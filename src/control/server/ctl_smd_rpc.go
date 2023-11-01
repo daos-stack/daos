@@ -261,7 +261,7 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 			if dds == nil {
 				return nil, errors.New("device with nil details in smd query resp")
 			}
-			if dds.TrAddr == "" {
+			if dds.Ctrlr.PciAddr == "" {
 				svc.log.Errorf("No transport address associated with device %s",
 					dds.Uuid)
 			}
@@ -270,12 +270,12 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 
 			// Where possible specify the TrAddr over UUID as there may be multiple
 			// UUIDs mapping to the same TrAddr.
-			if useTrAddr && dds.TrAddr != "" {
-				if matchAll || matchUUID || trAddrs[dds.TrAddr] {
+			if useTrAddr && dds.Ctrlr.PciAddr != "" {
+				if matchAll || matchUUID || trAddrs[dds.Ctrlr.PciAddr] {
 					// If UUID matches, add by TrAddr rather than UUID which
 					// should avoid duplicate UUID entries for the same TrAddr.
-					edm.add(engine, devID{trAddr: dds.TrAddr})
-					delete(trAddrs, dds.TrAddr)
+					edm.add(engine, devID{trAddr: dds.Ctrlr.PciAddr})
+					delete(trAddrs, dds.Ctrlr.PciAddr)
 					delete(devUUIDs, dds.Uuid)
 					continue
 				}
@@ -329,7 +329,10 @@ func addManageRespIDOnFail(log logging.Logger, res *ctlpb.SmdManageResp_Result, 
 	if res.Device == nil {
 		// Populate id so failure can be mapped to a device.
 		res.Device = &ctlpb.SmdDevice{
-			TrAddr: dev.trAddr, Uuid: dev.uuid,
+			Ctrlr: &ctlpb.NvmeController{
+				PciAddr: dev.trAddr,
+			},
+			Uuid: dev.uuid,
 		}
 	}
 }

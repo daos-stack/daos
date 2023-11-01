@@ -82,6 +82,7 @@ func (x *NvmeControllerResult) GetState() *ResponseState {
 	return nil
 }
 
+// TODO: Consolidate with smd.proto:NvmeDevReq.
 type ScanNvmeReq struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -161,6 +162,7 @@ func (x *ScanNvmeReq) GetRdbSize() uint64 {
 	return 0
 }
 
+// TODO: Consolidate with smd.proto:NvmeDevResp.
 type ScanNvmeResp struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

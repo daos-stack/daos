@@ -22,6 +22,12 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+var defMockCtrlr = storage.NvmeController{
+	PciAddr:   test.MockPCIAddr(1),
+	NvmeState: storage.NvmeStateNormal,
+	LedState:  storage.LedStateIdentify,
+}
+
 type mockSmdResp struct {
 	Hosts   string
 	SmdInfo *SmdInfo
@@ -166,11 +172,13 @@ func TestControl_SmdQuery(t *testing.T) {
 					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 						{
 							Details: &ctlpb.SmdDevice{
-								TrAddr:   test.MockPCIAddr(1),
-								Uuid:     test.MockUUID(0),
-								TgtIds:   []int32{1024, 1, 1, 2, 2, 3, 3},
-								DevState: devStateNormal,
-								LedState: ledStateNormal,
+								Uuid:   test.MockUUID(0),
+								TgtIds: []int32{1024, 1, 1, 2, 2, 3, 3},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  test.MockPCIAddr(1),
+									DevState: devStateNormal,
+									LedState: ledStateNormal,
+								},
 								RoleBits: storage.BdevRoleAll,
 							},
 						},
@@ -181,11 +189,13 @@ func TestControl_SmdQuery(t *testing.T) {
 					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 						{
 							Details: &ctlpb.SmdDevice{
-								TrAddr:   test.MockPCIAddr(1),
-								Uuid:     test.MockUUID(1),
-								TgtIds:   []int32{0},
-								DevState: devStateFaulty,
-								LedState: ledStateFault,
+								Uuid:   test.MockUUID(1),
+								TgtIds: []int32{0},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  test.MockPCIAddr(1),
+									DevState: devStateFaulty,
+									LedState: ledStateFault,
+								},
 								RoleBits: storage.BdevRoleData,
 							},
 						},
@@ -199,24 +209,28 @@ func TestControl_SmdQuery(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(0),
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
-								NvmeState: storage.NvmeStateNormal,
-								LedState:  storage.LedStateNormal,
+								Ctrlr: storage.NvmeController{
+									PciAddr:   test.MockPCIAddr(1),
+									NvmeState: storage.NvmeStateNormal,
+									LedState:  storage.LedStateNormal,
+								},
 								Roles: storage.BdevRoles{
 									storage.OptionBits(storage.BdevRoleAll),
 								},
 								HasSysXS: true,
 							},
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
 								Rank:      ranklist.Rank(1),
 								TargetIDs: []int32{0},
-								NvmeState: storage.NvmeStateFaulty,
-								LedState:  storage.LedStateFaulty,
+								Ctrlr: storage.NvmeController{
+									PciAddr:   test.MockPCIAddr(1),
+									NvmeState: storage.NvmeStateFaulty,
+									LedState:  storage.LedStateFaulty,
+								},
 								Roles: storage.BdevRoles{
 									storage.OptionBits(storage.BdevRoleData),
 								},
@@ -233,11 +247,13 @@ func TestControl_SmdQuery(t *testing.T) {
 				Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 					{
 						Details: &ctlpb.SmdDevice{
-							TrAddr:   test.MockPCIAddr(2),
-							Uuid:     test.MockUUID(1),
-							TgtIds:   []int32{1, 2, 3},
-							DevState: devStateNew,
-							LedState: ledStateUnknown,
+							Uuid:   test.MockUUID(1),
+							TgtIds: []int32{1, 2, 3},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(2),
+								DevState: devStateNew,
+								LedState: ledStateUnknown,
+							},
 						},
 					},
 				},
@@ -249,12 +265,14 @@ func TestControl_SmdQuery(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(2),
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
 								UUID:      test.MockUUID(1),
-								NvmeState: storage.NvmeStateNew,
-								LedState:  storage.LedStateUnknown,
+								Ctrlr: storage.NvmeController{
+									PciAddr:   test.MockPCIAddr(2),
+									NvmeState: storage.NvmeStateNew,
+									LedState:  storage.LedStateUnknown,
+								},
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -269,11 +287,13 @@ func TestControl_SmdQuery(t *testing.T) {
 					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 						{
 							Details: &ctlpb.SmdDevice{
-								TrAddr:   test.MockPCIAddr(1),
-								Uuid:     test.MockUUID(1),
-								TgtIds:   []int32{1, 2, 3},
-								DevState: devStateFaulty,
-								LedState: ledStateUnknown,
+								Uuid:   test.MockUUID(1),
+								TgtIds: []int32{1, 2, 3},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  test.MockPCIAddr(1),
+									DevState: devStateFaulty,
+									LedState: ledStateUnknown,
+								},
 							},
 						},
 					},
@@ -283,11 +303,13 @@ func TestControl_SmdQuery(t *testing.T) {
 					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 						{
 							Details: &ctlpb.SmdDevice{
-								TrAddr:   test.MockPCIAddr(2),
-								Uuid:     test.MockUUID(3),
-								TgtIds:   []int32{4, 5, 6},
-								DevState: devStateNormal,
-								LedState: ledStateUnknown,
+								Uuid:   test.MockUUID(3),
+								TgtIds: []int32{4, 5, 6},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  test.MockPCIAddr(2),
+									DevState: devStateNormal,
+									LedState: ledStateUnknown,
+								},
 							},
 						},
 					},
@@ -300,12 +322,14 @@ func TestControl_SmdQuery(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
 								Rank:      ranklist.Rank(1),
 								TargetIDs: []int32{1, 2, 3},
-								NvmeState: storage.NvmeStateFaulty,
-								LedState:  storage.LedStateUnknown,
+								Ctrlr: storage.NvmeController{
+									PciAddr:   test.MockPCIAddr(1),
+									NvmeState: storage.NvmeStateFaulty,
+									LedState:  storage.LedStateUnknown,
+								},
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -319,11 +343,13 @@ func TestControl_SmdQuery(t *testing.T) {
 				Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
 					{
 						Details: &ctlpb.SmdDevice{
-							TrAddr:   test.MockPCIAddr(1),
-							Uuid:     test.MockUUID(1),
-							TgtIds:   []int32{1, 2, 3},
-							LedState: ledStateIdentify,
-							DevState: devStateNormal,
+							Uuid:   test.MockUUID(1),
+							TgtIds: []int32{1, 2, 3},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(1),
+								DevState: devStateNormal,
+								LedState: ledStateIdentify,
+							},
 						},
 						Health: &ctlpb.BioHealthResp{
 							DevUuid:            test.MockUUID(1),
@@ -349,24 +375,26 @@ func TestControl_SmdQuery(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
-								NvmeState: storage.NvmeStateNormal,
-								LedState:  storage.LedStateIdentify,
-								Health: &storage.NvmeHealth{
-									Temperature:     2,
-									MediaErrors:     3,
-									ReadErrors:      4,
-									WriteErrors:     5,
-									UnmapErrors:     6,
-									ChecksumErrors:  7,
-									TempWarn:        true,
-									AvailSpareWarn:  true,
-									ReadOnlyWarn:    true,
-									ReliabilityWarn: true,
-									VolatileWarn:    true,
+								Ctrlr: storage.NvmeController{
+									PciAddr:   test.MockPCIAddr(1),
+									NvmeState: storage.NvmeStateNormal,
+									LedState:  storage.LedStateIdentify,
+									HealthStats: &storage.NvmeHealth{
+										Temperature:     2,
+										MediaErrors:     3,
+										ReadErrors:      4,
+										WriteErrors:     5,
+										UnmapErrors:     6,
+										ChecksumErrors:  7,
+										TempWarn:        true,
+										AvailSpareWarn:  true,
+										ReadOnlyWarn:    true,
+										ReliabilityWarn: true,
+										VolatileWarn:    true,
+									},
 								},
 							},
 						},
@@ -638,11 +666,13 @@ func TestControl_SmdManage(t *testing.T) {
 				Results: []*ctlpb.SmdManageResp_Result{
 					{
 						Device: &ctlpb.SmdDevice{
-							TrAddr:   test.MockPCIAddr(1),
-							Uuid:     test.MockUUID(1),
-							TgtIds:   []int32{1024, 1, 1, 2, 2, 3, 3},
-							LedState: ledStateIdentify,
-							DevState: devStateNormal,
+							Uuid:   test.MockUUID(1),
+							TgtIds: []int32{1024, 1, 1, 2, 2, 3, 3},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(1),
+								LedState: ledStateIdentify,
+								DevState: devStateNormal,
+							},
 							RoleBits: storage.BdevRoleAll,
 						},
 					},
@@ -654,12 +684,10 @@ func TestControl_SmdManage(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(1),
 								Rank:      ranklist.Rank(0),
 								TargetIDs: []int32{1, 2, 3},
-								NvmeState: storage.NvmeStateNormal,
-								LedState:  storage.LedStateIdentify,
+								Ctrlr:     defMockCtrlr,
 								Roles: storage.BdevRoles{
 									storage.OptionBits(storage.BdevRoleAll),
 								},
@@ -681,7 +709,9 @@ func TestControl_SmdManage(t *testing.T) {
 					{
 						Status: int32(daos.Busy),
 						Device: &ctlpb.SmdDevice{
-							TrAddr: test.MockPCIAddr(1),
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr: test.MockPCIAddr(1),
+							},
 						},
 					},
 				},
@@ -697,8 +727,10 @@ func TestControl_SmdManage(t *testing.T) {
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
 							{
-								TrAddr:    test.MockPCIAddr(1),
 								TargetIDs: []int32{},
+								Ctrlr: storage.NvmeController{
+									PciAddr: test.MockPCIAddr(1),
+								},
 							},
 						},
 					},

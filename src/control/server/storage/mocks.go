@@ -102,10 +102,12 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 	return &SmdDevice{
 		UUID:      test.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
-		NvmeState: NvmeStateNormal,
-		LedState:  LedStateNormal,
-		TrAddr:    parentTrAddr,
 		Roles:     BdevRoles{OptionBits(BdevRoleAll)},
+		Ctrlr: NvmeController{
+			NvmeState: NvmeStateNormal,
+			LedState:  LedStateNormal,
+			PciAddr:   parentTrAddr,
+		},
 	}
 }
 

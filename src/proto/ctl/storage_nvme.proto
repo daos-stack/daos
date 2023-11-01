@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,6 +21,7 @@ message NvmeControllerResult {
 	ResponseState state = 2;	// state of current operation
 }
 
+// TODO: Consolidate with smd.proto:NvmeDevReq.
 message ScanNvmeReq {
 	bool Health = 1;	// Retrieve NVMe device health statistics
 	bool Meta = 2;		// Retrieve metadata relating to NVMe device
@@ -29,6 +30,7 @@ message ScanNvmeReq {
 	uint64 RdbSize = 5;	// Size of the RDB blob
 }
 
+// TODO: Consolidate with smd.proto:NvmeDevResp.
 message ScanNvmeResp {
 	repeated NvmeController ctrlrs = 1;
 	ResponseState state = 2;

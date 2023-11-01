@@ -112,7 +112,8 @@ func (sr *SmdResp) addHostQueryResponse(hr *HostResponse, faultyOnly bool) error
 		rank := ranklist.Rank(rResp.Rank)
 
 		for _, pbDev := range rResp.GetDevices() {
-			if faultyOnly && (pbDev.Details.DevState != ctlpb.NvmeDevState_EVICTED) {
+			isEvicted := pbDev.Details.Ctrlr.DevState == ctlpb.NvmeDevState_EVICTED
+			if faultyOnly && !isEvicted {
 				continue
 			}
 
@@ -123,9 +124,11 @@ func (sr *SmdResp) addHostQueryResponse(hr *HostResponse, faultyOnly bool) error
 			sd.Rank = rank
 
 			if pbDev.Health != nil {
-				sd.Health = new(storage.NvmeHealth)
-				if err := convert.Types(pbDev.Health, sd.Health); err != nil {
-					return errors.Wrapf(err, "converting %T to %T", pbDev.Health, sd.Health)
+				sd.Ctrlr.HealthStats = new(storage.NvmeHealth)
+				if err := convert.Types(pbDev.Health,
+					sd.Ctrlr.HealthStats); err != nil {
+					return errors.Wrapf(err, "converting %T to %T",
+						pbDev.Health, sd.Ctrlr.HealthStats)
 				}
 			}
 
@@ -244,7 +247,7 @@ func (sr *SmdResp) getHostManageRespErr(hr *HostResponse) error {
 			if pbResult.Device != nil {
 				id = pbResult.Device.Uuid
 				if id == "" {
-					id = pbResult.Device.TrAddr
+					id = pbResult.Device.Ctrlr.PciAddr
 				}
 				id += " "
 			}

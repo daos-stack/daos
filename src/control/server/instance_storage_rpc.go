@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -194,7 +194,7 @@ func bdevScanEngine(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq
 }
 
 func smdGetHealth(ctx context.Context, ei *EngineInstance, dev *ctlpb.SmdQueryResp_SmdDeviceWithHealth) error {
-	state := dev.Details.DevState
+	state := dev.Details.Ctrlr.DevState
 	if state == ctlpb.NvmeDevState_NEW {
 		ei.log.Debugf("skip fetching health stats on device %q in NEW state", dev, state)
 		return nil

@@ -2486,3 +2486,73 @@ out:
 
 	mgmt__cont_set_owner_req__free_unpacked(req, &alloc.alloc);
 }
+
+void
+ds_mgmt_drpc_nvme_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Ctl__NvmeDevReq		*req = NULL;
+	Ctl__NvmeDevResp	*resp = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	int			 i;
+	int			 rc = 0;
+
+	/* Unpack the inner request from the drpc call body */
+	req = ctl__nvme_dev_req__unpack(&alloc.alloc, drpc_req->body.len, drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (nvme list devs)\n");
+		return;
+	}
+
+	D_INFO("Received request to list NVMe devices\n");
+
+	D_ALLOC_PTR(resp);
+	if (resp == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILURE;
+		ctl__nvme_dev_req__free_unpacked(req, &alloc.alloc);
+		return;
+	}
+
+	/* Response status is populated with SUCCESS on init. */
+	ctl__nvme_dev_resp__init(resp);
+
+	rc = ds_mgmt_nvme_list_devs(resp);
+	if (rc != 0)
+		D_ERROR("Failed to list NVMe devices :"DF_RC"\n", DP_RC(rc));
+
+	resp->status = rc;
+	len = ctl__nvme_dev_resp__get_packed_size(resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		ctl__nvme_dev_resp__pack(resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	ctl__nvme_dev_req__free_unpacked(req, &alloc.alloc);
+
+	/* all devs should already be freed upon error */
+	if (rc != 0)
+		goto out;
+
+	for (i = 0; i < resp->n_devices; i++) {
+		if (resp->devices[i] != NULL) {
+			if (resp->devices[i]->uuid != NULL)
+				D_FREE(resp->devices[i]->uuid);
+			if (resp->devices[i]->tgt_ids != NULL)
+				D_FREE(resp->devices[i]->tgt_ids);
+			if (resp->devices[i]->tr_addr != NULL)
+				D_FREE(resp->devices[i]->tr_addr);
+			D_FREE(resp->devices[i]);
+		}
+	}
+	D_FREE(resp->devices);
+out:
+	D_FREE(resp);
+}
+

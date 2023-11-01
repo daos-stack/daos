@@ -654,6 +654,126 @@ func (x *BioHealthResp) GetRdbWalSize() uint64 {
 	return 0
 }
 
+// NvmeController represents an NVMe Controller (SSD).
+type NvmeController struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Model       string                      `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`                                              // model name
+	Serial      string                      `protobuf:"bytes,2,opt,name=serial,proto3" json:"serial,omitempty"`                                            // serial number
+	PciAddr     string                      `protobuf:"bytes,3,opt,name=pci_addr,json=pciAddr,proto3" json:"pci_addr,omitempty"`                           // pci address
+	FwRev       string                      `protobuf:"bytes,4,opt,name=fw_rev,json=fwRev,proto3" json:"fw_rev,omitempty"`                                 // firmware revision
+	SocketId    int32                       `protobuf:"varint,5,opt,name=socket_id,json=socketId,proto3" json:"socket_id,omitempty"`                       // NUMA socket ID
+	HealthStats *BioHealthResp              `protobuf:"bytes,6,opt,name=health_stats,json=healthStats,proto3" json:"health_stats,omitempty"`               // controller's health stats
+	Namespaces  []*NvmeController_Namespace `protobuf:"bytes,7,rep,name=namespaces,proto3" json:"namespaces,omitempty"`                                    // controller's namespaces
+	SmdDevices  []*SmdDevice                `protobuf:"bytes,8,rep,name=smd_devices,json=smdDevices,proto3" json:"smd_devices,omitempty"`                  // controller's blobstores
+	DevState    NvmeDevState                `protobuf:"varint,9,opt,name=dev_state,json=devState,proto3,enum=ctl.NvmeDevState" json:"dev_state,omitempty"` // NVMe device operational state
+	LedState    LedState                    `protobuf:"varint,10,opt,name=led_state,json=ledState,proto3,enum=ctl.LedState" json:"led_state,omitempty"`    // NVMe device LED state
+}
+
+func (x *NvmeController) Reset() {
+	*x = NvmeController{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ctl_smd_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *NvmeController) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NvmeController) ProtoMessage() {}
+
+func (x *NvmeController) ProtoReflect() protoreflect.Message {
+	mi := &file_ctl_smd_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NvmeController.ProtoReflect.Descriptor instead.
+func (*NvmeController) Descriptor() ([]byte, []int) {
+	return file_ctl_smd_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *NvmeController) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *NvmeController) GetSerial() string {
+	if x != nil {
+		return x.Serial
+	}
+	return ""
+}
+
+func (x *NvmeController) GetPciAddr() string {
+	if x != nil {
+		return x.PciAddr
+	}
+	return ""
+}
+
+func (x *NvmeController) GetFwRev() string {
+	if x != nil {
+		return x.FwRev
+	}
+	return ""
+}
+
+func (x *NvmeController) GetSocketId() int32 {
+	if x != nil {
+		return x.SocketId
+	}
+	return 0
+}
+
+func (x *NvmeController) GetHealthStats() *BioHealthResp {
+	if x != nil {
+		return x.HealthStats
+	}
+	return nil
+}
+
+func (x *NvmeController) GetNamespaces() []*NvmeController_Namespace {
+	if x != nil {
+		return x.Namespaces
+	}
+	return nil
+}
+
+func (x *NvmeController) GetSmdDevices() []*SmdDevice {
+	if x != nil {
+		return x.SmdDevices
+	}
+	return nil
+}
+
+func (x *NvmeController) GetDevState() NvmeDevState {
+	if x != nil {
+		return x.DevState
+	}
+	return NvmeDevState_UNKNOWN
+}
+
+func (x *NvmeController) GetLedState() LedState {
+	if x != nil {
+		return x.LedState
+	}
+	return LedState_OFF
+}
+
 // SmdDevice represents a DAOS BIO device, identified by a UUID written into a label stored on a
 // SPDK blobstore created on a NVMe namespace. Multiple SmdDevices may exist per NVMe controller.
 type SmdDevice struct {
@@ -661,27 +781,26 @@ type SmdDevice struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Uuid        string       `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`                                                // UUID of blobstore
-	TgtIds      []int32      `protobuf:"varint,2,rep,packed,name=tgt_ids,json=tgtIds,proto3" json:"tgt_ids,omitempty"`                      // VOS target IDs
-	TrAddr      string       `protobuf:"bytes,3,opt,name=tr_addr,json=trAddr,proto3" json:"tr_addr,omitempty"`                              // Transport address of blobstore
-	DevState    NvmeDevState `protobuf:"varint,4,opt,name=dev_state,json=devState,proto3,enum=ctl.NvmeDevState" json:"dev_state,omitempty"` // NVMe device state
-	LedState    LedState     `protobuf:"varint,5,opt,name=led_state,json=ledState,proto3,enum=ctl.LedState" json:"led_state,omitempty"`     // LED state
-	TotalBytes  uint64       `protobuf:"varint,6,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`                 // blobstore clusters total bytes
-	AvailBytes  uint64       `protobuf:"varint,7,opt,name=avail_bytes,json=availBytes,proto3" json:"avail_bytes,omitempty"`                 // Available RAW storage for data
-	ClusterSize uint64       `protobuf:"varint,8,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`              // blobstore cluster size in bytes
-	Rank        uint32       `protobuf:"varint,9,opt,name=rank,proto3" json:"rank,omitempty"`                                               // DAOS I/O Engine using controller
-	RoleBits    uint32       `protobuf:"varint,10,opt,name=role_bits,json=roleBits,proto3" json:"role_bits,omitempty"`                      // Device active roles (bitmask)
-	MetaSize    uint64       `protobuf:"varint,11,opt,name=meta_size,json=metaSize,proto3" json:"meta_size,omitempty"`                      // Size of the metadata (i.e. vos file index) blob
-	MetaWalSize uint64       `protobuf:"varint,12,opt,name=meta_wal_size,json=metaWalSize,proto3" json:"meta_wal_size,omitempty"`           // Size of the metadata WAL blob
-	RdbSize     uint64       `protobuf:"varint,13,opt,name=rdb_size,json=rdbSize,proto3" json:"rdb_size,omitempty"`                         // Size of the RDB blob
-	RdbWalSize  uint64       `protobuf:"varint,14,opt,name=rdb_wal_size,json=rdbWalSize,proto3" json:"rdb_wal_size,omitempty"`              // Size of the RDB WAL blob
-	UsableBytes uint64       `protobuf:"varint,15,opt,name=usable_bytes,json=usableBytes,proto3" json:"usable_bytes,omitempty"`             // Effective storage available for data
+	Uuid             string          `protobuf:"bytes,1,opt,name=uuid,proto3" json:"uuid,omitempty"`                                                     // UUID of blobstore
+	TgtIds           []int32         `protobuf:"varint,2,rep,packed,name=tgt_ids,json=tgtIds,proto3" json:"tgt_ids,omitempty"`                           // VOS target IDs
+	TotalBytes       uint64          `protobuf:"varint,6,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`                      // blobstore clusters total bytes
+	AvailBytes       uint64          `protobuf:"varint,7,opt,name=avail_bytes,json=availBytes,proto3" json:"avail_bytes,omitempty"`                      // Available RAW storage for data
+	ClusterSize      uint64          `protobuf:"varint,8,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`                   // blobstore cluster size in bytes
+	Rank             uint32          `protobuf:"varint,9,opt,name=rank,proto3" json:"rank,omitempty"`                                                    // DAOS I/O Engine using controller
+	RoleBits         uint32          `protobuf:"varint,10,opt,name=role_bits,json=roleBits,proto3" json:"role_bits,omitempty"`                           // Device active roles (bitmask)
+	MetaSize         uint64          `protobuf:"varint,11,opt,name=meta_size,json=metaSize,proto3" json:"meta_size,omitempty"`                           // Size of the metadata (i.e. vos file index) blob
+	MetaWalSize      uint64          `protobuf:"varint,12,opt,name=meta_wal_size,json=metaWalSize,proto3" json:"meta_wal_size,omitempty"`                // Size of the metadata WAL blob
+	RdbSize          uint64          `protobuf:"varint,13,opt,name=rdb_size,json=rdbSize,proto3" json:"rdb_size,omitempty"`                              // Size of the RDB blob
+	RdbWalSize       uint64          `protobuf:"varint,14,opt,name=rdb_wal_size,json=rdbWalSize,proto3" json:"rdb_wal_size,omitempty"`                   // Size of the RDB WAL blob
+	UsableBytes      uint64          `protobuf:"varint,15,opt,name=usable_bytes,json=usableBytes,proto3" json:"usable_bytes,omitempty"`                  // Effective storage available for data
+	Ctrlr            *NvmeController `protobuf:"bytes,16,opt,name=ctrlr,proto3" json:"ctrlr,omitempty"`                                                  // Backing NVMe controller of SMD device
+	CtrlrNamespaceId uint32          `protobuf:"varint,17,opt,name=ctrlr_namespace_id,json=ctrlrNamespaceId,proto3" json:"ctrlr_namespace_id,omitempty"` // NVMe namespace id hosting SMD blobstore
 }
 
 func (x *SmdDevice) Reset() {
 	*x = SmdDevice{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[2]
+		mi := &file_ctl_smd_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -694,7 +813,7 @@ func (x *SmdDevice) String() string {
 func (*SmdDevice) ProtoMessage() {}
 
 func (x *SmdDevice) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[2]
+	mi := &file_ctl_smd_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -707,7 +826,7 @@ func (x *SmdDevice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdDevice.ProtoReflect.Descriptor instead.
 func (*SmdDevice) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{2}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SmdDevice) GetUuid() string {
@@ -722,27 +841,6 @@ func (x *SmdDevice) GetTgtIds() []int32 {
 		return x.TgtIds
 	}
 	return nil
-}
-
-func (x *SmdDevice) GetTrAddr() string {
-	if x != nil {
-		return x.TrAddr
-	}
-	return ""
-}
-
-func (x *SmdDevice) GetDevState() NvmeDevState {
-	if x != nil {
-		return x.DevState
-	}
-	return NvmeDevState_UNKNOWN
-}
-
-func (x *SmdDevice) GetLedState() LedState {
-	if x != nil {
-		return x.LedState
-	}
-	return LedState_OFF
 }
 
 func (x *SmdDevice) GetTotalBytes() uint64 {
@@ -815,6 +913,20 @@ func (x *SmdDevice) GetUsableBytes() uint64 {
 	return 0
 }
 
+func (x *SmdDevice) GetCtrlr() *NvmeController {
+	if x != nil {
+		return x.Ctrlr
+	}
+	return nil
+}
+
+func (x *SmdDevice) GetCtrlrNamespaceId() uint32 {
+	if x != nil {
+		return x.CtrlrNamespaceId
+	}
+	return 0
+}
+
 type SmdDevReq struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -824,7 +936,7 @@ type SmdDevReq struct {
 func (x *SmdDevReq) Reset() {
 	*x = SmdDevReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[3]
+		mi := &file_ctl_smd_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -837,7 +949,7 @@ func (x *SmdDevReq) String() string {
 func (*SmdDevReq) ProtoMessage() {}
 
 func (x *SmdDevReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[3]
+	mi := &file_ctl_smd_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -850,7 +962,7 @@ func (x *SmdDevReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdDevReq.ProtoReflect.Descriptor instead.
 func (*SmdDevReq) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{3}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{4}
 }
 
 type SmdDevResp struct {
@@ -865,7 +977,7 @@ type SmdDevResp struct {
 func (x *SmdDevResp) Reset() {
 	*x = SmdDevResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[4]
+		mi := &file_ctl_smd_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -878,7 +990,7 @@ func (x *SmdDevResp) String() string {
 func (*SmdDevResp) ProtoMessage() {}
 
 func (x *SmdDevResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[4]
+	mi := &file_ctl_smd_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -891,7 +1003,7 @@ func (x *SmdDevResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdDevResp.ProtoReflect.Descriptor instead.
 func (*SmdDevResp) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{4}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SmdDevResp) GetStatus() int32 {
@@ -917,7 +1029,7 @@ type SmdPoolReq struct {
 func (x *SmdPoolReq) Reset() {
 	*x = SmdPoolReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[5]
+		mi := &file_ctl_smd_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -930,7 +1042,7 @@ func (x *SmdPoolReq) String() string {
 func (*SmdPoolReq) ProtoMessage() {}
 
 func (x *SmdPoolReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[5]
+	mi := &file_ctl_smd_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -943,7 +1055,7 @@ func (x *SmdPoolReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdPoolReq.ProtoReflect.Descriptor instead.
 func (*SmdPoolReq) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{5}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{6}
 }
 
 type SmdPoolResp struct {
@@ -958,7 +1070,7 @@ type SmdPoolResp struct {
 func (x *SmdPoolResp) Reset() {
 	*x = SmdPoolResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[6]
+		mi := &file_ctl_smd_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -971,7 +1083,7 @@ func (x *SmdPoolResp) String() string {
 func (*SmdPoolResp) ProtoMessage() {}
 
 func (x *SmdPoolResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[6]
+	mi := &file_ctl_smd_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -984,7 +1096,7 @@ func (x *SmdPoolResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdPoolResp.ProtoReflect.Descriptor instead.
 func (*SmdPoolResp) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{6}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SmdPoolResp) GetStatus() int32 {
@@ -1016,7 +1128,7 @@ type SmdQueryReq struct {
 func (x *SmdQueryReq) Reset() {
 	*x = SmdQueryReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[7]
+		mi := &file_ctl_smd_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1029,7 +1141,7 @@ func (x *SmdQueryReq) String() string {
 func (*SmdQueryReq) ProtoMessage() {}
 
 func (x *SmdQueryReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[7]
+	mi := &file_ctl_smd_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1042,7 +1154,7 @@ func (x *SmdQueryReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdQueryReq.ProtoReflect.Descriptor instead.
 func (*SmdQueryReq) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{7}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SmdQueryReq) GetOmitDevices() bool {
@@ -1092,7 +1204,7 @@ type SmdQueryResp struct {
 func (x *SmdQueryResp) Reset() {
 	*x = SmdQueryResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[8]
+		mi := &file_ctl_smd_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1105,7 +1217,7 @@ func (x *SmdQueryResp) String() string {
 func (*SmdQueryResp) ProtoMessage() {}
 
 func (x *SmdQueryResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[8]
+	mi := &file_ctl_smd_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1118,7 +1230,7 @@ func (x *SmdQueryResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdQueryResp.ProtoReflect.Descriptor instead.
 func (*SmdQueryResp) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{8}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *SmdQueryResp) GetStatus() int32 {
@@ -1149,7 +1261,7 @@ type LedManageReq struct {
 func (x *LedManageReq) Reset() {
 	*x = LedManageReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[9]
+		mi := &file_ctl_smd_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1162,7 +1274,7 @@ func (x *LedManageReq) String() string {
 func (*LedManageReq) ProtoMessage() {}
 
 func (x *LedManageReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[9]
+	mi := &file_ctl_smd_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1175,7 +1287,7 @@ func (x *LedManageReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LedManageReq.ProtoReflect.Descriptor instead.
 func (*LedManageReq) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{9}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *LedManageReq) GetIds() string {
@@ -1219,7 +1331,7 @@ type DevReplaceReq struct {
 func (x *DevReplaceReq) Reset() {
 	*x = DevReplaceReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[10]
+		mi := &file_ctl_smd_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1232,7 +1344,7 @@ func (x *DevReplaceReq) String() string {
 func (*DevReplaceReq) ProtoMessage() {}
 
 func (x *DevReplaceReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[10]
+	mi := &file_ctl_smd_proto_msgTypes[11]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1245,7 +1357,7 @@ func (x *DevReplaceReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DevReplaceReq.ProtoReflect.Descriptor instead.
 func (*DevReplaceReq) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{10}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *DevReplaceReq) GetOldDevUuid() string {
@@ -1280,7 +1392,7 @@ type SetFaultyReq struct {
 func (x *SetFaultyReq) Reset() {
 	*x = SetFaultyReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[11]
+		mi := &file_ctl_smd_proto_msgTypes[12]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1293,7 +1405,7 @@ func (x *SetFaultyReq) String() string {
 func (*SetFaultyReq) ProtoMessage() {}
 
 func (x *SetFaultyReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[11]
+	mi := &file_ctl_smd_proto_msgTypes[12]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1306,7 +1418,7 @@ func (x *SetFaultyReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetFaultyReq.ProtoReflect.Descriptor instead.
 func (*SetFaultyReq) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{11}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SetFaultyReq) GetUuid() string {
@@ -1328,7 +1440,7 @@ type DevManageResp struct {
 func (x *DevManageResp) Reset() {
 	*x = DevManageResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[12]
+		mi := &file_ctl_smd_proto_msgTypes[13]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1341,7 +1453,7 @@ func (x *DevManageResp) String() string {
 func (*DevManageResp) ProtoMessage() {}
 
 func (x *DevManageResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[12]
+	mi := &file_ctl_smd_proto_msgTypes[13]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1354,7 +1466,7 @@ func (x *DevManageResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DevManageResp.ProtoReflect.Descriptor instead.
 func (*DevManageResp) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{12}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *DevManageResp) GetStatus() int32 {
@@ -1387,7 +1499,7 @@ type SmdManageReq struct {
 func (x *SmdManageReq) Reset() {
 	*x = SmdManageReq{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[13]
+		mi := &file_ctl_smd_proto_msgTypes[14]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1400,7 +1512,7 @@ func (x *SmdManageReq) String() string {
 func (*SmdManageReq) ProtoMessage() {}
 
 func (x *SmdManageReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[13]
+	mi := &file_ctl_smd_proto_msgTypes[14]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1413,7 +1525,7 @@ func (x *SmdManageReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdManageReq.ProtoReflect.Descriptor instead.
 func (*SmdManageReq) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{13}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{14}
 }
 
 func (m *SmdManageReq) GetOp() isSmdManageReq_Op {
@@ -1477,7 +1589,7 @@ type SmdManageResp struct {
 func (x *SmdManageResp) Reset() {
 	*x = SmdManageResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[14]
+		mi := &file_ctl_smd_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1490,7 +1602,7 @@ func (x *SmdManageResp) String() string {
 func (*SmdManageResp) ProtoMessage() {}
 
 func (x *SmdManageResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[14]
+	mi := &file_ctl_smd_proto_msgTypes[15]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1503,7 +1615,7 @@ func (x *SmdManageResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdManageResp.ProtoReflect.Descriptor instead.
 func (*SmdManageResp) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{14}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *SmdManageResp) GetRanks() []*SmdManageResp_RankResp {
@@ -1513,39 +1625,34 @@ func (x *SmdManageResp) GetRanks() []*SmdManageResp_RankResp {
 	return nil
 }
 
-// NvmeController represents an NVMe Controller (SSD).
-type NvmeController struct {
+// Namespace represents a namespace created on an NvmeController.
+type NvmeController_Namespace struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Model       string                      `protobuf:"bytes,1,opt,name=model,proto3" json:"model,omitempty"`                                // model name
-	Serial      string                      `protobuf:"bytes,2,opt,name=serial,proto3" json:"serial,omitempty"`                              // serial number
-	PciAddr     string                      `protobuf:"bytes,3,opt,name=pci_addr,json=pciAddr,proto3" json:"pci_addr,omitempty"`             // pci address
-	FwRev       string                      `protobuf:"bytes,4,opt,name=fw_rev,json=fwRev,proto3" json:"fw_rev,omitempty"`                   // firmware revision
-	SocketId    int32                       `protobuf:"varint,5,opt,name=socket_id,json=socketId,proto3" json:"socket_id,omitempty"`         // NUMA socket ID
-	HealthStats *BioHealthResp              `protobuf:"bytes,6,opt,name=health_stats,json=healthStats,proto3" json:"health_stats,omitempty"` // controller's health stats
-	Namespaces  []*NvmeController_Namespace `protobuf:"bytes,7,rep,name=namespaces,proto3" json:"namespaces,omitempty"`                      // controller's namespaces
-	SmdDevices  []*SmdDevice                `protobuf:"bytes,8,rep,name=smd_devices,json=smdDevices,proto3" json:"smd_devices,omitempty"`    // controller's blobstores
+	Id           uint32 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`                                          // namespace id
+	Size         uint64 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`                                      // device capacity in bytes
+	CtrlrPciAddr string `protobuf:"bytes,3,opt,name=ctrlr_pci_addr,json=ctrlrPciAddr,proto3" json:"ctrlr_pci_addr,omitempty"` // parent controller PCI address
 }
 
-func (x *NvmeController) Reset() {
-	*x = NvmeController{}
+func (x *NvmeController_Namespace) Reset() {
+	*x = NvmeController_Namespace{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[15]
+		mi := &file_ctl_smd_proto_msgTypes[16]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
 }
 
-func (x *NvmeController) String() string {
+func (x *NvmeController_Namespace) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*NvmeController) ProtoMessage() {}
+func (*NvmeController_Namespace) ProtoMessage() {}
 
-func (x *NvmeController) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[15]
+func (x *NvmeController_Namespace) ProtoReflect() protoreflect.Message {
+	mi := &file_ctl_smd_proto_msgTypes[16]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1556,65 +1663,30 @@ func (x *NvmeController) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use NvmeController.ProtoReflect.Descriptor instead.
-func (*NvmeController) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{15}
+// Deprecated: Use NvmeController_Namespace.ProtoReflect.Descriptor instead.
+func (*NvmeController_Namespace) Descriptor() ([]byte, []int) {
+	return file_ctl_smd_proto_rawDescGZIP(), []int{2, 0}
 }
 
-func (x *NvmeController) GetModel() string {
+func (x *NvmeController_Namespace) GetId() uint32 {
 	if x != nil {
-		return x.Model
-	}
-	return ""
-}
-
-func (x *NvmeController) GetSerial() string {
-	if x != nil {
-		return x.Serial
-	}
-	return ""
-}
-
-func (x *NvmeController) GetPciAddr() string {
-	if x != nil {
-		return x.PciAddr
-	}
-	return ""
-}
-
-func (x *NvmeController) GetFwRev() string {
-	if x != nil {
-		return x.FwRev
-	}
-	return ""
-}
-
-func (x *NvmeController) GetSocketId() int32 {
-	if x != nil {
-		return x.SocketId
+		return x.Id
 	}
 	return 0
 }
 
-func (x *NvmeController) GetHealthStats() *BioHealthResp {
+func (x *NvmeController_Namespace) GetSize() uint64 {
 	if x != nil {
-		return x.HealthStats
+		return x.Size
 	}
-	return nil
+	return 0
 }
 
-func (x *NvmeController) GetNamespaces() []*NvmeController_Namespace {
+func (x *NvmeController_Namespace) GetCtrlrPciAddr() string {
 	if x != nil {
-		return x.Namespaces
+		return x.CtrlrPciAddr
 	}
-	return nil
-}
-
-func (x *NvmeController) GetSmdDevices() []*SmdDevice {
-	if x != nil {
-		return x.SmdDevices
-	}
-	return nil
+	return ""
 }
 
 type SmdPoolResp_Pool struct {
@@ -1630,7 +1702,7 @@ type SmdPoolResp_Pool struct {
 func (x *SmdPoolResp_Pool) Reset() {
 	*x = SmdPoolResp_Pool{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[16]
+		mi := &file_ctl_smd_proto_msgTypes[17]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1643,7 +1715,7 @@ func (x *SmdPoolResp_Pool) String() string {
 func (*SmdPoolResp_Pool) ProtoMessage() {}
 
 func (x *SmdPoolResp_Pool) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[16]
+	mi := &file_ctl_smd_proto_msgTypes[17]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1656,7 +1728,7 @@ func (x *SmdPoolResp_Pool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdPoolResp_Pool.ProtoReflect.Descriptor instead.
 func (*SmdPoolResp_Pool) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{6, 0}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{7, 0}
 }
 
 func (x *SmdPoolResp_Pool) GetUuid() string {
@@ -1692,7 +1764,7 @@ type SmdQueryResp_SmdDeviceWithHealth struct {
 func (x *SmdQueryResp_SmdDeviceWithHealth) Reset() {
 	*x = SmdQueryResp_SmdDeviceWithHealth{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[17]
+		mi := &file_ctl_smd_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1705,7 +1777,7 @@ func (x *SmdQueryResp_SmdDeviceWithHealth) String() string {
 func (*SmdQueryResp_SmdDeviceWithHealth) ProtoMessage() {}
 
 func (x *SmdQueryResp_SmdDeviceWithHealth) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[17]
+	mi := &file_ctl_smd_proto_msgTypes[18]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1718,7 +1790,7 @@ func (x *SmdQueryResp_SmdDeviceWithHealth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdQueryResp_SmdDeviceWithHealth.ProtoReflect.Descriptor instead.
 func (*SmdQueryResp_SmdDeviceWithHealth) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{8, 0}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{9, 0}
 }
 
 func (x *SmdQueryResp_SmdDeviceWithHealth) GetDetails() *SmdDevice {
@@ -1748,7 +1820,7 @@ type SmdQueryResp_Pool struct {
 func (x *SmdQueryResp_Pool) Reset() {
 	*x = SmdQueryResp_Pool{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[18]
+		mi := &file_ctl_smd_proto_msgTypes[19]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1761,7 +1833,7 @@ func (x *SmdQueryResp_Pool) String() string {
 func (*SmdQueryResp_Pool) ProtoMessage() {}
 
 func (x *SmdQueryResp_Pool) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[18]
+	mi := &file_ctl_smd_proto_msgTypes[19]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1774,7 +1846,7 @@ func (x *SmdQueryResp_Pool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdQueryResp_Pool.ProtoReflect.Descriptor instead.
 func (*SmdQueryResp_Pool) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{8, 1}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{9, 1}
 }
 
 func (x *SmdQueryResp_Pool) GetUuid() string {
@@ -1811,7 +1883,7 @@ type SmdQueryResp_RankResp struct {
 func (x *SmdQueryResp_RankResp) Reset() {
 	*x = SmdQueryResp_RankResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[19]
+		mi := &file_ctl_smd_proto_msgTypes[20]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1824,7 +1896,7 @@ func (x *SmdQueryResp_RankResp) String() string {
 func (*SmdQueryResp_RankResp) ProtoMessage() {}
 
 func (x *SmdQueryResp_RankResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[19]
+	mi := &file_ctl_smd_proto_msgTypes[20]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1837,7 +1909,7 @@ func (x *SmdQueryResp_RankResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdQueryResp_RankResp.ProtoReflect.Descriptor instead.
 func (*SmdQueryResp_RankResp) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{8, 2}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{9, 2}
 }
 
 func (x *SmdQueryResp_RankResp) GetRank() uint32 {
@@ -1873,7 +1945,7 @@ type SmdManageResp_Result struct {
 func (x *SmdManageResp_Result) Reset() {
 	*x = SmdManageResp_Result{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[20]
+		mi := &file_ctl_smd_proto_msgTypes[21]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1886,7 +1958,7 @@ func (x *SmdManageResp_Result) String() string {
 func (*SmdManageResp_Result) ProtoMessage() {}
 
 func (x *SmdManageResp_Result) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[20]
+	mi := &file_ctl_smd_proto_msgTypes[21]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1899,7 +1971,7 @@ func (x *SmdManageResp_Result) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdManageResp_Result.ProtoReflect.Descriptor instead.
 func (*SmdManageResp_Result) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{14, 0}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{15, 0}
 }
 
 func (x *SmdManageResp_Result) GetStatus() int32 {
@@ -1928,7 +2000,7 @@ type SmdManageResp_RankResp struct {
 func (x *SmdManageResp_RankResp) Reset() {
 	*x = SmdManageResp_RankResp{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[21]
+		mi := &file_ctl_smd_proto_msgTypes[22]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1941,7 +2013,7 @@ func (x *SmdManageResp_RankResp) String() string {
 func (*SmdManageResp_RankResp) ProtoMessage() {}
 
 func (x *SmdManageResp_RankResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[21]
+	mi := &file_ctl_smd_proto_msgTypes[22]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1954,7 +2026,7 @@ func (x *SmdManageResp_RankResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SmdManageResp_RankResp.ProtoReflect.Descriptor instead.
 func (*SmdManageResp_RankResp) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{14, 1}
+	return file_ctl_smd_proto_rawDescGZIP(), []int{15, 1}
 }
 
 func (x *SmdManageResp_RankResp) GetRank() uint32 {
@@ -1969,70 +2041,6 @@ func (x *SmdManageResp_RankResp) GetResults() []*SmdManageResp_Result {
 		return x.Results
 	}
 	return nil
-}
-
-// Namespace represents a namespace created on an NvmeController.
-type NvmeController_Namespace struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Id           uint32 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`                                          // namespace id
-	Size         uint64 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`                                      // device capacity in bytes
-	CtrlrPciAddr string `protobuf:"bytes,3,opt,name=ctrlr_pci_addr,json=ctrlrPciAddr,proto3" json:"ctrlr_pci_addr,omitempty"` // parent controller PCI address
-}
-
-func (x *NvmeController_Namespace) Reset() {
-	*x = NvmeController_Namespace{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_ctl_smd_proto_msgTypes[22]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *NvmeController_Namespace) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NvmeController_Namespace) ProtoMessage() {}
-
-func (x *NvmeController_Namespace) ProtoReflect() protoreflect.Message {
-	mi := &file_ctl_smd_proto_msgTypes[22]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NvmeController_Namespace.ProtoReflect.Descriptor instead.
-func (*NvmeController_Namespace) Descriptor() ([]byte, []int) {
-	return file_ctl_smd_proto_rawDescGZIP(), []int{15, 0}
-}
-
-func (x *NvmeController_Namespace) GetId() uint32 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *NvmeController_Namespace) GetSize() uint64 {
-	if x != nil {
-		return x.Size
-	}
-	return 0
-}
-
-func (x *NvmeController_Namespace) GetCtrlrPciAddr() string {
-	if x != nil {
-		return x.CtrlrPciAddr
-	}
-	return ""
 }
 
 var File_ctl_smd_proto protoreflect.FileDescriptor
@@ -2163,37 +2171,67 @@ var file_ctl_smd_proto_rawDesc = []byte{
 	0x74, 0x61, 0x57, 0x61, 0x6c, 0x53, 0x69, 0x7a, 0x65, 0x12, 0x20, 0x0a, 0x0c, 0x72, 0x64, 0x62,
 	0x5f, 0x77, 0x61, 0x6c, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x30, 0x20, 0x01, 0x28, 0x04, 0x52,
 	0x0a, 0x72, 0x64, 0x62, 0x57, 0x61, 0x6c, 0x53, 0x69, 0x7a, 0x65, 0x4a, 0x04, 0x08, 0x01, 0x10,
-	0x02, 0x4a, 0x04, 0x08, 0x02, 0x10, 0x03, 0x22, 0xe4, 0x03, 0x0a, 0x09, 0x53, 0x6d, 0x64, 0x44,
-	0x65, 0x76, 0x69, 0x63, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x04, 0x75, 0x75, 0x69, 0x64, 0x12, 0x17, 0x0a, 0x07, 0x74, 0x67, 0x74,
-	0x5f, 0x69, 0x64, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x05, 0x52, 0x06, 0x74, 0x67, 0x74, 0x49,
-	0x64, 0x73, 0x12, 0x17, 0x0a, 0x07, 0x74, 0x72, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x03, 0x20,
-	0x01, 0x28, 0x09, 0x52, 0x06, 0x74, 0x72, 0x41, 0x64, 0x64, 0x72, 0x12, 0x2e, 0x0a, 0x09, 0x64,
-	0x65, 0x76, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x11,
-	0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x4e, 0x76, 0x6d, 0x65, 0x44, 0x65, 0x76, 0x53, 0x74, 0x61, 0x74,
-	0x65, 0x52, 0x08, 0x64, 0x65, 0x76, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x2a, 0x0a, 0x09, 0x6c,
-	0x65, 0x64, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x0d,
-	0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x4c, 0x65, 0x64, 0x53, 0x74, 0x61, 0x74, 0x65, 0x52, 0x08, 0x6c,
-	0x65, 0x64, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x1f, 0x0a, 0x0b, 0x74, 0x6f, 0x74, 0x61, 0x6c,
-	0x5f, 0x62, 0x79, 0x74, 0x65, 0x73, 0x18, 0x06, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0a, 0x74, 0x6f,
-	0x74, 0x61, 0x6c, 0x42, 0x79, 0x74, 0x65, 0x73, 0x12, 0x1f, 0x0a, 0x0b, 0x61, 0x76, 0x61, 0x69,
-	0x6c, 0x5f, 0x62, 0x79, 0x74, 0x65, 0x73, 0x18, 0x07, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0a, 0x61,
-	0x76, 0x61, 0x69, 0x6c, 0x42, 0x79, 0x74, 0x65, 0x73, 0x12, 0x21, 0x0a, 0x0c, 0x63, 0x6c, 0x75,
-	0x73, 0x74, 0x65, 0x72, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x08, 0x20, 0x01, 0x28, 0x04, 0x52,
-	0x0b, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x53, 0x69, 0x7a, 0x65, 0x12, 0x12, 0x0a, 0x04,
-	0x72, 0x61, 0x6e, 0x6b, 0x18, 0x09, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x72, 0x61, 0x6e, 0x6b,
-	0x12, 0x1b, 0x0a, 0x09, 0x72, 0x6f, 0x6c, 0x65, 0x5f, 0x62, 0x69, 0x74, 0x73, 0x18, 0x0a, 0x20,
-	0x01, 0x28, 0x0d, 0x52, 0x08, 0x72, 0x6f, 0x6c, 0x65, 0x42, 0x69, 0x74, 0x73, 0x12, 0x1b, 0x0a,
-	0x09, 0x6d, 0x65, 0x74, 0x61, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x0b, 0x20, 0x01, 0x28, 0x04,
-	0x52, 0x08, 0x6d, 0x65, 0x74, 0x61, 0x53, 0x69, 0x7a, 0x65, 0x12, 0x22, 0x0a, 0x0d, 0x6d, 0x65,
-	0x74, 0x61, 0x5f, 0x77, 0x61, 0x6c, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x0c, 0x20, 0x01, 0x28,
-	0x04, 0x52, 0x0b, 0x6d, 0x65, 0x74, 0x61, 0x57, 0x61, 0x6c, 0x53, 0x69, 0x7a, 0x65, 0x12, 0x19,
-	0x0a, 0x08, 0x72, 0x64, 0x62, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x0d, 0x20, 0x01, 0x28, 0x04,
-	0x52, 0x07, 0x72, 0x64, 0x62, 0x53, 0x69, 0x7a, 0x65, 0x12, 0x20, 0x0a, 0x0c, 0x72, 0x64, 0x62,
-	0x5f, 0x77, 0x61, 0x6c, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x0e, 0x20, 0x01, 0x28, 0x04, 0x52,
-	0x0a, 0x72, 0x64, 0x62, 0x57, 0x61, 0x6c, 0x53, 0x69, 0x7a, 0x65, 0x12, 0x21, 0x0a, 0x0c, 0x75,
-	0x73, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x62, 0x79, 0x74, 0x65, 0x73, 0x18, 0x0f, 0x20, 0x01, 0x28,
-	0x04, 0x52, 0x0b, 0x75, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x42, 0x79, 0x74, 0x65, 0x73, 0x22, 0x0b,
+	0x02, 0x4a, 0x04, 0x08, 0x02, 0x10, 0x03, 0x22, 0xe7, 0x03, 0x0a, 0x0e, 0x4e, 0x76, 0x6d, 0x65,
+	0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x12, 0x14, 0x0a, 0x05, 0x6d, 0x6f,
+	0x64, 0x65, 0x6c, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x6d, 0x6f, 0x64, 0x65, 0x6c,
+	0x12, 0x16, 0x0a, 0x06, 0x73, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x06, 0x73, 0x65, 0x72, 0x69, 0x61, 0x6c, 0x12, 0x19, 0x0a, 0x08, 0x70, 0x63, 0x69, 0x5f,
+	0x61, 0x64, 0x64, 0x72, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x70, 0x63, 0x69, 0x41,
+	0x64, 0x64, 0x72, 0x12, 0x15, 0x0a, 0x06, 0x66, 0x77, 0x5f, 0x72, 0x65, 0x76, 0x18, 0x04, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x05, 0x66, 0x77, 0x52, 0x65, 0x76, 0x12, 0x1b, 0x0a, 0x09, 0x73, 0x6f,
+	0x63, 0x6b, 0x65, 0x74, 0x5f, 0x69, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x05, 0x52, 0x08, 0x73,
+	0x6f, 0x63, 0x6b, 0x65, 0x74, 0x49, 0x64, 0x12, 0x35, 0x0a, 0x0c, 0x68, 0x65, 0x61, 0x6c, 0x74,
+	0x68, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x73, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e,
+	0x63, 0x74, 0x6c, 0x2e, 0x42, 0x69, 0x6f, 0x48, 0x65, 0x61, 0x6c, 0x74, 0x68, 0x52, 0x65, 0x73,
+	0x70, 0x52, 0x0b, 0x68, 0x65, 0x61, 0x6c, 0x74, 0x68, 0x53, 0x74, 0x61, 0x74, 0x73, 0x12, 0x3d,
+	0x0a, 0x0a, 0x6e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x73, 0x18, 0x07, 0x20, 0x03,
+	0x28, 0x0b, 0x32, 0x1d, 0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x4e, 0x76, 0x6d, 0x65, 0x43, 0x6f, 0x6e,
+	0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x2e, 0x4e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x52, 0x0a, 0x6e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x73, 0x12, 0x2f, 0x0a,
+	0x0b, 0x73, 0x6d, 0x64, 0x5f, 0x64, 0x65, 0x76, 0x69, 0x63, 0x65, 0x73, 0x18, 0x08, 0x20, 0x03,
+	0x28, 0x0b, 0x32, 0x0e, 0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x53, 0x6d, 0x64, 0x44, 0x65, 0x76, 0x69,
+	0x63, 0x65, 0x52, 0x0a, 0x73, 0x6d, 0x64, 0x44, 0x65, 0x76, 0x69, 0x63, 0x65, 0x73, 0x12, 0x2e,
+	0x0a, 0x09, 0x64, 0x65, 0x76, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x09, 0x20, 0x01, 0x28,
+	0x0e, 0x32, 0x11, 0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x4e, 0x76, 0x6d, 0x65, 0x44, 0x65, 0x76, 0x53,
+	0x74, 0x61, 0x74, 0x65, 0x52, 0x08, 0x64, 0x65, 0x76, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x2a,
+	0x0a, 0x09, 0x6c, 0x65, 0x64, 0x5f, 0x73, 0x74, 0x61, 0x74, 0x65, 0x18, 0x0a, 0x20, 0x01, 0x28,
+	0x0e, 0x32, 0x0d, 0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x4c, 0x65, 0x64, 0x53, 0x74, 0x61, 0x74, 0x65,
+	0x52, 0x08, 0x6c, 0x65, 0x64, 0x53, 0x74, 0x61, 0x74, 0x65, 0x1a, 0x55, 0x0a, 0x09, 0x4e, 0x61,
+	0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0d, 0x52, 0x02, 0x69, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x73, 0x69, 0x7a, 0x65, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x04, 0x73, 0x69, 0x7a, 0x65, 0x12, 0x24, 0x0a, 0x0e, 0x63,
+	0x74, 0x72, 0x6c, 0x72, 0x5f, 0x70, 0x63, 0x69, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x03, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x0c, 0x63, 0x74, 0x72, 0x6c, 0x72, 0x50, 0x63, 0x69, 0x41, 0x64, 0x64,
+	0x72, 0x22, 0xda, 0x03, 0x0a, 0x09, 0x53, 0x6d, 0x64, 0x44, 0x65, 0x76, 0x69, 0x63, 0x65, 0x12,
+	0x12, 0x0a, 0x04, 0x75, 0x75, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x75,
+	0x75, 0x69, 0x64, 0x12, 0x17, 0x0a, 0x07, 0x74, 0x67, 0x74, 0x5f, 0x69, 0x64, 0x73, 0x18, 0x02,
+	0x20, 0x03, 0x28, 0x05, 0x52, 0x06, 0x74, 0x67, 0x74, 0x49, 0x64, 0x73, 0x12, 0x1f, 0x0a, 0x0b,
+	0x74, 0x6f, 0x74, 0x61, 0x6c, 0x5f, 0x62, 0x79, 0x74, 0x65, 0x73, 0x18, 0x06, 0x20, 0x01, 0x28,
+	0x04, 0x52, 0x0a, 0x74, 0x6f, 0x74, 0x61, 0x6c, 0x42, 0x79, 0x74, 0x65, 0x73, 0x12, 0x1f, 0x0a,
+	0x0b, 0x61, 0x76, 0x61, 0x69, 0x6c, 0x5f, 0x62, 0x79, 0x74, 0x65, 0x73, 0x18, 0x07, 0x20, 0x01,
+	0x28, 0x04, 0x52, 0x0a, 0x61, 0x76, 0x61, 0x69, 0x6c, 0x42, 0x79, 0x74, 0x65, 0x73, 0x12, 0x21,
+	0x0a, 0x0c, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x08,
+	0x20, 0x01, 0x28, 0x04, 0x52, 0x0b, 0x63, 0x6c, 0x75, 0x73, 0x74, 0x65, 0x72, 0x53, 0x69, 0x7a,
+	0x65, 0x12, 0x12, 0x0a, 0x04, 0x72, 0x61, 0x6e, 0x6b, 0x18, 0x09, 0x20, 0x01, 0x28, 0x0d, 0x52,
+	0x04, 0x72, 0x61, 0x6e, 0x6b, 0x12, 0x1b, 0x0a, 0x09, 0x72, 0x6f, 0x6c, 0x65, 0x5f, 0x62, 0x69,
+	0x74, 0x73, 0x18, 0x0a, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x08, 0x72, 0x6f, 0x6c, 0x65, 0x42, 0x69,
+	0x74, 0x73, 0x12, 0x1b, 0x0a, 0x09, 0x6d, 0x65, 0x74, 0x61, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18,
+	0x0b, 0x20, 0x01, 0x28, 0x04, 0x52, 0x08, 0x6d, 0x65, 0x74, 0x61, 0x53, 0x69, 0x7a, 0x65, 0x12,
+	0x22, 0x0a, 0x0d, 0x6d, 0x65, 0x74, 0x61, 0x5f, 0x77, 0x61, 0x6c, 0x5f, 0x73, 0x69, 0x7a, 0x65,
+	0x18, 0x0c, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0b, 0x6d, 0x65, 0x74, 0x61, 0x57, 0x61, 0x6c, 0x53,
+	0x69, 0x7a, 0x65, 0x12, 0x19, 0x0a, 0x08, 0x72, 0x64, 0x62, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18,
+	0x0d, 0x20, 0x01, 0x28, 0x04, 0x52, 0x07, 0x72, 0x64, 0x62, 0x53, 0x69, 0x7a, 0x65, 0x12, 0x20,
+	0x0a, 0x0c, 0x72, 0x64, 0x62, 0x5f, 0x77, 0x61, 0x6c, 0x5f, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x0e,
+	0x20, 0x01, 0x28, 0x04, 0x52, 0x0a, 0x72, 0x64, 0x62, 0x57, 0x61, 0x6c, 0x53, 0x69, 0x7a, 0x65,
+	0x12, 0x21, 0x0a, 0x0c, 0x75, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x5f, 0x62, 0x79, 0x74, 0x65, 0x73,
+	0x18, 0x0f, 0x20, 0x01, 0x28, 0x04, 0x52, 0x0b, 0x75, 0x73, 0x61, 0x62, 0x6c, 0x65, 0x42, 0x79,
+	0x74, 0x65, 0x73, 0x12, 0x29, 0x0a, 0x05, 0x63, 0x74, 0x72, 0x6c, 0x72, 0x18, 0x10, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x13, 0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x4e, 0x76, 0x6d, 0x65, 0x43, 0x6f, 0x6e,
+	0x74, 0x72, 0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x52, 0x05, 0x63, 0x74, 0x72, 0x6c, 0x72, 0x12, 0x2c,
+	0x0a, 0x12, 0x63, 0x74, 0x72, 0x6c, 0x72, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63,
+	0x65, 0x5f, 0x69, 0x64, 0x18, 0x11, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x10, 0x63, 0x74, 0x72, 0x6c,
+	0x72, 0x4e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x49, 0x64, 0x4a, 0x04, 0x08, 0x03,
+	0x10, 0x04, 0x4a, 0x04, 0x08, 0x04, 0x10, 0x05, 0x4a, 0x04, 0x08, 0x05, 0x10, 0x06, 0x22, 0x0b,
 	0x0a, 0x09, 0x53, 0x6d, 0x64, 0x44, 0x65, 0x76, 0x52, 0x65, 0x71, 0x22, 0x4e, 0x0a, 0x0a, 0x53,
 	0x6d, 0x64, 0x44, 0x65, 0x76, 0x52, 0x65, 0x73, 0x70, 0x12, 0x16, 0x0a, 0x06, 0x73, 0x74, 0x61,
 	0x74, 0x75, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x06, 0x73, 0x74, 0x61, 0x74, 0x75,
@@ -2296,48 +2334,23 @@ var file_ctl_smd_proto_rawDesc = []byte{
 	0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x19,
 	0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x53, 0x6d, 0x64, 0x4d, 0x61, 0x6e, 0x61, 0x67, 0x65, 0x52, 0x65,
 	0x73, 0x70, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c,
-	0x74, 0x73, 0x22, 0x8b, 0x03, 0x0a, 0x0e, 0x4e, 0x76, 0x6d, 0x65, 0x43, 0x6f, 0x6e, 0x74, 0x72,
-	0x6f, 0x6c, 0x6c, 0x65, 0x72, 0x12, 0x14, 0x0a, 0x05, 0x6d, 0x6f, 0x64, 0x65, 0x6c, 0x18, 0x01,
-	0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x6d, 0x6f, 0x64, 0x65, 0x6c, 0x12, 0x16, 0x0a, 0x06, 0x73,
-	0x65, 0x72, 0x69, 0x61, 0x6c, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x73, 0x65, 0x72,
-	0x69, 0x61, 0x6c, 0x12, 0x19, 0x0a, 0x08, 0x70, 0x63, 0x69, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18,
-	0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x70, 0x63, 0x69, 0x41, 0x64, 0x64, 0x72, 0x12, 0x15,
-	0x0a, 0x06, 0x66, 0x77, 0x5f, 0x72, 0x65, 0x76, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05,
-	0x66, 0x77, 0x52, 0x65, 0x76, 0x12, 0x1b, 0x0a, 0x09, 0x73, 0x6f, 0x63, 0x6b, 0x65, 0x74, 0x5f,
-	0x69, 0x64, 0x18, 0x05, 0x20, 0x01, 0x28, 0x05, 0x52, 0x08, 0x73, 0x6f, 0x63, 0x6b, 0x65, 0x74,
-	0x49, 0x64, 0x12, 0x35, 0x0a, 0x0c, 0x68, 0x65, 0x61, 0x6c, 0x74, 0x68, 0x5f, 0x73, 0x74, 0x61,
-	0x74, 0x73, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x63, 0x74, 0x6c, 0x2e, 0x42,
-	0x69, 0x6f, 0x48, 0x65, 0x61, 0x6c, 0x74, 0x68, 0x52, 0x65, 0x73, 0x70, 0x52, 0x0b, 0x68, 0x65,
-	0x61, 0x6c, 0x74, 0x68, 0x53, 0x74, 0x61, 0x74, 0x73, 0x12, 0x3d, 0x0a, 0x0a, 0x6e, 0x61, 0x6d,
-	0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x73, 0x18, 0x07, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1d, 0x2e,
-	0x63, 0x74, 0x6c, 0x2e, 0x4e, 0x76, 0x6d, 0x65, 0x43, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x6c,
-	0x65, 0x72, 0x2e, 0x4e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x0a, 0x6e, 0x61,
-	0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x73, 0x12, 0x2f, 0x0a, 0x0b, 0x73, 0x6d, 0x64, 0x5f,
-	0x64, 0x65, 0x76, 0x69, 0x63, 0x65, 0x73, 0x18, 0x08, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0e, 0x2e,
-	0x63, 0x74, 0x6c, 0x2e, 0x53, 0x6d, 0x64, 0x44, 0x65, 0x76, 0x69, 0x63, 0x65, 0x52, 0x0a, 0x73,
-	0x6d, 0x64, 0x44, 0x65, 0x76, 0x69, 0x63, 0x65, 0x73, 0x1a, 0x55, 0x0a, 0x09, 0x4e, 0x61, 0x6d,
-	0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x0d, 0x52, 0x02, 0x69, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x73, 0x69, 0x7a, 0x65, 0x18, 0x02,
-	0x20, 0x01, 0x28, 0x04, 0x52, 0x04, 0x73, 0x69, 0x7a, 0x65, 0x12, 0x24, 0x0a, 0x0e, 0x63, 0x74,
-	0x72, 0x6c, 0x72, 0x5f, 0x70, 0x63, 0x69, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x03, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x0c, 0x63, 0x74, 0x72, 0x6c, 0x72, 0x50, 0x63, 0x69, 0x41, 0x64, 0x64, 0x72,
-	0x2a, 0x4c, 0x0a, 0x0c, 0x4e, 0x76, 0x6d, 0x65, 0x44, 0x65, 0x76, 0x53, 0x74, 0x61, 0x74, 0x65,
-	0x12, 0x0b, 0x0a, 0x07, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10, 0x00, 0x12, 0x0a, 0x0a,
-	0x06, 0x4e, 0x4f, 0x52, 0x4d, 0x41, 0x4c, 0x10, 0x01, 0x12, 0x07, 0x0a, 0x03, 0x4e, 0x45, 0x57,
-	0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x45, 0x56, 0x49, 0x43, 0x54, 0x45, 0x44, 0x10, 0x03, 0x12,
-	0x0d, 0x0a, 0x09, 0x55, 0x4e, 0x50, 0x4c, 0x55, 0x47, 0x47, 0x45, 0x44, 0x10, 0x04, 0x2a, 0x44,
-	0x0a, 0x08, 0x4c, 0x65, 0x64, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x07, 0x0a, 0x03, 0x4f, 0x46,
-	0x46, 0x10, 0x00, 0x12, 0x0f, 0x0a, 0x0b, 0x51, 0x55, 0x49, 0x43, 0x4b, 0x5f, 0x42, 0x4c, 0x49,
-	0x4e, 0x4b, 0x10, 0x01, 0x12, 0x06, 0x0a, 0x02, 0x4f, 0x4e, 0x10, 0x02, 0x12, 0x0e, 0x0a, 0x0a,
-	0x53, 0x4c, 0x4f, 0x57, 0x5f, 0x42, 0x4c, 0x49, 0x4e, 0x4b, 0x10, 0x03, 0x12, 0x06, 0x0a, 0x02,
-	0x4e, 0x41, 0x10, 0x04, 0x2a, 0x28, 0x0a, 0x09, 0x4c, 0x65, 0x64, 0x41, 0x63, 0x74, 0x69, 0x6f,
-	0x6e, 0x12, 0x07, 0x0a, 0x03, 0x47, 0x45, 0x54, 0x10, 0x00, 0x12, 0x07, 0x0a, 0x03, 0x53, 0x45,
-	0x54, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x52, 0x45, 0x53, 0x45, 0x54, 0x10, 0x02, 0x42, 0x39,
-	0x5a, 0x37, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x61, 0x6f,
-	0x73, 0x2d, 0x73, 0x74, 0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73, 0x72, 0x63,
-	0x2f, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f, 0x6e, 0x2f,
-	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x63, 0x74, 0x6c, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x33,
+	0x74, 0x73, 0x2a, 0x4c, 0x0a, 0x0c, 0x4e, 0x76, 0x6d, 0x65, 0x44, 0x65, 0x76, 0x53, 0x74, 0x61,
+	0x74, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10, 0x00, 0x12,
+	0x0a, 0x0a, 0x06, 0x4e, 0x4f, 0x52, 0x4d, 0x41, 0x4c, 0x10, 0x01, 0x12, 0x07, 0x0a, 0x03, 0x4e,
+	0x45, 0x57, 0x10, 0x02, 0x12, 0x0b, 0x0a, 0x07, 0x45, 0x56, 0x49, 0x43, 0x54, 0x45, 0x44, 0x10,
+	0x03, 0x12, 0x0d, 0x0a, 0x09, 0x55, 0x4e, 0x50, 0x4c, 0x55, 0x47, 0x47, 0x45, 0x44, 0x10, 0x04,
+	0x2a, 0x44, 0x0a, 0x08, 0x4c, 0x65, 0x64, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x07, 0x0a, 0x03,
+	0x4f, 0x46, 0x46, 0x10, 0x00, 0x12, 0x0f, 0x0a, 0x0b, 0x51, 0x55, 0x49, 0x43, 0x4b, 0x5f, 0x42,
+	0x4c, 0x49, 0x4e, 0x4b, 0x10, 0x01, 0x12, 0x06, 0x0a, 0x02, 0x4f, 0x4e, 0x10, 0x02, 0x12, 0x0e,
+	0x0a, 0x0a, 0x53, 0x4c, 0x4f, 0x57, 0x5f, 0x42, 0x4c, 0x49, 0x4e, 0x4b, 0x10, 0x03, 0x12, 0x06,
+	0x0a, 0x02, 0x4e, 0x41, 0x10, 0x04, 0x2a, 0x28, 0x0a, 0x09, 0x4c, 0x65, 0x64, 0x41, 0x63, 0x74,
+	0x69, 0x6f, 0x6e, 0x12, 0x07, 0x0a, 0x03, 0x47, 0x45, 0x54, 0x10, 0x00, 0x12, 0x07, 0x0a, 0x03,
+	0x53, 0x45, 0x54, 0x10, 0x01, 0x12, 0x09, 0x0a, 0x05, 0x52, 0x45, 0x53, 0x45, 0x54, 0x10, 0x02,
+	0x42, 0x39, 0x5a, 0x37, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64,
+	0x61, 0x6f, 0x73, 0x2d, 0x73, 0x74, 0x61, 0x63, 0x6b, 0x2f, 0x64, 0x61, 0x6f, 0x73, 0x2f, 0x73,
+	0x72, 0x63, 0x2f, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x6f, 0x6c, 0x2f, 0x63, 0x6f, 0x6d, 0x6d, 0x6f,
+	0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x63, 0x74, 0x6c, 0x62, 0x06, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x33,
 }
 
 var (
@@ -2360,55 +2373,56 @@ var file_ctl_smd_proto_goTypes = []interface{}{
 	(LedAction)(0),                           // 2: ctl.LedAction
 	(*BioHealthReq)(nil),                     // 3: ctl.BioHealthReq
 	(*BioHealthResp)(nil),                    // 4: ctl.BioHealthResp
-	(*SmdDevice)(nil),                        // 5: ctl.SmdDevice
-	(*SmdDevReq)(nil),                        // 6: ctl.SmdDevReq
-	(*SmdDevResp)(nil),                       // 7: ctl.SmdDevResp
-	(*SmdPoolReq)(nil),                       // 8: ctl.SmdPoolReq
-	(*SmdPoolResp)(nil),                      // 9: ctl.SmdPoolResp
-	(*SmdQueryReq)(nil),                      // 10: ctl.SmdQueryReq
-	(*SmdQueryResp)(nil),                     // 11: ctl.SmdQueryResp
-	(*LedManageReq)(nil),                     // 12: ctl.LedManageReq
-	(*DevReplaceReq)(nil),                    // 13: ctl.DevReplaceReq
-	(*SetFaultyReq)(nil),                     // 14: ctl.SetFaultyReq
-	(*DevManageResp)(nil),                    // 15: ctl.DevManageResp
-	(*SmdManageReq)(nil),                     // 16: ctl.SmdManageReq
-	(*SmdManageResp)(nil),                    // 17: ctl.SmdManageResp
-	(*NvmeController)(nil),                   // 18: ctl.NvmeController
-	(*SmdPoolResp_Pool)(nil),                 // 19: ctl.SmdPoolResp.Pool
-	(*SmdQueryResp_SmdDeviceWithHealth)(nil), // 20: ctl.SmdQueryResp.SmdDeviceWithHealth
-	(*SmdQueryResp_Pool)(nil),                // 21: ctl.SmdQueryResp.Pool
-	(*SmdQueryResp_RankResp)(nil),            // 22: ctl.SmdQueryResp.RankResp
-	(*SmdManageResp_Result)(nil),             // 23: ctl.SmdManageResp.Result
-	(*SmdManageResp_RankResp)(nil),           // 24: ctl.SmdManageResp.RankResp
-	(*NvmeController_Namespace)(nil),         // 25: ctl.NvmeController.Namespace
+	(*NvmeController)(nil),                   // 5: ctl.NvmeController
+	(*SmdDevice)(nil),                        // 6: ctl.SmdDevice
+	(*SmdDevReq)(nil),                        // 7: ctl.SmdDevReq
+	(*SmdDevResp)(nil),                       // 8: ctl.SmdDevResp
+	(*SmdPoolReq)(nil),                       // 9: ctl.SmdPoolReq
+	(*SmdPoolResp)(nil),                      // 10: ctl.SmdPoolResp
+	(*SmdQueryReq)(nil),                      // 11: ctl.SmdQueryReq
+	(*SmdQueryResp)(nil),                     // 12: ctl.SmdQueryResp
+	(*LedManageReq)(nil),                     // 13: ctl.LedManageReq
+	(*DevReplaceReq)(nil),                    // 14: ctl.DevReplaceReq
+	(*SetFaultyReq)(nil),                     // 15: ctl.SetFaultyReq
+	(*DevManageResp)(nil),                    // 16: ctl.DevManageResp
+	(*SmdManageReq)(nil),                     // 17: ctl.SmdManageReq
+	(*SmdManageResp)(nil),                    // 18: ctl.SmdManageResp
+	(*NvmeController_Namespace)(nil),         // 19: ctl.NvmeController.Namespace
+	(*SmdPoolResp_Pool)(nil),                 // 20: ctl.SmdPoolResp.Pool
+	(*SmdQueryResp_SmdDeviceWithHealth)(nil), // 21: ctl.SmdQueryResp.SmdDeviceWithHealth
+	(*SmdQueryResp_Pool)(nil),                // 22: ctl.SmdQueryResp.Pool
+	(*SmdQueryResp_RankResp)(nil),            // 23: ctl.SmdQueryResp.RankResp
+	(*SmdManageResp_Result)(nil),             // 24: ctl.SmdManageResp.Result
+	(*SmdManageResp_RankResp)(nil),           // 25: ctl.SmdManageResp.RankResp
 }
 var file_ctl_smd_proto_depIdxs = []int32{
-	0,  // 0: ctl.SmdDevice.dev_state:type_name -> ctl.NvmeDevState
-	1,  // 1: ctl.SmdDevice.led_state:type_name -> ctl.LedState
-	5,  // 2: ctl.SmdDevResp.devices:type_name -> ctl.SmdDevice
-	19, // 3: ctl.SmdPoolResp.pools:type_name -> ctl.SmdPoolResp.Pool
-	22, // 4: ctl.SmdQueryResp.ranks:type_name -> ctl.SmdQueryResp.RankResp
-	2,  // 5: ctl.LedManageReq.led_action:type_name -> ctl.LedAction
-	1,  // 6: ctl.LedManageReq.led_state:type_name -> ctl.LedState
-	5,  // 7: ctl.DevManageResp.device:type_name -> ctl.SmdDevice
-	12, // 8: ctl.SmdManageReq.led:type_name -> ctl.LedManageReq
-	13, // 9: ctl.SmdManageReq.replace:type_name -> ctl.DevReplaceReq
-	14, // 10: ctl.SmdManageReq.faulty:type_name -> ctl.SetFaultyReq
-	24, // 11: ctl.SmdManageResp.ranks:type_name -> ctl.SmdManageResp.RankResp
-	4,  // 12: ctl.NvmeController.health_stats:type_name -> ctl.BioHealthResp
-	25, // 13: ctl.NvmeController.namespaces:type_name -> ctl.NvmeController.Namespace
-	5,  // 14: ctl.NvmeController.smd_devices:type_name -> ctl.SmdDevice
-	5,  // 15: ctl.SmdQueryResp.SmdDeviceWithHealth.details:type_name -> ctl.SmdDevice
-	4,  // 16: ctl.SmdQueryResp.SmdDeviceWithHealth.health:type_name -> ctl.BioHealthResp
-	20, // 17: ctl.SmdQueryResp.RankResp.devices:type_name -> ctl.SmdQueryResp.SmdDeviceWithHealth
-	21, // 18: ctl.SmdQueryResp.RankResp.pools:type_name -> ctl.SmdQueryResp.Pool
-	5,  // 19: ctl.SmdManageResp.Result.device:type_name -> ctl.SmdDevice
-	23, // 20: ctl.SmdManageResp.RankResp.results:type_name -> ctl.SmdManageResp.Result
-	21, // [21:21] is the sub-list for method output_type
-	21, // [21:21] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	4,  // 0: ctl.NvmeController.health_stats:type_name -> ctl.BioHealthResp
+	19, // 1: ctl.NvmeController.namespaces:type_name -> ctl.NvmeController.Namespace
+	6,  // 2: ctl.NvmeController.smd_devices:type_name -> ctl.SmdDevice
+	0,  // 3: ctl.NvmeController.dev_state:type_name -> ctl.NvmeDevState
+	1,  // 4: ctl.NvmeController.led_state:type_name -> ctl.LedState
+	5,  // 5: ctl.SmdDevice.ctrlr:type_name -> ctl.NvmeController
+	6,  // 6: ctl.SmdDevResp.devices:type_name -> ctl.SmdDevice
+	20, // 7: ctl.SmdPoolResp.pools:type_name -> ctl.SmdPoolResp.Pool
+	23, // 8: ctl.SmdQueryResp.ranks:type_name -> ctl.SmdQueryResp.RankResp
+	2,  // 9: ctl.LedManageReq.led_action:type_name -> ctl.LedAction
+	1,  // 10: ctl.LedManageReq.led_state:type_name -> ctl.LedState
+	6,  // 11: ctl.DevManageResp.device:type_name -> ctl.SmdDevice
+	13, // 12: ctl.SmdManageReq.led:type_name -> ctl.LedManageReq
+	14, // 13: ctl.SmdManageReq.replace:type_name -> ctl.DevReplaceReq
+	15, // 14: ctl.SmdManageReq.faulty:type_name -> ctl.SetFaultyReq
+	25, // 15: ctl.SmdManageResp.ranks:type_name -> ctl.SmdManageResp.RankResp
+	6,  // 16: ctl.SmdQueryResp.SmdDeviceWithHealth.details:type_name -> ctl.SmdDevice
+	4,  // 17: ctl.SmdQueryResp.SmdDeviceWithHealth.health:type_name -> ctl.BioHealthResp
+	21, // 18: ctl.SmdQueryResp.RankResp.devices:type_name -> ctl.SmdQueryResp.SmdDeviceWithHealth
+	22, // 19: ctl.SmdQueryResp.RankResp.pools:type_name -> ctl.SmdQueryResp.Pool
+	6,  // 20: ctl.SmdManageResp.Result.device:type_name -> ctl.SmdDevice
+	24, // 21: ctl.SmdManageResp.RankResp.results:type_name -> ctl.SmdManageResp.Result
+	22, // [22:22] is the sub-list for method output_type
+	22, // [22:22] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_ctl_smd_proto_init() }
@@ -2442,162 +2456,6 @@ func file_ctl_smd_proto_init() {
 			}
 		}
 		file_ctl_smd_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdDevice); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdDevReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdDevResp); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdPoolReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdPoolResp); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdQueryReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdQueryResp); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LedManageReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DevReplaceReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SetFaultyReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*DevManageResp); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdManageReq); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdManageResp); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*NvmeController); i {
 			case 0:
 				return &v.state
@@ -2609,79 +2467,163 @@ func file_ctl_smd_proto_init() {
 				return nil
 			}
 		}
+		file_ctl_smd_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdDevice); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdDevReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdDevResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdPoolReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdPoolResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdQueryReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdQueryResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*LedManageReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*DevReplaceReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SetFaultyReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*DevManageResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdManageReq); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdManageResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 		file_ctl_smd_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdPoolResp_Pool); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdQueryResp_SmdDeviceWithHealth); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdQueryResp_Pool); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdQueryResp_RankResp); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdManageResp_Result); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SmdManageResp_RankResp); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_ctl_smd_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*NvmeController_Namespace); i {
 			case 0:
 				return &v.state
@@ -2693,8 +2635,80 @@ func file_ctl_smd_proto_init() {
 				return nil
 			}
 		}
+		file_ctl_smd_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdPoolResp_Pool); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdQueryResp_SmdDeviceWithHealth); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdQueryResp_Pool); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdQueryResp_RankResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdManageResp_Result); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ctl_smd_proto_msgTypes[22].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SmdManageResp_RankResp); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
-	file_ctl_smd_proto_msgTypes[13].OneofWrappers = []interface{}{
+	file_ctl_smd_proto_msgTypes[14].OneofWrappers = []interface{}{
 		(*SmdManageReq_Led)(nil),
 		(*SmdManageReq_Replace)(nil),
 		(*SmdManageReq_Faulty)(nil),
