@@ -292,8 +292,7 @@ CRT_RPC_DECLARE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP,
 	    (uint32_t)(pei_ntgts)CRT_VAR)((uint32_t)(pei_ndomains)CRT_VAR)(                        \
 	    (uint32_t)(pei_domains)CRT_ARRAY)
 
-#define DAOS_OSEQ_POOL_EXTEND /* output fields */		 \
-	((struct pool_op_out)	(peo_op)		CRT_VAR)
+#define DAOS_OSEQ_POOL_EXTEND /* output fields */ ((struct pool_op_out)(peo_op)CRT_VAR)
 
 CRT_RPC_DECLARE(pool_tgt_update, DAOS_ISEQ_POOL_TGT_UPDATE, DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_tgt_update_v6, DAOS_ISEQ_POOL_TGT_UPDATE_V6, DAOS_OSEQ_POOL_TGT_UPDATE)
