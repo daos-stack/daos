@@ -463,8 +463,7 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 
 	for _, dev := range scanRes.Namespaces {
 		if err := cr.removeNamespace(dev.Name); err != nil {
-			cr.log.Noticef("removeNamespace: %s", err.Error())
-			// Continue to reset regions.
+			return nil, errors.Wrap(err, "removeNamespace")
 		}
 	}
 
