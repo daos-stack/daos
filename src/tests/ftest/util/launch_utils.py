@@ -13,9 +13,9 @@ from pathlib import Path
 
 from ClusterShell.NodeSet import NodeSet
 from slurm_setup import SlurmSetup, SlurmSetupException
+# pylint: disable=import-error,no-name-in-module
 from util.collection_utils import TEST_RESULTS_DIRS, collect_test_result
 from util.data_utils import dict_extract_values, list_flatten, list_unique
-# pylint: disable=import-error,no-name-in-module
 from util.environment_utils import TestEnvironment
 from util.host_utils import HostException, HostInfo, get_local_host, get_node_set
 from util.logger_utils import LOG_FILE_FORMAT, get_file_handler
