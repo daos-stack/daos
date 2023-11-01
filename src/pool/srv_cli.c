@@ -241,7 +241,7 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 		rc = pool_req_create(info->dmi_ctx, &ep, cbs->pscc_op, uuid, no_uuid, &req_time,
 				     &rpc);
 		if (rc != 0) {
-			D_ERROR(DF_PRE": create RPC: "DF_RC"\n", DP_PRE(uuid, cbs), DP_RC(rc));
+			DL_ERROR(rc, DF_PRE": create RPC", DP_PRE(uuid, cbs));
 			break;
 		}
 

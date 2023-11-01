@@ -161,16 +161,12 @@ typedef struct {
 	daos_pool_info_t	*info;
 	/** Pool's label or UUID string to connect to, API v1.3.0 */
 	const char		*pool;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_pool_connect_t;
 
 /** pool disconnect args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_pool_disconnect_t;
 
 /** pool target update (add/exclude) args */
@@ -183,8 +179,6 @@ typedef struct {
 	d_rank_list_t		*svc;
 	/** Target array */
 	struct d_tgt_list	*tgts;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_pool_update_t;
 
 /** Object class register args */
@@ -207,8 +201,6 @@ typedef struct {
 	daos_pool_info_t       *info;
 	/** Optional, returned pool properties. */
 	daos_prop_t	       *prop;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t			 req_time;
 } daos_pool_query_t;
 
 /** pool target query args */
@@ -221,8 +213,6 @@ typedef struct {
 	d_rank_t		rank;
 	/** Returned storage information of target. */
 	daos_target_info_t	*info;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t			 req_time;
 } daos_pool_query_target_t;
 
 /** pool container list args */
@@ -233,8 +223,6 @@ typedef struct {
 	daos_size_t			*ncont;
 	/** Array of container structures. */
 	struct daos_pool_cont_info	*cont_buf;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t			 req_time;
 } daos_pool_list_cont_t;
 
 /** pool filter containers args */
@@ -247,8 +235,6 @@ typedef struct {
 	daos_size_t			*ncont;
 	/** Array of container extended info structures. */
 	struct daos_pool_cont_info2	*cont_buf;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t			 req_time;
 } daos_pool_filter_cont_t;
 
 /** pool list attributes args */
@@ -259,7 +245,6 @@ typedef struct {
 	char			*buf;
 	/** [in]: Buffer size. [out]: Aggregate size of all attribute names */
 	size_t			*size;
-	uint64_t		 req_time;
 } daos_pool_list_attr_t;
 
 /** pool get attributes args */
@@ -274,7 +259,6 @@ typedef struct {
 	void   *const		*values;
 	/** [in]: Array of \a n buf sizes. [out]: Array of actual sizes. */
 	size_t			*sizes;
-	uint64_t		 req_time;
 } daos_pool_get_attr_t;
 
 /** pool set attributes args */
@@ -289,7 +273,6 @@ typedef struct {
 	void   const *const	*values;
 	/** Array of \a n elements containing the sizes of attribute values. */
 	size_t const		*sizes;
-	uint64_t		 req_time;
 } daos_pool_set_attr_t;
 
 /** pool del attributes args */
@@ -300,7 +283,6 @@ typedef struct {
 	int			n;
 	/** Array of \a n null-terminated attribute names. */
 	char   const *const    *names;
-	uint64_t		req_time;
 } daos_pool_del_attr_t;
 
 /** pool add/remove replicas args */
@@ -329,8 +311,6 @@ typedef struct {
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t		req_time;
 } daos_pool_stop_svc_t;
 
 /** Container create args */

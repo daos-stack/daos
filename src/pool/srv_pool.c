@@ -966,8 +966,7 @@ rechoose:
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_CREATE, pool_uuid, pi_hdl_uuid, &req_time,
 			     &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID": failed to create POOL_CREATE RPC", DP_UUID(pool_uuid));
 		goto out_backoff_seq;
 	}
 	pool_create_in_set_data(rpc, POOL_CREATE, DAOS_POOL_VERSION, target_addrs, prop, ndomains,
@@ -2744,7 +2743,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_default_copy(prop_dup, prop);
 	if (rc) {
-		D_ERROR("daos_prop_default_copy failed.\n");
+		DL_ERROR(rc, "daos_prop_default_copy failed.\n");
 		D_GOTO(out_tx, rc);
 	}
 
@@ -2878,7 +2877,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
 	char			       *machine = NULL;
-	d_iov_t				cred;
+	d_iov_t			       *credp;
 	uint64_t			flags;
 	uint64_t			query_bits;
 	crt_bulk_t			bulk;
@@ -2893,7 +2892,21 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	pool_connect_in_get_data(rpc, POOL_CONNECT, handler_version, &cred, &flags, &query_bits,
+	pool_connect_in_get_cred(rpc, handler_version, &credp);
+	{
+		char   *inptr = crt_req_get(rpc);
+		size_t	off = (char *)credp - (char *)inptr;
+		size_t	exp_off;
+
+		if (handler_version >= POOL_PROTO_VER_WITH_SVC_OP_KEY)
+			exp_off = offsetof(struct pool_connect_v6_in, pci_cred);
+		else
+			exp_off = offsetof(struct pool_connect_in, pci_cred);
+
+		D_ASSERTF((off == exp_off), "rpc in=%p, credp=%p, offset=%zu, expected_offset=%zu, "
+			  "proto=%d", inptr, credp, off, exp_off, handler_version);
+	}
+	pool_connect_in_get_data(rpc, POOL_CONNECT, handler_version, &flags, &query_bits,
 				 &bulk, &cli_pool_version);
 
 	if (query_bits & DAOS_PO_QUERY_REBUILD_STATUS) {
@@ -2965,33 +2978,35 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	int diff = DAOS_POOL_GLOBAL_VERSION - cli_pool_version;
 	if (cli_pool_version <= DAOS_POOL_GLOBAL_VERSION) {
 		if (diff >= NUM_POOL_VERSIONS) {
-			D_ERROR(DF_UUID": cannot connect, client supported pool "
-				"layout version (%u) is more than %u versions smaller "
-				"than server supported pool layout version(%u), "
-				"try to upgrade client firstly.\n",
-				DP_UUID(in->pci_op.pi_uuid), cli_pool_version,
-				NUM_POOL_VERSIONS - 1, DAOS_POOL_GLOBAL_VERSION);
-			D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+			rc = -DER_NOTSUPPORTED;
+			DL_ERROR(rc, DF_UUID": cannot connect, client supported pool "
+				 "layout version (%u) is more than %u versions smaller "
+				 "than server supported pool layout version(%u), "
+				 "try to upgrade client firstly",
+				 DP_UUID(in->pci_op.pi_uuid), cli_pool_version,
+				 NUM_POOL_VERSIONS - 1, DAOS_POOL_GLOBAL_VERSION);
+			goto out_map_version;
 		}
 
 		if (global_ver > cli_pool_version) {
-			D_ERROR(DF_UUID": cannot connect, pool layout version(%u) > "
-				"max client supported pool layout version(%u), "
-				"try to upgrade client firstly.\n",
-				DP_UUID(in->pci_op.pi_uuid), global_ver,
-				cli_pool_version);
-			D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+			rc = -DER_NOTSUPPORTED;
+			DL_ERROR(rc, DF_UUID": cannot connect, pool layout version(%u) > "
+				 "max client supported pool layout version(%u), "
+				 "try to upgrade client firstly",
+				 DP_UUID(in->pci_op.pi_uuid), global_ver, cli_pool_version);
+			goto out_map_version;
 		}
 	} else {
 		diff = -diff;
 		if (diff >= NUM_POOL_VERSIONS) {
-			D_ERROR(DF_UUID": cannot connect, client supported pool "
-				"layout version (%u) is more than %u versions "
-				"larger than server supported pool layout version(%u), "
-				"try to upgrade server firstly.\n",
-				DP_UUID(in->pci_op.pi_uuid), cli_pool_version,
-				NUM_POOL_VERSIONS - 1, DAOS_POOL_GLOBAL_VERSION);
-			D_GOTO(out_map_version, rc = -DER_NOTSUPPORTED);
+			rc = -DER_NOTSUPPORTED;
+			DL_ERROR(rc, DF_UUID": cannot connect, client supported pool "
+				 "layout version (%u) is more than %u versions "
+				 "larger than server supported pool layout version(%u), "
+				 "try to upgrade server firstly",
+				 DP_UUID(in->pci_op.pi_uuid), cli_pool_version,
+				 NUM_POOL_VERSIONS - 1, DAOS_POOL_GLOBAL_VERSION);
+			goto out_map_version;
 		}
 		/* New clients should be able to access old pools without problem */
 	}
@@ -3019,25 +3034,25 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	 * Security capabilities determine the access control policy on this
 	 * pool handle.
 	 */
-	rc = ds_sec_pool_get_capabilities(flags, &cred, &owner, acl_entry->dpe_val_ptr, &sec_capas);
+	rc = ds_sec_pool_get_capabilities(flags, credp, &owner, acl_entry->dpe_val_ptr, &sec_capas);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": refusing connect attempt for " DF_X64 " error: "DF_RC"\n",
-			DP_UUID(in->pci_op.pi_uuid), flags, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID": refusing connect attempt for " DF_X64,
+			 DP_UUID(in->pci_op.pi_uuid), flags);
 		D_GOTO(out_map_version, rc);
 	}
 
-	rc = ds_sec_cred_get_origin(&cred, &machine);
+	rc = ds_sec_cred_get_origin(credp, &machine);
 
 	if (rc != 0) {
-		D_ERROR(DF_UUID": unable to retrieve origin error: "DF_RC"\n",
-			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID": unable to retrieve origin", DP_UUID(in->pci_op.pi_uuid));
 		D_GOTO(out_map_version, rc);
 	}
 
 	if (!ds_sec_pool_can_connect(sec_capas)) {
-		D_ERROR(DF_UUID": permission denied for connect attempt for " DF_X64 "\n",
+		rc = -DER_NO_PERM;
+		DL_ERROR(rc, DF_UUID": permission denied for connect attempt for " DF_X64,
 			DP_UUID(in->pci_op.pi_uuid), flags);
-		D_GOTO(out_map_version, rc = -DER_NO_PERM);
+		goto out_map_version;
 	}
 
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
@@ -3077,7 +3092,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		}
 	}
 
-	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, flags, sec_capas, &cred, global_ver,
+	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, flags, sec_capas, credp, global_ver,
 				  obj_layout_ver);
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC)) {
 		D_DEBUG(DB_MD, DF_UUID": fault injected: DAOS_POOL_CONNECT_FAIL_CORPC\n",
@@ -3092,7 +3107,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 
 	/* handle did not exist so create it */
 	/* XXX may be can check pool version to avoid allocating too much ? */
-	D_ALLOC(hdl, sizeof(*hdl) + cred.iov_len);
+	D_ALLOC(hdl, sizeof(*hdl) + credp->iov_len);
 	if (hdl == NULL)
 		D_GOTO(out_map_version, rc = -DER_NOMEM);
 
@@ -3100,8 +3115,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	hdl->ph_sec_capas = sec_capas;
 	/* XXX may be can check pool version to avoid initializing 3 following hdl fields ? */
 	strncpy(hdl->ph_machine, machine, MAXHOSTNAMELEN);
-	hdl->ph_cred_len = cred.iov_len;
-	memcpy(&hdl->ph_cred[0], cred.iov_buf, cred.iov_len);
+	hdl->ph_cred_len = credp->iov_len;
+	memcpy(&hdl->ph_cred[0], credp->iov_buf, credp->iov_len);
 
 	nhandles++;
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
@@ -3517,9 +3532,8 @@ rechoose:
 realloc_resp:
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_LIST_CONT, uuid, no_uuid, &req_time, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool list cont rpc: %d\n",
-			DP_UUID(uuid), rc);
-		D_GOTO(out_client, rc);
+		DL_ERROR(rc, DF_UUID": failed to create pool list cont rpc", DP_UUID(uuid));
+		goto out_client;
 	}
 
 	/* Allocate response buffer */
@@ -3788,8 +3802,9 @@ ds_pool_filter_cont_handler(crt_rpc_t *rpc, int handler_version)
 
 	/* Debug log and check filter specification */
 	if (!pool_cont_filter_is_valid(in->pfci_op.pi_uuid, filt_in)) {
-		D_ERROR(DF_UUID": filter input failed\n", DP_UUID(in->pfci_op.pi_uuid));
-		D_GOTO(out_svc, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, DF_UUID": filter input failed", DP_UUID(in->pfci_op.pi_uuid));
+		goto out_svc;
 	}
 
 	/* Call container service to get the filtered list of containers */
@@ -4188,8 +4203,8 @@ ds_pool_query_info_handler(crt_rpc_t *rpc, int handler_version)
 		rc = pool_query_tgt_space(rpc->cr_ctx, svc, in->pqii_op.pi_hdl, rank, tgt,
 					  &out->pqio_space);
 		if (rc)
-			D_ERROR(DF_UUID": Failed to query rank:%u, tgt:%d, "
-				""DF_RC"\n", DP_UUID(in->pqii_op.pi_uuid), rank, tgt, DP_RC(rc));
+			DL_ERROR(rc, DF_UUID": Failed to query rank:%u, tgt:%d",
+				 DP_UUID(in->pqii_op.pi_uuid), rank, tgt);
 	} else {
 		memset(&out->pqio_space, 0, sizeof(out->pqio_space));
 	}
@@ -4266,8 +4281,8 @@ rechoose:
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_QUERY_INFO, pool_uuid, no_uuid, &req_time,
 			     &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool query target rpc, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID": failed to create pool query target rpc",
+			DP_UUID(pool_uuid));
 		goto out_client;
 	}
 	pool_query_info_in_set_data(rpc, POOL_QUERY_INFO, DAOS_POOL_VERSION, rank, tgt_idx);
@@ -4399,9 +4414,8 @@ rechoose:
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_PROP_GET, pool_uuid, no_uuid, &req_time,
 			     &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool get prop rpc: "
-			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
-		D_GOTO(out_client, rc);
+		DL_ERROR(rc, DF_UUID": failed to create pool get prop rpc", DP_UUID(pool_uuid));
+		goto out_client;
 	}
 
 	in = crt_req_get(rpc);
@@ -4467,9 +4481,8 @@ rechoose:
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_EXTEND, pool_uuid, no_uuid, &req_time, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool extend rpc: "
-			""DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
-		D_GOTO(out_client, rc);
+		DL_ERROR(rc, DF_UUID": failed to create pool extend rpc", DP_UUID(pool_uuid));
+		goto out_client;
 	}
 
 	in = crt_req_get(rpc);
@@ -4550,9 +4563,8 @@ rechoose:
 
 	rc = pool_req_create(info->dmi_ctx, &ep, opcode, pool_uuid, no_uuid, &req_time, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool req: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		D_GOTO(out_client, rc);
+		DL_ERROR(rc, DF_UUID": failed to create pool req", DP_UUID(pool_uuid));
+		goto out_client;
 	}
 
 	pool_tgt_update_in_set_data(rpc, opc_get(rpc->cr_opc), DAOS_POOL_VERSION,
@@ -5439,9 +5451,8 @@ rechoose:
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_PROP_SET, pool_uuid, no_uuid, &req_time,
 			     &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool set prop rpc: %d\n",
-			DP_UUID(pool_uuid), rc);
-		D_GOTO(out_client, rc);
+		DL_ERROR(rc, DF_UUID": failed to create pool set prop rpc", DP_UUID(pool_uuid));
+		goto out_client;
 	}
 
 	in = crt_req_get(rpc);
@@ -5611,9 +5622,8 @@ rechoose:
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_ACL_UPDATE, pool_uuid, no_uuid, &req_time,
 			     &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool update ACL rpc: %d\n",
-			DP_UUID(pool_uuid), rc);
-		D_GOTO(out_client, rc);
+		DL_ERROR(rc, DF_UUID": failed to create pool update ACL rpc", DP_UUID(pool_uuid));
+		goto out_client;
 	}
 
 	in = crt_req_get(rpc);
@@ -5774,9 +5784,8 @@ rechoose:
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_ACL_DELETE, pool_uuid, no_uuid, &req_time,
 			     &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool delete ACL rpc: %d\n",
-			DP_UUID(pool_uuid), rc);
-		D_GOTO(out_client, rc);
+		DL_ERROR(rc, DF_UUID": failed to create pool delete ACL rpc", DP_UUID(pool_uuid));
+		goto out_client;
 	}
 
 	in = crt_req_get(rpc);
@@ -7799,9 +7808,8 @@ rechoose:
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_UPGRADE, pool_uuid, no_uuid, &req_time, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool upgrade rpc: %d\n",
-			DP_UUID(pool_uuid), rc);
-		D_GOTO(out_client, rc);
+		DL_ERROR(rc, DF_UUID": failed to create pool upgrade rpc", DP_UUID(pool_uuid));
+		goto out_client;
 	}
 
 	rc = dss_rpc_send(rpc);

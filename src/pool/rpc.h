@@ -248,7 +248,6 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 	((crt_bulk_t)		(pci_map_bulk)		CRT_VAR) \
 	((uint32_t)		(pci_pool_version)	CRT_VAR)
 
-
 CRT_RPC_DECLARE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DECLARE(pool_connect_v6, DAOS_ISEQ_POOL_CONNECT_V6, DAOS_OSEQ_POOL_CONNECT)
 
@@ -658,46 +657,56 @@ pool_create_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_connect_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver, d_iov_t *pci_credp,
-	 uint64_t *pci_flagsp, uint64_t *pci_query_bitsp, crt_bulk_t *pci_map_bulkp,
-	 uint32_t *pci_pool_versionp)
+pool_connect_in_get_cred(crt_rpc_t *rpc, int pool_proto_ver, d_iov_t **pci_credp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY)
+		*pci_credp = &(((struct pool_connect_v6_in *)in)->pci_cred);
+	else
+		*pci_credp = &(((struct pool_connect_in *)in)->pci_cred);
+}
+
+static inline void
+pool_connect_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver, uint64_t *pci_flagsp,
+	 uint64_t *pci_query_bitsp, crt_bulk_t *pci_map_bulkp, uint32_t *pci_pool_versionp)
 {
 	void *in = crt_req_get(rpc);
 
 	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
-		d_iov_set(pci_credp, ((struct pool_connect_v6_in *)in)->pci_cred.iov_buf,
-			  ((struct pool_connect_v6_in *)in)->pci_cred.iov_buf_len);
-		*pci_flagsp = ((struct pool_connect_v6_in *)in)->pci_flags;
-		*pci_query_bitsp = ((struct pool_connect_v6_in *)in)->pci_query_bits;
-		*pci_map_bulkp = ((struct pool_connect_v6_in *)in)->pci_map_bulk;
-		*pci_pool_versionp = ((struct pool_connect_v6_in *)in)->pci_pool_version;
+		if (pci_flagsp)
+			*pci_flagsp = ((struct pool_connect_v6_in *)in)->pci_flags;
+		if (pci_query_bitsp)
+			*pci_query_bitsp = ((struct pool_connect_v6_in *)in)->pci_query_bits;
+		if (pci_map_bulkp)
+			*pci_map_bulkp = ((struct pool_connect_v6_in *)in)->pci_map_bulk;
+		if (pci_pool_versionp)
+			*pci_pool_versionp = ((struct pool_connect_v6_in *)in)->pci_pool_version;
 	} else {
-		d_iov_set(pci_credp, ((struct pool_connect_in *)in)->pci_cred.iov_buf,
-			  ((struct pool_connect_in *)in)->pci_cred.iov_buf_len);
-		*pci_flagsp = ((struct pool_connect_in *)in)->pci_flags;
-		*pci_query_bitsp = ((struct pool_connect_in *)in)->pci_query_bits;
-		*pci_map_bulkp = ((struct pool_connect_in *)in)->pci_map_bulk;
-		*pci_pool_versionp = ((struct pool_connect_in *)in)->pci_pool_version;
+		if (pci_flagsp)
+			*pci_flagsp = ((struct pool_connect_in *)in)->pci_flags;
+		if (pci_query_bitsp)
+			*pci_query_bitsp = ((struct pool_connect_in *)in)->pci_query_bits;
+		if (pci_map_bulkp)
+			*pci_map_bulkp = ((struct pool_connect_in *)in)->pci_map_bulk;
+		if (pci_pool_versionp)
+			*pci_pool_versionp = ((struct pool_connect_in *)in)->pci_pool_version;
 	}
 }
 
 static inline void
-pool_connect_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver, d_iov_t pci_cred,
-			 uint64_t pci_flags, uint64_t pci_query_bits, crt_bulk_t pci_map_bulk,
+pool_connect_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver, uint64_t pci_flags,
+			 uint64_t pci_query_bits, crt_bulk_t pci_map_bulk,
 			 uint32_t pci_pool_version)
 {
 	void *in = crt_req_get(rpc);
 
 	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
-		d_iov_set(&((struct pool_connect_v6_in *)in)->pci_cred, pci_cred.iov_buf,
-			  pci_cred.iov_buf_len);
 		((struct pool_connect_v6_in *)in)->pci_flags = pci_flags;
 		((struct pool_connect_v6_in *)in)->pci_query_bits = pci_query_bits;
 		((struct pool_connect_v6_in *)in)->pci_map_bulk = pci_map_bulk;
 		((struct pool_connect_v6_in *)in)->pci_pool_version = pci_pool_version;
 	} else {
-		d_iov_set(&((struct pool_connect_in *)in)->pci_cred, pci_cred.iov_buf,
-			  pci_cred.iov_buf_len);
 		((struct pool_connect_in *)in)->pci_flags = pci_flags;
 		((struct pool_connect_in *)in)->pci_query_bits = pci_query_bits;
 		((struct pool_connect_in *)in)->pci_map_bulk = pci_map_bulk;
