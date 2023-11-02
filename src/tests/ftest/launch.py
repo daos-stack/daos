@@ -31,28 +31,21 @@ from process_core_files import CoreFileException, CoreFileProcessing
 from slurm_setup import SlurmSetup, SlurmSetupException
 
 # Update the path to support utils files that import other utils files
-# This is not good coding practice. Should use package paths and remove alls these E402.
+# This is not good coding practice. Should use package paths and remove all these E402.
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
-from data_utils import (dict_extract_values, list_flatten,  # noqa: E402
-                        list_unique)
+from data_utils import dict_extract_values, list_flatten, list_unique  # noqa: E402
 # pylint: disable=import-outside-toplevel
-from host_utils import (HostException, HostInfo, get_local_host,  # noqa: E402
-                        get_node_set)
+from host_utils import HostException, HostInfo, get_local_host, get_node_set  # noqa: E402
 from logger_utils import get_console_handler, get_file_handler  # noqa: E402
-from results_utils import (Job, Results, TestResult, create_html,  # noqa: E402
-                           create_xml)
+from results_utils import Job, Results, TestResult, create_html, create_xml  # noqa: E402
 from run_utils import stop_processes  # noqa: E402
-from run_utils import (RunException, find_command, run_local,  # noqa: E402
-                       run_remote)
-from slurm_utils import (create_partition, delete_partition,  # noqa: E402
-                         show_partition)
+from run_utils import RunException, find_command, run_local, run_remote  # noqa: E402
+from slurm_utils import create_partition, delete_partition, show_partition  # noqa: E402
 from storage_utils import StorageException, StorageInfo  # noqa: E402
 from user_utils import get_user_groups  # noqa: E402
-from user_utils import (get_chown_command, get_group_id,  # noqa: E402
-                        groupadd, useradd, userdel)
+from user_utils import get_chown_command, get_group_id, groupadd, useradd, userdel  # noqa: E402
 from yaml_utils import YamlException  # noqa: E402
-from yaml_utils import (YamlUpdater, get_test_category,  # noqa: E402
-                        get_yaml_data)
+from yaml_utils import YamlUpdater, get_test_category, get_yaml_data  # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")

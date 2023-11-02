@@ -8,8 +8,7 @@ import os
 import yaml
 from apricot import TestWithServers
 from command_utils_base import CommonConfig
-from server_utils import (DaosServerTransportCredentials,
-                          DaosServerYamlParameters)
+from server_utils import DaosServerTransportCredentials, DaosServerYamlParameters
 
 
 class StorageTiers(TestWithServers):
