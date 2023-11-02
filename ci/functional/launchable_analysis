@@ -23,7 +23,7 @@ fi
 
 notify=false
 
-ci/functional/junit_list_unsuccessful "$STAGE_NAME/*/*/xunit1_results.xml" > "$dir"test_fails
+ci/functional/junit_list_unsuccessful.py "$STAGE_NAME/*/*/xunit1_results.xml" > "$dir"test_fails
 mv subset.txt "$dir"launchable_subset
 
 while IFS=: read -r class test; do
