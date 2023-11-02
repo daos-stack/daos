@@ -732,6 +732,17 @@ daos_dti_reset(void)
 }
 
 /**
+ * daos_get_client_uuid to get (and lazily initialize) client thread dti_uuid.
+ */
+void
+daos_get_client_uuid(uuid_t *uuidp)
+{
+	if (uuid_is_null(dti_uuid))
+		uuid_generate(dti_uuid);
+	uuid_copy(*uuidp, dti_uuid);
+}
+
+/**
  * daos_recx_alloc/_free to provide same log facility for recx's alloc and free
  * for iom->iom_recxs' usage for example.
  */
