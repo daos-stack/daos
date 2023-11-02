@@ -188,6 +188,18 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
 };
 
+struct vos_gc_metrics {
+	struct d_tm_node_t *vgm_duration;  /* Duration of each gc scan */
+	struct d_tm_node_t *vgm_cont_del;  /* containers reclaimed */
+	struct d_tm_node_t *vgm_obj_del;   /* objects reclaimed */
+	struct d_tm_node_t *vgm_dkey_del;  /* dkeys reclaimed */
+	struct d_tm_node_t *vgm_akey_del;  /* akeys reclaimed */
+	struct d_tm_node_t *vgm_ev_del;    /* EV records reclaimed */
+	struct d_tm_node_t *vgm_sv_del;    /* SV records reclaimed */
+	struct d_tm_node_t *vgm_slack_cnt; /* Slack mode count */
+	struct d_tm_node_t *vgm_tight_cnt; /* Tight mode count */
+};
+
 /*
  * VOS Pool metrics for checkpoint activity.
  */
@@ -200,10 +212,14 @@ struct vos_chkpt_metrics {
 };
 
 void vos_chkpt_metrics_init(struct vos_chkpt_metrics *vc_metrics, const char *path, int tgt_id);
+void
+vos_gc_metrics_init(struct vos_gc_metrics *vc_metrics, const char *path, int tgt_id);
 
 struct vos_space_metrics {
 	struct d_tm_node_t	*vsm_scm_used;		/* SCM space used */
 	struct d_tm_node_t	*vsm_nvme_used;		/* NVMe space used */
+	struct d_tm_node_t      *vsm_scm_total;         /* SCM space total */
+	struct d_tm_node_t      *vsm_nvme_total;        /* NVMe space total */
 	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
 };
 
@@ -219,6 +235,7 @@ struct vos_rh_metrics {
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
 	struct vos_agg_metrics	 vp_agg_metrics;
+	struct vos_gc_metrics    vp_gc_metrics;
 	struct vos_space_metrics vp_space_metrics;
 	struct vos_chkpt_metrics vp_chkpt_metrics;
 	struct vos_rh_metrics	 vp_rh_metrics;
@@ -255,6 +272,8 @@ struct vos_pool {
 	/** btr handle for the container table */
 	daos_handle_t		vp_cont_th;
 	/** GC statistics of this pool */
+	struct vos_gc_stat       vp_gc_stat_global;
+	/** GC per slice statistics of this pool */
 	struct vos_gc_stat	vp_gc_stat;
 	/** link chain on vos_tls::vtl_gc_pools */
 	d_list_t		vp_gc_link;
