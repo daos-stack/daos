@@ -3,18 +3,17 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import time
 import threading
-
-from avocado.core.exceptions import TestFail
+import time
 
 from apricot import skipForTicket
-from nvme_utils import ServerFillUp
+from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
-from job_manager_utils import get_job_manager
-from ior_utils import IorCommand, IorMetrics
 from exception_utils import CommandFailure
 from general_utils import error_count
+from ior_utils import IorCommand, IorMetrics
+from job_manager_utils import get_job_manager
+from nvme_utils import ServerFillUp
 
 
 class NvmeEnospace(ServerFillUp):
