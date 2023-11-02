@@ -366,7 +366,7 @@ class FileTypeList:
             return vals
 
         def msg_to_github(vals):
-            # pylint: disable-next=consider-using-f-string
+            # pylint: disable=consider-using-f-string
             print(
                 '::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals)
             )
