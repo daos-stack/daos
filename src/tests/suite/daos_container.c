@@ -3567,6 +3567,77 @@ co_evict_hdls(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+update_after_flat(void **state)
+{
+#define STACK_BUF_LEN	(128)
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		 oid;
+	daos_handle_t		 oh;
+	d_iov_t			 dkey;
+	d_sg_list_t		 sgl;
+	d_iov_t			 sg_iov;
+	daos_iod_t		 iod;
+	daos_recx_t		 recx;
+	char			 stack_buf[STACK_BUF_LEN];
+	daos_epoch_t		 snap_epoch = 0;
+	daos_epoch_range_t	 epr;
+	int			 rc;
+
+	dts_buf_render(stack_buf, STACK_BUF_LEN);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	d_iov_set(&sg_iov, stack_buf, STACK_BUF_LEN);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 1;
+	sgl.sg_iovs	= &sg_iov;
+
+	/** init I/O descriptor */
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+	recx.rx_idx = 0;
+	recx.rx_nr  = STACK_BUF_LEN;
+	iod.iod_size	= 1;
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+	/** update record */
+	print_message("writing before flatten ...\n");
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_create_snap(arg->coh, &snap_epoch, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_not_equal(snap_epoch, 0);
+
+	print_message("flatten the container should fail as container with snapshot\n");
+	rc = daos_cont_set_ro(arg->coh, NULL);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	epr.epr_lo = snap_epoch;
+	epr.epr_hi = snap_epoch;
+	rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("flatten the container should success after destroying snapshots\n");
+	rc = daos_cont_set_ro(arg->coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("writing after flatten should fail\n");
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, -DER_NO_PERM);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -3638,6 +3709,7 @@ static const struct CMUnitTest co_tests[] = {
     {"CONT32: container get perms", co_get_perms, NULL, test_case_teardown},
     {"CONT33: exclusive open", co_exclusive_open, NULL, test_case_teardown},
     {"CONT34: evict handles", co_evict_hdls, NULL, test_case_teardown},
+    {"CONT35: update after flatten", update_after_flat, co_setup_sync, test_case_teardown},
 };
 
 int
