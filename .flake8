@@ -13,4 +13,4 @@ exclude =
     build,
     install
 max-line-length: 100
-ignore=W503
+ignore=W503,E203

@@ -40,3 +40,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Check DAOS logging macro use.
         run: ./utils/cq/d_logging_check.py --github src
+      - name: Black
+        uses: psf/black@stable
+        with:
+          options: "--check --verbose --extend-exclude ftest"
+          src: "./src"

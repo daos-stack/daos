@@ -1,3 +1,22 @@
+[tool.black]
+line-length = 100
+extend-exclude = '''
+(
+  ^/venv/
+  | ^/src/rdb/raft/
+  | ^/build/
+  | ^/install/
+  | ^/src/control/vendor/
+)
+'''
+include = '''
+(
+  SConstruct
+  | SConscript
+  | \.py$
+)
+'''
+skip-string-normalization = true
 [tool.isort]
 supported_extensions = ["py"]
 skip = [".git/", "src/rdb/raft", "build", "install", "venv", "src/control/vendor/"]

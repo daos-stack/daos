@@ -28,12 +28,12 @@ jobs:
         with:
           # W503 and W504 are related as they conflict.  W503 is the preferred style and all code
           # should be using it now.
-          ignore: 'W503'
+          ignore: 'W503,E203'
           exclude: 'src/control/vendor,src/client/pydaos/raw'
           max-line-length: '100'
       - name: flake8 Lint on SCons files.
         uses: py-actions/flake8@v2
         with:
-          ignore: 'F821,W503,F841'
+          ignore: 'F821,W503,F841,E203'
           max-line-length: '100'
           args: '--filename */SConscript, SConstruct'
