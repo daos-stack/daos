@@ -782,12 +782,22 @@ replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 	}
 }
 
+bool prefix(const char *pre, const char *str)
+{
+	    return strncmp(pre, str, strlen(pre)) == 0;
+}
+
 int
 bdev_name2roles(const char *name)
 {
 	const char	*dst = strrchr(name, '_');
 	char		*ptr_parse_end = NULL;
 	unsigned	 int value;
+
+	if (prefix("HotInNvme", name)) {
+		D_DEBUG(DB_MGMT, "Assigning no roles for %s bdev\n", name);
+		return 0;
+	}
 
 	if (dst == NULL)
 		return -DER_NONEXIST;
