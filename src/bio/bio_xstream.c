@@ -1776,6 +1776,7 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_bdev		*d_bdev, *tmp;
 	struct spdk_bdev	*bdev;
 	const char		*bdev_name;
+	unsigned int             roles       = 0;
 	static uint64_t		 scan_period = NVME_MONITOR_PERIOD;
 	int			 rc;
 
@@ -1799,8 +1800,16 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 
 		scan_period = 0;
 
-		/* don't support hot plug for sys device yet, assign default roles */
-		rc = create_bio_bdev(ctxt, bdev_name, NVME_ROLE_DATA, &d_bdev);
+		/*
+		 * Don't support hot plug for sys device yet. Assign default roles based on
+		 * operating mode (MD-on-SSD or PMem), roles will subsequently be updated based
+		 * on "old" device on "replace".
+		 */
+
+		if (bio_nvme_configured(SMD_DEV_TYPE_META))
+			roles = NVME_ROLE_DATA;
+
+		rc = create_bio_bdev(ctxt, bdev_name, roles, &d_bdev);
 		if (rc) {
 			D_ERROR("Failed to init hot plugged device %s\n", bdev_name);
 			break;
