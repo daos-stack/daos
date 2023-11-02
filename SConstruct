@@ -9,11 +9,13 @@ import SCons.Warnings
 from prereq_tools import PreReqComponent  # pylint: disable=reimported
 
 if sys.version_info.major < 3:
-    print(""""Python 2.7 is no longer supported in the DAOS build.
+    print(
+        """"Python 2.7 is no longer supported in the DAOS build.
 Install python3 version of SCons.   On some platforms this package does not
 install the scons binary so your command may need to use scons-3 instead of
 scons or you will need to create an alias or script by the same name to
-wrap scons-3.""")
+wrap scons-3."""
+    )
     Exit(1)
 
 SCons.Warnings.warningAsException()
@@ -22,63 +24,77 @@ SCons.Warnings.warningAsException()
 def add_command_line_options():
     """Add command line options"""
 
-    AddOption('--preprocess',
-              dest='preprocess',
-              action='store_true',
-              default=False,
-              help='Preprocess selected files for profiling')
-    AddOption('--no-rpath',
-              dest='no_rpath',
-              action='store_true',
-              default=False,
-              help='Disable rpath')
-    AddOption('--analyze-stack',
-              dest='analyze_stack',
-              metavar='ARGSTRING',
-              default=None,
-              help='Gather stack usage statistics after build')
+    AddOption(
+        '--preprocess',
+        dest='preprocess',
+        action='store_true',
+        default=False,
+        help='Preprocess selected files for profiling',
+    )
+    AddOption(
+        '--no-rpath', dest='no_rpath', action='store_true', default=False, help='Disable rpath'
+    )
+    AddOption(
+        '--analyze-stack',
+        dest='analyze_stack',
+        metavar='ARGSTRING',
+        default=None,
+        help='Gather stack usage statistics after build',
+    )
 
     # We need to sometimes use alternate tools for building and need to add them to the PATH in the
     # environment.
-    AddOption('--prepend-path',
-              dest='prepend_path',
-              default=None,
-              help="String to prepend to PATH environment variable.")
+    AddOption(
+        '--prepend-path',
+        dest='prepend_path',
+        default=None,
+        help="String to prepend to PATH environment variable.",
+    )
 
     # Allow specifying the locale to be used.  Default "en_US.UTF8"
-    AddOption('--locale-name',
-              dest='locale_name',
-              default='en_US.UTF8',
-              help='locale to use for building. [%default]')
+    AddOption(
+        '--locale-name',
+        dest='locale_name',
+        default='en_US.UTF8',
+        help='locale to use for building. [%default]',
+    )
 
-    AddOption('--require-optional',
-              dest='require_optional',
-              action='store_true',
-              default=False,
-              help='Fail the build if check_component fails')
+    AddOption(
+        '--require-optional',
+        dest='require_optional',
+        action='store_true',
+        default=False,
+        help='Fail the build if check_component fails',
+    )
 
-    AddOption('--build-deps',
-              dest='build_deps',
-              type='choice',
-              choices=['yes', 'no', 'only', 'build-only'],
-              default='no',
-              help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
+    AddOption(
+        '--build-deps',
+        dest='build_deps',
+        type='choice',
+        choices=['yes', 'no', 'only', 'build-only'],
+        default='no',
+        help="Automatically download and build sources.  (yes|no|only|build-only) [no]",
+    )
 
     # We want to be able to check what dependencies are needed without
     # doing a build, similar to --dry-run.  We can not use --dry-run
     # on the command line because it disables running the tests for the
     # the dependencies.  So we need a new option
-    AddOption('--check-only',
-              dest='check_only',
-              action='store_true',
-              default=False,
-              help="Check dependencies only, do not download or build.")
+    AddOption(
+        '--check-only',
+        dest='check_only',
+        action='store_true',
+        default=False,
+        help="Check dependencies only, do not download or build.",
+    )
 
     # Need to be able to look for an alternate build.config file.
-    AddOption('--build-config',
-              dest='build_config',
-              default=os.path.join(Dir('#').abspath, 'utils', 'build.config'),
-              help='build config file to use. [%default]')
+    AddOption(
+        '--build-config',
+        dest='build_config',
+        default=os.path.join(Dir('#').abspath, 'utils', 'build.config'),
+        help='build config file to use. [%default]',
+    )
 
 
 def parse_and_save_conf(env, opts_file):
@@ -89,14 +105,26 @@ def parse_and_save_conf(env, opts_file):
 
     opts = Variables(opts_file)
 
-    opts.Add(EnumVariable('SCONS_ENV', "Default SCons environment inheritance",
-                          'minimal', ['minimal', 'full'], ignorecase=2))
+    opts.Add(
+        EnumVariable(
+            'SCONS_ENV',
+            "Default SCons environment inheritance",
+            'minimal',
+            ['minimal', 'full'],
+            ignorecase=2,
+        )
+    )
 
     opts.Add('GO_BIN', 'Full path to go binary', None)
 
-    opts.Add(PathVariable('ENV_SCRIPT', "Location of environment script",
-                          os.path.expanduser('~/.scons_localrc'),
-                          PathVariable.PathAccept))
+    opts.Add(
+        PathVariable(
+            'ENV_SCRIPT',
+            "Location of environment script",
+            os.path.expanduser('~/.scons_localrc'),
+            PathVariable.PathAccept,
+        )
+    )
 
     # Finally parse the command line options and save to file if required.
     opts.Update(env)
@@ -118,7 +146,7 @@ def build_misc(build_prefix):
 
 
 def update_rpm_version(version, tag):
-    """ Update the version (and release) in the RPM spec file """
+    """Update the version (and release) in the RPM spec file"""
 
     # pylint: disable=consider-using-f-string
     spec = open("utils/rpms/daos.spec", "r").readlines()  # pylint: disable=consider-using-with
@@ -126,22 +154,22 @@ def update_rpm_version(version, tag):
     release = 0
     for line_num, line in enumerate(spec):
         if line.startswith("Version:"):
-            current_version = line[line.rfind(' ') + 1:].rstrip()
+            current_version = line[line.rfind(' ') + 1 :].rstrip()
             if version < current_version:
-                print("You cannot create a new version ({}) lower than the RPM "
-                      "spec file has currently ({})".format(version,
-                                                            current_version))
+                print(
+                    "You cannot create a new version ({}) lower than the RPM "
+                    "spec file has currently ({})".format(version, current_version)
+                )
                 return False
             if version > current_version:
                 spec[line_num] = "Version:       {}\n".format(version)
         if line.startswith("Release:"):
             if version == current_version:
-                current_release = int(line[line.rfind(' ') + 1:line.find('%')])
+                current_release = int(line[line.rfind(' ') + 1 : line.find('%')])
                 release = current_release + 1
             else:
                 release = 1
-            spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".\
-                             format(release)
+            spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".format(release)
         if line == "%changelog\n":
             cmd = 'rpmdev-packager'
             try:
@@ -149,22 +177,21 @@ def update_rpm_version(version, tag):
                 pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE)  # nosec
                 packager = pkg_st.communicate()[0].strip().decode('UTF-8')
             except OSError:
-                print("You need to have the rpmdev-packager tool (from the "
-                      "rpmdevtools RPM on EL7) in order to make releases.\n\n"
-                      "Additionally, you should define %packager in "
-                      "~/.rpmmacros as such:\n"
-                      "%packager	John A. Doe <john.doe@intel.com>"
-                      "so that package changelog entries are well defined")
+                print(
+                    "You need to have the rpmdev-packager tool (from the "
+                    "rpmdevtools RPM on EL7) in order to make releases.\n\n"
+                    "Additionally, you should define %packager in "
+                    "~/.rpmmacros as such:\n"
+                    "%packager	John A. Doe <john.doe@intel.com>"
+                    "so that package changelog entries are well defined"
+                )
                 return False
             date_str = time.strftime('%a %b %d %Y', time.gmtime())
             spec.insert(line_num + 1, "\n")
-            spec.insert(line_num + 1,
-                        "- Version bump up to {}\n".format(tag))
-            spec.insert(line_num + 1,
-                        '* {} {} - {}-{}\n'.format(date_str,
-                                                   packager,
-                                                   version,
-                                                   release))
+            spec.insert(line_num + 1, "- Version bump up to {}\n".format(tag))
+            spec.insert(
+                line_num + 1, '* {} {} - {}-{}\n'.format(date_str, packager, version, release)
+            )
             break
     open("utils/rpms/daos.spec", "w").writelines(spec)  # pylint: disable=consider-using-with
 
@@ -187,10 +214,8 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         variables = Variables()
 
         variables.Add('RELEASE', 'Set to the release version to make', None)
-        variables.Add('RELEASE_BASE', 'Set to the release version to make',
-                      'master')
-        variables.Add('ORG_NAME', 'The GitHub project to do the release on.',
-                      'daos-stack')
+        variables.Add('RELEASE_BASE', 'Set to the release version to make', 'master')
+        variables.Add('ORG_NAME', 'The GitHub project to do the release on.', 'daos-stack')
         variables.Add('REMOTE_NAME', 'The remoten name release on.', 'origin')
 
         env = Environment(variables=variables)
@@ -209,8 +234,10 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         if dash > 0:
             version = tag[0:dash]
         else:
-            print("** Final releases should be made on GitHub directly "
-                  "using a previous pre-release such as a release candidate.\n")
+            print(
+                "** Final releases should be made on GitHub directly "
+                "using a previous pre-release such as a release candidate.\n"
+            )
             question = "Are you sure you want to continue? (y/N): "
             answer = None
             while answer not in ["y", "n", ""]:
@@ -222,14 +249,16 @@ def check_for_release_target():  # pylint: disable=too-many-locals
 
         try:
             # pylint: disable=consider-using-with
-            token = yaml.safe_load(open(os.path.join(os.path.expanduser("~"),
-                                                     ".config", "hub"), 'r')
-                                   )['github.com'][0]['oauth_token']
+            token = yaml.safe_load(
+                open(os.path.join(os.path.expanduser("~"), ".config", "hub"), 'r')
+            )['github.com'][0]['oauth_token']
         except IOError as excpn:
             if excpn.errno == errno.ENOENT:
-                print("You need to install hub (from the hub RPM on EL7) to "
-                      "and run it at least once to create an authorization "
-                      "token in order to create releases")
+                print(
+                    "You need to install hub (from the hub RPM on EL7) to "
+                    "and run it at least once to create an authorization "
+                    "token in order to create releases"
+                )
                 Exit(1)
             raise
 
@@ -238,12 +267,12 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         print("Creating a branch for the PR...")
         repo = pygit2.Repository('.git')
         try:
-            base_ref = repo.lookup_reference(
-                'refs/remotes/{}/{}'.format(remote_name, base_branch))
+            base_ref = repo.lookup_reference('refs/remotes/{}/{}'.format(remote_name, base_branch))
         except KeyError:
-            print("Branch {}/{} is not a valid branch\n"
-                  "See https://github.com/{}/daos/branches".format(
-                      remote_name, base_branch, org_name))
+            print(
+                "Branch {}/{} is not a valid branch\n"
+                "See https://github.com/{}/daos/branches".format(remote_name, base_branch, org_name)
+            )
             Exit(1)
 
         # older pygit2 didn't have AlreadyExistsError
@@ -255,9 +284,10 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         try:
             repo.branches.create(branch, repo[base_ref.target])
         except already_exists_error_exception:
-            print("Branch {} exists locally already.\n"
-                  "You need to delete it or rename it to try again.".format(
-                      branch))
+            print(
+                "Branch {} exists locally already.\n"
+                "You need to delete it or rename it to try again.".format(branch)
+            )
             Exit(1)
 
         # and check it out
@@ -266,8 +296,10 @@ def check_for_release_target():  # pylint: disable=too-many-locals
 
         print("Updating the RPM specfile...")
         if not update_rpm_version(version, tag):
-            print("Branch has been left in the created state.  You will have "
-                  "to clean it up manually.")
+            print(
+                "Branch has been left in the created state.  You will have "
+                "to clean it up manually."
+            )
             Exit(1)
 
         print("Updating the VERSION and TAG files...")
@@ -283,21 +315,20 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         author = repo.default_signature
         committer = repo.default_signature
         summary = "Update version to v{}".format(tag)
-        message = "{}\n\n" \
-                  "Signed-off-by: {} <{}>".format(summary,
-                                                  repo.default_signature.name,
-                                                  repo.default_signature.email)
+        message = "{}\n\n" "Signed-off-by: {} <{}>".format(
+            summary, repo.default_signature.name, repo.default_signature.email
+        )
         index.add("utils/rpms/daos.spec")
         index.add("VERSION")
         index.add("TAG")
         index.write()
         tree = index.write_tree()
-        repo.create_commit('HEAD', author, committer, message, tree,
-                           [repo.head.target])
+        repo.create_commit('HEAD', author, committer, message, tree, [repo.head.target])
 
         # set up authentication callback
         class MyCallbacks(pygit2.RemoteCallbacks):  # pylint: disable=too-few-public-methods
-            """ Callbacks for pygit2 """
+            """Callbacks for pygit2"""
+
             @staticmethod
             def credentials(_url, username_from_url, allowed_types):
                 """setup credentials"""
@@ -306,8 +337,10 @@ def check_for_release_target():  # pylint: disable=too-many-locals
                         # Use ssh agent for authentication
                         return pygit2.KeypairFromAgent(username_from_url)
                 else:
-                    print("No supported credential types allowed by remote end.  SSH_AUTH_SOCK not "
-                          "found in your environment.  Are you running an ssh-agent?")
+                    print(
+                        "No supported credential types allowed by remote end.  SSH_AUTH_SOCK not "
+                        "found in your environment.  Are you running an ssh-agent?"
+                    )
                     Exit(1)
                 return None
 
@@ -315,8 +348,7 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         print("Pushing the changes to GitHub...")
         remote = repo.remotes[remote_name]
         try:
-            remote.push(['refs/heads/{}'.format(branch)],
-                        callbacks=MyCallbacks())
+            remote.push(['refs/heads/{}'.format(branch)], callbacks=MyCallbacks())
         except pygit2.GitError as err:
             print("Error pushing branch: {}".format(err))
             Exit(1)
@@ -330,18 +362,19 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         except github.UnknownObjectException:
             # maybe not an organization
             repo = gh_context.get_repo('{}/daos'.format(org_name))
-        new_pr = repo.create_pull(title=summary, body="", base=base_branch,
-                                  head="{}:{}".format(org_name, branch))
+        new_pr = repo.create_pull(
+            title=summary, body="", base=base_branch, head="{}:{}".format(org_name, branch)
+        )
 
-        print("Successfully created PR#{0} for this version "
-              "update:\n"
-              "https://github.com/{1}/daos/pull/{0}/".format(new_pr.number,
-                                                             org_name))
+        print(
+            "Successfully created PR#{0} for this version "
+            "update:\n"
+            "https://github.com/{1}/daos/pull/{0}/".format(new_pr.number, org_name)
+        )
 
         print("Self-assigning the PR...")
         # self-assign the PR
-        new_pr.as_issue().add_to_assignees(
-            gh_context.get_user(gh_context.get_user().login))
+        new_pr.as_issue().add_to_assignees(gh_context.get_user(gh_context.get_user().login))
 
         print("Done.")
 
@@ -358,12 +391,30 @@ def load_local(env_script, env):
 
 
 # Environment variables that are kept when SCONS_ENV=minimal (the default).
-MINIMAL_ENV = ('HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PKG_CONFIG_PATH',
-               'MODULEPATH', 'MODULESHOME', 'MODULESLOADED', 'I_MPI_ROOT', 'COVFILE')
+MINIMAL_ENV = (
+    'HOME',
+    'TERM',
+    'SSH_AUTH_SOCK',
+    'http_proxy',
+    'https_proxy',
+    'PKG_CONFIG_PATH',
+    'MODULEPATH',
+    'MODULESHOME',
+    'MODULESLOADED',
+    'I_MPI_ROOT',
+    'COVFILE',
+)
 
 # Environment variables that are also kept when LD_PRELOAD is set.
-PRELOAD_ENV = ('LD_PRELOAD', 'D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK',
-               'DD_SUBSYS', 'D_IL_MAX_EQ')
+PRELOAD_ENV = (
+    'LD_PRELOAD',
+    'D_LOG_FILE',
+    'DAOS_AGENT_DRPC_DIR',
+    'D_LOG_MASK',
+    'DD_MASK',
+    'DD_SUBSYS',
+    'D_IL_MAX_EQ',
+)
 
 
 def scons():
@@ -424,7 +475,6 @@ def scons():
     # Perform this check early before loading PreReqs as if this header is missing then we want
     # to exit before building any dependencies.
     if not GetOption('help'):
-
         config = deps_env.Configure()
         if not config.CheckHeader('stdatomic.h'):
             Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')

@@ -4,14 +4,22 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import ctypes
+
 # pylint: disable=too-many-lines
 import os
 import re
 from os.path import join
 
 from command_utils_base import BasicParameter, EnvironmentVariables
-from data_mover_utils import (ContClone, DcpCommand, DdeserializeCommand, DserializeCommand,
-                              DsyncCommand, FsCopy, uuid_from_obj)
+from data_mover_utils import (
+    ContClone,
+    DcpCommand,
+    DdeserializeCommand,
+    DserializeCommand,
+    DsyncCommand,
+    FsCopy,
+    uuid_from_obj,
+)
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from general_utils import create_string_buffer, get_log_file

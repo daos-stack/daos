@@ -5,6 +5,7 @@
 """
 import re
 from grp import getgrgid
+
 # pylint: disable=too-many-lines
 from logging import getLogger
 from pwd import getpwuid

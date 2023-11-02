@@ -2,18 +2,20 @@
 
 from SCons.Script import Configure, Exit, GetOption
 
-DESIRED_FLAGS = ['-fstack-usage',
-                 '-Wno-sign-compare',
-                 '-Wno-unused-parameter',
-                 '-Wno-missing-field-initializers',
-                 '-Wno-implicit-fallthrough',
-                 '-Wno-ignored-attributes',
-                 '-Wno-gnu-zero-variadic-macro-arguments',
-                 '-Wno-tautological-constant-out-of-range-compare',
-                 '-Wno-unused-command-line-argument',
-                 '-Wmismatched-dealloc',
-                 '-Wfree-nonheap-object',
-                 '-Wframe-larger-than=4096']
+DESIRED_FLAGS = [
+    '-fstack-usage',
+    '-Wno-sign-compare',
+    '-Wno-unused-parameter',
+    '-Wno-missing-field-initializers',
+    '-Wno-implicit-fallthrough',
+    '-Wno-ignored-attributes',
+    '-Wno-gnu-zero-variadic-macro-arguments',
+    '-Wno-tautological-constant-out-of-range-compare',
+    '-Wno-unused-command-line-argument',
+    '-Wmismatched-dealloc',
+    '-Wfree-nonheap-object',
+    '-Wframe-larger-than=4096',
+]
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks', '-fwrapv'])
@@ -21,8 +23,11 @@ DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
 # Compiler flags for stack hardening
 DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 
-PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
-                 '-Wno-unused-function']
+PP_ONLY_FLAGS = [
+    '-Wno-parentheses-equality',
+    '-Wno-builtin-requires-header',
+    '-Wno-unused-function',
+]
 
 
 def _base_setup(env):
@@ -110,12 +115,15 @@ def _check_flag_helper(context, compiler, ext, flag):
     flags.append('-O1')
     context.Message(f'Checking {compiler} {flag} ')
     context.env.Replace(CCFLAGS=flags)
-    ret = context.TryCompile("""
+    ret = context.TryCompile(
+        """
 # include <features.h>
 int main() {
     return 0;
 }
-""", ext)
+""",
+        ext,
+    )
     context.Result(ret)
     return ret
 
@@ -156,8 +164,7 @@ def _check_flags(env, config, key, value):
 def _append_if_supported(env, **kwargs):
     """Check and append flags for construction variables"""
     cenv = env.Clone()
-    config = Configure(cenv, custom_tests={'CheckFlag': _check_flag,
-                                           'CheckFlagCC': _check_flag_cc})
+    config = Configure(cenv, custom_tests={'CheckFlag': _check_flag, 'CheckFlagCC': _check_flag_cc})
     for key, value in kwargs.items():
         if key not in ["CFLAGS", "CXXFLAGS", "CCFLAGS"]:
             env.AppendUnique(**{key: value})

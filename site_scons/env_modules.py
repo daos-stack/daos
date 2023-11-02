@@ -29,22 +29,32 @@ from subprocess import PIPE, Popen  # nosec
 import distro
 
 
-class _env_module():  # pylint: disable=invalid-name
+class _env_module:  # pylint: disable=invalid-name
     """Class for utilizing Modules component to load environment modules"""
 
     env_module_init = None
-    _mpi_map = {"mpich": ['mpi/mpich-x86_64', 'gnu-mpich'],
-                "openmpi": ['mpi/mlnx_openmpi-x86_64', 'mpi/openmpi3-x86_64',
-                            'gnu-openmpi', 'mpi/openmpi-x86_64']}
+    _mpi_map = {
+        "mpich": ['mpi/mpich-x86_64', 'gnu-mpich'],
+        "openmpi": [
+            'mpi/mlnx_openmpi-x86_64',
+            'mpi/openmpi3-x86_64',
+            'gnu-openmpi',
+            'mpi/openmpi-x86_64',
+        ],
+    }
 
     def __init__(self, silent=False):
         """Load Modules for initializing environment variables"""
         # Leap 15's lmod-lua doesn't include the usual module path
         # in it's MODULEPATH, for some unknown reason
-        os.environ["MODULEPATH"] = ":".join([os.path.join(os.sep, "usr", "share", "modules"),
-                                             os.path.join(os.sep, "usr", "share", "modulefiles"),
-                                             os.path.join(os.sep, "etc", "modulefiles")]
-                                            + os.environ.get("MODULEPATH", "").split(":"))
+        os.environ["MODULEPATH"] = ":".join(
+            [
+                os.path.join(os.sep, "usr", "share", "modules"),
+                os.path.join(os.sep, "usr", "share", "modulefiles"),
+                os.path.join(os.sep, "etc", "modulefiles"),
+            ]
+            + os.environ.get("MODULEPATH", "").split(":")
+        )
         self._silent = silent
         self._module_load = self._init_mpi_module()
 
@@ -199,7 +209,7 @@ def load_mpi(mpi, silent=False):
             raise
         for line in proc.stdout.readlines():
             if line.startswith(b"Value:"):
-                if line[line.rfind(b".") + 1:-1].decode() == mpi:
+                if line[line.rfind(b".") + 1 : -1].decode() == mpi:
                     return True
                 return False
         return False

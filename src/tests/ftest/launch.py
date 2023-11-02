@@ -24,6 +24,7 @@ from tempfile import TemporaryDirectory
 # from avocado.core.version import MAJOR, MINOR
 # from avocado.utils.stacktrace import prepare_exc_info
 from ClusterShell.NodeSet import NodeSet
+
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
@@ -34,6 +35,7 @@ from slurm_setup import SlurmSetup, SlurmSetupException
 # This is not good coding practice. Should use package paths and remove all these E402.
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 from data_utils import dict_extract_values, list_flatten, list_unique  # noqa: E402
+
 # pylint: disable=import-outside-toplevel
 from host_utils import HostException, HostInfo, get_local_host, get_node_set  # noqa: E402
 from logger_utils import get_console_handler, get_file_handler  # noqa: E402

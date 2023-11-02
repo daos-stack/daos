@@ -46,7 +46,7 @@ SCons.Warnings.enableWarningClass(ToolProtocWarning)
 
 
 def _detect(env):
-    """ Try to detect the various protoc components """
+    """Try to detect the various protoc components"""
     protoc_found = False
     protoc_gen_go_found = False
     grpc_tools_found = False
@@ -78,6 +78,7 @@ def _detect(env):
     try:
         # pylint: disable=unused-import,import-outside-toplevel
         import grpc_tools.protoc  # noqa: F401
+
         grpc_tools_found = True
     except ImportError:
         grpc_tools_found = False
@@ -85,14 +86,13 @@ def _detect(env):
     if protoc_found and protoc_gen_go_found and grpc_tools_found:
         return True
     if not protoc_found:
-        raise SCons.Errors.StopError(ProtocCompilerNotFound,
-                                     "Could not detect protoc compiler")
+        raise SCons.Errors.StopError(ProtocCompilerNotFound, "Could not detect protoc compiler")
     if not protoc_gen_go_found:
-        raise SCons.Errors.StopError(GoProtocCompilerNotFound,
-                                     "Could not detect protoc-gen-go")
+        raise SCons.Errors.StopError(GoProtocCompilerNotFound, "Could not detect protoc-gen-go")
     if not grpc_tools_found:
-        raise SCons.Errors.StopError(PythonGRPCCompilerNotFound,
-                                     "grpc_tools.protoc python module is not installed")
+        raise SCons.Errors.StopError(
+            PythonGRPCCompilerNotFound, "grpc_tools.protoc python module is not installed"
+        )
     return None
 
 
@@ -106,10 +106,7 @@ def run_python(_source, _target, env, _for_signature):
 
 
 _grpc_python_builder = SCons.Builder.Builder(
-    generator=run_python,
-    suffix='$PYTHON_SUFFIX',
-    src_suffix='$PROTO_SUFFIX',
-    single_source=1
+    generator=run_python, suffix='$PYTHON_SUFFIX', src_suffix='$PROTO_SUFFIX', single_source=1
 )
 
 
@@ -123,10 +120,7 @@ def run_go(_source, _target, env, _for_signature):
 
 
 _grpc_go_builder = SCons.Builder.Builder(
-    generator=run_go,
-    suffix='$GO_SUFFIX',
-    src_suffix='$PROTO_SUFFIX',
-    single_source=1
+    generator=run_go, suffix='$GO_SUFFIX', src_suffix='$PROTO_SUFFIX', single_source=1
 )
 
 
@@ -142,7 +136,7 @@ def generate(env, **_kwargs):
         + '--python_out=$GTARGET_DIR --grpc_python_out=$GTARGET_DIR $SOURCE',
         PYTHON_COMSTR='',
         GO_COM='$PROTOC -I$PROTO_INCLUDES $SOURCE --go_out=plugins=grpc:$GTARGET_DIR',
-        GO_COMSTR=''
+        GO_COMSTR='',
     )
     env['BUILDERS']['GRPCPython'] = _grpc_python_builder
     env['BUILDERS']['GRPCGo'] = _grpc_go_builder

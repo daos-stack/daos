@@ -41,8 +41,9 @@ def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
         relpath = os.path.relpath(rpath, prefix)
         if relpath != rpath:
             if set_cgo_ld:
-                env.AppendENVPath("CGO_LDFLAGS", f'-Wl,-rpath=$ORIGIN/{install_off}/{relpath}',
-                                  sep=" ")
+                env.AppendENVPath(
+                    "CGO_LDFLAGS", f'-Wl,-rpath=$ORIGIN/{install_off}/{relpath}', sep=" "
+                )
             else:
                 joined = os.path.normpath(os.path.join(install_off, relpath))
                 env.AppendUnique(RPATH=[DaosLiteral(fr'\$$ORIGIN/{joined}')])

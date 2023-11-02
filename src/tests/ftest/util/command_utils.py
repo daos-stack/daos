@@ -16,12 +16,26 @@ from logging import getLogger
 
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
-from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
-                                LogParameter, ObjectWithParameters)
+from command_utils_base import (
+    BasicParameter,
+    CommandWithParameters,
+    EnvironmentVariables,
+    LogParameter,
+    ObjectWithParameters,
+)
 from exception_utils import CommandFailure
-from general_utils import (DaosTestError, change_file_owner, check_file_exists, create_directory,
-                           distribute_files, get_file_listing, get_job_manager_class,
-                           get_subprocess_stdout, run_command, run_pcmd)
+from general_utils import (
+    DaosTestError,
+    change_file_owner,
+    check_file_exists,
+    create_directory,
+    distribute_files,
+    get_file_listing,
+    get_job_manager_class,
+    get_subprocess_stdout,
+    run_command,
+    run_pcmd,
+)
 from run_utils import command_as_user
 from user_utils import get_primary_group
 from yaml_utils import get_yaml_data

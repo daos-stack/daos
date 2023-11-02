@@ -17,7 +17,7 @@ def exit_handler(handle):
     handle.analyze()
 
 
-class Analyzer():
+class Analyzer:
     """Class to parse .su files"""
 
     def __init__(self, env, daos_prefix, comp_prefix, arg=""):
@@ -36,16 +36,46 @@ class Analyzer():
     def parse_args(self, arg_str):
         """Parse the arguments"""
         parser = argparse.ArgumentParser(description='Stack size analyzer')
-        parser.add_argument('-x', '--exclude-dir', dest='xdirs', nargs='*', default=[],
-                            help="string to match indicating directories to exclude")
-        parser.add_argument('-I', '--include-dir', dest='dirs', nargs='*', default=[],
-                            help="string to match indicating directories to include")
-        parser.add_argument('-i', '--include-file', dest='files', nargs='*', default=[],
-                            help="string to match indicating a directory to include")
-        parser.add_argument('-c', '--cutoff', dest='cutoff', default=100, type=int,
-                            help="Lower bound cutoff for entries to print")
-        parser.add_argument('-e', '--exit', dest='exit', default=False, action="store_true",
-                            help="Do not wait for build. Run the analysis immediately and exit.")
+        parser.add_argument(
+            '-x',
+            '--exclude-dir',
+            dest='xdirs',
+            nargs='*',
+            default=[],
+            help="string to match indicating directories to exclude",
+        )
+        parser.add_argument(
+            '-I',
+            '--include-dir',
+            dest='dirs',
+            nargs='*',
+            default=[],
+            help="string to match indicating directories to include",
+        )
+        parser.add_argument(
+            '-i',
+            '--include-file',
+            dest='files',
+            nargs='*',
+            default=[],
+            help="string to match indicating a directory to include",
+        )
+        parser.add_argument(
+            '-c',
+            '--cutoff',
+            dest='cutoff',
+            default=100,
+            type=int,
+            help="Lower bound cutoff for entries to print",
+        )
+        parser.add_argument(
+            '-e',
+            '--exit',
+            dest='exit',
+            default=False,
+            action="store_true",
+            help="Do not wait for build. Run the analysis immediately and exit.",
+        )
         args = parser.parse_args(arg_str.split())
         self.dir_exclusions = args.xdirs
         self.dir_inclusions = args.dirs

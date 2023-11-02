@@ -5,6 +5,7 @@
 """
 import ctypes
 import json
+
 # pylint: disable=too-many-lines
 import os
 from time import sleep, time

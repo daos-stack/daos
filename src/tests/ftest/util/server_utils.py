@@ -18,8 +18,14 @@ from command_utils import SubprocessManager
 from command_utils_base import BasicParameter, CommonConfig
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import (get_default_config_file, get_display_size, get_log_file, list_to_str,
-                           pcmd, run_pcmd)
+from general_utils import (
+    get_default_config_file,
+    get_display_size,
+    get_log_file,
+    list_to_str,
+    pcmd,
+    run_pcmd,
+)
 from host_utils import get_local_host
 from run_utils import run_remote, stop_processes
 from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
