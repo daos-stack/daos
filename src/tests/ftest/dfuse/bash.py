@@ -202,7 +202,7 @@ class Cmd(DfuseTestBase):
             for different container and pool sizes and perform basic bash
             commands.
 
-        :avocado: tags=all,
+        :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=dfuse
         :avocado: tags=Cmd,test_bashcmd,test_bashcmd_ioil
@@ -217,7 +217,7 @@ class Cmd(DfuseTestBase):
             for different container and pool sizes and perform basic bash
             commands.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all
         :avocado: tags=hw,medium
         :avocado: tags=dfuse
         :avocado: tags=Cmd,test_bashcmd,test_bashcmd_pil4dfs
