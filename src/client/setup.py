@@ -8,9 +8,10 @@ python3 setup.py install
 If run from within a compiled DAOS source tree this it will detect the
 install path automatically, otherwise it'll use the defaults.
 """
-import os
 import json
-from setuptools import setup, find_packages, Extension
+import os
+
+from setuptools import Extension, find_packages, setup
 
 
 def load_conf():

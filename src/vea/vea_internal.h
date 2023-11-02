@@ -310,7 +310,6 @@ int persistent_free(struct vea_space_info *vsi, struct vea_free_entry *vfe);
 int aggregated_free(struct vea_space_info *vsi, struct vea_free_entry *vfe);
 int trigger_aging_flush(struct vea_space_info *vsi, bool force,
 			uint32_t nr_flush, uint32_t *nr_flushed);
-int schedule_aging_flush(struct vea_space_info *vsi);
 int bitmap_entry_insert(struct vea_space_info *vsi, struct vea_free_bitmap *vfb,
 			int state, struct vea_bitmap_entry **ret_entry, unsigned int flags);
 int free_type(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt,

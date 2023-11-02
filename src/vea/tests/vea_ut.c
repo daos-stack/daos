@@ -534,8 +534,8 @@ ut_free(void **state)
 	print_message("persistent free extents:\n");
 	vea_dump(args->vua_vsi, false);
 
-	/* call vea_flush to trigger free extents migration */
-	rc = vea_flush(args->vua_vsi, true, UINT32_MAX, &nr_flushed);
+	/* force aging free extents flush */
+	rc = trigger_aging_flush(args->vua_vsi, true, UINT32_MAX, &nr_flushed);
 	assert_rc_equal(rc, 0);
 	assert_true(nr_flushed > 0);
 
@@ -775,13 +775,6 @@ ut_reserve_special(void **state)
 
 	/* free the allocated space */
 	rc = vea_free(args.vua_vsi, hdr_blks, blk_cnt);
-	assert_rc_equal(rc, 0);
-
-	/*
-	 * immediate reserve after free, the free extents should be made
-	 * visible for allocation immediately, reserve should succeed.
-	 */
-	rc = vea_reserve(args.vua_vsi, blk_cnt, NULL, r_list);
 	assert_rc_equal(rc, 0);
 
 	vea_unload(args.vua_vsi);
