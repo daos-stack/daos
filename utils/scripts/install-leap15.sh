@@ -23,7 +23,7 @@ dnf --nodocs install \
     fuse3-devel \
     gcc \
     gcc-c++ \
-    gcc-gfortran \
+    gcc-fortran \
     git \
     go1.18 \
     go1.18-race \

@@ -23,10 +23,10 @@ apt-get install \
     curl \
     fuse3 \
     gcc \
-    gcc-c++ \
-    gcc-gfortran \
+    gfortran \
     git \
     golang-go \
+    g++ \
     kmod \
     libaio-dev \
     libboost-dev \
