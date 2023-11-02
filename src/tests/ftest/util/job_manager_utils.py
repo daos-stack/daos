@@ -1068,6 +1068,10 @@ class Systemctl(JobManager):
             if timeout is not None:
                 timed_out = duration > timeout
 
+            self.log.info(
+                "Searching for '%s' status: detected=%s/%s, timed_out=%ss/%ss, complete=%s",
+                pattern, detected, quantity, duration, timeout, complete)
+
             if verbose:
                 self.display_log_data(log_data)
 
