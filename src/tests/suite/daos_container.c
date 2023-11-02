@@ -629,7 +629,7 @@ co_op_retry(void **state)
 	if (arg->myrank != 0)
 		return;
 
-		/* see above TODO */
+		/* See above TODO */
 #if 0
 	print_message("setting DAOS_CONT_OP_NOREPLY and creating container ... ");
 	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
