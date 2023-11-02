@@ -30,9 +30,9 @@ def scons():
 
     look_path = os.path.join(nvme_lib_src, 'nvme_internal.h')
     if os.path.isfile(look_path):
-        testbin = unit_env.d_test_program('nvme_control_ctests',
-                                          ['nvme_control_ut.c', nc_obj, ncc_obj, control_tgts],
-                                          LIBS=libs)
+        testbin = unit_env.d_test_program(
+            'nvme_control_ctests', ['nvme_control_ut.c', nc_obj, ncc_obj, control_tgts], LIBS=libs
+        )
         unit_env.Install("$PREFIX/bin", testbin)
     else:
         print(f'{look_path} missing, skipping nvme_control_ut build')

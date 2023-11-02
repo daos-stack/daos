@@ -13,8 +13,7 @@ def configure_lustre(denv):
     # If Lustre installed build a Lustre-aware libduns
     conf = Configure(denv)
     gotversion = False
-    if not conf.CheckLibWithHeader('lustreapi', 'linux/lustre/lustre_user.h',
-                                   'c'):
+    if not conf.CheckLibWithHeader('lustreapi', 'linux/lustre/lustre_user.h', 'c'):
         _print("No installed Lustre version detected")
     else:
         _print("Installed Lustre version detected")

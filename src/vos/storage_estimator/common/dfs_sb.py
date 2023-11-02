@@ -85,7 +85,9 @@ def _print_akey(iod, overhead='meta'):
   overhead: {3}
   value_type: {4}
   values: [{5}]
-'''.format(key, key, iov_buf_len, overhead, iod_type, values)
+'''.format(
+        key, key, iov_buf_len, overhead, iod_type, values
+    )
 
     return key, akey
 
@@ -113,7 +115,9 @@ def _print_dkey(dkey, akeys):
   size: {1}
   overhead: meta
   akeys: {2}
-'''.format(key, dkey.iov_len, _list_2_str(akeys))
+'''.format(
+        key, dkey.iov_len, _list_2_str(akeys)
+    )
 
     return buf
 
@@ -129,7 +133,9 @@ dfs_inode: &dfs_inode
   overhead: meta
   value_type: array
   values: [{1}]
-'''.format(key, values)
+'''.format(
+        key, values
+    )
 
     return buf
 
@@ -161,14 +167,8 @@ def _create_akey(iod):
         iod_type = ValType.ARRAY
 
     overhead = Overhead.META
-    akey = AKey(
-        key=key.decode('utf-8'),
-        value_type=iod_type,
-        overhead=overhead)
-    value = VosValue(
-        count=int(
-            iod.iod_nr), size=int(
-            iod.iod_size))
+    akey = AKey(key=key.decode('utf-8'), value_type=iod_type, overhead=overhead)
+    value = VosValue(count=int(iod.iod_nr), size=int(iod.iod_size))
     akey.add_value(value)
 
     return akey
@@ -189,23 +189,22 @@ def _parse_dfs_sb_dkey(dkey_raw, iods, akey_count):
 def _parse_dfs_akey_inode(dfs_entry_key_size, dfs_entry_size):
     key = 'x' * dfs_entry_key_size
     value = VosValue(size=dfs_entry_size)
-    akey = AKey(
-        key=key,
-        overhead=Overhead.META,
-        value_type=ValType.ARRAY)
+    akey = AKey(key=key, overhead=Overhead.META, value_type=ValType.ARRAY)
     akey.add_value(value)
 
     return akey
 
 
 class STR_BUFFER(ctypes.Structure):
-    _fields_ = [("status", ctypes.c_int),
-                ("str_len", ctypes.c_size_t),
-                ("buf_len", ctypes.c_size_t),
-                ("cstr", ctypes.c_char_p)]
+    _fields_ = [
+        ("status", ctypes.c_int),
+        ("str_len", ctypes.c_size_t),
+        ("buf_len", ctypes.c_size_t),
+        ("cstr", ctypes.c_char_p),
+    ]
 
 
-class BASE_CLASS():
+class BASE_CLASS:
     def __init__(self, lib_name):
         self._lib = self._load_lib(lib_name)
 
@@ -214,14 +213,10 @@ class BASE_CLASS():
         try:
             lib_path = os.path.join(current_path, '../../..')
 
-            libdfs = ctypes.CDLL(
-                os.path.join(lib_path, lib_name),
-                mode=ctypes.DEFAULT_MODE)
+            libdfs = ctypes.CDLL(os.path.join(lib_path, lib_name), mode=ctypes.DEFAULT_MODE)
 
         except OSError as err:
-            raise Exception(
-                'failed to load {0} library: {1}'.format(
-                    lib_name, err))
+            raise Exception('failed to load {0} library: {1}'.format(lib_name, err))
 
         return libdfs
 
@@ -238,13 +233,11 @@ class VOS_SIZE(BASE_CLASS):
         """vospath - mount point of daos. Default is /mnt/daos"""
         print('  Reading VOS structures from current installation')
         ret = self._lib.get_vos_structure_sizes_yaml(
-            ctypes.c_int(alloc_overhead),
-            ctypes.byref(self._data),
-            bytes(vospath, encoding='utf-8'))
+            ctypes.c_int(alloc_overhead), ctypes.byref(self._data), bytes(vospath, encoding='utf-8')
+        )
 
         if ret != 0:
-            raise Exception(
-                'failed to retrieve the VOS structure sizes')
+            raise Exception('failed to retrieve the VOS structure sizes')
 
         vos_str = ctypes.string_at(self._data.cstr, self._data.str_len)
 
@@ -279,22 +272,19 @@ class DFS_SB(BASE_CLASS):
             ctypes.byref(self._iods),
             ctypes.byref(self._akey_count),
             ctypes.byref(self._dfs_entry_key_size),
-            ctypes.byref(self._dfs_entry_size))
+            ctypes.byref(self._dfs_entry_size),
+        )
         self._ready = True
 
         if ret != 0:
-            raise Exception(
-                'failed to retrieve the DFS Super Block. RC: {0}'.format(ret))
+            raise Exception('failed to retrieve the DFS Super Block. RC: {0}'.format(ret))
 
     def get_dfs_str(self):
         if not self._ready:
             self._dfs_get_sb_layout()
         return _print_dfs(
-            self._dkey,
-            self._iods,
-            self._akey_count,
-            self._dfs_entry_key_size,
-            self._dfs_entry_size)
+            self._dkey, self._iods, self._akey_count, self._dfs_entry_key_size, self._dfs_entry_size
+        )
 
     def get_dfs_sb_dkey(self):
         if not self._ready:
@@ -304,16 +294,13 @@ class DFS_SB(BASE_CLASS):
     def get_dfs_inode_akey(self):
         if not self._ready:
             self._dfs_get_sb_layout()
-        return _parse_dfs_akey_inode(
-            self._dfs_entry_key_size.value,
-            self._dfs_entry_size.value)
+        return _parse_dfs_akey_inode(self._dfs_entry_key_size.value, self._dfs_entry_size.value)
 
 
 def print_daos_version():
     try:
         current_path = os.path.dirname(os.path.abspath(__file__))
-        with open(os.path.join(current_path, '../../../daos/VERSION'),
-                  'r') as version_file:
+        with open(os.path.join(current_path, '../../../daos/VERSION'), 'r') as version_file:
             daos_version = version_file.read().rstrip()
     except OSError:
         daos_version = '0.0.0'
@@ -327,8 +314,7 @@ def get_dfs_sb_obj():
         dkey = dfs_sb.get_dfs_sb_dkey()
         dfs_inode = dfs_sb.get_dfs_inode_akey()
     except Exception as err:
-        raise Exception(
-            'Failed to get the DFS superblock VOS object: {0}'.format(err))
+        raise Exception('Failed to get the DFS superblock VOS object: {0}'.format(err))
 
     sb_obj = VosObject()
     sb_obj.add_value(dkey)

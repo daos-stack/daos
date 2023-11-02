@@ -9,14 +9,16 @@ import subprocess  # nosec
 import sys
 from os.path import join
 
-BUILD_FILES = ['site_scons/prereq_tools',
-               'site_scons/components',
-               'utils/build.config',
-               'SConstruct',
-               '.github/workflows/landing-builds.yml',
-               '.dockerignore',
-               'requirements.txt',
-               'ci/gha_helper.py']
+BUILD_FILES = [
+    'site_scons/prereq_tools',
+    'site_scons/components',
+    'utils/build.config',
+    'SConstruct',
+    '.github/workflows/landing-builds.yml',
+    '.dockerignore',
+    'requirements.txt',
+    'ci/gha_helper.py',
+]
 
 COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
 

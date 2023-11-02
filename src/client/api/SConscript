@@ -1,7 +1,21 @@
 """Build DAOS client"""
 
-LIBDAOS_SRC = ['agent.c', 'array.c', 'container.c', 'event.c', 'init.c', 'job.c', 'kv.c', 'mgmt.c',
-               'object.c', 'pool.c', 'rpc.c', 'task.c', 'tx.c', 'pipeline.c']
+LIBDAOS_SRC = [
+    'agent.c',
+    'array.c',
+    'container.c',
+    'event.c',
+    'init.c',
+    'job.c',
+    'kv.c',
+    'mgmt.c',
+    'object.c',
+    'pool.c',
+    'rpc.c',
+    'task.c',
+    'tx.c',
+    'pipeline.c',
+]
 
 
 def scons():
@@ -15,8 +29,9 @@ def scons():
     libdaos_tgts[:0] = denv.SharedObject(LIBDAOS_SRC)
 
     if prereqs.client_requested():
-        libdaos = env.d_library('daos', libdaos_tgts, SHLIBVERSION=API_VERSION,
-                                LIBS=['daos_common'])
+        libdaos = env.d_library(
+            'daos', libdaos_tgts, SHLIBVERSION=API_VERSION, LIBS=['daos_common']
+        )
         if hasattr(env, 'InstallVersionedLib'):
             env.InstallVersionedLib('$PREFIX/lib64/', libdaos, SHLIBVERSION=API_VERSION)
         else:

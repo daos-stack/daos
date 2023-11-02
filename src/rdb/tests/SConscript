@@ -13,9 +13,11 @@ def scons():
     tenv.Install('$PREFIX/lib64/daos_srv', librdbt)
 
     # rdbt client
-    rdbt = tenv.d_program('rdbt', ['rdbt.c', 'rpc.c'] + libdaos_tgts,
-                          LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal', 'protobuf-c',
-                                'pthread'])
+    rdbt = tenv.d_program(
+        'rdbt',
+        ['rdbt.c', 'rpc.c'] + libdaos_tgts,
+        LIBS=['daos_common_pmem', 'cart', 'gurt', 'uuid', 'isal', 'protobuf-c', 'pthread'],
+    )
     tenv.Install('$PREFIX/bin', rdbt)
 
 

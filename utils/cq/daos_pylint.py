@@ -18,11 +18,15 @@ try:
     from pylint.lint import Run
     from pylint.reporters.collecting_reporter import CollectingReporter
 except ImportError:
-
     if os.path.exists('venv'):
-        sys.path.append(os.path.join('venv', 'lib',
-                                     f'python{sys.version_info.major}.{sys.version_info.minor}',
-                                     'site-packages'))
+        sys.path.append(
+            os.path.join(
+                'venv',
+                'lib',
+                f'python{sys.version_info.major}.{sys.version_info.minor}',
+                'site-packages',
+            )
+        )
         try:
             from pylint.constants import full_version
             from pylint.lint import Run
@@ -63,7 +67,7 @@ except ImportError:
 # also be enabled shortly however we have a number to correct or resolve before enabling.
 
 
-class WrapScript():
+class WrapScript:
     """Create a wrapper for a scons file and maintain a line mapping
 
     An update here is needed as files in site_scons/*.py do not automatically import SCons but
@@ -71,7 +75,6 @@ class WrapScript():
     """
 
     def __init__(self, fname, from_stdin):
-
         self.line_map = {}
         # pylint: disable-next=consider-using-with
         self._outfile = tempfile.NamedTemporaryFile(mode='w+', prefix='daos_pylint_')
@@ -159,7 +162,8 @@ class WrapScript():
             if variable.upper() == 'PREREQS':
                 newlines += 1
                 outfile.write(
-                    f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n')
+                    f'{prefix}{variable} = PreReqComponent(DefaultEnvironment(), Variables())\n'
+                )
             elif "ENV" in variable.upper():
                 newlines += 1
                 outfile.write(f'{prefix}{variable} = DefaultEnvironment()\n')
@@ -184,11 +188,13 @@ class WrapScript():
         # Always import PreReqComponent here, but it'll only be used in some cases.  This causes
         # errors in the toplevel SConstruct which are suppressed, the alternative would be to do
         # two passes and only add the include if needed later.
-        outfile.write("""# pylint: disable-next=unused-wildcard-import,wildcard-import
+        outfile.write(
+            """# pylint: disable-next=unused-wildcard-import,wildcard-import
 from SCons.Script import * # pylint: disable=import-outside-toplevel
 # pylint: disable-next=import-outside-toplevel,unused-wildcard-import,wildcard-import
 from SCons.Variables import *
-from prereq_tools import PreReqComponent # pylint: disable=unused-import\n""")
+from prereq_tools import PreReqComponent # pylint: disable=unused-import\n"""
+        )
         return 5
 
     def convert_line(self, line):
@@ -196,7 +202,7 @@ from prereq_tools import PreReqComponent # pylint: disable=unused-import\n""")
         return self.line_map[line]
 
 
-class FileTypeList():
+class FileTypeList:
     """Class for sorting files
 
     Consumes a list of file/module names and sorts them into categories so that later on each
@@ -213,8 +219,9 @@ class FileTypeList():
 
     def file_count(self):
         """Return the number of files to be checked"""
-        return len(self.ftest_files) + len(self.scons_files) \
-            + len(self.files) + len(self.fake_scons)
+        return (
+            len(self.ftest_files) + len(self.scons_files) + len(self.files) + len(self.fake_scons)
+        )
 
     def add(self, file, force=False):
         """Add a filename to the correct list"""
@@ -340,13 +347,15 @@ class FileTypeList():
 
         def parse_msg(msg):
             # Convert from a pylint message into a dict that can be using for printing.
-            vals = {'category': msg.category,
-                    'column': msg.column,
-                    'message-id': msg.msg_id,
-                    'message': msg.msg,
-                    'symbol': msg.symbol,
-                    'msg': msg.msg,
-                    'msg_id': msg.msg_id}
+            vals = {
+                'category': msg.category,
+                'column': msg.column,
+                'message-id': msg.msg_id,
+                'message': msg.msg,
+                'symbol': msg.symbol,
+                'msg': msg.msg,
+                'msg_id': msg.msg_id,
+            }
 
             if wrapper:
                 vals['path'] = target_file
@@ -358,8 +367,9 @@ class FileTypeList():
 
         def msg_to_github(vals):
             # pylint: disable-next=consider-using-f-string
-            print('::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(
-                **vals))
+            print(
+                '::{category} file={path},line={line},col={column},::{symbol}, {msg}'.format(**vals)
+            )
 
         failed = False
         rep = CollectingReporter()
@@ -437,14 +447,16 @@ sys.path.append('site_scons')"""
             symbols[msg.symbol] += 1
 
             if args.output_format == 'json':
-                report = {'type': vals['category'],
-                          'path': msg.path,
-                          'module': msg.module,
-                          'line': vals['line'],
-                          'column': vals['column'],
-                          'symbol': vals['symbol'],
-                          'message': vals['message'],
-                          'message-id': vals['message-id']}
+                report = {
+                    'type': vals['category'],
+                    'path': msg.path,
+                    'module': msg.module,
+                    'line': vals['line'],
+                    'column': vals['column'],
+                    'symbol': vals['symbol'],
+                    'message': vals['message'],
+                    'message-id': vals['message-id'],
+                }
 
                 if msg.obj:
                     report['obj'] = msg.obj
@@ -474,10 +486,10 @@ sys.path.append('site_scons')"""
 
         if not types or args.reports == 'n':
             return failed
-        for (mtype, count) in types.most_common():
+        for mtype, count in types.most_common():
             print(f'{mtype}:{count}')
 
-        for (mtype, count) in symbols.most_common():
+        for mtype, count in symbols.most_common():
             print(f'{mtype}:{count}')
         return failed
 
@@ -519,8 +531,9 @@ def main():
 
     rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc')
 
-    parser.add_argument('--msg-template',
-                        default='{path}:{line}:{column}: {message-id}: {message} ({symbol})')
+    parser.add_argument(
+        '--msg-template', default='{path}:{line}:{column}: {message-id}: {message} ({symbol})'
+    )
     parser.add_argument('--reports', choices=['y', 'n'], default='y')
     parser.add_argument('--output-format', choices=['text', 'json', 'github'], default='text')
     parser.add_argument('--rcfile', default=rcfile)

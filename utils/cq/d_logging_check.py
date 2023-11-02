@@ -21,7 +21,7 @@ import sys
 ARGS = None
 
 
-class FileLine():
+class FileLine:
     """One line from a file"""
 
     def __init__(self, file_object, line, lineno):
@@ -124,15 +124,47 @@ class FileParser:
 
 
 # Logging macros where the new-line is added if missing.
-PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FATAT', 'D_EMIT',
-            'D_TRACE_INFO', 'D_TRACE_NOTE', 'D_TRACE_WARN', 'D_TRACE_ERROR', 'D_TRACE_ALERT',
-            'D_TRACE_CRIT', 'D_TRACE_FATAL', 'D_TRACE_EMIT', 'RPC_TRACE', 'RPC_ERROR',
-            'VOS_TX_LOG_FAIL', 'VOS_TX_TRACE_FAIL', 'D_DEBUG', 'D_CDEBUG', 'IV_DBG']
+PREFIXES = [
+    'D_ERROR',
+    'D_WARN',
+    'D_INFO',
+    'D_NOTE',
+    'D_ALERT',
+    'D_CRIT',
+    'D_FATAT',
+    'D_EMIT',
+    'D_TRACE_INFO',
+    'D_TRACE_NOTE',
+    'D_TRACE_WARN',
+    'D_TRACE_ERROR',
+    'D_TRACE_ALERT',
+    'D_TRACE_CRIT',
+    'D_TRACE_FATAL',
+    'D_TRACE_EMIT',
+    'RPC_TRACE',
+    'RPC_ERROR',
+    'VOS_TX_LOG_FAIL',
+    'VOS_TX_TRACE_FAIL',
+    'D_DEBUG',
+    'D_CDEBUG',
+    'IV_DBG',
+]
 
 # Logging macros where a new-line is always added.
-PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
-                'DFUSE_TRA_WARNING', 'DFUSE_TRA_ERROR', 'DFUSE_TRA_DEBUG', 'DFUSE_TRA_INFO',
-                'DH_PERROR_SYS', 'DH_PERROR_DER', 'DL_CDEBUG', 'PRINT_ERROR']
+PREFIXES_NNL = [
+    'DFUSE_LOG_WARNING',
+    'DFUSE_LOG_ERROR',
+    'DFUSE_LOG_DEBUG',
+    'DFUSE_LOG_INFO',
+    'DFUSE_TRA_WARNING',
+    'DFUSE_TRA_ERROR',
+    'DFUSE_TRA_DEBUG',
+    'DFUSE_TRA_INFO',
+    'DH_PERROR_SYS',
+    'DH_PERROR_DER',
+    'DL_CDEBUG',
+    'PRINT_ERROR',
+]
 
 for prefix in ['DL', 'DHL', 'DS', 'DHS']:
     for suffix in ['ERROR', 'WARN', 'INFO']:
@@ -142,7 +174,7 @@ PREFIXES_ALL = PREFIXES.copy()
 PREFIXES_ALL.extend(PREFIXES_NNL)
 
 
-class AllChecks():
+class AllChecks:
     """All the checks in one class"""
 
     def __init__(self, file_object):
@@ -319,7 +351,7 @@ class AllChecks():
             if any(map(msg.endswith, [' ', '=', '.', ',', ':', ';'])):
                 msg = msg[:-1]
             if msg.endswith(var_name):
-                msg = msg[:-len(var_name)]
+                msg = msg[: -len(var_name)]
             if msg.endswith('rc'):
                 msg = msg[:-2]
 

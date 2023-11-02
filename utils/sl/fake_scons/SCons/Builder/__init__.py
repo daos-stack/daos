@@ -27,5 +27,4 @@ class Builder:
 
 ARGUMENTS = {}
 
-__all__ = ['Builder',
-           'ARGUMENTS']
+__all__ = ['Builder', 'ARGUMENTS']

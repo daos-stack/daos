@@ -16,12 +16,12 @@ from . import DAOS_MAGIC, DaosClient, PyDError, pydaos_shim
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
-    {key: value for key, value in list(pydaos_shim.__dict__.items())
-     if key.startswith("OC_")})
+    {key: value for key, value in list(pydaos_shim.__dict__.items()) if key.startswith("OC_")},
+)
 
 
 def _get_object_id(cid):
-    """ Get the existing DAOS object class ID based on name.  """
+    """Get the existing DAOS object class ID based on name."""
 
     # Default to OC_UNKNOWN (0), which will automatically select an object class.
     if cid == "0":
@@ -30,7 +30,7 @@ def _get_object_id(cid):
 
 
 class DObjNotFound(Exception):
-    """Raised by get if name associated with DAOS object not found """
+    """Raised by get if name associated with DAOS object not found"""
 
     def __init__(self, name):
         self.name = name
@@ -40,7 +40,7 @@ class DObjNotFound(Exception):
         return "Failed to open '{}'".format(self.name)
 
 
-class DCont():
+class DCont:
     """
     Class representing of DAOS python container
     Can be identified via a path or a combination of pool label and container
@@ -73,8 +73,7 @@ class DCont():
         self._dc = DaosClient()
         self._hdl = None
         if path is None and (pool is None or cont is None):
-            raise PyDError("invalid pool or container UUID",
-                           -pydaos_shim.DER_INVAL)
+            raise PyDError("invalid pool or container UUID", -pydaos_shim.DER_INVAL)
         if path is not None:
             self.pool = None
             self.cont = None
@@ -95,7 +94,7 @@ class DCont():
             raise PyDError("failed to close container", ret)
 
     def get(self, name):
-        """ Look up DAOS object associated with name """
+        """Look up DAOS object associated with name"""
 
         (ret, hi, lo, otype) = pydaos_shim.cont_get(DAOS_MAGIC, self._hdl, name)
         if ret == -pydaos_shim.DER_NONEXIST:
@@ -114,14 +113,15 @@ class DCont():
         return self.get(name)
 
     def dict(self, name, v: dict = None, cid="0"):
-        """ Create new DDict object """
+        """Create new DDict object"""
 
         # Get the existing class ID based on class name given. Default to 0
         objId = _get_object_id(cid)
 
         # Insert name into root kv and get back an object ID
-        (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
-                                                objId, pydaos_shim.PYDAOS_DICT)
+        (ret, hi, lo) = pydaos_shim.cont_newobj(
+            DAOS_MAGIC, self._hdl, name, objId, pydaos_shim.PYDAOS_DICT
+        )
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to create DAOS dict", ret)
 
@@ -135,14 +135,15 @@ class DCont():
 
     def array(self, name, v: list = None, cid="0"):
         # pylint: disable=unused-argument
-        """ Create new DArray object """
+        """Create new DArray object"""
 
         # Get the existing class ID based on class name given. Default to 0
         objId = _get_object_id(cid)
 
         # Insert name into root kv and get back an object ID
-        (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
-                                                objId, pydaos_shim.PYDAOS_ARRAY)
+        (ret, hi, lo) = pydaos_shim.cont_newobj(
+            DAOS_MAGIC, self._hdl, name, objId, pydaos_shim.PYDAOS_ARRAY
+        )
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to create DAOS array", ret)
 
@@ -160,7 +161,7 @@ class DCont():
         return 'daos://{}/{}'.format(self.pool, self.cont)
 
 
-class _DObj():
+class _DObj:
     # pylint: disable=no-member
 
     def __init__(self, name, hdl, hi, lo, cont):
@@ -189,9 +190,10 @@ class _DObj():
         return "[" + hex(self.hi) + ":" + hex(self.lo) + "]"
 
 
-class DDictIter():
+class DDictIter:
     # pylint: disable=too-few-public-methods
-    """ Iterator class for DDict """
+    """Iterator class for DDict"""
+
     def __init__(self, ddict):
         self._dc = DaosClient()
         self._entries = []
@@ -213,9 +215,9 @@ class DDictIter():
             raise StopIteration()
 
         # read more entries
-        (ret, nr, sz, anchor) = pydaos_shim.kv_iter(DAOS_MAGIC, self._kv.oh,
-                                                    self._entries, self._nr,
-                                                    self._size, self._anchor)
+        (ret, nr, sz, anchor) = pydaos_shim.kv_iter(
+            DAOS_MAGIC, self._kv.oh, self._entries, self._nr, self._size, self._anchor
+        )
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to enumerate Dictionary", ret)
 
@@ -389,6 +391,7 @@ class DDict(_DObj):
 
     def __iter__(self):
         return DDictIter(self)
+
 
 # pylint: disable=too-few-public-methods
 

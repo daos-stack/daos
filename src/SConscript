@@ -26,7 +26,7 @@ HEADERS = [
     'daos_pipeline.h',
 ]
 HEADERS_SRV = ['vos.h', 'vos_types.h']
-HEADERS_GURT = [
+HEADERS_GURT = {
     'dlog.h',
     'debug.h',
     'common.h',
@@ -40,7 +40,7 @@ HEADERS_GURT = [
     'slab.h',
     'telemetry_consumer.h',
     'telemetry_common.h',
-]
+}
 HEADERS_CART = ['api.h', 'iv.h', 'types.h', 'swim.h']
 
 

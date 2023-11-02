@@ -5,9 +5,20 @@ def scons():
     """Execute build"""
     Import('denv', 'utest_utils', 'conf_dir', 'cmd_parser')
 
-    libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
-                 'daos_tests', 'gurt', 'uuid', 'pthread',
-                 'pmemobj', 'cmocka', 'gomp']
+    libraries = [
+        'vos',
+        'bio',
+        'abt',
+        'pthread',
+        'daos_common_pmem',
+        'daos_tests',
+        'gurt',
+        'uuid',
+        'pthread',
+        'pmemobj',
+        'cmocka',
+        'gomp',
+    ]
 
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
@@ -18,11 +29,26 @@ def scons():
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     tenv.Append(OBJPREFIX="b_")
 
-    vos_test_src = ['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',
-                    tenv.Object("vts_common.c"), 'vts_aggregate.c', 'vts_dtx.c',
-                    'vts_gc.c', 'vts_checksum.c', 'vts_ilog.c', 'vts_array.c',
-                    'vts_pm.c', 'vts_ts.c', 'vts_mvcc.c', 'vos_cmd.c', 'vts_wal.c',
-                    '../../object/srv_csum.c', '../../object/srv_io_map.c']
+    vos_test_src = [
+        'vos_tests.c',
+        'vts_io.c',
+        'vts_pool.c',
+        'vts_container.c',
+        tenv.Object("vts_common.c"),
+        'vts_aggregate.c',
+        'vts_dtx.c',
+        'vts_gc.c',
+        'vts_checksum.c',
+        'vts_ilog.c',
+        'vts_array.c',
+        'vts_pm.c',
+        'vts_ts.c',
+        'vts_mvcc.c',
+        'vos_cmd.c',
+        'vts_wal.c',
+        '../../object/srv_csum.c',
+        '../../object/srv_io_map.c',
+    ]
     vos_tests = tenv.d_program('vos_tests', vos_test_src, LIBS=libraries)
     tenv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
     evt_ctl = tenv.d_program('evt_ctl', ['evt_ctl.c', utest_utils, cmd_parser], LIBS=libraries)
@@ -33,11 +59,23 @@ def scons():
     unit_env = tenv.Clone()
     unit_env.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
-    libraries = ['daos_common_pmem', 'daos_tests', 'gurt', 'cart', 'cmocka',
-                 'vos', 'uuid', 'pmem', 'pmemobj', 'bio', 'pthread', 'abt']
-    unit_env.d_test_program('pool_scrubbing_tests', ['pool_scrubbing_tests.c',
-                                                     '../vos_pool_scrub.c'],
-                            LIBS=libraries)
+    libraries = [
+        'daos_common_pmem',
+        'daos_tests',
+        'gurt',
+        'cart',
+        'cmocka',
+        'vos',
+        'uuid',
+        'pmem',
+        'pmemobj',
+        'bio',
+        'pthread',
+        'abt',
+    ]
+    unit_env.d_test_program(
+        'pool_scrubbing_tests', ['pool_scrubbing_tests.c', '../vos_pool_scrub.c'], LIBS=libraries
+    )
 
     tenv = denv.Clone()
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])

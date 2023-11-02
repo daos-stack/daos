@@ -28,8 +28,22 @@ import jira
 # Expected components from the commit message, and directory in src/, src/client or utils/ is also
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
-VALID_COMPONENTS = ('agent', 'build', 'ci', 'csum', 'doc', 'gha', 'il', 'md', 'mercury',
-                    'packaging', 'pil4dfs', 'swim', 'test', 'tools')
+VALID_COMPONENTS = (
+    'agent',
+    'build',
+    'ci',
+    'csum',
+    'doc',
+    'gha',
+    'il',
+    'md',
+    'mercury',
+    'packaging',
+    'pil4dfs',
+    'swim',
+    'test',
+    'tools',
+)
 
 # Expected ticket prefix.
 VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
@@ -57,9 +71,11 @@ def set_output(key, value):
 
 def valid_comp_from_dir(component):
     """Checks is a component is valid based on src tree"""
-    return os.path.isdir(os.path.join('src', component)) \
-        or os.path.isdir(os.path.join('src', 'client', component)) \
+    return (
+        os.path.isdir(os.path.join('src', component))
+        or os.path.isdir(os.path.join('src', 'client', component))
         or os.path.isdir(os.path.join('utils', component))
+    )
 
 
 def fetch_pr_data():
@@ -144,8 +160,10 @@ def main():
         ticket = server.issue(ticket_number, fields=FIELDS)
     except jira.exceptions.JIRAError:
         errors.append('Unable to load ticket data')
-        output = [f'Errors are {",".join(errors)}',
-                  f'https://daosio.atlassian.net/browse/{ticket_number}']
+        output = [
+            f'Errors are {",".join(errors)}',
+            f'https://daosio.atlassian.net/browse/{ticket_number}',
+        ]
         set_output('message', '\n'.join(output))
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
@@ -158,15 +176,17 @@ def main():
 
     # Elevated priority, PRs to master where ticket is "Required for Version" is set.
     if ticket.fields.customfield_10045:
-
         # Check the target branch here.  Can not be done from a ticket number alone, so only perform
         # this check if we can.
 
         rv_priority = None
 
         for version in ticket.fields.customfield_10045:
-            if str(version) in ('2.0.3 Community Release', '2.0.3 Community Release',
-                                '2.2 Community Release'):
+            if str(version) in (
+                '2.0.3 Community Release',
+                '2.0.3 Community Release',
+                '2.2 Community Release',
+            ):
                 rv_priority = 2
             elif str(version) in ('2.4 Community Release'):
                 rv_priority = 3

@@ -20,7 +20,7 @@
 """Fake Action class"""
 
 
-class Action():
+class Action:
     """Fake Action"""
 
     def __init__(self, *args, **kw):

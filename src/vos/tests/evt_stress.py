@@ -6,8 +6,9 @@ import os
 from os.path import join
 
 
-class EVTStress():
+class EVTStress:
     """Helper class for running the test"""
+
     def __init__(self):
         parser = argparse.ArgumentParser(description='Run evt_ctl with pattern from DAOS-11894')
         parser.add_argument('--algo', default='dist', choices=['dist', 'dist_even', 'soff'])

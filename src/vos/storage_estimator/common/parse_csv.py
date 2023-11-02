@@ -8,8 +8,26 @@ from storage_estimator.dfs_sb import get_dfs_inode_akey
 from storage_estimator.explorer import AverageFS
 from storage_estimator.util import ProcessBase
 
-FILE_SIZES = ['4k', '64k', '128k', '256k', '512k', '768k', '1m', '8m', '64m',
-              '128m', '1g', '10g', '100g', '250g', '500g', '1t', '10t', '100t']
+FILE_SIZES = [
+    '4k',
+    '64k',
+    '128k',
+    '256k',
+    '512k',
+    '768k',
+    '1m',
+    '8m',
+    '64m',
+    '128m',
+    '1g',
+    '10g',
+    '100g',
+    '250g',
+    '500g',
+    '1t',
+    '10t',
+    '100t',
+]
 
 
 class ProcessCSV(ProcessBase):
@@ -36,8 +54,8 @@ class ProcessCSV(ProcessBase):
                 raise Exception(
                     "CSV must provide one row of values that matches fields"
                     "Number of fields is {0}"
-                    "Number of values is {1}".format(
-                        len(fields), len(values)))
+                    "Number of values is {1}".format(len(fields), len(values))
+                )
             for name in fields:
                 value_dict[name] = values[idx]
                 idx += 1
@@ -55,10 +73,7 @@ class ProcessCSV(ProcessBase):
                 symlink_size = 0
 
             total_items = count_files + count_symlink + count_dir
-            unknown_items = int(
-                value_dict.get(
-                    "total_objects",
-                    0)) - total_items
+            unknown_items = int(value_dict.get("total_objects", 0)) - total_items
 
             self._debug("total files {0}".format(count_files))
             self._debug("total directories {0}".format(count_dir))
@@ -68,12 +83,9 @@ class ProcessCSV(ProcessBase):
             items_per_dir = total_items // count_dir
             dir_name_size = total_dir_size // count_dir
 
-            self._debug(
-                'assuming {0} items per directory'.format(items_per_dir))
-            self._debug(
-                'assuming average symlink size of {0} bytes'.format(symlink_size))
-            self._debug(
-                'assuming average dir size of {0} bytes'.format(dir_name_size))
+            self._debug('assuming {0} items per directory'.format(items_per_dir))
+            self._debug('assuming average symlink size of {0} bytes'.format(symlink_size))
+            self._debug('assuming average dir size of {0} bytes'.format(dir_name_size))
 
             afs = AverageFS(self._oclass)
             afs.set_verbose(self._verbose)
@@ -94,11 +106,11 @@ class ProcessCSV(ProcessBase):
                 total_size = int(value_dict.get("%s_size" % size, 0))
 
                 if num_files != 0:
-                    avg_file_size = (total_size // num_files)
+                    avg_file_size = total_size // num_files
                     pretty_size = self._to_human(avg_file_size)
                     self._debug(
-                        'found {0} files of {1} average size'.format(
-                            num_files, pretty_size))
+                        'found {0} files of {1} average size'.format(num_files, pretty_size)
+                    )
                     afs.add_average_file(num_files, avg_file_size)
 
             return afs

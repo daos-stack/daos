@@ -20,8 +20,9 @@
 """Fake Variables class"""
 
 
-class PathVariable():
+class PathVariable:
     """Fake PathVariable"""
+
     PathIsDirCreate = 1
     PathIsDir = 2
     PathAccept = 3
@@ -30,21 +31,21 @@ class PathVariable():
         pass
 
 
-class ListVariable():
+class ListVariable:
     """Fake ListVariable"""
 
     def __init__(self, *args, **kw):
         pass
 
 
-class BoolVariable():
+class BoolVariable:
     """Fake BoolVariable"""
 
     def __init__(self, *args, **kw):
         pass
 
 
-class EnumVariable():
+class EnumVariable:
     """Fake EnumVariable"""
 
     def __init__(self, *args, **kw):
@@ -53,8 +54,4 @@ class EnumVariable():
 
 ARGUMENTS = {}
 
-__all__ = ['PathVariable',
-           'ListVariable',
-           'BoolVariable',
-           'EnumVariable',
-           'ARGUMENTS']
+__all__ = ['PathVariable', 'ListVariable', 'BoolVariable', 'EnumVariable', 'ARGUMENTS']

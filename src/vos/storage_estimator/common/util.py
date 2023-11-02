@@ -13,7 +13,7 @@ from storage_estimator.vos_size import MetaOverhead
 from storage_estimator.vos_structures import Containers
 
 
-class CommonBase():
+class CommonBase:
     def __init__(self):
         self._verbose = False
 
@@ -23,9 +23,7 @@ class CommonBase():
 
     def _check_value_type(self, value, values_type):
         if not isinstance(value, values_type):
-            raise TypeError(
-                'item {0} must be of type {1}'.format(
-                    value, type(values_type)))
+            raise TypeError('item {0} must be of type {1}'.format(value, type(values_type)))
 
     def _error(self, msg):
         print('Error: {0}'.format(msg))
@@ -51,7 +49,8 @@ class CommonBase():
             5: 'PiB',
             6: 'EiB',
             7: 'ZiB',
-            8: 'YiB'}
+            8: 'YiB',
+        }
 
     def _to_human(self, size):
         power_labels = self._get_power_labels()
@@ -95,8 +94,7 @@ class CommonBase():
     def _check_positive_number(self, number):
         self._check_value_type(number, int)
         if number < 1:
-            raise ValueError(
-                '{0} must be a positive not zero value'.format(number))
+            raise ValueError('{0} must be a positive not zero value'.format(number))
 
     def _from_human(self, human_number):
         self._check_value_type(human_number, str)
@@ -123,12 +121,9 @@ class ObjectClass(CommonBase):
     def print_pretty_status(self):
         self._debug(
             '{0:<13}{1:<10}{2:<10}{3:<9}{4:<9}{5:<11}'.format(
-                'FS Object',
-                'OClass',
-                '# Targets',
-                '# Stripe',
-                '# Parity',
-                '# Replicas'))
+                'FS Object', 'OClass', '# Targets', '# Stripe', '# Parity', '# Replicas'
+            )
+        )
         self._get_pretty_status('File', self._file_oclass)
         self._get_pretty_status('Directory', self._dir_oclass)
 
@@ -168,48 +163,37 @@ class ObjectClass(CommonBase):
         return False
 
     def get_dir_targets(self):
-        return self._get_oclass_parameter(
-            self._dir_oclass, 'number_of_targets')
+        return self._get_oclass_parameter(self._dir_oclass, 'number_of_targets')
 
     def get_dir_stripe(self):
-        return self._get_oclass_parameter(
-            self._dir_oclass, 'number_of_stripe_cells')
+        return self._get_oclass_parameter(self._dir_oclass, 'number_of_stripe_cells')
 
     def get_dir_parity(self):
-        return self._get_oclass_parameter(
-            self._dir_oclass, 'number_of_parity_cells')
+        return self._get_oclass_parameter(self._dir_oclass, 'number_of_parity_cells')
 
     def get_dir_replicas(self):
-        return self._get_oclass_parameter(
-            self._dir_oclass, 'number_of_replicas')
+        return self._get_oclass_parameter(self._dir_oclass, 'number_of_replicas')
 
     def get_file_targets(self):
-        return self._get_oclass_parameter(
-            self._file_oclass, 'number_of_targets')
+        return self._get_oclass_parameter(self._file_oclass, 'number_of_targets')
 
     def get_file_stripe(self):
-        return self._get_oclass_parameter(
-            self._file_oclass, 'number_of_stripe_cells')
+        return self._get_oclass_parameter(self._file_oclass, 'number_of_stripe_cells')
 
     def get_file_parity(self):
-        return self._get_oclass_parameter(
-            self._file_oclass, 'number_of_parity_cells')
+        return self._get_oclass_parameter(self._file_oclass, 'number_of_parity_cells')
 
     def get_file_replicas(self):
-        return self._get_oclass_parameter(
-            self._file_oclass, 'number_of_replicas')
+        return self._get_oclass_parameter(self._file_oclass, 'number_of_replicas')
 
     def get_supported_oclass(self):
         return list(self._get_oclass_definitions().keys())
 
     def _get_min_shards_required(self, oclass_type):
-        parity = self._get_oclass_parameter(
-            oclass_type, 'number_of_parity_cells')
-        stripe = self._get_oclass_parameter(
-            oclass_type, 'number_of_stripe_cells')
+        parity = self._get_oclass_parameter(oclass_type, 'number_of_parity_cells')
+        stripe = self._get_oclass_parameter(oclass_type, 'number_of_stripe_cells')
         targets = self._get_oclass_parameter(oclass_type, 'number_of_targets')
-        replicas = self._get_oclass_parameter(
-            oclass_type, 'number_of_replicas')
+        replicas = self._get_oclass_parameter(oclass_type, 'number_of_replicas')
 
         return max(stripe + parity, targets, replicas)
 
@@ -219,15 +203,15 @@ class ObjectClass(CommonBase):
         if targets == 0:
             targets = 'all'
 
-        cells = self._get_oclass_parameter(
-            oclass_type, 'number_of_stripe_cells')
-        parity = self._get_oclass_parameter(
-            oclass_type, 'number_of_parity_cells')
-        replicas = self._get_oclass_parameter(
-            oclass_type, 'number_of_replicas')
+        cells = self._get_oclass_parameter(oclass_type, 'number_of_stripe_cells')
+        parity = self._get_oclass_parameter(oclass_type, 'number_of_parity_cells')
+        replicas = self._get_oclass_parameter(oclass_type, 'number_of_replicas')
 
-        self._debug('{0:<13}{1:<10}{2:<10}{3:<9}{4:<9}{5:<11}'.format(
-            label, oclass_type, targets, cells, parity, replicas))
+        self._debug(
+            '{0:<13}{1:<10}{2:<10}{3:<9}{4:<9}{5:<11}'.format(
+                label, oclass_type, targets, cells, parity, replicas
+            )
+        )
 
     def _update_oclass(self, args, key_value, default_value):
         op = vars(args)
@@ -239,7 +223,9 @@ class ObjectClass(CommonBase):
         if value not in supported_oclasses:
             raise ValueError(
                 'unknown object class "{0}", the supported objects are {1}:'.format(
-                    value, self.get_supported_oclass()))
+                    value, self.get_supported_oclass()
+                )
+            )
 
         return value
 
@@ -248,10 +234,9 @@ class ObjectClass(CommonBase):
             'number_of_targets': 0,
             'number_of_stripe_cells': 1,
             'number_of_parity_cells': 2,
-            'number_of_replicas': 3
+            'number_of_replicas': 3,
         }
-        return self._get_oclass_definitions(
-        )[oclass_type][ec_parameters[parameter_id]]
+        return self._get_oclass_definitions()[oclass_type][ec_parameters[parameter_id]]
 
     def _get_oclass_definitions(self):
         return {
@@ -273,7 +258,7 @@ class ObjectClass(CommonBase):
             'EC_8P2GX': (0, 8, 2, 1),
             # 16+2 Erasure Coded object, it spreads across all targets within
             # the pool
-            'EC_16P2GX': (0, 16, 2, 1)
+            'EC_16P2GX': (0, 16, 2, 1),
         }
 
 
@@ -296,9 +281,7 @@ class Common(CommonBase):
                 f.write(buf)
 
         except OSError as err:
-            raise Exception(
-                'Failed to open file {0} {1}'.format(
-                    file_name, err))
+            raise Exception('Failed to open file {0} {1}'.format(file_name, err))
 
     def _get_vos_meta(self):
         self._meta_str = self._create_vos_meta()
@@ -323,9 +306,7 @@ class Common(CommonBase):
         try:
             data = yaml.safe_load(open(file_name, 'r'))
         except OSError as err:
-            raise Exception(
-                'Failed to open file {0} {1}'.format(
-                    file_name, err))
+            raise Exception('Failed to open file {0} {1}'.format(file_name, err))
 
         return data
 
@@ -337,13 +318,12 @@ class Common(CommonBase):
 
         if 'containers' not in config_yaml:
             raise Exception(
-                'No "containers" key in {0}. Nothing to do'.format(
-                    self._args.config[0]))
+                'No "containers" key in {0}. Nothing to do'.format(self._args.config[0])
+            )
 
         self._debug('starting analysis')
         if 'average' in self._args and not self._args.average:
-            self._debug(
-                'for massive file systems, consider using the average "-x" option')
+            self._debug('for massive file systems, consider using the average "-x" option')
 
         self._debug('working...')
         for container in config_yaml.get('containers'):
@@ -391,8 +371,8 @@ class ProcessBase(Common):
         shards_required = self._oclass.validate_number_of_shards(num_shards)
         if shards_required > 0:
             raise ValueError(
-                'Insufficient shards. Wanted {0} given {1}'.format(
-                    shards_required, num_shards))
+                'Insufficient shards. Wanted {0} given {1}'.format(shards_required, num_shards)
+            )
 
         return num_shards
 
@@ -421,13 +401,15 @@ class ProcessBase(Common):
             csum_name = self._args.checksum
 
             if csum_name not in csummers:
-                raise ValueError(f"unknown checksum algorithm: '{csum_name}', the supported "
-                                 + f"checksum algorithms are: '{list(csummers.keys())}'")
+                raise ValueError(
+                    f"unknown checksum algorithm: '{csum_name}', the supported "
+                    + f"checksum algorithms are: '{list(csummers.keys())}'"
+                )
 
             csum_size = csummers[csum_name]
             self._debug(
-                'using checksum "{0}" algorithm of size {1} bytes'.format(
-                    csum_name, csum_size))
+                'using checksum "{0}" algorithm of size {1} bytes'.format(csum_name, csum_size)
+            )
             self._csum_size = csum_size
 
     def _process_block_values(self):

@@ -8,6 +8,7 @@
 """
 import argparse
 import json
+
 # pylint: disable=broad-except
 import os
 import re
@@ -24,7 +25,7 @@ from junit_xml import TestCase, TestSuite
 def check_version():
     """Ensure python version is compatible"""
     if sys.version_info < (3, 6):
-        print("Python version 3.6 or greater is required""")
+        print("Python version 3.6 or greater is required" "")
         sys.exit(-1)
 
 
@@ -50,8 +51,9 @@ def setup_junit(memcheck):
     return (suite, test)
 
 
-class BaseResults():
+class BaseResults:
     """Keep track of test results"""
+
     def __init__(self):
         """Initializes the values"""
         self.results = {"tests": 0, "errors": 0, "failures": 0, "fail_msg": "", "error_msg": ""}
@@ -87,6 +89,7 @@ class BaseResults():
 
 class Results(BaseResults):
     """Keep track of test results to produce final report"""
+
     def __init__(self, memcheck):
         """Class to keep track of results"""
         super().__init__()
@@ -99,19 +102,23 @@ class Results(BaseResults):
         if os.environ.get("CMOCKA_XML_FILE", None) is None:
             return
         if self.results["failures"]:
-            self.test.add_failure_info(message=f"{self.results['failures']} of "
-                                               + f"{self.results['tests']} failed",
-                                       output=self.results["fail_msg"])
+            self.test.add_failure_info(
+                message=f"{self.results['failures']} of " + f"{self.results['tests']} failed",
+                output=self.results["fail_msg"],
+            )
         if self.results["errors"]:
-            self.test.add_error_info(message=f"{self.results['errors']} of "
-                                             + f"{self.results['tests']} failed",
-                                     output=self.results["error_msg"])
+            self.test.add_error_info(
+                message=f"{self.results['errors']} of " + f"{self.results['tests']} failed",
+                output=self.results["error_msg"],
+            )
         write_xml_result(self.name, self.suite)
 
     def print_results(self):
         """Print the output"""
-        print(f"Ran {self.results['tests']} tests, {self.results['failures']} tests failed, "
-              + f"{self.results['errors']} tests had errors")
+        print(
+            f"Ran {self.results['tests']} tests, {self.results['failures']} tests failed, "
+            + f"{self.results['errors']} tests had errors"
+        )
         if self.results["failures"]:
             print("FAILURES:")
             print(self.results["fail_msg"])
@@ -120,8 +127,9 @@ class Results(BaseResults):
             print(self.results["error_msg"])
 
 
-class ValgrindHelper():
+class ValgrindHelper:
     """Helper class to setup xml command"""
+
     @staticmethod
     def get_xml_name(name):
         """Get the xml file name"""
@@ -135,11 +143,19 @@ class ValgrindHelper():
     @staticmethod
     def setup_cmd(base, cmd, name):
         """Return a new command using valgrind"""
-        cmd_prefix = ["valgrind", "--leak-check=full", "--show-reachable=yes", "--num-callers=20",
-                      "--error-limit=no", "--fair-sched=try",
-                      f"--suppressions={ValgrindHelper.get_supp(base)}",
-                      "--gen-suppressions=all", "--error-exitcode=42", "--xml=yes",
-                      f"--xml-file={ValgrindHelper.get_xml_name(name)}"]
+        cmd_prefix = [
+            "valgrind",
+            "--leak-check=full",
+            "--show-reachable=yes",
+            "--num-callers=20",
+            "--error-limit=no",
+            "--fair-sched=try",
+            f"--suppressions={ValgrindHelper.get_supp(base)}",
+            "--gen-suppressions=all",
+            "--error-exitcode=42",
+            "--xml=yes",
+            f"--xml-file={ValgrindHelper.get_xml_name(name)}",
+        ]
         return cmd_prefix + cmd
 
 
@@ -149,8 +165,7 @@ def run_cmd(cmd, output_log=None, env=None):
     if output_log:
         with open(output_log, "w", encoding="UTF-8") as output:
             print(f"RUNNING COMMAND {' '.join(cmd)}\n    Log: {output_log}")
-            ret = subprocess.run(cmd, check=False, env=env, stdout=output,
-                                 stderr=subprocess.STDOUT)
+            ret = subprocess.run(cmd, check=False, env=env, stdout=output, stderr=subprocess.STDOUT)
     else:
         print(f"RUNNING COMMAND {' '.join(cmd)}")
         ret = subprocess.run(cmd, check=False, env=env)
@@ -204,8 +219,10 @@ def process_cmocka(fname, suite_name):
                 else:
                     match = re.search("^(.*case )name(.*$)", line)
                     if match:
-                        outfile.write(f"{match.group(1)}classname=\"UTEST_{suite_name}.{suite}\""
-                                      + f" name{match.group(2)}\n")
+                        outfile.write(
+                            f"{match.group(1)}classname=\"UTEST_{suite_name}.{suite}\""
+                            + f" name{match.group(2)}\n"
+                        )
                         continue
                     match = re.search("^(.*case classname=\")(.*$)", line)
                     if match:
@@ -225,8 +242,9 @@ def for_each_file(path, operate, arg, ext=None):
             operate(full_path, arg)
 
 
-class AIO():
+class AIO:
     """Handle AIO specific setup and teardown"""
+
     def __init__(self, mount, device=None):
         """Initialize an AIO device"""
         self.config_name = os.path.join(mount, "daos_nvme.conf")
@@ -307,8 +325,18 @@ class AIO():
         if self.device is None:
             run_cmd(["dd", "if=/dev/zero", f"of={self.fname}", "bs=1G", f"count={min_size}"])
         else:
-            run_cmd(["sudo", "-E", "dd", "if=/dev/zero", f"of={self.fname}", "bs=4K", "count=1",
-                     "conv=notrunc"])
+            run_cmd(
+                [
+                    "sudo",
+                    "-E",
+                    "dd",
+                    "if=/dev/zero",
+                    f"of={self.fname}",
+                    "bs=4K",
+                    "count=1",
+                    "conv=notrunc",
+                ]
+            )
         self.create_config(name)
 
     def finalize_test(self):
@@ -327,7 +355,7 @@ class AIO():
             os.unlink(self.config_name)
 
 
-class Test():
+class Test:
     """Define a test"""
 
     test_num = 1
@@ -341,8 +369,7 @@ class Test():
         if env_vars:
             self.env.update(env_vars)
         self.warn_if_missing = config.get("warn_if_missing", None)
-        self.aio = {"aio": config.get("aio", None),
-                    "size": config.get("size", 4)}
+        self.aio = {"aio": config.get("aio", None), "size": config.get("size", 4)}
         if self.filter(args.test_filter):
             print(f"Filtered test  {' '.join(self.cmd)}")
             raise TestSkipped()
@@ -429,8 +456,12 @@ class Test():
         cmd = [os.path.join(base, self.cmd[0])] + self.cmd[1:]
         if memcheck:
             if os.path.splitext(cmd[0])[-1] in [".sh", ".py"]:
-                self.env.update({"USE_VALGRIND": "memcheck",
-                                 "VALGRIND_SUPP": ValgrindHelper.get_supp(self.root_dir())})
+                self.env.update(
+                    {
+                        "USE_VALGRIND": "memcheck",
+                        "VALGRIND_SUPP": ValgrindHelper.get_supp(self.root_dir()),
+                    }
+                )
             else:
                 cmd = ValgrindHelper.setup_cmd(self.root_dir(), cmd, self.name)
         if sudo:
@@ -469,8 +500,9 @@ class Test():
             print(f"   produced {fname}")
 
 
-class Suite():
+class Suite:
     """Define a suite"""
+
     def __init__(self, path_info, config, args):
         """Initialize a test suite"""
         self.name = config["name"]
@@ -561,8 +593,10 @@ class Suite():
                 try:
                     ret = test.run(self.base, args.memcheck, self.sudo)
                     if ret != 0:
-                        results.add_failure(f"{' '.join(test.get_last())} failed: ret={ret} "
-                                            + f"logs={test.log_dir()}")
+                        results.add_failure(
+                            f"{' '.join(test.get_last())} failed: ret={ret} "
+                            + f"logs={test.log_dir()}"
+                        )
                 except Exception:
                     results.add_error(f"{traceback.format_exc()}")
                     ret = 1  # prevent reporting errors on teardown too
@@ -603,18 +637,25 @@ def get_args():
     """Parse the arguments"""
     parser = argparse.ArgumentParser(description='Run DAOS unit tests')
     parser.add_argument('--memcheck', action='store_true', help='Run tests with Valgrind memcheck')
-    parser.add_argument('--test_filter', default=None,
-                        help='Regular expression to select tests to run')
-    parser.add_argument('--suite_filter', default=None,
-                        help='Regular expression to select suites to run')
-    parser.add_argument('--no-fail-on-error', action='store_true',
-                        help='Disable non-zero return code on failure')
-    parser.add_argument('--sudo', choices=['yes', 'only', 'no'], default='yes',
-                        help='How to handle tests requiring sudo')
-    parser.add_argument('--bdev', default=None,
-                        help="Device to use for AIO, will create file by default")
-    parser.add_argument('--log_dir', default="/tmp/daos_utest",
-                        help="Path to store test logs")
+    parser.add_argument(
+        '--test_filter', default=None, help='Regular expression to select tests to run'
+    )
+    parser.add_argument(
+        '--suite_filter', default=None, help='Regular expression to select suites to run'
+    )
+    parser.add_argument(
+        '--no-fail-on-error', action='store_true', help='Disable non-zero return code on failure'
+    )
+    parser.add_argument(
+        '--sudo',
+        choices=['yes', 'only', 'no'],
+        default='yes',
+        help='How to handle tests requiring sudo',
+    )
+    parser.add_argument(
+        '--bdev', default=None, help="Device to use for AIO, will create file by default"
+    )
+    parser.add_argument('--log_dir', default="/tmp/daos_utest", help="Path to store test logs")
     return parser.parse_args()
 
 
@@ -623,10 +664,12 @@ def get_path_info(args):
     script_dir = os.path.dirname(os.path.realpath(__file__))
     daos_base = os.path.realpath(os.path.join(script_dir, '..'))
     build_vars_file = os.path.join(daos_base, '.build_vars.json')
-    path_info = {"DAOS_BASE": daos_base,
-                 "UTEST_YAML": os.path.join(daos_base, "utils", "utest.yaml"),
-                 "MOUNT_DIR": "/mnt/daos",
-                 "LOG_DIR": args.log_dir}
+    path_info = {
+        "DAOS_BASE": daos_base,
+        "UTEST_YAML": os.path.join(daos_base, "utils", "utest.yaml"),
+        "MOUNT_DIR": "/mnt/daos",
+        "LOG_DIR": args.log_dir,
+    }
     try:
         with open(build_vars_file, "r", encoding="UTF-8") as vars_file:
             build_vars = json.load(vars_file)

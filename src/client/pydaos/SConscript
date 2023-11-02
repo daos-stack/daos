@@ -24,15 +24,16 @@ def build_shim_module():
 
     new_env.compiler_setup()
 
-    obj = new_env.SharedObject('pydaos_shim', 'pydaos_shim.c',
-                               SHLINKFLAGS=[],
-                               SHLIBPREFIX="")
-    base = new_env.d_library(target='pydaos_shim', source=[obj],
-                             install_off="../../../..",
-                             SHLINK='gcc -pthread -shared',
-                             SHLINKFLAGS=[],
-                             SHLIBPREFIX="",
-                             SHLIBSUFFIX='.so')
+    obj = new_env.SharedObject('pydaos_shim', 'pydaos_shim.c', SHLINKFLAGS=[], SHLIBPREFIX="")
+    base = new_env.d_library(
+        target='pydaos_shim',
+        source=[obj],
+        install_off="../../../..",
+        SHLINK='gcc -pthread -shared',
+        SHLINKFLAGS=[],
+        SHLIBPREFIX="",
+        SHLIBSUFFIX='.so',
+    )
     install_path = f'$PREFIX/lib64/python{version}/site-packages/pydaos'
     new_env.Install(install_path, base)
     # install new wrappers too

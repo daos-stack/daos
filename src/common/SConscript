@@ -1,19 +1,44 @@
 """Build common libraries"""
 
 
-COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
-                'misc.c', 'pool_map.c', 'sort.c', 'btree.c', 'prop.c',
-                'btree_class.c', 'tse.c', 'rsvc.c', 'checksum.c',
-                'drpc.c', 'drpc.pb-c.c', 'proc.c',
-                'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
-                'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
-                'compression_qat.c', 'multihash.c', 'multihash_isal.c',
-                'cipher.c', 'cipher_isal.c', 'qat.c', 'fault_domain.c',
-                'policy.c']
+COMMON_FILES = [
+    'debug.c',
+    'mem.c',
+    'fail_loc.c',
+    'lru.c',
+    'misc.c',
+    'pool_map.c',
+    'sort.c',
+    'btree.c',
+    'prop.c',
+    'btree_class.c',
+    'tse.c',
+    'rsvc.c',
+    'checksum.c',
+    'drpc.c',
+    'drpc.pb-c.c',
+    'proc.c',
+    'acl_api.c',
+    'acl_util.c',
+    'acl_principal.c',
+    'cont_props.c',
+    'dedup.c',
+    'profile.c',
+    'compression.c',
+    'compression_isal.c',
+    'compression_qat.c',
+    'multihash.c',
+    'multihash_isal.c',
+    'cipher.c',
+    'cipher_isal.c',
+    'qat.c',
+    'fault_domain.c',
+    'policy.c',
+]
 
 
 def build_daos_common(denv, client):
-    """ Building non-pmem version for client's common lib"""
+    """Building non-pmem version for client's common lib"""
     benv = denv.Clone()
     stack_mmap_files = []
     ad_mem_files = []
@@ -23,12 +48,28 @@ def build_daos_common(denv, client):
     if client:
         libname = 'daos_common'
     else:
-        dav_src = ['dav/alloc_class.c', 'dav/bucket.c', 'dav/container_ravl.c',
-                   'dav/container_seglists.c', 'dav/critnib.c', 'dav/dav_clogs.c',
-                   'dav/dav_iface.c', 'dav/heap.c', 'dav/memblock.c',
-                   'dav/memops.c', 'dav/os_thread_posix.c', 'dav/palloc.c', 'dav/ravl.c',
-                   'dav/ravl_interval.c', 'dav/recycler.c', 'dav/stats.c', 'dav/tx.c', 'dav/ulog.c',
-                   'dav/util.c', 'dav/wal_tx.c']
+        dav_src = [
+            'dav/alloc_class.c',
+            'dav/bucket.c',
+            'dav/container_ravl.c',
+            'dav/container_seglists.c',
+            'dav/critnib.c',
+            'dav/dav_clogs.c',
+            'dav/dav_iface.c',
+            'dav/heap.c',
+            'dav/memblock.c',
+            'dav/memops.c',
+            'dav/os_thread_posix.c',
+            'dav/palloc.c',
+            'dav/ravl.c',
+            'dav/ravl_interval.c',
+            'dav/recycler.c',
+            'dav/stats.c',
+            'dav/tx.c',
+            'dav/ulog.c',
+            'dav/util.c',
+            'dav/wal_tx.c',
+        ]
         ad_mem_files = ['ad_mem.c', 'ad_tx.c']
         common_libs.extend(['pmemobj', 'abt'])
         benv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
@@ -41,8 +82,9 @@ def build_daos_common(denv, client):
             stack_mmap_files = ['stack_mmap.c']
             benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
-    common = benv.d_library(libname, COMMON_FILES + dav_src + ad_mem_files + stack_mmap_files,
-                            LIBS=common_libs)
+    common = benv.d_library(
+        libname, COMMON_FILES + dav_src + ad_mem_files + stack_mmap_files, LIBS=common_libs
+    )
     benv.Install('$PREFIX/lib64/', common)
     return common
 

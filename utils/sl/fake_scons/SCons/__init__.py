@@ -19,10 +19,4 @@
 # SOFTWARE.
 """Fake SCons"""
 
-__all__ = ['Script',
-           'Action',
-           'Variables',
-           'Builder',
-           'Errors',
-           'Subst',
-           'Warnings']
+__all__ = ['Script', 'Action', 'Variables', 'Builder', 'Errors', 'Subst', 'Warnings']

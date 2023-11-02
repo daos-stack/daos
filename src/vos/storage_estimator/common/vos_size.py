@@ -19,8 +19,7 @@ def convert(stat):
 
 def print_total(name, stat, total):
     "Pretty print"
-    print("\t%-20s: %s (%5.2f%%)" % (name, convert(stat),
-                                     100 * float(stat) / total))
+    print("\t%-20s: %s (%5.2f%%)" % (name, convert(stat), 100 * float(stat) / total))
 
 
 def check_key_type(spec):
@@ -33,7 +32,7 @@ def check_key_type(spec):
         raise RuntimeError("Size required for hashed key %s" % spec)
 
 
-class Stats():
+class Stats:
     """Class for calculating and storing stats"""
 
     def __init__(self):
@@ -50,7 +49,7 @@ class Stats():
             "user_meta": 0,
             "total_meta": 0,
             "nvme_total": 0,
-            "total": 0
+            "total": 0,
         }
 
     def mult(self, multiplier):
@@ -92,8 +91,7 @@ class Stats():
     def pretty_print(self):
         """Pretty print statistics"""
         print("Metadata breakdown:")
-        self.stats["scm_total"] = self.stats["total"] - \
-            self.stats["nvme_total"]
+        self.stats["scm_total"] = self.stats["total"] - self.stats["nvme_total"]
         self.print_stat("pool")
         self.print_stat("container")
         self.print_stat("object")
@@ -113,10 +111,11 @@ class Stats():
         pretty_total = convert(self.stats["total"])
         print("Total storage required: {0}".format(pretty_total))
 
+
 # pylint: disable=too-many-instance-attributes
 
 
-class MetaOverhead():
+class MetaOverhead:
     """Class for calculating overheads"""
 
     def __init__(self, args, num_pools, meta_yaml):
@@ -126,8 +125,7 @@ class MetaOverhead():
         self.num_pools = num_pools
         self.pools = []
         for _index in range(0, self.num_pools):
-            self.pools.append({"trees": [], "dup": 1, "key": "container",
-                               "count": 0})
+            self.pools.append({"trees": [], "dup": 1, "key": "container", "count": 0})
         self.next_cont = 1
         self.next_object = 1
         self._scm_cutoff = meta_yaml.get("scm_cutoff", 4096)
@@ -144,11 +142,14 @@ class MetaOverhead():
 
         for pool in self.pools:
             pool["count"] += int(cont_spec.get("count", 1))
-            cont = {"dup": int(cont_spec.get("count", 1)), "key": "object",
-                    "count": 0,
-                    "csum_size": int(cont_spec.get("csum_size", 0)),
-                    "csum_gran": int(cont_spec.get("csum_gran", 1048576)),
-                    "trees": []}
+            cont = {
+                "dup": int(cont_spec.get("count", 1)),
+                "key": "object",
+                "count": 0,
+                "csum_size": int(cont_spec.get("csum_size", 0)),
+                "csum_gran": int(cont_spec.get("csum_gran", 1048576)),
+                "trees": [],
+            }
             pool["trees"].append(cont)
 
         for obj_spec in cont_spec.get("objects"):
@@ -189,18 +190,28 @@ class MetaOverhead():
                 pool = self.pools[pool_idx]
                 cont = pool["trees"][-1]
                 if cont["trees"] == [] or cont["trees"][-1]["oid"] != oid:
-                    obj = {"dup": int(obj_spec.get("count", 1)), "key": "dkey",
-                           "count": 0, "trees": [], "oid": oid}
+                    obj = {
+                        "dup": int(obj_spec.get("count", 1)),
+                        "key": "dkey",
+                        "count": 0,
+                        "trees": [],
+                        "oid": oid,
+                    }
                     cont["trees"].append(obj)
                     cont["count"] += int(obj_spec.get("count", 1))
                 dup = full_count
                 if partial_count > idx:
                     dup += 1
                 obj = cont["trees"][-1]
-                dkey = {"dup": dup, "key": "akey", "count": 0, "trees": [],
-                        "type": dkey_spec.get("type", "hashed"),
-                        "size": int(dkey_spec.get("size", 0)),
-                        "overhead": dkey_spec.get("overhead", "user")}
+                dkey = {
+                    "dup": dup,
+                    "key": "akey",
+                    "count": 0,
+                    "trees": [],
+                    "type": dkey_spec.get("type", "hashed"),
+                    "size": int(dkey_spec.get("size", 0)),
+                    "overhead": dkey_spec.get("overhead", "user"),
+                }
                 obj["trees"].append(dkey)
                 obj["count"] += dup
                 for akey_spec in dkey_spec.get("akeys"):
@@ -213,12 +224,17 @@ class MetaOverhead():
             raise RuntimeError("No values in akey spec %s" % akey_spec)
         if "value_type" not in akey_spec:
             raise RuntimeError("No value_type in akey spec %s" % akey_spec)
-        akey = {"dup": int(akey_spec.get("count", 1)),
-                "key": akey_spec.get("value_type"), "count": 0,
-                "type": akey_spec.get("type", "hashed"),
-                "size": int(akey_spec.get("size", 0)),
-                "overhead": akey_spec.get("overhead", "user"),
-                "value_size": 0, "meta_size": 0, "nvme_size": 0}
+        akey = {
+            "dup": int(akey_spec.get("count", 1)),
+            "key": akey_spec.get("value_type"),
+            "count": 0,
+            "type": akey_spec.get("type", "hashed"),
+            "size": int(akey_spec.get("size", 0)),
+            "overhead": akey_spec.get("overhead", "user"),
+            "value_size": 0,
+            "meta_size": 0,
+            "nvme_size": 0,
+        }
         dkey["trees"].append(akey)
         dkey["count"] += int(akey_spec.get("count", 1))
         for value_spec in akey_spec.get("values"):
@@ -235,14 +251,11 @@ class MetaOverhead():
 
         akey["count"] += value_spec.get("count", 1)  # Number of values
         if value_spec.get("overhead", "user") == "user":
-            akey["value_size"] += size * \
-                value_spec.get("count", 1)  # total size
+            akey["value_size"] += size * value_spec.get("count", 1)  # total size
         else:
-            akey["meta_size"] += size * \
-                value_spec.get("count", 1)  # total size
+            akey["meta_size"] += size * value_spec.get("count", 1)  # total size
         if nvme:
-            akey["nvme_size"] += size * \
-                value_spec.get("count", 1)  # total size
+            akey["nvme_size"] += size * value_spec.get("count", 1)  # total size
 
         # Add checksum overhead
 
@@ -250,8 +263,7 @@ class MetaOverhead():
         if akey["key"] == "array":
             csum_size = int(math.ceil(size / cont["csum_gran"]) * csum_size)
 
-        akey["meta_size"] += csum_size * \
-            value_spec.get("count", 1)
+        akey["meta_size"] += csum_size * value_spec.get("count", 1)
 
     def load_container(self, cont_spec):
         """calculate metadata for update(s)"""

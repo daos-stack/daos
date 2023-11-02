@@ -21,13 +21,17 @@ from . import conversion, daos_cref
 
 DaosObjClass = enum.Enum(
     "DaosObjClass",
-    {key: value for key, value in list(pydaos_shim.__dict__.items())
-     if key.startswith("OC_")})
+    {key: value for key, value in list(pydaos_shim.__dict__.items()) if key.startswith("OC_")},
+)
 
 DaosContPropEnum = enum.Enum(
     "DaosContPropEnum",
-    {key: value for key, value in list(pydaos_shim.__dict__.items())
-     if key.startswith("DAOS_PROP_")})
+    {
+        key: value
+        for key, value in list(pydaos_shim.__dict__.items())
+        if key.startswith("DAOS_PROP_")
+    },
+)
 
 # Value used to determine whether we need to call daos_obj_list_dkey again.
 # This is a value used in daos_anchor_is_eof in daos_api.h. Not sure how to
@@ -35,7 +39,7 @@ DaosContPropEnum = enum.Enum(
 DAOS_ANCHOR_TYPE_EOF = 3
 
 
-class DaosPool():
+class DaosPool:
     """A python object representing a DAOS pool."""
 
     def __init__(self, context):
@@ -82,8 +86,14 @@ class DaosPool():
         uuid_str = self.get_uuid_str()
 
         if cb_func is None:
-            ret = func(bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
-                       ctypes.byref(self.handle), ctypes.byref(c_info), None)
+            ret = func(
+                bytes(uuid_str, encoding='utf-8'),
+                self.group,
+                c_flags,
+                ctypes.byref(self.handle),
+                ctypes.byref(c_info),
+                None,
+            )
 
             if ret != 0:
                 self.handle = 0
@@ -91,14 +101,17 @@ class DaosPool():
             self.connected = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
-                      ctypes.byref(self.handle), ctypes.byref(c_info), event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            params = [
+                bytes(uuid_str, encoding='utf-8'),
+                self.group,
+                c_flags,
+                ctypes.byref(self.handle),
+                ctypes.byref(c_info),
+                event,
+            ]
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def disconnect(self, cb_func=None):
@@ -112,12 +125,9 @@ class DaosPool():
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def local2global(self):
@@ -172,11 +182,9 @@ class DaosPool():
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func, self))
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def pool_query(self, cb_func=None):
@@ -187,21 +195,16 @@ class DaosPool():
         self.pool_info.pi_bits = ctypes.c_ulong(-1)
 
         if cb_func is None:
-            ret = func(self.handle, None, ctypes.byref(self.pool_info),
-                       None, None)
+            ret = func(self.handle, None, ctypes.byref(self.pool_info), None, None)
             if ret != 0:
                 raise DaosApiError("Pool query returned non-zero. RC: {0}".format(ret))
             return self.pool_info
 
         event = daos_cref.DaosEvent()
-        params = [self.handle, None, ctypes.byref(self.pool_info), None,
-                  event]
-        thread = threading.Thread(target=daos_cref.async_worker,
-                                  args=(func,
-                                        params,
-                                        self.context,
-                                        cb_func,
-                                        self))
+        params = [self.handle, None, ctypes.byref(self.pool_info), None, event]
+        thread = threading.Thread(
+            target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+        )
         thread.start()
         return None
 
@@ -211,20 +214,16 @@ class DaosPool():
         func = self.context.get_function('query-target')
 
         if cb_func is None:
-            ret = func(self.handle, tgt, rank, ctypes.byref(self.target_info),
-                       None)
+            ret = func(self.handle, tgt, rank, ctypes.byref(self.target_info), None)
             if ret != 0:
                 raise DaosApiError("Pool query returned non-zero. RC: {0}".format(ret))
             return self.target_info
 
         event = daos_cref.DaosEvent()
         params = [self.handle, tgt, rank, ctypes.byref(self.target_info), event]
-        thread = threading.Thread(target=daos_cref.async_worker,
-                                  args=(func,
-                                        params,
-                                        self.context,
-                                        cb_func,
-                                        self))
+        thread = threading.Thread(
+            target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+        )
         thread.start()
         return None
 
@@ -260,8 +259,7 @@ class DaosPool():
         func = self.context.get_function('list-pool-attr')
         ret = func(self.handle, sbuf, t_size, None)
         if ret != 0:
-            raise DaosApiError("Pool List-attr returned non-zero. RC:{0}"
-                               .format(ret))
+            raise DaosApiError("Pool List-attr returned non-zero. RC:{0}".format(ret))
         buf = t_size[0]
 
         buff = ctypes.create_string_buffer(buf + 1).raw
@@ -271,17 +269,13 @@ class DaosPool():
         if cb_func is None:
             ret = func(self.handle, buff, total_size, None)
             if ret != 0:
-                raise DaosApiError("Pool List Attribute returned non-zero. "
-                                   "RC: {0}".format(ret))
+                raise DaosApiError("Pool List Attribute returned non-zero. " "RC: {0}".format(ret))
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, buff, total_size, event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
         return total_size.contents, buff
 
@@ -321,17 +315,13 @@ class DaosPool():
         if cb_func is None:
             ret = func(self.handle, no_of_att, names, values, sizes, None)
             if ret != 0:
-                raise DaosApiError("Pool Set Attribute returned non-zero"
-                                   "RC: {0}".format(ret))
+                raise DaosApiError("Pool Set Attribute returned non-zero" "RC: {0}".format(ret))
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, no_of_att, names, values, sizes, event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def get_attr(self, attr_names, poh=None, cb_func=None):
@@ -359,36 +349,43 @@ class DaosPool():
 
         no_of_att = ctypes.c_int(attr_count)
         buffers = ctypes.c_char_p * attr_count
-        buff = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(100).raw)
-                         for i in range(attr_count)])
+        buff = buffers(
+            *[ctypes.c_char_p(ctypes.create_string_buffer(100).raw) for i in range(attr_count)]
+        )
 
         size_of_att_val = [100] * attr_count
         sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)
 
         func = self.context.get_function('get-pool-attr')
         if cb_func is None:
-            ret = func(self.handle, no_of_att, ctypes.byref(attr_names_c),
-                       ctypes.byref(buff), sizes, None)
+            ret = func(
+                self.handle, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff), sizes, None
+            )
             if ret != 0:
-                raise DaosApiError("Pool Get Attribute returned non-zero. "
-                                   "RC: {0}".format(ret))
+                raise DaosApiError("Pool Get Attribute returned non-zero. " "RC: {0}".format(ret))
 
             # Construct the results dictionary from buff and sizes set in the function
             # call.
             results = {}
             index = 0
             for attr in attr_names:
-                results[attr] = buff[index][:sizes[index]]
+                results[attr] = buff[index][: sizes[index]]
                 index += 1
             return results
 
         # Asynchronous mode.
         event = daos_cref.DaosEvent()
-        params = [self.handle, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff),
-                  sizes, event]
+        params = [
+            self.handle,
+            no_of_att,
+            ctypes.byref(attr_names_c),
+            ctypes.byref(buff),
+            sizes,
+            event,
+        ]
         thread = threading.Thread(
-            target=daos_cref.async_worker, args=(
-                func, params, self.context, cb_func, self))
+            target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+        )
         thread.start()
 
         # Return buff and sizes because at this point, the values aren't set. The
@@ -430,19 +427,19 @@ class DaosObjClassOld(enum.IntEnum):
 
 # pylint: disable=no-member
 ConvertObjClass = {
-    DaosObjClassOld.DAOS_OC_TINY_RW:     DaosObjClass.OC_S1,
-    DaosObjClassOld.DAOS_OC_SMALL_RW:    DaosObjClass.OC_S4,
-    DaosObjClassOld.DAOS_OC_LARGE_RW:    DaosObjClass.OC_SX,
-    DaosObjClassOld.DAOS_OC_R2S_RW:      DaosObjClass.OC_RP_2G1,
-    DaosObjClassOld.DAOS_OC_R2_RW:       DaosObjClass.OC_RP_2G2,
-    DaosObjClassOld.DAOS_OC_R2_MAX_RW:   DaosObjClass.OC_RP_2GX,
-    DaosObjClassOld.DAOS_OC_R3S_RW:      DaosObjClass.OC_RP_3G1,
-    DaosObjClassOld.DAOS_OC_R3_RW:       DaosObjClass.OC_RP_3G2,
-    DaosObjClassOld.DAOS_OC_R3_MAX_RW:   DaosObjClass.OC_RP_3GX,
-    DaosObjClassOld.DAOS_OC_R4S_RW:      DaosObjClass.OC_RP_4G1,
-    DaosObjClassOld.DAOS_OC_R4_RW:       DaosObjClass.OC_RP_4G2,
-    DaosObjClassOld.DAOS_OC_R4_MAX_RW:   DaosObjClass.OC_RP_4GX,
-    DaosObjClassOld.DAOS_OC_REPL_MAX_RW: DaosObjClass.OC_RP_XSF
+    DaosObjClassOld.DAOS_OC_TINY_RW: DaosObjClass.OC_S1,
+    DaosObjClassOld.DAOS_OC_SMALL_RW: DaosObjClass.OC_S4,
+    DaosObjClassOld.DAOS_OC_LARGE_RW: DaosObjClass.OC_SX,
+    DaosObjClassOld.DAOS_OC_R2S_RW: DaosObjClass.OC_RP_2G1,
+    DaosObjClassOld.DAOS_OC_R2_RW: DaosObjClass.OC_RP_2G2,
+    DaosObjClassOld.DAOS_OC_R2_MAX_RW: DaosObjClass.OC_RP_2GX,
+    DaosObjClassOld.DAOS_OC_R3S_RW: DaosObjClass.OC_RP_3G1,
+    DaosObjClassOld.DAOS_OC_R3_RW: DaosObjClass.OC_RP_3G2,
+    DaosObjClassOld.DAOS_OC_R3_MAX_RW: DaosObjClass.OC_RP_3GX,
+    DaosObjClassOld.DAOS_OC_R4S_RW: DaosObjClass.OC_RP_4G1,
+    DaosObjClassOld.DAOS_OC_R4_RW: DaosObjClass.OC_RP_4G2,
+    DaosObjClassOld.DAOS_OC_R4_MAX_RW: DaosObjClass.OC_RP_4GX,
+    DaosObjClassOld.DAOS_OC_REPL_MAX_RW: DaosObjClass.OC_RP_XSF,
 }
 # pylint: enable=no-member
 
@@ -477,18 +474,16 @@ def get_object_class(item):
             return ConvertObjClass[item]
         except KeyError:
             # No conversion exists for the old DAOS object class
-            raise DaosApiError(
-                "No conversion exists for the {} DAOS object class".format(
-                    item))
+            raise DaosApiError("No conversion exists for the {} DAOS object class".format(item))
     elif isinstance(item, DaosObjClass):
         return item
     else:
         raise DaosApiError(
-            "Unknown DAOS object enumeration class for {} ({})".format(
-                item, type(item)))
+            "Unknown DAOS object enumeration class for {} ({})".format(item, type(item))
+        )
 
 
-class DaosObj():
+class DaosObj:
     """A class representing an object stored in a DAOS container."""
 
     def __init__(self, context, container, c_oid=None):
@@ -507,8 +502,10 @@ class DaosObj():
             func = self.context.get_function('close-obj')
             ret = func(self.obj_handle, None)
             if ret != 0:
-                raise DaosApiError("Object close returned non-zero. RC: {0} "
-                                   "handle: {1}".format(ret, self.obj_handle))
+                raise DaosApiError(
+                    "Object close returned non-zero. RC: {0} "
+                    "handle: {1}".format(ret, self.obj_handle)
+                )
             self.obj_handle = None
 
     def __str__(self):
@@ -548,11 +545,9 @@ class DaosObj():
         self.c_oid.hi = func(seed)
 
         func = self.context.get_function('generate-oid')
-        ret = func(self.container.coh, ctypes.byref(self.c_oid), 0, obj_cls_int,
-                   0, 0)
+        ret = func(self.container.coh, ctypes.byref(self.c_oid), 0, obj_cls_int, 0, 0)
         if ret != 0:
-            raise DaosApiError("Object generate oid returned non-zero. RC: {0} "
-                               .format(ret))
+            raise DaosApiError("Object generate oid returned non-zero. RC: {0} ".format(ret))
 
         if rank is not None:
             self.c_oid.hi |= rank << 24
@@ -563,11 +558,9 @@ class DaosObj():
         self.obj_handle = ctypes.c_uint64(0)
 
         func = self.context.get_function('open-obj')
-        ret = func(self.container.coh, self.c_oid, c_mode,
-                   ctypes.byref(self.obj_handle), None)
+        ret = func(self.container.coh, self.c_oid, c_mode, ctypes.byref(self.obj_handle), None)
         if ret != 0:
-            raise DaosApiError("Object open returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("Object open returned non-zero. RC: {0}".format(ret))
 
     def close(self):
         """Close this object."""
@@ -575,8 +568,7 @@ class DaosObj():
             func = self.context.get_function('close-obj')
             ret = func(self.obj_handle, None)
             if ret != 0:
-                raise DaosApiError("Object close returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError("Object close returned non-zero. RC: {0}".format(ret))
             self.obj_handle = None
 
     def refresh_attr(self, txn=daos_cref.DAOS_TX_NONE):
@@ -588,13 +580,13 @@ class DaosObj():
               an independent transaction
         """
         if self.c_oid is None:
-            raise DaosApiError(
-                "refresh_attr called but object not initialized")
+            raise DaosApiError("refresh_attr called but object not initialized")
         if self.obj_handle is None:
             self.open()
 
-        rank_list = ctypes.cast(ctypes.pointer((ctypes.c_uint32 * 5)()),
-                                ctypes.POINTER(ctypes.c_uint32))
+        rank_list = ctypes.cast(
+            ctypes.pointer((ctypes.c_uint32 * 5)()), ctypes.POINTER(ctypes.c_uint32)
+        )
         self.c_tgts = daos_cref.RankList(rank_list, 5)
 
         func = self.context.get_function('query-obj')
@@ -613,15 +605,15 @@ class DaosObj():
         obj_layout_ptr = ctypes.POINTER(daos_cref.DaosObjLayout)()
 
         func = self.context.get_function('get-layout')
-        ret = func(
-            self.container.coh, self.c_oid, ctypes.byref(obj_layout_ptr))
+        ret = func(self.container.coh, self.c_oid, ctypes.byref(obj_layout_ptr))
 
         if ret == 0:
             shards = obj_layout_ptr[0].ol_shards[0][0].os_replica_nr
             del self.tgt_rank_list[:]
             for index in range(shards):
                 self.tgt_rank_list.append(
-                    obj_layout_ptr[0].ol_shards[0][0].os_shard_loc[index].sd_rank)
+                    obj_layout_ptr[0].ol_shards[0][0].os_shard_loc[index].sd_rank
+                )
         else:
             raise DaosApiError("get_layout returned. RC: {0}".format(ret))
 
@@ -643,17 +635,13 @@ class DaosObj():
         if cb_func is None:
             ret = func(self.obj_handle, c_tx, 0, None)
             if ret != 0:
-                raise DaosApiError("punch-dkeys returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError("punch-dkeys returned non-zero. RC: {0}".format(ret))
         else:
             event = daos_cref.DaosEvent()
             params = [self.obj_handle, c_tx, event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def punch_dkeys(self, txn, dkeys, cb_func=None):
@@ -691,22 +679,15 @@ class DaosObj():
         # create synchronously, if its there then run it in a thread
         func = self.context.get_function('punch-dkeys')
         if cb_func is None:
-            ret = func(self.obj_handle, c_tx, 0, c_len_dkeys,
-                       ctypes.byref(c_dkeys), None)
+            ret = func(self.obj_handle, c_tx, 0, c_len_dkeys, ctypes.byref(c_dkeys), None)
             if ret != 0:
-                raise DaosApiError("punch-dkeys returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError("punch-dkeys returned non-zero. RC: {0}".format(ret))
         else:
             event = daos_cref.DaosEvent()
-            params = [
-                self.obj_handle, c_tx, c_len_dkeys, ctypes.byref(c_dkeys),
-                event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            params = [self.obj_handle, c_tx, c_len_dkeys, ctypes.byref(c_dkeys), event]
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def punch_akeys(self, txn, dkey, akeys, cb_func=None):
@@ -747,32 +728,40 @@ class DaosObj():
         # create synchronously, if its there then run it in a thread
         func = self.context.get_function('punch-akeys')
         if cb_func is None:
-            ret = func(self.obj_handle, c_tx, 0, ctypes.byref(c_dkey_iov),
-                       c_len_akeys, ctypes.byref(c_akeys), None)
+            ret = func(
+                self.obj_handle,
+                c_tx,
+                0,
+                ctypes.byref(c_dkey_iov),
+                c_len_akeys,
+                ctypes.byref(c_akeys),
+                None,
+            )
             if ret != 0:
-                raise DaosApiError("punch-akeys returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError("punch-akeys returned non-zero. RC: {0}".format(ret))
         else:
             event = daos_cref.DaosEvent()
-            params = [self.obj_handle, c_tx, ctypes.byref(c_dkey_iov),
-                      c_len_akeys, ctypes.byref(c_akeys), event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            params = [
+                self.obj_handle,
+                c_tx,
+                ctypes.byref(c_dkey_iov),
+                c_len_akeys,
+                ctypes.byref(c_akeys),
+                event,
+            ]
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
 
-class IORequest():
+class IORequest:
     """Python object that centralizes details about an I/O type.
 
     Type is either 1 (single) or 2 (array)
     """
 
-    def __init__(self, context, container, obj, rank=None, iotype=1,
-                 objtype=None):
+    def __init__(self, context, container, obj, rank=None, iotype=1, objtype=None):
         """Initialize an IORequest object.
 
         Args:
@@ -827,8 +816,7 @@ class IORequest():
             sgl_iov_list[idx].iov_buf = ctypes.cast(item[0], ctypes.c_void_p)
             idx += 1
 
-        self.sgl.sg_iovs = ctypes.cast(ctypes.pointer(sgl_iov_list),
-                                       ctypes.POINTER(daos_cref.IOV))
+        self.sgl.sg_iovs = ctypes.cast(ctypes.pointer(sgl_iov_list), ctypes.POINTER(daos_cref.IOV))
         self.sgl.sg_nr = len(c_data)
         self.sgl.sg_nr_out = len(c_data)
 
@@ -854,14 +842,20 @@ class IORequest():
         dkey_iov.iov_buf_len = ctypes.sizeof(dkey)
         dkey_iov.iov_len = ctypes.sizeof(dkey)
 
-        ret = func(self.obj.obj_handle, txn, 0, ctypes.byref(dkey_iov),
-                   1, ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
+        ret = func(
+            self.obj.obj_handle,
+            txn,
+            0,
+            ctypes.byref(dkey_iov),
+            1,
+            ctypes.byref(self.iod),
+            ctypes.byref(self.sgl),
+            None,
+        )
         if ret != 0:
-            raise DaosApiError("Object update returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("Object update returned non-zero. RC: {0}".format(ret))
 
-    def fetch_array(self, dkey, akey, rec_count, rec_size,
-                    txn=daos_cref.DAOS_TX_NONE):
+    def fetch_array(self, dkey, akey, rec_count, rec_size, txn=daos_cref.DAOS_TX_NONE):
         """Retrieve an array data from a dkey/akey pair.
 
         dkey      --1st level key for the array value
@@ -891,11 +885,10 @@ class IORequest():
         sgl_iov_list = (daos_cref.IOV * rec_count.value)()
         for index in range(rec_count.value):
             sgl_iov_list[index].iov_buf_len = rec_size
-            sgl_iov_list[index].iov_buf = (
-                ctypes.cast(ctypes.create_string_buffer(rec_size.value),
-                            ctypes.c_void_p))
-        self.sgl.sg_iovs = ctypes.cast(ctypes.pointer(sgl_iov_list),
-                                       ctypes.POINTER(daos_cref.IOV))
+            sgl_iov_list[index].iov_buf = ctypes.cast(
+                ctypes.create_string_buffer(rec_size.value), ctypes.c_void_p
+            )
+        self.sgl.sg_iovs = ctypes.cast(ctypes.pointer(sgl_iov_list), ctypes.POINTER(daos_cref.IOV))
         self.sgl.sg_nr = rec_count
         self.sgl.sg_nr_out = rec_count
 
@@ -907,22 +900,28 @@ class IORequest():
         # now do it
         func = self.context.get_function('fetch-obj')
 
-        ret = func(self.obj.obj_handle, txn, 0, ctypes.byref(dkey_iov), 1,
-                   ctypes.byref(self.iod), ctypes.byref(self.sgl), None, None)
+        ret = func(
+            self.obj.obj_handle,
+            txn,
+            0,
+            ctypes.byref(dkey_iov),
+            1,
+            ctypes.byref(self.iod),
+            ctypes.byref(self.sgl),
+            None,
+            None,
+        )
         if ret != 0:
-            raise DaosApiError("Array fetch returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("Array fetch returned non-zero. RC: {0}".format(ret))
 
         # convert the output into a python list rather than return C types
         # outside this file
         output = []
         for index in range(rec_count.value):
-            output.append(ctypes.string_at(sgl_iov_list[index].iov_buf,
-                                           rec_size.value))
+            output.append(ctypes.string_at(sgl_iov_list[index].iov_buf, rec_size.value))
         return output
 
-    def single_insert(self, dkey, akey, value, size,
-                      txn=daos_cref.DAOS_TX_NONE):
+    def single_insert(self, dkey, akey, value, size, txn=daos_cref.DAOS_TX_NONE):
         """Update object with with a single value.
 
         dkey  --1st level key for the array value
@@ -967,14 +966,20 @@ class IORequest():
             dkey_ptr = None
 
         func = self.context.get_function('update-obj')
-        ret = func(self.obj.obj_handle, txn, 0, dkey_ptr, 1,
-                   ctypes.byref(self.iod), ctypes.byref(self.sgl), None)
+        ret = func(
+            self.obj.obj_handle,
+            txn,
+            0,
+            dkey_ptr,
+            1,
+            ctypes.byref(self.iod),
+            ctypes.byref(self.sgl),
+            None,
+        )
         if ret != 0:
-            raise DaosApiError("Object update returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("Object update returned non-zero. RC: {0}".format(ret))
 
-    def single_fetch(self, dkey, akey, size, test_hints=None,
-                     txn=daos_cref.DAOS_TX_NONE):
+    def single_fetch(self, dkey, akey, size, test_hints=None, txn=daos_cref.DAOS_TX_NONE):
         """Retrieve a single value from a dkey/akey pair.
 
         dkey --1st level key for the single value
@@ -1037,11 +1042,9 @@ class IORequest():
 
         # now do it
         func = self.context.get_function('fetch-obj')
-        ret = func(self.obj.obj_handle, txn, 0, dkey_ptr,
-                   1, iod_ptr, sgl_ptr, None, None)
+        ret = func(self.obj.obj_handle, txn, 0, dkey_ptr, 1, iod_ptr, sgl_ptr, None, None)
         if ret != 0:
-            raise DaosApiError("Object fetch returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("Object fetch returned non-zero. RC: {0}".format(ret))
         return buf
 
     def multi_akey_insert(self, dkey, data, txn):
@@ -1061,7 +1064,6 @@ class IORequest():
         sgl_list = (daos_cref.SGL * count)()
         index = 0
         for tup in data:
-
             sgl_iov = daos_cref.IOV()
             sgl_iov.iov_len = ctypes.c_size_t(len(tup[1]) + 1)
             sgl_iov.iov_buf_len = ctypes.c_size_t(len(tup[1]) + 1)
@@ -1093,11 +1095,9 @@ class IORequest():
 
         # now do it
         func = self.context.get_function('update-obj')
-        ret = func(self.obj.obj_handle, txn, 0, dkey_ptr, c_count,
-                   iod_ptr, sgl_ptr, None)
+        ret = func(self.obj.obj_handle, txn, 0, dkey_ptr, c_count, iod_ptr, sgl_ptr, None)
         if ret != 0:
-            raise DaosApiError("Object update returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("Object update returned non-zero. RC: {0}".format(ret))
 
     def multi_akey_fetch(self, dkey, keys, txn):
         """Retrieve multiple akeys & associated data.
@@ -1149,16 +1149,23 @@ class IORequest():
         # now do it
         func = self.context.get_function('fetch-obj')
 
-        ret = func(self.obj.obj_handle, txn, 0, ctypes.byref(dkey_iov),
-                   c_count, ctypes.byref(iods), sgl_ptr, None, None)
+        ret = func(
+            self.obj.obj_handle,
+            txn,
+            0,
+            ctypes.byref(dkey_iov),
+            c_count,
+            ctypes.byref(iods),
+            sgl_ptr,
+            None,
+            None,
+        )
         if ret != 0:
-            raise DaosApiError("multikey fetch returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("multikey fetch returned non-zero. RC: {0}".format(ret))
         result = {}
         index = 0
         for sgl in sgl_list:
-            char_p = ctypes.cast((sgl.sg_iovs).contents.iov_buf,
-                                 ctypes.c_char_p)
+            char_p = ctypes.cast((sgl.sg_iovs).contents.iov_buf, ctypes.c_char_p)
             result[(keys[index][0]).value] = char_p.value
             index += 1
 
@@ -1235,13 +1242,12 @@ class IORequest():
 
         cur = 0
         for index in range(key_count):
-            keys.append(buf[cur:cur + daos_kds[index].kd_key_len])
+            keys.append(buf[cur : cur + daos_kds[index].kd_key_len])
             cur += daos_kds[index].kd_key_len
 
         return keys
 
-    def list_dkey(self, obj_handle=None, key_num=5, key_len=512,
-                  txn=daos_cref.DAOS_TX_NONE):
+    def list_dkey(self, obj_handle=None, key_num=5, key_len=512, txn=daos_cref.DAOS_TX_NONE):
         """Return dkeys in the object.
 
         Because the underlying method takes buffer of given size and stores the
@@ -1286,8 +1292,7 @@ class IORequest():
         nr_val = ctypes.c_uint32(key_num)
 
         # Define the array of ctypes DaosKeyDescriptor.
-        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(
-            daos_cref.DaosKeyDescriptor())
+        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(daos_cref.DaosKeyDescriptor())
 
         # Prepare the scatter/gather list to store the dkeys obtained. Use
         # key_num * key_len for the buffer size.
@@ -1303,13 +1308,17 @@ class IORequest():
 
         while not anchor.da_type == DAOS_ANCHOR_TYPE_EOF:
             ret = list_dkey_func(
-                obj_handle, txn, ctypes.byref(nr_val),
-                ctypes.byref(daos_kds), ctypes.byref(self.sgl),
-                ctypes.byref(anchor), None)
+                obj_handle,
+                txn,
+                ctypes.byref(nr_val),
+                ctypes.byref(daos_kds),
+                ctypes.byref(self.sgl),
+                ctypes.byref(anchor),
+                None,
+            )
 
             if ret != 0:
-                raise DaosApiError(
-                    "list_dkey returned non-zero. RC: {0}".format(ret))
+                raise DaosApiError("list_dkey returned non-zero. RC: {0}".format(ret))
 
             # No dkeys returned.
             if nr_val.value == 0:
@@ -1318,13 +1327,11 @@ class IORequest():
             # The keys are written contiguously in the buffer. Use the key size
             # set in the kds (key descriptors) object to get the individual
             # keys.
-            dkeys.extend(
-                self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds, buf=buf))
+            dkeys.extend(self.collect_keys(key_count=nr_val.value, daos_kds=daos_kds, buf=buf))
 
         return dkeys
 
-    def list_akey(self, dkey, obj_handle=None, key_num=5, key_len=512,
-                  txn=daos_cref.DAOS_TX_NONE):
+    def list_akey(self, dkey, obj_handle=None, key_num=5, key_len=512, txn=daos_cref.DAOS_TX_NONE):
         """Return akeys from given dkey in the object.
 
         See list_dkey doc for details.
@@ -1353,8 +1360,7 @@ class IORequest():
 
         nr_val = ctypes.c_uint32(key_num)
 
-        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(
-            daos_cref.DaosKeyDescriptor())
+        daos_kds = (daos_cref.DaosKeyDescriptor * key_num)(daos_cref.DaosKeyDescriptor())
 
         buf = self.prepare_sgl(key_num=key_num, key_len=key_len)
 
@@ -1368,13 +1374,18 @@ class IORequest():
 
         while not anchor.da_type == DAOS_ANCHOR_TYPE_EOF:
             ret = list_akey_func(
-                obj_handle, txn, dkey_ptr, ctypes.byref(nr_val),
-                ctypes.byref(daos_kds), ctypes.byref(self.sgl),
-                ctypes.byref(anchor), None)
+                obj_handle,
+                txn,
+                dkey_ptr,
+                ctypes.byref(nr_val),
+                ctypes.byref(daos_kds),
+                ctypes.byref(self.sgl),
+                ctypes.byref(anchor),
+                None,
+            )
 
             if ret != 0:
-                raise DaosApiError(
-                    "list_akey returned non-zero. RC: {0}".format(ret))
+                raise DaosApiError("list_akey returned non-zero. RC: {0}".format(ret))
 
             # No akeys returned.
             if nr_val.value == 0:
@@ -1387,19 +1398,21 @@ class IORequest():
 
 class DaosContProperties(ctypes.Structure):
     # pylint: disable=too-few-public-methods
-    """ This is a python container properties
+    """This is a python container properties
     structure used to set the type(eg: posix),
     enable checksum.
     NOTE: This structure can be enhanced in
     future for setting other container properties
     (if needed)
     """
-    _fields_ = [("type", ctypes.c_char * 10),
-                ("enable_chksum", ctypes.c_bool),
-                ("srv_verify", ctypes.c_bool),
-                ("chksum_type", ctypes.c_uint64),
-                ("chunk_size", ctypes.c_uint64),
-                ("rd_lvl", ctypes.c_uint64)]
+    _fields_ = [
+        ("type", ctypes.c_char * 10),
+        ("enable_chksum", ctypes.c_bool),
+        ("srv_verify", ctypes.c_bool),
+        ("chksum_type", ctypes.c_uint64),
+        ("chunk_size", ctypes.c_uint64),
+        ("rd_lvl", ctypes.c_uint64),
+    ]
 
     def __init__(self):
         # Set some default values for
@@ -1418,13 +1431,14 @@ class DaosContProperties(ctypes.Structure):
         self.rd_lvl = ctypes.c_uint64(daos_cref.DAOS_PROP_CO_REDUN_DEFAULT)
 
 
-class DaosInputParams():
+class DaosInputParams:
     # pylint: disable=too-few-public-methods
-    """ This is a helper python method
+    """This is a helper python method
     which can be used to pack input
     parameters for create methods
     (eg: container or pool (future)).
     """
+
     def __init__(self):
         super().__init__()
         # Get the input params for setting
@@ -1433,7 +1447,7 @@ class DaosInputParams():
         self.co_prop = DaosContProperties()
 
     def get_con_create_params(self):
-        """ Get the container create params.
+        """Get the container create params.
         This method is used to pack
         input parameters as a structure.
         Perform a get_con_create_params
@@ -1444,7 +1458,7 @@ class DaosInputParams():
         return self.co_prop
 
 
-class DaosContainer():
+class DaosContainer:
     # pylint: disable=too-many-public-methods
     """A python object representing a DAOS container."""
 
@@ -1503,52 +1517,59 @@ class DaosContainer():
         idx = 0
         if self.cont_input_values.type.decode("UTF-8") != "Unknown":
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
-                DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value)
-            if self.cont_input_values.type.decode(
-                    "UTF-8") in ("posix", "POSIX"):
+                DaosContPropEnum.DAOS_PROP_CO_LAYOUT_TYPE.value
+            )
+            if self.cont_input_values.type.decode("UTF-8") in ("posix", "POSIX"):
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value)
+                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_POSIX.value
+                )
             elif self.cont_input_values.type.decode("UTF-8") == "hdf5":
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value)
+                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_HDF5.value
+                )
             else:
                 # TODO:                              # pylint: disable=W0511
                 # This should ideally fail.
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKNOWN.value)
+                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKNOWN.value
+                )
             idx = idx + 1
         # If checksum flag is enabled.
         if self.cont_input_values.enable_chksum is True:
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
-                DaosContPropEnum.DAOS_PROP_CO_CSUM.value)
+                DaosContPropEnum.DAOS_PROP_CO_CSUM.value
+            )
             if self.cont_input_values.chksum_type == 100:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(1)
             else:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    self.cont_input_values.chksum_type)
+                    self.cont_input_values.chksum_type
+                )
             idx = idx + 1
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
-                DaosContPropEnum.DAOS_PROP_CO_CSUM_SERVER_VERIFY.value)
+                DaosContPropEnum.DAOS_PROP_CO_CSUM_SERVER_VERIFY.value
+            )
             if self.cont_input_values.srv_verify is True:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(1)
             else:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(0)
             idx = idx + 1
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
-                DaosContPropEnum.DAOS_PROP_CO_CSUM_CHUNK_SIZE.value)
+                DaosContPropEnum.DAOS_PROP_CO_CSUM_CHUNK_SIZE.value
+            )
             if self.cont_input_values.chunk_size == 0:
-                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    16384)
+                self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(16384)
             else:
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    self.cont_input_values.chunk_size)
+                    self.cont_input_values.chunk_size
+                )
             idx = idx + 1
 
         if self.cont_input_values.rd_lvl != daos_cref.DAOS_PROP_CO_REDUN_DEFAULT:
             self.cont_prop.dpp_entries[idx].dpe_type = ctypes.c_uint32(
-                DaosContPropEnum.DAOS_PROP_CO_REDUN_LVL.value)
-            self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                self.cont_input_values.rd_lvl)
+                DaosContPropEnum.DAOS_PROP_CO_REDUN_LVL.value
+            )
+            self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(self.cont_input_values.rd_lvl)
 
         func = self.context.get_function('create-cont')
 
@@ -1558,26 +1579,20 @@ class DaosContainer():
             if self.cont_prop is None:
                 ret = func(self.poh, ctypes.byref(self.uuid), None, None)
             else:
-                ret = func(self.poh, ctypes.byref(self.uuid), ctypes.byref(self.cont_prop),
-                           None)
+                ret = func(self.poh, ctypes.byref(self.uuid), ctypes.byref(self.cont_prop), None)
             if ret != 0:
                 self.uuid = (ctypes.c_ubyte * 1)(0)
-                raise DaosApiError(
-                    "Container create returned non-zero. RC: {0}".format(ret))
+                raise DaosApiError("Container create returned non-zero. RC: {0}".format(ret))
             self.attached = 1
         else:
             event = daos_cref.DaosEvent()
             if self.cont_prop is None:
                 params = [self.poh, ctypes.byref(self.uuid), None, event]
             else:
-                params = [self.poh, ctypes.byref(self.uuid), ctypes.byref(self.cont_prop),
-                          event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+                params = [self.poh, ctypes.byref(self.uuid), ctypes.byref(self.cont_prop), event]
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def destroy(self, force=1, poh=None, con_uuid=None, cb_func=None):
@@ -1600,18 +1615,14 @@ class DaosContainer():
         if cb_func is None:
             ret = func(self.poh, bytes(uuid_str, encoding='utf-8'), c_force, None)
             if ret != 0:
-                raise DaosApiError("Container destroy returned non-zero. "
-                                   "RC: {0}".format(ret))
+                raise DaosApiError("Container destroy returned non-zero. " "RC: {0}".format(ret))
             self.attached = 0
         else:
             event = daos_cref.DaosEvent()
             params = [self.poh, bytes(uuid_str, encoding='utf-8'), c_force, event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def open(self, poh=None, cuuid=None, flags=None, cb_func=None):
@@ -1637,22 +1648,30 @@ class DaosContainer():
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
         if cb_func is None:
-            ret = func(self.poh, bytes(uuid_str, encoding='utf-8'), c_flags,
-                       ctypes.byref(self.coh), ctypes.byref(self.info), None)
+            ret = func(
+                self.poh,
+                bytes(uuid_str, encoding='utf-8'),
+                c_flags,
+                ctypes.byref(self.coh),
+                ctypes.byref(self.info),
+                None,
+            )
             if ret != 0:
-                raise DaosApiError("Container open returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError("Container open returned non-zero. RC: {0}".format(ret))
             self.opened = 1
         else:
             event = daos_cref.DaosEvent()
-            params = [self.poh, bytes(uuid_str, encoding='utf-8'), c_flags,
-                      ctypes.byref(self.coh), ctypes.byref(self.info), event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            params = [
+                self.poh,
+                bytes(uuid_str, encoding='utf-8'),
+                c_flags,
+                ctypes.byref(self.coh),
+                ctypes.byref(self.info),
+                event,
+            ]
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def close(self, coh=None, cb_func=None):
@@ -1669,18 +1688,14 @@ class DaosContainer():
         if cb_func is None:
             ret = func(self.coh, None)
             if ret != 0:
-                raise DaosApiError("Container close returned non-zero. RC: {0}"
-                                   .format(ret))
+                raise DaosApiError("Container close returned non-zero. RC: {0}".format(ret))
             self.opened = 0
         else:
             event = daos_cref.DaosEvent()
             params = [self.coh, event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def query(self, coh=None, cont_prop=None, cb_func=None):
@@ -1707,20 +1722,18 @@ class DaosContainer():
 
         if cb_func is None:
             if cont_prop:
-                ret = func(
-                    self.coh, ctypes.byref(self.info), ctypes.byref(cont_prop), None)
+                ret = func(self.coh, ctypes.byref(self.info), ctypes.byref(cont_prop), None)
             else:
                 ret = func(self.coh, ctypes.byref(self.info), None, None)
             if ret != 0:
-                raise DaosApiError(
-                    "Container query returned non-zero. RC: {0}".format(ret))
+                raise DaosApiError("Container query returned non-zero. RC: {0}".format(ret))
             return self.info
 
         event = daos_cref.DaosEvent()
         params = [self.coh, ctypes.byref(self.info), None, event]
-        thread = threading.Thread(target=daos_cref.async_worker,
-                                  args=(func, params, self.context,
-                                        cb_func, self))
+        thread = threading.Thread(
+            target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+        )
         thread.start()
 
         return None
@@ -1737,8 +1750,7 @@ class DaosContainer():
         func = self.context.get_function('open-tx')
         ret = func(self.coh, ctypes.byref(c_tx), 0, None)
         if ret != 0:
-            raise DaosApiError("tx open returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("tx open returned non-zero. RC: {0}".format(ret))
 
         return c_tx.value
 
@@ -1751,8 +1763,7 @@ class DaosContainer():
         func = self.context.get_function('commit-tx')
         ret = func(txn, None)
         if ret != 0:
-            raise DaosApiError("TX commit returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("TX commit returned non-zero. RC: {0}".format(ret))
 
     def close_tx(self, txn):
         """Close out a transaction that is done being modified."""
@@ -1765,8 +1776,7 @@ class DaosContainer():
         func = self.context.get_function('close-tx')
         ret = func(c_tx, None)
         if ret != 0:
-            raise DaosApiError("TX close returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("TX close returned non-zero. RC: {0}".format(ret))
 
     def abort_tx(self, txn):
         """Abort a transaction that is done being modified."""
@@ -1779,8 +1789,7 @@ class DaosContainer():
         func = self.context.get_function('destroy-tx')
         ret = func(c_tx, None)
         if ret != 0:
-            raise DaosApiError("TX abort returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("TX abort returned non-zero. RC: {0}".format(ret))
 
     def restart_tx(self, txn):
         """Restart a transaction that is being modified."""
@@ -1793,11 +1802,11 @@ class DaosContainer():
         func = self.context.get_function('restart-tx')
         ret = func(c_tx, None)
         if ret != 0:
-            raise DaosApiError("TX restart returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("TX restart returned non-zero. RC: {0}".format(ret))
 
-    def write_an_array_value(self, datalist, dkey, akey, obj=None, rank=None,
-                             obj_cls=None, txn=daos_cref.DAOS_TX_NONE):
+    def write_an_array_value(
+        self, datalist, dkey, akey, obj=None, rank=None, obj_cls=None, txn=daos_cref.DAOS_TX_NONE
+    ):
         """Write an array of data to an object.
 
         If an object is not supplied a new one is created.  The update occurs
@@ -1826,8 +1835,17 @@ class DaosContainer():
 
         return ioreq.obj
 
-    def write_an_obj(self, thedata, size, dkey, akey, obj=None, rank=None,
-                     obj_cls=None, txn=daos_cref.DAOS_TX_NONE):
+    def write_an_obj(
+        self,
+        thedata,
+        size,
+        dkey,
+        akey,
+        obj=None,
+        rank=None,
+        obj_cls=None,
+        txn=daos_cref.DAOS_TX_NONE,
+    ):
         """Write a single value to an object.
 
         If an object isn't supplied a new one is created.  The update occurs in
@@ -1859,8 +1877,9 @@ class DaosContainer():
 
         return ioreq.obj
 
-    def write_multi_akeys(self, dkey, data, obj=None, rank=None, obj_cls=None,
-                          txn=daos_cref.DAOS_TX_NONE):
+    def write_multi_akeys(
+        self, dkey, data, obj=None, rank=None, obj_cls=None, txn=daos_cref.DAOS_TX_NONE
+    ):
         """Write multiple values to an object, each tagged with a unique akey.
 
         If an object isn't supplied a new one is created.  The update
@@ -1886,8 +1905,7 @@ class DaosContainer():
 
         c_data = []
         for tup in data:
-            newtup = (ctypes.create_string_buffer(tup[0]),
-                      ctypes.create_string_buffer(tup[1]))
+            newtup = (ctypes.create_string_buffer(tup[0]), ctypes.create_string_buffer(tup[1]))
             c_data.append(newtup)
 
         # obj can be None in which case a new one is created
@@ -1897,8 +1915,7 @@ class DaosContainer():
 
         return ioreq.obj
 
-    def read_an_array(self, rec_count, rec_size, dkey, akey, obj,
-                      txn=daos_cref.DAOS_TX_NONE):
+    def read_an_array(self, rec_count, rec_size, dkey, akey, obj, txn=daos_cref.DAOS_TX_NONE):
         """Read an array value from the specified object.
 
         rec_count --number of records (array indices) to read
@@ -1915,8 +1932,7 @@ class DaosContainer():
         c_akey = ctypes.create_string_buffer(akey)
 
         ioreq = IORequest(self.context, self, obj)
-        buf = ioreq.fetch_array(c_dkey, c_akey, c_rec_count,
-                                c_rec_size, txn)
+        buf = ioreq.fetch_array(c_dkey, c_akey, c_rec_count, c_rec_size, txn)
         return buf
 
     def read_multi_akeys(self, dkey, data, obj, txn=daos_cref.DAOS_TX_NONE):
@@ -1939,16 +1955,14 @@ class DaosContainer():
 
         c_data = []
         for tup in data:
-            newtup = (ctypes.create_string_buffer(tup[0]),
-                      ctypes.c_size_t(tup[1]))
+            newtup = (ctypes.create_string_buffer(tup[0]), ctypes.c_size_t(tup[1]))
             c_data.append(newtup)
 
         ioreq = IORequest(self.context, self, obj)
         buf = ioreq.multi_akey_fetch(c_dkey, c_data, txn)
         return buf
 
-    def read_an_obj(self, size, dkey, akey, obj, test_hints=None,
-                    txn=daos_cref.DAOS_TX_NONE):
+    def read_an_obj(self, size, dkey, akey, obj, test_hints=None, txn=daos_cref.DAOS_TX_NONE):
         """Read a single value from an object in this container."""
         # init test_hints if necessary
         if test_hints is None:
@@ -1978,8 +1992,7 @@ class DaosContainer():
         func = self.context.get_function("convert-clocal")
         ret = func(self.coh, ctypes.byref(c_glob))
         if ret != 0:
-            raise DaosApiError("Cntnr local2global returned non-zero. RC: {0}"
-                               .format(ret))
+            raise DaosApiError("Cntnr local2global returned non-zero. RC: {0}".format(ret))
         # now call it for real
         c_buf = ctypes.create_string_buffer(c_glob.iov_buf_len)
         c_glob.iov_buf = ctypes.cast(c_buf, ctypes.c_void_p)
@@ -2003,8 +2016,7 @@ class DaosContainer():
 
         ret = func(self.poh, c_glob, ctypes.byref(local_handle))
         if ret != 0:
-            raise DaosApiError("Container global2local returned non-zero. "
-                               "RC: {0}".format(ret))
+            raise DaosApiError("Container global2local returned non-zero. " "RC: {0}".format(ret))
         self.coh = local_handle
         return local_handle
 
@@ -2035,8 +2047,7 @@ class DaosContainer():
         t_size = ctypes.pointer(ctypes.c_size_t(100))
         ret = func(self.coh, sbuf, t_size, None)
         if ret != 0:
-            raise DaosApiError("Container list-cont-attr returned non-zero. "
-                               "RC: {0}".format(ret))
+            raise DaosApiError("Container list-cont-attr returned non-zero. " "RC: {0}".format(ret))
         buf = t_size[0]
 
         buff = ctypes.create_string_buffer(buf + 1).raw
@@ -2047,17 +2058,14 @@ class DaosContainer():
             ret = func(self.coh, buff, total_size, None)
             if ret != 0:
                 raise DaosApiError(
-                    "Container List Attribute returned non-zero. "
-                    "RC: {0}".format(ret))
+                    "Container List Attribute returned non-zero. " "RC: {0}".format(ret)
+                )
         else:
             event = daos_cref.DaosEvent()
             params = [self.coh, buff, total_size, event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
         return total_size[0], buff
@@ -2098,17 +2106,15 @@ class DaosContainer():
         if cb_func is None:
             ret = func(self.coh, no_of_att, names, values, sizes, None)
             if ret != 0:
-                raise DaosApiError("Container Set Attribute returned non-zero "
-                                   "RC: {0}".format(ret))
+                raise DaosApiError(
+                    "Container Set Attribute returned non-zero " "RC: {0}".format(ret)
+                )
         else:
             event = daos_cref.DaosEvent()
             params = [self.coh, no_of_att, names, values, sizes, event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
     def get_attr(self, attr_names, coh=None, cb_func=None):
@@ -2139,35 +2145,37 @@ class DaosContainer():
 
         no_of_att = ctypes.c_int(attr_count)
         buffers = ctypes.c_char_p * attr_count
-        buff = buffers(*[ctypes.c_char_p(ctypes.create_string_buffer(100).raw)
-                         for i in range(attr_count)])
+        buff = buffers(
+            *[ctypes.c_char_p(ctypes.create_string_buffer(100).raw) for i in range(attr_count)]
+        )
 
         size_of_att_val = [100] * attr_count
         sizes = (ctypes.c_size_t * attr_count)(*size_of_att_val)
 
         func = self.context.get_function('get-cont-attr')
         if cb_func is None:
-            ret = func(self.coh, no_of_att, ctypes.byref(attr_names_c),
-                       ctypes.byref(buff), sizes, None)
+            ret = func(
+                self.coh, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff), sizes, None
+            )
             if ret != 0:
-                raise DaosApiError("Container Get Attribute returned non-zero "
-                                   "RC: {0}".format(ret))
+                raise DaosApiError(
+                    "Container Get Attribute returned non-zero " "RC: {0}".format(ret)
+                )
 
             # Construct the results dictionary from buff and sizes set in the function
             # call.
             results = {}
             index = 0
             for attr in attr_names:
-                results[attr] = buff[index][:sizes[index]]
+                results[attr] = buff[index][: sizes[index]]
                 index += 1
             return results
 
         event = daos_cref.DaosEvent()
-        params = [self.coh, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff),
-                  sizes, event]
+        params = [self.coh, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff), sizes, event]
         thread = threading.Thread(
-            target=daos_cref.async_worker, args=(
-                func, params, self.context, cb_func, self))
+            target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+        )
         thread.start()
 
         # Return buff and sizes because at this point, the values aren't set. The
@@ -2194,21 +2202,17 @@ class DaosContainer():
         if cb_func is None:
             retcode = func(coh, epoch, None)
             if retcode != 0:
-                raise DaosApiError("cont aggregate returned non-zero.RC: {0}"
-                                   .format(retcode))
+                raise DaosApiError("cont aggregate returned non-zero.RC: {0}".format(retcode))
         else:
             event = daos_cref.DaosEvent()
             params = [coh, epoch, event]
-            thread = threading.Thread(target=daos_cref.async_worker,
-                                      args=(func,
-                                            params,
-                                            self.context,
-                                            cb_func,
-                                            self))
+            thread = threading.Thread(
+                target=daos_cref.async_worker, args=(func, params, self.context, cb_func, self)
+            )
             thread.start()
 
 
-class DaosSnapshot():
+class DaosSnapshot:
     """A python object that can represent a DAOS snapshot.
 
     We do not save the coh in the snapshot since it is different each time the
@@ -2222,7 +2226,7 @@ class DaosSnapshot():
         libdaos we know to always convert it to a ctype.
         """
         self.context = context
-        self.name = name            # currently unused
+        self.name = name  # currently unused
         self.epoch = 0
 
     def create(self, coh):
@@ -2237,8 +2241,7 @@ class DaosSnapshot():
         retcode = func(coh, ctypes.byref(epoch), None, None)
         self.epoch = epoch.value
         if retcode != 0:
-            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
-                               .format(retcode))
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}".format(retcode))
 
     #  To be Done: Generalize this function to accept and return the number of
     #  snapshots and the epochs and names lists. See description of
@@ -2258,11 +2261,11 @@ class DaosSnapshot():
         num = ctypes.c_uint64(1)
         epoch = ctypes.c_uint64(self.epoch)
         anchor = daos_cref.Anchor()
-        retcode = func(coh, ctypes.byref(num), ctypes.byref(epoch), None,
-                       ctypes.byref(anchor), None)
+        retcode = func(
+            coh, ctypes.byref(num), ctypes.byref(epoch), None, ctypes.byref(anchor), None
+        )
         if retcode != 0:
-            raise DaosApiError("Snapshot create returned non-zero. RC: {0}"
-                               .format(retcode))
+            raise DaosApiError("Snapshot create returned non-zero. RC: {0}".format(retcode))
         return epoch.value
 
     def open(self, coh, epoch=None):
@@ -2279,8 +2282,7 @@ class DaosSnapshot():
         txhndl = ctypes.c_uint64(0)
         retcode = func(coh, epoch, ctypes.byref(txhndl), None)
         if retcode != 0:
-            raise DaosApiError("Snapshot handle returned non-zero. RC: {0}"
-                               .format(retcode))
+            raise DaosApiError("Snapshot handle returned non-zero. RC: {0}".format(retcode))
         return txhndl
 
     def destroy(self, coh, epoch=None, evnt=None):
@@ -2306,7 +2308,7 @@ class DaosSnapshot():
             raise DaosApiError("Failed to destroy the snapshot. RC: {}".format(retcode))
 
 
-class DaosContext():
+class DaosContext:
     # pylint: disable=too-few-public-methods
     """Provides environment and other info for a DAOS client."""
 
@@ -2314,70 +2316,68 @@ class DaosContext():
         """Set up the DAOS API and MPI."""
         # first find the DAOS version
         self._dc = None
-        with open(os.path.join(path, "daos", "API_VERSION"),
-                  "r") as version_file:
+        with open(os.path.join(path, "daos", "API_VERSION"), "r") as version_file:
             daos_version = version_file.read().rstrip()
 
         self.libdaos = ctypes.CDLL(
-            os.path.join(path, 'libdaos.so.{}'.format(daos_version)),
-            mode=ctypes.DEFAULT_MODE)
-        ctypes.CDLL(os.path.join(path, 'libdaos_common.so'),
-                    mode=ctypes.RTLD_GLOBAL)
+            os.path.join(path, 'libdaos.so.{}'.format(daos_version)), mode=ctypes.DEFAULT_MODE
+        )
+        ctypes.CDLL(os.path.join(path, 'libdaos_common.so'), mode=ctypes.RTLD_GLOBAL)
 
-        self.libtest = ctypes.CDLL(os.path.join(path, 'libdaos_tests.so'),
-                                   mode=ctypes.DEFAULT_MODE)
+        self.libtest = ctypes.CDLL(os.path.join(path, 'libdaos_tests.so'), mode=ctypes.DEFAULT_MODE)
         # Note: action-subject format
         self.ftable = {
-            'close-cont':      self.libdaos.daos_cont_close,
-            'close-obj':       self.libdaos.daos_obj_close,
-            'close-tx':        self.libdaos.daos_tx_close,
-            'commit-tx':       self.libdaos.daos_tx_commit,
-            'connect-pool':    self.libdaos.daos_pool_connect,
+            'close-cont': self.libdaos.daos_cont_close,
+            'close-obj': self.libdaos.daos_obj_close,
+            'close-tx': self.libdaos.daos_tx_close,
+            'commit-tx': self.libdaos.daos_tx_commit,
+            'connect-pool': self.libdaos.daos_pool_connect,
             'convert-cglobal': self.libdaos.daos_cont_global2local,
-            'convert-clocal':  self.libdaos.daos_cont_local2global,
+            'convert-clocal': self.libdaos.daos_cont_local2global,
             'convert-pglobal': self.libdaos.daos_pool_global2local,
-            'convert-plocal':  self.libdaos.daos_pool_local2global,
-            'create-cont':     self.libdaos.daos_cont_create,
-            'create-eq':       self.libdaos.daos_eq_create,
-            'create-snap':     self.libdaos.daos_cont_create_snap,
-            'd_log':           self.libtest.dts_log,
-            'destroy-cont':    self.libdaos.daos_cont_destroy,
-            'destroy-eq':      self.libdaos.daos_eq_destroy,
-            'destroy-snap':    self.libdaos.daos_cont_destroy_snap,
-            'destroy-tx':      self.libdaos.daos_tx_abort,
+            'convert-plocal': self.libdaos.daos_pool_local2global,
+            'create-cont': self.libdaos.daos_cont_create,
+            'create-eq': self.libdaos.daos_eq_create,
+            'create-snap': self.libdaos.daos_cont_create_snap,
+            'd_log': self.libtest.dts_log,
+            'destroy-cont': self.libdaos.daos_cont_destroy,
+            'destroy-eq': self.libdaos.daos_eq_destroy,
+            'destroy-snap': self.libdaos.daos_cont_destroy_snap,
+            'destroy-tx': self.libdaos.daos_tx_abort,
             'disconnect-pool': self.libdaos.daos_pool_disconnect,
-            'fetch-obj':       self.libdaos.daos_obj_fetch,
-            'generate-oid':    self.libdaos.daos_obj_generate_oid,
-            'get-cont-attr':   self.libdaos.daos_cont_get_attr,
-            'get-pool-attr':   self.libdaos.daos_pool_get_attr,
-            'get-layout':      self.libdaos.daos_obj_layout_get,
-            'init-event':      self.libdaos.daos_event_init,
-            'list-akey':       self.libdaos.daos_obj_list_akey,
-            'list-attr':       self.libdaos.daos_cont_list_attr,
-            'list-cont-attr':  self.libdaos.daos_cont_list_attr,
-            'list-dkey':       self.libdaos.daos_obj_list_dkey,
-            'list-pool-attr':  self.libdaos.daos_pool_list_attr,
-            'cont-aggregate':  self.libdaos.daos_cont_aggregate,
-            'list-snap':       self.libdaos.daos_cont_list_snap,
-            'open-cont':       self.libdaos.daos_cont_open,
-            'open-obj':        self.libdaos.daos_obj_open,
-            'open-snap':       self.libdaos.daos_tx_open_snap,
-            'open-tx':         self.libdaos.daos_tx_open,
-            'poll-eq':         self.libdaos.daos_eq_poll,
-            'punch-akeys':     self.libdaos.daos_obj_punch_akeys,
-            'punch-dkeys':     self.libdaos.daos_obj_punch_dkeys,
-            'punch-obj':       self.libdaos.daos_obj_punch,
-            'query-cont':      self.libdaos.daos_cont_query,
-            'query-obj':       self.libdaos.daos_obj_query,
-            'query-pool':      self.libdaos.daos_pool_query,
-            'query-target':    self.libdaos.daos_pool_query_target,
-            'restart-tx':      self.libdaos.daos_tx_restart,
-            'set-cont-attr':   self.libdaos.daos_cont_set_attr,
-            'set-pool-attr':   self.libdaos.daos_pool_set_attr,
-            'stop-service':    self.libdaos.daos_pool_stop_svc,
-            'test-event':      self.libdaos.daos_event_test,
-            'update-obj':      self.libdaos.daos_obj_update,
-            'oid_gen':         self.libtest.dts_oid_gen}
+            'fetch-obj': self.libdaos.daos_obj_fetch,
+            'generate-oid': self.libdaos.daos_obj_generate_oid,
+            'get-cont-attr': self.libdaos.daos_cont_get_attr,
+            'get-pool-attr': self.libdaos.daos_pool_get_attr,
+            'get-layout': self.libdaos.daos_obj_layout_get,
+            'init-event': self.libdaos.daos_event_init,
+            'list-akey': self.libdaos.daos_obj_list_akey,
+            'list-attr': self.libdaos.daos_cont_list_attr,
+            'list-cont-attr': self.libdaos.daos_cont_list_attr,
+            'list-dkey': self.libdaos.daos_obj_list_dkey,
+            'list-pool-attr': self.libdaos.daos_pool_list_attr,
+            'cont-aggregate': self.libdaos.daos_cont_aggregate,
+            'list-snap': self.libdaos.daos_cont_list_snap,
+            'open-cont': self.libdaos.daos_cont_open,
+            'open-obj': self.libdaos.daos_obj_open,
+            'open-snap': self.libdaos.daos_tx_open_snap,
+            'open-tx': self.libdaos.daos_tx_open,
+            'poll-eq': self.libdaos.daos_eq_poll,
+            'punch-akeys': self.libdaos.daos_obj_punch_akeys,
+            'punch-dkeys': self.libdaos.daos_obj_punch_dkeys,
+            'punch-obj': self.libdaos.daos_obj_punch,
+            'query-cont': self.libdaos.daos_cont_query,
+            'query-obj': self.libdaos.daos_obj_query,
+            'query-pool': self.libdaos.daos_pool_query,
+            'query-target': self.libdaos.daos_pool_query_target,
+            'restart-tx': self.libdaos.daos_tx_restart,
+            'set-cont-attr': self.libdaos.daos_cont_set_attr,
+            'set-pool-attr': self.libdaos.daos_pool_set_attr,
+            'stop-service': self.libdaos.daos_pool_stop_svc,
+            'test-event': self.libdaos.daos_event_test,
+            'update-obj': self.libdaos.daos_obj_update,
+            'oid_gen': self.libtest.dts_oid_gen,
+        }
 
     def get_function(self, function):
         """Call a function through the API."""

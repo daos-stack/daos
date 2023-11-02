@@ -25,7 +25,7 @@ class StrBool(Enum):
     NO = "No"
 
 
-class VosBase():
+class VosBase:
     def __init__(self, count):
         self._payload = dict()
         self.set_count(count)
@@ -66,20 +66,13 @@ class VosValue(VosBase):
         if aligned is None:
             aligned = StrBool.YES.value
         elif aligned is not StrBool.YES.value and aligned is not StrBool.NO.value:
-            raise TypeError(
-                "aligned parameter must be of type {0}".format(
-                    type(StrBool)))
+            raise TypeError("aligned parameter must be of type {0}".format(type(StrBool)))
 
         self._payload["aligned"] = aligned
 
 
 class VosItems(VosBase):
-    def __init__(
-            self,
-            count=None,
-            values=None,
-            values_label=None,
-            values_type=None):
+    def __init__(self, count=None, values=None, values_label=None, values_type=None):
         super().__init__(count)
         self._values_label = values_label
         self._values_type = values_type
@@ -88,9 +81,7 @@ class VosItems(VosBase):
 
     def dump(self):
         if not bool(self._payload[self._values_label]):
-            raise VosValueError(
-                "list of {0} must not be empty".format(
-                    self._values_label))
+            raise VosValueError("list of {0} must not be empty".format(self._values_label))
         return self._payload
 
     def add_value(self, value):
@@ -104,22 +95,20 @@ class VosItems(VosBase):
 
     def _check_value_type(self, value):
         if not isinstance(value, self._values_type):
-            raise TypeError(
-                "item {0} must be of type {1}".format(
-                    value, type(
-                        self._values_type)))
+            raise TypeError("item {0} must be of type {1}".format(value, type(self._values_type)))
 
 
 class VosKey(VosItems):
     def __init__(
-            self,
-            key=None,
-            count=None,
-            key_type=None,
-            overhead=None,
-            values=None,
-            values_label=None,
-            values_type=None):
+        self,
+        key=None,
+        count=None,
+        key_type=None,
+        overhead=None,
+        values=None,
+        values_label=None,
+        values_type=None,
+    ):
         super().__init__(count, values, values_label, values_type)
         self._set_type(key, key_type)
         self._set_overhead(overhead)
@@ -131,9 +120,7 @@ class VosKey(VosItems):
         elif overhead == Overhead.META.value:
             self._payload["overhead"] = Overhead.META.value
         else:
-            raise TypeError(
-                "overhead parameter must be of type {0}".format(
-                    type(Overhead)))
+            raise TypeError("overhead parameter must be of type {0}".format(type(Overhead)))
 
     def _add_key_size(self, key):
         if key:
@@ -150,20 +137,11 @@ class VosKey(VosItems):
         elif key_type == KeyType.INTEGER.value:
             self._payload["type"] = KeyType.INTEGER.value
         else:
-            raise TypeError(
-                "key_type parameter must be of type {0}".format(
-                    type(KeyType)))
+            raise TypeError("key_type parameter must be of type {0}".format(type(KeyType)))
 
 
 class AKey(VosKey):
-    def __init__(
-            self,
-            key=None,
-            count=1,
-            key_type=None,
-            overhead=None,
-            value_type=None,
-            values=[]):
+    def __init__(self, key=None, count=1, key_type=None, overhead=None, value_type=None, values=[]):
         super().__init__(
             key=key,
             count=count,
@@ -171,7 +149,8 @@ class AKey(VosKey):
             overhead=overhead,
             values=values,
             values_label="values",
-            values_type=VosValue)
+            values_type=VosValue,
+        )
         self._set_value_type(value_type)
 
     def _set_value_type(self, value_type):
@@ -181,27 +160,12 @@ class AKey(VosKey):
         elif value_type == ValType.ARRAY.value or value_type == ValType.SINGLE.value:
             self._payload["value_type"] = value_type
         else:
-            raise TypeError(
-                "value_type parameter must be of type {0}".format(
-                    type(ValType)))
+            raise TypeError("value_type parameter must be of type {0}".format(type(ValType)))
 
 
 class DKey(VosKey):
-    def __init__(
-            self,
-            key=None,
-            count=1,
-            key_type=None,
-            overhead=None,
-            akeys=[]):
-        super().__init__(
-            key,
-            count,
-            key_type,
-            overhead,
-            akeys,
-            "akeys",
-            AKey)
+    def __init__(self, key=None, count=1, key_type=None, overhead=None, akeys=[]):
+        super().__init__(key, count, key_type, overhead, akeys, "akeys", AKey)
 
 
 class VosObject(VosItems):
@@ -235,10 +199,8 @@ class Container(VosItems):
 class Containers(VosItems):
     def __init__(self, num_shards=1000, containers=[]):
         super().__init__(
-            count=None,
-            values=containers,
-            values_label="containers",
-            values_type=Container)
+            count=None, values=containers, values_label="containers", values_type=Container
+        )
         self.set_num_shards(num_shards)
 
     def dump(self):

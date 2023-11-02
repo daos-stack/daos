@@ -20,7 +20,7 @@
 """Fake scons environment shutting up pylint on SCons files"""
 
 
-class Literal():
+class Literal:
     """Fake Literal"""
 
     def __init__(self, lstr):

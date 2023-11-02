@@ -108,15 +108,14 @@ def process_csv(args):
         sys.exit(-1)
 
 
-class MyFormatter(argparse.ArgumentDefaultsHelpFormatter,
-                  argparse.RawTextHelpFormatter):
+class MyFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
     """Just to get proper help output"""
+
     pass
 
 
 # create the top-level parser
-parser = argparse.ArgumentParser(description=tool_description,
-                                 formatter_class=MyFormatter)
+parser = argparse.ArgumentParser(description=tool_description, formatter_class=MyFormatter)
 subparsers = parser.add_subparsers(description='valid subcommands')
 
 example_description = '''
@@ -130,269 +129,189 @@ example = subparsers.add_parser(
     'create_example',
     help='Create a YAML example of the DFS layout',
     description=example_description,
-    formatter_class=MyFormatter)
-example.add_argument('-a', '--alloc_overhead', type=int,
-                     help='Vos alloc overhead', default=0)
+    formatter_class=MyFormatter,
+)
+example.add_argument('-a', '--alloc_overhead', type=int, help='Vos alloc overhead', default=0)
 example.add_argument(
     '-f',
     '--dfs_file_name',
     type=str,
     help='Output file name of the DFS example',
-    default='vos_dfs_sample.yaml')
+    default='vos_dfs_sample.yaml',
+)
 example.add_argument(
     '-m',
     '--meta_out',
     type=str,
     help='Output file name of the Vos Metadata',
-    default='vos_size.yaml')
+    default='vos_size.yaml',
+)
+example.add_argument('-v', '--verbose', action='store_true', help='Explain what is being done')
 example.add_argument(
-    '-v',
-    '--verbose',
-    action='store_true',
-    help='Explain what is being done')
-example.add_argument(
-    '-S',
-    '--storage',
-    dest='vospath',
-    type=str,
-    help='DAOS storage path',
-    default=vos_path_default)
+    '-S', '--storage', dest='vospath', type=str, help='DAOS storage path', default=vos_path_default
+)
 example.set_defaults(func=create_dfs_example)
 
 
 # read the file system
 explore = subparsers.add_parser(
-    'explore_fs', help='Estimate the VOS overhead from a given tree directory',
-    formatter_class=MyFormatter)
-explore.add_argument(
-    'path',
-    type=str,
-    nargs=1,
-    help='Path to the target directory',
-    default=None)
-explore.add_argument(
-    '-v',
-    '--verbose',
-    action='store_true',
-    help='Explain what is being done')
+    'explore_fs',
+    help='Estimate the VOS overhead from a given tree directory',
+    formatter_class=MyFormatter,
+)
+explore.add_argument('path', type=str, nargs=1, help='Path to the target directory', default=None)
+explore.add_argument('-v', '--verbose', action='store_true', help='Explain what is being done')
 explore.add_argument(
     '-t',
     '--dir_oclass',
     type=str,
     help='Predefined object classes. It describes schema of data distribution & protection '
-         + 'for directories.',
-    default='S1')
+    + 'for directories.',
+    default='S1',
+)
 explore.add_argument(
     '-r',
     '--file_oclass',
     type=str,
     help='Predefined object classes. It describes schema of data distribution & protection for '
-         + 'files.',
-    default='SX')
+    + 'files.',
+    default='SX',
+)
 explore.add_argument(
-    '-x',
-    '--average',
-    action='store_true',
-    help='Use average file size for estimation. (Faster)')
-explore.add_argument(
-    '-i',
-    '--io_size',
-    type=str,
-    help='I/O size.',
-    default='1MiB')
+    '-x', '--average', action='store_true', help='Use average file size for estimation. (Faster)'
+)
+explore.add_argument('-i', '--io_size', type=str, help='I/O size.', default='1MiB')
 explore.add_argument(
     '-c',
     '--chunk_size',
     type=str,
     help='Array chunk size/stripe size for regular files.',
-    default='1MiB')
+    default='1MiB',
+)
+explore.add_argument('-e', '--ec_cell_size', type=str, help='EC cell size', default='64KiB')
 explore.add_argument(
-    '-e',
-    '--ec_cell_size',
-    type=str,
-    help='EC cell size',
-    default='64KiB')
-explore.add_argument(
-    '-A',
-    '--assume_aggregation',
-    action='store_true',
-    help='Assume aggregation',
-    default=False)
+    '-A', '--assume_aggregation', action='store_true', help='Assume aggregation', default=False
+)
 explore.add_argument(
     '-s',
     '--scm_cutoff',
     type=str,
     help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
-    default='4KiB')
-explore.add_argument(
-    '-n',
-    '--num_shards',
-    type=int,
-    help='Number of VOS Pools',
-    default=1000)
-explore.add_argument('-a', '--alloc_overhead', type=int,
-                     help='Vos alloc overhead', default=0)
+    default='4KiB',
+)
+explore.add_argument('-n', '--num_shards', type=int, help='Number of VOS Pools', default=1000)
+explore.add_argument('-a', '--alloc_overhead', type=int, help='Vos alloc overhead', default=0)
 explore.add_argument(
     '-k',
     '--checksum',
     type=str,
     help='[optional] Checksum algorithm to be used crc16, crc32, crc64, sha1, sha256, sha512',
-    default=None)
+    default=None,
+)
 explore.add_argument(
-    '-m',
-    '--meta',
-    metavar='META',
-    help='[optional] Input metadata file',
-    default=None)
+    '-m', '--meta', metavar='META', help='[optional] Input metadata file', default=None
+)
 explore.add_argument(
-    '-o',
-    '--output',
-    dest='output',
-    type=str,
-    help='Output file name',
-    default=None)
+    '-o', '--output', dest='output', type=str, help='Output file name', default=None
+)
 explore.add_argument(
-    '-S',
-    '--storage',
-    dest='vospath',
-    type=str,
-    help='DAOS storage path',
-    default=vos_path_default)
+    '-S', '--storage', dest='vospath', type=str, help='DAOS storage path', default=vos_path_default
+)
 
 explore.set_defaults(func=process_fs)
 
 # parse a yaml file
 yaml_file = subparsers.add_parser(
-    'read_yaml', help='Estimate the VOS overhead from a given YAML file',
-    formatter_class=MyFormatter)
+    'read_yaml',
+    help='Estimate the VOS overhead from a given YAML file',
+    formatter_class=MyFormatter,
+)
+yaml_file.add_argument('-v', '--verbose', action='store_true', help='Explain what is being done')
 yaml_file.add_argument(
-    '-v',
-    '--verbose',
-    action='store_true',
-    help='Explain what is being done')
-yaml_file.add_argument('config', metavar='CONFIG', type=str, nargs=1,
-                       help='Path to the input yaml configuration file')
-yaml_file.add_argument('-a', '--alloc_overhead', type=int,
-                       help='Vos alloc overhead', default=0)
+    'config', metavar='CONFIG', type=str, nargs=1, help='Path to the input yaml configuration file'
+)
+yaml_file.add_argument('-a', '--alloc_overhead', type=int, help='Vos alloc overhead', default=0)
 yaml_file.add_argument(
     '-s',
     '--scm_cutoff',
     type=str,
     help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
-    default='4KiB')
+    default='4KiB',
+)
 yaml_file.add_argument(
-    '-m',
-    '--meta',
-    metavar='META',
-    help='[optional] Input metadata file',
-    default=None)
+    '-m', '--meta', metavar='META', help='[optional] Input metadata file', default=None
+)
 yaml_file.add_argument(
-    '-S',
-    '--storage',
-    dest='vospath',
-    type=str,
-    help='DAOS storage path',
-    default=vos_path_default)
+    '-S', '--storage', dest='vospath', type=str, help='DAOS storage path', default=vos_path_default
+)
 yaml_file.set_defaults(func=process_yaml)
 
 # parse a csv file
 csv_file = subparsers.add_parser(
-    'read_csv', help='Estimate the VOS overhead from a given CSV file',
-    formatter_class=MyFormatter)
+    'read_csv', help='Estimate the VOS overhead from a given CSV file', formatter_class=MyFormatter
+)
 csv_file.add_argument(
-    'csv',
-    metavar='CSV',
-    type=str,
-    nargs=1,
-    help='Input CSV file (assumes Argonne format)')
+    'csv', metavar='CSV', type=str, nargs=1, help='Input CSV file (assumes Argonne format)'
+)
 csv_file.add_argument(
-    '--file_name_size',
-    type=int,
-    dest='file_name_size',
-    help='Average file name length',
-    default=32)
-csv_file.add_argument(
-    '-i',
-    '--io_size',
-    type=str,
-    help='I/O size.',
-    default='1MiB')
+    '--file_name_size', type=int, dest='file_name_size', help='Average file name length', default=32
+)
+csv_file.add_argument('-i', '--io_size', type=str, help='I/O size.', default='1MiB')
 csv_file.add_argument(
     '--chunk_size',
     dest='chunk_size',
     type=str,
     help='Array chunk size/stripe size for regular files. Must be multiple of I/O size',
-    default='1MiB')
+    default='1MiB',
+)
+csv_file.add_argument('-e', '--ec_cell_size', type=str, help='EC cell size', default='64KiB')
 csv_file.add_argument(
-    '-e',
-    '--ec_cell_size',
-    type=str,
-    help='EC cell size',
-    default='64KiB')
-csv_file.add_argument(
-    '-A',
-    '--assume_aggregation',
-    action='store_true',
-    help='Assume aggregation',
-    default=False)
+    '-A', '--assume_aggregation', action='store_true', help='Assume aggregation', default=False
+)
 csv_file.add_argument(
     '-s',
     '--scm_cutoff',
     type=str,
     help='SCM threshold in bytes, optional suffixes KiB, MiB, ..., YiB',
-    default='4KiB')
+    default='4KiB',
+)
 csv_file.add_argument(
-    '--num_shards',
-    dest='num_shards',
-    type=int,
-    help='Number of vos pools',
-    default=1000)
+    '--num_shards', dest='num_shards', type=int, help='Number of vos pools', default=1000
+)
 csv_file.add_argument(
     '-k',
     '--checksum',
     type=str,
     help='[optional] Checksum algorithm to be used crc16, crc32, crc64, sha1, sha256, sha512',
-    default=None)
-csv_file.add_argument(
-    '-v',
-    '--verbose',
-    action='store_true',
-    help='Explain what is being done')
-csv_file.add_argument('-a', '--alloc_overhead', type=int,
-                      help='Vos alloc overhead', default=0)
+    default=None,
+)
+csv_file.add_argument('-v', '--verbose', action='store_true', help='Explain what is being done')
+csv_file.add_argument('-a', '--alloc_overhead', type=int, help='Vos alloc overhead', default=0)
 csv_file.add_argument(
     '-t',
     '--dir_oclass',
     type=str,
     help='Predefined object classes. It describes schema of data distribution & protection for '
-         + 'directories.',
-    default='S1')
+    + 'directories.',
+    default='S1',
+)
 csv_file.add_argument(
     '-r',
     '--file_oclass',
     type=str,
     help='Predefined object classes. It describes schema of data distribution & protection for '
-         + 'files.',
-    default='SX')
+    + 'files.',
+    default='SX',
+)
 csv_file.add_argument(
-    '-m',
-    '--meta',
-    metavar='META',
-    help='[optional] Input metadata file',
-    default=None)
+    '-m', '--meta', metavar='META', help='[optional] Input metadata file', default=None
+)
 csv_file.add_argument(
-    '-o', '--output',
-    dest='output',
-    type=str,
-    help='Output file name',
-    default=None)
+    '-o', '--output', dest='output', type=str, help='Output file name', default=None
+)
 csv_file.add_argument(
-    '-S',
-    '--storage',
-    dest='vospath',
-    type=str,
-    help='DAOS storage path',
-    default=vos_path_default)
+    '-S', '--storage', dest='vospath', type=str, help='DAOS storage path', default=vos_path_default
+)
 csv_file.set_defaults(func=process_csv)
 
 # parse the args and call whatever function was selected

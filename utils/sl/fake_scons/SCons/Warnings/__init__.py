@@ -34,5 +34,5 @@ class MissingSConscriptWarning(Exception):
 
 
 # pylint: disable-next=redefined-builtin,too-few-public-methods
-class Warning():
+class Warning:
     """Fake Warning"""

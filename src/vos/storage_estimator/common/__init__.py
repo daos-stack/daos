@@ -3,10 +3,4 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-__all__ = [
-    'dfs_sb',
-    'explorer',
-    'parse_csv',
-    'vos_size',
-    'vos_structures',
-    'util']
+__all__ = ['dfs_sb', 'explorer', 'parse_csv', 'vos_size', 'vos_structures', 'util']

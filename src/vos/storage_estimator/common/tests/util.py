@@ -8,7 +8,7 @@ import shutil
 import tempfile
 
 
-class FileGenerator():
+class FileGenerator:
     def __init__(self, prefix=""):
         if prefix:
             temp_path = tempfile.mkdtemp(prefix=prefix)
@@ -30,10 +30,7 @@ class FileGenerator():
             if file.get("type", "unknown") == "file":
                 self.generate_file(file.get("path", ""), file.get("size", 0))
             if file.get("type", "unknown") == "symlink":
-                self._create_symlink(
-                    file.get(
-                        "path", ""), file.get(
-                        "dest", ""))
+                self._create_symlink(file.get("path", ""), file.get("dest", ""))
 
     def _create_symlink(self, path, dest):
         target_path = os.path.join(self._mock_root, path)

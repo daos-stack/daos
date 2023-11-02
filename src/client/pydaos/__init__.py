@@ -34,7 +34,7 @@ class PyDError(Exception):
         return self.message
 
 
-class DaosClient():
+class DaosClient:
     # pylint: disable=too-few-public-methods
     # pylint: disable=attribute-defined-outside-init
     """

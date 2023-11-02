@@ -9,16 +9,24 @@ import os
 import sys
 
 from storage_estimator.util import CommonBase, ObjectClass
-from storage_estimator.vos_structures import (AKey, Container, DKey, KeyType, Overhead, ValType,
-                                              VosObject, VosValue)
+from storage_estimator.vos_structures import (
+    AKey,
+    Container,
+    DKey,
+    KeyType,
+    Overhead,
+    ValType,
+    VosObject,
+    VosValue,
+)
 
 
-class FileInfo():
+class FileInfo:
     def __init__(self, size):
         self.st_size = size
 
 
-class Entry():
+class Entry:
     def __init__(self, name, path):
         self.path = path
         self.name = name
@@ -40,9 +48,7 @@ class AverageFS(CommonBase):
         elif isinstance(arg, ObjectClass):
             self._dfs = DFS(arg)
         else:
-            raise TypeError(
-                'arg must be of type {0} or {1}'.format(
-                    type(DFS), type(ObjectClass)))
+            raise TypeError('arg must be of type {0} or {1}'.format(type(DFS), type(ObjectClass)))
 
         self._total_symlinks = 0
         self._avg_symlink_size = 0
@@ -92,8 +98,7 @@ class AverageFS(CommonBase):
     def set_avg_name_size(self, name_size):
         self._check_value_type(name_size, int)
         self._avg_name_size = name_size
-        self._debug(
-            'using {0} average file name size'.format(self._avg_name_size))
+        self._debug('using {0} average file name size'.format(self._avg_name_size))
 
     def get_dfs(self):
         new_dfs = self._dfs.copy()
@@ -114,20 +119,18 @@ class AverageFS(CommonBase):
             symlink_per_dir += (self._total_symlinks % self._total_dirs) > 0
             self._debug(
                 'adding {} symlinks of name size {} bytes and size {} bytes per directory'.format(
-                    symlink_per_dir,
-                    self._avg_name_size,
-                    self._avg_symlink_size))
-            dfs.add_symlink(
-                oid,
-                avg_name,
-                self._avg_symlink_size,
-                symlink_per_dir)
+                    symlink_per_dir, self._avg_name_size, self._avg_symlink_size
+                )
+            )
+            dfs.add_symlink(oid, avg_name, self._avg_symlink_size, symlink_per_dir)
 
             # add dirs
             avg_dir_name = 'x' * self._dir_name_size
             self._debug(
                 'adding 1 directory of name size {0} bytes per directory'.format(
-                    self._dir_name_size))
+                    self._dir_name_size
+                )
+            )
             dfs.add_dummy(oid, avg_dir_name)
 
             # add files
@@ -135,7 +138,9 @@ class AverageFS(CommonBase):
             files_per_dir += (self._total_files % self._total_dirs) > 0
             self._debug(
                 'adding {0} files of name size {1} per directory'.format(
-                    files_per_dir, self._avg_name_size))
+                    files_per_dir, self._avg_name_size
+                )
+            )
             dfs.add_dummy(oid, avg_name, files_per_dir)
 
         return dfs
@@ -272,24 +277,17 @@ class DFS(CommonBase):
 
     def _create_default_dkey0(self):
         akey = AKey(
-            key='0',
-            key_type=KeyType.HASHED,
-            overhead=Overhead.META,
-            value_type=ValType.ARRAY)
+            key='0', key_type=KeyType.HASHED, overhead=Overhead.META, value_type=ValType.ARRAY
+        )
         value = VosValue(count=1, size=32)
         akey.add_value(value)
-        dkey = DKey(
-            key_type=KeyType.INTEGER,
-            overhead=Overhead.META,
-            akeys=[akey])
+        dkey = DKey(key_type=KeyType.INTEGER, overhead=Overhead.META, akeys=[akey])
 
         return dkey
 
     def _create_default_inode_akey(self, key='DFS_INODE', size=96):
         value = VosValue(size=size)
-        akey = AKey(key=key,
-                    overhead=Overhead.META,
-                    value_type=ValType.ARRAY)
+        akey = AKey(key=key, overhead=Overhead.META, value_type=ValType.ARRAY)
         akey.add_value(value)
         return akey
 
@@ -303,10 +301,7 @@ class DFS(CommonBase):
             remainder = size % io_size
             akey_size = io_size
 
-        akey = AKey(
-            key_type=KeyType.INTEGER,
-            overhead=Overhead.USER,
-            value_type=ValType.ARRAY)
+        akey = AKey(key_type=KeyType.INTEGER, overhead=Overhead.USER, value_type=ValType.ARRAY)
 
         if count > 0:
             value = VosValue(count=count, size=akey_size)
@@ -320,10 +315,7 @@ class DFS(CommonBase):
 
     def _create_file_dkey(self, size, io_size):
         akey = self._create_file_akey(size, io_size)
-        dkey = DKey(
-            key_type=KeyType.INTEGER,
-            overhead=Overhead.USER,
-            akeys=[akey])
+        dkey = DKey(key_type=KeyType.INTEGER, overhead=Overhead.USER, akeys=[akey])
 
         return dkey
 
@@ -381,8 +373,8 @@ class DFS(CommonBase):
 
     def _add_ec_elements(self, file_object, chunks, remainder, parity_stats):
         """If it's an EC class, add EC specific data and return True.
-           For now, the command line ensures ec cell size is never smaller than
-           the io_size or chunk_size for simplicity"""
+        For now, the command line ensures ec cell size is never smaller than
+        the io_size or chunk_size for simplicity"""
         parity = self._oclass.get_file_parity()
 
         if parity == 0:
@@ -412,9 +404,7 @@ class DFS(CommonBase):
         chunks = file_size // self._chunk_size
         remainder = file_size % self._chunk_size
 
-        self._debug(
-            'adding {0} chunk(s) of size {1}'.format(
-                chunks, self._chunk_size))
+        self._debug('adding {0} chunk(s) of size {1}'.format(chunks, self._chunk_size))
 
         if self._add_ec_elements(file_object, chunks, remainder, parity_stats):
             return
@@ -450,9 +440,7 @@ class DFS(CommonBase):
             return
         parity_stats = CellStats(self._verbose)
 
-        self._debug(
-            'adding {0} file(s) of size of {1}'.format(
-                identical_files, file_size))
+        self._debug('adding {0} file(s) of size of {1}'.format(identical_files, file_size))
         file_object = VosObject()
         file_object.set_num_of_targets(self._oclass.get_file_targets())
         file_object.set_count(identical_files)
@@ -528,26 +516,14 @@ class FileSystemExplorer(CommonBase):
         self._info('')
         self._info('Summary:')
         self._info('')
-        self._info(
-            '  directories {0} count {1}'.format(
-                self._count_files,
-                pretty_name_size))
-        self._info(
-            '  files       {0} count {1}'.format(
-                self._count_dir,
-                pretty_file_size))
-        self._info(
-            '  symlinks    {0} count {1}'.format(
-                self._count_sym,
-                pretty_sym_size))
+        self._info('  directories {0} count {1}'.format(self._count_files, pretty_name_size))
+        self._info('  files       {0} count {1}'.format(self._count_dir, pretty_file_size))
+        self._info('  symlinks    {0} count {1}'.format(self._count_sym, pretty_sym_size))
         self._info('  errors      {0} count'.format(self._count_error))
         self._info('')
         self._info('  total count   {0}'.format(total_count))
 
-        self._info(
-            '  total size    {0} ({1} bytes)'.format(
-                pretty_total_size,
-                total_size))
+        self._info('  total size    {0} ({1} bytes)'.format(pretty_total_size, total_size))
 
         self._info('')
 
@@ -566,8 +542,7 @@ class FileSystemExplorer(CommonBase):
         else:
             avg_file_name_size = self._name_size // total_items
 
-        self._debug(
-            '  assuming average file name size of {0} bytes'.format(avg_file_name_size))
+        self._debug('  assuming average file name size of {0} bytes'.format(avg_file_name_size))
         return avg_file_name_size
 
     def get_dfs_average(self):
@@ -581,8 +556,7 @@ class FileSystemExplorer(CommonBase):
 
         if self._count_files > 0:
             avg_file_size = self._file_size // self._count_files
-            self._debug(
-                '  assuming average file size of {0} bytes'.format(avg_file_size))
+            self._debug('  assuming average file size of {0} bytes'.format(avg_file_size))
             averageFS.add_average_file(self._count_files, avg_file_size)
 
         dfs = averageFS.get_dfs()
@@ -599,7 +573,8 @@ class FileSystemExplorer(CommonBase):
             "values": 0,
             "dkey_size": 0,
             "akey_size": 0,
-            "value_size": 0}
+            "value_size": 0,
+        }
 
         for object in container["objects"]:
             obj_count = object.get("count", 11)
@@ -632,8 +607,7 @@ class FileSystemExplorer(CommonBase):
                             continue
 
                         total_values = obj_count * dkey_count * akey_count * value_count
-                        stats["value_size"] += value.get("size",
-                                                         0) * total_values
+                        stats["value_size"] += value.get("size", 0) * total_values
                         stats["values"] += total_akeys
 
         return stats
@@ -654,9 +628,7 @@ class FileSystemExplorer(CommonBase):
                     self._process_file(entry)
                     count += 1
                 else:
-                    self._error(
-                        'found unknown object (skipped): {0}'.format(
-                            entry.name))
+                    self._error('found unknown object (skipped): {0}'.format(entry.name))
             if count == 0:
                 self._process_empty_dir()
 
@@ -679,9 +651,7 @@ class FileSystemExplorer(CommonBase):
             elif os.path.isfile(target):
                 self._process_file(entry)
             else:
-                print(
-                    'Error: found unknown object (skipped): {0}'.format(
-                        entry.name))
+                print('Error: found unknown object (skipped): {0}'.format(entry.name))
 
     def _read_directory(self, file_path):
         try:
@@ -701,9 +671,7 @@ class FileSystemExplorer(CommonBase):
         self._dfs.remove_obj(self._oid)
 
     def _process_error(self, file_path):
-        self._debug(
-            'a adding dummy entry {0} for {1}'.format(
-                self._oid, file_path))
+        self._debug('a adding dummy entry {0} for {1}'.format(self._oid, file_path))
         self._dfs.add_dummy(self._oid, 'unknown')
         self._count_error += 1
 

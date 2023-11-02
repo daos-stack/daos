@@ -28,14 +28,14 @@ import sys
 # pylint: disable=unused-argument
 
 
-class SConscript():
+class SConscript:
     """Fake SConscript"""
 
     def __init__(self, *_args, **_kw):
         """Init function"""
 
 
-class DefaultEnvironment():
+class DefaultEnvironment:
     """Default environment"""
 
     def __init__(self, *_args, **_kwargs):
@@ -196,7 +196,7 @@ class DefaultEnvironment():
     def __getitem__(self, x):
         """Fake __getitem__"""
 
-        class myItem():
+        class myItem:
             """Fake class for Env variables"""
 
             def __index__(self):
@@ -339,7 +339,7 @@ class DefaultEnvironment():
         return
 
 
-class Variables():
+class Variables:
     """Fake variables"""
 
     def __init__(self, *_args, **_kw):
@@ -361,7 +361,7 @@ class Variables():
         """Fake Save"""
 
 
-class Configure():
+class Configure:
     """Fake Configure"""
 
     def __init__(self, *_args, **_kw):
@@ -412,14 +412,14 @@ class Configure():
         """Fake finish"""
 
 
-class Literal():
+class Literal:
     """Fake Literal"""
 
     def __init__(self, *_args, **_kw):
         """Constructor"""
 
 
-class Dir():
+class Dir:
     """Fake Dir"""
 
     def __init__(self, *_args, **_kw):
@@ -431,11 +431,11 @@ class Dir():
         return self
 
 
-class Scanner():
+class Scanner:
     """Fake Scanner"""
 
 
-class File():
+class File:
     """Fake File"""
 
 
@@ -458,7 +458,7 @@ def SetOption(*_args, **_kw):
     return True
 
 
-class Help():
+class Help:
     """Fake Help"""
 
     def __init__(self, *_args, **_kw):
@@ -541,29 +541,31 @@ DEFAULT_TARGETS = []
 
 Environment = DefaultEnvironment
 
-__all__ = ['DefaultEnvironment',
-           'Variables',
-           'Configure',
-           'GetOption',
-           'SetOption',
-           'Execute',
-           'Depends',
-           'Platform',
-           'Literal',
-           'Dir',
-           'Help',
-           'Glob',
-           'Split',
-           'Exit',
-           'Import',
-           'Export',
-           'SConscript',
-           'Default',
-           'AlwaysBuild',
-           'Command',
-           'Builder',
-           'AddOption',
-           'VariantDir',
-           'COMMAND_LINE_TARGETS',
-           'BUILD_TARGETS',
-           'DEFAULT_TARGETS']
+__all__ = [
+    'DefaultEnvironment',
+    'Variables',
+    'Configure',
+    'GetOption',
+    'SetOption',
+    'Execute',
+    'Depends',
+    'Platform',
+    'Literal',
+    'Dir',
+    'Help',
+    'Glob',
+    'Split',
+    'Exit',
+    'Import',
+    'Export',
+    'SConscript',
+    'Default',
+    'AlwaysBuild',
+    'Command',
+    'Builder',
+    'AddOption',
+    'VariantDir',
+    'COMMAND_LINE_TARGETS',
+    'BUILD_TARGETS',
+    'DEFAULT_TARGETS',
+]

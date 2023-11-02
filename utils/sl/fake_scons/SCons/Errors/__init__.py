@@ -34,5 +34,4 @@ class UserError(Exception):
 
 ARGUMENTS = {}
 
-__all__ = ['StopError',
-           'ARGUMENTS']
+__all__ = ['StopError', 'ARGUMENTS']
