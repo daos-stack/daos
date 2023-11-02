@@ -61,13 +61,15 @@ SUPPORTED_PROVIDERS = [
     "ofi+cxi",
     "ofi+verbs;ofi_rxm",
     "ucx+dc_x",
+    "ucx+ud_x",
     "ofi+tcp;ofi_rxm",
     "ofi+opx",
 ]
 # Temporary pipeline-lib workaround until DAOS-13934 is implemented
 PROVIDER_ALIAS = {
     "ofi+verbs": "ofi+verbs;ofi_rxm",
-    "ofi+tcp": "ofi+tcp;ofi_rxm"
+    "ofi+tcp": "ofi+tcp;ofi_rxm",
+    "ucx+dc_x": "ucx+ud_x"
 }
 PROCS_TO_CLEANUP = [
     "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
