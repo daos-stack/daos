@@ -107,10 +107,14 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 	}
 
+	DFUSE_REPLY_OPEN(oh, req, &fi_out);
+
+	/* At this point no reference is held by dfuse on oh, but oh->doh_readahead->dra_lock is
+	 * held and will block any call to release so oh->doh_readahead is still accessible.
+	 */
+
 	if (oh->doh_readahead)
 		dfuse_pre_read(dfuse_info, oh);
-
-	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
 	return;
 err:
@@ -121,10 +125,11 @@ err:
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
-	struct dfuse_obj_hdl *oh         = (struct dfuse_obj_hdl *)fi->fh;
-	int                   rc;
-	uint32_t              il_calls;
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl     *oh         = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_inode_entry *ie         = NULL;
+	int                       rc;
+	uint32_t                  il_calls;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -191,19 +196,18 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	}
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
+	if (oh->doh_evict_on_close) {
+		ie = oh->doh_ie;
+		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
+	}
+
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0) {
 		DFUSE_REPLY_ZERO_OH(oh, req);
 	} else {
-		/* Copy the pointer so it's still valid after REPLY, no reference will be held on
-		 * it but this is the destructor so it's OK to keep a copy here however ie should
-		 * not be used.*/
-		struct dfuse_obj_hdl *oh2 = oh;
-
-		DFUSE_REPLY_ERR_RAW(oh2, req, rc);
+		DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 		oh->doh_ie = NULL;
 	}
-	/* TODO: Do not access oh->doh_ie below here */
 	if (oh->doh_parent_dir) {
 		bool use_linear_read = false;
 
@@ -216,14 +220,13 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
 	}
-	if (oh->doh_evict_on_close) {
-		/* TODO: Do not access oh->doh_ie here */
-		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, oh->doh_ie->ie_parent,
-						      oh->doh_ie->ie_name,
-						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
+	if (ie) {
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
+						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 
 		if (rc != 0)
-			DHS_ERROR(oh, -rc, "inval_entry() error");
+			DHS_ERROR(ie, -rc, "inval_entry() error");
+		dfuse_inode_decref(dfuse_info, ie);
 	}
 	dfuse_oh_free(dfuse_info, oh);
 }

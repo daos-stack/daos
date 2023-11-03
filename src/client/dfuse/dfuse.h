@@ -671,6 +671,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
 	} while (0)
 
+/* This zeros _oh->doh_ie rather than _oh directly */
 #define DFUSE_REPLY_ZERO_OH(_oh, req)                                                              \
 	do {                                                                                       \
 		int __rc;                                                                          \
@@ -759,13 +760,13 @@ struct fuse_lowlevel_ops dfuse_ops;
 			DS_ERROR(-__rc, "fuse_reply_write() error");                               \
 	} while (0)
 
+/* See open.c for why _oh is not set to NULL here */
 #define DFUSE_REPLY_OPEN(_oh, req, _fi)                                                            \
 	do {                                                                                       \
 		int __rc;                                                                          \
 		DFUSE_TRA_DEBUG(_oh, "Returning open, keep_cache %d", (_fi)->keep_cache);          \
 		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
-		(_oh) = NULL;                                                                      \
-		__rc  = fuse_reply_open(req, _fi);                                                 \
+		__rc = fuse_reply_open(req, _fi);                                                  \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
 	} while (0)

@@ -48,7 +48,7 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 	 */
 	rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, ino, 0, 0);
 	if (rc && rc != -ENOENT)
-		DFUSE_TRA_ERROR(ie, "inval_inode() returned: %d (%s)", rc, strerror(-rc));
+		DHS_ERROR(ie, -rc, "inval_inode() error");
 
 	/* If the kernel was aware of this inode at an old location then remove that which should
 	 * trigger a forget call.  Checking the test logs shows that we do see the forget anyway
@@ -61,7 +61,7 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 		rc = fuse_lowlevel_notify_delete(dfuse_info->di_session, ie->ie_parent, ino,
 						 ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 		if (rc && rc != -ENOENT)
-			DFUSE_TRA_ERROR(ie, "notify_delete() returned: %d (%s)", rc, strerror(-rc));
+			DHS_ERROR(ie, -rc, "notify_delete() error");
 	}
 
 	/* Drop the ref again */

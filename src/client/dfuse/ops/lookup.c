@@ -156,6 +156,7 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 
 	return;
 out_err:
+	/* TODO: Verify ie reference here */
 	dfs_release(ie->ie_obj);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
