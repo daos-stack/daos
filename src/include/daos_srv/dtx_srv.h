@@ -141,10 +141,11 @@ struct dtx_sub_status {
 	int				dss_result;
 	uint32_t			dss_version;
 	uint32_t			dss_comp:1;
+	void				*dss_data;
 };
 
 struct dtx_leader_handle;
-typedef int (*dtx_agg_cb_t)(struct dtx_leader_handle *dlh, int allow_failure);
+typedef int (*dtx_agg_cb_t)(struct dtx_leader_handle *dlh, void *arg);
 
 /* Transaction handle on the leader node to manage the transaction */
 struct dtx_leader_handle {
@@ -153,6 +154,11 @@ struct dtx_leader_handle {
 	/* result for the distribute transaction */
 	int				dlh_result;
 	uint32_t			dlh_rmt_ver;
+	/*
+	 * 64-bits alignment. If need more bits for new member, do NOT forget to
+	 * update the engine_mem_dtx_dtx_leader_handle_xxx in telemetry_utils.py
+	 */
+	uint32_t			dlh_padding;
 
 	/* The array of the DTX COS entries */
 	uint32_t			dlh_dti_cos_count;
@@ -161,12 +167,15 @@ struct dtx_leader_handle {
 	/* The future to wait for sub requests to finish. */
 	ABT_future			dlh_future;
 
-	dtx_agg_cb_t			dlh_agg_cb;
 	int32_t				dlh_allow_failure;
 					/* Normal sub requests have been processed. */
 	uint32_t			dlh_normal_sub_done:1,
+					dlh_need_agg:1,
+					dlh_agg_done:1,
 					 /* Collective DTX. */
 					 dlh_coll:1,
+					 /* Need neither commit nor abort. */
+					 dlh_fake:1,
 					/* Drop conditional flags when forward RPC. */
 					dlh_drop_cond:1;
 	/* Ranks list for collective modification. */
@@ -228,6 +237,10 @@ enum dtx_flags {
 	DTX_DROP_CMT		= (1 << 8),
 	/** Collective DTX. */
 	DTX_COLL		= (1 << 9),
+	/* The non-leader targets are collective. */
+	DTX_TGT_COLL		= (1 << 10),
+	/* Not real transaction, need neither commit nor abort. */
+	DTX_FAKE		= (1 << 11),
 };
 
 void
@@ -238,7 +251,7 @@ int
 dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 		 uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt, uint8_t *hints, uint32_t hint_sz,
-		 uint8_t *bitmap, uint32_t bitmap_sz, struct daos_shard_tgt *tgts, int tgt_cnt,
+		 uint8_t *bitmap, uint32_t bitmap_sz, void *tgts, int tgt_cnt,
 		 uint32_t flags, d_rank_list_t *ranks, struct dtx_memberships *mbs,
 		 struct dtx_leader_handle **p_dlh);
 int

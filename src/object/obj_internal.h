@@ -33,6 +33,21 @@
 
 struct obj_io_context;
 
+#define OBJ_COLL_QUERY_THD_DEF	32
+/*
+ * If the count of engines on which there are shards to be queried for the object is less than
+ * obj_coll_query_thd, then the client will dispatch all the RPCs to related engines by itself.
+ * Otherwise, it will ask some engine(s) to help to forward the collective query RPCs to other
+ * engines. Under such case, the count of RPCs that are sent out by the client will be at least
+ * obj_coll_query_thd.
+ *
+ * On server side, the engine may only need to query single shard, or collective query multiple
+ * shards and forward the collective query request to the other engines if required. Currently,
+ * CaRT does not support to broadcast different content to different targets, the relay engine
+ * will forward related query request to others one by one.
+ */
+extern uint32_t		obj_coll_query_thd;
+
 /**
  * Bypass client I/O RPC, it means the client stack will complete the
  * fetch/update RPC immediately, nothing will be submitted to remote server.
@@ -254,6 +269,17 @@ struct shard_punch_args {
 	uint32_t		 pa_opc;
 };
 
+struct shard_query_key_args {
+	/* shard_auxi_args must be the first for shard_task_sched(). */
+	struct shard_auxi_args	 kqa_auxi;
+	uuid_t			 kqa_coh_uuid;
+	uuid_t			 kqa_cont_uuid;
+	struct dtx_id		 kqa_dti;
+	uint32_t		 kqa_dct_cap;
+	int			 kqa_dct_nr;
+	struct daos_coll_target	*kqa_dcts;
+};
+
 struct shard_sub_anchor {
 	daos_anchor_t	ssa_anchor;
 	/* These two extra anchors are for migration enumeration */
@@ -418,6 +444,7 @@ struct obj_auxi_args {
 	union {
 		struct shard_rw_args		rw_args;
 		struct shard_punch_args		p_args;
+		struct shard_query_key_args	q_args;
 		struct shard_list_args		l_args;
 		struct shard_k2a_args		k_args;
 		struct shard_sync_args		s_args;
@@ -586,6 +613,13 @@ int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, 
 			   daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
 			   struct dtx_id *dti, uint32_t *map_ver,
 			   daos_handle_t th, tse_task_t *task);
+
+int dc_obj_shard_coll_query(struct dtx_epoch *epoch, uint32_t flags, uint32_t req_map_ver,
+			    struct dc_object *obj, daos_key_t *dkey, daos_key_t *akey,
+			    daos_recx_t *recx, daos_epoch_t *max_epoch, const uuid_t coh_uuid,
+			    const uuid_t cont_uuid, struct dtx_id *dti, uint32_t *map_ver,
+			    struct daos_coll_target *dcts, uint32_t dct_nr, daos_handle_t th,
+			    tse_task_t *task);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
@@ -846,9 +880,32 @@ daos_recx_ep_list_ep_valid(struct daos_recx_ep_list *list)
 	return (list->re_ep_valid == 1);
 }
 
-int  obj_class_init(void);
+int obj_class_init(void);
 void obj_class_fini(void);
-int  obj_utils_init(void);
+
+struct obj_query_merge_args {
+	struct daos_oclass_attr	*oca;
+	daos_unit_oid_t		 oid;
+	daos_epoch_t		 src_epoch;
+	daos_key_t		*in_dkey;
+	daos_key_t		*src_dkey;
+	daos_key_t		*tgt_dkey;
+	daos_key_t		*src_akey;
+	daos_key_t		*tgt_akey;
+	daos_recx_t		*src_recx;
+	daos_recx_t		*tgt_recx;
+	daos_epoch_t		*tgt_epoch;
+	uint32_t		*tgt_map_ver;
+	uint32_t		*shard;
+	uint64_t		 flags;
+	uint32_t		 opc;
+	uint32_t		 src_map_ver;
+	int			 ret;
+};
+
+/* obj_utils.c */
+int daos_obj_merge_query_merge(struct obj_query_merge_args *args);
+int obj_utils_init(void);
 void obj_utils_fini(void);
 
 /* obj_tx.c */

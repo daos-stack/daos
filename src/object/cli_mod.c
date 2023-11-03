@@ -18,6 +18,8 @@
 
 unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
 int		dc_obj_proto_version;
+uint32_t	obj_coll_query_thd;
+
 
 /**
  * Initialize object interface
@@ -67,6 +69,10 @@ dc_obj_init(void)
 			daos_rpc_unregister(&obj_proto_fmt_1);
 		D_GOTO(out_class, rc);
 	}
+
+	obj_coll_query_thd = OBJ_COLL_QUERY_THD_DEF;
+	d_getenv_int("DAOS_COLL_QUERY_THD", &obj_coll_query_thd);
+	D_INFO("Set DAOS collective query threshold as %u\n", obj_coll_query_thd);
 
 	tx_verify_rdg = false;
 	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);

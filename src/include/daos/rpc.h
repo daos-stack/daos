@@ -31,8 +31,11 @@
 #define MODID_MASK	0xff
 #define MODID_OFFSET	24
 #define MOD_ID_BITS	7
-#define opc_get_mod_id(opcode)	((opcode >> MODID_OFFSET) & MODID_MASK)
-#define opc_get(opcode)		(opcode & OPCODE_MASK)
+#define opc_get_mod_id(opcode)	(((opcode) >> MODID_OFFSET) & MODID_MASK)
+#define opc_get(opcode)		((opcode) & OPCODE_MASK)
+
+#define OPCODE_RAW_MASK	((1 << RPC_VERSION_OFFSET) - 1)
+#define OPC_RAW(opcode)	((opcode) & OPCODE_RAW_MASK)
 
 #define DAOS_RPC_OPCODE(opc, mod_id, rpc_ver)			\
 	((opc & OPCODE_MASK) << OPCODE_OFFSET |			\
