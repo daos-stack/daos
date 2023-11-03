@@ -235,16 +235,9 @@ daos_sgl_data_len(d_sg_list_t *sgl)
 daos_size_t
 daos_sgl_buf_size(d_sg_list_t *sgl)
 {
-	daos_size_t	size = 0;
-	int		i;
-
-	if (sgl == NULL || sgl->sg_iovs == NULL)
+	if (sgl == NULL)
 		return 0;
-
-	for (i = 0, size = 0; i < sgl->sg_nr; i++)
-		size += sgl->sg_iovs[i].iov_buf_len;
-
-	return size;
+	return d_sgl_buf_size(sgl);
 }
 
 daos_size_t
@@ -736,6 +729,17 @@ void
 daos_dti_reset(void)
 {
 	memset(dti_uuid, 0, sizeof(dti_uuid));
+}
+
+/**
+ * daos_get_client_uuid to get (and lazily initialize) client thread dti_uuid.
+ */
+void
+daos_get_client_uuid(uuid_t *uuidp)
+{
+	if (uuid_is_null(dti_uuid))
+		uuid_generate(dti_uuid);
+	uuid_copy(*uuidp, dti_uuid);
 }
 
 /**

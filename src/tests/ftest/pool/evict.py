@@ -3,11 +3,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 from pydaos.raw import DaosApiError, c_uuid_to_str
-
-from apricot import TestWithServers
 
 
 class PoolEvictTest(TestWithServers):

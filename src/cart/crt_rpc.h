@@ -216,7 +216,7 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
 }
 
-#define CRT_PROTO_INTERNAL_VERSION 4
+#define CRT_PROTO_INTERNAL_VERSION 5
 #define CRT_PROTO_FI_VERSION 3
 #define CRT_PROTO_ST_VERSION 1
 #define CRT_PROTO_CTL_VERSION 1
@@ -308,7 +308,7 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 		crt_hdlr_iv_update, NULL)				\
 	X(CRT_OPC_IV_SYNC,						\
 		0, &CQF_crt_iv_sync,					\
-		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)			\
+		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a,
@@ -476,7 +476,8 @@ CRT_RPC_DECLARE(crt_st_status_req,
 	((d_rank_t)		(ifi_root_node)		CRT_VAR)
 
 #define CRT_OSEQ_IV_FETCH	/* output fields */		 \
-	((int32_t)		(ifo_rc)		CRT_VAR)
+	((d_sg_list_t)		(ifo_sgl)		CRT_VAR) \
+	((int32_t)		(ifo_rc)		CRT_VAR) \
 
 CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 
@@ -491,6 +492,7 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 	((d_iov_t)		(ivu_sync_type)		CRT_VAR) \
 	/* Bulk handle for iv value */				 \
 	((crt_bulk_t)		(ivu_iv_value_bulk)	CRT_VAR) \
+	((d_sg_list_t)		(ivu_iv_sgl)		CRT_VAR) \
 	/* Root node for IV UPDATE */				 \
 	((d_rank_t)		(ivu_root_node)		CRT_VAR) \
 	/* Original node that issued crt_iv_update call */	 \
@@ -500,7 +502,8 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 	((uint32_t)		(padding)		CRT_VAR)
 
 #define CRT_OSEQ_IV_UPDATE	/* output fields */		 \
-	((uint64_t)		(rc)			CRT_VAR)
+	((uint64_t)		(rc)			CRT_VAR) \
+	((d_sg_list_t)		(ivo_iv_sgl)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 
@@ -513,8 +516,9 @@ CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 	((d_iov_t)		(ivs_key)		CRT_VAR) \
 	/* IOV for sync type */					 \
 	((d_iov_t)		(ivs_sync_type)		CRT_VAR) \
+	((d_sg_list_t)		(ivs_sync_sgl)		CRT_VAR) \
 	/* IV Class ID */					 \
-	((uint32_t)		(ivs_class_id)		CRT_VAR)
+	((uint32_t)		(ivs_class_id)		CRT_VAR) \
 
 #define CRT_OSEQ_IV_SYNC	/* output fields */		 \
 	((int32_t)		(rc)			CRT_VAR)

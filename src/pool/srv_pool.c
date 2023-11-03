@@ -900,6 +900,7 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	struct pool_create_in  *in;
 	struct pool_create_out *out;
 	struct d_backoff_seq	backoff_seq;
+	int			n_attempts = 0;
 	int			rc;
 
 	/* Check for default label supplied via property. */
@@ -967,9 +968,16 @@ rechoose:
 	in->pri_ndomains = ndomains;
 	in->pri_domains.ca_count = ndomains;
 	in->pri_domains.ca_arrays = (uint32_t *)domains;
+	if (n_attempts == 0)
+		/*
+		 * This is our first attempt. Use a non-null pi_hdl to ask the
+		 * chosen PS replica to campaign.
+		 */
+		uuid_generate(in->pri_op.pi_hdl);
 
 	/* Send the POOL_CREATE request. */
 	rc = dss_rpc_send(rpc);
+	n_attempts++;
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 	rc = rsvc_client_complete_rpc(&client, &ep, rc,
@@ -1594,8 +1602,6 @@ check_map:
 	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
 	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection is disabled due to old layout\n",
-			DP_UUID(svc->ps_uuid));
 		rc = 0;
 	} else if (rc != 0) {
 		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
@@ -1603,7 +1609,7 @@ check_map:
 		goto out_lock;
 	}
 
-	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size: " DF_U64 " %s %u)\n",
+	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size " DF_U64 " %s %u minimum)\n",
 		DP_UUID(svc->ps_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_size,
 		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
 
@@ -2681,6 +2687,16 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		D_DEBUG(DB_MD, DF_UUID": pool service already stopping\n",
 			DP_UUID(svc->ps_uuid));
 		D_GOTO(out_mutex, rc = -DER_CANCELED);
+	}
+
+	if (!uuid_is_null(in->pri_op.pi_hdl)) {
+		/*
+		 * Try starting a campaign without waiting for the election
+		 * timeout. Since this is a performance optimization, ignore
+		 * errors.
+		 */
+		rc = rdb_campaign(svc->ps_rsvc.s_db);
+		D_DEBUG(DB_MD, DF_UUID": campaign: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, RDB_NIL_TERM, &tx);
@@ -3906,6 +3922,10 @@ ds_pool_query_handler(crt_rpc_t *rpc, int version)
 			case DAOS_PROP_PO_SVC_REDUN_FAC:
 			case DAOS_PROP_PO_OBJ_VERSION:
 			case DAOS_PROP_PO_PERF_DOMAIN:
+			case DAOS_PROP_PO_CHECKPOINT_MODE:
+			case DAOS_PROP_PO_CHECKPOINT_FREQ:
+			case DAOS_PROP_PO_CHECKPOINT_THRESH:
+			case DAOS_PROP_PO_REINT_MODE:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
