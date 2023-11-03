@@ -172,7 +172,7 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	}
 }
 
-func (ei *EngineInstance) GetBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+func getBioHealth(ctx context.Context, ei *EngineInstance, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	dresp, err := ei.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "GetBioHealth dRPC call")
@@ -190,7 +190,7 @@ func (ei *EngineInstance) GetBioHealth(ctx context.Context, req *ctlpb.BioHealth
 	return resp, nil
 }
 
-func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
+func listSmdDevices(ctx context.Context, ei *EngineInstance, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
 	dresp, err := ei.CallDrpc(ctx, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
@@ -204,24 +204,6 @@ func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevR
 	if resp.Status != 0 {
 		return nil, errors.Wrap(daos.Status(resp.Status), "ListSmdDevices failed")
 	}
-
-	return resp, nil
-}
-
-func listNvmeDevices(ctx context.Context, ei *EngineInstance, req *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodNvmeDevs, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := new(ctlpb.ScanNvmeResp)
-	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal NVMeListDevs response")
-	}
-
-	//	if resp.Status != 0 {
-	//		return nil, errors.Wrap(daos.Status(resp.Status), "ListNVMeDevices failed")
-	//	}
 
 	return resp, nil
 }

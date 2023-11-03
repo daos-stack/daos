@@ -25,28 +25,41 @@ import (
 )
 
 func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
+	defSmdScanRes := &ctlpb.SmdDevResp{
+		Devices: []*ctlpb.SmdDevice{
+			proto.MockSmdDevice(test.MockPCIAddr(2), 2),
+		},
+	}
+
 	for name, tc := range map[string]struct {
 		req                ctlpb.ScanNvmeReq
 		bdevAddrs          []string
 		provRes            *storage.BdevScanResponse
 		provErr            error
 		engStopped         bool
-		engRes             *ctlpb.ScanNvmeResp
-		engErr             error
+		smdRes             *ctlpb.SmdDevResp
+		smdErr             error
+		healthRes          *ctlpb.BioHealthResp
+		healthErr          error
 		expResp            *ctlpb.ScanNvmeResp
 		expErr             error
 		expBackendScanCall *storage.BdevScanRequest
 	}{
-		"scan over drpc": {
+		"scan over drpc; no health or meta": {
 			expResp: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
-					proto.MockNvmeController(2),
+					func() *ctlpb.NvmeController {
+						c := proto.MockNvmeController(2)
+						c.HealthStats = nil
+						c.SmdDevices = nil
+						return c
+					}(),
 				},
 				State: new(ctlpb.ResponseState),
 			},
 		},
 		"scan fails over drpc": {
-			engErr: errors.New("drpc fail"),
+			smdErr: errors.New("drpc fail"),
 			expErr: errors.New("drpc fail"),
 		},
 		"scan over engine provider; no bdevs in config": {
@@ -73,23 +86,32 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			provErr:    errors.New("provider scan fail"),
 			expErr:     errors.New("provider scan fail"),
 		},
+		// "scan over drpc; with health": {},
+		// "scan over drpc; with smd": {},
+		// "scan over drpc; with smd and health": {},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			scanEngineBdevsOverDrpc = func(_ context.Context, _ *EngineInstance, _ *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
-				return tc.engRes, tc.engErr
+			scanSmd = func(_ context.Context, _ *EngineInstance, _ *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
+				return tc.smdRes, tc.smdErr
 			}
 			defer func() {
-				scanEngineBdevsOverDrpc = listNvmeDevices
+				scanSmd = listSmdDevices
+			}()
+			getCtrlrHealth = func(_ context.Context, _ *EngineInstance, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+				return tc.healthRes, tc.healthErr
+			}
+			defer func() {
+				getCtrlrHealth = getBioHealth
 			}()
 
 			if tc.provRes == nil {
 				tc.provRes = defProviderScanRes
 			}
-			if tc.engRes == nil {
-				tc.engRes = defEngineScanRes
+			if tc.smdRes == nil {
+				tc.smdRes = defSmdScanRes
 			}
 
 			ec := engine.MockConfig()
@@ -110,9 +132,9 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 
 			cs := newMockControlServiceFromBackends(t, log, sCfg, bmb, smb, nil,
 				tc.engStopped)
+			ei := cs.harness.Instances()[0].(*EngineInstance)
 
-			resp, err := bdevScanEngine(test.Context(t), cs.harness.Instances()[0],
-				&tc.req)
+			resp, err := bdevScanEngine(test.Context(t), ei, &tc.req)
 			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return

@@ -19,8 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-var scanEngineBdevsOverDrpc = listNvmeDevices
-
 // GetStorage retrieve the storage provider for an engine instance.
 func (ei *EngineInstance) GetStorage() *storage.Provider {
 	return ei.storage
