@@ -7,6 +7,7 @@
 package support
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -48,7 +50,21 @@ type CollectLogSubCmd struct {
 	TargetFolder string `short:"t" long:"target-folder" description:"Target Folder location where log will be copied"`
 	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
 	ExtraLogsDir string `short:"c" long:"extra-logs-dir" description:"Collect the Logs from given directory"`
+	LogStartDate string `short:"D" long:"start-date" description:"Specify the start date, the day from log will be collected, Format: MM-DD"`
+	LogEndDate   string `short:"F" long:"end-date" description:"Specify the end date, the day till the log will be collected, Format: MM-DD"`
+	LogStartTime string `short:"S" long:"log-start-time" description:"Specify the log collection start time, Format: HH:MM:SS"`
+	LogEndTime   string `short:"E" long:"log-end-time" description:"Specify the log collection end time, Format: HH:MM:SS"`
 }
+
+type LogTypeSubCmd struct {
+	LogType string `short:"e" long:"log-type" description:"collect specific logs only admin,control,server and ignore everything else"`
+}
+
+const (
+	MMDD       = "1-2"
+	HHMMSS     = "15:04:05"
+	MMDDHHMMSS = "1/2-15:04:05"
+)
 
 // Folder names to copy logs and configs
 const (
@@ -56,7 +72,9 @@ const (
 	dmgNodeLogs      = "DmgNodeLogs"      // Copy the dmg command output specific to the server.
 	daosAgentCmdInfo = "DaosAgentCmdInfo" // Copy the daos_agent command output specific to the node.
 	genSystemInfo    = "GenSystemInfo"    // Copy the system related information
-	serverLogs       = "ServerLogs"       // Copy the server/control and helper logs
+	engineLogs       = "EngineLogs"       // Copy the engine logs
+	controlLogs      = "ControlLogs"      // Copy the control logs
+	adminLogs        = "AdminLogs"        // Copy the helper logs
 	clientLogs       = "ClientLogs"       // Copy the DAOS client logs
 	DaosServerConfig = "DaosServerConfig" // Copy the server config
 	agentConfig      = "AgentConfig"      // Copy the Agent config
@@ -127,11 +145,73 @@ type CollectLogsParams struct {
 	JsonOutput   bool
 	LogFunction  int32
 	LogCmd       string
+	LogStartDate string
+	LogEndDate   string
+	LogStartTime string
+	LogEndTime   string
+	Stop         bool
 }
 
 type logCopy struct {
 	cmd    string
 	option string
+}
+
+// Verify if the date and time argument is valid and return error if it's invalid
+func (cmd *CollectLogSubCmd) DateTimeValidate() error {
+	if cmd.LogStartDate != "" || cmd.LogEndDate != "" {
+		startDate, err := time.Parse(MMDD, cmd.LogStartDate)
+		if err != nil {
+			return errors.New("Invalid date, please provide the startDate in MM-DD format")
+		}
+
+		endDate, err := time.Parse(MMDD, cmd.LogEndDate)
+		if err != nil {
+			return errors.New("Invalid date, please provide the endDate in MM-DD format")
+		}
+
+		if startDate.After(endDate) {
+			return errors.New("start-date can not be after end-date")
+		}
+	}
+
+	if cmd.LogStartTime != "" {
+		_, err := time.Parse(HHMMSS, cmd.LogStartTime)
+		if err != nil {
+			return errors.New("Invalid log-start-time, please provide the time in HH:MM:SS format")
+		}
+	}
+
+	if cmd.LogEndTime != "" {
+		_, err := time.Parse(HHMMSS, cmd.LogEndTime)
+		if err != nil {
+			return errors.New("Invalid log-end-time, please provide the time in HH:MM:SS format")
+		}
+	}
+
+	return nil
+}
+
+// Verify LogType argument is valid.Return error, if it's not matching as describer in help
+func (cmd *LogTypeSubCmd) LogTypeValidate(LogCollection map[int32][]string) error {
+	logType := []string{}
+
+	if strings.Contains(cmd.LogType, "admin") {
+		logType = append(logType, "HelperLog")
+	}
+	if strings.Contains(cmd.LogType, "control") {
+		logType = append(logType, "ControlLog")
+	}
+	if strings.Contains(cmd.LogType, "server") {
+		logType = append(logType, "EngineLog")
+	}
+
+	if len(logType) == 0 {
+		return errors.New("Invalid log-type, please use admin|control|server log-type only")
+	}
+	LogCollection[CollectServerLogEnum] = logType
+
+	return nil
 }
 
 // Print the progress while collect-log command is in progress
@@ -467,7 +547,7 @@ func collectClientLog(log logging.Logger, opts ...CollectLogsParams) error {
 
 		matches, _ := filepath.Glob(clientLogFile + "*")
 		for _, logfile := range matches {
-			err := cpLogFile(logfile, clientLogLocation, log)
+			err = cpLinesFromLog(log, logfile, clientLogLocation, opts...)
 			if err != nil {
 				return err
 			}
@@ -579,6 +659,90 @@ func copyServerConfig(log logging.Logger, opts ...CollectLogsParams) error {
 	return nil
 }
 
+// Copy only specific lines from the server logs based on the Start/End date
+// and Start/End time, provided by user.
+func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ...CollectLogsParams) error {
+	// Copy the full log file incase of no dates provided
+	if opts[0].LogStartDate == "" && opts[0].LogEndDate == "" {
+		err := cpLogFile(srcFile, destFile, log)
+		if err != nil {
+			return err
+		}
+	} else {
+		var startTime, endTime string
+
+		logStartDate, err := time.Parse(MMDD, opts[0].LogStartDate)
+		if err != nil {
+			return err
+		}
+
+		logEndDate, err := time.Parse(MMDD, opts[0].LogEndDate)
+		if err != nil {
+			return err
+		}
+
+		// Default Start time, incase no start time provides on start dates.This will copy log start of the day.
+		if opts[0].LogStartTime == "" {
+			opts[0].LogStartTime = "00:00:00"
+		}
+
+		// Default End time, incase no End time provides.This will copy log till the End of the day.
+		if opts[0].LogEndTime == "" {
+			opts[0].LogEndTime = "23:59:59"
+		}
+
+		startTime = fmt.Sprintf("%d/%d-%s", logStartDate.Month(), logStartDate.Day(), opts[0].LogStartTime)
+		endTime = fmt.Sprintf("%d/%d-%s", logEndDate.Month(), logEndDate.Day(), opts[0].LogEndTime)
+
+		actStartTime, _ := time.Parse(MMDDHHMMSS, startTime)
+		actEndTime, _ := time.Parse(MMDDHHMMSS, endTime)
+
+		// Create the new empty file, which will be used to copy the matching date/time log lines.
+		logFileName := filepath.Join(destFile, filepath.Base(srcFile))
+		writeFile, err := os.Create(logFileName)
+		if err != nil {
+			return err
+		}
+		defer writeFile.Close()
+
+		readFile, err := os.Open(srcFile)
+		if err != nil {
+			return err
+		}
+		defer readFile.Close()
+
+		// Loop through each line and identify the date and time of each log line.
+		// Compare the date,time stamp and copy if it's in the user provided range.
+		scanner := bufio.NewScanner(readFile)
+		for scanner.Scan() {
+			lineData := scanner.Text()
+			lineDataSlice := strings.Split(lineData, " ")
+			dateTime := strings.Split(lineDataSlice[0], "-")
+			// skip and continue to next line if no date time stamp
+			if len(dateTime) != 2 {
+				continue
+			}
+			timeOnly := strings.Split(dateTime[1], ".")
+			expDateTime := fmt.Sprintf("%s-%s", dateTime[0], timeOnly[0])
+			expLogTime, _ := time.Parse(MMDDHHMMSS, expDateTime)
+			// Copy line to the file, if the log line has time stamp
+			// between the given range of start/end date and time.
+			if expLogTime.After(actStartTime) && expLogTime.Before(actEndTime) {
+				_, err = writeFile.WriteString(lineData + "\n")
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Collect all server side logs
 func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 	var cfgPath string
@@ -592,33 +756,45 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 	serverConfig.SetPath(cfgPath)
 	serverConfig.Load()
 
-	targetServerLogs, err := createHostLogFolder(serverLogs, log, opts...)
-	if err != nil {
-		return err
-	}
-
 	switch opts[0].LogCmd {
 	case "EngineLog":
 		if len(serverConfig.Engines) == 0 {
 			return errors.New("Engine count is 0 from server config")
 		}
 
+		targetServerLogs, err := createHostLogFolder(engineLogs, log, opts...)
+		if err != nil {
+			return err
+		}
+
 		for i := range serverConfig.Engines {
 			matches, _ := filepath.Glob(serverConfig.Engines[i].LogFile + "*")
-			for _, logfile := range matches {
-				err = cpLogFile(logfile, targetServerLogs, log)
-				if err != nil {
+			for _, logFile := range matches {
+				err = cpLinesFromLog(log, logFile, targetServerLogs, opts...)
+				if err != nil && opts[0].Stop {
 					return err
 				}
 			}
 		}
+
 	case "ControlLog":
-		err = cpLogFile(serverConfig.ControlLogFile, targetServerLogs, log)
+		targetControlLogs, err := createHostLogFolder(controlLogs, log, opts...)
 		if err != nil {
 			return err
 		}
+
+		err = cpLogFile(serverConfig.ControlLogFile, targetControlLogs, log)
+		if err != nil {
+			return err
+		}
+
 	case "HelperLog":
-		err = cpLogFile(serverConfig.HelperLogFile, targetServerLogs, log)
+		targetAdminLogs, err := createHostLogFolder(adminLogs, log, opts...)
+		if err != nil {
+			return err
+		}
+
+		err = cpLogFile(serverConfig.HelperLogFile, targetAdminLogs, log)
 		if err != nil {
 			return err
 		}

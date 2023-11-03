@@ -7,8 +7,10 @@
 package support
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -823,6 +825,262 @@ transport_config:
 			collLogParams.LogCmd = tc.logCmd
 			gotErr := collectServerLog(log, collLogParams)
 			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestSupport_DateTimeValidate(t *testing.T) {
+	for name, tc := range map[string]struct {
+		logStartDate string
+		logEndDate   string
+		logStartTime string
+		logEndTime   string
+		expErr       error
+	}{
+		"Empty Date and Time": {
+			expErr: nil,
+		},
+		"Valid StartDate No EndDate": {
+			logStartDate: "12-01",
+			expErr:       errors.New("Invalid date, please provide the endDate in MM-DD format"),
+		},
+		"No StartDate Valid EndDate": {
+			logEndDate: "12-31",
+			expErr:     errors.New("Invalid date, please provide the startDate in MM-DD format"),
+		},
+		"Invalid StartDate No EndDate": {
+			logStartDate: "44-22",
+			expErr:       errors.New("Invalid date, please provide the startDate in MM-DD format"),
+		},
+		"Invalid EndDate": {
+			logStartDate: "12-01",
+			logEndDate:   "44-22",
+			expErr:       errors.New("Invalid date, please provide the endDate in MM-DD format"),
+		},
+		"StartDate after EndDate": {
+			logStartDate: "10-01",
+			logEndDate:   "05-06",
+			expErr:       errors.New("start-date can not be after end-date"),
+		},
+		"Valid StartDate and EndDate": {
+			logStartDate: "12-01",
+			logEndDate:   "12-31",
+			expErr:       nil,
+		},
+		"Valid StartTime No EndTime": {
+			logStartTime: "13:15:59",
+			expErr:       nil,
+		},
+		"No StartTime valid EndTime": {
+			logEndTime: "20:30:50",
+			expErr:     nil,
+		},
+		"Invalid StartTime": {
+			logStartTime: "25:99:67",
+			expErr:       errors.New("Invalid log-start-time, please provide the time in HH:MM:SS format"),
+		},
+		"Invalid EndTime": {
+			logStartTime: "13:15:59",
+			logEndTime:   "25:99:67",
+			expErr:       errors.New("Invalid log-end-time, please provide the time in HH:MM:SS format"),
+		},
+		"Valid StartTime EndTime": {
+			logStartTime: "13:15:59",
+			logEndTime:   "20:30:50",
+			expErr:       nil,
+		},
+		"Valid Date Time": {
+			logStartDate: "12-01",
+			logEndDate:   "12-31",
+			logStartTime: "13:15:59",
+			logEndTime:   "20:30:50",
+			expErr:       nil,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var params CollectLogSubCmd
+			params.LogStartDate = tc.logStartDate
+			params.LogEndDate = tc.logEndDate
+			params.LogStartTime = tc.logStartTime
+			params.LogEndTime = tc.logEndTime
+			err := params.DateTimeValidate()
+			test.CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+		})
+	}
+}
+
+func TestSupport_LogTypeValidate(t *testing.T) {
+	for name, tc := range map[string]struct {
+		logType    string
+		expLogType []string
+		expErr     error
+	}{
+		"empty": {
+			expErr: errors.New("Invalid log-type, please use admin|control|server log-type only"),
+		},
+		"LogType Admin": {
+			logType:    "admin",
+			expLogType: []string{"HelperLog"},
+			expErr:     nil,
+		},
+		"LogType Control": {
+			logType:    "control",
+			expLogType: []string{"ControlLog"},
+			expErr:     nil,
+		},
+		"LogType Server": {
+			logType:    "server",
+			expLogType: []string{"EngineLog"},
+			expErr:     nil,
+		},
+		"LogType Admin Control": {
+			logType:    "admin|control",
+			expLogType: []string{"HelperLog", "ControlLog"},
+			expErr:     nil,
+		},
+		"LogType Admin Control Server": {
+			logType:    "admin|control|server",
+			expLogType: []string{"HelperLog", "ControlLog", "EngineLog"},
+			expErr:     nil,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var LogCollection = map[int32][]string{}
+			var params LogTypeSubCmd
+			params.LogType = tc.logType
+			err := params.LogTypeValidate(LogCollection)
+			test.CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			if reflect.DeepEqual(LogCollection[CollectServerLogEnum], tc.expLogType) == false {
+				t.Fatalf("LogCollection[CollectServerLogEnum] Expected:%s Got:%s", tc.expLogType, LogCollection[CollectServerLogEnum])
+			}
+
+		})
+	}
+}
+
+func TestSupport_cpLinesFromLog(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+	targetTestDir, targetCleanup := test.CreateTestDir(t)
+	defer targetCleanup()
+
+	srcPath := test.CreateTestFile(t, targetTestDir, "Temp File\n")
+	dstTestDir, dstCleanup := test.CreateTestDir(t)
+	defer dstCleanup()
+
+	collLogParams := CollectLogsParams{}
+
+	DummyLogs := `01/01-01:01:01.90 system-01 LOG LINE 1
+02/02-04:04:04.90 system-02 LOG LINE 2
+03/03-06:06:06.90 system-02 LOG LINE 3
+04/04-08:08:08.90 system-02 LOG LINE 4
+05/05-10:10:10.90 system-02 LOG LINE 5
+06/06-12:12:12.90 system-02 LOG LINE 6
+07/07-14:14:14.90 system-02 LOG LINE 7
+08/08-16:16:16.90 system-02 LOG LINE 8
+09/09-18:18:18.90 system-02 LOG LINE 9
+10/10-20:20:20.90 system-02 LOG LINE 10
+11/11-22:22:22.90 system-02 LOG LINE 11
+12/12-23:59:59.90 system-02 LOG LINE 12
+`
+	MockEngineLogFile := test.CreateTestFile(t, targetTestDir, DummyLogs)
+
+	for name, tc := range map[string]struct {
+		logStartDate string
+		logEndDate   string
+		logStartTime string
+		logEndTime   string
+		srcFile      string
+		destFile     string
+		expErr       error
+		verifyLog    string
+	}{
+		"No startDate and EndDate": {
+			logStartDate: "",
+			logEndDate:   "",
+			srcFile:      srcPath,
+			destFile:     dstTestDir,
+			expErr:       nil,
+		},
+		"Invalid Destination Directory": {
+			logStartDate: "",
+			logEndDate:   "",
+			srcFile:      srcPath,
+			destFile:     dstTestDir + "/tmp",
+			expErr:       errors.New("unable to Copy File"),
+		},
+		"Invalid Source File": {
+			logStartDate: "01-01",
+			logEndDate:   "12-31",
+			srcFile:      srcPath + "unknownFile",
+			destFile:     dstTestDir,
+			expErr:       errors.New("no such file or directory"),
+		},
+		"invalid StartDate": {
+			logStartDate: "20-25",
+			logEndDate:   "",
+			srcFile:      srcPath,
+			destFile:     dstTestDir,
+			expErr:       errors.New("parsing time \"20-25\": month out of range"),
+		},
+		"invalid EndDate": {
+			logStartDate: "01-23",
+			logEndDate:   "20-25",
+			srcFile:      srcPath,
+			destFile:     dstTestDir,
+			expErr:       errors.New("parsing time \"20-25\": month out of range"),
+		},
+		"Valid date without any time": {
+			logStartDate: "01-01",
+			logEndDate:   "12-31",
+			srcFile:      srcPath,
+			destFile:     dstTestDir,
+			expErr:       nil,
+		},
+		"Verify the content of log line based on date": {
+			logStartDate: "04-01",
+			logEndDate:   "08-08",
+			srcFile:      MockEngineLogFile,
+			destFile:     dstTestDir,
+			expErr:       nil,
+			verifyLog:    "08/08-16:16:16.90 system-02 LOG LINE 8",
+		},
+		"Verify the content of log line based on date and time": {
+			logStartDate: "09-09",
+			logEndDate:   "11-11",
+			logStartTime: "12:00:00",
+			logEndTime:   "23:23:23",
+			srcFile:      MockEngineLogFile,
+			destFile:     dstTestDir,
+			expErr:       nil,
+			verifyLog:    "11/11-22:22:22.90 system-02 LOG LINE 11",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			collLogParams.LogStartDate = tc.logStartDate
+			collLogParams.LogEndDate = tc.logEndDate
+			gotErr := cpLinesFromLog(log, tc.srcFile, tc.destFile, collLogParams)
+			test.CmpErr(t, tc.expErr, gotErr)
+
+			if tc.verifyLog != "" {
+				readFile := filepath.Join(tc.destFile, filepath.Base(tc.srcFile))
+				b, err := ioutil.ReadFile(readFile)
+				if err != nil {
+					t.Fatalf(err.Error())
+				}
+
+				if strings.Contains(string(b), tc.verifyLog) == false {
+					t.Fatalf("Expected log line:=%s can not be found in File:=%s", tc.verifyLog, readFile)
+				}
+
+			}
 		})
 	}
 }
