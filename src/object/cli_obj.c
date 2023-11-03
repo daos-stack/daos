@@ -17,6 +17,7 @@
 #include <daos/task.h>
 #include <daos_task.h>
 #include <daos_types.h>
+#include <daos/mgmt.h>
 #include <daos_obj.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
@@ -2766,6 +2767,7 @@ obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
 	case DAOS_OBJ_RPC_SYNC:
 		return &obj_auxi->s_args.sa_auxi;
 	case DAOS_OBJ_RPC_QUERY_KEY:
+	case DAOS_OBJ_RPC_COLL_PUNCH:
 		/*
 		 * called from obj_comp_cb_internal() and
 		 * checked in obj_shard_comp_cb() correctly
@@ -4791,6 +4793,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				dc_tx_attach(obj_auxi->th, obj, DAOS_OBJ_RPC_FETCH, task, 0, false);
 			break;
 		}
+		case DAOS_OBJ_RPC_COLL_PUNCH:
 		case DAOS_OBJ_RPC_PUNCH:
 		case DAOS_OBJ_RPC_PUNCH_DKEYS:
 		case DAOS_OBJ_RPC_PUNCH_AKEYS:
@@ -6697,21 +6700,68 @@ shard_punch_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 }
 
 static int
+dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
+		  uint32_t map_ver, daos_obj_punch_t *args, struct obj_auxi_args *auxi)
+{
+	struct shard_punch_args	*spa = &auxi->p_args;
+	struct dc_obj_shard	*shard = NULL;
+	uint32_t		 flags = ORF_LEADER;
+	uint32_t		 off;
+	int			 rc;
+	int			 i;
+
+	for (i = 0, off = obj->cob_md.omd_id.lo % obj->cob_shards_nr; i < obj->cob_shards_nr;
+	     i++, off = (off + 1) % obj->cob_shards_nr) {
+		rc = obj_shard_open(obj, i, map_ver, &shard);
+		if (rc == 0) {
+			if (!shard->do_rebuilding && !shard->do_reintegrating)
+				break;
+
+			obj_shard_close(shard);
+		}
+
+		if (rc != -DER_NONEXIST)
+			goto out;
+	}
+
+	/* If all shards are NONEXIST, then need not send collective punch RPC. */
+	if (unlikely(i == obj->cob_shards_nr))
+		D_GOTO(out, rc = 0);
+
+	if (auxi->io_retry)
+		flags |= ORF_RESEND;
+	else
+		daos_dti_gen(&spa->pa_dti, false);
+	if (obj_is_ec(obj))
+		flags |= ORF_EC;
+
+	/* The shard will be closed via RPC callback in dc_obj_shard_coll_punch(). */
+	return dc_obj_shard_coll_punch(shard, spa, epoch, args->flags, flags, map_ver,
+				       &auxi->map_ver_reply, task);
+
+out:
+	D_CDEBUG(rc == 0, DB_IO, DLOG_ERR,
+		 "DAOS_OBJ_RPC_COLL_PUNCH for "DF_OID" map_ver %u, task %p: "DF_RC"\n",
+		 DP_OID(obj->cob_md.omd_id), map_ver, task, DP_RC(rc));
+
+	obj_task_complete(task, rc);
+
+	return rc;
+}
+
+#define OBJ_COLL_PUNCH_THRESHOLD	DTX_COLL_TREE_TOPO
+
+static int
 dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 	     uint32_t map_ver, enum obj_rpc_opc opc, daos_obj_punch_t *api_args)
 {
 	struct obj_auxi_args	*obj_auxi;
+	struct dc_pool		*pool;
 	uint32_t		shard;
 	uint32_t		shard_cnt;
 	uint32_t		grp_cnt;
+	uint32_t		node_cnt;
 	int			rc;
-
-	if (opc == DAOS_OBJ_RPC_PUNCH && obj->cob_grp_nr > 1)
-		/* The object have multiple redundancy groups, use DAOS
-		 * internal transaction to handle that to guarantee the
-		 * atomicity of punch object.
-		 */
-		return dc_tx_convert(obj, opc, task);
 
 	rc = obj_task_init(task, opc, map_ver, api_args->th, &obj_auxi, obj);
 	if (rc != 0) {
@@ -6722,6 +6772,30 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 	if (obj_auxi->tx_convert) {
 		obj_auxi->tx_convert = 0;
 		return dc_tx_convert(obj, opc, task);
+	}
+
+	if (opc == DAOS_OBJ_RPC_PUNCH && obj->cob_grp_nr > 1) {
+		/*
+		 * We support object collective punch since release-2.4.1 (version 10).
+		 *
+		 * The object has multiple redundancy groups, use internal distributed
+		 * transaction to guarantee the atomicity of punch all object shards.
+		 */
+		if (dc_obj_proto_version <= 9)
+			D_GOTO(out_task, rc = -DER_NEED_TX);
+
+		pool = obj->cob_pool;
+		D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+		node_cnt = pool_map_node_nr(pool->dp_map);
+		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+
+		if (obj->cob_shards_nr <= OBJ_COLL_PUNCH_THRESHOLD &&
+		    obj->cob_shards_nr <= node_cnt)
+			D_GOTO(out_task, rc = -DER_NEED_TX);
+
+		obj_auxi->opc = DAOS_OBJ_RPC_COLL_PUNCH;
+
+		return dc_obj_coll_punch(task, obj, epoch, map_ver, api_args, obj_auxi);
 	}
 
 	if (opc == DAOS_OBJ_RPC_PUNCH) {
