@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -86,8 +86,7 @@ func (e *External) LookupUserID(uid uint32) (User, error) {
 // LookupGroupId is a wrapper for user.LookupGroupId.
 func (e *External) LookupGroupID(gid uint32) (*user.Group, error) {
 	gidStr := strconv.FormatUint(uint64(gid), 10)
-	return &user.Group{Gid: gidStr, Name: gidStr}, nil
-	//return user.LookupGroupId(gidStr)
+	return user.LookupGroupId(gidStr)
 }
 
 // Current is a wrapper for user.Current.
