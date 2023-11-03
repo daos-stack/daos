@@ -9,8 +9,8 @@ import site
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
-from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
-                                get_common_provider, get_fastest_interface)
+from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, VERBS_PROVIDER,
+                                NetworkException, get_common_provider, get_fastest_interface)
 from util.run_utils import run_remote
 
 
@@ -408,7 +408,10 @@ class TestEnvironment():
         if result.passed:
             # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
             logger.debug("  Excluding verbs provider for Omni-Path adapters")
-            supported.pop("verbs")
+            try:
+                supported.remove(VERBS_PROVIDER)
+            except ValueError:
+                pass
 
         # Detect all supported providers for this interface that are common to all of the hosts
         common_providers = get_common_provider(logger, hosts, self.interface, supported)

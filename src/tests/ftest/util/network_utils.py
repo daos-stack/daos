@@ -11,16 +11,22 @@ from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
 from util.run_utils import run_remote
 
+CXI_PROVIDER = "ofi+cxi"
+OPX_PROVIDER = "ofi+opx"
+VERBS_PROVIDER = "ofi+verbs;ofi_rxm"
+TCP_PROVIDER = "ofi+tcp;ofi_rxm"
+UCX_PROVIDER = "ucx+dc_x"
+# Order here is used to select default provider in enviroment_utils
 SUPPORTED_PROVIDERS = (
-    "ofi+cxi",
-    "ofi+verbs;ofi_rxm",
-    "ucx+dc_x",
-    "ofi+tcp;ofi_rxm",
-    "ofi+opx"
+    CXI_PROVIDER,
+    VERBS_PROVIDER,
+    UCX_PROVIDER,
+    TCP_PROVIDER,
+    OPX_PROVIDER
 )
 PROVIDER_ALIAS = {
-    "ofi+verbs": "ofi+verbs;ofi_rxm",
-    "ofi+tcp": "ofi+tcp;ofi_rxm"
+    "ofi+verbs": VERBS_PROVIDER,
+    "ofi+tcp": TCP_PROVIDER
 }
 
 
