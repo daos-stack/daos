@@ -1801,9 +1801,8 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 		scan_period = 0;
 
 		/*
-		 * Don't support hot plug for sys device yet. Assign default roles based on
-		 * operating mode (MD-on-SSD or PMem), roles will subsequently be updated based
-		 * on "old" device on "replace".
+		 * Assign default roles based on operating mode (MD-on-SSD or PMem), roles will
+		 * subsequently be updated based on "old" device on "replace".
 		 */
 
 		if (bio_nvme_configured(SMD_DEV_TYPE_META))
