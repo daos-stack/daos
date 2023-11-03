@@ -21,6 +21,11 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+var (
+	scanSmd        = listSmdDevices
+	getCtrlrHealth = getBioHealth
+)
+
 // newMntRet creates and populates SCM mount result.
 // Currently only used for format operations.
 func (ei *EngineInstance) newMntRet(mountPoint string, inErr error) *ctlpb.ScmMountResult {
@@ -157,6 +162,76 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 	return
 }
 
+func populateCtrlrHealth(ctx context.Context, ei *EngineInstance, smdUuid string, ctrlr *ctlpb.NvmeController) error {
+	state := ctrlr.DevState
+	if state == ctlpb.NvmeDevState_NEW {
+		ei.log.Noticef("skip fetching health stats on device %q in NEW state", ctrlr, state)
+		return nil
+	}
+
+	health, err := getCtrlrHealth(ctx, ei, &ctlpb.BioHealthReq{DevUuid: smdUuid})
+	if err != nil {
+		return errors.Wrapf(err, "retrieve health stats for %q (state %q)", ctrlr, state)
+	}
+	ctrlr.HealthStats = health
+
+	return nil
+}
+
+// Scan SMD devices over dRPC and reconstruct NVMe scan response from results.
+func scanEngineBdevsOverDrpc(ctx context.Context, ei *EngineInstance, pbReq *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
+	scanSmdResp, err := scanSmd(ctx, ei, &ctlpb.SmdDevReq{})
+	if err != nil {
+		return nil, errors.Wrap(err, "scan smd")
+	}
+
+	// Re-link SMD devices inside NVMe controller structures and populate scan response.
+
+	pbResp := ctlpb.ScanNvmeResp{
+		State: new(ctlpb.ResponseState),
+	}
+	seenCtrlrs := make(map[string]*ctlpb.NvmeController)
+
+	for _, sd := range scanSmdResp.Devices {
+		if sd.Ctrlr == nil {
+			return nil, errors.Errorf("smd %q has no ctrlr ref", sd.Uuid)
+		}
+
+		addr := sd.Ctrlr.PciAddr
+
+		if _, exists := seenCtrlrs[addr]; !exists {
+			c := new(ctlpb.NvmeController)
+			*c = *sd.Ctrlr
+			c.SmdDevices = nil
+			c.HealthStats = nil
+			seenCtrlrs[addr] = c
+			pbResp.Ctrlrs = append(pbResp.Ctrlrs, c)
+		}
+
+		c := seenCtrlrs[addr]
+		ei.log.Debugf("seen ctrlr: %+v", c.FwRev)
+
+		// Populate SMD (meta) if requested.
+		if pbReq.Meta {
+			nsd := new(ctlpb.SmdDevice)
+			*nsd = *sd
+			nsd.Ctrlr = nil
+			c.SmdDevices = append(c.SmdDevices, nsd)
+		}
+
+		// Populate health if requested.
+		if pbReq.Health && c.HealthStats == nil {
+			if err := populateCtrlrHealth(ctx, ei, sd.Uuid, c); err != nil {
+				return nil, err
+			}
+		}
+
+		// TODO: handle Basic request parameter.
+	}
+
+	return &pbResp, nil
+}
+
 // bdevScanEngine calls either in to the private engine storage provider to scan bdevs if engine process
 // is not started, otherwise dRPC is used to retrieve details from the online engine.
 func bdevScanEngine(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
@@ -193,22 +268,6 @@ func bdevScanEngine(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq
 	return bdevScanToProtoResp(ei.storage.ScanBdevs, req)
 }
 
-func smdGetHealth(ctx context.Context, ei *EngineInstance, dev *ctlpb.SmdDevice) error {
-	state := dev.Ctrlr.DevState
-	if state == ctlpb.NvmeDevState_NEW {
-		ei.log.Debugf("skip fetching health stats on device %q in NEW state", dev, state)
-		return nil
-	}
-
-	health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: dev.Uuid})
-	if err != nil {
-		return errors.Wrapf(err, "device %q, state %q", dev, state)
-	}
-	dev.Ctrlr.HealthStats = health
-
-	return nil
-}
-
 func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp_RankResp, error) {
 	ei, ok := engine.(*EngineInstance)
 	if !ok {
@@ -236,7 +295,7 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		return rResp, nil
 	}
 
-	listDevsResp, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
+	listDevsResp, err := listSmdDevices(ctx, ei, new(ctlpb.SmdDevReq))
 	if err != nil {
 		return nil, errors.Wrapf(err, "rank %d", engineRank)
 	}
@@ -260,7 +319,7 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 			continue // Skip health query if UUID doesn't match requested.
 		}
 		if pbReq.IncludeBioHealth {
-			if err := smdGetHealth(ctx, ei, dev); err != nil {
+			if err := populateCtrlrHealth(ctx, ei, dev.Uuid, dev.Ctrlr); err != nil {
 				return nil, err
 			}
 		}
