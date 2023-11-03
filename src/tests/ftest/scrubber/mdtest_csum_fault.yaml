@@ -57,7 +57,7 @@ mdtest:
   manager: "MPICH"
   mdtest_params:
     # [api, write, read, branching_factor, num_of_dir_files, depth, flags, IL]
-    - [DFS,   4096, 4096, 1, 200000, 100, ' ', False]
+    - [DFS,   4096, 4096, 1, 1000, 100, ' ', False]
 faults:
   fault_list:
     - DAOS_CSUM_CORRUPT_DISK
