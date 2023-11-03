@@ -221,11 +221,3 @@ message SmdManageResp {
 	}
 	repeated RankResp ranks = 1;		// List of per-rank responses
 }
-
-//message NvmeDevReq {}
-//
-//message NvmeDevResp {
-//	int32 status = 1;
-//	repeated NvmeController devices = 2;
-//}
-

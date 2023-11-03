@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,7 +68,6 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_POOL_UPGRADE           = 239,
 	DRPC_METHOD_MGMT_POOL_QUERY_TARGETS     = 240,
 	DRPC_METHOD_MGMT_LED_MANAGE             = 241,
-	DRPC_METHOD_MGMT_NVME_LIST_DEVS         = 242,
 
 	NUM_DRPC_MGMT_METHODS /* Must be last */
 };
