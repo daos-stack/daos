@@ -1330,15 +1330,14 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	bool                has_cond   = false;
 	bool                standalone = ioc->ic_cont->vc_pool->vp_sysdb;
 
-	D_DEBUG(DB_IO, DF_AKEY " fetch %s epr " DF_X64 "-" DF_X64 "\n",
-		DP_KEY(&iod->iod_name), iod->iod_type == DAOS_IOD_ARRAY ? "array" : "single",
-		ioc->ic_epr.epr_lo, ioc->ic_epr.epr_hi);
+	D_DEBUG(DB_IO, DF_AKEY " fetch %s epr " DF_X64 "-" DF_X64 "\n", DP_KEY(&iod->iod_name),
+		iod->iod_type == DAOS_IOD_ARRAY ? "array" : "single", ioc->ic_epr.epr_lo,
+		ioc->ic_epr.epr_hi);
 
 	if (is_array) {
 		if (iod->iod_nr == 0 || iod->iod_recxs == NULL) {
 			D_ASSERT(iod->iod_nr == 0 && iod->iod_recxs == NULL);
-			D_DEBUG(DB_TRACE,
-				DF_AKEY " fetch array bypassed - NULL iod_recxs.\n",
+			D_DEBUG(DB_TRACE, DF_AKEY " fetch array bypassed - NULL iod_recxs.\n",
 				DP_KEY(&iod->iod_name));
 			return 0;
 		}
@@ -1352,8 +1351,8 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	if (stop_check(ioc, VOS_OF_COND_AKEY_FETCH, iod, &rc, true)) {
 		if (rc == 0 && !ioc->ic_read_ts_only)
 			iod_empty_sgl(ioc, ioc->ic_sgl_at);
-		VOS_TX_LOG_FAIL(rc, "Failed to get " DF_AKEY " " DF_RC "\n",
-				DP_KEY(&iod->iod_name), DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Failed to get " DF_AKEY " " DF_RC "\n", DP_KEY(&iod->iod_name),
+				DP_RC(rc));
 		goto out;
 	}
 
@@ -1811,8 +1810,8 @@ update_value(struct vos_io_context *ioc, daos_iod_t *iod, struct dcs_csum_info *
 
 		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc, minor_epc);
 		if (rc)
-			DL_ERROR(rc,  DF_AKEY " update, akey_update_single failed",
-				DP_KEY(&iod->iod_name));
+			DL_ERROR(rc, DF_AKEY " update, akey_update_single failed",
+				 DP_KEY(&iod->iod_name));
 		return rc;
 	}
 
