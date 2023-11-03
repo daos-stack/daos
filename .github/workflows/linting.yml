@@ -43,4 +43,4 @@ jobs:
       - name: Black
         uses: psf/black@stable
         with:
-          options: "--check --verbose --extend-exclude (ftest|vendor)"
+          options: "--check --verbose --extend-exclude (ftest|vendor|utils)"

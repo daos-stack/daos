@@ -12,9 +12,10 @@ modified_re = re.compile(r'^(?:M|A)(\s+)(?P<name>.*)')
 
 def rebasing():
     """Determines if the current operation is a rebase"""
-    with subprocess.Popen(
-        ["git", "branch"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    ) as process:
+    with subprocess.Popen(["git", "branch"],
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE) as process:
+
         stdout = process.communicate()[0].decode()
         return stdout.split('\n', maxsplit=1)[0].startswith("* (no branch, rebasing")
 
@@ -34,10 +35,8 @@ def submodule_check(modname, msg_file):
             with open(msg_file, 'r', encoding='utf-8') as file:
                 lines = file.readlines()
 
-            message = (
-                f'# WARNING *** This patch modifies the {modname} reference.  '
-                'Are you sure this is intended? *** WARNING'
-            )
+            message = f'# WARNING *** This patch modifies the {modname} reference.  ' \
+                      'Are you sure this is intended? *** WARNING'
 
             if lines[0] != message:
                 lines = [message, "\n", "\n"] + lines
@@ -48,12 +47,12 @@ def submodule_check(modname, msg_file):
 
 def main(msg_file):
     """main"""
-    for line in (
-        subprocess.check_output(['git', 'submodule', 'status']).decode().rstrip().split('\n')
-    ):
+    for line in subprocess.check_output(['git', 'submodule',
+                                        'status']).decode().rstrip().split('\n'):
         if line:
             submodule_check(line[1:].split(' ')[1], msg_file)
 
 
 if __name__ == '__main__':
+
     main(sys.argv[1])
