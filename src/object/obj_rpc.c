@@ -611,6 +611,7 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 {
 	int		rc;
 	int		i;
+	int		j;
 
 	rc = crt_proc_uint16_t(proc, proc_op, &dcsr->dcsr_opc);
 	if (unlikely(rc))
@@ -703,8 +704,14 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
 				rc = crt_proc_crt_bulk_t(proc, proc_op,
 							 &dcu->dcu_bulks[i]);
-				if (unlikely(rc))
+				if (unlikely(rc)) {
+					if (DECODING(proc_op)) {
+						for (j = 0; j < i; j++)
+							crt_proc_crt_bulk_t(proc, CRT_PROC_FREE,
+									    &dcu->dcu_bulks[j]);
+					}
 					D_GOTO(out, rc);
+				}
 			}
 		} else if (!(dcu->dcu_flags & ORF_EMPTY_SGL)) {
 			if (DECODING(proc_op)) {
@@ -716,8 +723,14 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 			for (i = 0; i < dcsr->dcsr_nr; i++) {
 				rc = crt_proc_d_sg_list_t(proc, proc_op,
 							  &dcu->dcu_sgls[i]);
-				if (unlikely(rc))
+				if (unlikely(rc)) {
+					if (DECODING(proc_op)) {
+						for (j = 0; j < i; j++)
+							crt_proc_d_sg_list_t(proc, CRT_PROC_FREE,
+									     &dcu->dcu_sgls[j]);
+					}
 					D_GOTO(out, rc);
+				}
 			}
 		}
 
@@ -740,8 +753,14 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 		for (i = 0; i < dcsr->dcsr_nr; i++) {
 			rc = crt_proc_daos_key_t(proc, proc_op,
 						 &dcp->dcp_akeys[i]);
-			if (unlikely(rc))
+			if (unlikely(rc)) {
+				if (DECODING(proc_op)) {
+					for (j = 0; j < i; j++)
+						crt_proc_daos_key_t(proc, CRT_PROC_FREE,
+								    &dcp->dcp_akeys[j]);
+				}
 				D_GOTO(out, rc);
+			}
 		}
 
 		break;
@@ -761,8 +780,14 @@ crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 		for (i = 0; i < dcsr->dcsr_nr; i++) {
 			rc = crt_proc_daos_iod_t(proc, proc_op,
 						 &dcr->dcr_iods[i]);
-			if (unlikely(rc))
+			if (unlikely(rc)) {
+				if (DECODING(proc_op)) {
+					for (j = 0; j < i; j++)
+						crt_proc_daos_iod_t(proc, CRT_PROC_FREE,
+								    &dcr->dcr_iods[j]);
+				}
 				D_GOTO(out, rc);
+			}
 		}
 
 		break;
@@ -877,6 +902,7 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 {
 	int		rc;
 	int		i;
+	int		j;
 
 	rc = crt_proc_uint32_t(proc, proc_op, &dcs->dcs_type);
 	if (unlikely(rc))
@@ -902,8 +928,15 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 
 		for (i = 0; i < dcs->dcs_nr; i++) {
 			rc = crt_proc_struct_daos_cpd_sub_head(proc, proc_op, &dcsh[i], true);
-			if (unlikely(rc))
+			if (unlikely(rc)) {
+				if (DECODING(proc_op)) {
+					for (j = 0; j < i; j++)
+						crt_proc_struct_daos_cpd_sub_head(proc,
+										  CRT_PROC_FREE,
+										  &dcsh[j], true);
+				}
 				D_GOTO(out, rc);
+			}
 		}
 
 		break;
@@ -929,11 +962,17 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 
 		for (i = 0; i < dcs->dcs_nr; i++) {
-			rc = crt_proc_struct_daos_cpd_sub_req(proc, proc_op,
-							      &dcsr[i],
-							      with_oid);
-			if (unlikely(rc))
+			rc = crt_proc_struct_daos_cpd_sub_req(proc, proc_op, &dcsr[i], with_oid);
+			if (unlikely(rc)) {
+				if (DECODING(proc_op)) {
+					for (j = 0; j < i; j++)
+						crt_proc_struct_daos_cpd_sub_req(proc,
+										 CRT_PROC_FREE,
+										 &dcsr[j],
+										 with_oid);
+				}
 				D_GOTO(out, rc);
+			}
 		}
 
 		break;
@@ -952,10 +991,16 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 
 		for (i = 0; i < dcs->dcs_nr; i++) {
-			rc = crt_proc_struct_daos_cpd_disp_ent(proc, proc_op,
-							       &dcde[i]);
-			if (unlikely(rc))
+			rc = crt_proc_struct_daos_cpd_disp_ent(proc, proc_op, &dcde[i]);
+			if (unlikely(rc)) {
+				if (DECODING(proc_op)) {
+					for (j = 0; j < i; j++)
+						crt_proc_struct_daos_cpd_disp_ent(proc,
+										  CRT_PROC_FREE,
+										  &dcde[j]);
+				}
 				D_GOTO(out, rc);
+			}
 		}
 
 		break;
@@ -974,10 +1019,15 @@ crt_proc_struct_daos_cpd_sg(crt_proc_t proc, crt_proc_op_t proc_op,
 		}
 
 		for (i = 0; i < dcs->dcs_nr; i++) {
-			rc = crt_proc_struct_daos_shard_tgt(proc, proc_op,
-							    &dst[i]);
-			if (unlikely(rc))
+			rc = crt_proc_struct_daos_shard_tgt(proc, proc_op, &dst[i]);
+			if (unlikely(rc)) {
+				if (DECODING(proc_op)) {
+					for (j = 0; j < i; j++)
+						crt_proc_struct_daos_shard_tgt(proc, CRT_PROC_FREE,
+									       &dst[j]);
+				}
 				D_GOTO(out, rc);
+			}
 		}
 
 		break;
@@ -1024,6 +1074,125 @@ out:
 	return rc;
 }
 
+static int
+crt_proc_struct_daos_coll_shard(crt_proc_t proc, crt_proc_op_t proc_op, struct daos_coll_shard *dcs)
+{
+	int	rc = 0;
+	int	i;
+
+	if (FREEING(proc_op)) {
+		if (dcs->dcs_buf != &dcs->dcs_inline)
+			D_FREE(dcs->dcs_buf);
+		return 0;
+	}
+
+	rc = crt_proc_uint16_t(proc, proc_op, &dcs->dcs_nr);
+	if (unlikely(rc))
+		return rc;
+
+	/* dct_shards is sparse array, skip the hole. */
+	if (dcs->dcs_nr == 0)
+		return 0;
+
+	rc = crt_proc_uint16_t(proc, proc_op, &dcs->dcs_cap);
+	if (unlikely(rc))
+		return rc;
+
+	if (DECODING(proc_op))
+		dcs->dcs_cap = dcs->dcs_nr;
+
+	if (dcs->dcs_nr == 1) {
+		rc = crt_proc_uint32_t(proc, proc_op, &dcs->dcs_inline);
+		if (unlikely(rc))
+			return rc;
+
+		if (DECODING(proc_op))
+			dcs->dcs_buf = &dcs->dcs_inline;
+
+		return 0;
+	}
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_ARRAY(dcs->dcs_buf, dcs->dcs_nr);
+		if (dcs->dcs_buf == NULL)
+			return -DER_NOMEM;
+	}
+
+	for (i = 0; i < dcs->dcs_nr; i++) {
+		rc = crt_proc_uint32_t(proc, proc_op, &dcs->dcs_buf[i]);
+		if (unlikely(rc))
+			goto out;
+	}
+
+out:
+	if (unlikely(rc) && DECODING(proc_op) && dcs->dcs_buf != &dcs->dcs_inline)
+		D_FREE(dcs->dcs_buf);
+	return rc;
+}
+
+static int
+crt_proc_struct_daos_coll_target(crt_proc_t proc, crt_proc_op_t proc_op, struct daos_coll_target *dct)
+{
+	int	size;
+	int	rc;
+	int	i;
+	int	j;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &dct->dct_rank);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint8_t(proc, proc_op, &dct->dct_bitmap_sz);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint8_t(proc, proc_op, &dct->dct_padding);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint16_t(proc, proc_op, &dct->dct_shard_nr);
+	if (unlikely(rc))
+		return rc;
+
+	size = dct->dct_bitmap_sz << 3;
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_ARRAY(dct->dct_bitmap, dct->dct_bitmap_sz);
+		if (dct->dct_bitmap == NULL)
+			return -DER_NOMEM;
+
+		D_ALLOC_ARRAY(dct->dct_shards, size);
+		if (dct->dct_shards == NULL)
+			goto out;
+	}
+
+	rc = crt_proc_memcpy(proc, proc_op, dct->dct_bitmap, dct->dct_bitmap_sz);
+	if (unlikely(rc))
+		goto out;
+
+	for (i = 0; i < size; i++) {
+		rc = crt_proc_struct_daos_coll_shard(proc, proc_op, &dct->dct_shards[i]);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op)) {
+				for (j = 0; j < i; j++)
+					crt_proc_struct_daos_coll_shard(proc, CRT_PROC_FREE,
+									&dct->dct_shards[j]);
+			}
+			goto out;
+		}
+	}
+
+	if (FREEING(proc_op))
+		D_FREE(dct->dct_shards);
+
+out:
+	if (unlikely(rc) && DECODING(proc_op)) {
+		D_FREE(dct->dct_bitmap);
+		D_FREE(dct->dct_shards);
+	}
+	return rc;
+}
+
 CRT_RPC_DEFINE(obj_rw, DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 CRT_RPC_DEFINE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 CRT_RPC_DEFINE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
@@ -1035,6 +1204,7 @@ CRT_RPC_DEFINE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 CRT_RPC_DEFINE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 CRT_RPC_DEFINE(obj_key2anchor, DAOS_ISEQ_OBJ_KEY2ANCHOR, DAOS_OSEQ_OBJ_KEY2ANCHOR)
 CRT_RPC_DEFINE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUNCH)
+CRT_RPC_DEFINE(obj_coll_query, DAOS_ISEQ_OBJ_COLL_QUERY, DAOS_OSEQ_OBJ_COLL_QUERY)
 
 /* Define for obj_proto_rpc_fmt[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
@@ -1115,6 +1285,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_COLL_PUNCH:
 		((struct obj_coll_punch_out *)reply)->ocpo_ret = status;
 		break;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		((struct obj_coll_query_out *)reply)->ocqo_ret = status;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -1156,6 +1329,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 		return ((struct obj_ec_rep_out *)reply)->er_status;
 	case DAOS_OBJ_RPC_COLL_PUNCH:
 		return ((struct obj_coll_punch_out *)reply)->ocpo_ret;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		return ((struct obj_coll_query_out *)reply)->ocqo_ret;
 	default:
 		D_ASSERT(0);
 	}
@@ -1208,6 +1383,9 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_COLL_PUNCH:
 		((struct obj_coll_punch_out *)reply)->ocpo_map_version = map_version;
 		break;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		((struct obj_coll_query_out *)reply)->ocqo_map_version = map_version;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -1245,6 +1423,8 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 		return ((struct obj_cpd_out *)reply)->oco_map_version;
 	case DAOS_OBJ_RPC_COLL_PUNCH:
 		return ((struct obj_coll_punch_out *)reply)->ocpo_map_version;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		return ((struct obj_coll_query_out *)reply)->ocqo_map_version;
 	default:
 		D_ASSERT(0);
 	}
