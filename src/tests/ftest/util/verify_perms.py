@@ -15,9 +15,9 @@ from functools import partial
 from itertools import product
 from multiprocessing import Process, Queue  # MUST be a multiprocessing Queue
 
-from logger_utils import get_console_handler
-from run_utils import RunException, run_local
-from user_utils import get_user_uid_gid
+from util.logger_utils import get_console_handler
+from util.run_utils import RunException, run_local
+from util.user_utils import get_user_uid_gid
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
