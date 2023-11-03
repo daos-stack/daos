@@ -14,8 +14,9 @@ import "C"
 import (
 	"fmt"
 
-	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
 	"github.com/pkg/errors"
+
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
 )
 
 func dfsError(rc C.int) error {

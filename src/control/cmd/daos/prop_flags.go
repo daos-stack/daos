@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )

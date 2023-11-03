@@ -21,8 +21,8 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
-	apiMocks "github.com/daos-stack/daos/src/control/lib/daos/api/mocks"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
+	apiMocks "github.com/daos-stack/daos/src/control/lib/daos/client/mocks"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 

@@ -14,8 +14,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/daos"
-	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
+	"github.com/daos-stack/daos/src/control/lib/dfs"
 )
 
 /*
@@ -181,7 +181,7 @@ func (f *OidFlag) UnmarshalFlag(fv string) error {
 
 type ConsModeFlag struct {
 	Set  bool
-	Mode daos.DFSConsistencyMode
+	Mode dfs.ConsistencyMode
 }
 
 func (f *ConsModeFlag) String() string {

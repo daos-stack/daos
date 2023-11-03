@@ -18,9 +18,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	"github.com/daos-stack/daos/src/control/lib/daos/api"
-	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
-	apiMocks "github.com/daos-stack/daos/src/control/lib/daos/api/mocks"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
+	apiMocks "github.com/daos-stack/daos/src/control/lib/daos/client/mocks"
+	"github.com/daos-stack/daos/src/control/lib/dfs"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -264,10 +264,10 @@ func objClass(t *testing.T, str string) daosAPI.ObjectClass {
 	return cls
 }
 
-func mockApiCtx(t *testing.T, cfg *api.MockApiClientConfig) context.Context {
+func mockApiCtx(t *testing.T, cfg *daosAPI.MockApiClientConfig) context.Context {
 	t.Helper()
 
-	ctx, err := api.MockApiClientContext(test.Context(t), cfg)
+	ctx, err := daosAPI.MockApiClientContext(test.Context(t), cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +290,7 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 	poolLabel := "poolLabel"
 	contUUID := test.MockPoolUUID(2)
 	contLabel := "contLabel"
-	consMode := daos.DFSConsistencyModeBalanced
+	consMode := dfs.ConsistencyModeBalanced
 	contHints := "dir:single,file:max"
 	defOClass := objClass(t, "SX")
 	dirOClass := objClass(t, "RP_2G1")
@@ -443,7 +443,7 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 		},
 		"invalid pool path": {
 			args: makeArgs(baseArgs, "--path", "/path", contLabel),
-			ctx: mockApiCtx(t, &api.MockApiClientConfig{
+			ctx: mockApiCtx(t, &daosAPI.MockApiClientConfig{
 				ReturnCodeMap: map[string]int{
 					"dfuse_open": int(syscall.ENOENT),
 				},
@@ -452,7 +452,7 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 		},
 		"valid pool path": {
 			args: makeArgs(baseArgs, "--path", "/path", contLabel),
-			ctx: mockApiCtx(t, &api.MockApiClientConfig{
+			ctx: mockApiCtx(t, &daosAPI.MockApiClientConfig{
 				ConnectedPool: poolUUID,
 			}),
 			expInfo: &daosAPI.ContainerInfo{
@@ -497,7 +497,7 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 			}
 
 			cmpOpts := []cmp.Option{
-				cmp.Comparer(func(a, b api.ContainerPropertySet) bool {
+				cmp.Comparer(func(a, b daosAPI.ContainerPropertySet) bool {
 					return a.String() == b.String()
 				}),
 			}
