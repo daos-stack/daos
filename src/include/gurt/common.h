@@ -337,29 +337,25 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 		d_errno2der(_rc);                                                                  \
 	})
 
-#define __D_PTHREAD_TIMED(fn, fn2, x)                                                              \
+#define __D_PTHREAD_TIMED(fn, x)                                                                   \
 	({                                                                                         \
-		int _rc;                                                                           \
-		_rc = fn((x));                                                                     \
-		if (_rc == EBUSY) {                                                                \
-			int             delay1 = 0;                                                \
-			int             delay2 = 1;                                                \
-			int             f      = delay1 + delay2;                                  \
-			int             c      = f;                                                \
-			struct timespec _wait  = {};                                               \
+		int             _rc;                                                               \
+		int             _delay1 = 0;                                                       \
+		int             _delay2 = 1;                                                       \
+		int             _f      = _delay1 + _delay2;                                       \
+		int             _c      = _f;                                                      \
+		struct timespec _wait   = {};                                                      \
+		clock_gettime(CLOCK_REALTIME, &_wait);                                             \
+		_wait.tv_sec += _f;                                                                \
+		while ((_rc = fn((x), &_wait)) == ETIMEDOUT) {                                     \
+			_delay1 = _delay2;                                                         \
+			_delay2 = _f;                                                              \
+			_c += _f;                                                                  \
+			_f = _delay1 + _delay2;                                                    \
+			D_CDEBUG(_c > 1, DLOG_WARN, DB_MEM,                                        \
+				 #fn "(%p) still held after %d seconds", x, _c);                   \
 			clock_gettime(CLOCK_REALTIME, &_wait);                                     \
-			_wait.tv_sec += f;                                                         \
-			D_DEBUG(DB_MEM, #fn "(%p) held, waiting", x);                              \
-			while ((_rc = fn2((x), &_wait)) == ETIMEDOUT) {                            \
-				delay1 = delay2;                                                   \
-				delay2 = f;                                                        \
-				c += f;                                                            \
-				f = delay1 + delay2;                                               \
-				D_CDEBUG(c > 1, DLOG_WARN, DB_MEM,                                 \
-					 #fn2 "(%p) still held after %d seconds", x, c);           \
-				clock_gettime(CLOCK_REALTIME, &_wait);                             \
-				_wait.tv_sec += f;                                                 \
-			}                                                                          \
+			_wait.tv_sec += _f;                                                        \
 		}                                                                                  \
 		D_ASSERTF(_rc == 0, #fn "(%p) rc=%d %s\n", x, _rc, strerror(_rc));                 \
 		d_errno2der(_rc);                                                                  \
@@ -405,11 +401,9 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 
 #else
 
-#define D_MUTEX_LOCK(x) __D_PTHREAD_TIMED(pthread_mutex_trylock, pthread_mutex_timedlock, x)
-#define D_RWLOCK_WRLOCK(x)                                                                         \
-	__D_PTHREAD_TIMED(pthread_rwlock_trywrlock, pthread_rwlock_timedwrlock, x)
-#define D_RWLOCK_RDLOCK(x)                                                                         \
-	__D_PTHREAD_TIMED(pthread_rwlock_tryrdlock, pthread_rwlock_timedrdlock, x)
+#define D_MUTEX_LOCK(x)    __D_PTHREAD_TIMED(pthread_mutex_timedlock, x)
+#define D_RWLOCK_WRLOCK(x) __D_PTHREAD_TIMED(pthread_rwlock_timedwrlock, x)
+#define D_RWLOCK_RDLOCK(x) __D_PTHREAD_TIMED(pthread_rwlock_timedrdlock, x)
 
 #endif
 
