@@ -353,8 +353,9 @@ struct bio_dev_info {
 	uint32_t		bdi_tgt_cnt;
 	int		       *bdi_tgts;
 	char		       *bdi_traddr;
-	uint32_t		bdi_dev_type;	/* reserved */
-	uint32_t		bdi_dev_roles;	/* reserved */
+	uint32_t                bdi_dev_type;
+	uint32_t                bdi_dev_roles;
+	struct ctrlr_t         *bdi_ctrlr; /* defined in control.h */
 };
 
 static inline void
@@ -364,6 +365,8 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
 		D_FREE(dev_info->bdi_tgts);
 	if (dev_info->bdi_traddr != NULL)
 		D_FREE(dev_info->bdi_traddr);
+	if (dev_info->bdi_ctrlr != NULL)
+		D_FREE(dev_info->bdi_ctrlr);
 	D_FREE(dev_info);
 }
 

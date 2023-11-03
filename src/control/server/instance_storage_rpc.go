@@ -209,9 +209,8 @@ func scanEngineBdevsOverDrpc(ctx context.Context, ei *EngineInstance, pbReq *ctl
 		}
 
 		c := seenCtrlrs[addr]
-		ei.log.Debugf("seen ctrlr: %+v", c.FwRev)
 
-		// Populate SMD (meta) if requested.
+		// Populate SMD (nvme-meta) if requested.
 		if pbReq.Meta {
 			nsd := new(ctlpb.SmdDevice)
 			*nsd = *sd
@@ -228,6 +227,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, ei *EngineInstance, pbReq *ctl
 
 		// TODO: handle Basic request parameter.
 	}
+	ei.log.Debugf("seen ctrlrs: %+v", seenCtrlrs)
 
 	return &pbResp, nil
 }

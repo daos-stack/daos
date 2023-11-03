@@ -9,8 +9,7 @@
 
 #include <stdbool.h>
 #include <spdk/nvme_intel.h>
-
-#define BUFLEN 1024
+#include <daos_srv/control.h>
 
 /**
  * \brief NVMECONTROL return codes
@@ -37,39 +36,15 @@ enum nvme_control_status_code {
 };
 
 /**
- * \brief NVMe controller details
- */
-struct ctrlr_t {
-	char				 model[BUFLEN];
-	char				 serial[BUFLEN];
-	char				 pci_addr[BUFLEN];
-	char				 fw_rev[BUFLEN];
-	char				 pci_type[BUFLEN];
-	int				 socket_id;
-	struct ns_t			*nss;
-	struct nvme_stats		*stats;
-	struct ctrlr_t			*next;
-};
-
-/**
- * \brief NVMe namespace details
- */
-struct ns_t {
-	uint32_t	id;
-	uint64_t	size;
-	struct ns_t    *next;
-};
-
-/**
  * \brief Result struct for namespace wipe operation containing return code,
  * namespace id, parent controller pci address, info message and link to next
  * list element.
  */
 struct wipe_res_t {
-	char			 ctrlr_pci_addr[BUFLEN];
+	char                     ctrlr_pci_addr[NVME_DETAIL_BUFLEN];
 	uint32_t		 ns_id;
 	int			 rc;
-	char			 info[BUFLEN];
+	char                     info[NVME_DETAIL_BUFLEN];
 	struct wipe_res_t	*next;
 };
 
@@ -81,7 +56,7 @@ struct ret_t {
 	struct ctrlr_t		*ctrlrs;
 	struct wipe_res_t	*wipe_results;
 	int			 rc;
-	char			 info[BUFLEN];
+	char                     info[NVME_DETAIL_BUFLEN];
 };
 
 struct ctrlr_entry {

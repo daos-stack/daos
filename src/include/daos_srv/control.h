@@ -123,6 +123,32 @@ struct nvme_stats {
 	uint64_t    host_bytes_written; /* Host bytes written, 1count=32MiB) */
 };
 
+#define NVME_DETAIL_BUFLEN 1024
+
+/**
+ * NVMe controller details.
+ */
+struct ctrlr_t {
+	char               model[NVME_DETAIL_BUFLEN];
+	char               serial[NVME_DETAIL_BUFLEN];
+	char               pci_addr[NVME_DETAIL_BUFLEN];
+	char               fw_rev[NVME_DETAIL_BUFLEN];
+	char               pci_type[NVME_DETAIL_BUFLEN];
+	int                socket_id;
+	struct ns_t       *nss;
+	struct nvme_stats *stats;
+	struct ctrlr_t    *next;
+};
+
+/**
+ * NVMe namespace details.
+ */
+struct ns_t {
+	uint32_t     id;
+	uint64_t     size;
+	struct ns_t *next;
+};
+
 /**
  * Parse input string and output ASCII as required by the NVMe spec.
  *

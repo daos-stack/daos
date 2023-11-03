@@ -19,15 +19,6 @@
 #define LED_STATE_NAME(s) (ctl__led_state__descriptor.values[s].name)
 #define LED_ACTION_NAME(a) (ctl__led_action__descriptor.values[a].name)
 
-struct led_opts {
-	struct spdk_pci_addr	pci_addr;
-	bool			all_devices;
-	bool			finished;
-	Ctl__LedAction		action;
-	Ctl__LedState		led_state;
-	int			status;
-};
-
 static int
 revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 {
@@ -597,6 +588,73 @@ find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
 	return NULL;
 }
 
+struct ctrlr_opts {
+	struct spdk_pci_addr pci_addr;
+	bool                 finished;
+	struct ctrlr_t      *ctrlr;
+	int                  status;
+};
+
+static void
+get_ctrlr_details(void *ctx, struct spdk_pci_device *pci_device)
+{
+	struct ctrlr_opts *opts = ctx;
+
+	if (opts->status != 0)
+		return;
+	if (opts->finished)
+		return;
+
+	if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
+		return;
+	opts->finished = true;
+
+	D_DEBUG(DB_MGMT, "getting controller details\n");
+	if (opts->ctrlr == NULL) {
+		D_ERROR("ctrlr in opts not initialized\n");
+		opts->status = -DER_INVAL;
+	} else {
+		opts->ctrlr->socket_id = spdk_pci_device_get_socket_id(pci_device);
+	}
+
+	return;
+}
+
+static int
+alloc_ctrlr_info(struct bio_xs_context *xs_ctxt, struct bio_dev_info *info)
+{
+	struct spdk_pci_addr pci_addr;
+	struct ctrlr_opts    opts = {0};
+	int                  rc;
+
+	D_ASSERT(is_init_xstream(xs_ctxt));
+
+	D_ALLOC_PTR(info->bdi_ctrlr);
+	if (info->bdi_ctrlr == NULL)
+		return -DER_NOMEM;
+
+	rc = spdk_pci_addr_parse(&pci_addr, info->bdi_traddr);
+	if (rc != 0) {
+		D_ERROR("Unable to parse PCI address for device %s (%s)\n", info->bdi_traddr,
+			spdk_strerror(-rc));
+		return -DER_INVAL;
+	}
+
+	/* Init context to be used by led_device_action() */
+	opts.finished = false;
+	opts.status   = 0;
+	opts.pci_addr = pci_addr;
+	opts.ctrlr    = info->bdi_ctrlr;
+	if (opts.ctrlr == NULL) {
+		D_ERROR("ctrlr in opts not inited\n");
+		return -DER_INVAL;
+	}
+
+	spdk_pci_for_each_device(&opts, get_ctrlr_details);
+
+	return opts.status;
+}
+
 int
 bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 {
@@ -637,6 +695,13 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 			b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
 		if (d_bdev->bb_faulty)
 			b_info->bdi_flags |= NVME_DEV_FL_FAULTY;
+
+		rc = alloc_ctrlr_info(xs_ctxt, b_info);
+		if (rc) {
+			DL_ERROR(rc, "Failed to get ctrlr details");
+			goto out;
+		}
+
 		d_list_add_tail(&b_info->bdi_link, dev_list);
 		(*dev_cnt)++;
 
@@ -683,6 +748,15 @@ out:
 
 	return rc;
 }
+
+struct led_opts {
+	struct spdk_pci_addr pci_addr;
+	bool                 all_devices;
+	bool                 finished;
+	Ctl__LedAction       action;
+	Ctl__LedState        led_state;
+	int                  status;
+};
 
 static void
 led_device_action(void *ctx, struct spdk_pci_device *pci_device)
