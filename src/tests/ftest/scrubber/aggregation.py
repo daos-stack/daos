@@ -27,14 +27,12 @@ class TestScrubberEvictWithAggregation(TestWithScrubber):
         :avocado: tags=scrubber,faults
         :avocado: tags=TestScrubberEvictWithAggregation,test_target_eviction_during_aggregation
         """
-        pool_prop = self.params.get("properties", '/run/pool/*')
-        cont_prop = self.params.get("properties", '/run/container/*')
         initial_metrics = {}
         final_metrics = {}
-        self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
-        self.dmg_cmd.pool_query(self.pool.identifier)
+        self.add_pool()
         # Disable the aggregation on the pool.
         self.pool.set_property("reclaim", "disabled")
+        self.add_container(self.pool)
         # Pool and Containers are already created. Just run the IOR.
         self.run_ior_with_pool(create_pool=False, create_cont=False)
         # Enable the aggregation on the pool.

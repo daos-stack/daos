@@ -19,7 +19,7 @@ class TestScrubberEvictWithSnapshot(TestWithScrubber):
     def test_target_eviction_during_snapshot(self):
         """JIRA ID: DAOS-7333
 
-        - Take a container snapshot while the csum faults 
+        - Take a container snapshot while the csum faults
         are generated and target is evicted eventually.
 
         :avocado: tags=all,pr,daily_regression
@@ -37,7 +37,7 @@ class TestScrubberEvictWithSnapshot(TestWithScrubber):
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         # Wait for a minute for the scrubber to take action and evict target
         # after corruption threshold reached.
-        # Take a snap-shot after 15 seconds while the csum faults are injected. 
+        # Take a snap-shot after 15 seconds while the csum faults are injected.
         time.sleep(15)
         self.container.create_snap()
         time.sleep(45)
