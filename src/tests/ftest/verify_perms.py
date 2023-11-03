@@ -15,6 +15,7 @@ from functools import partial
 from itertools import product
 from multiprocessing import Process, Queue  # MUST be a multiprocessing Queue
 
+# pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
 from util.run_utils import RunException, run_local
 from util.user_utils import get_user_uid_gid
