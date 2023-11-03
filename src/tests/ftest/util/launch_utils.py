@@ -575,14 +575,14 @@ class TestRunner():
             # Save the group's gid
             if group and group not in group_gid:
                 try:
-                    group_gid[group] = self._query_create_group(clients, group, create)
+                    group_gid[group] = self._query_create_group(logger, clients, group, create)
                 except LaunchException as error:
                     self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
                     return 128
 
             gid = group_gid.get(group, None)
             try:
-                self._query_create_user(clients, user, gid, create)
+                self._query_create_user(logger, clients, user, gid, create)
             except LaunchException as error:
                 self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
                 return 128
