@@ -7,8 +7,6 @@
  * This file is part of CaRT. It implements message logging system.
  */
 
-#define DLOG_MUTEX
-
 #include <fcntl.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -21,9 +19,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#ifdef DLOG_MUTEX
 #include <pthread.h>
-#endif
 
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -87,9 +83,7 @@ struct d_log_state {
 	bool rank_appended;	/* flag to indicate if rank is already appended */
 };
 
-#ifdef DLOG_MUTEX
-pthread_mutex_t clogmux = PTHREAD_MUTEX_INITIALIZER; /* protect clog in threaded env */
-#endif
+static pthread_mutex_t clogmux = PTHREAD_MUTEX_INITIALIZER; /* protect clog in threaded env */
 
 struct cache_entry {
 	int		*ce_cache;
@@ -112,13 +106,8 @@ static const char        *default_fac0name = "CLOG";
 /* whether we should merge log and stderr */
 static bool               merge_stderr;
 
-#ifdef DLOG_MUTEX
 #define clog_lock()   pthread_mutex_lock(&clogmux)
 #define clog_unlock() pthread_mutex_unlock(&clogmux)
-#else
-#define clog_lock()
-#define clog_unlock()
-#endif
 
 static int d_log_write(char *buf, int len, bool flush);
 static const char *clog_pristr(int);
@@ -130,9 +119,9 @@ static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
 /**
  * clog_pristr: convert priority to 4 byte symbolic name.
  *
- * \param pri [IN]		the priority to convert to a string
+ * \param[in] pri	the priority to convert to a string
  *
- * \return			the string (symbolic name) of the priority
+ * \return		the string (symbolic name) of the priority
  */
 static const char *clog_pristr(int pri)
 {
@@ -150,9 +139,9 @@ static const char *clog_pristr(int pri)
  * clog_setnfac: set the number of facilities allocated (including default
  * to a given value).   clog must be open for this to do anything.
  * we set the default name for facility 0 here.
- * caller must hold clog_lock.
+ * caller must hold clogmux.
  *
- * \param n [IN]	the number of facilities to allocate space for now.
+ * \param[in] n		the number of facilities to allocate space for now.
  *
  * \return		zero on success, -1 on error.
  */
@@ -163,7 +152,7 @@ static int clog_setnfac(int n)
 
 	/*
 	 * no need to check d_log_xst.tag to see if clog is open or not,
-	 * since caller holds clog_lock already it must be ok.
+	 * since caller holds clogmux already it must be ok.
 	 */
 
 	/* hmm, already done */
@@ -257,7 +246,7 @@ reset_caches(bool lock_held)
 void
 d_log_add_cache(int *cache, int nr)
 {
-	struct cache_entry	*ce;
+	struct cache_entry *ce;
 
 	/* Can't use D_ALLOC yet */
 	ce = malloc(sizeof(*ce));
@@ -331,13 +320,6 @@ static void dlog_cleanout(void)
 				      struct cache_entry, ce_link)))
 		free(ce);
 	clog_unlock();
-#ifdef DLOG_MUTEX
-	/* XXX
-	 * do not destroy mutex to allow correct execution of dlog_sync()
-	 * which as been registered using atexit() and to be run upon exit()
-	 */
-	/* pthread_mutex_destroy(&clogmux); */
-#endif
 }
 
 static __thread int	 pre_err;
@@ -559,7 +541,7 @@ d_log_sync(void)
  * we vsnprintf the message into a holding buffer to format it.  then we
  * send it to all target output logs.  the holding buffer is set to
  * DLOG_TBSIZ, if the message is too long it will be silently truncated.
- * caller should not hold clog_lock, d_vlog will grab it as needed.
+ * caller should not hold clogmux, d_vlog will grab it as needed.
  *
  * @param flags returned by d_log_check
  * @param fmt the printf(3) format to use
