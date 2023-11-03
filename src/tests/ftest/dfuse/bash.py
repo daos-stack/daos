@@ -79,32 +79,19 @@ class Cmd(DfuseTestBase):
                     self.dfuse.update_params(disable_wb_cache=True)
                     self.dfuse.run()
 
-                abs_dir_path = os.path.join(
-                    self.dfuse.mount_dir.value, dir_name)
+                fuse_root_dir = self.dfuse.mount_dir.value
+                abs_dir_path = os.path.join(fuse_root_dir, dir_name)
                 abs_file_path1 = os.path.join(abs_dir_path, file_name1)
                 abs_file_path2 = os.path.join(abs_dir_path, file_name2)
 
-                src_c_name = os.path.join(self.dfuse.mount_dir.value, 'src.c')
-                with open(src_c_name, 'w') as fd:
+                with open(os.path.join(fuse_root_dir, 'src.c'), 'w') as fd:
                     fd.write('#include <stdio.h>\n\nint main(void) {\nprintf("Hello World!");\n}\n')
-                output_c = os.path.join(self.dfuse.mount_dir.value, 'output_c')
-                link_name = os.path.join(self.dfuse.mount_dir.value, 'link_c')
+                link_name = os.path.join(fuse_root_dir, 'link_c')
 
-                src_f_name = os.path.join(self.dfuse.mount_dir.value, 'src.f')
-                with open(src_f_name, 'w') as fd:
-                    fd.write('      program test\n      write(*,*) "Hello"\n      end program\n')
-                output_f = os.path.join(self.dfuse.mount_dir.value, 'output_f')
-
-                src_a_name = os.path.join(self.dfuse.mount_dir.value, 'src_a.c')
-                with open(src_a_name, 'w') as fd:
+                with open(os.path.join(fuse_root_dir, 'src_a.c'), 'w') as fd:
                     fd.write('#include <stdio.h>\n\nvoid fun_a(void) {\nprintf("fun_a()");\n}\n')
-                src_b_name = os.path.join(self.dfuse.mount_dir.value, 'src_b.c')
-                with open(src_b_name, 'w') as fd:
+                with open(os.path.join(fuse_root_dir, 'src_b.c'), 'w') as fd:
                     fd.write('#include <stdio.h>\n\nvoid fun_b(void) {\nprintf("fun_b()");\n}\n')
-                obj_a = os.path.join(self.dfuse.mount_dir.value, 'src_a.o')
-                obj_b = os.path.join(self.dfuse.mount_dir.value, 'src_b.o')
-                lib_ab = os.path.join(self.dfuse.mount_dir.value, 'lib.a')
-                download = os.path.join(self.dfuse.mount_dir.value, 'download.html')
                 # list of commands to be executed.
                 commands = [f"mkdir -p {abs_dir_path}",
                             f"touch {abs_file_path1}",
@@ -125,34 +112,33 @@ class Cmd(DfuseTestBase):
                             f"ls -al {abs_dir_path}/..",
                             f"rm {abs_file_path2}",
                             f"rmdir {abs_dir_path}",
-                            f"wc -l {src_c_name}",
-                            f"xxd {src_c_name}",
+                            f"wc -l {fuse_root_dir}/src.c",
+                            f"xxd {fuse_root_dir}/src.c",
                             f'ln -s src.c {link_name}',
                             f'readlink {link_name}',
                             f'realpath {link_name}',
-                            f'head {src_c_name}',
-                            f'tail {src_c_name}',
-                            # f'more {src_c_name}', # more hangs over ssh somehow
-                            f'dos2unix {src_c_name}',
-                            f"gcc -o {output_c} {src_c_name}",
-                            f'size {output_c}',
-                            f'readelf -s {output_c}',
-                            f'strip -s {output_c}',
-                            f"g++ -o {output_c} {src_c_name}",
-                            f"gfortran -o {output_f} {src_f_name}",
-                            f"gcc -c -o {obj_a} {src_a_name}",
-                            f"gcc -c -o {obj_b} {src_b_name}",
-                            f"ar -rc {lib_ab} {obj_a} {obj_b}",
-                            f"objdump -d {obj_a}",
-                            f"grep print {src_a_name}",
-                            "awk '{print $1}' " + src_f_name,
-                            f"base64 {src_f_name}",
-                            f"md5sum {src_f_name}",
-                            f"cksum {src_f_name}",
-                            f"bzip2 -z {lib_ab}",
-                            f"chmod u-r {lib_ab}.bz2",
-                            f"wget \"https://www.google.com\" -O {download}",
-                            f"curl \"https://www.google.com\" -o {download}"]
+                            f'head {fuse_root_dir}/src.c',
+                            f'tail {fuse_root_dir}/src.c',
+                            # f'more {fuse_root_dir}/src.c', # more hangs over ssh somehow
+                            f'dos2unix {fuse_root_dir}/src.c',
+                            f"gcc -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
+                            f'size {fuse_root_dir}/output',
+                            f'readelf -s {fuse_root_dir}/output',
+                            f'strip -s {fuse_root_dir}/output',
+                            f"g++ -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
+                            f"gcc -c -o {fuse_root_dir}/obj_a.o {fuse_root_dir}/src_a.c",
+                            f"gcc -c -o {fuse_root_dir}/obj_b.o {fuse_root_dir}/src_b.c",
+                            f"ar -rc {fuse_root_dir}/lib.a {fuse_root_dir}/obj_a.o "
+                            f"{fuse_root_dir}/obj_b.o",
+                            f"objdump -d {fuse_root_dir}/obj_a.o",
+                            f"grep print {fuse_root_dir}/src.c",
+                            "awk '{print $1}' " + fuse_root_dir + '/src.c',
+                            f"base64 {fuse_root_dir}/src.c",
+                            f"md5sum {fuse_root_dir}/src.c",
+                            f"cksum {fuse_root_dir}/src.c",
+                            f"bzip2 -z {fuse_root_dir}/lib.a",
+                            f"chmod u-r {fuse_root_dir}/lib.a.bz2",
+                            f"curl \"https://www.google.com\" -o {fuse_root_dir}/download.html"]
                 for cmd in commands:
                     try:
                         # execute bash cmds
@@ -204,8 +190,8 @@ class Cmd(DfuseTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=dfuse
-        :avocado: tags=Cmd,test_bashcmd,test_bashcmd_ioil
+        :avocado: tags=dfuse,il
+        :avocado: tags=Cmd,test_bashcmd_ioil
         """
         self.run_bashcmd(il_lib="libioil.so")
 
@@ -219,7 +205,7 @@ class Cmd(DfuseTestBase):
 
         :avocado: tags=all
         :avocado: tags=hw,medium
-        :avocado: tags=dfuse
-        :avocado: tags=Cmd,test_bashcmd,test_bashcmd_pil4dfs
+        :avocado: tags=dfuse,pil4dfs
+        :avocado: tags=Cmd,test_bashcmd_pil4dfs
         """
         self.run_bashcmd(il_lib="libpil4dfs.so")
