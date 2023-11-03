@@ -38,7 +38,7 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("Call ip link set before tearDown.")
             if self.network_down_host:
                 update_network_interface(
-                    self.log, interface=self.interface, state="up", hosts=self.network_down_host,
+                    interface=self.interface, state="up", hosts=self.network_down_host,
                     errors=error_list)
         return error_list
 
@@ -206,7 +206,7 @@ class NetworkFailureTest(IorTestBase):
         if self.test_env == "ci":
             # wolf
             update_network_interface(
-                self.log, interface=self.interface, state="down", hosts=self.network_down_host,
+                interface=self.interface, state="down", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.
@@ -228,7 +228,7 @@ class NetworkFailureTest(IorTestBase):
         if self.test_env == "ci":
             # wolf
             update_network_interface(
-                self.log, interface=self.interface, state="up", hosts=self.network_down_host,
+                interface=self.interface, state="up", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.
@@ -392,7 +392,7 @@ class NetworkFailureTest(IorTestBase):
         # wolf
         if self.test_env == "ci":
             update_network_interface(
-                self.log, interface=self.interface, state="down", hosts=self.network_down_host,
+                interface=self.interface, state="down", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.
@@ -431,7 +431,7 @@ class NetworkFailureTest(IorTestBase):
         if self.test_env == "ci":
             # wolf
             update_network_interface(
-                self.log, interface=self.interface, state="up", hosts=self.network_down_host,
+                interface=self.interface, state="up", hosts=self.network_down_host,
                 errors=errors)
         else:
             # Aurora. Manually run the command.
