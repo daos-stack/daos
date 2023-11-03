@@ -263,12 +263,12 @@ def define_components(reqs):
                 libs=['isal_crypto'])
 
     reqs.define('pmdk',
-                retriever=GitRepoRetriever('https://github.com/pmem/pmdk.git'),
+                retriever=GitRepoRetriever('https://github.com/grom72/pmdk.git'),
                 commands=[['make',
                            'all',
                            'BUILD_RPMEM=n',
-                           'NDCTL_ENABLE=n',
-                           'NDCTL_DISABLE=y',
+                           'NDCTL_ENABLE=y',
+                           'NDCTL_DISABLE=n',
                            'DOC=n',
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
