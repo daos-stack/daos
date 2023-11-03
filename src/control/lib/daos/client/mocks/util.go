@@ -3,7 +3,7 @@ package mocks
 import (
 	"context"
 
-	"github.com/daos-stack/daos/src/control/lib/daos/api"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
 )
 
 var (
@@ -12,8 +12,8 @@ var (
 )
 
 func PoolConnCtx(parent context.Context, cfg *PoolConnCfg) context.Context {
-	if apiCtx, err := api.MockApiClientContext(parent, nil); err == nil {
-		parent = apiCtx
+	if daosAPICtx, err := daosAPI.MockApiClientContext(parent, nil); err == nil {
+		parent = daosAPICtx
 	}
 	return context.WithValue(parent, mockPoolConnKey, NewPoolConn(cfg))
 }
@@ -26,8 +26,8 @@ func GetPoolConn(ctx context.Context) *PoolConn {
 }
 
 func ContConnCtx(parent context.Context, cfg *ContConnCfg) context.Context {
-	if apiCtx, err := api.MockApiClientContext(parent, nil); err == nil {
-		parent = apiCtx
+	if daosAPICtx, err := daosAPI.MockApiClientContext(parent, nil); err == nil {
+		parent = daosAPICtx
 	}
 	return context.WithValue(parent, mockContConnKey, newMockContConn(cfg))
 }

@@ -1,4 +1,4 @@
-package api_test
+package client_test
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
-	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
+	"github.com/daos-stack/daos/src/control/lib/daos/client"
 )
 
 func TestClient_ResolveContainerPath(t *testing.T) {
@@ -20,11 +20,11 @@ func TestClient_ResolveContainerPath(t *testing.T) {
 	for name, tc := range map[string]struct {
 		ctx    context.Context
 		path   string
-		cfg    *daosAPI.MockApiClientConfig
+		cfg    *client.MockApiClientConfig
 		expErr error
 	}{
 		"nonexistent dfuse path": {
-			cfg: &daosAPI.MockApiClientConfig{
+			cfg: &client.MockApiClientConfig{
 				ReturnCodeMap: map[string]int{
 					"dfuse_ioctl": int(syscall.ENOENT),
 				},
@@ -32,13 +32,13 @@ func TestClient_ResolveContainerPath(t *testing.T) {
 			expErr: daos.Nonexistent,
 		},
 		"successful dfuse path resolution": {
-			cfg: &daosAPI.MockApiClientConfig{
+			cfg: &client.MockApiClientConfig{
 				ConnectedPool: connPool,
 				ConnectedCont: connCont,
 			},
 		},
 		"duns path not valid": {
-			cfg: &daosAPI.MockApiClientConfig{
+			cfg: &client.MockApiClientConfig{
 				ReturnCodeMap: map[string]int{
 					"dfuse_ioctl":       int(syscall.ENOTTY),
 					"duns_resolve_path": int(syscall.ENODATA),
@@ -47,7 +47,7 @@ func TestClient_ResolveContainerPath(t *testing.T) {
 			expErr: daos.BadPath,
 		},
 		"successful duns path resolution": {
-			cfg: &daosAPI.MockApiClientConfig{
+			cfg: &client.MockApiClientConfig{
 				ConnectedPool: connPool,
 				ConnectedCont: connCont,
 				ReturnCodeMap: map[string]int{
@@ -59,12 +59,12 @@ func TestClient_ResolveContainerPath(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if tc.ctx == nil {
 				var err error
-				tc.ctx, err = daosAPI.MockApiClientContext(context.Background(), tc.cfg)
+				tc.ctx, err = client.MockApiClientContext(context.Background(), tc.cfg)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
-			poolID, contID, err := daosAPI.ResolveContainerPath(tc.ctx, tc.path)
+			poolID, contID, err := client.ResolveContainerPath(tc.ctx, tc.path)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return

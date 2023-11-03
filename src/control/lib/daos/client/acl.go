@@ -1,4 +1,4 @@
-package api
+package client
 
 /*
 #include <stdlib.h>
