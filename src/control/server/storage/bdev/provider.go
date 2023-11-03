@@ -51,7 +51,7 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 // Scan calls into the backend to discover NVMe components in the
 // system.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
-	p.log.Debug("run bdev storage provider scan")
+	p.log.Debug("run bdev storage provider scan, req: %+v", req)
 	return p.backend.Scan(req)
 }
 
@@ -60,12 +60,11 @@ func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResp
 // reset allocation of hugepages, otherwise rebind devices to user-space
 // driver compatible with SPDK and allocate hugeages.
 func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	p.log.Debugf("run bdev storage provider prepare setup, req: %+v", req)
 	if req.Reset_ {
-		p.log.Debug("run bdev storage provider prepare reset")
 		return p.backend.Reset(req)
 	}
 
-	p.log.Debug("run bdev storage provider prepare setup")
 	return p.backend.Prepare(req)
 }
 

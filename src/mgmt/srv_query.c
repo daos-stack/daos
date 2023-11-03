@@ -333,9 +333,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		 * NULL.
 		 */
 		resp->devices[i]->uuid = NULL;
-		resp->devices[i]->tr_addr = NULL;
 		resp->devices[i]->tgt_ids = NULL;
-		resp->devices[i]->led_state = CTL__LED_STATE__NA;
 
 		D_ALLOC(resp->devices[i]->uuid, DAOS_UUID_STR_SIZE);
 		if (resp->devices[i]->uuid == NULL) {
@@ -344,30 +342,50 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		}
 		uuid_unparse_lower(dev_info->bdi_dev_id, resp->devices[i]->uuid);
 
+		resp->devices[i]->role_bits = dev_info->bdi_dev_roles;
+
+		resp->devices[i]->n_tgt_ids = dev_info->bdi_tgt_cnt;
+		D_ALLOC(resp->devices[i]->tgt_ids, sizeof(int) * dev_info->bdi_tgt_cnt);
+		if (resp->devices[i]->tgt_ids == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		for (j = 0; j < dev_info->bdi_tgt_cnt; j++)
+			resp->devices[i]->tgt_ids[j] = dev_info->bdi_tgts[j];
+
+		/* Populate NVMe controller details */
+
+		D_ALLOC_PTR(resp->devices[i]->ctrlr);
+		if (resp->devices[i]->ctrlr == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		ctl__nvme_controller__init(resp->devices[i]->ctrlr);
+
+		resp->devices[i]->ctrlr->pci_addr = NULL;
+		resp->devices[i]->ctrlr->led_state = CTL__LED_STATE__NA;
+
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
-			D_ALLOC(resp->devices[i]->tr_addr, buflen);
-			if (resp->devices[i]->tr_addr == NULL) {
+			D_ALLOC(resp->devices[i]->ctrlr->pci_addr, buflen);
+			if (resp->devices[i]->ctrlr->pci_addr == NULL) {
 				rc = -DER_NOMEM;
 				break;
 			}
-			/* Transport Addr -> Blobstore UUID mapping */
-			strncpy(resp->devices[i]->tr_addr, dev_info->bdi_traddr, buflen);
+			strncpy(resp->devices[i]->ctrlr->pci_addr, dev_info->bdi_traddr, buflen);
 		}
 
 		if ((dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) == 0) {
-			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__UNPLUGGED;
+			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__UNPLUGGED;
 			goto skip_dev;
 		}
 
 		if ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
-			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__EVICTED;
+			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__EVICTED;
 		else if ((dev_info->bdi_flags & NVME_DEV_FL_INUSE) == 0)
-			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NEW;
+			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__NEW;
 		else
-			resp->devices[i]->dev_state = CTL__NVME_DEV_STATE__NORMAL;
-
-		resp->devices[i]->role_bits = dev_info->bdi_dev_roles;
+			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__NORMAL;
 
 		/* Fetch LED State if device is plugged */
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);
@@ -387,16 +405,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 				break;
 			}
 		}
-		resp->devices[i]->led_state = led_state;
+		resp->devices[i]->ctrlr->led_state = led_state;
 
-		resp->devices[i]->n_tgt_ids = dev_info->bdi_tgt_cnt;
-		D_ALLOC(resp->devices[i]->tgt_ids, sizeof(int) * dev_info->bdi_tgt_cnt);
-		if (resp->devices[i]->tgt_ids == NULL) {
-			rc = -DER_NOMEM;
-			break;
-		}
-		for (j = 0; j < dev_info->bdi_tgt_cnt; j++)
-			resp->devices[i]->tgt_ids[j] = dev_info->bdi_tgts[j];
 skip_dev:
 		d_list_del(&dev_info->bdi_link);
 		/* Frees sdi_tgts and dev_info */
@@ -418,8 +428,19 @@ skip_dev:
 					D_FREE(resp->devices[i]->uuid);
 				if (resp->devices[i]->tgt_ids != NULL)
 					D_FREE(resp->devices[i]->tgt_ids);
-				if (resp->devices[i]->tr_addr != NULL)
-					D_FREE(resp->devices[i]->tr_addr);
+				if (resp->devices[i]->ctrlr != NULL) {
+					if (resp->devices[i]->ctrlr->pci_addr != NULL)
+						D_FREE(resp->devices[i]->ctrlr->pci_addr);
+					//					if
+					//(resp->devices[i]->ctrlr->model != NULL)
+					//						D_FREE(resp->devices[i]->ctrlr->model);
+					//					if
+					//(resp->devices[i]->ctrlr->serial != NULL)
+					//						D_FREE(resp->devices[i]->ctrlr->serial);
+					//					if
+					//(resp->devices[i]->ctrlr->fw_rev != NULL)
+					//						D_FREE(resp->devices[i]->ctrlr->fw_rev);
+				}
 				D_FREE(resp->devices[i]);
 			}
 		}
@@ -615,7 +636,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	}
 	ctl__smd_device__init(resp->device);
 	resp->device->uuid = NULL;
-	resp->device->dev_state = CTL__NVME_DEV_STATE__EVICTED;
+	//resp->device->dev_state = CTL__NVME_DEV_STATE__EVICTED;
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
 	if (resp->device->uuid == NULL) {
@@ -643,7 +664,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 			goto out;
 		}
 	}
-	resp->device->led_state = led_state;
+	//resp->device->led_state = led_state;
 
 out:
 	smd_dev_free_info(dev_info);
@@ -666,21 +687,22 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	}
 	ctl__smd_device__init(resp->device);
 	resp->device->uuid = NULL;
-	resp->device->tr_addr = NULL;
+	//resp->device->tr_addr = NULL;
 
-	D_ALLOC(resp->device->tr_addr, ADDR_STR_MAX_LEN + 1);
-	if (resp->device->tr_addr == NULL)
-		return -DER_NOMEM;
+//	D_ALLOC(resp->device->tr_addr, ADDR_STR_MAX_LEN + 1);
+//	if (resp->device->tr_addr == NULL)
+//		return -DER_NOMEM;
 
-	if (((req->ids) == NULL) || (strlen(req->ids) == 0)) {
-		D_ERROR("Transport address not provided in request\n");
-		return -DER_INVAL;
-	}
+//	if (((req->ids) == NULL) || (strlen(req->ids) == 0)) {
+//		D_ERROR("Transport address not provided in request\n");
+//		return -DER_INVAL;
+//	}
 
-	strncpy(resp->device->tr_addr, req->ids, ADDR_STR_MAX_LEN + 1);
+//	strncpy(resp->device->tr_addr, req->ids, ADDR_STR_MAX_LEN + 1);
 
 	/* tr_addr will be used if set and get populated if not */
-	led_info.tr_addr = resp->device->tr_addr;
+//	led_info.tr_addr = resp->device->tr_addr;
+	led_info.tr_addr = req->ids;
 	led_info.action = req->led_action;
 	led_state = req->led_state;
 	led_info.state = &led_state;
@@ -691,12 +713,12 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 			     init_xs_type(), 0, 0);
 	if (rc != 0) {
 		if (rc == -DER_NOSYS) {
-			resp->device->led_state = CTL__LED_STATE__NA;
+			//resp->device->led_state = CTL__LED_STATE__NA;
 			/* Reset rc for non-VMD case */
 			rc = 0;
 		}
-	} else {
-		resp->device->led_state = (Ctl__LedState)led_state;
+//	} else {
+//		resp->device->led_state = (Ctl__LedState)led_state;
 	}
 
 	return rc;
@@ -762,12 +784,12 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp
 	if (rc != 0) {
 		DL_ERROR(rc, "ULT did not complete storage_dev_replace");
 		/* BIO device state after unsuccessful reintegration */
-		resp->device->dev_state = CTL__NVME_DEV_STATE__EVICTED;
+		//resp->device->dev_state = CTL__NVME_DEV_STATE__EVICTED;
 		goto out;
 	}
 
 	/* BIO device state after successful reintegration */
-	resp->device->dev_state = CTL__NVME_DEV_STATE__NORMAL;
+	//resp->device->dev_state = CTL__NVME_DEV_STATE__NORMAL;
 out:
 	if (rc != 0) {
 		if (resp->device->uuid != NULL)
