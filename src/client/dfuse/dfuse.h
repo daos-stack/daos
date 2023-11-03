@@ -723,12 +723,13 @@ struct fuse_lowlevel_ops dfuse_ops;
 			DS_ERROR(-__rc, "fuse_reply_readlink() error");                            \
 	} while (0)
 
+/* Do not set desc to NULL until after the reply */
 #define DFUSE_REPLY_BUFQ(desc, req, buf, size)                                                     \
 	do {                                                                                       \
 		int __rc;                                                                          \
 		_Static_assert(IS_IEOH(desc), "Param is not correct");                             \
-		(desc) = NULL;                                                                     \
 		__rc   = fuse_reply_buf(req, buf, size);                                           \
+		(desc) = NULL;                                                                     \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_buf() error");                                 \
 	} while (0)
