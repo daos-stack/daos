@@ -57,6 +57,7 @@
  * purposes, have their own rules described separately in the API documentation
  * of rdb_tx_begin_local.) Ending a TX without committing it discards all its
  * updates. Ending a query-only TX without committing is fine at the moment.
+ * rdb_tx_discard() will, without ending the TX, discard the updates made so far.
  *
  * A query sees all (conflicting) updates committed (successfully) before its
  * rdb_tx_begin(). It may or may not see updates committed after its
@@ -238,6 +239,8 @@ struct rdb_tx {
 /** TX methods */
 int rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx);
 int rdb_tx_begin_local(struct rdb_storage *storage, struct rdb_tx *tx);
+void
+     rdb_tx_discard(struct rdb_tx *tx);
 int rdb_tx_commit(struct rdb_tx *tx);
 void rdb_tx_end(struct rdb_tx *tx);
 

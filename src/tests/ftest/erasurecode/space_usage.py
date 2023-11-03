@@ -3,9 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ior_test_base import IorTestBase
-from data_utils import list_stats, dict_subtract, dict_extract_values
+from data_utils import dict_extract_values, dict_subtract, list_stats
 from general_utils import percent_change
+from ior_test_base import IorTestBase
 from oclass_utils import calculate_ec_targets_used
 
 

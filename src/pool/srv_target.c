@@ -223,7 +223,7 @@ flush_ult(void *arg)
 	D_ASSERT(child->spc_flush_req != NULL);
 
 	while (!dss_ult_exiting(child->spc_flush_req)) {
-		rc = vos_flush_pool(child->spc_hdl, false, nr_flush, &nr_flushed);
+		rc = vos_flush_pool(child->spc_hdl, nr_flush, &nr_flushed);
 		if (rc < 0) {
 			D_ERROR(DF_UUID"[%d]: Flush pool failed. "DF_RC"\n",
 				DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, DP_RC(rc));
@@ -674,13 +674,18 @@ pool_fetch_hdls_ult(void *data)
 	struct ds_pool	*pool = data;
 	int		rc = 0;
 
+	D_INFO(DF_UUID": begin: fetch_hdls=%u stopping=%u\n", DP_UUID(pool->sp_uuid),
+	       pool->sp_fetch_hdls, pool->sp_stopping);
+
 	/* sp_map == NULL means the IV ns is not setup yet, i.e.
 	 * the pool leader does not broadcast the pool map to the
 	 * current node yet, see pool_iv_pre_sync().
 	 */
 	ABT_mutex_lock(pool->sp_mutex);
-	if (pool->sp_map == NULL)
+	if (pool->sp_map == NULL) {
+		D_INFO(DF_UUID": waiting for map\n", DP_UUID(pool->sp_uuid));
 		ABT_cond_wait(pool->sp_fetch_hdls_cond, pool->sp_mutex);
+	}
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	if (pool->sp_stopping) {
@@ -688,6 +693,7 @@ pool_fetch_hdls_ult(void *data)
 			DP_UUID(pool->sp_uuid));
 		D_GOTO(out, rc);
 	}
+	D_INFO(DF_UUID": fetching handles\n", DP_UUID(pool->sp_uuid));
 	rc = ds_pool_iv_conn_hdl_fetch(pool);
 	if (rc) {
 		D_ERROR("iv conn fetch %d\n", rc);
@@ -695,11 +701,13 @@ pool_fetch_hdls_ult(void *data)
 	}
 
 out:
+	D_INFO(DF_UUID": signaling done\n", DP_UUID(pool->sp_uuid));
 	ABT_mutex_lock(pool->sp_mutex);
 	ABT_cond_signal(pool->sp_fetch_hdls_done_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	pool->sp_fetch_hdls = 0;
+	D_INFO(DF_UUID": end\n", DP_UUID(pool->sp_uuid));
 }
 
 static void
@@ -749,6 +757,9 @@ ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 static void
 pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 {
+	D_INFO(DF_UUID": begin: fetch_hdls=%u stopping=%u\n", DP_UUID(pool->sp_uuid),
+	       pool->sp_fetch_hdls, pool->sp_stopping);
+
 	if (!pool->sp_fetch_hdls) {
 		D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
 		return;
@@ -757,8 +768,10 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 	ABT_mutex_lock(pool->sp_mutex);
 	ABT_cond_signal(pool->sp_fetch_hdls_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
+	D_INFO(DF_UUID": signaled\n", DP_UUID(pool->sp_uuid));
 
 	ABT_mutex_lock(pool->sp_mutex);
+	D_INFO(DF_UUID": waiting for ULT\n", DP_UUID(pool->sp_uuid));
 	ABT_cond_wait(pool->sp_fetch_hdls_done_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
 	D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
@@ -901,7 +914,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_migrate_stop(pool, -1, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	ds_pool_put(pool);
-	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
+	D_INFO(DF_UUID": pool stopped\n", DP_UUID(uuid));
 }
 
 /* ds_pool_hdl ****************************************************************/
