@@ -235,6 +235,7 @@ junit
 kds
 kv
 kwargs
+launchable
 ldflags
 len
 libaio
@@ -441,6 +442,7 @@ testdata
 testFile
 testname
 testrunner
+testsuites
 tgt
 timestamp
 timestamps
