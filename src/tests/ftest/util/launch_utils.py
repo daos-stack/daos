@@ -13,6 +13,7 @@ from pathlib import Path
 
 from ClusterShell.NodeSet import NodeSet
 from slurm_setup import SlurmSetup, SlurmSetupException
+
 # pylint: disable=import-error,no-name-in-module
 from util.collection_utils import TEST_RESULTS_DIRS, collect_test_result
 from util.data_utils import dict_extract_values, list_flatten, list_unique

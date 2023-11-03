@@ -9,6 +9,7 @@ from collections import OrderedDict
 
 import yaml
 from ClusterShell.NodeSet import NodeSet
+
 # pylint: disable=import-error,no-name-in-module
 from util.data_utils import dict_extract_values, list_flatten, list_unique
 

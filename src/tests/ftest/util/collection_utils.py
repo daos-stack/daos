@@ -12,6 +12,7 @@ from collections import OrderedDict
 
 from ClusterShell.NodeSet import NodeSet
 from process_core_files import CoreFileException, CoreFileProcessing
+
 # pylint: disable=import-error,no-name-in-module
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host

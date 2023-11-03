@@ -12,6 +12,7 @@ from operator import is_not
 
 import yaml
 from ClusterShell.NodeSet import NodeSet
+
 # pylint: disable=import-error,no-name-in-module
 from util.run_utils import run_remote
 

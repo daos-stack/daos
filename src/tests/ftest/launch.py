@@ -15,6 +15,7 @@ from tempfile import TemporaryDirectory
 
 from ClusterShell.NodeSet import NodeSet
 from process_core_files import get_core_file_pattern
+
 # pylint: disable=import-error,no-name-in-module
 from util.avocado_utils import AvocadoException, AvocadoInfo
 from util.code_coverage_utils import CodeCoverage
