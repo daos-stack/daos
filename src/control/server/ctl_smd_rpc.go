@@ -257,34 +257,30 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 			if dev == nil {
 				return nil, errors.New("nil device in smd query resp")
 			}
-			dds := dev.Details
-			if dds == nil {
-				return nil, errors.New("device with nil details in smd query resp")
-			}
-			if dds.Ctrlr.PciAddr == "" {
+			if dev.Ctrlr.PciAddr == "" {
 				svc.log.Errorf("No transport address associated with device %s",
-					dds.Uuid)
+					dev.Uuid)
 			}
 
-			matchUUID := dds.Uuid != "" && devUUIDs[dds.Uuid]
+			matchUUID := dev.Uuid != "" && devUUIDs[dev.Uuid]
 
 			// Where possible specify the TrAddr over UUID as there may be multiple
 			// UUIDs mapping to the same TrAddr.
-			if useTrAddr && dds.Ctrlr.PciAddr != "" {
-				if matchAll || matchUUID || trAddrs[dds.Ctrlr.PciAddr] {
+			if useTrAddr && dev.Ctrlr.PciAddr != "" {
+				if matchAll || matchUUID || trAddrs[dev.Ctrlr.PciAddr] {
 					// If UUID matches, add by TrAddr rather than UUID which
 					// should avoid duplicate UUID entries for the same TrAddr.
-					edm.add(engine, devID{trAddr: dds.Ctrlr.PciAddr})
-					delete(trAddrs, dds.Ctrlr.PciAddr)
-					delete(devUUIDs, dds.Uuid)
+					edm.add(engine, devID{trAddr: dev.Ctrlr.PciAddr})
+					delete(trAddrs, dev.Ctrlr.PciAddr)
+					delete(devUUIDs, dev.Uuid)
 					continue
 				}
 			}
 
 			if matchUUID {
 				// Only add UUID entry if TrAddr is not available for a device.
-				edm.add(engine, devID{uuid: dds.Uuid})
-				delete(devUUIDs, dds.Uuid)
+				edm.add(engine, devID{uuid: dev.Uuid})
+				delete(devUUIDs, dev.Uuid)
 			}
 		}
 	}

@@ -193,18 +193,18 @@ func bdevScanEngine(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq
 	return bdevScanToProtoResp(ei.storage.ScanBdevs, req)
 }
 
-func smdGetHealth(ctx context.Context, ei *EngineInstance, dev *ctlpb.SmdQueryResp_SmdDeviceWithHealth) error {
-	state := dev.Details.Ctrlr.DevState
+func smdGetHealth(ctx context.Context, ei *EngineInstance, dev *ctlpb.SmdDevice) error {
+	state := dev.Ctrlr.DevState
 	if state == ctlpb.NvmeDevState_NEW {
 		ei.log.Debugf("skip fetching health stats on device %q in NEW state", dev, state)
 		return nil
 	}
 
-	health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: dev.Details.Uuid})
+	health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: dev.Uuid})
 	if err != nil {
 		return errors.Wrapf(err, "device %q, state %q", dev, state)
 	}
-	dev.Health = health
+	dev.Ctrlr.HealthStats = health
 
 	return nil
 }
@@ -249,14 +249,14 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 	// For each SmdDevice returned in list devs response, append a SmdDeviceWithHealth.
 	for _, sd := range listDevsResp.Devices {
 		if sd != nil {
-			rResp.Devices = append(rResp.Devices,
-				&ctlpb.SmdQueryResp_SmdDeviceWithHealth{Details: sd})
+			rResp.Devices = append(rResp.Devices, sd)
+			//&ctlpb.SmdQueryResp_SmdDeviceWithHealth{Details: sd})
 		}
 	}
 
 	found := false
 	for _, dev := range rResp.Devices {
-		if pbReq.Uuid != "" && dev.Details.Uuid != pbReq.Uuid {
+		if pbReq.Uuid != "" && dev.Uuid != pbReq.Uuid {
 			continue // Skip health query if UUID doesn't match requested.
 		}
 		if pbReq.IncludeBioHealth {
@@ -264,8 +264,8 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 				return nil, err
 			}
 		}
-		if pbReq.Uuid != "" && dev.Details.Uuid == pbReq.Uuid {
-			rResp.Devices = []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{dev}
+		if pbReq.Uuid != "" && dev.Uuid == pbReq.Uuid {
+			rResp.Devices = []*ctlpb.SmdDevice{dev}
 			found = true
 			break
 		}

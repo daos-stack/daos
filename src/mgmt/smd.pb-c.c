@@ -424,12 +424,6 @@ void   ctl__smd_query_req__free_unpacked
   assert(message->base.descriptor == &ctl__smd_query_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   ctl__smd_query_resp__smd_device_with_health__init
-                     (Ctl__SmdQueryResp__SmdDeviceWithHealth         *message)
-{
-  static const Ctl__SmdQueryResp__SmdDeviceWithHealth init_value = CTL__SMD_QUERY_RESP__SMD_DEVICE_WITH_HEALTH__INIT;
-  *message = init_value;
-}
 void   ctl__smd_query_resp__pool__init
                      (Ctl__SmdQueryResp__Pool         *message)
 {
@@ -2163,57 +2157,6 @@ const ProtobufCMessageDescriptor ctl__smd_query_req__descriptor =
   (ProtobufCMessageInit) ctl__smd_query_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__smd_query_resp__smd_device_with_health__field_descriptors[2] =
-{
-  {
-    "details",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryResp__SmdDeviceWithHealth, details),
-    &ctl__smd_device__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "health",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_MESSAGE,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SmdQueryResp__SmdDeviceWithHealth, health),
-    &ctl__bio_health_resp__descriptor,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned ctl__smd_query_resp__smd_device_with_health__field_indices_by_name[] = {
-  0,   /* field[0] = details */
-  1,   /* field[1] = health */
-};
-static const ProtobufCIntRange ctl__smd_query_resp__smd_device_with_health__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 2 }
-};
-const ProtobufCMessageDescriptor ctl__smd_query_resp__smd_device_with_health__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.SmdQueryResp.SmdDeviceWithHealth",
-  "SmdDeviceWithHealth",
-  "Ctl__SmdQueryResp__SmdDeviceWithHealth",
-  "ctl",
-  sizeof(Ctl__SmdQueryResp__SmdDeviceWithHealth),
-  2,
-  ctl__smd_query_resp__smd_device_with_health__field_descriptors,
-  ctl__smd_query_resp__smd_device_with_health__field_indices_by_name,
-  1,  ctl__smd_query_resp__smd_device_with_health__number_ranges,
-  (ProtobufCMessageInit) ctl__smd_query_resp__smd_device_with_health__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
 static const ProtobufCFieldDescriptor ctl__smd_query_resp__pool__field_descriptors[3] =
 {
   {
@@ -2299,7 +2242,7 @@ static const ProtobufCFieldDescriptor ctl__smd_query_resp__rank_resp__field_desc
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Ctl__SmdQueryResp__RankResp, n_devices),
     offsetof(Ctl__SmdQueryResp__RankResp, devices),
-    &ctl__smd_query_resp__smd_device_with_health__descriptor,
+    &ctl__smd_device__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */

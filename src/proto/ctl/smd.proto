@@ -160,10 +160,6 @@ message SmdQueryReq {
 }
 
 message SmdQueryResp {
-	message SmdDeviceWithHealth {
-		SmdDevice details = 1;
-		BioHealthResp health = 2; // optional BIO health
-	}
 	message Pool {
 		string uuid = 1; // UUID of VOS pool
 		repeated int32 tgt_ids = 2; // VOS target IDs
@@ -171,7 +167,7 @@ message SmdQueryResp {
 	}
 	message RankResp {
 		uint32 rank = 1; // rank to which this response corresponds
-		repeated SmdDeviceWithHealth devices = 2; // List of devices on the rank
+		repeated SmdDevice devices = 2; // List of devices on the rank
 		repeated Pool pools = 3; // List of pools on the rank
 	}
 	int32 status = 1; // DAOS error code

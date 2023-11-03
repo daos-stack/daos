@@ -79,46 +79,7 @@ func pbDevWithHealth(sd *ctlpb.SmdDevice, h *ctlpb.BioHealthResp) *ctlpb.SmdDevi
 	return sd
 }
 
-//}
-//	pbReplacedDev = &ctlpb.SmdDevice{
-//		Uuid: test.MockUUID(2),
-//		Ctrlr: &ctlpb.NvmeController{
-//			PciAddr:  test.MockPCIAddr(2),
-//			DevState: devStateNormal,
-//			LedState: ledStateNormal,
-//		},
-//	}
-//	pbFaultDev = &ctlpb.SmdDevice{
-//		Uuid: test.MockUUID(1),
-//		Ctrlr: &ctlpb.NvmeController{
-//			PciAddr:  test.MockPCIAddr(1),
-//			DevState: devStateFaulty,
-//			LedState: ledStateFault,
-//		},
-//	}
-//	pbIdentDev = &ctlpb.SmdDevice{
-//		Uuid: test.MockUUID(1),
-//		Ctrlr: &ctlpb.NvmeController{
-//			PciAddr:  test.MockPCIAddr(1),
-//			LedState: ledStateIdentify,
-//		},
-//	}
-//)
-
 func TestServer_CtlSvc_SmdQuery(t *testing.T) {
-	//	faultyCtrlr := &ctlpb.NvmeController{
-	//		DevState: devStateFaulty,
-	//		LedState: ledStateFault,
-	//	}
-	//	newCtrlr := &ctlpb.NvmeController{
-	//		DevState: devStateNew,
-	//		LedState: ledStateNormal,
-	//	}
-	//	normalCtrlr := &ctlpb.NvmeController{
-	//		DevState: devStateNormal,
-	//		LedState: ledStateNormal,
-	//	}
-	//
 	for name, tc := range map[string]struct {
 		setupAP        bool
 		req            *ctlpb.SmdQueryReq
@@ -340,54 +301,46 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:   test.MockUUID(0),
-									TgtIds: []int32{0, 1, 2},
-									Ctrlr: &ctlpb.NvmeController{
-										PciAddr:  "0000:8a:00.0",
-										DevState: devStateNormal,
-										LedState: ledStateNormal,
-									},
+						Devices: []*ctlpb.SmdDevice{
+							&ctlpb.SmdDevice{
+								Uuid:   test.MockUUID(0),
+								TgtIds: []int32{0, 1, 2},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  "0000:8a:00.0",
+									DevState: devStateNormal,
+									LedState: ledStateNormal,
 								},
 							},
-							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:   test.MockUUID(1),
-									TgtIds: []int32{3, 4, 5},
-									Ctrlr: &ctlpb.NvmeController{
-										PciAddr:  "0000:80:00.0",
-										DevState: devStateFaulty,
-										LedState: ledStateFault,
-									},
+							&ctlpb.SmdDevice{
+								Uuid:   test.MockUUID(1),
+								TgtIds: []int32{3, 4, 5},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  "0000:80:00.0",
+									DevState: devStateFaulty,
+									LedState: ledStateFault,
 								},
 							},
 						},
 						Rank: uint32(0),
 					},
 					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:   test.MockUUID(2),
-									TgtIds: []int32{0, 1, 2},
-									Ctrlr: &ctlpb.NvmeController{
-										PciAddr:  "0000:da:00.0",
-										DevState: devStateFaulty,
-										LedState: ledStateUnknown,
-									},
+						Devices: []*ctlpb.SmdDevice{
+							&ctlpb.SmdDevice{
+								Uuid:   test.MockUUID(2),
+								TgtIds: []int32{0, 1, 2},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  "0000:da:00.0",
+									DevState: devStateFaulty,
+									LedState: ledStateUnknown,
 								},
 							},
-							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:   test.MockUUID(3),
-									TgtIds: []int32{3, 4, 5},
-									Ctrlr: &ctlpb.NvmeController{
-										PciAddr:  "0000:db:00.0",
-										DevState: devStateNormal,
-										LedState: ledStateIdentify,
-									},
+							&ctlpb.SmdDevice{
+								Uuid:   test.MockUUID(3),
+								TgtIds: []int32{3, 4, 5},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  "0000:db:00.0",
+									DevState: devStateNormal,
+									LedState: ledStateIdentify,
 								},
 							},
 						},
@@ -421,14 +374,12 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:   test.MockUUID(0),
-									TgtIds: []int32{0, 1, 2},
-									Ctrlr: &ctlpb.NvmeController{
-										PciAddr: "0000:db:00.0",
-									},
+						Devices: []*ctlpb.SmdDevice{
+							&ctlpb.SmdDevice{
+								Uuid:   test.MockUUID(0),
+								TgtIds: []int32{0, 1, 2},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr: "0000:db:00.0",
 								},
 							},
 						},
@@ -461,10 +412,8 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{Details: pbNormDev(1)},
-						},
+						Rank:    1,
+						Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 					},
 				},
 			},
@@ -495,12 +444,8 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{},
 					{
-						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: pbFaultDev(1),
-							},
-						},
+						Rank:    1,
+						Devices: []*ctlpb.SmdDevice{pbFaultDev(1)},
 					},
 				},
 			},
@@ -555,15 +500,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					{},
 					{
 						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: pbDevWithHealth(
-									pbFaultDev(1),
-									&ctlpb.BioHealthResp{
-										Temperature: 1000000,
-										TempWarn:    true,
-									}),
-							},
+						Devices: []*ctlpb.SmdDevice{
+							pbDevWithHealth(
+								pbFaultDev(1),
+								&ctlpb.BioHealthResp{
+									Temperature: 1000000,
+									TempWarn:    true,
+								}),
 						},
 					},
 				},
@@ -605,27 +548,23 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			expResp: &ctlpb.SmdQueryResp{
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: pbDevWithHealth(
-									pbNormDev(0),
-									&ctlpb.BioHealthResp{
-										Temperature: 1000000,
-									}),
-							},
+						Devices: []*ctlpb.SmdDevice{
+							pbDevWithHealth(
+								pbNormDev(0),
+								&ctlpb.BioHealthResp{
+									Temperature: 100000,
+								}),
 						},
 					},
 					{
 						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: pbDevWithHealth(
-									pbFaultDev(1),
-									&ctlpb.BioHealthResp{
-										Temperature: 1000000,
-										TempWarn:    true,
-									}),
-							},
+						Devices: []*ctlpb.SmdDevice{
+							pbDevWithHealth(
+								pbFaultDev(1),
+								&ctlpb.BioHealthResp{
+									Temperature: 1000000,
+									TempWarn:    true,
+								}),
 						},
 					},
 				},
@@ -664,12 +603,8 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{},
 					{
-						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: pbNewDev(1),
-							},
-						},
+						Rank:    1,
+						Devices: []*ctlpb.SmdDevice{pbNewDev(1)},
 					},
 				},
 			},
@@ -1021,7 +956,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				0: {
 					{
 						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{pbNormDev(0)},
+							Devices: []*ctlpb.SmdDevice{pbNormDev(1)},
 						},
 					},
 				},
@@ -1142,8 +1077,9 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
+						Rank: 1,
 						Results: []*ctlpb.SmdManageResp_Result{
-							{Device: pbIdentDev(1)},
+							{Device: pbIdentDev(2)},
 						},
 					},
 				},
@@ -1185,6 +1121,12 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			expResp: &ctlpb.SmdManageResp{
 				Ranks: []*ctlpb.SmdManageResp_RankResp{
 					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbIdentDev(1)},
+						},
+					},
+					{
+						Rank: 1,
 						Results: []*ctlpb.SmdManageResp_Result{
 							{Device: pbIdentDev(2)},
 						},
@@ -1250,7 +1192,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 							{
 								Device: func() *ctlpb.SmdDevice {
 									sd := pbIdentDev(2)
-									sd.PciAddr = "d50505:01:00.0"
+									sd.Ctrlr.PciAddr = "d50505:01:00.0"
 									return sd
 								}(),
 							},

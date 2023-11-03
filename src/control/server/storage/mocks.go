@@ -122,6 +122,8 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 		PciAddr:     pciAddr,
 		FwRev:       concat("fwRev", idx),
 		SocketID:    idx % 2,
+		NvmeState:   NvmeStateNormal,
+		LedState:    LedStateNormal,
 		HealthStats: MockNvmeHealth(idx),
 		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(1)},
 		SmdDevices:  []*SmdDevice{MockSmdDevice(pciAddr, idx)},

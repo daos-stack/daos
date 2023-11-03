@@ -27,7 +27,6 @@ typedef struct _Ctl__SmdPoolResp Ctl__SmdPoolResp;
 typedef struct _Ctl__SmdPoolResp__Pool Ctl__SmdPoolResp__Pool;
 typedef struct _Ctl__SmdQueryReq Ctl__SmdQueryReq;
 typedef struct _Ctl__SmdQueryResp Ctl__SmdQueryResp;
-typedef struct _Ctl__SmdQueryResp__SmdDeviceWithHealth Ctl__SmdQueryResp__SmdDeviceWithHealth;
 typedef struct _Ctl__SmdQueryResp__Pool Ctl__SmdQueryResp__Pool;
 typedef struct _Ctl__SmdQueryResp__RankResp Ctl__SmdQueryResp__RankResp;
 typedef struct _Ctl__LedManageReq Ctl__LedManageReq;
@@ -465,20 +464,6 @@ struct  _Ctl__SmdQueryReq
     , 0, 0, 0, (char *)protobuf_c_empty_string, 0 }
 
 
-struct  _Ctl__SmdQueryResp__SmdDeviceWithHealth
-{
-  ProtobufCMessage base;
-  Ctl__SmdDevice *details;
-  /*
-   * optional BIO health
-   */
-  Ctl__BioHealthResp *health;
-};
-#define CTL__SMD_QUERY_RESP__SMD_DEVICE_WITH_HEALTH__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_resp__smd_device_with_health__descriptor) \
-    , NULL, NULL }
-
-
 struct  _Ctl__SmdQueryResp__Pool
 {
   ProtobufCMessage base;
@@ -513,7 +498,7 @@ struct  _Ctl__SmdQueryResp__RankResp
    * List of devices on the rank
    */
   size_t n_devices;
-  Ctl__SmdQueryResp__SmdDeviceWithHealth **devices;
+  Ctl__SmdDevice **devices;
   /*
    * List of pools on the rank
    */
@@ -874,9 +859,6 @@ Ctl__SmdQueryReq *
 void   ctl__smd_query_req__free_unpacked
                      (Ctl__SmdQueryReq *message,
                       ProtobufCAllocator *allocator);
-/* Ctl__SmdQueryResp__SmdDeviceWithHealth methods */
-void   ctl__smd_query_resp__smd_device_with_health__init
-                     (Ctl__SmdQueryResp__SmdDeviceWithHealth         *message);
 /* Ctl__SmdQueryResp__Pool methods */
 void   ctl__smd_query_resp__pool__init
                      (Ctl__SmdQueryResp__Pool         *message);
@@ -1057,9 +1039,6 @@ typedef void (*Ctl__SmdPoolResp_Closure)
 typedef void (*Ctl__SmdQueryReq_Closure)
                  (const Ctl__SmdQueryReq *message,
                   void *closure_data);
-typedef void (*Ctl__SmdQueryResp__SmdDeviceWithHealth_Closure)
-                 (const Ctl__SmdQueryResp__SmdDeviceWithHealth *message,
-                  void *closure_data);
 typedef void (*Ctl__SmdQueryResp__Pool_Closure)
                  (const Ctl__SmdQueryResp__Pool *message,
                   void *closure_data);
@@ -1114,7 +1093,6 @@ extern const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_pool_resp__pool__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_resp__descriptor;
-extern const ProtobufCMessageDescriptor ctl__smd_query_resp__smd_device_with_health__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_resp__pool__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_resp__rank_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__led_manage_req__descriptor;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -168,36 +168,31 @@ func TestControl_SmdQuery(t *testing.T) {
 		"list devices": {
 			mic: newMockInvokerWRankResps([]*ctlpb.SmdQueryResp_RankResp{
 				{
-					Rank: 0,
-					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+					Devices: []*ctlpb.SmdDevice{
 						{
-							Details: &ctlpb.SmdDevice{
-								Uuid:   test.MockUUID(0),
-								TgtIds: []int32{1024, 1, 1, 2, 2, 3, 3},
-								Ctrlr: &ctlpb.NvmeController{
-									PciAddr:  test.MockPCIAddr(1),
-									DevState: devStateNormal,
-									LedState: ledStateNormal,
-								},
-								RoleBits: storage.BdevRoleAll,
+							Uuid:   test.MockUUID(0),
+							TgtIds: []int32{1024, 1, 1, 2, 2, 3, 3},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(1),
+								DevState: devStateNormal,
+								LedState: ledStateNormal,
 							},
+							RoleBits: storage.BdevRoleAll,
 						},
 					},
 				},
 				{
 					Rank: 1,
-					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+					Devices: []*ctlpb.SmdDevice{
 						{
-							Details: &ctlpb.SmdDevice{
-								Uuid:   test.MockUUID(1),
-								TgtIds: []int32{0},
-								Ctrlr: &ctlpb.NvmeController{
-									PciAddr:  test.MockPCIAddr(1),
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-								RoleBits: storage.BdevRoleData,
+							Uuid:   test.MockUUID(1),
+							TgtIds: []int32{0},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(1),
+								DevState: devStateFaulty,
+								LedState: ledStateFault,
 							},
+							RoleBits: storage.BdevRoleData,
 						},
 					},
 				},
@@ -243,17 +238,14 @@ func TestControl_SmdQuery(t *testing.T) {
 		},
 		"list devices; missing led state": {
 			mic: newMockInvokerWRankResps(&ctlpb.SmdQueryResp_RankResp{
-				Rank: 0,
-				Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+				Devices: []*ctlpb.SmdDevice{
 					{
-						Details: &ctlpb.SmdDevice{
-							Uuid:   test.MockUUID(1),
-							TgtIds: []int32{1, 2, 3},
-							Ctrlr: &ctlpb.NvmeController{
-								PciAddr:  test.MockPCIAddr(2),
-								DevState: devStateNew,
-								LedState: ledStateUnknown,
-							},
+						Uuid:   test.MockUUID(1),
+						TgtIds: []int32{1, 2, 3},
+						Ctrlr: &ctlpb.NvmeController{
+							PciAddr:  test.MockPCIAddr(2),
+							DevState: devStateNew,
+							LedState: ledStateUnknown,
 						},
 					},
 				},
@@ -284,32 +276,27 @@ func TestControl_SmdQuery(t *testing.T) {
 			mic: newMockInvokerWRankResps(
 				&ctlpb.SmdQueryResp_RankResp{
 					Rank: 1,
-					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+					Devices: []*ctlpb.SmdDevice{
 						{
-							Details: &ctlpb.SmdDevice{
-								Uuid:   test.MockUUID(1),
-								TgtIds: []int32{1, 2, 3},
-								Ctrlr: &ctlpb.NvmeController{
-									PciAddr:  test.MockPCIAddr(1),
-									DevState: devStateFaulty,
-									LedState: ledStateUnknown,
-								},
+							Uuid:   test.MockUUID(1),
+							TgtIds: []int32{1, 2, 3},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(1),
+								DevState: devStateFaulty,
+								LedState: ledStateUnknown,
 							},
 						},
 					},
 				},
 				&ctlpb.SmdQueryResp_RankResp{
-					Rank: 0,
-					Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+					Devices: []*ctlpb.SmdDevice{
 						{
-							Details: &ctlpb.SmdDevice{
-								Uuid:   test.MockUUID(3),
-								TgtIds: []int32{4, 5, 6},
-								Ctrlr: &ctlpb.NvmeController{
-									PciAddr:  test.MockPCIAddr(2),
-									DevState: devStateNormal,
-									LedState: ledStateUnknown,
-								},
+							Uuid:   test.MockUUID(3),
+							TgtIds: []int32{4, 5, 6},
+							Ctrlr: &ctlpb.NvmeController{
+								PciAddr:  test.MockPCIAddr(2),
+								DevState: devStateNormal,
+								LedState: ledStateUnknown,
 							},
 						},
 					},
@@ -339,31 +326,28 @@ func TestControl_SmdQuery(t *testing.T) {
 		},
 		"device health": {
 			mic: newMockInvokerWRankResps(&ctlpb.SmdQueryResp_RankResp{
-				Rank: 0,
-				Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+				Devices: []*ctlpb.SmdDevice{
 					{
-						Details: &ctlpb.SmdDevice{
-							Uuid:   test.MockUUID(1),
-							TgtIds: []int32{1, 2, 3},
-							Ctrlr: &ctlpb.NvmeController{
-								PciAddr:  test.MockPCIAddr(1),
-								DevState: devStateNormal,
-								LedState: ledStateIdentify,
+						Uuid:   test.MockUUID(1),
+						TgtIds: []int32{1, 2, 3},
+						Ctrlr: &ctlpb.NvmeController{
+							PciAddr:  test.MockPCIAddr(1),
+							DevState: devStateNormal,
+							LedState: ledStateIdentify,
+							HealthStats: &ctlpb.BioHealthResp{
+								DevUuid:            test.MockUUID(1),
+								Temperature:        2,
+								MediaErrs:          3,
+								BioReadErrs:        4,
+								BioWriteErrs:       5,
+								BioUnmapErrs:       6,
+								ChecksumErrs:       7,
+								TempWarn:           true,
+								AvailSpareWarn:     true,
+								ReadOnlyWarn:       true,
+								DevReliabilityWarn: true,
+								VolatileMemWarn:    true,
 							},
-						},
-						Health: &ctlpb.BioHealthResp{
-							DevUuid:            test.MockUUID(1),
-							Temperature:        2,
-							MediaErrs:          3,
-							BioReadErrs:        4,
-							BioWriteErrs:       5,
-							BioUnmapErrs:       6,
-							ChecksumErrs:       7,
-							TempWarn:           true,
-							AvailSpareWarn:     true,
-							ReadOnlyWarn:       true,
-							DevReliabilityWarn: true,
-							VolatileMemWarn:    true,
 						},
 					},
 				},
