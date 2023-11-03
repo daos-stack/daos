@@ -568,6 +568,10 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		       void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		       uint32_t fw_cnt, tse_task_t *task);
 
+int dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *args,
+			    struct dtx_epoch *epoch, uint64_t api_flags, uint32_t rpc_flags,
+			    uint32_t map_ver, uint32_t *rep_ver, tse_task_t *task);
+
 int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
