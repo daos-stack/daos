@@ -408,7 +408,7 @@ class TestEnvironment():
         if result.passed:
             # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
             logger.debug("  Excluding verbs provider for Omni-Path adapters")
-            supported.pop("verbs")
+            supported = list(filter(lambda x: 'verbs' not in x, supported))
 
         # Detect all supported providers for this interface that are common to all of the hosts
         common_providers = get_common_provider(logger, hosts, self.interface, supported)
