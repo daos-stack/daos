@@ -468,7 +468,7 @@ class VerifyPermsCommand(ExecutableCommand):
             namespace (str): command namespace. Defaults to /run/verify_perms/*
 
         """
-        path = os.path.realpath(os.path.dirname(__file__))
+        path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
         super().__init__(namespace, "verify_perms.py", path)
 
         # verify_perms.py options
