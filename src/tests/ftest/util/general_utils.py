@@ -22,11 +22,10 @@ from avocado.core.settings import settings
 from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
-from pydaos.raw import IORequest, DaosObjClass
-
 from ClusterShell.Task import task_self
 from run_utils import RunException, get_clush_command, run_local, run_remote
 from user_utils import get_chown_command, get_primary_group
+from pydaos.raw import IORequest, DaosObjClass
 
 
 class DaosTestError(Exception):
