@@ -60,7 +60,6 @@ struct dtx_cos_rec_child {
 	daos_epoch_t		 dcrc_epoch;
 	/* Pointer to the dtx_cos_rec. */
 	struct dtx_cos_rec	*dcrc_ptr;
-	struct d_binheap_node	dcrc_heap_node;
 };
 
 struct dtx_cos_rec_bundle {
@@ -130,6 +129,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	dcrc->dcrc_dte = dtx_entry_get(rbund->dte);
 	dcrc->dcrc_epoch = rbund->epoch;
 	dcrc->dcrc_ptr = dcr;
+
 	d_list_add_tail(&dcrc->dcrc_gl_committable,
 			&cont->sc_dtx_cos_list);
 	cont->sc_dtx_committable_count++;
@@ -148,29 +148,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rec->rec_off = umem_ptr2off(&tins->ti_umm, dcr);
 
-	if (val_out) {
-		val_out->iov_buf = dcrc;
-		val_out->iov_buf_len = val_out->iov_len = sizeof(*dcrc);
-	}
-
 	return 0;
-}
-
-static void
-dcrc_delete(struct ds_cont_child *cont, struct dtx_cos_rec_child *dcrc)
-{
-	struct dtx_tls	*tls = dtx_tls_get();
-
-	if (!d_binheap_is_empty(&cont->sc_dtx_cos_heap))
-		d_binheap_remove(&cont->sc_dtx_cos_heap, &dcrc->dcrc_heap_node);
-
-	d_list_del(&dcrc->dcrc_gl_committable);
-	d_list_del(&dcrc->dcrc_lo_link);
-	dtx_entry_put(dcrc->dcrc_dte);
-	D_FREE(dcrc);
-
-	cont->sc_dtx_committable_count--;
-	d_tm_dec_gauge(tls->dt_committable, 1);
 }
 
 static int
@@ -180,26 +158,42 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct dtx_cos_rec		*dcr;
 	struct dtx_cos_rec_child	*dcrc;
 	struct dtx_cos_rec_child	*next;
+	int				 dec = 0;
+	struct dtx_tls			*tls = dtx_tls_get();
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
 	dcr = (struct dtx_cos_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_reg_list,
 				   dcrc_lo_link) {
-		dcrc_delete(cont, dcrc);
+		d_list_del(&dcrc->dcrc_lo_link);
+		d_list_del(&dcrc->dcrc_gl_committable);
+		dtx_entry_put(dcrc->dcrc_dte);
+		D_FREE(dcrc);
+		dec++;
 	}
-
 	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_prio_list,
 				   dcrc_lo_link) {
-		dcrc_delete(cont, dcrc);
+		d_list_del(&dcrc->dcrc_lo_link);
+		d_list_del(&dcrc->dcrc_gl_committable);
+		dtx_entry_put(dcrc->dcrc_dte);
+		D_FREE(dcrc);
+		dec++;
 	}
-
 	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_expcmt_list,
 				   dcrc_lo_link) {
-		dcrc_delete(cont, dcrc);
+		d_list_del(&dcrc->dcrc_lo_link);
+		d_list_del(&dcrc->dcrc_gl_committable);
+		dtx_entry_put(dcrc->dcrc_dte);
+		D_FREE(dcrc);
+		dec++;
 	}
-
 	D_FREE(dcr);
+
+	cont->sc_dtx_committable_count -= dec;
+
+	/** adjust per-pool counter */
+	d_tm_dec_gauge(tls->dt_committable, dec);
 
 	return 0;
 }
@@ -257,10 +251,6 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		dcr->dcr_reg_count++;
 	}
 
-	if (val_out) {
-		val_out->iov_buf = dcrc;
-		val_out->iov_buf_len = val_out->iov_len = sizeof(*dcrc);
-	}
 	return 0;
 }
 
@@ -382,43 +372,6 @@ dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 	return count;
 }
 
-static bool
-dcrc_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
-{
-	struct dtx_cos_rec_child *nodea, *nodeb;
-
-	nodea = container_of(a, struct dtx_cos_rec_child, dcrc_heap_node);
-	nodeb = container_of(b, struct dtx_cos_rec_child, dcrc_heap_node);
-
-	/* Min heap, the minimum epoch dtx cos node is on root */
-	return nodea->dcrc_epoch < nodeb->dcrc_epoch;
-}
-
-struct d_binheap_ops dtx_cos_heap_ops = {
-	.hop_enter	= NULL,
-	.hop_exit	= NULL,
-	.hop_compare	= dcrc_node_cmp,
-};
-
-daos_epoch_t
-dtx_get_min_cos_eph(struct ds_cont_child *cont)
-{
-	if (!d_binheap_is_empty(&cont->sc_dtx_cos_heap)) {
-		struct d_binheap_node *root;
-
-		root = d_binheap_root(&cont->sc_dtx_cos_heap);
-		if (root != NULL) {
-			struct dtx_cos_rec_child *dcrc;
-
-			dcrc = container_of(root, struct dtx_cos_rec_child, dcrc_heap_node);
-
-			return dcrc->dcrc_epoch;
-		}
-	}
-
-	return d_hlc_get();
-}
-
 int
 dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	    daos_unit_oid_t *oid, uint64_t dkey_hash,
@@ -428,7 +381,6 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	struct dtx_cos_rec_bundle	rbund;
 	d_iov_t				kiov;
 	d_iov_t				riov;
-	d_iov_t				riov_out = { 0 };
 	int				rc;
 
 	if (!dtx_cont_opened(cont))
@@ -447,14 +399,7 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	d_iov_set(&riov, &rbund, sizeof(rbund));
 
 	rc = dbtree_upsert(cont->sc_dtx_cos_hdl, BTR_PROBE_EQ,
-			   DAOS_INTENT_UPDATE, &kiov, &riov, &riov_out);
-
-	if (rc == 0) {
-		struct dtx_cos_rec_child *dcrc;
-
-		dcrc = riov_out.iov_buf;
-		rc = d_binheap_insert(&cont->sc_dtx_cos_heap, &dcrc->dcrc_heap_node);
-	}
+			   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO, "Insert DTX "DF_DTI" to CoS "
 		 "cache, "DF_UOID", key %lu, flags %x: rc = "DF_RC"\n",
@@ -468,6 +413,7 @@ int
 dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 	    daos_unit_oid_t *oid, uint64_t dkey_hash)
 {
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_cos_key		 key;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
@@ -491,8 +437,15 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) != 0)
 			continue;
 
-		dcrc_delete(cont, dcrc);
+		d_list_del(&dcrc->dcrc_gl_committable);
+		d_list_del(&dcrc->dcrc_lo_link);
+		dtx_entry_put(dcrc->dcrc_dte);
+		D_FREE(dcrc);
+
+		cont->sc_dtx_committable_count--;
 		dcr->dcr_prio_count--;
+		d_tm_dec_gauge(tls->dt_committable, 1);
+
 		D_GOTO(out, found = 1);
 	}
 
@@ -500,8 +453,15 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) != 0)
 			continue;
 
-		dcrc_delete(cont, dcrc);
+		d_list_del(&dcrc->dcrc_gl_committable);
+		d_list_del(&dcrc->dcrc_lo_link);
+		dtx_entry_put(dcrc->dcrc_dte);
+		D_FREE(dcrc);
+
+		cont->sc_dtx_committable_count--;
 		dcr->dcr_reg_count--;
+		d_tm_dec_gauge(tls->dt_committable, 1);
+
 		D_GOTO(out, found = 2);
 	}
 
@@ -509,8 +469,14 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		if (memcmp(&dcrc->dcrc_dte->dte_xid, xid, sizeof(*xid)) != 0)
 			continue;
 
-		dcrc_delete(cont, dcrc);
+		d_list_del(&dcrc->dcrc_gl_committable);
+		d_list_del(&dcrc->dcrc_lo_link);
+		dtx_entry_put(dcrc->dcrc_dte);
+		D_FREE(dcrc);
+
+		cont->sc_dtx_committable_count--;
 		dcr->dcr_expcmt_count--;
+		d_tm_dec_gauge(tls->dt_committable, 1);
 
 		D_GOTO(out, found = 3);
 	}
@@ -520,6 +486,7 @@ out:
 	    dcr->dcr_expcmt_count == 0)
 		rc = dbtree_delete(cont->sc_dtx_cos_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);
+
 	if (rc == 0 && found == 0)
 		rc = -DER_NONEXIST;
 

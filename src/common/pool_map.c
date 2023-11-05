@@ -1160,7 +1160,7 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 					return -DER_NO_PERM;
 				}
 
-			} else if (dc->co_status == PO_COMP_ST_UPIN) {
+			} else if (dc->co_status & (PO_COMP_ST_UPIN | PO_COMP_ST_UP)) {
 				if (!existed) {
 					D_ERROR("status [UPIN] not valid for "
 						"new comp\n");
@@ -2057,11 +2057,14 @@ pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 }
 
 static int
-activate_new_target(struct pool_domain *domain, uint32_t id)
+refresh_dom(struct pool_domain *domain, uint32_t id, uint32_t status)
 {
 	int i;
 
 	D_ASSERT(domain->do_targets != NULL);
+
+	/* XXX Only support UP and UPIN status update now */
+	D_ASSERT(status & (PO_COMP_ST_UP | PO_COMP_ST_UPIN));
 
 	/*
 	 * If this component has children, recurse over them.
@@ -2071,10 +2074,19 @@ activate_new_target(struct pool_domain *domain, uint32_t id)
 	 */
 	if (domain->do_children != NULL) {
 		for (i = 0; i < domain->do_child_nr; i++) {
-			int found = activate_new_target(&domain->do_children[i],
-							id);
+			int found = refresh_dom(&domain->do_children[i], id, status);
 			if (found) {
-				domain->do_comp.co_status = PO_COMP_ST_UPIN;
+				if (status == PO_COMP_ST_UP) {
+					/* Dom should only be changed to UP if its original
+					 * status is NEW, otherwise if parts of targets under
+					 * the domain are turns to UP, the domain status might
+					 * be UPIN, then it can not be turned to UP.
+					 */
+					if (domain->do_comp.co_status == PO_COMP_ST_NEW)
+						domain->do_comp.co_status = status;
+				} else { /* UPIN status */
+					domain->do_comp.co_status = status;
+				}
 				return found;
 			}
 		}
@@ -2088,11 +2100,14 @@ activate_new_target(struct pool_domain *domain, uint32_t id)
 	for (i = 0; i < domain->do_target_nr; i++) {
 		struct pool_component *comp = &domain->do_targets[i].ta_comp;
 
+		/* NB: Since it is only used to update to UP and UPIN, and this
+		 * check might need change for other status XXX
+		 */
 		if (comp->co_id == id && (comp->co_status == PO_COMP_ST_NEW ||
 					  comp->co_status == PO_COMP_ST_UP ||
 					  comp->co_status == PO_COMP_ST_DRAIN)) {
-			comp->co_status = PO_COMP_ST_UPIN;
-			domain->do_comp.co_status = PO_COMP_ST_UPIN;
+			comp->co_status = status;
+			domain->do_comp.co_status = status;
 			return 1;
 		}
 	}
@@ -2101,19 +2116,20 @@ activate_new_target(struct pool_domain *domain, uint32_t id)
 }
 
 /**
- * Activate (move to UPIN) a NEW or UP target and all of its parent domains
+ * Rfresh target status of one target and all of its parent domains
  *
  * \param map	[IN]		The pool map to search
  * \param id	[IN]		Target ID to search
+ * \param status [IN]		Status to be updated
  *
  * \return		0 if target was not found or not in NEW state
  *                      1 if target was found and activated
  */
 int
-pool_map_activate_new_target(struct pool_map *map, uint32_t id)
+pool_map_refresh_tgt_dom_status(struct pool_map *map, uint32_t id, uint32_t status)
 {
 	if (map->po_tree != NULL)
-		return activate_new_target(map->po_tree, id);
+		return refresh_dom(map->po_tree, id, status);
 	return 0;
 }
 

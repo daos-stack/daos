@@ -342,7 +342,7 @@ rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
 		enum pool_comp_state states);
 
 bool
-is_current_tgt_unavail(struct rebuild_tgt_pool_tracker *rpt);
+is_rebuild_scanning_tgt(struct rebuild_tgt_pool_tracker *rpt);
 
 typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
 				       uuid_t co_uuid, daos_unit_oid_t oid,

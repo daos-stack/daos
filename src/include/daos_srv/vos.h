@@ -1531,4 +1531,14 @@ vos_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr);
 void
 vos_aggregate_exit(daos_handle_t coh);
 
+/**
+ * Check if the oid exist in current vos.
+ * \param[in]	coh	vos handle
+ * \param[in]	oid	oid to be checked.
+ *
+ * \return	true	exist.
+ * 		false	does not exist.
+ */
+bool
+vos_oi_exist(daos_handle_t oh, daos_unit_oid_t oid);
 #endif /* __VOS_API_H */

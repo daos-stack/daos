@@ -142,7 +142,6 @@ extern uint32_t dtx_agg_thd_age_lo;
  */
 extern uint32_t dtx_batched_ult_max;
 
-extern struct d_binheap_ops dtx_cos_heap_ops;
 /*
  * If the size of dtx_memberships exceeds DTX_INLINE_MBS_SIZE, then load it (DTX mbs)
  * dynamically when use it to avoid holding a lot of DRAM resource for long time that

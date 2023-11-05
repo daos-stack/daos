@@ -100,6 +100,8 @@ struct migrate_pool_tls {
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
 				mpt_init_tls:1,
+				mpt_reintegrating_set:1,
+				mpt_reintegrating:1,
 				mpt_fini:1;
 };
 

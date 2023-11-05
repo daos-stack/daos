@@ -58,7 +58,6 @@ struct ds_cont_child {
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
 	d_list_t		 sc_open_hdls;	/* the list of ds_cont_hdl. */
-	d_list_t		 sc_open_dtx_list; /* link to all open leader dtx. */
 	struct daos_csummer	*sc_csummer;
 	struct cont_props	 sc_props;
 
@@ -114,24 +113,22 @@ struct ds_cont_child {
 	 */
 	uint64_t		*sc_ec_query_agg_eph;
 
-
-	/* local DTX commit eph */
-	uint64_t		*sc_dtx_commit_eph;
 	/**
 	 * Timestamp of last EC update, which is used by aggregation to check
 	 * if it needs to do EC aggregate.
 	 */
 	uint64_t		sc_ec_update_timestamp;
 
+	/**
+	 * Timestamp of last update stable epoch.
+	 */
+	uint64_t		sc_last_stable_timestamp;
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
 	struct btr_root		 sc_dtx_cos_btr;
 	/* The global list for committable DTXs. */
 	d_list_t		 sc_dtx_cos_list;
-
-	/* heap of the dtx */
-	struct d_binheap	 sc_dtx_cos_heap;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
@@ -209,10 +206,6 @@ void ds_cont_child_get(struct ds_cont_child *cont);
 
 int ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
 			      struct ds_cont_child **cont);
-
-struct dtx_leader_handle;
-void ds_cont_child_insert_dtx(struct ds_cont_child *cont_child,
-			      struct dtx_leader_handle *new_dlh);
 
 typedef int (*cont_iter_cb_t)(uuid_t co_uuid, vos_iter_entry_t *ent, void *arg);
 int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,

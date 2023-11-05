@@ -157,6 +157,7 @@ ds_pool_disconnect_handler_v5(crt_rpc_t *rpc);
 void
      ds_pool_query_handler_v6(crt_rpc_t *rpc);
 void ds_pool_query_handler_v5(crt_rpc_t *rpc);
+void ds_pool_query_handler_v6(crt_rpc_t *rpc);
 void ds_pool_prop_get_handler(crt_rpc_t *rpc);
 void ds_pool_prop_set_handler(crt_rpc_t *rpc);
 void ds_pool_acl_update_handler(crt_rpc_t *rpc);
@@ -220,6 +221,7 @@ void ds_pool_replicas_update_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop);
 int ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic);
 void ds_pool_tgt_query_map_handler(crt_rpc_t *rpc);
+void ds_pool_tgt_query_map_handler_v6(crt_rpc_t *rpc);
 void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
 
 /*

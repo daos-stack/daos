@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -114,7 +114,6 @@ static struct daos_rpc_handler pool_handlers_v5[] = {POOL_PROTO_CLI_RPC_LIST(5)
 
 static struct daos_rpc_handler pool_handlers_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
 							 POOL_PROTO_SRV_RPC_LIST};
-
 #undef X
 
 static void *

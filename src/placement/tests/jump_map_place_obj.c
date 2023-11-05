@@ -384,8 +384,8 @@ jtc_scan(struct jm_test_ctx *ctx)
 {
 	struct daos_obj_md md = {.omd_id = ctx->oid, .omd_ver = ctx->ver};
 
-	rr_find(ctx->pl_map, &md, ctx->ver, &ctx->reint, pl_obj_find_reint);
-	rr_find(ctx->pl_map, &md, ctx->ver, &ctx->new, pl_obj_find_addition);
+	rr_find(ctx->pl_map, &md, ctx->ver, &ctx->reint, pl_obj_find_rebuild);
+	rr_find(ctx->pl_map, &md, ctx->ver, &ctx->new, pl_obj_find_rebuild);
 	rr_find(ctx->pl_map, &md, ctx->ver, &ctx->rebuild, pl_obj_find_rebuild);
 
 	if (ctx->enable_print_layout) {

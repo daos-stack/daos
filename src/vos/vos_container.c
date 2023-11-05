@@ -498,6 +498,21 @@ vos_cont_get_boundary(daos_handle_t coh, uint64_t *epoch)
 		return 0;
 	}
 
+	if (cont->vc_lowest_act_eph != 0) {
+		*epoch = cont->vc_lowest_act_eph - 1;
+		D_DEBUG(DB_TRACE, "get from act" DF_X64 " with container " DF_UUID "\n",
+			*epoch, DP_UUID(cont->vc_id));
+		return 0;
+	}
+
+	D_ASSERT(cont->vc_cmt_dtx_indexed == 1);
+	if (cont->vc_highest_cmt_eph != 0) {
+		*epoch = cont->vc_highest_cmt_eph + 1;
+		D_DEBUG(DB_TRACE, "get from cmt" DF_X64 " with container " DF_UUID "\n",
+			*epoch, DP_UUID(cont->vc_id));
+		return 0;
+	}
+
 	uuid_copy(ukey.uuid, cont->vc_id);
 	rc = cont_df_lookup(cont->vc_pool, &ukey, &args);
 	if (rc) {

@@ -267,10 +267,6 @@ int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				daos_epoch_t eph);
 int ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop);
 
-int ds_cont_track_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
-			     daos_epoch_t **ec_epoch_p, daos_epoch_t **dtx_epoch_p);
-int ds_cont_track_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
-
 /* oid_iv.c */
 int ds_oid_iv_init(void);
 int ds_oid_iv_fini(void);

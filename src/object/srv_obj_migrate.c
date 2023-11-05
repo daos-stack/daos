@@ -2948,34 +2948,50 @@ migrate_obj_ult(void *data)
 		D_GOTO(free_notls, rc = 0);
 	}
 
-	/* Only reintegrating targets/pool needs to discard the object,
-	 * if sp_need_discard is 0, either the target does not need to
-	 * discard, or discard has been done. spc_discard_done means
-	 * discarding has been done in the current VOS target.
-	 */
-	if (tls->mpt_pool->spc_pool->sp_need_discard) {
-		while(!tls->mpt_pool->spc_discard_done) {
-			D_DEBUG(DB_REBUILD, DF_UUID" wait for discard to finish.\n",
-				DP_UUID(arg->pool_uuid));
-			dss_sleep(2 * 1000);
-			if (tls->mpt_fini)
-				D_GOTO(free_notls, rc);
-		}
-		if (tls->mpt_pool->spc_pool->sp_discard_status) {
-			rc = tls->mpt_pool->spc_pool->sp_discard_status;
-			D_DEBUG(DB_REBUILD, DF_UUID " discard failure: " DF_RC,
-				DP_UUID(arg->pool_uuid), DP_RC(rc));
-			D_GOTO(out, rc);
-		}
+	if (!tls->mpt_reintegrating_set) {
+		struct pool_target *target;
+		struct ds_pool *pool = tls->mpt_pool->spc_pool;
+
+		ABT_rwlock_rdlock(pool->sp_lock);
+		rc = pool_map_find_target_by_rank_idx(pool->sp_map, dss_self_rank(),
+						      dss_get_module_info()->dmi_tgt_id,
+						      &target);
+		ABT_rwlock_unlock(pool->sp_lock);
+
+		D_ASSERT(rc == 1);
+		D_DEBUG(DB_REBUILD, "status %u in version %u\n", target->ta_comp.co_status,
+			target->ta_comp.co_in_ver);
+		if (target->ta_comp.co_status == PO_COMP_ST_UP &&
+		    target->ta_comp.co_in_ver <= tls->mpt_version)
+			tls->mpt_reintegrating = 1;
+
+		tls->mpt_reintegrating_set = 1;
 	}
 
-	if (tls->mpt_opc == RB_OP_REINT) {
+	if (tls->mpt_reintegrating) {
 		struct ds_cont_child *cont_child = NULL;
 
 		/* check again to see if the container is being destroyed. */
 		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child, false);
-		if (cont_child != NULL && !cont_child->sc_stopping)
-			vos_cont_get_boundary(cont_child->sc_hdl, &stable_epoch);
+		if (cont_child != NULL && !cont_child->sc_stopping) {
+			if (vos_oi_exist(cont_child->sc_hdl, arg->oid)) {
+				rc = vos_dtx_cmt_reindex(cont_child->sc_hdl);
+				if (rc < 0) {
+					ds_cont_child_put(cont_child);
+					D_GOTO(out, rc);
+				}
+				vos_cont_get_boundary(cont_child->sc_hdl,
+						      &stable_epoch);
+			} else {
+				/* If the object does not exist on the local
+				 * target at all, it is either created after
+				 * stable epoch or migrated to this target due
+				 * to co-location. let's set stable epoch to
+				 * 0, i.e. migrating the whole object.
+				 */
+				stable_epoch = 0;
+			}
+		}
 
 		if (cont_child)
 			ds_cont_child_put(cont_child);
@@ -3078,7 +3094,6 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 	daos_handle_t		 toh = tls->mpt_migrated_root_hdl;
 	struct migrate_obj_val	 val;
 	d_iov_t			 val_iov;
-	int			 ult_tgt_idx;
 	int			 rc;
 
 	D_ASSERT(daos_handle_is_valid(toh));
@@ -3107,28 +3122,9 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 		       sizeof(*obj_arg->snaps) * cont_arg->snap_cnt);
 	}
 
-	if (cont_arg->pool_tls->mpt_opc == RB_OP_REINT) {
-		/* This ULT will need to destroy objects prior to migration. To
-		 * do this it must be scheduled on the xstream where that data
-		 * is stored.
-		 */
-		ult_tgt_idx = tgt_idx;
-	} else {
-		/* This ULT will not need to destroy data, it will act as a
-		 * client to enumerate the data to migrate, then migrate that
-		 * data on a different ULT that is pinned to the appropriate
-		 * target.
-		 *
-		 * Because no data migration happens here, schedule this
-		 * pseudorandomly to get better performance by leveraging all
-		 * the xstreams.
-		 */
-		ult_tgt_idx = d_rand() % dss_tgt_nr;
-	}
-
 	/* Let's iterate the object on different xstream */
 	rc = dss_ult_create(migrate_obj_ult, obj_arg, DSS_XS_VOS,
-			    ult_tgt_idx, MIGRATE_STACK_SIZE,
+			    tgt_idx, MIGRATE_STACK_SIZE,
 			    NULL);
 	if (rc)
 		goto free;

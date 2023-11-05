@@ -2304,30 +2304,6 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 	if (!obj_is_modification_opc(opc))
 		return 0;
 
-	/* If the incoming I/O is during integration, then it needs to wait the
-	 * vos discard to finish, which otherwise might discard these new in-flight
-	 * I/O update.
-	 */
-	if ((flags & ORF_REINTEGRATING_IO) &&
-	    (child->sc_pool->spc_pool->sp_need_discard &&
-	     child->sc_pool->spc_discard_done == 0)) {
-		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
-		return -DER_UPDATE_AGAIN;
-	}
-
-	/* All I/O during rebuilding, needs to wait for the rebuild fence to
-	 * be generated (see rebuild_prepare_one()), which will create a boundary
-	 * for rebuild, so the data after boundary(epoch) should not be rebuilt,
-	 * which otherwise might be written duplicately, which might cause
-	 * the failure in VOS.
-	 */
-	if ((flags & ORF_REBUILDING_IO) &&
-	    (!child->sc_pool->spc_pool->sp_disable_rebuild &&
-	      child->sc_pool->spc_rebuild_fence == 0)) {
-		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
-		return -DER_UPDATE_AGAIN;
-	}
-
 	return 0;
 }
 
@@ -2934,7 +2910,7 @@ again2:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(ioc.ioc_coh, &orw->orw_dti, &epoch, 1,
+	rc = dtx_leader_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
 			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
@@ -3791,7 +3767,7 @@ again2:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(ioc.ioc_coh, &opi->opi_dti, &epoch, 1,
+	rc = dtx_leader_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
 			      version, &opi->opi_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
@@ -4844,7 +4820,7 @@ again:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(dca->dca_ioc->ioc_coh, &dcsh->dcsh_xid,
+	rc = dtx_leader_begin(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
 			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,
 			      oci->oci_map_ver, &dcsh->dcsh_leader_oid,
 			      NULL, 0, tgts, tgt_cnt - 1, dtx_flags,

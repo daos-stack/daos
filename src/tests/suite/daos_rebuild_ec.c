@@ -1324,6 +1324,48 @@ rebuild_ec_parity_overwrite_fail_parity(void **state)
 	free(verify_data);
 }
 
+static void
+rebuild_ec_combined_ops(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	int		rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "delay_rebuild");
+	assert_int_equal(rc, 0);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	write_ec_full(&req, arg->index, 0);
+	ioreq_fini(&req);
+
+	arg->no_rebuild = 1;
+	rebuild_single_pool_rank(arg, 5, true);
+	print_message("sleep 30 seconds for rebuild to be scheduled/delay \n");
+	sleep(30);
+	extend_single_pool_rank(arg, 6);
+	print_message("sleep 5 seconds for extend be scheduled/combined \n");
+	sleep(5);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+
+	arg->no_rebuild = 0;
+	if (arg->myrank == 0)
+		test_rebuild_wait(&arg, 1);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	verify_ec_full(&req, arg->index, 0);
+	ioreq_fini(&req);
+
+	reintegrate_single_pool_rank(arg, 5, true);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	verify_ec_full(&req, arg->index, 0);
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -1458,6 +1500,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD46: fail parity shard and data shards after overwrite",
 	 rebuild_ec_parity_overwrite_fail_parity, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD47: combine multiple rebuild operation for EC",
+	 rebuild_ec_combined_ops, rebuild_ec_6nodes_setup,
 	 test_teardown},
 };
 

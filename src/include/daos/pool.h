@@ -103,6 +103,7 @@ struct dc_pool {
 
 	/* pool redunc factor */
 	uint32_t		dp_rf;
+	uint32_t		dp_rebuild_ver;
 };
 
 static inline unsigned int

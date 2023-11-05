@@ -1269,6 +1269,23 @@ rebuild_sub_rf0_setup(void **state)
 }
 
 int
+rebuild_sub_3nodes_setup(void **state)
+{
+	int rc;
+
+	save_group_state(state);
+	rc = test_setup(state, SETUP_CONT_CONNECT, true,
+			REBUILD_POOL_SIZE, 3, NULL);
+	if (rc) {
+		print_message("It can not create the pool with 3 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+		return 0;
+	}
+
+	return rc;
+}
+
+int
 rebuild_sub_teardown(void **state)
 {
 	int rc;

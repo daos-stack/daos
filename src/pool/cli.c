@@ -59,6 +59,9 @@ dc_pool_init(void)
 	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
 		rc = daos_rpc_register(&pool_proto_fmt_v6, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
+	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
+		rc = daos_rpc_register(&pool_proto_fmt_v6, POOL_PROTO_CLI_COUNT, NULL,
+				       DAOS_POOL_MODULE);
 	} else {
 		D_ERROR("%d version pool RPC not supported.\n", dc_pool_proto_version);
 		rc = -DER_PROTO;
@@ -87,6 +90,7 @@ dc_pool_fini(void)
 		rc = -DER_PROTO;
 		DL_ERROR(rc, "%d version pool RPC not supported", dc_pool_proto_version);
 	}
+
 	if (rc != 0)
 		DL_ERROR(rc, "failed to unregister pool RPCs");
 }
@@ -362,13 +366,13 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 		    struct daos_pool_space *ps, struct daos_rebuild_status *rs,
 		    d_rank_list_t **ranks, daos_pool_info_t *info,
 		    daos_prop_t *prop_req, daos_prop_t *prop_reply,
-		    bool connect)
+		    uint32_t rebuild_ver, bool connect)
 {
 	struct pool_map	       *map;
 	int			rc;
 
-	D_DEBUG(DB_MD, DF_UUID": info=%p (pi_bits="DF_X64"), ranks=%p\n",
-		DP_UUID(pool->dp_pool), info, info ? info->pi_bits : 0, ranks);
+	D_DEBUG(DB_MD, DF_UUID": info=%p (pi_bits="DF_X64"), ranks=%p rebuild_ver %u\n",
+		DP_UUID(pool->dp_pool), info, info ? info->pi_bits : 0, ranks, rebuild_ver);
 
 	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
@@ -381,6 +385,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	if (rc)
 		goto out_unlock;
 
+	pool->dp_rebuild_ver = rebuild_ver;
 	/* Scan all targets for populating info->pi_ndisabled */
 	if (info != NULL) {
 		rc = pool_map_find_failed_tgts(map, NULL, &info->pi_ndisabled);
@@ -473,7 +478,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 	struct pool_task_priv     *tpriv   = dc_task_get_priv(task);
 	daos_pool_info_t	  *info = arg->pca_info;
 	struct pool_buf		  *map_buf = arg->pca_map_buf;
-	struct pool_connect_out   *pco     = crt_reply_get(arg->rpc);
+	struct pool_connect_v6_out *pco = crt_reply_get(arg->rpc);
 	crt_bulk_t                 bulk;
 	d_iov_t                   *credp;
 	bool                       free_tpriv = true;
@@ -510,8 +515,11 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	rc = process_query_reply(tpriv->pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_op.po_hint.sh_rank, &pco->pco_space, &pco->pco_rebuild_st,
-				 NULL /* tgts */, info, NULL, NULL, true);
+				 pco->pco_op.po_hint.sh_rank,
+				 &pco->pco_space, &pco->pco_rebuild_st,
+				 NULL /* tgts */, info, NULL, NULL,
+				 dc_pool_proto_version >= 6 ? pco->pco_rebuild_ver : 0,
+				 true);
 	if (rc != 0) {
 		if (rc == -DER_AGAIN) {
 			rc = tse_task_reinit(task);
@@ -1408,13 +1416,13 @@ pool_query_cb(tse_task_t *task, void *data)
 {
 	struct pool_query_arg	       *arg = (struct pool_query_arg *)data;
 	struct pool_buf		       *map_buf = arg->dqa_map_buf;
-	struct pool_query_out          *out_v5  = crt_reply_get(arg->rpc);
+	struct pool_query_v6_out       *out_v6 = crt_reply_get(arg->rpc);
 	d_rank_list_t		       *ranks = NULL;
 	d_rank_list_t		      **ranks_arg;
 	int				rc = task->dt_result;
 
 	rc = pool_rsvc_client_complete_rpc(arg->dqa_pool, &arg->rpc->cr_ep, rc,
-					   &out_v5->pqo_op, task);
+					   &out_v6->pqo_op, task);
 	if (rc < 0)
 		D_GOTO(out, rc);
 	else if (rc == RSVC_CLIENT_RECHOOSE)
@@ -1428,17 +1436,17 @@ pool_query_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	rc = out_v5->pqo_op.po_rc;
+	rc = out_v6->pqo_op.po_rc;
 	if (rc == -DER_TRUNC) {
 		struct dc_pool *pool = arg->dqa_pool;
 
 		D_WARN("pool map buffer size (%ld) < required (%u)\n",
-		       pool_buf_size(map_buf->pb_nr), out_v5->pqo_map_buf_size);
+		       pool_buf_size(map_buf->pb_nr), out_v6->pqo_map_buf_size);
 
 		/* retry with map buffer size required by server */
 		D_INFO("retry with map buffer size required by server (%ul)\n",
-		       out_v5->pqo_map_buf_size);
-		pool->dp_map_sz = out_v5->pqo_map_buf_size;
+		       out_v6->pqo_map_buf_size);
+		pool->dp_map_sz = out_v6->pqo_map_buf_size;
 		rc = tse_task_reinit(task);
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
@@ -1449,11 +1457,12 @@ pool_query_cb(tse_task_t *task, void *data)
 	ranks_arg = arg->dqa_ranks ? arg->dqa_ranks : &ranks;
 
 	rc = process_query_reply(arg->dqa_pool, map_buf,
-				 out_v5->pqo_op.po_map_version,
-				 out_v5->pqo_op.po_hint.sh_rank,
-				 &out_v5->pqo_space, &out_v5->pqo_rebuild_st,
+				 out_v6->pqo_op.po_map_version,
+				 out_v6->pqo_op.po_hint.sh_rank,
+				 &out_v6->pqo_space, &out_v6->pqo_rebuild_st,
 				 ranks_arg, arg->dqa_info,
-				 arg->dqa_prop, out_v5->pqo_prop, false);
+				 arg->dqa_prop, out_v6->pqo_prop,
+				 dc_pool_proto_version >= 6 ? out_v6->pqo_rebuild_ver : 0, false);
 	if (rc != 0) {
 		if (rc == -DER_AGAIN) {
 			rc = tse_task_reinit(task);
@@ -1713,7 +1722,7 @@ map_refresh_cb(tse_task_t *task, void *varg)
 	struct map_refresh_arg	       *arg = tse_task_buf_embedded(task, sizeof(*arg));
 	struct dc_pool		       *pool = arg->mra_pool;
 	struct pool_tgt_query_map_in   *in = crt_req_get(cb_arg->mrc_rpc);
-	struct pool_tgt_query_map_out  *out = crt_reply_get(cb_arg->mrc_rpc);
+	struct pool_tgt_query_map_v6_out  *out = crt_reply_get(cb_arg->mrc_rpc);
 	unsigned int			version_cached;
 	struct pool_map		       *map;
 	bool				reinit = false;
@@ -1809,7 +1818,8 @@ map_refresh_cb(tse_task_t *task, void *varg)
 
 	rc = dc_pool_map_update(pool, map, false /* connect */);
 	pool_map_decref(map);
-
+	if (dc_pool_proto_version >= 6)
+		pool->dp_rebuild_ver = out->tmo_rebuild_ver;
 out:
 	destroy_map_refresh_rpc(cb_arg->mrc_rpc, cb_arg->mrc_map_buf);
 
