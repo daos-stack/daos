@@ -75,17 +75,6 @@
 
 /* Create a fake st_ino in stat for a path */
 #define FAKE_ST_INO(path)   (d_hash_string_u32(path, strnlen(path, DFS_MAX_PATH)))
-/*
-static inline void
-compute_inode(struct dfuse_cont *dfs, daos_obj_id_t *oid, ino_t *_ino)
-{
-	uint64_t hi;
-
-	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_ino << 48);
-
-	*_ino = hi ^ (oid->lo << 32);
-}
-*/
 
 /* structure allocated for dfs container */
 struct dfs_mt {
@@ -109,6 +98,7 @@ static _Atomic uint64_t        num_opendir;
 static _Atomic uint64_t        num_readdir;
 static _Atomic uint64_t        num_link;
 static _Atomic uint64_t        num_unlink;
+static _Atomic uint64_t        num_rdlink;
 static _Atomic uint64_t        num_seek;
 static _Atomic uint64_t        num_mkdir;
 static _Atomic uint64_t        num_rmdir;
@@ -136,9 +126,6 @@ static bool             daos_inited;
 static bool             daos_debug_inited;
 static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
-
-/* data needed in compatible mode */
-d_list_t                pools_head;
 
 static int
 init_dfs(int idx);
@@ -255,8 +242,6 @@ static pthread_mutex_t lock_fd;
 static pthread_mutex_t lock_dirfd;
 static pthread_mutex_t lock_mmap;
 static pthread_mutex_t lock_fd_dup2ed;
-/* the lock used to query dfs, pool, container, dfs_obj from dfuse */
-static pthread_mutex_t lock_get_dfs_info;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t          mode_not_umask;
@@ -776,8 +761,6 @@ out:
 	return rc;
 }
 
-#define NAME_LEN 128
-
 static int
 fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 {
@@ -791,7 +774,7 @@ fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 	if (rc != 0) {
 		rc = errno;
 		if (rc != ENOTTY)
-			D_DEBUG(DB_ANY, "ioctl call on %d failed %d (%s)\n", fd, rc, strerror(rc));
+			DS_WARN(rc, "ioctl call on %d failed", fd);
 		D_GOTO(err, rc);
 	}
 
@@ -801,7 +784,7 @@ fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 		D_GOTO(err, rc);
 	}
 	if (uuid_compare(dfs_mt->uuid_cont, il_reply.fir_cont) != 0) {
-		D_WARN("Inconsistent container uuid"DF_UUID" != "DF_UUID"\n",
+		D_WARN("inconsistent container uuid"DF_UUID" != "DF_UUID"\n",
 		       DP_UUID(&dfs_mt->uuid_cont), DP_UUID(&il_reply.fir_cont));
 		D_GOTO(err, rc = EINVAL);
 	}
@@ -811,10 +794,10 @@ fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 		rc = errno;
 		/* Known not working for a dir */
 		if (rc != EISDIR)
-			D_WARN("ioctl call on %d failed %d (%s)\n", fd, rc, strerror(rc));
+			DS_WARN(rc, "ioctl call on %d failed", fd);
 		D_GOTO(err, rc);
 	}
-	/* to query dfs object for file/dir */
+	/* to query dfs object for files */
 	D_ALLOC(buff_obj, hsd_reply.fsr_dobj_size);
 	if (buff_obj == NULL)
 		return ENOMEM;
@@ -824,7 +807,7 @@ fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 	rc = ioctl(fd, cmd, iov.iov_buf);
 	if (rc != 0) {
 		rc = errno;
-		D_WARN("ioctl call on %d failed: %d (%s)\n", fd, rc, strerror(rc));
+		DS_WARN(rc, "ioctl call on %d failed", fd);
 		D_GOTO(err, rc);
 	}
 
@@ -833,7 +816,7 @@ fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 
 	rc = dfs_obj_global2local(dfs_mt->dfs, 0, iov, obj);
 	if (rc) {
-		D_WARN("Failed to use dfs object handle: %d (%s)\n", rc, strerror(rc));
+		DS_WARN(rc, "failed to use dfs object handle");
 		D_GOTO(err, rc);
 	}
 
@@ -844,6 +827,8 @@ err:
 	D_FREE(buff_obj);
 	return rc;
 }
+
+#define NAME_LEN 128
 
 static int
 retrieve_handles_from_fuse(int idx)
@@ -1636,22 +1621,19 @@ get_fd_redirected(int fd)
 {
 	int i, fd_ret = fd;
 
+	if (fd >= FD_FILE_BASE)
+		return fd;
 	if (compatible_mode) {
-		/* Look up in hash table */
 		d_list_t     *rlink;
 		int           fd_kernel = fd;
 		struct ht_fd *fd_ht_obj;
 
-		/* only fd allocated by kernel should be passed in compatible mode */
-		assert(fd < FD_FILE_BASE);
 		rlink = d_hash_rec_find(fd_hash, &fd_kernel, sizeof(int));
 		if (rlink != NULL) {
 			fd_ht_obj = fd_obj(rlink);
 			return fd_ht_obj->fake_fd;
 		}
 	}
-	if (fd >= FD_FILE_BASE)
-		return fd;
 
 	D_MUTEX_LOCK(&lock_fd_dup2ed);
 	if (num_fd_dup2ed > 0) {
@@ -1810,6 +1792,8 @@ close_all_duped_fd(void)
 {
 	int i;
 
+	if (num_fd_dup2ed == 0)
+		return;
 	/* Only the main thread will call this function in the destruction phase */
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		if (fd_dup2_list[i].fd_src >= 0)
@@ -1888,19 +1872,6 @@ out_readlink:
 	return (-1);
 }
 
-/* simply skip them to avoid the extra ioctl cost as in libioil. */
-/*
-static bool
-dfuse_check_valid_path(const char *path)
-{
-	if ((strncmp(path, "/sys/", 5) == 0) ||
-		(strncmp(path, "/dev/", 5) == 0) ||
-		strncmp(path, "/proc/", 6) == 0) {
-		return false;
-	}
-	return true;
-}
-*/
 static int
 open_common(int (*real_open)(const char *pathname, int oflags, ...), const char *caller_name,
 	    const char *pathname, int oflags, ...)
@@ -1914,9 +1885,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	char             item_name[DFS_MAX_NAME];
 	char             *parent_dir = NULL;
 	char             *full_path = NULL;
-//	struct            timeval tm1, tm2;
-//	double            d_time;
-
 
 	if (pathname == NULL) {
 		errno = EFAULT;
@@ -1959,7 +1927,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		/* query file object through ioctl() */
 		rc = fetch_dfs_cont_file_obj_with_fd(fd_kernel, dfs_mt, &dfs_obj_local);
 		if (rc)
-//			DS_WARN(rc, "fetch_dfs_cont_file_obj_with_fd() failed");
 			goto out_compatible;
 		/* Need to create a fake fd and associate with fd_kernel */
 		atomic_fetch_add_relaxed(&num_open, 1);
@@ -2147,10 +2114,9 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 org_func:
 	FREE(parent_dir);
 	if (two_args)
-		fd_kernel = real_open(pathname, oflags);
+		return real_open(pathname, oflags);
 	else
-		fd_kernel = real_open(pathname, oflags, mode);
-	return fd_kernel;
+		return real_open(pathname, oflags, mode);
 
 out_error:
 	FREE(parent_dir);
@@ -3042,10 +3008,10 @@ opendir(const char *path)
 	mode_t           mode;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char            *parent_dir = NULL;
-	char            *full_path  = NULL;
+	char            *parent_dir  = NULL;
+	char            *full_path   = NULL;
 	DIR             *dirp_kernel = NULL;
-	struct ht_fd    *fd_ht_obj = NULL;
+	struct ht_fd    *fd_ht_obj   = NULL;
 
 	if (next_opendir == NULL) {
 		next_opendir = dlsym(RTLD_NEXT, "opendir");
@@ -3716,6 +3682,7 @@ readlink(const char *path, char *buf, size_t size)
 	if (!is_target_path)
 		goto out_org;
 
+	atomic_fetch_add_relaxed(&num_rdlink, 1);
 	rc =
 	    dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDONLY | O_NOFOLLOW, &obj, NULL, NULL);
 	if (rc)
@@ -4418,10 +4385,8 @@ fchdir(int dirfd)
 
 org:
 	rc = next_fchdir(dirfd);
-	if (rc == 0) {
+	if (rc == 0)
 		update_cwd();
-		// further improvement: readlink() and update cwd_dir[];
-	}
 	return rc;
 }
 
@@ -5866,37 +5831,7 @@ register_handler(int sig, struct sigaction *old_handler)
 		abort();
 	}
 }
-/*
-static void
-hang_for_debugging(void)
-{
-        FILE *fIn;
-        char szPath[1024], *ReadLine;
-        volatile int  flag = 1;
 
-        fIn = fopen("/proc/self/cmdline", "r");
-        if (fIn == NULL)        {
-                printf("Fail to open file: %s\nQuit\n", szPath);
-                exit(1);
-        }
-
-        ReadLine = fgets(szPath, 255, fIn);
-        fclose(fIn);
-
-        if (ReadLine == NULL)   {
-                printf("Fail to determine the executable file name.\nQuit\n");
-                exit(1);
-        }
-
-        if (strstr(szPath, "hexdump")) {
-                printf("DBG> Found %s. pid = %d\n", szPath, getpid());
-                fflush(stdout);
-                while (flag) {
-                        sleep(1);
-                }
-        }
-}
-*/
 static __attribute__((constructor)) void
 init_myhook(void)
 {
@@ -6019,7 +5954,6 @@ init_myhook(void)
 	install_hook();
 	hook_enabled = 1;
 	hook_enabled_bak = hook_enabled;
-//	hang_for_debugging();
 }
 
 static void
@@ -6027,7 +5961,7 @@ print_summary(void)
 {
 	uint64_t op_sum = 0;
 	uint64_t read_loc, write_loc, open_loc, stat_loc;
-	uint64_t opendir_loc, readdir_loc, link_loc, unlink_loc, seek_loc;
+	uint64_t opendir_loc, readdir_loc, link_loc, unlink_loc, rdlink_loc, seek_loc;
 	uint64_t mkdir_loc, rmdir_loc, rename_loc, mmap_loc;
 
 	if (!report)
@@ -6041,6 +5975,7 @@ print_summary(void)
 	readdir_loc = atomic_load_relaxed(&num_readdir);
 	link_loc    = atomic_load_relaxed(&num_link);
 	unlink_loc  = atomic_load_relaxed(&num_unlink);
+	rdlink_loc  = atomic_load_relaxed(&num_rdlink);
 	seek_loc    = atomic_load_relaxed(&num_seek);
 	mkdir_loc   = atomic_load_relaxed(&num_mkdir);
 	rmdir_loc   = atomic_load_relaxed(&num_rmdir);
@@ -6056,14 +5991,15 @@ print_summary(void)
 	fprintf(stderr, "[readdir]  %" PRIu64 "\n", readdir_loc);
 	fprintf(stderr, "[link   ]  %" PRIu64 "\n", link_loc);
 	fprintf(stderr, "[unlink ]  %" PRIu64 "\n", unlink_loc);
+	fprintf(stderr, "[rdlink ]  %" PRIu64 "\n", rdlink_loc);
 	fprintf(stderr, "[seek   ]  %" PRIu64 "\n", seek_loc);
 	fprintf(stderr, "[mkdir  ]  %" PRIu64 "\n", mkdir_loc);
 	fprintf(stderr, "[rmdir  ]  %" PRIu64 "\n", rmdir_loc);
 	fprintf(stderr, "[rename ]  %" PRIu64 "\n", rename_loc);
 	fprintf(stderr, "[mmap   ]  %" PRIu64 "\n", mmap_loc);
 
-	op_sum = read_loc + write_loc + open_loc + stat_loc + opendir_loc + readdir_loc +
-		 link_loc + unlink_loc + seek_loc + mkdir_loc + rmdir_loc + rename_loc + mmap_loc;
+	op_sum = read_loc + write_loc + open_loc + stat_loc + opendir_loc + readdir_loc + link_loc +
+		 unlink_loc + rdlink_loc + seek_loc + mkdir_loc + rmdir_loc + rename_loc + mmap_loc;
 	fprintf(stderr, "\n");
 	fprintf(stderr, "[op_sum ]  %" PRIu64 "\n", op_sum);
 }
@@ -6108,8 +6044,6 @@ finalize_myhook(void)
 		D_MUTEX_DESTROY(&lock_fd);
 		D_MUTEX_DESTROY(&lock_mmap);
 		D_MUTEX_DESTROY(&lock_fd_dup2ed);
-		if (compatible_mode)
-			D_MUTEX_DESTROY(&lock_get_dfs_info);
 
 		if (hook_enabled_bak)
 			uninstall_hook();
@@ -6128,7 +6062,7 @@ finalize_myhook(void)
 
 		rc = d_hash_table_destroy(fd_hash, false);
 		if (rc != 0) {
-			D_ERROR("error in d_hash_table_destroy(fd_hash): " DF_RC "\n", DP_RC(rc));
+			DL_ERROR(rc, "error in d_hash_table_destroy(fd_hash)");
 		}
 	}
 
@@ -6195,9 +6129,6 @@ finalize_dfs(void)
 	int       rc, i;
 	d_list_t *rlink = NULL;
 
-	if (compatible_mode) {
-		/* Tidy up any open connections */
-	}
 	/* Disable interception */
 	hook_enabled = 0;
 
