@@ -41,6 +41,7 @@ struct obj_io_context;
 extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern unsigned int	srv_io_mode;
+extern unsigned int	obj_coll_punch_thd;
 
 /* Whether check redundancy group validation when DTX resync. */
 extern bool	tx_verify_rdg;
@@ -567,6 +568,10 @@ ec_obj_update_encode(tse_task_t *task, daos_obj_id_t oid,
 int dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		       void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		       uint32_t fw_cnt, tse_task_t *task);
+
+int dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *args,
+			    struct dtx_epoch *epoch, uint64_t api_flags, uint32_t rpc_flags,
+			    uint32_t map_ver, uint32_t *rep_ver, tse_task_t *task);
 
 int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,

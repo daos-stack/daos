@@ -259,9 +259,9 @@ int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
 int ds_pool_svc_global_map_version_get(uuid_t uuid, uint32_t *global_ver);
 
 int
-ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
+ds_pool_child_map_refresh_sync(uuid_t uuid, uint32_t version);
 int
-ds_pool_child_map_refresh_async(struct ds_pool_child *dpc);
+ds_pool_child_map_refresh_async(uuid_t uuid, uint32_t version);
 
 int
 map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *ranks);
