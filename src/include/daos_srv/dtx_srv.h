@@ -64,7 +64,6 @@ struct dtx_handle {
 					 dth_pinned:1,
 					 /* DTXs in CoS list are committed. */
 					 dth_cos_done:1,
-					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
 					 /* Do not keep committed entry. */
@@ -140,6 +139,7 @@ struct dtx_handle {
 struct dtx_sub_status {
 	struct daos_shard_tgt		dss_tgt;
 	int				dss_result;
+	uint32_t			dss_version;
 	uint32_t			dss_comp:1;
 };
 
@@ -152,6 +152,7 @@ struct dtx_leader_handle {
 	struct dtx_handle		dlh_handle;
 	/* result for the distribute transaction */
 	int				dlh_result;
+	uint32_t			dlh_rmt_ver;
 
 	/* The array of the DTX COS entries */
 	uint32_t			dlh_dti_cos_count;
@@ -164,12 +165,26 @@ struct dtx_leader_handle {
 	int32_t				dlh_allow_failure;
 					/* Normal sub requests have been processed. */
 	uint32_t			dlh_normal_sub_done:1,
+					 /* Collective DTX. */
+					 dlh_coll:1,
 					/* Drop conditional flags when forward RPC. */
 					dlh_drop_cond:1;
+	/* Ranks list for collective modification. */
+	d_rank_list_t			*dlh_coll_ranks;
+	/* VOS targets hint for collective modification. */
+	uint8_t				*dlh_coll_hints;
+	/* Bitmap for collective modification on local VOS targets. */
+	uint8_t				*dlh_coll_bitmap;
+	/* The size of dlh_coll_hints array. */
+	uint32_t			dlh_coll_hint_sz;
+	/* The size of dlh_coll_bitmap in bytes. */
+	uint32_t			dlh_coll_bitmap_sz;
+	/* The bcast RPC tree topo for collective transaction */
+	uint16_t			dlh_coll_tree_topo;
+	/* How many delay forward sub request. */
+	uint16_t			dlh_delay_sub_cnt;
 	/* How many normal sub request. */
 	uint32_t			dlh_normal_sub_cnt;
-	/* How many delay forward sub request. */
-	uint32_t			dlh_delay_sub_cnt;
 	/* The index of the first target that forward sub-request to. */
 	uint32_t			dlh_forward_idx;
 	/* The count of the targets that forward sub-request to. */
@@ -205,7 +220,7 @@ enum dtx_flags {
 	DTX_FOR_MIGRATION	= (1 << 3),
 	/** Ignore other uncommitted DTXs. */
 	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
-	/** Resent request. */
+	/** Resent request. Out-of-date. */
 	DTX_RESEND		= (1 << 5),
 	/** Force DTX refresh if hit non-committed DTX on non-leader. Out-of-date DAOS-7878. */
 	DTX_FORCE_REFRESH	= (1 << 6),
@@ -213,6 +228,8 @@ enum dtx_flags {
 	DTX_PREPARED		= (1 << 7),
 	/** Do not keep committed entry. */
 	DTX_DROP_CMT		= (1 << 8),
+	/** Collective DTX. */
+	DTX_COLL		= (1 << 9),
 };
 
 void
@@ -220,12 +237,12 @@ dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth);
 int
 dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash);
 int
-dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
-		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
-		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
-		 struct dtx_id *dti_cos, int dti_cos_cnt,
-		 struct daos_shard_tgt *tgts, int tgt_cnt, uint32_t flags,
-		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh);
+dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
+		 uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+		 struct dtx_id *dti_cos, int dti_cos_cnt, uint8_t *hints, uint32_t hint_sz,
+		 uint8_t *bitmap, uint32_t bitmap_sz, struct daos_shard_tgt *tgts, int tgt_cnt,
+		 uint32_t flags, d_rank_list_t *ranks, struct dtx_memberships *mbs,
+		 struct dtx_leader_handle **p_dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result);
 
@@ -260,9 +277,20 @@ void dtx_cont_deregister(struct ds_cont_child *cont);
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);
 
+int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
+	       struct dtx_cos_key *dcks, int count);
+
 int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch);
 
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
+
+int dtx_coll_commit(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ranks,
+		    uint8_t *hints, uint32_t hint_sz, uint8_t *bitmap, uint32_t bitmap_sz,
+		    uint32_t version);
+
+int dtx_coll_abort(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ranks,
+		   uint8_t *hints, uint32_t hint_sz, uint8_t *bitmap, uint32_t bitmap_sz,
+		   uint32_t version, daos_epoch_t epoch);
 
 /**
  * Check whether the given DTX is resent one or not.
