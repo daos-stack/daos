@@ -576,14 +576,14 @@ class TestRunner():
             # Save the group's gid
             if group and group not in group_gid:
                 try:
-                    group_gid[group] = self._query_create_group(clients, group, create)
+                    group_gid[group] = self._query_create_group(logger, clients, group, create)
                 except LaunchException as error:
                     self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
                     return 128
 
             gid = group_gid.get(group, None)
             try:
-                self._query_create_user(clients, user, gid, create)
+                self._query_create_user(logger, clients, user, gid, create)
             except LaunchException as error:
                 self.test_result.fail_test(logger, "Prepare", str(error), sys.exc_info())
                 return 128
@@ -618,7 +618,7 @@ class TestRunner():
 
         # Create the group
         logger.info('Creating group %s', group)
-        if not groupadd(hosts, group, True, True).passed:
+        if not groupadd(logger, hosts, group, True, True).passed:
             raise LaunchException(f'Error creating group {group}')
 
         # Get the group id on each node
@@ -656,11 +656,11 @@ class TestRunner():
 
         # Delete and ignore errors, in case user account is inconsistent across nodes
         logger.info('Deleting user %s', user)
-        _ = userdel(hosts, user, True)
+        _ = userdel(logger, hosts, user, True)
 
         logger.info('Creating user %s in group %s', user, gid)
         test_env = TestEnvironment()
-        if not useradd(hosts, user, gid, test_env.user_dir, True).passed:
+        if not useradd(logger, hosts, user, gid, test_env.user_dir, True).passed:
             raise LaunchException(f'Error creating user {user}')
 
     def _generate_certs(self, logger):
