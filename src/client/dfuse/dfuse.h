@@ -89,14 +89,58 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args);
 
 struct dfuse_inode_entry;
 
+/* Preread.
+ *
+ * DFuse can start a pre-read of the file on open, then when reads do occur they can happen directly
+ * from the buffer.  For 'linear reads' of a file this means that the read can be triggered sooner
+ * and performed as one dfs request.  Make use of the pre-read code to only use this for trivial
+ * reads, if a file is not read linearly or it's written to then back off to the regular behavior,
+ * which will likely use the kernel cache.
+ *
+ * Pre-read is enabled when:
+ *  Caching is enabled
+ *  The file is not cached
+ *  The file is small enough to fit in one buffer (1mb)
+ *  The previous file from the same directory was read linearly.
+ * Similar to the READDIR_PLUS_AUTO logic this feature is enabled bassed on the I/O pattern of the
+ * most recent access to the parent directory, general I/O workloads or interception library use are
+ * unlikely to trigger this code however something that is reading the entire contents of a
+ * directory tree should.
+ *
+ * This works by creating a new descriptor which is pointed to by the open handle, on open dfuse
+ * decides if it will use pre-read and if so allocate a new descriptor, add it to the open handle
+ * and then once it's replied to the open immediately issue a read.  The new descriptor includes a
+ * lock which is locked by open before it replies to the kernel request and unlocked by the dfs read
+ * callback.  Read requests then take the lock to ensure the dfs read is complete and reply directly
+ * with the data in the buffer.
+ *
+ * This works up to the buffer size, the pre-read tries to read the expected file size is smaller
+ * then dfuse will detect this and back off to regular read, however it will not detect if the file
+ * has grown in size.
+ *
+ * A dfuse_event is hung off this new descriptor and these come from the same pool as regular reads,
+ * this buffer is kept as long as it's needed but released as soon as possible, either on error or
+ * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
+ */
+struct dfuse_read_ahead {
+	pthread_mutex_t     dra_lock;
+	struct dfuse_event *dra_ev;
+	int                 dra_rc;
+};
+
 /** what is returned as the handle for fuse fuse_file_info on create/open/opendir */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
 	dfs_t                    *doh_dfs;
 	/** the DFS object handle.  Not created for directories. */
 	dfs_obj_t                *doh_obj;
+
+	struct dfuse_read_ahead  *doh_readahead;
+
 	/** the inode entry for the file */
 	struct dfuse_inode_entry *doh_ie;
+
+	struct dfuse_inode_entry *doh_parent_dir;
 
 	/** readdir handle. */
 	struct dfuse_readdir_hdl *doh_rd;
@@ -128,7 +172,7 @@ struct dfuse_obj_hdl {
 	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
 
-	/* True if the file handle is writeable - used for cache invalidation */
+	/* True if the file handle is writable - used for cache invalidation */
 	bool                      doh_writeable;
 
 	/* Track possible kernel cache of readdir on this directory */
@@ -335,9 +379,11 @@ struct dfuse_event {
 		struct dfuse_inode_entry *de_ie;
 	};
 	off_t  de_req_position; /**< The file position requested by fuse */
-	size_t de_req_len;
+	union {
+		size_t de_req_len;
+		size_t de_readahead_len;
+	};
 	void (*de_complete_cb)(struct dfuse_event *ev);
-
 	struct stat de_attr;
 };
 
@@ -367,6 +413,39 @@ struct dfuse_pool {
 	struct d_hash_table dfp_cont_table;
 };
 
+/* Statistics that dfuse keeps per container.  Logged at umount and can be queried through
+ * 'daos filesystem query`.
+ */
+#define D_FOREACH_DFUSE_STATX(ACTION)                                                              \
+	ACTION(CREATE)                                                                             \
+	ACTION(MKNOD)                                                                              \
+	ACTION(FGETATTR)                                                                           \
+	ACTION(GETATTR)                                                                            \
+	ACTION(FSETATTR)                                                                           \
+	ACTION(SETATTR)                                                                            \
+	ACTION(LOOKUP)                                                                             \
+	ACTION(MKDIR)                                                                              \
+	ACTION(UNLINK)                                                                             \
+	ACTION(READDIR)                                                                            \
+	ACTION(SYMLINK)                                                                            \
+	ACTION(OPENDIR)                                                                            \
+	ACTION(SETXATTR)                                                                           \
+	ACTION(GETXATTR)                                                                           \
+	ACTION(RMXATTR)                                                                            \
+	ACTION(LISTXATTR)                                                                          \
+	ACTION(RENAME)                                                                             \
+	ACTION(OPEN)                                                                               \
+	ACTION(READ)                                                                               \
+	ACTION(WRITE)                                                                              \
+	ACTION(STATFS)
+
+#define DFUSE_STAT_DEFINE(name, ...) DS_##name,
+
+enum dfuse_stat_id {
+	/** Return value representing success */
+	D_FOREACH_DFUSE_STATX(DFUSE_STAT_DEFINE) DS_LIMIT,
+};
+
 /** Container information
  *
  * This represents a container that DFUSE is accessing.  All containers will have a valid dfs
@@ -378,36 +457,41 @@ struct dfuse_pool {
  */
 struct dfuse_cont {
 	/** Fuse handlers to use for this container */
-	struct dfuse_inode_ops	*dfs_ops;
+	struct dfuse_inode_ops *dfs_ops;
 
 	/** Pointer to parent pool, where a reference is held */
-	struct dfuse_pool	*dfs_dfp;
+	struct dfuse_pool      *dfs_dfp;
 
 	/** dfs mount handle */
-	dfs_t			*dfs_ns;
+	dfs_t                  *dfs_ns;
 
 	/** UUID of the container */
-	uuid_t			dfs_cont;
+	uuid_t                  dfs_cont;
 
 	/** Container handle */
-	daos_handle_t		dfs_coh;
+	daos_handle_t           dfs_coh;
 
 	/** Hash table entry entry in dfp_cont_table */
-	d_list_t		dfs_entry;
+	d_list_t                dfs_entry;
 	/** Hash table reference count */
-	ATOMIC uint32_t          dfs_ref;
+	ATOMIC uint32_t         dfs_ref;
 
 	/** Inode number of the root of this container */
-	ino_t			dfs_ino;
+	ino_t                   dfs_ino;
+
+	ATOMIC uint64_t         dfs_stat_value[DS_LIMIT];
 
 	/** Caching information */
-	double			dfc_attr_timeout;
-	double			dfc_dentry_timeout;
-	double			dfc_dentry_dir_timeout;
-	double			dfc_ndentry_timeout;
-	double			dfc_data_timeout;
-	bool			dfc_direct_io_disable;
+	double                  dfc_attr_timeout;
+	double                  dfc_dentry_timeout;
+	double                  dfc_dentry_dir_timeout;
+	double                  dfc_ndentry_timeout;
+	double                  dfc_data_timeout;
+	bool                    dfc_direct_io_disable;
 };
+
+#define DFUSE_IE_STAT_ADD(_ie, _stat)                                                              \
+	atomic_fetch_add_relaxed(&(_ie)->ie_dfs->dfs_stat_value[(_stat)], 1)
 
 void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
@@ -680,6 +764,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %#zx",            \
+				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
 		if ((entry).attr_timeout > 0) {                                                    \
 			(inode)->ie_stat = (entry).attr;                                           \
 			dfuse_mcache_set_time(inode);                                              \
@@ -706,7 +792,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_IOCTL_SIZE(desc, req, arg, size)                                               \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning ioctl");                                          \
+		DFUSE_TRA_DEBUG(desc, "Returning ioctl size %zi", size);                           \
 		__rc = fuse_reply_ioctl(req, 0, arg, size);                                        \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(desc, "fuse_reply_ioctl() returned: %d (%s)", __rc,        \
@@ -793,6 +879,13 @@ struct dfuse_inode_entry {
 
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
+
+	/** Last file closed in this directory was read linearly.  Directories only.
+	 *
+	 * Set on close() of a file in the directory to the value of linear_read from the fh.
+	 * Checked on open of a file to determine if pre-caching is used.
+	 */
+	ATOMIC bool               ie_linear_read;
 };
 
 static inline struct dfuse_inode_entry *
@@ -847,21 +940,21 @@ dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *i
 void
 dfuse_mcache_set_time(struct dfuse_inode_entry *ie);
 
-/* Set the cache as invalid */
+/* Set the metadata cache as invalid */
 void
 dfuse_mcache_evict(struct dfuse_inode_entry *ie);
 
-/* Check the cache setting against a given timeout, and return time left */
+/* Check the metadata cache setting against a given timeout, and return time left */
 bool
 dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 
 /* Data caching functions */
 
-/* Mark the cache as up-to-date from now */
+/* Mark the data cache as up-to-date from now */
 void
 dfuse_dcache_set_time(struct dfuse_inode_entry *ie);
 
-/* Set the cache as invalid */
+/* Set the data cache as invalid */
 void
 dfuse_dcache_evict(struct dfuse_inode_entry *ie);
 
@@ -872,6 +965,9 @@ dfuse_cache_evict(struct dfuse_inode_entry *ie);
 /* Check the cache setting against a given timeout */
 bool
 dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age);
+
+void
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
 
 int
 check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, char *attr,

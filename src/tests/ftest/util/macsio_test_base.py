@@ -5,8 +5,8 @@
 """
 from apricot import TestWithServers
 from exception_utils import CommandFailure
-from macsio_util import MacsioCommand
 from general_utils import get_log_file
+from macsio_util import MacsioCommand
 
 
 class MacsioTestBase(TestWithServers):

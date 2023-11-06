@@ -3,13 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import random
 import threading
+import time
 
-from write_host_file import write_host_file
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
+from write_host_file import write_host_file
 
 
 class OSAOnlineDrain(OSAUtils):
