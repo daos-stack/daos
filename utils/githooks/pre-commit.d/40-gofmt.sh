@@ -8,7 +8,6 @@ set -ue
 
 echo "Gofmt:"
 # shellcheck disable=SC1091
-. utils/githooks/find_base.sh
 
 go_files=
 if [ "$TARGET" = "HEAD" ]; then

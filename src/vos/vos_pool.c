@@ -793,7 +793,7 @@ pool_hop_free(struct d_ulink *hlink)
 	}
 
 	if (pool->vp_dying)
-		vos_delete_blob(pool->vp_id, 0);
+		vos_delete_blob(pool->vp_id, pool->vp_rdb ? VOS_POF_RDB : 0);
 
 	D_FREE(pool);
 }
@@ -1101,7 +1101,8 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
-	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
+	D_DEBUG(DB_MGMT, DF_UUID": No open handles, OK to delete: flags=%x\n", DP_UUID(uuid),
+		flags);
 
 	vos_delete_blob(uuid, flags);
 	return 0;
@@ -1183,11 +1184,14 @@ lock_pool_memory(struct vos_pool *pool)
 	if (lock_mem == LM_FLAG_DISABLED)
 		return;
 
+	/*
+	 * Mlock may take several tens of seconds to complete when memory
+	 * is tight, so mlock is skipped in current MD-on-SSD scenario.
+	 */
 	if (bio_nvme_configured(SMD_DEV_TYPE_META))
-		lock_bytes = vos_pool2umm(pool)->umm_pool->up_store.stor_size;
-	else
-		lock_bytes = pool->vp_pool_df->pd_scm_sz;
+		return;
 
+	lock_bytes = pool->vp_pool_df->pd_scm_sz;
 	rc = mlock((void *)pool->vp_umm.umm_base, lock_bytes);
 	if (rc != 0) {
 		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64

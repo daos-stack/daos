@@ -12,6 +12,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -215,6 +218,59 @@ func TestSecurity_AuthorizedRpcsAreValid(t *testing.T) {
 			if len(invalid) > 0 {
 				t.Fatalf("authorized RPCs without server methods (remove from methodAuthorizations):\n%s", strings.Join(invalid, "\n"))
 			}
+		})
+	}
+}
+
+func TestSecurity_MethodToCompnent(t *testing.T) {
+	for name, tc := range map[string]struct {
+		method  string
+		authMap map[string][]Component
+		expComp build.Component
+		expErr  error
+	}{
+		"method maps to an unknown component": {
+			method: "/unknown",
+			expErr: errors.New("does not map"),
+		},
+		"method maps to 0 components": {
+			method: "/zero",
+			authMap: map[string][]Component{
+				"/zero": nil,
+			},
+			expErr: errors.New("does not map"),
+		},
+		"method maps to 2 components": {
+			method: "/two",
+			authMap: map[string][]Component{
+				"/two": {ComponentAdmin, ComponentAgent},
+			},
+			expErr: errors.New("multiple authorized"),
+		},
+		"method maps to 1 component": {
+			method: "/one",
+			authMap: map[string][]Component{
+				"/one": {ComponentServer},
+			},
+			expComp: build.ComponentServer,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var gotComp build.Component
+			var gotErr error
+
+			if tc.authMap != nil {
+				gotComp, gotErr = methodToComponent(tc.method, tc.authMap)
+			} else {
+				gotComp, gotErr = MethodToComponent(tc.method)
+			}
+
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expComp, gotComp, "unexpected component")
 		})
 	}
 }

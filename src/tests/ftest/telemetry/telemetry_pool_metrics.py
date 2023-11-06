@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 
@@ -36,9 +35,11 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         the values are weighted according to the number of timeout rpc and resent update rpc.
 
         Note:
-            There is not yet a telemetry counter defining the number of failing fetch operations.
-            However, the number of timeout_ops should be at least equal to the number of fetch which
-            have failed and thus have been redo one or more times.
+            The extra network traffic needed to manage transient errors could not be accurately
+            predicted and thus the returned intervals could be invalid when such errors are
+            occurring.  Moreover, there is not yet a telemetry counter defining the number of
+            failing fetch operations.  However, the number of timeout_ops should be at least equal
+            to the number of fetch which have failed and thus have been redo one or more times.
 
         Args:
             timeout_ops (int): Total number of timed out RPC requests.
@@ -79,7 +80,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 ),
                 "engine_pool_xferred_fetch": (
                     ops_number * self.ior_cmd.transfer_size.value,
-                    (ops_number + timeout_ops + 1) * self.ior_cmd.transfer_size.value
+                    (ops_number + timeout_ops + 2) * self.ior_cmd.transfer_size.value
                 ),
                 "engine_pool_xferred_update": (
                     3 * ops_number * self.ior_cmd.transfer_size.value,
@@ -152,18 +153,17 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         metrics_init = self.get_metrics(metric_names)
 
         # Run ior command.
-        try:
-            self.update_ior_cmd_with_pool(False)
-            self.ior_cmd.dfs_oclass.update(self.dfs_oclass)
-            self.ior_cmd.dfs_chunk.update(self.ior_cmd.transfer_size.value)
-            self.run_ior_with_pool(
-                timeout=200, create_pool=False, create_cont=False)
-        except TestFail:
-            self.log.info("#ior command failed!")
+        self.update_ior_cmd_with_pool(False)
+        self.ior_cmd.dfs_oclass.update(self.dfs_oclass)
+        self.ior_cmd.dfs_chunk.update(self.ior_cmd.transfer_size.value)
+        # NOTE DAOS-12946: Not catching ior failures is intended.  Indeed, to properly test the
+        # metrics we have to exactly know how much data have been transferred.
+        self.run_ior_with_pool(timeout=200, create_pool=False, create_cont=False)
 
         # collect second set of pool metric data after read/write
         metrics_end = self.get_metrics(metric_names)
 
+        # Compute the number of operations done
         metrics = {}
         for name in metric_names:
             metrics[name] = metrics_end[name] - metrics_init[name]
@@ -171,9 +171,16 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 "Successfully retrieve metric: %s=%d (init=%d, end=%d)",
                 name, metrics[name], metrics_init[name], metrics_end[name])
 
-        # perform verification check
+        # Check if transient networking occurred during the test.
         timeout_ops = metrics["engine_net_req_timeout"]
         resent_ops = metrics["engine_pool_resent"]
+        if timeout_ops > 0 or resent_ops > 0:
+            self.log.info(
+                "Transient networking errors occurred during the test which could lead "
+                "to false positive: timeout_ops=%d, resent_ops=%d",
+                timeout_ops, resent_ops)
+
+        # perform verification check
         expected_values = self.get_expected_value_range(timeout_ops, resent_ops)
         for name in expected_values:
             val = metrics[name]

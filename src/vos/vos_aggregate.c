@@ -587,7 +587,7 @@ csum_prepare_ent(struct evt_entry_in *ent_in, unsigned int cs_type,
  * the verification checksum for the component (input) segments.
  * The full buffer is extended to hold checksums for entire merge window.
  * Currently, allocations for prior windows are retained until aggregation
- * for an evtree is complete (in vos_agg_akey, and at end of agggregation).
+ * for an evtree is complete (in vos_agg_akey, and at end of aggregation).
  */
 static int
 csum_prepare_buf(struct agg_lgc_seg *segs, unsigned int seg_cnt,

@@ -240,8 +240,8 @@ teardown_io(void **state)
 	int			 rc;
 
 	if (table) {
-		vos_ts_table_free(&table);
-		rc = vos_ts_table_alloc(&table);
+		vos_ts_table_free(&table, NULL);
+		rc = vos_ts_table_alloc(&table, NULL);
 		if (rc != 0) {
 			printf("Fatal error, table couldn't be reallocated\n");
 			exit(rc);

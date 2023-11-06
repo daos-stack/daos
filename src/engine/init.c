@@ -687,7 +687,6 @@ server_init(int argc, char *argv[])
 		       DP_RC(rc));
 
 	metrics = &dss_engine_metrics;
-
 	/** Report timestamp when engine was started */
 	d_tm_record_timestamp(metrics->started_time);
 

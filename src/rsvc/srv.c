@@ -167,8 +167,11 @@ ds_rsvc_put(struct ds_rsvc *svc)
 	D_ASSERTF(svc->s_ref > 0, "%d\n", svc->s_ref);
 	svc->s_ref--;
 	if (svc->s_ref == 0) {
-		if (svc->s_db != NULL) /* "nodb" */
+		if (svc->s_db != NULL) { /* "nodb" */
 			rdb_stop_and_close(svc->s_db);
+			if (svc->s_destroy)
+				rdb_destroy(svc->s_db_path, svc->s_db_uuid); /* ignore any error */
+		}
 		fini_free(svc);
 	}
 }
@@ -871,6 +874,7 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 				goto out;
 			}
 		}
+		D_ASSERT(!svc->s_destroy);
 		if (svc->s_stop)
 			rc = -DER_CANCELED;
 		else
@@ -927,8 +931,10 @@ stop(struct ds_rsvc *svc, bool destroy)
 	while (svc->s_state != DS_RSVC_DOWN)
 		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
 
-	if (destroy)
-		rc = remove(svc->s_db_path);
+	if (destroy) {
+		D_ASSERT(d_list_empty(&svc->s_entry));
+		svc->s_destroy = true;
+	}
 
 	ABT_mutex_unlock(svc->s_mutex);
 	ds_rsvc_put(svc);
@@ -1308,7 +1314,7 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  *
  * XXX excluded and ranks are a bit duplicate here, since this function only
  * suppose to send RPC to @ranks list, but cart does not have such interface
- * for collective RPC, so we have to use both ranks and exclued for the moment,
+ * for collective RPC, so we have to use both ranks and excluded for the moment,
  * and it should be simplified once cart can provide rank list collective RPC.
  *
  * \param[in]	class		replicated service class

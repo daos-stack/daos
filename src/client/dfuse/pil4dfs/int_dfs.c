@@ -344,7 +344,7 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, dfs_obj_t **o
 	}
 
 	/* Allocate struct and string in a single buffer.  This includes a extra byte so name will
-	 * be \0 terminiated however that is not required.
+	 * be \0 terminated however that is not required.
 	 */
 	D_ALLOC(hdl, sizeof(*hdl) + len + 1);
 	if (hdl == NULL)
@@ -591,7 +591,7 @@ discover_daos_mount(void)
 		return;
 
 	if (num_dfs >= MAX_DAOS_MT) {
-		D_WARN("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
+		D_WARN("dfs_list[] is full already. Need to increase MAX_DAOS_MT.\n");
 		return;
 	}
 

@@ -755,7 +755,7 @@ err_free:
 /*
  * Return a container connection by uuid.
  *
- * Re-use an existing connection if possible, otherwise open new connection
+ * Reuse an existing connection if possible, otherwise open new connection
  * and setup dfs.
  *
  * In the case of a container which has been created by mkdir _dfs will be a

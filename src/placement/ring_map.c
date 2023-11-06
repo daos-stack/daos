@@ -186,7 +186,7 @@ static daos_sort_ops_t ring_target_shuff_sops = {
 	.so_swap	= ring_target_swap,
 };
 
-/** compare versoins of two domains */
+/** compare versions of two domains */
 static int
 ring_domain_ver_cmp(void *array, int a, int b)
 {
