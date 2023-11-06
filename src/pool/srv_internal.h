@@ -143,9 +143,11 @@ struct pool_map_refresh_ult_arg {
  */
 void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
+uint32_t ds_pool_get_vos_pool_df_version(uint32_t pool_global_version);
 int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
+int ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool);
 void ds_pool_create_handler(crt_rpc_t *rpc);
 void ds_pool_connect_handler_v4(crt_rpc_t *rpc);
 void ds_pool_connect_handler_v5(crt_rpc_t *rpc);
