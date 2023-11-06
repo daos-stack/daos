@@ -17,6 +17,15 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${TARGET:=centos8}"
       : "${REPO_SPEC:=el-8}"
       ;;
+    *CentOS\ 9*|*EL\ 9*|*el9*|*centos9*)
+      : "${CHROOT_NAME:=rocky+epel-9-x86_64}"
+      : "${TARGET:=centos9}"
+      : "${REPO_SPEC:=el-9}"
+      ;;
+    *Leap\ 15.5*|*leap15.5*|*opensuse15.5*|*sles15.5*)
+      : "${CHROOT_NAME:=opensuse-leap-15.5-x86_64}"
+      : "${TARGET:=leap15.5}"
+      ;;
     *Leap\ 15.4*|*leap15.4*|*opensuse15.4*|*sles15.4*)
       : "${CHROOT_NAME:=opensuse-leap-15.4-x86_64}"
       : "${TARGET:=leap15.4}"
@@ -26,7 +35,7 @@ if [ -n "${STAGE_NAME:?}" ]; then
       : "${TARGET:=leap15.3}"
       ;;
     *Leap\ 15*|*leap15*|*opensuse15*|*sles15*)
-      : "${CHROOT_NAME:=opensuse-leap-15.3-x86_64}"
+      : "${CHROOT_NAME:=opensuse-leap-15.5-x86_64}"
       : "${TARGET:=leap15}"
       : "${REPO_SPEC:=sl-15}"
       ;;
