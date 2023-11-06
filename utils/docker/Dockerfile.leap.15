@@ -31,6 +31,7 @@ RUN set -e;                                         \
 
 FROM basic
 # Install OS updates and package.  Include basic tools and daos dependencies
+RUN dnf search go
 RUN dnf upgrade &&          \
     /tmp/install.sh &&      \
     dnf clean all &&        \
