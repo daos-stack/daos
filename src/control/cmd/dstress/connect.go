@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"hash/crc32"
 	"io"
-	"math/rand"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"sync"
@@ -34,6 +35,7 @@ type connectStressCmd struct {
 	Check   bool   `long:"checksum" short:"k" description:"Enable checksum verification of read buffer"`
 	Dir     string `long:"test-dir" short:"d" description:"Parent directory for test files" default:"/testDir"`
 	Count   uint   `long:"count" short:"c" description:"Connection count for this pool"`
+	PerProc bool   `long:"per-proc" short:"p" description:"Each connection is made in a new process"`
 	Size    string `long:"size" short:"s" description:"Size of per-client test buffer or max file size"`
 	Args    struct {
 		Pool      string `positional-arg-name:"pool" required:"true"`
@@ -146,17 +148,9 @@ func (c *daosClient) Start(ctx context.Context, idx uint, testBuf []byte, errOut
 			return
 		}
 
-		r, err := os.Open("/dev/urandom")
-		if err != nil {
-			c.log.Errorf("failed to open /dev/urandom: %s", err)
-			errOut <- err
-			return
-		}
-		defer r.Close()
-
 		srw := &statsReadWriter{
 			stats: c.cfg.stats,
-			r:     io.LimitReader(r, int64(c.cfg.fileSize)),
+			r:     io.LimitReader(rand.Reader, int64(c.cfg.fileSize)),
 		}
 		if _, err = f.ReadFrom(srw); err != nil {
 			c.log.Errorf("failed to write to %s: %s", testFile, err)
@@ -191,14 +185,14 @@ func (c *daosClient) Start(ctx context.Context, idx uint, testBuf []byte, errOut
 
 			writeCount, err := f.WriteAt(testBuf, 0)
 			if err != nil {
-				errOut <- err
+				errOut <- errors.Wrap(err, "write error")
 				return
 			}
 			c.cfg.stats.AddWrite(uint64(writeCount))
 
 			readCount, err := f.ReadAt(readBuf, 0)
 			if err != nil {
-				errOut <- err
+				errOut <- errors.Wrap(err, "read error")
 				return
 			}
 			c.cfg.stats.AddRead(uint64(readCount))
@@ -217,12 +211,12 @@ func (c *daosClient) Start(ctx context.Context, idx uint, testBuf []byte, errOut
 
 			if !c.cfg.rewrite {
 				if err := f.Close(); err != nil {
-					errOut <- err
+					errOut <- errors.Wrapf(err, "failed to close %s", testFile)
 					return
 				}
 
 				if err := fs.Remove(testFile); err != nil {
-					errOut <- err
+					errOut <- errors.Wrapf(err, "failed to remove %s", testFile)
 					return
 				}
 
@@ -301,14 +295,10 @@ func (cmd *connectStressCmd) Execute(args []string) error {
 
 	var testBuf []byte
 	if !cmd.Append {
-		testBuf = func() []byte {
-			alnum := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-			buf := make([]byte, bufSize)
-			for i := 0; i < len(buf); i++ {
-				buf[i] = alnum[rand.Intn(len(alnum))]
-			}
-			return buf
-		}()
+		testBuf = make([]byte, bufSize)
+		if _, err := rand.Reader.Read(testBuf); err != nil {
+			return errors.Wrap(err, "failed to fill testBuf")
+		}
 	}
 
 	cs := new(clientStats)
@@ -334,6 +324,10 @@ func (cmd *connectStressCmd) Execute(args []string) error {
 		}
 	}()
 
+	if cmd.PerProc {
+		quiet = true
+	}
+
 	for ; ctx.Err() == nil && connections < cmd.Count; connections++ {
 		cfg := &clientCfg{
 			testDir:   filepath.Clean(cmd.Dir),
@@ -343,15 +337,51 @@ func (cmd *connectStressCmd) Execute(args []string) error {
 			append:    cmd.Append,
 			fileSize:  bufSize,
 		}
-		client, err := newDaosClient(cmd.daosCtx, cmd, cmd.Args.Pool, cmd.Args.Container, cfg)
-		if err != nil {
-			return err
-		}
-		wg.Add(1)
 
-		go client.Start(ctx, connections, testBuf, errChan)
-		if !quiet {
-			fmt.Fprintf(os.Stderr, "Connections: %d\r", connections+1)
+		if cmd.PerProc {
+			idx := connections
+			args := []string{"connect", cmd.Args.Pool, cmd.Args.Container, "--quiet"}
+			if cfg.testDir != "" {
+				args = append(args, "-d", fmt.Sprintf("%s/%d", cfg.testDir, idx))
+			}
+			if cfg.checkSums {
+				args = append(args, "-k")
+			}
+			if cfg.rewrite {
+				args = append(args, "-r")
+			}
+			if cfg.append {
+				args = append(args, "-a")
+			}
+			if cmd.Size != "" {
+				args = append(args, "-s", cmd.Size)
+			}
+
+			go func() {
+				eCmd := exec.CommandContext(ctx, os.Args[0], args...)
+				eCmd.Stdout = os.Stdout
+				eCmd.Stderr = os.Stderr
+				eCmd.Cancel = func() error {
+					return eCmd.Process.Signal(os.Interrupt)
+				}
+				if err := eCmd.Run(); err != nil && !errors.Is(err, context.Canceled) {
+					errChan <- errors.Wrapf(err, "child %d run failed", idx)
+					return
+				}
+				errChan <- nil
+			}()
+			wg.Add(1)
+		} else {
+			client, err := newDaosClient(cmd.daosCtx, cmd, cmd.Args.Pool, cmd.Args.Container, cfg)
+			if err != nil {
+				return err
+			}
+			wg.Add(1)
+
+			go client.Start(ctx, connections, testBuf, errChan)
+			if !quiet {
+				fmt.Fprintf(os.Stderr, "Connections: %d\r", connections+1)
+			}
 		}
 	}
 
