@@ -338,7 +338,7 @@ func (cmd *connectStressCmd) Execute(args []string) error {
 			fileSize:  bufSize,
 		}
 
-		if cmd.PerProc {
+		if cmd.PerProc && cmd.Count > 1 {
 			idx := connections
 			args := []string{"connect", cmd.Args.Pool, cmd.Args.Container, "--quiet"}
 			if cfg.testDir != "" {
