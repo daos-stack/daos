@@ -410,9 +410,9 @@ static int (*next_xstat)(int ver, const char *path, struct stat *stat_buf);
 
 static int (*libc_lxstat)(int ver, const char *path, struct stat *stat_buf);
 
-static int (*next_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags);
+static int (*libc_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags);
 
-static int (*next_fstatat)(int dirfd, const char *path, struct stat *stat_buf, int flags);
+static int (*libc_fstatat)(int dirfd, const char *path, struct stat *stat_buf, int flags);
 
 static int (*next_statx)(int dirfd, const char *path, int flags, unsigned int mask,
 			 struct statx *statx_buf);
@@ -469,6 +469,8 @@ static int (*next_ioctl)(int fd, unsigned long request, ...);
 static int (*next_dup)(int oldfd);
 
 static int (*next_dup2)(int oldfd, int newfd);
+
+static int (*libc_dup3)(int oldfd, int newfd, int flags);
 
 static int (*next_symlink)(const char *symvalue, const char *path);
 
@@ -2068,6 +2070,26 @@ pread64(int fd, void *buf, size_t size, off_t offset) __attribute__((alias("prea
 ssize_t
 __pread64(int fd, void *buf, size_t size, off_t offset) __attribute__((alias("pread")));
 
+extern void __chk_fail(void) __attribute__ ((__noreturn__));
+
+ssize_t
+__pread64_chk(int fd, void *buf, size_t size, off_t offset, size_t buflen)
+{
+	if (size > buflen)
+		__chk_fail();
+
+	return pread(fd, buf, size, offset);
+}
+
+ssize_t
+__read_chk(int fd, void *buf, size_t size, size_t buflen)
+{
+	if (size > buflen)
+		__chk_fail();
+
+	return read(fd, buf, size);
+}
+
 ssize_t
 write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, const void *buf,
 	   size_t size)
@@ -2319,7 +2341,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	char *full_path = NULL;
 
 	if (!hook_enabled)
-		return next_fxstatat(ver, dirfd, path, stat_buf, flags);
+		return libc_fxstatat(ver, dirfd, path, stat_buf, flags);
 
 	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
@@ -2339,7 +2361,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 		else
 			rc = new_xstat(1, full_path, stat_buf);
 	} else {
-		rc = next_fxstatat(ver, dirfd, path, stat_buf, flags);
+		rc = libc_fxstatat(ver, dirfd, path, stat_buf, flags);
 	}
 
 	error = errno;
@@ -2355,17 +2377,13 @@ out_err:
 }
 
 int
-fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat_buf, int flags)
+new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat_buf, int flags)
 {
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
-	if (next_fstatat == NULL) {
-		next_fstatat = dlsym(RTLD_NEXT, "fstatat");
-		D_ASSERT(fstatat != NULL);
-	}
 	if (!hook_enabled)
-		return next_fstatat(dirfd, path, stat_buf, flags);
+		return libc_fstatat(dirfd, path, stat_buf, flags);
 
 	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
@@ -2385,7 +2403,7 @@ fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat_buf
 		else
 			rc = new_xstat(1, full_path, stat_buf);
 	} else {
-		rc = next_fstatat(dirfd, path, stat_buf, flags);
+		rc = libc_fstatat(dirfd, path, stat_buf, flags);
 	}
 
 	error = errno;
@@ -2399,10 +2417,6 @@ out_err:
 	errno = error;
 	return (-1);
 }
-
-int
-fstatat64(int dirfd, const char *__restrict path, struct stat64 *__restrict stat_buf, int flags)
-	__attribute__((alias("fstatat")));
 
 static void
 copy_stat_to_statx(const struct stat *stat_buf, struct statx *statx_buf)
@@ -4881,63 +4895,23 @@ dup2(int oldfd, int newfd)
 int
 __dup2(int oldfd, int newfd) __attribute__((alias("dup2"), leaf, nothrow));
 
-/**
- *int
- *dup3(int oldfd, int newfd, int flags)
- *{
- *	int i, fd_Directed;
- *
- *	if (real_dup3 == NULL)	{
- *		real_dup3 = dlsym(RTLD_NEXT, "dup3");
- *		D_ASSERT(real_dup3 != NULL);
- *	}
- *	if (!hook_enabled)
- *		return real_dup3(oldfd, newfd, flags);
- *	if (oldfd == newfd) {
- *		if (oldfd < FD_FILE_BASE)
- *			return real_dup3(oldfd, newfd, flags);
- *		else
- *			return newfd;
- *	}
- *	if (oldfd < FD_FILE_BASE)
- *		return real_dup3(oldfd, newfd, flags);
- *
- *	fd_Directed = Get_Fd_Redirected(oldfd);
- *
- *	for (i = 0; i <MAX_FD_DUP2ED; i++)	{
- *		if ((fd_dup2_list[i].fd_dest != oldfd) && (fd_dup2_list[i].fd_src==newfd))	{
- *			close(fd_dup2_list[i].fd_dest);
- *			fd_dup2_list[i].fd_src = -1;
- *			fd_dup2_list[i].fd_dest = -1;
- *		}
- *	}
- *
- *	if ((fd_Directed>=FD_FILE_BASE) && (newfd<FD_FILE_BASE))	{
- *		if (num_fd_dup2ed >= MAX_FD_DUP2ED)	{
- *			printf("ERROR: num_fd_dup2ed >= MAX_FD_DUP2ED\n");
- *			errno = EBADF;
- *			return -1;
- *		}
- *		else	{
- *			for (i = 0; i < MAX_FD_DUP2ED; i++)	{
- *				if (fd_dup2_list[i].fd_src == -1)	{	// available
- *					fd_dup2_list[i].fd_src = newfd;
- *					fd_dup2_list[i].fd_dest = fd_Directed;
- *					num_fd_dup2ed++;
- *					return newfd;
- *				}
- *			}
- *		}
- *	}
- *	else if ((fd_Directed == newfd) && (fd_Directed >= FD_FILE_BASE))	{
- *		return newfd;
- *	}
- *	else {
- *		return real_dup3(oldfd, newfd, flags);
- *	}
- *	return -1;
- *}
- */
+int
+new_dup3(int oldfd, int newfd, int flags)
+{
+	if (oldfd == newfd) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (!hook_enabled)
+		return libc_dup3(oldfd, newfd, flags);
+
+	if (get_fd_redirected(oldfd) < FD_FILE_BASE && get_fd_redirected(newfd) < FD_FILE_BASE)
+		return libc_dup3(oldfd, newfd, flags);
+
+	/* Ignore flags now. Need more work later to handle flags, e.g., O_CLOEXEC */
+	return dup2(oldfd, newfd);
+}
 
 void *
 new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
@@ -5455,7 +5429,8 @@ init_myhook(void)
 	register_a_hook("libc", "__xstat", (void *)new_xstat, (long int *)(&next_xstat));
 	/* Many variants for lxstat: _lxstat, __lxstat, ___lxstat, __lxstat64 */
 	register_a_hook("libc", "__lxstat", (void *)new_lxstat, (long int *)(&libc_lxstat));
-	register_a_hook("libc", "__fxstatat", (void *)new_fxstatat, (long int *)(&next_fxstatat));
+	register_a_hook("libc", "__fxstatat", (void *)new_fxstatat, (long int *)(&libc_fxstatat));
+	register_a_hook("libc", "fstatat", (void *)new_fstatat, (long int *)(&libc_fstatat));
 	register_a_hook("libc", "readdir", (void *)new_readdir, (long int *)(&next_readdir));
 
 	register_a_hook("libc", "fcntl", (void *)new_fcntl, (long int *)(&libc_fcntl));
@@ -5464,6 +5439,7 @@ init_myhook(void)
 	register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
 
 	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
+	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
 
 	/**	register_a_hook("libc", "execve", (void *)new_execve, (long int *)(&real_execve));
 	 *	register_a_hook("libc", "execvp", (void *)new_execvp, (long int *)(&real_execvp));

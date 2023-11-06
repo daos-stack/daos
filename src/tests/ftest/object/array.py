@@ -3,13 +3,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import logging
 import time
 import traceback
-import logging
-
-from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
 
 from apricot import TestWithServers
+from pydaos.raw import DaosApiError, DaosContainer, c_uuid_to_str
 
 
 class ArrayObjTest(TestWithServers):

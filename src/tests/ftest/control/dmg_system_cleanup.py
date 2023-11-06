@@ -4,9 +4,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from socket import gethostname
+
+from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosPool
-from apricot import TestWithServers
 
 
 class DmgSystemCleanupTest(TestWithServers):
