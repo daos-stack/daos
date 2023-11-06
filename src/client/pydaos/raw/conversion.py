@@ -8,7 +8,7 @@
 import ctypes
 import uuid
 
-from .. import (DAOS_MAGIC, pydaos_shim)
+from .. import DAOS_MAGIC, pydaos_shim
 
 
 def c_uuid_to_str(cuuid):
