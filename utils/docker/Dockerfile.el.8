@@ -41,16 +41,6 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
-ARG QUICKBUILD=false
-ARG QUICKBUILD_DEPS
-
-RUN if $QUICKBUILD; then                                          \
-        echo "Installing: $QUICKBUILD_DEPS";                      \
-        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | \
-          xargs -0 dnf install;                                   \
-        dnf clean all;                                            \
-    fi
-
 ARG BULLSEYE
 RUN if [ "x$BULLSEYE" != "x" ]; then                                               \
       dnf install xz && dnf clean all &&                                           \
