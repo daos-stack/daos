@@ -1978,8 +1978,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				goto out_compatible;
 			}
 			if (strnlen(dir_list[idx_dirfd]->path, DFS_MAX_PATH) >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n", ENAMETOOLONG,
-					strerror(ENAMETOOLONG));
+				D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n",
+					ENAMETOOLONG, strerror(ENAMETOOLONG));
 				free_dirfd(idx_dirfd);
 				goto out_compatible;
 			}
@@ -1998,7 +1998,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		}
 		fd_ht_obj->real_fd = fd_kernel;
 		fd_ht_obj->fake_fd = fd_fake;
-		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry, true);
+		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry,
+				       true);
 		if (rc != 0) {
 			DL_WARN(rc, "d_hash_rec_insert() failed");
 			if (fd_fake >= FD_DIR_BASE)
@@ -3105,7 +3106,8 @@ opendir(const char *path)
 		fd_ht_obj->real_fd = dirfd(dirp_kernel);
 		assert(fd_ht_obj->real_fd >= 0);
 		fd_ht_obj->fake_fd = idx_dirfd + FD_DIR_BASE;
-		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry, true);
+		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry,
+				       true);
 		if (rc != 0) {
 			DL_WARN(rc, "d_hash_rec_insert() failed");
 			free_dirfd(idx_dirfd);
@@ -3293,6 +3295,7 @@ closedir(DIR *dirp)
 			if (rc == false) {
 				D_WARN("d_hash_rec_delete() failed.\n");
 			}
+			D_FREE(fd_ht_obj);
 			return next_closedir(dirp);
 		}
 	}
@@ -5863,8 +5866,8 @@ init_myhook(void)
 	if (env_compatible) {
 		if (strncmp(env_compatible, "1", 2) == 0 ||
 		    strncasecmp(env_compatible, "true", 5) == 0) {
-			rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
-				 &fd_hash_ops, &fd_hash);
+			rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX |
+						 D_HASH_FT_LRU, 12, NULL, &fd_hash_ops, &fd_hash);
 			if (rc != 0) {
 				DL_ERROR(rc, "failed to create fd hash table");
 				return;
