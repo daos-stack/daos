@@ -17,7 +17,7 @@ RUN utils/scripts/install-el8.sh
 ARG VENV=/tmp/build_venv
 RUN virtualenv $VENV
 RUN source $VENV/bin/activate && \
-  pip install --upgrade pip && \
+  pip install --require-hashes -r google_build/base_requirements.txt && \
   pip install --require-hashes -r google_build/requirements.txt
 
 # Build DAOS.
