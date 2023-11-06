@@ -5,37 +5,15 @@
 """
 import time
 
-from apricot import TestWithServers
+from recovery_test_base import RecoveryTestBase
 from general_utils import report_errors
 
 
-class PoolCleanupTest(TestWithServers):
+class PoolCleanupTest(RecoveryTestBase):
     """Test Pass 3: Pool Cleanup
 
     :avocado: recursive
     """
-
-    def wait_for_check_complete(self):
-        """Repeatedly call dmg check query until status becomes COMPLETED.
-
-        If the status doesn't become COMPLETED, fail the test.
-
-        Returns:
-            list: List of repair reports.
-
-        """
-        repair_reports = None
-        for _ in range(8):
-            check_query_out = self.get_dmg_command().check_query()
-            if check_query_out["response"]["status"] == "COMPLETED":
-                repair_reports = check_query_out["response"]["reports"]
-                break
-            time.sleep(5)
-
-        if not repair_reports:
-            self.fail("Checker didn't detect or repair any inconsistency!")
-
-        return repair_reports
 
     def test_corrupt_label_ms(self):
         """Test corrupt label in MS.
