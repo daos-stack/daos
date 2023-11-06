@@ -6,10 +6,10 @@
 
 import time
 
-from file_count_test_base import FileCountTestBase
-from data_mover_test_base import DataMoverTestBase
-from general_utils import human_to_bytes
 import security_test_base as secTestBase
+from data_mover_test_base import DataMoverTestBase
+from file_count_test_base import FileCountTestBase
+from general_utils import human_to_bytes
 from test_utils_pool import check_pool_creation
 
 

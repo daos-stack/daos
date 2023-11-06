@@ -3,16 +3,17 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import pytest
-import unittest
-import yaml
 import os
+import unittest
 
-from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, Containers, \
-    VosValue, Overhead, ValType, VosValueError
+import pytest
+import yaml
 from storage_estimator.explorer import FileSystemExplorer
-from storage_estimator.util import ObjectClass
 from storage_estimator.parse_csv import ProcessCSV
+from storage_estimator.util import ObjectClass
+from storage_estimator.vos_structures import (AKey, Container, Containers, DKey, Overhead, ValType,
+                                              VosObject, VosValue, VosValueError)
+
 from .util import FileGenerator
 
 

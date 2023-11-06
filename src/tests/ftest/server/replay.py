@@ -7,7 +7,6 @@ import random
 import time
 
 from apricot import TestWithServers
-
 from dfuse_utils import get_dfuse, start_dfuse, stop_dfuse
 from general_utils import join
 from ior_utils import get_ior
