@@ -92,7 +92,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
             daos_test_env['DD_SUBSYS'] = 'all'
             daos_test_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
 
-        command = [self.daos_test, '--test-dir', mount_dir, '--all']
+        command = [self.daos_test, '--test-dir', mount_dir, '--mmap']
         if cache_mode != 'writeback':
             command.append('--metadata')
 
