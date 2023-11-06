@@ -42,7 +42,7 @@ type File struct {
 }
 
 func (f *File) read(buf []byte, off int64) (int, error) {
-	var readSize C.daos_size_t
+	readSize := C.daos_size_t(len(buf))
 
 	err := dfsError(C.dfs_sys_read(f.dfs, f.obj, unsafe.Pointer(&buf[0]), C.daos_off_t(off), &readSize, nil))
 	if err != nil {
@@ -50,7 +50,7 @@ func (f *File) read(buf []byte, off int64) (int, error) {
 	}
 
 	if int(readSize) < len(buf) {
-		err = io.EOF
+		err = errors.Wrapf(io.EOF, "read %d bytes, expected %d", readSize, len(buf))
 	}
 
 	f.position = off + int64(readSize)
@@ -77,7 +77,7 @@ func (f *File) ReadFrom(r io.Reader) (total int64, _ error) {
 		}
 
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				err = nil
 			}
 			return total, err
@@ -112,7 +112,7 @@ func (f *File) write(buf []byte, off int64) (int, error) {
 	}
 
 	if int(writeSize) < len(buf) {
-		err = io.ErrShortWrite
+		err = errors.Wrapf(io.ErrShortWrite, "wrote %d bytes, expected %d", writeSize, len(buf))
 	}
 
 	f.position = off + int64(writeSize)
@@ -130,7 +130,7 @@ func (f *File) WriteTo(w io.Writer) (int64, error) {
 	for {
 		n, err = f.read(buf, f.position)
 		if err != nil {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				err = nil
 			}
 			return int64(n), err
