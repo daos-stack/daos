@@ -6,9 +6,8 @@
 #
 
 # Pull base image
-ARG POINT_RELEASE=
-ARG BASE_DISTRO=rockylinux/rockylinux:8$POINT_RELEASE
-FROM $BASE_DISTRO as basic
+ARG BASE_DISTRO=rockylinux/rockylinux:8
+FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
@@ -23,18 +22,9 @@ ARG REPOS
 COPY ./utils/scripts/install-el8.sh /tmp/install.sh
 # script to setup local repo if available
 COPY ./utils/scripts/helpers/repo-helper-el8.sh /tmp/repo-helper.sh
-
 RUN set -e;                                         \
     chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
-    /tmp/repo-helper.sh;                            \
-    rm -f /tmp/repo-helper.sh
-
-FROM basic
-# Install OS updates and package.  Include basic tools and daos dependencies
-RUN dnf upgrade;          \
-    /tmp/install.sh;      \
-    dnf clean all;        \
-    rm -f /tmp/install.sh
+    /tmp/repo-helper.sh
 
 # Add DAOS users
 ARG UID=1000
