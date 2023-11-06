@@ -19,7 +19,7 @@ ENV BUILD_VENV=/build_venv
 RUN virtualenv $BUILD_VENV
 RUN source $BUILD_VENV/bin/activate && \
   pip install --upgrade pip && \
-  pip install -r google_build/requirements.txt
+  pip install --require-hashes -r google_build/requirements.txt
 
 # Cleanup. No need to store the source in the image.
 WORKDIR /
