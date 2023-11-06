@@ -22,10 +22,8 @@ apt-get install \
     cmake \
     curl \
     fuse3 \
-    gcc \
     git \
     golang-go \
-    g++ \
     kmod \
     libaio-dev \
     libboost-dev \
