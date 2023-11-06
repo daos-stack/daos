@@ -12,7 +12,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
-	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -43,6 +43,16 @@ func exitWithError(log logging.Logger, err error) {
 		log.Errorf("%s: %s", cmdName, fault.ShowResolutionFor(err))
 	}
 	os.Exit(1)
+}
+
+func initDaosDebug() (func(), error) {
+	if err := daosAPI.DebugInit(); err != nil {
+		return nil, err
+	}
+
+	return func() {
+		daosAPI.DebugFini()
+	}, nil
 }
 
 func parseOpts(parent context.Context, args []string, opts *cliOptions, log *logging.LeveledLogger) error {
@@ -98,7 +108,7 @@ func parseOpts(parent context.Context, args []string, opts *cliOptions, log *log
 				return err
 			}
 			daosCmd.setCtx(ctx)
-			defer daosAPI.Fini(ctx)
+			//defer daosAPI.Fini(ctx)
 		}
 
 		if argsCmd, ok := cmd.(cmdutil.ArgsHandler); ok {
@@ -131,16 +141,17 @@ func parseOpts(parent context.Context, args []string, opts *cliOptions, log *log
 	// Initialize the daos debug system first so that
 	// any allocations made as part of argument parsing
 	// are logged when running under NLT.
-	/*debugFini, err := initDaosDebug()
-	  if err != nil {
-	          exitWithError(log, err)
-	  defer debugFini()*/
+	debugFini, err := initDaosDebug()
+	if err != nil {
+		exitWithError(log, err)
+	}
+	defer debugFini()
 
 	// Set the traceback level such that a crash results in
 	// a coredump (when ulimit -c is set appropriately).
 	debug.SetTraceback("crash")
 
-	_, err := p.ParseArgs(args)
+	_, err = p.ParseArgs(args)
 	if opts.JSON && wroteJSON.IsFalse() {
 		return cmdutil.OutputJSON(os.Stdout, nil, err)
 	}

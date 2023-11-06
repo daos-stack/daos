@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -16,7 +17,8 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
-	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
+	"github.com/daos-stack/daos/src/control/lib/dfs"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -27,11 +29,12 @@ const (
 type connectStressCmd struct {
 	daosCmd
 
+	Append  bool   `long:"append" short:"a" description:"Keep appending to the test file up to max size"`
 	Rewrite bool   `long:"rewrite" short:"r" description:"Rewrite the test file instead of recreating it"`
 	Check   bool   `long:"checksum" short:"k" description:"Enable checksum verification of read buffer"`
 	Dir     string `long:"test-dir" short:"d" description:"Parent directory for test files" default:"/testDir"`
 	Count   uint   `long:"count" short:"c" description:"Connection count for this pool"`
-	BufSize string `long:"buffer-size" short:"b" description:"Size of per-client test buffer"`
+	Size    string `long:"size" short:"s" description:"Size of per-client test buffer or max file size"`
 	Args    struct {
 		Pool      string `positional-arg-name:"pool" required:"true"`
 		Container string `positional-arg-name:"container" required:"true"`
@@ -39,46 +42,66 @@ type connectStressCmd struct {
 }
 
 func newDaosClient(ctx context.Context, log logging.Logger, pool, cont string, cfg *clientCfg) (*daosClient, error) {
-	connReq := daosAPI.PoolConnectReq{
-		PoolID: pool,
-		Flags:  uint(daosAPI.AccessFlagReadWrite),
-	}
-	poolInfo, err := daosAPI.PoolConnect(ctx, connReq)
-	if err != nil {
-		return nil, err
-	}
-	contConn, err := poolInfo.PoolConnection.OpenContainer(ctx, cont, daosAPI.ContainerOpenFlagReadWrite)
-	if err != nil {
-		return nil, err
-	}
-
 	if cfg == nil {
 		cfg = &clientCfg{}
 	}
 	return &daosClient{
 		log:  log,
 		cfg:  cfg,
-		pool: poolInfo.PoolConnection,
-		cont: contConn,
+		pool: pool,
+		cont: cont,
 	}, nil
 }
 
 type clientCfg struct {
 	testDir   string
+	append    bool
 	checkSums bool
 	rewrite   bool
+	fileSize  uint64
 	stats     *clientStats
 }
 
 type daosClient struct {
 	log  logging.Logger
 	cfg  *clientCfg
-	pool *daosAPI.PoolHandle
-	cont *daosAPI.ContainerHandle
+	pool string
+	cont string
+}
+
+type statsReadWriter struct {
+	w     io.Writer
+	r     io.Reader
+	stats *clientStats
+}
+
+func (srw *statsReadWriter) Write(buf []byte) (int, error) {
+	n, err := srw.w.Write(buf)
+	srw.stats.AddWrite(uint64(n))
+	return n, err
+}
+
+func (srw *statsReadWriter) Read(buf []byte) (int, error) {
+	n, err := srw.r.Read(buf)
+	srw.stats.AddWrite(uint64(n))
+	return n, err
 }
 
 func (c *daosClient) Start(ctx context.Context, idx uint, testBuf []byte, errOut chan<- error) {
-	fs, err := daosAPI.MountFilesystem(c.pool, c.cont, daosAPI.AccessFlagReadWrite)
+	openResp, err := daosAPI.PoolConnect(ctx, c.pool, "", daosAPI.PoolConnectFlagReadWrite)
+	if err != nil {
+		errOut <- err
+		return
+	}
+	poolHdl := openResp.PoolConnection
+
+	contHdl, err := poolHdl.OpenContainer(ctx, c.cont, daosAPI.ContainerOpenFlagReadWrite)
+	if err != nil {
+		errOut <- err
+		return
+	}
+
+	fs, err := dfs.Mount(poolHdl, contHdl, os.O_RDWR, dfs.SysFlagNoCache)
 	if err != nil {
 		errOut <- err
 		return
@@ -91,13 +114,59 @@ func (c *daosClient) Start(ctx context.Context, idx uint, testBuf []byte, errOut
 	testFile := fmt.Sprintf("/%s/test-%d", c.cfg.testDir, idx)
 	c.log.Debugf("connecting client %d to %s", idx, testFile)
 
-	var obj *daosAPI.FilesystemFile
+	var f *dfs.File
 	defer func() {
-		if obj != nil {
-			obj.Close()
+		if f != nil {
+			if err := f.Close(); err != nil {
+				c.log.Errorf("failed to close %s: %s", testFile, err)
+			}
 		}
-		fs.Unmount()
+		if fs != nil {
+			if err := fs.Unmount(); err != nil {
+				c.log.Errorf("failed to unmount DFS: %s", err)
+			}
+		}
+		if contHdl != nil {
+			if err := contHdl.Close(ctx); err != nil {
+				c.log.Errorf("failed to close container: %s", err)
+			}
+		}
+		if poolHdl != nil {
+			if err := poolHdl.Disconnect(ctx); err != nil {
+				c.log.Errorf("failed to disconnect pool: %s", err)
+			}
+		}
 	}()
+
+	if c.cfg.append {
+		f, err = fs.Create(testFile)
+		if err != nil {
+			c.log.Errorf("failed to open %s: %s", testFile, err)
+			errOut <- err
+			return
+		}
+
+		r, err := os.Open("/dev/urandom")
+		if err != nil {
+			c.log.Errorf("failed to open /dev/urandom: %s", err)
+			errOut <- err
+			return
+		}
+		defer r.Close()
+
+		srw := &statsReadWriter{
+			stats: c.cfg.stats,
+			r:     io.LimitReader(r, int64(c.cfg.fileSize)),
+		}
+		if _, err = f.ReadFrom(srw); err != nil {
+			c.log.Errorf("failed to write to %s: %s", testFile, err)
+			errOut <- err
+		} else {
+			errOut <- nil
+		}
+
+		return
+	}
 
 	var writeSum uint32
 	if c.cfg.checkSums {
@@ -111,8 +180,8 @@ func (c *daosClient) Start(ctx context.Context, idx uint, testBuf []byte, errOut
 			errOut <- nil
 			return
 		default:
-			if obj == nil {
-				obj, err = fs.Create(testFile)
+			if f == nil {
+				f, err = fs.Create(testFile)
 				if err != nil {
 					c.log.Errorf("failed to open %s: %s", testFile, err)
 					errOut <- err
@@ -120,14 +189,14 @@ func (c *daosClient) Start(ctx context.Context, idx uint, testBuf []byte, errOut
 				}
 			}
 
-			writeCount, err := obj.WriteAt(testBuf, 0)
+			writeCount, err := f.WriteAt(testBuf, 0)
 			if err != nil {
 				errOut <- err
 				return
 			}
 			c.cfg.stats.AddWrite(uint64(writeCount))
 
-			readCount, err := obj.ReadAt(readBuf, 0)
+			readCount, err := f.ReadAt(readBuf, 0)
 			if err != nil {
 				errOut <- err
 				return
@@ -147,7 +216,7 @@ func (c *daosClient) Start(ctx context.Context, idx uint, testBuf []byte, errOut
 			}
 
 			if !c.cfg.rewrite {
-				if err := obj.Close(); err != nil {
+				if err := f.Close(); err != nil {
 					errOut <- err
 					return
 				}
@@ -157,7 +226,7 @@ func (c *daosClient) Start(ctx context.Context, idx uint, testBuf []byte, errOut
 					return
 				}
 
-				obj = nil
+				f = nil
 			}
 		}
 	}
@@ -208,29 +277,39 @@ func (cmd *connectStressCmd) Execute(args []string) error {
 	defer func() {
 		cmd.Infof("Connection count at exit: %d", connections)
 	}()
-	maxConn := cmd.Count
-	if maxConn == 0 {
-		maxConn = maxConn << 1
+	if cmd.Count == 0 {
+		cmd.Count = 1
 	}
 
-	if cmd.BufSize == "" {
-		cmd.BufSize = "0"
+	if cmd.Size == "" {
+		cmd.Size = "0"
 	}
-	bufSize, err := humanize.ParseBytes(cmd.BufSize)
+	bufSize, err := humanize.ParseBytes(cmd.Size)
 	if err != nil {
-		return errors.Wrapf(err, "unable to parse %q", cmd.BufSize)
+		return errors.Wrapf(err, "unable to parse %q", cmd.Size)
 	}
 	if bufSize == 0 {
 		bufSize = defBufSize
 	}
-	testBuf := func() []byte {
-		alnum := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-		buf := make([]byte, bufSize)
-		for i := 0; i < len(buf); i++ {
-			buf[i] = alnum[rand.Intn(len(alnum))]
-		}
-		return buf
-	}()
+
+	if cmd.Append && cmd.Rewrite {
+		return errors.New("--append and --rewrite are incompatible")
+	}
+	if cmd.Append && cmd.Check {
+		return errors.New("--check is not available with --append")
+	}
+
+	var testBuf []byte
+	if !cmd.Append {
+		testBuf = func() []byte {
+			alnum := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+			buf := make([]byte, bufSize)
+			for i := 0; i < len(buf); i++ {
+				buf[i] = alnum[rand.Intn(len(alnum))]
+			}
+			return buf
+		}()
+	}
 
 	cs := new(clientStats)
 	ctx, cancel := context.WithCancel(cmd.daosCtx)
@@ -255,12 +334,14 @@ func (cmd *connectStressCmd) Execute(args []string) error {
 		}
 	}()
 
-	for ; ctx.Err() == nil && connections < maxConn; connections++ {
+	for ; ctx.Err() == nil && connections < cmd.Count; connections++ {
 		cfg := &clientCfg{
 			testDir:   filepath.Clean(cmd.Dir),
 			stats:     cs,
 			checkSums: cmd.Check,
 			rewrite:   cmd.Rewrite,
+			append:    cmd.Append,
+			fileSize:  bufSize,
 		}
 		client, err := newDaosClient(cmd.daosCtx, cmd, cmd.Args.Pool, cmd.Args.Container, cfg)
 		if err != nil {
@@ -275,27 +356,31 @@ func (cmd *connectStressCmd) Execute(args []string) error {
 	}
 
 	cmd.Infof("\nEstablished %d connections", connections)
-	interval := time.Second
-	var lastRead uint64
-	var lastWrite uint64
-	for {
-		select {
-		case <-ctx.Done():
-			wg.Wait()
-			return nil
-		default:
-			if !quiet {
-				curRead := cs.GetRead()
-				readDelta := curRead - lastRead
-				lastRead = curRead
-				curWrite := cs.GetWrite()
-				writeDelta := curWrite - lastWrite
-				lastWrite = curWrite
+	if !quiet {
+		go func() {
+			interval := time.Second
+			var lastRead uint64
+			var lastWrite uint64
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					curRead := cs.GetRead()
+					readDelta := curRead - lastRead
+					lastRead = curRead
+					curWrite := cs.GetWrite()
+					writeDelta := curWrite - lastWrite
+					lastWrite = curWrite
 
-				fmt.Fprintf(os.Stderr, "read: %s/s, write: %s/s\r",
-					humanize.Bytes(readDelta), humanize.Bytes(writeDelta))
+					fmt.Fprintf(os.Stderr, "read: %s/s, write: %s/s\r",
+						humanize.Bytes(readDelta), humanize.Bytes(writeDelta))
+					time.Sleep(interval)
+				}
 			}
-			time.Sleep(interval)
-		}
+		}()
 	}
+
+	wg.Wait()
+	return nil
 }
