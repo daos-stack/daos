@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
@@ -32,7 +33,8 @@ func TestClient_Init(t *testing.T) {
 				t.Helper()
 				parent, cancel := context.WithCancel(context.Background())
 				b := &daosClientBinding{
-					cancelCtx: cancel,
+					initialized: atm.NewBool(true),
+					cancelCtx:   cancel,
 				}
 				ctx, err := setApiClient(parent, b)
 				if err != nil {

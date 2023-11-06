@@ -30,6 +30,16 @@ get_rebuild_state(struct daos_rebuild_status *drs)
 */
 import "C"
 
+type (
+	PoolConnectFlag uint
+)
+
+const (
+	PoolConnectFlagReadOnly  PoolConnectFlag = C.DAOS_PC_RO
+	PoolConnectFlagReadWrite PoolConnectFlag = C.DAOS_PC_RW
+	PoolConnectFlagExclusive PoolConnectFlag = C.DAOS_PC_EX
+)
+
 func newPoolSpaceInfo(dps *C.struct_daos_pool_space, mt C.uint) *daos.StorageUsageStats {
 	if dps == nil {
 		return nil
@@ -87,12 +97,6 @@ func newPoolInfo(cpi *C.daos_pool_info_t) *daos.PoolInfo {
 }
 
 type (
-	PoolConnectReq struct {
-		PoolID     string
-		SystemName string
-		Flags      uint
-	}
-
 	PoolConnectResp struct {
 		PoolConnection *PoolHandle
 		PoolInfo       *daos.PoolInfo
@@ -153,33 +157,33 @@ func (m *mockApiClient) daos_pool_connect(poolID *C.char, sys *C.char, flags C.u
 	return 0
 }
 
-func PoolConnect(ctx context.Context, req PoolConnectReq) (*PoolConnectResp, error) {
-	log.Debugf("PoolConnect(%+v)", req)
+func PoolConnect(ctx context.Context, poolID, sysID string, flags PoolConnectFlag) (*PoolConnectResp, error) {
+	log.Debugf("PoolConnect(%s)", poolID)
 
 	client, err := getApiClient(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if req.PoolID == "" {
+	if poolID == "" {
 		return nil, errors.Wrap(daos.InvalidInput, "no pool ID provided")
 	}
-	if req.SystemName == "" {
-		req.SystemName = build.DefaultSystemName
+	if sysID == "" {
+		sysID = build.DefaultSystemName
 	}
-	if req.Flags == 0 {
-		req.Flags = C.DAOS_PC_RO
+	if flags == 0 {
+		flags = PoolConnectFlagReadOnly
 	}
 
 	var dpi C.daos_pool_info_t
 	var poolConn PoolHandle
 
-	cPoolID := C.CString(req.PoolID)
+	cPoolID := C.CString(poolID)
 	defer freeString(cPoolID)
-	cSys := C.CString(req.SystemName)
+	cSys := C.CString(sysID)
 	defer freeString(cSys)
 
-	if err := daosError(client.daos_pool_connect(cPoolID, cSys, C.uint(req.Flags), &poolConn.daosHandle, &dpi, nil)); err != nil {
+	if err := daosError(client.daos_pool_connect(cPoolID, cSys, C.uint(flags), &poolConn.daosHandle, &dpi, nil)); err != nil {
 		return nil, errors.Wrap(err, "failed to connect to pool")
 	}
 

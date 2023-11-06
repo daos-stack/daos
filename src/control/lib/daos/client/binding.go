@@ -1,7 +1,5 @@
 package client
 
-import "context"
-
 /*
 #cgo LDFLAGS: -lgurt -lcart -ldaos -ldaos_common -lduns -ldfs -luuid
 
@@ -10,6 +8,11 @@ import "context"
 #include <daos_fs.h>
 */
 import "C"
+import (
+	"context"
+
+	"github.com/daos-stack/daos/src/control/lib/atm"
+)
 
 type (
 	apiClient interface {
@@ -32,15 +35,32 @@ type (
 	}
 
 	daosClientBinding struct {
-		cancelCtx context.CancelFunc
+		cancelCtx   context.CancelFunc
+		initialized atm.Bool
 	}
 )
 
 func (b *daosClientBinding) daos_init() C.int {
-	return C.daos_init()
+	if b.initialized.IsTrue() {
+		return -C.DER_ALREADY
+	}
+
+	if rc := C.daos_init(); rc != 0 {
+		return rc
+	}
+
+	b.initialized.SetTrue()
+	return 0
 }
 
 func (b *daosClientBinding) daos_fini() C.int {
-	b.cancelCtx()
-	return C.daos_fini()
+	if b.initialized.IsTrue() {
+		b.initialized.SetFalse()
+		if b.cancelCtx != nil {
+			b.cancelCtx()
+		}
+		return C.daos_fini()
+	}
+
+	return 0
 }

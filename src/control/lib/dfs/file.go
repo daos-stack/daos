@@ -57,7 +57,7 @@ func (f *File) read(buf []byte, off int64) (int, error) {
 	return int(readSize), err
 }
 
-func (f *File) ReadFrom(r io.Reader) (int64, error) {
+func (f *File) ReadFrom(r io.Reader) (total int64, _ error) {
 	f.Lock()
 	defer f.Unlock()
 
@@ -67,16 +67,20 @@ func (f *File) ReadFrom(r io.Reader) (int64, error) {
 
 	for {
 		n, err = r.Read(buf)
+		total += int64(n)
+
+		if n > 0 {
+			_, err = f.write(buf[:n], f.position)
+			if err != nil {
+				return total, err
+			}
+		}
+
 		if err != nil {
 			if err == io.EOF {
 				err = nil
 			}
-			return int64(n), err
-		}
-
-		_, err = f.write(buf[:n], f.position)
-		if err != nil {
-			return int64(n), err
+			return total, err
 		}
 	}
 }

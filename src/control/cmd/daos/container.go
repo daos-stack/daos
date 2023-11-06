@@ -187,7 +187,7 @@ func (cmd *containerBaseCmd) queryContainer() (*daosAPI.ContainerInfo, error) {
 	return cmd.contConn.Query(cmd.daosCtx)
 }
 
-func (cmd *containerBaseCmd) connectPool(flags uint, ap *C.struct_cmd_args_s) (func(), error) {
+func (cmd *containerBaseCmd) connectPool(flags daosAPI.PoolConnectFlag, ap *C.struct_cmd_args_s) (func(), error) {
 	if err := cmd.poolBaseCmd.connectPool(flags); err != nil {
 		return nil, err
 	}

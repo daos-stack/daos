@@ -75,10 +75,6 @@ func getApiClient(ctx context.Context) (apiClient, error) {
 	if ctx == nil {
 		return nil, errors.Wrap(daos.InvalidInput, "nil context")
 	}
-	if ctx.Err() != nil {
-		return nil, errors.Wrap(ctx.Err(), "API context error (call Init()?)")
-	}
-
 	if client, ok := ctx.Value(apiClientKey).(apiClient); ok {
 		return client, nil
 	}
@@ -130,7 +126,10 @@ func Init(parent context.Context) (context.Context, error) {
 	}
 
 	if err := daosError(client.daos_init()); err != nil {
-		return nil, err
+		// May have already been initialized by DFS.
+		if err != daos.Already {
+			return nil, err
+		}
 	}
 
 	return ctx, nil
@@ -140,10 +139,6 @@ func Init(parent context.Context) (context.Context, error) {
 func Fini(ctx context.Context) error {
 	client, err := getApiClient(ctx)
 	if err != nil {
-		// If the context was canceled, just give up.
-		if errors.Is(err, context.Canceled) {
-			return nil
-		}
 		return err
 	}
 

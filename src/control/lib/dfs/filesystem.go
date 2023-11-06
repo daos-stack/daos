@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/daos/client"
 )
@@ -45,6 +46,12 @@ func cHandlePtr(ptrHdl interface{ Pointer() unsafe.Pointer }) (*C.daos_handle_t,
 }
 
 func Connect(poolID, contID, sysID string, mFlags int, sFlags SysFlag) (*Filesystem, error) {
+	if poolID == "" || contID == "" {
+		return nil, errors.New("missing pool or container ID")
+	}
+	if sysID == "" {
+		sysID = build.DefaultSystemName
+	}
 	if mFlags == 0 {
 		mFlags = os.O_RDONLY
 	}

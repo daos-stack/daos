@@ -154,24 +154,20 @@ func (cmd *poolBaseCmd) PoolID() ui.LabelOrUUIDFlag {
 	return cmd.Args.Pool.LabelOrUUIDFlag
 }
 
-func (cmd *poolBaseCmd) connectPool(flags uint) error {
+func (cmd *poolBaseCmd) connectPool(flags daosAPI.PoolConnectFlag) error {
 	sysName := cmd.SysName
 	if sysName == "" {
 		sysName = build.DefaultSystemName
 	}
-	poolConnReq := daosAPI.PoolConnectReq{
-		SystemName: sysName,
-		PoolID:     cmd.PoolID().String(),
-		Flags:      flags,
-	}
+	poolID := cmd.PoolID().String()
 
 	if mpc := apiMocks.GetPoolConn(cmd.daosCtx); mpc != nil {
-		if err := mpc.Connect(cmd.daosCtx, poolConnReq); err != nil {
+		if err := mpc.Connect(cmd.daosCtx, poolID, sysName, flags); err != nil {
 			return err
 		}
 		cmd.poolConn = &wrappedPoolMock{mpc}
 	} else {
-		resp, err := daosAPI.PoolConnect(cmd.daosCtx, poolConnReq)
+		resp, err := daosAPI.PoolConnect(cmd.daosCtx, poolID, sysName, flags)
 		if err != nil {
 			return err
 		}
@@ -190,7 +186,7 @@ func (cmd *poolBaseCmd) disconnectPool() {
 	}
 }
 
-func (cmd *poolBaseCmd) resolveAndConnect(flags uint, ap *C.struct_cmd_args_s) (func(), error) {
+func (cmd *poolBaseCmd) resolveAndConnect(flags daosAPI.PoolConnectFlag, ap *C.struct_cmd_args_s) (func(), error) {
 	if err := cmd.connectPool(flags); err != nil {
 		return nil, errors.Wrapf(err,
 			"failed to connect to pool %s", cmd.PoolID())

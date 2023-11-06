@@ -77,7 +77,7 @@ func NewPoolConn(cfg *PoolConnCfg) *PoolConn {
 	}
 }
 
-func (mpc *PoolConn) Connect(context.Context, daosAPI.PoolConnectReq) error {
+func (mpc *PoolConn) Connect(context.Context, string, string, daosAPI.PoolConnectFlag) error {
 	return mpc.cfg.Connect.Error
 }
 
