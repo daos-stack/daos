@@ -316,7 +316,7 @@ post_provision_config_nodes() {
                 branch="${branch%:*}"
             fi
         fi
-        local repo_url="${ARTEFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/$DISTRO_NAME/
+        local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/$DISTRO_NAME/
         dnf -y config-manager --add-repo="${repo_url}"
         disable_gpg_check "$repo_url"
     done
@@ -365,7 +365,7 @@ setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-$version
 EOF
 
         printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
-    fi 
+    fi
 
     distro_custom
 

@@ -94,7 +94,7 @@ for repo in $DISTRO_BASE_PR_REPOS $PR_REPOS; do
     repo_adds+=("--enablerepo $repo:${branch//[@\/]/_}:$build_number")
     echo -e "[$repo:${branch//[@\/]/_}:$build_number]\n\
 name=$repo:${branch//[@\/]/_}:$build_number\n\
-baseurl=${ARTEFACTS_URL:-${JENKINS_URL:-https://build.hpdd.intel.com/}job/}daos-stack/job/$repo/job/${branch//\//%2F}/$build_number/artifact/artifacts/$DISTRO/\n\
+baseurl=${ARTIFACTS_URL:-${JENKINS_URL:-https://build.hpdd.intel.com/}job/}daos-stack/job/$repo/job/${branch//\//%2F}/$build_number/artifact/artifacts/$DISTRO/\n\
 enabled=1\n\
 gpgcheck=False\n" >> "$cfg_file"
 done

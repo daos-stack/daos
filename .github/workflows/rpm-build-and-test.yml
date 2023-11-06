@@ -182,7 +182,7 @@ jobs:
       DISTRO_REPOS: disabled
       DOCKER_BUILDKIT: 0
       JENKINS_URL: https://build.hpdd.intel.com/
-      ARTEFACTS_URL: file:///scratch/job_repos/
+      ARTIFACTS_URL: file:///scratch/job_repos/
       MOCK_OPTIONS: --uniqueext=${{ github.run_id }}
       PR_NUM: ${{ github.event.pull_request.number }}
       # TODO -- this should be on stable, backedup storage, not /scratch
@@ -326,7 +326,7 @@ jobs:
              # it might seem tempting to factor in the result of the build for this
              # distro here and not include a failed build in the test matrix
              # the problem with that is that if/when the user asks GHA to rebuild
-             # all faiiled jobs and a previously failed RPM job is successful, the
+             # all failed jobs and a previously failed RPM job is successful, the
              # test matrix won't include testing it since it was calculated and was
              # successful on the previous run without the failed build stage in it
              if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
@@ -372,7 +372,7 @@ jobs:
       REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
       REMOVE_EXISTING_RPMS: false
       # TODO -- this should be on stable, backedup storage
-      ARTEFACTS_URL: file:///scratch/job_repos/
+      ARTIFACTS_URL: file:///scratch/job_repos/
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       # keep VS Code's GHA linting happy
       NODESTRING:
@@ -592,7 +592,7 @@ jobs:
       REPOSITORY_URL: https://repo.dc.hpdd.intel.com/
       REMOVE_EXISTING_RPMS: false
       # TODO -- this should be on stable, backedup storage
-      ARTEFACTS_URL: file:///scratch/job_repos/
+      ARTIFACTS_URL: file:///scratch/job_repos/
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       # keep VS Code's GHA linting happy
       NODESTRING:
