@@ -548,10 +548,10 @@ svt_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 static void
 cancel_nvme_exts(bio_addr_t *addr, struct dtx_handle *dth)
 {
-	struct vea_resrvd_ext	*ext;
-	struct dtx_rsrvd_uint	*dru;
-	int			 i;
-	uint64_t		 blk_off;
+	struct vea_resrvd_ext *ext;
+	struct dtx_rsrvd_uint *dru;
+	int                    i;
+	uint64_t               blk_off;
 
 	if (addr->ba_type != DAOS_MEDIA_NVME)
 		return;
@@ -565,8 +565,7 @@ cancel_nvme_exts(bio_addr_t *addr, struct dtx_handle *dth)
 		d_list_for_each_entry(ext, &dru->dru_nvme, vre_link) {
 			if (ext->vre_blk_off == blk_off) {
 				d_list_del(&ext->vre_link);
-				d_list_add_tail(&ext->vre_link,
-						&dth->dth_deferred_nvme);
+				d_list_add_tail(&ext->vre_link, &dth->dth_deferred_nvme);
 				return;
 			}
 		}
@@ -576,16 +575,14 @@ cancel_nvme_exts(bio_addr_t *addr, struct dtx_handle *dth)
 }
 
 static int
-svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
-		      bool overwrite)
+svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec, bool overwrite)
 {
 	daos_epoch_t		*epc = (daos_epoch_t *)&rec->rec_hkey[0];
 	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
-	bio_addr_t		*addr = &irec->ir_ex_addr;
-	struct dtx_handle	*dth = NULL;
-	struct umem_rsrvd_act	*rsrvd_scm;
-	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
-	int			 i;
+	bio_addr_t              *addr = &irec->ir_ex_addr;
+	struct dtx_handle       *dth  = NULL;
+	struct umem_rsrvd_act   *rsrvd_scm;
+	struct vos_container    *cont = vos_hdl2cont(tins->ti_coh);
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -600,7 +597,7 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 				  irec->ir_dtx, *epc, rec->rec_off);
 
 	if (!overwrite) {
-		int	rc;
+		int rc;
 
 		/* SCM value is stored together with vos_irec_df */
 		if (addr->ba_type == DAOS_MEDIA_NVME) {
@@ -615,13 +612,10 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 		return umem_free(&tins->ti_umm, rec->rec_off);
 	}
 
-	/** There can't be more cancellations than updates in this
-	 *  modification so just use the current one
+	/** We allocate enough space assuming for every reserve, there may also
+	 * be a deferred free
 	 */
-	D_ASSERT(dth->dth_op_seq > 0);
-	D_ASSERT(dth->dth_op_seq <= dth->dth_deferred_cnt);
-	i = dth->dth_op_seq - 1;
-	rsrvd_scm = dth->dth_deferred[i];
+	rsrvd_scm = dth->dth_current_rsrvd;
 	D_ASSERT(rsrvd_scm != NULL);
 
 	umem_defer_free(&tins->ti_umm, rec->rec_off, rsrvd_scm);
@@ -655,21 +649,25 @@ static int
 svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		d_iov_t *key_iov, d_iov_t *val_iov, d_iov_t *val_out)
 {
-	struct vos_svt_key	*skey;
-	struct vos_irec_df	*irec;
+	struct vos_svt_key      *skey;
+	struct vos_irec_df      *irec;
 	struct vos_rec_bundle	*rbund;
-	int			 rc;
+	int                      rc;
 
 	rbund = iov2rec_bundle(val_iov);
-	skey = (struct vos_svt_key *)key_iov->iov_buf;
-	irec = vos_rec2irec(tins, rec);
+	skey  = (struct vos_svt_key *)key_iov->iov_buf;
+	irec  = vos_rec2irec(tins, rec);
 
-	/** Disallow same epoch overwrite */
-	if (skey->sk_minor_epc <= irec->ir_minor_epc)
-		return -DER_NO_PERM;
+	if (skey->sk_minor_epc <= irec->ir_minor_epc) {
+		/* This must be an overwrite by migration */
+		BIO_ADDR_SET_CANCELLED(&rbund->rb_biov->bi_addr);
+		return 0;
+	}
 
-	D_DEBUG(DB_IO, "Overwrite epoch "DF_X64".%d\n", skey->sk_epoch,
-		skey->sk_minor_epc);
+	/* In the normal DTX case, a later minor epoch will actually overwrite
+	 * the value that is in the tree since the major epoch is the key.
+	 */
+	D_DEBUG(DB_IO, "Overwrite epoch " DF_X64 ".%d\n", skey->sk_epoch, skey->sk_minor_epc);
 
 	rc = svt_rec_free_internal(tins, rec, true);
 	if (rc != 0)

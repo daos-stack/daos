@@ -816,12 +816,10 @@ simple_multi_update(void **state)
 			  strlen(overwrite[i]) + 1);
 	}
 
-	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, 2, 0, 0, NULL, 0, NULL,
-			   NULL);
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, 3, 0, 0, NULL, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 1, 0,
-			    0, &dkey, 2, iod, NULL, sgl);
+	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, 2, 0, 0, &dkey, 2, iod, NULL, sgl);
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {
@@ -829,8 +827,7 @@ simple_multi_update(void **state)
 		d_iov_set(&sgl[i].sg_iovs[0], (void *)buf[i], sizeof(buf[i]));
 	}
 
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 1, 0, &dkey, 2,
-			   iod, sgl);
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, 2, 0, &dkey, 2, iod, sgl);
 	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 2; i++) {

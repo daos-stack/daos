@@ -1263,8 +1263,9 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
  *
  * \param[in]	cont		the VOS container
  * \param[in]	dth_in		The dtx handle, if applicable
- * \param[in]	rsrvd_scmp	Pointer to reserved scm, will be consumed
- * \param[in]	nvme_exts	List of resreved nvme extents
+ * \param[in]	rsrvd_actp	Pointer to reserved scm, will be consumed
+ * \param[in]	nvme_exts	List of reserved nvme extents
+ * \param[in]	cancel_exts	List of reserved nvme extents to cancel
  * \param[in]	started		Only applies when dth_in is invalid,
  *				indicates if vos_tx_begin was successful
  * \param[in]	biod		bio_desc for data I/O
@@ -1274,8 +1275,8 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
  */
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct umem_rsrvd_act **rsrvd_actp, d_list_t *nvme_exts, bool started,
-	   struct bio_desc *biod, int err);
+	   struct umem_rsrvd_act **rsrvd_actp, d_list_t *nvme_exts, d_list_t *cancel_exts,
+	   bool started, struct bio_desc *biod, int err);
 
 /* vos_obj.c */
 int
@@ -1790,5 +1791,10 @@ vos_fake_anchor_create(daos_anchor_t *anchor)
 	memset(&anchor->da_buf[0], 0, sizeof(anchor->da_buf));
 	anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
 }
+
+/** Cancel the current allocation, assume overwrite is always the same */
+void
+vos_handle_overwrite(struct dtx_handle *dth, struct umem_instance *umm, bio_addr_t *addr,
+		     umem_off_t off);
 
 #endif /* __VOS_INTERNAL_H__ */

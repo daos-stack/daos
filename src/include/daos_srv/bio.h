@@ -29,6 +29,8 @@
 			((addr)->ba_flags &= ~(BIO_FLAG_DEDUP_BUF))
 #define BIO_ADDR_IS_CORRUPTED(addr) ((addr)->ba_flags & BIO_FLAG_CORRUPTED)
 #define BIO_ADDR_SET_CORRUPTED(addr) ((addr)->ba_flags |= BIO_FLAG_CORRUPTED)
+#define BIO_ADDR_IS_CANCELLED(addr)  ((addr)->ba_flags & BIO_FLAG_CANCELLED)
+#define BIO_ADDR_SET_CANCELLED(addr) ((addr)->ba_flags |= BIO_FLAG_CANCELLED)
 
 /* Can support up to 16 flags for a BIO address */
 enum BIO_FLAG {
@@ -39,6 +41,8 @@ enum BIO_FLAG {
 	/* The address is a buffer for dedup verify */
 	BIO_FLAG_DEDUP_BUF = (1 << 2),
 	BIO_FLAG_CORRUPTED = (1 << 3),
+	/** Mark a bio_addr as cancelled, for convenience */
+	BIO_FLAG_CANCELLED = (1 << 4),
 };
 
 typedef struct {

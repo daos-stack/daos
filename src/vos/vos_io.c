@@ -53,6 +53,8 @@ struct vos_io_context {
 	unsigned int		 ic_umoffs_at;
 	/** reserved NVMe extents */
 	d_list_t		 ic_blk_exts;
+	/** reserved NVMe extents to be cancelled */
+	d_list_t                  ic_cancel_exts;
 	daos_size_t		 ic_space_held[DAOS_MEDIA_MAX];
 	/** number DAOS IO descriptors */
 	unsigned int		 ic_iod_nr;
@@ -516,6 +518,7 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 	}
 
 	D_ASSERT(d_list_empty(&ioc->ic_blk_exts));
+	D_ASSERT(d_list_empty(&ioc->ic_cancel_exts));
 	D_ASSERT(d_list_empty(&ioc->ic_dedup_entries));
 	D_FREE(ioc->ic_umoffs);
 }
@@ -523,7 +526,6 @@ vos_ioc_reserve_fini(struct vos_io_context *ioc)
 static int
 vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 {
-	struct umem_rsrvd_act	*scm;
 	int			 total_acts = 0;
 	int			 i;
 
@@ -543,21 +545,13 @@ vos_ioc_reserve_init(struct vos_io_context *ioc, struct dtx_handle *dth)
 	if (vos_ioc2umm(ioc)->umm_ops->mo_reserve == NULL)
 		return 0;
 
-	umem_rsrvd_act_alloc(vos_ioc2umm(ioc), &ioc->ic_rsrvd_scm, total_acts);
+	/** Reserve enough space for one deferred action per operation */
+	umem_rsrvd_act_alloc(vos_ioc2umm(ioc), &ioc->ic_rsrvd_scm, 2 * total_acts);
 	if (ioc->ic_rsrvd_scm == NULL)
 		return -DER_NOMEM;
 
-	if (!dtx_is_valid_handle(dth) || dth->dth_deferred == NULL)
-		return 0;
-
-	/** Reserve enough space for any deferred actions */
-	umem_rsrvd_act_alloc(vos_ioc2umm(ioc), &scm, total_acts);
-	if (scm == NULL) {
-		D_FREE(ioc->ic_rsrvd_scm);
-		return -DER_NOMEM;
-	}
-
-	dth->dth_deferred[dth->dth_deferred_cnt++] = scm;
+	if (dth != NULL)
+		dth->dth_current_rsrvd = ioc->ic_rsrvd_scm;
 
 	return 0;
 }
@@ -689,6 +683,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
 	vos_ilog_fetch_init(&ioc->ic_akey_info);
 	D_INIT_LIST_HEAD(&ioc->ic_blk_exts);
+	D_INIT_LIST_HEAD(&ioc->ic_cancel_exts);
 	ioc->ic_shadows = shadows;
 	D_INIT_LIST_HEAD(&ioc->ic_dedup_entries);
 
@@ -1630,6 +1625,43 @@ iod_update_biov(struct vos_io_context *ioc)
 	return biov;
 }
 
+static void
+handle_overwrite(struct vos_io_context *ioc, bio_addr_t *addr, umem_off_t off)
+{
+	struct vea_resrvd_ext *ext;
+	uint64_t               blk_off;
+
+	if (BIO_ADDR_IS_HOLE(addr))
+		return;
+
+	/* For scm, let's defer free to after publish is processed */
+	if (off != UMOFF_NULL || addr->ba_type != DAOS_MEDIA_NVME) {
+		/** For single value, we embed ba_off in the record at off.
+		 * Otherwise, we need to cancel ba_off.
+		 */
+		if (off == UMOFF_NULL)
+			off = addr->ba_off;
+
+		umem_defer_free(vos_ioc2umm(ioc), off, ioc->ic_rsrvd_scm);
+
+		if (addr->ba_type != DAOS_MEDIA_NVME)
+			return;
+	}
+
+	blk_off = vos_byte2blkoff(addr->ba_off);
+
+	d_list_for_each_entry(ext, &ioc->ic_blk_exts, vre_link) {
+		if (ext->vre_blk_off == blk_off) {
+			d_list_del(&ext->vre_link);
+			d_list_add_tail(&ext->vre_link, &ioc->ic_cancel_exts);
+			return;
+		}
+	}
+
+	D_ASSERTF(0, "Attempted to cancel extent at blk_off:" DF_X64 ", but not in reserve list.\n",
+		  blk_off);
+}
+
 static int
 akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 		   daos_size_t gsize, struct vos_io_context *ioc,
@@ -1674,6 +1706,9 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	rc = dbtree_update(toh, &kiov, &riov);
 	if (rc != 0)
 		D_ERROR("Failed to update subtree: "DF_RC"\n", DP_RC(rc));
+
+	if (BIO_ADDR_IS_CANCELLED(&biov->bi_addr))
+		handle_overwrite(ioc, &biov->bi_addr, umoff);
 
 	ioc->ic_io_size += rsize;
 
@@ -1722,6 +1757,11 @@ akey_update_recx(daos_handle_t toh, uint32_t pm_ver, daos_recx_t *recx,
 
 		vos_dedup_update(vos_cont2pool(ioc->ic_cont), csum, csum_len,
 				 biov, &ioc->ic_dedup_entries);
+	}
+
+	if (rc == -DER_VOS_PARTIAL_UPDATE) {
+		handle_overwrite(ioc, &biov->bi_addr, UMOFF_NULL);
+		rc = 0;
 	}
 	return rc;
 }
@@ -2467,8 +2507,8 @@ abort:
 	if (err == 0)
 		vos_ts_set_wupdate(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
 
-	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm,
-			 &ioc->ic_blk_exts, tx_started, ioc->ic_biod, err);
+	err = vos_tx_end(ioc->ic_cont, dth, &ioc->ic_rsrvd_scm, &ioc->ic_blk_exts,
+			 &ioc->ic_cancel_exts, tx_started, ioc->ic_biod, err);
 	if (err == 0)
 		vos_dedup_process(vos_cont2pool(ioc->ic_cont), &ioc->ic_dedup_entries, false);
 

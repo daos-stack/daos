@@ -31,7 +31,7 @@ function word_set {
  -a 90-95@$np2:coffee	\
  -a 50-56@$n:scarlet	\
  -a 57-61@$n:witch		\
- -a 57-61@$n:witch		\
+ -a -57-61@$n:witch		\
  -a 96-99@$n:blue		\
  -a 78-82@$np2:hello	\
  -a 25-29@$np1:widow	\

@@ -2153,43 +2153,6 @@ evt_insert_entry(struct evt_context *tcx, const struct evt_entry_in *ent,
 	return evt_insert_or_split(tcx, ent, csum_bufp);
 }
 
-static int
-evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent,
-	      uint8_t **csum_bufp)
-{
-	struct evt_desc		*dst_desc;
-	struct evt_trace	*trace;
-	struct evt_node		*node;
-	daos_size_t		 csum_buf_len = 0;
-	daos_size_t		 size;
-	int			 rc;
-
-	trace = &tcx->tc_trace[tcx->tc_depth - 1];
-	node = evt_off2node(tcx, trace->tr_node);
-	dst_desc = evt_node_desc_at(tcx, node, trace->tr_at);
-
-	D_ASSERT(ent->ei_inob != 0);
-	size = ent->ei_inob * evt_rect_width(&ent->ei_rect);
-
-	rc = evt_desc_bio_free(tcx, dst_desc, size);
-	if (rc != 0)
-		return rc;
-
-	if (ci_is_valid(&ent->ei_csum))
-		csum_buf_len = ci_csums_len(ent->ei_csum);
-
-	rc = umem_tx_add_ptr(evt_umm(tcx), dst_desc,
-			     sizeof(*dst_desc) + csum_buf_len);
-	if (rc != 0)
-		return rc;
-
-	dst_desc->dc_ex_addr = ent->ei_addr;
-	dst_desc->dc_ver = ent->ei_ver;
-	evt_desc_csum_fill(tcx, dst_desc, ent, csum_bufp);
-
-	return 0;
-}
-
 /** For hole extents that are too large for a single entry, search the tree
  *  first and only insert holes where an extent is visible
  */
@@ -2241,9 +2204,7 @@ int
 evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	   uint8_t **csum_bufp)
 {
-	struct evt_context		*tcx;
-	struct evt_entry		*ent = NULL;
-	struct evt_entry_in		 ent_cpy;
+	struct evt_context *tcx;
 	EVT_ENT_ARRAY_SM_PTR(ent_array);
 	const struct evt_entry_in	*entryp = entry;
 	struct evt_filter		 filter;
@@ -2289,26 +2250,13 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
 				&filter, &entry->ei_rect, ent_array);
 	alt_rc = rc;
-	if (rc < 0)
+	if (rc < 0) {
+		D_DEBUG(DB_TRACE, "evt_ent_array_fill returned: " DF_RC "\n", DP_RC(rc));
 		return rc;
-
-	if (ent_array->ea_ent_nr == 1) {
-		if (entry->ei_rect.rc_minor_epc == EVT_MINOR_EPC_MAX) {
-			/** Special case.   This is an overlapping delete record
-			 *  which can happen when there are minor epochs
-			 *  involved.   Rather than rejecting, insert prefix
-			 *  and/or suffix extents.
-			 */
-			ent = evt_ent_array_get(ent_array, 0);
-			if (ent->en_ext.ex_lo <= entry->ei_rect.rc_ex.ex_lo &&
-			    ent->en_ext.ex_hi >= entry->ei_rect.rc_ex.ex_hi) {
-				/** Nothing to do, existing extent contains
-				 *  the new one
-				 */
-				return 0;
-			}
-		}
 	}
+
+	D_ASSERTF(ent_array->ea_ent_nr == 0, "There should be no overlapped entries: ea_ent_nr=%d",
+		  ent_array->ea_ent_nr);
 
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
@@ -2325,40 +2273,6 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		tcx->tc_inob = tcx->tc_root->tr_inob = entry->ei_inob;
 	}
 
-	D_ASSERT(ent_array->ea_ent_nr <= 1);
-	if (ent_array->ea_ent_nr == 1) {
-		if (ent != NULL) {
-			memcpy(&ent_cpy, entry, sizeof(*entry));
-			entryp = &ent_cpy;
-			/** We need to edit the existing extent */
-			if (entry->ei_rect.rc_ex.ex_lo < ent->en_ext.ex_lo) {
-				ent_cpy.ei_rect.rc_ex.ex_hi = ent->en_ext.ex_lo - 1;
-				if (entry->ei_rect.rc_ex.ex_hi <= ent->en_ext.ex_hi)
-					goto insert;
-				/* There is also a suffix, so insert the prefix */
-				rc = evt_insert_entry(tcx, entryp, csum_bufp);
-				if (rc != 0)
-					goto out;
-			}
-
-			D_ASSERT(entry->ei_rect.rc_ex.ex_hi > ent->en_ext.ex_hi);
-			ent_cpy.ei_rect.rc_ex.ex_hi = entry->ei_rect.rc_ex.ex_hi;
-			ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_hi + 1;
-
-			/* Now insert the suffix */
-			goto insert;
-		}
-		/*
-		 * NB: This is part of the current hack to keep "supporting"
-		 * overwrite for same epoch, full overwrite.
-		 * No copy for duplicate punch.
-		 */
-		if (entry->ei_inob > 0)
-			rc = evt_desc_copy(tcx, entry, csum_bufp);
-		goto out;
-	}
-
-insert:
 	/* Phase-2: Inserting */
 	rc = evt_insert_entry(tcx, entryp, csum_bufp);
 
@@ -2704,27 +2618,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 					  " overlaps with " DF_RECT "\n",
 					  DP_RECT(&rtmp), DP_RECT(rect));
 
-				/* NB: This is temporary to allow full overwrite
-				 * in same epoch to avoid breaking rebuild.
-				 * Without some sequence number and client
-				 * identifier, we can't do this robustly.
-				 * There can be a race between rebuild and
-				 * client doing different updates.  But this
-				 * isn't any worse than what we already have in
-				 * place so I did it this way to minimize
-				 * change while we decide how to handle this
-				 * properly.
+				/** This may or may not be partial but the
+				 * result is the same.  Tell the upper layer
+				 * that we have detected a same epoch overwrite.
+				 * Making the simplifying assumption that this
+				 * is from migration since DTX logic should
+				 * disallow same epoch overwrite of different
+				 * values.
 				 */
-				if (range_overlap != RT_OVERLAP_SAME) {
-					D_ERROR("Same epoch partial "
-						"overwrite not supported:"
-						DF_RECT" overlaps with "DF_RECT
-						"\n", DP_RECT(rect),
-						DP_RECT(&rtmp));
-					rc = -DER_VOS_PARTIAL_UPDATE;
-					goto out;
-				}
-				break; /* we can update the record in place */
+				rc = -DER_VOS_PARTIAL_UPDATE;
+				goto out;
 			case EVT_FIND_SAME:
 				if (range_overlap != RT_OVERLAP_SAME)
 					continue;

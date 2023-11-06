@@ -150,8 +150,7 @@ static int
 vos_tx_publish(struct dtx_handle *dth, bool publish)
 {
 	struct vos_container	*cont = vos_hdl2cont(dth->dth_coh);
-	struct dtx_rsrvd_uint	*dru;
-	struct umem_rsrvd_act	*scm;
+	struct dtx_rsrvd_uint   *dru;
 	int			 rc;
 	int			 i;
 
@@ -180,15 +179,6 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 		/** Function checks if list is empty */
 		rc = vos_publish_blocks(cont, &dru->dru_nvme,
 					publish, VOS_IOS_GENERIC);
-		if (rc && publish)
-			return rc;
-	}
-
-	for (i = 0; i < dth->dth_deferred_cnt; i++) {
-		scm = dth->dth_deferred[i];
-		rc = vos_publish_scm(cont, scm, publish);
-		D_FREE(dth->dth_deferred[i]);
-
 		if (rc && publish)
 			return rc;
 	}
@@ -229,7 +219,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
 
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts,
+	   struct umem_rsrvd_act **rsrvd_scmp, d_list_t *nvme_exts, d_list_t *cancel_exts,
 	   bool started, struct bio_desc *biod, int err)
 {
 	struct dtx_handle	*dth = dth_in;
@@ -257,6 +247,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 		D_INIT_LIST_HEAD(&dru->dru_nvme);
 		d_list_splice_init(nvme_exts, &dru->dru_nvme);
+		d_list_splice_init(cancel_exts, &dth->dth_deferred_nvme);
 	}
 
 	if (!dth->dth_local_tx_started)

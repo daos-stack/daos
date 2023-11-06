@@ -35,6 +35,7 @@ static bool			vts_nest_iterators;
  */
 char		last_dkey[UPDATE_DKEY_SIZE];
 char		last_akey[UPDATE_AKEY_SIZE];
+char                            last_value[UPDATE_BUF_SIZE];
 
 struct io_test_flag {
 	char			*tf_str;
@@ -827,12 +828,15 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		if (arg->ta_flags & TF_OVERWRITE) {
 			memcpy(dkey_buf, last_dkey, arg->dkey_size);
 			memcpy(akey_buf, last_akey, arg->akey_size);
+			memcpy(update_buf, last_value, UPDATE_BUF_SIZE);
 		} else {
 			vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
 			memcpy(last_dkey, dkey_buf, arg->dkey_size);
 
 			vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
 			memcpy(last_akey, akey_buf, arg->akey_size);
+			dts_buf_render(update_buf, UPDATE_BUF_SIZE);
+			memcpy(last_value, update_buf, UPDATE_BUF_SIZE);
 		}
 
 		set_iov(&dkey, &dkey_buf[0],
@@ -840,7 +844,6 @@ io_update_and_fetch_dkey(struct io_test_args *arg, daos_epoch_t update_epoch,
 		set_iov(&akey, &akey_buf[0],
 			is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
 
-		dts_buf_render(update_buf, UPDATE_BUF_SIZE);
 		d_iov_set(&val_iov, &update_buf[0], UPDATE_BUF_SIZE);
 		iod.iod_size = recx_size;
 		rex.rx_nr    = recx_nr;

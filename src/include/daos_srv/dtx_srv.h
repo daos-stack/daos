@@ -103,8 +103,7 @@ struct dtx_handle {
 	/** The flags, see dtx_entry_flags. */
 	uint32_t			 dth_flags;
 	/** The count of reserved items in the dth_rsrvds array. */
-	uint16_t			 dth_rsrvd_cnt;
-	uint16_t			 dth_deferred_cnt;
+	uint32_t                         dth_rsrvd_cnt;
 	/** The total sub modifications count. */
 	uint16_t			 dth_modification_cnt;
 	/** Modification sequence in the distributed transaction. */
@@ -121,8 +120,8 @@ struct dtx_handle {
 	uint64_t			 dth_dkey_hash;
 
 	struct dtx_rsrvd_uint		 dth_rsrvd_inline;
-	struct dtx_rsrvd_uint		*dth_rsrvds;
-	void				**dth_deferred;
+	struct dtx_rsrvd_uint           *dth_rsrvds;
+	void                            *dth_current_rsrvd;
 	/* NVME extents to release */
 	d_list_t			 dth_deferred_nvme;
 	/* Committed or comittable DTX list */
