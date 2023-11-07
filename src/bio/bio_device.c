@@ -1088,6 +1088,10 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 	struct spdk_pci_addr	pci_addr;
 	int			rc;
 
+	/* LED management on NVMe devices currently only supported when VMD is enabled. */
+	if (!is_vmd_enabled())
+		return 0;
+
 	/**
 	 * If tr_addr is already provided, convert to a PCI address. If tr_addr is NULL or empty,
 	 * derive PCI address from the provided UUID and if tr_addr is an empty string buffer then
