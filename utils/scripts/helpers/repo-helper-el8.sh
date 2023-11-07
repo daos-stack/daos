@@ -97,4 +97,11 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo
     save_repos+=("$repo:$branch:$build_number")
 done
 
-disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
+# Install OS updates and package.  Include basic tools and daos dependencies
+if [ -e /tmp/install.sh ]; then
+    dnf upgrade
+    disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
+    /tmp/install.sh
+    dnf clean all
+    rm -f /tmp/install.sh
+fi

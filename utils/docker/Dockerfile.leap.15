@@ -6,12 +6,11 @@
 #
 
 # Pull base image
-ARG POINT_RELEASE=
-ARG BASE_DISTRO=registry.opensuse.org/opensuse/leap-dnf:15$POINT_RELEASE
-FROM $BASE_DISTRO as basic
-LABEL maintainer="daos@daos.groups.io"
+ARG BASE_DISTRO=opensuse/leap:15.5
+FROM $BASE_DISTRO
 # Needed for later use of BASE_DISTRO
 ARG BASE_DISTRO
+LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
@@ -23,18 +22,9 @@ ARG REPOS
 COPY ./utils/scripts/install-leap15.sh /tmp/install.sh
 # script to setup local repo if available
 COPY ./utils/scripts/helpers/repo-helper-leap15.sh /tmp/repo-helper.sh
-
 RUN set -e;                                         \
     chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
-    /tmp/repo-helper.sh;                            \
-    rm -f /tmp/repo-helper.sh
-
-FROM basic
-# Install OS updates and package.  Include basic tools and daos dependencies
-RUN dnf upgrade;          \
-    /tmp/install.sh;      \
-    dnf clean all;        \
-    rm -f /tmp/install.sh
+    /tmp/repo-helper.sh
 
 # Add DAOS users
 ARG UID=1000

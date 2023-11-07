@@ -33,32 +33,23 @@ disable_repos () {
     fi
 }
 
-# Use local repo server if present
 install_curl() {
 
     if command -v curl; then
         return
     fi
 
-    if command -v dnf; then
-        dnf -y install curl
-        return
-    fi
-
-    if command -v zypper; then
-        zypper mr --all --disable
-        zypper addrepo                                                                           \
-            "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO##*:}/repo/oss/" \
-              temp_opensuse_oss_proxy
-        zypper --non-interactive install curl
-        zypper removerepo temp_opensuse_oss_proxy
-    fi
+    zypper mr --all --disable
+    zypper addrepo                                                                           \
+        "${REPO_FILE_URL%/*/}/opensuse-proxy/distribution/leap/${BASE_DISTRO##*:}/repo/oss/" \
+          temp_opensuse_oss_proxy
+    zypper --non-interactive install curl
+    zypper removerepo temp_opensuse_oss_proxy
 }
 
 install_dnf() {
 
     if command -v dnf; then
-        dnf -y install dnf-plugins-core
         return
     fi
 
@@ -78,37 +69,26 @@ install_dnf() {
 
 MAJOR_VER="${BASE_DISTRO##*:}"
 MAJOR_VER="${MAJOR_VER%%.*}"
-if command -v dnf; then
-    repos_dir=/etc/yum.repos.d/
-else
-    repos_dir=/etc/zypp/repos.d/
-fi
 if [ -n "$REPO_FILE_URL" ]; then
     install_curl
-    mkdir -p "$repos_dir"
-    pushd "$repos_dir"
-    curl -k -f -o daos_ci-leap"$MAJOR_VER"-artifactory.repo        \
-         "$REPO_FILE_URL"daos_ci-leap"$MAJOR_VER"-artifactory.repo
-    disable_repos "$repos_dir"
+    mkdir -p /etc/zypp/repos.d
+    pushd /etc/zypp/repos.d/
+    curl -k -f -o daos_ci-leap$MAJOR_VER-artifactory.repo        \
+         "$REPO_FILE_URL"daos_ci-leap$MAJOR_VER-artifactory.repo
+    disable_repos /etc/zypp/repos.d/
     popd
     install_dnf
 else
-    if ! command -v dnf; then
-        zypper --non-interactive --gpg-auto-import-keys install \
-            dnf dnf-plugins-core
-    fi
+    zypper --non-interactive --gpg-auto-import-keys install \
+        dnf dnf-plugins-core
 fi
-if [ ! -d /etc/yum.repos.d/ ]; then
-    mkdir -p /etc/yum.repos.d/
-    pushd "$repos_dir"
-    for file in *.repo; do
-        sed -e '/type=NONE/d' < "$file" > "/etc/yum.repos.d/$file"
-    done
-    popd
-fi
-if command -v zypper; then
-    zypper --non-interactive clean --all
-fi
+mkdir -p /etc/dnf/repos.d
+pushd /etc/zypp/repos.d/
+for file in *.repo; do
+    sed -e '/type=NONE/d' < "$file" > "/etc/dnf/repos.d/$file"
+done
+popd
+zypper --non-interactive clean --all
 dnf config-manager --save --setopt=assumeyes=True
 dnf config-manager --save --setopt=install_weak_deps=False
 
@@ -130,12 +110,18 @@ for repo in $REPOS; do
 name=$repo:$branch:$build_number\n\
 baseurl=${JENKINS_URL}$daos_base$repo/job/$branch/$build_number$artifacts\n\
 enabled=1\n\
-gpgcheck=False\n" >> $repos_dir$repo:$branch:$build_number.repo
-    cat $repos_dir$repo:$branch:$build_number.repo
+gpgcheck=False\n" >> /etc/dnf/repos.d/$repo:$branch:$build_number.repo
+    cat /etc/dnf/repos.d/$repo:$branch:$build_number.repo
     save_repos+=("$repo:$branch:$build_number")
 done
 
-disable_repos $repos_dir "${save_repos[@]}"
+if [ -e /tmp/install.sh ]; then
+    dnf upgrade
+    disable_repos /etc/dnf/repos.d/ "${save_repos[@]}"
+    /tmp/install.sh
+    dnf clean all
+    rm -f /tmp/install.sh
+fi
 
 if [ -e /etc/profile.d/lmod.sh ]; then
     if ! grep "MODULEPATH=.*/usr/share/modules" /etc/profile.d/lmod.sh; then
