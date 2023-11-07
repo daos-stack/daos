@@ -5,7 +5,7 @@
 """
 import os
 
-from command_utils_base import FormattedParameter, BasicParameter, CommandWithParameters
+from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 from general_utils import run_pcmd
 
 

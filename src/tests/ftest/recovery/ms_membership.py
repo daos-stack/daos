@@ -5,8 +5,8 @@
 """
 
 from apricot import TestWithServers
-from general_utils import report_errors
 from exception_utils import CommandFailure
+from general_utils import report_errors
 
 
 class MSMembershipTest(TestWithServers):

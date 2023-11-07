@@ -3,18 +3,19 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import re
-from collections import defaultdict
 import argparse
-import time
+from collections import defaultdict
+import re
 import subprocess  # nosec
+import time
 import yaml
+
+from demo_utils import check_disable, check_enable, check_repair, check_set_policy, \
+    check_start, cont_get_prop, convert_list_to_str, create_container, create_pool, \
+    create_uuid_to_seqnum, format_storage, inject_fault_daos, inject_fault_mgmt, \
+    inject_fault_pool, list_pool, pool_get_prop, repeat_check_query, \
+    storage_query_usage, system_query, system_start, system_stop
 from ClusterShell.NodeSet import NodeSet
-from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enable, \
-    check_start, check_disable, repeat_check_query, check_repair, create_uuid_to_seqnum, \
-    pool_get_prop, create_pool, inject_fault_pool, create_container, inject_fault_daos, \
-    system_stop, system_query, storage_query_usage, cont_get_prop, system_start, \
-    check_set_policy, convert_list_to_str
 
 
 # Run this script on Aurora node as user. e.g.,

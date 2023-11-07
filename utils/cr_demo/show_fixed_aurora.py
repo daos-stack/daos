@@ -3,12 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import subprocess  # nosec
 import argparse
+import subprocess  # nosec
 import yaml
 from ClusterShell.NodeSet import NodeSet
-from demo_utils import list_pool, pool_get_prop, create_container, system_stop, \
-    system_query, storage_query_usage, cont_get_prop, pool_query
+
+from demo_utils import cont_get_prop, create_container, list_pool, pool_get_prop, \
+    pool_query, storage_query_usage, system_query, system_stop
 
 
 # Run this script on Aurora node as user after running run_demo_aurora.py. E.g.,

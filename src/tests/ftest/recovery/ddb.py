@@ -7,11 +7,11 @@ import os
 import re
 from ClusterShell.NodeSet import NodeSet
 
-from recovery_test_base import RecoveryTestBase
-from general_utils import report_errors, insert_objects, distribute_files, \
-    DaosTestError, get_random_string, copy_remote_to_local
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
+from general_utils import DaosTestError, copy_remote_to_local, distribute_files, \
+    get_random_string, insert_objects, report_errors
+from recovery_test_base import RecoveryTestBase
 
 
 class DdbTest(RecoveryTestBase):
