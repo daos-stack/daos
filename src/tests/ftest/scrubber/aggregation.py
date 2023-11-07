@@ -34,9 +34,12 @@ class TestScrubberEvictWithAggregation(TestWithScrubber):
         self.pool.set_property("reclaim", "disabled")
         self.add_container(self.pool)
         # Pool and Containers are already created. Just run the IOR.
-        self.run_ior_with_pool(create_pool=False, create_cont=False)
+        self.run_ior_with_pool(create_cont=False)
         # Enable the aggregation on the pool.
-        self.pool.set_property("reclaim", "timed")
+        self.pool.set_property("reclaim", "time")
+        self.pool.set_property("scrub", "timed")
+        self.pool.set_property("scrub-freq", "1")
+        self.pool.set_property("scrub-thresh", "3")
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         # Wait for two minutes for aggregation run and scrubber to take to evict target

@@ -1,6 +1,6 @@
 hosts:
-  test_servers: 2
-  test_clients: 2
+  test_servers: 3
+  test_clients: 1
 timeout: 600
 setup:
   start_servers_once: false
@@ -39,30 +39,27 @@ dmg:
   transport_config:
     allow_insecure: true
 pool:
-  scm_size: 6G
-  nvme_size: 54G
+  size: 50%
   svcn: 4
   control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
-  properties: "scrub:timed,scrub-freq:1,scrub-thresh:2"
 container:
   type: POSIX
   control_method: daos
-  oclass: RP_2GX
+  oclass: RP_2G1
   properties: "cksum:crc16"
 ior:
   ior_timeout: 60
   client_processes:
     np: 6
   test_file: daos:testFile
-  repetitions: 2
   dfs_destroy: false
   flags: "-v -W -w -r -R -k"
   api: DFS
   transfer_size: 1M
   block_size: 8G
-  dfs_oclass: RP_2GX
+  dfs_oclass: RP_2G1
   dfs_dir_oclass: RP_2GX
 faults:
   fault_list:
