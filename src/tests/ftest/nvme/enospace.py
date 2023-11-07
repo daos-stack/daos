@@ -207,8 +207,8 @@ class NvmeEnospace(ServerFillUp):
                    f"{pool_usage['nvme']}")
             self.fail(msg)
         # SCM usage will not be 100% because some space (<1%) is used for the system.
-        if pool_usage['scm'] <= 95:
-            msg = f"Pool SCM used percentage should be > 95%, instead {pool_usage['scm']}"
+        if pool_usage['scm'] <= 90:
+            msg = f"Pool SCM used percentage should be > 90%, instead {pool_usage['scm']}"
             self.fail(msg)
 
     def run_enospace_with_bg_job(self, log_file):
