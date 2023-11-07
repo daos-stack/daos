@@ -673,9 +673,9 @@ scrubbing_with_good_akey_then_bad_akey(void **state)
 	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1));
 	ctx->tsc_scrub_ctx.sc_pool_start_scrub.tv_sec -= 10;
 
-	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1, true);
+	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 2, true);
 	sts_ctx_do_scrub(ctx);
-	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 1));
+	assert_csum_error(sts_ctx_fetch(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey", 2));
 }
 
 static int
