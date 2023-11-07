@@ -6,33 +6,31 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 # pylint: disable=too-many-lines
 
 import os
-import time
 import random
-import threading
 import re
+import threading
+import time
 from itertools import product
 
+import slurm_utils
 from avocado.core.exceptions import TestFail
-from pydaos.raw import DaosSnapshot, DaosApiError
-
-from ior_utils import IorCommand
-from fio_utils import FioCommand
-from mdtest_utils import MdtestCommand
+from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import Dfuse
 from dmg_utils import get_storage_query_device_info
+from duns_utils import format_path
+from fio_utils import FioCommand
+from general_utils import (DaosTestError, get_host_data, get_log_file, get_random_bytes,
+                           get_random_string, list_to_str, pcmd, run_command, run_pcmd)
+from ior_utils import IorCommand
 from job_manager_utils import Mpirun
-from general_utils import get_host_data, get_random_string, \
-    run_command, DaosTestError, pcmd, get_random_bytes, \
-    run_pcmd, list_to_str, get_log_file
-from command_utils_base import EnvironmentVariables
-import slurm_utils
+from macsio_util import MacsioCommand
+from mdtest_utils import MdtestCommand
+from oclass_utils import extract_redundancy_factor
+from pydaos.raw import DaosApiError, DaosSnapshot
 from run_utils import run_remote
 from test_utils_container import TestContainer
-from macsio_util import MacsioCommand
-from oclass_utils import extract_redundancy_factor
-from duns_utils import format_path
 
 H_LOCK = threading.Lock()
 

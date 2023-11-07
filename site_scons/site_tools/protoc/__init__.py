@@ -20,7 +20,9 @@
 # SOFTWARE.
 
 import os
+
 import SCons.Builder
+
 # pylint: disable=too-few-public-methods,missing-class-docstring
 
 

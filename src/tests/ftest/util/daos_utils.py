@@ -7,7 +7,7 @@ import re
 import traceback
 
 from daos_utils_base import DaosCommandBase
-from general_utils import list_to_str, dict_to_str
+from general_utils import dict_to_str, list_to_str
 
 
 class DaosCommand(DaosCommandBase):

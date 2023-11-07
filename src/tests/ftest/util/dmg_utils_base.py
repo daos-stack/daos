@@ -6,9 +6,8 @@
 from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
-
-from command_utils_base import FormattedParameter, CommandWithParameters, BasicParameter
 from command_utils import CommandWithSubCommand, YamlCommand
+from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 from general_utils import nodeset_append_suffix
 
 
