@@ -114,7 +114,7 @@ class PoolCreateCapacityTests(TestWithServers):
             Verify that DAOS is ready to accept requests within 2 minutes.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=pool
         :avocado: tags=PoolCreateCapacityTests,test_create_pool_quantity
         """
