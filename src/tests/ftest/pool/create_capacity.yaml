@@ -18,6 +18,7 @@ server_config:
       log_mask: DEBUG
       targets: 1
       env_vars:
+        - DAOS_MD_CAP=512
         - DD_MASK=group_metadata_only
         - D_LOG_FLUSH=DEBUG
       storage: auto
@@ -26,9 +27,5 @@ pool:
   control_method: dmg
   scm_size: 192MiB
   nvme_size: 1024MiB
-  ratio:
-    # md_on_scm: 28
-    md_on_scm: 100
-    # md_on_ssd: 15
-    md_on_ssd: 100
+  quantity: 200
   set_logmasks: False
