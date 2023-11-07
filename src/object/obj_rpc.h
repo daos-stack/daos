@@ -31,7 +31,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 9
+#define DAOS_OBJ_VERSION 10
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
@@ -96,7 +96,13 @@
 		ds_obj_cpd_handler, NULL, "compound")			\
 	X(DAOS_OBJ_RPC_KEY2ANCHOR,					\
 		0, &CQF_obj_key2anchor,					\
-		ds_obj_key2anchor_handler, NULL, "key2anchor")
+		ds_obj_key2anchor_handler, NULL, "key2anchor")		\
+	X(DAOS_OBJ_RPC_COLL_PUNCH,					\
+		0, &CQF_obj_coll_punch, ds_obj_coll_punch_handler,	\
+		&obj_coll_punch_co_ops, "obj_coll_punch")		\
+	X(DAOS_OBJ_RPC_COLL_QUERY,					\
+		0, &CQF_obj_coll_query, ds_obj_coll_query_handler,	\
+		NULL, "obj_coll_query")
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e, f) a,
@@ -107,6 +113,7 @@ enum obj_rpc_opc {
 };
 #undef X
 
+extern struct crt_corpc_ops obj_coll_punch_co_ops;
 extern struct crt_proto_format obj_proto_fmt_0;
 extern struct crt_proto_format obj_proto_fmt_1;
 extern int dc_obj_proto_version;
@@ -147,8 +154,8 @@ enum obj_rpc_flags {
 	 * oei_epr.epr_hi is epoch.
 	 */
 	ORF_ENUM_WITHOUT_EPR	= (1 << 8),
-	/* CPD RPC leader */
-	ORF_CPD_LEADER		= (1 << 9),
+	/* RPC leader */
+	ORF_LEADER		= (1 << 9),
 	/* Bulk data transfer for CPD RPC. */
 	ORF_CPD_BULK		= (1 << 10),
 	/* Contain EC split req, only used on CPD leader locally. Obsolete - DAOS-10348. */
@@ -636,6 +643,58 @@ struct daos_cpd_sg {
 
 CRT_RPC_DECLARE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 
+#define DAOS_ISEQ_OBJ_COLL_PUNCH	/* input fields */				\
+	((struct dtx_id)		(ocpi_xid)			CRT_VAR)	\
+	((uuid_t)			(ocpi_po_uuid)			CRT_VAR)	\
+	((uuid_t)			(ocpi_co_hdl)			CRT_VAR)	\
+	((uuid_t)			(ocpi_co_uuid)			CRT_VAR)	\
+	((daos_unit_oid_t)		(ocpi_oid)			CRT_RAW)	\
+	((uint64_t)			(ocpi_epoch)			CRT_VAR)	\
+	((uint64_t)			(ocpi_api_flags)		CRT_VAR)	\
+	((uint32_t)			(ocpi_map_ver)			CRT_VAR)	\
+	((uint32_t)			(ocpi_flags)			CRT_VAR)	\
+	((uint32_t)			(ocpi_fdom_lvl)			CRT_VAR)	\
+	((uint32_t)			(ocpi_pdom_lvl)			CRT_VAR)	\
+	((uint32_t)			(ocpi_pda)			CRT_VAR)	\
+	((uint32_t)			(ocpi_leader_id)		CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_COLL_PUNCH	/* output fields */				\
+	((int32_t)			(ocpo_ret)			CRT_VAR)	\
+	((uint32_t)			(ocpo_map_version)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUNCH)
+
+#define DAOS_ISEQ_OBJ_COLL_QUERY	/* input fields */				\
+	((struct dtx_id)		(ocqi_xid)			CRT_VAR)	\
+	((uuid_t)			(ocqi_po_uuid)			CRT_VAR)	\
+	((uuid_t)			(ocqi_co_hdl)			CRT_VAR)	\
+	((uuid_t)			(ocqi_co_uuid)			CRT_VAR)	\
+	((daos_unit_oid_t)		(ocqi_oid)			CRT_RAW)	\
+	((uint64_t)			(ocqi_epoch)			CRT_VAR)	\
+	((uint64_t)			(ocqi_epoch_first)		CRT_VAR)	\
+	((uint64_t)			(ocqi_api_flags)		CRT_VAR)	\
+	((uint32_t)			(ocqi_map_ver)			CRT_VAR)	\
+	((uint32_t)			(ocqi_flags)			CRT_VAR)	\
+	((daos_key_t)			(ocqi_dkey)			CRT_VAR)	\
+	((daos_key_t)			(ocqi_akey)			CRT_VAR)	\
+	((struct daos_coll_target)	(ocqi_tgts)			CRT_ARRAY)
+
+#define DAOS_OSEQ_OBJ_COLL_QUERY	/* output fields */				\
+	((int32_t)			(ocqo_ret)			CRT_VAR)	\
+	((uint32_t)			(ocqo_map_version)		CRT_VAR)	\
+	/* The id_shard corresponding to ocqo_recx */					\
+	((uint32_t)			(ocqo_shard)			CRT_VAR)	\
+	((uint32_t)			(ocqo_padding)			CRT_VAR)	\
+	((uint64_t)			(ocqo_epoch)			CRT_VAR)	\
+	((daos_key_t)			(ocqo_dkey)			CRT_VAR)	\
+	((daos_key_t)			(ocqo_akey)			CRT_VAR)	\
+	/* recx for visible extent */							\
+	((daos_recx_t)			(ocqo_recx)			CRT_VAR)	\
+	/* epoch for max write */							\
+	((uint64_t)			(ocqo_max_epoch)		CRT_VAR)
+
+CRT_RPC_DECLARE(obj_coll_query, DAOS_ISEQ_OBJ_COLL_QUERY, DAOS_OSEQ_OBJ_COLL_QUERY)
+
 static inline int
 obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req)
@@ -668,7 +727,7 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
-		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS || opc == DAOS_OBJ_RPC_COLL_PUNCH;
 }
 
 #define DAOS_OBJ_UPDATE_MODE_MASK	(DAOS_OO_RW | DAOS_OO_EXCL |	\
@@ -698,17 +757,6 @@ static inline bool
 obj_rpc_is_fetch(crt_rpc_t *rpc)
 {
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
-}
-
-static inline bool
-obj_rpc_is_punch(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_DKEYS ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_AKEYS ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
 }
 
 static inline bool

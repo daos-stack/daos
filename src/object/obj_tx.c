@@ -2278,7 +2278,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
-	oci->oci_flags = ORF_CPD_LEADER;
+	oci->oci_flags = ORF_LEADER;
 	if (tx->tx_set_resend && !tx->tx_renew)
 		oci->oci_flags |= ORF_RESEND;
 	tx->tx_renew = 0;
@@ -3501,6 +3501,8 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc, tse_
 				    fe->nr != 1 ? fe->iods : (void *)&fe->iods[0].iod_name);
 		break;
 	}
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		/* Fall through. */
 	case DAOS_OBJ_RPC_QUERY_KEY: {
 		daos_obj_query_key_t	*qu = dc_task_get_args(task);
 		daos_key_t		*dkey;

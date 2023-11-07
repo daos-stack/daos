@@ -7321,39 +7321,44 @@ out:
 
 /* Update pool map version for current xstream. */
 int
-ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc)
+ds_pool_child_map_refresh_sync(uuid_t uuid, uint32_t version)
 {
 	struct pool_map_refresh_ult_arg	arg;
 	ABT_eventual			eventual;
 	int				*status;
 	int				rc;
 
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
+	if (dss_get_module_info()->dmi_xs_id != 0) {
+		rc = ABT_eventual_create(sizeof(*status), &eventual);
+		if (rc != ABT_SUCCESS)
+			return dss_abterr2der(rc);
 
-	arg.iua_pool_version = dpc->spc_map_version;
-	uuid_copy(arg.iua_pool_uuid, dpc->spc_uuid);
-	arg.iua_eventual = eventual;
+		arg.iua_pool_version = version;
+		uuid_copy(arg.iua_pool_uuid, uuid);
+		arg.iua_eventual = eventual;
 
-	rc = dss_ult_create(ds_pool_map_refresh_ult, &arg, DSS_XS_SYS,
-			    0, 0, NULL);
-	if (rc)
-		D_GOTO(out_eventual, rc);
+		rc = dss_ult_create(ds_pool_map_refresh_ult, &arg, DSS_XS_SYS,
+				    0, 0, NULL);
+		if (rc != 0)
+			D_GOTO(out_eventual, rc);
 
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-	if (*status != 0)
-		D_GOTO(out_eventual, rc = *status);
+		rc = ABT_eventual_wait(eventual, (void **)&status);
+		if (rc != ABT_SUCCESS)
+			rc = dss_abterr2der(rc);
+		else
+			rc = *status;
 
 out_eventual:
-	ABT_eventual_free(&eventual);
+		ABT_eventual_free(&eventual);
+	} else {
+		rc = ds_pool_map_refresh_internal(uuid, version);
+	}
+
 	return rc;
 }
 
 int
-ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
+ds_pool_child_map_refresh_async(uuid_t uuid, uint32_t version)
 {
 	struct pool_map_refresh_ult_arg	*arg;
 	int				rc;
@@ -7361,8 +7366,8 @@ ds_pool_child_map_refresh_async(struct ds_pool_child *dpc)
 	D_ALLOC_PTR(arg);
 	if (arg == NULL)
 		return -DER_NOMEM;
-	arg->iua_pool_version = dpc->spc_map_version;
-	uuid_copy(arg->iua_pool_uuid, dpc->spc_uuid);
+	arg->iua_pool_version = version;
+	uuid_copy(arg->iua_pool_uuid, uuid);
 
 	rc = dss_ult_create(ds_pool_map_refresh_ult, arg, DSS_XS_SYS,
 			    0, 0, NULL);

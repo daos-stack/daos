@@ -16,7 +16,13 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+#define OBJ_COLL_PUNCH_THRESHOLD_MIN	32
+#define OBJ_FWD_QUERY_THRESHOLD_MIN	32
+
 unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
+unsigned int	obj_coll_punch_thd;
+unsigned int	obj_fwd_query_thd;
+unsigned int	obj_fwd_query_cnt;
 int		dc_obj_proto_version;
 
 /**
@@ -67,6 +73,37 @@ dc_obj_init(void)
 			daos_rpc_unregister(&obj_proto_fmt_1);
 		D_GOTO(out_class, rc);
 	}
+
+	obj_coll_punch_thd = OBJ_COLL_PUNCH_THRESHOLD_MIN;
+	d_getenv_int("OBJ_COLL_PUNCH_THRESHOLD", &obj_coll_punch_thd);
+	if (obj_coll_punch_thd < OBJ_COLL_PUNCH_THRESHOLD_MIN) {
+		D_WARN("Invalid collective punch threshold %u, it cannot be smaller than %u, "
+		       "use the default value %u\n", obj_coll_punch_thd,
+		       OBJ_COLL_PUNCH_THRESHOLD_MIN, OBJ_COLL_PUNCH_THRESHOLD_MIN);
+		obj_coll_punch_thd = OBJ_COLL_PUNCH_THRESHOLD_MIN;
+	}
+	D_INFO("Set object collective punch threshold as %u\n", obj_coll_punch_thd);
+
+	obj_fwd_query_thd = OBJ_FWD_QUERY_THRESHOLD_MIN;
+	d_getenv_int("OBJ_FWD_QUERY_THRESHOLD", &obj_fwd_query_thd);
+	if (obj_fwd_query_thd < OBJ_FWD_QUERY_THRESHOLD_MIN) {
+		D_WARN("Invalid forward object collective query threshold %u, "
+		       "it cannot be smaller than %u, use the default value %u\n",
+		       obj_fwd_query_thd, OBJ_FWD_QUERY_THRESHOLD_MIN, OBJ_FWD_QUERY_THRESHOLD_MIN);
+		obj_fwd_query_thd = OBJ_FWD_QUERY_THRESHOLD_MIN;
+	}
+	D_INFO("Set threshold for forwarding object collective query as %u\n", obj_fwd_query_thd);
+
+	obj_fwd_query_cnt = obj_fwd_query_thd;
+	d_getenv_int("OBJ_FWD_QUERY_COUNT", &obj_fwd_query_cnt);
+	if (obj_fwd_query_cnt < 1 || obj_fwd_query_cnt > obj_fwd_query_thd) {
+		D_WARN("Invalid count %u for forwarding object collective query RPC, it should be "
+		       "at least 1, but cannot exceed the threshold for triggering forwarding RPC "
+		       "(%d by default), use the default value %u\n",
+		       obj_fwd_query_cnt, OBJ_FWD_QUERY_THRESHOLD_MIN, obj_fwd_query_thd);
+		obj_fwd_query_cnt = obj_fwd_query_thd;
+	}
+	D_INFO("Set count for forwarding object collective query RPC as %u\n", obj_fwd_query_cnt);
 
 	tx_verify_rdg = false;
 	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);
