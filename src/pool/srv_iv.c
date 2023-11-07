@@ -1355,20 +1355,19 @@ pool_iv_map_invalidate(void *ns, unsigned int shortcut, unsigned int sync_mode)
 	return rc;
 }
 
-/* ULT to refresh pool map version */
-void
-ds_pool_map_refresh_ult(void *arg)
+int
+ds_pool_map_refresh_internal(uuid_t uuid, uint32_t version)
 {
-	struct pool_map_refresh_ult_arg	*iv_arg = arg;
-	struct ds_pool			*pool;
-	d_rank_t			 rank;
-	int				 rc = 0;
+	struct ds_pool	*pool;
+	d_rank_t	 rank;
+	int		 rc = 0;
 
 	/* Pool IV fetch should only be done in xstream 0 */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	rc = ds_pool_lookup(iv_arg->iua_pool_uuid, &pool);
+
+	rc = ds_pool_lookup(uuid, &pool);
 	if (rc != 0) {
-		D_WARN(DF_UUID" refresh pool map: %d\n", DP_UUID(iv_arg->iua_pool_uuid), rc);
+		D_WARN(DF_UUID" refresh pool map: %d\n", DP_UUID(uuid), rc);
 		goto out;
 	}
 
@@ -1385,12 +1384,10 @@ ds_pool_map_refresh_ult(void *arg)
 	 * until the refresh is done.
 	 */
 	ABT_mutex_lock(pool->sp_mutex);
-	if (pool->sp_map_version >= iv_arg->iua_pool_version &&
-	    pool->sp_map != NULL &&
+	if (pool->sp_map_version >= version && pool->sp_map != NULL &&
 	    !DAOS_FAIL_CHECK(DAOS_FORCE_REFRESH_POOL_MAP)) {
 		D_DEBUG(DB_TRACE, "current pool version %u >= %u\n",
-			pool_map_get_version(pool->sp_map),
-			iv_arg->iua_pool_version);
+			pool_map_get_version(pool->sp_map), version);
 		goto unlock;
 	}
 
@@ -1410,9 +1407,22 @@ unlock:
 out:
 	if (pool != NULL)
 		ds_pool_put(pool);
-	if (iv_arg->iua_eventual)
+
+	return rc;
+}
+
+/* ULT to refresh pool map version */
+void
+ds_pool_map_refresh_ult(void *arg)
+{
+	struct pool_map_refresh_ult_arg	*iv_arg = arg;
+	int				 rc;
+
+	rc = ds_pool_map_refresh_internal(iv_arg->iua_pool_uuid, iv_arg->iua_pool_version);
+	if (iv_arg->iua_eventual != NULL)
 		ABT_eventual_set(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
-	D_FREE(iv_arg);
+	else
+		D_FREE(iv_arg);
 }
 
 int
