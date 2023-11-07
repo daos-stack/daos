@@ -266,6 +266,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	uint32_t	mem_pin_enable = 0;
 	uint32_t	is_secondary;
 	char		ucx_ib_fork_init = 0;
+	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -276,19 +277,10 @@ static int data_init(int server, crt_init_options_t *opt)
 		crt_gdata.cg_rpcid, crt_gdata.cg_num_cores);
 
 	/* Set context post init / post incr to tune number of pre-posted recvs */
-	if (getenv("D_POST_INIT") != NULL) {
-		uint32_t post_init = 0;
-		d_getenv_int("D_POST_INIT", &post_init);
-		crt_gdata.cg_post_init = post_init;
-	} else
-		crt_gdata.cg_post_init = CRT_HG_POST_INIT;
-
-	if (getenv("D_POST_INCR") != NULL) {
-		uint32_t post_incr = 0;
-		d_getenv_int("D_POST_INCR", &post_incr);
-		crt_gdata.cg_post_incr = post_incr;
-	} else
-		crt_gdata.cg_post_incr = CRT_HG_POST_INCR;
+	d_getenv_int("D_POST_INIT", &post_init);
+	crt_gdata.cg_post_init = post_init;
+	d_getenv_int("D_POST_INCR", &post_incr);
+	crt_gdata.cg_post_incr = post_incr;
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
