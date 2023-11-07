@@ -51,17 +51,14 @@ def get_tier_roles(tier, total_tiers):
     if tier == 1 and total_tiers == 2:
         # A single bdev tier is assigned all roles
         return ['wal', 'data', 'meta']
-    if tier == 1 and total_tiers == 3:
-        # The first of three bdev tiers in is assigned the wal and meta roles
-        return ['wal', 'meta']
     if tier == 1:
-        # The first of four or more bdev tiers in is assigned the wal role
+        # The first of multiple bdev tiers in is assigned the wal role
         return ['wal']
     if tier == 2 and total_tiers == 3:
-        # The second of three bdev tiers in is assigned the data role
-        return ['data']
+        # The second of two bdev tiers in is assigned the data and meta role
+        return ['data', 'meta']
     if tier == 2:
-        # The second of four or more bdev tiers in is assigned the meta
+        # The second of three or more bdev tiers in is assigned the meta
         return ['meta']
     # Any additional bdev tiers are assigned the data role
     return ['data']
