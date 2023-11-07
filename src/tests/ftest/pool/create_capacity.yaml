@@ -38,5 +38,9 @@ pool:
   control_method: dmg
   scm_size: 192MiB
   nvme_size: 1024MiB
-  quantity: 200
+  ratio:
+    # md_on_scm: 28
+    md_on_scm: 100
+    # md_on_ssd: 15
+    md_on_ssd: 100
   set_logmasks: False
