@@ -3,16 +3,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import re
+from grp import getgrgid
 # pylint: disable=too-many-lines
 from logging import getLogger
-from grp import getgrgid
 from pwd import getpwuid
-import re
 
-from exception_utils import CommandFailure
 from dmg_utils_base import DmgCommandBase
-from general_utils import get_numeric_list, dict_to_str
-from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+from dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
+from exception_utils import CommandFailure
+from general_utils import dict_to_str, get_numeric_list
 
 
 class DmgJsonCommandFailure(CommandFailure):

@@ -3,13 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
-import random
-import threading
 import copy
 import queue
-from osa_utils import OSAUtils
+import random
+import threading
+import time
+
 from dmg_utils import check_system_query_status
+from osa_utils import OSAUtils
 from test_utils_pool import add_pool
 
 
