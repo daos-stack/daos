@@ -32,6 +32,7 @@ int
 dc_cont_init(void)
 {
 	int		rc;
+
 #if 0
 	uint32_t	ver_array[2] = {DAOS_CONT_VERSION - 1, DAOS_CONT_VERSION};
 

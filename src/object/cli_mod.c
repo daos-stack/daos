@@ -40,7 +40,7 @@ dc_obj_init(void)
 #if 0
 	dc_obj_proto_version = 0;
 	rc = daos_rpc_proto_query(obj_proto_fmt_0.cpf_base, ver_array, 2,
-                                  &dc_obj_proto_version);
+				  &dc_obj_proto_version);
 #else
 	dc_obj_proto_version = DAOS_OBJ_VERSION;
 	rc = 0;

@@ -45,7 +45,7 @@ dc_pool_init(void)
 #if 0
 	dc_pool_proto_version = 0;
 	rc = daos_rpc_proto_query(pool_proto_fmt_v4.cpf_base, ver_array, 2,
-                                  &dc_pool_proto_version);
+				  &dc_pool_proto_version);
 #else
 	dc_pool_proto_version = DAOS_POOL_VERSION;
 	rc = 0;
