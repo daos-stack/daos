@@ -8,8 +8,7 @@ import ctypes
 import os
 
 from pydaos.raw import daos_cref
-from storage_estimator.vos_structures import (AKey, DKey, Overhead, ValType,
-                                              VosObject, VosValue)
+from storage_estimator.vos_structures import AKey, DKey, Overhead, ValType, VosObject, VosValue
 
 header = '''---
 # Sample conflig file DFS files and directories
