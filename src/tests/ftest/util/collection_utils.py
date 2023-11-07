@@ -883,7 +883,7 @@ def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
     if new_xml_data is not None:
         logger.debug("  Diff of %s after replacement", xml_file)
         for line in unified_diff(xml_data.splitlines(), new_xml_data.splitlines(),
-                                 fromfile=xml_file, tofile=xml_file, n=1, lineterm=""):
+                                 fromfile=xml_file, tofile=xml_file, n=0, lineterm=""):
             logger.debug("    %s", line)
         logger.debug("")
 
