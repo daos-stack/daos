@@ -7,23 +7,24 @@ import time
 from scrubber_test_base import TestWithScrubber
 
 
-class TestWithMdTestScrubberFault(TestWithScrubber):
+class CheckCsumMetricsMdtest(TestWithScrubber):
     # pylint: disable=too-many-nested-blocks,too-many-ancestors
-    """Inject Checksum Fault with scrubber enabled for MdTest run.
+    """Check the checksum metrics with scrubber enabled during MdTest run.
 
     :avocado: recursive
     """
-    def test_scrubber_mdtest_csum_fault(self):
+    def test_scrubber_csum_metrics_with_mdtest(self):
         """JIRA ID: DAOS-5938
 
-            1. Create checksum faults and see
-            whether scrubber finds them.
-            2. Run mdtest application as part of
-            the testing.
-        :avocado: tags=all,pr,daily_regression
+            1. Start the scrubber.
+            2. Get the Checksum metrics
+            3. Run mdtest application.
+            4. Gather the scrubber metrics related to checksum
+            and compare it with initial values.
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=scrubber,faults
-        :avocado: tags=TestWithMdTestScrubberFault,test_scrubber_mdtest_csum_fault
+        :avocado: tags=scrubber
+        :avocado: tags=CheckCsumMetricsMdtest,test_scrubber_csum_metrics_with_mdtest
 
         """
         pool_prop = self.params.get("properties", '/run/pool/*')
@@ -33,7 +34,7 @@ class TestWithMdTestScrubberFault(TestWithScrubber):
         final_metrics = {}
         # Create a pool and container
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
-        initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
+        initial_metrics = self.scrubber.get_csum_total_metrics()
         self.run_mdtest_and_check_scruber_status(pool=self.pool, cont=self.container,
                                                  mdtest_params=mdtest_params)
         start_time = 0
@@ -41,7 +42,7 @@ class TestWithMdTestScrubberFault(TestWithScrubber):
         poll_status = False
         start_time = time.time()
         while int(finish_time - start_time) < 60 and poll_status is False:
-            final_metrics = self.scrubber.get_scrub_corrupt_metrics()
+            final_metrics = self.scrubber.get_csum_total_metrics()
             status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
             if status is False:
                 self.log.info("------Test Failed-----")
