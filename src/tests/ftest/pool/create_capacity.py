@@ -45,6 +45,98 @@ class PoolCreateCapacityTests(TestWithServers):
             md_on_dev = "md_on_ssd"
         self.pool_ratio = self.params.get(md_on_dev, "/run/pool/ratio/*", 0)
 
+    def display_available_storage(self):
+        """TODO DAOS-1428"""
+        result = self.get_dmg_command().storage_query_usage()
+
+        self.log.debug(f"{' Available storage ':-^80}")
+        scm_engine_bytes = {}
+        nvme_engine_bytes = {}
+        for host_storage in result["response"]["HostStorage"].values():
+            self.log.debug(f"\t- hosts: {host_storage['hosts']}")
+
+            for scm_device in host_storage["storage"]["scm_namespaces"]:
+                rank = scm_device["mount"]["rank"]
+                if rank not in scm_engine_bytes:
+                    scm_engine_bytes[rank] = 0
+                scm_engine_bytes[rank] += scm_device["mount"]["avail_bytes"]
+                self.log.debug(f"\t\t. rank={rank}, mount={scm_device['mount']['path']}, avail_bytes={get_display_size(scm_device['mount']['avail_bytes'])}")
+
+            if host_storage["storage"]["nvme_devices"] is None:
+                continue
+
+            for nvme_device in host_storage["storage"]["nvme_devices"]:
+                if nvme_device["smd_devices"] is None:
+                    continue
+                for smd_device in nvme_device["smd_devices"]:
+                    if smd_device["dev_state"] != "NORMAL":
+                        continue
+                    rank = smd_device["rank"]
+                    if rank not in nvme_engine_bytes:
+                        nvme_engine_bytes[rank] = 0
+                    nvme_engine_bytes[rank] += smd_device["avail_bytes"]
+                    self.log.debug(f"\t\t. rank={rank}, tr_addr={smd_device['tr_addr']}, avail_bytes={get_display_size(smd_device['avail_bytes'])}")
+
+        scm_bytes = sys.maxsize
+        for size in scm_engine_bytes.values():
+            scm_bytes = min(scm_bytes, size)
+        if scm_bytes == sys.maxsize:
+            scm_bytes = 0
+
+        nvme_bytes = sys.maxsize
+        for size in nvme_engine_bytes.values():
+            nvme_bytes = min(nvme_bytes, size)
+        if nvme_bytes == sys.maxsize:
+            nvme_bytes = 0
+
+        self.log.debug("Available Bytes per rank: scm={get_display_size(scm_bytes)}, nvme={get_display_size(nvme_bytes)}")
+
+    def display_usable_storage(self):
+        """TODO DAOS-1428"""
+        result = self.get_dmg_command().storage_query_usage()
+
+        self.log.debug(f"{' Usable storage ':-^80}")
+        scm_engine_bytes = {}
+        nvme_engine_bytes = {}
+        for host_storage in result["response"]["HostStorage"].values():
+            self.log.debug(f"\t- hosts: {host_storage['hosts']}")
+
+            for scm_device in host_storage["storage"]["scm_namespaces"]:
+                rank = scm_device["mount"]["rank"]
+                if rank not in scm_engine_bytes:
+                    scm_engine_bytes[rank] = 0
+                scm_engine_bytes[rank] += scm_device["mount"]["usable_bytes"]
+                self.log.debug(f"\t\t. rank={rank}, mount={scm_device['mount']['path']}, usable_bytes={get_display_size(scm_device['mount']['usable_bytes'])}")
+
+            if host_storage["storage"]["nvme_devices"] is None:
+                continue
+
+            for nvme_device in host_storage["storage"]["nvme_devices"]:
+                if nvme_device["smd_devices"] is None:
+                    continue
+                for smd_device in nvme_device["smd_devices"]:
+                    if smd_device["dev_state"] != "NORMAL":
+                        continue
+                    rank = smd_device["rank"]
+                    if rank not in nvme_engine_bytes:
+                        nvme_engine_bytes[rank] = 0
+                    nvme_engine_bytes[rank] += smd_device["usable_bytes"]
+                    self.log.debug(f"\t\t. rank={rank}, tr_addr={smd_device['tr_addr']}, usable_bytes={get_display_size(smd_device['usable_bytes'])}")
+
+        scm_bytes = sys.maxsize
+        for size in scm_engine_bytes.values():
+            scm_bytes = min(scm_bytes, size)
+        if scm_bytes == sys.maxsize:
+            scm_bytes = 0
+
+        nvme_bytes = sys.maxsize
+        for size in nvme_engine_bytes.values():
+            nvme_bytes = min(nvme_bytes, size)
+        if nvme_bytes == sys.maxsize:
+            nvme_bytes = 0
+
+        self.log.debug("Available Bytes per rank: scm={get_display_size(scm_bytes)}, nvme={get_display_size(nvme_bytes)}")
+
     def get_available_storage(self):
         """Returns the largest available storage of the tiers storage
 
@@ -134,10 +226,14 @@ class PoolCreateCapacityTests(TestWithServers):
             pools.append(add_pool(self, create=False))
 
         # Create all the pools
-        self.log_step('Creating {} pools (dmg pool create)'.format(pool_count))
-        self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)
-        check_pool_creation(self, pools, 30)
-        self.get_dmg_command().server_set_logmasks(raise_exception=False)
+        try:
+            self.log_step('Creating {} pools (dmg pool create)'.format(pool_count))
+            self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)
+            check_pool_creation(self, pools, 30)
+            self.get_dmg_command().server_set_logmasks(raise_exception=False)
+        finally:
+            self.display_usable_storage()
+            self.display_available_storage()
 
         # Verify DAOS can be restarted in less than 2 minutes
         self.log_step('Stopping all engines (dmg system stop)')
