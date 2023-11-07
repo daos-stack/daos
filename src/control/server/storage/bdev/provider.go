@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -51,7 +51,7 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 // Scan calls into the backend to discover NVMe components in the
 // system.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
-	p.log.Debug("run bdev storage provider scan, req: %+v", req)
+	p.log.Debugf("run bdev storage provider scan, req: %+v", req)
 	return p.backend.Scan(req)
 }
 

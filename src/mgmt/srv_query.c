@@ -364,6 +364,12 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		resp->devices[i]->ctrlr->pci_addr = NULL;
 		resp->devices[i]->ctrlr->led_state = CTL__LED_STATE__NA;
+		if (dev_info->bdi_ctrlr == NULL) {
+			D_ERROR("ctrlr not inited in bio_dev_info");
+			rc = -DER_INVAL;
+			break;
+		}
+		resp->devices[i]->ctrlr->socket_id = dev_info->bdi_ctrlr->socket_id;
 
 		if (dev_info->bdi_traddr != NULL) {
 			buflen = strlen(dev_info->bdi_traddr) + 1;
