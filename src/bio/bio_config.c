@@ -375,7 +375,7 @@ load_vmd_subsystem_config(struct json_config_ctx *ctx, bool *vmd_enabled)
 	int			 rc;
 
 	D_ASSERT(ctx->config_it != NULL);
-	D_ASSERT(vmd_enabled != NULL);
+	D_ASSERT(*vmd_enabled == false);
 
 	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
 				     SPDK_COUNTOF(config_entry_decoders), &cfg);
@@ -615,10 +615,10 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
 {
 	int	rc;
 
+	D_ASSERT(*vmd_enabled == false);
+
 	if (vmd_ss == NULL)
 		return 0;
-
-	D_ASSERT(vmd_enabled != NULL);
 
 	rc = decode_subsystem_configs(vmd_ss, ctx);
 	if (rc != 0)
@@ -642,20 +642,22 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
  * \param[in]	nvme_conf	JSON config file path
  * \param[out]	opts		SPDK environment options
  * \param[out]	roles		global nvme bdev roles
+ * \param[out]	vmd_enabled	global VMD-enablement flag
  *
  * \returns	 Zero on success, negative on failure (DER)
  */
 int
-bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *roles)
+bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *roles,
+		      bool *vmd_enabled)
 {
 	struct json_config_ctx	*ctx;
 	struct spdk_json_val	*bdev_ss = NULL;
 	struct spdk_json_val	*vmd_ss = NULL;
-	bool			 vmd_enabled = false;
 	int			 rc = 0;
 
 	D_ASSERT(nvme_conf != NULL);
 	D_ASSERT(opts != NULL);
+	D_ASSERT(*vmd_enabled == false);
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
@@ -703,7 +705,7 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *ro
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = check_vmd_status(ctx, vmd_ss, &vmd_enabled);
+	rc = check_vmd_status(ctx, vmd_ss, vmd_enabled);
 	if (rc < 0)
 		goto out;
 
@@ -712,7 +714,7 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *ro
 		goto out;
 	*roles = rc;
 
-	rc = add_bdevs_to_opts(ctx, bdev_ss, vmd_enabled, opts);
+	rc = add_bdevs_to_opts(ctx, bdev_ss, *vmd_enabled, opts);
 out:
 	free_json_config_ctx(ctx);
 	return rc;
