@@ -18,29 +18,29 @@ class TestWithScrubberPerf(IorTestBase):
         """JIRA ID: DAOS-7372
         Check IOR performance with checksum enabled.
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,manual
         :avocado: tags=hw,medium
         :avocado: tags=scrubber
         :avocado: tags=test_scrubber_performance
         """
         self.add_pool()
-        self.get_container(self.pool)
+        self.add_container(self.pool)
         values = "Pool : {} Container: {}".format(self.pool, self.container)
         self.log.info(values)
-        cmd_result = self.run_ior_with_pool(create_pool=False, create_cont=False)
+        cmd_result = self.run_ior_with_pool(create_cont=False)
         metrics = self.ior_cmd.get_ior_metrics(cmd_result)
         ior_write_size_without_scrubber = int(metrics[0][22])
         self.log.info("IOR Metrics without scrubber enabled")
-        self.log.info("====================================")                     )
+        self.log.info("====================================")
         self.log.info("IOR metrics = %s", metrics)
         self.log.info("ior_write_size = %d", ior_write_size_without_scrubber)
         self.pool.set_property("scrub", "timed")
         self.pool.set_property("scrub-freq", "1")
         time.sleep(15)
-        cmd_result = self.run_ior_with_pool()
+        cmd_result = self.run_ior_with_pool(create_cont=False)
         metrics = self.ior_cmd.get_ior_metrics(cmd_result)
         ior_write_size_with_scrubber = int(metrics[0][22])
         self.log.info("IOR Metrics with scrubber enabled")
-        self.log.info("=================================")                     )
+        self.log.info("=================================")
         self.log.info("IOR metrics = %s", metrics)
         self.log.info("ior_write_size = %d", ior_write_size_with_scrubber)

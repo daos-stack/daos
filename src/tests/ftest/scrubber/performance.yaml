@@ -54,9 +54,8 @@ ior:
     np_16:
       np: 2
   test_file: daos:testFile
-  repetitions: 2
   dfs_destroy: false
-  flags: "-v -W -w -r -R -k"
+  flags: "-v -W -w -r -R"
   api: DFS
   block_size: 100M
   transfer_size: 1M
