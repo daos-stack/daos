@@ -9,6 +9,7 @@ import os
 import re
 import sys
 from collections import OrderedDict
+from difflib import unified_diff
 
 from ClusterShell.NodeSet import NodeSet
 from process_core_files import CoreFileException, CoreFileProcessing
@@ -870,12 +871,6 @@ def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
         str: the updated xml_data; None if an error was detected
     """
     logger.debug("Replacing '%s' with '%s' in %s", pattern, replacement, xml_file)
-
-    logger.debug("  Contents of %s before replacement", xml_file)
-    for line in xml_data.splitlines():
-        logger.debug("    %s", line)
-    logger.debug("")
-
     try:
         with open(xml_file, "w", encoding="utf-8") as xml_buffer:
             xml_buffer.write(re.sub(pattern, replacement, xml_data))
@@ -886,8 +881,9 @@ def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
 
     new_xml_data = get_xml_data(logger, xml_file, test_result)
     if new_xml_data is not None:
-        logger.debug("  Contents of %s after replacement", xml_file)
-        for line in new_xml_data.splitlines():
+        logger.debug("  Diff of %s after replacement", xml_file)
+        for line in unified_diff(xml_data.splitlines(), new_xml_data.splitlines(),
+                                 fromfile=xml_file, tofile=xml_file, n=1, lineterm=""):
             logger.debug("    %s", line)
         logger.debug("")
 
