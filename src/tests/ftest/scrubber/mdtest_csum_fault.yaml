@@ -36,8 +36,7 @@ dmg:
   transport_config:
     allow_insecure: True
 pool:
-  scm_size: 6G
-  nvme_size: 54G
+  size: 50%
   svcn: 4
   control_method: dmg
   rebuild_timeout: 120
@@ -46,7 +45,7 @@ pool:
 container:
   type: POSIX
   control_method: daos
-  oclass: RP_2GX
+  oclass: RP_2G1
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 mdtest:
   client_processes:
