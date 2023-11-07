@@ -11,14 +11,15 @@ from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
-from general_utils import get_errors_count
+from general_utils import get_display_size, get_errors_count
 from ior_utils import IorCommand, IorMetrics
 from job_manager_utils import get_job_manager
 from nvme_utils import ServerFillUp
 from pydaos.raw import c_err_to_str
+from telemetry_test_base import TestWithTelemetry
 
 
-class NvmeEnospace(ServerFillUp):
+class NvmeEnospace(ServerFillUp, TestWithTelemetry):
     """
     Test Class Description: To validate DER_NOSPACE for SCM and NVMe
     :avocado: recursive
@@ -31,7 +32,11 @@ class NvmeEnospace(ServerFillUp):
         """Initialize a NvmeEnospace object."""
         super().__init__(*args, **kwargs)
 
+        self.metric_names = ['engine_pool_vos_space_scm_used', 'engine_pool_vos_space_nvme_used']
+        self.media_names = ['SCM', 'NVMe']
         self.expected_errors = [self.DER_NOSPACE, self.DER_TIMEDOUT]
+
+        self.pool_usage_min = []
         self.test_result = []
         self.daos_cmd = None
 
@@ -41,9 +46,122 @@ class NvmeEnospace(ServerFillUp):
 
         self.test_result = []
 
+        for idx in range(len(self.media_names)):
+            self.pool_usage_min.append(float(
+                self.params.get(self.media_names[idx].casefold(), "/run/pool/usage_min/*", 0)))
+
         # initialize daos command
         self.daos_cmd = DaosCommand(self.bin)
         self.create_pool_max_size()
+
+    def get_pool_space_metrics(self, pool_uuid):
+        """Return the metrics on space usage of a given pool.
+
+        Args:
+            pool_uuid (str): Unique id of a pool.
+
+        Returns:
+            dict: metrics on space usage.
+
+        """
+        metrics = {}
+        for hostname, data in self.telemetry.get_metrics(",".join(self.metric_names)).items():
+            for metric_name, entry in data.items():
+                if metric_name not in metrics:
+                    metrics[metric_name] = {
+                        "description": entry['description'],
+                        "hosts": {}
+                    }
+
+                hosts = metrics[metric_name]["hosts"]
+                for metric in entry['metrics']:
+                    if metric['labels']['pool'].casefold() != pool_uuid.casefold():
+                        continue
+
+                    if hostname not in hosts:
+                        hosts[hostname] = {}
+
+                    rank = metric['labels']['rank']
+                    if rank not in hosts[hostname]:
+                        hosts[hostname][rank] = {}
+
+                    target = metric['labels']['target']
+                    hosts[hostname][rank][target] = metric['value']
+
+        return metrics
+
+    def get_pool_usage(self, pool_space):
+        """Get the pool storage used % for SCM and NVMe.
+
+        Returns:
+            list: a list of SCM/NVMe pool space usage in %(float)
+
+        """
+        pool_usage = []
+        for idx in range(len(self.media_names)):
+            s_total = pool_space.ps_space.s_total[idx]
+            s_free = pool_space.ps_space.s_free[idx]
+            pool_usage.append((100 * (s_total - s_free)) / s_total)
+
+        return pool_usage
+
+    def display_pool_stats(self, pool_space, pool_space_metrics):
+        """Display statisics on pool usage.
+
+        Args:
+            pool_space (object): space usage information of a pool.
+            pool_space_metrics (dict): dict of metrics on space usage of a pool.
+        """
+
+        title = f"{' Pool Space Usage ':-^80}"
+        self.log.debug(title)
+
+        pool_usage = self.get_pool_usage(pool_space)
+        for idx in range(len(self.media_names)):
+            self.log.debug("%s Space Stat:", self.media_names[idx])
+            self.log.debug(
+                "\t- Total used space:          %.2f%%",
+                pool_usage[idx])
+            self.log.debug(
+                "\t- Average device free space: %s",
+                get_display_size(pool_space.ps_free_mean[idx]))
+            self.log.debug(
+                "\t- Minimal device free space: %s",
+                get_display_size(pool_space.ps_free_min[idx]))
+            self.log.debug(
+                "\t- Maximal device free space: %s",
+                get_display_size(pool_space.ps_free_max[idx]))
+
+        for metric in pool_space_metrics.values():
+            table = [["Hostname", "Rank", "Target", "Size"]]
+            cols_size = []
+            for cell in table[0]:
+                cols_size.append(len(cell))
+            for hostname, ranks in metric['hosts'].items():
+                for rank, targets in ranks.items():
+                    for target, size in targets.items():
+                        row = [hostname, rank, target, get_display_size(size)]
+                        table.append(row)
+                        for idx in range(len(cols_size)):
+                            cols_size[idx] = max(cols_size[idx], len(row[idx]))
+                        hostname = ""
+                        rank = ""
+
+            for idx in range(len(table[0])):
+                table[0][idx] = f"{table[0][idx]:^{cols_size[idx]}}"
+            row = ' | '.join(table[0])
+            title = f"{' ' + metric['description'] + ' ':-^{len(row)}}"
+            self.log.debug("")
+            self.log.debug(title)
+            self.log.debug(row)
+            self.log.debug("-" * len(row))
+            for row in table[1:]:
+                for idx in range(len(row)):
+                    align_op = "<"
+                    if idx + 1 == len(row):
+                        align_op = ">"
+                    row[idx] = f"{row[idx]:{align_op}{cols_size[idx]}}"
+                self.log.debug(" | ".join(row))
 
     def verify_enospace_log(self, log_file):
         """Function checking logs consistency.
@@ -193,22 +311,24 @@ class NvmeEnospace(ServerFillUp):
             self.fail('This test is suppose to FAIL because of DER_NOSPACE'
                       'but it Passed')
 
-        # Display the pool usage %
-        self.log.info(self.pool.pool_percentage_used())
+        # Display the pool statistics
+        self.pool.get_info()
+        pool_space = self.pool.info.pi_space
+        pool_space_metrics = self.get_pool_space_metrics(self.pool.uuid)
+        self.display_pool_stats(pool_space, pool_space_metrics)
 
         # verify the DER_NO_SPACE error count is expected and no other Error in client log
         self.verify_enospace_log(log_file)
 
         # Check both NVMe and SCM are full.
-        pool_usage = self.pool.pool_percentage_used()
-        # NVMe should be almost full. If not, fail the test.
-        if pool_usage['nvme'] <= 95:
-            msg = (f"Pool NVMe used percentage should be > 95%, instead "
-                   f"{pool_usage['nvme']}")
-            self.fail(msg)
-        # SCM usage will not be 100% because some space (<1%) is used for the system.
-        if pool_usage['scm'] <= 90:
-            msg = f"Pool SCM used percentage should be > 90%, instead {pool_usage['scm']}"
+        pool_usage = self.get_pool_usage(pool_space)
+        for idx in range(len(self.media_names)):
+            if pool_usage[idx] >= self.pool_usage_min[idx]:
+                continue
+            msg = (
+                f"Pool {self.media_names[idx]} used percentage is invalid: "
+                f"wait_in=[{self.pool_usage_min[idx]}, 100], got={pool_usage[idx]}"
+            )
             self.fail(msg)
 
     def run_enospace_with_bg_job(self, log_file):
