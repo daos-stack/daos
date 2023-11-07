@@ -20,6 +20,7 @@ from telemetry_test_base import TestWithTelemetry
 
 
 class NvmeEnospace(ServerFillUp, TestWithTelemetry):
+    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate DER_NOSPACE for SCM and NVMe
     :avocado: recursive
@@ -46,9 +47,9 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         self.test_result = []
 
-        for idx in range(len(self.media_names)):
+        for elt in self.media_names:
             self.pool_usage_min.append(float(
-                self.params.get(self.media_names[idx].casefold(), "/run/pool/usage_min/*", 0)))
+                self.params.get(elt.casefold(), "/run/pool/usage_min/*", 0)))
 
         # initialize daos command
         self.daos_cmd = DaosCommand(self.bin)
@@ -98,7 +99,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         """
         pool_usage = []
-        for idx in range(len(self.media_names)):
+        for idx, _ in enumerate(self.media_names):
             s_total = pool_space.ps_space.s_total[idx]
             s_free = pool_space.ps_space.s_free[idx]
             pool_usage.append((100 * (s_total - s_free)) / s_total)
@@ -106,7 +107,7 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         return pool_usage
 
     def display_pool_stats(self, pool_space, pool_space_metrics):
-        """Display statisics on pool usage.
+        """Display statistics on pool usage.
 
         Args:
             pool_space (object): space usage information of a pool.
@@ -117,8 +118,8 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
         self.log.debug(title)
 
         pool_usage = self.get_pool_usage(pool_space)
-        for idx in range(len(self.media_names)):
-            self.log.debug("%s Space Stat:", self.media_names[idx])
+        for idx, elt in enumerate(self.media_names):
+            self.log.debug("%s Space Stat:", elt)
             self.log.debug(
                 "\t- Total used space:          %.2f%%",
                 pool_usage[idx])
@@ -142,13 +143,13 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                     for target, size in targets.items():
                         row = [hostname, rank, target, get_display_size(size)]
                         table.append(row)
-                        for idx in range(len(cols_size)):
-                            cols_size[idx] = max(cols_size[idx], len(row[idx]))
+                        for idx, elt in enumerate(cols_size):
+                            cols_size[idx] = max(elt, len(row[idx]))
                         hostname = ""
                         rank = ""
 
-            for idx in range(len(table[0])):
-                table[0][idx] = f"{table[0][idx]:^{cols_size[idx]}}"
+            for idx, elt in enumerate(table[0]):
+                table[0][idx] = f"{elt:^{cols_size[idx]}}"
             row = ' | '.join(table[0])
             title = f"{' ' + metric['description'] + ' ':-^{len(row)}}"
             self.log.debug("")
@@ -156,11 +157,11 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
             self.log.debug(row)
             self.log.debug("-" * len(row))
             for row in table[1:]:
-                for idx in range(len(row)):
+                for idx, elt in enumerate(row):
                     align_op = "<"
                     if idx + 1 == len(row):
                         align_op = ">"
-                    row[idx] = f"{row[idx]:{align_op}{cols_size[idx]}}"
+                    row[idx] = f"{elt:{align_op}{cols_size[idx]}}"
                 self.log.debug(" | ".join(row))
 
     def verify_enospace_log(self, log_file):
@@ -322,11 +323,11 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
 
         # Check both NVMe and SCM are full.
         pool_usage = self.get_pool_usage(pool_space)
-        for idx in range(len(self.media_names)):
+        for idx, elt in enumerate(self.media_names):
             if pool_usage[idx] >= self.pool_usage_min[idx]:
                 continue
             msg = (
-                f"Pool {self.media_names[idx]} used percentage is invalid: "
+                f"Pool {elt} used percentage is invalid: "
                 f"wait_in=[{self.pool_usage_min[idx]}, 100], got={pool_usage[idx]}"
             )
             self.fail(msg)
