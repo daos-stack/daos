@@ -1018,7 +1018,19 @@ dfs_teardown(void **state)
 int
 run_dfs_par_test(int rank, int size)
 {
-	int rc = 0;
+	int   rc = 0;
+	char *out_path = NULL;
+	char *xml_file = NULL;
+
+	/** append rank to xml path */
+	xml_file = getenv("CMOCKA_XML_FILE");
+	if (xml_file) {
+		D_ASPRINTF(out_path, "%s.rank%d", xml_file, rank);
+		rc = setenv("CMOCKA_XML_FILE", out_path, 1);
+		D_FREE(out_path);
+		if (rc)
+			return rc;
+	}
 
 	par_barrier(PAR_COMM_WORLD);
 	rc = cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Parallel", dfs_par_tests, dfs_setup,

@@ -717,7 +717,7 @@ def update_jenkins_xml(logger, test, logs_dir, test_result):
         return False
 
     # Determine if this test produced any cmocka xml files
-    cmocka_files = glob.glob(f"{logs_dir}/test-results/*-*/data/*.xml")
+    cmocka_files = glob.glob(f"{logs_dir}/test-results/*-*/data/*.xml*")
     logger.debug("Updating %s cmocka xml files for use in Jenkins", len(cmocka_files))
     if cmocka_files:
         # Extract the test class name from the xml data

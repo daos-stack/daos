@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
+import re
 
 from agent_utils import include_local_host
 from command_utils import ExecutableCommand
@@ -155,7 +156,14 @@ class CmockaUtils():
                     for cmocka_file in os.listdir(cmocka_node_path):
                         if "_cmocka_results." in cmocka_file:
                             cmocka_file_path = os.path.join(cmocka_node_path, cmocka_file)
-                            command = ["mv", cmocka_file_path, self.outputdir]
+                            cmocka_file_name = os.path.basename(cmocka_file_path)
+                            cmocka_rank = re.findall(r'xml\.rank([0-9]+)', cmocka_file_name)
+                            if cmocka_rank:
+                                cmocka_file_name = re.sub(
+                                    r'cmocka_results\.xml.*$',
+                                    f'rank{cmocka_rank[0]}_cmocka_results.xml',
+                                    cmocka_file_name)
+                            command = ["mv", cmocka_file_path, os.path.join(self.outputdir, cmocka_file_name)]
                             run_local(test.log, " ".join(command))
 
     def _check_cmocka_files(self):
