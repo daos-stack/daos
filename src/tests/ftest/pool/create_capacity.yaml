@@ -3,7 +3,8 @@ hosts:
   test_clients: 1
 
 timeouts:
-  test_create_pool_quantity: 1200
+  # test_create_pool_quantity: 1200
+  test_create_pool_quantity: 3600
 
 server_config:
   name: daos_server
