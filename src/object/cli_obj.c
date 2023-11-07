@@ -2271,6 +2271,18 @@ check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 	return 0;
 }
 
+static inline void
+obj_coll_query_cleanup(tse_task_t *task)
+{
+	struct shard_query_key_args	*args = dc_task_get_args(task);
+
+	daos_coll_target_cleanup(args->kqa_dcts,
+				 args->kqa_dct_nr < 0 ? args->kqa_dct_cap : args->kqa_dct_nr);
+	args->kqa_dcts = NULL;
+	args->kqa_dct_cap = 0;
+	args->kqa_dct_nr = 0;
+}
+
 static inline bool
 obj_key_valid(daos_obj_id_t oid, daos_key_t *key, bool check_dkey)
 {
@@ -2768,6 +2780,7 @@ obj_embedded_shard_arg(struct obj_auxi_args *obj_auxi)
 		return &obj_auxi->s_args.sa_auxi;
 	case DAOS_OBJ_RPC_QUERY_KEY:
 	case DAOS_OBJ_RPC_COLL_PUNCH:
+	case DAOS_OBJ_RPC_COLL_QUERY:
 		/*
 		 * called from obj_comp_cb_internal() and
 		 * checked in obj_shard_comp_cb() correctly
@@ -4757,6 +4770,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 		}
 	}
 
+	if (obj_auxi->opc == DAOS_OBJ_RPC_COLL_QUERY)
+		obj_coll_query_cleanup(task);
+
 	if (!io_task_reinited) {
 		d_list_t *head = &obj_auxi->shard_task_head;
 
@@ -4800,6 +4816,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			D_ASSERT(daos_handle_is_inval(obj_auxi->th));
 			break;
 		case DAOS_OBJ_RPC_QUERY_KEY:
+		case DAOS_OBJ_RPC_COLL_QUERY:
 		case DAOS_OBJ_RECX_RPC_ENUMERATE:
 		case DAOS_OBJ_AKEY_RPC_ENUMERATE:
 		case DAOS_OBJ_DKEY_RPC_ENUMERATE:
@@ -6901,19 +6918,12 @@ dc_obj_punch_akeys_task(tse_task_t *task)
 	return obj_punch_common(task, DAOS_OBJ_RPC_PUNCH_AKEYS, args);
 }
 
-struct shard_query_key_args {
-	/* shard_auxi_args must be the first for shard_task_sched(). */
-	struct shard_auxi_args	 kqa_auxi;
-	uuid_t			 kqa_coh_uuid;
-	uuid_t			 kqa_cont_uuid;
-	struct dtx_id		 kqa_dti;
-};
-
 static int
 shard_query_key_task(tse_task_t *task)
 {
 	struct shard_query_key_args	*args;
 	daos_obj_query_key_t		*api_args;
+	struct obj_auxi_args		*obj_auxi;
 	struct dc_object		*obj;
 	struct dc_obj_shard		*obj_shard;
 	daos_handle_t			 th;
@@ -6921,8 +6931,9 @@ shard_query_key_task(tse_task_t *task)
 	int				 rc;
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
-	obj = args->kqa_auxi.obj_auxi->obj;
-	th = args->kqa_auxi.obj_auxi->th;
+	obj_auxi = args->kqa_auxi.obj_auxi;
+	obj = obj_auxi->obj;
+	th = obj_auxi->th;
 	epoch = &args->kqa_auxi.epoch;
 
 	/* See the similar shard_io_task. */
@@ -6936,6 +6947,15 @@ shard_query_key_task(tse_task_t *task)
 		if (rc == DC_TX_GE_REINITED)
 			return 0;
 	}
+
+	api_args = dc_task_get_args(obj_auxi->obj_task);
+	if (args->kqa_dcts != NULL)
+		return dc_obj_shard_coll_query(epoch, api_args->flags, obj_auxi->map_ver_req, obj,
+					       api_args->dkey, api_args->akey, api_args->recx,
+					       api_args->max_epoch, args->kqa_coh_uuid,
+					       args->kqa_cont_uuid, &args->kqa_dti,
+					       &obj_auxi->map_ver_reply, args->kqa_dcts,
+					       args->kqa_dct_nr, th, task);
 
 	rc = obj_shard_open(obj, args->kqa_auxi.shard, args->kqa_auxi.map_ver, &obj_shard);
 	if (rc != 0) {
@@ -6954,13 +6974,10 @@ shard_query_key_task(tse_task_t *task)
 		return rc;
 	}
 
-	api_args = dc_task_get_args(args->kqa_auxi.obj_auxi->obj_task);
-	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags,
-				    args->kqa_auxi.obj_auxi->map_ver_req, obj,
-				    api_args->dkey, api_args->akey,
-				    api_args->recx, api_args->max_epoch, args->kqa_coh_uuid,
-				    args->kqa_cont_uuid, &args->kqa_dti,
-				    &args->kqa_auxi.obj_auxi->map_ver_reply, th, task);
+	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags, obj_auxi->map_ver_req, obj,
+				    api_args->dkey, api_args->akey, api_args->recx,
+				    api_args->max_epoch, args->kqa_coh_uuid, args->kqa_cont_uuid,
+				    &args->kqa_dti, &obj_auxi->map_ver_reply, th, task);
 
 	return rc;
 }
@@ -6969,7 +6986,8 @@ static int
 queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 			   struct dtx_epoch *epoch, int shard, unsigned int map_ver,
 			   struct dc_object *obj, struct dtx_id *dti,
-			   uuid_t coh_uuid, uuid_t cont_uuid)
+			   uuid_t coh_uuid, uuid_t cont_uuid,
+			   struct daos_coll_target *dcts, uint32_t dct_nr)
 {
 	tse_sched_t			*sched = tse_task2sched(api_task);
 	tse_task_t			*task;
@@ -6983,17 +7001,20 @@ queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 
 	args = tse_task_buf_embedded(task, sizeof(*args));
 	args->kqa_auxi.epoch	= *epoch;
-	args->kqa_auxi.shard	= shard;
 	args->kqa_auxi.map_ver	= map_ver;
 	args->kqa_auxi.obj_auxi	= obj_auxi;
 	args->kqa_dti		= *dti;
 	uuid_copy(args->kqa_coh_uuid, coh_uuid);
 	uuid_copy(args->kqa_cont_uuid, cont_uuid);
+	args->kqa_dcts = dcts;
+	args->kqa_dct_nr = dct_nr;
 
-	rc = obj_shard2tgtid(obj, shard, map_ver,
-			     &args->kqa_auxi.target);
-	if (rc != 0)
-		D_GOTO(out_task, rc);
+	if (dcts == NULL) {
+		args->kqa_auxi.shard = shard;
+		rc = obj_shard2tgtid(obj, shard, map_ver, &args->kqa_auxi.target);
+		if (rc != 0)
+			D_GOTO(out_task, rc);
+	}
 
 	rc = tse_task_register_deps(api_task, 1, &task);
 	if (rc != 0)
@@ -7010,6 +7031,210 @@ out_task:
 	return rc;
 }
 
+static int
+obj_coll_query_prep_one(tse_task_t *api_task, struct dc_object *obj, uint32_t map_ver, uint32_t idx)
+{
+	struct shard_query_key_args	*args = dc_task_get_args(api_task);
+	struct dc_obj_shard		*shard = NULL;
+	struct daos_coll_target		*dct;
+	struct daos_coll_shard		*dcs;
+	uint32_t			*tmp;
+	uint8_t				*new_bm;
+	int				 size;
+	int				 old_len;
+	int				 rc = 0;
+	int				 i;
+
+	rc = obj_shard_open(obj, idx, map_ver, &shard);
+	if (rc == -DER_NONEXIST)
+		D_GOTO(out, rc = 0);
+
+	if (rc != 0 || shard->do_rebuilding)
+		goto out;
+
+	dct = &args->kqa_dcts[shard->do_target_rank];
+	dct->dct_rank = shard->do_target_rank;
+
+	if (shard->do_target_idx >= dct->dct_bitmap_sz << 3) {
+		size = (shard->do_target_idx >> 3) + 1;
+		old_len = dct->dct_bitmap_sz << 3;
+
+		D_REALLOC_ARRAY(dcs, dct->dct_shards, old_len, size << 3);
+		if (dcs == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		dct->dct_shards = dcs;
+		for (i = 0; i < old_len; i++) {
+			dcs = &dct->dct_shards[i];
+			if (dcs->dcs_nr == 1)
+				dcs->dcs_buf = &dcs->dcs_inline;
+		}
+
+		D_REALLOC_ARRAY(new_bm, dct->dct_bitmap, dct->dct_bitmap_sz, size);
+		if (new_bm == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		dct->dct_bitmap = new_bm;
+		dct->dct_bitmap_sz = size;
+	}
+
+	dcs = &dct->dct_shards[shard->do_target_idx];
+
+	if (unlikely(isset(dct->dct_bitmap, shard->do_target_idx))) {
+		/* More than one shards reside on the same VOS target. */
+		D_ASSERT(dcs->dcs_nr >= 1);
+
+		if (dcs->dcs_nr >= dcs->dcs_cap) {
+			D_ALLOC_ARRAY(tmp, dcs->dcs_nr << 1);
+			if (tmp == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			memcpy(tmp, dcs->dcs_buf, sizeof(*tmp) * dcs->dcs_nr);
+			if (dcs->dcs_buf != &dcs->dcs_inline)
+				D_FREE(dcs->dcs_buf);
+			dcs->dcs_buf = tmp;
+			dcs->dcs_cap = dcs->dcs_nr << 1;
+		}
+	} else {
+		D_ASSERT(dcs->dcs_nr == 0);
+
+		dcs->dcs_buf = &dcs->dcs_inline;
+		setbit(dct->dct_bitmap, shard->do_target_idx);
+		dct->dct_shard_nr++;
+	}
+
+	dcs->dcs_buf[dcs->dcs_nr++] = shard->do_id.id_shard;
+
+out:
+	if (shard != NULL)
+		obj_shard_close(shard);
+
+	return rc;
+}
+
+static int
+obj_coll_query_prep(tse_task_t *api_task, struct dc_object *obj)
+{
+	struct shard_query_key_args	*args = dc_task_get_args(api_task);
+	struct dc_pool			*pool = obj->cob_pool;
+	uint32_t			 node_nr;
+	int				 rc = 0;
+
+	D_ASSERT(pool != NULL);
+
+	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
+	node_nr = pool_map_node_nr(pool->dp_map);
+	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
+
+	D_ALLOC_ARRAY(args->kqa_dcts, node_nr);
+	if (args->kqa_dcts == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/*
+	 * Set kqa_dct_nr as -1 to indicate that the kqa_dcts array may be sparse until
+	 * queue_coll_query_task() is done. That is useful when obj_coll_query_cleanup.
+	 */
+	args->kqa_dct_nr = -1;
+	args->kqa_dct_cap = node_nr;
+
+out:
+	return rc;
+}
+
+static int
+queue_coll_query_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi, struct dc_object *obj,
+		      struct dtx_id *xid, struct dtx_epoch *epoch, uint32_t map_ver)
+{
+	struct shard_query_key_args	*args = dc_task_get_args(api_task);
+	struct dc_cont			*cont = obj->cob_co;
+	struct daos_coll_target		*dct;
+	struct daos_coll_target		 tmp;
+	int				 rc = 0;
+	int				 len;
+	int				 pos;
+	int				 i;
+
+	D_ASSERT(args->kqa_dcts != NULL);
+
+	for (i = 0, args->kqa_dct_nr = 0; i < args->kqa_dct_cap; i++) {
+		dct = &args->kqa_dcts[i];
+		if (dct->dct_bitmap != NULL) {
+			if (args->kqa_dct_nr < i)
+				memcpy(&args->kqa_dcts[args->kqa_dct_nr], dct, sizeof(*dct));
+			args->kqa_dct_nr++;
+		}
+	}
+
+	/* If all shards are NONEXIST, then need not send query RPC(s). */
+	if (unlikely(args->kqa_dct_nr == 0))
+		D_GOTO(out, rc = 1);
+
+	/* Reset the other dct slots to avoid double free during cleanup. */
+	if (args->kqa_dct_cap > args->kqa_dct_nr)
+		memset(&args->kqa_dcts[args->kqa_dct_nr], 0,
+		       sizeof(*dct) * (args->kqa_dct_cap - args->kqa_dct_nr));
+
+	for (i = 0; i < args->kqa_dct_nr; i += len) {
+		/*
+		 * As long as the left engines exceeds obj_fwd_query_thd, then ask next engine to
+		 * help forward to some other engines. If the left ones is less than the threshold,
+		 * then in spite of how many RPCs have ever been sent by the client, the left ones
+		 * will be sent by the client itself, because waiting on the client is better than
+		 * on servers. Means that obj_fwd_query_cnt is not larger than obj_fwd_query_thd.
+		 *
+		 * Small obj_fwd_query_cnt will distribute the load of forwarding object collective
+		 * query RPC among more engines, seems more balanaced. But smaller obj_fwd_query_cnt
+		 * also means client will send more RPCs by itself, it may decrease the whole query
+		 * efficiency. So need some compromise consideration.
+		 *
+		 * On server side, the engine may only need to query single shard, or collectively
+		 * query multiple shards and forward the collective query RPC to the other engines
+		 * if required. Currently, CaRT does not support to broadcast different content to
+		 * different targets, the relay engine needs to forward related query RPC to others
+		 * one by one. On the other hand, multiple level broadcast RPC will cause additional
+		 * RPC round-trips, from application's perspective, the query latency is increased.
+		 * That is not expected, especially under interaction mode.
+		 *
+		 * If obj_fwd_query_thd exceeds the args->kqa_dct_nr, then disable the functionality
+		 * of engine forwarding object collective query RPCs.
+		 *
+		 * It is not suggested to use too small obj_fwd_query_thd, that will cause more RPC
+		 * load to be moved from client to server.
+		 */
+		if (args->kqa_dct_nr - i > obj_fwd_query_thd) {
+			/*
+			 * The left obj_fwd_query_thd RPCs will be sent by the client itself.
+			 * "+1" is for the RPC to the relay engine.
+			 */
+			len = args->kqa_dct_nr - i - obj_fwd_query_thd + 1;
+			if (len > obj_fwd_query_cnt + 1)
+				len = obj_fwd_query_cnt + 1;
+
+			/*
+			 * Randomly (avoid load imbalance) choose an engine for helping forward
+			 * the collective query RPC to other engines.
+			 */
+			pos = d_rand() % (args->kqa_dct_nr - i)  + i;
+			if (pos != i) {
+				memcpy(&tmp, &args->kqa_dcts[i], sizeof(tmp));
+				memcpy(&args->kqa_dcts[i], &args->kqa_dcts[pos], sizeof(tmp));
+				memcpy(&args->kqa_dcts[pos], &tmp, sizeof(tmp));
+			}
+		} else {
+			len = 1;
+		}
+
+		rc = queue_shard_query_key_task(api_task, obj_auxi, epoch, 0 /* shard, useless */,
+						map_ver, obj, xid, cont->dc_cont_hdl, cont->dc_uuid,
+						&args->kqa_dcts[i], len);
+		if (rc != 0)
+			goto out;
+	}
+
+out:
+	return rc;
+}
+
 int
 dc_obj_query_key(tse_task_t *api_task)
 {
@@ -7017,8 +7242,9 @@ dc_obj_query_key(tse_task_t *api_task)
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
 	d_list_t		*head = NULL;
-	uuid_t			coh_uuid;
-	uuid_t			cont_uuid;
+	uuid_t			co_hdl;
+	uuid_t			co_uuid;
+	uint32_t		grp_size;
 	int			grp_idx;
 	uint32_t		grp_nr;
 	unsigned int		map_ver = 0;
@@ -7026,6 +7252,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	struct dtx_id		dti;
 	int			i = 0;
 	int			rc;
+	bool			coll = false;
 
 	D_ASSERTF(api_args != NULL,
 		  "Task Argument OPC does not match DC OPC\n");
@@ -7058,7 +7285,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	obj_auxi->spec_shard = 0;
 	obj_auxi->spec_group = 0;
 
-	rc = dc_cont2uuid(obj->cob_co, &coh_uuid, &cont_uuid);
+	rc = dc_cont2uuid(obj->cob_co, &co_hdl, &co_uuid);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
@@ -7107,13 +7334,25 @@ dc_obj_query_key(tse_task_t *api_task)
 	D_ASSERT(!obj_auxi->args_initialized);
 	D_ASSERT(d_list_empty(head));
 
+	/* Some optimization for get dkey since 2.6 */
+	if (api_args->flags & DAOS_GET_DKEY && grp_nr > 1 && dc_obj_proto_version > 9) {
+		rc = obj_coll_query_prep(api_task, obj);
+		if (rc != 0)
+			goto out_task;
+
+		obj_auxi->opc = DAOS_OBJ_RPC_COLL_QUERY;
+		coll = true;
+	}
+
+	grp_size = daos_oclass_grp_size(&obj->cob_oca);
+
 	for (i = grp_idx; i < grp_idx + grp_nr; i++) {
 		int start_shard;
 		int j;
 		int shard_cnt = 0;
 
 		/* Try leader for current group */
-		if (!obj_is_ec(obj) || (obj_is_ec(obj) && !obj_ec_parity_rotate_enabled(obj))) {
+		if (!obj_is_ec(obj) || !obj_ec_parity_rotate_enabled(obj)) {
 			int leader;
 
 			leader = obj_grp_leader_get(obj, i, (uint64_t)d_rand(),
@@ -7123,10 +7362,14 @@ dc_obj_query_key(tse_task_t *api_task)
 				    !is_ec_parity_shard(obj, obj_auxi->dkey_hash, leader))
 					goto non_leader;
 
-				rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, leader,
-								map_ver, obj, &dti, coh_uuid,
-								cont_uuid);
-				if (rc)
+				if (coll)
+					rc = obj_coll_query_prep_one(api_task, obj,
+								     map_ver, leader);
+				else
+					rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch,
+									leader, map_ver, obj, &dti,
+									co_hdl, co_uuid, NULL, 0);
+				if (rc != 0)
 					D_GOTO(out_task, rc);
 
 				D_DEBUG(DB_IO, DF_OID" try leader %d for group %d.\n",
@@ -7146,12 +7389,17 @@ non_leader:
 		start_shard = i * obj_get_grp_size(obj);
 		D_DEBUG(DB_IO, DF_OID" EC needs to try all shards for group %d.\n",
 			DP_OID(obj->cob_md.omd_id), i);
-		for (j = start_shard; j < start_shard + daos_oclass_grp_size(&obj->cob_oca); j++) {
+		for (j = start_shard; j < start_shard + grp_size; j++) {
 			if (obj_shard_is_invalid(obj, j, DAOS_OBJ_RPC_QUERY_KEY))
 				continue;
-			rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, j, map_ver,
-							obj, &dti, coh_uuid, cont_uuid);
-			if (rc)
+
+			if (coll)
+				rc = obj_coll_query_prep_one(api_task, obj, map_ver, j);
+			else
+				rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, j,
+								map_ver, obj, &dti, co_hdl, co_uuid,
+								NULL, 0);
+			if (rc != 0)
 				D_GOTO(out_task, rc);
 
 			if (++shard_cnt >= obj_ec_data_tgt_nr(&obj->cob_oca))
@@ -7165,6 +7413,12 @@ non_leader:
 		}
 	}
 
+	if (coll) {
+		rc = queue_coll_query_task(api_task, obj_auxi, obj, &dti, &epoch, map_ver);
+		if (rc != 0)
+			goto out_task;
+	}
+
 	obj_auxi->args_initialized = 1;
 	obj_shard_task_sched(obj_auxi, &epoch);
 
@@ -7176,6 +7430,8 @@ out_task:
 		/* abort/complete sub-tasks will complete api_task */
 		tse_task_list_traverse(head, shard_task_abort, &rc);
 	} else {
+		if (rc > 0)
+			rc = 0;
 		obj_task_complete(api_task, rc);
 	}
 

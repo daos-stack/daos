@@ -255,6 +255,9 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dth, void *arg, int idx,
 int
 ds_obj_coll_punch_remote(struct dtx_leader_handle *dth, void *arg, int idx,
 			 dtx_sub_comp_cb_t comp_cb);
+int
+ds_obj_coll_query_remote(struct dtx_leader_handle *dlh, void *data, int idx,
+			 dtx_sub_comp_cb_t comp_cb);
 
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
@@ -264,6 +267,7 @@ void ds_obj_key2anchor_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
+void ds_obj_coll_query_handler(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
 void ds_obj_migrate_handler(crt_rpc_t *rpc);
 void ds_obj_ec_agg_handler(crt_rpc_t *rpc);

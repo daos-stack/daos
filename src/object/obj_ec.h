@@ -318,6 +318,11 @@ struct obj_reasb_req;
 	((shard % obj_ec_tgt_nr(&obj->cob_oca) + obj_ec_tgt_nr(&obj->cob_oca) -		\
 	 obj_ec_shard_idx(obj, dkey_hash, 0)) % obj_ec_tgt_nr(&obj->cob_oca))
 
+/* Get the logical offset of shard within one group by oca, physical idx -> logical idx */
+#define obj_ec_shard_off_by_oca(layout_ver, dkey_hash, oca, shard)				\
+	((shard % obj_ec_tgt_nr(oca) + obj_ec_tgt_nr(oca) -					\
+	 obj_ec_shard_idx_by_layout_ver(layout_ver, dkey_hash, oca, 0)) % obj_ec_tgt_nr(oca))
+
 /* Get the logical offset of the tgt_idx by start target of EC, physical idx -> logical idx */
 #define obj_ec_shard_off_by_start(tgt_idx, oca, start_tgt)		\
 	((tgt_idx + obj_ec_tgt_nr(oca) - start_tgt) % obj_ec_tgt_nr(oca))
