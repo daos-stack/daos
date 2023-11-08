@@ -195,7 +195,7 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, struct cont_iv_key *key,
 		dst->iv_agg_eph.eph = src->iv_agg_eph.eph;
 		break;
 	default:
-		D_ERROR("bad iv_class_id %d: "DF_RC".\n", entry->iv_class->iv_class_id,
+		D_ERROR("bad iv_class_id %d: "DF_RC"\n", entry->iv_class->iv_class_id,
 			DP_RC(-DER_INVAL));
 		return -DER_INVAL;
 	};
@@ -384,6 +384,7 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			break;
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			iv_prop->cip_scrubbing_disabled = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_SCRUB_DIS;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
