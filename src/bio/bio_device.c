@@ -459,11 +459,46 @@ out:
 }
 
 static int
-json_write_cb(void *cb_ctx, const void *data, size_t size)
+json_write_bdev_cb(void *cb_ctx, const void *json, size_t json_size)
 {
-	struct bio_dev_info	*b_info = cb_ctx;
-	char			*prefix = "traddr\": \"";
-	char			*traddr, *end;
+	struct bio_dev_info *b_info = cb_ctx;
+
+	return bio_decode_bdev_params(b_info, json, (int)json_size);
+}
+
+static int
+json_find_bdev_params(struct spdk_bdev *bdev, struct bio_dev_info *b_info)
+{
+	struct spdk_json_write_ctx *json;
+	int                         rc;
+
+	json = spdk_json_write_begin(json_write_bdev_cb, b_info, SPDK_JSON_WRITE_FLAG_FORMATTED);
+	if (json == NULL) {
+		D_ERROR("Failed to alloc SPDK json context\n");
+		return -DER_NOMEM;
+	}
+
+	rc = spdk_bdev_dump_info_json(bdev, json);
+	if (rc != 0) {
+		D_ERROR("Failed to dump config from SPDK bdev (%s)\n", spdk_strerror(-rc));
+		return daos_errno2der(-rc);
+	}
+
+	rc = spdk_json_write_end(json);
+	if (rc != 0) {
+		D_ERROR("Failed to write JSON (%s)\n", spdk_strerror(-rc));
+		return daos_errno2der(-rc);
+	}
+
+	return rc;
+}
+
+static int
+json_write_traddr_cb(void *cb_ctx, const void *data, size_t size)
+{
+	struct bio_dev_info *b_info = cb_ctx;
+	char                *prefix = "traddr\": \"";
+	char                *traddr, *end;
 
 	D_ASSERT(b_info != NULL);
 	/* traddr is already generated */
@@ -494,7 +529,7 @@ int
 fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 {
 	struct spdk_bdev		*bdev;
-	struct spdk_json_write_ctx	*json;
+	struct spdk_json_write_ctx      *json;
 	int				 rc;
 
 	D_ASSERT(dev_name != NULL);
@@ -510,8 +545,7 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
 		return 0;
 
-	json = spdk_json_write_begin(json_write_cb, b_info,
-				     SPDK_JSON_WRITE_FLAG_FORMATTED);
+	json = spdk_json_write_begin(json_write_traddr_cb, b_info, SPDK_JSON_WRITE_FLAG_FORMATTED);
 	if (json == NULL) {
 		D_ERROR("Failed to alloc SPDK json context\n");
 		return -DER_NOMEM;
@@ -537,7 +571,7 @@ static struct bio_dev_info *
 alloc_dev_info(uuid_t dev_id, char *dev_name, struct smd_dev_info *s_info)
 {
 	struct bio_dev_info	*info;
-	int			 tgt_cnt = 0, i, rc;
+	int                      tgt_cnt = 0, i;
 
 	D_ALLOC_PTR(info);
 	if (info == NULL)
@@ -548,14 +582,6 @@ alloc_dev_info(uuid_t dev_id, char *dev_name, struct smd_dev_info *s_info)
 		info->bdi_flags |= NVME_DEV_FL_INUSE;
 		if (s_info->sdi_state == SMD_DEV_FAULTY)
 			info->bdi_flags |= NVME_DEV_FL_FAULTY;
-	}
-
-	if (dev_name != NULL) {
-		rc = fill_in_traddr(info, dev_name);
-		if (rc != 0) {
-			bio_free_dev_info(info);
-			return NULL;
-		}
 	}
 
 	if (tgt_cnt != 0) {
@@ -588,17 +614,20 @@ find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
 	return NULL;
 }
 
-struct ctrlr_opts {
+struct pci_dev_opts {
 	struct spdk_pci_addr pci_addr;
 	bool                 finished;
-	struct ctrlr_t      *ctrlr;
+	int                 *socket_id;
+	char               **pci_type;
 	int                  status;
 };
 
 static void
-get_ctrlr_details(void *ctx, struct spdk_pci_device *pci_device)
+pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 {
-	struct ctrlr_opts *opts = ctx;
+	struct pci_dev_opts *opts = ctx;
+	const char          *device_type;
+	int                  len;
 
 	if (opts->status != 0)
 		return;
@@ -609,50 +638,110 @@ get_ctrlr_details(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	opts->finished = true;
 
-	D_DEBUG(DB_MGMT, "getting controller details\n");
-	if (opts->ctrlr == NULL) {
-		D_ERROR("ctrlr in opts not initialized\n");
-		opts->status = -DER_INVAL;
-	} else {
-		opts->ctrlr->socket_id = spdk_pci_device_get_socket_id(pci_device);
-	}
+	/* Populate pci_dev_type and socket_id */
 
-	return;
+	*opts->socket_id = spdk_pci_device_get_socket_id(pci_device);
+
+	device_type = spdk_pci_device_get_type(pci_device);
+	if (device_type == NULL) {
+		D_ERROR("spdk_pci_device_get_type returned nil\n");
+		opts->status = -DER_INVAL;
+		return;
+	}
+	len = strlen(device_type);
+	if (len == 0) {
+		D_ERROR("spdk_pci_device_get_type returned empty\n");
+		opts->status = -DER_INVAL;
+		return;
+	}
+	D_STRNDUP(*opts->pci_type, device_type, len);
+	if (*opts->pci_type == NULL) {
+		opts->status = -DER_NOMEM;
+		return;
+	}
 }
 
 static int
-alloc_ctrlr_info(struct bio_xs_context *xs_ctxt, struct bio_dev_info *info)
+fetch_pci_dev_info(struct ctrlr_t *w_ctrlr, const char *tr_addr)
 {
+	struct pci_dev_opts  opts = {0};
 	struct spdk_pci_addr pci_addr;
-	struct ctrlr_opts    opts = {0};
 	int                  rc;
 
-	D_ASSERT(is_init_xstream(xs_ctxt));
-
-	D_ALLOC_PTR(info->bdi_ctrlr);
-	if (info->bdi_ctrlr == NULL)
-		return -DER_NOMEM;
-
-	rc = spdk_pci_addr_parse(&pci_addr, info->bdi_traddr);
+	rc = spdk_pci_addr_parse(&pci_addr, tr_addr);
 	if (rc != 0) {
-		D_ERROR("Unable to parse PCI address for device %s (%s)\n", info->bdi_traddr,
+		D_ERROR("Unable to parse PCI address for device %s (%s)\n", tr_addr,
 			spdk_strerror(-rc));
 		return -DER_INVAL;
 	}
 
-	/* Init context to be used by led_device_action() */
-	opts.finished = false;
-	opts.status   = 0;
-	opts.pci_addr = pci_addr;
-	opts.ctrlr    = info->bdi_ctrlr;
-	if (opts.ctrlr == NULL) {
-		D_ERROR("ctrlr in opts not inited\n");
-		return -DER_INVAL;
-	}
+	opts.finished  = false;
+	opts.status    = 0;
+	opts.pci_addr  = pci_addr;
+	opts.socket_id = &w_ctrlr->socket_id;
+	opts.pci_type  = &w_ctrlr->pci_type;
 
-	spdk_pci_for_each_device(&opts, get_ctrlr_details);
+	spdk_pci_for_each_device(&opts, pci_device_cb);
 
 	return opts.status;
+}
+
+static int
+alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
+{
+	struct spdk_bdev *bdev;
+	uint32_t          blk_sz;
+	uint64_t          nr_blks;
+	int               rc;
+
+	D_ASSERT(b_info != NULL);
+	D_ASSERT(b_info->bdi_ctrlr == NULL);
+
+	if (dev_name == NULL) {
+		D_DEBUG(DB_MGMT, "missing bdev device name, skipping ctrlr info fetch\n") ;
+		return 0;
+	}
+
+	bdev = spdk_bdev_get_by_name(dev_name);
+	if (bdev == NULL) {
+		D_ERROR("Failed to get SPDK bdev for %s\n", dev_name);
+		return -DER_NONEXIST;
+	}
+
+	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
+		return 0;
+
+	D_ALLOC_PTR(b_info->bdi_ctrlr);
+	if (b_info->bdi_ctrlr == NULL)
+		return -DER_NOMEM;
+
+	D_ALLOC_PTR(b_info->bdi_ctrlr->nss);
+	if (b_info->bdi_ctrlr->nss == NULL)
+		return -DER_NOMEM;
+
+	/* Namespace capacity by direct query of SPDK bdev object */
+	blk_sz                       = spdk_bdev_get_block_size(bdev);
+	nr_blks                      = spdk_bdev_get_num_blocks(bdev);
+	b_info->bdi_ctrlr->nss->size = nr_blks * (uint64_t)blk_sz;
+
+	/* Controller details and namespace ID by parsing SPDK bdev JSON info */
+	rc = json_find_bdev_params(bdev, b_info);
+	if (rc != 0) {
+		D_ERROR("Failed to get bdev json params for %s\n", dev_name);
+		return rc;
+	}
+
+	D_DEBUG(DB_MGMT, "fetched %s controller details\n", b_info->bdi_traddr);
+	D_DEBUG(DB_MGMT, "namespace %d of size %lu\n", b_info->bdi_ctrlr->nss->id,
+		b_info->bdi_ctrlr->nss->size);
+
+	/* Fetch socket ID and PCI device type by enumerating spdk_pci_device list */
+	rc = fetch_pci_dev_info(b_info->bdi_ctrlr, b_info->bdi_traddr);
+	if (rc != 0) {
+		return rc;
+	}
+
+	return 0;
 }
 
 int
@@ -696,7 +785,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		if (d_bdev->bb_faulty)
 			b_info->bdi_flags |= NVME_DEV_FL_FAULTY;
 
-		rc = alloc_ctrlr_info(xs_ctxt, b_info);
+		rc = alloc_ctrlr_info(d_bdev->bb_uuid, dev_name, b_info);
 		if (rc) {
 			DL_ERROR(rc, "Failed to get ctrlr details");
 			goto out;
@@ -792,7 +881,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	}
 
-	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
+	if (strncmp(pci_dev_type, NVME_PCI_DEV_TYPE_VMD, strlen(NVME_PCI_DEV_TYPE_VMD)) != 0) {
 		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s:%s), can't manage LED\n",
 			pci_dev_type, addr_buf);
 		opts->status = -DER_NOSYS;

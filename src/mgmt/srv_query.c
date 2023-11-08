@@ -10,6 +10,7 @@
 
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
+#include <daos_srv/control.h>
 
 #include "srv_internal.h"
 
@@ -293,14 +294,39 @@ bio_query_dev_list(void *arg)
 	return 0;
 }
 
+static int
+copy_str2ctrlr(char **dst, const char *src)
+{
+	int len;
+
+	D_ASSERT(src != NULL);
+	D_ASSERT(dst != NULL);
+
+	if ((*dst != NULL) && (strnlen(*dst, NVME_DETAIL_BUFLEN) != 0)) {
+		D_ERROR("attempting to copy to non-empty destination");
+		return -DER_INVAL;
+	}
+
+	len = strnlen(src, NVME_DETAIL_BUFLEN);
+	D_ALLOC(*dst, len + 1);
+	if (*dst == NULL)
+		return -DER_NOMEM;
+
+	if (copy_ascii(*dst, len+1, src, len) != 0) {
+		D_ERROR("copy_ascii: '%s'\n", src);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 int
 ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 {
 	struct bio_dev_info		*dev_info = NULL, *tmp;
 	struct bio_list_devs_info	 list_devs_info = { 0 };
-	struct bio_led_manage_info	 led_info = { 0 };
-	Ctl__LedState		 led_state;
-	int				 buflen;
+	struct bio_led_manage_info       led_info       = {0};
+	Ctl__LedState                    led_state;
 	int				 rc = 0;
 	int				 i = 0, j;
 
@@ -355,6 +381,12 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		/* Populate NVMe controller details */
 
+		if (dev_info->bdi_ctrlr == NULL) {
+			D_ERROR("ctrlr not initialized in bio_dev_info");
+			rc = -DER_INVAL;
+			break;
+		}
+
 		D_ALLOC_PTR(resp->devices[i]->ctrlr);
 		if (resp->devices[i]->ctrlr == NULL) {
 			rc = -DER_NOMEM;
@@ -362,28 +394,75 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		}
 		ctl__nvme_controller__init(resp->devices[i]->ctrlr);
 
-		resp->devices[i]->ctrlr->pci_addr = NULL;
-		resp->devices[i]->ctrlr->led_state = CTL__LED_STATE__NA;
-		if (dev_info->bdi_ctrlr == NULL) {
-			D_ERROR("ctrlr not inited in bio_dev_info");
-			rc = -DER_INVAL;
+		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->pci_addr, dev_info->bdi_traddr);
+		if (rc != 0) {
+			break;
+		}
+		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->model, dev_info->bdi_ctrlr->model);
+		if (rc != 0) {
+			break;
+		}
+		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->serial, dev_info->bdi_ctrlr->serial);
+		if (rc != 0) {
+			break;
+		}
+		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->fw_rev, dev_info->bdi_ctrlr->fw_rev);
+		if (rc != 0) {
+			break;
+		}
+		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->vendor_id,
+				    dev_info->bdi_ctrlr->vendor_id);
+		if (rc != 0) {
+			break;
+		}
+		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->pci_dev_type,
+				    dev_info->bdi_ctrlr->pci_type);
+		if (rc != 0) {
 			break;
 		}
 		resp->devices[i]->ctrlr->socket_id = dev_info->bdi_ctrlr->socket_id;
 
-		if (dev_info->bdi_traddr != NULL) {
-			buflen = strlen(dev_info->bdi_traddr) + 1;
-			D_ALLOC(resp->devices[i]->ctrlr->pci_addr, buflen);
-			if (resp->devices[i]->ctrlr->pci_addr == NULL) {
-				rc = -DER_NOMEM;
-				break;
-			}
-			strncpy(resp->devices[i]->ctrlr->pci_addr, dev_info->bdi_traddr, buflen);
+		D_DEBUG(DB_MGMT, "ctrlr details: '%s' '%s' '%s' '%s' '%s' '%s' '%d'\n",
+			resp->devices[i]->ctrlr->pci_addr, resp->devices[i]->ctrlr->model,
+			resp->devices[i]->ctrlr->serial, resp->devices[i]->ctrlr->fw_rev,
+			resp->devices[i]->ctrlr->vendor_id, resp->devices[i]->ctrlr->pci_dev_type,
+			resp->devices[i]->ctrlr->socket_id);
+
+		/* Populate NVMe namespace id and capacity */
+
+		if (dev_info->bdi_ctrlr->nss == NULL) {
+			D_ERROR("nss not initialized in bio_dev_info");
+			rc = -DER_INVAL;
+			break;
 		}
+		D_ASSERT(dev_info->bdi_ctrlr->nss->next == NULL);
+
+		/* When describing a SMD, only one NVMe namespace is relevant */
+		D_ALLOC_ARRAY(resp->devices[i]->ctrlr->namespaces, 1);
+		if (resp->devices[i]->ctrlr->namespaces == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		D_ALLOC_PTR(resp->devices[i]->ctrlr->namespaces[0]);
+		if (resp->devices[i]->ctrlr->namespaces[0] == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		resp->devices[i]->ctrlr->n_namespaces = 1;
+		ctl__nvme_controller__namespace__init(resp->devices[i]->ctrlr->namespaces[0]);
+
+		resp->devices[i]->ctrlr->namespaces[0]->id   = dev_info->bdi_ctrlr->nss->id;
+		resp->devices[i]->ctrlr->namespaces[0]->size = dev_info->bdi_ctrlr->nss->size;
+
+		D_DEBUG(DB_MGMT, "ns id/size: '%d' '%ld'\n",
+			resp->devices[i]->ctrlr->namespaces[0]->id,
+			resp->devices[i]->ctrlr->namespaces[0]->size);
+
+		/* Populate NVMe device state */
 
 		if ((dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) == 0) {
 			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__UNPLUGGED;
-			goto skip_dev;
+			goto next_dev;
 		}
 
 		if ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
@@ -392,6 +471,10 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__NEW;
 		else
 			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__NORMAL;
+
+		if (strncmp(dev_info->bdi_ctrlr->pci_type, NVME_PCI_DEV_TYPE_VMD,
+			    strlen(NVME_PCI_DEV_TYPE_VMD)) != 0)
+			goto next_dev;
 
 		/* Fetch LED State if device is plugged */
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);
@@ -413,7 +496,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		}
 		resp->devices[i]->ctrlr->led_state = led_state;
 
-skip_dev:
+next_dev:
 		d_list_del(&dev_info->bdi_link);
 		/* Frees sdi_tgts and dev_info */
 		bio_free_dev_info(dev_info);
@@ -430,23 +513,7 @@ skip_dev:
 		}
 		for (; i >= 0; i--) {
 			if (resp->devices[i] != NULL) {
-				if (resp->devices[i]->uuid != NULL)
-					D_FREE(resp->devices[i]->uuid);
-				if (resp->devices[i]->tgt_ids != NULL)
-					D_FREE(resp->devices[i]->tgt_ids);
-				if (resp->devices[i]->ctrlr != NULL) {
-					if (resp->devices[i]->ctrlr->pci_addr != NULL)
-						D_FREE(resp->devices[i]->ctrlr->pci_addr);
-					//					if
-					//(resp->devices[i]->ctrlr->model != NULL)
-					//						D_FREE(resp->devices[i]->ctrlr->model);
-					//					if
-					//(resp->devices[i]->ctrlr->serial != NULL)
-					//						D_FREE(resp->devices[i]->ctrlr->serial);
-					//					if
-					//(resp->devices[i]->ctrlr->fw_rev != NULL)
-					//						D_FREE(resp->devices[i]->ctrlr->fw_rev);
-				}
+				ds_mgmt_smd_free_dev(resp->devices[i]);
 				D_FREE(resp->devices[i]);
 			}
 		}

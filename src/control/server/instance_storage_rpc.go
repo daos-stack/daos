@@ -194,7 +194,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, ei *EngineInstance, pbReq *ctl
 
 	for _, sd := range scanSmdResp.Devices {
 		if sd.Ctrlr == nil {
-			return nil, errors.Errorf("smd %q has no ctrlr ref", sd.Uuid)
+			return nil, errors.Errorf("smd %+v has no ctrlr ref", sd)
 		}
 
 		addr := sd.Ctrlr.PciAddr

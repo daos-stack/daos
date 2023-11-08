@@ -19,7 +19,6 @@
 
 #include "smd.pb-c.h"
 
-#define BIO_DEV_TYPE_VMD	"vmd"
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 #define BIO_XS_CNT_MAX		BIO_MAX_VOS_TGT_CNT /* Max VOS xstreams per blobstore */
@@ -668,4 +667,6 @@ int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int
 int bio_set_hotplug_filter(const char *nvme_conf);
 int bio_read_accel_props(const char *nvme_conf);
 int bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr);
+int
+bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_size);
 #endif /* __BIO_INTERNAL_H__ */

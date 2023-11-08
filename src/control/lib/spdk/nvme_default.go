@@ -104,10 +104,10 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 // c2GoController is a private translation function.
 func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
 	return &storage.NvmeController{
-		Model:    C.GoString(&ctrlr.model[0]),
-		Serial:   C.GoString(&ctrlr.serial[0]),
-		PciAddr:  C.GoString(&ctrlr.pci_addr[0]),
-		FwRev:    C.GoString(&ctrlr.fw_rev[0]),
+		Model:    C.GoString(ctrlr.model),
+		Serial:   C.GoString(ctrlr.serial),
+		PciAddr:  C.GoString(ctrlr.pci_addr),
+		FwRev:    C.GoString(ctrlr.fw_rev),
 		SocketID: int32(ctrlr.socket_id),
 	}
 }
