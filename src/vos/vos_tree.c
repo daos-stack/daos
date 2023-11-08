@@ -658,11 +658,15 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	skey  = (struct vos_svt_key *)key_iov->iov_buf;
 	irec  = vos_rec2irec(tins, rec);
 
-	if (skey->sk_minor_epc <= irec->ir_minor_epc) {
+	if (skey->sk_minor_epc < irec->ir_minor_epc) {
 		/* This must be an overwrite by migration */
 		BIO_ADDR_SET_CANCELLED(&rbund->rb_biov->bi_addr);
 		return 0;
 	}
+
+	/** NB: let the overwrite happen when minor_epc is equal.  This is
+	 *  because SMD uses db_upsert which just writes at epoch 1.
+	 */
 
 	/* In the normal DTX case, a later minor epoch will actually overwrite
 	 * the value that is in the tree since the major epoch is the key.
