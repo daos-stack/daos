@@ -5,6 +5,7 @@
 """
 import re
 import time
+
 from ClusterShell.NodeSet import NodeSet
 
 from ddb_utils import DdbCommand

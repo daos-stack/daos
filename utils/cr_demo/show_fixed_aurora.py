@@ -5,6 +5,7 @@
 """
 import argparse
 import subprocess  # nosec
+
 import yaml
 from ClusterShell.NodeSet import NodeSet
 

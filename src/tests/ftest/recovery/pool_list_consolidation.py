@@ -4,9 +4,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-from ClusterShell.NodeSet import NodeSet
 
 from avocado.core.exceptions import TestFail
+from ClusterShell.NodeSet import NodeSet
+
 from general_utils import check_file_exists, pcmd, report_errors
 from recovery_test_base import RecoveryTestBase
 
