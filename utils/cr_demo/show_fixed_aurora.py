@@ -9,8 +9,8 @@ import subprocess  # nosec
 import yaml
 from ClusterShell.NodeSet import NodeSet
 
-from demo_utils import cont_get_prop, create_container, list_pool, pool_get_prop, \
-    pool_query, storage_query_usage, system_query, system_stop
+from demo_utils import (cont_get_prop, create_container, list_pool, pool_get_prop, pool_query,
+                        storage_query_usage, system_query, system_stop)
 
 
 # Run this script on Aurora node as user after running run_demo_aurora.py. E.g.,
