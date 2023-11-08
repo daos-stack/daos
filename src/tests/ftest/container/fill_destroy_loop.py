@@ -6,7 +6,7 @@
 import random
 
 from apricot import TestWithServers
-from avocado.core.exceptions import TestFail
+from general_utils import DaosTestError
 
 
 class BoundaryPoolContainerSpace(TestWithServers):
@@ -43,7 +43,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
             try:
                 container.write_objects()
-            except TestFail as excep:
+            except DaosTestError as excep:
                 # Uncomment following for debugging
                 # self.log.info("%s", repr(excep))
                 if self.DER_NOSPACE in str(excep):

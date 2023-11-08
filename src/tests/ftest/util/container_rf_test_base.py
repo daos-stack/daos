@@ -132,7 +132,7 @@ class ContRedundancyFactor(RebuildTestBase):
                 self.inputs.rank.value[0], self.inputs.object_class.value)
         else:
             try:
-                self.container.write_objects_wo_failon(
+                self.container.write_objects(
                     self.inputs.rank.value[0], self.inputs.object_class.value)
                 self.fail("#Container redundancy factor with an invalid "
                           "object_class traffic passed, expecting Fail")
