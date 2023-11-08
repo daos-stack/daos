@@ -32,8 +32,8 @@ function build_and_run() {
   echo "Installing python dependencies..."
   virtualenv venv
   source venv/bin/activate
-  pip install --upgrade pip
-  pip install -r requirements.txt
+  pip install --require-hashes -r google_build/base_requirements.txt
+  pip install --require-hashes -r google_build/requirements.txt
 
   echo "Building daos..."
   scons BUILD_TYPE=dev TARGET_TYPE=release --jobs="$(nproc --all)" --build-deps=yes install PREFIX=/opt/daos
