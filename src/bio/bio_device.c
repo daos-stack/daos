@@ -11,6 +11,7 @@
 #include <daos_srv/smd.h>
 #include <spdk/string.h>
 #include <spdk/likely.h>
+#include <spdk/nvme.h>
 #include <spdk/env.h>
 #include <spdk/vmd.h>
 
@@ -588,71 +589,64 @@ find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
 	return NULL;
 }
 
-struct ctrlr_opts {
-	struct spdk_pci_addr pci_addr;
-	bool                 finished;
-	struct ctrlr_t      *ctrlr;
-	int                  status;
-};
-
-static void
-get_ctrlr_details(void *ctx, struct spdk_pci_device *pci_device)
+static int
+alloc_ctrlr_info(struct bio_dev_info *info)
 {
-	struct ctrlr_opts *opts = ctx;
+	struct spdk_nvme_transport_id      trid;
+	struct spdk_nvme_ctrlr_opts        copts;
+	struct spdk_nvme_ctrlr            *r_ctrlr;
+	struct ctrlr_t                    *w_ctrlr;
+	const struct spdk_nvme_ctrlr_data *cdata;
+	struct spdk_pci_device            *pci_device;
+	const char                        *device_type;
 
-	if (opts->status != 0)
-		return;
-	if (opts->finished)
-		return;
+	trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
+	snprintf(trid.traddr, sizeof(trid.traddr), "%s", info->bdi_traddr);
+	spdk_nvme_ctrlr_get_default_ctrlr_opts(&copts, sizeof(copts));
 
-	if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
-		return;
-	opts->finished = true;
-
-	D_DEBUG(DB_MGMT, "getting controller details\n");
-	if (opts->ctrlr == NULL) {
-		D_ERROR("ctrlr in opts not initialized\n");
-		opts->status = -DER_INVAL;
-	} else {
-		opts->ctrlr->socket_id = spdk_pci_device_get_socket_id(pci_device);
+	r_ctrlr = spdk_nvme_connect(&trid, &copts, sizeof(copts));
+	if (r_ctrlr == NULL) {
+		D_ERROR("spdk_nvme_connect returned nil\n");
+		return -DER_INVAL;
 	}
 
-	return;
-}
-
-static int
-alloc_ctrlr_info(struct bio_xs_context *xs_ctxt, struct bio_dev_info *info)
-{
-	struct spdk_pci_addr pci_addr;
-	struct ctrlr_opts    opts = {0};
-	int                  rc;
-
-	D_ASSERT(is_init_xstream(xs_ctxt));
+	D_DEBUG(DB_MGMT, "fetching %s controller details\n", info->bdi_traddr);
 
 	D_ALLOC_PTR(info->bdi_ctrlr);
 	if (info->bdi_ctrlr == NULL)
 		return -DER_NOMEM;
+	w_ctrlr = info->bdi_ctrlr;
 
-	rc = spdk_pci_addr_parse(&pci_addr, info->bdi_traddr);
-	if (rc != 0) {
-		D_ERROR("Unable to parse PCI address for device %s (%s)\n", info->bdi_traddr,
-			spdk_strerror(-rc));
+	cdata = spdk_nvme_ctrlr_get_data(r_ctrlr);
+	if (cdata == NULL) {
+		D_ERROR("spdk_nvme_ctrlr_get_data returned nil\n");
+		return -DER_INVAL;
+	}
+	if (copy_ascii(w_ctrlr->model, sizeof(w_ctrlr->model), cdata->mn, sizeof(cdata->mn)) != 0)
+		return -DER_INVAL;
+	if (copy_ascii(w_ctrlr->serial, sizeof(w_ctrlr->serial), cdata->sn, sizeof(cdata->sn)) != 0)
+		return -DER_INVAL;
+	if (copy_ascii(w_ctrlr->fw_rev, sizeof(w_ctrlr->fw_rev), cdata->fr, sizeof(cdata->fr)) != 0)
+		return -DER_INVAL;
+
+	pci_device = spdk_nvme_ctrlr_get_pci_device(r_ctrlr);
+	if (pci_device == NULL) {
+		D_ERROR("spdk_nvme_ctrlr_get_pci_device returned nil\n");
 		return -DER_INVAL;
 	}
 
-	/* Init context to be used by led_device_action() */
-	opts.finished = false;
-	opts.status   = 0;
-	opts.pci_addr = pci_addr;
-	opts.ctrlr    = info->bdi_ctrlr;
-	if (opts.ctrlr == NULL) {
-		D_ERROR("ctrlr in opts not inited\n");
+	w_ctrlr->socket_id = spdk_pci_device_get_socket_id(pci_device);
+
+	device_type = spdk_pci_device_get_type(pci_device);
+	if (device_type == NULL) {
+		D_ERROR("spdk_pci_device_get_type returned nil\n");
 		return -DER_INVAL;
 	}
+	if (copy_ascii(w_ctrlr->pci_type, sizeof(w_ctrlr->pci_type), device_type,
+		       sizeof(device_type)) != 0)
+		return -DER_INVAL;
 
-	spdk_pci_for_each_device(&opts, get_ctrlr_details);
-
-	return opts.status;
+	return 0;
 }
 
 int
@@ -696,7 +690,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		if (d_bdev->bb_faulty)
 			b_info->bdi_flags |= NVME_DEV_FL_FAULTY;
 
-		rc = alloc_ctrlr_info(xs_ctxt, b_info);
+		rc = alloc_ctrlr_info(b_info);
 		if (rc) {
 			DL_ERROR(rc, "Failed to get ctrlr details");
 			goto out;
