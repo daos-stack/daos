@@ -302,7 +302,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
 						Devices: []*ctlpb.SmdDevice{
-							&ctlpb.SmdDevice{
+							{
 								Uuid:   test.MockUUID(0),
 								TgtIds: []int32{0, 1, 2},
 								Ctrlr: &ctlpb.NvmeController{
@@ -311,7 +311,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 									LedState: ledStateNormal,
 								},
 							},
-							&ctlpb.SmdDevice{
+							{
 								Uuid:   test.MockUUID(1),
 								TgtIds: []int32{3, 4, 5},
 								Ctrlr: &ctlpb.NvmeController{
@@ -325,7 +325,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 					},
 					{
 						Devices: []*ctlpb.SmdDevice{
-							&ctlpb.SmdDevice{
+							{
 								Uuid:   test.MockUUID(2),
 								TgtIds: []int32{0, 1, 2},
 								Ctrlr: &ctlpb.NvmeController{
@@ -334,7 +334,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 									LedState: ledStateUnknown,
 								},
 							},
-							&ctlpb.SmdDevice{
+							{
 								Uuid:   test.MockUUID(3),
 								TgtIds: []int32{3, 4, 5},
 								Ctrlr: &ctlpb.NvmeController{
@@ -375,7 +375,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				Ranks: []*ctlpb.SmdQueryResp_RankResp{
 					{
 						Devices: []*ctlpb.SmdDevice{
-							&ctlpb.SmdDevice{
+							{
 								Uuid:   test.MockUUID(0),
 								TgtIds: []int32{0, 1, 2},
 								Ctrlr: &ctlpb.NvmeController{
