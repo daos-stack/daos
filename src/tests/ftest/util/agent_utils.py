@@ -8,12 +8,11 @@ import re
 import socket
 from getpass import getuser
 
-from agent_utils_params import (DaosAgentTransportCredentials,
-                                DaosAgentYamlParameters)
+from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from ClusterShell.NodeSet import NodeSet
 from command_utils import CommandWithSubCommand, SubprocessManager, YamlCommand
-from command_utils_base import (CommandWithParameters, CommonConfig,
-                                EnvironmentVariables, FormattedParameter)
+from command_utils_base import (CommandWithParameters, CommonConfig, EnvironmentVariables,
+                                FormattedParameter)
 from exception_utils import CommandFailure
 from general_utils import get_default_config_file, get_log_file, run_pcmd
 from run_utils import run_remote
