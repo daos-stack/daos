@@ -89,6 +89,7 @@ class IorCrash(IorTestBase):
         self.assertTrue(self.cont_nhandles_match(), "Error confirming container info nhandles")
 
         # Run IOR and verify it completes successfully
+        self.ior_cmd.subprocess = False
         self.run_ior_with_pool(create_pool=False, create_cont=False)
 
         # Verify engines did not crash
