@@ -96,8 +96,6 @@ class BoundaryPoolContainerSpace(TestWithServers):
             try:
                 container.write_objects()
             except DaosTestError as excep:
-                # Uncomment following for debugging
-                # self.log.info("%s", repr(excep))
                 if self.DER_NOSPACE in str(excep):
                     self.log.info(
                         "--%i.(4)DER_NOSPACE %s detected, pool is unable for an additional"
