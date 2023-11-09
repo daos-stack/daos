@@ -5518,8 +5518,10 @@ ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
 	cont_svc_put_leader(svc);
 out_pool_hdl:
 	if (opc == CONT_OPEN_BYLABEL) {
+		struct cont_open_bylabel_out *lout;
+
 		cont_op_in_get_label(rpc, opc, cont_proto_ver, &lbl);
-		struct cont_open_bylabel_out	*lout = crt_reply_get(rpc);
+		lout = crt_reply_get(rpc);
 
 		D_DEBUG(DB_MD,
 			DF_CONT ":%s: replying rpc: %p hdl=" DF_UUID " opc=%u(%s) " DF_RC "\n",
