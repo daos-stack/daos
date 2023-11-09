@@ -9,7 +9,6 @@ from scrubber_test_base import TestWithScrubber
 
 
 class TestScrubberEvictWithSnapshot(TestWithScrubber):
-    # pylint: disable=too-many-nested-blocks
     """Inject Checksum Fault with scrubber enabled
     and scrubber threshold set to a certain value.
     Snapshot taken while checksum faults are injected.
@@ -22,7 +21,7 @@ class TestScrubberEvictWithSnapshot(TestWithScrubber):
         - Take a container snapshot while the csum faults
         are generated and target is evicted eventually.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=scrubber,faults
         :avocado: tags=TestScrubberEvictWithSnapshot,test_target_eviction_during_snapshot
@@ -41,11 +40,13 @@ class TestScrubberEvictWithSnapshot(TestWithScrubber):
         time.sleep(15)
         self.container.create_snap()
         time.sleep(45)
-        self.dmg_cmd.pool_query(self.pool.identifier)
+        self.dmg_cmd.pool_query()
         final_metrics = self.scrubber.get_scrub_corrupt_metrics()
         status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
+        # Compare the initial scrubber corrupt metrics with the final values.
+        # If they differ, the test passed. If not, the test failed
         if status is False:
-            self.log.info("------Test Failed-----")
-            self.log.info("---No metrics value change----")
+            self.log.info("------Scrubber Snapshot Test Failed-----")
+            self.log.info("---Scrubber corrupt metrics values doesn't change----")
             self.fail("------Test Failed-----")
-        self.log.info("------Test passed------")
+        self.log.info("------Scrubber Snapshot Test Passed------")

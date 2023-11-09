@@ -9,7 +9,6 @@ from scrubber_test_base import TestWithScrubber
 
 
 class TestScrubberEvictWithRebuild(TestWithScrubber):
-    # pylint: disable=too-many-nested-blocks
     """Inject Checksum Fault with scrubber enabled
     and scrubber threshold set to a certain value.
     Rebuild is run on the background.
@@ -21,10 +20,11 @@ class TestScrubberEvictWithRebuild(TestWithScrubber):
 
         - Perform target eviction while rebuild is happening
         in the background.
-        :avocado: tags=all,pr,daily_regression
+
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=scrubber,faults
-        :avocado: tags=TestWithScrubberTargetEviction,test_target_eviction_during_rebuild
+        :avocado: tags=TestScrubberEvictWithRebuild,test_target_eviction_during_rebuild
         """
         pool_prop = self.params.get("properties", '/run/pool/*')
         cont_prop = self.params.get("properties", '/run/container/*')
@@ -39,11 +39,13 @@ class TestScrubberEvictWithRebuild(TestWithScrubber):
         # Wait for a minute for the scrubber to take action and evict target
         # after corruption threshold reached.
         time.sleep(60)
-        self.dmg_cmd.pool_query(self.pool.identifier)
+        self.dmg_cmd.pool_query()
         final_metrics = self.scrubber.get_scrub_corrupt_metrics()
         status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
+        # Compare the initial scrubber corrupt metrics with the final values.
+        # If they differ, the test passed. If not, the test failed
         if status is False:
-            self.log.info("------Test Failed-----")
-            self.log.info("---No metrics value change----")
+            self.log.info("------Scrubber Rebuild Test Failed-----")
+            self.log.info("---Scrubber corrupt metrics values doesn't change----")
             self.fail("------Test Failed-----")
-        self.log.info("------Test passed------")
+        self.log.info("------Scrubber Rebuild Test Passed------")

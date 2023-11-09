@@ -39,7 +39,7 @@ dmg:
   transport_config:
     allow_insecure: true
 pool:
-  size: 50%
+  size: 80%
   svcn: 4
   control_method: dmg
   rebuild_timeout: 120
@@ -48,7 +48,7 @@ container:
   type: POSIX
   control_method: daos
   oclass: RP_2G1
-  properties: "cksum:crc16"
+  properties: "cksum:sha512"
 ior:
   ior_timeout: 60
   client_processes:
