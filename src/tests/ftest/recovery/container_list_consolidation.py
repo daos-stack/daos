@@ -7,7 +7,6 @@ import re
 import time
 
 from ClusterShell.NodeSet import NodeSet
-
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
 from general_utils import report_errors
