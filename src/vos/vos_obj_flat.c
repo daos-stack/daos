@@ -519,6 +519,7 @@ vof_flat_init(struct vof_iter_arg *arg)
 
 	umm = &cont->vc_pool->vp_umm;
 	umem_rsrvd_act_alloc(umm, &act, 1);
+	/* will be published in vof_flat_publish() and freed in gc_drain_obj() */
 	umoff = vos_reserve_scm(cont, act, arg->via_df_len);
 	if (UMOFF_IS_NULL(umoff)) {
 		D_ERROR("Reserve %d from SCM failed\n", arg->via_df_len);
@@ -643,6 +644,48 @@ vof_flat_sort(struct vof_iter_arg *arg)
 	return rc;
 }
 
+static int
+vof_destroy_tree(daos_handle_t coh, struct vos_object *obj)
+{
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct umem_instance	*umm;
+	struct vos_obj_df	*obj_df = obj->obj_df;
+	struct ilog_desc_cbs	 cbs;
+	struct btr_root		*obj_btr_root;
+	umem_off_t		 root_off;
+	umem_off_t		 obj_df_off;
+	int			 rc;
+
+	umm = &cont->vc_pool->vp_umm;
+
+	/* alloc and copy obj_df->vo_tree, will be freed in gc_drain_obj() */
+	root_off = umem_alloc(umm, sizeof(struct btr_root));
+	if (UMOFF_IS_NULL(root_off)) {
+		rc = -DER_NOSPACE;
+		D_ERROR(DF_UOID" failed to alloc obj_btr_root, "DF_RC"\n",
+			DP_UOID(obj_df->vo_id), DP_RC(rc));
+		return rc;
+	}
+	obj_btr_root = umem_off2ptr(umm, root_off);
+	memcpy(obj_btr_root, &obj_df->vo_tree, sizeof(struct btr_root));
+
+	/* destroy ilog */
+	vos_ilog_desc_cbs_init(&cbs, coh);
+	rc = ilog_destroy(umm, &cbs, &obj_df->vo_ilog);
+	if (rc != 0) {
+		D_ERROR("Failed to destroy incarnation log: "DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
+	vos_ilog_ts_evict(&obj_df->vo_ilog, VOS_TS_TYPE_OBJ, cont->vc_pool->vp_sysdb);
+
+	/* destroy tree by gc */
+	obj_df_off = umem_ptr2off(umm, obj_df);
+	rc = gc_add_item(cont->vc_pool, coh, GC_OBJ, obj_df_off, root_off);
+
+	return rc;
+}
+
 int
 vof_flat_publish(daos_handle_t ih, unsigned *acts, struct vof_iter_arg *arg)
 {
@@ -673,20 +716,29 @@ vof_flat_publish(daos_handle_t ih, unsigned *acts, struct vof_iter_arg *arg)
 	if (rc)
 		goto out;
 
+	rc = vof_destroy_tree(coh, obj);
+	if (rc) {
+		D_ERROR(DF_UOID" vos obj destroy tree failed: rc = "DF_RC"\n",
+			DP_UOID(oid), DP_RC(rc));
+		goto tx_end;
+	}
+
 	rc = umem_tx_publish(umm, arg->via_rsrvd_act);
 	if (rc) {
 		D_ERROR("tx publish failed "DF_RC"\n", DP_RC(rc));
 		goto tx_end;
 	}
 
-	/* TODO: destroy the obj_df->vo_tree */
-
-	rc = umem_tx_xadd_ptr(umm, &obj_df->vo_tree, sizeof(obj_df->vo_tree),
-			      UMEM_XADD_NO_SNAPSHOT);
+	rc = umem_tx_add_ptr(umm, &obj_df->vo_tree, sizeof(obj_df->vo_tree));
 	if (rc)
 		goto tx_end;
+	rc = umem_tx_add_ptr(umm, &obj_df->vo_sync, sizeof(obj_df->vo_sync));
+	if (rc)
+		goto tx_end;
+
 	bio_addr_set(&obj_df->vo_flat.vo_flat_addr, DAOS_MEDIA_SCM, arg->via_umoff);
 	obj_df->vo_flat.vo_flat_len = arg->via_df_len;
+	vos_obj_set_flat(obj_df);
 
 tx_end:
 	rc = umem_tx_end(umm, rc);
@@ -761,7 +813,9 @@ cont_iter_cb(daos_handle_t ih, vos_iter_entry_t *ent, vos_iter_type_t type,
 		goto out;
 	}
 
-#if 0
+	vof_flat_dump(arg->via_df); //lxz
+
+#if 1
 	rc = vof_flat_publish(ih, acts, arg);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": flat publish "DF_UOID" failed, "DF_RC"\n",

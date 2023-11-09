@@ -1242,6 +1242,11 @@ fetch_value(struct vos_io_context *ioc, daos_iod_t *iod, daos_handle_t toh,
 	if (ioc->ic_read_ts_only || ioc->ic_check_existence)
 		return rc;
 
+	if (vos_obj_flattened(ioc->ic_obj->obj_df)) {
+		D_ERROR("lxz fetch flattened obj "DF_UOID"\n", DP_UOID(ioc->ic_obj->obj_id));
+		return 0;
+	}
+
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
 		rc = akey_fetch_single(toh, epr, &iod->iod_size, ioc);
 		return rc;
@@ -1345,6 +1350,9 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		flags |= SUBTR_EVT;
 	}
 
+	if (vos_obj_flattened(ioc->ic_obj->obj_df))
+		goto fetch_value;
+
 	rc = key_tree_prepare(
 	    ioc->ic_obj, ak_toh, VOS_BTR_AKEY, &iod->iod_name, flags, DAOS_INTENT_DEFAULT, &krec,
 	    (ioc->ic_check_existence || ioc->ic_read_ts_only) ? NULL : &toh, ioc->ic_ts_set);
@@ -1404,10 +1412,13 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	struct vos_object	*obj = ioc->ic_obj;
 	struct vos_krec_df	*krec;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
-	int			 i, rc;
+	int			 i, rc = 0;
 	int                      flags = 0;
 	bool			 has_cond;
 	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
+
+	if (vos_obj_flattened(obj->obj_df))
+		goto fetch_flat;
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
@@ -1468,6 +1479,7 @@ fetch_akey:
 		iod_set_cursor(ioc, 0);
 		rc = fetch_value(ioc, &ioc->ic_iods[0], toh, &ioc->ic_epr, standalone);
 	} else {
+fetch_flat:
 		for (i = 0; i < ioc->ic_iod_nr; i++) {
 			iod_set_cursor(ioc, i);
 			rc = akey_fetch(ioc, toh);
@@ -1780,19 +1792,23 @@ vos_key_mark_agg(struct vos_container *cont, struct vos_krec_df *krec, daos_epoc
 }
 
 int
-vos_mark_agg(struct vos_container *cont, struct btr_root *dkey_root, struct btr_root *obj_root,
-	     daos_epoch_t epoch)
+vos_mark_agg(struct vos_container *cont, struct vos_object *obj, daos_epoch_t epoch)
 {
 	struct umem_instance	*umm;
+	struct btr_root		*dkey_root;
+	struct btr_root		*obj_root;
 	int			 rc;
 
 	if ((cont->vc_pool->vp_feats & VOS_POOL_FEAT_AGG_OPT) == 0)
 		return 0;
 
 	umm = vos_cont2umm(cont);
-	rc = vos_btr_mark_agg(umm, dkey_root, epoch);
-	if (rc == 0)
-		rc = vos_btr_mark_agg(umm, obj_root, epoch);
+	obj_root = &cont->vc_cont_df->cd_obj_root;
+	rc = vos_btr_mark_agg(umm, obj_root, epoch);
+	if (rc == 0 && !vos_obj_flattened(obj->obj_df)) {
+		dkey_root = &obj->obj_df->vo_tree;
+		rc = vos_btr_mark_agg(umm, dkey_root, epoch);
+	}
 
 	return rc;
 }
@@ -1803,8 +1819,7 @@ vos_ioc_mark_agg(struct vos_io_context *ioc)
 	if (!ioc->ic_agg_needed)
 		return 0;
 
-	return vos_mark_agg(ioc->ic_cont, &ioc->ic_obj->obj_df->vo_tree,
-			    &ioc->ic_cont->vc_cont_df->cd_obj_root, ioc->ic_epr.epr_hi);
+	return vos_mark_agg(ioc->ic_cont, ioc->ic_obj, ioc->ic_epr.epr_hi);
 }
 
 static int

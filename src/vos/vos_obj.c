@@ -537,8 +537,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			}
 
 			if (rc == 0)
-				rc = vos_mark_agg(cont, &obj->obj_df->vo_tree,
-						  &cont->vc_cont_df->cd_obj_root, epoch);
+				rc = vos_mark_agg(cont, obj, epoch);
 
 			vos_obj_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
 					obj, rc != 0);

@@ -1653,15 +1653,13 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 /** Mark that the object and container need aggregation.
  *
  * \param[in] cont	VOS container
- * \param[in] dkey_root	Root of dkey tree (marked for object)
- * \param[in] obj_root	Root of object tree (marked for container)
+ * \param[in] obj	VOS object
  * \param[in] epoch	Epoch of aggregatable update
  *
  * \return 0 on success, error otherwise
  */
 int
-vos_mark_agg(struct vos_container *cont, struct btr_root *dkey_root, struct btr_root *obj_root,
-	     daos_epoch_t epoch);
+vos_mark_agg(struct vos_container *cont, struct vos_object *obj, daos_epoch_t epoch);
 
 /** Mark that the key needs aggregation.
  *

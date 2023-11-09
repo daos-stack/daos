@@ -143,4 +143,16 @@ struct vos_obj_flat {
 	uint16_t			 vof_nr;
 };
 
+static inline bool
+vos_obj_flattened(struct vos_obj_df *obj_df)
+{
+	return obj_df->vo_sync == DAOS_EPOCH_MAX;
+}
+
+static inline void
+vos_obj_set_flat(struct vos_obj_df *obj_df)
+{
+	obj_df->vo_sync = DAOS_EPOCH_MAX;
+}
+
 #endif

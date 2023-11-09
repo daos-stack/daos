@@ -414,7 +414,8 @@ check_object:
 		goto failed_2;
 	}
 
-	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
+	if ((flags & VOS_OBJ_DISCARD) || intent == DAOS_INTENT_KILL ||
+	    intent == DAOS_INTENT_PUNCH || vos_obj_flattened(obj->obj_df))
 		goto out;
 
 	if (!create) {

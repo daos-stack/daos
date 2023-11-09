@@ -238,13 +238,12 @@ vos_obj_discard_release(struct daos_lru_cache *occ, struct vos_object *obj);
 static inline bool
 vos_obj_is_empty(struct vos_object *obj)
 {
-	return !obj->obj_df || obj->obj_df->vo_tree.tr_class == 0;
-}
-
-static inline bool
-vos_obj_flattened(struct vos_object *obj)
-{
-	return obj->obj_df && obj->obj_df->vo_sync == DAOS_EPOCH_MAX;
+	if (!obj->obj_df)
+		return true;
+	/* empty object won't be flattened */
+	if (vos_obj_flattened(obj->obj_df))
+		return false;
+	return obj->obj_df->vo_tree.tr_class == 0;
 }
 
 #endif

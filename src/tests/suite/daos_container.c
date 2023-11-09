@@ -4044,17 +4044,26 @@ cont_flatten(void **state)
 		}
 	}
 
-	/** close object */
-	rc = daos_obj_close(oh, NULL);
-	assert_rc_equal(rc, 0);
+	//rc = daos_obj_close(oh, NULL);
+	//assert_rc_equal(rc, 0);
 
 	print_message("flatten the container\n");
 	rc = daos_cont_set_ro(arg->coh, NULL);
 	assert_rc_equal(rc, 0);
 
-	print_message("sleep 30 S ...\n");
-	sleep(30);
-	print_message("sleep 30 S done\n");
+	print_message("sleep 40 S ...\n");
+	sleep(40);
+	print_message("sleep 40 S done\n");
+
+	/* read from flattened object */
+	print_message("read from flattened object "DF_OID" ...\n", DP_OID(oid));
+	//rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	//assert_rc_equal(rc, 0);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	print_message("read from flattened object "DF_OID" done, rc %d\n", DP_OID(oid), rc);
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
 	test_teardown((void **)&arg);
 }
 

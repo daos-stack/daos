@@ -57,7 +57,10 @@ struct vos_gc_bag_df {
 	struct vos_gc_item {
 		/* address of the item to be freed */
 		umem_off_t		it_addr;
-		/** Reserved, argument for GC_VEA/BIO (e.g. size of extent) */
+		/**
+		 * Reserved, argument for GC_VEA/BIO (e.g. size of extent), or object b-tree root
+		 * node's pointer for GC_OBJ (see vos_obj_destroy_tree).
+		 */
 		uint64_t		it_args;
 	}			bag_items[0];
 };
