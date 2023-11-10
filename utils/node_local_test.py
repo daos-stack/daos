@@ -10,29 +10,31 @@ the client with fault injection of D_ALLOC() usage.
 
 # pylint: disable=too-many-lines
 
-import os
-from os.path import join
-import sys
-import time
-import uuid
-import json
-import copy
-import signal
-import pprint
-import stat
-import errno
 import argparse
-import threading
+import copy
+import errno
 import functools
-import traceback
-import subprocess  # nosec
-import tempfile
+import json
+import os
 import pickle  # nosec
+import pprint
+import random
 import re
 import shutil
-import xattr
+import signal
+import stat
+import subprocess  # nosec
+import sys
+import tempfile
+import threading
+import time
+import traceback
+import uuid
+from os.path import join
+
 import junit_xml
 import tabulate
+import xattr
 import yaml
 
 
@@ -686,7 +688,7 @@ class DaosServer():
 
             with open(join(self._io_server_dir.name, 'daos_engine'), 'w') as fd:
                 fd.write('#!/bin/sh\n')
-                fd.write(f"export PATH={join(self.conf['PREFIX'],'bin')}:$PATH\n")
+                fd.write(f"export PATH={join(self.conf['PREFIX'], 'bin')}:$PATH\n")
                 fd.write(f'exec valgrind {" ".join(valgrind_args)} daos_engine "$@"\n')
 
             os.chmod(join(self._io_server_dir.name, 'daos_engine'),
@@ -1439,6 +1441,8 @@ class DFuse():
             return fatal_errors
 
         print('Stopping fuse')
+
+        self.run_query()
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
@@ -1519,6 +1523,13 @@ class DFuse():
 
         assert ret.returncode == 0, ret
         return ret
+
+    def run_query(self, use_json=False, quiet=False):
+        """Run filesystem query"""
+        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dir],
+                          use_json=use_json, log_check=quiet, valgrind=quiet)
+        print(rc)
+        return rc
 
     def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None):
         """Query and verify the dfuse statistics.
@@ -2145,6 +2156,69 @@ class PosixTests():
         print(data)
         assert data == 'test'
 
+    def test_pre_read(self):
+        """Test the pre-read code.
+
+        Test reading a file which is previously unknown to fuse with caching on.  This should go
+        into the pre_read code and load the file contents automatically after the open call.
+        """
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse.start(v_hint='pre_read_0')
+
+        with open(join(dfuse.dir, 'file0'), 'w') as fd:
+            fd.write('test')
+
+        with open(join(dfuse.dir, 'file1'), 'w') as fd:
+            fd.write('test')
+
+        with open(join(dfuse.dir, 'file2'), 'w') as fd:
+            fd.write('testing')
+
+        raw_data0 = ''.join(random.choices(['d', 'a', 'o', 's'], k=1024 * 1024))  # nosec
+        with open(join(dfuse.dir, 'file3'), 'w') as fd:
+            fd.write(raw_data0)
+
+        raw_data1 = ''.join(random.choices(['d', 'a', 'o', 's'], k=(1024 * 1024) - 1))  # nosec
+        with open(join(dfuse.dir, 'file4'), 'w') as fd:
+            fd.write(raw_data1)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        dfuse = DFuse(self.server, self.conf, caching=True, container=self.container)
+        dfuse.start(v_hint='pre_read_1')
+
+        with open(join(dfuse.dir, 'file0'), 'r') as fd:
+            data0 = fd.read()
+
+        with open(join(dfuse.dir, 'file1'), 'r') as fd:
+            data1 = fd.read(16)
+
+        with open(join(dfuse.dir, 'file2'), 'r') as fd:
+            data2 = fd.read(2)
+
+        with open(join(dfuse.dir, 'file3'), 'r') as fd:
+            data3 = fd.read()
+
+        with open(join(dfuse.dir, 'file4'), 'r') as fd:
+            data4 = fd.read()
+            data5 = fd.read()
+
+        # This should not use the pre-read feature, to be validated via the logs.
+        with open(join(dfuse.dir, 'file4'), 'r') as fd:
+            data6 = fd.read()
+
+        if dfuse.stop():
+            self.fatal_errors = True
+        print(data0)
+        assert data0 == 'test'
+        assert data1 == 'test'
+        assert data2 == 'te'
+        assert raw_data0 == data3
+        assert raw_data1 == data4
+        assert len(data5) == 0
+        assert raw_data1 == data6
+
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
         dfuse0 = DFuse(self.server,
@@ -2732,11 +2806,9 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
-        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dfuse.dir])
-        print(rc)
+        rc = self.dfuse.run_query()
         assert rc.returncode == 0
-        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dfuse.dir], use_json=True)
-        print(rc)
+        rc = self.dfuse.run_query(use_json=True)
         assert rc.returncode == 0
 
     @needs_dfuse
@@ -4004,6 +4076,9 @@ class PosixTests():
         with open(file1, 'w') as fd:
             fd.write('Hello World!')
 
+        # hexdump to check file
+        self.server.run_daos_client_cmd_pil4dfs(['hexdump', file1])
+
         # Copy a file.
         file2 = join(path, 'file2')
         self.server.run_daos_client_cmd_pil4dfs(['cp', file1, file2])
@@ -4045,6 +4120,10 @@ class PosixTests():
         file5 = join(path, 'newfile')
         self.server.run_daos_client_cmd_pil4dfs(['dd', 'if=/dev/zero', f'of={file5}', 'bs=1',
                                                 'count=1'])
+        # cp "/usr/bin/mkdir" to DFS and call "/usr/bin/file" to analyze the binary file file6
+        file6 = join(path, 'elffile')
+        self.server.run_daos_client_cmd_pil4dfs(['cp', '/usr/bin/mkdir', file6])
+        self.server.run_daos_client_cmd_pil4dfs(['file', file6])
 
 
 class NltStdoutWrapper():

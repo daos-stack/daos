@@ -74,6 +74,7 @@ extern "C" {
 
 void d_srand(long int);
 long int d_rand(void);
+long int d_randn(long int n);
 
 /* Instruct the compiler these are allocation functions that return a pointer, and if possible
  * which function needs to be used to free them.
@@ -499,12 +500,48 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 	sgl->sg_nr = 0;
 }
 
+static inline size_t  __attribute__((nonnull))
+d_sgl_buf_size(d_sg_list_t *sgl)
+{
+	size_t	size = 0;
+	int	i;
+
+	if (sgl->sg_iovs == NULL)
+		return 0;
+
+	for (i = 0, size = 0; i < sgl->sg_nr; i++)
+		size += sgl->sg_iovs[i].iov_buf_len;
+
+	return size;
+}
+
+static inline void
+d_sgl_buf_copy(d_sg_list_t *dst_sgl, d_sg_list_t *src_sgl)
+{
+	int i;
+
+	D_ASSERT(dst_sgl->sg_nr >= src_sgl->sg_nr);
+	for (i = 0; i < src_sgl->sg_nr; i++) {
+		D_ASSERT(dst_sgl->sg_iovs[i].iov_buf_len >=
+			 src_sgl->sg_iovs[i].iov_buf_len);
+
+		memcpy(dst_sgl->sg_iovs[i].iov_buf, src_sgl->sg_iovs[i].iov_buf,
+		       src_sgl->sg_iovs[i].iov_buf_len);
+		dst_sgl->sg_iovs[i].iov_len = src_sgl->sg_iovs[i].iov_len;
+		dst_sgl->sg_iovs[i].iov_buf_len = src_sgl->sg_iovs[i].iov_buf_len;
+	}
+}
+
 void d_getenv_bool(const char *env, bool *bool_val);
 void d_getenv_char(const char *env, char *char_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
 int d_getenv_uint64_t(const char *env, uint64_t *val);
 int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
 void d_free_string(struct d_string_buffer_t *buf);
+
+typedef void (*d_alloc_track_cb_t)(void *arg, size_t size);
+
+void d_set_alloc_track_cb(d_alloc_track_cb_t alloc_cb, d_alloc_track_cb_t free_cb, void *arg);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
@@ -949,6 +986,19 @@ struct d_vec_pointers {
 int d_vec_pointers_init(struct d_vec_pointers *pointers, uint32_t cap);
 void d_vec_pointers_fini(struct d_vec_pointers *pointers);
 int d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer);
+
+/** Change the default setting for if a signal handler should be installed in crt_init()
+ *
+ * This is controlled by DAOS_SIGNAL_REGISTER however calling this function changes the default
+ * value if the env is not set.  Daos supplied binaries should call this function, libraries should
+ * not.
+ */
+void
+d_signal_stack_enable(bool enabled);
+
+/** Register the signal handlers, if configured */
+void
+d_signal_register();
 
 #if defined(__cplusplus)
 }

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -537,8 +537,10 @@ out:
 	/* Ensure credential memory is wiped clean */
 	explicit_bzero(pci->pci_cred.iov_buf, pci->pci_cred.iov_buf_len);
 	daos_iov_free(&pci->pci_cred);
-	if (put_pool)
+	if (put_pool) {
 		dc_pool_put(pool);
+		dc_task_set_priv(task, NULL);
+	}
 	return rc;
 }
 
@@ -720,6 +722,7 @@ dc_pool_connect(tse_task_t *task)
 
 out_pool:
 	dc_pool_put(pool);
+	dc_task_set_priv(task, NULL);
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
@@ -1212,6 +1215,7 @@ out:
 		rsvc_client_fini(&state->client);
 		dc_mgmt_sys_detach(state->sys);
 		D_FREE(state);
+		dc_task_set_priv(task, NULL);
 	}
 	return rc;
 }
@@ -1312,6 +1316,7 @@ out_group:
 	dc_mgmt_sys_detach(state->sys);
 out_state:
 	D_FREE(state);
+	dc_task_set_priv(task, NULL);
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
@@ -3206,9 +3211,9 @@ int dc_pool_get_redunc(daos_handle_t poh)
 /**
  * Get pool_target by dc pool and target index.
  *
- * \param pool [IN]	dc pool
- * \param tgt_idx [IN]	target index.
- * \param tgt [OUT]	pool target pointer.
+ * \param[in]  pool	dc pool
+ * \param[in]  tgt_idx	target index.
+ * \param[out] tgt	pool target pointer.
  *
  * \return		0 if get the pool_target.
  * \return		errno if it does not get the pool_target.

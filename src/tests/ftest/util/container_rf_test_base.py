@@ -5,9 +5,9 @@
 """
 import re
 
-from rebuild_test_base import RebuildTestBase
-from general_utils import DaosTestError
 from daos_utils import DaosCommand
+from general_utils import DaosTestError
+from rebuild_test_base import RebuildTestBase
 
 
 class ContRedundancyFactor(RebuildTestBase):
@@ -132,7 +132,7 @@ class ContRedundancyFactor(RebuildTestBase):
                 self.inputs.rank.value[0], self.inputs.object_class.value)
         else:
             try:
-                self.container.write_objects_wo_failon(
+                self.container.write_objects(
                     self.inputs.rank.value[0], self.inputs.object_class.value)
                 self.fail("#Container redundancy factor with an invalid "
                           "object_class traffic passed, expecting Fail")

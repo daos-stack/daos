@@ -3498,6 +3498,14 @@ lookup_rel_path_loop:
 				D_ERROR("daos_array_open() Failed (%d)\n", rc);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 			}
+			if (flags & O_TRUNC) {
+				rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, 0, NULL);
+				if (rc) {
+					DL_ERROR(rc, "Failed to truncate file");
+					daos_array_close(obj->oh, NULL);
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
+				}
+			}
 
 			if (stbuf) {
 				daos_size_t size;
@@ -3661,6 +3669,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 {
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
+	if (flags & O_APPEND)
+		return ENOTSUP;
 	if (_obj == NULL)
 		return EINVAL;
 	if (path == NULL || strnlen(path, DFS_MAX_PATH) > DFS_MAX_PATH - 1)
@@ -3880,6 +3890,8 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		parent = &dfs->root;
 	else if (!S_ISDIR(parent->mode))
 		return ENOTDIR;
+	if (flags & O_APPEND)
+		return ENOTSUP;
 
 	rc = check_name(name, &len);
 	if (rc)
@@ -3923,6 +3935,14 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() Failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
+		}
+		if (flags & O_TRUNC) {
+			rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, 0, NULL);
+			if (rc) {
+				DL_ERROR(rc, "Failed to truncate file");
+				daos_array_close(obj->oh, NULL);
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			}
 		}
 
 		/** we need the file size if stat struct is needed */
@@ -4084,6 +4104,8 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
+	if (flags & O_APPEND)
+		return ENOTSUP;
 	if ((dfs->amode != O_RDWR) && (flags & O_CREAT))
 		return EPERM;
 	if (_obj == NULL)
@@ -4190,6 +4212,8 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		return EINVAL;
 	if (obj == NULL || _new_obj == NULL)
 		return EINVAL;
+	if (flags & O_APPEND)
+		return ENOTSUP;
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
@@ -4489,7 +4513,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 
 	D_ALLOC_PTR(params);
 	if (params == NULL)
-		D_GOTO(err_task, rc = ENOMEM);
+		D_GOTO(err_task, rc = -DER_NOMEM);
 
 	params->read_size = read_size;
 
@@ -4513,10 +4537,12 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	daos_task_set_priv(task, params);
 	rc = tse_task_register_cbs(task, NULL, NULL, 0, read_cb, NULL, 0);
 	if (rc)
-		D_GOTO(err_params, rc = daos_der2errno(rc));
+		D_GOTO(err_params, rc);
 
 	rc = dc_task_schedule(task, true);
-	return daos_der2errno(rc);
+	if (rc)
+		D_GOTO(err_task, rc);
+	return 0;
 
 err_params:
 	D_FREE(params);

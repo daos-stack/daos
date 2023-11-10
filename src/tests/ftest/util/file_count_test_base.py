@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from avocado.core.exceptions import TestFail
-
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from oclass_utils import extract_redundancy_factor

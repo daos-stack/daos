@@ -118,7 +118,7 @@ dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
  *
  * @param sgl		Scatter gather list to initialize
  * @param count		Number of IO Vectors that will be created in the SGL
- * @param repeat	Number of tiems to repeat the string
+ * @param repeat	Number of times to repeat the string
  * @param d		First string that will be used
  * @param ...		Rest of strings, up to count
  */
@@ -343,13 +343,11 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
 /**
  * Get NVMe Device health stats.
  *
- * \param dmg_config_file
- *		[IN]	DMG config file
- * \param host	[IN]	Get device-health from the given host.
- * \param uuid	[IN]	UUID of the device.
- * \param stats	[IN/OUT]
- *			[in] Health stats for which to get counter value.
- *			[out] Stats counter value.
+ * \param[in] dmg_config_file	DMG config file
+ * \param[in] host		Get device-health from the given host.
+ * \param[in] uuid		UUID of the device.
+ * \param[in,out] stats		[in] Health stats for which to get counter value.
+ *				[out] Stats counter value.
  */
 int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 				    char *stats, const uuid_t uuid);

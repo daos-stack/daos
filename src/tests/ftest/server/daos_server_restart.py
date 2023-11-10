@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado import fail_on
 from apricot import TestWithServers
+from avocado import fail_on
 from exception_utils import CommandFailure
 from server_utils import ServerFailed
 
