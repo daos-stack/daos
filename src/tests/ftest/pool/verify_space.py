@@ -7,7 +7,6 @@ import os
 import re
 
 from apricot import TestWithServers
-
 from exception_utils import CommandFailure
 from general_utils import human_to_bytes
 from ior_utils import run_ior
