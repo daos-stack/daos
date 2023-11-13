@@ -124,13 +124,13 @@ class NvmeEnospace(ServerFillUp, TestWithTelemetry):
                 "\t- Total used space:          %.2f%%",
                 pool_usage[idx])
             self.log.debug(
-                "\t- Average device free space: %s",
+                "\t- Average target free space: %s",
                 get_display_size(pool_space.ps_free_mean[idx]))
             self.log.debug(
-                "\t- Minimal device free space: %s",
+                "\t- Minimal target free space: %s",
                 get_display_size(pool_space.ps_free_min[idx]))
             self.log.debug(
-                "\t- Maximal device free space: %s",
+                "\t- Maximal target free space: %s",
                 get_display_size(pool_space.ps_free_max[idx]))
 
         for metric in pool_space_metrics.values():
