@@ -365,7 +365,7 @@ failed to initialize daos: Miscellaneous error (-1025)
 
 # Work around to check for daos_agent certification and start daos_agent
 	#check for /etc/daos/certs/daosCA.crt, agent.crt and agent.key
-	$ sudo systemctl enable daos_agent.service
+	$ sudo systemctl stop daos_agent.service
 	$ sudo systemctl start daos_agent.service
 	$ sudo systemctl status daos_agent.service
 ```
