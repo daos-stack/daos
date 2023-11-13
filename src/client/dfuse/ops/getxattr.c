@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,8 +8,6 @@
 #include "dfuse.h"
 
 #include "daos_uns.h"
-
-#define SECURITY_CAP "security.capability"
 
 static int
 _dfuse_attr_create(char *type, uuid_t pool, uuid_t cont, char **_value, daos_size_t *_out_size)
@@ -59,10 +57,6 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode, const char *n
 
 			goto reply;
 		}
-	}
-
-	if (strncmp(name, SECURITY_CAP, sizeof(SECURITY_CAP)) == 0) {
-		D_GOTO(free, rc = ENODATA);
 	}
 
 	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, NULL, &out_size);
