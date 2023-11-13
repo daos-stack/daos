@@ -76,18 +76,17 @@
 /* Create a fake st_ino in stat for a path */
 #define FAKE_ST_INO(path)   (d_hash_string_u32(path, strnlen(path, DFS_MAX_PATH)))
 
-#define MAX_EQ 64
+#define MAX_EQ              64
 
 /* In case of fork(), only the parent process could destroy daos env. */
-static pid_t                  init_pid;
 static bool                   context_reset;
 static __thread daos_handle_t td_eqh;
 
-static daos_handle_t    main_eqh;
-static daos_handle_t    eq_list[MAX_EQ];
-static uint16_t         eq_count_max;
-static uint16_t         eq_count;
-static uint16_t         eq_idx;
+static daos_handle_t          main_eqh;
+static daos_handle_t          eq_list[MAX_EQ];
+static uint16_t               eq_count_max;
+static uint16_t               eq_count;
+static uint16_t               eq_idx;
 
 /* structure allocated for dfs container */
 struct dfs_mt {
@@ -501,7 +500,7 @@ static void * (*next_mmap)(void *addr, size_t length, int prot, int flags, int f
 static int (*next_munmap)(void *addr, size_t length);
 
 static void (*next_exit)(int rc);
-static void (*next__exit)(int rc) __attribute__ ((__noreturn__));
+static void (*next__exit)(int rc) __attribute__((__noreturn__));
 
 /* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
 /* static org_dup3 real_dup3=NULL; */
@@ -906,7 +905,7 @@ child_hdlr(void)
 	daos_eq_lib_reset_after_fork();
 	daos_dti_reset();
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
-	rc = daos_eq_create(&td_eqh);
+	rc     = daos_eq_create(&td_eqh);
 	if (rc)
 		DL_WARN(rc, "daos_eq_create() failed");
 	else
@@ -1019,7 +1018,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 				if (rc)
 					DL_WARN(rc, "daos_eq_create() failed");
 				main_eqh = td_eqh;
-				rc = pthread_atfork(NULL, NULL, &child_hdlr);
+				rc       = pthread_atfork(NULL, NULL, &child_hdlr);
 				D_ASSERT(rc == 0);
 			}
 
@@ -2043,12 +2042,12 @@ new_close_nocancel(int fd)
 static ssize_t
 pread_over_dfs(int fd, void *buf, size_t size, off_t offset)
 {
-	int             rc, rc2;
-	d_iov_t         iov;
-	d_sg_list_t     sgl;
-	daos_size_t     bytes_read;
-	daos_event_t	ev;
-	daos_handle_t	eqh;
+	int           rc, rc2;
+	d_iov_t       iov;
+	d_sg_list_t   sgl;
+	daos_size_t   bytes_read;
+	daos_event_t  ev;
+	daos_handle_t eqh;
 
 	atomic_fetch_add_relaxed(&num_read, 1);
 	sgl.sg_nr     = 1;
@@ -2058,7 +2057,7 @@ pread_over_dfs(int fd, void *buf, size_t size, off_t offset)
 
 	rc = get_eqh(&eqh);
 	if (rc == 0) {
-		bool	flag = false;
+		bool flag = false;
 
 		rc = daos_event_init(&ev, eqh, NULL);
 		if (rc) {
@@ -2192,11 +2191,11 @@ __read_chk(int fd, void *buf, size_t size, size_t buflen)
 static ssize_t
 pwrite_over_dfs(int fd, const void *buf, size_t size, off_t offset)
 {
-	int		rc, rc2;
-	d_iov_t		iov;
-	d_sg_list_t	sgl;
-	daos_event_t	ev;
-	daos_handle_t	eqh;
+	int           rc, rc2;
+	d_iov_t       iov;
+	d_sg_list_t   sgl;
+	daos_event_t  ev;
+	daos_handle_t eqh;
 
 	atomic_fetch_add_relaxed(&num_write, 1);
 	sgl.sg_nr     = 1;
@@ -2206,7 +2205,7 @@ pwrite_over_dfs(int fd, const void *buf, size_t size, off_t offset)
 
 	rc = get_eqh(&eqh);
 	if (rc == 0) {
-		bool	flag = false;
+		bool flag = false;
 
 		rc = daos_event_init(&ev, eqh, NULL);
 		if (rc) {
@@ -2234,8 +2233,7 @@ pwrite_over_dfs(int fd, const void *buf, size_t size, off_t offset)
 		if (rc2)
 			DL_ERROR(rc2, "daos_event_fini() failed");
 	} else {
-		rc = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl, offset,
-				NULL);
+		rc = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl, offset, NULL);
 	}
 
 	if (rc)
@@ -5500,12 +5498,11 @@ register_handler(int sig, struct sigaction *old_handler)
 static __attribute__((constructor)) void
 init_myhook(void)
 {
-	mode_t      umask_old;
-	char       *env_log;
-	int         rc;
-	uint64_t    eq_count_loc = 0;
+	mode_t   umask_old;
+	char    *env_log;
+	int      rc;
+	uint64_t eq_count_loc = 0;
 
-	init_pid = getpid();
 	umask_old = umask(0);
 	umask(umask_old);
 	mode_not_umask = ~umask_old;
@@ -5559,7 +5556,7 @@ init_myhook(void)
 	rc = d_getenv_uint64_t("D_IL_MAX_EQ", &eq_count_loc);
 	if (rc != -DER_NONEXIST) {
 		if (eq_count_loc > MAX_EQ) {
-			D_WARN("Max EQ count (%"PRIu64") should not exceed: %d", eq_count_loc,
+			D_WARN("Max EQ count (%" PRIu64 ") should not exceed: %d", eq_count_loc,
 			       MAX_EQ);
 			eq_count_loc = MAX_EQ;
 		}
@@ -5883,7 +5880,7 @@ get_eqh(daos_handle_t *eqh)
 	rc = pthread_mutex_lock(&lock_eqh);
 	/** create a new EQ if the EQ pool is not full; otherwise round robin EQ use from pool */
 	if (eq_count >= eq_count_max) {
-		td_eqh = eq_list[eq_idx ++];
+		td_eqh = eq_list[eq_idx++];
 		if (eq_idx == eq_count_max)
 			eq_idx = 0;
 	} else {
@@ -5893,7 +5890,7 @@ get_eqh(daos_handle_t *eqh)
 			return -1;
 		}
 		eq_list[eq_count] = td_eqh;
-		eq_count ++;
+		eq_count++;
 	}
 	pthread_mutex_unlock(&lock_eqh);
 	*eqh = td_eqh;

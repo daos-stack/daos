@@ -110,7 +110,7 @@ crt:
 int
 daos_eq_lib_reset_after_fork(void)
 {
-	eq_ref = 0;
+	eq_ref            = 0;
 	ev_thpriv_is_init = false;
 	return daos_eq_lib_init();
 }
