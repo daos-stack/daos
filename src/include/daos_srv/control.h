@@ -24,6 +24,8 @@
 extern const char *
 dpdk_cli_override_opts;
 
+#define NVME_PCI_DEV_TYPE_VMD	"vmd"
+
 /** Device state flags */
 #define NVME_DEV_FL_PLUGGED	(1 << 0)	/* Device is present in slot */
 #define NVME_DEV_FL_INUSE	(1 << 1)	/* Used by DAOS (present in SMD) */
@@ -123,17 +125,15 @@ struct nvme_stats {
 	uint64_t    host_bytes_written; /* Host bytes written, 1count=32MiB) */
 };
 
-#define NVME_DETAIL_BUFLEN 1024
-
 /**
  * NVMe controller details.
  */
 struct ctrlr_t {
-	char               model[NVME_DETAIL_BUFLEN];
-	char               serial[NVME_DETAIL_BUFLEN];
-	char               pci_addr[NVME_DETAIL_BUFLEN];
-	char               fw_rev[NVME_DETAIL_BUFLEN];
-	char               pci_type[NVME_DETAIL_BUFLEN];
+	char              *model;
+	char              *serial;
+	char              *pci_addr;
+	char              *fw_rev;
+	char              *pci_type;
 	int                socket_id;
 	struct ns_t       *nss;
 	struct nvme_stats *stats;

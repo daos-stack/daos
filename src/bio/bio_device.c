@@ -9,6 +9,7 @@
 #include <spdk/thread.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
+#include <daos_srv/control.h>
 #include <spdk/string.h>
 #include <spdk/likely.h>
 #include <spdk/nvme.h>
@@ -459,31 +460,31 @@ out:
 	return rc;
 }
 
+static char *json_prefix = NULL;
+
 static int
 json_write_cb(void *cb_ctx, const void *data, size_t size)
 {
-	struct bio_dev_info	*b_info = cb_ctx;
-	char			*prefix = "traddr\": \"";
-	char			*traddr, *end;
+	char *tmp, *end, **buf_ptr = cb_ctx;
 
-	D_ASSERT(b_info != NULL);
-	/* traddr is already generated */
-	if (b_info->bdi_traddr != NULL)
+	D_ASSERT(json_prefix != NULL);
+	D_ASSERT(buf_ptr != NULL);
+	D_ASSERT(*buf_ptr == NULL);
+
+	if (size <= strlen(json_prefix))
 		return 0;
 
-	if (size <= strlen(prefix))
-		return 0;
+	tmp = strstr(data, json_prefix);
+	if (tmp) {
 
-	traddr = strstr(data, prefix);
-	if (traddr) {
-		traddr += strlen(prefix);
-		end = strchr(traddr, '"');
+		tmp += strlen(json_prefix);
+		end = strchr(tmp, '"');
 		if (end == NULL)
 			return 0;
 
-		D_STRNDUP(b_info->bdi_traddr, traddr, end - traddr);
-		if (b_info->bdi_traddr == NULL) {
-			D_ERROR("Failed to alloc traddr %s\n", traddr);
+		D_STRNDUP(*buf_ptr, tmp, end - tmp);
+		if (*buf_ptr == NULL) {
+			D_ERROR("Failed to alloc string %s\n", tmp);
 			return -DER_NOMEM;
 		}
 	}
@@ -491,11 +492,50 @@ json_write_cb(void *cb_ctx, const void *data, size_t size)
 	return 0;
 }
 
+static int
+find_in_bdev_json(struct spdk_bdev *bdev, char **buf_ptr, char *prefix)
+{
+	struct spdk_json_write_ctx	*json;
+	int				 rc;
+
+	D_ASSERT(buf_ptr != NULL);
+	D_ASSERT(*buf_ptr == NULL);
+
+	json_prefix = prefix;
+
+	json = spdk_json_write_begin(json_write_cb, buf_ptr, SPDK_JSON_WRITE_FLAG_FORMATTED);
+	if (json == NULL) {
+		D_ERROR("Failed to alloc SPDK json context\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = spdk_bdev_dump_info_json(bdev, json);
+	if (rc != 0) {
+		D_ERROR("Failed to dump config from SPDK bdev (%s)\n", spdk_strerror(-rc));
+		D_GOTO(out, rc = daos_errno2der(-rc));
+	}
+
+	rc = spdk_json_write_end(json);
+	if (rc != 0) {
+		D_ERROR("Failed to write JSON (%s)\n", spdk_strerror(-rc));
+		D_GOTO(out, rc = daos_errno2der(-rc));
+	}
+
+	if ((*buf_ptr) == NULL) {
+		D_ERROR("No value could be read from JSON for key %s\n", prefix);
+		rc = -DER_INVAL;
+	}
+
+out:
+	json_prefix = NULL;
+	return rc;
+}
+
+
 int
 fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 {
 	struct spdk_bdev		*bdev;
-	struct spdk_json_write_ctx	*json;
 	int				 rc;
 
 	D_ASSERT(dev_name != NULL);
@@ -511,27 +551,18 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
 		return 0;
 
-	json = spdk_json_write_begin(json_write_cb, b_info,
-				     SPDK_JSON_WRITE_FLAG_FORMATTED);
-	if (json == NULL) {
-		D_ERROR("Failed to alloc SPDK json context\n");
-		return -DER_NOMEM;
-	}
-
-	rc = spdk_bdev_dump_info_json(bdev, json);
+	rc = find_in_bdev_json(bdev, &b_info->bdi_traddr, "traddr\": \"");
 	if (rc != 0) {
-		D_ERROR("Failed to dump config from SPDK bdev (%s)\n", spdk_strerror(-rc));
-		rc = daos_errno2der(-rc);
-	}
-
-	spdk_json_write_end(json);
-
-	if (!rc && b_info->bdi_traddr == NULL) {
 		D_ERROR("Failed to get traddr for %s\n", dev_name);
-		rc = -DER_INVAL;
+		return rc;
 	}
+	if (b_info->bdi_traddr == NULL) {
+		D_ERROR("Nil value returned for traddr on %s\n", dev_name);
+		return -DER_INVAL;
+	}
+	D_DEBUG(DB_MGMT, "fetched '%s' value from bdev json\n", b_info->bdi_traddr);
 
-	return rc;
+	return 0;
 }
 
 static struct bio_dev_info *
@@ -590,61 +621,122 @@ find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
 }
 
 static int
-alloc_ctrlr_info(struct bio_dev_info *info)
+alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 {
-	struct spdk_nvme_transport_id      trid;
-	struct spdk_nvme_ctrlr_opts        copts;
-	struct spdk_nvme_ctrlr            *r_ctrlr;
-	struct ctrlr_t                    *w_ctrlr;
-	const struct spdk_nvme_ctrlr_data *cdata;
-	struct spdk_pci_device            *pci_device;
-	const char                        *device_type;
+	struct spdk_bdev *bdev;
+	struct ctrlr_t *w_ctrlr;
+	int rc;
 
-	trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
-	snprintf(trid.traddr, sizeof(trid.traddr), "%s", info->bdi_traddr);
-	spdk_nvme_ctrlr_get_default_ctrlr_opts(&copts, sizeof(copts));
+	D_ASSERT(b_info != NULL);
+	D_ASSERT(b_info->bdi_ctrlr == NULL);
 
-	r_ctrlr = spdk_nvme_connect(&trid, &copts, sizeof(copts));
-	if (r_ctrlr == NULL) {
-		D_ERROR("spdk_nvme_connect returned nil\n");
-		return -DER_INVAL;
+	if (dev_name == NULL) {
+		D_DEBUG(DB_MGMT, "missing bdev device name, skipping ctrlr info fetch\n") ;
+		return 0;
 	}
 
-	D_DEBUG(DB_MGMT, "fetching %s controller details\n", info->bdi_traddr);
+	bdev = spdk_bdev_get_by_name(dev_name);
+	if (bdev == NULL) {
+		D_ERROR("Failed to get SPDK bdev for %s\n", dev_name);
+		return -DER_NONEXIST;
+	}
 
-	D_ALLOC_PTR(info->bdi_ctrlr);
-	if (info->bdi_ctrlr == NULL)
+	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
+		return 0;
+
+	//	vendor_id
+
+	D_ALLOC_PTR(b_info->bdi_ctrlr);
+	if (b_info->bdi_ctrlr == NULL)
 		return -DER_NOMEM;
-	w_ctrlr = info->bdi_ctrlr;
+	w_ctrlr = b_info->bdi_ctrlr;
 
-	cdata = spdk_nvme_ctrlr_get_data(r_ctrlr);
-	if (cdata == NULL) {
-		D_ERROR("spdk_nvme_ctrlr_get_data returned nil\n");
+	rc = find_in_bdev_json(bdev, &w_ctrlr->model, "model_number\": \"");
+	if (rc != 0) {
+		D_ERROR("Failed to get model_number for %s\n", dev_name);
+		return rc;
+	}
+	if (w_ctrlr->model == NULL) {
+		D_ERROR("Nil value returned for model_number on %s\n", dev_name);
 		return -DER_INVAL;
 	}
-	if (copy_ascii(w_ctrlr->model, sizeof(w_ctrlr->model), cdata->mn, sizeof(cdata->mn)) != 0)
-		return -DER_INVAL;
-	if (copy_ascii(w_ctrlr->serial, sizeof(w_ctrlr->serial), cdata->sn, sizeof(cdata->sn)) != 0)
-		return -DER_INVAL;
-	if (copy_ascii(w_ctrlr->fw_rev, sizeof(w_ctrlr->fw_rev), cdata->fr, sizeof(cdata->fr)) != 0)
-		return -DER_INVAL;
+	D_DEBUG(DB_MGMT, "fetched %s value from bdev json\n", w_ctrlr->model);
 
-	pci_device = spdk_nvme_ctrlr_get_pci_device(r_ctrlr);
-	if (pci_device == NULL) {
-		D_ERROR("spdk_nvme_ctrlr_get_pci_device returned nil\n");
+	rc = find_in_bdev_json(bdev, &w_ctrlr->serial, "serial_number\": \"");
+	if (rc != 0) {
+		D_ERROR("Failed to get serial_number for %s\n", dev_name);
+		return rc;
+	}
+	if (w_ctrlr->serial == NULL) {
+		D_ERROR("Nil value returned for serial_number on %s\n", dev_name);
 		return -DER_INVAL;
 	}
+	D_DEBUG(DB_MGMT, "fetched %s value from bdev json\n", w_ctrlr->serial);
 
-	w_ctrlr->socket_id = spdk_pci_device_get_socket_id(pci_device);
-
-	device_type = spdk_pci_device_get_type(pci_device);
-	if (device_type == NULL) {
-		D_ERROR("spdk_pci_device_get_type returned nil\n");
+	rc = find_in_bdev_json(bdev, &w_ctrlr->fw_rev, "firmware_revision\": \"");
+	if (rc != 0) {
+		D_ERROR("Failed to get firmware_revision for %s\n", dev_name);
+		return rc;
+	}
+	if (w_ctrlr->fw_rev == NULL) {
+		D_ERROR("Nil value returned for firmware_revision on %s\n", dev_name);
 		return -DER_INVAL;
 	}
-	if (copy_ascii(w_ctrlr->pci_type, sizeof(w_ctrlr->pci_type), device_type,
-		       sizeof(device_type)) != 0)
-		return -DER_INVAL;
+	D_DEBUG(DB_MGMT, "fetched %s value from bdev json\n", w_ctrlr->fw_rev);
+
+	//	struct spdk_nvme_transport_id trid;
+	//	struct spdk_nvme_ctrlr_opts copts;
+	//	struct spdk_nvme_ctrlr *r_ctrlr;
+	//	struct ctrlr_t *w_ctrlr;
+	//	const struct spdk_nvme_ctrlr_data *cdata;
+	//	struct spdk_pci_device *pci_device;
+	//	const char *device_type;
+	//
+	//	D_DEBUG(DB_MGMT, "fetching %s controller details\n", info->bdi_traddr);
+	//
+	//	//trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
+	//	//snprintf(trid.traddr, sizeof(trid.traddr), "%s", info->bdi_traddr);
+	//	spdk_nvme_transport_id_parse(&trid, "trtype:PCIe traddr:0000:2c:00.0");
+	//	spdk_nvme_ctrlr_get_default_ctrlr_opts(&copts, sizeof(copts));
+	//
+	//	r_ctrlr = spdk_nvme_connect(&trid, &copts, sizeof(copts));
+	//	if (r_ctrlr == NULL) {
+	//		D_ERROR("spdk_nvme_connect returned nil\n");
+	//		return -DER_INVAL;
+	//	}
+	//
+	//
+	//	cdata = spdk_nvme_ctrlr_get_data(r_ctrlr);
+	//	if (cdata == NULL) {
+	//		D_ERROR("spdk_nvme_ctrlr_get_data returned nil\n");
+	//		return -DER_INVAL;
+	//	}
+	//	if (copy_ascii(w_ctrlr->model, sizeof(w_ctrlr->model), cdata->mn,
+	//		       sizeof(cdata->mn)) != 0)
+	//		return -DER_INVAL;
+	//	if (copy_ascii(w_ctrlr->serial, sizeof(w_ctrlr->serial), cdata->sn,
+	//		       sizeof(cdata->sn)) != 0)
+	//		return -DER_INVAL;
+	//	if (copy_ascii(w_ctrlr->fw_rev, sizeof(w_ctrlr->fw_rev), cdata->fr,
+	//		       sizeof(cdata->fr)) != 0)
+	//		return -DER_INVAL;
+	//
+	//	pci_device = spdk_nvme_ctrlr_get_pci_device(r_ctrlr);
+	//	if (pci_device == NULL) {
+	//		D_ERROR("spdk_nvme_ctrlr_get_pci_device returned nil\n");
+	//		return -DER_INVAL;
+	//	}
+	//
+	//	w_ctrlr->socket_id = spdk_pci_device_get_socket_id(pci_device);
+	//
+	//	device_type = spdk_pci_device_get_type(pci_device);
+	//	if (device_type == NULL) {
+	//		D_ERROR("spdk_pci_device_get_type returned nil\n");
+	//		return -DER_INVAL;
+	//	}
+	//	if (copy_ascii(w_ctrlr->pci_type, sizeof(w_ctrlr->pci_type), device_type,
+	//			sizeof(device_type)) != 0)
+	//		return -DER_INVAL;
 
 	return 0;
 }
@@ -690,7 +782,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		if (d_bdev->bb_faulty)
 			b_info->bdi_flags |= NVME_DEV_FL_FAULTY;
 
-		rc = alloc_ctrlr_info(b_info);
+		rc = alloc_ctrlr_info(d_bdev->bb_uuid, dev_name, b_info);
 		if (rc) {
 			DL_ERROR(rc, "Failed to get ctrlr details");
 			goto out;
@@ -786,7 +878,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	}
 
-	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
+	if (strncmp(pci_dev_type, NVME_PCI_DEV_TYPE_VMD, strlen(NVME_PCI_DEV_TYPE_VMD)) != 0) {
 		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s:%s), can't manage LED\n",
 			pci_dev_type, addr_buf);
 		opts->status = -DER_NOSYS;

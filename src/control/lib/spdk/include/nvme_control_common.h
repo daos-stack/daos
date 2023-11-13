@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2019-2021 Intel Corporation.
+* (C) Copyright 2019-2023 Intel Corporation.
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
 */
@@ -10,6 +10,8 @@
 #include <stdbool.h>
 #include <spdk/nvme_intel.h>
 #include <daos_srv/control.h>
+
+#define NVME_DETAIL_BUFLEN 1024
 
 /**
  * \brief NVMECONTROL return codes
@@ -32,6 +34,7 @@ enum nvme_control_status_code {
 	NVMEC_ERR_ALLOC_SEQUENCE_BUF	= 0xE,
 	NVMEC_ERR_NO_VMD_CTRLRS		= 0xF,
 	NVMEC_ERR_WRITE_TRUNC		= 0x10,
+	NVMEC_ERR_GET_PCI_TYPE		= 0x11,
 	NVMEC_LAST_STATUS_VALUE
 };
 

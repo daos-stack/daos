@@ -417,7 +417,8 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	struct spdk_pci_device			*pci_dev;
 	struct nvme_stats			*cstats;
 	struct ctrlr_t				*ctrlr_tmp;
-	int					 rc, written;
+	const char				*pci_type;
+	int					 rc;
 
 	ctrlr_entry = g_controllers;
 
@@ -446,23 +447,23 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 			goto fail;
 		}
 
+		/* Populate numa socket id & pci device type */
+
 		pci_dev = get_pci(ctrlr_entry->ctrlr);
 		if (!pci_dev) {
 			rc = -NVMEC_ERR_GET_PCI_DEV;
 			goto fail;
 		}
 
-		/* populate numa socket id & pci device type */
 		ctrlr_tmp->socket_id = get_socket_id(pci_dev);
-		written = snprintf(ctrlr_tmp->pci_type,
-				   sizeof(ctrlr_tmp->pci_type), "%s",
-				   spdk_pci_device_get_type(pci_dev));
-		if (written >= sizeof(ctrlr_tmp->pci_type)) {
-			rc = -NVMEC_ERR_CHK_SIZE;
-			free(pci_dev);
+
+		pci_type = spdk_pci_device_get_type(pci_dev);
+		free(pci_dev);
+		ctrlr_tmp->pci_type = strndup(pci_type, strlen(pci_type));
+		if (ctrlr_tmp->pci_type == NULL) {
+			rc = -NVMEC_ERR_GET_PCI_TYPE;
 			goto fail;
 		}
-		free(pci_dev);
 
 		/* Alloc linked list of namespaces per controller */
 		if (ctrlr_entry->nss) {

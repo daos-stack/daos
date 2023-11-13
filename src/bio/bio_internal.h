@@ -19,7 +19,6 @@
 
 #include "smd.pb-c.h"
 
-#define BIO_DEV_TYPE_VMD	"vmd"
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 #define BIO_XS_CNT_MAX		BIO_MAX_VOS_TGT_CNT /* Max VOS xstreams per blobstore */

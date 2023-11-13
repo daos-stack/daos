@@ -11,6 +11,8 @@
 #include <spdk/thread.h>
 #include <spdk/nvme.h>
 #include <spdk/nvmf_spec.h>
+#include <daos_srv/control.h>
+
 #include "bio_internal.h"
 
 /* JSON tags should match encode/decode logic in src/control/server/storage/bdev/backend_json.go */
@@ -693,7 +695,7 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *ro
 		if (spdk_json_strequal(ctx->subsystem_name, "bdev"))
 			bdev_ss = ctx->subsystems_it;
 
-		if (spdk_json_strequal(ctx->subsystem_name, BIO_DEV_TYPE_VMD))
+		if (spdk_json_strequal(ctx->subsystem_name, NVME_PCI_DEV_TYPE_VMD))
 			vmd_ss = ctx->subsystems_it;
 
 		/* Move on to next subsystem */
