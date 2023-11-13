@@ -35,6 +35,7 @@
 #include <daos_fs.h>
 #include <daos_uns.h>
 #include <dfuse_ioctl.h>
+#include <daos/event.h>
 #include <daos_prop.h>
 #include <daos/common.h>
 #include "dfs_internal.h"
@@ -74,6 +75,19 @@
 
 /* Create a fake st_ino in stat for a path */
 #define FAKE_ST_INO(path)   (d_hash_string_u32(path, strnlen(path, DFS_MAX_PATH)))
+
+#define MAX_EQ 64
+
+/* In case of fork(), only the parent process could destroy daos env. */
+static pid_t                  init_pid;
+static bool                   context_reset;
+static __thread daos_handle_t td_eqh;
+
+static daos_handle_t    main_eqh;
+static daos_handle_t    eq_list[MAX_EQ];
+static uint16_t         eq_count_max;
+static uint16_t         eq_count;
+static uint16_t         eq_idx;
 
 /* structure allocated for dfs container */
 struct dfs_mt {
@@ -233,6 +247,7 @@ static pthread_mutex_t lock_fd;
 static pthread_mutex_t lock_dirfd;
 static pthread_mutex_t lock_mmap;
 static pthread_mutex_t lock_fd_dup2ed;
+static pthread_mutex_t lock_eqh;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t          mode_not_umask;
@@ -241,6 +256,8 @@ static void
 finalize_dfs(void);
 static void
 update_cwd(void);
+static int
+get_eqh(daos_handle_t *eqh);
 
 /* Hash table entry for directory handles.  The struct and name will be allocated as a single
  * entity.
@@ -484,6 +501,7 @@ static void * (*next_mmap)(void *addr, size_t length, int prot, int flags, int f
 static int (*next_munmap)(void *addr, size_t length);
 
 static void (*next_exit)(int rc);
+static void (*next__exit)(int rc) __attribute__ ((__noreturn__));
 
 /* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
 /* static org_dup3 real_dup3=NULL; */
@@ -876,6 +894,26 @@ is_path_start_with_daos(const char *path, char *pool, char *cont, char **rel_pat
 	return true;
 }
 
+static void
+child_hdlr(void)
+{
+	int rc;
+
+	/* daos is not initialized yet */
+	if (!daos_inited)
+		return;
+
+	daos_eq_lib_reset_after_fork();
+	daos_dti_reset();
+	td_eqh = main_eqh = DAOS_HDL_INVAL;
+	rc = daos_eq_create(&td_eqh);
+	if (rc)
+		DL_WARN(rc, "daos_eq_create() failed");
+	else
+		main_eqh = td_eqh;
+	context_reset = true;
+}
+
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
  *  the pointer to struct dfs_mt.
@@ -976,6 +1014,15 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 				*is_target_path = 0;
 				goto out_normal;
 			}
+			if (eq_count_max) {
+				rc = daos_eq_create(&td_eqh);
+				if (rc)
+					DL_WARN(rc, "daos_eq_create() failed");
+				main_eqh = td_eqh;
+				rc = pthread_atfork(NULL, NULL, &child_hdlr);
+				D_ASSERT(rc == 0);
+			}
+
 			daos_inited = true;
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
 		}
@@ -1994,6 +2041,74 @@ new_close_nocancel(int fd)
 }
 
 static ssize_t
+pread_over_dfs(int fd, void *buf, size_t size, off_t offset)
+{
+	int             rc, rc2;
+	d_iov_t         iov;
+	d_sg_list_t     sgl;
+	daos_size_t     bytes_read;
+	daos_event_t	ev;
+	daos_handle_t	eqh;
+
+	atomic_fetch_add_relaxed(&num_read, 1);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, buf, size);
+	sgl.sg_iovs = &iov;
+
+	rc = get_eqh(&eqh);
+	if (rc == 0) {
+		bool	flag = false;
+
+		rc = daos_event_init(&ev, eqh, NULL);
+		if (rc) {
+			DL_ERROR(rc, "daos_event_init() failed");
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		rc = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl, offset,
+			      &bytes_read, &ev);
+		if (rc)
+			D_GOTO(err_ev, rc);
+
+		while (1) {
+			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+			if (rc) {
+				DL_ERROR(rc, "daos_event_test() failed");
+				D_GOTO(err_ev, rc = daos_der2errno(rc));
+			}
+			if (flag)
+				break;
+			sched_yield();
+		}
+		rc = ev.ev_error;
+
+		rc2 = daos_event_fini(&ev);
+		if (rc2)
+			DL_ERROR(rc2, "daos_event_fini() failed");
+	} else {
+		rc = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl, offset,
+			      &bytes_read, NULL);
+	}
+
+	if (rc)
+		D_GOTO(err, rc);
+
+	/* not passing the error of daos_event_fini() to read() */
+	return (ssize_t)bytes_read;
+
+err_ev:
+	rc2 = daos_event_fini(&ev);
+	if (rc2)
+		DL_ERROR(rc2, "daos_event_fini() failed");
+
+err:
+	DS_ERROR(rc, "dfs_read(%p, %zu) failed", buf, size);
+	errno = rc;
+	return (-1);
+}
+
+static ssize_t
 read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *buf, size_t size)
 {
 	ssize_t rc;
@@ -2004,7 +2119,8 @@ read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *bu
 
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed >= FD_FILE_BASE) {
-		rc = pread(fd_directed, buf, size, file_list[fd_directed - FD_FILE_BASE]->offset);
+		rc = pread_over_dfs(fd_directed - FD_FILE_BASE, buf, size,
+				    file_list[fd_directed - FD_FILE_BASE]->offset);
 		if (rc >= 0)
 			file_list[fd_directed - FD_FILE_BASE]->offset += rc;
 		return rc;
@@ -2028,12 +2144,7 @@ new_read_pthread(int fd, void *buf, size_t size)
 ssize_t
 pread(int fd, void *buf, size_t size, off_t offset)
 {
-	daos_size_t bytes_read;
-	char       *ptr = (char *)buf;
-	int         rc;
-	int         fd_directed;
-	d_iov_t     iov;
-	d_sg_list_t sgl;
+	int fd_directed;
 
 	if (size == 0)
 		return 0;
@@ -2049,22 +2160,7 @@ pread(int fd, void *buf, size_t size, off_t offset)
 	if (fd_directed < FD_FILE_BASE)
 		return next_pread(fd, buf, size, offset);
 
-	sgl.sg_nr     = 1;
-	sgl.sg_nr_out = 0;
-	d_iov_set(&iov, (void *)ptr, size);
-	sgl.sg_iovs = &iov;
-	rc          = dfs_read(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
-			       file_list[fd_directed - FD_FILE_BASE]->file, &sgl,
-			       offset, &bytes_read, NULL);
-	if (rc) {
-		DS_ERROR(rc, "dfs_read(%p, %zu) failed", (void *)ptr, size);
-		errno      = rc;
-		bytes_read = -1;
-	}
-
-	atomic_fetch_add_relaxed(&num_read, 1);
-
-	return (ssize_t)bytes_read;
+	return pread_over_dfs(fd_directed - FD_FILE_BASE, buf, size, offset);
 }
 
 ssize_t
@@ -2093,6 +2189,72 @@ __read_chk(int fd, void *buf, size_t size, size_t buflen)
 	return read(fd, buf, size);
 }
 
+static ssize_t
+pwrite_over_dfs(int fd, const void *buf, size_t size, off_t offset)
+{
+	int		rc, rc2;
+	d_iov_t		iov;
+	d_sg_list_t	sgl;
+	daos_event_t	ev;
+	daos_handle_t	eqh;
+
+	atomic_fetch_add_relaxed(&num_write, 1);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, (void *)buf, size);
+	sgl.sg_iovs = &iov;
+
+	rc = get_eqh(&eqh);
+	if (rc == 0) {
+		bool	flag = false;
+
+		rc = daos_event_init(&ev, eqh, NULL);
+		if (rc) {
+			DL_ERROR(rc, "daos_event_init() failed");
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		rc = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl, offset, &ev);
+		if (rc)
+			D_GOTO(err_ev, rc);
+
+		while (1) {
+			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+			if (rc) {
+				DL_ERROR(rc, "daos_event_test() failed");
+				D_GOTO(err_ev, rc = daos_der2errno(rc));
+			}
+			if (flag)
+				break;
+			sched_yield();
+		}
+		rc = ev.ev_error;
+
+		rc2 = daos_event_fini(&ev);
+		if (rc2)
+			DL_ERROR(rc2, "daos_event_fini() failed");
+	} else {
+		rc = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl, offset,
+				NULL);
+	}
+
+	if (rc)
+		D_GOTO(err, rc);
+
+	/* not passing the error of daos_event_fini() to read() */
+	return size;
+
+err_ev:
+	rc2 = daos_event_fini(&ev);
+	if (rc2)
+		DL_ERROR(rc2, "daos_event_fini() failed");
+
+err:
+	DS_ERROR(rc, "dfs_write(%p, %zu) failed", (void *)buf, size);
+	errno = rc;
+	return (-1);
+}
+
 ssize_t
 write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, const void *buf,
 	   size_t size)
@@ -2105,7 +2267,8 @@ write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, 
 
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed >= FD_FILE_BASE) {
-		rc = pwrite(fd_directed, buf, size, file_list[fd_directed - FD_FILE_BASE]->offset);
+		rc = pwrite_over_dfs(fd_directed - FD_FILE_BASE, buf, size,
+				     file_list[fd_directed - FD_FILE_BASE]->offset);
 		if (rc >= 0)
 			file_list[fd_directed - FD_FILE_BASE]->offset += rc;
 		return rc;
@@ -2129,11 +2292,7 @@ new_write_pthread(int fd, const void *buf, size_t size)
 ssize_t
 pwrite(int fd, const void *buf, size_t size, off_t offset)
 {
-	char       *ptr = (char *)buf;
-	int         rc;
-	int         fd_directed;
-	d_iov_t     iov;
-	d_sg_list_t sgl;
+	int fd_directed;
 
 	if (size == 0)
 		return 0;
@@ -2149,20 +2308,7 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 	if (fd_directed < FD_FILE_BASE)
 		return next_pwrite(fd, buf, size, offset);
 
-	sgl.sg_nr     = 1;
-	sgl.sg_nr_out = 0;
-	d_iov_set(&iov, (void *)ptr, size);
-	sgl.sg_iovs = &iov;
-	rc          = dfs_write(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
-				file_list[fd_directed - FD_FILE_BASE]->file, &sgl, offset, NULL);
-	if (rc) {
-		DS_ERROR(rc, "dfs_write(%p, %zu) failed", (void *)ptr, size);
-		errno = rc;
-		return (-1);
-	}
-	atomic_fetch_add_relaxed(&num_write, 1);
-
-	return size;
+	return pwrite_over_dfs(fd_directed - FD_FILE_BASE, buf, size, offset);
 }
 
 ssize_t
@@ -5354,10 +5500,12 @@ register_handler(int sig, struct sigaction *old_handler)
 static __attribute__((constructor)) void
 init_myhook(void)
 {
-	mode_t umask_old;
-	char   *env_log;
-	int    rc;
+	mode_t      umask_old;
+	char       *env_log;
+	int         rc;
+	uint64_t    eq_count_loc = 0;
 
+	init_pid = getpid();
 	umask_old = umask(0);
 	umask(umask_old);
 	mode_not_umask = ~umask_old;
@@ -5404,6 +5552,21 @@ init_myhook(void)
 	rc = init_fd_list();
 	if (rc)
 		return;
+
+	rc = D_MUTEX_INIT(&lock_eqh, NULL);
+	if (rc)
+		return;
+	rc = d_getenv_uint64_t("D_IL_MAX_EQ", &eq_count_loc);
+	if (rc != -DER_NONEXIST) {
+		if (eq_count_loc > MAX_EQ) {
+			D_WARN("Max EQ count (%"PRIu64") should not exceed: %d", eq_count_loc,
+			       MAX_EQ);
+			eq_count_loc = MAX_EQ;
+		}
+		eq_count_max = (uint16_t)eq_count_loc;
+	} else {
+		eq_count_max = MAX_EQ;
+	}
 
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
 	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&libc_open));
@@ -5528,9 +5691,33 @@ close_all_dirfd(void)
 	}
 }
 
+static void
+destroy_all_eqs(void)
+{
+	int i;
+
+	/** destroy EQs created by threads */
+	for (i = 0; i < eq_count; i++) {
+		daos_eq_destroy(eq_list[i], 0);
+	}
+	/** destroy main thread eq */
+	if (daos_handle_is_valid(main_eqh))
+		daos_eq_destroy(main_eqh, 0);
+}
+
 static __attribute__((destructor)) void
 finalize_myhook(void)
 {
+	if (context_reset) {
+		/* child processes after fork() */
+		destroy_all_eqs();
+		daos_eq_lib_fini();
+		return;
+	} else {
+		/* parent process */
+		destroy_all_eqs();
+	}
+
 	if (num_dfs > 0) {
 		close_all_duped_fd();
 		close_all_fd();
@@ -5538,6 +5725,7 @@ finalize_myhook(void)
 
 		finalize_dfs();
 
+		D_MUTEX_DESTROY(&lock_eqh);
 		D_MUTEX_DESTROY(&lock_dfs);
 		D_MUTEX_DESTROY(&lock_dirfd);
 		D_MUTEX_DESTROY(&lock_fd);
@@ -5662,4 +5850,52 @@ finalize_dfs(void)
 				DL_ERROR(rc, "daos_fini() failed");
 		}
 	}
+}
+
+void __attribute__ ((__noreturn__))
+_exit(int rc)
+{
+	if (next__exit == NULL) {
+		next__exit = dlsym(RTLD_NEXT, "_exit");
+		D_ASSERT(next__exit != NULL);
+	}
+	if (context_reset) {
+		destroy_all_eqs();
+		daos_eq_lib_fini();
+	}
+	(*next__exit)(rc);
+}
+
+static int
+get_eqh(daos_handle_t *eqh)
+{
+	int rc;
+
+	if (daos_handle_is_valid(td_eqh)) {
+		*eqh = td_eqh;
+		return 0;
+	}
+
+	/** No EQ support requested */
+	if (eq_count_max == 0)
+		return -1;
+
+	rc = pthread_mutex_lock(&lock_eqh);
+	/** create a new EQ if the EQ pool is not full; otherwise round robin EQ use from pool */
+	if (eq_count >= eq_count_max) {
+		td_eqh = eq_list[eq_idx ++];
+		if (eq_idx == eq_count_max)
+			eq_idx = 0;
+	} else {
+		rc = daos_eq_create(&td_eqh);
+		if (rc) {
+			pthread_mutex_unlock(&lock_eqh); 
+			return -1;
+		}
+		eq_list[eq_count] = td_eqh;
+		eq_count ++;
+	}
+	pthread_mutex_unlock(&lock_eqh);
+	*eqh = td_eqh;
+	return 0;
 }
