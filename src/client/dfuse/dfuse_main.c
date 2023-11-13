@@ -281,7 +281,7 @@ show_help(char *name)
 	    "Alternatively, the mountpoint directory can also be specified with the -m or\n"
 	    "--mountpoint= option but this usage is deprecated.\n"
 	    "\n"
-	    "The DAOS pool and container can be specified in several different ways"
+	    "The DAOS pool and container can be specified in several different ways\n"
 	    "(only one way of specifying the pool and container should be used):\n"
 	    "* The DAOS pool and container can be explicitly specified on the command line\n"
 	    "  as positional arguments, using either UUIDs or labels. This is the most\n"
