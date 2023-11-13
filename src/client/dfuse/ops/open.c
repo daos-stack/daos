@@ -16,6 +16,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct fuse_file_info     fi_out = {0};
 	int                       rc;
 	bool                      prefetch = false;
+	bool                      preread  = false;
 	int                       flags;
 
 	ie = dfuse_inode_lookup(dfuse_info, ino);
@@ -108,13 +109,17 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		if (oh->doh_readahead) {
 			D_MUTEX_INIT(&oh->doh_readahead->dra_lock, 0);
 			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
+			preread = true;
 		}
 	}
 
 	dfuse_inode_decref(dfuse_info, ie);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
-	if (oh->doh_readahead)
+	/* No reference is held on oh here but if preread is true then a lock is held which prevents
+	 * release from completing which also holds open the inode.
+	 */
+	if (preread)
 		dfuse_pre_read(dfuse_info, oh);
 
 	return;
