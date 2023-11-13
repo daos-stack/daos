@@ -447,6 +447,9 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
+/* Do not allow security xattrs to be set or read, see DAOS-14639 */
+#define XATTR_SEC "security."
+
 void
 df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size,
 	       int flags)
@@ -459,6 +462,9 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *val
 	if (strncmp(name, DFUSE_XATTR_PREFIX, sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
 		D_GOTO(err, rc = EPERM);
 	}
+
+	if (strncmp(name, XATTR_SEC, sizeof(XATTR_SEC) - 1) == 0)
+		D_GOTO(err, rc = ENODATA);
 
 	inode = dfuse_inode_lookup(dfuse_info, ino);
 	if (!inode) {
@@ -487,6 +493,9 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *inode;
 	int                       rc;
+
+	if (strncmp(name, XATTR_SEC, sizeof(XATTR_SEC) - 1) == 0)
+		D_GOTO(err, rc = ENODATA);
 
 	inode = dfuse_inode_lookup(dfuse_info, ino);
 	if (!inode) {
