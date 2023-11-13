@@ -94,6 +94,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	if (dfuse_info->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
+	conn->want |= FUSE_CAP_CACHE_SYMLINKS;
+
 	dfuse_show_flags(dfuse_info, conn->want);
 
 	conn->max_background       = 16;

@@ -281,7 +281,7 @@ show_help(char *name)
 	    "Alternatively, the mountpoint directory can also be specified with the -m or\n"
 	    "--mountpoint= option but this usage is deprecated.\n"
 	    "\n"
-	    "The DAOS pool and container can be specified in several different ways"
+	    "The DAOS pool and container can be specified in several different ways\n"
 	    "(only one way of specifying the pool and container should be used):\n"
 	    "* The DAOS pool and container can be explicitly specified on the command line\n"
 	    "  as positional arguments, using either UUIDs or labels. This is the most\n"
@@ -431,7 +431,7 @@ main(int argc, char **argv)
 	dfuse_info->di_eq_count = 1;
 
 	while (1) {
-		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
 
 		if (c == -1)
 			break;
