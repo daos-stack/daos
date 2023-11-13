@@ -4541,7 +4541,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 
 	rc = dc_task_schedule(task, true);
 	if (rc)
-		D_GOTO(err_task, rc);
+		return daos_der2errno(rc);
 	return 0;
 
 err_params:
@@ -5042,7 +5042,7 @@ dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
 	rc = dc_task_create(statx_task, NULL, ev, &task);
 	if (rc) {
 		daos_obj_close(oh, NULL);
-		return rc;
+		return daos_der2errno(rc);
 	}
 
 	args = dc_task_get_args(task);
@@ -5054,7 +5054,7 @@ dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
 	rc = dc_task_schedule(task, true);
 	if (rc) {
 		daos_obj_close(oh, NULL);
-		return rc;
+		return daos_der2errno(rc);
 	}
 	return 0;
 }
