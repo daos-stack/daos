@@ -4867,22 +4867,35 @@ dup2(int oldfd, int newfd)
 	else
 		fd_directed = query_fd_forward_dest(oldfd);
 	if (fd_directed >= FD_FILE_BASE) {
-		rc = close(newfd);
-		if (rc != 0 && errno != EBADF)
-			return -1;
-		fd = allocate_a_fd_from_kernel();
-		if (fd < 0) {
+		int fd_tmp;
+
+		fd_tmp = allocate_a_fd_from_kernel();
+		if (fd_tmp < 0) {
 			/* failed to allocate an fd from kernel */
 			errno_save = errno;
 			DS_ERROR(errno_save, "failed to get a fd from kernel");
 			errno = errno_save;
 			return (-1);
+		}
+		/* rely on dup2() to get the desired fd */
+		fd = next_dup2(fd_tmp, newfd);
+		if (fd < 0) {
+			/* failed to allocate an fd from kernel */
+			errno_save = errno;
+			DS_ERROR(errno_save, "failed to get a fd from kernel");
+			close(fd_tmp);
+			errno = errno_save;
+			return (-1);
 		} else if (fd != newfd) {
 			close(fd);
+			close(fd_tmp);
 			DS_ERROR(EBUSY, "failed to get the desired fd in dup2()");
 			errno = EBUSY;
 			return (-1);
 		}
+		rc = close(fd_tmp);
+		if (rc != 0)
+			return -1;
 		idx = allocate_dup2ed_fd(fd, fd_directed);
 		if (idx >= 0)
 			return fd;
