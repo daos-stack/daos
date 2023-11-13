@@ -37,8 +37,8 @@ pool:
   usage_min:
     # SCM usage will not be 100% because some space (<1%) is used for the system and data
     # distribution is not fully uniform.
-    scm: 92
-    # NVMe should be almost full. If not, fail the test.
+    scm: 94
+    # NVMe will not be 100% because data distribution is not fully uniform.
     nvme: 96
 
 container:
