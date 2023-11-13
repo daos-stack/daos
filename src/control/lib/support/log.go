@@ -662,7 +662,7 @@ func copyServerConfig(log logging.Logger, opts ...CollectLogsParams) error {
 // Copy only specific lines from the server logs based on the Start/End date
 // and Start/End time, provided by user.
 func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ...CollectLogsParams) error {
-	// Copy the full log file incase of no dates provided
+	// Copy the full log file in case of no dates provided
 	if opts[0].LogStartDate == "" && opts[0].LogEndDate == "" {
 		err := cpLogFile(srcFile, destFile, log)
 		if err != nil {
@@ -681,12 +681,12 @@ func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ..
 			return err
 		}
 
-		// Default Start time, incase no start time provides on start dates.This will copy log start of the day.
+		// Default Start time, in case no start time provides on start dates.This will copy log start of the day.
 		if opts[0].LogStartTime == "" {
 			opts[0].LogStartTime = "00:00:00"
 		}
 
-		// Default End time, incase no End time provides.This will copy log till the End of the day.
+		// Default End time, in case no End time provides.This will copy log till the End of the day.
 		if opts[0].LogEndTime == "" {
 			opts[0].LogEndTime = "23:59:59"
 		}
