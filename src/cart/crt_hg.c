@@ -11,8 +11,8 @@
 #include "crt_internal.h"
 
 /*
- * na_dict table should be in the same order of enum crt_provider_t, the last one
- * is terminator with NULL nad_str.
+ * List of supported CaRT providers. The table is terminated with the last entry
+ * having nad_str = NULL.
  */
 struct crt_na_dict crt_na_dict[] = {
 	{
@@ -21,22 +21,11 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_PROV_OFI_SOCKETS,
-		.nad_str	= "ofi+sockets",
-		.nad_alt_str	= "ofi+socket",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = true,
-	}, {
 		.nad_type	= CRT_PROV_OFI_VERBS_RXM,
 		.nad_str	= "ofi+verbs;ofi_rxm",
 		.nad_alt_str	= "ofi+verbs",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
-	}, {
-		.nad_type	= CRT_PROV_OFI_GNI,
-		.nad_str	= "ofi+gni",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = false,
 	}, {
 		.nad_type	= CRT_PROV_OFI_TCP,
 		.nad_str	= "ofi+tcp",
@@ -156,13 +145,14 @@ crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr)
 crt_provider_t
 crt_prov_str_to_prov(const char *prov_str)
 {
-	int i;
+	int i = 0;
 
-	for (i = 0; i < CRT_PROV_COUNT; i++) {
+	while (crt_na_dict[i].nad_str) {
 		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
 			return crt_na_dict[i].nad_type;
+		i++;
 	}
 
 	return CRT_PROV_UNKNOWN;
@@ -511,10 +501,26 @@ crt_provider_domain_get(bool primary, int provider)
 	return prov_data->cpg_na_config.noc_domain;
 }
 
+static struct crt_na_dict *
+crt_get_na_dict_entry(int provider)
+{
+	struct crt_na_dict *entry = &crt_na_dict[0];
+
+	while (entry && entry->nad_str) {
+		if (entry->nad_type == provider)
+			return entry;
+		entry++;
+	}
+
+	return NULL;
+}
+
 char *
 crt_provider_name_get(int provider)
 {
-	return crt_na_dict[provider].nad_str;
+	struct crt_na_dict *entry = crt_get_na_dict_entry(provider);
+
+	return entry ? entry->nad_str : NULL;
 }
 
 static char*
@@ -541,13 +547,17 @@ crt_provider_is_block_mode(int provider)
 bool
 crt_provider_is_contig_ep(int provider)
 {
-	return crt_na_dict[provider].nad_contig_eps;
+	struct crt_na_dict *entry = crt_get_na_dict_entry(provider);
+
+	return entry ? entry->nad_contig_eps : false;
 }
 
 bool
 crt_provider_is_port_based(int provider)
 {
-	return crt_na_dict[provider].nad_port_bind;
+	struct crt_na_dict *entry = crt_get_na_dict_entry(provider);
+
+	return entry ? entry->nad_port_bind : false;
 }
 
 bool
@@ -609,7 +619,7 @@ crt_provider_get_ctx_idx(bool primary, int provider)
 	struct crt_prov_gdata	*prov_data = crt_get_prov_gdata(primary, provider);
 	int			i;
 
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+	for (i = 0; i < prov_data->cpg_ctx_max_num; i++) {
 		if (prov_data->cpg_used_idx[i] == false) {
 			prov_data->cpg_used_idx[i] = true;
 			prov_data->cpg_ctx_num++;
@@ -617,8 +627,9 @@ crt_provider_get_ctx_idx(bool primary, int provider)
 		}
 	}
 
-	D_ERROR("ctx_num %d, will exceed CRT_SRV_CONTEXT_NUM (%d) if create more context.\n",
-		prov_data->cpg_ctx_num, CRT_SRV_CONTEXT_NUM);
+	D_DEBUG(DB_ALL, "provider:%d allowed context limit = %d exceeded\n",
+		provider, CRT_SRV_CONTEXT_NUM);
+
 	return -1;
 }
 
@@ -762,6 +773,20 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 	va_end(ap);
 
 	return 0;
+}
+
+int
+crt_hg_get_protocol_info(const char *info_string, struct na_protocol_info **na_protocol_info_p)
+{
+	hg_return_t ret = HG_Get_na_protocol_info(info_string, na_protocol_info_p);
+
+	return crt_hgret_2_der(ret);
+}
+
+void
+crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info)
+{
+	HG_Free_na_protocol_info(na_protocol_info);
 }
 
 /* to be called only in crt_init */
@@ -1117,8 +1142,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 			rpc_pub->cr_ep.ep_grp = NULL;
 			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
 		} else {
-			D_ERROR("_unpack_body failed, rc: %d, opc: %#x.\n",
-				rc, rpc_pub->cr_opc);
+			DHL_ERROR(rpc_priv, rc, "_unpack_body failed, opc: %#x", rpc_pub->cr_opc);
 			crt_hg_reply_error_send(rpc_priv, -DER_MISC);
 			D_GOTO(decref, hg_ret = HG_SUCCESS);
 		}
@@ -1191,7 +1215,6 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		hg_ret = HG_Reset(rpc_priv->crp_hg_hdl, rpc_priv->crp_hg_addr,
 				  0 /* reuse original rpcid */);
 		if (hg_ret != HG_SUCCESS) {
-			rpc_priv->crp_hg_hdl = NULL;
 			RPC_ERROR(rpc_priv, "HG_Reset failed, hg_ret: " DF_HG_RC "\n",
 				  DP_HG_RC(hg_ret));
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));

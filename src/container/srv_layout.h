@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +15,7 @@
  * for ds_cont:
  *
  *   Root KVS (GENERIC):
+ *     Container UUIDs KVS (GENERIC):
  *     Container KVS (GENERIC):
  *       Container property KVS (GENERIC):
  *         Snapshot KVS (INTEGER)
@@ -22,6 +23,7 @@
  *         Handle index KVS (GENERIC)
  *       ... (more container property KVSs)
  *     Container handle KVS (GENERIC)
+ *     Service ops KVS (GENERIC) - NB used by both pool and container modules
  *
  * The version of the whole layout is defined by ds_pool_prop_global_version.
  */
@@ -40,8 +42,8 @@
  *
  *   extern d_iov_t ds_cont_prop_new_key;	comment_on_value_type
  *
- *   Note 1. The "new_key" name in ds_cont_prop_new_key must not appear in the
- *   root KVS in src/pool/srv_layout.h, that is, there must not be a
+ *   Note 1. The "new_key" name in ds_cont_prop_new_key must not appear (with very few exceptions)
+ *   in the root KVS in src/pool/srv_layout.h, that is, there must usually not be a
  *   ds_pool_prop_new_key, because the two root KVSs are the same RDB KVS.
  *
  *   Note 2. The comment_on_value_type shall focus on the value type only;
@@ -51,6 +53,8 @@
 extern d_iov_t ds_cont_prop_cuuids;		/* container UUIDs KVS */
 extern d_iov_t ds_cont_prop_conts;		/* container KVS */
 extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
+extern d_iov_t ds_cont_prop_svc_ops;            /* service ops KVS - common to pool, container */
+extern d_iov_t ds_cont_prop_svc_ops_enabled;    /* uint32_t - common to pool, container */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*
@@ -106,6 +110,7 @@ extern d_iov_t ds_cont_prop_roots;		/* daos_prop_co_roots */
 extern d_iov_t ds_cont_prop_ec_cell_sz;		/* uint64_t */
 extern d_iov_t ds_cont_prop_ec_pda;		/* uint64_t */
 extern d_iov_t ds_cont_prop_rp_pda;		/* uint64_t */
+extern d_iov_t ds_cont_prop_perf_domain;	/* uint64_t */
 extern d_iov_t ds_cont_prop_cont_global_version;/* uint32_t */
 extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
 extern d_iov_t ds_cont_prop_co_md_times;	/* co_md_times */
@@ -154,6 +159,13 @@ struct container_hdl {
 	uint64_t	ch_flags;
 	uint64_t	ch_sec_capas;
 };
+
+/*
+ * Service ops KVS (RDB_KVS_GENERIC)
+ *
+ * Each key is a client UUID and HLC timestamp, defined in struct ds_pool_svc_op_key.
+ * Each value represents the result of handling that RPC, defined in struct ds_pool_svc_op_val.
+ */
 
 extern daos_prop_t cont_prop_default;
 extern daos_prop_t cont_prop_default_v0;

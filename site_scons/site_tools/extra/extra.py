@@ -9,9 +9,9 @@ Code to handle clang-format when used in the build.
 This is used by scons to reformat automatically generated header files to be readable, but also
 outside of scons by the clang-format commit hook to check the version.
 """
-import subprocess  # nosec
-import re
 import os
+import re
+import subprocess  # nosec
 import sys
 
 from SCons.Builder import Builder

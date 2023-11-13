@@ -5,8 +5,9 @@
 """
 
 import os
+
 import yaml
-from general_utils import distribute_files, run_command, DaosTestError
+from general_utils import DaosTestError, distribute_files, run_command
 from run_utils import get_clush_command
 
 # a lookup table of predefined faults
@@ -303,6 +304,9 @@ class FaultInjection():
         Returns:
            error_list (list) : Errors during removing fault files (if any).
         """
+        if not self.fault_file:
+            return []
+
         # Remove the fault injection files on the hosts.
         error_list = []
         command = "rm -f {}".format(self.fault_file)

@@ -815,7 +815,7 @@ bdev_name2roles(const char *name)
  * xstream for this device hasn't been established yet.
  */
 static int
-create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
+create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int roles,
 		struct bio_bdev **dev_out)
 {
 	struct bio_bdev			*d_bdev, *old_dev;
@@ -843,13 +843,8 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	}
 
 	D_INIT_LIST_HEAD(&d_bdev->bb_link);
-	rc = bdev_name2roles(bdev_name);
-	if (rc < 0) {
-		D_ERROR("Failed to get role from bdev name, "DF_RC"\n", DP_RC(rc));
-		goto error;
-	}
 
-	d_bdev->bb_roles = rc;
+	d_bdev->bb_roles = roles;
 	D_STRNDUP(d_bdev->bb_name, bdev_name, strlen(bdev_name));
 	if (d_bdev->bb_name == NULL) {
 		D_GOTO(error, rc = -DER_NOMEM);
@@ -956,7 +951,9 @@ error:
 static int
 init_bio_bdevs(struct bio_xs_context *ctxt)
 {
+	struct bio_bdev  *d_bdev;
 	struct spdk_bdev *bdev;
+	const char       *bdev_name;
 	int rc = 0;
 
 	D_ASSERT(!is_server_started());
@@ -965,16 +962,47 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 		rc = -DER_NONEXIST;
 	}
 
-	for (bdev = spdk_bdev_first(); bdev != NULL;
-	     bdev = spdk_bdev_next(bdev)) {
+	for (bdev = spdk_bdev_first(); bdev != NULL; bdev = spdk_bdev_next(bdev)) {
 		if (nvme_glb.bd_bdev_class != get_bdev_type(bdev))
 			continue;
 
-		rc = create_bio_bdev(ctxt, spdk_bdev_get_name(bdev), NULL);
+		bdev_name = spdk_bdev_get_name(bdev);
+
+		rc = bdev_name2roles(bdev_name);
+		if (rc < 0) {
+			D_ERROR("Failed to get role from bdev name '%s', "DF_RC"\n", bdev_name,
+				DP_RC(rc));
+			return rc;
+		}
+
+		rc = create_bio_bdev(ctxt, bdev_name, rc, NULL);
 		if (rc)
-			break;
+			return rc;
 	}
-	return rc;
+
+	for (bdev = spdk_bdev_first(); bdev != NULL; bdev = spdk_bdev_next(bdev)) {
+		if (nvme_glb.bd_bdev_class != get_bdev_type(bdev))
+			continue;
+
+		d_bdev = lookup_dev_by_name(spdk_bdev_get_name(bdev));
+		if (d_bdev == NULL) {
+			D_ERROR("Device %s doesn't exist\n", spdk_bdev_get_name(bdev));
+			return -DER_EXIST;
+		}
+
+		D_INFO("Resetting LED on dev " DF_UUID " \n", DP_UUID(d_bdev->bb_uuid));
+		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
+				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
+		if (rc != 0) {
+			if (rc != -DER_NOSYS) {
+				D_ERROR("Reset LED on device:" DF_UUID " failed, " DF_RC "\n",
+					DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+				return rc;
+			}
+		}
+	}
+
+	return 0;
 }
 
 static void
@@ -1492,9 +1520,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			 */
 			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
 						bio_spdk_subsys_timeout);
-			D_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR,
-				 "SPDK subsystems finalized. "DF_RC"\n",
-				 DP_RC(rc));
+			DL_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR, rc, "SPDK subsystems finalized");
 
 			nvme_glb.bd_init_thread = NULL;
 
@@ -1749,6 +1775,8 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_blobstore	*bbs;
 	struct bio_bdev		*d_bdev, *tmp;
 	struct spdk_bdev	*bdev;
+	const char		*bdev_name;
+	unsigned int             roles       = 0;
 	static uint64_t		 scan_period = NVME_MONITOR_PERIOD;
 	int			 rc;
 
@@ -1756,28 +1784,33 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 		return;
 
 	/* Iterate SPDK bdevs to detect hot plugged device */
-	for (bdev = spdk_bdev_first(); bdev != NULL;
-	     bdev = spdk_bdev_next(bdev)) {
+	for (bdev = spdk_bdev_first(); bdev != NULL; bdev = spdk_bdev_next(bdev)) {
 		if (nvme_glb.bd_bdev_class != get_bdev_type(bdev))
 			continue;
 
-		d_bdev = lookup_dev_by_name(spdk_bdev_get_name(bdev));
+		bdev_name = spdk_bdev_get_name(bdev);
+
+		d_bdev = lookup_dev_by_name(bdev_name);
 		if (d_bdev != NULL)
 			continue;
 
-		D_INFO("Detected hot plugged device %s\n",
-		       spdk_bdev_get_name(bdev));
+		D_INFO("Detected hot plugged device %s\n", bdev_name);
 		/* Print a console message */
-		D_PRINT("Detected hot plugged device %s\n",
-			spdk_bdev_get_name(bdev));
+		D_PRINT("Detected hot plugged device %s\n", bdev_name);
 
 		scan_period = 0;
 
-		/* don't support hot plug for sys device yet */
-		rc = create_bio_bdev(ctxt, spdk_bdev_get_name(bdev), &d_bdev);
+		/*
+		 * Assign default roles based on operating mode (MD-on-SSD or PMem), roles will
+		 * subsequently be updated based on "old" device on "replace".
+		 */
+
+		if (bio_nvme_configured(SMD_DEV_TYPE_META))
+			roles = NVME_ROLE_DATA;
+
+		rc = create_bio_bdev(ctxt, bdev_name, roles, &d_bdev);
 		if (rc) {
-			D_ERROR("Failed to init hot plugged device %s\n",
-				spdk_bdev_get_name(bdev));
+			D_ERROR("Failed to init hot plugged device %s\n", bdev_name);
 			break;
 		}
 
@@ -1837,8 +1870,7 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
-	struct bio_bdev		*d_bdev;
-	unsigned int		 led_state;
+	struct bio_bdev         *d_bdev;
 	int			 rc;
 
 	/* Scan all devices present in bio_bdev list */
@@ -1849,10 +1881,12 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 
 			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
-					    (unsigned int)CTL__LED_ACTION__RESET, &led_state, 0);
+					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 			if (rc != 0)
-				D_ERROR("Reset LED identify state after timeout failed on device:"
-					DF_UUID", "DF_RC"\n", DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+				/* DER_NOSYS indicates that VMD-LED control is not enabled */
+				DL_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR, rc,
+					  "Reset LED on device:" DF_UUID " failed",
+					  DP_UUID(d_bdev->bb_uuid));
 		}
 	}
 }

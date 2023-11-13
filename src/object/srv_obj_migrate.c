@@ -36,7 +36,7 @@
  */
 #define MIGRATE_MAX_SIZE	(1 << 28)
 /* Max migrate ULT number on the server */
-#define MIGRATE_MAX_ULT		8192
+#define MIGRATE_MAX_ULT		512
 
 struct migrate_one {
 	daos_key_t		 mo_dkey;
@@ -515,8 +515,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
 	D_ASSERT(tls != NULL);
-	if (opc == RB_OP_REINT)
-		pool->sp_reintegrating++;
+	pool->sp_rebuilding++;
 
 	rc = ABT_cond_create(&tls->mpt_init_cond);
 	if (rc != ABT_SUCCESS)
@@ -621,7 +620,6 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		d_iov_t *csum_iov_fetch)
 {
 	struct migrate_pool_tls	*tls;
-	struct dc_object	*obj;
 	int			rc = 0;
 
 	tls = migrate_pool_tls_lookup(mrone->mo_pool_uuid,
@@ -635,21 +633,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
 		flags |= DIOF_TO_LEADER;
 
-	/**
-	 * For EC data migration, let's force it to do degraded fetch,
-	 * make sure reintegration will not fetch from the original
-	 * shard, which might cause parity corruption.
-	 */
-	obj = obj_hdl2ptr(oh);
-	if (iods[0].iod_type != DAOS_IOD_SINGLE &&
-	    daos_oclass_is_ec(&mrone->mo_oca) &&
-	    is_ec_data_shard(obj, mrone->mo_dkey_hash, mrone->mo_oid.id_shard) &&
-	    obj_ec_parity_alive(oh, mrone->mo_dkey_hash, NULL))
-		flags |= DIOF_FOR_FORCE_DEGRADE;
-
-	obj_decref(obj);
-
-	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey,
 			   iod_num, iods, sgls, NULL,
 			   flags, NULL, csum_iov_fetch);
 	if (rc != 0)
@@ -670,7 +654,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 		csum_iov_fetch->iov_len = 0;
 		csum_iov_fetch->iov_buf = p;
 
-		rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey, iod_num, iods, sgls,
+		rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls,
 				   NULL, flags, NULL, csum_iov_fetch);
 	}
 
@@ -944,7 +928,8 @@ out:
 
 static int
 __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
-			      daos_iod_t *iods, daos_epoch_t **ephs, uint32_t iods_num,
+			      daos_iod_t *iods, daos_epoch_t fetch_eph,
+			      daos_epoch_t **ephs, uint32_t iods_num,
 			      struct ds_cont_child *ds_cont, bool encode)
 {
 	d_sg_list_t	 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
@@ -952,6 +937,7 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	char		*data;
 	daos_size_t	 size;
 	unsigned int	 p = obj_ec_parity_tgt_nr(&mrone->mo_oca);
+	daos_size_t	stride_nr = obj_ec_stripe_rec_nr(&mrone->mo_oca);
 	unsigned char	*p_bufs[OBJ_EC_MAX_P] = { 0 };
 	struct daos_csummer	*csummer = NULL;
 	unsigned char	*ptr;
@@ -974,7 +960,7 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	D_DEBUG(DB_REBUILD, DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_U64"\n",
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey), iods_num, mrone->mo_epoch);
 
-	rc = mrone_obj_fetch(mrone, oh, sgls, iods, iods_num, mrone->mo_epoch, DIOF_FOR_MIGRATION,
+	rc = mrone_obj_fetch(mrone, oh, sgls, iods, iods_num, fetch_eph, DIOF_FOR_MIGRATION,
 			     NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed: "DF_RC"\n",
@@ -997,7 +983,9 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 		for (j = 1; j < iods[i].iod_nr; j++) {
 			daos_recx_t	*recx = &iods[i].iod_recxs[j];
 
-			if (offset + size == recx->rx_idx) {
+			/* Merge the recx if there are in the same stripe */
+			if (offset + size == recx->rx_idx &&
+			    offset / stride_nr == recx->rx_idx / stride_nr) {
 				size += recx->rx_nr;
 				parity_eph = max(ephs[i][j], parity_eph);
 				continue;
@@ -1035,22 +1023,54 @@ static int
 migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
 {
+	int i;
+	int j;
 	int rc = 0;
 
 	/* If it is parity recxs from another replica, then let's encode it anyway */
-	if (mrone->mo_iods_num_from_parity > 0) {
-		rc = __migrate_fetch_update_parity(mrone, oh, mrone->mo_iods_from_parity,
-						   mrone->mo_iods_update_ephs_from_parity,
-						   mrone->mo_iods_num_from_parity, ds_cont,
-						   true);
+	for (i = 0; i < mrone->mo_iods_num_from_parity; i++) {
+		for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++) {
+			daos_iod_t iod = mrone->mo_iods_from_parity[i];
+			daos_epoch_t fetch_eph;
+			daos_epoch_t update_eph;
+			daos_epoch_t *update_eph_p;
 
-		if (rc)
-			return rc;
+			iod.iod_nr = 1;
+			iod.iod_recxs = &mrone->mo_iods_from_parity[i].iod_recxs[j];
+			/* If the epoch is higher than EC aggregate boundary, then
+			 * it should use stable epoch to fetch the data, since
+			 * the data could be aggregated independently on parity
+			 * and data shard, so using stable epoch could make sure
+			 * the consistency view during rebuild. And also EC aggregation
+			 * should already aggregate the parity, so there should not
+			 * be any partial update on the parity as well.
+			 *
+			 * Otherwise there might be partial update on this rebuilding
+			 * shard, so let's use the epoch from the parity shard to fetch
+			 * the data here, which will make sure partial update will not
+			 * be fetched here. And also EC aggregation is being disabled
+			 * at the moment, so there should not be any vos aggregation
+			 * impact this process as well.
+			 */
+			if (ds_cont->sc_ec_agg_eph_boundary >
+			    mrone->mo_iods_update_ephs_from_parity[i][j])
+				fetch_eph = mrone->mo_epoch;
+			else
+				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+
+			update_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+			update_eph_p = &update_eph;
+			rc = __migrate_fetch_update_parity(mrone, oh, &iod, fetch_eph, &update_eph_p,
+							   mrone->mo_iods_num_from_parity, ds_cont,
+							   true);
+			if (rc)
+				return rc;
+		}
 	}
 
 	/* Otherwise, keep it as replicate recx */
 	if (mrone->mo_iod_num > 0) {
-		rc = __migrate_fetch_update_parity(mrone, oh, mrone->mo_iods,
+		rc = __migrate_fetch_update_parity(mrone, oh, mrone->mo_iods, mrone->mo_epoch,
 						   mrone->mo_iods_update_ephs,
 						   mrone->mo_iod_num, ds_cont, false);
 	}
@@ -1221,7 +1241,8 @@ out:
 
 static int
 __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
-			    daos_iod_t *iods, int iod_num, daos_epoch_t update_eph,
+			    daos_iod_t *iods, int iod_num, daos_epoch_t fetch_eph,
+			    daos_epoch_t update_eph,
 			    uint32_t flags, struct ds_cont_child *ds_cont)
 {
 	d_sg_list_t		 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
@@ -1280,8 +1301,7 @@ __migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		p_csum_iov = &csum_iov;
 	}
 
-	rc = mrone_obj_fetch(mrone, oh, sgls, iods, iod_num, mrone->mo_epoch,
-			     flags, p_csum_iov);
+	rc = mrone_obj_fetch(mrone, oh, sgls, iods, iod_num, fetch_eph, flags, p_csum_iov);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed: "DF_RC"\n",
 			DP_KEY(&mrone->mo_dkey), DP_RC(rc));
@@ -1356,34 +1376,48 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	if (!daos_oclass_is_ec(&mrone->mo_oca))
 		return __migrate_fetch_update_bulk(mrone, oh, mrone->mo_iods,
 						   mrone->mo_iod_num,
+						   mrone->mo_epoch,
 						   mrone->mo_min_epoch,
 						   DIOF_FOR_MIGRATION, ds_cont);
 
 	/* For EC object, if the migration include both extent from parity rebuild
 	 * and extent from replicate rebuild, let rebuild the extent with parity first,
 	 * then extent from replication.
-	 *
-	 * Since the parity shard epoch should be higher or equal to the data shard epoch,
-	 * so let's use the minimum epochs of all parity shards as the update epoch of
-	 * this data shard.
 	 */
+	for (i = 0; i < mrone->mo_iods_num_from_parity; i++) {
+		for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++) {
+			daos_iod_t iod = mrone->mo_iods_from_parity[i];
+			daos_epoch_t fetch_eph;
 
-	if (mrone->mo_iods_num_from_parity > 0) {
-		daos_epoch_t min_eph = DAOS_EPOCH_MAX;
+			iod.iod_nr = 1;
+			iod.iod_recxs = &mrone->mo_iods_from_parity[i].iod_recxs[j];
 
-		for (i = 0; i < mrone->mo_iods_num_from_parity; i++) {
-			for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++)
-				min_eph = min(min_eph,
-					      mrone->mo_iods_update_ephs_from_parity[i][j]);
+			/* If the epoch is higher than EC aggregate boundary, then
+			 * it should use stable epoch to fetch the data, since
+			 * the data could be aggregated independently on parity
+			 * and data shard, so using stable epoch could make sure
+			 * the consistency view during rebuild. And also EC aggregation
+			 * should already aggregate the parity, so there should not
+			 * be any partial update on the parity as well.
+			 *
+			 * Otherwise there might be partial update on this rebuilding
+			 * shard, so let's use the epoch from the parity shard to fetch
+			 * the data here, which will make sure partial update will not
+			 * be fetched here. And also EC aggregation is being disabled
+			 * at the moment, so there should not be any vos aggregation
+			 * impact this process as well.
+			 */
+			if (ds_cont->sc_ec_agg_eph_boundary >
+			    mrone->mo_iods_update_ephs_from_parity[i][j])
+				fetch_eph = mrone->mo_epoch;
+			else
+				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1, fetch_eph,
+						mrone->mo_iods_update_ephs_from_parity[i][j],
+						DIOF_EC_RECOV_FROM_PARITY, ds_cont);
+			if (rc != 0)
+				D_GOTO(out, rc);
 		}
-
-		rc = __migrate_fetch_update_bulk(mrone, oh, mrone->mo_iods_from_parity,
-						 mrone->mo_iods_num_from_parity,
-						 min_eph,
-						 DIOF_FOR_MIGRATION | DIOF_EC_RECOV_FROM_PARITY,
-						 ds_cont);
-		if (rc > 0)
-			D_GOTO(out, rc);
 	}
 
 	/* The data, rebuilt from replication, needs to keep the same epoch during rebuild,
@@ -1399,10 +1433,25 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			iod.iod_nr = 1;
 			iod.iod_recxs = &mrone->mo_iods[i].iod_recxs[j];
 			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1,
+							 mrone->mo_epoch,
 							 mrone->mo_iods_update_ephs[i][j],
 							 DIOF_FOR_MIGRATION, ds_cont);
-			if (rc > 0)
-				D_GOTO(out, rc);
+			if (rc < 0) {
+				if (rc == -DER_VOS_PARTIAL_UPDATE) {
+					/* In some cases, EC aggregation failed to delete the
+					 * replicate recx, then during rebuild these replicate
+					 * recx might be rebuilt again. Since the data rebuilt
+					 * from parity will be rebuilt first. so let's ignore
+					 * this replicate recx for now.
+					 */
+					D_WARN(DF_UOID" "DF_RECX"/"DF_X64" already rebuilt\n",
+					       DP_UOID(mrone->mo_oid), DP_RECX(iod.iod_recxs[0]),
+					       mrone->mo_iods_update_ephs[i][j]);
+					rc = 0;
+				} else {
+					D_GOTO(out, rc);
+				}
+			}
 		}
 	}
 out:
@@ -1484,21 +1533,31 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 static int
 migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
-		       struct ds_cont_child **cont_p)
+		       struct ds_cont_child **cont_p, bool create)
 {
 	struct ds_cont_child	*cont_child = NULL;
 	int			rc;
 
 	*cont_p = NULL;
-	if (tls->mpt_opc == RB_OP_EXTEND || tls->mpt_opc == RB_OP_REINT) {
-		/* For extend and reintegration, it may need create the container */
+	if (tls->mpt_pool->spc_pool->sp_stopping) {
+		D_DEBUG(DB_REBUILD, DF_UUID "pool is being destroyed.\n",
+			DP_UUID(tls->mpt_pool_uuid));
+		return 0;
+	}
+
+	if (create) {
+		/* Since the shard might be moved different location for any pool operation,
+		 * so it may need create the container in all cases.
+		 */
 		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont_child);
 		if (rc != 0) {
-			if (rc == -DER_SHUTDOWN) {
+			if (rc == -DER_SHUTDOWN || (cont_child && cont_child->sc_stopping)) {
 				D_DEBUG(DB_REBUILD, DF_UUID "container is being destroyed\n",
 					DP_UUID(cont_uuid));
 				rc = 0;
 			}
+			if (cont_child)
+				ds_cont_child_put(cont_child);
 			return rc;
 		}
 	} else {
@@ -1532,7 +1591,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	int			 rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
-	rc = migrate_get_cont_child(tls, mrone->mo_cont_uuid, &cont);
+	rc = migrate_get_cont_child(tls, mrone->mo_cont_uuid, &cont, true);
 	if (rc || cont == NULL)
 		D_GOTO(cont_put, rc);
 
@@ -2327,10 +2386,9 @@ migrate_enum_unpack_cb(struct dc_obj_enum_unpack_io *io, void *data)
 	migrate_tgt_off = obj_ec_shard_off_by_layout_ver(layout_ver, io->ui_dkey_hash,
 							 &arg->oc_attr, shard);
 	unpack_tgt_off = obj_ec_shard_off(obj, io->ui_dkey_hash, io->ui_oid.id_shard);
-	if ((rc == 1 &&
+	if (rc == 1 &&
 	     (is_ec_data_shard_by_tgt_off(unpack_tgt_off, &arg->oc_attr) ||
-	     (io->ui_oid.id_layout_ver > 0 && io->ui_oid.id_shard != parity_shard))) ||
-	    (tls->mpt_opc == RB_OP_EXCLUDE && io->ui_oid.id_shard == shard)) {
+	     (io->ui_oid.id_layout_ver > 0 && io->ui_oid.id_shard != parity_shard))) {
 		D_DEBUG(DB_REBUILD, DF_UOID" ignore shard "DF_KEY"/%u/%d/%u/%d.\n",
 			DP_UOID(io->ui_oid), DP_KEY(&io->ui_dkey), shard,
 			(int)obj_ec_shard_off(obj, io->ui_dkey_hash, 0), parity_shard, rc);
@@ -2442,7 +2500,7 @@ migrate_obj_punch_one(void *data)
 		tls, DP_UUID(tls->mpt_pool_uuid), arg->version, arg->punched_epoch,
 		DP_UOID(arg->oid));
 
-	rc = migrate_get_cont_child(tls, arg->cont_uuid, &cont);
+	rc = migrate_get_cont_child(tls, arg->cont_uuid, &cont, true);
 	if (rc != 0 || cont == NULL)
 		D_GOTO(put, rc);
 
@@ -2563,7 +2621,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	/* Only open with RW flag, reintegrating flag will be set, which is needed
 	 * during unpack_cb to check if parity shard alive.
 	 */
-	rc = dsc_obj_open(coh, arg->oid.id_pub, DAOS_OO_RW, &oh);
+	rc = dsc_obj_open(coh, arg->oid.id_pub, DAOS_OO_RO, &oh);
 	if (rc) {
 		D_ERROR("dsc_obj_open failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_cont, rc);
@@ -2591,10 +2649,17 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	if (tls->mpt_opc == RB_OP_UPGRADE)
 		unpack_arg.new_layout_ver = tls->mpt_new_layout_ver;
 
-	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
 	enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-		     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
+		     DIOF_FOR_MIGRATION;
 
+	/* Upgrade needs to iterate all of the group, since dkey might be
+	 * in different group after upgrade, otherwise only iterate the
+	 * specific group.
+	 */
+	if (tls->mpt_opc != RB_OP_UPGRADE) {
+		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
+		enum_flags |= DIOF_TO_SPEC_GROUP;
+	}
 
 	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {
 		p_csum = NULL;
@@ -2603,6 +2668,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 			minimum_nr = obj_ec_tgt_nr(&unpack_arg.oc_attr);
 		else
 			minimum_nr = 2;
+		enum_flags |= DIOF_RECX_REVERSE;
 	} else {
 		minimum_nr = 2;
 		p_csum = &csum;
@@ -2683,6 +2749,13 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 					DP_UOID(arg->oid));
 			}
 			continue;
+		} else if (rc == -DER_UPDATE_AGAIN) {
+			/* -DER_UPDATE_AGAIN means the remote target does not parse EC
+			 * aggregation yet, so let's retry.
+			 */
+			D_DEBUG(DB_REBUILD, DF_UOID "retry with %d \n", DP_UOID(arg->oid), rc);
+			rc = 0;
+			continue;
 		} else if (rc) {
 			/* container might have been destroyed. Or there is
 			 * no spare target left for this object see
@@ -2706,7 +2779,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		}
 
 		/* Each object enumeration RPC will at least one OID */
-		if (num <= minimum_nr) {
+		if (num <= minimum_nr && (enum_flags & DIOF_TO_SPEC_GROUP)) {
 			D_DEBUG(DB_REBUILD, "enumeration buffer %u empty"
 				DF_UOID"\n", num, DP_UOID(arg->oid));
 			break;
@@ -2818,12 +2891,14 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
-	if (tls->mpt_opc == RB_OP_REINT)
-		pool->sp_reintegrating--;
+	pool->sp_rebuilding--;
 	migrate_pool_tls_put(tls);
 	tls->mpt_fini = 1;
 	/* Wait for xstream 0 migrate ULT(migrate_ult) stop */
 	if (tls->mpt_ult_running) {
+		ABT_mutex_lock(tls->mpt_inflight_mutex);
+		ABT_cond_broadcast(tls->mpt_inflight_cond);
+		ABT_mutex_unlock(tls->mpt_inflight_mutex);
 		rc = ABT_eventual_wait(tls->mpt_done_eventual, NULL);
 		if (rc != ABT_SUCCESS) {
 			rc = dss_abterr2der(rc);
@@ -2885,12 +2960,11 @@ migrate_obj_ult(void *data)
 			if (tls->mpt_fini)
 				D_GOTO(free_notls, rc);
 		}
-		D_ASSERT(tls->mpt_pool->spc_pool->sp_need_discard == 0);
 		if (tls->mpt_pool->spc_pool->sp_discard_status) {
 			rc = tls->mpt_pool->spc_pool->sp_discard_status;
-			D_DEBUG(DB_REBUILD, DF_UUID" discard failure"DF_RC".\n",
+			D_DEBUG(DB_REBUILD, DF_UUID " discard failure: " DF_RC,
 				DP_UUID(arg->pool_uuid), DP_RC(rc));
-			D_GOTO(free_notls, rc);
+			D_GOTO(out, rc);
 		}
 	}
 
@@ -2931,7 +3005,7 @@ free:
 		struct ds_cont_child *cont_child = NULL;
 
 		/* check again to see if the container is being destroyed. */
-		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child);
+		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child, false);
 		if (cont_child == NULL || cont_child->sc_stopping)
 			rc = 0;
 
@@ -2942,7 +3016,7 @@ free:
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OBJ_FAIL) &&
 	    tls->mpt_obj_count >= daos_fail_value_get())
 		rc = -DER_IO;
-
+out:
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
 
@@ -3020,7 +3094,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 		 * pseudorandomly to get better performance by leveraging all
 		 * the xstreams.
 		 */
-		ult_tgt_idx = oid.id_pub.lo % dss_tgt_nr;
+		ult_tgt_idx = d_rand() % dss_tgt_nr;
 	}
 
 	/* Let's iterate the object on different xstream */
@@ -3138,6 +3212,16 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	if (rc) {
 		D_ERROR("ds_cont_fetch_snaps failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_put, rc);
+	}
+
+	rc = ds_cont_fetch_ec_agg_boundary(dp->sp_iv_ns, cont_uuid);
+	if (rc) {
+		/* Sometime it may too early to fetch the EC boundary,
+		 * since EC boundary does not start yet, which is forbidden
+		 * during rebuild anyway, so let's continue.
+		 */
+		D_DEBUG(DB_REBUILD, DF_UUID" fetch agg_boundary failed: "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
 	}
 
 	arg.yield_freq	= DEFAULT_YIELD_FREQ;

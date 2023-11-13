@@ -4,9 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from command_utils_base import FormattedParameter
-from command_utils_base import BasicParameter
 from command_utils import ExecutableCommand
+from command_utils_base import BasicParameter, FormattedParameter
 
 
 # pylint: disable=too-few-public-methods,too-many-instance-attributes

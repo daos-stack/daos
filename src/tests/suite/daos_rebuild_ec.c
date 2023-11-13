@@ -1111,6 +1111,7 @@ rebuild_ec_multiple_shards(void **state)
 	d_rank_t	rank = 2;
 	int		i, j, k;
 	char		*data;
+	char		*verify_data;
 	uint64_t	stripe_size = 4 * CELL_SIZE;
 	daos_recx_t	recx;
 
@@ -1118,32 +1119,69 @@ rebuild_ec_multiple_shards(void **state)
 		return;
 
 	data = (char *)malloc(stripe_size);
+	verify_data = (char *)malloc(stripe_size);
 	assert_true(data != NULL);
+	assert_true(verify_data != NULL);
+	for (i = 0; i < 20; i++)
+		oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
+
 	for (k = 0; k < 3; k++) {
 		for (i = 0; i < 20; i++) {
-			oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
 			ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+			memset(data, 'a' + i, stripe_size);
 			for (j = 5 * k; j < 5 * (k + 1); j++) {
 				req.iod_type = DAOS_IOD_ARRAY;
 				recx.rx_nr = stripe_size;
 				recx.rx_idx = j * stripe_size;
-				memset(data, 'a', stripe_size);
 				insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
 					     data, stripe_size, &req);
 			}
 			ioreq_fini(&req);
 		}
+
 		rebuild_pools_ranks(&arg, 1, &rank, 1, false);
 		daos_cont_status_clear(arg->coh, NULL);
+		print_message("exclude rank %u\n", rank);
 		rank++;
+
+		for (i = 0; i < 20; i++) {
+			ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+			memset(verify_data, 'a' + i, stripe_size);
+			for (j = 5 * k; j < 5 * (k + 1); j++) {
+				req.iod_type = DAOS_IOD_ARRAY;
+				recx.rx_nr = stripe_size;
+				recx.rx_idx = j * stripe_size;
+				memset(data, 0, stripe_size);
+				lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+					     data, stripe_size, &req);
+				assert_memory_equal(verify_data, data, stripe_size);
+			}
+			ioreq_fini(&req);
+		}
 	}
 
 	rank = 2;
-	for (i = 0; i < 3; i++) {
+	for (k = 0; k < 3; k++) {
 		reintegrate_pools_ranks(&arg, 1, &rank, 1, false);
 		rank++;
+
+		for (i = 0; i < 20; i++) {
+			ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+			memset(verify_data, 'a' + i, stripe_size);
+			for (j = 5 * k; j < 5 * (k + 1); j++) {
+				req.iod_type = DAOS_IOD_ARRAY;
+				recx.rx_nr = stripe_size;
+				recx.rx_idx = j * stripe_size;
+				memset(data, 0, stripe_size);
+				lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+					     data, stripe_size, &req);
+				assert_memory_equal(verify_data, data, stripe_size);
+			}
+			ioreq_fini(&req);
+		}
 	}
 
+	free(verify_data);
 	free(data);
 }
 
@@ -1213,6 +1251,77 @@ rebuild_ec_multiple_failure_tgts(void **state)
 		assert_memory_equal(data, v_data, 20);
 	}
 	ioreq_fini(&req);
+}
+
+static void
+rebuild_ec_parity_overwrite_fail_parity(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		*data;
+	char		*verify_data;
+	daos_recx_t	recx;
+	d_rank_t	data_ranks[2];
+	d_rank_t	parity_rank;
+	uint64_t	dkey_hash;
+	int		shard_idx;
+	int		stripe_size = 4 * CELL_SIZE;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	data = (char *)malloc(stripe_size);
+	verify_data = (char *)malloc(stripe_size);
+	make_buffer(data, 'a', stripe_size);
+
+	recx.rx_idx = 0;	/* full stripe */
+	recx.rx_nr = stripe_size;
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	make_buffer(data, 'b', 1000);
+	memcpy(verify_data, data, stripe_size);
+	recx.rx_idx = 0;
+	recx.rx_nr = 1000;
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, 1000, &req);
+
+	dkey_hash = d_hash_murmur64((const unsigned char *)"d_key", strlen("d_key"), 5731);
+
+	/* fail parity epoch */
+	shard_idx = (dkey_hash % 6 + 5) % 6;
+	parity_rank = get_rank_by_oid_shard(arg, oid, shard_idx);
+	rebuild_single_pool_rank(arg, parity_rank, true);
+
+	/* fail data shard */
+	shard_idx = (dkey_hash % 6 + 0) % 6;
+	data_ranks[0] = get_rank_by_oid_shard(arg, oid, shard_idx);
+	shard_idx = (dkey_hash % 6 + 1) % 6;
+	data_ranks[1] = get_rank_by_oid_shard(arg, oid, shard_idx);
+
+	rebuild_pools_ranks(&arg, 1, data_ranks, 2, true);
+	recx.rx_idx = 0;	/* full stripe */
+	recx.rx_nr = stripe_size;
+	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	assert_memory_equal(data, verify_data, stripe_size);
+
+	reintegrate_pools_ranks(&arg, 1, data_ranks, 2, true);
+	reintegrate_pools_ranks(&arg, 1, &parity_rank, 1, true);
+
+	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	assert_memory_equal(data, verify_data, stripe_size);
+
+
+	ioreq_fini(&req);
+	free(data);
+	free(verify_data);
 }
 
 /** create a new pool/container for each test */
@@ -1346,6 +1455,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD45: multiple shards fail tgts",
 	 rebuild_ec_multiple_failure_tgts, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD46: fail parity shard and data shards after overwrite",
+	 rebuild_ec_parity_overwrite_fail_parity, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
 

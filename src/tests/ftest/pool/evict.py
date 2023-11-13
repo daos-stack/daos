@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
+from general_utils import DaosTestError
 from pydaos.raw import DaosApiError, c_uuid_to_str
 
-from apricot import TestWithServers
 
-
-class EvictTests(TestWithServers):
+class PoolEvictTest(TestWithServers):
     """
     Tests DAOS client eviction from a pool that the client is using.
 
@@ -18,7 +17,7 @@ class EvictTests(TestWithServers):
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize an EvictTests object."""
+        """Initialize an PoolEvictTest object."""
         super().__init__(*args, **kwargs)
         self.start_agents_once = False
         self.start_servers_once = False
@@ -85,7 +84,7 @@ class EvictTests(TestWithServers):
         if pool.dmg.result.exit_status != 0:
             self.fail("Pool evict failed!")
 
-    def test_evict(self):
+    def test_pool_evict(self):
         """
         Test Steps:
         1. Create 2 pools on all server ranks.
@@ -108,7 +107,7 @@ class EvictTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_evict
-        :avocado: tags=pool_evict_basic,test_evict
+        :avocado: tags=PoolEvictTest,test_pool_evict
         """
         # Do not use self.pool. It will cause -1002 error when disconnecting.
         pools = []
@@ -206,7 +205,7 @@ class EvictTests(TestWithServers):
                 if failure_expected:
                     self.fail(
                         "Pool {} was evicted, but write_objects worked!".format(index))
-            except TestFail as error:
+            except DaosTestError as error:
                 if failure_expected and "-1002" in str(error):
                     msg = "Pool # {}: write_objects failed as expected.\n\t{}".format(
                         index, error)

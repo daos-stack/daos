@@ -22,23 +22,6 @@
 #include <dirent.h>
 
 #include <cmocka.h>
-#ifdef OVERRIDE_CMOCKA_SKIP
-/* redefine cmocka's skip() so it will no longer abort()
- * if CMOCKA_TEST_ABORT=1
- *
- * it can't be redefined as a function as it must return from current context
- */
-#undef skip
-#define skip() \
-	do { \
-		const char *abort_test = getenv("CMOCKA_TEST_ABORT"); \
-		if (abort_test != NULL && abort_test[0] == '1') \
-			print_message("Skipped !!!\n"); \
-		else \
-			_skip(__FILE__, __LINE__); \
-		return; \
-	} while  (0)
-#endif
 
 #if FAULT_INJECTION
 #define FAULT_INJECTION_REQUIRED() do { } while (0)
@@ -405,6 +388,7 @@ int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 int daos_pool_upgrade(const uuid_t pool_uuid);
 int ec_data_nr_get(daos_obj_id_t oid);
 int ec_parity_nr_get(daos_obj_id_t oid);
+int ec_tgt_nr_get(daos_obj_id_t oid);
 
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
@@ -687,5 +671,9 @@ out:
 	D_FREE(fullpath);
 	return rc;
 }
+
+void test_set_engine_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc);
+void test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value);
+void test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num);
 
 #endif

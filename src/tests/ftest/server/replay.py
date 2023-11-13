@@ -7,7 +7,6 @@ import random
 import time
 
 from apricot import TestWithServers
-
 from dfuse_utils import get_dfuse, start_dfuse, stop_dfuse
 from general_utils import join
 from ior_utils import get_ior
@@ -158,7 +157,7 @@ class ReplayTests(TestWithServers):
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
         :avocado: tags=server,replay
-        :avocado: tags=ReplayTests,test_restart_posix
+        :avocado: tags=ReplayTests,test_replay_posix
         """
         ppn = self.params.get('ppn', '/run/ior_write/*', 1)
         container = self.create_container()

@@ -1,8 +1,6 @@
 """Common DAOS library for setting up the compiler"""
 
-from SCons.Script import GetOption, Exit
-from SCons.Script import Configure
-
+from SCons.Script import Configure, Exit, GetOption
 
 DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-sign-compare',
@@ -39,8 +37,9 @@ def _base_setup(env):
     compiler = env['CC']
 
     build_type = env['BUILD_TYPE']
-    print(f'Setting up compile environment for {compiler}')
-    print(f"Build type is '{build_type}'")
+    if not GetOption('silent'):
+        print(f'Setting up compile environment for {compiler}')
+        print(f"Build type is '{build_type}'")
 
     prev_compiler = env.get('BSETUP', False)
     if prev_compiler:

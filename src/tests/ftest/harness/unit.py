@@ -3,12 +3,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithoutServers
-from data_utils import list_unique, list_flatten, list_stats, \
-    dict_extract_values, dict_subtract
-from run_utils import run_remote, ResultData
+from ClusterShell.NodeSet import NodeSet
+from data_utils import dict_extract_values, dict_subtract, list_flatten, list_stats, list_unique
+from run_utils import ResultData, run_remote
 
 
 class HarnessUnitTest(TestWithoutServers):
@@ -390,7 +388,7 @@ class HarnessUnitTest(TestWithoutServers):
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness,run_utils
-        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote_separated
+        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote_no_stdout
         """
         hosts = self.get_hosts_from_yaml('test_clients', 'partition', 'reservation', '/run/hosts/*')
         command = 'if [ $(hostname -s) == \'{}\' ]; then echo stderr 1>&2; fi'.format(hosts[1])
@@ -423,7 +421,7 @@ class HarnessUnitTest(TestWithoutServers):
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness,run_utils
-        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote_separated
+        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote_failure
         """
         hosts = self.get_hosts_from_yaml('test_clients', 'partition', 'reservation', '/run/hosts/*')
         command = 'if [ $(hostname -s) == \'{}\' ]; then echo fail; exit 1; fi; echo pass'.format(

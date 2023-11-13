@@ -135,7 +135,6 @@ debian
 debuginfo
 defusedxml
 del
-dependances
 deps
 dereference
 dereferencing
@@ -176,6 +175,7 @@ fchmod
 fcntl
 filename
 filesystem
+findall
 findcmd
 fini
 fio
@@ -198,6 +198,7 @@ groupadd
 groupname
 grp
 hackery
+hexdump
 hfi
 hostfile
 hostlist
@@ -234,6 +235,7 @@ junit
 kds
 kv
 kwargs
+launchable
 ldflags
 len
 libaio
@@ -253,6 +255,7 @@ logfile
 logfiles
 logmasks
 lseek
+lsblk
 lspci
 lua
 lustre
@@ -439,6 +442,7 @@ testdata
 testFile
 testname
 testrunner
+testsuites
 tgt
 timestamp
 timestamps

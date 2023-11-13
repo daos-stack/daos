@@ -10,10 +10,10 @@ LogIter and LogLine class definitions.
 This provides a way of querying CaRT logfiles for processing.
 """
 
-from collections import OrderedDict
 import bz2
 import os
 import re
+from collections import OrderedDict
 
 
 class InvalidPid(Exception):
@@ -41,7 +41,6 @@ for (name, value) in LOG_LEVELS.items():
     LOG_NAMES[value] = name
 
 
-# pylint: disable=too-few-public-methods
 class LogRaw():
     """Class for raw (non cart log lines) in cart log files.
 
@@ -49,6 +48,7 @@ class LogRaw():
     for example mercury logs being sent to the same file.
     """
 
+    # pylint: disable=too-few-public-methods
     def __init__(self, line):
         self.line = line.rstrip('\n')
         self.trace = False
@@ -68,6 +68,8 @@ class LogLine():
     It allows for queries such as 'string in line' which will match against
     the message only, and != which will match the entire line.
     """
+
+    # pylint: disable=too-many-public-methods
 
     # Match an address range, a region in memory.
     re_region = re.compile(r"(0|0x[0-9a-f]{1,16})-(0x[0-9a-f]{1,16})")
@@ -180,6 +182,7 @@ class LogLine():
         # without creating too much output.
 
         # pylint: disable=invalid-name
+
         fields = []
         for entry in self._fields[2:]:
             field = None
@@ -279,7 +282,9 @@ class LogLine():
 
     def is_callback(self):
         """Returns true if line is RPC callback"""
-        if self.function not in ('crt_hg_req_send_cb', 'crt_rpc_complete'):
+        if self.function not in ('crt_hg_req_send_cb',
+                                 'crt_rpc_complete',
+                                 'crt_rpc_complete_and_unlock'):
             return False
 
         return self._is_type(['Invoking', 'RPC', 'callback'], base=5)
@@ -365,7 +370,6 @@ class LogLine():
         return self.get_field(-1).rstrip('.')
 
 
-# pylint: disable=too-many-branches
 class StateIter():
     """Helper class for LogIter to add a state-full iterator.
 
@@ -382,7 +386,7 @@ class StateIter():
 
     def __iter__(self):
 
-        # Dict, indexed by pointer, containing re-use index for that pointer.
+        # Dict, indexed by pointer, containing reuse index for that pointer.
         self.reuse_table = {}
         # Conversion from active pointer to line where it was created.
         self.active_desc = {}
@@ -456,7 +460,6 @@ class LogIter():
         # find and report the error, then continue with the file open as
         # latin-1
 
-        # pylint: disable=consider-using-with
         self._fd = None
 
         self.file_corrupt = False
@@ -492,6 +495,7 @@ class LogIter():
                     # latin-1 rather than unicode.
                 self._fd.seek(0)
             else:
+                # pylint: disable-next=consider-using-with
                 self._fd = open(fname, 'r', encoding='utf-8')
 
         self.fname = fname

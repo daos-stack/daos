@@ -343,6 +343,11 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, NULL, filename_sym1, create_mode | S_IFLNK,
 		      create_flags, 0, 0, filename_dir1, &obj);
 	assert_int_equal(rc, 0);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(stbuf.st_mode));
+	assert_int_equal(stbuf.st_size, strlen(filename_dir1));
+	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 
@@ -353,6 +358,10 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, NULL, filename_dir1, create_mode | S_IFDIR,
 		      create_flags, 0, 0, NULL, &dir);
 	assert_int_equal(rc, 0);
+
+	rc = dfs_ostatx(dfs_mt, dir, &stbuf, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISDIR(stbuf.st_mode));
 
 	/** try chmod to a symlink, should fail (since chmod resolves link) */
 	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, S_IFLNK);
@@ -395,6 +404,10 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, dir, filename_sym2, create_mode | S_IFLNK,
 		      create_flags, 0, 0, filename_file2, &obj);
 	assert_int_equal(rc, 0);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(stbuf.st_mode));
+	assert_int_equal(stbuf.st_size, strlen(filename_file2));
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 
@@ -1034,34 +1047,92 @@ dfs_test_rename(void **state)
 	rc = dfs_write(dfs_mt, obj2, &sgl, 64, NULL);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_release(obj2);
+	rc = dfs_ostatx(dfs_mt, obj1, &stbuf, NULL);
 	assert_int_equal(rc, 0);
-	rc = dfs_release(obj1);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
-	assert_int_equal(rc, 0);
+	assert_true(stbuf.st_size == 0);
 	prev_ts.tv_sec = stbuf.st_ctim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
-	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, NULL);
 	assert_int_equal(rc, 0);
+	assert_true(stbuf.st_size == 128);
 
 	rc = dfs_chmod(dfs_mt, NULL, f1, S_IFREG | S_IRUSR | S_IWUSR);
 	assert_int_equal(rc, 0);
 	rc = dfs_chmod(dfs_mt, NULL, f2, S_IFREG | S_IRUSR | S_IWUSR | S_IXUSR);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
+	daos_event_t ev, *evp;
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 1234;
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	rc = dfs_ostatx(dfs_mt, obj1, &stbuf, &ev);
 	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
 	/** check ctime updated */
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	assert_true(stbuf.st_size == 0);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 1234;
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+	/** check ctime updated */
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	assert_true(stbuf.st_size == 128);
+
+	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_move(dfs_mt, NULL, f2, NULL, f1, NULL);
 	assert_int_equal(rc, 0);
 
+	/** try to stat obj1 corresponding to f1 which was removed, should fail. */
+	rc = dfs_ostatx(dfs_mt, obj1, &stbuf, NULL);
+	assert_int_equal(rc, ENOENT);
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	rc = dfs_ostatx(dfs_mt, obj1, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, ENOENT);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+
 	rc = dfs_remove(dfs_mt, NULL, f1, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/** try to stat obj2 corresponding to f2 which was renamed, should fail. */
+	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, NULL);
+	assert_int_equal(rc, ENOENT);
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, ENOENT);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_release(obj2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj1);
 	assert_int_equal(rc, 0);
 }
 
@@ -1480,7 +1551,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 
 	/** verify mtime is now the same as the one we just set */
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(first_ts.tv_sec, stbuf.st_mtim.tv_sec);
 	assert_int_equal(first_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
@@ -1495,7 +1566,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 		assert_int_equal(rc, 0);
 	}
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
@@ -1579,7 +1650,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	assert_int_equal(rc, 0);
 	/* verify */
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
 	timeptr = localtime(&stbuf.st_mtim.tv_sec);
@@ -2982,6 +3053,201 @@ dfs_test_fix_chunk_size(void **state)
 	D_FREE(buf);
 }
 
+static void
+dfs_test_oflags(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	char			*filename_file1 = "file1";
+	char			*path_file1 = "/file1";
+	mode_t			create_mode = S_IWUSR | S_IRUSR;
+	mode_t			mode;
+	int			create_flags = O_RDWR | O_CREAT | O_EXCL;
+	int			rc;
+	struct stat		stbuf;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** Testing O_APPEND & O_TRUNC in dfs_open/dfs_lookup_rel */
+
+	/** remove /file1 if existing */
+	dfs_remove(dfs_mt, NULL, filename_file1, 0, NULL);
+
+	/** Create /file1 with O_APPEND, should fail */
+	rc = dfs_open(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
+		      create_flags | O_APPEND, 0, 0, NULL, &obj);
+	assert_int_equal(rc, ENOTSUP);
+
+	/** Create /file1 with O_APPEND using dfs_lookup, should fail */
+	rc = dfs_lookup(dfs_mt, path_file1, create_flags | O_APPEND, &obj, &mode, NULL);
+	assert_int_equal(rc, ENOTSUP);
+
+	/** Create /file1 and write 5 bytes */
+	rc = dfs_test_file_gen(filename_file1, 0, OC_S1, 5);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 with O_TRUNC, size should be zero */
+	rc = dfs_open(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
+		      O_RDWR | O_TRUNC, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify file size after truncating */
+	rc = dfs_lookup(dfs_mt, path_file1, O_RDONLY, &obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, filename_file1, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 and write 5 bytes */
+	rc = dfs_test_file_gen(filename_file1, 0, OC_S1, 5);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 with O_TRUNC, size should be zero */
+	rc = dfs_lookup(dfs_mt, path_file1, O_RDWR | O_TRUNC, &obj, &mode, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify file size after truncating */
+	rc = dfs_lookup(dfs_mt, path_file1, O_RDONLY, &obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, filename_file1, 0, NULL);
+	assert_int_equal(rc, 0);
+}
+
+#define NUM_ENTRIES	1024
+#define NR_ENUM		64
+
+static void
+dfs_test_pipeline_find(void **state)
+{
+	dfs_obj_t	*dir1, *f1;
+	int		i;
+	time_t		ts = 0;
+	mode_t		create_mode = S_IWUSR | S_IRUSR;
+	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
+	char		*dirname = "pipeline_dir";
+	int		rc;
+
+	rc = dfs_open(dfs_mt, NULL, dirname, create_mode | S_IFDIR, create_flags,
+		      OC_SX, 0, NULL, &dir1);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < NUM_ENTRIES; i++) {
+		char name[24];
+
+		/* create 1 dir for every 100 files */
+		if (i % 100 == 0) {
+			sprintf(name, "dir.%d", i);
+			rc = dfs_mkdir(dfs_mt, dir1, name, create_mode | S_IFDIR, 0);
+			assert_int_equal(rc, 0);
+		} else {
+			daos_obj_id_t oid;
+
+			sprintf(name, "file.%d", i);
+			rc = dfs_open(dfs_mt, dir1, name, create_mode | S_IFREG, create_flags, 0, 0,
+				      NULL, &f1);
+			assert_int_equal(rc, 0);
+
+			dfs_obj2id(f1, &oid);
+			/* printf("File %s \t OID: %"PRIu64".%"PRIu64"\n", name, oid.hi, oid.lo); */
+
+			rc = dfs_release(f1);
+			assert_int_equal(rc, 0);
+		}
+
+		if (i == NUM_ENTRIES / 2) {
+			sleep(1);
+			ts = time(NULL);
+			sleep(1);
+		}
+	}
+
+	dfs_predicate_t pred = {0};
+	dfs_pipeline_t *dpipe = NULL;
+
+	strcpy(pred.dp_name, "%.6%");
+	pred.dp_newer = ts;
+	rc = dfs_pipeline_create(dfs_mt, pred, DFS_FILTER_NAME | DFS_FILTER_NEWER, &dpipe);
+	assert_int_equal(rc, 0);
+
+
+	uint32_t num_split = 0, j;
+
+	rc = dfs_obj_anchor_split(dir1, &num_split, NULL);
+	assert_int_equal(rc, 0);
+	print_message("Anchor split in %u parts\n", num_split);
+
+	daos_anchor_t *anchors;
+	struct dirent *dents = NULL;
+	daos_obj_id_t *oids = NULL;
+	daos_size_t *csizes = NULL;
+
+	anchors = malloc(sizeof(daos_anchor_t) * num_split);
+	dents = malloc (sizeof(struct dirent) * NR_ENUM);
+	oids = calloc(NR_ENUM, sizeof(daos_obj_id_t));
+	csizes = calloc(NR_ENUM, sizeof(daos_size_t));
+
+	uint64_t nr_total = 0, nr_matched = 0, nr_scanned;
+
+	for (j = 0; j < num_split; j++) {
+		daos_anchor_t *anchor = &anchors[j];
+		uint32_t nr;
+
+		memset(anchor, 0, sizeof(daos_anchor_t));
+
+		rc = dfs_obj_anchor_set(dir1, j, anchor);
+		assert_int_equal(rc, 0);
+
+		while (!daos_anchor_is_eof(anchor)) {
+			nr = NR_ENUM;
+			rc = dfs_readdir_with_filter(dfs_mt, dir1, dpipe, anchor, &nr, dents, oids,
+						     csizes, &nr_scanned);
+			assert_int_equal(rc, 0);
+
+			nr_total += nr_scanned;
+			nr_matched += nr;
+
+			for (i = 0; i < nr; i++) {
+				print_message("Name: %s\t", dents[i].d_name);
+				print_message("OID: %"PRIu64".%"PRIu64"\t", oids[i].hi, oids[i].lo);
+				print_message("CSIZE = %zu\n", csizes[i]);
+				if (dents[i].d_type == DT_DIR)
+					print_message("Type: DIR\n");
+				else if (dents[i].d_type == DT_REG)
+					print_message("Type: FILE\n");
+				else
+					assert(0);
+			}
+		}
+	}
+
+	print_message("total entries scanned = %"PRIu64"\n", nr_total);
+	print_message("total entries matched = %"PRIu64"\n", nr_matched);
+
+	free(dents);
+	free(anchors);
+	free(oids);
+	free(csizes);
+	rc = dfs_pipeline_destroy(dpipe);
+	assert_int_equal(rc, 0);
+	/** close / finalize */
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -3035,6 +3301,10 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_relink_root, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST26: dfs MWC chunk size fix",
 	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST27: dfs pipeline find",
+	  dfs_test_pipeline_find, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST28: dfs open/lookup flags",
+	  dfs_test_oflags, async_disable, test_case_teardown},
 };
 
 static int

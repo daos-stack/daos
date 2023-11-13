@@ -492,52 +492,6 @@ crt_proc_struct_obj_iod_array(crt_proc_t proc, crt_proc_op_t proc_op,
 }
 
 static int
-crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
-{
-	int		i;
-	int		rc;
-
-	if (FREEING(proc_op)) {
-		/* NB: don't need free in crt_proc_d_iov_t() */
-		D_FREE(p->sg_iovs);
-		return 0;
-	}
-
-	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr);
-	if (unlikely(rc))
-		return rc;
-
-	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr_out);
-	if (unlikely(rc))
-		return rc;
-
-	if (p->sg_nr == 0)
-		return 0;
-
-	switch (proc_op) {
-	case CRT_PROC_DECODE:
-		D_ALLOC_ARRAY(p->sg_iovs, p->sg_nr);
-		if (p->sg_iovs == NULL)
-			return -DER_NOMEM;
-		/* fall through to fill sg_iovs */
-	case CRT_PROC_ENCODE:
-		for (i = 0; i < p->sg_nr; i++) {
-			rc = crt_proc_d_iov_t(proc, proc_op, &p->sg_iovs[i]);
-			if (unlikely(rc)) {
-				if (DECODING(proc_op))
-					D_FREE(p->sg_iovs);
-				return rc;
-			}
-		}
-		break;
-	default:
-		return -DER_INVAL;
-	}
-
-	return rc;
-}
-
-static int
 crt_proc_struct_daos_shard_tgt(crt_proc_t proc, crt_proc_op_t proc_op,
 			       struct daos_shard_tgt *p)
 {
@@ -1103,7 +1057,15 @@ static struct crt_proto_rpc_format obj_proto_rpc_fmt[] = {
 
 #undef X
 
-struct crt_proto_format obj_proto_fmt = {
+struct crt_proto_format obj_proto_fmt_0 = {
+	.cpf_name  = "daos-object",
+	.cpf_ver   = DAOS_OBJ_VERSION - 1,
+	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt),
+	.cpf_prf   = obj_proto_rpc_fmt,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_OBJ_MODULE, 0)
+};
+
+struct crt_proto_format obj_proto_fmt_1 = {
 	.cpf_name  = "daos-object",
 	.cpf_ver   = DAOS_OBJ_VERSION,
 	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt),

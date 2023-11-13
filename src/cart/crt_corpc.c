@@ -244,13 +244,12 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_GOTO(out, rc);
 	}
 
-	for (i = 0; i < seg_num; i++)
-		D_FREE(iovs[i].iov_buf);
-
 	rc = crt_bulk_free(bulk_hdl);
 	if (rc != 0)
 		D_ERROR("crt_bulk_free failed: "DF_RC"\n", DP_RC(rc));
 
+	for (i = 0; i < seg_num; i++)
+		D_FREE(iovs[i].iov_buf);
 out:
 	D_FREE(iovs);
 	return rc;

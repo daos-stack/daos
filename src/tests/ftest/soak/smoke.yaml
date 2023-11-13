@@ -86,6 +86,7 @@ smoke:
   # num of bytes to write to reserved container
   resv_bytes: 500
   enable_intercept_lib: true
+  enable_remote_logging: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
