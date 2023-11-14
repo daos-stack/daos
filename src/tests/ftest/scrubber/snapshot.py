@@ -31,7 +31,7 @@ class TestScrubberEvictWithSnapshot(TestWithScrubber):
         initial_metrics = {}
         final_metrics = {}
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
-        self.dmg_cmd.pool_query(self.pool.identifier)
+        self.pool.query()
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         # Wait for a minute for the scrubber to take action and evict target
@@ -40,13 +40,12 @@ class TestScrubberEvictWithSnapshot(TestWithScrubber):
         time.sleep(15)
         self.container.create_snap()
         time.sleep(45)
-        self.dmg_cmd.pool_query()
+        self.pool.query()
         final_metrics = self.scrubber.get_scrub_corrupt_metrics()
         status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
         # Compare the initial scrubber corrupt metrics with the final values.
         # If they differ, the test passed. If not, the test failed
         if status is False:
             self.log.info("------Scrubber Snapshot Test Failed-----")
-            self.log.info("---Scrubber corrupt metrics values doesn't change----")
-            self.fail("------Test Failed-----")
+            self.fail("-Test Failed: Scrubber corrupt metrics values doesn't change-")
         self.log.info("------Scrubber Snapshot Test Passed------")

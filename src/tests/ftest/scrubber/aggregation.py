@@ -6,9 +6,9 @@
 import time
 
 from scrubber_test_base import TestWithScrubber
+from telemetry_utils import TelemetryUtils
 
-
-class TestScrubberEvictWithAggregation(TestWithScrubber):
+class TestScrubberEvictWithAggregation(TestWithScrubber, TelemetryUtils):
     """Inject Checksum Fault with scrubber enabled
     and scrubber threshold set to a certain value.
     Aggregation is run on the background.
@@ -23,7 +23,7 @@ class TestScrubberEvictWithAggregation(TestWithScrubber):
         and see whether SSD auto eviction works as expected.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=scrubber,faults
         :avocado: tags=TestScrubberEvictWithAggregation,test_target_eviction_during_aggregation
         """
@@ -35,6 +35,7 @@ class TestScrubberEvictWithAggregation(TestWithScrubber):
         self.add_container(self.pool)
         # Pool and Containers are already created. Just run the IOR.
         self.run_ior_with_pool(create_cont=False)
+        initial_aggregation_metrics = self.get_metrics("engine_pool_vos_aggregation_obj_scanned")
         # Enable the aggregation on the pool.
         self.pool.set_property("reclaim", "time")
         # Now enable the scrubber on the pool.
@@ -43,17 +44,28 @@ class TestScrubberEvictWithAggregation(TestWithScrubber):
         self.pool.set_property("scrub-thresh", "3")
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
-        # Wait for two minutes for aggregation run and scrubber to take to evict target
-        # after corruption threshold reached. We want both aggregation and scrubber tasks
+        # We want both aggregation and scrubber tasks
         # to run in parallel during this time.
-        time.sleep(120)
-        self.dmg_cmd.pool_query()
+        start_time = 0
+        finish_time = 0
+        poll_status = False
+        start_time = time.time()
+        while int(finish_time - start_time) < 120 and poll_status is False:
+            final_aggregation_metrics = self.get_metrics("engine_pool_vos_aggregation_obj_scanned")
+            status = self.verify_scrubber_metrics_value(initial_aggregation_metrics,
+                                                        final_aggregation_metrics)
+            if status is True:
+                break
+            poll_status = True
+            # Wait for 10 seconds before querying the metrics value.
+            time.sleep(10)
+            finish_time = time.time()
+        self.pool.query()
         final_metrics = self.scrubber.get_scrub_corrupt_metrics()
         status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
         # Compare the initial scrubber corrupt metrics with the final values.
         # If they differ, the test passed. If not, the test failed.
         if status is False:
             self.log.info("------Scrubber Aggregation Test Failed-----")
-            self.log.info("---Scrubber corrupt metrics values doesn't change----")
-            self.fail("------Test Failed-----")
-        self.log.info("------Scrubber Aggregation Test Passed------")
+            self.fail("-Test Failed: Scrubber corrupt metrics values doesn't change-")
+        self.log.info("------Scrubber Aggregation Passed------")

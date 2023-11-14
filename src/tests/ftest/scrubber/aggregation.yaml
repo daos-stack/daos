@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 3
+  test_servers: 4
   test_clients: 1
 timeout: 600
 setup:
@@ -30,14 +30,6 @@ server_config:
       env_vars:
         - DD_MASK=mgmt,md,rebuild
       storage: auto
-  transport_config:
-    allow_insecure: true
-agent_config:
-  transport_config:
-    allow_insecure: true
-dmg:
-  transport_config:
-    allow_insecure: true
 pool:
   size: 80%
   svcn: 4

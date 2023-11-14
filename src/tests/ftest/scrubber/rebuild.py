@@ -39,13 +39,12 @@ class TestScrubberEvictWithRebuild(TestWithScrubber):
         # Wait for a minute for the scrubber to take action and evict target
         # after corruption threshold reached.
         time.sleep(60)
-        self.dmg_cmd.pool_query()
+        self.pool.query()
         final_metrics = self.scrubber.get_scrub_corrupt_metrics()
         status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
         # Compare the initial scrubber corrupt metrics with the final values.
         # If they differ, the test passed. If not, the test failed
         if status is False:
             self.log.info("------Scrubber Rebuild Test Failed-----")
-            self.log.info("---Scrubber corrupt metrics values doesn't change----")
-            self.fail("------Test Failed-----")
+            self.fail("-Test Failed: Scrubber corrupt metrics values doesn't change-")
         self.log.info("------Scrubber Rebuild Test Passed------")
