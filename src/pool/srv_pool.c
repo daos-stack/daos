@@ -265,9 +265,12 @@ read_map_buf(struct rdb_tx *tx, const rdb_path_t *kvs, struct pool_buf **buf,
 		return rc;
 	size = pool_buf_size(b->pb_nr);
 	D_ALLOC(*buf, size);
+	D_EMIT("alloc-ed buf: %d\n", buf ? 1 : 0);
 	if (*buf == NULL)
 		return -DER_NOMEM;
+	D_EMIT("memcpy buf, \n");
 	memcpy(*buf, b, size);
+	D_EMIT("memcpy-ed buf, \n");
 	return 0;
 }
 
@@ -3822,7 +3825,9 @@ ds_pool_query_handler(crt_rpc_t *rpc, int version)
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
 
+	D_EMIT("Getting ps_lock\n");
 	ABT_rwlock_rdlock(svc->ps_lock);
+	D_EMIT("Got ps_lock\n");
 
 	/* Verify the pool handle for client calls.
 	 * Note: since rebuild will not connect the pool, so we only verify
@@ -3966,28 +3971,35 @@ ds_pool_query_handler(crt_rpc_t *rpc, int version)
 		}
 	}
 
+	D_EMIT("Reading map buf\n");
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
+	D_EMIT("Read map buf, rc: %d\n", rc);
 	if (rc != 0)
 		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 
 out_lock:
+	D_EMIT("Unlocking ABT_rwlock\n");
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (rc != 0)
 		goto out_svc;
 
+	D_EMIT("transfer map buf\n");
 	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc,
 				      in->pqi_map_bulk, &out->pqo_map_buf_size);
+	D_EMIT("free map buf\n");
 	D_FREE(map_buf);
 	if (rc != 0)
 		goto out_svc;
 
+	D_EMIT("sp_metrics\n");
 	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 
 	/* See comment above, rebuild doesn't connect the pool */
 	if ((in->pqi_query_bits & DAOS_PO_QUERY_SPACE) &&
 	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
+		D_DEBUG(DB_MD, "pool_space_query_bcast\n");
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
 					    &out->pqo_space);
 		if (unlikely(rc))
@@ -3995,6 +4007,7 @@ out_lock:
 
 		d_tm_inc_counter(metrics->query_space_total, 1);
 	}
+	D_EMIT("d_tm_inc_counter\n");
 	d_tm_inc_counter(metrics->query_total, 1);
 
 out_svc:

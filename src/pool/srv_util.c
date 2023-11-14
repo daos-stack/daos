@@ -181,7 +181,9 @@ ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 	map_sgl.sg_nr_out = 0;
 	map_sgl.sg_iovs = &map_iov;
 
+	D_EMIT("Creating bulk.");
 	rc = crt_bulk_create(rpc->cr_ctx, &map_sgl, CRT_BULK_RO, &bulk);
+	D_EMIT("Created bulk.");
 	if (rc != 0)
 		goto out;
 
