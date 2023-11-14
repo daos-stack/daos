@@ -6,10 +6,9 @@
 import os
 
 from avocado import fail_on
-
 from cont_security_test_base import ContSecurityTestBase
-from security_test_base import create_acl_file
 from exception_utils import CommandFailure
+from security_test_base import create_acl_file
 
 
 class UpdateContainerACLTest(ContSecurityTestBase):

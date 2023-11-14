@@ -5,27 +5,25 @@
 """
 # pylint: disable=too-many-lines
 import contextlib
-from datetime import datetime
-from getpass import getuser
 import json
-from logging import getLogger
 import os
 import re
 import signal
 import time
+from datetime import datetime
+from getpass import getuser
+from logging import getLogger
 
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
-
-from command_utils_base import \
-    BasicParameter, CommandWithParameters, EnvironmentVariables, LogParameter, ObjectWithParameters
+from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
+                                LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
-from general_utils import check_file_exists, \
-    run_command, DaosTestError, get_job_manager_class, create_directory, \
-    distribute_files, change_file_owner, get_file_listing, run_pcmd, \
-    get_subprocess_stdout
-from user_utils import get_primary_group
+from general_utils import (DaosTestError, change_file_owner, check_file_exists, create_directory,
+                           distribute_files, get_file_listing, get_job_manager_class,
+                           get_subprocess_stdout, run_command, run_pcmd)
 from run_utils import command_as_user
+from user_utils import get_primary_group
 from yaml_utils import get_yaml_data
 
 

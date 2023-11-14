@@ -250,10 +250,13 @@ void ds_cont_tgt_ec_eph_query_ult(void *data);
 int ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
 			  uint64_t **epoch_p);
 int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
+void ds_cont_ec_eph_free(struct ds_pool *pool);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
 
 typedef int(*cont_rdb_iter_cb_t)(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *arg);
 int ds_cont_rdb_iterate(struct cont_svc *svc, cont_rdb_iter_cb_t iter_cb, void *cb_arg);
 int ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx);
+
+int ds_cont_fetch_ec_agg_boundary(void *ns, uuid_t cont_uuid);
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

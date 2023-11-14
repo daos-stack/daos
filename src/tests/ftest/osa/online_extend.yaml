@@ -44,6 +44,7 @@ pool:
   control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
+  properties: scrub:lazy
 container:
   type: POSIX
   control_method: daos

@@ -316,7 +316,7 @@ pipeline {
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
         string(name: 'CI_UNIT_VM1_NVME_LABEL',
-               defaultValue: 'bwx_vm1',
+               defaultValue: 'ci_ssd_vm1',
                description: 'Label to use for 1 VM node unit tests that need NVMe')
         string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
@@ -692,11 +692,8 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
-                                                                parallel_build: true,
-                                                                qb: quickBuild()) +
+                                                                parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('el8') + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -733,12 +730,9 @@ pipeline {
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true,
-                                                                parallel_build: true,
-                                                                qb: true) +
+                                                                parallel_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-el8 " +
                                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('el8', true) + '"' +
                                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }
@@ -1110,9 +1104,9 @@ pipeline {
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
                         job_step_update(nlt_test())
-                        recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                                       skipPublishingChecks: true,
-                                       id: 'fir', name: 'Fault Injection Report')
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
+                        //                skipPublishingChecks: true,
+                        //                id: 'fir', name: 'Fault Injection Report')
                     }
                     post {
                         always {
@@ -1274,12 +1268,9 @@ pipeline {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.el.8'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild()) +
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable') +
                                 " -t ${sanitized_JOB_NAME}-el8 " +
                                 ' --build-arg BULLSEYE=' + env.BULLSEYE +
-                                ' --build-arg QUICKBUILD_DEPS="' +
-                                quickBuildDeps('el8') + '"' +
                                 ' --build-arg REPOS="' + prRepos() + '"'
                         }
                     }

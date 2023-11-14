@@ -6,7 +6,7 @@
 import os
 
 from fio_test_base import FioBase
-from general_utils import run_pcmd, get_remote_file_size
+from general_utils import get_remote_file_size, run_pcmd
 
 
 class Ecodtruncate(FioBase):
