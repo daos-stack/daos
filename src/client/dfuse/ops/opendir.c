@@ -60,9 +60,9 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
-	DFUSE_TRA_DEBUG(oh, "Kernel cache flags invalid %d started %d finished %d",
+	DFUSE_TRA_DEBUG(oh, "Kernel cache flags invalid %d started %d finished %d drop " DF_BOOL,
 			oh->doh_kreaddir_invalid, oh->doh_kreaddir_started,
-			oh->doh_kreaddir_finished);
+			oh->doh_kreaddir_finished, DP_BOOL(oh->doh_evict_on_close));
 
 	if ((!oh->doh_kreaddir_invalid) && oh->doh_kreaddir_finished) {
 		DFUSE_TRA_DEBUG(oh, "Directory handle may have populated cache, saving");
@@ -73,7 +73,8 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	dfuse_dre_drop(dfuse_info, oh);
 	if (oh->doh_evict_on_close) {
 		int rc;
-
+		D_INFO("Calling inval_entry %#lx " DF_DE, oh->doh_ie->ie_parent,
+		       DP_DE(oh->doh_ie->ie_name));
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, oh->doh_ie->ie_parent,
 						      oh->doh_ie->ie_name,
 						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
