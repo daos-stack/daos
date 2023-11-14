@@ -5,8 +5,8 @@
 """
 import time
 
-from recovery_test_base import RecoveryTestBase
 from general_utils import report_errors
+from recovery_test_base import RecoveryTestBase
 
 
 class PoolCleanupTest(RecoveryTestBase):
@@ -22,7 +22,7 @@ class PoolCleanupTest(RecoveryTestBase):
         2. Mangle the label in the MS (Mangle the copy of the PS metadata exists in the
         MS).
         3. Check that the label in MS is corrupted with -fault added.
-        4. Check that the label in PS isn’t corrupted.
+        4. Check that the label in PS is not corrupted.
         5. Stop the servers and enable the checker.
         6. Set the policy to --all-interactive.
         7. Start the checker and query the checker until the fault is detected.
