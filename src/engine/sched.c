@@ -527,6 +527,11 @@ sched_metrics_init(struct dss_xstream *dx)
 			     "ULT", "sched/cycle_size/xs_%u", dx->dx_xs_id);
 	if (rc)
 		D_WARN("Failed to create cycle_size telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->ss_total_reject, D_TM_COUNTER, "Total rejected requests",
+			     "req", "sched/total_reject/xs_%u", dx->dx_xs_id);
+	if (rc)
+		D_WARN("Failed to create total_reject telemetry: "DF_RC"\n", DP_RC(rc));
 }
 
 static int
@@ -839,6 +844,15 @@ out:
 	return spi->spi_space_pressure;
 }
 
+/*
+ * Current default ult stack size is 16kib, limit amount of memory
+ * that each target can use to process RPC to 100MiB.
+ */
+#define DEFAULT_STACKSIZE	16384
+#define MAX_KICKED_REQ_CNT	((100 << 20) / 16384)
+/* max cycle time in msecs */
+#define MAX_CYCLE_TIME		((MAX_KICKED_REQ_CNT * 20) / 1000)
+
 static int
 process_req(struct dss_xstream *dx, struct sched_request *req)
 {
@@ -846,8 +860,6 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	struct sched_pool_info	*spi = req->sr_pool_info;
 	struct sched_req_info	*sri;
 	unsigned int		 req_type = req->sr_attr.sra_type;
-	int			 i;
-	uint64_t		 ult_timeout = 0;
 
 	D_ASSERT(spi != NULL);
 	D_ASSERT(req_type < SCHED_REQ_MAX);
@@ -864,17 +876,20 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	if (req->sr_attr.sra_flags & SCHED_REQ_FL_NO_DELAY)
 		goto kickoff;
 
-	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
-		ult_timeout += info->si_kicked_req_cnt[i] * req_latencys[i];
-	ult_timeout /= 1000;
-
 	/* Request expired */
-	if ((info->si_cur_ts - req->sr_enqueue_ts + ult_timeout) >
-	    (req->sr_attr.sra_timeout * 2 / 3))
+	if (req->sr_attr.sra_timeout &&
+	    (info->si_cur_ts - req->sr_enqueue_ts) >
+	    (req->sr_attr.sra_timeout - MAX_CYCLE_TIME))
 		goto kickoff;
 
-	/* Remaining requests are not expired */
+	/*
+	 * To ensure normal performance and simplify the code logic, we choose
+	 * not to sort RPC individually based on RPC timeouts and the current
+	 * number of RPCs. However, the downside of this approach is that we
+	 * cannot guarantee that enqueued RPCs will not time out.
+	 */
 	return 1;
+
 kickoff:
 	sri->sri_req_kicked++;
 	info->si_kicked_req_cnt[req_type]++;
@@ -1096,13 +1111,6 @@ throttle_sys(struct stats_window *sw, uint32_t *kick, struct pressure_ratio *pr)
 		apportion_wts(avail_wts, kick, SCHED_REQ_SCRUB);
 }
 
-/*
- * Current default ult stack size is 16kib, limit memory size
- * of per target up to 100MiB for RPC processing.
- */
-#define DEFAULT_STACKSIZE	16384
-#define MAX_KICKED_REQ_CNT	((100 << 20) / 16384)
-
 static bool
 is_system_req(int req_type)
 {
@@ -1141,6 +1149,8 @@ process_pool_cb(d_list_t *rlink, void *arg)
 
 	if (rpc_cnt > MAX_KICKED_REQ_CNT) {
 		for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
+			if (is_system_req(i))
+				continue;
 			tmp = kick[i] * MAX_KICKED_REQ_CNT / info->si_total_req_cnt;
 			kick[i] = tmp;
 		}
@@ -1312,9 +1322,6 @@ req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 		d_list_add_tail(&req->sr_link, &sri->sri_req_list);
 	}
 	req->sr_enqueue_ts = info->si_cur_ts;
-	/* Hint is RPC enqueue id */
-	if (attr->sra_enqueue_id == 0)
-		attr->sra_enqueue_id = info->si_cur_ts;
 
 	sri->sri_req_cnt++;
 	spi->spi_req_cnt++;
@@ -1343,7 +1350,6 @@ req_need_reject(struct sched_req_attr *attr, struct sched_info *info)
 	 * ults will be executed, reserve 50% of timeout for it.
 	 */
 	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
-		estimated_time += info->si_kicked_req_cnt[i] * req_latencys[i];
 		req_num += info->si_kicked_req_cnt[i];
 		if (!is_system_req(i)) {
 			estimated_time += info->si_req_cnt[i] * req_latencys[i];
@@ -1352,6 +1358,7 @@ req_need_reject(struct sched_req_attr *attr, struct sched_info *info)
 	}
 	/* convert to msecs */
 	estimated_time /= 1000;
+	estimated_time += MAX_CYCLE_TIME;
 	if ((estimated_time << 1) > attr->sra_timeout)
 		return true;
 
@@ -1371,9 +1378,8 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 	if (!should_enqueue_req(dx, attr))
 		return req_kickoff_internal(dx, attr, func, arg);
 
-	info->si_cur_id++;
 	if (attr->sra_enqueue_id == 0)
-		attr->sra_enqueue_id = info->si_cur_id;
+		attr->sra_enqueue_id = ++info->si_cur_id;
 
 	/*
 	 * A RPC flow control mechanism is introduced to avoid RPC timeout when the
@@ -1386,8 +1392,10 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 	 *
 	 * That requires wire format and client changes.
 	 */
-	if (req_need_reject(attr, info))
+	if (req_need_reject(attr, info)) {
+		d_tm_inc_counter(info->si_stats.ss_total_reject, 1);
 		return -DER_OVERLOAD_RETRY;
+	}
 
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL, false);

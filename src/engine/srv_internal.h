@@ -33,6 +33,7 @@ struct sched_stats {
 	struct d_tm_node_t	*ss_sq_len;		/* Sleep queue length */
 	struct d_tm_node_t	*ss_cycle_duration;	/* Cycle duration (ms) */
 	struct d_tm_node_t	*ss_cycle_size;		/* Total ULTs in a cycle */
+	struct d_tm_node_t	*ss_total_reject;	/* Total Rejected requests */
 	uint64_t		 ss_busy_ts;		/* Last busy timestamp (ms) */
 	uint64_t		 ss_watchdog_ts;	/* Last watchdog print ts (ms) */
 	void			*ss_last_unit;		/* Last executed unit */

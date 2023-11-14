@@ -329,7 +329,7 @@ obj_set_req(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		om->om_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
 		om->om_status = -DER_OVERLOAD_RETRY;
 
-		return -DER_TIMEDOUT;
+		return -DER_OVERLOAD_RETRY;
 	} else if (obj_is_enum_opc(rpc->cr_opc)) {
 		struct obj_key_enum_v10_out *oeo_v10 = crt_reply_get(rpc);
 
