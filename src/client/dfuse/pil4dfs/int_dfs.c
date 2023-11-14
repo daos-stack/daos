@@ -764,11 +764,11 @@ out:
 static int
 fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 {
-	int                     cmd, rc;
-	d_iov_t                 iov	 = {};
-	char                   *buff_obj = NULL;
-	struct dfuse_hsd_reply  hsd_reply;
-	struct dfuse_il_reply   il_reply;
+	int                    cmd, rc;
+	d_iov_t                iov	 = {};
+	char                  *buff_obj = NULL;
+	struct dfuse_hsd_reply hsd_reply;
+	struct dfuse_il_reply  il_reply;
 
 	rc = ioctl(fd, DFUSE_IOCTL_IL, &il_reply);
 	if (rc != 0) {
@@ -1960,8 +1960,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			dir_list[idx_dirfd]->num_ents = 0;
 			dir_list[idx_dirfd]->st_ino   = FAKE_ST_INO(full_path);
 			memset(&dir_list[idx_dirfd]->anchor, 0, sizeof(daos_anchor_t));
-			dir_list[idx_dirfd]->path     = NULL;
-			dir_list[idx_dirfd]->ents     = NULL;
+			dir_list[idx_dirfd]->path = NULL;
+			dir_list[idx_dirfd]->ents = NULL;
 			if (strncmp(full_path, "/", 2) == 0)
 				full_path[0] = 0;
 
@@ -5103,7 +5103,7 @@ new_fcntl(int fd, int cmd, ...)
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
 			if (compatible_mode) {
 				struct ht_fd *fd_ht_obj = NULL;
-				int           fd_fake = -1;
+				int           fd_fake   = -1;
 
 				/* only fd allocated by kernel should be passed */
 				assert(fd < FD_FILE_BASE);
@@ -5269,7 +5269,7 @@ dup2(int oldfd, int newfd)
 
 	if (compatible_mode) {
 		struct ht_fd *fd_ht_obj = NULL;
-		int           fd_fake = -1;
+		int           fd_fake   = -1;
 
 		assert(oldfd < FD_FILE_BASE && newfd < FD_FILE_BASE);
 		fd_kernel = next_dup2(oldfd, newfd);
@@ -5279,15 +5279,15 @@ dup2(int oldfd, int newfd)
 		if (fd_directed < FD_FILE_BASE) {
 			return fd_kernel;
 		} else if (fd_directed < FD_DIR_BASE) {
-			rc = find_next_available_fd(
-				file_list[fd_directed - FD_FILE_BASE], &next_fd);
+			rc = find_next_available_fd(file_list[fd_directed - FD_FILE_BASE],
+						    &next_fd);
 			if (rc)
 				/* still return the fd dup from kernel in compatible mode */
 				return fd_kernel;
 			fd_fake = next_fd + FD_FILE_BASE;
 		} else {
-			rc = find_next_available_dirfd(
-				dir_list[fd_directed - FD_DIR_BASE], &next_dirfd);
+			rc = find_next_available_dirfd(dir_list[fd_directed - FD_DIR_BASE],
+						       &next_dirfd);
 			if (rc)
 				/* still return the fd dup from kernel in
 				 * compatible mode
@@ -5867,7 +5867,7 @@ init_myhook(void)
 
 			compatible_mode = true;
 			D_INFO("pil4dfs compatible mode is ON.\n");
-		    }
+		}
 	}
 
 	/* Find dfuse mounts from /proc/mounts */
