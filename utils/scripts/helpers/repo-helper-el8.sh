@@ -50,8 +50,8 @@ if [ -n "$REPO_FILE_URL" ]; then
     install_curl
     mkdir -p /etc/yum.repos.d
     pushd /etc/yum.repos.d/
-    curl -k -f -o daos_ci-el$MAJOR_VER-artifactory.repo        \
-         "$REPO_FILE_URL"daos_ci-el$MAJOR_VER-artifactory.repo
+    curl -k -f -o daos_ci-el"$MAJOR_VER"-artifactory.repo        \
+         "$REPO_FILE_URL"daos_ci-el"$MAJOR_VER"-artifactory.repo
     disable_repos /etc/yum.repos.d/
     popd
 fi
@@ -70,7 +70,7 @@ if [ ! -f /etc/fedora-release ]; then
         PT_REPO=powertools
     fi
     dnf install epel-release
-        dnf config-manager --enable $PT_REPO
+        dnf config-manager --enable "$PT_REPO"
     fi
     dnf clean all
 
@@ -78,6 +78,10 @@ daos_base="job/daos-stack/job/"
 artifacts="/artifact/artifacts/el8/"
 save_repos=()
 for repo in $REPOS; do
+    # don't install daos@ repos since we are building daos
+    if [[ $repo = daos@* ]]; then
+        continue
+    fi
     branch="master"
     build_number="lastSuccessfulBuild"
     if [[ $repo = *@* ]]; then
@@ -92,8 +96,8 @@ for repo in $REPOS; do
 name=$repo:$branch:$build_number\n\
 baseurl=${JENKINS_URL}$daos_base$repo/job/$branch/$build_number$artifacts\n\
 enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo
-    cat /etc/yum.repos.d/$repo:$branch:$build_number.repo
+gpgcheck=False\n" >> /etc/yum.repos.d/"$repo:$branch:$build_number".repo
+    cat /etc/yum.repos.d/"$repo:$branch:$build_number".repo
     save_repos+=("$repo:$branch:$build_number")
 done
 
