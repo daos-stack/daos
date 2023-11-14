@@ -38,7 +38,7 @@ else
     TARGET="$ORIGIN/master"
     min_diff=-1
     for base in "${all_bases[@]}"; do
-        git rev-parse --verify "$base" 2&>/dev/null || continue
+        git rev-parse --verify "$ORIGIN/$base" &> /dev/null || continue
         commits_ahead=$(git log --oneline "$ORIGIN/$base..HEAD" | wc -l)
         commits_behind=$(git log --oneline "HEAD..$ORIGIN/$base" | wc -l)
         commits_diff=$((commits_ahead + commits_behind))

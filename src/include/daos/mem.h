@@ -320,7 +320,6 @@ enum {
 /* Hints for umem atomic copy operation primarily for bmem implementation */
 enum acopy_hint {
 	UMEM_COMMIT_IMMEDIATE = 0, /* commit immediate, do not call within a tx */
-	UMEM_COMMIT_DEFER,	/* OK to defer commit to blob to a later point */
 	UMEM_RESERVED_MEM	/* memory from dav_reserve(), commit on publish */
 };
 

@@ -2877,6 +2877,9 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	tls->mpt_fini = 1;
 	/* Wait for xstream 0 migrate ULT(migrate_ult) stop */
 	if (tls->mpt_ult_running) {
+		ABT_mutex_lock(tls->mpt_inflight_mutex);
+		ABT_cond_broadcast(tls->mpt_inflight_cond);
+		ABT_mutex_unlock(tls->mpt_inflight_mutex);
 		rc = ABT_eventual_wait(tls->mpt_done_eventual, NULL);
 		if (rc != ABT_SUCCESS) {
 			rc = dss_abterr2der(rc);
