@@ -31,7 +31,7 @@ class TestScrubberEvictWithRebuild(TestWithScrubber):
         initial_metrics = {}
         final_metrics = {}
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
-        self.dmg_cmd.pool_query(self.pool.identifier)
+        self.pool.query()
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         # Exclude Rank 5 to start the rebuild operation.

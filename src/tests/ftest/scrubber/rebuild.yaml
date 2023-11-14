@@ -42,7 +42,7 @@ container:
   type: POSIX
   control_method: daos
   oclass: RP_2GX
-  properties: "cksum:sha256"
+  properties: "cksum:sha256,rd_fac:1"
 ior:
   ior_timeout: 60
   client_processes:
