@@ -23,13 +23,11 @@ def scons():
     tests = []
 
     for test in TEST_SRC:
-        flags = []
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
         testprog = test_env.d_test_program(target=testname,
                                            source=testobj + gurt_targets,
-                                           LIBS=test_env["LIBS"] + ['yaml'],
-                                           LINKFLAGS=flags)
+                                           LIBS=test_env["LIBS"] + ['yaml'])
         tests.append(testprog)
 
     Default(tests)
