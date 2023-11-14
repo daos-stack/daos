@@ -35,7 +35,6 @@ class DmgCommandBase(YamlCommand):
             default_yaml_file = self.yaml.filename
 
         self.hostlist_suffix = hostlist_suffix
-
         self._hostlist = FormattedParameter("-l {}")
         self.hostfile = FormattedParameter("-f {}")
         self.configpath = FormattedParameter("-o {}", default_yaml_file)
@@ -216,8 +215,7 @@ class DmgCommandBase(YamlCommand):
 
         def __init__(self):
             """Create a dmg config subcommand object."""
-            super(DmgCommandBase.ConfigSubCommand, self).__init__(
-                "run/dmg/config/*", "config")
+            super(DmgCommandBase.ConfigSubCommand, self).__init__("run/dmg/config/*", "config")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
@@ -234,10 +232,8 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg config generate object."""
                 super(
                     DmgCommandBase.ConfigSubCommand.GenerateSubCommand,
-                    self).__init__(
-                        "/run/dmg/config/generate/*", "generate")
-                self.access_points = FormattedParameter(
-                    "--access-points={}", None)
+                    self).__init__("/run/dmg/config/generate/*", "generate")
+                self.access_points = FormattedParameter("--access-points={}", None)
                 self.num_engines = FormattedParameter("--num-engines={}", None)
                 self.scm_only = FormattedParameter("--scm-only", False)
                 self.net_class = FormattedParameter("--net-class={}", None)
@@ -277,8 +273,7 @@ class DmgCommandBase(YamlCommand):
 
         def __init__(self):
             """Create a dmg faults subcommand object."""
-            super(DmgCommandBase.FaultsSubCommand, self).__init__(
-                "run/dmg/faults/*", "faults")
+            super(DmgCommandBase.FaultsSubCommand, self).__init__("run/dmg/faults/*", "faults")
 
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
@@ -299,8 +294,7 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg faults add-checker-report object."""
                 super(
                     DmgCommandBase.FaultsSubCommand.AddCheckerReportSubCommand,
-                    self).__init__(
-                        "/run/dmg/faults/add-checker-report/*", "add-checker-report")
+                    self).__init__("/run/dmg/faults/add-checker-report/*", "add-checker-report")
                 self.file = FormattedParameter("--file={}", None)
                 self.checker_report_class = FormattedParameter("--class={}", None)
 
@@ -525,8 +519,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg pool overwrite-acl command object."""
-                super().__init__(
-                    "/run/dmg/pool/overwrite-acl/*", "overwrite-acl")
+                super().__init__("/run/dmg/pool/overwrite-acl/*", "overwrite-acl")
                 self.pool = BasicParameter(None, position=1)
                 self.acl_file = FormattedParameter("-a {}", None)
 
@@ -880,8 +873,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg system erase command object."""
-                super().__init__(
-                    "/run/dmg/system/erase/*", "erase")
+                super().__init__("/run/dmg/system/erase/*", "erase")
 
         class ExcludeSubCommand(CommandWithParameters):
             """Defines an object for the dmg system exclude command."""
@@ -897,8 +889,7 @@ class DmgCommandBase(YamlCommand):
 
             def __init__(self):
                 """Create a dmg system leader-query command object."""
-                super().__init__(
-                    "/run/dmg/system/leader-query/*", "leader-query")
+                super().__init__("/run/dmg/system/leader-query/*", "leader-query")
 
         class ListPoolsSubCommand(CommandWithParameters):
             """Defines an object for the dmg system list-pools command."""
@@ -971,8 +962,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg telemetry metrics list object."""
-                    super().__init__(
-                        "/run/dmg/telemetry/metrics/list/*", "list")
+                    super().__init__("/run/dmg/telemetry/metrics/list/*", "list")
                     self.host = FormattedParameter("--host-list={}", None)
                     self.port = FormattedParameter("--port={}", None)
 
@@ -981,8 +971,7 @@ class DmgCommandBase(YamlCommand):
 
                 def __init__(self):
                     """Create a dmg telemetry metrics query object."""
-                    super().__init__(
-                        "/run/dmg/telemetry/metrics/query/*", "query")
+                    super().__init__("/run/dmg/telemetry/metrics/query/*", "query")
                     self.host = FormattedParameter("--host-list={}", None)
                     self.port = FormattedParameter("--port={}", None)
                     self.metrics = FormattedParameter("--metrics={}", None)
@@ -992,8 +981,7 @@ class DmgCommandBase(YamlCommand):
 
         def __init__(self):
             """Create a dmg version subcommand object."""
-            super(DmgCommandBase.VersionSubCommand, self).__init__(
-                "/run/dmg/version/*", "version")
+            super(DmgCommandBase.VersionSubCommand, self).__init__("/run/dmg/version/*", "version")
 
     def _get_new(self):
         """Get a new object based upon this one.

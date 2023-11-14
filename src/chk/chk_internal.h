@@ -134,7 +134,7 @@ CRT_RPC_DECLARE(chk_query, DAOS_ISEQ_CHK_QUERY, DAOS_OSEQ_CHK_QUERY);
 /*
  * CHK_MARK:
  * From check leader to check engine to mark some rank as "dead". Under check mode, if some rank
- * is dead (and failed to rejoin), it will not be exlcuded from related pool map to avoid further
+ * is dead (and failed to rejoin), it will not be excluded from related pool map to avoid further
  * damaging the system, instead, it will be mark as "dead" by the check instance and the check
  * status on related pool(s) will be marked as "failed".
  */

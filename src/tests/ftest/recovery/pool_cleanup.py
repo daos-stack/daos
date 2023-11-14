@@ -5,8 +5,8 @@
 """
 import time
 
-from recovery_test_base import RecoveryTestBase
 from general_utils import report_errors
+from recovery_test_base import RecoveryTestBase
 
 
 class PoolCleanupTest(RecoveryTestBase):
