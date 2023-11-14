@@ -177,15 +177,15 @@ struct ds_pool_child {
 	void			*spc_metrics[DAOS_NR_MODULE];
 };
 
-struct svc_op_key {
-	uint64_t mdk_client_time;
-	uuid_t   mdk_client_id;
+struct ds_pool_svc_op_key {
+	uint64_t ok_client_time;
+	uuid_t   ok_client_id;
 	/* TODO: add a (cart) opcode to the key? */
 };
 
-struct svc_op_val {
-	int  mdv_rc;
-	char mdv_resvd[62];
+struct ds_pool_svc_op_val {
+	int  ov_rc;
+	char ov_resvd[60];
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
@@ -216,9 +216,10 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
-int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
-			    const d_rank_list_t *target_addrs, int ndomains,
-			    const uint32_t *domains, daos_prop_t *prop, d_rank_list_t **svc_addrs);
+int
+     ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			     d_rank_list_t *target_addrs, int ndomains, uint32_t *domains,
+			     daos_prop_t *prop, d_rank_list_t **svc_addrs);
 int ds_pool_svc_stop(uuid_t pool_uuid);
 int ds_pool_svc_rf_to_nreplicas(int svc_rf);
 int ds_pool_svc_rf_from_nreplicas(int nreplicas);

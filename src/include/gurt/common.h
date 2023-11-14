@@ -329,13 +329,36 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 	})
 
 /* Internal helper macros, not to be called directly by the outside caller */
-#define __D_PTHREAD(fn, x)						\
-	({								\
-		int _rc;						\
-		_rc = fn(x);						\
-		D_ASSERTF(_rc == 0, "%s rc=%d %s\n", #fn, _rc,		\
-			  strerror(_rc));				\
-		d_errno2der(_rc);					\
+#define __D_PTHREAD(fn, x)                                                                         \
+	({                                                                                         \
+		int _rc;                                                                           \
+		_rc = fn(x);                                                                       \
+		D_ASSERTF(_rc == 0, #fn "(%p) rc=%d %s\n", x, _rc, strerror(_rc));                 \
+		d_errno2der(_rc);                                                                  \
+	})
+
+#define __D_PTHREAD_TIMED(fn, x)                                                                   \
+	({                                                                                         \
+		int             _rc;                                                               \
+		int             _delay1 = 0;                                                       \
+		int             _delay2 = 1;                                                       \
+		int             _f      = _delay1 + _delay2;                                       \
+		int             _c      = _f;                                                      \
+		struct timespec _wait   = {};                                                      \
+		clock_gettime(CLOCK_REALTIME, &_wait);                                             \
+		_wait.tv_sec += _f;                                                                \
+		while ((_rc = fn((x), &_wait)) == ETIMEDOUT) {                                     \
+			_delay1 = _delay2;                                                         \
+			_delay2 = _f;                                                              \
+			_c += _f;                                                                  \
+			_f = _delay1 + _delay2;                                                    \
+			D_CDEBUG(_c > 1, DLOG_WARN, DB_MEM,                                        \
+				 #fn "(%p) still held after %d seconds", x, _c);                   \
+			clock_gettime(CLOCK_REALTIME, &_wait);                                     \
+			_wait.tv_sec += _f;                                                        \
+		}                                                                                  \
+		D_ASSERTF(_rc == 0, #fn "(%p) rc=%d %s\n", x, _rc, strerror(_rc));                 \
+		d_errno2der(_rc);                                                                  \
 	})
 
 #define __D_PTHREAD_TRYLOCK(fn, x)					\
@@ -359,11 +382,8 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 	})
 
 #define D_SPIN_LOCK(x)		__D_PTHREAD(pthread_spin_lock, x)
-#define D_SPIN_UNLOCK(x)	__D_PTHREAD(pthread_spin_unlock, x)
-#define D_MUTEX_LOCK(x)		__D_PTHREAD(pthread_mutex_lock, x)
-#define D_MUTEX_UNLOCK(x)	__D_PTHREAD(pthread_mutex_unlock, x)
-#define D_RWLOCK_RDLOCK(x)	__D_PTHREAD(pthread_rwlock_rdlock, x)
-#define D_RWLOCK_WRLOCK(x)	__D_PTHREAD(pthread_rwlock_wrlock, x)
+#define D_SPIN_UNLOCK(x)        __D_PTHREAD(pthread_spin_unlock, x)
+#define D_MUTEX_UNLOCK(x)       __D_PTHREAD(pthread_mutex_unlock, x)
 #define D_RWLOCK_TRYWRLOCK(x)	__D_PTHREAD_TRYLOCK(pthread_rwlock_trywrlock, x)
 #define D_RWLOCK_UNLOCK(x)	__D_PTHREAD(pthread_rwlock_unlock, x)
 #define D_MUTEX_DESTROY(x)	__D_PTHREAD(pthread_mutex_destroy, x)
@@ -372,6 +392,20 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 #define D_MUTEX_INIT(x, y)	__D_PTHREAD_INIT(pthread_mutex_init, x, y)
 #define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
 #define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
+
+#ifdef DAOS_BUILD_RELEASE
+
+#define D_MUTEX_LOCK(x)    __D_PTHREAD(pthread_mutex_lock, x)
+#define D_RWLOCK_WRLOCK(x) __D_PTHREAD(pthread_rwlock_wrlock, x)
+#define D_RWLOCK_RDLOCK(x) __D_PTHREAD(pthread_rwlock_rdlock, x)
+
+#else
+
+#define D_MUTEX_LOCK(x)    __D_PTHREAD_TIMED(pthread_mutex_timedlock, x)
+#define D_RWLOCK_WRLOCK(x) __D_PTHREAD_TIMED(pthread_rwlock_timedwrlock, x)
+#define D_RWLOCK_RDLOCK(x) __D_PTHREAD_TIMED(pthread_rwlock_timedrdlock, x)
+
+#endif
 
 #define DGOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
 #define DGOLDEN_RATIO_PRIME_32	0x9e370001UL
@@ -423,7 +457,7 @@ void d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 			bool exclude);
 int d_rank_list_merge(d_rank_list_t *src_set, d_rank_list_t *merge_set);
 d_rank_list_t *d_rank_list_alloc(uint32_t size);
-d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
+int d_rank_list_resize(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);
 int d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src);
 void d_rank_list_shuffle(d_rank_list_t *rank_list);
@@ -503,8 +537,8 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 static inline size_t  __attribute__((nonnull))
 d_sgl_buf_size(d_sg_list_t *sgl)
 {
-	size_t	size = 0;
-	int	i;
+	size_t   size = 0;
+	uint32_t i;
 
 	if (sgl->sg_iovs == NULL)
 		return 0;
@@ -518,7 +552,7 @@ d_sgl_buf_size(d_sg_list_t *sgl)
 static inline void
 d_sgl_buf_copy(d_sg_list_t *dst_sgl, d_sg_list_t *src_sgl)
 {
-	int i;
+	uint32_t i;
 
 	D_ASSERT(dst_sgl->sg_nr >= src_sgl->sg_nr);
 	for (i = 0; i < src_sgl->sg_nr; i++) {
@@ -986,6 +1020,19 @@ struct d_vec_pointers {
 int d_vec_pointers_init(struct d_vec_pointers *pointers, uint32_t cap);
 void d_vec_pointers_fini(struct d_vec_pointers *pointers);
 int d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer);
+
+/** Change the default setting for if a signal handler should be installed in crt_init()
+ *
+ * This is controlled by DAOS_SIGNAL_REGISTER however calling this function changes the default
+ * value if the env is not set.  Daos supplied binaries should call this function, libraries should
+ * not.
+ */
+void
+d_signal_stack_enable(bool enabled);
+
+/** Register the signal handlers, if configured */
+void
+d_signal_register();
 
 #if defined(__cplusplus)
 }

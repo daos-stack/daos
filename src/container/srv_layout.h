@@ -163,8 +163,8 @@ struct container_hdl {
 /*
  * Service ops KVS (RDB_KVS_GENERIC)
  *
- * Each key is a client UUID and HLC timestamp, defined in struct svc_op_key.
- * Each value represents the result of handling that RPC, defined in struct svc_op_val.
+ * Each key is a client UUID and HLC timestamp, defined in struct ds_pool_svc_op_key.
+ * Each value represents the result of handling that RPC, defined in struct ds_pool_svc_op_val.
  */
 
 extern daos_prop_t cont_prop_default;

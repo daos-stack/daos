@@ -80,7 +80,7 @@ object types and can be combined with the the event and scheduler interface.
 The typical flow of a transaction is as follows:
 
 ```C
-daos_handle_t tx = DAOS_TX_NONE;
+daos_handle_t th = DAOS_TX_NONE;
 int           rc;
 
 /* allocate transaction */
