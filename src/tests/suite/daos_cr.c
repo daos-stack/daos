@@ -1802,6 +1802,9 @@ cr_pause(void **state, bool force)
 	rc = cr_system_start();
 	assert_rc_equal(rc, 0);
 
+	/* Wait sometime for MS to be ready for check query. */
+	sleep(3);
+
 	cr_dci_fini(&dci);
 	rc = cr_check_query(1,  &pool.pool_uuid, &dci);
 	assert_rc_equal(rc, 0);

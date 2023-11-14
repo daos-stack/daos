@@ -1858,11 +1858,11 @@ chk_engine_sched(void *args)
 	D_INFO(DF_ENGINE" scheduler on rank %u entry at phase %u\n",
 	       DP_ENGINE(ins), myrank, cbk->cb_phase);
 
-	while (ins->ci_sched_running) {
+	while (!ins->ci_sched_exiting) {
 		dss_sleep(300);
 
 		/* Someone wants to stop the check. */
-		if (!ins->ci_sched_running)
+		if (ins->ci_sched_exiting)
 			D_GOTO(out, rc = 0);
 
 		ins_phase = chk_pools_find_slowest(ins, &done);
@@ -2293,9 +2293,11 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags)
 {
 	struct chk_instance	*ins = chk_engine;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
+	struct chk_pool_rec	*cpr;
 	d_rank_t		 myrank = dss_self_rank();
 	int			 rc = 0;
 	int			 i;
+	int			 active = false;
 
 	if (gen != 0 && gen != cbk->cb_gen)
 		D_GOTO(log, rc = -DER_NOTAPPLICABLE);
@@ -2306,7 +2308,7 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags)
 	if (ins->ci_starting)
 		D_GOTO(log, rc = -DER_BUSY);
 
-	if (ins->ci_stopping)
+	if (ins->ci_stopping || ins->ci_sched_exiting)
 		D_GOTO(log, rc = -DER_INPROGRESS);
 
 	if (cbk->cb_ins_status != CHK__CHECK_INST_STATUS__CIS_RUNNING)
@@ -2332,7 +2334,17 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags)
 	if (ins->ci_pool_stopped)
 		*flags = CSF_POOL_STOPPED;
 
-	if (d_list_empty(&ins->ci_pool_list)) {
+	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
+		if (!cpr->cpr_done && !cpr->cpr_skip && !cpr->cpr_stop) {
+			D_ASSERTF(pool_nr != 0, "Hit active pool "DF_UUIDF" after stop all\n",
+				  DP_UUID(cpr->cpr_uuid));
+
+			active = true;
+			break;
+		}
+	}
+
+	if (!active) {
 		chk_stop_sched(ins);
 		/* To indicate that there is no active pool(s) on this rank. */
 		rc = 1;
@@ -3164,7 +3176,7 @@ again:
 		goto out;
 	}
 
-	if (!ins->ci_sched_running || cpr->cpr_exiting) {
+	if (!ins->ci_sched_running || ins->ci_sched_exiting || cpr->cpr_exiting) {
 		rc = 1;
 		ABT_mutex_unlock(cpr->cpr_mutex);
 		goto out;

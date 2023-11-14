@@ -434,9 +434,14 @@ chk_pool_wait(struct chk_pool_rec *cpr)
 	struct chk_pending_rec	*tmp;
 
 	D_ASSERT(cpr->cpr_refs > 0);
+	/*
+	 * The caller chk_pool_stop_one() must firstly delete the cpr from the pool
+	 * tree, then stop it here. So chk_pool_wait() will not be called repeatedly.
+	 */
+	D_ASSERT(cpr->cpr_stop == 0);
 
 	ABT_mutex_lock(cpr->cpr_mutex);
-	if (cpr->cpr_thread != ABT_THREAD_NULL && !cpr->cpr_stop) {
+	if (cpr->cpr_thread != ABT_THREAD_NULL) {
 		cpr->cpr_stop = 1;
 		ABT_cond_broadcast(cpr->cpr_cond);
 		ABT_mutex_unlock(cpr->cpr_mutex);
