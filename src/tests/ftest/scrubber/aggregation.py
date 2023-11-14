@@ -50,15 +50,14 @@ class TestScrubberEvictWithAggregation(TelemetryUtils, TestWithScrubber):
         # to run in parallel during this time.
         start_time = 0
         finish_time = 0
-        poll_status = False
         start_time = time.time()
-        while int(finish_time - start_time) < 120 and poll_status is False:
+        while int(finish_time - start_time) < 120:
             final_aggregation_metrics = self.get_metrics("engine_pool_vos_aggregation_obj_scanned")
             status = self.verify_scrubber_metrics_value(initial_aggregation_metrics,
                                                         final_aggregation_metrics)
+            # aggregation counters are changing (which means aggregation has started)
             if status is True:
                 break
-            poll_status = True
             # Wait for 10 seconds before querying the metrics value.
             time.sleep(10)
             finish_time = time.time()
