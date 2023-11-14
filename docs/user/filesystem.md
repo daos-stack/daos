@@ -974,6 +974,10 @@ libpil4dfs intercepting summary for ops on DFS:
 [op_sum ]  5003
 ```
 
+### Turn on compatible mode in libpil4dfs
+
+"D_IL_COMPATIBLE=1" or "D_IL_COMPATIBLE=true" turns on compatible mode. Fake fd will not be returned to applications. This mode provides better compatibility with degraded performance in open, openat, and opendir, etc.
+
 ### Limitations of using libpil4dfs
 Stability issues: This is a preview version. Some features are not implemented yet. Many APIs are involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc. 
 
