@@ -5,10 +5,12 @@
 """
 import time
 
-from scrubber_test_base import TestWithScrubber
 from telemetry_utils import TelemetryUtils
+from scrubber_test_base import TestWithScrubber
 
-class TestScrubberEvictWithAggregation(TestWithScrubber, TelemetryUtils):
+
+class TestScrubberEvictWithAggregation(TelemetryUtils, TestWithScrubber):
+    # pylint: disable=too-many-ancestors
     """Inject Checksum Fault with scrubber enabled
     and scrubber threshold set to a certain value.
     Aggregation is run on the background.
