@@ -231,8 +231,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          submodules: true
-          fetch-depth: 500
+          submodules: false
+          fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Build RPM Docker image
         id: build-rpm-docker-image
@@ -315,35 +315,51 @@ jobs:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: false
+          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Calculate Functional Testing Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
+             . ci/gha_functions.sh
+             set -eu
+             # it might seem tempting to factor in the result of the build for this
+             # distro here and not include a failed build in the test matrix but
+             # the problem with that is that if/when the user asks GHA to rebuild
+             # all failed jobs and a previously failed RPM job is successful, the
+             # test matrix won't include testing it since it was calculated and was
+             # successful on the previous run without the failed build stage in it
              l=()
              trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT' EXIT
              if ${CP_SKIP_FUNC_TEST:-false}; then
                  exit 0
              fi
-             # it might seem tempting to factor in the result of the build for this
-             # distro here and not include a failed build in the test matrix
-             # the problem with that is that if/when the user asks GHA to rebuild
-             # all failed jobs and a previously failed RPM job is successful, the
-             # test matrix won't include testing it since it was calculated and was
-             # successful on the previous run without the failed build stage in it
-             if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
-                ! ${CP_SKIP_FUNC_TEST_EL8:-false}; then
-                 # it would definitely be nicer to get these into the environment
-                 # as unquoted strings so that we didn't have to double quote here
-                 l+=('"el8"')
+             if ! cd src/tests/ftest; then
+                 echo "src/tests/ftest doesn't exist."
+                 echo "Could not determine if tests exist for this stage, assuming they do."
+                 exit 0
              fi
-             if ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
-                ! ${CP_SKIP_FUNC_TEST_EL9:-false}; then
-                 l+=('"el9"')
-             fi
-             if ${{ github.event_name == 'push' }} ||
-                (${{ github.event_name == 'pull_request' }} &&
-                ! ${CP_SKIP_BUILD_LEAP15_RPM:-false} &&
-                ! ${CP_SKIP_FUNC_TEST_LEAP15:-true}); then
-                 l+=('"leap15"')
+
+             if ./launch.py --list "$(get_test_tags "-hw")"; then
+                 if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
+                    ! ${CP_SKIP_FUNC_TEST_EL8:-false}; then
+                     # it would definitely be nicer to get these into the environment
+                     # as unquoted strings so that we didn't have to double quote here
+                     l+=('"el8"')
+                 fi
+                 if ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
+                    ! ${CP_SKIP_FUNC_TEST_EL9:-false}; then
+                     l+=('"el9"')
+                 fi
+                 if ${{ github.event_name == 'push' }} ||
+                    (${{ github.event_name == 'pull_request' }} &&
+                    ! ${CP_SKIP_BUILD_LEAP15_RPM:-false} &&
+                    ! ${CP_SKIP_FUNC_TEST_LEAP15:-true}); then
+                     l+=('"leap15"')
+                 fi
              fi
 
   Functional:
@@ -532,34 +548,50 @@ jobs:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          submodules: false
+          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Calculate Functional Testing Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
+             . ci/gha_functions.sh
              set -eu
+             # it might seem tempting to factor in the result of the build for this
+             # distro here and not include a failed build in the test matrix but
+             # the problem with that is that if/when the user asks GHA to rebuild
+             # all faiiled jobs and a previously failed RPM job is successful, the
+             # test matrix won't include testing it since it was calculated and was
+             # successful on the previous run without the failed build stage in it
              l=()
              trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT' EXIT
              if ${CP_SKIP_FUNC_HW_TEST:-false}; then
                  exit 0
              fi
-             # it might seem tempting to factor in the result of the build for this
-             # distro here and not include a failed build in the test matrix
-             # the problem with that is that if/when the user asks GHA to rebuild
-             # all faiiled jobs and a previously failed RPM job is successful, the
-             # test matrix won't include testing it since it was calculated and was
-             # successful on the previous run without the failed build stage in it
-             if ! "${CP_SKIP_FUNC_HW_TEST_LARGE:-false}"; then
+             if ! cd src/tests/ftest; then
+                 echo "src/tests/ftest doesn't exist."
+                 echo "Could not determine if tests exist for this stage, assuming they do."
+                 exit 0
+             fi
+             if ! "${CP_SKIP_FUNC_HW_TEST_LARGE:-false}" &&
+                ./launch.py --list "$(get_test_tags "hw,large,-provider")"; then
                  # it would definitely be nicer to get these into the environment
                  # as unquoted strings so that we didn't have to double quote here
                  l+=('"Large"')
              fi
-             if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM:-false}; then
+             if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM:-false} &&
+                ./launch.py --list "$(get_test_tags "hw,medium,-provider")"; then
                  l+=('"Medium"')
              fi
-             if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM_VERBS_PROVIDER:-false}; then
+             if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM_VERBS_PROVIDER:-false} &&
+                ./launch.py --list "$(get_test_tags "hw,medium,provider")"; then
                  l+=('"Medium Verbs Provider"')
              fi
              if ${{ github.event_name == 'push' }} &&
-                ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM_UCX_PROVIDER:-false}; then
+                ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM_UCX_PROVIDER:-false} &&
+                ./launch.py --list "$(get_test_tags "hw,medium,provider")"; then
                  l+=('"Medium UCX Provider"')
              fi
 
@@ -581,7 +613,7 @@ jobs:
       (needs.Build-RPM.result == 'success' ||
        needs.Build-RPM.result == 'skipped') &&
       (needs.Functional.result == 'success' ||
-      needs.Functional.result == 'skipped')
+       needs.Functional.result == 'skipped')
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
