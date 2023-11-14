@@ -3,14 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import re
-from ClusterShell.NodeSet import NodeSet
+import time
 
-from recovery_test_base import RecoveryTestBase
-from general_utils import report_errors
+from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
+from general_utils import report_errors
+from recovery_test_base import RecoveryTestBase
 
 
 class ContainerListConsolidationTest(RecoveryTestBase):

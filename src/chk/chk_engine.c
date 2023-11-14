@@ -2563,7 +2563,7 @@ chk_engine_mark_rank_dead(uint64_t gen, d_rank_t rank, uint32_t version)
 	 *	 check instance; otherwise, related pool(s) will be marked as 'failed' when
 	 *	 try ro access something on the dead rank.
 	 *
-	 *	 So here, it is not ncessary to find out the affected pools and fail them
+	 *	 So here, it is not necessary to find out the affected pools and fail them
 	 *	 immediately when the death event is reported, instead, it will be handled
 	 *	 sometime later as the DAOS check going.
 	 */

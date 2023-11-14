@@ -6,9 +6,8 @@
 import time
 
 from ClusterShell.NodeSet import NodeSet
-
-from ior_test_base import IorTestBase
 from general_utils import report_errors
+from ior_test_base import IorTestBase
 from run_utils import run_remote
 
 
