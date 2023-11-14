@@ -61,8 +61,7 @@ class DynamicServerPool(TestWithServers):
             # and the extra server we'll be adding will be rank2.
             for rank, host in enumerate(hosts):
                 pool_exists_on_host = pool.verify_uuid_directory(
-                    NodeSet(host), pool.uuid.lower(),
-                    self.server_managers[0].get_config_value("scm_mount"))
+                    NodeSet(host), self.server_managers[0].get_config_value("scm_mount"))
                 # If this rank is in the rank list, there should be the
                 # UUID-named directory; i.e., pool_exist_on_host is True.
                 pool_expected = rank in uuid_to_ranks[pool.uuid.lower()]

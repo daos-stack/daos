@@ -76,10 +76,10 @@ class MultiServerCreateDeleteTest(TestWithServers):
                 self.fail("Test was expected to fail but it passed at pool create.")
             if '0' in tgtlist:
                 # verify_uuid_directory checks if the uuid directory exists in host1
-                if not self.pool.verify_uuid_directory(host1, self.pool.uuid, scm_mount):
+                if not self.pool.verify_uuid_directory(host1, scm_mount):
                     self.fail("Pool {0} not found on host {1}.\n".format(self.pool.uuid, host1))
             if '1' in tgtlist:
-                if not self.pool.verify_uuid_directory(host2, self.pool.uuid, scm_mount):
+                if not self.pool.verify_uuid_directory(host2, scm_mount):
                     self.fail("Pool {0} not found on host {1}.\n".format(self.pool.uuid, host2))
         else:
             test_destroy = False

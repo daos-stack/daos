@@ -1448,12 +1448,11 @@ class TestPool(TestDaosApiBase):
                 status = False
         return status
 
-    def verify_uuid_directory(self, host, uuid, scm_mount):
+    def verify_uuid_directory(self, host, scm_mount):
         """Check if pool folder exist on server.
 
         Args:
             host (NodeSet): Server host name
-            uuid (str): Pool uuid to check if exists
             scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
                 obtained as self.server_managers[0].get_config_value("scm_mount")
 
@@ -1461,7 +1460,7 @@ class TestPool(TestDaosApiBase):
             bool: True if pool folder exists, False otherwise
 
         """
-        pool_dir = f"{scm_mount}/{uuid}"
+        pool_dir = f"{scm_mount}/{self.uuid.lower()}"
         result = check_file_exists(host, pool_dir, directory=True, sudo=True)
         if result[0]:
             self.log.info("%s exists on %s", pool_dir, host)
