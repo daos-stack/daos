@@ -551,19 +551,6 @@ iterate_biov(struct bio_desc *biod,
 				struct bio_copy_args *arg = data;
 
 				D_ASSERT(i < arg->ca_sgl_cnt);
-				/* re-check to avoid compiler warning
-				 * This function is weird in that it takes a callback and a void *
-				 * but then modifies the void * based on which callback is provided,
-				 * the compiler knows about what is behind the pointer in
-				 * different cases and the writes here would be a buffer overflow
-				 * for different cb functions.  The compiler does not like this and
-				 * only allows the code to compile based on the presence of the
-				 * assert() - and D_ASSERT() may be disabled so add an additional
-				 * call to assert() itself.  Overall the logic of modifying data
-				 * should be in the cb itself as it's not really a void * depsite
-				 * what it's declared as.
-				 */
-				assert(i < arg->ca_sgl_cnt);
 				arg->ca_sgl_idx = i;
 				arg->ca_iov_idx = 0;
 				arg->ca_iov_off = 0;
@@ -790,13 +777,12 @@ iod_expand_region(struct bio_iov *biov, struct bio_rsrvd_region *last_rg,
 	D_DEBUG(DB_TRACE, "merging IOVs: ["DF_U64", "DF_U64"), ["DF_U64", "DF_U64")\n",
 		last_rg->brr_off, last_rg->brr_end, off, end);
 
-	if (last_rg->brr_off < off) {
+	if (last_rg->brr_off < off)
 		chk_pg_idx += (prev_pg_end - prev_pg_start);
-	} else {
+	else
 		/* The prev region must be covered by one page */
 		D_ASSERTF(prev_pg_end == prev_pg_start,
 			  ""DF_U64" != "DF_U64"\n", prev_pg_end, prev_pg_start);
-	}
 
 	bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
 	if (bio_iov2raw_buf(biov) == NULL)
