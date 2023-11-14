@@ -1093,18 +1093,10 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 		goto out_replicas;
 	}
 
-	if (entry->type == RAFT_LOGTYPE_ADD_NODE) {
+	if (entry->type == RAFT_LOGTYPE_ADD_NODE)
 		rc = d_rank_list_append(replicas, rank);
-	} else if (entry->type == RAFT_LOGTYPE_REMOVE_NODE) {
-		/* never expect 1->0 in practice, right? But protect against double-free. */
-		bool replicas_freed = (replicas->rl_nr == 1);
-
+	else if (entry->type == RAFT_LOGTYPE_REMOVE_NODE)
 		rc = d_rank_list_del(replicas, rank);
-		if (replicas_freed) {
-			D_ASSERT(rc == -DER_NOMEM);
-			replicas = NULL;
-		}
-	}
 	if (rc != 0)
 		goto out_replicas;
 
