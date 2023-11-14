@@ -449,6 +449,8 @@ err:
 
 /* Do not allow security xattrs to be set or read, see DAOS-14639 */
 #define XATTR_SEC "security."
+/* Do not allow either system.posix_acl_default or system.posix_acl_access */
+#define XATTR_P_ACL "system.posix_acl"
 
 void
 df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size,
@@ -464,7 +466,10 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *val
 	}
 
 	if (strncmp(name, XATTR_SEC, sizeof(XATTR_SEC) - 1) == 0)
-		D_GOTO(err, rc = ENODATA);
+		D_GOTO(err, rc = ENOTSUP);
+
+	if (strncmp(name, XATTR_P_ACL, sizeof(XATTR_P_ACL) - 1) == 0)
+		D_GOTO(err, rc = ENOTSUP);
 
 	inode = dfuse_inode_lookup(dfuse_info, ino);
 	if (!inode) {
@@ -495,6 +500,9 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 	int                       rc;
 
 	if (strncmp(name, XATTR_SEC, sizeof(XATTR_SEC) - 1) == 0)
+		D_GOTO(err, rc = ENODATA);
+
+	if (strncmp(name, XATTR_P_ACL, sizeof(XATTR_P_ACL) - 1) == 0)
 		D_GOTO(err, rc = ENODATA);
 
 	inode = dfuse_inode_lookup(dfuse_info, ino);
