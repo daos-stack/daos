@@ -1069,6 +1069,7 @@ agg_update_parity(struct ec_agg_entry *entry, uint8_t *bit_map,
 			goto out;
 		while (!isset(bit_map, j))
 			j++;
+		D_ERROR("i %d, j%d, ec_encode_data_update\n", i, j);
 		agg_diff_preprocess(entry, diff, j);
 		ec_encode_data_update(cell_bytes, k, p, j,
 				      entry->ae_codec->ec_gftbls, diff,

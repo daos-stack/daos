@@ -5265,7 +5265,8 @@ obj_ec_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned 
 			D_GOTO(out, rc = -DER_TGT_RETRY);
 		}
 
-		D_DEBUG(DB_IO, DF_OID" shard re-direct %d -> %d for degrade fetch.\n",
+		//D_DEBUG(DB_IO, DF_OID" shard re-direct %d -> %d for degrade fetch.\n",
+		D_ERROR(DF_OID" shard re-direct %d -> %d for degrade fetch.\n",
 			DP_OID(obj->cob_md.omd_id), grp_start + tgt_idx, grp_start + ec_deg_tgt);
 
 		/* Update the tgt map */

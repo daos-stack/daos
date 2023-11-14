@@ -2514,6 +2514,92 @@ ec_three_stripes_nvme_io(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+ec_partial_overwrite_agg(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_size_t	stripe_size, data_size, update_size;
+	char		*data;
+	char		*verify_data;
+	uint16_t	fail_shards[2];
+	uint64_t	fail_val;
+	daos_recx_t	recx;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)EC_CELL_SIZE;
+	data_size = stripe_size * 2;
+	data = (char *)malloc(data_size);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(data_size);
+	assert_true(verify_data != NULL);
+
+	print_message("cell_size %d, data_size %d\n", EC_CELL_SIZE, (int)data_size);
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_idx = 0;
+	recx.rx_nr = data_size;
+	memset(data, 'a', data_size);
+	//dts_buf_render(data, data_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, data_size, &req);
+
+	/* overwrite
+	 * rect [ 0x0000 - 0x7FFF ]            size: 32KiB
+	 * rect [ 0x8000 - 0xFFFF ]            size: 32KiB
+	 * rect [ 0x10000 - 0x17FFF ]          size: 32KiB
+	 * rect [ 0x28000 - 0x2FFFF ]           size: 32KiB
+	 */
+	update_size = 0x8000;
+	memset(data, 'b', update_size);
+	recx.rx_idx = 0;
+	recx.rx_nr = 0x8000;
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, update_size, &req);
+	recx.rx_idx = 0x8000;
+	memset(data + 0x8000, 'b', update_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, update_size, &req);
+	recx.rx_idx = 0x10000;
+	memset(data + 0x10000, 'b', update_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, update_size, &req);
+	recx.rx_idx = 0x28000;
+	memset(data + 0x28000, 'b', update_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, update_size, &req);
+
+	memcpy(verify_data, data, data_size);
+	memset(data, 0, data_size);
+
+	fail_shards[0] = 0;
+	fail_shards[1] = 3;
+	fail_val = daos_shard_fail_value(fail_shards, 2);
+	daos_fail_value_set(fail_val);
+	daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
+
+	print_message("verify data before agg\n");
+	recx.rx_idx = 0;
+	recx.rx_nr = data_size;
+	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, data_size, &req);
+	assert_memory_equal(data, verify_data, data_size);
+
+	print_message("sleep 50 S for agg...\n");
+	sleep(50);
+	print_message("sleep 50 S done\n");
+
+	print_message("verify data after agg\n");
+	memset(data, 0, data_size);
+	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, data, data_size, &req);
+	assert_memory_equal(data, verify_data, data_size);
+
+	ioreq_fini(&req);
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
 	{"EC0: ec dkey list and punch test",
@@ -2571,6 +2657,8 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC27: ec double nvme io failed", ec_two_stripes_nvme_io, async_disable,
 	test_case_teardown},
 	{"EC28: ec three nvme io failed", ec_three_stripes_nvme_io, async_disable,
+	test_case_teardown},
+	{"EC29: ec partial overwrite aggregation", ec_partial_overwrite_agg, async_disable,
 	test_case_teardown},
 };
 
