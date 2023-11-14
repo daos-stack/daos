@@ -416,6 +416,7 @@ jobs:
             env
             STAGE_TAGS="-hw"
             FTEST_ARG=""
+            INST_RPMS="daos-client daos-tests daos-server daos-serialize daos-tests-internal"
             case "${{ matrix.distro }}" in
                 'el8')
                     CHROOT_NAME="rocky+epel-8-x86_64"
@@ -472,8 +473,7 @@ jobs:
             echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
                  $GITHUB_ENV
             echo "LABEL=$LABEL" >> $GITHUB_ENV
-            echo -n "INST_RPMS=daos-client daos-tests daos-server daos-serialize" >> $GITHUB_ENV
-            echo -n " daos-tests-internal" >> $GITHUB_ENV
+            echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v3
         with:
@@ -646,6 +646,7 @@ jobs:
         run: |
             STAGE_TAGS="hw"
             FTEST_ARG="--nvme=auto:-3DNAND"
+            INST_RPMS="daos-client daos-tests daos-server daos-serialize daos-tests-internal"
             CHROOT_NAME="rocky+epel-8-x86_64"
             DISTRO_NAME="EL"
             DISTRO_NAME_UPPER="EL"
@@ -666,8 +667,19 @@ jobs:
                 STAGE_TAGS+=",large"
                 SIZE="LARGE"
             fi
-            if [[ "${{ matrix.stage }}" = *\ Prvider ]]; then
+            if [[ "${{ matrix.stage }}" = *\ Provider ]]; then
                 STAGE_TAGS+=",provider"
+                if [[ "${{ matrix.stage }}" = *\ Verbs\ * ]]; then
+                  FTEST_ARG+=' --provider ofi+verbs'
+                elif [[ "${{ matrix.stage }}" = *\ UCX\ * ]]; then
+                  FTEST_ARG+=' --provider ucx+dc_x'
+                  INST_RPMS+=' mercury-ucx'
+                elif [[ "${{ matrix.stage }}" = *\ TCP\ * ]]; then
+                  FTEST_ARG+=' --provider ofi+tcp'
+                else
+                    echo "Unknown provider in ${{ matrix.stage }}"
+                    exit 1
+                fi
             else
                 STAGE_TAGS+=",-provider"
             fi
@@ -684,8 +696,7 @@ jobs:
             echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
                  $GITHUB_ENV
             echo "LABEL=$LABEL" >> $GITHUB_ENV
-            echo -n "INST_RPMS=daos-client daos-tests daos-server daos-serialize" >> $GITHUB_ENV
-            echo " daos-tests-internal" >> $GITHUB_ENV
+            echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
             echo "SIZE=$SIZE" >> $GITHUB_ENV
       - name: Checkout code
         uses: actions/checkout@v3
