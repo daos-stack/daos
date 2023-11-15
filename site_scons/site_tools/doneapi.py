@@ -26,7 +26,7 @@ class DetectCompiler():
         sys.stdout.flush()
         for path in [root, binp, libp, include, icx]:
             if not os.path.exists(path):
-                print("oneapi compiler: %s doesn't exist" % path)
+                print(f"oneapi compiler: {path} doesn't exist")
                 return
         self.map = {'root': root,
                     'bin': binp,
