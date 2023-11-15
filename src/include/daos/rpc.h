@@ -93,8 +93,6 @@ enum daos_rpc_type {
 };
 
 struct daos_req_comm_in {
-	uuid_t		req_in_pool_id;
-	uuid_t          req_in_cont_id;
 	uint32_t	req_in_uid;
 	uint32_t	req_in_gid;
 	uint32_t	req_in_projid;

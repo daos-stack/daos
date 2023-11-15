@@ -877,7 +877,7 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 		goto kickoff;
 
 	/* Request expired */
-	if (req->sr_attr.sra_timeout &&
+	if (req->sr_attr.sra_timeout > MAX_CYCLE_TIME &&
 	    (info->si_cur_ts - req->sr_enqueue_ts) >
 	    (req->sr_attr.sra_timeout - MAX_CYCLE_TIME))
 		goto kickoff;
@@ -1151,7 +1151,7 @@ process_pool_cb(d_list_t *rlink, void *arg)
 		for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
 			if (is_system_req(i))
 				continue;
-			tmp = kick[i] * MAX_KICKED_REQ_CNT / info->si_total_req_cnt;
+			tmp = kick[i] * MAX_KICKED_REQ_CNT / rpc_cnt;
 			kick[i] = tmp;
 		}
 	}
@@ -1218,7 +1218,7 @@ policy_fifo_process(struct dss_xstream *dx)
 				rc = process_req(dx, req1);
 				if (rc > 0) {
 					d_binheap_remove(&info->si_heap, &req1->sr_node);
-					d_list_add_tail(&req->sr_link, &tmp_list);
+					d_list_add_tail(&req1->sr_link, &tmp_list);
 				}
 			} else {
 				break;
@@ -1234,7 +1234,7 @@ policy_fifo_process(struct dss_xstream *dx)
 		rc = process_req(dx, req1);
 		if (rc > 0) {
 			d_binheap_remove(&info->si_heap, &req1->sr_node);
-			d_list_add_tail(&req->sr_link, &tmp_list);
+			d_list_add_tail(&req1->sr_link, &tmp_list);
 		}
 	}
 
@@ -1331,7 +1331,8 @@ req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 	return rc;
 }
 
-#define MAX_SCHED_REQ_NUM	(2 << 20)
+#define MAX_SCHED_REQ_NUM	(1 << 20)
+#define RPC_ROUND_TRIP_TIME	(100)	/* in msecs */
 
 static bool
 req_need_reject(struct sched_req_attr *attr, struct sched_info *info)
@@ -1347,10 +1348,9 @@ req_need_reject(struct sched_req_attr *attr, struct sched_info *info)
 	/*
 	 * Calculate time based on ults on argobots and non-system
 	 * requests queued. It is not easy to estimate how many system
-	 * ults will be executed, reserve 50% of timeout for it.
+	 * ults will be executed, reserve 50% of RPC estimated time.
 	 */
 	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
-		req_num += info->si_kicked_req_cnt[i];
 		if (!is_system_req(i)) {
 			estimated_time += info->si_req_cnt[i] * req_latencys[i];
 			req_num += info->si_req_cnt[i];
@@ -1358,11 +1358,16 @@ req_need_reject(struct sched_req_attr *attr, struct sched_info *info)
 	}
 	/* convert to msecs */
 	estimated_time /= 1000;
+	/* system ULT time */
+	estimated_time += (estimated_time / 2);
+	/* max cycle time */
 	estimated_time += MAX_CYCLE_TIME;
-	if ((estimated_time << 1) > attr->sra_timeout)
+	/* RPC round-trip time */
+	estimated_time += RPC_ROUND_TRIP_TIME;
+	if (estimated_time > attr->sra_timeout)
 		return true;
 
-	if ((req_num << 1) > MAX_SCHED_REQ_NUM)
+	if (req_num > MAX_SCHED_REQ_NUM)
 		return true;
 
 	return false;
