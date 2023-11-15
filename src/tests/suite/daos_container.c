@@ -2487,9 +2487,11 @@ co_rf_simple(void **state)
 		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					  3, -1);
 		assert_success(rc);
+		test_rebuild_wait(&arg, 1);
 		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					  4, -1);
 		assert_success(rc);
+		test_rebuild_wait(&arg, 1);
 		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					  5, -1);
 		assert_success(rc);
@@ -2924,9 +2926,11 @@ co_redun_lvl(void **state)
 		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					  ranks[2], -1);
 		assert_success(rc);
+		test_rebuild_wait(&arg, 1);
 		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					  ranks[1], -1);
 		assert_success(rc);
+		test_rebuild_wait(&arg, 1);
 		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 					  ranks[0], -1);
 		assert_success(rc);
