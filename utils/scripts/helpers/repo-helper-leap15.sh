@@ -121,6 +121,10 @@ daos_base="job/daos-stack/job/"
 artifacts="/artifact/artifacts/leap15/"
 save_repos=()
 for repo in $REPOS; do
+    # don't install daos@ repos since we are building daos
+    if [[ $repo = daos@* ]]; then
+        continue
+    fi
     branch="master"
     build_number="lastSuccessfulBuild"
     if [[ $repo = *@* ]]; then
