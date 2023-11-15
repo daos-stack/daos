@@ -402,8 +402,8 @@ pool_child_delete_one(void *uuid)
 	if (child == NULL)
 		return 0;
 
-	D_ASSERT(d_list_empty(&child->spc_cont_list));
 	d_list_del_init(&child->spc_list);
+	ds_cont_child_stop_all(child);
 	ds_stop_chkpt_ult(child);
 	ds_stop_scrubbing_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
@@ -561,6 +561,8 @@ pool_free_ref(struct daos_llink *llink)
 	else if (rc != 0)
 		D_ERROR(DF_UUID": failed to delete ES pool caches: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
+
+	ds_cont_ec_eph_free(pool);
 
 	pl_map_disconnect(pool->sp_uuid);
 	if (pool->sp_map != NULL)
@@ -854,36 +856,6 @@ failure_pool:
 }
 
 /*
- * Called via dss_thread_collective() to stop all container services
- * on the current xstream.
- */
-static int
-pool_child_stop_containers(void *uuid)
-{
-	struct ds_pool_child *child;
-
-	child = ds_pool_child_lookup(uuid);
-	if (child == NULL)
-		return 0;
-
-	ds_cont_child_stop_all(child);
-	ds_pool_child_put(child); /* -1 for the list */
-	return 0;
-}
-
-static int
-ds_pool_stop_all_containers(struct ds_pool *pool)
-{
-	int rc;
-
-	rc = dss_thread_collective(pool_child_stop_containers, pool->sp_uuid, 0);
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to stop container service: "DF_RC"\n",
-			DP_UUID(pool->sp_uuid), DP_RC(rc));
-	return rc;
-}
-
-/*
  * Stop a pool. Must be called on the system xstream. Release the ds_pool
  * object reference held by ds_pool_start. Only for mgmt and pool modules.
  */
@@ -901,12 +873,6 @@ ds_pool_stop(uuid_t uuid)
 	pool->sp_stopping = 1;
 
 	ds_iv_ns_stop(pool->sp_iv_ns);
-
-	/* Though all containers started in pool_alloc_ref, we need stop all
-	 * containers service before tgt_ec_eqh_query_ult(), otherwise container
-	 * EC aggregation ULT might try to access ec_eqh_query structure.
-	 */
-	ds_pool_stop_all_containers(pool);
 	ds_pool_tgt_ec_eph_query_abort(pool);
 	pool_fetch_hdls_ult_abort(pool);
 
