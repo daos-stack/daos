@@ -503,7 +503,7 @@ rdb_get_use_leases(void)
  * \a clue->bcl_replicas with d_rank_list_free.
  *
  * \param[in]	storage	database storage
- * \parma[out]	clue	database clue
+ * \param[out]	clue	database clue
  */
 int
 rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
