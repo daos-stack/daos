@@ -12,13 +12,11 @@ import logging
 import sys
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
-from util.agent_utils_params import (DaosAgentTransportCredentials,
-                                     DaosAgentYamlParameters)
+from util.agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from util.command_utils_base import CommonConfig
 from util.dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
 from util.exception_utils import CommandFailure
-from util.server_utils_params import (DaosServerTransportCredentials,
-                                      DaosServerYamlParameters)
+from util.server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 
 
 def generate_agent_config(args):
