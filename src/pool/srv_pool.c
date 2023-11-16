@@ -2741,7 +2741,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_default_copy(prop_dup, prop);
 	if (rc) {
-		DL_ERROR(rc, "daos_prop_default_copy failed.\n");
+		DL_ERROR(rc, "daos_prop_default_copy() failed");
 		D_GOTO(out_tx, rc);
 	}
 
