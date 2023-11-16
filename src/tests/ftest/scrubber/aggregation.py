@@ -6,10 +6,10 @@
 import time
 
 from scrubber_test_base import TestWithScrubber
-from telemetry_utils import TelemetryUtils
+from telemetry_utils import get_metrics
 
 
-class TestScrubberEvictWithAggregation(TelemetryUtils, TestWithScrubber):
+class TestScrubberEvictWithAggregation(TestWithScrubber):
     # pylint: disable=too-many-ancestors
     """Inject Checksum Fault with scrubber enabled
     and scrubber threshold set to a certain value.
@@ -37,7 +37,7 @@ class TestScrubberEvictWithAggregation(TelemetryUtils, TestWithScrubber):
         self.add_container(self.pool)
         # Pool and Containers are already created. Just run the IOR.
         self.run_ior_with_pool(create_cont=False)
-        initial_aggregation_metrics = self.get_metrics("engine_pool_vos_aggregation_obj_scanned")
+        initial_aggregation_metrics = get_metrics("engine_pool_vos_aggregation_obj_scanned")
         # Enable the aggregation on the pool.
         self.pool.set_property("reclaim", "time")
         # Now enable the scrubber on the pool.
@@ -50,7 +50,7 @@ class TestScrubberEvictWithAggregation(TelemetryUtils, TestWithScrubber):
         finish_time = 0
         start_time = time.time()
         while int(finish_time - start_time) < 120:
-            final_aggregation_metrics = self.get_metrics("engine_pool_vos_aggregation_obj_scanned")
+            final_aggregation_metrics = get_metrics("engine_pool_vos_aggregation_obj_scanned")
             status = self.verify_scrubber_metrics_value(initial_aggregation_metrics,
                                                         final_aggregation_metrics)
             # aggregation counters are changing (which means aggregation has started)
