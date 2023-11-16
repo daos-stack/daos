@@ -574,22 +574,33 @@ d_sgl_buf_copy(d_sg_list_t *dst_sgl, d_sg_list_t *src_sgl)
 	}
 }
 
-int d_getenv_str(char* str_val, size_t str_size, const char *name);
-int d_getenv_bool(bool *bool_val, const char *env);
-int d_getenv_char(char *char_val, const char *env);
-int d_getenv_uint(unsigned int *uint_val, const char *env);
-int d_getenv_uint64_t(uint64_t *val, const char *env);
-int d_putenv(char *name);
-int d_setenv(const char *name, const char *value, int overwrite);
-int d_unsetenv(const char *name);
-int d_clearenv(void);
-// FIXME DAOS-14532 Should be useless
-#if 0
-int d_apply_if_not_setenv(const char *name, const char *value);
-#endif
+int
+d_getenv_str(char *str_val, size_t str_size, const char *name);
+int
+d_agetenv_str(char **str_val, const char *name);
+int
+d_getenv_bool(bool *bool_val, const char *env);
+int
+d_getenv_char(char *char_val, const char *env);
+int
+d_getenv_uint(unsigned int *uint_val, const char *env);
+int
+d_getenv_uint32_t(uint32_t *uint32_val, const char *env);
+int
+d_getenv_uint64_t(uint64_t *uint64_val, const char *env);
+int
+d_putenv(char *name);
+int
+d_setenv(const char *name, const char *value, int overwrite);
+int
+d_unsetenv(const char *name);
+int
+d_clearenv(void);
 
-int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
-void d_free_string(struct d_string_buffer_t *buf);
+int
+d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
+void
+d_free_string(struct d_string_buffer_t *buf);
 
 typedef void (*d_alloc_track_cb_t)(void *arg, size_t size);
 

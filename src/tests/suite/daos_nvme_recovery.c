@@ -81,17 +81,14 @@ nvme_fault_reaction(void **state, int mode)
 	* create the another pool which will be offline by default.
 	*/
 	if (mode == 2) {
-		char	*env;
-		int	size_gb;
-		daos_size_t	scm_size = (daos_size_t)4 << 30/*Default 4G*/;
-		daos_size_t	nvme_size;
+		unsigned    size_gb;
+		daos_size_t scm_size = (daos_size_t)4 << 30 /*Default 4G*/;
+		daos_size_t nvme_size;
 
 		/* Use the SCM size if set with environment */
-		env = d_getenv("POOL_SCM_SIZE");
-		if (env) {
-			size_gb = atoi(env);
-			if (size_gb != 0)
-				scm_size = (daos_size_t)size_gb << 30;
+		rc = d_getenv_uint(&size_gb, "POOL_SCM_SIZE");
+		if (rc == -DER_SUCCESS && size_gb > 0) {
+			scm_size = (daos_size_t)size_gb << 30;
 		}
 
 		/* NVMe size is 4x of SCM size */

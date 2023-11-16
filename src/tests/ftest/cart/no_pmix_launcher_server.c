@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,20 +21,22 @@
 
 int main(int argc, char **argv)
 {
-	crt_group_t		*grp;
-	crt_context_t		crt_ctx[NUM_SERVER_CTX];
-	pthread_t		progress_thread[NUM_SERVER_CTX];
-	struct test_options	*opts = crtu_get_opts();
-	int			i;
-	char			*my_uri;
-	char			*env_self_rank;
-	d_rank_t		my_rank;
-	char			*grp_cfg_file;
-	uint32_t		grp_size;
-	int			rc;
+	crt_group_t         *grp;
+	crt_context_t        crt_ctx[NUM_SERVER_CTX];
+	pthread_t            progress_thread[NUM_SERVER_CTX];
+	struct test_options *opts = crtu_get_opts();
+	int                  i;
+	char                *my_uri;
+	char                *env;
+	d_rank_t             my_rank;
+	uint32_t             grp_size;
+	int                  rc;
 
-	env_self_rank = d_getenv("CRT_L_RANK");
-	my_rank = atoi(env_self_rank);
+	rc = d_getenv_uint32_t(&my_rank, "CRT_L_RANK");
+	if (rc != -DER_SUCCESS) {
+		printf("CRT_L_RANK can not be retrieve: " DF_RC "\n", DP_RC(rc));
+		return -1;
+	}
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -83,11 +85,12 @@ int main(int argc, char **argv)
 		}
 	}
 
-	grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
-	if (grp_cfg_file == NULL) {
-		D_ERROR("CRT_L_GRP_CFG was not set\n");
+	rc = d_agetenv_str(&env, "CRT_L_GRP_CFG");
+	if (env == NULL) {
+		D_ERROR("CRT_L_GRP_CFG can not be retrieve: " DF_RC "\n", DP_RC(rc));
 		assert(0);
 	}
+	D_DEBUG(DB_TEST, "Group Config File: %s\n", env);
 
 	rc = crt_rank_uri_get(grp, my_rank, 0, &my_uri);
 	if (rc != 0) {
@@ -96,15 +99,14 @@ int main(int argc, char **argv)
 	}
 
 	/* load group info from a config file and delete file upon return */
-	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
-				       true);
+	rc = crtu_load_group_from_file(env, crt_ctx[0], grp, my_rank, true);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
-	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
-		  my_uri, grp_cfg_file);
+	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank, my_uri, env);
+	D_FREE(env);
 	D_FREE(my_uri);
 
 	rc = crt_group_size(NULL, &grp_size);

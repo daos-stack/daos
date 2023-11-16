@@ -1721,7 +1721,7 @@ setup_mvcc(void **state)
 	D_ALLOC_PTR(mvcc_arg);
 	D_ASSERT(mvcc_arg != NULL);
 	mvcc_arg->epoch = 500;
-	d_getenv_bool("CMOCKA_TEST_ABORT", &mvcc_arg->fail_fast);
+	d_getenv_bool(&mvcc_arg->fail_fast, "CMOCKA_TEST_ABORT");
 	arg->custom = mvcc_arg;
 	return 0;
 }
@@ -1743,7 +1743,7 @@ run_mvcc_tests(const char *cfg)
 {
 	char	test_name[DTS_CFG_MAX];
 
-	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &pp_enabled);
+	d_getenv_bool(&pp_enabled, "DAOS_DKEY_PUNCH_PROPAGATE");
 
 	dts_create_config(test_name, "MVCC Tests %s%s", cfg, pp_enabled ? " pp enabled" : "");
 

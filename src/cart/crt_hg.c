@@ -793,8 +793,8 @@ crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info)
 int
 crt_hg_init(void)
 {
-	int	rc;
-	char	env[1];
+	int  rc;
+	char env[1];
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");

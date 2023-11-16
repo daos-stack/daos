@@ -192,8 +192,8 @@ set_faulty_criteria(void)
 	glb_criteria.fc_max_csum_errs = UINT32_MAX;
 
 	d_getenv_bool(&glb_criteria.fc_enabled, "DAOS_NVME_AUTO_FAULTY_ENABLED");
-	d_getenv_uint(&glb_criteria.fc_max_io_errs, "DAOS_NVME_AUTO_FAULTY_IO");
-	d_getenv_uint(&glb_criteria.fc_max_csum_errs, "DAOS_NVME_AUTO_FAULTY_CSUM");
+	d_getenv_uint32_t(&glb_criteria.fc_max_io_errs, "DAOS_NVME_AUTO_FAULTY_IO");
+	d_getenv_uint32_t(&glb_criteria.fc_max_csum_errs, "DAOS_NVME_AUTO_FAULTY_CSUM");
 
 	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u\n",
 	       glb_criteria.fc_enabled ? "enabled" : "disabled",
@@ -204,9 +204,9 @@ int
 bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	      unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect)
 {
-	char		env[16];
-	int		rc, fd;
-	unsigned int	size_mb = DAOS_DMA_CHUNK_MB;
+	char         env[sizeof("AIO")];
+	int          rc, fd;
+	unsigned int size_mb = DAOS_DMA_CHUNK_MB;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
@@ -288,7 +288,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
 	rc = d_getenv_str(env, sizeof(env), "VOS_BDEV_CLASS");
-	if (rc != -DER_NONEXIST && strncasecmp(env, "AIO", sizeof("AIO")) == 0) {
+	if (rc == -DER_SUCCESS && strncasecmp(env, "AIO", sizeof("AIO")) == 0) {
 		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}

@@ -97,7 +97,7 @@ daos_eq_lib_init()
 
 	eq_ref = 1;
 
-	d_getenv_uint(&ev_prog_timeout, "D_POLL_TIMEOUT");
+	d_getenv_uint32_t(&ev_prog_timeout, "D_POLL_TIMEOUT");
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);

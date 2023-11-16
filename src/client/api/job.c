@@ -36,32 +36,31 @@ craft_default_jobid(char **jobid)
 int
 dc_job_init(void)
 {
-	char	 env[1024];
-	int	 rc;
+	char *jobid_env;
+	char *jobid;
+	int   rc = 0;
 
-	rc = d_getenv_str(env, sizeof(env), JOBID_ENV);
-	if (rc == -DER_NONEXIST) {
-		D_STRNDUP_S(dc_jobid_env, DEFAULT_JOBID_ENV);
-	} else {
-		D_STRNDUP(dc_jobid_env, env, MAX_ENV_NAME);
+	rc = d_agetenv_str(&jobid_env, JOBID_ENV);
+	if (jobid_env == NULL) {
+		D_STRNDUP_S(jobid_env, DEFAULT_JOBID_ENV);
+		if (jobid_env == NULL)
+			D_GOTO(out_err, rc = -DER_NOMEM);
 	}
-	if (dc_jobid_env == NULL)
-		D_GOTO(out_err, rc = -DER_NOMEM);
 
-	rc = d_getenv_str(env, sizeof(env), dc_jobid_env);
-	if (rc == -DER_NONEXIST) {
-		rc = craft_default_jobid(&dc_jobid_env);
+	dc_jobid_env = jobid_env;
+
+	rc = d_agetenv_str(&jobid, dc_jobid_env);
+	if (jobid == NULL) {
+		rc = craft_default_jobid(&jobid);
 		if (rc)
 			D_GOTO(out_env, rc);
-	} else {
-		D_STRNDUP(dc_jobid, env, MAX_JOBID_LEN);
-		if (dc_jobid == NULL)
-			D_GOTO(out_env, rc = -DER_NOMEM);
 	}
+
+	dc_jobid = jobid;
 
 	D_INFO("Using JOBID ENV: %s\n", dc_jobid_env);
 	D_INFO("Using JOBID %s\n", dc_jobid);
-	return -DER_SUCCESS;
+	return 0;
 
 out_env:
 	D_FREE(dc_jobid_env);

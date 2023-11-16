@@ -248,31 +248,30 @@ set_group_version(crt_context_t ctx, crt_group_t *grp,
 
 int main(int argc, char **argv)
 {
-	crt_group_t		*grp;
-	crt_context_t		crt_ctx[NUM_SERVER_CTX];
-	pthread_t		progress_thread[NUM_SERVER_CTX];
-	struct test_options	*opts = crtu_get_opts();
-	int			i;
-	char			*my_uri;
-	char			env[1024];
-	d_rank_t		my_rank;
-	uint32_t		grp_size;
-	crt_group_t		*sec_grp1;
-	d_rank_list_t		*rank_list;
-	d_rank_list_t		*p_list, *s_list;
-	crt_endpoint_t		server_ep;
-	d_rank_t		rank;
-	crt_rpc_t		*rpc;
-	sem_t			sem;
-	int			rc;
-	int			num_attach_retries = 20;
+	crt_group_t         *grp;
+	crt_context_t        crt_ctx[NUM_SERVER_CTX];
+	pthread_t            progress_thread[NUM_SERVER_CTX];
+	struct test_options *opts = crtu_get_opts();
+	int                  i;
+	char                *my_uri;
+	char                *env;
+	d_rank_t             my_rank;
+	uint32_t             grp_size;
+	crt_group_t         *sec_grp1;
+	d_rank_list_t       *rank_list;
+	d_rank_list_t       *p_list, *s_list;
+	crt_endpoint_t       server_ep;
+	d_rank_t             rank;
+	crt_rpc_t           *rpc;
+	sem_t                sem;
+	int                  rc;
+	int                  num_attach_retries = 20;
 
-	rc = d_getenv_str(env, sizeof(env), "CRT_L_RANK");
-	if (rc == DER_NONEXIST) {
-		printf("CRT_L_RANK was not set\n");
+	rc = d_getenv_uint32_t(&my_rank, "CRT_L_RANK");
+	if (rc != -DER_SUCCESS) {
+		printf("CRT_L_RANK can not be retrieve: " DF_RC "\n", DP_RC(rc));
 		return -1;
 	}
-	my_rank = atoi(env);
 
 	/* When under valgrind bump expected timeouts to 60 seconds */
 	if (D_ON_VALGRIND) {
@@ -342,13 +341,12 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = d_getenv_str(env, sizeof(env), "CRT_L_GRP_CFG");
-	if (rc == DER_NONEXIST) {
-		D_ERROR("CRT_L_GRP_CFG was not set\n");
+	rc = d_agetenv_str(&env, "CRT_L_GRP_CFG");
+	if (env == NULL) {
+		D_ERROR("CRT_L_GRP_CFG can not be retrieve: " DF_RC "\n", DP_RC(rc));
 		assert(0);
-	} else {
-		D_DEBUG(DB_TEST, "Group Config File: %s\n", env);
 	}
+	D_DEBUG(DB_TEST, "Group Config File: %s\n", env);
 
 	/* load group info from a config file and delete file upon return */
 	rc = crtu_load_group_from_file(env, crt_ctx[0], grp, my_rank, true);
@@ -358,6 +356,7 @@ int main(int argc, char **argv)
 	}
 
 	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank, my_uri, env);
+	D_FREE(env);
 	D_FREE(my_uri);
 
 	rc = crt_group_size(NULL, &grp_size);

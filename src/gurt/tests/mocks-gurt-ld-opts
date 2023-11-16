@@ -1,1 +1,2 @@
 --wrap=getenv
+--wrap=strdup

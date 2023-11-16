@@ -3322,7 +3322,7 @@ dfs_setup(void **state)
 	if (arg->myrank == 0) {
 		bool	use_dtx = false;
 
-		d_getenv_bool("DFS_USE_DTX", &use_dtx);
+		d_getenv_bool(&use_dtx, "DFS_USE_DTX");
 		if (use_dtx)
 			print_message("Running DFS Serial tests with DTX enabled\n");
 		else

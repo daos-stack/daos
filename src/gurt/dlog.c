@@ -829,53 +829,52 @@ int
 d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	   char *logfile, int flags, d_log_id_cb_t log_id_cb)
 {
-	int		 tagblen;
-	char		*newtag = NULL, *cp;
-	int		 truncate = 0, rc;
-	char		 env[256];
-	char		*buffer = NULL;
-	uint64_t	 log_size = LOG_SIZE_DEF;
-	int		 pri;
+	int      tagblen;
+	char    *newtag = NULL;
+	char    *cp;
+	bool     truncate   = false;
+	bool     append_pid = false;
+	int      rc;
+	char    *env;
+	char    *buffer   = NULL;
+	uint64_t log_size = LOG_SIZE_DEF;
+	int      pri;
 
 	memset(&mst, 0, sizeof(mst));
 	mst.flush_pri = DLOG_WARN;
 	mst.log_id_cb = log_id_cb;
 
-	rc = d_getenv_str(env, sizeof(env), D_LOG_FLUSH_ENV);
-	if (rc == -DER_SUCCESS) {
+	d_agetenv_str(&env, D_LOG_FLUSH_ENV);
+	if (env != NULL) {
 		pri = d_log_str2pri(env, strlen(env) + 1);
-
 		if (pri != -1)
 			mst.flush_pri = pri;
+		D_FREE(env);
 	}
 
-	rc = d_getenv_str(env, sizeof(env), D_LOG_TRUNCATE_ENV);
-	if (rc == -DER_SUCCESS && strncmp(env, "0", sizeof("0")) != 0)
-		truncate = 1;
+	d_getenv_bool(&truncate, D_LOG_TRUNCATE_ENV);
 
-	rc = d_getenv_str(env, sizeof(env), D_LOG_SIZE_ENV);
-	if (rc == -DER_SUCCESS) {
+	d_agetenv_str(&env, D_LOG_SIZE_ENV);
+	if (env != NULL) {
 		log_size = d_getenv_size(env);
 		if (log_size < LOG_SIZE_MIN)
 			log_size = LOG_SIZE_MIN;
+		D_FREE(env);
 	}
 
-	rc = d_getenv_str(env, sizeof(env), D_LOG_FILE_APPEND_PID_ENV);
-	if (logfile != NULL && rc == -DER_SUCCESS) {
-		if (strncmp(env, "0", sizeof("0")) != 0) {
+	if (logfile != NULL) {
+		d_getenv_bool(&append_pid, D_LOG_FILE_APPEND_PID_ENV);
+		if (append_pid) {
 			rc = asprintf(&buffer, "%s.%d", logfile, getpid());
 			if (buffer != NULL && rc != -1)
 				logfile = buffer;
 			else
-				D_PRINT_ERR("Failed to append pid to "
-					    "DAOS debug log name, "
+				D_PRINT_ERR("Failed to append pid to DAOS debug log name, "
 					    "continuing.\n");
 		}
 	}
 
-	rc = d_getenv_str(env, sizeof(env), D_LOG_FILE_APPEND_RANK_ENV);
-	if (rc == -DER_SUCCESS && strncmp(env, "0", sizeof("0")) != 0)
-		mst.append_rank = true;
+	rc = d_getenv_bool(&mst.append_rank, D_LOG_FILE_APPEND_RANK_ENV);
 
 	/* quick sanity check (mst.tag is non-null if already open) */
 	if (d_log_xst.tag || !tag ||
@@ -910,9 +909,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		int         log_flags = O_RDWR | O_CREAT;
 		struct stat st;
 
-		rc = d_getenv_str(env, sizeof(env), D_LOG_STDERR_IN_LOG_ENV);
-		if (rc == -DER_SUCCESS && strncmp(env, "0", sizeof("0")) != 0)
-			merge_stderr = true;
+		d_getenv_bool(&merge_stderr, D_LOG_STDERR_IN_LOG_ENV);
 
 		if (!truncate)
 			log_flags |= O_APPEND;
@@ -1072,27 +1069,35 @@ void d_log_close(void)
  */
 bool d_logfac_is_enabled(const char *fac_name)
 {
-	char	 env[1024];
-	char	*ddsubsys_fac;
-	int	 len = strlen(fac_name);
-	int	 rc;
+	char *ddsubsys_env;
+	char *ddsubsys_fac;
+	int   len = strlen(fac_name);
+	bool  rc;
 
 	/* read env DD_SUBSYS to enable corresponding facilities */
-	rc = d_getenv_str(env, sizeof(env), DD_FAC_ENV);
-	if (rc == -DER_NONEXIST)
-		return true; /* enable all facilities by default */
+	d_agetenv_str(&ddsubsys_env, DD_FAC_ENV);
+	if (ddsubsys_env == NULL) {
+		/* enable all facilities by default */
+		D_GOTO(out, rc = true);
+	}
 
-	if (strncasecmp(env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0)
-		return true; /* enable all facilities with DD_SUBSYS=all */
+	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, sizeof(DD_FAC_ALL)) == 0) {
+		/* enable all facilities with DD_SUBSYS=all */
+		D_GOTO(out, rc = true);
+	}
 
-	ddsubsys_fac = strcasestr(env, fac_name);
+	ddsubsys_fac = strcasestr(ddsubsys_env, fac_name);
 	if (ddsubsys_fac == NULL)
-		return false;
+		D_GOTO(out, rc = false);
 
 	if (ddsubsys_fac[len] != '\0' && ddsubsys_fac[len] != ',')
-		return false;
+		D_GOTO(out, rc = false);
 
-	return true;
+	rc = true;
+
+out:
+	D_FREE(ddsubsys_env);
+	return rc;
 }
 
 /*

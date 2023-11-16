@@ -6493,16 +6493,16 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		    struct pool_target_addr_list *inval_list_out,
 		    uint32_t *map_version, struct rsvc_hint *hint)
 {
-	daos_rebuild_opc_t		op;
-	struct pool_target_id_list	target_list = { 0 };
-	daos_prop_t			prop = { 0 };
-	uint32_t			tgt_map_ver = 0;
-	struct daos_prop_entry		*entry;
-	bool				updated;
-	int				rc;
-	char				env[16];
-	daos_epoch_t			rebuild_eph = d_hlc_get();
-	uint64_t			delay = 2;
+	daos_rebuild_opc_t         op;
+	struct pool_target_id_list target_list = {0};
+	daos_prop_t                prop        = {0};
+	uint32_t                   tgt_map_ver = 0;
+	struct daos_prop_entry    *entry;
+	bool                       updated;
+	int                        rc;
+	char                       env[sizeof(REBUILD_ENV_DISABLED)];
+	daos_epoch_t               rebuild_eph = d_hlc_get();
+	uint64_t                   delay       = 2;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, extend_rank_list,
 					  extend_domains_nr, extend_domains,
@@ -6532,8 +6532,8 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	}
 
 	rc = d_getenv_str(env, sizeof(env), REBUILD_ENV);
-	if ((rc != DER_NONEXIST && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
-	     daos_fail_check(DAOS_REBUILD_DISABLE)) {
+	if ((rc == -DER_SUCCESS && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
+	    daos_fail_check(DAOS_REBUILD_DISABLE)) {
 		D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
 		D_GOTO(out, rc = 0);
 	}

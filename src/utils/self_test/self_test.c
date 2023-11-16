@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1827,34 +1827,37 @@ int main(int argc, char *argv[])
 	}
 
 	if (use_daos_agent_vars == false) {
-		char *env;
+		char  env[1];
 		char *attach_path;
+		int   rc;
 
-		env = d_getenv("CRT_PHY_ADDR_STR");
-		if (env == NULL) {
+		rc = d_getenv_str(env, sizeof(env), "CRT_PHY_ADDR_STR");
+		if (rc == -DER_NONEXIST) {
 			printf("Error: provider (CRT_PHY_ADDR_STR) is not set\n");
 			printf("Example: export CRT_PHY_ADDR_STR='ofi+tcp'\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 
-		env = d_getenv("OFI_INTERFACE");
-		if (env == NULL) {
+		rc = d_getenv_str(env, sizeof(env), "OFI_INTERFACE");
+		if (rc == -DER_NONEXIST) {
 			printf("Error: interface (OFI_INTERFACE) is not set\n");
 			printf("Example: export OFI_INTERFACE=eth0\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 
 		if (attach_info_path)
-			attach_path = attach_info_path;
+			attach_path = strdup(attach_info_path);
 		else {
-			attach_path = d_getenv("CRT_ATTACH_INFO_PATH");
+			d_agetenv_str(&attach_path, "CRT_ATTACH_INFO_PATH");
 			if (!attach_path)
-				attach_path = "/tmp";
+				attach_path = strdup("/tmp");
 		}
+		D_ASSERT(attach_path != NULL);
 
 		printf("Warning: running without daos_agent connection (-u option); "
 		       "Using attachment file %s/%s.attach_info_tmp instead\n",
 		       attach_path, dest_name ? dest_name : default_dest_name);
+		D_FREE(attach_path);
 	}
 
 	/******************** Parse message sizes argument ********************/

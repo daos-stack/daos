@@ -2876,8 +2876,9 @@ run_csum_tests(int rc)
 int
 run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
-	int rc = 0;
-	int i;
+	int  rc = 0;
+	char env[1];
+	int  i;
 
 	if (rank != 0) {
 		par_barrier(PAR_COMM_WORLD);
@@ -2885,7 +2886,8 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	}
 
 	if (sub_tests_size == 0) {
-		if (d_getenv("DAOS_CSUM_TEST_ALL_TYPE")) {
+		rc = d_getenv_str(env, sizeof(env), "DAOS_CSUM_TEST_ALL_TYPE");
+		if (rc != -DER_NONEXIST) {
 			for (i = DAOS_PROP_CO_CSUM_OFF + 1;
 			     i <= DAOS_PROP_CO_CSUM_ADLER32; i++) {
 				dts_csum_prop_type = i;

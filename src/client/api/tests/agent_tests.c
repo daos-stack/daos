@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,7 +24,7 @@
 
 static char *getenv_return; /* value to be returned */
 static const char *getenv_name; /* saved input */
-char *d_getenv(const char *name)
+char *getenv(const char *name)
 {
 	getenv_name = name;
 	return getenv_return;

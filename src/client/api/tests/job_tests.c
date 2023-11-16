@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,7 +29,7 @@
 static char *getenv_daos_jobid_return; /* value returned for DAOS_JOBID */
 static char *getenv_jobid_env_return; /* value returned for DAOS_JOBID_ENV */
 static char *getenv_jobid_return; /* value stored in location DAOS_JOBID_ENV */
-char *d_getenv(const char *name)
+char *getenv(const char *name)
 {
 	if (strncmp(name, DEFAULT_JOBID_ENV, sizeof(DEFAULT_JOBID_ENV)) == 0) {
 		return getenv_daos_jobid_return;

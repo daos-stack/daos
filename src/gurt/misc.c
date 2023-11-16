@@ -25,11 +25,6 @@
 #include <gurt/common.h>
 #include <gurt/atomic.h>
 
-#define __xstr(s) __str(s)
-#define __str(s) #s
-#define UINT_STR_MAX sizeof(__xstr(UINT_MAX))
-#define UINT64_STR_MAX sizeof(__xstr(UINT64_MAX))
-
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};
 
@@ -954,19 +949,15 @@ d_rank_range_list_free(d_rank_range_list_t *range_list)
 }
 
 static inline bool
-dis_uint_str(const char *str)
+dis_unsigned_str(char *str)
 {
-	int	idx;
-
-	if (str == NULL)
+	if (str == NULL || str[0] == '\0')
 		return false;
 
-	for(idx = 0; idx < UINT_STR_MAX - 1; ++idx) {
-		if (str[idx] < '0' && str[idx] > '9')
-			break;
-	}
+	while (*str != '\0' && *str >= '0' && *str <= '9')
+		++str;
 
-	return idx > 0 && str[idx] == '\0';
+	return *str == '\0';
 }
 
 static inline bool
@@ -991,11 +982,11 @@ static pthread_rwlock_t d_env_lock = PTHREAD_RWLOCK_INITIALIZER;
  * \return				0 on success, a negative value on error.
  */
 int
-d_getenv_str(char* str_val, size_t str_size, const char *name)
+d_getenv_str(char *str_val, size_t str_size, const char *name)
 {
-	char	*tmp;
-	int	 len;
-	int	 rc = -DER_SUCCESS;
+	char *tmp;
+	int   len;
+	int   rc = -DER_SUCCESS;
 
 	D_ASSERT(name != NULL);
 	D_ASSERT(str_val != NULL);
@@ -1034,8 +1025,8 @@ out:
 int
 d_agetenv_str(char **str_val, const char *name)
 {
-	char	*env;
-	int	rc;
+	char *env;
+	int   rc;
 
 	D_ASSERT(name != NULL);
 
@@ -1052,7 +1043,7 @@ d_agetenv_str(char **str_val, const char *name)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	*str_val = env;
-	rc = -DER_SUCCESS;
+	rc       = -DER_SUCCESS;
 
 out:
 	D_RWLOCK_UNLOCK(&d_env_lock);
@@ -1072,22 +1063,26 @@ out:
 int
 d_getenv_bool(bool *bool_val, const char *name)
 {
-	char	*tmp;
-	int	 rc = -DER_SUCCESS;
+	char     *env;
+	char     *endptr;
+	long long val;
+	int       rc;
 
 	D_ASSERT(name != NULL);
 	D_ASSERT(bool_val != NULL);
 
 	D_RWLOCK_RDLOCK(&d_env_lock);
 
-	tmp = getenv(name);
-	if (tmp == NULL) {
+	env = getenv(name);
+	if (env == NULL) {
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	/* treats any valid non-integer string as true */
-	// FIXME DAOS-14532 use strtol function
-	*bool_val = !dis_uint_str(tmp) || atoi(tmp) != 0;
+	errno     = 0;
+	val       = strtoll(env, &endptr, 10);
+	*bool_val = errno != 0 || endptr == env || *endptr != '\0' || val != 0;
+	rc        = -DER_SUCCESS;
 
 out:
 	D_RWLOCK_UNLOCK(&d_env_lock);
@@ -1106,24 +1101,25 @@ out:
 int
 d_getenv_char(char *char_val, const char *name)
 {
-	char	*tmp;
-	int	 rc = -DER_SUCCESS;
+	char *env;
+	int   rc;
 
 	D_ASSERT(name != NULL);
 	D_ASSERT(char_val != NULL);
 
 	D_RWLOCK_RDLOCK(&d_env_lock);
 
-	tmp = getenv(name);
-	if (tmp == NULL) {
+	env = getenv(name);
+	if (env == NULL) {
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	if (!dis_single_char_str(tmp)) {
+	if (!dis_single_char_str(env)) {
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	*char_val = *tmp;
+	*char_val = *env;
+	rc        = -DER_SUCCESS;
 
 out:
 	D_RWLOCK_UNLOCK(&d_env_lock);
@@ -1142,24 +1138,88 @@ out:
 int
 d_getenv_uint(unsigned *uint_val, const char *name)
 {
-	char		*tmp;
-	int		 rc = -DER_SUCCESS;
+	char         *env;
+	char         *endptr;
+	unsigned long val;
+	int           rc;
 
 	D_ASSERT(name != NULL);
 	D_ASSERT(uint_val != NULL);
 
 	D_RWLOCK_RDLOCK(&d_env_lock);
-	tmp = getenv(name);
-	if (tmp == NULL) {
+	env = getenv(name);
+	if (env == NULL) {
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	// FIXME replace with strtoul
-	if (!dis_uint_str(tmp)) {
+	if (!dis_unsigned_str(env)) {
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	*uint_val = atoi(tmp);
+	errno = 0;
+	val   = strtoul(env, &endptr, 0);
+	if (errno != 0 || endptr == env || *endptr != '\0') {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+#if UINT_MAX != ULONG_MAX
+	D_ASSERT(sizeof(unsigned) < sizeof(unsigned long));
+	if (val > UINT_MAX) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+#endif
+	*uint_val = (unsigned)val;
+	rc        = -DER_SUCCESS;
+
+out:
+	D_RWLOCK_UNLOCK(&d_env_lock);
+
+	return rc;
+}
+
+/**
+ * get a 32bits unsigned integer type environment variables
+ *
+ * \param[in,out]	val	returned value of the ENV. Will not change the original value if ENV
+ *				is not set or set as a non-integer value.
+ * \param[in]		name	name of the environment variable.
+ * \return			0 on success, a negative value on error.
+ */
+int
+d_getenv_uint32_t(uint32_t *uint32_val, const char *name)
+{
+	char              *env;
+	char              *endptr;
+	unsigned long long val;
+	int                rc;
+
+	D_ASSERT(name != NULL);
+	D_ASSERT(uint32_val != NULL);
+
+	D_RWLOCK_RDLOCK(&d_env_lock);
+	env = getenv(name);
+	if (env == NULL) {
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+	if (!dis_unsigned_str(env)) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	errno = 0;
+	val   = strtoull(env, &endptr, 0);
+	if (errno != 0 || endptr == env || *endptr != '\0') {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+#if UINT32_MAX != ULLONG_MAX
+	D_ASSERT(sizeof(uint32_t) < sizeof(unsigned long long));
+	if (val > UINT32_MAX) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+#endif
+	*uint32_val = (uint64_t)val;
+	rc          = -DER_SUCCESS;
 
 out:
 	D_RWLOCK_UNLOCK(&d_env_lock);
@@ -1176,39 +1236,40 @@ out:
  * \return			0 on success, a negative value on error.
  */
 int
-d_getenv_uint64_t(uint64_t *val, const char *name)
+d_getenv_uint64_t(uint64_t *uint64_val, const char *name)
 {
-	char		*tmp;
-	size_t		 tmp_len;
-	int		 matched;
-	uint64_t	 new_val;
-	int		 count;
-	int		 rc = 0;
+	char              *env;
+	char              *endptr;
+	unsigned long long val;
+	int                rc;
 
 	D_ASSERT(name != NULL);
-	D_ASSERT(val != NULL);
+	D_ASSERT(uint64_val != NULL);
 
 	D_RWLOCK_RDLOCK(&d_env_lock);
-	tmp = getenv(name);
-	if (tmp == NULL) {
+	env = getenv(name);
+	if (env == NULL) {
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	// Replace with strtoull
-	tmp_len = strnlen(tmp, UINT64_STR_MAX);
-	if (tmp_len == UINT64_STR_MAX) {
+	if (!dis_unsigned_str(env)) {
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	/* Now do scanf, check that the number was matched, and there are no extra unmatched
-	 * characters at the end.
-	 */
-	matched = sscanf(tmp, "%"PRId64"%n", &new_val, &count);
-	if (matched != 1 || tmp_len != count) {
+	errno = 0;
+	val   = strtoull(env, &endptr, 0);
+	if (errno != 0 || endptr == env || *endptr != '\0') {
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	*val = new_val;
+#if UINT64_MAX != ULLONG_MAX
+	D_ASSERT(sizeof(uint64_t) < sizeof(unsigned long long));
+	if (val > UINT64_MAX) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+#endif
+	*uint64_val = (uint64_t)val;
+	rc          = -DER_SUCCESS;
 
 out:
 	D_RWLOCK_UNLOCK(&d_env_lock);
@@ -1225,11 +1286,12 @@ out:
 int
 d_putenv(char *name)
 {
-	int	env_errno;
-	int	rc;
+	int env_errno;
+	int rc;
 
 	D_RWLOCK_WRLOCK(&d_env_lock);
-	rc = putenv(name);
+	errno     = 0;
+	rc        = putenv(name);
 	env_errno = errno;
 	D_RWLOCK_UNLOCK(&d_env_lock);
 
@@ -1248,11 +1310,12 @@ d_putenv(char *name)
 int
 d_setenv(const char *name, const char *value, int overwrite)
 {
-	int	env_errno;
-	int	rc;
+	int env_errno;
+	int rc;
 
 	D_RWLOCK_WRLOCK(&d_env_lock);
-	rc = setenv(name, value, overwrite);
+	errno     = 0;
+	rc        = setenv(name, value, overwrite);
 	env_errno = errno;
 	D_RWLOCK_UNLOCK(&d_env_lock);
 
@@ -1269,11 +1332,12 @@ d_setenv(const char *name, const char *value, int overwrite)
 int
 d_unsetenv(const char *name)
 {
-	int	env_errno;
-	int	rc;
+	int env_errno;
+	int rc;
 
 	D_RWLOCK_WRLOCK(&d_env_lock);
-	rc = unsetenv(name);
+	errno     = 0;
+	rc        = unsetenv(name);
 	env_errno = errno;
 	D_RWLOCK_UNLOCK(&d_env_lock);
 
@@ -1298,32 +1362,6 @@ d_clearenv(void)
 
 	return rc;
 }
-
-// FIXME DAOS-14532 Should be useless
-#if 0
-/**
- * TODO
- */
-int
-d_apply_if_not_setenv(const char *name, const char *value)
-{
-	char *old_val;
-	int rc = -DER_SUCCESS;
-
-	D_RWLOCK_WRLOCK(&d_env_lock);
-
-	old_val = getenv(name);
-
-	if (old_val == NULL) {
-		D_INFO("%s was not set, setting to %s\n", name, value);
-		rc = setenv(name, value, true);
-	}
-
-	D_RWLOCK_UNLOCK(&d_env_lock);
-
-	return -rc;
-}
-#endif
 
 /**
  * Write formatted data to d_string_buffer_t

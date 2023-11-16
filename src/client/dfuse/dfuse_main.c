@@ -522,11 +522,12 @@ main(int argc, char **argv)
 		}
 	}
 
-	rc2 = d_getenv_str(env, sizeof(env), "PMIX_RANK");
-	if (!dfuse_info->di_foreground && rc2 != DER_NONEXIST) {
-		DFUSE_TRA_WARNING(dfuse_info,
-				  "Not running in background under orterun");
-		dfuse_info->di_foreground = true;
+	if (!dfuse_info->di_foreground) {
+		rc2 = d_getenv_str(env, sizeof(env), "PMIX_RANK");
+		if (rc2 != DER_NONEXIST) {
+			DFUSE_TRA_WARNING(dfuse_info, "Not running in background under orterun");
+			dfuse_info->di_foreground = true;
+		}
 	}
 
 	if (!dfuse_info->di_mountpoint) {

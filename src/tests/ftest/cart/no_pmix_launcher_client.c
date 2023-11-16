@@ -49,21 +49,21 @@ rpc_handle_reply(const struct crt_cb_info *info)
 
 int main(int argc, char **argv)
 {
-	crt_context_t		crt_ctx;
-	crt_group_t		*grp;
-	char			env[1024];
-	int			rc;
-	sem_t			sem;
-	pthread_t		progress_thread;
-	crt_rpc_t		*rpc = NULL;
-	struct RPC_PING_in	*input;
-	crt_endpoint_t		server_ep;
-	int			i;
-	uint32_t		grp_size;
-	d_rank_list_t		*rank_list;
-	d_rank_t		rank;
-	d_iov_t			iov;
-	int			tag;
+	crt_context_t       crt_ctx;
+	crt_group_t        *grp;
+	char               *env;
+	int                 rc;
+	sem_t               sem;
+	pthread_t           progress_thread;
+	crt_rpc_t          *rpc = NULL;
+	struct RPC_PING_in *input;
+	crt_endpoint_t      server_ep;
+	int                 i;
+	uint32_t            grp_size;
+	d_rank_list_t      *rank_list;
+	d_rank_t            rank;
+	d_iov_t             iov;
+	int                 tag;
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, 20, false, true);
@@ -107,9 +107,9 @@ int main(int argc, char **argv)
 				progress_function, &crt_ctx);
 	assert(rc == 0);
 
-	rc = d_getenv_str(env, sizeof(env), "CRT_L_GRP_CFG");
-	if (rc == DER_NONEXIST) {
-		D_ERROR("CRT_L_GRP_CFG was not set\n");
+	rc = d_agetenv_str(&env, "CRT_L_GRP_CFG");
+	if (env == NULL) {
+		D_ERROR("CRT_L_GRP_CFG can not be retrieve: " DF_RC "\n", DP_RC(rc));
 		assert(0);
 	}
 	DBG_PRINT("Client starting with cfg_file=%s\n", env);
@@ -120,6 +120,7 @@ int main(int argc, char **argv)
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
+	D_FREE(env);
 
 	rc = crt_group_size(grp, &grp_size);
 	if (rc != 0) {

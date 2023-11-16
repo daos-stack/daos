@@ -104,14 +104,13 @@ unsigned int daos_io_bypass;
 static void
 io_bypass_init(void)
 {
-	char*	str;
-	char	*tok;
-	char	*saved_ptr;
-	char	 env[256];
-	int	 rc;
+	char *str;
+	char *tok;
+	char *saved_ptr;
+	char *env;
 
-	rc = d_getenv_str(env, sizeof(env), DENV_IO_BYPASS);
-	if (rc == -DER_NONEXIST)
+	d_agetenv_str(&env, DENV_IO_BYPASS);
+	if (env == NULL)
 		return;
 
 	tok = strtok_r(env, ",", &saved_ptr);
@@ -132,6 +131,7 @@ io_bypass_init(void)
 		}
 		tok = str;
 	};
+	D_FREE(env);
 }
 
 void
@@ -156,7 +156,6 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 {
 	int	flags = DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG;
 	int	rc;
-	char	env[1024];
 
 	D_MUTEX_LOCK(&dd_lock);
 	if (dd_ref > 0) {
@@ -166,18 +165,18 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 	}
 
 	/* honor the env variable first */
-	rc = d_getenv_str(env, sizeof(env), D_LOG_FILE_ENV);
-	logfile = env;
-	if (rc == -DER_NONEXIST || env[0] == '\0') {
+	rc = d_agetenv_str(&logfile, D_LOG_FILE_ENV);
+	if (logfile == NULL || strlen(logfile) == 0) {
 		flags |= DLOG_FLV_STDOUT;
-		logfile = NULL;
+		D_FREE(logfile);
 	} else if (!strncmp(logfile, "/dev/null", sizeof("/dev/null"))) {
 		/* Don't set up logging or log to stdout if the log file is /dev/null */
-		logfile = NULL;
+		D_FREE(logfile);
 	}
 
 	rc = d_log_init_adv("DAOS", logfile, flags, logmask, DLOG_CRIT,
 			    log_id_cb);
+	D_FREE(logfile);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
 			DP_RC(rc));

@@ -648,16 +648,16 @@ crt_init_options_t daos_crt_init_opt;
 crt_init_options_t *
 daos_crt_init_opt_get(bool server, int ctx_nr)
 {
-	char		addr_env[256];
-	bool		sep = false;
-	uint32_t	limit = 0;
-	int		rc;
+	char     addr_env[sizeof(CRT_SOCKET_PROV)];
+	bool     sep   = false;
+	uint32_t limit = 0;
+	int      rc;
 
 	/** enable statistics on the server side */
 	daos_crt_init_opt.cio_use_sensors = server;
 
 	/** configure cart for maximum bulk threshold */
-	d_getenv_uint(&limit, "DAOS_RPC_SIZE_LIMIT");
+	d_getenv_uint32_t(&limit, "DAOS_RPC_SIZE_LIMIT");
 
 	daos_crt_init_opt.cio_use_expected_size = 1;
 	daos_crt_init_opt.cio_max_expected_size = limit ? limit : DAOS_RPC_SIZE;
@@ -685,10 +685,8 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	 * 1) now sockets provider cannot create more than 16 contexts for SEP
 	 * 2) some problems if SEP communicates with regular EP.
 	 */
-
 	rc = d_getenv_str(addr_env, sizeof(addr_env), CRT_PHY_ADDR_ENV);
-	if (rc != -DER_NONEXIST &&
-	    strncmp(addr_env, CRT_SOCKET_PROV, sizeof(CRT_SOCKET_PROV)) == 0) {
+	if (rc == -DER_SUCCESS && strcmp(addr_env, CRT_SOCKET_PROV) == 0) {
 		D_INFO("for sockets provider force it to use regular EP.\n");
 		daos_crt_init_opt.cio_use_sep = 0;
 		goto out;

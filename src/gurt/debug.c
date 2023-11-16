@@ -377,16 +377,17 @@ d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname, uint32_t flags)
 static void
 debug_prio_err_load_env(void)
 {
-	char	env[256];
-	int	i, rc;
+	char *env;
+	int   i, rc;
 
-	rc = d_getenv_str(env, sizeof(env), DD_STDERR_ENV);
+	rc = d_agetenv_str(&env, DD_STDERR_ENV);
 	switch (rc) {
-	case -DER_TRUNC:
+	case -DER_NOMEM:
 		D_PRINT_ERR("%s = %s - too long environment variable.\n", DD_STDERR_ENV, env);
 	case -DER_NONEXIST:
 		return;
 	}
+	D_ASSERT(env != NULL);
 
 	for (i = 0; i < NUM_DBG_PRIO_ENTRIES; i++) {
 		if (d_dbg_prio_dict[i].dd_name != NULL &&
@@ -399,6 +400,7 @@ debug_prio_err_load_env(void)
 	/* invalid DD_STDERR option */
 	if (d_dbglog_data.dd_prio_err == 0)
 		D_PRINT_ERR("DD_STDERR = %s - invalid option\n", env);
+	D_FREE(env);
 }
 
 void
@@ -419,18 +421,16 @@ d_log_sync_mask_ex(const char *log_mask, const char *dd_mask)
 void
 d_log_sync_mask(void)
 {
-	char	 buf[2][256];
-	char	*dd_mask;
-	char	*log_mask;
-	int	 rc;
+	char *log_mask;
+	char *dd_mask;
 
-	rc = d_getenv_str(buf[0], sizeof(buf[0]), DD_MASK_ENV);
-	dd_mask = (rc == -DER_NONEXIST)?NULL:&buf[0][0];
-
-	rc = d_getenv_str(buf[1], sizeof(buf[1]), D_LOG_MASK_ENV);
-	log_mask = (rc == -DER_NONEXIST)?NULL:&buf[1][0];
+	d_agetenv_str(&log_mask, D_LOG_MASK_ENV);
+	d_agetenv_str(&dd_mask, DD_MASK_ENV);
 
 	d_log_sync_mask_ex(log_mask, dd_mask);
+
+	D_FREE(dd_mask);
+	D_FREE(log_mask);
 }
 
 /**
@@ -552,20 +552,18 @@ int
 d_log_init(void)
 {
 	char	*log_file;
-	char	 buf[1024];
 	int	 flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
-	int	rc;
+	int	 rc;
 
-	rc = d_getenv_str(buf, sizeof(buf), D_LOG_FILE_ENV);
-	if (rc != 0 || buf[0] == '\0') {
+	d_agetenv_str(&log_file, D_LOG_FILE_ENV);
+	if (log_file == NULL || strlen(log_file) == 0) {
 		flags |= DLOG_FLV_STDOUT;
-		log_file = NULL;
-	} else {
-		log_file = &buf[0];
+		D_FREE(log_file);
 	}
 
 	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG,
 			    NULL);
+	D_FREE(log_file);
 	if (rc != DER_SUCCESS) {
 		D_PRINT_ERR("d_log_init_adv failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);

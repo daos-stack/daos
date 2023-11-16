@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -88,23 +88,25 @@ static struct crt_proto_format my_proto_fmt_basic_corpc = {
 
 int main(void)
 {
-	int		rc;
-	crt_context_t	g_main_ctx;
-	d_rank_list_t	*rank_list;
-	d_rank_list_t	membs;
-	d_rank_t	memb_ranks[] = {1, 2, 4};
-	crt_rpc_t	*rpc;
-	uint32_t	grp_size;
-	crt_group_t	*grp;
-	char		*env_self_rank;
-	char		*grp_cfg_file;
-	pthread_t	progress_thread;
+	int            rc;
+	crt_context_t  g_main_ctx;
+	d_rank_list_t *rank_list;
+	d_rank_list_t  membs;
+	d_rank_t       memb_ranks[] = {1, 2, 4};
+	crt_rpc_t     *rpc;
+	uint32_t       grp_size;
+	crt_group_t   *grp;
+	char          *env;
+	pthread_t      progress_thread;
 
 	membs.rl_nr = 3;
 	membs.rl_ranks = memb_ranks;
 
-	env_self_rank = d_getenv("CRT_L_RANK");
-	my_rank = atoi(env_self_rank);
+	rc = d_getenv_uint32_t(&my_rank, "CRT_L_RANK");
+	if (rc != -DER_SUCCESS) {
+		printf("CRT_L_RANK can not be retrieve: " DF_RC "\n", DP_RC(rc));
+		return -1;
+	}
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -128,7 +130,12 @@ int main(void)
 		assert(0);
 	}
 
-	grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
+	rc = d_agetenv_str(&env, "CRT_L_GRP_CFG");
+	if (env == NULL) {
+		D_ERROR("CRT_L_GRP_CFG can not be retrieve: " DF_RC "\n", DP_RC(rc));
+		assert(0);
+	}
+	D_DEBUG(DB_TEST, "Group Config File: %s\n", env);
 
 	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
@@ -144,8 +151,8 @@ int main(void)
 	}
 
 	/* load group info from a config file and delete file upon return */
-	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
-				       true);
+	rc = crtu_load_group_from_file(env, g_main_ctx, grp, my_rank, true);
+	D_FREE(env);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);

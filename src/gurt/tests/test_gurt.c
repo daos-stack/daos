@@ -26,25 +26,8 @@
 /* machine epsilon */
 #define EPSILON (1.0E-16)
 
-/* static char *__root; */
+static char *__root;
 
-/*
- * Test setup and teardown
- */
-static int
-setup_gurt_mocks(void **state)
-{
-	mock_getenv_setup();
-	return 0;
-}
-
-static int
-teardown_gurt_mocks(void **state)
-{
-	return 0;
-}
-
-#if 0
 static void
 test_time(void **state)
 {
@@ -604,18 +587,17 @@ FOREACH_TEST_FAC(D_LOG_INSTANTIATE_FAC, FOREACH_TEST_DB);
 static void
 test_log(void **state)
 {
-	char *logmask;
-	char *allocated_mask = NULL;
-	int rc;
-	int rc_dbgbit;
-	int logfac1;
-	int logfac2;
-	char retbuf[1024];
-	char *oldmask;
+	char    *logmask;
+	int      rc;
+	int      rc_dbgbit;
+	int      logfac1;
+	int      logfac2;
+	char     retbuf[1024];
+	char    *oldmask;
 	uint64_t dbg_mask;
 	uint64_t current_dbgmask;
 
-	oldmask = d_getenv("D_LOG_MASK");
+	d_agetenv_str(&oldmask, "D_LOG_MASK");
 
 	d_setenv("D_LOG_MASK", "CLOG=DEBUG,T1=DEBUG", 1);
 	memset(retbuf, 0x00, sizeof(retbuf));
@@ -636,10 +618,9 @@ test_log(void **state)
 	LOG_DEBUG(logfac2, "log2 debug should not print\n");
 
 	/* Alternatively, a component may have its own mask */
-	logmask = d_getenv("TEST_LOG_MASK");
+	d_agetenv_str(&logmask, "TEST_LOG_MASK");
 	if (logmask == NULL) {
-		D_STRNDUP_S(allocated_mask, "ERR,T1=DEBUG,CLOG=DEBUG");
-		logmask = allocated_mask;
+		D_STRNDUP_S(logmask, "ERR,T1=DEBUG,CLOG=DEBUG");
 	}
 	assert_non_null(logmask);
 
@@ -647,7 +628,7 @@ test_log(void **state)
 	LOG_DEBUG(logfac1, "rc after 1st setmaks is %x\n", rc);
 	rc = d_log_setmasks(logmask, -1);
 	LOG_DEBUG(logfac1, "rc after 2nd setmasks is %x\n", rc);
-	D_FREE(allocated_mask);
+	D_FREE(logmask);
 
 	d_log_getmasks(retbuf, 0, 1024, 0);
 	LOG_DEBUG(logfac1, "log mask: %s\n\n", retbuf);
@@ -755,10 +736,12 @@ test_log(void **state)
 	rc = D_LOG_DEREGISTER_DB(FOREACH_TEST_DB);
 	assert_int_equal(rc, 0);
 
-	if (oldmask)
+	if (oldmask) {
 		d_log_setmasks(oldmask, -1);
-	else
+		D_FREE(oldmask);
+	} else {
 		d_log_setmasks("ERR", -1);
+	}
 
 	d_log_fini();
 }
@@ -2093,47 +2076,343 @@ test_d_rank_list_dup_sort_uniq(void **state)
 					  exp_ranks, ARRAY_SIZE(exp_ranks));
 	}
 }
-#endif
 
-static void
-test_d_getenv(void **state)
+static int
+setup_getenv_mocks(void **state)
 {
-	char value[] = "012";
-	int  rc = 0;
-
-	/* TODO Test with string of one characteur */
-
-	getenv_return = "bar",
-	rc = d_getenv_str(value, sizeof(value), "foo");
-	assert_int_equal(rc, EXIT_SUCCESS);
-	assert_string_equal(value, "bar");
-
-	getenv_return = "",
-	rc = d_getenv_str(value, sizeof(value), "foo");
-	assert_int_equal(rc, EXIT_SUCCESS);
-	assert_string_equal(value, "");
-
-	getenv_return = "too long string",
-	rc = d_getenv_str(value, sizeof(value), "foo");
-	assert_int_equal(rc, -DER_TRUNC);
-	assert_string_equal(value, "too");
-
-	getenv_return = NULL;
-	rc = d_getenv_str(value, sizeof(value), "foo");
-	assert_int_equal(rc, -DER_NONEXIST);
-	assert_string_equal(value, "");
+	mock_getenv_setup();
+	return 0;
 }
 
-/* Convenience macro for declaring unit tests in this suite */
-#define AGENT_UTEST(X) \
-	cmocka_unit_test_setup_teardown(X, setup_gurt_mocks, \
-			teardown_gurt_mocks)
+static int
+teardown_getenv_mocks(void **state)
+{
+	mock_getenv_teardown();
+	return 0;
+}
+
+static void
+test_d_getenv_str(void **state)
+{
+	char env[] = "012";
+	int  rc    = 0;
+
+	getenv_return = "bar";
+	rc            = d_getenv_str(env, sizeof(env), "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_string_equal(env, "bar");
+
+	getenv_return = "";
+	rc            = d_getenv_str(env, sizeof(env), "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_string_equal(env, "");
+
+	getenv_return = "too long string";
+	rc            = d_getenv_str(env, sizeof(env), "foo");
+	assert_int_equal(rc, -DER_TRUNC);
+	assert_string_equal(env, "too");
+
+	getenv_return = "too long string";
+	rc            = d_getenv_str(env, 2, "foo");
+	assert_int_equal(rc, -DER_TRUNC);
+	assert_string_equal(env, "t");
+
+	assert_string_equal(env, "t");
+	getenv_return = "too long string";
+	rc            = d_getenv_str(env, 1, "foo");
+	assert_int_equal(rc, -DER_TRUNC);
+	assert_string_equal(env, "");
+
+	getenv_return = NULL;
+	rc            = d_getenv_str(env, sizeof(env), "foo");
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_string_equal(env, "");
+}
+
+static void
+test_d_agetenv_str(void **state)
+{
+	char *env = NULL;
+	int   rc  = 0;
+
+	getenv_return = "bar";
+	rc            = d_agetenv_str(&env, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_string_equal(env, "bar");
+	D_FREE(env);
+
+	getenv_return = "";
+	rc            = d_agetenv_str(&env, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_string_equal(env, "");
+	D_FREE(env);
+
+	getenv_return = NULL;
+	env           = (char *)0x1;
+	rc            = d_agetenv_str(&env, "foo");
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_null(env);
+
+	getenv_return = "bar";
+	env           = (char *)0x1;
+	mock_strdup_setup();
+	rc = d_agetenv_str(&env, "foo");
+	mock_strdup_teardown();
+	assert_int_equal(rc, -DER_NOMEM);
+	assert_null(env);
+}
+
+static void
+test_d_getenv_bool(void **state)
+{
+	bool val = false;
+	int  rc  = 0;
+
+	getenv_return = "bar";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val);
+
+	val           = false;
+	getenv_return = "true";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val);
+
+	val           = false;
+	getenv_return = "false";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val);
+
+	val           = false;
+	getenv_return = "1";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val);
+
+	val           = false;
+	getenv_return = "999999999999999999999999999999999999";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val);
+
+	val           = false;
+	getenv_return = "0dmlnv";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val);
+
+	val           = false;
+	getenv_return = "1";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val);
+
+	val           = false;
+	getenv_return = "03";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val);
+
+	val           = true;
+	getenv_return = "0";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_false(val);
+
+	val           = true;
+	getenv_return = "   0";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_false(val);
+
+	val           = false;
+	getenv_return = "0    ";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val);
+
+	val           = true;
+	getenv_return = "0000000";
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_false(val);
+
+	val           = true;
+	getenv_return = NULL;
+	rc            = d_getenv_bool(&val, "foo");
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_true(val);
+}
+
+static void
+test_d_getenv_char(void **state)
+{
+	char val = '\0';
+	int  rc  = 0;
+
+	getenv_return = "a";
+	rc            = d_getenv_char(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == 'a');
+
+	getenv_return = "";
+	rc            = d_getenv_char(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 'a');
+
+	getenv_return = "booo";
+	rc            = d_getenv_char(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 'a');
+
+	getenv_return = NULL;
+	rc            = d_getenv_char(&val, "foo");
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_true(val == 'a');
+}
+
+static void
+test_d_getenv_uint(void **state)
+{
+	unsigned val = 0;
+	int      rc  = 0;
+
+	getenv_return = "4294967295";
+	rc            = d_getenv_uint(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == UINT_MAX);
+
+	getenv_return = "42";
+	rc            = d_getenv_uint(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == 42);
+
+	getenv_return = "4294967296";
+	rc            = d_getenv_uint(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "-42";
+	rc            = d_getenv_uint(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "booo";
+	rc            = d_getenv_uint(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "42booo";
+	rc            = d_getenv_uint(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = NULL;
+	rc            = d_getenv_uint(&val, "foo");
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_true(val == 42);
+}
+
+static void
+test_d_getenv_uint32_t(void **state)
+{
+	uint32_t val = 0;
+	int      rc  = 0;
+
+	getenv_return = "4294967295";
+	rc            = d_getenv_uint32_t(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == UINT32_MAX);
+
+	getenv_return = "42";
+	rc            = d_getenv_uint32_t(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == 42);
+
+	getenv_return = "4294967296";
+	rc            = d_getenv_uint32_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "-42";
+	rc            = d_getenv_uint32_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "booo";
+	rc            = d_getenv_uint32_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "42booo";
+	rc            = d_getenv_uint32_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "";
+	rc            = d_getenv_uint32_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = NULL;
+	rc            = d_getenv_uint32_t(&val, "foo");
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_true(val == 42);
+}
+
+static void
+test_d_getenv_uint64_t(void **state)
+{
+	uint64_t val = 0;
+	int      rc  = 0;
+
+	getenv_return = "18446744073709551615";
+	rc            = d_getenv_uint64_t(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == UINT64_MAX);
+
+	getenv_return = "42";
+	rc            = d_getenv_uint64_t(&val, "foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == 42);
+
+	getenv_return = "18446744073709551616";
+	rc            = d_getenv_uint64_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "-42";
+	rc            = d_getenv_uint64_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "booo";
+	rc            = d_getenv_uint64_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "42booo";
+	rc            = d_getenv_uint64_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = "";
+	rc            = d_getenv_uint64_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
+	getenv_return = NULL;
+	rc            = d_getenv_uint64_t(&val, "foo");
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_true(val == 42);
+}
 
 int
 main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
-#if 0
 	    cmocka_unit_test(test_time),
 	    cmocka_unit_test(test_d_errstr),
 	    cmocka_unit_test(test_d_errdesc),
@@ -2152,13 +2431,22 @@ main(int argc, char **argv)
 	    cmocka_unit_test(test_gurt_string_buffer),
 	    cmocka_unit_test(test_d_rank_list_dup_sort_uniq),
 	    cmocka_unit_test(test_hash_perf),
-#endif
-	    AGENT_UTEST(test_d_getenv),
-	};
+	    cmocka_unit_test_setup_teardown(test_d_getenv_str, setup_getenv_mocks,
+					    teardown_getenv_mocks),
+	    cmocka_unit_test_setup_teardown(test_d_agetenv_str, setup_getenv_mocks,
+					    teardown_getenv_mocks),
+	    cmocka_unit_test_setup_teardown(test_d_getenv_bool, setup_getenv_mocks,
+					    teardown_getenv_mocks),
+	    cmocka_unit_test_setup_teardown(test_d_getenv_char, setup_getenv_mocks,
+					    teardown_getenv_mocks),
+	    cmocka_unit_test_setup_teardown(test_d_getenv_uint, setup_getenv_mocks,
+					    teardown_getenv_mocks),
+	    cmocka_unit_test_setup_teardown(test_d_getenv_uint32_t, setup_getenv_mocks,
+					    teardown_getenv_mocks),
+	    cmocka_unit_test_setup_teardown(test_d_getenv_uint64_t, setup_getenv_mocks,
+					    teardown_getenv_mocks)};
 
 	d_register_alt_assert(mock_assert);
 
-	return cmocka_run_group_tests_name("test_gurt", tests, NULL, NULL);
-	/* return cmocka_run_group_tests_name("test_gurt", tests, init_tests, */
-	/* 	fini_tests); */
+	return cmocka_run_group_tests_name("test_gurt", tests, init_tests, fini_tests);
 }

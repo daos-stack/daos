@@ -1020,11 +1020,11 @@ dss_start_xs_id(int tag, int xs_id)
 static int
 dss_xstreams_init(void)
 {
-	char	env[64];
-	int	rc = 0;
-	int	rc2;
-	int	i, xs_id;
-	int      tags;
+	char *env;
+	int   rc = 0;
+	int   rc2;
+	int   i, xs_id;
+	int   tags;
 
 	D_ASSERT(dss_tgt_nr >= 1);
 
@@ -1049,14 +1049,15 @@ dss_xstreams_init(void)
 		       sched_relax_intvl);
 	}
 
-	rc2 = d_getenv_str(env, sizeof(env), "DAOS_SCHED_RELAX_MODE");
-	if (rc2 != DER_NONEXIST) {
+	rc2 = d_agetenv_str(&env, "DAOS_SCHED_RELAX_MODE");
+	if (rc2 == -DER_SUCCESS) {
 		sched_relax_mode = sched_relax_str2mode(env);
 		if (sched_relax_mode == SCHED_RELAX_MODE_INVALID) {
 			D_WARN("Invalid relax mode [%s]\n", env);
 			sched_relax_mode = SCHED_RELAX_MODE_NET;
 		}
 	}
+	D_FREE(env);
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
