@@ -103,7 +103,7 @@ struct aio_ctx {
 	int                   depth;
 	bool                  on_dfs;
 	bool                  inited;
-	/* eqs are useable only for current context */
+	/* eqs are usable only for current context */
 	struct aio_ctx_eq_ev *eq_ev_list;
 };
 
@@ -5638,7 +5638,7 @@ create_eq_ev_for_aio(int ctx_idx, int io_depth)
 			return 0;
 		} else {
 			DS_ERROR(EINVAL, "the number of requested ops is larger then the context "
-				 "depth");
+					 "depth");
 			return EINVAL;
 		}
 	}
@@ -5681,12 +5681,12 @@ free_eq:
 int
 io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 {
-	int             i, n_op_dfs, fd, io_depth, ctx_idx;
-	daos_size_t	read_size = 0;
-	d_iov_t		iov       = {};
-	d_sg_list_t	sgl       = {};
-	int		rc;
-	short		op;
+	int         i, n_op_dfs, fd, io_depth, ctx_idx;
+	daos_size_t read_size = 0;
+	d_iov_t     iov       = {};
+	d_sg_list_t sgl       = {};
+	int         rc;
+	short       op;
 
 	if (next_io_submit == NULL) {
 		next_io_submit = dlsym(RTLD_NEXT, "io_submit");
@@ -5736,11 +5736,12 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 		}
 		sgl.sg_nr = 1;
 		d_iov_set(&iov, (void *)ios[i]->u.c.buf, ios[i]->u.c.nbytes);
-		sgl.sg_iovs = &iov;
+		sgl.sg_iovs                               = &iov;
 		aio_ctx_list[ctx_idx].eq_ev_list[i].piocb = ios[i];
 		if (op == IO_CMD_PREAD) {
 			rc = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
-				      ios[i]->u.c.offset, &read_size, &aio_ctx_list[ctx_idx].eq_ev_list[i].ev);
+				      ios[i]->u.c.offset, &read_size,
+				      &aio_ctx_list[ctx_idx].eq_ev_list[i].ev);
 			if (rc)
 				D_GOTO(err, rc);
 		}
@@ -5782,12 +5783,12 @@ int
 io_getevents(io_context_t ctx, long min_nr, long nr, struct io_event *events,
 	     struct timespec *timeout)
 {
-	int		 	 i, j, rc, io_depth, ctx_idx, op_done = 0;
-	struct daos_event	*eps[AIO_EQ_DEPTH + 1] = { 0 };
-	struct aio_ctx_eq_ev    *p_eq_ev;
-	struct iocb             *piocb;
-	struct timespec          times_0;
-	struct timespec          times_1;
+	int                   i, j, rc, io_depth, ctx_idx, op_done = 0;
+	struct daos_event    *eps[AIO_EQ_DEPTH + 1] = { 0 };
+	struct aio_ctx_eq_ev *p_eq_ev;
+	struct iocb          *piocb;
+	struct timespec       times_0;
+	struct timespec       times_1;
 
 	if (next_io_getevents == NULL) {
 		next_io_getevents = dlsym(RTLD_NEXT, "io_getevents");
@@ -5825,7 +5826,7 @@ io_getevents(io_context_t ctx, long min_nr, long nr, struct io_event *events,
 					DS_ERROR(eps[j]->ev_error, "daos_eq_poll() error");
 				else {
 					p_eq_ev = container_of(eps[j], struct aio_ctx_eq_ev, ev);
-					piocb = p_eq_ev->piocb;
+					piocb   = p_eq_ev->piocb;
 					events[op_done].obj = piocb;
 					events[op_done].res = piocb->u.c.nbytes;
 					daos_event_fini(eps[j]);
@@ -5842,7 +5843,7 @@ io_getevents(io_context_t ctx, long min_nr, long nr, struct io_event *events,
 				clock_gettime(CLOCK_REALTIME, &times_1);
 				if (((times_1.tv_sec - times_0.tv_sec) > timeout->tv_sec) ||
 				    (((times_1.tv_sec - times_0.tv_sec) == timeout->tv_sec) &&
-				    ((times_1.tv_nsec - times_0.tv_nsec) >= timeout->tv_nsec)))
+				     ((times_1.tv_nsec - times_0.tv_nsec) >= timeout->tv_nsec)))
 					return op_done;
 			}
 		}
