@@ -1048,7 +1048,7 @@ dss_xstreams_init(void)
 		       sched_relax_intvl);
 	}
 
-	env = getenv("DAOS_SCHED_RELAX_MODE");
+	env = d_getenv("DAOS_SCHED_RELAX_MODE");
 	if (env) {
 		sched_relax_mode = sched_relax_str2mode(env);
 		if (sched_relax_mode == SCHED_RELAX_MODE_INVALID) {

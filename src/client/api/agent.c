@@ -13,7 +13,7 @@ int
 dc_agent_init()
 {
 	char	*path = NULL;
-	char	*envpath = getenv(DAOS_AGENT_DRPC_DIR_ENV);
+	char	*envpath = d_getenv(DAOS_AGENT_DRPC_DIR_ENV);
 
 	if (envpath)
 		D_ASPRINTF(path, "%s/%s", envpath,

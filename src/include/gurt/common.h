@@ -574,10 +574,17 @@ d_sgl_buf_copy(d_sg_list_t *dst_sgl, d_sg_list_t *src_sgl)
 	}
 }
 
+char *d_getenv(const char *name);
 void d_getenv_bool(const char *env, bool *bool_val);
 void d_getenv_char(const char *env, char *char_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
 int d_getenv_uint64_t(const char *env, uint64_t *val);
+int d_putenv(char *name);
+int d_setenv(const char *name, const char *value, int overwrite);
+int d_unsetenv(const char *name);
+int d_clearenv(void);
+int d_apply_if_not_setenv(const char *name, const char *value);
+
 int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
 void d_free_string(struct d_string_buffer_t *buf);
 

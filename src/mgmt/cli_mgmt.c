@@ -480,7 +480,7 @@ int dc_mgmt_net_cfg(const char *name)
 				continue;
 			}
 
-			rc = setenv(v_name, v_value, 0);
+			rc = d_setenv(v_name, v_value, 0);
 			if (rc != 0)
 				D_GOTO(cleanup, rc = d_errno2der(errno));
 			D_DEBUG(DB_MGMT, "set server-supplied client env: %s", env);
@@ -491,26 +491,26 @@ int dc_mgmt_net_cfg(const char *name)
 	g_num_serv_ranks = resp->n_rank_uris;
 	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
 	/* These two are always set */
-	rc = setenv("CRT_PHY_ADDR_STR", info.provider, 1);
+	rc = d_setenv("CRT_PHY_ADDR_STR", info.provider, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	sprintf(buf, "%d", info.crt_ctx_share_addr);
-	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
+	rc = d_setenv("CRT_CTX_SHARE_ADDR", buf, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* If the server has set this, the client must use the same value. */
 	if (info.srv_srx_set != -1) {
 		sprintf(buf, "%d", info.srv_srx_set);
-		rc = setenv("FI_OFI_RXM_USE_SRX", buf, 1);
+		rc = d_setenv("FI_OFI_RXM_USE_SRX", buf, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 		D_INFO("Using server's value for FI_OFI_RXM_USE_SRX: %s\n",
 		       buf);
 	} else {
 		/* Client may not set it if the server hasn't. */
-		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
+		cli_srx_set = d_getenv("FI_OFI_RXM_USE_SRX");
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
 				"but server is unset!\n", cli_srx_set);
@@ -519,10 +519,10 @@ int dc_mgmt_net_cfg(const char *name)
 	}
 
 	/* Allow client env overrides for these three */
-	crt_timeout = getenv("CRT_TIMEOUT");
+	crt_timeout = d_getenv("CRT_TIMEOUT");
 	if (!crt_timeout) {
 		sprintf(buf, "%d", info.crt_timeout);
-		rc = setenv("CRT_TIMEOUT", buf, 1);
+		rc = d_setenv("CRT_TIMEOUT", buf, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
@@ -530,10 +530,10 @@ int dc_mgmt_net_cfg(const char *name)
 			crt_timeout);
 	}
 
-	ofi_interface = getenv("OFI_INTERFACE");
-	ofi_domain = getenv("OFI_DOMAIN");
+	ofi_interface = d_getenv("OFI_INTERFACE");
+	ofi_domain = d_getenv("OFI_DOMAIN");
 	if (!ofi_interface) {
-		rc = setenv("OFI_INTERFACE", info.interface, 1);
+		rc = d_setenv("OFI_INTERFACE", info.interface, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 
@@ -545,7 +545,7 @@ int dc_mgmt_net_cfg(const char *name)
 			D_WARN("Ignoring OFI_DOMAIN '%s' because OFI_INTERFACE is not set; using "
 			       "automatic configuration instead\n", ofi_domain);
 
-		rc = setenv("OFI_DOMAIN", info.domain, 1);
+		rc = d_setenv("OFI_DOMAIN", info.domain, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
@@ -556,14 +556,14 @@ int dc_mgmt_net_cfg(const char *name)
 			D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
 
-	D_INFO("Network interface: %s, Domain: %s\n", getenv("OFI_INTERFACE"),
-	       getenv("OFI_DOMAIN"));
+	D_INFO("Network interface: %s, Domain: %s\n", d_getenv("OFI_INTERFACE"),
+	       d_getenv("OFI_DOMAIN"));
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
 		"\tCRT_PHY_ADDR_STR: %s, "
 		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
-		getenv("CRT_PHY_ADDR_STR"),
-		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
+		d_getenv("CRT_PHY_ADDR_STR"),
+		d_getenv("CRT_CTX_SHARE_ADDR"), d_getenv("CRT_TIMEOUT"));
 
 cleanup:
 	put_attach_info(&info, resp);
@@ -585,7 +585,7 @@ int dc_mgmt_net_cfg_check(const char *name)
 
 	/* Client may not set it if the server hasn't. */
 	if (info.srv_srx_set == -1) {
-		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
+		cli_srx_set = d_getenv("FI_OFI_RXM_USE_SRX");
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
 				"but server is unset!\n", cli_srx_set);

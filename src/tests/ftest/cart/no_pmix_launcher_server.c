@@ -33,7 +33,7 @@ int main(int argc, char **argv)
 	uint32_t		grp_size;
 	int			rc;
 
-	env_self_rank = getenv("CRT_L_RANK");
+	env_self_rank = d_getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
@@ -83,7 +83,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
 	if (grp_cfg_file == NULL) {
 		D_ERROR("CRT_L_GRP_CFG was not set\n");
 		assert(0);

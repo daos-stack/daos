@@ -803,9 +803,9 @@ crt_hg_init(void)
 
 	#define EXT_FAC DD_FAC(external)
 
-	env = getenv("HG_LOG_SUBSYS");
+	env = d_getenv("HG_LOG_SUBSYS");
 	if (!env) {
-		env = getenv("HG_LOG_LEVEL");
+		env = d_getenv("HG_LOG_LEVEL");
 		if (!env)
 			HG_Set_log_level("warning");
 		HG_Set_log_subsys("hg,na");

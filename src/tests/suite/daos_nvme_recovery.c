@@ -87,7 +87,7 @@ nvme_fault_reaction(void **state, int mode)
 		daos_size_t	nvme_size;
 
 		/* Use the SCM size if set with environment */
-		env = getenv("POOL_SCM_SIZE");
+		env = d_getenv("POOL_SCM_SIZE");
 		if (env) {
 			size_gb = atoi(env);
 			if (size_gb != 0)

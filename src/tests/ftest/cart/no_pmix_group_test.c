@@ -318,7 +318,7 @@ int main(int argc, char **argv)
 	int			num_attach_retries = 20;
 	uint32_t		primary_grp_version = 1;
 
-	env_self_rank = getenv("CRT_L_RANK");
+	env_self_rank = d_getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
 
 	/* When under valgrind bump expected timeouts to 60 seconds */
@@ -382,7 +382,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
 
 	rc = crt_rank_self_set(my_rank, primary_grp_version);
 	if (rc != 0) {

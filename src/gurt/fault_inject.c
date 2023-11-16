@@ -534,7 +534,7 @@ d_fault_inject_init(void)
 	}
 	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 
-	config_file = getenv(D_FAULT_CONFIG_ENV);
+	config_file = d_getenv(D_FAULT_CONFIG_ENV);
 	if (config_file == NULL || strlen(config_file) == 0) {
 		D_INFO("No config file, fault injection is OFF.\n");
 		D_GOTO(out, rc);

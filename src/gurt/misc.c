@@ -974,6 +974,99 @@ dis_single_char_str(char *str)
 }
 
 /**
+ * FIXME DAOS-14532: Update comment
+ *
+ * Overloads to hook the unsafe getenv()/[un]setenv()/putenv()/clearenv()
+ * functions from glibc.
+ * Libgurt is the preferred place for this as it is the lowest layer in DAOS,
+ * so it will be the earliest to be loaded and will ensure the hook to be
+ * installed as early as possible and could prevent usage of LD_PRELOAD.
+ * The idea is to strengthen all the environment APIs by using a common lock.
+ *
+ * XXX this will address the main lack of multi-thread protection in the Glibc
+ * APIs but do not handle all unsafe use-cases (like the change/removal of an
+ * env var when its value address has already been grabbed by a previous
+ * getenv(), ...).
+ */
+
+static pthread_rwlock_t hook_env_lock = PTHREAD_RWLOCK_INITIALIZER;
+
+char *d_getenv(const char *name)
+{
+	char *p;
+
+	D_RWLOCK_RDLOCK(&hook_env_lock);
+	p = getenv(name);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return p;
+}
+
+int d_putenv(char *name)
+{
+	int rc;
+
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = putenv(name);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+int d_setenv(const char *name, const char *value, int overwrite)
+{
+	int rc;
+
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = setenv(name, value, overwrite);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+int d_unsetenv(const char *name)
+{
+	int rc;
+
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = unsetenv(name);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+int d_clearenv(void)
+{
+	int rc;
+
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = clearenv();
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+int d_apply_if_not_setenv(const char *name, const char *value)
+{
+	char *old_val;
+	int rc = 0;
+
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+
+	old_val = getenv(name);
+
+	if (old_val == NULL) {
+		D_INFO("%s was not set, setting to %s\n", name, value);
+		rc = setenv(name, value, true);
+	}
+
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+/**
+ * FIXME DAOS-14532: Makes all the function atomic
  * get a bool type environment variables
  *
  * \param[in]		env		name of the environment variable
@@ -990,7 +1083,7 @@ d_getenv_bool(const char *env, bool *bool_val)
 		return;
 	D_ASSERT(bool_val != NULL);
 
-	env_val = getenv(env);
+	env_val = d_getenv(env);
 	if (!env_val)
 		return;
 
@@ -1002,6 +1095,7 @@ d_getenv_bool(const char *env, bool *bool_val)
 }
 
 /**
+ * FIXME DAOS-14532: Makes all the function atomic
  * get single character environment variable
  *
  * \param[in]           env     name of the environment variable
@@ -1015,7 +1109,7 @@ d_getenv_char(const char *env, char *char_val)
 	if (env == NULL || char_val == NULL)
 		return;
 
-	env_val = getenv(env);
+	env_val = d_getenv(env);
 	if (!env_val)
 		return;
 
@@ -1027,6 +1121,7 @@ d_getenv_char(const char *env, char *char_val)
 }
 
 /**
+ * FIXME DAOS-14532: Makes all the function atomic
  * get an integer type environment variables
  *
  * \param[in]		env	name of the environment variable
@@ -1043,7 +1138,7 @@ d_getenv_int(const char *env, unsigned *int_val)
 	if (env == NULL || int_val == NULL)
 		return;
 
-	env_val = getenv(env);
+	env_val = d_getenv(env);
 	if (!env_val)
 		return;
 
@@ -1057,6 +1152,9 @@ d_getenv_int(const char *env, unsigned *int_val)
 	*int_val = value;
 }
 
+/**
+ * FIXME DAOS-14532: Makes all the function atomic
+ */
 int
 d_getenv_uint64_t(const char *env, uint64_t *val)
 {
@@ -1066,7 +1164,7 @@ d_getenv_uint64_t(const char *env, uint64_t *val)
 	uint64_t	new_val;
 	int		count;
 
-	env_val = getenv(env);
+	env_val = d_getenv(env);
 	if (!env_val) {
 		D_DEBUG(DB_TRACE, "ENV '%s' unchanged at %"PRId64"\n", env, *val);
 		return -DER_NONEXIST;
@@ -1338,120 +1436,4 @@ d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer)
 	pointers->p_buf[pointers->p_len] = pointer;
 	pointers->p_len++;
 	return 0;
-}
-
-/**
- * Overloads to hook the unsafe getenv()/[un]setenv()/putenv()/clearenv()
- * functions from glibc.
- * Libgurt is the preferred place for this as it is the lowest layer in DAOS,
- * so it will be the earliest to be loaded and will ensure the hook to be
- * installed as early as possible and could prevent usage of LD_PRELOAD.
- * The idea is to strengthen all the environment APIs by using a common lock.
- *
- * XXX this will address the main lack of multi-thread protection in the Glibc
- * APIs but do not handle all unsafe use-cases (like the change/removal of an
- * env var when its value address has already been grabbed by a previous
- * getenv(), ...).
- */
-
-static pthread_rwlock_t hook_env_lock = PTHREAD_RWLOCK_INITIALIZER;
-static char *(* ATOMIC real_getenv)(const char *);
-static int (* ATOMIC real_putenv)(char *);
-static int (* ATOMIC real_setenv)(const char *, const char *, int);
-static int (* ATOMIC real_unsetenv)(const char *);
-static int (* ATOMIC real_clearenv)(void);
-
-static void bind_libc_symbol(void **real_ptr_addr, const char *name)
-{
-	void *real_temp;
-
-	/* XXX __atomic_*() built-ins are used to avoid the need to cast
-	 * each of the ATOMIC pointers of functions, that seems to be
-	 * required to make Intel compiler happy ...
-	 */
-	if (__atomic_load_n(real_ptr_addr, __ATOMIC_RELAXED) == NULL) {
-		void *handle;
-
-		handle = dlopen("libc.so.6", RTLD_NOLOAD);
-		if (handle == NULL) {
-			handle = dlopen("libc.so.6", RTLD_LAZY);
-			D_ASSERT(handle != NULL);
-		}
-
-		real_temp = dlsym(handle, name);
-		D_ASSERT(real_temp != NULL);
-
-		__atomic_store_n(real_ptr_addr, real_temp, __ATOMIC_RELAXED);
-	}
-}
-
-static pthread_once_t init_real_symbols_flag = PTHREAD_ONCE_INIT;
-
-static void init_real_symbols(void)
-{
-	bind_libc_symbol((void **)&real_getenv, "getenv");
-	bind_libc_symbol((void **)&real_putenv, "putenv");
-	bind_libc_symbol((void **)&real_setenv, "setenv");
-	bind_libc_symbol((void **)&real_unsetenv, "unsetenv");
-	bind_libc_symbol((void **)&real_clearenv, "clearenv");
-}
-
-char *getenv(const char *name)
-{
-	char *p;
-
-	pthread_once(&init_real_symbols_flag, init_real_symbols);
-	D_RWLOCK_RDLOCK(&hook_env_lock);
-	p = real_getenv(name);
-	D_RWLOCK_UNLOCK(&hook_env_lock);
-
-	return p;
-}
-
-int putenv(char *name)
-{
-	int rc;
-
-	pthread_once(&init_real_symbols_flag, init_real_symbols);
-	D_RWLOCK_WRLOCK(&hook_env_lock);
-	rc = real_putenv(name);
-	D_RWLOCK_UNLOCK(&hook_env_lock);
-
-	return rc;
-}
-
-int setenv(const char *name, const char *value, int overwrite)
-{
-	int rc;
-
-	pthread_once(&init_real_symbols_flag, init_real_symbols);
-	D_RWLOCK_WRLOCK(&hook_env_lock);
-	rc = real_setenv(name, value, overwrite);
-	D_RWLOCK_UNLOCK(&hook_env_lock);
-
-	return rc;
-}
-
-int unsetenv(const char *name)
-{
-	int rc;
-
-	pthread_once(&init_real_symbols_flag, init_real_symbols);
-	D_RWLOCK_WRLOCK(&hook_env_lock);
-	rc = real_unsetenv(name);
-	D_RWLOCK_UNLOCK(&hook_env_lock);
-
-	return rc;
-}
-
-int clearenv(void)
-{
-	int rc;
-
-	pthread_once(&init_real_symbols_flag, init_real_symbols);
-	D_RWLOCK_WRLOCK(&hook_env_lock);
-	rc = real_clearenv();
-	D_RWLOCK_UNLOCK(&hook_env_lock);
-
-	return rc;
 }

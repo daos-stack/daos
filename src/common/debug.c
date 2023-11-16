@@ -104,7 +104,7 @@ unsigned int daos_io_bypass;
 static void
 io_bypass_init(void)
 {
-	char	*str = getenv(DENV_IO_BYPASS);
+	char	*str = d_getenv(DENV_IO_BYPASS);
 	char	*tok;
 	char	*saved_ptr;
 
@@ -162,7 +162,7 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 	}
 
 	/* honor the env variable first */
-	logfile = getenv(D_LOG_FILE_ENV);
+	logfile = d_getenv(D_LOG_FILE_ENV);
 	if (logfile == NULL || strlen(logfile) == 0) {
 		flags |= DLOG_FLV_STDOUT;
 		logfile = NULL;

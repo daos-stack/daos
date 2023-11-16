@@ -841,7 +841,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.flush_pri = DLOG_WARN;
 	mst.log_id_cb = log_id_cb;
 
-	env = getenv(D_LOG_FLUSH_ENV);
+	env = d_getenv(D_LOG_FLUSH_ENV);
 	if (env) {
 		pri = d_log_str2pri(env, strlen(env) + 1);
 
@@ -849,18 +849,18 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			mst.flush_pri = pri;
 	}
 
-	env = getenv(D_LOG_TRUNCATE_ENV);
+	env = d_getenv(D_LOG_TRUNCATE_ENV);
 	if (env != NULL && atoi(env) > 0)
 		truncate = 1;
 
-	env = getenv(D_LOG_SIZE_ENV);
+	env = d_getenv(D_LOG_SIZE_ENV);
 	if (env != NULL) {
 		log_size = d_getenv_size(env);
 		if (log_size < LOG_SIZE_MIN)
 			log_size = LOG_SIZE_MIN;
 	}
 
-	env = getenv(D_LOG_FILE_APPEND_PID_ENV);
+	env = d_getenv(D_LOG_FILE_APPEND_PID_ENV);
 	if (logfile != NULL && env != NULL) {
 		if (strcmp(env, "0") != 0) {
 			rc = asprintf(&buffer, "%s.%d", logfile, getpid());
@@ -873,7 +873,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		}
 	}
 
-	env = getenv(D_LOG_FILE_APPEND_RANK_ENV);
+	env = d_getenv(D_LOG_FILE_APPEND_RANK_ENV);
 	if (env && strcmp(env, "0") != 0)
 		mst.append_rank = true;
 
@@ -910,7 +910,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		int         log_flags = O_RDWR | O_CREAT;
 		struct stat st;
 
-		env = getenv(D_LOG_STDERR_IN_LOG_ENV);
+		env = d_getenv(D_LOG_STDERR_IN_LOG_ENV);
 		if (env != NULL && atoi(env) > 0)
 			merge_stderr = true;
 
@@ -1077,7 +1077,7 @@ bool d_logfac_is_enabled(const char *fac_name)
 	int len = strlen(fac_name);
 
 	/* read env DD_SUBSYS to enable corresponding facilities */
-	ddsubsys_env = getenv(DD_FAC_ENV);
+	ddsubsys_env = d_getenv(DD_FAC_ENV);
 	if (ddsubsys_env == NULL)
 		return true; /* enable all facilities by default */
 

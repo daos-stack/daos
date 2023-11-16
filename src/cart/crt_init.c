@@ -102,7 +102,7 @@ dump_envariables(void)
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
-		val = getenv(envars[i]);
+		val = d_getenv(envars[i]);
 		if (strcmp(envars[i], "D_PROVIDER_AUTH_KEY") == 0 && val)
 			D_INFO("%s = %s\n", envars[i], "********");
 		else
@@ -332,13 +332,13 @@ static int data_init(int server, crt_init_options_t *opt)
 		}
 	}
 	if (server)
-		setenv("UCX_IB_FORK_INIT", "n", 1);
+		d_setenv("UCX_IB_FORK_INIT", "n", 1);
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
 	if (fi_univ_size == 0) {
 		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
-		setenv("FI_UNIVERSE_SIZE", "2048", 1);
+		d_setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	}
 
 	if (credits == 0) {
@@ -530,19 +530,6 @@ out:
 }
 
 static void
-apply_if_not_set(const char *env_name, const char *new_value)
-{
-	char *old_val;
-
-	old_val = getenv(env_name);
-
-	if (old_val == NULL) {
-		D_INFO("%s not set, setting to %s\n", env_name, new_value);
-		setenv(env_name, new_value, true);
-	}
-}
-
-static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
 	uint32_t mrc_enable = 0;
@@ -562,11 +549,11 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	if (prov == CRT_PROV_OFI_VERBS_RXM ||
 	    prov == CRT_PROV_OFI_TCP_RXM) {
 		/* Use shared receive queues to avoid large mem consumption */
-		apply_if_not_set("FI_OFI_RXM_USE_SRX", "1");
+		d_apply_if_not_setenv("FI_OFI_RXM_USE_SRX", "1");
 
 		/* Only apply on the server side */
 		if (prov == CRT_PROV_OFI_TCP_RXM && crt_is_service())
-			apply_if_not_set("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd");
+			d_apply_if_not_setenv("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd");
 
 	}
 
@@ -576,12 +563,12 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
 	if (mrc_enable == 0) {
 		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
-		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
+		d_setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
 	}
 
 	/* Use tagged messages for other providers, disable multi-recv */
 	if (prov != CRT_PROV_OFI_CXI && prov != CRT_PROV_OFI_TCP)
-		apply_if_not_set("NA_OFI_UNEXPECTED_TAG_MSG", "1");
+		d_apply_if_not_setenv("NA_OFI_UNEXPECTED_TAG_MSG", "1");
 
 	g_prov_settings_applied[prov] = true;
 }
@@ -684,7 +671,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		crt_gdata.cg_auto_swim_disable =
 			(flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE) ? 1 : 0;
 
-		path = getenv("CRT_ATTACH_INFO_PATH");
+		path = d_getenv("CRT_ATTACH_INFO_PATH");
 		if (path != NULL && strlen(path) > 0) {
 			rc = crt_group_config_path_set(path);
 			if (rc != 0)
@@ -698,14 +685,14 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		if (opt && opt->cio_auth_key)
 			auth_key_env = opt->cio_auth_key;
 		else
-			auth_key_env = getenv("D_PROVIDER_AUTH_KEY");
+			auth_key_env = d_getenv("D_PROVIDER_AUTH_KEY");
 
 		if (opt && opt->cio_provider)
 			provider_env = opt->cio_provider;
 		else {
-			provider_env = getenv(CRT_PHY_ADDR_ENV);
+			provider_env = d_getenv(CRT_PHY_ADDR_ENV);
 
-			tmp = getenv("D_PROVIDER");
+			tmp = d_getenv("D_PROVIDER");
 			if (tmp)
 				provider_env = tmp;
 		}
@@ -713,9 +700,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		if (opt && opt->cio_interface)
 			interface_env = opt->cio_interface;
 		else {
-			interface_env = getenv("OFI_INTERFACE");
+			interface_env = d_getenv("OFI_INTERFACE");
 
-			tmp = getenv("D_INTERFACE");
+			tmp = d_getenv("D_INTERFACE");
 			if (tmp)
 				interface_env = tmp;
 		}
@@ -723,9 +710,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		if (opt && opt->cio_domain)
 			domain_env = opt->cio_domain;
 		else {
-			domain_env = getenv("OFI_DOMAIN");
+			domain_env = d_getenv("OFI_DOMAIN");
 
-			tmp = getenv("D_DOMAIN");
+			tmp = d_getenv("D_DOMAIN");
 			if (tmp)
 				domain_env = tmp;
 		}
@@ -733,9 +720,9 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		if (opt && opt->cio_port)
 			port_str = opt->cio_port;
 		else {
-			port_str = getenv("OFI_PORT");
+			port_str = d_getenv("OFI_PORT");
 
-			tmp = getenv("D_PORT");
+			tmp = d_getenv("D_PORT");
 			if (tmp)
 				port_str = tmp;
 		}

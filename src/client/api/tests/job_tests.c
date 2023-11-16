@@ -29,7 +29,7 @@
 static char *getenv_daos_jobid_return; /* value returned for DAOS_JOBID */
 static char *getenv_jobid_env_return; /* value returned for DAOS_JOBID_ENV */
 static char *getenv_jobid_return; /* value stored in location DAOS_JOBID_ENV */
-char *getenv(const char *name)
+char *d_getenv(const char *name)
 {
 	if (strncmp(name, DEFAULT_JOBID_ENV, sizeof(DEFAULT_JOBID_ENV)) == 0) {
 		return getenv_daos_jobid_return;

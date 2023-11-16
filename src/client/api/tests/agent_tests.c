@@ -24,7 +24,7 @@
 
 static char *getenv_return; /* value to be returned */
 static const char *getenv_name; /* saved input */
-char *getenv(const char *name)
+char *d_getenv(const char *name)
 {
 	getenv_name = name;
 	return getenv_return;

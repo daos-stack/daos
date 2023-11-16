@@ -597,9 +597,9 @@ test_log(void **state)
 	uint64_t dbg_mask;
 	uint64_t current_dbgmask;
 
-	oldmask = getenv("D_LOG_MASK");
+	oldmask = d_getenv("D_LOG_MASK");
 
-	setenv("D_LOG_MASK", "CLOG=DEBUG,T1=DEBUG", 1);
+	d_setenv("D_LOG_MASK", "CLOG=DEBUG,T1=DEBUG", 1);
 	memset(retbuf, 0x00, sizeof(retbuf));
 	rc = d_log_init();
 	assert_int_equal(rc, 0);
@@ -618,7 +618,7 @@ test_log(void **state)
 	LOG_DEBUG(logfac2, "log2 debug should not print\n");
 
 	/* Alternatively, a component may have its own mask */
-	logmask = getenv("TEST_LOG_MASK");
+	logmask = d_getenv("TEST_LOG_MASK");
 	if (logmask == NULL) {
 		D_STRNDUP_S(allocated_mask, "ERR,T1=DEBUG,CLOG=DEBUG");
 		logmask = allocated_mask;
@@ -643,8 +643,8 @@ test_log(void **state)
 	/* Test debug mask bits*/
 
 	/* Attempt to set debug mask bits with facility mask not set to DEBUG */
-	setenv("D_LOG_MASK", "T2=WARN", 1);
-	setenv("DD_MASK", "trace", 1);
+	d_setenv("D_LOG_MASK", "T2=WARN", 1);
+	d_setenv("DD_MASK", "trace", 1);
 	d_log_sync_mask();
 	D_STRNDUP_S(logmask, "T2=WARN");
 	assert_non_null(logmask);
@@ -658,8 +658,8 @@ test_log(void **state)
 	memset(retbuf, 0x00, sizeof(retbuf));
 
 	/* Set trace debug mask */
-	setenv("D_LOG_MASK", "T1=DEBUG", 1);
-	setenv("DD_MASK", "trace", 1); /* DB_TRACE stream is set */
+	d_setenv("D_LOG_MASK", "T1=DEBUG", 1);
+	d_setenv("DD_MASK", "trace", 1); /* DB_TRACE stream is set */
 	d_log_sync_mask();
 	D_STRNDUP_S(logmask, "T1=DEBUG");
 	assert_non_null(logmask);
@@ -677,7 +677,7 @@ test_log(void **state)
 	memset(retbuf, 0x00, sizeof(retbuf));
 
 	/* Set test debug mask */
-	setenv("DD_MASK", "test", 1); /* DB_TEST stream is now also set */
+	d_setenv("DD_MASK", "test", 1); /* DB_TEST stream is now also set */
 	d_log_sync_mask();
 	D_STRNDUP_S(logmask, "T1=DEBUG");
 	assert_non_null(logmask);
@@ -702,8 +702,8 @@ test_log(void **state)
 	assert_int_equal(rc, 0);
 #undef D_LOGFAC
 #define D_LOGFAC	DD_FAC(sn)
-	setenv("D_LOG_MASK", "sn=DEBUG", 1);
-	setenv("DD_MASK", "test1", 1);
+	d_setenv("D_LOG_MASK", "sn=DEBUG", 1);
+	d_setenv("DD_MASK", "test1", 1);
 	d_log_sync_mask();
 
 	D_INFO("This message should appear\n");
@@ -717,8 +717,8 @@ test_log(void **state)
 	assert_int_equal(D_LOG_ENABLED(DB_TEST2), 0);
 	assert_int_equal(D_LOG_ENABLED(DB_TEST1), 0);
 	d_log_sync_mask();
-	setenv("D_LOG_MASK", "foobar=DEBUG", 1);
-	setenv("DD_MASK", "test2_long", 1);
+	d_setenv("D_LOG_MASK", "foobar=DEBUG", 1);
+	d_setenv("DD_MASK", "test2_long", 1);
 	d_log_sync_mask();
 	assert_int_equal(D_LOG_ENABLED(DB_TEST1), 0);
 	assert_int_not_equal(D_LOG_ENABLED(DB_TEST2), 0);

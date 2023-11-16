@@ -271,7 +271,7 @@ int main(int argc, char **argv)
 		crtu_set_shutdown_delay(2);
 	}
 
-	env_self_rank = getenv("CRT_L_RANK");
+	env_self_rank = d_getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
@@ -326,7 +326,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
 
 	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {

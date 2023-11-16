@@ -37,7 +37,7 @@ int
 dc_job_init(void)
 {
 	char *jobid;
-	char *jobid_env = getenv(JOBID_ENV);
+	char *jobid_env = d_getenv(JOBID_ENV);
 	int   err = 0;
 
 	if (jobid_env == NULL) {
@@ -52,7 +52,7 @@ dc_job_init(void)
 
 	dc_jobid_env = jobid_env;
 
-	jobid = getenv(dc_jobid_env);
+	jobid = d_getenv(dc_jobid_env);
 	if (jobid == NULL) {
 		err = craft_default_jobid(&jobid);
 		if (err)

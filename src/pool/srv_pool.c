@@ -6531,7 +6531,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
-	env = getenv(REBUILD_ENV);
+	env = d_getenv(REBUILD_ENV);
 	if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
 	     daos_fail_check(DAOS_REBUILD_DISABLE)) {
 		D_DEBUG(DB_TRACE, "Rebuild is disabled\n");

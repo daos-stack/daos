@@ -73,7 +73,7 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	env_self_rank = getenv("CRT_L_RANK");
+	env_self_rank = d_getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */

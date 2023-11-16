@@ -1389,7 +1389,7 @@ ds_rsvc_get_md_cap(void)
 	char	       *v;
 	int		n;
 
-	v = getenv(DAOS_MD_CAP_ENV); /* in MB */
+	v = d_getenv(DAOS_MD_CAP_ENV); /* in MB */
 	if (v == NULL)
 		return size_default;
 	n = atoi(v);

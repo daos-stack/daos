@@ -1241,7 +1241,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	env_self_rank = getenv("CRT_L_RANK");
+	env_self_rank = d_getenv("CRT_L_RANK");
 	if (env_self_rank == NULL) {
 		printf("CRT_L_RANK was not set\n");
 		return -1;
@@ -1274,7 +1274,7 @@ int main(int argc, char **argv)
 	init_work_contexts();
 
 	/* Load the group configuration file */
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
 	if (grp_cfg_file == NULL) {
 		D_ERROR("CRT_L_GRP_CFG was not set\n");
 		assert(0);

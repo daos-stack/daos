@@ -380,7 +380,7 @@ debug_prio_err_load_env(void)
 	char	*env;
 	int	i;
 
-	env = getenv(DD_STDERR_ENV);
+	env = d_getenv(DD_STDERR_ENV);
 	if (env == NULL)
 		return;
 
@@ -415,7 +415,7 @@ d_log_sync_mask_ex(const char *log_mask, const char *dd_mask)
 void
 d_log_sync_mask(void)
 {
-	d_log_sync_mask_ex(getenv(D_LOG_MASK_ENV), getenv(DD_MASK_ENV));
+	d_log_sync_mask_ex(d_getenv(D_LOG_MASK_ENV), d_getenv(DD_MASK_ENV));
 }
 
 /**
@@ -540,7 +540,7 @@ d_log_init(void)
 	int	 flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
 	int	 rc;
 
-	log_file = getenv(D_LOG_FILE_ENV);
+	log_file = d_getenv(D_LOG_FILE_ENV);
 	if (log_file == NULL || strlen(log_file) == 0) {
 		flags |= DLOG_FLV_STDOUT;
 		log_file = NULL;

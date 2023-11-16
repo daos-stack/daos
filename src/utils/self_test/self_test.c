@@ -1830,14 +1830,14 @@ int main(int argc, char *argv[])
 		char *env;
 		char *attach_path;
 
-		env = getenv("CRT_PHY_ADDR_STR");
+		env = d_getenv("CRT_PHY_ADDR_STR");
 		if (env == NULL) {
 			printf("Error: provider (CRT_PHY_ADDR_STR) is not set\n");
 			printf("Example: export CRT_PHY_ADDR_STR='ofi+tcp'\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 
-		env = getenv("OFI_INTERFACE");
+		env = d_getenv("OFI_INTERFACE");
 		if (env == NULL) {
 			printf("Error: interface (OFI_INTERFACE) is not set\n");
 			printf("Example: export OFI_INTERFACE=eth0\n");
@@ -1847,7 +1847,7 @@ int main(int argc, char *argv[])
 		if (attach_info_path)
 			attach_path = attach_info_path;
 		else {
-			attach_path = getenv("CRT_ATTACH_INFO_PATH");
+			attach_path = d_getenv("CRT_ATTACH_INFO_PATH");
 			if (!attach_path)
 				attach_path = "/tmp";
 		}

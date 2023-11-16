@@ -606,7 +606,7 @@ discover_daos_mount_with_env(void)
 	char *container = NULL;
 
 	/* Add the mount if env DAOS_MOUNT_POINT is set. */
-	fs_root = getenv("DAOS_MOUNT_POINT");
+	fs_root = d_getenv("DAOS_MOUNT_POINT");
 	if (fs_root == NULL)
 		/* env DAOS_MOUNT_POINT is undefined, return success (0) */
 		D_GOTO(out, rc = 0);
@@ -633,13 +633,13 @@ discover_daos_mount_with_env(void)
 		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
-	pool = getenv("DAOS_POOL");
+	pool = d_getenv("DAOS_POOL");
 	if (pool == NULL) {
 		D_FATAL("DAOS_POOL is not set.\n");
 		D_GOTO(out, rc = EINVAL);
 	}
 
-	container = getenv("DAOS_CONTAINER");
+	container = d_getenv("DAOS_CONTAINER");
 	if (container == NULL) {
 		D_FATAL("DAOS_CONTAINER is not set.\n");
 		D_GOTO(out, rc = EINVAL);
@@ -5515,7 +5515,7 @@ init_myhook(void)
 	else
 		daos_debug_inited = true;
 
-	env_log = getenv("D_IL_REPORT");
+	env_log = d_getenv("D_IL_REPORT");
 	if (env_log) {
 		report = true;
 		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)

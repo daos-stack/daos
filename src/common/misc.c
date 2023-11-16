@@ -684,7 +684,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	 * 1) now sockets provider cannot create more than 16 contexts for SEP
 	 * 2) some problems if SEP communicates with regular EP.
 	 */
-	addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
+	addr_env = (crt_phy_addr_t)d_getenv(CRT_PHY_ADDR_ENV);
 	if (addr_env != NULL &&
 	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
 		D_INFO("for sockets provider force it to use regular EP.\n");
