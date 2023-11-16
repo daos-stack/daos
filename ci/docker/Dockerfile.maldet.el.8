@@ -23,9 +23,17 @@ COPY ./utils/scripts/helpers/distro_info.sh /tmp/distro_info.sh
 COPY ./utils/scripts/helpers/install_maldet.sh /tmp/install.sh
 # script to setup local repo if available
 COPY ./utils/scripts/helpers/repo-helper-el8.sh /tmp/repo-helper.sh
-RUN set -e;                                         \
-    chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
-    /tmp/repo-helper.sh
+
+RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
+    /tmp/repo-helper.sh &&                          \
+    rm -f /tmp/repo-helper.sh
+
+FROM basic
+# Install OS updates and package.  Include basic tools and daos dependencies
+RUN dnf upgrade &&        \
+    /tmp/install.sh &&    \
+    dnf clean all &&      \
+    rm -f /tmp/install.sh
 
 # Add DAOS users
 ARG UID=1000
