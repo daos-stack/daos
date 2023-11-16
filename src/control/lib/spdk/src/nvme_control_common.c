@@ -1,5 +1,5 @@
 /**
-* (C) Copyright 2019-2022 Intel Corporation.
+* (C) Copyright 2019-2023 Intel Corporation.
 *
 * SPDX-License-Identifier: BSD-2-Clause-Patent
 */
@@ -124,6 +124,21 @@ init_ret(void)
 	return ret;
 }
 
+static void
+free_ctrlr_fields(struct ctrlr_t *ctrlr)
+{
+	if (ctrlr->model != NULL)
+		free(ctrlr->model);
+	if (ctrlr->serial != NULL)
+		free(ctrlr->serial);
+	if (ctrlr->fw_rev != NULL)
+		free(ctrlr->fw_rev);
+	if (ctrlr->vendor_id != NULL)
+		free(ctrlr->vendor_id);
+	if (ctrlr->pci_type != NULL)
+		free(ctrlr->pci_type);
+}
+
 void
 clean_ret(struct ret_t *ret)
 {
@@ -146,6 +161,7 @@ clean_ret(struct ret_t *ret)
 		if (ret->ctrlrs->stats)
 			free(ret->ctrlrs->stats);
 
+		free_ctrlr_fields(ret->ctrlrs);
 		cnext = ret->ctrlrs->next;
 		free(ret->ctrlrs);
 		ret->ctrlrs = cnext;
@@ -234,19 +250,44 @@ fail:
 }
 
 static int
+str2ctrlr(char **dst, const void *src)
+{
+	int len;
+
+	assert(src != NULL);
+	assert(dst != NULL);
+	assert(*dst == NULL);
+
+	len = sizeof(src);
+	*dst = calloc(1, len + 1);
+	if (*dst == NULL)
+		return -ENOMEM;
+
+	if (copy_ascii(*dst, len+1, src, len) != 0) {
+		perror("copy_ascii");
+		return -NVMEC_ERR_CHK_SIZE;
+	}
+
+	return 0;
+}
+
+static int
 copy_ctrlr_data(struct ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
 {
-	if (copy_ascii(cdst->model, sizeof(cdst->model), cdata->mn,
-		       sizeof(cdata->mn)) != 0)
-		return -NVMEC_ERR_CHK_SIZE;
+	int rc;
 
-	if (copy_ascii(cdst->serial, sizeof(cdst->serial), cdata->sn,
-		       sizeof(cdata->sn)) != 0)
-		return -NVMEC_ERR_CHK_SIZE;
-
-	if (copy_ascii(cdst->fw_rev, sizeof(cdst->fw_rev), cdata->fr,
-		       sizeof(cdata->fr)) != 0)
-		return -NVMEC_ERR_CHK_SIZE;
+	rc = str2ctrlr(&cdst->model, cdata->mn);
+	if (rc != 0) {
+		return rc;
+	}
+	rc = str2ctrlr(&cdst->serial, cdata->sn);
+	if (rc != 0) {
+		return rc;
+	}
+	rc = str2ctrlr(&cdst->fw_rev, cdata->fr);
+	if (rc != 0) {
+		return rc;
+	}
 
 	return 0;
 }
@@ -316,7 +357,7 @@ populate_dev_health(struct nvme_stats *stats,
 				   true : false;
 
 	/* Intel Smart Information Attributes */
-	if (cdata->vid != SPDK_PCI_VID_INTEL)
+	if ((cdata == NULL) || (cdata->vid != SPDK_PCI_VID_INTEL))
 		return;
 	for (i = 0; i < SPDK_COUNTOF(isp->attributes); i++) {
 		if (isp->attributes[i].code ==
@@ -429,20 +470,25 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 			goto fail;
 		}
 
-		ctrlr_tmp->nss = NULL;
-		ctrlr_tmp->stats = NULL;
-		ctrlr_tmp->next = NULL;
-
 		cdata = spdk_nvme_ctrlr_get_data(ctrlr_entry->ctrlr);
 
 		rc = copy_data(ctrlr_tmp, cdata);
 		if (rc != 0)
 			goto fail;
 
-		rc = spdk_pci_addr_fmt(ctrlr_tmp->pci_addr,
-				       sizeof(ctrlr_tmp->pci_addr),
+		ctrlr_tmp->pci_addr = calloc(1, SPDK_NVMF_TRADDR_MAX_LEN + 1);
+		if (!ctrlr_tmp->pci_addr) {
+			rc = -ENOMEM;
+			goto fail;
+		}
+
+		rc = spdk_pci_addr_fmt(ctrlr_tmp->pci_addr, SPDK_NVMF_TRADDR_MAX_LEN,
 				       &ctrlr_entry->pci_addr);
 		if (rc != 0) {
+			rc = -NVMEC_ERR_PCI_ADDR_FMT;
+			goto fail;
+		}
+		if (strlen(ctrlr_tmp->pci_addr) == 0) {
 			rc = -NVMEC_ERR_PCI_ADDR_FMT;
 			goto fail;
 		}
@@ -498,8 +544,10 @@ fail:
 	if (ret->rc == 0)
 		/* Catch unexpected failures */
 		ret->rc = -EINVAL;
-	if (ctrlr_tmp)
+	if (ctrlr_tmp) {
+		free_ctrlr_fields(ctrlr_tmp);
 		free(ctrlr_tmp);
+	}
 	clean_ret(ret);
 	return;
 }

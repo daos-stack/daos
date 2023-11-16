@@ -521,7 +521,7 @@ find_in_bdev_json(struct spdk_bdev *bdev, char **buf_ptr, char *prefix)
 		D_GOTO(out, rc = daos_errno2der(-rc));
 	}
 
-	if ((*buf_ptr) == NULL) {
+	if (*buf_ptr == NULL) {
 		D_ERROR("No value could be read from JSON for key %s\n", prefix);
 		rc = -DER_INVAL;
 	}
@@ -556,11 +556,6 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 		D_ERROR("Failed to get traddr for %s\n", dev_name);
 		return rc;
 	}
-	if (b_info->bdi_traddr == NULL) {
-		D_ERROR("Nil value returned for traddr on %s\n", dev_name);
-		return -DER_INVAL;
-	}
-	D_DEBUG(DB_MGMT, "fetched '%s' value from bdev json\n", b_info->bdi_traddr);
 
 	return 0;
 }
@@ -620,6 +615,78 @@ find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
 	return NULL;
 }
 
+struct pci_dev_opts {
+	struct spdk_pci_addr pci_addr;
+	bool                 finished;
+	int                 *socket_id;
+	char               **pci_type;
+	int                  status;
+};
+
+static void
+pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
+{
+	struct pci_dev_opts *opts = ctx;
+	const char          *device_type;
+	int                  len;
+
+	if (opts->status != 0)
+		return;
+	if (opts->finished)
+		return;
+
+	if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
+		return;
+	opts->finished = true;
+
+	/* Populate pci_dev_type and socket_id */
+
+	*opts->socket_id = spdk_pci_device_get_socket_id(pci_device);
+
+	device_type = spdk_pci_device_get_type(pci_device);
+	if (device_type == NULL) {
+		D_ERROR("spdk_pci_device_get_type returned nil\n");
+		opts->status = -DER_INVAL;
+		return;
+	}
+	len = strlen(device_type);
+	if (len == 0) {
+		D_ERROR("spdk_pci_device_get_type returned empty\n");
+		opts->status = -DER_INVAL;
+		return;
+	}
+	D_STRNDUP(*opts->pci_type, device_type, len);
+	if (*opts->pci_type == NULL) {
+		opts->status = -DER_NOMEM;
+		return;
+	}
+}
+
+static int
+fetch_pci_dev_info(struct ctrlr_t *w_ctrlr, const char *tr_addr)
+{
+	struct pci_dev_opts  opts = {0};
+	struct spdk_pci_addr pci_addr;
+	int                  rc;
+
+	rc = spdk_pci_addr_parse(&pci_addr, tr_addr);
+	if (rc != 0) {
+		D_ERROR("Unable to parse PCI address for device %s (%s)\n", tr_addr,
+			spdk_strerror(-rc));
+		return -DER_INVAL;
+	}
+
+	opts.finished  = false;
+	opts.status    = 0;
+	opts.pci_addr  = pci_addr;
+	opts.socket_id = &w_ctrlr->socket_id;
+	opts.pci_type  = &w_ctrlr->pci_type;
+
+	spdk_pci_for_each_device(&opts, pci_device_cb);
+
+	return opts.status;
+}
+
 static int
 alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 {
@@ -644,7 +711,7 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
 		return 0;
 
-	//	vendor_id
+	D_DEBUG(DB_MGMT, "fetching %s controller details\n", b_info->bdi_traddr);
 
 	D_ALLOC_PTR(b_info->bdi_ctrlr);
 	if (b_info->bdi_ctrlr == NULL)
@@ -656,87 +723,35 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 		D_ERROR("Failed to get model_number for %s\n", dev_name);
 		return rc;
 	}
-	if (w_ctrlr->model == NULL) {
-		D_ERROR("Nil value returned for model_number on %s\n", dev_name);
-		return -DER_INVAL;
-	}
-	D_DEBUG(DB_MGMT, "fetched %s value from bdev json\n", w_ctrlr->model);
 
 	rc = find_in_bdev_json(bdev, &w_ctrlr->serial, "serial_number\": \"");
 	if (rc != 0) {
 		D_ERROR("Failed to get serial_number for %s\n", dev_name);
 		return rc;
 	}
-	if (w_ctrlr->serial == NULL) {
-		D_ERROR("Nil value returned for serial_number on %s\n", dev_name);
-		return -DER_INVAL;
-	}
-	D_DEBUG(DB_MGMT, "fetched %s value from bdev json\n", w_ctrlr->serial);
 
 	rc = find_in_bdev_json(bdev, &w_ctrlr->fw_rev, "firmware_revision\": \"");
 	if (rc != 0) {
 		D_ERROR("Failed to get firmware_revision for %s\n", dev_name);
 		return rc;
 	}
-	if (w_ctrlr->fw_rev == NULL) {
-		D_ERROR("Nil value returned for firmware_revision on %s\n", dev_name);
+
+	rc = find_in_bdev_json(bdev, &w_ctrlr->vendor_id, "vendor_id\": \"");
+	if (rc != 0) {
+		D_ERROR("Failed to get vendor_id for %s\n", dev_name);
+		return rc;
+	}
+	if (w_ctrlr->vendor_id == NULL) {
+		D_ERROR("Nil value returned for vendor_id on %s\n", dev_name);
 		return -DER_INVAL;
 	}
-	D_DEBUG(DB_MGMT, "fetched %s value from bdev json\n", w_ctrlr->fw_rev);
 
-	//	struct spdk_nvme_transport_id trid;
-	//	struct spdk_nvme_ctrlr_opts copts;
-	//	struct spdk_nvme_ctrlr *r_ctrlr;
-	//	struct ctrlr_t *w_ctrlr;
-	//	const struct spdk_nvme_ctrlr_data *cdata;
-	//	struct spdk_pci_device *pci_device;
-	//	const char *device_type;
-	//
-	//	D_DEBUG(DB_MGMT, "fetching %s controller details\n", info->bdi_traddr);
-	//
-	//	//trid.trtype = SPDK_NVME_TRANSPORT_PCIE;
-	//	//snprintf(trid.traddr, sizeof(trid.traddr), "%s", info->bdi_traddr);
-	//	spdk_nvme_transport_id_parse(&trid, "trtype:PCIe traddr:0000:2c:00.0");
-	//	spdk_nvme_ctrlr_get_default_ctrlr_opts(&copts, sizeof(copts));
-	//
-	//	r_ctrlr = spdk_nvme_connect(&trid, &copts, sizeof(copts));
-	//	if (r_ctrlr == NULL) {
-	//		D_ERROR("spdk_nvme_connect returned nil\n");
-	//		return -DER_INVAL;
-	//	}
-	//
-	//
-	//	cdata = spdk_nvme_ctrlr_get_data(r_ctrlr);
-	//	if (cdata == NULL) {
-	//		D_ERROR("spdk_nvme_ctrlr_get_data returned nil\n");
-	//		return -DER_INVAL;
-	//	}
-	//	if (copy_ascii(w_ctrlr->model, sizeof(w_ctrlr->model), cdata->mn,
-	//		       sizeof(cdata->mn)) != 0)
-	//		return -DER_INVAL;
-	//	if (copy_ascii(w_ctrlr->serial, sizeof(w_ctrlr->serial), cdata->sn,
-	//		       sizeof(cdata->sn)) != 0)
-	//		return -DER_INVAL;
-	//	if (copy_ascii(w_ctrlr->fw_rev, sizeof(w_ctrlr->fw_rev), cdata->fr,
-	//		       sizeof(cdata->fr)) != 0)
-	//		return -DER_INVAL;
-	//
-	//	pci_device = spdk_nvme_ctrlr_get_pci_device(r_ctrlr);
-	//	if (pci_device == NULL) {
-	//		D_ERROR("spdk_nvme_ctrlr_get_pci_device returned nil\n");
-	//		return -DER_INVAL;
-	//	}
-	//
-	//	w_ctrlr->socket_id = spdk_pci_device_get_socket_id(pci_device);
-	//
-	//	device_type = spdk_pci_device_get_type(pci_device);
-	//	if (device_type == NULL) {
-	//		D_ERROR("spdk_pci_device_get_type returned nil\n");
-	//		return -DER_INVAL;
-	//	}
-	//	if (copy_ascii(w_ctrlr->pci_type, sizeof(w_ctrlr->pci_type), device_type,
-	//			sizeof(device_type)) != 0)
-	//		return -DER_INVAL;
+	/* Fetch socket ID and PCI device type by enumerating spdk_pci_device list */
+
+	rc = fetch_pci_dev_info(w_ctrlr, b_info->bdi_traddr);
+	if (rc != 0) {
+		return rc;
+	}
 
 	return 0;
 }

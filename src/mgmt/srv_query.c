@@ -10,6 +10,7 @@
 
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
+#include <daos_srv/control.h>
 
 #include "srv_internal.h"
 
@@ -298,10 +299,15 @@ copy_str2ctrlr(char **dst, const char *src)
 {
 	int len;
 
-	if ((src == NULL) || (*dst == NULL))
-		return -DER_INVAL;
+	D_ASSERT(src != NULL);
+	D_ASSERT(dst != NULL);
 
-	len = strlen(src);
+	if ((*dst != NULL) && (strlen(*dst) != 0)) {
+		D_ERROR("attempting to copy to non-empty destination");
+		return -DER_INVAL;
+	}
+
+	len = strnlen(src, NVME_DETAIL_BUFLEN);
 	D_ALLOC(*dst, len + 1);
 	if (*dst == NULL)
 		return -DER_NOMEM;
@@ -391,13 +397,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		ctrlr = resp->devices[i]->ctrlr;
 		ctl__nvme_controller__init(ctrlr);
 
-		D_INFO("populating '%s' '%s' '%s' '%s'\n", dev_info->bdi_traddr,
-			dev_info->bdi_ctrlr->model, dev_info->bdi_ctrlr->serial,
-			dev_info->bdi_ctrlr->fw_rev);
-
-		D_STRNDUP(ctrlr->pci_addr, dev_info->bdi_traddr, strlen(dev_info->bdi_traddr));
-		if (ctrlr->pci_addr == NULL) {
-			rc = -DER_NOMEM;
+		rc = copy_str2ctrlr(&ctrlr->pci_addr, dev_info->bdi_traddr);
+		if (rc != 0) {
 			break;
 		}
 		rc = copy_str2ctrlr(&ctrlr->model, dev_info->bdi_ctrlr->model);
@@ -412,19 +413,19 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		if (rc != 0) {
 			break;
 		}
+		rc = copy_str2ctrlr(&ctrlr->vendor_id, dev_info->bdi_ctrlr->vendor_id);
+		if (rc != 0) {
+			break;
+		}
+		rc = copy_str2ctrlr(&ctrlr->pci_dev_type, dev_info->bdi_ctrlr->pci_type);
+		if (rc != 0) {
+			break;
+		}
+		ctrlr->socket_id = dev_info->bdi_ctrlr->socket_id;
 
-//		ctrlr->socket_id = dev_info->bdi_ctrlr->socket_id;
-//		rc = copy_str2ctrlr(ctrlr->vendor_id dev_info->bdi_ctrlr->vendor_id);
-//		if (rc != 0) {
-//			break;
-//		}
-//		rc = cpy_str2ctrlr(dev_info->bdi_ctrlr->pci_type, ctrlr->pci_type);
-//		if (rc != 0) {
-//			break;
-//		}
-
-		D_INFO("populated #2: '%s' '%s' '%s' '%s'\n", ctrlr->pci_addr, ctrlr->model,
-			ctrlr->serial, ctrlr->fw_rev);
+		D_DEBUG(DB_MGMT, "ctrlr details: '%s' '%s' '%s' '%s' '%s' '%s' '%d'\n",
+			ctrlr->pci_addr, ctrlr->model, ctrlr->serial, ctrlr->fw_rev,
+			ctrlr->vendor_id, ctrlr->pci_dev_type, ctrlr->socket_id);
 
 		if ((dev_info->bdi_flags & NVME_DEV_FL_PLUGGED) == 0) {
 			ctrlr->dev_state = CTL__NVME_DEV_STATE__UNPLUGGED;
@@ -438,9 +439,9 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		else
 			ctrlr->dev_state = CTL__NVME_DEV_STATE__NORMAL;
 
-//		if (strncmp(dev_info->bdi_ctrlr->pci_type, NVME_PCI_DEV_TYPE_VMD,
-//			    strlen(NVME_PCI_DEV_TYPE_VMD)) != 0)
-//			goto next_dev;
+		if (strncmp(dev_info->bdi_ctrlr->pci_type, NVME_PCI_DEV_TYPE_VMD,
+			    strlen(NVME_PCI_DEV_TYPE_VMD)) != 0)
+			goto next_dev;
 
 		/* Fetch LED State if device is plugged */
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);
@@ -485,9 +486,6 @@ next_dev:
 					D_FREE(resp->devices[i]->tgt_ids);
 				ctrlr = resp->devices[i]->ctrlr;
 				if (ctrlr != NULL) {
-					D_INFO("freeing '%s' '%s' '%s' '%s'\n",
-						ctrlr->pci_addr, ctrlr->model, ctrlr->serial,
-						ctrlr->fw_rev);
 					if (ctrlr->pci_addr != NULL)
 						D_FREE(ctrlr->pci_addr);
 					if (ctrlr->model != NULL)

@@ -11,8 +11,6 @@
 #include <spdk/nvme_intel.h>
 #include <daos_srv/control.h>
 
-#define NVME_DETAIL_BUFLEN 1024
-
 /**
  * \brief NVMECONTROL return codes
  */

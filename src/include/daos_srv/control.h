@@ -25,6 +25,7 @@ extern const char *
 dpdk_cli_override_opts;
 
 #define NVME_PCI_DEV_TYPE_VMD	"vmd"
+#define NVME_DETAIL_BUFLEN	1024
 
 /** Device state flags */
 #define NVME_DEV_FL_PLUGGED	(1 << 0)	/* Device is present in slot */
@@ -134,6 +135,7 @@ struct ctrlr_t {
 	char              *pci_addr;
 	char              *fw_rev;
 	char              *pci_type;
+	char              *vendor_id;
 	int                socket_id;
 	struct ns_t       *nss;
 	struct nvme_stats *stats;

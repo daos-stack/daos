@@ -1502,7 +1502,7 @@ const ProtobufCMessageDescriptor ctl__nvme_controller__namespace__descriptor =
   (ProtobufCMessageInit) ctl__nvme_controller__namespace__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__nvme_controller__field_descriptors[10] =
+static const ProtobufCFieldDescriptor ctl__nvme_controller__field_descriptors[12] =
 {
   {
     "model",
@@ -1624,6 +1624,30 @@ static const ProtobufCFieldDescriptor ctl__nvme_controller__field_descriptors[10
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "pci_dev_type",
+    11,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, pci_dev_type),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "vendor_id",
+    12,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Ctl__NvmeController, vendor_id),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__nvme_controller__field_indices_by_name[] = {
   8,   /* field[8] = dev_state */
@@ -1633,14 +1657,16 @@ static const unsigned ctl__nvme_controller__field_indices_by_name[] = {
   0,   /* field[0] = model */
   6,   /* field[6] = namespaces */
   2,   /* field[2] = pci_addr */
+  10,   /* field[10] = pci_dev_type */
   1,   /* field[1] = serial */
   7,   /* field[7] = smd_devices */
   4,   /* field[4] = socket_id */
+  11,   /* field[11] = vendor_id */
 };
 static const ProtobufCIntRange ctl__nvme_controller__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 10 }
+  { 0, 12 }
 };
 const ProtobufCMessageDescriptor ctl__nvme_controller__descriptor =
 {
@@ -1650,7 +1676,7 @@ const ProtobufCMessageDescriptor ctl__nvme_controller__descriptor =
   "Ctl__NvmeController",
   "ctl",
   sizeof(Ctl__NvmeController),
-  10,
+  12,
   ctl__nvme_controller__field_descriptors,
   ctl__nvme_controller__field_indices_by_name,
   1,  ctl__nvme_controller__number_ranges,

@@ -331,6 +331,8 @@ type NvmeController struct {
 	Serial      string           `hash:"ignore" json:"serial"`
 	PciAddr     string           `json:"pci_addr"`
 	FwRev       string           `json:"fw_rev"`
+	VendorID    string           `json:"vendor_id"`
+	PciType     string           `json:"pci_type"`
 	SocketID    int32            `json:"socket_id"`
 	HealthStats *NvmeHealth      `json:"health_stats"`
 	Namespaces  []*NvmeNamespace `hash:"set" json:"namespaces"`

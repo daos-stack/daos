@@ -371,7 +371,10 @@ bio_free_dev_info(struct bio_dev_info *dev_info)
 			D_FREE(dev_info->bdi_ctrlr->serial);
 		if (dev_info->bdi_ctrlr->fw_rev != NULL)
 			D_FREE(dev_info->bdi_ctrlr->fw_rev);
-		// TODO: free all ctrlr fields
+		if (dev_info->bdi_ctrlr->vendor_id != NULL)
+			D_FREE(dev_info->bdi_ctrlr->vendor_id);
+		if (dev_info->bdi_ctrlr->pci_type != NULL)
+			D_FREE(dev_info->bdi_ctrlr->pci_type);
 		D_FREE(dev_info->bdi_ctrlr);
 	}
 	D_FREE(dev_info);

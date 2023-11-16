@@ -294,10 +294,18 @@ struct  _Ctl__NvmeController
    * NVMe device LED state
    */
   Ctl__LedState led_state;
+  /*
+   * PCI device type, vmd or pci
+   */
+  char *pci_dev_type;
+  /*
+   * controller's vendor ID
+   */
+  char *vendor_id;
 };
 #define CTL__NVME_CONTROLLER__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__nvme_controller__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,NULL, 0,NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__OFF }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,NULL, 0,NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__OFF, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*
