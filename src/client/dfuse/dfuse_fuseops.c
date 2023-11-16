@@ -448,7 +448,7 @@ err:
 }
 
 /* Do not allow security xattrs to be set or read, see DAOS-14639 */
-#define XATTR_SEC "security."
+#define XATTR_SEC   "security."
 /* Do not allow either system.posix_acl_default or system.posix_acl_access */
 #define XATTR_P_ACL "system.posix_acl"
 
