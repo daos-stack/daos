@@ -831,7 +831,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 				continue;
 
 			D_ASSERT(target != NULL);
-			if ((target->ta_comp.co_status | PO_COMP_ST_UP) &&
+			if ((target->ta_comp.co_status == PO_COMP_ST_UP) &&
 			     target->ta_comp.co_in_ver <= rebuild_ver) {
 				rc = 1;
 				break;
