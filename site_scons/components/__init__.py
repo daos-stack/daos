@@ -371,7 +371,7 @@ def define_components(reqs):
         libaio_pkg = 'libaio-devel'
     reqs.define('capstone', libs=['capstone'], headers=['capstone/capstone.h'],
                 package=capstone_pkg)
-    reqs.define('aio', libs=['aio'], headers=['libaio.h'],
+    reqs.define('aio', libs=['aio'], headers=['libaio.h'], package=libaio_pkg)
 
 
 __all__ = ['define_components']
