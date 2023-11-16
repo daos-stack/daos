@@ -452,7 +452,7 @@ migrate_pool_tls_create_one(void *data)
 	pool_tls->mpt_executed_ult = 0;
 	pool_tls->mpt_root_hdl = DAOS_HDL_INVAL;
 	pool_tls->mpt_max_eph = arg->max_eph;
-	pool_tls->mpt_pool = ds_pool_child_lookup(arg->pool_uuid);
+	pool_tls->mpt_pool = ds_pool_child_get(arg->pool_uuid);
 	pool_tls->mpt_new_layout_ver = arg->new_layout_ver;
 	pool_tls->mpt_opc = arg->opc;
 	pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE;

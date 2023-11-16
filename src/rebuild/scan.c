@@ -973,7 +973,7 @@ rebuild_scanner(void *data)
 		}
 	}
 
-	child = ds_pool_child_lookup(rpt->rt_pool_uuid);
+	child = ds_pool_child_get(rpt->rt_pool_uuid);
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 

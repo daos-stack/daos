@@ -632,7 +632,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		goto out_mutex;
 	}
 
-	cont->sc_pool = ds_pool_child_lookup(po_uuid);
+	cont->sc_pool = ds_pool_child_get(po_uuid);
 	if (cont->sc_pool == NULL) {
 		rc = -DER_NO_HDL;
 		goto out_cond;
@@ -834,8 +834,6 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 	D_DEBUG(DB_MD, DF_UUID"[%d]: Stopping all containers\n",
 		DP_UUID(pool_child->spc_uuid),
 		dss_get_module_info()->dmi_tgt_id);
-
-	D_ASSERT(d_list_empty(&pool_child->spc_list));
 
 	cont_list = &pool_child->spc_cont_list;
 	while (!d_list_empty(cont_list)) {
@@ -1144,7 +1142,7 @@ cont_child_destroy_one(void *vin)
 	struct ds_pool_child	       *pool;
 	int				rc, retry_cnt = 0;
 
-	pool = ds_pool_child_lookup(in->tdi_pool_uuid);
+	pool = ds_pool_child_get(in->tdi_pool_uuid);
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
@@ -1306,7 +1304,7 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 	struct ds_pool_child	*pool_child;
 	int rc;
 
-	pool_child = ds_pool_child_lookup(pool_uuid);
+	pool_child = ds_pool_child_get(pool_uuid);
 	if (pool_child == NULL) {
 		D_ERROR(DF_CONT" : failed to find pool child\n",
 			DP_CONT(pool_uuid, cont_uuid));
@@ -1532,7 +1530,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		if (ddra == NULL)
 			D_GOTO(err_dtx, rc = -DER_NOMEM);
 
-		ddra->pool = ds_pool_child_get(hdl->sch_cont->sc_pool);
+		ddra->pool = ds_pool_child_get(hdl->sch_cont->sc_pool->spc_uuid);
 		uuid_copy(ddra->co_uuid, cont_uuid);
 		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
 				    0, 0, NULL);
@@ -1772,7 +1770,7 @@ cont_query_one(void *vin)
 	if (pool_hdl == NULL)
 		return -DER_NO_HDL;
 
-	pool_child = ds_pool_child_lookup(pool_hdl->sph_pool->sp_uuid);
+	pool_child = ds_pool_child_get(pool_hdl->sph_pool->sp_uuid);
 	if (pool_child == NULL)
 		D_GOTO(ds_pool_hdl, rc = -DER_NO_HDL);
 

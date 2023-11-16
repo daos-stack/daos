@@ -973,7 +973,6 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
-	ds_pool_child_put(pool_child);
 
 	if (rc)
 		return rc;
