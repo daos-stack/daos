@@ -506,10 +506,13 @@ print_mgmt_net_env()
  */
 int dc_mgmt_net_cfg(const char *name)
 {
-	int                      rc;
-	char                     buf[SYS_INFO_BUF_SIZE];
-	char                    *env;
-	struct dc_mgmt_sys_info  info;
+	int rc;
+	char buf[SYS_INFO_BUF_SIZE];
+	char *crt_timeout;
+	char *ofi_interface;
+	char *ofi_domain;
+	char *cli_srx_set;
+	struct dc_mgmt_sys_info info;
 	Mgmt__GetAttachInfoResp *resp;
 
 	/* Query the agent for the CaRT network configuration parameters */
@@ -518,26 +521,26 @@ int dc_mgmt_net_cfg(const char *name)
 		return rc;
 
 	if (resp->client_net_hint != NULL && resp->client_net_hint->n_env_vars > 0) {
-		int   i;
-		char *v_var;
-		char *v_name;
-		char *v_value;
+		int i;
+		char *env = NULL;
+		char *v_name = NULL;
+		char *v_value = NULL;
 
 		for (i = 0; i < resp->client_net_hint->n_env_vars; i++) {
-			v_var = resp->client_net_hint->env_vars[i];
-			if (v_var == NULL)
+			env = resp->client_net_hint->env_vars[i];
+			if (env == NULL)
 				continue;
 
-			rc = _split_env(v_var, &v_name, &v_value);
+			rc = _split_env(env, &v_name, &v_value);
 			if (rc != 0) {
-				D_ERROR("invalid client env var: %s\n", v_var);
+				D_ERROR("invalid client env var: %s\n", env);
 				continue;
 			}
 
 			rc = d_setenv(v_name, v_value, 0);
 			if (rc != 0)
 				D_GOTO(cleanup, rc = d_errno2der(errno));
-			D_DEBUG(DB_MGMT, "set server-supplied client env: %s", v_var);
+			D_DEBUG(DB_MGMT, "set server-supplied client env: %s", env);
 		}
 	}
 
@@ -564,57 +567,59 @@ int dc_mgmt_net_cfg(const char *name)
 		       buf);
 	} else {
 		/* Client may not set it if the server hasn't. */
-		d_agetenv_str(&env, "FI_OFI_RXM_USE_SRX");
-		if (env != NULL) {
-			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, but server is unset!\n", env);
-			D_FREE(env);
+		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");
+		if (cli_srx_set) {
+			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
+				"but server is unset!\n", cli_srx_set);
+			D_FREE(cli_srx_set);
 			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 	}
 
 	/* Allow client env overrides for these three */
-	d_agetenv_str(&env, "CRT_TIMEOUT");
-	if (env == NULL) {
+	d_agetenv_str(&crt_timeout, "CRT_TIMEOUT");
+	if (!crt_timeout) {
 		sprintf(buf, "%d", info.crt_timeout);
 		rc = d_setenv("CRT_TIMEOUT", buf, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_INFO("Using client provided CRT_TIMEOUT: %s\n", env);
+		D_INFO("Using client provided CRT_TIMEOUT: %s\n",
+			crt_timeout);
+		D_FREE(crt_timeout);
 	}
-	D_FREE(env);
 
-	d_agetenv_str(&env, "OFI_INTERFACE");
-	if (env == NULL) {
+	d_agetenv_str(&ofi_interface, "OFI_INTERFACE");
+	d_agetenv_str(&ofi_domain, "OFI_DOMAIN");
+	if (!ofi_interface) {
 		rc = d_setenv("OFI_INTERFACE", info.interface, 1);
-		if (rc != 0)
+		if (rc != 0) {
+			D_FREE(ofi_domain);
 			D_GOTO(cleanup, rc = d_errno2der(errno));
+		}
 
 		/*
 		 * If we use the agent as the source, client env shouldn't be allowed to override
 		 * the domain. Otherwise we could get a mismatch between interface and domain.
 		 */
-		d_agetenv_str(&env, "OFI_DOMAIN");
-		if (env != NULL)
+		if (ofi_domain)
 			D_WARN("Ignoring OFI_DOMAIN '%s' because OFI_INTERFACE is not set; using "
-			       "automatic configuration instead\n",
-			       env);
-		D_FREE(env);
+			       "automatic configuration instead\n", ofi_domain);
 
 		rc = d_setenv("OFI_DOMAIN", info.domain, 1);
-		if (rc != 0)
+		if (rc != 0) {
+			D_FREE(ofi_domain);
 			D_GOTO(cleanup, rc = d_errno2der(errno));
+		}
 	} else {
-		D_INFO("Using client provided OFI_INTERFACE: %s\n", env);
-		D_FREE(env);
+		D_INFO("Using client provided OFI_INTERFACE: %s\n", ofi_interface);
 
-		d_agetenv_str(&env, "OFI_DOMAIN");
-		if (env != NULL)
-			D_INFO("Using client provided OFI_DOMAIN: %s\n", env);
-		else
-			D_INFO("No domain provided by the client environment: should no be needed");
-		D_FREE(env);
+		/* If the client env didn't provide a domain, we can assume we don't need one. */
+		if (ofi_domain)
+			D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
+	D_FREE(ofi_domain);
+	D_FREE(ofi_interface);
 
 	print_mgmt_net_env();
 
@@ -624,12 +629,11 @@ cleanup:
 	return rc;
 }
 
-int
-dc_mgmt_net_cfg_check(const char *name)
+int dc_mgmt_net_cfg_check(const char *name)
 {
-	int                      rc;
-	char                    *env;
-	struct dc_mgmt_sys_info  info;
+	int rc;
+	char *cli_srx_set;
+	struct dc_mgmt_sys_info info;
 	Mgmt__GetAttachInfoResp *resp;
 
 	/* Query the agent for the CaRT network configuration parameters */
@@ -639,11 +643,13 @@ dc_mgmt_net_cfg_check(const char *name)
 
 	/* Client may not set it if the server hasn't. */
 	if (info.srv_srx_set == -1) {
-		d_agetenv_str(&env, "FI_OFI_RXM_USE_SRX");
-		if (env != NULL) {
-			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s but server is unset!\n", env);
-			D_FREE(env);
-			D_GOTO(out, rc = -DER_INVAL);
+		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");
+		if (cli_srx_set) {
+			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
+				"but server is unset!\n", cli_srx_set);
+			D_FREE(cli_srx_set);
+			rc = -DER_INVAL;
+			goto out;
 		}
 	}
 	rc = 0;

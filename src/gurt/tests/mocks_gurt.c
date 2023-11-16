@@ -29,8 +29,6 @@ __real_getenv(const char *name);
 char *
 __wrap_getenv(const char *name)
 {
-	/* printf("I am the wrapped function"); */
-	/* return getenv_return; */
 	if (mock_getenv)
 		return getenv_return;
 
@@ -57,8 +55,6 @@ __real_strdup(const char *name);
 char *
 __wrap_strdup(const char *name)
 {
-	/* printf("I am the wrapped function"); */
-	/* return strdup_return; */
 	if (mock_strdup)
 		return NULL;
 

@@ -97,15 +97,16 @@ crtu_progress_stop(void)
 void
 write_completion_file(void)
 {
-	FILE *fptr;
-	char *env;
-	char *completion_file = NULL;
+	FILE	*fptr;
+	char	*dir;
+	char	*completion_file = NULL;
 
-	d_agetenv_str(&env, "DAOS_TEST_SHARED_DIR");
-	D_ASSERTF(env != NULL, "DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
-			       "option.\n");
-	D_ASPRINTF(completion_file, "%s/test-servers-completed.txt.%d", env, getpid());
-	D_FREE(env);
+	d_agetenv_str(&dir, "DAOS_TEST_SHARED_DIR");
+	D_ASSERTF(dir != NULL,
+		"DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
+		"option.\n");
+	D_ASPRINTF(completion_file, "%s/test-servers-completed.txt.%d", dir, getpid());
+	D_FREE(dir);
 	D_ASSERTF(completion_file != NULL, "Error allocating completion_file string\n");
 
 	unlink(completion_file);
@@ -453,9 +454,12 @@ crtu_dc_mgmt_net_print_env(void)
 int
 crtu_dc_mgmt_net_cfg_setenv(const char *name)
 {
-	int                      rc;
-	char                     buf[SYS_INFO_BUF_SIZE];
-	char                    *env;
+	int			 rc;
+	char			 buf[SYS_INFO_BUF_SIZE];
+	char			*crt_timeout;
+	char			*ofi_interface;
+	char			*ofi_domain;
+	char			*cli_srx_set;
 	struct dc_mgmt_sys_info  crt_net_cfg_info = {0};
 	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
 
@@ -493,47 +497,50 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n", buf);
 	} else {
 		/* Client may not set it if the server hasn't. */
-		d_agetenv_str(&env, "FI_OFI_RXM_USE_SRX");
-		if (env != NULL) {
-			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, but server is unset!\n", env);
-			D_FREE(env);
+		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");
+		if (cli_srx_set) {
+			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
+				"but server is unset!\n", cli_srx_set);
+			D_FREE(cli_srx_set);
 			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 	}
 
 	/* Allow client env overrides for these three */
-	d_agetenv_str(&env, "CRT_TIMEOUT");
-	if (env == NULL) {
+	d_agetenv_str(&crt_timeout, "CRT_TIMEOUT");
+	if (!crt_timeout) {
 		sprintf(buf, "%d", crt_net_cfg_info.crt_timeout);
 		rc = d_setenv("CRT_TIMEOUT", buf, 1);
 		D_INFO("setenv CRT_TIMEOUT=%d\n", crt_net_cfg_info.crt_timeout);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", env);
-		D_FREE(env);
+		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
+		D_FREE(crt_timeout);
 	}
 
-	d_agetenv_str(&env, "OFI_INTERFACE");
-	if (env == NULL) {
+	d_agetenv_str(&ofi_interface, "OFI_INTERFACE");
+	if (!ofi_interface) {
 		rc = d_setenv("OFI_INTERFACE", crt_net_cfg_info.interface, 1);
 		D_INFO("Setting OFI_INTERFACE=%s\n", crt_net_cfg_info.interface);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT, "Using client provided OFI_INTERFACE: %s\n", env);
-		D_FREE(env);
+		D_DEBUG(DB_MGMT,
+			"Using client provided OFI_INTERFACE: %s\n",
+			ofi_interface);
+		D_FREE(ofi_interface);
 	}
 
-	d_agetenv_str(&env, "OFI_DOMAIN");
-	if (env == NULL) {
+	d_agetenv_str(&ofi_domain, "OFI_DOMAIN");
+	if (!ofi_domain) {
 		rc = d_setenv("OFI_DOMAIN", crt_net_cfg_info.domain, 1);
 		D_INFO("Setting OFI_DOMAIN=%s\n", crt_net_cfg_info.domain);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", env);
-		D_FREE(env);
+		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+		D_FREE(ofi_domain);
 	}
 
 	crtu_dc_mgmt_net_print_env();
@@ -551,9 +558,9 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		     unsigned int total_srv_ctx, bool use_cfg,
 		     crt_init_options_t *init_opt, bool use_daos_agent_env)
 {
-	char    *env;
-	uint32_t grp_size;
-	int      rc = 0;
+	char		*grp_cfg_file;
+	uint32_t	 grp_size;
+	int		 rc = 0;
 
 	if (opts.assert_on_error)
 		D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
@@ -609,10 +616,15 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			if (*grp == NULL)
 				D_GOTO(out, rc = -DER_INVAL);
 
-			/* load group info from a config file and delete file upon return */
-			d_agetenv_str(&env, "CRT_L_GRP_CFG");
-			rc = crtu_load_group_from_file(env, *crt_ctx, *grp, -1, true);
-			D_FREE(env);
+			d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
+
+			/* load group info from a config file and
+			 * delete file upon return
+			 */
+			rc = crtu_load_group_from_file(grp_cfg_file,
+						       *crt_ctx, *grp,
+						       -1, true);
+			D_FREE(grp_cfg_file);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}

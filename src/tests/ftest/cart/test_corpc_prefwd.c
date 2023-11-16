@@ -110,25 +110,24 @@ static struct crt_proto_format my_proto_fmt_basic_corpc = {
 
 int main(void)
 {
-	int            rc;
-	crt_context_t  g_main_ctx;
-	d_rank_list_t *rank_list;
-	d_rank_list_t  excluded_membs;
-	d_rank_t       excluded_ranks = {0};
-	crt_rpc_t     *rpc;
-	d_rank_t       my_rank;
-	crt_group_t   *grp;
-	char          *env;
-	pthread_t      progress_thread;
+	int		rc;
+	crt_context_t	g_main_ctx;
+	d_rank_list_t	*rank_list;
+	d_rank_list_t	excluded_membs;
+	d_rank_t	excluded_ranks = {0};
+	crt_rpc_t	*rpc;
+	d_rank_t	my_rank;
+	crt_group_t	*grp;
+	char		*env_self_rank;
+	char		*grp_cfg_file;
+	pthread_t	progress_thread;
 
 	excluded_membs.rl_nr = 1;
 	excluded_membs.rl_ranks = &excluded_ranks;
 
-	rc = d_getenv_uint32_t(&my_rank, "CRT_L_RANK");
-	if (rc != -DER_SUCCESS) {
-		printf("CRT_L_RANK can not be retrieve: " DF_RC "\n", DP_RC(rc));
-		return -1;
-	}
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
+	my_rank = atoi(env_self_rank);
+	D_FREE(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -152,12 +151,7 @@ int main(void)
 		assert(0);
 	}
 
-	rc = d_agetenv_str(&env, "CRT_L_GRP_CFG");
-	if (env == NULL) {
-		D_ERROR("CRT_L_GRP_CFG can not be retrieve: " DF_RC "\n", DP_RC(rc));
-		assert(0);
-	}
-	D_DEBUG(DB_TEST, "Group Config File: %s\n", env);
+	d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
 
 	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
@@ -173,8 +167,9 @@ int main(void)
 	}
 
 	/* load group info from a config file and delete file upon return */
-	rc = crtu_load_group_from_file(env, g_main_ctx, grp, my_rank, true);
-	D_FREE(env);
+	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
+				       true);
+	D_FREE(grp_cfg_file);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);

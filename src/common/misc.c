@@ -648,10 +648,9 @@ crt_init_options_t daos_crt_init_opt;
 crt_init_options_t *
 daos_crt_init_opt_get(bool server, int ctx_nr)
 {
-	char     addr_env[sizeof(CRT_SOCKET_PROV)];
-	bool     sep   = false;
-	uint32_t limit = 0;
-	int      rc;
+	crt_phy_addr_t	addr_env;
+	bool		sep = false;
+	uint32_t	limit = 0;
 
 	/** enable statistics on the server side */
 	daos_crt_init_opt.cio_use_sensors = server;
@@ -685,12 +684,15 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	 * 1) now sockets provider cannot create more than 16 contexts for SEP
 	 * 2) some problems if SEP communicates with regular EP.
 	 */
-	rc = d_getenv_str(addr_env, sizeof(addr_env), CRT_PHY_ADDR_ENV);
-	if (rc == -DER_SUCCESS && strcmp(addr_env, CRT_SOCKET_PROV) == 0) {
+	d_agetenv_str(&addr_env, CRT_PHY_ADDR_ENV);
+	if (addr_env != NULL &&
+	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
 		D_INFO("for sockets provider force it to use regular EP.\n");
 		daos_crt_init_opt.cio_use_sep = 0;
+		D_FREE(addr_env);
 		goto out;
 	}
+	D_FREE(addr_env);
 
 	daos_crt_init_opt.cio_use_sep = 1;
 

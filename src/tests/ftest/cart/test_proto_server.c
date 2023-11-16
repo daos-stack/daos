@@ -73,6 +73,7 @@ test_run(d_rank_t my_rank)
 int
 main(int argc, char **argv)
 {
+	char		*env_self_rank;
 	d_rank_t	 my_rank;
 	int		 rc;
 
@@ -82,11 +83,9 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	rc = d_getenv_uint32_t(&my_rank, "CRT_L_RANK");
-	if (rc != -DER_SUCCESS) {
-		printf("CRT_L_RANK can not be retrieve: " DF_RC "\n", DP_RC(rc));
-		return -1;
-	}
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
+	my_rank = atoi(env_self_rank);
+	D_FREE(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 40, true, true);

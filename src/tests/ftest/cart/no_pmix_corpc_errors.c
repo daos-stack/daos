@@ -246,23 +246,24 @@ set_error(crt_context_t ctx, crt_group_t *grp,
 
 int main(int argc, char **argv)
 {
-	crt_group_t         *grp;
-	crt_context_t        crt_ctx[NUM_SERVER_CTX];
-	pthread_t            progress_thread[NUM_SERVER_CTX];
-	struct test_options *opts = crtu_get_opts();
-	int                  i, k;
-	char                *my_uri;
-	char                *env;
-	d_rank_t             my_rank;
-	uint32_t             grp_size;
-	crt_group_t         *sec_grp1;
-	d_rank_list_t       *rank_list;
-	d_rank_list_t       *p_list, *s_list;
-	crt_endpoint_t       server_ep;
-	d_rank_t             rank;
-	crt_rpc_t           *rpc;
-	sem_t                sem;
-	int                  rc;
+	crt_group_t		*grp;
+	crt_context_t		crt_ctx[NUM_SERVER_CTX];
+	pthread_t		progress_thread[NUM_SERVER_CTX];
+	struct test_options	*opts = crtu_get_opts();
+	int			i, k;
+	char			*my_uri;
+	char			*env_self_rank;
+	d_rank_t		my_rank;
+	char			*grp_cfg_file;
+	uint32_t		grp_size;
+	crt_group_t		*sec_grp1;
+	d_rank_list_t		*rank_list;
+	d_rank_list_t		*p_list, *s_list;
+	crt_endpoint_t		server_ep;
+	d_rank_t		rank;
+	crt_rpc_t		*rpc;
+	sem_t			sem;
+	int			rc;
 
 	if (D_ON_VALGRIND) {
 		crtu_set_shutdown_delay(10);
@@ -270,11 +271,9 @@ int main(int argc, char **argv)
 		crtu_set_shutdown_delay(2);
 	}
 
-	rc = d_getenv_uint32_t(&my_rank, "CRT_L_RANK");
-	if (rc != -DER_SUCCESS) {
-		printf("CRT_L_RANK can not be retrieve: " DF_RC "\n", DP_RC(rc));
-		return -1;
-	}
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
+	my_rank = atoi(env_self_rank);
+	D_FREE(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -328,6 +327,8 @@ int main(int argc, char **argv)
 		}
 	}
 
+	d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
+
 	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
@@ -341,22 +342,17 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = d_agetenv_str(&env, "CRT_L_GRP_CFG");
-	if (env == NULL) {
-		D_ERROR("CRT_L_GRP_CFG can not be retrieve: " DF_RC "\n", DP_RC(rc));
-		assert(0);
-	}
-	D_DEBUG(DB_TEST, "Group Config File: %s\n", env);
-
 	/* load group info from a config file and delete file upon return */
-	rc = crtu_load_group_from_file(env, crt_ctx[0], grp, my_rank, true);
+	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
+				       true);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
-	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank, my_uri, env);
-	D_FREE(env);
+	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
+			my_uri, grp_cfg_file);
+	D_FREE(grp_cfg_file);
 	D_FREE(my_uri);
 
 	rc = crt_group_size(NULL, &grp_size);

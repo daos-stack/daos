@@ -600,68 +600,50 @@ query_dfs_mount(const char *path)
 static int
 discover_daos_mount_with_env(void)
 {
-	int   idx;
-	int   len_fs_root;
-	int   rc;
+	int   idx, len_fs_root, rc;
 	char *fs_root   = NULL;
 	char *pool      = NULL;
 	char *container = NULL;
 
 	/* Add the mount if env DAOS_MOUNT_POINT is set. */
 	rc = d_agetenv_str(&fs_root, "DAOS_MOUNT_POINT");
-	if (rc == -DER_NONEXIST) {
+	if (fs_root == NULL)
 		/* env DAOS_MOUNT_POINT is undefined, return success (0) */
-		D_GOTO(error, rc = 0);
-	}
-	if (rc == -DER_NOMEM) {
-		D_FATAL("DAOS_MOUNT_POINT is too long.\n");
-		D_GOTO(error, rc = ENOMEM);
-	}
-	D_ASSERT(fs_root != NULL);
+		D_GOTO(out, rc = 0);
 
 	if (num_dfs >= MAX_DAOS_MT) {
 		D_FATAL("dfs_list[] is full already. Need to increase MAX_DAOS_MT.\n");
-		D_GOTO(error, rc = EBUSY);
+		D_GOTO(out, rc = EBUSY);
 	}
 
 	if (access(fs_root, R_OK)) {
 		D_FATAL("no read permission for %s: %d (%s)\n", fs_root, errno,	strerror(errno));
-		D_GOTO(error, rc = EACCES);
+		D_GOTO(out, rc = EACCES);
 	}
 
 	/* check whether fs_root exists in dfs_list[] already. "idx >= 0" means exists. */
 	idx = query_dfs_mount(fs_root);
 	if (idx >= 0)
-		D_GOTO(error, rc = 0);
+		D_GOTO(out, rc = 0);
 
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
 		D_FATAL("DAOS_MOUNT_POINT is too long.\n");
-		D_GOTO(error, rc = ENAMETOOLONG);
+		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
-	rc = d_agetenv_str(&pool, "DAOS_POOL");
-	if (rc == -DER_NONEXIST) {
+	d_agetenv_str(&pool, "DAOS_POOL");
+	if (pool == NULL) {
 		D_FATAL("DAOS_POOL is not set.\n");
-		D_GOTO(error, rc = EINVAL);
+		D_GOTO(out, rc = EINVAL);
 	}
-	if (rc == -DER_NOMEM) {
-		D_FATAL("DAOS_POOL is too long.\n");
-		D_GOTO(error, rc = ENOMEM);
-	}
-	D_ASSERT(pool != NULL);
 
 	rc = d_agetenv_str(&container, "DAOS_CONTAINER");
-	if (rc == -DER_NONEXIST) {
+	if (container == NULL) {
 		D_FATAL("DAOS_CONTAINER is not set.\n");
-		D_GOTO(error, rc = EINVAL);
+		D_GOTO(out, rc = EINVAL);
 	}
-	if (rc == -DER_NOMEM) {
-		D_FATAL("DAOS_CONTAINER is too long.\n");
-		D_GOTO(error, rc = ENOMEM);
-	}
-	D_ASSERT(container != NULL);
 
 	dfs_list[num_dfs].fs_root      = fs_root;
 	dfs_list[num_dfs].pool         = pool;
@@ -673,7 +655,7 @@ discover_daos_mount_with_env(void)
 
 	return 0;
 
-error:
+out:
 	D_FREE(container);
 	D_FREE(pool);
 	D_FREE(fs_root);
@@ -5518,7 +5500,7 @@ static __attribute__((constructor)) void
 init_myhook(void)
 {
 	mode_t   umask_old;
-	char     env[sizeof("false")];
+	char    *env_log;
 	int      rc;
 	uint64_t eq_count_loc = 0;
 
@@ -5534,12 +5516,12 @@ init_myhook(void)
 	else
 		daos_debug_inited = true;
 
-	rc = d_getenv_str(env, sizeof(env), "D_IL_REPORT");
-	if (rc != DER_NONEXIST) {
+	d_agetenv_str(&env_log, "D_IL_REPORT");
+	if (env_log) {
 		report = true;
-		if (strncmp(env, "0", sizeof("0")) == 0 ||
-		    strncasecmp(env, "false", sizeof("false")) == 0)
+		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
 			report = false;
+		D_FREE(env_log);
 	}
 
 	/* Find dfuse mounts from /proc/mounts */
@@ -5824,6 +5806,8 @@ finalize_dfs(void)
 	for (i = 0; i < num_dfs; i++) {
 		if (dfs_list[i].dfs_dir_hash == NULL) {
 			D_FREE(dfs_list[i].fs_root);
+			D_FREE(dfs_list[i].pool);
+			D_FREE(dfs_list[i].cont);
 			continue;
 		}
 
@@ -5855,6 +5839,8 @@ finalize_dfs(void)
 			continue;
 		}
 		D_FREE(dfs_list[i].fs_root);
+		D_FREE(dfs_list[i].pool);
+		D_FREE(dfs_list[i].cont);
 	}
 
 	if (daos_inited) {

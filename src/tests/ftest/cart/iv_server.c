@@ -1210,13 +1210,14 @@ show_usage(char *app_name)
 
 int main(int argc, char **argv)
 {
-	char          *arg_verbose = NULL;
-	char          *env;
-	d_rank_list_t *rank_list;
-	d_rank_t       my_rank;
-	int            c;
-	int            rc;
-	uint32_t       version;
+	char		*arg_verbose = NULL;
+	char		*env_self_rank;
+	char		*grp_cfg_file;
+	d_rank_list_t	*rank_list;
+	d_rank_t	my_rank;
+	int		c;
+	int		rc;
+	uint32_t	version;
 
 	while ((c = getopt(argc, argv, "v:")) != -1) {
 		switch (c) {
@@ -1240,11 +1241,14 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	rc = d_getenv_uint32_t(&my_rank, "CRT_L_RANK");
-	if (rc != -DER_SUCCESS) {
-		printf("CRT_L_RANK can not be retrieve: " DF_RC "\n", DP_RC(rc));
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
+	if (env_self_rank == NULL) {
+		printf("CRT_L_RANK was not set\n");
 		return -1;
 	}
+
+	my_rank = atoi(env_self_rank);
+	D_FREE(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -1271,19 +1275,21 @@ int main(int argc, char **argv)
 	init_work_contexts();
 
 	/* Load the group configuration file */
-	rc = d_agetenv_str(&env, "CRT_L_GRP_CFG");
-	if (env == NULL) {
-		D_ERROR("CRT_L_GRP_CFG can not be retrieve: " DF_RC "\n", DP_RC(rc));
+	rc = d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
+	if (grp_cfg_file == NULL) {
+		D_ERROR("CRT_L_GRP_CFG was not set\n");
 		assert(0);
+	} else {
+		D_DEBUG(DB_TEST, "Group Config File: %s\n", grp_cfg_file);
 	}
-	D_DEBUG(DB_TEST, "Group Config File: %s\n", env);
 
-	rc = crtu_load_group_from_file(env, g_main_ctx, grp, my_rank, true);
+	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
+				     true);
 	if (rc != 0) {
-		D_ERROR("Failed to load group file %s\n", env);
+		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
 		assert(0);
 	}
-	D_FREE(env);
+	D_FREE(grp_cfg_file);
 
 	/* Start the server for myself */
 	DBG_PRINT("Server starting, self_rank=%d\n", my_rank);

@@ -25,6 +25,8 @@
 #include <gurt/common.h>
 #include <gurt/atomic.h>
 
+#define UINT64_MAX_STR "18446744073709551615"
+
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};
 
@@ -951,10 +953,13 @@ d_rank_range_list_free(d_rank_range_list_t *range_list)
 static inline bool
 dis_unsigned_str(char *str)
 {
+	char *eos;
+
 	if (str == NULL || str[0] == '\0')
 		return false;
 
-	while (*str != '\0' && *str >= '0' && *str <= '9')
+	eos = str + (sizeof(UINT64_MAX_STR) - 1);
+	while (str != eos && *str != '\0' && *str >= '0' && *str <= '9')
 		++str;
 
 	return *str == '\0';
@@ -1018,7 +1023,7 @@ out:
 /**
  * Get a string type environment variables
  *
- * \param[in,out]	rc		returned value of the ENV on success, NULL on error.
+ * \param[in,out]	str_val		returned value of the ENV on success, NULL on error.
  * \param[in]		name		name of the environment variable.
  * \return				0 on success, a negative value on error.
  */
@@ -1026,6 +1031,7 @@ int
 d_agetenv_str(char **str_val, const char *name)
 {
 	char *env;
+	char *tmp;
 	int   rc;
 
 	D_ASSERT(name != NULL);
@@ -1038,11 +1044,12 @@ d_agetenv_str(char **str_val, const char *name)
 	if (env == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
-	env = strdup(env);
-	if (env == NULL)
+	/* DAOS-14532 There is no limit to environment variable size */
+	tmp = strdup(env);
+	if (tmp == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	*str_val = env;
+	*str_val = tmp;
 	rc       = -DER_SUCCESS;
 
 out:

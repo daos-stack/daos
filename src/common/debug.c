@@ -169,7 +169,7 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 	if (logfile == NULL || strlen(logfile) == 0) {
 		flags |= DLOG_FLV_STDOUT;
 		D_FREE(logfile);
-	} else if (!strncmp(logfile, "/dev/null", sizeof("/dev/null"))) {
+	} else if (!strncmp(logfile, "/dev/null", 9)) {
 		/* Don't set up logging or log to stdout if the log file is /dev/null */
 		D_FREE(logfile);
 	}

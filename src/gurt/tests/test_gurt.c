@@ -2383,6 +2383,11 @@ test_d_getenv_uint64_t(void **state)
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
+	getenv_return = "012345678901234567890";
+	rc            = d_getenv_uint64_t(&val, "foo");
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == 42);
+
 	getenv_return = "-42";
 	rc            = d_getenv_uint64_t(&val, "foo");
 	assert_int_equal(rc, -DER_INVAL);
@@ -2407,6 +2412,25 @@ test_d_getenv_uint64_t(void **state)
 	rc            = d_getenv_uint64_t(&val, "foo");
 	assert_int_equal(rc, -DER_NONEXIST);
 	assert_true(val == 42);
+}
+
+static void
+test_d_setenv(void **state)
+{
+	char env[1];
+	int  rc;
+
+	rc = d_getenv_str(env, sizeof(env), "foo");
+	assert_int_equal(rc, -DER_NONEXIST);
+	rc = d_setenv("foo", "bar", 0);
+	assert_int_equal(rc, -DER_SUCCESS);
+	rc = d_getenv_str(env, sizeof(env), "foo");
+	assert_int_equal(rc, -DER_TRUNC);
+
+	rc = d_unsetenv("foo");
+	assert_int_equal(rc, -DER_SUCCESS);
+	rc = d_getenv_str(env, sizeof(env), "foo");
+	assert_int_equal(rc, -DER_NONEXIST);
 }
 
 int
@@ -2444,7 +2468,8 @@ main(int argc, char **argv)
 	    cmocka_unit_test_setup_teardown(test_d_getenv_uint32_t, setup_getenv_mocks,
 					    teardown_getenv_mocks),
 	    cmocka_unit_test_setup_teardown(test_d_getenv_uint64_t, setup_getenv_mocks,
-					    teardown_getenv_mocks)};
+					    teardown_getenv_mocks),
+	    cmocka_unit_test(test_d_setenv)};
 
 	d_register_alt_assert(mock_assert);
 

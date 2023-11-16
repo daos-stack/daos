@@ -62,54 +62,54 @@ crt_lib_fini(void)
 static void
 dump_envariables(void)
 {
-	int                i;
-	char              *env;
-	static const char *var_names[] = {"D_PROVIDER",
-					  "D_INTERFACE",
-					  "D_DOMAIN",
-					  "D_PORT",
-					  "CRT_PHY_ADDR_STR",
-					  "D_LOG_STDERR_IN_LOG",
-					  "D_LOG_SIZE",
-					  "D_LOG_FILE",
-					  "D_LOG_FILE_APPEND_PID",
-					  "D_LOG_MASK",
-					  "DD_MASK",
-					  "DD_STDERR",
-					  "DD_SUBSYS",
-					  "CRT_TIMEOUT",
-					  "CRT_ATTACH_INFO_PATH",
-					  "OFI_PORT",
-					  "OFI_INTERFACE",
-					  "OFI_DOMAIN",
-					  "CRT_CREDIT_EP_CTX",
-					  "CRT_CTX_SHARE_ADDR",
-					  "CRT_CTX_NUM",
-					  "D_FI_CONFIG",
-					  "FI_UNIVERSE_SIZE",
-					  "CRT_ENABLE_MEM_PIN",
-					  "FI_OFI_RXM_USE_SRX",
-					  "D_LOG_FLUSH",
-					  "CRT_MRC_ENABLE",
-					  "CRT_SECONDARY_PROVIDER",
-					  "D_PROVIDER_AUTH_KEY",
-					  "D_PORT_AUTO_ADJUST",
-					  "D_POLL_TIMEOUT",
-					  "D_LOG_FILE_APPEND_RANK",
-					  "D_POST_INIT",
-					  "D_POST_INCR",
-					  "DAOS_SIGNAL_REGISTER"};
+	int	i;
+	char	*val;
+	char    *envars[] = {"D_PROVIDER",
+			     "D_INTERFACE",
+			     "D_DOMAIN",
+			     "D_PORT",
+			     "CRT_PHY_ADDR_STR",
+			     "D_LOG_STDERR_IN_LOG",
+			     "D_LOG_SIZE",
+			     "D_LOG_FILE",
+			     "D_LOG_FILE_APPEND_PID",
+			     "D_LOG_MASK",
+			     "DD_MASK",
+			     "DD_STDERR",
+			     "DD_SUBSYS",
+			     "CRT_TIMEOUT",
+			     "CRT_ATTACH_INFO_PATH",
+			     "OFI_PORT",
+			     "OFI_INTERFACE",
+			     "OFI_DOMAIN",
+			     "CRT_CREDIT_EP_CTX",
+			     "CRT_CTX_SHARE_ADDR",
+			     "CRT_CTX_NUM",
+			     "D_FI_CONFIG",
+			     "FI_UNIVERSE_SIZE",
+			     "CRT_ENABLE_MEM_PIN",
+			     "FI_OFI_RXM_USE_SRX",
+			     "D_LOG_FLUSH",
+			     "CRT_MRC_ENABLE",
+			     "CRT_SECONDARY_PROVIDER",
+			     "D_PROVIDER_AUTH_KEY",
+			     "D_PORT_AUTO_ADJUST",
+			     "D_POLL_TIMEOUT",
+			     "D_LOG_FILE_APPEND_RANK",
+			     "D_POST_INIT",
+			     "D_POST_INCR",
+			     "DAOS_SIGNAL_REGISTER"};
 
 	D_INFO("-- ENVARS: --\n");
-	for (i = 0; i < ARRAY_SIZE(var_names); i++) {
-		d_agetenv_str(&env, var_names[i]);
-		if (env == NULL)
+	for (i = 0; i < ARRAY_SIZE(envars); i++) {
+		d_agetenv_str(&val, envars[i]);
+		if (val == NULL)
 			continue;
-		if (strcmp(var_names[i], "D_PROVIDER_AUTH_KEY") == 0)
-			D_INFO("%s = %s\n", var_names[i], "********");
+		if (strcmp(envars[i], "D_PROVIDER_AUTH_KEY") == 0)
+			D_INFO("%s = %s\n", envars[i], "********");
 		else
-			D_INFO("%s = %s\n", var_names[i], env);
-		D_FREE(env);
+			D_INFO("%s = %s\n", envars[i], val);
+		D_FREE(val);
 	}
 }
 
@@ -263,15 +263,14 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 /* first step init - for initializing crt_gdata */
 static int data_init(int server, crt_init_options_t *opt)
 {
-	uint32_t timeout = 0;
-	uint32_t credits;
-	uint32_t fi_univ_size   = 0;
-	uint32_t mem_pin_enable = 0;
-	uint32_t is_secondary;
-	char     ucx_ib_fork_init = 0;
-	uint32_t post_init        = CRT_HG_POST_INIT;
-	uint32_t post_incr        = CRT_HG_POST_INCR;
-	int      rc               = 0;
+	uint32_t        timeout = 0;
+	uint32_t	credits;
+	uint32_t	fi_univ_size = 0;
+	uint32_t	mem_pin_enable = 0;
+	uint32_t	is_secondary;
+	char		ucx_ib_fork_init = 0;
+	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
+	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
 
@@ -593,8 +592,13 @@ crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
+	char          *provider_env;
+	char          *interface_env;
+	char          *domain_env;
+	char          *auth_key_env;
 	struct timeval now;
 	unsigned int   seed;
+	char          *path;
 	bool           server;
 	int            rc            = 0;
 	char          *provider_str0 = NULL;
@@ -602,25 +606,29 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	crt_provider_t primary_provider;
 	crt_provider_t secondary_provider;
 	crt_provider_t tmp_prov;
-	char          *port0, *port1;
+	char          *port_str, *port0, *port1;
 	char          *iface0, *iface1, *domain0, *domain1;
 	char          *auth_key0, *auth_key1;
 	int            num_secondaries  = 0;
 	bool           port_auto_adjust = false;
 	int            i;
-	char          *env = NULL;
 
 	d_signal_register();
 
-	server    = flags & CRT_FLAG_BIT_SERVER;
-	port0     = NULL;
-	port1     = NULL;
-	iface0    = NULL;
-	iface1    = NULL;
-	domain0   = NULL;
-	domain1   = NULL;
-	auth_key0 = NULL;
-	auth_key1 = NULL;
+	provider_env  = NULL;
+	interface_env = NULL;
+	domain_env    = NULL;
+	auth_key_env  = NULL;
+	server        = flags & CRT_FLAG_BIT_SERVER;
+	port_str      = NULL;
+	port0         = NULL;
+	port1         = NULL;
+	iface0        = NULL;
+	iface1        = NULL;
+	domain0       = NULL;
+	domain1       = NULL;
+	auth_key0     = NULL;
+	auth_key1     = NULL;
 
 	/* d_log_init is reference counted */
 	rc = d_log_init();
@@ -668,85 +676,80 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		crt_gdata.cg_auto_swim_disable =
 			(flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE) ? 1 : 0;
 
-		rc = d_agetenv_str(&env, "CRT_ATTACH_INFO_PATH");
-		if (rc != -DER_NONEXIST && env[0] != '\0') {
-			rc = crt_group_config_path_set(env);
+		d_agetenv_str(&path, "CRT_ATTACH_INFO_PATH");
+		if (path != NULL && strlen(path) > 0) {
+			rc = crt_group_config_path_set(path);
 			if (rc != 0)
 				D_ERROR("Got %s from ENV CRT_ATTACH_INFO_PATH, "
 					"but crt_group_config_path_set failed "
-					"rc: %d, ignore the ENV.\n",
-					env, rc);
+					"rc: %d, ignore the ENV.\n", path, rc);
 			else
-				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", env);
+				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
 		}
-		D_FREE(env);
+		D_FREE(path);
+
+		if (opt && opt->cio_auth_key)
+			auth_key_env = strdup(opt->cio_auth_key);
+		else
+			d_agetenv_str(&auth_key_env, "D_PROVIDER_AUTH_KEY");
+
+		if (opt && opt->cio_provider)
+			provider_env = strdup(opt->cio_provider);
+		else {
+			d_agetenv_str(&provider_env, "D_PROVIDER");
+			if (provider_env == NULL)
+				d_agetenv_str(&provider_env, CRT_PHY_ADDR_ENV);
+		}
+
+		if (opt && opt->cio_interface)
+			interface_env = strdup(opt->cio_interface);
+		else {
+			d_agetenv_str(&interface_env, "D_INTERFACE");
+			if (interface_env == NULL) {
+				d_agetenv_str(&interface_env, "OFI_INTERFACE");
+			}
+		}
+
+		if (opt && opt->cio_domain)
+			domain_env = strdup(opt->cio_domain);
+		else {
+			d_agetenv_str(&domain_env, "D_DOMAIN");
+			if (domain_env == NULL)
+				d_agetenv_str(&domain_env, "OFI_DOMAIN");
+		}
+
+		if (opt && opt->cio_port)
+			port_str = strdup(opt->cio_port);
+		else {
+			d_agetenv_str(&port_str, "D_PORT");
+			if (port_str == NULL)
+				d_agetenv_str(&port_str, "OFI_PORT");
+		}
 
 		d_getenv_bool(&port_auto_adjust, "D_PORT_AUTO_ADJUST");
 
-		if (opt && opt->cio_provider)
-			env = strdup(opt->cio_provider);
-		else {
-			d_agetenv_str(&env, "D_PROVIDER");
-			if (env == NULL)
-				d_agetenv_str(&env, CRT_PHY_ADDR_ENV);
-		}
-		rc = __split_arg(env, &provider_str0, &provider_str1);
-		if (rc != 0) {
-			D_FREE(env);
+		rc = __split_arg(provider_env, &provider_str0, &provider_str1);
+		if (rc != 0)
 			D_GOTO(unlock, rc);
-		}
-		primary_provider   = crt_str_to_provider(provider_str0);
+
+		primary_provider = crt_str_to_provider(provider_str0);
 		secondary_provider = crt_str_to_provider(provider_str1);
+
 		if (primary_provider == CRT_PROV_UNKNOWN) {
-			D_ERROR("Requested provider %s not found\n", env);
-			D_FREE(env);
+			D_ERROR("Requested provider %s not found\n", provider_env);
 			D_GOTO(unlock, rc = -DER_NONEXIST);
 		}
-		D_FREE(env);
 
-		if (opt && opt->cio_interface)
-			env = strdup(opt->cio_interface);
-		else {
-			d_agetenv_str(&env, "D_INTERFACE");
-			if (env == NULL) {
-				d_agetenv_str(&env, "OFI_INTERFACE");
-			}
-		}
-		rc = __split_arg(env, &iface0, &iface1);
-		D_FREE(env);
+		rc = __split_arg(interface_env, &iface0, &iface1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
-
-		if (opt && opt->cio_domain)
-			env = strdup(opt->cio_domain);
-		else {
-			d_agetenv_str(&env, "D_DOMAIN");
-			if (env == NULL)
-				d_agetenv_str(&env, "OFI_DOMAIN");
-		}
-		rc = __split_arg(env, &domain0, &domain1);
-		D_FREE(env);
+		rc = __split_arg(domain_env, &domain0, &domain1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
-
-		if (opt && opt->cio_port)
-			env = strdup(opt->cio_port);
-		else {
-			d_agetenv_str(&env, "D_PORT");
-			if (env == NULL)
-				d_agetenv_str(&env, "OFI_PORT");
-		}
-		rc = __split_arg(env, &port0, &port1);
-		D_FREE(env);
+		rc = __split_arg(port_str, &port0, &port1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
-
-		if (opt && opt->cio_auth_key)
-			env = strdup(opt->cio_auth_key);
-		else
-			d_agetenv_str(&env, "D_PROVIDER_AUTH_KEY");
-		rc = __split_arg(env, &auth_key0, &auth_key1);
-		D_FREE(env);
+		rc = __split_arg(auth_key_env, &auth_key0, &auth_key1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
 
@@ -886,6 +889,11 @@ out:
 	D_FREE(domain0);
 	D_FREE(provider_str0);
 	D_FREE(auth_key0);
+	D_FREE(interface_env);
+	D_FREE(domain_env);
+	D_FREE(port_str);
+	D_FREE(provider_env);
+	D_FREE(auth_key_env);
 
 	if (rc != 0) {
 		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));

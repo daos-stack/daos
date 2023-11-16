@@ -290,38 +290,37 @@ rpc_handle_reply(const struct crt_cb_info *info)
 
 int main(int argc, char **argv)
 {
-	crt_group_t         *grp;
-	crt_context_t        crt_ctx[NUM_SERVER_CTX];
-	pthread_t            progress_thread[NUM_SERVER_CTX];
-	struct test_options *opts = crtu_get_opts();
-	d_rank_list_t       *mod_ranks;
-	uint64_t            *incarnations;
-	char                *uris[10];
-	d_rank_list_t       *mod_prim_ranks;
-	d_rank_list_t       *mod_sec_ranks;
-	int                  i;
-	char                *my_uri;
-	char                *env;
-	d_rank_t             my_rank;
-	uint32_t             grp_size;
-	d_rank_t             tmp_rank;
-	crt_group_t         *sec_grp1;
-	d_rank_list_t       *rank_list;
-	crt_endpoint_t       server_ep;
-	d_rank_t             rank;
-	crt_rpc_t           *rpc;
-	struct RPC_PING_in  *input;
-	sem_t                sem;
-	int                  tag;
-	int                  rc;
-	int                  num_attach_retries  = 20;
-	uint32_t             primary_grp_version = 1;
+	crt_group_t		*grp;
+	crt_context_t		crt_ctx[NUM_SERVER_CTX];
+	pthread_t		progress_thread[NUM_SERVER_CTX];
+	struct test_options	*opts = crtu_get_opts();
+	d_rank_list_t		*mod_ranks;
+	uint64_t		*incarnations;
+	char			*uris[10];
+	d_rank_list_t		*mod_prim_ranks;
+	d_rank_list_t		*mod_sec_ranks;
+	int			i;
+	char			*my_uri;
+	char			*env_self_rank;
+	d_rank_t		my_rank;
+	char			*grp_cfg_file;
+	uint32_t		grp_size;
+	d_rank_t		tmp_rank;
+	crt_group_t		*sec_grp1;
+	d_rank_list_t		*rank_list;
+	crt_endpoint_t		server_ep;
+	d_rank_t		rank;
+	crt_rpc_t		*rpc;
+	struct RPC_PING_in	*input;
+	sem_t			sem;
+	int			tag;
+	int			rc;
+	int			num_attach_retries = 20;
+	uint32_t		primary_grp_version = 1;
 
-	rc = d_getenv_uint32_t(&my_rank, "CRT_L_RANK");
-	if (rc != -DER_SUCCESS) {
-		printf("CRT_L_RANK can not be retrieve: " DF_RC "\n", DP_RC(rc));
-		return -1;
-	}
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
+	my_rank = atoi(env_self_rank);
+	D_FREE(env_self_rank);
 
 	/* When under valgrind bump expected timeouts to 60 seconds */
 	if (D_ON_VALGRIND) {
@@ -384,6 +383,8 @@ int main(int argc, char **argv)
 		}
 	}
 
+	d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
+
 	rc = crt_rank_self_set(my_rank, primary_grp_version);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
@@ -397,22 +398,17 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = d_agetenv_str(&env, "CRT_L_GRP_CFG");
-	if (env == NULL) {
-		D_ERROR("CRT_L_GRP_CFG can not be retrieve: " DF_RC "\n", DP_RC(rc));
-		assert(0);
-	}
-	D_DEBUG(DB_TEST, "Group Config File: %s\n", env);
-
 	/* load group info from a config file and delete file upon return */
-	rc = crtu_load_group_from_file(env, crt_ctx[0], grp, my_rank, true);
+	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
+				       true);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
-	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank, my_uri, env);
-	D_FREE(env);
+	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
+			my_uri, grp_cfg_file);
+	D_FREE(grp_cfg_file);
 	D_FREE(my_uri);
 
 	rc = crt_group_size(NULL, &grp_size);

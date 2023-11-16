@@ -204,9 +204,9 @@ int
 bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	      unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect)
 {
-	char         env[sizeof("AIO")];
-	int          rc, fd;
-	unsigned int size_mb = DAOS_DMA_CHUNK_MB;
+	char		*env;
+	int		 rc, fd;
+	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
@@ -287,11 +287,12 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
-	rc = d_getenv_str(env, sizeof(env), "VOS_BDEV_CLASS");
-	if (rc == -DER_SUCCESS && strncasecmp(env, "AIO", sizeof("AIO")) == 0) {
+	d_agetenv_str(&env, "VOS_BDEV_CLASS");
+	if (env && strcasecmp(env, "AIO") == 0) {
 		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
+	D_FREE(env);
 
 	if (numa_node > 0) {
 		bio_numa_node = (unsigned int)numa_node;

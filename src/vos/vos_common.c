@@ -944,9 +944,9 @@ vos_self_fini(void)
 int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
-	char          *env;
-	int            rc = 0;
-	struct sys_db *db;
+	char		*evt_mode;
+	int		 rc = 0;
+	struct sys_db	*db;
 
 	D_MUTEX_LOCK(&self_mode.self_lock);
 	if (self_mode.self_ref) {
@@ -993,16 +993,16 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto failed;
 	}
 
-	rc = d_agetenv_str(&env, "DAOS_EVTREE_MODE");
-	if (env != NULL) {
-		if (strcasecmp("soff", env) == 0) {
+	rc = d_agetenv_str(&evt_mode, "DAOS_EVTREE_MODE");
+	if (evt_mode) {
+		if (strcasecmp("soff", evt_mode) == 0) {
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
 			vos_evt_feats |= EVT_FEAT_SORT_SOFF;
-		} else if (strcasecmp("dist_even", env) == 0) {
+		} else if (strcasecmp("dist_even", evt_mode) == 0) {
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
 			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
 		}
-		D_FREE(env);
+		D_FREE(evt_mode);
 	}
 	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:

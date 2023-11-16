@@ -377,17 +377,12 @@ d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname, uint32_t flags)
 static void
 debug_prio_err_load_env(void)
 {
-	char *env;
-	int   i, rc;
+	char	*env;
+	int	i;
 
-	rc = d_agetenv_str(&env, DD_STDERR_ENV);
-	switch (rc) {
-	case -DER_NOMEM:
-		D_PRINT_ERR("%s = %s - too long environment variable.\n", DD_STDERR_ENV, env);
-	case -DER_NONEXIST:
+	d_agetenv_str(&env, DD_STDERR_ENV);
+	if (env == NULL)
 		return;
-	}
-	D_ASSERT(env != NULL);
 
 	for (i = 0; i < NUM_DBG_PRIO_ENTRIES; i++) {
 		if (d_dbg_prio_dict[i].dd_name != NULL &&

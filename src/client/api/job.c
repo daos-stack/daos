@@ -36,24 +36,24 @@ craft_default_jobid(char **jobid)
 int
 dc_job_init(void)
 {
-	char *jobid_env;
 	char *jobid;
-	int   rc = 0;
+	char *jobid_env;
+	int   err = 0;
 
-	rc = d_agetenv_str(&jobid_env, JOBID_ENV);
+	d_agetenv_str(&jobid_env, JOBID_ENV);
 	if (jobid_env == NULL) {
 		D_STRNDUP_S(jobid_env, DEFAULT_JOBID_ENV);
 		if (jobid_env == NULL)
-			D_GOTO(out_err, rc = -DER_NOMEM);
+			D_GOTO(out_err, err = -DER_NOMEM);
 	}
 
 	dc_jobid_env = jobid_env;
 
-	rc = d_agetenv_str(&jobid, dc_jobid_env);
+	d_agetenv_str(&jobid, dc_jobid_env);
 	if (jobid == NULL) {
-		rc = craft_default_jobid(&jobid);
-		if (rc)
-			D_GOTO(out_env, rc);
+		err = craft_default_jobid(&jobid);
+		if (err)
+			D_GOTO(out_env, err);
 	}
 
 	dc_jobid = jobid;
@@ -65,7 +65,7 @@ dc_job_init(void)
 out_env:
 	D_FREE(dc_jobid_env);
 out_err:
-	return rc;
+	return err;
 }
 
 void
