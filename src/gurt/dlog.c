@@ -829,40 +829,40 @@ int
 d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	   char *logfile, int flags, d_log_id_cb_t log_id_cb)
 {
-	int		tagblen;
+	int		 tagblen;
 	char		*newtag = NULL, *cp;
-	int		truncate = 0, rc;
-	char		*env;
+	int		 truncate = 0, rc;
+	char		 env[256];
 	char		*buffer = NULL;
-	uint64_t	log_size = LOG_SIZE_DEF;
-	int		pri;
+	uint64_t	 log_size = LOG_SIZE_DEF;
+	int		 pri;
 
 	memset(&mst, 0, sizeof(mst));
 	mst.flush_pri = DLOG_WARN;
 	mst.log_id_cb = log_id_cb;
 
-	env = d_getenv(D_LOG_FLUSH_ENV);
-	if (env) {
+	rc = d_getenv_str(env, sizeof(env), D_LOG_FLUSH_ENV);
+	if (rc == -DER_SUCCESS) {
 		pri = d_log_str2pri(env, strlen(env) + 1);
 
 		if (pri != -1)
 			mst.flush_pri = pri;
 	}
 
-	env = d_getenv(D_LOG_TRUNCATE_ENV);
-	if (env != NULL && atoi(env) > 0)
+	rc = d_getenv_str(env, sizeof(env), D_LOG_TRUNCATE_ENV);
+	if (rc == -DER_SUCCESS && strncmp(env, "0", sizeof("0")) != 0)
 		truncate = 1;
 
-	env = d_getenv(D_LOG_SIZE_ENV);
-	if (env != NULL) {
+	rc = d_getenv_str(env, sizeof(env), D_LOG_SIZE_ENV);
+	if (rc == -DER_SUCCESS) {
 		log_size = d_getenv_size(env);
 		if (log_size < LOG_SIZE_MIN)
 			log_size = LOG_SIZE_MIN;
 	}
 
-	env = d_getenv(D_LOG_FILE_APPEND_PID_ENV);
-	if (logfile != NULL && env != NULL) {
-		if (strcmp(env, "0") != 0) {
+	rc = d_getenv_str(env, sizeof(env), D_LOG_FILE_APPEND_PID_ENV);
+	if (logfile != NULL && rc == -DER_SUCCESS) {
+		if (strncmp(env, "0", sizeof("0")) != 0) {
 			rc = asprintf(&buffer, "%s.%d", logfile, getpid());
 			if (buffer != NULL && rc != -1)
 				logfile = buffer;
@@ -873,8 +873,8 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		}
 	}
 
-	env = d_getenv(D_LOG_FILE_APPEND_RANK_ENV);
-	if (env && strcmp(env, "0") != 0)
+	rc = d_getenv_str(env, sizeof(env), D_LOG_FILE_APPEND_RANK_ENV);
+	if (rc == -DER_SUCCESS && strncmp(env, "0", sizeof("0")) != 0)
 		mst.append_rank = true;
 
 	/* quick sanity check (mst.tag is non-null if already open) */
@@ -910,8 +910,8 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		int         log_flags = O_RDWR | O_CREAT;
 		struct stat st;
 
-		env = d_getenv(D_LOG_STDERR_IN_LOG_ENV);
-		if (env != NULL && atoi(env) > 0)
+		rc = d_getenv_str(env, sizeof(env), D_LOG_STDERR_IN_LOG_ENV);
+		if (rc == -DER_SUCCESS && strncmp(env, "0", sizeof("0")) != 0)
 			merge_stderr = true;
 
 		if (!truncate)
@@ -1072,19 +1072,20 @@ void d_log_close(void)
  */
 bool d_logfac_is_enabled(const char *fac_name)
 {
-	char *ddsubsys_env;
-	char *ddsubsys_fac;
-	int len = strlen(fac_name);
+	char	 env[1024];
+	char	*ddsubsys_fac;
+	int	 len = strlen(fac_name);
+	int	 rc;
 
 	/* read env DD_SUBSYS to enable corresponding facilities */
-	ddsubsys_env = d_getenv(DD_FAC_ENV);
-	if (ddsubsys_env == NULL)
+	rc = d_getenv_str(env, sizeof(env), DD_FAC_ENV);
+	if (rc == -DER_NONEXIST)
 		return true; /* enable all facilities by default */
 
-	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0)
+	if (strncasecmp(env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0)
 		return true; /* enable all facilities with DD_SUBSYS=all */
 
-	ddsubsys_fac = strcasestr(ddsubsys_env, fac_name);
+	ddsubsys_fac = strcasestr(env, fac_name);
 	if (ddsubsys_fac == NULL)
 		return false;
 

@@ -191,9 +191,9 @@ set_faulty_criteria(void)
 	 */
 	glb_criteria.fc_max_csum_errs = UINT32_MAX;
 
-	d_getenv_bool("DAOS_NVME_AUTO_FAULTY_ENABLED", &glb_criteria.fc_enabled);
-	d_getenv_int("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
-	d_getenv_int("DAOS_NVME_AUTO_FAULTY_CSUM", &glb_criteria.fc_max_csum_errs);
+	d_getenv_bool(&glb_criteria.fc_enabled, "DAOS_NVME_AUTO_FAULTY_ENABLED");
+	d_getenv_uint(&glb_criteria.fc_max_io_errs, "DAOS_NVME_AUTO_FAULTY_IO");
+	d_getenv_uint(&glb_criteria.fc_max_csum_errs, "DAOS_NVME_AUTO_FAULTY_CSUM");
 
 	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u\n",
 	       glb_criteria.fc_enabled ? "enabled" : "disabled",
@@ -204,9 +204,9 @@ int
 bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	      unsigned int hugepage_size, unsigned int tgt_nr, bool bypass_health_collect)
 {
-	char		*env;
-	int		 rc, fd;
-	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
+	char		env[16];
+	int		rc, fd;
+	unsigned int	size_mb = DAOS_DMA_CHUNK_MB;
 
 	if (tgt_nr <= 0) {
 		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
@@ -242,18 +242,18 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
-	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
+	d_getenv_bool(&bio_scm_rdma, "DAOS_SCM_RDMA_ENABLED");
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
-	d_getenv_int("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
+	d_getenv_uint(&bio_spdk_subsys_timeout, "DAOS_SPDK_SUBSYS_TIMEOUT");
 	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
 
-	d_getenv_int("DAOS_SPDK_MAX_UNMAP_CNT", &bio_spdk_max_unmap_cnt);
+	d_getenv_uint(&bio_spdk_max_unmap_cnt, "DAOS_SPDK_MAX_UNMAP_CNT");
 	if (bio_spdk_max_unmap_cnt == 0)
 		bio_spdk_max_unmap_cnt = UINT32_MAX;
 	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
 
-	d_getenv_int("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
+	d_getenv_uint(&bio_max_async_sz, "DAOS_MAX_ASYNC_SZ");
 	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
 
 	/* Hugepages disabled */
@@ -287,8 +287,8 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
-	env = d_getenv("VOS_BDEV_CLASS");
-	if (env && strcasecmp(env, "AIO") == 0) {
+	rc = d_getenv_str(env, sizeof(env), "VOS_BDEV_CLASS");
+	if (rc != -DER_NONEXIST && strncasecmp(env, "AIO", sizeof("AIO")) == 0) {
 		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}

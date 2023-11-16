@@ -17,11 +17,18 @@
 #include <errno.h>
 #include <dlfcn.h>
 #include <pthread.h>
+#include <limits.h>
+#include <stdint.h>
 
 #include <malloc.h>
 
 #include <gurt/common.h>
 #include <gurt/atomic.h>
+
+#define __xstr(s) __str(s)
+#define __str(s) #s
+#define UINT_STR_MAX sizeof(__xstr(UINT_MAX))
+#define UINT64_STR_MAX sizeof(__xstr(UINT64_MAX))
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};
@@ -947,111 +954,363 @@ d_rank_range_list_free(d_rank_range_list_t *range_list)
 }
 
 static inline bool
-dis_integer_str(char *str)
+dis_uint_str(const char *str)
 {
-	char	*p;
+	int	idx;
 
-	p = str;
-	if (p == NULL || strlen(p) == 0)
+	if (str == NULL)
 		return false;
 
-	while (*p != '\0') {
-		if (*p <= '9' && *p >= '0') {
-			p++;
-			continue;
-		} else {
-			return false;
-		}
+	for(idx = 0; idx < UINT_STR_MAX - 1; ++idx) {
+		if (str[idx] < '0' && str[idx] > '9')
+			break;
 	}
 
-	return true;
+	return idx > 0 && str[idx] == '\0';
 }
 
 static inline bool
 dis_single_char_str(char *str)
 {
-	return strlen(str) == 1;
+	return strnlen(str, 2) == 1;
 }
 
 /**
- * FIXME DAOS-14532: Update comment
- *
  * Overloads to hook the unsafe getenv()/[un]setenv()/putenv()/clearenv()
  * functions from glibc.
- * Libgurt is the preferred place for this as it is the lowest layer in DAOS,
- * so it will be the earliest to be loaded and will ensure the hook to be
- * installed as early as possible and could prevent usage of LD_PRELOAD.
- * The idea is to strengthen all the environment APIs by using a common lock.
- *
- * XXX this will address the main lack of multi-thread protection in the Glibc
- * APIs but do not handle all unsafe use-cases (like the change/removal of an
- * env var when its value address has already been grabbed by a previous
- * getenv(), ...).
  */
+static pthread_rwlock_t d_env_lock = PTHREAD_RWLOCK_INITIALIZER;
 
-static pthread_rwlock_t hook_env_lock = PTHREAD_RWLOCK_INITIALIZER;
-
-char *d_getenv(const char *name)
+/**
+ * Get a string type environment variables
+ *
+ * \param[in,out]	str_val		returned value of the ENV. Will not change the original
+ *					value if ENV is not set.
+ * \param[in]		str_size	Size of the input string.
+ * \param[in]		name		name of the environment variable.
+ * \return				0 on success, a negative value on error.
+ */
+int
+d_getenv_str(char* str_val, size_t str_size, const char *name)
 {
-	char *p;
+	char	*tmp;
+	int	 len;
+	int	 rc = -DER_SUCCESS;
 
-	D_RWLOCK_RDLOCK(&hook_env_lock);
-	p = getenv(name);
-	D_RWLOCK_UNLOCK(&hook_env_lock);
+	D_ASSERT(name != NULL);
+	D_ASSERT(str_val != NULL);
+	D_ASSERT(str_size > 0);
 
-	return p;
+	D_RWLOCK_RDLOCK(&d_env_lock);
+
+	tmp = getenv(name);
+	if (tmp == NULL) {
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+	len = strnlen(tmp, str_size);
+	memcpy(str_val, tmp, len);
+
+	if (len == str_size) {
+		fprintf(stderr, "ENV '%s' has been truncated\n", name);
+		rc = -DER_TRUNC;
+		--len;
+	}
+	str_val[len] = '\0';
+
+out:
+	D_RWLOCK_UNLOCK(&d_env_lock);
+
+	return rc;
 }
 
-int d_putenv(char *name)
+/**
+ * Get a string type environment variables
+ *
+ * \param[in,out]	rc		returned value of the ENV on success, NULL on error.
+ * \param[in]		name		name of the environment variable.
+ * \return				0 on success, a negative value on error.
+ */
+int
+d_agetenv_str(char **str_val, const char *name)
 {
-	int rc;
+	char	*env;
+	int	rc;
 
-	D_RWLOCK_WRLOCK(&hook_env_lock);
+	D_ASSERT(name != NULL);
+
+	*str_val = NULL;
+
+	D_RWLOCK_RDLOCK(&d_env_lock);
+
+	env = getenv(name);
+	if (env == NULL)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
+	env = strdup(env);
+	if (env == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	*str_val = env;
+	rc = -DER_SUCCESS;
+
+out:
+	D_RWLOCK_UNLOCK(&d_env_lock);
+
+	return rc;
+}
+
+/**
+ * get a bool type environment variables.
+ *
+ * \param[in,out]	bool_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set. Set as false if the env is set to
+ *					0, otherwise set as true.
+ * \param[in]		name		name of the environment variable.
+ * \return				0 on success, a negative value on error.
+ */
+int
+d_getenv_bool(bool *bool_val, const char *name)
+{
+	char	*tmp;
+	int	 rc = -DER_SUCCESS;
+
+	D_ASSERT(name != NULL);
+	D_ASSERT(bool_val != NULL);
+
+	D_RWLOCK_RDLOCK(&d_env_lock);
+
+	tmp = getenv(name);
+	if (tmp == NULL) {
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+	/* treats any valid non-integer string as true */
+	// FIXME DAOS-14532 use strtol function
+	*bool_val = !dis_uint_str(tmp) || atoi(tmp) != 0;
+
+out:
+	D_RWLOCK_UNLOCK(&d_env_lock);
+
+	return rc;
+}
+
+/**
+ * get single character environment variable.
+ *
+ * \param[in,out]	char_val	returned value of the ENV. Will not change the original
+ *					value.
+ * \param[in]		name		name of the environment variable.
+ * \return				0 on success, a negative value on error.
+ */
+int
+d_getenv_char(char *char_val, const char *name)
+{
+	char	*tmp;
+	int	 rc = -DER_SUCCESS;
+
+	D_ASSERT(name != NULL);
+	D_ASSERT(char_val != NULL);
+
+	D_RWLOCK_RDLOCK(&d_env_lock);
+
+	tmp = getenv(name);
+	if (tmp == NULL) {
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+	if (!dis_single_char_str(tmp)) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	*char_val = *tmp;
+
+out:
+	D_RWLOCK_UNLOCK(&d_env_lock);
+
+	return rc;
+}
+
+/**
+ * get an unsigned integer type environment variables.
+ *
+ * \param[in,out]	uint_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \param[in]		name		name of the environment variable.
+ * \return				0 on success, a negative value on error.
+ */
+int
+d_getenv_uint(unsigned *uint_val, const char *name)
+{
+	char		*tmp;
+	int		 rc = -DER_SUCCESS;
+
+	D_ASSERT(name != NULL);
+	D_ASSERT(uint_val != NULL);
+
+	D_RWLOCK_RDLOCK(&d_env_lock);
+	tmp = getenv(name);
+	if (tmp == NULL) {
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+	// FIXME replace with strtoul
+	if (!dis_uint_str(tmp)) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	*uint_val = atoi(tmp);
+
+out:
+	D_RWLOCK_UNLOCK(&d_env_lock);
+
+	return rc;
+}
+
+/**
+ * get a 64bits unsigned integer type environment variables
+ *
+ * \param[in,out]	val	returned value of the ENV. Will not change the original value if ENV
+ *				is not set or set as a non-integer value.
+ * \param[in]		name	name of the environment variable.
+ * \return			0 on success, a negative value on error.
+ */
+int
+d_getenv_uint64_t(uint64_t *val, const char *name)
+{
+	char		*tmp;
+	size_t		 tmp_len;
+	int		 matched;
+	uint64_t	 new_val;
+	int		 count;
+	int		 rc = 0;
+
+	D_ASSERT(name != NULL);
+	D_ASSERT(val != NULL);
+
+	D_RWLOCK_RDLOCK(&d_env_lock);
+	tmp = getenv(name);
+	if (tmp == NULL) {
+		D_GOTO(out, rc = -DER_NONEXIST);
+	}
+
+	// Replace with strtoull
+	tmp_len = strnlen(tmp, UINT64_STR_MAX);
+	if (tmp_len == UINT64_STR_MAX) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	/* Now do scanf, check that the number was matched, and there are no extra unmatched
+	 * characters at the end.
+	 */
+	matched = sscanf(tmp, "%"PRId64"%n", &new_val, &count);
+	if (matched != 1 || tmp_len != count) {
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	*val = new_val;
+
+out:
+	D_RWLOCK_UNLOCK(&d_env_lock);
+
+	return rc;
+}
+
+/**
+ * Thread safe wrapper of the libc putenv() function.
+ *
+ * \param[in]	name	name of the environment variable.
+ * \return		0 on success, a negative value on error.
+ */
+int
+d_putenv(char *name)
+{
+	int	env_errno;
+	int	rc;
+
+	D_RWLOCK_WRLOCK(&d_env_lock);
 	rc = putenv(name);
-	D_RWLOCK_UNLOCK(&hook_env_lock);
+	env_errno = errno;
+	D_RWLOCK_UNLOCK(&d_env_lock);
 
+	errno = env_errno;
 	return rc;
 }
 
-int d_setenv(const char *name, const char *value, int overwrite)
+/**
+ * Thread safe wrapper of the libc setenv() function.
+ *
+ * \param[in]	name		name of the environment variable.
+ * \param[in]	value		value of the environment variable.
+ * \param[in]	overwrite	overwrite when nonzero.
+ * \return			0 on success, a negative value on error.
+ */
+int
+d_setenv(const char *name, const char *value, int overwrite)
 {
-	int rc;
+	int	env_errno;
+	int	rc;
 
-	D_RWLOCK_WRLOCK(&hook_env_lock);
+	D_RWLOCK_WRLOCK(&d_env_lock);
 	rc = setenv(name, value, overwrite);
-	D_RWLOCK_UNLOCK(&hook_env_lock);
+	env_errno = errno;
+	D_RWLOCK_UNLOCK(&d_env_lock);
 
+	errno = env_errno;
 	return rc;
 }
 
-int d_unsetenv(const char *name)
+/**
+ * Thread safe wrapper of the libc unsetenv() function.
+ *
+ * \param[in]	name		name of the environment variable.
+ * \return			0 on success, a negative value on error.
+ */
+int
+d_unsetenv(const char *name)
 {
-	int rc;
+	int	env_errno;
+	int	rc;
 
-	D_RWLOCK_WRLOCK(&hook_env_lock);
+	D_RWLOCK_WRLOCK(&d_env_lock);
 	rc = unsetenv(name);
-	D_RWLOCK_UNLOCK(&hook_env_lock);
+	env_errno = errno;
+	D_RWLOCK_UNLOCK(&d_env_lock);
 
+	errno = env_errno;
 	return rc;
 }
 
-int d_clearenv(void)
+/**
+ * Thread safe wrapper of the libc clearenv() function.
+ *
+ * \param[in]	name		name of the environment variable.
+ * \return			0 on success, a negative value on error.
+ */
+int
+d_clearenv(void)
 {
 	int rc;
 
-	D_RWLOCK_WRLOCK(&hook_env_lock);
+	D_RWLOCK_WRLOCK(&d_env_lock);
 	rc = clearenv();
-	D_RWLOCK_UNLOCK(&hook_env_lock);
+	D_RWLOCK_UNLOCK(&d_env_lock);
 
 	return rc;
 }
 
-int d_apply_if_not_setenv(const char *name, const char *value)
+// FIXME DAOS-14532 Should be useless
+#if 0
+/**
+ * TODO
+ */
+int
+d_apply_if_not_setenv(const char *name, const char *value)
 {
 	char *old_val;
-	int rc = 0;
+	int rc = -DER_SUCCESS;
 
-	D_RWLOCK_WRLOCK(&hook_env_lock);
+	D_RWLOCK_WRLOCK(&d_env_lock);
 
 	old_val = getenv(name);
 
@@ -1060,135 +1319,11 @@ int d_apply_if_not_setenv(const char *name, const char *value)
 		rc = setenv(name, value, true);
 	}
 
-	D_RWLOCK_UNLOCK(&hook_env_lock);
+	D_RWLOCK_UNLOCK(&d_env_lock);
 
-	return rc;
+	return -rc;
 }
-
-/**
- * FIXME DAOS-14532: Makes all the function atomic
- * get a bool type environment variables
- *
- * \param[in]		env		name of the environment variable
- * \param[in,out]	bool_val	returned value of the ENV. Will not change the original
- *					value if ENV is not set. Set as false if the env is set to
- *					0, otherwise set as true.
- */
-void
-d_getenv_bool(const char *env, bool *bool_val)
-{
-	char *env_val;
-
-	if (env == NULL)
-		return;
-	D_ASSERT(bool_val != NULL);
-
-	env_val = d_getenv(env);
-	if (!env_val)
-		return;
-
-	/* treats any valid non-integer string as true */
-	if (!dis_integer_str(env_val))
-		*bool_val = true;
-
-	*bool_val = (atoi(env_val) == 0 ? false : true);
-}
-
-/**
- * FIXME DAOS-14532: Makes all the function atomic
- * get single character environment variable
- *
- * \param[in]           env     name of the environment variable
- * \param[in,out]       char_val returned value of the ENV. Will not change the original value
- */
-void
-d_getenv_char(const char *env, char *char_val)
-{
-	char		*env_val;
-
-	if (env == NULL || char_val == NULL)
-		return;
-
-	env_val = d_getenv(env);
-	if (!env_val)
-		return;
-
-	if (!dis_single_char_str(env_val)) {
-		D_ERROR("ENV %s is not single character.\n", env_val);
-		return;
-	}
-	*char_val = *env_val;
-}
-
-/**
- * FIXME DAOS-14532: Makes all the function atomic
- * get an integer type environment variables
- *
- * \param[in]		env	name of the environment variable
- * \param[in,out]	int_val	returned value of the ENV. Will not change the original value if ENV
- *				is not set or set as a
- *				non-integer value.
- */
-void
-d_getenv_int(const char *env, unsigned *int_val)
-{
-	char		*env_val;
-	unsigned	 value;
-
-	if (env == NULL || int_val == NULL)
-		return;
-
-	env_val = d_getenv(env);
-	if (!env_val)
-		return;
-
-	if (!dis_integer_str(env_val)) {
-		D_ERROR("ENV %s is not integer.\n", env_val);
-		return;
-	}
-
-	value = atoi(env_val);
-	D_DEBUG(DB_TRACE, "get ENV %s as %d.\n", env, value);
-	*int_val = value;
-}
-
-/**
- * FIXME DAOS-14532: Makes all the function atomic
- */
-int
-d_getenv_uint64_t(const char *env, uint64_t *val)
-{
-	char		*env_val;
-	size_t		env_len;
-	int		matched;
-	uint64_t	new_val;
-	int		count;
-
-	env_val = d_getenv(env);
-	if (!env_val) {
-		D_DEBUG(DB_TRACE, "ENV '%s' unchanged at %"PRId64"\n", env, *val);
-		return -DER_NONEXIST;
-	}
-
-	env_len = strnlen(env_val, 128);
-	if (env_len == 128) {
-		D_ERROR("ENV '%s' is invalid\n", env);
-		return -DER_INVAL;
-	}
-
-	/* Now do scanf, check that the number was matched, and there are no extra unmatched
-	 * characters at the end.
-	 */
-	matched = sscanf(env_val, "%"PRId64"%n", &new_val, &count);
-	if (matched == 1 && env_len == count) {
-		*val = new_val;
-		D_DEBUG(DB_TRACE, "ENV '%s' set to %"PRId64"\n", env, *val);
-		return -DER_SUCCESS;
-	}
-
-	D_ERROR("ENV '%s' is invalid: '%s'\n", env, env_val);
-	return -DER_INVAL;
-}
+#endif
 
 /**
  * Write formatted data to d_string_buffer_t

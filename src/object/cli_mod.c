@@ -69,7 +69,7 @@ dc_obj_init(void)
 	}
 
 	tx_verify_rdg = false;
-	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);
+	d_getenv_bool(&tx_verify_rdg, "DAOS_TX_VERIFY_RDG");
 	D_INFO("%s TX redundancy group verification\n", tx_verify_rdg ? "Enable" : "Disable");
 
 out_class:

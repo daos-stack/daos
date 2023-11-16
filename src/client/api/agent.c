@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,10 +13,14 @@ int
 dc_agent_init()
 {
 	char	*path = NULL;
-	char	*envpath = d_getenv(DAOS_AGENT_DRPC_DIR_ENV);
+	char	*dir_path;
+	char	 env[1024];
+	int	 rc;
 
-	if (envpath)
-		D_ASPRINTF(path, "%s/%s", envpath,
+	rc = d_getenv_str(env, sizeof(env), DAOS_AGENT_DRPC_DIR_ENV);
+	dir_path = (rc == -DER_NONEXIST)?NULL:env;
+	if (dir_path)
+		D_ASPRINTF(path, "%s/%s", dir_path,
 				DAOS_AGENT_DRPC_SOCK_NAME);
 	else
 		D_STRNDUP_S(path, DEFAULT_DAOS_AGENT_DRPC_SOCK);

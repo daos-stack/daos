@@ -61,7 +61,7 @@ umempobj_settings_init(bool md_on_ssd)
 		return rc;
 	}
 
-	d_getenv_int("DAOS_MD_ON_SSD_MODE", &md_mode);
+	d_getenv_uint(&md_mode, "DAOS_MD_ON_SSD_MODE");
 
 	switch (md_mode) {
 	case DAOS_MD_BMEM:

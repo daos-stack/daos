@@ -100,14 +100,14 @@ static int		use_glob_eq;
 static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
 {
-	int rc;
-	int ret;
-	char *override;
+	int	rc;
+	int	ret;
+	char	env[2];
 
 	rc = daos_init();
 	if ((rc == 0) && (use_glob_eq == 0)) {
-		override = d_getenv("PYDAOS_GLOB_EQ");
-		if ((override == NULL) || strcmp(override, "0")) {
+		rc = d_getenv_str(env, sizeof(env), "PYDAOS_GLOB_EQ");
+		if (rc != -DER_SUCCESS || env[0] != '0') {
 			use_glob_eq = 1;
 			ret = daos_eq_create(&glob_eq);
 			if (ret) {

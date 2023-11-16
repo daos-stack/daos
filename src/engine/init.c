@@ -314,7 +314,7 @@ dss_topo_init()
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
-	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
+	d_getenv_bool(&tgt_oversub, "DAOS_TARGET_OVERSUBSCRIBE");
 	dss_tgt_nr = nr_threads;
 
 	/* if no NUMA node was specified, or NUMA data unavailable */
@@ -432,13 +432,17 @@ dss_init_state_set(enum dss_init_state state)
 static int
 abt_max_num_xstreams(void)
 {
-	char   *env;
+	char	env[64];
+	int	rc;
 
-	env = d_getenv("ABT_MAX_NUM_XSTREAMS");
-	if (env == NULL)
-		env = d_getenv("ABT_ENV_MAX_NUM_XSTREAMS");
-	if (env != NULL)
+	rc = d_getenv_str(env, sizeof(env), "ABT_MAX_NUM_XSTREAMS");
+	if (rc != DER_NONEXIST)
 		return atoi(env);
+
+	rc = d_getenv_str(env, sizeof(env), "ABT_ENV_MAX_NUM_XSTREAMS");
+	if (rc != DER_NONEXIST)
+		return atoi(env);
+
 	return 0;
 }
 

@@ -104,14 +104,17 @@ unsigned int daos_io_bypass;
 static void
 io_bypass_init(void)
 {
-	char	*str = d_getenv(DENV_IO_BYPASS);
+	char*	str;
 	char	*tok;
 	char	*saved_ptr;
+	char	 env[256];
+	int	 rc;
 
-	if (!str)
+	rc = d_getenv_str(env, sizeof(env), DENV_IO_BYPASS);
+	if (rc == -DER_NONEXIST)
 		return;
 
-	tok = strtok_r(str, ",", &saved_ptr);
+	tok = strtok_r(env, ",", &saved_ptr);
 	while (tok) {
 		struct io_bypass *iob;
 
@@ -153,6 +156,7 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 {
 	int	flags = DLOG_FLV_FAC | DLOG_FLV_LOGPID | DLOG_FLV_TAG;
 	int	rc;
+	char	env[1024];
 
 	D_MUTEX_LOCK(&dd_lock);
 	if (dd_ref > 0) {
@@ -162,11 +166,12 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 	}
 
 	/* honor the env variable first */
-	logfile = d_getenv(D_LOG_FILE_ENV);
-	if (logfile == NULL || strlen(logfile) == 0) {
+	rc = d_getenv_str(env, sizeof(env), D_LOG_FILE_ENV);
+	logfile = env;
+	if (rc == -DER_NONEXIST || env[0] == '\0') {
 		flags |= DLOG_FLV_STDOUT;
 		logfile = NULL;
-	} else if (!strncmp(logfile, "/dev/null", 9)) {
+	} else if (!strncmp(logfile, "/dev/null", sizeof("/dev/null"))) {
 		/* Don't set up logging or log to stdout if the log file is /dev/null */
 		logfile = NULL;
 	}

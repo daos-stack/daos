@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 {
 	crt_context_t		crt_ctx;
 	crt_group_t		*grp;
-	char			*grp_cfg_file;
+	char			env[1024];
 	int			rc;
 	sem_t			sem;
 	pthread_t		progress_thread;
@@ -107,11 +107,15 @@ int main(int argc, char **argv)
 				progress_function, &crt_ctx);
 	assert(rc == 0);
 
-	grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
-	DBG_PRINT("Client starting with cfg_file=%s\n", grp_cfg_file);
+	rc = d_getenv_str(env, sizeof(env), "CRT_L_GRP_CFG");
+	if (rc == DER_NONEXIST) {
+		D_ERROR("CRT_L_GRP_CFG was not set\n");
+		assert(0);
+	}
+	DBG_PRINT("Client starting with cfg_file=%s\n", env);
 
 	/* load group info from a config file and delete file upon return */
-	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx, grp, -1, true);
+	rc = crtu_load_group_from_file(env, crt_ctx, grp, -1, true);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);

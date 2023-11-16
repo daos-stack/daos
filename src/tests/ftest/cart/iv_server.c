@@ -1211,8 +1211,7 @@ show_usage(char *app_name)
 int main(int argc, char **argv)
 {
 	char		*arg_verbose = NULL;
-	char		*env_self_rank;
-	char		*grp_cfg_file;
+	char		env[1024];
 	d_rank_list_t	*rank_list;
 	d_rank_t	my_rank;
 	int		c;
@@ -1241,13 +1240,12 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	env_self_rank = d_getenv("CRT_L_RANK");
-	if (env_self_rank == NULL) {
+	rc = d_getenv_str(env, sizeof(env), "CRT_L_RANK");
+	if (rc == DER_NONEXIST) {
 		printf("CRT_L_RANK was not set\n");
 		return -1;
 	}
-
-	my_rank = atoi(env_self_rank);
+	my_rank = atoi(env);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -1274,18 +1272,17 @@ int main(int argc, char **argv)
 	init_work_contexts();
 
 	/* Load the group configuration file */
-	grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
-	if (grp_cfg_file == NULL) {
+	rc = d_getenv_str(env, sizeof(env), "CRT_L_GRP_CFG");
+	if (rc == DER_NONEXIST) {
 		D_ERROR("CRT_L_GRP_CFG was not set\n");
 		assert(0);
 	} else {
-		D_DEBUG(DB_TEST, "Group Config File: %s\n", grp_cfg_file);
+		D_DEBUG(DB_TEST, "Group Config File: %s\n", env);
 	}
 
-	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
-				     true);
+	rc = crtu_load_group_from_file(env, g_main_ctx, grp, my_rank, true);
 	if (rc != 0) {
-		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
+		D_ERROR("Failed to load group file %s\n", env);
 		assert(0);
 	}
 

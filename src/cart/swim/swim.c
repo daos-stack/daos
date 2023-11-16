@@ -25,7 +25,7 @@ swim_prot_period_len_default(void)
 {
 	unsigned int val = SWIM_PROTOCOL_PERIOD_LEN;
 
-	d_getenv_int("SWIM_PROTOCOL_PERIOD_LEN", &val);
+	d_getenv_uint(&val, "SWIM_PROTOCOL_PERIOD_LEN");
 	return val;
 }
 
@@ -34,7 +34,7 @@ swim_suspect_timeout_default(void)
 {
 	unsigned int val = SWIM_SUSPECT_TIMEOUT;
 
-	d_getenv_int("SWIM_SUSPECT_TIMEOUT", &val);
+	d_getenv_uint(&val, "SWIM_SUSPECT_TIMEOUT");
 	return val;
 }
 
@@ -43,7 +43,7 @@ swim_ping_timeout_default(void)
 {
 	unsigned int val = SWIM_PING_TIMEOUT;
 
-	d_getenv_int("SWIM_PING_TIMEOUT", &val);
+	d_getenv_uint(&val, "SWIM_PING_TIMEOUT");
 	return val;
 }
 

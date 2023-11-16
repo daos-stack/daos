@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -377,12 +377,16 @@ d_log_dbg_grp_alloc(d_dbug_t dbgmask, char *grpname, uint32_t flags)
 static void
 debug_prio_err_load_env(void)
 {
-	char	*env;
-	int	i;
+	char	env[256];
+	int	i, rc;
 
-	env = d_getenv(DD_STDERR_ENV);
-	if (env == NULL)
+	rc = d_getenv_str(env, sizeof(env), DD_STDERR_ENV);
+	switch (rc) {
+	case -DER_TRUNC:
+		D_PRINT_ERR("%s = %s - too long environment variable.\n", DD_STDERR_ENV, env);
+	case -DER_NONEXIST:
 		return;
+	}
 
 	for (i = 0; i < NUM_DBG_PRIO_ENTRIES; i++) {
 		if (d_dbg_prio_dict[i].dd_name != NULL &&
@@ -415,7 +419,18 @@ d_log_sync_mask_ex(const char *log_mask, const char *dd_mask)
 void
 d_log_sync_mask(void)
 {
-	d_log_sync_mask_ex(d_getenv(D_LOG_MASK_ENV), d_getenv(DD_MASK_ENV));
+	char	 buf[2][256];
+	char	*dd_mask;
+	char	*log_mask;
+	int	 rc;
+
+	rc = d_getenv_str(buf[0], sizeof(buf[0]), DD_MASK_ENV);
+	dd_mask = (rc == -DER_NONEXIST)?NULL:&buf[0][0];
+
+	rc = d_getenv_str(buf[1], sizeof(buf[1]), D_LOG_MASK_ENV);
+	log_mask = (rc == -DER_NONEXIST)?NULL:&buf[1][0];
+
+	d_log_sync_mask_ex(log_mask, dd_mask);
 }
 
 /**
@@ -537,13 +552,16 @@ int
 d_log_init(void)
 {
 	char	*log_file;
+	char	 buf[1024];
 	int	 flags = DLOG_FLV_LOGPID | DLOG_FLV_FAC | DLOG_FLV_TAG;
-	int	 rc;
+	int	rc;
 
-	log_file = d_getenv(D_LOG_FILE_ENV);
-	if (log_file == NULL || strlen(log_file) == 0) {
+	rc = d_getenv_str(buf, sizeof(buf), D_LOG_FILE_ENV);
+	if (rc != 0 || buf[0] == '\0') {
 		flags |= DLOG_FLV_STDOUT;
 		log_file = NULL;
+	} else {
+		log_file = &buf[0];
 	}
 
 	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG,

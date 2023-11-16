@@ -390,6 +390,7 @@ main(int argc, char **argv)
 	int                c;
 	int                rc;
 	int                rc2;
+	char               env[1];
 	char              *path              = NULL;
 	bool               have_thread_count = false;
 	int                pos_index         = 0;
@@ -521,7 +522,8 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (!dfuse_info->di_foreground && d_getenv("PMIX_RANK")) {
+	rc2 = d_getenv_str(env, sizeof(env), "PMIX_RANK");
+	if (!dfuse_info->di_foreground && rc2 != DER_NONEXIST) {
 		DFUSE_TRA_WARNING(dfuse_info,
 				  "Not running in background under orterun");
 		dfuse_info->di_foreground = true;

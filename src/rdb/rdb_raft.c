@@ -2419,7 +2419,7 @@ rdb_raft_get_election_timeout(void)
 	unsigned int	default_value = 7000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(&value, name);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2434,7 +2434,7 @@ rdb_raft_get_request_timeout(void)
 	unsigned int	default_value = 3000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(&value, name);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2449,7 +2449,7 @@ rdb_raft_get_lease_maintenance_grace(void)
 	unsigned int	default_value = 7000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(&value, name);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2464,7 +2464,7 @@ rdb_raft_get_compact_thres(void)
 	unsigned int	default_value = 256;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(&value, name);
 	if (value == 0) {
 		D_WARN("%s not in (0, %u] (defaulting to %u)\n", name, UINT_MAX, default_value);
 		value = default_value;
@@ -2479,7 +2479,7 @@ rdb_raft_get_ae_max_entries(void)
 	unsigned int	default_value = 32;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(&value, name);
 	if (value == 0) {
 		D_WARN("%s not in (0, %u] (defaulting to %u)\n", name, UINT_MAX, default_value);
 		value = default_value;
@@ -2495,7 +2495,7 @@ rdb_raft_get_ae_max_size(void)
 	uint64_t	value = default_value;
 	int		rc;
 
-	rc = d_getenv_uint64_t(name, &value);
+	rc = d_getenv_uint64_t(&value, name);
 	if ((rc != -DER_NONEXIST && rc != 0) || value == 0) {
 		D_WARN("%s not in (0, "DF_U64"] (defaulting to "DF_U64")\n", name, UINT64_MAX,
 		       default_value);

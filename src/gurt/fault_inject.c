@@ -514,7 +514,7 @@ d_fi_gdata_destroy(void)
 int
 d_fault_inject_init(void)
 {
-	char             *config_file;
+	char              config_file[1024];
 	FILE             *fp = NULL;
 	yaml_parser_t     parser;
 	yaml_event_t      event;
@@ -534,10 +534,10 @@ d_fault_inject_init(void)
 	}
 	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 
-	config_file = d_getenv(D_FAULT_CONFIG_ENV);
-	if (config_file == NULL || strlen(config_file) == 0) {
+	rc = d_getenv_str(config_file, sizeof(config_file), D_FAULT_CONFIG_ENV);
+	if (rc == -DER_NONEXIST || config_file[0] == '\0') {
 		D_INFO("No config file, fault injection is OFF.\n");
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = -DER_SUCCESS);
 	}
 
 	fp         = fopen(config_file, "r");

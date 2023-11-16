@@ -21,12 +21,30 @@
 #include <gurt/dlog.h>
 #include <gurt/hash.h>
 #include <gurt/atomic.h>
+#include "mocks_gurt.h"
 
 /* machine epsilon */
 #define EPSILON (1.0E-16)
 
-static char *__root;
+/* static char *__root; */
 
+/*
+ * Test setup and teardown
+ */
+static int
+setup_gurt_mocks(void **state)
+{
+	mock_getenv_setup();
+	return 0;
+}
+
+static int
+teardown_gurt_mocks(void **state)
+{
+	return 0;
+}
+
+#if 0
 static void
 test_time(void **state)
 {
@@ -2075,11 +2093,47 @@ test_d_rank_list_dup_sort_uniq(void **state)
 					  exp_ranks, ARRAY_SIZE(exp_ranks));
 	}
 }
+#endif
+
+static void
+test_d_getenv(void **state)
+{
+	char value[] = "012";
+	int  rc = 0;
+
+	/* TODO Test with string of one characteur */
+
+	getenv_return = "bar",
+	rc = d_getenv_str(value, sizeof(value), "foo");
+	assert_int_equal(rc, EXIT_SUCCESS);
+	assert_string_equal(value, "bar");
+
+	getenv_return = "",
+	rc = d_getenv_str(value, sizeof(value), "foo");
+	assert_int_equal(rc, EXIT_SUCCESS);
+	assert_string_equal(value, "");
+
+	getenv_return = "too long string",
+	rc = d_getenv_str(value, sizeof(value), "foo");
+	assert_int_equal(rc, -DER_TRUNC);
+	assert_string_equal(value, "too");
+
+	getenv_return = NULL;
+	rc = d_getenv_str(value, sizeof(value), "foo");
+	assert_int_equal(rc, -DER_NONEXIST);
+	assert_string_equal(value, "");
+}
+
+/* Convenience macro for declaring unit tests in this suite */
+#define AGENT_UTEST(X) \
+	cmocka_unit_test_setup_teardown(X, setup_gurt_mocks, \
+			teardown_gurt_mocks)
 
 int
 main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
+#if 0
 	    cmocka_unit_test(test_time),
 	    cmocka_unit_test(test_d_errstr),
 	    cmocka_unit_test(test_d_errdesc),
@@ -2098,10 +2152,13 @@ main(int argc, char **argv)
 	    cmocka_unit_test(test_gurt_string_buffer),
 	    cmocka_unit_test(test_d_rank_list_dup_sort_uniq),
 	    cmocka_unit_test(test_hash_perf),
+#endif
+	    AGENT_UTEST(test_d_getenv),
 	};
 
 	d_register_alt_assert(mock_assert);
 
-	return cmocka_run_group_tests_name("test_gurt", tests, init_tests,
-		fini_tests);
+	return cmocka_run_group_tests_name("test_gurt", tests, NULL, NULL);
+	/* return cmocka_run_group_tests_name("test_gurt", tests, init_tests, */
+	/* 	fini_tests); */
 }

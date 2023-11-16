@@ -603,7 +603,7 @@ vos_mod_init(void)
 	if (rc)
 		D_ERROR("Failed to initialize incarnation log capability\n");
 
-	d_getenv_int("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
+	d_getenv_uint(&vos_agg_nvme_thresh, "DAOS_VOS_AGG_THRESH");
 	if (vos_agg_nvme_thresh == 0 || vos_agg_nvme_thresh > 256)
 		vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
 	/* Round down to 2^n blocks */
@@ -613,7 +613,7 @@ vos_mod_init(void)
 	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%lu).\n",
 	       vos_agg_nvme_thresh, VOS_BLK_SZ);
 
-	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &vos_dkey_punch_propagate);
+	d_getenv_bool(&vos_dkey_punch_propagate, "DAOS_DKEY_PUNCH_PROPAGATE");
 	D_INFO("DKEY punch propagation is %s\n", vos_dkey_punch_propagate ? "enabled" : "disabled");
 
 
@@ -944,7 +944,7 @@ vos_self_fini(void)
 int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 {
-	char		*evt_mode;
+	char		 env[16];
 	int		 rc = 0;
 	struct sys_db	*db;
 
@@ -993,12 +993,12 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto failed;
 	}
 
-	evt_mode = d_getenv("DAOS_EVTREE_MODE");
-	if (evt_mode) {
-		if (strcasecmp("soff", evt_mode) == 0) {
+	rc = d_getenv_str(env, sizeof(env), "DAOS_EVTREE_MODE");
+	if (rc == -DER_SUCCESS) {
+		if (strcasecmp("soff", env) == 0) {
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
 			vos_evt_feats |= EVT_FEAT_SORT_SOFF;
-		} else if (strcasecmp("dist_even", evt_mode) == 0) {
+		} else if (strcasecmp("dist_even", env) == 0) {
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
 			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
 		}

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -254,9 +254,8 @@ int main(int argc, char **argv)
 	struct test_options	*opts = crtu_get_opts();
 	int			i;
 	char			*my_uri;
-	char			*env_self_rank;
+	char			env[1024];
 	d_rank_t		my_rank;
-	char			*grp_cfg_file;
 	uint32_t		grp_size;
 	crt_group_t		*sec_grp1;
 	d_rank_list_t		*rank_list;
@@ -268,8 +267,12 @@ int main(int argc, char **argv)
 	int			rc;
 	int			num_attach_retries = 20;
 
-	env_self_rank = d_getenv("CRT_L_RANK");
-	my_rank = atoi(env_self_rank);
+	rc = d_getenv_str(env, sizeof(env), "CRT_L_RANK");
+	if (rc == DER_NONEXIST) {
+		printf("CRT_L_RANK was not set\n");
+		return -1;
+	}
+	my_rank = atoi(env);
 
 	/* When under valgrind bump expected timeouts to 60 seconds */
 	if (D_ON_VALGRIND) {
@@ -326,8 +329,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
-
 	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
@@ -341,16 +342,22 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
+	rc = d_getenv_str(env, sizeof(env), "CRT_L_GRP_CFG");
+	if (rc == DER_NONEXIST) {
+		D_ERROR("CRT_L_GRP_CFG was not set\n");
+		assert(0);
+	} else {
+		D_DEBUG(DB_TEST, "Group Config File: %s\n", env);
+	}
+
 	/* load group info from a config file and delete file upon return */
-	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
-				       true);
+	rc = crtu_load_group_from_file(env, crt_ctx[0], grp, my_rank, true);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
-	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
-			my_uri, grp_cfg_file);
+	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank, my_uri, env);
 	D_FREE(my_uri);
 
 	rc = crt_group_size(NULL, &grp_size);

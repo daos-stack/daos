@@ -98,11 +98,12 @@ void
 write_completion_file(void)
 {
 	FILE	*fptr;
-	char	*dir;
+	char	 dir[1024];
 	char	*completion_file = NULL;
+	int	 rc;
 
-	dir = d_getenv("DAOS_TEST_SHARED_DIR");
-	D_ASSERTF(dir != NULL,
+	rc = d_getenv_str(dir, sizeof(dir), "DAOS_TEST_SHARED_DIR");
+	D_ASSERTF(rc != -DER_NONEXIST,
 		"DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
 		"option.\n");
 	D_ASPRINTF(completion_file, "%s/test-servers-completed.txt.%d", dir, getpid());
@@ -409,15 +410,57 @@ err_group:
 	return rc;
 }
 
+static inline void
+crtu_dc_mgmt_net_print_env(void)
+{
+	static const char* var_names[] = {
+		"OFI_INTERFACE",
+		"OFI_DOMAIN",
+		"CRT_PHY_ADDR_STR",
+		"CRT_CTX_SHARE_ADDR",
+		"CRT_TIMEOUT"
+	};
+	int	 idx;
+	char	 env[256];
+	char	*msg = NULL;
+	char	*tmp = NULL;
+	int	 rc;
+
+	rc = d_getenv_str(env, sizeof(env), var_names[0]);
+	D_ASSERTF(rc == -DER_SUCCESS,
+		  "Can not retrieve environment varirable %s: "DF_RC"\n",
+		  var_names[0], DP_RC(rc));
+	msg = d_asprintf2(&rc, "CaRT env setup with:\n\t%s=%s", var_names[0], env);
+	if(msg == NULL) {
+		D_WARN("Information message can not be created");
+		return;
+	}
+
+	for(idx = 1; idx < sizeof(var_names) / sizeof(char*); ++idx) {
+		rc = d_getenv_str(env, sizeof(env), var_names[idx]);
+		D_ASSERTF(rc == -DER_SUCCESS,
+			  "Can not retrieve environment varirable %s: "DF_RC"\n",
+			  var_names[idx], DP_RC(rc));
+
+		tmp = msg;
+		msg = d_asprintf2(&rc, "%s, %s=%s", tmp, var_names[idx], env);
+		D_FREE(tmp);
+		if (msg == NULL) {
+			D_WARN("Information message can not be created");
+			return;
+		}
+	}
+
+	D_INFO("%s", msg);
+	D_FREE(msg);
+}
+
 int
 crtu_dc_mgmt_net_cfg_setenv(const char *name)
 {
 	int			 rc;
 	char			 buf[SYS_INFO_BUF_SIZE];
-	char			*crt_timeout;
-	char			*ofi_interface;
-	char			*ofi_domain;
-	char			*cli_srx_set;
+	char			 env[256];
 	struct dc_mgmt_sys_info  crt_net_cfg_info = {0};
 	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
 
@@ -455,54 +498,47 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n", buf);
 	} else {
 		/* Client may not set it if the server hasn't. */
-		cli_srx_set = d_getenv("FI_OFI_RXM_USE_SRX");
-		if (cli_srx_set) {
+		rc = d_getenv_str(env, sizeof(env), "FI_OFI_RXM_USE_SRX");
+		if (rc != -DER_NONEXIST) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
-				"but server is unset!\n", cli_srx_set);
+				"but server is unset!\n", env);
 			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 	}
 
 	/* Allow client env overrides for these three */
-	crt_timeout = d_getenv("CRT_TIMEOUT");
-	if (!crt_timeout) {
+	rc = d_getenv_str(env, sizeof(env), "CRT_TIMEOUT");
+	if (rc == -DER_NONEXIST) {
 		sprintf(buf, "%d", crt_net_cfg_info.crt_timeout);
 		rc = d_setenv("CRT_TIMEOUT", buf, 1);
 		D_INFO("setenv CRT_TIMEOUT=%d\n", crt_net_cfg_info.crt_timeout);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
+		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", env);
 	}
 
-	ofi_interface = d_getenv("OFI_INTERFACE");
-	if (!ofi_interface) {
+	rc = d_getenv_str(env, sizeof(env), "OFI_INTERFACE");
+	if (rc == -DER_NONEXIST) {
 		rc = d_setenv("OFI_INTERFACE", crt_net_cfg_info.interface, 1);
 		D_INFO("Setting OFI_INTERFACE=%s\n", crt_net_cfg_info.interface);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT,
-			"Using client provided OFI_INTERFACE: %s\n",
-			ofi_interface);
+		D_DEBUG(DB_MGMT, "Using client provided OFI_INTERFACE: %s\n", env);
 	}
 
-	ofi_domain = d_getenv("OFI_DOMAIN");
-	if (!ofi_domain) {
+	rc = d_getenv_str(env, sizeof(env), "OFI_DOMAIN");
+	if (rc == -DER_NONEXIST) {
 		rc = d_setenv("OFI_DOMAIN", crt_net_cfg_info.domain, 1);
 		D_INFO("Setting OFI_DOMAIN=%s\n", crt_net_cfg_info.domain);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", env);
 	}
 
-	D_INFO("CaRT env setup with:\n"
-		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
-		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
-		d_getenv("OFI_INTERFACE"), d_getenv("OFI_DOMAIN"),
-		d_getenv("CRT_PHY_ADDR_STR"),
-		d_getenv("CRT_CTX_SHARE_ADDR"), d_getenv("CRT_TIMEOUT"));
+	crtu_dc_mgmt_net_print_env();
 
 cleanup:
 	dc_put_attach_info(&crt_net_cfg_info, crt_net_cfg_resp);
@@ -520,6 +556,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 	char		*grp_cfg_file;
 	uint32_t	 grp_size;
 	int		 rc = 0;
+	char		 env[1024];
 
 	if (opts.assert_on_error)
 		D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
@@ -575,7 +612,8 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			if (*grp == NULL)
 				D_GOTO(out, rc = -DER_INVAL);
 
-			grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
+			rc = d_getenv_str(env, sizeof(env), "CRT_L_GRP_CFG");
+			grp_cfg_file = (rc == -DER_NONEXIST)?NULL:env;
 
 			/* load group info from a config file and
 			 * delete file upon return
@@ -644,17 +682,17 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		     pthread_t *progress_thread, crt_group_t **grp,
 		     uint32_t *grp_size, crt_init_options_t *init_opt)
 {
-	char		*env_self_rank;
 	char		*grp_cfg_file;
 	char		*my_uri;
 	d_rank_t	 my_rank;
 	int		 rc = 0;
+	char		 env[1024];
 
 	if (opts.assert_on_error)
 		D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
 
-	env_self_rank = d_getenv("CRT_L_RANK");
-	my_rank = atoi(env_self_rank);
+	rc = d_getenv_uint(&my_rank, "CRT_L_RANK");
+	D_ASSERTF(rc == DER_SUCCESS, "Rank can not be retrieve: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_log_init();
 	if (rc != 0)
@@ -695,7 +733,8 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 			D_GOTO(out, rc);
 	}
 
-	grp_cfg_file = d_getenv("CRT_L_GRP_CFG");
+	rc = d_getenv_str(env, sizeof(env), "CRT_L_GRP_CFG");
+	grp_cfg_file = (rc == -DER_NONEXIST)?NULL:env;
 
 	rc = crt_rank_uri_get(*grp, my_rank, 0, &my_uri);
 	if (rc != 0)

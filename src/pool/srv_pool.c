@@ -6500,7 +6500,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	struct daos_prop_entry		*entry;
 	bool				updated;
 	int				rc;
-	char				*env;
+	char				env[16];
 	daos_epoch_t			rebuild_eph = d_hlc_get();
 	uint64_t			delay = 2;
 
@@ -6531,8 +6531,8 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
-	env = d_getenv(REBUILD_ENV);
-	if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
+	rc = d_getenv_str(env, sizeof(env), REBUILD_ENV);
+	if ((rc != DER_NONEXIST && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
 	     daos_fail_check(DAOS_REBUILD_DISABLE)) {
 		D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
 		D_GOTO(out, rc = 0);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,45 +36,37 @@ craft_default_jobid(char **jobid)
 int
 dc_job_init(void)
 {
-	char *jobid;
-	char *jobid_env = d_getenv(JOBID_ENV);
-	int   err = 0;
+	char	 env[1024];
+	int	 rc;
 
-	if (jobid_env == NULL) {
-		D_STRNDUP_S(jobid_env, DEFAULT_JOBID_ENV);
+	rc = d_getenv_str(env, sizeof(env), JOBID_ENV);
+	if (rc == -DER_NONEXIST) {
+		D_STRNDUP_S(dc_jobid_env, DEFAULT_JOBID_ENV);
 	} else {
-		char *tmp_env = jobid_env;
-
-		D_STRNDUP(jobid_env, tmp_env, MAX_ENV_NAME);
+		D_STRNDUP(dc_jobid_env, env, MAX_ENV_NAME);
 	}
-	if (jobid_env == NULL)
-		D_GOTO(out_err, err = -DER_NOMEM);
+	if (dc_jobid_env == NULL)
+		D_GOTO(out_err, rc = -DER_NOMEM);
 
-	dc_jobid_env = jobid_env;
-
-	jobid = d_getenv(dc_jobid_env);
-	if (jobid == NULL) {
-		err = craft_default_jobid(&jobid);
-		if (err)
-			D_GOTO(out_env, err);
+	rc = d_getenv_str(env, sizeof(env), dc_jobid_env);
+	if (rc == -DER_NONEXIST) {
+		rc = craft_default_jobid(&dc_jobid_env);
+		if (rc)
+			D_GOTO(out_env, rc);
 	} else {
-		char *tmp_jobid = jobid;
-
-		D_STRNDUP(jobid, tmp_jobid, MAX_JOBID_LEN);
-		if (jobid == NULL)
-			D_GOTO(out_env, err = -DER_NOMEM);
+		D_STRNDUP(dc_jobid, env, MAX_JOBID_LEN);
+		if (dc_jobid == NULL)
+			D_GOTO(out_env, rc = -DER_NOMEM);
 	}
-
-	dc_jobid = jobid;
 
 	D_INFO("Using JOBID ENV: %s\n", dc_jobid_env);
 	D_INFO("Using JOBID %s\n", dc_jobid);
-	return 0;
+	return -DER_SUCCESS;
 
 out_env:
 	D_FREE(dc_jobid_env);
 out_err:
-	return err;
+	return rc;
 }
 
 void

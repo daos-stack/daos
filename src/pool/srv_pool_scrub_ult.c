@@ -44,7 +44,7 @@ scrubbing_is_enabled()
 {
 	bool result = false;
 
-	d_getenv_bool("DAOS_CSUM_SCRUB_DISABLED", &result);
+	d_getenv_bool(&result, "DAOS_CSUM_SCRUB_DISABLED");
 	return !result;
 }
 

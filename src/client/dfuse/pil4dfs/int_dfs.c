@@ -600,64 +600,74 @@ query_dfs_mount(const char *path)
 static int
 discover_daos_mount_with_env(void)
 {
-	int   idx, len_fs_root, rc;
+	int   idx, rc;
 	char *fs_root   = NULL;
 	char *pool      = NULL;
 	char *container = NULL;
 
-	/* Add the mount if env DAOS_MOUNT_POINT is set. */
-	fs_root = d_getenv("DAOS_MOUNT_POINT");
-	if (fs_root == NULL)
-		/* env DAOS_MOUNT_POINT is undefined, return success (0) */
-		D_GOTO(out, rc = 0);
-
 	if (num_dfs >= MAX_DAOS_MT) {
 		D_FATAL("dfs_list[] is full already. Need to increase MAX_DAOS_MT.\n");
-		D_GOTO(out, rc = EBUSY);
+		D_GOTO(error, rc = EBUSY);
 	}
 
+	/* Add the mount if env DAOS_MOUNT_POINT is set. */
+	fs_root = (char*) malloc(sizeof(char) * DFS_MAX_PATH);
+	if (fs_root == NULL)
+		D_GOTO(error, rc = ENOMEM);
+	rc = d_getenv_str(fs_root, DFS_MAX_PATH, "DAOS_MOUNT_POINT");
+	if (rc == -DER_NONEXIST) {
+		/* env DAOS_MOUNT_POINT is undefined, return success (0) */
+		D_GOTO(error, rc = 0);
+	}
+	if (rc == -DER_TRUNC) {
+		D_FATAL("DAOS_MOUNT_POINT is too long.\n");
+		D_GOTO(error, rc = ENAMETOOLONG);
+	}
 	if (access(fs_root, R_OK)) {
 		D_FATAL("no read permission for %s: %d (%s)\n", fs_root, errno,	strerror(errno));
-		D_GOTO(out, rc = EACCES);
+		D_GOTO(error, rc = EACCES);
 	}
-
 	/* check whether fs_root exists in dfs_list[] already. "idx >= 0" means exists. */
 	idx = query_dfs_mount(fs_root);
 	if (idx >= 0)
-		D_GOTO(out, rc = 0);
+		D_GOTO(error, rc = 0);
+	dfs_list[num_dfs].fs_root = fs_root;
+	dfs_list[num_dfs].len_fs_root = strlen(fs_root);
 
-	/* Not found in existing list, then append this new mount point. */
-	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
-	if (len_fs_root >= DFS_MAX_PATH) {
-		D_FATAL("DAOS_MOUNT_POINT is too long.\n");
-		D_GOTO(out, rc = ENAMETOOLONG);
-	}
-
-	pool = d_getenv("DAOS_POOL");
-	if (pool == NULL) {
+	pool = (char*) malloc(sizeof(char) * DAOS_PROP_LABEL_MAX_LEN);
+	if (pool == NULL)
+		D_GOTO(error, rc = ENOMEM);
+	rc = d_getenv_str(pool, DAOS_PROP_LABEL_MAX_LEN, "DAOS_POOL");
+	if (rc == -DER_NONEXIST) {
 		D_FATAL("DAOS_POOL is not set.\n");
-		D_GOTO(out, rc = EINVAL);
+		D_GOTO(error, rc = EINVAL);
 	}
+	if (rc == -DER_TRUNC) {
+		D_FATAL("DAOS_POOL is too long.\n");
+		D_GOTO(error, rc = ENAMETOOLONG);
+	}
+	dfs_list[num_dfs].pool = pool;
 
-	container = d_getenv("DAOS_CONTAINER");
-	if (container == NULL) {
+	container = (char*) malloc(sizeof(char) * DAOS_PROP_LABEL_MAX_LEN);
+	if (container == NULL)
+		D_GOTO(error, rc = ENOMEM);
+	rc = d_getenv_str(container, DAOS_PROP_LABEL_MAX_LEN, "DAOS_CONTAINER");
+	if (rc == -DER_NONEXIST) {
 		D_FATAL("DAOS_CONTAINER is not set.\n");
-		D_GOTO(out, rc = EINVAL);
+		D_GOTO(error, rc = EINVAL);
 	}
+	if (rc == -DER_TRUNC) {
+		D_FATAL("DAOS_CONTAINER is too long.\n");
+		D_GOTO(error, rc = ENAMETOOLONG);
+	}
+	dfs_list[num_dfs].cont = container;
 
-	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
-	if (dfs_list[num_dfs].fs_root == NULL)
-		D_GOTO(out, rc = ENOMEM);
+	return 0;
 
-	dfs_list[num_dfs].pool         = pool;
-	dfs_list[num_dfs].cont         = container;
-	dfs_list[num_dfs].dfs_dir_hash = NULL;
-	dfs_list[num_dfs].len_fs_root  = len_fs_root;
-	atomic_init(&dfs_list[num_dfs].inited, 0);
-	num_dfs++;
-	rc = 0;
-
-out:
+error:
+	D_FREE(container);
+	D_FREE(pool);
+	D_FREE(fs_root);
 	return rc;
 }
 
@@ -5499,7 +5509,7 @@ static __attribute__((constructor)) void
 init_myhook(void)
 {
 	mode_t   umask_old;
-	char    *env_log;
+	char     env[16];
 	int      rc;
 	uint64_t eq_count_loc = 0;
 
@@ -5515,10 +5525,10 @@ init_myhook(void)
 	else
 		daos_debug_inited = true;
 
-	env_log = d_getenv("D_IL_REPORT");
-	if (env_log) {
+	rc = d_getenv_str(env, sizeof(env), "D_IL_REPORT");
+	if (rc != DER_NONEXIST) {
 		report = true;
-		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
+		if (strncmp(env, "0", 2) == 0 || strncasecmp(env, "false", 6) == 0)
 			report = false;
 	}
 
@@ -5553,7 +5563,7 @@ init_myhook(void)
 	rc = D_MUTEX_INIT(&lock_eqh, NULL);
 	if (rc)
 		return;
-	rc = d_getenv_uint64_t("D_IL_MAX_EQ", &eq_count_loc);
+	rc = d_getenv_uint64_t(&eq_count_loc, "D_IL_MAX_EQ");
 	if (rc != -DER_NONEXIST) {
 		if (eq_count_loc > MAX_EQ) {
 			D_WARN("Max EQ count (%" PRIu64 ") should not exceed: %d", eq_count_loc,
