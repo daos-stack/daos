@@ -2422,15 +2422,21 @@ test_d_setenv(void **state)
 
 	rc = d_getenv_str(env, sizeof(env), "foo");
 	assert_int_equal(rc, -DER_NONEXIST);
+	assert_false(d_isenv_def("foo"));
+
 	rc = d_setenv("foo", "bar", 0);
 	assert_int_equal(rc, -DER_SUCCESS);
+
 	rc = d_getenv_str(env, sizeof(env), "foo");
 	assert_int_equal(rc, -DER_TRUNC);
+	assert_true(d_isenv_def("foo"));
 
 	rc = d_unsetenv("foo");
 	assert_int_equal(rc, -DER_SUCCESS);
+
 	rc = d_getenv_str(env, sizeof(env), "foo");
 	assert_int_equal(rc, -DER_NONEXIST);
+	assert_false(d_isenv_def("foo"));
 }
 
 int

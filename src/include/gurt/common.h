@@ -574,6 +574,8 @@ d_sgl_buf_copy(d_sg_list_t *dst_sgl, d_sg_list_t *src_sgl)
 	}
 }
 
+bool
+d_isenv_def(char *name);
 int
 d_getenv_str(char *str_val, size_t str_size, const char *name);
 int

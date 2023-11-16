@@ -1827,19 +1827,15 @@ int main(int argc, char *argv[])
 	}
 
 	if (use_daos_agent_vars == false) {
-		char  env[1];
 		char *attach_path;
-		int   rc;
 
-		rc = d_getenv_str(env, sizeof(env), "CRT_PHY_ADDR_STR");
-		if (rc == -DER_NONEXIST) {
+		if (!d_isenv_def("CRT_PHY_ADDR_STR")) {
 			printf("Error: provider (CRT_PHY_ADDR_STR) is not set\n");
 			printf("Example: export CRT_PHY_ADDR_STR='ofi+tcp'\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 
-		rc = d_getenv_str(env, sizeof(env), "OFI_INTERFACE");
-		if (rc == -DER_NONEXIST) {
+		if (!d_isenv_def("OFI_INTERFACE")) {
 			printf("Error: interface (OFI_INTERFACE) is not set\n");
 			printf("Example: export OFI_INTERFACE=eth0\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);

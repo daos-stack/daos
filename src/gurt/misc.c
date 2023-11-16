@@ -977,6 +977,18 @@ dis_single_char_str(char *str)
  */
 static pthread_rwlock_t d_env_lock = PTHREAD_RWLOCK_INITIALIZER;
 
+bool
+d_isenv_def(char *name)
+{
+	char *env;
+
+	pthread_rwlock_rdlock(&d_env_lock);
+	env = getenv(name);
+	pthread_rwlock_unlock(&d_env_lock);
+
+	return env != NULL;
+}
+
 /**
  * Get a string type environment variables
  *
