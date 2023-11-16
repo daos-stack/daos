@@ -343,35 +343,6 @@ ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 	return (atomic_fetch_sub_relaxed(&ie->ie_ref, 1) == 1);
 }
 
-static int
-ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
-{
-	struct dfuse_inode_entry *ie;
-	uint32_t                  oldref = 0;
-	uint32_t                  newref = 0;
-
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-	do {
-		oldref = atomic_load_relaxed(&ie->ie_ref);
-
-		if (oldref < count)
-			break;
-
-		newref = oldref - count;
-
-	} while (!atomic_compare_exchange(&ie->ie_ref, oldref, newref));
-
-	if (oldref < count) {
-		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u", count, oldref);
-		return -DER_INVAL;
-	}
-
-	if (newref == 0)
-		return 1;
-	return 0;
-}
-
 static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
@@ -384,13 +355,12 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t ie_hops = {
-    .hop_key_cmp     = ih_key_cmp,
-    .hop_key_hash    = ih_key_hash,
-    .hop_rec_hash    = ih_rec_hash,
-    .hop_rec_addref  = ih_addref,
-    .hop_rec_decref  = ih_decref,
-    .hop_rec_ndecref = ih_ndecref,
-    .hop_rec_free    = ih_free,
+    .hop_key_cmp    = ih_key_cmp,
+    .hop_key_hash   = ih_key_hash,
+    .hop_rec_hash   = ih_rec_hash,
+    .hop_rec_addref = ih_addref,
+    .hop_rec_decref = ih_decref,
+    .hop_rec_free   = ih_free,
 };
 
 static uint32_t
@@ -1395,10 +1365,13 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",
 			ie->ie_stat.st_ino, ref, DP_DE(ie->ie_name), ie->ie_parent);
 
-	D_ASSERT(ref == 0);
-	D_ASSERT(atomic_load_relaxed(&ie->ie_readdir_number) == 0);
-	D_ASSERT(atomic_load_relaxed(&ie->ie_il_count) == 0);
-	D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 0);
+	D_ASSERTF(ref == 0, "Reference is %d", ref);
+	D_ASSERTF(atomic_load_relaxed(&ie->ie_readdir_number) == 0, "readdir_number is %d",
+		  atomic_load_relaxed(&ie->ie_readdir_number));
+	D_ASSERTF(atomic_load_relaxed(&ie->ie_il_count) == 0, "il_count is %d",
+		  atomic_load_relaxed(&ie->ie_il_count));
+	D_ASSERTF(atomic_load_relaxed(&ie->ie_open_count) == 0, "open_count is %d",
+		  atomic_load_relaxed(&ie->ie_open_count));
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);

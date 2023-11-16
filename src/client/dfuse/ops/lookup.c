@@ -154,12 +154,13 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 	rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, wipe_parent, wipe_name,
 					      strnlen(wipe_name, NAME_MAX));
 	if (rc && rc != -ENOENT)
-		DFUSE_TRA_ERROR(ie, "inval_entry() returned: %d (%s)", rc, strerror(-rc));
+		DS_ERROR(-rc, "inval_entry() failed");
 
 	return;
 out_err:
-	DFUSE_REPLY_ERR_RAW(ie, req, rc);
+	/* TODO: Verify ie reference here */
 	dfs_release(ie->ie_obj);
+	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
 /* Check for and set a unified namespace entry point.
