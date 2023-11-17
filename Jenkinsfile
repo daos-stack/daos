@@ -31,9 +31,6 @@ void job_step_update(def value=currentBuild.currentResult) {
     jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
 
-// Should try to figure this out automatically
-/* groovylint-disable-next-line CompileStatic, VariableName */
-String base_branch = 'master'
 // For master, this is just some wildly high number
 next_version = '1000'
 
@@ -116,6 +113,9 @@ pipeline {
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of latest. example: 1.3.103-1, 1.2-2')
+        string(name: 'BaseBranch',
+               defaultValue: 'master',
+               description: 'The base branch to run daily-testing against (i.e. master, or a PR\'s branch)')
         // TODO: add parameter support for per-distro CI_PR_REPOS
         string(name: 'CI_PR_REPOS',
                defaultValue: '',
