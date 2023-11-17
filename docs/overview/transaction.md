@@ -68,7 +68,7 @@ accessed concurrently by uncoordinated clients. All I/O operations
 the same epoch. The DAOS transaction mechanism automatically detects the
 traditional read/write, write/read and write/write conflicts and aborts
 one of the conflicting transactions (the transaction fails to commit
-with `-DER_RESTART`). The failed transaction then has to be restarted
+with `-DER_TX_RESTART`). The failed transaction then has to be restarted
 by the user/application.
 
 In the initial implementation, the transaction API does not support reading
@@ -80,7 +80,7 @@ object types and can be combined with the the event and scheduler interface.
 The typical flow of a transaction is as follows:
 
 ```C
-daos_handle_t tx = DAOS_TX_NONE;
+daos_handle_t th = DAOS_TX_NONE;
 int           rc;
 
 /* allocate transaction */
