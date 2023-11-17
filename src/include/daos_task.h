@@ -26,7 +26,7 @@ extern "C" {
 #include <daos/tse.h>
 #include <daos_pipeline.h>
 
-/* Note: X is taken by cart */
+/* Add new rpcs to the end of this list. To remove replace with DOAS_OPC_GAP_X */
 #define DAOS_OPC_LIST 				\
 	XY(DAOS_OPC_SET_PARAMS)			\
 	XY(DAOS_OPC_MGMT_GET_BS_STATE)		\
@@ -68,6 +68,7 @@ extern "C" {
 	XY(DAOS_OPC_TX_OPEN_SNAP)		\
 	XY(DAOS_OPC_TX_CLOSE)			\
 	XY(DAOS_OPC_TX_RESTART)			\
+	XY(DAOS_OPC_GAP_0)			\
 	XY(DAOS_OPC_OBJ_QUERY_CLASS)		\
 	XY(DAOS_OPC_OBJ_LIST_CLASS)		\
 	XY(DAOS_OPC_OBJ_OPEN)			\
