@@ -16,6 +16,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@pahender/DAOS-14658') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -297,6 +298,7 @@ pipeline {
                             name: 'Functional on EL 8',
                             pragma_suffix: '-vm',
                             distro: 'el8',
+                            base_branch: env.BaseBranch,
                             label: vm9_label('EL8'),
                             next_version: next_version,
                             stage_tags: '-hw',
@@ -310,6 +312,7 @@ pipeline {
                             name: 'Functional on EL 9',
                             pragma_suffix: '-vm',
                             distro: 'el9',
+                            base_branch: env.BaseBranch,
                             label: vm9_label('EL9'),
                             next_version: next_version,
                             stage_tags: '-hw',
@@ -323,6 +326,7 @@ pipeline {
                             name: 'Functional on Leap 15.4',
                             pragma_suffix: '-vm',
                             distro: 'leap15',
+                            base_branch: env.BaseBranch,
                             label: vm9_label('Leap15'),
                             next_version: next_version,
                             stage_tags: '-hw',
@@ -336,6 +340,7 @@ pipeline {
                             name: 'Functional on Ubuntu 20.04',
                             pragma_suffix: '-vm',
                             distro: 'ubuntu20',
+                            base_branch: env.BaseBranch,
                             label: vm9_label('Ubuntu'),
                             next_version: next_version,
                             stage_tags: '-hw',
@@ -348,6 +353,7 @@ pipeline {
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
+                            base_branch: env.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
@@ -360,6 +366,7 @@ pipeline {
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
+                            base_branch: env.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
@@ -372,6 +379,7 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider',
                             pragma_suffix: '-hw-medium-verbs-provider',
+                            base_branch: env.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -385,6 +393,7 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+                            base_branch: env.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -398,6 +407,7 @@ pipeline {
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
+                            base_branch: env.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
@@ -411,6 +421,7 @@ pipeline {
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
+                            base_branch: env.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
@@ -423,6 +434,7 @@ pipeline {
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
+                            base_branch: env.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
