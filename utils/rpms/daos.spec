@@ -593,6 +593,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
   * Point https://github.com/pmem/pmdk as the main PMDK reference source.
   NOTE: PMDK upgrade to 2.0.0 does not affect any API call used by DAOS.
         libpmemobj (and libpmem) API stays unchanged.
+
 * Fri Nov 03 2023 Phillip Henderson <phillip.henderson@intel.com> 2.5.100-10
 - Move verify_perms.py location
 
