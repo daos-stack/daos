@@ -1546,10 +1546,11 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 static int
 update_vos_prop_on_targets(void *in)
 {
-	struct ds_pool			*pool = (struct ds_pool *)in;
-	struct ds_pool_child		*child = NULL;
-	struct policy_desc_t		policy_desc = {0};
-	int                              ret         = 0;
+	struct ds_pool       *pool        = (struct ds_pool *)in;
+	struct ds_pool_child *child       = NULL;
+	struct policy_desc_t  policy_desc = {0};
+	uint32_t              df_version;
+	int                   ret = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
@@ -1565,16 +1566,16 @@ update_vos_prop_on_targets(void *in)
 		goto out;
 
 	/** If necessary, upgrade the vos pool format */
-	if (pool->sp_global_version >= 3) {
-		D_DEBUG(DB_MGMT, "Upgrading durable format to 2.6 df=%d\n", VOS_POOL_DF_2_6);
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_6);
-	} else if (pool->sp_global_version == 2) {
-		D_DEBUG(DB_MGMT, "Upgrading durable format to 2.4 df=%d\n", VOS_POOL_DF_2_4);
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
-	} else {
-		D_ERROR("2.2 or earlier pool can't be upgraded to 2.6\n");
-		D_GOTO(out, ret = -DER_NO_PERM);
+	df_version = ds_pool_get_vos_pool_df_version(pool->sp_global_version);
+	if (df_version == 0) {
+		ret = -DER_NO_PERM;
+		DL_ERROR(ret, DF_UUID ": pool global version %u no longer supported",
+			 DP_UUID(pool->sp_uuid), pool->sp_global_version);
+		D_GOTO(out, ret);
 	}
+	D_DEBUG(DB_MGMT, DF_UUID ": upgrading VOS pool durable format to %u\n",
+		DP_UUID(pool->sp_uuid), df_version);
+	ret = vos_pool_upgrade(child->spc_hdl, df_version);
 
 	if (pool->sp_checkpoint_props_changed) {
 		pool->sp_checkpoint_props_changed = 0;
@@ -1639,6 +1640,10 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	}
 
 	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
+	if (ret != 0)
+		return ret;
+
+	ret = ds_pool_svc_upgrade_vos_pool(pool);
 
 	return ret;
 }
