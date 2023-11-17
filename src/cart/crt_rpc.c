@@ -9,6 +9,7 @@
 #define D_LOGFAC	DD_FAC(rpc)
 
 #include <semaphore.h>
+#include <daos_task.h>
 
 #include "crt_internal.h"
 
@@ -210,7 +211,11 @@ static struct crt_proto_rpc_format crt_iv_rpcs[] = {
 
 #undef X
 
+/* For CART internal lists */
 #define X(a, b, c, d, e) case a: return #a;
+
+/* For DAOS opcode list */
+#define XY(a) case a: return #a;
 
 /* Helper function to convert internally registered RPC opc to str */
 char
@@ -226,10 +231,16 @@ char
 		CRT_ST_RPCS_LIST
 		CRT_CTL_RPCS_LIST
 	}
-	return "DAOS";
+
+	switch (opc >> CRT_PROTO_BASEOPC_SHIFT) {
+		DAOS_OPC_LIST
+	}
+
+	return "CUSTOM";
 }
 
 #undef X
+#undef XY
 
 /* CRT RPC related APIs or internal functions */
 int
