@@ -619,7 +619,7 @@ crt_provider_get_ctx_idx(bool primary, int provider)
 	struct crt_prov_gdata	*prov_data = crt_get_prov_gdata(primary, provider);
 	int			i;
 
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+	for (i = 0; i < prov_data->cpg_ctx_max_num; i++) {
 		if (prov_data->cpg_used_idx[i] == false) {
 			prov_data->cpg_used_idx[i] = true;
 			prov_data->cpg_ctx_num++;
