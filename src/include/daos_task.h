@@ -111,10 +111,10 @@ extern "C" {
 
 /** DAOS operation codes for task creation */
 typedef enum {
-	DAOS_OPC_INVALID	= -1,
+	DAOS_OPC_INVALID = -1,
 	/* Starting at 0 will break Application Binary Interface backward
 	 * compatibility */
-	DAOS_OPC_FILLER		= 2,
+	DAOS_OPC_FILLER	 = 2,
 	DAOS_OPC_LIST
 	DAOS_OPC_MAX
 } daos_opc_t;
