@@ -13,7 +13,7 @@ import SCons.Warnings
 
 
 # pylint: disable=too-few-public-methods
-class DetectCompiler():
+class DetectCompiler:
     """Find oneapi compiler"""
 
     def __init__(self):
@@ -28,11 +28,7 @@ class DetectCompiler():
             if not os.path.exists(path):
                 print(f"oneapi compiler: {path} doesn't exist")
                 return
-        self.map = {'root': root,
-                    'bin': binp,
-                    'lib': libp,
-                    'include': include,
-                    'icx': icx}
+        self.map = {'root': root, 'bin': binp, 'lib': libp, 'include': include, 'icx': icx}
 
     def __getitem__(self, key):
         """Return key"""
@@ -48,11 +44,8 @@ def generate(env):
         raise SCons.Errors.InternalError("No oneapi compiler found")
 
     env['INTEL_C_COMPILER_TOP'] = detector['root']
-    paths = {'INCLUDE': 'include',
-             'LIB': 'libarch',
-             'PATH': 'bin',
-             'LD_LIBRARY_PATH': 'lib'}
-    for (key, value) in paths.items():
+    paths = {'INCLUDE': 'include', 'LIB': 'libarch', 'PATH': 'bin', 'LD_LIBRARY_PATH': 'lib'}
+    for key, value in paths.items():
         env.PrependENVPath(key, detector[value])
     env.PrependENVPath("PATH", detector["bin"])
     env.PrependENVPath("LIB", detector["lib"])
