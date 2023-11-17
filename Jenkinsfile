@@ -419,7 +419,7 @@ pipeline {
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
-                        )
+                        ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
@@ -431,7 +431,7 @@ pipeline {
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
-                        )
+                        ),
                     )
                 }
             }
