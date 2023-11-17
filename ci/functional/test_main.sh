@@ -84,8 +84,8 @@ if $TEST_RPMS; then
     ssh -i ci_key -l jenkins "${first_node}" \
       "TEST_TAG=\"$test_tag\"                        \
        TNODES=\"$tnodes\"                            \
-       FTEST_ARG=\"$FTEST_ARG\"                      \
-       WITH_VALGRIND=\"$WITH_VALGRIND\"              \
+       FTEST_ARG=\"${FTEST_ARG:-}\"                  \
+       WITH_VALGRIND=\"${WITH_VALGRIND:-}\"          \
        STAGE_NAME=\"$STAGE_NAME\"                    \
        $(cat ci/functional/test_main_node.sh)"
 else
