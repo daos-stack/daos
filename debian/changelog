@@ -1,4 +1,4 @@
-daos (2.5.100-10) unstable; urgency=medium
+daos (2.5.100-11) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * Update PMDK to 2.0.0
     * Remove libpmemblk from dependencies.
@@ -8,8 +8,12 @@ daos (2.5.100-10) unstable; urgency=medium
     NOTE: PMDK upgrade to 2.0.0 does not affect any API call used by DAOS.
           libpmemobj (and libpmem) API stays unchanged.
 
- -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Mon, 02 Oct 2023 12:52:00 -0400
+ -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Fri, 17 Nov 2023 12:52:00 -0400
 
+  [ Phillip Henderson ]
+  * Move verify_perms.py location
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 03 Nov 2023 04:17:00 -0500
 
 daos (2.5.100-9) unstable; urgency=medium
 

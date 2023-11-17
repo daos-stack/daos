@@ -5,9 +5,9 @@
 """
 import random
 
+from nvme_utils import ServerFillUp
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
-from nvme_utils import ServerFillUp
 from write_host_file import write_host_file
 
 

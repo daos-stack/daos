@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Interface between CI and bug-tracking tools"""
 
-import os
-import sys
 import json
-import time
-import urllib
+import os
 import random
 import string
+import sys
+import time
+import urllib
+
 import jira
 
 # Script to improve interaction with Jenkins, GitHub and Jira.  This is intended to work in several
