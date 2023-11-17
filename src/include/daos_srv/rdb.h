@@ -170,6 +170,7 @@ int
 int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_ping(struct rdb *db, uint64_t caller_term);
+int rdb_upgrade_vos_pool(struct rdb *db, uint32_t df_version);
 
 /**
  * Path (opaque)
