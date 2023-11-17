@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 4
+  test_servers: 3
   test_clients: 1
 timeout: 600
 setup:
@@ -39,7 +39,7 @@ pool:
 container:
   type: POSIX
   control_method: daos
-  oclass: RP_2G1
+  oclass: RP_2GX
   properties: "cksum:sha512,rd_fac:1"
 ior:
   ior_timeout: 60
