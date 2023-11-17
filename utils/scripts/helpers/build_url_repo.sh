@@ -4,7 +4,7 @@
 
 set -uex
 
-if [[ $REPOS != *daos@PR-* ]]; then
+if [[ ${REPOS:-} != *daos@PR-* ]]; then
     mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
     # shellcheck source=utils/scripts/helpers/distro_info.sh
     source "$mydir/distro_info.sh"
