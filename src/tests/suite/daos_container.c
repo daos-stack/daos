@@ -613,73 +613,31 @@ co_properties(void **state)
 static void
 co_op_retry(void **state)
 {
-	test_arg_t	*arg = *state;
-	uuid_t		 uuid;
-	char		 str[37];
-	daos_handle_t	 coh;
-	daos_cont_info_t info;
-#if 0
-	/* TODO: inject DAOS_CONT_OP_NOREPLY for container create when dup rpc
-	 * detection logic is enabled in the engine. DAOS-14019, DAOS-14020.
-	 */
-	int              i;
-#endif
-	int		 rc;
+	test_arg_t        *arg = *state;
+	uuid_t             uuid;
+	char               str[37];
+	const char        *label1 = "co_op_retry_cont_fi_pass";
+	const char        *label2 = "co_op_retry_cont_fi_fail";
+	daos_handle_t      coh;
+	daos_cont_info_t   info;
+	char const *const  names[]     = {"TestAttrName0", "TestAttrName1"};
+	void const *const  in_values[] = {"TestAttrValue0", "TestAttrValue1"};
+	size_t const       in_sizes[]  = {strlen(in_values[0]), strlen(in_values[1])};
+	int                n           = (int)ARRAY_SIZE(names);
+	daos_epoch_t       epoch;
+	daos_epoch_range_t epr;
+	struct daos_acl   *acl  = NULL;
+	struct daos_ace   *ace  = NULL;
+	daos_prop_t       *prop = NULL;
+	int                rc;
 
 	if (arg->myrank != 0)
 		return;
 
-		/* See above TODO */
-#if 0
-	print_message("setting DAOS_CONT_OP_NOREPLY and creating container ... ");
-	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				   DAOS_CONT_OP_NOREPLY | DAOS_FAIL_ONCE, 0, NULL);
-	assert_rc_equal(rc, 0);
-#else
-	print_message("creating container ... ");
-#endif
+	print_message("creating container ...");
 	rc = daos_cont_create(arg->pool.poh, &uuid, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success, created container: " DF_UUID "\n", DP_UUID(uuid));
-
-#if 0
-	print_message("BEGIN: many containers with DAOS_CONT_OP_NOREPLY\n");
-	// for (i = 0; i < (20000 + 1024); i++) {
-	for (i = 0; i < 100; i++) {
-		char   cname[32];
-		uuid_t cuuid;
-
-		rc = snprintf(cname, 32, "cont%d", i);
-		assert_true((rc > 0) && (rc < 32));
-
-		/* Force a retry RPC for container create */
-		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-					   DAOS_CONT_OP_NOREPLY | DAOS_FAIL_ONCE, 0, NULL);
-		assert_rc_equal(rc, 0);
-
-		rc = daos_cont_create_with_label(arg->pool.poh, cname, NULL, &cuuid, NULL);
-		assert_rc_equal(rc, 0);
-
-		rc = daos_cont_create_with_label(arg->pool.poh, cname, NULL, &cuuid, NULL);
-		// assert_int_not_equal(rc, 0);
-		assert_rc_equal(rc, -DER_EXIST);
-
-		/* And also force a retry RPC for container destroy */
-		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-					   DAOS_CONT_OP_NOREPLY | DAOS_FAIL_ONCE, 0, NULL);
-		assert_rc_equal(rc, 0);
-
-		rc = daos_cont_destroy(arg->pool.poh, cname, 1 /* force */, NULL);
-		assert_rc_equal(rc, 0);
-
-		rc = daos_cont_destroy(arg->pool.poh, cname, 1 /* force */, NULL);
-		assert_rc_equal(rc, -DER_NONEXIST);
-
-		if ((i % 5000) == 0)
-			print_message("done creating/destroying %d containers\n", (i + 1));
-	}
-	print_message("END: many (%d) containers with DAOS_CONT_OP_NOREPLY\n", (i + 1));
-#endif
 
 	print_message("opening container ... ");
 	uuid_unparse(uuid, str);
@@ -688,25 +646,203 @@ co_op_retry(void **state)
 	print_message("success\n");
 
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE);
-
-	print_message("querying container ... ");
+	print_message("querying container (corpc failure, retry RPC) ... ");
 	rc = daos_cont_query(coh, &info, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_CLOSE_FAIL_CORPC | DAOS_FAIL_ONCE);
+	print_message("closing container (corpc failure, retry RPC) ... ");
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE);
+	print_message("destroying container (corpc failure, retry RPC) ... ");
+	rc = daos_cont_destroy(arg->pool.poh, str, 1 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	/* fault inject a timeout reply after successful handling; rpc retry sees success. */
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("creating container %s (retry / dup rpc detection) ... ", label1);
+	rc = daos_cont_create_with_label(arg->pool.poh, label1, NULL, &uuid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success, created container: " DF_UUID "\n", DP_UUID(uuid));
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("opening container %s (retry / dup rpc detection) ... ", label1);
+	uuid_unparse(uuid, str);
+	rc = daos_cont_open(arg->pool.poh, label1, DAOS_COO_RW, &coh, &info, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("setting container attributes (retry / dup rpc detection)... ");
+	rc = daos_cont_set_attr(coh, n, names, in_values, in_sizes, NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("deleting container attributes (retry / dup rpc detection)... ");
+	rc = daos_cont_del_attr(coh, n, names, NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("creating snapshot on container (retry / dup rpc detection)... ");
+	rc = daos_cont_create_snap(coh, &epoch, NULL, NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	print_message("success, epoch= " DF_X64 "\n", epoch);
+
+	epr.epr_lo = epr.epr_hi = epoch;
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("destroying snapshot on container (retry / dup rpc detection)... ");
+	rc = daos_cont_destroy_snap(coh, epr, NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
+	assert_non_null(ace);
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms  = DAOS_ACL_PERM_READ;
+	acl                   = daos_acl_create(&ace, 1);
+	assert_non_null(acl);
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("update container ACL (retry / dup rpc detection)... ");
+	rc = daos_cont_update_acl(coh, acl, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("delete container ACL (retry / dup rpc detection)... ");
+	rc = daos_cont_delete_acl(coh, DAOS_ACL_EVERYONE, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	prop = daos_prop_alloc(1);
+	assert_non_null(prop);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
+	prop->dpp_entries[0].dpe_val  = 1023;
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("set container property (retry / dup rpc detection)... ");
+	rc = daos_cont_set_prop(coh, prop, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("closing container (retry / dup rpc detection) ... ");
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_PASS_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("destroying container %s (retry / dup rpc detection) ... ", label1);
+	rc = daos_cont_destroy(arg->pool.poh, label1, 1 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	/* fault inject a timeout reply after failed handling; rpc retry sees failure. */
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail creating container %s (retry / dup rpc detection) ... ", label1);
+	rc = daos_cont_create_with_label(arg->pool.poh, label2, NULL, &uuid, NULL);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
+
+	print_message("creating container %s ... ", label2);
+	rc = daos_cont_create_with_label(arg->pool.poh, label2, NULL, &uuid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail opening container %s (retry / dup rpc detection) ... ", label2);
+	uuid_unparse(uuid, str);
+	rc = daos_cont_open(arg->pool.poh, label2, DAOS_COO_RW, &coh, &info, NULL);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
+
+	print_message("opening container %s ... ", label2);
+	rc = daos_cont_open(arg->pool.poh, label2, DAOS_COO_RW, &coh, &info, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail setting container attributes (retry / dup rpc detection)... ");
+	rc = daos_cont_set_attr(coh, n, names, in_values, in_sizes, NULL /* ev */);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail deleting container attributes (retry / dup rpc detection)... ");
+	rc = daos_cont_del_attr(coh, n, names, NULL /* ev */);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail creating snapshot on container (retry / dup rpc detection)... ");
+	rc = daos_cont_create_snap(coh, &epoch, NULL, NULL /* ev */);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
+
+	print_message("creating snapshot on container (retry / dup rpc detection)... ");
+	rc = daos_cont_create_snap(coh, &epoch, NULL, NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	epr.epr_lo = epr.epr_hi = epoch;
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail destroying snapshot on container (retry / dup rpc detection)... ");
+	rc = daos_cont_destroy_snap(coh, epr, NULL /* ev */);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail update container ACL (retry / dup rpc detection)... ");
+	rc = daos_cont_update_acl(coh, acl, NULL);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail delete container ACL (retry / dup rpc detection)... ");
+	rc = daos_cont_delete_acl(coh, DAOS_ACL_EVERYONE, NULL, NULL);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail set container property (retry / dup rpc detection)... ");
+	rc = daos_cont_set_prop(coh, prop, NULL);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail closing container (retry / dup rpc detection) ... ");
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
 
 	print_message("closing container ... ");
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
+	print_message("test-fail destroying container %s (retry / dup rpc detection) ... ", label2);
+	rc = daos_cont_destroy(arg->pool.poh, label2, 1 /* force */, NULL);
+	assert_rc_equal(rc, -DER_MISC);
+	print_message("success\n");
 
-	print_message("destroying container ... ");
-	rc = daos_cont_destroy(arg->pool.poh, str, 1 /* force */, NULL);
+	print_message("destroying container %s ... ", label2);
+	rc = daos_cont_destroy(arg->pool.poh, label2, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
+
+	daos_acl_free(acl);
+	daos_ace_free(ace);
+	daos_prop_free(prop);
 
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 }
