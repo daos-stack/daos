@@ -935,3 +935,137 @@ out:
 		rc = 0;
 	return rc;
 }
+
+static int
+json_decode_bdev_str(struct spdk_json_val *obj, const char *key, char **dst)
+{
+	struct spdk_json_val *val = NULL;
+	int                   rc;
+
+	rc = spdk_json_find_string(obj, key, NULL, &val);
+	if (rc < 0) {
+		D_ERROR("Failed to find string value '%s': %s\n", key, strerror(-rc));
+		return -DER_INVAL;
+	}
+
+	rc = spdk_json_decode_string(val, dst);
+	if (rc < 0) {
+		D_ERROR("Failed to decode string value for '%s': %s\n", key, strerror(-rc));
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
+static struct spdk_json_object_decoder nvme_ns_decoders[] = {
+    {"id", offsetof(struct ns_t, id), spdk_json_decode_uint32},
+};
+
+/**
+ * Fetch bdev controller parameters from spdk_bdev_dump_info_json output.
+ *
+ * \param[out] *b_info		Device info struct to populate
+ * \param[in]	json		Raw JSON to parse
+ * \param[in]	json_size	Number of JSON chars
+ *
+ * \returns	 Zero on success, negative on failure (DER)
+ */
+int
+bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_size)
+{
+	struct spdk_json_val *values = NULL;
+	struct spdk_json_val *ctrlr_data = NULL;
+	struct spdk_json_val *ns_data    = NULL;
+	void                 *end;
+	ssize_t               values_cnt;
+	char                 *tmp = NULL;
+	ssize_t               rc;
+	char                 *end1 = NULL;
+
+	/* Trim chars to get single valid "nvme" object from array. */
+	tmp = strstr(json, "{");
+	if (tmp == NULL)
+		return -DER_INVAL;
+	end1 = strchr(tmp, ']');
+	if (end1 == NULL)
+		return -DER_INVAL;
+	*end1 = '\0';
+
+	D_INFO("input JSON: %s\n", tmp);
+	rc = spdk_json_parse((void *)tmp, end1 - tmp, NULL, 0, &end,
+			     SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
+	if (rc < 0) {
+		D_ERROR("Parsing config failed: %s\n", strerror(-rc));
+		return -DER_INVAL;
+	}
+	D_INFO("input JSON Count: %ld\n", rc);
+
+	values_cnt = rc;
+	D_ALLOC_ARRAY(values, values_cnt);
+	if (values == NULL)
+		return -DER_NOMEM;
+
+	rc = spdk_json_parse((void *)tmp, end1 - tmp, values, values_cnt, &end,
+			     SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
+	if (rc != values_cnt) {
+		D_ERROR("Parsing config failed, want %zd values got %zd\n", values_cnt, rc);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	D_INFO("JSON type: %d\n", values->type);
+
+	rc = json_decode_bdev_str(values, "pci_address", &b_info->bdi_traddr);
+	if (rc < 0) {
+		D_ERROR("Failed to decode JSON string value for pci_address: %s\n", strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = spdk_json_find(values, "ctrlr_data", NULL, &ctrlr_data, SPDK_JSON_VAL_OBJECT_BEGIN);
+	if ((rc < 0) && (ctrlr_data == NULL)) {
+		D_ERROR("Failed to find ctrlr_data JSON object: %s\n", strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = json_decode_bdev_str(ctrlr_data, "model_number", &b_info->bdi_ctrlr->model);
+	if (rc < 0) {
+		D_ERROR("Failed to decode JSON string value for model_number: %s\n", strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = json_decode_bdev_str(ctrlr_data, "serial_number", &b_info->bdi_ctrlr->serial);
+	if (rc < 0) {
+		D_ERROR("Failed to decode JSON string value for serial_number: %s\n",
+			strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = json_decode_bdev_str(ctrlr_data, "firmware_revision", &b_info->bdi_ctrlr->fw_rev);
+	if (rc < 0) {
+		D_ERROR("Failed to decode JSON string value for firmware_revision: %s\n",
+			strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = json_decode_bdev_str(ctrlr_data, "vendor_id", &b_info->bdi_ctrlr->vendor_id);
+	if (rc < 0) {
+		D_ERROR("Failed to decode JSON string value for vendor_id: %s\n", strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = spdk_json_find(values, "ns_data", NULL, &ns_data, SPDK_JSON_VAL_OBJECT_BEGIN);
+	if ((rc < 0) && (ns_data == NULL)) {
+		D_ERROR("Failed to find ns_data JSON object: %s\n", strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rc = spdk_json_decode_object(ns_data, nvme_ns_decoders, SPDK_COUNTOF(nvme_ns_decoders),
+				     &b_info->bdi_ctrlr->nss);
+	if (rc < 0) {
+		D_ERROR("Failed to decode 'id' entry (%s)\n", strerror(-rc));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+out:
+	D_FREE(values);
+
+	return rc;
+}

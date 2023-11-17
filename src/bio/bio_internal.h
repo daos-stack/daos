@@ -667,4 +667,6 @@ int bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int
 int bio_set_hotplug_filter(const char *nvme_conf);
 int bio_read_accel_props(const char *nvme_conf);
 int bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr);
+int
+bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_size);
 #endif /* __BIO_INTERNAL_H__ */

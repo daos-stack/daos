@@ -463,7 +463,7 @@ out:
 static char *json_prefix = NULL;
 
 static int
-json_write_cb(void *cb_ctx, const void *data, size_t size)
+json_write_str_cb(void *cb_ctx, const void *data, size_t size)
 {
 	char *tmp, *end, **buf_ptr = cb_ctx;
 
@@ -474,9 +474,10 @@ json_write_cb(void *cb_ctx, const void *data, size_t size)
 	if (size <= strlen(json_prefix))
 		return 0;
 
+	D_DEBUG(DB_MGMT, "%s json: %s\n", json_prefix, (char *)data);
+
 	tmp = strstr(data, json_prefix);
 	if (tmp) {
-
 		tmp += strlen(json_prefix);
 		end = strchr(tmp, '"');
 		if (end == NULL)
@@ -493,7 +494,7 @@ json_write_cb(void *cb_ctx, const void *data, size_t size)
 }
 
 static int
-find_in_bdev_json(struct spdk_bdev *bdev, char **buf_ptr, char *prefix)
+find_bdev_json_str(struct spdk_bdev *bdev, char **buf_ptr, char *prefix)
 {
 	struct spdk_json_write_ctx	*json;
 	int				 rc;
@@ -503,7 +504,7 @@ find_in_bdev_json(struct spdk_bdev *bdev, char **buf_ptr, char *prefix)
 
 	json_prefix = prefix;
 
-	json = spdk_json_write_begin(json_write_cb, buf_ptr, SPDK_JSON_WRITE_FLAG_FORMATTED);
+	json = spdk_json_write_begin(json_write_str_cb, buf_ptr, SPDK_JSON_WRITE_FLAG_FORMATTED);
 	if (json == NULL) {
 		D_ERROR("Failed to alloc SPDK json context\n");
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -531,6 +532,40 @@ out:
 	return rc;
 }
 
+static int
+json_write_cb(void *cb_ctx, const void *json, size_t json_size)
+{
+	struct bio_dev_info *b_info = cb_ctx;
+
+	return bio_decode_bdev_params(b_info, json, (int)json_size);
+}
+
+static int
+json_find_bdev_params(struct spdk_bdev *bdev, struct bio_dev_info *b_info)
+{
+	struct spdk_json_write_ctx *json;
+	int                         rc;
+
+	json = spdk_json_write_begin(json_write_cb, b_info, SPDK_JSON_WRITE_FLAG_FORMATTED);
+	if (json == NULL) {
+		D_ERROR("Failed to alloc SPDK json context\n");
+		return -DER_NOMEM;
+	}
+
+	rc = spdk_bdev_dump_info_json(bdev, json);
+	if (rc != 0) {
+		D_ERROR("Failed to dump config from SPDK bdev (%s)\n", spdk_strerror(-rc));
+		return daos_errno2der(-rc);
+	}
+
+	rc = spdk_json_write_end(json);
+	if (rc != 0) {
+		D_ERROR("Failed to write JSON (%s)\n", spdk_strerror(-rc));
+		return daos_errno2der(-rc);
+	}
+
+	return rc;
+}
 
 int
 fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
@@ -551,7 +586,7 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
 		return 0;
 
-	rc = find_in_bdev_json(bdev, &b_info->bdi_traddr, "traddr\": \"");
+	rc = find_bdev_json_str(bdev, &b_info->bdi_traddr, "traddr\": \"");
 	if (rc != 0) {
 		D_ERROR("Failed to get traddr for %s\n", dev_name);
 		return rc;
@@ -564,7 +599,7 @@ static struct bio_dev_info *
 alloc_dev_info(uuid_t dev_id, char *dev_name, struct smd_dev_info *s_info)
 {
 	struct bio_dev_info	*info;
-	int			 tgt_cnt = 0, i, rc;
+	int                      tgt_cnt = 0, i;
 
 	D_ALLOC_PTR(info);
 	if (info == NULL)
@@ -575,14 +610,6 @@ alloc_dev_info(uuid_t dev_id, char *dev_name, struct smd_dev_info *s_info)
 		info->bdi_flags |= NVME_DEV_FL_INUSE;
 		if (s_info->sdi_state == SMD_DEV_FAULTY)
 			info->bdi_flags |= NVME_DEV_FL_FAULTY;
-	}
-
-	if (dev_name != NULL) {
-		rc = fill_in_traddr(info, dev_name);
-		if (rc != 0) {
-			bio_free_dev_info(info);
-			return NULL;
-		}
 	}
 
 	if (tgt_cnt != 0) {
@@ -691,8 +718,9 @@ static int
 alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 {
 	struct spdk_bdev *bdev;
-	struct ctrlr_t *w_ctrlr;
-	int rc;
+	uint32_t          blk_sz;
+	uint64_t          nr_blks;
+	int               rc;
 
 	D_ASSERT(b_info != NULL);
 	D_ASSERT(b_info->bdi_ctrlr == NULL);
@@ -711,44 +739,32 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
 		return 0;
 
-	D_DEBUG(DB_MGMT, "fetching %s controller details\n", b_info->bdi_traddr);
-
 	D_ALLOC_PTR(b_info->bdi_ctrlr);
 	if (b_info->bdi_ctrlr == NULL)
 		return -DER_NOMEM;
-	w_ctrlr = b_info->bdi_ctrlr;
 
-	rc = find_in_bdev_json(bdev, &w_ctrlr->model, "model_number\": \"");
+	D_ALLOC_PTR(b_info->bdi_ctrlr->nss);
+	if (b_info->bdi_ctrlr->nss == NULL)
+		return -DER_NOMEM;
+
+	/* Namespace capacity by direct query of SPDK bdev object */
+	blk_sz                       = spdk_bdev_get_block_size(bdev);
+	nr_blks                      = spdk_bdev_get_num_blocks(bdev);
+	b_info->bdi_ctrlr->nss->size = nr_blks * (uint64_t)blk_sz;
+
+	/* Controller details and namespace ID by parsing SPDK bdev JSON info */
+	rc = json_find_bdev_params(bdev, b_info);
 	if (rc != 0) {
-		D_ERROR("Failed to get model_number for %s\n", dev_name);
+		D_ERROR("Failed to get bdev json params for %s\n", dev_name);
 		return rc;
 	}
 
-	rc = find_in_bdev_json(bdev, &w_ctrlr->serial, "serial_number\": \"");
-	if (rc != 0) {
-		D_ERROR("Failed to get serial_number for %s\n", dev_name);
-		return rc;
-	}
-
-	rc = find_in_bdev_json(bdev, &w_ctrlr->fw_rev, "firmware_revision\": \"");
-	if (rc != 0) {
-		D_ERROR("Failed to get firmware_revision for %s\n", dev_name);
-		return rc;
-	}
-
-	rc = find_in_bdev_json(bdev, &w_ctrlr->vendor_id, "vendor_id\": \"");
-	if (rc != 0) {
-		D_ERROR("Failed to get vendor_id for %s\n", dev_name);
-		return rc;
-	}
-	if (w_ctrlr->vendor_id == NULL) {
-		D_ERROR("Nil value returned for vendor_id on %s\n", dev_name);
-		return -DER_INVAL;
-	}
+	D_DEBUG(DB_MGMT, "fetched %s controller details\n", b_info->bdi_traddr);
+	D_DEBUG(DB_MGMT, "namespace %d of size %lu\n", b_info->bdi_ctrlr->nss->id,
+		b_info->bdi_ctrlr->nss->size);
 
 	/* Fetch socket ID and PCI device type by enumerating spdk_pci_device list */
-
-	rc = fetch_pci_dev_info(w_ctrlr, b_info->bdi_traddr);
+	rc = fetch_pci_dev_info(b_info->bdi_ctrlr, b_info->bdi_traddr);
 	if (rc != 0) {
 		return rc;
 	}
