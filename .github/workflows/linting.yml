@@ -42,9 +42,13 @@ jobs:
         run: ./utils/cq/d_logging_check.py --github src
 
   python-black:
-    name: Logging macro checking
+    name: Python black formatting
     runs-on: ubuntu-22.04
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Black
         uses: psf/black@stable
         with:
