@@ -55,8 +55,8 @@ if [ -n "$REPO_FILE_URL" ]; then
     install_curl
     mkdir -p /etc/yum.repos.d
     pushd /etc/yum.repos.d/
-    curl -k -f -o daos_ci-el$MAJOR_VER-artifactory.repo        \
-         "$REPO_FILE_URL"daos_ci-el$MAJOR_VER-artifactory.repo
+    curl -k -f -o daos_ci-el"$MAJOR_VER"-artifactory.repo        \
+         "$REPO_FILE_URL"daos_ci-el"$MAJOR_VER"-artifactory.repo
     disable_repos /etc/yum.repos.d/
     popd
 fi
@@ -66,16 +66,16 @@ dnf config-manager --save --setopt=install_weak_deps=False
 if [ ! -f /etc/fedora-release ]; then
     dnf --disablerepo \*epel\* install epel-release
     if [ -n "$REPO_FILE_URL" ]; then
-        PT_REPO="daos_ci-${DISTRO}${MAJOR_VER}-powertools-artifactory"
+        PT_REPO="daos_ci-${DISTRO}${MAJOR_VER}-crb-artifactory"
         true > /etc/yum.repos.d/epel.repo
         true > /etc/yum.repos.d/epel-modular.repo
         sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
             -i /etc/dnf/dnf.conf
     else
-        PT_REPO=powertools
+        PT_REPO=crb
     fi
     dnf install epel-release
-    dnf config-manager --enable "$PT_REPO"
+    dnf config-manager --enable $PT_REPO
 fi
 dnf clean all
 
