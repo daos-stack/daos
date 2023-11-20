@@ -46,10 +46,8 @@ jobs:
       dequoted_message: ${{ steps.dequoted_commit_message.outputs.text }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          submodules: false
-          fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import Commit Message
         id: commit_message
@@ -229,10 +227,8 @@ jobs:
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
             echo "FVERSION=$FVERSION" >> $GITHUB_ENV
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          submodules: false
-          fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Build RPM Docker image
         id: build-rpm-docker-image
@@ -316,10 +312,8 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          submodules: false
-          fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Calculate Functional Testing Matrix
         id: matrix
@@ -475,7 +469,7 @@ jobs:
             echo "LABEL=$LABEL" >> $GITHUB_ENV
             echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 500
@@ -549,10 +543,8 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          submodules: false
-          fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Calculate Functional Testing Matrix
         id: matrix
@@ -699,7 +691,7 @@ jobs:
             echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
             echo "SIZE=$SIZE" >> $GITHUB_ENV
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 500
