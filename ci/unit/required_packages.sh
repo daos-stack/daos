@@ -34,6 +34,7 @@ pkgs="argobots                         \
       protobuf-c                       \
       python3$PY_MINOR_VER-junit_xml   \
       python3$PY_MINOR_VER-pyxattr     \
+      python3$PY_MINOR_VER-pytest      \
       python3$PY_MINOR_VER-tabulate    \
       spdk-devel                       \
       valgrind-devel"
