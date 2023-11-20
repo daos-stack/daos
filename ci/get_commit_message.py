@@ -73,28 +73,40 @@ def modify_commit_message_pragmas(commit_message, target):
     modified_files = git_files_changed(target)
 
     rec_tags = tags.files_to_tags(modified_files)
+    commit_tags = set()
 
     # Extract all "Features" and "Test-tag"
     feature_tags = re.findall(
         r'^Features:(.*)$', commit_message, flags=re.MULTILINE | re.IGNORECASE)
     if feature_tags:
         for _tags in feature_tags:
-            rec_tags.update(filter(None, _tags.split(' ')))
+            commit_tags.update(filter(None, _tags.split(' ')))
         commit_message = re.sub(
             r'^Features:.*$', '', commit_message, flags=re.MULTILINE | re.IGNORECASE)
     test_tags = re.findall(
         r'^Test-tag:(.*)$', commit_message, flags=re.MULTILINE | re.IGNORECASE)
     if test_tags:
         for _tags in test_tags:
-            rec_tags.update(filter(None, _tags.split(' ')))
+            commit_tags.update(filter(None, _tags.split(' ')))
         commit_message = re.sub(
             r'^Test-tag:.*$', '', commit_message, flags=re.MULTILINE | re.IGNORECASE)
 
     # Put "Test-tag" after the title
     commit_message_split = commit_message.splitlines()
     commit_message_split.insert(1, '')
-    commit_message_split.insert(2, '# Auto-recommended Test-tag')
-    commit_message_split.insert(3, f'Test-tag: {" ".join(sorted(rec_tags))}')
+    if test_tags:
+        # Keep the commit tags but leave a comment with the recommended
+        commit_message_split.insert(2, f'Test-tag: {" ".join(sorted(commit_tags))}')
+        commit_message_split.insert(3, '# Auto-recommended Test-tag')
+        commit_message_split.insert(4, f'# Test-tag: {" ".join(sorted(rec_tags))}')
+        commit_message_split.insert(5, '')
+    else:
+        # If there were "Feature" tags, merge into the recommended.
+        # Otherwise, just use the recommended.
+        rec_tags.update(commit_tags)
+        commit_message_split.insert(2, '# Auto-recommended Test-tag')
+        commit_message_split.insert(3, f'Test-tag: {" ".join(sorted(rec_tags))}')
+        commit_message_split.insert(4, '')
     return os.linesep.join(commit_message_split)
 
 
