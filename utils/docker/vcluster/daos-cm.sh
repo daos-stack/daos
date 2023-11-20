@@ -1,10 +1,11 @@
 #!/bin/bash
 
-# shellcheck disable=SC2034
+# shellcheck disable=SC2034,SC2145
 
 set -o pipefail
 
 VERSION=0.2
+# shellcheck disable=SC2046
 CWD="$(realpath $(dirname $0))"
 
 DAOS_POOL_SIZE=10G
@@ -233,7 +234,7 @@ done
 CMD="$1"
 DAOS_IFACE_IP="$2"
 
-cd "$CWD"
+cd "$CWD" || exit 1
 case "$CMD" in
 	start) start "$DAOS_IFACE_IP" "$DAOS_POOL_SIZE" ;;
 	stop) stop ;;
