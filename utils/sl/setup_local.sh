@@ -102,8 +102,8 @@ for item in $list; do
 done
 
 in_list "${SL_PREFIX}/bin" "${old_path}"
+# shellcheck disable=SC2181
 if [ $? -eq 0 ]; then
-    # shellcheck disable=SC2181
     PATH=$SL_PREFIX/bin:$PATH
 fi
 export PATH
