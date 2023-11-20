@@ -2,7 +2,7 @@
 
 # shellcheck disable=SC2034,SC2145,SC2086,SC2068
 
-set -o pipefail
+set -e -o pipefail
 
 VERSION=0.2
 # shellcheck disable=SC2046
@@ -234,7 +234,7 @@ done
 CMD="$1"
 DAOS_IFACE_IP="$2"
 
-cd "$CWD" || exit 1
+cd "$CWD"
 case "$CMD" in
 	start) start "$DAOS_IFACE_IP" "$DAOS_POOL_SIZE" ;;
 	stop) stop ;;
