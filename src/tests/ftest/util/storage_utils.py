@@ -12,7 +12,8 @@ from operator import is_not
 
 import yaml
 from ClusterShell.NodeSet import NodeSet
-from run_utils import run_remote
+# pylint: disable=import-error,no-name-in-module
+from util.run_utils import run_remote
 
 
 def find_pci_address(value, *flags):

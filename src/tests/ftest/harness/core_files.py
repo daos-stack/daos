@@ -52,7 +52,7 @@ class HarnessCoreFilesTest(TestWithServers):
             with open(core_file, "w", encoding="utf-8") as local_core_file:
                 local_core_file.write("THIS IS JUST A TEST\n")
         except IOError as error:
-            self.fail("Error writing {}: {}".format(local_core_file, str(error)))
+            self.fail("Error writing {}: {}".format(core_file, str(error)))
 
         # Choose a server find the pid of its daos_engine process
         host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
