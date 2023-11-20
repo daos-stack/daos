@@ -34,6 +34,13 @@ pool:
   scm_size: 5G
   nvme_size: 5G
   control_method: dmg
+  usage_min:
+    # SCM usage will not be 100% because some space (<1%) is used for the system and data
+    # distribution is not fully uniform.
+    scm: 94
+    # NVMe will not be 100% because data distribution is not fully uniform.
+    nvme: 96
+
 container:
   control_method: daos
   type: POSIX
