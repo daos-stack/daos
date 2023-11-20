@@ -1493,22 +1493,13 @@ dav_tx_off2ptr(uint64_t off)
 uint64_t
 dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num)
 {
-	int tx_inprogress = 0;
-	int rc;
-
 	DAV_DBG("pop %p act %p size %zu type_num %llx",
 		pop, act, size,
 		(unsigned long long)type_num);
 
-	if (get_tx()->stage != DAV_TX_STAGE_NONE)
-		tx_inprogress = 1;
-
 	DAV_API_START();
-	if (!tx_inprogress) {
-		rc = lw_tx_begin(pop);
-		if (rc)
-			return 0;
-	}
+	if (pop->do_utx == NULL && dav_umem_wtx_new(pop) == NULL)
+		return 0;
 
 	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
 		0, 0, 0, act) != 0) {
@@ -1516,8 +1507,6 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_n
 		return 0;
 	}
 
-	if (!tx_inprogress)
-		lw_tx_end(pop, NULL);
 	DAV_API_END();
 	return act->heap.offset;
 }
