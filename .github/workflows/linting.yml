@@ -30,6 +30,21 @@ jobs:
       - name: Run on build files.
         run: find . -name SConscript | xargs isort --check-only
 
+  shell-check:
+    name: ShellCheck
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Run
+        run: sudo apt-get update && sudo apt-get install shellcheck
+      - name: Add error parser
+        run: echo -n "::add-matcher::ci/shellcheck-matcher.json"
+      - name: Run Shellcheck
+        run: \[ -x ci/run_shellcheck.sh \] && ./ci/run_shellcheck.sh
+
   log-check:
     name: Logging macro checking
     runs-on: ubuntu-22.04

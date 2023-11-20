@@ -401,66 +401,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('checkpatch') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.checkpatch'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false)
-                        }
-                    }
-                    steps {
-                        checkPatch user: GITHUB_USER_USR,
-                                   password: GITHUB_USER_PSW,
-                                   ignored_files: 'src/control/vendor/*:' +
-                                                  '*.pb-c.[ch]:' +
-                                                  'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
-                                                  'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
-                                                  /* groovylint-disable-next-line LineLength */
-                                                  'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
-                                                  '*.crt:' +
-                                                  '*.pem:' +
-                                                  '*_test.go:' +
-                                                  'src/cart/_structures_from_macros_.h:' +
-                                                  'src/tests/ftest/*.patch:' +
-                                                  'src/tests/ftest/large_stdout.txt'
-                    }
-                    post {
-                        always {
-                            job_status_update()
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        /* temporarily moved some stuff into stepResult due to JENKINS-39203
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        } */
-                    }
-                } // stage('checkpatch')
                 stage('Python Bandit check') {
                     when {
                         beforeAgent true

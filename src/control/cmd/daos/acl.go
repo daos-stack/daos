@@ -35,7 +35,7 @@ import (
 func getAclStrings(e *C.struct_daos_prop_entry) (out []string) {
 	acl := (*C.struct_daos_acl)(C.get_dpe_val_ptr(e))
 	if acl == nil {
-		return
+	return
 	}
 
 	var aces **C.char

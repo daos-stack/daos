@@ -10,7 +10,7 @@ fi
 
 cwd=$(dirname "$0")
 DAOS_DIR=$(cd "${cwd}/../../.." && echo "$PWD")
-#shellcheck disable=SC1090
+# shellcheck disable=SC1091
 source "$DAOS_DIR/.build_vars.sh"
 EVT_CTL="$SL_PREFIX/bin/evt_ctl"
 
