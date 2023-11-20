@@ -433,6 +433,7 @@ struct dfuse_pool {
 	ACTION(UNLINK)                                                                             \
 	ACTION(READDIR)                                                                            \
 	ACTION(SYMLINK)                                                                            \
+	ACTION(READLINK)                                                                           \
 	ACTION(OPENDIR)                                                                            \
 	ACTION(SETXATTR)                                                                           \
 	ACTION(GETXATTR)                                                                           \
