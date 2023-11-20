@@ -72,36 +72,10 @@ cont:
 	return NULL;
 }
 
-static void *
-dfuse_evict_thread(void *arg)
-{
-	struct dfuse_info *dfuse_info = arg;
-
-	while (1) {
-		struct timespec ts = {};
-		int             rc;
-
-		if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
-			D_ERROR("Unable to set time");
-		ts.tv_sec += 1;
-
-		rc = sem_timedwait(&dfuse_info->di_dte_sem, &ts);
-		if (rc != 0) {
-			rc = errno;
-
-			if (errno != ETIMEDOUT)
-				DS_ERROR(rc, "sem_wait");
-		}
-
-		while (dfuse_de_run(dfuse_info, 0) != 0)
-			;
-	}
-	return NULL;
-}
-
 bool
 dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 
+/* Eviction loop, run periodically in it's own thread */
 int
 dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 {
@@ -138,10 +112,10 @@ dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 							      inode->ie_parent, inode->ie_name,
 							      strnlen(inode->ie_name, NAME_MAX));
 			if (rc && rc != -ENOENT)
-				DFUSE_TRA_ERROR(inode, "notify_delete() returned: %d (%s)", rc,
-						strerror(-rc));
+				DHS_ERROR(inode, -rc, "notify_delete() failed");
 
 			d_list_del_init(&inode->ie_evict_entry);
+			/* Drop ref? */
 			evicted++;
 			goto out;
 		}
@@ -152,17 +126,48 @@ out:
 	return evicted;
 }
 
+/* Main loop for eviction thread.  Spins until ready for exit waking after one second and iterates
+ * over all newly expired dentries.
+ */
+static void *
+dfuse_evict_thread(void *arg)
+{
+	struct dfuse_info *dfuse_info = arg;
+
+	while (1) {
+		struct timespec ts = {};
+		int             rc;
+
+		if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
+			D_ERROR("Unable to set time");
+		ts.tv_sec += 1;
+
+		rc = sem_timedwait(&dfuse_info->di_dte_sem, &ts);
+		if (rc != 0) {
+			rc = errno;
+
+			if (errno != ETIMEDOUT)
+				DS_ERROR(rc, "sem_wait");
+		}
+
+		while (dfuse_de_run(dfuse_info, 0) != 0)
+			;
+	}
+	return NULL;
+}
+
 int
 dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *inode,
 			double timeout)
 {
 	struct dfuse_time_entry *dte;
 	struct timespec          now;
+	int                      rc;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 
-#if 0
-	rc = D_NMUTEX_TRYWRLOCK(&dfuse_info->di_dte_lock);
+#if 1
+	rc = D_RWLOCK_TRYWRLOCK(&dfuse_info->di_dte_lock);
 	if (rc != 0) {
 		DFUSE_TRA_INFO(inode, "Unable to get lock, dropping");
 		return 0;
