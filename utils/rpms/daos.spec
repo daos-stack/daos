@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0-6%{?dist}
+%global mercury_version 2.3.1-1%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       11%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -585,7 +585,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Nov 17 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.5.100-11
+* Fri Nov 17 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.5.100-12
 - Update to PMDK 2.0.0
   * Remove libpmemblk from dependencies.
   * Start using BUILD_EXAMPLES=n and BUILD_BENCHMARKS=n instead of patches.
@@ -593,6 +593,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
   * Point https://github.com/pmem/pmdk as the main PMDK reference source.
   NOTE: PMDK upgrade to 2.0.0 does not affect any API call used by DAOS.
         libpmemobj (and libpmem) API stays unchanged.
+
+* Wed Nov 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.5.100-11
+- Bump mercury min version to 2.3.1
 
 * Fri Nov 03 2023 Phillip Henderson <phillip.henderson@intel.com> 2.5.100-10
 - Move verify_perms.py location
