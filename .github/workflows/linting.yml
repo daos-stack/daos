@@ -43,7 +43,7 @@ jobs:
       - name: Add error parser
         run: echo -n "::add-matcher::ci/shellcheck-matcher.json"
       - name: Run Shellcheck
-        run: \[ -x ci/run_shellcheck.sh \] && ./ci/run_shellcheck.sh
+        run: \[ ! -x ci/run_shellcheck.sh \] || ./ci/run_shellcheck.sh
 
   log-check:
     name: Logging macro checking
