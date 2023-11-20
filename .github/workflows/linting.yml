@@ -50,4 +50,4 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Check DAOS ftest tags.
-        run: ./src/tests/ftest/tags.py lint
+        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint
