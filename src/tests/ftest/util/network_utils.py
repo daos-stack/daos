@@ -18,11 +18,11 @@ SUPPORTED_PROVIDERS = (
     "ucx+dc_x",
     "ucx+ud_x",
     "ofi+tcp;ofi_rxm",
+    "ofi+tcp",
     "ofi+opx"
 )
 PROVIDER_ALIAS = {
-    "ofi+verbs": "ofi+verbs;ofi_rxm",
-    "ofi+tcp": "ofi+tcp;ofi_rxm"
+    "ofi+verbs": "ofi+verbs;ofi_rxm"
 }
 
 

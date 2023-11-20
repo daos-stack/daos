@@ -193,7 +193,7 @@ static void
 test_port_tcp(void **state)
 {
 	d_setenv("OFI_INTERFACE", "lo", 1);
-	d_setenv("CRT_PHY_ADDR_STR", "ofi+tcp;ofi_rxm", 1);
+	d_setenv("CRT_PHY_ADDR_STR", "ofi+tcp", 1);
 	run_test_fork(state);
 }
 

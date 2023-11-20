@@ -1,6 +1,6 @@
 name: daos_server
 port: 10001
-provider: ofi+tcp;ofi_rxm
+provider: ofi+tcp
 disable_hugepages: true
 control_log_mask: DEBUG
 access_points: ['localhost:10001']

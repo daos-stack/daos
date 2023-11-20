@@ -85,7 +85,7 @@ agent_config:
 dmg:
   transport_config:
     allow_insecure: false
-provider: ofi+tcp;ofi_rxm
+provider: ofi+tcp
 pool:
   control_method: dmg
   scm_size: 1G

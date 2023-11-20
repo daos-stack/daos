@@ -18,7 +18,7 @@ env_CRT_PHY_ADDR_STR: !mux
   sm:
     CRT_PHY_ADDR_STR: "sm"
   ofi_tcp:
-    CRT_PHY_ADDR_STR: "ofi+tcp;ofi_rxm"
+    CRT_PHY_ADDR_STR: "ofi+tcp"
 hosts: !mux
   hosts_1:
     config: one_node

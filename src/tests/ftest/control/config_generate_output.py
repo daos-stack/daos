@@ -23,7 +23,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Initialize a ConfigGenerateOutput object."""
         super().__init__(*args, **kwargs)
 
-        self.def_provider = "ofi+tcp;ofi_rxm"
+        self.def_provider = "ofi+tcp"
 
         # Data structure that store expected values.
         self.numa_node_to_pci_addrs = defaultdict(set)

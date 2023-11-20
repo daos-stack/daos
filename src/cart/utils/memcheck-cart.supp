@@ -497,6 +497,18 @@
    fun:crt_hg_class_init
 }
 {
+   Tcp provider
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   ...
+   fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_senddata
+   ...
+}
+{
    Tcp provider with ofi rxm
    Memcheck:Param
    sendmsg(msg.msg_iov[1])
@@ -504,6 +516,7 @@
    fun:ofi_bsock_sendv
    ...
    fun:fi_tsend
+   ...
 }
 {
    Tcp provider with ofi rxm 2
