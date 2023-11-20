@@ -87,7 +87,6 @@ def modify_commit_message_pragmas(commit_message, target):
     if test_tags:
         for _tags in test_tags:
             rec_tags.update(filter(None, _tags.split(' ')))
-        rec_tags.update(map(str.strip, test_tags))
         commit_message = re.sub(
             r'^Test-tag:.*$', '', commit_message, flags=re.MULTILINE | re.IGNORECASE)
 
