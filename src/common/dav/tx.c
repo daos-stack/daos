@@ -1507,12 +1507,17 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_n
 	DAV_API_START();
 	if (!tx_inprogress) {
 		rc = lw_tx_begin(pop);
-		if (rc)
+		if (rc) {
+			errno = rc;
 			return 0;
+		}
 	}
 
 	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
 		0, 0, 0, act) != 0) {
+		if (!tx_inprogress)
+			lw_tx_end(pop, NULL);
+		D_ERROR("palloc reservation failed errno %d\n", errno);
 		DAV_API_END();
 		return 0;
 	}
@@ -1694,8 +1699,10 @@ obj_alloc_root(dav_obj_t *pop, size_t size)
 	carg.arg = NULL;
 
 	ret = lw_tx_begin(pop);
-	if (ret)
-		return ret;
+	if (ret) {
+		errno = ret;
+		return -1;
+	}
 	ctx = pop->external;
 	operation_start(ctx);
 
@@ -1707,6 +1714,8 @@ obj_alloc_root(dav_obj_t *pop, size_t size)
 			0, 0, 0, 0, ctx); /* REVISIT: object_flags and type num ignored*/
 
 	lw_tx_end(pop, NULL);
+	if (ret)
+		D_ERROR("obj_alloc_root failed errno = %d \n", errno);
 	return ret;
 }
 
@@ -1800,8 +1809,10 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 	carg.arg = arg;
 
 	ret = lw_tx_begin(pop);
-	if (ret)
-		return ret;
+	if (ret) {
+		errno = ret;
+		return -1;
+	}
 	ctx = pop->external;
 	operation_start(ctx);
 
@@ -1810,6 +1821,8 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 			ARENA_ID_FROM_FLAG(flags), ctx);
 
 	lw_tx_end(pop, NULL);
+	if (ret)
+		D_ERROR("obj_alloc_construct failed %d %d\n", ret, errno);
 	return ret;
 }
 
