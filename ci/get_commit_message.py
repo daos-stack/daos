@@ -43,7 +43,7 @@ def git_root_dir():
 
 
 def git_files_changed(target):
-    """Get a list of file from git diff.
+    """Get a list of files from git diff.
 
     Args:
         target (str): target branch or commit.
@@ -61,6 +61,8 @@ def git_files_changed(target):
 def modify_commit_message_pragmas(commit_message, target):
     """Modify the commit message pragmas.
 
+    TODO: if a commit already has Test-tag, do not overwrite. Just comment the suggested.
+
     Args:
         commit_message (str): the original commit message
         target (str): where the current branch is intended to be merged
@@ -74,27 +76,30 @@ def modify_commit_message_pragmas(commit_message, target):
 
     # Extract all "Features" and "Test-tag"
     feature_tags = re.findall(
-        r'^ *Features:.*$', commit_message, flags=re.MULTILINE | re.IGNORECASE)
+        r'^Features:(.*)$', commit_message, flags=re.MULTILINE | re.IGNORECASE)
     if feature_tags:
-        rec_tags.update(line.split(':')[1].strip() for line in feature_tags)
+        for _tags in feature_tags:
+            rec_tags.update(filter(None, _tags.split(' ')))
         commit_message = re.sub(
-            r'^ *Features:.*$', '', commit_message, flags=re.MULTILINE | re.IGNORECASE)
+            r'^Features:.*$', '', commit_message, flags=re.MULTILINE | re.IGNORECASE)
     test_tags = re.findall(
-        r'^ *Test-tag:.*$', commit_message, flags=re.MULTILINE | re.IGNORECASE)
+        r'^Test-tag:(.*)$', commit_message, flags=re.MULTILINE | re.IGNORECASE)
     if test_tags:
-        rec_tags.update(line.split(':')[1].strip() for line in test_tags)
+        for _tags in test_tags:
+            rec_tags.update(filter(None, _tags.split(' ')))
+        rec_tags.update(map(str.strip, test_tags))
         commit_message = re.sub(
-            r'^ *Test-tag:.*$', '', commit_message, flags=re.MULTILINE | re.IGNORECASE)
+            r'^Test-tag:.*$', '', commit_message, flags=re.MULTILINE | re.IGNORECASE)
 
     # Put "Test-tag" after the title
     commit_message_split = commit_message.splitlines()
     commit_message_split.insert(1, '')
     commit_message_split.insert(2, '# Auto-recommended Test-tag')
-    commit_message_split.insert(3, f'Test-tag: {" ".join(rec_tags)}')
+    commit_message_split.insert(3, f'Test-tag: {" ".join(sorted(rec_tags))}')
     return os.linesep.join(commit_message_split)
 
 
-if __name__ == '__main__':
+def main():
     parser = ArgumentParser()
     parser.add_argument(
         "--target",
@@ -105,3 +110,7 @@ if __name__ == '__main__':
         print(modify_commit_message_pragmas(git_commit_message(), args.target))
     else:
         print(git_commit_message())
+
+
+if __name__ == '__main__':
+    main()
