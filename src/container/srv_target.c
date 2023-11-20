@@ -835,6 +835,8 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 		DP_UUID(pool_child->spc_uuid),
 		dss_get_module_info()->dmi_tgt_id);
 
+	D_ASSERT(d_list_empty(&pool_child->spc_list));
+
 	cont_list = &pool_child->spc_cont_list;
 	while (!d_list_empty(cont_list)) {
 		cont_child = d_list_entry(cont_list->next,
@@ -2351,9 +2353,19 @@ ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx)
 static void
 cont_ec_eph_destroy(struct cont_ec_eph *ec_eph)
 {
+	D_ASSERT(ec_eph->ce_ref == 0);
 	d_list_del(&ec_eph->ce_list);
 	D_FREE(ec_eph->ce_ephs);
 	D_FREE(ec_eph);
+}
+
+void
+ds_cont_ec_eph_free(struct ds_pool *pool)
+{
+	struct cont_ec_eph	*ec_eph, *tmp;
+
+	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list, ce_list)
+		cont_ec_eph_destroy(ec_eph);
 }
 
 /**
@@ -2446,13 +2458,8 @@ yield:
 
 		sched_req_sleep(pool->sp_ec_ephs_req, EC_TGT_AGG_INTV);
 	}
-
 out:
-	D_INFO(DF_UUID" stop tgt ec aggregation\n", DP_UUID(pool->sp_uuid));
-
-	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list,
-				   ce_list)
-		cont_ec_eph_destroy(ec_eph);
+	D_INFO(DF_UUID" stop tgt ec query eph ULT\n", DP_UUID(pool->sp_uuid));
 }
 
 struct cont_prop_set_arg {
