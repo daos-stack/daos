@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -116,6 +116,19 @@ dfs_sys_mount(daos_handle_t poh, daos_handle_t coh, int mflags, int sflags,
  */
 int
 dfs_sys_umount(dfs_sys_t *dfs_sys);
+
+/**
+ * Set a prefix on the DFS mount where all paths passed to dfs_lookup are
+ * trimmed off that prefix.
+ *
+ * \param[in]	dfs_sys	Pointer to the mounted filesystem.
+ * \param[in]	prefix	absolute prefix to trim off path to dfs_lookup.
+ *			Passing NULL unsets the prefix.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_sys_set_prefix(dfs_sys_t *dfs_sys, const char *prefix);
 
 /**
  * Convert a local dfs_sys mount to global representation data which can be

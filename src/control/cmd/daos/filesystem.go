@@ -50,6 +50,7 @@ type fsCmd struct {
 	DfuseQuery     fsDfuseQueryCmd     `command:"query" description:"Query dfuse for memory usage"`
 	DfuseEvict     fsDfuseEvictCmd     `command:"evict" description:"Evict object from dfuse"`
 	Scan           fsScanCmd           `command:"scan" description:"Scan POSIX container and report statistics"`
+	Chmod          fsChmodCmd          `command:"chmod" description:"Change file mode bits"`
 }
 
 type fsCopyCmd struct {
@@ -663,5 +664,33 @@ func (cmd *fsScanCmd) Execute(_ []string) error {
 	if err := dfsError(rc); err != nil {
 		return errors.Wrapf(err, "failed to scan")
 	}
+	return nil
+}
+
+type fsChmodCmd struct {
+	fsAttrCmd
+
+	ModeBits ModeBitsFlag `long:"mode" short:"m" description:"file mode in octal, e.g. 0755" required:"1"`
+}
+
+func (cmd *fsChmodCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := setupFSAttrCmd(&cmd.fsAttrCmd)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	ap.object_mode = cmd.ModeBits.Mode
+
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	if err != nil {
+		return errors.Wrapf(err, "failed to connect")
+	}
+	defer cleanup()
+
+	if err := dfsError(C.fs_chmod_hdlr(ap)); err != nil {
+		return errors.Wrapf(err, "chmod failed")
+	}
+
 	return nil
 }
