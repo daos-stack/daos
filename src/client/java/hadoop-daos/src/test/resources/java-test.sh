@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 cd /root/daos
@@ -6,7 +6,6 @@ first=$1
 shift
 caller=$1
 
-# shellcheck disable=SC3010
 if [[ "jvm" == "$caller" ]]
 then
         shift

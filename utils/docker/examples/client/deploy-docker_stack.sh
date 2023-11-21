@@ -3,8 +3,7 @@
 # set -x
 set -e -o pipefail
 
-# shellcheck disable=SC2086
-CWD="$(realpath "$(dirname $0)")"
+CWD="$(realpath "$(dirname "$0")")"
 
 set -a
 # shellcheck disable=SC1091

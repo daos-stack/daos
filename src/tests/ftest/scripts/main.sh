@@ -1,5 +1,5 @@
+#!/bin/sh
 # shellcheck disable=SC1113
-# shellcheck shell=bash
 # /*
 #  * (C) Copyright 2016-2023 Intel Corporation.
 #  *
