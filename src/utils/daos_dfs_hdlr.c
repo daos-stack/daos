@@ -21,6 +21,7 @@
 
 #include "daos_types.h"
 #include "daos_fs.h"
+#include "daos_fs_sys.h"
 #include "dfs_internal.h"
 #include "daos_uns.h"
 #include "daos_hdlr.h"
@@ -305,4 +306,42 @@ int
 fs_relink_root_hdlr(struct cmd_args_s *ap)
 {
 	return dfs_relink_root(ap->cont);
+}
+
+int
+fs_chmod_hdlr(struct cmd_args_s *ap)
+{
+	const int mflags = O_RDWR;
+	const int sflags = DFS_SYS_NO_LOCK | DFS_SYS_NO_CACHE;
+	dfs_sys_t *dfs_sys;
+	int rc = 0;
+	int rc2 = 0;
+
+	rc = dfs_sys_mount(ap->pool, ap->cont, mflags, sflags, &dfs_sys);
+	if (rc) {
+		fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n",
+			ap->cont_str, strerror(rc), rc);
+		return rc;
+	}
+
+	if (ap->dfs_prefix) {
+		rc = dfs_sys_set_prefix(dfs_sys, ap->dfs_prefix);
+		if (rc) {
+			fprintf(ap->errstream, "failed to set path prefix %s: %s (%d)\n",
+				ap->dfs_prefix, strerror(rc), rc);
+			D_GOTO(out_umount, rc);
+		}
+	}
+
+	rc = dfs_sys_chmod(dfs_sys, ap->dfs_path, ap->object_mode);
+	if (rc) {
+		fprintf(ap->errstream, "failed to change mode bits for path %s: %s (%d)\n",
+			ap->dfs_path, strerror(rc), rc);
+	}
+
+out_umount:
+	rc2 = dfs_sys_umount(dfs_sys);
+	if (rc2)
+		fprintf(ap->errstream, "failed to umount DFS container\n");
+	return rc;
 }
