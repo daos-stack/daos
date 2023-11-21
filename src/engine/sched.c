@@ -1147,6 +1147,10 @@ process_pool_cb(d_list_t *rlink, void *arg)
 			rpc_cnt += kick[i];
 	}
 
+	/*
+	 * If the number of non-system requests exceeds the limit of maximum kicked
+	 * requests, adjust the limit based on the ratio of each non-system request type.
+	 */
 	if (rpc_cnt > MAX_KICKED_REQ_CNT) {
 		for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
 			if (is_system_req(i))
