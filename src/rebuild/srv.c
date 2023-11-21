@@ -2084,7 +2084,7 @@ rebuild_fini_one(void *arg)
 	/* close the opened local ds_cont on main XS */
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
-	dpc = ds_pool_child_get(rpt->rt_pool_uuid);
+	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
 	D_ASSERT(dpc != NULL);
 
 	/* Reset rebuild epoch, then reset the aggregation epoch, so
@@ -2333,7 +2333,7 @@ rebuild_prepare_one(void *data)
 	if (pool_tls == NULL)
 		return -DER_NOMEM;
 
-	dpc = ds_pool_child_get(rpt->rt_pool_uuid);
+	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
 	D_ASSERT(dpc != NULL);
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);

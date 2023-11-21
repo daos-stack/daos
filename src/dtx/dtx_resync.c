@@ -756,7 +756,7 @@ dtx_resync_one(void *data)
 	struct dtx_container_scan_arg	 cb_arg = { 0 };
 	int				 rc;
 
-	child = ds_pool_child_get(arg->pool_uuid);
+	child = ds_pool_child_lookup(arg->pool_uuid);
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 

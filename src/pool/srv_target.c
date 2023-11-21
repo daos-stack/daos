@@ -72,8 +72,8 @@ stop_flush_ult(struct ds_pool_child *child)
 	child->spc_flush_req = NULL;
 }
 
-struct ds_pool_child *
-ds_pool_child_lookup(const uuid_t uuid)
+static struct ds_pool_child *
+pool_child_lookup_noref(const uuid_t uuid)
 {
 	struct ds_pool_child   *child;
 	struct pool_tls	       *tls = pool_tls_get();
@@ -87,11 +87,11 @@ ds_pool_child_lookup(const uuid_t uuid)
 }
 
 struct ds_pool_child *
-ds_pool_child_get(const uuid_t uuid)
+ds_pool_child_lookup(const uuid_t uuid)
 {
 	struct ds_pool_child	*child;
 
-	child = ds_pool_child_lookup(uuid);
+	child = pool_child_lookup_noref(uuid);
 	if (child == NULL) {
 		D_ERROR(DF_UUID": Pool child isn't found.\n", DP_UUID(uuid));
 		return child;
@@ -416,7 +416,7 @@ ds_pool_child_start(uuid_t pool_uuid)
 	struct ds_pool_child	*child;
 	int			 rc;
 
-	child = ds_pool_child_lookup(pool_uuid);
+	child = pool_child_lookup_noref(pool_uuid);
 	if (child == NULL) {
 		D_ERROR(DF_UUID": Pool child not found.\n", DP_UUID(pool_uuid));
 		return -DER_NONEXIST;
@@ -451,7 +451,7 @@ pool_child_stop(struct ds_pool_child *child)
 		D_ERROR(DF_UUID": Pool is in starting.\n", DP_UUID(child->spc_uuid));
 		return -DER_BUSY;
 	} else if (*child->spc_state == POOL_CHILD_STOPPING) {
-		D_DEBUG(DB_MGMT, DF_UUID": Pool is alreay in stopping.\n",
+		D_DEBUG(DB_MGMT, DF_UUID": Pool is already in stopping.\n",
 			DP_UUID(child->spc_uuid));
 		return 1;
 	} else if (*child->spc_state == POOL_CHILD_NEW) {
@@ -495,7 +495,7 @@ ds_pool_child_stop(uuid_t pool_uuid)
 {
 	struct ds_pool_child	*child;
 
-	child = ds_pool_child_lookup(pool_uuid);
+	child = pool_child_lookup_noref(pool_uuid);
 	if (child == NULL) {
 		D_ERROR(DF_UUID": Pool child not found.\n", DP_UUID(pool_uuid));
 		return -DER_NONEXIST;
@@ -521,7 +521,7 @@ pool_child_add_one(void *varg)
 	struct ds_pool_child		*child;
 	int				 rc;
 
-	child = ds_pool_child_lookup(arg->pla_uuid);
+	child = pool_child_lookup_noref(arg->pla_uuid);
 	if (child != NULL)
 		return 0;
 
@@ -552,7 +552,7 @@ pool_child_delete_one(void *uuid)
 	struct ds_pool_child	*child;
 	int			 rc, retry_cnt = 0;
 
-	child = ds_pool_child_lookup(uuid);
+	child = pool_child_lookup_noref(uuid);
 	if (child == NULL)
 		return 0;
 retry:
@@ -1284,7 +1284,7 @@ pool_query_space(uuid_t pool_uuid, struct daos_pool_space *x_ps)
 	struct vos_pool_space	*vps = &vos_pool_info.pif_space;
 	int			 i, rc;
 
-	pool_child = ds_pool_child_get(pool_uuid);
+	pool_child = ds_pool_child_lookup(pool_uuid);
 	if (pool_child == NULL)
 		return -DER_NO_HDL;
 
@@ -1542,7 +1542,7 @@ update_child_map(void *data)
 	struct ds_pool		*pool = (struct ds_pool *)data;
 	struct ds_pool_child	*child;
 
-	child = ds_pool_child_get(pool->sp_uuid);
+	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
 		return -DER_NONEXIST;
 
@@ -1707,7 +1707,7 @@ update_vos_prop_on_targets(void *in)
 	struct policy_desc_t		policy_desc = {0};
 	int                              ret         = 0;
 
-	child = ds_pool_child_get(pool->sp_uuid);
+	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
 		return -DER_NONEXIST;	/* no child created yet? */
 
@@ -2059,7 +2059,7 @@ pool_child_discard(void *data)
 	D_DEBUG(DB_MD, DF_UUID" discard %u/%u\n", DP_UUID(arg->pool_uuid),
 		myrank, addr.pta_target);
 
-	child = ds_pool_child_get(arg->pool_uuid);
+	child = ds_pool_child_lookup(arg->pool_uuid);
 	D_ASSERT(child != NULL);
 	param.ip_hdl = child->spc_hdl;
 

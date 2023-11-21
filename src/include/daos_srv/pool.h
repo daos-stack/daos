@@ -191,17 +191,15 @@ struct ds_pool_svc_op_val {
 	char ov_resvd[60];
 };
 
-/* Find ds_pool_child in cache, no reference held */
+/* Find ds_pool_child in cache, hold one reference */
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
-/* Find ds_pool_child in cache, hold reference */
-struct ds_pool_child *ds_pool_child_get(const uuid_t uuid);
-/* Put the reference held by ds_pool_child_get() */
+/* Put the reference held by ds_pool_child_lookup() */
 void ds_pool_child_put(struct ds_pool_child *child);
 /* Start ds_pool child */
 int ds_pool_child_start(uuid_t pool_uuid);
 /* Stop ds_pool_child */
 int ds_pool_child_stop(uuid_t pool_uuid);
-/* Qeury pool child state */
+/* Query pool child state */
 uint32_t ds_pool_child_state(struct ds_pool *pool, uint32_t tgt_id);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
