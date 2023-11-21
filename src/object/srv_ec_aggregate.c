@@ -2491,7 +2491,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 {
 	struct ec_agg_param	*agg_param = param->ap_data;
 	struct ec_agg_pool_info *info = &agg_param->ap_pool_info;
-	struct ec_agg_ult_arg	arg;
+	struct ec_agg_ult_arg	arg = { 0 };
 	int			rc;
 
 	D_ASSERT(agg_param->ap_initialized == 0);
@@ -2508,9 +2508,10 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	arg.param = agg_param;
 	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_execute(ec_agg_init_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	if (arg.ec_query_p != NULL)
+		cont->sc_ec_query_agg_eph = arg.ec_query_p;
 	if (rc != 0)
 		D_GOTO(out, rc);
-	cont->sc_ec_query_agg_eph = arg.ec_query_p;
 
 	rc = dsc_pool_open(info->api_pool_uuid,
 			   info->api_poh_uuid, DAOS_PC_RW,
