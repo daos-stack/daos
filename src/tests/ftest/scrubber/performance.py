@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
+
 from ior_test_base import IorTestBase
 
 
@@ -25,8 +26,6 @@ class TestWithScrubberPerf(IorTestBase):
         """
         self.add_pool()
         self.add_container(self.pool)
-        values = "Pool : {} Container: {}".format(self.pool, self.container)
-        self.log.info(values)
         cmd_result = self.run_ior_with_pool(create_cont=False)
         metrics = self.ior_cmd.get_ior_metrics(cmd_result)
         ior_write_size_without_scrubber = int(metrics[0][22])
