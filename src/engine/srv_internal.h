@@ -102,6 +102,7 @@ struct dss_xstream {
 #endif
 	bool			dx_progress_started;	/* Network poll started */
 	int                     dx_tag;                 /** tag for xstream */
+	struct dss_chore_queue *dx_chore_queue;
 };
 
 /** Engine module's metrics */
@@ -375,5 +376,9 @@ dss_xstream_has_nvme(struct dss_xstream *dx)
 
 	return false;
 }
+
+int dss_chore_queue_init(struct dss_xstream *dx);
+void dss_chore_queue_stop(struct dss_xstream *dx);
+void dss_chore_queue_fini(struct dss_xstream *dx);
 
 #endif /* __DAOS_SRV_INTERNAL__ */

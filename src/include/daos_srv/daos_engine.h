@@ -821,4 +821,40 @@ enum dss_drpc_call_flag {
 int dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
 		  unsigned int flags, Drpc__Response **resp);
 
+/** Status of a chore */
+enum dss_chore_status {
+	DSS_CHORE_NEW,		/**< ready to be scheduled for the first time (private) */
+	DSS_CHORE_READY,	/**< ready to be scheduled */
+	DSS_CHORE_DONE		/**< no more scheduling required */
+};
+
+struct dss_chore;
+
+/**
+ * Must return either DSS_CHORE_READY (if yielding to other chores) or
+ * DSS_CHORE_DONE (if terminating). If \a is_reentrance is true, this is not
+ * the first time \a chore is scheduled. A typical implementation shall
+ * initialize its internal state variables if \a is_reentrance is false. See
+ * dtx_leader_exec_ops_chore for an example.
+ */
+typedef enum dss_chore_status (*dss_chore_func_t)(struct dss_chore *chore, bool is_reentrance);
+
+/**
+ * Chore (opaque)
+ *
+ * A simple task (e.g., an I/O forwarding task) that yields by returning
+ * DSS_CHORE_READY instead of calling ABT_thread_yield. This data structure
+ * shall be embedded in the user's own task data structure, which typically
+ * also includes arguments and internal state variables for \a cho_func. All
+ * fields are private. See dtx_chore for an example.
+ */
+struct dss_chore {
+	d_list_t              cho_link;
+	enum dss_chore_status cho_status;
+	dss_chore_func_t      cho_func;
+};
+
+int dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func);
+void dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func);
+
 #endif /* __DSS_API_H__ */

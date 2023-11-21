@@ -518,6 +518,15 @@ dss_srv_handler(void *arg)
 		}
 	}
 
+	/* Some xstreams do not need this, actually... */
+	rc = dss_chore_queue_init(dx);
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to initialize chore queue");
+		ABT_future_set(dx->dx_shutdown, dx);
+		wait_all_exited(dx, dmi);
+		goto nvme_fini;
+	}
+
 	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creator */
@@ -564,12 +573,15 @@ dss_srv_handler(void *arg)
 	if (dx->dx_comm)
 		dx->dx_progress_started = false;
 
+	dss_chore_queue_stop(dx);
+
 	wait_all_exited(dx, dmi);
 	if (dmi->dmi_dp) {
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
 	}
 
+	dss_chore_queue_fini(dx);
 nvme_fini:
 	if (dss_xstream_has_nvme(dx))
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
