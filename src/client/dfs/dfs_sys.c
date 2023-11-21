@@ -541,6 +541,12 @@ dfs_sys_umount(dfs_sys_t *dfs_sys)
 }
 
 int
+dfs_sys_set_prefix(dfs_sys_t *dfs_sys, const char *prefix)
+{
+	return dfs_set_prefix(dfs_sys->dfs, prefix);
+}
+
+int
 dfs_sys_local2global_all(dfs_sys_t *dfs_sys, d_iov_t *glob)
 {
 	if (dfs_sys == NULL)

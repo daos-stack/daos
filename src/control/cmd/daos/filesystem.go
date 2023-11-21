@@ -37,6 +37,7 @@ type fsCmd struct {
 	ResetAttr      fsResetAttrCmd      `command:"reset-attr" description:"reset fs attributes"`
 	ResetChunkSize fsResetChunkSizeCmd `command:"reset-chunk-size" description:"reset fs chunk size"`
 	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset fs obj class"`
+	Chmod          fsChmodCmd          `command:"chmod" description:"change file mode bits"`
 }
 
 type fsCopyCmd struct {
@@ -428,6 +429,34 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 
 	if err := dfsError(C.fs_relink_root_hdlr(ap)); err != nil {
 		return errors.Wrapf(err, "Relink Root failed")
+	}
+
+	return nil
+}
+
+type fsChmodCmd struct {
+	fsAttrCmd
+
+	ModeBits ModeBitsFlag `long:"mode" short:"m" description:"file mode in octal, e.g. 0755" required:"1"`
+}
+
+func (cmd *fsChmodCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := setupFSAttrCmd(&cmd.fsAttrCmd)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	ap.object_mode = cmd.ModeBits.Mode
+
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	if err != nil {
+		return errors.Wrapf(err, "failed to connect")
+	}
+	defer cleanup()
+
+	if err := dfsError(C.fs_chmod_hdlr(ap)); err != nil {
+		return errors.Wrapf(err, "chmod failed")
 	}
 
 	return nil

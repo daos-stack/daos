@@ -19,6 +19,7 @@ enum fs_op {
 	FS_RESET_CHUNK_SIZE,
 	FS_RESET_OCLASS,
 	FS_CHECK,
+	FS_CHMOD,
 };
 
 enum cont_op {
@@ -161,6 +162,7 @@ struct cmd_args_s {
 	bool			verbose;	/* --verbose mode */
 	char			*entry;		/* --entry for ACL */
 	char			*principal;	/* --principal for ACL */
+	mode_t			object_mode;	/* object mode bits */
 };
 
 #define ARGS_VERIFY_PATH_CREATE(ap, label, rcexpr)			\
@@ -195,6 +197,7 @@ int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
 int fs_fix_entry_hdlr(struct cmd_args_s *ap, bool fix_entry);
 int fs_recreate_sb_hdlr(struct cmd_args_s *ap);
 int fs_relink_root_hdlr(struct cmd_args_s *ap);
+int fs_chmod_hdlr(struct cmd_args_s *ap);
 
 /* Container operations */
 int cont_check_hdlr(struct cmd_args_s *ap);
