@@ -1003,7 +1003,7 @@ bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_s
 	if (ctx == NULL)
 		return -DER_NOMEM;
 
-	/* Calculate number of values in tree. */
+	/* Calculate number of values in tree before mem alloc. */
 	rc = spdk_json_parse(json_data, strnlen(json_data, json_size), NULL, 0, &end,
 			     SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
 	if (rc < 0) {
@@ -1016,7 +1016,7 @@ bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_s
 	if (ctx->values == NULL)
 		D_GOTO(free_ctx, rc = -DER_NOMEM);
 
-	/* Populate JSON tree keys and values. */
+	/* Populate tree of keys and values from JSON. */
 	rc = spdk_json_parse(json_data, strnlen(json_data, json_size), ctx->values, ctx->values_cnt,
 			     &end, SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
 	if (rc < 0) {
