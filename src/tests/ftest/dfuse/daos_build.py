@@ -214,7 +214,12 @@ class DaosBuild(DfuseTestBase):
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
                 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
-                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
+                'daos filesystem query {}'.format(mount_dir),
+                'daos filesystem evict {}'.format(build_dir),
+                'daos filesystem query {}'.format(mount_dir),
+                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs),
+                'scons -C {} --jobs {} install'.format(build_dir, intercept_jobs),
+                'daos filesystem query {}'.format(mount_dir)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
