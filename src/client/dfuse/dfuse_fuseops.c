@@ -464,6 +464,11 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
+/* Do not allow security xattrs to be set or read, see DAOS-14639 */
+#define XATTR_SEC   "security."
+/* Do not allow either system.posix_acl_default or system.posix_acl_access */
+#define XATTR_P_ACL "system.posix_acl"
+
 void
 df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	       const char *value, size_t size, int flags)
@@ -478,6 +483,12 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 		    sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
 		D_GOTO(err, rc = EPERM);
 	}
+
+	if (strncmp(name, XATTR_SEC, sizeof(XATTR_SEC) - 1) == 0)
+		D_GOTO(err, rc = ENOTSUP);
+
+	if (strncmp(name, XATTR_P_ACL, sizeof(XATTR_P_ACL) - 1) == 0)
+		D_GOTO(err, rc = ENOTSUP);
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -507,6 +518,12 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 	struct dfuse_inode_entry	*inode;
 	d_list_t			*rlink;
 	int				rc;
+
+	if (strncmp(name, XATTR_SEC, sizeof(XATTR_SEC) - 1) == 0)
+		D_GOTO(err, rc = ENODATA);
+
+	if (strncmp(name, XATTR_P_ACL, sizeof(XATTR_P_ACL) - 1) == 0)
+		D_GOTO(err, rc = ENODATA);
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
