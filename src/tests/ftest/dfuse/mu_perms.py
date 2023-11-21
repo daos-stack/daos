@@ -3,16 +3,15 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-from itertools import product
-import time
 import re
+import time
+from itertools import product
 
 from ClusterShell.NodeSet import NodeSet
-
 from dfuse_test_base import DfuseTestBase
-from dfuse_utils import get_dfuse, start_dfuse, VerifyPermsCommand
+from dfuse_utils import VerifyPermsCommand, get_dfuse, start_dfuse
+from run_utils import command_as_user, run_remote
 from user_utils import get_chown_command
-from run_utils import run_remote, command_as_user
 
 
 class DfuseMUPerms(DfuseTestBase):
@@ -369,7 +368,7 @@ class DfuseMUPerms(DfuseTestBase):
             self.log.info('Verify - no perms - not using IL')
             _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
             self.log.info('Verify - no perms - using IL')
-            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=False)
+            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=False)
 
             # Give the user POSIX perms
             posix_perms = {'file': '606', 'dir': '505'}[entry_type]
@@ -384,7 +383,7 @@ class DfuseMUPerms(DfuseTestBase):
             self.log.info('Verify - POSIX perms only - not using IL')
             _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
             self.log.info('Verify - POSIX perms only - using IL')
-            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=True)
+            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=True)
 
             # Give the user pool/container ACL perms
             self.log.info('Giving %s pool "r" ACL permissions', other_user)
@@ -396,7 +395,7 @@ class DfuseMUPerms(DfuseTestBase):
             self.log.info('Verify - POSIX and ACL perms - not using IL')
             _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
             self.log.info('Verify - POSIX and ACL perms - using IL')
-            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=False)
+            _verify(use_il=True, expected_il_messages=4, expect_der_no_perm=False)
 
             # Revoke POSIX permissions
             posix_perms = {'file': '600', 'dir': '00'}[entry_type]
@@ -411,7 +410,7 @@ class DfuseMUPerms(DfuseTestBase):
             self.log.info('Verify - ACLs only - not using IL')
             _verify(use_il=False, expected_il_messages=0, expect_der_no_perm=False)
             self.log.info('Verify - ACLs only - using IL')
-            _verify(use_il=True, expected_il_messages=1, expect_der_no_perm=False)
+            _verify(use_il=True, expected_il_messages=2, expect_der_no_perm=False)
 
         # Stop dfuse instances. Needed until containers are cleaned up with with register_cleanup
         dfuse.stop()

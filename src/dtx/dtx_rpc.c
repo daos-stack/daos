@@ -706,8 +706,8 @@ dtx_rpc_prep(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **
 
 	/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
 	if (dss_has_enough_helper())
-		rc = dss_ult_create(dtx_rpc_helper, dca, DSS_XS_IOFW, dca->dca_tgtid,
-				    DSS_DEEP_STACK_SZ, &dca->dca_helper);
+		rc = dss_ult_create(dtx_rpc_helper, dca, DSS_XS_IOFW, dca->dca_tgtid, 0,
+				    &dca->dca_helper);
 	else
 		rc = dtx_rpc_internal(dca);
 

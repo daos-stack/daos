@@ -7,7 +7,6 @@ import os
 import re
 
 from apricot import TestWithServers
-
 from exception_utils import CommandFailure
 from general_utils import human_to_bytes
 from ior_utils import run_ior
@@ -126,7 +125,7 @@ class VerifyPoolSpace(TestWithServers):
         system_pool_size = {}
         self.log_step(f'Collect system-level DAOS mount information for {description}')
         fields = ('source', 'size', 'used', 'avail', 'pcent', 'target')
-        command = f"df -h --output={','.join(fields)} | grep -E '{'|'.join(scm_mounts)}'"
+        command = f"df -BG --output={','.join(fields)} | grep -E '{'|'.join(scm_mounts)}'"
         result = run_remote(self.log, self.server_managers[0].hosts, command, stderr=True)
         if not result.passed:
             self.fail('Error collecting system level daos mount information')

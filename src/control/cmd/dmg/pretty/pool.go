@@ -19,6 +19,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
+const msgNoPools = "No pools in system"
+
 func getTierNameText(tierIdx int) string {
 	switch tierIdx {
 	case int(control.StorageMediaTypeScm):
@@ -48,10 +50,10 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	}
 	fmt.Fprintln(w, "Pool space info:")
 	if pqr.EnabledRanks != nil {
-		fmt.Fprintf(w, "- Enabled targets: %s\n", pqr.EnabledRanks)
+		fmt.Fprintf(w, "- Enabled ranks: %s\n", pqr.EnabledRanks)
 	}
 	if pqr.DisabledRanks != nil {
-		fmt.Fprintf(w, "- Disabled targets: %s\n", pqr.DisabledRanks)
+		fmt.Fprintf(w, "- Disabled ranks: %s\n", pqr.DisabledRanks)
 	}
 	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
 	if pqr.TierStats != nil {
@@ -209,7 +211,7 @@ func poolListCreateRow(pool *control.Pool, upgrade bool) txtfmt.TableRow {
 
 func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 	if len(resp.Pools) == 0 {
-		fmt.Fprintln(out, "no pools in system")
+		fmt.Fprintln(out, msgNoPools)
 		return nil
 	}
 	upgrade := false
@@ -285,7 +287,7 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 
 func printListPoolsRespVerbose(noQuery bool, out io.Writer, resp *control.ListPoolsResp) error {
 	if len(resp.Pools) == 0 {
-		fmt.Fprintln(out, "no pools in system")
+		fmt.Fprintln(out, msgNoPools)
 		return nil
 	}
 

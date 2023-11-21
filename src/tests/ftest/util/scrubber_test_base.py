@@ -5,8 +5,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import threading
 
-from scrubber_utils import ScrubberUtils
 from ior_test_base import IorTestBase
+from scrubber_utils import ScrubberUtils
 
 
 class TestWithScrubber(IorTestBase):
