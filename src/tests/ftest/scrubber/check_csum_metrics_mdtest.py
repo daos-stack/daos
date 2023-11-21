@@ -4,11 +4,12 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
+
 from scrubber_test_base import TestWithScrubber
 
 
 class CheckCsumMetricsMdtest(TestWithScrubber):
-    # pylint: disable=too-many-nested-blocks,too-many-ancestors
+    # pylint: disable=too-many-ancestors
     """Check the checksum metrics with scrubber enabled during MdTest run.
 
     :avocado: recursive
