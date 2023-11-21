@@ -28,6 +28,7 @@ container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
+  oclass: SX
 ior:
   client_processes:
     ppn: 32
@@ -38,7 +39,7 @@ ior:
   sw_deadline: 15
   sw_wearout: 1
   sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
-  dfs_oclass: 'SX'
+  dfs_oclass: SX
   transfer_size: 1M
   block_size: 150G
   # 0.5 only for CI, due to the varying nature of different clusters in CI.
