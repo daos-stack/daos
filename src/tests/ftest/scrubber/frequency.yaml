@@ -62,7 +62,6 @@ ior:
     ior_api:
       - DFS
     transfer_block_size:
-      - [256B, 2M]
       - [1M, 32M]
     obj_class:
       - RP_2G1
