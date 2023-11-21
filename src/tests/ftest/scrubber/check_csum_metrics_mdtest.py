@@ -46,12 +46,11 @@ class CheckCsumMetricsMdtest(TestWithScrubber):
             final_metrics = self.scrubber.get_csum_total_metrics()
             status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
             if status is False:
-                self.log.info("------Test Failed-----")
-                self.log.info("---No metrics value change----")
+                self.log.info("---Scrubber metrics value doesn't change---")
             else:
                 poll_status = True
             finish_time = time.time()
         if poll_status is True:
-            self.log.info("------Test passed------")
+            self.log.info("--Scrubber testing with mdtest: Test passed--")
         else:
-            self.fail("------Test Failed-----")
+            self.fail("--Scrubber metrics value doesn't change (mdtest) : Test Failed--")
