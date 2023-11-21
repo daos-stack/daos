@@ -302,7 +302,7 @@ copy_str2ctrlr(char **dst, const char *src)
 	D_ASSERT(src != NULL);
 	D_ASSERT(dst != NULL);
 
-	if ((*dst != NULL) && (strlen(*dst) != 0)) {
+	if ((*dst != NULL) && (strnlen(*dst, NVME_DETAIL_BUFLEN) != 0)) {
 		D_ERROR("attempting to copy to non-empty destination");
 		return -DER_INVAL;
 	}

@@ -18,6 +18,8 @@
 
 /* JSON tags should match encode/decode logic in src/control/server/storage/bdev/backend_json.go */
 
+#define JSON_MAX_CHARS 4096
+
 struct
 json_config_ctx {
 	/* Current "subsystems" array */
@@ -377,6 +379,7 @@ load_vmd_subsystem_config(struct json_config_ctx *ctx, bool *vmd_enabled)
 	int			 rc;
 
 	D_ASSERT(ctx->config_it != NULL);
+	D_ASSERT(vmd_enabled != NULL);
 	D_ASSERT(*vmd_enabled == false);
 
 	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
@@ -617,6 +620,7 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
 {
 	int	rc;
 
+	D_ASSERT(vmd_enabled != NULL);
 	D_ASSERT(*vmd_enabled == false);
 
 	if (vmd_ss == NULL)
@@ -659,6 +663,7 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *ro
 
 	D_ASSERT(nvme_conf != NULL);
 	D_ASSERT(opts != NULL);
+	D_ASSERT(vmd_enabled != NULL);
 	D_ASSERT(*vmd_enabled == false);
 
 	D_ALLOC_PTR(ctx);
@@ -984,6 +989,10 @@ bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_s
 	D_ASSERT(b_info->bdi_ctrlr->nss != NULL);
 	D_ASSERT(json != NULL);
 	D_ASSERT(json_size > 0);
+
+	/* Check input is null-terminated */
+	if (strnlen(json, JSON_MAX_CHARS) == JSON_MAX_CHARS)
+		return -DER_INVAL;
 
 	/* Trim chars to get single valid "nvme" object from array. */
 	tmp = strstr(json, "{");

@@ -505,7 +505,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 		pci_type = spdk_pci_device_get_type(pci_dev);
 		free(pci_dev);
-		ctrlr_tmp->pci_type = strndup(pci_type, strlen(pci_type));
+		ctrlr_tmp->pci_type = strndup(pci_type, NVME_DETAIL_BUFLEN);
 		if (ctrlr_tmp->pci_type == NULL) {
 			rc = -NVMEC_ERR_GET_PCI_TYPE;
 			goto fail;
