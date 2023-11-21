@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,7 +47,7 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode, const char *n
 				goto err;
 
 			if (size == 0) {
-				fuse_reply_xattr(req, out_size);
+				DFUSE_REPLY_XATTR(inode, req, out_size);
 				D_FREE(value);
 				return;
 			}
@@ -64,7 +64,7 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode, const char *n
 		D_GOTO(err, rc);
 
 	if (size == 0) {
-		fuse_reply_xattr(req, out_size);
+		DFUSE_REPLY_XATTR(inode, req, out_size);
 		return;
 	}
 

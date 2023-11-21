@@ -6,7 +6,7 @@
 from socket import gethostname
 
 from apricot import TestWithServers
-from avocado.core.exceptions import TestFail
+from general_utils import DaosTestError
 from pydaos.raw import DaosPool
 
 
@@ -62,7 +62,7 @@ class DmgSystemCleanupTest(TestWithServers):
         try:
             for idx in range(2):
                 self.container[idx].write_objects()
-        except TestFail as error:
+        except DaosTestError as error:
             self.fail("Unable to write container #{}: {}\n".format(idx, error))
 
         # Call dmg system cleanup on the host and create cleaned pool list.
@@ -78,7 +78,7 @@ class DmgSystemCleanupTest(TestWithServers):
         for idx in range(2):
             try:
                 self.container[idx].write_objects()
-            except TestFail as error:
+            except DaosTestError as error:
                 self.log.info("Unable to write container #%d: as expected %s\n", idx, error)
             else:
                 self.fail("Wrote to container #{} when it should have failed".format(idx))
