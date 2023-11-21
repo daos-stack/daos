@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+/* Implements the checksum scrubber for a pool target */
+
 #define D_LOGFAC	DD_FAC(csum)
 
 #include <daos_srv/vos.h>
