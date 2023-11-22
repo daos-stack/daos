@@ -9,10 +9,8 @@
 #include <spdk/thread.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
-#include <daos_srv/control.h>
 #include <spdk/string.h>
 #include <spdk/likely.h>
-#include <spdk/nvme.h>
 #include <spdk/env.h>
 #include <spdk/vmd.h>
 
@@ -460,80 +458,8 @@ out:
 	return rc;
 }
 
-static char *json_prefix = NULL;
-
 static int
-json_write_str_cb(void *cb_ctx, const void *data, size_t size)
-{
-	char *tmp, *end, **buf_ptr = cb_ctx;
-
-	D_ASSERT(json_prefix != NULL);
-	D_ASSERT(buf_ptr != NULL);
-	D_ASSERT(*buf_ptr == NULL);
-
-	if (size <= strlen(json_prefix))
-		return 0;
-
-	D_DEBUG(DB_MGMT, "%s json: %s\n", json_prefix, (char *)data);
-
-	tmp = strstr(data, json_prefix);
-	if (tmp) {
-		tmp += strlen(json_prefix);
-		end = strchr(tmp, '"');
-		if (end == NULL)
-			return 0;
-
-		D_STRNDUP(*buf_ptr, tmp, end - tmp);
-		if (*buf_ptr == NULL) {
-			D_ERROR("Failed to alloc string %s\n", tmp);
-			return -DER_NOMEM;
-		}
-	}
-
-	return 0;
-}
-
-static int
-find_bdev_json_str(struct spdk_bdev *bdev, char **buf_ptr, char *prefix)
-{
-	struct spdk_json_write_ctx	*json;
-	int				 rc;
-
-	D_ASSERT(buf_ptr != NULL);
-	D_ASSERT(*buf_ptr == NULL);
-
-	json_prefix = prefix;
-
-	json = spdk_json_write_begin(json_write_str_cb, buf_ptr, SPDK_JSON_WRITE_FLAG_FORMATTED);
-	if (json == NULL) {
-		D_ERROR("Failed to alloc SPDK json context\n");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	rc = spdk_bdev_dump_info_json(bdev, json);
-	if (rc != 0) {
-		D_ERROR("Failed to dump config from SPDK bdev (%s)\n", spdk_strerror(-rc));
-		D_GOTO(out, rc = daos_errno2der(-rc));
-	}
-
-	rc = spdk_json_write_end(json);
-	if (rc != 0) {
-		D_ERROR("Failed to write JSON (%s)\n", spdk_strerror(-rc));
-		D_GOTO(out, rc = daos_errno2der(-rc));
-	}
-
-	if (*buf_ptr == NULL) {
-		D_ERROR("No value could be read from JSON for key %s\n", prefix);
-		rc = -DER_INVAL;
-	}
-
-out:
-	json_prefix = NULL;
-	return rc;
-}
-
-static int
-json_write_cb(void *cb_ctx, const void *json, size_t json_size)
+json_write_bdev_cb(void *cb_ctx, const void *json, size_t json_size)
 {
 	struct bio_dev_info *b_info = cb_ctx;
 
@@ -546,7 +472,7 @@ json_find_bdev_params(struct spdk_bdev *bdev, struct bio_dev_info *b_info)
 	struct spdk_json_write_ctx *json;
 	int                         rc;
 
-	json = spdk_json_write_begin(json_write_cb, b_info, SPDK_JSON_WRITE_FLAG_FORMATTED);
+	json = spdk_json_write_begin(json_write_bdev_cb, b_info, SPDK_JSON_WRITE_FLAG_FORMATTED);
 	if (json == NULL) {
 		D_ERROR("Failed to alloc SPDK json context\n");
 		return -DER_NOMEM;
@@ -567,10 +493,43 @@ json_find_bdev_params(struct spdk_bdev *bdev, struct bio_dev_info *b_info)
 	return rc;
 }
 
+static int
+json_write_traddr_cb(void *cb_ctx, const void *data, size_t size)
+{
+	struct bio_dev_info *b_info = cb_ctx;
+	char                *prefix = "traddr\": \"";
+	char                *traddr, *end;
+
+	D_ASSERT(b_info != NULL);
+	/* traddr is already generated */
+	if (b_info->bdi_traddr != NULL)
+		return 0;
+
+	if (size <= strlen(prefix))
+		return 0;
+
+	traddr = strstr(data, prefix);
+	if (traddr) {
+		traddr += strlen(prefix);
+		end = strchr(traddr, '"');
+		if (end == NULL)
+			return 0;
+
+		D_STRNDUP(b_info->bdi_traddr, traddr, end - traddr);
+		if (b_info->bdi_traddr == NULL) {
+			D_ERROR("Failed to alloc traddr %s\n", traddr);
+			return -DER_NOMEM;
+		}
+	}
+
+	return 0;
+}
+
 int
 fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 {
 	struct spdk_bdev		*bdev;
+	struct spdk_json_write_ctx      *json;
 	int				 rc;
 
 	D_ASSERT(dev_name != NULL);
@@ -586,13 +545,26 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
 		return 0;
 
-	rc = find_bdev_json_str(bdev, &b_info->bdi_traddr, "traddr\": \"");
-	if (rc != 0) {
-		D_ERROR("Failed to get traddr for %s\n", dev_name);
-		return rc;
+	json = spdk_json_write_begin(json_write_traddr_cb, b_info, SPDK_JSON_WRITE_FLAG_FORMATTED);
+	if (json == NULL) {
+		D_ERROR("Failed to alloc SPDK json context\n");
+		return -DER_NOMEM;
 	}
 
-	return 0;
+	rc = spdk_bdev_dump_info_json(bdev, json);
+	if (rc != 0) {
+		D_ERROR("Failed to dump config from SPDK bdev (%s)\n", spdk_strerror(-rc));
+		rc = daos_errno2der(-rc);
+	}
+
+	spdk_json_write_end(json);
+
+	if (!rc && b_info->bdi_traddr == NULL) {
+		D_ERROR("Failed to get traddr for %s\n", dev_name);
+		rc = -DER_INVAL;
+	}
+
+	return rc;
 }
 
 static struct bio_dev_info *
