@@ -6862,7 +6862,8 @@ queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 	tse_task_t			*task;
 	struct shard_query_key_args	*args;
 	d_list_t			*head = NULL;
-	int				rc;
+	int				 rc;
+	uint32_t			 target;
 
 	rc = tse_task_create(shard_query_key_task, sched, NULL, &task);
 	if (rc != 0)
@@ -6877,10 +6878,15 @@ queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 	uuid_copy(args->kqa_coh_uuid, coh_uuid);
 	uuid_copy(args->kqa_cont_uuid, cont_uuid);
 
-	rc = obj_shard2tgtid(obj, shard, map_ver,
-			     &args->kqa_auxi.target);
+	rc = obj_shard2tgtid(obj, shard, map_ver, &target);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
+
+	/* Reset @enqueue_id if target changed */
+	if (target != args->kqa_auxi.target)
+		args->kqa_auxi.enqueue_id = 0;
+
+	args->kqa_auxi.target = target;
 
 	rc = tse_task_register_deps(api_task, 1, &task);
 	if (rc != 0)
