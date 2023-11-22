@@ -699,20 +699,6 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (opts->finished)
 		return;
 
-	pci_dev_type = spdk_pci_device_get_type(pci_device);
-	if (pci_dev_type == NULL) {
-		D_ERROR("nil pci device type returned\n");
-		opts->status = -DER_MISC;
-		return;
-	}
-
-	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
-		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s), can't manage LEDs\n",
-			pci_dev_type);
-		opts->status = -DER_NOSYS;
-		return;
-	}
-
 	if (!opts->all_devices) {
 		if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
 			return;
@@ -723,6 +709,20 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (rc != 0) {
 		D_ERROR("Failed to format VMD's PCI address (%s)\n", spdk_strerror(-rc));
 		opts->status = -DER_INVAL;
+		return;
+	}
+
+	pci_dev_type = spdk_pci_device_get_type(pci_device);
+	if (pci_dev_type == NULL) {
+		D_ERROR("nil pci device type returned\n");
+		opts->status = -DER_MISC;
+		return;
+	}
+
+	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
+		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s:%s), can't manage LED\n",
+			pci_dev_type, addr_buf);
+		opts->status = -DER_NOSYS;
 		return;
 	}
 
