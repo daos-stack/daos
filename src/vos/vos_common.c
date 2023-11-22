@@ -763,7 +763,7 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	rc = d_tm_add_metric(&vam->vam_fail_count, D_TM_COUNTER, "aggregation failures", NULL,
 			     "%s/%s/fail_count/tgt_%u", path, VOS_AGG_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'fail_count' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'fail_count' telemetry");
 
 	/* Metrics related to VOS checkpointing */
 	vos_chkpt_metrics_init(&vp_metrics->vp_chkpt_metrics, path, tgt_id);
