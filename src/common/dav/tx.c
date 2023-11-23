@@ -1136,6 +1136,7 @@ dav_tx_add_range_direct(const void *ptr, size_t size)
 		return ret;
 	}
 
+	D_ASSERT(ptr >= tx->pop->do_base);
 	struct tx_range_def args = {
 		.offset = OBJ_PTR_TO_OFF(tx->pop, ptr),
 		.size = size,
@@ -1182,6 +1183,7 @@ dav_tx_xadd_range_direct(const void *ptr, size_t size, uint64_t flags)
 		return ret;
 	}
 
+	D_ASSERT(ptr >= tx->pop->do_base);
 	off = OBJ_PTR_TO_OFF(tx->pop, ptr);
 	struct tx_range_def args = {
 		.offset = off,
@@ -1494,14 +1496,20 @@ uint64_t
 dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num)
 {
 	int rc;
+	int tx_inprogress = 0;
 
 	DAV_DBG("pop %p act %p size %zu type_num %llx",
 		pop, act, size,
 		(unsigned long long)type_num);
 
 	DAV_API_START();
-	rc = lw_tx_begin(pop);
-	D_ASSERT(rc == 0);
+	if (get_tx()->stage != DAV_TX_STAGE_NONE)
+		tx_inprogress = 1;
+
+	if (!tx_inprogress) {
+		rc = lw_tx_begin(pop);
+		D_ASSERT(rc == 0);
+	}
 
 	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
 		0, 0, 0, act) != 0) {
@@ -1509,6 +1517,16 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_n
 		return 0;
 	}
 
+	if (!tx_inprogress) {
+		if (wal_tx_act_nr(pop->do_utx) != 0) {
+			rc = 1;
+			D_ERROR("BEGIN reserve stats for %s : %lu %lu %lu\n", pop->do_path, pop->do_rsrv_cnt, pop->do_commt_cnt, pop->do_net_commit_items);
+			pop->do_rsrv_cnt++;
+		}
+		lw_tx_end(pop, NULL);
+		if (rc)
+			D_ERROR("END reserve stats for %s : %lu %lu %lu\n", pop->do_path, pop->do_rsrv_cnt, pop->do_commt_cnt, pop->do_net_commit_items);
+	}
 	DAV_API_END();
 	return act->heap.offset;
 }

@@ -113,6 +113,9 @@ dav_wal_tx_submit(struct dav_obj *dav_hdl, struct umem_wal_tx *utx, void *data)
 	if (wal_tx_act_nr(utx) == 0)
 		return 0;
 
+	dav_hdl->do_net_commit_items += wal_tx_act_nr(utx);
+	dav_hdl->do_commt_cnt++;
+
 	d_list_for_each_entry_safe(wa, next, redo_list, wa_link) {
 		ua = &wa->wa_act;
 		switch (ua->ac_opc) {

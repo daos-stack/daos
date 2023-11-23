@@ -64,6 +64,9 @@ typedef struct dav_obj {
 	struct umem_store               *do_store;
 
 	struct dav_clogs		 clogs __attribute__ ((__aligned__(CACHELINE_SIZE)));
+	uint64_t                         do_rsrv_cnt;
+	uint64_t                         do_commt_cnt;
+	uint64_t                         do_net_commit_items;
 } dav_obj_t;
 
 static inline
