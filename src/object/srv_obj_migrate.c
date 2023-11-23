@@ -1388,6 +1388,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 		for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++) {
 			daos_iod_t iod = mrone->mo_iods_from_parity[i];
 			daos_epoch_t fetch_eph;
+			daos_epoch_t update_eph;
 
 			iod.iod_nr = 1;
 			iod.iod_recxs = &mrone->mo_iods_from_parity[i].iod_recxs[j];
@@ -1412,9 +1413,10 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 				fetch_eph = mrone->mo_epoch;
 			else
 				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
-			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1, fetch_eph,
-						mrone->mo_iods_update_ephs_from_parity[i][j],
-						DIOF_EC_RECOV_FROM_PARITY, ds_cont);
+
+			update_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1, fetch_eph, update_eph,
+							 DIOF_EC_RECOV_FROM_PARITY, ds_cont);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
