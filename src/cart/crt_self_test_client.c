@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -162,7 +162,6 @@ void crt_self_test_client_init(void)
 
 void crt_self_test_client_fini(void)
 {
-	D_MUTEX_DESTROY(&g_data_lock);
 }
 
 static void
