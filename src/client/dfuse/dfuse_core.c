@@ -167,7 +167,7 @@ dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 
 #if 1
-	rc = D_RWLOCK_TRYWRLOCK(&dfuse_info->di_dte_lock);
+	rc = D_MUTEX_TRYLOCK(&dfuse_info->di_dte_lock);
 	if (rc != 0) {
 		DFUSE_TRA_INFO(inode, "Unable to get lock, dropping");
 		return 0;
