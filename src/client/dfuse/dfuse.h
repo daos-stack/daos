@@ -1027,9 +1027,6 @@ int
 dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *inode,
 			double timeout);
 
-int
-dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent);
-
 /* Mark the cache for a directory invalid.  Called when directory contents change on create,
  * unlink or rename
  */

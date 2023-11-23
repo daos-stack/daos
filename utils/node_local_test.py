@@ -1392,6 +1392,8 @@ class DFuse():
             if self.container:
                 cmd.extend(['--container', self.container])
 
+        cmd.extend(['-t', str(32)])
+
         print(f"Running {' '.join(cmd)}")
         # pylint: disable-next=consider-using-with
         self._sp = subprocess.Popen(cmd, env=my_env)

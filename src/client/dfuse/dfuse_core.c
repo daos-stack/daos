@@ -75,13 +75,41 @@ cont:
 bool
 dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 
+/* Evict inodes based on timeout
+ *
+ * Maintain a number of lists for inode timeouts, for each timeout value keep a list of inodes
+ * that are using that value, when a inode is refreshed by the kernel then move the inode to the end
+ * of the list.
+ *
+ * Separately have a thread which periodically will walk each list starting at the front and
+ * invalidate any entry where the timeout has expired.
+ *
+ * In this way the lists are never traversed, on access a entry is removed from where it is and
+ * appended to the end, and the timeout starts at the front of the list and traverses only as far
+ * as it needs to until the front entry is to be kept.
+ *
+ * Locking: The dte_lock is contended, it is accessed from:
+ *  ie_close() which is called from forget and some failure paths in readdir()
+ *  lookup() to move entries to the end of this list.
+ *  de_run() to pull items from the front of the list.
+ */
+
+struct inode_core {
+	char       name[NAME_MAX + 1];
+	fuse_ino_t parent;
+};
+
+#define EVICT_COUNT 8
+
 /* Eviction loop, run periodically in it's own thread */
-int
+bool
 dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 {
 	struct dfuse_time_entry  *dte;
 	struct dfuse_inode_entry *inode, *inodep;
-	int                       evicted = 0;
+	bool                      done_work       = false;
+	struct inode_core         ic[EVICT_COUNT] = {};
+	int                       idx             = 0;
 
 	D_MUTEX_LOCK(&dfuse_info->di_dte_lock);
 
@@ -91,7 +119,6 @@ dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 
 		d_list_for_each_entry_safe(inode, inodep, &dte->inode_list, ie_evict_entry) {
 			double timeout;
-			int    rc;
 
 			if (dfuse_dentry_get_valid(inode, dte->time, &timeout)) {
 				DFUSE_TRA_INFO(inode, "still valid bucket %lf left %lf " DF_DE,
@@ -105,25 +132,36 @@ dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 				continue;
 			}
 
-			DFUSE_TRA_INFO(inode, "Evicting bucket %lf " DF_DE, dte->time,
-				       DP_DE(inode->ie_name));
-
-			rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session,
-							      inode->ie_parent, inode->ie_name,
-							      strnlen(inode->ie_name, NAME_MAX));
-			if (rc && rc != -ENOENT)
-				DHS_ERROR(inode, -rc, "notify_delete() failed");
+			/* Log the mode here, but possibly just evict dirs anyway */
+			ic[idx].parent = inode->ie_parent;
+			strncpy(ic[idx].name, inode->ie_name, NAME_MAX);
 
 			d_list_del_init(&inode->ie_evict_entry);
-			/* Drop ref? */
-			evicted++;
-			goto out;
+
+			idx++;
+
+			if (idx == EVICT_COUNT)
+				goto out;
 		}
 	}
 out:
+	DFUSE_TRA_INFO(dfuse_info, "Unlocking");
 	D_MUTEX_UNLOCK(&dfuse_info->di_dte_lock);
 
-	return evicted;
+	for (int i = 0; i < idx; i++) {
+		int rc;
+
+		DFUSE_TRA_INFO(dfuse_info, "Evicting entry %#lx " DF_DE, ic[i].parent,
+			       DP_DE(ic[i].name));
+
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ic[i].parent,
+						      ic[i].name, strnlen(ic[i].name, NAME_MAX));
+		if (rc && rc != -ENOENT)
+			DHS_ERROR(inode, -rc, "notify_delete() failed");
+		done_work = true;
+	}
+
+	return done_work;
 }
 
 /* Main loop for eviction thread.  Spins until ready for exit waking after one second and iterates
@@ -150,8 +188,9 @@ dfuse_evict_thread(void *arg)
 				DS_ERROR(rc, "sem_wait");
 		}
 
-		while (dfuse_de_run(dfuse_info, 0) != 0)
+		while (dfuse_de_run(dfuse_info, 0))
 			;
+		DFUSE_TRA_INFO(dfuse_info, "Sleeping");
 	}
 	return NULL;
 }
@@ -162,11 +201,10 @@ dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry 
 {
 	struct dfuse_time_entry *dte;
 	struct timespec          now;
-	int                      rc;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 
-#if 1
+#if 0
 	rc = D_MUTEX_TRYLOCK(&dfuse_info->di_dte_lock);
 	if (rc != 0) {
 		DFUSE_TRA_INFO(inode, "Unable to get lock, dropping");
@@ -185,7 +223,9 @@ dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry 
 		if (dte->time > timeout)
 			continue;
 
-		DFUSE_TRA_INFO(inode, "Moved to tail of %lf list %lf", dte->time, timeout);
+		DFUSE_TRA_INFO(inode, "Putting at tail %#lx " DF_DE " timeout %lf",
+			       inode->ie_parent, DP_DE(inode->ie_name), timeout);
+
 		d_list_move_tail(&inode->ie_evict_entry, &dte->inode_list);
 		break;
 	}
@@ -1357,10 +1397,7 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	int      rc;
 	uint32_t ref;
 
-	if (d_list_empty(&ie->ie_evict_entry)) {
-		D_ERROR("List is empty");
-	} else {
-		D_ERROR("List is not empty");
+	if (!d_list_empty(&ie->ie_evict_entry)) {
 		D_MUTEX_LOCK(&dfuse_info->di_dte_lock);
 		d_list_del(&ie->ie_evict_entry);
 		D_MUTEX_UNLOCK(&dfuse_info->di_dte_lock);

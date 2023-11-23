@@ -131,6 +131,7 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 
 	ie->ie_stat = entry.attr;
 
+	/* Deaddlock */
 	dfuse_update_inode_time(dfuse_info, ie, entry.entry_timeout);
 
 	if (fi_out) {
