@@ -6,9 +6,8 @@
 import traceback
 import uuid
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 
 RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"

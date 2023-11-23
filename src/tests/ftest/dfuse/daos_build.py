@@ -138,8 +138,8 @@ class DaosBuild(DfuseTestBase):
         remote_env = {}
         if run_on_vms:
             dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
-            build_jobs = 6
-            remote_env['D_IL_MAX_EQ'] = '2'
+            build_jobs = 6 * 2
+            remote_env['D_IL_MAX_EQ'] = '0'
 
         intercept_jobs = build_jobs
         if intercept:
@@ -216,7 +216,9 @@ class DaosBuild(DfuseTestBase):
                 'daos filesystem query {}'.format(mount_dir),
                 'daos filesystem evict {}'.format(build_dir),
                 'daos filesystem query {}'.format(mount_dir),
-                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
+                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs),
+                'scons -C {} --jobs {} install'.format(build_dir, intercept_jobs),
+                'daos filesystem query {}'.format(mount_dir)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.

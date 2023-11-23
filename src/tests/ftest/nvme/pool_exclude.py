@@ -3,17 +3,17 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from multiprocessing import Queue
-import time
 import random
-import threading
 import re
+import threading
+import time
+from multiprocessing import Queue
 
 from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
-from test_utils_pool import add_pool
 from osa_utils import OSAUtils
+from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 

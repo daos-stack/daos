@@ -6,16 +6,12 @@
 
 import json
 
-from ClusterShell.NodeSet import NodeSet
-
-from general_utils import run_command, DaosTestError, get_journalctl, journalctl_time
-from ior_test_base import IorTestBase
-from exception_utils import CommandFailure
-
 # Imports need to be split or python fails to import
-from apricot import TestWithServers
-from apricot import TestWithoutServers
-
+from apricot import TestWithoutServers, TestWithServers
+from ClusterShell.NodeSet import NodeSet
+from exception_utils import CommandFailure
+from general_utils import DaosTestError, get_journalctl, journalctl_time, run_command
+from ior_test_base import IorTestBase
 
 # pylint: disable-next=fixme
 # TODO Provision all daos nodes using provisioning tool provided by HPCM

@@ -3,8 +3,9 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import re
+from logging import getLogger
+
 from ClusterShell.NodeSet import NodeSet
 
 
@@ -120,6 +121,7 @@ class TelemetryUtils():
         "engine_sched_relax_time",
         "engine_sched_wait_queue",
         "engine_sched_sleep_queue",
+        "engine_sched_total_reject",
         "engine_sched_cycle_duration",
         "engine_sched_cycle_duration_max",
         "engine_sched_cycle_duration_mean",

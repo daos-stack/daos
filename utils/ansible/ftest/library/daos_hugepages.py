@@ -9,9 +9,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import datetime
 import os
 import re
-import datetime
 import subprocess  # nosec B404
 
 from ansible.module_utils.basic import AnsibleModule

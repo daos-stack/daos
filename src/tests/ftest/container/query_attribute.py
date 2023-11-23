@@ -4,9 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import base64
+
 from apricot import TestWithServers
 from general_utils import report_errors
-
 
 # Test container set-attr, get-attr, and list-attrs with different
 # types of characters.
