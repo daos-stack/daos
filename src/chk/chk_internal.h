@@ -134,7 +134,7 @@ CRT_RPC_DECLARE(chk_query, DAOS_ISEQ_CHK_QUERY, DAOS_OSEQ_CHK_QUERY);
 /*
  * CHK_MARK:
  * From check leader to check engine to mark some rank as "dead". Under check mode, if some rank
- * is dead (and failed to rejoin), it will not be exlcuded from related pool map to avoid further
+ * is dead (and failed to rejoin), it will not be excluded from related pool map to avoid further
  * damaging the system, instead, it will be mark as "dead" by the check instance and the check
  * status on related pool(s) will be marked as "failed".
  */
@@ -998,6 +998,9 @@ static inline void
 chk_pool_get(struct chk_pool_rec *cpr)
 {
 	cpr->cpr_refs++;
+
+	D_DEBUG(DB_TRACE, "Get ref on pool rec %p for "DF_UUIDF", ref %d\n",
+		cpr, DP_UUID(cpr->cpr_uuid), cpr->cpr_refs);
 }
 
 static inline void
@@ -1008,6 +1011,9 @@ chk_pool_put(struct chk_pool_rec *cpr)
 
 	/* NOTE: Before being destroyed, keep it in the list. */
 	D_ASSERT(!d_list_empty(&cpr->cpr_link));
+
+	D_DEBUG(DB_TRACE, "Pet ref on pool rec %p for "DF_UUIDF", ref %d\n",
+		cpr, DP_UUID(cpr->cpr_uuid), cpr->cpr_refs);
 
 	if (--(cpr->cpr_refs) == 0) {
 		d_list_del(&cpr->cpr_link);
@@ -1034,6 +1040,9 @@ chk_pool_put(struct chk_pool_rec *cpr)
 			for (i = 0; i < cpr->cpr_shard_nr; i++)
 				D_FREE(cpr->cpr_mbs[i].cpm_tgt_status);
 		}
+
+		D_DEBUG(DB_TRACE, "Destroy pool rec %p for "DF_UUIDF"\n",
+			cpr, DP_UUID(cpr->cpr_uuid));
 
 		D_FREE(cpr->cpr_mbs);
 		D_FREE(cpr->cpr_label);
@@ -1150,42 +1159,41 @@ chk_dup_string(char **tgt, const char *src, size_t len)
 static inline void
 chk_stop_sched(struct chk_instance *ins)
 {
+	uint64_t	gen = ins->ci_bk.cb_gen;
+
 	ABT_mutex_lock(ins->ci_abt_mutex);
-	if (ins->ci_sched != ABT_THREAD_NULL && ins->ci_sched_running) {
-		ins->ci_sched_running = 0;
+	if (ins->ci_sched_running && !ins->ci_sched_exiting) {
+		D_ASSERT(ins->ci_sched != ABT_THREAD_NULL);
+
+		D_INFO("Stopping %s instance on rank %u with gen "DF_U64"\n",
+		       ins->ci_is_leader ? "leader" : "engine", dss_self_rank(), gen);
+
+		ins->ci_sched_exiting = 1;
 		ABT_cond_broadcast(ins->ci_abt_cond);
 		ABT_mutex_unlock(ins->ci_abt_mutex);
 		ABT_thread_free(&ins->ci_sched);
 	} else {
 		ABT_mutex_unlock(ins->ci_abt_mutex);
+		/* Check ci_bk.cb_gen for the case of others restarted checker during my wait. */
+		while (ins->ci_sched_running && gen == ins->ci_bk.cb_gen)
+			dss_sleep(300);
 	}
 }
 
 static inline int
 chk_ins_can_start(struct chk_instance *ins)
 {
-	struct chk_bookmark	*cbk = &ins->ci_bk;
-
 	if (unlikely(!ins->ci_inited))
 		return -DER_AGAIN;
 
 	if (ins->ci_starting)
 		return -DER_INPROGRESS;
 
-	if (ins->ci_stopping)
+	if (ins->ci_stopping || ins->ci_sched_exiting)
 		return -DER_BUSY;
 
 	if (ins->ci_sched_running)
 		return -DER_ALREADY;
-
-	/*
-	 * If ci_sched_running is zero but check instance is still running,
-	 * then someone is trying to stop it.
-	 */
-	if (((ins->ci_is_leader && cbk->cb_magic == CHK_BK_MAGIC_LEADER) ||
-	     (!ins->ci_is_leader && cbk->cb_magic == CHK_BK_MAGIC_ENGINE)) &&
-	    cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING)
-		return -DER_BUSY;
 
 	return 0;
 }
