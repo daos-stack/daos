@@ -470,16 +470,16 @@ typedef DAOS_MUTEX pthread_mutex_t;
 #endif /* DAOS_MUTEX_WRAPPER */
 
 #define D_SPIN_UNLOCK(x)        __D_PTHREAD(pthread_spin_unlock, x)
-#define D_RWLOCK_RDLOCK(x)	__D_PTHREAD(pthread_rwlock_rdlock, x)
-#define D_RWLOCK_WRLOCK(x)	__D_PTHREAD(pthread_rwlock_wrlock, x)
-#define D_SPIN_LOCK(x)		__D_PTHREAD(pthread_spin_lock, x)
+#define D_RWLOCK_RDLOCK(x)      __D_PTHREAD(pthread_rwlock_rdlock, x)
+#define D_RWLOCK_WRLOCK(x)      __D_PTHREAD(pthread_rwlock_wrlock, x)
+#define D_SPIN_LOCK(x)          __D_PTHREAD(pthread_spin_lock, x)
 #define D_SPIN_UNLOCK(x)        __D_PTHREAD(pthread_spin_unlock, x)
-#define D_RWLOCK_TRYWRLOCK(x)	__D_PTHREAD_TRYLOCK(pthread_rwlock_trywrlock, x)
+#define D_RWLOCK_TRYWRLOCK(x)   __D_PTHREAD_TRYLOCK(pthread_rwlock_trywrlock, x)
 #define D_RWLOCK_UNLOCK(x)      __D_PTHREAD(pthread_rwlock_unlock, x)
-#define D_SPIN_DESTROY(x)	__D_PTHREAD(pthread_spin_destroy, x)
+#define D_SPIN_DESTROY(x)       __D_PTHREAD(pthread_spin_destroy, x)
 #define D_RWLOCK_DESTROY(x)     __D_PTHREAD(pthread_rwlock_destroy, x)
-#define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
-#define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
+#define D_SPIN_INIT(x, y)       __D_PTHREAD_INIT(pthread_spin_init, x, y)
+#define D_RWLOCK_INIT(x, y)     __D_PTHREAD_INIT(pthread_rwlock_init, x, y)
 
 #define DGOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
 #define DGOLDEN_RATIO_PRIME_32	0x9e370001UL

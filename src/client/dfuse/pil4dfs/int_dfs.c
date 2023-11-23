@@ -244,7 +244,7 @@ static DAOS_MUTEX      lock_fd        = DAOS_MUTEX_INITIALIZER;
 static DAOS_MUTEX      lock_dirfd     = DAOS_MUTEX_INITIALIZER;
 static DAOS_MUTEX      lock_mmap      = DAOS_MUTEX_INITIALIZER;
 static DAOS_MUTEX      lock_fd_dup2ed = DAOS_MUTEX_INITIALIZER;
-static DAOS_MUTEX lock_eqh = DAOS_MUTEX_INITIALIZER;
+static DAOS_MUTEX      lock_eqh       = DAOS_MUTEX_INITIALIZER;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t          mode_not_umask;
