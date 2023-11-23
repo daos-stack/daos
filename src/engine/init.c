@@ -1113,6 +1113,8 @@ main(int argc, char **argv)
 	sigaddset(&set, SIGUSR1);
 	sigaddset(&set, SIGUSR2);
 	while (1) {
+		char cmd[128];
+
 		rc = sigwait(&set, &sig);
 		if (rc) {
 			D_ERROR("failed to wait for signals: %d\n", rc);
@@ -1148,6 +1150,8 @@ main(int argc, char **argv)
 						 "/tmp/daos_dump_%d.txt",
 						 getpid());
 
+				sprintf(cmd, "/usr/bin/pstack %d >> %s\n", getpid(), name);
+
 				abt_infos = fopen(name, "a");
 				if (abt_infos == NULL) {
 					D_ERROR("failed to open file to dump ABT infos and ULTs stacks: %s (%d)\n",
@@ -1156,6 +1160,7 @@ main(int argc, char **argv)
 				}
 			}
 
+			rc = system(cmd);
 			/* print header msg with date */
 			fprintf(abt_infos,
 				"=== Dump of ABT infos and ULTs stacks in %s mode (",
