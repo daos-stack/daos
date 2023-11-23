@@ -15,8 +15,14 @@
 
 #include <gurt/list.h>
 
+typedef struct daos_mutex2 {
+	pthread_mutex_t lock;
+	bool            inited;
+	int            *check;
+} DAOS_MUTEX2;
+
 /* tse_task arguments max length (pthread_mutex_t is of different size between x86 and aarch64). */
-#define TSE_TASK_ARG_LEN	(840 + sizeof(pthread_mutex_t))
+#define TSE_TASK_ARG_LEN        (840 + sizeof(DAOS_MUTEX2))
 /* internal tse private data size (struct tse_task_private) */
 #define TSE_PRIV_SIZE		(TSE_TASK_ARG_LEN + 136)
 /* tse_task is used to track single asynchronous operation (8 bytes used for public members). */

@@ -5528,9 +5528,6 @@ init_myhook(void)
 	if (rc)
 		return;
 
-	rc = D_MUTEX_INIT(&lock_eqh, NULL);
-	if (rc)
-		return;
 	rc = d_getenv_uint64_t("D_IL_MAX_EQ", &eq_count_loc);
 	if (rc != -DER_NONEXIST) {
 		if (eq_count_loc > MAX_EQ) {
@@ -5855,7 +5852,7 @@ get_eqh(daos_handle_t *eqh)
 	if (eq_count_max == 0)
 		return -1;
 
-	rc = pthread_mutex_lock(&lock_eqh);
+	rc = D_MUTEX_LOCK(&lock_eqh);
 	/** create a new EQ if the EQ pool is not full; otherwise round robin EQ use from pool */
 	if (eq_count >= eq_count_max) {
 		td_eqh = eq_list[eq_idx++];
@@ -5864,13 +5861,13 @@ get_eqh(daos_handle_t *eqh)
 	} else {
 		rc = daos_eq_create(&td_eqh);
 		if (rc) {
-			pthread_mutex_unlock(&lock_eqh); 
+			D_MUTEX_UNLOCK(&lock_eqh);
 			return -1;
 		}
 		eq_list[eq_count] = td_eqh;
 		eq_count++;
 	}
-	pthread_mutex_unlock(&lock_eqh);
+	D_MUTEX_UNLOCK(&lock_eqh);
 	*eqh = td_eqh;
 	return 0;
 }

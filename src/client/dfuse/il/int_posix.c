@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC DD_FAC(il)
 #include <stdarg.h>
 #include <inttypes.h>
 #include <libgen.h>
