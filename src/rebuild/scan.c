@@ -93,6 +93,8 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 {
 	struct rebuild_tgt_pool_tracker *rpt = arg->rpt;
 	int				rc;
+	uint64_t			enqueue_id;
+	uint32_t			max_delay;
 
 	/* re-init the send argument to fill the object buffer */
 	arg->count = 0;
@@ -111,21 +113,25 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		" cnt %d stable epoch "DF_U64"\n", DP_UUID(rpt->rt_pool_uuid), arg->tgt_id,
 		arg->count, rpt->rt_stable_epoch);
 	while (1) {
+		enqueue_id = 0;
+		max_delay = 0;
 		rc = ds_object_migrate_send(rpt->rt_pool, rpt->rt_poh_uuid,
 					    rpt->rt_coh_uuid, arg->cont_uuid,
 					    arg->tgt_id, rpt->rt_rebuild_ver,
 					    rpt->rt_rebuild_gen, rpt->rt_stable_epoch,
 					    arg->oids, arg->ephs, arg->punched_ephs, arg->shards,
-					    arg->count, rpt->rt_new_layout_ver, rpt->rt_rebuild_op);
+					    arg->count, rpt->rt_new_layout_ver, rpt->rt_rebuild_op,
+					    &enqueue_id, &max_delay);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
-		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
+		    rc != -DER_OVERLOAD_RETRY && rc != -DER_AGAIN &&
+		    !daos_crt_network_error(rc)))
 			break;
 
 		/* otherwise let's retry */
 		D_DEBUG(DB_REBUILD, DF_UUID" retry send object to tgt_id %d\n",
 			DP_UUID(rpt->rt_pool_uuid), arg->tgt_id);
-		dss_sleep(0);
+		dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
 	}
 out:
 	return rc;

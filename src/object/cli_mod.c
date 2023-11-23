@@ -37,15 +37,15 @@ dc_obj_init(void)
 		D_GOTO(out_utils, rc);
 
 	dc_obj_proto_version = 0;
-	rc = daos_rpc_proto_query(obj_proto_fmt_0.cpf_base, ver_array, 2, &dc_obj_proto_version);
+	rc = daos_rpc_proto_query(obj_proto_fmt_v9.cpf_base, ver_array, 2, &dc_obj_proto_version);
 	if (rc)
 		D_GOTO(out_class, rc);
 
 	if (dc_obj_proto_version == DAOS_OBJ_VERSION - 1) {
-		rc = daos_rpc_register(&obj_proto_fmt_0, OBJ_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&obj_proto_fmt_v9, OBJ_PROTO_CLI_COUNT, NULL,
 				       DAOS_OBJ_MODULE);
 	} else if (dc_obj_proto_version == DAOS_OBJ_VERSION) {
-		rc = daos_rpc_register(&obj_proto_fmt_1, OBJ_PROTO_CLI_COUNT, NULL,
+		rc = daos_rpc_register(&obj_proto_fmt_v10, OBJ_PROTO_CLI_COUNT, NULL,
 				       DAOS_OBJ_MODULE);
 	} else {
 		D_ERROR("%d version object RPC not supported.\n", dc_obj_proto_version);
@@ -62,9 +62,9 @@ dc_obj_init(void)
 	if (rc) {
 		D_ERROR("failed to obj_ec_codec_init: "DF_RC"\n", DP_RC(rc));
 		if (dc_obj_proto_version == DAOS_OBJ_VERSION - 1)
-			daos_rpc_unregister(&obj_proto_fmt_0);
+			daos_rpc_unregister(&obj_proto_fmt_v9);
 		else
-			daos_rpc_unregister(&obj_proto_fmt_1);
+			daos_rpc_unregister(&obj_proto_fmt_v10);
 		D_GOTO(out_class, rc);
 	}
 
@@ -88,9 +88,9 @@ void
 dc_obj_fini(void)
 {
 	if (dc_obj_proto_version == DAOS_OBJ_VERSION - 1)
-		daos_rpc_unregister(&obj_proto_fmt_0);
+		daos_rpc_unregister(&obj_proto_fmt_v9);
 	else
-		daos_rpc_unregister(&obj_proto_fmt_1);
+		daos_rpc_unregister(&obj_proto_fmt_v10);
 	obj_ec_codec_fini();
 	obj_class_fini();
 	obj_utils_fini();
