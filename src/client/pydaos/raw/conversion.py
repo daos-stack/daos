@@ -36,7 +36,7 @@ def str_to_c_uuid(uuidstr):
 
 
 def c_err_to_str(err_num):
-    """ Utility function to convert C error code to its string id.
+    """Utility function to convert C error code to its string id.
 
     Args:
         err_num (int): C error code.
