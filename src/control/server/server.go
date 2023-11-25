@@ -308,27 +308,14 @@ func (srv *server) addEngines(ctx context.Context) error {
 		return err
 	}
 
-	// Retrieve NVMe device details (before engines are started) so static details can be
-	// recovered by the engine storage provider(s) during scan even if devices are in use.
-	nvmeScanResp, err := scanBdevStorage(srv)
-	if err != nil {
-		return err
-	}
-
 	if len(srv.cfg.Engines) == 0 {
 		return nil
 	}
 
-	nrEngineBdevsIdx := -1
-	nrEngineBdevs := -1
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
 			return errors.Wrap(err, "creating engine instances")
-		}
-
-		if err := setEngineBdevs(engine, nvmeScanResp, &nrEngineBdevsIdx, &nrEngineBdevs); err != nil {
-			return errors.Wrap(err, "setting engine bdevs")
 		}
 
 		registerEngineEventCallbacks(srv, engine, &allStarted)

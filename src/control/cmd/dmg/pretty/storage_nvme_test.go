@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -329,23 +329,30 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 }
 
 func TestPretty_PrintNVMetaMap(t *testing.T) {
+	mockNvmeController := func(idx int32) *storage.NvmeController {
+		c := storage.MockNvmeController(idx)
+		c.SmdDevices = []*storage.SmdDevice{
+			storage.MockSmdDevice(*c, idx),
+		}
+		return c
+	}
 	var (
-		controllerA = storage.MockNvmeController(1)
-		controllerB = storage.MockNvmeController(2)
-		controllerC = storage.MockNvmeController(1)
-		controllerD = storage.MockNvmeController(2)
-		controllerE = storage.MockNvmeController(1)
-		controllerF = storage.MockNvmeController(2)
+		controllerA = mockNvmeController(1)
+		controllerB = mockNvmeController(2)
+		controllerC = mockNvmeController(1)
+		controllerD = mockNvmeController(2)
+		controllerE = mockNvmeController(1)
+		controllerF = mockNvmeController(2)
 	)
 	controllerA.SmdDevices = nil
 	controllerB.SmdDevices = nil
 	controllerE.SmdDevices = []*storage.SmdDevice{
-		storage.MockSmdDevice(controllerE.PciAddr, 0),
-		storage.MockSmdDevice(controllerE.PciAddr, 1),
+		storage.MockSmdDevice(*controllerE, 0),
+		storage.MockSmdDevice(*controllerE, 1),
 	}
 	controllerF.SmdDevices = []*storage.SmdDevice{
-		storage.MockSmdDevice(controllerF.PciAddr, 2),
-		storage.MockSmdDevice(controllerF.PciAddr, 3),
+		storage.MockSmdDevice(*controllerF, 2),
+		storage.MockSmdDevice(*controllerF, 3),
 	}
 	for name, tc := range map[string]struct {
 		hsm         control.HostStorageMap

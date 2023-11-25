@@ -460,6 +460,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		resp->devices[i]->ctrlr->namespaces[0]->id   = dev_info->bdi_ctrlr->nss->id;
 		resp->devices[i]->ctrlr->namespaces[0]->size = dev_info->bdi_ctrlr->nss->size;
+		resp->devices[i]->ctrlr_namespace_id = dev_info-bdi_ctrlr->nss->id;
 
 		D_DEBUG(DB_MGMT, "ns id/size: '%d' '%ld'\n",
 			resp->devices[i]->ctrlr->namespaces[0]->id,
