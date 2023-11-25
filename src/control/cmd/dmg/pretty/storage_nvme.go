@@ -292,6 +292,10 @@ func PrintNvmeMetaMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintCo
 
 				for _, device := range controller.SmdDevices {
 					iw1 := txtfmt.NewIndentWriter(iw)
+
+					// Attach parent controller details to SMD before printing.
+					device.Ctrlr = *controller
+
 					if err := printSmdDevice(device, iw1, opts...); err != nil {
 						return err
 					}
