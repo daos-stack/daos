@@ -2161,10 +2161,12 @@ again:
 
 	/*
 	 * NOTE: Ideally, we probably should create ULT for each shard, but for performance
-	 *	 reasons, let's only create one for all remote targets for now.
+	 *	 reasons, let's only create one for all remote targets for now. Moreover,
+	 *	 we assume that func does not require deep stacks to forward the remote
+	 *	 requests (dtx_leader_exec_ops_ult does not execute the local part of func).
 	 */
 	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
-			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
+			    dss_get_module_info()->dmi_tgt_id, 0, NULL);
 	if (rc != 0) {
 		D_ERROR("ult create failed [%u, %u] (2): "DF_RC"\n",
 			dlh->dlh_forward_idx, dlh->dlh_forward_cnt, DP_RC(rc));
@@ -2235,8 +2237,9 @@ exec:
 	/* The ones without DELAY flag will be skipped when scan the targets array. */
 	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 
+	/* See also the dss_ult_create above. */
 	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
-			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
+			    dss_get_module_info()->dmi_tgt_id, 0, NULL);
 	if (rc != 0) {
 		D_ERROR("ult create failed (4): "DF_RC"\n", DP_RC(rc));
 		ABT_future_free(&dlh->dlh_future);

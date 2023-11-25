@@ -671,8 +671,8 @@ dtx_rpc_prep(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **
 
 	/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
 	if (dss_has_enough_helper())
-		rc = dss_ult_create(dtx_rpc_helper, dca, DSS_XS_IOFW, dca->dca_tgtid,
-				    DSS_DEEP_STACK_SZ, &dca->dca_helper);
+		rc = dss_ult_create(dtx_rpc_helper, dca, DSS_XS_IOFW, dca->dca_tgtid, 0,
+				    &dca->dca_helper);
 	else
 		rc = dtx_rpc_internal(dca);
 
@@ -930,7 +930,10 @@ again:
 		if (myrank == target->ta_comp.co_rank &&
 		    dss_get_module_info()->dmi_tgt_id == target->ta_comp.co_index) {
 			d_list_del(&dsp->dsp_link);
-			d_list_add_tail(&dsp->dsp_link, &self);
+			if (for_io)
+				d_list_add_tail(&dsp->dsp_link, &self);
+			else
+				dtx_dsp_free(dsp);
 			if (--(*check_count) == 0)
 				break;
 			continue;
@@ -1137,7 +1140,7 @@ next2:
 			dck.oid = dsp->dsp_oid;
 			dck.dkey_hash = dsp->dsp_dkey_hash;
 			rc = dtx_commit(cont, &pdte, &dck, 1);
-			if (rc < 0 && rc != -DER_NONEXIST)
+			if (rc < 0 && rc != -DER_NONEXIST && for_io)
 				d_list_add_tail(&dsp->dsp_link, cmt_list);
 			else
 				dtx_dsp_free(dsp);
@@ -1153,7 +1156,7 @@ next2:
 			dtx_dsp_free(dsp);
 			continue;
 		case DSHR_ABORT_FAILED:
-			if (abt_list != NULL)
+			if (for_io)
 				d_list_add_tail(&dsp->dsp_link, abt_list);
 			else
 				dtx_dsp_free(dsp);

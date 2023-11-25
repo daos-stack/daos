@@ -1714,7 +1714,8 @@ dc_obj_layout_refresh(daos_handle_t oh)
 }
 
 uint32_t
-dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inprogress_cnt)
+dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inprogress_cnt,
+		   uint32_t timeout_sec)
 {
 	uint32_t	delay = 0;
 
@@ -1730,6 +1731,12 @@ dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inp
 				task, (int)*inprogress_cnt, (int)*retry_cnt, delay);
 		}
 	}
+
+	/*
+	 * Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case.
+	 */
+	if (err == -DER_OVERLOAD_RETRY)
+		delay = daos_rpc_rand_delay(timeout_sec) << 20;
 
 	return delay;
 }
@@ -1762,7 +1769,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		}
 
 		delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
-					   &obj_auxi->inprogress_cnt);
+					   &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
 		rc = tse_task_reinit_with_delay(task, delay);
 		if (rc != 0)
 			D_GOTO(err, rc);
@@ -2713,6 +2720,9 @@ shard_auxi_set_param(struct shard_auxi_args *shard_arg, uint32_t map_ver,
 		     uint32_t shard, uint32_t tgt_id, struct dtx_epoch *epoch,
 		     uint16_t ec_tgt_idx)
 {
+	/* Reset @enqueue_id if target changed */
+	if (shard_arg->target != tgt_id)
+		shard_arg->enqueue_id = 0;
 	shard_arg->epoch = *epoch;
 	shard_arg->shard = shard;
 	shard_arg->target = tgt_id;
@@ -6917,7 +6927,9 @@ shard_query_key_task(tse_task_t *task)
 				    api_args->dkey, api_args->akey,
 				    api_args->recx, api_args->max_epoch, args->kqa_coh_uuid,
 				    args->kqa_cont_uuid, &args->kqa_dti,
-				    &args->kqa_auxi.obj_auxi->map_ver_reply, th, task);
+				    &args->kqa_auxi.obj_auxi->map_ver_reply, th, task,
+				    &args->kqa_auxi.obj_auxi->max_delay,
+				    &args->kqa_auxi.enqueue_id);
 
 	return rc;
 }
@@ -6932,7 +6944,8 @@ queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 	tse_task_t			*task;
 	struct shard_query_key_args	*args;
 	d_list_t			*head = NULL;
-	int				rc;
+	int				 rc;
+	uint32_t			 target;
 
 	rc = tse_task_create(shard_query_key_task, sched, NULL, &task);
 	if (rc != 0)
@@ -6947,10 +6960,15 @@ queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 	uuid_copy(args->kqa_coh_uuid, coh_uuid);
 	uuid_copy(args->kqa_cont_uuid, cont_uuid);
 
-	rc = obj_shard2tgtid(obj, shard, map_ver,
-			     &args->kqa_auxi.target);
+	rc = obj_shard2tgtid(obj, shard, map_ver, &target);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
+
+	/* Reset @enqueue_id if target changed */
+	if (target != args->kqa_auxi.target)
+		args->kqa_auxi.enqueue_id = 0;
+
+	args->kqa_auxi.target = target;
 
 	rc = tse_task_register_deps(api_task, 1, &task);
 	if (rc != 0)
