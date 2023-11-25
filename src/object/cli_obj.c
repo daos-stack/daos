@@ -6679,7 +6679,7 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 
 	for (i = 0, off = obj->cob_md.omd_id.lo % obj->cob_shards_nr; i < obj->cob_shards_nr;
 	     i++, off = (off + 1) % obj->cob_shards_nr) {
-		rc = obj_shard_open(obj, i, map_ver, &shard);
+		rc = obj_shard_open(obj, off, map_ver, &shard);
 		if (rc == 0) {
 			if (!shard->do_rebuilding && !shard->do_reintegrating)
 				break;
@@ -6744,14 +6744,14 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 
 		if (grp_cnt > 1) {
 			/*
-			 * We support object collective punch since release-2.6 (and 2.4.1)
+			 * We support object collective punch since release-2.6 (and may 2.4.x)
 			 * (version 10). The conditions to trigger object collective punch are:
 			 *
 			 * 1. The shards count exceeds the engines count. Means that there are
 			 *    some shards reside on the same engine. Collectively punch object
 			 *    will save some RPCs. Or
 			 *
-			 * 2. The shards count exceeds the threshold for collective punch (32
+			 * 2. The shards count exceeds the threshold for collective punch (16
 			 *    by default). Collectively punch object will distribute the RPCs
 			 *    load among more engines even if the total RPCs count may be not
 			 *    decreased too much.

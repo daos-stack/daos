@@ -16,7 +16,7 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-#define OBJ_COLL_PUNCH_THRESHOLD_MIN	32
+#define OBJ_COLL_PUNCH_THRESHOLD_MIN	16
 
 unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
 unsigned int	obj_coll_punch_thd;

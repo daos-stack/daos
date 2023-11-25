@@ -517,16 +517,16 @@ dtx_init(void)
 {
 	int	rc;
 
-	dtx_coll_tree_topo = DTX_COLL_TREE_TOPO_DEF;
-	d_getenv_int("DTX_COLL_TREE_TOPO", &dtx_coll_tree_topo);
-	if (dtx_coll_tree_topo < DTX_COLL_TREE_TOPO_MIN ||
-	    dtx_coll_tree_topo > DTX_COLL_TREE_TOPO_MAX) {
-		D_WARN("Invalid bcast RPC tree topo %u, the valid range is [%u, %u], "
-		       "use the default value %u\n", dtx_coll_tree_topo,
-		       DTX_COLL_TREE_TOPO_MIN, DTX_COLL_TREE_TOPO_MAX, DTX_COLL_TREE_TOPO_DEF);
-		dtx_coll_tree_topo = DTX_COLL_TREE_TOPO_DEF;
+	dtx_coll_tree_width = DTX_COLL_TREE_WIDTH_DEF;
+	d_getenv_int("DTX_COLL_TREE_WIDTH", &dtx_coll_tree_width);
+	if (dtx_coll_tree_width < DTX_COLL_TREE_WIDTH_MIN ||
+	    dtx_coll_tree_width > DTX_COLL_TREE_WIDTH_MAX) {
+		D_WARN("Invalid bcast RPC tree width %u, the valid range is [%u, %u], "
+		       "use the default value %u\n", dtx_coll_tree_width,
+		       DTX_COLL_TREE_WIDTH_MIN, DTX_COLL_TREE_WIDTH_MAX, DTX_COLL_TREE_WIDTH_DEF);
+		dtx_coll_tree_width = DTX_COLL_TREE_WIDTH_DEF;
 	}
-	D_INFO("Set bcast RPC tree topo for collective transaction as %u\n", dtx_coll_tree_topo);
+	D_INFO("Set bcast RPC tree width for collective transaction as %u\n", dtx_coll_tree_width);
 
 	dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
 	d_getenv_int("DAOS_DTX_AGG_THD_CNT", &dtx_agg_thd_cnt_up);

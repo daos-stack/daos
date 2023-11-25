@@ -1374,7 +1374,7 @@ dtx_coll_rpc(struct dtx_coll_rpc_args *dcra)
 				  DAOS_RPC_OPCODE(dcra->dcra_opc, DAOS_DTX_MODULE,
 						  DAOS_DTX_VERSION),
 				  NULL, NULL, CRT_RPC_FLAG_FILTER_INVERT,
-				  crt_tree_topo(CRT_TREE_KNOMIAL, dtx_coll_tree_topo), &req);
+				  crt_tree_topo(CRT_TREE_KNOMIAL, dtx_coll_tree_width), &req);
 	if (rc != 0) {
 		D_ERROR("crt_corpc_req_create failed for coll DTX ("DF_DTI") RPC %u: "DF_RC"\n",
 			DP_DTI(&dcra->dcra_xid), dcra->dcra_opc, DP_RC(rc));

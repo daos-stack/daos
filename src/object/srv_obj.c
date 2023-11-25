@@ -2198,8 +2198,6 @@ again:
 			D_GOTO(out, rc = -DER_TX_RESTART);
 
 		D_GOTO(out, rc = -DER_STALE);
-	} else if (DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM)) {
-		D_GOTO(out, rc = -DER_STALE);
 	} else if (rpc_map_ver > ioc->ioc_map_ver &&
 		   opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_COLL_PUNCH) {
 
@@ -2222,6 +2220,8 @@ again:
 		once = true;
 
 		goto again;
+	} else if (DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM)) {
+		D_GOTO(out, rc = -DER_STALE);
 	}
 
 out:
@@ -5613,7 +5613,21 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_shard **p_s
 			rank_nr++;
 		}
 
-		if (tgt->ta_comp.co_id == ocpi->ocpi_leader_id) {
+		if (tgt->ta_comp.co_id == ocpi->ocpi_leader_id &&
+		    !layout->ol_shards[i].po_rebuilding && !layout->ol_shards[i].po_reintegrating) {
+			if (ocpi->ocpi_flags & ORF_LEADER)
+				D_ASSERTF(myrank == dct->dct_rank,
+					  "Unmatched leader rank %u vs %u\n",
+					  myrank, dct->dct_rank);
+			else
+				D_ASSERTF(myrank != dct->dct_rank,
+					  "Unexpected target, rank %u, tgt_id %u\n",
+					  myrank, layout->ol_shards[i].po_target);
+
+			/* The leader target must be unique. */
+			D_ASSERT(leader_rank == -1);
+			D_ASSERT(ocpi->ocpi_leader_id == layout->ol_shards[i].po_target);
+
 			leader_rank = dct->dct_rank;
 			if (dct->dct_tgt_nr > 0)
 				memmove(&dct->dct_tgt_ids[1], &dct->dct_tgt_ids[0],
@@ -5717,7 +5731,9 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_shard **p_s
 	}
 
 	/* ddt[0] is always the leader target. */
-	D_ASSERT(ddt[0].ddt_id == ocpi->ocpi_leader_id);
+	D_ASSERTF(ddt[0].ddt_id == ocpi->ocpi_leader_id,
+		  "Invalid leader target %u vs %u on rank %u vs %u\n",
+		  ddt[0].ddt_id, ocpi->ocpi_leader_id, myrank, leader_rank);
 
 	if (ocpi->ocpi_flags & ORF_LEADER) {
 		if (unlikely(rank_nr == 1)) {

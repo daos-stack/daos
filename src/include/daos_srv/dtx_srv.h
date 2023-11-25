@@ -179,8 +179,8 @@ struct dtx_leader_handle {
 	uint32_t			dlh_coll_hint_sz;
 	/* The size of dlh_coll_bitmap in bytes. */
 	uint32_t			dlh_coll_bitmap_sz;
-	/* The bcast RPC tree topo for collective transaction */
-	uint16_t			dlh_coll_tree_topo;
+	/* The bcast RPC tree width for collective transaction */
+	uint16_t			dlh_coll_tree_width;
 	/* How many delay forward sub request. */
 	uint16_t			dlh_delay_sub_cnt;
 	/* How many normal sub request. */

@@ -24,10 +24,10 @@ uint32_t dtx_agg_thd_age_up;
 uint32_t dtx_agg_thd_age_lo;
 uint32_t dtx_batched_ult_max;
 /*
- * Smaller bcast RPC tree topo for collective transaction makes related RPC load to be distributed
+ * Smaller bcast RPC tree width for collective transaction makes related RPC load to be distributed
  * among more engines, but it may increase single transaction latency from the client perspective.
  */
-uint32_t dtx_coll_tree_topo;
+uint32_t dtx_coll_tree_width;
 
 
 struct dtx_batched_pool_args {
@@ -1180,7 +1180,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 
 	if (flags & DTX_COLL) {
 		dlh->dlh_coll = 1;
-		dlh->dlh_coll_tree_topo = dtx_coll_tree_topo;
+		dlh->dlh_coll_tree_width = dtx_coll_tree_width;
 	}
 
 	dlh->dlh_coll_ranks = ranks;

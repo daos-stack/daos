@@ -162,12 +162,12 @@ extern uint32_t dtx_agg_thd_age_lo;
 /* The default count of DTX batched commit ULTs. */
 #define DTX_BATCHED_ULT_DEF	32
 
-/* The bcast RPC tree topo for collective transaction. */
-#define DTX_COLL_TREE_TOPO_MAX		128
-#define DTX_COLL_TREE_TOPO_DEF		32
-#define DTX_COLL_TREE_TOPO_MIN		8
+/* The bcast RPC tree width for collective transaction. */
+#define DTX_COLL_TREE_WIDTH_MAX		64
+#define DTX_COLL_TREE_WIDTH_DEF		16
+#define DTX_COLL_TREE_WIDTH_MIN		4
 
-extern uint32_t dtx_coll_tree_topo;
+extern uint32_t dtx_coll_tree_width;
 
 /*
  * Ideally, dedicated DXT batched commit ULT for each opened container is the most simple model.

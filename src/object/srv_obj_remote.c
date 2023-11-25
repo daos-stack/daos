@@ -526,7 +526,7 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 				  DAOS_RPC_OPCODE(DAOS_OBJ_RPC_COLL_PUNCH, DAOS_OBJ_MODULE,
 						  DAOS_OBJ_VERSION),
 				  NULL, NULL, CRT_RPC_FLAG_FILTER_INVERT,
-				  crt_tree_topo(CRT_TREE_KNOMIAL, dlh->dlh_coll_tree_topo), &req);
+				  crt_tree_topo(CRT_TREE_KNOMIAL, dlh->dlh_coll_tree_width), &req);
 	if (rc != 0) {
 		D_ERROR("crt_corpc_req_create failed for collective punch remote: "DF_RC"\n",
 			DP_RC(rc));
