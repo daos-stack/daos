@@ -300,7 +300,12 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 	} else if (obj_rpc_is_cpd(rpc)) {
 		struct obj_cpd_in *oci = crt_req_get(rpc);
 
-		sched_req_attr_init(attr, SCHED_REQ_MIGRATE, &oci->oci_pool_uuid);
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &oci->oci_pool_uuid);
+	} else if (obj_rpc_is_coll_punch(rpc)) {
+		struct obj_coll_punch_in *ocpi = crt_req_get(rpc);
+
+		attr->sra_enqueue_id = ocpi->ocpi_comm_in.req_in_enqueue_id;
+		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &ocpi->ocpi_po_uuid);
 	} else {
 		/* Other requests will not be queued, see dss_rpc_hdlr() */
 		return -DER_NOSYS;
@@ -380,6 +385,12 @@ obj_set_req(crt_rpc_t *rpc, struct sched_req_attr *attr)
 	} else if (obj_rpc_is_cpd(rpc)) {
 		/* No RPC retry for DTX, client will retry anyway. */
 		return -DER_TIMEDOUT;
+	} else if (obj_rpc_is_coll_punch(rpc)) {
+		struct obj_coll_punch_out *ocpo = crt_reply_get(rpc);
+
+		ocpo->ocpo_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		ocpo->ocpo_ret = -DER_OVERLOAD_RETRY;
+		return -DER_OVERLOAD_RETRY;
 	}
 	/* Other requests will not be queued, see dss_rpc_hdlr() */
 	return -DER_TIMEDOUT;

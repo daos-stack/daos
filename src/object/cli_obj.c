@@ -6695,10 +6695,18 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	if (unlikely(i == obj->cob_shards_nr))
 		D_GOTO(out, rc = 0);
 
-	if (auxi->io_retry)
+	if (auxi->io_retry) {
 		flags |= ORF_RESEND;
-	else
+		/* Reset @enqueue_id if resend to new leader. */
+		if (spa->pa_auxi.shard != off)
+			spa->pa_auxi.enqueue_id = 0;
+	} else {
+		spa->pa_auxi.obj_auxi = auxi;
 		daos_dti_gen(&spa->pa_dti, false);
+	}
+
+	spa->pa_auxi.shard = off;
+
 	if (obj_is_ec(obj))
 		flags |= ORF_EC;
 

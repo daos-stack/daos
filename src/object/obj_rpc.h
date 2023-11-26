@@ -724,11 +724,13 @@ CRT_RPC_DECLARE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 	((uint32_t)			(ocpi_fdom_lvl)			CRT_VAR)	\
 	((uint32_t)			(ocpi_pdom_lvl)			CRT_VAR)	\
 	((uint32_t)			(ocpi_pda)			CRT_VAR)	\
-	((uint32_t)			(ocpi_leader_id)		CRT_VAR)
+	((uint32_t)			(ocpi_leader_id)		CRT_VAR)	\
+	((struct daos_req_comm_in)	(ocpi_comm_in)			CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_COLL_PUNCH	/* output fields */				\
 	((int32_t)			(ocpo_ret)			CRT_VAR)	\
-	((uint32_t)			(ocpo_map_version)		CRT_VAR)
+	((uint32_t)			(ocpo_map_version)		CRT_VAR)	\
+	((struct daos_req_comm_out)	(ocpo_comm_out)			CRT_VAR)
 
 CRT_RPC_DECLARE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUNCH)
 
@@ -857,6 +859,12 @@ static inline bool
 obj_rpc_is_cpd(crt_rpc_t *rpc)
 {
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_CPD;
+}
+
+static inline bool
+obj_rpc_is_coll_punch(crt_rpc_t *rpc)
+{
+	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_COLL_PUNCH;
 }
 
 #endif /* __DAOS_OBJ_RPC_H__ */

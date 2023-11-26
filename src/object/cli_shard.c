@@ -1311,6 +1311,7 @@ struct obj_coll_punch_cb_args {
 	crt_rpc_t		*ocpca_rpc;
 	uint32_t		*ocpca_ver;
 	struct dc_obj_shard	*ocpca_shard;
+	struct shard_punch_args	*ocpca_shard_args;
 };
 
 static int
@@ -1323,6 +1324,16 @@ obj_shard_coll_punch_cb(tse_task_t *task, void *data)
 	if (task->dt_result == 0) {
 		task->dt_result = obj_reply_get_status(rpc);
 		*cb_args->ocpca_ver = obj_reply_map_version_get(rpc);
+	} else if (task->dt_result == -DER_OVERLOAD_RETRY) {
+		struct obj_coll_punch_out	*ocpo = crt_reply_get(rpc);
+		struct shard_punch_args		*shard_args = cb_args->ocpca_shard_args;
+		uint32_t			 timeout = 0;
+
+		if (shard_args->pa_auxi.enqueue_id == 0)
+			shard_args->pa_auxi.enqueue_id = ocpo->ocpo_comm_out.req_out_enqueue_id;
+		crt_req_get_timeout(rpc, &timeout);
+		if (timeout > shard_args->pa_auxi.obj_auxi->max_delay)
+			shard_args->pa_auxi.obj_auxi->max_delay = timeout;
 	}
 
 	DL_CDEBUG(task->dt_result < 0, DLOG_ERR, DB_IO, task->dt_result,
@@ -1373,11 +1384,13 @@ dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *arg
 	ocpi->ocpi_leader_id = shard->do_target_id;
 	ocpi->ocpi_flags = rpc_flags;
 	daos_dti_copy(&ocpi->ocpi_xid, &args->pa_dti);
+	ocpi->ocpi_comm_in.req_in_enqueue_id = args->pa_auxi.enqueue_id;
 
 	crt_req_addref(req);
 	cb_args.ocpca_rpc = req;
 	cb_args.ocpca_ver = rep_ver;
 	cb_args.ocpca_shard = shard;
+	cb_args.ocpca_shard_args = args;
 
 	rc = tse_task_register_comp_cb(task, obj_shard_coll_punch_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)
