@@ -134,7 +134,8 @@ dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 
 			/* Log the mode here, but possibly just evict dirs anyway */
 			ic[idx].parent = inode->ie_parent;
-			strncpy(ic[idx].name, inode->ie_name, NAME_MAX);
+			strncpy(ic[idx].name, inode->ie_name, NAME_MAX + 1);
+			ic[idx].name[NAME_MAX] = '\0';
 
 			d_list_del_init(&inode->ie_evict_entry);
 
