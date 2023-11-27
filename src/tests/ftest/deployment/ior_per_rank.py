@@ -58,7 +58,7 @@ class IorPerRank(IorTestBase):
 
             # inject failure to verify code below. To be removed after verification
             if int(rank) == 1:
-                actual_write_x = 0.4567
+                actual_write_x = 0.6789
 
             if int(rank) == 3:
                 raise DaosTestError('oops. test')
