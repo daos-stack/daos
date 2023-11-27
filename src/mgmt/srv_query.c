@@ -325,6 +325,38 @@ copy_str2ctrlr(char **dst, const char *src)
 	return 0;
 }
 
+static int
+add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
+{
+	int rc;
+
+	rc = copy_str2ctrlr(&ctrlr->pci_addr, dev_info->bdi_traddr);
+	if (rc != 0)
+		return rc;
+	rc = copy_str2ctrlr(&ctrlr->model, dev_info->bdi_ctrlr->model);
+	if (rc != 0)
+		return rc;
+	rc = copy_str2ctrlr(&ctrlr->serial, dev_info->bdi_ctrlr->serial);
+	if (rc != 0)
+		return rc;
+	rc = copy_str2ctrlr(&ctrlr->fw_rev, dev_info->bdi_ctrlr->fw_rev);
+	if (rc != 0)
+		return rc;
+	rc = copy_str2ctrlr(&ctrlr->vendor_id, dev_info->bdi_ctrlr->vendor_id);
+	if (rc != 0)
+		return rc;
+	rc = copy_str2ctrlr(&ctrlr->pci_dev_type, dev_info->bdi_ctrlr->pci_type);
+	if (rc != 0)
+		return rc;
+	ctrlr->socket_id = dev_info->bdi_ctrlr->socket_id;
+
+	D_DEBUG(DB_MGMT, "ctrlr details: '%s' '%s' '%s' '%s' '%s' '%s' '%d'\n", ctrlr->pci_addr,
+		ctrlr->model, ctrlr->serial, ctrlr->fw_rev, ctrlr->vendor_id, ctrlr->pci_dev_type,
+		ctrlr->socket_id);
+
+	return 0;
+}
+
 int
 ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 {
@@ -399,39 +431,9 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		}
 		ctl__nvme_controller__init(resp->devices[i]->ctrlr);
 
-		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->pci_addr, dev_info->bdi_traddr);
-		if (rc != 0) {
+		rc = add_ctrlr_details(resp->devices[i]->ctrlr, dev_info);
+		if (rc != 0)
 			break;
-		}
-		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->model, dev_info->bdi_ctrlr->model);
-		if (rc != 0) {
-			break;
-		}
-		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->serial, dev_info->bdi_ctrlr->serial);
-		if (rc != 0) {
-			break;
-		}
-		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->fw_rev, dev_info->bdi_ctrlr->fw_rev);
-		if (rc != 0) {
-			break;
-		}
-		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->vendor_id,
-				    dev_info->bdi_ctrlr->vendor_id);
-		if (rc != 0) {
-			break;
-		}
-		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->pci_dev_type,
-				    dev_info->bdi_ctrlr->pci_type);
-		if (rc != 0) {
-			break;
-		}
-		resp->devices[i]->ctrlr->socket_id = dev_info->bdi_ctrlr->socket_id;
-
-		D_DEBUG(DB_MGMT, "ctrlr details: '%s' '%s' '%s' '%s' '%s' '%s' '%d'\n",
-			resp->devices[i]->ctrlr->pci_addr, resp->devices[i]->ctrlr->model,
-			resp->devices[i]->ctrlr->serial, resp->devices[i]->ctrlr->fw_rev,
-			resp->devices[i]->ctrlr->vendor_id, resp->devices[i]->ctrlr->pci_dev_type,
-			resp->devices[i]->ctrlr->socket_id);
 
 		/* Populate NVMe namespace id and capacity */
 
