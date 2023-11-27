@@ -1363,29 +1363,36 @@ dm_connect(struct cmd_args_s *ap,
 	   daos_cont_info_t *dst_cont_info)
 {
 	/* check source pool/conts */
-	int				rc = 0;
-	struct duns_attr_t		dattr = {0};
-	dfs_attr_t			attr = {0};
-	daos_prop_t			*props = NULL;
-	int				rc2;
-	bool				status_healthy;
+	int                rc    = 0;
+	struct duns_attr_t dattr = {0};
+	dfs_attr_t         attr  = {0};
+	daos_prop_t       *props = NULL;
+	int                rc2;
+	bool               status_healthy;
+	unsigned int       src_cont_flags;
+
+	/* DFS only needs R. For daos API we need W for snapshot create */
+	if (is_posix_copy)
+		src_cont_flags = DAOS_COO_RO;
+	else
+		src_cont_flags = DAOS_COO_RW;
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
-		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RW, &ca->src_poh, NULL, NULL);
+		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RO, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to connect to source pool");
 			D_GOTO(err, rc);
 		}
-		rc = daos_cont_open(ca->src_poh, ca->src_cont, DAOS_COO_RW, &ca->src_coh,
+		rc = daos_cont_open(ca->src_poh, ca->src_cont, src_cont_flags, &ca->src_coh,
 				    src_cont_info, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to open source container");
 			D_GOTO(err, rc);
 		}
 		if (is_posix_copy) {
-			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDWR,
-					   DFS_SYS_NO_LOCK, &src_file_dfs->dfs_sys);
+			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDONLY, DFS_SYS_NO_LOCK,
+					   &src_file_dfs->dfs_sys);
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "Failed to mount DFS filesystem on source");
