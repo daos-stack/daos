@@ -105,16 +105,16 @@ struct inode_core {
 bool
 dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 {
-	struct dfuse_time_entry  *dte;
-	struct dfuse_inode_entry *inode, *inodep;
-	bool                      done_work       = false;
-	struct inode_core         ic[EVICT_COUNT] = {};
-	int                       idx             = 0;
+	struct dfuse_time_entry *dte;
+	struct inode_core        ic[EVICT_COUNT] = {};
+	int                      idx             = 0;
 
 	D_MUTEX_LOCK(&dfuse_info->di_dte_lock);
 
 	/* Walk the list, oldest first */
 	d_list_for_each_entry(dte, &dfuse_info->di_dtes, dte_list) {
+		struct dfuse_inode_entry *inode, *inodep;
+
 		DFUSE_TRA_INFO(dte, "Iterating for timeout %lf", dte->time);
 
 		d_list_for_each_entry_safe(inode, inodep, &dte->inode_list, ie_evict_entry) {
@@ -148,6 +148,9 @@ out:
 	DFUSE_TRA_INFO(dfuse_info, "Unlocking");
 	D_MUTEX_UNLOCK(&dfuse_info->di_dte_lock);
 
+	if (idx == 0)
+		return false;
+
 	for (int i = 0; i < idx; i++) {
 		int rc;
 
@@ -157,11 +160,10 @@ out:
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ic[i].parent,
 						      ic[i].name, strnlen(ic[i].name, NAME_MAX));
 		if (rc && rc != -ENOENT)
-			DHS_ERROR(inode, -rc, "notify_delete() failed");
-		done_work = true;
+			DHS_ERROR(dfuse_info, -rc, "notify_delete() failed");
 	}
 
-	return done_work;
+	return true;
 }
 
 /* Main loop for eviction thread.  Spins until ready for exit waking after one second and iterates
