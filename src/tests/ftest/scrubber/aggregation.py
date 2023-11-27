@@ -44,7 +44,7 @@ class TestScrubberEvictWithAggregation(TestWithScrubber, TestWithTelemetry):
         # Now enable the scrubber on the pool.
         self.pool.set_prop(properties="scrub:timed,scrub-freq:1,scrub-thresh:3")
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
-        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        self.run_ior_and_check_scrubber_status(pool=self.pool, cont=self.container)
         # We want both aggregation and scrubber tasks
         # to run in parallel during this time.
         start_time = 0
