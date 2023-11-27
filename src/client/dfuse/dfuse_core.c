@@ -115,14 +115,14 @@ dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 	d_list_for_each_entry(dte, &dfuse_info->di_dtes, dte_list) {
 		struct dfuse_inode_entry *inode, *inodep;
 
-		DFUSE_TRA_INFO(dte, "Iterating for timeout %lf", dte->time);
+		DFUSE_TRA_DEBUG(dte, "Iterating for timeout %lf", dte->time);
 
 		d_list_for_each_entry_safe(inode, inodep, &dte->inode_list, ie_evict_entry) {
 			double timeout;
 
 			if (dfuse_dentry_get_valid(inode, dte->time, &timeout)) {
-				DFUSE_TRA_INFO(inode, "still valid bucket %lf left %lf " DF_DE,
-					       dte->time, timeout, DP_DE(inode->ie_name));
+				DFUSE_TRA_INFO(inode, "Keeping left %lf " DF_DE, timeout,
+					       DP_DE(inode->ie_name));
 				break;
 			}
 
@@ -146,7 +146,7 @@ dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 		}
 	}
 out:
-	DFUSE_TRA_INFO(dfuse_info, "Unlocking");
+	DFUSE_TRA_DEBUG(dfuse_info, "Unlocking");
 	D_MUTEX_UNLOCK(&dfuse_info->di_dte_lock);
 
 	if (idx == 0)
@@ -169,6 +169,7 @@ out:
 
 /* Main loop for eviction thread.  Spins until ready for exit waking after one second and iterates
  * over all newly expired dentries.
+ * TODO: Wait for this thread to startup and shutdown properly.
  */
 static void *
 dfuse_evict_thread(void *arg)
@@ -1205,12 +1206,17 @@ dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *tim
 		left.tv_nsec += 1000000000;
 	}
 	time_left = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
-	if (time_left > 0) {
+	if (time_left > 0)
 		use = true;
 
-		if (timeout)
-			*timeout = time_left;
-	}
+	/* Allow some leeway before evicting things, the kernel will no re-validate until the
+	 * entry has expired so allow this to happen first.
+	 */
+	if (time_left > -2)
+		use = true;
+
+	if (use && timeout)
+		*timeout = time_left;
 
 	return use;
 }
