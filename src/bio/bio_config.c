@@ -385,7 +385,6 @@ load_vmd_subsystem_config(struct json_config_ctx *ctx, bool *vmd_enabled)
 
 	D_ASSERT(ctx->config_it != NULL);
 	D_ASSERT(vmd_enabled != NULL);
-	D_ASSERT(*vmd_enabled == false);
 
 	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
 				     SPDK_COUNTOF(config_entry_decoders), &cfg);

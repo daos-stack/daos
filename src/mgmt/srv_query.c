@@ -308,6 +308,11 @@ copy_str2ctrlr(char **dst, const char *src)
 	}
 
 	len = strnlen(src, NVME_DETAIL_BUFLEN);
+	if (len == NVME_DETAIL_BUFLEN) {
+		D_ERROR("src buf too large");
+		return -DER_INVAL;
+	}
+
 	D_ALLOC(*dst, len + 1);
 	if (*dst == NULL)
 		return -DER_NOMEM;
@@ -379,13 +384,13 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		for (j = 0; j < dev_info->bdi_tgt_cnt; j++)
 			resp->devices[i]->tgt_ids[j] = dev_info->bdi_tgts[j];
 
-		/* Populate NVMe controller details */
-
 		if (dev_info->bdi_ctrlr == NULL) {
 			D_ERROR("ctrlr not initialized in bio_dev_info");
 			rc = -DER_INVAL;
 			break;
 		}
+
+		/* Populate NVMe controller details */
 
 		D_ALLOC_PTR(resp->devices[i]->ctrlr);
 		if (resp->devices[i]->ctrlr == NULL) {
@@ -472,11 +477,12 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		else
 			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__NORMAL;
 
+		/* Fetch LED State if VMD is enabled and device is plugged */
+
 		if (strncmp(dev_info->bdi_ctrlr->pci_type, NVME_PCI_DEV_TYPE_VMD,
 			    strlen(NVME_PCI_DEV_TYPE_VMD)) != 0)
 			goto next_dev;
 
-		/* Fetch LED State if device is plugged */
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);
 		led_info.action = CTL__LED_ACTION__GET;
 		led_state = CTL__LED_STATE__NA;

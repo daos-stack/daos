@@ -258,7 +258,12 @@ str2ctrlr(char **dst, const void *src)
 	assert(dst != NULL);
 	assert(*dst == NULL);
 
-	len  = sizeof(src);
+	len = strnlen((const char *)src, NVME_DETAIL_BUFLEN);
+	if (len == NVME_DETAIL_BUFLEN) {
+		perror("src buf too big");
+		return -NVMEC_ERR_CHK_SIZE;
+	}
+
 	*dst = calloc(1, len + 1);
 	if (*dst == NULL)
 		return -ENOMEM;
