@@ -460,7 +460,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		resp->devices[i]->ctrlr->namespaces[0]->id   = dev_info->bdi_ctrlr->nss->id;
 		resp->devices[i]->ctrlr->namespaces[0]->size = dev_info->bdi_ctrlr->nss->size;
-		resp->devices[i]->ctrlr_namespace_id = dev_info-bdi_ctrlr->nss->id;
+		resp->devices[i]->ctrlr_namespace_id = dev_info->bdi_ctrlr->nss->id;
 
 		D_DEBUG(DB_MGMT, "ns id/size: '%d' '%ld'\n",
 			resp->devices[i]->ctrlr->namespaces[0]->id,
@@ -718,7 +718,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	}
 	ctl__smd_device__init(resp->device);
 	resp->device->uuid = NULL;
-	// resp->device->dev_state = CTL__NVME_DEV_STATE__EVICTED;
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
 	if (resp->device->uuid == NULL) {
@@ -746,7 +745,6 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 			goto out;
 		}
 	}
-	// resp->device->led_state = led_state;
 
 out:
 	smd_dev_free_info(dev_info);
@@ -769,21 +767,7 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	}
 	ctl__smd_device__init(resp->device);
 	resp->device->uuid = NULL;
-	// resp->device->tr_addr = NULL;
 
-	//	D_ALLOC(resp->device->tr_addr, ADDR_STR_MAX_LEN + 1);
-	//	if (resp->device->tr_addr == NULL)
-	//		return -DER_NOMEM;
-
-	//	if (((req->ids) == NULL) || (strlen(req->ids) == 0)) {
-	//		D_ERROR("Transport address not provided in request\n");
-	//		return -DER_INVAL;
-	//	}
-
-	//	strncpy(resp->device->tr_addr, req->ids, ADDR_STR_MAX_LEN + 1);
-
-	/* tr_addr will be used if set and get populated if not */
-	//	led_info.tr_addr = resp->device->tr_addr;
 	led_info.tr_addr  = req->ids;
 	led_info.action = req->led_action;
 	led_state = req->led_state;
@@ -794,13 +778,9 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
 			     init_xs_type(), 0, 0);
 	if (rc != 0) {
-		if (rc == -DER_NOSYS) {
-			// resp->device->led_state = CTL__LED_STATE__NA;
+		if (rc == -DER_NOSYS)
 			/* Reset rc for non-VMD case */
 			rc = 0;
-		}
-		//	} else {
-		//		resp->device->led_state = (Ctl__LedState)led_state;
 	}
 
 	return rc;
@@ -863,15 +843,9 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp
 	uuid_copy(replace_dev_info.new_dev, new_dev_uuid);
 	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL, NULL,
 			     init_xs_type(), 0, 0);
-	if (rc != 0) {
+	if (rc != 0)
 		DL_ERROR(rc, "ULT did not complete storage_dev_replace");
-		/* BIO device state after unsuccessful reintegration */
-		// resp->device->dev_state = CTL__NVME_DEV_STATE__EVICTED;
-		goto out;
-	}
 
-	/* BIO device state after successful reintegration */
-	// resp->device->dev_state = CTL__NVME_DEV_STATE__NORMAL;
 out:
 	if (rc != 0) {
 		if (resp->device->uuid != NULL)
