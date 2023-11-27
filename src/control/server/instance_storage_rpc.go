@@ -162,7 +162,7 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 	return
 }
 
-func populateCtrlrHealth(ctx context.Context, ei *EngineInstance, smdUuid string, ctrlr *ctlpb.NvmeController) error {
+func populateCtrlrHealth(ctx context.Context, ei *EngineInstance, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
 	state := ctrlr.DevState
 	if state != ctlpb.NvmeDevState_NORMAL && state != ctlpb.NvmeDevState_EVICTED {
 		ei.log.Noticef("skip fetching health stats on device %q in %q state", dev,
@@ -170,13 +170,13 @@ func populateCtrlrHealth(ctx context.Context, ei *EngineInstance, smdUuid string
 		return nil
 	}
 
-	health, err := getCtrlrHealth(ctx, ei, &ctlpb.BioHealthReq{DevUuid: smdUuid})
+	health, err := getCtrlrHealth(ctx, ei, req)
 	if err != nil {
-		return errors.Wrapf(err, "retrieve health stats for %q (state %q)", ctrlr, state)
+		return false, errors.Wrapf(err, "retrieve health stats for %q (state %q)", ctrlr, state)
 	}
 	ctrlr.HealthStats = health
 
-	return nil
+	return true, nil
 }
 
 // Scan SMD devices over dRPC and reconstruct NVMe scan response from results.
@@ -210,24 +210,37 @@ func scanEngineBdevsOverDrpc(ctx context.Context, ei *EngineInstance, pbReq *ctl
 		}
 
 		c := seenCtrlrs[addr]
-		ei.log.Debugf("seen ctrlr: %+v", c.FwRev)
+
+		// Populate health if requested.
+		healthUpdated := false
+		if pbReq.Health {
+			bhReq := &ctlpb.BioHealthReq{
+				DevUuid:  sd.Uuid,
+				MetaSize: pbReq.MetaSize,
+				RdbSize:  pbReq.RdbSize,
+			}
+			upd, err := populateCtrlrHealth(ctx, ei, bhReq, c)
+			if err != nil {
+				return nil, err
+			}
+			healthUpdated = upd
+		}
 
 		// Populate SMD (meta) if requested.
 		if pbReq.Meta {
 			nsd := new(ctlpb.SmdDevice)
 			*nsd = *sd
-			nsd.Ctrlr = nil
+			nsd.Ctrlr, nsd.MetaSize, nsd.RdbSize = nil, pbReq.MetaSize, pbReq.RdbSize
+			if healthUpdated {
+				// Populate space usage for each SMD device from health stats.
+				nsd.TotalBytes = c.HealthStats.TotalBytes
+				nsd.AvailBytes = c.HealthStats.AvailBytes
+				nsd.ClusterSize = c.HealthStats.ClusterSize
+				nsd.MetaWalSize = c.HealthStats.MetaWalSize
+				nsd.RdbWalSize = c.HealthStats.RdbWalSize
+			}
 			c.SmdDevices = append(c.SmdDevices, nsd)
 		}
-
-		// Populate health if requested.
-		if pbReq.Health && c.HealthStats == nil {
-			if err := populateCtrlrHealth(ctx, ei, sd.Uuid, c); err != nil {
-				return nil, err
-			}
-		}
-
-		// TODO: handle Basic request parameter.
 	}
 
 	return &pbResp, nil
@@ -255,8 +268,6 @@ func bdevScanEngine(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq
 	if isUp {
 		return scanEngineBdevsOverDrpc(ctx, ei, pbReq)
 	}
-
-	// TODO: should anything be passed from pbReq here e.g. Meta/Health specifiers?
 
 	// Retrieve engine cfg bdevs to restrict scan scope.
 	req := storage.BdevScanRequest{
@@ -298,7 +309,6 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		return rResp, nil
 	}
 
-	// For each SmdDevice returned in list devs response, append a SmdDeviceWithHealth.
 	for _, sd := range listDevsResp.Devices {
 		if sd != nil {
 			rResp.Devices = append(rResp.Devices, sd)
@@ -311,7 +321,8 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 			continue // Skip health query if UUID doesn't match requested.
 		}
 		if pbReq.IncludeBioHealth {
-			if err := populateCtrlrHealth(ctx, ei, dev.Uuid, dev.Ctrlr); err != nil {
+			bhReq := &ctlpb.BioHealthReq{DevUuid: dev.Uuid}
+			if _, err := populateCtrlrHealth(ctx, ei, bhReq, dev.Ctrlr); err != nil {
 				return nil, err
 			}
 		}

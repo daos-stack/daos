@@ -87,7 +87,20 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			provErr:    errors.New("provider scan fail"),
 			expErr:     errors.New("provider scan fail"),
 		},
-		// "scan over drpc; with health": {},
+		"scan over drpc; with health": {
+			req: ctlpb.ScanNvmeReq{Health: true},
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					func() *ctlpb.NvmeController {
+						c := proto.MockNvmeController(2)
+						c.HealthStats = nil
+						c.SmdDevices = nil
+						return c
+					}(),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+		},
 		// "scan over drpc; with smd": {},
 		// "scan over drpc; with smd and health": {},
 	} {

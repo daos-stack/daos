@@ -70,22 +70,6 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 	return rs
 }
 
-// TODO: Trim unwanted fields so responses can be coalesced from hash map when returned via
-//       control API. This should now occur in bdev backend and engine drpc handler.
-//	for _, pbc := range inResp.Ctrlrs {
-//		if !req.GetHealth() {
-//			pbc.HealthStats = nil
-//		}
-//		if !req.GetMeta() {
-//			pbc.SmdDevices = nil
-//		}
-//		if req.GetBasic() {
-//			pbc.Serial = ""
-//			pbc.Model = ""
-//			pbc.FwRev = ""
-//		}
-//	}
-
 // Convert bdev scan results to protobuf response.
 func bdevScanToProtoResp(scan scanBdevsFn, req storage.BdevScanRequest) (*ctlpb.ScanNvmeResp, error) {
 	resp, err := scan(req)
@@ -108,13 +92,21 @@ func bdevScanGlobal(cs *ControlService, cfgBdevs *storage.BdevDeviceList) (*ctlp
 }
 
 // Scan bdevs through each engine and collate response results.
-func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
+func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, nsps []*ctlpb.ScmNamespace) (*ctlpb.ScanNvmeResp, error) {
 	var errLast error
 	instances := cs.harness.Instances()
 	resp := &ctlpb.ScanNvmeResp{}
 
 	for _, ei := range instances {
-		respEng, err := scanEngineBdevs(ctx, ei, req)
+		eReq := new(ctlpb.ScanNvmeReq)
+		*eReq = *req
+		ms, rs, err := cs.computeMetaRdbSize(ei, nsps)
+		if err != nil {
+			return nil, errors.Wrap(err, "computing meta and rdb size")
+		}
+		eReq.MetaSize, eReq.RdbSize = ms, rs
+
+		respEng, err := scanEngineBdevs(ctx, ei, eReq)
 		if err != nil {
 			err = errors.Wrapf(err, "instance %d", ei.Index())
 			if errLast == nil && len(instances) > 1 {
@@ -131,12 +123,33 @@ func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvm
 	resp.State = newResponseState(errLast, ctlpb.ResponseStatus_CTL_ERR_NVME, "")
 
 	return resp, nil
-	//resp, err := c.scanAssignedBdevs(ctx, nsps, req.GetHealth() || req.GetMeta())
+}
+
+// Trim unwanted fields so responses can be coalesced from hash map when returned from server.
+func bdevScanTrimResults(req *ctlpb.ScanNvmeReq, resp *ctlpb.ScanNvmeResp) *ctlpb.ScanNvmeResp {
+	if resp == nil {
+		return nil
+	}
+	for _, pbc := range resp.Ctrlrs {
+		if !req.GetHealth() {
+			pbc.HealthStats = nil
+		}
+		if !req.GetMeta() {
+			pbc.SmdDevices = nil
+		}
+		if req.GetBasic() {
+			pbc.Serial = ""
+			pbc.Model = ""
+			pbc.FwRev = ""
+		}
+	}
+
+	return resp
 }
 
 // Return NVMe device details. The scan method employed depends on whether the engines are running
 // or not. If running, scan over dRPC. If not running then use engine's storage provider.
-func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, nsps []*ctlpb.ScmNamespace) (*ctlpb.ScanNvmeResp, error) {
+func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, nsps []*ctlpb.ScmNamespace) (resp *ctlpb.ScanNvmeResp, err error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
@@ -162,11 +175,13 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 		} else {
 			cs.log.Debugf("scan bdevs from control service as no bdevs in cfg")
 		}
-		return bdevScanGlobal(cs, cfgBdevs)
+		resp, err = bdevScanGlobal(cs, cfgBdevs)
+	} else {
+		cs.log.Debugf("scan assigned bdevs through engine instances as some are started")
+		resp, err = bdevScanEngines(ctx, cs, req, nsps)
 	}
 
-	cs.log.Debugf("scan assigned bdevs through engine instances as some are started")
-	return bdevScanEngines(ctx, cs, req)
+	return bdevScanTrimResults(req, resp), err
 }
 
 // newScanScmResp sets protobuf SCM scan response with module or namespace info.
@@ -275,6 +290,43 @@ func (c *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 	return rdbSize, nil
 }
 
+// Compute the maximal size of the metadata to allow the engine to fill the WallMeta field
+// response.  The maximal metadata (i.e. VOS index file) size should be equal to the SCM available
+// size divided by the number of targets of the engine.
+func (cs *ControlService) computeMetaRdbSize(ei Engine, nsps []*ctlpb.ScmNamespace) (md_size, rdb_size uint64, errOut error) {
+	for _, nsp := range nsps {
+		mp := nsp.GetMount()
+		if mp == nil {
+			continue
+		}
+		if r, err := ei.GetRank(); err != nil || uint32(r) != mp.GetRank() {
+			continue
+		}
+
+		// NOTE DAOS-14223: This metadata size calculation won't necessarily match
+		//                  the meta blob size on SSD if --meta-size is specified in
+		//                  pool create command.
+		md_size = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
+
+		engineCfg, err := cs.getEngineCfgFromScmNsp(nsp)
+		if err != nil {
+			errOut = errors.Wrap(err, "Engine with invalid configuration")
+			return
+		}
+		rdb_size, errOut = cs.getRdbSize(engineCfg)
+		if errOut != nil {
+			return
+		}
+		break
+	}
+
+	if md_size == 0 {
+		cs.log.Noticef("instance %d: no SCM space available for metadata", ei.Index)
+	}
+
+	return
+}
+
 type deviceToAdjust struct {
 	ctlr *ctl.NvmeController
 	idx  int
@@ -379,9 +431,9 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 				continue
 			}
 
-			if dev.Ctrlr.GetDevState() != ctlpb.NvmeDevState_NORMAL {
+			if ctlr.GetDevState() != ctlpb.NvmeDevState_NORMAL {
 				c.log.Debugf("SMD device %s (rank %d, ctlr %s) not usable: device state %q",
-					dev.GetUuid(), rank, ctlr.GetPciAddr(), ctlpb.NvmeDevState_name[int32(dev.Ctrlr.DevState)])
+					dev.GetUuid(), rank, ctlr.GetPciAddr(), ctlpb.NvmeDevState_name[int32(ctlr.DevState)])
 				dev.AvailBytes = 0
 				dev.UsableBytes = 0
 				continue
@@ -557,7 +609,6 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	if err != nil {
 		return nil, err
 	}
-	// TODO: Move into updateScanNvmeResp().
 	if req.Nvme.GetMeta() {
 		c.adjustNvmeSize(respNvme)
 	}
