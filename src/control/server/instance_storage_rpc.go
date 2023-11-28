@@ -184,6 +184,9 @@ func scanEngineBdevsOverDrpc(ctx context.Context, ei *EngineInstance, pbReq *ctl
 	if err != nil {
 		return nil, errors.Wrap(err, "scan smd")
 	}
+	if scanSmdResp == nil {
+		return nil, errors.New("nil smd scan resp")
+	}
 
 	// Re-link SMD devices inside NVMe controller structures and populate scan response.
 
