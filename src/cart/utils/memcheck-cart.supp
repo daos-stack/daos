@@ -523,4 +523,15 @@
    write(buf)
    fun:syscall.Syscall.abi0
 }
-
+{
+   <insert_a_suppression_name_here>
+   DAOS-14680
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_cgo_0edd79296193_Cfunc__Cmalloc
+   fun:runtime.asmcgocall.abi0
+   ...
+   fun:racecall
+   fun:runtime.morestack.abi0
+}
