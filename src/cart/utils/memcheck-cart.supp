@@ -524,7 +524,6 @@
    fun:syscall.Syscall.abi0
 }
 {
-   <insert_a_suppression_name_here>
    DAOS-14680
    Memcheck:Leak
    match-leak-kinds: reachable
