@@ -68,16 +68,18 @@ class IorPerRank(IorTestBase):
                 if host not in self.failed_nodes:
                     self.failed_nodes[host] = []
                 self.failed_nodes[host].append(
-                    f"rank {rank} write diff too large. "
-                    f"Expected: {self.write_x:.2f}; actual: {actual_write_x:.2f}")
+                    f"rank {rank} low write perf. "
+                    f"BW: {dfs_max_write:.2f}/{self.expected_bw:.2f}; "
+                    f"percent diff: {actual_write_x:.2f}/{self.write_x:.2f}")
 
             # verify read performance
             if actual_read_x > self.read_x:
                 if host not in self.failed_nodes:
                     self.failed_nodes[host] = []
                 self.failed_nodes[host].append(
-                    f"rank {rank} read diff too large. "
-                    f"Expected: {self.read_x:.2f}; actual: {actual_read_x:.2f}")
+                    f"rank {rank} low read perf. "
+                    f"BW: {dfs_max_read:.2f}/{self.expected_bw:.2f}; "
+                    f"percent diff: {actual_read_x:.2f}/{self.read_x:.2f}")
 
         except (TestFail, DaosTestError) as error:
             if host not in self.failed_nodes:
@@ -132,8 +134,8 @@ class IorPerRank(IorTestBase):
 
         # list the failed node and the rank number associated with that node
         if self.failed_nodes:
-            self.log.info("List of failed ranks with corresponding nodes")
+            self.log.info("List of failed nodes with corresponding ranks")
             for node, reason_list in self.failed_nodes.items():
                 for reason in reason_list:
-                    self.log.info("Node: %s, reason: %s", node, reason)
+                    self.log.info("%s: %s", node, reason)
             self.fail("Performance check failed for one or more nodes")
