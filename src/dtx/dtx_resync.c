@@ -261,28 +261,46 @@ dtx_verify_groups(struct ds_pool *pool, struct dtx_memberships *mbs,
 }
 
 int
-dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
+dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_unit_oid_t oid,
 		      daos_epoch_t epoch, int *tgt_array, int *err)
 {
-	int	rc = 0;
+	struct dtx_memberships	*mbs = dte->dte_mbs;
+	d_rank_list_t		*ranks = NULL;
+	uint8_t			*hints = NULL;
+	uint8_t			*bitmap = NULL;
+	uint32_t		 hint_sz = 0;
+	uint32_t		 bitmap_sz = 0;
+	int			 rc = 0;
 
-	rc = dtx_check(cont, dte, epoch);
+	if (mbs->dm_flags & DMF_CONTAIN_TARGET_GRP) {
+		rc = dtx_coll_prep(cont->sc_pool_uuid, oid, mbs, dss_self_rank(),
+				   dss_get_module_info()->dmi_tgt_id, dte->dte_ver,
+				   &hints, &hint_sz, &bitmap, &bitmap_sz, &ranks);
+		if (rc != 0) {
+			D_ERROR("Failed to prepare the bitmap (and hints) for collective DTX "
+				DF_DTI": "DF_RC"\n", DP_DTI(&dte->dte_xid), DP_RC(rc));
+			goto out;
+		}
+
+		rc = dtx_coll_check(cont, &dte->dte_xid, ranks, hints, hint_sz, bitmap, bitmap_sz,
+				    dte->dte_ver, epoch);
+	} else {
+		rc = dtx_check(cont, dte, epoch);
+	}
 	switch (rc) {
 	case DTX_ST_COMMITTED:
 	case DTX_ST_COMMITTABLE:
 		/* The DTX has been committed on some remote replica(s),
 		 * let's commit the DTX globally.
 		 */
-		return DSHR_NEED_COMMIT;
+		D_GOTO(out, rc = DSHR_NEED_COMMIT);
 	case -DER_INPROGRESS:
 	case -DER_TIMEDOUT:
 		D_WARN("Other participants not sure about whether the "
 		       "DTX "DF_DTI" is committed or not, need retry.\n",
 		       DP_DTI(&dte->dte_xid));
-		return DSHR_NEED_RETRY;
+		D_GOTO(out, rc = DSHR_NEED_RETRY);
 	case DTX_ST_PREPARED: {
-		struct dtx_memberships	*mbs = dte->dte_mbs;
-
 		/* If the transaction across multiple redundancy groups,
 		 * need to check whether there are enough alive targets.
 		 */
@@ -293,7 +311,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 				goto out;
 
 			if (rc > 0)
-				return DSHR_NEED_COMMIT;
+				D_GOTO(out, rc = DSHR_NEED_COMMIT);
 
 			/* XXX: For the distributed transaction that lose too
 			 *	many particiants (the whole redundancy group),
@@ -304,14 +322,18 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 			 *	Then we mark the TX as corrupted via special
 			 *	dtx_abort() with 0 @epoch.
 			 */
-			rc = dtx_abort(cont, dte, 0);
+			if (mbs->dm_flags & DMF_CONTAIN_TARGET_GRP)
+				rc = dtx_coll_abort(cont, &dte->dte_xid, ranks, hints, hint_sz,
+						    bitmap, bitmap_sz, dte->dte_ver, 0);
+			else
+				rc = dtx_abort(cont, dte, 0);
 			if (rc < 0 && err != NULL)
 				*err = rc;
 
-			return DSHR_CORRUPT;
+			D_GOTO(out, rc = DSHR_CORRUPT);
 		}
 
-		return DSHR_NEED_COMMIT;
+		D_GOTO(out, rc = DSHR_NEED_COMMIT);
 	}
 	case -DER_NONEXIST:
 		/* Someone (the DTX owner or batched commit ULT) may have
@@ -345,7 +367,11 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		 * some other DTX(s). To avoid complex rollback logic, let's
 		 * abort the DTXs one by one, not batched.
 		 */
-		rc = dtx_abort(cont, dte, epoch);
+		if (mbs->dm_flags & DMF_CONTAIN_TARGET_GRP)
+			rc = dtx_coll_abort(cont, &dte->dte_xid, ranks, hints, hint_sz, bitmap,
+					    bitmap_sz, dte->dte_ver, epoch);
+		else
+			rc = dtx_abort(cont, dte, epoch);
 
 		D_DEBUG(DB_TRACE, "As new leader for DTX "DF_DTI", abort it (2): "DF_RC"\n",
 			DP_DTI(&dte->dte_xid), DP_RC(rc));
@@ -354,10 +380,10 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 			if (err != NULL)
 				*err = rc;
 
-			return DSHR_ABORT_FAILED;
+			D_GOTO(out, rc = DSHR_ABORT_FAILED);
 		}
 
-		return DSHR_IGNORE;
+		D_GOTO(out, rc = DSHR_IGNORE);
 	default:
 		D_WARN("Not sure about whether the DTX "DF_DTI
 		       " can be committed or not: %d, skip it.\n",
@@ -368,6 +394,13 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 	}
 
 out:
+	if (rc == DSHR_NEED_COMMIT && mbs->dm_flags & DMF_CONTAIN_TARGET_GRP)
+		rc = dtx_coll_commit(cont, &dte->dte_xid, ranks, hints, hint_sz, bitmap, bitmap_sz,
+				     dte->dte_ver);
+
+	d_rank_list_free(ranks);
+	D_FREE(hints);
+	D_FREE(bitmap);
 	return rc;
 }
 
@@ -412,9 +445,10 @@ dtx_status_handle(struct dtx_resync_args *dra)
 		}
 
 		if (dre->dre_dte.dte_mbs == NULL) {
-			rc = vos_dtx_load_mbs(cont->sc_hdl, &dre->dre_xid, &dre->dre_dte.dte_mbs);
+			rc = vos_dtx_load_mbs(cont->sc_hdl, &dre->dre_xid, NULL,
+					      &dre->dre_dte.dte_mbs);
 			if (rc != 0) {
-				if (rc != -DER_NONEXIST)
+				if (rc < 0 && rc != -DER_NONEXIST)
 					D_WARN("Failed to load mbs, do not know the leader for DTX "
 					       DF_DTI" (ver = %u/%u/%u): rc = %d, skip it.\n",
 					       DP_DTI(&dre->dre_xid), dra->resync_version,
@@ -446,7 +480,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 			continue;
 		}
 
-		rc = dtx_status_handle_one(cont, &dre->dre_dte, dre->dre_epoch,
+		rc = dtx_status_handle_one(cont, &dre->dre_dte, dre->dre_oid, dre->dre_epoch,
 					   tgt_array, &err);
 		switch (rc) {
 		case DSHR_NEED_COMMIT:

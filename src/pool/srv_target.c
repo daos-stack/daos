@@ -1338,10 +1338,12 @@ pool_query_one(void *vin)
 static int
 pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 {
-	struct dss_coll_ops		coll_ops;
-	struct dss_coll_args		coll_args = { 0 };
-	struct pool_query_xs_arg	agg_arg = { 0 };
-	int				rc;
+	struct dss_coll_ops		 coll_ops;
+	struct dss_coll_args		 coll_args = { 0 };
+	struct pool_query_xs_arg	 agg_arg = { 0 };
+	int				*exclude_tgts = NULL;
+	uint32_t			 exclude_tgt_nr = 0;
+	int				 rc = 0;
 
 	D_ASSERT(ps != NULL);
 	memset(ps, 0, sizeof(*ps));
@@ -1359,24 +1361,32 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	coll_args.ca_aggregator		= &agg_arg;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
-	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid,
-					&coll_args.ca_exclude_tgts,
-					&coll_args.ca_exclude_tgts_cnt);
-	if (rc) {
+	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to get index : rc "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
-		return rc;
+		goto out;
+	}
+
+	if (exclude_tgts != NULL) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	D_FREE(coll_args.ca_exclude_tgts);
-	if (rc) {
+	if (rc != 0) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
 	*ps = agg_arg.qxa_space;
+
+out:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	return rc;
 }
 
@@ -2100,9 +2110,11 @@ ds_pool_tgt_discard_ult(void *data)
 {
 	struct ds_pool		*pool;
 	struct tgt_discard_arg	*arg = data;
-	struct dss_coll_ops	coll_ops = { 0 };
-	struct dss_coll_args	coll_args = { 0 };
-	int			rc;
+	struct dss_coll_ops	 coll_ops = { 0 };
+	struct dss_coll_args	 coll_args = { 0 };
+	int			*exclude_tgts = NULL;
+	uint32_t		 exclude_tgt_nr = 0;
+	int			 rc = 0;
 
 	/* If discard failed, let's still go ahead, since reintegration might
 	 * still succeed, though it might leave some garbage on the reintegration
@@ -2125,21 +2137,28 @@ ds_pool_tgt_discard_ult(void *data)
 		 */
 		status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN |
 			 PO_COMP_ST_DOWN | PO_COMP_ST_NEW;
-		rc = ds_pool_get_tgt_idx_by_state(arg->pool_uuid, status,
-						  &coll_args.ca_exclude_tgts,
-						  &coll_args.ca_exclude_tgts_cnt);
-		if (rc) {
+		rc = ds_pool_get_tgt_idx_by_state(arg->pool_uuid, status, &exclude_tgts,
+						  &exclude_tgt_nr);
+		if (rc != 0) {
 			D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
 				DP_UUID(arg->pool_uuid), DP_RC(rc));
 			D_GOTO(put, rc);
 		}
+
+		if (exclude_tgts != NULL) {
+			rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr,
+						   &coll_args.ca_tgt_bitmap, &coll_args.ca_tgt_bitmap_sz);
+			if (rc != 0)
+				goto put;
+		}
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
-	if (coll_args.ca_exclude_tgts)
-		D_FREE(coll_args.ca_exclude_tgts);
 	DL_CDEBUG(rc == 0, DB_MD, DLOG_ERR, rc, DF_UUID " tgt discard", DP_UUID(arg->pool_uuid));
+
 put:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	pool->sp_need_discard = 0;
 	pool->sp_discard_status = rc;
 

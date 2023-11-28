@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,18 +35,23 @@ struct obj_remote_cb_arg {
 };
 
 static void
-do_shard_update_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
+shard_update_req_cb(const struct crt_cb_info *cb_info)
 {
+	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
+	crt_rpc_t			*req = cb_info->cci_rpc;
 	crt_rpc_t			*parent_req = arg->parent_req;
 	struct obj_rw_out		*orwo = crt_reply_get(req);
 	struct obj_rw_in		*orw_parent = crt_req_get(parent_req);
 	struct dtx_leader_handle	*dlh = arg->dlh;
-	int				rc1 = 0;
+	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
+	int				 rc = cb_info->cci_rc;
+	int				 rc1;
 
 	if (orw_parent->orw_map_ver < orwo->orw_map_version) {
 		D_DEBUG(DB_IO, DF_UOID": map_ver stale (%d < %d).\n",
 			DP_UOID(orw_parent->orw_oid), orw_parent->orw_map_ver,
 			orwo->orw_map_version);
+		sub->dss_version = orwo->orw_map_version;
 		rc1 = -DER_STALE;
 	} else {
 		rc1 = orwo->orw_ret;
@@ -58,12 +63,6 @@ do_shard_update_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 	arg->comp_cb(dlh, arg->idx, rc);
 	crt_req_decref(parent_req);
 	D_FREE(arg);
-}
-
-static inline void
-shard_update_req_cb(const struct crt_cb_info *cb_info)
-{
-	do_shard_update_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
 }
 
 /* Execute update on the remote target */
@@ -122,14 +121,13 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw_parent = crt_req_get(parent_req);
 	orw = crt_req_get(req);
 	*orw = *orw_parent;
+
 	orw->orw_oid.id_shard = shard_tgt->st_shard_id;
-	uuid_copy(orw->orw_co_hdl, orw_parent->orw_co_hdl);
-	uuid_copy(orw->orw_co_uuid, orw_parent->orw_co_uuid);
 	orw->orw_flags |= ORF_BULK_BIND | obj_exec_arg->flags;
 	if (shard_tgt->st_flags & DTF_DELAY_FORWARD && dlh->dlh_drop_cond)
 		orw->orw_api_flags &= ~DAOS_COND_MASK;
-	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_count;
-	orw->orw_dti_cos.ca_arrays	= dth->dth_dti_cos;
+	orw->orw_dti_cos.ca_count = dth->dth_dti_cos_count;
+	orw->orw_dti_cos.ca_arrays = dth->dth_dti_cos;
 
 	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
 		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
@@ -152,18 +150,23 @@ out:
 }
 
 static void
-do_shard_punch_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
+shard_punch_req_cb(const struct crt_cb_info *cb_info)
 {
+	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
+	crt_rpc_t			*req = cb_info->cci_rpc;
 	crt_rpc_t			*parent_req = arg->parent_req;
 	struct obj_punch_out		*opo = crt_reply_get(req);
-	struct obj_punch_in		*opi_parent = crt_req_get(req);
+	struct obj_punch_in		*opi_parent = crt_req_get(parent_req);
 	struct dtx_leader_handle	*dlh = arg->dlh;
-	int				rc1 = 0;
+	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
+	int				 rc = cb_info->cci_rc;
+	int				 rc1;
 
 	if (opi_parent->opi_map_ver < opo->opo_map_version) {
 		D_DEBUG(DB_IO, DF_UOID": map_ver stale (%d < %d).\n",
 			DP_UOID(opi_parent->opi_oid), opi_parent->opi_map_ver,
 			opo->opo_map_version);
+		sub->dss_version = opo->opo_map_version;
 		rc1 = -DER_STALE;
 	} else {
 		rc1 = opo->opo_ret;
@@ -175,12 +178,6 @@ do_shard_punch_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 	arg->comp_cb(dlh, arg->idx, rc);
 	crt_req_decref(parent_req);
 	D_FREE(arg);
-}
-
-static inline void
-shard_punch_req_cb(const struct crt_cb_info *cb_info)
-{
-	do_shard_punch_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
 }
 
 /* Execute punch on the remote target */
@@ -200,6 +197,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	struct obj_punch_in		*opi_parent;
 	crt_opcode_t			opc;
 	int				rc = 0;
+	bool				sent_rpc = false;
 
 	D_ASSERT(idx < dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt);
 	sub = &dlh->dlh_subs[idx];
@@ -234,11 +232,8 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	opi_parent = crt_req_get(parent_req);
 	opi = crt_req_get(req);
 	*opi = *opi_parent;
+
 	opi->opi_oid.id_shard = shard_tgt->st_shard_id;
-	uuid_copy(opi->opi_co_hdl, opi_parent->opi_co_hdl);
-	uuid_copy(opi->opi_co_uuid, opi_parent->opi_co_uuid);
-	opi->opi_shard_tgts.ca_count = opi_parent->opi_shard_tgts.ca_count;
-	opi->opi_shard_tgts.ca_arrays = opi_parent->opi_shard_tgts.ca_arrays;
 	opi->opi_flags |= obj_exec_arg->flags;
 	if (shard_tgt->st_flags & DTF_DELAY_FORWARD && dlh->dlh_drop_cond)
 		opi->opi_api_flags &= ~DAOS_COND_PUNCH;
@@ -254,10 +249,11 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 		D_ASSERT(sub->dss_comp == 1);
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
 	}
-	return rc;
+
+	sent_rpc = true;
 
 out:
-	if (rc) {
+	if (!sent_rpc) {
 		sub->dss_result = rc;
 		comp_cb(dlh, idx, rc);
 		if (remote_arg) {
@@ -269,9 +265,12 @@ out:
 }
 
 static void
-do_shard_cpd_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
+shard_cpd_req_cb(const struct crt_cb_info *cb_info)
 {
-	struct obj_cpd_out	*oco = crt_reply_get(req);
+	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
+	crt_rpc_t			*req = cb_info->cci_rpc;
+	struct obj_cpd_out		*oco = crt_reply_get(req);
+	int				 rc = cb_info->cci_rc;
 
 	if (rc >= 0)
 		rc = oco->oco_ret;
@@ -282,12 +281,6 @@ do_shard_cpd_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 	D_FREE(arg->cpd_dcsr);
 	D_FREE(arg->cpd_dcde);
 	D_FREE(arg);
-}
-
-static inline void
-shard_cpd_req_cb(const struct crt_cb_info *cb_info)
-{
-	do_shard_cpd_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
 }
 
 /* Dispatch CPD RPC and handle sub requests remotely */
@@ -361,7 +354,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	uuid_copy(oci->oci_co_hdl, oci_parent->oci_co_hdl);
 	uuid_copy(oci->oci_co_uuid, oci_parent->oci_co_uuid);
 	oci->oci_map_ver = oci_parent->oci_map_ver;
-	oci->oci_flags = (oci_parent->oci_flags | exec_arg->flags) & ~ORF_CPD_LEADER;
+	oci->oci_flags = (oci_parent->oci_flags | exec_arg->flags) & ~ORF_LEADER;
 
 	oci->oci_disp_tgts.ca_arrays = NULL;
 	oci->oci_disp_tgts.ca_count = 0;
@@ -445,5 +438,126 @@ out:
 	D_FREE(dcsr_dcs);
 	D_FREE(dcde_dcs);
 
+	return rc;
+}
+
+static void
+shard_coll_punch_req_cb(const struct crt_cb_info *cb_info)
+{
+	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
+	crt_rpc_t			*req = cb_info->cci_rpc;
+	crt_rpc_t			*parent_req = arg->parent_req;
+	struct obj_coll_punch_out	*ocpo = crt_reply_get(req);
+	struct obj_coll_punch_in	*ocpi_parent = crt_req_get(parent_req);
+	struct dtx_leader_handle	*dlh = arg->dlh;
+	struct dtx_sub_status		*sub = &dlh->dlh_subs[arg->idx];
+	int				 rc = cb_info->cci_rc;
+	int				 rc1;
+
+	if (ocpi_parent->ocpi_map_ver < ocpo->ocpo_map_version) {
+		D_DEBUG(DB_IO, DF_UOID": map_ver stale (%d < %d).\n",
+			DP_UOID(ocpi_parent->ocpi_oid), ocpi_parent->ocpi_map_ver,
+			ocpo->ocpo_map_version);
+		sub->dss_version = ocpo->ocpo_map_version;
+		rc1 = -DER_STALE;
+	} else {
+		rc1 = ocpo->ocpo_ret;
+	}
+
+	if (rc >= 0)
+		rc = rc1;
+
+	arg->comp_cb(dlh, arg->idx, rc);
+	crt_req_decref(parent_req);
+	D_FREE(arg);
+}
+
+static int
+obj_coll_punch_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *arg)
+{
+	struct obj_coll_punch_out	*out_source = crt_reply_get(source);
+	struct obj_coll_punch_out	*out_result = crt_reply_get(result);
+
+	if (out_result->ocpo_ret == 0)
+		out_result->ocpo_ret = out_source->ocpo_ret;
+
+	if (out_result->ocpo_map_version < out_source->ocpo_map_version)
+		out_result->ocpo_map_version = out_source->ocpo_map_version;
+
+	return 0;
+}
+
+struct crt_corpc_ops obj_coll_punch_co_ops = {
+	.co_aggregate = obj_coll_punch_aggregator,
+	.co_pre_forward	= NULL,
+	.co_post_reply = NULL,
+};
+
+int
+ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
+			 dtx_sub_comp_cb_t comp_cb)
+{
+	struct ds_obj_exec_arg		*exec_arg = data;
+	struct obj_remote_cb_arg	*remote_arg;
+	struct dtx_sub_status		*sub;
+	crt_rpc_t			*parent_req = exec_arg->rpc;
+	crt_rpc_t			*req;
+	struct obj_coll_punch_in	*ocpi_parent;
+	struct obj_coll_punch_in	*ocpi;
+	int				rc = 0;
+	bool				sent_rpc = false;
+
+	/* For collective punch, only need one bcast RPC. */
+	D_ASSERT(idx == 0);
+	D_ASSERT(dlh->dlh_coll_ranks != NULL);
+
+	sub = &dlh->dlh_subs[idx];
+	D_ALLOC_PTR(remote_arg);
+	if (remote_arg == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	crt_req_addref(parent_req);
+	remote_arg->parent_req = parent_req;
+	remote_arg->dlh = dlh;
+	remote_arg->comp_cb = comp_cb;
+	remote_arg->idx = idx;
+
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, dlh->dlh_coll_ranks,
+				  DAOS_RPC_OPCODE(DAOS_OBJ_RPC_COLL_PUNCH, DAOS_OBJ_MODULE,
+						  DAOS_OBJ_VERSION),
+				  NULL, NULL, CRT_RPC_FLAG_FILTER_INVERT,
+				  crt_tree_topo(CRT_TREE_KNOMIAL, dlh->dlh_coll_tree_width), &req);
+	if (rc != 0) {
+		D_ERROR("crt_corpc_req_create failed for collective punch remote: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	ocpi_parent = crt_req_get(parent_req);
+	ocpi = crt_req_get(req);
+	*ocpi = *ocpi_parent;
+
+	ocpi->ocpi_flags = (exec_arg->flags | ocpi_parent->ocpi_flags) & ~ORF_LEADER;
+
+	D_DEBUG(DB_IO, DF_UOID" broadcast collective punch RPC with flags %x/"DF_X64"\n",
+		DP_UOID(ocpi->ocpi_oid), ocpi->ocpi_flags, ocpi->ocpi_api_flags);
+
+	rc = crt_req_send(req, shard_coll_punch_req_cb, remote_arg);
+	if (rc != 0) {
+		D_ASSERT(sub->dss_comp == 1);
+		D_ERROR("crt_req_send failed for collective punch remote: "DF_RC"\n", DP_RC(rc));
+	}
+
+	sent_rpc = true;
+
+out:
+	if (!sent_rpc) {
+		sub->dss_result = rc;
+		comp_cb(dlh, idx, rc);
+		if (remote_arg != NULL) {
+			crt_req_decref(parent_req);
+			D_FREE(remote_arg);
+		}
+	}
 	return rc;
 }

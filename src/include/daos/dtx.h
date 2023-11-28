@@ -62,6 +62,8 @@ enum dtx_mbs_flags {
 	 * shard index to sort the dtx_memberships::dm_tgts. Obsolete.
 	 */
 	DMF_SORTED_SAD_IDX		= (1 << 3),
+	/* The dtx_target_group information is appended after dtx_daos_target in dm_tgts. */
+	DMF_CONTAIN_TARGET_GRP		= (1 << 4),
 };
 
 /**
@@ -128,6 +130,20 @@ struct dtx_redundancy_group {
 	uint32_t			drg_ids[0];
 };
 
+/**
+ * Classify the shards that are described in dtx_daos_target based on the rank.
+ * With these information, the caller can easily know which shard(s) reside on
+ * the given daos engine (rank).
+ */
+struct dtx_target_group {
+	uint32_t			dtg_rank;
+	/* The index for the first shard on the given rank in dtx_memberships::dm_tgts. */
+	uint32_t			dtg_start_idx;
+	/* How many shards on the given rank that take part in the transaction. */
+	uint32_t			dtg_tgt_nr;
+	uint32_t			dtg_padding;
+};
+
 struct dtx_memberships {
 	/* How many touched shards in the DTX. */
 	uint32_t			dm_tgt_cnt;
@@ -153,7 +169,8 @@ struct dtx_memberships {
 	};
 
 	/* The first 'sizeof(struct dtx_daos_target) * dm_tgt_cnt' is the
-	 * dtx_daos_target array. The subsequent are modification groups.
+	 * dtx_daos_target array. The subsequent are redundancy groups or
+	 * dtx_target_group, depends on dm_flags.
 	 */
 	union {
 		char			dm_data[0];

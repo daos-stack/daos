@@ -1902,10 +1902,12 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 }
 
 int
-vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs)
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
+		 struct dtx_memberships **mbs)
 {
 	struct vos_container	*cont;
 	struct dtx_memberships	*tmp;
+	struct vos_dtx_act_ent	*dae;
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
 	int			 rc;
@@ -1917,14 +1919,24 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships *
 	d_iov_set(&riov, NULL, 0);
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 	if (rc == 0) {
-		tmp = vos_dtx_pack_mbs(vos_cont2umm(cont), riov.iov_buf);
-		if (tmp == NULL)
+		dae = riov.iov_buf;
+		tmp = vos_dtx_pack_mbs(vos_cont2umm(cont), dae);
+		if (tmp == NULL) {
 			rc = -DER_NOMEM;
-		else
+		} else {
+			if (oid != NULL)
+				*oid = DAE_OID(dae);
 			*mbs = tmp;
+		}
+	} else if (rc == -DER_NONEXIST) {
+		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
+		if (rc == 0)
+			rc = 1;
+		else if (rc == -DER_NONEXIST && !cont->vc_cmt_dtx_indexed)
+			rc = -DER_INPROGRESS;
 	}
 
-	if (rc != 0)
+	if (rc < 0)
 		D_ERROR("Failed to load mbs for "DF_DTI": "DF_RC"\n", DP_DTI(dti), DP_RC(rc));
 
 	return rc;
