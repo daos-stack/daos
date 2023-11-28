@@ -168,3 +168,7 @@
   required_src: ["src/ddb/tests/SConscript"]
   tests:
     - cmd: ["bin/ddb_tests"]
+- name: dfuse
+  base: "BUILD_DIR"
+  tests:
+    - cmd: ["src/client/dfuse/utest.sh"]
