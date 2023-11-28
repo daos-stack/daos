@@ -32,6 +32,9 @@
 		char *_module;							\
 		char *_opc;							\
 										\
+		if (!D_LOG_ENABLED(DB_TRACE))					\
+			break;							\
+										\
 		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);		\
 		D_TRACE_DEBUG(mask, (rpc),					\
 			"[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,	\
