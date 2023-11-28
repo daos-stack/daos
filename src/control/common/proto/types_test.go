@@ -46,13 +46,13 @@ func TestProto_ConvertNvmeHealth(t *testing.T) {
 
 func TestProto_ConvertSmdDevice(t *testing.T) {
 	c := storage.MockNvmeController()
-	pb := MockSmdDevice(*c, 1)
+	pb := MockSmdDevice(c, 1)
 	pb.Ctrlr.HealthStats = MockNvmeHealth(1)
 	native, err := (*SmdDevice)(pb).ToNative()
 	if err != nil {
 		t.Fatal(err)
 	}
-	expNative := storage.MockSmdDevice(*c, 1)
+	expNative := storage.MockSmdDevice(c, 1)
 	expNative.Ctrlr.HealthStats = storage.MockNvmeHealth(1)
 
 	co := cmpopts.IgnoreFields(storage.NvmeController{}, "Serial")

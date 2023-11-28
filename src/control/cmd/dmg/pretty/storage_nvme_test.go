@@ -332,7 +332,7 @@ func TestPretty_PrintNVMetaMap(t *testing.T) {
 	mockNvmeController := func(idx int32) *storage.NvmeController {
 		c := storage.MockNvmeController(idx)
 		c.SmdDevices = []*storage.SmdDevice{
-			storage.MockSmdDevice(*c, idx),
+			storage.MockSmdDevice(nil, idx),
 		}
 		return c
 	}
@@ -347,12 +347,12 @@ func TestPretty_PrintNVMetaMap(t *testing.T) {
 	controllerA.SmdDevices = nil
 	controllerB.SmdDevices = nil
 	controllerE.SmdDevices = []*storage.SmdDevice{
-		storage.MockSmdDevice(*controllerE, 0),
-		storage.MockSmdDevice(*controllerE, 1),
+		storage.MockSmdDevice(nil, 0),
+		storage.MockSmdDevice(nil, 1),
 	}
 	controllerF.SmdDevices = []*storage.SmdDevice{
-		storage.MockSmdDevice(*controllerF, 2),
-		storage.MockSmdDevice(*controllerF, 3),
+		storage.MockSmdDevice(nil, 2),
+		storage.MockSmdDevice(nil, 3),
 	}
 	for name, tc := range map[string]struct {
 		hsm         control.HostStorageMap

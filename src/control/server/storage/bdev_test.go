@@ -126,8 +126,7 @@ func Test_LedState(t *testing.T) {
 
 // Test_Convert_SmdDevice verifies proto->native and native->native JSON conversions.
 func Test_Convert_SmdDevice(t *testing.T) {
-	c := MockNvmeController(1)
-	native := MockSmdDevice(*c)
+	native := MockSmdDevice(MockNvmeController(1))
 	origTgts := native.TargetIDs
 	// Validate target IDs get de-duplicated and HasSysXS set appropriately
 	native.TargetIDs = append(native.TargetIDs, sysXSTgtID, native.TargetIDs[0])
