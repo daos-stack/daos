@@ -203,10 +203,10 @@ CRT_RPC_DEFINE(rdb_installsnapshot, DAOS_ISEQ_RDB_INSTALLSNAPSHOT,
 	.prf_req_fmt = c,	\
 	.prf_hdlr    = NULL,	\
 	.prf_co_ops  = NULL,	\
-}
+},
 
 static struct crt_proto_rpc_format rdb_proto_rpc_fmt[] = {
-	RDB_PROTO_SRV_RPC_LIST,
+	RDB_PROTO_SRV_RPC_LIST
 };
 
 #undef X

@@ -10,8 +10,14 @@
 
 #include <semaphore.h>
 #include <daos_task.h>
-
 #include "crt_internal.h"
+#include <daos/rpc.h>
+
+#include "../mgmt/rpc.h"
+#include "../pool/rpc.h"
+#include "../container/rpc.h"
+#include "../pipeline/pipeline_rpc.h"
+#include "../object/obj_rpc.h"
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
 
@@ -211,36 +217,111 @@ static struct crt_proto_rpc_format crt_iv_rpcs[] = {
 
 #undef X
 
-/* For CART internal lists */
-#define X(a, b, c, d, e) case a: return #a;
 
-/* For DAOS opcode list */
-#define XY(a) case a: return #a;
+
+#define X(a, b, c, d, e) case a: opc = #a;
 
 /* Helper function to convert internally registered RPC opc to str */
-char
-*crt_opc_to_str(crt_opcode_t opc)
+void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 {
-	if (crt_opc_is_swim(opc))
-		return "SWIM";
+	char	*module = NULL;
+	char	*opc = NULL;
+	int	base;
+	bool	daos_module = false;
+	bool	cart_module = false;
 
-	switch (opc) {
-		CRT_INTERNAL_RPCS_LIST
-		CRT_FI_RPCS_LIST
-		CRT_IV_RPCS_LIST
-		CRT_ST_RPCS_LIST
-		CRT_CTL_RPCS_LIST
+	base = crt_opc & CRT_PROTO_BASEOPC_MASK;
+
+	/* First, find if one of internal modules */
+	switch (base) {
+	case CRT_OPC_INTERNAL_BASE:
+	case CRT_OPC_FI_BASE:
+	case CRT_OPC_ST_BASE:
+	case CRT_OPC_CTL_BASE:
+	case CRT_OPC_IV_BASE:
+		module = "CART";
+		cart_module = true;
+		break;
+	case CRT_OPC_SWIM_BASE:
+		module = "SWIM";
+		break;
 	}
 
-	switch (opc >> CRT_PROTO_BASEOPC_SHIFT) {
-		DAOS_OPC_LIST
+	/* Check if daos module */
+	if (module == NULL) {
+
+		module = daos_opc_to_module_str(crt_opc);
+
+		if (module)
+			daos_module = true;
+		else
+			module = "CUSTOM";
 	}
 
-	return "CUSTOM";
+
+	/* Next find the opcode name if available for the module  */
+	if (cart_module) {
+		switch (crt_opc) {
+			CRT_INTERNAL_RPCS_LIST
+			CRT_FI_RPCS_LIST
+			CRT_IV_RPCS_LIST
+			CRT_ST_RPCS_LIST
+			CRT_CTL_RPCS_LIST
+		}
+		return;
+	}
+
+
+	if (daos_module) {
+		int mod_id;
+		int op_id;
+
+		mod_id = opc_get_mod_id(crt_opc);
+		op_id = opc_get(crt_opc);
+
+		switch (mod_id) {
+		case DAOS_MGMT_MODULE:
+			switch (op_id) {
+			MGMT_PROTO_CLI_RPC_LIST
+			MGMT_PROTO_SRV_RPC_LIST
+			}
+			break;
+		case DAOS_POOL_MODULE:
+			switch (op_id) {
+			POOL_PROTO_RPC_LIST
+			}
+			break;
+		case DAOS_CONT_MODULE:
+			switch (op_id) {
+			CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8)
+			CONT_PROTO_SRV_RPC_LIST
+			}
+			break;
+		case DAOS_OBJ_MODULE:
+			opc = obj_opc_to_str(op_id);
+			break;
+		case DAOS_PIPELINE_MODULE:
+			switch (op_id) {
+			PIPELINE_PROTO_CLI_RPC_LIST
+			}
+			break;
+
+/* TODO: RDB module header needs to reorg as it pulls many dependencies
+		case DAOS_RDB_MODULE:
+			switch (op_id) {
+			RDB_PROTO_SRV_RPC_LIST
+			}
+			break;
+*/
+		}
+	}
+
+	*module_name = module;
+	*opc_name = opc;
+
 }
 
 #undef X
-#undef XY
 
 /* CRT RPC related APIs or internal functions */
 int

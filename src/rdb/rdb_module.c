@@ -34,10 +34,10 @@ rdb_module_fini(void)
 	.dr_opc       = a,	\
 	.dr_hdlr      = d,	\
 	.dr_corpc_ops = e,	\
-}
+},
 
 static struct daos_rpc_handler rdb_handlers[] = {
-	RDB_PROTO_SRV_RPC_LIST,
+	RDB_PROTO_SRV_RPC_LIST
 };
 
 #undef X

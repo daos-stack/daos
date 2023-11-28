@@ -39,16 +39,20 @@
 	} while (0)
 
 /* Log an error with a RPC descriptor */
-#define RPC_ERROR(rpc, fmt, ...)					\
-	do {								\
-		D_TRACE_ERROR((rpc),					\
-			"[opc=%#x (%s) rpcid=%#lx rank:tag=%d:%d] " fmt,\
-			(rpc)->crp_pub.cr_opc,				\
-			crt_opc_to_str((rpc)->crp_pub.cr_opc),		\
-			(rpc)->crp_req_hdr.cch_rpcid,			\
-			(rpc)->crp_pub.cr_ep.ep_rank,			\
-			(rpc)->crp_pub.cr_ep.ep_tag,			\
-			## __VA_ARGS__);				\
+#define RPC_ERROR(rpc, fmt, ...)						\
+	do {									\
+		char *_module;							\
+		char *_opc;							\
+										\
+		crt_opc_decode((rpc)->crp_pub.cr_opc, &_module, &_opc);		\
+		D_TRACE_ERROR((rpc),						\
+			"[opc=%#x (%s:%s) rpcid=%#lx rank:tag=%d:%d] " fmt,	\
+			(rpc)->crp_pub.cr_opc,					\
+			_module, _opc,						\
+			(rpc)->crp_req_hdr.cch_rpcid,				\
+			(rpc)->crp_pub.cr_ep.ep_rank,				\
+			(rpc)->crp_pub.cr_ep.ep_tag,				\
+			## __VA_ARGS__);					\
 	} while (0)
 
 /**

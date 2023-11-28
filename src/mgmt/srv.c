@@ -46,11 +46,11 @@ static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
 	.dr_opc       = a,	\
 	.dr_hdlr      = d,	\
 	.dr_corpc_ops = e,	\
-}
+},
 
 static struct daos_rpc_handler mgmt_handlers[] = {
-	MGMT_PROTO_CLI_RPC_LIST,
-	MGMT_PROTO_SRV_RPC_LIST,
+	MGMT_PROTO_CLI_RPC_LIST
+	MGMT_PROTO_SRV_RPC_LIST
 };
 
 #undef X

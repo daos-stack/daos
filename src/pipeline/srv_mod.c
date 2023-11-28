@@ -22,7 +22,7 @@ pipeline_mod_fini(void)
 	return 0;
 }
 
-#define X(a, b, c, d, e, f)	\
+#define X(a, b, c, d, e)	\
 {				\
 	.dr_opc		= a,	\
 	.dr_hdlr	= d,	\

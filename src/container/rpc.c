@@ -148,16 +148,16 @@ CRT_RPC_DEFINE(cont_acl_delete_v8, DAOS_ISEQ_CONT_ACL_DELETE_V8, DAOS_OSEQ_CONT_
 	.prf_req_fmt = c,	\
 	.prf_hdlr    = NULL,	\
 	.prf_co_ops  = NULL,	\
-}
+},
 
 static struct crt_proto_rpc_format cont_proto_rpc_fmt_v8[] = {
-    CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8),
-    CONT_PROTO_SRV_RPC_LIST,
+    CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8)
+    CONT_PROTO_SRV_RPC_LIST
 };
 
 static struct crt_proto_rpc_format cont_proto_rpc_fmt_v7[] = {
-    CONT_PROTO_CLI_RPC_LIST(7, ds_cont_op_handler_v7),
-    CONT_PROTO_SRV_RPC_LIST,
+    CONT_PROTO_CLI_RPC_LIST(7, ds_cont_op_handler_v7)
+    CONT_PROTO_SRV_RPC_LIST
 };
 
 #undef X

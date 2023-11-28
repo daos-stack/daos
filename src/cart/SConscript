@@ -64,6 +64,8 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     env.require('mercury', headers_only=True)
+    env.require('isal', headers_only=True)
+    env.require('argobots', headers_only=True)
 
     denv = env.Clone(LIBS=[])
 
