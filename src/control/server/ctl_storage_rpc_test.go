@@ -9,25 +9,32 @@ package server
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/testing/protocmp"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/mount"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
@@ -723,6 +730,803 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResp, resp, defStorageScanCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_checkTmpfsMem(t *testing.T) {
+	for name, tc := range map[string]struct {
+		scmCfgs     map[int]*storage.TierConfig
+		memInfoErr  error
+		memAvailGiB int
+		expErr      error
+	}{
+		"pmem tier; skip check": {
+			scmCfgs: map[int]*storage.TierConfig{
+				0: {
+					Class: storage.ClassDcpm,
+				},
+			},
+		},
+		"meminfo fetch fails": {
+			scmCfgs: map[int]*storage.TierConfig{
+				0: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 5,
+					},
+				},
+			},
+			memInfoErr: errors.New("fail"),
+			expErr:     errors.New("fail"),
+		},
+		"single engine; ram tier; perform check; low mem": {
+			scmCfgs: map[int]*storage.TierConfig{
+				0: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 5,
+					},
+				},
+			},
+			memAvailGiB: 4,
+			expErr: storage.FaultRamdiskLowMem("Available", 5*humanize.GiByte,
+				4.5*humanize.GiByte, 4*humanize.GiByte),
+		},
+		"single engine; ram tier; perform check": {
+			scmCfgs: map[int]*storage.TierConfig{
+				0: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 5,
+					},
+				},
+			},
+			memAvailGiB: 5,
+		},
+		"dual engine; ram tier; perform check; low mem": {
+			scmCfgs: map[int]*storage.TierConfig{
+				0: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 80,
+					},
+				},
+				1: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 80,
+					},
+				},
+			},
+			memAvailGiB: 140,
+			expErr: storage.FaultRamdiskLowMem("Available", 160*humanize.GiByte,
+				144*humanize.GiByte, 140*humanize.GiByte),
+		},
+		"dual engine; ram tier; perform check": {
+			scmCfgs: map[int]*storage.TierConfig{
+				1: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 80,
+					},
+				},
+				0: {
+					Class: storage.ClassRam,
+					Scm: storage.ScmConfig{
+						RamdiskSize: 80,
+					},
+				},
+			},
+			memAvailGiB: 145,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			getMemInfo := func() (*common.MemInfo, error) {
+				return &common.MemInfo{
+					HugepageSizeKiB: 2048,
+					MemAvailableKiB: (humanize.GiByte * tc.memAvailGiB) / humanize.KiByte,
+				}, tc.memInfoErr
+			}
+
+			gotErr := checkTmpfsMem(log, tc.scmCfgs, getMemInfo)
+			test.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+func TestServer_CtlSvc_StorageFormat(t *testing.T) {
+	mockNvmeController0 := storage.MockNvmeController(0)
+	mockNvmeController1 := storage.MockNvmeController(1)
+
+	for name, tc := range map[string]struct {
+		scmMounted       bool // if scmMounted we emulate ext4 fs is mounted
+		tmpfsEmpty       bool // if false, an already-mounted ramdisk is not empty
+		superblockExists bool
+		instancesStarted bool // engine already started
+		sMounts          []string
+		sClass           storage.Class
+		sDevs            []string
+		sSize            int
+		bClass           storage.Class
+		bDevs            [][]string
+		bSize            int
+		bmbc             *bdev.MockBackendConfig
+		awaitTimeout     time.Duration
+		getMemInfo       func() (*common.MemInfo, error)
+		expAwaitExit     bool
+		expAwaitErr      error
+		expResp          *ctlpb.StorageFormatResp
+		reformat         bool // indicates setting of reformat parameter
+	}{
+		"ram no nvme": {
+			sMounts: []string{"/mnt/daos"},
+			sClass:  storage.ClassRam,
+			sSize:   6,
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		"dcpm no nvme": {
+			sMounts: []string{"/mnt/daos"},
+			sClass:  storage.ClassDcpm,
+			sDevs:   []string{"/dev/pmem1"},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		"nvme and ram": {
+			sMounts: []string{"/mnt/daos"},
+			sClass:  storage.ClassRam,
+			sDevs:   []string{"/dev/pmem1"}, // ignored if SCM class is ram
+			sSize:   6,
+			bClass:  storage.ClassNvme,
+			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		"aio file no size and ram": {
+			sMounts: []string{"/mnt/daos"},
+			sClass:  storage.ClassRam,
+			sDevs:   []string{"/dev/pmem1"}, // ignored if SCM class is ram
+			sSize:   6,
+			bClass:  storage.ClassFile,
+			bDevs:   [][]string{{"/tmp/daos-bdev"}},
+			bSize:   6,
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						"/tmp/daos-bdev": new(storage.BdevDeviceFormatResponse),
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: "/tmp/daos-bdev",
+						State:   new(ctlpb.ResponseState),
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		"nvme and dcpm": {
+			sMounts: []string{"/mnt/daos"},
+			sClass:  storage.ClassDcpm,
+			sDevs:   []string{"dev/pmem0"},
+			bClass:  storage.ClassNvme,
+			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		"io instance already running": { // await should exit immediately
+			instancesStarted: true,
+			scmMounted:       true,
+			sMounts:          []string{"/mnt/daos"},
+			sClass:           storage.ClassRam,
+			sSize:            6,
+			bClass:           storage.ClassNvme,
+			bDevs:            [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+			},
+			expAwaitExit: true,
+			expAwaitErr:  errors.New("can't wait for storage: instance 0 already started"),
+			awaitTimeout: time.Second,
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: storage.NilBdevAddress,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
+						},
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "SCM is already formatted",
+						},
+					},
+				},
+			},
+		},
+		// if emulated scm (ram) is already formatted and mounted (with
+		// superblock) then awaitStorageReady() will not wait and format
+		// attempt should fail with no reformat option set
+		"ram already mounted no reformat": {
+			scmMounted: true,
+			sMounts:    []string{"/mnt/daos"},
+			sClass:     storage.ClassRam,
+			sSize:      6,
+			bClass:     storage.ClassNvme,
+			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: storage.NilBdevAddress,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
+						},
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "SCM is already formatted",
+						},
+					},
+				},
+			},
+		},
+		"ram already mounted but empty": {
+			scmMounted: true,
+			tmpfsEmpty: true,
+			sMounts:    []string{"/mnt/daos"},
+			sClass:     storage.ClassRam,
+			sSize:      6,
+			bClass:     storage.ClassNvme,
+			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "SCM is already formatted",
+						},
+					},
+				},
+			},
+		},
+		"ram already mounted and reformat set": {
+			scmMounted: true,
+			reformat:   true,
+			sMounts:    []string{"/mnt/daos"},
+			sClass:     storage.ClassRam,
+			sSize:      6,
+			bClass:     storage.ClassNvme,
+			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		"dcpm already mounted no reformat": {
+			scmMounted: true,
+			sMounts:    []string{"/mnt/daos"},
+			sClass:     storage.ClassDcpm,
+			sDevs:      []string{"/dev/pmem1"},
+			bClass:     storage.ClassNvme,
+			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: storage.NilBdevAddress,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
+						},
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "SCM is already formatted",
+						},
+					},
+				},
+			},
+		},
+		"dcpm already mounted and reformat set": {
+			scmMounted: true,
+			reformat:   true,
+			sMounts:    []string{"/mnt/daos"},
+			sClass:     storage.ClassDcpm,
+			sDevs:      []string{"/dev/pmem1"},
+			bClass:     storage.ClassNvme,
+			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		// if superblock exists, awaitStorageReady() won't wait
+		"superblock exists and reformat set": {
+			scmMounted:       true,
+			superblockExists: true,
+			reformat:         true,
+			sMounts:          []string{"/mnt/daos"},
+			sClass:           storage.ClassDcpm,
+			sDevs:            []string{"/dev/pmem1"},
+			bClass:           storage.ClassNvme,
+			bDevs:            [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+			},
+			expAwaitExit: true,
+			awaitTimeout: time.Second,
+			expResp: &ctlpb.StorageFormatResp{
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		"nvme and dcpm success multi-io": {
+			sMounts: []string{"/mnt/daos0", "/mnt/daos1"},
+			sClass:  storage.ClassDcpm,
+			sDevs:   []string{"/dev/pmem0", "/dev/pmem1"},
+			bClass:  storage.ClassNvme,
+			bDevs: [][]string{
+				{mockNvmeController0.PciAddr},
+				{mockNvmeController1.PciAddr},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0, mockNvmeController1},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+					{
+						// this should be id 1 but mock
+						// backend spits same output for
+						// both I/O Engine instances
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint:    "/mnt/daos0",
+						State:       new(ctlpb.ResponseState),
+						Instanceidx: 0,
+					},
+					{
+						Mntpoint:    "/mnt/daos1",
+						State:       new(ctlpb.ResponseState),
+						Instanceidx: 1,
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			testDir, cleanup := test.CreateTestDir(t)
+			defer cleanup()
+
+			if tc.expResp == nil {
+				t.Fatal("expResp test case parameter required")
+			}
+			test.AssertEqual(t, len(tc.sMounts), len(tc.expResp.Mrets), name)
+			for i := range tc.sMounts {
+				// Hack to deal with creating the mountpoint in test.
+				// FIXME (DAOS-3471): The tests in this layer really shouldn't be
+				// reaching down far enough to actually interact with the filesystem.
+				tc.sMounts[i] = filepath.Join(testDir, tc.sMounts[i])
+				if len(tc.expResp.Mrets) > 0 {
+					mp := &(tc.expResp.Mrets[i].Mntpoint)
+					if *mp != "" {
+						if strings.HasSuffix(tc.sMounts[i], *mp) {
+							*mp = tc.sMounts[i]
+						}
+					}
+				}
+			}
+
+			config := config.DefaultServer()
+
+			// validate test parameters
+			if len(tc.sDevs) > 0 {
+				test.AssertEqual(t, len(tc.sMounts), len(tc.sDevs), name)
+			} else {
+				tc.sDevs = []string{"/dev/pmem0", "/dev/pmem1"}
+			}
+			if len(tc.bDevs) > 0 {
+				test.AssertEqual(t, len(tc.sMounts), len(tc.bDevs), name)
+			} else {
+				tc.bDevs = [][]string{{}, {}}
+			}
+
+			// map SCM mount targets to source devices
+			devToMount := make(map[string]string)
+
+			// add all I/O Engine configurations
+			for idx, scmMount := range tc.sMounts {
+				if tc.sClass == storage.ClassDcpm {
+					devToMount[tc.sDevs[idx]] = scmMount
+					t.Logf("sDevs[%d]= %v, value= %v", idx, tc.sDevs[idx], scmMount)
+				}
+				engine := engine.MockConfig().
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmMountPoint(scmMount).
+							WithStorageClass(tc.sClass.String()).
+							WithScmRamdiskSize(uint(tc.sSize)).
+							WithScmDeviceList(tc.sDevs[idx]),
+						storage.NewTierConfig().
+							WithStorageClass(tc.bClass.String()).
+							WithBdevFileSize(tc.bSize).
+							WithBdevDeviceList(tc.bDevs[idx]...),
+					)
+				config.Engines = append(config.Engines, engine)
+			}
+
+			getFsRetStr := "none"
+			if tc.scmMounted {
+				getFsRetStr = "ext4"
+			}
+			smsc := &system.MockSysConfig{
+				IsMountedBool:  tc.scmMounted,
+				GetfsStr:       getFsRetStr,
+				SourceToTarget: devToMount,
+			}
+			if tc.sClass == storage.ClassRam {
+				total := uint64(1234)
+				avail := total
+				if !tc.tmpfsEmpty {
+					avail--
+				}
+				smsc.GetfsUsageResps = []system.GetfsUsageRetval{
+					{
+						Total: total,
+						Avail: avail,
+					},
+				}
+			}
+			sysProv := system.NewMockSysProvider(log, smsc)
+			mounter := mount.NewProvider(log, sysProv)
+			scmProv := scm.NewProvider(log, nil, sysProv, mounter)
+			bdevProv := bdev.NewMockProvider(log, tc.bmbc)
+			if tc.getMemInfo == nil {
+				tc.getMemInfo = func() (*common.MemInfo, error) {
+					return &common.MemInfo{
+						MemAvailableKiB: (6 * humanize.GiByte) / humanize.KiByte,
+					}, nil
+				}
+			}
+
+			mscs := NewMockStorageControlService(log, config.Engines, sysProv, scmProv,
+				bdevProv, tc.getMemInfo)
+
+			ctxEvt, cancelEvtCtx := context.WithCancel(context.Background())
+			t.Cleanup(cancelEvtCtx)
+
+			cs := &ControlService{
+				StorageControlService: *mscs,
+				harness:               &EngineHarness{log: log},
+				events:                events.NewPubSub(ctxEvt, log),
+				srvCfg:                config,
+			}
+
+			for i, ec := range config.Engines {
+				root := filepath.Dir(tc.sMounts[i])
+				if tc.scmMounted {
+					root = tc.sMounts[i]
+				}
+				if err := os.MkdirAll(root, 0777); err != nil {
+					t.Fatal(err)
+				}
+
+				trc := &engine.TestRunnerConfig{}
+				trc.Running.Store(tc.instancesStarted)
+				runner := engine.NewTestRunner(trc, ec)
+
+				storProv := storage.MockProvider(log, 0, &ec.Storage, sysProv,
+					scmProv, bdevProv, nil)
+
+				ei := NewEngineInstance(log, storProv, nil, runner)
+				ei.ready.Store(tc.instancesStarted)
+
+				// if the instance is expected to have a valid superblock, create one
+				if tc.superblockExists {
+					if err := ei.createSuperblock(); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					ei.setSuperblock(nil)
+				}
+
+				if err := cs.harness.AddInstance(ei); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			instances := cs.harness.Instances()
+			test.AssertEqual(t, len(tc.sMounts), len(instances), "nr mounts != nr instances")
+
+			ctx, cancel := context.WithCancel(test.Context(t))
+			if tc.awaitTimeout != 0 {
+				ctx, cancel = context.WithTimeout(ctx, tc.awaitTimeout)
+			}
+			t.Cleanup(cancel)
+
+			// Trigger await storage ready on each instance and send results to
+			// awaitCh. awaitStorageReady() will set "waitFormat" flag, fire off
+			// "onAwaitFormat" callbacks, select on "storageReady" channel then
+			// finally unset "waitFormat" flag.
+			awaitCh := make(chan error)
+			for _, ei := range instances {
+				t.Logf("call awaitStorageReady() (%d)", ei.Index())
+				go func(ctx context.Context, e *EngineInstance) {
+					select {
+					case <-ctx.Done():
+					case awaitCh <- e.awaitStorageReady(ctx):
+					}
+				}(ctx, ei.(*EngineInstance))
+			}
+
+			// When all instances are in awaiting format state ("waitFormat" set),
+			// close awaitingFormat channel to signal ready state.
+			awaitingFormat := make(chan struct{})
+			t.Log("polling on 'waitFormat' state(s)")
+			go func(ctxIn context.Context) {
+				for {
+					ready := true
+					for _, ei := range instances {
+						if !ei.(*EngineInstance).isAwaitingFormat() {
+							ready = false
+						}
+					}
+					if ready {
+						close(awaitingFormat)
+						return
+					}
+					select {
+					case <-time.After(testShortTimeout):
+					case <-ctxIn.Done():
+						return
+					}
+				}
+			}(ctx)
+
+			select {
+			case <-awaitingFormat:
+				t.Log("storage is ready and waiting for format")
+			case err := <-awaitCh:
+				t.Log("rx on awaitCh from unusual awaitStorageReady() returns")
+				test.CmpErr(t, tc.expAwaitErr, err)
+				if !tc.expAwaitExit {
+					t.Fatal("unexpected exit from awaitStorageReady()")
+				}
+			case <-ctx.Done():
+				t.Logf("context done (%s)", ctx.Err())
+				test.CmpErr(t, tc.expAwaitErr, ctx.Err())
+				if tc.expAwaitErr == nil {
+					t.Fatal(ctx.Err())
+				}
+				if !tc.scmMounted {
+					t.Fatalf("unexpected behavior of awaitStorageReady")
+				}
+			}
+
+			resp, fmtErr := cs.StorageFormat(test.Context(t), &ctlpb.StorageFormatReq{
+				Reformat: tc.reformat,
+			})
+			if fmtErr != nil {
+				t.Fatal(fmtErr)
+			}
+
+			test.AssertEqual(t, len(tc.expResp.Crets), len(resp.Crets),
+				"number of controller results")
+			test.AssertEqual(t, len(tc.expResp.Mrets), len(resp.Mrets),
+				"number of mount results")
+			for _, exp := range tc.expResp.Crets {
+				match := false
+				for _, got := range resp.Crets {
+					if diff := cmp.Diff(exp, got, test.DefaultCmpOpts()...); diff == "" {
+						match = true
+					}
+				}
+				if !match {
+					t.Fatalf("unexpected results: (\nwant: %+v\ngot: %+v)",
+						tc.expResp.Crets, resp.Crets)
+				}
+			}
+			for _, exp := range tc.expResp.Mrets {
+				match := false
+				for _, got := range resp.Mrets {
+					if diff := cmp.Diff(exp, got, test.DefaultCmpOpts()...); diff == "" {
+						match = true
+					}
+				}
+				if !match {
+					t.Fatalf("unexpected results: (\nwant: %+v\ngot: %+v)",
+						tc.expResp.Mrets, resp.Mrets)
+				}
 			}
 		})
 	}
