@@ -102,5 +102,5 @@ class IorCrash(IorTestBase):
         # Verify container handle opened by ior is closed (by ior before its graceful exit)
         # Give ior some time to get started and open the container!
         # And, expect 2 open handles, one for this container open/query, and another for ior itself
-        self.assertTrue(self.verify_cont_handles(exp_nhandles=2),
+        self.assertTrue(self.verify_cont_handles(expected_handles=2),
                         "Error confirming container info nhandles")
