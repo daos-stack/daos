@@ -1392,8 +1392,6 @@ class DFuse():
             if self.container:
                 cmd.extend(['--container', self.container])
 
-        cmd.extend(['-t', str(32)])
-
         print(f"Running {' '.join(cmd)}")
         # pylint: disable-next=consider-using-with
         self._sp = subprocess.Popen(cmd, env=my_env)
@@ -2814,9 +2812,8 @@ class PosixTests():
         assert rc.returncode == 0
 
     @needs_dfuse
-    def Xtest_uns_link(self):
+    def test_uns_link(self):
         """Simple test to create a container then create a path for it in dfuse"""
-        # Disabled as this fails with inode eviction, needs container timeouts set.
         container1 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link1')
         cmd = ['cont', 'query', self.pool.id(), container1.id()]
         rc = run_daos_cmd(self.conf, cmd)
