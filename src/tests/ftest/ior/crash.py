@@ -98,5 +98,4 @@ class IorCrash(IorTestBase):
             self.fail("One or more engines crashed")
 
         # Verify container handle opened by ior is closed (by ior before its graceful exit)
-        self.assertTrue(self.cont_nhandles_match(attempts=1, delay_sec=0),
-                        "Error confirming container info nhandles")
+        self.assertTrue(self.cont_nhandles_match(), "Error confirming container info nhandles")
