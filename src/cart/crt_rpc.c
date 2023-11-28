@@ -244,6 +244,7 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 		break;
 	case CRT_OPC_SWIM_BASE:
 		module = "SWIM";
+		cart_module = true;
 		break;
 	}
 
@@ -268,7 +269,6 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 			CRT_ST_RPCS_LIST
 			CRT_CTL_RPCS_LIST
 		}
-		return;
 	}
 
 
