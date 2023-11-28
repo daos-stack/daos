@@ -47,7 +47,5 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - name: Check DAOS ftest tags.
         run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint
