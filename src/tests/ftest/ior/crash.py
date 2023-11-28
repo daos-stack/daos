@@ -26,6 +26,7 @@ class IorCrash(IorTestBase):
         for _ in range(attempts):
             if self.container.verify_query({'num_handles': num_handles}):
                 return True
+            self.log.info("check_container_info does not match yet, sleep %d sec", delay_sec)
             time.sleep(delay_sec)
         return False
 
@@ -98,4 +99,7 @@ class IorCrash(IorTestBase):
             self.fail("One or more engines crashed")
 
         # Verify container handle opened by ior is closed (by ior before its graceful exit)
-        self.assertTrue(self.cont_nhandles_match(), "Error confirming container info nhandles")
+        # Give ior some time to get started and open the container!
+        # And, expect 2 open handles, one for this container open/query, and another for ior itself
+        self.assertTrue(self.cont_nhandles_match(exp_nhandles=2, attempts=5, delay_sec=2),
+                        "Error confirming container info nhandles")
