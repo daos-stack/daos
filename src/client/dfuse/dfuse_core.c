@@ -167,9 +167,26 @@ out:
 	return true;
 }
 
+/* Remove all inodes from the evict queues. */
+void
+dfuse_de_stop(struct dfuse_info *dfuse_info)
+{
+	struct dfuse_time_entry *dte, *dtep;
+
+	/* Walk the list, oldest first */
+	d_list_for_each_entry_safe(dte, dtep, &dfuse_info->di_dtes, dte_list) {
+		struct dfuse_inode_entry *inode, *inodep;
+
+		d_list_for_each_entry_safe(inode, inodep, &dte->inode_list, ie_evict_entry)
+			d_list_del_init(&inode->ie_evict_entry);
+
+		d_list_del(&dte->dte_list);
+		D_FREE(dte);
+	}
+}
+
 /* Main loop for eviction thread.  Spins until ready for exit waking after one second and iterates
  * over all newly expired dentries.
- * TODO: Wait for this thread to startup and shutdown properly.
  */
 static void *
 dfuse_evict_thread(void *arg)
@@ -185,7 +202,9 @@ dfuse_evict_thread(void *arg)
 		ts.tv_sec += 1;
 
 		rc = sem_timedwait(&dfuse_info->di_dte_sem, &ts);
-		if (rc != 0) {
+		if (rc == 0) {
+			return NULL;
+		} else {
 			rc = errno;
 
 			if (errno != ETIMEDOUT)
@@ -208,15 +227,7 @@ dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry 
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 
-#if 0
-	rc = D_MUTEX_TRYLOCK(&dfuse_info->di_dte_lock);
-	if (rc != 0) {
-		DFUSE_TRA_INFO(inode, "Unable to get lock, dropping");
-		return 0;
-	}
-#else
 	D_MUTEX_LOCK(&dfuse_info->di_dte_lock);
-#endif
 	inode->ie_dentry_last_update = now;
 
 	/* Walk each timeout value
@@ -240,13 +251,15 @@ dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry 
 }
 
 static int
-dfuse_de_add(d_list_t *list, double timeout)
+dfuse_de_add(struct dfuse_info *dfuse_info, d_list_t *list, double timeout)
 {
 	struct dfuse_time_entry *dte;
 
 	D_ALLOC_PTR(dte);
 	if (dte == NULL)
 		return -DER_NOMEM;
+
+	DFUSE_TRA_UP(dte, dfuse_info, "time bucket");
 
 	dte->time = timeout;
 	D_INIT_LIST_HEAD(&dte->inode_list);
@@ -255,9 +268,9 @@ dfuse_de_add(d_list_t *list, double timeout)
 	return -DER_SUCCESS;
 }
 
-/* Ensure there's a timeout list for the given value
- * To do this
- * */
+/* Ensure there's a timeout list for the given value.
+ * Check if one exists already, and if it does not the insert it into the right location.
+ */
 static int
 dfuse_de_add_value(struct dfuse_info *dfuse_info, double timeout)
 {
@@ -281,7 +294,7 @@ dfuse_de_add_value(struct dfuse_info *dfuse_info, double timeout)
 	}
 
 	if (lower == -1) {
-		rc = dfuse_de_add(&dfuse_info->di_dtes, timeout);
+		rc = dfuse_de_add(dfuse_info, &dfuse_info->di_dtes, timeout);
 		goto out;
 	}
 
@@ -290,7 +303,7 @@ dfuse_de_add_value(struct dfuse_info *dfuse_info, double timeout)
 		if (dte->time < lower)
 			continue;
 
-		rc = dfuse_de_add(&dte->dte_list, timeout);
+		rc = dfuse_de_add(dfuse_info, &dte->dte_list, timeout);
 		break;
 	}
 
@@ -306,11 +319,11 @@ out:
 static int
 dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 {
-	int		matched;
-	unsigned int	out = 0;
-	int		count0 = 0;
-	int		count1 = 0;
-	char		c = '\0';
+	int          matched;
+	unsigned int out    = 0;
+	int          count0 = 0;
+	int          count1 = 0;
+	char         c      = '\0';
 
 	matched = sscanf(buff, "%u%n%c%n", &out, &count0, &c, &count1);
 
@@ -679,7 +692,7 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 err_disconnect:
 	ret = daos_pool_disconnect(dfp->dfp_poh, NULL);
 	if (ret)
-		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: "DF_RC, DP_RC(ret));
+		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: " DF_RC, DP_RC(ret));
 err_free:
 	D_FREE(dfp);
 err:
@@ -1021,8 +1034,8 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 
 	atomic_init(&dfc->dfs_ref, 1);
 
-	DFUSE_TRA_DEBUG(dfp, "New cont "DF_UUIDF" in pool "DF_UUIDF,
-			DP_UUID(cont), DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_DEBUG(dfp, "New cont " DF_UUIDF " in pool " DF_UUIDF, DP_UUID(cont),
+			DP_UUID(dfp->dfp_pool));
 
 	dfc->dfs_dfp = dfp;
 
@@ -1103,8 +1116,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 	 * container if there is a race to insert, so if that happens
 	 * just use that one.
 	 */
-	rlink = d_hash_rec_find_insert(&dfp->dfp_cont_table,
-				       &dfc->dfs_cont, sizeof(dfc->dfs_cont),
+	rlink = d_hash_rec_find_insert(&dfp->dfp_cont_table, &dfc->dfs_cont, sizeof(dfc->dfs_cont),
 				       &dfc->dfs_entry);
 
 	if (rlink != &dfc->dfs_entry) {
@@ -1311,8 +1323,6 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 	D_INIT_LIST_HEAD(&dfuse_info->di_dtes);
 
 	dfuse_de_add_value(dfuse_info, 0);
-	dfuse_de_add_value(dfuse_info, 50);
-	dfuse_de_add_value(dfuse_info, 70);
 
 	D_RWLOCK_INIT(&dfuse_info->di_forget_lock, 0);
 
@@ -1510,8 +1520,8 @@ dfuse_event_release(void *arg)
 int
 dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 {
-	struct fuse_args          args     = {0};
-	struct dfuse_inode_entry *ie       = NULL;
+	struct fuse_args          args       = {0};
+	struct dfuse_inode_entry *ie         = NULL;
 	struct d_slab_reg         read_slab  = {.sr_init    = dfuse_event_init,
 						.sr_reset   = dfuse_read_event_reset,
 						.sr_release = dfuse_event_release,
@@ -1532,7 +1542,7 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	 * standard allocation macros
 	 */
 	args.allocated = 1;
-	args.argv = calloc(sizeof(*args.argv), args.argc);
+	args.argv      = calloc(sizeof(*args.argv), args.argc);
 	if (!args.argv)
 		D_GOTO(err, rc = -DER_NOMEM);
 
@@ -1691,8 +1701,8 @@ dfuse_cont_close_cb(d_list_t *rlink, void *handle)
 
 	dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 
-	DFUSE_TRA_ERROR(dfc, "Failed to close cont ref %d "DF_UUID,
-			dfc->dfs_ref, DP_UUID(dfc->dfs_cont));
+	DFUSE_TRA_ERROR(dfc, "Failed to close cont ref %d " DF_UUID, dfc->dfs_ref,
+			DP_UUID(dfc->dfs_cont));
 	return 0;
 }
 
@@ -1708,15 +1718,14 @@ static int
 dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 {
 	struct dfuse_pool *dfp;
-	int rc;
+	int                rc;
 
 	dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 
-	DFUSE_TRA_ERROR(dfp, "Failed to close pool ref %d "DF_UUID,
-			dfp->dfp_ref, DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_ERROR(dfp, "Failed to close pool ref %d " DF_UUID, dfp->dfp_ref,
+			DP_UUID(dfp->dfp_pool));
 
-	d_hash_table_traverse(&dfp->dfp_cont_table,
-			      dfuse_cont_close_cb, NULL);
+	d_hash_table_traverse(&dfp->dfp_cont_table, dfuse_cont_close_cb, NULL);
 
 	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
 	if (rc != -DER_SUCCESS)
@@ -1725,9 +1734,7 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 		if (rc != -DER_SUCCESS)
-			DFUSE_TRA_ERROR(dfp,
-					"daos_pool_disconnect() failed: "DF_RC,
-					DP_RC(rc));
+			DFUSE_TRA_ERROR(dfp, "daos_pool_disconnect() failed: " DF_RC, DP_RC(rc));
 	}
 
 	return 0;
@@ -1744,6 +1751,13 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 	int       handles = 0;
 	int       rc;
 	int       i;
+
+	/* Stop and drain evict queues */
+	sem_post(&dfuse_info->di_dte_sem);
+
+	pthread_join(dfuse_info->di_dte_thread, NULL);
+
+	dfuse_de_stop(dfuse_info);
 
 	DFUSE_TRA_INFO(dfuse_info, "Flushing inode table");
 
