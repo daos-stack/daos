@@ -219,17 +219,23 @@ static struct crt_proto_rpc_format crt_iv_rpcs[] = {
 
 
 
-#define X(a, b, c, d, e) case a: opc = #a;
 
 /* Helper function to convert internally registered RPC opc to str */
 void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 {
-	char	*module = NULL;
-	char	*opc = NULL;
-	int	base;
-	bool	daos_module = false;
-	bool	cart_module = false;
+	char		*module = NULL;
+	char		*opc = NULL;
+	unsigned long 	base;
+	bool		daos_module = false;
+	bool		cart_module = false;
+	int		mod_id;
+	int		op_id;
 
+
+	mod_id = opc_get_mod_id(crt_opc);
+	op_id = opc_get(crt_opc);
+
+	/* CaRT keeps all base codes as unsigned longs */
 	base = crt_opc & CRT_PROTO_BASEOPC_MASK;
 
 	/* First, find if one of internal modules */
@@ -250,7 +256,6 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 
 	/* Check if daos module */
 	if (module == NULL) {
-
 		module = daos_opc_to_module_str(crt_opc);
 
 		if (module)
@@ -259,6 +264,8 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 			module = "CUSTOM";
 	}
 
+/* Redefining X macro allows to reuse existing lists */
+#define X(a, b, c, d, e) case a: opc = #a;
 
 	/* Next find the opcode name if available for the module  */
 	if (cart_module) {
@@ -271,13 +278,8 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 		}
 	}
 
-
+	/* TODO: Cover all daos modules eventually */
 	if (daos_module) {
-		int mod_id;
-		int op_id;
-
-		mod_id = opc_get_mod_id(crt_opc);
-		op_id = opc_get(crt_opc);
 
 		switch (mod_id) {
 		case DAOS_MGMT_MODULE:
@@ -316,12 +318,16 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 		}
 	}
 
+#undef X
+
+	if (opc == NULL)
+		opc = "";
+
 	*module_name = module;
 	*opc_name = opc;
 
 }
 
-#undef X
 
 /* CRT RPC related APIs or internal functions */
 int
