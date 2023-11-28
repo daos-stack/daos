@@ -429,7 +429,7 @@ main(int argc, char **argv)
 	dfuse_info->di_eq_count = 1;
 
 	while (1) {
-		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
 
 		if (c == -1)
 			break;

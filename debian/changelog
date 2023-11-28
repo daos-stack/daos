@@ -1,10 +1,16 @@
-daos (2.5.100-11) unstable; urgency=medium
+daos (2.5.100-12) unstable; urgency=medium
   [ Dalton Bohning ]
   * Add tags.py
 
- -- Dalton Bohning <dalton.bohning@intel.com>  Wed, 08 Nov 2023 12:00:00 -0500
+ -- Dalton Bohning <dalton.bohning@intel.com>  Tue, 28 Nov 2023 12:00:00 -0500
 
- daos (2.5.100-10) unstable; urgency=medium
+daos (2.5.100-11) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Bump mercury min version to 2.3.1
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com>  Wed, 15 Nov 2023 10:30:00 -0600
+
+daos (2.5.100-10) unstable; urgency=medium
   [ Phillip Henderson ]
   * Move verify_perms.py location
 
