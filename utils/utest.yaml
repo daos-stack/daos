@@ -169,6 +169,6 @@
   tests:
     - cmd: ["bin/ddb_tests"]
 - name: dfuse
-  base: "BUILD_DIR"
+  base: "DAOS_BASE"
   tests:
     - cmd: ["src/client/dfuse/utest.sh"]

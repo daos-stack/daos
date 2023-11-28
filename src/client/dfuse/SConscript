@@ -226,7 +226,6 @@ def scons():
     Default(dfuse_bin)
 
     cenv.Install(os.path.join("$PREFIX", 'bin'), dfuse_bin)
-    cenv.Install(os.path.join("$PREFIX", "bin"), "utest.sh")
 
 
 if __name__ == "SCons.Script":
