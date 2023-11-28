@@ -354,7 +354,7 @@ struct bio_dev_info {
 	int		       *bdi_tgts;
 	char		       *bdi_traddr;
 	uint32_t                bdi_dev_roles;
-	struct ctrlr_t         *bdi_ctrlr; /* defined in control.h */
+	struct nvme_ctrlr_t    *bdi_ctrlr; /* defined in control.h */
 };
 
 static inline void

@@ -125,7 +125,7 @@ init_ret(void)
 }
 
 static void
-free_ctrlr_fields(struct ctrlr_t *ctrlr)
+free_ctrlr_fields(struct nvme_ctrlr_t *ctrlr)
 {
 	if (ctrlr->model != NULL)
 		free(ctrlr->model);
@@ -142,8 +142,8 @@ free_ctrlr_fields(struct ctrlr_t *ctrlr)
 void
 clean_ret(struct ret_t *ret)
 {
-	struct ctrlr_t		*cnext;
-	struct ns_t		*nnext;
+	struct nvme_ctrlr_t     *cnext;
+	struct nvme_ns_t        *nnext;
 	struct wipe_res_t	*wrnext;
 
 	while (ret && (ret->wipe_results)) {
@@ -277,7 +277,7 @@ str2ctrlr(char **dst, const void *src)
 }
 
 static int
-copy_ctrlr_data(struct ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
+copy_ctrlr_data(struct nvme_ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
 {
 	int rc;
 
@@ -298,14 +298,14 @@ copy_ctrlr_data(struct ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cdata)
 }
 
 static int
-collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
+collect_namespaces(struct ns_entry *ns_entry, struct nvme_ctrlr_t *ctrlr)
 {
-	struct ns_t	*ns_tmp;
+	struct nvme_ns_t *ns_tmp;
 
 	while (ns_entry) {
-		ns_tmp = calloc(1, sizeof(struct ns_t));
+		ns_tmp = calloc(1, sizeof(struct nvme_ns_t));
 		if (ns_tmp == NULL) {
-			perror("ns_t calloc");
+			perror("nvme_ns_t calloc");
 			return -ENOMEM;
 		}
 
@@ -462,7 +462,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	const struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_pci_device			*pci_dev;
 	struct nvme_stats			*cstats;
-	struct ctrlr_t				*ctrlr_tmp;
+	struct nvme_ctrlr_t                     *ctrlr_tmp;
 	const char                              *pci_type;
 	int                                      len;
 	int                                      rc;
@@ -470,7 +470,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	ctrlr_entry = g_controllers;
 
 	while (ctrlr_entry) {
-		ctrlr_tmp = calloc(1, sizeof(struct ctrlr_t));
+		ctrlr_tmp = calloc(1, sizeof(struct nvme_ctrlr_t));
 		if (!ctrlr_tmp) {
 			rc = -ENOMEM;
 			goto fail;

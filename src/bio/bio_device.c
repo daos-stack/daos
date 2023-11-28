@@ -663,7 +663,7 @@ pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 }
 
 static int
-fetch_pci_dev_info(struct ctrlr_t *w_ctrlr, const char *tr_addr)
+fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
 {
 	struct pci_dev_opts  opts = {0};
 	struct spdk_pci_addr pci_addr;

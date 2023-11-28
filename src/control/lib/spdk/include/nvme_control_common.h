@@ -54,7 +54,7 @@ struct wipe_res_t {
  * results and info message
  */
 struct ret_t {
-	struct ctrlr_t		*ctrlrs;
+	struct nvme_ctrlr_t     *ctrlrs;
 	struct wipe_res_t	*wipe_results;
 	int			 rc;
 	char                     info[NVME_DETAIL_BUFLEN];
@@ -162,8 +162,7 @@ _discover(prober, bool, health_getter);
  * Provide ability to pass function pointers to _collect for mocking
  * in unit tests.
  */
-typedef int
-(*data_copier)(struct ctrlr_t *, const struct spdk_nvme_ctrlr_data *);
+typedef int (*data_copier)(struct nvme_ctrlr_t *, const struct spdk_nvme_ctrlr_data *);
 
 typedef struct spdk_pci_device *
 (*pci_getter)(struct spdk_nvme_ctrlr *);

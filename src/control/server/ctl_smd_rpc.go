@@ -43,15 +43,30 @@ func queryRank(reqRank uint32, engineRank ranklist.Rank) bool {
 }
 
 func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
+	if req == nil {
+		return errors.New("nil request")
+	}
+
 	for _, ei := range svc.harness.Instances() {
+		if !ei.IsReady() {
+			svc.log.Debugf("skipping not-ready instance")
+			continue
+		}
+
+		engineRank, err := ei.GetRank()
+		if err != nil {
+			return err
+		}
+		if !queryRank(req.GetRank(), engineRank) {
+			svc.log.Debugf("skipping rank %d not specified in request", engineRank)
+			continue
+		}
+
 		rResp, err := smdQueryEngine(ctx, ei, req)
 		if err != nil {
 			return err
 		}
-		// If rank hasn't been requested, don't include its response.
-		if rResp != nil {
-			resp.Ranks = append(resp.Ranks, rResp)
-		}
+		resp.Ranks = append(resp.Ranks, rResp)
 	}
 
 	return nil
@@ -69,6 +84,7 @@ func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQuer
 			return err
 		}
 		if !queryRank(req.GetRank(), engineRank) {
+			svc.log.Debugf("skipping rank %d not specified in request", engineRank)
 			continue
 		}
 

@@ -179,26 +179,13 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		return nil, errors.New("not EngineInstance")
 	}
 
-	if pbReq == nil {
-		return nil, errors.New("nil request")
-	}
-
 	engineRank, err := ei.GetRank()
 	if err != nil {
 		return nil, errors.Wrapf(err, "instance %d GetRank", ei.Index())
 	}
-	if !queryRank(pbReq.GetRank(), engineRank) {
-		ei.log.Debugf("skipping rank %d not specified in request", engineRank)
-		return nil, nil
-	}
 
 	rResp := new(ctlpb.SmdQueryResp_RankResp)
 	rResp.Rank = engineRank.Uint32()
-
-	if !ei.IsReady() {
-		ei.log.Debugf("skipping not-ready instance %d", ei.Index())
-		return rResp, nil
-	}
 
 	listDevsResp, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
@@ -214,7 +201,6 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 	for _, sd := range listDevsResp.Devices {
 		if sd != nil {
 			rResp.Devices = append(rResp.Devices, sd)
-			//&ctlpb.SmdQueryResp_SmdDeviceWithHealth{Details: sd})
 		}
 	}
 

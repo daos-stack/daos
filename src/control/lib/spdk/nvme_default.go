@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -47,7 +47,7 @@ func realRemove(name string) error {
 // accessible by SPDK on a given host.
 //
 // Calls C.nvme_discover which returns pointers to single linked list of
-// ctrlr_t structs. These are converted and returned as Controller slices
+// nvme_ctrlr_t structs. These are converted and returned as Controller slices
 // containing any Namespace and DeviceHealth structs.
 // Afterwards remove lockfile for each discovered device.
 func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
@@ -102,7 +102,7 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 }
 
 // c2GoController is a private translation function.
-func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
+func c2GoController(ctrlr *C.struct_nvme_ctrlr_t) *storage.NvmeController {
 	return &storage.NvmeController{
 		Model:    C.GoString(ctrlr.model),
 		Serial:   C.GoString(ctrlr.serial),
@@ -152,7 +152,7 @@ func c2GoDeviceHealth(hs *C.struct_nvme_stats) *storage.NvmeHealth {
 }
 
 // c2GoNamespace is a private translation function.
-func c2GoNamespace(ns *C.struct_ns_t) *storage.NvmeNamespace {
+func c2GoNamespace(ns *C.struct_nvme_ns_t) *storage.NvmeNamespace {
 	return &storage.NvmeNamespace{
 		ID:   uint32(ns.id),
 		Size: uint64(ns.size),
