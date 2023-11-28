@@ -30,14 +30,6 @@
 #define NVME_MONITOR_PERIOD	    (60ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 #define NVME_MONITOR_SHORT_PERIOD   (3ULL * (NSEC_PER_SEC / NSEC_PER_USEC))
 
-static bool bio_vmd_enabled;
-
-static inline bool
-is_vmd_enabled(void)
-{
-	return bio_vmd_enabled;
-}
-
 struct bio_bulk_args {
 	void		*ba_bulk_ctxt;
 	unsigned int	 ba_bulk_perm;
@@ -546,6 +538,7 @@ extern struct bio_faulty_criteria	glb_criteria;
 /* bio_xstream.c */
 extern bool		bio_scm_rdma;
 extern bool		bio_spdk_inited;
+extern bool                             bio_vmd_enabled;
 extern unsigned int	bio_chk_sz;
 extern unsigned int	bio_chk_cnt_max;
 extern unsigned int	bio_numa_node;
