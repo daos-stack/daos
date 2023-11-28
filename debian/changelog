@@ -1,8 +1,14 @@
-daos (2.4.0-3) unstable; urgency=medium
+daos (2.4.0-4) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Bump mercury min version to 2.3.1
 
- -- Jerome Soumagne <jerome.soumagne@intel.com>  Tue, 21 Nov 2023 10:30:00 -0600
+ -- Jerome Soumagne <jerome.soumagne@intel.com>  Tue, 28 Nov 2023 10:30:00 -0600
+
+daos (2.4.0-3) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Move verify_perms.py location
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 03 Nov 2023 04:17:00 -0500
 
 daos (2.4.0-2) unstable; urgency=medium
   [ Phillip Henderson ]
