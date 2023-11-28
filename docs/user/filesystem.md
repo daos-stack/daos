@@ -49,8 +49,8 @@ The DFS API closely represents the POSIX API. The API includes operations to:
 The following features from POSIX are not supported:
 
 * Hard links
-* mmap support with MAP\_SHARED will be consistent from single client only. Note
-  that this is supported through DFUSE only (i.e. not through the DFS API).
+* mmap support with MAP\_SHARED will be consistent from single client only and only when data
+  caching is enabled. Note that this is supported through DFUSE only (i.e. not through the DFS API).
 * Char devices, block devices, sockets and pipes
 * User/group quotas
 * setuid(), setgid() programs, supplementary groups, POSIX ACLs are not supported

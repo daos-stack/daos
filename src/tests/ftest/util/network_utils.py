@@ -11,6 +11,7 @@ from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
 from util.run_utils import run_remote
 
+# Order here is used to select default provider in environment_utils
 SUPPORTED_PROVIDERS = (
     "ofi+cxi",
     "ofi+verbs;ofi_rxm",

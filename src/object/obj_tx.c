@@ -1091,7 +1091,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	locked = false;
 
 	if (rc != -DER_TX_RESTART) {
-		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt);
+		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt, 0);
 		rc1 = tse_task_reinit_with_delay(task, delay);
 		if (rc1 != 0) {
 			D_ERROR("Failed to reinit task %p: %d, %d\n", task, rc1, rc);
