@@ -2075,11 +2075,12 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	d_list_t                     free_list;
 	d_list_t                     waiting_list;
 	int                          i;
-	int                          rc;
+	int                          rc = 0;
 	int                          inflight = 0;
 	int                          pages_scanned = 0;
 	int                          dchunks_copied = 0;
 	int                          iovs_used = 0;
+	int			     nr_copying_pgs = 0;
 
 	if (cache == NULL)
 		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
@@ -2115,6 +2116,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		pinfo->pi_waiting = 1;
 		if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_inflight, chkpt_id) > 0)
 			chkpt_id = pinfo->pi_last_inflight;
+		nr_copying_pgs++;
 	}
 
 	do {
@@ -2205,6 +2207,13 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		iovs_used      += chkpt_data->cd_sg_list.sg_nr_out;
 		d_list_add(&chkpt_data->cd_link, &free_list);
 
+		if (DAOS_FAIL_CHECK(DAOS_MEM_FAIL_CHECKPOINT) &&
+		    pages_scanned >= nr_copying_pgs / 2) {
+			d_list_move(&cache->ca_pgs_copying, &cache->ca_pgs_dirty);
+			rc = -DER_AGAIN;
+			break;
+		}
+
 	} while (inflight != 0 || !d_list_empty(&cache->ca_pgs_copying));
 
 	D_FREE(chkpt_data_all);
@@ -2216,6 +2225,6 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		stats->uccs_nr_iovs    = iovs_used;
 	}
 
-	return 0;
+	return rc;
 }
 #endif
