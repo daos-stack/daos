@@ -79,10 +79,14 @@ func bdevScanToProtoResp(scan scanBdevsFn, req storage.BdevScanRequest) (*ctlpb.
 
 	pbCtrlrs := make(proto.NvmeControllers, 0, len(resp.Controllers))
 
+	if err := pbCtrlrs.FromNative(resp.Controllers); err != nil {
+		return nil, err
+	}
+
 	return &ctlpb.ScanNvmeResp{
 		State:  new(ctlpb.ResponseState),
 		Ctrlrs: pbCtrlrs,
-	}, pbCtrlrs.FromNative(resp.Controllers)
+	}, nil
 }
 
 // Scan bdevs through harness's ControlService (not per-engine).

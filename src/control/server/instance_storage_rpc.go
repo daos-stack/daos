@@ -233,7 +233,9 @@ func scanEngineBdevsOverDrpc(ctx context.Context, ei *EngineInstance, pbReq *ctl
 		if pbReq.Meta {
 			nsd := new(ctlpb.SmdDevice)
 			*nsd = *sd
-			nsd.Ctrlr, nsd.MetaSize, nsd.RdbSize = nil, pbReq.MetaSize, pbReq.RdbSize
+			nsd.Ctrlr = nil
+			nsd.MetaSize = pbReq.MetaSize
+			nsd.RdbSize = pbReq.RdbSize
 			if healthUpdated {
 				// Populate space usage for each SMD device from health stats.
 				nsd.TotalBytes = c.HealthStats.TotalBytes
