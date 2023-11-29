@@ -130,15 +130,15 @@ struct nvme_stats {
  * NVMe controller details.
  */
 struct nvme_ctrlr_t {
-	char              *model;
-	char              *serial;
-	char              *pci_addr;
-	char              *fw_rev;
-	char              *pci_type;
-	char              *vendor_id;
-	int                socket_id;
+	char                *model;
+	char                *serial;
+	char                *pci_addr;
+	char                *fw_rev;
+	char                *pci_type;
+	char                *vendor_id;
+	int                  socket_id;
 	struct nvme_ns_t    *nss;
-	struct nvme_stats *stats;
+	struct nvme_stats   *stats;
 	struct nvme_ctrlr_t *next;
 };
 
@@ -146,8 +146,8 @@ struct nvme_ctrlr_t {
  * NVMe namespace details.
  */
 struct nvme_ns_t {
-	uint32_t     id;
-	uint64_t     size;
+	uint32_t          id;
+	uint64_t          size;
 	struct nvme_ns_t *next;
 };
 
