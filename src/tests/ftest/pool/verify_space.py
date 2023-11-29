@@ -211,6 +211,7 @@ class VerifyPoolSpace(TestWithServers):
         :avocado: tags=VerifyPoolSpace,test_verify_pool_space
         """
         scm_mounts = set()
+        self.log.info("test")
         for engine_params in self.server_managers[0].manager.job.yaml.engine_params:
             scm_mounts.add(engine_params.get_value('scm_mount'))
         dmg = self.get_dmg_command()

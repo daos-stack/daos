@@ -54,7 +54,7 @@ class NvmeHealth(ServerFillUp):
         # Create the pools
         pool_list = []
         for pool_num in range(actual_num_pools):
-            self.log.info("-- Creating pool number = %s", pool_num)
+            self.log.info("-- Creating pool  number = %s", pool_num)
             try:
                 pool_list.append(self.get_pool(scm_size=scm_per_pool, nvme_size=nvme_per_pool))
             except TestFail as error:

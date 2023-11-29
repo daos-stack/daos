@@ -36,6 +36,7 @@ class NvmeFault(ServerFillUp):
         :avocado: tags=nvme
         :avocado: tags=nvme_fault,test_nvme_fault
         """
+        self.log.info("test")
         # Create the Pool with Maximum NVMe size
         self.create_pool_max_size(nvme=True)
 
