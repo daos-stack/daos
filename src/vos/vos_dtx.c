@@ -40,8 +40,8 @@ enum {
 			D_ASSERT(dae->dae_dth->dth_ent == dae);				\
 			dae->dae_dth->dth_ent = NULL;					\
 		}									\
-		D_DEBUG(DB_TRACE, "Evicting lid "DF_DTI": lid=%d\n",			\
-			DP_DTI(&DAE_XID(dae)), DAE_LID(dae));				\
+		D_DEBUG(DB_TRACE, "Evicting lid "DF_DTI": lid=%lx\n",			\
+			DP_DTI(&DAE_XID(dae)), DAE_LID(dae) & DTX_LID_SOLO_MASK);	\
 		d_list_del_init(&dae->dae_link);					\
 		lrua_evictx(cont->vc_dtx_array,						\
 			    (DAE_LID(dae) & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,	\
@@ -962,7 +962,7 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
 
-	rc = lrua_allocx(cont->vc_dtx_array, &idx, dth->dth_epoch, &dae);
+	rc = lrua_allocx(cont->vc_dtx_array, &idx, dth->dth_epoch, &dae, &dth->dth_local_stub);
 	if (rc != 0) {
 		/* The array is full, need to commit some transactions first */
 		if (rc == -DER_BUSY)
@@ -1006,8 +1006,8 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	dae->dae_dbd = dbd;
 	dae->dae_dth = dth;
 
-	D_DEBUG(DB_IO, "Allocated new lid DTX: "DF_DTI" lid=%d dae=%p"
-		" dae_dbd=%p\n", DP_DTI(&dth->dth_xid), DAE_LID(dae), dae, dbd);
+	D_DEBUG(DB_IO, "Allocated new lid DTX: "DF_DTI" lid=%lx, dae=%p, dae_dbd=%p\n",
+		DP_DTI(&dth->dth_xid), DAE_LID(dae) & DTX_LID_SOLO_MASK, dae, dbd);
 
 	d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
 	d_iov_set(&riov, dae, sizeof(*dae));
@@ -1154,6 +1154,10 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	found = lrua_lookupx(cont->vc_dtx_array, (entry & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,
 			     epoch, &dae);
 	if (!found) {
+		D_ASSERTF(!(entry & DTX_LID_SOLO_FLAG),
+			  "non-committed solo entry %lu must be there, epoch "DF_X64", boundary "
+			  DF_X64"\n", entry & DTX_LID_SOLO_MASK, epoch, cont->vc_solo_dtx_epoch);
+
 		D_DEBUG(DB_TRACE,
 			"Entry %d "DF_U64" not in lru array, it must be committed\n",
 			entry, epoch);
@@ -3233,4 +3237,16 @@ cmt:
 	D_DEBUG(DB_TRACE, "Reset DTX cache for "DF_UUID"\n", DP_UUID(cont->vc_id));
 
 	return 0;
+}
+
+void
+vos_dtx_renew_epoch(struct dtx_handle *dth)
+{
+	struct vos_dtx_act_ent	*dae = dth->dth_ent;
+
+	if (dae != NULL)
+		DAE_EPOCH(dae) = dth->dth_epoch;
+
+	if (dth->dth_local_stub != NULL)
+		lrua_refresh_key(dth->dth_local_stub, dth->dth_epoch);
 }
