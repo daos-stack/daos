@@ -431,7 +431,7 @@ pipeline {
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Large',
+                            name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large',
                             base_branch: env.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
