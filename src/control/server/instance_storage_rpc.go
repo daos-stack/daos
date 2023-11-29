@@ -159,8 +159,9 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 
 func smdGetHealth(ctx context.Context, ei *EngineInstance, dev *ctlpb.SmdDevice) error {
 	state := dev.Ctrlr.DevState
-	if state == ctlpb.NvmeDevState_NEW {
-		ei.log.Debugf("skip fetching health stats on device %q in NEW state", dev, state)
+	if state != ctlpb.NvmeDevState_NORMAL && state != ctlpb.NvmeDevState_EVICTED {
+		ei.log.Debugf("skip fetching health stats on device %q in %q state", dev,
+			ctlpb.NvmeDevState_name[int32(state)])
 		return nil
 	}
 
