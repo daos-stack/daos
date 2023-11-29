@@ -56,13 +56,6 @@ class IorPerRank(IorTestBase):
             actual_write_x = abs(percent_change(self.expected_bw, dfs_max_write))
             actual_read_x = abs(percent_change(self.expected_bw, dfs_max_read))
 
-            # inject failure to verify code below. To be removed after verification
-            if int(rank) == 1:
-                actual_write_x = 0.6789
-
-            if int(rank) == 3:
-                raise DaosTestError('oops. test')
-
             # verify write performance
             if actual_write_x > self.write_x:
                 if host not in self.failed_nodes:
