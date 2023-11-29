@@ -960,13 +960,13 @@ static struct spdk_json_object_decoder nvme_decoders[] = {
     {"ns_data", offsetof(struct json_bdev_nvme_ctx, ns_data), cap_object, false}};
 
 static struct spdk_json_object_decoder nvme_ctrlr_decoders[] = {
-    {"model_number", offsetof(struct ctrlr_t, model), spdk_json_decode_string},
-    {"serial_number", offsetof(struct ctrlr_t, serial), spdk_json_decode_string},
-    {"firmware_revision", offsetof(struct ctrlr_t, fw_rev), spdk_json_decode_string},
-    {"vendor_id", offsetof(struct ctrlr_t, vendor_id), spdk_json_decode_string}};
+    {"model_number", offsetof(struct nvme_ctrlr_t, model), spdk_json_decode_string},
+    {"serial_number", offsetof(struct nvme_ctrlr_t, serial), spdk_json_decode_string},
+    {"firmware_revision", offsetof(struct nvme_ctrlr_t, fw_rev), spdk_json_decode_string},
+    {"vendor_id", offsetof(struct nvme_ctrlr_t, vendor_id), spdk_json_decode_string}};
 
 static struct spdk_json_object_decoder nvme_ns_decoders[] = {
-    {"id", offsetof(struct ns_t, id), spdk_json_decode_uint32}};
+    {"id", offsetof(struct nvme_ns_t, id), spdk_json_decode_uint32}};
 
 /**
  * Fetch bdev controller parameters from spdk_bdev_dump_info_json output.

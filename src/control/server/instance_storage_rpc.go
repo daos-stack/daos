@@ -164,8 +164,9 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 
 func populateCtrlrHealth(ctx context.Context, ei *EngineInstance, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
 	state := ctrlr.DevState
-	if state == ctlpb.NvmeDevState_NEW {
-		ei.log.Noticef("skip fetching health stats on device %q in NEW state", ctrlr, state)
+	if state != ctlpb.NvmeDevState_NORMAL && state != ctlpb.NvmeDevState_EVICTED {
+		ei.log.Debugf("skip fetching health stats on device %q in %q state", ctrlr.PciAddr,
+			ctlpb.NvmeDevState_name[int32(state)])
 		return false, nil
 	}
 
@@ -290,26 +291,13 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		return nil, errors.New("not EngineInstance")
 	}
 
-	if pbReq == nil {
-		return nil, errors.New("nil request")
-	}
-
 	engineRank, err := ei.GetRank()
 	if err != nil {
 		return nil, errors.Wrapf(err, "instance %d GetRank", ei.Index())
 	}
-	if !queryRank(pbReq.GetRank(), engineRank) {
-		ei.log.Debugf("skipping rank %d not specified in request", engineRank)
-		return nil, nil
-	}
 
 	rResp := new(ctlpb.SmdQueryResp_RankResp)
 	rResp.Rank = engineRank.Uint32()
-
-	if !ei.IsReady() {
-		ei.log.Debugf("skipping not-ready instance %d", ei.Index())
-		return rResp, nil
-	}
 
 	listDevsResp, err := listSmdDevices(ctx, ei, new(ctlpb.SmdDevReq))
 	if err != nil {

@@ -54,6 +54,8 @@ static unsigned int bio_chk_cnt_init;
 bool bio_scm_rdma;
 /* Whether SPDK inited */
 bool bio_spdk_inited;
+/* Whether VMD is enabled */
+bool                bio_vmd_enabled;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
@@ -1874,7 +1876,7 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_bdev         *d_bdev;
 	int			 rc;
 
-	if (!is_vmd_enabled()) {
+	if (!bio_vmd_enabled) {
 		return;
 	}
 

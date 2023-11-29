@@ -663,7 +663,7 @@ pci_device_cb(void *ctx, struct spdk_pci_device *pci_device)
 }
 
 static int
-fetch_pci_dev_info(struct ctrlr_t *w_ctrlr, const char *tr_addr)
+fetch_pci_dev_info(struct nvme_ctrlr_t *w_ctrlr, const char *tr_addr)
 {
 	struct pci_dev_opts  opts = {0};
 	struct spdk_pci_addr pci_addr;
@@ -785,6 +785,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 		rc = alloc_ctrlr_info(d_bdev->bb_uuid, dev_name, b_info);
 		if (rc) {
 			DL_ERROR(rc, "Failed to get ctrlr details");
+			bio_free_dev_info(b_info);
 			goto out;
 		}
 
@@ -1176,7 +1177,7 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 	int			rc;
 
 	/* LED management on NVMe devices currently only supported when VMD is enabled. */
-	if (!is_vmd_enabled())
+	if (!bio_vmd_enabled)
 		return 0;
 
 	/**
