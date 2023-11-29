@@ -259,11 +259,11 @@ post_provision_config_nodes() {
 
     if $CONFIG_POWER_ONLY; then
         rm -f "$REPOS_DIR"/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
-        time dnf -y erase fio fuse ior-hpc mpich-autoload               \
+        time dnf -y erase fio fuse ior-hpc mpich-autoload          \
                      ompi argobots cart daos daos-client dpdk      \
                      fuse-libs libisa-l libpmemobj mercury mpich   \
                      pmix protobuf-c spdk libfabric libpmem        \
-                     libpmemblk munge-libs munge slurm             \
+                     munge-libs munge slurm                        \
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 

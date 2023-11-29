@@ -907,7 +907,7 @@ Please refer the [ndctl list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pa
 
 The pmempool is a management tool for Persistent Memory pool files created by PMDK libraries.
 DAOS uses the PMDK library to manage persistence inside ext4 files.
-[pmempool](https://pmem.io/pmdk/manpages/linux/v1.9/pmempool/pmempool-check.1/) can check consistency of a given pool file.
+[pmempool](https://github.com/pmem/pmdk/blob/stable-2.0/doc/pmempool/pmempool-check.1.md) can check consistency of a given pool file.
 It can be run with -r (repair) option which can fix some of the issues with pool file. DAOS will have more number of such pool file (vos-*), based
 on number of targets mention per daos engine. User may need to check each vos pool file for corruption on faulty pool.
 
