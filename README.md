@@ -10,7 +10,7 @@
 <img src="https://avatars.githubusercontent.com/u/20561043?s=400&u=db7cd0ada987ba59c21c3de5f9e7cffba73c3325&v=4" width="200" height="200">
 </a>
 
-## What is DAOS?
+## What is DAOS????
 
 The **D**istributed **A**synchronous **O**bject **S**torage (DAOS) is an
 open-source software-defined object store designed from the ground up for
