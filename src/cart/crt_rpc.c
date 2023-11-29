@@ -217,23 +217,20 @@ static struct crt_proto_rpc_format crt_iv_rpcs[] = {
 
 #undef X
 
-
-
-
 /* Helper function to convert internally registered RPC opc to str */
-void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
+void
+crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 {
-	char		*module = NULL;
-	char		*opc = NULL;
-	unsigned long 	base;
-	bool		daos_module = false;
-	bool		cart_module = false;
-	int		mod_id;
-	int		op_id;
-
+	char         *module = NULL;
+	char         *opc    = NULL;
+	unsigned long base;
+	bool          daos_module = false;
+	bool          cart_module = false;
+	int           mod_id;
+	int           op_id;
 
 	mod_id = opc_get_mod_id(crt_opc);
-	op_id = opc_get(crt_opc);
+	op_id  = opc_get(crt_opc);
 
 	/* CaRT keeps all base codes as unsigned longs */
 	base = crt_opc & CRT_PROTO_BASEOPC_MASK;
@@ -245,11 +242,11 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 	case CRT_OPC_ST_BASE:
 	case CRT_OPC_CTL_BASE:
 	case CRT_OPC_IV_BASE:
-		module = "CART";
+		module      = "CART";
 		cart_module = true;
 		break;
 	case CRT_OPC_SWIM_BASE:
-		module = "SWIM";
+		module      = "SWIM";
 		cart_module = true;
 		break;
 	}
@@ -282,23 +279,22 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 
 	/* TODO: Cover all daos modules eventually */
 	if (daos_module) {
-
 		switch (mod_id) {
 		case DAOS_MGMT_MODULE:
 			switch (op_id) {
-			MGMT_PROTO_CLI_RPC_LIST
-			MGMT_PROTO_SRV_RPC_LIST
+				MGMT_PROTO_CLI_RPC_LIST
+				MGMT_PROTO_SRV_RPC_LIST
 			}
 			break;
 		case DAOS_POOL_MODULE:
 			switch (op_id) {
-			POOL_PROTO_RPC_LIST
+				POOL_PROTO_RPC_LIST
 			}
 			break;
 		case DAOS_CONT_MODULE:
 			switch (op_id) {
-			CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8)
-			CONT_PROTO_SRV_RPC_LIST
+				CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8)
+				CONT_PROTO_SRV_RPC_LIST
 			}
 			break;
 		case DAOS_OBJ_MODULE:
@@ -306,17 +302,17 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 			break;
 		case DAOS_PIPELINE_MODULE:
 			switch (op_id) {
-			PIPELINE_PROTO_CLI_RPC_LIST
+				PIPELINE_PROTO_CLI_RPC_LIST
 			}
 			break;
 
-/* TODO: RDB module header needs to reorg as it pulls many dependencies
-		case DAOS_RDB_MODULE:
-			switch (op_id) {
-			RDB_PROTO_SRV_RPC_LIST
-			}
-			break;
-*/
+			/* TODO: RDB module header needs to reorg as it pulls many dependencies
+					case DAOS_RDB_MODULE:
+						switch (op_id) {
+						RDB_PROTO_SRV_RPC_LIST
+						}
+						break;
+			*/
 		}
 	}
 
@@ -326,10 +322,8 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 		opc = "";
 
 	*module_name = module;
-	*opc_name = opc;
-
+	*opc_name    = opc;
 }
-
 
 /* CRT RPC related APIs or internal functions */
 int

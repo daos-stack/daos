@@ -40,43 +40,45 @@
 	 (rpc_ver & RPC_VERSION_MASK) << RPC_VERSION_OFFSET |	\
 	 (mod_id & MODID_MASK) << MODID_OFFSET)
 
-
-#define DAOS_MODULE_LIST \
-	X(DAOS_VOS_MODULE		, 0) /** version object store */ 	\
-	X(DAOS_MGMT_MODULE		, 1) /** storage management */		\
-	X(DAOS_POOL_MODULE		, 2) /** pool service */		\
-	X(DAOS_CONT_MODULE		, 3) /** container service */		\
-	X(DAOS_OBJ_MODULE		, 4) /** object service */		\
-	X(DAOS_REBUILD_MODULE		, 5) /** rebuild **/			\
-	X(DAOS_RSVC_MODULE		, 6) /** replicated service server */	\
-	X(DAOS_RDB_MODULE		, 7) /** rdb */				\
-	X(DAOS_RDBT_MODULE		, 8) /** rdb test */			\
-	X(DAOS_SEC_MODULE		, 9) /** security framework */		\
-	X(DAOS_DTX_MODULE		, 10) /** DTX */			\
-	X(DAOS_PIPELINE_MODULE		, 11)					\
-	X(DAOS_NR_MODULE		, 12) /** number of defined modules */	\
-	X(DAOS_MAX_MODULE		, 64)  /** Size of uint64_t see dmg profile */
+#define DAOS_MODULE_LIST                                                                           \
+	X(DAOS_VOS_MODULE, 0)     /** version object store */                                      \
+	X(DAOS_MGMT_MODULE, 1)    /** storage management */                                        \
+	X(DAOS_POOL_MODULE, 2)    /** pool service */                                              \
+	X(DAOS_CONT_MODULE, 3)    /** container service */                                         \
+	X(DAOS_OBJ_MODULE, 4)     /** object service */                                            \
+	X(DAOS_REBUILD_MODULE, 5) /** rebuild **/                                                  \
+	X(DAOS_RSVC_MODULE, 6)    /** replicated service server */                                 \
+	X(DAOS_RDB_MODULE, 7)     /** rdb */                                                       \
+	X(DAOS_RDBT_MODULE, 8)    /** rdb test */                                                  \
+	X(DAOS_SEC_MODULE, 9)     /** security framework */                                        \
+	X(DAOS_DTX_MODULE, 10)    /** DTX */                                                       \
+	X(DAOS_PIPELINE_MODULE, 11)                                                                \
+	X(DAOS_NR_MODULE, 12)  /** number of defined modules */                                    \
+	X(DAOS_MAX_MODULE, 64) /** Size of uint64_t see dmg profile */
 
 enum daos_module_id {
-#define X(a,b) a = b,
+#define X(a, b) a = b,
 	DAOS_MODULE_LIST
 #undef X
 
 };
 
-static inline char* daos_opc_to_module_str(uint32_t daos_opc)
+static inline char *
+daos_opc_to_module_str(uint32_t daos_opc)
 {
 #define X(a, ...)                                                                                  \
 	case a:                                                                                    \
 		return #a;
 
-	switch opc_get_mod_id(daos_opc) {
-		DAOS_MODULE_LIST
-		default: return NULL;
-	}
+	switch
+		opc_get_mod_id(daos_opc)
+		{
+			DAOS_MODULE_LIST
+		default:
+			return NULL;
+		}
 #undef X
 }
-
 
 enum daos_rpc_flags {
 	/** flag of reply disabled */

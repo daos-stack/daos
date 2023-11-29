@@ -29,16 +29,14 @@ rdb_module_fini(void)
 /* Define for cont_rpcs[] array population below.
  * See RDB_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
-{				\
-	.dr_opc       = a,	\
-	.dr_hdlr      = d,	\
-	.dr_corpc_ops = e,	\
-},
+#define X(a, b, c, d, e)                                                                           \
+	{                                                                                          \
+	    .dr_opc       = a,                                                                     \
+	    .dr_hdlr      = d,                                                                     \
+	    .dr_corpc_ops = e,                                                                     \
+	},
 
-static struct daos_rpc_handler rdb_handlers[] = {
-	RDB_PROTO_SRV_RPC_LIST
-};
+static struct daos_rpc_handler rdb_handlers[] = {RDB_PROTO_SRV_RPC_LIST};
 
 #undef X
 

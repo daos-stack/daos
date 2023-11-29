@@ -16,15 +16,12 @@
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr
  */
-#define PIPELINE_PROTO_CLI_RPC_LIST					\
-	X(DAOS_PIPELINE_RPC_RUN,					\
-		0, &CQF_pipeline_run,					\
-		ds_pipeline_run_handler, NULL)
+#define PIPELINE_PROTO_CLI_RPC_LIST                                                                \
+	X(DAOS_PIPELINE_RPC_RUN, 0, &CQF_pipeline_run, ds_pipeline_run_handler, NULL)
 
 #define X(a, ...) a,
 enum pipeline_rpc_opc {
-	PIPELINE_PROTO_CLI_RPC_LIST
-	PIPELINE_PROTO_CLI_COUNT,
+	PIPELINE_PROTO_CLI_RPC_LIST PIPELINE_PROTO_CLI_COUNT,
 	PIPELINE_PROTO_CLI_LAST = PIPELINE_PROTO_CLI_COUNT - 1,
 };
 
