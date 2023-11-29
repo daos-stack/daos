@@ -321,6 +321,7 @@ pipeline {
                 script {
                     env.COMMIT_MESSAGE = sh(script: 'ci/get_commit_message.py --target origin/' + target_branch,
                                             returnStdout: true).trim()
+                    echo "Commit message: ${env.COMMIT_MESSAGE}"
                     Map pragmas = [:]
                     // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
                     env.COMMIT_MESSAGE.split('\n').each { line ->
@@ -337,6 +338,7 @@ pipeline {
                         }
                     }
                     env.pragmas = pragmas
+                    echo "Pragmas: ${pragmas}"
                 }
             }
         }
