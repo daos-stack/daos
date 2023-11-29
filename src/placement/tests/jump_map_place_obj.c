@@ -2291,6 +2291,126 @@ fail_multiple_ranks(void **state)
 	jtc_fini(&ctx);
 }
 
+static void
+layout_count_tgt(struct pl_obj_layout *layout, uint32_t *tgt_counters, uint32_t size)
+{
+	int grp;
+	int sz;
+	int index;
+
+	for (grp = 0; grp < layout->ol_grp_nr; ++grp) {
+		for (sz = 0; sz < layout->ol_grp_size; ++sz) {
+			struct pl_obj_shard shard;
+
+			index = (grp * layout->ol_grp_size) + sz;
+			shard = layout->ol_shards[index];
+			D_ASSERT(shard.po_target < size);
+			tgt_counters[shard.po_target]++;
+		}
+	}
+}
+
+static void
+layout_dist_verify(void **state, uint32_t doms_nr, uint32_t nodes_per_dom, uint32_t tgts_per_node,
+		   int obj_class, int test_num_objs)
+{
+	struct jm_test_ctx ctx;
+	char		   obj_class_name[64] = {0};
+	uint32_t	   *tgt_counters;
+	uint32_t	   tgt_max = 0, tgt_min = -1, tgt_avg = 0;
+	uint64_t	   lo = 0, hi = 0;
+	uint32_t	   i, total_tgts;
+	int		   rc;
+
+	total_tgts = doms_nr * nodes_per_dom * tgts_per_node;
+	daos_oclass_id2name(obj_class, obj_class_name);
+	print_message("\nWith %d domains each PD, %d nodes each domain, "
+		      "%d targets each node = %d targets, num_objs %d, obj_class %s"
+		      "fail domain %s\n",
+		      doms_nr, nodes_per_dom, tgts_per_node, total_tgts,
+		      test_num_objs, obj_class_name, fail_domain_node ? "node" : "rank");
+	jtc_init(&ctx, doms_nr, nodes_per_dom, tgts_per_node, obj_class, g_verbose);
+
+	D_ALLOC_ARRAY(tgt_counters, total_tgts);
+	D_ASSERT(tgt_counters != NULL);
+
+	lo = rand();
+	for (i = 0; i < test_num_objs; i++) {
+		daos_obj_id_t	oid;
+		int		start_fail_idx = rand() % 4;
+		int		j;
+
+		gen_oid(&oid, lo, hi++, obj_class);
+		rc = plt_obj_place(oid, 0, &ctx.layout, ctx.pl_map, false);
+		assert_rc_equal(rc, 0);
+		layout_count_tgt(ctx.layout, tgt_counters, total_tgts);
+
+		check_grp_not_in_same_domain(&ctx, ctx.layout->ol_grp_size,
+					     ctx.layout->ol_grp_nr,
+					     fail_domain_node ? nodes_per_dom * tgts_per_node :
+					     tgts_per_node, false);
+
+		start_fail_idx *= tgts_per_node;
+		for (j = start_fail_idx; j < start_fail_idx + tgts_per_node; j++) {
+			jtc_set_status_on_target(&ctx, DOWN, j);
+			jtc_set_status_on_target(&ctx, DOWNOUT, j);
+		}
+
+		pl_obj_layout_free(ctx.layout);
+		rc = plt_obj_place(oid, 0, &ctx.layout, ctx.pl_map, false);
+		assert_rc_equal(rc, 0);
+
+		check_grp_not_in_same_domain(&ctx, ctx.layout->ol_grp_size,
+					     ctx.layout->ol_grp_nr,
+					     fail_domain_node ? nodes_per_dom * tgts_per_node :
+					     tgts_per_node, false);
+		pl_obj_layout_free(ctx.layout);
+		for (j = start_fail_idx; j < start_fail_idx + tgts_per_node; j++) {
+			jtc_set_status_on_target(&ctx, UP, j);
+			jtc_set_status_on_target(&ctx, UPIN, j);
+		}
+
+	}
+
+	for (i = 0; i < total_tgts; i++) {
+		tgt_max = max(tgt_counters[i], tgt_max);
+		tgt_min = min(tgt_counters[i], tgt_min);
+		tgt_avg += tgt_counters[i];
+	}
+	tgt_avg /= total_tgts;
+
+        print_message("Place %d object (class %s), on %d targets, #shards on each target -\n",
+                      test_num_objs, obj_class_name, total_tgts);
+        for (i = 0; i < total_tgts; i++) {
+                if (i > 0 && i % 8 == 0)
+                        print_message("\n");
+                print_message("[%4d]: %4d;||", i, tgt_counters[i]);
+        }
+        print_message("\n");
+
+	print_message("\nPlace %d object (class %s), on %d targets, statistics of #shards on tgts\n"
+		      "\t\tmin:      %d\n"
+		      "\t\taverage:  %d\n"
+		      "\t\tmax:      %d\n"
+		      "\t\timbalance: %d\n",
+		      test_num_objs, obj_class_name, total_tgts,
+		      tgt_min, tgt_avg, tgt_max, ((tgt_max - tgt_min) * 100 / tgt_avg));
+
+	assert_true(((tgt_max - tgt_min) * 100) / tgt_avg <= 5);
+	jtc_fini(&ctx);
+	D_FREE(tgt_counters);
+}
+
+static void
+obj_shards_balance_verify(void **state)
+{
+	layout_dist_verify(state, 4, 1, 16, OC_RP_2G2, 409600);
+	layout_dist_verify(state, 4, 1, 16, OC_RP_2GX, 409600);
+	layout_dist_verify(state, 2, 2, 16, OC_RP_2G2, 409600);
+	layout_dist_verify(state, 2, 2, 16, OC_RP_2GX, 409600);
+	layout_dist_verify(state, 4, 1, 16, OC_EC_2P1GX, 409600);
+}
+
 /*
  * ------------------------------------------------
  * End Test Cases
@@ -2321,6 +2441,8 @@ placement_test_teardown(void **state)
 
 static const struct CMUnitTest tests[] = {
 	/* Standard configurations */
+	T("obj shard verification should not imbalance more than 5%",
+	  obj_shards_balance_verify),
 	T("Target for first shard continually goes to DOWN state and "
 	  "never finishes rebuild. Should still get new target until no more",
 	  down_continuously),

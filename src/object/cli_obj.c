@@ -7271,7 +7271,6 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	uint32_t		nr_grp;
 	struct cont_props	props;
 	int			rc;
-	uint32_t		 rf;
 	struct dc_cont		*dc;
 
 	if (!daos_otype_t_is_valid(type))
@@ -7297,17 +7296,18 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
-	rf = dc->dc_props.dcp_redun_fac;
 
-	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d rf:%u\n", attr.pa_domain_nr,
-		attr.pa_target_nr, rf);
+	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
+		attr.pa_domain_nr, attr.pa_target_nr);
 
 	if (cid == OC_UNKNOWN) {
+		uint32_t rf;
+
+		rf = dc->dc_props.dcp_redun_fac;
 		rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord,
 				   &nr_grp);
 	} else {
-		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp,
-					 rf);
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp);
 	}
 	dc_cont_put(dc);
 
@@ -7360,8 +7360,8 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 				   attr.pa_target_nr, type, hints, &ord,
 				   &nr_grp);
 	else
-		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp,
-					 rf_factor);
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
+					 attr.pa_target_nr, &ord, &nr_grp);
 	if (rc)
 		return rc;
 

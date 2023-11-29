@@ -247,9 +247,8 @@ int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
-int
-daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum daos_obj_redun *ord,
-		    uint32_t *nr, uint32_t rf_factor);
+int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
+			enum daos_obj_redun *ord, uint32_t *nr);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
 int daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
 			uint32_t args, daos_oclass_id_t *cid);
