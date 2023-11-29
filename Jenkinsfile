@@ -236,40 +236,21 @@ pipeline {
         stage('Check PR') {
             when { changeRequest() }
             parallel {
-                stage('Used Required Git Hooks') {
+                stage('Branch name check') {
+                    when { changeRequest() }
                     steps {
-                        catchError(stageResult: 'UNSTABLE', buildResult: 'SUCCESS',
-                                   message: 'PR did not get committed with required git hooks.  ' +
-                                            'Please see utils/githooks/README.md.') {
-                            sh 'if ! ' + cachedCommitPragma('Required-githooks', 'false') + '''; then
-                                   echo 'PR did not get committed with required git hooks.  ' +
-                                        'Please see utils/githooks/README.md.'
-                                   exit 1
-                                fi'''
+                        script {
+                            if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
+                                error('Your PR branch name does not follow the rules. Please rename it ' +
+                                      'according to the rules described here: ' +
+                                      'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names.  ' +
+                                      'Once you have renamed your branch locally to match the ' +
+                                      'format, close this PR and open a new one using the newly renamed ' +
+                                      'local branch.')
+                            }
                         }
                     }
-                    post {
-                        unsuccessful {
-                            echo 'PR did not get committed with required git hooks.  ' +
-                                 'Please see utils/githooks/README.md.'
-                        }
-                    }
-                } // stage('Used Required Git Hooks')
-                // stage('Branch name check') {
-                //     when { changeRequest() }
-                //     steps {
-                //         script {
-                //             if (env.CHANGE_ID.toInteger() > 9742 && !env.CHANGE_BRANCH.contains('/')) {
-                //                 error('Your PR branch name does not follow the rules. Please rename it ' +
-                //                       'according to the rules described here: ' +
-                //                       'https://daosio.atlassian.net/l/cp/UP1sPTvc#branch_names.  ' +
-                //                       'Once you have renamed your branch locally to match the ' +
-                //                       'format, close this PR and open a new one using the newly renamed ' +
-                //                       'local branch.')
-                //             }
-                //         }
-                //     }
-                // }
+                }
             } // parallel
         } // stage('Check PR')
         stage('Cancel Previous Builds') {
@@ -431,7 +412,7 @@ pipeline {
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
-                            name: 'Functional Hardware Large',
+                            name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large',
                             base_branch: env.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
