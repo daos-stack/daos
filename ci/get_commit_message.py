@@ -96,7 +96,7 @@ def modify_commit_message_pragmas(commit_message):
             test_tags.update(f'full_regression,{feature}')
 
     # Replace 'Features:' with 'Test-tags:'
-    commit_message = update_commit_pragma(commit_message, 'Features')
+    commit_message = update_commit_pragma(commit_message, 'Features', None)
     commit_message = update_commit_pragma(commit_message, 'Test-tag', test_tags)
 
     if 'Test-tag-hw-medium-md-on-ssd' not in commit_message:
