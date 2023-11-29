@@ -198,8 +198,9 @@ class DmgStorageQuery(ControlTestBase):
                 elif key == 'temp_warn':
                     self.log.info("  %s: %s", key, device['ctrlr']['health_stats'][key])
                     if device['ctrlr']['health_stats'][key]:
-                        self.log.info("    Temperature warning detected: %s",
-                                device['ctrlr']['health_stats'][key])
+                        self.log.info(
+                            "    Temperature warning detected: %s",
+                            device['ctrlr']['health_stats'][key])
                         errors.append(key)
                 elif 'temp_time' in key:
                     self.log.info("  %s: %s", key, device['ctrlr']['health_stats'][key])
