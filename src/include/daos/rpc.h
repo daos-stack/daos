@@ -66,7 +66,9 @@ enum daos_module_id {
 
 static inline char* daos_opc_to_module_str(uint32_t daos_opc)
 {
-#define X(a,b) case a: return #a;
+#define X(a, ...)                                                                                  \
+	case a:                                                                                    \
+		return #a;
 
 	switch opc_get_mod_id(daos_opc) {
 		DAOS_MODULE_LIST

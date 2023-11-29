@@ -21,7 +21,7 @@
 		0, &CQF_pipeline_run,					\
 		ds_pipeline_run_handler, NULL)
 
-#define X(a, b, c, d, e) a,
+#define X(a, ...) a,
 enum pipeline_rpc_opc {
 	PIPELINE_PROTO_CLI_RPC_LIST
 	PIPELINE_PROTO_CLI_COUNT,

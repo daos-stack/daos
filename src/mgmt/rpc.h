@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -69,7 +69,7 @@
 
 
 /* Define for RPC enum population below */
-#define X(a, b, c, d, e) a,
+#define X(a, ...) a,
 
 enum mgmt_operation {
 	MGMT_PROTO_CLI_RPC_LIST

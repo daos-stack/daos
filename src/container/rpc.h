@@ -93,7 +93,7 @@
 		&ds_cont_tgt_snapshot_notify_co_ops)
 
 /* Define for RPC enum population below */
-#define X(a, b, c, d, e) a,
+#define X(a, ...) a,
 
 enum cont_operation {
 	CONT_PROTO_CLI_RPC_LIST(DAOS_CONT_VERSION, ds_cont_op_handler_v8)

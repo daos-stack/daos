@@ -224,7 +224,7 @@ int rdb_raft_trigger_compaction(struct rdb *db, bool compact_all, uint64_t *idx)
 		rdb_installsnapshot_handler, NULL)
 
 /* Define for RPC enum population below */
-#define X(a, b, c, d, e) a,
+#define X(a, ...) a,
 
 enum rdb_operation {
 	RDB_PROTO_SRV_RPC_LIST

@@ -265,7 +265,9 @@ void crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 	}
 
 /* Redefining X macro allows to reuse existing lists */
-#define X(a, b, c, d, e) case a: opc = #a;
+#define X(a, ...)                                                                                  \
+	case a:                                                                                    \
+		opc = #a;
 
 	/* Next find the opcode name if available for the module  */
 	if (cart_module) {
