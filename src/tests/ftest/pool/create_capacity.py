@@ -63,7 +63,7 @@ class PoolCreateCapacityTests(TestWithServers):
             if nsp["id"] != namespace_id:
                 continue
             return int(nsp["size"] / cluster_bytes) * cluster_bytes
-        self.fail(f"Namespace of id {namespace_id} could not be find")
+        self.fail(f"Namespace of id {namespace_id} could not be found")
 
     def get_available_storage(self, storage_usage):
         """Returns the largest available storage of the tiers storage.
@@ -113,11 +113,7 @@ class PoolCreateCapacityTests(TestWithServers):
                     nvme_engine_bytes[rank][roles] += self.get_nsp_available_bytes(
                         namespaces, namespace_id, cluster_bytes)
 
-        scm_bytes = sys.maxsize
-        for size in scm_engine_bytes.values():
-            scm_bytes = min(scm_bytes, size)
-        if scm_bytes == sys.maxsize:
-            scm_bytes = 0
+        scm_bytes = min(scm_engine_bytes.values(), default=0)
 
         nvme_bytes = {}
         for it in nvme_engine_bytes.values():
@@ -147,7 +143,7 @@ class PoolCreateCapacityTests(TestWithServers):
                     if smd_device["dev_state"] != "NORMAL":
                         continue
                     return smd_device[attr_name]
-        raise AttributeError
+        raise AttributeError(f"SMD device attribute '{attr_name}' not found")
 
     def get_cluster_bytes(self, storage_usage):
         """Returns the size of one SPDK cluster.
