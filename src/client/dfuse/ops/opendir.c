@@ -78,8 +78,7 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	DFUSE_REPLY_ZERO_OH(oh, req);
 	if (ie) {
 		int rc;
-		D_INFO("Calling inval_entry %#lx " DF_DE, ie->ie_parent,
-		       DP_DE(ie->ie_name));
+		D_INFO("Calling inval_entry %#lx " DF_DE, ie->ie_parent, DP_DE(ie->ie_name));
 
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
 						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
