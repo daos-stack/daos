@@ -3,13 +3,10 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import sys
 import time
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from general_utils import get_display_size, human_to_bytes
-from server_utils import ServerFailed
 from test_utils_pool import add_pool
 
 
@@ -56,7 +53,7 @@ class PoolCreateCapacityTests(TestWithServers):
         for _ in range(self.pool_quantity[1]):
             self.pools.append(add_pool(self, create=False))
 
-        self.log.debug('Creating {} pools (dmg pool create)'.format(self.pool_quantity))
+        self.log.debug('Creating %i pools (dmg pool create)', self.pool_quantity)
         try:
             for index, pool in enumerate(self.pools):
                 start = time.time()
@@ -71,7 +68,7 @@ class PoolCreateCapacityTests(TestWithServers):
         except TestFail as error:
             self.assertIn(
                 self.DER_NOSPACE, str(error),
-                f"Unexpected error occcured: wait={self.DER_NOSPACE}, got={str(error)}")
+                f"Unexpected error occurred: wait={self.DER_NOSPACE}, got={str(error)}")
 
             self.destroy_pools(self.pools[index])
             self.pools = self.pools[:index]
@@ -82,9 +79,8 @@ class PoolCreateCapacityTests(TestWithServers):
                 f"{self.pool_quantity[0]}: got={index}")
 
             self.log.info(
-                'Quantity of pools created lower than expected: '
-                f"wait={self.pool_quantity[1]}, got={index}")
-
+                "Quantity of pools created lower than expected: wait=%i, got=%i",
+                self.pool_quantity[1], index)
 
     def test_create_pool_quantity(self):
         """JIRA ID: DAOS-5114 / SRS-2 / SRS-4.
