@@ -1143,7 +1143,7 @@ pipeline {
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: next_version,
-                            stage_tags: 'hw,medium',
+                            stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
                             nvme: 'auto_md_on_ssd',
@@ -1160,6 +1160,19 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: 'ofi+verbs;ofi_rxm',
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Verbs Provider MD on SSD',
+                            pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,provider',
+                            default_tags: startedByTimer() ?
+                                'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
+                            nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1189,6 +1202,19 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal
                         )
+                        'Functional Hardware Large MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Large MD on SSD',
+                            pragma_suffix: '-hw-large-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,large',
+                            default_tags: startedByTimer() ?
+                                'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
+                            nvme: 'auto_md_on_ssd',
+                            run_if_pr: false,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
                     )
                 }
             }

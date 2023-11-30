@@ -39,32 +39,40 @@ def get_pragma_values(commit_message, pragma):
     return ' '.join(re.findall(regex, commit_message, flags=re.MULTILINE | re.IGNORECASE))
 
 
-def update_commit_pragma(commit_message, pragma, new_values):
+def update_commit_pragma(commit_message, pragma_values):
     """Update the existing commit pragma with new values.
 
     Inserts the updated commit pragmas after the commit message title.
 
     Args:
         commit_message (str): the original commit message
-        pragma (str): the commit pragma name
-        new_values (str): values to assign for the new commit pragma. If None the old commit pragma
-            is simply removed.
+        pragma_values (dict): a dictionary of commit pragma name str keys and their set values. The
+            commit pragma key will be removed for the commit message and, if it has values defined,
+            a new entry will be added with the new values.
 
     Returns:
         str: the updated commit message
     """
-    regex = rf'^{pragma}:.*$'
+    # Remove the old commit pragmas
+    for pragma in sorted(pragma_values):
+        regex = rf'^{pragma}:.*$'
+        commit_message = re.sub(regex, '', commit_message, flags=re.MULTILINE | re.IGNORECASE)
 
-    # Remove the old commit pragma
-    commit_message = re.sub(regex, '', commit_message, flags=re.MULTILINE | re.IGNORECASE)
-    if new_values is None:
-        return commit_message
-
-    # Insert the new commit pragma
+    # Insert the new commit pragmas
     commit_message_split = commit_message.splitlines()
-    commit_message_split.insert(1, '')
-    commit_message_split.insert(2, f'{pragma}: {new_values}')
-    commit_message_split.insert(3, '')
+    insert_line = 1
+    for pragma in sorted(pragma_values):
+        if not pragma_values[pragma]:
+            continue
+        if insert_line == 1:
+            commit_message_split.insert(insert_line, '')
+            insert_line += 1
+        commit_message_split.insert(
+            insert_line, f'{pragma}: {" ".join(sorted(pragma_values[pragma]))}')
+        insert_line += 1
+    if insert_line > 1:
+        commit_message_split.insert(insert_line, '')
+
     return os.linesep.join(commit_message_split)
 
 
@@ -77,32 +85,43 @@ def modify_commit_message_pragmas(commit_message):
     Returns:
         str: the modified commit message
     """
-    test_tags = set()
-    test_tags_md_on_ssd = 'pr,md_on_ssd'
-    test_tag_values = get_pragma_values(commit_message, 'Test-tag')
-    if test_tag_values:
-        # When 'Test-tags:' exists in the commit message use the same tags for the MD on SSD testing
-        test_tags.update(filter(None, test_tag_values.split(' ')))
-        test_tags_md_on_ssd = test_tag_values
-    else:
-        # Default to using the 'pr' tag
-        test_tags.add('pr')
+    tag_pragmas = {
+        'Test-tag': set(),
+        'Test-tag-hw-medium-md-on-ssd': set(),
+        'Test-tag-hw-medium-verbs-provider-md-on-ssd': set(),
+        'Test-tag-hw-large-md-on-ssd': set(),
+        'Features': set(),
+    }
 
-    feature_values = get_pragma_values(commit_message, 'Features')
-    if feature_values:
-        # Add daily and weekly feature tests when 'Features' exists
-        for feature in filter(None, feature_values.split(' ')):
-            test_tags.add(f'daily_regression,{feature}')
-            test_tags.add(f'full_regression,{feature}')
+    # Get the values for any tag pragma in the commit message
+    for pragma, value_set in tag_pragmas.items():
+        specified_values = get_pragma_values(commit_message, pragma)
+        if specified_values:
+            value_set.update(filter(None, specified_values.split(' ')))
 
-    # Replace 'Features:' with 'Test-tag:'
-    commit_message = update_commit_pragma(commit_message, 'Features', None)
-    commit_message = update_commit_pragma(commit_message, 'Test-tag', ' '.join(test_tags))
+    # Set defaults for Medium MD on SSD stages if no global tags are set
+    if not tag_pragmas['Test-tag']:
+        for pragma in ('Test-tag-hw-medium-md-on-ssd',
+                       'Test-tag-hw-medium-verbs-provider-md-on-ssd'):
+            if not tag_pragmas[pragma]:
+                tag_pragmas[pragma].add('pr,md_on_ssd')
 
-    if 'Test-tag-hw-medium-md-on-ssd' not in commit_message:
-        # Add tags for MD on SSD testing
-        commit_message = update_commit_pragma(
-            commit_message, 'Test-tag-hw-medium-md-on-ssd', test_tags_md_on_ssd)
+    # Run the normally disabled Functional Hardware Large MD on SSD stage when it has tests
+    if tag_pragmas['Test-tag'] or tag_pragmas['Test-tag-hw-large-md-on-ssd']:
+        specified_values = get_pragma_values(commit_message, 'Skip-func-hw-test-large-md-on-ssd')
+        if specified_values != 'true':
+            tag_pragmas['Skip-func-hw-test-large-md-on-ssd'] = ['false']
+
+    # Append any Features tags to the Test-tag pragma
+    if tag_pragmas['Features']:
+        tag_pragmas['Test-tag'].add('pr')
+        for feature in tag_pragmas['Features']:
+            tag_pragmas['Test-tag'].add(f'daily_regression,{feature}')
+            tag_pragmas['Test-tag'].add(f'full_regression,{feature}')
+        tag_pragmas['Features'].clear()
+
+    # Update the commit message with the tag pragmas
+    commit_message = update_commit_pragma(commit_message, tag_pragmas)
 
     return commit_message
 
