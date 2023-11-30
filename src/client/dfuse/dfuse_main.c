@@ -240,9 +240,7 @@ show_version(char *name)
 	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n", name, DAOS_VERSION,
 		DAOS_API_VERSION_MAJOR, DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 	fprintf(stdout, "Using fuse %s\n", fuse_pkgversion());
-#if HAVE_CACHE_READDIR
 	fprintf(stdout, "Kernel readdir support enabled\n");
-#endif
 };
 
 static void
@@ -431,7 +429,7 @@ main(int argc, char **argv)
 	dfuse_info->di_eq_count = 1;
 
 	while (1) {
-		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
 
 		if (c == -1)
 			break;
