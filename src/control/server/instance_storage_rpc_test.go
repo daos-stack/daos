@@ -41,19 +41,71 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		req                ctlpb.ScanNvmeReq
-		bdevAddrs          []string
-		provRes            *storage.BdevScanResponse
-		provErr            error
-		engStopped         bool
-		smdRes             *ctlpb.SmdDevResp
-		smdErr             error
-		healthRes          *ctlpb.BioHealthResp
-		healthErr          error
-		expResp            *ctlpb.ScanNvmeResp
-		expErr             error
-		expBackendScanCall *storage.BdevScanRequest
+		req                 ctlpb.ScanNvmeReq
+		bdevAddrs           []string
+		provRes             *storage.BdevScanResponse
+		provErr             error
+		engStopped          bool
+		smdRes              *ctlpb.SmdDevResp
+		smdErr              error
+		healthRes           *ctlpb.BioHealthResp
+		healthErr           error
+		expResp             *ctlpb.ScanNvmeResp
+		expErr              error
+		expBackendScanCalls []storage.BdevScanRequest
 	}{
+		"no bdevs in cfg": {
+			bdevAddrs: []string{},
+			expErr:    errors.New("empty device list"),
+		},
+		"engines stopped; scan over engine provider": {
+			bdevAddrs:  []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			engStopped: true,
+			provRes: &storage.BdevScanResponse{
+				Controllers: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+				},
+			},
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					proto.MockNvmeController(1),
+					proto.MockNvmeController(2),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+			expBackendScanCalls: []storage.BdevScanRequest{
+				{
+					DeviceList: storage.MustNewBdevDeviceList(
+						test.MockPCIAddr(1), test.MockPCIAddr(2)),
+				},
+			},
+		},
+		"engines stopped; scan over engine provider; retry on empty response": {
+			bdevAddrs:  []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			engStopped: true,
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					proto.MockNvmeController(1),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+			expBackendScanCalls: []storage.BdevScanRequest{
+				{
+					DeviceList: storage.MustNewBdevDeviceList(
+						test.MockPCIAddr(1), test.MockPCIAddr(2)),
+				},
+				{
+					DeviceList: storage.MustNewBdevDeviceList(
+						test.MockPCIAddr(1), test.MockPCIAddr(2)),
+				},
+			},
+		},
+		"engines stopped; scan fails over engine provider": {
+			engStopped: true,
+			provErr:    errors.New("provider scan fail"),
+			expErr:     errors.New("provider scan fail"),
+		},
 		"scan over drpc; no health or meta": {
 			smdRes:    defSmdScanRes(),
 			healthRes: proto.MockNvmeHealth(2),
@@ -72,30 +124,6 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 		"scan fails over drpc": {
 			smdErr: errors.New("drpc fail"),
 			expErr: errors.New("drpc fail"),
-		},
-		"scan over engine provider; no bdevs in config": {
-			engStopped: true,
-			expErr:     errors.New("empty device list"),
-		},
-		"scan over engine provider; bdevs in config": {
-			bdevAddrs:  []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			engStopped: true,
-			expResp: &ctlpb.ScanNvmeResp{
-				Ctrlrs: proto.NvmeControllers{
-					proto.MockNvmeController(1),
-				},
-				State: new(ctlpb.ResponseState),
-			},
-			expBackendScanCall: &storage.BdevScanRequest{
-				DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(1),
-					test.MockPCIAddr(2)),
-			},
-		},
-		"scan fails over engine provider": {
-			bdevAddrs:  []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			engStopped: true,
-			provErr:    errors.New("provider scan fail"),
-			expErr:     errors.New("provider scan fail"),
 		},
 		"scan over drpc; with health": {
 			req:       ctlpb.ScanNvmeReq{Health: true},
@@ -203,11 +231,12 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			}
 
 			ec := engine.MockConfig()
-			if tc.bdevAddrs != nil {
-				ec.WithStorage(storage.NewTierConfig().
-					WithStorageClass(storage.ClassNvme.String()).
-					WithBdevDeviceList(tc.bdevAddrs...))
+			if tc.bdevAddrs == nil {
+				tc.bdevAddrs = []string{test.MockPCIAddr(1)}
 			}
+			ec.WithStorage(storage.NewTierConfig().
+				WithStorageClass(storage.ClassNvme.String()).
+				WithBdevDeviceList(tc.bdevAddrs...))
 
 			sCfg := config.DefaultServer().WithEngines(ec)
 
@@ -241,22 +270,14 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			})
 
 			bmb.RLock()
-			switch len(bmb.ScanCalls) {
-			case 0:
-				if tc.expBackendScanCall == nil {
-					return
-				}
-				t.Fatalf("unexpected number of backend scan calls, want 1 got 0")
-			case 1:
-				if tc.expBackendScanCall != nil {
-					break
-				}
-				t.Fatalf("unexpected number of backend scan calls, want 0 got 1")
-			default:
-				t.Fatalf("unexpected number of backend scan calls, want 0-1 got %d",
-					len(bmb.ScanCalls))
+			if len(tc.expBackendScanCalls) != len(bmb.ScanCalls) {
+				t.Fatalf("unexpected number of backend scan calls, want %d got %d",
+					len(tc.expBackendScanCalls), len(bmb.ScanCalls))
 			}
-			if diff := cmp.Diff(*tc.expBackendScanCall, bmb.ScanCalls[0],
+			if len(tc.expBackendScanCalls) == 0 {
+				return
+			}
+			if diff := cmp.Diff(tc.expBackendScanCalls, bmb.ScanCalls,
 				append(defStorageScanCmpOpts, cmpopt)...); diff != "" {
 				t.Fatalf("unexpected backend scan calls (-want, +got):\n%s\n", diff)
 			}
