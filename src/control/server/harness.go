@@ -64,6 +64,7 @@ type Engine interface {
 	OnInstanceExit(...onInstanceExitFn)
 	OnReady(...onReadyFn)
 	GetStorage() *storage.Provider
+	Debugf(format string, args ...interface{})
 }
 
 // EngineHarness is responsible for managing Engine instances.
