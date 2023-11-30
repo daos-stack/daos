@@ -4700,6 +4700,7 @@ def run_evict_test(server):
     fd = open(join(test_path, 'testfile'), 'wb', buffering=0)
     fd.write(b'hello')
 
+    # Evict the container.
     run_daos_cmd(server.conf, ['container', 'evict', '--all', pool.id(), sub_cont.id()])
 
     try:
@@ -4747,11 +4748,7 @@ def run_evict_test(server):
     dfuse.evict_and_wait([p_path])
 
     # Now check there is only the root inode, everything else should be disconnected/closed.
-    dfuse_stat = dfuse.check_usage()
-    assert dfuse_stat['inodes'] == 1
-    assert dfuse_stat['open_files'] == 1
-    assert dfuse_stat['pools'] == 1
-    assert dfuse_stat['containers'] == 1
+    dfuse_stat = dfuse.check_usage(inodes=1, open_files=1, pools=1,containers=1)
 
     dfuse.stop()
 

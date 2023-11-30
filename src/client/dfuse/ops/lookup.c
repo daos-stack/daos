@@ -291,8 +291,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
-			    &ie->ie_stat.st_ino);
+	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
 
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(dfuse_info, ie, out, attr_len);
@@ -330,7 +329,6 @@ out:
 		D_INFO("Calling forget %#lx " DF_DE, pinode, DP_DE(name));
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, pinode, name,
 						      strnlen(name, NAME_MAX));
-		DS_ERROR(-rc, "inval_entry() replied");
 		if (rc && rc != -ENOENT)
 			DS_ERROR(-rc, "inval_entry() failed");
 
