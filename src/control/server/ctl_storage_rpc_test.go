@@ -103,14 +103,50 @@ func TestServer_bdevScan(t *testing.T) {
 							test.MockPCIAddr(2)),
 				},
 			},
+			provRes: &storage.BdevScanResponse{
+				Controllers: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+				},
+			},
 			engStopped: []bool{true},
 			expResp: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
 					proto.MockNvmeController(1),
+					proto.MockNvmeController(2),
 				},
 				State: new(ctlpb.ResponseState),
 			},
 			expBackendScanCalls: []storage.BdevScanRequest{
+				{
+					DeviceList: storage.MustNewBdevDeviceList(
+						test.MockPCIAddr(1), test.MockPCIAddr(2)),
+				},
+			},
+		},
+		"bdevs in config; engine not started; scan local; retry on empty response": {
+			req: &ctlpb.ScanNvmeReq{Health: true, Meta: true},
+			engTierCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1),
+							test.MockPCIAddr(2)),
+				},
+			},
+			provRes: &storage.BdevScanResponse{
+				Controllers: storage.NvmeControllers{},
+			},
+			engStopped: []bool{true},
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{},
+				State:  new(ctlpb.ResponseState),
+			},
+			expBackendScanCalls: []storage.BdevScanRequest{
+				{
+					DeviceList: storage.MustNewBdevDeviceList(
+						test.MockPCIAddr(1), test.MockPCIAddr(2)),
+				},
 				{
 					DeviceList: storage.MustNewBdevDeviceList(
 						test.MockPCIAddr(1), test.MockPCIAddr(2)),
