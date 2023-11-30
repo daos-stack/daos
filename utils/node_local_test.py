@@ -1369,6 +1369,9 @@ class DFuse():
 
         if single_threaded:
             cmd.append('--singlethread')
+        elif not self.cores:
+            # Use a lower default thread-count for NLT due to running tests in parallel.
+            cmd.extend(['--thread-count', '4'])
 
         if not self.caching:
             cmd.append('--disable-caching')
