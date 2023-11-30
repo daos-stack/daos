@@ -1332,7 +1332,7 @@ def build_job_script(self, commands, job, nodesperjob, ppn):
             "error": str(error),
             "export": "ALL",
             "exclusive": None,
-            "ntasks": str(ppn)
+            "ntasks": str(nodesperjob * ppn)
         }
         # include the cluster specific params
         sbatch.update(self.srun_params)

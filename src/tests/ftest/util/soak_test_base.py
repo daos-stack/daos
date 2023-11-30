@@ -18,7 +18,6 @@ import slurm_utils
 from agent_utils import include_local_host
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from dmg_utils import DmgCommand
 from exception_utils import CommandFailure
 from general_utils import journalctl_time
 from host_utils import get_local_host
