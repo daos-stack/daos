@@ -310,7 +310,7 @@ class PoolCreateCapacityTests(TestWithServers):
         :avocado: tags=pool
         :avocado: tags=PoolCreateCapacityTests,test_create_pool_quantity
         """
-        self.log.info("Retrieving storage usage")
+        self.log_step("Retrieving storage usage")
         storage_usage = self.get_dmg_command().storage_query_usage()
 
         scm_avail_bytes, nvme_avail_bytes = self.get_available_storage(storage_usage)
@@ -385,4 +385,5 @@ class PoolCreateCapacityTests(TestWithServers):
                     len(missing_pools), ", ".join(missing_pools)))
         if len(pools) != len(detected_pools):
             self.fail('Incorrect number of pools detected after rebooting the servers')
+
         self.log_step('Test passed')
