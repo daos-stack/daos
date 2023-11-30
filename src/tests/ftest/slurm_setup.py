@@ -116,7 +116,7 @@ class SlurmSetup():
         """
         # Get munge status on all nodes
         self.log.info("Check munge status")
-        if not self._active_systemctl(self.all_nodes, 'munge'):
+        if self._active_systemctl(self.all_nodes, 'munge'):
             return
         self.log.info("Starting munge")
 
