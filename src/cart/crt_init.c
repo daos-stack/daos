@@ -96,7 +96,8 @@ dump_envariables(void)
 			     "D_PORT_AUTO_ADJUST",
 			     "D_POLL_TIMEOUT",
 			     "D_LOG_FILE_APPEND_RANK",
-			     "DAOS_SIGNAL_REGISTER"};
+			     "DAOS_SIGNAL_REGISTER",
+			     "D_POOL_WARMUP"};
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
