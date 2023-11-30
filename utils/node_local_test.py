@@ -1322,6 +1322,7 @@ class DFuse():
 
     def start(self, v_hint=None, single_threaded=False, use_oopt=False):
         """Start a dfuse instance"""
+        # pylint: disable=too-many-branches
         dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
 
         pre_inode = os.stat(self.dir).st_ino
