@@ -172,8 +172,8 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	}
 }
 
-func getBioHealth(ctx context.Context, ei *EngineInstance, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodBioHealth, req)
+func getBioHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+	dresp, err := engine.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "GetBioHealth dRPC call")
 	}
@@ -190,8 +190,8 @@ func getBioHealth(ctx context.Context, ei *EngineInstance, req *ctlpb.BioHealthR
 	return resp, nil
 }
 
-func listSmdDevices(ctx context.Context, ei *EngineInstance, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSmdDevs, req)
+func listSmdDevices(ctx context.Context, engine Engine, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
+	dresp, err := engine.CallDrpc(ctx, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
 	}

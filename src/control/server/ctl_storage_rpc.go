@@ -151,6 +151,28 @@ func bdevScanTrimResults(req *ctlpb.ScanNvmeReq, resp *ctlpb.ScanNvmeResp) *ctlp
 	return resp
 }
 
+func engineHasStarted(instances []Engine) bool {
+	for _, ei := range instances {
+		if ei.IsStarted() {
+			return true
+		}
+	}
+
+	return false
+}
+
+func bdevScanAssigned(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, nsps []*ctlpb.ScmNamespace, hasStarted *bool, cfgBdevs *storage.BdevDeviceList) (*ctlpb.ScanNvmeResp, error) {
+	*hasStarted = engineHasStarted(cs.harness.Instances())
+	if !*hasStarted {
+		cs.log.Debugf("scan bdevs from control service as no engines started")
+		return bdevScanGlobal(cs, cfgBdevs)
+	}
+
+	// Delegate scan to engine instances as soon as one engine with assigned bdevs has started.
+	cs.log.Debugf("scan assigned bdevs through engine instances as some are started")
+	return bdevScanEngines(ctx, cs, req, nsps)
+}
+
 // Return NVMe device details. The scan method employed depends on whether the engines are running
 // or not. If running, scan over dRPC. If not running then use engine's storage provider.
 func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, nsps []*ctlpb.ScmNamespace) (resp *ctlpb.ScanNvmeResp, err error) {
@@ -159,33 +181,46 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	}
 
 	cfgBdevs := getBdevCfgsFromSrvCfg(cs.srvCfg).Bdevs()
-	hasBdevs := cfgBdevs.Len() != 0
+
+	if cfgBdevs.Len() == 0 {
+		cs.log.Debugf("scan bdevs from control service as no bdevs in cfg")
+
+		// No bdevs configured for engines to claim so scan through control service.
+		resp, err = bdevScanGlobal(cs, cfgBdevs)
+		if err != nil {
+			return nil, err
+		}
+		return bdevScanTrimResults(req, resp), nil
+	}
 
 	// Note the potential window where engines are started but not yet ready to respond. In this
 	// state there is a possibility that neither scan mechanism will work because devices have
-	// been claimed by SPDK but details are not yet available over dRPC. Here it is assumed that
-	// devices are claimed as soon the engines are started.
+	// been claimed by SPDK but details are not yet available over dRPC.
 
-	hasStarted := false
-	for _, ei := range cs.harness.Instances() {
-		if ei.IsStarted() {
-			hasStarted = true
+	var hasStarted bool
+	resp, err = bdevScanAssigned(ctx, cs, req, nsps, &hasStarted, cfgBdevs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Retry once if global scan returns unexpected number of controllers incase engines
+	// claimed devices between when started state was checked and scan was executed.
+	if !hasStarted && len(resp.Ctrlrs) != cfgBdevs.Len() {
+		cs.log.Debugf("retrying bdev scan as unexpected nr returned, want %d got %d",
+			cfgBdevs.Len(), len(resp.Ctrlrs))
+
+		resp, err = bdevScanAssigned(ctx, cs, req, nsps, &hasStarted, cfgBdevs)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	if !hasBdevs || !hasStarted {
-		if hasBdevs {
-			cs.log.Debugf("scan bdevs from control service as no engines started")
-		} else {
-			cs.log.Debugf("scan bdevs from control service as no bdevs in cfg")
-		}
-		resp, err = bdevScanGlobal(cs, cfgBdevs)
-	} else {
-		cs.log.Debugf("scan assigned bdevs through engine instances as some are started")
-		resp, err = bdevScanEngines(ctx, cs, req, nsps)
+	if len(resp.Ctrlrs) != cfgBdevs.Len() {
+		cs.log.Noticef("bdev scan returned unexpected nr, want %d got %d",
+			cfgBdevs.Len(), len(resp.Ctrlrs))
 	}
 
-	return bdevScanTrimResults(req, resp), err
+	return bdevScanTrimResults(req, resp), nil
 }
 
 // newScanScmResp sets protobuf SCM scan response with module or namespace info.

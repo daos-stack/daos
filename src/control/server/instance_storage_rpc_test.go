@@ -185,13 +185,13 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			scanSmd = func(_ context.Context, _ *EngineInstance, _ *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
+			scanSmd = func(_ context.Context, _ Engine, _ *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
 				return tc.smdRes, tc.smdErr
 			}
 			defer func() {
 				scanSmd = listSmdDevices
 			}()
-			getCtrlrHealth = func(_ context.Context, _ *EngineInstance, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+			getCtrlrHealth = func(_ context.Context, _ Engine, _ *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 				return tc.healthRes, tc.healthErr
 			}
 			defer func() {
