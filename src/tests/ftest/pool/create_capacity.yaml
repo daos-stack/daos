@@ -3,7 +3,7 @@ hosts:
   test_clients: 1
 
 timeouts:
-  test_create_pool_quantity: 1200
+  test_create_pool_quantity: 600
 
 server_config:
   name: daos_server
@@ -18,6 +18,8 @@ server_config:
       log_mask: DEBUG
       targets: 1
       env_vars:
+        # NOTE The minimal size of the DAOS RDB is equal to 128MiB
+        - DAOS_MD_CAP=128
         - DD_MASK=group_metadata_only
         - D_LOG_FLUSH=DEBUG
       storage: auto
@@ -30,13 +32,17 @@ server_config:
       log_mask: DEBUG
       targets: 1
       env_vars:
+        # NOTE The minimal size of the DAOS RDB is equal to 128MiB
+        - DAOS_MD_CAP=128
         - DD_MASK=group_metadata_only
         - D_LOG_FLUSH=DEBUG
       storage: auto
+  start_duration: 120
 
 pool:
   control_method: dmg
   scm_size: 192MiB
+  # NOTE The minimal size of DATA with MD on SCM is equal to 1GiB (i.e. size of a SPDK cluster)
   nvme_size: 1024MiB
   quantity: 200
   set_logmasks: False
