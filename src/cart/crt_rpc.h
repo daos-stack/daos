@@ -218,11 +218,11 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
 }
 
-#define CRT_PROTO_INTERNAL_VERSION 5
+#define CRT_PROTO_INTERNAL_VERSION 4
 #define CRT_PROTO_FI_VERSION 3
 #define CRT_PROTO_ST_VERSION 1
 #define CRT_PROTO_CTL_VERSION 1
-#define CRT_PROTO_IV_VERSION 1
+#define CRT_PROTO_IV_VERSION       2
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,

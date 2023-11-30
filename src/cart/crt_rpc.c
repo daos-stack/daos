@@ -1924,3 +1924,9 @@ crt_trigger_hlc_error_cb(void)
 	if (handler)
 		handler(arg);
 }
+
+int
+crt_req_get_proto_ver(crt_rpc_t *req)
+{
+	return (req->cr_opc & CRT_PROTO_VER_MASK) >> 16;
+}

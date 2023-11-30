@@ -2291,6 +2291,15 @@ int crt_context_quota_set(crt_context_t crt_ctx, crt_quota_type_t quota, int val
  */
 int crt_context_quota_get(crt_context_t crt_ctx, crt_quota_type_t quota, int *value);
 
+/**
+ * Get the proto version of an RPC request.
+ *
+ * \param[in] req              pointer to RPC request
+ *
+ * \return                     positive version or negative error.
+ */
+int
+crt_req_get_proto_ver(crt_rpc_t *req);
 
 /** @}
  */
