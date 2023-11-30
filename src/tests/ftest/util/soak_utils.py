@@ -1295,7 +1295,7 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
     return commands
 
 
-def build_job_script(self, commands, job, nodesperjob):
+def build_job_script(self, commands, job, nodesperjob, ppn):
     """Create a slurm batch script that will execute a list of cmdlines.
 
     Args:
@@ -1331,7 +1331,8 @@ def build_job_script(self, commands, job, nodesperjob):
             "exclude": str(self.slurm_exclude_nodes),
             "error": str(error),
             "export": "ALL",
-            "exclusive": None
+            "exclusive": None,
+            "ntasks": str(ppn)
         }
         # include the cluster specific params
         sbatch.update(self.srun_params)

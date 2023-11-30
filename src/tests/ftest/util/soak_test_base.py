@@ -94,7 +94,7 @@ class SoakTestBase(TestWithServers):
         self.sharedsoak_dir = self.tmp + "/soak"
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
-        self.dmg_command = DmgCommand(self.bin)
+        self.dmg_command = self.get_dmg_command()
         # Fail if slurm partition is not defined
         # NOTE: Slurm reservation and partition are created before soak runs.
         # CI uses partition=daos_client and no reservation.
@@ -338,7 +338,7 @@ class SoakTestBase(TestWithServers):
                     else:
                         raise SoakTestError(
                             "<<FAILED: Job {} is not supported. ".format(job))
-                    jobscript = build_job_script(self, commands, job, npj)
+                    jobscript = build_job_script(self, commands, job, npj, ppn)
                     job_cmdlist.extend(jobscript)
         return job_cmdlist
 

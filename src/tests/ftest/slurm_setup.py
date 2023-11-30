@@ -114,44 +114,47 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem starting munge
         """
-        self.log.info("Starting munge")
+        # Get munge status on all nodes
+        self.log.info("Check munge status")
+        if not self._active_systemctl(self.all_nodes, 'munge'):
+            self.log.info("Starting munge")
 
-        # Create munge key only if it does not exist.
-        result = run_remote(
-            self.log, self.control, command_as_user(f'test -f {self.MUNGE_KEY}', self.root))
-        if not result.passed:
-            # Create a munge key on the control host
-            self.log.debug('Creating a new munge key on %s', self.control)
+            # Create munge key only if it does not exist.
             result = run_remote(
-                self.log, self.control, command_as_user('create-munge-key', self.root))
+                self.log, self.control, command_as_user(f'test -f {self.MUNGE_KEY}', self.root))
             if not result.passed:
-                # Try the other possible munge key creation command:
+                # Create a munge key on the control host
+                self.log.debug('Creating a new munge key on %s', self.control)
                 result = run_remote(
-                    self.log, self.control, command_as_user('mungekey -c', self.root))
+                    self.log, self.control, command_as_user('create-munge-key', self.root))
                 if not result.passed:
-                    raise SlurmSetupException(f'Error creating munge key on {result.failed_hosts}')
+                    # Try the other possible munge key creation command:
+                    result = run_remote(
+                        self.log, self.control, command_as_user('mungekey -c', self.root))
+                    if not result.passed:
+                        raise SlurmSetupException(f'Error creating munge key on {result.failed_hosts}')
 
-        # Setup the munge dir file permissions on all hosts
-        self._update_file(self.all_nodes, self.MUNGE_DIR, '777', user)
+            # Setup the munge dir file permissions on all hosts
+            self._update_file(self.all_nodes, self.MUNGE_DIR, '777', user)
 
-        # Setup the munge key file permissions on the control host
-        self._update_file(self.control, self.MUNGE_KEY, '777', user)
+            # Setup the munge key file permissions on the control host
+            self._update_file(self.control, self.MUNGE_KEY, '777', user)
 
-        # Copy the munge key from the control node to the non-control nodes
-        non_control = self.nodes.difference(self.control)
-        self.log.debug('Copying the munge key to %s', non_control)
-        command = get_clush_command(
-            non_control, args=f"-B -S -v --copy {self.MUNGE_KEY} --dest {self.MUNGE_KEY}")
-        result = run_remote(self.log, self.control, command)
-        if not result.passed:
-            raise SlurmSetupException(f'Error creating munge key on {result.failed_hosts}')
+            # Copy the munge key from the control node to the non-control nodes
+            non_control = self.nodes.difference(self.control)
+            self.log.debug('Copying the munge key to %s', non_control)
+            command = get_clush_command(
+                non_control, args=f"-B -S -v --copy {self.MUNGE_KEY} --dest {self.MUNGE_KEY}")
+            result = run_remote(self.log, self.control, command)
+            if not result.passed:
+                raise SlurmSetupException(f'Error creating munge key on {result.failed_hosts}')
 
-        # Resetting munge dir and key permissions
-        self._update_file(self.all_nodes, self.MUNGE_KEY, '400', 'munge')
-        self._update_file(self.all_nodes, self.MUNGE_DIR, '700', 'munge')
+            # Resetting munge dir and key permissions
+            self._update_file(self.all_nodes, self.MUNGE_KEY, '400', 'munge')
+            self._update_file(self.all_nodes, self.MUNGE_DIR, '700', 'munge')
 
-        # Restart munge on all nodes
-        self._restart_systemctl(self.all_nodes, 'munge')
+            # Restart munge on all nodes
+            self._restart_systemctl(self.all_nodes, 'munge')
 
     def start_slurm(self, user, debug):
         """Start slurm.
@@ -325,9 +328,9 @@ class SlurmSetup():
                 match[0]: match[1]
                 for match in re.findall(r"(Socket|Core|Thread).*:\s+(\d+)", "\n".join(data.stdout))
                 if len(match) > 1}
-
+            nodelist = ','.join(sorted(data.hosts))
             if "Socket" in info and "Core" in info and "Thread" in info:
-                echo_command = (f'echo \"Nodename={data.hosts} Sockets={info["Socket"]} '
+                echo_command = (f'echo \"Nodename={nodelist} Sockets={info["Socket"]} '
                                 f'CoresPerSocket={info["Core"]} ThreadsPerCore={info["Thread"]}\"')
                 mod_result = self._append_config_file(echo_command)
                 if mod_result.failed_hosts:
@@ -346,8 +349,8 @@ class SlurmSetup():
         """
         self.log.debug('Updating slurm config partition information on %s', self.all_nodes)
         echo_command = (
-            f'echo \"PartitionName={partition} Nodes={self.nodes} Default=YES MaxTime=INFINITE '
-            'State=UP\"')
+            f'echo \"PartitionName={partition} Nodes={",".join(sorted(self.nodes))} '
+            'Default=YES MaxTime=INFINITE State=UP\"')
         mod_result = self._append_config_file(echo_command)
         if mod_result.failed_hosts:
             raise SlurmSetupException(
@@ -449,6 +452,28 @@ class SlurmSetup():
             if not result.passed:
                 self._display_debug(result.failed_hosts, debug_log, debug_config)
                 raise SlurmSetupException(f'Error restarting {service} on {result.failed_hosts}')
+
+    def _active_systemctl(self, nodes, service, debug_log=None, debug_config=None):
+        """Restart the systemctl service.
+
+        Args:
+            nodes (NodeSet): nodes on which to get status from the systemctl service
+            service (str): systemctl service to get status
+            debug_log (str, optional): log file to display if there is a problem with status
+            debug_config (str, optional): config file to display if there is a problem with status
+
+        Raises:
+            SlurmSetupException: if there is a problem with the systemctl service
+
+        Returns:
+            boolean: True is systemctl is-active {service} returns "active"
+        """
+        command = command_as_user(f'systemctl is-active {service}', self.root)
+        result = run_remote(self.log, nodes, command)
+        if not result.passed:
+            self._display_debug(result.failed_hosts, debug_log, debug_config)
+            self.log.debug(f'{service} service not active on {result.failed_hosts}')
+        return result.homogeneous and "/n".join(result.output[0].stdout) == "active"
 
     def _display_debug(self, nodes, debug_log=None, debug_config=None):
         """Display debug information.
