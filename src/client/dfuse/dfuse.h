@@ -799,8 +799,6 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %#zx",            \
-				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
 		if ((entry).attr_timeout > 0) {                                                    \
 			(inode)->ie_stat = (entry).attr;                                           \
 			dfuse_mcache_set_time(inode);                                              \

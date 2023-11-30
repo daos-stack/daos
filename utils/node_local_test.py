@@ -4735,8 +4735,7 @@ def run_evict_test(server):
             break
         count -= 1
         if count == 0:
-            break
-            # assert False, 'Path should have been evicted'
+            assert False, 'Path should have been evicted'
         time.sleep(1)
 
     # Now evict the whole new container.  This will cause dfuse to flush everything and then

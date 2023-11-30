@@ -232,7 +232,7 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 
 	ie->ie_dfs = dfs;
 
-	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %#lx", dfs->dfs_ino);
+	DFUSE_TRA_DEBUG(dfs, "UNS entry point activated, root %#lx", dfs->dfs_ino);
 
 	duns_destroy_attr(&dattr);
 
@@ -326,7 +326,8 @@ out:
 	}
 
 	if (evict) {
-		D_INFO("Calling forget %#lx " DF_DE, pinode, DP_DE(name));
+		D_INFO("Calling inval_entry %#lx " DF_DE " cinode %#lx", pinode, DP_DE(name),
+		       cinode);
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, pinode, name,
 						      strnlen(name, NAME_MAX));
 		if (rc && rc != -ENOENT)
@@ -334,9 +335,12 @@ out:
 
 		if (cinode != 0) {
 			rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, cinode, 0, 0);
-			DS_ERROR(-rc, "inval_inode() replied");
 			if (rc && rc != -ENOENT)
-				DS_ERROR(-rc, "inval_inode() failed");
+				DS_ERROR(-rc, "inval_inode() cinode %#lx failed", cinode);
 		}
+
+		rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, pinode, 0, 0);
+		if (rc && rc != -ENOENT)
+			DS_ERROR(-rc, "inval_inode() pinode %#lx failed", pinode);
 	}
 }
