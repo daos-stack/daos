@@ -9,6 +9,7 @@ from scrubber_test_base import TestWithScrubber
 
 
 class TestScrubberEvictWithRebuild(TestWithScrubber):
+    # pylint: disable=too-many-ancestors
     """Inject Checksum Fault with scrubber enabled
     and scrubber threshold set to a certain value.
     Rebuild is run on the background.
