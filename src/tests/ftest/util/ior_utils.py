@@ -8,11 +8,11 @@ import re
 from enum import IntEnum
 
 from avocado.utils.process import CmdResult
-from command_utils_base import FormattedParameter, BasicParameter
-from exception_utils import CommandFailure
 from command_utils import SubProcessCommand
-from general_utils import get_log_file
+from command_utils_base import BasicParameter, FormattedParameter
 from duns_utils import format_path
+from exception_utils import CommandFailure
+from general_utils import get_log_file
 
 
 def get_ior(test, manager, hosts, path, slots, namespace="/run/ior/*", ior_params=None):

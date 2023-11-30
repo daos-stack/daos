@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0-6%{?dist}
+%global mercury_version 2.3.1-1%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       9%{?relval}%{?dist}
+Release:       12%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -49,7 +49,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 1.12.1~rc1
+BuildRequires: libpmemobj-devel >= 2.0.0
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -145,11 +145,11 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
+Requires: libpmemobj1 >= 2.0.0-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
+Requires: libpmemobj >= 2.0.0-1%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
@@ -364,7 +364,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,util/verify_perms}.py,%{_bindir}/daos_storage_estimator.py,%{_datarootdir}/daos/control/setup_spdk.sh}
+sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,verify_perms}.py,%{_bindir}/daos_storage_estimator.py,%{_datarootdir}/daos/control/setup_spdk.sh}
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
@@ -585,6 +585,21 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Nov 17 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.5.100-12
+- Update to PMDK 2.0.0
+  * Remove libpmemblk from dependencies.
+  * Start using BUILD_EXAMPLES=n and BUILD_BENCHMARKS=n instead of patches.
+  * Stop using BUILD_RPMEM=n (removed) and NDCTL_DISABLE=y (invalid).
+  * Point https://github.com/pmem/pmdk as the main PMDK reference source.
+  NOTE: PMDK upgrade to 2.0.0 does not affect any API call used by DAOS.
+        libpmemobj (and libpmem) API stays unchanged.
+
+* Wed Nov 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.5.100-11
+- Bump mercury min version to 2.3.1
+
+* Fri Nov 03 2023 Phillip Henderson <phillip.henderson@intel.com> 2.5.100-10
+- Move verify_perms.py location
+
 * Wed Aug 23 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-9
 - Update fuse3 requirement to R: /usr/bin/fusermount3 by path
   rather than by package name, for portability and future-proofing

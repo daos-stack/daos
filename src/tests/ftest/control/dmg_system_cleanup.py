@@ -4,9 +4,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from socket import gethostname
-from avocado.core.exceptions import TestFail
-from pydaos.raw import DaosPool
+
 from apricot import TestWithServers
+from general_utils import DaosTestError
+from pydaos.raw import DaosPool
 
 
 class DmgSystemCleanupTest(TestWithServers):
@@ -33,8 +34,8 @@ class DmgSystemCleanupTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=control,dmg
-        :avocado: tags=dmg_system_cleanup,test_dmg_system_cleanup_one_host
+        :avocado: tags=control,dmg,dmg_system_cleanup
+        :avocado: tags=DmgSystemCleanupTest,test_dmg_system_cleanup_one_host
         """
         # Print out where this is running
         hostname = gethostname().split(".")[0]
@@ -61,7 +62,7 @@ class DmgSystemCleanupTest(TestWithServers):
         try:
             for idx in range(2):
                 self.container[idx].write_objects()
-        except TestFail as error:
+        except DaosTestError as error:
             self.fail("Unable to write container #{}: {}\n".format(idx, error))
 
         # Call dmg system cleanup on the host and create cleaned pool list.
@@ -77,9 +78,10 @@ class DmgSystemCleanupTest(TestWithServers):
         for idx in range(2):
             try:
                 self.container[idx].write_objects()
-                self.fail("Wrote to container #{} when it should have failed:\n".format(idx))
-            except TestFail as error:
+            except DaosTestError as error:
                 self.log.info("Unable to write container #%d: as expected %s\n", idx, error)
+            else:
+                self.fail("Wrote to container #{} when it should have failed".format(idx))
 
         # Build a list of pool IDs and counts (6) to compare against
         # our cleanup results.

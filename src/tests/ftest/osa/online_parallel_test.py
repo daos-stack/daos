@@ -3,18 +3,18 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
+import copy
+import queue
 import random
 import threading
-import copy
-
+import time
 from itertools import product
-import queue
-from write_host_file import write_host_file
-from exception_utils import CommandFailure
-from daos_racer_utils import DaosRacerCommand
-from osa_utils import OSAUtils
+
 from apricot import skipForTicket
+from daos_racer_utils import DaosRacerCommand
+from exception_utils import CommandFailure
+from osa_utils import OSAUtils
+from write_host_file import write_host_file
 
 
 class OSAOnlineParallelTest(OSAUtils):

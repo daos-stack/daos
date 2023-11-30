@@ -1713,7 +1713,8 @@ dc_obj_layout_refresh(daos_handle_t oh)
 }
 
 uint32_t
-dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inprogress_cnt)
+dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inprogress_cnt,
+		   uint32_t timeout_sec)
 {
 	uint32_t	delay = 0;
 
@@ -1729,6 +1730,12 @@ dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inp
 				task, (int)*inprogress_cnt, (int)*retry_cnt, delay);
 		}
 	}
+
+	/*
+	 * Randomly delay [1,  max_delay - 5] for DER_OVERLOAD_RETRY case.
+	 */
+	if (err == -DER_OVERLOAD_RETRY)
+		delay = daos_rpc_rand_delay(timeout_sec) << 20;
 
 	return delay;
 }
@@ -1761,7 +1768,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 		}
 
 		delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
-					   &obj_auxi->inprogress_cnt);
+					   &obj_auxi->inprogress_cnt, obj_auxi->max_delay);
 		rc = tse_task_reinit_with_delay(task, delay);
 		if (rc != 0)
 			D_GOTO(err, rc);
@@ -2712,6 +2719,9 @@ shard_auxi_set_param(struct shard_auxi_args *shard_arg, uint32_t map_ver,
 		     uint32_t shard, uint32_t tgt_id, struct dtx_epoch *epoch,
 		     uint16_t ec_tgt_idx)
 {
+	/* Reset @enqueue_id if target changed */
+	if (shard_arg->target != tgt_id)
+		shard_arg->enqueue_id = 0;
 	shard_arg->epoch = *epoch;
 	shard_arg->shard = shard;
 	shard_arg->target = tgt_id;
@@ -6203,6 +6213,7 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 	int			shard;
 	unsigned int		first;
 
+	grp_start = grp_idx * obj_get_grp_size(obj);
 	oca = obj_get_oca(obj);
 	if (dkey == NULL && obj_ec_parity_rotate_enabled(obj)) {
 		int fail_cnt = 0;
@@ -6214,7 +6225,6 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 		 * to resolve, so let's enumerate from all shards in this case.
 		 */
 		*shard_cnt = 0;
-		grp_start = grp_idx * obj_get_grp_size(obj);
 		/* Check if each shards are in good state */
 		D_ASSERT(bitmaps != NULL);
 		for (i = 0; i < obj_ec_tgt_nr(oca); i++) {
@@ -6243,10 +6253,16 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 			if (shard < 0)
 				D_GOTO(out, shard);
 
-			if (is_ec_data_shard(obj_auxi->obj, obj_auxi->dkey_hash, shard))
-				*shard_cnt = obj_ec_data_tgt_nr(oca);
-			if (bitmaps != NULL)
-				setbit(*bitmaps, shard % obj_get_grp_size(obj));
+			if (is_ec_data_shard(obj_auxi->obj, obj_auxi->dkey_hash, shard)) {
+				first = shard;
+				/* If the leader is one of the data shard, then let's check
+				 * if all data shards are valid, then set the bitmaps.
+				 */
+				D_GOTO(out_set, shard);
+			} else {
+				if (bitmaps != NULL)
+					setbit(*bitmaps, shard % obj_get_grp_size(obj));
+			}
 			D_GOTO(out, shard);
 		}
 
@@ -6258,8 +6274,10 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 		}
 	}
 
-	grp_start = grp_idx * obj_get_grp_size(obj);
 	first = obj_ec_shard_idx(obj, obj_auxi->dkey_hash, 0);
+	shard = first + grp_start;
+
+out_set:
 	D_DEBUG(DB_IO, "let's choose from the data shard %u for "DF_OID"\n",
 		first, DP_OID(obj->cob_md.omd_id));
 
@@ -6279,7 +6297,6 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 			setbit(*bitmaps, shard_idx % obj_ec_tgt_nr(oca));
 	}
 
-	shard = first + grp_start;
 	*shard_cnt = obj_ec_data_tgt_nr(oca);
 
 out:
@@ -6828,7 +6845,9 @@ shard_query_key_task(tse_task_t *task)
 				    api_args->dkey, api_args->akey,
 				    api_args->recx, api_args->max_epoch, args->kqa_coh_uuid,
 				    args->kqa_cont_uuid, &args->kqa_dti,
-				    &args->kqa_auxi.obj_auxi->map_ver_reply, th, task);
+				    &args->kqa_auxi.obj_auxi->map_ver_reply, th, task,
+				    &args->kqa_auxi.obj_auxi->max_delay,
+				    &args->kqa_auxi.enqueue_id);
 
 	return rc;
 }
@@ -6843,7 +6862,8 @@ queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 	tse_task_t			*task;
 	struct shard_query_key_args	*args;
 	d_list_t			*head = NULL;
-	int				rc;
+	int				 rc;
+	uint32_t			 target;
 
 	rc = tse_task_create(shard_query_key_task, sched, NULL, &task);
 	if (rc != 0)
@@ -6858,10 +6878,15 @@ queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
 	uuid_copy(args->kqa_coh_uuid, coh_uuid);
 	uuid_copy(args->kqa_cont_uuid, cont_uuid);
 
-	rc = obj_shard2tgtid(obj, shard, map_ver,
-			     &args->kqa_auxi.target);
+	rc = obj_shard2tgtid(obj, shard, map_ver, &target);
 	if (rc != 0)
 		D_GOTO(out_task, rc);
+
+	/* Reset @enqueue_id if target changed */
+	if (target != args->kqa_auxi.target)
+		args->kqa_auxi.enqueue_id = 0;
+
+	args->kqa_auxi.target = target;
 
 	rc = tse_task_register_deps(api_task, 1, &task);
 	if (rc != 0)
