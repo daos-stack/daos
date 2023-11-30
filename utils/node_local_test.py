@@ -2813,17 +2813,26 @@ class PosixTests():
 
     @needs_dfuse
     def test_uns_link(self):
-        """Simple test to create a container then create a path for it in dfuse"""
+        """Simple test to create a container then create a path for it in dfuse
+
+        This test requires caching attributes to be set on the second container so that it does
+        not get evicted before the inode count check.
+        """
+        # Create a new container which not linked
         container1 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link1')
         cmd = ['cont', 'query', self.pool.id(), container1.id()]
         rc = run_daos_cmd(self.conf, cmd)
         assert rc.returncode == 0
 
+        # Create a second new container which is not linked
         container2 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link2')
-        cmd = ['cont', 'query', self.pool.id(), container2.id()]
-        rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
+        cont_attrs = {'dfuse-attr-time': '5m',
+                      'dfuse-dentry-time': '5m',
+                      'dfuse-dentry-dir-time': '5m',
+                      'dfuse-ndentry-time': '5m'}
+        container2.set_attrs(cont_attrs)
 
+        # Link and then destroy the first container
         path = join(self.dfuse.dir, 'uns_link1')
         cmd = ['cont', 'link', self.pool.id(), 'mycont_uns_link1', '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
@@ -2835,6 +2844,8 @@ class PosixTests():
         cmd = ['cont', 'destroy', '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
 
+        # Link and then destroy the second container but check inode count before and after
+        # destroying.
         path = join(self.dfuse.dir, 'uns_link2')
         cmd = ['cont', 'link', self.pool.id(), container2.id(), '--path', path]
         rc = run_daos_cmd(self.conf, cmd)

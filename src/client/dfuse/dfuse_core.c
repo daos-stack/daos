@@ -101,7 +101,11 @@ struct inode_core {
 
 #define EVICT_COUNT 8
 
-/* Eviction loop, run periodically in it's own thread */
+/* Eviction loop, run periodically in it's own thread
+ * TODO: Check how this works with caching disabled.
+ * TODO: Have this function return a time-to-sleep rather than waking up every second.
+ * TODO: Have de_add_value() wakeup this thread.
+ */
 bool
 dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 {
@@ -121,8 +125,8 @@ dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
 			double timeout;
 
 			if (dfuse_dentry_get_valid(inode, dte->time, &timeout)) {
-				DFUSE_TRA_INFO(inode, "Keeping left %lf " DF_DE, timeout,
-					       DP_DE(inode->ie_name));
+				DFUSE_TRA_DEBUG(inode, "Keeping left %lf " DF_DE, timeout,
+						DP_DE(inode->ie_name));
 				break;
 			}
 
@@ -155,8 +159,8 @@ out:
 	for (int i = 0; i < idx; i++) {
 		int rc;
 
-		DFUSE_TRA_INFO(dfuse_info, "Evicting entry %#lx " DF_DE, ic[i].parent,
-			       DP_DE(ic[i].name));
+		DFUSE_TRA_DEBUG(dfuse_info, "Evicting entry %#lx " DF_DE, ic[i].parent,
+				DP_DE(ic[i].name));
 
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ic[i].parent,
 						      ic[i].name, strnlen(ic[i].name, NAME_MAX));
