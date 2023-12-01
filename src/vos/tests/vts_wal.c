@@ -411,6 +411,7 @@ wal_pool_refill(struct io_test_args *arg)
 
 	if (arg->fail_replay) {
 		daos_fail_loc_set(DAOS_WAL_FAIL_REPLAY | DAOS_FAIL_ALWAYS);
+		daos_fail_value_set(1000);
 		poh = DAOS_HDL_INVAL;
 		rc = vos_pool_open(tcx->tc_po_name, tcx->tc_po_uuid, 0, &poh);
 		assert_rc_equal(rc, -DER_AGAIN);
@@ -1222,6 +1223,7 @@ wal_kv_teardown(void **state)
 	arg->checkpoint = false;
 	arg->fail_replay = false;
 	arg->fail_checkpoint = false;
+	daos_fail_value_set(0);
 	daos_fail_loc_set(0);
 
 	return 0;

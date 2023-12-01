@@ -1763,7 +1763,8 @@ load_wal:
 		}
 
 		/* test need generate enough tx */
-		if (nr_replayed > 1000 && DAOS_FAIL_CHECK(DAOS_WAL_FAIL_REPLAY)) {
+		if (DAOS_FAIL_CHECK(DAOS_WAL_FAIL_REPLAY) &&
+		    nr_replayed > daos_fail_value_get()) {
 			rc = -DER_AGAIN;
 			break;
 		}

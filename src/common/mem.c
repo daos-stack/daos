@@ -2159,10 +2159,31 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 				pinfo->pi_last_checkpoint = pinfo->pi_last_inflight;
 			}
 
+			/*
+			 * DAV allocator uses valgrind macros to mark certain portions of
+			 * heap as no access for user. Prevent valgrind from reporting
+			 * invalid read while checkpointing these address ranges.
+			 */
+			if (DAOS_ON_VALGRIND) {
+				d_sg_list_t  *sgl = &chkpt_data->cd_sg_list;
+
+				for (i = 0; i < sgl->sg_nr; i++)
+					VALGRIND_DISABLE_ADDR_ERROR_REPORTING_IN_RANGE(
+						sgl->sg_iovs[i].iov_buf, sgl->sg_iovs[i].iov_len);
+			}
+
 			rc = store->stor_ops->so_flush_copy(chkpt_data->cd_fh,
 							    &chkpt_data->cd_sg_list);
 			/** If this fails, it means invalid argument, so assertion here is fine */
 			D_ASSERT(rc == 0);
+
+			if (DAOS_ON_VALGRIND) {
+				d_sg_list_t  *sgl = &chkpt_data->cd_sg_list;
+
+				for (i = 0; i < sgl->sg_nr; i++)
+					VALGRIND_ENABLE_ADDR_ERROR_REPORTING_IN_RANGE(
+						sgl->sg_iovs[i].iov_buf, sgl->sg_iovs[i].iov_len);
+			}
 
 			for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
 				pinfo             = chkpt_data->cd_pages[i];
