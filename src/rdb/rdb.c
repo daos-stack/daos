@@ -20,10 +20,6 @@
 static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
 			     uint64_t caller_term, struct rdb_cbs *cbs, void *arg,
 			     struct rdb **dbp);
-static int
-rdb_chkptd_start(struct rdb *db);
-static void
-rdb_chkptd_stop(struct rdb *db);
 
 /**
  * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
@@ -75,8 +71,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 
 	/* Initialize the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version,
-			   &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version, &value, NULL /* vtx */);
 	if (rc != 0)
 		goto out_mc_hdl;
 
@@ -90,7 +85,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	 * rdb_start() checks this attribute when starting a DB.
 	 */
 	d_iov_set(&value, (void *)uuid, sizeof(uuid_t));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value, NULL /* vtx */);
 	if (rc != 0)
 		goto out_mc_hdl;
 
@@ -228,6 +223,9 @@ rdb_lookup(const uuid_t uuid)
 		return NULL;
 	return rdb_obj(entry);
 }
+
+static int rdb_chkptd_start(struct rdb *db);
+static void rdb_chkptd_stop(struct rdb *db);
 
 /*
  * If created successfully, the new DB handle will consume pool and mc, which
