@@ -61,7 +61,6 @@ rdb_raft_rc(int raft_rc)
 	case RAFT_ERR_NOMEM:			return -DER_NOMEM;
 	case RAFT_ERR_SNAPSHOT_ALREADY_LOADED:	return -DER_ALREADY;
 	case RAFT_ERR_INVALID_CFG_CHANGE:	return -DER_INVAL;
-	case RAFT_ERR_MIGHT_VIOLATE_LEASE:	return -DER_NO_PERM;
 	default:				return -DER_MISC;
 	}
 }
