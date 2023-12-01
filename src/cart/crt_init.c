@@ -96,6 +96,7 @@ dump_envariables(void)
 			     "D_PORT_AUTO_ADJUST",
 			     "D_POLL_TIMEOUT",
 			     "D_LOG_FILE_APPEND_RANK",
+			     "D_QUOTA_RPCS",
 			     "DAOS_SIGNAL_REGISTER"};
 
 	D_INFO("-- ENVARS: --\n");
@@ -255,6 +256,8 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	return DER_SUCCESS;
 }
 
+#define CRT_QUOTA_RPCS_DEFAULT 64
+
 /* first step init - for initializing crt_gdata */
 static int data_init(int server, crt_init_options_t *opt)
 {
@@ -316,6 +319,9 @@ static int data_init(int server, crt_init_options_t *opt)
 		credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
 		d_getenv_int("CRT_CREDIT_EP_CTX", &credits);
 	}
+
+	crt_gdata.cg_rpc_quota = CRT_QUOTA_RPCS_DEFAULT;
+	d_getenv_int("D_QUOTA_RPCS", &crt_gdata.cg_rpc_quota);
 
 	/* Must be set on the server when using UCX, will not affect OFI */
 	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);

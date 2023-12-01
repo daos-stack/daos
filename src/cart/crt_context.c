@@ -11,6 +11,8 @@
 #include "crt_internal.h"
 
 static void crt_epi_destroy(struct crt_ep_inflight *epi);
+static int context_quotas_init(crt_context_t crt_ctx);
+static int context_quotas_finalize(crt_context_t crt_ctx);
 
 static struct crt_ep_inflight *
 epi_link2ptr(d_list_t *rlink)
@@ -169,7 +171,7 @@ crt_context_init(crt_context_t crt_ctx)
 		D_GOTO(out_binheap_destroy, rc);
 	}
 
-	rc = crt_context_quotas_init(crt_ctx);
+	rc = context_quotas_init(crt_ctx);
 
 	D_GOTO(out, rc);
 
@@ -693,10 +695,17 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
+	rc = context_quotas_finalize(crt_ctx);
+	if (rc) {
+		DL_ERROR(rc, "context_quotas_finalize() failed");
+		if (!force)
+			D_GOTO(out, rc);
+	}
+
 	ctx = crt_ctx;
 	rc = crt_grp_ctx_invalid(ctx, false /* locked */);
 	if (rc) {
-		D_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n", rc);
+		DL_ERROR(rc, "crt_grp_ctx_invalid() failed");
 		if (!force)
 			D_GOTO(out, rc);
 	}
@@ -1189,7 +1198,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 
 	/* check inflight quota. if exceeded, queue this rpc */
 	quota_rc = crt_context_get_quota_resource(rpc_priv->crp_pub.cr_ctx,
-						  CRT_QUOTA_RPC_INFLIGHT);
+						  CRT_QUOTA_RPCS);
 
 	grp_priv = crt_grp_pub2priv(rpc_priv->crp_pub.cr_ep.ep_grp);
 	ep_rank = crt_grp_priv_get_primary_rank(grp_priv,
@@ -1371,7 +1380,7 @@ dispatch_rpc(struct crt_rpc_priv *rpc, bool get_quota) {
 	if (get_quota) {
 		/* No need to worry about rc here, we just released quota earlier */
 		rc = crt_context_get_quota_resource(rpc->crp_pub.cr_ctx,
-						    CRT_QUOTA_RPC_INFLIGHT);
+						    CRT_QUOTA_RPCS);
 		/* TODO: Consider if we need to requeue */
 		if (rc)
 			D_WARN("Quota query failed with rc=%d\n", rc);
@@ -1418,7 +1427,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	if (tmp_rpc != NULL) {
 		dispatch_rpc(tmp_rpc, false);
 	} else {
-		crt_context_put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPC_INFLIGHT);
+		crt_context_put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPCS);
 	}
 
 	crt_context_req_untrack_internal(rpc_priv);
@@ -1961,8 +1970,8 @@ crt_req_force_completion(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 }
 
-int
-crt_context_quotas_init(crt_context_t crt_ctx)
+static int
+context_quotas_init(crt_context_t crt_ctx)
 {
 	struct crt_context	*ctx = crt_ctx;
 	struct crt_quotas	*quotas;
@@ -1975,50 +1984,27 @@ crt_context_quotas_init(crt_context_t crt_ctx)
 
 	quotas = &ctx->cc_quotas;
 
-	if (quotas->enabled) {
-		D_ERROR("Quotas already enabled\n");
-		D_GOTO(out, rc = -DER_ALREADY);
-	}
-
-	quotas->limit[CRT_QUOTA_RPC_ALLOC_SOFT] = 64;
-	quotas->limit[CRT_QUOTA_RPC_ALLOC_HARD] = 512;
-
-	/* TODO: Set based on ep credits */
-	quotas->limit[CRT_QUOTA_RPC_INFLIGHT] = 64;
-
-	quotas->current[CRT_QUOTA_RPC_ALLOC_SOFT] = 0;
-	quotas->current[CRT_QUOTA_RPC_ALLOC_HARD] = 0;
-	quotas->current[CRT_QUOTA_RPC_INFLIGHT] = 0;
-
-	quotas->enabled = true;
+	quotas->limit[CRT_QUOTA_RPCS]   = crt_gdata.cg_rpc_quota;
+	quotas->current[CRT_QUOTA_RPCS] = 0;
+	quotas->enabled[CRT_QUOTA_RPCS] = crt_gdata.cg_rpc_quota > 0 ? true : false;
 out:
 	return rc;
 }
 
-int
-crt_context_quotas_finalize(crt_context_t crt_ctx)
+static int
+context_quotas_finalize(crt_context_t crt_ctx)
 {
 	struct crt_context	*ctx = crt_ctx;
-	struct crt_quotas	*quotas;
-	int			rc = 0;
 
 	if (ctx == NULL) {
 		D_ERROR("NULL context\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		return -DER_INVAL;
 	}
 
-	quotas = &ctx->cc_quotas;
+	for (int i = 0; i < CRT_QUOTA_COUNT; i++)
+		ctx->cc_quotas.enabled[i] = false;
 
-	if (!quotas->enabled) {
-		D_ERROR("Quotas were not enabled\n");
-		D_GOTO(out, rc = -DER_ALREADY);
-	}
-
-	quotas->enabled = false;
-
-out:
-	return rc;
-
+	return DER_SUCCESS;
 }
 
 int
@@ -2089,7 +2075,7 @@ crt_context_get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	}
 
 	/* If quotas not enabled or unlimited quota */
-	if (!ctx->cc_quotas.enabled || ctx->cc_quotas.limit[quota] == 0)
+	if (!ctx->cc_quotas.enabled[quota] || ctx->cc_quotas.limit[quota] == 0)
 		return 0;
 
 	D_MUTEX_LOCK(&ctx->cc_quotas.mutex);
@@ -2123,7 +2109,7 @@ crt_context_put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	}
 
 	/* If quotas not enabled or unlimited quota */
-	if (!ctx->cc_quotas.enabled || ctx->cc_quotas.limit[quota] == 0)
+	if (!ctx->cc_quotas.enabled[quota] || ctx->cc_quotas.limit[quota] == 0)
 		return 0;
 
 	D_MUTEX_LOCK(&ctx->cc_quotas.mutex);
