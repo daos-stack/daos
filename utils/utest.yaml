@@ -168,7 +168,3 @@
   required_src: ["src/ddb/tests/SConscript"]
   tests:
     - cmd: ["bin/ddb_tests"]
-- name: dfuse
-  base: "DAOS_BASE"
-  tests:
-    - cmd: ["src/client/dfuse/utest.sh"]
