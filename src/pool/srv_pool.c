@@ -41,6 +41,20 @@
 #define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED    1
 #define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3
 
+/*
+ * Return the corresponding VOS pool DF version or 0 if pool_global_version is
+ * not supported.
+ */
+uint32_t
+ds_pool_get_vos_pool_df_version(uint32_t pool_global_version)
+{
+	if (pool_global_version >= 3)
+		return VOS_POOL_DF_2_6;
+	else if (pool_global_version == 2)
+		return VOS_POOL_DF_2_4;
+	return 0;
+}
+
 #define DUP_OP_MIN_RDB_SIZE                       (1 << 30)
 
 /* Pool service crt event */
@@ -2832,7 +2846,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 
 	rc = pool_prop_default_copy(prop_dup, prop);
 	if (rc) {
-		DL_ERROR(rc, "daos_prop_default_copy failed.\n");
+		DL_ERROR(rc, "daos_prop_default_copy() failed");
 		D_GOTO(out_tx, rc);
 	}
 
@@ -8259,4 +8273,41 @@ struct cont_svc *
 ds_pool_ps2cs(struct ds_pool_svc *ds_svc)
 {
 	return pool_ds2svc(ds_svc)->ps_cont_svc;
+}
+
+/* Upgrade the VOS pool of a pool service replica (if any). */
+int
+ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool)
+{
+	d_iov_t         id;
+	struct ds_rsvc *rsvc;
+	uint32_t        df_version;
+	int             rc;
+
+	df_version = ds_pool_get_vos_pool_df_version(pool->sp_global_version);
+	if (df_version == 0) {
+		rc = -DER_NO_PERM;
+		DL_ERROR(rc, DF_UUID ": pool global version %u no longer supported",
+			 DP_UUID(pool->sp_uuid), pool->sp_global_version);
+		return rc;
+	}
+
+	d_iov_set(&id, pool->sp_uuid, sizeof(uuid_t));
+	rc = ds_rsvc_lookup(DS_RSVC_CLASS_POOL, &id, &rsvc);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID ": no applicable pool service replica: " DF_RC "\n",
+			DP_UUID(pool->sp_uuid), DP_RC(rc));
+		return 0;
+	}
+
+	rc = rdb_upgrade_vos_pool(rsvc->s_db, df_version);
+	if (rc == 0)
+		D_DEBUG(DB_MD, DF_UUID ": upgraded to or already at %u\n", DP_UUID(pool->sp_uuid),
+			df_version);
+	else
+		DL_ERROR(rc, DF_UUID ": failed to upgrade pool service to global version %u",
+			 DP_UUID(pool->sp_uuid), pool->sp_global_version);
+
+	ds_rsvc_put(rsvc);
+	return rc;
 }

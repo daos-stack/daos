@@ -835,8 +835,6 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 		DP_UUID(pool_child->spc_uuid),
 		dss_get_module_info()->dmi_tgt_id);
 
-	D_ASSERT(d_list_empty(&pool_child->spc_list));
-
 	cont_list = &pool_child->spc_cont_list;
 	while (!d_list_empty(cont_list)) {
 		cont_child = d_list_entry(cont_list->next,
@@ -1601,7 +1599,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		if (ddra == NULL)
 			D_GOTO(err_dtx, rc = -DER_NOMEM);
 
-		ddra->pool = ds_pool_child_get(hdl->sch_cont->sc_pool);
+		ddra->pool = ds_pool_child_lookup(hdl->sch_cont->sc_pool->spc_uuid);
 		uuid_copy(ddra->co_uuid, cont_uuid);
 		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
 				    0, 0, NULL);

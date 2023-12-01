@@ -463,7 +463,7 @@ migrate_pool_tls_create_one(void *data)
 	pool_tls->mpt_executed_ult = 0;
 	pool_tls->mpt_root_hdl = DAOS_HDL_INVAL;
 	pool_tls->mpt_max_eph = arg->max_eph;
-	pool_tls->mpt_pool = pool_child != NULL ? ds_pool_child_get(pool_child) : NULL;
+	pool_tls->mpt_pool = pool_child != NULL ? ds_pool_child_lookup(arg->pool_uuid) : NULL;
 	pool_tls->mpt_new_layout_ver = arg->new_layout_ver;
 	pool_tls->mpt_opc = arg->opc;
 	pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE;
@@ -3719,7 +3719,8 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 		       uuid_t cont_uuid, int tgt_id, uint32_t version, unsigned int generation,
 		       uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
 		       daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
-		       uint32_t new_layout_ver, uint32_t migrate_opc)
+		       uint32_t new_layout_ver, uint32_t migrate_opc,
+		       uint64_t *enqueue_id, uint32_t *max_delay)
 {
 	struct obj_migrate_in	*migrate_in = NULL;
 	struct obj_migrate_out	*migrate_out = NULL;
@@ -3729,6 +3730,7 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 	unsigned int		index;
 	crt_rpc_t		*rpc;
 	int			rc;
+	uint32_t		rpc_timeout = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
 	rc = pool_map_find_target(pool->sp_map, tgt_id, &target);
@@ -3780,6 +3782,8 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 	migrate_in->om_ephs.ca_count = cnt;
 	migrate_in->om_punched_ephs.ca_arrays = punched_ephs;
 	migrate_in->om_punched_ephs.ca_count = cnt;
+	migrate_in->om_comm_in.req_in_enqueue_id = *enqueue_id;
+	crt_req_get_timeout(rpc, &rpc_timeout);
 
 	if (shards) {
 		migrate_in->om_shards.ca_arrays = shards;
@@ -3793,6 +3797,10 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_h
 
 	migrate_out = crt_reply_get(rpc);
 	rc = migrate_out->om_status;
+	if (rc == -DER_OVERLOAD_RETRY) {
+		*enqueue_id = migrate_out->om_comm_out.req_out_enqueue_id;
+		*max_delay = rpc_timeout;
+	}
 out:
 	D_DEBUG(DB_REBUILD, DF_UUID" migrate object: %d\n",
 		DP_UUID(pool->sp_uuid), rc);

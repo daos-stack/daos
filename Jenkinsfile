@@ -20,55 +20,15 @@
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
-void job_status_write() {
-    if (!env.DAOS_STACK_JOB_STATUS_DIR) {
-        return
-    }
-    String jobName = env.JOB_NAME.replace('/', '_')
-    jobName += '_' + env.BUILD_NUMBER
-    String dirName = env.DAOS_STACK_JOB_STATUS_DIR + '/' + jobName + '/'
-
-    String job_status_text = writeYaml data: job_status_internal,
-                                       returnText: true
-
-    // Need to use shell script for creating files that are not
-    // in the workspace.
-    sh label: "Write jenkins_job_status ${dirName}jenkins_result",
-       script: """mkdir -p ${dirName}
-                  echo "${job_status_text}" >> ${dirName}jenkins_result"""
-}
-
-// groovylint-disable-next-line MethodParameterTypeRequired
-void job_status_update(String name=env.STAGE_NAME,
-                       // groovylint-disable-next-line NoDef
-                       def value=currentBuild.currentResult) {
-    String key = name.replace(' ', '_')
-    key = key.replaceAll('[ .]', '_')
-    if (job_status_internal.containsKey(key)) {
-        // groovylint-disable-next-line VariableTypeRequired, NoDef
-        def myStage = job_status_internal[key]
-        if (myStage in Map) {
-            if (value in Map) {
-                value.each { resultKey, data -> myStage[resultKey] = data }
-                return
-            }
-            // Update result with single value
-            myStage['result'] = value
-            return
-        }
-    }
-    // pass through value
-    job_status_internal[key] = value
+// groovylint-disable-next-line MethodParameterTypeRequired, NoDef
+void job_status_update(String name=env.STAGE_NAME, def value=currentBuild.currentResult) {
+    jobStatusUpdate(job_status_internal, name, value)
 }
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
-void job_step_update(def value) {
-    // Wrapper around a pipeline step to obtain a status.
-    if (value == null) {
-        // groovylint-disable-next-line ParameterReassignment
-        value = currentBuild.currentResult
-    }
-    job_status_update(env.STAGE_NAME, value)
+void job_step_update(def value=currentBuild.currentResult) {
+    // job_status_update(env.STAGE_NAME, value)
+    jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
 
 Map nlt_test() {
@@ -169,13 +129,6 @@ String vm9_label(String distro) {
 
 pipeline {
     agent { label 'lightweight' }
-
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
-             /* groovylint-disable-next-line AddEmptyString */
-             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
-    }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
@@ -304,6 +257,9 @@ pipeline {
         booleanParam(name: 'CI_medium_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
+        booleanParam(name: 'CI_medium-md-on-ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium MD on SSD test stage')
         booleanParam(name: 'CI_medium-verbs-provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
@@ -328,6 +284,9 @@ pipeline {
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for the Functional Hardware Medium stage')
+        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
+               defaultValue: 'ci_nvme5',
+               description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
                description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
@@ -1163,100 +1122,75 @@ pipeline {
                 beforeAgent true
                 expression { !skipStage() }
             }
-            parallel {
-                stage('Functional Hardware Medium') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Medium')
-                stage('Functional Hardware Medium Verbs Provider') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Medium Verbs Provider')
-                stage('Functional Hardware Medium UCX Provider') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Medium UCX Provider')
-                stage('Functional Hardware Large') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
-                    }
-                    steps {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_function: 'runTestFunctionalV2'))
-                    }
-                    post {
-                        always {
-                            functionalTestPostV2()
-                            job_status_update()
-                        }
-                    }
-                } // stage('Functional_Hardware_Large')
-            } // parallel
+            steps {
+                script {
+                    parallel(
+                        'Functional Hardware Medium': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium',
+                            pragma_suffix: '-hw-medium',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,-provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            nvme: 'auto',
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium MD on SSD',
+                            pragma_suffix: '-hw-medium-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium',
+                            default_tags: startedByTimer() ?
+                                'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
+                            nvme: 'auto_md_on_ssd',
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Verbs Provider',
+                            pragma_suffix: '-hw-medium-verbs-provider',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            default_nvme: 'auto',
+                            provider: 'ofi+verbs;ofi_rxm',
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium UCX Provider',
+                            pragma_suffix: '-hw-medium-ucx-provider',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,provider',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            default_nvme: 'auto',
+                            provider: 'ucx+dc_x',
+                            run_if_pr: false,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Large': getFunctionalTestStage(
+                            name: 'Functional Hardware Large',
+                            pragma_suffix: '-hw-large',
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,large',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            default_nvme: 'auto',
+                            run_if_pr: true,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        )
+                    )
+                }
+            }
         } // stage('Test Hardware')
         stage('Test Report') {
             parallel {
@@ -1304,7 +1238,7 @@ pipeline {
                                                      'el8-gcc-unit-memcheck',
                                                      'fault-inject-valgrind']
             job_status_update('final_status')
-            job_status_write()
+            jobStatusWrite(job_status_internal)
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch

@@ -62,6 +62,7 @@ struct ds_pool {
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
 	struct ds_iv_ns		*sp_iv_ns;
+	uint32_t		*sp_states;	/* pool child state array */
 
 	/* structure related to EC aggregate epoch query */
 	d_list_t		sp_ec_ephs_list;
@@ -132,6 +133,13 @@ struct ds_pool_hdl {
 struct ds_pool_hdl *ds_pool_hdl_lookup(const uuid_t uuid);
 void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
 
+enum pool_child_state {
+	POOL_CHILD_NEW	= 0,
+	POOL_CHILD_STARTING,
+	POOL_CHILD_STARTED,
+	POOL_CHILD_STOPPING,
+};
+
 /*
  * Per-thread pool object
  *
@@ -168,6 +176,7 @@ struct ds_pool_child {
 			spc_no_storage:1; /* The pool shard has no storage. */
 
 	uint32_t	spc_reint_mode;
+	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a
@@ -188,9 +197,16 @@ struct ds_pool_svc_op_val {
 	char ov_resvd[60];
 };
 
+/* Find ds_pool_child in cache, hold one reference */
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
-struct ds_pool_child *ds_pool_child_get(struct ds_pool_child *child);
+/* Put the reference held by ds_pool_child_lookup() */
 void ds_pool_child_put(struct ds_pool_child *child);
+/* Start ds_pool child */
+int ds_pool_child_start(uuid_t pool_uuid);
+/* Stop ds_pool_child */
+int ds_pool_child_stop(uuid_t pool_uuid);
+/* Query pool child state */
+uint32_t ds_pool_child_state(struct ds_pool *pool, uint32_t tgt_id);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 enum daos_module_id module, crt_opcode_t opcode,

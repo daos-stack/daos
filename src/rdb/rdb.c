@@ -1136,3 +1136,20 @@ error:
 	rdb_chkptd_stop(db);
 	return rc;
 }
+
+/**
+ * Upgrade the durable format of the VOS pool underlying \a db to
+ * \a df_version.
+ *
+ * Exposing "VOS pool" makes this API function hacky, and probably indicates
+ * that the upgrade model is not quite right.
+ *
+ * \param[in]	db		database
+ * \param[in]	df_version	VOS durable format version (e.g.,
+ *				VOS_POOL_DF_2_6)
+ */
+int
+rdb_upgrade_vos_pool(struct rdb *db, uint32_t df_version)
+{
+	return vos_pool_upgrade(db->d_pool, df_version);
+}

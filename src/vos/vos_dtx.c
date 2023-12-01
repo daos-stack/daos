@@ -10,7 +10,6 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
-#include <libpmem.h>
 #include <daos_srv/vos.h>
 #include <daos/common.h>
 #include "vos_layout.h"

@@ -229,12 +229,16 @@ enum {
 enum {
 	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
 	SCHED_REQ_FL_PERIODIC	= (1 << 1),
+	SCHED_REQ_FL_NO_REJECT	= (1 << 2),
 };
 
 struct sched_req_attr {
 	uuid_t		sra_pool_id;
 	uint32_t	sra_type;
 	uint32_t	sra_flags;
+	uint32_t	sra_timeout;
+	/* Hint for RPC rejection */
+	uint64_t	sra_enqueue_id;
 };
 
 static inline void
@@ -407,6 +411,8 @@ dss_ult_yield(void *arg)
 struct dss_module_ops {
 	/* Get schedule request attributes from RPC */
 	int (*dms_get_req_attr)(crt_rpc_t *rpc, struct sched_req_attr *attr);
+	/* Set schedule request attributes to RPC */
+	int (*dms_set_req)(crt_rpc_t *rpc, struct sched_req_attr *attr);
 };
 
 int srv_profile_stop();
@@ -760,7 +766,8 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_u
 		       uuid_t cont_hdl_uuid, int tgt_id, uint32_t version, unsigned int generation,
 		       uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
 		       daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
-		       uint32_t new_gl_ver, unsigned int migrate_opc);
+		       uint32_t new_gl_ver, unsigned int migrate_opc, uint64_t *enqueue_id,
+		       uint32_t *max_delay);
 int
 ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
 		  uint32_t version, uint32_t generation, uint64_t max_eph, uint32_t opc,

@@ -96,6 +96,31 @@ enum daos_rpc_type {
 	DAOS_REQ_CHK,
 };
 
+struct daos_req_comm_in {
+	/** Request user ID, reserved for NRS */
+	uint32_t	req_in_uid;
+	/** Request group ID, reserved for NRS */
+	uint32_t	req_in_gid;
+	/** Request project ID, reserved for NRS */
+	uint32_t	req_in_projid;
+	/** Enqueue ID of the request on the server side, for server overloaded retry */
+	uint64_t	req_in_enqueue_id;
+	/** Reserved for future extension */
+	uint64_t	req_in_paddings[4];
+	/** Request client address, reserved for NRS */
+	d_string_t	req_in_addr;
+	/** Job ID of the request, reserved for NRS */
+	d_string_t	req_in_jobid;
+};
+
+struct daos_req_comm_out {
+	/** Enqueue ID of the request returned to client, for server overloaded retry */
+	uint64_t	req_out_enqueue_id;
+	/** Reserved for future extension */
+	uint64_t	req_out_paddings[4];
+};
+
+
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
 #define DAOS_TGT0_OFFSET		(2)
 /** The cart context index of target index */
@@ -217,5 +242,16 @@ daos_rpc_from_client(crt_rpc_t *rpc)
 
 int
 daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int *ret_ver);
+
+static inline uint32_t
+daos_rpc_rand_delay(uint32_t max_delay)
+{
+	if (max_delay == 0)
+		return 0;
+	if (max_delay > 5)
+		max_delay -= 5;
+
+	return (d_rand() % max_delay) + 1;
+}
 
 #endif /* __DRPC_API_H__ */
