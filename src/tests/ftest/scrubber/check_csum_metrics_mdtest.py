@@ -5,10 +5,11 @@
 """
 import time
 
+from mdtest_test_base import MdtestBase
 from scrubber_test_base import TestWithScrubber
 
 
-class CheckCsumMetricsMdtest(TestWithScrubber):
+class CheckCsumMetricsMdtest(TestWithScrubber, MdtestBase):
     # pylint: disable=too-many-ancestors
     """Check the checksum metrics with scrubber enabled during MdTest run.
 
@@ -30,14 +31,12 @@ class CheckCsumMetricsMdtest(TestWithScrubber):
         """
         pool_prop = self.params.get("properties", '/run/pool/*')
         cont_prop = self.params.get("properties", '/run/container/*')
-        mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
         initial_metrics = {}
         final_metrics = {}
         # Create a pool and container
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
         initial_metrics = self.scrubber.get_csum_total_metrics()
-        self.run_mdtest_and_check_scruber_status(pool=self.pool, cont=self.container,
-                                                 mdtest_params=mdtest_params)
+        self.execute_mdtest()
         start_time = 0
         finish_time = 0
         poll_status = False

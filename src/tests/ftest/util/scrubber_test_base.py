@@ -6,11 +6,10 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import threading
 
 from ior_test_base import IorTestBase
-from mdtest_test_base import MdtestBase
 from scrubber_utils import ScrubberUtils
 
 
-class TestWithScrubber(IorTestBase, MdtestBase):
+class TestWithScrubber(IorTestBase):
     """Test with scrubber enabled.
 
     :avocado: recursive
@@ -125,43 +124,6 @@ class TestWithScrubber(IorTestBase, MdtestBase):
                                            "create_cont": False,
                                            "fail_on_warning": fail_on_warning})
         # Launch the IOR thread
-        process.start()
-        # Wait for the thread to finish
-        process.join()
-        self.final_metrics = self.scrubber.get_csum_total_metrics()
-        # Just make sure scrubber is working here.
-        status = self.verify_scrubber_metrics_value(self.initial_metrics, self.final_metrics)
-        return status
-
-    def run_mdtest_and_check_scruber_status(self, pool, cont, mdtest_params):
-        """Run mdtest and get scrubber metrics
-
-        Args:
-            pool (object): Pool object
-            cont (object): Container object within the pool.
-            mdtest_params(list): List comprising of different set of mdtest parameters.
-
-        Returns:
-            status(bool) : True (Scrubber working), False(Scrubber not working)
-        """
-        status = False
-        self.initial_metrics = self.scrubber.get_csum_total_metrics()
-        self.pool = pool
-        self.container = cont
-        # Print the pool properties
-        result = self.dmg_cmd.pool_get_prop(self.pool.uuid, "scrub")
-        self.log.info("Pool Properties")
-        self.log.info("===============")
-        self.log.info(result)
-        result = self.daos_cmd.container_get_prop(self.pool.uuid, self.container.uuid)
-        self.log.info("Container Properties")
-        self.log.info("===============")
-        self.log.info(result)
-
-        # Add a thread for these mdtest run
-        process = threading.Thread(target=self.run_mdtest_multiple_variants,
-                                   kwargs={"mdtest_params": mdtest_params})
-        # Launch the mdtest thread
         process.start()
         # Wait for the thread to finish
         process.join()

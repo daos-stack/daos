@@ -9,7 +9,6 @@ from scrubber_test_base import TestWithScrubber
 
 
 class TestScrubberEvictWithSnapshot(TestWithScrubber):
-    # pylint: disable=too-many-ancestors
     """Inject Checksum Fault with scrubber enabled
     and scrubber threshold set to a certain value.
     Snapshot taken while checksum faults are injected.

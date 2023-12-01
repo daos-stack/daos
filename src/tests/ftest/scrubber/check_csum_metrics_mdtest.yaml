@@ -27,19 +27,9 @@ server_config:
       env_vars:
         - DD_MASK=csum,mgmt,md,rebuild
       storage: auto
-  transport_config:
-    allow_insecure: True
-agent_config:
-  transport_config:
-    allow_insecure: True
-dmg:
-  transport_config:
-    allow_insecure: True
 pool:
   size: 50%
   svcn: 4
-  control_method: dmg
-  rebuild_timeout: 120
   pool_query_timeout: 30
   properties: "scrub:timed,scrub-freq:1"
 container:
@@ -54,6 +44,8 @@ mdtest:
   dfs_dir_oclass: RP_2GX
   test_dir: "/"
   manager: "MPICH"
-  mdtest_params:
-    # [api, write, read, branching_factor, num_of_dir_files, depth, flags, IL]
-    - [DFS,   4096, 4096, 1, 100, 100, ' ', False]
+  num_of_files_dirs: 100
+  read_bytes: 4096
+  write_bytes: 4096
+  api: DFS
+  depth: 100
