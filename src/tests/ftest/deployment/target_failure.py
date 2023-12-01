@@ -48,8 +48,7 @@ class TargetFailure(IorTestBase):
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", '/run/ior/client_processes/*')
-        manager.ppn.update(ppn, 'mpirun.ppn')
-        manager.processes.update(None, 'mpirun.np')
+        manager.assign_processes(ppn=ppn)
 
         # Run the command.
         try:
