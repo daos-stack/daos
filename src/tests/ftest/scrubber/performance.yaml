@@ -37,27 +37,28 @@ dmg:
   transport_config:
     allow_insecure: true
 pool:
-  scm_size: 6000000000
-  nvme_size: 54000000000
-  svcn: 4
+  size: 95%
   control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
 container:
   type: POSIX
   control_method: daos
-  oclass: RP_2G1
   properties: "cksum:crc16"
 ior:
   ior_timeout: 60
   client_processes:
-    np_16:
-      np: 2
+    ppn: 32
   test_file: daos:testFile
   dfs_destroy: false
-  flags: "-v -W -w -r -R"
+  write_flags: "-w -C -e -g -G 27 -k -Q 1 -v"
+  read_flags:  "-r -R -C -e -g -G 27 -k -Q 1 -v"
   api: DFS
-  block_size: 100M
-  transfer_size: 1M
-  dfs_class: RP_2G1
-  dfs_dir_class: RP_2GX
+  block_size: 150G
+  dfs_oclass: RP_2G1
+  dfs_dir_oclass: RP_2GX
+  dfs_chunk: 4MiB
+  transfer_size: 4MiB
+  sw_deadline: 30
+  sw_wearout: 1
+  sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
