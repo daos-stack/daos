@@ -283,7 +283,7 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 		}
 	} else if (sc_mode(ctx) == DAOS_SCRUB_MODE_LAZY) {
 		sc_sleep(ctx, 0);
-		while (!ctx->sc_is_idle_fn()) {
+		while (!sc_is_idle(ctx) && sc_mode(ctx) == DAOS_SCRUB_MODE_LAZY) {
 			sc_m_track_busy(ctx);
 			/* Don't actually know how long it will be but wait for 1 second before
 			 * trying again

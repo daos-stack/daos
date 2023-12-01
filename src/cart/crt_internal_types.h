@@ -91,6 +91,10 @@ struct crt_gdata {
 	/** Placeholder for secondary provider data */
 	struct crt_prov_gdata	*cg_prov_gdata_secondary;
 
+	/** Hints to mercury for request post init (ignored for clients) */
+	uint32_t                 cg_post_init;
+	uint32_t                 cg_post_incr;
+
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
 
