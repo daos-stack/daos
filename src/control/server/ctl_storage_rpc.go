@@ -48,15 +48,6 @@ const (
 	mdFsScmBytes uint64 = humanize.MiByte
 )
 
-// Package-local function variables for mocking in unit tests.
-var (
-	// Use to stub bdev scan response in StorageScan() unit tests.
-	scanBdevs       = bdevScan
-	scanEngineBdevs = bdevScanEngine
-)
-
-type scanBdevsFn func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
-
 // newResponseState creates, populates and returns ResponseState.
 func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg string) *ctlpb.ResponseState {
 	rs := new(ctlpb.ResponseState)
@@ -69,6 +60,15 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 
 	return rs
 }
+
+// Package-local function variables for mocking in unit tests.
+var (
+	// Use to stub bdev scan response in StorageScan() unit tests.
+	scanBdevs       = bdevScan
+	scanEngineBdevs = bdevScanEngine
+)
+
+type scanBdevsFn func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 
 // Convert bdev scan results to protobuf response.
 func bdevScanToProtoResp(scan scanBdevsFn, req storage.BdevScanRequest) (*ctlpb.ScanNvmeResp, error) {
