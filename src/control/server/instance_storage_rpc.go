@@ -245,6 +245,11 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 				nsd.MetaWalSize = c.HealthStats.MetaWalSize
 				nsd.RdbWalSize = c.HealthStats.RdbWalSize
 			}
+			engineRank, err := engine.GetRank()
+			if err != nil {
+				return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
+			}
+			nsd.Rank = engineRank.Uint32()
 			c.SmdDevices = append(c.SmdDevices, nsd)
 		}
 	}
