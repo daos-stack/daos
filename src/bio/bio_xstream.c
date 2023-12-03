@@ -958,8 +958,8 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 
 	D_ASSERT(!is_server_started());
 	if (spdk_bdev_first() == NULL) {
-		D_ERROR("No SPDK bdevs found!");
-		rc = -DER_NONEXIST;
+		D_ERROR("No SPDK bdevs found!\n");
+		return -DER_NONEXIST;
 	}
 
 	for (bdev = spdk_bdev_first(); bdev != NULL; bdev = spdk_bdev_next(bdev)) {
