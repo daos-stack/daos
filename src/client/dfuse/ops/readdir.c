@@ -788,11 +788,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	char                         *reply_buff = NULL;
 	int                           rc         = EIO;
 
-	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readdir_number, 1) == 0,
-		  "Multiple readdir per handle");
-
-	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_ie->ie_readdir_number, 1) == 0,
-		  "Multiple readdir per inode");
+	D_MUTEX_LOCK(&oh->doh_ie->ie_lock);
 
 	/* Handle the EOD case, the kernel will keep reading until it receives zero replies so
 	 * reply early in this case.
@@ -822,6 +818,8 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 out:
 	atomic_fetch_sub_relaxed(&oh->doh_readdir_number, 1);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readdir_number, 1);
+
+	D_MUTEX_UNLOCK(&oh->doh_ie->ie_lock);
 
 	if (rc)
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
