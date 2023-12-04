@@ -821,10 +821,7 @@ select_svc_ranks(int svc_rf, const d_rank_list_t *target_addrs, int ndomains,
 		return rc;
 
 	/* Shuffle the target ranks to avoid overloading any particular ranks. */
-	/*
-	 * DAOS-9177: Temporarily disable shuffle to give us more time to stabilize tests.
-	 */
-	/*daos_rank_list_shuffle(rnd_tgts);*/
+	d_rank_list_shuffle(rnd_tgts);
 
 	/* Determine the number of selectable targets. */
 	selectable = rnd_tgts->rl_nr;
@@ -845,6 +842,8 @@ select_svc_ranks(int svc_rf, const d_rank_list_t *target_addrs, int ndomains,
 		j++;
 	}
 	D_ASSERTF(j == ranks->rl_nr, "%d == %u\n", j, ranks->rl_nr);
+
+	d_rank_list_sort(ranks);
 
 	*ranksp = ranks;
 	rc = 0;
@@ -5940,9 +5939,6 @@ pool_svc_reconf_ult(void *varg)
 	}
 
 	if (rdb_get_ranks(svc->ps_rsvc.s_db, &new) == 0) {
-		d_rank_list_sort(current);
-		d_rank_list_sort(new);
-
 		if (svc->ps_force_notify || !d_rank_list_identical(new, current)) {
 			int rc_tmp;
 
