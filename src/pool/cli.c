@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -484,6 +484,11 @@ warmup(struct dc_pool *pool)
 	int                 shift;
 	struct pool_target *tgts;
 	sem_t               sem;
+	crt_bulk_t          bulk_hdl;
+	void               *bulk_buf;
+	int                 bulk_len = 4096;
+	d_sg_list_t         sgl;
+	d_iov_t             iov;
 	int                 nr;
 	int                 rc = 0;
 
@@ -497,6 +502,26 @@ warmup(struct dc_pool *pool)
 		parsed = true;
 	}
 	if (!enabled) {
+		D_MUTEX_UNLOCK(&warmup_lock);
+		return;
+	}
+
+	D_ALLOC(bulk_buf, bulk_len);
+	if (bulk_buf == NULL) {
+		D_ERROR("Failed to alloc mem\n");
+		D_MUTEX_UNLOCK(&warmup_lock);
+		return;
+	}
+
+	ctx = daos_get_crt_ctx();
+
+	d_iov_set(&iov, bulk_buf, bulk_len);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &iov;
+	rc = crt_bulk_create(ctx, &sgl, CRT_BULK_RW, &bulk_hdl);
+	if (rc < 0) {
+		D_ERROR("Failed to create bulk handle\n");
 		D_MUTEX_UNLOCK(&warmup_lock);
 		return;
 	}
@@ -518,11 +543,11 @@ warmup(struct dc_pool *pool)
 
 	D_DEBUG(DB_TRACE, "Pinging %d targets, shifting at %d\n", nr, shift);
 
-	ctx = daos_get_crt_ctx();
 	for (i = 0; i < nr; i++) {
-		crt_endpoint_t ep;
-		crt_rpc_t     *rpc = NULL;
-		int            idx;
+		crt_endpoint_t			ep;
+		crt_rpc_t			*rpc = NULL;
+		struct pool_tgt_warmup_in	*rpc_in;
+		int				idx;
 
 		idx        = (i + shift) % nr;
 		ep.ep_grp  = pool->dp_sys->sy_group;
@@ -535,6 +560,8 @@ warmup(struct dc_pool *pool)
 			goto exit;
 		}
 		D_ASSERTF(rc == 0, "crt_req_create failed; rc=%d\n", rc);
+		rpc_in = crt_req_get(rpc);
+		rpc_in->tw_bulk = bulk_hdl;
 
 		rc = crt_req_send(rpc, warmup_cb, &sem);
 		if (rc != 0) {
@@ -556,6 +583,8 @@ warmup(struct dc_pool *pool)
 
 exit:
 	(void)sem_destroy(&sem);
+	crt_bulk_free(bulk_hdl);
+	D_FREE(bulk_buf);
 	D_MUTEX_UNLOCK(&warmup_lock);
 }
 
