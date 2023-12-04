@@ -5,11 +5,14 @@ server_config:
   engines_per_host: 1
   engines:
     0:
+      targets: 4
+      env_vars:
+        - DAOS_TARGET_OVERSUBSCRIBE=1
       storage:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 16
+  system_ram_reserved: 2
 pool:
   size: 2G
   control_method: dmg

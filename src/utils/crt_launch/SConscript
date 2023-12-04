@@ -1,8 +1,3 @@
-#!python
-# (C) Copyright 2016-2021 Intel Corporation.
-#
-# SPDX-License-Identifier: BSD-2-Clause-Patent
-#
 """Build crt_launch"""
 
 CRT_LAUNCH = 'crt_launch.c'
@@ -10,14 +5,14 @@ CRT_LAUNCH = 'crt_launch.c'
 
 def scons():
     """scons function"""
-    Import('env', 'prereqs')
+    Import('env')
 
     tenv = env.Clone()
 
     libs = ['dpar', 'cart', 'gurt', 'pthread', 'm']
 
     tenv.AppendUnique(LIBS=libs)
-    prereqs.require(tenv, 'mercury')
+    tenv.require('mercury')
     tenv.AppendUnique(FLAGS='-pthread')
 
     crt_launch = tenv.d_program(CRT_LAUNCH, LIBS=libs)

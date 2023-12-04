@@ -65,7 +65,6 @@ def build_client_libs_shared(env, prereqs):
         il_obj += ilenv.SharedObject(os.path.join('il', src), SHOBJPREFIX='s_')
 
     pil4dfsenv = env.Clone()
-    pil4dfsenv.AppendUnique(CFLAGS='-Wno-error=nonnull-compare')
     if '-fvisibility=hidden' in pil4dfsenv['CFLAGS']:
         pil4dfsenv['CFLAGS'].remove('-fvisibility=hidden')
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
@@ -160,13 +159,7 @@ def configure_fuse(cenv):
         return
 
     check = Configure(cenv,
-                      custom_tests={'CheckStructMember': check_struct_member,
-                                    'CheckFuseIoctl': check_ioctl_def})
-
-    if check.CheckStructMember('#include <fuse3/fuse.h>',
-                               'struct fuse_file_info',
-                               'cache_readdir'):
-        cenv.AppendUnique(CPPDEFINES={'HAVE_CACHE_READDIR': '1'})
+                      custom_tests={'CheckFuseIoctl': check_ioctl_def})
 
     if check.CheckFuseIoctl('unsigned int'):
         pass

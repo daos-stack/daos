@@ -15,9 +15,9 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 4
+  system_ram_reserved: 1
 pool:
-  scm_size: 1G
+  scm_size: 5G
   control_method: dmg
 snapshot:
   dkey: "dkey"

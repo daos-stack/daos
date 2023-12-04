@@ -3,7 +3,7 @@
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     libs = ['daos_common', 'gurt', 'protobuf-c']
     sources = ['drpc_test.c', 'drpc_test.pb-c.c']
@@ -12,7 +12,7 @@ def scons():
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
     denv.AppendUnique(CPPDEFINES=['TEST'])
 
-    prereqs.require(denv, 'protobufc')
+    denv.require('protobufc')
 
     drpc_test = denv.d_program('drpc_test', sources, LIBS=libs)
     env.Install('$PREFIX/bin/', drpc_test)

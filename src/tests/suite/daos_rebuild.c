@@ -1089,7 +1089,7 @@ rebuild_multiple_failures(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, OBJ_NR);
 
-	/* Remove this inflight IO temporarily XXX */
+	/* Remove this in-flight IO temporarily XXX */
 	arg->rebuild_cb = rebuild_io_cb;
 	arg->rebuild_cb_arg = cb_arg_oids;
 	/* Disable data validation because of DAOS-2915. */

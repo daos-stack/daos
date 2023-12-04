@@ -3,13 +3,13 @@
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs')
+    Import('denv')
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common_pmem', 'uuid', 'abt', 'gurt']
     tenv = denv.Clone()
 
-    prereqs.require(tenv, 'argobots')
+    tenv.require('argobots')
 
     tenv.AppendUnique(LIBPATH=[Dir('..')])
     smd_ut = tenv.d_test_program('smd_ut.c', LIBS=libraries)

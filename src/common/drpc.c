@@ -1,12 +1,11 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <daos/common.h>
 #include <daos/drpc.h>
-#include <daos/drpc.pb-c.h>
 #include <daos_errno.h>
 
 #include <stdlib.h>
@@ -275,26 +274,6 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
 	return 0;
 }
 
-static struct unixcomm *
-unixcomm_accept(struct unixcomm *listener)
-{
-	struct unixcomm *comm;
-
-	D_ALLOC_PTR(comm);
-	if (comm == NULL)
-		return NULL;
-
-	comm->fd = accept(listener->fd, NULL, NULL);
-	if (comm->fd < 0) {
-		D_ERROR("Failed to accept connection on listener fd %d, "
-			"errno=%d\n", listener->fd, errno);
-		D_FREE(comm);
-		return NULL;
-	}
-
-	return comm;
-}
-
 static int
 unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 		ssize_t *sent)
@@ -538,34 +517,46 @@ drpc_is_valid_listener(struct drpc *ctx)
  * Wait for a client to connect to a listening drpc context, and return the
  * context for the client's session.
  *
- * \param	ctx	drpc context created by drpc_listen()
+ * \param[in]	ctx	drpc context created by drpc_listen()
+ * \param[out]  drpc    New drpc context;
  *
- * \return	new drpc context for the accepted client session, or
- *			NULL if failed to get one
+ * \return		daos errno
  */
-struct drpc *
-drpc_accept(struct drpc *listener_ctx)
+int
+drpc_accept(struct drpc *listener_ctx, struct drpc **drpc)
 {
 	struct drpc	*session_ctx;
 	struct unixcomm	*comm;
 
 	if (!drpc_is_valid_listener(listener_ctx)) {
 		D_ERROR("dRPC context is not a listener\n");
-		return NULL;
+		return -DER_INVAL;
 	}
 
 	D_ALLOC_PTR(session_ctx);
 	if (session_ctx == NULL)
-		return NULL;
+		return -DER_NOMEM;
 
-	comm = unixcomm_accept(listener_ctx->comm);
+	D_ALLOC_PTR(comm);
 	if (comm == NULL) {
 		D_FREE(session_ctx);
-		return NULL;
+		return -DER_NOMEM;
+	}
+
+	comm->fd = accept(listener_ctx->comm->fd, NULL, NULL);
+	if (comm->fd < 0) {
+		int rc = daos_errno2der(errno);
+
+		DL_ERROR(rc, "Failed to accept connection on listener fd %d",
+			 listener_ctx->comm->fd);
+		D_FREE(comm);
+		D_FREE(session_ctx);
+		return rc;
 	}
 
 	init_drpc_ctx(session_ctx, comm, listener_ctx->handler);
-	return session_ctx;
+	*drpc = session_ctx;
+	return 0;
 }
 
 static int

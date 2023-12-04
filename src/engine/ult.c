@@ -329,7 +329,8 @@ sched_ult2xs(int xs_type, int tgt_id)
 {
 	uint32_t	xs_id;
 
-	D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
+	if (xs_type == DSS_XS_VOS || xs_type == DSS_XS_OFFLOAD || xs_type == DSS_XS_IOFW)
+		D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
 	switch (xs_type) {
 	case DSS_XS_SELF:
 		return DSS_XS_SELF;
@@ -597,4 +598,15 @@ dss_offload_exec(int (*func)(void *), void *arg)
 	D_ASSERT(info->dmi_xstream->dx_main_xs);
 
 	return dss_ult_execute(func, arg, NULL, NULL, DSS_XS_OFFLOAD, info->dmi_tgt_id, 0);
+}
+
+int
+dss_main_exec(void (*func)(void *), void *arg)
+{
+	struct dss_module_info *info = dss_get_module_info();
+
+	D_ASSERT(info != NULL);
+	D_ASSERT(info->dmi_xstream->dx_main_xs || info->dmi_xs_id == 0);
+
+	return dss_ult_create(func, arg, DSS_XS_SELF, info->dmi_tgt_id, 0, NULL);
 }

@@ -1,3 +1,95 @@
+daos (2.5.100-12) unstable; urgency=medium
+  [ Tomasz Gromadzki ]
+  * Update PMDK to 2.0.0
+    * Remove libpmemblk from dependencies.
+    * Start using BUILD_EXAMPLES=n and BUILD_BENCHMARKS=n instead of patches.
+    * Stop using BUILD_RPMEM=n (removed) and NDCTL_DISABLE=y (invalid).
+    * Point https://github.com/pmem/pmdk as the main PMDK reference source.
+    NOTE: PMDK upgrade to 2.0.0 does not affect any API call used by DAOS.
+          libpmemobj (and libpmem) API stays unchanged.
+
+ -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Fri, 17 Nov 2023 12:52:00 -0400
+
+  [ Jerome Soumagne ]
+  * Bump mercury min version to 2.3.1
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com>  Wed, 15 Nov 2023 10:30:00 -0600
+
+daos (2.5.100-10) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Move verify_perms.py location
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 03 Nov 2023 04:17:00 -0500
+
+daos (2.5.100-9) unstable; urgency=medium
+
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Wed, 23 Aug 2023 15:02:44 -0400
+
+daos (2.5.100-8) unstable; urgency=medium
+
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 08 Aug 2023 10:02:29 -0400
+
+daos (2.5.100-7) unstable; urgency=medium
+
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 07 Jul 2023 16:05:01 -0400
+
+daos (2.5.100-6) unstable; urgency=medium
+  [Michael MacDonald]
+  * Add golang-go as a tests dependency for dfuse/daos_build.py
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com> Thu, 29 Jun 2023 10:10:00 -0400
+
+daos (2.5.100-5) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.10.1-1408.g9524cdb
+
+ -- Li Wei <wei.g.li@intel.com>  Thu, 22 Jun 2023 09:00:00 +0900
+
+daos (2.5.100-4) unstable; urgency=medium
+  [ Mohamad Chaarawi ]
+  * Add pipeline lib
+
+ -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>  Wed, 14 Jun 2023 4:24:00 -0600
+
+daos (2.5.100-3) unstable; urgency=medium
+  [ Wang Shilong ]
+  * Remove lmdb-devel for MD on SSD
+
+ -- Wang Shilong <shilong.wang@intel.com> Wed, 14 Jun 2023 07:58:00 -0600
+
+daos (2.5.100-2) unstable; urgency=medium
+  [ Ryon Jensen ]
+  * Removed unnecessary test files
+
+ -- Ryon Jensen <ryon.jensen@intel.com>  Wed, 07 Jun 2023 10:46:00 -0700
+
+daos (2.5.100-1) unstable; urgency=medium
+    [ Jeff Olivier ]
+    * Bump release to 2.5.100
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Tue, 06 Jun 2023 16:40:00 -0600
+
+daos (2.3.107-7) unstable; urgency=medium
+  [ Jerome Soumagne ]
+  * Remove libfabric pinning and allow for 1.18 builds
+
+ -- Jerome Soumagne <jerome.soumagne@intel.com> Mon,  5 Jun 2023 10:30:00 -0600
+
+daos (2.3.107-6) unstable; urgency=medium
+    [ Jeff Olivier ]
+    * Add lmdb-devel and bio_ut for MD on SSD
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Fri, 26 May 2023 14:40:00 -0600
+
 daos (2.3.107-5) unstable; urgency=medium
     [ Lei Huang ]
     * Add libcapstone-devel to deps of client-tests package

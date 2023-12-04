@@ -5,9 +5,10 @@
 """
 
 import os
+
+from general_utils import percent_change
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
-from general_utils import percent_change
 
 
 class IorInterceptTestBase(IorTestBase):
@@ -57,6 +58,7 @@ class IorInterceptTestBase(IorTestBase):
         # Log some params for debugging.
         server_provider = self.server_managers[0].get_config_value("provider")
         self.log.info("Provider:           %s", server_provider)
+        self.log.info("Library:            %s", libname)
         self.log.info("Servers:            %s", self.hostlist_servers)
         self.log.info("Clients:            %s", self.hostlist_clients)
         self.log.info("PPN:                %s", self.ppn)

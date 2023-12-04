@@ -24,31 +24,28 @@ if [ -n "$repo_files_pr" ]; then
     REPO_FILE_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-do/job/repo-files/job/$branch/$build_number/artifact/"
 fi
 
-id=$(lsb_release -si)
-release=$(lsb_release -sr)
+. /etc/os-release
 # shellcheck disable=SC2034
 EXCLUDE_UPGRADE=mercury,daos,daos-\*
 if rpm -qa | grep mlnx; then
     # packages not to allow upgrading if MLNX OFED is installed
     EXCLUDE_UPGRADE+=,openmpi,\*mlnx\*,\*ucx\*
 fi
-case "$id" in
-    CentOS|Rocky|AlmaLinux|RedHatEnterpriseServer)
-        if [ "${release%%.*}" = 7 ]; then
-            DISTRO_NAME=centos${release%%.*}
+case "$ID_LIKE" in
+    *rhel*)
+        if [ "$VERSION_ID" = "7" ]; then
+            DISTRO_NAME=centos"$VERSION_ID"
             EXCLUDE_UPGRADE+=,fuse
         else
-            DISTRO_NAME=el${release%%.*}
+            DISTRO_NAME=el${VERSION_ID%%.*}
             EXCLUDE_UPGRADE+=,dpdk\*
         fi
         REPOS_DIR=/etc/yum.repos.d
         DISTRO_GENERIC=el
-        # shellcheck disable=SC2034
-        LSB_RELEASE=redhat-lsb-core
         ;;
-    openSUSE)
+    *suse*)
         # shellcheck disable=SC2034
-        DISTRO_NAME=leap${release%%.*}
+        DISTRO_NAME=leap${VERSION_ID%%.*}
         # shellcheck disable=SC2034
         DISTRO_GENERIC=sl
         # shellcheck disable=SC2034

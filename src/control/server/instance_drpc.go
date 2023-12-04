@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,8 +28,8 @@ import (
 )
 
 var (
-	errDRPCNotReady     = errors.New("no dRPC client set (data plane not started?)")
-	errInstanceNotReady = errors.New("instance not ready yet")
+	errDRPCNotReady   = errors.New("no dRPC client set (data plane not started?)")
+	errEngineNotReady = errors.New("engine not ready yet")
 )
 
 func (ei *EngineInstance) setDrpcClient(c drpc.DomainSocketClient) {
@@ -67,8 +67,7 @@ func (ei *EngineInstance) awaitDrpcReady() chan *srvpb.NotifyReadyReq {
 	return ei.drpcReady
 }
 
-// CallDrpc makes the supplied dRPC call via this instance's dRPC client.
-func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
+func (ei *EngineInstance) callDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
 	dc, err := ei.getDrpcClient()
 	if err != nil {
 		return nil, err
@@ -85,6 +84,18 @@ func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body
 	}()
 
 	return makeDrpcCall(ctx, ei.log, dc, method, body)
+}
+
+// CallDrpc makes the supplied dRPC call via this instance's dRPC client.
+func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (*drpc.Response, error) {
+	if !ei.IsStarted() {
+		return nil, FaultDataPlaneNotStarted
+	}
+	if !ei.IsReady() {
+		return nil, errEngineNotReady
+	}
+
+	return ei.callDrpc(ctx, method, body)
 }
 
 // drespToMemberResult converts drpc.Response to system.MemberResult.
@@ -222,7 +233,7 @@ func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevice) (*storage.SmdDevic
 //
 // Query each SmdDevice on each I/O Engine instance for health stats and update existing controller
 // data in ctrlrMap using PCI address key.
-func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage.NvmeController) ([]storage.NvmeController, error) {
+func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage.NvmeController, ms uint64, rs uint64) ([]storage.NvmeController, error) {
 	ctrlrMap := make(map[string]*storage.NvmeController)
 	for idx, ctrlr := range ctrlrs {
 		if _, exists := ctrlrMap[ctrlr.PciAddr]; exists {
@@ -257,8 +268,10 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage
 		if err != nil {
 			return nil, errors.Wrapf(err, "%s: collect smd info", msg)
 		}
+		smdDev.MetaSize = ms
+		smdDev.RdbSize = rs
 
-		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID})
+		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: smdDev.UUID, MetaSize: ms, RdbSize: rs})
 		if err != nil {
 			// Log the error if it indicates non-existent health and the SMD entity has
 			// an abnormal state. Otherwise it is expected that health may be missing.
@@ -274,9 +287,11 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage
 		}
 
 		// Populate space usage for each SMD device from health stats.
-		smdDev.ClusterSize = pbStats.ClusterSize
 		smdDev.TotalBytes = pbStats.TotalBytes
 		smdDev.AvailBytes = pbStats.AvailBytes
+		smdDev.ClusterSize = pbStats.ClusterSize
+		smdDev.MetaWalSize = pbStats.MetaWalSize
+		smdDev.RdbWalSize = pbStats.RdbWalSize
 		msg = fmt.Sprintf("%s: smd usage = %s/%s", msg, humanize.Bytes(smdDev.AvailBytes),
 			humanize.Bytes(smdDev.TotalBytes))
 		ctrlr.UpdateSmd(smdDev)

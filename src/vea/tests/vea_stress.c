@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +24,7 @@ uint64_t pool_capacity		= (1024ULL << 30);	/* 1TB */
 unsigned int cont_per_pool	= 1;
 unsigned int obj_per_cont	= 100;
 unsigned int test_duration	= (2 * 60);		/* 2 mins */
+unsigned int upd_blks_max	= 256;			/* 1MB by default */
 unsigned int rand_seed;
 bool loading_test;					/* test loading pool */
 
@@ -40,7 +41,6 @@ enum {
 #define VS_RSRV_CNT_MAX		10		/* extents */
 #define VS_FREE_CNT_MAX		30		/* extents */
 #define VS_MERGE_CNT_MAX	10		/* extents */
-#define VS_UPD_BLKS_MAX		256		/* 1MB */
 #define VS_AGG_BLKS_MAX		1024		/* 4MB */
 
 struct vs_perf_cntr {
@@ -311,7 +311,7 @@ vs_update(struct vea_stress_pool *vs_pool)
 
 	rsrv_cnt = get_random_count(VS_RSRV_CNT_MAX);
 	for (i = 0; i < rsrv_cnt; i++) {
-		blk_cnt = get_random_count(VS_UPD_BLKS_MAX);
+		blk_cnt = get_random_count(upd_blks_max);
 
 		cur_ts = daos_getutime();
 		rc = vea_reserve(vs_pool->vsp_vsi, blk_cnt, hint, &r_list);
@@ -584,7 +584,7 @@ vs_stop_run(struct vea_stress_pool *vs_pool, int rc)
 		last_print_ts ? now - last_print_ts : 0);
 	last_print_ts = now;
 
-	ret = pmemobj_ctl_get(vs_pool->vsp_umm.umm_pool, "stats.heap.curr_allocated", &heap_bytes);
+	ret = umempobj_get_heapusage(vs_pool->vsp_umm.umm_pool, &heap_bytes);
 	if (ret) {
 		fprintf(stderr, "failed to get heap usage\n");
 		return stop;
@@ -601,10 +601,11 @@ vs_stop_run(struct vea_stress_pool *vs_pool, int rc)
 	}
 
 	fprintf(stdout, "free_blks:["DF_12U64","DF_12U64"] frags_l:"DF_12U64" frags_s:"DF_12U64" "
-		"frags_a:"DF_12U64" r_hint:"DF_12U64" r_large:"DF_12U64" r_small:"DF_12U64"\n",
+		"frags_a:"DF_12U64" frags_bitmap:"DF_12U64" r_hint:"DF_12U64" r_large:"DF_12U64" "
+		"r_small:"DF_12U64" r_bitmap:"DF_12U64"\n",
 		stat.vs_free_persistent, stat.vs_free_transient, stat.vs_frags_large,
-		stat.vs_frags_small, stat.vs_frags_aging, stat.vs_resrv_hint, stat.vs_resrv_large,
-		stat.vs_resrv_small);
+		stat.vs_frags_small, stat.vs_frags_aging, stat.vs_frags_bitmap,
+		stat.vs_resrv_hint, stat.vs_resrv_large, stat.vs_resrv_small, stat.vs_resrv_bitmap);
 
 	return stop;
 }
@@ -724,7 +725,7 @@ vs_teardown_pool(struct vea_stress_pool *vs_pool)
 		vea_unload(vs_pool->vsp_vsi);
 
 	if (vs_pool->vsp_umm.umm_pool != NULL)
-		pmemobj_close(vs_pool->vsp_umm.umm_pool);
+		umempobj_close(vs_pool->vsp_umm.umm_pool);
 
 	umem_fini_txd(&vs_pool->vsp_txd);
 	D_FREE(vs_pool);
@@ -735,13 +736,12 @@ vs_setup_pool(void)
 {
 	struct vea_stress_pool	*vs_pool;
 	struct umem_attr	 uma = { 0 };
-	PMEMoid			 root;
 	void			*root_addr;
 	struct vea_unmap_context unmap_ctxt = { 0 };
 	struct vea_attr		 attr;
 	struct vea_stat		 stat;
 	uint64_t		 load_time;
-	int			 rc, enable_stats = 1;
+	int			 rc;
 
 	D_ALLOC(vs_pool, vs_arg_size());
 	if (vs_pool == NULL) {
@@ -759,29 +759,25 @@ vs_setup_pool(void)
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	if (loading_test) {
-		uma.uma_pool = pmemobj_open(pool_file, "vea_stress");
+		uma.uma_pool = umempobj_open(pool_file, "vea_stress",
+					     UMEMPOBJ_ENABLE_STATS, NULL);
 		if (uma.uma_pool == NULL) {
-			fprintf(stderr, "failed to open pmemobj pool\n");
+			fprintf(stderr, "failed to open pobj pool\n");
 			goto error;
 		}
 	} else {
 		unlink(pool_file);
-		uma.uma_pool = pmemobj_create(pool_file, "vea_stress", heap_size, 0666);
+		uma.uma_pool = umempobj_create(pool_file, "vea_stress",
+				    UMEMPOBJ_ENABLE_STATS, heap_size, 0666, NULL);
 		if (uma.uma_pool == NULL) {
-			fprintf(stderr, "failed to create pmemobj pool\n");
+			fprintf(stderr, "failed to create pobj pool\n");
 			goto error;
 		}
 	}
 
-	rc = pmemobj_ctl_set(uma.uma_pool, "stats.enabled", &enable_stats);
-	if (rc) {
-		fprintf(stderr, "failed to enable pmemobj stats\n");
-		goto error;
-	}
-
-	root = pmemobj_root(uma.uma_pool, vs_root_size());
-	if (OID_IS_NULL(root)) {
-		fprintf(stderr, "failed to get pmemobj pool root\n");
+	root_addr = umempobj_get_rootptr(uma.uma_pool, vs_root_size());
+	if (root_addr == NULL) {
+		fprintf(stderr, "failed to get pobj pool root\n");
 		goto error;
 	}
 
@@ -792,7 +788,6 @@ vs_setup_pool(void)
 	}
 	uma.uma_pool = NULL;
 
-	root_addr = pmemobj_direct(root);
 	vs_pool->vsp_vsd = root_addr;
 	root_addr += sizeof(struct vea_space_df);
 
@@ -836,7 +831,7 @@ vs_setup_pool(void)
 	return vs_pool;
 error:
 	if (uma.uma_pool != NULL)
-		pmemobj_close(uma.uma_pool);
+		umempobj_close(uma.uma_pool);
 	vs_teardown_pool(vs_pool);
 	return NULL;
 }
@@ -879,6 +874,7 @@ vs_init(void)
 
 const char vs_stress_options[] =
 "Available options are:\n"
+"-b <block_nr>		max blocks per update\n"
 "-C <capacity>		pool capacity\n"
 "-c <cont_nr>		container nr\n"
 "-d <duration>		test duration in seconds\n"
@@ -938,6 +934,7 @@ vs_op2str(unsigned int op)
 int main(int argc, char **argv)
 {
 	static struct option long_ops[] = {
+		{ "block_max",	required_argument,	NULL,	'b' },
 		{ "capacity",	required_argument,	NULL,	'C' },
 		{ "cont_nr",	required_argument,	NULL,	'c' },
 		{ "duration",	required_argument,	NULL,	'd' },
@@ -955,8 +952,16 @@ int main(int argc, char **argv)
 
 	rand_seed = (unsigned int)(time(NULL) & 0xFFFFFFFFUL);
 	memset(pool_file, 0, sizeof(pool_file));
-	while ((rc = getopt_long(argc, argv, "C:c:d:f:H:lo:s:h", long_ops, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "b:C:c:d:f:H:lo:s:h", long_ops, NULL)) != -1) {
 		switch (rc) {
+		case 'b':
+			upd_blks_max = strtoull(optarg, &endp, 0);
+			if (*endp != '\0') {
+				printf("invalid update max blocks\n");
+				print_usage();
+				return -1;
+			}
+			break;
 		case 'C':
 			pool_capacity = strtoul(optarg, &endp, 0);
 			pool_capacity = val_unit(pool_capacity, *endp);

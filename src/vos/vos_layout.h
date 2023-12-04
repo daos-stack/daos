@@ -12,7 +12,6 @@
 
 #ifndef _VOS_LAYOUT_H
 #define _VOS_LAYOUT_H
-#include <libpmemobj.h>
 #include <daos/btree.h>
 #include <daos_srv/evtree.h>
 #include <daos_srv/vos_types.h>
@@ -21,15 +20,8 @@
 #include <daos_srv/dtx_srv.h>
 #include "ilog.h"
 
-/**
- * Typed Layout named using Macros from libpmemobj
- * for root object.  We don't need to define the TOIDs for
- * other VOS structures because VOS uses umem_off_t for internal
- * pointers rather than using typed allocations.
- */
-POBJ_LAYOUT_BEGIN(vos_pool_layout);
-POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
-POBJ_LAYOUT_END(vos_pool_layout);
+/** Layout name for vos pool */
+#define VOS_POOL_LAYOUT         "vos_pool_layout"
 
 struct vos_gc_bin_df {
 	/** address of the first(oldest) bag */
@@ -88,7 +80,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				23
+#define POOL_DF_VER_1                           23
 
 /** Individual version specific featuers are assigned to a release specific durable
  * format version number.  This allows us to add multiple features in a release cycle
@@ -99,13 +91,18 @@ enum vos_gc_type {
  */
 
 /** Current durable format version */
-#define POOL_DF_VERSION                         VOS_POOL_DF_2_4
+#define POOL_DF_VERSION                         VOS_POOL_DF_2_6
 
-/** 2.2 features */
+/** 2.2 features.  Until we have an upgrade path for RDB, we need to support more than one old
+ *  version.
+ */
 #define VOS_POOL_FEAT_2_2                       (VOS_POOL_FEAT_AGG_OPT)
 
 /** 2.4 features */
 #define VOS_POOL_FEAT_2_4                       (VOS_POOL_FEAT_CHK | VOS_POOL_FEAT_DYN_ROOT)
+
+/** 2.6 features */
+#define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_EMB_VALUE | VOS_POOL_FEAT_FLAT_DKEY)
 
 /**
  * Durable format for VOS pool
@@ -291,11 +288,13 @@ D_CASSERT(offsetof(struct vos_cont_df, cd_dtx_committed_tail) ==
 /** btree (d/a-key) record bit flags */
 enum vos_krec_bf {
 	/* Array value (evtree) */
-	KREC_BF_EVT			= (1 << 0),
+	KREC_BF_EVT = (1 << 0),
 	/* Single Value or Key (btree) */
-	KREC_BF_BTR			= (1 << 1),
-	/* it's a dkey, otherwise is akey */
-	KREC_BF_DKEY			= (1 << 2),
+	KREC_BF_BTR = (1 << 1),
+	/* it's a dkey, otherwise is akey or single value if KREC_BF_NO_AKEY is set */
+	KREC_BF_DKEY = (1 << 2),
+	/* Value is stored in DKEY */
+	KREC_BF_NO_AKEY = (1 << 3),
 };
 
 /**

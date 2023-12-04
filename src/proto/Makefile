@@ -45,6 +45,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/ctl/storage_scm.pb.go\
 		   common/proto/ctl/ctl.pb.go\
 		   common/proto/ctl/network.pb.go\
+		   common/proto/ctl/support.pb.go\
 		   common/proto/ctl/firmware.pb.go\
 		   common/proto/ctl/ranks.pb.go\
 		   common/proto/srv/srv.pb.go\
@@ -95,16 +96,16 @@ PROTOC_GEN_GO_GRPC := $(GOPATH)/bin/$(notdir $(PROTOC_GEN_GO_GRPC_IMP))
 
 $(PROTOC_GEN_GO_GRPC): $(PROTOC)
 	@echo "Installing gRPC protobuf generator ($(PROTOC_GEN_GO_GRPC_TAG)) for Go..."
-	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) ] &&\
-		cd $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) &&\
-		git checkout master || true
-	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_PKG) ] &&\
-		cd $(GOPATH)/src/$(PROTOC_GEN_GO_PKG) &&\
-		git checkout master || true
-	go get -u $(PROTOC_GEN_GO_GRPC_IMP) &&\
-	cd $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) &&\
-	git checkout $(PROTOC_GEN_GO_GRPC_TAG) &&\
-	go install $(PROTOC_GEN_GO_GRPC_IMP)
+#	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) ] &&\
+#		cd $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) &&\
+#		git checkout master || true
+#	[ -d $(GOPATH)/src/$(PROTOC_GEN_GO_PKG) ] &&\
+#		cd $(GOPATH)/src/$(PROTOC_GEN_GO_PKG) &&\
+#		git checkout master || true
+#	go get -u $(PROTOC_GEN_GO_GRPC_IMP) &&\
+#	cd $(GOPATH)/src/$(PROTOC_GEN_GO_GRPC_IMP) &&\
+#	git checkout $(PROTOC_GEN_GO_GRPC_TAG) &&\
+#	go install $(PROTOC_GEN_GO_GRPC_IMP)
 
 clean-gen:
 	rm -f $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC)

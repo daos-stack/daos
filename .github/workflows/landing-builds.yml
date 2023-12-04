@@ -40,16 +40,16 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:mantic
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:36
+            with: fedora:38
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.4
+            with: opensuse/leap:15.5
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -91,7 +91,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:mantic
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -150,16 +150,16 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:mantic
           - distro: rocky
             base: el.9
             with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:36
+            with: fedora:38
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.4
+            with: opensuse/leap:15.5
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -222,7 +222,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma.8, alma.9, rocky.8]
+        distro: [alma.8, alma.9, rocky.8, ubuntu]
         include:
           - distro: alma.8
             base: el.8
@@ -233,6 +233,9 @@ jobs:
           - distro: rocky.8
             base: el.8
             with: rockylinux/rockylinux:8
+          - distro: ubuntu
+            base: ubuntu
+            with: ubuntu:22.04
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -297,10 +300,11 @@ jobs:
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
-                 --memcheck no --test cont_copy
+                 --memcheck no --test cont_copy --system-ram-reserved 1
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)
+    if: github.repository == 'daos-stack/daos'
     runs-on: [self-hosted, ARM64]
     strategy:
       fail-fast: false
@@ -310,13 +314,13 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:mantic
           - distro: alma.8
             base: el.8
             with: almalinux:8
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.4
+            with: opensuse/leap:15.5
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
@@ -383,4 +387,4 @@ jobs:
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
-                 --memcheck no --test cont_copy
+                 --memcheck no --test cont_copy --system-ram-reserved 6

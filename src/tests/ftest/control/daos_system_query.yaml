@@ -7,10 +7,12 @@ server_config:
   engines:
     0:
       pinned_numa_node: 0
-      nr_xs_helpers: 1
+      targets: 4
+      nr_xs_helpers: 0
       fabric_iface_port: 31416
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt
       storage: auto
+  system_ram_reserved: 1

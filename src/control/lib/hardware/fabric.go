@@ -1065,7 +1065,7 @@ func WaitFabricReady(ctx context.Context, log logging.Logger, params WaitFabricR
 func loopFabricReady(log logging.Logger, params WaitFabricReadyParams, ch chan error) {
 	readySet := common.NewStringSet()
 	unusableSet := common.NewStringSet()
-	log.Debug("waiting for fabric interfaces to become ready...")
+	log.Trace("waiting for fabric interfaces to become ready...")
 	for {
 		for _, iface := range params.FabricIfaces {
 			// No need to check again if we marked it ready or unusable

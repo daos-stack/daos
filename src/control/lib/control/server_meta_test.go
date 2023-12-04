@@ -168,9 +168,10 @@ func TestControl_SmdQuery(t *testing.T) {
 							Details: &ctlpb.SmdDevice{
 								TrAddr:   test.MockPCIAddr(1),
 								Uuid:     test.MockUUID(0),
-								TgtIds:   []int32{0},
+								TgtIds:   []int32{1024, 1, 1, 2, 2, 3, 3},
 								DevState: devStateNormal,
 								LedState: ledStateNormal,
+								RoleBits: storage.BdevRoleAll,
 							},
 						},
 					},
@@ -185,6 +186,7 @@ func TestControl_SmdQuery(t *testing.T) {
 								TgtIds:   []int32{0},
 								DevState: devStateFaulty,
 								LedState: ledStateFault,
+								RoleBits: storage.BdevRoleData,
 							},
 						},
 					},
@@ -200,9 +202,13 @@ func TestControl_SmdQuery(t *testing.T) {
 								TrAddr:    test.MockPCIAddr(1),
 								UUID:      test.MockUUID(0),
 								Rank:      ranklist.Rank(0),
-								TargetIDs: []int32{0},
+								TargetIDs: []int32{1, 2, 3},
 								NvmeState: storage.NvmeStateNormal,
 								LedState:  storage.LedStateNormal,
+								Roles: storage.BdevRoles{
+									storage.OptionBits(storage.BdevRoleAll),
+								},
+								HasSysXS: true,
 							},
 							{
 								TrAddr:    test.MockPCIAddr(1),
@@ -211,6 +217,9 @@ func TestControl_SmdQuery(t *testing.T) {
 								TargetIDs: []int32{0},
 								NvmeState: storage.NvmeStateFaulty,
 								LedState:  storage.LedStateFaulty,
+								Roles: storage.BdevRoles{
+									storage.OptionBits(storage.BdevRoleData),
+								},
 							},
 						},
 						Pools: make(map[string][]*SmdPool),
@@ -631,9 +640,10 @@ func TestControl_SmdManage(t *testing.T) {
 						Device: &ctlpb.SmdDevice{
 							TrAddr:   test.MockPCIAddr(1),
 							Uuid:     test.MockUUID(1),
-							TgtIds:   []int32{1, 2, 3},
+							TgtIds:   []int32{1024, 1, 1, 2, 2, 3, 3},
 							LedState: ledStateIdentify,
 							DevState: devStateNormal,
+							RoleBits: storage.BdevRoleAll,
 						},
 					},
 				},
@@ -650,6 +660,10 @@ func TestControl_SmdManage(t *testing.T) {
 								TargetIDs: []int32{1, 2, 3},
 								NvmeState: storage.NvmeStateNormal,
 								LedState:  storage.LedStateIdentify,
+								Roles: storage.BdevRoles{
+									storage.OptionBits(storage.BdevRoleAll),
+								},
+								HasSysXS: true,
 							},
 						},
 					},
@@ -682,7 +696,10 @@ func TestControl_SmdManage(t *testing.T) {
 					Hosts: "host-0",
 					SmdInfo: &SmdInfo{
 						Devices: []*storage.SmdDevice{
-							{TrAddr: test.MockPCIAddr(1)},
+							{
+								TrAddr:    test.MockPCIAddr(1),
+								TargetIDs: []int32{},
+							},
 						},
 					},
 				}),

@@ -11,6 +11,7 @@ on:
 jobs:
   make_release:
     name: Create Release
+    if: github.repository == 'daos-stack/daos'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3

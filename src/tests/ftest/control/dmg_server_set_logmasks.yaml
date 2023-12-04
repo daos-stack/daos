@@ -4,10 +4,14 @@ timeout: 120
 server_config:
   name: daos_server
   engines_per_host: 1
+  system_ram_reserved: 6
   engines:
     0:
+      targets: 4
+      env_vars:
+        - DAOS_TARGET_OVERSUBSCRIBE=1
       storage:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 16
+          scm_size: 4

@@ -47,7 +47,7 @@ type (
 	// SystemProvider defines a set of methods to be implemented by a provider
 	// of SCM-specific system capabilities.
 	SystemProvider interface {
-		Mkfs(fsType, device string, force bool) error
+		Mkfs(system.MkfsReq) error
 		Getfs(device string) (string, error)
 		Stat(string) (os.FileInfo, error)
 		Chmod(string, os.FileMode) error
@@ -317,13 +317,75 @@ func (p *Provider) formatRamdisk(req storage.ScmFormatRequest) (*storage.ScmForm
 	}, nil
 }
 
+func getDistroArgs() []string {
+	distro := system.GetDistribution()
+
+	// use stride option for SCM interleaved mode
+	// disable lazy initialization (hurts perf)
+	// discard is not needed/supported on SCM
+	opts := "stride=512,lazy_itable_init=0,lazy_journal_init=0,nodiscard"
+
+	// enable flex_bg to allow larger contiguous block allocation
+	// disable uninit_bg to initialize everything upfront
+	// disable resize to avoid GDT block allocations
+	// disable extra isize since we really have no use for this
+	feat := "flex_bg,^uninit_bg,^resize_inode,^extra_isize"
+
+	switch {
+	case distro.ID == "centos" && distro.Version.Major < 8:
+		// use strict minimum listed above here since that's
+		// the oldest distribution we support
+	default:
+		// packed_meta_blocks allows to group all data blocks together
+		opts += ",packed_meta_blocks=1"
+		// enable sparse_super2 since 2x superblock copies are enough
+		// disable csum since we have ECC already for SCM
+		// bigalloc is intentionally not used since some kernels don't support it
+		feat += ",sparse_super2,^metadata_csum"
+	}
+
+	return []string{
+		"-E", opts,
+		"-O", feat,
+		// each ext4 group is of size 32767 x 4KB = 128M
+		// pack 128 groups together to increase ability to use huge
+		// pages for a total virtual group size of 16G
+		"-G", "128",
+	}
+}
+
 func (p *Provider) formatDcpm(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
 	if req.Dcpm == nil {
 		return nil, FaultFormatMissingParam
 	}
 
+	opts := []string{
+		// use quiet mode
+		"-q",
+		// use direct i/o to avoid polluting page cache
+		"-D",
+		// use DAOS label
+		"-L", "daos",
+		// don't reserve blocks for super-user
+		"-m", "0",
+		// use largest possible block size
+		"-b", "4096",
+		// don't need large inode, 128B is enough
+		// since we don't use xattr
+		"-I", "128",
+		// reduce the inode per bytes ratio
+		// one inode for 64MiB is more than enough
+		"-i", "67108864",
+	}
+	opts = append(opts, getDistroArgs()...)
+
 	p.log.Debugf("running mkfs.%s %s", dcpmFsType, req.Dcpm.Device)
-	if err := p.sys.Mkfs(dcpmFsType, req.Dcpm.Device, req.Force); err != nil {
+	if err := p.sys.Mkfs(system.MkfsReq{
+		Filesystem: dcpmFsType,
+		Device:     req.Dcpm.Device,
+		Options:    opts,
+		Force:      req.Force,
+	}); err != nil {
 		return nil, errors.Wrapf(err, "failed to format %s", req.Dcpm.Device)
 	}
 

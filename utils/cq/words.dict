@@ -135,7 +135,6 @@ debian
 debuginfo
 defusedxml
 del
-dependances
 deps
 dereference
 dereferencing
@@ -162,6 +161,7 @@ dst
 dsync
 dtx
 eg
+enablement
 endswith
 enospace
 enum
@@ -175,6 +175,7 @@ fchmod
 fcntl
 filename
 filesystem
+findall
 findcmd
 fini
 fio
@@ -197,11 +198,13 @@ groupadd
 groupname
 grp
 hackery
+hexdump
 hfi
 hostfile
 hostlist
 hostname
 hostnames
+https
 hugepage
 hugepages
 hwloc
@@ -232,6 +235,7 @@ junit
 kds
 kv
 kwargs
+launchable
 ldflags
 len
 libaio
@@ -251,6 +255,7 @@ logfile
 logfiles
 logmasks
 lseek
+lsblk
 lspci
 lua
 lustre
@@ -386,7 +391,9 @@ shlex
 simul
 sinfo
 slurm
+slurmd
 slurmctl
+slurmctld
 spdk
 squeue
 src
@@ -435,6 +442,7 @@ testdata
 testFile
 testname
 testrunner
+testsuites
 tgt
 timestamp
 timestamps

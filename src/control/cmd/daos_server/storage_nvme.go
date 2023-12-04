@@ -94,8 +94,8 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 
 	req.DisableVFIO = req.DisableVFIO || cfg.DisableVFIO
 
-	if req.HugePageCount == 0 && cfg.NrHugepages > 0 {
-		req.HugePageCount = cfg.NrHugepages
+	if req.HugepageCount == 0 && cfg.NrHugepages > 0 {
+		req.HugepageCount = cfg.NrHugepages
 	}
 
 	if req.PCIAllowList == "" {
@@ -242,7 +242,7 @@ func (cmd *prepareNVMeCmd) Execute(_ []string) error {
 	cmd.Debugf("executing prepare drives command: %+v", cmd)
 
 	req := storage.BdevPrepareRequest{
-		HugePageCount: cmd.NrHugepages,
+		HugepageCount: cmd.NrHugepages,
 		TargetUser:    cmd.TargetUser,
 		PCIAllowList:  cmd.Args.PCIAllowList,
 		PCIBlockList:  cmd.PCIBlockList,
@@ -286,7 +286,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 	cmd.Debug("Reset locally-attached NVMe storage...")
 
 	cleanReq := storage.BdevPrepareRequest{
-		CleanHugePagesOnly: true,
+		CleanHugepagesOnly: true,
 	}
 
 	msg := "cleanup hugepages before nvme reset"
@@ -294,7 +294,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 	if resp, err := resetBackend(cleanReq); err != nil {
 		cmd.Errorf("%s", errors.Wrap(err, msg))
 	} else {
-		cmd.Debugf("%s: %d removed", msg, resp.NrHugePagesRemoved)
+		cmd.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
 	}
 
 	cfgParam := cmd.config
@@ -305,21 +305,36 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &resetReq); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
-	// As reset nvme backend doesn't use NrHugepages, overwrite any set value with zero.
-	resetReq.HugePageCount = 0
+
+	// Apply request parameter field values required specifically for reset operation.
+	resetReq.HugepageCount = 0
+	resetReq.HugeNodes = ""
+	resetReq.CleanHugepagesOnly = false
+	resetReq.Reset_ = true
 
 	cmd.Debugf("nvme reset request parameters: %+v", resetReq)
 
-	// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
-	//                 controllers (as specified in the server config file) then the backing
-	//                 devices of the unselected VMD controllers will be bound to no driver
-	//                 and therefore inaccessible from both OS and SPDK. Workaround is to run
-	//                 nvme scan --ignore-config to reset driver bindings.
+	resetResp, err := resetBackend(resetReq)
+	if err != nil {
+		return errors.Wrap(err, "nvme reset backend")
+	}
 
-	// Reset NVMe device access.
-	_, err := resetBackend(resetReq)
+	// SPDK-2926: If VMD has been detected, perform an extra SPDK reset (without PCI_ALLOWED)
+	//            to reset dangling NVMe devices left unbound after the DRIVER_OVERRIDE=none
+	//            setup call was used in nvme prepare.
+	if resetResp.VMDPrepared {
+		resetReq.PCIAllowList = ""
+		resetReq.PCIBlockList = ""
+		resetReq.EnableVMD = false // Prevents VMD endpoints being auto populated
 
-	return err
+		cmd.Debugf("vmd second nvme reset request parameters: %+v", resetReq)
+
+		if _, err := resetBackend(resetReq); err != nil {
+			return errors.Wrap(err, "nvme reset backend")
+		}
+	}
+
+	return nil
 }
 
 func (cmd *resetNVMeCmd) Execute(_ []string) error {
@@ -336,7 +351,6 @@ func (cmd *resetNVMeCmd) Execute(_ []string) error {
 		PCIAllowList: cmd.Args.PCIAllowList,
 		PCIBlockList: cmd.PCIBlockList,
 		DisableVFIO:  cmd.DisableVFIO,
-		Reset_:       true,
 	}
 
 	return resetNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
@@ -391,16 +405,8 @@ func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePr
 	cmd.Info(bld.String())
 
 	if !cmd.SkipPrep {
-		// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
-		//                 controllers (as specified in the server config file) then the
-		//                 backing devices of the unselected VMD controllers will be bound
-		//                 to no driver and therefore inaccessible from both OS and SPDK.
-		//                 Workaround is to run nvme scan --ignore-config to reset driver
-		//                 bindings.
-
 		req := storage.BdevPrepareRequest{
 			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
-			Reset_:       true,
 		}
 		if err := resetNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
 			return errors.Wrap(err,

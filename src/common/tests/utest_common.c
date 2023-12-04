@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -55,12 +55,11 @@ utest_tx_add(struct utest_context *utx, void *ptr, size_t size)
 
 int
 utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
-		  struct utest_context **utx)
+		  struct umem_store *store, struct utest_context **utx)
 {
 	struct utest_context	*ctx;
 	struct utest_root	*root;
-	PMEMoid			 root_oid;
-	int			 rc, enabled = 1;
+	int			 rc;
 
 	if (strnlen(name, UTEST_POOL_NAME_MAX + 1) > UTEST_POOL_NAME_MAX)
 		return -DER_INVAL;
@@ -70,9 +69,13 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 		return -DER_NOMEM;
 
 	strcpy(ctx->uc_pool_name, name);
-	ctx->uc_uma.uma_id = UMEM_CLASS_PMEM;
-	ctx->uc_uma.uma_pool = pmemobj_create(name, "utest_pool", pool_size,
-					      0666);
+	if (store)
+		ctx->uc_uma.uma_id = umempobj_backend_type2class_id(store->store_type);
+	else
+		ctx->uc_uma.uma_id = UMEM_CLASS_PMEM;
+
+	ctx->uc_uma.uma_pool = umempobj_create(name, "utest_pool",
+				UMEMPOBJ_ENABLE_STATS, pool_size, 0666, store);
 
 	if (ctx->uc_uma.uma_pool == NULL) {
 		perror("Utest pmem pool couldn't be created");
@@ -80,25 +83,17 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 		goto free_ctx;
 	}
 
-	rc = pmemobj_ctl_set(ctx->uc_uma.uma_pool, "stats.enabled", &enabled);
-	if (rc) {
-		perror("Enable SCM usage statistics failed.");
-		goto free_ctx;
-	}
-
-	root_oid = pmemobj_root(ctx->uc_uma.uma_pool,
+	root = umempobj_get_rootptr(ctx->uc_uma.uma_pool,
 				sizeof(*root) + root_size);
-	if (OID_IS_NULL(root_oid)) {
+	if (root == NULL) {
 		perror("Could not get pmem root");
 		rc = -DER_MISC;
 		goto destroy;
 	}
 
-	ctx->uc_root = root_oid.off;
-
 	umem_class_init(&ctx->uc_uma, &ctx->uc_umm);
 
-	root = umem_off2ptr(&ctx->uc_umm, ctx->uc_root);
+	ctx->uc_root = umem_ptr2off(&ctx->uc_umm, root);
 
 	rc = utest_tx_begin(ctx);
 	if (rc != 0)
@@ -108,7 +103,7 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 	if (rc != 0)
 		goto end;
 
-	root->ur_class = UMEM_CLASS_PMEM;
+	root->ur_class = ctx->uc_umm.umm_id;
 	root->ur_root_size = root_size;
 	root->ur_ref_cnt = 1;
 end:
@@ -119,7 +114,7 @@ end:
 	*utx = ctx;
 	return 0;
 destroy:
-	pmemobj_close(ctx->uc_uma.uma_pool);
+	umempobj_close(ctx->uc_uma.uma_pool);
 	if (remove(ctx->uc_pool_name) != 0)
 		D_ERROR("Failed to remove %s: %s\n", ctx->uc_pool_name, strerror(errno));
 free_ctx:
@@ -207,7 +202,7 @@ end:
 	if (refcnt != 0)
 		return 0;
 
-	pmemobj_close(utx->uc_uma.uma_pool);
+	umempobj_close(utx->uc_uma.uma_pool);
 	if (remove(utx->uc_pool_name) != 0) {
 		D_ERROR("Failed to remove %s: %s\n", utx->uc_pool_name, strerror(errno));
 		rc = -DER_IO;
@@ -289,8 +284,7 @@ utest_get_scm_used_space(struct utest_context *utx,
 
 	um_ins = utest_utx2umm(utx);
 	if (um_ins->umm_id != UMEM_CLASS_VMEM) {
-		rc = pmemobj_ctl_get(um_ins->umm_pool,
-			"stats.heap.curr_allocated",
+		rc = umempobj_get_heapusage(um_ins->umm_pool,
 			used_space);
 	} else {
 		/* VMEM . Just return zero */

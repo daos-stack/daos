@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,8 +31,7 @@ struct led_opts {
 static int
 revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 {
-	struct bio_blobstore	*bbs;
-	unsigned int		 led_state = (unsigned int)CTL__LED_STATE__OFF;
+	struct bio_blobstore    *bbs;
 	int			 rc;
 
 	D_ASSERT(d_bdev);
@@ -55,13 +54,13 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
-	/* Set the LED of the VMD device to OFF state (regardless of any FAULT state) */
-	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__SET,
-			    &led_state, 0);
+	/* Reset the LED of the VMD device once revived */
+	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__RESET,
+			    NULL, 0);
 	if (rc != 0)
-		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
-			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n", DP_UUID(d_bdev->bb_uuid),
-			 DP_RC(rc));
+		/* DER_NOSYS indicates that VMD-LED control is not enabled */
+		DL_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR, rc,
+			  "Reset LED on device:" DF_UUID " failed", DP_UUID(d_bdev->bb_uuid));
 
 	return 0;
 }
@@ -218,13 +217,13 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	d_list_for_each_entry(pool_info, pool_list, spi_link) {
 		bool	found_tgt = false;
 
-		for (i = 0; i < pool_info->spi_tgt_cnt; i++) {
+		for (i = 0; i < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; i++) {
 			/* Skip the targets not assigned to old device */
-			if (!is_tgt_on_dev(old_info, pool_info->spi_tgts[i]))
+			if (!is_tgt_on_dev(old_info, pool_info->spi_tgts[SMD_DEV_TYPE_DATA][i]))
 				continue;
 
 			found_tgt = true;
-			rc = create_one_blob(bs, pool_info->spi_blob_sz,
+			rc = create_one_blob(bs, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
 					     &blob_id);
 			if (rc)
 				goto out;
@@ -241,7 +240,7 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 			d_list_add_tail(&created->bi_link, blob_list);
 
 			/* Replace the blob id in pool info */
-			pool_info->spi_blobs[i] = blob_id;
+			pool_info->spi_blobs[SMD_DEV_TYPE_DATA][i] = blob_id;
 		}
 
 		/*
@@ -325,7 +324,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 		return -DER_BUSY;
 	}
 	/* Avoid re-enter or being destroyed by hot remove callback */
-	new_dev->bb_replacing = true;
+	new_dev->bb_replacing = 1;
 
 	D_INIT_LIST_HEAD(&pool_list);
 	D_INIT_LIST_HEAD(&blob_list);
@@ -355,7 +354,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 
 	/* Replace in-memory bio_bdev */
 	replace_bio_bdev(old_dev, new_dev);
-	new_dev->bb_replacing = false;
+	new_dev->bb_replacing = 0;
 	old_dev = new_dev;
 	new_dev = NULL;
 
@@ -367,7 +366,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	 * is triggered, we'll miss auto reint on the replaced device. It's
 	 * supposed to be fixed once incremental reint is ready.
 	 */
-	old_dev->bb_trigger_reint = true;
+	old_dev->bb_trigger_reint = 1;
 
 	/* Transit BS state to SETUP */
 	D_ASSERT(owner_thread(bbs) != NULL);
@@ -378,7 +377,7 @@ out:
 pool_list_out:
 	free_pool_list(&pool_list);
 	if (new_dev)
-		new_dev->bb_replacing = false;
+		new_dev->bb_replacing = 0;
 	return rc;
 }
 
@@ -633,6 +632,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 			rc = -DER_NOMEM;
 			goto out;
 		}
+		b_info->bdi_dev_roles = d_bdev->bb_roles;
 		if (!d_bdev->bb_removed)
 			b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
 		if (d_bdev->bb_faulty)
@@ -698,20 +698,6 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (opts->finished)
 		return;
 
-	pci_dev_type = spdk_pci_device_get_type(pci_device);
-	if (pci_dev_type == NULL) {
-		D_ERROR("nil pci device type returned\n");
-		opts->status = -DER_MISC;
-		return;
-	}
-
-	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
-		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s), can't manage LEDs\n",
-			pci_dev_type);
-		opts->status = -DER_NOSYS;
-		return;
-	}
-
 	if (!opts->all_devices) {
 		if (spdk_pci_addr_compare(&opts->pci_addr, &pci_device->addr) != 0)
 			return;
@@ -722,6 +708,20 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (rc != 0) {
 		D_ERROR("Failed to format VMD's PCI address (%s)\n", spdk_strerror(-rc));
 		opts->status = -DER_INVAL;
+		return;
+	}
+
+	pci_dev_type = spdk_pci_device_get_type(pci_device);
+	if (pci_dev_type == NULL) {
+		D_ERROR("nil pci device type returned\n");
+		opts->status = -DER_MISC;
+		return;
+	}
+
+	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
+		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s:%s), can't manage LED\n",
+			pci_dev_type, addr_buf);
+		opts->status = -DER_NOSYS;
 		return;
 	}
 
@@ -747,7 +747,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		break;
 	case CTL__LED_ACTION__RESET:
 		/* Reset intercepted earlier in call-stack and converted to set */
-		D_ERROR("Reset action is not supported");
+		D_ERROR("Reset action is not supported\n");
 		opts->status = -DER_INVAL;
 		return;
 	default:
@@ -870,11 +870,6 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 
 	D_ASSERT(is_init_xstream(xs_ctxt));
 
-	if (state == NULL) {
-		D_ERROR("LED state receiver is NULL\n");
-		return -DER_INVAL;
-	}
-
 	/* Init context to be used by led_device_action() */
 	opts.all_devices = false;
 	opts.finished = false;
@@ -889,6 +884,10 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 		break;
 	case CTL__LED_ACTION__SET:
 		opts.action = action;
+		if (state == NULL) {
+			D_ERROR("LED state not set for SET action\n");
+			return -DER_INVAL;
+		}
 		opts.led_state = *state;
 		break;
 	case CTL__LED_ACTION__RESET:
@@ -913,11 +912,18 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	spdk_pci_for_each_device(&opts, led_device_action);
 
 	if (opts.status != 0) {
-		if (opts.status != -DER_NOSYS)
-			D_ERROR("LED %s failed (target state: %s): %s\n", LED_ACTION_NAME(action),
-				LED_STATE_NAME(*state), spdk_strerror(opts.status));
+		if (opts.status != -DER_NOSYS) {
+			if (state != NULL)
+				D_ERROR("LED %s failed (target state: %s): %s\n",
+					LED_ACTION_NAME(action), LED_STATE_NAME(*state),
+					spdk_strerror(opts.status));
+			else
+				D_ERROR("LED %s failed: %s\n", LED_ACTION_NAME(action),
+					spdk_strerror(opts.status));
+		}
 		return opts.status;
 	}
+
 	if (!opts.all_devices && !opts.finished) {
 		D_ERROR("Device could not be found\n");
 		return -DER_NONEXIST;
@@ -927,11 +933,21 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	switch (action) {
 	case CTL__LED_ACTION__SET:
 		if (*state == CTL__LED_STATE__QUICK_BLINK) {
-			/* If identify state has been set, record LED start time on bdevs */
+			/**
+			 * If identify state has been set, record LED start time on bdevs
+			 * to start timer.
+			 */
 			rc = set_timer(xs_ctxt, pci_addr,
 				       (duration != 0) ? d_timeus_secdiff(0) + duration : 0);
 			if (rc != 0) {
 				D_ERROR("Recording LED start time failed (%d)\n", rc);
+				return rc;
+			}
+		} else {
+			/* Clear LED start time to cancel any previously set timers */
+			rc = set_timer(xs_ctxt, pci_addr, 0);
+			if (rc != 0) {
+				D_ERROR("Clearing LED start time failed (%d)\n", rc);
 				return rc;
 			}
 		}
@@ -947,8 +963,13 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	default:
 		break;
 	}
+	if (!opts.all_devices && !opts.finished) {
+		D_ERROR("Device could not be found\n");
+		return -DER_NONEXIST;
+	}
 
-	*state = opts.led_state;
+	if (state != NULL)
+		*state = opts.led_state;
 
 	return 0;
 }
@@ -971,15 +992,15 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 
 	rc = fill_in_traddr(&b_info, d_bdev->bb_name);
 	if (rc) {
-		D_ERROR("Unable to get traddr for device:%s\n", d_bdev->bb_name);
-		return -DER_INVAL;
+		D_DEBUG(DB_MGMT, "Unable to get traddr for device %s\n", d_bdev->bb_name);
+		return -DER_NOSYS;
 	}
 
 	rc = spdk_pci_addr_parse(pci_addr, b_info.bdi_traddr);
 	if (rc != 0) {
-		D_ERROR("Unable to parse PCI address for device %s (%s)\n", b_info.bdi_traddr,
-			spdk_strerror(-rc));
-		rc = -DER_INVAL;
+		D_DEBUG(DB_MGMT, "Unable to parse PCI address for device %s (%s)\n",
+			b_info.bdi_traddr, spdk_strerror(-rc));
+		rc = -DER_NOSYS;
 	}
 
 	D_FREE(b_info.bdi_traddr);

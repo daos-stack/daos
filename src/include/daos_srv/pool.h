@@ -48,6 +48,8 @@ struct ds_pool {
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
+	/* Performance Domain level */
+	uint32_t		sp_perf_domain;
 	uint32_t		sp_global_version;
 	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
@@ -56,6 +58,7 @@ struct ds_pool {
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
 	struct ds_iv_ns		*sp_iv_ns;
+	uint32_t		*sp_states;	/* pool child state array */
 
 	/* structure related to EC aggregate epoch query */
 	d_list_t		sp_ec_ephs_list;
@@ -69,17 +72,17 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t		sp_stopping:1,
-				sp_fetch_hdls:1,
-				sp_disable_rebuild:1,
-				sp_need_discard:1;
+	uint32_t sp_stopping : 1, sp_fetch_hdls : 1, sp_disable_rebuild : 1, sp_need_discard : 1,
+	    sp_checkpoint_props_changed : 1;
 
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
 	uint32_t		sp_rebuild_gen;
 
-	int			sp_reintegrating;
+	int			sp_rebuilding;
+
+	int			sp_discard_status;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
 
@@ -94,6 +97,11 @@ struct ds_pool {
 	uint64_t		sp_scrub_mode;
 	uint64_t		sp_scrub_freq_sec;
 	uint64_t		sp_scrub_thresh;
+	/** WAL checkpointing properties */
+	uint32_t                 sp_checkpoint_mode;
+	uint32_t                 sp_checkpoint_freq;
+	uint32_t                 sp_checkpoint_thresh;
+	uint32_t		 sp_reint_mode;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -121,6 +129,13 @@ struct ds_pool_hdl {
 struct ds_pool_hdl *ds_pool_hdl_lookup(const uuid_t uuid);
 void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
 
+enum pool_child_state {
+	POOL_CHILD_NEW	= 0,
+	POOL_CHILD_STARTING,
+	POOL_CHILD_STARTED,
+	POOL_CHILD_STOPPING,
+};
+
 /*
  * Per-thread pool object
  *
@@ -136,6 +151,7 @@ struct ds_pool_child {
 	struct sched_request	*spc_gc_req;	/* Track GC ULT */
 	struct sched_request	*spc_flush_req;	/* Dedicated VEA flush ULT */
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
+	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
 	d_list_t		spc_cont_list;
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
@@ -152,7 +168,9 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1;
+	uint32_t	spc_discard_done:1;
+	uint32_t	spc_reint_mode;
+	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a
@@ -162,9 +180,27 @@ struct ds_pool_child {
 	void			*spc_metrics[DAOS_NR_MODULE];
 };
 
+struct ds_pool_svc_op_key {
+	uint64_t ok_client_time;
+	uuid_t   ok_client_id;
+	/* TODO: add a (cart) opcode to the key? */
+};
+
+struct ds_pool_svc_op_val {
+	int  ov_rc;
+	char ov_resvd[60];
+};
+
+/* Find ds_pool_child in cache, hold one reference */
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
-struct ds_pool_child *ds_pool_child_get(struct ds_pool_child *child);
+/* Put the reference held by ds_pool_child_lookup() */
 void ds_pool_child_put(struct ds_pool_child *child);
+/* Start ds_pool child */
+int ds_pool_child_start(uuid_t pool_uuid);
+/* Stop ds_pool_child */
+int ds_pool_child_stop(uuid_t pool_uuid);
+/* Query pool child state */
+uint32_t ds_pool_child_state(struct ds_pool *pool, uint32_t tgt_id);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 enum daos_module_id module, crt_opcode_t opcode,
@@ -188,9 +224,10 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
-int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
-			    const d_rank_list_t *target_addrs, int ndomains,
-			    const uint32_t *domains, daos_prop_t *prop, d_rank_list_t **svc_addrs);
+int
+     ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			     d_rank_list_t *target_addrs, int ndomains, uint32_t *domains,
+			     daos_prop_t *prop, d_rank_list_t **svc_addrs);
 int ds_pool_svc_stop(uuid_t pool_uuid);
 int ds_pool_svc_rf_to_nreplicas(int svc_rf);
 int ds_pool_svc_rf_from_nreplicas(int nreplicas);
@@ -205,9 +242,9 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   enum daos_acl_principal_type principal_type,
 			   const char *principal_name);
 
-int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		      daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		      uint32_t *upgrade_layout_ver);
+int dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
+		       d_rank_list_t **ranks, daos_pool_info_t *pool_info,
+		       uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
 int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
 			     uint32_t tgt_idx, daos_target_info_t *ti);
 
@@ -324,6 +361,10 @@ ds_pool_get_version(struct ds_pool *pool)
 	return ver;
 }
 
+int
+ds_start_chkpt_ult(struct ds_pool_child *child);
+void
+ds_stop_chkpt_ult(struct ds_pool_child *child);
 struct rdb_tx;
 int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 			    d_iov_t *cred);

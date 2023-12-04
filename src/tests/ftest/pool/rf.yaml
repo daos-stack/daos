@@ -6,13 +6,13 @@ timeout: 300
 
 server_config:
   engines_per_host: 1
+  system_ram_reserved: 16
   engines:
     0:
       storage:
         0:
           class: ram
           scm_mount: /mnt/daos0
-          scm_size: 16
 
 pool:
   name: daos_server

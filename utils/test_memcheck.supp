@@ -257,6 +257,17 @@
    ...
 }
 {
+   Tcp provider with ofi rxm 2
+   Memcheck:Param
+   sendmsg(msg.msg_iov[2])
+   fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_tsend
+   ...
+}
+{
    par_init mpi or dlopen leak
    Memcheck:Leak
    match-leak-kinds: all
@@ -329,4 +340,46 @@
    ...
    fun:compat_call.constprop.0
    fun:internal_getgrouplist
+}
+{
+   spdk_env_init leak
+   Memcheck:Leak
+   ...
+   fun:spdk_env_init
+}
+{
+   spdk_notify_type_register leak
+   Memcheck:Leak
+   ...
+   fun:spdk_notify_type_register
+}
+{
+   bdev_user_io_getevents invalid read
+   Memcheck:Addr1
+   ...
+   fun:bdev_user_io_getevents
+}
+{
+   bdev_aio_writev param error
+   Memcheck:Param
+   io_submit(PWRITEV(iov[i]))
+   fun:syscall
+   ...
+   fun:bdev_aio_writev
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Param
+   writev(vector[...])
+   fun:writev
+   ...
+   fun:mdb_txn_commit
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Param
+   pwrite64(buf)
+   fun:pwrite
+   ...
+   fun:mdb_txn_commit
 }

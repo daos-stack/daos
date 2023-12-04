@@ -625,7 +625,7 @@ dtx_batched_commit_one(void *arg)
 
 		if ((stat.dtx_committable_count <= DTX_THRESHOLD_COUNT) &&
 		    (stat.dtx_oldest_committable_time == 0 ||
-		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) <
+		     d_hlc_age2sec(stat.dtx_oldest_committable_time) <
 		     DTX_COMMIT_THRESHOLD_AGE))
 			break;
 	}
@@ -690,7 +690,7 @@ dtx_batched_commit(void *arg)
 		    (dtx_batched_ult_max != 0 && tls->dt_batched_ult_cnt < dtx_batched_ult_max) &&
 		    ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
 		     (stat.dtx_oldest_committable_time != 0 &&
-		      dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >=
+		      d_hlc_age2sec(stat.dtx_oldest_committable_time) >=
 		      DTX_COMMIT_THRESHOLD_AGE))) {
 			D_ASSERT(!dbca->dbca_commit_done);
 			sleep_time = 0;
@@ -1114,6 +1114,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh)
 {
 	struct dtx_leader_handle	*dlh;
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_handle		*dth;
 	int				 rc;
 	int				 i;
@@ -1151,10 +1152,12 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		DP_DTI(dti), sub_modification_cnt, dth->dth_ver,
 		DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags, DP_RC(rc));
 
-	if (rc != 0)
+	if (rc != 0) {
 		D_FREE(dlh);
-	else
+	} else {
 		*p_dlh = dlh;
+		d_tm_inc_gauge(tls->dt_dtx_leader_total, 1);
+	}
 
 	return rc;
 }
@@ -1178,6 +1181,17 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 	return dlh->dlh_result;
 };
 
+void
+dtx_entry_put(struct dtx_entry *dte)
+{
+	if (--(dte->dte_refs) == 0) {
+		struct dtx_tls	*tls = dtx_tls_get();
+
+		d_tm_dec_gauge(tls->dt_dtx_entry_total, 1);
+		D_FREE(dte);
+	}
+}
+
 /**
  * Stop the leader thandle.
  *
@@ -1192,6 +1206,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 {
 	struct ds_cont_child		*cont = coh->sch_cont;
 	struct dtx_handle		*dth = &dlh->dlh_handle;
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_entry		*dte;
 	struct dtx_memberships		*mbs;
 	size_t				 size;
@@ -1308,6 +1323,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	dte->dte_ver = dth->dth_ver;
 	dte->dte_refs = 1;
 	dte->dte_mbs = mbs;
+	d_tm_inc_gauge(tls->dt_dtx_entry_total, 1);
 
 	/* Use the new created @dte instead of dth->dth_dte that will be
 	 * released after dtx_leader_end().
@@ -1419,6 +1435,7 @@ out:
 
 	D_FREE(dth->dth_oid_array);
 	D_FREE(dlh);
+	d_tm_dec_gauge(tls->dt_dtx_leader_total, 1);
 
 	return result;
 }
@@ -2076,10 +2093,12 @@ again:
 
 	/*
 	 * NOTE: Ideally, we probably should create ULT for each shard, but for performance
-	 *	 reasons, let's only create one for all remote targets for now.
+	 *	 reasons, let's only create one for all remote targets for now. Moreover,
+	 *	 we assume that func does not require deep stacks to forward the remote
+	 *	 requests (dtx_leader_exec_ops_ult does not execute the local part of func).
 	 */
 	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
-			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
+			    dss_get_module_info()->dmi_tgt_id, 0, NULL);
 	if (rc != 0) {
 		D_ERROR("ult create failed [%u, %u] (2): "DF_RC"\n",
 			dlh->dlh_forward_idx, dlh->dlh_forward_cnt, DP_RC(rc));
@@ -2150,8 +2169,9 @@ exec:
 	/* The ones without DELAY flag will be skipped when scan the targets array. */
 	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 
+	/* See also the dss_ult_create above. */
 	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
-			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
+			    dss_get_module_info()->dmi_tgt_id, 0, NULL);
 	if (rc != 0) {
 		D_ERROR("ult create failed (4): "DF_RC"\n", DP_RC(rc));
 		ABT_future_free(&dlh->dlh_future);

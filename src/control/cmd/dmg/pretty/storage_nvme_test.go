@@ -16,7 +16,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -341,32 +340,12 @@ func TestPretty_PrintNVMetaMap(t *testing.T) {
 	controllerA.SmdDevices = nil
 	controllerB.SmdDevices = nil
 	controllerE.SmdDevices = []*storage.SmdDevice{
-		{
-			UUID:      test.MockUUID(0),
-			TargetIDs: []int32{0, 1, 2},
-			Rank:      0,
-			NvmeState: storage.NvmeStateNormal,
-		},
-		{
-			UUID:      test.MockUUID(1),
-			TargetIDs: []int32{3, 4, 5},
-			Rank:      0,
-			NvmeState: storage.NvmeStateFaulty,
-		},
+		storage.MockSmdDevice(controllerE.PciAddr, 0),
+		storage.MockSmdDevice(controllerE.PciAddr, 1),
 	}
 	controllerF.SmdDevices = []*storage.SmdDevice{
-		{
-			UUID:      test.MockUUID(2),
-			TargetIDs: []int32{6, 7, 8},
-			Rank:      1,
-			NvmeState: storage.NvmeStateNormal,
-		},
-		{
-			UUID:      test.MockUUID(3),
-			TargetIDs: []int32{9, 10, 11},
-			Rank:      1,
-			NvmeState: storage.NvmeStateFaulty,
-		},
+		storage.MockSmdDevice(controllerF.PciAddr, 2),
+		storage.MockSmdDevice(controllerF.PciAddr, 3),
 	}
 	for name, tc := range map[string]struct {
 		hsm         control.HostStorageMap
@@ -428,12 +407,12 @@ host1
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
     UUID:%s [TrAddr:%s]
-      Targets:%v Rank:%d State:%s LED:%s
+      Roles:data,meta,wal Targets:%v Rank:%d State:%s LED:%s
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
     UUID:%s [TrAddr:%s]
-      Targets:%v Rank:%d State:%s LED:%s
+      Roles:data,meta,wal Targets:%v Rank:%d State:%s LED:%s
 
 `,
 				controllerC.PciAddr, controllerC.Model, controllerC.FwRev,
@@ -468,35 +447,39 @@ host1
 -----
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s [TrAddr:]
-      Targets:%v Rank:%d State:%s LED:%s
-    UUID:%s [TrAddr:]
-      Targets:%v Rank:%d State:%s LED:%s
+    UUID:%s [TrAddr:%s]
+      Roles:data,meta,wal Targets:%v Rank:%d State:%s LED:%s
+    UUID:%s [TrAddr:%s]
+      Roles:data,meta,wal Targets:%v Rank:%d State:%s LED:%s
 
 PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
   SMD Devices
-    UUID:%s [TrAddr:]
-      Targets:%v Rank:%d State:%s LED:%s
-    UUID:%s [TrAddr:]
-      Targets:%v Rank:%d State:%s LED:%s
+    UUID:%s [TrAddr:%s]
+      Roles:data,meta,wal Targets:%v Rank:%d State:%s LED:%s
+    UUID:%s [TrAddr:%s]
+      Roles:data,meta,wal Targets:%v Rank:%d State:%s LED:%s
 
 `,
 				controllerE.PciAddr, controllerE.Model, controllerE.FwRev,
 				controllerE.SocketID, humanize.Bytes(controllerE.Capacity()),
-				controllerE.SmdDevices[0].UUID, controllerE.SmdDevices[0].TargetIDs,
-				controllerE.SmdDevices[0].Rank, controllerE.SmdDevices[0].NvmeState.String(),
+				controllerE.SmdDevices[0].UUID, controllerE.PciAddr,
+				controllerE.SmdDevices[0].TargetIDs, controllerE.SmdDevices[0].Rank,
+				controllerE.SmdDevices[0].NvmeState.String(),
 				controllerE.SmdDevices[0].LedState.String(),
-				controllerE.SmdDevices[1].UUID, controllerE.SmdDevices[1].TargetIDs,
-				controllerE.SmdDevices[1].Rank, controllerE.SmdDevices[1].NvmeState.String(),
+				controllerE.SmdDevices[1].UUID, controllerE.PciAddr,
+				controllerE.SmdDevices[1].TargetIDs, controllerE.SmdDevices[1].Rank,
+				controllerE.SmdDevices[1].NvmeState.String(),
 				controllerE.SmdDevices[1].LedState.String(),
 
 				controllerF.PciAddr, controllerF.Model, controllerF.FwRev,
 				controllerF.SocketID, humanize.Bytes(controllerF.Capacity()),
-				controllerF.SmdDevices[0].UUID, controllerF.SmdDevices[0].TargetIDs,
-				controllerF.SmdDevices[0].Rank, controllerF.SmdDevices[0].NvmeState.String(),
+				controllerF.SmdDevices[0].UUID, controllerF.PciAddr,
+				controllerF.SmdDevices[0].TargetIDs, controllerF.SmdDevices[0].Rank,
+				controllerF.SmdDevices[0].NvmeState.String(),
 				controllerF.SmdDevices[0].LedState.String(),
-				controllerF.SmdDevices[1].UUID, controllerF.SmdDevices[1].TargetIDs,
-				controllerF.SmdDevices[1].Rank, controllerF.SmdDevices[1].NvmeState.String(),
+				controllerF.SmdDevices[1].UUID, controllerF.PciAddr,
+				controllerF.SmdDevices[1].TargetIDs, controllerF.SmdDevices[1].Rank,
+				controllerF.SmdDevices[1].NvmeState.String(),
 				controllerF.SmdDevices[1].LedState.String()),
 		},
 	} {

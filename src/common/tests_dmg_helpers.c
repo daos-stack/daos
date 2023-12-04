@@ -523,7 +523,7 @@ dmg_pool_set_prop(const char *dmg_config_file,
 	rc = daos_dmg_json_pipe("pool set-prop", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -678,7 +678,7 @@ dmg_pool_create(const char *dmg_config_file,
 	rc = daos_dmg_json_pipe("pool create", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -744,7 +744,7 @@ dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp
 	rc = daos_dmg_json_pipe("pool destroy", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -790,7 +790,7 @@ dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid,
 	rc = daos_dmg_json_pipe(cmd, dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -860,7 +860,7 @@ dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
 	rc = daos_dmg_json_pipe("pool extend", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -892,7 +892,7 @@ dmg_pool_list(const char *dmg_config_file, const char *group,
 	rc = daos_dmg_json_pipe("pool list", dmg_config_file,
 				NULL, 0, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -1020,7 +1020,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 				NULL, 0, &dmg_out);
 	if (rc != 0) {
 		D_FREE(disk);
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -1113,7 +1113,7 @@ dmg_storage_set_nvme_fault(const char *dmg_config_file,
 	rc = daos_dmg_json_pipe("storage set nvme-faulty ", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg command failed");
+		D_ERROR("dmg command failed\n");
 		goto out_json;
 	}
 
@@ -1154,7 +1154,7 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	rc = daos_dmg_json_pipe("storage query device-health ", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg command failed");
+		D_ERROR("dmg command failed\n");
 		goto out_json;
 	}
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
@@ -1248,7 +1248,7 @@ int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force)
 	rc = daos_dmg_json_pipe("system stop", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0)
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
@@ -1272,7 +1272,7 @@ int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank)
 	rc = daos_dmg_json_pipe("system start", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0)
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);

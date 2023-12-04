@@ -18,7 +18,7 @@ source build/.build_vars.sh
 sudo mkdir -p "${SL_SRC_DIR}"
 sudo mount --bind build "${SL_SRC_DIR}"
 
-test_log_dir="unit_test_logs"
+log_prefix="unit_test"
 
 if [ -n "$BULLSEYE" ]; then
     pushd "${SL_SRC_DIR}/bullseye"
@@ -30,7 +30,7 @@ if [ -n "$BULLSEYE" ]; then
     rm -rf bullseye
     export COVFILE="${SL_SRC_DIR}/test.cov"
     export PATH="/opt/BullseyeCoverage/bin:$PATH"
-    test_log_dir="covc_test_logs"
+    log_prefix="covc_test"
 fi
 
 cd "${SL_SRC_DIR}"
@@ -56,14 +56,21 @@ fi
 sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
 RUN_TEST_VALGRIND=""
 if [ "$WITH_VALGRIND" = "memcheck" ]; then
-    test_log_dir="unit_test_memcheck_logs"
+    log_prefix="unit_test_memcheck"
     RUN_TEST_VALGRIND="--memcheck"
 fi
 VDB_ARG=""
 if [ -b "/dev/vdb" ]; then
     VDB_ARG="--bdev=/dev/vdb"
 fi
+SUDO_ARG="--sudo=no"
+test_log_dir="${log_prefix}_logs"
+if [ "$BDEV_TEST" = "true" ]; then
+    SUDO_ARG="--sudo=only"
+    test_log_dir="${log_prefix}_bdev_logs"
+fi
 
 rm -rf "$test_log_dir"
 
-utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir"
+utils/run_utest.py $RUN_TEST_VALGRIND --no-fail-on-error $VDB_ARG --log_dir="$test_log_dir" \
+                   $SUDO_ARG

@@ -4,13 +4,12 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from performance_test_base import PerformanceTestBase
 from data_mover_test_base import DataMoverTestBase
 from exception_utils import CommandFailure
+from performance_test_base import PerformanceTestBase
 
 
 class BasicCheckout(PerformanceTestBase):
-    # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class wrapping up tests from four
                                different test classes into one. Intent
@@ -96,8 +95,6 @@ class BasicCheckout(PerformanceTestBase):
 
 
 class BasicCheckoutDm(DataMoverTestBase):
-    # pylint: disable=too-few-public-methods
-    # pylint: disable=attribute-defined-outside-init
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class to wrap datamover test to
                                run as part of basic checkout and verify
@@ -113,7 +110,7 @@ class BasicCheckoutDm(DataMoverTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=deployment,datamover,fs_copy,ior,basic_checkout
+        :avocado: tags=deployment,datamover,daos_fs_copy,ior,basic_checkout
         :avocado: tags=BasicCheckoutDm,test_basic_checkout_dm
         """
         # load ior params for dm test

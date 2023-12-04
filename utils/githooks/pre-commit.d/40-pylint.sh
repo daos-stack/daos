@@ -8,12 +8,14 @@ set -ue
 
 echo "Pylint:"
 # shellcheck disable=SC1091
-. utils/githooks/find_base.sh
 
-if [ "$TARGET" = "HEAD" ]; then
-    echo "  Checking against HEAD"
-    git diff HEAD --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
-else
-    echo "  Checking against branch ${TARGET}"
-    git diff "$TARGET"... --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
+
+if [ -f utils/cq/daos_pylint.py ]; then
+    if [ "$TARGET" = "HEAD" ]; then
+            echo "  Checking against HEAD"
+            git diff HEAD --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
+    else
+            echo "  Checking against branch ${TARGET}"
+            git diff "$TARGET"... --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
+    fi
 fi

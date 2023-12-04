@@ -7,6 +7,7 @@ url_to_repo() {
     local url="$1"
 
     local repo=${url#*://}
+    repo="${repo#/}"
     repo="${repo//%/}"
     repo="${repo//\//_}"
 
@@ -67,10 +68,10 @@ disable_gpg_check() {
 }
 
 dump_repos() {
-        for file in "$REPOS_DIR"/*.repo; do
-            echo "---- $file ----"
-            cat "$file"
-        done
+    for file in "$REPOS_DIR"/*.repo; do
+        echo "---- $file ----"
+        cat "$file"
+    done
 }
 
 env > /root/last_run-env.txt
@@ -97,6 +98,10 @@ chmod 700 "${jenkins_ssh}"
 chmod 600 "${jenkins_ssh}"/{authorized_keys,id_rsa*,config}
 chown -R jenkins.jenkins /localhome/jenkins/
 echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
+
+# /scratch is needed on test nodes
+mkdir -p /scratch
+mount wolf-2:/export/scratch /scratch
 
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script

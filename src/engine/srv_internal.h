@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +9,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos/stack_mmap.h>
 #include <gurt/telemetry_common.h>
+#include <gurt/heap.h>
 
 /**
  * Argobots ULT pools for different tasks, NET_POLL & NVME_POLL
@@ -32,6 +33,7 @@ struct sched_stats {
 	struct d_tm_node_t	*ss_sq_len;		/* Sleep queue length */
 	struct d_tm_node_t	*ss_cycle_duration;	/* Cycle duration (ms) */
 	struct d_tm_node_t	*ss_cycle_size;		/* Total ULTs in a cycle */
+	struct d_tm_node_t	*ss_total_reject;	/* Total Rejected requests */
 	uint64_t		 ss_busy_ts;		/* Last busy timestamp (ms) */
 	uint64_t		 ss_watchdog_ts;	/* Last watchdog print ts (ms) */
 	void			*ss_last_unit;		/* Last executed unit */
@@ -41,6 +43,7 @@ struct sched_info {
 	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
 	uint64_t		 si_cur_seq;	/* Current schedule sequence */
 	uint64_t		 si_ult_start;	/* Start time of last executed unit */
+	uint64_t		 si_cur_id;	/* Current sequence ID for incoming RPC */
 	void			*si_ult_func;	/* Function addr of last executed unit */
 	struct sched_stats	 si_stats;	/* Sched stats */
 	d_list_t		 si_idle_list;	/* All unused requests */
@@ -48,10 +51,22 @@ struct sched_info {
 	d_list_t		 si_fifo_list;	/* All IO requests in FIFO */
 	d_list_t		 si_purge_list;	/* Stale sched_pool_info */
 	struct d_hash_table	*si_pool_hash;	/* All sched_pool_info */
-	uint32_t		 si_req_cnt;	/* Total inuse request count */
+	struct d_binheap	 si_heap;	/* All retried RPC */
+	/* Total inuse request count */
+	uint32_t		 si_total_req_cnt;
+	/* Request count for each type of inuse request */
+	uint32_t		 si_req_cnt[SCHED_REQ_MAX];
 	int			 si_sleep_cnt;	/* Sleeping request count */
 	int			 si_wait_cnt;	/* Long wait request count */
+	/* Number of kicked requests for each type in current cycle */
+	uint32_t		 si_kicked_req_cnt[SCHED_REQ_MAX];
 	unsigned int		 si_stop:1;
+};
+
+struct mem_stats {
+	struct d_tm_node_t	*ms_total_usage;	/* Total memory usage (bytes) */
+	struct d_tm_node_t	*ms_mallinfo;		/* memory allocate information */
+	uint64_t		ms_current;
 };
 
 /** Per-xstream configuration data */
@@ -80,6 +95,7 @@ struct dss_xstream {
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
+	struct mem_stats	dx_mem_stats;	/* memory usages stats on this xstream */
 #ifdef ULT_MMAP_STACK
 	/* per-xstream pool/list of free stacks */
 	struct stack_pool	*dx_sp;
@@ -95,6 +111,7 @@ struct engine_metrics {
 	struct d_tm_node_t	*rank_id;
 	struct d_tm_node_t	*dead_rank_events;
 	struct d_tm_node_t	*last_event_time;
+	struct d_tm_node_t	*meminfo;
 };
 
 extern struct engine_metrics dss_engine_metrics;
@@ -139,7 +156,6 @@ int dss_module_load(const char *modname);
 int dss_module_init_all(uint64_t *mod_fac);
 int dss_module_unload(const char *modname);
 void dss_module_unload_all(void);
-int dss_module_setup_all(void);
 int dss_module_cleanup_all(void);
 
 /* srv.c */
@@ -151,6 +167,8 @@ void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
+void dss_mem_total_alloc_track(void *arg, daos_size_t bytes);
+void dss_mem_total_free_track(void *arg, daos_size_t bytes);
 
 /* srv_metrics.c */
 int dss_engine_metrics_init(void);
@@ -212,14 +230,15 @@ void sched_stop(struct dss_xstream *dx);
 static inline bool
 sched_xstream_stopping(void)
 {
-	struct dss_xstream	*dx = dss_current_xstream();
+	struct dss_xstream	*dx;
 	ABT_bool		 state;
 	int			 rc;
 
 	/* ULT creation from main thread which doesn't have dss_xstream */
-	if (dx == NULL)
+	if (dss_tls_get() == NULL)
 		return false;
 
+	dx = dss_current_xstream();
 	rc = ABT_future_test(dx->dx_stopping, &state);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 	return state == ABT_TRUE;
@@ -251,7 +270,8 @@ static inline void
 dss_free_stack_cb(void *arg)
 {
 	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
-	struct dss_xstream *dx = dss_current_xstream();
+	/* main thread doesn't have TLS and XS */
+	struct dss_xstream *dx = dss_tls_get() ? dss_current_xstream() : NULL;
 
 	/* ensure pool where to free stack is from current-XStream/ULT-exiting */
 	if (dx != NULL)
@@ -271,7 +291,11 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 #ifdef ULT_MMAP_STACK
-	struct dss_xstream *cur_dx = dss_current_xstream();
+	bool			 tls_set = dss_tls_get() ? true : false;
+	struct dss_xstream	*cur_dx = NULL;
+
+	if (tls_set)
+		cur_dx = dss_current_xstream();
 
 	/* if possible,stack should be allocated from launching XStream pool */
 	if (cur_dx == NULL)
@@ -338,6 +362,18 @@ dss_xs2tgt(int xs_id)
 		return -1;
 	return (xs_id - dss_sys_xs_nr) /
 	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
+}
+
+static inline bool
+dss_xstream_has_nvme(struct dss_xstream *dx)
+{
+
+	if (dx->dx_main_xs != 0)
+		return true;
+	if (bio_nvme_configured(SMD_DEV_TYPE_META) && dx->dx_xs_id == 0)
+		return true;
+
+	return false;
 }
 
 #endif /* __DAOS_SRV_INTERNAL__ */

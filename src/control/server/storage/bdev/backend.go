@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	hugePageDir         = "/dev/hugepages"
+	hugepageDir         = "/dev/hugepages"
 	spdkHugepagePattern = `spdk_pid([0-9]+)map`
 )
 
@@ -126,9 +126,9 @@ func isPIDActive(pidStr string, stat statFn) (bool, error) {
 	return true, nil
 }
 
-// createHugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
+// createHugepageWalkFunc returns a filepath.WalkFunc that will remove any file whose
 // name begins with prefix and encoded pid is inactive.
-func createHugePageWalkFunc(log logging.Logger, hugePageDir string, stat statFn, remove removeFn, count *uint) filepath.WalkFunc {
+func createHugepageWalkFunc(log logging.Logger, topDir string, stat statFn, remove removeFn, count *uint) filepath.WalkFunc {
 	re := regexp.MustCompile(spdkHugepagePattern)
 
 	return func(path string, info os.FileInfo, err error) error {
@@ -139,7 +139,7 @@ func createHugePageWalkFunc(log logging.Logger, hugePageDir string, stat statFn,
 			return errors.New("nil fileinfo")
 		case info.IsDir():
 			log.Debugf("walk func: dir %s", path)
-			if path == hugePageDir {
+			if path == topDir {
 				return nil
 			}
 			return filepath.SkipDir // skip subdirectories
@@ -167,11 +167,11 @@ func createHugePageWalkFunc(log logging.Logger, hugePageDir string, stat statFn,
 	}
 }
 
-// cleanHugePages removes hugepage files with pathPrefix that are owned by the user with username
-// tgtUsr by processing directory tree with filepath.WalkFunc returned from hugePageWalkFunc.
-func cleanHugePages(log logging.Logger, hugePageDir string) (count uint, _ error) {
-	return count, filepath.Walk(hugePageDir,
-		createHugePageWalkFunc(log, hugePageDir, os.Stat, os.Remove, &count))
+// cleanHugepages removes hugepage files with pathPrefix that are owned by the user with username
+// tgtUsr by processing directory tree with filepath.WalkFunc returned from hugepageWalkFunc.
+func cleanHugepages(log logging.Logger, topDir string) (count uint, _ error) {
+	return count, filepath.Walk(topDir,
+		createHugepageWalkFunc(log, topDir, os.Stat, os.Remove, &count))
 }
 
 func logNUMAStats(log logging.Logger) {
@@ -194,15 +194,15 @@ func logNUMAStats(log logging.Logger) {
 func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
 	resp := &storage.BdevPrepareResponse{}
 
-	if req.CleanHugePagesOnly {
+	if req.CleanHugepagesOnly {
 		// Remove hugepages that were created by a no-longer-active SPDK process. Note that
 		// when running prepare, it's unlikely that any SPDK processes are active as this
 		// is performed prior to starting engines.
-		nrRemoved, err := hpClean(sb.log, hugePageDir)
+		nrRemoved, err := hpClean(sb.log, hugepageDir)
 		if err != nil {
 			return resp, errors.Wrapf(err, "clean spdk hugepages")
 		}
-		resp.NrHugePagesRemoved = nrRemoved
+		resp.NrHugepagesRemoved = nrRemoved
 
 		logNUMAStats(sb.log)
 
@@ -235,23 +235,26 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 }
 
 // reset receives function pointers for external interfaces.
-func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn) error {
+func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn) (*storage.BdevPrepareResponse, error) {
+	resp := &storage.BdevPrepareResponse{}
+
 	// Update request if VMD has been explicitly enabled and there are VMD endpoints configured.
 	if err := updatePrepareRequest(sb.log, &req, vmdDetect); err != nil {
-		return errors.Wrapf(err, "update prepare request")
+		return resp, errors.Wrapf(err, "update prepare request")
 	}
+	resp.VMDPrepared = req.EnableVMD
 
-	return errors.Wrap(sb.script.Reset(&req), "unbinding nvme devices from userspace drivers")
+	return resp, errors.Wrap(sb.script.Reset(&req), "unbinding nvme devices from userspace drivers")
 }
 
 // Reset will perform a lookup on the requested target user to validate existence
 // then reset non-VMD NVMe devices for use by the OS/kernel.
 // If EnableVmd is true in request then attempt to use VMD NVMe devices.
-// If DisableCleanHugePages is false in request then cleanup any leftover hugepages
+// If DisableCleanHugepages is false in request then cleanup any leftover hugepages
 // owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
 // devs specified in bdev_list and bdev_exclude provided in the server config file.
-func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
+func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("spdk backend reset (script call): %+v", req)
 	return sb.reset(req, DetectVMD)
 }
@@ -259,13 +262,13 @@ func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 // Prepare will perform a lookup on the requested target user to validate existence
 // then prepare non-VMD NVMe devices for use with SPDK.
 // If EnableVmd is true in request then attempt to use VMD NVMe devices.
-// If DisableCleanHugePages is false in request then cleanup any leftover hugepages
+// If DisableCleanHugepages is false in request then cleanup any leftover hugepages
 // owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
 // devs specified in bdev_list and bdev_exclude provided in the server config file.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("spdk backend prepare (script call): %+v", req)
-	return sb.prepare(req, DetectVMD, cleanHugePages)
+	return sb.prepare(req, DetectVMD, cleanHugepages)
 }
 
 // groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data

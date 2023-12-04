@@ -102,9 +102,13 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			// no results as rank cannot be read from superblock
 			expResults: []*sharedpb.RankResult{},
 		},
-		"instances stopped": {
+		"instances stopped already": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: -1},
+				&mgmtpb.DaosResp{Status: -1},
+			},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
 				{Rank: 2, State: msStopped},
@@ -413,199 +417,6 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 	}
 }
 
-func TestServer_CtlSvc_PingRanks(t *testing.T) {
-	for name, tc := range map[string]struct {
-		missingSB        bool
-		instancesStopped bool
-		req              *ctlpb.RanksReq
-		drpcRet          error
-		junkResp         bool
-		drpcResps        []proto.Message
-		responseDelay    time.Duration
-		ctxTimeout       time.Duration
-		ctxCancel        time.Duration
-		expResults       []*sharedpb.RankResult
-		expErr           error
-	}{
-		"nil request": {
-			expErr: errors.New("nil request"),
-		},
-		"no ranks specified": {
-			req:    &ctlpb.RanksReq{},
-			expErr: errors.New("no ranks specified in request"),
-		},
-		"missing superblock": {
-			req:       &ctlpb.RanksReq{Ranks: "0-3"},
-			missingSB: true,
-			// no results as rank can't be read from superblock
-			expResults: []*sharedpb.RankResult{},
-		},
-		"instances stopped": {
-			req:              &ctlpb.RanksReq{Ranks: "0-3"},
-			instancesStopped: true,
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msStopped},
-				{Rank: 2, State: msStopped},
-			},
-		},
-		"instances started": {
-			req: &ctlpb.RanksReq{Ranks: "0-3"},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady},
-				{Rank: 2, State: msReady},
-			},
-		},
-		"dRPC resp fails": {
-			// force flag in request triggers dRPC ping
-			req:     &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			drpcRet: errors.New("call failed"),
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
-			},
-		},
-		"dRPC resp junk": {
-			// force flag in request triggers dRPC ping
-			req:      &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			junkResp: true,
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
-			},
-		},
-		"dRPC context timeout": { // dRPC req-resp duration > parent context Timeout
-			// force flag in request triggers dRPC ping
-			req:           &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			responseDelay: 40 * time.Millisecond,
-			ctxTimeout:    10 * time.Millisecond,
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expErr: context.DeadlineExceeded,
-		},
-		"dRPC context cancel": { // dRPC req-resp duration > when parent context is canceled
-			// force flag in request triggers dRPC ping
-			req:           &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			responseDelay: 40 * time.Millisecond,
-			ctxCancel:     10 * time.Millisecond,
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expErr: context.Canceled,
-		},
-		"dRPC unsuccessful call": {
-			// force flag in request triggers dRPC ping
-			req: &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: -1},
-				&mgmtpb.DaosResp{Status: -1},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msErrored, Errored: true},
-				{Rank: 2, State: msErrored, Errored: true},
-			},
-		},
-		"dRPC successful call": {
-			// force flag in request triggers dRPC ping
-			req: &ctlpb.RanksReq{Ranks: "0-3", Force: true},
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady},
-				{Rank: 2, State: msReady},
-			},
-		},
-		"dRPC filtered ranks": {
-			// force flag in request triggers dRPC ping
-			req: &ctlpb.RanksReq{Ranks: "0-1,3", Force: true},
-			drpcResps: []proto.Message{
-				&mgmtpb.DaosResp{Status: 0},
-				&mgmtpb.DaosResp{Status: 0},
-			},
-			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: msReady},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			cfg := config.DefaultServer().WithEngines(
-				engine.MockConfig().WithTargetCount(1),
-				engine.MockConfig().WithTargetCount(1),
-			)
-			svc := mockControlService(t, log, cfg, nil, nil, nil)
-
-			for i, e := range svc.harness.instances {
-				srv := e.(*EngineInstance)
-				if tc.missingSB {
-					srv._superblock = nil
-					continue
-				}
-
-				trc := &engine.TestRunnerConfig{}
-				if !tc.instancesStopped {
-					trc.Running.SetTrue()
-					srv.ready.SetTrue()
-				}
-				srv.runner = engine.NewTestRunner(trc, engine.MockConfig())
-				srv.setIndex(uint32(i))
-
-				srv._superblock.Rank = new(ranklist.Rank)
-				*srv._superblock.Rank = ranklist.Rank(i + 1)
-
-				cfg := new(mockDrpcClientConfig)
-				if tc.drpcRet != nil {
-					cfg.setSendMsgResponse(drpc.Status_FAILURE, nil, nil)
-				} else if tc.junkResp {
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
-				} else if len(tc.drpcResps) > i {
-					rb, _ := proto.Marshal(tc.drpcResps[i])
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
-
-					if tc.responseDelay != time.Duration(0) {
-						cfg.setResponseDelay(tc.responseDelay)
-					}
-				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
-			}
-
-			ctx, outerCancel := context.WithCancel(test.Context(t))
-			t.Cleanup(outerCancel)
-			if tc.ctxTimeout != 0 {
-				inner, cancel := context.WithTimeout(ctx, tc.ctxTimeout)
-				defer cancel()
-				ctx = inner
-			} else if tc.ctxCancel != 0 {
-				inner, cancel := context.WithCancel(ctx)
-				ctx = inner
-				go func() {
-					<-time.After(tc.ctxCancel)
-					cancel()
-				}()
-			}
-
-			gotResp, gotErr := svc.PingRanks(ctx, tc.req)
-			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			// order of results nondeterministic as dPing run async
-			checkUnorderedRankResults(t, tc.expResults, gotResp.Results)
-		})
-	}
-}
-
 func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		missingSB        bool
@@ -874,6 +685,102 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 	}
 }
 
+func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req           ctlpb.SetLogMasksReq
+		cfgMasks      string
+		cfgStreams    string
+		cfgSubsystems string
+		expMasks      string
+		expStreams    string
+		expSubsystems string
+		expErr        error
+	}{
+		"empty masks string in request; reset not set in request": {
+			expErr: errors.New("empty log masks in request"),
+		},
+		"empty masks string in request; no configured log mask": {
+			req: ctlpb.SetLogMasksReq{
+				ResetMasks: true,
+			},
+			expErr: errors.New("empty log masks in config"),
+		},
+		"empty masks string in request; configured log mask": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:      "DEBUG",
+				ResetMasks: true,
+			},
+			cfgMasks: "ERR",
+			expMasks: "ERR",
+		},
+		"masks specified in request": {
+			req: ctlpb.SetLogMasksReq{
+				Masks: "DEBUG",
+			},
+			cfgMasks: "ERR",
+			expMasks: "DBUG",
+		},
+		"all values specified in request": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:      "DEBUG",
+				Streams:    "MGMT",
+				Subsystems: "MISC",
+			},
+			expMasks:   "ERR,MISC=DBUG",
+			expStreams: "MGMT",
+		},
+		"reset all masks; simple": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:           "DEBUG",
+				Streams:         "MGMT",
+				Subsystems:      "MISC",
+				ResetMasks:      true,
+				ResetStreams:    true,
+				ResetSubsystems: true,
+			},
+			cfgMasks:      "ERR",
+			cfgStreams:    "md",
+			cfgSubsystems: "misc",
+			expMasks:      "ERR",
+			expStreams:    "md",
+		},
+		"reset all masks; complex": {
+			req: ctlpb.SetLogMasksReq{
+				ResetMasks:      true,
+				ResetStreams:    true,
+				ResetSubsystems: true,
+			},
+			cfgMasks:   "info,dtx=debug,vos=debug,object=debug",
+			cfgStreams: "io,epc",
+			expMasks:   "INFO,dtx=DBUG,vos=DBUG,object=DBUG",
+			expStreams: "io,epc",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := engine.MockConfig().
+				WithLogMask(tc.cfgMasks).
+				WithLogStreams(tc.cfgStreams).
+				WithLogSubsystems(tc.cfgSubsystems)
+
+			gotErr := updateSetLogMasksReq(cfg, &tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expMasks, tc.req.Masks); diff != "" {
+				t.Fatalf("unexpected masks: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expStreams, tc.req.Streams); diff != "" {
+				t.Fatalf("unexpected streams: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expSubsystems, tc.req.Subsystems); diff != "" {
+				t.Fatalf("unexpected subsystems: %s", diff)
+			}
+		})
+	}
+}
+
 func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		missingRank      bool
@@ -890,19 +797,27 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
-		"empty masks string in request; no configured log mask": {
-			req:    &ctlpb.SetLogMasksReq{},
-			expErr: errors.New("no log_mask set in engine config"),
-		},
 		"empty masks string in request; configured log mask": {
 			cfgLogMask: "DEBUG",
-			req:        &ctlpb.SetLogMasksReq{},
-			expErr:     errors.New("dRPC returned no response"),
+			req: &ctlpb.SetLogMasksReq{
+				ResetMasks: true,
+			},
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					"validate response: dRPC returned no response",
+					"validate response: dRPC returned no response",
+				},
+			},
 		},
 		"instances stopped": {
 			req:              &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
 			instancesStopped: true,
-			expErr:           errors.New("not ready"),
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					FaultDataPlaneNotStarted.Error(),
+					FaultDataPlaneNotStarted.Error(),
+				},
+			},
 		},
 		"dRPC resp fails": {
 			req:     &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -911,7 +826,12 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: 0},
 				&ctlpb.SetLogMasksResp{Status: 0},
 			},
-			expErr: errors.New("bad dRPC response"),
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					"validate response: bad dRPC response status: FAILURE",
+					"validate response: bad dRPC response status: FAILURE",
+				},
+			},
 		},
 		"dRPC resp junk": {
 			req:      &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -925,7 +845,9 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: 0},
 				&ctlpb.SetLogMasksResp{Status: 0},
 			},
-			expResp: &ctlpb.SetLogMasksResp{},
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{"", ""},
+			},
 		},
 		"successful call": {
 			req: &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -933,7 +855,9 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: 0},
 				&ctlpb.SetLogMasksResp{Status: 0},
 			},
-			expResp: &ctlpb.SetLogMasksResp{},
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{"", ""},
+			},
 		},
 		"unsuccessful call": {
 			req: &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -941,7 +865,12 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: -1},
 				&ctlpb.SetLogMasksResp{Status: -1},
 			},
-			expErr: errors.New("DER_UNKNOWN(-1): Unknown error code -1"),
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					"DER_UNKNOWN(-1): Unknown error code -1",
+					"DER_UNKNOWN(-1): Unknown error code -1",
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

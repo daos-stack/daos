@@ -19,6 +19,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
+const msgNoPools = "No pools in system"
+
 func getTierNameText(tierIdx int) string {
 	switch tierIdx {
 	case int(control.StorageMediaTypeScm):
@@ -39,18 +41,19 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	w := txtfmt.NewErrWriter(out)
 
 	// Maintain output compatibility with the `daos pool query` output.
-	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
-		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
+	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d, state=%s\n",
+		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version, pqr.State)
+
 	if pqr.PoolLayoutVer != pqr.UpgradeLayoutVer {
 		fmt.Fprintf(w, "Pool layout out of date (%d < %d) -- see `dmg pool upgrade` for details.\n",
 			pqr.PoolLayoutVer, pqr.UpgradeLayoutVer)
 	}
 	fmt.Fprintln(w, "Pool space info:")
 	if pqr.EnabledRanks != nil {
-		fmt.Fprintf(w, "- Enabled targets: %s\n", pqr.EnabledRanks)
+		fmt.Fprintf(w, "- Enabled ranks: %s\n", pqr.EnabledRanks)
 	}
 	if pqr.DisabledRanks != nil {
-		fmt.Fprintf(w, "- Disabled targets: %s\n", pqr.DisabledRanks)
+		fmt.Fprintf(w, "- Disabled ranks: %s\n", pqr.DisabledRanks)
 	}
 	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
 	if pqr.TierStats != nil {
@@ -184,6 +187,7 @@ func poolListCreateRow(pool *control.Pool, upgrade bool) txtfmt.TableRow {
 			imbalance = pool.Usage[ti].Imbalance
 		}
 	}
+
 	row := txtfmt.TableRow{
 		"Pool":      pool.GetName(),
 		"Size":      fmt.Sprintf("%s", humanize.Bytes(size)),
@@ -207,7 +211,7 @@ func poolListCreateRow(pool *control.Pool, upgrade bool) txtfmt.TableRow {
 
 func printListPoolsResp(out io.Writer, resp *control.ListPoolsResp) error {
 	if len(resp.Pools) == 0 {
-		fmt.Fprintln(out, "no pools in system")
+		fmt.Fprintln(out, msgNoPools)
 		return nil
 	}
 	upgrade := false
@@ -271,6 +275,7 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 		"SvcReps":        svcReps,
 		"Disabled":       fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
 		"UpgradeNeeded?": upgrade,
+		"Rebuild State":  pool.RebuildState,
 	}
 
 	for _, tu := range pool.Usage {
@@ -280,9 +285,9 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 	return row
 }
 
-func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error {
+func printListPoolsRespVerbose(noQuery bool, out io.Writer, resp *control.ListPoolsResp) error {
 	if len(resp.Pools) == 0 {
-		fmt.Fprintln(out, "no pools in system")
+		fmt.Fprintln(out, msgNoPools)
 		return nil
 	}
 
@@ -295,6 +300,10 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 	}
 	titles = append(titles, "Disabled")
 	titles = append(titles, "UpgradeNeeded?")
+
+	if !noQuery {
+		titles = append(titles, "Rebuild State")
+	}
 	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow
@@ -313,7 +322,7 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 // PrintListPoolsResponse generates a human-readable representation of the
 // supplied ListPoolsResp struct and writes it to the supplied io.Writer.
 // Additional columns for pool UUID and service replicas if verbose is set.
-func PrintListPoolsResponse(out, outErr io.Writer, resp *control.ListPoolsResp, verbose bool) error {
+func PrintListPoolsResponse(out, outErr io.Writer, resp *control.ListPoolsResp, verbose bool, noQuery bool) error {
 	warn, err := resp.Validate()
 	if err != nil {
 		return err
@@ -323,7 +332,7 @@ func PrintListPoolsResponse(out, outErr io.Writer, resp *control.ListPoolsResp, 
 	}
 
 	if verbose {
-		return printListPoolsRespVerbose(out, resp)
+		return printListPoolsRespVerbose(noQuery, out, resp)
 	}
 
 	return printListPoolsResp(out, resp)

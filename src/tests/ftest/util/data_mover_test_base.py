@@ -3,24 +3,22 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import ctypes
 # pylint: disable=too-many-lines
 import os
-from os.path import join
 import re
-import ctypes
+from os.path import join
 
-from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
-
+from command_utils_base import BasicParameter, EnvironmentVariables
+from data_mover_utils import (ContClone, DcpCommand, DdeserializeCommand, DserializeCommand,
+                              DsyncCommand, FsCopy, uuid_from_obj)
+from duns_utils import format_path
 from exception_utils import CommandFailure
-from test_utils_container import TestContainer
+from general_utils import create_string_buffer, get_log_file
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from data_mover_utils import DcpCommand, DsyncCommand, FsCopy, ContClone
-from data_mover_utils import DserializeCommand, DdeserializeCommand
-from data_mover_utils import uuid_from_obj
-from duns_utils import format_path
-from general_utils import create_string_buffer, get_log_file
-from command_utils_base import BasicParameter, EnvironmentVariables
+from pydaos.raw import DaosContainer, DaosObj, IORequest, str_to_c_uuid
+from test_utils_container import TestContainer
 
 
 class DataMoverTestBase(IorTestBase, MdtestBase):
@@ -833,7 +831,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Reset params
         self.mdtest_cmd.api.update(None)
         self.mdtest_cmd.test_dir.update(None)
-        self.mdtest_cmd.dfs_pool_uuid.update(None)
+        self.mdtest_cmd.dfs_pool.update(None)
         self.mdtest_cmd.dfs_cont.update(None)
         self.mdtest_cmd.dfs_group.update(None)
 

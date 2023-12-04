@@ -8,6 +8,12 @@ name: clang-format
 # pushing a new git commit so should be optional.
 #
 # Runs in a fedora docker container to get a recent clang-format version.
+#
+# This checks out the tree with the default settings - a merge commit of the PR with the target
+# branch, then it applies git-clang-format which only works against branches, not where branches
+# diverge, and then it removes any changes to auto-generated files.  The result should be something
+# that can be applied to the PR however it may not apply cleanly if there are merge issues with
+# master - although in this case the PR should be merged with the target before landing in any case.
 
 on:
   pull_request:
@@ -19,14 +25,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
       - name: Pull via git
-        run: git fetch origin ${{ github.event.pull_request.base.sha }}
+        run: git fetch origin ${{ github.event.pull_request.base.ref }}
       - name: Run check in docker
         uses: ./.github/actions/clang-format
         with:
-          target: ${{ github.event.pull_request.base.sha }}
+          target: origin/${{ github.event.pull_request.base.ref }}
       - name: Export changes
         uses: actions/upload-artifact@v3
         if: failure()

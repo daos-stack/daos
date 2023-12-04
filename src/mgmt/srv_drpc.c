@@ -115,14 +115,19 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	/* Response status is populated with SUCCESS (0) on init */
+	/** Response status is populated with SUCCESS (0) on init */
 	ctl__set_log_masks_resp__init(&resp);
 
-	/* This assumes req->masks is a null terminated string */
-	d_log_setmasks(req->masks, -1);
+	/**
+	 * Assuming req->masks and req->streams are null terminated strings, update engine log
+	 * masks and debug stream mask.
+	 */
+	d_log_sync_mask_ex(req->masks, req->streams);
+
+	/** Check settings have persisted */
 	d_log_getmasks(retbuf, 0, sizeof(retbuf), 0);
-	D_INFO("Received request to set log masks '%s', masks are now %s\n",
-		req->masks, retbuf);
+	D_INFO("Received request to set log masks '%s' masks are now %s, debug streams (DD_MASK) "
+	       "set to '%s'\n", req->masks, retbuf, req->streams);
 
 	len = ctl__set_log_masks_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
@@ -155,9 +160,10 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to set rank to %u\n", req->rank);
+	D_INFO("Received request to set rank to %u and map_version to %u\n", req->rank,
+	       req->map_version);
 
-	rc = crt_rank_self_set(req->rank);
+	rc = crt_rank_self_set(req->rank, req->map_version);
 	if (rc != 0)
 		D_ERROR("Failed to set self rank %u: "DF_RC"\n", req->rank,
 			DP_RC(rc));
@@ -465,11 +471,10 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	rc = uuid_parse(req->uuid, pool_uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->uuid,
-			DP_RC(rc));
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->uuid, pool_uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
@@ -480,19 +485,19 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (req->n_properties > 0) {
 		prop = daos_prop_merge(base_props, req_props);
-		daos_prop_free(req_props);
-		daos_prop_free(base_props);
 		if (prop == NULL) {
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 	} else {
 		prop = base_props;
+		base_props = NULL;
 	}
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->tierbytes[DAOS_MEDIA_SCM], req->tierbytes[DAOS_MEDIA_NVME],
-				 prop, &svc, req->n_faultdomains, req->faultdomains);
+				 prop, &svc, req->n_faultdomains, req->faultdomains,
+				 req->meta_blob_size);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -515,7 +520,10 @@ out:
 
 	mgmt__pool_create_req__free_unpacked(req, &alloc.alloc);
 
+	daos_prop_free(base_props);
+	daos_prop_free(req_props);
 	daos_prop_free(prop);
+
 	if (targets != NULL)
 		d_rank_list_free(targets);
 
@@ -549,11 +557,10 @@ ds_mgmt_drpc_pool_destroy(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to destroy pool %s\n", req->id);
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->id,
-			DP_RC(rc));
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	/*
@@ -621,11 +628,10 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to evict pool connections %s\n", req->id);
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->id,
-			DP_RC(rc));
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -639,11 +645,10 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		for (i = 0; i < req->n_handles; i++) {
-			rc = uuid_parse(req->handles[i], handles[i]);
-			if (rc != 0) {
-				D_ERROR("Unable to parse handle UUID %s: "
-				DF_RC"\n", req->id, DP_RC(rc));
-				D_GOTO(out_free, rc = -DER_INVAL);
+			if (uuid_parse(req->handles[i], handles[i]) != 0) {
+				rc = -DER_INVAL;
+				DL_ERROR(rc, "Handle UUID is invalid");
+				goto out_free;
 			}
 		}
 		n_handles = req->n_handles;
@@ -695,11 +700,10 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_targetidx,
 	int				rc, i;
 
 	num_addrs = (n_targetidx > 0) ? n_targetidx : 1;
-	rc = uuid_parse(id, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", id,
-			DP_RC(rc));
-		return -DER_INVAL;
+	if (uuid_parse(id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		return rc;
 	}
 
 	rc = pool_target_addr_list_alloc(num_addrs, &target_addr_list);
@@ -767,7 +771,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_exclude_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -817,7 +820,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_drain_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -864,10 +866,9 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		nvme_bytes = req->tierbytes[DAOS_MEDIA_NVME];
 	}
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->id,
-			DP_RC(rc));
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -996,10 +997,10 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Couldn't parse '%s' to UUID\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	D_INFO(DF_UUID": received request to set pool properties\n",
@@ -1065,11 +1066,10 @@ ds_mgmt_drpc_pool_upgrade(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to upgrade pool %s\n", req->id);
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", req->id,
-			DP_RC(rc));
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1086,7 +1086,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_upgrade_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -1216,10 +1215,10 @@ void ds_mgmt_drpc_pool_get_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	rc = uuid_parse(req->id, uuid);
-	if (rc != 0) {
-		D_ERROR("Couldn't parse '%s' to UUID\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+	if (uuid_parse(req->id, uuid) != 0) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	D_INFO(DF_UUID": received request to get pool properties\n",
@@ -1303,8 +1302,7 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 
 	rc = daos_acl_to_strs(acl, &ace_list, &ace_nr);
 	if (rc != 0) {
-		D_ERROR("Couldn't convert ACL to string list, rc="DF_RC"",
-			DP_RC(rc));
+		D_ERROR("Couldn't convert ACL to string list: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1358,7 +1356,6 @@ pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate buffer for packed ACLResp\n");
 	} else {
 		mgmt__aclresp__pack(acl_resp, body);
 		drpc_resp->body.len = len;
@@ -1388,8 +1385,9 @@ ds_mgmt_drpc_pool_get_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to get ACL for pool %s\n", req->id);
 
 	if (uuid_parse(req->id, pool_uuid) != 0) {
-		D_ERROR("Couldn't parse '%s' to UUID\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1440,8 +1438,9 @@ get_params_from_modify_acl_req(Drpc__Call *drpc_req, uuid_t uuid_out,
 	}
 
 	if (uuid_parse(req->id, uuid_out) != 0) {
-		D_ERROR("Couldn't parse UUID\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "UUID is invalid");
+		goto out;
 	}
 
 	rc = daos_acl_from_strs((const char **)req->entries, req->n_entries, acl_out);
@@ -1557,8 +1556,9 @@ ds_mgmt_drpc_pool_delete_acl(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 
 	if (uuid_parse(req->id, pool_uuid) != 0) {
-		D_ERROR("Couldn't parse UUID\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1618,8 +1618,9 @@ ds_mgmt_drpc_pool_list_cont(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	/* resp.containers, n_containers are NULL/0 */
 
 	if (uuid_parse(req->id, req_uuid) != 0) {
-		D_ERROR("Failed to parse pool uuid %s\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1760,8 +1761,9 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to query DAOS pool %s\n", req->id);
 
 	if (uuid_parse(req->id, uuid) != 0) {
-		D_ERROR("Failed to parse pool uuid %s\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -1870,8 +1872,9 @@ ds_mgmt_drpc_pool_query_targets(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to query DAOS pool %s, %zu targets\n", req->id, req->n_targets);
 
 	if (uuid_parse(req->id, uuid) != 0) {
-		D_ERROR("Failed to parse pool uuid %s\n", req->id);
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
@@ -2130,11 +2133,10 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__bio_health_resp__init(resp);
 
 	if (strlen(req->dev_uuid) != 0) {
-		rc = uuid_parse(req->dev_uuid, uuid);
-		if (rc != 0) {
-			D_ERROR("Unable to parse device UUID %s: "DF_RC"\n",
-				req->dev_uuid, DP_RC(rc));
-			D_GOTO(out, rc = -DER_INVAL);
+		if (uuid_parse(req->dev_uuid, uuid) != 0) {
+			rc = -DER_INVAL;
+			DL_ERROR(rc, "Device UUID is invalid");
+			goto out;
 		}
 	} else
 		uuid_clear(uuid); /* need to set uuid = NULL */
@@ -2143,6 +2145,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (bio_health == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	bio_health->mb_meta_size = req->meta_size;
+	bio_health->mb_rdb_size = req->rdb_size;
 	rc = ds_mgmt_bio_health_query(bio_health, uuid);
 	if (rc != 0) {
 		D_ERROR("Failed to query BIO health data :"DF_RC"\n",
@@ -2178,6 +2182,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
 	resp->cluster_size = stats.cluster_size;
+	resp->meta_wal_size = stats.meta_wal_size;
+	resp->rdb_wal_size = stats.rdb_wal_size;
 	resp->program_fail_cnt_norm = stats.program_fail_cnt_norm;
 	resp->program_fail_cnt_raw = stats.program_fail_cnt_raw;
 	resp->erase_fail_cnt_norm = stats.erase_fail_cnt_norm;
@@ -2275,8 +2281,9 @@ ds_mgmt_drpc_dev_set_faulty(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ctl__dev_manage_resp__init(resp);
 
 	if (uuid_parse(req->uuid, dev_uuid) != 0) {
-		D_ERROR("Device UUID (%s) is invalid\n", req->uuid);
-		D_GOTO(pack_resp, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Device UUID is invalid");
+		goto pack_resp;
 	}
 
 	rc = ds_mgmt_dev_set_faulty(dev_uuid, resp);
@@ -2372,13 +2379,15 @@ ds_mgmt_drpc_dev_replace(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->device->uuid = NULL;
 
 	if (uuid_parse(req->old_dev_uuid, old_uuid) != 0) {
-		D_ERROR("Old device UUID (%s) is invalid\n", req->old_dev_uuid);
-		D_GOTO(pack_resp, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Old device UUID is invalid");
+		goto pack_resp;
 	}
 
 	if (uuid_parse(req->new_dev_uuid, new_uuid) != 0) {
-		D_ERROR("New device UUID (%s) is invalid\n", req->new_dev_uuid);
-		D_GOTO(pack_resp, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "New device UUID is invalid");
+		goto pack_resp;
 	}
 
 	/* TODO DAOS-6283: Implement no-reint device replacement option */
@@ -2399,11 +2408,21 @@ void
 ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
+	int		rc;
 
 	D_INFO("Received request to setup engine\n");
 
-	dss_init_state_set(DSS_INIT_STATE_SET_UP);
+	rc = dss_module_setup_all();
+	if (rc != 0) {
+		D_ERROR("Module setup failed: %d\n", rc);
+		goto err;
+	}
 
+	D_INFO("Modules successfully set up\n");
+
+	dss_init_state_set(DSS_INIT_STATE_SET_UP);
+err:
+	resp.status = rc;
 	pack_daos_response(&resp, drpc_resp);
 }
 
@@ -2431,13 +2450,15 @@ ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to change container owner\n");
 
 	if (uuid_parse(req->contuuid, cont_uuid) != 0) {
-		D_ERROR("Container UUID is invalid\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Container UUID is invalid");
+		goto out;
 	}
 
 	if (uuid_parse(req->pooluuid, pool_uuid) != 0) {
-		D_ERROR("Pool UUID is invalid\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out;
 	}
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);

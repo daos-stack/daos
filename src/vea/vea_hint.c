@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,7 +54,7 @@ hint_cancel(struct vea_hint_context *hint, uint64_t off, uint64_t seq_min,
 		 */
 		hint->vhc_off = off;
 		return 0;
-	} else if (hint->vhc_seq > seq_max) {
+	} else if (hint->vhc_seq >= seq_max) {
 		/*
 		 * Subsequent reserve detected, abort hint cancel. It could
 		 * result in un-allocated holes on out of order hint cancels,
@@ -76,7 +76,7 @@ hint_tx_publish(struct umem_instance *umm, struct vea_hint_context *hint,
 {
 	int	rc;
 
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK ||
+	D_ASSERT(umem_tx_inprogress(umm) ||
 		 umm->umm_id == UMEM_CLASS_VMEM);
 
 	if (hint == NULL)

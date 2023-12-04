@@ -193,7 +193,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 			harness := NewEngineHarness(log)
-			sp := storage.NewProvider(log, 0, nil, nil, nil, nil)
+			sp := storage.NewProvider(log, 0, nil, nil, nil, nil, nil)
 			srv := newTestEngine(log, true, sp)
 
 			if err := harness.AddInstance(srv); err != nil {
@@ -480,7 +480,12 @@ func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 	t.Helper()
 
-	test.AssertEqual(t, len(exp), len(ms.Members(nil)), "unexpected number of members")
+	members, err := ms.Members(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	test.AssertEqual(t, len(exp), len(members), "unexpected number of members")
 	for _, em := range exp {
 		am, err := ms.Get(em.Rank)
 		if err != nil {
@@ -995,7 +1000,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			case *mgmtpb.SystemStopReq:
 				gotFanReq.Method = control.StopRanks
 			default:
-				gotFanReq.Method = control.PingRanks
+				t.Fatal("no system request specified")
 			}
 
 			cmpOpts := []cmp.Option{
@@ -1913,9 +1918,10 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				},
 			},
 			expResp: &mgmtpb.JoinResp{
-				Status: 0,
-				Rank:   curMember.Rank.Uint32(),
-				State:  mgmtpb.JoinResp_IN,
+				Status:     0,
+				Rank:       curMember.Rank.Uint32(),
+				State:      mgmtpb.JoinResp_IN,
+				MapVersion: 2,
 			},
 		},
 		"rejoining host; NilRank": {
@@ -1935,9 +1941,10 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				},
 			},
 			expResp: &mgmtpb.JoinResp{
-				Status: 0,
-				Rank:   curMember.Rank.Uint32(),
-				State:  mgmtpb.JoinResp_IN,
+				Status:     0,
+				Rank:       curMember.Rank.Uint32(),
+				State:      mgmtpb.JoinResp_IN,
+				MapVersion: 2,
 			},
 		},
 		"new host (non local)": {
@@ -1957,10 +1964,11 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				},
 			},
 			expResp: &mgmtpb.JoinResp{
-				Status:    0,
-				Rank:      newMember.Rank.Uint32(),
-				State:     mgmtpb.JoinResp_IN,
-				LocalJoin: false,
+				Status:     0,
+				Rank:       newMember.Rank.Uint32(),
+				State:      mgmtpb.JoinResp_IN,
+				LocalJoin:  false,
+				MapVersion: 2,
 			},
 		},
 		"new host (local)": {
@@ -1982,10 +1990,11 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				},
 			},
 			expResp: &mgmtpb.JoinResp{
-				Status:    0,
-				Rank:      newMember.Rank.Uint32(),
-				State:     mgmtpb.JoinResp_IN,
-				LocalJoin: true,
+				Status:     0,
+				Rank:       newMember.Rank.Uint32(),
+				State:      mgmtpb.JoinResp_IN,
+				LocalJoin:  true,
+				MapVersion: 2,
 			},
 		},
 	} {

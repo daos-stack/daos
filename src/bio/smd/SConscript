@@ -9,7 +9,7 @@ def scons():
 
     denv = env.Clone()
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    prereqs.require(denv, 'pmdk', 'argobots', 'protobufc')
+    denv.require('pmdk', 'argobots', 'protobufc')
 
     denv.d_static_library('smd', FILES, LIBS=[])
 

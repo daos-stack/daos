@@ -448,16 +448,16 @@ ds_mgmt_cleanup()
 }
 
 struct dss_module mgmt_module = {
-	.sm_name		= "mgmt",
-	.sm_mod_id		= DAOS_MGMT_MODULE,
-	.sm_ver			= DAOS_MGMT_VERSION,
-	.sm_proto_count		= 1,
-	.sm_init		= ds_mgmt_init,
-	.sm_fini		= ds_mgmt_fini,
-	.sm_setup		= ds_mgmt_setup,
-	.sm_cleanup		= ds_mgmt_cleanup,
-	.sm_proto_fmt		= &mgmt_proto_fmt,
-	.sm_cli_count		= MGMT_PROTO_CLI_COUNT,
-	.sm_handlers		= mgmt_handlers,
-	.sm_drpc_handlers	= mgmt_drpc_handlers,
+    .sm_name          = "mgmt",
+    .sm_mod_id        = DAOS_MGMT_MODULE,
+    .sm_ver           = DAOS_MGMT_VERSION,
+    .sm_proto_count   = 1,
+    .sm_init          = ds_mgmt_init,
+    .sm_fini          = ds_mgmt_fini,
+    .sm_setup         = ds_mgmt_setup,
+    .sm_cleanup       = ds_mgmt_cleanup,
+    .sm_proto_fmt     = {&mgmt_proto_fmt},
+    .sm_cli_count     = {MGMT_PROTO_CLI_COUNT},
+    .sm_handlers      = {mgmt_handlers},
+    .sm_drpc_handlers = mgmt_drpc_handlers,
 };

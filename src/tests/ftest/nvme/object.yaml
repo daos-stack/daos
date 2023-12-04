@@ -1,5 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers: 3
   test_clients: 1
@@ -24,29 +22,15 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
-  transport_config:
-    allow_insecure: true
-agent_config:
-  transport_config:
-    allow_insecure: true
-dmg:
-  transport_config:
-    allow_insecure: true
 pool_1:
-  control_method: dmg
-  scm_size: 4000000000
-  nvme_size: 20000000000
-  svcn: 1
+  scm_size: 4GB
+  nvme_size: 20G
 pool_2:
-  control_method: dmg
-  scm_size: 4000000000
-  nvme_size: 100000000000
-  svcn: 1
+  scm_size: 4GB
+  nvme_size: 100GB
 pool_3:
-  control_method: dmg
-  scm_size: 4000000000
-  nvme_size: 800000000000
-  svcn: 1
+  scm_size: 4GB
+  nvme_size: 350GB
 container:
   object_qty: 10
   record_size:

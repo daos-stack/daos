@@ -6,18 +6,19 @@
 
   Test script for running all DAOS unit tests
 """
+import argparse
+import json
 # pylint: disable=broad-except
 import os
-import sys
-import json
-import argparse
-import shutil
 import re
+import shutil
 import subprocess  # nosec
+import sys
 import tempfile
 import traceback
-from junit_xml import TestSuite, TestCase
+
 import yaml
+from junit_xml import TestCase, TestSuite
 
 
 def check_version():
@@ -299,11 +300,15 @@ class AIO():
             config_file.write(contents)
 
     def prepare_test(self, name="AIO_1", min_size=4):
-        """Prepare AIO for a test, min_size in GB"""
+        """Prepare AIO for a test, min_size in GB. Erase 4K header if device exists (no truncate
+        opt makes dd behavior consistent across device disks and files enabling unit tests to be
+        run locally with /dev/vdb filt).
+        """
         if self.device is None:
             run_cmd(["dd", "if=/dev/zero", f"of={self.fname}", "bs=1G", f"count={min_size}"])
         else:
-            run_cmd(["sudo", "-E", "dd", "if=/dev/zero", f"of={self.fname}", "bs=4K", "count=1"])
+            run_cmd(["sudo", "-E", "dd", "if=/dev/zero", f"of={self.fname}", "bs=4K", "count=1",
+                     "conv=notrunc"])
         self.create_config(name)
 
     def finalize_test(self):
@@ -508,8 +513,12 @@ class Suite():
             print(f"Filtered suite {self.name}")
             return True
 
-        if args.no_sudo and self.sudo:
-            print(f"Skipped  suite {self.name}, requires sudo")
+        if self.sudo:
+            if args.sudo == 'no':
+                print(f"Skipped  suite {self.name}, requires sudo")
+                return True
+        elif args.sudo == 'only':
+            print(f"Skipped  suite {self.name}, doesn't require sudo")
             return True
 
         if args.memcheck and not self.memcheck:
@@ -582,7 +591,8 @@ def move_codecov(base):
         if os.path.isfile(target):
             os.unlink(target)
         src = os.path.join(base, "test.cov")
-        if os.path.isfile(target):
+        if os.path.isfile(src):
+            print(f"Moving {src} to {target}")
             shutil.move(src, target)
     except Exception:
         print("Exception trying to copy test.cov")
@@ -599,7 +609,8 @@ def get_args():
                         help='Regular expression to select suites to run')
     parser.add_argument('--no-fail-on-error', action='store_true',
                         help='Disable non-zero return code on failure')
-    parser.add_argument('--no_sudo', action='store_true', help='Disable tests requiring sudo')
+    parser.add_argument('--sudo', choices=['yes', 'only', 'no'], default='yes',
+                        help='How to handle tests requiring sudo')
     parser.add_argument('--bdev', default=None,
                         help="Device to use for AIO, will create file by default")
     parser.add_argument('--log_dir', default="/tmp/daos_utest",
@@ -637,7 +648,7 @@ def main():
 
     aio = None
 
-    if not args.no_sudo:
+    if args.sudo in ['yes', 'only']:
         aio = AIO(path_info["MOUNT_DIR"], args.bdev)
 
     suites = []

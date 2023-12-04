@@ -1,6 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
-
 hosts:
   test_servers: 4
   test_clients: 1
@@ -13,9 +10,10 @@ server_config:
       log_mask: ERR
       storage: auto
 pool:
-  prop_name: reclaim
-  prop_value: disabled
-  control_method: dmg
+  properties: reclaim:disabled
+container:
+  control_method: daos
+  type: POSIX
 ior:
   flags: "-w -r -k -vv"
   repetitions: 1

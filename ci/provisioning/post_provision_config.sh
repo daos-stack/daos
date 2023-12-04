@@ -42,11 +42,11 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            DAOS_STACK_GROUP_REPO=\"${!DSG_REPO_var:-}\"
            DAOS_STACK_EL_8_APPSTREAM_REPO=\"${!DSA_REPO_var:-}\"
            DISTRO=\"$DISTRO\"
-           DAOS_STACK_RETRY_DELAY_SECONDS=\"${DAOS_STACK_RETRY_DELAY_SECONDS}\"
-           DAOS_STACK_RETRY_COUNT=\"${DAOS_STACK_RETRY_COUNT}\"
-           BUILD_URL=\"${BUILD_URL}\"
-           STAGE_NAME=\"${STAGE_NAME}\"
-           OPERATIONS_EMAIL=\"${OPERATIONS_EMAIL}\"
+           DAOS_STACK_RETRY_DELAY_SECONDS=\"$DAOS_STACK_RETRY_DELAY_SECONDS\"
+           DAOS_STACK_RETRY_COUNT=\"$DAOS_STACK_RETRY_COUNT\"
+           BUILD_URL=\"$BUILD_URL\"
+           STAGE_NAME=\"$STAGE_NAME\"
+           OPERATIONS_EMAIL=\"$OPERATIONS_EMAIL\"
            COMMIT_MESSAGE=\"$sanitized_commit_message\"
            REPO_FILE_URL=\"$REPO_FILE_URL\"
            ARTIFACTORY_URL=\"${ARTIFACTORY_URL:-}\"
@@ -54,20 +54,22 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            CHANGE_TARGET=\"${CHANGE_TARGET:-}\"
            CI_RPM_TEST_VERSION=\"${CI_RPM_TEST_VERSION:-}\"
            CI_PR_REPOS=\"${CI_PR_REPOS:-}\"
+           REPO_PATH=\"${REPO_PATH:-}\"
+           ARTIFACTS_URL=\"${ARTIFACTS_URL:-}\"
            $(cat ci/stacktrace.sh)
            $(cat ci/junit.sh)
            $(cat ci/provisioning/post_provision_config_common_functions.sh)
            $(cat ci/provisioning/post_provision_config_common.sh)
-           $(cat ci/provisioning/post_provision_config_nodes_"${DISTRO}".sh)
+           $(cat ci/provisioning/post_provision_config_nodes_"$DISTRO".sh)
            $(cat ci/provisioning/post_provision_config_nodes.sh)"; then
     report_junit post_provision_config.sh results.xml "$NODESTRING"
     exit 1
 fi
 
-git log --format=%s -n 1 HEAD | \
+git log --format=%B -n 1 HEAD | sed -ne '1s/^\([A-Z][A-Z]*-[0-9][0-9]*\) .*/\1/p' \
+                                     -e '/^Fixes:/{s/^Fixes: *//;s/ /\
+/g;p}' | \
   retry_cmd 60 ssh -i ci_key -l jenkins "${NODELIST%%,*}" \
-                                     "cat >/tmp/commit_title"
+                                     "cat >/tmp/commit_fixes"
 git log --pretty=format:%h --abbrev-commit --abbrev=7 |
   retry_cmd 60 ssh -i ci_key -l jenkins "${NODELIST%%,*}" "cat >/tmp/commit_list"
-retry_cmd 600 ssh root@"${NODELIST%%,*}" "mkdir -p /scratch && " \
-                                         "mount wolf-2:/export/scratch /scratch"

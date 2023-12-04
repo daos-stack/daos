@@ -3,8 +3,9 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import re
+from logging import getLogger
+
 from ClusterShell.NodeSet import NodeSet
 
 
@@ -120,6 +121,7 @@ class TelemetryUtils():
         "engine_sched_relax_time",
         "engine_sched_wait_queue",
         "engine_sched_sleep_queue",
+        "engine_sched_total_reject",
         "engine_sched_cycle_duration",
         "engine_sched_cycle_duration_max",
         "engine_sched_cycle_duration_mean",
@@ -143,7 +145,22 @@ class TelemetryUtils():
         "engine_dmabuff_grab_retries_max",
         "engine_dmabuff_grab_retries_mean",
         "engine_dmabuff_grab_retries_min",
-        "engine_dmabuff_grab_retries_stddev"]
+        "engine_dmabuff_grab_retries_stddev",
+        "engine_dmabuff_wal_sz",
+        "engine_dmabuff_wal_sz_max",
+        "engine_dmabuff_wal_sz_mean",
+        "engine_dmabuff_wal_sz_min",
+        "engine_dmabuff_wal_sz_stddev",
+        "engine_dmabuff_wal_qd",
+        "engine_dmabuff_wal_qd_max",
+        "engine_dmabuff_wal_qd_mean",
+        "engine_dmabuff_wal_qd_min",
+        "engine_dmabuff_wal_qd_stddev",
+        "engine_dmabuff_wal_waiters",
+        "engine_dmabuff_wal_waiters_max",
+        "engine_dmabuff_wal_waiters_mean",
+        "engine_dmabuff_wal_waiters_min",
+        "engine_dmabuff_wal_waiters_stddev"]
     ENGINE_IO_DTX_COMMITTABLE_METRICS = [
         "engine_io_dtx_committable",
         "engine_io_dtx_committable_max",
@@ -542,6 +559,14 @@ class TelemetryUtils():
         ENGINE_NVME_RELIABILITY_METRICS +\
         ENGINE_NVME_CRIT_WARN_METRICS +\
         ENGINE_NVME_INTEL_VENDOR_METRICS
+    ENGINE_MEM_USAGE_METRICS = [
+        "engine_mem_vos_dtx_cmt_ent_48",
+        "engine_mem_vos_vos_obj_360",
+        "engine_mem_vos_vos_lru_size",
+        "engine_mem_dtx_dtx_leader_handle_336",
+        "engine_mem_dtx_dtx_entry_40"]
+    ENGINE_MEM_TOTAL_USAGE_METRICS = [
+        "engine_mem_total_mem"]
 
     def __init__(self, dmg, servers):
         """Create a TelemetryUtils object.
@@ -572,6 +597,8 @@ class TelemetryUtils():
         all_metrics_names.extend(self.ENGINE_NET_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
         all_metrics_names.extend(self.ENGINE_DMABUFF_METRICS)
+        all_metrics_names.extend(self.ENGINE_MEM_USAGE_METRICS)
+        all_metrics_names.extend(self.ENGINE_MEM_TOTAL_USAGE_METRICS)
         if with_pools:
             all_metrics_names.extend(self.ENGINE_POOL_METRICS)
             all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)

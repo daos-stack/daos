@@ -10,13 +10,11 @@ from logging import getLogger
 from time import time
 
 from avocado import fail_on
-from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
-                        c_uuid_to_str, str_to_c_uuid)
-
-from test_utils_base import TestDaosApiBase
 from command_utils_base import BasicParameter
 from exception_utils import CommandFailure
-from general_utils import get_random_bytes, DaosTestError
+from general_utils import DaosTestError, get_random_bytes
+from pydaos.raw import DaosApiError, DaosContainer, DaosInputParams, c_uuid_to_str, str_to_c_uuid
+from test_utils_base import TestDaosApiBase
 
 
 class TestContainerData():
@@ -238,19 +236,17 @@ class TestContainerData():
 class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosContainer objects."""
 
-    def __init__(self, pool, cb_handler=None, daos_command=None, label_generator=None):
+    def __init__(self, pool, daos_command=None, label_generator=None):
         """Create a TestContainer object.
 
         Args:
             pool (TestPool): the test pool in which to create the container
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
             daos_command (DaosCommand, optional): daos command object. Defaults to None
             label_generator (LabelGenerator, optional): used to generate container label by adding
                 a number to self.label. Defaults to None
 
         """
-        super().__init__("/run/container/*", cb_handler)
+        super().__init__("/run/container/*")
         self.pool = pool
 
         self.object_qty = BasicParameter(None)
@@ -275,6 +271,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.file_oclass = BasicParameter(None)
         self.chunk_size = BasicParameter(None)
         self.properties = BasicParameter(None)
+        self.acl_file = BasicParameter(None)
         self.daos_timeout = BasicParameter(None)
         self.label = BasicParameter(None, "TestContainer")
         self.label_generator = label_generator
@@ -315,6 +312,18 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             return self.label.value
         return self.uuid
 
+    def no_exception(self):
+        """Temporarily disable raising exceptions for failed commands."""
+        return self.daos.no_exception()
+
+    def as_user(self, user):
+        """Temporarily run commands as a different user.
+
+        Args:
+            user (str): the user to temporarily run as
+        """
+        return self.daos.as_user(user)
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -339,12 +348,11 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def create(self, con_in=None, acl_file=None):
+    def create(self, con_in=None):
         """Create a container.
 
         Args:
             con_in (optional): to be defined. Defaults to None.
-            acl_file (str, optional): path of the ACL file. Defaults to None.
 
         Returns:
             dict: the daos json command output converted to a python dictionary
@@ -399,7 +407,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 "file_oclass": self.file_oclass.value,
                 "chunk_size": self.chunk_size.value,
                 "properties": self.properties.value,
-                "acl_file": acl_file,
+                "acl_file": self.acl_file.value,
                 "label": self.label.value
             }
 
@@ -612,31 +620,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             if key != "self" and val is not None]
         return self._check_info(checks)
 
-    def write_objects_wo_failon(self, rank=None, obj_class=None):
-        """Write objects to the container without fail_on DaosTestError,
-           for negative test on container write_objects.
-
-        Args:
-            rank (int, optional): server rank. Defaults to None.
-            obj_class (int, optional): daos object class. Defaults to None.
-
-        """
-        self.open()
-        self.log.info(
-            "Writing %s object(s), with %s record(s) of %s bytes(s) each, in "
-            "container %s%s%s",
-            self.object_qty.value, self.record_qty.value, self.data_size.value,
-            str(self), " on rank {}".format(rank) if rank is not None else "",
-            " with object class {}".format(obj_class)
-            if obj_class is not None else "")
-        for _ in range(self.object_qty.value):
-            self.written_data.append(TestContainerData(self.debug.value))
-            self.written_data[-1].write_object(
-                self, self.record_qty.value, self.akey_size.value,
-                self.dkey_size.value, self.data_size.value, rank, obj_class,
-                self.data_array_size.value)
-
-    @fail_on(DaosTestError)
     def write_objects(self, rank=None, obj_class=None):
         """Write objects to the container.
 
@@ -663,7 +646,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 self.dkey_size.value, self.data_size.value, rank, obj_class,
                 self.data_array_size.value)
 
-    @fail_on(DaosTestError)
     def read_objects(self, txn=None):
         """Read the objects from the container and verify they match.
 
@@ -907,23 +889,53 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         return self.daos.container_check(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
 
-    @fail_on(CommandFailure)
-    def set_prop(self, *args, **kwargs):
-        """Set container properties by calling daos container set-prop.
+    def delete_acl(self, *args, **kwargs):
+        """Set container properties by calling daos container delete-acl.
 
         Args:
-            args (tuple, optional): positional arguments to DaosCommand.container_set_prop
-            kwargs (dict, optional): named arguments to DaosCommand.container_set_prop
+            args (tuple, optional): positional arguments to DaosCommand.container_delete_acl
+            kwargs (dict, optional): named arguments to DaosCommand.container_delete_acl
 
         Returns:
-            str: JSON output of daos container set-prop.
+            CmdResult: Object that contains exit status, stdout, and other information.
 
         Raises:
             CommandFailure: Raised from the daos command call.
 
         """
-        return self.daos.container_set_prop(
-            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+        return self.daos.container_delete_acl(
+            self.pool.identifier, self.identifier, *args, **kwargs)
+
+    def get_acl(self, *args, **kwargs):
+        """Call daos container get-acl.
+
+        Args:
+            args (tuple, optional): args to pass to container_get_acl
+            kwargs (dict, optional): keyword args to pass to container_get_acl
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_get_acl(
+            self.pool.identifier, self.identifier, *args, **kwargs)
+
+    def get_attr(self, *args, **kwargs):
+        """Call daos container get-attr.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_get_attr
+            kwargs (dict, optional): named arguments to DaosCommand.container_get_attr
+
+        Returns:
+            str: JSON output of daos container get-attr.
+
+        """
+        return self.daos.container_get_attr(
+            self.pool.identifier, self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
     def get_prop(self, *args, **kwargs):
@@ -959,13 +971,26 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 return False
         return True
 
-    @fail_on(CommandFailure)
-    def list_snaps(self, *args, **kwargs):
-        """Get container properties by calling daos container list-snaps.
+    def list_attrs(self, *args, **kwargs):
+        """Get container properties by calling daos container list-attrs.
 
         Args:
-            args (tuple, optional): positional arguments to DaosCommand.container_list_snaps
-            kwargs (dict, optional): named arguments to DaosCommand.container_list_snaps
+            args (tuple, optional): positional arguments to DaosCommand.container_list_attrs
+            kwargs (dict, optional): named arguments to DaosCommand.container_list_attrs
+
+        Returns:
+            str: JSON output of daos container list-attrs
+
+        Raises:
+            CommandFailure: Raised from the daos command call
+
+        """
+        return self.daos.container_list_attrs(
+            self.pool.identifier, self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
+    def list_snaps(self):
+        """Get container properties by calling daos container list-snaps.
 
         Returns:
             str: JSON output of daos container list-snaps
@@ -974,8 +999,24 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             CommandFailure: Raised from the daos command call
 
         """
-        return self.daos.container_list_snaps(
-            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+        return self.daos.container_list_snaps(pool=self.pool.identifier, cont=self.identifier)
+
+    def overwrite_acl(self, *args, **kwargs):
+        """Call daos container overwrite-acl.
+
+        Args:
+            args (tuple, optional): args to pass to overwrite_acl
+            kwargs (dict, optional): keyword args to pass to overwrite_acl
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_overwrite_acl(
+            self.pool.identifier, self.identifier, *args, **kwargs)
 
     @fail_on(CommandFailure)
     def query(self, *args, **kwargs):
@@ -995,24 +1036,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         return self.daos.container_query(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
 
-    @fail_on(CommandFailure)
-    def update_acl(self, entry=None, acl_file=None):
-        """Update container acl by calling daos container update-acl.
-
-        Args:
-            entry (bool, optional): Add or modify a single ACL entry
-            acl_file (str, optional): Input file containing ACL
-
-        Returns:
-            str: JSON output of daos container update-acl.
-
-        Raises:
-            CommandFailure: Raised from the daos command call.
-
-        """
-        return self.daos.container_update_acl(
-            pool=self.pool.identifier, cont=self.identifier, entry=entry, acl_file=acl_file)
-
     def set_attr(self, *args, **kwargs):
         """Call daos container set-attr.
 
@@ -1025,4 +1048,56 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         """
         return self.daos.container_set_attr(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def set_owner(self, *args, **kwargs):
+        """Set container properties by calling daos container set-owner.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_set_owner
+            kwargs (dict, optional): named arguments to DaosCommand.container_set_owner
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other information.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_set_owner(
+            self.pool.identifier, self.identifier, *args, **kwargs)
+
+    @fail_on(CommandFailure)
+    def set_prop(self, *args, **kwargs):
+        """Set container properties by calling daos container set-prop.
+
+        Args:
+            args (tuple, optional): positional arguments to DaosCommand.container_set_prop
+            kwargs (dict, optional): named arguments to DaosCommand.container_set_prop
+
+        Returns:
+            str: JSON output of daos container set-prop.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_set_prop(
+            pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def update_acl(self, *args, **kwargs):
+        """Call daos container update-acl.
+
+        Args:
+            args (tuple, optional): args to pass to container_update_acl
+            kwargs (dict, optional): keyword args to pass to container_update_acl
+
+        Returns:
+            str: JSON output of daos container update-acl.
+
+        Raises:
+            CommandFailure: Raised from the daos command call.
+
+        """
+        return self.daos.container_update_acl(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)

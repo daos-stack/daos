@@ -1,8 +1,3 @@
-#!python
-# (C) Copyright 2016-2021 Intel Corporation.
-#
-# SPDX-License-Identifier: BSD-2-Clause-Patent
-#
 """Build self test"""
 
 
@@ -12,12 +7,12 @@ SELF_TEST = 'self_test.c'
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs', 'cart_utils_objs')
+    Import('env', 'cart_utils_objs')
 
     tenv = env.Clone(LIBS=[])
 
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'daos', 'daos_common'])
-    prereqs.require(tenv, 'mercury', 'protobufc')
+    tenv.require('mercury', 'protobufc')
     tenv.AppendUnique(FLAGS='-pthread')
     tenv.AppendUnique(CPPPATH=[Dir('../../cart/utils').srcnode()])
 

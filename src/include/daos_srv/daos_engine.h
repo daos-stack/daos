@@ -192,11 +192,8 @@ dss_current_xstream(void)
  * finish entering shutdown mode (i.e., any dss_srv_set_shutting_down call
  * won't return).
  */
-static inline bool
-dss_srv_shutting_down(void)
-{
-	return dss_get_module_info()->dmi_srv_shutting_down;
-}
+bool
+dss_srv_shutting_down(void);
 
 /**
  * Module facility feature bits
@@ -232,12 +229,16 @@ enum {
 enum {
 	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
 	SCHED_REQ_FL_PERIODIC	= (1 << 1),
+	SCHED_REQ_FL_NO_REJECT	= (1 << 2),
 };
 
 struct sched_req_attr {
 	uuid_t		sra_pool_id;
 	uint32_t	sra_type;
 	uint32_t	sra_flags;
+	uint32_t	sra_timeout;
+	/* Hint for RPC rejection */
+	uint64_t	sra_enqueue_id;
 };
 
 static inline void
@@ -387,7 +388,7 @@ dss_ult_exiting(struct sched_request *req)
 	return dss_xstream_exiting(dx) || sched_req_is_aborted(req);
 }
 
-/*
+/**
  * Yield function regularly called by long-run ULTs.
  *
  * \param[in] req	Sched request.
@@ -410,6 +411,8 @@ dss_ult_yield(void *arg)
 struct dss_module_ops {
 	/* Get schedule request attributes from RPC */
 	int (*dms_get_req_attr)(crt_rpc_t *rpc, struct sched_req_attr *attr);
+	/* Set schedule request attributes to RPC */
+	int (*dms_set_req)(crt_rpc_t *rpc, struct sched_req_attr *attr);
 };
 
 int srv_profile_stop();
@@ -517,6 +520,7 @@ int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
 int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
 int __attribute__((weak)) dss_offload_exec(int (*func)(void *), void *arg);
+int __attribute__((weak)) dss_main_exec(void (*func)(void *), void *arg);
 
 /*
  * If server wants to create ULTs periodically, it should call this special
@@ -545,40 +549,32 @@ struct dss_coll_ops {
 	/**
 	 * Function to be invoked by dss_collective
 	 *
-	 * \param f_args		[IN]	Arguments for function
+	 * \param[in] f_args	Arguments for function
 	 */
-	int				(*co_func)(void *f_args);
+	int (*co_func)(void *f_args);
 
 	/**
 	 * Callback for reducing after dss_collective (optional)
 	 *
-	 * \param a_args		[IN/OUT]
-	 *					Aggregator arguments for
-	 *					reducing results
-	 * \param s_args		[IN]	Reduce arguments for this
-	 *					current stream
+	 * \param[in,out] a_args	Aggregator arguments for reducing results
+	 * \param[in] s_args		Reduce arguments for this current stream
 	 */
-	void				(*co_reduce)(void *a_args,
-						     void *s_args);
+	void (*co_reduce)(void *a_args, void *s_args);
 
 	/**
 	 * Alloc function for allocating reduce arguments (optional)
 	 *
-	 * \param args			[IN/OUT] coll_args for this streams
-	 * \param aggregator_args	[IN]	 aggregator args for
-	 *					 initializatuin
+	 * \param[in,out] args		coll_args for this streams
+	 * \param[in] aggregator_args	aggregator args for  initializatuin
 	 */
-	int				(*co_reduce_arg_alloc)
-					(struct dss_stream_arg_type *args,
-					 void *a_args);
+	int (*co_reduce_arg_alloc)(struct dss_stream_arg_type *args, void *a_args);
 	/**
 	 * Free the allocated reduce arguments
 	 * (Mandatory if co_rarg_alloc was provided)
 	 *
-	 * \param args			[IN]	coll_args for this stream
+	 * \param[in] args		coll_args for this stream
 	 */
-	void				(*co_reduce_arg_free)
-					(struct dss_stream_arg_type *args);
+	void (*co_reduce_arg_free)(struct dss_stream_arg_type *args);
 };
 
 struct dss_coll_args {
@@ -770,7 +766,8 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_u
 		       uuid_t cont_hdl_uuid, int tgt_id, uint32_t version, unsigned int generation,
 		       uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
 		       daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
-		       uint32_t new_gl_ver, unsigned int migrate_opc);
+		       uint32_t new_gl_ver, unsigned int migrate_opc, uint64_t *enqueue_id,
+		       uint32_t *max_delay);
 int
 ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
 		  uint32_t version, uint32_t generation, uint64_t max_eph, uint32_t opc,
@@ -781,7 +778,7 @@ ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
 
 int
 obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint32_t old_ver,
-		struct daos_obj_md *md, uint32_t *tgt, uint32_t *shard_p);
+		struct daos_obj_md *md, uint32_t *tgts, uint32_t *shards, int array_size);
 
 /** Server init state (see server_init) */
 enum dss_init_state {
@@ -798,45 +795,15 @@ enum dss_media_error_type {
 
 void dss_init_state_set(enum dss_init_state state);
 
-/* Notify control-plane of a bio error. */
-int
-ds_notify_bio_error(int media_err_type, int tgt_id);
+/** Call module setup from drpc setup call handler. */
+int dss_module_setup_all(void);
+
+/** Notify control-plane of a bio error. */
+int ds_notify_bio_error(int media_err_type, int tgt_id);
 
 int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 			 d_rank_list_t **svc_ranks);
-
-struct sys_db;
-typedef int (*sys_db_trav_cb_t)(struct sys_db *db, char *table, d_iov_t *key,
-				void *args);
-
-#define SYS_DB_NAME_SZ		32
-
-/** system database is a simple local KV store */
-struct sys_db {
-	char	 sd_name[SYS_DB_NAME_SZ];
-	/** look up the provided key in \a table and return its value */
-	int	(*sd_fetch)(struct sys_db *db, char *table,
-			    d_iov_t *key, d_iov_t *val);
-	/** update or insert a KV pair to \a table */
-	int	(*sd_upsert)(struct sys_db *db, char *table,
-			     d_iov_t *key, d_iov_t *val);
-	/** reserved */
-	int	(*sd_insert)(struct sys_db *db, char *table,
-			     d_iov_t *key, d_iov_t *val);
-	/** reserved */
-	int	(*sd_update)(struct sys_db *db, char *table,
-			     d_iov_t *key, d_iov_t *val);
-	/** delete provided key and its value from the \a table */
-	int	(*sd_delete)(struct sys_db *db, char *table, d_iov_t *key);
-	/** traverse all keys in the \a table */
-	int	(*sd_traverse)(struct sys_db *db, char *table,
-			       sys_db_trav_cb_t cb, void *args);
-	int	(*sd_tx_begin)(struct sys_db *db);
-	int	(*sd_tx_end)(struct sys_db *db, int rc);
-	void	(*sd_lock)(struct sys_db *db);
-	void	(*sd_unlock)(struct sys_db *db);
-};
 
 /** Flags for dss_drpc_call */
 enum dss_drpc_call_flag {

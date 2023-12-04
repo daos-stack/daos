@@ -279,7 +279,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		error_exit();
 	}
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
 			my_rank, rc);

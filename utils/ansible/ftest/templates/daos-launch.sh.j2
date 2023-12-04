@@ -170,8 +170,8 @@ function cleanup
 			mountpoint="/mnt/daos$index"
 			if ssh root@$host mountpoint -q "$mountpoint" ; then
 				info "Cleaning mount points $mountpoint of host $host"
-				ssh root@$host rm -fr /mnt/daos0/*
-				ssh root@$host umount /mnt/daos0
+				ssh root@$host rm -fr $mountpoint/*
+				ssh root@$host umount $mountpoint
 			fi
 		done
 
@@ -231,14 +231,16 @@ info "Setting simulation environment"
 export PYTHONPATH="$DAOS_INSTALL_DIR/lib64/python3.6/site-packages:$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
 cd "$DAOS_SOURCE_DIR/utils/sl"
 source setup_local.sh
-$MODULE_EXE load mpi/mpich-x86_64
+if $MODULE_EXE is-avail mpi/mpich-x86_64 ; then
+	$MODULE_EXE load mpi/mpich-x86_64
+fi
 
 info "Parametrization of the simulation"
 cd "$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-common_opts="-car --test_servers=$SERVERS_LIST --test_clients=$CLIENTS_LIST"
+common_opts="-ar --test_servers=$SERVERS_LIST --test_clients=$CLIENTS_LIST"
 {% else %}
-common_opts="-car --test_servers=$SERVERS_LIST"
+common_opts="-ar --test_servers=$SERVERS_LIST"
 {% endif %}
 
 info "Starting functional test simulation"

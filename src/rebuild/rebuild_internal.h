@@ -87,6 +87,7 @@ struct rebuild_tgt_pool_tracker {
 	/* Global dtx resync version */
 	uint32_t		rt_global_dtx_resync_version;
 
+	ABT_cond		rt_global_dtx_wait_cond;
 	/* new layout version for upgrade rebuild */
 	uint32_t		rt_new_layout_ver;
 

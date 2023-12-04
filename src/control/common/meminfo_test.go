@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -48,12 +48,12 @@ HugePages_Surp:        0
 Hugepagesize:       2048 kB
 			`,
 			expOut: &MemInfo{
-				HugePagesTotal: 1024,
-				HugePagesFree:  1023,
-				HugePageSizeKb: 2048,
-				MemTotal:       1024,
-				MemFree:        1024,
-				MemAvailable:   1024,
+				HugepagesTotal:  1024,
+				HugepagesFree:   1023,
+				HugepageSizeKiB: 2048,
+				MemTotalKiB:     1024,
+				MemFreeKiB:      1024,
+				MemAvailableKiB: 1024,
 			},
 			expFreeMB: 2046,
 		},
@@ -66,9 +66,9 @@ HugePages_Surp:        0
 Hugepagesize:       1048576 kB
 			`,
 			expOut: &MemInfo{
-				HugePagesTotal: 16,
-				HugePagesFree:  16,
-				HugePageSizeKb: 1048576,
+				HugepagesTotal:  16,
+				HugepagesFree:   16,
+				HugepageSizeKiB: 1048576,
 			},
 			expFreeMB: 16384,
 		},
@@ -98,63 +98,9 @@ Hugepagesize:       1 GB
 				t.Fatalf("unexpected output (-want, +got)\n%s\n", diff)
 			}
 
-			if gotOut.HugePagesFreeMB() != tc.expFreeMB {
+			if gotOut.HugepagesFreeMB() != tc.expFreeMB {
 				t.Fatalf("expected FreeMB() to be %d, got %d",
-					tc.expFreeMB, gotOut.HugePagesFreeMB())
-			}
-		})
-	}
-}
-
-func TestCommon_CalcMinHugePages(t *testing.T) {
-	for name, tc := range map[string]struct {
-		input      *MemInfo
-		numTargets int
-		expPages   int
-		expErr     error
-	}{
-		"no pages": {
-			input:      &MemInfo{},
-			numTargets: 1,
-			expErr:     errors.New("invalid system hugepage size"),
-		},
-		"no targets": {
-			input: &MemInfo{
-				HugePageSizeKb: 2048,
-			},
-			expErr: errors.New("numTargets"),
-		},
-		"2KB pagesize; 16 targets": {
-			input: &MemInfo{
-				HugePageSizeKb: 2048,
-			},
-			numTargets: 16,
-			expPages:   8192,
-		},
-		"2KB pagesize; 31 targets": {
-			input: &MemInfo{
-				HugePageSizeKb: 2048,
-			},
-			numTargets: 31,
-			expPages:   15872,
-		},
-		"1GB pagesize; 16 targets": {
-			input: &MemInfo{
-				HugePageSizeKb: 1048576,
-			},
-			numTargets: 16,
-			expPages:   16,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotPages, gotErr := CalcMinHugePages(tc.input.HugePageSizeKb, tc.numTargets)
-			CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			if gotPages != tc.expPages {
-				t.Fatalf("expected %d, got %d", tc.expPages, gotPages)
+					tc.expFreeMB, gotOut.HugepagesFreeMB())
 			}
 		})
 	}

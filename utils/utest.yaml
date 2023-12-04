@@ -77,6 +77,10 @@
 - name: VOS
   base: "PREFIX"
   tests:
+    - cmd: ["bin/vos_perf", "-i", "-d", "15", "-o", "5", "-f", "-a", "1", "-A", "-n", "5", "-R",
+            '"U;p F;p I;s;p, I;p; A;p"']
+    - cmd: ["bin/vos_perf", "-i", "-d", "15", "-o", "5", "-f", "-a", "1", "-n", "5", "-R",
+            '"U;p F;p I;s;p, I;p; A;p"']
     - cmd: ["bin/vos_perf", "-R", '"U;p F;p V"', "-o", "5", "-d", "5", "-a", "5", "-n", "10"]
     - cmd: ["bin/vos_perf", "-R", '"U;p F;p V"', "-o", "5", "-d", "5", "-a", "5", "-n", "10",
             "-A", "-D", "/mnt/..MOUNT"]
@@ -105,7 +109,6 @@
 - name: VOS_NVMe
   base: "PREFIX"
   sudo: True
-  memcheck: False
   tests:
     - cmd: ["bin/vos_tests", "-a"]
       aio: "AIO_1"
@@ -113,8 +116,7 @@
 - name: VOS_md_on_ssd
   base: "PREFIX"
   sudo: True
-  memcheck: False
-  required_src: ["src/bio/tests/bio_ut.c"]
+  required_src: ["src/vos/tests/bio_ut.c"]
   tests:
     - cmd: ["bin/vos_tests", "-A", "50"]
       aio: "AIO_7"
@@ -123,11 +125,12 @@
       aio: "AIO_7"
       size: 4
 - name: csum
-  base: "PREFIX"
+  base: "BUILD_DIR"
   tests:
-    - cmd: ["bin/rpc_tests"]
-    - cmd: ["bin/pool_scrubbing_tests"]
-    - cmd: ["bin/srv_checksum_tests"]
+    - cmd: ["src/tests/rpc/rpc_tests"]
+    - cmd: ["src/vos/tests/pool_scrubbing_tests"]
+    - cmd: ["src/object/tests/srv_checksum_tests"]
+    - cmd: ["src/object/tests/cli_checksum_tests"]
 - name: bio
   base: "BUILD_DIR"
   tests:
@@ -143,6 +146,7 @@
   tests:
     - cmd: ["src/tests/ftest/cart/utest/test_linkage"]
     - cmd: ["src/tests/ftest/cart/utest/utest_hlc"]
+    - cmd: ["src/tests/ftest/cart/utest/utest_protocol"]
     - cmd: ["src/tests/ftest/cart/utest/utest_swim"]
 - name: storage_estimator
   base: "DAOS_BASE"

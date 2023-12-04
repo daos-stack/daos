@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -127,6 +127,14 @@ enum daos_pool_props {
 	 * The pool performance domain
 	 */
 	DAOS_PROP_PO_PERF_DOMAIN,
+	/** Checkpoint mode, only applicable to MD_ON_SSD */
+	DAOS_PROP_PO_CHECKPOINT_MODE,
+	/** Frequency of timed checkpoint in seconds, default is 5 */
+	DAOS_PROP_PO_CHECKPOINT_FREQ,
+	/** WAL usage threshold to trigger checkpoint, default is 50% */
+	DAOS_PROP_PO_CHECKPOINT_THRESH,
+	/** Reintegration mode for pool, data_sync|no_data_sync default is data_sync*/
+	DAOS_PROP_PO_REINT_MODE,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -142,18 +150,19 @@ daos_rf_is_valid(unsigned long long rf)
 	return rf <= DAOS_PROP_PO_REDUN_FAC_MAX;
 }
 
+#define DAOS_PROP_PDA_MAX	((uint32_t)-1)
 /**
- * the placement algorithm should place two-way and three-way
- * replication object within a PD; for those object classes with
- * more than 3 replicas, DAOS will place three replicas within a PD
- * and switch to another PD.
+ * The default PDA for replica object or non-replica obj (S1/S2/.../SX).
+ * Default value (-1) means will try to put all replica shards of same RDG on same PD,
+ * for non-replica obj will put all shards for the object within a PD if
+ * the #targets in the PD is enough.
  */
-#define DAOS_PROP_PO_RP_PDA_DEFAULT	3
+#define DAOS_PROP_PO_RP_PDA_DEFAULT	DAOS_PROP_PDA_MAX
 /**
  * the placement algorithm always tries to scatter shards of EC
  * object to different PDs.
  */
-#define DAOS_PROP_PO_EC_PDA_DEFAULT	1
+#define DAOS_PROP_PO_EC_PDA_DEFAULT	((uint32_t)1)
 
 /** DAOS pool upgrade status */
 enum {
@@ -173,9 +182,18 @@ daos_svc_rf_is_valid(uint64_t svc_rf)
 }
 
 /**
+ * Level of perf_domain, should be same value as PO_COMP_TP_xxx (enum pool_comp_type).
+ */
+enum {
+	DAOS_PROP_PERF_DOMAIN_ROOT = 255,
+	DAOS_PROP_PERF_DOMAIN_GROUP = 3,
+};
+
+/**
  * default performance domain is root
  */
-#define DAOS_PROP_PO_PERF_DOMAIN_DEFAULT	PO_COMP_TP_ROOT
+#define DAOS_PROP_PO_PERF_DOMAIN_DEFAULT	DAOS_PROP_PERF_DOMAIN_ROOT
+#define DAOS_PROP_CO_PERF_DOMAIN_DEFAULT	DAOS_PROP_PERF_DOMAIN_ROOT
 
 /**
  * Number of pool property types
@@ -191,6 +209,16 @@ enum {
 	DAOS_RECLAIM_TIME,
 };
 
+enum {
+	DAOS_REINT_MODE_DATA_SYNC = 0,
+	DAOS_REINT_MODE_NO_DATA_SYNC = 1,
+};
+
+/**
+ * default reintegration mode is data_sync
+ */
+#define DAOS_PROP_PO_REINT_MODE_DEFAULT	DAOS_REINT_MODE_DATA_SYNC
+
 /**
  * Pool checksum scrubbing schedule type
  * It is expected that these stay contiguous.
@@ -204,8 +232,24 @@ enum {
 
 /* Checksum Scrubbing Defaults */
 #define DAOS_PROP_PO_SCRUB_MODE_DEFAULT DAOS_SCRUB_MODE_OFF
+
 #define DAOS_PROP_PO_SCRUB_FREQ_DEFAULT 604800 /* 1 week in seconds */
 #define DAOS_PROP_PO_SCRUB_THRESH_DEFAULT 0
+
+/** Checkpoint strategy */
+enum {
+	DAOS_CHECKPOINT_DISABLED = 0,
+	DAOS_CHECKPOINT_TIMED,
+	DAOS_CHECKPOINT_LAZY,
+};
+
+#define DAOS_PROP_PO_CHECKPOINT_MODE_DEFAULT   DAOS_CHECKPOINT_TIMED
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_DEFAULT   5  /* 5 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_MIN       1  /* 1 seconds */
+#define DAOS_PROP_PO_CHECKPOINT_FREQ_MAX       (1 << 20) /* 1 million seconds */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT 50 /* 50 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_MAX     75 /* 75 % WAL capacity */
+#define DAOS_PROP_PO_CHECKPOINT_THRESH_MIN     10 /* 10 % WAL capacity */
 
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
@@ -328,6 +372,8 @@ enum daos_cont_props {
 	DAOS_PROP_CO_SCRUBBER_DISABLED,
 	/** immutable container object global version */
 	DAOS_PROP_CO_OBJ_VERSION,
+	/** The container performance domain, now always inherit from pool */
+	DAOS_PROP_CO_PERF_DOMAIN,
 	DAOS_PROP_CO_MAX,
 };
 
@@ -446,6 +492,7 @@ enum {
 
 /** clear the UNCLEAN status */
 #define DAOS_PROP_CO_CLEAR	(0x1)
+
 /** daos container status */
 struct daos_co_status {
 	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
@@ -647,6 +694,19 @@ daos_prop_free(daos_prop_t *prop);
  */
 int
 daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **prop);
+
+/**
+ * Merge a set of new DAOS properties into a set of existing DAOS properties.
+ *
+ * \param[in]	old_prop	Existing set of properties
+ * \param[in]	new_prop	New properties - may override old entries
+ * \param[out]	out_prop	New properties - may override old entries
+ *
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out_prop);
 
 /**
  * Merge a set of new DAOS properties into a set of existing DAOS properties.

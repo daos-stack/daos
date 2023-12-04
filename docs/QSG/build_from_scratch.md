@@ -16,7 +16,7 @@ Download DAOS source code using the following command:
 
 The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
 
-To checkout the 2.4 development branch, simply run:
+To checkout the master (development) branch, simply run:
 
 ```
 $ git clone --recurse-submodules https://github.com/daos-stack/daos.git
@@ -83,7 +83,7 @@ PATH.
  ```bash
  $ python3 -m venv venv
  $ source venv/bin/activate
- $ python3 -m pip install -f requirements.txt
+ $ python3 -m pip install -r requirements.txt
  ```
 
 ## Build DAOS

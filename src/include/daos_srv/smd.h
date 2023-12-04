@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,11 +15,17 @@
 #include <gurt/list.h>
 #include <daos/common.h>
 #include <daos_types.h>
-#include <daos_srv/daos_engine.h>
 
 enum smd_dev_state {
 	SMD_DEV_NORMAL	= 0,
 	SMD_DEV_FAULTY,
+};
+
+enum smd_dev_type {
+	SMD_DEV_TYPE_DATA = 0,
+	SMD_DEV_TYPE_META,
+	SMD_DEV_TYPE_WAL,
+	SMD_DEV_TYPE_MAX = 3,
 };
 
 struct smd_dev_info {
@@ -33,12 +39,16 @@ struct smd_dev_info {
 struct smd_pool_info {
 	d_list_t	 spi_link;
 	uuid_t		 spi_id;
-	uint64_t	 spi_blob_sz;
-	uint32_t	 spi_tgt_cnt;
-	int		*spi_tgts;
-	uint64_t	*spi_blobs;
+	uint64_t	 spi_blob_sz[SMD_DEV_TYPE_MAX];
+	uint16_t	 spi_flags[SMD_DEV_TYPE_MAX];
+	uint16_t	 spi_tgt_cnt[SMD_DEV_TYPE_MAX];
+	int		*spi_tgts[SMD_DEV_TYPE_MAX];
+	uint64_t	*spi_blobs[SMD_DEV_TYPE_MAX];
 };
 
+#define	SMD_POOL_IN_CREATION	0x1
+
+struct sys_db;
 /**
  * Initialize SMD store, create store if it's not existing
  *
@@ -56,22 +66,24 @@ void smd_fini(void);
 /**
  * Assign a NVMe device to a target (VOS xstream)
  *
- * \param [IN]	dev_id	NVMe device ID
- * \param [IN]	tgt_id	Target ID
+ * \param [IN]	dev_id		NVMe device ID
+ * \param [IN]	tgt_id		Target ID
+ * \param [IN]	smd_type	SMD type
  *
- * \return		Zero on success, negative value on error
+ * \return			Zero on success, negative value on error
  */
-int smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id);
+int smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type smd_type);
 
 /**
  * Unassign a NVMe device from a target (VOS xstream)
  *
- * \param [IN]	dev_id	NVMe device ID
- * \param [IN]	tgt_id	Target ID
+ * \param [IN]	dev_id		NVMe device ID
+ * \param [IN]	tgt_id		Target ID
+ * \param [IN]	smd_type	SMD type
  *
- * \return		Zero on success, negative value on error
+ * \return			Zero on success, negative value on error
  */
-int smd_dev_del_tgt(uuid_t dev_id, uint32_t tgt_id);
+int smd_dev_del_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type smd_type);
 
 /**
  * Set a NVMe device state
@@ -97,11 +109,12 @@ int smd_dev_get_by_id(uuid_t dev_id, struct smd_dev_info **dev_info);
  * Get NVMe device info by target ID, caller is responsible to free @dev_info
  *
  * \param [IN]	tgt_id		Target ID
+ * \param [IN]	smd_type	SMD type
  * \param [OUT]	dev_info	Device info
  *
  * \return			Zero on success, negative value on error
  */
-int smd_dev_get_by_tgt(uint32_t tgt_id, struct smd_dev_info **dev_info);
+int smd_dev_get_by_tgt(uint32_t tgt_id, enum smd_dev_type smd_type, struct smd_dev_info **dev_info);
 
 /**
  * List all NVMe devices, caller is responsible to free list items
@@ -138,22 +151,31 @@ int smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list);
  * \param [IN]	pool_id		Pool UUID
  * \param [IN]	tgt_id		Target ID
  * \param [IN]	blob_id		Blob ID
+ * \param [IN]	smd_type	SMD type
  * \param [IN]	blob_sz		Blob size
  *
  * \return			Zero on success, negative value on error
  */
 int smd_pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
-		     uint64_t blob_sz);
+		     enum smd_dev_type smd_type, uint64_t blob_sz);
+
+/* Assign a blob to a RDB pool target */
+int smd_rdb_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id,
+		    enum smd_dev_type smd_type, uint64_t blob_sz);
 
 /**
  * Unassign a VOS pool target
  *
  * \param [IN]	pool_id		Pool UUID
  * \param [IN]	tgt_id		Target ID
+ * \param [IN]	smd_type	SMD type
  *
  * \return			Zero on success, negative value on error
  */
-int smd_pool_del_tgt(uuid_t pool_id, uint32_t tgt_id);
+int smd_pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, enum smd_dev_type smd_type);
+
+/* Unassign a RDB pool target */
+int smd_rdb_del_tgt(uuid_t pool_id, uint32_t tgt_id, enum smd_dev_type smd_type);
 
 /**
  * Get pool info, caller is responsible to free @pool_info
@@ -174,7 +196,22 @@ int smd_pool_get_info(uuid_t pool_id, struct smd_pool_info **pool_info);
  *
  * \return			Zero on success, negative value on error
  */
-int smd_pool_get_blob(uuid_t pool_id, uint32_t tgt_id, uint64_t *blob_id);
+int smd_pool_get_blob(uuid_t pool_id, uint32_t tgt_id,
+		      enum smd_dev_type smd_type, uint64_t *blob_id);
+
+/* Get blob ID mapped to RDB:target */
+int smd_rdb_get_blob(uuid_t pool_id, uint32_t tgt_id,
+		     enum smd_dev_type smd_type, uint64_t *blob_id);
+
+/**
+ * Get size of the blob corresponding to rdb-pool file
+ *
+ * \param [IN]	pool_id		Pool UUID
+ * \param [OUT]	blob_sz		Size of the blob
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_rdb_get_blob_sz(uuid_t pool_id, uint64_t *blob_sz);
 
 /**
  * Get pool info, caller is responsible to free list items
@@ -195,13 +232,26 @@ int smd_pool_list(d_list_t *pool_list, int *pool_cnt);
  */
 char *smd_dev_stat2str(enum smd_dev_state state);
 
+/**
+ * Mark a pool as ready to be used in smd.
+ *
+ * \param [IN]	pool_id		Pool UUID
+ *
+ * \return			Zero on success, negative value on error
+ */
+int smd_pool_mark_ready(uuid_t pool_id);
+
 static inline void
 smd_pool_free_info(struct smd_pool_info *pool_info)
 {
-	if (pool_info->spi_blobs != NULL)
-		D_FREE(pool_info->spi_blobs);
-	if (pool_info->spi_tgts != NULL)
-		D_FREE(pool_info->spi_tgts);
+	enum smd_dev_type	st;
+
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		if (pool_info->spi_blobs[st] != NULL)
+			D_FREE(pool_info->spi_blobs[st]);
+		if (pool_info->spi_tgts[st] != NULL)
+			D_FREE(pool_info->spi_tgts[st]);
+	}
 	D_FREE(pool_info);
 }
 
