@@ -816,9 +816,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	rc = dfuse_do_readdir(fs_handle, req, oh, reply_buff, &size, offset, plus);
 
 out:
-	atomic_fetch_sub_relaxed(&oh->doh_readdir_number, 1);
-	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readdir_number, 1);
-
 	D_MUTEX_UNLOCK(&oh->doh_ie->ie_lock);
 
 	if (rc)

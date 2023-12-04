@@ -99,9 +99,6 @@ struct dfuse_obj_hdl {
 
 	ATOMIC uint32_t           doh_il_calls;
 
-	/** Number of active readdir operations */
-	ATOMIC uint32_t           doh_readdir_number;
-
 	ATOMIC uint64_t           doh_write_count;
 
 	/* Next offset we expect from readdir */
@@ -780,9 +777,6 @@ struct dfuse_inode_entry {
 
 	/* Readdir handle, if present.  May be shared */
 	struct dfuse_readdir_hdl *ie_rd_hdl;
-
-	/** Number of active readdir operations */
-	ATOMIC uint32_t           ie_readdir_number;
 
 	/** file was truncated from 0 to a certain size */
 	bool                      ie_truncated;
