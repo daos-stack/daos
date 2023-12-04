@@ -360,21 +360,15 @@ struct bio_dev_info {
 static inline void
 bio_free_dev_info(struct bio_dev_info *dev_info)
 {
-	if (dev_info->bdi_tgts != NULL)
-		D_FREE(dev_info->bdi_tgts);
-	if (dev_info->bdi_traddr != NULL)
-		D_FREE(dev_info->bdi_traddr);
+	D_FREE(dev_info->bdi_tgts);
+	D_FREE(dev_info->bdi_traddr);
 	if (dev_info->bdi_ctrlr != NULL) {
-		if (dev_info->bdi_ctrlr->model != NULL)
-			D_FREE(dev_info->bdi_ctrlr->model);
-		if (dev_info->bdi_ctrlr->serial != NULL)
-			D_FREE(dev_info->bdi_ctrlr->serial);
-		if (dev_info->bdi_ctrlr->fw_rev != NULL)
-			D_FREE(dev_info->bdi_ctrlr->fw_rev);
-		if (dev_info->bdi_ctrlr->vendor_id != NULL)
-			D_FREE(dev_info->bdi_ctrlr->vendor_id);
-		if (dev_info->bdi_ctrlr->pci_type != NULL)
-			D_FREE(dev_info->bdi_ctrlr->pci_type);
+		D_FREE(dev_info->bdi_ctrlr->model);
+		D_FREE(dev_info->bdi_ctrlr->serial);
+		D_FREE(dev_info->bdi_ctrlr->fw_rev);
+		D_FREE(dev_info->bdi_ctrlr->vendor_id);
+		D_FREE(dev_info->bdi_ctrlr->pci_type);
+		D_FREE(dev_info->bdi_ctrlr->nss);
 		D_FREE(dev_info->bdi_ctrlr);
 	}
 	D_FREE(dev_info);

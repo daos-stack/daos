@@ -994,14 +994,13 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			return -DER_EXIST;
 		}
 
+		/* A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible */
 		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-		if (rc != 0) {
-			if (rc != -DER_NOSYS) {
-				D_ERROR("Reset LED on device:" DF_UUID " failed, " DF_RC "\n",
-					DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
-				return rc;
-			}
+		if ((rc != 0) && (rc != -DER_NOTSUPPORTED)) {
+			DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+				 DP_UUID(d_bdev->bb_uuid));
+			return rc;
 		}
 	}
 
@@ -1876,24 +1875,27 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_bdev         *d_bdev;
 	int			 rc;
 
-	if (!bio_vmd_enabled) {
+	if (!bio_vmd_enabled)
 		return;
-	}
 
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
-			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for "DF_UUID"\n",
-				DP_UUID(d_bdev->bb_uuid));
-
-			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
+			/**
+			 * LED will be reset to faulty or normal state based on SSDs bio_bdevs.
+			 * A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible.
+			 */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-			if (rc != 0)
-				/* DER_NOSYS indicates that VMD-LED control is not enabled */
-				DL_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR, rc,
-					  "Reset LED on device:" DF_UUID " failed",
-					  DP_UUID(d_bdev->bb_uuid));
+			if (rc != 0) {
+				if (rc != -DER_NOTSUPPORTED)
+					DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+						 DP_UUID(d_bdev->bb_uuid));
+				continue;
+			}
+
+			D_DEBUG(DB_MGMT, "Cleared LED QUICK_BLINK state for " DF_UUID "\n",
+				DP_UUID(d_bdev->bb_uuid));
 		}
 	}
 }

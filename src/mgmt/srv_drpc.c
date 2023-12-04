@@ -1964,27 +1964,17 @@ out:
 void
 ds_mgmt_smd_free_dev(Ctl__SmdDevice *dev)
 {
-	if (dev->uuid != NULL)
-		D_FREE(dev->uuid);
-	if (dev->tgt_ids != NULL)
-		D_FREE(dev->tgt_ids);
+	D_FREE(dev->uuid);
+	D_FREE(dev->tgt_ids);
 	if (dev->ctrlr != NULL) {
-		if (dev->ctrlr->model != NULL)
-			D_FREE(dev->ctrlr->model);
-		if (dev->ctrlr->serial != NULL)
-			D_FREE(dev->ctrlr->serial);
-		if (dev->ctrlr->pci_addr != NULL)
-			D_FREE(dev->ctrlr->pci_addr);
-		if (dev->ctrlr->fw_rev != NULL)
-			D_FREE(dev->ctrlr->fw_rev);
-		if (dev->ctrlr->vendor_id != NULL)
-			D_FREE(dev->ctrlr->vendor_id);
-		if (dev->ctrlr->pci_dev_type != NULL)
-			D_FREE(dev->ctrlr->pci_dev_type);
-		if (dev->ctrlr->namespaces != NULL) {
-			if (dev->ctrlr->namespaces[0] != NULL)
-				D_FREE(dev->ctrlr->namespaces[0]);
-		}
+		D_FREE(dev->ctrlr->model);
+		D_FREE(dev->ctrlr->serial);
+		D_FREE(dev->ctrlr->pci_addr);
+		D_FREE(dev->ctrlr->fw_rev);
+		D_FREE(dev->ctrlr->vendor_id);
+		D_FREE(dev->ctrlr->pci_dev_type);
+		if (dev->ctrlr->namespaces != NULL)
+			D_FREE(dev->ctrlr->namespaces[0]);
 	}
 }
 
@@ -2266,8 +2256,7 @@ drpc_dev_manage_free(Ctl__DevManageResp *resp)
 {
 	if (resp != NULL) {
 		if (resp->device != NULL) {
-			if (resp->device->uuid != NULL)
-				D_FREE(resp->device->uuid);
+			ds_mgmt_smd_free_dev(resp->device);
 			D_FREE(resp->device);
 		}
 		D_FREE(resp);
