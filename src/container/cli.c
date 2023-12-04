@@ -2418,7 +2418,6 @@ cont_req_cleanup(enum creq_cleanup_stage stage, tse_task_t *task, bool free_tpri
 	case CLEANUP_TASK_PRIV:
 		if (free_tpriv) {
 			D_FREE(args->cra_tpriv);
-			args->cra_tpriv = NULL;
 			dc_task_set_priv(task, NULL);
 		}
 	case CLEANUP_POOL:

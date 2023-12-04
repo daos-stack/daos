@@ -2691,6 +2691,7 @@ pool_op_is_write(crt_opcode_t opc)
 	case POOL_ADD_TGT:
 	case POOL_TGT_DISCARD:
 		is_write = false;
+		break;
 	default:
 		is_write = true;
 		break;
@@ -2702,8 +2703,8 @@ pool_op_is_write(crt_opcode_t opc)
  * Return the answer in is_dup (when rc == 0). Further when is_dup is true, assign value into valp.
  */
 static int
-pool_op_check_dup(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc, int pool_proto_ver,
-		  bool *is_dup, struct ds_pool_svc_op_val *valp)
+pool_op_lookup(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc, int pool_proto_ver,
+	       bool *is_dup, struct ds_pool_svc_op_val *valp)
 {
 	struct pool_op_v6_in     *in6 = crt_req_get(rpc);
 	struct ds_pool_svc_op_key op_key;
@@ -2772,8 +2773,8 @@ out:
 
 /* Save results of the (new, not duplicate) operation in svc_ops KVS. */
 static int
-pool_op_save_dup(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc, bool dup_op,
-		 int pool_proto_ver, int rc_in, struct ds_pool_svc_op_val *op_valp)
+pool_op_save(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc, int pool_proto_ver, int rc_in,
+	     struct ds_pool_svc_op_val *op_valp)
 {
 	struct pool_op_v6_in     *in6 = crt_req_get(rpc);
 	d_iov_t                   key;
@@ -2783,10 +2784,6 @@ pool_op_save_dup(struct rdb_tx *tx, struct pool_svc *svc, crt_rpc_t *rpc, bool d
 	bool                      proto_enabled;
 	crt_opcode_t              opc = opc_get(rpc->cr_opc);
 	int                       rc  = 0;
-
-	/* Test here for simpler caller invocation code */
-	if (dup_op)
-		goto out;
 
 	op_valp->ov_rc = rc_in;
 
@@ -3112,7 +3109,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = pool_op_check_dup(&tx, svc, rpc, handler_version, &dup_op, &op_val);
+	rc = pool_op_lookup(&tx, svc, rpc, handler_version, &dup_op, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	else if (dup_op)
@@ -3340,9 +3337,9 @@ out_map_version:
 
 	/* If meets criteria (not dup, write op, definitive rc, etc.), store result in ps_ops KVS */
 	if ((rc == 0) && !dup_op && fi_fail_noreply)
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, handler_version, -DER_MISC, &op_val);
-	else
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, handler_version, rc, &op_val);
+		rc = -DER_MISC;
+	if (!dup_op)
+		rc = pool_op_save(&tx, svc, rpc, handler_version, rc, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	rc = rdb_tx_commit(&tx);
@@ -3542,7 +3539,7 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc, int handler_version)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = pool_op_check_dup(&tx, svc, rpc, handler_version, &dup_op, &op_val);
+	rc = pool_op_lookup(&tx, svc, rpc, handler_version, &dup_op, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	else if (dup_op || fi_fail_noreply)
@@ -3567,9 +3564,9 @@ ds_pool_disconnect_handler(crt_rpc_t *rpc, int handler_version)
 
 out_commit:
 	if ((rc == 0) && !dup_op && fi_fail_noreply)
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, handler_version, -DER_MISC, &op_val);
-	else
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, handler_version, rc, &op_val);
+		rc = -DER_MISC;
+	if (!dup_op)
+		rc = pool_op_save(&tx, svc, rpc, handler_version, rc, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	rc = rdb_tx_commit(&tx);
@@ -4899,7 +4896,7 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = pool_op_check_dup(&tx, svc, rpc, DAOS_POOL_VERSION, &dup_op, &op_val);
+	rc = pool_op_lookup(&tx, svc, rpc, DAOS_POOL_VERSION, &dup_op, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	else if (dup_op || fi_fail_noreply)
@@ -4914,9 +4911,9 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 
 out_commit:
 	if ((rc == 0) && !dup_op && fi_fail_noreply)
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, DAOS_POOL_VERSION, -DER_MISC, &op_val);
-	else
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, DAOS_POOL_VERSION, rc, &op_val);
+		rc = -DER_MISC;
+	if (!dup_op)
+		rc = pool_op_save(&tx, svc, rpc, DAOS_POOL_VERSION, rc, &op_val);
 	if (rc != 0)
 		goto out_lock;
 
@@ -5838,7 +5835,7 @@ ds_pool_acl_update_handler(crt_rpc_t *rpc)
 	 */
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = pool_op_check_dup(&tx, svc, rpc, DAOS_POOL_VERSION, &dup_op, &op_val);
+	rc = pool_op_lookup(&tx, svc, rpc, DAOS_POOL_VERSION, &dup_op, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	else if (dup_op || fi_fail_noreply)
@@ -5874,9 +5871,9 @@ out_prop:
 		daos_prop_free(prop);
 out_commit:
 	if ((rc == 0) && !dup_op && fi_fail_noreply)
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, DAOS_POOL_VERSION, -DER_MISC, &op_val);
-	else
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, DAOS_POOL_VERSION, rc, &op_val);
+		rc = -DER_MISC;
+	if (!dup_op)
+		rc = pool_op_save(&tx, svc, rpc, DAOS_POOL_VERSION, rc, &op_val);
 	if (rc != 0)
 		goto out_lock;
 
@@ -6014,7 +6011,7 @@ ds_pool_acl_delete_handler(crt_rpc_t *rpc)
 	 */
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = pool_op_check_dup(&tx, svc, rpc, DAOS_POOL_VERSION, &dup_op, &op_val);
+	rc = pool_op_lookup(&tx, svc, rpc, DAOS_POOL_VERSION, &dup_op, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	else if (dup_op || fi_fail_noreply)
@@ -6051,9 +6048,9 @@ out_prop:
 		daos_prop_free(prop);
 out_commit:
 	if ((rc == 0) && !dup_op && fi_fail_noreply)
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, DAOS_POOL_VERSION, -DER_MISC, &op_val);
-	else
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, DAOS_POOL_VERSION, rc, &op_val);
+		rc = -DER_MISC;
+	if (!dup_op)
+		rc = pool_op_save(&tx, svc, rpc, DAOS_POOL_VERSION, rc, &op_val);
 	if (rc != 0)
 		goto out_lock;
 
@@ -7342,7 +7339,7 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = pool_op_check_dup(&tx, svc, rpc, DAOS_POOL_VERSION, &dup_op, &op_val);
+	rc = pool_op_lookup(&tx, svc, rpc, DAOS_POOL_VERSION, &dup_op, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	else if (dup_op || fi_fail_noreply)
@@ -7411,9 +7408,9 @@ out_free:
 	D_FREE(hdl_uuids);
 out_commit:
 	if ((rc == 0) && !dup_op && fi_fail_noreply)
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, DAOS_POOL_VERSION, -DER_MISC, &op_val);
-	else
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, DAOS_POOL_VERSION, rc, &op_val);
+		rc = -DER_MISC;
+	if (!dup_op)
+		rc = pool_op_save(&tx, svc, rpc, DAOS_POOL_VERSION, rc, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	rc = rdb_tx_commit(&tx);
@@ -7827,7 +7824,7 @@ ds_pool_attr_set_handler(crt_rpc_t *rpc, int handler_version)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = pool_op_check_dup(&tx, svc, rpc, handler_version, &dup_op, &op_val);
+	rc = pool_op_lookup(&tx, svc, rpc, handler_version, &dup_op, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	else if (dup_op || fi_fail_noreply)
@@ -7839,9 +7836,9 @@ ds_pool_attr_set_handler(crt_rpc_t *rpc, int handler_version)
 
 out_commit:
 	if ((rc == 0) && !dup_op && fi_fail_noreply)
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, handler_version, -DER_MISC, &op_val);
-	else
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, handler_version, rc, &op_val);
+		rc = -DER_MISC;
+	if (!dup_op)
+		rc = pool_op_save(&tx, svc, rpc, handler_version, rc, &op_val);
 	if (rc != 0)
 		goto out_lock;
 
@@ -7916,7 +7913,7 @@ ds_pool_attr_del_handler(crt_rpc_t *rpc, int handler_version)
 
 	ABT_rwlock_wrlock(svc->ps_lock);
 
-	rc = pool_op_check_dup(&tx, svc, rpc, handler_version, &dup_op, &op_val);
+	rc = pool_op_lookup(&tx, svc, rpc, handler_version, &dup_op, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	else if (dup_op || fi_fail_noreply)
@@ -7928,9 +7925,9 @@ ds_pool_attr_del_handler(crt_rpc_t *rpc, int handler_version)
 
 out_commit:
 	if ((rc == 0) && !dup_op && fi_fail_noreply)
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, handler_version, -DER_MISC, &op_val);
-	else
-		rc = pool_op_save_dup(&tx, svc, rpc, dup_op, handler_version, rc, &op_val);
+		rc = -DER_MISC;
+	if (!dup_op)
+		rc = pool_op_save(&tx, svc, rpc, handler_version, rc, &op_val);
 	if (rc != 0)
 		goto out_lock;
 
