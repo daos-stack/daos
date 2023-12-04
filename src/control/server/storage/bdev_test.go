@@ -174,29 +174,28 @@ func Test_Convert_SmdDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 	expOut := `{"role_bits":7,"uuid":"00000001-0001-0001-0001-000000000001","` +
-		`tgt_ids":[5,6,7,8],"rank":0,"total_bytes":0,"avail_bytes":0,"usa` +
-		`ble_bytes":0,"cluster_size":0,"meta_size":0,"meta_wal_size":0,"r` +
-		`db_size":0,"rdb_wal_size":0,"roles":"data,meta,wal","has_sys_xs"` +
+		`tgt_ids":[5,6,7,8],"rank":0,"total_bytes":0,"avail_bytes":0,"` +
+		`usable_bytes":0,"cluster_size":0,"meta_size":0,"meta_wal_size":0,"` +
+		`rdb_size":0,"rdb_wal_size":0,"roles":"data,meta,wal","has_sys_xs"` +
 		`:true,"ctrlr":{"info":"","model":"model-1","serial":"","pci_addr` +
 		`":"0000:01:00.0","fw_rev":"fwRev-1","vendor_id":"","pci_type":""` +
-		`,"socket_id":` +
-		`1,"health_stats":{"timestamp":0,"warn_temp_time":1,"crit_temp_ti` +
-		`me":1,"ctrl_busy_time":1,"power_cycles":1,"power_on_hours":1,"un` +
-		`safe_shutdowns":1,"media_errs":1,"err_log_entries":1,"bio_read_e` +
-		`rrs":1,"bio_write_errs":1,"bio_unmap_errs":1,"checksum_errs":1,"` +
-		`temperature":1,"temp_warn":true,"avail_spare_warn":true,"dev_rel` +
-		`iability_warn":true,"read_only_warn":true,"volatile_mem_warn":tr` +
-		`ue,"program_fail_cnt_norm":1,"program_fail_cnt_raw":1,"erase_fai` +
-		`l_cnt_norm":1,"erase_fail_cnt_raw":1,"wear_leveling_cnt_norm":1,` +
-		`"wear_leveling_cnt_min":1,"wear_leveling_cnt_max":1,"wear_leveli` +
-		`ng_cnt_avg":1,"endtoend_err_cnt_raw":1,"crc_err_cnt_raw":1,"medi` +
-		`a_wear_raw":1,"host_reads_raw":1,"workload_timer_raw":1,"thermal` +
+		`,"socket_id":1,"health_stats":{"timestamp":0,"warn_temp_time":1,"` +
+		`crit_temp_time":1,"ctrl_busy_time":1,"power_cycles":1,"power_on_hours":1,"` +
+		`unsafe_shutdowns":1,"media_errs":1,"err_log_entries":1,"bio_read_errs` +
+		`":1,"bio_write_errs":1,"bio_unmap_errs":1,"checksum_errs":1,"` +
+		`temperature":1,"temp_warn":true,"avail_spare_warn":true,"dev_reliability` +
+		`_warn":true,"read_only_warn":true,"volatile_mem_warn":true` +
+		`,"program_fail_cnt_norm":1,"program_fail_cnt_raw":1,"erase_fail` +
+		`_cnt_norm":1,"erase_fail_cnt_raw":1,"wear_leveling_cnt_norm":1,` +
+		`"wear_leveling_cnt_min":1,"wear_leveling_cnt_max":1,"wear_leveling` +
+		`_cnt_avg":1,"endtoend_err_cnt_raw":1,"crc_err_cnt_raw":1,"media` +
+		`_wear_raw":1,"host_reads_raw":1,"workload_timer_raw":1,"thermal` +
 		`_throttle_status":1,"thermal_throttle_event_cnt":1,"retry_buffer` +
-		`_overflow_cnt":1,"pll_lock_loss_cnt":1,"nand_bytes_written":1,"h` +
-		`ost_bytes_written":1,"cluster_size":0,"meta_wal_size":0,"rdb_wal` +
-		`_size":0},"namespaces":[{"id":1,"size":2000000000000}],"smd_devi` +
-		`ces":null,"dev_state":"EVICTED","led_state":"ON"},"ctrlr_namespa` +
-		`ce_id":0}`
+		`_overflow_cnt":1,"pll_lock_loss_cnt":1,"nand_bytes_written":1,"` +
+		`host_bytes_written":1,"cluster_size":0,"meta_wal_size":0,"rdb_wal` +
+		`_size":0},"namespaces":[{"id":1,"size":2000000000000}],"smd_devices` +
+		`":null,"dev_state":"EVICTED","led_state":"ON"},"ctrlr_namespace` +
+		`_id":0}`
 	if diff := cmp.Diff(expOut, string(out)); diff != "" {
 		t.Fatalf("expected json output to match (-want, +got):\n%s\n", diff)
 	}
