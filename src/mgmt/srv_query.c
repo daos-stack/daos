@@ -250,12 +250,11 @@ bio_storage_dev_manage_led(void *arg)
 	rc = bio_led_manage(bxc, led_info->tr_addr, led_info->dev_uuid,
 			    (unsigned int)led_info->action, (unsigned int *)led_info->state,
 			    led_info->duration);
-	if ((rc != 0) && (rc != -DER_NOSYS))
-		D_ERROR("bio_led_manage failed on device:"DF_UUID" (action: %s, state %s): "
-			DF_RC"\n", DP_UUID(led_info->dev_uuid),
-			ctl__led_action__descriptor.values[led_info->action].name,
-			ctl__led_state__descriptor.values[*led_info->state].name,
-			DP_RC(rc));
+	if ((rc != 0) && (rc != -DER_NOTSUPPORTED))
+		DL_ERROR(rc, "bio_led_manage failed on device:" DF_UUID " (action: %s, state %s)",
+			 DP_UUID(led_info->dev_uuid),
+			 ctl__led_action__descriptor.values[led_info->action].name,
+			 ctl__led_state__descriptor.values[*led_info->state].name);
 
 	return rc;
 }
@@ -482,10 +481,6 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		/* Fetch LED State if VMD is enabled and device is plugged */
 
-		if (strncmp(dev_info->bdi_ctrlr->pci_type, NVME_PCI_DEV_TYPE_VMD,
-			    strlen(NVME_PCI_DEV_TYPE_VMD)) != 0)
-			goto next_dev;
-
 		uuid_copy(led_info.dev_uuid, dev_info->bdi_dev_id);
 		led_info.action = CTL__LED_ACTION__GET;
 		led_state = CTL__LED_STATE__NA;
@@ -495,8 +490,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 				     init_xs_type(),
 				     0, 0);
 		if (rc != 0) {
-			if (rc == -DER_NOSYS) {
-				led_state = CTL__LED_STATE__NA;
+			if (rc == -DER_NOTSUPPORTED) {
+				resp->devices[i]->ctrlr->led_state = CTL__LED_STATE__NA;
 				/* Reset rc for non-VMD case */
 				rc = 0;
 			} else {
@@ -736,14 +731,12 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
 			     init_xs_type(), 0, 0);
 	if (rc != 0) {
-		D_ERROR("FAULT LED state not set on device:"DF_UUID"\n", DP_UUID(dev_uuid));
-		if (rc == -DER_NOSYS) {
-			led_state = CTL__LED_STATE__NA;
+		if (rc == -DER_NOTSUPPORTED)
 			/* Reset rc for non-VMD case */
 			rc = 0;
-		} else {
-			goto out;
-		}
+		else
+			DL_ERROR(rc, "FAULT LED state not set on device:" DF_UUID,
+				 DP_UUID(dev_uuid));
 	}
 
 out:
@@ -768,7 +761,23 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	ctl__smd_device__init(resp->device);
 	resp->device->uuid = NULL;
 
-	led_info.tr_addr  = req->ids;
+	D_ALLOC_PTR(resp->device->ctrlr);
+	if (resp->device->ctrlr == NULL) {
+		return -DER_NOMEM;
+	}
+	ctl__nvme_controller__init(resp->device->ctrlr);
+
+	D_ALLOC(resp->device->ctrlr->pci_addr, ADDR_STR_MAX_LEN + 1);
+	if (resp->device->ctrlr->pci_addr == NULL)
+		return -DER_NOMEM;
+	if ((req->ids == NULL) || (strlen(req->ids) == 0)) {
+		D_ERROR("PCI address not provided in request\n");
+		return -DER_INVAL;
+	}
+	strncpy(resp->device->ctrlr->pci_addr, req->ids, ADDR_STR_MAX_LEN + 1);
+
+	/* pci_addr will be used if set and get populated if not */
+	led_info.tr_addr  = resp->device->ctrlr->pci_addr;
 	led_info.action = req->led_action;
 	led_state = req->led_state;
 	led_info.state = &led_state;
@@ -778,9 +787,12 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	rc = dss_ult_execute(bio_storage_dev_manage_led, &led_info, NULL, NULL,
 			     init_xs_type(), 0, 0);
 	if (rc != 0) {
-		if (rc == -DER_NOSYS)
+		resp->device->ctrlr->led_state = CTL__LED_STATE__NA;
+		if (rc == -DER_NOTSUPPORTED)
 			/* Reset rc for non-VMD case */
 			rc = 0;
+	} else {
+		resp->device->ctrlr->led_state = (Ctl__LedState)led_state;
 	}
 
 	return rc;
@@ -822,7 +834,7 @@ int
 ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp *resp)
 {
 	struct bio_replace_dev_info	 replace_dev_info = { 0 };
-	int				 rc = 0;
+	int                              rc;
 
 	if (uuid_is_null(old_dev_uuid))
 		return -DER_INVAL;
@@ -833,10 +845,8 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp
 		DP_UUID(old_dev_uuid), DP_UUID(new_dev_uuid));
 
 	D_ALLOC(resp->device->uuid, DAOS_UUID_STR_SIZE);
-	if (resp->device->uuid == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (resp->device->uuid == NULL)
+		return -DER_NOMEM;
 	uuid_unparse_lower(new_dev_uuid, resp->device->uuid);
 
 	uuid_copy(replace_dev_info.old_dev, old_dev_uuid);
@@ -845,12 +855,6 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp
 			     init_xs_type(), 0, 0);
 	if (rc != 0)
 		DL_ERROR(rc, "ULT did not complete storage_dev_replace");
-
-out:
-	if (rc != 0) {
-		if (resp->device->uuid != NULL)
-			D_FREE(resp->device->uuid);
-	}
 
 	return rc;
 }

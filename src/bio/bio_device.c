@@ -46,13 +46,14 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
-	/* Reset the LED of the VMD device once revived */
+	/**
+	 * Reset the LED of the VMD device once revived, a DER_NOTSUPPORTED indicates that VMD-LED
+	 * control is not enabled on device.
+	 */
 	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__RESET,
 			    NULL, 0);
-	if (rc != 0)
-		/* DER_NOSYS indicates that VMD-LED control is not enabled */
-		DL_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR, rc,
-			  "Reset LED on device:" DF_UUID " failed", DP_UUID(d_bdev->bb_uuid));
+	if ((rc != 0) && (rc != -DER_NOTSUPPORTED))
+		DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed", DP_UUID(d_bdev->bb_uuid));
 
 	return 0;
 }
@@ -472,6 +473,7 @@ json_find_bdev_params(struct spdk_bdev *bdev, struct bio_dev_info *b_info)
 {
 	struct spdk_json_write_ctx *json;
 	int                         rc;
+	int                         rc2;
 
 	json = spdk_json_write_begin(json_write_bdev_cb, b_info, SPDK_JSON_WRITE_FLAG_FORMATTED);
 	if (json == NULL) {
@@ -480,16 +482,17 @@ json_find_bdev_params(struct spdk_bdev *bdev, struct bio_dev_info *b_info)
 	}
 
 	rc = spdk_bdev_dump_info_json(bdev, json);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR("Failed to dump config from SPDK bdev (%s)\n", spdk_strerror(-rc));
-		return daos_errno2der(-rc);
-	}
 
-	rc = spdk_json_write_end(json);
-	if (rc != 0) {
-		D_ERROR("Failed to write JSON (%s)\n", spdk_strerror(-rc));
+	rc2 = spdk_json_write_end(json);
+	if (rc2 != 0)
+		D_ERROR("Failed to write JSON (%s)\n", spdk_strerror(-rc2));
+
+	if (rc != 0)
 		return daos_errno2der(-rc);
-	}
+	if (rc2 != 0)
+		return daos_errno2der(-rc2);
 
 	return rc;
 }
@@ -882,7 +885,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	if (strncmp(pci_dev_type, NVME_PCI_DEV_TYPE_VMD, strlen(NVME_PCI_DEV_TYPE_VMD)) != 0) {
 		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s:%s), can't manage LED\n",
 			pci_dev_type, addr_buf);
-		opts->status = -DER_NOSYS;
+		opts->status = -DER_NOTSUPPORTED;
 		return;
 	}
 
@@ -1073,7 +1076,7 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	spdk_pci_for_each_device(&opts, led_device_action);
 
 	if (opts.status != 0) {
-		if (opts.status != -DER_NOSYS) {
+		if (opts.status != -DER_NOTSUPPORTED) {
 			if (state != NULL)
 				D_ERROR("LED %s failed (target state: %s): %s\n",
 					LED_ACTION_NAME(action), LED_STATE_NAME(*state),
@@ -1154,14 +1157,14 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 	rc = fill_in_traddr(&b_info, d_bdev->bb_name);
 	if (rc) {
 		D_DEBUG(DB_MGMT, "Unable to get traddr for device %s\n", d_bdev->bb_name);
-		return -DER_NOSYS;
+		return -DER_INVAL;
 	}
 
 	rc = spdk_pci_addr_parse(pci_addr, b_info.bdi_traddr);
 	if (rc != 0) {
 		D_DEBUG(DB_MGMT, "Unable to parse PCI address for device %s (%s)\n",
 			b_info.bdi_traddr, spdk_strerror(-rc));
-		rc = -DER_NOSYS;
+		rc = -DER_INVAL;
 	}
 
 	D_FREE(b_info.bdi_traddr);
@@ -1178,7 +1181,7 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 
 	/* LED management on NVMe devices currently only supported when VMD is enabled. */
 	if (!bio_vmd_enabled)
-		return 0;
+		return -DER_NOTSUPPORTED;
 
 	/**
 	 * If tr_addr is already provided, convert to a PCI address. If tr_addr is NULL or empty,
@@ -1187,15 +1190,17 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 	 */
 
 	if (tr_addr != NULL) {
-		addr_len = strnlen(tr_addr, SPDK_NVMF_TRADDR_MAX_LEN);
-		if (addr_len == SPDK_NVMF_TRADDR_MAX_LEN)
+		addr_len = strnlen(tr_addr, SPDK_NVMF_TRADDR_MAX_LEN + 1);
+		if (addr_len == SPDK_NVMF_TRADDR_MAX_LEN + 1)
 			return -DER_INVAL;
 	}
 
 	if (addr_len == 0) {
 		rc = dev_uuid2pci_addr(&pci_addr, dev_uuid);
-		if (rc != 0)
+		if (rc != 0) {
+			DL_ERROR(rc, "Failed to read PCI addr from dev UUID");
 			return rc;
+		}
 
 		if (tr_addr != NULL) {
 			/* Populate tr_addr buffer to return address */

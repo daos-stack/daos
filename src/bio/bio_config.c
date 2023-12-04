@@ -202,8 +202,8 @@ traddr_to_vmd(char *dst, const char *src)
 		return -DER_NOMEM;
 
 	strncat(vmd_addr, "0000:", SPDK_NVMF_TRADDR_MAX_LEN);
-	len = strnlen(vmd_addr, SPDK_NVMF_TRADDR_MAX_LEN);
-	if ((len == 0) || (len == SPDK_NVMF_TRADDR_MAX_LEN))
+	len = strnlen(vmd_addr, SPDK_NVMF_TRADDR_MAX_LEN + 1);
+	if ((len == 0) || (len == SPDK_NVMF_TRADDR_MAX_LEN + 1))
 		return -DER_INVAL;
 	vmd_addr_left_len = SPDK_NVMF_TRADDR_MAX_LEN - len;
 
@@ -1013,7 +1013,7 @@ bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_s
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)
-		return -DER_NOMEM;
+		D_GOTO(free_json, rc = -DER_NOMEM);
 
 	/* Calculate number of values in tree before mem alloc. */
 	rc = spdk_json_parse(json_data, strnlen(json_data, json_size), NULL, 0, &end,
@@ -1077,6 +1077,7 @@ free_values:
 	D_FREE(ctx->values);
 free_ctx:
 	D_FREE(ctx);
+free_json:
 	D_FREE(json_data);
 
 	return rc;
