@@ -705,7 +705,7 @@ pool_op_retry(void **state)
 		      principal);
 	rc = dmg_pool_delete_ace(arg->dmg_config, arg->pool.pool_uuid, arg->group, principal);
 	/* FIXME: DAOS-14020, change to expect rc == 0 when dup detection enabled in
-	 * pool_op_save_dup()
+	 * pool_op_save()
 	 */
 	assert_rc_equal(rc, -DER_NONEXIST);
 	print_message("success\n");
@@ -739,7 +739,7 @@ pool_op_retry(void **state)
 	print_message("success\n");
 
 	/* FIXME: DAOS-14020, change to expect rc == -DER_MISC for all DAOS_MD_OP_FAIL_NOREPLY
-	 * cases when dup detection is enabled in pool_op_save_dup()
+	 * cases when dup detection is enabled in pool_op_save()
 	 */
 
 	/* pool connect failure committed, "lost" reply - duplicate RPC retry */

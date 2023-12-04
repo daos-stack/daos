@@ -5226,8 +5226,8 @@ cont_op_is_write(crt_opcode_t opc)
  * Return the answer in is_dup (when rc == 0). Further when is_dup is true, assign value into valp.
  */
 static int
-cont_op_check_dup(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
-		  crt_rpc_t *rpc, int cont_proto_ver, bool *is_dup, struct ds_pool_svc_op_val *valp)
+cont_op_lookup(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
+	       crt_rpc_t *rpc, int cont_proto_ver, bool *is_dup, struct ds_pool_svc_op_val *valp)
 {
 	struct cont_op_v8_in     *in8 = crt_req_get(rpc);
 	struct ds_pool_svc_op_key op_key;
@@ -5298,9 +5298,8 @@ out:
 
 /* Save results of the operation in svc_ops KVS, in the existing rdb_tx context. */
 static int
-cont_op_save_dup(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
-		 crt_rpc_t *rpc, bool dup_op, int cont_proto_ver, int rc_in,
-		 struct ds_pool_svc_op_val *op_valp)
+cont_op_save(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc,
+	     int cont_proto_ver, int rc_in, struct ds_pool_svc_op_val *op_valp)
 {
 	struct cont_op_v8_in     *in8 = crt_req_get(rpc);
 	d_iov_t                   key;
@@ -5310,10 +5309,6 @@ cont_op_save_dup(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_sv
 	bool                      proto_enabled;
 	crt_opcode_t              opc = opc_get(rpc->cr_opc);
 	int                       rc  = 0;
-
-	/* Test here for simpler caller invocation code */
-	if (dup_op)
-		goto out;
 
 	op_valp->ov_rc = rc_in;
 
@@ -5408,7 +5403,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	else
 		ABT_rwlock_rdlock(svc->cs_lock);
 
-	rc = cont_op_check_dup(&tx, pool_hdl, svc, rpc, cont_proto_ver, &dup_op, &op_val);
+	rc = cont_op_lookup(&tx, pool_hdl, svc, rpc, cont_proto_ver, &dup_op, &op_val);
 	if (rc != 0)
 		goto out_lock;
 	else if (fi_fail_noreply)
@@ -5463,10 +5458,9 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 
 out_commit:
 	if ((rc == 0) && !dup_op && fi_fail_noreply)
-		rc = cont_op_save_dup(&tx, pool_hdl, svc, rpc, dup_op, cont_proto_ver, -DER_MISC,
-				      &op_val);
-	else
-		rc = cont_op_save_dup(&tx, pool_hdl, svc, rpc, dup_op, cont_proto_ver, rc, &op_val);
+		rc = -DER_MISC;
+	if (!dup_op)
+		rc = cont_op_save(&tx, pool_hdl, svc, rpc, cont_proto_ver, rc, &op_val);
 	if (rc != 0)
 		goto out_contref;
 

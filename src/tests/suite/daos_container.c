@@ -669,7 +669,7 @@ co_op_retry(void **state)
 	print_message("creating container %s (retry / dup rpc detection) ... ", label1);
 	rc = daos_cont_create_with_label(arg->pool.poh, label1, NULL, &uuid, NULL);
 	/* FIXME: DAOS-14020, change to expect rc == 0 when dup detection enabled in
-	 * cont_op_save_dup()
+	 * cont_op_save()
 	 */
 	assert_rc_equal(rc, -DER_EXIST);
 	print_message("success, created container: " DF_UUID "\n", DP_UUID(uuid));
@@ -704,7 +704,7 @@ co_op_retry(void **state)
 	print_message("destroying snapshot on container (retry / dup rpc detection)... ");
 	rc = daos_cont_destroy_snap(coh, epr, NULL /* ev */);
 	/* FIXME: DAOS-14020, change to expect rc == 0 when dup detection enabled in
-	 * cont_op_save_dup()
+	 * cont_op_save()
 	 */
 	assert_rc_equal(rc, -DER_NONEXIST);
 	print_message("success\n");
@@ -726,7 +726,7 @@ co_op_retry(void **state)
 	print_message("delete container ACL (retry / dup rpc detection)... ");
 	rc = daos_cont_delete_acl(coh, DAOS_ACL_EVERYONE, NULL, NULL);
 	/* FIXME: DAOS-14020, change to expect rc == 0 when dup detection enabled in
-	 * cont_op_save_dup()
+	 * cont_op_save()
 	 */
 	assert_rc_equal(rc, -DER_NONEXIST);
 	print_message("success\n");
@@ -752,7 +752,7 @@ co_op_retry(void **state)
 	print_message("destroying container %s (retry / dup rpc detection) ... ", label1);
 	rc = daos_cont_destroy(arg->pool.poh, label1, 1 /* force */, NULL);
 	/* FIXME: DAOS-14020, change to expect rc == 0 when dup detection enabled in
-	 * cont_op_save_dup()
+	 * cont_op_save()
 	 */
 	assert_rc_equal(rc, -DER_NONEXIST);
 	print_message("success\n");
@@ -760,7 +760,7 @@ co_op_retry(void **state)
 	/* fault inject a timeout reply after failed handling; rpc retry sees failure. */
 
 	/* FIXME: DAOS-14020, change to expect rc == -DER_MISC for all DAOS_MD_OP_FAIL_NOREPLY
-	 * cases when dup detection is enabled in cont_op_save_dup()
+	 * cases when dup detection is enabled in cont_op_save()
 	 */
 
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_MD_OP_FAIL_NOREPLY | DAOS_FAIL_ONCE);
@@ -772,7 +772,7 @@ co_op_retry(void **state)
 	print_message("creating container %s ... ", label2);
 	rc = daos_cont_create_with_label(arg->pool.poh, label2, NULL, &uuid, NULL);
 	/* FIXME: DAOS-14020, change to expect rc == 0 when dup detection enabled in
-	 * cont_op_save_dup()
+	 * cont_op_save()
 	 */
 	assert_rc_equal(rc, -DER_EXIST);
 	print_message("success\n");
@@ -785,7 +785,7 @@ co_op_retry(void **state)
 	print_message("success\n");
 
 #if 0
-	/* FIXME: DAOS-14020, enable this code when dup detection enabled in cont_op_save_dup() */
+	/* FIXME: DAOS-14020, enable this code when dup detection enabled in cont_op_save() */
 	print_message("opening container %s ... ", label2);
 	rc = daos_cont_open(arg->pool.poh, label2, DAOS_COO_RW, &coh, &info, NULL);
 	assert_rc_equal(rc, 0);
@@ -811,7 +811,7 @@ co_op_retry(void **state)
 	print_message("success\n");
 
 #if 0
-	/* FIXME: DAOS-14020, enable this code when dup detection enabled in cont_op_save_dup() */
+	/* FIXME: DAOS-14020, enable this code when dup detection enabled in cont_op_save() */
 	print_message("creating snapshot on container (retry / dup rpc detection)... ");
 	rc = daos_cont_create_snap(coh, &epoch, NULL, NULL /* ev */);
 	assert_rc_equal(rc, 0);
@@ -861,7 +861,7 @@ co_op_retry(void **state)
 	print_message("success\n");
 
 #if 0
-	/* FIXME: DAOS-14020, enable this code when dup detection enabled in cont_op_save_dup() */
+	/* FIXME: DAOS-14020, enable this code when dup detection enabled in cont_op_save() */
 	print_message("destroying container %s ... ", label2);
 	rc = daos_cont_destroy(arg->pool.poh, label2, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
