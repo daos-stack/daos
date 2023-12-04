@@ -36,6 +36,7 @@ dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_FLOCK_LOCKS);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_IOCTL_DIR);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_AUTO_INVAL_DATA);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPLICIT_INVAL_DATA);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_READDIRPLUS);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_READDIRPLUS_AUTO);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_ASYNC_DIO);
@@ -50,9 +51,6 @@ dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 #endif
 #ifdef FUSE_CAP_NO_OPENDIR_SUPPORT
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_NO_OPENDIR_SUPPORT);
-#endif
-#ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
-	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPLICIT_INVAL_DATA);
 #endif
 
 	if (cap)
@@ -87,6 +85,9 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
+
+	conn->want |= FUSE_CAP_EXPLICIT_INVAL_DATA;
+	conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
 
 	conn->time_gran = 1;
 
