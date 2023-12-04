@@ -1014,15 +1014,6 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 
 /* Cache expiry */
 
-/* Represents one timeout value (time).  Maintains a ordered list of dentries that are using
- * this timeout
- */
-struct dfuse_time_entry {
-	d_list_t inode_list;
-	double   time;
-	d_list_t dte_list;
-};
-
 int
 dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *inode,
 			double timeout);
@@ -1046,6 +1037,18 @@ dfuse_mcache_evict(struct dfuse_inode_entry *ie);
 /* Check the metadata cache setting against a given timeout, and return time left */
 bool
 dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+bool
+dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+int
+dfuse_de_add_value(struct dfuse_info *dfuse_info, double timeout);
+
+void *
+dfuse_evict_thread(void *arg);
+
+void
+dfuse_de_stop(struct dfuse_info *dfuse_info);
 
 /* Data caching functions */
 
