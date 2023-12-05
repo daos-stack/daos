@@ -1422,8 +1422,10 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	 * Return quota resource and dispatch 1 rpc if any on waitq.
 	 * dispatch_rpc() will either acquire a quota resource or will requeue this rpc
 	 */
+	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	tmp_rpc = d_list_pop_entry(&crt_ctx->cc_quotas.rpc_waitq,
 				   struct crt_rpc_priv, crp_waitq_link);
+	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 	if (tmp_rpc != NULL) {
 		dispatch_rpc(tmp_rpc, false);
 	} else {
