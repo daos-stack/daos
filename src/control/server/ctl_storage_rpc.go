@@ -625,6 +625,10 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	// be applied if only the Meta flag is set in the NVMe component of the request to continue
 	// to support off-line storage scan functionality which uses cached stats (e.g. dmg storage
 	// scan --nvme-meta).
+	//
+	// TODO DAOS-13228: Remove --nvme-meta scan option and the below workaround.
+	//                  If usage or meta requested, fail if no engines started and skip stopped
+	//                  engines in bdev scan. Only return results for ready engines over dRPC.
 	if req.Scm.Usage && req.Nvme.Meta {
 		nrInstances := len(c.harness.Instances())
 		readyRanks := c.harness.readyRanks()
