@@ -99,18 +99,15 @@ def modify_commit_message_pragmas(commit_message):
         if specified_values:
             value_set.update(filter(None, specified_values.split(' ')))
 
-    # Set defaults for Medium MD on SSD stages if no global tags are set
-    if not tag_pragmas['Test-tag']:
-        for pragma in ('Test-tag-hw-medium-md-on-ssd',
-                       'Test-tag-hw-medium-verbs-provider-md-on-ssd'):
-            if not tag_pragmas[pragma]:
-                tag_pragmas[pragma].add('pr,md_on_ssd')
-
-    # Run the normally disabled Functional Hardware Large MD on SSD stage when it has tests
-    if tag_pragmas['Test-tag'] or tag_pragmas['Test-tag-hw-large-md-on-ssd']:
-        specified_values = get_pragma_values(commit_message, 'Skip-func-hw-test-large-md-on-ssd')
-        if specified_values != 'true':
-            tag_pragmas['Skip-func-hw-test-large-md-on-ssd'] = ['false']
+    # Run the normally disabled Functional Hardware MD on SSD stages when they have tests
+    for pragma in ('Test-tag-hw-medium-md-on-ssd',
+                   'Test-tag-hw-medium-verbs-provider-md-on-ssd',
+                   'Test-tag-hw-large-md-on-ssd'):
+        if tag_pragmas[pragma]:
+            skip_pragma = pragma.replace('Test-tag', 'Skip-func')
+            skip_stage = get_pragma_values(commit_message, skip_pragma)
+            if skip_stage != 'true':
+                tag_pragmas[skip_pragma] = ['false']
 
     # Append any Features tags to the Test-tag pragma
     if tag_pragmas['Features']:

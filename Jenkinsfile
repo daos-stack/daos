@@ -268,6 +268,9 @@ pipeline {
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large test stage')
+        booleanParam(name: 'CI_large-md-on-ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Large MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -1147,7 +1150,7 @@ pipeline {
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
                             nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
+                            run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
@@ -1173,7 +1176,7 @@ pipeline {
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
                             nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
+                            run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
