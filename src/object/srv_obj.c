@@ -15,6 +15,8 @@
 
 #include <abt.h>
 #include <daos/rpc.h>
+#include <daos/placement.h>
+#include <daos/pool_map.h>
 #include <daos/cont_props.h>
 #include <daos_srv/pool.h>
 #include <daos_srv/rebuild.h>
@@ -2143,6 +2145,7 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 	struct obj_tls		*tls;
 	struct ds_pool_child	*poc;
 	int			rc;
+	bool			once = false;
 
 	rc = obj_ioc_init(pool_uuid, coh_uuid, cont_uuid, rpc, ioc);
 	if (rc)
@@ -2151,6 +2154,7 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 	poc = ioc->ioc_coc->sc_pool;
 	D_ASSERT(poc != NULL);
 
+again:
 	if (unlikely(poc->spc_pool->sp_map == NULL ||
 		     DAOS_FAIL_CHECK(DAOS_FORCE_REFRESH_POOL_MAP))) {
 		/* XXX: Client (or leader replica) has newer pool map than
@@ -2176,7 +2180,7 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 */
 		D_DEBUG(DB_IO, "stale server map_version %d req %d\n",
 			ioc->ioc_map_ver, rpc_map_ver);
-		rc = ds_pool_child_map_refresh_async(poc);
+		rc = ds_pool_child_map_refresh_async(poc->spc_uuid, poc->spc_map_version);
 		if (rc == 0) {
 			ioc->ioc_map_ver = poc->spc_map_version;
 			rc = -DER_STALE;
@@ -2194,6 +2198,28 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 			D_GOTO(out, rc = -DER_TX_RESTART);
 
 		D_GOTO(out, rc = -DER_STALE);
+	} else if (rpc_map_ver > ioc->ioc_map_ver &&
+		   opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_COLL_PUNCH) {
+
+		if (unlikely(once)) {
+			D_WARN("Still hold stale map %u vs %u for pool "DF_UUID" after refresh. "
+			       "Please check whether client offers version is correct or not.\n",
+			       rpc_map_ver, ioc->ioc_map_ver, DP_UUID(poc->spc_uuid));
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+
+		/*
+		 * For collective punch, the map version must be matched among client and
+		 * engines, otherwise, different engines may get different object layouts.
+		 */
+		rc = ds_pool_child_map_refresh_sync(poc->spc_uuid, rpc_map_ver);
+		if (rc != 0)
+			goto out;
+
+		ioc->ioc_map_ver = poc->spc_map_version;
+		once = true;
+
+		goto again;
 	} else if (DAOS_FAIL_CHECK(DAOS_DTX_STALE_PM)) {
 		D_GOTO(out, rc = -DER_STALE);
 	}
@@ -2596,8 +2622,6 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
-
-		dtx_flags |= DTX_RESEND;
 	}
 
 	/* Inject failure for test to simulate the case of lost some
@@ -2787,6 +2811,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	int				dti_cos_cnt;
 	uint32_t			tgt_cnt;
 	uint32_t			version = 0;
+	uint32_t			max_ver = 0;
 	struct dtx_epoch		epoch = {0};
 	int				rc;
 	bool				need_abort = false;
@@ -2857,6 +2882,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	}
 
 	version = orw->orw_map_ver;
+	max_ver = orw->orw_map_ver;
 
 	if (tgt_cnt == 0) {
 		if (!(orw->orw_api_flags & DAOS_COND_MASK))
@@ -2873,7 +2899,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	if (orw->orw_flags & ORF_RESEND) {
 		daos_epoch_t		 e;
 
-		dtx_flags |= DTX_RESEND;
 		d_tm_inc_counter(opm->opm_update_resent, 1);
 
 again1:
@@ -2934,9 +2959,10 @@ again2:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
-			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
-			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
+	rc = dtx_leader_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1, version, &orw->orw_oid,
+			      dti_cos, dti_cos_cnt, NULL /* hints */, 0 /* hint_sz */,
+			      NULL /* bitmap */, 0 /* bitmap_sz */, tgts, tgt_cnt, dtx_flags,
+			      NULL /* ranks */, mbs, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID ": Failed to start DTX for update " DF_RC "\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -2950,6 +2976,9 @@ again2:
 
 	/* Execute the operation on all targets */
 	rc = dtx_leader_exec_ops(dlh, obj_tgt_update, NULL, 0, &exec_arg);
+
+	if (max_ver < dlh->dlh_rmt_ver)
+		max_ver = dlh->dlh_rmt_ver;
 
 	/* Stop the distributed transaction */
 	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
@@ -3003,6 +3032,9 @@ out:
 			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
 			       DP_DTI(&orw->orw_dti), DP_RC(rc1));
 	}
+
+	if (ioc.ioc_map_ver < max_ver)
+		ioc.ioc_map_ver = max_ver;
 
 	obj_rw_reply(rpc, rc, epoch.oe_value, &ioc);
 	D_FREE(mbs);
@@ -3453,6 +3485,7 @@ again:
 	switch (opc) {
 	case DAOS_OBJ_RPC_PUNCH:
 	case DAOS_OBJ_RPC_TGT_PUNCH:
+	case DAOS_OBJ_RPC_COLL_PUNCH:
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
 				   opi->opi_epoch, opi->opi_map_ver,
 				   0, NULL, 0, NULL, dth);
@@ -3542,58 +3575,55 @@ out:
 	return rc;
 }
 
-/* Handle the punch requests on non-leader */
-void
-ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
-{
-	struct dtx_handle		*dth = NULL;
-	struct obj_io_context		 ioc;
-	struct obj_punch_in		*opi;
-	struct dtx_memberships		*mbs = NULL;
-	struct daos_shard_tgt		*tgts = NULL;
-	uint32_t			 dtx_flags = 0;
-	uint32_t			 tgt_cnt;
-	struct dtx_epoch		 epoch;
-	int				 rc;
+struct obj_tgt_punch_args {
+	uint32_t		 opc;
+	struct obj_io_context	*sponsor_ioc;
+	struct dtx_handle	*sponsor_dth;
+	struct obj_punch_in	*opi;
+	struct dtx_memberships	*mbs;
+	uint32_t		*ver;
+	void			*data;
+};
 
-	opi = crt_req_get(rpc);
-	D_ASSERT(opi != NULL);
-	rc = obj_ioc_begin(opi->opi_oid.id_pub, opi->opi_map_ver,
-			   opi->opi_pool_uuid, opi->opi_co_hdl,
-			   opi->opi_co_uuid, rpc, opi->opi_flags, &ioc);
-	if (rc)
+static int
+obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
+{
+	struct obj_io_context	 ioc = { 0 };
+	struct obj_io_context	*p_ioc = &ioc;
+	struct obj_punch_in	*opi = otpa->opi;
+	struct dtx_handle	*dth = NULL;
+	struct dtx_epoch	 epoch;
+	daos_epoch_t		 tmp;
+	uint32_t		 dtx_flags = 0;
+	int			 rc = 0;
+	int			 i;
+
+	if (otpa->sponsor_ioc != NULL) {
+		p_ioc = otpa->sponsor_ioc;
+		dth = otpa->sponsor_dth;
+		goto exec;
+	}
+
+	rc = obj_ioc_begin(opi->opi_oid.id_pub, opi->opi_map_ver, opi->opi_pool_uuid,
+			   opi->opi_co_hdl, opi->opi_co_uuid, otpa->data, opi->opi_flags, &ioc);
+	if (rc != 0)
 		goto out;
 
-	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
-		daos_epoch_t	e = opi->opi_epoch;
-
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &e, NULL);
+		tmp = opi->opi_epoch;
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &tmp, NULL);
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc == -DER_ALREADY || rc == 0)
 			D_GOTO(out, rc = 0);
 
-		/* Abort it firstly if exist but with different epoch,
-		 * then re-execute with new epoch.
-		 */
+		/* Abort old one with different epoch, then re-execute with new epoch. */
 		if (rc == -DER_MISMATCH)
 			/* Abort it by force with MAX epoch to guarantee
 			 * that it can be aborted.
 			 */
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, &opi->opi_dti, e);
+			rc = vos_dtx_abort(ioc.ioc_vos_coh, &opi->opi_dti, tmp);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
-			D_GOTO(out, rc);
-
-		dtx_flags |= DTX_RESEND;
-	}
-
-	tgts = opi->opi_shard_tgts.ca_arrays;
-	tgt_cnt = opi->opi_shard_tgts.ca_count;
-
-	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
-		rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &mbs);
-		if (rc != 0)
 			D_GOTO(out, rc);
 	}
 
@@ -3605,10 +3635,9 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 		dtx_flags |= DTX_SYNC;
 
 	/* Start the local transaction */
-	rc = dtx_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
-		       opi->opi_map_ver, &opi->opi_oid,
-		       opi->opi_dti_cos.ca_arrays,
-		       opi->opi_dti_cos.ca_count, dtx_flags, mbs, &dth);
+	rc = dtx_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, count, opi->opi_map_ver,
+		       &opi->opi_oid, opi->opi_dti_cos.ca_arrays, opi->opi_dti_cos.ca_count,
+		       dtx_flags, otpa->mbs, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID ": Failed to start DTX for punch " DF_RC "\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -3618,19 +3647,58 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	if (DAOS_FAIL_CHECK(DAOS_DTX_NONLEADER_ERROR))
 		D_GOTO(out, rc = -DER_IO);
 
-	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, dth);
-	if (rc != 0)
-		DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
-			      (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
-			  DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
+exec:
+	/* There may be multiple shards reside on the same VOS target. */
+	for (i = 0; i < count; i++) {
+		opi->opi_oid.id_shard = shards[i];
+		rc = obj_local_punch(opi, otpa->opc, p_ioc, dth);
+		if (rc != 0) {
+			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+				  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
+				  DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
+			goto out;
+		}
+	}
 
 out:
-	/* Stop the local transaction */
-	if (dth != NULL)
-		rc = dtx_end(dth, ioc.ioc_coc, rc);
-	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
-	D_FREE(mbs);
-	obj_ioc_end(&ioc, rc);
+	if (otpa->ver != NULL)
+		*otpa->ver = p_ioc->ioc_map_ver;
+	if (p_ioc == &ioc) {
+		if (dth != NULL)
+			rc = dtx_end(dth, p_ioc->ioc_coc, rc);
+		obj_ioc_end(p_ioc, rc);
+	}
+
+	return rc;
+}
+
+/* Handle the punch requests on non-leader */
+void
+ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
+{
+	struct obj_tgt_punch_args	 otpa = { 0 };
+	struct obj_punch_in		*opi = crt_req_get(rpc);
+	struct daos_shard_tgt		*tgts = opi->opi_shard_tgts.ca_arrays;
+	uint32_t			 tgt_cnt = opi->opi_shard_tgts.ca_count;
+	uint32_t			 version = 0;
+	int				 rc;
+
+	if (!daos_is_zero_dti(&opi->opi_dti) && tgt_cnt != 0) {
+		rc = obj_gen_dtx_mbs(opi->opi_flags, &tgt_cnt, &tgts, &otpa.mbs);
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+
+	otpa.opc = opc_get(rpc->cr_opc);
+	otpa.opi = opi;
+	otpa.ver = &version;
+	otpa.data = rpc;
+
+	rc = obj_tgt_punch(&otpa, &opi->opi_oid.id_shard, 1);
+
+out:
+	obj_punch_complete(rpc, rc, version);
+	D_FREE(otpa.mbs);
 }
 
 static int
@@ -3654,13 +3722,18 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, int allow_failure)
 	for (i = 0; i < sub_cnt; i++) {
 		sub = &dlh->dlh_subs[i];
 		if (sub->dss_tgt.st_rank != DAOS_TGT_IGNORE && sub->dss_comp) {
-			if (sub->dss_result == 0)
+			if (sub->dss_result == 0) {
 				succeeds++;
-			else if (sub->dss_result == allow_failure)
+			} else if (sub->dss_result == allow_failure) {
 				allow_failure_cnt++;
-			else if (result == -DER_INPROGRESS || result == 0)
-				/* Ignore INPROGRESS if there is other failure. */
+			} else if (result == -DER_INPROGRESS || result == -DER_AGAIN ||
+				   result == 0) {
+				/* Ignore INPROGRESS and AGAIN if there is other failure. */
 				result = sub->dss_result;
+
+				if (dlh->dlh_rmt_ver < sub->dss_version)
+					dlh->dlh_rmt_ver = sub->dss_version;
+			}
 		}
 	}
 
@@ -3675,8 +3748,7 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, int allow_failure)
 }
 
 static int
-obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
-	      dtx_sub_comp_cb_t comp_cb)
+obj_tgt_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_comp_cb_t comp_cb)
 {
 	struct ds_obj_exec_arg	*exec_arg = arg;
 
@@ -3694,10 +3766,9 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc, &dlh->dlh_handle);
 		if (rc != 0)
-			DL_CDEBUG(
-			    rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
-				(rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
-			    DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
+			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+				  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
+				  DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
 
 comp:
 		if (comp_cb != NULL)
@@ -3726,6 +3797,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	uint32_t			flags = 0;
 	uint32_t			dtx_flags = 0;
 	uint32_t			version = 0;
+	uint32_t			max_ver = 0;
 	struct dtx_epoch		epoch;
 	int				rc;
 	bool				need_abort = false;
@@ -3765,6 +3837,7 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 		opi->opi_flags &= ~ORF_EPOCH_UNCERTAIN;
 
 	version = opi->opi_map_ver;
+	max_ver = opi->opi_map_ver;
 	tgts = opi->opi_shard_tgts.ca_arrays;
 	tgt_cnt = opi->opi_shard_tgts.ca_count;
 
@@ -3785,8 +3858,6 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
 		daos_epoch_t	e;
-
-		dtx_flags |= DTX_RESEND;
 
 again1:
 		e = 0;
@@ -3846,9 +3917,10 @@ again2:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
-			      version, &opi->opi_oid, dti_cos, dti_cos_cnt,
-			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
+	rc = dtx_leader_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1, version, &opi->opi_oid,
+			      dti_cos, dti_cos_cnt, NULL /* hints */, 0 /* hint_sz */,
+			      NULL /* bitmap */, 0 /* bitmap_sz */, tgts, tgt_cnt, dtx_flags,
+			      NULL /* rank */, mbs, &dlh);
 	if (rc != 0) {
 		D_ERROR(DF_UOID ": Failed to start DTX for punch " DF_RC "\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -3860,9 +3932,12 @@ again2:
 	exec_arg.flags = flags;
 
 	/* Execute the operation on all shards */
-	rc = dtx_leader_exec_ops(dlh, obj_tgt_punch, obj_punch_agg_cb,
+	rc = dtx_leader_exec_ops(dlh, obj_tgt_punch_disp, obj_punch_agg_cb,
 				 (opi->opi_api_flags & DAOS_COND_PUNCH) ? -DER_NONEXIST : 0,
 				 &exec_arg);
+
+	if (max_ver < dlh->dlh_rmt_ver)
+		max_ver = dlh->dlh_rmt_ver;
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
@@ -3904,7 +3979,7 @@ out:
 			       DP_DTI(&opi->opi_dti), DP_RC(rc1));
 	}
 
-	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
+	obj_punch_complete(rpc, rc, max_ver);
 
 cleanup:
 	D_FREE(mbs);
@@ -4649,8 +4724,6 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc1 == -DER_ALREADY || rc1 == 0)
 			D_GOTO(out, rc = 0);
-
-		dtx_flags |= DTX_RESEND;
 	}
 
 	/* Refuse any modification with old epoch. */
@@ -4822,8 +4895,6 @@ ds_obj_dtx_leader(struct daos_cpd_args *dca)
 	D_ASSERT(dcsh->dcsh_epoch.oe_value != DAOS_EPOCH_MAX);
 
 	if (oci->oci_flags & ORF_RESEND) {
-		dtx_flags |= DTX_RESEND;
-
 again:
 		/* For distributed transaction, the 'ORF_RESEND' may means
 		 * that the DTX has been restarted with newer epoch.
@@ -4900,11 +4971,11 @@ again:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
-			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,
-			      oci->oci_map_ver, &dcsh->dcsh_leader_oid,
-			      NULL, 0, tgts, tgt_cnt - 1, dtx_flags,
-			      dcsh->dcsh_mbs, &dlh);
+	rc = dtx_leader_begin(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid, &dcsh->dcsh_epoch,
+			      dcde->dcde_write_cnt, oci->oci_map_ver, &dcsh->dcsh_leader_oid,
+			      NULL /* dti_cos */, 0 /* dti_cos_cnt */, NULL /* hints */,
+			      0 /* hint_sz */, NULL /* bitmap */, 0 /* bitmap_sz */, tgts,
+			      tgt_cnt - 1, dtx_flags, NULL /* ranks */, dcsh->dcsh_mbs, &dlh);
 	if (rc != 0)
 		goto out;
 
@@ -5163,7 +5234,7 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 
 	D_ASSERT(oci != NULL);
 
-	if (oci->oci_flags & ORF_CPD_LEADER)
+	if (oci->oci_flags & ORF_LEADER)
 		leader = true;
 	else
 		leader = false;
@@ -5351,4 +5422,668 @@ out:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+}
+
+struct obj_coll_tgt_args {
+	crt_rpc_t				*octa_rpc;
+	struct daos_coll_shard			*octa_shards;
+	uint32_t				*octa_versions;
+	int					 octa_sponsor_tgt;
+	struct obj_io_context			*octa_sponsor_ioc;
+	struct dtx_handle			*octa_sponsor_dth;
+	union {
+		void				*octa_misc;
+		/* Different collective operations may need different parameters. */
+		struct dtx_memberships		*octa_mbs;
+	};
+};
+
+static int
+obj_coll_tgt_punch(void *args)
+{
+	struct obj_coll_tgt_args	*octa = args;
+	crt_rpc_t			*rpc = octa->octa_rpc;
+	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
+	struct obj_punch_in		 opi = { 0 };
+	struct obj_tgt_punch_args	 otpa = { 0 };
+	uint32_t			 tgt_id = dss_get_module_info()->dmi_tgt_id;
+	int				 rc;
+
+	opi.opi_dti = ocpi->ocpi_xid;
+	uuid_copy(opi.opi_pool_uuid, ocpi->ocpi_po_uuid);
+	uuid_copy(opi.opi_co_hdl, ocpi->ocpi_co_hdl);
+	uuid_copy(opi.opi_co_uuid, ocpi->ocpi_co_uuid);
+	opi.opi_oid = ocpi->ocpi_oid;
+	opi.opi_oid.id_shard = octa->octa_shards[tgt_id].dcs_buf[0];
+	opi.opi_epoch = ocpi->ocpi_epoch;
+	opi.opi_api_flags = ocpi->ocpi_api_flags;
+	opi.opi_map_ver = ocpi->ocpi_map_ver;
+	opi.opi_flags = ocpi->ocpi_flags & ~ORF_LEADER;
+
+	otpa.opc = opc_get(rpc->cr_opc);
+	if (tgt_id == octa->octa_sponsor_tgt) {
+		otpa.sponsor_ioc = octa->octa_sponsor_ioc;
+		otpa.sponsor_dth = octa->octa_sponsor_dth;
+	}
+	otpa.opi = &opi;
+	otpa.mbs = octa->octa_mbs;
+	if (octa->octa_versions != NULL)
+		otpa.ver = &octa->octa_versions[tgt_id];
+	otpa.data = rpc;
+
+	rc = obj_tgt_punch(&otpa, octa->octa_shards[tgt_id].dcs_buf,
+			   octa->octa_shards[tgt_id].dcs_nr);
+
+	DL_CDEBUG(rc == 0 || rc == -DER_INPROGRESS || rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
+		  "Collective punch obj shard "DF_UOID" with "DF_DTI" on tgt %u",
+		  DP_UOID(opi.opi_oid), DP_DTI(&opi.opi_dti), tgt_id);
+
+	return rc;
+}
+
+typedef int (*obj_coll_func_t)(void *args);
+
+static int
+obj_coll_local(crt_rpc_t *rpc, struct daos_coll_shard *shards, uint8_t *bitmap, uint32_t bitmap_sz,
+	       uint32_t *version, struct obj_io_context *ioc, struct dtx_handle *dth, void *args,
+	       obj_coll_func_t func)
+{
+	struct obj_coll_tgt_args	 octa = { 0 };
+	struct dss_coll_ops		 coll_ops = { 0 };
+	struct dss_coll_args		 coll_args = { 0 };
+	uint32_t			 size = bitmap_sz << 3;
+	int				 rc = 0;
+	int				 i;
+
+	D_ASSERT(bitmap != NULL);
+
+	if (version != NULL) {
+		if (size > dss_tgt_nr)
+			size = dss_tgt_nr;
+		D_ALLOC_ARRAY(octa.octa_versions, size);
+		if (octa.octa_versions == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	octa.octa_rpc = rpc;
+	octa.octa_shards = shards;
+	octa.octa_misc = args;
+	octa.octa_sponsor_ioc = ioc;
+	octa.octa_sponsor_dth = dth;
+	if (ioc != NULL)
+		octa.octa_sponsor_tgt = dss_get_module_info()->dmi_tgt_id;
+	else
+		octa.octa_sponsor_tgt = -1;
+
+	coll_ops.co_func = func;
+	coll_args.ca_func_args = &octa;
+	coll_args.ca_tgt_bitmap = bitmap;
+	coll_args.ca_tgt_bitmap_sz = bitmap_sz;
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_USE_CURRENT_ULT);
+
+out:
+	if (octa.octa_versions != NULL) {
+		for (i = 0, *version = 0; i < size; i++) {
+			if (isset(bitmap, i) && *version < octa.octa_versions[i])
+				*version = octa.octa_versions[i];
+		}
+		D_FREE(octa.octa_versions);
+	}
+
+	return rc;
+}
+
+static int
+obj_coll_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_comp_cb_t comp_cb)
+{
+	struct ds_obj_exec_arg		*exec_arg = arg;
+	crt_rpc_t			*rpc = exec_arg->rpc;
+	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
+	int				 rc;
+
+	if (idx != -1)
+		return ds_obj_coll_punch_remote(dlh, arg, idx, comp_cb);
+
+	/* Local punch on the leader rank, including the leader target. */
+	rc = obj_coll_local(rpc, exec_arg->shards, dlh->dlh_coll_bitmap, dlh->dlh_coll_bitmap_sz,
+			    NULL, exec_arg->ioc, &dlh->dlh_handle, dlh->dlh_handle.dth_mbs,
+			    obj_coll_tgt_punch);
+
+	DL_CDEBUG(rc == 0 || rc == -DER_INPROGRESS || rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
+		  "Collective punch obj "DF_UOID" with "DF_DTI" on rank (leader) %u",
+		  DP_UOID(ocpi->ocpi_oid), DP_DTI(&ocpi->ocpi_xid), dss_self_rank());
+
+	if (comp_cb != NULL)
+		comp_cb(dlh, idx, rc);
+
+	return rc;
+}
+
+static int
+obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_shard **p_shards,
+		    uint8_t **p_hints, uint32_t *hint_sz, uint8_t **p_bitmap, uint32_t *bitmap_sz,
+		    struct dtx_memberships **p_mbs, d_rank_list_t **p_ranks)
+{
+	struct pl_map		*map = NULL;
+	struct pl_obj_layout	*layout = NULL;
+	struct dtx_memberships	*mbs = NULL;
+	struct daos_coll_target	*dcts = NULL;
+	struct daos_coll_target	*dct;
+	struct daos_coll_shard	*dcs;
+	struct dtx_daos_target	*ddt;
+	struct dtx_target_group	*dtg;
+	struct pool_target	*tgt;
+	struct daos_obj_md	 md = { 0 };
+	uint8_t			*hints = NULL;
+	int			 leader_rank = -1;
+	int			 length = -1;
+	uint32_t		*tmp;
+	uint32_t		 rank_nr = 0;
+	uint32_t		 tgt_nr;
+	uint32_t		 size;
+	d_rank_t		 myrank = dss_self_rank();
+	d_rank_t		 max_rank = 0;
+	int			 rc = 0;
+	int			 i;
+	int			 j;
+	int			 k;
+	int			 m;
+
+	D_ASSERT(p_shards != NULL);
+	D_ASSERT(p_hints != NULL);
+	D_ASSERT(p_bitmap != NULL);
+	D_ASSERT(p_mbs != NULL);
+	D_ASSERT(p_ranks != NULL);
+
+	map = pl_map_find(ocpi->ocpi_po_uuid, ocpi->ocpi_oid.id_pub);
+	if (map == NULL) {
+		D_ERROR("Failed to find valid placement map for "DF_UUID"\n",
+			DP_UUID(ocpi->ocpi_po_uuid));
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	md.omd_id = ocpi->ocpi_oid.id_pub;
+	md.omd_ver = ocpi->ocpi_map_ver;
+	md.omd_fdom_lvl = ocpi->ocpi_fdom_lvl;
+	md.omd_pdom_lvl = ocpi->ocpi_pdom_lvl;
+	md.omd_pda = ocpi->ocpi_pda;
+
+	rc = pl_obj_place(map, ocpi->ocpi_oid.id_layout_ver, &md, DAOS_OO_RW, NULL, &layout);
+	if (rc != 0) {
+		D_ERROR("Failed to load object layout for "DF_OID" in pool "DF_UUID"\n",
+			DP_OID(ocpi->ocpi_oid.id_pub), DP_UUID(ocpi->ocpi_po_uuid));
+		goto out;
+	}
+
+	length = pool_map_node_nr(map->pl_poolmap);
+
+	D_ALLOC_ARRAY(dcts, length + 1);
+	if (dcts == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (ocpi->ocpi_flags & ORF_LEADER) {
+		D_ALLOC_ARRAY(hints, length);
+		if (hints == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	for (i = 0, rank_nr = 0, tgt_nr = 0; i < layout->ol_nr; i++) {
+		if (layout->ol_shards[i].po_target == -1 || layout->ol_shards[i].po_shard == -1)
+			continue;
+
+		rc = pool_map_find_target(map->pl_poolmap, layout->ol_shards[i].po_target, &tgt);
+		D_ASSERT(rc == 1);
+
+		dct = &dcts[tgt->ta_comp.co_rank];
+		dct->dct_rank = tgt->ta_comp.co_rank;
+
+		if (max_rank < dct->dct_rank)
+			max_rank = dct->dct_rank;
+
+		/*
+		 * There may be more shards than engines count on the same VOS targets because of
+		 * rebuild/reintegration. The size of dct->dct_tgt_ids maybe larger than dss_tgt_nr.
+		 * It also means that there may repeated elements in the dct->dct_tgt_ids array,
+		 * that is no matter to store them repeatedly in the dtx_memberships.
+		 */
+		if (dct->dct_tgt_nr >= dct->dct_tgt_cap) {
+			if (dct->dct_tgt_nr == 0)
+				m = dss_tgt_nr;
+			else
+				m = dct->dct_tgt_nr << 1;
+			D_ALLOC_ARRAY(tmp, m);
+			if (tmp == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			if (dct->dct_tgt_ids != NULL) {
+				memcpy(tmp, dct->dct_tgt_ids, sizeof(*tmp) * dct->dct_tgt_nr);
+				D_FREE(dct->dct_tgt_ids);
+			}
+
+			dct->dct_tgt_ids = tmp;
+			dct->dct_tgt_cap = m;
+		}
+
+		if (dct->dct_tgt_nr == 0) {
+			/* Assign the first available shard to the hint for this engine. */
+			if (hints != NULL)
+				hints[dct->dct_rank] = tgt->ta_comp.co_index;
+			rank_nr++;
+		}
+
+		if (tgt->ta_comp.co_id == ocpi->ocpi_leader_id) {
+			if (ocpi->ocpi_flags & ORF_LEADER)
+				D_ASSERTF(myrank == dct->dct_rank,
+					  "Unmatched leader rank %u vs %u\n",
+					  myrank, dct->dct_rank);
+			else
+				D_ASSERTF(myrank != dct->dct_rank,
+					  "Unexpected target, rank %u, tgt_id %u\n",
+					  myrank, layout->ol_shards[i].po_target);
+
+			/*
+			 * The leader rank must be unique, but there may be multiple object shards
+			 * on the same leader target because of rebuild if without enough targets
+			 * to guarantee the redundancy factor.
+			 */
+			if (unlikely(leader_rank != -1)) {
+				D_ASSERTF(leader_rank == dct->dct_rank,
+					  "Leader rank must be unique: %u vs %u, myrank %u, "
+					  "leader target %u, flags %x\n",
+					  leader_rank, dct->dct_rank, myrank, ocpi->ocpi_leader_id,
+					  ocpi->ocpi_flags);
+				D_ASSERTF(dct->dct_tgt_ids[0] == layout->ol_shards[i].po_target,
+					  "Leader target must be unique: %u vs %u, leader rank %u, "
+					  "myrank %u, flags %x\n",
+					  dct->dct_tgt_ids[0], layout->ol_shards[i].po_target,
+					  leader_rank, myrank, ocpi->ocpi_flags);
+			} else {
+				leader_rank = dct->dct_rank;
+				if (dct->dct_tgt_nr > 0)
+					memmove(&dct->dct_tgt_ids[1], &dct->dct_tgt_ids[0],
+						sizeof(dct->dct_tgt_ids[0]) * dct->dct_tgt_nr);
+				dct->dct_tgt_ids[0] = layout->ol_shards[i].po_target;
+				dct->dct_tgt_nr++;
+				tgt_nr++;
+			}
+		} else {
+			dct->dct_tgt_ids[dct->dct_tgt_nr] = layout->ol_shards[i].po_target;
+			dct->dct_tgt_nr++;
+			tgt_nr++;
+		}
+
+		/* Only collect targets bitmap and shards for current engine. */
+		if (tgt->ta_comp.co_rank != myrank)
+			continue;
+
+		if (dct->dct_bitmap == NULL) {
+			size = ((dss_tgt_nr - 1) >> 3) + 1;
+			D_ALLOC_ARRAY(dct->dct_bitmap, size);
+			if (dct->dct_bitmap == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			dct->dct_bitmap_sz = size;
+		}
+
+		if (dct->dct_shards == NULL) {
+			D_ASSERT(dct->dct_bitmap_sz != 0);
+
+			D_ALLOC_ARRAY(dct->dct_shards, dct->dct_bitmap_sz << 3);
+			if (dct->dct_shards == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		dcs = &dct->dct_shards[tgt->ta_comp.co_index];
+
+		if (unlikely(isset(dct->dct_bitmap, tgt->ta_comp.co_index))) {
+			/* More than one shards reside on the same vos target. */
+			D_ASSERT(dcs->dcs_nr >= 1);
+
+			if (dcs->dcs_nr >= dcs->dcs_cap) {
+				D_ALLOC_ARRAY(tmp, dcs->dcs_nr << 1);
+				if (tmp == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+
+				memcpy(tmp, dcs->dcs_buf, sizeof(*tmp) * dcs->dcs_nr);
+				if (dcs->dcs_buf != &dcs->dcs_inline)
+					D_FREE(dcs->dcs_buf);
+				dcs->dcs_buf = tmp;
+				dcs->dcs_cap = dcs->dcs_nr << 1;
+			}
+		} else {
+			D_ASSERT(dcs->dcs_nr == 0);
+
+			dcs->dcs_buf = &dcs->dcs_inline;
+			setbit(dct->dct_bitmap, tgt->ta_comp.co_index);
+		}
+
+		dcs->dcs_buf[dcs->dcs_nr++] = layout->ol_shards[i].po_shard;
+	}
+
+	D_ASSERT(leader_rank != -1);
+	D_ASSERT(rank_nr >= 1);
+
+	if (leader_rank != 0) {
+		memcpy(&dcts[length], &dcts[leader_rank], sizeof(*dct));
+		memmove(&dcts[1], &dcts[0], sizeof(*dct) * leader_rank);
+		memcpy(&dcts[0], &dcts[length], sizeof(*dct));
+		memset(&dcts[length], 0, sizeof(*dct));
+	}
+
+	size = sizeof(*ddt) * tgt_nr + sizeof(*dtg) * rank_nr;
+	D_ALLOC(mbs, sizeof(*mbs) + size);
+	if (mbs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	/*
+	 * For object collective punch, we always commit related DTX synchronously. Even if we lost
+	 * some redundancy groups when DTX resync, we still continue to punch the remaining shards.
+	 * So set dm_grp_cnt as 1 to bypass redundancy group check.
+	 */
+	mbs->dm_grp_cnt = 1;
+	mbs->dm_tgt_cnt = tgt_nr;
+	mbs->dm_data_size = size;
+	mbs->dm_flags = DMF_CONTAIN_LEADER | DMF_CONTAIN_TARGET_GRP;
+
+	ddt = &mbs->dm_tgts[0];
+	dtg = (struct dtx_target_group *)(ddt + tgt_nr);
+
+	for (i = 0, j = 0, k = 0; i < length; i++) {
+		dct = &dcts[i];
+		if (dct->dct_tgt_ids == NULL)
+			continue;
+
+		dtg[k].dtg_start_idx = j;
+
+		for (m = 0; m < dct->dct_tgt_nr; m++)
+			ddt[j++].ddt_id = dct->dct_tgt_ids[m];
+
+		dtg[k].dtg_tgt_nr = dct->dct_tgt_nr;
+		dtg[k++].dtg_rank = dct->dct_rank;
+	}
+
+	/* ddt[0] is always the leader target. */
+	D_ASSERTF(ddt[0].ddt_id == ocpi->ocpi_leader_id,
+		  "Invalid leader target %u vs %u on rank %u vs %u, flags %x\n",
+		  ddt[0].ddt_id, ocpi->ocpi_leader_id, myrank, leader_rank, ocpi->ocpi_flags);
+
+	if (ocpi->ocpi_flags & ORF_LEADER) {
+		if (unlikely(rank_nr == 1)) {
+			/* Only one engine is involved in the collective punch. */
+			*p_ranks = NULL;
+			*p_hints = NULL;
+			*hint_sz = 0;
+		} else {
+			*p_ranks = d_rank_list_alloc(rank_nr - 1);
+			if (*p_ranks == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+
+			/* Set i = 1 to skip leader_rank. */
+			for (i = 1, j = 0; i < length; i++) {
+				if (dcts[i].dct_tgt_ids != NULL)
+					(*p_ranks)->rl_ranks[j++] = dcts[i].dct_rank;
+			}
+
+			*p_hints = hints;
+			*hint_sz = max_rank + 1;
+		}
+	} else {
+		*p_ranks = NULL;
+		*p_hints = NULL;
+		*hint_sz = 0;
+	}
+
+	*p_mbs = mbs;
+
+out:
+	if (rc < 0) {
+		d_rank_list_free(*p_ranks);
+		D_FREE(mbs);
+		*p_ranks = NULL;
+		*p_hints = NULL;
+		*hint_sz = 0;
+		*p_bitmap = NULL;
+		*bitmap_sz = 0;
+		*p_shards = NULL;
+	} else {
+		if (myrank == leader_rank)
+			dct = &dcts[0];
+		else if (myrank > leader_rank)
+			dct = &dcts[myrank];
+		else
+			dct = &dcts[myrank + 1];
+
+		D_ASSERT(dct->dct_rank == myrank);
+
+		*p_shards = dct->dct_shards;
+		*p_bitmap = dct->dct_bitmap;
+		*bitmap_sz = dct->dct_bitmap_sz;
+
+		/*
+		 * We have checked the pool map version. It is impossible that current pool map
+		 * version does not match the RPC given version as to the expected object shard
+		 * has been migrated to other engine.
+		 */
+		D_ASSERT(*p_bitmap != NULL);
+
+		dct->dct_shards = NULL;
+		dct->dct_bitmap = NULL;
+		dct->dct_bitmap_sz = 0;
+		dct->dct_shard_nr = 0;
+	}
+
+	daos_coll_target_cleanup(dcts, length + 1);
+
+	if (*p_hints != hints)
+		D_FREE(hints);
+
+	if (layout != NULL)
+		pl_obj_layout_free(layout);
+
+	if (map != NULL)
+		pl_map_decref(map);
+
+	return rc > 0 ? 0 : rc;
+}
+
+void
+ds_obj_coll_punch_handler(crt_rpc_t *rpc)
+{
+	struct dss_module_info		*dmi = dss_get_module_info();
+	struct ds_pool			*pool = NULL;
+	struct dtx_leader_handle	*dlh = NULL;
+	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
+	struct ds_obj_exec_arg		 exec_arg = { 0 };
+	struct obj_io_context		 ioc = { 0 };
+	struct cont_props		 co_props = { 0 };
+	d_rank_list_t			*ranks = NULL;
+	struct dtx_memberships		*mbs = NULL;
+	struct daos_coll_shard		*shards = NULL;
+	uint8_t				*hints = NULL;
+	uint8_t				*bitmap = NULL;
+	uint32_t			 bitmap_sz = 0;
+	uint32_t			 hint_sz = 0;
+	uint32_t			 flags = 0;
+	uint32_t			 dtx_flags = DTX_COLL;
+	uint32_t			 version = 0;
+	uint32_t			 max_ver = 0;
+	struct dtx_epoch		 epoch;
+	daos_epoch_t			 tmp;
+	int				 rc;
+	int				 rc1;
+	bool				 need_abort = false;
+
+	D_DEBUG(DB_IO, "(%s) handling collective punch RPC %p for obj "
+		DF_UOID" on XS %u/%u epc "DF_X64" pmv %u, with dti "DF_DTI"\n",
+		(ocpi->ocpi_flags & ORF_LEADER) ? "leader" : "non-leader", rpc,
+		DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id,
+		ocpi->ocpi_epoch, ocpi->ocpi_map_ver, DP_DTI(&ocpi->ocpi_xid));
+
+	if (ocpi->ocpi_flags & ORF_LEADER) {
+		rc = obj_ioc_begin(ocpi->ocpi_oid.id_pub, ocpi->ocpi_map_ver, ocpi->ocpi_po_uuid,
+				   ocpi->ocpi_co_hdl, ocpi->ocpi_co_uuid, rpc, ocpi->ocpi_flags,
+				   &ioc);
+		if (rc != 0)
+			goto out;
+
+		rc = ds_cont_get_props(&co_props, ocpi->ocpi_po_uuid, ocpi->ocpi_co_uuid);
+		if (rc != 0)
+			goto out;
+
+		ocpi->ocpi_fdom_lvl = co_props.dcp_redun_lvl;
+		ocpi->ocpi_pdom_lvl = co_props.dcp_perf_domain;
+		ocpi->ocpi_pda = daos_cont_props2pda(&co_props, ocpi->ocpi_flags & ORF_EC);
+	} else {
+		D_ASSERT(dmi->dmi_xs_id == 0);
+
+		/*
+		 * For collective punch, the map version must be matched among client and
+		 * engines, otherwise, different engines may get different object layouts.
+		 */
+
+		rc = ds_pool_lookup(ocpi->ocpi_po_uuid, &pool);
+		if (rc != 0) {
+			D_ERROR("Failed to locate pool "DF_UUID": "DF_RC"\n",
+				DP_UUID(ocpi->ocpi_po_uuid), DP_RC(rc));
+			goto out;
+		}
+
+		if (pool->sp_map_version > ocpi->ocpi_map_ver)
+			D_GOTO(out, rc = -DER_STALE);
+
+		if (pool->sp_map_version < ocpi->ocpi_map_ver) {
+			rc = ds_pool_child_map_refresh_sync(ocpi->ocpi_po_uuid, ocpi->ocpi_map_ver);
+			if (rc != 0)
+				goto out;
+
+			if (pool->sp_map_version > ocpi->ocpi_map_ver)
+				D_GOTO(out, rc = -DER_STALE);
+		}
+	}
+
+	rc = obj_coll_punch_prep(ocpi, &shards, &hints, &hint_sz, &bitmap, &bitmap_sz, &mbs,
+				 &ranks);
+	if (rc != 0)
+		goto out;
+
+	if (!(ocpi->ocpi_flags & ORF_LEADER)) {
+		rc = obj_coll_local(rpc, shards, bitmap, bitmap_sz, &version, NULL, NULL, mbs,
+				    obj_coll_tgt_punch);
+		goto out;
+	}
+
+	version = ocpi->ocpi_map_ver;
+	max_ver = ocpi->ocpi_map_ver;
+
+	rc = process_epoch(&ocpi->ocpi_epoch, NULL /* epoch_first */, &ocpi->ocpi_flags);
+	if (rc == PE_OK_LOCAL)
+		ocpi->ocpi_flags &= ~ORF_EPOCH_UNCERTAIN;
+
+	if (ocpi->ocpi_flags & ORF_DTX_SYNC)
+		dtx_flags |= DTX_SYNC;
+
+	if (ocpi->ocpi_flags & ORF_RESEND) {
+
+again1:
+		tmp = 0;
+		rc = dtx_handle_resend(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &tmp, &version);
+		switch (rc) {
+		case -DER_ALREADY:
+			D_GOTO(out, rc = 0);
+		case 0:
+			ocpi->ocpi_epoch = tmp;
+			flags |= ORF_RESEND;
+			/* TODO: Also recovery the epoch uncertainty. */
+			break;
+		case -DER_NONEXIST:
+			rc = 0;
+			break;
+		default:
+			D_GOTO(out, rc);
+		}
+	}
+
+again2:
+	epoch.oe_value = ocpi->ocpi_epoch;
+	epoch.oe_first = epoch.oe_value;
+	epoch.oe_flags = orf_to_dtx_epoch_flags(ocpi->ocpi_flags);
+
+	if (flags & ORF_RESEND)
+		dtx_flags |= DTX_PREPARED;
+	else
+		dtx_flags &= ~DTX_PREPARED;
+
+	rc = dtx_leader_begin(ioc.ioc_vos_coh, &ocpi->ocpi_xid, &epoch, 1, version, &ocpi->ocpi_oid,
+			      NULL /* dti_cos */, 0 /* dti_cos_cnt */, hints, hint_sz, bitmap,
+			      bitmap_sz, NULL /* tgts */, 0 /* tgt_cnt */, dtx_flags, ranks,
+			      mbs, &dlh);
+	if (rc != 0) {
+		D_ERROR(DF_UOID ": Failed to start DTX for collective punch: "DF_RC"\n",
+			DP_UOID(ocpi->ocpi_oid), DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	exec_arg.rpc = rpc;
+	exec_arg.ioc = &ioc;
+	exec_arg.shards = shards;
+	exec_arg.flags = flags;
+
+	/* Execute the operation on all shards */
+	rc = dtx_leader_exec_ops(dlh, obj_coll_punch_disp, NULL, 0, &exec_arg);
+
+	if (max_ver < dlh->dlh_rmt_ver)
+		max_ver = dlh->dlh_rmt_ver;
+
+	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+	switch (rc) {
+	case -DER_TX_RESTART:
+		ocpi->ocpi_epoch = d_hlc_get();
+		ocpi->ocpi_flags &= ~ORF_RESEND;
+		flags = 0;
+		goto again2;
+	case -DER_AGAIN:
+		ocpi->ocpi_flags |= ORF_RESEND;
+		need_abort = true;
+		ABT_thread_yield();
+		goto again1;
+	default:
+		break;
+	}
+
+out:
+	if (rc != 0 && need_abort) {
+		rc1 = dtx_coll_abort(ioc.ioc_coc, &ocpi->ocpi_xid, ranks, hints, hint_sz, bitmap,
+				     bitmap_sz, version, ocpi->ocpi_epoch);
+		if (rc1 != 0 && rc1 != -DER_NONEXIST)
+			D_WARN("Failed to collective abort DTX "DF_DTI": "DF_RC"\n",
+			       DP_DTI(&ocpi->ocpi_xid), DP_RC(rc1));
+	}
+
+	if (max_ver < ioc.ioc_map_ver)
+		max_ver = ioc.ioc_map_ver;
+
+	if (pool != NULL && max_ver < pool->sp_map_version)
+		max_ver = pool->sp_map_version;
+
+	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO, rc,
+		  "(%s) handled collective punch RPC %p for obj "
+		  DF_UOID" on XS %u/%u epc "DF_X64" pmv %u/%u, with dti "DF_DTI,
+		  (ocpi->ocpi_flags & ORF_LEADER) ? "leader" : "non-leader", rpc,
+		  DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id, ocpi->ocpi_epoch,
+		  ocpi->ocpi_map_ver, version, DP_DTI(&ocpi->ocpi_xid));
+
+	obj_punch_complete(rpc, rc, max_ver);
+
+	d_rank_list_free(ranks);
+	daos_coll_shard_cleanup(shards, bitmap_sz << 3);
+	D_FREE(bitmap);
+	D_FREE(hints);
+	D_FREE(mbs);
+
+	/* It is no matter even if obj_ioc_begin() was not called. */
+	obj_ioc_end(&ioc, rc);
+
+	if (pool != NULL)
+		ds_pool_put(pool);
 }

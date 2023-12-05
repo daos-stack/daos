@@ -242,6 +242,7 @@ extern struct bio_reaction_ops nvme_reaction_ops;
 uint32_t pool_iv_map_ent_size(int nr);
 int ds_pool_iv_init(void);
 int ds_pool_iv_fini(void);
+int ds_pool_map_refresh_internal(uuid_t uuid, uint32_t version);
 void ds_pool_map_refresh_ult(void *arg);
 
 int ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,

@@ -1307,6 +1307,120 @@ out:
 	return rc;
 }
 
+struct obj_coll_punch_cb_args {
+	crt_rpc_t		*ocpca_rpc;
+	uint32_t		*ocpca_ver;
+	struct dc_obj_shard	*ocpca_shard;
+	struct shard_punch_args	*ocpca_shard_args;
+};
+
+static int
+obj_shard_coll_punch_cb(tse_task_t *task, void *data)
+{
+	struct obj_coll_punch_cb_args	*cb_args = data;
+	crt_rpc_t			*rpc = cb_args->ocpca_rpc;
+	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
+
+	if (task->dt_result == 0) {
+		task->dt_result = obj_reply_get_status(rpc);
+		*cb_args->ocpca_ver = obj_reply_map_version_get(rpc);
+	}
+
+	if (task->dt_result == -DER_OVERLOAD_RETRY) {
+		struct obj_coll_punch_out	*ocpo = crt_reply_get(rpc);
+		struct shard_punch_args		*shard_args = cb_args->ocpca_shard_args;
+		uint32_t			 timeout = 0;
+
+		if (shard_args->pa_auxi.enqueue_id == 0)
+			shard_args->pa_auxi.enqueue_id = ocpo->ocpo_comm_out.req_out_enqueue_id;
+		crt_req_get_timeout(rpc, &timeout);
+		if (timeout > shard_args->pa_auxi.obj_auxi->max_delay)
+			shard_args->pa_auxi.obj_auxi->max_delay = timeout;
+	}
+
+	DL_CDEBUG(task->dt_result < 0, DLOG_ERR, DB_IO, task->dt_result,
+		  "DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" on leader %u with DTX "
+		  DF_DTI" for task %p, map_ver %u/%u, flags %lx/%x\n",
+		  rpc, DP_UOID(ocpi->ocpi_oid), ocpi->ocpi_leader_id, DP_DTI(&ocpi->ocpi_xid),
+		  task, ocpi->ocpi_map_ver, *cb_args->ocpca_ver,
+		  (unsigned long)ocpi->ocpi_api_flags, ocpi->ocpi_flags);
+
+	crt_req_decref(rpc);
+	obj_shard_decref(cb_args->ocpca_shard);
+
+	return task->dt_result;
+}
+
+int
+dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *args,
+			struct dtx_epoch *epoch, uint64_t api_flags, uint32_t rpc_flags,
+			uint32_t map_ver, uint32_t *rep_ver, tse_task_t *task)
+{
+	struct dc_pool			*pool = obj_shard_ptr2pool(shard);
+	crt_rpc_t			*req = NULL;
+	struct obj_coll_punch_in	*ocpi = NULL;
+	struct obj_coll_punch_cb_args	 cb_args = { 0 };
+	crt_endpoint_t			 tgt_ep = { 0 };
+	int				 rc = 0;
+
+	D_ASSERT(pool != NULL);
+
+	tgt_ep.ep_grp = pool->dp_sys->sy_group;
+	tgt_ep.ep_rank = shard->do_target_rank;
+	tgt_ep.ep_tag = shard->do_target_idx;
+
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_COLL_PUNCH, &req);
+	if (rc != 0)
+		goto out;
+
+	ocpi = crt_req_get(req);
+	D_ASSERT(ocpi != NULL);
+
+	uuid_copy(ocpi->ocpi_po_uuid, pool->dp_pool);
+	uuid_copy(ocpi->ocpi_co_hdl, shard->do_co->dc_cont_hdl);
+	uuid_copy(ocpi->ocpi_co_uuid, shard->do_co->dc_uuid);
+	ocpi->ocpi_oid = shard->do_id;
+	ocpi->ocpi_epoch = epoch->oe_value;
+	ocpi->ocpi_api_flags = api_flags;
+	ocpi->ocpi_map_ver = map_ver;
+	ocpi->ocpi_leader_id = shard->do_target_id;
+	ocpi->ocpi_flags = rpc_flags;
+	daos_dti_copy(&ocpi->ocpi_xid, &args->pa_dti);
+	ocpi->ocpi_comm_in.req_in_enqueue_id = args->pa_auxi.enqueue_id;
+
+	crt_req_addref(req);
+	cb_args.ocpca_rpc = req;
+	cb_args.ocpca_ver = rep_ver;
+	cb_args.ocpca_shard = shard;
+	cb_args.ocpca_shard_args = args;
+
+	rc = tse_task_register_comp_cb(task, obj_shard_coll_punch_cb, &cb_args, sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_req, rc);
+
+	D_DEBUG(DB_IO, "Sending DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" with DTX "
+		DF_DTI" for task %p, map_ver %u, flags %lx/%x, leader %u/%u\n",
+		req, DP_UOID(shard->do_id), DP_DTI(&args->pa_dti), task, map_ver,
+		(unsigned long)api_flags, rpc_flags, tgt_ep.ep_rank, tgt_ep.ep_tag);
+
+	return daos_rpc_send(req, task);
+
+out_req:
+	/* -1 for crt_req_addref(). */
+	crt_req_decref(req);
+	/* -1 for obj_req_create(). */
+	crt_req_decref(req);
+out:
+	D_ERROR("DAOS_OBJ_RPC_COLL_PUNCH RPC failed for "DF_UOID" with DTX "
+		DF_DTI" for task %p, map_ver %u, flags %lx/%x, leader %u/%u: "DF_RC"\n",
+		DP_UOID(shard->do_id), DP_DTI(&args->pa_dti), task, map_ver,
+		(unsigned long)api_flags, rpc_flags, tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
+
+	obj_shard_decref(shard);
+	tse_task_complete(task, rc);
+	return rc;
+}
+
 struct obj_enum_args {
 	crt_rpc_t		*rpc;
 	daos_handle_t		*hdlp;
