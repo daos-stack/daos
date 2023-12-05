@@ -770,7 +770,7 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	D_ALLOC(resp->device->ctrlr->pci_addr, ADDR_STR_MAX_LEN + 1);
 	if (resp->device->ctrlr->pci_addr == NULL)
 		return -DER_NOMEM;
-	if ((req->ids == NULL) || (strlen(req->ids) == 0)) {
+	if ((req->ids == NULL) || (strnlen(req->ids, ADDR_STR_MAX_LEN) == 0)) {
 		D_ERROR("PCI address not provided in request\n");
 		return -DER_INVAL;
 	}

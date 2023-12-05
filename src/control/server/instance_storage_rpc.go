@@ -260,7 +260,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 func bdevScanEngineAssigned(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq, devList *storage.BdevDeviceList, isStarted *bool) (*ctlpb.ScanNvmeResp, error) {
 	*isStarted = engine.IsStarted()
 	if !*isStarted {
-		//ei.log.Debugf("scanning engine-%d bdev tiers while engine is down", engine.Index())
+		engine.Debugf("scanning engine-%d bdev tiers while engine is down", engine.Index())
 
 		// Retrieve engine cfg bdevs to restrict scan scope.
 		req := storage.BdevScanRequest{DeviceList: devList}
