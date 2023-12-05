@@ -1148,7 +1148,7 @@ out:
 int
 dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 		 uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
-		 struct dtx_id *dti_cos, int dti_cos_cnt, struct daos_shard_tgt *tgts, int tgt_cnt,
+		 struct dtx_id *dti_cos, int dti_cos_cnt, void *tgts, int tgt_cnt,
 		 uint32_t flags, struct dtx_memberships *mbs, struct dtx_coll_entry *dce,
 		 struct dtx_leader_handle **p_dlh)
 {
@@ -1187,15 +1187,49 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 			dlh->dlh_delay_sub_cnt = 0;
 			dlh->dlh_normal_sub_cnt = cnt;
 		} else {
-			for (i = 0; i < cnt; i++) {
-				dlh->dlh_subs[i].dss_tgt = tgts[i];
-				if (unlikely(tgts[i].st_flags & DTF_DELAY_FORWARD))
-					dlh->dlh_delay_sub_cnt++;
-			}
+			if (flags & DTX_TGT_COLL) {
+				for (i = 0; i < cnt; i++) {
+					struct daos_coll_target	*dct;
+					struct daos_shard_tgt	*dst;
+					int			 size;
+					int			 j;
 
-			dlh->dlh_normal_sub_cnt = cnt - dlh->dlh_delay_sub_cnt;
+					dct = (struct daos_coll_target *)tgts + i;
+					dst = &dlh->dlh_subs[i].dss_tgt;
+
+					size = dct->dct_bitmap_sz << 3;
+					if (size > dss_tgt_nr)
+						size = dss_tgt_nr;
+
+					dst->st_rank = dct->dct_rank;
+					for (j = 0; j < size; j++) {
+						if (isset(dct->dct_bitmap, j)) {
+							dst->st_tgt_idx = j;
+							dst->st_shard_id =
+								dct->dct_shards[j].dcs_buf[0];
+							break;
+						}
+					}
+				}
+
+				dlh->dlh_normal_sub_cnt = cnt;
+				dlh->dlh_delay_sub_cnt = 0;
+			} else {
+				struct daos_shard_tgt	*shards = tgts;
+
+				for (i = 0; i < cnt; i++) {
+					dlh->dlh_subs[i].dss_tgt = shards[i];
+					if (unlikely(shards[i].st_flags & DTF_DELAY_FORWARD))
+						dlh->dlh_delay_sub_cnt++;
+				}
+
+				dlh->dlh_normal_sub_cnt = cnt - dlh->dlh_delay_sub_cnt;
+			}
 		}
 	}
+
+	if (flags & DTX_FAKE)
+		dlh->dlh_fake = 1;
 
 	dth = &dlh->dlh_handle;
 	rc = dtx_handle_init(dti, coh, epoch, true, sub_modification_cnt, pm_ver,
@@ -1265,7 +1299,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 
 	dtx_shares_fini(dth);
 
-	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY))
+	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY) || dlh->dlh_fake)
 		goto out;
 
 	if (unlikely(coh->sch_closed)) {
@@ -1988,9 +2022,7 @@ dtx_comp_cb(void **arg)
 	uint32_t			 i;
 	uint32_t			 j;
 
-	if (dlh->dlh_agg_cb != NULL) {
-		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_allow_failure);
-	} else {
+	if (!dlh->dlh_need_agg) {
 		for (i = dlh->dlh_forward_idx, j = 0; j < dlh->dlh_forward_cnt; i++, j++) {
 			sub = &dlh->dlh_subs[i];
 
@@ -2127,16 +2159,15 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dlh->dlh_normal_sub_done = 0;
 	dlh->dlh_drop_cond = 0;
 	dlh->dlh_forward_idx = 0;
+	dlh->dlh_need_agg = 0;
+	dlh->dlh_agg_done = 0;
 
 	if (sub_cnt > DTX_EXEC_STEP_LENGTH) {
 		dlh->dlh_forward_cnt = DTX_EXEC_STEP_LENGTH;
-		dlh->dlh_agg_cb = NULL;
 	} else {
 		dlh->dlh_forward_cnt = sub_cnt;
-		if (likely(dlh->dlh_delay_sub_cnt == 0))
-			dlh->dlh_agg_cb = agg_cb;
-		else
-			dlh->dlh_agg_cb = NULL;
+		if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
+			dlh->dlh_need_agg = 1;
 	}
 
 	if (dlh->dlh_normal_sub_cnt == 0)
@@ -2191,8 +2222,8 @@ exec:
 		dlh->dlh_forward_idx += dlh->dlh_forward_cnt;
 		if (sub_cnt <= DTX_EXEC_STEP_LENGTH) {
 			dlh->dlh_forward_cnt = sub_cnt;
-			if (likely(dlh->dlh_delay_sub_cnt == 0))
-				dlh->dlh_agg_cb = agg_cb;
+			if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
+				dlh->dlh_need_agg = 1;
 		}
 
 		D_DEBUG(DB_IO, "More dispatch sub-requests for "DF_DTI", normal %u, "
@@ -2205,17 +2236,24 @@ exec:
 	}
 
 	dlh->dlh_normal_sub_done = 1;
+	dlh->dlh_drop_cond = 1;
+
+	if (agg_cb != NULL) {
+		remote_rc = agg_cb(dlh, func_arg);
+		dlh->dlh_agg_done = 1;
+		if (remote_rc == allow_failure)
+			dlh->dlh_drop_cond = 0;
+		else if (remote_rc != 0)
+			D_GOTO(out, rc = remote_rc);
+	}
 
 	if (likely(dlh->dlh_delay_sub_cnt == 0))
 		goto out;
 
-	dlh->dlh_drop_cond = 1;
-
-	if (agg_cb != 0 && allow_failure != 0) {
-		rc = agg_cb(dlh, allow_failure);
-		if (rc == allow_failure)
-			dlh->dlh_drop_cond = 0;
-	}
+	/* Need more aggregation for delayed sub-requests. */
+	dlh->dlh_agg_done = 0;
+	if (agg_cb != NULL)
+		dlh->dlh_need_agg = 1;
 
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
 
@@ -2229,7 +2267,6 @@ exec:
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
-	dlh->dlh_agg_cb = agg_cb;
 	dlh->dlh_forward_idx = 0;
 	/* The ones without DELAY flag will be skipped when scan the targets array. */
 	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
@@ -2253,6 +2290,15 @@ exec:
 		allow_failure, local_rc, remote_rc);
 
 out:
+	/* The agg_cb may contain cleanup, let's do it even if hit failure at some former step. */
+	if (agg_cb != NULL && !dlh->dlh_agg_done) {
+		remote_rc = agg_cb(dlh, func_arg);
+		dlh->dlh_agg_done = 1;
+		if (remote_rc != 0 && remote_rc != allow_failure &&
+		    (rc == 0 || rc == allow_failure))
+			rc = remote_rc;
+	}
+
 	if (rc == 0 && local_rc == allow_failure &&
 	    (dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt == 0 || remote_rc == allow_failure))
 		rc = allow_failure;

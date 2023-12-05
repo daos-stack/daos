@@ -368,6 +368,18 @@ class TelemetryUtils():
         "engine_io_ops_obj_coll_punch_latency_mean",
         "engine_io_ops_obj_coll_punch_latency_min",
         "engine_io_ops_obj_coll_punch_latency_stddev"]
+    ENGINE_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS = [
+        "engine_io_ops_obj_coll_query_active",
+        "engine_io_ops_obj_coll_query_active_max",
+        "engine_io_ops_obj_coll_query_active_mean",
+        "engine_io_ops_obj_coll_query_active_min",
+        "engine_io_ops_obj_coll_query_active_stddev"]
+    ENGINE_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS = [
+        "engine_io_ops_obj_coll_query_latency",
+        "engine_io_ops_obj_coll_query_latency_max",
+        "engine_io_ops_obj_coll_query_latency_mean",
+        "engine_io_ops_obj_coll_query_latency_min",
+        "engine_io_ops_obj_coll_query_latency_stddev"]
     ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = [
         "engine_io_ops_obj_enum_active",
         "engine_io_ops_obj_enum_active_max",
@@ -498,6 +510,8 @@ class TelemetryUtils():
         ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS +\
         ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS +\
@@ -580,7 +594,7 @@ class TelemetryUtils():
         "engine_mem_vos_dtx_cmt_ent_48",
         "engine_mem_vos_vos_obj_360",
         "engine_mem_vos_vos_lru_size",
-        "engine_mem_dtx_dtx_leader_handle_360"]
+        "engine_mem_dtx_dtx_leader_handle_352"]
     ENGINE_MEM_TOTAL_USAGE_METRICS = [
         "engine_mem_total_mem"]
 

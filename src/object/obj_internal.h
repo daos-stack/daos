@@ -42,6 +42,8 @@ extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern unsigned int	srv_io_mode;
 extern unsigned int	obj_coll_punch_thd;
+extern unsigned int	obj_fwd_query_thd;
+extern unsigned int	obj_fwd_query_cnt;
 
 /* Whether check redundancy group validation when DTX resync. */
 extern bool	tx_verify_rdg;
@@ -361,6 +363,13 @@ struct obj_auxi_tgt_list {
 	uint32_t	tl_nr;
 };
 
+struct coll_query_args {
+	struct shard_auxi_args	 cqa_auxi;
+	uint32_t		 cqa_dct_cap;
+	int			 cqa_dct_nr;
+	struct daos_coll_target	*cqa_dcts;
+};
+
 /* Auxiliary args for object I/O */
 struct obj_auxi_args {
 	tse_task_t			*obj_task;
@@ -426,6 +435,7 @@ struct obj_auxi_args {
 		struct shard_list_args		l_args;
 		struct shard_k2a_args		k_args;
 		struct shard_sync_args		s_args;
+		struct coll_query_args		cq_args;
 	};
 };
 
@@ -589,8 +599,16 @@ int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, 
 			   uint32_t req_map_ver, struct dc_object *obj,
 			   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 			   daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
-			   struct dtx_id *dti, uint32_t *map_ver,
-			   daos_handle_t th, tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
+			   struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th,
+			   tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
+
+int dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
+			    uint32_t req_map_ver, struct dc_object *obj,
+			    daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+			    daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
+			    struct dtx_id *dti, uint32_t *map_ver, struct daos_coll_target *dcts,
+			    uint32_t dct_nr, daos_handle_t th, tse_task_t *task,
+			    uint32_t *max_delay, uint64_t *queue_id);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
@@ -851,9 +869,35 @@ daos_recx_ep_list_ep_valid(struct daos_recx_ep_list *list)
 	return (list->re_ep_valid == 1);
 }
 
-int  obj_class_init(void);
+int obj_class_init(void);
 void obj_class_fini(void);
-int  obj_utils_init(void);
+
+struct obj_query_merge_args {
+	struct daos_oclass_attr	*oca;
+	daos_unit_oid_t		 oid;
+	daos_epoch_t		 src_epoch;
+	daos_key_t		*in_dkey;
+	daos_key_t		*src_dkey;
+	daos_key_t		*tgt_dkey; /* output */
+	daos_key_t		*src_akey;
+	daos_key_t		*tgt_akey; /* output */
+	daos_recx_t		*src_recx;
+	daos_recx_t		*tgt_recx; /* output */
+	daos_epoch_t		*tgt_epoch; /* output */
+	uint32_t		*tgt_map_ver; /* output */
+	uint32_t		*shard; /* output */
+	uint32_t		*max_delay; /* output */
+	uint64_t		*queue_id; /* output */
+	crt_rpc_t		*rpc;
+	uint64_t		 flags;
+	uint32_t		 opc;
+	uint32_t		 src_map_ver;
+	int			 ret;
+};
+
+/* obj_utils.c */
+int daos_obj_merge_query_merge(struct obj_query_merge_args *args);
+int obj_utils_init(void);
 void obj_utils_fini(void);
 
 /* obj_tx.c */
