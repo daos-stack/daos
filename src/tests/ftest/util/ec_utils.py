@@ -3,20 +3,19 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import queue
 import re
 import threading
-import queue
 import time
 
-from pydaos.raw import DaosApiError
-
-from nvme_utils import ServerFillUp
-from daos_utils import DaosCommand
 from apricot import TestWithServers
-from mdtest_test_base import MdtestBase
-from fio_test_base import FioBase
+from daos_utils import DaosCommand
 from exception_utils import CommandFailure
+from fio_test_base import FioBase
 from general_utils import DaosTestError, run_pcmd
+from mdtest_test_base import MdtestBase
+from nvme_utils import ServerFillUp
+from pydaos.raw import DaosApiError
 
 
 def get_data_parity_number(log, oclass):

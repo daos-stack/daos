@@ -703,7 +703,7 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle, struct dfuse_p
 		rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh, &c_info, NULL);
 	}
 	if (rc == -DER_NONEXIST) {
-		DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: "	DF_RC, DP_RC(rc));
+		DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
 		D_GOTO(err_free, rc = daos_der2errno(rc));
 	} else if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
