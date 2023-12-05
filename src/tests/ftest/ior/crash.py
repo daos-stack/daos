@@ -6,8 +6,8 @@
 
 import time
 
-from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
+from ior_test_base import IorTestBase
 
 
 class IorCrash(IorTestBase):

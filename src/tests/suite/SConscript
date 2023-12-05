@@ -1,6 +1,6 @@
 """Build test suite"""
-import sys
 import subprocess  # nosec
+import sys
 
 TEST_CMOCKA_SKIP = """
 #include <stdarg.h>

@@ -5,9 +5,9 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import random
-import time
-import threading
 import re
+import threading
+import time
 
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
 # pylint: disable=import-error,no-name-in-module

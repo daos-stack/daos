@@ -3,15 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import grp
 import os
 import pwd
-import grp
 import re
 
-from avocado.core.exceptions import TestFail
-
-from apricot import TestWithServers
 import general_utils
+from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 from general_utils import DaosTestError
 from security_test_base import acl_entry
 

@@ -5,7 +5,8 @@
 """
 
 import os
-from env_modules import show_avail, get_module_list
+
+from env_modules import get_module_list, show_avail
 from general_utils import run_command
 
 
