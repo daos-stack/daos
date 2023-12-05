@@ -459,7 +459,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 
 		resp->devices[i]->ctrlr->namespaces[0]->id   = dev_info->bdi_ctrlr->nss->id;
 		resp->devices[i]->ctrlr->namespaces[0]->size = dev_info->bdi_ctrlr->nss->size;
-		resp->devices[i]->ctrlr_namespace_id = dev_info->bdi_ctrlr->nss->id;
+		resp->devices[i]->ctrlr_namespace_id         = dev_info->bdi_ctrlr->nss->id;
 
 		D_DEBUG(DB_MGMT, "ns id/size: '%d' '%ld'\n",
 			resp->devices[i]->ctrlr->namespaces[0]->id,
@@ -770,7 +770,7 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	D_ALLOC(resp->device->ctrlr->pci_addr, ADDR_STR_MAX_LEN + 1);
 	if (resp->device->ctrlr->pci_addr == NULL)
 		return -DER_NOMEM;
-	if ((req->ids == NULL) || (strlen(req->ids) == 0)) {
+	if ((req->ids == NULL) || (strnlen(req->ids, ADDR_STR_MAX_LEN) == 0)) {
 		D_ERROR("PCI address not provided in request\n");
 		return -DER_INVAL;
 	}

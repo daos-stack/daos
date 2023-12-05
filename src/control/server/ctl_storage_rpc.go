@@ -203,7 +203,7 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 		return nil, err
 	}
 
-	// Retry once if global scan returns unexpected number of controllers incase engines
+	// Retry once if global scan returns unexpected number of controllers in case engines
 	// claimed devices between when started state was checked and scan was executed.
 	if !hasStarted && len(resp.Ctrlrs) != cfgBdevs.Len() {
 		cs.log.Debugf("retrying bdev scan as unexpected nr returned, want %d got %d",

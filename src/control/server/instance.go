@@ -362,17 +362,7 @@ func (ei *EngineInstance) callSetUp(ctx context.Context) error {
 
 	return nil
 }
-<<<<<<< HEAD
-=======
-
-// BioErrorNotify logs a blob I/O error.
-func (ei *EngineInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
-
-	ei.log.Errorf("I/O Engine instance %d (target %d) has detected blob I/O error! %v",
-		ei.Index(), bio.TgtId, bio)
-}
 
 func (ei *EngineInstance) Debugf(format string, args ...interface{}) {
 	ei.log.Debugf(format, args...)
 }
->>>>>>> 2a9950142c (use Engine interface rather than converting to *EngineInstance)
