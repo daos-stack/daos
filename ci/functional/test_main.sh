@@ -89,15 +89,16 @@ export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
+
 if "$hardware_ok"; then
     if $TEST_RPMS; then
         # shellcheck disable=SC2029
-        ssh -i ci_key -l jenkins "${first_node}"         \
-          "TEST_TAG=\"$test_tag\"                        \
-           TNODES=\"$tnodes\"                            \
-           FTEST_ARG=\"$FTEST_ARG\"                      \
-           WITH_VALGRIND=\"$WITH_VALGRIND\"              \
-           STAGE_NAME=\"$STAGE_NAME\"                    \
+        ssh -i ci_key -l jenkins "${first_node}"   \
+          "TEST_TAG=\"$test_tag\"                  \
+           TNODES=\"$tnodes\"                      \
+           FTEST_ARG=\"${FTEST_ARG:-}\"            \
+           WITH_VALGRIND=\"${WITH_VALGRIND:-}\"    \
+           STAGE_NAME=\"$STAGE_NAME\"              \
            $(cat ci/functional/test_main_node.sh)"
     else
         ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"

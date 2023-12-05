@@ -266,11 +266,11 @@ post_provision_config_nodes() {
 
     if $CONFIG_POWER_ONLY; then
         rm -f "$REPOS_DIR"/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
-        time dnf -y erase fio fuse ior-hpc mpich-autoload               \
+        time dnf -y erase fio fuse ior-hpc mpich-autoload          \
                      ompi argobots cart daos daos-client dpdk      \
                      fuse-libs libisa-l libpmemobj mercury mpich   \
                      pmix protobuf-c spdk libfabric libpmem        \
-                     libpmemblk munge-libs munge slurm             \
+                     munge-libs munge slurm                        \
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
@@ -316,7 +316,7 @@ post_provision_config_nodes() {
                 branch="${branch%:*}"
             fi
         fi
-        local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
+        local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/$DISTRO_NAME/
         dnf -y config-manager --add-repo="${repo_url}"
         disable_gpg_check "$repo_url"
     done
@@ -365,7 +365,7 @@ setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-$version
 EOF
 
         printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
-    fi 
+    fi
 
     distro_custom
 
