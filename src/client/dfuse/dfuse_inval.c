@@ -64,7 +64,7 @@ dfuse_de_run(struct dfuse_info *dfuse_info, int *sleep_time)
 	struct dfuse_time_entry *dte;
 	struct inode_core        ic[EVICT_COUNT] = {};
 	int                      idx             = 0;
-	double                   sleep           = 60 * 1;
+	double                   sleep           = (60 * 1) - 1;
 
 	D_MUTEX_LOCK(&dfuse_info->di_dte_lock);
 
