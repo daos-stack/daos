@@ -5,9 +5,8 @@
 """
 import traceback
 
-from pydaos.raw import DaosContainer, DaosApiError, DaosObjId
-
 from apricot import TestWithServers
+from pydaos.raw import DaosApiError, DaosContainer, DaosObjId
 
 
 class ObjOpenBadParam(TestWithServers):

@@ -1,11 +1,11 @@
 """DAOS functions for building go"""
 
-import subprocess  # nosec B404
+import json
 import os
 import re
-import json
+import subprocess  # nosec B404
 
-from SCons.Script import Configure, GetOption, Scanner, Glob, Exit, File
+from SCons.Script import Configure, Exit, File, GetOption, Glob, Scanner
 
 GO_COMPILER = 'go'
 MIN_GO_VERSION = '1.18.0'

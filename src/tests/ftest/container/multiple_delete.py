@@ -5,8 +5,8 @@
 """
 import time
 
-from ior_test_base import IorTestBase
 from general_utils import DaosTestError
+from ior_test_base import IorTestBase
 
 SCM_THRESHOLD = 400000
 
