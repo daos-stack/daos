@@ -509,7 +509,8 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	/* For collective punch, only need one bcast RPC. */
 	D_ASSERT(idx == 0);
-	D_ASSERT(dlh->dlh_coll_ranks != NULL);
+	D_ASSERT(dlh->dlh_coll_entry != NULL);
+	D_ASSERT(dlh->dlh_coll_entry->dce_ranks != NULL);
 
 	sub = &dlh->dlh_subs[idx];
 	D_ALLOC_PTR(remote_arg);
@@ -522,7 +523,8 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 	remote_arg->comp_cb = comp_cb;
 	remote_arg->idx = idx;
 
-	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, dlh->dlh_coll_ranks,
+	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL,
+				  dlh->dlh_coll_entry->dce_ranks,
 				  DAOS_RPC_OPCODE(DAOS_OBJ_RPC_COLL_PUNCH, DAOS_OBJ_MODULE,
 						  DAOS_OBJ_VERSION),
 				  NULL, NULL, CRT_RPC_FLAG_FILTER_INVERT,

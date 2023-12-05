@@ -265,25 +265,19 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		      daos_epoch_t epoch, int *tgt_array, int *err)
 {
 	struct dtx_memberships	*mbs = dte->dte_mbs;
-	d_rank_list_t		*ranks = NULL;
-	uint8_t			*hints = NULL;
-	uint8_t			*bitmap = NULL;
-	uint32_t		 hint_sz = 0;
-	uint32_t		 bitmap_sz = 0;
+	struct dtx_coll_entry	*dce = NULL;
 	int			 rc = 0;
 
 	if (mbs->dm_flags & DMF_CONTAIN_TARGET_GRP) {
-		rc = dtx_coll_prep(cont->sc_pool_uuid, oid, mbs, dss_self_rank(),
-				   dss_get_module_info()->dmi_tgt_id, dte->dte_ver,
-				   &hints, &hint_sz, &bitmap, &bitmap_sz, &ranks);
+		rc = dtx_coll_prep(cont->sc_pool_uuid, oid, &dte->dte_xid, mbs, dss_self_rank(),
+				   dss_get_module_info()->dmi_tgt_id, dte->dte_ver, true, &dce);
 		if (rc != 0) {
 			D_ERROR("Failed to prepare the bitmap (and hints) for collective DTX "
 				DF_DTI": "DF_RC"\n", DP_DTI(&dte->dte_xid), DP_RC(rc));
 			goto out;
 		}
 
-		rc = dtx_coll_check(cont, &dte->dte_xid, ranks, hints, hint_sz, bitmap, bitmap_sz,
-				    dte->dte_ver, epoch);
+		rc = dtx_coll_check(cont, dce, epoch);
 	} else {
 		rc = dtx_check(cont, dte, epoch);
 	}
@@ -323,8 +317,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 			 *	dtx_abort() with 0 @epoch.
 			 */
 			if (mbs->dm_flags & DMF_CONTAIN_TARGET_GRP)
-				rc = dtx_coll_abort(cont, &dte->dte_xid, ranks, hints, hint_sz,
-						    bitmap, bitmap_sz, dte->dte_ver, 0);
+				rc = dtx_coll_abort(cont, dce, 0);
 			else
 				rc = dtx_abort(cont, dte, 0);
 			if (rc < 0 && err != NULL)
@@ -368,8 +361,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 		 * abort the DTXs one by one, not batched.
 		 */
 		if (mbs->dm_flags & DMF_CONTAIN_TARGET_GRP)
-			rc = dtx_coll_abort(cont, &dte->dte_xid, ranks, hints, hint_sz, bitmap,
-					    bitmap_sz, dte->dte_ver, epoch);
+			rc = dtx_coll_abort(cont, dce, epoch);
 		else
 			rc = dtx_abort(cont, dte, epoch);
 
@@ -395,12 +387,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_un
 
 out:
 	if (rc == DSHR_NEED_COMMIT && mbs->dm_flags & DMF_CONTAIN_TARGET_GRP)
-		rc = dtx_coll_commit(cont, &dte->dte_xid, ranks, hints, hint_sz, bitmap, bitmap_sz,
-				     dte->dte_ver);
+		rc = dtx_coll_commit(cont, dce, NULL);
 
-	d_rank_list_free(ranks);
-	D_FREE(hints);
-	D_FREE(bitmap);
+	dtx_coll_entry_put(dce);
 	return rc;
 }
 

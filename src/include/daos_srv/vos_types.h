@@ -33,6 +33,8 @@ enum dtx_cos_flags {
 	 * RPC instead of piggyback via other dispatched update/punch RPC.
 	 */
 	DCF_EXP_CMT		= (1 << 1),
+	/* For collective DTX. */
+	DCF_COLL		= (1 << 2),
 };
 
 enum dtx_stat_flags {

@@ -47,14 +47,6 @@ dtx_tls_init(int tags, int xs_id, int tgt_id)
 		D_WARN("Failed to create DTX leader metric: " DF_RC"\n",
 		       DP_RC(rc));
 
-	rc = d_tm_add_metric(&tls->dt_dtx_entry_total, D_TM_GAUGE,
-			     "total number of dtx entry in cache", "entry",
-			     "mem/dtx/dtx_entry_%u/tgt_%u",
-			     sizeof(struct dtx_entry), tgt_id);
-	if (rc != DER_SUCCESS)
-		D_WARN("Failed to create DTX entry metric: " DF_RC"\n",
-		       DP_RC(rc));
-
 	return tls;
 }
 
@@ -385,6 +377,7 @@ dtx_coll_handler(crt_rpc_t *rpc)
 {
 	struct dtx_coll_in		*dci = crt_req_get(rpc);
 	struct dtx_coll_out		*dco = crt_reply_get(rpc);
+	struct dtx_coll_entry		*dce = NULL;
 	struct dtx_coll_load_mbs_args	 dclma = { 0 };
 	d_rank_t			 myrank = dss_self_rank();
 	uint32_t			 bitmap_sz = 0;
@@ -425,14 +418,16 @@ dtx_coll_handler(crt_rpc_t *rpc)
 
 	switch (dclma.dclma_result) {
 	case 0:
-		rc = dtx_coll_prep(dci->dci_po_uuid, dclma.dclma_oid, dclma.dclma_mbs, myrank, -1,
-				   dci->dci_version, NULL /* p_hints */, NULL /* hint_sz */,
-				   &bitmap, &bitmap_sz, NULL /* p_ranks */);
+		rc = dtx_coll_prep(dci->dci_po_uuid, dclma.dclma_oid, &dci->dci_xid,
+				   dclma.dclma_mbs, myrank, -1, dci->dci_version, false, &dce);
 		if (rc != 0) {
 			D_ERROR("Failed to prepare the bitmap (and hints) for collective DTX "
 				DF_DTI" opc %u: "DF_RC"\n", DP_DTI(&dci->dci_xid), opc, DP_RC(rc));
 			goto out;
 		}
+
+		bitmap = dce->dce_bitmap;
+		bitmap_sz = dce->dce_bitmap_sz;
 		break;
 	case 1:
 		/* The DTX has been committed, then depends on the RPC type. */
@@ -507,8 +502,8 @@ out:
 	if (rc < 0)
 		D_ERROR("Failed to send collective RPC %p reply: "DF_RC"\n", rpc, DP_RC(rc));
 
+	dtx_coll_entry_put(dce);
 	D_FREE(dclma.dclma_mbs);
-	D_FREE(bitmap);
 	D_FREE(results);
 }
 
