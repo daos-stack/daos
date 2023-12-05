@@ -62,9 +62,7 @@ class TestWithScrubberFreq(TestWithScrubber):
         status = self.verify_scrubber_metrics_value(initial_scrubbed_metrics,
                                                     final_scrubbed_metrics)
         if status is True:
-            self.log.info("-------Test Failed-------")
-            self.log.info("---Metrics value is changing----")
-            self.fail("------Test Failed-----")
+            self.fail("--Test Failed: Metrics Value is Changing--")
         # Now set the scrub-freq to 5 seconds.
         self.pool.set_property("scrub-freq", "5")
         self.log.info("Sleeping for 5 secs pool property scrub:timed,scrub-freq:5")
@@ -79,8 +77,6 @@ class TestWithScrubberFreq(TestWithScrubber):
         status = self.verify_scrubber_metrics_value(initial_scrubbed_metrics,
                                                     final_scrubbed_metrics)
         if status is False:
-            self.log.info("-------Test Failed-------")
-            self.log.info("---No metrics value change----")
-            self.fail("------Test Failed-----")
+            self.fail("--Test Failed: No metrics value change--")
         self.log.info("Scrubber is scanning the objects at proper intervals")
         self.log.info("Test Passed")
