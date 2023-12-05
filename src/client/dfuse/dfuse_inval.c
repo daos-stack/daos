@@ -45,11 +45,12 @@ struct inode_core {
 #define EVICT_COUNT 8
 
 /* Eviction loop, run periodically in it's own thread
- * TODO: Check how this works with caching disabled.
  * TODO: Have this function return a time-to-sleep rather than waking up every second.
  * TODO: Have de_add_value() wakeup this thread.
  * TODO: Use array rather than list for buckets.
  * TODO: Set evicton timeout, max(time * 1.1, 10)?
+ * TODO: Inval files as well as dirs if dentry time is different?
+ * TODO: More lee-way for files.
  */
 static bool
 dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
