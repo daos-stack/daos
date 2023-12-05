@@ -59,6 +59,7 @@ struct dfuse_info {
 	pthread_mutex_t      di_dte_lock;
 	d_list_t             di_dtes;
 	sem_t                di_dte_sem;
+	bool                 di_dte_stop;
 	pthread_t            di_dte_thread;
 
 	/* Array of dfuse_eq */
@@ -1043,6 +1044,9 @@ dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *tim
 
 int
 dfuse_de_add_value(struct dfuse_info *dfuse_info, double timeout);
+
+void
+dfuse_de_add_cont(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc);
 
 void *
 dfuse_evict_thread(void *arg);

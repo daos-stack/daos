@@ -724,8 +724,7 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 			D_GOTO(err_close, rc);
 		}
 
-		dfuse_de_add_value(dfuse_info, dfc->dfc_dentry_timeout);
-		dfuse_de_add_value(dfuse_info, dfc->dfc_dentry_dir_timeout);
+		dfuse_de_add_cont(dfuse_info, dfc);
 	} else {
 		DFUSE_TRA_INFO(dfc, "Caching disabled");
 	}
@@ -849,9 +848,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 				D_GOTO(err_umount, rc);
 			}
 
-			dfuse_de_add_value(dfuse_info, dfc->dfc_dentry_timeout);
-			dfuse_de_add_value(dfuse_info, dfc->dfc_dentry_dir_timeout);
-
+			dfuse_de_add_cont(dfuse_info, dfc);
 		} else {
 			DFUSE_TRA_INFO(dfc, "Caching disabled");
 		}
@@ -980,12 +977,6 @@ dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *tim
 	if (time_left > 0)
 		use = true;
 
-	/* Allow some leeway before evicting things, the kernel will no re-validate until the
-	 * entry has expired so allow this to happen first.
-	 */
-	if (time_left > -2)
-		use = true;
-
 	if (use && timeout)
 		*timeout = time_left;
 
@@ -1081,7 +1072,8 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 
 	D_INIT_LIST_HEAD(&dfuse_info->di_dtes);
 
-	dfuse_de_add_value(dfuse_info, 0);
+	rc = dfuse_de_add_value(dfuse_info, 0);
+	D_ASSERT(rc == 0);
 
 	D_RWLOCK_INIT(&dfuse_info->di_forget_lock, 0);
 
@@ -1512,10 +1504,6 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 	int       i;
 
 	/* Stop and drain evict queues */
-	sem_post(&dfuse_info->di_dte_sem);
-
-	pthread_join(dfuse_info->di_dte_thread, NULL);
-
 	dfuse_de_stop(dfuse_info);
 
 	DFUSE_TRA_INFO(dfuse_info, "Flushing inode table");
