@@ -1181,18 +1181,7 @@ nvme_reint_reaction(int *tgt_ids, int tgt_cnt)
 	return nvme_reaction(tgt_ids, tgt_cnt, true);
 }
 
-static int
-nvme_bio_error(int media_err_type, int tgt_id)
-{
-	int rc;
-
-	rc = ds_notify_bio_error(media_err_type, tgt_id);
-
-	return rc;
-}
-
 struct bio_reaction_ops nvme_reaction_ops = {
 	.faulty_reaction	= nvme_faulty_reaction,
 	.reint_reaction		= nvme_reint_reaction,
-	.ioerr_reaction		= nvme_bio_error,
 };

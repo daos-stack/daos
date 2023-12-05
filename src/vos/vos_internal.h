@@ -1566,13 +1566,6 @@ void
 vos_report_layout_incompat(const char *type, int version, int min_version,
 			   int max_version, uuid_t *uuid);
 
-#define VOS_NOTIFY_RAS_EVENTF(...)			\
-	do {						\
-		if (ds_notify_ras_eventf == NULL)	\
-			break;				\
-		ds_notify_ras_eventf(__VA_ARGS__);	\
-	} while (0)					\
-
 static inline int
 vos_offload_exec(int (*func)(void *), void *arg)
 {

@@ -746,6 +746,11 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 		return;
 	}
 
+	bio_notify_ras_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
+			      RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
+			      NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
+			      DP_UUID(d_bdev->bb_uuid));
+
 	bbs = d_bdev->bb_blobstore;
 	/* A new device isn't used by DAOS yet */
 	if (bbs == NULL && !d_bdev->bb_replacing) {
@@ -1794,9 +1799,12 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 		if (d_bdev != NULL)
 			continue;
 
-		D_INFO("Detected hot plugged device %s\n", bdev_name);
 		/* Print a console message */
 		D_PRINT("Detected hot plugged device %s\n", bdev_name);
+		bio_notify_ras_eventf(RAS_DEVICE_PLUGGED, RAS_TYPE_INFO,
+				      RAS_SEV_NOTICE, NULL, NULL, NULL,
+				      NULL, NULL, NULL, NULL, NULL, NULL,
+				      "Detected hot plugged device: %s\n", bdev_name);
 
 		scan_period = 0;
 

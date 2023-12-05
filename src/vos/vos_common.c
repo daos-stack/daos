@@ -47,14 +47,8 @@ vos_report_layout_incompat(const char *type, int version, int min_version,
 		 min_version, max_version);
 	buf[DF_MAX_BUF - 1] = 0; /* Shut up any static analyzers */
 
-	if (ds_notify_ras_event == NULL) {
-		D_CRIT("%s\n", buf);
-		return;
-	}
-
-	ds_notify_ras_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO,
-			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, uuid,
-			    NULL, NULL, NULL, NULL);
+	bio_notify_ras_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO, RAS_SEV_ERROR,
+			     NULL, NULL, NULL, NULL, uuid, NULL, NULL, NULL, NULL);
 }
 
 struct vos_tls *

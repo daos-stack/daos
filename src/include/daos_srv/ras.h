@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,25 +35,32 @@
  *   * Don't arbitrarily reorder entries
  *   * Do limit lines to 99 columns, wrapping as necessary
  */
-#define RAS_EVENT_LIST									\
-	X(RAS_UNKNOWN_EVENT,		"unknown_ras_event")				\
-	X(RAS_ENGINE_FORMAT_REQUIRED,	"engine_format_required")			\
-	X(RAS_ENGINE_DIED,		"engine_died")					\
-	X(RAS_ENGINE_ASSERTED,		"engine_asserted")				\
-	X(RAS_ENGINE_CLOCK_DRIFT,	"engine_clock_drift")				\
-	X(RAS_POOL_CORRUPTION_DETECTED,	"corruption_detected")				\
-	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")				\
-	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")			\
-	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")				\
-	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")			\
-	X(RAS_POOL_DF_INCOMPAT,		"pool_durable_format_incompatible")		\
-	X(RAS_POOL_DEFER_DESTROY,	"pool_destroy_deferred")			\
-	X(RAS_CONT_DF_INCOMPAT,		"container_durable_format_incompatible")	\
-	X(RAS_RDB_DF_INCOMPAT,		"rdb_durable_format_incompatible")		\
-	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")				\
-	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")				\
-	X(RAS_SYSTEM_START_FAILED,	"system_start_failed")				\
-	X(RAS_SYSTEM_STOP_FAILED,	"system_stop_failed")
+#define RAS_EVENT_LIST										\
+	X(RAS_UNKNOWN_EVENT,			"unknown_ras_event")				\
+	X(RAS_ENGINE_FORMAT_REQUIRED,		"engine_format_required")			\
+	X(RAS_ENGINE_DIED,			"engine_died")					\
+	X(RAS_ENGINE_ASSERTED,			"engine_asserted")				\
+	X(RAS_ENGINE_CLOCK_DRIFT,		"engine_clock_drift")				\
+	X(RAS_POOL_CORRUPTION_DETECTED,		"corruption_detected")				\
+	X(RAS_POOL_REBUILD_START,		"pool_rebuild_started")				\
+	X(RAS_POOL_REBUILD_END,			"pool_rebuild_finished")			\
+	X(RAS_POOL_REBUILD_FAILED,		"pool_rebuild_failed")				\
+	X(RAS_POOL_REPS_UPDATE,			"pool_replicas_updated")			\
+	X(RAS_POOL_DF_INCOMPAT,			"pool_durable_format_incompatible")		\
+	X(RAS_POOL_DEFER_DESTROY,		"pool_destroy_deferred")			\
+	X(RAS_CONT_DF_INCOMPAT,			"container_durable_format_incompatible")	\
+	X(RAS_RDB_DF_INCOMPAT,			"rdb_durable_format_incompatible")		\
+	X(RAS_SWIM_RANK_ALIVE,			"swim_rank_alive")				\
+	X(RAS_SWIM_RANK_DEAD,			"swim_rank_dead")				\
+	X(RAS_SYSTEM_START_FAILED,		"system_start_failed")				\
+	X(RAS_SYSTEM_STOP_FAILED,		"system_stop_failed")				\
+	X(RAS_DEVICE_SET_FAULTY,		"device_set_faulty")				\
+	X(RAS_DEVCIE_FAULTY_CRITERIA_REACH,	"device_faulty_criteria_reach")			\
+	X(RAS_DEVICE_MEDIA_ERROR,		"device_media_error")				\
+	X(RAS_DEVICE_UNPLUGGED,			"device_unplugged")				\
+	X(RAS_DEVICE_PLUGGED,			"device_plugged")				\
+	X(RAS_DEVICE_STATE_CHANGE,		"device_state_change")				\
+	X(RAS_DEVICE_REPLACE,			"device_replace")
 
 /** Define RAS event enum */
 typedef enum {
