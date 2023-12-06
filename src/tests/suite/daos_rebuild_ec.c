@@ -1296,6 +1296,9 @@ rebuild_ec_parity_overwrite_fail_parity(void **state)
 	parity_rank = get_rank_by_oid_shard(arg, oid, shard_idx);
 	rebuild_single_pool_rank(arg, parity_rank, true);
 
+	print_message("sleep 60 seconds for aggregation\n");
+	sleep(60);
+
 	/* fail data shard */
 	shard_idx = (dkey_hash % 6 + 0) % 6;
 	data_ranks[0] = get_rank_by_oid_shard(arg, oid, shard_idx);

@@ -1615,6 +1615,7 @@ update_child_map(void *data)
 		return 0;
 	}
 
+	ds_cont_child_reset_ec_agg_eph_all(child);
 	child->spc_map_version = pool->sp_map_version;
 	ds_pool_child_put(child);
 	return 0;
