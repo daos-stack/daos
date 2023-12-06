@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.4.0
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -555,6 +555,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Sun Oct 15 2023 Li Wei <wei.g.li@intel.com> 2.4.0-5
+- Update raft to 0.10.1-2.410.gfc7d903
+
 * Tue Nov 28 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.4.0-4
 - Bump mercury min version to 2.3.1
 

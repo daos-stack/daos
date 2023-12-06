@@ -2848,7 +2848,7 @@ rdb_raft_campaign(struct rdb *db)
 	node = raft_get_my_node(db->d_raft);
 	if (node == NULL || !raft_node_is_voting(node)) {
 		D_DEBUG(DB_MD, DF_DB": must be voting node\n", DP_DB(db));
-		rc = -DER_INVAL;
+		rc = -DER_NO_PERM;
 		goto out_mutex;
 	}
 
