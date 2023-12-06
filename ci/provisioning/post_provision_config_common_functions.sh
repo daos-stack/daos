@@ -274,9 +274,6 @@ set_local_repo() {
             dnf -y config-manager \
                 --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
         fi
-        # Disable module filtering for our deps repo
-        deps_repo="daos-stack-deps-${DISTRO_GENERIC}-${VERSION_ID%%.*}-x86_64-stable-local-artifactory"
-        dnf config-manager --save --setopt "$deps_repo.module_hotfixes=true" "$deps_repo"
     fi
 
     dnf repolist
@@ -347,6 +344,21 @@ post_provision_config_nodes() {
 
     cat /etc/os-release
 
+    # start with everything fully up-to-date
+    # all subsequent package installs beyond this will install the newest packages
+    # but we need some hacks for images with MOFED already installed
+    cmd=(retry_dnf 600)
+    if grep MOFED_VERSION /etc/do-release; then
+        cmd+=(--setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE")
+    else
+        cmd+=(upgrade)
+    fi
+    if ! "${cmd[@]}"; then
+        dump_repos
+        return 1
+    fi
+    rpm -qa | grep ^go
+
     if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
         # Remove OPA and install MOFED
         install_mofed
@@ -374,10 +386,10 @@ post_provision_config_nodes() {
             fi
         fi
         local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/$DISTRO_NAME/
-        dnf -y config-manager --add-repo="${repo_url}"
-        # Disable module filtering
-        repo=$(url_to_repo "$repo_url")
-        dnf config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
+        dnf -y config-manager --add-repo="$repo_url"
+        repo="$(url_to_repo "$repo_url")"
+        # PR-repos: should always be able to upgrade modular packages
+        dnf -y config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
         disable_gpg_check "$repo_url"
     done
 
