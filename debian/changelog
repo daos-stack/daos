@@ -8,7 +8,7 @@ daos (2.4.0-5) unstable; urgency=medium
     NOTE: PMDK upgrade to 2.0.0 does not affect any API call used by DAOS.
           libpmemobj (and libpmem) API stays unchanged.
 
- -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Fri, 17 Nov 2023 12:52:00 -0400
+ -- Tomasz Gromadzki <tomasz.gromadzki@intel.com>  Wed, 06 Dec 2023 12:52:00 -0400
 
 daos (2.4.0-4) unstable; urgency=medium
   [ Jerome Soumagne ]

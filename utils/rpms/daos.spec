@@ -555,7 +555,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Fri Nov 17 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.4.0-5
+* Wed Dec 06 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.4.0-5
 - Update to PMDK 2.0.0
   * Remove libpmemblk from dependencies.
   * Start using BUILD_EXAMPLES=n and BUILD_BENCHMARKS=n instead of patches.
