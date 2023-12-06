@@ -155,11 +155,11 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
-        string(name: 'TestNvme',
-               defaultValue: '',
-               description: 'The launch.py --nvme argument to use for the Functional test ' +
-                            'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
-                            '0000:81:00.0, etc.)')
+        // string(name: 'TestNvme',
+        //        defaultValue: '',
+        //        description: 'The launch.py --nvme argument to use for the Functional test ' +
+        //                     'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
+        //                     '0000:81:00.0, etc.).  Does not apply to MD on SSD stages.')
         string(name: 'BuildType',
                defaultValue: '',
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
@@ -194,11 +194,9 @@ pipeline {
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
-        /* pipeline{} is too big for this
         string(name: 'CI_EL9_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 9 CI tests.  I.e. el9, el9.1, etc.')
-        */
         string(name: 'CI_LEAP15_TARGET',
                defaultValue: '',
                description: 'Image to use for OpenSUSE Leap CI tests.  I.e. leap15, leap15.2, etc.')
@@ -208,11 +206,9 @@ pipeline {
         booleanParam(name: 'CI_RPM_el8_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 8')
-        /* pipeline{} is too big for this
         booleanParam(name: 'CI_RPM_el9_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 9')
-        */
         booleanParam(name: 'CI_RPM_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for Leap 15')
@@ -240,11 +236,9 @@ pipeline {
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on EL 8 test stage')
-        /* pipeline{} is too big for this
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 test stage')
-        */
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on Leap 15 test stage' +
@@ -262,6 +256,9 @@ pipeline {
         booleanParam(name: 'CI_medium-verbs-provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
+        booleanParam(name: 'CI_medium-verbs-provider-md-on-ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium-ucx-provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
@@ -285,19 +282,16 @@ pipeline {
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for the Functional Hardware Medium stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
-               defaultValue: 'ci_nvme5',
-               description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
+               description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node Functional Hardware Large tests')
+               description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -1144,7 +1138,7 @@ pipeline {
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ?
@@ -1170,12 +1164,13 @@ pipeline {
                         'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium Verbs Provider MD on SSD',
                             pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
-                            nvme: 'auto_md_on_ssd',
+                            default_nvme: 'auto_md_on_ssd',
+                            provider: 'ofi+verbs;ofi_rxm',
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1208,12 +1203,11 @@ pipeline {
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
-                            default_tags: startedByTimer() ?
-                                'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
-                            nvme: 'auto_md_on_ssd',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            default_nvme: 'auto_md_on_ssd',
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
