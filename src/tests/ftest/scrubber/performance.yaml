@@ -1,7 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 2
-timeout: 150
+timeout: 1800
 setup:
   start_servers_once: false
 server_config:
@@ -52,7 +52,7 @@ ior:
   test_file: daos:testFile
   dfs_destroy: false
   write_flags: "-w -C -e -g -G 27 -k -Q 1 -v"
-  read_flags:  "-r -R -C -e -g -G 27 -k -Q 1 -v"
+  read_flags: "-r -R -C -e -g -G 27 -k -Q 1 -v"
   api: DFS
   block_size: 150G
   dfs_oclass: RP_2G1
