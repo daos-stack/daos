@@ -2040,7 +2040,7 @@ ds_pool_tgt_warmup_handler(crt_rpc_t *rpc)
 {
 	struct pool_tgt_warmup_in	*in;
 	crt_bulk_t			 bulk_cli;
-	crt_bulk_t			 bulk_local;
+	crt_bulk_t                       bulk_local = NULL;
 	crt_bulk_opid_t			 bulk_opid;
 	uint64_t			 len;
 	struct crt_bulk_desc		 bulk_desc;
