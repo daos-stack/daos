@@ -192,7 +192,7 @@ pipeline {
                defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_EL8_TARGET',
-               defaultValue: '',
+               defaultValue: 'el8.7',
                description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
         string(name: 'CI_EL9_TARGET',
                defaultValue: '',
@@ -951,7 +951,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8 with Valgrind')
-                stage('Functional on EL 8') {
+                stage('Functional on EL 8.7') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }

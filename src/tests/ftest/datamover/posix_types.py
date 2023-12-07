@@ -7,6 +7,7 @@ from os.path import basename, join
 
 from data_mover_test_base import DataMoverTestBase
 from duns_utils import format_path, parse_path
+from run_utils import run_remote
 
 
 class DmvrPosixTypesTest(DataMoverTestBase):
@@ -185,6 +186,11 @@ class DmvrPosixTypesTest(DataMoverTestBase):
             param_type = 'POSIX'
             pool = None
             cont = None
+            self.log.info('--HERE-- verifying directory')
+            run_remote(self.log, self.hostlist_clients, 'cat /proc/mounts | grep mnt')
+            run_remote(self.log, self.hostlist_clients, 'df -h /mnt/share')
+            run_remote(self.log, self.hostlist_clients, 'ls -las "{}"'.format(path))
+            run_remote(self.log, self.hostlist_clients, 'ls -las $dirname("{}")'.format(path))
         self.run_ior_with_params(param_type, path, pool, cont, self.test_file, self.ior_flags[1])
 
     def test_dm_posix_types_dcp(self):
