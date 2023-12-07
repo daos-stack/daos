@@ -63,9 +63,9 @@ dc_job_init(void)
 		char *tmp_jobid = jobid;
 
 		D_STRNDUP(jobid, tmp_jobid, MAX_JOBID_LEN);
+		d_free_env(&tmp_jobid);
 		if (jobid == NULL)
 			D_GOTO(out_env, err = -DER_NOMEM);
-		d_free_env(&tmp_jobid);
 	}
 
 	dc_jobid = jobid;
