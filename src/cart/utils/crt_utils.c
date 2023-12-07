@@ -739,7 +739,7 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	rc = crt_rank_uri_get(*grp, my_rank, 0, &my_uri);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	d_free_env(&my_uri);
+	D_FREE(my_uri);
 
 	rc = d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
 

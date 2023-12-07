@@ -793,7 +793,7 @@ crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info)
 int
 crt_hg_init(void)
 {
-	int rc;
+	int rc = 0;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -807,7 +807,6 @@ crt_hg_init(void)
 			HG_Set_log_level("warning");
 		HG_Set_log_subsys("hg,na");
 	}
-	rc = 0;
 
 	/* import HG log */
 	HG_Set_log_func(crt_hg_log);
