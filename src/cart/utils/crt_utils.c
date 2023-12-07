@@ -424,11 +424,8 @@ crtu_dc_mgmt_net_print_env(void)
 	D_ASSERTF(env != NULL, "Can not retrieve environment varirable %s: " DF_RC "\n",
 		  var_names[0], DP_RC(rc));
 	D_ASPRINTF(msg, "CaRT env setup with:\n\t%s=%s", var_names[0], env);
+	D_ASSERTF(msg != NULL, "Error allocating CaRT env setup message");
 	d_free_env(&env);
-	if (msg == NULL) {
-		D_WARN("Information message can not be created");
-		return;
-	}
 
 	for (idx = 1; idx < sizeof(var_names) / sizeof(char *); ++idx) {
 		char *tmp = msg;
@@ -438,12 +435,9 @@ crtu_dc_mgmt_net_print_env(void)
 			  var_names[idx], DP_RC(rc));
 
 		D_ASPRINTF(msg, "%s, %s=%s", tmp, var_names[idx], env);
+		D_ASSERTF(msg != NULL, "Error allocating CaRT env setup message");
 		d_free_env(&env);
 		D_FREE(tmp);
-		if (msg == NULL) {
-			D_WARN("Information message can not be created");
-			return;
-		}
 	}
 
 	D_INFO("%s", msg);
