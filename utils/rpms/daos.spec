@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       12%{?relval}%{?dist}
+Release:       13%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -49,7 +49,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 2.0.0
+BuildRequires: libpmemobj-devel >= 2.0.1
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -145,11 +145,11 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 2.0.0-1.suse1500
+Requires: libpmemobj1 >= 2.0.1-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 2.0.0-1%{?dist}
+Requires: libpmemobj >= 2.0.1-1%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
@@ -585,6 +585,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Dec 7 2023 Oksana Salyk <oksana.salyk@intel.com> 2.5.100-13
+- Update to PMDK 2.0.1
+  * Reduces libpmemobj's stack usage below the 11kB threshold.
+
 * Fri Nov 17 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.5.100-12
 - Update to PMDK 2.0.0
   * Remove libpmemblk from dependencies.
