@@ -55,4 +55,4 @@ case "$ID_LIKE" in
 esac
 
 # shellcheck disable=SC2034
-MLNX_VER_NUM=5.8-1.1.2.1
+MLNX_VER_NUM=5.8-3.0.7.0
