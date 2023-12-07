@@ -993,15 +993,16 @@ d_getenv_str(char *str_val, size_t str_size, const char *name)
 	int   len;
 	int   rc = -DER_SUCCESS;
 
-	D_ASSERT(name != NULL);
-	D_ASSERT(str_val != NULL);
-	D_ASSERT(str_size > 0);
+	assert(name != NULL);
+	assert(str_val != NULL);
+	assert(str_size > 0);
 
-	D_RWLOCK_RDLOCK(&d_env_lock);
+	pthread_rwlock_rdlock(&d_env_lock);
 
 	tmp = getenv(name);
 	if (tmp == NULL) {
-		D_GOTO(out, rc = -DER_NONEXIST);
+		rc = -DER_NONEXIST;
+		goto out;
 	}
 
 	len = strnlen(tmp, str_size);
@@ -1015,7 +1016,7 @@ d_getenv_str(char *str_val, size_t str_size, const char *name)
 	str_val[len] = '\0';
 
 out:
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	return rc;
 }
@@ -1034,26 +1035,30 @@ d_agetenv_str(char **str_val, const char *name)
 	char *tmp;
 	int   rc;
 
-	D_ASSERT(name != NULL);
+	assert(name != NULL);
 
 	*str_val = NULL;
 
-	D_RWLOCK_RDLOCK(&d_env_lock);
+	pthread_rwlock_rdlock(&d_env_lock);
 
 	env = getenv(name);
-	if (env == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
+	if (env == NULL) {
+		rc = -DER_NONEXIST;
+		goto out;
+	}
 
 	/* DAOS-14532 There is no limit to environment variable size */
 	tmp = strdup(env);
-	if (tmp == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	if (tmp == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
 
 	*str_val = tmp;
 	rc       = -DER_SUCCESS;
 
 out:
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	return rc;
 }
@@ -1075,14 +1080,15 @@ d_getenv_bool(bool *bool_val, const char *name)
 	long long val;
 	int       rc;
 
-	D_ASSERT(name != NULL);
-	D_ASSERT(bool_val != NULL);
+	assert(name != NULL);
+	assert(bool_val != NULL);
 
-	D_RWLOCK_RDLOCK(&d_env_lock);
+	pthread_rwlock_rdlock(&d_env_lock);
 
 	env = getenv(name);
 	if (env == NULL) {
-		D_GOTO(out, rc = -DER_NONEXIST);
+		rc = -DER_NONEXIST;
+		goto out;
 	}
 
 	/* treats any valid non-integer string as true */
@@ -1092,7 +1098,7 @@ d_getenv_bool(bool *bool_val, const char *name)
 	rc        = -DER_SUCCESS;
 
 out:
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	return rc;
 }
@@ -1111,25 +1117,27 @@ d_getenv_char(char *char_val, const char *name)
 	char *env;
 	int   rc;
 
-	D_ASSERT(name != NULL);
-	D_ASSERT(char_val != NULL);
+	assert(name != NULL);
+	assert(char_val != NULL);
 
-	D_RWLOCK_RDLOCK(&d_env_lock);
+	pthread_rwlock_rdlock(&d_env_lock);
 
 	env = getenv(name);
 	if (env == NULL) {
-		D_GOTO(out, rc = -DER_NONEXIST);
+		rc = -DER_NONEXIST;
+		goto out;
 	}
 
 	if (!dis_single_char_str(env)) {
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto out;
 	}
 
 	*char_val = *env;
 	rc        = -DER_SUCCESS;
 
 out:
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	return rc;
 }
@@ -1150,36 +1158,40 @@ d_getenv_uint(unsigned *uint_val, const char *name)
 	unsigned long val;
 	int           rc;
 
-	D_ASSERT(name != NULL);
-	D_ASSERT(uint_val != NULL);
+	assert(name != NULL);
+	assert(uint_val != NULL);
 
-	D_RWLOCK_RDLOCK(&d_env_lock);
+	pthread_rwlock_rdlock(&d_env_lock);
 	env = getenv(name);
 	if (env == NULL) {
-		D_GOTO(out, rc = -DER_NONEXIST);
+		rc = -DER_NONEXIST;
+		goto out;
 	}
 
 	if (!dis_unsigned_str(env)) {
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto out;
 	}
 
 	errno = 0;
 	val   = strtoul(env, &endptr, 0);
 	if (errno != 0 || endptr == env || *endptr != '\0') {
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto out;
 	}
 
 #if UINT_MAX != ULONG_MAX
-	D_ASSERT(sizeof(unsigned) < sizeof(unsigned long));
+	assert(sizeof(unsigned) < sizeof(unsigned long));
 	if (val > UINT_MAX) {
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto out;
 	}
 #endif
 	*uint_val = (unsigned)val;
 	rc        = -DER_SUCCESS;
 
 out:
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	return rc;
 }
@@ -1200,36 +1212,40 @@ d_getenv_uint32_t(uint32_t *uint32_val, const char *name)
 	unsigned long long val;
 	int                rc;
 
-	D_ASSERT(name != NULL);
-	D_ASSERT(uint32_val != NULL);
+	assert(name != NULL);
+	assert(uint32_val != NULL);
 
-	D_RWLOCK_RDLOCK(&d_env_lock);
+	pthread_rwlock_rdlock(&d_env_lock);
 	env = getenv(name);
 	if (env == NULL) {
-		D_GOTO(out, rc = -DER_NONEXIST);
+		rc = -DER_NONEXIST;
+		goto out;
 	}
 
 	if (!dis_unsigned_str(env)) {
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto out;
 	}
 
 	errno = 0;
 	val   = strtoull(env, &endptr, 0);
 	if (errno != 0 || endptr == env || *endptr != '\0') {
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto out;
 	}
 
 #if UINT32_MAX != ULLONG_MAX
-	D_ASSERT(sizeof(uint32_t) < sizeof(unsigned long long));
+	assert(sizeof(uint32_t) < sizeof(unsigned long long));
 	if (val > UINT32_MAX) {
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto out;
 	}
 #endif
 	*uint32_val = (uint64_t)val;
 	rc          = -DER_SUCCESS;
 
 out:
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	return rc;
 }
@@ -1250,36 +1266,40 @@ d_getenv_uint64_t(uint64_t *uint64_val, const char *name)
 	unsigned long long val;
 	int                rc;
 
-	D_ASSERT(name != NULL);
-	D_ASSERT(uint64_val != NULL);
+	assert(name != NULL);
+	assert(uint64_val != NULL);
 
-	D_RWLOCK_RDLOCK(&d_env_lock);
+	pthread_rwlock_rdlock(&d_env_lock);
 	env = getenv(name);
 	if (env == NULL) {
-		D_GOTO(out, rc = -DER_NONEXIST);
+		rc = -DER_NONEXIST;
+		goto out;
 	}
 
 	if (!dis_unsigned_str(env)) {
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto out;
 	}
 
 	errno = 0;
 	val   = strtoull(env, &endptr, 0);
 	if (errno != 0 || endptr == env || *endptr != '\0') {
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto out;
 	}
 
 #if UINT64_MAX != ULLONG_MAX
-	D_ASSERT(sizeof(uint64_t) < sizeof(unsigned long long));
+	assert(sizeof(uint64_t) < sizeof(unsigned long long));
 	if (val > UINT64_MAX) {
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		goto out;
 	}
 #endif
 	*uint64_val = (uint64_t)val;
 	rc          = -DER_SUCCESS;
 
 out:
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	return rc;
 }
@@ -1296,11 +1316,11 @@ d_putenv(char *name)
 	int env_errno;
 	int rc;
 
-	D_RWLOCK_WRLOCK(&d_env_lock);
+	pthread_rwlock_wrlock(&d_env_lock);
 	errno     = 0;
 	rc        = putenv(name);
 	env_errno = errno;
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	errno = env_errno;
 	return rc;
@@ -1320,11 +1340,11 @@ d_setenv(const char *name, const char *value, int overwrite)
 	int env_errno;
 	int rc;
 
-	D_RWLOCK_WRLOCK(&d_env_lock);
+	pthread_rwlock_wrlock(&d_env_lock);
 	errno     = 0;
 	rc        = setenv(name, value, overwrite);
 	env_errno = errno;
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	errno = env_errno;
 	return rc;
@@ -1342,11 +1362,11 @@ d_unsetenv(const char *name)
 	int env_errno;
 	int rc;
 
-	D_RWLOCK_WRLOCK(&d_env_lock);
+	pthread_rwlock_wrlock(&d_env_lock);
 	errno     = 0;
 	rc        = unsetenv(name);
 	env_errno = errno;
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	errno = env_errno;
 	return rc;
@@ -1363,9 +1383,9 @@ d_clearenv(void)
 {
 	int rc;
 
-	D_RWLOCK_WRLOCK(&d_env_lock);
+	pthread_rwlock_wrlock(&d_env_lock);
 	rc = clearenv();
-	D_RWLOCK_UNLOCK(&d_env_lock);
+	pthread_rwlock_unlock(&d_env_lock);
 
 	return rc;
 }

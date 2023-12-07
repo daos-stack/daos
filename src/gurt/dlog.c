@@ -847,20 +847,21 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 
 		if (pri != -1)
 			mst.flush_pri = pri;
-		D_FREE(env);
+		free(env);
 	}
 
 	d_agetenv_str(&env, D_LOG_TRUNCATE_ENV);
 	if (env != NULL && atoi(env) > 0)
 		truncate = 1;
-	D_FREE(env);
+	if (env)
+		free(env);
 
 	d_agetenv_str(&env, D_LOG_SIZE_ENV);
 	if (env != NULL) {
 		log_size = d_getenv_size(env);
 		if (log_size < LOG_SIZE_MIN)
 			log_size = LOG_SIZE_MIN;
-		D_FREE(env);
+		free(env);
 	}
 
 	d_agetenv_str(&env, D_LOG_FILE_APPEND_PID_ENV);
@@ -875,12 +876,14 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 					    "continuing.\n");
 		}
 	}
-	D_FREE(env);
+	if (env)
+		free(env);
 
 	d_agetenv_str(&env, D_LOG_FILE_APPEND_RANK_ENV);
 	if (env && strcmp(env, "0") != 0)
 		mst.append_rank = true;
-	D_FREE(env);
+	if (env)
+		free(env);
 
 	/* quick sanity check (mst.tag is non-null if already open) */
 	if (d_log_xst.tag || !tag ||
@@ -918,7 +921,8 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		d_agetenv_str(&env, D_LOG_STDERR_IN_LOG_ENV);
 		if (env != NULL && atoi(env) > 0)
 			merge_stderr = true;
-		D_FREE(env);
+		if (env)
+			free(env);
 
 		if (!truncate)
 			log_flags |= O_APPEND;
@@ -1086,22 +1090,29 @@ bool d_logfac_is_enabled(const char *fac_name)
 	/* read env DD_SUBSYS to enable corresponding facilities */
 	d_agetenv_str(&ddsubsys_env, DD_FAC_ENV);
 	if (ddsubsys_env == NULL)
-		D_GOTO(out, rc = true); /* enable all facilities by default */
+		return true; /* enable all facilities by default */
 
-	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0)
-		D_GOTO(out, rc = true); /* enable all facilities with DD_SUBSYS=all */
+	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0) {
+		rc = true; /* enable all facilities with DD_SUBSYS=all */
+		goto out;
+	}
 
 	ddsubsys_fac = strcasestr(ddsubsys_env, fac_name);
-	if (ddsubsys_fac == NULL)
-		D_GOTO(out, rc = false);
+	if (ddsubsys_fac == NULL) {
+		rc = false;
+		goto out;
+	}
 
-	if (ddsubsys_fac[len] != '\0' && ddsubsys_fac[len] != ',')
-		D_GOTO(out, rc = false);
+	if (ddsubsys_fac[len] != '\0' && ddsubsys_fac[len] != ',') {
+		rc = false;
+		goto out;
+	}
 
 	rc = true;
 
 out:
-	D_FREE(ddsubsys_env);
+	assert(ddsubsys_env);
+	free(ddsubsys_env);
 	return rc;
 }
 

@@ -131,7 +131,8 @@ io_bypass_init(void)
 		}
 		tok = str;
 	};
-	D_FREE(env);
+	assert(env);
+	free(env);
 }
 
 void
@@ -168,15 +169,20 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 	rc = d_agetenv_str(&logfile, D_LOG_FILE_ENV);
 	if (logfile == NULL || strlen(logfile) == 0) {
 		flags |= DLOG_FLV_STDOUT;
-		D_FREE(logfile);
+		if (logfile)
+			free(logfile);
+		logfile = NULL;
 	} else if (!strncmp(logfile, "/dev/null", 9)) {
 		/* Don't set up logging or log to stdout if the log file is /dev/null */
-		D_FREE(logfile);
+		assert(logfile);
+		free(logfile);
+		logfile = NULL;
 	}
 
 	rc = d_log_init_adv("DAOS", logfile, flags, logmask, DLOG_CRIT,
 			    log_id_cb);
-	D_FREE(logfile);
+	if (logfile)
+		free(logfile);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
 			DP_RC(rc));
