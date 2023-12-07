@@ -208,16 +208,16 @@ CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_
 	.prf_req_fmt = c,	\
 	.prf_hdlr    = NULL,	\
 	.prf_co_ops  = NULL,	\
-}
+},
 
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v4[] = {
-	POOL_PROTO_CLI_RPC_LIST(4),
-	POOL_PROTO_SRV_RPC_LIST,
+	POOL_PROTO_CLI_RPC_LIST(4)
+	POOL_PROTO_SRV_RPC_LIST
 };
 
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v5[] = {
-	POOL_PROTO_CLI_RPC_LIST(5),
-	POOL_PROTO_SRV_RPC_LIST,
+	POOL_PROTO_CLI_RPC_LIST(5)
+	POOL_PROTO_SRV_RPC_LIST
 };
 
 #undef X

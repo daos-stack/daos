@@ -132,23 +132,19 @@ CRT_RPC_DEFINE(cont_acl_delete, DAOS_ISEQ_CONT_ACL_DELETE,
 /* Define for cont_rpcs[] array population below.
  * See CONT_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
-{				\
-	.prf_flags   = b,	\
-	.prf_req_fmt = c,	\
-	.prf_hdlr    = NULL,	\
-	.prf_co_ops  = NULL,	\
-}
+#define X(a, b, c, d, e)                                                                           \
+	{                                                                                          \
+	    .prf_flags   = b,                                                                      \
+	    .prf_req_fmt = c,                                                                      \
+	    .prf_hdlr    = NULL,                                                                   \
+	    .prf_co_ops  = NULL,                                                                   \
+	},
 
 static struct crt_proto_rpc_format cont_proto_rpc_fmt_v7[] = {
-	CONT_PROTO_CLI_RPC_LIST(7, ds_cont_op_handler_v7),
-	CONT_PROTO_SRV_RPC_LIST,
-};
+    CONT_PROTO_CLI_RPC_LIST(7, ds_cont_op_handler_v7) CONT_PROTO_SRV_RPC_LIST};
 
 static struct crt_proto_rpc_format cont_proto_rpc_fmt_v6[] = {
-	CONT_PROTO_CLI_RPC_LIST(6, ds_cont_op_handler_v6),
-	CONT_PROTO_SRV_RPC_LIST,
-};
+    CONT_PROTO_CLI_RPC_LIST(6, ds_cont_op_handler_v6) CONT_PROTO_SRV_RPC_LIST};
 
 #undef X
 
