@@ -132,7 +132,7 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 	ie->ie_stat = entry.attr;
 
 	/* Mark the inode for future invalidation after timeout */
-	dfuse_update_inode_time(dfuse_info, ie, entry.entry_timeout);
+	ival_update_inode(ie, entry.entry_timeout);
 
 	if (fi_out) {
 		/* Now set the value of keep_cache, this is for creat where we need to do the hash

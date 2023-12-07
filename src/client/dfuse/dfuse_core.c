@@ -724,7 +724,9 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 			D_GOTO(err_close, rc);
 		}
 
-		dfuse_de_add_cont(dfuse_info, dfc);
+		rc = ival_add_cont_buckets(dfc);
+		if (rc)
+			goto err_close;
 	} else {
 		DFUSE_TRA_INFO(dfc, "Caching disabled");
 	}
@@ -848,7 +850,9 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 				D_GOTO(err_umount, rc);
 			}
 
-			dfuse_de_add_cont(dfuse_info, dfc);
+			rc = ival_add_cont_buckets(dfc);
+			if (rc != 0)
+				goto err_umount;
 		} else {
 			DFUSE_TRA_INFO(dfc, "Caching disabled");
 		}
@@ -1064,22 +1068,16 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 	if (rc != 0)
 		D_GOTO(err_pt, rc);
 
+	rc = ival_init(dfuse_info);
+	if (rc != 0)
+		D_GOTO(err_pt, rc = d_errno2der(rc));
+
 	atomic_init(&dfuse_info->di_ino_next, 2);
 	atomic_init(&dfuse_info->di_eqt_idx, 0);
 
 	D_SPIN_INIT(&dfuse_info->di_lock, 0);
-	D_MUTEX_INIT(&dfuse_info->di_dte_lock, 0);
-
-	D_INIT_LIST_HEAD(&dfuse_info->di_dtes);
-
-	rc = dfuse_de_add_value(dfuse_info, 0);
-	D_ASSERT(rc == 0);
 
 	D_RWLOCK_INIT(&dfuse_info->di_forget_lock, 0);
-
-	rc = sem_init(&dfuse_info->di_dte_sem, 0, 0);
-	if (rc != 0)
-		D_GOTO(err_eq, rc = daos_errno2der(errno));
 
 	for (i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
@@ -1110,7 +1108,6 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 
 err_eq:
 	D_SPIN_DESTROY(&dfuse_info->di_lock);
-	D_MUTEX_DESTROY(&dfuse_info->di_dte_lock);
 	D_RWLOCK_DESTROY(&dfuse_info->di_forget_lock);
 
 	for (i = 0; i < dfuse_info->di_eq_count; i++) {
@@ -1166,11 +1163,7 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	int      rc;
 	uint32_t ref;
 
-	if (!d_list_empty(&ie->ie_evict_entry)) {
-		D_MUTEX_LOCK(&dfuse_info->di_dte_lock);
-		d_list_del(&ie->ie_evict_entry);
-		D_MUTEX_UNLOCK(&dfuse_info->di_dte_lock);
-	}
+	ival_drop_inode(ie);
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
 	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",
@@ -1374,11 +1367,6 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 		pthread_setname_np(eqt->de_thread, "dfuse_progress");
 	}
 
-	rc = pthread_create(&dfuse_info->di_dte_thread, NULL, dfuse_evict_thread, dfuse_info);
-	if (rc != 0)
-		D_GOTO(err_threads, rc = daos_errno2der(rc));
-	pthread_setname_np(dfuse_info->di_dte_thread, "dfuse_evict");
-
 	rc = dfuse_launch_fuse(dfuse_info, &args);
 	if (rc == -DER_SUCCESS) {
 		fuse_opt_free_args(&args);
@@ -1502,9 +1490,6 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 	int       rc;
 	int       i;
 
-	/* Stop and drain evict queues */
-	dfuse_de_stop(dfuse_info);
-
 	DFUSE_TRA_INFO(dfuse_info, "Flushing inode table");
 
 	dfuse_info->di_shutdown = true;
@@ -1514,6 +1499,9 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 
 		sem_post(&eqt->de_sem);
 	}
+
+	/* Stop and drain invalidation queues */
+	ival_thread_stop();
 
 	for (i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
@@ -1574,7 +1562,6 @@ dfuse_fs_fini(struct dfuse_info *dfuse_info)
 	int i;
 
 	D_SPIN_DESTROY(&dfuse_info->di_lock);
-	D_MUTEX_DESTROY(&dfuse_info->di_dte_lock);
 	D_RWLOCK_DESTROY(&dfuse_info->di_forget_lock);
 
 	for (i = 0; i < dfuse_info->di_eq_count; i++) {

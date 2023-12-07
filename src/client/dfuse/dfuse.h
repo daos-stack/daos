@@ -56,12 +56,6 @@ struct dfuse_info {
 
 	struct d_slab        di_slab;
 
-	pthread_mutex_t      di_dte_lock;
-	d_list_t             di_dtes;
-	sem_t                di_dte_sem;
-	bool                 di_dte_stop;
-	pthread_t            di_dte_thread;
-
 	/* Array of dfuse_eq */
 	struct dfuse_eq     *di_eqt;
 	ATOMIC uint64_t      di_eqt_idx;
@@ -1010,12 +1004,6 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 	*_ino = hi ^ (oid->lo << 32);
 };
 
-/* Cache expiry */
-
-int
-dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *inode,
-			double timeout);
-
 /* Mark the cache for a directory invalid.  Called when directory contents change on create,
  * unlink or rename
  */
@@ -1036,20 +1024,29 @@ dfuse_mcache_evict(struct dfuse_inode_entry *ie);
 bool
 dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 
+/* Check the dentry cache setting against a given timeout, and return time left */
 bool
 dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 
+/* inval.c */
+
 int
-dfuse_de_add_value(struct dfuse_info *dfuse_info, double timeout);
+ival_add_cont_buckets(struct dfuse_cont *dfc);
 
 void
-dfuse_de_add_cont(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc);
+ival_drop_inode(struct dfuse_inode_entry *inode);
 
-void *
-dfuse_evict_thread(void *arg);
+int
+ival_update_inode(struct dfuse_inode_entry *inode, double timeout);
+
+int
+ival_init(struct dfuse_info *dfuse_info);
+
+int
+ival_thread_start(struct dfuse_info *dfuse_info);
 
 void
-dfuse_de_stop(struct dfuse_info *dfuse_info);
+ival_thread_stop();
 
 /* Data caching functions */
 
