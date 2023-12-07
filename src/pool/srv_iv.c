@@ -928,6 +928,17 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	struct ds_pool		*pool;
 	int			rc;
 
+	if (entry->iv_class->iv_class_id == IV_POOL_CONN) {
+		struct pool_iv_key *pool_key = key2priv(key);
+
+		/* Invalide entry will only delete one pool handle from the entry,
+		 * so it does not need to set iv_valid to false.
+		 */
+		rc = pool_iv_conn_delete(&iv_entry->piv_conn_hdls, pool_key->pik_uuid);
+		return rc;
+	}
+
+	entry->iv_valid = false;
 	if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
 		if (!uuid_is_null(iv_entry->piv_hdl.pih_cont_hdl)) {
 			entry->iv_valid = false;
@@ -944,12 +955,6 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 			ds_pool_put(pool);
 			return 0;
 		}
-	} else if (entry->iv_class->iv_class_id == IV_POOL_CONN) {
-		struct pool_iv_key *pool_key = key2priv(key);
-
-		rc = pool_iv_conn_delete(&iv_entry->piv_conn_hdls,
-					 pool_key->pik_uuid);
-		return rc;
 	}
 
 	return 0;

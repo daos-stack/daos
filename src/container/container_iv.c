@@ -434,6 +434,86 @@ out:
 }
 
 static int
+cont_iv_ent_fetch_from_master(struct ds_iv_entry *entry, struct ds_iv_key *key,
+			      d_iov_t *val_iov)
+{
+	daos_handle_t		root_hdl;
+	struct cont_iv_key	*civ_key = key2priv(key);
+	d_iov_t			key_iov;
+	int			class_id;
+	int			rc = 0;
+
+	class_id = entry->iv_class->iv_class_id;
+	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
+	switch(class_id) {
+	case IV_CONT_SNAP:
+		rc = cont_iv_snap_ent_create(entry, key);
+		break;
+	case IV_CONT_PROP:
+		rc = cont_iv_prop_ent_create(entry, key);
+		break;
+	case IV_CONT_CAPA: {
+		struct container_hdl	chdl = { 0 };
+		struct cont_iv_entry	iv_entry = { 0 };
+		daos_prop_t		*prop = NULL;
+		struct daos_prop_entry	*prop_entry;
+		struct daos_co_status	stat = { 0 };
+		d_iov_t			tmp_iov = { 0 };
+
+		/* If PS leader switches, it may not in IV cache,
+		 * let's lookup RDB then.
+		 **/
+		rc = ds_cont_hdl_rdb_lookup(entry->ns->iv_pool_uuid, civ_key->cont_uuid, &chdl);
+		if (rc != 0)
+			break;
+
+		if (uuid_is_null(chdl.ch_cont)) {
+			/* Skip for server to server handle */
+			iv_entry.iv_capa.sec_capas = ds_sec_get_rebuild_cont_capabilities();
+			iv_entry.iv_capa.flags = 0;
+			return 0;
+		}
+
+		rc = ds_cont_get_prop(entry->ns->iv_pool_uuid, chdl.ch_cont, &prop);
+		if (rc)
+			break;
+
+		prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+		D_ASSERT(prop_entry != NULL);
+
+		daos_prop_val_2_co_status(prop_entry->dpe_val, &stat);
+		iv_entry.iv_capa.status_pm_ver = stat.dcs_pm_ver;
+		daos_prop_free(prop);
+		/* Only happens on xstream 0 */
+		D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+		iv_entry.iv_capa.flags = chdl.ch_flags;
+		iv_entry.iv_capa.sec_capas = chdl.ch_sec_capas;
+		uuid_copy(iv_entry.cont_uuid, chdl.ch_cont);
+		d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
+		d_iov_set(&tmp_iov, &iv_entry, sizeof(iv_entry));
+		rc = dbtree_update(root_hdl, &key_iov, &tmp_iov);
+		break;
+		}
+	default:
+		break;
+	}
+
+	if (rc != 0) {
+		D_ERROR(DF_CONT" class %d iv entry failed " ""DF_RC"\n",
+			DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid), class_id, DP_RC(rc));
+		return rc;
+	}
+
+	entry->iv_valid = 1;
+
+	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
+	d_iov_set(val_iov, NULL, 0);
+	rc = dbtree_lookup(root_hdl, &key_iov, val_iov);
+
+	return rc;
+}
+
+static int
 cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		  d_sg_list_t *dst, void **priv)
 {
@@ -448,84 +528,31 @@ cont_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	memcpy(&root_hdl, entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
 
-again:
 	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	d_iov_set(&val_iov, NULL, 0);
 	rc = dbtree_lookup(root_hdl, &key_iov, &val_iov);
-	if (rc < 0) {
-		if (rc == -DER_NONEXIST && is_master(entry)) {
-			int	class_id;
-
-			class_id = entry->iv_class->iv_class_id;
-			if (class_id == IV_CONT_SNAP) {
-				rc = cont_iv_snap_ent_create(entry, key);
-				if (rc == 0)
-					goto again;
-				D_ERROR("create cont snap iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
-			} else if (class_id == IV_CONT_PROP) {
-				rc = cont_iv_prop_ent_create(entry, key);
-				if (rc == 0)
-					goto again;
-				D_ERROR("create cont prop iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
-			} else if (class_id == IV_CONT_CAPA) {
-				struct container_hdl	chdl = { 0 };
-				int			rc1;
-
-				/* If PS leader switches, it may not in IV cache,
-				 * let's lookup RDB then.
-				 **/
-				rc1 = ds_cont_hdl_rdb_lookup(entry->ns->iv_pool_uuid,
-							     civ_key->cont_uuid, &chdl);
-				if (rc1 == 0) {
-					struct cont_iv_entry	iv_entry = { 0 };
-					daos_prop_t		*prop = NULL;
-					struct daos_prop_entry	*prop_entry;
-					struct daos_co_status	stat = { 0 };
-
-					if (uuid_is_null(chdl.ch_cont)) {
-						/* Skip for container server handler */
-						iv_entry.iv_capa.sec_capas =
-							ds_sec_get_rebuild_cont_capabilities();
-						iv_entry.iv_capa.flags = 0;
-						D_GOTO(out, rc = 0);
-					}
-					rc = ds_cont_get_prop(entry->ns->iv_pool_uuid,
-							      chdl.ch_cont, &prop);
-					if (rc) {
-						D_ERROR(DF_CONT "get prop: "DF_RC"\n",
-							DP_CONT(entry->ns->iv_pool_uuid,
-								chdl.ch_cont), DP_RC(rc));
-						D_GOTO(out, rc);
-					}
-					prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
-					D_ASSERT(prop_entry != NULL);
-
-					daos_prop_val_2_co_status(prop_entry->dpe_val, &stat);
-					iv_entry.iv_capa.status_pm_ver = stat.dcs_pm_ver;
-					daos_prop_free(prop);
-					/* Only happens on xstream 0 */
-					D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-					iv_entry.iv_capa.flags = chdl.ch_flags;
-					iv_entry.iv_capa.sec_capas = chdl.ch_sec_capas;
-					uuid_copy(iv_entry.cont_uuid, chdl.ch_cont);
-					d_iov_set(&val_iov, &iv_entry, sizeof(iv_entry));
-					rc = dbtree_update(root_hdl, &key_iov, &val_iov);
-					if (rc == 0)
-						goto again;
-				} else {
-					rc = -DER_NONEXIST;
-				}
-			}
-		}
-		D_DEBUG(DB_MGMT, "lookup cont: rc "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+	if (rc < 0 && rc != -DER_NONEXIST) {
+		D_ERROR(DF_CONT" class %d iv entry failed " ""DF_RC"\n",
+			DP_CONT(entry->ns->iv_pool_uuid, civ_key->cont_uuid),
+			entry->iv_class->iv_class_id, DP_RC(rc));
+		return rc;
 	}
 
+	if (rc == -DER_NONEXIST) {
+		/* If it does not exist, then either go to its parent */
+		if (!is_master(entry))
+			return -DER_IVCB_FORWARD;
+
+		/* or load from master */
+		rc = cont_iv_ent_fetch_from_master(entry, key, &val_iov);
+		if (rc)
+			return rc;
+	}
+
+	D_ASSERT(entry->iv_valid);
 	src_iv = val_iov.iov_buf;
 	rc = cont_iv_ent_copy(entry, civ_key, dst, src_iv);
-out:
+
 	return rc;
 }
 

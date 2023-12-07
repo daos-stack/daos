@@ -796,23 +796,6 @@ obj_grp_leader_get(struct dc_object *obj, int grp_idx, uint64_t dkey_hash,
 	return obj_replica_leader_select(obj, grp_idx, dkey_hash, map_ver);
 }
 
-/* If the client has been asked to fetch (list/query) from leader replica,
- * then means that related data is associated with some prepared DTX that
- * may be committable on the leader replica. According to our current DTX
- * batched commit policy, it is quite possible that such DTX is not ready
- * to be committed, or it is committable but cached on the leader replica
- * for some time. On the other hand, such DTX may contain more data update
- * than current fetch. If the subsequent fetch against the same redundancy
- * group come very soon (within the OBJ_FETCH_LEADER_INTERVAL), then it is
- * possible that related target for the next fetch is covered by the same
- * DTX that is still not committed yet. If the assumption is right, asking
- * the application to fetch from leader replica directly can avoid one RPC
- * round-trip with non-leader replica. If such assumption is wrong, it may
- * increase the server load on which the leader replica resides in a short
- * time but it will not correctness issues.
- */
-#define		OBJ_FETCH_LEADER_INTERVAL	2
-
 int
 obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 {
@@ -832,7 +815,7 @@ obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver)
 	D_ASSERT(grp_size > 0);
 
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
-	if (obj->cob_version != map_ver || map_ver < pool_map_ver) {
+	if (obj->cob_version != pool_map_ver) {
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
 		D_DEBUG(DB_IO, "cob_ersion %u map_ver %u pool_map_ver %u\n",
 			obj->cob_version, map_ver, pool_map_ver);
@@ -4934,8 +4917,9 @@ obj_task_init_common(tse_task_t *task, int opc, uint32_t map_ver,
 	obj_auxi->is_ec_obj = obj_is_ec(obj);
 	*auxi = obj_auxi;
 
-	D_DEBUG(DB_IO, "client task %p init "DF_OID" opc 0x%x, try %d\n",
-		task, DP_OID(obj->cob_md.omd_id), opc, (int)obj_auxi->retry_cnt);
+	D_DEBUG(DB_IO, "client task %p init "DF_OID" opc 0x%x, ver %u try %d\n",
+		task, DP_OID(obj->cob_md.omd_id), opc, map_ver,
+		(int)obj_auxi->retry_cnt);
 }
 
 /**
@@ -5304,6 +5288,23 @@ obj_ec_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned 
 out:
 	return rc;
 }
+
+/* If the client has been asked to fetch (list/query) from leader replica,
+ * then means that related data is associated with some prepared DTX that
+ * may be committable on the leader replica. According to our current DTX
+ * batched commit policy, it is quite possible that such DTX is not ready
+ * to be committed, or it is committable but cached on the leader replica
+ * for some time. On the other hand, such DTX may contain more data update
+ * than current fetch. If the subsequent fetch against the same redundancy
+ * group come very soon (within the OBJ_FETCH_LEADER_INTERVAL), then it is
+ * possible that related target for the next fetch is covered by the same
+ * DTX that is still not committed yet. If the assumption is right, asking
+ * the application to fetch from leader replica directly can avoid one RPC
+ * round-trip with non-leader replica. If such assumption is wrong, it may
+ * increase the server load on which the leader replica resides in a short
+ * time but it will not correctness issues.
+ */
+#define		OBJ_FETCH_LEADER_INTERVAL	2
 
 static int
 obj_replica_fetch_shards_get(struct dc_object *obj, struct obj_auxi_args *obj_auxi,

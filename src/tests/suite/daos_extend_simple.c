@@ -615,6 +615,91 @@ dfs_extend_fail_retry(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+extend_handles(void **state)
+{
+	test_arg_t	*arg = *state;
+	test_arg_t	*new_arg = NULL;
+	daos_handle_t	pohs[10];
+	daos_handle_t	cohs[10];
+	uuid_t		cont_uuid[10];
+	daos_obj_id_t	oids[10];
+	char		str[37];
+	d_rank_t	ranks[2];
+	struct ioreq	req;
+	int		i;
+	int		rc;
+
+	rc = test_setup((void **)&new_arg, SETUP_POOL_CREATE,
+			 arg->multi_rank, 1 << 28, 3, NULL);
+	if (rc) {
+		print_message("open/connect another pool failed: rc %d\n", rc);
+		return;
+	}
+
+	for (i = 0; i < 10; i++) {
+		rc = daos_pool_connect(new_arg->pool.pool_str, new_arg->group,
+				       DAOS_PC_RW, &pohs[i], NULL /* pool info */,
+				       NULL /* ev */);
+		assert_int_equal(rc, 0);
+		rc = daos_cont_create(pohs[i], &cont_uuid[i], NULL, NULL);
+		assert_rc_equal(rc, 0);
+
+		uuid_unparse(cont_uuid[i], str);
+		rc = daos_cont_open(pohs[i], str, DAOS_COO_RW, &cohs[i], NULL, NULL);
+		assert_rc_equal(rc, 0);
+
+		oids[i] = daos_test_oid_gen(cohs[i], OC_S1, 0, 0, new_arg->myrank);
+		ioreq_init(&req, cohs[i], oids[i], DAOS_IOD_ARRAY, new_arg);
+
+		insert_single("dkey", "akey", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+		ioreq_fini(&req);
+	}
+
+	for (i = 0; i < 5; i++) {
+		rc = daos_cont_close(cohs[i], NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_pool_disconnect(pohs[i], NULL /* ev */);
+		assert_int_equal(rc, 0);
+	}
+
+	ranks[0] = 3;
+	ranks[1] = 4;
+	extend_pool_ranks(new_arg, ranks, 2);
+
+	/* If the pool/container is already disconnected, then it should return -DER_NO_HDL,
+	 * otherwise succeeds.
+	 */
+	for (i = 5; i < 10; i++) {
+		char buffer[16];
+
+		oids[i] = daos_test_oid_gen(cohs[i], OC_S1, 0, 0, new_arg->myrank);
+		ioreq_init(&req, cohs[i], oids[i], DAOS_IOD_ARRAY, new_arg);
+		lookup_single("dkey", "akey", 0, buffer, 16, DAOS_TX_NONE, &req);
+		ioreq_fini(&req);
+		uuid_unparse(cont_uuid[i], str);
+		rc = daos_cont_close(cohs[i], NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_cont_destroy(pohs[i], str, 0, NULL);
+		assert_int_equal(rc, 0);
+		rc = daos_pool_disconnect(pohs[i], NULL /* ev */);
+		assert_int_equal(rc, 0);
+	}
+
+	if (new_arg->myrank == 0)
+		daos_debug_set_params(new_arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_FAIL_DESTROY_BUSY_CHECK | DAOS_FAIL_ALWAYS, 0, NULL);
+
+	rc = pool_destroy_safe(new_arg, NULL);
+	assert_rc_equal(rc, 0);
+
+	if (new_arg->myrank == 0)
+		daos_debug_set_params(new_arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+	test_teardown((void **)&new_arg);
+}
+
 int
 extend_small_sub_setup(void **state)
 {
@@ -666,6 +751,8 @@ static const struct CMUnitTest extend_tests[] = {
 	 dfs_extend_write_extend, extend_small_sub_setup, test_teardown},
 	{"EXTEND16: extend fail then retry",
 	 dfs_extend_fail_retry, extend_small_sub_setup, test_teardown},
+	{"EXTEND17: extend pool hdls",
+	 extend_handles, extend_small_sub_setup, test_teardown},
 };
 
 int

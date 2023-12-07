@@ -433,6 +433,7 @@ void drain_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
 void drain_pools_ranks(test_arg_t **args, int args_cnt,
 		d_rank_t *failed_ranks, int ranks_nr, bool kill);
 void extend_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank);
+void extend_pool_ranks(test_arg_t *arg, d_rank_t *ranks, int nr);
 
 int rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
 		struct test_pool *pool);
