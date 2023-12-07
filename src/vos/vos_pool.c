@@ -282,6 +282,7 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 
 	D_ASSERT(err == 0);
 	err = bio_iod_post(biod, err);
+	bio_iod_free(biod);
 	if (err) {
 		DL_ERROR(err, "Checkpointing flush failed.");
 		/* See the comment in vos_wal_commit() */
