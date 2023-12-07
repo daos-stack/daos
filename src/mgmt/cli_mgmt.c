@@ -455,8 +455,11 @@ print_mgmt_net_env()
 	D_ASSERTF(env != NULL, "Can not retrieve environment varirable OFI_INTERFACE: " DF_RC "\n",
 		  DP_RC(rc));
 	D_ASPRINTF(msg, "Network Interface: %s", env);
-	D_ASSERTF(msg != NULL, "Error allocating CaRT initialization message");
 	d_free_env(&env);
+	if (msg == NULL) {
+		D_INFO("Error allocating CaRT initialization message");
+		return;
+	}
 	d_agetenv_str(&env, "OFI_DOMAIN");
 	if (env == NULL)
 		D_INFO("%s, Domain: NA", msg);
@@ -469,8 +472,11 @@ print_mgmt_net_env()
 	D_ASSERTF(env != NULL, "Can not retrieve environment varirable %s: " DF_RC "\n",
 		  var_names[0], DP_RC(rc));
 	D_ASPRINTF(msg, "CaRT initialization with:\n\t%s=%s", var_names[0], env);
-	D_ASSERTF(msg != NULL, "Error allocating CaRT initialization message");
 	d_free_env(&env);
+	if (msg == NULL) {
+		D_INFO("Error allocating CaRT initialization message");
+		return;
+	}
 
 	for (idx = 1; idx < sizeof(var_names) / sizeof(char *); ++idx) {
 		char *tmp = msg;
@@ -480,9 +486,12 @@ print_mgmt_net_env()
 			  var_names[idx], DP_RC(rc));
 
 		D_ASPRINTF(msg, "%s, %s=%s", tmp, var_names[idx], env);
-		D_ASSERTF(msg != NULL, "Error allocating CaRT initialization message");
 		d_free_env(&env);
 		D_FREE(tmp);
+		if (msg == NULL) {
+			D_INFO("Error allocating CaRT initialization message");
+			return;
+		}
 	}
 
 	D_DEBUG(DB_MGMT, "%s", msg);
