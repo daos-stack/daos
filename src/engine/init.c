@@ -432,16 +432,13 @@ dss_init_state_set(enum dss_init_state state)
 static int
 abt_max_num_xstreams(void)
 {
-	char *env;
-	int   num_xstreams = 0;
+	unsigned num_xstreams = 0;
 
-	d_agetenv_str(&env, "ABT_MAX_NUM_XSTREAMS");
-	if (env == NULL)
-		d_agetenv_str(&env, "ABT_ENV_MAX_NUM_XSTREAMS");
-	if (env != NULL) {
-		num_xstreams = atoi(env);
-		d_free_env(&env);
-	}
+	if (d_isenv_def("ABT_MAX_NUM_XSTREAMS"))
+		d_agetenv_uint(&num_xstreams, "ABT_MAX_NUM_XSTREAMS");
+	else
+		d_agetenv_uint(&num_xstreams, "ABT_ENV_MAX_NUM_XSTREAMS");
+	D_ASSERT(num_xstreams <= INT_MAX);
 
 	return num_xstreams;
 }
@@ -459,7 +456,7 @@ set_abt_max_num_xstreams(int n)
 		return -DER_NOMEM;
 	D_INFO("Setting %s to %s\n", name, value);
 	rc = d_setenv(name, value, 1 /* overwrite */);
-	d_free_env(&value);
+	D_FREE(value);
 	if (rc != 0)
 		return daos_errno2der(errno);
 	return 0;
