@@ -435,9 +435,9 @@ abt_max_num_xstreams(void)
 	unsigned num_xstreams = 0;
 
 	if (d_isenv_def("ABT_MAX_NUM_XSTREAMS"))
-		d_agetenv_uint(&num_xstreams, "ABT_MAX_NUM_XSTREAMS");
+		d_getenv_uint(&num_xstreams, "ABT_MAX_NUM_XSTREAMS");
 	else
-		d_agetenv_uint(&num_xstreams, "ABT_ENV_MAX_NUM_XSTREAMS");
+		d_getenv_uint(&num_xstreams, "ABT_ENV_MAX_NUM_XSTREAMS");
 	D_ASSERT(num_xstreams <= INT_MAX);
 
 	return num_xstreams;
