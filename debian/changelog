@@ -1,3 +1,10 @@
+daos (2.5.100-13) unstable; urgency=medium
+  [ Oksana Salyk ]
+  * Update PMDK to 2.0.1
+    * Reduces libpmemobj's stack usage below the 11kB threshold.
+
+ -- Oksana Salyk <oksana.salyk@intel.com>  Thu, 7 Dec 2023 08:52:00 -0400
+
 daos (2.5.100-12) unstable; urgency=medium
   [ Tomasz Gromadzki ]
   * Update PMDK to 2.0.0
