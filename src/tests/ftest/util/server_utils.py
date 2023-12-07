@@ -521,7 +521,7 @@ class DaosServerManager(SubprocessManager):
             started = self.get_detected_engine_count(self.manager.process)
         else:
             if hasattr(self.manager, 'timestamps'):
-                self.log.debug("TIME STAMPS:"
+                self.log.debug("TIME STAMPS:")
                 for key in sorted(self.manager.timestamps):
                     self.log.debug("  %-8s: %s", key, self.manager.timestamps[key])
             self.log.info("<SERVER> Waiting for the daos_engine to start")
