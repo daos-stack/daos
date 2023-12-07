@@ -353,7 +353,7 @@ int main(int argc, char **argv)
 	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
 			my_uri, grp_cfg_file);
 	d_free_env(&grp_cfg_file);
-	d_free_env(&my_uri);
+	D_FREE(my_uri);
 
 	rc = crt_group_size(NULL, &grp_size);
 	if (rc != 0) {

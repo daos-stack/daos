@@ -43,8 +43,6 @@ dc_job_init(void)
 	d_agetenv_str(&jobid_env, JOBID_ENV);
 	if (jobid_env == NULL) {
 		D_STRNDUP_S(jobid_env, DEFAULT_JOBID_ENV);
-		if (jobid_env == NULL)
-			D_GOTO(out_err, err = -DER_NOMEM);
 	} else {
 		char *tmp_env = jobid_env;
 

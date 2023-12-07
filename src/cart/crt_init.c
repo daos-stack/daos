@@ -889,9 +889,9 @@ out:
 	D_FREE(domain0);
 	D_FREE(provider_str0);
 	D_FREE(auth_key0);
-	d_free_env(&interface_env);
-	d_free_env(&domain_env);
 	d_free_env(&port_str);
+	d_free_env(&domain_env);
+	d_free_env(&interface_env);
 	d_free_env(&provider_env);
 	d_free_env(&auth_key_env);
 

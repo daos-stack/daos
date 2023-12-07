@@ -417,14 +417,13 @@ crtu_dc_mgmt_net_print_env(void)
 					  "CRT_CTX_SHARE_ADDR", "CRT_TIMEOUT"};
 	int                idx;
 	char              *env;
-	char              *msg = NULL;
-	char              *tmp = NULL;
+	char              *msg;
 	int                rc;
 
 	rc = d_agetenv_str(&env, var_names[0]);
 	D_ASSERTF(env != NULL, "Can not retrieve environment varirable %s: " DF_RC "\n",
 		  var_names[0], DP_RC(rc));
-	msg = d_asprintf2(&rc, "CaRT env setup with:\n\t%s=%s", var_names[0], env);
+	D_ASPRINTF(msg, "CaRT env setup with:\n\t%s=%s", var_names[0], env);
 	d_free_env(&env);
 	if (msg == NULL) {
 		D_WARN("Information message can not be created");
@@ -432,15 +431,15 @@ crtu_dc_mgmt_net_print_env(void)
 	}
 
 	for (idx = 1; idx < sizeof(var_names) / sizeof(char *); ++idx) {
-		tmp = msg;
+		char *tmp = msg;
 
 		rc = d_agetenv_str(&env, var_names[idx]);
 		D_ASSERTF(env != NULL, "Can not retrieve environment varirable %s: " DF_RC "\n",
 			  var_names[idx], DP_RC(rc));
 
-		msg = d_asprintf2(&rc, "%s, %s=%s", tmp, var_names[idx], env);
+		D_ASPRINTF(msg, "%s, %s=%s", tmp, var_names[idx], env);
 		d_free_env(&env);
-		d_free_env(&tmp);
+		D_FREE(tmp);
 		if (msg == NULL) {
 			D_WARN("Information message can not be created");
 			return;
@@ -448,7 +447,7 @@ crtu_dc_mgmt_net_print_env(void)
 	}
 
 	D_INFO("%s", msg);
-	d_free_env(&msg);
+	D_FREE(msg);
 }
 
 int
