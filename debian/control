@@ -29,7 +29,7 @@ Build-Depends: debhelper (>= 10),
                libboost-dev,
                libspdk-dev (>= 22.01.2),
                libipmctl-dev,
-               libraft-dev (= 0.10.1-1408.g9524cdb),
+               libraft-dev (= 0.10.1-1411.gefa15f4),
                python3-tabulate,
                liblz4-dev,
                libcapstone-dev
@@ -201,4 +201,3 @@ Description: The Distributed Asynchronous Object Storage (DAOS) is an open-sourc
  to optimize performance and cost.
  .
  This package contains the DAOS administrative tools (e.g. dmg).
-
