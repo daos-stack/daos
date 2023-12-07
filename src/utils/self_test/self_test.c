@@ -1853,7 +1853,7 @@ int main(int argc, char *argv[])
 		printf("Warning: running without daos_agent connection (-u option); "
 		       "Using attachment file %s/%s.attach_info_tmp instead\n",
 		       attach_path, dest_name ? dest_name : default_dest_name);
-		D_FREE(attach_path);
+		d_free_env(&attach_path);
 	}
 
 	/******************** Parse message sizes argument ********************/

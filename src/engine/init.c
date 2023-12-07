@@ -440,7 +440,7 @@ abt_max_num_xstreams(void)
 		d_agetenv_str(&env, "ABT_ENV_MAX_NUM_XSTREAMS");
 	if (env != NULL) {
 		num_xstreams = atoi(env);
-		D_FREE(env);
+		d_free_env(&env);
 	}
 
 	return num_xstreams;
@@ -459,7 +459,7 @@ set_abt_max_num_xstreams(int n)
 		return -DER_NOMEM;
 	D_INFO("Setting %s to %s\n", name, value);
 	rc = d_setenv(name, value, 1 /* overwrite */);
-	D_FREE(value);
+	d_free_env(&value);
 	if (rc != 0)
 		return daos_errno2der(errno);
 	return 0;

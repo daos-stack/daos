@@ -106,7 +106,7 @@ write_completion_file(void)
 		"DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
 		"option.\n");
 	D_ASPRINTF(completion_file, "%s/test-servers-completed.txt.%d", dir, getpid());
-	D_FREE(dir);
+	d_free_env(&dir);
 	D_ASSERTF(completion_file != NULL, "Error allocating completion_file string\n");
 
 	unlink(completion_file);
@@ -425,7 +425,7 @@ crtu_dc_mgmt_net_print_env(void)
 	D_ASSERTF(env != NULL, "Can not retrieve environment varirable %s: " DF_RC "\n",
 		  var_names[0], DP_RC(rc));
 	msg = d_asprintf2(&rc, "CaRT env setup with:\n\t%s=%s", var_names[0], env);
-	D_FREE(env);
+	d_free_env(&env);
 	if (msg == NULL) {
 		D_WARN("Information message can not be created");
 		return;
@@ -439,8 +439,8 @@ crtu_dc_mgmt_net_print_env(void)
 			  var_names[idx], DP_RC(rc));
 
 		msg = d_asprintf2(&rc, "%s, %s=%s", tmp, var_names[idx], env);
-		D_FREE(env);
-		D_FREE(tmp);
+		d_free_env(&env);
+		d_free_env(&tmp);
 		if (msg == NULL) {
 			D_WARN("Information message can not be created");
 			return;
@@ -448,7 +448,7 @@ crtu_dc_mgmt_net_print_env(void)
 	}
 
 	D_INFO("%s", msg);
-	D_FREE(msg);
+	d_free_env(&msg);
 }
 
 int
@@ -501,7 +501,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
 				"but server is unset!\n", cli_srx_set);
-			D_FREE(cli_srx_set);
+			d_free_env(&cli_srx_set);
 			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 	}
@@ -516,7 +516,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
 		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
-		D_FREE(crt_timeout);
+		d_free_env(&crt_timeout);
 	}
 
 	d_agetenv_str(&ofi_interface, "OFI_INTERFACE");
@@ -529,7 +529,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		D_DEBUG(DB_MGMT,
 			"Using client provided OFI_INTERFACE: %s\n",
 			ofi_interface);
-		D_FREE(ofi_interface);
+		d_free_env(&ofi_interface);
 	}
 
 	d_agetenv_str(&ofi_domain, "OFI_DOMAIN");
@@ -540,7 +540,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
 		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", ofi_domain);
-		D_FREE(ofi_domain);
+		d_free_env(&ofi_domain);
 	}
 
 	crtu_dc_mgmt_net_print_env();
@@ -624,7 +624,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			rc = crtu_load_group_from_file(grp_cfg_file,
 						       *crt_ctx, *grp,
 						       -1, true);
-			D_FREE(grp_cfg_file);
+			d_free_env(&grp_cfg_file);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -739,13 +739,13 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	rc = crt_rank_uri_get(*grp, my_rank, 0, &my_uri);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	D_FREE(my_uri);
+	d_free_env(&my_uri);
 
 	rc = d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
 
 	/* load group info from a config file and delete file upon return */
 	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], *grp, my_rank, true);
-	D_FREE(grp_cfg_file);
+	d_free_env(&grp_cfg_file);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

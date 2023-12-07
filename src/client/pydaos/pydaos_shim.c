@@ -115,7 +115,7 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 				use_glob_eq = 0;
 			}
 		}
-		D_FREE(override);
+		d_free_env(&override);
 	}
 
 	return PyInt_FromLong(rc);

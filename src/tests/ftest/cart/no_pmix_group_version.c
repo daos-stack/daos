@@ -270,7 +270,7 @@ int main(int argc, char **argv)
 
 	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
-	D_FREE(env_self_rank);
+	d_free_env(&env_self_rank);
 
 	/* When under valgrind bump expected timeouts to 60 seconds */
 	if (D_ON_VALGRIND) {
@@ -352,7 +352,7 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
 			my_uri, grp_cfg_file);
-	D_FREE(grp_cfg_file);
+	d_free_env(&grp_cfg_file);
 	D_FREE(my_uri);
 
 	rc = crt_group_size(NULL, &grp_size);

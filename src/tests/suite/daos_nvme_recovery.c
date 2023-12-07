@@ -92,7 +92,7 @@ nvme_fault_reaction(void **state, int mode)
 			size_gb = atoi(env);
 			if (size_gb != 0)
 				scm_size = (daos_size_t)size_gb << 30;
-			D_FREE(env);
+			d_free_env(&env);
 		}
 
 		/* NVMe size is 4x of SCM size */

@@ -1393,7 +1393,7 @@ ds_rsvc_get_md_cap(void)
 	if (v == NULL)
 		return size_default;
 	n = atoi(v);
-	D_FREE(v);
+	d_free_env(&v);
 	if ((n << 20) < MINIMUM_DAOS_MD_CAP_SIZE) {
 		D_ERROR("metadata capacity too low; using %zu MB\n",
 			size_default >> 20);

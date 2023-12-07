@@ -456,7 +456,7 @@ print_mgmt_net_env()
 	D_ASSERTF(env != NULL, "Can not retrieve environment varirable OFI_INTERFACE: " DF_RC "\n",
 		  DP_RC(rc));
 	msg = d_asprintf2(&rc, "Network Interface: %s", env);
-	D_FREE(env);
+	d_free_env(&env);
 	if (msg == NULL) {
 		D_WARN("Information message can not be created");
 		return;
@@ -466,14 +466,14 @@ print_mgmt_net_env()
 		D_INFO("%s, Domain: NA", msg);
 	else
 		D_INFO("%s, Domain: %s", msg, env);
-	D_FREE(env);
-	D_FREE(msg);
+	d_free_env(&env);
+	d_free_env(&msg);
 
 	rc = d_agetenv_str(&env, var_names[0]);
 	D_ASSERTF(env != NULL, "Can not retrieve environment varirable %s: " DF_RC "\n",
 		  var_names[0], DP_RC(rc));
 	msg = d_asprintf2(&rc, "CaRT initialization with:\n\t%s=%s", var_names[0], env);
-	D_FREE(env);
+	d_free_env(&env);
 	if (msg == NULL) {
 		D_WARN("Information message can not be created");
 		return;
@@ -487,8 +487,8 @@ print_mgmt_net_env()
 			  var_names[idx], DP_RC(rc));
 
 		msg = d_asprintf2(&rc, "%s, %s=%s", tmp, var_names[idx], env);
-		D_FREE(env);
-		D_FREE(tmp);
+		d_free_env(&env);
+		d_free_env(&tmp);
 		if (msg == NULL) {
 			D_WARN("Information message can not be created");
 			return;
@@ -496,7 +496,7 @@ print_mgmt_net_env()
 	}
 
 	D_DEBUG(DB_MGMT, "%s", msg);
-	D_FREE(msg);
+	d_free_env(&msg);
 }
 
 /*
@@ -571,7 +571,7 @@ int dc_mgmt_net_cfg(const char *name)
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
 				"but server is unset!\n", cli_srx_set);
-			D_FREE(cli_srx_set);
+			d_free_env(&cli_srx_set);
 			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 	}
@@ -586,7 +586,7 @@ int dc_mgmt_net_cfg(const char *name)
 	} else {
 		D_INFO("Using client provided CRT_TIMEOUT: %s\n",
 			crt_timeout);
-		D_FREE(crt_timeout);
+		d_free_env(&crt_timeout);
 	}
 
 	d_agetenv_str(&ofi_interface, "OFI_INTERFACE");
@@ -594,7 +594,7 @@ int dc_mgmt_net_cfg(const char *name)
 	if (!ofi_interface) {
 		rc = d_setenv("OFI_INTERFACE", info.interface, 1);
 		if (rc != 0) {
-			D_FREE(ofi_domain);
+			d_free_env(&ofi_domain);
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 		}
 
@@ -608,7 +608,7 @@ int dc_mgmt_net_cfg(const char *name)
 
 		rc = d_setenv("OFI_DOMAIN", info.domain, 1);
 		if (rc != 0) {
-			D_FREE(ofi_domain);
+			d_free_env(&ofi_domain);
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 		}
 	} else {
@@ -618,8 +618,8 @@ int dc_mgmt_net_cfg(const char *name)
 		if (ofi_domain)
 			D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
-	D_FREE(ofi_domain);
-	D_FREE(ofi_interface);
+	d_free_env(&ofi_domain);
+	d_free_env(&ofi_interface);
 
 	print_mgmt_net_env();
 
@@ -647,7 +647,7 @@ int dc_mgmt_net_cfg_check(const char *name)
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
 				"but server is unset!\n", cli_srx_set);
-			D_FREE(cli_srx_set);
+			d_free_env(&cli_srx_set);
 			rc = -DER_INVAL;
 			goto out;
 		}

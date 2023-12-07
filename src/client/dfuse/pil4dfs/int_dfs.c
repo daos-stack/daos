@@ -656,9 +656,9 @@ discover_daos_mount_with_env(void)
 	return 0;
 
 out:
-	D_FREE(container);
-	D_FREE(pool);
-	D_FREE(fs_root);
+	d_free_env(&container);
+	d_free_env(&pool);
+	d_free_env(&fs_root);
 	return rc;
 }
 
@@ -5521,7 +5521,7 @@ init_myhook(void)
 		report = true;
 		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
 			report = false;
-		D_FREE(env_log);
+		d_free_env(&env_log);
 	}
 
 	/* Find dfuse mounts from /proc/mounts */
@@ -5805,9 +5805,9 @@ finalize_dfs(void)
 
 	for (i = 0; i < num_dfs; i++) {
 		if (dfs_list[i].dfs_dir_hash == NULL) {
-			D_FREE(dfs_list[i].fs_root);
-			D_FREE(dfs_list[i].pool);
-			D_FREE(dfs_list[i].cont);
+			d_free_env(&dfs_list[i].fs_root);
+			d_free_env(&dfs_list[i].pool);
+			d_free_env(&dfs_list[i].cont);
 			continue;
 		}
 
@@ -5838,9 +5838,9 @@ finalize_dfs(void)
 			DL_ERROR(rc, "error in daos_pool_disconnect(%s)", dfs_list[i].fs_root);
 			continue;
 		}
-		D_FREE(dfs_list[i].fs_root);
-		D_FREE(dfs_list[i].pool);
-		D_FREE(dfs_list[i].cont);
+		d_free_env(&dfs_list[i].fs_root);
+		d_free_env(&dfs_list[i].pool);
+		d_free_env(&dfs_list[i].cont);
 	}
 
 	if (daos_inited) {

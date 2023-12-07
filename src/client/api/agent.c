@@ -21,7 +21,7 @@ dc_agent_init()
 				DAOS_AGENT_DRPC_SOCK_NAME);
 	else
 		D_STRNDUP_S(path, DEFAULT_DAOS_AGENT_DRPC_SOCK);
-	D_FREE(envpath);
+	d_free_env(&envpath);
 
 	if (path == NULL)
 		return -DER_NOMEM;

@@ -616,7 +616,7 @@ d_fault_inject_init(void)
 out:
 	if (fp)
 		fclose(fp);
-	D_FREE(config_file);
+	d_free_env(&config_file);
 	return rc;
 }
 

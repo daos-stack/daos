@@ -6535,10 +6535,10 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
 	     daos_fail_check(DAOS_REBUILD_DISABLE)) {
 		D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
-		D_FREE(env);
+		d_free_env(&env);
 		D_GOTO(out, rc = 0);
 	}
-	D_FREE(env);
+	d_free_env(&env);
 
 	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
 	if (rc)

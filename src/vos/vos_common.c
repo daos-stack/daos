@@ -1002,7 +1002,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
 			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
 		}
-		D_FREE(evt_mode);
+		d_free_env(&evt_mode);
 	}
 	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:

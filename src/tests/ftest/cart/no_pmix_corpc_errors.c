@@ -273,7 +273,7 @@ int main(int argc, char **argv)
 
 	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
-	D_FREE(env_self_rank);
+	d_free_env(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -352,8 +352,8 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
 			my_uri, grp_cfg_file);
-	D_FREE(grp_cfg_file);
-	D_FREE(my_uri);
+	d_free_env(&grp_cfg_file);
+	d_free_env(&my_uri);
 
 	rc = crt_group_size(NULL, &grp_size);
 	if (rc != 0) {

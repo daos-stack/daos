@@ -2138,14 +2138,18 @@ test_d_agetenv_str(void **state)
 	getenv_return = "bar";
 	rc            = d_agetenv_str(&env, "foo");
 	assert_int_equal(rc, -DER_SUCCESS);
+	assert_non_null(env);
 	assert_string_equal(env, "bar");
-	D_FREE(env);
+	d_free_env(&env);
+	assert_null(env);
 
 	getenv_return = "";
 	rc            = d_agetenv_str(&env, "foo");
 	assert_int_equal(rc, -DER_SUCCESS);
+	assert_non_null(env);
 	assert_string_equal(env, "");
-	D_FREE(env);
+	d_free_env(&env);
+	assert_null(env);
 
 	getenv_return = NULL;
 	env           = (char *)0x1;

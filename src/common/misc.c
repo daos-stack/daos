@@ -689,10 +689,10 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
 		D_INFO("for sockets provider force it to use regular EP.\n");
 		daos_crt_init_opt.cio_use_sep = 0;
-		D_FREE(addr_env);
+		d_free_env(&addr_env);
 		goto out;
 	}
-	D_FREE(addr_env);
+	d_free_env(&addr_env);
 
 	daos_crt_init_opt.cio_use_sep = 1;
 

@@ -977,6 +977,12 @@ dis_single_char_str(char *str)
  */
 static pthread_rwlock_t d_env_lock = PTHREAD_RWLOCK_INITIALIZER;
 
+/**
+ * Check if and environment variable is defined.
+ *
+ * \param[in]		name		name of the environment variable.
+ * \return				true iff the environment variable is defined.
+ */
 bool
 d_isenv_def(char *name)
 {
@@ -1073,6 +1079,23 @@ out:
 	pthread_rwlock_unlock(&d_env_lock);
 
 	return rc;
+}
+
+/**
+ * Frees memory space of an environment string value.
+ *
+ * \param[in,out]	str_val		Copy of an environment string value.
+ */
+void
+d_free_env(char **str_val)
+{
+	assert(str_val != NULL);
+
+	if (*str_val == NULL)
+		return;
+
+	free(*str_val);
+	*str_val = NULL;
 }
 
 /**

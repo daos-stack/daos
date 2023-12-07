@@ -580,6 +580,8 @@ int
 d_getenv_str(char *str_val, size_t str_size, const char *name);
 int
 d_agetenv_str(char **str_val, const char *name);
+void
+d_free_env(char **str_val);
 int
 d_getenv_bool(bool *bool_val, const char *env);
 int
