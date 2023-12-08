@@ -46,7 +46,7 @@ const (
 )
 
 type CollectLogSubCmd struct {
-	Stop         bool   `short:"s" long:"stop-on-error" description:"Stop the collect-log command on very first error"`
+	StopOnError  bool   `short:"s" long:"stop-on-error" description:"Stop the collect-log command on very first error"`
 	TargetFolder string `short:"t" long:"target-folder" description:"Target Folder location where log will be copied"`
 	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
 	ExtraLogsDir string `short:"c" long:"extra-logs-dir" description:"Collect the Logs from given directory"`
@@ -61,9 +61,10 @@ type LogTypeSubCmd struct {
 }
 
 const (
-	MMDD       = "1-2"
-	HHMMSS     = "15:04:05"
-	MMDDHHMMSS = "1/2-15:04:05"
+	MMDD        = "1-2"
+	HHMMSS      = "15:04:05"
+	MMDDHHMMSS  = "1/2-15:04:05"
+	MMDD_HHMMSS = "1/2 15:04:05"
 )
 
 // Folder names to copy logs and configs
@@ -149,7 +150,7 @@ type CollectLogsParams struct {
 	LogEndDate   string
 	LogStartTime string
 	LogEndTime   string
-	Stop         bool
+	StopOnError  bool
 }
 
 type logCopy struct {
@@ -193,25 +194,34 @@ func (cmd *CollectLogSubCmd) DateTimeValidate() error {
 }
 
 // Verify LogType argument is valid.Return error, if it's not matching as describer in help
-func (cmd *LogTypeSubCmd) LogTypeValidate(LogCollection map[int32][]string) error {
+func (cmd *LogTypeSubCmd) LogTypeValidate() ([]string, error) {
+	if cmd.LogType == "" {
+		return ServerLog, nil
+	}
+
 	logType := []string{}
+	logTypeIn := strings.FieldsFunc(cmd.LogType, logTypeSplit)
 
-	if strings.Contains(cmd.LogType, "admin") {
-		logType = append(logType, "HelperLog")
-	}
-	if strings.Contains(cmd.LogType, "control") {
-		logType = append(logType, "ControlLog")
-	}
-	if strings.Contains(cmd.LogType, "server") {
-		logType = append(logType, "EngineLog")
+	for _, value := range logTypeIn {
+		if value != "admin" && value != "control" && value != "server" {
+			return nil, errors.New("Invalid log-type, please use admin,control,server log-type only")
+		}
+
+		switch value {
+		case "admin":
+			logType = append(logType, "HelperLog")
+		case "control":
+			logType = append(logType, "ControlLog")
+		case "server":
+			logType = append(logType, "EngineLog")
+		}
 	}
 
-	if len(logType) == 0 {
-		return errors.New("Invalid log-type, please use admin|control|server log-type only")
-	}
-	LogCollection[CollectServerLogEnum] = logType
+	return logType, nil
+}
 
-	return nil
+func logTypeSplit(r rune) bool {
+	return r == ','
 }
 
 // Print the progress while collect-log command is in progress
@@ -659,85 +669,232 @@ func copyServerConfig(log logging.Logger, opts ...CollectLogsParams) error {
 	return nil
 }
 
-// Copy only specific lines from the server logs based on the Start/End date
-// and Start/End time, provided by user.
+// Calculate the start/end time provided by user.
+func getDateTime(log logging.Logger, opts ...CollectLogsParams) (time.Time, time.Time, error) {
+	var startTime, endTime, dateTimeFormat string
+	currentTime := time.Now()
+
+	logStartDate, err := time.Parse(MMDD, opts[0].LogStartDate)
+	if err != nil {
+		return currentTime, currentTime, err
+	}
+
+	logEndDate, err := time.Parse(MMDD, opts[0].LogEndDate)
+	if err != nil {
+		return currentTime, currentTime, err
+	}
+
+	// Default Start time, in case no start time provides on start dates.This will copy log start of the day.
+	if opts[0].LogStartTime == "" {
+		opts[0].LogStartTime = "00:00:00"
+	}
+
+	// Default End time, in case no End time provides.This will copy log till the End of the day.
+	if opts[0].LogEndTime == "" {
+		opts[0].LogEndTime = "23:59:59"
+	}
+
+	// Set the date/time format for Engine log.
+	if opts[0].LogCmd == "EngineLog" {
+		startTime = fmt.Sprintf("%d/%d-%s", logStartDate.Month(), logStartDate.Day(), opts[0].LogStartTime)
+		endTime = fmt.Sprintf("%d/%d-%s", logEndDate.Month(), logEndDate.Day(), opts[0].LogEndTime)
+		dateTimeFormat = MMDDHHMMSS
+	}
+
+	// Set the date/time format for Control and Helper log.
+	if opts[0].LogCmd == "ControlLog" || opts[0].LogCmd == "HelperLog" {
+		startTime = fmt.Sprintf("%d/%d %s", logStartDate.Month(), logStartDate.Day(), opts[0].LogStartTime)
+		endTime = fmt.Sprintf("%d/%d %s", logEndDate.Month(), logEndDate.Day(), opts[0].LogEndTime)
+		dateTimeFormat = MMDD_HHMMSS
+	}
+
+	actStartTime, _ := time.Parse(dateTimeFormat, startTime)
+	actEndTime, _ := time.Parse(dateTimeFormat, endTime)
+
+	return actStartTime, actEndTime, nil
+}
+
+// Copy only specific lines from the server logs based on the Start/End date and time, provided by user.
 func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ...CollectLogsParams) error {
 	// Copy the full log file in case of no dates provided
 	if opts[0].LogStartDate == "" && opts[0].LogEndDate == "" {
-		err := cpLogFile(srcFile, destFile, log)
-		if err != nil {
-			return err
-		}
-	} else {
-		var startTime, endTime string
+		return cpLogFile(srcFile, destFile, log)
+	}
 
-		logStartDate, err := time.Parse(MMDD, opts[0].LogStartDate)
-		if err != nil {
-			return err
-		}
+	// Get the start/end time provided by user for comparison.
+	actStartTime, actEndTime, err := getDateTime(log, opts...)
+	if err != nil {
+		return err
+	}
 
-		logEndDate, err := time.Parse(MMDD, opts[0].LogEndDate)
-		if err != nil {
-			return err
-		}
+	// Create the new empty file, which will be used to copy the matching log lines.
+	logFileName := filepath.Join(destFile, filepath.Base(srcFile))
+	writeFile, err := os.Create(logFileName)
+	if err != nil {
+		return err
+	}
+	defer writeFile.Close()
 
-		// Default Start time, in case no start time provides on start dates.This will copy log start of the day.
-		if opts[0].LogStartTime == "" {
-			opts[0].LogStartTime = "00:00:00"
-		}
+	// Open log file for reading.
+	readFile, err := os.Open(srcFile)
+	if err != nil {
+		return err
+	}
+	defer readFile.Close()
 
-		// Default End time, in case no End time provides.This will copy log till the End of the day.
-		if opts[0].LogEndTime == "" {
-			opts[0].LogEndTime = "23:59:59"
-		}
+	// Loop through each line and identify the date and time of each log line.
+	// Compare the date/time stamp against user provided date/time.
+	scanner := bufio.NewScanner(readFile)
+	var cpLogLine bool
 
-		startTime = fmt.Sprintf("%d/%d-%s", logStartDate.Month(), logStartDate.Day(), opts[0].LogStartTime)
-		endTime = fmt.Sprintf("%d/%d-%s", logEndDate.Month(), logEndDate.Day(), opts[0].LogEndTime)
-
-		actStartTime, _ := time.Parse(MMDDHHMMSS, startTime)
-		actEndTime, _ := time.Parse(MMDDHHMMSS, endTime)
-
-		// Create the new empty file, which will be used to copy the matching date/time log lines.
-		logFileName := filepath.Join(destFile, filepath.Base(srcFile))
-		writeFile, err := os.Create(logFileName)
-		if err != nil {
-			return err
-		}
-		defer writeFile.Close()
-
-		readFile, err := os.Open(srcFile)
-		if err != nil {
-			return err
-		}
-		defer readFile.Close()
-
-		// Loop through each line and identify the date and time of each log line.
-		// Compare the date,time stamp and copy if it's in the user provided range.
-		scanner := bufio.NewScanner(readFile)
+	if opts[0].LogCmd == "EngineLog" {
 		for scanner.Scan() {
 			lineData := scanner.Text()
 			lineDataSlice := strings.Split(lineData, " ")
-			dateTime := strings.Split(lineDataSlice[0], "-")
-			// skip and continue to next line if no date time stamp
-			if len(dateTime) != 2 {
+
+			if strings.ContainsAny(lineDataSlice[0], "-") == false {
+				if cpLogLine {
+					_, err = writeFile.WriteString(lineData + "\n")
+					if err != nil {
+						return err
+					}
+				}
 				continue
 			}
+
+			dateTime := strings.Split(lineDataSlice[0], "-")
+
+			// Copy line if it's in the user define range, even there is no date/time in log line
+			if len(dateTime) < 1 {
+				if cpLogLine {
+					_, err = writeFile.WriteString(lineData + "\n")
+					if err != nil {
+						return err
+					}
+				}
+				continue
+			}
+
+			if strings.ContainsAny(dateTime[1], ".") == false {
+				if cpLogLine {
+					_, err = writeFile.WriteString(lineData + "\n")
+					if err != nil {
+						return err
+					}
+				}
+				continue
+			}
+
 			timeOnly := strings.Split(dateTime[1], ".")
 			expDateTime := fmt.Sprintf("%s-%s", dateTime[0], timeOnly[0])
 			expLogTime, _ := time.Parse(MMDDHHMMSS, expDateTime)
-			// Copy line to the file, if the log line has time stamp
-			// between the given range of start/end date and time.
+			// Copy line, if the log line has time stamp between the given range of start/end date and time.
 			if expLogTime.After(actStartTime) && expLogTime.Before(actEndTime) {
+				cpLogLine = true
 				_, err = writeFile.WriteString(lineData + "\n")
 				if err != nil {
 					return err
 				}
+			}
+
+			if expLogTime.After(actEndTime) {
+				return nil
 			}
 		}
 
 		if err := scanner.Err(); err != nil {
 			return err
 		}
+
+		return nil
+	}
+
+	// Copy log line for Helper and Control log
+	// Set the date position for log file according to Helper or Control Log option.
+	datePosition := 1
+	if opts[0].LogCmd == "ControlLog" {
+		datePosition = 2
+	}
+
+	// Loop through each line and identify the date and time of each log line.
+	// Compare the date/time stamp against user provided date/time for Control/Helper Log
+	for scanner.Scan() {
+		lineData := scanner.Text()
+		lineDataSlice := strings.Split(lineData, " ")
+		// Copy line if it's in the user define range, even there is no date/time in log line
+		if len(lineDataSlice) < (datePosition + 2) {
+			if cpLogLine {
+				_, err = writeFile.WriteString(lineData + "\n")
+				if err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
+		// Copy line if it's in the user define range, and line does not have the date format
+		if strings.ContainsAny(lineDataSlice[datePosition], "/") == false {
+			if cpLogLine {
+				_, err = writeFile.WriteString(lineData + "\n")
+				if err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
+		// Copy the log line if there is no time but it's in the user defined range.
+		dateOnly := strings.Split(lineDataSlice[datePosition], "/")
+		if len(dateOnly) != 3 {
+			if cpLogLine {
+				_, err = writeFile.WriteString(lineData + "\n")
+				if err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
+		// Copy the log line if there is no time but it's in the user defined range.
+		if strings.ContainsAny(lineDataSlice[datePosition+1], ":") == false {
+			if cpLogLine {
+				_, err = writeFile.WriteString(lineData + "\n")
+				if err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
+		//Copy the line if time split doesn't have the required length but it's in user defined range.
+		timeCheck := strings.Split(lineDataSlice[datePosition+1], ":")
+		if len(timeCheck) != 3 {
+			if cpLogLine {
+				_, err = writeFile.WriteString(lineData + "\n")
+				if err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
+		expDateTime := fmt.Sprintf("%s/%s %s", dateOnly[1], dateOnly[2], lineDataSlice[datePosition+1])
+		expLogTime, _ := time.Parse(MMDD_HHMMSS, expDateTime)
+		// Copy line, if the log line has time stamp between the given range of start/end date and time.
+		if expLogTime.After(actStartTime) && expLogTime.Before(actEndTime) {
+			cpLogLine = true
+			_, err = writeFile.WriteString(lineData + "\n")
+			if err != nil {
+				return err
+			}
+		}
+		if expLogTime.After(actEndTime) {
+			return nil
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
 	}
 
 	return nil
@@ -771,7 +928,7 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 			matches, _ := filepath.Glob(serverConfig.Engines[i].LogFile + "*")
 			for _, logFile := range matches {
 				err = cpLinesFromLog(log, logFile, targetServerLogs, opts...)
-				if err != nil && opts[0].Stop {
+				if err != nil && opts[0].StopOnError {
 					return err
 				}
 			}
@@ -783,7 +940,7 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 			return err
 		}
 
-		err = cpLogFile(serverConfig.ControlLogFile, targetControlLogs, log)
+		err = cpLinesFromLog(log, serverConfig.ControlLogFile, targetControlLogs, opts...)
 		if err != nil {
 			return err
 		}
@@ -794,7 +951,7 @@ func collectServerLog(log logging.Logger, opts ...CollectLogsParams) error {
 			return err
 		}
 
-		err = cpLogFile(serverConfig.HelperLogFile, targetAdminLogs, log)
+		err = cpLinesFromLog(log, serverConfig.HelperLogFile, targetAdminLogs, opts...)
 		if err != nil {
 			return err
 		}

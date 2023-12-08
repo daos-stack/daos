@@ -28,7 +28,7 @@ type (
 		LogEndDate   string
 		LogStartTime string
 		LogEndTime   string
-		Stop         bool
+		StopOnError  bool
 	}
 
 	// CollectLogResp contains the results of a collect-log
@@ -55,7 +55,7 @@ func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq)
 			LogEndDate:   req.LogEndDate,
 			LogStartTime: req.LogStartTime,
 			LogEndTime:   req.LogEndTime,
-			Stop:         req.Stop,
+			StopOnError:  req.StopOnError,
 		})
 	})
 

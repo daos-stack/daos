@@ -39,14 +39,18 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	// Only collect the specific logs Admin,Control or Engine.
 	// This will ignore the system information collection.
 	if cmd.LogType != "" {
-		if err := cmd.LogTypeValidate(LogCollection); err != nil {
+		LogCollection[support.CollectServerLogEnum], err = cmd.LogTypeValidate()
+		if err != nil {
 			return err
 		}
 	} else {
 		LogCollection[support.CopyServerConfigEnum] = []string{""}
 		LogCollection[support.CollectSystemCmdEnum] = support.SystemCmd
 		LogCollection[support.CollectDaosServerCmdEnum] = support.DaosServerCmd
-		LogCollection[support.CollectServerLogEnum] = support.ServerLog
+		LogCollection[support.CollectServerLogEnum], err = cmd.LogTypeValidate()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Default 4 steps of log/conf collection.
@@ -89,7 +93,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
 				fmt.Println(err)
-				if cmd.Stop {
+				if cmd.StopOnError {
 					return err
 				}
 			}

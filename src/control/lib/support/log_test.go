@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -919,7 +920,13 @@ func TestSupport_LogTypeValidate(t *testing.T) {
 		expErr     error
 	}{
 		"empty": {
-			expErr: errors.New("Invalid log-type, please use admin|control|server log-type only"),
+			expLogType: ServerLog,
+			expErr:     nil,
+		},
+		"Invalid LogType": {
+			logType:    "INVALID_LOG",
+			expLogType: nil,
+			expErr:     errors.New("Invalid log-type, please use admin,control,server log-type only"),
 		},
 		"LogType Admin": {
 			logType:    "admin",
@@ -937,28 +944,27 @@ func TestSupport_LogTypeValidate(t *testing.T) {
 			expErr:     nil,
 		},
 		"LogType Admin Control": {
-			logType:    "admin|control",
+			logType:    "admin,control",
 			expLogType: []string{"HelperLog", "ControlLog"},
 			expErr:     nil,
 		},
 		"LogType Admin Control Server": {
-			logType:    "admin|control|server",
+			logType:    "admin,control,server",
 			expLogType: []string{"HelperLog", "ControlLog", "EngineLog"},
 			expErr:     nil,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			var LogCollection = map[int32][]string{}
 			var params LogTypeSubCmd
 			params.LogType = tc.logType
-			err := params.LogTypeValidate(LogCollection)
+			logType, err := params.LogTypeValidate()
 			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
 				return
 			}
 
-			if reflect.DeepEqual(LogCollection[CollectServerLogEnum], tc.expLogType) == false {
-				t.Fatalf("LogCollection[CollectServerLogEnum] Expected:%s Got:%s", tc.expLogType, LogCollection[CollectServerLogEnum])
+			if reflect.DeepEqual(logType, tc.expLogType) == false {
+				t.Fatalf("logType Expected:%s Got:%s", tc.expLogType, logType)
 			}
 
 		})
@@ -977,20 +983,53 @@ func TestSupport_cpLinesFromLog(t *testing.T) {
 
 	collLogParams := CollectLogsParams{}
 
-	DummyLogs := `01/01-01:01:01.90 system-01 LOG LINE 1
+	DummyEngineLog := `01/01-01:01:01.90 system-01 LOG LINE 1
 02/02-04:04:04.90 system-02 LOG LINE 2
 03/03-06:06:06.90 system-02 LOG LINE 3
 04/04-08:08:08.90 system-02 LOG LINE 4
 05/05-10:10:10.90 system-02 LOG LINE 5
 06/06-12:12:12.90 system-02 LOG LINE 6
 07/07-14:14:14.90 system-02 LOG LINE 7
+LINE WITHOUT DATE AND TIME
 08/08-16:16:16.90 system-02 LOG LINE 8
 09/09-18:18:18.90 system-02 LOG LINE 9
 10/10-20:20:20.90 system-02 LOG LINE 10
 11/11-22:22:22.90 system-02 LOG LINE 11
 12/12-23:59:59.90 system-02 LOG LINE 12
 `
-	MockEngineLogFile := test.CreateTestFile(t, targetTestDir, DummyLogs)
+	MockEngineLogFile := test.CreateTestFile(t, targetTestDir, DummyEngineLog)
+
+	DummyControlLog := `hostname INFO 2023/01/01 01:01:01 LOG LINE 1
+hostname INFO 2023/02/02 04:04:04 LOG LINE 2
+hostname INFO 2023/03/03 06:06:06 LOG LINE 3
+hostname INFO 2023/04/04 08:08:08 LOG LINE 4
+hostname INFO 2023/05/05 10:10:10 LOG LINE 5
+hostname INFO 2023/06/06 12:12:12 LOG LINE 6
+hostname INFO 2023/07/07 14:14:14 LOG LINE 7
+LINE WITHOUT DATE AND TIME
+hostname INFO 2023/08/08 16:16:16 LOG LINE 8
+hostname INFO 2023/09/09 18:18:18 LOG LINE 9
+hostname INFO 2023/10/10 20:20:20 LOG LINE 10
+hostname INFO 2023/11/11 22:22:22 LOG LINE 11
+hostname INFO 2023/12/12 23:59:59 LOG LINE 12
+`
+	MockControlLogFile := test.CreateTestFile(t, targetTestDir, DummyControlLog)
+
+	DummyAdminLog := `INFO 2023/01/01 01:01:01.441231 LOG LINE 1
+INFO 2023/02/02 04:04:04.441232 LOG LINE 2
+INFO 2023/03/03 06:06:06.441233 LOG LINE 3
+INFO 2023/04/04 08:08:08.441234 LOG LINE 4
+INFO 2023/05/05 10:10:10.441235 LOG LINE 5
+INFO 2023/06/06 12:12:12.441235 LOG LINE 6
+INFO 2023/07/07 14:14:14.441236 LOG LINE 7
+LINE WITHOUT DATE AND TIME
+INFO 2023/08/08 16:16:16.441237 LOG LINE 8
+INFO 2023/09/09 18:18:18.441238 LOG LINE 9
+INFO 2023/10/10 20:20:20.441239 LOG LINE 10
+INFO 2023/11/11 22:22:22.441240 LOG LINE 11
+INFO 2023/12/12 23:59:59.441241 LOG LINE 12
+`
+	MockAdminLogFile := test.CreateTestFile(t, targetTestDir, DummyAdminLog)
 
 	for name, tc := range map[string]struct {
 		logStartDate string
@@ -1001,6 +1040,7 @@ func TestSupport_cpLinesFromLog(t *testing.T) {
 		destFile     string
 		expErr       error
 		verifyLog    string
+		logCmd       string
 	}{
 		"No startDate and EndDate": {
 			logStartDate: "",
@@ -1044,28 +1084,73 @@ func TestSupport_cpLinesFromLog(t *testing.T) {
 			destFile:     dstTestDir,
 			expErr:       nil,
 		},
-		"Verify the content of log line based on date": {
+		"Verify the content of Engine log line based on date": {
 			logStartDate: "04-01",
 			logEndDate:   "08-08",
 			srcFile:      MockEngineLogFile,
 			destFile:     dstTestDir,
+			logCmd:       "EngineLog",
 			expErr:       nil,
 			verifyLog:    "08/08-16:16:16.90 system-02 LOG LINE 8",
 		},
-		"Verify the content of log line based on date and time": {
+		"Verify the content of Engine log line based on date and time": {
 			logStartDate: "09-09",
 			logEndDate:   "11-11",
 			logStartTime: "12:00:00",
 			logEndTime:   "23:23:23",
 			srcFile:      MockEngineLogFile,
 			destFile:     dstTestDir,
+			logCmd:       "EngineLog",
 			expErr:       nil,
 			verifyLog:    "11/11-22:22:22.90 system-02 LOG LINE 11",
+		},
+		"Verify the content of Control log line based on date": {
+			logStartDate: "04-01",
+			logEndDate:   "08-08",
+			srcFile:      MockControlLogFile,
+			destFile:     dstTestDir,
+			logCmd:       "ControlLog",
+			expErr:       nil,
+			verifyLog:    "hostname INFO 2023/08/08 16:16:16 LOG LINE 8",
+		},
+		"Verify the content of Control log line based on date and time": {
+			logStartDate: "09-09",
+			logEndDate:   "11-11",
+			logStartTime: "12:00:00",
+			logEndTime:   "23:23:23",
+			srcFile:      MockControlLogFile,
+			destFile:     dstTestDir,
+			logCmd:       "ControlLog",
+			expErr:       nil,
+			verifyLog:    "hostname INFO 2023/11/11 22:22:22 LOG LINE 11",
+		},
+		"Verify the content of Admin log line based on date": {
+			logStartDate: "04-01",
+			logEndDate:   "08-08",
+			srcFile:      MockAdminLogFile,
+			destFile:     dstTestDir,
+			logCmd:       "HelperLog",
+			expErr:       nil,
+			verifyLog:    "INFO 2023/08/08 16:16:16.441237 LOG LINE 8",
+		},
+		"Verify the content of Admin log line based on date and time": {
+			logStartDate: "09-09",
+			logEndDate:   "11-11",
+			logStartTime: "12:00:00",
+			logEndTime:   "23:23:23",
+			srcFile:      MockAdminLogFile,
+			destFile:     dstTestDir,
+			logCmd:       "HelperLog",
+			expErr:       nil,
+			verifyLog:    "INFO 2023/11/11 22:22:22.441240 LOG LINE 11",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			collLogParams.LogStartDate = tc.logStartDate
 			collLogParams.LogEndDate = tc.logEndDate
+			collLogParams.LogStartTime = tc.logStartTime
+			collLogParams.LogEndTime = tc.logEndTime
+			collLogParams.LogCmd = tc.logCmd
 			gotErr := cpLinesFromLog(log, tc.srcFile, tc.destFile, collLogParams)
 			test.CmpErr(t, tc.expErr, gotErr)
 
@@ -1080,6 +1165,82 @@ func TestSupport_cpLinesFromLog(t *testing.T) {
 					t.Fatalf("Expected log line:=%s can not be found in File:=%s", tc.verifyLog, readFile)
 				}
 
+			}
+		})
+	}
+}
+
+func TestSupport_getDateTime(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	collLogParams := CollectLogsParams{}
+
+	for name, tc := range map[string]struct {
+		logStartDate string
+		logEndDate   string
+		logStartTime string
+		logEndTime   string
+		logCmd       string
+		expStartTime string
+		expEndTime   string
+		expErr       error
+	}{
+		"No startDate": {
+			logStartDate: "",
+			logEndDate:   "1-2",
+			expErr:       errors.New("cannot parse"),
+		},
+		"No EndDate": {
+			logStartDate: "1-2",
+			logEndDate:   "",
+			expErr:       errors.New("cannot parse"),
+		},
+		"No StartTime": {
+			logStartDate: "1-2",
+			logEndDate:   "1-3",
+			expErr:       nil,
+			logCmd:       "EngineLog",
+		},
+		"No EndTime": {
+			logStartDate: "1-2",
+			logEndDate:   "1-3",
+			logStartTime: "10:10:10",
+			expStartTime: "1/2-10:10:10",
+			expEndTime:   "1/3-23:59:59",
+			expErr:       nil,
+			logCmd:       "EngineLog",
+		},
+		"Valid Date and Time": {
+			logStartDate: "1-2",
+			logEndDate:   "1-3",
+			logStartTime: "10:10:10",
+			logEndTime:   "12:12:12",
+			expStartTime: "1/2-10:10:10",
+			expEndTime:   "1/3-12:12:12",
+			expErr:       nil,
+			logCmd:       "ControlLog",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			collLogParams.LogStartDate = tc.logStartDate
+			collLogParams.LogEndDate = tc.logEndDate
+			collLogParams.LogStartTime = tc.logStartTime
+			collLogParams.LogEndTime = tc.logEndTime
+			collLogParams.LogCmd = tc.logCmd
+			startTime, endTime, gotErr := getDateTime(log, collLogParams)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expStartTime != "" {
+				tmpStartTime, _ := time.Parse(MMDDHHMMSS, tc.expStartTime)
+				if tmpStartTime.Equal(startTime) == false {
+					t.Fatalf("Expected StartTime:=%s But Got :=%s", tmpStartTime, startTime)
+				}
+			}
+			if tc.expEndTime != "" {
+				tmpEndTime, _ := time.Parse(MMDDHHMMSS, tc.expEndTime)
+				if tmpEndTime.Equal(endTime) == false {
+					t.Fatalf("Expected EndTime:=%s But Got :=%s", tmpEndTime, endTime)
+				}
 			}
 		})
 	}

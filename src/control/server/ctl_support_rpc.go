@@ -28,7 +28,7 @@ func (c *ControlService) CollectLog(ctx context.Context, req *ctlpb.CollectLogRe
 	params.LogEndDate = req.LogEndDate
 	params.LogStartTime = req.LogStartTime
 	params.LogEndTime = req.LogEndTime
-	params.Stop = req.Stop
+	params.StopOnError = req.StopOnError
 
 	err := support.CollectSupportLog(c.log, params)
 	if err != nil {
