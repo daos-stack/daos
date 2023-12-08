@@ -27,7 +27,7 @@ class TestWithScrubberFreq(TestWithScrubber):
             4. Update the scrubber frequency to 5 seconds.
             5. Observe the objects are scrubbed every 5 seconds.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=scrubber
         :avocado: tags=TestWithScrubberFreq,test_objects_scrubbed_properly
