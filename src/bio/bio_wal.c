@@ -1672,6 +1672,9 @@ bio_wal_replay(struct bio_meta_context *mc, struct bio_wal_rp_stats *wrs,
 	uint64_t		 total_bytes = 0, rpl_entries = 0, total_tx = 0;
 	uint64_t                 s_us = 0;
 
+	if (DAOS_FAIL_CHECK(DAOS_WAL_NO_REPLAY))
+		return 0;
+
 	D_ALLOC(buf, max_blks * blk_bytes);
 	if (buf == NULL)
 		return -DER_NOMEM;
@@ -1757,6 +1760,13 @@ load_wal:
 		if (tight_loop >= 20) {
 			tight_loop = 0;
 			bio_yield(NULL);
+		}
+
+		/* test need generate enough tx */
+		if (DAOS_FAIL_CHECK(DAOS_WAL_FAIL_REPLAY) &&
+		    nr_replayed > daos_fail_value_get()) {
+			rc = -DER_AGAIN;
+			break;
 		}
 	}
 out:
