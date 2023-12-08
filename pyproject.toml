@@ -20,6 +20,6 @@ skip-string-normalization = true
 [tool.isort]
 profile = "black"
 supported_extensions = ["py"]
-skip = [".git/", "src/rdb/raft", "build", "install", "venv", "src/control/vendor/"]
+skip = [".git/", "src/rdb/raft", "build", "install", "venv", "src/control/vendor/", "_topdir"]
 line_length = 99
 skip_gitignore = true

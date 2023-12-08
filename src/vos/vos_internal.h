@@ -27,8 +27,7 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
-D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
+#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
@@ -186,6 +185,7 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_del_ev;		/* Deleted EV records */
 	struct d_tm_node_t	*vam_merge_recs;	/* Total merged EV records */
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
+	struct d_tm_node_t	*vam_fail_count;	/* Aggregation failed */
 };
 
 struct vos_gc_metrics {
