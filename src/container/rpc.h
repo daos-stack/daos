@@ -35,71 +35,54 @@
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
 #define CONT_PROTO_CLI_RPC_LIST(ver, hdlr)                                                         \
-	X(CONT_CREATE, 0, ver >= 8 ? &CQF_cont_create_v8 : &CQF_cont_create, hdlr, NULL),          \
-	    X(CONT_DESTROY, 0, ver >= 8 ? &CQF_cont_destroy_v8 : &CQF_cont_destroy, hdlr, NULL),   \
-	    X(CONT_OPEN, 0, ver >= 8 ? &CQF_cont_open_v8 : &CQF_cont_open, hdlr, NULL),            \
-	    X(CONT_CLOSE, 0, ver >= 8 ? &CQF_cont_close_v8 : &CQF_cont_close, hdlr, NULL),         \
-	    X(CONT_QUERY, 0, ver >= 8 ? &CQF_cont_query_v8 : &CQF_cont_query, hdlr, NULL),         \
-	    X(CONT_OID_ALLOC, 0, &CQF_cont_oid_alloc, ds_cont_oid_alloc_handler, NULL),            \
-	    X(CONT_ATTR_LIST, 0, ver >= 8 ? &CQF_cont_attr_list_v8 : &CQF_cont_attr_list, hdlr,    \
-	      NULL),                                                                               \
-	    X(CONT_ATTR_GET, 0, ver >= 8 ? &CQF_cont_attr_get_v8 : &CQF_cont_attr_get, hdlr,       \
-	      NULL),                                                                               \
-	    X(CONT_ATTR_SET, 0, ver >= 8 ? &CQF_cont_attr_set_v8 : &CQF_cont_attr_set, hdlr,       \
-	      NULL),                                                                               \
-	    X(CONT_ATTR_DEL, 0, ver >= 8 ? &CQF_cont_attr_del_v8 : &CQF_cont_attr_del, hdlr,       \
-	      NULL),                                                                               \
-	    X(CONT_EPOCH_AGGREGATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op,      \
-	      hdlr, NULL),                                                                         \
-	    X(CONT_SNAP_LIST, 0, ver >= 8 ? &CQF_cont_snap_list_v8 : &CQF_cont_snap_list, hdlr,    \
-	      NULL),                                                                               \
-	    X(CONT_SNAP_CREATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr,    \
-	      NULL),                                                                               \
-	    X(CONT_SNAP_DESTROY, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr,   \
-	      NULL),                                                                               \
-	    X(CONT_PROP_SET, 0, ver >= 8 ? &CQF_cont_prop_set_v8 : &CQF_cont_prop_set, hdlr,       \
-	      NULL),                                                                               \
-	    X(CONT_ACL_UPDATE, 0, ver >= 8 ? &CQF_cont_acl_update_v8 : &CQF_cont_acl_update, hdlr, \
-	      NULL),                                                                               \
-	    X(CONT_ACL_DELETE, 0, ver >= 8 ? &CQF_cont_acl_delete_v8 : &CQF_cont_acl_delete, hdlr, \
-	      NULL),                                                                               \
-	    X(CONT_OPEN_BYLABEL, 0, ver >= 8 ? &CQF_cont_open_bylabel_v8 : &CQF_cont_open_bylabel, \
-	      hdlr, NULL),                                                                         \
-	    X(CONT_DESTROY_BYLABEL, 0,                                                             \
-	      ver >= 8 ? &CQF_cont_destroy_bylabel_v8 : &CQF_cont_destroy_bylabel, hdlr, NULL),    \
-	    X(CONT_SNAP_OIT_OID_GET, 0,                                                            \
-	      ver >= 8 ? &CQF_cont_snap_oit_oid_get_v8 : &CQF_cont_snap_oit_oid_get, hdlr, NULL),  \
-	    X(CONT_SNAP_OIT_CREATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op,      \
-	      hdlr, NULL),                                                                         \
-	    X(CONT_SNAP_OIT_DESTROY, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op,     \
-	      hdlr, NULL)
+	X(CONT_CREATE, 0, ver >= 8 ? &CQF_cont_create_v8 : &CQF_cont_create, hdlr, NULL)           \
+	X(CONT_DESTROY, 0, ver >= 8 ? &CQF_cont_destroy_v8 : &CQF_cont_destroy, hdlr, NULL)        \
+	X(CONT_OPEN, 0, ver >= 8 ? &CQF_cont_open_v8 : &CQF_cont_open, hdlr, NULL)                 \
+	X(CONT_CLOSE, 0, ver >= 8 ? &CQF_cont_close_v8 : &CQF_cont_close, hdlr, NULL)              \
+	X(CONT_QUERY, 0, ver >= 8 ? &CQF_cont_query_v8 : &CQF_cont_query, hdlr, NULL)              \
+	X(CONT_OID_ALLOC, 0, &CQF_cont_oid_alloc, ds_cont_oid_alloc_handler, NULL)                 \
+	X(CONT_ATTR_LIST, 0, ver >= 8 ? &CQF_cont_attr_list_v8 : &CQF_cont_attr_list, hdlr, NULL)  \
+	X(CONT_ATTR_GET, 0, ver >= 8 ? &CQF_cont_attr_get_v8 : &CQF_cont_attr_get, hdlr, NULL)     \
+	X(CONT_ATTR_SET, 0, ver >= 8 ? &CQF_cont_attr_set_v8 : &CQF_cont_attr_set, hdlr, NULL)     \
+	X(CONT_ATTR_DEL, 0, ver >= 8 ? &CQF_cont_attr_del_v8 : &CQF_cont_attr_del, hdlr, NULL)     \
+	X(CONT_EPOCH_AGGREGATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr,    \
+	  NULL)                                                                                    \
+	X(CONT_SNAP_LIST, 0, ver >= 8 ? &CQF_cont_snap_list_v8 : &CQF_cont_snap_list, hdlr, NULL)  \
+	X(CONT_SNAP_CREATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr, NULL)  \
+	X(CONT_SNAP_DESTROY, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr, NULL) \
+	X(CONT_PROP_SET, 0, ver >= 8 ? &CQF_cont_prop_set_v8 : &CQF_cont_prop_set, hdlr, NULL)     \
+	X(CONT_ACL_UPDATE, 0, ver >= 8 ? &CQF_cont_acl_update_v8 : &CQF_cont_acl_update, hdlr,     \
+	  NULL)                                                                                    \
+	X(CONT_ACL_DELETE, 0, ver >= 8 ? &CQF_cont_acl_delete_v8 : &CQF_cont_acl_delete, hdlr,     \
+	  NULL)                                                                                    \
+	X(CONT_OPEN_BYLABEL, 0, ver >= 8 ? &CQF_cont_open_bylabel_v8 : &CQF_cont_open_bylabel,     \
+	  hdlr, NULL)                                                                              \
+	X(CONT_DESTROY_BYLABEL, 0,                                                                 \
+	  ver >= 8 ? &CQF_cont_destroy_bylabel_v8 : &CQF_cont_destroy_bylabel, hdlr, NULL)         \
+	X(CONT_SNAP_OIT_OID_GET, 0,                                                                \
+	  ver >= 8 ? &CQF_cont_snap_oit_oid_get_v8 : &CQF_cont_snap_oit_oid_get, hdlr, NULL)       \
+	X(CONT_SNAP_OIT_CREATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr,    \
+	  NULL)                                                                                    \
+	X(CONT_SNAP_OIT_DESTROY, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr,   \
+	  NULL)
 
-#define CONT_PROTO_SRV_RPC_LIST						\
-	X(CONT_TGT_DESTROY,						\
-		0, &CQF_cont_tgt_destroy,				\
-		ds_cont_tgt_destroy_handler,				\
-		&ds_cont_tgt_destroy_co_ops),				\
-	X(CONT_TGT_QUERY,						\
-		0, &CQF_cont_tgt_query,					\
-		ds_cont_tgt_query_handler,				\
-		&ds_cont_tgt_query_co_ops),				\
-	X(CONT_TGT_EPOCH_AGGREGATE,					\
-		0, &CQF_cont_tgt_epoch_aggregate,			\
-		ds_cont_tgt_epoch_aggregate_handler,			\
-		&ds_cont_tgt_epoch_aggregate_co_ops),			\
-	X(CONT_TGT_SNAPSHOT_NOTIFY,					\
-		0, &CQF_cont_tgt_snapshot_notify,			\
-		ds_cont_tgt_snapshot_notify_handler,			\
-		&ds_cont_tgt_snapshot_notify_co_ops)
+#define CONT_PROTO_SRV_RPC_LIST                                                                    \
+	X(CONT_TGT_DESTROY, 0, &CQF_cont_tgt_destroy, ds_cont_tgt_destroy_handler,                 \
+	  &ds_cont_tgt_destroy_co_ops)                                                             \
+	X(CONT_TGT_QUERY, 0, &CQF_cont_tgt_query, ds_cont_tgt_query_handler,                       \
+	  &ds_cont_tgt_query_co_ops)                                                               \
+	X(CONT_TGT_EPOCH_AGGREGATE, 0, &CQF_cont_tgt_epoch_aggregate,                              \
+	  ds_cont_tgt_epoch_aggregate_handler, &ds_cont_tgt_epoch_aggregate_co_ops)                \
+	X(CONT_TGT_SNAPSHOT_NOTIFY, 0, &CQF_cont_tgt_snapshot_notify,                              \
+	  ds_cont_tgt_snapshot_notify_handler, &ds_cont_tgt_snapshot_notify_co_ops)
 
 /* Define for RPC enum population below */
-#define X(a, b, c, d, e) a
+#define X(a, ...) a,
 
 enum cont_operation {
-	CONT_PROTO_CLI_RPC_LIST(DAOS_CONT_VERSION, ds_cont_op_handler_v8),
-	CONT_PROTO_CLI_COUNT,
+	CONT_PROTO_CLI_RPC_LIST(DAOS_CONT_VERSION, ds_cont_op_handler_v8) CONT_PROTO_CLI_COUNT,
 	CONT_PROTO_CLI_LAST = CONT_PROTO_CLI_COUNT - 1,
-	CONT_PROTO_SRV_RPC_LIST,
+	CONT_PROTO_SRV_RPC_LIST
 };
 
 #undef X
