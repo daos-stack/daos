@@ -48,7 +48,7 @@ type startCmd struct {
 
 func (cmd *startCmd) Execute(_ []string) error {
 	if err := common.CheckDupeProcess(); err != nil {
-		return err
+		cmd.Notice(err.Error())
 	}
 
 	cmd.Infof("Starting %s (pid %d)", versionString(), os.Getpid())
