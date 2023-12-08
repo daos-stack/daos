@@ -1008,6 +1008,7 @@ dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth)
 {
 	dth->dth_epoch = epoch->oe_value;
 	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
+	vos_dtx_renew_epoch(dth);
 }
 
 /**
@@ -1149,9 +1150,9 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 	if (rc == 0 && sub_modification_cnt > 0)
 		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, leader "
+	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, epoch "DF_X64", leader "
 		DF_UOID", dti_cos_cnt %d, tgt_cnt %d, flags %x: "DF_RC"\n",
-		DP_DTI(dti), sub_modification_cnt, dth->dth_ver,
+		DP_DTI(dti), sub_modification_cnt, dth->dth_ver, epoch->oe_value,
 		DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags, DP_RC(rc));
 
 	if (rc != 0) {
@@ -1485,9 +1486,9 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 		rc = vos_dtx_attach(dth, false, false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
-		"dti_cos_cnt %d, flags %x: "DF_RC"\n",
+		"epoch "DF_X64", dti_cos_cnt %d, flags %x: "DF_RC"\n",
 		DP_DTI(dti), sub_modification_cnt,
-		dth->dth_ver, dti_cos_cnt, flags, DP_RC(rc));
+		dth->dth_ver, epoch->oe_value, dti_cos_cnt, flags, DP_RC(rc));
 
 	if (rc != 0)
 		D_FREE(dth);
