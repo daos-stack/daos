@@ -5,8 +5,8 @@
 """
 import time
 
-from exception_utils import CommandFailure
 from control_test_base import ControlTestBase
+from exception_utils import CommandFailure
 
 
 class DmgPoolQueryRanks(ControlTestBase):

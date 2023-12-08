@@ -26,14 +26,12 @@ def scons():
     test_env.AppendUnique(RPATH_FULL=LIBPATH)
 
     for test in TEST_SRC:
-        flags = []
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
         testprog = test_env.d_test_program(target=testname,
                                            source=[testobj, cart_targets, swim_targets,
                                                    gurt_targets],
-                                           LIBS=test_env["LIBS"] + ['yaml'],
-                                           LINKFLAGS=flags)
+                                           LIBS=test_env["LIBS"] + ['yaml'])
         Default(testprog)
 
 

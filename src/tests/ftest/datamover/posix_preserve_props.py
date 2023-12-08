@@ -5,11 +5,10 @@
 '''
 from os.path import join
 
-from pydaos.raw import DaosApiError
 import avocado
-
 from data_mover_test_base import DataMoverTestBase
 from duns_utils import format_path
+from pydaos.raw import DaosApiError
 
 
 class DmvrPreserveProps(DataMoverTestBase):

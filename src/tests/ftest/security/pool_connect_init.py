@@ -6,9 +6,8 @@
 import os
 import traceback
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 
 
 class PoolSecurityTest(TestWithServers):

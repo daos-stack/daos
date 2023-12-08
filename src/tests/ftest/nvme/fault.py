@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from nvme_utils import ServerFillUp
 from exception_utils import CommandFailure
+from nvme_utils import ServerFillUp
 
 
 class NvmeFault(ServerFillUp):

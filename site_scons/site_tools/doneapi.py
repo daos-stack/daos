@@ -3,13 +3,13 @@
 Hack to support oneapi version of Intel compilers
 
 """
-import sys
 import os
+import sys
 
+import SCons.Errors
 import SCons.Tool.gcc
 import SCons.Util
 import SCons.Warnings
-import SCons.Errors
 
 
 # pylint: disable=too-few-public-methods

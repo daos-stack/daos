@@ -3,10 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from socket import gethostname
-import subprocess   # nosec
 import shlex
+import subprocess  # nosec
 import time
+from socket import gethostname
+
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 

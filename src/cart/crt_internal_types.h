@@ -91,6 +91,10 @@ struct crt_gdata {
 	/** */
 	struct crt_prov_gdata	*cg_prov_gdata_secondary;
 
+	/** Hints to mercury for request post init (ignored for clients) */
+	uint32_t                 cg_post_init;
+	uint32_t                 cg_post_incr;
+
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
 
@@ -100,6 +104,7 @@ struct crt_gdata {
 	/** credits limitation for #inflight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
 
+	uint32_t		cg_iv_inline_limit;
 	/** the global opcode map */
 	struct crt_opc_map	*cg_opc_map;
 	/** HG level global data */
