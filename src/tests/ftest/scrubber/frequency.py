@@ -36,7 +36,7 @@ class TestWithScrubberFreq(TestWithScrubber):
         cont_prop = self.params.get("properties", '/run/container/*')
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
         # Run IOR and gather the total scrubbed metrics information.
-        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        self.run_ior_and_check_scrubber_status(pool=self.pool, cont=self.container)
         # Wait for 5 minutes to get first scrubber bytes scrubbed metrics.
         # NOTE: This value could change depending on the IOR data (objects created)
         self.log.info("Sleeping for 5 minutes pool property set to scrub:timed")
