@@ -17,8 +17,12 @@ def _scan_go_file(node, env, _path):
     src_dir = os.path.dirname(str(node))
     includes = []
     path_name = str(node)[12:]
-    rc = subprocess.run([env.d_go_bin, 'list', '--json', '-mod=vendor', path_name],
-                        cwd='src/control', stdout=subprocess.PIPE, check=True)
+    rc = subprocess.run(
+        [env.d_go_bin, 'list', '--json', '-mod=vendor', path_name],
+        cwd='src/control',
+        stdout=subprocess.PIPE,
+        check=True,
+    )
     data = json.loads(rc.stdout.decode('utf-8'))
     for dep in data['Deps']:
         if not dep.startswith('github.com/daos-stack/daos'):
@@ -72,9 +76,16 @@ def generate(env):
         go_version = out.split(' ')[2].replace('go', '')
         if '-' in go_version:
             go_version = go_version.split('-')[0]
-        if len([x for x, y in
-                zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
-                if int(x) < int(y)]) > 0:
+        if (
+            len(
+                [
+                    x
+                    for x, y in zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
+                    if int(x) < int(y)
+                ]
+            )
+            > 0
+        ):
             context.Result(f'{go_version} is too old (min supported: {MIN_GO_VERSION}) ')
             return 0
         context.Result(str(go_version))
