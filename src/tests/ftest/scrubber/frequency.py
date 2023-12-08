@@ -32,21 +32,9 @@ class TestWithScrubberFreq(TestWithScrubber):
         :avocado: tags=scrubber
         :avocado: tags=TestWithScrubberFreq,test_objects_scrubbed_properly
         """
-        flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
-        apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        transfer_block_size = self.params.get("transfer_block_size",
-                                              '/run/ior/iorflags/*')
-        obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
         pool_prop = self.params.get("properties", '/run/pool/*')
         cont_prop = self.params.get("properties", '/run/container/*')
-        self.ior_cmd.api.update(apis[0])
-        self.ior_cmd.flags.update(flags[0], "ior.flags")
-        self.ior_cmd.dfs_oclass.update(obj_class[0])
-        self.ior_cmd.dfs_dir_oclass.update(obj_class[0])
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
-        for test in transfer_block_size:
-            self.ior_cmd.transfer_size.update(test[0])
-            self.ior_cmd.block_size.update(test[1])
         # Run IOR and gather the total scrubbed metrics information.
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         # Wait for 5 minutes to get first scrubber bytes scrubbed metrics.
