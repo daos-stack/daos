@@ -389,7 +389,11 @@ type NvmeControllers []*NvmeController
 func (ncs NvmeControllers) String() string {
 	var ss []string
 	for _, c := range ncs {
-		ss = append(ss, c.PciAddr)
+		s := c.PciAddr
+		for _, sd := range c.SmdDevices {
+			s += fmt.Sprintf("-nsid%d-%s", sd.CtrlrNamespaceID, sd.Roles.String())
+		}
+		ss = append(ss, s)
 	}
 	return strings.Join(ss, ", ")
 }

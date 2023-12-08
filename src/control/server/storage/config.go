@@ -43,6 +43,7 @@ const (
 	accelOptMoveName = "move"
 	accelOptCRCName  = "crc"
 
+	bdevRoleNoneName = "n/a"
 	bdevRoleDataName = "data"
 	bdevRoleMetaName = "meta"
 	bdevRoleWALName  = "wal"
@@ -252,10 +253,18 @@ func (tcs TierConfigs) getBdevs(nvmeOnly bool) *BdevDeviceList {
 }
 
 func (tcs TierConfigs) Bdevs() *BdevDeviceList {
+	if len(tcs) == 0 {
+		return new(BdevDeviceList)
+	}
+
 	return tcs.getBdevs(false)
 }
 
 func (tcs TierConfigs) NVMeBdevs() *BdevDeviceList {
+	if len(tcs) == 0 {
+		return new(BdevDeviceList)
+	}
+
 	return tcs.getBdevs(true)
 }
 
@@ -281,18 +290,34 @@ func (tcs TierConfigs) checkBdevs(nvmeOnly, emulOnly bool) bool {
 }
 
 func (tcs TierConfigs) HaveBdevs() bool {
+	if len(tcs) == 0 {
+		return false
+	}
+
 	return tcs.checkBdevs(false, false)
 }
 
 func (tcs TierConfigs) HaveRealNVMe() bool {
+	if len(tcs) == 0 {
+		return false
+	}
+
 	return tcs.checkBdevs(true, false)
 }
 
 func (tcs TierConfigs) HaveEmulatedNVMe() bool {
+	if len(tcs) == 0 {
+		return false
+	}
+
 	return tcs.checkBdevs(false, true)
 }
 
 func (tcs TierConfigs) HasBdevRoleMeta() bool {
+	if len(tcs) == 0 {
+		return false
+	}
+
 	for _, bc := range tcs.BdevConfigs() {
 		bits := bc.Bdev.DeviceRoles.OptionBits
 		if (bits & BdevRoleMeta) != 0 {
@@ -442,6 +467,10 @@ func (tcs TierConfigs) validateBdevRoles() error {
 //   - If the scm tier is of class dcpm, the first (and only) bdev tier should have the Data role.
 //   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
 func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
+	if len(tcs) == 0 {
+		return errors.New("no storage tiers configured")
+	}
+
 	if extMetadataPath == "" {
 		return nil // MD-on-SSD not enabled.
 	}
@@ -847,7 +876,7 @@ func (obs *OptionBits) fromStrings(optStr2Flag optFlagMap, opts ...string) error
 			continue
 		}
 		flag, exists := optStr2Flag[opt]
-		if !exists {
+		if !exists && opt != bdevRoleNoneName {
 			return FaultBdevConfigOptFlagUnknown(opt, optStr2Flag.keys()...)
 		}
 		*obs |= flag
@@ -893,13 +922,19 @@ func (bdr BdevRoles) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON decodes user readable roles string into bitmask.
 func (bdr *BdevRoles) UnmarshalJSON(data []byte) error {
 	str := strings.Trim(strings.ToLower(string(data)), "\"")
+	if str == bdevRoleNoneName {
+		bdr.OptionBits = OptionBits(0)
+		return nil
+	}
+
 	return bdr.fromStrings(roleOptFlags, strings.Split(str, ",")...)
 }
 
 func (bdr *BdevRoles) String() string {
-	if bdr == nil {
-		return "none"
+	if bdr == nil || bdr.IsEmpty() {
+		return strings.ToUpper(bdevRoleNoneName)
 	}
+
 	return bdr.toString(roleOptFlags)
 }
 

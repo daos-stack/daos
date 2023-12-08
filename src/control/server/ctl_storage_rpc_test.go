@@ -28,6 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -72,15 +73,15 @@ func TestServer_bdevScan(t *testing.T) {
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
-		"no bdevs in config; scan local fails": {
-			req:         &ctlpb.ScanNvmeReq{Health: true, Meta: true},
+		"scan local; no bdevs in config; scan fails": {
+			req:         &ctlpb.ScanNvmeReq{Health: true},
 			engTierCfgs: []storage.TierConfigs{{}},
 			provErr:     errors.New("fail"),
 			engStopped:  []bool{false},
 			expErr:      errors.New("fail"),
 		},
-		"no bdevs in config; scan local; devlist passed to backend": {
-			req:         &ctlpb.ScanNvmeReq{Health: true, Meta: true},
+		"scan local; no bdevs in config; devlist passed to backend": {
+			req:         &ctlpb.ScanNvmeReq{Health: true},
 			engTierCfgs: []storage.TierConfigs{{}},
 			engStopped:  []bool{false},
 			expResp: &ctlpb.ScanNvmeResp{
@@ -93,8 +94,27 @@ func TestServer_bdevScan(t *testing.T) {
 				{DeviceList: new(storage.BdevDeviceList)},
 			},
 		},
-		"bdevs in config; engine not started; scan local; devlist passed to backend": {
+		"scan local; no bdevs in config; meta requested": {
+			req:         &ctlpb.ScanNvmeReq{Health: true, Meta: true},
+			engTierCfgs: []storage.TierConfigs{{}},
+			engStopped:  []bool{true},
+			expErr:      errors.New("info unavailable"),
+		},
+		"scan local; bdevs in config; meta requested": {
 			req: &ctlpb.ScanNvmeReq{Health: true, Meta: true},
+			engTierCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1),
+							test.MockPCIAddr(2)),
+				},
+			},
+			engStopped: []bool{true},
+			expErr:     errors.New("info unavailable"),
+		},
+		"scan local; bdevs in config; devlist passed to backend; no roles": {
+			req: &ctlpb.ScanNvmeReq{Health: true},
 			engTierCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -112,8 +132,26 @@ func TestServer_bdevScan(t *testing.T) {
 			engStopped: []bool{true},
 			expResp: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
-					proto.MockNvmeController(1),
-					proto.MockNvmeController(2),
+					func() *ctlpb.NvmeController {
+						c := proto.MockNvmeController(1)
+						c.SmdDevices = []*ctlpb.SmdDevice{
+							{
+								Rank:     uint32(ranklist.NilRank),
+								RoleBits: 0, // No roles.
+							},
+						}
+						return c
+					}(),
+					func() *ctlpb.NvmeController {
+						c := proto.MockNvmeController(2)
+						c.SmdDevices = []*ctlpb.SmdDevice{
+							{
+								Rank:     uint32(ranklist.NilRank),
+								RoleBits: 0, // No roles.
+							},
+						}
+						return c
+					}(),
 				},
 				State: new(ctlpb.ResponseState),
 			},
@@ -124,8 +162,61 @@ func TestServer_bdevScan(t *testing.T) {
 				},
 			},
 		},
-		"bdevs in config; engine not started; scan local; retry on empty response": {
-			req: &ctlpb.ScanNvmeReq{Health: true, Meta: true},
+		"scan local; bdevs in config; devlist passed to backend; roles from cfg": {
+			req: &ctlpb.ScanNvmeReq{Health: true},
+			engTierCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(1)).
+						WithBdevDeviceRoles(storage.BdevRoleWAL),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(test.MockPCIAddr(2)).
+						WithBdevDeviceRoles(storage.BdevRoleMeta | storage.BdevRoleData),
+				},
+			},
+			provRes: &storage.BdevScanResponse{
+				Controllers: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+				},
+			},
+			engStopped: []bool{true},
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					func() *ctlpb.NvmeController {
+						c := proto.MockNvmeController(1)
+						c.SmdDevices = []*ctlpb.SmdDevice{
+							{
+								Rank:     uint32(ranklist.NilRank),
+								RoleBits: uint32(storage.BdevRoleWAL),
+							},
+						}
+						return c
+					}(),
+					func() *ctlpb.NvmeController {
+						c := proto.MockNvmeController(2)
+						c.SmdDevices = []*ctlpb.SmdDevice{
+							{
+								Rank:     uint32(ranklist.NilRank),
+								RoleBits: uint32(storage.BdevRoleMeta | storage.BdevRoleData),
+							},
+						}
+						return c
+					}(),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+			expBackendScanCalls: []storage.BdevScanRequest{
+				{
+					DeviceList: storage.MustNewBdevDeviceList(
+						test.MockPCIAddr(1), test.MockPCIAddr(2)),
+				},
+			},
+		},
+		"scan local; bdevs in config; devlist passed to backend; retry on empty response": {
+			req: &ctlpb.ScanNvmeReq{Health: true},
 			engTierCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -153,7 +244,7 @@ func TestServer_bdevScan(t *testing.T) {
 				},
 			},
 		},
-		"bdevs in config; engine started; scan remote": {
+		"scan remote; bdevs in config": {
 			req: &ctlpb.ScanNvmeReq{Health: true, Meta: true},
 			engTierCfgs: []storage.TierConfigs{
 				{
@@ -364,8 +455,8 @@ func TestServer_bdevScan(t *testing.T) {
 				},
 			},
 		},
-		"bdevs in config; engine not started; scan local; vmd enabled": {
-			req: &ctlpb.ScanNvmeReq{Health: true, Meta: true},
+		"scan local; bdevs in config; vmd enabled": {
+			req: &ctlpb.ScanNvmeReq{},
 			engTierCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -382,18 +473,33 @@ func TestServer_bdevScan(t *testing.T) {
 			engStopped: []bool{true},
 			expResp: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
-					&ctlpb.NvmeController{PciAddr: "050505:01:00.0"},
-					&ctlpb.NvmeController{PciAddr: "050505:03:00.0"},
+					func() *ctlpb.NvmeController {
+						nc := &ctlpb.NvmeController{
+							PciAddr: "050505:01:00.0",
+						}
+						nc.SmdDevices = []*ctlpb.SmdDevice{
+							{Rank: uint32(ranklist.NilRank)},
+						}
+						return nc
+					}(),
+					func() *ctlpb.NvmeController {
+						nc := &ctlpb.NvmeController{
+							PciAddr: "050505:03:00.0",
+						}
+						nc.SmdDevices = []*ctlpb.SmdDevice{
+							{Rank: uint32(ranklist.NilRank)},
+						}
+						return nc
+					}(),
 				},
 				State: new(ctlpb.ResponseState),
 			},
 			expBackendScanCalls: []storage.BdevScanRequest{
 				{DeviceList: storage.MustNewBdevDeviceList("0000:05:05.5")},
-				{DeviceList: storage.MustNewBdevDeviceList("0000:05:05.5")},
 			},
 		},
-		"bdevs in config; engine started; scan remote; vmd enabled": {
-			req: &ctlpb.ScanNvmeReq{Health: true, Meta: true},
+		"scan remote; bdevs in config; vmd enabled": {
+			req: &ctlpb.ScanNvmeReq{Meta: true},
 			engTierCfgs: []storage.TierConfigs{
 				{
 					storage.NewTierConfig().
@@ -719,7 +825,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
-		"scan usage": {
+		"scan usage; engines not ready": {
 			req: &ctlpb.StorageScanReq{
 				Scm: &ctlpb.ScanScmReq{
 					Usage: true,
@@ -729,7 +835,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 				},
 			},
 			enginesNotReady: true,
-			expErr:          errEngineNotReady,
+			expErr:          errors.New("no scm details found"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

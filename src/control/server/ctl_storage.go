@@ -101,25 +101,26 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 
 	instances := cs.harness.Instances()
 
-	nss := make(storage.ScmNamespaces, len(instances))
-	for idx, ei := range instances {
-		if !ei.IsReady() {
+	nss := make(storage.ScmNamespaces, 0, len(instances))
+	for _, engine := range instances {
+		if !engine.IsReady() {
 			continue // skip if not running
 		}
 
-		cfg, err := ei.GetStorage().GetScmConfig()
+		cfg, err := engine.GetStorage().GetScmConfig()
 		if err != nil {
 			return nil, err
 		}
 
-		mount, err := ei.GetStorage().GetScmUsage()
+		mount, err := engine.GetStorage().GetScmUsage()
 		if err != nil {
 			return nil, err
 		}
 
+		var ns *storage.ScmNamespace
 		switch mount.Class {
 		case storage.ClassRam: // generate fake namespace for emulated ramdisk mounts
-			nss[idx] = &storage.ScmNamespace{
+			ns = &storage.ScmNamespace{
 				Mount:       mount,
 				BlockDevice: "ramdisk",
 				Size:        uint64(humanize.GiByte * cfg.Scm.RamdiskSize),
@@ -127,29 +128,32 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 		case storage.ClassDcpm: // update namespace mount info for online storage
 			if ssr.Namespaces == nil {
 				return nil, errors.Errorf("instance %d: input scm scan response missing namespaces",
-					ei.Index())
+					engine.Index())
 			}
-			ns := findPMemInScan(ssr, mount.DeviceList)
+			ns = findPMemInScan(ssr, mount.DeviceList)
 			if ns == nil {
 				return nil, errors.Errorf("instance %d: no pmem namespace for mount %s",
-					ei.Index(), mount.Path)
+					engine.Index(), mount.Path)
 			}
 			ns.Mount = mount
-			nss[idx] = ns
 		}
 
-		if nss[idx].Mount != nil {
-			rank, err := ei.GetRank()
+		if ns.Mount != nil {
+			rank, err := engine.GetRank()
 			if err != nil {
 				return nil, errors.Wrapf(err, "instance %d: no rank associated for mount %s",
-					ei.Index(), mount.Path)
+					engine.Index(), mount.Path)
 			}
-			nss[idx].Mount.Rank = rank
+			ns.Mount.Rank = rank
 		}
 
-		cs.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v",
-			nss[idx].BlockDevice, mount.Path, nss[idx].Mount)
+		cs.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v", ns.BlockDevice,
+			mount.Path, ns.Mount)
+		nss = append(nss, ns)
 	}
 
+	if len(nss) == 0 {
+		return nil, errors.New("no scm details found")
+	}
 	return &storage.ScmScanResponse{Namespaces: nss}, nil
 }
