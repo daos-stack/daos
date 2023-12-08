@@ -439,7 +439,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		return -DER_INVAL;
 	}
 
-	if (dtx_is_valid_handle(dth)) {
+	if (dtx_is_real_handle(dth)) {
 		epr.epr_hi = dth->dth_epoch;
 		bound = MAX(dth->dth_epoch_bound, dth->dth_epoch);
 	} else {

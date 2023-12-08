@@ -434,8 +434,8 @@ update:
 		return rc;
 	}
 
-	rc = ilog_update(loh, &max_epr, epr->epr_hi, dtx_is_valid_handle(dth) ?
-			 dth->dth_op_seq : VOS_SUB_OP_MAX, false);
+	rc = ilog_update(loh, &max_epr, epr->epr_hi,
+			 (dtx_is_real_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX), false);
 
 	ilog_close(loh);
 
@@ -531,7 +531,7 @@ punch_log:
 		return rc;
 	}
 
-	if (dth) {
+	if (dtx_is_real_handle(dth)) {
 		minor_epc = dth->dth_op_seq;
 	} else if (replay) {
 		/* If it's a replay, punch lower than the max in case there

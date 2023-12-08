@@ -3,19 +3,22 @@
 
 def scons():
     """Execute build"""
-    Import('denv')
+    Import('denv', 'vts_objs')
 
     libraries = ['abt', 'bio', 'dtx', 'vos', 'gurt', 'daos_common_pmem', 'cmocka', 'pthread',
-                 'uuid', 'cart']
+                 'uuid', 'cart', 'daos_tests']
 
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
+    tenv.Append(CPPPATH=[Dir('../../vos').srcnode()])
+    tenv.Append(CPPPATH=[Dir('../../vos/tests').srcnode()])
     tenv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
     tenv.require('argobots')
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     tenv.Append(OBJPREFIX="b_")
 
-    test_src = ['dtx_tests.c', 'sched_mock.c', 'ult_mock.c', 'srv_mock.c', '../../engine/tls.c']
+    test_src = ['dtx_tests.c', 'sched_mock.c', 'ult_mock.c', 'srv_mock.c', '../../engine/tls.c',
+                'dts_local.c', vts_objs]
     dtx_tests = tenv.d_program('dtx_tests', test_src, LIBS=libraries)
 
     tenv.Install('$PREFIX/bin/', [dtx_tests])

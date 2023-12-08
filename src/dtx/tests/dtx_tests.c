@@ -17,8 +17,10 @@
 #include <daos_srv/vos.h>
 #include <daos/tests_lib.h>
 
-#define STORAGE_PATH_LEN 96
-char vos_path[STORAGE_PATH_LEN + 1];
+#include "vts_common.h"
+
+int
+run_local_tests(const char *cfg);
 
 static void
 print_usage()
@@ -41,7 +43,7 @@ run_all_tests(int keys)
 
 	dts_create_config(cfg_desc_io, "keys=%d", keys);
 
-	// failed += run_some_tests(cfg_desc_io);
+	failed += run_local_tests(cfg_desc_io);
 
 	return failed;
 }

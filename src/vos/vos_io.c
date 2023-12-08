@@ -662,8 +662,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_io_size = 0;
 	ioc->ic_iod_nr = iod_nr;
 	ioc->ic_iods = iods;
-	ioc->ic_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
-	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound : epoch;
+	ioc->ic_epr.epr_hi = dtx_is_real_handle(dth) ? dth->dth_epoch : epoch;
+	bound              = dtx_is_real_handle(dth) ? dth->dth_epoch_bound : epoch;
 	ioc->ic_bound = MAX(bound, ioc->ic_epr.epr_hi);
 	ioc->ic_epr.epr_lo = 0;
 	ioc->ic_oid = oid;
@@ -2321,15 +2321,14 @@ dkey_update_begin(struct vos_io_context *ioc)
 }
 
 int
-vos_publish_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
-		bool publish)
+vos_publish_scm(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_scm, bool publish)
 {
 	int	rc = 0;
 
 	if (publish)
-		rc = umem_tx_publish(vos_cont2umm(cont), rsrvd_scm);
+		rc = umem_tx_publish(umm, rsrvd_scm);
 	else
-		umem_cancel(vos_cont2umm(cont), rsrvd_scm);
+		umem_cancel(umm, rsrvd_scm);
 
 	return rc;
 }
@@ -2385,6 +2384,38 @@ update_cancel(struct vos_io_context *ioc)
 			  true /* abort */);
 }
 
+/**
+ * Insert object ID and its parent container into the array of objects touched by the ongoing
+ * local transaction.
+ */
+static int
+vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid)
+{
+	/** The array has to grow to accommodate the next record. */
+	if (dth->dth_local_oid_cnt == dth->dth_local_oid_cap) {
+		struct dtx_local_oid_record *oid_array;
+
+		D_ALLOC_ARRAY(oid_array, dth->dth_local_oid_cap << 1);
+		if (oid_array == NULL)
+			return -DER_NOMEM;
+
+		memcpy(&oid_array[0], &dth->dth_local_oid_array[0],
+		       sizeof(*oid) * dth->dth_local_oid_cnt);
+
+		D_FREE(dth->dth_local_oid_array);
+		dth->dth_local_oid_array = oid_array;
+		dth->dth_local_oid_cap <<= 1;
+	}
+
+	struct dtx_local_oid_record *record = &dth->dth_local_oid_array[dth->dth_local_oid_cnt];
+	record->dor_cont                    = cont;
+	vos_cont_addref(cont);
+	record->dor_oid = *oid;
+	dth->dth_local_oid_cnt++;
+
+	return 0;
+}
+
 int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth)
@@ -2414,7 +2445,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	tx_started = true;
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
+	if (dtx_is_valid_handle(dth) && !dth->dth_local && dth->dth_dti_cos_count > 0 &&
 	    !dth->dth_cos_done) {
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
@@ -2456,6 +2487,10 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (vos_ts_set_check_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
 		err = -DER_TX_RESTART;
 		goto abort;
+	}
+
+	if (dtx_is_valid_handle(dth) && dth->dth_local) {
+		err = vos_insert_oid(dth, ioc->ic_cont, &ioc->ic_oid);
 	}
 
 abort:
@@ -2546,11 +2581,12 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
 		return -DER_IO;
 
-	if (dtx_is_valid_handle(dth))
+	if (dtx_is_real_handle(dth))
 		epoch = dth->dth_epoch;
 
-	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "
-		DF_X64", flags="DF_X64"\n", DP_UOID(oid), iod_nr, epoch, flags);
+	D_DEBUG(DB_TRACE,
+		"Prepare IOC for " DF_UOID ", iod_nr %d, epc " DF_X64 ", flags=" DF_X64 "\n",
+		DP_UOID(oid), iod_nr, (dtx_is_real_handle(dth) ? dth->dth_epoch : epoch), flags);
 
 	rc = vos_tgt_health_check(vos_hdl2cont(coh));
 	if (rc) {

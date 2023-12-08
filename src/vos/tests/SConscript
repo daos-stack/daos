@@ -5,6 +5,15 @@ def scons():
     """Execute build"""
     Import('denv', 'utest_utils', 'conf_dir', 'cmd_parser')
 
+    # build and export objects used by other unit tests
+    senv = denv.Clone()
+    senv.Append(CPPPATH=[Dir('..').srcnode()])
+    senv.Append(OBJPREFIX="vts_")
+    vts_src = ['vts_dtx.c', 'vts_io.c', 'vts_common.c', '../../object/srv_csum.c',
+               '../../object/srv_io_map.c']
+    vts_objs = senv.StaticObject(vts_src)
+    Export('vts_objs')
+
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
                  'daos_tests', 'gurt', 'uuid', 'pthread',
                  'pmemobj', 'cmocka', 'gomp']
@@ -18,11 +27,10 @@ def scons():
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     tenv.Append(OBJPREFIX="b_")
 
-    vos_test_src = ['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',
-                    tenv.Object("vts_common.c"), 'vts_aggregate.c', 'vts_dtx.c',
-                    'vts_gc.c', 'vts_checksum.c', 'vts_ilog.c', 'vts_array.c',
-                    'vts_pm.c', 'vts_ts.c', 'vts_mvcc.c', 'vos_cmd.c', 'vts_wal.c',
-                    '../../object/srv_csum.c', '../../object/srv_io_map.c']
+    vos_test_src = ['vos_tests.c', vts_objs, 'vts_pool.c', 'vts_container.c',
+                    'vts_aggregate.c', 'vts_gc.c', 'vts_checksum.c', 'vts_ilog.c',
+                    'vts_array.c', 'vts_pm.c', 'vts_ts.c', 'vts_mvcc.c',
+                    'vos_cmd.c', 'vts_wal.c']
     vos_tests = tenv.d_program('vos_tests', vos_test_src, LIBS=libraries)
     tenv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
     evt_ctl = tenv.d_program('evt_ctl', ['evt_ctl.c', utest_utils, cmd_parser], LIBS=libraries)

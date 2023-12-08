@@ -222,6 +222,31 @@ int
 vos_dtx_cache_reset(daos_handle_t coh, bool force);
 
 /**
+ * Initialize local transaction.
+ *
+ * Note: This entry point is not meant to be used directly. Please use dtx_begin instead.
+ *
+ * \param dth	[IN]	Local DTX handle.
+ * \param poh	[IN]	Pool handle.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh);
+
+/**
+ * Finalize local transaction if no error happened in the meantime.
+ *
+ * Note: This entry point is not meant to be used directly. Please use dtx_end instead.
+ *
+ * \param dth	[IN]	Local DTX handle.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_local_end(struct dtx_handle *dth);
+
+/**
  * Initialize the environment for a VOS instance
  * Must be called once before starting a VOS instance
  *
