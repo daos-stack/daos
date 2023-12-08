@@ -346,7 +346,7 @@ crt_proc_daos_pipeline_stats_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_pipe
 
 CRT_RPC_DEFINE(pipeline_run, DAOS_ISEQ_PIPELINE_RUN, DAOS_OSEQ_PIPELINE_RUN)
 
-#define X(a, b, c, d, e, f)                                                                        \
+#define X(a, b, c, ...)                                                                            \
 	{                                                                                          \
 	    .prf_flags   = b,                                                                      \
 	    .prf_req_fmt = c,                                                                      \
