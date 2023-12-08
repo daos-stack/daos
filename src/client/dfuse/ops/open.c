@@ -225,7 +225,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
 						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 
-		if (rc != 0 && rc != ENOENT)
+		if (rc != 0 && rc != -ENOENT)
 			DHS_ERROR(ie, -rc, "inval_entry() error");
 		dfuse_inode_decref(dfuse_info, ie);
 	}

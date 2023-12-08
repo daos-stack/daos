@@ -1531,12 +1531,17 @@ class DFuse():
         print(rc)
         return rc
 
-    def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None):
+    def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None,
+                    qpath=None):
         """Query and verify the dfuse statistics.
 
         Returns the raw numbers in a dict.
         """
-        cmd = ['filesystem', 'query', self.dir]
+        cmd = ['filesystem', 'query']
+        if qpath:
+            cmd.append(qpath)
+        else:
+            cmd.append(self.dir)
 
         if ino is not None:
             cmd.extend(['--inode', str(ino)])
@@ -1563,7 +1568,7 @@ class DFuse():
 
         return rc.json['response']
 
-    def evict_and_wait(self, paths):
+    def evict_and_wait(self, paths, qpath=None):
         """Evict a number of paths from dfuse"""
         inodes = []
         for path in paths:
@@ -1575,7 +1580,7 @@ class DFuse():
         for inode in inodes:
             found = True
             while found:
-                rc = self.check_usage(inode)
+                rc = self.check_usage(inode, qpath=qpath)
                 print(rc)
                 found = rc['resident']
                 if not found:
@@ -3297,6 +3302,12 @@ class PosixTests():
         server = self.server
         conf = self.conf
 
+        cont_attrs = {'dfuse-attr-time': '5m',
+                      'dfuse-dentry-time': '5m',
+                      'dfuse-dentry-dir-time': '5m',
+                      'dfuse-ndentry-time': '5m'}
+        container.set_attrs(cont_attrs)
+
         # Start dfuse on the container.
         dfuse = DFuse(server, conf, container=container, caching=False)
         dfuse.start('uns-0')
@@ -3318,6 +3329,8 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
+        uns_container.set_attrs(cont_attrs)
+
         print('Trying UNS')
         dfuse = DFuse(server, conf, caching=False)
         dfuse.start('uns-1')
@@ -3332,6 +3345,9 @@ class PosixTests():
         # Make a link within the new container.
         print('Inserting entry point')
         uns_container_2 = create_cont(conf, pool=self.pool, path=uns_path)
+
+        uns_container_2.set_attrs(cont_attrs)
+        dfuse.evict_and_wait([uns_path], qpath=join(dfuse.dir, pool, container.uuid))
 
         # List the root container again.
         print(os.listdir(join(dfuse.dir, pool, container.uuid)))

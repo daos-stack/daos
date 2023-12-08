@@ -66,8 +66,13 @@ static struct dfuse_ival ival_data;
 /* Eviction loop, run periodically in it's own thread
  * TODO: Use array rather than list for buckets.
  * TODO: Set evicton timeout, max(time * 1.1, 10)?
- * TODO: Check it's evicting containers correctly.
- * change where ival_update_inode() is called to include pools
+ *
+ * Future work:
+ * Better handling of eviction timeouts, "max(time * 1.1, 10)" or similar might be nice.
+ * Have containers reference count the timeout buckets.
+ * Use a list rather than arrays for timeout buckets.
+ * Duplicate entire functionality for data cache?
+ * Rather than invalidate data perhaps re-fresh it?
  *
  * Returns true if there is more work to do.  If false then *sleep_time is set in seconds.
  */
