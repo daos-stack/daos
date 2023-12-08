@@ -241,7 +241,9 @@ out:
 	return rc;
 }
 
-/* Stop thread, remove all inodes from the invalidation queues and teardown all data structures */
+/* Stop thread, remove all inodes from the invalidation queues and teardown all data structures
+ * May be called without thread_start() having been called.
+ */
 void
 ival_thread_stop()
 {
@@ -251,7 +253,9 @@ ival_thread_stop()
 	/* Stop and drain evict queues */
 	sem_post(&ival_sem);
 
-	pthread_join(ival_thread, NULL);
+	if (ival_thread)
+		pthread_join(ival_thread, NULL);
+	ival_thread = 0;
 
 	/* Walk the list, oldest first */
 	d_list_for_each_entry_safe(dte, dtep, &ival_data.time_entry_list, dte_list) {
