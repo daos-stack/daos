@@ -84,19 +84,22 @@ func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
 
 	for _, tr := range ei.storage.FormatBdevTiers() {
 		if tr.Error != nil {
-			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
+			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier),
+				tr.Error))
 			continue
 		}
 		for devAddr, status := range tr.Result.DeviceResponses {
-			ei.log.Debugf("instance %d: tier %d: device fmt of %s, status %+v",
-				ei.Index(), tr.Tier, devAddr, status)
+			ei.log.Debugf("instance %d: tier %d: device fmt of %s, status %+v, roles %q",
+				ei.Index(), tr.Tier, devAddr, status, tr.DeviceRoles)
 
 			// TODO DAOS-5828: passing status.Error directly triggers segfault
 			var err error
 			if status.Error != nil {
 				err = status.Error
 			}
-			results = append(results, ei.newCret(devAddr, err))
+			res := ei.newCret(devAddr, err)
+			res.RoleBits = uint32(tr.DeviceRoles.OptionBits)
+			results = append(results, res)
 		}
 	}
 
@@ -215,6 +218,15 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 
 		c := seenCtrlrs[addr]
 
+		nsd := new(ctlpb.SmdDevice)
+		*nsd = *sd
+		nsd.Ctrlr = nil
+		engineRank, err := engine.GetRank()
+		if err != nil {
+			return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
+		}
+		nsd.Rank = engineRank.Uint32()
+
 		// Populate health if requested.
 		healthUpdated := false
 		if pbReq.Health {
@@ -230,11 +242,8 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 			healthUpdated = upd
 		}
 
-		// Populate SMD (meta) if requested.
+		// Populate usage data if requested.
 		if pbReq.Meta {
-			nsd := new(ctlpb.SmdDevice)
-			*nsd = *sd
-			nsd.Ctrlr = nil
 			nsd.MetaSize = pbReq.MetaSize
 			nsd.RdbSize = pbReq.RdbSize
 			if healthUpdated {
@@ -245,13 +254,9 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 				nsd.MetaWalSize = c.HealthStats.MetaWalSize
 				nsd.RdbWalSize = c.HealthStats.RdbWalSize
 			}
-			engineRank, err := engine.GetRank()
-			if err != nil {
-				return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
-			}
-			nsd.Rank = engineRank.Uint32()
-			c.SmdDevices = append(c.SmdDevices, nsd)
 		}
+
+		c.SmdDevices = append(c.SmdDevices, nsd)
 	}
 
 	return &pbResp, nil

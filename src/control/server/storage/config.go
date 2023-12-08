@@ -43,6 +43,7 @@ const (
 	accelOptMoveName = "move"
 	accelOptCRCName  = "crc"
 
+	bdevRoleNoneName = "n/a"
 	bdevRoleDataName = "data"
 	bdevRoleMetaName = "meta"
 	bdevRoleWALName  = "wal"
@@ -847,7 +848,7 @@ func (obs *OptionBits) fromStrings(optStr2Flag optFlagMap, opts ...string) error
 			continue
 		}
 		flag, exists := optStr2Flag[opt]
-		if !exists {
+		if !exists && opt != bdevRoleNoneName {
 			return FaultBdevConfigOptFlagUnknown(opt, optStr2Flag.keys()...)
 		}
 		*obs |= flag
@@ -893,13 +894,19 @@ func (bdr BdevRoles) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON decodes user readable roles string into bitmask.
 func (bdr *BdevRoles) UnmarshalJSON(data []byte) error {
 	str := strings.Trim(strings.ToLower(string(data)), "\"")
+	if str == bdevRoleNoneName {
+		bdr.OptionBits = OptionBits(0)
+		return nil
+	}
+
 	return bdr.fromStrings(roleOptFlags, strings.Split(str, ",")...)
 }
 
 func (bdr *BdevRoles) String() string {
-	if bdr == nil {
-		return "none"
+	if bdr == nil || bdr.IsEmpty() {
+		return strings.ToUpper(bdevRoleNoneName)
 	}
+
 	return bdr.toString(roleOptFlags)
 }
 

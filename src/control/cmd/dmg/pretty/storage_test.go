@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -474,9 +474,9 @@ host1
 HugePage Size: 2048 KB
 	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+NVMe PCI     Model   FW Revision Socket ID Capacity Role(s) 
+--------     -----   ----------- --------- -------- ------- 
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   N/A     
 
 `,
 		},
@@ -587,9 +587,9 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+NVMe PCI     Model   FW Revision Socket ID Capacity Role(s) 
+--------     -----   ----------- --------- -------- ------- 
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   N/A     
 
 `,
 		},
@@ -613,9 +613,9 @@ SCM Namespace Socket ID Capacity
 ------------- --------- -------- 
 pmem0         0         1.0 TB   
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+NVMe PCI     Model   FW Revision Socket ID Capacity Role(s) 
+--------     -----   ----------- --------- -------- ------- 
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   N/A     
 
 `,
 		},
@@ -643,9 +643,9 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+NVMe PCI     Model   FW Revision Socket ID Capacity Role(s) 
+--------     -----   ----------- --------- -------- ------- 
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   N/A     
 
 `,
 		},
@@ -681,9 +681,9 @@ host2
 HugePage Size: 2048 KB
 	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+NVMe PCI     Model   FW Revision Socket ID Capacity Role(s) 
+--------     -----   ----------- --------- -------- ------- 
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   N/A     
 
 `,
 		},
@@ -703,9 +703,9 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+NVMe PCI     Model   FW Revision Socket ID Capacity Role(s) 
+--------     -----   ----------- --------- -------- ------- 
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   N/A     
 
 `,
 		},
@@ -739,9 +739,9 @@ host-[0001-0004]
 HugePage Size: 2048 KB
 	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+NVMe PCI     Model   FW Revision Socket ID Capacity Role(s) 
+--------     -----   ----------- --------- -------- ------- 
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   N/A     
 
 `,
 		},
@@ -775,9 +775,9 @@ host-j-[0001-0004]
 HugePage Size: 2048 KB
 	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+NVMe PCI     Model   FW Revision Socket ID Capacity Role(s) 
+--------     -----   ----------- --------- -------- ------- 
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   N/A     
 
 `,
 		},
@@ -814,10 +814,10 @@ SCM Namespace Socket ID Capacity
 pmem0         0         1.0 TB   
 pmem1         1         2.0 TB   
 
-NVMe PCI     Model FW Revision Socket ID Capacity 
---------     ----- ----------- --------- -------- 
-0000:01:00.0                   1         2.0 TB   
-0000:04:00.0                   0         2.0 TB   
+NVMe PCI     Model FW Revision Socket ID Capacity Role(s)       
+--------     ----- ----------- --------- -------- -------       
+0000:01:00.0                   1         2.0 TB   data,meta,wal 
+0000:04:00.0                   0         2.0 TB   data,meta,wal 
 
 ---------
 host[2,4]
@@ -828,10 +828,10 @@ SCM Namespace Socket ID Capacity
 pmem0         0         1.0 TB   
 pmem1         1         2.0 TB   
 
-NVMe PCI     Model FW Revision Socket ID Capacity 
---------     ----- ----------- --------- -------- 
-0000:01:00.0                   1         2.1 TB   
-0000:04:00.0                   0         2.1 TB   
+NVMe PCI     Model FW Revision Socket ID Capacity Role(s)       
+--------     ----- ----------- --------- -------- -------       
+0000:01:00.0                   1         2.1 TB   data,meta,wal 
+0000:04:00.0                   0         2.1 TB   data,meta,wal 
 
 `,
 		},
@@ -1151,9 +1151,9 @@ SCM Mount Format Result
 --------- ------------- 
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+2        CTL_SUCCESS   N/A     
 
 `,
 		},
@@ -1178,9 +1178,9 @@ SCM Mount Format Result
 /mnt/1    CTL_SUCCESS   
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-1        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+1        CTL_SUCCESS   N/A     
 
 `,
 		},
@@ -1200,10 +1200,10 @@ SCM Mount Format Result
 /mnt/1    CTL_SUCCESS   
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-1        CTL_SUCCESS   
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+1        CTL_SUCCESS   N/A     
+2        CTL_SUCCESS   N/A     
 
 `,
 		},
@@ -1227,9 +1227,9 @@ SCM Mount Format Result
 --------- ------------- 
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+2        CTL_SUCCESS   N/A     
 
 `,
 		},
@@ -1249,10 +1249,34 @@ SCM Mount Format Result
 /mnt/1    CTL_SUCCESS   
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-1        CTL_SUCCESS   
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+1        CTL_SUCCESS   N/A     
+2        CTL_SUCCESS   N/A     
+
+`,
+		},
+		"2 Hosts, 2 SCM, 2 NVMe; MD-on-SSD roles": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:        2,
+				ScmPerHost:   2,
+				NvmePerHost:  2,
+				NvmeRoleBits: int(storage.BdevRoleAll),
+			}),
+			expPrintStr: `
+
+---------
+host[1-2]
+---------
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/1    CTL_SUCCESS   
+/mnt/2    CTL_SUCCESS   
+
+NVMe PCI Format Result Role(s)       
+-------- ------------- -------       
+1        CTL_SUCCESS   data,meta,wal 
+2        CTL_SUCCESS   data,meta,wal 
 
 `,
 		},
@@ -1442,13 +1466,13 @@ host1
 host1
 -----
   Devices
-    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
+    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0 NSID:0]
       Roles:wal SysXS Targets:[0 1 2] Rank:0 State:NEW LED:OFF
-    UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
+    UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0 NSID:0]
       Roles:data,meta Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
-    UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
+    UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0 NSID:0]
       Roles:wal SysXS Targets:[0 1 2] Rank:1 State:UNKNOWN LED:NA
-    UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
+    UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0 NSID:0]
       Roles:data,meta Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
 `,
 		},
@@ -1478,11 +1502,12 @@ host1
 						SmdInfo: &control.SmdInfo{
 							Devices: []*storage.SmdDevice{
 								{
-									UUID:      test.MockUUID(0),
-									TargetIDs: []int32{0, 1, 2},
-									Rank:      0,
-									Ctrlr:     *mockController,
-									Roles:     storage.BdevRoles{storage.BdevRoleAll},
+									UUID:             test.MockUUID(0),
+									TargetIDs:        []int32{0, 1, 2},
+									Rank:             0,
+									Ctrlr:            *mockController,
+									CtrlrNamespaceID: 1,
+									Roles:            storage.BdevRoles{storage.BdevRoleAll},
 								},
 							},
 						},
@@ -1494,7 +1519,7 @@ host1
 host1
 -----
   Devices
-    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:01:00.0]
+    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:01:00.0 NSID:1]
       Roles:data,meta,wal Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
       Health Stats:
         Temperature:%dK(%.02fC)
@@ -1579,7 +1604,7 @@ host1
 host1
 -----
   Devices
-    TrAddr:0000:db:00.0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
+    TrAddr:0000:db:00.0 NSID:0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
 `,
 		},
 		"identify led; no uuid specified": {
@@ -1592,7 +1617,8 @@ host1
 						SmdInfo: &control.SmdInfo{
 							Devices: []*storage.SmdDevice{
 								{
-									Ctrlr: identCtrlr,
+									Ctrlr:            identCtrlr,
+									CtrlrNamespaceID: 1,
 								},
 							},
 						},
@@ -1604,7 +1630,7 @@ host1
 host1
 -----
   Devices
-    TrAddr:0000:db:00.0 LED:QUICK_BLINK
+    TrAddr:0000:db:00.0 NSID:1 LED:QUICK_BLINK
 `,
 		},
 	} {

@@ -37,25 +37,20 @@ type storageScanCmd struct {
 	cmdutil.JSONOutputCmd
 	Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
 	NvmeHealth bool `short:"n" long:"nvme-health" description:"Display NVMe device health statistics"`
-	NvmeMeta   bool `short:"m" long:"nvme-meta" description:"Display server meta data held on NVMe storage"`
 }
 
 // Execute is run when storageScanCmd activates.
 //
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(_ []string) error {
-	if cmd.NvmeHealth && cmd.NvmeMeta {
-		return errors.New("cannot use --nvme-health and --nvme-meta together")
-	}
-	if cmd.Verbose && (cmd.NvmeHealth || cmd.NvmeMeta) {
-		return errors.New("cannot use --verbose with --nvme-health or --nvme-meta")
+	if cmd.Verbose && cmd.NvmeHealth {
+		return errors.New("cannot use --verbose with --nvme-health")
 	}
 
 	req := &control.StorageScanReq{
 		NvmeHealth: cmd.NvmeHealth,
-		NvmeMeta:   cmd.NvmeMeta,
-		// don't strip nvme details if verbose or health or meta set
-		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth || cmd.NvmeMeta),
+		// Don't strip nvme details if verbose or health flags set.
+		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth),
 	}
 	req.SetHostList(cmd.getHostList())
 
@@ -81,16 +76,11 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	}
 
 	var out strings.Builder
-	switch {
-	case cmd.NvmeHealth:
+	if cmd.NvmeHealth {
 		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &out); err != nil {
 			return err
 		}
-	case cmd.NvmeMeta:
-		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &out); err != nil {
-			return err
-		}
-	default:
+	} else {
 		verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
 		if err := pretty.PrintHostStorageMap(resp.HostStorage, &out, verbose); err != nil {
 			return err

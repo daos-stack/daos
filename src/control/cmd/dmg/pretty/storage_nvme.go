@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -164,7 +164,6 @@ func parseNvmeFormatResults(inResults storage.NvmeControllers) storage.NvmeContr
 	parsedResults := make(storage.NvmeControllers, 0, len(inResults))
 	for _, result := range inResults {
 		if result.PciAddr != storage.NilBdevAddress {
-			// ignore skip results
 			parsedResults = append(parsedResults, result)
 		}
 	}
@@ -172,24 +171,31 @@ func parseNvmeFormatResults(inResults storage.NvmeControllers) storage.NvmeContr
 	return parsedResults
 }
 
-func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
-	if len(devices) == 0 {
+func printNvmeFormatResults(ctrlrs storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
+	if len(ctrlrs) == 0 {
 		fmt.Fprintln(out, "\tNo NVMe devices found")
 		return nil
 	}
 
 	pciTitle := "NVMe PCI"
 	resultTitle := "Format Result"
+	rolesTitle := "Role(s)"
 
-	formatter := txtfmt.NewTableFormatter(pciTitle, resultTitle)
+	formatter := txtfmt.NewTableFormatter(pciTitle, resultTitle, rolesTitle)
 	formatter.InitWriter(out)
 	var table []txtfmt.TableRow
 
-	sort.Slice(devices, func(i, j int) bool { return devices[i].PciAddr < devices[j].PciAddr })
+	sort.Slice(ctrlrs, func(i, j int) bool { return ctrlrs[i].PciAddr < ctrlrs[j].PciAddr })
 
-	for _, device := range parseNvmeFormatResults(devices) {
-		row := txtfmt.TableRow{pciTitle: device.PciAddr}
-		row[resultTitle] = device.Info
+	for _, ctrlr := range parseNvmeFormatResults(ctrlrs) {
+		row := txtfmt.TableRow{pciTitle: ctrlr.PciAddr}
+		row[resultTitle] = ctrlr.Info
+		roles := "???"
+		// Assumes that all SMD devices on a controller have the same roles.
+		if len(ctrlr.SmdDevices) > 0 {
+			roles = fmt.Sprintf("%s", ctrlr.SmdDevices[0].Roles.String())
+		}
+		row[rolesTitle] = roles
 
 		table = append(table, row)
 	}
@@ -212,9 +218,10 @@ func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, op
 	fwTitle := "FW Revision"
 	socketTitle := "Socket ID"
 	capacityTitle := "Capacity"
+	rolesTitle := "Role(s)"
 
 	formatter := txtfmt.NewTableFormatter(
-		pciTitle, modelTitle, fwTitle, socketTitle, capacityTitle,
+		pciTitle, modelTitle, fwTitle, socketTitle, capacityTitle, rolesTitle,
 	)
 	formatter.InitWriter(out)
 	var table []txtfmt.TableRow
@@ -227,6 +234,12 @@ func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, op
 		row[fwTitle] = ctrlr.FwRev
 		row[socketTitle] = fmt.Sprint(ctrlr.SocketID)
 		row[capacityTitle] = humanize.Bytes(ctrlr.Capacity())
+		roles := "???"
+		// Assumes that all SMD devices on a controller have the same roles.
+		if len(ctrlr.SmdDevices) > 0 {
+			roles = fmt.Sprintf("%s", &ctrlr.SmdDevices[0].Roles)
+		}
+		row[rolesTitle] = roles
 
 		table = append(table, row)
 	}
@@ -258,50 +271,6 @@ func PrintNvmeHealthMap(hsm control.HostStorageMap, out io.Writer, opts ...Print
 			iw := txtfmt.NewIndentWriter(out)
 			if err := printNvmeHealth(controller.HealthStats, iw, opts...); err != nil {
 				return err
-			}
-			fmt.Fprintln(out)
-		}
-	}
-
-	return w.Err
-}
-
-// PrintNvmeMetaMap generates a human-readable representation of the supplied
-// HostStorageMap, with a focus on presenting the NVMe Device Server Meta Data.
-func PrintNvmeMetaMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
-	w := txtfmt.NewErrWriter(out)
-
-	for _, key := range hsm.Keys() {
-		hss := hsm[key]
-		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
-		lineBreak := strings.Repeat("-", len(hosts))
-		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
-
-		if len(hss.HostStorage.NvmeDevices) == 0 {
-			fmt.Fprintln(out, "  No NVMe devices detected")
-			continue
-		}
-
-		for _, controller := range hss.HostStorage.NvmeDevices {
-			if err := printNvmeControllerSummary(controller, out, opts...); err != nil {
-				return err
-			}
-			iw := txtfmt.NewIndentWriter(out)
-			if len(controller.SmdDevices) > 0 {
-				fmt.Fprintln(iw, "SMD Devices")
-
-				for _, device := range controller.SmdDevices {
-					iw1 := txtfmt.NewIndentWriter(iw)
-
-					// Attach parent controller details to SMD before printing.
-					device.Ctrlr = *controller
-
-					if err := printSmdDevice(device, iw1, opts...); err != nil {
-						return err
-					}
-				}
-			} else {
-				fmt.Fprintln(iw, "No SMD devices found")
 			}
 			fmt.Fprintln(out)
 		}

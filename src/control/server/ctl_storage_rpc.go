@@ -13,7 +13,6 @@ import (
 	"strconv"
 
 	"github.com/dustin/go-humanize"
-	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -623,25 +622,6 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	}
 	resp := new(ctlpb.StorageScanResp)
 
-	// In the case that usage stats are being requested, relevant flags for both SCM and NVMe
-	// will be set and so fail if engines are not ready for comms. This restriction should not
-	// be applied if only the Meta flag is set in the NVMe component of the request to continue
-	// to support off-line storage scan functionality which uses cached stats (e.g. dmg storage
-	// scan --nvme-meta).
-	//
-	// TODO DAOS-13228: Remove --nvme-meta scan option and the below workaround.
-	//                  If usage or meta requested, fail if no engines started and skip stopped
-	//                  engines in bdev scan. Only return results for ready engines over dRPC.
-	if req.Scm.Usage && req.Nvme.Meta {
-		nrInstances := len(c.harness.Instances())
-		readyRanks := c.harness.readyRanks()
-		if len(readyRanks) != nrInstances {
-			return nil, errors.Wrapf(errEngineNotReady, "%s, ready: %v",
-				english.Plural(nrInstances, "engine", "engines"),
-				readyRanks)
-		}
-	}
-
 	respScm, err := c.scanScm(ctx, req.Scm)
 	if err != nil {
 		return nil, err
@@ -659,6 +639,9 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 		c.adjustNvmeSize(respNvme)
 	}
 	resp.Nvme = respNvme
+	for _, ctrlr := range resp.Nvme.Ctrlrs {
+		c.log.Debugf("Nvme: %+v", ctrlr.SmdDevices)
+	}
 
 	mi, err := c.getMemInfo()
 	if err != nil {
@@ -823,7 +806,6 @@ type formatNvmeReq struct {
 
 func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageFormatResp) {
 	// Allow format to complete on one instance even if another fails
-	// TODO: perform bdev format in parallel
 	for idx, ei := range req.instances {
 		_, hasError := req.errored[idx]
 		_, skipped := req.skipped[idx]

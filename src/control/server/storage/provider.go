@@ -472,9 +472,10 @@ func BdevFormatRequestFromConfig(log logging.Logger, cfg *TierConfig) (BdevForma
 
 // BdevTierFormatResult contains details of a format operation result.
 type BdevTierFormatResult struct {
-	Tier   int
-	Error  error
-	Result *BdevFormatResponse
+	Tier        int
+	DeviceRoles BdevRoles
+	Error       error
+	Result      *BdevFormatResponse
 }
 
 // FormatBdevTiers formats all the Bdev tiers in the engine storage
@@ -493,6 +494,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 			p.engineIndex, cfg.Class, cfg.Bdev.DeviceList)
 
 		results[i].Tier = cfg.Tier
+		results[i].DeviceRoles = cfg.Bdev.DeviceRoles
 		req, err := BdevFormatRequestFromConfig(p.log, cfg)
 		if err != nil {
 			results[i].Error = err
@@ -501,7 +503,6 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 		}
 
 		p.RLock()
-		req.BdevCache = &p.bdevCache
 		req.VMDEnabled = p.vmdEnabled
 		results[i].Result, results[i].Error = p.bdev.Format(req)
 		p.RUnlock()
