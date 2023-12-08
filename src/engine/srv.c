@@ -282,6 +282,11 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
 		return 0;
+
+	rc = crt_req_get_timeout(rpc, &attr.sra_timeout);
+	D_ASSERT(rc == 0);
+	/* convert it to msec */
+	attr.sra_timeout *= 1000;
 	/*
 	 * The mod_id for the RPC originated from CART is 0xfe, and 'module'
 	 * will be NULL for this case.
@@ -295,7 +300,20 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 		attr.sra_type = SCHED_REQ_ANONYM;
 	}
 
-	return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
+	rc = sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
+	if (rc != -DER_OVERLOAD_RETRY)
+		return rc;
+
+	if (module != NULL && module->sm_mod_ops != NULL &&
+	    module->sm_mod_ops->dms_set_req != NULL) {
+		rc = module->sm_mod_ops->dms_set_req(rpc, &attr);
+		if (rc == -DER_OVERLOAD_RETRY)
+			return crt_reply_send(rpc);
+	}
+	/*
+	 * No RPC protocol to return hint, just return timeout.
+	 */
+	return -DER_TIMEDOUT;
 }
 
 static int

@@ -2324,6 +2324,16 @@ crt_quiet_error(int err)
 	return err == -DER_GRPVER;
 }
 
+/**
+ * Get the proto version of an RPC request.
+ *
+ * \param[in] req              pointer to RPC request
+ *
+ * \return                     positive version or negative error.
+ */
+int
+crt_req_get_proto_ver(crt_rpc_t *req);
+
 /** @}
  */
 

@@ -7,7 +7,7 @@ set -uex
 # for custom packages if present.
 
 : "${REPO_FILE_URL:=}"
-: "${BASE_DISTRO:=rockylinux/rockylinux:8}"
+: "${BASE_DISTRO:=rockylinux/rockylinux:$MAJOR_VER}"
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
 
@@ -16,7 +16,7 @@ disable_repos () {
     local repos_dir="$1"
     shift
     local save_repos
-    IFS=" " read -r -a save_repos <<< "${*:-} daos_ci-el8-artifactory"
+    IFS=" " read -r -a save_repos <<< "${*:-} daos_ci-el$MAJOR_VER-artifactory"
     if [ -n "$REPO_FILE_URL" ]; then
         pushd "$repos_dir"
         local repo
@@ -44,6 +44,11 @@ DISTRO="rocky"
 if [[ $BASE_DISTRO == *alma* ]]; then
     DISTRO='alma'
 fi
+# Use local repo server if present
+# if a local repo server is present and the distro repo server can not
+# be reached, have to bootstrap in an environment to get curl installed
+# to then install the pre-built repo file.
+
 MAJOR_VER="${BASE_DISTRO##*:}"
 MAJOR_VER="${MAJOR_VER%%.*}"
 if [ -n "$REPO_FILE_URL" ]; then
@@ -55,8 +60,8 @@ if [ -n "$REPO_FILE_URL" ]; then
     disable_repos /etc/yum.repos.d/
     popd
 fi
-dnf --assumeyes --disablerepo \*epel\* install dnf-plugins-core
-dnf config-manager --save --setopt=assumeyes=True
+dnf -y --disablerepo \*epel\* install dnf-plugins-core
+dnf -y config-manager --save --setopt=assumeyes=True
 dnf config-manager --save --setopt=install_weak_deps=False
 if [ ! -f /etc/fedora-release ]; then
     dnf --disablerepo \*epel\* install epel-release
@@ -70,12 +75,12 @@ if [ ! -f /etc/fedora-release ]; then
         PT_REPO=powertools
     fi
     dnf install epel-release
-        dnf config-manager --enable "$PT_REPO"
-    fi
-    dnf clean all
+    dnf config-manager --enable "$PT_REPO"
+fi
+dnf clean all
 
 daos_base="job/daos-stack/job/"
-artifacts="/artifact/artifacts/el8/"
+artifacts="/artifact/artifacts/el$MAJOR_VER/"
 save_repos=()
 for repo in $REPOS; do
     # don't install daos@ repos since we are building daos
@@ -96,16 +101,10 @@ for repo in $REPOS; do
 name=$repo:$branch:$build_number\n\
 baseurl=${JENKINS_URL}$daos_base$repo/job/$branch/$build_number$artifacts\n\
 enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/"$repo:$branch:$build_number".repo
+gpgcheck=False\n
+module_hotfixes=true\n" >> /etc/yum.repos.d/"$repo:$branch:$build_number".repo
     cat /etc/yum.repos.d/"$repo:$branch:$build_number".repo
     save_repos+=("$repo:$branch:$build_number")
 done
 
-# Install OS updates and package.  Include basic tools and daos dependencies
-if [ -e /tmp/install.sh ]; then
-    dnf upgrade
-    disable_repos /etc/yum.repos.d/ "${save_repos[@]}"
-    /tmp/install.sh
-    dnf clean all
-    rm -f /tmp/install.sh
-fi
+disable_repos /etc/yum.repos.d/ "${save_repos[@]}"

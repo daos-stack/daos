@@ -5,7 +5,6 @@
 """
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from general_utils import check_for_pool
 
 
 class DynamicServerPool(TestWithServers):
@@ -61,7 +60,8 @@ class DynamicServerPool(TestWithServers):
             # appears that self.hostlist_servers[0] is always rank0, 1 is rank1,
             # and the extra server we'll be adding will be rank2.
             for rank, host in enumerate(hosts):
-                pool_exists_on_host = check_for_pool(NodeSet(host), pool.uuid.lower())
+                pool_exists_on_host = pool.verify_uuid_directory(
+                    NodeSet(host), self.server_managers[0].get_config_value("scm_mount"))
                 # If this rank is in the rank list, there should be the
                 # UUID-named directory; i.e., pool_exist_on_host is True.
                 pool_expected = rank in uuid_to_ranks[pool.uuid.lower()]
@@ -99,7 +99,7 @@ class DynamicServerPool(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,control
-        :avocado: tags=dynamic_server_pool,test_dynamic_server_pool
+        :avocado: tags=DynamicServerPool,test_dynamic_server_pool
         """
         # Create a pool on rank0.
         self.create_pool_with_ranks(ranks=[0], tl_update=True)

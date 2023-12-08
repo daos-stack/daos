@@ -1840,7 +1840,7 @@ out:
 			vos_update_renew_epoch(ioh, dth);
 
 			D_DEBUG(DB_IO,
-				"update rpc %p renew epoch "DF_U64" => "DF_U64" for "DF_DTI"\n",
+				"update rpc %p renew epoch "DF_X64" => "DF_X64" for "DF_DTI"\n",
 				rpc, orw->orw_epoch, dth->dth_epoch, DP_DTI(&orw->orw_dti));
 
 			orw->orw_epoch = dth->dth_epoch;
@@ -3535,8 +3535,9 @@ static int
 obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 		struct obj_io_context *ioc, struct dtx_handle *dth)
 {
-	struct ds_cont_child *cont = ioc->ioc_coc;
-	int	rc = 0;
+	struct ds_cont_child	*cont = ioc->ioc_coc;
+	uint64_t		 sched_seq;
+	int			 rc = 0;
 
 	if (daos_is_zero_dti(&opi->opi_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
@@ -3547,6 +3548,8 @@ again:
 	rc = dtx_sub_init(dth, &opi->opi_oid, opi->opi_dkey_hash);
 	if (rc != 0)
 		goto out;
+
+	sched_seq = sched_cur_seq();
 
 	switch (opc) {
 	case DAOS_OBJ_RPC_PUNCH:
@@ -3580,8 +3583,60 @@ again:
 
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc->ioc_coc);
-		if (rc == -DER_AGAIN)
+		if (rc != -DER_AGAIN)
+			goto out;
+
+		if (unlikely(sched_cur_seq() == sched_seq))
 			goto again;
+
+		/*
+		 * There is CPU yield after DTX start, and the resent RPC may be handled
+		 * during that. Let's check resent again before further process.
+		 */
+
+		if (dth->dth_need_validation) {
+			daos_epoch_t	epoch = 0;
+			int		rc1;
+
+			rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &opi->opi_dti, &epoch, NULL);
+			switch (rc1) {
+			case 0:
+				opi->opi_epoch = epoch;
+				/* Fall through */
+			case -DER_ALREADY:
+				rc = -DER_ALREADY;
+				break;
+			case -DER_NONEXIST:
+			case -DER_EP_OLD:
+				break;
+			default:
+				rc = rc1;
+				break;
+			}
+		}
+
+		/*
+		 * For solo punch, it will be handled via one-phase transaction. If there is CPU
+		 * yield after its epoch generated, we will renew the epoch, then we can use the
+		 * epoch to sort related solo DTXs based on their epochs.
+		 */
+		if (rc == -DER_AGAIN && dth->dth_solo) {
+			struct dtx_epoch	epoch;
+
+			epoch.oe_value = d_hlc_get();
+			epoch.oe_first = epoch.oe_value;
+			epoch.oe_flags = orf_to_dtx_epoch_flags(opi->opi_flags);
+
+			dtx_renew_epoch(&epoch, dth);
+
+			D_DEBUG(DB_IO,
+				"punch rpc %u renew epoch "DF_X64" => "DF_X64" for "DF_DTI"\n",
+				opc, opi->opi_epoch, dth->dth_epoch, DP_DTI(&opi->opi_dti));
+
+			opi->opi_epoch = dth->dth_epoch;
+		}
+
+		goto again;
 	}
 
 out:
@@ -4503,10 +4558,11 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 			dcsh->dcsh_epoch.oe_value = d_hlc_get();
 
 			dtx_renew_epoch(&dcsh->dcsh_epoch, dth);
-			vos_update_renew_epoch(iohs[0], dth);
+			if (daos_handle_is_valid(iohs[0]))
+				vos_update_renew_epoch(iohs[0], dth);
 
 			D_DEBUG(DB_IO,
-				"CPD rpc %p renew epoch "DF_U64" => "DF_U64" for "DF_DTI"\n",
+				"CPD rpc %p renew epoch "DF_X64" => "DF_X64" for "DF_DTI"\n",
 				rpc, epoch, dcsh->dcsh_epoch.oe_value, DP_DTI(&dcsh->dcsh_xid));
 		}
 	}
