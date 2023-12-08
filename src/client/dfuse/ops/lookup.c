@@ -296,10 +296,7 @@ out_free:
 	dfuse_ie_free(dfuse_info, ie);
 out:
 	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
-		struct fuse_entry_param entry = {};
-
-		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
-		DFUSE_REPLY_ENTRY(parent, req, entry);
+		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}

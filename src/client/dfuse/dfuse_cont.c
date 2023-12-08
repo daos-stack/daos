@@ -31,10 +31,8 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	 * lookups.
 	 */
 	if (uuid_parse(name, cont) < 0) {
-		struct fuse_entry_param entry = {.entry_timeout = 60};
-
 		DFUSE_TRA_DEBUG(parent, "Invalid container uuid");
-		DFUSE_REPLY_ENTRY(parent, req, entry);
+		DFUSE_REPLY_NO_ENTRY(parent, req, 60);
 		return;
 	}
 
@@ -98,10 +96,7 @@ decref:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 err:
 	if (rc == ENOENT) {
-		struct fuse_entry_param entry = {0};
-
-		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
-		DFUSE_REPLY_ENTRY(parent, req, entry);
+		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	}

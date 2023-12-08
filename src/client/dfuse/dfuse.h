@@ -782,13 +782,14 @@ struct fuse_lowlevel_ops dfuse_ops;
 			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
 	} while (0)
 
-#define DFUSE_REPLY_CREATE(_ie, req, entry, fi)                                                    \
+#define DFUSE_REPLY_CREATE(inode, req, entry, fi)                                                  \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_ie, "Returning create");                                          \
-		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
-		(_ie) = NULL;                                                                      \
-		__rc  = fuse_reply_create(req, &entry, fi);                                        \
+		DFUSE_TRA_DEBUG(inode, "Returning create");                                        \
+		ival_update_inode(inode, (entry).entry_timeout);                                   \
+		_Static_assert(IS_IE(inode), "Param is not inode entry");                          \
+		(inode) = NULL;                                                                    \
+		__rc    = fuse_reply_create(req, &entry, fi);                                      \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_create() error");                              \
 	} while (0)
@@ -796,17 +797,30 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %#zx",            \
-				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
 		if ((entry).attr_timeout > 0) {                                                    \
 			(inode)->ie_stat = (entry).attr;                                           \
 			dfuse_mcache_set_time(inode);                                              \
 		}                                                                                  \
-		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi timeout %lf", \
+		ival_update_inode(inode, (entry).entry_timeout);                                   \
+		DFUSE_TRA_DEBUG(inode,                                                             \
+				"Returning entry inode %#lx mode %#o size  %#zx timeout %lf",      \
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size,   \
 				(entry).attr_timeout);                                             \
 		(inode) = NULL;                                                                    \
 		__rc    = fuse_reply_entry(req, &entry);                                           \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_entry() error");                               \
+	} while (0)
+
+#define DFUSE_REPLY_NO_ENTRY(parent, req, timeout)                                                 \
+	do {                                                                                       \
+		int                     __rc;                                                      \
+		struct fuse_entry_param _entry = {};                                               \
+		_entry.entry_timeout           = timeout;                                          \
+		DFUSE_TRA_DEBUG(parent, "Returning negative entry parent %#lx  timeout %lf",       \
+				(parent)->ie_stat.st_ino, _entry.entry_timeout);                   \
+		(parent) = NULL;                                                                   \
+		__rc     = fuse_reply_entry(req, &_entry);                                         \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_entry() error");                               \
 	} while (0)
