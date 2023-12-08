@@ -388,6 +388,7 @@ dss_srv_handler(void *arg)
 	int				 rc;
 	bool				 track_mem = false;
 	bool				 signal_caller = true;
+	bool				 with_chore_queue = dx->dx_iofw && !dx->dx_main_xs;
 
 	rc = dss_xstream_set_affinity(dx);
 	if (rc)
@@ -518,7 +519,7 @@ dss_srv_handler(void *arg)
 		}
 	}
 
-	if (dx->dx_iofw) {
+	if (with_chore_queue) {
 		rc = dss_chore_queue_init(dx);
 		if (rc != 0) {
 			DL_ERROR(rc, "failed to initialize chore queue");
@@ -574,7 +575,7 @@ dss_srv_handler(void *arg)
 	if (dx->dx_comm)
 		dx->dx_progress_started = false;
 
-	if (dx->dx_iofw)
+	if (with_chore_queue)
 		dss_chore_queue_stop(dx);
 
 	wait_all_exited(dx, dmi);
@@ -583,7 +584,7 @@ dss_srv_handler(void *arg)
 		dmi->dmi_dp = NULL;
 	}
 
-	if (dx->dx_iofw)
+	if (with_chore_queue)
 		dss_chore_queue_fini(dx);
 nvme_fini:
 	if (dss_xstream_has_nvme(dx))
