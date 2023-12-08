@@ -164,35 +164,6 @@ ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 	return (atomic_fetch_sub_relaxed(&ie->ie_ref, 1) == 1);
 }
 
-static int
-ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
-{
-	struct dfuse_inode_entry *ie;
-	uint32_t                  oldref = 0;
-	uint32_t                  newref = 0;
-
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-	do {
-		oldref = atomic_load_relaxed(&ie->ie_ref);
-
-		if (oldref < count)
-			break;
-
-		newref = oldref - count;
-
-	} while (!atomic_compare_exchange(&ie->ie_ref, oldref, newref));
-
-	if (oldref < count) {
-		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u", count, oldref);
-		return -DER_INVAL;
-	}
-
-	if (newref == 0)
-		return 1;
-	return 0;
-}
-
 static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
@@ -205,13 +176,12 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t ie_hops = {
-    .hop_key_cmp     = ih_key_cmp,
-    .hop_key_hash    = ih_key_hash,
-    .hop_rec_hash    = ih_rec_hash,
-    .hop_rec_addref  = ih_addref,
-    .hop_rec_decref  = ih_decref,
-    .hop_rec_ndecref = ih_ndecref,
-    .hop_rec_free    = ih_free,
+    .hop_key_cmp    = ih_key_cmp,
+    .hop_key_hash   = ih_key_hash,
+    .hop_rec_hash   = ih_rec_hash,
+    .hop_rec_addref = ih_addref,
+    .hop_rec_decref = ih_decref,
+    .hop_rec_free   = ih_free,
 };
 
 static uint32_t
@@ -1128,7 +1098,6 @@ dfuse_open_handle_init(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
 	oh->doh_linear_read     = true;
 	oh->doh_linear_read_pos = 0;
 	atomic_init(&oh->doh_il_calls, 0);
-	atomic_init(&oh->doh_readdir_number, 0);
 	atomic_init(&oh->doh_write_count, 0);
 	atomic_fetch_add_relaxed(&dfuse_info->di_fh_count, 1);
 }
@@ -1140,8 +1109,9 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_open_count, 0);
 	atomic_init(&ie->ie_open_write_count, 0);
 	atomic_init(&ie->ie_il_count, 0);
-	atomic_init(&ie->ie_readdir_number, 0);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
+
+	D_MUTEX_INIT(&ie->ie_lock, NULL);
 }
 
 void
@@ -1154,10 +1124,11 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",
 			ie->ie_stat.st_ino, ref, DP_DE(ie->ie_name), ie->ie_parent);
 
-	D_ASSERT(ref == 0);
-	D_ASSERT(atomic_load_relaxed(&ie->ie_readdir_number) == 0);
-	D_ASSERT(atomic_load_relaxed(&ie->ie_il_count) == 0);
-	D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 0);
+	D_ASSERTF(ref == 0, "Reference is %d", ref);
+	D_ASSERTF(atomic_load_relaxed(&ie->ie_il_count) == 0, "il_count is %d",
+		  atomic_load_relaxed(&ie->ie_il_count));
+	D_ASSERTF(atomic_load_relaxed(&ie->ie_open_count) == 0, "open_count is %d",
+		  atomic_load_relaxed(&ie->ie_open_count));
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
@@ -1174,6 +1145,8 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 	}
+
+	D_MUTEX_DESTROY(&ie->ie_lock);
 
 	dfuse_ie_free(dfuse_info, ie);
 }

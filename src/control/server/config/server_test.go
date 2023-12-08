@@ -1617,7 +1617,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 					WithStorageClass("ram").
 					WithScmMountPoint("b"),
 			).
-			WithPinnedNumaNode(0).
+			WithPinnedNumaNode(1).
 			WithTargetCount(8)
 	}
 
@@ -1625,6 +1625,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 		configA *engine.Config
 		configB *engine.Config
 		expErr  error
+		expLog  string
 	}{
 		"successful validation": {
 			configA: configA(),
@@ -1690,15 +1691,15 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(2)),
 				),
 			configB: configB().
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
 				),
-			expErr: errors.New("valid PCI addresses"),
+			expErr: errors.New("engine 1 overlaps with entries in engine 0"),
 		},
 		"mismatched scm_class": {
 			configA: configA(),
@@ -1711,6 +1712,21 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				),
 			expErr: FaultConfigScmDiffClass(1, 0),
 		},
+		"mismatched nr bdev_list": {
+			configA: configA().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(1)),
+				),
+			configB: configB().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(3)),
+				),
+			expLog: "engine 1 has 2 but engine 0 has 1",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1722,6 +1738,11 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 
 			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)
+
+			if tc.expLog != "" {
+				hasEntry := strings.Contains(buf.String(), tc.expLog)
+				AssertTrue(t, hasEntry, "expected entries not found in log")
+			}
 		})
 	}
 }
