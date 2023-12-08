@@ -518,13 +518,14 @@ dss_srv_handler(void *arg)
 		}
 	}
 
-	/* Some xstreams do not need this, actually... */
-	rc = dss_chore_queue_init(dx);
-	if (rc != 0) {
-		DL_ERROR(rc, "failed to initialize chore queue");
-		ABT_future_set(dx->dx_shutdown, dx);
-		wait_all_exited(dx, dmi);
-		goto nvme_fini;
+	if (dx->dx_iofw) {
+		rc = dss_chore_queue_init(dx);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to initialize chore queue");
+			ABT_future_set(dx->dx_shutdown, dx);
+			wait_all_exited(dx, dmi);
+			goto nvme_fini;
+		}
 	}
 
 	dmi->dmi_xstream = dx;
@@ -573,7 +574,8 @@ dss_srv_handler(void *arg)
 	if (dx->dx_comm)
 		dx->dx_progress_started = false;
 
-	dss_chore_queue_stop(dx);
+	if (dx->dx_iofw)
+		dss_chore_queue_stop(dx);
 
 	wait_all_exited(dx, dmi);
 	if (dmi->dmi_dp) {
@@ -581,7 +583,8 @@ dss_srv_handler(void *arg)
 		dmi->dmi_dp = NULL;
 	}
 
-	dss_chore_queue_fini(dx);
+	if (dx->dx_iofw)
+		dss_chore_queue_fini(dx);
 nvme_fini:
 	if (dss_xstream_has_nvme(dx))
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
@@ -785,6 +788,8 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 	} else {
 		dx->dx_main_xs	= (xs_id >= dss_sys_xs_nr) && (xs_offset == 0);
 	}
+	/* See the DSS_XS_IOFW case in sched_ult2xs. */
+	dx->dx_iofw = xs_id >= dss_sys_xs_nr && (!dx->dx_main_xs || dss_tgt_offload_xs_nr == 0);
 	dx->dx_dsc_started = false;
 
 	/**

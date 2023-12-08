@@ -94,6 +94,7 @@ struct dss_xstream {
 	unsigned int		dx_timeout;
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
+	bool			dx_iofw;	/* true for DSS_XS_IOFW XS */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 	struct mem_stats	dx_mem_stats;	/* memory usages stats on this xstream */
 #ifdef ULT_MMAP_STACK
