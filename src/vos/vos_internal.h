@@ -27,8 +27,7 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
-D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
+#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\

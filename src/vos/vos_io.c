@@ -67,17 +67,11 @@ struct vos_io_context {
 	/** the total size of the IO */
 	uint64_t		 ic_io_size;
 	/** flags */
-	unsigned int		 ic_update:1,
-				 ic_size_fetch:1,
-				 ic_save_recx:1,
-				 ic_dedup:1, /** candidate for dedup */
-				 ic_dedup_verify:1,
-				 ic_read_ts_only:1,
-				 ic_check_existence:1,
-				 ic_remove:1,
-				 ic_skip_fetch:1,
-				 ic_agg_needed:1,
-				 ic_ec:1; /**< see VOS_OF_EC */
+	unsigned int              ic_update : 1, ic_size_fetch : 1, ic_save_recx : 1,
+	    ic_dedup        : 1, /** candidate for dedup */
+	    ic_dedup_verify : 1, ic_read_ts_only : 1, ic_check_existence : 1, ic_remove : 1,
+	    ic_skip_fetch : 1, ic_agg_needed : 1, ic_skip_akey_support : 1, ic_rebuild : 1,
+	    ic_ec : 1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -639,6 +633,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		ioc->ic_read_ts_only = 1;
 	ioc->ic_remove = ((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
+	ioc->ic_rebuild    = ((vos_flags & VOS_OF_REBUILD) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->ic_iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
@@ -2296,6 +2291,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	bool			 tx_started = false;
+	uint16_t                  minor_epc;
 
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
@@ -2340,9 +2336,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
+	if (dtx_is_valid_handle(dth))
+		minor_epc = dth->dth_op_seq;
+	else
+		minor_epc = ioc->ic_rebuild ? EVT_REBUILD_MINOR_MIN : VOS_SUB_OP_MAX;
+
 	/* Update tree index */
-	err = dkey_update(ioc, pm_ver, dkey, dtx_is_valid_handle(dth) ?
-			  dth->dth_op_seq : VOS_SUB_OP_MAX);
+	err = dkey_update(ioc, pm_ver, dkey, minor_epc);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
 				DP_RC(err));
