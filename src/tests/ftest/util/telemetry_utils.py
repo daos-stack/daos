@@ -563,7 +563,7 @@ class TelemetryUtils():
         "engine_mem_vos_dtx_cmt_ent_48",
         "engine_mem_vos_vos_obj_360",
         "engine_mem_vos_vos_lru_size",
-        "engine_mem_dtx_dtx_leader_handle_336",
+        "engine_mem_dtx_dtx_leader_handle_344",
         "engine_mem_dtx_dtx_entry_40"]
     ENGINE_MEM_TOTAL_USAGE_METRICS = [
         "engine_mem_total_mem"]

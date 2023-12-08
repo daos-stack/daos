@@ -2826,10 +2826,31 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 				pinfo->pi_last_checkpoint = pinfo->pi_last_inflight;
 			}
 
+			/*
+			 * DAV allocator uses valgrind macros to mark certain portions of
+			 * heap as no access for user. Prevent valgrind from reporting
+			 * invalid read while checkpointing these address ranges.
+			 */
+			if (DAOS_ON_VALGRIND) {
+				d_sg_list_t  *sgl = &chkpt_data->cd_sg_list;
+
+				for (i = 0; i < sgl->sg_nr; i++)
+					VALGRIND_DISABLE_ADDR_ERROR_REPORTING_IN_RANGE(
+						sgl->sg_iovs[i].iov_buf, sgl->sg_iovs[i].iov_len);
+			}
+
 			rc = store->stor_ops->so_flush_copy(chkpt_data->cd_fh,
 							    &chkpt_data->cd_sg_list);
 			/** If this fails, it means invalid argument, so assertion here is fine */
 			D_ASSERT(rc == 0);
+
+			if (DAOS_ON_VALGRIND) {
+				d_sg_list_t  *sgl = &chkpt_data->cd_sg_list;
+
+				for (i = 0; i < sgl->sg_nr; i++)
+					VALGRIND_ENABLE_ADDR_ERROR_REPORTING_IN_RANGE(
+						sgl->sg_iovs[i].iov_buf, sgl->sg_iovs[i].iov_len);
+			}
 
 			for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
 				pinfo             = chkpt_data->cd_pages[i];
@@ -2885,6 +2906,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	struct umem_checkpoint_data	*chkpt_data_all;
 	d_list_t			 dirty_list;
 	uint64_t			 chkpt_id = *out_id;
+	int				 rc = 0;
 
 	D_ASSERT(store != NULL);
 	cache = store->cache;
@@ -2900,7 +2922,25 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		return -DER_NOMEM;
 
 	D_INIT_LIST_HEAD(&dirty_list);
-	d_list_splice_init(&cache->ca_pgs_dirty, &dirty_list);
+
+	if (DAOS_FAIL_CHECK(DAOS_MEM_FAIL_CHECKPOINT)) {
+		unsigned int flush_nr = 0, dirty_nr = 0;
+
+		/* Flush half dirty pages to emulate interrupted checkpointing */
+		d_list_for_each_entry(pinfo, &cache->ca_pgs_dirty, pi_dirty_link)
+			dirty_nr++;
+
+		d_list_for_each_entry_safe(pinfo, tmp, &cache->ca_pgs_dirty, pi_dirty_link) {
+			d_list_del_init(&pinfo->pi_dirty_link);
+			d_list_add_tail(&pinfo->pi_dirty_link, &dirty_list);
+			flush_nr++;
+			if (flush_nr >= (dirty_nr / 2))
+				break;
+		}
+		rc = -DER_AGAIN;
+	} else {
+		d_list_splice_init(&cache->ca_pgs_dirty, &dirty_list);
+	}
 
 	cache_flush_pages(cache, &dirty_list, chkpt_data_all, MAX_INFLIGHT_SETS, wait_cb, arg,
 			  &chkpt_id, stats);
@@ -2918,7 +2958,7 @@ done:
 
 	*out_id = chkpt_id;
 
-	return 0;
+	return rc;
 }
 
 static int

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,60 +22,32 @@
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define MGMT_PROTO_CLI_RPC_LIST						\
-	X(MGMT_SVC_RIP,							\
-		DAOS_RPC_NO_REPLY, &CQF_mgmt_svc_rip,			\
-		ds_mgmt_hdlr_svc_rip, NULL),				\
-	X(MGMT_PARAMS_SET,						\
-		0, &CQF_mgmt_params_set,				\
-		ds_mgmt_params_set_hdlr, NULL),				\
-	X(MGMT_PROFILE,							\
-		0, &CQF_mgmt_profile,					\
-		ds_mgmt_profile_hdlr, NULL),				\
-	X(MGMT_POOL_GET_SVCRANKS,					\
-		0, &CQF_mgmt_pool_get_svcranks,				\
-		ds_mgmt_pool_get_svcranks_hdlr, NULL),			\
-	X(MGMT_POOL_FIND,						\
-		0, &CQF_mgmt_pool_find,					\
-		ds_mgmt_pool_find_hdlr, NULL),				\
-	X(MGMT_MARK,							\
-		0, &CQF_mgmt_mark,					\
-		ds_mgmt_mark_hdlr, NULL),				\
-	X(MGMT_GET_BS_STATE,						\
-		0, &CQF_mgmt_get_bs_state,				\
-		ds_mgmt_hdlr_get_bs_state, NULL)
-#define MGMT_PROTO_SRV_RPC_LIST						\
-	X(MGMT_TGT_CREATE,						\
-		0, &CQF_mgmt_tgt_create,				\
-		ds_mgmt_hdlr_tgt_create,				\
-		&ds_mgmt_hdlr_tgt_create_co_ops),			\
-	X(MGMT_TGT_DESTROY,						\
-		0, &CQF_mgmt_tgt_destroy,				\
-		ds_mgmt_hdlr_tgt_destroy, NULL),			\
-	X(MGMT_TGT_PARAMS_SET,						\
-		0, &CQF_mgmt_tgt_params_set,				\
-		ds_mgmt_tgt_params_set_hdlr, NULL),			\
-	X(MGMT_TGT_PROFILE,						\
-		0, &CQF_mgmt_profile,					\
-		ds_mgmt_tgt_profile_hdlr, NULL),			\
-	X(MGMT_TGT_MAP_UPDATE,						\
-		0, &CQF_mgmt_tgt_map_update,				\
-		ds_mgmt_hdlr_tgt_map_update,				\
-		&ds_mgmt_hdlr_tgt_map_update_co_ops),			\
-	X(MGMT_TGT_MARK,						\
-		0, &CQF_mgmt_mark,					\
-		ds_mgmt_tgt_mark_hdlr, NULL)
-
-
+#define MGMT_PROTO_CLI_RPC_LIST                                                                    \
+	X(MGMT_SVC_RIP, DAOS_RPC_NO_REPLY, &CQF_mgmt_svc_rip, ds_mgmt_hdlr_svc_rip, NULL)          \
+	X(MGMT_PARAMS_SET, 0, &CQF_mgmt_params_set, ds_mgmt_params_set_hdlr, NULL)                 \
+	X(MGMT_PROFILE, 0, &CQF_mgmt_profile, ds_mgmt_profile_hdlr, NULL)                          \
+	X(MGMT_POOL_GET_SVCRANKS, 0, &CQF_mgmt_pool_get_svcranks, ds_mgmt_pool_get_svcranks_hdlr,  \
+	  NULL)                                                                                    \
+	X(MGMT_POOL_FIND, 0, &CQF_mgmt_pool_find, ds_mgmt_pool_find_hdlr, NULL)                    \
+	X(MGMT_MARK, 0, &CQF_mgmt_mark, ds_mgmt_mark_hdlr, NULL)                                   \
+	X(MGMT_GET_BS_STATE, 0, &CQF_mgmt_get_bs_state, ds_mgmt_hdlr_get_bs_state, NULL)
+#define MGMT_PROTO_SRV_RPC_LIST                                                                    \
+	X(MGMT_TGT_CREATE, 0, &CQF_mgmt_tgt_create, ds_mgmt_hdlr_tgt_create,                       \
+	  &ds_mgmt_hdlr_tgt_create_co_ops)                                                         \
+	X(MGMT_TGT_DESTROY, 0, &CQF_mgmt_tgt_destroy, ds_mgmt_hdlr_tgt_destroy, NULL)              \
+	X(MGMT_TGT_PARAMS_SET, 0, &CQF_mgmt_tgt_params_set, ds_mgmt_tgt_params_set_hdlr, NULL)     \
+	X(MGMT_TGT_PROFILE, 0, &CQF_mgmt_profile, ds_mgmt_tgt_profile_hdlr, NULL)                  \
+	X(MGMT_TGT_MAP_UPDATE, 0, &CQF_mgmt_tgt_map_update, ds_mgmt_hdlr_tgt_map_update,           \
+	  &ds_mgmt_hdlr_tgt_map_update_co_ops)                                                     \
+	X(MGMT_TGT_MARK, 0, &CQF_mgmt_mark, ds_mgmt_tgt_mark_hdlr, NULL)
 
 /* Define for RPC enum population below */
-#define X(a, b, c, d, e) a
+#define X(a, ...) a,
 
 enum mgmt_operation {
-	MGMT_PROTO_CLI_RPC_LIST,
-	MGMT_PROTO_CLI_COUNT,
+	MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_CLI_COUNT,
 	MGMT_PROTO_CLI_LAST = MGMT_PROTO_CLI_COUNT - 1,
-	MGMT_PROTO_SRV_RPC_LIST,
+	MGMT_PROTO_SRV_RPC_LIST
 };
 
 #undef X

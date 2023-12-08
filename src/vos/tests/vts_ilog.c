@@ -158,7 +158,7 @@ fake_tx_log_add(struct umem_instance *umm, umem_off_t offset, uint32_t *tx_id,
 	uint32_t		 idx;
 	int			 rc;
 
-	rc = lrua_allocx(array, &idx, epoch, &entry);
+	rc = lrua_allocx(array, &idx, epoch, &entry, NULL);
 	assert_rc_equal(rc, 0);
 	assert_non_null(entry);
 

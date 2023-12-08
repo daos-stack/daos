@@ -347,8 +347,12 @@ static int
 vos_meta_flush_post(daos_handle_t fh, int err)
 {
 	struct bio_desc	*biod = (struct bio_desc *)fh.cookie;
+	int		 rc;
 
-	return bio_iod_post(biod, err);
+	rc = bio_iod_post(biod, err);
+	bio_iod_free(biod);
+
+	return rc;
 }
 
 static inline int
