@@ -619,6 +619,27 @@ struct dss_chore_queue {
 	ABT_thread chq_ult;
 };
 
+static void
+dss_chore_diy_internal(struct dss_chore *chore)
+{
+reenter:
+	D_DEBUG(DB_TRACE, "%p: status=%d\n", chore, chore->cho_status);
+	chore->cho_status = chore->cho_func(chore, chore->cho_status == DSS_CHORE_READY);
+	D_ASSERT(chore->cho_status != DSS_CHORE_NEW);
+	if (chore->cho_status == DSS_CHORE_READY) {
+		ABT_thread_yield();
+		goto reenter;
+	}
+}
+
+static void
+dss_chore_ult(void *arg)
+{
+	struct dss_chore *chore = arg;
+
+	dss_chore_diy_internal(chore);
+}
+
 /**
  * Add \a chore for \a func to the chore queue of some other xstream.
  *
@@ -637,6 +658,17 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
 
 	chore->cho_status = DSS_CHORE_NEW;
 	chore->cho_func   = func;
+
+	/*
+	 * The dss_chore_queue_ult approach may get insufficient scheduling on
+	 * a "main" xstream when the chore queue is long. So we fall back to
+	 * the one-ULT-per-chore approach if there's no helper xstream.
+	 */
+	if (dss_tgt_offload_xs_nr == 0) {
+		D_INIT_LIST_HEAD(&chore->cho_link);
+		return dss_ult_create(dss_chore_ult, chore, DSS_XS_IOFW, info->dmi_tgt_id,
+				      0 /* stack_size */, NULL /* ult */);
+	}
 
 	/* Find the chore queue. */
 	xs_id = sched_ult2xs(DSS_XS_IOFW, info->dmi_tgt_id);
@@ -669,36 +701,42 @@ dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
 void
 dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func)
 {
-	enum dss_chore_status status;
-	bool                  is_reentrance = false;
+	D_INIT_LIST_HEAD(&chore->cho_link);
+	chore->cho_status = DSS_CHORE_NEW;
+	chore->cho_func   = func;
 
-reenter:
-	D_DEBUG(DB_TRACE, "%p: status=%d\n", chore, chore->cho_status);
-	status = func(chore, is_reentrance);
-	D_ASSERT(status != DSS_CHORE_NEW);
-	if (status == DSS_CHORE_READY) {
-		ABT_thread_yield();
-		is_reentrance = true;
-		goto reenter;
-	}
+	dss_chore_diy_internal(chore);
 }
 
 static void
 dss_chore_queue_ult(void *arg)
 {
 	struct dss_chore_queue *queue = arg;
+	d_list_t                list  = D_LIST_HEAD_INIT(list);
 
 	D_ASSERT(queue != NULL);
 	D_DEBUG(DB_TRACE, "begin\n");
 
 	for (;;) {
-		struct dss_chore *chore = NULL;
-		bool              stop  = false;
+		struct dss_chore *chore;
+		struct dss_chore *chore_tmp;
+		bool              stop = false;
 
+		/*
+		 * The scheduling order shall be
+		 *
+		 *   [queue->chq_list] [list],
+		 *
+		 * where list contains chores that have returned
+		 * DSS_CHORE_READY in the previous iteration.
+		 */
 		ABT_mutex_lock(queue->chq_mutex);
 		for (;;) {
-			chore = d_list_pop_entry(&queue->chq_list, struct dss_chore, cho_link);
-			if (chore != NULL)
+			if (!d_list_empty(&queue->chq_list)) {
+				d_list_splice_init(&queue->chq_list, &list);
+				break;
+			}
+			if (!d_list_empty(&list))
 				break;
 			if (queue->chq_stop) {
 				stop = true;
@@ -711,16 +749,16 @@ dss_chore_queue_ult(void *arg)
 		if (stop)
 			break;
 
-		D_DEBUG(DB_TRACE, "%p: status=%d\n", chore, chore->cho_status);
-		chore->cho_status = chore->cho_func(chore, chore->cho_status == DSS_CHORE_READY);
-		D_ASSERT(chore->cho_status != DSS_CHORE_NEW);
-		if (chore->cho_status == DSS_CHORE_READY) {
-			ABT_mutex_lock(queue->chq_mutex);
-			d_list_add_tail(&chore->cho_link, &queue->chq_list);
-			ABT_mutex_unlock(queue->chq_mutex);
-		}
+		d_list_for_each_entry_safe(chore, chore_tmp, &list, cho_link) {
+			bool is_reentrance = (chore->cho_status == DSS_CHORE_READY);
 
-		ABT_thread_yield();
+			D_DEBUG(DB_TRACE, "%p: status=%d\n", chore, chore->cho_status);
+			chore->cho_status = chore->cho_func(chore, is_reentrance);
+			D_ASSERT(chore->cho_status != DSS_CHORE_NEW);
+			if (chore->cho_status == DSS_CHORE_DONE)
+				d_list_del_init(&chore->cho_link);
+			ABT_thread_yield();
+		}
 	}
 
 	D_DEBUG(DB_TRACE, "end\n");
