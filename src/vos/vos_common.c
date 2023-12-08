@@ -13,6 +13,7 @@
 
 #include <fcntl.h>
 #include <daos/common.h>
+#include <daos/metrics.h>
 #include <daos/rpc.h>
 #include <daos/lru.h>
 #include <daos/btree_class.h>
@@ -795,11 +796,11 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	return vp_metrics;
 }
 
-struct dss_module_metrics vos_metrics = {
-	.dmm_tags = DAOS_TGT_TAG,
-	.dmm_init = vos_metrics_alloc,
-	.dmm_fini = vos_metrics_free,
-	.dmm_nr_metrics = vos_metrics_count,
+struct daos_module_metrics vos_metrics = {
+    .dmm_tags       = DAOS_TGT_TAG,
+    .dmm_init       = vos_metrics_alloc,
+    .dmm_fini       = vos_metrics_free,
+    .dmm_nr_metrics = vos_metrics_count,
 };
 
 struct dss_module vos_srv_module =  {
