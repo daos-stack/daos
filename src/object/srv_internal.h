@@ -107,16 +107,6 @@ struct migrate_pool_tls {
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
-/*
- * Report latency on a per-I/O size.
- * Buckets starts at [0; 256B[ and are increased by power of 2
- * (i.e. [256B; 512B[, [512B; 1KB[) up to [4MB; infinity[
- * Since 4MB = 2^22 and 256B = 2^8, this means
- * (22 - 8 + 1) = 15 buckets plus the 4MB+ bucket, so
- * 16 buckets in total.
- */
-#define NR_LATENCY_BUCKETS 16
-
 struct obj_pool_metrics {
 	/** Count number of total per-opcode requests (type = counter) */
 	struct d_tm_node_t	*opm_total[OBJ_PROTO_CLI_COUNT];
@@ -166,24 +156,6 @@ static inline struct obj_tls *
 obj_tls_get()
 {
 	return dss_module_key_get(dss_tls_get(), &obj_module_key);
-}
-
-static inline unsigned int
-lat_bucket(uint64_t size)
-{
-	int nr;
-
-	if (size <= 256)
-		return 0;
-
-	/** return number of leading zero-bits */
-	nr =  __builtin_clzl(size - 1);
-
-	/** >4MB, return last bucket */
-	if (nr < 42)
-		return NR_LATENCY_BUCKETS - 1;
-
-	return 56 - nr;
 }
 
 enum latency_type {

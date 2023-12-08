@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +10,10 @@
 #define DDSUBSYS	DDFAC(object)
 
 #include <daos_types.h>
+#include <daos_types.h>
+#include <daos/job.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 #include "obj_internal.h"
 
 static daos_size_t
@@ -85,6 +89,61 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 	if (need_free)
 		D_FREE(iods);
 }
+
+int
+obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *op,
+		    char *desc, bool server)
+{
+	unsigned int	bucket_max = 256;
+	int		i;
+	int		rc = 0;
+
+	for (i = 0; i < NR_LATENCY_BUCKETS; i++) {
+		char *path;
+
+		if (server) {
+			if (bucket_max < 1024) /** B */
+				D_ASPRINTF(path, "io/latency/%s/%uB/tgt_%u",
+					   op, bucket_max, tgt_id);
+			else if (bucket_max < 1024 * 1024) /** KB */
+				D_ASPRINTF(path, "io/latency/%s/%uKB/tgt_%u",
+					   op, bucket_max / 1024, tgt_id);
+			else if (bucket_max <= 1024 * 1024 * 4) /** MB */
+				D_ASPRINTF(path, "io/latency/%s/%uMB/tgt_%u",
+					   op, bucket_max / (1024 * 1024), tgt_id);
+			else /** >4MB */
+				D_ASPRINTF(path, "io/latency/%s/GT4MB/tgt_%u",
+					   op, tgt_id);
+		} else {
+			pid_t pid = getpid();
+			unsigned long tid = pthread_self();
+
+			if (bucket_max < 1024) /** B */
+				D_ASPRINTF(path, "%s/%u/%lu/io/latency/%s/%uB",
+					   dc_jobid, pid, tid, op, bucket_max);
+			else if (bucket_max < 1024 * 1024) /** KB */
+				D_ASPRINTF(path, "%s/%u/%lu/io/latency/%s/%uKB",
+					   dc_jobid, pid, tid, op, bucket_max / 1024);
+			else if (bucket_max <= 1024 * 1024 * 4) /** MB */
+				D_ASPRINTF(path, "%s/%u/%lu/io/latency/%s/%uMB",
+					   dc_jobid, pid, tid, op, bucket_max / (1024 * 1024));
+			else /** >4MB */
+				D_ASPRINTF(path, "%s/%u/%lu/io/latency/%s/GT4MB",
+					   dc_jobid, pid, tid, op);
+
+		}
+		rc = d_tm_add_metric(&tm[i], D_TM_STATS_GAUGE, desc, "us", path);
+		if (rc)
+			D_WARN("Failed to create per-I/O size latency "
+			       "sensor: "DF_RC"\n", DP_RC(rc));
+		D_FREE(path);
+
+		bucket_max <<= 1;
+	}
+
+	return rc;
+}
+
 
 struct recx_rec {
 	daos_recx_t	*rr_recx;

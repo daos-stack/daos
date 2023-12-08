@@ -1,7 +1,7 @@
 """Build DAOS client"""
 
 LIBDAOS_SRC = ['agent.c', 'array.c', 'container.c', 'event.c', 'init.c', 'job.c', 'kv.c', 'mgmt.c',
-               'object.c', 'pool.c', 'rpc.c', 'task.c', 'tx.c', 'pipeline.c']
+               'object.c', 'pool.c', 'rpc.c', 'task.c', 'tx.c', 'pipeline.c', 'metrics.c']
 
 
 def scons():

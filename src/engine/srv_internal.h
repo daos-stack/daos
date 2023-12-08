@@ -314,10 +314,6 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	return dss_abterr2der(rc);
 }
 
-/* tls.c */
-void dss_tls_fini(struct dss_thread_local_storage *dtls);
-struct dss_thread_local_storage *dss_tls_init(int tag, int xs_id, int tgt_id);
-
 /* server_iv.c */
 void ds_iv_init(void);
 void ds_iv_fini(void);
