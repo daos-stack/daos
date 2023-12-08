@@ -63,9 +63,9 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 
 // Package-local function variables for mocking in unit tests.
 var (
-	// Use to stub bdev scan response in StorageScan() unit tests.
-	scanBdevs       = bdevScan
-	scanEngineBdevs = bdevScanEngine
+	scanBdevs        = bdevScan         // StorageScan() unit tests
+	scanEngineBdevs  = bdevScanEngine   // bdevScan() unit tests
+	computeMetaRdbSz = metaRdbComputeSz // TODO unit tests
 )
 
 type scanBdevsFn func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
@@ -104,11 +104,13 @@ func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvm
 	for _, ei := range instances {
 		eReq := new(ctlpb.ScanNvmeReq)
 		*eReq = *req
-		ms, rs, err := cs.computeMetaRdbSize(ei, nsps)
-		if err != nil {
-			return nil, errors.Wrap(err, "computing meta and rdb size")
+		if req.Meta {
+			ms, rs, err := computeMetaRdbSz(cs, ei, nsps)
+			if err != nil {
+				return nil, errors.Wrap(err, "computing meta and rdb size")
+			}
+			eReq.MetaSize, eReq.RdbSize = ms, rs
 		}
-		eReq.MetaSize, eReq.RdbSize = ms, rs
 
 		respEng, err := scanEngineBdevs(ctx, ei, eReq)
 		if err != nil {
@@ -313,7 +315,8 @@ func (c *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 	mdCapStr, err := engineCfg.GetEnvVar(daos.DaosMdCapEnv)
 	if err != nil {
 		c.log.Debugf("using default RDB file size with engine %d: %s (%d Bytes)",
-			engineCfg.Index, humanize.Bytes(daos.DefaultDaosMdCapSize), daos.DefaultDaosMdCapSize)
+			engineCfg.Index, humanize.Bytes(daos.DefaultDaosMdCapSize),
+			daos.DefaultDaosMdCapSize)
 		return uint64(daos.DefaultDaosMdCapSize), nil
 	}
 
@@ -332,7 +335,7 @@ func (c *ControlService) getRdbSize(engineCfg *engine.Config) (uint64, error) {
 // Compute the maximal size of the metadata to allow the engine to fill the WallMeta field
 // response.  The maximal metadata (i.e. VOS index file) size should be equal to the SCM available
 // size divided by the number of targets of the engine.
-func (cs *ControlService) computeMetaRdbSize(ei Engine, nsps []*ctlpb.ScmNamespace) (md_size, rdb_size uint64, errOut error) {
+func metaRdbComputeSz(cs *ControlService, ei Engine, nsps []*ctlpb.ScmNamespace) (md_size, rdb_size uint64, errOut error) {
 	for _, nsp := range nsps {
 		mp := nsp.GetMount()
 		if mp == nil {
