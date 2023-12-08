@@ -1555,28 +1555,24 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		       &rc, false)) {
 		if (rc == 0) {
 			if (ioc->ic_read_ts_only)
-				goto set_ioc;
+				goto out;
+
 			if (ioc->ic_obj != NULL &&
 			    has_uncertainty(ioc, &ioc->ic_obj->obj_ilog_info))
 				goto fetch_dkey;
 			for (i = 0; i < iod_nr; i++)
 				iod_empty_sgl(ioc, i);
-			goto set_ioc;
 		}
 		goto out;
 	}
 fetch_dkey:
 	if (dkey == NULL || dkey->iov_len == 0) {
-		if (ioc->ic_read_ts_only)
-			goto set_ioc;
-		D_GOTO(out, rc = -DER_INVAL);
+		if (!ioc->ic_read_ts_only)
+			rc = -DER_INVAL;
+	} else {
+		rc = dkey_fetch(ioc, dkey);
 	}
 
-	rc = dkey_fetch(ioc, dkey);
-	if (rc != 0)
-		goto out;
-set_ioc:
-	*ioh = vos_ioc2ioh(ioc);
 out:
 	vos_dth_set(NULL, ioc->ic_cont->vc_pool->vp_sysdb);
 
@@ -1595,9 +1591,13 @@ out:
 	if (rc != 0) {
 		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
 		ioc->ic_recx_lists = NULL;
-		return vos_fetch_end(vos_ioc2ioh(ioc), NULL, rc);
+		rc = vos_fetch_end(vos_ioc2ioh(ioc), NULL, rc);
+		*ioh = DAOS_HDL_INVAL;
+	} else {
+		*ioh = vos_ioc2ioh(ioc);
 	}
-	return 0;
+
+	return rc;
 }
 
 static umem_off_t
