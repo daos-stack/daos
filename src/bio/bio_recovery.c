@@ -445,23 +445,16 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 	}
 
 	if (rc) {
-		bio_notify_ras_eventf(RAS_DEVICE_STATE_CHANGE, RAS_TYPE_STATE_CHANGE,
-				      RAS_SEV_ERROR, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "Device: "DF_UUID" blobstore state transition error! "
-				      "tgt: %d, %s -> %s\n", DP_UUID(bbs->bb_dev->bb_uuid),
-				      bbs->bb_owner_xs->bxc_tgt_id,
-				      bio_state_enum_to_str(bbs->bb_state),
-				      bio_state_enum_to_str(new_state));
+		D_ERROR("Blobstore state transition error! tgt: %d, %s -> %s\n",
+			bbs->bb_owner_xs->bxc_tgt_id,
+			bio_state_enum_to_str(bbs->bb_state),
+			bio_state_enum_to_str(new_state));
 	} else {
-		bio_notify_ras_eventf(RAS_DEVICE_STATE_CHANGE, RAS_TYPE_STATE_CHANGE,
-				      RAS_SEV_NOTICE, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "Device: "DF_UUID" blobstore state transitioned. "
-				      "tgt: %d, %s -> %s\n", DP_UUID(bbs->bb_dev->bb_uuid),
-				      bbs->bb_owner_xs->bxc_tgt_id,
-				      bio_state_enum_to_str(bbs->bb_state),
-				      bio_state_enum_to_str(new_state));
+		D_DEBUG(DB_MGMT, "Blobstore state transitioned. "
+			"tgt: %d, %s -> %s\n",
+			bbs->bb_owner_xs->bxc_tgt_id,
+			bio_state_enum_to_str(bbs->bb_state),
+			bio_state_enum_to_str(new_state));
 
 		/* Print a console message */
 		D_PRINT("Blobstore state transitioned. tgt: %d, %s -> %s\n",

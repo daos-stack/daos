@@ -55,11 +55,9 @@
 	X(RAS_SYSTEM_START_FAILED,		"system_start_failed")				\
 	X(RAS_SYSTEM_STOP_FAILED,		"system_stop_failed")				\
 	X(RAS_DEVICE_SET_FAULTY,		"device_set_faulty")				\
-	X(RAS_DEVCIE_FAULTY_CRITERIA_REACH,	"device_faulty_criteria_reach")			\
 	X(RAS_DEVICE_MEDIA_ERROR,		"device_media_error")				\
 	X(RAS_DEVICE_UNPLUGGED,			"device_unplugged")				\
 	X(RAS_DEVICE_PLUGGED,			"device_plugged")				\
-	X(RAS_DEVICE_STATE_CHANGE,		"device_state_change")				\
 	X(RAS_DEVICE_REPLACE,			"device_replace")
 
 /** Define RAS event enum */

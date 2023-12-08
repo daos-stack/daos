@@ -713,22 +713,14 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 		return false;
 
 	if (dev_stats->bio_read_errs + dev_stats->bio_write_errs > glb_criteria.fc_max_io_errs) {
-		bio_notify_ras_eventf(RAS_DEVCIE_FAULTY_CRITERIA_REACH, RAS_TYPE_INFO,
-				      RAS_SEV_ERROR, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "NVME: "DF_UUID" I/O errors %u/%u reach limit %u\n",
-				      DP_UUID(bbs->bb_dev->bb_uuid), dev_stats->bio_read_errs,
-				      dev_stats->bio_write_errs, glb_criteria.fc_max_io_errs);
+		D_ERROR("NVMe I/O errors %u/%u reached limit %u\n", dev_stats->bio_read_errs,
+			dev_stats->bio_write_errs, glb_criteria.fc_max_io_errs);
 		return true;
 	}
 
 	if (dev_stats->checksum_errs > glb_criteria.fc_max_csum_errs) {
-		bio_notify_ras_eventf(RAS_DEVCIE_FAULTY_CRITERIA_REACH, RAS_TYPE_INFO,
-				      RAS_SEV_ERROR, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "NVME: "DF_UUID" csum errors %u reach limit %u\n",
-				      DP_UUID(bbs->bb_dev->bb_uuid), dev_stats->checksum_errs,
-				      glb_criteria.fc_max_csum_errs);
+		D_ERROR("NVME csum errors %u reached limit %u\n", dev_stats->checksum_errs,
+			glb_criteria.fc_max_csum_errs);
 		return true;
 	}
 

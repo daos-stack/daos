@@ -737,6 +737,11 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	D_ASSERT(d_bdev->bb_desc != NULL);
 	d_bdev->bb_removed = 1;
 
+	bio_notify_ras_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
+			      RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
+			      NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
+			      DP_UUID(d_bdev->bb_uuid));
+
 	/* The bio_bdev is still under construction */
 	if (d_list_empty(&d_bdev->bb_link)) {
 		D_ASSERT(d_bdev->bb_blobstore == NULL);
@@ -745,11 +750,6 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 			d_bdev->bb_name);
 		return;
 	}
-
-	bio_notify_ras_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
-			      RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
-			      NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
-			      DP_UUID(d_bdev->bb_uuid));
 
 	bbs = d_bdev->bb_blobstore;
 	/* A new device isn't used by DAOS yet */
