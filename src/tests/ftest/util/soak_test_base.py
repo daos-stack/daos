@@ -4,33 +4,32 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import multiprocessing
 import os
+import random
+import socket
+import threading
 import time
 from datetime import datetime, timedelta
-import multiprocessing
-import threading
-import random
 from filecmp import cmp
 from getpass import getuser
-import socket
 
+import slurm_utils
+from agent_utils import include_local_host
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from agent_utils import include_local_host
+from dmg_utils import DmgCommand
 from exception_utils import CommandFailure
 from general_utils import journalctl_time
 from host_utils import get_local_host
-import slurm_utils
-from dmg_utils import DmgCommand
-from run_utils import run_local, run_remote, RunException
-from soak_utils import ddhhmmss_format, add_pools, \
-    launch_snapshot, launch_exclude_reintegrate, launch_extend, \
-    create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
-    build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
-    create_racer_cmdline, run_event_check, run_monitor_check, \
-    create_mdtest_cmdline, reserved_file_copy, run_metrics_check, \
-    get_journalctl, get_daos_server_logs, create_macsio_cmdline, \
-    create_app_cmdline, create_dm_cmdline, launch_vmd_identify_check
+from run_utils import RunException, run_local, run_remote
+from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfuse,
+                        create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
+                        create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
+                        create_racer_cmdline, ddhhmmss_format, get_daos_server_logs, get_harassers,
+                        get_journalctl, launch_exclude_reintegrate, launch_extend,
+                        launch_server_stop_start, launch_snapshot, launch_vmd_identify_check,
+                        reserved_file_copy, run_event_check, run_metrics_check, run_monitor_check)
 
 
 class SoakTestBase(TestWithServers):

@@ -5,9 +5,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import sys
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 from general_utils import bytes_to_human
 
 

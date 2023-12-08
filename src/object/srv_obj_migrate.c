@@ -928,7 +928,8 @@ out:
 
 static int
 __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
-			      daos_iod_t *iods, daos_epoch_t **ephs, uint32_t iods_num,
+			      daos_iod_t *iods, daos_epoch_t fetch_eph,
+			      daos_epoch_t **ephs, uint32_t iods_num,
 			      struct ds_cont_child *ds_cont, bool encode)
 {
 	d_sg_list_t	 sgls[OBJ_ENUM_UNPACK_MAX_IODS];
@@ -959,7 +960,7 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	D_DEBUG(DB_REBUILD, DF_UOID" mrone %p dkey "DF_KEY" nr %d eph "DF_U64"\n",
 		DP_UOID(mrone->mo_oid), mrone, DP_KEY(&mrone->mo_dkey), iods_num, mrone->mo_epoch);
 
-	rc = mrone_obj_fetch(mrone, oh, sgls, iods, iods_num, mrone->mo_epoch, DIOF_FOR_MIGRATION,
+	rc = mrone_obj_fetch(mrone, oh, sgls, iods, iods_num, fetch_eph, DIOF_FOR_MIGRATION,
 			     NULL);
 	if (rc) {
 		D_ERROR("migrate dkey "DF_KEY" failed: "DF_RC"\n",
@@ -1022,22 +1023,54 @@ static int
 migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
 {
+	int i;
+	int j;
 	int rc = 0;
 
 	/* If it is parity recxs from another replica, then let's encode it anyway */
-	if (mrone->mo_iods_num_from_parity > 0) {
-		rc = __migrate_fetch_update_parity(mrone, oh, mrone->mo_iods_from_parity,
-						   mrone->mo_iods_update_ephs_from_parity,
-						   mrone->mo_iods_num_from_parity, ds_cont,
-						   true);
+	for (i = 0; i < mrone->mo_iods_num_from_parity; i++) {
+		for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++) {
+			daos_iod_t iod = mrone->mo_iods_from_parity[i];
+			daos_epoch_t fetch_eph;
+			daos_epoch_t update_eph;
+			daos_epoch_t *update_eph_p;
 
-		if (rc)
-			return rc;
+			iod.iod_nr = 1;
+			iod.iod_recxs = &mrone->mo_iods_from_parity[i].iod_recxs[j];
+			/* If the epoch is higher than EC aggregate boundary, then
+			 * it should use stable epoch to fetch the data, since
+			 * the data could be aggregated independently on parity
+			 * and data shard, so using stable epoch could make sure
+			 * the consistency view during rebuild. And also EC aggregation
+			 * should already aggregate the parity, so there should not
+			 * be any partial update on the parity as well.
+			 *
+			 * Otherwise there might be partial update on this rebuilding
+			 * shard, so let's use the epoch from the parity shard to fetch
+			 * the data here, which will make sure partial update will not
+			 * be fetched here. And also EC aggregation is being disabled
+			 * at the moment, so there should not be any vos aggregation
+			 * impact this process as well.
+			 */
+			if (ds_cont->sc_ec_agg_eph_boundary >
+			    mrone->mo_iods_update_ephs_from_parity[i][j])
+				fetch_eph = mrone->mo_epoch;
+			else
+				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+
+			update_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+			update_eph_p = &update_eph;
+			rc = __migrate_fetch_update_parity(mrone, oh, &iod, fetch_eph, &update_eph_p,
+							   mrone->mo_iods_num_from_parity, ds_cont,
+							   true);
+			if (rc)
+				return rc;
+		}
 	}
 
 	/* Otherwise, keep it as replicate recx */
 	if (mrone->mo_iod_num > 0) {
-		rc = __migrate_fetch_update_parity(mrone, oh, mrone->mo_iods,
+		rc = __migrate_fetch_update_parity(mrone, oh, mrone->mo_iods, mrone->mo_epoch,
 						   mrone->mo_iods_update_ephs,
 						   mrone->mo_iod_num, ds_cont, false);
 	}
@@ -1350,21 +1383,39 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	/* For EC object, if the migration include both extent from parity rebuild
 	 * and extent from replicate rebuild, let rebuild the extent with parity first,
 	 * then extent from replication.
-	 *
-	 * Since the parity shard epoch should be higher or equal to the data shard epoch,
-	 * so let's use the minimum epochs of all parity shards as the update epoch of
-	 * this data shard.
 	 */
-
 	for (i = 0; i < mrone->mo_iods_num_from_parity; i++) {
 		for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++) {
 			daos_iod_t iod = mrone->mo_iods_from_parity[i];
+			daos_epoch_t fetch_eph;
+			daos_epoch_t update_eph;
 
 			iod.iod_nr = 1;
 			iod.iod_recxs = &mrone->mo_iods_from_parity[i].iod_recxs[j];
-			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1,
-							 mrone->mo_iods_update_ephs_from_parity[i][j],
-							 mrone->mo_iods_update_ephs_from_parity[i][j],
+
+			/* If the epoch is higher than EC aggregate boundary, then
+			 * it should use stable epoch to fetch the data, since
+			 * the data could be aggregated independently on parity
+			 * and data shard, so using stable epoch could make sure
+			 * the consistency view during rebuild. And also EC aggregation
+			 * should already aggregate the parity, so there should not
+			 * be any partial update on the parity as well.
+			 *
+			 * Otherwise there might be partial update on this rebuilding
+			 * shard, so let's use the epoch from the parity shard to fetch
+			 * the data here, which will make sure partial update will not
+			 * be fetched here. And also EC aggregation is being disabled
+			 * at the moment, so there should not be any vos aggregation
+			 * impact this process as well.
+			 */
+			if (ds_cont->sc_ec_agg_eph_boundary >
+			    mrone->mo_iods_update_ephs_from_parity[i][j])
+				fetch_eph = mrone->mo_epoch;
+			else
+				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+
+			update_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1, fetch_eph, update_eph,
 							 DIOF_EC_RECOV_FROM_PARITY, ds_cont);
 			if (rc != 0)
 				D_GOTO(out, rc);
@@ -3163,6 +3214,16 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 	if (rc) {
 		D_ERROR("ds_cont_fetch_snaps failed: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_put, rc);
+	}
+
+	rc = ds_cont_fetch_ec_agg_boundary(dp->sp_iv_ns, cont_uuid);
+	if (rc) {
+		/* Sometime it may too early to fetch the EC boundary,
+		 * since EC boundary does not start yet, which is forbidden
+		 * during rebuild anyway, so let's continue.
+		 */
+		D_DEBUG(DB_REBUILD, DF_UUID" fetch agg_boundary failed: "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
 	}
 
 	arg.yield_freq	= DEFAULT_YIELD_FREQ;

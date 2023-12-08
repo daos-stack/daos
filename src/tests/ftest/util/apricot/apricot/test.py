@@ -5,41 +5,39 @@
 """
 # pylint: disable=too-many-lines
 
-from ast import literal_eval
-import os
 import json
+import os
+import random
 import re
 import sys
+from ast import literal_eval
 from time import time
-import random
-
-from avocado import fail_on, skip, TestFail
-from avocado import Test as avocadoTest
-from avocado.core import exceptions
-from ClusterShell.NodeSet import NodeSet
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
 
 from agent_utils import DaosAgentManager, include_local_host
+from avocado import Test as avocadoTest
+from avocado import TestFail, fail_on, skip
+from avocado.core import exceptions
 from cart_ctl_utils import CartCtl
+from ClusterShell.NodeSet import NodeSet
 from command_utils_base import EnvironmentVariables
-from exception_utils import CommandFailure
 from daos_utils import DaosCommand
 from distro_utils import detect
 from dmg_utils import get_dmg_command
+from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
-from general_utils import \
-    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command, \
-    dump_engines_stacks, get_avocado_config_value, set_avocado_config_value, \
-    nodeset_append_suffix, dict_to_str
-from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
-from logger_utils import TestLogger
-from server_utils import DaosServerManager
-from run_utils import stop_processes, run_remote, command_as_user
-from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
-from test_utils_container import TestContainer
-from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
-from write_host_file import write_host_file
+from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
+                           get_avocado_config_value, get_default_config_file, get_file_listing,
+                           nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
+from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from job_manager_utils import get_job_manager
+from logger_utils import TestLogger
+from pydaos.raw import DaosApiError, DaosContext, DaosLog
+from run_utils import command_as_user, run_remote, stop_processes
+from server_utils import DaosServerManager
+from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
+from test_utils_container import TestContainer
+from test_utils_pool import POOL_NAMESPACE, LabelGenerator, add_pool
+from write_host_file import write_host_file
 
 
 def skipForTicket(ticket):  # pylint: disable=invalid-name

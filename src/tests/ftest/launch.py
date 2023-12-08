@@ -4,6 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
+
 import getpass
 import json
 import logging
