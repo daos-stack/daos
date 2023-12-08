@@ -1090,8 +1090,8 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		/* clear any orphaned blobs that are associated with this uuid */
 		rc = clear_vos_pool(tc_in->tc_pool_uuid);
 		if (rc != 0) {
-			D_ERROR(DF_UUID ": failed to clear orphan blobs: " DF_RC "\n",
-				DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": failed to clear orphan blobs",
+				 DP_UUID(tc_in->tc_pool_uuid));
 			goto out;
 		}
 
