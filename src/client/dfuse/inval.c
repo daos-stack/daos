@@ -53,6 +53,7 @@ struct inode_core {
 struct dfuse_ival {
 	d_list_t             time_entry_list;
 	struct fuse_session *session;
+	bool                 session_dead;
 };
 
 #define EVICT_COUNT 8
@@ -128,7 +129,7 @@ out:
 	DFUSE_TRA_DEBUG(&ival_data, "Unlocking, allowing to sleep for %d seconds", *sleep_time);
 	D_MUTEX_UNLOCK(&ival_lock);
 
-	if (idx == 0)
+	if (idx == 0 || ival_data.session_dead)
 		return false;
 
 	for (int i = 0; i < idx; i++) {
@@ -139,8 +140,10 @@ out:
 
 		rc = fuse_lowlevel_notify_inval_entry(ival_data.session, ic[i].parent, ic[i].name,
 						      strnlen(ic[i].name, NAME_MAX));
-		if (rc && rc != -ENOENT)
+		if (rc && rc != -ENOENT && rc != -EBADF)
 			DHS_ERROR(&ival_data, -rc, "notify_inval_entry() failed");
+		if (rc == -EBADF)
+			ival_data.session_dead = true;
 	}
 
 	return true;
