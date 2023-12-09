@@ -199,7 +199,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8')
-                stage('Functional on Leap 15.4') {
+                stage('Functional on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
