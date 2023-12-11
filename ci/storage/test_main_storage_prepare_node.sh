@@ -25,9 +25,9 @@ else
 fi
 dnf -y install ipmctl daos-server"$DAOS_PKG_VERSION"
 
-lspci | grep Mellanox
+lspci | grep Mellanox || true  # Just for log info
 lscpu | grep Virtualization
-lscpu | grep -E -e Socket -e NUMA
+lscpu | grep -E -e Socket -e NUMA0
 
 if command -v opainfo; then opainfo || true; fi
 
