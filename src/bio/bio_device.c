@@ -461,18 +461,17 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 	rc = replace_dev(xs_ctxt, old_info, old_dev, new_dev);
 out:
 	if (rc == 0)
-		bio_notify_ras_eventf(RAS_DEVICE_REPLACE, RAS_TYPE_INFO,
-				      RAS_SEV_NOTICE, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "Replaced device: "DF_UUID" with device "DF_UUID"\n",
-				      DP_UUID(old_dev_id), DP_UUID(new_dev_id));
+		ras_notify_eventf(RAS_DEVICE_REPLACE, RAS_TYPE_INFO,
+				  RAS_SEV_NOTICE, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Replaced device: "DF_UUID" with device "DF_UUID"\n",
+				  DP_UUID(old_dev_id), DP_UUID(new_dev_id));
 	else
-		bio_notify_ras_eventf(RAS_DEVICE_REPLACE, RAS_TYPE_INFO,
-				      RAS_SEV_ERROR, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "Replaced device: "DF_UUID" with device: "DF_UUID" "
-				      "failed: %d\n", DP_UUID(old_dev_id),
-				      DP_UUID(new_dev_id), rc);
+		ras_notify_eventf(RAS_DEVICE_REPLACE, RAS_TYPE_INFO,
+				  RAS_SEV_ERROR, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Replaced device: "DF_UUID" with device: "DF_UUID" failed: %d\n",
+				  DP_UUID(old_dev_id), DP_UUID(new_dev_id), rc);
 
 	if (old_info)
 		smd_dev_free_info(old_info);

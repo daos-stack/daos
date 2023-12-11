@@ -358,9 +358,9 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 	if (rc > 0) /** value no longer exists */
 		return 0;
 
-	bio_notify_ras_event(RAS_POOL_CORRUPTION_DETECTED, "Data corruption detected",
-			     RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
-			     &ctx->sc_pool_uuid, sc_cont_uuid(ctx), NULL, NULL, NULL);
+	ras_notify_event(RAS_POOL_CORRUPTION_DETECTED, "Data corruption detected",
+			 RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
+			 &ctx->sc_pool_uuid, sc_cont_uuid(ctx), NULL, NULL, NULL);
 	sc_m_pool_corr_inc(ctx);
 	rc = sc_mark_corrupt(ctx);
 

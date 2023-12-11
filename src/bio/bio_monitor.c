@@ -221,16 +221,15 @@ bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t dev_uuid)
 		rc = dss_abterr2der(rc);
 
 	if (rc == 0)
-		bio_notify_ras_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				      RAS_SEV_NOTICE, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "Dev: "DF_UUID" set faulty\n", DP_UUID(dev_uuid));
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
+				  RAS_SEV_NOTICE, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Dev: "DF_UUID" set faulty\n", DP_UUID(dev_uuid));
 	else
-		bio_notify_ras_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				      RAS_SEV_ERROR, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "Dev: "DF_UUID" set faulty failed: %d\n",
-				      DP_UUID(dev_uuid), rc);
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
+				  RAS_SEV_ERROR, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Dev: "DF_UUID" set faulty failed: %d\n", DP_UUID(dev_uuid), rc);
 	return rc;
 }
 
@@ -743,17 +742,17 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 		D_ERROR("Failed to set FAULTY state. "DF_RC"\n", DP_RC(rc));
 
 	if (rc == 0)
-		bio_notify_ras_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				      RAS_SEV_NOTICE, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "Dev: "DF_UUID" auto faulty detect\n",
-				      DP_UUID(bbs->bb_dev->bb_uuid));
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
+				  RAS_SEV_NOTICE, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Dev: "DF_UUID" auto faulty detect\n",
+				  DP_UUID(bbs->bb_dev->bb_uuid));
 	else
-		bio_notify_ras_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
-				      RAS_SEV_ERROR, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "Dev: "DF_UUID" auto faulty detect failed: %d\n",
-				      DP_UUID(bbs->bb_dev->bb_uuid), rc);
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
+				  RAS_SEV_ERROR, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Dev: "DF_UUID" auto faulty detect failed: %d\n",
+				  DP_UUID(bbs->bb_dev->bb_uuid), rc);
 }
 
 /* Collect the raw device health state through SPDK admin APIs */

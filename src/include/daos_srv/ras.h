@@ -153,6 +153,58 @@ ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 		     d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
 		     uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data,
 		     const char *fmt, ...);
+/*
+ * Wrapper of ds_notify_ras_event.
+ */
+static inline void
+ras_notify_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
+		 d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
+		 uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data)
+{
+	if (ds_notify_ras_event != NULL) {
+		ds_notify_ras_event(id, msg, type, sev, hwid, rank, inc, jobid,
+				    pool, cont, objid, ctlop, data);
+	} else {
+		switch (sev) {
+		case RAS_SEV_ERROR:
+			D_ERROR("%s\n", msg);
+			break;
+		case RAS_SEV_NOTICE:
+			D_INFO("%s\n", msg);
+			break;
+		case RAS_SEV_WARNING:
+			D_WARN("%s\n", msg);
+			break;
+		default:
+			D_ERROR("%s\n", msg);
+			break;
+		}
+	}
+}
+
+/*
+ * Wrapper of ds_notify_ras_eventf.
+ */
+static inline void
+ras_notify_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
+		  d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
+		  uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data,
+		  const char *fmt, ...)
+{
+	char	buf[DAOS_RAS_STR_FIELD_SIZE];
+	va_list	ap;
+	int	rc;
+
+	va_start(ap, fmt);
+	rc = vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	if (rc >= sizeof(buf))
+		/* The message is too long. End it with '$'. */
+		buf[sizeof(buf) - 2] = '$';
+
+	ras_notify_event(id, buf, type, sev, hwid, rank, inc, jobid,
+			 pool, cont, objid, ctlop, data);
+}
 
 /**
  * Notify control plane of an update to a pool's service replicas and wait for

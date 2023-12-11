@@ -737,10 +737,10 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	D_ASSERT(d_bdev->bb_desc != NULL);
 	d_bdev->bb_removed = 1;
 
-	bio_notify_ras_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
-			      RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
-			      NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
-			      DP_UUID(d_bdev->bb_uuid));
+	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
+			  RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
+			  NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
+			  DP_UUID(d_bdev->bb_uuid));
 
 	/* The bio_bdev is still under construction */
 	if (d_list_empty(&d_bdev->bb_link)) {
@@ -1801,10 +1801,10 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 
 		/* Print a console message */
 		D_PRINT("Detected hot plugged device %s\n", bdev_name);
-		bio_notify_ras_eventf(RAS_DEVICE_PLUGGED, RAS_TYPE_INFO,
-				      RAS_SEV_NOTICE, NULL, NULL, NULL,
-				      NULL, NULL, NULL, NULL, NULL, NULL,
-				      "Detected hot plugged device: %s\n", bdev_name);
+		ras_notify_eventf(RAS_DEVICE_PLUGGED, RAS_TYPE_INFO,
+				  RAS_SEV_NOTICE, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Detected hot plugged device: %s\n", bdev_name);
 
 		scan_period = 0;
 

@@ -614,8 +614,8 @@ bio_media_error(void *msg_arg)
 		break;
 	}
 
-	bio_notify_ras_event(RAS_DEVICE_MEDIA_ERROR, err_str, RAS_TYPE_INFO, RAS_SEV_ERROR,
-			     NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+	ras_notify_event(RAS_DEVICE_MEDIA_ERROR, err_str, RAS_TYPE_INFO, RAS_SEV_ERROR,
+			 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	auto_faulty_detect(mem->mem_bs);
 
 	D_FREE(mem);
