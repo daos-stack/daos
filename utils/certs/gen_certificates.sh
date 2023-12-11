@@ -1,6 +1,6 @@
 #!/bin/bash
 # /*
-#  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2016-2022 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -22,7 +22,7 @@ CA_HOME="${1:-.}/daosCA"
 PRIVATE="${CA_HOME}/private"
 CERTS="${CA_HOME}/certs"
 CLIENTS="${CERTS}/clients"
-CONFIGS="$(dirname "${BASH_SOURCE[0]%/*}")"
+CONFIGS="$(dirname "${BASH_SOURCE}")"
 
 function setup_directories () {
     mkdir -p "${CA_HOME}"
