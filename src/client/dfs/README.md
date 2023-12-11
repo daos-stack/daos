@@ -242,3 +242,60 @@ pool):
  - SX if rd\_fac == 0
  - EC\_nP1GX if rd\_fac == 1
  - EC\_nP2GX if rd\_fac == 2
+
+# DFS control flow
+
+Below are a few sequence diagrams to illustrate what happens when a dfs API is
+called.
+
+## Opening an existing file with dfs_open
+```mermaid
+sequenceDiagram
+    box Client
+        participant A as application
+        participant B as libdfs
+        participant C as libdaos
+    end
+    box Server
+        participant D as parent RG member
+    end
+
+    A->>B: dfs_open
+    B->>C: daos_obj_fetch(parent_obj)
+    Note over C: Calculate dkey RG
+    C->>D: obj_fetch_rpc (conditional)
+    D->>C: return metadata
+    C->>B: return metadata
+    Note over B: Check permissions
+    B->>C: daos_array_open_with_attr
+    Note over C: Allocate handle<br/>Calculate object layout
+    C->>B: Return array object handle
+    Note over B: Allocate file handle<br/>Save object info
+    B->>A: Return file handle
+```
+
+## Opening an existing directory with dfs_open
+```mermaid
+sequenceDiagram
+    box Client
+        participant A as application
+        participant B as libdfs
+        participant C as libdaos
+    end
+    box Server
+        participant D as parent RG member
+    end
+
+    A->>B: dfs_open
+    B->>C: daos_obj_fetch(parent_obj)
+    Note over C: Calculate dkey RG
+    C->>D: obj_fetch_rpc (conditional)
+    D->>C: return metadata
+    C->>B: return metadata
+    Note over B: Check permissions
+    B->>C: daos_obj_open
+    Note over C: Allocate handle<br/>Calculate object layout<br/>Check class validity
+    C->>B: Return array object handle
+    Note over B: Allocate directory handle<br/>Save object info
+    B->>A: Return directory handle
+```
