@@ -1890,10 +1890,11 @@ class needs_dfuse_with_opt():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, caching=None, wbcache=True, single_threaded=False):
+    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True):
         self.caching = caching
         self.wbcache = wbcache
         self.single_threaded = single_threaded
+        self.dfuse_inval = dfuse_inval
 
     def __call__(self, method):
         """Wrapper function"""
@@ -1905,9 +1906,18 @@ class needs_dfuse_with_opt():
                 if obj.call_index == 0:
                     caching = True
                     obj.needs_more = True
-                    obj.test_name = f'{method.__name__}_with_caching'
+                    obj.test_name = f'{method.__name__}_caching_on'
                 else:
                     caching = False
+                    obj.test_name = f'{method.__name__}_caching_off'
+
+            if not self.dfuse_inval:
+                assert self.caching is None
+                cont_attrs = {'dfuse-attr-time': '5m',
+                              'dfuse-dentry-time': '5m',
+                              'dfuse-dentry-dir-time': '5m',
+                              'dfuse-ndentry-time': '5m'}
+                obj.container.set_attrs(cont_attrs)
 
             obj.dfuse = DFuse(obj.server,
                               obj.conf,
@@ -2816,9 +2826,16 @@ class PosixTests():
         rc = self.dfuse.run_query(use_json=True)
         assert rc.returncode == 0
 
-    @needs_dfuse
+    @needs_dfuse_with_opt(dfuse_inval=False, caching=True)
     def test_uns_link(self):
-        """Simple test to create a container then create a path for it in dfuse
+        """Test to create a container then create a path for it in dfuse.
+
+        Runs with dfuse already started, creates two new containers without links.
+
+        Links one container into UNS and then destroys it through the link.
+
+        Links the second container into UNS and then destroys it through the link, but checking
+        the inode counts before and after.
 
         This test requires caching attributes to be set on the second container so that it does
         not get evicted before the inode count check.
@@ -3332,7 +3349,7 @@ class PosixTests():
         uns_container.set_attrs(cont_attrs)
 
         print('Trying UNS')
-        dfuse = DFuse(server, conf, caching=False)
+        dfuse = DFuse(server, conf, caching=True)
         dfuse.start('uns-1')
 
         # List the root container.
@@ -3371,7 +3388,7 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
         print('Trying UNS with previous cont')
-        dfuse = DFuse(server, conf, caching=False)
+        dfuse = DFuse(server, conf, caching=True)
         dfuse.start('uns-3')
 
         second_path = join(dfuse.dir, pool, uns_container.uuid)
