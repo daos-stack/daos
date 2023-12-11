@@ -817,7 +817,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 		int                     __rc;                                                      \
 		struct fuse_entry_param _entry = {};                                               \
 		_entry.entry_timeout           = timeout;                                          \
-		DFUSE_TRA_DEBUG(parent, "Returning negative entry parent %#lx  timeout %lf",       \
+		DFUSE_TRA_DEBUG(parent, "Returning negative entry parent %#lx timeout %lf",        \
 				(parent)->ie_stat.st_ino, _entry.entry_timeout);                   \
 		(parent) = NULL;                                                                   \
 		__rc     = fuse_reply_entry(req, &_entry);                                         \
