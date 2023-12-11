@@ -1191,6 +1191,21 @@ pool_map_compat(struct pool_map *map, uint32_t version,
 	return 0;
 }
 
+static unsigned int
+pool_domain_tgt_count(struct pool_domain *tree)
+{
+	int             i;
+	unsigned int    tgt_nr = 0;
+
+	if (tree->do_children == NULL)
+		return tree->do_target_nr;
+
+	for (i = 0; i < tree->do_child_nr; i++)
+		tgt_nr += pool_domain_tgt_count(&tree->do_children[i]);
+
+	return tgt_nr;
+}
+
 /**
  * Merge all new components from \a tree into \a map.
  * Already existent components will be ignored.
@@ -1323,17 +1338,17 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 			/* new buffer may have changes for this domain */
 			if (sdom->do_children != NULL) {
 				struct pool_domain *child = addr;
-				struct pool_comp_cntr	s_cntr;
+				uint32_t	tgt_nr;
 
-				pool_tree_count(sdom, &s_cntr);
+				tgt_nr = pool_domain_tgt_count(sdom);
 				D_DEBUG(DB_TRACE, "Scan children of %s[%d] tgt_nr %u\n",
 					pool_domain_name(ddom),
-					ddom->do_comp.co_id, s_cntr.cc_targets);
+					ddom->do_comp.co_id, tgt_nr);
 
 				if (ddom->do_children == NULL)
 					ddom->do_children = child;
 
-				ddom->do_target_nr += s_cntr.cc_targets;
+				ddom->do_target_nr += tgt_nr;
 				/* copy new child domains to dest buffer */
 				for (j = 0; j < sdom->do_child_nr; j++) {
 					struct pool_component *dc;
