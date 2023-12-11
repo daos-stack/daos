@@ -45,9 +45,9 @@
  * directory is in active use but individual files are not.
  *
  * Future work might be to speculatively perform lookups close to the end of the timeout period,
- * then if a entry was in frequent use it's lookup could be preformed from memory, effectively
+ * then if a entry was in frequent use it's lookup could be performed from memory, effectively
  * moving the re-validation cost off the critical path.  This code currently only handles dentries
- * but could also seperately track attributes (inodes) and file contents as well.
+ * but could also separately track attributes (inodes) and file contents as well.
  *
  * Additional changes to consider in the future could include:
  *  Better handing of eviction timeouts, "max(time * 1.1, 10)" would be better than a flat +2/+5
