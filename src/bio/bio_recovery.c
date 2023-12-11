@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,55 +58,28 @@ on_faulty(struct bio_blobstore *bbs)
 }
 
 static void
-teardown_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
+teardown_xs_bs(void *arg)
 {
-	struct bio_io_context	*ioc;
-	int			 opened_blobs = 0;
-	struct bio_xs_blobstore	*bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
+	struct bio_xs_blobstore	*bxb = arg;
 
-	/* This blobstore is torndown */
+	D_ASSERT(bxb != NULL);
+	if (!is_server_started()) {
+		D_INFO("Abort xs teardown on server start/shutdown\n");
+		return;
+	}
+
+	/* This per-xstream blobstore is torndown */
 	if (bxb->bxb_io_channel == NULL)
 		return;
 
-	/* Try to close all blobs */
-	d_list_for_each_entry(ioc, &bxb->bxb_io_ctxts, bic_link) {
-		if (ioc->bic_blob == NULL && ioc->bic_opening == 0)
-			continue;
-
-		opened_blobs++;
-		if (ioc->bic_closing || ioc->bic_opening)
-			continue;
-
-		bio_blob_close(ioc, true);
-	}
-
-	if (opened_blobs) {
-		D_DEBUG(DB_MGMT, "blobstore:%p has %d opened blobs\n",
-			bxb->bxb_blobstore, opened_blobs);
-		return;
-	}
+	/* Blobs (VOS pools) should have been close on faulty reaction */
+	D_ASSERT(d_list_empty(&bxb->bxb_io_ctxts));
 
 	/* Put the io channel */
 	if (bxb->bxb_io_channel != NULL) {
 		spdk_bs_free_io_channel(bxb->bxb_io_channel);
 		bxb->bxb_io_channel = NULL;
 	}
-}
-
-static void
-teardown_xstream(void *arg)
-{
-	struct bio_xs_context	*xs_ctxt = arg;
-
-	D_ASSERT(xs_ctxt != NULL);
-	if (!is_server_started()) {
-		D_INFO("Abort xs teardown on server start/shutdown\n");
-		return;
-	}
-
-	xs_ctxt->bxc_ready = 0;
-	/* only teardown data blobstore for now */
-	teardown_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
 }
 
 static void
@@ -134,17 +107,19 @@ unload_bs_cp(void *arg, int rc)
 			     bbs->bb_dev);
 }
 
-static inline bool
-is_xstream_torndown(struct bio_xs_context *xs_ctxt)
+static struct bio_xs_blobstore *
+bs2bxb(struct bio_blobstore *bbs, struct bio_xs_context *xs_ctxt)
 {
 	struct bio_xs_blobstore	*bxb;
+	int			 st;
 
-	/* only check data blobstore for now */
-	bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
-	if (bxb->bxb_io_channel != NULL)
-		return false;
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = xs_ctxt->bxc_xs_blobstores[st];
+		if (bxb && bxb->bxb_blobstore && (bxb->bxb_blobstore == bbs))
+			return bxb;
+	}
 
-	return true;
+	return NULL;
 }
 
 /*
@@ -155,6 +130,7 @@ static int
 on_teardown(struct bio_blobstore *bbs)
 {
 	struct bio_dev_health	*bdh = &bbs->bb_dev_health;
+	struct bio_xs_blobstore	*bxb;
 	int			 i, rc = 0;
 
 	ABT_mutex_lock(bbs->bb_mutex);
@@ -174,13 +150,15 @@ on_teardown(struct bio_blobstore *bbs)
 	for (i = 0; i < bbs->bb_ref; i++) {
 		struct bio_xs_context	*xs_ctxt = bbs->bb_xs_ctxts[i];
 
-		/* This xstream is torndown */
-		if (is_xstream_torndown(xs_ctxt))
+		bxb = bs2bxb(bbs, xs_ctxt);
+		D_ASSERT(bxb != NULL);
+
+		/* This per-xstream blobstore is torndown */
+		if (bxb->bxb_io_channel == NULL)
 			continue;
 
 		D_ASSERT(xs_ctxt->bxc_thread != NULL);
-		spdk_thread_send_msg(xs_ctxt->bxc_thread, teardown_xstream,
-				     xs_ctxt);
+		spdk_thread_send_msg(xs_ctxt->bxc_thread, teardown_xs_bs, bxb);
 		rc += 1;
 	}
 
@@ -219,21 +197,21 @@ on_teardown(struct bio_blobstore *bbs)
 }
 
 static void
-setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
-		int *closed_blobs)
+setup_xs_bs(void *arg)
 {
-	struct bio_io_context	*ioc;
+	struct bio_xs_blobstore	*bxb = arg;
 	struct bio_blobstore	*bbs;
-	struct bio_xs_blobstore	*bxb;
 
-	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
 	D_ASSERT(bxb != NULL);
+	if (!is_server_started()) {
+		D_INFO("Abort xs setup on server start/shutdown\n");
+		return;
+	}
 
 	bbs = bxb->bxb_blobstore;
-	if (bbs == NULL)
-		return;
-
+	D_ASSERT(bbs != NULL);
 	D_ASSERT(bbs->bb_bs != NULL);
+
 	/*
 	 * Setup the blobstore io channel. It's must be done as the first step
 	 * of xstream setup, since blobstore teardown checks io channel to tell
@@ -245,54 +223,9 @@ setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
 			D_ERROR("Failed to create io channel for %p\n", bbs);
 			return;
 		}
+		/* Blobs (VOS pools) will be opened in reint reaction */
+		D_ASSERT(d_list_empty(&bxb->bxb_io_ctxts));
 	}
-
-	/* Try to open all blobs */
-	d_list_for_each_entry(ioc, &bxb->bxb_io_ctxts, bic_link) {
-		if (ioc->bic_blob != NULL && !ioc->bic_closing)
-			continue;
-
-		*closed_blobs = *closed_blobs + 1;
-		if (ioc->bic_opening || ioc->bic_closing)
-			continue;
-
-		/* fix sysdb */
-		bio_blob_open(ioc, true, 0, st, SPDK_BLOBID_INVALID);
-	}
-
-	if (*closed_blobs)
-		D_DEBUG(DB_MGMT, "blobstore:%p has %d closed blobs\n",
-			bbs, *closed_blobs);
-	return;
-
-}
-
-static void
-setup_xstream(void *arg)
-{
-	struct bio_xs_context	*xs_ctxt = arg;
-	int			 closed_blobs;
-
-	D_ASSERT(xs_ctxt != NULL);
-	if (!is_server_started()) {
-		D_INFO("Abort xs setup on server start/shutdown\n");
-		return;
-	}
-
-	/* only support data blobstore for now */
-	closed_blobs = 0;
-	setup_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA, &closed_blobs);
-	/*
-	 * It doesn't mean setup failed when there is any closed blob,
-	 * it means some blob is still busy and we can't move forward to
-	 * next state yet, we'll retry setup_xstream() later.
-	 */
-	if (closed_blobs > 0)
-		return;
-
-	xs_ctxt->bxc_ready = 1;
-	return;
-
 }
 
 static void
@@ -326,6 +259,7 @@ on_setup(struct bio_blobstore *bbs)
 {
 	struct bio_bdev		*d_bdev = bbs->bb_dev;
 	struct bio_dev_health	*bdh = &bbs->bb_dev_health;
+	struct bio_xs_blobstore	*bxb;
 	int			 i, rc = 0;
 
 	ABT_mutex_lock(bbs->bb_mutex);
@@ -387,13 +321,15 @@ bs_loaded:
 	for (i = 0; i < bbs->bb_ref; i++) {
 		struct bio_xs_context	*xs_ctxt = bbs->bb_xs_ctxts[i];
 
-		/* Setup for the xsteam is done */
-		if (xs_ctxt->bxc_ready)
+		bxb = bs2bxb(bbs, xs_ctxt);
+		D_ASSERT(bxb != NULL);
+
+		/* Setup for the per-xsteam blobstore is done */
+		if (bxb->bxb_io_channel != NULL)
 			continue;
 
 		D_ASSERT(xs_ctxt->bxc_thread != NULL);
-		spdk_thread_send_msg(xs_ctxt->bxc_thread, setup_xstream,
-				     xs_ctxt);
+		spdk_thread_send_msg(xs_ctxt->bxc_thread, setup_xs_bs, bxb);
 		rc += 1;
 	}
 
@@ -465,13 +401,8 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 		bbs->bb_state = new_state;
 
 		if (new_state == BIO_BS_STATE_FAULTY) {
-			struct spdk_bs_type	bstype;
-			uuid_t			dev_id;
-
-			bstype = spdk_bs_get_bstype(bbs->bb_bs);
-			memcpy(dev_id, bstype.bstype, sizeof(dev_id));
-
-			rc = smd_dev_set_state(dev_id, SMD_DEV_FAULTY);
+			D_ASSERT(bbs->bb_dev != NULL);
+			rc = smd_dev_set_state(bbs->bb_dev->bb_uuid, SMD_DEV_FAULTY);
 			if (rc)
 				D_ERROR("Set device state failed. "DF_RC"\n",
 					DP_RC(rc));
@@ -480,6 +411,45 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 	ABT_mutex_unlock(bbs->bb_mutex);
 
 	return rc;
+}
+
+int
+bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt)
+{
+	struct bio_xs_blobstore	*bxb;
+	enum smd_dev_type	 st;
+
+	/* sys xstream in pmem mode doesn't have NVMe context */
+	if (xs_ctxt == NULL)
+		return 0;
+
+	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
+		bxb = xs_ctxt->bxc_xs_blobstores[st];
+
+		if (!bxb || !bxb->bxb_blobstore)
+			continue;
+
+		if (bxb->bxb_blobstore->bb_state != BIO_BS_STATE_NORMAL)
+			return -DER_NVME_IO;
+	}
+
+	return 0;
+}
+
+static inline bool
+is_reint_ready(struct bio_blobstore *bbs)
+{
+	struct bio_xs_context	*xs_ctxt;
+	int			 i;
+
+	for (i = 0; i < bbs->bb_ref; i++) {
+		xs_ctxt = bbs->bb_xs_ctxts[i];
+
+		D_ASSERT(xs_ctxt != NULL);
+		if (bio_xsctxt_health_check(xs_ctxt))
+			return false;
+	}
+	return true;
 }
 
 static void
@@ -501,11 +471,18 @@ on_normal(struct bio_blobstore *bbs)
 	if (ract_ops == NULL || ract_ops->reint_reaction == NULL)
 		return;
 
+	D_ASSERT(is_server_started());
+	/*
+	 * xstream could be backed by multiple SSDs when roles are assigned to separated devices,
+	 * reintegration should only be triggered when all the backed SSDs are in normal state.
+	 */
+	if (!is_reint_ready(bbs))
+		return;
+
 	/*
 	 * It's safe to access xs context array without locking when the
 	 * server is neither in start nor shutdown phase.
 	 */
-	D_ASSERT(is_server_started());
 	tgt_cnt = bbs->bb_ref;
 	D_ASSERT(tgt_cnt <= BIO_XS_CNT_MAX && tgt_cnt > 0);
 
