@@ -408,51 +408,6 @@ smd_pool_list(d_list_t *pool_list, int *pools)
 	return rc;
 }
 
-/* smd_lock() and smd_tx_begin() are called by caller */
-int
-smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
-			      uint32_t *tgts)
-{
-	struct smd_pool		pool;
-	struct d_uuid		id;
-	enum smd_dev_type	st = SMD_DEV_TYPE_DATA;
-	int			i, rc;
-
-	uuid_copy(id.uuid, info->spi_id);
-	rc = smd_db_fetch(TABLE_POOLS[st], &id, sizeof(id), &pool, sizeof(pool));
-	if (rc) {
-		D_ERROR("Fetch pool "DF_UUID" failed. %d\n",
-			DP_UUID(&id.uuid), rc);
-		return rc;
-	}
-
-	D_ASSERT(info->spi_blob_sz[st] == pool.sp_blob_sz);
-	D_ASSERT(info->spi_tgt_cnt[st] == pool.sp_tgt_cnt);
-	D_ASSERT(pool.sp_tgt_cnt >= tgt_cnt);
-
-	for (i = 0; i < tgt_cnt; i++) {
-		int	tgt_id;
-		int	tgt_idx;
-
-		tgt_id = tgts[i];
-		tgt_idx = smd_pool_find_tgt(&pool, tgt_id);
-		if (tgt_idx < 0) {
-			D_ERROR("Invalid tgt %d for pool "DF_UUID"\n",
-				tgt_id, DP_UUID(&id.uuid));
-			return -DER_INVAL;
-		}
-		pool.sp_blobs[tgt_idx] = info->spi_blobs[st][tgt_idx];
-	}
-
-	rc = smd_db_upsert(TABLE_POOLS[st], &id, sizeof(id), &pool, sizeof(pool));
-	if (rc) {
-		D_ERROR("Replace blobs for pool "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
-		return rc;
-	}
-	return rc;
-}
-
 int
 smd_pool_mark_ready(uuid_t pool_id)
 {
