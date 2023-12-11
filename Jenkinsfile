@@ -1063,7 +1063,7 @@ pipeline {
                         }
                     }
                 } // stage('Fault inection testing on EL 8.8')
-                stage('Test RPMs on EL 8.6') {
+                stage('Test RPMs on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -1074,6 +1074,7 @@ pipeline {
                     steps {
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
+                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                     daos_pkg_version: daosPackagesVersion(next_version))
                         )
                     }
@@ -1083,7 +1084,7 @@ pipeline {
                         }
                     }
                 } // stage('Test CentOS 7 RPMs')
-                stage('Test RPMs on Leap 15.4') {
+                stage('Test RPMs on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -1097,8 +1098,8 @@ pipeline {
                          * additionally for this use-case, can't override
                            ftest_arg with this :-(
                         script {
-                            'Test RPMs on Leap 15.4': getFunctionalTestStage(
-                                name: 'Test RPMs on Leap 15.4',
+                            'Test RPMs on Leap 15.5': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.5',
                                 pragma_suffix: '',
                                 label: params.CI_UNIT_VM1_LABEL,
                                 next_version: next_version,
@@ -1126,6 +1127,7 @@ pipeline {
                     } */
                         job_step_update(
                             testRpm(inst_repos: daosRepos(),
+                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                     daos_pkg_version: daosPackagesVersion(next_version))
                         )
                     }
