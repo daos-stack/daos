@@ -95,9 +95,8 @@ close:
 decref:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 err:
-	if (rc == ENOENT) {
+	if (rc == ENOENT)
 		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
-	} else {
+	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	}
 }

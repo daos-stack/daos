@@ -132,9 +132,8 @@ decref:
 	dfuse_ie_free(dfuse_info, ie);
 	daos_prop_free(prop);
 err:
-	if (rc == ENOENT) {
+	if (rc == ENOENT)
 		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
-	} else {
+	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	}
 }

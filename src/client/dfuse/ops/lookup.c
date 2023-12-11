@@ -131,9 +131,6 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 
 	ie->ie_stat = entry.attr;
 
-	/* Mark the inode for future invalidation after timeout */
-	ival_update_inode(ie, entry.entry_timeout);
-
 	if (fi_out) {
 		/* Now set the value of keep_cache, this is for creat where we need to do the hash
 		 * table lookup before setting this value.
@@ -295,9 +292,8 @@ out_release:
 out_free:
 	dfuse_ie_free(dfuse_info, ie);
 out:
-	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
+	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0)
 		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
-	} else {
+	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	}
 }
