@@ -1244,7 +1244,6 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	}
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
-
 	/* add the RPC req to crt_ep_inflight */
 	D_MUTEX_LOCK(&epi->epi_mutex);
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
@@ -1370,21 +1369,11 @@ crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 }
 
 static void
-dispatch_rpc(struct crt_rpc_priv *rpc, bool get_quota) {
+dispatch_rpc(struct crt_rpc_priv *rpc) {
 	int rc;
 
 	if (rpc == NULL)
 		return;
-
-	/* TODO: Decide if we need to handle true case */
-	if (get_quota) {
-		/* No need to worry about rc here, we just released quota earlier */
-		rc = crt_context_get_quota_resource(rpc->crp_pub.cr_ctx,
-						    CRT_QUOTA_RPCS);
-		/* TODO: Consider if we need to requeue */
-		if (rc)
-			D_WARN("Quota query failed with rc=%d\n", rc);
-	}
 
 	crt_rpc_lock(rpc);
 
@@ -1418,23 +1407,21 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	epi = rpc_priv->crp_epi;
 	D_ASSERT(epi != NULL);
 
-	/*
-	 * Return quota resource and dispatch 1 rpc if any on waitq.
-	 * dispatch_rpc() will either acquire a quota resource or will requeue this rpc
-	 */
+	/* Dispatch one rpc from wait_q if any or return resource back */
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	tmp_rpc = d_list_pop_entry(&crt_ctx->cc_quotas.rpc_waitq,
 				   struct crt_rpc_priv, crp_waitq_link);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
+
 	if (tmp_rpc != NULL) {
-		dispatch_rpc(tmp_rpc, false);
+		dispatch_rpc(tmp_rpc);
 	} else {
 		crt_context_put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPCS);
 	}
 
 	crt_context_req_untrack_internal(rpc_priv);
 
-	/* done if flow control disabled */
+	/* done if ep credit flow control is disabled */
 	if (crt_gdata.cg_credit_ep_ctx == 0)
 		return;
 
@@ -2081,14 +2068,12 @@ crt_context_get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 		return 0;
 
 	D_MUTEX_LOCK(&ctx->cc_quotas.mutex);
-
 	if (ctx->cc_quotas.current[quota] < ctx->cc_quotas.limit[quota])
 		ctx->cc_quotas.current[quota]++;
 	else {
 		D_WARN("Quota limit reached for quota_type=%d\n", quota);
 		rc = -DER_QUOTA_LIMIT;
 	}
-
 	D_MUTEX_UNLOCK(&ctx->cc_quotas.mutex);
 out:
 	return rc;
@@ -2117,7 +2102,6 @@ crt_context_put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	D_MUTEX_LOCK(&ctx->cc_quotas.mutex);
 	D_ASSERTF(ctx->cc_quotas.current[quota] > 0, "Invalid current limit");
 	ctx->cc_quotas.current[quota]--;
-
 	D_MUTEX_UNLOCK(&ctx->cc_quotas.mutex);
 
 out:
