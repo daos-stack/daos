@@ -809,9 +809,9 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 		/* Turn on some caching of metadata, otherwise container
 		 * operations will be very frequent
 		 */
-		dfc->dfc_attr_timeout       = 60;
-		dfc->dfc_dentry_dir_timeout = 60;
-		dfc->dfc_ndentry_timeout    = 60;
+		dfc->dfc_attr_timeout       = 60 * 5;
+		dfc->dfc_dentry_dir_timeout = 60 * 5;
+		dfc->dfc_ndentry_timeout    = 60 * 5;
 
 	} else if (*_dfc == NULL) {
 		char str[37];
