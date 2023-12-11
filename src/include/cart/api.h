@@ -2227,10 +2227,6 @@ int crt_swim_init(int crt_ctx_idx);
  */
 void crt_swim_fini(void);
 
-/** Reset global variables and call crt_lib_init() after fork().
- */
-void crt_reset_afterfork(void);
-
 #define crt_proc__Bool			crt_proc_bool
 #define crt_proc_d_rank_t		crt_proc_uint32_t
 #define crt_proc_int			crt_proc_int32_t

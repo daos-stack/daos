@@ -97,4 +97,10 @@ crt_hdlr_ctl_get_pid(crt_rpc_t *rpc_req);
 
 void
 crt_iv_init(crt_init_options_t *ops);
+
+/** Reset global variables and call crt_lib_init() after fork().
+ */
+void
+crt_reset_afterfork(void);
+
 #endif /* __CRT_INTERNAL_H__ */
