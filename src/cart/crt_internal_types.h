@@ -264,6 +264,7 @@ struct crt_ep_inflight {
 /* max member RPC count allowed in one protocol  */
 #define CRT_PROTO_MAX_COUNT	(0xFFFFUL)
 #define CRT_PROTO_BASEOPC_MASK	(0xFF000000UL)
+#define CRT_PROTO_BASEOPC_SHIFT         24
 #define CRT_PROTO_VER_MASK	(0x00FF0000UL)
 #define CRT_PROTO_COUNT_MASK	(0x0000FFFFUL)
 

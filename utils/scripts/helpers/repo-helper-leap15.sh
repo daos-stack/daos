@@ -7,7 +7,7 @@ set -uex
 # for custom packages if present.
 
 : "${REPO_FILE_URL:=}"
-: "${BASE_DISTRO:=opensuse/leap:15.3}"
+: "${BASE_DISTRO:=opensuse/leap:15.5}"
 : "${JENKINS_URL:=}"
 : "${REPOS:=}"
 
@@ -139,12 +139,13 @@ for repo in $REPOS; do
 name=$repo:$branch:$build_number\n\
 baseurl=${JENKINS_URL}$daos_base$repo/job/$branch/$build_number$artifacts\n\
 enabled=1\n\
-gpgcheck=False\n" >> $repos_dir$repo:$branch:$build_number.repo
-    cat $repos_dir$repo:$branch:$build_number.repo
+gpgcheck=False\n
+module_hotfixes=true\n" >> "$repos_dir$repo:$branch:$build_number".repo
+    cat "$repos_dir$repo:$branch:$build_number".repo
     save_repos+=("$repo:$branch:$build_number")
 done
 
-disable_repos $repos_dir "${save_repos[@]}"
+disable_repos "$repos_dir" "${save_repos[@]}"
 
 if [ -e /etc/profile.d/lmod.sh ]; then
     if ! grep "MODULEPATH=.*/usr/share/modules" /etc/profile.d/lmod.sh; then

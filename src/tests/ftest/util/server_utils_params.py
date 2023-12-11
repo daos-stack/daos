@@ -107,7 +107,7 @@ class DaosServerYamlParameters(YamlParameters):
         #       is set for the running process. If group look up fails or user
         #       is not member, use uid return from user lookup.
         #
-        default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
+        default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp;ofi_rxm")
 
         # All log files should be placed in the same directory on each host to
         # enable easy log file archiving by launch.py
