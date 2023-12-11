@@ -78,11 +78,11 @@ cont:
 static int
 dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 {
-	int          matched;
-	unsigned int out    = 0;
-	int          count0 = 0;
-	int          count1 = 0;
-	char         c      = '\0';
+	int		matched;
+	unsigned int	out = 0;
+	int		count0 = 0;
+	int		count1 = 0;
+	char		c = '\0';
 
 	matched = sscanf(buff, "%u%n%c%n", &out, &count0, &c, &count1);
 
@@ -451,7 +451,7 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 err_disconnect:
 	ret = daos_pool_disconnect(dfp->dfp_poh, NULL);
 	if (ret)
-		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: " DF_RC, DP_RC(ret));
+		DFUSE_TRA_WARNING(dfp, "Failed to disconnect pool: "DF_RC, DP_RC(ret));
 err_free:
 	D_FREE(dfp);
 err:
@@ -794,8 +794,8 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 
 	atomic_init(&dfc->dfs_ref, 1);
 
-	DFUSE_TRA_DEBUG(dfp, "New cont " DF_UUIDF " in pool " DF_UUIDF, DP_UUID(cont),
-			DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_DEBUG(dfp, "New cont "DF_UUIDF" in pool "DF_UUIDF,
+			DP_UUID(cont), DP_UUID(dfp->dfp_pool));
 
 	dfc->dfs_dfp = dfp;
 
@@ -806,12 +806,12 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 		else
 			dfc->dfs_ops = &dfuse_cont_ops;
 
-		/* Turn on some caching of metadata, otherwise container operations will be very
-		 * frequent.
+		/* Turn on some caching of metadata, otherwise container
+		 * operations will be very frequent
 		 */
-		dfc->dfc_attr_timeout       = 60 * 10;
-		dfc->dfc_dentry_dir_timeout = 60 * 10;
-		dfc->dfc_ndentry_timeout    = 60 * 10;
+		dfc->dfc_attr_timeout       = 60;
+		dfc->dfc_dentry_dir_timeout = 60;
+		dfc->dfc_ndentry_timeout    = 60;
 
 	} else if (*_dfc == NULL) {
 		char str[37];
@@ -876,7 +876,8 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 	 * container if there is a race to insert, so if that happens
 	 * just use that one.
 	 */
-	rlink = d_hash_rec_find_insert(&dfp->dfp_cont_table, &dfc->dfs_cont, sizeof(dfc->dfs_cont),
+	rlink = d_hash_rec_find_insert(&dfp->dfp_cont_table,
+				       &dfc->dfs_cont, sizeof(dfc->dfs_cont),
 				       &dfc->dfs_entry);
 
 	if (rlink != &dfc->dfs_entry) {
@@ -1263,8 +1264,8 @@ dfuse_event_release(void *arg)
 int
 dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 {
-	struct fuse_args          args       = {0};
-	struct dfuse_inode_entry *ie         = NULL;
+	struct fuse_args          args     = {0};
+	struct dfuse_inode_entry *ie       = NULL;
 	struct d_slab_reg         read_slab  = {.sr_init    = dfuse_event_init,
 						.sr_reset   = dfuse_read_event_reset,
 						.sr_release = dfuse_event_release,
@@ -1285,7 +1286,7 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	 * standard allocation macros
 	 */
 	args.allocated = 1;
-	args.argv      = calloc(sizeof(*args.argv), args.argc);
+	args.argv = calloc(sizeof(*args.argv), args.argc);
 	if (!args.argv)
 		D_GOTO(err, rc = -DER_NOMEM);
 
@@ -1439,8 +1440,8 @@ dfuse_cont_close_cb(d_list_t *rlink, void *handle)
 
 	dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 
-	DFUSE_TRA_ERROR(dfc, "Failed to close cont ref %d " DF_UUID, dfc->dfs_ref,
-			DP_UUID(dfc->dfs_cont));
+	DFUSE_TRA_ERROR(dfc, "Failed to close cont ref %d "DF_UUID,
+			dfc->dfs_ref, DP_UUID(dfc->dfs_cont));
 	return 0;
 }
 
@@ -1456,14 +1457,15 @@ static int
 dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 {
 	struct dfuse_pool *dfp;
-	int                rc;
+	int rc;
 
 	dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 
-	DFUSE_TRA_ERROR(dfp, "Failed to close pool ref %d " DF_UUID, dfp->dfp_ref,
-			DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_ERROR(dfp, "Failed to close pool ref %d "DF_UUID,
+			dfp->dfp_ref, DP_UUID(dfp->dfp_pool));
 
-	d_hash_table_traverse(&dfp->dfp_cont_table, dfuse_cont_close_cb, NULL);
+	d_hash_table_traverse(&dfp->dfp_cont_table,
+			      dfuse_cont_close_cb, NULL);
 
 	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
 	if (rc != -DER_SUCCESS)
@@ -1472,7 +1474,9 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 		if (rc != -DER_SUCCESS)
-			DFUSE_TRA_ERROR(dfp, "daos_pool_disconnect() failed: " DF_RC, DP_RC(rc));
+			DFUSE_TRA_ERROR(dfp,
+					"daos_pool_disconnect() failed: "DF_RC,
+					DP_RC(rc));
 	}
 
 	return 0;
