@@ -71,6 +71,9 @@ def scons():
 
     Export('daos_version', 'API_VERSION')
 
+    # For Common library and headers.
+    env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
+
     # Generic DAOS includes
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include')])

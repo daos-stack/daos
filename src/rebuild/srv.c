@@ -2085,7 +2085,9 @@ rebuild_fini_one(void *arg)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
 	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
-	D_ASSERT(dpc != NULL);
+	/* The pool child could be stopped */
+	if (dpc == NULL)
+		return 0;
 
 	/* Reset rebuild epoch, then reset the aggregation epoch, so
 	 * it can aggregate the rebuild epoch.
@@ -2334,7 +2336,9 @@ rebuild_prepare_one(void *data)
 		return -DER_NOMEM;
 
 	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
-	D_ASSERT(dpc != NULL);
+	/* The pool child could be stopped */
+	if (dpc == NULL)
+		return 0;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
