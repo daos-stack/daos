@@ -261,9 +261,10 @@ sequenceDiagram
     end
 
     A->>B: dfs_open
-    B->>C: daos_obj_fetch(parent_obj)
-    Note over C: Calculate dkey RG
-    C->>D: obj_fetch_rpc (conditional)
+    Note over B: We need to get the<br/>inode from the parent object
+    B->>C: daos_obj_fetch(obj=parent_obj, dkey=filename)
+    Note over C: Calculate RG from dkey
+    C->>D: obj_fetch_rpc
     D->>C: return metadata
     C->>B: return metadata
     Note over B: Check permissions
@@ -287,9 +288,10 @@ sequenceDiagram
     end
 
     A->>B: dfs_open
-    B->>C: daos_obj_fetch(parent_obj)
-    Note over C: Calculate dkey RG
-    C->>D: obj_fetch_rpc (conditional)
+    Note over B: We need to get the<br/>inode from the parent object
+    B->>C: daos_obj_fetch(obj=parent_obj, dkey=filename)
+    Note over C: Calculate RG from dkey
+    C->>D: obj_fetch_rpc
     D->>C: return metadata
     C->>B: return metadata
     Note over B: Check permissions
