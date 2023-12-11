@@ -2,6 +2,8 @@
 
 set -e
 
+echo Running shellcheck
+
 # Find and run shellcheck on all shell scripts.  Previously the `file` command was used
 # to identify shell commands but that checks for a #! which some of our shell code does not
 # use so go purely on filename.
