@@ -1413,11 +1413,10 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 				   struct crt_rpc_priv, crp_waitq_link);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
-	if (tmp_rpc != NULL) {
+	if (tmp_rpc != NULL)
 		dispatch_rpc(tmp_rpc);
-	} else {
+	else
 		crt_context_put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPCS);
-	}
 
 	crt_context_req_untrack_internal(rpc_priv);
 
@@ -1469,7 +1468,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	/* re-submit the rpc req */
 	while ((tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link)))
-		dispatch_rpc(tmp_rpc, false);
+		dispatch_rpc(tmp_rpc);
 }
 
 /* TODO: Need per-provider call */
