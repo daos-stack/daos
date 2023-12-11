@@ -690,8 +690,9 @@ crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 	rpc_priv->crp_timeout_ts = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 }
 
-/* Convert opcode to string. Only returns string for internal RPCs */
-char *crt_opc_to_str(crt_opcode_t opc);
+/*  decode cart opcode into module and rpc opcode strings */
+void
+crt_opc_decode(crt_opcode_t opc, char **module_name, char **opc_name);
 
 bool crt_rpc_completed(struct crt_rpc_priv *rpc_priv);
 
