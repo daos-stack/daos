@@ -859,6 +859,108 @@ out:
 	return rc;
 }
 
+int
+dmg_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool evict", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		DL_ERROR(rc, "dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *ace)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", "--entry=");
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", ace);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool update-acl", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		DL_ERROR(rc, "dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_delete_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *principal)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", "--principal=");
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", principal);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool delete-acl", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		DL_ERROR(rc, "dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
 static int
 dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid,
 		const char *grp, d_rank_t rank, int tgt_idx)
