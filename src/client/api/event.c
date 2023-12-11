@@ -15,6 +15,7 @@
 
 #include "client_internal.h"
 #include <daos/rpc.h>
+#include <cart/api.h>
 
 /** thread-private event */
 static __thread daos_event_t	ev_thpriv;
@@ -110,6 +111,7 @@ crt:
 int
 daos_eq_lib_reset_after_fork(void)
 {
+	crt_reset_afterfork();
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
 	return daos_eq_lib_init();

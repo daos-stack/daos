@@ -52,6 +52,16 @@ crt_lib_init(void)
 	crt_gdata.cg_iv_inline_limit = 19456; /* 19KB */
 }
 
+void
+crt_reset_afterfork(void)
+{
+	gdata_init_flag = 0;
+	memset(&crt_gdata, 0, sizeof(struct crt_gdata));
+	memset(&crt_plugin_gdata, 0, sizeof(struct crt_plugin_gdata));
+	memset(g_prov_settings_applied, 0, sizeof(bool) * CRT_PROV_COUNT);
+	crt_lib_init();
+}
+
 /* Library deinit */
 static void
 crt_lib_fini(void)
