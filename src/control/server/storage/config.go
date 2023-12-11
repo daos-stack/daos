@@ -58,8 +58,9 @@ const (
 // ControlMetadata describes configuration options for control plane metadata storage on the
 // DAOS server.
 type ControlMetadata struct {
-	Path       string `yaml:"path,omitempty"`
-	DevicePath string `yaml:"device,omitempty"`
+	Path           string `yaml:"path,omitempty"`
+	DevicePath     string `yaml:"device,omitempty"`
+	DisableMdOnSSD bool   `yaml:"disable_md_on_ssd,omitempty"`
 }
 
 // Directory returns the full path to the directory where the control plane metadata is saved.
@@ -1144,7 +1145,7 @@ func (c *Config) Validate() error {
 	// backend, set to empty when no devices specified
 	if len(bdevCfgs) == 0 {
 		c.ConfigOutputPath = ""
-		if c.ControlMetadata.HasPath() {
+		if c.ControlMetadata.HasPath() && !c.ControlMetadata.DisableMdOnSSD {
 			return FaultBdevConfigControlMetadataNoRoles
 		}
 
@@ -1161,7 +1162,7 @@ func (c *Config) Validate() error {
 
 	var nvmeConfigRoot string
 	if c.ControlMetadata.HasPath() {
-		if !c.Tiers.HasBdevRoleMeta() {
+		if !c.Tiers.HasBdevRoleMeta() && !c.ControlMetadata.DisableMdOnSSD {
 			return FaultBdevConfigControlMetadataNoRoles
 		}
 		nvmeConfigRoot = c.ControlMetadata.EngineDirectory(c.EngineIdx)

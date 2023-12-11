@@ -1373,12 +1373,17 @@ dss_sys_db_init()
 	char	*sys_db_path = NULL;
 	char	*nvme_conf_path = NULL;
 
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
-		goto db_init;
-
 	if (dss_nvme_conf == NULL) {
-		D_ERROR("nvme conf path not set\n");
-		return -DER_INVAL;
+		/* must be set if md-on-ssd is enabled */
+		if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+			D_ERROR("nvme conf path not set\n");
+			return -DER_INVAL;
+		}
+		D_STRNDUP(sys_db_path, dss_storage_path, PATH_MAX);
+		if (sys_db_path == NULL)
+			return -DER_NOMEM;
+
+		goto db_init;
 	}
 
 	D_STRNDUP(nvme_conf_path, dss_nvme_conf, PATH_MAX);
@@ -1390,7 +1395,7 @@ dss_sys_db_init()
 		return -DER_NOMEM;
 
 db_init:
-	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path : dss_storage_path);
+	rc = vos_db_init(sys_db_path);
 	if (rc)
 		goto out;
 
