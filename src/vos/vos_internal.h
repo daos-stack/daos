@@ -27,8 +27,7 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
-D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
+#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
@@ -1761,6 +1760,26 @@ vos_flush_wal_header(struct vos_pool *vp)
 		return bio_wal_flush_header(mc);
 
 	return 0;
+}
+
+/*
+ * Check if the NVMe context of a VOS target is healthy.
+ *
+ * \param[in] coh	VOS container
+ *
+ * \return		0		: VOS target is healthy
+ *			-DER_NVME_IO	: VOS target is faulty
+ */
+static inline int
+vos_tgt_health_check(struct vos_container *cont)
+{
+	D_ASSERT(cont != NULL);
+	D_ASSERT(cont->vc_pool != NULL);
+
+	if (cont->vc_pool->vp_sysdb)
+		return 0;
+
+	return bio_xsctxt_health_check(vos_xsctxt_get());
 }
 
 int
