@@ -1913,7 +1913,7 @@ class needs_dfuse_with_opt():
                     obj.test_name = f'{method.__name__}_caching_off'
 
             if not self.dfuse_inval:
-                assert self.caching is None
+                assert self.caching is True
                 cont_attrs = {'dfuse-attr-time': '5m',
                               'dfuse-dentry-time': '5m',
                               'dfuse-dentry-dir-time': '5m',
