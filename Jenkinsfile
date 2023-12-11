@@ -1082,11 +1082,13 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test CentOS 7 RPMs')
+                } // stage('Test RPMs on EL 8.6')
                 stage('Test RPMs on Leap 15.4') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        // Workaround for SRE-1993 - skip this stage if a specific RPM version is specified
+                        // expression { !skipStage() }
+                        expression { params.CI_RPM_TEST_VERSION == '' }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
@@ -1134,7 +1136,7 @@ pipeline {
                             rpm_test_post(env.STAGE_NAME, env.NODELIST)
                         }
                     }
-                } // stage('Test Leap 15 RPMs')
+                } // stage('Test RPMs on Leap 15.4')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
