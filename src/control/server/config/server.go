@@ -78,9 +78,6 @@ type Server struct {
 
 	// Legacy config file parameters stored in a separate struct.
 	Legacy ServerLegacy `yaml:",inline"`
-
-	// Behavior flags
-	AutoFormat bool `yaml:"-"`
 }
 
 // WithCoreDumpFilter sets the core dump filter written to /proc/self/coredump_filter.
