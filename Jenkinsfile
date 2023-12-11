@@ -1086,7 +1086,9 @@ pipeline {
                 stage('Test RPMs on Leap 15.4') {
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        // Workaround for SRE-1993 - skip this stage if a specific RPM version is specified
+                        // expression { !skipStage() }
+                        expression { params.CI_RPM_TEST_VERSION == '' }
                     }
                     agent {
                         label params.CI_UNIT_VM1_LABEL
