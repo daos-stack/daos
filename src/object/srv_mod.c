@@ -125,10 +125,6 @@ obj_tls_init(int tags, int xs_id, int tgt_id)
 
 	D_INIT_LIST_HEAD(&tls->ot_pool_list);
 
-	if (tgt_id < 0)
-		/** skip sensor setup on system xstreams */
-		return tls;
-
 	/** register different per-opcode sensors */
 	for (opc = 0; opc < OBJ_PROTO_CLI_COUNT; opc++) {
 		/** Start with number of active requests, of type gauge */
@@ -140,9 +136,8 @@ obj_tls_init(int tags, int xs_id, int tgt_id)
 			D_WARN("Failed to create active counter: "DF_RC"\n",
 			       DP_RC(rc));
 
-		if (opc == DAOS_OBJ_RPC_UPDATE ||
-		    opc == DAOS_OBJ_RPC_TGT_UPDATE ||
-		    opc == DAOS_OBJ_RPC_FETCH)
+		if (opc == DAOS_OBJ_RPC_UPDATE || opc == DAOS_OBJ_RPC_TGT_UPDATE ||
+		    opc == DAOS_OBJ_RPC_FETCH || opc == DAOS_OBJ_RPC_COLL_PUNCH)
 			/** See below, latency reported per size for those */
 			continue;
 
@@ -183,6 +178,24 @@ obj_tls_init(int tags, int xs_id, int tgt_id)
 			    "bio_update", "BIO update processing time");
 	obj_latency_tm_init(DAOS_OBJ_RPC_FETCH, tgt_id, tls->ot_fetch_bio_lat,
 			    "bio_fetch", "BIO fetch processing time");
+
+	obj_latency_tm_init(DAOS_OBJ_RPC_COLL_PUNCH, tgt_id, tls->ot_coll_punch_map_lat,
+			    "coll_punch_map", "Find pool map processing time");
+	obj_latency_tm_init(DAOS_OBJ_RPC_COLL_PUNCH, tgt_id, tls->ot_coll_punch_layout_lat,
+			    "coll_punch_layout", "Generate object layout processing time");
+	obj_latency_tm_init(DAOS_OBJ_RPC_COLL_PUNCH, tgt_id, tls->ot_coll_punch_parse_lat,
+			    "coll_punch_parse", "Parse layout processing time");
+	obj_latency_tm_init(DAOS_OBJ_RPC_COLL_PUNCH, tgt_id, tls->ot_coll_punch_lexec_lat,
+			    "coll_punch_lexec", "Local collective exec processing time");
+	obj_latency_tm_init(DAOS_OBJ_RPC_COLL_PUNCH, tgt_id, tls->ot_coll_punch_texec_lat,
+			    "coll_punch_texec", "Total collective exec processing time");
+
+	obj_latency_tm_init(DAOS_OBJ_RPC_CPD, tgt_id, tls->ot_cpd_punch_lexec_lat,
+			    "cpd_punch_lexec", "Local cpd punch processing time");
+	obj_latency_tm_init(DAOS_OBJ_RPC_CPD, tgt_id, tls->ot_cpd_punch_texec_lat,
+			    "cpd_punch_texec", "Total cpd punch processing time");
+	obj_latency_tm_init(DAOS_OBJ_RPC_CPD, tgt_id, tls->ot_cpd_others_lat,
+			    "cpd_others", "Other CPD operation processing time");
 
 	return tls;
 }

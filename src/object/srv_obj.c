@@ -113,6 +113,91 @@ out:
 	return 0;
 }
 
+static void
+obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t size)
+{
+	struct obj_tls		*tls = obj_tls_get();
+	struct d_tm_node_t	*lat;
+
+	latency >>= 10; /* convert to micro seconds */
+
+	switch (opc) {
+	case DAOS_OBJ_RPC_FETCH:
+		switch (type) {
+		case BULK_LATENCY:
+			lat = tls->ot_fetch_bulk_lat[lat_bucket(size)];
+			break;
+		case BIO_LATENCY:
+			lat = tls->ot_fetch_bio_lat[lat_bucket(size)];
+			break;
+		case VOS_LATENCY:
+			lat = tls->ot_fetch_vos_lat[lat_bucket(size)];
+			break;
+		default:
+			D_ASSERT(0);
+		}
+		break;
+	case DAOS_OBJ_RPC_UPDATE:
+	case DAOS_OBJ_RPC_TGT_UPDATE:
+		switch (type) {
+		case BULK_LATENCY:
+			lat = tls->ot_update_bulk_lat[lat_bucket(size)];
+			break;
+		case BIO_LATENCY:
+			lat = tls->ot_update_bio_lat[lat_bucket(size)];
+			break;
+		case VOS_LATENCY:
+			lat = tls->ot_update_vos_lat[lat_bucket(size)];
+			break;
+		default:
+			D_ASSERT(0);
+		}
+		break;
+	case DAOS_OBJ_RPC_CPD:
+		switch (type) {
+		case BULK_LATENCY:
+			return;
+		case LOCAL_EXEC:
+			lat = tls->ot_cpd_punch_lexec_lat[d_rand() % NR_LATENCY_BUCKETS];
+			break;
+		case TOTAL_EXEC:
+			lat = tls->ot_cpd_punch_texec_lat[lat_log_bucket(size)];
+			break;
+		default:
+			D_ASSERT(0);
+		}
+		break;
+	case DAOS_OBJ_RPC_COLL_PUNCH:
+		switch (type) {
+		case FIND_MAP:
+			lat = tls->ot_coll_punch_map_lat[d_rand() % NR_LATENCY_BUCKETS];
+			break;
+		case GEN_LAYOUT:
+			lat = tls->ot_coll_punch_layout_lat[lat_log_bucket(size)];
+			break;
+		case COLL_PARSE:
+			lat = tls->ot_coll_punch_parse_lat[lat_log_bucket(size)];
+			break;
+		case LOCAL_EXEC:
+			if (size >= NR_LATENCY_BUCKETS)
+				size = NR_LATENCY_BUCKETS - 1;
+			lat = tls->ot_coll_punch_lexec_lat[size];
+			break;
+		case TOTAL_EXEC:
+			lat = tls->ot_coll_punch_texec_lat[lat_log_bucket(size)];
+			break;
+		default:
+			D_ASSERT(0);
+		}
+		break;
+	default:
+		/* Ignore other ops for the moment */
+		return;
+	}
+
+	d_tm_set_gauge(lat, latency);
+}
+
 /**
  * After bulk finish, let's send reply, then release the resource.
  */
@@ -4565,10 +4650,14 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 			if (rc != 0)
 				goto out;
 		} else {
-			daos_key_t	*dkey;
+			struct obj_cpd_in	*oci = crt_req_get(rpc);
+			daos_key_t		*dkey;
+			uint64_t		 time = 0;
 
 			if (dcsr->dcsr_opc == DCSO_PUNCH_OBJ) {
 				dkey = NULL;
+				if (oci->oci_flags & ORF_INTERNAL_PUNCH)
+					time = daos_get_ntime();
 			} else if (dcsr->dcsr_opc == DCSO_PUNCH_DKEY ||
 				   dcsr->dcsr_opc == DCSO_PUNCH_AKEY) {
 				dkey = &dcsr->dcsr_dkey;
@@ -4593,6 +4682,10 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 				dcsr->dcsr_punch.dcp_akeys : NULL, dth);
 			if (rc != 0)
 				goto out;
+
+			if (time != 0)
+				obj_update_latency(DAOS_OBJ_RPC_CPD, LOCAL_EXEC,
+						   daos_get_ntime() - time, 0);
 		}
 	}
 
@@ -4863,6 +4956,7 @@ ds_obj_dtx_leader(struct daos_cpd_args *dca)
 	struct daos_cpd_disp_ent	*dcde;
 	struct daos_cpd_sub_req		*dcsrs = NULL;
 	struct daos_shard_tgt		*tgts;
+	uint64_t			 time = 0;
 	uint32_t			 flags = 0;
 	uint32_t			 dtx_flags = DTX_DIST;
 	int				 tgt_cnt = 0;
@@ -4983,8 +5077,15 @@ again:
 	exec_arg.args = dca;
 	exec_arg.flags = flags;
 
+	if (oci->oci_flags & ORF_INTERNAL_PUNCH)
+		time = daos_get_ntime();
+
 	/* Execute the operation on all targets */
 	rc = dtx_leader_exec_ops(dlh, obj_obj_dtx_leader, NULL, 0, &exec_arg);
+
+	if (rc == 0 && time != 0)
+		obj_update_latency(DAOS_OBJ_RPC_CPD, TOTAL_EXEC, daos_get_ntime() - time,
+				   dlh->dlh_normal_sub_cnt + 1);
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coh, rc);
@@ -5483,13 +5584,14 @@ obj_coll_tgt_punch(void *args)
 typedef int (*obj_coll_func_t)(void *args);
 
 static int
-obj_coll_local(crt_rpc_t *rpc, struct daos_coll_shard *shards, uint8_t *bitmap, uint32_t bitmap_sz,
-	       uint32_t *version, struct obj_io_context *ioc, struct dtx_handle *dth, void *args,
-	       obj_coll_func_t func)
+obj_coll_local(crt_rpc_t *rpc, struct daos_coll_shard *shards, uint32_t shard_nr,
+	       uint8_t *bitmap, uint32_t bitmap_sz, uint32_t *version, struct obj_io_context *ioc,
+	       struct dtx_handle *dth, void *args, obj_coll_func_t func)
 {
 	struct obj_coll_tgt_args	octa = { 0 };
 	struct dss_coll_ops		coll_ops = { 0 };
 	struct dss_coll_args		coll_args = { 0 };
+	uint64_t			time = daos_get_ntime();
 	uint32_t			size = bitmap_sz << 3;
 	int				rc = 0;
 	int				i;
@@ -5518,6 +5620,9 @@ obj_coll_local(crt_rpc_t *rpc, struct daos_coll_shard *shards, uint8_t *bitmap, 
 	coll_args.ca_tgt_bitmap_sz = bitmap_sz;
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_USE_CURRENT_ULT);
+	if (rc == 0)
+		obj_update_latency(opc_get(rpc->cr_opc), LOCAL_EXEC,
+				   daos_get_ntime() - time, shard_nr);
 
 out:
 	if (octa.octa_versions != NULL) {
@@ -5543,9 +5648,10 @@ obj_coll_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_c
 		return ds_obj_coll_punch_remote(dlh, arg, idx, comp_cb);
 
 	/* Local punch on the leader rank, including the leader target. */
-	rc = obj_coll_local(rpc, exec_arg->shards, dlh->dlh_coll_entry->dce_bitmap,
-			    dlh->dlh_coll_entry->dce_bitmap_sz, NULL, exec_arg->ioc,
-			    &dlh->dlh_handle, dlh->dlh_handle.dth_mbs, obj_coll_tgt_punch);
+	rc = obj_coll_local(rpc, exec_arg->shards, dlh->dlh_coll_entry->dce_tgt_nr,
+			    dlh->dlh_coll_entry->dce_bitmap, dlh->dlh_coll_entry->dce_bitmap_sz,
+			    NULL, exec_arg->ioc, &dlh->dlh_handle, dlh->dlh_handle.dth_mbs,
+			    obj_coll_tgt_punch);
 
 	DL_CDEBUG(rc == 0 || rc == -DER_INPROGRESS || rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
 		  "Collective punch obj "DF_UOID" with "DF_DTI" on rank (leader) %u",
@@ -5572,6 +5678,8 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct dtx_coll_entry **p_dc
 	struct dtx_daos_target	*ddt;
 	struct dtx_target_group	*dtg;
 	struct daos_obj_md	 md = { 0 };
+	uint64_t		 time1 = 0;
+	uint64_t		 time2 = 0;
 	uint32_t		*tmp;
 	uint32_t		 rank_nr;
 	uint32_t		 tgt_nr;
@@ -5594,12 +5702,17 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct dtx_coll_entry **p_dc
 	dce->dce_ver = ocpi->ocpi_map_ver;
 	dce->dce_refs = 1;
 
+	time1 = daos_get_ntime();
+
 	map = pl_map_find(ocpi->ocpi_po_uuid, ocpi->ocpi_oid.id_pub);
 	if (map == NULL) {
 		D_ERROR("Failed to find valid placement map for "DF_UUID"\n",
 			DP_UUID(ocpi->ocpi_po_uuid));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
+
+	time2 = daos_get_ntime();
+	obj_update_latency(DAOS_OBJ_RPC_COLL_PUNCH, FIND_MAP, time2 - time1, 0);
 
 	md.omd_id = ocpi->ocpi_oid.id_pub;
 	md.omd_ver = ocpi->ocpi_map_ver;
@@ -5613,6 +5726,9 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct dtx_coll_entry **p_dc
 			DP_OID(ocpi->ocpi_oid.id_pub), DP_UUID(ocpi->ocpi_po_uuid));
 		goto out;
 	}
+
+	time1 = daos_get_ntime();
+	obj_update_latency(DAOS_OBJ_RPC_COLL_PUNCH, GEN_LAYOUT, time1 - time2, layout->ol_nr);
 
 	length = pool_map_node_nr(map->pl_poolmap);
 
@@ -5838,6 +5954,7 @@ out:
 		 */
 		D_ASSERT(dct->dct_bitmap != NULL);
 
+		dce->dce_tgt_nr = dct->dct_tgt_nr;
 		dce->dce_bitmap = dct->dct_bitmap;
 		dce->dce_bitmap_sz = dct->dct_bitmap_sz;
 		dct->dct_bitmap = NULL;
@@ -5852,6 +5969,9 @@ out:
 		mbs = NULL;
 
 		*p_dce = dtx_coll_entry_get(dce);
+
+		obj_update_latency(DAOS_OBJ_RPC_COLL_PUNCH, COLL_PARSE,
+				   daos_get_ntime() - time1, layout->ol_nr);
 	}
 
 	D_FREE(mbs);
@@ -5887,6 +6007,7 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 	uint32_t			 max_ver = 0;
 	struct dtx_epoch		 epoch;
 	daos_epoch_t			 tmp;
+	uint64_t			 time;
 	int				 rc;
 	int				 rc1;
 	bool				 need_abort = false;
@@ -5938,8 +6059,9 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 		goto out;
 
 	if (!(ocpi->ocpi_flags & ORF_LEADER)) {
-		rc = obj_coll_local(rpc, shards, dce->dce_bitmap, dce->dce_bitmap_sz, &version,
-				    &ioc, NULL, mbs, obj_coll_tgt_punch);
+		rc = obj_coll_local(rpc, shards, dce->dce_tgt_nr, dce->dce_bitmap,
+				    dce->dce_bitmap_sz, &version, &ioc, NULL, mbs,
+				    obj_coll_tgt_punch);
 		goto out;
 	}
 
@@ -6000,8 +6122,14 @@ again2:
 	exec_arg.shards = shards;
 	exec_arg.flags = flags;
 
+	time = daos_get_ntime();
+
 	/* Execute the operation on all shards */
 	rc = dtx_leader_exec_ops(dlh, obj_coll_punch_disp, NULL, 0, &exec_arg);
+
+	if (rc == 0)
+		obj_update_latency(DAOS_OBJ_RPC_COLL_PUNCH, TOTAL_EXEC, daos_get_ntime() - time,
+				   dce->dce_ranks != NULL ? dce->dce_ranks->rl_nr + 1 : 1);
 
 	if (max_ver < dlh->dlh_rmt_ver)
 		max_ver = dlh->dlh_rmt_ver;

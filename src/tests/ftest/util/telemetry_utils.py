@@ -200,6 +200,54 @@ class TelemetryUtils():
         "engine_io_latency_bio_fetch_mean",
         "engine_io_latency_bio_fetch_min",
         "engine_io_latency_bio_fetch_stddev"]
+    ENGINE_IO_LATENCY_COLL_PUNCH_LAYOUT_METRICS = [
+        "engine_io_latency_coll_punch_layout",
+        "engine_io_latency_coll_punch_layout_max",
+        "engine_io_latency_coll_punch_layout_mean",
+        "engine_io_latency_coll_punch_layout_min",
+        "engine_io_latency_coll_punch_layout_stddev"]
+    ENGINE_IO_LATENCY_COLL_PUNCH_LEXEC_METRICS = [
+        "engine_io_latency_coll_punch_lexec",
+        "engine_io_latency_coll_punch_lexec_max",
+        "engine_io_latency_coll_punch_lexec_mean",
+        "engine_io_latency_coll_punch_lexec_min",
+        "engine_io_latency_coll_punch_lexec_stddev"]
+    ENGINE_IO_LATENCY_COLL_PUNCH_MAP_METRICS = [
+        "engine_io_latency_coll_punch_map",
+        "engine_io_latency_coll_punch_map_max",
+        "engine_io_latency_coll_punch_map_mean",
+        "engine_io_latency_coll_punch_map_min",
+        "engine_io_latency_coll_punch_map_stddev"]
+    ENGINE_IO_LATENCY_COLL_PUNCH_PARSE_METRICS = [
+        "engine_io_latency_coll_punch_parse",
+        "engine_io_latency_coll_punch_parse_max",
+        "engine_io_latency_coll_punch_parse_mean",
+        "engine_io_latency_coll_punch_parse_min",
+        "engine_io_latency_coll_punch_parse_stddev"]
+    ENGINE_IO_LATENCY_COLL_PUNCH_TEXEC_METRICS = [
+        "engine_io_latency_coll_punch_texec",
+        "engine_io_latency_coll_punch_texec_max",
+        "engine_io_latency_coll_punch_texec_mean",
+        "engine_io_latency_coll_punch_texec_min",
+        "engine_io_latency_coll_punch_texec_stddev"]
+    ENGINE_IO_LATENCY_CPD_OTHERS_METRICS = [
+        "engine_io_latency_cpd_others",
+        "engine_io_latency_cpd_others_max",
+        "engine_io_latency_cpd_others_mean",
+        "engine_io_latency_cpd_others_min",
+        "engine_io_latency_cpd_others_stddev"]
+    ENGINE_IO_LATENCY_CPD_PUNCH_LEXEC_METRICS = [
+        "engine_io_latency_cpd_punch_lexec",
+        "engine_io_latency_cpd_punch_lexec_max",
+        "engine_io_latency_cpd_punch_lexec_mean",
+        "engine_io_latency_cpd_punch_lexec_min",
+        "engine_io_latency_cpd_punch_lexec_stddev"]
+    ENGINE_IO_LATENCY_CPD_PUNCH_TEXEC_METRICS = [
+        "engine_io_latency_cpd_punch_texec",
+        "engine_io_latency_cpd_punch_texec_max",
+        "engine_io_latency_cpd_punch_texec_mean",
+        "engine_io_latency_cpd_punch_texec_min",
+        "engine_io_latency_cpd_punch_texec_stddev"]
     ENGINE_IO_LATENCY_UPDATE_METRICS = [
         "engine_io_latency_update",
         "engine_io_latency_update_max",
@@ -362,12 +410,6 @@ class TelemetryUtils():
         "engine_io_ops_obj_coll_punch_active_mean",
         "engine_io_ops_obj_coll_punch_active_min",
         "engine_io_ops_obj_coll_punch_active_stddev"]
-    ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_obj_coll_punch_latency",
-        "engine_io_ops_obj_coll_punch_latency_max",
-        "engine_io_ops_obj_coll_punch_latency_mean",
-        "engine_io_ops_obj_coll_punch_latency_min",
-        "engine_io_ops_obj_coll_punch_latency_stddev"]
     ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = [
         "engine_io_ops_obj_enum_active",
         "engine_io_ops_obj_enum_active_max",
@@ -470,6 +512,14 @@ class TelemetryUtils():
         ENGINE_IO_LATENCY_BULK_FETCH_METRICS +\
         ENGINE_IO_LATENCY_VOS_FETCH_METRICS +\
         ENGINE_IO_LATENCY_BIO_FETCH_METRICS +\
+        ENGINE_IO_LATENCY_COLL_PUNCH_LAYOUT_METRICS +\
+        ENGINE_IO_LATENCY_COLL_PUNCH_LEXEC_METRICS +\
+        ENGINE_IO_LATENCY_COLL_PUNCH_MAP_METRICS +\
+        ENGINE_IO_LATENCY_COLL_PUNCH_PARSE_METRICS +\
+        ENGINE_IO_LATENCY_COLL_PUNCH_TEXEC_METRICS +\
+        ENGINE_IO_LATENCY_CPD_OTHERS_METRICS +\
+        ENGINE_IO_LATENCY_CPD_PUNCH_LEXEC_METRICS +\
+        ENGINE_IO_LATENCY_CPD_PUNCH_TEXEC_METRICS +\
         ENGINE_IO_LATENCY_UPDATE_METRICS +\
         ENGINE_IO_LATENCY_TGT_UPDATE_METRICS +\
         ENGINE_IO_LATENCY_BULK_UPDATE_METRICS +\
@@ -497,7 +547,6 @@ class TelemetryUtils():
         ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS +\
-        ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS +\

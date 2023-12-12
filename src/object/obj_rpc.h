@@ -185,6 +185,8 @@ enum obj_rpc_flags {
 	ORF_REBUILDING_IO	= (1 << 23),
 	/* 'sgls' is NULL, for update sub-request of CPD RPC. */
 	ORF_EMPTY_SGL		= (1 << 24),
+	/* Internal transaction for punch object. */
+	ORF_INTERNAL_PUNCH	= (1 << 25),
 };
 
 /* common for update/fetch */

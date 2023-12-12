@@ -160,6 +160,16 @@ struct obj_tls {
 
 	struct d_tm_node_t	*ot_update_bio_lat[NR_LATENCY_BUCKETS];
 	struct d_tm_node_t	*ot_fetch_bio_lat[NR_LATENCY_BUCKETS];
+
+	struct d_tm_node_t	*ot_coll_punch_map_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_coll_punch_layout_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_coll_punch_parse_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_coll_punch_lexec_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_coll_punch_texec_lat[NR_LATENCY_BUCKETS];
+
+	struct d_tm_node_t	*ot_cpd_punch_lexec_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_cpd_punch_texec_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t	*ot_cpd_others_lat[NR_LATENCY_BUCKETS];
 };
 
 static inline struct obj_tls *
@@ -186,54 +196,27 @@ lat_bucket(uint64_t size)
 	return 56 - nr;
 }
 
+static inline int
+lat_log_bucket(uint64_t size)
+{
+	int	i;
+
+	for (i = 0; size > 0; i++)
+		size >>= 1;
+
+	return i >= NR_LATENCY_BUCKETS ? NR_LATENCY_BUCKETS - 1 : i;
+}
+
 enum latency_type {
 	BULK_LATENCY,
 	BIO_LATENCY,
 	VOS_LATENCY,
+	FIND_MAP,
+	GEN_LAYOUT,
+	COLL_PARSE,
+	LOCAL_EXEC,
+	TOTAL_EXEC,
 };
-
-static inline void
-obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_size)
-{
-	struct obj_tls		*tls = obj_tls_get();
-	struct d_tm_node_t	*lat;
-
-	latency >>= 10; /* convert to micro seconds */
-
-	if (opc == DAOS_OBJ_RPC_FETCH) {
-		switch (type) {
-		case BULK_LATENCY:
-			lat = tls->ot_fetch_bulk_lat[lat_bucket(io_size)];
-			break;
-		case BIO_LATENCY:
-			lat = tls->ot_fetch_bio_lat[lat_bucket(io_size)];
-			break;
-		case VOS_LATENCY:
-			lat = tls->ot_fetch_vos_lat[lat_bucket(io_size)];
-			break;
-		default:
-			D_ASSERT(0);
-		}
-	} else if (opc == DAOS_OBJ_RPC_UPDATE || opc == DAOS_OBJ_RPC_TGT_UPDATE) {
-		switch (type) {
-		case BULK_LATENCY:
-			lat = tls->ot_update_bulk_lat[lat_bucket(io_size)];
-			break;
-		case BIO_LATENCY:
-			lat = tls->ot_update_bio_lat[lat_bucket(io_size)];
-			break;
-		case VOS_LATENCY:
-			lat = tls->ot_update_vos_lat[lat_bucket(io_size)];
-			break;
-		default:
-			D_ASSERT(0);
-		}
-	} else {
-		/* Ignore other ops for the moment */
-		return;
-	}
-	d_tm_set_gauge(lat, latency);
-}
 
 struct ds_obj_exec_arg {
 	crt_rpc_t		*rpc;

@@ -84,6 +84,7 @@ struct dc_tx {
 				 tx_retry:1, /** Retry the commit RPC. */
 				 tx_set_resend:1, /** Set 'resend' flag. */
 				 tx_for_convert:1,
+				 tx_internal_punch:1,
 				 tx_has_cond:1,
 				 tx_renew:1,
 				 tx_closed:1,
@@ -1918,6 +1919,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 				if (rc != 0)
 					goto out;
 			}
+
+			if (tx->tx_for_convert)
+				tx->tx_internal_punch = 1;
 		} else {
 			grp_idx = obj_dkey2grpidx(obj, dcsr->dcsr_dkey_hash,
 						  tx->tx_pm_ver);
@@ -2311,6 +2315,8 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	tx->tx_renew = 0;
 	if (tx->tx_reintegrating)
 		oci->oci_flags |= ORF_REINTEGRATING_IO;
+	if (tx->tx_internal_punch)
+		oci->oci_flags |= ORF_INTERNAL_PUNCH;
 
 	oci->oci_sub_heads.ca_arrays = &tx->tx_head;
 	oci->oci_sub_heads.ca_count = 1;

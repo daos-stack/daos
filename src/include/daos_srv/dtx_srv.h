@@ -152,7 +152,8 @@ struct dtx_coll_entry {
 	uint8_t				*dce_hints;
 	uint8_t				*dce_bitmap;
 	uint32_t			 dce_hint_sz;
-	uint32_t			 dce_bitmap_sz;
+	uint16_t			 dce_bitmap_sz;
+	uint16_t			 dce_tgt_nr;
 };
 
 struct dtx_leader_handle;
