@@ -196,11 +196,11 @@ struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
 /* Put the reference held by ds_pool_child_lookup() */
 void ds_pool_child_put(struct ds_pool_child *child);
 /* Start ds_pool child */
-int ds_pool_child_start(uuid_t pool_uuid);
+int ds_pool_child_start(uuid_t pool_uuid, bool recreate);
 /* Stop ds_pool_child */
 int ds_pool_child_stop(uuid_t pool_uuid);
 /* Query pool child state */
-uint32_t ds_pool_child_state(struct ds_pool *pool, uint32_t tgt_id);
+uint32_t ds_pool_child_state(uuid_t pool_uuid, uint32_t tgt_id);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 enum daos_module_id module, crt_opcode_t opcode,
