@@ -22,16 +22,26 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_DTX_VERSION	3
+#define DAOS_DTX_VERSION	4
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define DTX_PROTO_SRV_RPC_LIST						\
-	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_commit")	\
-	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_abort")	\
-	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL, "dtx_check")	\
-	X(DTX_REFRESH, 0, &CQF_dtx, dtx_handler, NULL, "dtx_refresh")
+#define DTX_PROTO_SRV_RPC_LIST							\
+	X(DTX_COMMIT,		0,	&CQF_dtx,	dtx_handler,		\
+	  NULL,			"dtx_commit")					\
+	X(DTX_ABORT,		0,	&CQF_dtx,	dtx_handler,		\
+	  NULL,			"dtx_abort")					\
+	X(DTX_CHECK,		0,	&CQF_dtx,	dtx_handler,		\
+	  NULL,			"dtx_check")					\
+	X(DTX_REFRESH,		0,	&CQF_dtx,	dtx_handler,		\
+	  NULL,			"dtx_refresh")					\
+	X(DTX_COLL_COMMIT,	0,	&CQF_dtx_coll,	dtx_coll_handler,	\
+	  &dtx_coll_commit_co_ops, "dtx_coll_commit")				\
+	X(DTX_COLL_ABORT,	0,	&CQF_dtx_coll,	dtx_coll_handler,	\
+	  &dtx_coll_abort_co_ops, "dtx_coll_abort")				\
+	X(DTX_COLL_CHECK,	0,	&CQF_dtx_coll,	dtx_coll_handler,	\
+	  &dtx_coll_check_co_ops, "dtx_coll_check")
 
 #define X(a, b, c, d, e, f) a,
 enum dtx_operation {
@@ -55,6 +65,27 @@ enum dtx_operation {
 	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
+
+/*
+ * DTX collective RPC input fields
+ * dci_hints is sparse array, one per engine, sorted against the rank ID.
+ * It can hold more than 19K engines inline RPC body.
+ */
+#define DAOS_ISEQ_COLL_DTX						\
+	((uuid_t)		(dci_po_uuid)		CRT_VAR)	\
+	((uuid_t)		(dci_co_uuid)		CRT_VAR)	\
+	((struct dtx_id)	(dci_xid)		CRT_VAR)	\
+	((uint32_t)		(dci_version)		CRT_VAR)	\
+	((uint32_t)		(dci_padding)		CRT_VAR)	\
+	((uint64_t)		(dci_epoch)		CRT_VAR)	\
+	((uint8_t)		(dci_hints)		CRT_ARRAY)
+
+/* DTX collective RPC output fields */
+#define DAOS_OSEQ_COLL_DTX						\
+	((int32_t)		(dco_status)		CRT_VAR)	\
+	((uint32_t)		(dco_misc)		CRT_VAR)
+
+CRT_RPC_DECLARE(dtx_coll, DAOS_ISEQ_COLL_DTX, DAOS_OSEQ_COLL_DTX);
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
 
@@ -131,6 +162,13 @@ extern uint32_t dtx_agg_thd_age_lo;
 /* The default count of DTX batched commit ULTs. */
 #define DTX_BATCHED_ULT_DEF	32
 
+/* The bcast RPC tree width for collective transaction. */
+#define DTX_COLL_TREE_WIDTH_MAX		64
+#define DTX_COLL_TREE_WIDTH_DEF		16
+#define DTX_COLL_TREE_WIDTH_MIN		4
+
+extern uint32_t dtx_coll_tree_width;
+
 /*
  * Ideally, dedicated DXT batched commit ULT for each opened container is the most simple model.
  * But it may be burden for the engine if opened containers become more and more on the target.
@@ -148,6 +186,19 @@ extern uint32_t dtx_batched_ult_max;
  * may happen on some very large system.
  */
 #define DTX_INLINE_MBS_SIZE		512
+
+extern struct crt_corpc_ops	dtx_coll_commit_co_ops;
+extern struct crt_corpc_ops	dtx_coll_abort_co_ops;
+extern struct crt_corpc_ops	dtx_coll_check_co_ops;
+
+struct dtx_coll_load_mbs_args {
+	struct dtx_coll_in	*dclma_params;
+	struct dtx_memberships	*dclma_mbs;
+	daos_unit_oid_t		 dclma_oid;
+	ABT_future		 dclma_future;
+	uint32_t		 dclma_opc;
+	int			 dclma_result;
+};
 
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
@@ -196,6 +247,7 @@ void dtx_batched_commit(void *arg);
 void dtx_aggregation_main(void *arg);
 int start_dtx_reindex_ult(struct ds_cont_child *cont);
 void stop_dtx_reindex_ult(struct ds_cont_child *cont);
+void dtx_merge_check_result(int *tgt, int src);
 
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
@@ -209,18 +261,26 @@ int dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
-int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
-
+int dtx_coll_check(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ranks,
+		   uint8_t *hints, uint32_t hint_sz, uint8_t *bitmap, uint32_t bitmap_sz,
+		   uint32_t version, daos_epoch_t epoch);
 int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *check_list,
 			 d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list, bool for_io);
-int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
+int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_unit_oid_t oid,
 			  daos_epoch_t epoch, int *tgt_array, int *err);
-
 int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
 		   struct pool_target **p_tgt);
+
+/* dtx_coll.c */
+void dtx_coll_load_mbs_ult(void *arg);
+int dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_memberships *mbs,
+		  d_rank_t my_rank, uint32_t my_tgtid, uint32_t version,
+		  uint8_t **p_hints, uint32_t *hint_sz, uint8_t **p_bitmap, uint32_t *bitmap_sz,
+		  d_rank_list_t **p_ranks);
+int dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epoch_t epoch,
+			uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap, int **p_results);
 
 enum dtx_status_handle_result {
 	DSHR_NEED_COMMIT	= 1,
