@@ -1720,8 +1720,11 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 
 	crt_rpc_inout_buff_init(rpc_priv);
 
-	rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
-				     ctx->cc_timeout_sec);
+	if (srv_flag && rpc_priv->crp_req_hdr.cch_src_timeout != 0)
+		rpc_priv->crp_timeout_sec = rpc_priv->crp_req_hdr.cch_src_timeout;
+	else
+		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
+					     ctx->cc_timeout_sec);
 }
 
 void
@@ -1994,18 +1997,13 @@ out:
 }
 
 int
-crt_req_src_timeout_get(crt_rpc_t *rpc, uint16_t *timeout)
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 {
-	struct crt_rpc_priv	*rpc_priv = NULL;
+	struct crt_rpc_priv	*rpc_priv;
 	int			rc = 0;
 
-	if (rpc == NULL) {
-		D_ERROR("NULL rpc passed\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	if (timeout == NULL) {
-		D_ERROR("NULL timeout passed\n");
+	if (rpc == NULL || timeout == NULL) {
+		D_ERROR("NULL pointer passed\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

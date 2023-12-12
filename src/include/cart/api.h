@@ -493,7 +493,7 @@ crt_req_dst_tag_get(crt_rpc_t *req, uint32_t *tag);
  *                             on failure
  */
 int
-crt_req_src_timeout_get(crt_rpc_t *rpc, uint16_t *timeout);
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout);
 
 /**
  * Return reply buffer
