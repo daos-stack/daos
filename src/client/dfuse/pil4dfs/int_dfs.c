@@ -30,6 +30,7 @@
 #include <daos/debug.h>
 #include <gurt/list.h>
 #include <gurt/common.h>
+#include <gurt/rbt.h>
 #include <gurt/hash.h>
 #include <daos.h>
 #include <daos_fs.h>
@@ -96,12 +97,31 @@ static uint16_t               eq_count_max;
 static uint16_t               eq_count;
 static uint16_t               eq_idx;
 
+struct dfs_obj_hdl {
+	dfs_obj_t      *oh_dfs_obj;
+	ATOMIC uint32_t oh_ref;
+	ATOMIC uint32_t oh_initialized:1;
+};
+
+struct dfs_cache_node {
+	pthread_rwlock_t       cn_rwlock;
+	struct dfs_cache_node *cn_parent;
+	struct d_rbt          *cn_childs;
+	struct dfs_obj_hdl    *cn_dfs_obj;
+};
+
+struct dfs_cache_tree {
+	dfs_t                 *dfs;
+	struct dfs_cache_node  ct_root;
+}
+
 /* structure allocated for dfs container */
 struct dfs_mt {
-	dfs_t               *dfs;
-	daos_handle_t        poh;
-	daos_handle_t        coh;
-	struct d_hash_table *dfs_dir_hash;
+	dfs_t                 *dfs;
+	daos_handle_t          poh;
+	daos_handle_t          coh;
+	struct dfs_cache_tree *dfs_dir_cache;
+	/* struct d_hash_table *dfs_dir_hash; */
 	int                  len_fs_root;
 
 	_Atomic uint32_t     inited;
@@ -266,6 +286,7 @@ update_cwd(void);
 static int
 get_eqh(daos_handle_t *eqh);
 
+#if 0
 /* Hash table entry for directory handles.  The struct and name will be allocated as a single
  * entity.
  */
@@ -387,6 +408,25 @@ out_release:
 	dfs_release(oh);
 	D_FREE(hdl);
 	return rc;
+}
+#endif
+
+static int
+dfs_cache_init(struct dfs_cache_tree *cache);
+{
+	// TODO DAOS-14348
+}
+
+static int
+dfs_cache_destroy(struct dfs_cache_tree *cache)
+{
+	// TODO DAOS-14348
+}
+
+static int
+dfs_cache_find_add(dfs_obj_t **obj, struct dfs_cache_tree *cache, const char *dir_name)
+{
+	// TODO DAOS-14348
 }
 
 static int (*ld_open)(const char *pathname, int oflags, ...);
@@ -682,7 +722,8 @@ discover_daos_mount_with_env(void)
 	if (dfs_list[num_dfs].cont == NULL)
 		D_GOTO(free_pool, rc = ENOMEM);
 
-	dfs_list[num_dfs].dfs_dir_hash = NULL;
+	/* dfs_list[num_dfs].dfs_dir_hash = NULL; */
+	memset(&dfs_list[num_dfs].dfs_dir_cache, 0, sizeof(struct dfs_cache_tree));
 	dfs_list[num_dfs].len_fs_root  = (int)len_fs_root;
 	atomic_init(&dfs_list[num_dfs].inited, 0);
 	num_dfs++;
@@ -728,7 +769,8 @@ discover_dfuse_mounts(void)
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
 		if (strncmp(fs_entry->mnt_type, MNT_TYPE_FUSE, sizeof(MNT_TYPE_FUSE)) == 0) {
-			pt_dfs_mt->dfs_dir_hash = NULL;
+			/* pt_dfs_mt->dfs_dir_hash = NULL; */
+			memset(&pt_dfs_mt->dfs_dir_cache, 0, sizeof(struct dfs_cache_tree));
 			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
 				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
@@ -889,6 +931,13 @@ retrieve_handles_from_fuse(int idx)
 		goto err;
 	}
 
+	rc = dfs_cache_init(&dfs_list[idx].dfs_cache_tree);
+	if (rc != -DER_SUCCESS) {
+		errno_saved = daos_der2errno(rc);
+		D_DEBUG(DB_ANY, "failed to create DFS directory cache tree: "DF_RC"\n", DP_RC(rc));
+		goto err;
+	}
+#if 0
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 	if (rc) {
@@ -897,6 +946,7 @@ retrieve_handles_from_fuse(int idx)
 			strerror(errno_saved));
 		goto err;
 	}
+#endif
 	D_FREE(buff);
 
 	return 0;
@@ -1197,7 +1247,8 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 					path_len);
 			}
 			/* look up the dfs object from hash table for the parent dir */
-			rc = lookup_insert_dir(*dfs_mt, *parent_dir, path_len, parent);
+			/* rc = lookup_insert_dir(*dfs_mt, *parent_dir, path_len, parent); */
+			rc = dfs_cache_find_add(parent, *dfs_mt, *parent_dir, path_len);
 			/* parent dir does not exist or something wrong */
 			if (rc)
 				D_GOTO(out_err, rc);
@@ -3482,6 +3533,12 @@ rmdir(const char *path)
 		goto out_org;
 	atomic_fetch_add_relaxed(&num_rmdir, 1);
 
+	rc = dfs_cache_remove(&dfs_mt->dfs_dir_cache, item_name);
+	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST) {
+		D_NOTE("failed to remove entry '%s' from cache: "DF_RC"\n", DP(RC));
+		D_GOTO(out_err, rc);
+	}
+
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc)
 		D_GOTO(out_err, rc);
@@ -3757,6 +3814,9 @@ rename(const char *old_name, const char *new_name)
 			      NULL);
 		if (rc)
 			D_GOTO(out_err, rc);
+
+		// TODO DAOS-14348 Update cache
+
 		return 0;
 	} else if (is_target_path1 == 1 && is_target_path2 == 0) {
 		/* Old_name is on DAOS and new_name is on non-DAOS filesystem */
@@ -3883,9 +3943,17 @@ rename(const char *old_name, const char *new_name)
 			rc = dfs_release(obj_old);
 			if (rc)
 				goto out_err;
+
 			rc = mkdir(new_name, stat_old.st_mode);
 			if (rc != 0)
 				D_GOTO(out_err, rc = errno);
+
+			rc = dfs_cache_remove(&dfs_mt->dfs_dir_cache, item_name);
+			if (rc != -DER_SUCCESS && rc != -DER_NONEXIST) {
+				D_NOTE("failed to remove entry '%s' from cache: "DF_RC"\n", DP(RC));
+				D_GOTO(out_err, rc);
+			}
+
 			rc = dfs_remove(dfs_mt1->dfs, parent_old, item_name_old, false, NULL);
 			if (rc)
 				goto out_err;
@@ -4021,6 +4089,9 @@ rename(const char *old_name, const char *new_name)
 			    dfs_mkdir(dfs_mt2->dfs, parent_new, item_name_new, stat_old.st_mode, 0);
 			if (rc != 0)
 				goto out_err;
+			// TODO DAOS-14348 Add new entry in cache
+
+			// FIXME DAOS-14348 Should not be done
 			rc = dfs_remove(dfs_mt1->dfs, parent_old, item_name_old, false, NULL);
 			if (rc)
 				goto out_err;
@@ -4322,6 +4393,12 @@ new_unlink(const char *path)
 		goto out_org;
 
 	atomic_fetch_add_relaxed(&num_unlink, 1);
+
+	rc = dfs_cache_remove(&dfs_mt->dfs_dir_cache, item_name);
+	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST) {
+		D_NOTE("failed to remove entry '%s' from cache: "DF_RC"\n", DP(RC));
+		D_GOTO(out_err, rc);
+	}
 
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc)
@@ -5929,16 +6006,23 @@ init_dfs(int idx)
 		DS_ERROR(rc, "failed to mount dfs");
 		D_GOTO(out_err_mt, rc);
 	}
+	rc = dfs_cache_init(&dfs_list[idx].dfs_cache_tree);
+	if (rc != -DER_SUCCESS) {
+		DL_ERROR(rc, "failed to create DFS directory cache tree");
+		D_GOTO(out_err_ht, rc = daos_der2errno(rc));
+	}
+#if 0
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to create hash table");
 		D_GOTO(out_err_ht, rc = daos_der2errno(rc));
 	}
+#endif
 
 	return 0;
 
-out_err_ht:
+out_err_cache:
 	rc2 = dfs_umount(dfs_list[idx].dfs);
 	if (rc2 != 0)
 		DS_ERROR(rc2, "error in dfs_umount(%s)", dfs_list[idx].fs_root);
@@ -5966,6 +6050,7 @@ finalize_dfs(void)
 	hook_enabled = 0;
 
 	for (i = 0; i < num_dfs; i++) {
+#if 0
 		if (dfs_list[i].dfs_dir_hash == NULL) {
 			D_FREE(dfs_list[i].fs_root);
 			D_FREE(dfs_list[i].pool);
@@ -5983,6 +6068,12 @@ finalize_dfs(void)
 		rc = d_hash_table_destroy(dfs_list[i].dfs_dir_hash, false);
 		if (rc != 0) {
 			DL_ERROR(rc, "error in d_hash_table_destroy(%s)", dfs_list[i].fs_root);
+			continue;
+		}
+#endif
+		rc = dfs_cache_destroy(&dfs_list[i].dfs_dir_cache);
+		if (rc != 0) {
+			DL_ERROR(rc, "error in dfs_cache_destroy(%s)", dfs_list[i].fs_root);
 			continue;
 		}
 		rc = dfs_umount(dfs_list[i].dfs);
