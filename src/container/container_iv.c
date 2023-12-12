@@ -461,7 +461,7 @@ again:
 				rc = cont_iv_snap_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_ERROR("create cont snap iv entry failed "
+				D_DEBUG("create cont snap iv entry failed "
 					""DF_RC"\n", DP_RC(rc));
 			} else if (class_id == IV_CONT_PROP) {
 				rc = cont_iv_prop_ent_create(entry, key);
@@ -763,8 +763,8 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = entry_size;
 	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL, retry);
 	if (rc)
-		DL_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR, rc, DF_UUID " iv fetch failed",
-			  DP_UUID(key_uuid));
+		D_DEBUG(DB_MGMT, DF_UUID " iv fetch failed: %d",
+			DP_UUID(key_uuid), rc);
 
 	return rc;
 }
