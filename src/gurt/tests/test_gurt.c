@@ -198,15 +198,24 @@ void test_d_errstr(void **state)
 	assert_string_equal(value, "DER_SUCCESS");
 	value = d_errstr(-DER_IVCB_FORWARD);
 	assert_string_equal(value, "DER_IVCB_FORWARD");
-#ifdef TEST_OLD_ERROR
-	value = d_errstr(-DER_FREE_MEM);
-	assert_string_equal(value, "DER_FREE_MEM");
-	value = d_errstr(-DER_STALE);
-	assert_string_equal(value, "DER_STALE");
-	(void)test_d_errstr_v2;
-#else
-	test_d_errstr_v2(state);
-#endif
+
+	/* Check the boundary at the end of the GURT error numbers, this will need updating if
+	 * additional error numbers are added.
+	 */
+	value = d_errstr(-DER_QUOTA_LIMIT);
+	assert_string_equal(value, "DER_QUOTA_LIMIT");
+	value = d_errstr(-1046);
+	assert_string_equal(value, "DER_QUOTA_LIMIT");
+	value = d_errstr(-(DER_QUOTA_LIMIT + 1));
+	assert_string_equal(value, "DER_UNKNOWN");
+
+	/* Check the end of the DAOS error numbers. */
+	value = d_errstr(-DER_DIV_BY_ZERO);
+	assert_string_equal(value, "DER_DIV_BY_ZERO");
+	value = d_errstr(-2047);
+	assert_string_equal(value, "DER_DIV_BY_ZERO");
+	value = d_errstr(-(DER_DIV_BY_ZERO + 1));
+	assert_string_equal(value, "DER_UNKNOWN");
 }
 
 void test_d_errdesc(void **state)

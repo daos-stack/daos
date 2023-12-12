@@ -25,143 +25,109 @@ extern "C" {
  */
 
 /** Preprocessor macro defining GURT errno values and internal definition of d_errstr */
-#define D_FOREACH_GURT_ERR(ACTION)					\
-	/** no permission */						\
-	ACTION(DER_NO_PERM,		(DER_ERR_GURT_BASE + 1),	\
-	       Operation not permitted)					\
-	/** invalid handle */						\
-	ACTION(DER_NO_HDL,		(DER_ERR_GURT_BASE + 2),	\
-	       Invalid handle)						\
-	/** invalid parameters */					\
-	ACTION(DER_INVAL,		(DER_ERR_GURT_BASE + 3),	\
-	       Invalid parameters)					\
-	/** entity already exists */					\
-	ACTION(DER_EXIST,		(DER_ERR_GURT_BASE + 4),	\
-	       Entity already exists)					\
-	/** nonexistent entity */					\
-	ACTION(DER_NONEXIST,		(DER_ERR_GURT_BASE + 5),	\
-	       The specified entity does not exist)			\
-	/** unreachable node */						\
-	ACTION(DER_UNREACH,		(DER_ERR_GURT_BASE + 6),	\
-	       Unreachable node)					\
-	/** no space on storage target */				\
-	ACTION(DER_NOSPACE,		(DER_ERR_GURT_BASE + 7),	\
-	       No space on storage target)				\
-	/** already did sth */						\
-	ACTION(DER_ALREADY,		(DER_ERR_GURT_BASE + 8),	\
-	       Operation already performed)				\
-	/** NO memory */						\
-	ACTION(DER_NOMEM,		(DER_ERR_GURT_BASE + 9),	\
-	       Out of memory)						\
-	/** Function not implemented */					\
-	ACTION(DER_NOSYS,		(DER_ERR_GURT_BASE + 10),	\
-	       Function not implemented)				\
-	/** timed out */						\
-	ACTION(DER_TIMEDOUT,		(DER_ERR_GURT_BASE + 11),	\
-	       Time out)						\
-	/** Busy */							\
-	ACTION(DER_BUSY,		(DER_ERR_GURT_BASE + 12),	\
-	       Device or resource busy)					\
-	/** Try again */						\
-	ACTION(DER_AGAIN,		(DER_ERR_GURT_BASE + 13),	\
-	       Try again)						\
-	/** Incompatible protocol */					\
-	ACTION(DER_PROTO,		(DER_ERR_GURT_BASE + 14),	\
-	       Incompatible protocol)					\
-	/** not initialized */						\
-	ACTION(DER_UNINIT,		(DER_ERR_GURT_BASE + 15),	\
-	       Device or resource not initialized)			\
-	/** buffer too short (larger buffer needed) */			\
-	ACTION(DER_TRUNC,		(DER_ERR_GURT_BASE + 16),	\
-	       Buffer too short)					\
-	/** data too long for defined data type or buffer size */	\
+#define D_FOREACH_GURT_ERR(ACTION)                                                                 \
+	/** no permission */                                                                       \
+	ACTION(DER_NO_PERM, (DER_ERR_GURT_BASE + 1), Operation not permitted)                      \
+	/** invalid handle */                                                                      \
+	ACTION(DER_NO_HDL, (DER_ERR_GURT_BASE + 2), Invalid handle)                                \
+	/** invalid parameters */                                                                  \
+	ACTION(DER_INVAL, (DER_ERR_GURT_BASE + 3), Invalid parameters)                             \
+	/** entity already exists */                                                               \
+	ACTION(DER_EXIST, (DER_ERR_GURT_BASE + 4), Entity already exists)                          \
+	/** nonexistent entity */                                                                  \
+	ACTION(DER_NONEXIST, (DER_ERR_GURT_BASE + 5), The specified entity does not exist)         \
+	/** unreachable node */                                                                    \
+	ACTION(DER_UNREACH, (DER_ERR_GURT_BASE + 6), Unreachable node)                             \
+	/** no space on storage target */                                                          \
+	ACTION(DER_NOSPACE, (DER_ERR_GURT_BASE + 7), No space on storage target)                   \
+	/** already did sth */                                                                     \
+	ACTION(DER_ALREADY, (DER_ERR_GURT_BASE + 8), Operation already performed)                  \
+	/** NO memory */                                                                           \
+	ACTION(DER_NOMEM, (DER_ERR_GURT_BASE + 9), Out of memory)                                  \
+	/** Function not implemented */                                                            \
+	ACTION(DER_NOSYS, (DER_ERR_GURT_BASE + 10), Function not implemented)                      \
+	/** timed out */                                                                           \
+	ACTION(DER_TIMEDOUT, (DER_ERR_GURT_BASE + 11), Time out)                                   \
+	/** Busy */                                                                                \
+	ACTION(DER_BUSY, (DER_ERR_GURT_BASE + 12), Device or resource busy)                        \
+	/** Try again */                                                                           \
+	ACTION(DER_AGAIN, (DER_ERR_GURT_BASE + 13), Try again)                                     \
+	/** Incompatible protocol */                                                               \
+	ACTION(DER_PROTO, (DER_ERR_GURT_BASE + 14), Incompatible protocol)                         \
+	/** not initialized */                                                                     \
+	ACTION(DER_UNINIT, (DER_ERR_GURT_BASE + 15), Device or resource not initialized)           \
+	/** buffer too short (larger buffer needed) */                                             \
+	ACTION(DER_TRUNC, (DER_ERR_GURT_BASE + 16), Buffer too short)                              \
+	/** data too long for defined data type or buffer size */                                  \
 	ACTION(DER_OVERFLOW,		(DER_ERR_GURT_BASE + 17),	\
-	       Data too long for defined data type or buffer size)	\
-	/** operation canceled */					\
-	ACTION(DER_CANCELED,		(DER_ERR_GURT_BASE + 18),	\
-	       Operation canceled)					\
-	/** Out-Of-Group or member list */				\
-	ACTION(DER_OOG,			(DER_ERR_GURT_BASE + 19),	\
-	       Out of group or member list)				\
-	/** transport layer mercury error */				\
-	ACTION(DER_HG,			(DER_ERR_GURT_BASE + 20),	\
-	       Transport layer mercury error)				\
-	/** RPC or protocol version not registered */			\
-	ACTION(DER_UNREG,		(DER_ERR_GURT_BASE + 21),	\
-	       RPC or protocol version not registered)			\
-	/** failed to generate an address string */			\
-	ACTION(DER_ADDRSTR_GEN,		(DER_ERR_GURT_BASE + 22),	\
-	       Failed to generate an address string)			\
-	/** PMIx layer error */						\
-	ACTION(DER_PMIX,		(DER_ERR_GURT_BASE + 23),	\
-	       PMIx layer error)					\
-	/** IV callback - cannot handle locally */			\
-	ACTION(DER_IVCB_FORWARD,	(DER_ERR_GURT_BASE + 24),	\
-	       Incast variable unavailable locally. Must forward)	\
-	/** miscellaneous error */					\
-	ACTION(DER_MISC,		(DER_ERR_GURT_BASE + 25),	\
-	       Miscellaneous error)					\
-	/** Bad path name */						\
-	ACTION(DER_BADPATH,		(DER_ERR_GURT_BASE + 26),	\
-	       Bad path name)						\
-	/** Not a directory */						\
-	ACTION(DER_NOTDIR,		(DER_ERR_GURT_BASE + 27),	\
-	       Not a directory)						\
-	/** corpc failed */						\
-	ACTION(DER_CORPC_INCOMPLETE,	(DER_ERR_GURT_BASE + 28),	\
-	       Collective RPC failed)					\
-	/** no rank is subscribed to RAS */				\
-	ACTION(DER_NO_RAS_RANK,		(DER_ERR_GURT_BASE + 29),	\
-	       No rank is subscribed to RAS)				\
-	/** service group not attached */				\
-	ACTION(DER_NOTATTACH,		(DER_ERR_GURT_BASE + 30),	\
-	       Service group not attached)				\
-	/** version mismatch */						\
-	ACTION(DER_MISMATCH,		(DER_ERR_GURT_BASE + 31),	\
-	       Version mismatch)					\
-	/** rank has been excluded */					\
-	ACTION(DER_EXCLUDED,		(DER_ERR_GURT_BASE + 32),	\
-	       Rank has been excluded)					\
-	/** user-provided RPC handler didn't send reply back */		\
-	ACTION(DER_NOREPLY,		(DER_ERR_GURT_BASE + 33),	\
-	       User provided RPC handler did not send reply back)	\
-	/** denial-of-service */					\
-	ACTION(DER_DOS,			(DER_ERR_GURT_BASE + 34),       \
-	       Denial of service)					\
-	/** Incorrect target for the RPC  */				\
+	       Data too long for defined data type or buffer size)                                 \
+	/** operation canceled */                                                                  \
+	ACTION(DER_CANCELED, (DER_ERR_GURT_BASE + 18), Operation canceled)                         \
+	/** Out-Of-Group or member list */                                                         \
+	ACTION(DER_OOG, (DER_ERR_GURT_BASE + 19), Out of group or member list)                     \
+	/** transport layer mercury error */                                                       \
+	ACTION(DER_HG, (DER_ERR_GURT_BASE + 20), Transport layer mercury error)                    \
+	/** RPC or protocol version not registered */                                              \
+	ACTION(DER_UNREG, (DER_ERR_GURT_BASE + 21), RPC or protocol version not registered)        \
+	/** failed to generate an address string */                                                \
+	ACTION(DER_ADDRSTR_GEN, (DER_ERR_GURT_BASE + 22), Failed to generate an address string)    \
+	/** PMIx layer error */                                                                    \
+	ACTION(DER_PMIX, (DER_ERR_GURT_BASE + 23), PMIx layer error)                               \
+	/** IV callback - cannot handle locally */                                                 \
+	ACTION(DER_IVCB_FORWARD, (DER_ERR_GURT_BASE + 24),                                         \
+	       Incast variable unavailable locally.Must forward)                                   \
+	/** miscellaneous error */                                                                 \
+	ACTION(DER_MISC, (DER_ERR_GURT_BASE + 25), Miscellaneous error)                            \
+	/** Bad path name */                                                                       \
+	ACTION(DER_BADPATH, (DER_ERR_GURT_BASE + 26), Bad path name)                               \
+	/** Not a directory */                                                                     \
+	ACTION(DER_NOTDIR, (DER_ERR_GURT_BASE + 27), Not a directory)                              \
+	/** corpc failed */                                                                        \
+	ACTION(DER_CORPC_INCOMPLETE, (DER_ERR_GURT_BASE + 28), Collective RPC failed)              \
+	/** no rank is subscribed to RAS */                                                        \
+	ACTION(DER_NO_RAS_RANK, (DER_ERR_GURT_BASE + 29), No rank is subscribed to RAS)            \
+	/** service group not attached */                                                          \
+	ACTION(DER_NOTATTACH, (DER_ERR_GURT_BASE + 30), Service group not attached)                \
+	/** version mismatch */                                                                    \
+	ACTION(DER_MISMATCH, (DER_ERR_GURT_BASE + 31), Version mismatch)                           \
+	/** rank has been excluded */                                                              \
+	ACTION(DER_EXCLUDED, (DER_ERR_GURT_BASE + 32), Rank has been excluded)                     \
+	/** user-provided RPC handler didn't send reply back */                                    \
+	ACTION(DER_NOREPLY, (DER_ERR_GURT_BASE + 33),                                              \
+	       User provided RPC handler did not send reply back)                                  \
+	/** denial-of-service */                                                                   \
+	ACTION(DER_DOS, (DER_ERR_GURT_BASE + 34), Denial of service)                               \
+	/** Incorrect target for the RPC  */                                                       \
 	ACTION(DER_BAD_TARGET,		(DER_ERR_GURT_BASE + 35),	\
-	       Incorrect target for the RPC)				\
-	/** Group versioning mismatch */				\
-	ACTION(DER_GRPVER,		(DER_ERR_GURT_BASE + 36),	\
-	       Group versioning mismatch)				\
-	/** HLC synchronization error */				\
-	ACTION(DER_HLC_SYNC,		(DER_ERR_GURT_BASE + 37),	\
-	       HLC synchronization error)				\
-	/** No shared memory available */				\
-	ACTION(DER_NO_SHMEM,		(DER_ERR_GURT_BASE + 38),	\
-	       Not enough shared memory free)				\
-	/** Failed to add metric */					\
-	ACTION(DER_ADD_METRIC_FAILED,   (DER_ERR_GURT_BASE + 39),	\
-	       Failed to add the specified metric)			\
-	/** Duration start/end mismatch */				\
-	ACTION(DER_DURATION_MISMATCH,   (DER_ERR_GURT_BASE + 40),	\
-	       Duration end not paired with duration start)		\
-	/** Operation not permitted on metric type*/			\
+	       Incorrect target for the RPC)                                                       \
+	/** Group versioning mismatch */                                                           \
+	ACTION(DER_GRPVER, (DER_ERR_GURT_BASE + 36), Group versioning mismatch)                    \
+	/** HLC synchronization error */                                                           \
+	ACTION(DER_HLC_SYNC, (DER_ERR_GURT_BASE + 37), HLC synchronization error)                  \
+	/** No shared memory available */                                                          \
+	ACTION(DER_NO_SHMEM, (DER_ERR_GURT_BASE + 38), Not enough shared memory free)              \
+	/** Failed to add metric */                                                                \
+	ACTION(DER_ADD_METRIC_FAILED, (DER_ERR_GURT_BASE + 39),                                    \
+	       Failed to add the specified metric)                                                 \
+	/** Duration start/end mismatch */                                                         \
+	ACTION(DER_DURATION_MISMATCH, (DER_ERR_GURT_BASE + 40),                                    \
+	       Duration end not paired with duration start)                                        \
+	/** Operation not permitted on metric type*/                                               \
 	ACTION(DER_OP_NOT_PERMITTED,    (DER_ERR_GURT_BASE + 41),	\
-	       Operation not permitted for metric type provided)	\
-	/** Metric path name exceeds permitted length*/			\
-	ACTION(DER_EXCEEDS_PATH_LEN,    (DER_ERR_GURT_BASE + 42),	\
-	       Path name exceeds permitted length)			\
-	/** Metric was not found.*/					\
-	ACTION(DER_METRIC_NOT_FOUND,    (DER_ERR_GURT_BASE + 43),	\
-	       Read failed because metric not found)			\
-	/** Invalid user/group permissions.*/				\
-	ACTION(DER_SHMEM_PERMS,         (DER_ERR_GURT_BASE + 44),	\
-	       Unable to access shared memory segment due to		\
-	       incompatible user or group permissions)			\
-	/** Fatal (non-retry-able) transport layer mercury error */	\
-	ACTION(DER_HG_FATAL,		(DER_ERR_GURT_BASE + 45),	\
-	       Fatal transport layer mercury error)
+	       Operation not permitted for metric type provided)                                   \
+	/** Metric path name exceeds permitted length*/                                            \
+	ACTION(DER_EXCEEDS_PATH_LEN, (DER_ERR_GURT_BASE + 42), Path name exceeds permitted length) \
+	/** Metric was not found.*/                                                                \
+	ACTION(DER_METRIC_NOT_FOUND, (DER_ERR_GURT_BASE + 43),                                     \
+	       Read failed because metric not found)                                               \
+	/** Invalid user/group permissions.*/                                                      \
+	ACTION(DER_SHMEM_PERMS, (DER_ERR_GURT_BASE + 44),                                          \
+	       Unable to access shared memory segment due to incompatible user or                  \
+		   group permissions)                                                              \
+	/** Fatal (non-retry-able) transport layer mercury error */                                \
+	ACTION(DER_HG_FATAL, (DER_ERR_GURT_BASE + 45), Fatal transport layer mercury error)        \
+	/** Quota limit reached on the requested resource */                                       \
+	ACTION(DER_QUOTA_LIMIT, (DER_ERR_GURT_BASE + 46), Quota limit reached)
 	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
