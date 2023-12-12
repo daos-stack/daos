@@ -385,8 +385,7 @@ struct bio_xs_context {
 	struct spdk_thread	*bxc_thread;
 	struct bio_xs_blobstore	*bxc_xs_blobstores[SMD_DEV_TYPE_MAX];
 	struct bio_dma_buffer	*bxc_dma_buf;
-	unsigned int		 bxc_ready:1,		/* xstream setup finished */
-				 bxc_self_polling;	/* for standalone VOS */
+	unsigned int		 bxc_self_polling:1;	/* for standalone VOS */
 };
 
 /* Per VOS instance I/O context */
