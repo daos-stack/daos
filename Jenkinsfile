@@ -290,8 +290,8 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
-                        'Functional on Leap 15.4': getFunctionalTestStage(
-                            name: 'Functional on Leap 15.4',
+                        'Functional on Leap 15.5': getFunctionalTestStage(
+                            name: 'Functional on Leap 15.5',
                             pragma_suffix: '-vm',
                             distro: 'leap15',
                             base_branch: env.BaseBranch,
