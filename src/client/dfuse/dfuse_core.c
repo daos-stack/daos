@@ -1071,7 +1071,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 
 	rc = ival_init(dfuse_info);
 	if (rc != 0)
-		D_GOTO(err_pt, rc = d_errno2der(rc));
+		D_GOTO(err_it, rc = d_errno2der(rc));
 
 	atomic_init(&dfuse_info->di_ino_next, 2);
 	atomic_init(&dfuse_info->di_eqt_idx, 0);
@@ -1125,6 +1125,9 @@ err_eq:
 		sem_destroy(&eqt->de_sem);
 		DFUSE_TRA_DOWN(eqt);
 	}
+
+	ival_thread_stop();
+err_it:
 	d_hash_table_destroy_inplace(&dfuse_info->dpi_iet, false);
 err_pt:
 	d_hash_table_destroy_inplace(&dfuse_info->di_pool_table, false);

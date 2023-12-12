@@ -723,6 +723,8 @@ out_cont:
 out_pool:
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_daos:
+	ival_thread_stop();
+
 	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)
 		rc = rc2;

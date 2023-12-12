@@ -255,13 +255,18 @@ ival_init(struct dfuse_info *dfuse_info)
 	D_INIT_LIST_HEAD(&ival_data.time_entry_list);
 
 	rc = sem_init(&ival_sem, 0, 0);
-	if (rc != 0) {
-		rc = errno;
-		goto out;
-	}
+	if (rc != 0)
+		D_GOTO(out, rc = errno);
 
 	rc = ival_bucket_add(&ival_data.time_entry_list, 0);
+	if (rc)
+		goto sem;
+
 out:
+	return rc;
+sem:
+	sem_destroy(&ival_sem);
+	DFUSE_TRA_DOWN(&ival_data);
 	return rc;
 }
 
