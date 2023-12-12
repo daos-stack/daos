@@ -123,8 +123,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	drpcSrvStart := time.Now()
 	err = drpcServer.Start(hwlocCtx)
 	if err != nil {
-		cmd.Errorf("Unable to start socket server on %s: %v", sockPath, err)
-		return err
+		return errors.Wrap(err, "unable to start dRPC server")
 	}
 	cmd.Debugf("dRPC socket server started: %s", time.Since(drpcSrvStart))
 
