@@ -83,18 +83,19 @@ int
 d_rbt_insert(d_rbt_t *rbt, void *key, void *data, bool overwrite);
 
 /**
- * Lookup \p key in the RBT, if there is a matched node, it should be returned.  Otherwise a new
- * node will be inserted into the RBT, and \p node_new will holds a pointer on this new node.
+ * Lookup \p key in the RBT, if there is a matched node, it should be returned into \node.
+ * Otherwise a new node will be inserted into the RBT, and \p node will holds a pointer on this new
+ * node.
  *
  * \param[in,out] rbt	The RBT to lookup and update
  * \param[in] key	The key to find or insert
  * \param[in] data	The data to find or insert
- * \param[in] node_new	Pointer on the found node if it exists
+ * \param[in] node_new	Pointer on the found node if it exists, or the new one inserted
  *
  * \return		0 on success, negative value on error
  */
 int
-d_rbt_find_insert(d_rbt_t *rbt, void *key, void *data, d_rbt_node_t **node_new);
+d_rbt_find_insert(d_rbt_t *rbt, void *key, void *data, d_rbt_node_t **node);
 
 /**
  * Delete the node identified by \p key from the RBT
