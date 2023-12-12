@@ -73,3 +73,10 @@
     src: daos-launch_nlt.sh.j2
     mode: '0755'
     dest: "{{ daos_runtime_dir }}/daos-launch_nlt.sh"
+
+- name: Install DAOS polkit configuration file
+  remote_user: root
+  template:
+    src: daos-polkit.rules.j2
+    mode: '0640'
+    dest: /etc/polkit-1/rules.d/50-daos_ftest.rules

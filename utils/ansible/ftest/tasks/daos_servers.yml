@@ -19,7 +19,7 @@
 - name: Check Huge Pages
   remote_user: root
   daos_hugepages:
-    size: "{{ daos_hugepages_nb | default(4096) }}"
+    size: "{{ daos_hugepages_nb | default(daos_hugepages_nb_default) }}"
 
 - name: Add DAOS server groups
   remote_user: root
