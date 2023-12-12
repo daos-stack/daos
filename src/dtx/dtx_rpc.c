@@ -1420,20 +1420,19 @@ dtx_coll_rpc_helper(void *arg)
 }
 
 static int
-dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_id *xid, uint32_t opc, uint32_t version,
-		  daos_epoch_t epoch, uint8_t *hints, uint32_t hint_sz,
-		  d_rank_list_t *ranks, struct dtx_coll_rpc_args *dcra)
+dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32_t opc,
+		  daos_epoch_t epoch, struct dtx_coll_rpc_args *dcra)
 {
 	int	rc;
 
 	dcra->dcra_cont = cont;
-	dcra->dcra_xid = *xid;
+	dcra->dcra_xid = dce->dce_xid;
 	dcra->dcra_opc = opc;
-	dcra->dcra_ver = version;
+	dcra->dcra_ver = dce->dce_ver;
 	dcra->dcra_epoch = epoch;
-	dcra->dcra_ranks = ranks;
-	dcra->dcra_hints = hints;
-	dcra->dcra_hint_sz = hint_sz;
+	dcra->dcra_ranks = dce->dce_ranks;
+	dcra->dcra_hints = dce->dce_hints;
+	dcra->dcra_hint_sz = dce->dce_hint_sz;
 	dcra->dcra_future = ABT_FUTURE_NULL;
 	dcra->dcra_helper = ABT_THREAD_NULL;
 
@@ -1466,9 +1465,7 @@ dtx_coll_rpc_post(struct dtx_coll_rpc_args *dcra, int ret)
 }
 
 int
-dtx_coll_commit(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ranks,
-		uint8_t *hints, uint32_t hint_sz, uint8_t *bitmap, uint32_t bitmap_sz,
-		uint32_t version)
+dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct dtx_cos_key *dck)
 {
 	struct dtx_coll_rpc_args	 dcra = { 0 };
 	int				*results = NULL;
@@ -1479,13 +1476,13 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *r
 	int				 rc2 = 0;
 	int				 i;
 
-	if (ranks != NULL)
-		rc = dtx_coll_rpc_prep(cont, xid, DTX_COLL_COMMIT, version, 0, hints, hint_sz,
-				       ranks, &dcra);
+	if (dce->dce_ranks != NULL)
+		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_COMMIT, 0, &dcra);
 
-	if (bitmap != NULL) {
-		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, xid, 0,
-					  DTX_COLL_COMMIT, bitmap_sz, bitmap, &results);
+	if (dce->dce_bitmap != NULL) {
+		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, 0,
+					  DTX_COLL_COMMIT, dce->dce_bitmap_sz, dce->dce_bitmap,
+					  &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {
@@ -1500,7 +1497,7 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *r
 		D_FREE(results);
 	}
 
-	if (ranks != NULL) {
+	if (dce->dce_ranks != NULL) {
 		rc = dtx_coll_rpc_post(&dcra, rc);
 		if (rc > 0 || rc == -DER_NONEXIST || rc == -DER_EXCLUDED || rc == -DER_OOG)
 			rc = 0;
@@ -1509,23 +1506,30 @@ dtx_coll_commit(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *r
 	}
 
 	if (rc == 0 && rc1 == 0)
-		rc2 = vos_dtx_commit(cont->sc_hdl, xid, 1, NULL);
+		rc2 = vos_dtx_commit(cont->sc_hdl, &dce->dce_xid, 1, NULL);
 	else if (committed > 0)
-		/* Mark the DTX as "PARTIAL_COMMITTED" and re-commit it later. */
-		rc2 = vos_dtx_set_flags(cont->sc_hdl, xid, 1, DTE_PARTIAL_COMMITTED);
+		/* Mark the DTX as "PARTIAL_COMMITTED" and re-commit it later via cleanup logic. */
+		rc2 = vos_dtx_set_flags(cont->sc_hdl, &dce->dce_xid, 1, DTE_PARTIAL_COMMITTED);
 	if (rc2 > 0 || rc2 == -DER_NONEXIST)
 		rc2 = 0;
 
+	/*
+	 * NOTE: Currently, we commit collective DTX one by one with high priority. So here we have
+	 *	 to remove the collective DTX entry from the CoS even if the commit failed remotely.
+	 *	 Otherwise, the batched commit ULT may be blocked by such "bad" entry.
+	 */
+	if (rc2 == 0 && dck != NULL)
+		dtx_del_cos(cont, &dce->dce_xid, &dck->oid, dck->dkey_hash);
+
 	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
-		 "Collectively commit DTX "DF_DTI": %d/%d/%d\n", DP_DTI(xid), rc, rc1, rc2);
+		 "Collectively commit DTX "DF_DTI": %d/%d/%d\n",
+		 DP_DTI(&dce->dce_xid), rc, rc1, rc2);
 
 	return rc != 0 ? rc : rc1 != 0 ? rc1 : rc2;
 }
 
 int
-dtx_coll_abort(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ranks,
-	       uint8_t *hints, uint32_t hint_sz, uint8_t *bitmap, uint32_t bitmap_sz,
-	       uint32_t version, daos_epoch_t epoch)
+dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch)
 {
 	struct dtx_coll_rpc_args	 dcra = { 0 };
 	int				*results = NULL;
@@ -1535,13 +1539,13 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ra
 	int				 rc2 = 0;
 	int				 i;
 
-	if (ranks != NULL)
-		rc = dtx_coll_rpc_prep(cont, xid, DTX_COLL_ABORT, version, epoch, hints, hint_sz,
-				       ranks, &dcra);
+	if (dce->dce_ranks != NULL)
+		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_ABORT, epoch, &dcra);
 
-	if (bitmap != NULL) {
-		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, xid, epoch,
-					  DTX_COLL_ABORT, bitmap_sz, bitmap, &results);
+	if (dce->dce_bitmap != NULL) {
+		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
+					  DTX_COLL_ABORT, dce->dce_bitmap_sz, dce->dce_bitmap,
+					  &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {
@@ -1554,29 +1558,28 @@ dtx_coll_abort(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ra
 		D_FREE(results);
 	}
 
-	if (ranks != NULL) {
+	if (dce->dce_ranks != NULL) {
 		rc = dtx_coll_rpc_post(&dcra, rc);
 		if (rc > 0 || rc == -DER_NONEXIST || rc == -DER_EXCLUDED || rc == -DER_OOG)
 			rc = 0;
 	}
 
 	if (epoch != 0)
-		rc2 = vos_dtx_abort(cont->sc_hdl, xid, epoch);
+		rc2 = vos_dtx_abort(cont->sc_hdl, &dce->dce_xid, epoch);
 	else
-		rc2 = vos_dtx_set_flags(cont->sc_hdl, xid, 1, DTE_CORRUPTED);
+		rc2 = vos_dtx_set_flags(cont->sc_hdl, &dce->dce_xid, 1, DTE_CORRUPTED);
 	if (rc2 > 0 || rc2 == -DER_NONEXIST)
 		rc2 = 0;
 
 	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
-		 "Collectively abort DTX "DF_DTI": %d/%d/%d\n", DP_DTI(xid), rc, rc1, rc2);
+		 "Collectively abort DTX "DF_DTI": %d/%d/%d\n",
+		 DP_DTI(&dce->dce_xid), rc, rc1, rc2);
 
 	return rc != 0 ? rc : rc1 != 0 ? rc1 : rc2;
 }
 
 int
-dtx_coll_check(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ranks,
-	       uint8_t *hints, uint32_t hint_sz, uint8_t *bitmap, uint32_t bitmap_sz,
-	       uint32_t version, daos_epoch_t epoch)
+dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch)
 {
 	struct dtx_coll_rpc_args	 dcra = { 0 };
 	int				*results = NULL;
@@ -1589,36 +1592,37 @@ dtx_coll_check(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ra
 	 * If no other target, then current target is the unique
 	 * one and 'prepared', then related DTX can be committed.
 	 */
-	if (unlikely(ranks == NULL && bitmap == NULL))
+	if (unlikely(dce->dce_ranks == NULL && dce->dce_bitmap == NULL))
 		return DTX_ST_PREPARED;
 
-	if (ranks != NULL)
-		rc = dtx_coll_rpc_prep(cont, xid, DTX_COLL_CHECK, version, epoch, hints, hint_sz,
-				       ranks, &dcra);
+	if (dce->dce_ranks != NULL)
+		rc = dtx_coll_rpc_prep(cont, dce, DTX_COLL_CHECK, epoch, &dcra);
 
-	if (bitmap != NULL) {
-		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, xid, epoch,
-					  DTX_COLL_CHECK, bitmap_sz, bitmap, &results);
+	if (dce->dce_bitmap != NULL) {
+		len = dtx_coll_local_exec(cont->sc_pool_uuid, cont->sc_uuid, &dce->dce_xid, epoch,
+					  DTX_COLL_CHECK, dce->dce_bitmap_sz, dce->dce_bitmap,
+					  &results);
 		if (len < 0) {
 			rc1 = len;
 		} else {
 			D_ASSERT(results != NULL);
 			for (i = 0; i < len; i++) {
-				if (isset(bitmap, i))
+				if (isset(dce->dce_bitmap, i))
 					dtx_merge_check_result(&rc1, results[i]);
 			}
 		}
 		D_FREE(results);
 	}
 
-	if (ranks != NULL) {
+	if (dce->dce_ranks != NULL) {
 		rc = dtx_coll_rpc_post(&dcra, rc);
-		if (bitmap != NULL)
+		if (dce->dce_bitmap != NULL)
 			dtx_merge_check_result(&rc, rc1);
 	}
 
 	D_CDEBUG((rc < 0 && rc != -DER_NONEXIST) || (rc1 < 0 && rc1 != -DER_NONEXIST), DLOG_ERR,
-		 DB_TRACE, "Collectively check DTX "DF_DTI": %d/%d/\n", DP_DTI(xid), rc, rc1);
+		 DB_TRACE, "Collectively check DTX "DF_DTI": %d/%d/\n",
+		 DP_DTI(&dce->dce_xid), rc, rc1);
 
-	return ranks != NULL  ? rc : rc1;
+	return dce->dce_ranks != NULL  ? rc : rc1;
 }

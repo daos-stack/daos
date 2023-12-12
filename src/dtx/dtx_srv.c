@@ -47,14 +47,6 @@ dtx_tls_init(int tags, int xs_id, int tgt_id)
 		D_WARN("Failed to create DTX leader metric: " DF_RC"\n",
 		       DP_RC(rc));
 
-	rc = d_tm_add_metric(&tls->dt_dtx_entry_total, D_TM_GAUGE,
-			     "total number of dtx entry in cache", "entry",
-			     "mem/dtx/dtx_entry_%u/tgt_%u",
-			     sizeof(struct dtx_entry), tgt_id);
-	if (rc != DER_SUCCESS)
-		D_WARN("Failed to create DTX entry metric: " DF_RC"\n",
-		       DP_RC(rc));
-
 	return tls;
 }
 
@@ -385,7 +377,7 @@ dtx_coll_handler(crt_rpc_t *rpc)
 {
 	struct dtx_coll_in		*dci = crt_req_get(rpc);
 	struct dtx_coll_out		*dco = crt_reply_get(rpc);
-	struct dtx_coll_load_mbs_args	 dclma = { 0 };
+	struct dtx_coll_prep_args	 dcpa = { 0 };
 	d_rank_t			 myrank = dss_self_rank();
 	uint32_t			 bitmap_sz = 0;
 	uint32_t			 opc = opc_get(rpc->cr_opc);
@@ -403,36 +395,32 @@ dtx_coll_handler(crt_rpc_t *rpc)
 	D_ASSERT(hints != NULL);
 	D_ASSERT(dci->dci_hints.ca_count > myrank);
 
-	dclma.dclma_params = dci;
-	dclma.dclma_opc = opc;
-	rc = ABT_future_create(1, NULL, &dclma.dclma_future);
+	dcpa.dcpa_params = dci;
+	dcpa.dcpa_opc = opc;
+	rc = ABT_future_create(1, NULL, &dcpa.dcpa_future);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_future_create failed: rc = %d\n", rc);
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
-	rc = dss_ult_create(dtx_coll_load_mbs_ult, &dclma, DSS_XS_VOS, hints[myrank], 0, NULL);
+	rc = dss_ult_create(dtx_coll_prep_ult, &dcpa, DSS_XS_VOS, hints[myrank], 0, NULL);
 	if (rc != 0) {
-		ABT_future_free(&dclma.dclma_future);
+		ABT_future_free(&dcpa.dcpa_future);
 		D_ERROR("Failed to create ult on XS %u: "DF_RC"\n", hints[myrank], DP_RC(rc));
 		goto out;
 	}
 
-	rc = ABT_future_wait(dclma.dclma_future);
+	rc = ABT_future_wait(dcpa.dcpa_future);
 	D_ASSERT(rc == ABT_SUCCESS);
 
-	ABT_future_free(&dclma.dclma_future);
+	ABT_future_free(&dcpa.dcpa_future);
 
-	switch (dclma.dclma_result) {
+	switch (dcpa.dcpa_result) {
 	case 0:
-		rc = dtx_coll_prep(dci->dci_po_uuid, dclma.dclma_oid, dclma.dclma_mbs, myrank, -1,
-				   dci->dci_version, NULL /* p_hints */, NULL /* hint_sz */,
-				   &bitmap, &bitmap_sz, NULL /* p_ranks */);
-		if (rc != 0) {
-			D_ERROR("Failed to prepare the bitmap (and hints) for collective DTX "
-				DF_DTI" opc %u: "DF_RC"\n", DP_DTI(&dci->dci_xid), opc, DP_RC(rc));
-			goto out;
-		}
+		D_ASSERT(dcpa.dcpa_dce != NULL);
+
+		bitmap = dcpa.dcpa_dce->dce_bitmap;
+		bitmap_sz = dcpa.dcpa_dce->dce_bitmap_sz;
 		break;
 	case 1:
 		/* The DTX has been committed, then depends on the RPC type. */
@@ -464,9 +452,9 @@ dtx_coll_handler(crt_rpc_t *rpc)
 		 */
 		break;
 	default:
-		D_ASSERTF(dclma.dclma_result < 0, "Unexpected result when load MBS for DTX "
-			  DF_DTI": "DF_RC"\n", DP_DTI(&dci->dci_xid), DP_RC(dclma.dclma_result));
-		D_GOTO(out, rc = dclma.dclma_result);
+		D_ASSERTF(dcpa.dcpa_result < 0, "Unexpected result when load MBS for DTX "
+			  DF_DTI": "DF_RC"\n", DP_DTI(&dci->dci_xid), DP_RC(dcpa.dcpa_result));
+		D_GOTO(out, rc = dcpa.dcpa_result);
 	}
 
 	len = dtx_coll_local_exec(dci->dci_po_uuid, dci->dci_co_uuid, &dci->dci_xid, dci->dci_epoch,
@@ -507,8 +495,7 @@ out:
 	if (rc < 0)
 		D_ERROR("Failed to send collective RPC %p reply: "DF_RC"\n", rpc, DP_RC(rc));
 
-	D_FREE(dclma.dclma_mbs);
-	D_FREE(bitmap);
+	dtx_coll_entry_put(dcpa.dcpa_dce);
 	D_FREE(results);
 }
 

@@ -144,6 +144,17 @@ struct dtx_sub_status {
 	uint32_t			dss_comp:1;
 };
 
+struct dtx_coll_entry {
+	struct dtx_id			 dce_xid;
+	uint32_t			 dce_ver;
+	uint32_t			 dce_refs;
+	d_rank_list_t			*dce_ranks;
+	uint8_t				*dce_hints;
+	uint8_t				*dce_bitmap;
+	uint32_t			 dce_hint_sz;
+	uint32_t			 dce_bitmap_sz;
+};
+
 struct dtx_leader_handle;
 typedef int (*dtx_agg_cb_t)(struct dtx_leader_handle *dlh, int allow_failure);
 
@@ -166,20 +177,12 @@ struct dtx_leader_handle {
 	int32_t				dlh_allow_failure;
 					/* Normal sub requests have been processed. */
 	uint32_t			dlh_normal_sub_done:1,
-					 /* Collective DTX. */
-					 dlh_coll:1,
+					/* For collective DTX. */
+					dlh_coll:1,
 					/* Drop conditional flags when forward RPC. */
 					dlh_drop_cond:1;
-	/* Ranks list for collective modification. */
-	d_rank_list_t			*dlh_coll_ranks;
-	/* VOS targets hint for collective modification. */
-	uint8_t				*dlh_coll_hints;
-	/* Bitmap for collective modification on local VOS targets. */
-	uint8_t				*dlh_coll_bitmap;
-	/* The size of dlh_coll_hints array. */
-	uint32_t			dlh_coll_hint_sz;
-	/* The size of dlh_coll_bitmap in bytes. */
-	uint32_t			dlh_coll_bitmap_sz;
+	/* Elements for collective DTX. */
+	struct dtx_coll_entry		*dlh_coll_entry;
 	/* The bcast RPC tree width for collective transaction */
 	uint16_t			dlh_coll_tree_width;
 	/* How many delay forward sub request. */
@@ -195,7 +198,8 @@ struct dtx_leader_handle {
 };
 
 struct dtx_stat {
-	uint64_t	dtx_committable_count;
+	uint32_t	dtx_committable_count;
+	uint32_t	dtx_committable_coll_count;
 	uint64_t	dtx_oldest_committable_time;
 	uint64_t	dtx_oldest_active_time;
 	/* The epoch for the oldest entry in the 1st committed blob. */
@@ -229,7 +233,7 @@ enum dtx_flags {
 	DTX_PREPARED		= (1 << 7),
 	/** Do not keep committed entry. */
 	DTX_DROP_CMT		= (1 << 8),
-	/** Collective DTX. */
+	/** For collective DTX. */
 	DTX_COLL		= (1 << 9),
 };
 
@@ -240,9 +244,8 @@ dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash);
 int
 dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
 		 uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
-		 struct dtx_id *dti_cos, int dti_cos_cnt, uint8_t *hints, uint32_t hint_sz,
-		 uint8_t *bitmap, uint32_t bitmap_sz, struct daos_shard_tgt *tgts, int tgt_cnt,
-		 uint32_t flags, d_rank_list_t *ranks, struct dtx_memberships *mbs,
+		 struct dtx_id *dti_cos, int dti_cos_cnt, struct daos_shard_tgt *tgts, int tgt_cnt,
+		 uint32_t flags, struct dtx_memberships *mbs, struct dtx_coll_entry *dce,
 		 struct dtx_leader_handle **p_dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result);
@@ -285,13 +288,11 @@ int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t ep
 
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 
-int dtx_coll_commit(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ranks,
-		    uint8_t *hints, uint32_t hint_sz, uint8_t *bitmap, uint32_t bitmap_sz,
-		    uint32_t version);
+int
+dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct dtx_cos_key *dck);
 
-int dtx_coll_abort(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ranks,
-		   uint8_t *hints, uint32_t hint_sz, uint8_t *bitmap, uint32_t bitmap_sz,
-		   uint32_t version, daos_epoch_t epoch);
+int
+dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch);
 
 /**
  * Check whether the given DTX is resent one or not.
@@ -318,6 +319,24 @@ int dtx_coll_abort(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t
 int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti,
 		      daos_epoch_t *epoch, uint32_t *pm_ver);
 
+static inline struct dtx_coll_entry *
+dtx_coll_entry_get(struct dtx_coll_entry *dce)
+{
+	dce->dce_refs++;
+	return dce;
+}
+
+static inline void
+dtx_coll_entry_put(struct dtx_coll_entry *dce)
+{
+	if (dce != NULL && --(dce->dce_refs) == 0) {
+		d_rank_list_free(dce->dce_ranks);
+		D_FREE(dce->dce_bitmap);
+		D_FREE(dce->dce_hints);
+		D_FREE(dce);
+	}
+}
+
 static inline void
 dtx_dsp_free(struct dtx_share_peer *dsp)
 {
@@ -334,7 +353,12 @@ dtx_entry_get(struct dtx_entry *dte)
 	return dte;
 }
 
-void dtx_entry_put(struct dtx_entry *dte);
+static inline void
+dtx_entry_put(struct dtx_entry *dte)
+{
+	if (--(dte->dte_refs) == 0)
+		D_FREE(dte);
+}
 
 static inline bool
 dtx_is_valid_handle(const struct dtx_handle *dth)

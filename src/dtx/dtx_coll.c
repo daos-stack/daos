@@ -46,41 +46,52 @@ struct dtx_coll_local_args {
 };
 
 void
-dtx_coll_load_mbs_ult(void *arg)
+dtx_coll_prep_ult(void *arg)
 {
-	struct dtx_coll_load_mbs_args	*dclma = arg;
-	struct dtx_coll_in		*dci = dclma->dclma_params;
+	struct dtx_coll_prep_args	*dcpa = arg;
+	struct dtx_coll_in		*dci = dcpa->dcpa_params;
+	struct dtx_memberships		*mbs = NULL;
 	struct ds_cont_child		*cont = NULL;
 	int				 rc = 0;
 
-	rc = ds_cont_child_lookup(dci->dci_po_uuid, dci->dci_co_uuid, &cont);
-	if (rc != 0) {
+	dcpa->dcpa_result = ds_cont_child_lookup(dci->dci_po_uuid, dci->dci_co_uuid, &cont);
+	if (dcpa->dcpa_result != 0) {
 		D_ERROR("Failed to locate pool="DF_UUID" cont="DF_UUID" for DTX "
 			DF_DTI" with opc %u: "DF_RC"\n",
 			DP_UUID(dci->dci_po_uuid), DP_UUID(dci->dci_co_uuid),
-			DP_DTI(&dci->dci_xid), dclma->dclma_opc, DP_RC(rc));
+			DP_DTI(&dci->dci_xid), dcpa->dcpa_opc, DP_RC(dcpa->dcpa_result));
 		/*
 		 * Convert the case of container non-exist as -DER_IO to distinguish
 		 * the case of DTX entry does not exist. The latter one is normal.
 		 */
-		if (rc == -DER_NONEXIST)
-			rc = -DER_IO;
-		dclma->dclma_result = rc;
-	} else {
-		rc = vos_dtx_load_mbs(cont->sc_hdl, &dci->dci_xid, &dclma->dclma_oid,
-				      &dclma->dclma_mbs);
-		dclma->dclma_result = rc;
-		if (rc == -DER_INPROGRESS && !dtx_cont_opened(cont) &&
-		    dclma->dclma_opc == DTX_COLL_CHECK) {
-			rc = start_dtx_reindex_ult(cont);
-			if (rc != 0)
-				D_ERROR(DF_UUID": Failed to trigger DTX reindex: "DF_RC"\n",
-					DP_UUID(cont->sc_uuid), DP_RC(rc));
-		}
-		ds_cont_child_put(cont);
+		if (dcpa->dcpa_result == -DER_NONEXIST)
+			dcpa->dcpa_result = -DER_IO;
+
+		goto out;
 	}
 
-	rc = ABT_future_set(dclma->dclma_future, NULL);
+	dcpa->dcpa_result = vos_dtx_load_mbs(cont->sc_hdl, &dci->dci_xid, &dcpa->dcpa_oid, &mbs);
+	if (dcpa->dcpa_result == -DER_INPROGRESS && !dtx_cont_opened(cont) &&
+	    dcpa->dcpa_opc == DTX_COLL_CHECK) {
+		rc = start_dtx_reindex_ult(cont);
+		if (rc != 0)
+			D_ERROR(DF_UUID": Failed to trigger DTX reindex: "DF_RC"\n",
+				DP_UUID(cont->sc_uuid), DP_RC(rc));
+	}
+
+	ds_cont_child_put(cont);
+	if (dcpa->dcpa_result != 0)
+		goto out;
+
+	dcpa->dcpa_result = dtx_coll_prep(dci->dci_po_uuid, dcpa->dcpa_oid, &dci->dci_xid, mbs, -1,
+					  dci->dci_version, false, &dcpa->dcpa_dce);
+	if (dcpa->dcpa_result != 0)
+		D_ERROR("Failed to prepare the bitmap (and hints) for collective DTX "
+			DF_DTI" opc %u: "DF_RC"\n", DP_DTI(&dci->dci_xid),
+			dcpa->dcpa_opc, DP_RC(dcpa->dcpa_result));
+
+out:
+	rc = ABT_future_set(dcpa->dcpa_future, NULL);
 	D_ASSERT(rc == ABT_SUCCESS);
 }
 
@@ -100,20 +111,18 @@ dtx_coll_dtg_cmp(const void *m1, const void *m2)
 }
 
 int
-dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_memberships *mbs, d_rank_t my_rank,
-	      uint32_t my_tgtid, uint32_t version, uint8_t **p_hints, uint32_t *hint_sz,
-	      uint8_t **p_bitmap, uint32_t *bitmap_sz, d_rank_list_t **p_ranks)
+dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dtx_memberships *mbs,
+	      uint32_t my_tgtid, uint32_t version, bool need_hint, struct dtx_coll_entry **p_dce)
 {
 	struct pl_map		*map = NULL;
 	struct pool_target	*target;
 	struct dtx_daos_target	*ddt;
+	struct dtx_coll_entry	*dce = NULL;
 	struct dtx_target_group	*base;
 	struct dtx_target_group	*dtg = NULL;
 	struct dtx_target_group	 key = { 0 };
-	uint8_t			*hints = NULL;
-	uint8_t			*bitmap = NULL;
-	size_t			 size = ((dss_tgt_nr - 1) >> 3) + 1;
 	uint32_t		 node_nr;
+	d_rank_t		 my_rank = dss_self_rank();
 	d_rank_t		 max_rank;
 	int			 count;
 	int			 rc = 0;
@@ -123,8 +132,13 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_memberships *mbs, 
 
 	D_ASSERT(mbs->dm_flags & DMF_CONTAIN_TARGET_GRP);
 
-	*p_bitmap = NULL;
-	*bitmap_sz = 0;
+	D_ALLOC_PTR(dce);
+	if (dce == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	dce->dce_xid = *xid;
+	dce->dce_ver = version;
+	dce->dce_refs = 1;
 
 	ddt = &mbs->dm_tgts[0];
 	base = (struct dtx_target_group *)(ddt + mbs->dm_tgt_cnt);
@@ -146,8 +160,9 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_memberships *mbs, 
 		}
 	}
 
-	D_ALLOC_ARRAY(bitmap, size);
-	if (bitmap == NULL)
+	dce->dce_bitmap_sz = ((dss_tgt_nr - 1) >> 3) + 1;
+	D_ALLOC_ARRAY(dce->dce_bitmap, dce->dce_bitmap_sz);
+	if (dce->dce_bitmap == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	map = pl_map_find(po_uuid, oid.id_pub);
@@ -156,7 +171,7 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_memberships *mbs, 
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	for (i = dtg->dtg_start_idx; i < dtg->dtg_start_idx + dtg->dtg_tgt_nr; i++) {
+	for (i = dtg->dtg_start_idx, j = 0; i < dtg->dtg_start_idx + dtg->dtg_tgt_nr; i++) {
 		rc = pool_map_find_target(map->pl_poolmap, ddt[i].ddt_id, &target);
 		D_ASSERT(rc == 1);
 
@@ -176,30 +191,29 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_memberships *mbs, 
 			continue;
 
 		/* Skip current (new) leader target. */
-		if (my_tgtid != target->ta_comp.co_index)
-			setbit(bitmap, target->ta_comp.co_index);
+		if (my_tgtid != target->ta_comp.co_index) {
+			setbit(dce->dce_bitmap, target->ta_comp.co_index);
+			j++;
+		}
 	}
 
-	if (p_hints == NULL)
-		D_GOTO(out, rc = 0);
+	rc = 0;
 
-	D_ASSERT(hint_sz != NULL);
-	D_ASSERT(p_ranks != NULL);
+	if (unlikely(j == 0)) {
+		D_FREE(dce->dce_bitmap);
+		dce->dce_bitmap_sz = 0;
+	}
 
-	if (unlikely(count == 1)) {
-		*p_ranks = NULL;
-		*p_hints = NULL;
-		*hint_sz = 0;
+	if (!need_hint || unlikely(count == 1))
 		goto out;
-	}
 
-	*p_ranks = d_rank_list_alloc(count - 1);
-	if (*p_ranks == NULL)
+	dce->dce_ranks = d_rank_list_alloc(count - 1);
+	if (dce->dce_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	node_nr = pool_map_node_nr(map->pl_poolmap);
-	D_ALLOC_ARRAY(hints, node_nr);
-	if (hints == NULL)
+	D_ALLOC_ARRAY(dce->dce_hints, node_nr);
+	if (dce->dce_hints == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	for (i = 0, j = 0, max_rank = 0, dtg = base; i < count; i++, dtg++) {
@@ -216,44 +230,37 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_memberships *mbs, 
 			     target->ta_comp.co_status == PO_COMP_ST_UPIN ||
 			     target->ta_comp.co_status == PO_COMP_ST_NEW ||
 			     target->ta_comp.co_status == PO_COMP_ST_DRAIN)) {
+				dce->dce_ranks->rl_ranks[j++] = dtg->dtg_rank;
+				dce->dce_hints[dtg->dtg_rank] = target->ta_comp.co_index;
 				if (max_rank < dtg->dtg_rank)
 					max_rank = dtg->dtg_rank;
-
-				(*p_ranks)->rl_ranks[j++] = dtg->dtg_rank;
-				hints[dtg->dtg_rank] = target->ta_comp.co_index;
 				break;
 			}
 		}
 	}
 
+	rc = 0;
+
 	/*
 	 * It is no matter that the real size of rl_ranks array is larger than rl_nr.
 	 * Then reduce rl_nr to skip those non-defined ranks at the tail in rl_ranks.
 	 */
-	(*p_ranks)->rl_nr = j;
-
-	*p_hints = hints;
-	*hint_sz = max_rank + 1;
+	if (unlikely(j == 0)) {
+		d_rank_list_free(dce->dce_ranks);
+		dce->dce_ranks = NULL;
+	} else {
+		dce->dce_ranks->rl_nr = j;
+		dce->dce_hint_sz = max_rank + 1;
+	}
 
 out:
 	if (map != NULL)
 		pl_map_decref(map);
 
-	if (rc != 0) {
-		D_FREE(bitmap);
-		if (p_ranks != NULL) {
-			d_rank_list_free(*p_ranks);
-			*p_ranks = NULL;
-		}
-		D_FREE(hints);
-		if (p_hints != NULL) {
-			*p_hints = NULL;
-			*hint_sz = 0;
-		}
-	} else {
-		*p_bitmap = bitmap;
-		*bitmap_sz = size;
-	}
+	if (rc != 0)
+		dtx_coll_entry_put(dce);
+	else
+		*p_dce = dce;
 
 	return rc;
 }

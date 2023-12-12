@@ -191,13 +191,13 @@ extern struct crt_corpc_ops	dtx_coll_commit_co_ops;
 extern struct crt_corpc_ops	dtx_coll_abort_co_ops;
 extern struct crt_corpc_ops	dtx_coll_check_co_ops;
 
-struct dtx_coll_load_mbs_args {
-	struct dtx_coll_in	*dclma_params;
-	struct dtx_memberships	*dclma_mbs;
-	daos_unit_oid_t		 dclma_oid;
-	ABT_future		 dclma_future;
-	uint32_t		 dclma_opc;
-	int			 dclma_result;
+struct dtx_coll_prep_args {
+	struct dtx_coll_entry	*dcpa_dce;
+	struct dtx_coll_in	*dcpa_params;
+	daos_unit_oid_t		 dcpa_oid;
+	ABT_future		 dcpa_future;
+	uint32_t		 dcpa_opc;
+	int			 dcpa_result;
 };
 
 struct dtx_pool_metrics {
@@ -212,7 +212,6 @@ struct dtx_pool_metrics {
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
 	struct d_tm_node_t	*dt_dtx_leader_total;
-	struct d_tm_node_t	*dt_dtx_entry_total;
 	uint64_t		 dt_agg_gen;
 	uint32_t		 dt_batched_ult_cnt;
 };
@@ -252,10 +251,10 @@ void dtx_merge_check_result(int *tgt, int src);
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 			  daos_unit_oid_t *oid, daos_epoch_t epoch,
-			  struct dtx_entry ***dtes, struct dtx_cos_key **dcks);
-int dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
-		daos_unit_oid_t *oid, uint64_t dkey_hash,
-		daos_epoch_t epoch, uint32_t flags);
+			  struct dtx_entry ***dtes, struct dtx_cos_key **dcks,
+			  struct dtx_coll_entry **p_dce);
+int dtx_add_cos(struct ds_cont_child *cont, void *entry, daos_unit_oid_t *oid,
+		uint64_t dkey_hash, daos_epoch_t epoch, uint32_t flags);
 int dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 		daos_unit_oid_t *oid, uint64_t dkey_hash);
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
@@ -263,9 +262,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 /* dtx_rpc.c */
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
-int dtx_coll_check(struct ds_cont_child *cont, struct dtx_id *xid, d_rank_list_t *ranks,
-		   uint8_t *hints, uint32_t hint_sz, uint8_t *bitmap, uint32_t bitmap_sz,
-		   uint32_t version, daos_epoch_t epoch);
+int dtx_coll_check(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch);
 int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *check_list,
 			 d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list, bool for_io);
 int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte, daos_unit_oid_t oid,
@@ -274,11 +271,10 @@ int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
 		   struct pool_target **p_tgt);
 
 /* dtx_coll.c */
-void dtx_coll_load_mbs_ult(void *arg);
-int dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_memberships *mbs,
-		  d_rank_t my_rank, uint32_t my_tgtid, uint32_t version,
-		  uint8_t **p_hints, uint32_t *hint_sz, uint8_t **p_bitmap, uint32_t *bitmap_sz,
-		  d_rank_list_t **p_ranks);
+void dtx_coll_prep_ult(void *arg);
+int dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid,
+		  struct dtx_memberships *mbs, uint32_t my_tgtid, uint32_t version,
+		  bool need_hint, struct dtx_coll_entry **p_dce);
 int dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epoch_t epoch,
 			uint32_t opc, uint32_t bitmap_sz, uint8_t *bitmap, int **p_results);
 
