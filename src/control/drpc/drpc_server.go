@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -113,7 +113,6 @@ func (d *DomainSocketServer) Start(ctx context.Context) error {
 func (d *DomainSocketServer) checkExistingSocket(ctx context.Context, addr *net.UnixAddr) error {
 	conn, err := net.DialUnix("unixpacket", nil, addr)
 	if err == nil {
-		d.log.Errorf("")
 		_ = conn.Close()
 		return FaultSocketFileInUse(d.sockFile)
 	}
