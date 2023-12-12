@@ -726,6 +726,25 @@ out:
 }
 
 int
+crt_req_get_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep)
+{
+	struct crt_rpc_priv	*rpc_priv;
+	int			 rc = 0;
+
+	if (req == NULL || tgt_ep == NULL) {
+		D_ERROR("invalid parameter (NULL req or tgt_ep).\n");
+		rc = -DER_INVAL;
+	} else {
+		rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
+		tgt_ep->ep_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
+		tgt_ep->ep_rank = rpc_priv->crp_pub.cr_ep.ep_rank;
+		tgt_ep->ep_grp = rpc_priv->crp_pub.cr_ep.ep_grp;
+	}
+
+	return rc;
+}
+
+int
 crt_req_set_timeout(crt_rpc_t *req, uint32_t timeout_sec)
 {
 	struct crt_rpc_priv	*rpc_priv;

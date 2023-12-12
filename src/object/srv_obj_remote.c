@@ -514,6 +514,7 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 	struct ds_obj_exec_arg		*exec_arg = data;
 	struct obj_remote_cb_arg	*remote_arg;
 	struct dtx_sub_status		*sub;
+	crt_endpoint_t			 tgt_ep = { 0 };
 	crt_rpc_t			*parent_req = exec_arg->rpc;
 	crt_rpc_t			*req;
 	struct obj_coll_punch_in	*ocpi_parent;
@@ -546,6 +547,22 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 	if (rc != 0) {
 		D_ERROR("crt_corpc_req_create failed for collective punch remote: "DF_RC"\n",
 			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rc = crt_req_get_endpoint(parent_req, &tgt_ep);
+	if (rc != 0) {
+		D_ERROR("crt_req_get_endpoint failed for collective punch remote: "DF_RC"\n",
+			DP_RC(rc));
+		crt_req_decref(req);
+		D_GOTO(out, rc);
+	}
+
+	rc = crt_req_set_endpoint(req, &tgt_ep);
+	if (rc != 0) {
+		D_ERROR("crt_req_set_endpoint failed for collective punch remote: "DF_RC"\n",
+			DP_RC(rc));
+		crt_req_decref(req);
 		D_GOTO(out, rc);
 	}
 

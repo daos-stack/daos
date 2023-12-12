@@ -3588,29 +3588,30 @@ static int
 obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 {
 	struct obj_io_context	 ioc = { 0 };
-	struct obj_io_context	*p_ioc = &ioc;
+	struct obj_io_context	*p_ioc = otpa->sponsor_ioc;
+	struct dtx_handle	*dth = otpa->sponsor_dth;
 	struct obj_punch_in	*opi = otpa->opi;
-	struct dtx_handle	*dth = NULL;
 	struct dtx_epoch	 epoch;
 	daos_epoch_t		 tmp;
 	uint32_t		 dtx_flags = 0;
 	int			 rc = 0;
 	int			 i;
 
-	if (otpa->sponsor_ioc != NULL) {
-		p_ioc = otpa->sponsor_ioc;
-		dth = otpa->sponsor_dth;
-		goto exec;
+	if (p_ioc == NULL) {
+		p_ioc = &ioc;
+		rc = obj_ioc_begin(opi->opi_oid.id_pub, opi->opi_map_ver, opi->opi_pool_uuid,
+				   opi->opi_co_hdl, opi->opi_co_uuid, otpa->data, opi->opi_flags,
+				   p_ioc);
+		if (rc != 0)
+			goto out;
 	}
 
-	rc = obj_ioc_begin(opi->opi_oid.id_pub, opi->opi_map_ver, opi->opi_pool_uuid,
-			   opi->opi_co_hdl, opi->opi_co_uuid, otpa->data, opi->opi_flags, &ioc);
-	if (rc != 0)
-		goto out;
+	if (dth != NULL)
+		goto exec;
 
 	if (opi->opi_flags & ORF_RESEND) {
 		tmp = opi->opi_epoch;
-		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti, &tmp, NULL);
+		rc = dtx_handle_resend(p_ioc->ioc_vos_coh, &opi->opi_dti, &tmp, NULL);
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc == -DER_ALREADY || rc == 0)
 			D_GOTO(out, rc = 0);
@@ -3620,7 +3621,7 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 			/* Abort it by force with MAX epoch to guarantee
 			 * that it can be aborted.
 			 */
-			rc = vos_dtx_abort(ioc.ioc_vos_coh, &opi->opi_dti, tmp);
+			rc = vos_dtx_abort(p_ioc->ioc_vos_coh, &opi->opi_dti, tmp);
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
@@ -3634,7 +3635,7 @@ obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 		dtx_flags |= DTX_SYNC;
 
 	/* Start the local transaction */
-	rc = dtx_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, count, opi->opi_map_ver,
+	rc = dtx_begin(p_ioc->ioc_vos_coh, &opi->opi_dti, &epoch, count, opi->opi_map_ver,
 		       &opi->opi_oid, opi->opi_dti_cos.ca_arrays, opi->opi_dti_cos.ca_count,
 		       dtx_flags, otpa->mbs, &dth);
 	if (rc != 0) {
@@ -3662,11 +3663,12 @@ exec:
 out:
 	if (otpa->ver != NULL)
 		*otpa->ver = p_ioc->ioc_map_ver;
-	if (p_ioc == &ioc) {
-		if (dth != NULL)
-			rc = dtx_end(dth, p_ioc->ioc_coc, rc);
+
+	if (dth != NULL && dth != otpa->sponsor_dth)
+		rc = dtx_end(dth, p_ioc->ioc_coc, rc);
+
+	if (p_ioc == &ioc)
 		obj_ioc_end(p_ioc, rc);
-	}
 
 	return rc;
 }
@@ -5425,7 +5427,7 @@ struct obj_coll_tgt_args {
 	crt_rpc_t				*octa_rpc;
 	struct daos_coll_shard			*octa_shards;
 	uint32_t				*octa_versions;
-	int					 octa_sponsor_tgt;
+	uint32_t				 octa_sponsor_tgt;
 	struct obj_io_context			*octa_sponsor_ioc;
 	struct dtx_handle			*octa_sponsor_dth;
 	union {
@@ -5493,6 +5495,7 @@ obj_coll_local(crt_rpc_t *rpc, struct daos_coll_shard *shards, uint8_t *bitmap, 
 	int				i;
 
 	D_ASSERT(bitmap != NULL);
+	D_ASSERT(ioc != NULL);
 
 	if (version != NULL) {
 		if (size > dss_tgt_nr)
@@ -5507,10 +5510,7 @@ obj_coll_local(crt_rpc_t *rpc, struct daos_coll_shard *shards, uint8_t *bitmap, 
 	octa.octa_misc = args;
 	octa.octa_sponsor_ioc = ioc;
 	octa.octa_sponsor_dth = dth;
-	if (ioc != NULL)
-		octa.octa_sponsor_tgt = dss_get_module_info()->dmi_tgt_id;
-	else
-		octa.octa_sponsor_tgt = -1;
+	octa.octa_sponsor_tgt = dss_get_module_info()->dmi_tgt_id;
 
 	coll_ops.co_func = func;
 	coll_args.ca_func_args = &octa;
@@ -5871,7 +5871,7 @@ void
 ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 {
 	struct dss_module_info		*dmi = dss_get_module_info();
-	struct ds_pool			*pool = NULL;
+	struct ds_pool_child		*pool = NULL;
 	struct dtx_leader_handle	*dlh = NULL;
 	struct dtx_memberships		*mbs = NULL;
 	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
@@ -5897,13 +5897,14 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 		DP_UOID(ocpi->ocpi_oid), dmi->dmi_xs_id, dmi->dmi_tgt_id,
 		ocpi->ocpi_epoch, ocpi->ocpi_map_ver, DP_DTI(&ocpi->ocpi_xid));
 
-	if (ocpi->ocpi_flags & ORF_LEADER) {
-		rc = obj_ioc_begin(ocpi->ocpi_oid.id_pub, ocpi->ocpi_map_ver, ocpi->ocpi_po_uuid,
-				   ocpi->ocpi_co_hdl, ocpi->ocpi_co_uuid, rpc, ocpi->ocpi_flags,
-				   &ioc);
-		if (rc != 0)
-			goto out;
+	D_ASSERT(dmi->dmi_xs_id != 0);
 
+	rc = obj_ioc_begin(ocpi->ocpi_oid.id_pub, ocpi->ocpi_map_ver, ocpi->ocpi_po_uuid,
+			   ocpi->ocpi_co_hdl, ocpi->ocpi_co_uuid, rpc, ocpi->ocpi_flags, &ioc);
+	if (rc != 0)
+		goto out;
+
+	if (ocpi->ocpi_flags & ORF_LEADER) {
 		rc = ds_cont_get_props(&co_props, ocpi->ocpi_po_uuid, ocpi->ocpi_co_uuid);
 		if (rc != 0)
 			goto out;
@@ -5912,29 +5913,22 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 		ocpi->ocpi_pdom_lvl = co_props.dcp_perf_domain;
 		ocpi->ocpi_pda = daos_cont_props2pda(&co_props, ocpi->ocpi_flags & ORF_EC);
 	} else {
-		D_ASSERT(dmi->dmi_xs_id == 0);
-
 		/*
 		 * For collective punch, the map version must be matched among client and
 		 * engines, otherwise, different engines may get different object layouts.
 		 */
 
-		rc = ds_pool_lookup(ocpi->ocpi_po_uuid, &pool);
-		if (rc != 0) {
-			D_ERROR("Failed to locate pool "DF_UUID": "DF_RC"\n",
-				DP_UUID(ocpi->ocpi_po_uuid), DP_RC(rc));
-			goto out;
-		}
+		pool = ioc.ioc_coc->sc_pool;
 
-		if (pool->sp_map_version > ocpi->ocpi_map_ver)
+		if (pool->spc_map_version > ocpi->ocpi_map_ver)
 			D_GOTO(out, rc = -DER_STALE);
 
-		if (pool->sp_map_version < ocpi->ocpi_map_ver) {
+		if (pool->spc_map_version < ocpi->ocpi_map_ver) {
 			rc = ds_pool_child_map_refresh_sync(ocpi->ocpi_po_uuid, ocpi->ocpi_map_ver);
 			if (rc != 0)
 				goto out;
 
-			if (pool->sp_map_version > ocpi->ocpi_map_ver)
+			if (pool->spc_map_version > ocpi->ocpi_map_ver)
 				D_GOTO(out, rc = -DER_STALE);
 		}
 	}
@@ -5945,7 +5939,7 @@ ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 
 	if (!(ocpi->ocpi_flags & ORF_LEADER)) {
 		rc = obj_coll_local(rpc, shards, dce->dce_bitmap, dce->dce_bitmap_sz, &version,
-				    NULL, NULL, mbs, obj_coll_tgt_punch);
+				    &ioc, NULL, mbs, obj_coll_tgt_punch);
 		goto out;
 	}
 
@@ -6042,9 +6036,6 @@ out:
 	if (max_ver < version)
 		max_ver = version;
 
-	if (pool != NULL && max_ver < pool->sp_map_version)
-		max_ver = pool->sp_map_version;
-
 	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO, rc,
 		  "(%s) handled collective punch RPC %p for obj "
 		  DF_UOID" on XS %u/%u epc "DF_X64" pmv %u/%u, with dti "DF_DTI,
@@ -6060,7 +6051,4 @@ out:
 
 	/* It is no matter even if obj_ioc_begin() was not called. */
 	obj_ioc_end(&ioc, rc);
-
-	if (pool != NULL)
-		ds_pool_put(pool);
 }

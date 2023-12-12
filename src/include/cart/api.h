@@ -308,6 +308,17 @@ int
 crt_req_set_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep);
 
 /**
+ * Get the endpoint information from an RPC request.
+ *
+ * \param[in] req              pointer to RPC request
+ * \param[out] tgt_ep          RPC target endpoint
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_req_get_endpoint(crt_rpc_t *req, crt_endpoint_t *tgt_ep);
+
+/**
  * Set the timeout value for an RPC request.
  *
  * It is an optional function. If user does not call it, then will depend on
