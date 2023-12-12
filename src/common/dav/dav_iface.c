@@ -143,7 +143,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 
 		rc = hdl->do_store->stor_ops->so_wal_replay(hdl->do_store, dav_wal_replay_cb, hdl);
 		if (rc) {
-			err = rc;
+			err = daos_der2errno(rc);
 			goto out2;
 		}
 
