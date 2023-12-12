@@ -5571,7 +5571,6 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct dtx_coll_entry **p_dc
 	struct daos_coll_shard	*dcs;
 	struct dtx_daos_target	*ddt;
 	struct dtx_target_group	*dtg;
-	struct pool_target	*tgt;
 	struct daos_obj_md	 md = { 0 };
 	uint32_t		*tmp;
 	uint32_t		 rank_nr;
@@ -5631,11 +5630,8 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct dtx_coll_entry **p_dc
 		if (layout->ol_shards[i].po_target == -1 || layout->ol_shards[i].po_shard == -1)
 			continue;
 
-		rc = pool_map_find_target(map->pl_poolmap, layout->ol_shards[i].po_target, &tgt);
-		D_ASSERT(rc == 1);
-
-		dct = &dcts[tgt->ta_comp.co_rank];
-		dct->dct_rank = tgt->ta_comp.co_rank;
+		dct = &dcts[layout->ol_shards[i].po_rank];
+		dct->dct_rank = layout->ol_shards[i].po_rank;
 
 		if (max_rank < dct->dct_rank)
 			max_rank = dct->dct_rank;
@@ -5667,11 +5663,11 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct dtx_coll_entry **p_dc
 		if (dct->dct_tgt_nr == 0) {
 			/* Assign the first available shard to the hint for this engine. */
 			if (dce->dce_hints != NULL)
-				dce->dce_hints[dct->dct_rank] = tgt->ta_comp.co_index;
+				dce->dce_hints[dct->dct_rank] = layout->ol_shards[i].po_index;
 			rank_nr++;
 		}
 
-		if (tgt->ta_comp.co_id == ocpi->ocpi_leader_id) {
+		if (layout->ol_shards[i].po_target == ocpi->ocpi_leader_id) {
 			if (ocpi->ocpi_flags & ORF_LEADER)
 				D_ASSERTF(myrank == dct->dct_rank,
 					  "Unmatched leader rank %u vs %u\n",
@@ -5713,7 +5709,7 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct dtx_coll_entry **p_dc
 		}
 
 		/* Only collect targets bitmap and shards for current engine. */
-		if (tgt->ta_comp.co_rank != myrank)
+		if (layout->ol_shards[i].po_rank != myrank)
 			continue;
 
 		if (dct->dct_bitmap == NULL) {
@@ -5733,9 +5729,9 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct dtx_coll_entry **p_dc
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
 
-		dcs = &dct->dct_shards[tgt->ta_comp.co_index];
+		dcs = &dct->dct_shards[layout->ol_shards[i].po_index];
 
-		if (unlikely(isset(dct->dct_bitmap, tgt->ta_comp.co_index))) {
+		if (unlikely(isset(dct->dct_bitmap, layout->ol_shards[i].po_index))) {
 			/* More than one shards reside on the same vos target. */
 			D_ASSERT(dcs->dcs_nr >= 1);
 
@@ -5754,7 +5750,7 @@ obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct dtx_coll_entry **p_dc
 			D_ASSERT(dcs->dcs_nr == 0);
 
 			dcs->dcs_buf = &dcs->dcs_inline;
-			setbit(dct->dct_bitmap, tgt->ta_comp.co_index);
+			setbit(dct->dct_bitmap, layout->ol_shards[i].po_index);
 		}
 
 		dcs->dcs_buf[dcs->dcs_nr++] = layout->ol_shards[i].po_shard;
