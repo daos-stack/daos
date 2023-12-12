@@ -65,249 +65,13 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	return 0;
 }
 
-static bool
-is_tgt_on_dev(struct smd_dev_info *dev_info, int tgt_idx)
-{
-	int	i;
-
-	for (i = 0; i < dev_info->sdi_tgt_cnt; i++) {
-		if (tgt_idx == dev_info->sdi_tgts[i])
-			return true;
-	}
-	return false;
-}
-
-struct blob_ops_arg {
-	ABT_eventual	boa_eventual;
-	int		boa_rc;
-	spdk_blob_id	boa_blob_id;
-};
-
-static void
-blob_create_cp(void *cb_arg, spdk_blob_id blob_id, int rc)
-{
-	struct blob_ops_arg	*boa = cb_arg;
-
-	boa->boa_rc = daos_errno2der(-rc);
-	boa->boa_blob_id = blob_id;
-	ABT_eventual_set(boa->boa_eventual, NULL, 0);
-	if (rc)
-		D_ERROR("Create blob failed. %d\n", rc);
-}
-
-static void
-blob_delete_cp(void *cb_arg, int rc)
-{
-	struct blob_ops_arg	*boa = cb_arg;
-
-	boa->boa_rc = daos_errno2der(-rc);
-	ABT_eventual_set(boa->boa_eventual, NULL, 0);
-	if (rc)
-		D_ERROR("Delete blob failed. %d\n", rc);
-}
-
-static int
-create_one_blob(struct spdk_blob_store *bs, uint64_t blob_sz,
-		spdk_blob_id *blob_id)
-{
-	struct blob_ops_arg	boa = { 0 };
-	struct spdk_blob_opts	blob_opts;
-	uint64_t		cluster_sz;
-	int			rc;
-
-	D_ASSERT(bs != NULL);
-	*blob_id = 0;
-	cluster_sz = spdk_bs_get_cluster_size(bs);
-
-	if (blob_sz < cluster_sz) {
-		D_ERROR("Invalid blob size "DF_U64", cluster size "DF_U64"\n",
-			blob_sz, cluster_sz);
-		return -DER_INVAL;
-	}
-
-	rc = ABT_eventual_create(0, &boa.boa_eventual);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	spdk_blob_opts_init(&blob_opts, sizeof(blob_opts));
-	blob_opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
-
-	spdk_bs_create_blob_ext(bs, &blob_opts, blob_create_cp, &boa);
-
-	rc = ABT_eventual_wait(boa.boa_eventual, NULL);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		D_ERROR("Wait eventual failed. "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
-
-	rc = boa.boa_rc;
-	if (rc)
-		D_ERROR("Create blob failed. "DF_RC"\n", DP_RC(rc));
-	else
-		*blob_id = boa.boa_blob_id;
-out:
-	ABT_eventual_free(&boa.boa_eventual);
-	return rc;
-}
-
-static int
-delete_one_blob(struct spdk_blob_store *bs, spdk_blob_id blob_id)
-{
-	struct blob_ops_arg	boa = { 0 };
-	int			rc;
-
-	D_ASSERT(bs != NULL);
-	rc = ABT_eventual_create(0, &boa.boa_eventual);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	spdk_bs_delete_blob(bs, blob_id, blob_delete_cp, &boa);
-
-	rc = ABT_eventual_wait(boa.boa_eventual, NULL);
-	if (rc != ABT_SUCCESS) {
-		rc = dss_abterr2der(rc);
-		D_ERROR("Wait eventual failed. "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
-
-	rc = boa.boa_rc;
-	if (rc)
-		D_ERROR("Delete blob("DF_U64") failed. "DF_RC"\n",
-			blob_id, DP_RC(rc));
-out:
-	ABT_eventual_free(&boa.boa_eventual);
-	return rc;
-}
-
-struct blob_item {
-	d_list_t	bi_link;
-	spdk_blob_id	bi_blob_id;
-};
-
-static int
-create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
-		 struct bio_bdev *d_bdev, d_list_t *pool_list,
-		 d_list_t *blob_list)
-{
-	struct spdk_blob_store	*bs;
-	struct smd_pool_info	*pool_info;
-	uint64_t		 blob_id;
-	struct blob_item	*created;
-	int			 i, rc = 0;
-
-	D_ASSERT(d_bdev && d_bdev->bb_replacing);
-	D_ASSERT(d_list_empty(blob_list));
-
-	if (d_list_empty(pool_list))
-		return 0;
-
-	bs = load_blobstore(xs_ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
-			    false, false, NULL, NULL);
-	if (bs == NULL) {
-		D_ERROR("Failed to load blobstore for new dev "DF_UUID"\n",
-			DP_UUID(d_bdev->bb_uuid));
-		return -DER_INVAL;
-	}
-
-	/*
-	 * Iterate all pools, create old blobs on new device, replace the
-	 * old blob IDs with new blob IDs in the pool info.
-	 */
-	d_list_for_each_entry(pool_info, pool_list, spi_link) {
-		bool	found_tgt = false;
-
-		for (i = 0; i < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; i++) {
-			/* Skip the targets not assigned to old device */
-			if (!is_tgt_on_dev(old_info, pool_info->spi_tgts[SMD_DEV_TYPE_DATA][i]))
-				continue;
-
-			found_tgt = true;
-			rc = create_one_blob(bs, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
-					     &blob_id);
-			if (rc)
-				goto out;
-
-			D_ASSERT(blob_id != 0);
-			/* Add to created blob list */
-			D_ALLOC_PTR(created);
-			if (created == NULL) {
-				rc = -DER_NOMEM;
-				goto out;
-			}
-			D_INIT_LIST_HEAD(&created->bi_link);
-			created->bi_blob_id = blob_id;
-			d_list_add_tail(&created->bi_link, blob_list);
-
-			/* Replace the blob id in pool info */
-			pool_info->spi_blobs[SMD_DEV_TYPE_DATA][i] = blob_id;
-		}
-
-		/*
-		 * TODO: Pool is created during target is in DOWN state? Let's
-		 *	 handle this once DAOS-5134 is fixed.
-		 */
-		if (!found_tgt) {
-			D_ERROR("No blobs from "DF_UUID" on dev "DF_UUID"\n",
-				DP_UUID(pool_info->spi_id),
-				DP_UUID(d_bdev->bb_uuid));
-			rc = -DER_NOSYS;
-			goto out;
-		}
-	}
-out:
-	unload_blobstore(xs_ctxt, bs);
-	return rc;
-}
-
-static void
-free_blob_list(struct bio_xs_context *xs_ctxt, d_list_t *blob_list,
-	       struct bio_bdev *d_bdev)
-{
-	struct spdk_blob_store	*bs = NULL;
-	struct blob_item	*created, *tmp;
-
-	if (d_bdev == NULL)
-		goto free;
-
-	D_ASSERT(d_bdev->bb_replacing);
-	bs = load_blobstore(xs_ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
-			    false, false, NULL, NULL);
-	if (bs == NULL)
-		D_ERROR("Failed to load blobstore for new dev "DF_UUID"\n",
-			DP_UUID(d_bdev->bb_uuid));
-
-free:
-	d_list_for_each_entry_safe(created, tmp, blob_list, bi_link) {
-		if (bs != NULL)
-			delete_one_blob(bs, created->bi_blob_id);
-
-		d_list_del_init(&created->bi_link);
-		D_FREE(created);
-	}
-
-	if (bs != NULL)
-		unload_blobstore(xs_ctxt, bs);
-}
-
-static void
-free_pool_list(d_list_t *pool_list)
-{
-	struct smd_pool_info	*pool_info, *tmp;
-
-	d_list_for_each_entry_safe(pool_info, tmp, pool_list, spi_link) {
-		d_list_del_init(&pool_info->spi_link);
-		smd_pool_free_info(pool_info);
-	}
-}
-
 static int
 replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	    struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 {
 	struct bio_blobstore	*bbs = old_dev->bb_blobstore;
-	d_list_t		 pool_list, blob_list;
-	int			 pool_cnt = 0, rc;
+	unsigned int		 old_roles;
+	int			 rc;
 
 	D_ASSERT(bbs != NULL);
 	D_ASSERT(bbs->bb_state == BIO_BS_STATE_OUT);
@@ -323,32 +87,16 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 			DP_UUID(new_dev->bb_uuid), new_dev->bb_name);
 		return -DER_BUSY;
 	}
+
 	/* Avoid re-enter or being destroyed by hot remove callback */
 	new_dev->bb_replacing = 1;
 
-	D_INIT_LIST_HEAD(&pool_list);
-	D_INIT_LIST_HEAD(&blob_list);
-
-	/* Create existing blobs on new device */
-	rc = smd_pool_list(&pool_list, &pool_cnt);
-	if (rc) {
-		D_ERROR("Failed to list pools in SMD. "DF_RC"\n", DP_RC(rc));
-		goto pool_list_out;
-	}
-
-	rc = create_old_blobs(xs_ctxt, old_info, new_dev, &pool_list,
-			      &blob_list);
-	if (rc) {
-		D_ERROR("Failed to create old blobs. "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
-
+	old_roles = bio_nvme_configured(SMD_DEV_TYPE_META) ? old_dev->bb_roles : NVME_ROLE_DATA;
 	/* Replace old device with new device in SMD */
-	rc = smd_dev_replace(old_dev->bb_uuid, new_dev->bb_uuid, &pool_list);
+	rc = smd_dev_replace(old_dev->bb_uuid, new_dev->bb_uuid, old_roles);
 	if (rc) {
-		D_ERROR("Failed to replace dev: "DF_UUID" -> "DF_UUID", "
-			""DF_RC"\n", DP_UUID(old_dev->bb_uuid),
-			DP_UUID(new_dev->bb_uuid), DP_RC(rc));
+		DL_ERROR(rc, "Failed to replace dev: "DF_UUID" -> "DF_UUID". roles(%u)",
+			 DP_UUID(old_dev->bb_uuid), DP_UUID(new_dev->bb_uuid), old_roles);
 		goto out;
 	}
 
@@ -373,9 +121,6 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, old_dev);
 
 out:
-	free_blob_list(xs_ctxt, &blob_list, new_dev);
-pool_list_out:
-	free_pool_list(&pool_list);
 	if (new_dev)
 		new_dev->bb_replacing = 0;
 	return rc;
@@ -398,7 +143,7 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 	if (rc) {
 		D_ERROR("Lookup old dev "DF_UUID" in SMD failed. "DF_RC"\n",
 			DP_UUID(old_dev_id), DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
 	if (old_info->sdi_state != SMD_DEV_FAULTY) {
@@ -460,6 +205,19 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 
 	rc = replace_dev(xs_ctxt, old_info, old_dev, new_dev);
 out:
+	if (rc == 0)
+		ras_notify_eventf(RAS_DEVICE_REPLACE, RAS_TYPE_INFO,
+				  RAS_SEV_NOTICE, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Replaced device: "DF_UUID" with device "DF_UUID"\n",
+				  DP_UUID(old_dev_id), DP_UUID(new_dev_id));
+	else
+		ras_notify_eventf(RAS_DEVICE_REPLACE, RAS_TYPE_INFO,
+				  RAS_SEV_ERROR, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Replaced device: "DF_UUID" with device: "DF_UUID" failed: %d\n",
+				  DP_UUID(old_dev_id), DP_UUID(new_dev_id), rc);
+
 	if (old_info)
 		smd_dev_free_info(old_info);
 	if (new_info)
