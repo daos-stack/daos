@@ -310,7 +310,7 @@ daos_key2str(daos_key_t *key)
 /* Format a directory entry suitable for logging.
  * Take a directory entry (filename) and return something suitable for printing, no not modify the
  * input itself, either return the input as-is for printing or some metadata about it.
- * TODO: Check boundary case.
+ * TODO Add unit test
  */
 char *
 daos_de2str(const char *de)
@@ -320,7 +320,7 @@ daos_de2str(const char *de)
 	if (!de)
 		return "<NULL>";
 
-	for (i = 0; i < NAME_MAX; i++) {
+	for (i = 0; i < NAME_MAX + 1; i++) {
 		if (de[i] == '\0')
 			return (char *)de;
 		if (de[i] == '/')
