@@ -12,6 +12,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <limits.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include "wrap_cmocka.h"
@@ -21,6 +22,7 @@
 #include <gurt/dlog.h>
 #include <gurt/hash.h>
 #include <gurt/atomic.h>
+#include <gurt/rbt.h>
 #include "mocks_gurt.h"
 
 /* machine epsilon */
@@ -2694,6 +2696,230 @@ test_d_rank_range_list_str(void **state)
 	d_rank_range_list_free(range_list);
 }
 
+static int
+rbt_cmp_key(const void *key1, const void *key2)
+{
+	return *(int*)key1 - *(int*)key2;
+}
+
+static void
+rbt_free_node(d_rbt_node_t *node)
+{
+	D_FREE(node->rn_key);
+	D_FREE(node->rn_data);
+}
+
+static void
+rbt_print_node(const d_rbt_node_t *node)
+{
+	if (node->rn_key != NULL)
+		printf("0x%03x", *(int*)node->rn_key);
+	else
+		printf("NA");
+	if (node->rn_data != NULL)
+		printf(":0x%04x", *(int*)node->rn_data);
+	else
+		printf(":NA%*s", 4, "");
+}
+
+static void
+test_rbt_001(void **state)
+{
+	d_rbt_t *rbt;
+	int      rc;
+	int      idx;
+	int      rbt_count;
+
+	rc = d_rbt_create(rbt_cmp_key, rbt_free_node, &rbt);
+	assert_int_equal(rc, -DER_SUCCESS);
+
+	rbt_count = 0;
+	for (idx = 0; idx < 0xffff; idx++) {
+		int           key;
+		d_rbt_node_t *node;
+		int           i;
+
+		key = rand() % 0xfff;
+		node = d_rbt_find(rbt, &key);
+		if (node != NULL) {
+			int *key_tmp;
+			int *data;
+
+			assert_int_equal(key, *(int *)node->rn_key);
+			assert_non_null(node->rn_data);
+			assert_int_not_equal(idx, *(int *)node->rn_data);
+
+			rc = d_rbt_insert(rbt, &key, NULL, false);
+			assert_int_equal(rc, -DER_EXIST);
+
+			D_ALLOC_PTR(key_tmp);
+			*key_tmp = key;
+			D_ALLOC_PTR(data);
+			*data = idx;
+			rc = d_rbt_insert(rbt, key_tmp, data, true);
+			assert_int_equal(rc, -DER_SUCCESS);
+
+			node = d_rbt_find(rbt, &key);
+			assert_non_null(node);
+			assert_ptr_equal(key_tmp, (int *)node->rn_key);
+			assert_ptr_equal(data, (int *)node->rn_data);
+		} else {
+			int *key_tmp;
+			int *data;
+
+			D_ALLOC_PTR(key_tmp);
+			*key_tmp = key;
+			D_ALLOC_PTR(data);
+			*data = idx;
+			rc = d_rbt_insert(rbt, key_tmp, data, false);
+			assert_int_equal(rc, -DER_SUCCESS);
+
+			node = d_rbt_find(rbt, &key);
+			assert_non_null(node);
+			assert_int_equal(key, *(int *)node->rn_key);
+			assert_int_equal(idx, *(int *)node->rn_data);
+			assert_ptr_equal(key_tmp, (int *)node->rn_key);
+			assert_ptr_equal(data, (int *)node->rn_data);
+			rbt_count++;
+		}
+		assert_true(d_rbt_is_sorted(rbt));
+		assert_true(d_rbt_get_black_height(rbt) > 0);
+
+		key = rand() % 0xfff;
+		node = d_rbt_find(rbt, &key);
+		if (node != NULL) {
+			rc = d_rbt_delete(rbt, &key, true);
+			assert_int_equal(rc, -DER_SUCCESS);
+			rbt_count--;
+
+			node = d_rbt_find(rbt, &key);
+			assert_null(node);
+		} else {
+			rc = d_rbt_delete(rbt, &key, true);
+			assert_int_equal(rc, -DER_NONEXIST);
+		}
+		assert_true(d_rbt_is_sorted(rbt));
+		assert_true(d_rbt_get_black_height(rbt) > 0);
+
+		i = 0;
+		key = -1;
+		for (node = d_rbt_get_first_node(rbt);
+		     node != NULL;
+		     node = d_rbt_node_next(rbt, node)) {
+			assert_true(key < *(int *)node->rn_key);
+			assert_true(idx >= *(int *)node->rn_data);
+			key = *(int *)node->rn_key;
+			++i;
+		}
+		assert_int_equal(i, rbt_count);
+
+		i = 0;
+		key = INT_MAX;
+		for (node = d_rbt_get_last_node(rbt);
+		     node != NULL;
+		     node = d_rbt_node_prev(rbt, node)) {
+			assert_true(key > *(int *)node->rn_key);
+			assert_true(idx >= *(int *)node->rn_data);
+			key = *(int *)node->rn_key;
+			++i;
+		}
+		assert_int_equal(i, rbt_count);
+	}
+
+	d_rbt_print(rbt, rbt_print_node);
+
+	d_rbt_destroy(rbt, true);
+}
+
+static void
+test_rbt_002(void **state)
+{
+	struct d_rbt *rbt;
+	int           rc;
+	int           idx;
+	int      rbt_count;
+
+	rc = d_rbt_create(rbt_cmp_key, rbt_free_node, &rbt);
+	assert_int_equal(rc, -DER_SUCCESS);
+
+	rbt_count = 0;
+	for (idx = 0; idx < 0xffff; idx++) {
+		int           key;
+		int          *key_new;
+		int          *data_new;
+		d_rbt_node_t *node = NULL;
+		int           i;
+
+		D_ALLOC_PTR(key_new);
+		*key_new = rand() % 0xfff;
+		D_ALLOC_PTR(data_new);
+		*data_new = idx;
+		rc        = d_rbt_find_insert(rbt, key_new, data_new, &node);
+		if (rc == -DER_EXIST) {
+			assert_non_null(node);
+			assert_int_equal(*key_new, *(int *)node->rn_key);
+
+			assert_int_not_equal(idx, *(int *)node->rn_data);
+
+			D_FREE(key_new);
+			D_FREE(data_new);
+		} else {
+			assert_int_equal(rc, -DER_SUCCESS);
+			assert_non_null(node);
+			assert_int_equal(*key_new, *(int *)node->rn_key);
+			assert_int_equal(idx, *(int *)node->rn_data);
+			assert_ptr_equal(key_new, (int *)node->rn_key);
+			assert_ptr_equal(data_new, (int *)node->rn_data);
+			rbt_count++;
+		}
+		assert_true(d_rbt_is_sorted(rbt));
+		assert_true(d_rbt_get_black_height(rbt) > 0);
+
+		key = rand() % 0xfff;
+		node = d_rbt_find(rbt, &key);
+		if (node != NULL) {
+			rc = d_rbt_delete(rbt, &key, true);
+			assert_int_equal(rc, -DER_SUCCESS);
+			rbt_count--;
+
+			node = d_rbt_find(rbt, &key);
+			assert_null(node);
+		} else {
+			rc = d_rbt_delete(rbt, &key, true);
+			assert_int_equal(rc, -DER_NONEXIST);
+		}
+		assert_true(d_rbt_is_sorted(rbt));
+		assert_true(d_rbt_get_black_height(rbt) > 0);
+
+		i = 0;
+		key = -1;
+		for (node = d_rbt_get_first_node(rbt);
+		     node != NULL;
+		     node = d_rbt_node_next(rbt, node)) {
+			assert_true(key < *(int *)node->rn_key);
+			assert_true(idx >= *(int *)node->rn_data);
+			key = *(int *)node->rn_key;
+			++i;
+		}
+		assert_int_equal(i, rbt_count);
+
+		i = 0;
+		key = INT_MAX;
+		for (node = d_rbt_get_last_node(rbt);
+		     node != NULL;
+		     node = d_rbt_node_prev(rbt, node)) {
+			assert_true(key > *(int *)node->rn_key);
+			assert_true(idx >= *(int *)node->rn_data);
+			key = *(int *)node->rn_key;
+			++i;
+		}
+		assert_int_equal(i, rbt_count);
+	}
+	d_rbt_print(rbt, rbt_print_node);
+
+	d_rbt_destroy(rbt, true);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -2733,7 +2959,9 @@ main(int argc, char **argv)
 	    cmocka_unit_test(test_d_setenv),
 	    cmocka_unit_test(test_d_rank_list_to_str),
 	    cmocka_unit_test(test_d_rank_range_list_create_from_ranks),
-	    cmocka_unit_test(test_d_rank_range_list_str)};
+	    cmocka_unit_test(test_d_rank_range_list_str),
+	    cmocka_unit_test(test_rbt_001),
+	    cmocka_unit_test(test_rbt_002)};
 
 	d_register_alt_assert(mock_assert);
 

@@ -8,7 +8,7 @@ HEADERS = ['daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
            'daos_prop.h', 'daos_obj_class.h', 'daos_obj.h', 'daos_pool.h',
            'daos_cont.h', 'daos_version.h', 'daos_fs_sys.h', 'daos_s3.h', 'daos_pipeline.h',
            'daos.h']
-HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
+HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h', 'rbt.h',
                 'heap.h', 'fault_inject.h', 'debug_setup.h',
                 'types.h', 'atomic.h', 'slab.h',
                 'telemetry_consumer.h', 'telemetry_common.h']
