@@ -322,6 +322,20 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		if (ret)
 			D_WARN("Failed to create failed addr counter: "DF_RC
 			       "\n", DP_RC(ret));
+
+		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_waitq_depth, D_TM_GAUGE,
+				      "Current count of enqueued RPCs", "rpcs",
+				      "net/%s/waitq_depth/ctx_%u",
+				      prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(rc, "Failed to create rpc waitq gauge");
+
+		ret = d_tm_add_metric(&ctx->cc_quotas.rpc_quota_exceeded, D_TM_COUNTER,
+				      "Total number of exceeded RPC quota errors",
+				      "errors", "net/%s/quota_exceeded/ctx_%u",
+				      prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(rc, "Failed to create quota exceeded counter");
 	}
 
 	if (crt_is_service() &&
@@ -1289,8 +1303,10 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	d_hash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
 
-	if (quota_rc == -DER_QUOTA_LIMIT)
+	if (quota_rc == -DER_QUOTA_LIMIT) {
 		d_list_add_tail(&rpc_priv->crp_waitq_link, &crt_ctx->cc_quotas.rpc_waitq);
+		d_tm_inc_gauge(crt_ctx->cc_quotas.rpc_waitq_depth, 1);
+	}
 
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
@@ -1414,10 +1430,12 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 				   struct crt_rpc_priv, crp_waitq_link);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
-	if (tmp_rpc != NULL)
+	if (tmp_rpc != NULL) {
 		dispatch_rpc(tmp_rpc);
-	else
+		d_tm_dec_gauge(crt_ctx->cc_quotas.rpc_waitq_depth, 1);
+	} else {
 		put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPCS);
+	}
 
 	crt_context_req_untrack_internal(rpc_priv);
 
@@ -2066,6 +2084,7 @@ get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 	} else {
 		D_DEBUG(DB_TRACE, "Quota limit (%d) reached for quota_type=%d\n",
 			ctx->cc_quotas.limit[quota], quota);
+		d_tm_inc_counter(ctx->cc_quotas.rpc_quota_exceeded, 1);
 		rc = -DER_QUOTA_LIMIT;
 	}
 
