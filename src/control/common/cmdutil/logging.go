@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -89,8 +89,7 @@ func ConfigureLogger(logIn logging.Logger, cfg LogConfig) error {
 			return errors.Wrap(err, "create log file")
 		}
 
-		log.Infof("%s logging to file %s",
-			os.Args[0], cfg.LogFile)
+		log.Infof("%s logging to file %s", os.Args[0], cfg.LogFile)
 
 		// Create an additional set of loggers which append everything
 		// to the specified file.
