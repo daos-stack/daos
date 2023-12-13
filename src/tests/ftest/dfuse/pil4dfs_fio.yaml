@@ -1,0 +1,127 @@
+hosts:
+  test_servers: 2
+  test_clients: 1
+
+timeout: 1000
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      storage: auto
+
+pool:
+  size: 90%
+  control_method: dmg
+
+container:
+  type: POSIX
+  control_method: daos
+
+fio:
+  names:
+    - global
+    - job
+  global:
+    directory: '/tmp/daos_dfuse'
+    ioengine: 'psync'
+    group_reporting: 1
+    direct: 1
+    verify: 'crc64'
+    iodepth: 16
+    rw: 'rw'
+    runtime: '30s'
+    time_based: 1
+  job:
+    params: !mux
+      params_000:
+        thread: 0
+        blocksize: '256B'
+        size: '32K'
+        numjobs: 1
+      params_001:
+        thread: 0
+        blocksize: '256B'
+        size: '32K'
+        numjobs: 32
+      params_002:
+        thread: 0
+        blocksize: '256B'
+        size: '32K'
+        numjobs: 64
+      params_003:
+        thread: 0
+        blocksize: '256B'
+        size: '32K'
+        numjobs: 128
+      params_010:
+        thread: 0
+        blocksize: '1M'
+        size: '128M'
+        numjobs: 1
+      params_011:
+        thread: 0
+        blocksize: '1M'
+        size: '128M'
+        numjobs: 32
+      params_012:
+        thread: 0
+        blocksize: '1M'
+        size: '128M'
+        numjobs: 64
+      params_013:
+        thread: 0
+        blocksize: '1M'
+        size: '128M'
+        numjobs: 128
+      params_100:
+        thread: 1
+        blocksize: '256B'
+        size: '32K'
+        numjobs: 1
+      params_101:
+        thread: 1
+        blocksize: '256B'
+        size: '32K'
+        numjobs: 32
+      params_102:
+        thread: 1
+        blocksize: '256B'
+        size: '32K'
+        numjobs: 64
+      params_103:
+        thread: 1
+        blocksize: '256B'
+        size: '32K'
+        numjobs: 128
+      params_110:
+        thread: 1
+        blocksize: '1M'
+        size: '128M'
+        numjobs: 1
+      params_111:
+        thread: 1
+        blocksize: '1M'
+        size: '128M'
+        numjobs: 32
+      params_112:
+        thread: 1
+        blocksize: '1M'
+        size: '128M'
+        numjobs: 64
+      params_113:
+        thread: 1
+        blocksize: '1M'
+        size: '128M'
+        numjobs: 128
