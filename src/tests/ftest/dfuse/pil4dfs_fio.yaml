@@ -30,18 +30,23 @@ container:
   control_method: daos
 
 fio:
+  bw_deltas:
+    read: 10
+    write: 10
+  dfuse:
+    ioengine: 'psync'
+  dfs:
+    ioengine: 'dfs'
   names:
     - global
     - job
   global:
-    directory: '/tmp/daos_dfuse'
-    ioengine: 'psync'
     group_reporting: 1
     direct: 1
     verify: 'crc64'
     iodepth: 16
     rw: 'rw'
-    runtime: '30s'
+    runtime: '60s'
     time_based: 1
   job:
     params: !mux
@@ -73,17 +78,17 @@ fio:
       params_011:
         thread: 0
         blocksize: '1M'
-        size: '128M'
+        size: '96M'
         numjobs: 32
       params_012:
         thread: 0
         blocksize: '1M'
-        size: '128M'
+        size: '64M'
         numjobs: 64
       params_013:
         thread: 0
         blocksize: '1M'
-        size: '128M'
+        size: '32M'
         numjobs: 128
       params_100:
         thread: 1
@@ -113,15 +118,15 @@ fio:
       params_111:
         thread: 1
         blocksize: '1M'
-        size: '128M'
+        size: '96M'
         numjobs: 32
       params_112:
         thread: 1
         blocksize: '1M'
-        size: '128M'
+        size: '64M'
         numjobs: 64
       params_113:
         thread: 1
         blocksize: '1M'
-        size: '128M'
+        size: '32M'
         numjobs: 128
