@@ -22,18 +22,6 @@ message NotifyReadyReq {
 
 // NotifyReadyResp is nil.
 
-message BioErrorReq {
-	bool unmapErr = 1; // unmap I/O error
-	bool readErr = 2; // read I/O error
-	bool writeErr = 3; // write I/O error
-	int32 tgtId = 4;  // VOS target ID
-	uint32 instanceIdx = 5; // I/O Engine instance index
-	string drpcListenerSock = 6; // Path to I/O Engine's dRPC listener socket
-	string uri = 7; // CaRT URI
-}
-
-// BioErrorResp is nil.
-
 message GetPoolSvcReq {
 	string uuid = 1; // Pool UUID
 }

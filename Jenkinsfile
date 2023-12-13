@@ -126,6 +126,15 @@ String vm9_label(String distro) {
                                                           def_val: params.FUNCTIONAL_VM_LABEL))
 }
 
+void rpm_test_post(String stage_name, String node) {
+    sh label: 'Fetch and stage artifacts',
+       script: 'hostname; ssh -i ci_key jenkins@' + node + ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
+               'scp -i ci_key jenkins@' + node + ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
+               env.STAGE_NAME + '/"'
+    archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+    job_status_update()
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -500,7 +509,7 @@ pipeline {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
+                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=38'
                             args '--cap-add=SYS_ADMIN'
                         }
                     }
@@ -537,7 +546,7 @@ pipeline {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
+                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=38'
                             args '--cap-add=SYS_ADMIN'
                         }
                     }
@@ -564,7 +573,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.4') {
+                stage('Build RPM on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -574,7 +583,7 @@ pipeline {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=37'
+                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=38'
                             args  '--cap-add=SYS_ADMIN'
                         }
                     }
@@ -715,7 +724,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.4 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -759,7 +768,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 8') {
+                stage('Unit Test on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -781,7 +790,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev on EL 8') {
+                stage('Unit Test bdev on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -803,7 +812,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 8') {
+                stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -843,7 +852,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test Bullseye on EL 8') {
+                stage('Unit Test Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -870,8 +879,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit test Bullseye on EL 8')
-                stage('Unit Test with memcheck on EL 8') {
+                } // stage('Unit test Bullseye on EL 8.8')
+                stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -895,8 +904,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck on EL 8')
-                stage('Unit Test bdev with memcheck on EL 8') {
+                } // stage('Unit Test with memcheck on EL 8.8')
+                stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -929,7 +938,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional on EL 8 with Valgrind') {
+                stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -950,8 +959,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8 with Valgrind')
-                stage('Functional on EL 8') {
+                } // stage('Functional on EL 8.8 with Valgrind')
+                stage('Functional on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -972,7 +981,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8')
+                } // stage('Functional on EL 8.8')
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
@@ -995,7 +1004,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.4') {
+                stage('Functional on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1016,7 +1025,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15.4')
+                } // stage('Functional on Leap 15.5')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -1039,7 +1048,7 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 8') {
+                stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1090,10 +1099,82 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault inection testing')
+                } // stage('Fault inection testing on EL 8.8')
+                // stage('Test RPMs on EL 8.6') {
+                //     when {
+                //         beforeAgent true
+                //         expression { ! skipStage() }
+                //     }
+                //     agent {
+                //         label params.CI_UNIT_VM1_LABEL
+                //     }
+                //     steps {
+                //         job_step_update(
+                //             testRpm(inst_repos: daosRepos(),
+                //                     daos_pkg_version: daosPackagesVersion(next_version))
+                //         )
+                //     }
+                //     post {
+                //         always {
+                //             rpm_test_post(env.STAGE_NAME, env.NODELIST)
+                //         }
+                //     }
+                // } // stage('Test CentOS 7 RPMs')
+                // stage('Test RPMs on Leap 15.4') {
+                //     when {
+                //         beforeAgent true
+                //         expression { ! skipStage() }
+                //     }
+                //     agent {
+                //         label params.CI_UNIT_VM1_LABEL
+                //     }
+                //     steps {
+                //         /* neither of these work as FTest strips the first node
+                //            out of the pool requiring 2 node clusters at minimum
+                //          * additionally for this use-case, can't override
+                //            ftest_arg with this :-(
+                //         script {
+                //             'Test RPMs on Leap 15.4': getFunctionalTestStage(
+                //                 name: 'Test RPMs on Leap 15.4',
+                //                 pragma_suffix: '',
+                //                 label: params.CI_UNIT_VM1_LABEL,
+                //                 next_version: next_version,
+                //                 stage_tags: '',
+                //                 default_tags: 'test_daos_management',
+                //                 nvme: 'auto',
+                //                 run_if_pr: true,
+                //                 run_if_landing: true,
+                //                 job_status: job_status_internal
+                //             )
+                //         }
+                //            job_step_update(
+                //             functionalTest(
+                //                 test_tag: 'test_daos_management',
+                //                 ftest_arg: '--yaml_extension single_host',
+                //                 inst_repos: daosRepos(),
+                //                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                //                 test_function: 'runTestFunctionalV2'))
+                //     }
+                //     post {
+                //         always {
+                //             functionalTestPostV2()
+                //             job_status_update()
+                //         }
+                //     } */
+                //         job_step_update(
+                //             testRpm(inst_repos: daosRepos(),
+                //                     daos_pkg_version: daosPackagesVersion(next_version))
+                //         )
+                //     }
+                //     post {
+                //         always {
+                //             rpm_test_post(env.STAGE_NAME, env.NODELIST)
+                //         }
+                //     }
+                // } // stage('Test Leap 15 RPMs')
             } // parallel
         } // stage('Test')
-        stage('Test Storage Prep on EL 8') {
+        stage('Test Storage Prep on EL 8.8') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
