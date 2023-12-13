@@ -663,6 +663,17 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 				cb_arg->pra_pm_ver, DP_RC(rc));
 			goto out;
 		}
+
+		rc = tse_task_register_comp_cb(task, pmap_refresh_cb, cb_arg,
+					       sizeof(*cb_arg));
+		if (rc) {
+			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), failed "
+				"to reg_comp_cb, "DF_RC"\n",
+				DP_UUID(pool->dp_pool), pm_ver,
+				cb_arg->pra_pm_ver, DP_RC(rc));
+			goto out;
+		}
+
 		if (cb_arg->pra_retry_nr > 3)
 			delay = cb_arg->pra_retry_nr * 10;
 		else
@@ -673,16 +684,6 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), resched"
 				" failed, "DF_RC"\n", DP_UUID(pool->dp_pool),
 				pm_ver, cb_arg->pra_pm_ver, DP_RC(rc));
-			goto out;
-		}
-
-		rc = tse_task_register_comp_cb(task, pmap_refresh_cb, cb_arg,
-					       sizeof(*cb_arg));
-		if (rc) {
-			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), failed "
-				"to reg_comp_cb, "DF_RC"\n",
-				DP_UUID(pool->dp_pool), pm_ver,
-				cb_arg->pra_pm_ver, DP_RC(rc));
 			goto out;
 		}
 
