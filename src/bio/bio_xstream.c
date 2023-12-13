@@ -741,6 +741,11 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	D_ASSERT(d_bdev->bb_desc != NULL);
 	d_bdev->bb_removed = 1;
 
+	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
+			  RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
+			  NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
+			  DP_UUID(d_bdev->bb_uuid));
+
 	/* The bio_bdev is still under construction */
 	if (d_list_empty(&d_bdev->bb_link)) {
 		D_ASSERT(d_bdev->bb_blobstore == NULL);
@@ -773,6 +778,7 @@ replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 
 	new_dev->bb_blobstore = old_dev->bb_blobstore;
 	new_dev->bb_blobstore->bb_dev = new_dev;
+	new_dev->bb_roles = old_dev->bb_roles;
 	old_dev->bb_blobstore = NULL;
 
 	new_dev->bb_tgt_cnt = old_dev->bb_tgt_cnt;
@@ -963,7 +969,7 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 	D_ASSERT(!is_server_started());
 	if (spdk_bdev_first() == NULL) {
 		D_ERROR("No SPDK bdevs found!\n");
-		rc = -DER_NONEXIST;
+		return -DER_NONEXIST;
 	}
 
 	for (bdev = spdk_bdev_first(); bdev != NULL; bdev = spdk_bdev_next(bdev)) {
@@ -1130,22 +1136,6 @@ get_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 	return bb;
 }
 
-static inline unsigned int
-dev_type2role(enum smd_dev_type st)
-{
-	switch (st) {
-	case SMD_DEV_TYPE_DATA:
-		return NVME_ROLE_DATA;
-	case SMD_DEV_TYPE_META:
-		return NVME_ROLE_META;
-	case SMD_DEV_TYPE_WAL:
-		return NVME_ROLE_WAL;
-	default:
-		D_ASSERT(0);
-		return NVME_ROLE_DATA;
-	}
-}
-
 static inline bool
 is_role_match(unsigned int roles, unsigned int req_role)
 {
@@ -1164,7 +1154,7 @@ bio_nvme_configured(enum smd_dev_type type)
 	if (type >= SMD_DEV_TYPE_MAX)
 		return true;
 
-	return is_role_match(nvme_glb.bd_nvme_roles, dev_type2role(type));
+	return is_role_match(nvme_glb.bd_nvme_roles, smd_dev_type2role(type));
 }
 
 static struct bio_bdev *
@@ -1199,7 +1189,7 @@ choose_device(int tgt_id, enum smd_dev_type st)
 			d_bdev->bb_tgt_cnt_init = 1;
 		}
 		/* Choose the least used one */
-		if (is_role_match(d_bdev->bb_roles, dev_type2role(st)) &&
+		if (is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)) &&
 		    d_bdev->bb_tgt_cnt < lowest_tgt_cnt) {
 			lowest_tgt_cnt = d_bdev->bb_tgt_cnt;
 			chosen_bdev = d_bdev;
@@ -1231,7 +1221,7 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 	int			rc;
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
-		if (!is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 
 		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st);
@@ -1263,7 +1253,7 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 
 		D_DEBUG(DB_MGMT, "Successfully mapped dev "DF_UUID"/%d/%u to tgt %d role %u\n",
 			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_tgt_cnt, d_bdev->bb_roles,
-			tgt_id, dev_type2role(st));
+			tgt_id, smd_dev_type2role(st));
 
 		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 			break;
@@ -1272,7 +1262,7 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 	return assigned ? 0 : -DER_INVAL;
 error:
 	for (st = SMD_DEV_TYPE_DATA; st < failed_st; st++) {
-		if (!is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 		/* TODO Error cleanup by smd_dev_del_tgt() */
 	}
@@ -1341,7 +1331,6 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	unsigned int		 dev_state;
 	int			 rc;
 
-	D_ASSERT(!ctxt->bxc_ready);
 	D_ASSERT(ctxt->bxc_xs_blobstores[st] == NULL);
 
 	if (d_list_empty(&nvme_glb.bd_bdevs)) {
@@ -1464,7 +1453,6 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (ctxt == NULL)
 		return;
 
-	ctxt->bxc_ready = 0;
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = ctxt->bxc_xs_blobstores[st];
 		if (bxb == NULL)
@@ -1674,7 +1662,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		if (st == SMD_DEV_TYPE_DATA && tgt_id == BIO_SYS_TGT_ID)
 			continue;
 		/* Share the same device/blobstore used by previous type */
-		if (d_bdev && is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+		if (d_bdev && is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
 		if (st != SMD_DEV_TYPE_DATA && !bio_nvme_configured(SMD_DEV_TYPE_META))
@@ -1698,8 +1686,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	ctxt->bxc_ready = 1;
-
 out:
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
 	if (rc != 0)
@@ -1796,9 +1782,12 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 		if (d_bdev != NULL)
 			continue;
 
-		D_INFO("Detected hot plugged device %s\n", bdev_name);
 		/* Print a console message */
 		D_PRINT("Detected hot plugged device %s\n", bdev_name);
+		ras_notify_eventf(RAS_DEVICE_PLUGGED, RAS_TYPE_INFO,
+				  RAS_SEV_NOTICE, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Detected hot plugged device: %s\n", bdev_name);
 
 		scan_period = 0;
 
@@ -1933,17 +1922,14 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	if (!is_server_started())
 		return 0;
 
-	/*
-	 * Query and print the SPDK device health stats for only the device
-	 * owner xstream.
-	 */
+	/* Monitor device health on the device owner xstream */
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = ctxt->bxc_xs_blobstores[st];
-		if (bxb && bxb->bxb_blobstore &&
-		    is_bbs_owner(ctxt, bxb->bxb_blobstore))
+		if (bxb && bxb->bxb_blobstore && is_bbs_owner(ctxt, bxb->bxb_blobstore))
 			bio_bs_monitor(ctxt, st, now);
 	}
 
+	/* Detect new plugged device, manage LED on init xstream */
 	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);
 		bio_led_event_monitor(ctxt, now);
