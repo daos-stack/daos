@@ -183,7 +183,9 @@ _discover(prober probe, bool detach, health_getter get_health)
 	struct ctrlr_entry	*ctrlr_entry;
 	struct health_entry	*health_entry;
 	struct ret_t		*ret;
-	int			 rc;
+	int			 rc = 0;
+
+	ret = init_ret();
 
 	/*
 	 * Start the SPDK NVMe enumeration process.  probe_cb will be called
@@ -194,10 +196,10 @@ _discover(prober probe, bool detach, health_getter get_health)
 	 */
 	rc = probe(NULL, NULL, probe_cb, attach_cb, NULL);
 	if (rc != 0)
-		goto fail;
+		goto out;
 
 	if (!g_controllers || !g_controllers->ctrlr)
-		return init_ret(); /* no controllers */
+		goto out; /* no controllers */
 
 	/*
 	 * Collect NVMe SSD health stats for each probed controller.
@@ -209,13 +211,13 @@ _discover(prober probe, bool detach, health_getter get_health)
 		health_entry = calloc(1, sizeof(struct health_entry));
 		if (health_entry == NULL) {
 			rc = -ENOMEM;
-			goto fail;
+			goto out;
 		}
 
 		rc = get_health(ctrlr_entry->ctrlr, health_entry);
 		if (rc != 0) {
 			free(health_entry);
-			goto fail;
+			goto out;
 		}
 
 		ctrlr_entry->health = health_entry;
@@ -223,12 +225,8 @@ _discover(prober probe, bool detach, health_getter get_health)
 	}
 
 	ret = collect();
-	/* TODO: cleanup(detach); */
-	return ret;
-
-fail:
+out:
 	cleanup(detach);
-	ret = init_ret();
 	ret->rc = rc;
 	return ret;
 }
@@ -494,9 +492,6 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 	return;
 fail:
 	ret->rc = rc;
-	if (ret->rc == 0)
-		/* Catch unexpected failures */
-		ret->rc = -EINVAL;
 	if (ctrlr_tmp)
 		free(ctrlr_tmp);
 	clean_ret(ret);
