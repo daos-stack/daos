@@ -758,7 +758,6 @@ cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
 	daos_lru_ref_release(cache, &cont->sc_list);
 }
 
-
 /*
  * If create == false, then this is assumed to be a pure lookup. In this case,
  * -DER_NONEXIST is returned if the ds_cont_child object does not exist.
@@ -791,10 +790,6 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
 	}
 
 	ds_cont = cont_child_obj(llink);
-	if (ds_cont->sc_stopping) {
-		cont_child_put(cache, ds_cont);
-		return -DER_SHUTDOWN;
-	}
 	*cont = ds_cont;
 	return 0;
 }
@@ -1171,6 +1166,14 @@ cont_child_destroy_one(void *vin)
 				       &cont);
 		if (rc == -DER_NONEXIST)
 			break;
+
+		if (cont->sc_stopping) {
+			rc = -DER_SHUTDOWN;
+			D_ERROR(DF_CONT": container is in stopping "DF_RC"\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), DP_RC(rc));
+			cont_child_put(tls->dt_cont_cache, cont);
+		}
+
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 
@@ -1311,9 +1314,20 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 		     struct ds_cont_child **ds_cont)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
+	int			 rc;
 
-	return cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
-				 true /* create */, ds_cont);
+	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
+			       true /* create */, ds_cont);
+	if (rc != 0)
+		return rc;
+
+	if ((*ds_cont)->sc_stopping) {
+		cont_child_put(tls->dt_cont_cache, *ds_cont);
+		*ds_cont = NULL;
+		return -DER_SHUTDOWN;
+	}
+
+	return 0;
 }
 
 /**
