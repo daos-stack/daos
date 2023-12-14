@@ -678,6 +678,11 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 			goto out;
 		}
 
+		cb_arg->pra_retry_nr++;
+		D_DEBUG(DB_TRACE, DF_UUID": pmap_refresh version (%d:%d), "
+			"in %d retry\n", DP_UUID(pool->dp_pool), pm_ver,
+			cb_arg->pra_pm_ver, cb_arg->pra_retry_nr);
+
 		rc = tse_task_reinit_with_delay(task, delay);
 		if (rc) {
 			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), resched"
@@ -686,10 +691,6 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 			goto out;
 		}
 
-		cb_arg->pra_retry_nr++;
-		D_DEBUG(DB_TRACE, DF_UUID": pmap_refresh version (%d:%d), "
-			"in %d retry\n", DP_UUID(pool->dp_pool), pm_ver,
-			cb_arg->pra_pm_ver, cb_arg->pra_retry_nr);
 		return rc;
 	}
 out:
