@@ -54,6 +54,8 @@ static unsigned int bio_chk_cnt_init;
 bool bio_scm_rdma;
 /* Whether SPDK inited */
 bool bio_spdk_inited;
+/* Whether VMD is enabled */
+bool                bio_vmd_enabled;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
@@ -93,6 +95,7 @@ bio_spdk_env_init(void)
 {
 	struct spdk_env_opts	opts;
 	bool			enable_rpc_srv = false;
+	bool                    vmd_enabled    = false;
 	int			rc;
 	int			roles = 0;
 
@@ -111,13 +114,14 @@ bio_spdk_env_init(void)
 	 */
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
-		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts, &roles);
+		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts, &roles, &vmd_enabled);
 		if (rc != 0) {
 			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
 				DP_RC(rc));
 			goto out;
 		}
 		nvme_glb.bd_nvme_roles = roles;
+		bio_vmd_enabled        = vmd_enabled;
 
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
@@ -996,15 +1000,13 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			return -DER_EXIST;
 		}
 
-		D_INFO("Resetting LED on dev " DF_UUID " \n", DP_UUID(d_bdev->bb_uuid));
+		/* A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible */
 		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-		if (rc != 0) {
-			if (rc != -DER_NOSYS) {
-				D_ERROR("Reset LED on device:" DF_UUID " failed, " DF_RC "\n",
-					DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
-				return rc;
-			}
+		if ((rc != 0) && (rc != -DER_NOTSUPPORTED)) {
+			DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+				 DP_UUID(d_bdev->bb_uuid));
+			return rc;
 		}
 	}
 
@@ -1862,20 +1864,27 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_bdev         *d_bdev;
 	int			 rc;
 
+	if (!bio_vmd_enabled)
+		return;
+
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
-			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for "DF_UUID"\n",
-				DP_UUID(d_bdev->bb_uuid));
-
-			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
+			/**
+			 * LED will be reset to faulty or normal state based on SSDs bio_bdevs.
+			 * A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible.
+			 */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-			if (rc != 0)
-				/* DER_NOSYS indicates that VMD-LED control is not enabled */
-				DL_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR, rc,
-					  "Reset LED on device:" DF_UUID " failed",
-					  DP_UUID(d_bdev->bb_uuid));
+			if (rc != 0) {
+				if (rc != -DER_NOTSUPPORTED)
+					DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+						 DP_UUID(d_bdev->bb_uuid));
+				continue;
+			}
+
+			D_DEBUG(DB_MGMT, "Cleared LED QUICK_BLINK state for " DF_UUID "\n",
+				DP_UUID(d_bdev->bb_uuid));
 		}
 	}
 }
