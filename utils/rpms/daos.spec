@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       13%{?relval}%{?dist}
+Release:       14%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -542,6 +542,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files server-tests
 %doc README.md
+%{_bindir}/dtx_tests
 %{_bindir}/evt_ctl
 %{_bindir}/jump_pl_map
 %{_bindir}/pl_bench
@@ -585,6 +586,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Dec 14 2023 Jan Michalski <jan.michalski@intel.com> 2.5.100-14
+- Add dtx_tests to the server-tests package
+
 * Wed Dec 06 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-13
 - Update for EL 8.8 and Leap 15.5
 - Update raft to 0.10.1-2.411.gefa15f4
