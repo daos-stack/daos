@@ -1,8 +1,11 @@
 #!/bin/bash
 
-set -o pipefail
+# shellcheck disable=SC2034,SC2145,SC2086,SC2068
+
+set -e -o pipefail
 
 VERSION=0.2
+# shellcheck disable=SC2046
 CWD="$(realpath $(dirname $0))"
 
 DAOS_POOL_SIZE=10G
