@@ -2039,7 +2039,7 @@ dtx_leader_exec_ops_chore(struct dss_chore *chore, bool is_reentrance)
 
 		/* Yield to avoid holding CPU for too long time. */
 		if (++(dtx_chore->k) % DTX_RPC_YIELD_THD == 0)
-			return DSS_CHORE_READY;
+			return DSS_CHORE_YIELD;
 	}
 
 	if (rc != 0) {

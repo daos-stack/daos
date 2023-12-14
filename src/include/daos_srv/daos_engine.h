@@ -824,14 +824,14 @@ int dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
 /** Status of a chore */
 enum dss_chore_status {
 	DSS_CHORE_NEW,		/**< ready to be scheduled for the first time (private) */
-	DSS_CHORE_READY,	/**< ready to be scheduled */
+	DSS_CHORE_YIELD,	/**< ready to be scheduled again */
 	DSS_CHORE_DONE		/**< no more scheduling required */
 };
 
 struct dss_chore;
 
 /**
- * Must return either DSS_CHORE_READY (if yielding to other chores) or
+ * Must return either DSS_CHORE_YIELD (if yielding to other chores) or
  * DSS_CHORE_DONE (if terminating). If \a is_reentrance is true, this is not
  * the first time \a chore is scheduled. A typical implementation shall
  * initialize its internal state variables if \a is_reentrance is false. See
@@ -843,7 +843,7 @@ typedef enum dss_chore_status (*dss_chore_func_t)(struct dss_chore *chore, bool 
  * Chore (opaque)
  *
  * A simple task (e.g., an I/O forwarding task) that yields by returning
- * DSS_CHORE_READY instead of calling ABT_thread_yield. This data structure
+ * DSS_CHORE_YIELD instead of calling ABT_thread_yield. This data structure
  * shall be embedded in the user's own task data structure, which typically
  * also includes arguments and internal state variables for \a cho_func. All
  * fields are private. See dtx_chore for an example.

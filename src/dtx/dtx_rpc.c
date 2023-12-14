@@ -441,7 +441,7 @@ dtx_req_list_send(struct dtx_common_args *dca, daos_epoch_t epoch, int len, bool
 
 		/* Yield to avoid holding CPU for too long time. */
 		if (++(dca->dca_i) % DTX_RPC_YIELD_THD == 0)
-			return DSS_CHORE_READY;
+			return DSS_CHORE_YIELD;
 	}
 
 	return DSS_CHORE_DONE;
@@ -675,8 +675,8 @@ dtx_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 
 send:
 	rc = dtx_req_list_send(dca, dca->dca_epoch, length, is_reentrance);
-	if (rc == DSS_CHORE_READY)
-		return DSS_CHORE_READY;
+	if (rc == DSS_CHORE_YIELD)
+		return DSS_CHORE_YIELD;
 	if (rc == DSS_CHORE_DONE)
 		rc = 0;
 

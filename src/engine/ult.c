@@ -624,9 +624,9 @@ dss_chore_diy_internal(struct dss_chore *chore)
 {
 reenter:
 	D_DEBUG(DB_TRACE, "%p: status=%d\n", chore, chore->cho_status);
-	chore->cho_status = chore->cho_func(chore, chore->cho_status == DSS_CHORE_READY);
+	chore->cho_status = chore->cho_func(chore, chore->cho_status == DSS_CHORE_YIELD);
 	D_ASSERT(chore->cho_status != DSS_CHORE_NEW);
-	if (chore->cho_status == DSS_CHORE_READY) {
+	if (chore->cho_status == DSS_CHORE_YIELD) {
 		ABT_thread_yield();
 		goto reenter;
 	}
@@ -728,7 +728,7 @@ dss_chore_queue_ult(void *arg)
 		 *   [queue->chq_list] [list],
 		 *
 		 * where list contains chores that have returned
-		 * DSS_CHORE_READY in the previous iteration.
+		 * DSS_CHORE_YIELD in the previous iteration.
 		 */
 		ABT_mutex_lock(queue->chq_mutex);
 		for (;;) {
@@ -750,7 +750,7 @@ dss_chore_queue_ult(void *arg)
 			break;
 
 		d_list_for_each_entry_safe(chore, chore_tmp, &list, cho_link) {
-			bool is_reentrance = (chore->cho_status == DSS_CHORE_READY);
+			bool is_reentrance = (chore->cho_status == DSS_CHORE_YIELD);
 
 			D_DEBUG(DB_TRACE, "%p: status=%d\n", chore, chore->cho_status);
 			chore->cho_status = chore->cho_func(chore, is_reentrance);
