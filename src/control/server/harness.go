@@ -15,7 +15,6 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -46,7 +45,6 @@ type Engine interface {
 	// These methods should probably be refactored out into functions that
 	// accept the engine instance as a parameter.
 	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult
-	StorageFormatNVMe() commonpb.NvmeControllerResults
 
 	// This is a more reasonable surface that will be easier to maintain and test.
 	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)

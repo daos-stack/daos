@@ -524,12 +524,12 @@ type (
 	// BdevFormatRequest defines the parameters for a Format operation.
 	BdevFormatRequest struct {
 		pbin.ForwardableRequest
-		Properties BdevTierProperties
-		OwnerUID   int
-		OwnerGID   int
-		VMDEnabled bool
-		Hostname   string
-		BdevCache  *BdevScanResponse
+		Properties   BdevTierProperties
+		OwnerUID     int
+		OwnerGID     int
+		Hostname     string
+		VMDEnabled   bool
+		ScannedBdevs NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
@@ -539,14 +539,14 @@ type (
 		OwnerUID          int
 		OwnerGID          int
 		TierProps         []BdevTierProperties
-		VMDEnabled        bool
 		HotplugEnabled    bool
 		HotplugBusidBegin uint8
 		HotplugBusidEnd   uint8
 		Hostname          string
-		BdevCache         *BdevScanResponse
 		AccelProps        AccelProps
 		SpdkRpcSrvProps   SpdkRpcServer
+		VMDEnabled        bool
+		ScannedBdevs      NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.

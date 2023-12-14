@@ -283,8 +283,12 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
 
-	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,
-		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
+	sp := storage.DefaultProvider(srv.log, idx, &cfg.Storage).
+		WithVMDEnabled(srv.ctlSvc.storage.IsVMDEnabled())
+
+	engine := NewEngineInstance(srv.log, sp, joinFn, engine.NewRunner(srv.log, cfg)).
+		WithHostFaultDomain(srv.harness.faultDomain)
+
 	if idx == 0 {
 		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)
 	}

@@ -823,29 +823,48 @@ type formatNvmeReq struct {
 
 func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageFormatResp) {
 	// Allow format to complete on one instance even if another fails
-	// TODO: perform bdev format in parallel
-	for idx, ei := range req.instances {
+	for idx, engine := range req.instances {
 		_, hasError := req.errored[idx]
 		_, skipped := req.skipped[idx]
 		if hasError || (skipped && !req.mdFormatted) {
-			// if scm failed to format or was already formatted, indicate skipping bdev format
-			ret := ei.newCret(storage.NilBdevAddress, nil)
-			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
+			// If scm failed to format or was already formatted, skip bdev format.
+			ret := engine.newCret(storage.NilBdevAddress, nil)
+			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, engine.Index())
 			resp.Crets = append(resp.Crets, ret)
 			continue
 		}
 
+		respBdevs, err := scanEngineBdevs(ctx, engine, new(ctlpb.ScanNvmeReq))
+		if err != nil {
+			if errors.Is(err, errEngineBdevScanEmptyDevList) {
+				// No controllers assigned in config, continue.
+				continue
+			}
+			req.errored[idx] = err.Error()
+			resp.Crets = append(resp.Crets, engine.newCret("", err))
+			continue
+		}
+
+		// Convert proto ctrlr scan results to native when calling into storage provider.
+		pbCtrlrs := proto.NvmeControllers(respBdevs.Ctrlrs)
+		ctrlrs, err := pbCtrlrs.ToNative()
+		if err != nil {
+			req.errored[idx] = err.Error()
+			resp.Crets = append(resp.Crets, engine.newCret("", err))
+			continue
+		}
+
 		// SCM formatted correctly on this instance, format NVMe
-		cResults := ei.StorageFormatNVMe()
+		cResults := formatEngineBdevs(engine, ctrlrs)
 		if cResults.HasErrors() {
 			req.errored[idx] = cResults.Errors()
 			resp.Crets = append(resp.Crets, cResults...)
 			continue
 		}
 
-		if err := ei.GetStorage().WriteNvmeConfig(ctx, req.log); err != nil {
+		if err := engine.GetStorage().WriteNvmeConfig(ctx, req.log, ctrlrs); err != nil {
 			req.errored[idx] = err.Error()
-			cResults = append(cResults, ei.newCret("", err))
+			cResults = append(cResults, engine.newCret("", err))
 		}
 
 		resp.Crets = append(resp.Crets, cResults...)
@@ -989,8 +1008,9 @@ func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.Nv
 	}
 	c.log.Debugf("updated bdev list: %+v", tierCfg.Bdev.DeviceList)
 
+	// TODO: Supply scan results for VMD backing device address mapping.
 	resp = new(ctlpb.NvmeAddDeviceResp)
-	if err := engineStorage.WriteNvmeConfig(ctx, c.log); err != nil {
+	if err := engineStorage.WriteNvmeConfig(ctx, c.log, nil); err != nil {
 		err = errors.Wrapf(err, "write nvme config for engine %d", engineIndex)
 		c.log.Error(err.Error())
 

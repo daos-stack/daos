@@ -41,7 +41,6 @@ type Provider struct {
 	metadata      MetadataProvider
 	scm           ScmProvider
 	bdev          BdevProvider
-	bdevCache     BdevScanResponse
 	vmdEnabled    bool
 }
 
@@ -479,7 +478,7 @@ type BdevTierFormatResult struct {
 
 // FormatBdevTiers formats all the Bdev tiers in the engine storage
 // configuration.
-func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
+func (p *Provider) FormatBdevTiers(ctrlrs NvmeControllers) (results []BdevTierFormatResult) {
 	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierFormatResult, len(bdevCfgs))
 
@@ -492,20 +491,20 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 		p.log.Infof("Instance %d: starting format of %s block devices %v",
 			p.engineIndex, cfg.Class, cfg.Bdev.DeviceList)
 
-		results[i].Tier = cfg.Tier
 		req, err := BdevFormatRequestFromConfig(p.log, cfg)
 		if err != nil {
 			results[i].Error = err
 			p.log.Errorf("Instance %d: format failed (%s)", err)
 			continue
 		}
+		req.ScannedBdevs = ctrlrs
 
 		p.RLock()
-		req.BdevCache = &p.bdevCache
 		req.VMDEnabled = p.vmdEnabled
 		results[i].Result, results[i].Error = p.bdev.Format(req)
 		p.RUnlock()
 
+		results[i].Tier = cfg.Tier
 		if err := results[i].Error; err != nil {
 			p.log.Errorf("Instance %d: format failed (%s)", err)
 			continue
@@ -595,7 +594,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
-func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) error {
+func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger, ctrlrs NvmeControllers) error {
 	p.RLock()
 	vmdEnabled := p.vmdEnabled
 	engineIndex := p.engineIndex
@@ -607,16 +606,10 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) erro
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
-	if req == nil {
-		return errors.New("BdevWriteConfigRequestFromConfig returned nil request")
-	}
+	req.ScannedBdevs = ctrlrs
 
 	log.Infof("Writing NVMe config file for engine instance %d to %q", engineIndex,
 		req.ConfigOutputPath)
-
-	p.RLock()
-	defer p.RUnlock()
-	req.BdevCache = &p.bdevCache
 
 	_, err = p.bdev.WriteConfig(*req)
 
@@ -640,9 +633,14 @@ func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 }
 
 // WithVMDEnabled enables VMD on storage provider.
-func (p *Provider) WithVMDEnabled() *Provider {
-	p.vmdEnabled = true
+func (p *Provider) WithVMDEnabled(b bool) *Provider {
+	p.vmdEnabled = b
 	return p
+}
+
+// IsVMDEnabled queries whether VMD is enabled on storage provider.
+func (p *Provider) IsVMDEnabled() bool {
+	return p.vmdEnabled
 }
 
 func (p *Provider) BdevRoleMetaConfigured() bool {

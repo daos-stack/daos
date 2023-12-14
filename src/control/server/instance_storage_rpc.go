@@ -22,8 +22,9 @@ import (
 )
 
 var (
-	scanSmd        = listSmdDevices
-	getCtrlrHealth = getBioHealth
+	scanSmd                       = listSmdDevices
+	getCtrlrHealth                = getBioHealth
+	errEngineBdevScanEmptyDevList = errors.New("empty device list for engine instance")
 )
 
 // newMntRet creates and populates SCM mount result.
@@ -78,11 +79,28 @@ func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 	return ei.newMntRet(cfg.Scm.MountPoint, nil), nil
 }
 
-func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
+func formatEngineBdevs(engine Engine, ctrlrs storage.NvmeControllers) (results proto.NvmeControllerResults) {
+	ei := engine.(*EngineInstance)
+
+	// If no superblock exists, format NVMe and populate response with results.
+	needsSuperblock, err := ei.NeedsSuperblock()
+	if err != nil {
+		ei.log.Errorf("engine storage for %s instance %d: NeedsSuperblock(): %s",
+			build.DataPlaneName, ei.Index(), err)
+
+		return proto.NvmeControllerResults{
+			ei.newCret("", err),
+		}
+	}
+
+	if !needsSuperblock {
+		return
+	}
+
 	defer ei.logDuration(track(fmt.Sprintf(
 		"Format of NVMe storage for %s instance %d", build.DataPlaneName, ei.Index())))
 
-	for _, tr := range ei.storage.FormatBdevTiers() {
+	for _, tr := range ei.storage.FormatBdevTiers(ctrlrs) {
 		if tr.Error != nil {
 			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
 			continue
@@ -139,26 +157,6 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	}
 
 	mResult, scmErr = ei.scmFormat(force)
-	return
-}
-
-// StorageFormatNVMe performs format on NVMe if superblock needs writing.
-func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResults) {
-	// If no superblock exists, format NVMe and populate response with results.
-	needsSuperblock, err := ei.NeedsSuperblock()
-	if err != nil {
-		ei.log.Errorf("engine storage for %s instance %d: NeedsSuperblock(): %s",
-			build.DataPlaneName, ei.Index(), err)
-
-		return proto.NvmeControllerResults{
-			ei.newCret("", err),
-		}
-	}
-
-	if needsSuperblock {
-		cResults = ei.bdevFormat()
-	}
-
 	return
 }
 
@@ -291,8 +289,7 @@ func bdevScanEngine(ctx context.Context, engine Engine, req *ctlpb.ScanNvmeReq) 
 
 	eCfgBdevs := storage.TierConfigs(engine.GetStorage().GetBdevConfigs()).Bdevs()
 	if eCfgBdevs.Len() == 0 {
-		return nil, errors.Errorf("empty device list for engine instance %d",
-			engine.Index())
+		return nil, errEngineBdevScanEmptyDevList
 	}
 
 	var isStarted bool

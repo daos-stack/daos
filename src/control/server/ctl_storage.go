@@ -49,7 +49,7 @@ func (scs *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storag
 
 // WithVMDEnabled enables VMD support in storage provider.
 func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
-	scs.storage.WithVMDEnabled()
+	scs.storage.WithVMDEnabled(true)
 	return scs
 }
 
