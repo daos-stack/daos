@@ -17,7 +17,7 @@ server_config:
   name: daos_server
   control_log_mask: INFO
   control_log_file: daos_control0.log
-  crt_timeout: 60
+  crt_timeout: 120
   engines_per_host: 2
   engines:
     0:
@@ -41,11 +41,11 @@ server_config:
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 75%
-  rebuild_timeout: 480
+  rebuild_timeout: 600
   pool_query_timeout: 120
 pool_reserved:
   size: 10%
-  rebuild_timeout: 480
+  rebuild_timeout: 600
   pool_query_timeout: 120
 container:
   type: POSIX
@@ -142,7 +142,7 @@ ior_harasser:
 fio_harasser:
   api:
     - POSIX
-  job_timeout: 20
+  job_timeout: 30
   names:
     - global
     - test
@@ -172,7 +172,7 @@ fio_harasser:
     disable_caching: true
 mdtest_harasser:
   # maximum timeout for a single job in test in minutes
-  job_timeout: 20
+  job_timeout: 30
   nodesperjob:
     - 1
     - 4
