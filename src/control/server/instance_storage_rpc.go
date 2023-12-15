@@ -215,7 +215,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 		c := seenCtrlrs[addr]
 
 		// Only minimal info provided in standard scan to enable result aggregation across
-		// homogenous hosts.
+		// homogeneous hosts.
 		engineRank, err := engine.GetRank()
 		if err != nil {
 			engine.Debugf("instance %d GetRank: %s", engine.Index(), err.Error())

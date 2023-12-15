@@ -191,7 +191,7 @@ func printNvmeFormatResults(ctrlrs storage.NvmeControllers, out io.Writer, opts 
 	for _, ctrlr := range parseNvmeFormatResults(ctrlrs) {
 		row := txtfmt.TableRow{pciTitle: ctrlr.PciAddr}
 		row[resultTitle] = ctrlr.Info
-		roles := "???"
+		roles := "N/A"
 		// Assumes that all SMD devices on a controller have the same roles.
 		if len(ctrlr.SmdDevices) > 0 {
 			roles = fmt.Sprintf("%s", ctrlr.SmdDevices[0].Roles.String())
@@ -236,7 +236,7 @@ func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, op
 		row[fwTitle] = ctrlr.FwRev
 		row[socketTitle] = fmt.Sprint(ctrlr.SocketID)
 		row[capacityTitle] = humanize.Bytes(ctrlr.Capacity())
-		roles := "???"
+		roles := "N/A"
 		rank := "None"
 		// Assumes that all SMD devices on a controller have the same roles and rank.
 		if len(ctrlr.SmdDevices) > 0 {
