@@ -2524,32 +2524,28 @@ touch_page(struct umem_store *store, struct umem_page_info *pinfo, uint64_t wr_t
 	uint64_t bit;
 	uint64_t idx;
 
+	D_ASSERT(wr_tx != -1ULL);
+	D_ASSERTF(store->stor_ops->so_wal_id_cmp(store, wr_tx, pinfo->pi_last_inflight) >= 0,
+		  "cur_tx:"DF_U64" < last_inflight:"DF_U64"\n", wr_tx, pinfo->pi_last_inflight);
+	D_ASSERTF(store->stor_ops->so_wal_id_cmp(store, wr_tx, pinfo->pi_last_checkpoint) > 0,
+		  "cur_tx:"DF_U64" <= last_checkpoint:"DF_U64"\n",
+		  wr_tx, pinfo->pi_last_checkpoint);
+
 	for (bit_nr = start_bit; bit_nr <= end_bit; bit_nr++) {
 		idx = bit_nr >> UMEM_CHUNK_IDX_SHIFT; /** uint64_t index */
 		bit = bit_nr & UMEM_CHUNK_IDX_MASK;
 		pinfo->pi_bmap[idx] |= 1ULL << bit;
 	}
 
-	/* Don't change the pi_dirty_link while the page is being flushed */
-	if (d_list_empty(&pinfo->pi_flush_link) && !is_page_dirty(pinfo)) {
-		D_ASSERT(pinfo->pi_io == 0);
-		/* FIXME: See the comments below */
-		d_list_del(&pinfo->pi_dirty_link);
-		d_list_add_tail(&pinfo->pi_dirty_link, &cache->ca_pgs_dirty);
-	}
+	pinfo->pi_last_inflight = wr_tx;
 
-	/*
-	 * In rare cases like relaxed memcpy, DAV could call umem_cache_touch() with lower
-	 * transaction ID (or -1ULL).
-	 *
-	 * TODO: Revisit the potential issue since umem cache relies on transaction ID to
-	 * tell if a page is clean (not by checking bitmaps).
-	 */
-	if (store->stor_ops->so_wal_id_cmp(store, wr_tx, pinfo->pi_last_inflight) <= 0 ||
-	    wr_tx == -1ULL)
+	/* Don't change the pi_dirty_link while the page is being flushed */
+	if (!d_list_empty(&pinfo->pi_flush_link))
 		return;
 
-	pinfo->pi_last_inflight = wr_tx;
+	D_ASSERT(pinfo->pi_io == 0);
+	if (d_list_empty(&pinfo->pi_dirty_link))
+		d_list_add_tail(&pinfo->pi_dirty_link, &cache->ca_pgs_dirty);
 }
 
 /* Convert MD-blob offset to memory page */
