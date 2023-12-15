@@ -262,7 +262,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 	}
 
 	for _, c := range seenCtrlrs {
-		engine.Debugf("ctrlr scanned: %+v", c)
+		engine.Tracef("nvme ssd scanned: %+v", c)
 		pbResp.Ctrlrs = append(pbResp.Ctrlrs, c)
 	}
 
