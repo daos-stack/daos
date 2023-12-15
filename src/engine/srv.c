@@ -520,9 +520,9 @@ dss_srv_handler(void *arg)
 	}
 
 	if (with_chore_queue) {
-		rc = dss_chore_queue_init(dx);
+		rc = dss_chore_queue_start(dx);
 		if (rc != 0) {
-			DL_ERROR(rc, "failed to initialize chore queue");
+			DL_ERROR(rc, "failed to start chore queue");
 			ABT_future_set(dx->dx_shutdown, dx);
 			wait_all_exited(dx, dmi);
 			goto nvme_fini;
@@ -584,8 +584,6 @@ dss_srv_handler(void *arg)
 		dmi->dmi_dp = NULL;
 	}
 
-	if (with_chore_queue)
-		dss_chore_queue_fini(dx);
 nvme_fini:
 	if (dss_xstream_has_nvme(dx))
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
@@ -819,6 +817,12 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 		D_GOTO(out_dx, rc);
 	}
 
+	rc = dss_chore_queue_init(dx);
+	if (rc != 0) {
+		DL_ERROR(rc, "initialize chore queue fails");
+		goto out_sched;
+	}
+
 	dss_mem_stats_init(&dx->dx_mem_stats, xs_id);
 
 	/** start XS, ABT rank 0 is reserved for the primary xstream */
@@ -826,7 +830,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 					  &dx->dx_xstream);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create xstream fails %d\n", rc);
-		D_GOTO(out_sched, rc = dss_abterr2der(rc));
+		D_GOTO(out_chore_queue, rc = dss_abterr2der(rc));
 	}
 
 	rc = ABT_thread_attr_create(&attr);
@@ -875,6 +879,8 @@ out_xstream:
 		ABT_thread_attr_free(&attr);
 	ABT_xstream_join(dx->dx_xstream);
 	ABT_xstream_free(&dx->dx_xstream);
+out_chore_queue:
+	dss_chore_queue_fini(dx);
 out_sched:
 	dss_sched_fini(dx);
 out_dx:
@@ -934,6 +940,7 @@ dss_xstreams_fini(bool force)
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
+		dss_chore_queue_fini(dx);
 		dss_sched_fini(dx);
 		dss_xstream_free(dx);
 		xstream_data.xd_xs_ptrs[i] = NULL;

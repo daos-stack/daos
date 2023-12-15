@@ -69,6 +69,15 @@ struct mem_stats {
 	uint64_t		ms_current;
 };
 
+/* See dss_chore. */
+struct dss_chore_queue {
+	d_list_t   chq_list;
+	bool       chq_stop;
+	ABT_mutex  chq_mutex;
+	ABT_cond   chq_cond;
+	ABT_thread chq_ult;
+};
+
 /** Per-xstream configuration data */
 struct dss_xstream {
 	char			dx_name[DSS_XS_NAME_LEN];
@@ -103,7 +112,7 @@ struct dss_xstream {
 #endif
 	bool			dx_progress_started;	/* Network poll started */
 	int                     dx_tag;                 /** tag for xstream */
-	struct dss_chore_queue *dx_chore_queue;
+	struct dss_chore_queue	dx_chore_queue;
 };
 
 /** Engine module's metrics */
@@ -379,6 +388,7 @@ dss_xstream_has_nvme(struct dss_xstream *dx)
 }
 
 int dss_chore_queue_init(struct dss_xstream *dx);
+int dss_chore_queue_start(struct dss_xstream *dx);
 void dss_chore_queue_stop(struct dss_xstream *dx);
 void dss_chore_queue_fini(struct dss_xstream *dx);
 
