@@ -292,6 +292,8 @@ enum {
 	VOS_POOL_FEAT_EMB_VALUE = (1ULL << 3),
 	/** Flat DKEY support enabled */
 	VOS_POOL_FEAT_FLAT_DKEY = (1ULL << 4),
+	/** Embedded value support enabled */
+	VOS_POOL_FEAT_EMBED_FIRST = (1ULL << 5),
 };
 
 /** Mask for any conditionals passed to to the fetch */
