@@ -50,7 +50,7 @@
  * but could also separately track attributes (inodes) and file contents as well.
  *
  * Additional changes to consider in the future could include:
- *  Better handing of eviction timeouts, "max(time * 1.1, 10)" would be better than a flat +2/+5
+ *  Better handing of eviction timeouts, "max(time * 1.1, 10)" would be better than a flat +x/+5
  *  Use arrays rather than lists for the buckets for faster iteration.
  *  Reference counting the timeout buckets.
  *
@@ -70,6 +70,14 @@
  * As this relates to releasing resources there is no additional benefit in finer grained time
  * control than this.
  */
+
+/* Grace period before invalidating directories or non-directories.  Needs to be long enough so that
+ * entries in the working set are invalidated but short enough to be meaningful.
+ * Directories that are used as the cwd for processes can cause problems with being invalidated too
+ * early so use a higher value here.
+ */
+#define INVAL_DIRECTORY_GRACE (60 * 10)
+#define INVAL_FILE_GRACE      2
 
 /* Represents one timeout value (time).  Maintains a ordered list of dentries that are using
  * this timeout.
@@ -325,9 +333,9 @@ ival_update_inode(struct dfuse_inode_entry *inode, double timeout)
 	bool                     wake = false;
 
 	if (S_ISDIR(inode->ie_stat.st_mode))
-		timeout += 5;
+		timeout += INVAL_DIRECTORY_GRACE;
 	else
-		timeout += 2;
+		timeout += INVAL_FILE_GRACE;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 
@@ -411,8 +419,8 @@ ival_add_cont_buckets(struct dfuse_cont *dfc)
 {
 	int rc, rc2;
 
-	rc  = ival_bucket_add_value(dfc->dfc_dentry_timeout + 2);
-	rc2 = ival_bucket_add_value(dfc->dfc_dentry_dir_timeout + 5);
+	rc  = ival_bucket_add_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
+	rc2 = ival_bucket_add_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
 
 	return rc ? rc : rc2;
 }
