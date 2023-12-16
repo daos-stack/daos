@@ -32,3 +32,12 @@ class ScrubberUtils(TelemetryUtils):
             dict: scrubber csum total metrics.
         """
         return self.get_metrics("engine_pool_scrubber_csums_total")
+
+    def get_scrubber_bytes_scrubbed_total(self):
+        """This method is used to get scrubber bytes scrubbed total
+        metrics information.
+
+        Returns:
+            dict: scrubber bytes scrubbed total.
+        """
+        return self.get_metrics("engine_pool_scrubber_bytes_scrubbed_total")
