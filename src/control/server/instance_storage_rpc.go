@@ -79,9 +79,7 @@ func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 	return ei.newMntRet(cfg.Scm.MountPoint, nil), nil
 }
 
-func formatEngineBdevs(engine Engine, ctrlrs storage.NvmeControllers) (results proto.NvmeControllerResults) {
-	ei := engine.(*EngineInstance)
-
+func formatEngineBdevs(ei *EngineInstance, ctrlrs storage.NvmeControllers) (results proto.NvmeControllerResults) {
 	// If no superblock exists, format NVMe and populate response with results.
 	needsSuperblock, err := ei.NeedsSuperblock()
 	if err != nil {

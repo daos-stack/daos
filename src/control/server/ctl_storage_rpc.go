@@ -855,7 +855,8 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 		}
 
 		// SCM formatted correctly on this instance, format NVMe
-		cResults := formatEngineBdevs(engine, ctrlrs)
+		cResults := formatEngineBdevs(engine.(*EngineInstance), ctrlrs)
+
 		if cResults.HasErrors() {
 			req.errored[idx] = cResults.Errors()
 			resp.Crets = append(resp.Crets, cResults...)
