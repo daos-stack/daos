@@ -841,4 +841,12 @@ int
 dc_obj_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
 		   d_sg_list_t *sgl, d_iov_t *csum, dc_obj_enum_unpack_cb_t cb,
 		   void *cb_arg);
+
+/** Check if server supports daos_obj_query_max_epoch */
+extern int dc_obj_proto_version;
+static inline bool
+dc_supports_epoch_query()
+{
+	return (dc_obj_proto_version >= 9);
+}
 #endif /* __DD_OBJ_H__ */
