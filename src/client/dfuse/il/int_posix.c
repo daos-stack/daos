@@ -47,9 +47,11 @@ struct ioil_pool {
 
 struct ioil_global {
 	pthread_mutex_t	iog_lock;
+#if 0
 	d_list_t	iog_pools_head;
 	daos_handle_t	iog_main_eqh;
 	daos_handle_t	iog_eqs[IOIL_MAX_EQ];
+#endif
 	uint16_t	iog_eq_count_max;
 	uint16_t	iog_eq_count;
 	uint16_t	iog_eq_idx;
@@ -95,6 +97,7 @@ static const char *const bypass_status[] = {
  * ioil_shrink_pool() is only used in ioil_fini() where stale pools
  * have been left open, for example if there are problems on close.
  */
+#if 0
 
 static int
 ioil_shrink_pool(struct ioil_pool *pool)
@@ -154,6 +157,7 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 
 	return ioil_shrink_pool(pool);
 }
+#endif
 
 static void
 entry_array_close(void *arg) {
@@ -161,7 +165,9 @@ entry_array_close(void *arg) {
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
 	dfs_release(entry->fd_dfsoh);
+#if 0
 	entry->fd_cont->ioc_open_count -= 1;
+#endif
 
 	/* Do not close container/pool handles at this point
 	 * to allow for reuse.
@@ -285,7 +291,9 @@ ioil_init(void)
 
 	pthread_once(&init_links_flag, init_links);
 
+#if 0
 	D_INIT_LIST_HEAD(&ioil_iog.iog_pools_head);
+#endif
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc)
@@ -374,6 +382,7 @@ ioil_fini(void)
 
 	ioil_show_summary();
 
+#if 0
 	/* Tidy up any open connections */
 	d_list_for_each_entry_safe(pool, pnext,
 				   &ioil_iog.iog_pools_head, iop_pools) {
@@ -405,10 +414,13 @@ ioil_fini(void)
 			daos_eq_destroy(ioil_iog.iog_main_eqh, 0);
 		daos_fini();
 	}
+
+#endif
 	ioil_iog.iog_daos_init = false;
 	daos_debug_fini();
 }
 
+#if 0
 int
 ioil_get_eqh(daos_handle_t *eqh)
 {
@@ -804,6 +816,16 @@ child_hdlr(void)
 		ioil_iog.iog_main_eqh = ioil_eqh;
 }
 
+#else
+
+static bool
+call_daos_init(int fd)
+{
+	return true;
+}
+
+#endif
+
 /* Returns true on success */
 static bool
 check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
@@ -843,6 +865,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 		if (!call_daos_init(fd))
 			goto err;
 
+#if 0
 		if (ioil_iog.iog_eq_count_max) {
 			rc = daos_eq_create(&ioil_eqh);
 			if (rc) {
@@ -854,8 +877,10 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 			rc = pthread_atfork(NULL, NULL, &child_hdlr);
 			D_ASSERT(rc == 0);
 		}
+#endif
 	}
 
+#if 0
 	d_list_for_each_entry(pool, &ioil_iog.iog_pools_head, iop_pools) {
 		if (uuid_compare(pool->iop_uuid, il_reply.fir_pool) != 0)
 			continue;
@@ -911,10 +936,13 @@ open_cont:
 	}
 
 get_file:
+#endif
 	entry->fd_pos = 0;
 	entry->fd_flags = flags;
 	entry->fd_status = DFUSE_IO_BYPASS;
+#if 0
 	entry->fd_cont = cont;
+#endif
 
 	/* Only intercept fstat if caching is not on for this file */
 	if ((il_reply.fir_flags & DFUSE_IOCTL_FLAGS_MCACHE) == 0)
@@ -922,6 +950,7 @@ get_file:
 
 	DFUSE_LOG_DEBUG("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
 
+#if 0
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
 	if (rc == EISDIR)
@@ -931,6 +960,8 @@ get_file:
 
 	DFUSE_LOG_DEBUG("fd:%d flags %#lx fstat %s", fd, il_reply.fir_flags,
 			entry->fd_fstat ? "yes" : "no");
+
+#endif
 
 	rc = vector_set(&fd_table, fd, entry);
 	if (rc != 0) {
@@ -942,7 +973,9 @@ get_file:
 
 	DFUSE_LOG_DEBUG("Added entry for new fd %d", fd);
 
+#if 0
 	cont->ioc_open_count += 1;
+#endif
 
 	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);
 	D_ASSERT(rc == 0);
@@ -952,8 +985,10 @@ get_file:
 obj_close:
 	dfs_release(entry->fd_dfsoh);
 
+#if 0
 shrink:
 	ioil_shrink_cont(cont, true, false);
+#endif
 
 err:
 	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);
@@ -1765,6 +1800,7 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 	return __real_mmap(address, length, prot, flags, fd, offset);
 }
 
+#if 0
 DFUSE_PUBLIC int
 dfuse_ftruncate(int fd, off_t length)
 {
@@ -1791,6 +1827,15 @@ dfuse_ftruncate(int fd, off_t length)
 do_real_ftruncate:
 	return __real_ftruncate(fd, length);
 }
+#else
+
+DFUSE_PUBLIC int
+dfuse_ftruncate(int fd, off_t length)
+{
+	return __real_ftruncate(fd, length);
+}
+
+#endif
 
 DFUSE_PUBLIC int
 dfuse_fsync(int fd)
@@ -2893,6 +2938,7 @@ do_real_fn:
 	return __real_vfprintf(stream, format, arg);
 }
 
+#if 0
 DFUSE_PUBLIC int
 dfuse___fxstat(int ver, int fd, struct stat *buf)
 {
@@ -2955,6 +3001,15 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 do_real_fstat:
 	return __real___fxstat(ver, fd, buf);
 }
+#else
+
+DFUSE_PUBLIC int
+dfuse___fxstat(int ver, int fd, struct stat *buf)
+{
+	return __real___fxstat(ver, fd, buf);
+}
+
+#endif
 
 DFUSE_PUBLIC int
 dfuse_get_bypass_status(int fd)

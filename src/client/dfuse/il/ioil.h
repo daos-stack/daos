@@ -29,7 +29,9 @@ struct ioil_cont {
 };
 
 struct fd_entry {
+#if 0
 	struct ioil_cont *fd_cont;
+#endif
 	dfs_obj_t        *fd_dfsoh;
 	off_t             fd_pos;
 	ino_t             fd_ino;

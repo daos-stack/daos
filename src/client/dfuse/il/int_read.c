@@ -40,8 +40,9 @@ read_bulk(int fd, char *buff, size_t len, off_t position, struct fd_entry *entry
 		*errcode = errno;
 		return -1;
 	}
-	if (rc == 0)
-		return diov.len;
+	return diov.len;
+
+#if 0
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
@@ -86,6 +87,7 @@ out:
 		return -1;
 	}
 	return read_size;
+#endif
 }
 
 ssize_t

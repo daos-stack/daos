@@ -39,9 +39,9 @@ ioil_do_writex(int fd, const char *buff, size_t len, off_t position, struct fd_e
 	if (rc == -1) {
 		DS_ERROR(errno, "Error from ioctl on fd %d", fd);
 	}
-	if (rc == 0)
 		return diov.len;
 
+#if 0
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
@@ -83,6 +83,7 @@ out:
 		return -1;
 	}
 	return len;
+#endif
 }
 
 ssize_t
