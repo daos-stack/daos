@@ -264,12 +264,9 @@ struct dead_pool {
 	uuid_t		dp_uuid;
 };
 
-/* Remove leftover SPDK resources from pools not fully created/destroyed */
 static int
-cleanup_leftover_cb(uuid_t uuid, void *arg)
+clear_vos_pool(uuid_t uuid)
 {
-	d_list_t		*dead_list = arg;
-	struct dead_pool	*dp;
 	int			 rc;
 	struct d_uuid		 id;
 
@@ -286,6 +283,21 @@ cleanup_leftover_cb(uuid_t uuid, void *arg)
 		D_ERROR("tgt_kill_pool, rc: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
+
+	return 0;
+}
+
+/* Remove leftover SPDK resources from pools not fully created/destroyed */
+static int
+cleanup_leftover_cb(uuid_t uuid, void *arg)
+{
+	d_list_t         *dead_list = arg;
+	struct dead_pool *dp;
+	int               rc;
+
+	rc = clear_vos_pool(uuid);
+	if (rc != 0)
+		return rc;
 
 	D_ALLOC_PTR(dp);
 	if (dp == NULL)
@@ -1074,6 +1086,14 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 
 	if (tca.tca_newborn != NULL) {
 		struct vos_pool_arg vpa = {0};
+
+		/* clear any orphaned blobs that are associated with this uuid */
+		rc = clear_vos_pool(tc_in->tc_pool_uuid);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to clear orphan blobs",
+				 DP_UUID(tc_in->tc_pool_uuid));
+			goto out;
+		}
 
 		D_ASSERT(dss_tgt_nr > 0);
 		uuid_copy(vpa.vpa_uuid, tc_in->tc_pool_uuid);
