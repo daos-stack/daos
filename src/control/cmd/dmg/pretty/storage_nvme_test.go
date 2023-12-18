@@ -366,8 +366,7 @@ host1
 					"host1",
 					&control.HostStorage{
 						NvmeDevices: storage.NvmeControllers{
-							controllerA,
-							controllerB,
+							controllerA, controllerB,
 						},
 					},
 				},
@@ -394,8 +393,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 					"host1",
 					&control.HostStorage{
 						NvmeDevices: storage.NvmeControllers{
-							controllerC,
-							controllerD,
+							controllerC, controllerD,
 						},
 					},
 				},
@@ -419,15 +417,15 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerC.SocketID, humanize.Bytes(controllerC.Capacity()),
 				controllerC.SmdDevices[0].UUID, controllerC.PciAddr,
 				controllerC.SmdDevices[0].TargetIDs,
-				controllerC.SmdDevices[0].Rank, controllerC.SmdDevices[0].NvmeState.String(),
-				controllerC.SmdDevices[0].LedState.String(),
+				controllerC.SmdDevices[0].Rank,
+				controllerC.NvmeState, controllerC.LedState,
 
 				controllerD.PciAddr, controllerD.Model, controllerD.FwRev,
 				controllerD.SocketID, humanize.Bytes(controllerD.Capacity()),
 				controllerD.SmdDevices[0].UUID, controllerD.PciAddr,
 				controllerD.SmdDevices[0].TargetIDs,
-				controllerD.SmdDevices[0].Rank, controllerD.SmdDevices[0].NvmeState.String(),
-				controllerD.SmdDevices[0].LedState.String()),
+				controllerD.SmdDevices[0].Rank,
+				controllerD.NvmeState, controllerD.LedState),
 		},
 		"multiple smd devices on each controller": {
 			hsm: mockHostStorageMap(t,
@@ -464,23 +462,19 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerE.SocketID, humanize.Bytes(controllerE.Capacity()),
 				controllerE.SmdDevices[0].UUID, controllerE.PciAddr,
 				controllerE.SmdDevices[0].TargetIDs, controllerE.SmdDevices[0].Rank,
-				controllerE.SmdDevices[0].NvmeState.String(),
-				controllerE.SmdDevices[0].LedState.String(),
+				controllerE.NvmeState, controllerE.LedState,
 				controllerE.SmdDevices[1].UUID, controllerE.PciAddr,
 				controllerE.SmdDevices[1].TargetIDs, controllerE.SmdDevices[1].Rank,
-				controllerE.SmdDevices[1].NvmeState.String(),
-				controllerE.SmdDevices[1].LedState.String(),
+				controllerE.NvmeState, controllerE.LedState,
 
 				controllerF.PciAddr, controllerF.Model, controllerF.FwRev,
 				controllerF.SocketID, humanize.Bytes(controllerF.Capacity()),
 				controllerF.SmdDevices[0].UUID, controllerF.PciAddr,
 				controllerF.SmdDevices[0].TargetIDs, controllerF.SmdDevices[0].Rank,
-				controllerF.SmdDevices[0].NvmeState.String(),
-				controllerF.SmdDevices[0].LedState.String(),
+				controllerF.NvmeState, controllerF.LedState,
 				controllerF.SmdDevices[1].UUID, controllerF.PciAddr,
 				controllerF.SmdDevices[1].TargetIDs, controllerF.SmdDevices[1].Rank,
-				controllerF.SmdDevices[1].NvmeState.String(),
-				controllerF.SmdDevices[1].LedState.String()),
+				controllerF.NvmeState, controllerF.LedState),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

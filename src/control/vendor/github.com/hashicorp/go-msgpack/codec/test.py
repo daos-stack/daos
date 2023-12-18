@@ -11,14 +11,7 @@
 
 # Ensure all "string" keys are utf strings (else encoded as bytes)
 
-import os
-import sys
-import threading
-
-import cbor
-import msgpack
-import msgpackrpc
-
+import cbor, msgpack, msgpackrpc, sys, os, threading
 
 def get_test_data_list():
     # get list with all primitive types, and a combo type

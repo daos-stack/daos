@@ -28,3 +28,6 @@ AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
 SpaceBeforeParens: ControlStatementsExceptForEachMacros
 KeepEmptyLinesAtTheStartOfBlocks: false
 MaxEmptyLinesToKeep: 1
+---
+Language: Json
+IndentWidth: 2
