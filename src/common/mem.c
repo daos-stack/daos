@@ -2527,7 +2527,8 @@ touch_page(struct umem_store *store, struct umem_page_info *pinfo, uint64_t wr_t
 	D_ASSERT(wr_tx != -1ULL);
 	D_ASSERTF(store->stor_ops->so_wal_id_cmp(store, wr_tx, pinfo->pi_last_inflight) >= 0,
 		  "cur_tx:"DF_U64" < last_inflight:"DF_U64"\n", wr_tx, pinfo->pi_last_inflight);
-	D_ASSERTF(store->stor_ops->so_wal_id_cmp(store, wr_tx, pinfo->pi_last_checkpoint) > 0,
+	D_ASSERTF(pinfo->pi_last_checkpoint == 0 ||
+		  store->stor_ops->so_wal_id_cmp(store, wr_tx, pinfo->pi_last_checkpoint) > 0,
 		  "cur_tx:"DF_U64" <= last_checkpoint:"DF_U64"\n",
 		  wr_tx, pinfo->pi_last_checkpoint);
 
