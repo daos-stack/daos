@@ -539,8 +539,8 @@ d_log_sync(void)
 void
 d_log_disable_logging(void)
 {
-        mst.log_fd     = -1;
-        mst.log_old_fd = -1;
+	mst.log_fd     = -1;
+	mst.log_old_fd = -1;
 }
 
 /**

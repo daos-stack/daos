@@ -498,7 +498,7 @@ do_directory(void **state)
 	assert_return_code(rc, errno);
 }
 
-#define ERR_ENV_UNSET	(2)
+#define ERR_ENV_UNSET (2)
 
 void
 check_pil4dfs_env()
@@ -562,7 +562,7 @@ do_exec(void **state)
 	pid_t pid;
 	int   status, rc, fd;
 	char *envp[1] = {NULL};
-	char *argv[3]={"dfuse_test", "-c", NULL};
+	char *argv[3] = {"dfuse_test", "-c", NULL};
 	char *exe_path;
 	char *env_ldpreload;
 
@@ -575,7 +575,7 @@ do_exec(void **state)
 	printf("Found libpil4dfs.so.\n");
 	exe_path = malloc(PATH_MAX);
 	assert_non_null(exe_path);
-	rc = readlink("/proc/self/exe", exe_path, PATH_MAX-1);	
+	rc = readlink("/proc/self/exe", exe_path, PATH_MAX - 1);	
 	assert_true(rc > 0);
 	exe_path[rc] = 0;
 
@@ -585,7 +585,7 @@ do_exec(void **state)
 	if (pid == 0)
 		execve(exe_path, argv, envp);
 	waitpid(pid, &status, 0);
-	if ( WIFEXITED(status) )
+	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
 
 	/* fork and call execv() */
@@ -594,7 +594,7 @@ do_exec(void **state)
 	if (pid == 0)
 		execv(exe_path, argv);
 	waitpid(pid, &status, 0);
-	if ( WIFEXITED(status) )
+	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
 
 	/* fork and call execvp() */
@@ -603,7 +603,7 @@ do_exec(void **state)
 	if (pid == 0)
 		execvp(exe_path, argv);
 	waitpid(pid, &status, 0);
-	if ( WIFEXITED(status) )
+	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
 
 	/* fork and call execvpe() */
@@ -612,7 +612,7 @@ do_exec(void **state)
 	if (pid == 0)
 		execvpe(exe_path, argv, envp);
 	waitpid(pid, &status, 0);
-	if ( WIFEXITED(status) )
+	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
 
 	/* fork and call execvpe() */
@@ -623,7 +623,7 @@ do_exec(void **state)
 	if (pid == 0)
 		fexecve(fd, argv, envp);
 	waitpid(pid, &status, 0);
-	if ( WIFEXITED(status) )
+	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
 }
 

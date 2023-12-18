@@ -3184,14 +3184,15 @@ out_readdir:
 extern char **__environ;
 
 /* This number may be updated later to be consistent!*/
-#define N_ENV_CHECK	(7)
+#define N_ENV_CHECK (7)
 /**
  * char    env_list[N_ENV_CHECK][32] = {"LD_PRELOAD", "D_IL_REPORT", "DAOS_MOUNT_POINT",
  *				     "DAOS_POOL", "DAOS_CONTAINER", "D_IL_MAX_EQ",
  *				     "D_IL_ENFORCE_EXEC_ENV"};
  */
 
-static char** pre_envp(char *const envp[])
+static char **
+pre_envp(char *const envp[])
 {
 	int	i, rc, num_entry = 0;
 	int     idx_preload = -1;
@@ -3222,10 +3223,10 @@ static char** pre_envp(char *const envp[])
 	} else if (envp[0] == NULL) {
 		num_entry = 0;
 	} else {
-		while (envp[num_entry])	{
+		while (envp[num_entry]) {
 			if (strncmp(envp[num_entry], "LD_PRELOAD", 10) == 0) {
 				preload_included = true;
-				idx_preload = num_entry;
+				idx_preload      = num_entry;
 				if (strstr(envp[num_entry], "libpil4dfs.so"))
 					pil4dfs_in_preload = true;
 			} else if (strncmp(envp[num_entry], "D_IL_REPORT", 11) == 0) {
@@ -3253,7 +3254,7 @@ static char** pre_envp(char *const envp[])
 	}
 
 	pil4df_path = query_pil4dfs_path();
-	len2 = strnlen(pil4df_path, PATH_MAX);
+	len2        = strnlen(pil4df_path, PATH_MAX);
 	/* copy existing entries */
 	for (i = 0; i < num_entry; i++)	{
 		if (preload_included == true && pil4dfs_in_preload == false && idx_preload == i) {
@@ -3377,7 +3378,7 @@ err_out2:
 err_out1:
 	free(new_envp);
 err_out0:
-	return (char**)envp;
+	return (char **)envp;
 }
 
 static void
@@ -5790,7 +5791,7 @@ init_myhook(void)
 			report = false;
 	}
 	enforce_exec_env = true;
-	env_exec = getenv("D_IL_ENFORCE_EXEC_ENV");
+	env_exec         = getenv("D_IL_ENFORCE_EXEC_ENV");
 	if (env_exec) {
 		if (strncmp(env_exec, "0", 2) == 0 || strncasecmp(env_exec, "false", 6) == 0)
 			enforce_exec_env = false;

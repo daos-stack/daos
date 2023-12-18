@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -450,7 +450,8 @@ void d_log_sync(void);
 /**
  * disable logging by resetting fd for logging
  */
-void d_log_disable_logging(void);
+void
+d_log_disable_logging(void);
 
 #if defined(__cplusplus)
 }
