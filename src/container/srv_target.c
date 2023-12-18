@@ -770,7 +770,6 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
 	struct daos_llink      *llink;
 	uuid_t			key[2];	/* HT key is cuuid+puuid */
 	int			rc;
-	struct ds_cont_child   *ds_cont;
 
 	uuid_copy(key[0], co_uuid);
 	uuid_copy(key[1], po_uuid);
@@ -789,8 +788,7 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
 		return rc;
 	}
 
-	ds_cont = cont_child_obj(llink);
-	*cont = ds_cont;
+	*cont = cont_child_obj(llink);
 	return 0;
 }
 
@@ -1166,13 +1164,6 @@ cont_child_destroy_one(void *vin)
 				       &cont);
 		if (rc == -DER_NONEXIST)
 			break;
-
-		if (cont->sc_stopping) {
-			rc = -DER_SHUTDOWN;
-			D_ERROR(DF_CONT": container is in stopping "DF_RC"\n",
-				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), DP_RC(rc));
-			cont_child_put(tls->dt_cont_cache, cont);
-		}
 
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
