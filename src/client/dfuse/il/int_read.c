@@ -5,15 +5,20 @@
  */
 
 #define D_LOGFAC DD_FAC(il)
+
+#include <sys/ioctl.h>
+
 #include "dfuse_common.h"
 #include "intercept.h"
 #include "daos.h"
 #include "daos_array.h"
 
+#include "dfuse_ioctl.h"
+
 #include "ioil.h"
 
 static ssize_t
-read_bulk(char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode)
+read_bulk(int fd, char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode)
 {
 	daos_size_t	read_size = 0;
 	d_iov_t		iov       = {};
@@ -21,8 +26,22 @@ read_bulk(char *buff, size_t len, off_t position, struct fd_entry *entry, int *e
 	daos_event_t	ev;
 	daos_handle_t	eqh;
 	int		rc;
+	struct dfuse_io_vec diov = {};
+
+	diov.base     = buff;
+	diov.len      = len;
+	diov.position = position;
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "%#zx-%#zx", position, position + len - 1);
+
+	rc = ioctl(fd, DFUSE_IOCTL_READ, &diov);
+	if (rc == -1) {
+		DS_ERROR(errno, "Error from ioctl on fd %d", fd);
+		*errcode = errno;
+		return -1;
+	}
+	if (rc == 0)
+		return diov.len;
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
@@ -70,13 +89,13 @@ out:
 }
 
 ssize_t
-ioil_do_pread(char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode)
+ioil_do_pread(int fd, char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode)
 {
-	return read_bulk(buff, len, position, entry, errcode);
+	return read_bulk(fd, buff, len, position, entry, errcode);
 }
 
 ssize_t
-ioil_do_preadv(const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
+ioil_do_preadv(int fd, const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
 	       int *errcode)
 {
 	ssize_t bytes_read;
@@ -84,10 +103,10 @@ ioil_do_preadv(const struct iovec *iov, int count, off_t position, struct fd_ent
 	int     i;
 
 	for (i = 0; i < count; i++) {
-		bytes_read = read_bulk(iov[i].iov_base, iov[i].iov_len, position, entry, errcode);
+		bytes_read =
+		    read_bulk(fd, iov[i].iov_base, iov[i].iov_len, position, entry, errcode);
 
-		if (bytes_read == -1)
-			return (ssize_t)-1;
+		read_bulk(fd, iov[i].iov_base, iov[i].iov_len, position, entry, errcode);
 
 		if (bytes_read == 0)
 			return total_read;

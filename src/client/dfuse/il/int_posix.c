@@ -184,7 +184,7 @@ ioil_initialize_fd_table(int max_fds)
 }
 
 static ssize_t
-pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
+pread_rpc(struct fd_entry *entry, int fd, char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_read;
 	int errcode;
@@ -196,7 +196,7 @@ pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 		__real_fprintf(stderr, "[libioil] Intercepting read of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
-	bytes_read = ioil_do_pread(buff, len, offset, entry, &errcode);
+	bytes_read = ioil_do_pread(fd, buff, len, offset, entry, &errcode);
 	if (bytes_read < 0)
 		saved_errno = errcode;
 	return bytes_read;
@@ -204,8 +204,7 @@ pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 
 /* Start simple and just loop */
 static ssize_t
-preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
-	   off_t offset)
+preadv_rpc(struct fd_entry *entry, int fd, const struct iovec *iov, int count, off_t offset)
 {
 	ssize_t bytes_read;
 	int errcode;
@@ -217,15 +216,14 @@ preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 		__real_fprintf(stderr, "[libioil] Intercepting read\n");
 
 	/* Just get rpc working then work out how to really do this */
-	bytes_read = ioil_do_preadv(iov, count, offset, entry,
-				    &errcode);
+	bytes_read = ioil_do_preadv(fd, iov, count, offset, entry, &errcode);
 	if (bytes_read < 0)
 		saved_errno = errcode;
 	return bytes_read;
 }
 
 static ssize_t
-pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
+pwrite_rpc(struct fd_entry *entry, int fd, const char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_written;
 	int errcode;
@@ -237,8 +235,7 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 		__real_fprintf(stderr, "[libioil] Intercepting write of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
-	bytes_written = ioil_do_writex(buff, len, offset, entry,
-				       &errcode);
+	bytes_written = ioil_do_writex(fd, buff, len, offset, entry, &errcode);
 	if (bytes_written < 0)
 		saved_errno = errcode;
 
@@ -247,8 +244,7 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 
 /* Start simple and just loop */
 static ssize_t
-pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
-	    off_t offset)
+pwritev_rpc(struct fd_entry *entry, int fd, const struct iovec *iov, int count, off_t offset)
 {
 	ssize_t bytes_written;
 	int errcode;
@@ -260,8 +256,7 @@ pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 		__real_fprintf(stderr, "[libioil] Intercepting write\n");
 
 	/* Just get rpc working then work out how to really do this */
-	bytes_written = ioil_do_pwritev(iov, count, offset, entry,
-					&errcode);
+	bytes_written = ioil_do_pwritev(fd, iov, count, offset, entry, &errcode);
 	if (bytes_written < 0)
 		saved_errno = errcode;
 
@@ -1270,7 +1265,7 @@ dfuse_read(int fd, void *buf, size_t len)
 		goto do_real_read;
 
 	oldpos = entry->fd_pos;
-	bytes_read = pread_rpc(entry, buf, len, oldpos);
+	bytes_read = pread_rpc(entry, fd, buf, len, oldpos);
 	if (bytes_read < 0)
 		goto disable_file;
 	else if (bytes_read > 0)
@@ -1293,7 +1288,7 @@ disable_file:
 			errno = EIO;
 		return -1;
 	}
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "Disabling interception on I/O error");
+	DFUSE_TRA_INFO(entry->fd_dfsoh, "Disabling interception on %d due to I/O error", fd);
 	entry->fd_status = DFUSE_IO_DIS_IOERR;
 	vector_decref(&fd_table, entry);
 	/* Fall through and do the read */
@@ -1320,7 +1315,7 @@ dfuse_pread(int fd, void *buf, size_t count, off_t offset)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pread;
 
-	bytes_read = pread_rpc(entry, buf, count, offset);
+	bytes_read = pread_rpc(entry, fd, buf, count, offset);
 
 	vector_decref(&fd_table, entry);
 
@@ -1355,7 +1350,7 @@ dfuse_write(int fd, const void *buf, size_t len)
 			buf, len, bypass_status[entry->fd_status]);
 
 	oldpos = entry->fd_pos;
-	bytes_written = pwrite_rpc(entry, buf, len, entry->fd_pos);
+	bytes_written = pwrite_rpc(entry, fd, buf, len, entry->fd_pos);
 	if (bytes_written > 0)
 		entry->fd_pos = oldpos + bytes_written;
 	vector_decref(&fd_table, entry);
@@ -1387,7 +1382,7 @@ dfuse_pwrite(int fd, const void *buf, size_t count, off_t offset)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pwrite;
 
-	bytes_written = pwrite_rpc(entry, buf, count, offset);
+	bytes_written = pwrite_rpc(entry, fd, buf, count, offset);
 
 	vector_decref(&fd_table, entry);
 
@@ -1639,7 +1634,7 @@ dfuse_readv(int fd, const struct iovec *vector, int iovcnt)
 		goto do_real_readv;
 
 	oldpos = entry->fd_pos;
-	bytes_read = preadv_rpc(entry, vector, iovcnt, entry->fd_pos);
+	bytes_read = preadv_rpc(entry, fd, vector, iovcnt, entry->fd_pos);
 	if (bytes_read > 0)
 		entry->fd_pos = oldpos + bytes_read;
 	vector_decref(&fd_table, entry);
@@ -1670,7 +1665,7 @@ dfuse_preadv(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_preadv;
 
-	bytes_read = preadv_rpc(entry, vector, iovcnt, offset);
+	bytes_read = preadv_rpc(entry, fd, vector, iovcnt, offset);
 	vector_decref(&fd_table, entry);
 
 	RESTORE_ERRNO(bytes_read < 0);
@@ -1701,7 +1696,7 @@ dfuse_writev(int fd, const struct iovec *vector, int iovcnt)
 		goto do_real_writev;
 
 	oldpos = entry->fd_pos;
-	bytes_written = pwritev_rpc(entry, vector, iovcnt, entry->fd_pos);
+	bytes_written = pwritev_rpc(entry, fd, vector, iovcnt, entry->fd_pos);
 	if (bytes_written > 0)
 		entry->fd_pos = oldpos + bytes_written;
 	vector_decref(&fd_table, entry);
@@ -1733,7 +1728,7 @@ dfuse_pwritev(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pwritev;
 
-	bytes_written = pwritev_rpc(entry, vector, iovcnt, offset);
+	bytes_written = pwritev_rpc(entry, fd, vector, iovcnt, offset);
 
 	vector_decref(&fd_table, entry);
 
@@ -2171,14 +2166,14 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 		__real_fprintf(stderr, "[libioil] Intercepting fread of size %zi\n", len);
 
 	oldpos     = entry->fd_pos;
-	bytes_read = ioil_do_pread(ptr, len, oldpos, entry, &errcode);
+	bytes_read = ioil_do_pread(fd, ptr, len, oldpos, entry, &errcode);
 	if (bytes_read > 0) {
 		nread         = bytes_read / size;
 		entry->fd_pos = oldpos + (nread * size);
 		if (nread != nmemb)
 			entry->fd_eof = true;
 	} else if (bytes_read < 0) {
-		entry->fd_err = bytes_read;
+		entry->fd_err = errcode;
 	} else {
 		entry->fd_eof = true;
 	}
@@ -2232,12 +2227,12 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "Doing fwrite to %p at %#zx", stream, entry->fd_pos);
 	oldpos        = entry->fd_pos;
-	bytes_written = ioil_do_writex(ptr, len, oldpos, entry, &errcode);
+	bytes_written = ioil_do_writex(fd, ptr, len, oldpos, entry, &errcode);
 	if (bytes_written > 0) {
 		nwrite        = bytes_written / size;
 		entry->fd_pos = oldpos + (nwrite * size);
 	} else if (bytes_written < 0) {
-		entry->fd_err = bytes_written;
+		entry->fd_err = errcode;
 	}
 
 	vector_decref(&fd_table, entry);

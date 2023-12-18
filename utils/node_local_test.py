@@ -1500,7 +1500,7 @@ class DFuse():
         commands do not free all memory anyway.
         """
         my_env = get_base_env()
-        prefix = f'dnt_dfuse_il_{get_inc_id()}_'
+        prefix = f'dnt_ioil_{os.path.basename(cmd[0])}_'
         with tempfile.NamedTemporaryFile(prefix=prefix, suffix='.log', delete=False) as log_file:
             log_name = log_file.name
         my_env['D_LOG_FILE'] = log_name
@@ -2637,8 +2637,8 @@ class PosixTests():
     def test_il_cat(self):
         """Quick check for the interception library"""
         fname = join(self.dfuse.dir, 'file')
-        with open(fname, 'w'):
-            pass
+        with open(fname, 'w') as fd:
+            fd.write('8 bytes ')
 
         check_fstat = True
         if self.dfuse.caching:

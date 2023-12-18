@@ -44,14 +44,15 @@ struct fd_entry {
 };
 
 ssize_t
-ioil_do_pread(char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode);
+ioil_do_pread(int fd, char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode);
 ssize_t
-ioil_do_preadv(const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
+ioil_do_preadv(int fd, const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
 	       int *errcode);
 ssize_t
-ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode);
+ioil_do_writex(int fd, const char *buff, size_t len, off_t position, struct fd_entry *entry,
+	       int *errcode);
 ssize_t
-ioil_do_pwritev(const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
+ioil_do_pwritev(int fd, const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
 		int *errcode);
 int
 ioil_get_eqh(daos_handle_t *eqh);

@@ -29,6 +29,7 @@
 #define DFUSE_COUNT_QUERY_CMD    (DFUSE_IOCTL_REPLY_BASE + 10)
 #define DFUSE_IOCTL_EVICT_NR     (DFUSE_IOCTL_REPLY_BASE + 11)
 #define DFUSE_IOCTL_STAT_NR      (DFUSE_IOCTL_REPLY_BASE + 12)
+#define DFUSE_IOCTL_READ_NR      (DFUSE_IOCTL_REPLY_BASE + 13)
 
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)
@@ -76,6 +77,13 @@ struct dfuse_stat {
 	char     name[16];
 };
 
+struct dfuse_io_vec {
+	void  *base;
+	size_t len;
+	off_t  position;
+	int    direction;
+};
+
 /* Defines the IOCTL command to get the object ID for a open file */
 #define DFUSE_IOCTL_IL ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_CORE, struct dfuse_il_reply))
 
@@ -97,5 +105,7 @@ struct dfuse_stat {
 
 #define DFUSE_IOCTL_DFUSE_EVICT                                                                    \
 	((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_EVICT_NR, struct dfuse_mem_query))
+
+#define DFUSE_IOCTL_READ ((int)_IOWR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_READ_NR, struct dfuse_io_vec))
 
 #endif /* __DFUSE_IOCTL_H__ */

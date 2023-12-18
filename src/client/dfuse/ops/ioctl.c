@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#include <sys/ptrace.h>
+
 #include "dfuse_common.h"
 #include "dfuse.h"
 
@@ -371,6 +373,126 @@ handle_cont_stat_query(fuse_req_t req, struct dfuse_obj_hdl *oh)
 	DFUSE_REPLY_IOCTL_SIZE(oh, req, &stat, sizeof(stat));
 }
 
+static void
+handle_write(struct dfuse_obj_hdl *oh, const struct dfuse_io_vec *diov, fuse_req_t req)
+{
+	const struct fuse_ctx *fc = fuse_req_ctx(req);
+	int                    rc;
+	void                  *buf;
+	size_t                 res;
+	struct iovec           local  = {};
+	struct iovec           remote = {};
+	struct dfuse_io_vec    reply  = {};
+	d_sg_list_t            sg     = {};
+	d_iov_t                iov    = {};
+
+	D_ALLOC(buf, diov->len);
+	if (buf == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	local.iov_base = buf;
+	local.iov_len  = diov->len;
+
+	remote.iov_base = diov->base;
+	remote.iov_len  = diov->len;
+
+	res = process_vm_readv(fc->pid, &local, 1, &remote, 1, 0);
+	if (res == -1) {
+		rc = errno;
+		DHS_ERROR(oh, rc, "process_vm_readv() reply");
+		goto err;
+	}
+	if (res != diov->len) {
+		rc = ERANGE;
+		DHS_ERROR(oh, rc, "Unable to read from %p-%p in %d read %zi", diov->base,
+			  diov->base + diov->len - 1, fc->pid, res);
+		goto err;
+	}
+
+	d_iov_set(&iov, buf, diov->len);
+	sg.sg_nr   = 1;
+	sg.sg_iovs = &iov;
+
+	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &sg, diov->position, NULL);
+	if (rc)
+		goto err;
+
+	reply.len = diov->len;
+	DFUSE_REPLY_IOCTL(oh, req, reply);
+
+	goto out;
+
+err:
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+
+out:
+	D_FREE(buf);
+}
+
+static void
+handle_read(struct dfuse_obj_hdl *oh, const struct dfuse_io_vec *diov, fuse_req_t req)
+{
+	const struct fuse_ctx *fc = fuse_req_ctx(req);
+	int                    rc;
+	void                  *buf;
+	size_t                 res;
+	struct iovec           local    = {};
+	struct iovec           remote   = {};
+	struct dfuse_io_vec    reply    = {};
+	d_sg_list_t            sg       = {};
+	d_iov_t                iov      = {};
+	daos_size_t            read_len = 0;
+
+	if (diov->direction)
+		return handle_write(oh, diov, req);
+
+	D_ALLOC(buf, diov->len);
+	if (buf == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	d_iov_set(&iov, buf, diov->len);
+	sg.sg_nr   = 1;
+	sg.sg_iovs = &iov;
+	rc         = dfs_read(oh->doh_dfs, oh->doh_obj, &sg, diov->position, &read_len, NULL);
+	if (rc)
+		goto err;
+
+	if (read_len == 0)
+		goto reply;
+
+	local.iov_base = buf;
+	local.iov_len  = read_len;
+
+	remote.iov_base = diov->base;
+	remote.iov_len  = read_len;
+
+	res = process_vm_writev(fc->pid, &local, 1, &remote, 1, 0);
+	if (res == -1) {
+		rc = errno;
+		DHS_ERROR(oh, rc, "process_vm_writev() reply");
+		goto err;
+	}
+	if (res != read_len) {
+		rc = ERANGE;
+		DHS_ERROR(oh, rc, "Unable to write to %p-%p in %d written %zi", diov->base,
+			  diov->base + read_len - 1, fc->pid, res);
+		goto err;
+	}
+	read_len = res;
+
+reply:
+	reply.len = read_len;
+	DFUSE_REPLY_IOCTL(oh, req, reply);
+
+	goto out;
+
+err:
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+
+out:
+	D_FREE(buf);
+}
+
 #ifdef FUSE_IOCTL_USE_INT
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
@@ -469,7 +591,13 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 
 	DFUSE_TRA_DEBUG(oh, "trusted pid %d", fc->pid);
 
-	if (cmd == DFUSE_IOCTL_IL_SIZE) {
+	if (cmd == DFUSE_IOCTL_READ) {
+		if (in_bufsz != sizeof(struct dfuse_io_vec))
+			D_GOTO(out_err, rc = EIO);
+		if (out_bufsz != sizeof(struct dfuse_io_vec))
+			D_GOTO(out_err, rc = EIO);
+		handle_read(oh, in_buf, req);
+	} else if (cmd == DFUSE_IOCTL_IL_SIZE) {
 		if (out_bufsz < sizeof(struct dfuse_hs_reply))
 			D_GOTO(out_err, rc = EIO);
 		handle_size_ioctl(oh, req);

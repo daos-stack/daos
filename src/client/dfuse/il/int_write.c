@@ -5,23 +5,42 @@
  */
 
 #define D_LOGFAC DD_FAC(il)
+
+#include <sys/ioctl.h>
+
 #include "dfuse_common.h"
 #include "intercept.h"
 #include "daos.h"
 #include "daos_array.h"
 
+#include "dfuse_ioctl.h"
+
 #include "ioil.h"
 
 ssize_t
-ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode)
+ioil_do_writex(int fd, const char *buff, size_t len, off_t position, struct fd_entry *entry,
+	       int *errcode)
 {
 	d_iov_t		iov = {};
 	d_sg_list_t	sgl = {};
 	daos_event_t	ev;
 	daos_handle_t	eqh;
 	int		rc;
+	struct dfuse_io_vec diov;
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "%#zx-%#zx", position, position + len - 1);
+
+	diov.base      = (char *)buff;
+	diov.len       = len;
+	diov.position  = position;
+	diov.direction = 1;
+
+	rc = ioctl(fd, DFUSE_IOCTL_READ, &diov);
+	if (rc == -1) {
+		DS_ERROR(errno, "Error from ioctl on fd %d", fd);
+	}
+	if (rc == 0)
+		return diov.len;
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
@@ -67,7 +86,7 @@ out:
 }
 
 ssize_t
-ioil_do_pwritev(const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
+ioil_do_pwritev(int fd, const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
 		int *errcode)
 {
 	ssize_t bytes_written;
@@ -76,7 +95,7 @@ ioil_do_pwritev(const struct iovec *iov, int count, off_t position, struct fd_en
 
 	for (i = 0; i < count; i++) {
 		bytes_written =
-		    ioil_do_writex(iov[i].iov_base, iov[i].iov_len, position, entry, errcode);
+		    ioil_do_writex(fd, iov[i].iov_base, iov[i].iov_len, position, entry, errcode);
 
 		if (bytes_written == -1)
 			return (ssize_t)-1;
