@@ -241,7 +241,7 @@ func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, op
 		// Assumes that all SMD devices on a controller have the same roles and rank.
 		if len(ctrlr.SmdDevices) > 0 {
 			sd := ctrlr.SmdDevices[0]
-			roles = fmt.Sprintf("%s", &sd.Roles)
+			roles = sd.Roles.String()
 			if sd.Rank != ranklist.NilRank {
 				rank = sd.Rank.String()
 			}

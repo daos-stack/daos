@@ -72,11 +72,11 @@ type scanBdevsFn func(storage.BdevScanRequest) (*storage.BdevScanResponse, error
 func ctrlrToPciStr(nc *ctlpb.NvmeController) (string, error) {
 	pciAddr, err := hardware.NewPCIAddress(nc.GetPciAddr())
 	if err != nil {
-		return "", errors.Errorf("Invalid PCI address: %s", err)
+		return "", errors.Wrapf(err, "Invalid PCI address")
 	}
 	if pciAddr.IsVMDBackingAddress() {
 		if pciAddr, err = pciAddr.BackingToVMDAddress(); err != nil {
-			return "", errors.Errorf("Invalid VMD address: %s", err)
+			return "", errors.Wrapf(err, "Invalid VMD address")
 		}
 	}
 
@@ -244,9 +244,6 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 
 	if nrCfgBdevs == 0 {
 		cs.log.Debugf("scan bdevs from control service as no bdevs in cfg")
-		if req.Meta {
-			return nil, errors.New("meta smd usage info unavailable as no bdevs in cfg")
-		}
 
 		// No bdevs configured for engines to claim so scan through control service.
 		resp, err = bdevScanToProtoResp(cs.storage.ScanBdevs, bdevCfgs)
