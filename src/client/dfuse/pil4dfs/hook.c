@@ -94,7 +94,8 @@ static char     **lib_name_list;
 static char     *path_ld;
 static char     *path_libc;
 static char     *path_libpthread;
-static char     *path_libpil4dfs;
+/* This is needed all the time. */
+static char      path_libpil4dfs[PATH_MAX];
 
 #define MAX_MAP_SIZE	(512*1024)
 #define MAP_SIZE_LIMIT	(16*1024*1024)
@@ -322,9 +323,7 @@ determine_lib_path(void)
 		DS_ERROR(ENAMETOOLONG, "path_libpil4dfs is too long");
 		goto err;
 	}
-	D_STRNDUP(path_libpil4dfs, start, pos - start + sizeof("libpil4dfs.so"));
-	if (path_libpil4dfs == NULL)
-		goto err;
+	memcpy(path_libpil4dfs, start, pos - start + sizeof("libpil4dfs.so"));
 	path_libpil4dfs[pos - start - 1 + sizeof("libpil4dfs.so")] = 0;
 	D_FREE(read_buff_map);
 
@@ -746,7 +745,6 @@ free_memory_in_hook(void)
 
 	D_FREE(path_ld);
 	D_FREE(path_libc);
-	D_FREE(path_libpil4dfs);
 	D_FREE(module_list);
 	free(path_libpthread);
 
