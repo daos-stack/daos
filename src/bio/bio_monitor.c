@@ -220,6 +220,16 @@ bio_dev_set_faulty(struct bio_xs_context *xs, uuid_t dev_uuid)
 	if (ABT_eventual_free(&dsm.eventual) != ABT_SUCCESS)
 		rc = dss_abterr2der(rc);
 
+	if (rc == 0)
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
+				  RAS_SEV_NOTICE, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Dev: "DF_UUID" set faulty\n", DP_UUID(dev_uuid));
+	else
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
+				  RAS_SEV_ERROR, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Dev: "DF_UUID" set faulty failed: %d\n", DP_UUID(dev_uuid), rc);
 	return rc;
 }
 
@@ -698,6 +708,17 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 		}
 	}
 
+	/* Auto-faulty for WAL/Meta device is always enabled */
+	if (bbs->bb_dev->bb_roles & (NVME_ROLE_META | NVME_ROLE_WAL)) {
+		/* The WAL/NVMe device needs be marked as faulty on any I/O error */
+		if (dev_stats->bio_read_errs || dev_stats->bio_write_errs) {
+			D_ERROR("NVMe device (role:%u) hit I/O error %u/%u\n",
+				bbs->bb_dev->bb_roles, dev_stats->bio_read_errs,
+				dev_stats->bio_write_errs);
+			return true;
+		}
+	}
+
 	if (!glb_criteria.fc_enabled)
 		return false;
 
@@ -730,6 +751,19 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 	rc = bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
 	if (rc)
 		D_ERROR("Failed to set FAULTY state. "DF_RC"\n", DP_RC(rc));
+
+	if (rc == 0)
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
+				  RAS_SEV_NOTICE, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Dev: "DF_UUID" auto faulty detect\n",
+				  DP_UUID(bbs->bb_dev->bb_uuid));
+	else
+		ras_notify_eventf(RAS_DEVICE_SET_FAULTY, RAS_TYPE_INFO,
+				  RAS_SEV_ERROR, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Dev: "DF_UUID" auto faulty detect failed: %d\n",
+				  DP_UUID(bbs->bb_dev->bb_uuid), rc);
 }
 
 /* Collect the raw device health state through SPDK admin APIs */
@@ -823,14 +857,11 @@ bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64_t no
 		return;
 	dev_health->bdh_stat_age = now;
 
-	/* only support Data SSD auto fauty detection and state transit. */
-	if (st == SMD_DEV_TYPE_DATA) {
-		auto_faulty_detect(bbs);
-		rc = bio_bs_state_transit(bbs);
-		if (rc)
-			D_ERROR("State transition on target %d failed. %d\n",
-				bbs->bb_owner_xs->bxc_tgt_id, rc);
-	}
+	auto_faulty_detect(bbs);
+	rc = bio_bs_state_transit(bbs);
+	if (rc)
+		DL_ERROR(rc, "State transition on target %d failed",
+			 bbs->bb_owner_xs->bxc_tgt_id);
 
 	if (!bypass_health_collect())
 		collect_raw_health_data((void *)&xs_ctxt->bxc_xs_blobstores[st]);
