@@ -447,6 +447,11 @@ void d_log_add_cache(int *cache, int nr);
  */
 void d_log_sync(void);
 
+/**
+ * disable logging by resetting fd for logging
+ */
+void d_log_disable_logging(void);
+
 #if defined(__cplusplus)
 }
 #endif

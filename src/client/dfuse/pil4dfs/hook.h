@@ -54,4 +54,10 @@ uninstall_hook(void);
 void
 free_memory_in_hook(void);
 
+/**
+ * return the full path of libpil4dfs.so.
+ */
+char *
+query_pil4dfs_path(void);
+
 #endif

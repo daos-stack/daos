@@ -94,6 +94,7 @@ static char     **lib_name_list;
 static char     *path_ld;
 static char     *path_libc;
 static char     *path_libpthread;
+static char     *path_libpil4dfs;
 
 #define MAX_MAP_SIZE	(512*1024)
 #define MAP_SIZE_LIMIT	(16*1024*1024)
@@ -281,7 +282,7 @@ determine_lib_path(void)
 	if (path_libc == NULL)
 		goto err;
 	path_libc[end - start] = 0;
-	D_FREE(read_buff_map);
+//	D_FREE(read_buff_map);
 
 	pos = strstr(path_libc, "libc-2.");
 	if (pos) {
@@ -308,6 +309,26 @@ determine_lib_path(void)
 	}	
 	D_FREE(lib_dir_str);
 
+	pos = strstr(read_buff_map, "libpil4dfs.so");
+	if (pos == NULL) {
+		D_ERROR("Failed to find the path of libpil4dfs.so!\n");
+		goto err;
+	}
+	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
+	if (start == NULL || end == NULL) {
+		D_ERROR("get_path_pos() failed to determine the path for libpil4dfs.so.!\n");
+		goto err;
+	}
+	if ((end - start + 1) >= PATH_MAX) {
+		DS_ERROR(ENAMETOOLONG, "path_libpil4dfs is too long");
+		goto err;
+	}
+	D_STRNDUP(path_libpil4dfs, start, pos - start + sizeof("libpil4dfs.so"));
+	if (path_libpil4dfs == NULL)
+		goto err;
+	path_libpil4dfs[pos - start - 1 + sizeof("libpil4dfs.so")] = 0;
+	D_FREE(read_buff_map);
+
 	return;
 
 err:
@@ -317,6 +338,13 @@ err_1:
 	found_libc = 0;
 	quit_hook_init();
 }
+
+char *
+query_pil4dfs_path(void)
+{
+	return path_libpil4dfs;
+}
+
 
 /*
  * query_func_addr - Determine the addresses and code sizes of functions in func_name_list[].
