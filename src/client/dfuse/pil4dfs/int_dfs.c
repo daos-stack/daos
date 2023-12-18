@@ -126,7 +126,7 @@ static _Atomic uint32_t        daos_init_cnt;
  * true.
  */
 static bool             report;
-/* always load libpil4dfs related env variabls in exec() */
+/* always load libpil4dfs related env variables in exec() */
 static bool             enforce_exec_env;
 static long int         page_size;
 
@@ -3183,7 +3183,7 @@ out_readdir:
 
 extern char **__environ;
 
-/* This number may be updated later to be consitent!*/
+/* This number may be updated later to be consistent!*/
 #define N_ENV_CHECK	(7)
 /**
  * char    env_list[N_ENV_CHECK][32] = {"LD_PRELOAD", "D_IL_REPORT", "DAOS_MOUNT_POINT",
@@ -3245,6 +3245,7 @@ static char** pre_envp(char *const envp[])
 		}
 	}
 
+	/* The fd for daos logging may be not valid here, so use plain printf */
 	new_envp = malloc(sizeof(char *) * (num_entry + N_ENV_CHECK + 1));
 	if (new_envp == NULL) {
 		printf("Error: failed to allocate memory for new_envp. Use existing envp\n");
@@ -3300,7 +3301,8 @@ static char** pre_envp(char *const envp[])
 		if (fs_root) {
 			rc = asprintf(&str_mp, "DAOS_MOUNT_POINT=%s", fs_root);
 			if (rc < 0) {
-				printf("Error: failed to allocate memory for DAOS_MOUNT_POINT env!\n");
+				printf("Error: failed to allocate memory for DAOS_MOUNT_POINT "
+				       "env!\n");
 				goto err_out3;
 			}
 			new_envp[i] = str_mp;
@@ -3312,7 +3314,8 @@ static char** pre_envp(char *const envp[])
 		if (pool) {
 			rc = asprintf(&str_pool, "DAOS_POOL=%s", pool);
 			if (rc < 0) {
-				printf("Error: failed to allocate memory for DAOS_MOUNT_POINT env!\n");
+				printf("Error: failed to allocate memory for DAOS_MOUNT_POINT "
+				       "env!\n");
 				goto err_out4;
 			}
 			new_envp[i] = str_pool;
@@ -3324,7 +3327,8 @@ static char** pre_envp(char *const envp[])
 		if (container) {
 			rc = asprintf(&str_cont, "DAOS_CONTAINER=%s", container);
 			if (rc < 0) {
-				printf("Error: failed to allocate memory for DAOS_CONTAINER env!\n");
+				printf("Error: failed to allocate memory for DAOS_CONTAINER "
+				       "env!\n");
 				goto err_out5;
 			}
 			new_envp[i] = str_cont;

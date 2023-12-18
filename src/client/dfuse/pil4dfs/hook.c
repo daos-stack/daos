@@ -282,7 +282,6 @@ determine_lib_path(void)
 	if (path_libc == NULL)
 		goto err;
 	path_libc[end - start] = 0;
-//	D_FREE(read_buff_map);
 
 	pos = strstr(path_libc, "libc-2.");
 	if (pos) {
@@ -747,6 +746,7 @@ free_memory_in_hook(void)
 
 	D_FREE(path_ld);
 	D_FREE(path_libc);
+	D_FREE(path_libpil4dfs);
 	D_FREE(module_list);
 	free(path_libpthread);
 
