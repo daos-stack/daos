@@ -247,6 +247,12 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 	if (rc)
 		D_GOTO(out, rc);
+
+	rc = ds_cont_tgt_snapshots_update(entry->ns->iv_pool_uuid,
+					  civ_key->cont_uuid,
+					  snaps, snap_cnt);
+	if (rc)
+		D_GOTO(out, rc);
 out:
 	D_FREE(iv_entry);
 	D_FREE(snaps);
@@ -424,6 +430,10 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 
 	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = ds_cont_tgt_prop_update(entry->ns->iv_pool_uuid, civ_key->cont_uuid, prop);
 	if (rc)
 		D_GOTO(out, rc);
 out:
