@@ -2016,13 +2016,8 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states,
 			RB_OP_STR(rebuild_op), DP_RC(rc));
 		return rc;
 	}
-	if (tgts_cnt == 0)
-		return 0;
 
-	rc = regenerate_task_internal(pool, tgts, tgts_cnt, rebuild_op);
-	D_FREE(tgts);
-
-	return rc;
+	return regenerate_task_internal(pool, tgts, tgts_cnt, rebuild_op);
 }
 
 
@@ -2090,9 +2085,7 @@ rebuild_fini_one(void *arg)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 
 	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
-	/* The pool child could be stopped */
-	if (dpc == NULL)
-		return 0;
+	D_ASSERT(dpc != NULL);
 
 	/* Reset rebuild epoch, then reset the aggregation epoch, so
 	 * it can aggregate the rebuild epoch.
@@ -2116,7 +2109,7 @@ rebuild_fini_one(void *arg)
 	return 0;
 }
 
-static void
+int
 rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 {
 	struct rebuild_pool_tls	*pool_tls;
@@ -2152,9 +2145,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 
 	/* close the rebuild pool/container on all main XS */
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
-	if (rc != 0)
-		D_WARN(DF_UUID" rebuild fini one failed: "DF_RC"\n",
-		       DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
+
 	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
 	d_list_del_init(&rpt->rt_list);
@@ -2167,6 +2158,8 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 
 	rpt_destroy(rpt);
+
+	return rc;
 }
 
 void
@@ -2343,12 +2336,7 @@ rebuild_prepare_one(void *data)
 					   rpt->rt_coh_uuid, rpt->rt_rebuild_ver,
 					   rpt->rt_rebuild_gen);
 	if (pool_tls == NULL)
-		return -DER_NOMEM;
-
-	dpc = ds_pool_child_lookup(rpt->rt_pool_uuid);
-	/* The pool child could be stopped */
-	if (dpc == NULL)
-		return 0;
+		D_GOTO(put, rc = -DER_NOMEM);
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
 

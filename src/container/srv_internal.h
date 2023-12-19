@@ -213,9 +213,7 @@ int ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 /* srv_epoch.c */
 int
 ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		    struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver,
-		    struct ds_pool_svc_op_val *op_val);
-
+		    struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
 int
 ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);

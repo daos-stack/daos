@@ -66,18 +66,6 @@ shard_update_req_cb(const struct crt_cb_info *cb_info)
 	do_shard_update_req_cb(cb_info->cci_rpc, cb_info->cci_arg, cb_info->cci_rc);
 }
 
-static void
-obj_inherit_timeout(crt_rpc_t *parent, crt_rpc_t *child)
-{
-	uint32_t	timeout;
-	int		rc;
-
-	rc = crt_req_src_timeout_get(parent, &timeout);
-	D_ASSERT(rc == 0);
-	rc = crt_req_set_timeout(child, timeout);
-	D_ASSERT(rc == 0);
-}
-
 /* Execute update on the remote target */
 int
 ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
@@ -131,7 +119,6 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 		D_GOTO(out, rc);
 	}
 
-	obj_inherit_timeout(parent_req, req);
 	orw_parent = crt_req_get(parent_req);
 	orw = crt_req_get(req);
 	*orw = *orw_parent;
@@ -244,7 +231,6 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 		D_GOTO(out, rc);
 	}
 
-	obj_inherit_timeout(parent_req, req);
 	opi_parent = crt_req_get(parent_req);
 	opi = crt_req_get(req);
 	*opi = *opi_parent;

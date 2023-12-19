@@ -26,7 +26,6 @@
 
 #include <daos_srv/pool.h>
 
-#include <sys/stat.h>
 #include <gurt/telemetry_producer.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
@@ -276,20 +275,12 @@ start_flush_ult(struct ds_pool_child *child)
 
 /* This query API could be called from any xstream */
 uint32_t
-ds_pool_child_state(uuid_t pool_uuid, uint32_t tgt_id)
+ds_pool_child_state(struct ds_pool *pool, uint32_t tgt_id)
 {
 	struct dss_module_info	*info = dss_get_module_info();
-	struct ds_pool_child	*child;
 
 	D_ASSERT(info->dmi_tgt_id < dss_tgt_nr);
-	child = pool_child_lookup_noref(pool_uuid);
-	if (child == NULL) {
-		D_ERROR(DF_UUID": Pool child isn't found.\n", DP_UUID(pool_uuid));
-		return POOL_CHILD_NEW;
-	}
-
-	D_ASSERT(child->spc_pool != NULL);
-	return child->spc_pool->sp_states[info->dmi_tgt_id];
+	return pool->sp_states[info->dmi_tgt_id];
 }
 
 static void
@@ -355,56 +346,7 @@ out_free:
 }
 
 static int
-pool_child_recreate(struct ds_pool_child *child)
-{
-	struct dss_module_info	*info = dss_get_module_info();
-	struct smd_pool_info	*pool_info;
-	struct stat		 lstat;
-	char			*path;
-	int			 rc;
-
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
-	if (rc != 0)
-		return rc;
-
-	rc = stat(path, &lstat);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID": Stat VOS pool file failed.", DP_UUID(child->spc_uuid));
-		rc = daos_errno2der(errno);
-		goto out;
-	}
-	if (lstat.st_size == 0) {
-		D_ERROR(DF_UUID": VOS pool file isn't fallocated.", DP_UUID(child->spc_uuid));
-		goto out;
-	}
-
-	rc = smd_pool_get_info(child->spc_uuid, &pool_info);
-	if (rc) {
-		DL_ERROR(rc, DF_UUID": Get pool info failed.", DP_UUID(child->spc_uuid));
-		goto out;
-	}
-
-	rc = vos_pool_kill(child->spc_uuid, 0);
-	if (rc) {
-		DL_ERROR(rc, DF_UUID": Destroy VOS pool failed.", DP_UUID(child->spc_uuid));
-		goto pool_info;
-	}
-
-	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
-			     0, NULL);
-	if (rc)
-		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
-
-pool_info:
-	smd_pool_free_info(pool_info);
-out:
-	D_FREE(path);
-	return rc;
-
-}
-
-static int
-pool_child_start(struct ds_pool_child *child, bool recreate)
+pool_child_start(struct ds_pool_child *child)
 {
 	struct dss_module_info	*info = dss_get_module_info();
 	char			*path;
@@ -414,12 +356,6 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 	D_ASSERT(!d_list_empty(&child->spc_list));
 
 	*child->spc_state = POOL_CHILD_STARTING;
-
-	if (recreate) {
-		rc = pool_child_recreate(child);
-		if (rc != 0)
-			goto out;
-	}
 
 	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
@@ -433,8 +369,8 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 
 	if (rc != 0) {
 		if (!engine_in_check() || rc != -DER_NONEXIST) {
-			DL_CDEBUG(rc == -DER_NVME_IO, DB_MGMT, DLOG_ERR, rc,
-				  DF_UUID": Open VOS pool failed.", DP_UUID(child->spc_uuid));
+			D_ERROR(DF_UUID": Open VOS pool failed. "DF_RC"\n",
+				DP_UUID(child->spc_uuid), DP_RC(rc));
 			goto out;
 		}
 
@@ -493,7 +429,7 @@ out:
 }
 
 int
-ds_pool_child_start(uuid_t pool_uuid, bool recreate)
+ds_pool_child_start(uuid_t pool_uuid)
 {
 	struct ds_pool_child	*child;
 	int			 rc;
@@ -515,9 +451,9 @@ ds_pool_child_start(uuid_t pool_uuid, bool recreate)
 		return 0;
 	}
 
-	rc = pool_child_start(child, recreate);
+	rc = pool_child_start(child);
 	if (rc)
-		DL_ERROR(rc, DF_UUID": Pool start failed.", DP_UUID(pool_uuid));
+		D_ERROR(DF_UUID": Pool start failed. "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
 
 	return rc;
 }
@@ -622,12 +558,10 @@ pool_child_add_one(void *varg)
 		return -DER_NOMEM;
 	}
 
-	rc = pool_child_start(child, false);
+	rc = pool_child_start(child);
 	if (rc) {
-		DL_CDEBUG(rc == -DER_NVME_IO, DLOG_WARN, DLOG_ERR, rc,
-			  DF_UUID": Pool start failed.", DP_UUID(child->spc_uuid));
-		if (rc == -DER_NVME_IO)
-			rc = 0;
+		D_ERROR(DF_UUID": Pool start failed. "DF_RC"\n",
+			DP_UUID(child->spc_uuid), DP_RC(rc));
 		pool_child_free(child);
 	}
 
@@ -1734,12 +1668,9 @@ update_child_map(void *data)
 	struct ds_pool		*pool = (struct ds_pool *)data;
 	struct ds_pool_child	*child;
 
-	/* The pool child could be stopped */
 	child = ds_pool_child_lookup(pool->sp_uuid);
-	if (child == NULL) {
-		D_DEBUG(DB_MD, DF_UUID": Pool child isn't found.", DP_UUID(pool->sp_uuid));
-		return 0;
-	}
+	if (child == NULL)
+		return -DER_NONEXIST;
 
 	child->spc_map_version = pool->sp_map_version;
 	ds_pool_child_put(child);

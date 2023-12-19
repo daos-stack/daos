@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,7 +15,6 @@
 #include <gurt/list.h>
 #include <daos/common.h>
 #include <daos_types.h>
-#include <daos_srv/control.h>	/* For NVME_ROLE_ALL */
 
 enum smd_dev_state {
 	SMD_DEV_NORMAL	= 0,
@@ -28,22 +27,6 @@ enum smd_dev_type {
 	SMD_DEV_TYPE_WAL,
 	SMD_DEV_TYPE_MAX = 3,
 };
-
-static inline unsigned int
-smd_dev_type2role(enum smd_dev_type st)
-{
-	switch (st) {
-	case SMD_DEV_TYPE_DATA:
-		return NVME_ROLE_DATA;
-	case SMD_DEV_TYPE_META:
-		return NVME_ROLE_META;
-	case SMD_DEV_TYPE_WAL:
-		return NVME_ROLE_WAL;
-	default:
-		D_ASSERT(0);
-		return NVME_ROLE_DATA;
-	}
-}
 
 struct smd_dev_info {
 	d_list_t		 sdi_link;
@@ -156,11 +139,11 @@ static inline void smd_dev_free_info(struct smd_dev_info *dev_info)
  *
  * \param [IN] old_id		Old device ID
  * \param [IN] new_id		New device ID
- * \param [IN] dev_roles	Old device roles
+ * \param [IN] pool_list	List of pools to be updated
  *
  * \return			Zero on success, negative value on error
  */
-int smd_dev_replace(uuid_t old_id, uuid_t new_id, unsigned int old_roles);
+int smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list);
 
 /**
  * Assign a blob to a VOS pool target

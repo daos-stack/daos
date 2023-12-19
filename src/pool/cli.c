@@ -2546,8 +2546,7 @@ enum preq_cleanup_stage {
 };
 
 static void
-pool_req_cleanup(enum preq_cleanup_stage stage, tse_task_t *task, bool free_tpriv,
-		 struct pool_req_arg *args)
+pool_req_cleanup(enum preq_cleanup_stage stage, bool free_tpriv, struct pool_req_arg *args)
 {
 	switch (stage) {
 	case CLEANUP_ALL:
@@ -2558,10 +2557,8 @@ pool_req_cleanup(enum preq_cleanup_stage stage, tse_task_t *task, bool free_tpri
 	case CLEANUP_RPC:
 		crt_req_decref(args->pra_rpc);
 	case CLEANUP_TASK_PRIV:
-		if (free_tpriv) {
+		if (free_tpriv)
 			D_FREE(args->pra_tpriv);
-			dc_task_set_priv(task, NULL);
-		}
 	case CLEANUP_POOL:
 		dc_pool_put(args->pra_pool);
 	}
@@ -2602,7 +2599,7 @@ pool_req_complete(tse_task_t *task, void *data)
 	if (args->pra_callback != NULL)
 		rc = args->pra_callback(task, data);
 out:
-	pool_req_cleanup(CLEANUP_BULK, task, free_tpriv, args);
+	pool_req_cleanup(CLEANUP_BULK, free_tpriv, args);
 	return rc;
 }
 
@@ -2634,13 +2631,12 @@ pool_req_prepare(daos_handle_t poh, enum pool_operation opcode, crt_context_t *c
 	if (tpriv == NULL) {
 		D_ALLOC_PTR(tpriv);
 		if (tpriv == NULL) {
-			pool_req_cleanup(CLEANUP_POOL, task, false /* free_tpriv */, args);
+			pool_req_cleanup(CLEANUP_POOL, false /* free_tpriv */, args);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		dc_task_set_priv(task, tpriv);
+		args->pra_tpriv = tpriv;
 	}
-	args->pra_tpriv = tpriv;
-
 	ep.ep_grp  = args->pra_pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&args->pra_pool->dp_client_lock);
 	rc = rsvc_client_choose(&args->pra_pool->dp_client, &ep);
@@ -2648,7 +2644,7 @@ pool_req_prepare(daos_handle_t poh, enum pool_operation opcode, crt_context_t *c
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
 			DP_UUID(args->pra_pool->dp_pool), DP_RC(rc));
-		pool_req_cleanup(CLEANUP_TASK_PRIV, task, true /* free_tpriv */, args);
+		pool_req_cleanup(CLEANUP_TASK_PRIV, true /* free_tpriv */, args);
 		goto out;
 	}
 
@@ -2656,7 +2652,7 @@ pool_req_prepare(daos_handle_t poh, enum pool_operation opcode, crt_context_t *c
 			     &tpriv->rq_time, &args->pra_rpc);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to create rpc");
-		pool_req_cleanup(CLEANUP_TASK_PRIV, task, true /* free_tpriv */, args);
+		pool_req_cleanup(CLEANUP_TASK_PRIV, true /* free_tpriv */, args);
 		D_GOTO(out, rc);
 	}
 
@@ -2702,7 +2698,7 @@ dc_pool_list_attr(tse_task_t *task)
 		};
 		rc = crt_bulk_create(daos_task2ctx(task), &sgl, CRT_BULK_RW, &bulk);
 		if (rc != 0) {
-			pool_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &cb_args);
+			pool_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
 			D_GOTO(out, rc);
 		}
 		pool_attr_list_in_set_data(cb_args.pra_rpc, bulk);
@@ -2713,7 +2709,7 @@ dc_pool_list_attr(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, pool_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
-		pool_req_cleanup(CLEANUP_BULK, task, true /* free_tpriv */, &cb_args);
+		pool_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
 		D_GOTO(out, rc);
 	}
 
@@ -2898,7 +2894,7 @@ dc_pool_get_attr(tse_task_t *task)
 
 	rc = tse_task_register_comp_cb(task, pool_req_complete, &cb_args, sizeof(cb_args));
 	if (rc != 0) {
-		pool_req_cleanup(CLEANUP_BULK, task, true /* free_tpriv */, &cb_args);
+		pool_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
 		D_GOTO(out, rc);
 	}
 
@@ -2908,7 +2904,7 @@ dc_pool_get_attr(tse_task_t *task)
 	return daos_rpc_send(cb_args.pra_rpc, task);
 
 out_rpc:
-	pool_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &cb_args);
+	pool_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to get pool attributes: "DF_RC"\n", DP_RC(rc));
@@ -3000,7 +2996,7 @@ dc_pool_set_attr(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, pool_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
-		pool_req_cleanup(CLEANUP_BULK, task, true /* free_tpriv */, &cb_args);
+		pool_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
 		D_GOTO(out, rc);
 	}
 
@@ -3008,7 +3004,7 @@ dc_pool_set_attr(tse_task_t *task)
 	return daos_rpc_send(cb_args.pra_rpc, task);
 
 out_rpc:
-	pool_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &cb_args);
+	pool_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to set pool attributes: "DF_RC"\n", DP_RC(rc));
@@ -3073,7 +3069,7 @@ dc_pool_del_attr(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, pool_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
-		pool_req_cleanup(CLEANUP_BULK, task, true /* free_tpriv */, &cb_args);
+		pool_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
 		D_GOTO(out, rc);
 	}
 
@@ -3081,7 +3077,7 @@ dc_pool_del_attr(tse_task_t *task)
 	return daos_rpc_send(cb_args.pra_rpc, task);
 
 out_rpc:
-	pool_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &cb_args);
+	pool_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to del pool attributes: "DF_RC"\n", DP_RC(rc));

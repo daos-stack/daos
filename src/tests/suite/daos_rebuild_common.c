@@ -141,9 +141,6 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			return;
 		}
 		args[i]->rebuild_pre_pool_ver = pool_info.pi_map_ver;
-		if (op_type == RB_OP_TYPE_FAIL)
-			print_message("before exclude, got pool " DF_UUIDF "info, map_ver=%d\n",
-				      DP_UUID(args[i]->pool.pool_uuid), pool_info.pi_map_ver);
 	}
 
 	for (i = 0; i < args_cnt; i++)

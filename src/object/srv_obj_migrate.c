@@ -491,10 +491,10 @@ out:
 	return rc;
 }
 
-static int
+static struct migrate_pool_tls*
 migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsigned int generation,
 			       uuid_t pool_hdl_uuid, uuid_t co_hdl_uuid, uint64_t max_eph,
-			       uint32_t new_layout_ver, uint32_t opc, struct migrate_pool_tls **p_tls)
+			       uint32_t new_layout_ver, uint32_t opc)
 {
 	struct migrate_pool_tls *tls = NULL;
 	struct migrate_pool_tls_create_arg arg = { 0 };
@@ -509,16 +509,8 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 			ABT_mutex_lock(tls->mpt_init_mutex);
 			ABT_cond_wait(tls->mpt_init_cond, tls->mpt_init_mutex);
 			ABT_mutex_unlock(tls->mpt_init_mutex);
-			if (tls->mpt_init_failed) {
-				migrate_pool_tls_put(tls);
-				rc = -DER_NOMEM;
-			}
 		}
-
-		if (rc == 0)
-			*p_tls = tls;
-
-		return rc;
+		return tls;
 	}
 
 	D_ASSERT(generation != (unsigned int)(-1));
@@ -569,27 +561,16 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 out:
 	if (tls != NULL && tls->mpt_init_tls) {
 		tls->mpt_init_tls = 0;
-		/* Set init failed, so the waiting lookup(above) can be notified */
-		if (rc != 0)
-			tls->mpt_init_failed = 1;
 		ABT_mutex_lock(tls->mpt_init_mutex);
 		ABT_cond_broadcast(tls->mpt_init_cond);
 		ABT_mutex_unlock(tls->mpt_init_mutex);
 	}
 	D_DEBUG(DB_TRACE, "create tls "DF_UUID": "DF_RC"\n",
 		DP_UUID(pool->sp_uuid), DP_RC(rc));
-
-	if (rc != 0) {
-		if (tls != NULL)
-			migrate_pool_tls_put(tls);
-	} else {
-		*p_tls = tls;
-	}
-
 	if (prop != NULL)
 		daos_prop_free(prop);
 
-	return rc;
+	return tls;
 }
 
 static void
@@ -660,7 +641,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(mrone->mo_pool_uuid));
-		D_GOTO(out, rc = -DER_SHUTDOWN);
+		D_GOTO(out, rc);
 	}
 
 	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
@@ -2912,14 +2893,11 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	int			 rc;
 
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
-	if (tls == NULL || tls->mpt_fini) {
-		if (tls != NULL)
-		       migrate_pool_tls_put(tls);
+	if (tls == NULL) {
 		D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 		return;
 	}
 
-	tls->mpt_fini = 1;
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
 	arg.generation = generation;
@@ -2927,7 +2905,9 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
+	pool->sp_rebuilding--;
 	migrate_pool_tls_put(tls);
+	tls->mpt_fini = 1;
 	/* Wait for xstream 0 migrate ULT(migrate_ult) stop */
 	if (tls->mpt_ult_running) {
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
@@ -2942,7 +2922,6 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	}
 
 	migrate_pool_tls_put(tls);
-	pool->sp_rebuilding--;
 	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 }
 
@@ -3473,15 +3452,15 @@ ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_
 		  unsigned int *shards, uint32_t count, unsigned int tgt_idx,
 		  uint32_t new_layout_ver)
 {
-	struct migrate_pool_tls	*tls = NULL;
+	struct migrate_pool_tls	*tls;
 	int			i;
 	int			rc;
 
 	/* Check if the pool tls exists */
-	rc = migrate_pool_tls_lookup_create(pool, version, generation, po_hdl, co_hdl, max_eph,
-					    new_layout_ver, opc, &tls);
-	if (rc != 0)
-		D_GOTO(out, rc);
+	tls = migrate_pool_tls_lookup_create(pool, version, generation, po_hdl, co_hdl, max_eph,
+					     new_layout_ver, opc);
+	if (tls == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 	if (tls->mpt_fini)
 		D_GOTO(out, rc = -DER_SHUTDOWN);
 

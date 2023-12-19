@@ -1762,26 +1762,6 @@ vos_flush_wal_header(struct vos_pool *vp)
 	return 0;
 }
 
-/*
- * Check if the NVMe context of a VOS target is healthy.
- *
- * \param[in] coh	VOS container
- *
- * \return		0		: VOS target is healthy
- *			-DER_NVME_IO	: VOS target is faulty
- */
-static inline int
-vos_tgt_health_check(struct vos_container *cont)
-{
-	D_ASSERT(cont != NULL);
-	D_ASSERT(cont->vc_pool != NULL);
-
-	if (cont->vc_pool->vp_sysdb)
-		return 0;
-
-	return bio_xsctxt_health_check(vos_xsctxt_get());
-}
-
 int
 vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
 			  uint32_t layout_ver);
