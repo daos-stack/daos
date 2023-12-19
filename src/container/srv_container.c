@@ -25,8 +25,8 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_producer.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_MDTIMES 2
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES 2
