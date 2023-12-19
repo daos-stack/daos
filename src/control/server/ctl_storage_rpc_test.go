@@ -94,11 +94,18 @@ func TestServer_bdevScan(t *testing.T) {
 				{DeviceList: new(storage.BdevDeviceList)},
 			},
 		},
+		// This should succeed so nil NVMe stats can be returned in SCM-only scenarios.
 		"scan local; no bdevs in config; meta requested": {
 			req:         &ctlpb.ScanNvmeReq{Health: true, Meta: true},
 			engTierCfgs: []storage.TierConfigs{{}},
-			engStopped:  []bool{true},
-			expErr:      errors.New("info unavailable"),
+			engStopped:  []bool{false},
+			provRes:     &storage.BdevScanResponse{},
+			expResp: &ctlpb.ScanNvmeResp{
+				State: new(ctlpb.ResponseState),
+			},
+			expBackendScanCalls: []storage.BdevScanRequest{
+				{DeviceList: new(storage.BdevDeviceList)},
+			},
 		},
 		"scan local; bdevs in config; meta requested": {
 			req: &ctlpb.ScanNvmeReq{Health: true, Meta: true},
