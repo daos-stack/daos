@@ -47,14 +47,8 @@ vos_report_layout_incompat(const char *type, int version, int min_version,
 		 min_version, max_version);
 	buf[DF_MAX_BUF - 1] = 0; /* Shut up any static analyzers */
 
-	if (ds_notify_ras_event == NULL) {
-		D_CRIT("%s\n", buf);
-		return;
-	}
-
-	ds_notify_ras_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO,
-			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, uuid,
-			    NULL, NULL, NULL, NULL);
+	ras_notify_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO, RAS_SEV_ERROR,
+			 NULL, NULL, NULL, NULL, uuid, NULL, NULL, NULL, NULL);
 }
 
 struct vos_tls *
@@ -758,6 +752,12 @@ vos_metrics_alloc(const char *path, int tgt_id)
 			     "%s/%s/merged_size/tgt_%u", path, VOS_AGG_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS aggregation failed */
+	rc = d_tm_add_metric(&vam->vam_fail_count, D_TM_COUNTER, "aggregation failures", NULL,
+			     "%s/%s/fail_count/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create 'fail_count' telemetry");
 
 	/* Metrics related to VOS checkpointing */
 	vos_chkpt_metrics_init(&vp_metrics->vp_chkpt_metrics, path, tgt_id);

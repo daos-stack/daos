@@ -94,6 +94,8 @@ dump_envariables(void)
 			     "D_PORT_AUTO_ADJUST",
 			     "D_POLL_TIMEOUT",
 			     "D_LOG_FILE_APPEND_RANK",
+			     "D_POST_INIT",
+			     "D_POST_INCR",
 			     "DAOS_SIGNAL_REGISTER"};
 
 	D_INFO("-- ENVARS: --\n");
@@ -256,12 +258,13 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 /* first step init - for initializing crt_gdata */
 static int data_init(int server, crt_init_options_t *opt)
 {
-	uint32_t	timeout;
+	uint32_t        timeout = 0;
 	uint32_t	credits;
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_enable = 0;
 	uint32_t	is_secondary;
 	char		ucx_ib_fork_init = 0;
+	uint32_t        post_init = CRT_HG_POST_INIT, post_incr = CRT_HG_POST_INCR;
 	int		rc = 0;
 
 	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
@@ -270,6 +273,12 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	D_DEBUG(DB_ALL, "Starting RPCID %#lx. Num cores: %ld\n",
 		crt_gdata.cg_rpcid, crt_gdata.cg_num_cores);
+
+	/* Set context post init / post incr to tune number of pre-posted recvs */
+	d_getenv_int("D_POST_INIT", &post_init);
+	crt_gdata.cg_post_init = post_init;
+	d_getenv_int("D_POST_INCR", &post_incr);
+	crt_gdata.cg_post_incr = post_incr;
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
@@ -283,12 +292,8 @@ static int data_init(int server, crt_init_options_t *opt)
 		 * is running using a secondary provider
 		 */
 		d_getenv_int("CRT_SECONDARY_PROVIDER", &is_secondary);
-
 	}
-
 	crt_gdata.cg_provider_is_primary = (is_secondary) ? 0 : 1;
-
-	timeout = 0;
 
 	if (opt && opt->cio_crt_timeout != 0)
 		timeout = opt->cio_crt_timeout;
