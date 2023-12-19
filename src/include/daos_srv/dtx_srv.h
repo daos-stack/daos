@@ -197,6 +197,9 @@ struct dtx_leader_handle {
 	struct dtx_sub_status		*dlh_subs;
 };
 
+_Static_assert(sizeof(struct dtx_leader_handle) == 352,
+	       "The size of this structure may be tracked by other modules e.g. telemetry");
+
 struct dtx_stat {
 	uint64_t	dtx_committable_count;
 	uint64_t	dtx_oldest_committable_time;
