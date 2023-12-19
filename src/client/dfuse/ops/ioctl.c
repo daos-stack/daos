@@ -26,6 +26,10 @@ handle_user_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	DFUSE_REPLY_IOCTL(oh, req, dur);
 }
 
+bool
+dfuse_ioctl_readahead_reply(fuse_req_t req, const struct dfuse_io_vec *diov,
+			    struct dfuse_obj_hdl *oh);
+
 static void
 handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
@@ -390,6 +394,8 @@ handle_write(struct dfuse_obj_hdl *oh, const struct dfuse_io_vec *diov, fuse_req
 	if (buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
+	oh->doh_linear_read = false;
+
 	local.iov_base = buf;
 	local.iov_len  = diov->len;
 
@@ -446,6 +452,17 @@ handle_read(struct dfuse_obj_hdl *oh, const struct dfuse_io_vec *diov, fuse_req_
 	if (diov->direction)
 		return handle_write(oh, diov, req);
 
+	if (oh->doh_readahead) {
+		bool replied;
+
+		D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
+		replied = dfuse_ioctl_readahead_reply(req, diov, oh);
+		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
+
+		if (replied)
+			return;
+	}
+
 	D_ALLOC(buf, diov->len);
 	if (buf == NULL)
 		D_GOTO(err, rc = ENOMEM);
@@ -453,7 +470,8 @@ handle_read(struct dfuse_obj_hdl *oh, const struct dfuse_io_vec *diov, fuse_req_
 	d_iov_set(&iov, buf, diov->len);
 	sg.sg_nr   = 1;
 	sg.sg_iovs = &iov;
-	rc         = dfs_read(oh->doh_dfs, oh->doh_obj, &sg, diov->position, &read_len, NULL);
+
+	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &sg, diov->position, &read_len, NULL);
 	if (rc)
 		goto err;
 

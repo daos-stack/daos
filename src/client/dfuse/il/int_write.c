@@ -38,8 +38,10 @@ ioil_do_writex(int fd, const char *buff, size_t len, off_t position, struct fd_e
 	rc = ioctl(fd, DFUSE_IOCTL_READ, &diov);
 	if (rc == -1) {
 		DS_ERROR(errno, "Error from ioctl on fd %d", fd);
+		*errcode = errno;
+		return -1;
 	}
-		return diov.len;
+	return diov.len;
 
 #if 0
 	sgl.sg_nr = 1;

@@ -7,6 +7,8 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+#include "dfuse_ioctl.h"
+
 static void
 dfuse_cb_read_complete(struct dfuse_event *ev)
 {
@@ -49,6 +51,88 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 release:
 	daos_event_fini(&ev->de_ev);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
+}
+
+bool
+dfuse_ioctl_readahead_reply(fuse_req_t req, const struct dfuse_io_vec *diov,
+			    struct dfuse_obj_hdl *oh)
+{
+	const struct fuse_ctx *fc = fuse_req_ctx(req);
+	size_t                 reply_len;
+	size_t                 len      = diov->len;
+	off_t                  position = diov->position;
+	struct iovec           local    = {};
+	struct iovec           remote   = {};
+	struct dfuse_io_vec    reply    = {};
+	size_t                 res;
+	int                    rc;
+
+	if (oh->doh_readahead->dra_rc) {
+		DFUSE_REPLY_ERR_RAW(oh, req, oh->doh_readahead->dra_rc);
+		return true;
+	}
+
+	if (!oh->doh_linear_read || oh->doh_readahead->dra_ev == NULL) {
+		DFUSE_TRA_DEBUG(oh, "Readahead disabled");
+		return false;
+	}
+
+	if (oh->doh_linear_read_pos != position) {
+		DFUSE_TRA_DEBUG(oh, "disabling readahead");
+		daos_event_fini(&oh->doh_readahead->dra_ev->de_ev);
+		d_slab_release(oh->doh_readahead->dra_ev->de_eqt->de_read_slab,
+			       oh->doh_readahead->dra_ev);
+		oh->doh_readahead->dra_ev = NULL;
+		return false;
+	}
+
+	oh->doh_linear_read_pos = position + len;
+	if (position + len >= oh->doh_readahead->dra_ev->de_readahead_len) {
+		oh->doh_linear_read_eof = true;
+	}
+
+	/* At this point there is a buffer of known length that contains the data, and a read
+	 * request.
+	 * If the attempted read is bigger than the data then it will be truncated.
+	 * It the attempted read is smaller than the buffer it will be met in full.
+	 */
+
+	if (position + len < oh->doh_readahead->dra_ev->de_readahead_len) {
+		reply_len = len;
+		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position, position + reply_len - 1);
+	} else {
+		/* The read will be truncated */
+		reply_len = oh->doh_readahead->dra_ev->de_readahead_len - position;
+		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)", position,
+				position + reply_len - 1, position + reply_len, position + len - 1);
+	}
+
+	local.iov_base = oh->doh_readahead->dra_ev->de_iov.iov_buf + position;
+	local.iov_len  = reply_len;
+
+	remote.iov_base = diov->base;
+	remote.iov_len  = reply_len;
+
+	res = process_vm_writev(fc->pid, &local, 1, &remote, 1, 0);
+	if (res == -1) {
+		rc = errno;
+		DHS_ERROR(oh, rc, "process_vm_writev() reply");
+		goto err;
+	}
+	if (res != reply_len) {
+		rc = ERANGE;
+		DHS_ERROR(oh, rc, "Unable to write to %p-%p in %d written %zi", diov->base,
+			  diov->base + reply_len - 1, fc->pid, res);
+		goto err;
+	}
+
+	reply.len = reply_len;
+	DFUSE_REPLY_IOCTL(oh, req, reply);
+	return true;
+
+err:
+	DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	return true;
 }
 
 static bool
