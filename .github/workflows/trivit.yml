@@ -1,0 +1,59 @@
+name: Trivy checking
+
+on:
+  workflow_dispatch:
+  schedule:
+    # run this job at 23:00 UTC every other day
+    - cron: '0 23 */2 * *'
+  push:
+    branches:
+      - master
+      - 'feature/*'
+      - 'release/*'
+  pull_request:
+
+jobs:
+  trivy-check:
+    name: Trivy checking
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        branch: [master, release/2.4]
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Install trivy package
+        run: |
+          sudo apt-get install wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | \
+          sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install trivy
+
+      - name: Generate trivy report file extension
+        id: gen_extension
+        run: |
+          EXTENSION=$(echo "${{ matrix.branch }}" | sed -e 's/release\///')
+          echo "EXTENSION=$EXTENSION" >> $GITHUB_OUTPUT
+
+      - name: Generate trivy report
+        run: |
+          trivy fs -c ci/trivy/trivy.yaml \
+           --output trivy-report-daos.${{ steps.gen_extension.outputs.EXTENSION }}.txt .
+
+      - name: Artifactory upload
+        uses: actions/upload-artifact@v4
+        env:
+          EXTENSION: ${{ steps.gen_extension.outputs.EXTENSION }}
+        with:
+          path: trivy-report-daos.*
+          name: trivy-report-daos.${{ steps.gen_extension.outputs.EXTENSION }}
+
+      - name: Scan with trivy
+        run: trivy fs -c ci/trivy/trivy.yaml --exit-code 1 .
