@@ -274,9 +274,68 @@ local_transaction(void **state)
 	}
 }
 
+#define OIDS_NUM 100
+
+static void
+big_local_transaction(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
+
+	int                    rc = 0;
+	int                    passed_rc;
+	char                   buf[BUF_SIZE];
+	struct dtx_handle     *dth       = NULL;
+	const char            *test_data = "Hello";
+
+	daos_key_t            *dkey = &la->dkey[0];
+
+	/** prepare OIDs */
+	daos_unit_oid_t        oids[OIDS_NUM];
+	for (int i = 0; i < OIDS_NUM; ++i) {
+		oids[i] = gen_oid(arg->otype);
+	}
+
+	print_message("Test:\n");
+
+	print_message("- begin local transaction\n");
+	rc =
+	    dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, 256, 0, NULL, NULL, 0, DTX_LOCAL, NULL, &dth);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dth);
+
+	la->iod.iod_size = strlen(test_data);
+	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data, la->iod.iod_size);
+
+	print_message("- insert at all OIDs\n");
+	for (int i = 0; i < OIDS_NUM; ++i) {
+		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oids[i], la->epoch++, 0, 0, dkey, 1,
+				       &la->iod, NULL, &la->sgl, dth);
+		assert_rc_equal(rc, 0);
+	}
+
+	print_message("- abort the transaction\n");
+	passed_rc = -DER_EXIST;
+	rc        = dtx_end(dth, NULL, passed_rc);
+	assert_rc_equal(rc, passed_rc);
+
+	print_message("- try fetching the inserted values\n");
+	for (int i = 0; i < OIDS_NUM; ++i) {
+		d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
+		fetch(arg->ctx.tc_co_hdl, oids[i], la->epoch, dkey, &la->iod, &la->fetch_sgl);
+
+		validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
+	}
+
+	la->epoch++;
+}
+
+#undef OIDS_NUM
+
 static const struct CMUnitTest local_tests_all[] = {
     {"DTX100: Simple local transaction", local_transaction, setup_local_args, teardown_local_args},
     {"DTX101: Simple local transaction with pre-existing data", local_transaction, warmup, cleanup},
+    {"DTX102: Big local transaction", big_local_transaction, warmup, cleanup},
 };
 
 int

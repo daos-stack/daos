@@ -2395,14 +2395,11 @@ vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid
 	if (dth->dth_local_oid_cnt == dth->dth_local_oid_cap) {
 		struct dtx_local_oid_record *oid_array;
 
-		D_ALLOC_ARRAY(oid_array, dth->dth_local_oid_cap << 1);
+		D_REALLOC_ARRAY(oid_array, dth->dth_local_oid_array, dth->dth_local_oid_cap,
+				dth->dth_local_oid_cap << 1);
 		if (oid_array == NULL)
 			return -DER_NOMEM;
 
-		memcpy(&oid_array[0], &dth->dth_local_oid_array[0],
-		       sizeof(*oid) * dth->dth_local_oid_cnt);
-
-		D_FREE(dth->dth_local_oid_array);
 		dth->dth_local_oid_array = oid_array;
 		dth->dth_local_oid_cap <<= 1;
 	}
