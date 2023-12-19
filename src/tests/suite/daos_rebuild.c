@@ -1176,7 +1176,7 @@ rebuild_fail_all_replicas(void **state)
 	 * the new leader can be chosen.
 	 */
 	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 7) {
-		print_message("need at least 6 svcs, -s7\n");
+		print_message("need at least 7 svcs, -s7\n");
 		return;
 	}
 

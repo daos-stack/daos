@@ -258,7 +258,7 @@ rank_list_del_at(d_rank_list_t *list, int index)
  * The rcd_n_engines field is the number of POOL_SVC_MAP_STATES engines.
  *
  * The number of vacant engines is therefore rcd_n_engines - rcd_n_replicas. We
- * always have 0 <= rcd_n_replicas <= rcd_n_engines and rcd_engines > 0.
+ * always have 0 <= rcd_n_replicas <= rcd_n_engines and rcd_n_engines > 0.
  */
 struct reconf_domain {
 	struct pool_domain *rcd_domain;
@@ -423,12 +423,17 @@ fini_reconf_map(struct reconf_map *rmap)
 	D_FREE(rmap->rcm_domains);
 }
 
-/* Find in domain a random engine that is not in replicas. */
+/* Find in rdomain a random engine that is not in replicas. */
 static d_rank_t
 find_vacancy_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas)
 {
 	int n = rdomain->rcd_n_engines - rdomain->rcd_n_replicas;
 	int i;
+
+	D_ASSERTF(n >= 0, "invalid n: %d: rcd_n_engines=%d rcd_n_replicas=%d\n", n,
+		  rdomain->rcd_n_engines, rdomain->rcd_n_replicas);
+	if (n == 0)
+		return CRT_NO_RANK;
 
 	for (i = 0; i < rdomain->rcd_domain->do_comp.co_nr; i++) {
 		struct pool_domain *engine = &rdomain->rcd_domain->do_children[i];
@@ -445,19 +450,38 @@ find_vacancy_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas)
 	return CRT_NO_RANK;
 }
 
-/* Find in domain an engine that is in replicas but not self. */
+/* Find in rdomain a random engine that is in replicas but not self. */
 static d_rank_t
 find_replica_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas, d_rank_t self)
 {
+	int n = rdomain->rcd_n_replicas;
 	int i;
+
+	/* If ourself is in this domain, decrement n. */
+	for (i = 0; i < rdomain->rcd_domain->do_comp.co_nr; i++) {
+		struct pool_domain *engine = &rdomain->rcd_domain->do_children[i];
+
+		if (engine->do_comp.co_rank == self) {
+			n--;
+			break;
+		}
+	}
+
+	D_ASSERTF(n >= 0, "invalid n: %d: rcd_n_engines=%d rcd_n_replicas=%d rl_nr=%d self=%u\n", n,
+		  rdomain->rcd_n_engines, rdomain->rcd_n_replicas, replicas->rl_nr, self);
+	if (n == 0)
+		return CRT_NO_RANK;
 
 	for (i = 0; i < rdomain->rcd_domain->do_comp.co_nr; i++) {
 		struct pool_domain *engine = &rdomain->rcd_domain->do_children[i];
 
 		if ((engine->do_comp.co_status & POOL_SVC_MAP_STATES) &&
 		    engine->do_comp.co_rank != self &&
-		    d_rank_list_find(replicas, engine->do_comp.co_rank, NULL /* idx */))
-			return engine->do_comp.co_rank;
+		    d_rank_list_find(replicas, engine->do_comp.co_rank, NULL /* idx */)) {
+			if (d_randn(n) == 0)
+				return engine->do_comp.co_rank;
+			n--;
+		}
 	}
 
 	return CRT_NO_RANK;
@@ -476,8 +500,10 @@ add_replicas(int n, struct reconf_map *rmap, int domains_n_engines_max, d_rank_l
 	int i;
 
 	D_ASSERTF(n > 0, "invalid n: %d\n", n);
-	D_ASSERTF(domains_n_engines_max >= 0, "invalid domains_n_engines_max: %d\n",
-		  domains_n_engines_max);
+	D_ASSERTF(0 <= domains_n_engines_max &&
+		      domains_n_engines_max <= rmap->rcm_domains_n_engines_max,
+		  "invalid domains_n_engines_max: %d: rcm_domains_n_engines_max=%d\n",
+		  domains_n_engines_max, rmap->rcm_domains_n_engines_max);
 
 	if (domains_n_engines_max == 0)
 		domains_n_engines_max = rmap->rcm_domains_n_engines_max;
