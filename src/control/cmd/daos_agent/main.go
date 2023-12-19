@@ -193,7 +193,7 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 	return err
 }
 
-func processConfig(log *logging.LeveledLogger, cmd flags.Commander, opts *cliOptions, cfgPath string) (*Config, error) {
+func processConfig(log logging.Logger, cmd flags.Commander, opts *cliOptions, cfgPath string) (*Config, error) {
 	cfg := DefaultConfig()
 	if cfgPath != "" {
 		var err error
@@ -245,7 +245,7 @@ func processConfig(log *logging.LeveledLogger, cmd flags.Commander, opts *cliOpt
 	return cfg, nil
 }
 
-func configureLogging(log *logging.LeveledLogger, cmd flags.Commander, cfg *Config, opts *cliOptions) error {
+func configureLogging(log logging.Logger, cmd flags.Commander, cfg *Config, opts *cliOptions) error {
 	if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
 		logCmd.SetLog(log)
 

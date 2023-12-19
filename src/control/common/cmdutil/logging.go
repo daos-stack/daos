@@ -9,9 +9,10 @@ package cmdutil
 import (
 	"os"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/pkg/errors"
 )
 
 var _ LogSetter = (*LogCmd)(nil)
