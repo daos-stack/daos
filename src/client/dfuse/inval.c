@@ -76,7 +76,7 @@
  * Directories that are used as the cwd for processes can cause problems with being invalidated too
  * early so use a higher value here.
  */
-#define INVAL_DIRECTORY_GRACE (60 * 10)
+#define INVAL_DIRECTORY_GRACE (60 * 30)
 #define INVAL_FILE_GRACE      2
 
 /* Represents one timeout value (time).  Maintains a ordered list of dentries that are using
