@@ -515,6 +515,12 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
+        "engine_net_delay_stddev",
+        "engine_net_glitch",
+        "engine_net_delay_max",
+        "engine_net_delay_mean",
+        "engine_net_delay",
+        "engine_net_delay_min",
         "engine_net_failed_addr",
         "engine_net_req_timeout",
         "engine_net_uri_lookup_timeout",
