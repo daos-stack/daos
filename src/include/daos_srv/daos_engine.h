@@ -801,9 +801,6 @@ void dss_init_state_set(enum dss_init_state state);
 /** Call module setup from drpc setup call handler. */
 int dss_module_setup_all(void);
 
-/** Notify control-plane of a bio error. */
-int ds_notify_bio_error(int media_err_type, int tgt_id);
-
 int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 			 d_rank_list_t **svc_ranks);
