@@ -379,10 +379,3 @@ func (ei *EngineInstance) callSetUp(ctx context.Context) error {
 
 	return nil
 }
-
-// BioErrorNotify logs a blob I/O error.
-func (ei *EngineInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
-
-	ei.log.Errorf("I/O Engine instance %d (target %d) has detected blob I/O error! %v",
-		ei.Index(), bio.TgtId, bio)
-}

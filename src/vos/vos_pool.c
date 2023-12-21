@@ -1096,11 +1096,9 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 		pool->vp_dying = 1;
 		vos_pool_decref(pool); /* -1 for lookup */
 
-		D_WARN(DF_UUID": Open reference exists, pool destroy is deferred\n",
-		       DP_UUID(uuid));
-		VOS_NOTIFY_RAS_EVENTF(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
-				      NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
-				      "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
+		ras_notify_eventf(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
+				  NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
+				  "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}

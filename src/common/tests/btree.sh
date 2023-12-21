@@ -2,9 +2,10 @@
 
 cwd=$(dirname "$0")
 DAOS_DIR=${DAOS_DIR:-$(cd "$cwd/../../.." && echo "$PWD")}
+# shellcheck disable=SC1091
 source "${DAOS_DIR}/.build_vars.sh"
 BTR=${SL_BUILD_DIR}/src/common/tests/btree
-VCMD=()
+VCMD=""
 BAT_NUM=${BAT_NUM:-"20000"}
 if [ "$USE_VALGRIND" = "memcheck" ]; then
     BAT_NUM="200"
@@ -100,7 +101,7 @@ run_test()
 
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
-        eval "${VCMD[@]}" "$BTR" --start-test \
+        eval "${VCMD}" "$BTR" --start-test \
         "btree functional ${test_conf_pre} ${test_conf} iterate=${IDIR}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
@@ -120,7 +121,7 @@ run_test()
         -D
 
         echo "B+tree batch operations test..."
-        eval "${VCMD[@]}" "$BTR" \
+        eval "${VCMD}" "$BTR" \
         --start-test "btree batch operations ${test_conf_pre} ${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -c                                          \
@@ -129,14 +130,14 @@ run_test()
         -D
 
         echo "B+tree drain test..."
-        eval "${VCMD[@]}" "$BTR" \
+        eval "${VCMD}" "$BTR" \
         --start-test "btree drain ${test_conf_pre} ${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -e -D
 
     else
         echo "B+tree performance test..."
-        eval "${VCMD[@]}" "$BTR" \
+        eval "${VCMD}" "$BTR" \
         --start-test "btree performance ${test_conf_pre} ${test_conf}" \
         "${DYN}" "${PMEM}" -C "${UINT}${IPL}o:$ORDER" \
         -p "$BAT_NUM"                               \

@@ -455,6 +455,7 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 			bbs->bb_owner_xs->bxc_tgt_id,
 			bio_state_enum_to_str(bbs->bb_state),
 			bio_state_enum_to_str(new_state));
+
 		/* Print a console message */
 		D_PRINT("Blobstore state transitioned. tgt: %d, %s -> %s\n",
 			bbs->bb_owner_xs->bxc_tgt_id,
@@ -573,7 +574,7 @@ bio_media_error(void *msg_arg)
 	struct media_error_msg		*mem = msg_arg;
 	struct bio_dev_health		*bdh;
 	struct nvme_stats		*dev_state;
-	int				 rc;
+	char				 err_str[DAOS_RAS_STR_FIELD_SIZE];
 
 	bdh = &mem->mem_bs->bb_dev_health;
 	dev_state = &bdh->bdh_health_state;
@@ -583,44 +584,39 @@ bio_media_error(void *msg_arg)
 		/* Update unmap error counter */
 		dev_state->bio_unmap_errs++;
 		d_tm_inc_counter(bdh->bdh_unmap_errs, 1);
-		D_ERROR("Unmap error logged from tgt_id:%d\n", mem->mem_tgt_id);
+		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
+			 "Device: "DF_UUID" unmap error logged from tgt_id:%d\n",
+			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	case MET_WRITE:
 		/* Update write I/O error counter */
 		dev_state->bio_write_errs++;
 		d_tm_inc_counter(bdh->bdh_write_errs, 1);
-		D_ERROR("Write error logged from tgt_id:%d\n", mem->mem_tgt_id);
+		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
+			 "Device: "DF_UUID" write error logged from tgt_id:%d\n",
+			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	case MET_READ:
 		/* Update read I/O error counter */
 		dev_state->bio_read_errs++;
 		d_tm_inc_counter(bdh->bdh_read_errs, 1);
-		D_ERROR("Read error logged from tgt_id:%d\n", mem->mem_tgt_id);
+		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
+			 "Device: "DF_UUID" read error logged from tgt_id:%d\n",
+			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	case MET_CSUM:
 		/* Update CSUM error counter */
 		dev_state->checksum_errs++;
 		d_tm_inc_counter(bdh->bdh_checksum_errs, 1);
-		D_ERROR("CSUM error logged from tgt_id:%d\n", mem->mem_tgt_id);
+		snprintf(err_str, DAOS_RAS_STR_FIELD_SIZE,
+			 "Device: "DF_UUID" csum error logged from tgt_id:%d\n",
+			 DP_UUID(mem->mem_bs->bb_dev->bb_uuid), mem->mem_tgt_id);
 		break;
 	}
 
+	ras_notify_event(RAS_DEVICE_MEDIA_ERROR, err_str, RAS_TYPE_INFO, RAS_SEV_ERROR,
+			 NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	auto_faulty_detect(mem->mem_bs);
 
-	if (ract_ops == NULL || ract_ops->ioerr_reaction == NULL)
-		goto out;
-	/*
-	 * Notify admin through Control Plane of BIO error callback.
-	 * TODO: CSUM errors not currently supported by Control Plane.
-	 */
-	if (mem->mem_err_type != MET_CSUM) {
-		rc = ract_ops->ioerr_reaction(mem->mem_err_type,
-					      mem->mem_tgt_id);
-		if (rc < 0)
-			D_ERROR("Blobstore I/O error notification error. %d\n",
-				rc);
-	}
-
-out:
 	D_FREE(mem);
 }

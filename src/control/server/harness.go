@@ -43,7 +43,6 @@ type Engine interface {
 	// These methods should probably be replaced by callbacks.
 	NotifyDrpcReady(*srvpb.NotifyReadyReq)
 	NotifyStorageReady()
-	BioErrorNotify(*srvpb.BioErrorReq)
 
 	// These methods should probably be refactored out into functions that
 	// accept the engine instance as a parameter.
