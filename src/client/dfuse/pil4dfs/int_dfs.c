@@ -913,6 +913,9 @@ child_hdlr(void)
 	context_reset = true;
 }
 
+/* avoid using fd smaller than this number in daos_init() */
+#define DAOS_MIN_FD 10
+
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
  *  the pointer to struct dfs_mt.
@@ -1007,6 +1010,19 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		/* trying to avoid lock as much as possible */
 		if (!daos_inited) {
 			/* daos_init() is expensive to call. We call it only when necessary. */
+			int low_fd_list[DAOS_MIN_FD], low_fd_count = 0, fd_kernel, idx;
+
+			fd_kernel = open("/proc/self/maps", O_RDONLY);
+			while (fd_kernel>=0) {
+				if (fd_kernel >= DAOS_MIN_FD) {
+					close(fd_kernel);
+					break;
+				} else {
+					low_fd_list[low_fd_count] = fd_kernel;
+					low_fd_count++;
+				}
+				fd_kernel = open("/proc/self/maps", O_RDONLY);
+			}
 			rc = daos_init();
 			if (rc) {
 				DL_ERROR(rc, "daos_init() failed");
@@ -1024,6 +1040,8 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 			daos_inited = true;
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
+			for (idx = 0; idx < low_fd_count; idx++)
+				close(low_fd_list[idx]);
 		}
 
 		/* dfs info can be set up after daos has been initialized. */
@@ -2539,6 +2557,10 @@ new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat
 		else
 			return new_xstat(1, path, stat_buf);
 	}
+
+	if (dirfd >= FD_FILE_BASE && dirfd < FD_DIR_BASE && path[0] == 0)
+		/* same as fstat for a file. May need further work to handle flags */
+		return fstat(dirfd, stat_buf);
 
 	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
 	if (error)
@@ -4979,7 +5001,7 @@ dup(int oldfd)
 int
 dup2(int oldfd, int newfd)
 {
-	int fd, fd_directed, idx, rc, errno_save;
+	int fd, oldfd_directed, fd_directed, idx, rc, errno_save;
 
 	/* Need more work later. */
 	if (next_dup2 == NULL) {
@@ -4995,8 +5017,12 @@ dup2(int oldfd, int newfd)
 		else
 			return newfd;
 	}
-	if ((oldfd < FD_FILE_BASE) && (newfd < FD_FILE_BASE))
+	oldfd_directed = query_fd_forward_dest(oldfd);
+	if ((oldfd_directed < FD_FILE_BASE) && (oldfd < FD_FILE_BASE) && (newfd < FD_FILE_BASE))
 		return next_dup2(oldfd, newfd);
+
+	if (oldfd_directed >= FD_FILE_BASE && oldfd < FD_FILE_BASE)
+		oldfd = oldfd_directed;
 
 	if (newfd >= FD_FILE_BASE) {
 		DS_ERROR(ENOTSUP, "unimplemented yet for newfd >= FD_FILE_BASE");
@@ -5015,13 +5041,22 @@ dup2(int oldfd, int newfd)
 	else
 		fd_directed = query_fd_forward_dest(oldfd);
 	if (fd_directed >= FD_FILE_BASE) {
-		rc = close(newfd);
-		if (rc != 0 && errno != EBADF)
-			return -1;
-		fd = allocate_a_fd_from_kernel();
+		int fd_tmp;
+
+		fd_tmp = allocate_a_fd_from_kernel();
+		if (fd_tmp < 0) {
+			/* failed to allocate an fd from kernel */
+			errno_save = errno;
+			DS_ERROR(errno_save, "failed to get a fd from kernel");
+			errno = errno_save;
+			return (-1);
+		}
+		/* rely on dup2() to get the desired fd */
+		fd = next_dup2(fd_tmp, newfd);
 		if (fd < 0) {
 			/* failed to allocate an fd from kernel */
 			errno_save = errno;
+			close(fd_tmp);
 			DS_ERROR(errno_save, "failed to get a fd from kernel");
 			errno = errno_save;
 			return (-1);
@@ -5031,6 +5066,9 @@ dup2(int oldfd, int newfd)
 			errno = EBUSY;
 			return (-1);
 		}
+		rc = close(fd_tmp);
+		if (rc != 0)
+			return -1;
 		idx = allocate_dup2ed_fd(fd, fd_directed);
 		if (idx >= 0)
 			return fd;
