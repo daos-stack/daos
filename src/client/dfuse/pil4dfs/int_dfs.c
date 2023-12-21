@@ -1013,7 +1013,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			int low_fd_list[DAOS_MIN_FD], low_fd_count = 0, fd_kernel, idx;
 
 			fd_kernel = open("/proc/self/maps", O_RDONLY);
-			while (fd_kernel>=0) {
+			while (fd_kernel >= 0) {
 				if (fd_kernel >= DAOS_MIN_FD) {
 					close(fd_kernel);
 					break;
