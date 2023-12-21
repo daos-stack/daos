@@ -724,12 +724,13 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 			D_GOTO(err_close, rc);
 		}
 
-		rc = ival_add_cont_buckets(dfc);
-		if (rc)
-			goto err_close;
 	} else {
 		DFUSE_TRA_INFO(dfc, "Caching disabled");
 	}
+
+	rc = ival_add_cont_buckets(dfc);
+	if (rc)
+		goto err_close;
 
 	rc = dfuse_cont_open(dfuse_info, dfp, &c_info.ci_uuid, &dfc);
 	if (rc) {
@@ -850,12 +851,14 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 				D_GOTO(err_umount, rc);
 			}
 
-			rc = ival_add_cont_buckets(dfc);
-			if (rc != 0)
-				goto err_umount;
 		} else {
 			DFUSE_TRA_INFO(dfc, "Caching disabled");
 		}
+
+		rc = ival_add_cont_buckets(dfc);
+		if (rc != 0)
+			goto err_umount;
+
 	} else {
 		/* This is either a container where a label is set on the
 		 * command line, or one created through mkdir, in either case

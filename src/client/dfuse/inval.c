@@ -183,8 +183,8 @@ out:
 	for (int i = 0; i < idx; i++) {
 		int rc;
 
-		DFUSE_TRA_INFO(&ival_data, "Evicting entry %#lx " DF_DE " dir:" DF_BOOL,
-			       ic[i].parent, DP_DE(ic[i].name), DP_BOOL(ic[i].dir));
+		DFUSE_TRA_DEBUG(&ival_data, "Evicting entry %#lx " DF_DE " dir:" DF_BOOL,
+				ic[i].parent, DP_DE(ic[i].name), DP_BOOL(ic[i].dir));
 
 		rc = fuse_lowlevel_notify_inval_entry(ival_data.session, ic[i].parent, ic[i].name,
 						      strnlen(ic[i].name, NAME_MAX));
@@ -355,7 +355,7 @@ ival_update_inode(struct dfuse_inode_entry *inode, double timeout)
 		if (d_list_empty(&dte->inode_list))
 			wake = true;
 
-		DFUSE_TRA_DEBUG(inode, "timeout %lf wake " DF_BOOL " %#lx " DF_DE, timeout,
+		DFUSE_TRA_DEBUG(inode, "timeout %lf wake:" DF_BOOL " %#lx " DF_DE, timeout,
 				DP_BOOL(wake), inode->ie_parent, DP_DE(inode->ie_name));
 
 		d_list_move_tail(&inode->ie_evict_entry, &dte->inode_list);
