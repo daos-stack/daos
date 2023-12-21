@@ -486,6 +486,7 @@ struct dfuse_cont {
 	double                  dfc_ndentry_timeout;
 	double                  dfc_data_timeout;
 	bool                    dfc_direct_io_disable;
+	bool                    dfc_wb_cache;
 };
 
 #define DFUSE_IE_STAT_ADD(_ie, _stat)                                                              \
@@ -933,8 +934,10 @@ struct dfuse_inode_entry {
 
 #define DFUSE_IE_WFLUSH(_ie)                                                                       \
 	do {                                                                                       \
-		D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                                 \
-		D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                                 \
+		if ((_ie)->ie_dfs->dfc_wb_cache) {                                                 \
+			D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                         \
+			D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                         \
+		}                                                                                  \
 	} while (0)
 
 /* Lookup an inode and take a ref on it. */

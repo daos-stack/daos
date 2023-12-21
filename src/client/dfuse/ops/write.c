@@ -46,8 +46,10 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 
 	eqt = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
 
-	if (oh->doh_ie->ie_dfs->dfc_data_timeout != 0 && dfuse_info->di_wb_cache)
+	if (oh->doh_ie->ie_dfs->dfc_wb_cache) {
+		D_RWLOCK_RDLOCK(&oh->doh_ie->ie_wlock);
 		wb_cache = true;
+	}
 
 	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x", position, position + len - 1,
 			bufv->buf[0].flags);
@@ -105,11 +107,8 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	if (wb_cache) {
+	if (wb_cache)
 		DFUSE_REPLY_WRITE(oh, req, len);
-	} else {
-		D_RWLOCK_UNLOCK(&ev->de_oh->doh_ie->ie_wlock);
-	}
 
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
@@ -120,7 +119,8 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	return;
 
 err:
-	D_RWLOCK_UNLOCK(&ev->de_oh->doh_ie->ie_wlock);
+	if (wb_cache)
+		D_RWLOCK_UNLOCK(&ev->de_oh->doh_ie->ie_wlock);
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	if (ev) {
 		daos_event_fini(&ev->de_ev);

@@ -523,7 +523,7 @@ dfuse_char_disabled(char *addr, size_t len)
  * set.
  */
 static int
-dfuse_cont_get_cache(struct dfuse_cont *dfc)
+dfuse_cont_get_cache(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
 {
 	size_t       sizes[ATTR_COUNT];
 	char        *buff;
@@ -641,6 +641,9 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 
 	if (have_dentry && !have_dentry_dir)
 		dfc->dfc_dentry_dir_timeout = dfc->dfc_dentry_timeout;
+
+	if (dfc->dfc_data_timeout != 0 && dfuse_info->di_wb_cache)
+		dfc->dfc_wb_cache = true;
 	rc = 0;
 out:
 	D_FREE(buff);
@@ -713,7 +716,7 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 	}
 
 	if (dfuse_info->di_caching) {
-		rc = dfuse_cont_get_cache(dfc);
+		rc = dfuse_cont_get_cache(dfuse_info, dfc);
 		if (rc == ENODATA) {
 			/* If there is no container specific
 			 * attributes then use defaults
@@ -836,7 +839,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 		}
 
 		if (dfuse_info->di_caching) {
-			rc = dfuse_cont_get_cache(dfc);
+			rc = dfuse_cont_get_cache(dfuse_info, dfc);
 			if (rc == ENODATA) {
 				/* If there are no container attributes then use defaults */
 				DFUSE_TRA_INFO(dfc, "Using default caching values");
@@ -1105,7 +1108,6 @@ dfuse_open_handle_init(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
 void
 dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {
-	D_RWLOCK_INIT(&ie->ie_wlock, 0);
 	atomic_init(&ie->ie_ref, 1);
 	atomic_init(&ie->ie_open_count, 0);
 	atomic_init(&ie->ie_open_write_count, 0);
@@ -1113,6 +1115,7 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
 
 	D_MUTEX_INIT(&ie->ie_lock, NULL);
+	D_RWLOCK_INIT(&ie->ie_wlock, 0);
 }
 
 void
@@ -1120,10 +1123,6 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {
 	int      rc;
 	uint32_t ref;
-
-	DFUSE_IE_WFLUSH(ie);
-
-	D_RWLOCK_DESTROY(&ie->ie_wlock);
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
 	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",
