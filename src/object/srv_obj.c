@@ -25,7 +25,7 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/security.h>
 #include <daos/checksum.h>
-#include "daos_srv/srv_csum.h"
+#include <daos_srv/srv_csum.h>
 #include "obj_rpc.h"
 #include "srv_internal.h"
 

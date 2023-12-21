@@ -6,8 +6,8 @@
 
 #include "dfuse_common.h"
 #include "dfuse.h"
-#include "daos_fs.h"
-#include "daos_api.h"
+#include <daos_fs.h>
+#include <daos_api.h>
 
 /* Lookup a container within a pool */
 void
