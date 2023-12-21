@@ -223,7 +223,6 @@ func (ei *EngineInstance) getSmdDetails(smd *ctlpb.SmdDevice) (*storage.SmdDevic
 	}
 
 	smdDev.Rank = engineRank
-	smdDev.TrAddr = smd.GetTrAddr()
 
 	return smdDev, nil
 }
@@ -256,9 +255,9 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage
 	hasUpdatedHealth := make(map[string]bool)
 	for _, smd := range smdDevs.Devices {
 		msg := fmt.Sprintf("instance %d: smd %s: ctrlr %s", ei.Index(), smd.Uuid,
-			smd.TrAddr)
+			smd.Ctrlr.PciAddr)
 
-		ctrlr, exists := ctrlrMap[smd.GetTrAddr()]
+		ctrlr, exists := ctrlrMap[smd.Ctrlr.PciAddr]
 		if !exists {
 			ei.log.Errorf("%s: ctrlr not found", msg)
 			continue
@@ -276,9 +275,9 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrs []storage
 			// Log the error if it indicates non-existent health and the SMD entity has
 			// an abnormal state. Otherwise it is expected that health may be missing.
 			status, ok := errors.Cause(err).(daos.Status)
-			if ok && status == daos.Nonexistent && smdDev.NvmeState != storage.NvmeStateNormal {
+			if ok && status == daos.Nonexistent && smdDev.Ctrlr.NvmeState != storage.NvmeStateNormal {
 				ei.log.Debugf("%s: stats not found (device state: %q), skip update",
-					msg, smdDev.NvmeState.String())
+					msg, smdDev.Ctrlr.NvmeState.String())
 			} else {
 				ei.log.Errorf("%s: fetch stats: %s", msg, err.Error())
 			}

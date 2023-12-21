@@ -367,9 +367,9 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 				continue
 			}
 
-			if dev.GetDevState() != ctlpb.NvmeDevState_NORMAL {
+			if dev.Ctrlr.GetDevState() != ctlpb.NvmeDevState_NORMAL {
 				c.log.Debugf("SMD device %s (rank %d, ctlr %s) not usable: device state %q",
-					dev.GetUuid(), rank, ctlr.GetPciAddr(), ctlpb.NvmeDevState_name[int32(dev.DevState)])
+					dev.GetUuid(), rank, ctlr.GetPciAddr(), ctlpb.NvmeDevState_name[int32(dev.Ctrlr.DevState)])
 				dev.AvailBytes = 0
 				dev.UsableBytes = 0
 				continue
