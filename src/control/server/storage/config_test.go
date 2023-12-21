@@ -782,7 +782,7 @@ func TestStorage_BdevDeviceRoles_String(t *testing.T) {
 	}{
 		"empty": {
 			bits:   OptionBits(0),
-			expOut: "N/A",
+			expOut: "NA",
 		},
 		"all": {
 			bits:   OptionBits(BdevRoleAll),

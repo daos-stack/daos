@@ -476,7 +476,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     0    
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -589,7 +589,7 @@ SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     0    
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -615,7 +615,7 @@ pmem0         0      1.0 TB
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     0    
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -645,7 +645,7 @@ SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     0    
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -683,7 +683,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     0    
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -705,7 +705,7 @@ SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     0    
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -741,7 +741,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     0    
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -777,7 +777,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     0    
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -922,7 +922,7 @@ Errors:
 
 Hosts     SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
 -----     --------- -------- -------- ---------- --------- --------- 
-host[1-2] 0 B       0 B      N/A      0 B        0 B       N/A       
+host[1-2] 0 B       0 B      NA       0 B        0 B       NA        
 `,
 		},
 		"no storage": {
@@ -939,7 +939,7 @@ host[1-2] 0 B       0 B      N/A      0 B        0 B       N/A
 			expPrintStr: `
 Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
 ----- --------- -------- -------- ---------- --------- --------- 
-host1 0 B       0 B      N/A      0 B        0 B       N/A       
+host1 0 B       0 B      NA       0 B        0 B       NA        
 `,
 		},
 		"single host with space usage": {
@@ -1153,7 +1153,7 @@ SCM Mount Format Result
 
 NVMe PCI Format Result Role(s) 
 -------- ------------- ------- 
-2        CTL_SUCCESS   N/A     
+2        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1180,7 +1180,7 @@ SCM Mount Format Result
 
 NVMe PCI Format Result Role(s) 
 -------- ------------- ------- 
-1        CTL_SUCCESS   N/A     
+1        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1202,8 +1202,8 @@ SCM Mount Format Result
 
 NVMe PCI Format Result Role(s) 
 -------- ------------- ------- 
-1        CTL_SUCCESS   N/A     
-2        CTL_SUCCESS   N/A     
+1        CTL_SUCCESS   NA      
+2        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1229,7 +1229,7 @@ SCM Mount Format Result
 
 NVMe PCI Format Result Role(s) 
 -------- ------------- ------- 
-2        CTL_SUCCESS   N/A     
+2        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1251,8 +1251,8 @@ SCM Mount Format Result
 
 NVMe PCI Format Result Role(s) 
 -------- ------------- ------- 
-1        CTL_SUCCESS   N/A     
-2        CTL_SUCCESS   N/A     
+1        CTL_SUCCESS   NA      
+2        CTL_SUCCESS   NA      
 
 `,
 		},

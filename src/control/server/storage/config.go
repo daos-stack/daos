@@ -43,7 +43,7 @@ const (
 	accelOptMoveName = "move"
 	accelOptCRCName  = "crc"
 
-	bdevRoleNoneName = "n/a"
+	bdevRoleNoneName = "na"
 	bdevRoleDataName = "data"
 	bdevRoleMetaName = "meta"
 	bdevRoleWALName  = "wal"

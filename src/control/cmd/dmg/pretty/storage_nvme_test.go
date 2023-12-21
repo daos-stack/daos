@@ -47,8 +47,8 @@ func TestPretty_PrintNVMeController(t *testing.T) {
 			expPrintStr: `
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     None 
-0000:02:00.0 model-2 fwRev-2     0      2.0 TB   N/A     None 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      None 
+0000:02:00.0 model-2 fwRev-2     0      2.0 TB   NA      None 
 `,
 		},
 		"vmd backing devices": {
@@ -59,8 +59,8 @@ NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank
 			expPrintStr: `
 NVMe PCI       Model FW Revision Socket Capacity Role(s) Rank 
 --------       ----- ----------- ------ -------- ------- ---- 
-050505:01:00.0                   0      0 B      N/A     None 
-050505:03:00.0                   0      0 B      N/A     None 
+050505:01:00.0                   0      0 B      NA      None 
+050505:03:00.0                   0      0 B      NA      None 
 `,
 		},
 		"controllers with roles": {
@@ -83,8 +83,8 @@ NVMe PCI     Model   FW Revision Socket Capacity Role(s)  Rank
 			expPrintStr: `
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     1    
-0000:02:00.0 model-2 fwRev-2     0      2.0 TB   N/A     2    
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      1    
+0000:02:00.0 model-2 fwRev-2     0      2.0 TB   NA      2    
 `,
 		},
 		"controllers with no rank": {
@@ -95,8 +95,8 @@ NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank
 			expPrintStr: `
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
-0000:01:00.0 model-1 fwRev-1     1      2.0 TB   N/A     None 
-0000:02:00.0 model-2 fwRev-2     0      2.0 TB   N/A     None 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      None 
+0000:02:00.0 model-2 fwRev-2     0      2.0 TB   NA      None 
 `,
 		},
 	} {

@@ -126,11 +126,11 @@ type LedState int32
 
 // LedState values representing the VMD LED state (see include/spdk/vmd.h).
 const (
-	LedStateNormal LedState = iota
+	LedStateUnknown LedState = iota
 	LedStateIdentify
 	LedStateFaulty
 	LedStateRebuild
-	LedStateUnknown
+	LedStateNormal
 )
 
 func (vls LedState) String() string {
