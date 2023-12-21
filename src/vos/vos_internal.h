@@ -27,8 +27,7 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
-D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
+#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
@@ -186,6 +185,7 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_del_ev;		/* Deleted EV records */
 	struct d_tm_node_t	*vam_merge_recs;	/* Total merged EV records */
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
+	struct d_tm_node_t	*vam_fail_count;	/* Aggregation failed */
 };
 
 struct vos_gc_metrics {
@@ -1565,13 +1565,6 @@ void
 vos_report_layout_incompat(const char *type, int version, int min_version,
 			   int max_version, uuid_t *uuid);
 
-#define VOS_NOTIFY_RAS_EVENTF(...)			\
-	do {						\
-		if (ds_notify_ras_eventf == NULL)	\
-			break;				\
-		ds_notify_ras_eventf(__VA_ARGS__);	\
-	} while (0)					\
-
 static inline int
 vos_offload_exec(int (*func)(void *), void *arg)
 {
@@ -1760,6 +1753,26 @@ vos_flush_wal_header(struct vos_pool *vp)
 		return bio_wal_flush_header(mc);
 
 	return 0;
+}
+
+/*
+ * Check if the NVMe context of a VOS target is healthy.
+ *
+ * \param[in] coh	VOS container
+ *
+ * \return		0		: VOS target is healthy
+ *			-DER_NVME_IO	: VOS target is faulty
+ */
+static inline int
+vos_tgt_health_check(struct vos_container *cont)
+{
+	D_ASSERT(cont != NULL);
+	D_ASSERT(cont->vc_pool != NULL);
+
+	if (cont->vc_pool->vp_sysdb)
+		return 0;
+
+	return bio_xsctxt_health_check(vos_xsctxt_get());
 }
 
 int

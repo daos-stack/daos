@@ -1098,7 +1098,6 @@ dfuse_open_handle_init(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
 	oh->doh_linear_read     = true;
 	oh->doh_linear_read_pos = 0;
 	atomic_init(&oh->doh_il_calls, 0);
-	atomic_init(&oh->doh_readdir_number, 0);
 	atomic_init(&oh->doh_write_count, 0);
 	atomic_fetch_add_relaxed(&dfuse_info->di_fh_count, 1);
 }
@@ -1110,8 +1109,9 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_open_count, 0);
 	atomic_init(&ie->ie_open_write_count, 0);
 	atomic_init(&ie->ie_il_count, 0);
-	atomic_init(&ie->ie_readdir_number, 0);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
+
+	D_MUTEX_INIT(&ie->ie_lock, NULL);
 }
 
 void
@@ -1125,8 +1125,6 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 			ie->ie_stat.st_ino, ref, DP_DE(ie->ie_name), ie->ie_parent);
 
 	D_ASSERTF(ref == 0, "Reference is %d", ref);
-	D_ASSERTF(atomic_load_relaxed(&ie->ie_readdir_number) == 0, "readdir_number is %d",
-		  atomic_load_relaxed(&ie->ie_readdir_number));
 	D_ASSERTF(atomic_load_relaxed(&ie->ie_il_count) == 0, "il_count is %d",
 		  atomic_load_relaxed(&ie->ie_il_count));
 	D_ASSERTF(atomic_load_relaxed(&ie->ie_open_count) == 0, "open_count is %d",
@@ -1147,6 +1145,8 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 	}
+
+	D_MUTEX_DESTROY(&ie->ie_lock);
 
 	dfuse_ie_free(dfuse_info, ie);
 }
