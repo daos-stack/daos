@@ -6,6 +6,7 @@
 
 package main
 
+//"github.com/daos-stack/daos/src/control/common"
 import (
 	"context"
 	"os"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
@@ -47,9 +47,9 @@ type startCmd struct {
 }
 
 func (cmd *startCmd) Execute(_ []string) error {
-	if err := common.CheckDupeProcess(); err != nil {
-		return err
-	}
+	//	if err := common.CheckDupeProcess(); err != nil {
+	//		return err
+	//	}
 
 	cmd.Infof("Starting %s (pid %d)", versionString(), os.Getpid())
 	startedAt := time.Now()
