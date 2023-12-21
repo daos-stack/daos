@@ -43,10 +43,7 @@ jobs:
       - name: Add error parser
         run: echo -n "::add-matcher::ci/shellcheck-matcher.json"
       - name: Run Shellcheck
-        # The check will run with this file from the target branch but the code from the PR so
-        # test for this file before calling it to prevent failures on PRs where this check is
-        # in the target branch but the PR is not updated to include it.
-        run: \[ ! -x ci/run_shellcheck.sh \] || ./ci/run_shellcheck.sh
+        run: ./ci/run_shellcheck.sh
 
   log-check:
     name: Logging macro checking

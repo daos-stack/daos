@@ -1,0 +1,16 @@
+name: Jenkins status report
+
+on:
+  pull_request:
+
+jobs:
+  # Check and report Jenkins test results.  Should use the check_suite trigger when stable, and
+  # test the PR that triggered it obviously.
+  jenkins_check:
+    name: Check Jenkins results
+    if: github.repository == 'daos-stack/daos'
+    runs-on: [self-hosted, light]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run check
+        run: ./ci/daily_status.py --pr ${{ github.event.pull_request.number }}
