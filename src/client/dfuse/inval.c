@@ -104,6 +104,7 @@ struct dfuse_ival {
 struct inode_core {
 	char       name[NAME_MAX + 1];
 	fuse_ino_t parent;
+	bool       dir;
 };
 
 /* Number of dentries to invalidate per iteration. This value affects how long the lock is held,
@@ -160,6 +161,7 @@ ival_loop(int *sleep_time)
 			ic[idx].parent = inode->ie_parent;
 			strncpy(ic[idx].name, inode->ie_name, NAME_MAX + 1);
 			ic[idx].name[NAME_MAX] = '\0';
+			ic[idx].dir            = S_ISDIR(inode->ie_stat.st_mode);
 
 			d_list_del_init(&inode->ie_evict_entry);
 
@@ -181,8 +183,8 @@ out:
 	for (int i = 0; i < idx; i++) {
 		int rc;
 
-		DFUSE_TRA_DEBUG(&ival_data, "Evicting entry %#lx " DF_DE, ic[i].parent,
-				DP_DE(ic[i].name));
+		DFUSE_TRA_INFO(&ival_data, "Evicting entry %#lx " DF_DE " dir:" DF_BOOL,
+			       ic[i].parent, DP_DE(ic[i].name), DP_BOOL(ic[i].dir));
 
 		rc = fuse_lowlevel_notify_inval_entry(ival_data.session, ic[i].parent, ic[i].name,
 						      strnlen(ic[i].name, NAME_MAX));
