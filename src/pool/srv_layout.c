@@ -28,6 +28,8 @@ RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
 RDB_STRING_KEY(ds_pool_prop_, svc_ops);
 RDB_STRING_KEY(ds_pool_prop_, svc_ops_enabled);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_max);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_num);
 
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
