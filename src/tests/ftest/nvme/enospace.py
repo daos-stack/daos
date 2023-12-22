@@ -7,13 +7,13 @@ import os
 import threading
 import time
 
-from nvme_utils import ServerFillUp
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
 from general_utils import get_display_size, get_errors_count
 from ior_utils import IorCommand, IorMetrics
 from job_manager_utils import get_job_manager
+from nvme_utils import ServerFillUp
 from pydaos.raw import c_err_to_str
 from telemetry_test_base import TestWithTelemetry
 
