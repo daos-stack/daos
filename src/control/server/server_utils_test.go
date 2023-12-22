@@ -858,9 +858,9 @@ func TestServer_scanBdevStorage(t *testing.T) {
 		},
 		"bdev in config not found by spdk": {
 			bmbc: &bdev.MockBackendConfig{
-				ScanErr: storage.FaultBdevNotFound(test.MockPCIAddr()),
+				ScanErr: storage.FaultBdevNotFound(false, test.MockPCIAddr()),
 			},
-			expErr: storage.FaultBdevNotFound(test.MockPCIAddr()),
+			expErr: storage.FaultBdevNotFound(false, test.MockPCIAddr()),
 		},
 		"successful scan": {
 			bmbc: &bdev.MockBackendConfig{
