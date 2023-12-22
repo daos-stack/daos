@@ -8,7 +8,6 @@ import threading
 import time
 
 from nvme_utils import ServerFillUp
-from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure

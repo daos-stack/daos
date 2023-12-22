@@ -181,7 +181,7 @@ class ServerFillUp(IorTestBase):
         if 'Perf' in operation:
             self.ior_local_cmd.block_size.update(
                 int(self.ior_local_cmd.block_size.value) * 10, 'ior.block_size')
-                                                   #from * 30 to aviod wr no space
+        # from * 30 to avoid wr no space
         # To set IOR repetitions
         self.ior_local_cmd.repetitions.update(repetitions, 'ior.repetitions')
 
