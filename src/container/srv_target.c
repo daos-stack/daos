@@ -276,6 +276,8 @@ get_hae(struct ds_cont_child *cont, bool vos_agg)
 static inline void
 adjust_upper_bound(struct ds_cont_child *cont, bool vos_agg, uint64_t *upper_bound)
 {
+	uint64_t	max, boundary;
+
 	/* Cap the upper bound when taking snapshot */
 	if (*upper_bound >= cont->sc_aggregation_max)
 		*upper_bound = cont->sc_aggregation_max - 1;
@@ -284,6 +286,13 @@ adjust_upper_bound(struct ds_cont_child *cont, bool vos_agg, uint64_t *upper_bou
 	if (!vos_agg || unlikely(ec_agg_disabled))
 		return;
 
+	max = d_hlc2sec(*upper_bound);
+	boundary = d_hlc2sec(cont->sc_ec_agg_eph_boundary);
+
+	if (max > boundary && (max - boundary) >= 10) {
+		D_INFO(DF_CONT" Max:"DF_U64", EC boundary:"DF_U64"\n",
+		       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), max, boundary);
+	}
 	/* Cap VOS aggregation upper bound to EC aggregation HAE */
 	*upper_bound = min(*upper_bound, cont->sc_ec_agg_eph_boundary);
 }

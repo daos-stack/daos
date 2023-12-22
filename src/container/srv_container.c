@@ -1879,6 +1879,9 @@ cont_agg_eph_leader_ult(void *arg)
 				DP_CONT(svc->cs_pool_uuid,
 					ec_agg->ea_cont_uuid),
 				min_eph, ec_agg->ea_current_eph);
+			D_INFO(DF_CONT": Reporting EC boundary cur:"DF_U64" new:"DF_U64"\n",
+			       DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
+			       d_hlc2sec(ec_agg->ea_current_eph), d_hlc2sec(min_eph));
 			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
 							ec_agg->ea_cont_uuid,
 							min_eph);
