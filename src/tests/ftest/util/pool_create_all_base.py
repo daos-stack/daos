@@ -6,9 +6,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import sys
 import time
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 from general_utils import bytes_to_human
 
 
@@ -64,7 +63,7 @@ class PoolCreateAllTestBase(TestWithServers):
                 if nvme_device["smd_devices"] is None:
                     continue
                 for smd_device in nvme_device["smd_devices"]:
-                    if smd_device["dev_state"] == "NORMAL":
+                    if smd_device["ctrlr"]["dev_state"] == "NORMAL":
                         nvme_bytes += smd_device["usable_bytes"]
             nvme_engine_bytes = min(nvme_engine_bytes, nvme_bytes)
 
@@ -312,7 +311,7 @@ class PoolCreateAllTestBase(TestWithServers):
             nvme_bytes = 0
             for nvme_device in host_storage["storage"]["nvme_devices"]:
                 for smd_device in nvme_device["smd_devices"]:
-                    if smd_device["dev_state"] != "NORMAL":
+                    if smd_device["ctrlr"]["dev_state"] != "NORMAL":
                         continue
                     nvme_bytes += smd_device["total_bytes"]
                     nvme_bytes -= smd_device["avail_bytes"]

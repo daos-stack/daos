@@ -835,6 +835,14 @@ void
 vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth);
 
 /**
+ * Renew the epoch for the DTX entry.
+ *
+ * \param dth	[IN]	Pointer to the DTX handle.
+ */
+void
+vos_dtx_renew_epoch(struct dtx_handle *dth);
+
+/**
  * Get the recx/epoch list.
  *
  * \param ioh	[IN]	The I/O handle.
@@ -1218,7 +1226,7 @@ int
 vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg);
 int
-vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_flushed);
+vos_flush_pool(daos_handle_t poh, uint32_t nr_flush, uint32_t *nr_flushed);
 
 bool
 vos_gc_pool_idle(daos_handle_t poh);

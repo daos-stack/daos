@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 
 from control_test_base import ControlTestBase
-from run_utils import run_remote, command_as_user
+from run_utils import command_as_user, run_remote
 
 
 class SupportTestBase(ControlTestBase):

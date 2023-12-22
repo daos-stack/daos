@@ -54,6 +54,8 @@ static unsigned int bio_chk_cnt_init;
 bool bio_scm_rdma;
 /* Whether SPDK inited */
 bool bio_spdk_inited;
+/* Whether VMD is enabled */
+bool                bio_vmd_enabled;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
@@ -93,6 +95,7 @@ bio_spdk_env_init(void)
 {
 	struct spdk_env_opts	opts;
 	bool			enable_rpc_srv = false;
+	bool                    vmd_enabled    = false;
 	int			rc;
 	int			roles = 0;
 
@@ -111,13 +114,14 @@ bio_spdk_env_init(void)
 	 */
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
-		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts, &roles);
+		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts, &roles, &vmd_enabled);
 		if (rc != 0) {
 			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
 				DP_RC(rc));
 			goto out;
 		}
 		nvme_glb.bd_nvme_roles = roles;
+		bio_vmd_enabled        = vmd_enabled;
 
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
@@ -737,6 +741,11 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	D_ASSERT(d_bdev->bb_desc != NULL);
 	d_bdev->bb_removed = 1;
 
+	ras_notify_eventf(RAS_DEVICE_UNPLUGGED, RAS_TYPE_INFO,
+			  RAS_SEV_NOTICE, NULL, NULL, NULL, NULL, NULL,
+			  NULL, NULL, NULL, NULL, "Dev: "DF_UUID" unplugged\n",
+			  DP_UUID(d_bdev->bb_uuid));
+
 	/* The bio_bdev is still under construction */
 	if (d_list_empty(&d_bdev->bb_link)) {
 		D_ASSERT(d_bdev->bb_blobstore == NULL);
@@ -769,6 +778,7 @@ replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 
 	new_dev->bb_blobstore = old_dev->bb_blobstore;
 	new_dev->bb_blobstore->bb_dev = new_dev;
+	new_dev->bb_roles = old_dev->bb_roles;
 	old_dev->bb_blobstore = NULL;
 
 	new_dev->bb_tgt_cnt = old_dev->bb_tgt_cnt;
@@ -815,7 +825,7 @@ bdev_name2roles(const char *name)
  * xstream for this device hasn't been established yet.
  */
 static int
-create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
+create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name, unsigned int roles,
 		struct bio_bdev **dev_out)
 {
 	struct bio_bdev			*d_bdev, *old_dev;
@@ -843,13 +853,8 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	}
 
 	D_INIT_LIST_HEAD(&d_bdev->bb_link);
-	rc = bdev_name2roles(bdev_name);
-	if (rc < 0) {
-		D_ERROR("Failed to get role from bdev name, "DF_RC"\n", DP_RC(rc));
-		goto error;
-	}
 
-	d_bdev->bb_roles = rc;
+	d_bdev->bb_roles = roles;
 	D_STRNDUP(d_bdev->bb_name, bdev_name, strlen(bdev_name));
 	if (d_bdev->bb_name == NULL) {
 		D_GOTO(error, rc = -DER_NOMEM);
@@ -958,20 +963,29 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 {
 	struct bio_bdev  *d_bdev;
 	struct spdk_bdev *bdev;
+	const char       *bdev_name;
 	int rc = 0;
 
 	D_ASSERT(!is_server_started());
 	if (spdk_bdev_first() == NULL) {
 		D_ERROR("No SPDK bdevs found!\n");
-		rc = -DER_NONEXIST;
+		return -DER_NONEXIST;
 	}
 
-	for (bdev = spdk_bdev_first(); bdev != NULL;
-	     bdev = spdk_bdev_next(bdev)) {
+	for (bdev = spdk_bdev_first(); bdev != NULL; bdev = spdk_bdev_next(bdev)) {
 		if (nvme_glb.bd_bdev_class != get_bdev_type(bdev))
 			continue;
 
-		rc = create_bio_bdev(ctxt, spdk_bdev_get_name(bdev), NULL);
+		bdev_name = spdk_bdev_get_name(bdev);
+
+		rc = bdev_name2roles(bdev_name);
+		if (rc < 0) {
+			D_ERROR("Failed to get role from bdev name '%s', "DF_RC"\n", bdev_name,
+				DP_RC(rc));
+			return rc;
+		}
+
+		rc = create_bio_bdev(ctxt, bdev_name, rc, NULL);
 		if (rc)
 			return rc;
 	}
@@ -986,15 +1000,13 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			return -DER_EXIST;
 		}
 
-		D_INFO("Resetting LED on dev " DF_UUID " \n", DP_UUID(d_bdev->bb_uuid));
+		/* A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible */
 		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-		if (rc != 0) {
-			if (rc != -DER_NOSYS) {
-				D_ERROR("Reset LED on device:" DF_UUID " failed, " DF_RC "\n",
-					DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
-				return rc;
-			}
+		if ((rc != 0) && (rc != -DER_NOTSUPPORTED)) {
+			DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+				 DP_UUID(d_bdev->bb_uuid));
+			return rc;
 		}
 	}
 
@@ -1124,22 +1136,6 @@ get_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 	return bb;
 }
 
-static inline unsigned int
-dev_type2role(enum smd_dev_type st)
-{
-	switch (st) {
-	case SMD_DEV_TYPE_DATA:
-		return NVME_ROLE_DATA;
-	case SMD_DEV_TYPE_META:
-		return NVME_ROLE_META;
-	case SMD_DEV_TYPE_WAL:
-		return NVME_ROLE_WAL;
-	default:
-		D_ASSERT(0);
-		return NVME_ROLE_DATA;
-	}
-}
-
 static inline bool
 is_role_match(unsigned int roles, unsigned int req_role)
 {
@@ -1158,7 +1154,7 @@ bio_nvme_configured(enum smd_dev_type type)
 	if (type >= SMD_DEV_TYPE_MAX)
 		return true;
 
-	return is_role_match(nvme_glb.bd_nvme_roles, dev_type2role(type));
+	return is_role_match(nvme_glb.bd_nvme_roles, smd_dev_type2role(type));
 }
 
 static struct bio_bdev *
@@ -1193,7 +1189,7 @@ choose_device(int tgt_id, enum smd_dev_type st)
 			d_bdev->bb_tgt_cnt_init = 1;
 		}
 		/* Choose the least used one */
-		if (is_role_match(d_bdev->bb_roles, dev_type2role(st)) &&
+		if (is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)) &&
 		    d_bdev->bb_tgt_cnt < lowest_tgt_cnt) {
 			lowest_tgt_cnt = d_bdev->bb_tgt_cnt;
 			chosen_bdev = d_bdev;
@@ -1225,7 +1221,7 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 	int			rc;
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
-		if (!is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 
 		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st);
@@ -1257,7 +1253,7 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 
 		D_DEBUG(DB_MGMT, "Successfully mapped dev "DF_UUID"/%d/%u to tgt %d role %u\n",
 			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_tgt_cnt, d_bdev->bb_roles,
-			tgt_id, dev_type2role(st));
+			tgt_id, smd_dev_type2role(st));
 
 		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 			break;
@@ -1266,7 +1262,7 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 	return assigned ? 0 : -DER_INVAL;
 error:
 	for (st = SMD_DEV_TYPE_DATA; st < failed_st; st++) {
-		if (!is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 		/* TODO Error cleanup by smd_dev_del_tgt() */
 	}
@@ -1335,7 +1331,6 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	unsigned int		 dev_state;
 	int			 rc;
 
-	D_ASSERT(!ctxt->bxc_ready);
 	D_ASSERT(ctxt->bxc_xs_blobstores[st] == NULL);
 
 	if (d_list_empty(&nvme_glb.bd_bdevs)) {
@@ -1458,7 +1453,6 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (ctxt == NULL)
 		return;
 
-	ctxt->bxc_ready = 0;
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = ctxt->bxc_xs_blobstores[st];
 		if (bxb == NULL)
@@ -1668,7 +1662,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		if (st == SMD_DEV_TYPE_DATA && tgt_id == BIO_SYS_TGT_ID)
 			continue;
 		/* Share the same device/blobstore used by previous type */
-		if (d_bdev && is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+		if (d_bdev && is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
 		if (st != SMD_DEV_TYPE_DATA && !bio_nvme_configured(SMD_DEV_TYPE_META))
@@ -1692,8 +1686,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	ctxt->bxc_ready = 1;
-
 out:
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
 	if (rc != 0)
@@ -1771,6 +1763,8 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_blobstore	*bbs;
 	struct bio_bdev		*d_bdev, *tmp;
 	struct spdk_bdev	*bdev;
+	const char		*bdev_name;
+	unsigned int             roles       = 0;
 	static uint64_t		 scan_period = NVME_MONITOR_PERIOD;
 	int			 rc;
 
@@ -1778,28 +1772,36 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 		return;
 
 	/* Iterate SPDK bdevs to detect hot plugged device */
-	for (bdev = spdk_bdev_first(); bdev != NULL;
-	     bdev = spdk_bdev_next(bdev)) {
+	for (bdev = spdk_bdev_first(); bdev != NULL; bdev = spdk_bdev_next(bdev)) {
 		if (nvme_glb.bd_bdev_class != get_bdev_type(bdev))
 			continue;
 
-		d_bdev = lookup_dev_by_name(spdk_bdev_get_name(bdev));
+		bdev_name = spdk_bdev_get_name(bdev);
+
+		d_bdev = lookup_dev_by_name(bdev_name);
 		if (d_bdev != NULL)
 			continue;
 
-		D_INFO("Detected hot plugged device %s\n",
-		       spdk_bdev_get_name(bdev));
 		/* Print a console message */
-		D_PRINT("Detected hot plugged device %s\n",
-			spdk_bdev_get_name(bdev));
+		D_PRINT("Detected hot plugged device %s\n", bdev_name);
+		ras_notify_eventf(RAS_DEVICE_PLUGGED, RAS_TYPE_INFO,
+				  RAS_SEV_NOTICE, NULL, NULL, NULL,
+				  NULL, NULL, NULL, NULL, NULL, NULL,
+				  "Detected hot plugged device: %s\n", bdev_name);
 
 		scan_period = 0;
 
-		/* don't support hot plug for sys device yet */
-		rc = create_bio_bdev(ctxt, spdk_bdev_get_name(bdev), &d_bdev);
+		/*
+		 * Assign default roles based on operating mode (MD-on-SSD or PMem), roles will
+		 * subsequently be updated based on "old" device on "replace".
+		 */
+
+		if (bio_nvme_configured(SMD_DEV_TYPE_META))
+			roles = NVME_ROLE_DATA;
+
+		rc = create_bio_bdev(ctxt, bdev_name, roles, &d_bdev);
 		if (rc) {
-			D_ERROR("Failed to init hot plugged device %s\n",
-				spdk_bdev_get_name(bdev));
+			D_ERROR("Failed to init hot plugged device %s\n", bdev_name);
 			break;
 		}
 
@@ -1862,20 +1864,27 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_bdev         *d_bdev;
 	int			 rc;
 
+	if (!bio_vmd_enabled)
+		return;
+
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
-			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for "DF_UUID"\n",
-				DP_UUID(d_bdev->bb_uuid));
-
-			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
+			/**
+			 * LED will be reset to faulty or normal state based on SSDs bio_bdevs.
+			 * A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible.
+			 */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-			if (rc != 0)
-				/* DER_NOSYS indicates that VMD-LED control is not enabled */
-				DL_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR, rc,
-					  "Reset LED on device:" DF_UUID " failed",
-					  DP_UUID(d_bdev->bb_uuid));
+			if (rc != 0) {
+				if (rc != -DER_NOTSUPPORTED)
+					DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+						 DP_UUID(d_bdev->bb_uuid));
+				continue;
+			}
+
+			D_DEBUG(DB_MGMT, "Cleared LED QUICK_BLINK state for " DF_UUID "\n",
+				DP_UUID(d_bdev->bb_uuid));
 		}
 	}
 }
@@ -1913,17 +1922,14 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	if (!is_server_started())
 		return 0;
 
-	/*
-	 * Query and print the SPDK device health stats for only the device
-	 * owner xstream.
-	 */
+	/* Monitor device health on the device owner xstream */
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = ctxt->bxc_xs_blobstores[st];
-		if (bxb && bxb->bxb_blobstore &&
-		    is_bbs_owner(ctxt, bxb->bxb_blobstore))
+		if (bxb && bxb->bxb_blobstore && is_bbs_owner(ctxt, bxb->bxb_blobstore))
 			bio_bs_monitor(ctxt, st, now);
 	}
 
+	/* Detect new plugged device, manage LED on init xstream */
 	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);
 		bio_led_event_monitor(ctxt, now);

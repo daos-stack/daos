@@ -7,8 +7,8 @@
 
 import os
 
-from general_utils import check_file_exists, pcmd
 from apricot import TestWithServers
+from general_utils import check_file_exists, pcmd
 
 
 class SuperBlockVersioning(TestWithServers):

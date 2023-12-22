@@ -458,7 +458,7 @@ crt_req_dst_tag_get(crt_rpc_t *req, uint32_t *tag);
  *                             on failure
  */
 int
-crt_req_src_timeout_get(crt_rpc_t *rpc, uint16_t *timeout);
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout);
 
 /**
  * Return reply buffer
@@ -2246,6 +2246,16 @@ crt_quiet_error(int err)
 {
 	return err == -DER_GRPVER;
 }
+
+/**
+ * Get the proto version of an RPC request.
+ *
+ * \param[in] req              pointer to RPC request
+ *
+ * \return                     positive version or negative error.
+ */
+int
+crt_req_get_proto_ver(crt_rpc_t *req);
 
 /** @}
  */

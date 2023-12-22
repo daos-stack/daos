@@ -55,6 +55,19 @@ d_rand()
 	return result;
 }
 
+/* Return a random integer in [0, n), where n must be positive. */
+long int
+d_randn(long int n)
+{
+	long int i;
+
+	D_ASSERT(n > 0);
+	i = ((double)d_rand() / D_RAND_MAX) * n;
+	if (i >= n)
+		i = 0;
+	return i;
+}
+
 /* Developer/debug version, poison memory on free.
  * This tries several ways to access the buffer size however none of them are perfect so for now
  * this is no in release builds.
@@ -440,26 +453,27 @@ d_rank_list_alloc(uint32_t size)
 	return rank_list;
 }
 
-d_rank_list_t *
-d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
+int
+d_rank_list_resize(d_rank_list_t *ptr, uint32_t size)
 {
 	d_rank_t *new_rl_ranks;
 
 	if (ptr == NULL)
-		return d_rank_list_alloc(size);
+		return -DER_INVAL;
 	if (size == 0) {
-		d_rank_list_free(ptr);
-		return NULL;
+		D_FREE(ptr->rl_ranks);
+		ptr->rl_nr = 0;
+		return 0;
 	}
 	D_REALLOC_ARRAY(new_rl_ranks, ptr->rl_ranks, ptr->rl_nr, size);
 	if (new_rl_ranks != NULL) {
 		ptr->rl_ranks = new_rl_ranks;
 		ptr->rl_nr = size;
 	} else {
-		ptr = NULL;
+		return -DER_NOMEM;
 	}
 
-	return ptr;
+	return 0;
 }
 
 void
@@ -482,12 +496,11 @@ d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src)
 	}
 
 	if (dst->rl_nr != src->rl_nr) {
-		dst = d_rank_list_realloc(dst, src->rl_nr);
-		if (dst == NULL) {
-			D_ERROR("d_rank_list_realloc() failed.\n");
-			D_GOTO(out, rc = -DER_NOMEM);
+		rc = d_rank_list_resize(dst, src->rl_nr);
+		if (rc != 0) {
+			D_ERROR("d_rank_list_resize() failed.\n");
+			D_GOTO(out, rc);
 		}
-		dst->rl_nr = src->rl_nr;
 	}
 
 	memcpy(dst->rl_ranks, src->rl_ranks, dst->rl_nr * sizeof(d_rank_t));
@@ -585,10 +598,10 @@ d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 	D_ASSERT(idx <= new_num);
 	num_bytes = (new_num - idx) * sizeof(d_rank_t);
 	memmove(dest, src, num_bytes);
-	rank_list = d_rank_list_realloc(rank_list, new_num);
-	if (rank_list == NULL) {
-		D_ERROR("d_rank_list_realloc() failed.\n");
-		D_GOTO(out, rc = -DER_NOMEM);
+	rc = d_rank_list_resize(rank_list, new_num);
+	if (rc != 0) {
+		D_ERROR("d_rank_list_resize() failed.\n");
+		D_GOTO(out, rc);
 	}
 out:
 	return rc;
@@ -597,16 +610,15 @@ out:
 int
 d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 {
-	uint32_t		 old_num = rank_list->rl_nr;
-	d_rank_list_t		*new_rank_list;
-	int			 rc = 0;
+	uint32_t	old_num = rank_list->rl_nr;
+	int		rc = 0;
 
-	new_rank_list = d_rank_list_realloc(rank_list, old_num + 1);
-	if (new_rank_list == NULL) {
-		D_ERROR("d_rank_list_realloc() failed.\n");
-		D_GOTO(out, rc = -DER_NOMEM);
+	rc = d_rank_list_resize(rank_list, old_num + 1);
+	if (rc != 0) {
+		D_ERROR("d_rank_list_resize() failed.\n");
+		D_GOTO(out, rc);
 	}
-	new_rank_list->rl_ranks[old_num] = rank;
+	rank_list->rl_ranks[old_num] = rank;
 
 out:
 	return rc;

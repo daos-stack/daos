@@ -7,9 +7,8 @@ import os
 from getpass import getuser
 
 from ClusterShell.NodeSet import NodeSet
-
-from run_utils import run_remote, command_as_user
 from dfuse_test_base import DfuseTestBase
+from run_utils import command_as_user, run_remote
 
 
 class DfuseMUMount(DfuseTestBase):

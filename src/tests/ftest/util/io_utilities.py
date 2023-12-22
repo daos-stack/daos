@@ -3,16 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import os
 import random
 import shutil
 import tempfile
 import time
+from logging import getLogger
 
+from general_utils import DaosTestError, get_random_bytes
 from pydaos.raw import DaosApiError
-
-from general_utils import get_random_bytes, DaosTestError
 
 
 class DirTree():

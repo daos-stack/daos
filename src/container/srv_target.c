@@ -629,13 +629,18 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	rc = ABT_cond_create(&cont->sc_scrub_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		goto out_mutex;
+		goto out_resync_cond;
+	}
+	rc = ABT_cond_create(&cont->sc_rebuild_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_scrub_cond;
 	}
 
 	cont->sc_pool = ds_pool_child_lookup(po_uuid);
 	if (cont->sc_pool == NULL) {
 		rc = -DER_NO_HDL;
-		goto out_cond;
+		goto out_rebuild_cond;
 	}
 
 	rc = vos_cont_open(cont->sc_pool->spc_hdl, co_uuid, &cont->sc_hdl);
@@ -661,7 +666,11 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 
 out_pool:
 	ds_pool_child_put(cont->sc_pool);
-out_cond:
+out_rebuild_cond:
+	ABT_cond_free(&cont->sc_rebuild_cond);
+out_scrub_cond:
+	ABT_cond_free(&cont->sc_scrub_cond);
+out_resync_cond:
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 out_mutex:
 	ABT_mutex_free(&cont->sc_mutex);
@@ -688,6 +697,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_cond_free(&cont->sc_scrub_cond);
+	ABT_cond_free(&cont->sc_rebuild_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
 }
@@ -742,6 +752,12 @@ ds_cont_child_cache_destroy(struct daos_lru_cache *cache)
 	daos_lru_cache_destroy(cache);
 }
 
+static void
+cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
+{
+	daos_lru_ref_release(cache, &cont->sc_list);
+}
+
 /*
  * If create == false, then this is assumed to be a pure lookup. In this case,
  * -DER_NONEXIST is returned if the ds_cont_child object does not exist.
@@ -776,12 +792,6 @@ cont_child_lookup(struct daos_lru_cache *cache, const uuid_t co_uuid,
 	return 0;
 }
 
-static void
-cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
-{
-	daos_lru_ref_release(cache, &cont->sc_list);
-}
-
 static inline bool
 cont_child_started(struct ds_cont_child *cont_child)
 {
@@ -807,13 +817,13 @@ cont_child_stop(struct ds_cont_child *cont_child)
 	/* Some ds_cont_child will only created by ds_cont_child_lookup().
 	 * never be started at all
 	 */
+	cont_child->sc_stopping = 1;
 	if (cont_child_started(cont_child)) {
 		D_DEBUG(DB_MD, DF_CONT"[%d]: Stopping container\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid,
 				cont_child->sc_uuid),
 			dss_get_module_info()->dmi_tgt_id);
 
-		cont_child->sc_stopping = 1;
 		d_list_del_init(&cont_child->sc_link);
 
 		dtx_cont_deregister(cont_child);
@@ -1154,6 +1164,7 @@ cont_child_destroy_one(void *vin)
 				       &cont);
 		if (rc == -DER_NONEXIST)
 			break;
+
 		if (rc != 0)
 			D_GOTO(out_pool, rc);
 
@@ -1178,7 +1189,7 @@ cont_child_destroy_one(void *vin)
 		ABT_mutex_unlock(cont->sc_mutex);
 
 		/* Give chance to DTX reindex ULT for exit. */
-		if (unlikely(cont->sc_dtx_reindex))
+		while (unlikely(cont->sc_dtx_reindex))
 			ABT_thread_yield();
 
 		/* Make sure checksum scrubbing has stopped */
@@ -1187,6 +1198,12 @@ cont_child_destroy_one(void *vin)
 			sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
 			ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
 		}
+		ABT_mutex_unlock(cont->sc_mutex);
+
+		/* Make sure rebuild has stopped */
+		ABT_mutex_lock(cont->sc_mutex);
+		if (cont->sc_rebuilding)
+			ABT_cond_wait(cont->sc_rebuild_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
 
 		retry_cnt++;
@@ -1288,9 +1305,20 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 		     struct ds_cont_child **ds_cont)
 {
 	struct dsm_tls		*tls = dsm_tls_get();
+	int			 rc;
 
-	return cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
-				 true /* create */, ds_cont);
+	rc = cont_child_lookup(tls->dt_cont_cache, cont_uuid, pool_uuid,
+			       true /* create */, ds_cont);
+	if (rc != 0)
+		return rc;
+
+	if ((*ds_cont)->sc_stopping) {
+		cont_child_put(tls->dt_cont_cache, *ds_cont);
+		*ds_cont = NULL;
+		return -DER_SHUTDOWN;
+	}
+
+	return 0;
 }
 
 /**
@@ -1530,7 +1558,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		if (ddra == NULL)
 			D_GOTO(err_dtx, rc = -DER_NOMEM);
 
-		ddra->pool = ds_pool_child_get(hdl->sch_cont->sc_pool);
+		ddra->pool = ds_pool_child_lookup(hdl->sch_cont->sc_pool->spc_uuid);
 		uuid_copy(ddra->co_uuid, cont_uuid);
 		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
 				    0, 0, NULL);
@@ -2351,9 +2379,19 @@ ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx)
 static void
 cont_ec_eph_destroy(struct cont_ec_eph *ec_eph)
 {
+	D_ASSERT(ec_eph->ce_ref == 0);
 	d_list_del(&ec_eph->ce_list);
 	D_FREE(ec_eph->ce_ephs);
 	D_FREE(ec_eph);
+}
+
+void
+ds_cont_ec_eph_free(struct ds_pool *pool)
+{
+	struct cont_ec_eph	*ec_eph, *tmp;
+
+	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list, ce_list)
+		cont_ec_eph_destroy(ec_eph);
 }
 
 /**
@@ -2446,13 +2484,8 @@ yield:
 
 		sched_req_sleep(pool->sp_ec_ephs_req, EC_TGT_AGG_INTV);
 	}
-
 out:
-	D_INFO(DF_UUID" stop tgt ec aggregation\n", DP_UUID(pool->sp_uuid));
-
-	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list,
-				   ce_list)
-		cont_ec_eph_destroy(ec_eph);
+	D_INFO(DF_UUID" stop tgt ec query eph ULT\n", DP_UUID(pool->sp_uuid));
 }
 
 struct cont_prop_set_arg {

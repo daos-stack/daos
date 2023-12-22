@@ -348,6 +348,7 @@ func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanRespo
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover nvme")
 	}
+	sb.log.Debugf("spdk backend scan (bindings discover call) resp: %+v", foundDevs)
 
 	outDevs, err := groomDiscoveredBdevs(needDevs, foundDevs, req.VMDEnabled)
 	if err != nil {

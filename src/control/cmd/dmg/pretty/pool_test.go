@@ -112,7 +112,7 @@ Rebuild busy, 42 objs, 21 recs
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
-- Enabled targets: 0-2
+- Enabled ranks: 0-2
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
@@ -157,7 +157,7 @@ Rebuild busy, 42 objs, 21 recs
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
-- Disabled targets: 0-1,3
+- Disabled ranks: 0-1,3
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
@@ -202,7 +202,7 @@ Rebuild busy, 42 objs, 21 recs
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
-- Disabled targets: 0-1,3
+- Disabled ranks: 0-1,3
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
@@ -982,10 +982,8 @@ func TestPretty_PrintListPoolsResponse(t *testing.T) {
 		expPrintStr string
 	}{
 		"empty response": {
-			resp: &control.ListPoolsResp{},
-			expPrintStr: `
-no pools in system
-`,
+			resp:        &control.ListPoolsResp{},
+			expPrintStr: msgNoPools + "\n",
 		},
 		"one pool; no usage": {
 			resp: &control.ListPoolsResp{
@@ -1182,11 +1180,9 @@ one  6.0 TB Ready 83%  12%       0/16
 `,
 		},
 		"verbose, empty response": {
-			resp:    &control.ListPoolsResp{},
-			verbose: true,
-			expPrintStr: `
-no pools in system
-`,
+			resp:        &control.ListPoolsResp{},
+			verbose:     true,
+			expPrintStr: msgNoPools + "\n",
 		},
 		"verbose; zero svc replicas": {
 			resp: &control.ListPoolsResp{
