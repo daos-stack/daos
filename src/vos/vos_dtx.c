@@ -138,6 +138,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	dsp->dsp_xid = DAE_XID(dae);
 	dsp->dsp_oid = DAE_OID(dae);
 	dsp->dsp_epoch = DAE_EPOCH(dae);
+	dsp->dsp_version = DAE_VER(dae);
 	dsp->dsp_dkey_hash = DAE_DKEY_HASH(dae);
 
 	mbs = (struct dtx_memberships *)(dsp + 1);
@@ -1636,7 +1637,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	int				 rc = 0;
 
 	if (!dth->dth_active)
-		return 0;
+		D_WARN("AAAAAAAA: hit empty transaction "DF_DTI"\n", DP_DTI(&dth->dth_xid));
 
 	cont = vos_hdl2cont(dth->dth_coh);
 	D_ASSERT(cont != NULL);
@@ -1770,6 +1771,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 static struct dtx_memberships *
 vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 {
+	struct dtx_handle	*dth = dae->dae_dth;
 	struct dtx_memberships	*tmp;
 	size_t			 size;
 
@@ -1783,7 +1785,11 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 	tmp->dm_data_size = DAE_MBS_DSIZE(dae);
 	tmp->dm_flags = DAE_MBS_FLAGS(dae);
 	tmp->dm_dte_flags = DAE_FLAGS(dae);
-	if (tmp->dm_data_size <= sizeof(DAE_MBS_INLINE(dae)))
+
+	/* The DTX is not prepared yet, copy the MBS from DTX handle. */
+	if (dth != NULL)
+		memcpy(tmp->dm_data, dth->dth_mbs->dm_data, tmp->dm_data_size);
+	else if (tmp->dm_data_size <= sizeof(DAE_MBS_INLINE(dae)))
 		memcpy(tmp->dm_data, DAE_MBS_INLINE(dae), tmp->dm_data_size);
 	else
 		memcpy(tmp->dm_data, umem_off2ptr(umm, DAE_MBS_OFF(dae)),
@@ -1905,10 +1911,12 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 }
 
 int
-vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs)
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
+		 struct dtx_memberships **mbs)
 {
 	struct vos_container	*cont;
 	struct dtx_memberships	*tmp;
+	struct vos_dtx_act_ent	*dae;
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
 	int			 rc;
@@ -1920,14 +1928,24 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships *
 	d_iov_set(&riov, NULL, 0);
 	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
 	if (rc == 0) {
-		tmp = vos_dtx_pack_mbs(vos_cont2umm(cont), riov.iov_buf);
-		if (tmp == NULL)
+		dae = riov.iov_buf;
+		tmp = vos_dtx_pack_mbs(vos_cont2umm(cont), dae);
+		if (tmp == NULL) {
 			rc = -DER_NOMEM;
-		else
+		} else {
+			if (oid != NULL)
+				*oid = DAE_OID(dae);
 			*mbs = tmp;
+		}
+	} else if (rc == -DER_NONEXIST) {
+		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
+		if (rc == 0)
+			rc = 1;
+		else if (rc == -DER_NONEXIST && !cont->vc_cmt_dtx_indexed)
+			rc = -DER_INPROGRESS;
 	}
 
-	if (rc != 0)
+	if (rc < 0)
 		D_ERROR("Failed to load mbs for "DF_DTI": "DF_RC"\n", DP_DTI(dti), DP_RC(rc));
 
 	return rc;

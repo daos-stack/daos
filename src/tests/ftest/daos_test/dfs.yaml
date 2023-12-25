@@ -21,7 +21,9 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
+      log_mask: DEBUG
       env_vars:
+        - FI_LOG_LEVEL=debug
         - D_LOG_FILE_APPEND_PID=1
       storage:
         0:
@@ -34,7 +36,9 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
+      log_mask: DEBUG
       env_vars:
+        - FI_LOG_LEVEL=debug
         - D_LOG_FILE_APPEND_PID=1
       storage:
         0:
@@ -68,5 +72,5 @@ daos_tests:
     test_daos_dfs_sys: 1
   test_log_mask:
     test_daos_dfs_unit: INFO
-    test_daos_dfs_parallel: INFO,IO=DEBUG
+    test_daos_dfs_parallel: DEBUG
     test_daos_dfs_sys: INFO
