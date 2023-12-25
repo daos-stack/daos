@@ -922,7 +922,7 @@ Errors:
 
 Hosts     SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
 -----     --------- -------- -------- ---------- --------- --------- 
-host[1-2] 0 B       0 B      NA       0 B        0 B       NA        
+host[1-2] 0 B       0 B      N/A      0 B        0 B       N/A       
 `,
 		},
 		"no storage": {
@@ -939,7 +939,7 @@ host[1-2] 0 B       0 B      NA       0 B        0 B       NA
 			expPrintStr: `
 Hosts SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used 
 ----- --------- -------- -------- ---------- --------- --------- 
-host1 0 B       0 B      NA       0 B        0 B       NA        
+host1 0 B       0 B      N/A      0 B        0 B       N/A       
 `,
 		},
 		"single host with space usage": {

@@ -875,8 +875,11 @@ func (obs *OptionBits) fromStrings(optStr2Flag optFlagMap, opts ...string) error
 		if len(opt) == 0 {
 			continue
 		}
+		if strings.ToLower(opt) == bdevRoleNoneName {
+			break
+		}
 		flag, exists := optStr2Flag[opt]
-		if !exists && opt != bdevRoleNoneName {
+		if !exists {
 			return FaultBdevConfigOptFlagUnknown(opt, optStr2Flag.keys()...)
 		}
 		*obs |= flag

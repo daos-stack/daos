@@ -124,7 +124,7 @@ func (nds *NvmeDevState) UnmarshalJSON(data []byte) error {
 // LedState represents the LED state of device.
 type LedState int32
 
-// LedState values representing the VMD LED state (see include/spdk/vmd.h).
+// LedState values representing the VMD LED state (see src/proto/ctl/smd.proto).
 const (
 	LedStateUnknown LedState = iota
 	LedStateIdentify
