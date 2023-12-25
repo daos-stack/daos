@@ -127,12 +127,12 @@ class NvmeHealth(ServerFillUp):
                             if device['uuid'] != uuid:
                                 error_msg = '  <== ERROR: UNEXPECTED DEVICE UUID'
                                 errors += 1
-                            elif device['dev_state'].lower() != 'normal':
+                            elif device['ctrlr']['dev_state'].lower() != 'normal':
                                 error_msg = '  <== ERROR: STATE NOT NORMAL'
                                 errors += 1
                             self.log.info(
                                 '  health is %s for %s%s',
-                                device['dev_state'], device['uuid'], error_msg)
+                                device['ctrlr']['dev_state'], device['uuid'], error_msg)
                         except KeyError as error:
                             self.fail(
                                 "Error parsing dmg.storage_query_device_health() output: {}".format(

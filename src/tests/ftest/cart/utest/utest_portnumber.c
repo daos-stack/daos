@@ -41,7 +41,7 @@
 
 #include <cmocka.h>
 #include <cart/api.h>
-#include "gurt/debug.h"
+#include <gurt/debug.h>
 
 #define CHILD1_INIT_ERR			10
 #define CHILD1_CONTEXT_DESTROY_ERR	11
