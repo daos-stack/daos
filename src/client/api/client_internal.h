@@ -118,7 +118,7 @@ daos_eqx2eq(struct daos_eq_private *eqx)
  * next test case due to dirty ev_thpriv status.
  */
 int
-daos_event_priv_reset(void);
+daos_event_priv_reset(bool force);
 
 /**
  * Retrieve the private per-thread event

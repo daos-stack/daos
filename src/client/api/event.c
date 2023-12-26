@@ -1057,13 +1057,8 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 	return rc;
 }
 
-/**
- * Unlink events from various list, parent_list, child list,
- * and event queue hash list, and destroy all of the child
- * events
- **/
-int
-daos_event_fini(struct daos_event *ev)
+static int
+daos_event_fini_internal(struct daos_event *ev, bool force)
 {
 	struct daos_event_private	*evx = daos_ev2evx(ev);
 	struct daos_eq_private		*eqx = NULL;
@@ -1080,7 +1075,7 @@ daos_event_fini(struct daos_event *ev)
 		D_MUTEX_LOCK(&eqx->eqx_lock);
 	}
 
-	if (evx->evx_status == DAOS_EVS_RUNNING) {
+	if (evx->evx_status == DAOS_EVS_RUNNING && !force) {
 		rc = -DER_BUSY;
 		goto out;
 	}
@@ -1095,14 +1090,9 @@ daos_event_fini(struct daos_event *ev)
 
 		tmp = d_list_entry(evx->evx_child.next,
 				   struct daos_event_private, evx_link);
-		D_ASSERTF(tmp->evx_status == DAOS_EVS_READY ||
-			  tmp->evx_status == DAOS_EVS_COMPLETED ||
-			  tmp->evx_status == DAOS_EVS_ABORTED,
-			 "EV %p status: %d\n", tmp, tmp->evx_status);
-
 		if (tmp->evx_status != DAOS_EVS_READY &&
 		    tmp->evx_status != DAOS_EVS_COMPLETED &&
-		    tmp->evx_status != DAOS_EVS_ABORTED) {
+		    tmp->evx_status != DAOS_EVS_ABORTED && !force) {
 			D_ERROR("Child event %p launched: %d\n", daos_evx2ev(tmp), tmp->evx_status);
 			rc = -DER_INVAL;
 			goto out;
@@ -1111,7 +1101,7 @@ daos_event_fini(struct daos_event *ev)
 		if (eqx != NULL)
 			D_MUTEX_UNLOCK(&eqx->eqx_lock);
 
-		rc = daos_event_fini(daos_evx2ev(tmp));
+		rc = daos_event_fini_internal(daos_evx2ev(tmp), force);
 		if (rc < 0) {
 			D_ERROR("Failed to finalize child event "DF_RC"\n", DP_RC(rc));
 			goto out_unlocked;
@@ -1119,9 +1109,6 @@ daos_event_fini(struct daos_event *ev)
 
 		if (eqx != NULL)
 			D_MUTEX_LOCK(&eqx->eqx_lock);
-
-		tmp->evx_status = DAOS_EVS_READY;
-		tmp->evx_parent = NULL;
 	}
 
 	/* If it is a child event, delete it from parent list */
@@ -1132,7 +1119,7 @@ daos_event_fini(struct daos_event *ev)
 			goto out;
 		}
 
-		if (evx->evx_parent->evx_status != DAOS_EVS_READY) {
+		if (evx->evx_parent->evx_status != DAOS_EVS_READY && !force) {
 			D_ERROR("Parent event not init or launched: %d\n",
 				evx->evx_parent->evx_status);
 			rc = -DER_INVAL;
@@ -1142,13 +1129,14 @@ daos_event_fini(struct daos_event *ev)
 		d_list_del_init(&evx->evx_link);
 		evx->evx_status = DAOS_EVS_READY;
 		evx->evx_parent = NULL;
-		evx->evx_ctx = NULL;
 	}
 
 	/* Remove from the evx_link */
 	if (!d_list_empty(&evx->evx_link)) {
 		d_list_del(&evx->evx_link);
-		D_ASSERT(evx->evx_status != DAOS_EVS_RUNNING);
+
+		if (!force)
+			D_ASSERT(evx->evx_status != DAOS_EVS_RUNNING);
 
 		if (evx->evx_status == DAOS_EVS_COMPLETED && eq != NULL) {
 			D_ASSERTF(eq->eq_n_comp > 0, "eq %p\n", eq);
@@ -1164,6 +1152,17 @@ out_unlocked:
 	if (eq != NULL)
 		daos_eq_putref(eqx);
 	return rc;
+}
+
+/**
+ * Unlink events from various list, parent_list, child list,
+ * and event queue hash list, and destroy all of the child
+ * events
+ **/
+int
+daos_event_fini(struct daos_event *ev)
+{
+	return daos_event_fini_internal(ev, false);
 }
 
 struct daos_event *
@@ -1222,12 +1221,12 @@ daos_event_abort(struct daos_event *ev)
 }
 
 int
-daos_event_priv_reset(void)
+daos_event_priv_reset(bool force)
 {
 	int rc;
 
 	if (ev_thpriv_is_init) {
-		rc = daos_event_fini(&ev_thpriv);
+		rc = daos_event_fini_internal(&ev_thpriv, force);
 		if (rc) {
 			D_ERROR("Failed to finalize thread private event "DF_RC"\n", DP_RC(rc));
 			return rc;
@@ -1310,7 +1309,7 @@ daos_event_priv_wait()
 	/** on success, the event should have been reset to ready stat by the progress cb */
 	if (rc == 0)
 		D_ASSERT(evx->evx_status == DAOS_EVS_READY);
-	rc2 = daos_event_priv_reset();
+	rc2 = daos_event_priv_reset(false);
 	if (rc2) {
 		if (rc == 0)
 			rc = rc2;

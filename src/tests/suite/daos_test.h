@@ -66,7 +66,7 @@ extern char *test_io_dir;
 /* the IO conf file*/
 extern const char *test_io_conf;
 
-extern int daos_event_priv_reset(void);
+extern int daos_event_priv_reset(bool force);
 #define TEST_RANKS_MAX_NUM	(13)
 #define DAOS_SERVER_CONF	"/etc/daos/daos_server.yml"
 #define DAOS_SERVER_CONF_LENGTH		512
@@ -306,7 +306,7 @@ async_overlap(void **state)
 static inline int
 test_case_teardown(void **state)
 {
-	assert_rc_equal(daos_event_priv_reset(), 0);
+	assert_rc_equal(daos_event_priv_reset(true), 0);
 	return 0;
 }
 
