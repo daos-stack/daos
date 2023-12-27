@@ -368,7 +368,7 @@ pool_child_start(struct ds_pool_child *child)
 	D_FREE(path);
 
 	if (rc != 0) {
-		if (!engine_in_check() || rc != -DER_NONEXIST) {
+		if (rc != -DER_NONEXIST) {
 			D_ERROR(DF_UUID": Open VOS pool failed. "DF_RC"\n",
 				DP_UUID(child->spc_uuid), DP_RC(rc));
 			goto out;
@@ -973,6 +973,8 @@ ds_pool_chk_post_one(void *varg)
 	child = ds_pool_child_lookup(arg->pla_uuid);
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
+
+	D_ASSERT(*child->spc_state == POOL_CHILD_STARTED);
 
 	if (unlikely(child->spc_no_storage))
 		D_GOTO(out, rc = 0);
