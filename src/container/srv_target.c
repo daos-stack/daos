@@ -239,6 +239,14 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
+	/*
+	 * EC aggregation must proceed no matter if the target is busy or not,
+	 * otherwise, the global EC boundary won't be bumped promptly, and that
+	 * will impact VOS aggregation on every target.
+	 */
+	if (!vos_agg)
+		return true;
+
 	if (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy() &&
 	    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
 		D_DEBUG(DB_EPC, "Pool reclaim strategy is lazy, service is "
