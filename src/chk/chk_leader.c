@@ -2015,6 +2015,7 @@ chk_leader_pool_ult(void *arg)
 		if (DAOS_FAIL_CHECK(DAOS_CHK_LEADER_BLOCK)) {
 			while (!(chk_leader_pool_need_stop(cpr, &rc)))
 				dss_sleep(300);
+			goto exit;
 		}
 	}
 
