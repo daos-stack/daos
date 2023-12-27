@@ -170,6 +170,37 @@ cr_dump_pools(uint32_t pool_nr, uuid_t uuids[])
 /* dmg command */
 
 static inline int
+cr_debug_set_params_internal(test_arg_t *arg, uint64_t fail_loc, bool nowait)
+{
+	int	rc;
+	int	i = 0;
+
+	for (i = 0; i < 10; i++) {
+		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, fail_loc, 0, NULL);
+		if (rc == 0 || rc != -DER_TIMEDOUT || nowait)
+			break;
+
+		sleep(2);
+	}
+
+	print_message("CR: set fail_loc as " DF_X64 ": " DF_RC "\n", fail_loc, DP_RC(rc));
+
+	return rc;
+}
+
+static inline int
+cr_debug_set_params(test_arg_t *arg, uint64_t fail_loc)
+{
+	return cr_debug_set_params_internal(arg, fail_loc, false);
+}
+
+static inline int
+cr_debug_set_params_nowait(test_arg_t *arg, uint64_t fail_loc)
+{
+	return cr_debug_set_params_internal(arg, fail_loc, true);
+}
+
+static inline int
 cr_fault_inject(uuid_t uuid, bool mgmt, const char *fault)
 {
 	int	rc;
@@ -205,7 +236,7 @@ cr_system_stop(bool force)
 }
 
 static inline int
-cr_rank_reint(uint32_t rank)
+cr_rank_reint(uint32_t rank, bool start)
 {
 	int	rc;
 
@@ -214,22 +245,61 @@ cr_rank_reint(uint32_t rank)
 	if (rc != 0)
 		return rc;
 
-	print_message("CR: starting the rank %u ...\n", rank);
-	return dmg_system_start_rank(dmg_config_file, rank);
+	if (start) {
+		print_message("CR: starting the rank %u ...\n", rank);
+		rc = dmg_system_start_rank(dmg_config_file, rank);
+	}
+
+	return rc;
 }
 
 static inline int
-cr_rank_exclude(uint32_t rank)
+cr_rank_exclude(test_arg_t *arg, struct test_pool *pool, int *rank)
 {
+	int	count;
 	int	rc;
+	int	i;
+	int	j;
 
-	print_message("CR: stopping the rank %u ...\n", rank);
-	rc = dmg_system_stop_rank(dmg_config_file, rank, true);
+	D_ASSERT(pool->svc != NULL);
+
+	/*
+	 * The check leader (elected by control plane, usually on rank 0) and
+	 * PS leader maybe on different ranks, do not exclude such two ranks.
+	 */
+	count = pool->svc->rl_nr + 2;
+	if (!test_runable(arg, count)) {
+		print_message("Need enough targets (%u/%u vs %d) for test, skip\n",
+			      arg->srv_nnodes, arg->srv_ntgts, count);
+		return 1;
+	}
+
+	for (i = 1, *rank = -1; i < count && *rank < 0; i++) {
+		for (j = 0; j < pool->svc->rl_nr; j++) {
+			if (pool->svc->rl_ranks[j] == i)
+				break;
+		}
+
+		if (j >= pool->svc->rl_nr)
+			*rank = i;
+	}
+
+	D_ASSERT(*rank >= 0);
+
+	rc = cr_debug_set_params(arg, DAOS_CHK_ENGINE_DEATH | DAOS_FAIL_ALWAYS);
 	if (rc != 0)
 		return rc;
 
-	print_message("CR: excluding the rank %u ...\n", rank);
-	return dmg_system_exclude_rank(dmg_config_file, rank);
+	print_message("CR: stopping the rank %d ...\n", *rank);
+	rc = dmg_system_stop_rank(dmg_config_file, *rank, false);
+	if (rc != 0)
+		return rc;
+
+	/* The *rank is stopped, that may cause set_params to timeout, do not wait. */
+	cr_debug_set_params_nowait(arg, 0);
+
+	print_message("CR: excluding the rank %d ...\n", *rank);
+	return dmg_system_exclude_rank(dmg_config_file, *rank);
 }
 
 static inline int
@@ -272,23 +342,6 @@ cr_check_set_policy(uint32_t flags, const char *policies)
 	print_message("CR: set checker policy with flags %x, policy %s ...\n",
 		      flags, policies != NULL ? policies : "(null)");
 	return dmg_check_set_policy(dmg_config_file, flags, policies);
-}
-
-static inline int
-cr_debug_set_params(test_arg_t *arg, uint64_t fail_loc)
-{
-	int	rc;
-	int	i;
-
-	for (i = 0; i < 10; i++) {
-		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, fail_loc, 0, NULL);
-		if (rc == 0)
-			break;
-
-		sleep(1);
-	}
-
-	return rc;
 }
 
 static struct daos_check_report_info *
@@ -755,6 +808,18 @@ cr_pool_create(void **state, struct test_pool *pool, bool connect, uint32_t faul
 }
 
 static int
+cr_pool_create_with_svc(void **state, struct test_pool *pool, bool connect, uint32_t fault)
+{
+	pool->svc = d_rank_list_alloc(1);
+	if (pool->svc == NULL) {
+		print_message("CR: failed to create svc list for create pool\n");
+		return -DER_NOMEM;
+	}
+
+	return cr_pool_create(state, pool, connect, fault);
+}
+
+static int
 cr_cont_create(void **state, struct test_pool *pool, struct test_cont *cont, int fault)
 {
 	char		 uuid_str[DAOS_UUID_STR_SIZE];
@@ -821,9 +886,7 @@ cr_cont_create(void **state, struct test_pool *pool, struct test_cont *cont, int
 				      DP_UUID(cont->uuid), DP_RC(rc));
 
 		daos_prop_free(prop);
-
-		rc1 = cr_debug_set_params(arg, 0);
-		assert_rc_equal(rc1, 0);
+		cr_debug_set_params(arg, 0);
 
 		print_message("CR: closing container " DF_UUID " ...\n", DP_UUID(cont->uuid));
 		rc1 = daos_cont_close(coh, NULL);
@@ -1952,8 +2015,7 @@ cr_leader_resume(void **state)
 
 	/* The following is for cleanup, include the repairing of orphan pool before destroy. */
 
-	rc = cr_debug_set_params(arg, 0);
-	assert_rc_equal(rc, 0);
+	cr_debug_set_params(arg, 0);
 
 	rc = cr_system_stop(false);
 	assert_rc_equal(rc, 0);
@@ -2062,8 +2124,7 @@ cr_engine_resume(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_debug_set_params(arg, 0);
-	assert_rc_equal(rc, 0);
+	cr_debug_set_params(arg, 0);
 
 	rc = cr_mode_switch(false);
 	assert_rc_equal(rc, 0);
@@ -2271,8 +2332,7 @@ cr_failout(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 1, &class, &action, &result);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_debug_set_params(arg, 0);
-	assert_rc_equal(rc, 0);
+	cr_debug_set_params(arg, 0);
 
 	rc = cr_mode_switch(false);
 	assert_rc_equal(rc, 0);
@@ -2512,8 +2572,7 @@ cr_fail_ps_sync(void **state, bool leader)
 	rc = cr_ins_verify(&dci, TCIS_STOPPED);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_debug_set_params(arg, 0);
-	assert_rc_equal(rc, 0);
+	cr_debug_set_params(arg, 0);
 
 	rc = cr_check_start(TCSF_NONE, 0, NULL, NULL);
 	assert_rc_equal(rc, 0);
@@ -2609,19 +2668,14 @@ cr_engine_death(void **state)
 	char				*label = NULL;
 	uint32_t			 class = TCC_POOL_BAD_LABEL;
 	uint32_t			 action;
+	int				 rank = -1;
 	int				 rc;
 	int				 i;
 
 	print_message("CR20: check engine death during check\n");
 
-	rc = cr_pool_create(state, &pool, true, class);
+	rc = cr_pool_create_with_svc(state, &pool, true, class);
 	assert_rc_equal(rc, 0);
-
-	if (!test_runable(arg, 3)) {
-		print_message("Need enough targets (%u/%u vs 3) for test, skip\n",
-			      arg->srv_nnodes, arg->srv_ntgts);
-		goto cleanup;
-	}
 
 	rc = cr_system_stop(false);
 	assert_rc_equal(rc, 0);
@@ -2641,7 +2695,9 @@ cr_engine_death(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_rank_exclude(2);
+	rc = cr_rank_exclude(arg, &pool, &rank);
+	if (rc > 0)
+		goto cleanup;
 	assert_rc_equal(rc, 0);
 
 	print_message("CR: sleep seconds for the rank death event\n");
@@ -2669,7 +2725,7 @@ cr_engine_death(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Reint the rank for subsequent test. */
-	rc = cr_rank_reint(2);
+	rc = cr_rank_reint(rank, false);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_mode_switch(false);
@@ -2717,19 +2773,14 @@ cr_engine_rejoin_succ(void **state)
 	struct daos_check_report_info	*dcri;
 	uint32_t			 class = TCC_POOL_NONEXIST_ON_MS;
 	uint32_t			 action;
+	int				 rank = -1;
 	int				 rc;
 	int				 i;
 
 	print_message("CR21: check engine rejoins check instance successfully\n");
 
-	rc = cr_pool_create(state, &pool, true, class);
+	rc = cr_pool_create_with_svc(state, &pool, true, class);
 	assert_rc_equal(rc, 0);
-
-	if (!test_runable(arg, 3)) {
-		print_message("Need enough targets (%u/%u vs 3) for test, skip\n",
-			      arg->srv_nnodes, arg->srv_ntgts);
-		goto cleanup;
-	}
 
 	rc = cr_system_stop(false);
 	assert_rc_equal(rc, 0);
@@ -2749,11 +2800,13 @@ cr_engine_rejoin_succ(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_rank_exclude(2);
+	rc = cr_rank_exclude(arg, &pool, &rank);
+	if (rc > 0)
+		goto cleanup;
 	assert_rc_equal(rc, 0);
 
 	/* Reint the rank immediately before the rank death event being detected. */
-	rc = cr_rank_reint(2);
+	rc = cr_rank_reint(rank, true);
 	assert_rc_equal(rc, 0);
 
 	cr_pool_wait(1, &pool.pool_uuid, &dci);
@@ -2834,20 +2887,15 @@ cr_engine_rejoin_fail(void **state)
 	struct daos_check_report_info	*dcri;
 	uint32_t			 class = TCC_POOL_NONEXIST_ON_MS;
 	uint32_t			 action;
+	int				 rank = -1;
 	int				 result;
 	int				 rc;
 	int				 i;
 
 	print_message("CR22: check engine fails to rejoin check instance\n");
 
-	rc = cr_pool_create(state, &pool, true, class);
+	rc = cr_pool_create_with_svc(state, &pool, true, class);
 	assert_rc_equal(rc, 0);
-
-	if (!test_runable(arg, 3)) {
-		print_message("Need enough targets (%u/%u vs 3) for test, skip\n",
-			      arg->srv_nnodes, arg->srv_ntgts);
-		goto cleanup;
-	}
 
 	rc = cr_system_stop(false);
 	assert_rc_equal(rc, 0);
@@ -2867,7 +2915,9 @@ cr_engine_rejoin_fail(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_rank_exclude(2);
+	rc = cr_rank_exclude(arg, &pool, &rank);
+	if (rc > 0)
+		goto cleanup;
 	assert_rc_equal(rc, 0);
 
 	print_message("CR: sleep seconds for the rank death event\n");
@@ -2902,7 +2952,7 @@ cr_engine_rejoin_fail(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Reint the rank, rejoin will fail but not affect the rank start. */
-	rc = cr_rank_reint(2);
+	rc = cr_rank_reint(rank, true);
 	assert_rc_equal(rc, 0);
 
 	/* Wait for a while until the control plane to be ready for new check start. */
@@ -2924,6 +2974,10 @@ cr_engine_rejoin_fail(void **state)
 		class = TCC_POOL_NONEXIST_ON_MS;
 		rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, 1, &class, &action, NULL);
 	}
+	assert_rc_equal(rc, 0);
+
+	/* The former excluded rank is not in the check ranks set, stop it explicitly. */
+	rc = dmg_system_stop_rank(dmg_config_file, rank, false);
 	assert_rc_equal(rc, 0);
 
 	rc = cr_mode_switch(false);
@@ -3192,8 +3246,7 @@ cr_fail_sync_orphan(void **state)
 	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_debug_set_params(arg, 0);
-	assert_rc_equal(rc, 0);
+	cr_debug_set_params(arg, 0);
 
 	rc = cr_mode_switch(false);
 	assert_rc_equal(rc, 0);
@@ -3351,8 +3404,7 @@ cr_handle_fail_pool1(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_FAILED, 0, NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_debug_set_params(arg, 0);
-	assert_rc_equal(rc, 0);
+	cr_debug_set_params(arg, 0);
 
 	rc = cr_mode_switch(false);
 	assert_rc_equal(rc, 0);
@@ -3436,8 +3488,7 @@ cr_handle_fail_pool2(void **state)
 	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_debug_set_params(arg, 0);
-	assert_rc_equal(rc, 0);
+	cr_debug_set_params(arg, 0);
 
 	rc = cr_mode_switch(false);
 	assert_rc_equal(rc, 0);

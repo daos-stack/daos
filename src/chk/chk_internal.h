@@ -553,6 +553,8 @@ struct chk_instance {
 				 ci_stopping:1,
 				 ci_started:1,
 				 ci_inited:1,
+				 ci_pause:1,
+				 ci_rejoining:1,
 				 ci_implicated:1;
 	uint32_t		 ci_start_flags;
 };
@@ -1161,6 +1163,7 @@ chk_stop_sched(struct chk_instance *ins)
 {
 	uint64_t	gen = ins->ci_bk.cb_gen;
 
+	ins->ci_pause = 1;
 	ABT_mutex_lock(ins->ci_abt_mutex);
 	if (ins->ci_sched_running && !ins->ci_sched_exiting) {
 		D_ASSERT(ins->ci_sched != ABT_THREAD_NULL);
@@ -1175,7 +1178,7 @@ chk_stop_sched(struct chk_instance *ins)
 	} else {
 		ABT_mutex_unlock(ins->ci_abt_mutex);
 		/* Check ci_bk.cb_gen for the case of others restarted checker during my wait. */
-		while (ins->ci_sched_running && gen == ins->ci_bk.cb_gen)
+		while ((ins->ci_sched_running || ins->ci_rejoining) && gen == ins->ci_bk.cb_gen)
 			dss_sleep(300);
 	}
 }

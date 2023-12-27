@@ -184,6 +184,9 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_statu
 	chk_destroy_pending_tree(ins);
 	chk_destroy_pool_tree(ins);
 
+	if (DAOS_FAIL_CHECK(DAOS_CHK_ENGINE_DEATH))
+		goto out;
+
 	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
 		cbk->cb_ins_status = ins_status;
 		if (ins_phase != CHK_INVAL_PHASE)
@@ -1608,7 +1611,7 @@ out:
 }
 
 static void
-chk_engine_pool_notify(struct chk_pool_rec *cpr, struct ds_pool *pool)
+chk_engine_pool_notify(struct chk_pool_rec *cpr)
 {
 	struct chk_instance	*ins =cpr->cpr_ins;
 	struct chk_bookmark	*cbk = &cpr->cpr_bk;
@@ -1623,8 +1626,14 @@ chk_engine_pool_notify(struct chk_pool_rec *cpr, struct ds_pool *pool)
 	iv.ci_from_psl = 1;
 
 	if (!DAOS_FAIL_CHECK(DAOS_CHK_PS_NOTIFY_ENGINE)) {
-		/* Synchronously notify the pool shards with the new check status/phase. */
-		rc = chk_iv_update(pool->sp_iv_ns, &iv, CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER,
+		/*
+		 * Synchronously notify the pool shards with the new check status/phase.
+		 * Because some engine maybe not the (refreshed) pool map. Then we will
+		 * use ins->ci_iv_ns instead of pool->sp_iv_ns to send the notification
+		 * to all engines. Otherwise, the engine out of the pool map cannot get
+		 * the notification.
+		 */
+		rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE, CRT_IV_SYNC_EAGER,
 				   true);
 		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 			 DF_ENGINE" on rank %u notify pool shards for "DF_UUIDF", phase %u, "
@@ -1656,7 +1665,6 @@ chk_engine_pool_ult(void *args)
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_bookmark		*cbk = &cpr->cpr_bk;
 	struct pool_map			*map = NULL;
-	struct ds_pool			*pool = NULL;
 	struct chk_cont_list_aggregator	 aggregator = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	int				 i;
@@ -1675,7 +1683,6 @@ chk_engine_pool_ult(void *args)
 	D_INFO(DF_ENGINE" pool ult enter for "DF_UUIDF"\n", DP_ENGINE(ins), DP_UUID(cpr->cpr_uuid));
 
 	uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
-	pool = ds_pool_svc2pool(svc);
 
 	if (cpr->cpr_stop)
 		goto out;
@@ -1685,7 +1692,7 @@ chk_engine_pool_ult(void *args)
 
 	if (cbk->cb_phase < CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP) {
 		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_POOL_CLEANUP;
-		chk_engine_pool_notify(cpr, pool);
+		chk_engine_pool_notify(cpr);
 		/* QUEST: How to estimate the left time? */
 		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		rc = chk_bk_update_pool(cbk, uuid_str);
@@ -1735,6 +1742,7 @@ chk_engine_pool_ult(void *args)
 		if (DAOS_FAIL_CHECK(DAOS_CHK_LEADER_BLOCK)) {
 			while (!cpr->cpr_stop)
 				dss_sleep(300);
+			goto out;
 		}
 	}
 
@@ -1750,7 +1758,7 @@ chk_engine_pool_ult(void *args)
 cont:
 	if (cbk->cb_phase < CHK__CHECK_SCAN_PHASE__CSP_CONT_LIST) {
 		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_CONT_LIST;
-		chk_engine_pool_notify(cpr, pool);
+		chk_engine_pool_notify(cpr);
 		/* QUEST: How to estimate the left time? */
 		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		rc = chk_bk_update_pool(cbk, uuid_str);
@@ -1766,13 +1774,14 @@ cont:
 		goto out;
 
 	/* Collect containers from pool shards. */
-	rc = chk_cont_list_remote(pool, cbk->cb_gen, chk_engine_cont_list_remote_cb, &aggregator);
+	rc = chk_cont_list_remote(ds_pool_svc2pool(svc), cbk->cb_gen,
+				  chk_engine_cont_list_remote_cb, &aggregator);
 	if (rc != 0 || cpr->cpr_stop)
 		goto out;
 
 	if (cbk->cb_phase < CHK__CHECK_SCAN_PHASE__CSP_CONT_CLEANUP) {
 		cbk->cb_phase = CHK__CHECK_SCAN_PHASE__CSP_CONT_CLEANUP;
-		chk_engine_pool_notify(cpr, pool);
+		chk_engine_pool_notify(cpr);
 		/* QUEST: How to estimate the left time? */
 		cbk->cb_time.ct_left_time = CHK__CHECK_SCAN_PHASE__CSP_DONE - cbk->cb_phase;
 		rc = chk_bk_update_pool(cbk, uuid_str);
@@ -1810,7 +1819,7 @@ out:
 			else
 				update = false;
 		}
-		chk_engine_pool_notify(cpr, pool);
+		chk_engine_pool_notify(cpr);
 		cbk->cb_time.ct_stop_time = time(NULL);
 		if (likely(update))
 			rc1 = chk_bk_update_pool(cbk, uuid_str);
@@ -3320,6 +3329,7 @@ chk_engine_rejoin(void *args)
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
 
+	ins->ci_rejoining = 1;
 	ins->ci_starting = 1;
 	ins->ci_started = 0;
 	ins->ci_start_flags = 0;
@@ -3354,11 +3364,12 @@ again:
 	rc = chk_rejoin_remote(prop->cp_leader, cbk->cb_gen, myrank, cbk->cb_iv_uuid, &flags,
 			       &pool_nr, &pools);
 	if (rc != 0) {
-		if (rc == -DER_OOG || rc == -DER_GRPVER) {
+		if ((rc == -DER_OOG || rc == -DER_GRPVER) && !ins->ci_pause) {
 			D_INFO(DF_ENGINE" Someone is not ready %d, let's rejoin after 1 sec\n",
 			       DP_ENGINE(ins), rc);
 			dss_sleep(1000);
-			goto again;
+			if (!ins->ci_pause)
+				goto again;
 		}
 
 		goto out_iv;
@@ -3427,6 +3438,7 @@ out_log:
 		D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
 			 DF_ENGINE" rejoin on rank %u with iv "DF_UUIDF": "DF_RC"\n",
 			 DP_ENGINE(ins), myrank, DP_UUID(cbk->cb_iv_uuid), DP_RC(rc));
+	ins->ci_rejoining = 0;
 	ins->ci_starting = 0;
 	ins->ci_inited = 1;
 }

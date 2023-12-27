@@ -220,8 +220,9 @@ func (svc *mgmtSvc) SystemCheckDisable(ctx context.Context, req *mgmtpb.CheckDis
 		return nil, err
 	}
 	stopReq := &mgmtpb.SystemStopReq{
-		Sys:   req.Sys,
-		Force: true,
+		Sys: req.Sys,
+		// Do not force stop system, it may cause resource leak and fail next system start.
+		Force: false,
 		Ranks: ranklist.RankSetFromRanks(checkRanks).String(),
 	}
 	if _, err := svc.SystemStop(ctx, stopReq); err != nil {
