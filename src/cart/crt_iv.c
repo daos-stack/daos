@@ -1395,7 +1395,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 						   &iv_value, input->ifi_value_bulk,
 						   rpc_req, user_priv);
 			if (rc != 0) {
-				DL_ERROR(rc, "bulk transfer failed.\n");
+				DL_ERROR(rc, "bulk transfer failed");
 				D_GOTO(reply_direct, rc);
 			}
 			put_needed = false;
@@ -2550,11 +2550,10 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		child_output = crt_reply_get(iv_info->uci_child_rpc);
 
 		/* uci_bulk_hdl will not be set for invalidate call */
-		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL) {
+		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
 			crt_bulk_free(iv_info->uci_bulk_hdl);
-			iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
-					   iv_info->uci_user_priv);
-		}
+		iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
+				   iv_info->uci_user_priv);
 		child_output->rc = output->rc;
 
 		if (cb_info->cci_rc != 0)
@@ -3135,7 +3134,7 @@ exit:
 decref_error:
 	IVNS_DECREF(ivns_internal);
 put_error:
-	iv_ops->ivo_on_put(ivns_internal, &iv_value, &user_priv);
+	iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 
 send_error:
 	output->rc = rc;
@@ -3346,7 +3345,7 @@ send_error:
 	crt_reply_send(rpc_req);
 
 	if (put_needed)
-		iv_ops->ivo_on_put(ivns_internal, &iv_value, &user_priv);
+		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 
 	/* ADDREF done in lookup above */
 	if (ivns_internal)

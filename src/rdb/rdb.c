@@ -503,7 +503,7 @@ rdb_get_use_leases(void)
  * \a clue->bcl_replicas with d_rank_list_free.
  *
  * \param[in]	storage	database storage
- * \parma[out]	clue	database clue
+ * \param[out]	clue	database clue
  */
 int
 rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
@@ -1135,4 +1135,21 @@ rdb_chkptd_start(struct rdb *db)
 error:
 	rdb_chkptd_stop(db);
 	return rc;
+}
+
+/**
+ * Upgrade the durable format of the VOS pool underlying \a db to
+ * \a df_version.
+ *
+ * Exposing "VOS pool" makes this API function hacky, and probably indicates
+ * that the upgrade model is not quite right.
+ *
+ * \param[in]	db		database
+ * \param[in]	df_version	VOS durable format version (e.g.,
+ *				VOS_POOL_DF_2_6)
+ */
+int
+rdb_upgrade_vos_pool(struct rdb *db, uint32_t df_version)
+{
+	return vos_pool_upgrade(db->d_pool, df_version);
 }

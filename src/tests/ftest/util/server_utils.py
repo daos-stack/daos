@@ -5,27 +5,26 @@
 """
 # pylint: disable=too-many-lines
 
-from collections import defaultdict
-from getpass import getuser
 import os
+import random
 import re
 import time
-import random
+from collections import defaultdict
+from getpass import getuser
 
 from avocado import fail_on
-
 from ClusterShell.NodeSet import NodeSet
-from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
+from command_utils_base import BasicParameter, CommonConfig
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import pcmd, get_log_file, list_to_str, get_display_size, run_pcmd
-from general_utils import get_default_config_file
+from general_utils import (get_default_config_file, get_display_size, get_log_file, list_to_str,
+                           pcmd, run_pcmd)
 from host_utils import get_local_host
-from server_utils_base import ServerFailed, DaosServerCommand, DaosServerInformation
+from run_utils import run_remote, stop_processes
+from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
-from run_utils import run_remote, stop_processes
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):

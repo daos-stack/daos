@@ -464,12 +464,16 @@ struct crt_corpc_ops chk_pool_start_co_ops = {
 };
 
 static inline int
-chk_co_rpc_prepare(d_rank_list_t *rank_list, crt_opcode_t opc, crt_rpc_t **req)
+chk_co_rpc_prepare(d_rank_list_t *rank_list, crt_opcode_t opc, crt_rpc_t **req, bool failout)
 {
+	uint32_t	flags = CRT_RPC_FLAG_FILTER_INVERT;
+
+	if (failout)
+		flags |= CRT_RPC_FLAG_CO_FAILOUT;
+
 	return crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, rank_list,
 				    DAOS_RPC_OPCODE(opc, DAOS_CHK_MODULE, DAOS_CHK_VERSION),
-				    NULL, NULL, CRT_RPC_FLAG_FILTER_INVERT,
-				    crt_tree_topo(CRT_TREE_KNOMIAL, 32), req);
+				    NULL, NULL, flags, crt_tree_topo(CRT_TREE_KNOMIAL, 32), req);
 }
 
 static inline int
@@ -500,7 +504,7 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 	int				 rc1;
 	int				 i;
 
-	rc = chk_co_rpc_prepare(rank_list, CHK_START, &req);
+	rc = chk_co_rpc_prepare(rank_list, CHK_START, &req, true);
 	if (rc != 0)
 		goto out;
 
@@ -584,7 +588,7 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pool
 	int				 rc;
 	int				 i;
 
-	rc = chk_co_rpc_prepare(rank_list, CHK_STOP, &req);
+	rc = chk_co_rpc_prepare(rank_list, CHK_STOP, &req, false);
 	if (rc != 0)
 		goto out;
 
@@ -644,7 +648,7 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 	struct chk_query_out		*cqo = NULL;
 	int				 rc;
 
-	rc = chk_co_rpc_prepare(rank_list, CHK_QUERY, &req);
+	rc = chk_co_rpc_prepare(rank_list, CHK_QUERY, &req, true);
 	if (rc != 0)
 		goto out;
 
@@ -695,7 +699,7 @@ chk_mark_remote(d_rank_list_t *rank_list, uint64_t gen, d_rank_t rank, uint32_t 
 	struct chk_mark_out	*cmo;
 	int			 rc;
 
-	rc = chk_co_rpc_prepare(rank_list, CHK_MARK, &req);
+	rc = chk_co_rpc_prepare(rank_list, CHK_MARK, &req, false);
 	if (rc != 0)
 		goto out;
 
@@ -732,7 +736,7 @@ chk_act_remote(d_rank_list_t *rank_list, uint64_t gen, uint64_t seq, uint32_t cl
 	int			 rc;
 
 	if (for_all)
-		rc = chk_co_rpc_prepare(rank_list, CHK_ACT, &req);
+		rc = chk_co_rpc_prepare(rank_list, CHK_ACT, &req, false);
 	else
 		rc = chk_sg_rpc_prepare(rank, CHK_ACT, &req);
 
@@ -826,7 +830,7 @@ chk_pool_start_remote(d_rank_list_t *rank_list, uint64_t gen, uuid_t uuid, uint3
 	struct chk_pool_start_out	*cpso;
 	int				 rc;
 
-	rc = chk_co_rpc_prepare(rank_list, CHK_POOL_START, &req);
+	rc = chk_co_rpc_prepare(rank_list, CHK_POOL_START, &req, true);
 	if (rc != 0)
 		goto out;
 

@@ -4,37 +4,18 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-from ClusterShell.NodeSet import NodeSet
+
 from avocado.core.exceptions import TestFail
+from ClusterShell.NodeSet import NodeSet
+from general_utils import check_file_exists, pcmd, report_errors
+from recovery_test_base import RecoveryTestBase
 
-from apricot import TestWithServers
-from general_utils import report_errors, pcmd, check_file_exists
 
-
-class PoolListConsolidationTest(TestWithServers):
+class PoolListConsolidationTest(RecoveryTestBase):
     """Test Pass 1: Pool List Consolidation
 
     :avocado: recursive
     """
-
-    def chk_query_inconsistency(self):
-        """Wait DAOS checker to complete and return checker query result.
-
-        Returns:
-            The string that contains detected inconsistency or empty if timeout (40 seconds).
-
-        """
-        dmg_command = self.get_dmg_command()
-
-        query_msg = ""
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "COMPLETED":
-                query_msg = check_query_out["response"]["reports"][0]["msg"]
-                break
-            time.sleep(5)
-
-        return query_msg
 
     def chk_dist_checker(self, inconsistency, policies=None):
         """Run DAOS checker with kinds of options.
@@ -68,7 +49,7 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.check_start(dry_run=True)
 
         # 2.2 Query the checker.
-        query_msg = self.chk_query_inconsistency()
+        query_msg = self.wait_for_check_complete()[0]["msg"]
 
         # 2.3 Verify that the checker detected the inconsistency.
         if inconsistency not in query_msg:
@@ -85,7 +66,7 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.check_start(auto="on")
 
         # 4.2. Query the checker.
-        query_msg = self.chk_query_inconsistency()
+        query_msg = self.wait_for_check_complete()[0]["msg"]
 
         # 4.3 Verify that the checker detected the inconsistency.
         if inconsistency not in query_msg:
@@ -102,7 +83,7 @@ class PoolListConsolidationTest(TestWithServers):
         dmg_command.check_start(auto="off", policies=policies)
 
         # 6.2 Query the checker.
-        query_msg = self.chk_query_inconsistency()
+        query_msg = self.wait_for_check_complete()[0]["msg"]
 
         # 6.3 Verify that the checker detected the inconsistency.
         if inconsistency not in query_msg:

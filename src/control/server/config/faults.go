@@ -147,7 +147,7 @@ func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
 func FaultConfigScmDiffClass(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigScmDiffClass,
-		fmt.Sprintf("the SCM class in I/O Engine %d is different from I/O Engine %d",
+		fmt.Sprintf("the SCM class in engine %d is different from engine %d",
 			curIdx, seenIdx),
 		"ensure that each I/O Engine has a single SCM tier with the same class and restart",
 	)
@@ -156,7 +156,7 @@ func FaultConfigScmDiffClass(curIdx, seenIdx int) *fault.Fault {
 func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigOverlappingBdevDeviceList,
-		fmt.Sprintf("the bdev_list value in I/O Engine %d overlaps with entries in server %d", curIdx, seenIdx),
+		fmt.Sprintf("the bdev_list value in engine %d overlaps with entries in engine %d", curIdx, seenIdx),
 		"ensure that each I/O Engine has a unique set of bdev_list entries and restart",
 	)
 }

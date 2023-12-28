@@ -1,9 +1,9 @@
 """Build DAOS Control Plane"""
 # pylint: disable=too-many-locals
 import os
-from os.path import join
-from os import urandom
 from binascii import b2a_hex
+from os import urandom
+from os.path import join
 
 
 def is_firmware_mgmt_build(benv):
@@ -148,7 +148,7 @@ def scons():
     install_go_bin(senv, "daos_server")
 
     aenv = denv.Clone()
-    aenv.require('spdk', 'pmdk', 'ofi')
+    aenv.require('spdk', 'pmdk', 'ofi', 'argobots')
 
     aenv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     aenv.Replace(RPATH=[])

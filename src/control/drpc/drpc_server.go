@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -87,26 +87,49 @@ func (d *DomainSocketServer) Listen(ctx context.Context) {
 
 // Start sets up the dRPC server socket and kicks off the listener goroutine.
 func (d *DomainSocketServer) Start(ctx context.Context) error {
-	// Just in case an old socket file is still lying around
-	if err := syscall.Unlink(d.sockFile); err != nil && !os.IsNotExist(err) {
-		return errors.Wrapf(err, "Unable to unlink %s", d.sockFile)
+	if d == nil {
+		return errors.New("DomainSocketServer is nil")
 	}
 
 	addr := &net.UnixAddr{Name: d.sockFile, Net: "unixpacket"}
+	if err := d.checkExistingSocket(ctx, addr); err != nil {
+		return err
+	}
+
 	lis, err := net.ListenUnix("unixpacket", addr)
 	if err != nil {
-		return errors.Wrapf(err, "Unable to listen on unix socket %s", d.sockFile)
+		return errors.Wrapf(err, "unable to listen on unix socket %s", d.sockFile)
 	}
 	d.listener = lis
 
-	// The only writer should be the I/O Engines which should be running as the same user as
-	// daos_server process.
 	if err := os.Chmod(d.sockFile, d.sockFileMode); err != nil {
-		return errors.Wrapf(err, "Unable to set permissions on %s", d.sockFile)
+		return errors.Wrapf(err, "unable to set permissions on %s", d.sockFile)
 	}
 
 	go d.Listen(ctx)
 	return nil
+}
+
+func (d *DomainSocketServer) checkExistingSocket(ctx context.Context, addr *net.UnixAddr) error {
+	conn, err := net.DialUnix("unixpacket", nil, addr)
+	if err == nil {
+		_ = conn.Close()
+		return FaultSocketFileInUse(d.sockFile)
+	}
+
+	if errors.Is(err, syscall.ENOENT) {
+		return nil
+	}
+
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		// File exists but no one is listening - it's safe to delete.
+		if err := syscall.Unlink(addr.Name); err != nil && !os.IsNotExist(err) {
+			return errors.Wrap(err, "unlink old socket file")
+		}
+		return nil
+	}
+
+	return err
 }
 
 // RegisterRPCModule takes a Module and associates it with the given

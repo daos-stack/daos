@@ -372,14 +372,50 @@ error:
 	return rc;
 }
 
-static inline void
-aging_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
+#define FLUSH_INTVL		5	/* seconds */
+
+static inline bool
+need_aging_flush(struct vea_space_info *vsi, bool force)
 {
-	if (vsi->vsi_unmap_ctxt.vnc_ext_flush) {
-		if (nr_flushed != NULL)
-			*nr_flushed = 0;
-	} else {
-		trigger_aging_flush(vsi, force, nr_flush, nr_flushed);
+	int	i;
+	bool	empty_bitmap = false;
+
+	for (i = 0; i < VEA_MAX_BITMAP_CLASS; i++) {
+		if (!d_list_empty(&vsi->vsi_class.vfc_bitmap_empty[i])) {
+			empty_bitmap = true;
+			break;
+		}
+	}
+
+	if (!empty_bitmap && d_list_empty(&vsi->vsi_agg_lru))
+		return false;
+
+	if (!force && get_current_age() < (vsi->vsi_flush_time + FLUSH_INTVL))
+		return false;
+
+	return true;
+}
+
+static inline void
+inline_aging_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
+{
+	int rc;
+
+	if (nr_flushed)
+		*nr_flushed = 0;
+
+	/* Don't do inline flush when external flush is specified */
+	if (vsi->vsi_unmap_ctxt.vnc_ext_flush)
+		return;
+
+	/* Don't do flush within a transaction */
+	if (!umem_tx_none(vsi->vsi_umem))
+		return;
+
+	if (need_aging_flush(vsi, force)) {
+		rc = trigger_aging_flush(vsi, force, nr_flush, nr_flushed);
+		if (rc)
+			DL_ERROR(rc, "Aging flush failed.");
 	}
 }
 
@@ -421,7 +457,7 @@ vea_reserve(struct vea_space_info *vsi, uint32_t blk_cnt,
 		hint_get(hint, &resrvd->vre_hint_off);
 
 	/* Trigger aging extents flush */
-	aging_flush(vsi, force, MAX_FLUSH_FRAGS, &nr_flushed);
+	inline_aging_flush(vsi, force, MAX_FLUSH_FRAGS, NULL);
 retry:
 	/* Reserve from hint offset */
 	if (try_hint) {
@@ -442,7 +478,7 @@ retry:
 	rc = -DER_NOSPACE;
 	if (!force) {
 		force = true;
-		trigger_aging_flush(vsi, force, MAX_FLUSH_FRAGS * 10, &nr_flushed);
+		inline_aging_flush(vsi, force, MAX_FLUSH_FRAGS * 10, &nr_flushed);
 		if (nr_flushed == 0)
 			goto error;
 		goto retry;
@@ -635,6 +671,53 @@ vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	return process_resrvd_list(vsi, hint, resrvd_list, true);
 }
 
+static void
+flush_end_cb(void *data, bool noop)
+{
+	struct vea_space_info	*vsi = data;
+
+	if (!noop)
+		trigger_aging_flush(vsi, false, MAX_FLUSH_FRAGS * 20, NULL);
+
+	vsi->vsi_flush_scheduled = false;
+}
+
+static void
+schedule_aging_flush(struct vea_space_info *vsi)
+{
+	int	rc;
+
+	D_ASSERT(vsi != NULL);
+	/* Don't schedule aging flush when external flush is specified */
+	if (vsi->vsi_unmap_ctxt.vnc_ext_flush)
+		return;
+
+	/* Do inline flush immediately when it's not in a transaction */
+	if (umem_tx_none(vsi->vsi_umem)) {
+		inline_aging_flush(vsi, false, MAX_FLUSH_FRAGS * 20, NULL);
+		return;
+	}
+
+	/* Check flush condition in advance to avoid unnecessary umem_tx_add_callback() */
+	if (!need_aging_flush(vsi, false))
+		return;
+
+	/* Schedule one transaction end callback flush is enough */
+	if (vsi->vsi_flush_scheduled)
+		return;
+
+	/*
+	 * Perform the flush in transaction end callback, since the flush operation
+	 * could yield on blob unmap.
+	 */
+	rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, UMEM_STAGE_NONE,
+				  flush_end_cb, vsi);
+	if (rc)
+		DL_ERROR(rc, "Add transaction end callback error.");
+	else
+		vsi->vsi_flush_scheduled = true;
+}
+
 /*
  * Free allocated extent.
  *
@@ -688,12 +771,8 @@ done:
 	/* Commit/Abort transaction on success/error */
 	rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
 	/* Flush the expired aging free extents to compound index */
-	if (rc == 0) {
-		if (umem_tx_none(umem))
-			aging_flush(vsi, false, MAX_FLUSH_FRAGS * 20, NULL);
-		else
-			schedule_aging_flush(vsi);
-	}
+	if (rc == 0)
+		schedule_aging_flush(vsi);
 error:
 	/*
 	 * -DER_NONEXIST or -DER_ENOENT could be ignored by some caller,
@@ -878,14 +957,14 @@ vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
 }
 
 int
-vea_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
+vea_flush(struct vea_space_info *vsi, uint32_t nr_flush, uint32_t *nr_flushed)
 {
 	if (!umem_tx_none(vsi->vsi_umem)) {
 		D_ERROR("This function isn't supposed to be called in transaction!\n");
 		return -DER_INVAL;
 	}
 
-	return trigger_aging_flush(vsi, force, nr_flush, nr_flushed);
+	return trigger_aging_flush(vsi, false, nr_flush, nr_flushed);
 }
 
 struct vea_cb_args {

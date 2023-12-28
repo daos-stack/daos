@@ -314,13 +314,12 @@ int vea_query(struct vea_space_info *vsi, struct vea_attr *attr,
  * Flushing the free frags in aging buffer
  *
  * \param vsi        [IN]	In-memory compound index
- * \param force      [IN]	Force flush no matter if there is qualified extent
  * \param nr_flush   [IN]	Flush at most @nr_flush frags
  * \param nr_flushed [OUT]	How many frags are actually flushed (optional)
  *
  * \return			Zero on success; Appropriated negative value on error
  */
-int vea_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed);
+int vea_flush(struct vea_space_info *vsi, uint32_t nr_flush, uint32_t *nr_flushed);
 
 /**
  * Free metrcis

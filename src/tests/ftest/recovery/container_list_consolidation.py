@@ -3,14 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import re
-from ClusterShell.NodeSet import NodeSet
+import time
 
-from recovery_test_base import RecoveryTestBase
-from general_utils import report_errors
+from ClusterShell.NodeSet import NodeSet
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
+from general_utils import report_errors
+from recovery_test_base import RecoveryTestBase
 
 
 class ContainerListConsolidationTest(RecoveryTestBase):
@@ -18,28 +18,6 @@ class ContainerListConsolidationTest(RecoveryTestBase):
 
     :avocado: recursive
     """
-
-    def wait_for_check_complete(self):
-        """Repeatedly call dmg check query until status becomes COMPLETED.
-
-        If the status doesn't become COMPLETED, fail the test.
-
-        Returns:
-            list: List of repair reports.
-
-        """
-        repair_reports = None
-        for _ in range(8):
-            check_query_out = self.get_dmg_command().check_query()
-            if check_query_out["response"]["status"] == "COMPLETED":
-                repair_reports = check_query_out["response"]["reports"]
-                break
-            time.sleep(5)
-
-        if not repair_reports:
-            self.fail("Checker didn't detect or repair any inconsistency!")
-
-        return repair_reports
 
     def test_orphan_container(self):
         """Test orphan container. Container is in shard, but not in PS.

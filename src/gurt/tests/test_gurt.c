@@ -130,7 +130,7 @@ test_d_errstr(void **state)
 	/* Check the end of the DAOS error numbers. */
 	value = d_errstr(-DER_NOT_RESUME);
 	assert_string_equal(value, "DER_NOT_RESUME");
-	value = d_errstr(-2048);
+	value = d_errstr(-2049);
 	assert_string_equal(value, "DER_NOT_RESUME");
 	value = d_errstr(-(DER_NOT_RESUME + 1));
 	assert_string_equal(value, "DER_UNKNOWN");

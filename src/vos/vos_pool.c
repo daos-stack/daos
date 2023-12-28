@@ -279,8 +279,12 @@ static int
 vos_meta_flush_post(daos_handle_t fh, int err)
 {
 	struct bio_desc	*biod = (struct bio_desc *)fh.cookie;
+	int		 rc;
 
-	return bio_iod_post(biod, err);
+	rc = bio_iod_post(biod, err);
+	bio_iod_free(biod);
+
+	return rc;
 }
 
 static inline int
@@ -1092,11 +1096,9 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 		pool->vp_dying = 1;
 		vos_pool_decref(pool); /* -1 for lookup */
 
-		D_WARN(DF_UUID": Open reference exists, pool destroy is deferred\n",
-		       DP_UUID(uuid));
-		VOS_NOTIFY_RAS_EVENTF(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
-				      NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
-				      "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
+		ras_notify_eventf(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
+				  NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
+				  "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
@@ -1506,7 +1508,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 
 	D_ASSERT(pinfo != NULL);
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
-	pinfo->pif_gc_stat = pool->vp_gc_stat;
+	pinfo->pif_gc_stat = pool->vp_gc_stat_global;
 
 	cpi = umem_off2ptr(&pool->vp_umm, pool_df->pd_chk);
 	if (cpi != NULL) {
@@ -1572,7 +1574,7 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 	default:
 		return -DER_NOSYS;
 	case VOS_PO_CTL_RESET_GC:
-		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
+		memset(&pool->vp_gc_stat_global, 0, sizeof(pool->vp_gc_stat_global));
 		break;
 	case VOS_PO_CTL_SET_POLICY:
 		if (param == NULL)

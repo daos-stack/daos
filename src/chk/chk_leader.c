@@ -1306,7 +1306,7 @@ chk_leader_need_stop(struct chk_instance *ins, int *ret)
 		}
 	}
 
-	if (!ins->ci_sched_running) {
+	if (!ins->ci_sched_running || ins->ci_sched_exiting) {
 		*ret = 0;
 		return true;
 	}
@@ -1931,7 +1931,7 @@ again:
 	if (rc1 == RSVC_CLIENT_RECHOOSE ||
 	    (rc1 == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(rc))) {
 		dss_sleep(interval);
-		if (cpr->cpr_stop || !ins->ci_sched_running) {
+		if (cpr->cpr_stop || !ins->ci_sched_running || ins->ci_sched_exiting) {
 			notify = false;
 			D_GOTO(out_client, rc = 0);
 		}
@@ -2015,6 +2015,7 @@ chk_leader_pool_ult(void *arg)
 		if (DAOS_FAIL_CHECK(DAOS_CHK_LEADER_BLOCK)) {
 			while (!(chk_leader_pool_need_stop(cpr, &rc)))
 				dss_sleep(300);
+			goto exit;
 		}
 	}
 
@@ -2165,7 +2166,7 @@ chk_leader_sched(void *args)
 	ABT_mutex_lock(ins->ci_abt_mutex);
 
 again:
-	if (!ins->ci_sched_running) {
+	if (ins->ci_sched_exiting) {
 		ABT_mutex_unlock(ins->ci_abt_mutex);
 		D_GOTO(out, rc = 0);
 	}
@@ -3039,7 +3040,7 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 	if (ins->ci_starting)
 		D_GOTO(log, rc = -DER_BUSY);
 
-	if (ins->ci_stopping)
+	if (ins->ci_stopping || ins->ci_sched_exiting)
 		D_GOTO(log, rc = -DER_INPROGRESS);
 
 	/*
@@ -3620,7 +3621,7 @@ again:
 		goto out;
 	}
 
-	if (!ins->ci_sched_running || cpr->cpr_exiting) {
+	if (!ins->ci_sched_running || ins->ci_sched_exiting || cpr->cpr_exiting) {
 		rc = 1;
 		ABT_mutex_unlock(cpr->cpr_mutex);
 		goto out;

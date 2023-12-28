@@ -3,20 +3,19 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-# pylint: disable=too-many-lines
-from distutils.spawn import find_executable  # pylint: disable=deprecated-module
 import os
 import re
 import time
+# pylint: disable=too-many-lines
+from distutils.spawn import find_executable  # pylint: disable=deprecated-module
 
 from ClusterShell.NodeSet import NodeSet
-
 from command_utils import ExecutableCommand, SystemctlCommand
-from command_utils_base import FormattedParameter, EnvironmentVariables
-from exception_utils import CommandFailure, MPILoadError
+from command_utils_base import BasicParameter, EnvironmentVariables, FormattedParameter
 from env_modules import load_mpi
-from general_utils import pcmd, run_pcmd, get_job_manager_class, get_journalctl_command, \
-    journalctl_time
+from exception_utils import CommandFailure, MPILoadError
+from general_utils import (get_job_manager_class, get_journalctl_command, journalctl_time, pcmd,
+                           run_pcmd)
 from run_utils import run_remote, stop_processes
 from write_host_file import write_host_file
 
@@ -163,12 +162,12 @@ class JobManager(ExecutableCommand):
         """
 
     def assign_processes(self, processes):
-        """Assign the number of processes per node.
+        """Assign the number of processes.
 
         Set the appropriate command line parameter with the specified value.
 
         Args:
-            processes (int): number of processes per node
+            processes (int): number of processes
         """
 
     def assign_environment(self, env_vars, append=False):
@@ -337,10 +336,10 @@ class Orterun(JobManager):
         self.hostfile.value = write_host_file(**kwargs)
 
     def assign_processes(self, processes):
-        """Assign the number of processes per node (-np).
+        """Assign the number of processes (-np).
 
         Args:
-            processes (int): number of processes per node
+            processes (int): number of processes
         """
         self.processes.value = processes
 
@@ -433,8 +432,7 @@ class Mpirun(JobManager):
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
-        self.bind_to = FormattedParameter("--bind-to {}", None)
-        self.map_by = FormattedParameter("--map-by {}", None)
+        self.args = BasicParameter(None, None)
         self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
@@ -456,13 +454,18 @@ class Mpirun(JobManager):
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
 
-    def assign_processes(self, processes):
-        """Assign the number of processes per node (-np).
+    def assign_processes(self, processes=None, ppn=None):
+        """Assign the number of processes (-np) and processes per node (-ppn).
 
         Args:
-            processes (int): number of processes per node
+            processes (int, optional): number of processes. Defaults to None.
+                if not specified, auto-calculated from ppn.
+            ppn (int, optional): number of processes per node. Defaults to None.
         """
+        if ppn is not None and processes is None:
+            processes = ppn * len(self._hosts)
         self.processes.update(processes, "mpirun.np")
+        self.ppn.update(ppn, "mpirun.ppn")
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.

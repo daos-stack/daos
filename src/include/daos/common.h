@@ -466,7 +466,7 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
  * @param[in]		sgl		sgl to be read from
  * @param[in]		check_buf	if true process on the sgl buf len
 					instead of iov_len
- * @param[in/out]	idx		index into the sgl to start reading from
+ * @param[in,out]	idx		index into the sgl to start reading from
  * @param[in]		buf_len_req	number of bytes requested
  * @param[out]		p_buf		resulting pointer to buffer
  * @param[out]		p_buf_len	length of buffer
@@ -854,15 +854,15 @@ enum {
 #define DAOS_POOL_FAIL_MAP_REFRESH	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x69)
 #define DAOS_CONT_G2L_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6a)
 #define DAOS_POOL_CREATE_FAIL_STEP_UP	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6b)
+#define DAOS_CONT_OP_NOREPLY            (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6c)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
 #define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
 #define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
 #define DAOS_POOL_UPGRADE_CONT_ABORT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x73)
-
 #define DAOS_POOL_FAIL_MAP_REFRESH_SERIOUSLY \
-					(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x73)
+					(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x74)
 
 #define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
@@ -896,6 +896,12 @@ enum {
 #define DAOS_CHK_SYNC_ORPHAN_PROCESS	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa6)
 #define DAOS_CHK_FAIL_REPORT_POOL1	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa7)
 #define DAOS_CHK_FAIL_REPORT_POOL2	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa8)
+#define DAOS_CHK_ENGINE_DEATH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa9)
+
+/* WAL && checkpoint failure inject */
+#define DAOS_WAL_NO_REPLAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x100)
+#define DAOS_WAL_FAIL_REPLAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x101)
+#define DAOS_MEM_FAIL_CHECKPOINT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x102)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -1021,6 +1027,9 @@ int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
 daos_recx_t *daos_recx_alloc(uint32_t nr);
 void daos_recx_free(daos_recx_t *recx);
+
+void
+daos_get_client_uuid(uuid_t *uuidp);
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)

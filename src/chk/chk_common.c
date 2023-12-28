@@ -434,9 +434,14 @@ chk_pool_wait(struct chk_pool_rec *cpr)
 	struct chk_pending_rec	*tmp;
 
 	D_ASSERT(cpr->cpr_refs > 0);
+	/*
+	 * The caller chk_pool_stop_one() must firstly delete the cpr from the pool
+	 * tree, then stop it here. So chk_pool_wait() will not be called repeatedly.
+	 */
+	D_ASSERT(cpr->cpr_stop == 0);
 
 	ABT_mutex_lock(cpr->cpr_mutex);
-	if (cpr->cpr_thread != ABT_THREAD_NULL && !cpr->cpr_stop) {
+	if (cpr->cpr_thread != ABT_THREAD_NULL) {
 		cpr->cpr_stop = 1;
 		ABT_cond_broadcast(cpr->cpr_cond);
 		ABT_mutex_unlock(cpr->cpr_mutex);
@@ -486,8 +491,9 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t ph
 
 		chk_pool_wait(cpr);
 
-		if (cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING ||
-		    cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING) {
+		if ((cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKING ||
+		     cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_PENDING) &&
+		    !DAOS_FAIL_CHECK(DAOS_CHK_ENGINE_DEATH)) {
 			if (phase != CHK_INVAL_PHASE && phase > cbk->cb_phase)
 				cbk->cb_phase = phase;
 			cbk->cb_pool_status = status;
@@ -500,7 +506,7 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t ph
 
 		if (!ins->ci_is_leader &&
 		    (cpr->cpr_bk.cb_pool_status != CHK__CHECK_POOL_STATUS__CPS_CHECKED ||
-		     cpr->cpr_not_export_ps))
+		     cpr->cpr_not_export_ps || DAOS_FAIL_CHECK(DAOS_CHK_ENGINE_DEATH)))
 			chk_pool_shutdown(cpr, false);
 
 		/* Drop the reference that is held when create in chk_pool_alloc(). */
@@ -1246,6 +1252,7 @@ chk_ins_fini(struct chk_instance **p_ins)
 	if (ins == NULL)
 		return;
 
+	ins->ci_inited = 0;
 	chk_iv_ns_cleanup(&ins->ci_iv_ns);
 
 	if (ins->ci_iv_group != NULL)

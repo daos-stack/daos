@@ -1,7 +1,7 @@
 hosts:
   test_servers: 3
   test_clients: 1
-timeout: 240
+timeout: 300
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -11,7 +11,6 @@ server_config:
       storage: auto
 pool:
   size: 50%
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos

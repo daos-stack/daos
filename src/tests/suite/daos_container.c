@@ -386,7 +386,6 @@ co_properties(void **state)
 	daos_prop_t		*prop_query;
 	daos_prop_t		*prop_query2;
 	struct daos_prop_entry	*entry;
-	daos_pool_info_t	 info = {0};
 	int			 rc;
 	char			*exp_owner;
 	char			*exp_owner_grp;
@@ -416,13 +415,7 @@ co_properties(void **state)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
 	assert_success(rc);
 
-	if (arg->myrank == 0) {
-		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
-		assert_rc_equal(rc, 0);
-		rc = daos_debug_set_params(arg->group, info.pi_leader,
-			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
-		assert_rc_equal(rc, 0);
-	}
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_FORCE_PROP_VERIFY | DAOS_FAIL_ALWAYS);
 	par_barrier(PAR_COMM_WORLD);
 
 	prop_query = get_query_prop_all();
@@ -491,12 +484,11 @@ co_properties(void **state)
 		fail_msg("scrubber disabled failed.\n");
 	}
 
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
+
 	if (arg->myrank == 0) {
 		uuid_t		 uuid;
 		daos_prop_t	*prop2;
-
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
-				     0, NULL);
 
 		/* Create container: same label - fail */
 		print_message("Checking create: different UUID same label "
@@ -626,58 +618,97 @@ co_op_retry(void **state)
 	char		 str[37];
 	daos_handle_t	 coh;
 	daos_cont_info_t info;
+#if 0
+	/* TODO: inject DAOS_CONT_OP_NOREPLY for container create when dup rpc
+	 * detection logic is enabled in the engine. DAOS-14019, DAOS-14020.
+	 */
+	int              i;
+#endif
 	int		 rc;
 
 	if (arg->myrank != 0)
 		return;
 
+		/* See above TODO */
+#if 0
+	print_message("setting DAOS_CONT_OP_NOREPLY and creating container ... ");
+	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				   DAOS_CONT_OP_NOREPLY | DAOS_FAIL_ONCE, 0, NULL);
+	assert_rc_equal(rc, 0);
+#else
 	print_message("creating container ... ");
+#endif
 	rc = daos_cont_create(arg->pool.poh, &uuid, NULL, NULL);
 	assert_rc_equal(rc, 0);
-	print_message("success\n");
+	print_message("success, created container: " DF_UUID "\n", DP_UUID(uuid));
+
+#if 0
+	print_message("BEGIN: many containers with DAOS_CONT_OP_NOREPLY\n");
+	// for (i = 0; i < (20000 + 1024); i++) {
+	for (i = 0; i < 100; i++) {
+		char   cname[32];
+		uuid_t cuuid;
+
+		rc = snprintf(cname, 32, "cont%d", i);
+		assert_true((rc > 0) && (rc < 32));
+
+		/* Force a retry RPC for container create */
+		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					   DAOS_CONT_OP_NOREPLY | DAOS_FAIL_ONCE, 0, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_cont_create_with_label(arg->pool.poh, cname, NULL, &cuuid, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_cont_create_with_label(arg->pool.poh, cname, NULL, &cuuid, NULL);
+		// assert_int_not_equal(rc, 0);
+		assert_rc_equal(rc, -DER_EXIST);
+
+		/* And also force a retry RPC for container destroy */
+		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					   DAOS_CONT_OP_NOREPLY | DAOS_FAIL_ONCE, 0, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_cont_destroy(arg->pool.poh, cname, 1 /* force */, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_cont_destroy(arg->pool.poh, cname, 1 /* force */, NULL);
+		assert_rc_equal(rc, -DER_NONEXIST);
+
+		if ((i % 5000) == 0)
+			print_message("done creating/destroying %d containers\n", (i + 1));
+	}
+	print_message("END: many (%d) containers with DAOS_CONT_OP_NOREPLY\n", (i + 1));
+#endif
 
 	print_message("opening container ... ");
 	uuid_unparse(uuid, str);
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &info,
-			    NULL);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &info, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
-	print_message("setting DAOS_CONT_QUERY_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_CONT_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("success\n");
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE);
 
 	print_message("querying container ... ");
 	rc = daos_cont_query(coh, &info, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
-	print_message("setting DAOS_CONT_CLOSE_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_CONT_CLOSE_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("success\n");
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_CLOSE_FAIL_CORPC | DAOS_FAIL_ONCE);
 
 	print_message("closing container ... ");
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
-	print_message("setting DAOS_CONT_DESTROY_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_CONT_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("success\n");
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE);
 
 	print_message("destroying container ... ");
 	rc = daos_cont_destroy(arg->pool.poh, str, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 }
 
 static void
@@ -768,7 +799,6 @@ co_acl(void **state)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	daos_prop_t		*prop_in;
-	daos_pool_info_t	 info = {0};
 	int			 rc;
 	char			 exp_owner[] = "fictionaluser@";
 	char			 exp_owner_grp[] = "admins@";
@@ -831,13 +861,7 @@ co_acl(void **state)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop_in);
 	assert_success(rc);
 
-	if (arg->myrank == 0) {
-		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
-		assert_rc_equal(rc, 0);
-		rc = daos_debug_set_params(arg->group, info.pi_leader,
-			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
-		assert_rc_equal(rc, 0);
-	}
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_FORCE_PROP_VERIFY | DAOS_FAIL_ALWAYS);
 	par_barrier(PAR_COMM_WORLD);
 
 	co_acl_get(arg, exp_acl, exp_owner, exp_owner_grp);
@@ -937,9 +961,7 @@ co_acl(void **state)
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	/* Clean up */
-	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
-				     0, NULL);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 	par_barrier(PAR_COMM_WORLD);
 
 	daos_prop_free(prop_in);
@@ -2293,18 +2315,12 @@ co_open_fail_destroy(void **state)
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
-	print_message("setting DAOS_CONT_OPEN_FAIL ... ");
-	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				  DAOS_CONT_OPEN_FAIL | DAOS_FAIL_ONCE,
-				  0, NULL);
-	assert_rc_equal(rc, 0);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_OPEN_FAIL | DAOS_FAIL_ONCE);
 
 	uuid_unparse(uuid, str);
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &info,
-			    NULL);
-	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-			      0, 0, NULL);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &info, NULL);
 	assert_rc_equal(rc, -DER_IO);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 	print_message("destroying container ... ");
 	rc = daos_cont_destroy(arg->pool.poh, str, 1 /* force */, NULL);
 	assert_rc_equal(rc, 0);
@@ -2398,16 +2414,14 @@ co_rf_simple(void **state)
 	daos_prop_val_2_co_status(entry->dpe_val, &stat);
 	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
 
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS,
-				      0, NULL);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-				      arg->group, 5, -1);
-		assert_success(rc);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-				      arg->group, 4, -1);
-		assert_success(rc);
+		unsigned int ranks[2];
+
+		ranks[0] = 5;
+		ranks[1] = 4;
+		arg->no_rebuild = 1;
+		rebuild_pools_ranks(&arg, 1, ranks, 2, false);
 	}
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
@@ -2421,6 +2435,8 @@ co_rf_simple(void **state)
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 
+	/* Hang the rebuild */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	/* IO testing */
 	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
@@ -2445,8 +2461,8 @@ co_rf_simple(void **state)
 	assert_rc_equal(rc, 0);
 
 	if (arg->myrank == 0) {
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-				      arg->group, 3, -1);
+		arg->no_rebuild = 1;
+		rebuild_single_pool_rank(arg, 3, false);
 		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
@@ -2467,19 +2483,19 @@ co_rf_simple(void **state)
 			    NULL);
 	assert_rc_equal(rc, -DER_RF);
 
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 	if (arg->myrank == 0) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		unsigned int ranks[3];
+
+		arg->no_rebuild = 0;
+		print_message("sleep 10 seconds for rebuild resume and wait\n");
+		sleep(10);
 		test_rebuild_wait(&arg, 1);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  3, -1);
-		assert_success(rc);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  4, -1);
-		assert_success(rc);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  5, -1);
-		assert_success(rc);
-		test_rebuild_wait(&arg, 1);
+		ranks[0] = 3;
+		ranks[1] = 4;
+		ranks[2] = 5;
+
+		reintegrate_pools_ranks(&arg, 1, ranks, 3, false);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
@@ -2574,8 +2590,7 @@ delet_container_during_aggregation(void **state)
 	pool_storage_info(arg, &pinfo);
 
 	/* Aggregation will be Hold */
-	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-			      DAOS_VOS_AGG_BLOCKED | DAOS_FAIL_ALWAYS, 0, NULL);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_VOS_AGG_BLOCKED | DAOS_FAIL_ALWAYS);
 
 	/* Write/fetch and Punch Data with 2K size */
 	for (i = 0; i <= 5000; i++)
@@ -2593,7 +2608,7 @@ delet_container_during_aggregation(void **state)
 	}
 
 	/* Aggregation will continue */
-	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 
 	/* Destroy the container while Aggregation is running */
 	rc = test_teardown_cont(arg);
@@ -2685,7 +2700,7 @@ nrank_per_node_get(struct pool_map *poolmap)
 }
 
 static int
-ranks_on_same_node(struct pool_map *poolmap, int src_rank, int *ranks)
+ranks_on_same_node(struct pool_map *poolmap, int src_rank, d_rank_t *ranks)
 {
 	struct pool_domain	*node_doms;
 	struct pool_domain	*rank_doms;
@@ -2745,7 +2760,7 @@ co_redun_lvl(void **state)
 	daos_iod_t		 iod;
 	daos_recx_t		 recx;
 	int			 nrank_per_node, ndom;
-	int			 ranks[3];
+	d_rank_t		 ranks[3];
 	int			 i, rc;
 
 	if (!test_runable(arg0, 8))
@@ -2830,16 +2845,12 @@ co_redun_lvl(void **state)
 	/* exclude two engined on same node, as redun_lvl set as DAOS_PROP_CO_REDUN_NODE,
 	 * should not cause RF broken.
 	 */
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS, 0, NULL);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-				      ranks[0], -1);
-		assert_success(rc);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-				      ranks[1], -1);
-		assert_success(rc);
+		arg->no_rebuild = 1;
+		rebuild_pools_ranks(&arg, 1, ranks, 2, false);
 	}
+
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
@@ -2875,6 +2886,7 @@ co_redun_lvl(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 	}
 
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
 	print_message("obj update should success before RF broken\n");
 	io_oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
@@ -2885,17 +2897,15 @@ co_redun_lvl(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* exclude one more rank on another NODE dom */
-	if (arg->myrank == 0) {
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-				      arg->group, ranks[2], -1);
-		assert_success(rc);
-	}
+	if (arg->myrank == 0)
+		rebuild_single_pool_rank(arg, ranks[2], false);
 
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+
 	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_UNCLEAN);
 	rc = daos_cont_open(arg->pool.poh, arg->co_str, arg->cont_open_flags, &coh, NULL, NULL);
 	assert_rc_equal(rc, -DER_RF);
@@ -2906,20 +2916,15 @@ co_redun_lvl(void **state)
 	rc = daos_obj_fetch(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
 	assert_rc_equal(rc, -DER_RF);
 
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 	if (arg->myrank == 0) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		arg->no_rebuild = 0;
+		print_message("sleep 10 seconds for rebuild resume and wait\n");
+		sleep(10);
 		test_rebuild_wait(&arg, 1);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  ranks[2], -1);
-		assert_success(rc);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  ranks[1], -1);
-		assert_success(rc);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  ranks[0], -1);
-		assert_success(rc);
-		test_rebuild_wait(&arg, 1);
+		reintegrate_pools_ranks(&arg, 1, ranks, 3, false);
 	}
+
 	par_barrier(PAR_COMM_WORLD);
 
 	print_message("obj update should still fail with DER_RF after re-integrate\n");
