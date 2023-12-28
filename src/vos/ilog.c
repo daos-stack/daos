@@ -587,7 +587,7 @@ check_equal(struct ilog_context *lctx, struct ilog_id *id_out, const struct ilog
 			D_DEBUG(DB_IO, "No entry found, done\n");
 			return 0;
 		}
-		if (dtx_is_committed(id_in->id_tx_id, ilog_ctx2cont(lctx), id_in->id_epoch)) {
+		if (dtx_is_committed(id_out->id_tx_id, ilog_ctx2cont(lctx), id_out->id_epoch)) {
 			/** Need to differentiate between updates that are
 			 * overwrites and others that are conflicts.  Return
 			 * a different error code in this case if the result

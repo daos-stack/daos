@@ -127,7 +127,8 @@ evt_off2node(struct evt_context *tcx, umem_off_t offset)
 	struct evt_node *node;
 
 	node = evt_off2ptr(tcx, offset);
-	D_ASSERT(node->tn_magic == EVT_NODE_MAGIC);
+	D_ASSERTF(node->tn_magic == EVT_NODE_MAGIC, "Invalid node %p, magic %u vs %u\n",
+		  node, node->tn_magic, EVT_NODE_MAGIC);
 
 	return node;
 }
@@ -142,7 +143,8 @@ evt_off2desc(struct evt_context *tcx, umem_off_t offset)
 	struct evt_desc *desc;
 
 	desc = evt_off2ptr(tcx, offset);
-	D_ASSERT(desc->dc_magic == EVT_DESC_MAGIC);
+	D_ASSERTF(desc->dc_magic == EVT_DESC_MAGIC, "Invalid desc %p magic %u vs %u\n",
+		  desc, desc->dc_magic, EVT_DESC_MAGIC);
 
 	return desc;
 }
