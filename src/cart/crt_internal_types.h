@@ -194,7 +194,7 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 
 struct crt_quotas {
 	int			limit[CRT_QUOTA_COUNT];
-	int			current[CRT_QUOTA_COUNT];
+	ATOMIC uint32_t		current[CRT_QUOTA_COUNT];
 	bool			enabled[CRT_QUOTA_COUNT];
 	pthread_mutex_t		mutex;
 	d_list_t		rpc_waitq;
