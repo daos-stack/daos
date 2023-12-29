@@ -595,9 +595,13 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	class = entry->iv_class;
 	if (iv_value) {
-		rc = class->iv_class_ops->ivc_value_alloc(entry, &key, iv_value);
-		if (rc)
-			D_GOTO(out, rc);
+		if (permission & CRT_IV_NO_ALLOC) {
+			iv_value->sg_nr = 1;
+		} else {
+			rc = class->iv_class_ops->ivc_value_alloc(entry, &key, iv_value);
+			if (rc)
+				D_GOTO(out, rc);
+		}
 	}
 
 	rc = class->iv_class_ops->ivc_ent_get(entry, &entry_priv_val);
@@ -626,7 +630,7 @@ out:
 	return rc;
 }
 
-static int
+static void
 ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 {
 	struct ds_iv_ns		*ns = NULL;
@@ -638,7 +642,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	if (rc != 0) {
 		if (ns != NULL)
 			ds_iv_ns_put(ns); /* balance ivc_on_get */
-		return rc;
+		return;
 	}
 	D_ASSERT(ns != NULL);
 
@@ -652,9 +656,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	/* Let's deal with iv_value first */
 	d_sgl_fini(iv_value, true);
 
-	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry, priv_entry->priv);
-	if (rc)
-		D_GOTO(put, rc);
+	entry->iv_class->iv_class_ops->ivc_ent_put(entry, priv_entry->priv);
 
 	D_FREE(priv_entry);
 	if (--entry->iv_ref > 0)
@@ -668,7 +670,7 @@ put:
 	ds_iv_ns_put(ns);
 	ds_iv_ns_put(ns);
 
-	return rc;
+	return;
 }
 
 static int
