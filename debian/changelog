@@ -1,3 +1,17 @@
+daos (2.4.1-1) unstable; urgency=medium
+
+  [ Phillip Henderson ]
+  * First release candidate for 2.4.1
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 08 Dec 2023 16:12:00 -0500
+
+daos (2.4.0-5) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Update for EL 8.8 and Leap 15.5
+  * Update raft to 0.10.1-2.411.gefa15f4
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Wed, 06 Dec 2023 08:54:56 -0500
+
 daos (2.4.0-4) unstable; urgency=medium
   [ Jerome Soumagne ]
   * Bump mercury min version to 2.3.1
