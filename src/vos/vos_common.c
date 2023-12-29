@@ -294,7 +294,7 @@ cancel:
 			dae->dae_preparing = 0;
 		}
 
-		if (unlikely(dth->dth_need_validation && dth->dth_active)) {
+		if (err == 0 && unlikely(dth->dth_need_validation && dth->dth_active)) {
 			/* Aborted by race during the yield for local TX commit. */
 			rc = vos_dtx_validation(dth);
 			switch (rc) {

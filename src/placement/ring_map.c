@@ -1076,9 +1076,11 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 			pos = plts[idx].pt_pos;
 
 			tgt = &tgts[pos];
-			layout->ol_shards[k].po_shard  = rop->rop_shard_id + k;
+			layout->ol_shards[k].po_shard = rop->rop_shard_id + k;
 			layout->ol_shards[k].po_target = tgt->ta_comp.co_id;
-			layout->ol_shards[k].po_fseq   = tgt->ta_comp.co_fseq;
+			layout->ol_shards[k].po_fseq = tgt->ta_comp.co_fseq;
+			layout->ol_shards[k].po_rank = tgt->ta_comp.co_rank;
+			layout->ol_shards[k].po_index = tgt->ta_comp.co_index;
 
 			if (pool_target_unavail(tgt, for_reint)) {
 				rc = remap_alloc_one(remap_list, k, tgt, for_reint, NULL);

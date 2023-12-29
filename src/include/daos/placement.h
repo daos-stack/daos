@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -63,7 +63,9 @@ struct pl_obj_shard {
 	uint32_t	po_shard;	/* shard identifier */
 	uint32_t	po_target;	/* target id */
 	uint32_t	po_fseq;	/* The latest failure sequence */
-	uint32_t	po_rebuilding:1, /* rebuilding status */
+	uint16_t	po_rank;	/* The rank on which the shard exists */
+	uint8_t		po_index;	/* The target index inside the node */
+	uint8_t		po_rebuilding:1, /* rebuilding status */
 			po_reintegrating:1; /* reintegrating status */
 };
 
