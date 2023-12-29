@@ -1374,8 +1374,7 @@ static void
 dispatch_rpc(struct crt_rpc_priv *rpc) {
 	int rc;
 
-	if (rpc == NULL)
-		return;
+	D_ASSERTF(rpc != NULL, "rpc is NULL\n");
 
 	crt_rpc_lock(rpc);
 
