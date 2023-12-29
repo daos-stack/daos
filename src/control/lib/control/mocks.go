@@ -678,7 +678,7 @@ func MockStorageScanResp(t *testing.T,
 		smdDevice.UsableBytes = mockNvmeConfig.UsableBytes
 		smdDevice.TotalBytes = mockNvmeConfig.TotalBytes
 		if mockNvmeConfig.NvmeState != nil {
-			smdDevice.NvmeState = *mockNvmeConfig.NvmeState
+			smdDevice.Ctrlr.NvmeState = *mockNvmeConfig.NvmeState
 		}
 		if mockNvmeConfig.NvmeRole != nil {
 			smdDevice.Roles = *mockNvmeConfig.NvmeRole

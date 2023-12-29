@@ -130,8 +130,8 @@ func Test_Convert_SmdDevice(t *testing.T) {
 	origTgts := native.TargetIDs
 	// Validate target IDs get de-duplicated and HasSysXS set appropriately
 	native.TargetIDs = append(native.TargetIDs, sysXSTgtID, native.TargetIDs[0])
-	native.NvmeState = NvmeStateFaulty
-	native.LedState = LedStateFaulty
+	native.Ctrlr.NvmeState = NvmeStateFaulty
+	native.Ctrlr.LedState = LedStateFaulty
 
 	proto := new(ctlpb.SmdDevice)
 	if err := convert.Types(native, proto); err != nil {
@@ -140,8 +140,10 @@ func Test_Convert_SmdDevice(t *testing.T) {
 
 	test.AssertEqual(t, proto.Uuid, native.UUID, "uuid match")
 	test.AssertEqual(t, proto.TgtIds, native.TargetIDs, "targets match")
-	test.AssertEqual(t, NvmeDevState(proto.DevState), native.NvmeState, "nvme dev state match")
-	test.AssertEqual(t, LedState(proto.LedState), native.LedState, "dev led state match")
+	test.AssertEqual(t, NvmeDevState(proto.Ctrlr.DevState), native.Ctrlr.NvmeState,
+		"nvme dev state match")
+	test.AssertEqual(t, LedState(proto.Ctrlr.LedState), native.Ctrlr.LedState,
+		"dev led state match")
 	test.AssertEqual(t, OptionBits(proto.RoleBits), native.Roles.OptionBits, "roles match")
 
 	convertedNative := new(SmdDevice)
@@ -170,10 +172,12 @@ func Test_Convert_SmdDevice(t *testing.T) {
 		t.Fatal(err)
 	}
 	expOut := `{"role_bits":7,"uuid":"00000001-0001-0001-0001-000000000001","tgt_ids":[5,6,7,8],` +
-		`"dev_state":"EVICTED","led_state":"ON","rank":0,"total_bytes":0,"avail_bytes":0,` +
-		`"usable_bytes":0,"cluster_size":0,"meta_size":0,"meta_wal_size":0,"rdb_size":0,` +
-		`"rdb_wal_size":0,"health":null,"tr_addr":"0000:01:00.0","roles":"data,meta,wal",` +
-		`"has_sys_xs":true}`
+		`"rank":0,"total_bytes":0,"avail_bytes":0,"usable_bytes":0,"cluster_size":0,` +
+		`"meta_size":0,"meta_wal_size":0,"rdb_size":0,"rdb_wal_size":0,` +
+		`"roles":"data,meta,wal","has_sys_xs":true,"ctrlr":{"info":"","model":"",` +
+		`"serial":"","pci_addr":"0000:01:00.0","fw_rev":"","vendor_id":"","pci_type":"",` +
+		`"socket_id":0,"health_stats":null,"namespaces":null,"smd_devices":null,` +
+		`"dev_state":"EVICTED","led_state":"ON"},"ctrlr_namespace_id":0}`
 	if diff := cmp.Diff(expOut, string(out)); diff != "" {
 		t.Fatalf("expected json output to be human readable (-want, +got):\n%s\n", diff)
 	}
