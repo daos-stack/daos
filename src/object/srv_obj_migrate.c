@@ -1073,7 +1073,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			 */
 			if (ds_cont->sc_ec_agg_eph_boundary >
 			    mrone->mo_iods_update_ephs_from_parity[i][j])
-				fetch_eph = mrone->mo_epoch;
+				fetch_eph = min(ds_cont->sc_ec_agg_eph_boundary, mrone->mo_epoch);
 			else
 				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
 
