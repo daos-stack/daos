@@ -273,7 +273,7 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 
 // groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data
 // to only those devices discovered and in device list and confirm that the devices specified in
-// the device list have all been discovered.
+// the device list have all been discovered. VMD addresses with no backing devices return error.
 func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.NvmeControllers, vmdEnabled bool) (storage.NvmeControllers, error) {
 	// if the request does not specify a device filter, return all discovered controllers
 	if reqDevs.IsEmpty() {
@@ -319,7 +319,7 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 	}
 
 	if !missing.IsEmpty() {
-		return nil, storage.FaultBdevNotFound(missing.Strings()...)
+		return nil, storage.FaultBdevNotFound(vmdEnabled, missing.Strings()...)
 	}
 
 	return out, nil
