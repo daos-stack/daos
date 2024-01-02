@@ -7,7 +7,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#include "daos_uns.h"
+#include <daos_uns.h>
 
 char *duns_xattr_name = DUNS_XATTR_NAME;
 

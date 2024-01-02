@@ -2016,8 +2016,13 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states,
 			RB_OP_STR(rebuild_op), DP_RC(rc));
 		return rc;
 	}
+	if (tgts_cnt == 0)
+		return 0;
 
-	return regenerate_task_internal(pool, tgts, tgts_cnt, rebuild_op);
+	rc = regenerate_task_internal(pool, tgts, tgts_cnt, rebuild_op);
+	D_FREE(tgts);
+
+	return rc;
 }
 
 
@@ -2111,7 +2116,7 @@ rebuild_fini_one(void *arg)
 	return 0;
 }
 
-int
+static void
 rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 {
 	struct rebuild_pool_tls	*pool_tls;
@@ -2147,7 +2152,9 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 
 	/* close the rebuild pool/container on all main XS */
 	rc = dss_task_collective(rebuild_fini_one, rpt, 0);
-
+	if (rc != 0)
+		D_WARN(DF_UUID" rebuild fini one failed: "DF_RC"\n",
+		       DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
 	d_list_del_init(&rpt->rt_list);
@@ -2160,8 +2167,6 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 
 	rpt_destroy(rpt);
-
-	return rc;
 }
 
 void

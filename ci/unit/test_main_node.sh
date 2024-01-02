@@ -13,6 +13,7 @@ if grep /mnt/daos\  /proc/mounts; then
 fi
 sudo mkdir -p /mnt/daos
 
+# shellcheck disable=SC1091
 source build/.build_vars.sh
 
 sudo mkdir -p "${SL_SRC_DIR}"

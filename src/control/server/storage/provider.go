@@ -427,6 +427,7 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 
 	if err == nil && resp != nil && !req.CleanHugepagesOnly {
 		p.vmdEnabled = resp.VMDPrepared
+		p.log.Debugf("setting vmd=%v on storage provider", p.vmdEnabled)
 	}
 	return resp, err
 }

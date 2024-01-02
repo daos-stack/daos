@@ -26,11 +26,11 @@
 #endif
 #include <daos/common.h>
 #include <daos/object.h>
-#include "dfuse_ioctl.h"
-#include "daos_types.h"
-#include "daos.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
+#include <dfuse_ioctl.h>
+#include <daos_types.h>
+#include <daos.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
 
 #ifndef FUSE_SUPER_MAGIC
 #define FUSE_SUPER_MAGIC	0x65735546
