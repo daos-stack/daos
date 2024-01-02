@@ -324,6 +324,17 @@ copy_str2ctrlr(char **dst, const char *src)
 	return 0;
 }
 
+static void
+ctrlr_reset_str_fields(Ctl__NvmeController *ctrlr)
+{
+	ctrlr->pci_addr     = NULL;
+	ctrlr->model        = NULL;
+	ctrlr->serial       = NULL;
+	ctrlr->fw_rev       = NULL;
+	ctrlr->vendor_id    = NULL;
+	ctrlr->pci_dev_type = NULL;
+}
+
 static int
 add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
 {
@@ -429,6 +440,8 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 			break;
 		}
 		ctl__nvme_controller__init(resp->devices[i]->ctrlr);
+		/* Set string fields to NULL to allow D_FREE to work as expected on cleanup */
+		ctrlr_reset_str_fields(resp->devices[i]->ctrlr);
 
 		rc = add_ctrlr_details(resp->devices[i]->ctrlr, dev_info);
 		if (rc != 0)
@@ -767,6 +780,8 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 		return -DER_NOMEM;
 	}
 	ctl__nvme_controller__init(resp->device->ctrlr);
+	/* Set string fields to NULL to allow D_FREE to work as expected on cleanup */
+	ctrlr_reset_str_fields(resp->device->ctrlr);
 
 	D_ALLOC(resp->device->ctrlr->pci_addr, ADDR_STR_MAX_LEN + 1);
 	if (resp->device->ctrlr->pci_addr == NULL)

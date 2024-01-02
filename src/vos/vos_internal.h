@@ -413,6 +413,7 @@ struct vos_dtx_act_ent {
 					 dae_maybe_shared:1,
 					 /* Need validation on leader before commit/committable. */
 					 dae_need_validation:1,
+					 dae_need_release:1,
 					 dae_preparing:1,
 					 dae_prepared:1;
 };
@@ -1591,12 +1592,6 @@ vos_exec(void (*func)(void *), void *arg)
 	func(arg);
 
 	return 0;
-}
-
-static inline bool
-umoff_is_null(umem_off_t umoff)
-{
-	return umoff == UMOFF_NULL;
 }
 
 /* vos_csum_recalc.c */

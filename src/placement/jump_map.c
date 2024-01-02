@@ -700,6 +700,8 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 			layout->ol_shards[k].po_target = target->ta_comp.co_id;
 			layout->ol_shards[k].po_fseq = target->ta_comp.co_fseq;
 			layout->ol_shards[k].po_shard = k;
+			layout->ol_shards[k].po_rank = target->ta_comp.co_rank;
+			layout->ol_shards[k].po_index = target->ta_comp.co_index;
 
 			/** If target is failed queue it for remap*/
 			if (need_remap_comp(&target->ta_comp, allow_version, gen_mode)) {
