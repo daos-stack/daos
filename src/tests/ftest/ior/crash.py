@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,7 +17,7 @@ class IorCrash(IorTestBase):
     :avocado: recursive
     """
     def verify_cont_handles(self, expected_handles=1):
-        """Verify container number of handles. If needed, perform multiple queries (with delay).
+        """Verify number of container handles. If needed, perform multiple queries (with delay).
 
         Args:
             expected_handles (int): expected number of container handles. Defaults to 1.
