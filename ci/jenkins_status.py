@@ -150,6 +150,7 @@ def test_against_job(all_failed, job_name, count):
         unexplained = all_failed.difference(main_failed)
         if not unexplained:
             print(f"Stopping checking at {ccount} builds, all failures explained")
+            break
 
     ignore = all_failed.intersection(main_failed)
     if ignore:
