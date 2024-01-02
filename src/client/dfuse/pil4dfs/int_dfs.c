@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -913,8 +913,48 @@ child_hdlr(void)
 	context_reset = true;
 }
 
-/* avoid using fd smaller than this number in daos_init() */
+/* Wrapper function for daos_init().
+ * some applications especially bash scripts use specific low fds directly.
+ * It would be safer to avoid using such low fds (fd <= DAOS_MIN_FD) in daos.
+ */
+
 #define DAOS_MIN_FD 10
+
+static bool
+call_daos_init(void)
+{
+	int  low_fd_list[DAOS_MIN_FD] = {};
+	int  low_fd_count             = 0;
+	bool success                  = false;
+	int  i, rc;
+
+	low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
+	while (1) {
+		if (low_fd_list[low_fd_count] < 0) {
+			DS_ERROR(errno, "failed to reserve a low fd");
+			goto err;
+		} else if (low_fd_list[low_fd_count] >= DAOS_MIN_FD) {
+			low_fd_count++;
+			break;
+		} else {
+			low_fd_count++;
+		}
+		low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
+	}
+	rc = daos_init();
+	if (rc) {
+		DL_ERROR(rc, "daos_init() failed");
+		goto err;
+	}
+
+	success = true;
+
+err:
+	for (i = 0; i < low_fd_count; i++)
+		close(low_fd_list[i]);
+
+	return success;
+}
 
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
@@ -1010,38 +1050,27 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		/* trying to avoid lock as much as possible */
 		if (!daos_inited) {
 			/* daos_init() is expensive to call. We call it only when necessary. */
-			int low_fd_list[DAOS_MIN_FD], low_fd_count = 0, fd_kernel, idx;
 
-			fd_kernel = open("/proc/self/maps", O_RDONLY);
-			while (fd_kernel >= 0) {
-				if (fd_kernel >= DAOS_MIN_FD) {
-					close(fd_kernel);
-					break;
-				} else {
-					low_fd_list[low_fd_count] = fd_kernel;
-					low_fd_count++;
-				}
-				fd_kernel = open("/proc/self/maps", O_RDONLY);
-			}
-			rc = daos_init();
-			if (rc) {
-				DL_ERROR(rc, "daos_init() failed");
+			if (!call_daos_init()) {
 				*is_target_path = 0;
 				goto out_normal;
 			}
+
 			if (eq_count_max) {
-				rc = daos_eq_create(&td_eqh);
-				if (rc)
-					DL_WARN(rc, "daos_eq_create() failed");
-				main_eqh = td_eqh;
-				rc       = pthread_atfork(NULL, NULL, &child_hdlr);
+				D_MUTEX_LOCK(&lock_eqh);
+				if (daos_handle_is_inval(main_eqh)) {
+					rc = daos_eq_create(&td_eqh);
+					if (rc)
+						DL_WARN(rc, "daos_eq_create() failed");
+					main_eqh = td_eqh;
+				}
+				D_MUTEX_UNLOCK(&lock_eqh);
+				rc = pthread_atfork(NULL, NULL, &child_hdlr);
 				D_ASSERT(rc == 0);
 			}
 
 			daos_inited = true;
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
-			for (idx = 0; idx < low_fd_count; idx++)
-				close(low_fd_list[idx]);
 		}
 
 		/* dfs info can be set up after daos has been initialized. */
