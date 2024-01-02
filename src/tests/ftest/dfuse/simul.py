@@ -73,7 +73,7 @@ class PosixSimul(DfuseTestBase):
     def run_simul(self, include=None, exclude=None, raise_exception=True):
         """Run simul.
 
-        If an include value is set, the exclude value is ignored and vice versa.
+        If an include value is set, the exclude value is ignored and vice-versa.
 
         Args:
             include (str, optional): comma-separated list of tests to include. Defaults to None.
