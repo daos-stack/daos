@@ -52,7 +52,7 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
 
 ARG BULLSEYE
 RUN if [ "x$BULLSEYE" != "x" ]; then                                               \
-      echo "==>Debug 1... JENKINS_URL=${JENKINS_URL}" &&                           \
+      echo "==>Debug 1... JENKINS_URL=${JENKINS_URL}";                             \
     fi
 RUN if [ "x$BULLSEYE" != "x" ]; then                                               \
       dnf install xz && dnf clean all &&                                           \
