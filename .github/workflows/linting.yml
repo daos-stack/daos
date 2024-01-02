@@ -14,6 +14,14 @@ jobs:
   # This checks .py files only so misses SConstruct and SConscript files are not checked, rather
   # for these files check them afterwards.  The output-filter will not be installed for this part
   # so regressions will be detected but not annotated.
+
+  # In order for new checks to work when landed but when testing PRs which are not rebased then
+  # it is necessairy to check for the existence of scripts and files before calling them.
+  # This is because checks which annotate code have to check out the PR code rather than a merge
+  # commit so the line numbers are correct for reporting.  Any checks which simply return failure
+  # can checkout the (default) merge commit and therefore do not need this protection.
+  # run: \[ ! -x ci/run_shellcheck.sh \] || ./ci/run_shellcheck.sh
+
   isort:
     name: Python isort
     runs-on: ubuntu-latest

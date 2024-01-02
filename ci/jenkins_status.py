@@ -125,6 +125,41 @@ def show_job(job_name, jid):
     return failed
 
 
+def test_against_job(all_failed, job_name, count):
+    """Check for failures in existing test runs
+
+    Takes set of failed tests, returns set of unexplained tests
+    """
+    data = je_load(job_name)
+    lcb = data["lastCompletedBuild"]["number"]
+    main_failed = set()
+    ccount = 0
+    for build in data["builds"]:
+        jid = build["number"]
+        if jid > lcb:
+            print(f"Job {jid} is of {job_name} is still running, skipping")
+        failed = show_job(job_name, jid)
+        if not isinstance(failed, list):
+            continue
+        for test in failed:
+            main_failed.add(test)
+        ccount += 1
+        if count == ccount:
+            break
+
+        unexplained = all_failed.difference(main_failed)
+        if not unexplained:
+            print(f"Stopping checking at {ccount} builds, all failures explained")
+
+    ignore = all_failed.intersection(main_failed)
+    if ignore:
+        print(f"Tests which failed in the PR and have also failed in {job_name} builds.")
+        for test in ignore:
+            print(test.full_info())
+
+    return all_failed.difference(main_failed)
+
+
 def main():
     """Check the results of a PR"""
 
@@ -153,42 +188,21 @@ def main():
         break
     if not all_failed:
         print("No failed tests in PR, returning")
+        return
 
-    print("PR had failed tests, checking against landings builds")
+    print(f"PR had failed {len(all_failed)} tests, checking against landings builds")
 
-    job_name = "daily-testing"
-    data = je_load(job_name)
-    lcb = data["lastCompletedBuild"]["number"]
-    main_failed = set()
-    check_count = 0
-    for build in data["builds"]:
-        jid = build["number"]
-        if jid > lcb:
-            print(f"Job {jid} is of {job_name} is still running, skipping")
-        failed = show_job(job_name, jid)
-        if not isinstance(failed, list):
-            continue
-        for test in failed:
-            main_failed.add(test)
-        check_count += 1
-        if check_count > 14:
-            break
+    all_failed = test_against_job(all_failed, "daily-testing", 14)
 
-        unexplained = all_failed.difference(main_failed)
-        if not unexplained:
-            print(f"Stopping checking at {check_count} builds, all failures explained")
-            break
+    if all_failed:
+        all_failed = test_against_job(all_failed, "weekly-testing", 4)
 
-    ignore = all_failed.intersection(main_failed)
-    if ignore:
-        print("Tests which failed in the PR and have also failed in landings builds.")
-        for test in ignore:
-            print(test.full_info())
+    if all_failed:
+        all_failed = test_against_job(all_failed, "master", 14)
 
-    new = all_failed.difference(main_failed)
-    if new:
+    if all_failed:
         print("Tests which only failed in the PR")
-        for test in new:
+        for test in all_failed:
             print(test.full_info())
         sys.exit(1)
 

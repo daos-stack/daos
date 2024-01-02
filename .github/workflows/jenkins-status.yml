@@ -13,4 +13,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run check
-        run: ./ci/daily_status.py --pr ${{ github.event.pull_request.number }}
+        run: ./ci/jenkins_status.py --pr ${{ github.event.pull_request.number }}
