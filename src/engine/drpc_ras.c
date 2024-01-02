@@ -183,7 +183,20 @@ log_event(Shared__RASEvent *evt)
 
 out:
 	fclose(stream);
-	D_INFO("&&& RAS EVENT%s\n", buf);
+	switch (evt->severity) {
+	case RAS_SEV_ERROR:
+		D_ERROR("&&& RAS EVENT%s\n", buf);
+		break;
+	case RAS_SEV_NOTICE:
+		D_INFO("&&& RAS EVENT%s\n", buf);
+		break;
+	case RAS_SEV_WARNING:
+		D_WARN("&&& RAS EVENT%s\n", buf);
+		break;
+	default:
+		D_ERROR("&&& RAS EVENT%s\n", buf);
+		break;
+	}
 	free(buf);
 }
 

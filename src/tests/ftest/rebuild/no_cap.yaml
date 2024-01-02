@@ -12,7 +12,7 @@ server_config:
   engines_per_host: 2
   engines:
     0:
-      targets: 8
+      targets: 1
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
@@ -20,7 +20,7 @@ server_config:
       log_file: daos_server0.log
       storage: auto
     1:
-      targets: 8
+      targets: 1
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
@@ -36,6 +36,6 @@ pool:
   pool_query_timeout: 30
   pool_query_interval: 1
   test_data_list: [1048576]
-  oclass: "OC_RP_2G1"
+  oclass: "OC_RP_4G1"
 rebuild:
   rank_to_kill: 1

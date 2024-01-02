@@ -8,6 +8,8 @@ set -eux
 
 : "${FIRST_NODE:=}"
 : "${OPERATIONS_EMAIL:=}"
+: "${STAGE_NAME:=Unknown}"
+: "${BUILD_URL:=Unknown}"
 
 result=0
 mail_message=''
@@ -38,9 +40,10 @@ function do_mail {
         return
     fi
     # shellcheck disable=SC2059
+    build_info="BUILD_URL = $BUILD_URL$nl STAGE = $STAGE_NAME$nl$nl"
     mail -s "Hardware check failed after reboot!" \
          -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL" \
-         <<< "$mail_message"
+         <<< "$build_info$mail_message"
     set -x
 }
 
@@ -242,7 +245,7 @@ if [ -e /sys/class/net/ib1 ]; then
     testcases+="  </testcase>$nl"
 
     ((testruns++)) || true
-    testcases+="  <testcase name=\"NVMe lsblk Count Node $mynodenum\">${nl}"
+    testcases+="  <testcase name=\"PMEM lsblk Count Node $mynodenum\">${nl}"
     if [ "$lsblk_pmem" -ne "$dimm_rcount" ]; then
        lsblk_pmem_msg="Only $lsblk_pmem of $dimm_rcount PMEM devices seen."
        mail_message+="$nl$lsblk_pmem_msg$nl$(lsblk)$nl"
