@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,12 +65,7 @@ int ds_tls_key_create(void);
 int dc_tls_key_create(void);
 void ds_tls_key_delete(void);
 void dc_tls_key_delete(void);
-/* For now TLS is only enabled if metrics are enabled */
-#define METRIC_DUMP_ENV "DAOS_METRIC_DUMP_ENV"
-#define DAOS_CLIENT_METRICS_ENV	"DAOS_CLIENT_METRICS"
-#define DAOS_CLIENT_METRICS_RETAIN_ENV	"DAOS_CLIENT_METRICS_RETAIN"
-extern bool daos_client_metric;
-extern bool daos_client_metric_retain;
+
 struct daos_module_key* daos_get_module_key(int index);
 
 /**

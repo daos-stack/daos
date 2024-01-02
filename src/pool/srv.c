@@ -13,6 +13,7 @@
 
 #include <daos_srv/pool.h>
 #include <daos/rpc.h>
+#include <daos/metrics.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include "rpc.h"
@@ -170,7 +171,7 @@ struct dss_module_key pool_module_key = {
 	.dmk_fini = pool_tls_fini,
 };
 
-struct dss_module_metrics pool_metrics = {
+struct daos_module_metrics pool_metrics = {
 	.dmm_tags = DAOS_SYS_TAG,
 	.dmm_init = ds_pool_metrics_alloc,
 	.dmm_fini = ds_pool_metrics_free,

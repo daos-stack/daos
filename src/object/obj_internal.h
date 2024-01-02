@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -620,6 +620,30 @@ dc_obj_tls_get()
 	D_ASSERT(dtls != NULL);
 	return daos_module_key_get(dtls, &dc_obj_module_key);
 }
+
+struct obj_pool_metrics {
+	/** Count number of total per-opcode requests (type = counter) */
+	struct d_tm_node_t	*opm_total[OBJ_PROTO_CLI_COUNT];
+	/** Total number of bytes fetched (type = counter) */
+	struct d_tm_node_t	*opm_fetch_bytes;
+	/** Total number of bytes updated (type = counter) */
+	struct d_tm_node_t	*opm_update_bytes;
+
+	/** Total number of silently restarted updates (type = counter) */
+	struct d_tm_node_t	*opm_update_restart;
+	/** Total number of resent update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_resent;
+	/** Total number of retry update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_retry;
+	/** Total number of EC full-stripe update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_ec_full;
+	/** Total number of EC partial update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_ec_partial;
+};
+
+void obj_metrics_free(void *data);
+int obj_metrics_count(void);
+void * obj_metrics_alloc_internal(const char *path, int tgt_id, bool server);
 
 static inline unsigned int
 lat_bucket(uint64_t size)

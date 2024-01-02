@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2023 Intel Corporation.
+ *  (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/checksum.h>
+#include <daos/metrics.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 #include "cli_csum.h"
@@ -683,23 +684,21 @@ obj_shard_update_metrics_end(crt_rpc_t *rpc, uint64_t send_time, void *arg, int 
 {
 	struct dc_obj_tls *tls;
 	struct rw_cb_args *rw_args;
-	struct obj_rw_in   *orw;
+	struct dc_pool	  *pool;
+	struct obj_rw_in  *orw;
 	struct d_tm_node_t *lat = NULL;
+	struct obj_pool_metrics	*opm = NULL;
 	daos_size_t	   size;
 	uint64_t	   time;
 	int		   opc;
 
-	if (!daos_client_metric)
+	if (!daos_client_metric || ret != 0)
 		return;
-
 	tls = dc_obj_tls_get();
 	D_ASSERT(tls != NULL);
 	opc = opc_get(rpc->cr_opc);
 	orw = crt_req_get(rpc);
 	d_tm_dec_gauge(tls->cot_op_active[opc], 1);
-
-	if (ret != 0)
-		return;
 	/**
 	 * Measure latency of successful I/O only.
 	 * Use bit shift for performance and tolerate some inaccuracy.
@@ -709,14 +708,20 @@ obj_shard_update_metrics_end(crt_rpc_t *rpc, uint64_t send_time, void *arg, int 
 
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE:
-		rw_args = arg;
-		size = daos_sgls_packed_size(rw_args->rwaa_sgls, orw->orw_nr, NULL);
-		lat = tls->cot_update_lat[lat_bucket(size)];
-		break;
 	case DAOS_OBJ_RPC_FETCH:
 		rw_args = arg;
-		size = obj_get_fetch_size(rw_args);
-		lat = tls->cot_fetch_lat[lat_bucket(size)];
+		pool = rw_args->shard_args->auxi.obj_auxi->obj->cob_pool;
+		D_ASSERT(pool != NULL);
+		opm = pool->dp_metrics[DAOS_OBJ_MODULE];
+		if (opc == DAOS_OBJ_RPC_UPDATE) {
+			size = daos_sgls_packed_size(rw_args->rwaa_sgls, orw->orw_nr, NULL);
+			d_tm_inc_counter(opm->opm_update_bytes, size);
+			lat = tls->cot_update_lat[lat_bucket(size)];
+		} else {
+			size = obj_get_fetch_size(rw_args);
+			lat = tls->cot_fetch_lat[lat_bucket(size)];
+			d_tm_inc_counter(opm->opm_fetch_bytes, size);
+		}
 		break;
 	default:
 		lat = tls->cot_op_lat[opc];

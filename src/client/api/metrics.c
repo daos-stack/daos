@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,7 @@
 #include <daos/common.h>
 #include <daos/job.h>
 #include <daos/tls.h>
+#include <daos/metrics.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_consumer.h>
 #include <gurt/telemetry_producer.h>

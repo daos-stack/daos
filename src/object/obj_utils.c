@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -142,6 +142,102 @@ obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *op,
 	}
 
 	return rc;
+}
+
+void
+obj_metrics_free(void *data)
+{
+	D_FREE(data);
+}
+
+int
+obj_metrics_count(void)
+{
+	return (sizeof(struct obj_pool_metrics) / sizeof(struct d_tm_node_t *));
+}
+
+
+void *
+obj_metrics_alloc_internal(const char *path, int tgt_id, bool server)
+{
+	struct obj_pool_metrics	*metrics;
+	uint32_t		opc;
+	int			rc;
+
+	D_ASSERT(tgt_id >= 0);
+
+	D_ALLOC_PTR(metrics);
+	if (metrics == NULL)
+		return NULL;
+
+	/** register different per-opcode counters */
+	for (opc = 0; opc < OBJ_PROTO_CLI_COUNT; opc++) {
+		/** Then the total number of requests, of type counter */
+		rc = d_tm_add_metric(&metrics->opm_total[opc], D_TM_COUNTER,
+				     "total number of processed object RPCs",
+				     "ops", "%s/ops/%s/%s%u", path,
+				     obj_opc_to_str(opc), server ? "tgt_" : "", tgt_id);
+		if (rc)
+			D_WARN("Failed to create total counter: "DF_RC"\n",
+			       DP_RC(rc));
+	}
+
+	/** Total number of silently restarted updates, of type counter */
+	rc = d_tm_add_metric(&metrics->opm_update_restart, D_TM_COUNTER,
+			     "total number of restarted update ops", "updates",
+			     "%s/restarted/%s%u", path, server ? "tgt_" : "", tgt_id);
+	if (rc)
+		D_WARN("Failed to create restarted counter: "DF_RC"\n",
+		       DP_RC(rc));
+
+	/** Total number of resent updates, of type counter */
+	rc = d_tm_add_metric(&metrics->opm_update_resent, D_TM_COUNTER,
+			     "total number of resent update RPCs", "updates",
+			     "%s/resent/%s%u", path, server ? "tgt_" : "", tgt_id);
+	if (rc)
+		D_WARN("Failed to create resent counter: "DF_RC"\n",
+		       DP_RC(rc));
+
+	/** Total number of retry updates locally, of type counter */
+	rc = d_tm_add_metric(&metrics->opm_update_retry, D_TM_COUNTER,
+			     "total number of retried update RPCs", "updates",
+			     "%s/retry/%s%u", path, server ? "tgt_" : "", tgt_id);
+	if (rc)
+		D_WARN("Failed to create retry cnt sensor: "DF_RC"\n", DP_RC(rc));
+
+	/** Total bytes read */
+	rc = d_tm_add_metric(&metrics->opm_fetch_bytes, D_TM_COUNTER,
+			     "total number of bytes fetched/read", "bytes",
+			     "%s/xferred/fetch/%s%u", path, server ? "tgt_" : "", tgt_id);
+	if (rc)
+		D_WARN("Failed to create bytes fetch counter: "DF_RC"\n",
+		       DP_RC(rc));
+
+	/** Total bytes written */
+	rc = d_tm_add_metric(&metrics->opm_update_bytes, D_TM_COUNTER,
+			     "total number of bytes updated/written", "bytes",
+			     "%s/xferred/update/%s%u", path, server ? "tgt_" : "", tgt_id);
+	if (rc)
+		D_WARN("Failed to create bytes update counter: "DF_RC"\n",
+		       DP_RC(rc));
+
+	/** Total number of EC full-stripe update operations, of type counter */
+	rc = d_tm_add_metric(&metrics->opm_update_ec_full, D_TM_COUNTER,
+			     "total number of EC sull-stripe updates", "updates",
+			     "%s/EC_update/full_stripe/%s%u", path, server ? "tgt_" : "", tgt_id);
+	if (rc)
+		D_WARN("Failed to create EC full stripe update counter: "DF_RC"\n",
+		       DP_RC(rc));
+
+	/** Total number of EC partial update operations, of type counter */
+	rc = d_tm_add_metric(&metrics->opm_update_ec_partial, D_TM_COUNTER,
+			     "total number of EC sull-partial updates", "updates",
+			     "%s/EC_update/partial/%s%u", path, server ? "tgt_" : "", tgt_id);
+	if (rc)
+		D_WARN("Failed to create EC partial update counter: "DF_RC"\n",
+		       DP_RC(rc));
+
+	return metrics;
 }
 
 

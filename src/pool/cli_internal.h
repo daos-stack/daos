@@ -15,5 +15,7 @@ void dc_pool_hdl_unlink(struct dc_pool *pool);
 struct dc_pool *dc_pool_alloc(unsigned int nr);
 
 int dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect);
+int dc_pool_metrics_start(struct dc_pool *pool);
+void dc_pool_metrics_stop(struct dc_pool *pool);
 
 #endif /* __POOL_CLIENT_INTERNAL_H__ */

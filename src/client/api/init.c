@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,7 +23,7 @@
 #include <daos/btree_class.h>
 #include <daos/placement.h>
 #include <daos/job.h>
-#include <daos/metric.h>
+#include <daos/metrics.h>
 #if BUILD_PIPELINE
 #include <daos/pipeline.h>
 #endif
@@ -316,6 +316,7 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+	daos_metrics_fini();
 #if BUILD_PIPELINE
 	dc_pipeline_fini();
 #endif

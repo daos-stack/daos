@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -106,26 +106,6 @@ struct migrate_pool_tls {
 
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
-
-struct obj_pool_metrics {
-	/** Count number of total per-opcode requests (type = counter) */
-	struct d_tm_node_t	*opm_total[OBJ_PROTO_CLI_COUNT];
-	/** Total number of bytes fetched (type = counter) */
-	struct d_tm_node_t	*opm_fetch_bytes;
-	/** Total number of bytes updated (type = counter) */
-	struct d_tm_node_t	*opm_update_bytes;
-
-	/** Total number of silently restarted updates (type = counter) */
-	struct d_tm_node_t	*opm_update_restart;
-	/** Total number of resent update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_resent;
-	/** Total number of retry update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_retry;
-	/** Total number of EC full-stripe update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_ec_full;
-	/** Total number of EC partial update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_ec_partial;
-};
 
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;

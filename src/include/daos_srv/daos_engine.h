@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -341,23 +341,6 @@ struct dss_module_ops {
 int srv_profile_stop();
 int srv_profile_start(char *path, int avg);
 
-struct dss_module_metrics {
-	/* Indicate where the keys should be instantiated */
-	enum dss_module_tag dmm_tags;
-
-	/**
-	 * allocate metrics with path to ephemeral shmem for to the
-	 * newly-created pool
-	 */
-	void	*(*dmm_init)(const char *path, int tgt_id);
-	void	 (*dmm_fini)(void *data);
-
-	/**
-	 * Get the number of metrics allocated by this module in total (including all targets).
-	 */
-	int	 (*dmm_nr_metrics)(void);
-};
-
 /**
  * Each module should provide a dss_module structure which defines the module
  * interface. The name of the allocated structure must be the library name
@@ -403,7 +386,7 @@ struct dss_module {
 	struct dss_module_ops		*sm_mod_ops;
 
 	/* Per-pool metrics (optional) */
-	struct dss_module_metrics	*sm_metrics;
+	struct daos_module_metrics	*sm_metrics;
 };
 
 /**

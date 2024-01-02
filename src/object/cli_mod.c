@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,6 +13,7 @@
 #include <daos/rpc.h>
 #include <daos/mgmt.h>
 #include <daos/tls.h>
+#include <daos/metrics.h>
 #include <daos/job.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
@@ -107,6 +108,26 @@ struct daos_module_key dc_obj_module_key = {
 	.dmk_fini = dc_obj_tls_fini,
 };
 
+static void*
+dc_obj_metrics_alloc(const char *path, int tgt_id)
+{
+	return obj_metrics_alloc_internal(path, tgt_id, false);
+}
+
+static void
+dc_obj_metrics_free(void *data)
+{
+	D_FREE(data);
+}
+
+/* metrics per pool */
+struct daos_module_metrics dc_obj_metrics = {
+	.dmm_tags = DAOS_CLI_TAG,
+	.dmm_init = dc_obj_metrics_alloc,
+	.dmm_fini = dc_obj_metrics_free,
+	.dmm_nr_metrics = obj_metrics_count,
+};
+
 /**
  * Initialize object interface
  */
@@ -117,8 +138,15 @@ dc_obj_init(void)
 	int	 rc;
 
 	d_getenv_bool(DAOS_CLIENT_METRICS_ENV, &daos_client_metric);
-	if (daos_client_metric)
+	if (daos_client_metric) {
 		daos_register_key(&dc_obj_module_key);
+		rc = daos_register_metrics(DAOS_CLI_TAG, DAOS_OBJ_MODULE,
+					   &dc_obj_metrics);
+		if (rc) {
+			DL_ERROR(rc, "register object failed");
+			return rc;
+		}
+	}
 
 	rc = obj_utils_init();
 	if (rc)

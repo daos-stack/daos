@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,9 +15,13 @@
 #define D_LOGFAC	DD_FAC(pool)
 
 #include <daos/common.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 #include <daos/event.h>
 #include <daos/mgmt.h>
 #include <daos/placement.h>
+#include <daos/metrics.h>
+#include <daos/job.h>
 #include <daos/pool.h>
 #include <daos/security.h>
 #include <daos_types.h>
@@ -106,6 +110,9 @@ pool_free(struct d_hlink *hlink)
 	D_RWLOCK_DESTROY(&pool->dp_map_lock);
 	D_MUTEX_DESTROY(&pool->dp_client_lock);
 	D_RWLOCK_DESTROY(&pool->dp_co_list_lock);
+
+	if (pool->dp_metrics != NULL)
+		dc_pool_metrics_stop(pool);
 
 	if (pool->dp_map != NULL)
 		pool_map_decref(pool->dp_map);
@@ -558,6 +565,68 @@ out:
 	return rc;
 }
 
+/**
+ * Destroy metrics for a specific pool.
+ *
+ * \param[in]	pool	pointer to ds_pool structure
+ */
+void
+dc_pool_metrics_stop(struct dc_pool *pool)
+{
+	int rc;
+
+	if (!daos_client_metric)
+		return;
+
+	daos_module_fini_metrics(DAOS_CLI_TAG, pool->dp_metrics);
+	if (!daos_client_metric_retain) {
+		rc = d_tm_del_ephemeral_dir(pool->dp_path);
+		if (rc != 0) {
+			D_WARN(DF_UUID ": failed to remove pool metrics dir for pool: "
+			       DF_RC"\n", DP_UUID(pool->dp_pool), DP_RC(rc));
+			return;
+		}
+	}
+
+	D_INFO(DF_UUID ": destroyed ds_pool metrics: %s\n", DP_UUID(pool->dp_pool), pool->dp_path);
+}
+
+int
+dc_pool_metrics_start(struct dc_pool *pool)
+{
+	int pid = getpid();
+	size_t size = daos_module_nr_pool_metrics() * PER_METRIC_BYTES;
+	int rc;
+
+	if (!daos_client_metric)
+		return 0;
+
+	snprintf(pool->dp_path, sizeof(pool->dp_path), "%s/%u/pool/"DF_UUIDF,
+		 dc_jobid, pid, DP_UUID(pool->dp_pool));
+
+	/** create new shmem space for per-pool metrics */
+	rc = d_tm_add_ephemeral_dir(NULL, size, pool->dp_path);
+	if (rc != 0) {
+		D_WARN(DF_UUID ": failed to create metrics dir for pool: "
+		       DF_RC "\n", DP_UUID(pool->dp_pool), DP_RC(rc));
+		return rc;
+	}
+
+	/* initialize metrics on the system xstream for each module */
+	rc = daos_module_init_metrics(DAOS_CLI_TAG, pool->dp_metrics,
+				      pool->dp_path, pid);
+	if (rc != 0) {
+		D_WARN(DF_UUID ": failed to initialize module metrics: "
+		       DF_RC"\n", DP_UUID(pool->dp_pool), DP_RC(rc));
+		dc_pool_metrics_stop(pool);
+		return rc;
+	}
+
+	D_INFO(DF_UUID ": created metrics for pool %s\n", DP_UUID(pool->dp_pool), pool->dp_path);
+
+	return 0;
+}
+
 /* allocate and initialize a dc_pool by label or uuid */
 static int
 init_pool(const char *label, uuid_t uuid, uint64_t capas, const char *grp,
@@ -579,6 +648,10 @@ init_pool(const char *label, uuid_t uuid, uint64_t capas, const char *grp,
 
 	/** attach to the server group and initialize rsvc_client */
 	rc = dc_mgmt_sys_attach(grp, &pool->dp_sys);
+	if (rc != 0)
+		D_GOTO(err_pool, rc);
+
+	rc = dc_pool_metrics_start(pool);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
 
