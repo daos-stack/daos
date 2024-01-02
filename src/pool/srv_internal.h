@@ -143,30 +143,64 @@ struct pool_map_refresh_ult_arg {
  */
 void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
+uint32_t ds_pool_get_vos_pool_df_version(uint32_t pool_global_version);
 int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
+int ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool);
 void ds_pool_create_handler(crt_rpc_t *rpc);
-void ds_pool_connect_handler_v4(crt_rpc_t *rpc);
+void
+     ds_pool_connect_handler_v6(crt_rpc_t *rpc);
 void ds_pool_connect_handler_v5(crt_rpc_t *rpc);
-void ds_pool_disconnect_handler(crt_rpc_t *rpc);
-void ds_pool_query_handler_v4(crt_rpc_t *rpc);
+void
+ds_pool_disconnect_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_disconnect_handler_v5(crt_rpc_t *rpc);
+void
+     ds_pool_query_handler_v6(crt_rpc_t *rpc);
 void ds_pool_query_handler_v5(crt_rpc_t *rpc);
 void ds_pool_prop_get_handler(crt_rpc_t *rpc);
 void ds_pool_prop_set_handler(crt_rpc_t *rpc);
 void ds_pool_acl_update_handler(crt_rpc_t *rpc);
 void ds_pool_acl_delete_handler(crt_rpc_t *rpc);
-void ds_pool_update_handler(crt_rpc_t *rpc);
+void
+ds_pool_update_handler_v6(crt_rpc_t *rpc);
+void
+     ds_pool_update_handler_v5(crt_rpc_t *rpc);
 void ds_pool_extend_handler(crt_rpc_t *rpc);
 void ds_pool_evict_handler(crt_rpc_t *rpc);
-void ds_pool_svc_stop_handler(crt_rpc_t *rpc);
-void ds_pool_attr_list_handler(crt_rpc_t *rpc);
-void ds_pool_attr_get_handler(crt_rpc_t *rpc);
-void ds_pool_attr_set_handler(crt_rpc_t *rpc);
-void ds_pool_attr_del_handler(crt_rpc_t *rpc);
-void ds_pool_list_cont_handler(crt_rpc_t *rpc);
-void ds_pool_filter_cont_handler(crt_rpc_t *rpc);
-void ds_pool_query_info_handler(crt_rpc_t *rpc);
+void
+ds_pool_svc_stop_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_svc_stop_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_list_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_list_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_get_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_get_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_set_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_set_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_del_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_del_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_list_cont_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_list_cont_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_filter_cont_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_filter_cont_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_query_info_handler_v6(crt_rpc_t *rpc);
+void
+     ds_pool_query_info_handler_v5(crt_rpc_t *rpc);
 void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 void ds_pool_upgrade_handler(crt_rpc_t *rpc);
 

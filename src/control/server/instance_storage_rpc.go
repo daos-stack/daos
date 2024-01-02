@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -155,4 +155,75 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 	}
 
 	return
+}
+
+func smdGetHealth(ctx context.Context, ei *EngineInstance, dev *ctlpb.SmdDevice) error {
+	state := dev.Ctrlr.DevState
+	if state != ctlpb.NvmeDevState_NORMAL && state != ctlpb.NvmeDevState_EVICTED {
+		ei.log.Debugf("skip fetching health stats on device %q in %q state", dev,
+			ctlpb.NvmeDevState_name[int32(state)])
+		return nil
+	}
+
+	health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: dev.Uuid})
+	if err != nil {
+		return errors.Wrapf(err, "device %q, state %q", dev, state)
+	}
+	dev.Ctrlr.HealthStats = health
+
+	return nil
+}
+
+func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp_RankResp, error) {
+	ei, ok := engine.(*EngineInstance)
+	if !ok {
+		return nil, errors.New("not EngineInstance")
+	}
+
+	engineRank, err := ei.GetRank()
+	if err != nil {
+		return nil, errors.Wrapf(err, "instance %d GetRank", ei.Index())
+	}
+
+	rResp := new(ctlpb.SmdQueryResp_RankResp)
+	rResp.Rank = engineRank.Uint32()
+
+	listDevsResp, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
+	if err != nil {
+		return nil, errors.Wrapf(err, "rank %d", engineRank)
+	}
+
+	if len(listDevsResp.Devices) == 0 {
+		rResp.Devices = nil
+		return rResp, nil
+	}
+
+	// For each SmdDevice returned in list devs response, append a SmdDeviceWithHealth.
+	for _, sd := range listDevsResp.Devices {
+		if sd != nil {
+			rResp.Devices = append(rResp.Devices, sd)
+		}
+	}
+
+	found := false
+	for _, dev := range rResp.Devices {
+		if pbReq.Uuid != "" && dev.Uuid != pbReq.Uuid {
+			continue // Skip health query if UUID doesn't match requested.
+		}
+		if pbReq.IncludeBioHealth {
+			if err := smdGetHealth(ctx, ei, dev); err != nil {
+				return nil, err
+			}
+		}
+		if pbReq.Uuid != "" && dev.Uuid == pbReq.Uuid {
+			rResp.Devices = []*ctlpb.SmdDevice{dev}
+			found = true
+			break
+		}
+	}
+	if pbReq.Uuid != "" && !found {
+		rResp.Devices = nil
+	}
+
+	return rResp, nil
 }

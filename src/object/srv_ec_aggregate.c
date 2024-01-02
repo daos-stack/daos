@@ -1289,6 +1289,8 @@ agg_peer_update_ult(void *arg)
 	struct dc_object	*obj = NULL;
 	crt_rpc_t		*rpc = NULL;
 	int			 rc = 0;
+	uint64_t		 enqueue_id;
+	uint32_t		 max_delay = 0;
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		D_GOTO(out, rc = -DER_TIMEDOUT);
@@ -1305,6 +1307,8 @@ agg_peer_update_ult(void *arg)
 			continue;
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
+		enqueue_id = 0;
+retry:
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 		if (rc) {
@@ -1325,6 +1329,7 @@ agg_peer_update_ult(void *arg)
 		ec_agg_in->ea_oid = entry->ae_oid;
 		peer_shard = obj_ec_parity_shard(obj, entry->ae_dkey_hash,
 						 shard / obj_ec_tgt_nr(&entry->ae_oca), peer);
+		ec_agg_in->ea_comm_in.req_in_enqueue_id = enqueue_id;
 		ec_agg_in->ea_oid.id_shard = peer_shard;
 		ec_agg_in->ea_dkey = entry->ae_dkey;
 		ec_agg_in->ea_epoch_range.epr_lo = agg_param->ap_epr.epr_lo;
@@ -1384,6 +1389,7 @@ agg_peer_update_ult(void *arg)
 				DP_RC(rc));
 			goto out_bulk;
 		}
+		crt_req_get_timeout(rpc, &max_delay);
 		ec_agg_out = crt_reply_get(rpc);
 		rc = ec_agg_out->ea_status;
 		if (bulk_hdl) {
@@ -1400,6 +1406,11 @@ agg_peer_update_ult(void *arg)
 			D_ERROR(DF_UOID" pidx %d to peer %d, ea_status "
 				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer,
 				DP_RC(rc));
+			if (rc == -DER_OVERLOAD_RETRY) {
+				enqueue_id = ec_agg_out->ea_comm_out.req_out_enqueue_id;
+				dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
+				goto retry;
+			}
 			break;
 		}
 	}
@@ -1530,6 +1541,8 @@ agg_process_holes_ult(void *arg)
 	uint32_t		 peer;
 	int			 i, rc = 0;
 	bool			 valid_hole = false;
+	uint32_t		 max_delay = 0;
+	uint64_t		 enqueue_id;
 
 	/* Process extent list to find what to re-replicate -- build recx array
 	 */
@@ -1632,6 +1645,8 @@ agg_process_holes_ult(void *arg)
 			}
 		}
 
+		enqueue_id = 0;
+retry:
 		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
@@ -1664,6 +1679,8 @@ agg_process_holes_ult(void *arg)
 		ec_rep_in->er_epoch_range.epr_hi = entry->ae_cur_stripe.as_hi_epoch;
 		ec_rep_in->er_map_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 		ec_rep_in->er_bulk = bulk_hdl;
+		ec_rep_in->er_comm_in.req_in_enqueue_id = enqueue_id;
+		crt_req_get_timeout(rpc, &max_delay);
 		rc = dss_rpc_send(rpc);
 		if (rc) {
 			D_ERROR(DF_UOID" peer %d dss_rpc_send failed "DF_RC"\n",
@@ -1677,6 +1694,11 @@ agg_process_holes_ult(void *arg)
 		if (rc) {
 			D_ERROR(DF_UOID" peer %d er_status failed "DF_RC"\n",
 				DP_UOID(entry->ae_oid), peer, DP_RC(rc));
+			if (rc == -DER_OVERLOAD_RETRY) {
+				enqueue_id = ec_rep_out->er_comm_out.req_out_enqueue_id;
+				dss_sleep(daos_rpc_rand_delay(max_delay) << 10);
+				goto retry;
+			}
 			break;
 		}
 	}
@@ -2491,7 +2513,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 {
 	struct ec_agg_param	*agg_param = param->ap_data;
 	struct ec_agg_pool_info *info = &agg_param->ap_pool_info;
-	struct ec_agg_ult_arg	arg;
+	struct ec_agg_ult_arg	arg = { 0 };
 	int			rc;
 
 	D_ASSERT(agg_param->ap_initialized == 0);
@@ -2508,9 +2530,10 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	arg.param = agg_param;
 	arg.tgt_idx = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_execute(ec_agg_init_ult, &arg, NULL, NULL, DSS_XS_SYS, 0, 0);
+	if (arg.ec_query_p != NULL)
+		cont->sc_ec_query_agg_eph = arg.ec_query_p;
 	if (rc != 0)
 		D_GOTO(out, rc);
-	cont->sc_ec_query_agg_eph = arg.ec_query_p;
 
 	rc = dsc_pool_open(info->api_pool_uuid,
 			   info->api_poh_uuid, DAOS_PC_RW,
@@ -2628,8 +2651,19 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 update_hae:
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
-		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph)
+		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph) {
+			uint64_t orig, cur;
+
+			orig = d_hlc2sec(*cont->sc_ec_query_agg_eph);
+			cur = d_hlc2sec(cont->sc_ec_agg_eph);
+			if (orig && cur > orig && (cur - orig) >= 600)
+				D_WARN(DF_CONT" Sluggish EC boundary bumping: "
+				       ""DF_U64" -> "DF_U64", gap:"DF_U64"\n",
+				       DP_CONT(cont->sc_pool_uuid, cont->sc_uuid),
+				       orig, cur, cur - orig);
+
 			*cont->sc_ec_query_agg_eph = cont->sc_ec_agg_eph;
+		}
 	}
 
 	return rc;

@@ -32,12 +32,12 @@
 #include <daos/debug.h>
 #include <daos/object.h>
 
-#include "daos_types.h"
-#include "daos_api.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
-#include "daos_prop.h"
-#include "daos_fs_sys.h"
+#include <daos_types.h>
+#include <daos_api.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
+#include <daos_prop.h>
+#include <daos_fs_sys.h>
 
 #include "daos_hdlr.h"
 
@@ -1367,29 +1367,36 @@ dm_connect(struct cmd_args_s *ap,
 	   daos_cont_info_t *dst_cont_info)
 {
 	/* check source pool/conts */
-	int				rc = 0;
-	struct duns_attr_t		dattr = {0};
-	dfs_attr_t			attr = {0};
-	daos_prop_t			*props = NULL;
-	int				rc2;
-	bool				status_healthy;
+	int                rc    = 0;
+	struct duns_attr_t dattr = {0};
+	dfs_attr_t         attr  = {0};
+	daos_prop_t       *props = NULL;
+	int                rc2;
+	bool               status_healthy;
+	unsigned int       src_cont_flags;
+
+	/* DFS only needs R. For daos API we need W for snapshot create */
+	if (is_posix_copy)
+		src_cont_flags = DAOS_COO_RO;
+	else
+		src_cont_flags = DAOS_COO_RW;
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
-		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RW, &ca->src_poh, NULL, NULL);
+		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RO, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to connect to source pool");
 			D_GOTO(err, rc);
 		}
-		rc = daos_cont_open(ca->src_poh, ca->src_cont, DAOS_COO_RW, &ca->src_coh,
+		rc = daos_cont_open(ca->src_poh, ca->src_cont, src_cont_flags, &ca->src_coh,
 				    src_cont_info, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to open source container");
 			D_GOTO(err, rc);
 		}
 		if (is_posix_copy) {
-			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDWR,
-					   DFS_SYS_NO_LOCK, &src_file_dfs->dfs_sys);
+			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDONLY, DFS_SYS_NO_LOCK,
+					   &src_file_dfs->dfs_sys);
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "Failed to mount DFS filesystem on source");
@@ -2434,6 +2441,9 @@ dfuse_count_query(struct cmd_args_s *ap)
 	struct dfuse_mem_query query = {};
 	int                    rc    = -DER_SUCCESS;
 	int                    fd;
+	struct dfuse_stat     *stat   = NULL;
+	uint64_t               tstats = 0;
+	int                    i;
 
 	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
 	if (fd < 0) {
@@ -2451,7 +2461,7 @@ dfuse_count_query(struct cmd_args_s *ap)
 		if (rc == ENOTTY) {
 			rc = -DER_MISC;
 		} else {
-			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			DH_PERROR_SYS(ap, rc, "query ioctl failed");
 			rc = daos_errno2der(errno);
 		}
 		goto close;
@@ -2463,8 +2473,35 @@ dfuse_count_query(struct cmd_args_s *ap)
 	ap->dfuse_mem.container_count = query.container_count;
 	ap->dfuse_mem.found           = query.found;
 
+	D_ALLOC_ARRAY(stat, query.stat_count);
+	if (stat == NULL)
+		D_GOTO(close, rc = -DER_NOMEM);
+
+	rc = ioctl(fd,
+		   (int)_IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_STAT_NR,
+			     sizeof(struct dfuse_stat) * query.stat_count),
+		   stat);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "stat ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+	for (i = 0; i < query.stat_count; i++)
+		tstats += stat[i].value;
+
+	for (i = 0; i < query.stat_count; i++)
+		if (stat[i].value != 0)
+			fprintf(ap->outstream, "%16s: %5.1f%% (%ld)\n", stat[i].name,
+				(double)stat[i].value / tstats * 100, stat[i].value);
+
 close:
 	close(fd);
+	D_FREE(stat);
 	return rc;
 }
 

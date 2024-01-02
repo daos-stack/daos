@@ -4,20 +4,21 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import sys
-import os
 import getpass
-from argparse import ArgumentParser
-from multiprocessing import Process, Queue  # MUST be a multiprocessing Queue
-import traceback
-import tempfile
-from itertools import product
 import logging
+import os
+import sys
+import tempfile
+import traceback
+from argparse import ArgumentParser
 from functools import partial
+from itertools import product
+from multiprocessing import Process, Queue  # MUST be a multiprocessing Queue
 
-from logger_utils import get_console_handler
-from user_utils import get_user_uid_gid
-from run_utils import run_local, RunException
+# pylint: disable=import-error,no-name-in-module
+from util.logger_utils import get_console_handler
+from util.run_utils import RunException, run_local
+from util.user_utils import get_user_uid_gid
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
@@ -260,9 +261,10 @@ def _real_w(entry_type, path):
     '''
     if entry_type == 'file':
         try:
-            # Write a newline to reduce likelihood of corrupting an executable file
-            with open(path, 'a', encoding='utf-8') as file:
-                return file.write('\n') == 1
+            # Always write a line that allows the file to be executable
+            with open(path, "w", encoding='utf-8') as file:
+                data = '#!/usr/bin/env bash\n'
+                return file.write(data) == len(data)
         except PermissionError:
             return False
     if entry_type == 'dir':

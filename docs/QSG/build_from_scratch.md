@@ -83,7 +83,7 @@ PATH.
  ```bash
  $ python3 -m venv venv
  $ source venv/bin/activate
- $ python3 -m pip install -f requirements.txt
+ $ python3 -m pip install -r requirements.txt
  ```
 
 ## Build DAOS

@@ -159,13 +159,7 @@ def configure_fuse(cenv):
         return
 
     check = Configure(cenv,
-                      custom_tests={'CheckStructMember': check_struct_member,
-                                    'CheckFuseIoctl': check_ioctl_def})
-
-    if check.CheckStructMember('#include <fuse3/fuse.h>',
-                               'struct fuse_file_info',
-                               'cache_readdir'):
-        cenv.AppendUnique(CPPDEFINES={'HAVE_CACHE_READDIR': '1'})
+                      custom_tests={'CheckFuseIoctl': check_ioctl_def})
 
     if check.CheckFuseIoctl('unsigned int'):
         pass

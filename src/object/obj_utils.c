@@ -204,6 +204,120 @@ static btr_ops_t recx_btr_ops = {
 	.to_key_decode	= recx_key_decode
 };
 
+void
+obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
+		   uint32_t start, uint32_t max_width, struct obj_coll_disp_cursor *ocdc)
+{
+	if (max_width == 0) {
+		/*
+		 * Guarantee that the targets information (to be dispatched) can be packed
+		 * inside the RPC body instead of via bulk transfer.
+		 */
+		max_width = (inline_size + max_tgt_size) / DAOS_BULK_LIMIT + 1;
+		if (max_width < COLL_DISP_WIDTH_DEF)
+			max_width = COLL_DISP_WIDTH_DEF;
+	}
+
+	if (tgt_nr - start > max_width) {
+		ocdc->grp_nr = max_width;
+		ocdc->cur_step = (tgt_nr - start) / max_width;
+		if ((tgt_nr - start) % max_width != 0) {
+			ocdc->cur_step++;
+			ocdc->fixed_step = 0;
+		} else {
+			ocdc->fixed_step = 1;
+		}
+	} else {
+		ocdc->grp_nr = tgt_nr - start;
+		ocdc->cur_step = 1;
+		ocdc->fixed_step = 1;
+	}
+
+	ocdc->pending_grps = ocdc->grp_nr;
+	ocdc->tgt_nr = tgt_nr;
+	ocdc->cur_pos = start;
+}
+
+void
+obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *tgts,
+		   crt_endpoint_t *tgt_ep)
+{
+	struct daos_coll_target		*dct = &tgts[ocdc->cur_pos];
+	struct daos_coll_target		 tmp;
+	unsigned long			 rand = 0;
+	uint32_t			 size;
+	int				 pos;
+	int				 i;
+
+	if (ocdc->cur_step > 2) {
+		rand = d_rand();
+		/*
+		 * Randomly choose an engine as the relay one for load balance.
+		 * If the one corresponding to "pos" is former moved one, then
+		 * use the "cur_pos" as the relay engine.
+		 */
+		pos = rand % (ocdc->tgt_nr - ocdc->cur_pos) + ocdc->cur_pos;
+		if (pos != ocdc->cur_pos && tgts[pos].dct_rank > dct->dct_rank) {
+			memcpy(&tmp, &tgts[pos], sizeof(tmp));
+			memcpy(&tgts[pos], dct, sizeof(tmp));
+			memcpy(dct, &tmp, sizeof(tmp));
+		}
+	}
+
+	size = dct->dct_bitmap_sz << 3;
+
+	/* Randomly choose a XS as the local leader on target engine for load balance. */
+	for (i = 0, pos = (rand != 0 ? rand : d_rand()) % dct->dct_tgt_nr; i < size; i++) {
+		if (isset(dct->dct_bitmap, i)) {
+			pos -= dct->dct_shards[i].dcs_nr;
+			if (pos < 0)
+				break;
+		}
+	}
+
+	D_ASSERT(i < size);
+
+	tgt_ep->ep_tag = i;
+	tgt_ep->ep_rank = dct->dct_rank;
+}
+
+void
+obj_coll_disp_move(struct obj_coll_disp_cursor *ocdc)
+{
+	ocdc->cur_pos += ocdc->cur_step;
+
+	/* The last one. */
+	if (--(ocdc->pending_grps) == 0) {
+		D_ASSERTF(ocdc->cur_pos == ocdc->tgt_nr,
+			  "COLL disp cursor trouble (1): "
+			  "grp_nr %u, pos %u, step %u (%s), tgt_nr %u\n",
+			  ocdc->grp_nr, ocdc->cur_pos, ocdc->cur_step,
+			  ocdc->fixed_step ? "fixed" : "vary", ocdc->tgt_nr);
+		return;
+	}
+
+	D_ASSERTF(ocdc->tgt_nr - ocdc->cur_pos >= ocdc->pending_grps,
+		  "COLL disp cursor trouble (2): "
+		  "pos %u, step %u (%s), tgt_nr %u, grp_nr %u, pending_grps %u\n",
+		  ocdc->cur_pos, ocdc->cur_step, ocdc->fixed_step ? "fixed" : "vary",
+		  ocdc->tgt_nr, ocdc->grp_nr, ocdc->pending_grps);
+
+	if (ocdc->fixed_step) {
+		D_ASSERTF(ocdc->cur_pos + ocdc->cur_step <= ocdc->tgt_nr,
+			  "COLL disp cursor trouble (3): "
+			  "pos %u, step %u (%s), tgt_nr %u, grp_nr %u, pending_grps %u\n",
+			  ocdc->cur_pos, ocdc->cur_step, ocdc->fixed_step ? "fixed" : "vary",
+			  ocdc->tgt_nr, ocdc->grp_nr, ocdc->pending_grps);
+		return;
+	}
+
+	ocdc->cur_step = (ocdc->tgt_nr - ocdc->cur_pos) / ocdc->pending_grps;
+	if ((ocdc->tgt_nr - ocdc->cur_pos) % ocdc->pending_grps != 0)
+		ocdc->cur_step++;
+	else
+		ocdc->fixed_step = 1;
+}
+
 int
 obj_utils_init(void)
 {

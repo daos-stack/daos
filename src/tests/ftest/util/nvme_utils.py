@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import threading
 import re
+import threading
 import time
 
 from avocado import fail_on
 from avocado.core.exceptions import TestFail
-
-from dmg_utils import get_storage_query_device_uuids, get_dmg_response
+from dmg_utils import get_dmg_response, get_storage_query_device_uuids
 from exception_utils import CommandFailure
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
@@ -155,7 +154,7 @@ class ServerFillUp(IorTestBase):
 
         self.nvme_local_cont.create()
 
-    def start_ior_thread(self, create_cont, operation):
+    def start_ior_thread(self, create_cont, operation, log_file=None):
         """Start IOR write/read threads and wait until all threads are finished.
 
         Args:
@@ -164,6 +163,7 @@ class ServerFillUp(IorTestBase):
                 Write/WriteRead: It will Write or Write/Read base on IOR parameter in yaml file.
                 Auto_Write/Auto_Read: It will calculate the IOR block size based on requested
                                         storage % to be fill.
+            log_file (str, optional): log file. Defaults to None.
         """
         # IOR flag can Write/Read based on test yaml
         self.ior_local_cmd.flags.value = self.ior_default_flags
@@ -188,7 +188,7 @@ class ServerFillUp(IorTestBase):
 
         # Define the job manager for the IOR command
         job_manager_main = get_job_manager(self, "Mpirun", self.ior_local_cmd, mpi_type="mpich")
-        env = self.ior_local_cmd.get_default_env(str(job_manager_main))
+        env = self.ior_local_cmd.get_default_env(str(job_manager_main), log_file)
         job_manager_main.assign_hosts(self.hostlist_clients, self.workdir, None)
         job_manager_main.assign_environment(env, True)
         job_manager_main.assign_processes(self.params.get("np", '/run/ior/client_processes/*'))
@@ -334,7 +334,8 @@ class ServerFillUp(IorTestBase):
         """
         self.pool.exclude(rank, str(target))
 
-    def start_ior_load(self, storage='NVMe', operation="WriteRead", percent=1, create_cont=True):
+    def start_ior_load(self, storage='NVMe', operation="WriteRead", percent=1, create_cont=True,
+                       log_file=None):
         """Fill up the server either SCM or NVMe.
 
         Fill up based on percent amount given using IOR.
@@ -344,6 +345,7 @@ class ServerFillUp(IorTestBase):
             operation (string): Write/Read operation
             percent (int): % of storage to be filled
             create_cont (bool): To create the new container for IOR
+            log_file (str, optional): log file. Defaults to None.
         """
         kill_rank_job = []
         kill_target_job = []
@@ -354,8 +356,9 @@ class ServerFillUp(IorTestBase):
         self.scm_fill = 'SCM' in storage
 
         # Create the IOR threads
-        job = threading.Thread(target=self.start_ior_thread, kwargs={"create_cont": create_cont,
-                                                                     "operation": operation})
+        job = threading.Thread(
+            target=self.start_ior_thread,
+            kwargs={"create_cont": create_cont, "operation": operation, "log_file": log_file})
         # Launch the IOR thread
         job.start()
 

@@ -133,6 +133,8 @@ test_d_errstr(void **state)
 	value = d_errstr(-2047);
 	assert_string_equal(value, "DER_DIV_BY_ZERO");
 	value = d_errstr(-(DER_DIV_BY_ZERO + 1));
+	assert_string_equal(value, "DER_OVERLOAD_RETRY");
+	value = d_errstr(-(DER_OVERLOAD_RETRY + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
 }
 
