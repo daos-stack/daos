@@ -1,3 +1,10 @@
+daos (2.4.1-1) unstable; urgency=medium
+
+  [ Phillip Henderson ]
+  * First release candidate for 2.4.1
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 08 Dec 2023 16:12:00 -0500
+
 daos (2.4.0-5) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Update for EL 8.8 and Leap 15.5
