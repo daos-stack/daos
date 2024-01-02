@@ -652,8 +652,6 @@ pipeline {
                     }
                     post {
                         unsuccessful {
-                            echo '==>Debug 1...' +
-                                 '==>Debug JENKINS_URL=${JENKINS_URL}'
                             sh label: 'Save failed Bullseye logs',
                                script: '''if [ -f config.log ]; then
                                           mv config.log config.log-el8-covc
