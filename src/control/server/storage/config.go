@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1060,6 +1060,14 @@ type SpdkRpcServer struct {
 	SockAddr string `yaml:"sock_addr,omitempty" json:"sock_addr"`
 }
 
+// BdevAutoFaulty struct describes settings for detection of faulty NVMe devices within the BIO
+// module of the engine process.
+type BdevAutoFaulty struct {
+	Enable      bool   `yaml:"enable,omitempty" json:"enable"`
+	MaxIoErrs   uint32 `yaml:"max_io_errs,omitempty" json:"max_io_errs"`
+	MaxCsumErrs uint32 `yaml:"max_csum_errs,omitempty" json:"max_csum_errs"`
+}
+
 type Config struct {
 	ControlMetadata  ControlMetadata `yaml:"-"` // inherited from server
 	EngineIdx        uint            `yaml:"-"`
@@ -1070,6 +1078,7 @@ type Config struct {
 	NumaNodeIndex    uint            `yaml:"-"`
 	AccelProps       AccelProps      `yaml:"acceleration,omitempty"`
 	SpdkRpcSrvProps  SpdkRpcServer   `yaml:"spdk_rpc_server,omitempty"`
+	AutoFaultyProps  BdevAutoFaulty  `yaml:"bdev_auto_faulty,omitempty"`
 }
 
 func (c *Config) SetNUMAAffinity(node uint) {

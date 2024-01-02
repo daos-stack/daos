@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +52,7 @@ const (
 	ConfSetHotplugBusidRange     = C.NVME_CONF_SET_HOTPLUG_RANGE
 	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
 	ConfSetSpdkRpcServer         = C.NVME_CONF_SET_SPDK_RPC_SERVER
+	ConfSetAutoFaultyProps       = C.NVME_CONF_SET_AUTO_FAULTY
 )
 
 // Acceleration related constants for engine setting and optional capabilities.
@@ -545,6 +546,7 @@ type (
 		Hostname          string
 		AccelProps        AccelProps
 		SpdkRpcSrvProps   SpdkRpcServer
+		AutoFaultyProps   BdevAutoFaulty
 		VMDEnabled        bool
 		ScannedBdevs      NvmeControllers // VMD needs address mapping for backing devices.
 	}
