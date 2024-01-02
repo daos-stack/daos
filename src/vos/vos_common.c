@@ -155,8 +155,7 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 		return 0;
 
 	if (dth->dth_local) {
-		/** We stored the pool handle in this field in this case */
-		pool = vos_hdl2pool(dth->dth_coh);
+		pool = vos_hdl2pool(dth->dth_poh);
 		umm  = vos_pool2umm(pool);
 	} else {
 		cont = vos_hdl2cont(dth->dth_coh);
@@ -240,6 +239,9 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
 static inline void
 vos_local_tx_abort(struct dtx_handle *dth)
 {
+	struct dtx_local_oid_record *record = NULL;
+	struct daos_lru_cache       *occ    = NULL;
+
 	if (dth->dth_local_oid_cnt == 0)
 		return;
 
@@ -247,8 +249,8 @@ vos_local_tx_abort(struct dtx_handle *dth)
 	 * Since a local transaction spawns always a single pool an eaither one of the containers
 	 * can be used to access the pool.
 	 */
-	struct dtx_local_oid_record *record = &dth->dth_local_oid_array[0];
-	struct daos_lru_cache *occ = vos_obj_cache_current(record->dor_cont->vc_pool->vp_sysdb);
+	record = &dth->dth_local_oid_array[0];
+	occ    = vos_obj_cache_current(record->dor_cont->vc_pool->vp_sysdb);
 
 	/**
 	 * Evict all objects touched by the aborted transaction from the object cache to make sure
@@ -285,7 +287,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	}
 
 	if (dth->dth_local) {
-		pool = vos_hdl2pool(dth_in->dth_coh);
+		pool = vos_hdl2pool(dth_in->dth_poh);
 	} else {
 		pool = cont->vc_pool;
 	}

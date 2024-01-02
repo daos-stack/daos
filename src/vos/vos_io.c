@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2391,10 +2391,11 @@ update_cancel(struct vos_io_context *ioc)
 static int
 vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid)
 {
+	struct dtx_local_oid_record *oid_array = NULL;
+	struct dtx_local_oid_record *record    = NULL;
+
 	/** The array has to grow to accommodate the next record. */
 	if (dth->dth_local_oid_cnt == dth->dth_local_oid_cap) {
-		struct dtx_local_oid_record *oid_array;
-
 		D_REALLOC_ARRAY(oid_array, dth->dth_local_oid_array, dth->dth_local_oid_cap,
 				dth->dth_local_oid_cap << 1);
 		if (oid_array == NULL)
@@ -2404,8 +2405,8 @@ vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid
 		dth->dth_local_oid_cap <<= 1;
 	}
 
-	struct dtx_local_oid_record *record = &dth->dth_local_oid_array[dth->dth_local_oid_cnt];
-	record->dor_cont                    = cont;
+	record           = &dth->dth_local_oid_array[dth->dth_local_oid_cnt];
+	record->dor_cont = cont;
 	vos_cont_addref(cont);
 	record->dor_oid = *oid;
 	dth->dth_local_oid_cnt++;
@@ -2442,8 +2443,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	tx_started = true;
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && !dth->dth_local && dth->dth_dti_cos_count > 0 &&
-	    !dth->dth_cos_done) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
+		D_ASSERT(!dth->dth_local);
+
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);

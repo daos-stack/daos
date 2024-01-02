@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,8 +52,11 @@ struct dtx_handle {
 			struct dtx_memberships	*dth_mbs;
 		};
 	};
-	/** The container handle or pool handle (local transactions only) */
-	daos_handle_t			 dth_coh;
+	union {
+		/** The container handle or pool handle (local transactions only) */
+		daos_handle_t dth_coh;
+		daos_handle_t dth_poh;
+	};
 	/** The epoch# for the DTX. */
 	daos_epoch_t			 dth_epoch;
 	/**
@@ -121,12 +124,24 @@ struct dtx_handle {
 	/** Modification sequence in the distributed transaction. */
 	uint16_t			 dth_op_seq;
 
-	/** The count of objects that are modified by this DTX. */
-	uint16_t			 dth_oid_cnt;
-	/** The total slots in the dth_oid_array. */
-	uint16_t			 dth_oid_cap;
-	/** If more than one objects are modified, the IDs are reocrded here. */
-	daos_unit_oid_t			*dth_oid_array;
+	union {
+		struct {
+			/** The count of objects that are modified by this DTX. */
+			uint16_t         dth_oid_cnt;
+			/** The total slots in the dth_oid_array. */
+			uint16_t         dth_oid_cap;
+			/** If more than one objects are modified, the IDs are reocrded here. */
+			daos_unit_oid_t *dth_oid_array;
+		};
+		struct {
+			/** The count of objects stored in dth_local_oid_array. */
+			uint16_t                     dth_local_oid_cnt;
+			/** The total slots in the dth_local_oid_array. */
+			uint16_t                     dth_local_oid_cap;
+			/** The record of all objects touched by the local transaction. */
+			struct dtx_local_oid_record *dth_local_oid_array;
+		};
+	};
 
 	/* Hash of the dkey to be modified if applicable. Per modification. */
 	uint64_t			 dth_dkey_hash;
@@ -145,14 +160,7 @@ struct dtx_handle {
 	d_list_t			 dth_share_act_list;
 	/* DTX list to be checked */
 	d_list_t			 dth_share_tbd_list;
-	int				 dth_share_tbd_count;
-
-	/** The count of objects stored in dth_local_oid_array. */
-	uint16_t                          dth_local_oid_cnt;
-	/** The total slots in the dth_local_oid_array. */
-	uint16_t                          dth_local_oid_cap;
-	/** The record of all objects touched by the local transaction. */
-	struct dtx_local_oid_record      *dth_local_oid_array;
+	int                               dth_share_tbd_count;
 };
 
 /* Each sub transaction handle to manage each sub thandle */

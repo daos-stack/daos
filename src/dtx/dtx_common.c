@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -865,11 +865,11 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	if (!local) {
 		dth->dth_xid        = *dti;
 		dth->dth_leader_oid = *leader_oid;
+		dth->dth_coh        = coh;
 	} else {
 		dth->dth_xid.dti_hlc = 1;
+		dth->dth_poh         = coh;
 	}
-
-	dth->dth_coh = coh;
 
 	dth->dth_ver = pm_ver;
 	dth->dth_refs = 1;
@@ -1463,7 +1463,7 @@ out:
 /**
  * Prepare the DTX handle in DRAM.
  *
- * \param coh		[IN]	Container handle.
+ * \param coh		[IN]	Container handle or pool handle.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param sub_modification_cnt
