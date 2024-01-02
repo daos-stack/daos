@@ -43,9 +43,13 @@ func queryRank(reqRank uint32, engineRank ranklist.Rank) bool {
 }
 
 func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
+	if req == nil {
+		return errors.New("nil request")
+	}
+
 	for _, ei := range svc.harness.Instances() {
 		if !ei.IsReady() {
-			svc.log.Debugf("skipping not-ready instance %d", ei.Index())
+			svc.log.Debugf("skipping not-ready instance")
 			continue
 		}
 
@@ -54,65 +58,15 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 			return err
 		}
 		if !queryRank(req.GetRank(), engineRank) {
+			svc.log.Debugf("skipping rank %d not specified in request", engineRank)
 			continue
 		}
 
-		rResp := new(ctlpb.SmdQueryResp_RankResp)
-		rResp.Rank = engineRank.Uint32()
-
-		listDevsResp, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
+		rResp, err := smdQueryEngine(ctx, ei, req)
 		if err != nil {
-			return errors.Wrapf(err, "rank %d", engineRank)
-		}
-
-		if len(listDevsResp.Devices) == 0 {
-			rResp.Devices = nil
-			resp.Ranks = append(resp.Ranks, rResp)
-			continue
-		}
-
-		// For each SmdDevice returned in list devs response, append a SmdDeviceWithHealth.
-		for _, sd := range listDevsResp.Devices {
-			rResp.Devices = append(rResp.Devices, &ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-				Details: sd,
-			})
+			return err
 		}
 		resp.Ranks = append(resp.Ranks, rResp)
-
-		if req.Uuid != "" {
-			found := false
-			for _, dev := range rResp.Devices {
-				if dev.Details.Uuid == req.Uuid {
-					rResp.Devices = []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{dev}
-					found = true
-					break
-				}
-			}
-			if !found {
-				rResp.Devices = nil
-			}
-		}
-
-		for _, dev := range rResp.Devices {
-			state := dev.Details.DevState
-
-			// skip health query if the device is not in a normal or faulty state
-			if req.IncludeBioHealth {
-				if state != ctlpb.NvmeDevState_NEW {
-					health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-						DevUuid: dev.Details.Uuid,
-					})
-					if err != nil {
-						return errors.Wrapf(err, "device %q, state %q",
-							dev, state)
-					}
-					dev.Health = health
-					continue
-				}
-				svc.log.Debugf("skip fetching health stats on device %q in NEW state",
-					dev, state)
-			}
-		}
 	}
 
 	return nil
@@ -130,6 +84,7 @@ func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQuer
 			return err
 		}
 		if !queryRank(req.GetRank(), engineRank) {
+			svc.log.Debugf("skipping rank %d not specified in request", engineRank)
 			continue
 		}
 
@@ -318,34 +273,30 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 			if dev == nil {
 				return nil, errors.New("nil device in smd query resp")
 			}
-			dds := dev.Details
-			if dds == nil {
-				return nil, errors.New("device with nil details in smd query resp")
-			}
-			if dds.TrAddr == "" {
+			if dev.Ctrlr.PciAddr == "" {
 				svc.log.Errorf("No transport address associated with device %s",
-					dds.Uuid)
+					dev.Uuid)
 			}
 
-			matchUUID := dds.Uuid != "" && devUUIDs[dds.Uuid]
+			matchUUID := dev.Uuid != "" && devUUIDs[dev.Uuid]
 
 			// Where possible specify the TrAddr over UUID as there may be multiple
 			// UUIDs mapping to the same TrAddr.
-			if useTrAddr && dds.TrAddr != "" {
-				if matchAll || matchUUID || trAddrs[dds.TrAddr] {
+			if useTrAddr && dev.Ctrlr.PciAddr != "" {
+				if matchAll || matchUUID || trAddrs[dev.Ctrlr.PciAddr] {
 					// If UUID matches, add by TrAddr rather than UUID which
 					// should avoid duplicate UUID entries for the same TrAddr.
-					edm.add(engine, devID{trAddr: dds.TrAddr})
-					delete(trAddrs, dds.TrAddr)
-					delete(devUUIDs, dds.Uuid)
+					edm.add(engine, devID{trAddr: dev.Ctrlr.PciAddr})
+					delete(trAddrs, dev.Ctrlr.PciAddr)
+					delete(devUUIDs, dev.Uuid)
 					continue
 				}
 			}
 
 			if matchUUID {
 				// Only add UUID entry if TrAddr is not available for a device.
-				edm.add(engine, devID{uuid: dds.Uuid})
-				delete(devUUIDs, dds.Uuid)
+				edm.add(engine, devID{uuid: dev.Uuid})
+				delete(devUUIDs, dev.Uuid)
 			}
 		}
 	}
@@ -390,7 +341,10 @@ func addManageRespIDOnFail(log logging.Logger, res *ctlpb.SmdManageResp_Result, 
 	if res.Device == nil {
 		// Populate id so failure can be mapped to a device.
 		res.Device = &ctlpb.SmdDevice{
-			TrAddr: dev.trAddr, Uuid: dev.uuid,
+			Ctrlr: &ctlpb.NvmeController{
+				PciAddr: dev.trAddr,
+			},
+			Uuid: dev.uuid,
 		}
 	}
 }

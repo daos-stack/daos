@@ -25,7 +25,7 @@
 #include <daos_srv/dtx_srv.h>
 #include <daos_srv/security.h>
 #include <daos/checksum.h>
-#include "daos_srv/srv_csum.h"
+#include <daos_srv/srv_csum.h>
 #include "obj_rpc.h"
 #include "srv_internal.h"
 
@@ -2345,14 +2345,14 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rc != 0)
 		return rc;
 
-	rc = obj_inflight_io_check(ioc->ioc_coc, opc, flags);
-	if (rc != 0)
-		goto failed;
-
 	rc = obj_capa_check(ioc->ioc_coh, obj_is_modification_opc(opc),
 			    obj_is_ec_agg_opc(opc) ||
 			    (flags & ORF_FOR_MIGRATION) ||
 			    (flags & ORF_FOR_EC_AGG));
+	if (rc != 0)
+		goto failed;
+
+	rc = obj_inflight_io_check(ioc->ioc_coc, opc, flags);
 	if (rc != 0)
 		goto failed;
 

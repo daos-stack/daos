@@ -18,8 +18,8 @@
 #include <daos/array.h>
 #include <daos/object.h>
 
-#include "daos.h"
-#include "daos_fs.h"
+#include <daos.h>
+#include <daos_fs.h>
 #include "dfs_internal.h"
 
 /** D-key name of SB metadata */
