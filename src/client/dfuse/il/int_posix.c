@@ -21,12 +21,14 @@
 #include <sys/ioctl.h>
 #include <string.h>
 
-#include <daos/event.h>
-#include "dfuse_log.h"
 #include <gurt/list.h>
 #include <gurt/atomic.h>
+
+#include <daos/event.h>
+#include <dfuse_ioctl.h>
+
+#include "dfuse_log.h"
 #include "intercept.h"
-#include "dfuse_ioctl.h"
 #include "dfuse_vector.h"
 #include "dfuse_common.h"
 
