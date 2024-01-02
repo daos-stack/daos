@@ -486,13 +486,6 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 		}
 	}
 
-	rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
-			     "Number of committed entries kept around for reply"
-			     " reconstruction", "entries",
-			     "io/dtx/committed/tgt_%u", tgt_id);
-	if (rc)
-		D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
-		       DP_RC(rc));
 	if (tgt_id >= 0) {
 		rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
 				     "Number of committed entries kept around for reply"

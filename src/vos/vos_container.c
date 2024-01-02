@@ -200,6 +200,8 @@ cont_free_internal(struct vos_container *cont)
 	cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
 	d_tm_dec_gauge(vos_tls_get(cont->vc_pool->vp_sysdb)->vtl_committed,
 		       cont->vc_dtx_committed_count);
+	d_tm_dec_gauge(vos_tls_get(cont->vc_pool->vp_sysdb)->vtl_dtx_cmt_ent_cnt,
+		       cont->vc_dtx_committed_count);
 
 	D_FREE(cont);
 }
