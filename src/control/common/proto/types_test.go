@@ -46,11 +46,13 @@ func TestProto_ConvertNvmeHealth(t *testing.T) {
 
 func TestProto_ConvertSmdDevice(t *testing.T) {
 	pb := MockSmdDevice("0000:80:00.0", 1)
+	pb.Ctrlr.HealthStats = MockNvmeHealth(1)
 	native, err := (*SmdDevice)(pb).ToNative()
 	if err != nil {
 		t.Fatal(err)
 	}
 	expNative := storage.MockSmdDevice("0000:80:00.0", 1)
+	expNative.Ctrlr.HealthStats = storage.MockNvmeHealth(1)
 
 	if diff := cmp.Diff(expNative, native, test.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)

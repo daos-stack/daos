@@ -17,8 +17,8 @@
 #include <gurt/atomic.h>
 #include <gurt/slab.h>
 
-#include "daos.h"
-#include "daos_fs.h"
+#include <daos.h>
+#include <daos_fs.h>
 
 #include "dfs_internal.h"
 
@@ -146,9 +146,6 @@ struct dfuse_obj_hdl {
 	struct dfuse_readdir_hdl *doh_rd;
 
 	ATOMIC uint32_t           doh_il_calls;
-
-	/** Number of active readdir operations */
-	ATOMIC uint32_t           doh_readdir_number;
 
 	ATOMIC uint64_t           doh_write_count;
 
@@ -689,7 +686,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 	do {                                                                                       \
 		int    __rc;                                                                       \
 		double timeout = 0;                                                                \
-		if (atomic_load_relaxed(&(ie)->ie_open_count) == 0) {                              \
+		if (atomic_load_relaxed(&(ie)->ie_il_count) == 0) {                                \
 			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
 			dfuse_mcache_set_time(ie);                                                 \
 		}                                                                                  \
@@ -876,6 +873,9 @@ struct dfuse_inode_entry {
 
 	struct dfuse_cont        *ie_dfs;
 
+	/* Lock, used to protect readdir calls */
+	pthread_mutex_t           ie_lock;
+
 	/** Hash table of inodes
 	 * All valid inodes are kept in a hash table, using the hash table locking.
 	 */
@@ -904,9 +904,6 @@ struct dfuse_inode_entry {
 
 	/* Readdir handle, if present.  May be shared */
 	struct dfuse_readdir_hdl *ie_rd_hdl;
-
-	/** Number of active readdir operations */
-	ATOMIC uint32_t           ie_readdir_number;
 
 	/** file was truncated from 0 to a certain size */
 	bool                      ie_truncated;
