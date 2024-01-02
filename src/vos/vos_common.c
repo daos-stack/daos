@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -292,6 +292,17 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 	if (rsrvd_scmp != NULL) {
 		D_ASSERT(nvme_exts != NULL);
+		if (dth->dth_rsrvd_cnt > 0 && dth->dth_rsrvd_cnt >= dth->dth_modification_cnt) {
+			/*
+			 * Just do your best to release the SCM reservation. Can't handle another
+			 * error while handling one already anyway.
+			 */
+			(void)vos_publish_scm(vos_pool2umm(pool), *rsrvd_scmp, false /* publish */);
+			*rsrvd_scmp = NULL;
+			err         = -DER_NOMEM;
+			goto cancel;
+		}
+
 		dru = &dth->dth_rsrvds[dth->dth_rsrvd_cnt++];
 		dru->dru_scm = *rsrvd_scmp;
 		*rsrvd_scmp = NULL;

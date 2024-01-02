@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -332,10 +332,64 @@ big_local_transaction(void **state)
 
 #undef OIDS_NUM
 
+static void
+too_complex_transaction(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
+
+	int                    rc = 0;
+	char                   buf[BUF_SIZE];
+	struct dtx_handle     *dth       = NULL;
+	const char            *test_data = "Hello";
+	daos_key_t            *dkey0     = &la->dkey[0];
+	daos_key_t            *dkey1     = &la->dkey[1];
+
+	print_message("Test:\n");
+
+	print_message("- begin local transaction\n");
+	uint16_t sub_modification_cnt = 0;
+	rc = dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, sub_modification_cnt, 0, NULL, NULL, 0,
+		       DTX_LOCAL, NULL, &dth);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dth);
+
+	la->iod.iod_size = strlen(test_data);
+	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data, la->iod.iod_size);
+
+	/* there is always a single inline slot available */
+	print_message("- insert at DKEY[0] (rc=0)\n");
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, dkey0, 1, &la->iod,
+			       NULL, &la->sgl, dth);
+	assert_rc_equal(rc, 0);
+
+	/* there should not be slot available to record another operation */
+	print_message("- insert at DKEY[1] (rc=-DER_NOMEM)\n");
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, dkey1, 1, &la->iod,
+			       NULL, &la->sgl, dth);
+	assert_rc_equal(rc, -DER_NOMEM);
+
+	print_message("- abort the transaction (rc=-DER_NOMEM)\n");
+	rc = dtx_end(dth, NULL, rc);
+	assert_rc_equal(rc, -DER_NOMEM);
+
+	d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
+
+	print_message("- try fetching the value inserted at DKEY[0]\n");
+	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, dkey0, &la->iod, &la->fetch_sgl);
+	validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
+
+	print_message("- try fetching the value that failed to be inserted at DKEY[1]\n");
+	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, dkey1, &la->iod, &la->fetch_sgl);
+	validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
+}
+
 static const struct CMUnitTest local_tests_all[] = {
     {"DTX100: Simple local transaction", local_transaction, setup_local_args, teardown_local_args},
     {"DTX101: Simple local transaction with pre-existing data", local_transaction, warmup, cleanup},
     {"DTX102: Big local transaction", big_local_transaction, warmup, cleanup},
+    {"DTX103: Too complex transaction", too_complex_transaction, setup_local_args,
+     teardown_local_args},
 };
 
 int
