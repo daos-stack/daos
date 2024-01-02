@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1177,6 +1177,45 @@ out:
 	return rc;
 }
 
+static int
+d_getenv_ull(unsigned long long *val, const char* name)
+{
+	char              *env;
+	char              *endptr;
+	unsigned long long tmp;
+	int                rc;
+
+	assert(val != NULL);
+	assert(name != NULL);
+
+	pthread_rwlock_rdlock(&d_env_lock);
+	env = getenv(name);
+	if (env == NULL) {
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+
+	if (!dis_unsigned_str(env)) {
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	errno = 0;
+	tmp   = strtoull(env, &endptr, 0);
+	if (errno != 0 || endptr == env || *endptr != '\0') {
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	*val = tmp;
+	rc   = -DER_SUCCESS;
+
+out:
+	pthread_rwlock_unlock(&d_env_lock);
+
+	return rc;
+}
+
 /**
  * get an unsigned integer type environment variables.
  *
@@ -1188,155 +1227,89 @@ out:
 int
 d_getenv_uint(unsigned *uint_val, const char *name)
 {
-	char         *env;
-	char         *endptr;
-	unsigned long val;
-	int           rc;
+	int                rc;
+	unsigned long long tmp;
 
-	assert(name != NULL);
 	assert(uint_val != NULL);
+	assert(name != NULL);
 
-	pthread_rwlock_rdlock(&d_env_lock);
-	env = getenv(name);
-	if (env == NULL) {
-		rc = -DER_NONEXIST;
-		goto out;
-	}
+	rc = d_getenv_ull(&tmp, name);
+	if (rc != -DER_SUCCESS)
+		return rc;
 
-	if (!dis_unsigned_str(env)) {
-		rc = -DER_INVAL;
-		goto out;
-	}
-
-	errno = 0;
-	val   = strtoul(env, &endptr, 0);
-	if (errno != 0 || endptr == env || *endptr != '\0') {
-		rc = -DER_INVAL;
-		goto out;
-	}
-
-#if UINT_MAX != ULONG_MAX
-	assert(sizeof(unsigned) < sizeof(unsigned long));
-	if (val > UINT_MAX) {
-		rc = -DER_INVAL;
-		goto out;
+#if UINT_MAX != ULLONG_MAX
+	assert(sizeof(unsigned) < sizeof(unsigned long long));
+	if (tmp > UINT_MAX) {
+		return -DER_INVAL;
 	}
 #endif
-	*uint_val = (unsigned)val;
-	rc        = -DER_SUCCESS;
 
-out:
-	pthread_rwlock_unlock(&d_env_lock);
-
-	return rc;
+	*uint_val = (unsigned)tmp;
+	return -DER_SUCCESS;
 }
 
 /**
  * get a 32bits unsigned integer type environment variables
  *
- * \param[in,out]	val	returned value of the ENV. Will not change the original value if ENV
- *				is not set or set as a non-integer value.
- * \param[in]		name	name of the environment variable.
- * \return			0 on success, a negative value on error.
+ * \param[in,out]	uint32_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \param[in]		name		name of the environment variable.
+ * \return				0 on success, a negative value on error.
  */
 int
 d_getenv_uint32_t(uint32_t *uint32_val, const char *name)
 {
-	char              *env;
-	char              *endptr;
-	unsigned long long val;
 	int                rc;
+	unsigned long long tmp;
 
-	assert(name != NULL);
 	assert(uint32_val != NULL);
+	assert(name != NULL);
 
-	pthread_rwlock_rdlock(&d_env_lock);
-	env = getenv(name);
-	if (env == NULL) {
-		rc = -DER_NONEXIST;
-		goto out;
-	}
-
-	if (!dis_unsigned_str(env)) {
-		rc = -DER_INVAL;
-		goto out;
-	}
-
-	errno = 0;
-	val   = strtoull(env, &endptr, 0);
-	if (errno != 0 || endptr == env || *endptr != '\0') {
-		rc = -DER_INVAL;
-		goto out;
-	}
+	rc = d_getenv_ull(&tmp, name);
+	if (rc != -DER_SUCCESS)
+		return rc;
 
 #if UINT32_MAX != ULLONG_MAX
 	assert(sizeof(uint32_t) < sizeof(unsigned long long));
-	if (val > UINT32_MAX) {
-		rc = -DER_INVAL;
-		goto out;
+	if (tmp > UINT32_MAX) {
+		return -DER_INVAL;
 	}
 #endif
-	*uint32_val = (uint64_t)val;
-	rc          = -DER_SUCCESS;
 
-out:
-	pthread_rwlock_unlock(&d_env_lock);
-
-	return rc;
+	*uint32_val = (uint32_t)tmp;
+	return -DER_SUCCESS;
 }
 
 /**
  * get a 64bits unsigned integer type environment variables
  *
- * \param[in,out]	val	returned value of the ENV. Will not change the original value if ENV
- *				is not set or set as a non-integer value.
- * \param[in]		name	name of the environment variable.
- * \return			0 on success, a negative value on error.
+ * \param[in,out]	uint64_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \param[in]		name		name of the environment variable.
+ * \return				0 on success, a negative value on error.
  */
 int
 d_getenv_uint64_t(uint64_t *uint64_val, const char *name)
 {
-	char              *env;
-	char              *endptr;
-	unsigned long long val;
 	int                rc;
+	unsigned long long tmp;
 
-	assert(name != NULL);
 	assert(uint64_val != NULL);
+	assert(name != NULL);
 
-	pthread_rwlock_rdlock(&d_env_lock);
-	env = getenv(name);
-	if (env == NULL) {
-		rc = -DER_NONEXIST;
-		goto out;
-	}
-
-	if (!dis_unsigned_str(env)) {
-		rc = -DER_INVAL;
-		goto out;
-	}
-
-	errno = 0;
-	val   = strtoull(env, &endptr, 0);
-	if (errno != 0 || endptr == env || *endptr != '\0') {
-		rc = -DER_INVAL;
-		goto out;
-	}
+	rc = d_getenv_ull(&tmp, name);
+	if (rc != -DER_SUCCESS)
+		return rc;
 
 #if UINT64_MAX != ULLONG_MAX
 	assert(sizeof(uint64_t) < sizeof(unsigned long long));
-	if (val > UINT64_MAX) {
-		rc = -DER_INVAL;
-		goto out;
+	if (tmp > UINT64_MAX) {
+		return -DER_INVAL;
 	}
 #endif
-	*uint64_val = (uint64_t)val;
-	rc          = -DER_SUCCESS;
 
-out:
-	pthread_rwlock_unlock(&d_env_lock);
-
-	return rc;
+	*uint64_val = (uint64_t)tmp;
+	return -DER_SUCCESS;
 }
 
 /**
