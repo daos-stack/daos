@@ -20,6 +20,9 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+#define OBJ_COLL_PUNCH_THD_MIN	31
+
+unsigned int	obj_coll_punch_thd;
 unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
 int		dc_obj_proto_version;
 
@@ -156,6 +159,16 @@ dc_obj_init(void)
 			daos_rpc_unregister(&obj_proto_fmt_v10);
 		D_GOTO(out_class, rc);
 	}
+
+	obj_coll_punch_thd = OBJ_COLL_PUNCH_THD_MIN;
+	d_getenv_int("DAOS_OBJ_COLL_PUNCH_THD", &obj_coll_punch_thd);
+	if (obj_coll_punch_thd < OBJ_COLL_PUNCH_THD_MIN) {
+		D_WARN("Invalid collective punch threshold %u, it cannot be smaller than %u, "
+		       "use the default value %u\n", obj_coll_punch_thd,
+		       OBJ_COLL_PUNCH_THD_MIN, OBJ_COLL_PUNCH_THD_MIN);
+		obj_coll_punch_thd = OBJ_COLL_PUNCH_THD_MIN;
+	}
+	D_INFO("Set object collective punch threshold as %u\n", obj_coll_punch_thd);
 
 	tx_verify_rdg = false;
 	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);
