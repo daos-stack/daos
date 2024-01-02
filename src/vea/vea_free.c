@@ -1002,7 +1002,7 @@ trigger_aging_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, u
 	D_ASSERT(umem_tx_none(vsi->vsi_umem));
 
 	cur_time = get_current_age();
-	rc = reclaim_unused_bitmap(vsi, 10);
+	rc = reclaim_unused_bitmap(vsi, MAX_FLUSH_FRAGS);
 	if (rc)
 		goto out;
 
