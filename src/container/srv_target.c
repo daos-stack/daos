@@ -50,6 +50,7 @@ agg_rate_ctl(void *arg)
 	struct ds_cont_child	*cont = param->ap_cont;
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
+	uint32_t		 msecs;
 
 	/* Abort current round of aggregation */
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
@@ -62,28 +63,16 @@ agg_rate_ctl(void *arg)
 	if (pool->sp_rebuilding && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
 
-	/* System is idle, let aggregation run in tight mode */
-	if (!dss_xstream_is_busy()) {
+	/* When system is idle or under space pressure, let aggregation run in tight mode */
+	if (!dss_xstream_is_busy() || sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 		sched_req_yield(req);
 		return 0;
 	}
 
-	/*
-	 * When it's under space pressure, aggregation will continue run in slack
-	 * mode no matter what reclaim policy is used, otherwise, it'll take an extra
-	 * sleep to minimize the performance impact.
-	 */
-	if (sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
-		uint32_t msecs;
+	msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY) ? 1000 : 50;
+	sched_req_sleep(req, msecs);
 
-		/* Sleep 2 seconds in lazy mode, it's kind of pausing aggregation */
-		msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY) ? 2000 : 50;
-		sched_req_sleep(req, msecs);
-	} else {
-		sched_req_yield(req);
-	}
-
-	/* System is busy, let aggregation run in slack mode */
+	/* System is busy and no space pressure, let aggregation run in slack mode */
 	return 1;
 }
 

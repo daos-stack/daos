@@ -124,32 +124,21 @@ gc_rate_ctl(void *arg)
 	struct ds_pool_child	*child = (struct ds_pool_child *)arg;
 	struct ds_pool		*pool = child->spc_pool;
 	struct sched_request	*req = child->spc_gc_req;
+	uint32_t		 msecs;
 
 	if (dss_ult_exiting(req))
 		return -1;
 
-	/* Let GC ULT run in tight mode when system is idle */
-	if (!dss_xstream_is_busy()) {
+	/* Let GC ULT run in tight mode when system is idle or under space pressure */
+	if (!dss_xstream_is_busy() || sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 		sched_req_yield(req);
 		return 0;
 	}
 
-	/*
-	 * When it's under space pressure, GC will continue run in slack mode
-	 * no matter what reclaim policy is used, otherwise, it'll take an extra
-	 * sleep to minimize the performance impact.
-	 */
-	if (sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
-		uint32_t msecs;
-
-		msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY ||
-			 pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ? 2000 : 50;
-		sched_req_sleep(req, msecs);
-	} else {
-		sched_req_yield(req);
-	}
-
-	/* Let GC ULT run in slack mode when system is busy */
+	msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY ||
+			pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ? 1000 : 50;
+	sched_req_sleep(req, msecs);
+	/* Let GC ULT run in slack mode when system is busy and no space pressure */
 	return 1;
 }
 
