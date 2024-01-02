@@ -1178,7 +1178,7 @@ out:
 }
 
 static int
-d_getenv_ull(unsigned long long *val, const char* name)
+d_getenv_ull(unsigned long long *val, const char *name)
 {
 	char              *env;
 	char              *endptr;
