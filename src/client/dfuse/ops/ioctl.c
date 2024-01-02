@@ -11,7 +11,7 @@
 
 #include <sys/ioctl.h>
 
-#include "dfuse_ioctl.h"
+#include <dfuse_ioctl.h>
 
 #define MAX_IOCTL_SIZE ((1024 * 16) - 1)
 

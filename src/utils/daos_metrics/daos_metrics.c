@@ -10,8 +10,8 @@
 
 #include <getopt.h>
 #include <string.h>
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_consumer.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_consumer.h>
 
 static void
 print_usage(const char *prog_name)

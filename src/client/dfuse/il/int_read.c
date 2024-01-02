@@ -10,8 +10,8 @@
 
 #include "dfuse_common.h"
 #include "intercept.h"
-#include "daos.h"
-#include "daos_array.h"
+#include <daos.h>
+#include <daos_array.h>
 
 #include "dfuse_ioctl.h"
 
