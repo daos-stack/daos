@@ -19,6 +19,13 @@ ARG CB0
 ARG REPO_FILE_URL
 ARG JENKINS_URL
 ARG REPOS
+
+RUN if [ "x$JENKINS_URL" != "x" ]; then                                           \
+      echo "==>Debug 1... JENKINS_URL=${JENKINS_URL}"                      &&     \
+      echo "==>Debug 1... REPO_FILE_URL=${REPO_FILE_URL}"                  &&     \
+      echo "==>Debug 1... REPOS=${REPOS}";
+    fi
+
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el8.sh /tmp/install.sh
 # script to setup local repo if available
