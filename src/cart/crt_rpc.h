@@ -12,7 +12,7 @@
 #define __CRT_RPC_H__
 
 #include <gurt/heap.h>
-#include "gurt/common.h"
+#include <gurt/common.h>
 
 /* default RPC timeout 60 seconds */
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
