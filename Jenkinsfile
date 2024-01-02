@@ -649,6 +649,7 @@ pipeline {
                                        stash_opt: true,
                                        scons_args: sconsFaultsArgs() +
                                                    ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                            echo "==Debug JENKINS_URL=${JENKINS_URL}"
                     }
                     post {
                         unsuccessful {
