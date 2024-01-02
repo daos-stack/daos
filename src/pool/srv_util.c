@@ -916,7 +916,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	/* Get pool map to check the target status */
 	pool_child = ds_pool_child_lookup(pool_id);
 	if (pool_child == NULL) {
-		D_ERROR(DF_UUID": Pool cache not found\n", DP_UUID(pool_id));
+		D_ERROR(DF_UUID": Pool child not found\n", DP_UUID(pool_id));
 		/*
 		 * The SMD pool info could be inconsistent with global pool
 		 * info when pool creation/destroy partially succeed or fail.
@@ -1107,16 +1107,134 @@ update_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	return rc;
 }
 
+/*
+ * 0: All ds_pool_child are started/stopped
+ * 1: Some ds_pool_child are still in starting/stopping
+ * 2: Some ds_pool_child need be started/stopped
+ */
+static int
+check_pool_child_state(unsigned int tgt_id, d_list_t *pool_list, uint32_t expected)
+{
+	struct smd_pool_info	*pool_info;
+	uint32_t		 state, inprogress;
+	int			 rc = 0;
+
+	D_ASSERT(expected == POOL_CHILD_NEW || expected == POOL_CHILD_STARTED);
+	inprogress = (expected == POOL_CHILD_NEW) ? POOL_CHILD_STOPPING : POOL_CHILD_STARTING;
+
+	d_list_for_each_entry(pool_info, pool_list, spi_link) {
+		state = ds_pool_child_state(pool_info->spi_id, tgt_id);
+
+		if (state == expected)
+			continue;
+		else if (state == inprogress)
+			rc = 1;
+		else
+			return 2;
+	}
+
+	return rc;
+}
+
+static void
+manage_target(bool start)
+{
+	struct smd_pool_info	*pool_info, *tmp;
+	d_list_t		 pool_list;
+	int			 pool_cnt, rc;
+
+	D_INIT_LIST_HEAD(&pool_list);
+	rc = smd_pool_list(&pool_list, &pool_cnt);
+	if (rc) {
+		DL_ERROR(rc, "Failed to list pools.");
+		return;
+	}
+
+	d_list_for_each_entry(pool_info, &pool_list, spi_link) {
+		if (start)
+			rc = ds_pool_child_start(pool_info->spi_id, true);
+		else
+			rc = ds_pool_child_stop(pool_info->spi_id);
+
+		if (rc < 0) {
+			DL_ERROR(rc, DF_UUID": Failed to %s pool child.",
+				 DP_UUID(pool_info->spi_id), start ? "start" : "stop");
+			break;
+		}
+	}
+
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		d_list_del(&pool_info->spi_link);
+		smd_pool_free_info(pool_info);
+	}
+}
+
+static void
+setup_target(void *arg)
+{
+	manage_target(true);
+}
+
+static void
+teardown_target(void *arg)
+{
+	manage_target(false);
+}
+
+static int
+manage_targets(int *tgt_ids, int tgt_cnt, d_list_t *pool_list, bool start)
+{
+	uint32_t	expected = start ? POOL_CHILD_STARTED : POOL_CHILD_NEW;
+	int		i, rc, ret = 0;
+
+	for (i = 0; i < tgt_cnt; i++) {
+		rc = check_pool_child_state(tgt_ids[i], pool_list, expected);
+
+		if (ret < rc)
+			ret = rc;
+
+		/* All pool child state are in (or transiting to) expected state */
+		if (rc < 2)
+			continue;
+
+		rc = dss_ult_create(start ? setup_target : teardown_target, NULL, DSS_XS_VOS,
+				    tgt_ids[i], 0, NULL);
+		if (rc) {
+			DL_ERROR(rc, "Failed to create ULT.");
+			ret = rc;
+			break;
+		}
+	}
+
+	return ret;
+}
+
 static int
 nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 {
 	struct smd_pool_info	*pool_info, *tmp;
 	d_list_t		 pool_list;
 	d_rank_t		 pl_rank;
-	int			 pool_cnt, ret, rc;
+	int			 pool_cnt, ret, rc, i;
 
 	D_ASSERT(tgt_cnt > 0);
 	D_ASSERT(tgt_ids != NULL);
+
+	for (i = 0; i < tgt_cnt; i++) {
+		if (tgt_ids[i] == BIO_SYS_TGT_ID) {
+			if (reint) {
+				D_ERROR("Auto reint sys target isn't supported.\n");
+				return -DER_NOTSUPPORTED;
+			}
+
+			D_ERROR("SYS target SSD is failed, kill the engine...\n");
+			rc = kill(getpid(), SIGKILL);
+			if (rc != 0)
+				D_ERROR("failed to raise SIGKILL: %d\n", errno);
+			return 1;
+		}
+		D_ASSERT(tgt_ids[i] >= 0 && tgt_ids[i] < BIO_MAX_VOS_TGT_CNT);
+	}
 
 	D_INIT_LIST_HEAD(&pool_list);
 	rc = smd_pool_list(&pool_list, &pool_cnt);
@@ -1125,7 +1243,18 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 		return rc;
 	}
 
-	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+	if (reint) {
+		rc = manage_targets(tgt_ids, tgt_cnt, &pool_list, true);
+		if (rc) {
+			if (rc < 0)
+				DL_ERROR(rc, "Setup targets failed.");
+			else
+				D_DEBUG(DB_MGMT, "Setup targets is in-progress.\n");
+			goto done;
+		}
+	}
+
+	d_list_for_each_entry(pool_info, &pool_list, spi_link) {
 		ret = check_pool_targets(pool_info->spi_id, tgt_ids, tgt_cnt,
 					 reint, &pl_rank);
 		switch (ret) {
@@ -1159,13 +1288,22 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 				rc = ret;
 			break;
 		}
+	}
 
+	if (!rc && !reint) {
+		rc = manage_targets(tgt_ids, tgt_cnt, &pool_list, false);
+		if (rc < 0)
+			DL_ERROR(rc, "Teardown targets failed.");
+		else if (rc > 0)
+			D_DEBUG(DB_MGMT, "Teardown targets is in-progress.\n");
+	}
+done:
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
 		d_list_del(&pool_info->spi_link);
 		smd_pool_free_info(pool_info);
 	}
 
-	D_DEBUG(DB_MGMT, "Faulty reaction done. tgt_cnt:%d, rc:%d\n",
-		tgt_cnt, rc);
+	D_DEBUG(DB_MGMT, "NVMe reaction done. tgt_cnt:%d, rc:%d\n", tgt_cnt, rc);
 	return rc;
 }
 
@@ -1181,18 +1319,7 @@ nvme_reint_reaction(int *tgt_ids, int tgt_cnt)
 	return nvme_reaction(tgt_ids, tgt_cnt, true);
 }
 
-static int
-nvme_bio_error(int media_err_type, int tgt_id)
-{
-	int rc;
-
-	rc = ds_notify_bio_error(media_err_type, tgt_id);
-
-	return rc;
-}
-
 struct bio_reaction_ops nvme_reaction_ops = {
 	.faulty_reaction	= nvme_faulty_reaction,
 	.reint_reaction		= nvme_reint_reaction,
-	.ioerr_reaction		= nvme_bio_error,
 };

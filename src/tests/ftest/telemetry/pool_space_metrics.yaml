@@ -44,7 +44,7 @@ ior:
   env_vars:
     - D_LOG_MASK=INFO
 mpirun:
-  bind_to: socket
+  args: "--bind-to socket"
 
 scm_metric_thresholds:
   # Maximal metadata size is empirically adjusted to 8MiB
