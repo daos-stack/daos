@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,6 +13,8 @@
 #include <cmocka.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/container.h>
+
+uint32_t dss_tgt_nr = 4;
 
 static void *
 mock_init(int tags, int xs_id, int tgt_id)
@@ -120,4 +122,11 @@ ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid, struct ds_cont_child **
 {
 	assert_true(false);
 	return -DER_NOMEM;
+}
+
+d_rank_t
+dss_self_rank(void)
+{
+	assert_true(false);
+	return -1;
 }

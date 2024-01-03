@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,6 +30,17 @@ dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_idx, size_t
 
 int
 dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags)
+{
+	assert_true(false);
+	return -DER_NOMEM;
+}
+
+struct dss_coll_ops;
+struct dss_coll_args;
+
+int
+dss_thread_collective_reduce(struct dss_coll_ops *ops, struct dss_coll_args *args,
+			     unsigned int flags)
 {
 	assert_true(false);
 	return -DER_NOMEM;
