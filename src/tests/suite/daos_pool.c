@@ -493,8 +493,8 @@ pool_properties(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
-	char			 label[] = "test_pool_properties";
-	uint64_t		 space_rb = 36;
+	char                     label[]  = "test_pool_properties";
+	uint64_t                 space_rb = 36;
 	daos_prop_t		*prop = NULL;
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry	*entry;
@@ -522,10 +522,10 @@ pool_properties(void **state)
 	prop->dpp_entries[1].dpe_val = DAOS_SCRUB_MODE_TIMED;
 
 	prop->dpp_entries[2].dpe_type = DAOS_PROP_PO_SVC_OPS_ENABLED;
-	prop->dpp_entries[2].dpe_val = 0;	/* disabled */
+	prop->dpp_entries[2].dpe_val  = 0; /* disabled */
 
 	prop->dpp_entries[3].dpe_type = DAOS_PROP_PO_SPACE_RB;
-	prop->dpp_entries[3].dpe_val = space_rb;
+	prop->dpp_entries[3].dpe_val  = space_rb;
 
 	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
