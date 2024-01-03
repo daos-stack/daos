@@ -53,6 +53,3 @@ case "$ID_LIKE" in
         EXCLUDE_UPGRADE+=,fuse,fuse-libs,fuse-devel
         ;;
 esac
-
-# shellcheck disable=SC2034
-MLNX_VER_NUM=5.8-3.0.7.0
