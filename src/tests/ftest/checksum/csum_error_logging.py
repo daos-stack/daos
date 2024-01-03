@@ -37,7 +37,7 @@ class CsumErrorLog(DaosCoreBase):
             for device in devices:
                 try:
                     if device['uuid'] == device_id:
-                        return device['health']['checksum_errs']
+                        return device['ctrlr']['health_stats']['checksum_errs']
                 except KeyError as error:
                     self.fail(
                         'Error parsing dmg storage query device-health output: {}'.format(error))
