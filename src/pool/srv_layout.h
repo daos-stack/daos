@@ -83,6 +83,7 @@ extern d_iov_t ds_pool_prop_svc_ops;            /* service ops KVS */
 extern d_iov_t ds_pool_prop_svc_ops_enabled;    /* uint32_t */
 extern d_iov_t ds_pool_prop_svc_ops_max;        /* uint32_t */
 extern d_iov_t ds_pool_prop_svc_ops_num;        /* uint32_t */
+extern d_iov_t ds_pool_prop_svc_ops_age;        /* uint32_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*

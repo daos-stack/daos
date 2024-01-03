@@ -95,6 +95,31 @@ func PoolProperties() PoolPropertyMap {
 				valueMarshaler: numericMarshaler,
 			},
 		},
+		"svc_ops_enabled": {
+			Property: PoolProperty{
+				Number:      PoolPropertySvcOpsEnabled,
+				Description: "Metadata duplicate operations detection enabled",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					oeErr := errors.Errorf("invalid svc_ops_enabled value %s (valid values: 0-1)", s)
+					oeVal, err := strconv.ParseUint(s, 10, 32)
+					if err != nil {
+						return nil, oeErr
+					}
+					if oeVal > 1 {
+						return nil, oeErr
+					}
+					return &PoolPropertyValue{oeVal}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				valueMarshaler: numericMarshaler,
+			},
+		},
 		"label": {
 			Property: PoolProperty{
 				Number:      PoolPropertyLabel,

@@ -135,6 +135,8 @@ enum daos_pool_props {
 	DAOS_PROP_PO_CHECKPOINT_THRESH,
 	/** Reintegration mode for pool, data_sync|no_data_sync default is data_sync*/
 	DAOS_PROP_PO_REINT_MODE,
+	/** Metadata duplicate operations detection enabled (1) or disabled (0) */
+	DAOS_PROP_PO_SVC_OPS_ENABLED,
 	DAOS_PROP_PO_MAX,
 };
 

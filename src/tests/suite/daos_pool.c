@@ -494,9 +494,7 @@ pool_properties(void **state)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	char			 label[] = "test_pool_properties";
-#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	uint64_t		 space_rb = 36;
-#endif
 	daos_prop_t		*prop = NULL;
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry	*entry;
@@ -512,7 +510,7 @@ pool_properties(void **state)
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-	prop = daos_prop_alloc(2);
+	prop = daos_prop_alloc(4);
 	/* label - set arg->pool_label to use daos_pool_connect() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	D_STRNDUP_S(prop->dpp_entries[0].dpe_str, label);
@@ -523,11 +521,11 @@ pool_properties(void **state)
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SCRUB_MODE;
 	prop->dpp_entries[1].dpe_val = DAOS_SCRUB_MODE_TIMED;
 
-#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
-	/* change daos_prop_alloc() above, specify 2 entries not 1 */
-	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SPACE_RB;
-	prop->dpp_entries[1].dpe_val = space_rb;
-#endif
+	prop->dpp_entries[2].dpe_type = DAOS_PROP_PO_SVC_OPS_ENABLED;
+	prop->dpp_entries[2].dpe_val = 0;	/* disabled */
+
+	prop->dpp_entries[3].dpe_type = DAOS_PROP_PO_SPACE_RB;
+	prop->dpp_entries[3].dpe_val = space_rb;
 
 	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
@@ -550,12 +548,21 @@ pool_properties(void **state)
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
 		fail_msg("label verification failed.\n");
 	}
-#if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_MODE);
+	if (entry == NULL || (entry->dpe_val != DAOS_SCRUB_MODE_TIMED)) {
+		fail_msg("scrub_mode verification failed.\n");
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SVC_OPS_ENABLED);
+	if (entry == NULL || (entry->dpe_val != 0)) {
+		fail_msg("svc_ops_enabled verification failed.\n");
+	}
+
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
 	if (entry == NULL || entry->dpe_val != space_rb) {
 		fail_msg("space_rb verification failed.\n");
 	}
-#endif
 	/* not set properties should get default value */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SELF_HEAL);
 	if (entry == NULL ||
@@ -594,9 +601,11 @@ pool_properties(void **state)
 		fail_msg("Owner-group prop verification failed.\n");
 	}
 
+#if 0
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_MODE);
 	if (entry == NULL || entry->dpe_val != DAOS_SCRUB_MODE_OFF)
 		fail_msg("scrubber sched verification failed.\n");
+#endif
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_FREQ);
 	if (entry == NULL) {
@@ -636,6 +645,10 @@ pool_op_retry(void **state)
 
 	if (arg->myrank != 0)
 		return;
+
+	/* Not allowed to set the (test-only) property svc_ops_enabled on existing pool */
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "svc_ops_enabled", "0");
+	assert_rc_equal(rc, -DER_NO_PERM);
 
 	/* pool connect/query/disconnect failing corpcs - non-duplicate-RPC retries */
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE);
