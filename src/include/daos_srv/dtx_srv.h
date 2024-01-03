@@ -71,43 +71,43 @@ struct dtx_handle {
 	 */
 	daos_unit_oid_t			 dth_leader_oid;
 
-	uint32_t			 dth_sync:1, /* commit synchronously. */
-					 /* Pin the DTX entry in DRAM. */
-					 dth_pinned:1,
-					 /* DTXs in CoS list are committed. */
-					 dth_cos_done:1,
-					 /* Only one participator in the DTX. */
-					 dth_solo:1,
-					 /* Do not keep committed entry. */
-					 dth_drop_cmt:1,
-					 /* Modified shared items: object/key */
-					 dth_modify_shared:1,
-					 /* The DTX entry is in active table. */
-					 dth_active:1,
-					 /* Leader oid is touched. */
-					 dth_touched_leader_oid:1,
-					 /* Local TX is started. */
-					 dth_local_tx_started:1,
-					 /* The DTX share lists are inited. */
-					 dth_shares_inited:1,
-					 /* Distributed transaction. */
-					 dth_dist:1,
-					 /* For data migration. */
-					 dth_for_migration:1,
-					 /* Has prepared locally, for resend. */
-					 dth_prepared:1,
-					 /* The DTX handle is aborted. */
-					 dth_aborted:1,
-					 /* The modification is done by others. */
-					 dth_already:1,
-					 /* Need validation on leader before commit/committable. */
-					 dth_need_validation:1,
-					 /* Ignore other uncommitted DTXs. */
-					 dth_ignore_uncommitted:1,
-					 /* Local transaction */
-	    				 dth_local:1,
-	    				 /* Flag to commit the local transaction */
-	    				 dth_local_complete:1;
+	uint32_t                         dth_sync : 1, /* commit synchronously. */
+	    /* Pin the DTX entry in DRAM. */
+	    dth_pinned                            : 1,
+	    /* DTXs in CoS list are committed. */
+	    dth_cos_done                          : 1,
+	    /* Only one participator in the DTX. */
+	    dth_solo                              : 1,
+	    /* Do not keep committed entry. */
+	    dth_drop_cmt                          : 1,
+	    /* Modified shared items: object/key */
+	    dth_modify_shared                     : 1,
+	    /* The DTX entry is in active table. */
+	    dth_active                            : 1,
+	    /* Leader oid is touched. */
+	    dth_touched_leader_oid                : 1,
+	    /* Local TX is started. */
+	    dth_local_tx_started                  : 1,
+	    /* The DTX share lists are inited. */
+	    dth_shares_inited                     : 1,
+	    /* Distributed transaction. */
+	    dth_dist                              : 1,
+	    /* For data migration. */
+	    dth_for_migration                     : 1,
+	    /* Has prepared locally, for resend. */
+	    dth_prepared                          : 1,
+	    /* The DTX handle is aborted. */
+	    dth_aborted                           : 1,
+	    /* The modification is done by others. */
+	    dth_already                           : 1,
+	    /* Need validation on leader before commit/committable. */
+	    dth_need_validation                   : 1,
+	    /* Ignore other uncommitted DTXs. */
+	    dth_ignore_uncommitted                : 1,
+	    /* Local transaction */
+	    dth_local                             : 1,
+	    /* Flag to commit the local transaction */
+	    dth_local_complete                    : 1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -257,21 +257,21 @@ enum dtx_flags {
 	/** For data migration. */
 	DTX_FOR_MIGRATION = (1 << 3),
 	/** Ignore other uncommitted DTXs. */
-	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
+	DTX_IGNORE_UNCOMMITTED = (1 << 4),
 	/** Resent request. Out-of-date. */
-	DTX_RESEND		= (1 << 5),
+	DTX_RESEND = (1 << 5),
 	/** Force DTX refresh if hit non-committed DTX on non-leader. Out-of-date DAOS-7878. */
 	DTX_FORCE_REFRESH = (1 << 6),
 	/** Transaction has been prepared locally. */
 	DTX_PREPARED = (1 << 7),
 	/** Do not keep committed entry. */
-	DTX_DROP_CMT		= (1 << 8),
+	DTX_DROP_CMT = (1 << 8),
 	/* The non-leader targets are collective. */
-	DTX_TGT_COLL		= (1 << 9),
+	DTX_TGT_COLL = (1 << 9),
 	/* Not real DTX leader, Only forward IO to others, but neither commit nor abort DTX. */
-	DTX_RELAY		= (1 << 10),
+	DTX_RELAY = (1 << 10),
 	/** Local transaction */
-	DTX_LOCAL		= (1 << 11),
+	DTX_LOCAL = (1 << 11),
 };
 
 void

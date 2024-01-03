@@ -925,7 +925,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
-	dth->dth_local = (flags & DTX_LOCAL) ? 1 : 0;
+	dth->dth_local              = (flags & DTX_LOCAL) ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
