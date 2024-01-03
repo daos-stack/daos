@@ -2315,7 +2315,7 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 	if (D_LOG_ENABLED(DB_TRACE))
 		rec_str = btr_rec_string(tcx, rec, true, str, BTR_PRINT_BUF);
 
-	if (tcx->tc_depth != 0 && !embed && !btr_has_embedded_value(tcx)) {
+	if (tcx->tc_depth != 0 && !btr_has_embedded_value(tcx)) {
 		struct btr_trace *trace;
 
 		/* trace for the leaf */
