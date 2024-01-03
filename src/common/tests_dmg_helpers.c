@@ -651,7 +651,7 @@ dmg_pool_create(const char *dmg_config_file,
 		if (entry != NULL) {
 			const char *scrub_str = NULL;
 
-			switch(entry->dpe_val) {
+			switch (entry->dpe_val) {
 			case DAOS_SCRUB_MODE_OFF:
 				scrub_str = "off";
 				break;
@@ -688,7 +688,7 @@ dmg_pool_create(const char *dmg_config_file,
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
-}
+	}
 
 	if (!has_label) {
 		char	 path[] = "/tmp/test_XXXXXX";

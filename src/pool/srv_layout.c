@@ -158,8 +158,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
     {
 	.dpe_type = DAOS_PROP_PO_SVC_OPS_ENABLED,
 	.dpe_val  = 1,
-    }
-};
+    }};
 
 daos_prop_t pool_prop_default = {
 	.dpp_nr		= DAOS_PROP_PO_NUM,

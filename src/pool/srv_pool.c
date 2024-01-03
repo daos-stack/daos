@@ -698,15 +698,15 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 static uint32_t
 get_svc_ops_age(void)
 {
-	const uint32_t  ops_age_default = DEFAULT_PS_OPS_ENTRY_AGE_SEC;
-	char	       *v;
-	int		n;
+	const uint32_t ops_age_default = DEFAULT_PS_OPS_ENTRY_AGE_SEC;
+	char          *v;
+	int            n;
 
 	v = getenv(DAOS_MD_OPS_AGE_SEC_ENV); /* in MB */
 	if (v == NULL)
 		return ops_age_default;
 	n = atoi(v);
-	if ((n < MIN_PS_OPS_ENTRY_AGE_SEC) || (n > MAX_PS_OPS_ENTRY_AGE_SEC)){
+	if ((n < MIN_PS_OPS_ENTRY_AGE_SEC) || (n > MAX_PS_OPS_ENTRY_AGE_SEC)) {
 		D_ERROR("metadata ps ops age %d out of range %u..%u; using %u sec\n", n,
 			MIN_PS_OPS_ENTRY_AGE_SEC, MAX_PS_OPS_ENTRY_AGE_SEC, ops_age_default);
 		return ops_age_default;
@@ -1721,9 +1721,10 @@ check_map:
 	}
 	svc->ps_ops_age = svc_ops_age;
 
-	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size " DF_U64 " %s %u minimum), "
-		"max entries %u, max entry age %u sec\n", DP_UUID(svc->ps_uuid),
-		svc_ops_enabled ? "enabled" : "disabled", rdb_size,
+	D_DEBUG(DB_MD,
+		DF_UUID ": duplicate ops detection %s (rdb size " DF_U64 " %s %u minimum), "
+			"max entries %u, max entry age %u sec\n",
+		DP_UUID(svc->ps_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_size,
 		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE, svc_ops_max, svc_ops_age);
 
 out_lock:
@@ -2762,7 +2763,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
 		if (rc == -DER_NONEXIST && global_ver < DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS) {
 			/* needs to be upgraded */
-			rc  = 0;
+			rc    = 0;
 			val32 = 0;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
@@ -2774,7 +2775,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			D_GOTO(out_prop, rc);
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_OPS_ENABLED;
-		prop->dpp_entries[idx].dpe_val = val32;
+		prop->dpp_entries[idx].dpe_val  = val32;
 		idx++;
 	}
 

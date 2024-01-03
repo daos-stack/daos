@@ -50,7 +50,7 @@
 #define DAOS_PO_QUERY_PROP_CHECKPOINT_FREQ      (1ULL << (PROP_BIT_START + 22))
 #define DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH    (1ULL << (PROP_BIT_START + 23))
 #define DAOS_PO_QUERY_PROP_REINT_MODE		(1ULL << (PROP_BIT_START + 24))
-#define DAOS_PO_QUERY_PROP_SVC_OPS_ENABLED	(1ULL << (PROP_BIT_START + 25))
+#define DAOS_PO_QUERY_PROP_SVC_OPS_ENABLED      (1ULL << (PROP_BIT_START + 25))
 #define DAOS_PO_QUERY_PROP_BIT_END              41
 
 #define DAOS_PO_QUERY_PROP_ALL                                                                     \

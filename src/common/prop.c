@@ -418,7 +418,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_SVC_OPS_ENABLED:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val > 1) {
-				D_ERROR("invalid svc_ops_enabled "DF_U64".\n", val);
+				D_ERROR("invalid svc_ops_enabled " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
