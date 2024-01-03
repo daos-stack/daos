@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2943,9 +2943,11 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 	if (!dtx_is_valid_handle(dth) || unlikely(dth->dth_already))
 		return;
 
+	D_ASSERT(!dth->dth_local);
+
 	dae = dth->dth_ent;
 	if (dae == NULL) {
-		if (!dth->dth_active && !dth->dth_local)
+		if (!dth->dth_active)
 			return;
 	} else {
 		/* 'prepared'/'preparing' DTX can be either committed or aborted, not cleanup. */
@@ -3289,7 +3291,18 @@ error:
 }
 
 int
-vos_dtx_local_end(struct dtx_handle *dth)
+vos_dtx_local_end(struct dtx_handle *dth, int result)
 {
-	return vos_tx_end(NULL, dth, NULL, NULL, true, NULL, 0);
+	dth->dth_local_complete = 1;
+	result                  = vos_tx_end(NULL, dth, NULL, NULL, true, NULL, result);
+
+	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
+		vos_cont_decref(dth->dth_local_oid_array[i].dor_cont);
+	}
+
+	dth->dth_local_oid_cnt = 0;
+	D_FREE(dth->dth_local_oid_array);
+	dth->dth_local_oid_cap = 0;
+
+	return result;
 }

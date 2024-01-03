@@ -422,16 +422,6 @@ cancel:
 			vos_dtx_cleanup_internal(dth);
 	}
 
-	if (dth->dth_local) {
-		for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
-			vos_cont_decref(dth->dth_local_oid_array[i].dor_cont);
-		}
-
-		dth->dth_local_oid_cnt = 0;
-		D_FREE(dth->dth_local_oid_array);
-		dth->dth_local_oid_cap = 0;
-	}
-
 	return err;
 }
 

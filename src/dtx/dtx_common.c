@@ -1519,15 +1519,14 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 {
 	D_ASSERT(dth != NULL);
 
-	if (dth->dth_local)
-		dth->dth_local_complete = 1;
-
 	dtx_shares_fini(dth);
 
 	if (daos_is_zero_dti(&dth->dth_xid))
 		goto out;
 
-	if (result < 0) {
+	if (dth->dth_local) {
+		result = vos_dtx_local_end(dth, result);
+	} else if (result < 0) {
 		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 			int	rc;
 
@@ -1552,8 +1551,6 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		 * 2. Remove the pinned DTX entry.
 		 */
 		vos_dtx_cleanup(dth, true);
-	} else if (dth->dth_local) {
-		result = vos_dtx_local_end(dth);
 	}
 
 	if (!dth->dth_local) {
