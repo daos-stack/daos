@@ -30,6 +30,7 @@ RDB_STRING_KEY(ds_pool_prop_, svc_ops);
 RDB_STRING_KEY(ds_pool_prop_, svc_ops_enabled);
 RDB_STRING_KEY(ds_pool_prop_, svc_ops_max);
 RDB_STRING_KEY(ds_pool_prop_, svc_ops_num);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_age);
 
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
@@ -154,6 +155,10 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	.dpe_type = DAOS_PROP_PO_REINT_MODE,
 	.dpe_val  = DAOS_PROP_PO_REINT_MODE_DEFAULT,
     },
+    {
+	.dpe_type = DAOS_PROP_PO_SVC_OPS_ENABLED,
+	.dpe_val  = 1,
+    }
 };
 
 daos_prop_t pool_prop_default = {
