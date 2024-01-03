@@ -29,6 +29,8 @@
 #include "obj_rpc.h"
 #include "srv_internal.h"
 
+/* Only for test. */
+
 static int
 obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 		    struct dcs_iod_csums *iod_csums, struct bio_desc *biod,
