@@ -111,8 +111,7 @@ pool_free(struct d_hlink *hlink)
 	D_MUTEX_DESTROY(&pool->dp_client_lock);
 	D_RWLOCK_DESTROY(&pool->dp_co_list_lock);
 
-	if (pool->dp_metrics != NULL)
-		dc_pool_metrics_stop(pool);
+	dc_pool_metrics_stop(pool);
 
 	if (pool->dp_map != NULL)
 		pool_map_decref(pool->dp_map);
