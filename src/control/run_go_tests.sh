@@ -147,6 +147,7 @@ function check_formatting()
 {
 	srcdir=${1:-"./"}
 	output=$(find "$srcdir/" -name '*.go' -and -not -path '*vendor*' \
+		-and -not -name '*.pb.go' \
 		-print0 | xargs -0 gofmt -d)
 	if [ -n "$output" ]; then
 		errmsg="ERROR: Your code hasn't been run through gofmt!
