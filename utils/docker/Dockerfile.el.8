@@ -20,11 +20,9 @@ ARG REPO_FILE_URL
 ARG JENKINS_URL
 ARG REPOS
 
-RUN if [ "x$JENKINS_URL" != "x" ]; then                                           \
-      echo "==>Debug 1... JENKINS_URL=${JENKINS_URL}"                      &&     \
-      echo "==>Debug 1... REPO_FILE_URL=${REPO_FILE_URL}"                  &&     \
-      echo "==>Debug 1... REPOS=${REPOS}";
-    fi
+RUN echo "==>Debug 1... JENKINS_URL=${JENKINS_URL}"
+RUN echo "==>Debug 2... REPO_FILE_URL=${REPO_FILE_URL}"
+RUN echo "==>Debug 3... REPOS=${REPOS}"
 
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el8.sh /tmp/install.sh
@@ -59,7 +57,7 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
 
 ARG BULLSEYE
 RUN if [ "x$BULLSEYE" != "x" ]; then                                               \
-      echo "==>Debug 1... JENKINS_URL=${JENKINS_URL}";                             \
+      echo "==>Debug 11... JENKINS_URL=${JENKINS_URL}";                             \
     fi
 RUN if [ "x$BULLSEYE" != "x" ]; then                                               \
       dnf install xz && dnf clean all &&                                           \
