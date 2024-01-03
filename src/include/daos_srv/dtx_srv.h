@@ -23,6 +23,7 @@ struct dtx_share_peer {
 	daos_epoch_t		 dsp_epoch;
 	uint64_t		 dsp_dkey_hash;
 	int			 dsp_status;
+	uint32_t		 dsp_version;
 	uint32_t		 dsp_inline_mbs:1;
 	struct dtx_memberships	*dsp_mbs;
 };
@@ -70,43 +71,43 @@ struct dtx_handle {
 	 */
 	daos_unit_oid_t			 dth_leader_oid;
 
-	uint32_t                         dth_sync : 1, /* commit synchronously. */
-	    /* Pin the DTX entry in DRAM. */
-	    dth_pinned                            : 1,
-	    /* DTXs in CoS list are committed. */
-	    dth_cos_done : 1, dth_resent : 1, /* For resent case. */
-	    /* Only one participator in the DTX. */
-	    dth_solo               : 1,
-	    /* Do not keep committed entry. */
-	    dth_drop_cmt           : 1,
-	    /* Modified shared items: object/key */
-	    dth_modify_shared      : 1,
-	    /* The DTX entry is in active table. */
-	    dth_active             : 1,
-	    /* Leader oid is touched. */
-	    dth_touched_leader_oid : 1,
-	    /* Local TX is started. */
-	    dth_local_tx_started   : 1,
-	    /* The DTX share lists are inited. */
-	    dth_shares_inited      : 1,
-	    /* Distributed transaction. */
-	    dth_dist               : 1,
-	    /* For data migration. */
-	    dth_for_migration      : 1,
-	    /* Has prepared locally, for resend. */
-	    dth_prepared           : 1,
-	    /* The DTX handle is aborted. */
-	    dth_aborted            : 1,
-	    /* The modification is done by others. */
-	    dth_already            : 1,
-	    /* Need validation on leader before commit/committable. */
-	    dth_need_validation    : 1,
-	    /* Ignore other uncommitted DTXs. */
-	    dth_ignore_uncommitted : 1,
-	    /* Local transaction */
-	    dth_local              : 1,
-	    /* Flag to commit the local transaction */
-	    dth_local_complete     : 1;
+	uint32_t			 dth_sync:1, /* commit synchronously. */
+					 /* Pin the DTX entry in DRAM. */
+					 dth_pinned:1,
+					 /* DTXs in CoS list are committed. */
+					 dth_cos_done:1,
+					 /* Only one participator in the DTX. */
+					 dth_solo:1,
+					 /* Do not keep committed entry. */
+					 dth_drop_cmt:1,
+					 /* Modified shared items: object/key */
+					 dth_modify_shared:1,
+					 /* The DTX entry is in active table. */
+					 dth_active:1,
+					 /* Leader oid is touched. */
+					 dth_touched_leader_oid:1,
+					 /* Local TX is started. */
+					 dth_local_tx_started:1,
+					 /* The DTX share lists are inited. */
+					 dth_shares_inited:1,
+					 /* Distributed transaction. */
+					 dth_dist:1,
+					 /* For data migration. */
+					 dth_for_migration:1,
+					 /* Has prepared locally, for resend. */
+					 dth_prepared:1,
+					 /* The DTX handle is aborted. */
+					 dth_aborted:1,
+					 /* The modification is done by others. */
+					 dth_already:1,
+					 /* Need validation on leader before commit/committable. */
+					 dth_need_validation:1,
+					 /* Ignore other uncommitted DTXs. */
+					 dth_ignore_uncommitted:1,
+					 /* Local transaction */
+	    				 dth_local:1,
+	    				 /* Flag to commit the local transaction */
+	    				 dth_local_complete:1;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -167,7 +168,19 @@ struct dtx_handle {
 struct dtx_sub_status {
 	struct daos_shard_tgt		dss_tgt;
 	int				dss_result;
+	uint32_t			dss_version;
 	uint32_t			dss_comp:1;
+};
+
+struct dtx_coll_entry {
+	struct dtx_id			 dce_xid;
+	uint32_t			 dce_ver;
+	uint32_t			 dce_refs;
+	d_rank_list_t			*dce_ranks;
+	uint8_t				*dce_hints;
+	uint8_t				*dce_bitmap;
+	uint32_t			 dce_hint_sz;
+	uint32_t			 dce_bitmap_sz;
 };
 
 struct dtx_leader_handle;
@@ -179,7 +192,10 @@ struct dtx_leader_handle {
 	struct dtx_handle		dlh_handle;
 	/* result for the distribute transaction */
 	int				dlh_result;
-
+	/* The known latest pool map version from remote targets. */
+	uint32_t			dlh_rmt_ver;
+	/* For 64-bits alignment. */
+	uint32_t			dlh_padding;
 	/* The array of the DTX COS entries */
 	uint32_t			dlh_dti_cos_count;
 	struct dtx_id			*dlh_dti_cos;
@@ -191,8 +207,14 @@ struct dtx_leader_handle {
 	int32_t				dlh_allow_failure;
 					/* Normal sub requests have been processed. */
 	uint32_t			dlh_normal_sub_done:1,
+					/* For collective DTX. */
+					dlh_coll:1,
+					/* Only forward RPC, but neither commit nor abort DTX. */
+					dlh_relay:1,
 					/* Drop conditional flags when forward RPC. */
 					dlh_drop_cond:1;
+	/* Elements for collective DTX. */
+	struct dtx_coll_entry		*dlh_coll_entry;
 	/* How many normal sub request. */
 	uint32_t			dlh_normal_sub_cnt;
 	/* How many delay forward sub request. */
@@ -209,7 +231,8 @@ _Static_assert(sizeof(struct dtx_leader_handle) == 352,
 	       "The size of this structure may be tracked by other modules e.g. telemetry");
 
 struct dtx_stat {
-	uint64_t	dtx_committable_count;
+	uint32_t	dtx_committable_count;
+	uint32_t	dtx_committable_coll_count;
 	uint64_t	dtx_oldest_committable_time;
 	uint64_t	dtx_oldest_active_time;
 	/* The epoch for the oldest entry in the 1st committed blob. */
@@ -234,17 +257,21 @@ enum dtx_flags {
 	/** For data migration. */
 	DTX_FOR_MIGRATION = (1 << 3),
 	/** Ignore other uncommitted DTXs. */
-	DTX_IGNORE_UNCOMMITTED = (1 << 4),
-	/** Resent request. */
-	DTX_RESEND = (1 << 5),
+	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
+	/** Resent request. Out-of-date. */
+	DTX_RESEND		= (1 << 5),
 	/** Force DTX refresh if hit non-committed DTX on non-leader. Out-of-date DAOS-7878. */
 	DTX_FORCE_REFRESH = (1 << 6),
 	/** Transaction has been prepared locally. */
 	DTX_PREPARED = (1 << 7),
 	/** Do not keep committed entry. */
-	DTX_DROP_CMT = (1 << 8),
+	DTX_DROP_CMT		= (1 << 8),
+	/* The non-leader targets are collective. */
+	DTX_TGT_COLL		= (1 << 9),
+	/* Not real DTX leader, Only forward IO to others, but neither commit nor abort DTX. */
+	DTX_RELAY		= (1 << 10),
 	/** Local transaction */
-	DTX_LOCAL = (1 << 9),
+	DTX_LOCAL		= (1 << 11),
 };
 
 void
@@ -252,12 +279,11 @@ dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth);
 int
 dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash);
 int
-dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
-		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
-		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
-		 struct dtx_id *dti_cos, int dti_cos_cnt,
-		 struct daos_shard_tgt *tgts, int tgt_cnt, uint32_t flags,
-		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh);
+dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti, struct dtx_epoch *epoch,
+		 uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+		 struct dtx_id *dti_cos, int dti_cos_cnt, struct daos_shard_tgt *tgts, int tgt_cnt,
+		 uint32_t flags, struct dtx_memberships *mbs, struct dtx_coll_entry *dce,
+		 struct dtx_leader_handle **p_dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result);
 
@@ -292,9 +318,18 @@ void dtx_cont_deregister(struct ds_cont_child *cont);
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);
 
+int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
+	       struct dtx_cos_key *dcks, int count);
+
 int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch);
 
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
+
+int
+dtx_coll_commit(struct ds_cont_child *cont, struct dtx_coll_entry *dce, struct dtx_cos_key *dck);
+
+int
+dtx_coll_abort(struct ds_cont_child *cont, struct dtx_coll_entry *dce, daos_epoch_t epoch);
 
 /**
  * Check whether the given DTX is resent one or not.
@@ -321,6 +356,24 @@ int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 int dtx_handle_resend(daos_handle_t coh, struct dtx_id *dti,
 		      daos_epoch_t *epoch, uint32_t *pm_ver);
 
+static inline struct dtx_coll_entry *
+dtx_coll_entry_get(struct dtx_coll_entry *dce)
+{
+	dce->dce_refs++;
+	return dce;
+}
+
+static inline void
+dtx_coll_entry_put(struct dtx_coll_entry *dce)
+{
+	if (dce != NULL && --(dce->dce_refs) == 0) {
+		d_rank_list_free(dce->dce_ranks);
+		D_FREE(dce->dce_bitmap);
+		D_FREE(dce->dce_hints);
+		D_FREE(dce);
+	}
+}
+
 static inline void
 dtx_dsp_free(struct dtx_share_peer *dsp)
 {
@@ -337,7 +390,12 @@ dtx_entry_get(struct dtx_entry *dte)
 	return dte;
 }
 
-void dtx_entry_put(struct dtx_entry *dte);
+static inline void
+dtx_entry_put(struct dtx_entry *dte)
+{
+	if (--(dte->dte_refs) == 0)
+		D_FREE(dte);
+}
 
 static inline bool
 dtx_is_valid_handle(const struct dtx_handle *dth)

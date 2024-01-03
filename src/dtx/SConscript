@@ -18,7 +18,8 @@ def scons():
     # dtx
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     dtx = denv.d_library('dtx',
-                         ['dtx_srv.c', 'dtx_rpc.c', 'dtx_resync.c', 'dtx_common.c', 'dtx_cos.c'],
+                         ['dtx_srv.c', 'dtx_rpc.c', 'dtx_resync.c', 'dtx_common.c', 'dtx_cos.c',
+                          'dtx_coll.c'],
                          install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', dtx)
 
