@@ -44,7 +44,7 @@ dc_obj_tls_init(int tags, int xs_id, int pid)
 		/** Start with number of active requests, of type gauge */
 		rc = d_tm_add_metric(&tls->cot_op_active[opc], D_TM_STATS_GAUGE,
 				     "number of active object RPCs", "ops",
-				     "%s/%u/%lu/ops/%s/active", dc_jobid, pid, tid,
+				     "%s/%u/%lu/io/ops/%s/active", dc_jobid, pid, tid,
 				      obj_opc_to_str(opc));
 		if (rc) {
 			D_WARN("Failed to create active counter: "DF_RC"\n", DP_RC(rc));
@@ -60,7 +60,7 @@ dc_obj_tls_init(int tags, int xs_id, int pid)
 		/** And finally the per-opcode latency, of type gauge */
 		rc = d_tm_add_metric(&tls->cot_op_lat[opc], D_TM_STATS_GAUGE,
 				     "object RPC processing time", "us",
-				     "%s/%u/%lu/ops/%s/latency", dc_jobid, pid, tid,
+				     "%s/%u/%lu/io/ops/%s/latency", dc_jobid, pid, tid,
 				     obj_opc_to_str(opc));
 		if (rc) {
 			D_WARN("Failed to create latency sensor: "DF_RC"\n", DP_RC(rc));
