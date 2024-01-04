@@ -1,6 +1,7 @@
-avocado-framework==102.0
-avocado-framework-plugin-result-html==102.0
-avocado-framework-plugin-varianter-yaml-to-mux==102.0
+# Later versions require a python upgrade so stick to 100 for now.
+avocado-framework==100
+avocado-framework-plugin-result-html==100
+avocado-framework-plugin-varianter-yaml-to-mux==100
 clustershell
 paramiko
 pyenchant

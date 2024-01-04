@@ -29,6 +29,8 @@ distro_custom() {
     python3 -m pip install pip --upgrade
     python3 -m pip install --requirement /tmp/requirements.txt
 
+    dnf search python3.11
+
 }
 
 install_mofed() {
