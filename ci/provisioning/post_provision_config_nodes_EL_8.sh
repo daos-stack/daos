@@ -16,14 +16,9 @@ group_repo_post() {
 
 distro_custom() {
     # install avocado
-    local avocado_rpms=(python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}})
-    if [ -z "$(dnf repoquery "${avocado_rpms[@]}")" ]; then
-        avocado_rpms=()
-        pip install "avocado-framework<83.0"
-        pip install "avocado-framework-plugin-result-html<83.0"
-        pip install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
-    fi
-    dnf -y install "${avocado_rpms[@]}" clustershell
+
+    pip install pip --upgrade
+    pip install --requirement utils/cq/requirements.txt
 
     # for Launchable's pip install
     dnf -y install python3-setuptools.noarch

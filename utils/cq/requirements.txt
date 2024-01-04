@@ -1,8 +1,6 @@
-# Packages needed to check code.  These are needed for linting rather than build.
-# 94.0 is reporting a couple of errors so stick on 93.
-avocado-framework<94
-avocado-framework-plugin-result-html<94
-avocado-framework-plugin-varianter-yaml-to-mux<94
+avocado-framework==102.0
+avocado-framework-plugin-result-html==102.0
+avocado-framework-plugin-varianter-yaml-to-mux==102.0
 clustershell
 paramiko
 pyenchant

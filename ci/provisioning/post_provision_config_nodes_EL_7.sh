@@ -46,6 +46,9 @@ EOF
     pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
     pip3 install clustershell
 
+    echo No more el7 builds.
+    exit 1
+
     # Mellanox OFED hack
     if ls -d /usr/mpi/gcc/openmpi-*; then
         version="$(rpm -q --qf "%{version}" openmpi)"
