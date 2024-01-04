@@ -20,15 +20,14 @@ distro_custom() {
     # TODO: This code is not exiting on failure.
     set -e
 
-    dnf -y install python3.11 python3.11-devel
-
-    alternatives --set python3 /usr/bin/python3.11
+    # dnf -y install python3.11 python3.11-devel
+    # alternatives --set python3 /usr/bin/python3.11
 
     # for Launchable's pip install
     dnf -y install python3-setuptools.noarch
 
     python3 -m pip install pip --upgrade
-    python3 -m pip install --requirement utils/cq/requirements.txt
+    python3 -m pip install --requirement /tmp/requirements.txt
 
 }
 
