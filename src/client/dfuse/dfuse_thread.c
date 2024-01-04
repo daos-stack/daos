@@ -7,6 +7,7 @@
 #include <pthread.h>
 
 #include <fuse3/fuse_lowlevel.h>
+#define D_LOGFAC DD_FAC(dfuse)
 #include "dfuse.h"
 
 struct dfuse_thread {
@@ -18,7 +19,7 @@ struct dfuse_thread {
 
 struct dfuse_tm {
 	d_list_t		tm_threads;
-	DAOS_MUTEX               tm_lock;
+	pthread_mutex_t		tm_lock;
 	struct fuse_session	*tm_se;
 	sem_t			tm_finish;
 	bool			tm_exit;
