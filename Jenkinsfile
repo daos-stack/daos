@@ -2,7 +2,7 @@
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
-/* Copyright 2019-2023 Intel Corporation
+/* Copyright 2019-2024 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -1202,7 +1202,7 @@ pipeline {
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
+                            provider: 'ucx+ud_x',
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
