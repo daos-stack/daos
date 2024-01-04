@@ -28,6 +28,9 @@ distro_custom() {
 
     python3 -m pip install pip --upgrade
     python3 -m pip install --requirement /tmp/requirements.txt
+    python3 -m pip install --requirement /tmp/cq-req.txt
+
+    alternatives --display python3
 
     dnf search python3.11
 
