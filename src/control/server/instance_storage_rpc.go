@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -82,9 +82,9 @@ func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 
 func formatEngineBdevs(ei *EngineInstance, ctrlrs storage.NvmeControllers) (results proto.NvmeControllerResults) {
 	// If no superblock exists, format NVMe and populate response with results.
-	needsSuperblock, err := ei.NeedsSuperblock()
+	needsSuperblock, err := ei.needsSuperblock()
 	if err != nil {
-		ei.log.Errorf("engine storage for %s instance %d: NeedsSuperblock(): %s",
+		ei.log.Errorf("engine storage for %s instance %d: needsSuperblock(): %s",
 			build.DataPlaneName, ei.Index(), err)
 
 		return proto.NvmeControllerResults{

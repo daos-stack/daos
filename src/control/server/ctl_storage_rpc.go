@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -868,7 +868,7 @@ type formatNvmeReq struct {
 	mdFormatted bool
 }
 
-func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageFormatResp) {
+func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageFormatResp) error {
 	// Allow format to complete on one instance even if another fails
 	for idx, engine := range req.instances {
 		_, hasError := req.errored[idx]
@@ -896,13 +896,16 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 		pbCtrlrs := proto.NvmeControllers(respBdevs.Ctrlrs)
 		ctrlrs, err := pbCtrlrs.ToNative()
 		if err != nil {
-			req.errored[idx] = err.Error()
-			resp.Crets = append(resp.Crets, engine.newCret("", err))
-			continue
+			return errors.Wrapf(err, "convert %T to %T", pbCtrlrs, ctrlrs)
+		}
+
+		ei, ok := engine.(*EngineInstance)
+		if !ok {
+			return errors.New("Engine interface obj is not an EngineInstance")
 		}
 
 		// SCM formatted correctly on this instance, format NVMe
-		cResults := formatEngineBdevs(engine.(*EngineInstance), ctrlrs)
+		cResults := formatEngineBdevs(ei, ctrlrs)
 
 		if cResults.HasErrors() {
 			req.errored[idx] = cResults.Errors()
@@ -917,6 +920,8 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 
 		resp.Crets = append(resp.Crets, cResults...)
 	}
+
+	return nil
 }
 
 // StorageFormat delegates to Storage implementation's Format methods to prepare
