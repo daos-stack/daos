@@ -85,7 +85,7 @@
 
 /* the number of low fd blocked */
 static uint16_t               low_fd_count;
-/* upper limit of low fd that will be bloked */
+/* upper limit of low fd that will be blocked */
 static uint16_t               max_low_fd_blocked;
 /* the list of low fd blocked */
 static int                   *low_fd_list;
