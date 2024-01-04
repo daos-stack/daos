@@ -86,6 +86,11 @@ python3 --version
 which python3
 pip list
 pip list --user
+which avocado
+
+avocado -v
+avocado config
+avocado --paginator=off list --filter-by-tags=pr,-hw ./
 
 # shellcheck disable=SC2086,SC2090,SC2048
 if ! ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then

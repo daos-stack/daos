@@ -228,6 +228,7 @@ class AvocadoInfo():
         Returns:
             list: avocado list command parts
         """
+        # TODO: Fixup.
         if self.major >= 83:
             return ["avocado", "list"]
         if self.major >= 82:

@@ -6028,8 +6028,8 @@ def run(wf, args):
                 fatal_errors.add_result(run_posix_tests(server, conf))
                 fatal_errors.add_result(run_dfuse(server, conf))
                 fatal_errors.add_result(run_duns_overlay_test(server, conf))
-                # test_pydaos_kv(server, conf)
-                # test_pydaos_kv_obj_class(server, conf)
+                test_pydaos_kv(server, conf)
+                test_pydaos_kv_obj_class(server, conf)
                 fatal_errors.add_result(server.set_fi())
             elif args.test == 'all':
                 fatal_errors.add_result(run_posix_tests(server, conf))

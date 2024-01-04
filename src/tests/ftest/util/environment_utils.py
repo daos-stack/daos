@@ -61,7 +61,10 @@ def update_path(logger, build_vars_file):
     path = os.environ.get("PATH")
 
     # Update PATH
+    print(f'Set path from: {os.environ["path"]}')
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
+    print(f'Set path to: {os.environ["path"]}')
+    logger.info("Testing with PATH=%s", os.environ["PATH"])
 
 
 def set_python_environment(logger):
@@ -100,7 +103,7 @@ def set_python_environment(logger):
             if required_path not in defined_python_paths:
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
-    logger.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
+    logger.info("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
 
 
 def log_environment(logger):
