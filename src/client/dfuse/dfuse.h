@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -874,7 +874,7 @@ struct dfuse_inode_entry {
 	struct dfuse_cont        *ie_dfs;
 
 	/* Lock, used to protect readdir calls */
-	pthread_mutex_t           ie_lock;
+	DAOS_MUTEX                ie_lock;
 
 	/** Hash table of inodes
 	 * All valid inodes are kept in a hash table, using the hash table locking.
