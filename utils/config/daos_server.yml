@@ -443,6 +443,13 @@
 #    - meta
 #    - wal
 #
+#  # Set criteria for automatic detection and eviction of faulty NVMe devices.
+#
+#  bdev_auto_faulty:
+#    enable: true
+#    max_io_errs: 100
+#    max_csum_errs: 200
+#
 #
 #-
 #  # Number of I/O service threads (and network endpoints) per engine.
@@ -591,3 +598,8 @@
 #
 #    # See about bdev_roles above.
 #    bdev_roles: [wal, meta, data]
+#
+#  # Disable automatic detection and eviction of faulty NVMe devices.
+#
+#  bdev_auto_faulty:
+#    enable: false

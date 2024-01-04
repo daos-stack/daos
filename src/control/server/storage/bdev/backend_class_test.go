@@ -115,6 +115,9 @@ func TestBackend_writeJSONFile(t *testing.T) {
 		accelOptMask      storage.AccelOptionBits
 		rpcSrvEnable      bool
 		rpcSrvSockAddr    string
+		autoFaultyEnable  bool
+		autoFaultyMaxIo   uint32
+		autoFaultyMaxCsum uint32
 		expErr            error
 		expOut            string
 	}{
@@ -682,7 +685,10 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				WithStorageConfigOutputPath(cfgOutputPath).
 				WithStorageEnableHotplug(tc.enableHotplug).
 				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask).
+				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr).
 				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr)
+			WithStorageAutoFaultyCriteria(tc.autoFaulty, tc.autoFaultyMaxIo,
+				tc.autoFaultyMaxCsum)
 
 			req, err := storage.BdevWriteConfigRequestFromConfig(test.Context(t), log,
 				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)

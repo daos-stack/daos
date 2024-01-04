@@ -543,8 +543,8 @@ func (c *Config) WithStorageSpdkRpcSrvProps(enable bool, sockAddr string) *Confi
 	return c
 }
 
-// WithStorageAutoFaultyProps specifies NVMe auto-faulty settings in the I/O Engine.
-func (c *Config) WithStorageAutoFaultyProps(enable bool, maxIoErrs, maxCsumErrs uint32) *Config {
+// WithStorageAutoFaultyCriteria specifies NVMe auto-faulty settings in the I/O Engine.
+func (c *Config) WithStorageAutoFaultyCriteria(enable bool, maxIoErrs, maxCsumErrs uint32) *Config {
 	c.Storage.AutoFaultyProps.Enable = enable
 	c.Storage.AutoFaultyProps.MaxIoErrs = maxIoErrs
 	c.Storage.AutoFaultyProps.MaxCsumErrs = maxCsumErrs
