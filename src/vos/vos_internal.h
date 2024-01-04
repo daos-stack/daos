@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1797,5 +1797,19 @@ vos_fake_anchor_create(daos_anchor_t *anchor)
 	memset(&anchor->da_buf[0], 0, sizeof(anchor->da_buf));
 	anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
 }
+
+/**
+ * Insert object ID and its parent container into the array of objects touched by the ongoing
+ * local transaction.
+ *
+ * \param[in] dth	DTX handle for ongoing local transaction
+ * \param[in] cont	VOS container
+ * \param[in] oid	Object ID
+ *
+ * \return		0		: Success.
+ *			-DER_NOMEM	: Run out of the volatile memory.
+ */
+int
+vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid);
 
 #endif /* __VOS_INTERNAL_H__ */

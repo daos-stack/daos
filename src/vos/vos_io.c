@@ -2384,11 +2384,7 @@ update_cancel(struct vos_io_context *ioc)
 			  true /* abort */);
 }
 
-/**
- * Insert object ID and its parent container into the array of objects touched by the ongoing
- * local transaction.
- */
-static int
+int
 vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid)
 {
 	struct dtx_local_oid_record *oid_array = NULL;

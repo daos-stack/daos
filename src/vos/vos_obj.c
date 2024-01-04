@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -560,8 +560,13 @@ reset:
 		vos_ts_set_update(ts_set, epr.epr_hi);
 	}
 
-	if (rc == 0)
+	if (rc == 0) {
 		vos_ts_set_wupdate(ts_set, epr.epr_hi);
+
+		if (dtx_is_valid_handle(dth) && dth->dth_local) {
+			rc = vos_insert_oid(dth, cont, &oid);
+		}
+	}
 
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, NULL, rc);
 	if (dtx_is_valid_handle(dth)) {
