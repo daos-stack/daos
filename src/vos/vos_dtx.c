@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2118,7 +2118,6 @@ vos_dtx_post_handle(struct vos_container *cont,
 				cont->vc_dtx_committed_count++;
 				cont->vc_pool->vp_dtx_committed_count++;
 				d_tm_inc_gauge(tls->vtl_committed, 1);
-				d_tm_inc_gauge(tls->vtl_dtx_cmt_ent_cnt, 1);
 			}
 		}
 	}
@@ -2475,7 +2474,6 @@ vos_dtx_aggregate(daos_handle_t coh)
 		cont->vc_dtx_committed_count--;
 		cont->vc_pool->vp_dtx_committed_count--;
 		d_tm_dec_gauge(tls->vtl_committed, 1);
-		d_tm_dec_gauge(tls->vtl_dtx_cmt_ent_cnt, 1);
 	}
 
 	if (epoch != cont_df->cd_newest_aggregated) {
@@ -3216,7 +3214,6 @@ cmt:
 		cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
 		D_ASSERT(cont->vc_pool->vp_sysdb == false);
 		d_tm_dec_gauge(vos_tls_get(false)->vtl_committed, cont->vc_dtx_committed_count);
-		d_tm_dec_gauge(vos_tls_get(false)->vtl_dtx_cmt_ent_cnt, cont->vc_dtx_committed_count);
 
 		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
 		cont->vc_dtx_committed_count = 0;

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -679,11 +679,13 @@ dss_mem_stats_init(struct mem_stats *stats, int xs_id)
 	if (rc)
 		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&stats->ms_mallinfo, D_TM_MEMINFO,
-			     "Total memory arena", "", "mem/meminfo/xs_%u", xs_id);
-	if (rc)
-		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
-	stats->ms_current = 0;
+	if (xs_id == DSS_MAIN_XS_ID(0)) {
+		rc = d_tm_add_metric(&stats->ms_mallinfo, D_TM_MEMINFO,
+				     "Total memory arena", "", "mem/meminfo/xs_%u", xs_id);
+		if (rc)
+			D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
+		stats->ms_current = 0;
+	}
 }
 
 void
@@ -694,8 +696,12 @@ dss_mem_total_alloc_track(void *arg, daos_size_t bytes)
 	D_ASSERT(arg != NULL);
 
 	d_tm_inc_gauge(stats->ms_total_usage, bytes);
-	/* Only retrieve mallocinfo every 10 allocation */
-	if ((stats->ms_current++ % 10) == 0)
+
+	if (stats->ms_mallinfo == NULL)
+		return;
+
+	/* Only retrieve mallocinfo every 100 allocation */
+	if ((stats->ms_current++ % 100) == 0)
 		d_tm_record_meminfo(stats->ms_mallinfo);
 }
 
