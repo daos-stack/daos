@@ -177,6 +177,7 @@ def main():
     parser = argparse.ArgumentParser(description="Check Jenkins test results")
     parser.add_argument("--pr", type=int, required=True)
     parser.add_argument("--target", default="master", choices=["master", "release/2.4"])
+    parser.add_argument("--more", action="store_true")
 
     args = parser.parse_args()
 
@@ -202,31 +203,38 @@ def main():
         print("No failed tests in PR, returning")
         return
 
+    build_count = 14
+    weekly_build_count = 4
+
+    if args.more:
+        build_count = 60
+        weekly_build_count = 10
+
     print(f"PR had failed {len(all_failed)} tests, checking against landings builds")
 
     if args.target == "master":
         print("Checking daily builds")
-        all_failed = test_against_job(all_failed, "daily-testing", 14)
+        all_failed = test_against_job(all_failed, "daily-testing", build_count)
 
         if all_failed:
             print("Checking weekly builds")
-            all_failed = test_against_job(all_failed, "weekly-testing", 4)
+            all_failed = test_against_job(all_failed, "weekly-testing", weekly_build_count)
 
         if all_failed:
             print("Checking landing builds")
-            all_failed = test_against_job(all_failed, "master", 14)
+            all_failed = test_against_job(all_failed, "master", build_count, timed=False)
     else:
         print("Checking daily builds")
-        all_failed = test_against_job(all_failed, "release%252F2.4", 14)
+        all_failed = test_against_job(all_failed, "release%252F2.4", build_count)
 
         if all_failed:
             print("Checking weekly builds")
-            all_failed = test_against_job(all_failed, "weekly-2.4-testing", 4)
+            all_failed = test_against_job(all_failed, "weekly-2.4-testing", weekly_build_count)
 
         if all_failed:
             print("Checking landing builds")
             all_failed = test_against_job(
-                all_failed, "release%252F2.4", 14, timed=False
+                all_failed, "release%252F2.4", build_count, timed=False
             )
 
     if all_failed:
