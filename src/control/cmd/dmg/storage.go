@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -61,7 +60,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 
 	cmd.Debugf("storage scan request: %+v", req)
 
-	resp, err := control.StorageScan(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.StorageScan(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
@@ -115,7 +114,7 @@ type storageFormatCmd struct {
 //
 // Run NVMe and SCM storage format on all connected servers.
 func (cmd *storageFormatCmd) Execute(args []string) (err error) {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	req := &control.StorageFormatReq{Reformat: cmd.Force}
 	req.SetHostList(cmd.getHostList())
@@ -164,7 +163,7 @@ type nvmeRebindCmd struct {
 //
 // Rebind NVMe SSD from kernel driver and bind to user-space driver on single server.
 func (cmd *nvmeRebindCmd) Execute(args []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	if len(cmd.getHostList()) != 1 {
 		return errors.New("command expects a single host in hostlist")
@@ -213,7 +212,7 @@ type nvmeAddDeviceCmd struct {
 //
 // Add recently inserted NVMe SSD to a running engine by updating relevant NVMe config file.
 func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	if len(cmd.getHostList()) != 1 {
 		return errors.New("command expects a single host in hostlist")
