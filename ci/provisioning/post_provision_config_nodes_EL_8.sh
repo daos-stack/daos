@@ -19,8 +19,8 @@ distro_custom() {
 
     # TODO: This code is not exiting on failure.
 
-    dnf -y remove python3-paramiko
-    dnf -y remove clustershell
+    # dnf -y remove python3-paramiko
+    # dnf -y remove clustershell
 
     dnf -y install python39 python39-devel
 

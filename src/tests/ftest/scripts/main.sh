@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1113
 # /*
-#  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2016-2024 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -81,6 +81,11 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     client_nodes=$(IFS=','; echo "${test_node_list[*]:8}")
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
+
+python3 --version
+which python3
+pip list
+pip list --user
 
 # shellcheck disable=SC2086,SC2090,SC2048
 if ! ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
