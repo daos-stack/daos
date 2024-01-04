@@ -560,9 +560,9 @@ int
 crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req)
 {
-	int rc = 0;
-	struct crt_grp_priv *grp_priv = NULL;
+	struct crt_grp_priv	*grp_priv = NULL;
 	struct crt_rpc_priv	*rpc_priv;
+	int			rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
