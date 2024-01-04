@@ -23,8 +23,16 @@ distro_custom() {
     # dnf -y install python3.11 python3.11-devel
     # alternatives --set python3 /usr/bin/python3.11
 
-    dnf -y remove paramiko
+    dnf -y remove python3-paramiko
     dnf -y remove clustershell
+
+    dny -y install python39 python39-devel
+
+    alternatives --display python3
+
+    alternatives --set python3 /usr/bin/python3.9
+
+    alternatives --display python3
 
     # for Launchable's pip install
     dnf -y install python3-setuptools.noarch
@@ -32,10 +40,6 @@ distro_custom() {
     python3 -m pip install pip --upgrade
     python3 -m pip install --requirement /tmp/requirements.txt
     python3 -m pip install --requirement /tmp/cq-req.txt
-
-    alternatives --display python3
-
-    dnf search python3
 
 }
 
