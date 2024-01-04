@@ -18,6 +18,8 @@
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
 #define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
 
+#define CRT_QUOTA_RPCS_DEFAULT 64
+
 /* uri lookup max retry times */
 #define CRT_URI_LOOKUP_RETRY_MAX	(8)
 
@@ -130,6 +132,8 @@ struct crt_rpc_priv {
 	d_list_t		crp_epi_link;
 	/* tmp_link used in crt_context_req_untrack */
 	d_list_t		crp_tmp_link;
+	/* link for crt_context::cc_quotas.rpc_waitq */
+	d_list_t		crp_waitq_link;
 	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */
 	d_list_t		crp_parent_link;
 	/* binheap node for timeout management, in crt_context::cc_bh_timeout */
