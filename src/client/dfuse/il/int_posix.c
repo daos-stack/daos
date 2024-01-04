@@ -20,12 +20,14 @@
 #include <sys/ioctl.h>
 #include <string.h>
 
-#include <daos/event.h>
-#include "dfuse_log.h"
 #include <gurt/list.h>
 #include <gurt/atomic.h>
+
+#include <daos/event.h>
+#include <dfuse_ioctl.h>
+
+#include "dfuse_log.h"
 #include "intercept.h"
-#include "dfuse_ioctl.h"
 #include "dfuse_vector.h"
 #include "dfuse_common.h"
 
@@ -2177,7 +2179,7 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 		if (nread != nmemb)
 			entry->fd_eof = true;
 	} else if (bytes_read < 0) {
-		entry->fd_err = bytes_read;
+		entry->fd_err = errcode;
 	} else {
 		entry->fd_eof = true;
 	}
@@ -2236,7 +2238,7 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 		nwrite        = bytes_written / size;
 		entry->fd_pos = oldpos + (nwrite * size);
 	} else if (bytes_written < 0) {
-		entry->fd_err = bytes_written;
+		entry->fd_err = errcode;
 	}
 
 	vector_decref(&fd_table, entry);

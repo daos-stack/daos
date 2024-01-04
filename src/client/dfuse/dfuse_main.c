@@ -17,9 +17,9 @@
 
 #include "dfuse.h"
 
-#include "daos_fs.h"
-#include "daos_api.h"
-#include "daos_uns.h"
+#include <daos_fs.h>
+#include <daos_api.h>
+#include <daos_uns.h>
 
 #include <gurt/common.h>
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's

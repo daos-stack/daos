@@ -48,7 +48,7 @@ type startCmd struct {
 
 func (cmd *startCmd) Execute(_ []string) error {
 	if err := common.CheckDupeProcess(); err != nil {
-		return err
+		cmd.Notice(err.Error())
 	}
 
 	cmd.Infof("Starting %s (pid %d)", versionString(), os.Getpid())
@@ -123,8 +123,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	drpcSrvStart := time.Now()
 	err = drpcServer.Start(hwlocCtx)
 	if err != nil {
-		cmd.Errorf("Unable to start socket server on %s: %v", sockPath, err)
-		return err
+		return errors.Wrap(err, "unable to start dRPC server")
 	}
 	cmd.Debugf("dRPC socket server started: %s", time.Since(drpcSrvStart))
 

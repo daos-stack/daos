@@ -38,6 +38,14 @@
 	(void)(addr);\
 	(void)(len);\
 } while (0)
+#define VALGRIND_DISABLE_ADDR_ERROR_REPORTING_IN_RANGE(addr, len) do {\
+	(void)(addr);\
+	(void)(len);\
+} while (0)
+#define VALGRIND_ENABLE_ADDR_ERROR_REPORTING_IN_RANGE(addr, len) do {\
+	(void)(addr);\
+	(void)(len);\
+} while (0)
 #endif
 
 #include <gurt/types.h>

@@ -313,10 +313,11 @@ tse_task_register_cbs(tse_task_t *task, tse_task_cb_t prep_cb,
 
 /**
  * Reinitialize a task and move it into the scheduler's initialize list. The
- * task must have a body function to be reinserted into the scheduler. If the
- * task is reintialzed in one of its completion CBs, that callback and the ones
- * that have already executed will have been removed from the cb list and will
- * need to be re-registered by the user after re-insertion.
+ * task must have a body function to be reinserted into the scheduler.
+ * Once the task being reinitialized, it possible be executed by other thread
+ * when it progresses the scheduler. So all accesses to the task must happen before
+ * the reinit call, for example task dependency/callback registration or task
+ * argument accessing.
  *
  * \param task	[IN]	Task to reinitialize
  *

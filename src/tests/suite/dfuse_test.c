@@ -29,7 +29,7 @@
 #include <sys/ioctl.h>
 #include <dirent.h>
 
-#include "dfuse_ioctl.h"
+#include <dfuse_ioctl.h>
 
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
