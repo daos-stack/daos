@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -520,10 +520,6 @@ class DaosServerManager(SubprocessManager):
             self.manager.job.update_pattern("dmg", hosts_qty)
             started = self.get_detected_engine_count(self.manager.process)
         else:
-            if hasattr(self.manager, 'timestamps'):
-                self.log.debug("TIME STAMPS:")
-                for key in sorted(self.manager.timestamps):
-                    self.log.debug("  %-8s: %s", key, self.manager.timestamps[key])
             self.log.info("<SERVER> Waiting for the daos_engine to start")
             self.manager.job.update_pattern("normal", hosts_qty)
             started = self.manager.check_subprocess_status(self.manager.process)
