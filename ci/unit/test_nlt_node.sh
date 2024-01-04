@@ -26,8 +26,9 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 
 python3 -m venv venv
 source venv/bin/activate
-pip install --requirement requirements.txt
-pip install --requirement utils/cq/requirements.txt
+pip --quiet install --upgrade pip
+pip --quiet install --requirement requirements.txt
+pip --quiet install --requirement utils/cq/requirements.txt
 
 ./utils/node_local_test.py --max-log-size 1700MiB --dfuse-dir /localhome/jenkins/ \
     --log-usage-save nltir.xml --log-usage-export nltr.json all
