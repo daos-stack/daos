@@ -338,6 +338,10 @@ class DefaultEnvironment():
         """Fake require"""
         return
 
+    def CompilationDatabase(self):
+        """Fake CompilationDatabase"""
+        return []
+
 
 class Variables():
     """Fake variables"""

@@ -7,6 +7,7 @@ import time
 
 import SCons.Warnings
 from prereq_tools import PreReqComponent  # pylint: disable=reimported
+from SCons import __version__ as scons_raw_version  # pylint: disable=protected-access
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -169,6 +170,11 @@ def update_rpm_version(version, tag):
     open("utils/rpms/daos.spec", "w").writelines(spec)  # pylint: disable=consider-using-with
 
     return True
+
+
+def get_scons_version(env):
+    """Get the version of Scons"""
+    return env._get_major_minor_revision(scons_raw_version)  # pylint: disable=protected-access
 
 
 def check_for_release_target():  # pylint: disable=too-many-locals
@@ -429,6 +435,11 @@ def scons():
         if not config.CheckHeader('stdatomic.h'):
             Exit('stdatomic.h is required to compile DAOS, update your compiler or distro version')
         config.Finish()
+
+    scons_ver = get_scons_version(deps_env)
+    if scons_ver >= (4, 0, 0):
+        deps_env.Tool("compilation_db")
+        deps_env.Alias("compiledb", deps_env.CompilationDatabase())
 
     # Define and load the components.  This will add more values to opt.
     prereqs = PreReqComponent(deps_env, opts)
