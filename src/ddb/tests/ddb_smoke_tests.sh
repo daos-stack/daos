@@ -70,5 +70,10 @@ run_cmd diff /tmp/ddb_new_value /tmp/ddb_value_dump
 
 rm -f /tmp/ddb_commands
 touch /tmp/ddb_commands
-{ echo "ls"; echo "ls [0]"; echo "ls [0]/[0]"; echo "dump_superblock"; } >> /tmp/ddb_commands
+cat << EOF > /tmp/ddb_commands
+ls
+ls [0]
+ls [0]/[0]
+dump_superblock
+EOF
 run_cmd ddb $vos_file -f /tmp/ddb_commands
