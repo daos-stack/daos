@@ -88,7 +88,7 @@ struct crt_gdata {
 	/** Provider specific data */
 	struct crt_prov_gdata	cg_prov_gdata_primary;
 
-	/** */
+	/** Placeholder for secondary provider data */
 	struct crt_prov_gdata	*cg_prov_gdata_secondary;
 
 	/** Hints to mercury for request post init (ignored for clients) */
@@ -110,6 +110,7 @@ struct crt_gdata {
 	/** HG level global data */
 	struct crt_hg_gdata	*cg_hg;
 
+	/** Points to default group */
 	struct crt_grp_gdata	*cg_grp;
 
 	/** refcount to protect crt_init/crt_finalize */
@@ -145,6 +146,8 @@ struct crt_gdata {
 	struct d_tm_node_t	*cg_uri_other;
 	/** Number of cores on a system */
 	long			 cg_num_cores;
+	/** Inflight rpc quota limit */
+	uint32_t		cg_rpc_quota;
 };
 
 extern struct crt_gdata		crt_gdata;
@@ -189,6 +192,14 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 #define CRT_DEFAULT_CREDITS_PER_EP_CTX	(32)
 #define CRT_MAX_CREDITS_PER_EP_CTX	(256)
 
+struct crt_quotas {
+	int			limit[CRT_QUOTA_COUNT];
+	ATOMIC uint32_t		current[CRT_QUOTA_COUNT];
+	bool			enabled[CRT_QUOTA_COUNT];
+	pthread_mutex_t		mutex;
+	d_list_t		rpc_waitq;
+};
+
 /* crt_context */
 struct crt_context {
 	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
@@ -227,6 +238,9 @@ struct crt_context {
 
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
+
+	/** Stores quotas */
+	struct crt_quotas	cc_quotas;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */
