@@ -61,29 +61,25 @@ obj_shard_addref(struct dc_obj_shard *shard)
 	D_SPIN_UNLOCK(&shard->do_obj->cob_spin);
 }
 
+static inline void
+obj_shard_addref_locked(struct dc_obj_shard *shard)
+{
+	shard->do_ref++;
+}
+
 int
 dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t oid,
 		  unsigned int mode, struct dc_obj_shard *shard)
 {
-	struct pool_target	*map_tgt;
-	int			rc;
-
 	D_ASSERT(obj != NULL && shard != NULL);
 	D_ASSERT(shard->do_obj == NULL);
 
-	rc = dc_pool_tgt_idx2ptr(obj->cob_pool, shard->do_target_id,
-				 &map_tgt);
-	if (rc)
-		return rc;
-
 	shard->do_id = oid;
-	shard->do_target_rank = map_tgt->ta_comp.co_rank;
-	shard->do_target_idx = map_tgt->ta_comp.co_index;
 	shard->do_obj = obj;
 	shard->do_co = obj->cob_co;
-	obj_shard_addref(shard); /* release this until obj_layout_free */
 
 	D_SPIN_LOCK(&obj->cob_spin);
+	obj_shard_addref_locked(shard); /* release this until obj_layout_free */
 	obj->cob_shards->do_open_count++;
 	D_SPIN_UNLOCK(&obj->cob_spin);
 
@@ -1288,8 +1284,8 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		opi->opi_shard_tgts.ca_arrays = NULL;
 	}
 	uuid_copy(opi->opi_pool_uuid, pool->dp_pool);
-	uuid_copy(opi->opi_co_hdl, args->pa_coh_uuid);
-	uuid_copy(opi->opi_co_uuid, args->pa_cont_uuid);
+	uuid_copy(opi->opi_co_hdl, shard->do_co->dc_cont_hdl);
+	uuid_copy(opi->opi_co_uuid, shard->do_co->dc_uuid);
 	daos_dti_copy(&opi->opi_dti, &args->pa_dti);
 	opi->opi_flags = args->pa_auxi.flags;
 	opi->opi_dti_cos.ca_count = 0;
@@ -1303,6 +1299,142 @@ out_req:
 	crt_req_decref(req);
 	crt_req_decref(req);
 out:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+struct shard_coll_punch_cb_args {
+	crt_rpc_t		*cpca_rpc;
+	uint32_t		*cpca_ver;
+	struct shard_punch_args	*cpca_shard_args;
+};
+
+static int
+obj_shard_coll_punch_cb(tse_task_t *task, void *data)
+{
+	struct shard_coll_punch_cb_args	*cb_args = data;
+	crt_rpc_t			*rpc = cb_args->cpca_rpc;
+	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
+
+	if (task->dt_result == 0) {
+		task->dt_result = obj_reply_get_status(rpc);
+		*cb_args->cpca_ver = obj_reply_map_version_get(rpc);
+	}
+
+	if (task->dt_result == -DER_OVERLOAD_RETRY) {
+		struct obj_coll_punch_out	*ocpo = crt_reply_get(rpc);
+		struct shard_punch_args		*shard_args = cb_args->cpca_shard_args;
+		uint32_t			 timeout = 0;
+
+		if (shard_args->pa_auxi.enqueue_id == 0)
+			shard_args->pa_auxi.enqueue_id = ocpo->ocpo_comm_out.req_out_enqueue_id;
+		crt_req_get_timeout(rpc, &timeout);
+		if (timeout > shard_args->pa_auxi.obj_auxi->max_delay)
+			shard_args->pa_auxi.obj_auxi->max_delay = timeout;
+	}
+
+	DL_CDEBUG(task->dt_result < 0, DLOG_ERR, DB_IO, task->dt_result,
+		  "DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" with DTX "
+		  DF_DTI" for task %p, map_ver %u/%u, flags %lx/%x", rpc, DP_UOID(ocpi->ocpi_oid),
+		  DP_DTI(&ocpi->ocpi_xid), task, ocpi->ocpi_map_ver, *cb_args->cpca_ver,
+		  (unsigned long)ocpi->ocpi_api_flags, ocpi->ocpi_flags);
+
+	crt_req_decref(rpc);
+
+	return task->dt_result;
+}
+
+int
+dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *args,
+			struct dtx_memberships *mbs, uint32_t mbs_max_size, crt_bulk_t *bulks,
+			uint32_t bulk_sz, struct daos_coll_target *tgts, uint32_t tgt_nr,
+			uint32_t max_tgt_size, struct dtx_epoch *epoch, uint64_t api_flags,
+			uint32_t rpc_flags, uint32_t map_ver, uint32_t *rep_ver, tse_task_t *task)
+{
+	struct dc_pool			*pool = obj_shard_ptr2pool(shard);
+	crt_rpc_t			*req = NULL;
+	struct obj_coll_punch_in	*ocpi = NULL;
+	struct shard_coll_punch_cb_args	 cb_args = { 0 };
+	crt_endpoint_t			 tgt_ep = { 0 };
+	int				 rc = 0;
+
+	D_ASSERT(pool != NULL);
+
+	tgt_ep.ep_grp = pool->dp_sys->sy_group;
+	tgt_ep.ep_rank = shard->do_target_rank;
+	tgt_ep.ep_tag = shard->do_target_idx;
+
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_COLL_PUNCH, &req);
+	if (rc != 0)
+		goto out;
+
+	ocpi = crt_req_get(req);
+	D_ASSERT(ocpi != NULL);
+
+	ocpi->ocpi_xid = args->pa_dti;
+	ocpi->ocpi_mbs = mbs;
+	ocpi->ocpi_odm.odm_mbs_max_sz = mbs_max_size;
+	uuid_copy(ocpi->ocpi_po_uuid, pool->dp_pool);
+	uuid_copy(ocpi->ocpi_co_hdl, shard->do_co->dc_cont_hdl);
+	uuid_copy(ocpi->ocpi_co_uuid, shard->do_co->dc_uuid);
+	ocpi->ocpi_oid = shard->do_id;
+	ocpi->ocpi_epoch = epoch->oe_value;
+	ocpi->ocpi_api_flags = api_flags;
+	ocpi->ocpi_map_ver = map_ver;
+	ocpi->ocpi_flags = rpc_flags;
+
+	if (bulks != NULL) {
+		D_ASSERT(bulk_sz != 0);
+
+		ocpi->ocpi_bulk_tgt_sz = bulk_sz;
+		ocpi->ocpi_bulk_tgt_nr = tgt_nr;
+		ocpi->ocpi_tgt_bulk = bulks[0];
+		ocpi->ocpi_tgts.ca_count = 0;
+		ocpi->ocpi_tgts.ca_arrays = NULL;
+	} else {
+		D_ASSERT(tgts != NULL);
+
+		ocpi->ocpi_bulk_tgt_sz = 0;
+		ocpi->ocpi_bulk_tgt_nr = 0;
+		ocpi->ocpi_tgt_bulk = NULL;
+		ocpi->ocpi_tgts.ca_count = tgt_nr;
+		ocpi->ocpi_tgts.ca_arrays = tgts;
+	}
+
+	ocpi->ocpi_max_tgt_sz = max_tgt_size;
+	ocpi->ocpi_disp_width = 0;
+	ocpi->ocpi_disp_depth = 0;
+
+	ocpi->ocpi_comm_in.req_in_enqueue_id = args->pa_auxi.enqueue_id;
+
+	crt_req_addref(req);
+	cb_args.cpca_rpc = req;
+	cb_args.cpca_ver = rep_ver;
+	cb_args.cpca_shard_args = args;
+
+	rc = tse_task_register_comp_cb(task, obj_shard_coll_punch_cb, &cb_args, sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_req, rc);
+
+	D_DEBUG(DB_IO, "Sending DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" with DTX "
+		DF_DTI" for task %p, map_ver %u, flags %lx/%x, leader %u/%u, bulk_sz %u\n",
+		req, DP_UOID(shard->do_id), DP_DTI(&args->pa_dti), task, map_ver,
+		(unsigned long)api_flags, rpc_flags, tgt_ep.ep_rank, tgt_ep.ep_tag, bulk_sz);
+
+	return daos_rpc_send(req, task);
+
+out_req:
+	/* -1 for crt_req_addref(). */
+	crt_req_decref(req);
+	/* -1 for obj_req_create(). */
+	crt_req_decref(req);
+out:
+	D_ERROR("DAOS_OBJ_RPC_COLL_PUNCH RPC failed for "DF_UOID" with DTX "
+		DF_DTI" for task %p, map_ver %u, flags %lx/%x, leader %u/%u: "DF_RC"\n",
+		DP_UOID(shard->do_id), DP_DTI(&args->pa_dti), task, map_ver,
+		(unsigned long)api_flags, rpc_flags, tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
+
+	obj_shard_decref(shard);
 	tse_task_complete(task, rc);
 	return rc;
 }

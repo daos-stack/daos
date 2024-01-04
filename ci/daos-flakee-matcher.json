@@ -4,13 +4,13 @@
       "owner": "flake8-error-e",
       "severity": "error",
       "pattern": [
-        {
-          "regexp": "^([^:]+):(\\d+):(\\d+):\\s+(E\\d+\\s+.+)$",
-          "file": 1,
-          "line": 2,
-          "column": 3,
-          "message": 4
-        }
+	{
+	  "regexp": "^([^:]+):(\\d+):(\\d+):\\s+(E\\d+\\s+.+)$",
+	  "file": 1,
+	  "line": 2,
+	  "column": 3,
+	  "message": 4
+	}
       ]
     }
   ]
