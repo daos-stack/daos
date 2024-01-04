@@ -26,7 +26,7 @@ distro_custom() {
     dnf -y remove python3-paramiko
     dnf -y remove clustershell
 
-    dny -y install python39 python39-devel
+    dnf -y install python39 python39-devel
 
     alternatives --display python3
 
