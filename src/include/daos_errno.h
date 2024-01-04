@@ -161,7 +161,10 @@ extern "C" {
 	       incompatible user or group permissions)			\
 	/** Fatal (non-retry-able) transport layer mercury error */	\
 	ACTION(DER_HG_FATAL,		(DER_ERR_GURT_BASE + 45),	\
-	       Fatal transport layer mercury error)
+	       Fatal transport layer mercury error)			\
+	/** Quota limit reached on the requested resource */		\
+	ACTION(DER_QUOTA_LIMIT, 	(DER_ERR_GURT_BASE + 46),	\
+		Quota limit reached)
 	/** TODO: add more error numbers */
 
 /** Preprocessor macro defining DAOS errno values and internal definition of d_errstr */
