@@ -33,5 +33,13 @@ pip install --upgrade pip
 pip install --requirement requirements.txt
 pip install --requirement utils/cq/requirements.txt
 
+cd src/client
+
+pip install .
+
+cd -
+
+pip list
+
 ./utils/node_local_test.py --max-log-size 1700MiB --dfuse-dir /localhome/jenkins/ \
     --log-usage-save nltir.xml --log-usage-export nltr.json all
