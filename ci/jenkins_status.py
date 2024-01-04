@@ -91,19 +91,27 @@ def je_load(job_name, jid=None, what=None, tree=None):
         return json.load(f)
 
 
-def show_job(job_name, jid):
+def show_job(job_name, jid, timed=None):
     """Parse one job
+
+    timed: None - check all builds,
+           True - only check timed builds.
+           False - only check non-timed builds.
 
     Return a list of failed test objects"""
 
-    if not job_name.startswith("PR-"):
+    if timed is not None:
         jdata = je_load(job_name, jid=jid, tree="actions[causes]")
         if (
             "causes" not in jdata["actions"][0]
             or jdata["actions"][0]["causes"][0]["_class"]
             != "hudson.triggers.TimerTrigger$TimerTriggerCause"
         ):
-            return None
+            if timed:
+                return None
+        else:
+            if not timed:
+                return None
 
     try:
         jdata = je_load(job_name, jid=jid, what="testReport")
@@ -125,7 +133,7 @@ def show_job(job_name, jid):
     return failed
 
 
-def test_against_job(all_failed, job_name, count):
+def test_against_job(all_failed, job_name, count, timed=True):
     """Check for failures in existing test runs
 
     Takes set of failed tests, returns set of unexplained tests
@@ -138,7 +146,7 @@ def test_against_job(all_failed, job_name, count):
         jid = build["number"]
         if jid > lcb:
             print(f"Job {jid} is of {job_name} is still running, skipping")
-        failed = show_job(job_name, jid)
+        failed = show_job(job_name, jid, timed=timed)
         if not isinstance(failed, list):
             continue
         for test in failed:
@@ -154,7 +162,9 @@ def test_against_job(all_failed, job_name, count):
 
     ignore = all_failed.intersection(main_failed)
     if ignore:
-        print(f"Tests which failed in the PR and have also failed in {job_name} builds.")
+        print(
+            f"Tests which failed in the PR and have also failed in {job_name} builds."
+        )
         for test in ignore:
             print(test.full_info())
 
@@ -166,6 +176,7 @@ def main():
 
     parser = argparse.ArgumentParser(description="Check Jenkins test results")
     parser.add_argument("--pr", type=int, required=True)
+    parser.add_argument("--target", default="master", choices=["master", "release/2.4"])
 
     args = parser.parse_args()
 
@@ -193,13 +204,30 @@ def main():
 
     print(f"PR had failed {len(all_failed)} tests, checking against landings builds")
 
-    all_failed = test_against_job(all_failed, "daily-testing", 14)
+    if args.target == "master":
+        print("Checking daily builds")
+        all_failed = test_against_job(all_failed, "daily-testing", 14)
 
-    if all_failed:
-        all_failed = test_against_job(all_failed, "weekly-testing", 4)
+        if all_failed:
+            print("Checking weekly builds")
+            all_failed = test_against_job(all_failed, "weekly-testing", 4)
 
-    if all_failed:
-        all_failed = test_against_job(all_failed, "master", 14)
+        if all_failed:
+            print("Checking landing builds")
+            all_failed = test_against_job(all_failed, "master", 14)
+    else:
+        print("Checking daily builds")
+        all_failed = test_against_job(all_failed, "release%252F2.4", 14)
+
+        if all_failed:
+            print("Checking weekly builds")
+            all_failed = test_against_job(all_failed, "weekly-2.4-testing", 4)
+
+        if all_failed:
+            print("Checking landing builds")
+            all_failed = test_against_job(
+                all_failed, "release%252F2.4", 14, timed=False
+            )
 
     if all_failed:
         print("Tests which only failed in the PR")
