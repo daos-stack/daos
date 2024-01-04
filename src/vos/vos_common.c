@@ -300,6 +300,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 			 * error while handling one already anyway.
 			 */
 			(void)vos_publish_scm(vos_pool2umm(pool), *rsrvd_scmp, false /* publish */);
+			D_FREE(*rsrvd_scmp);
 			*rsrvd_scmp = NULL;
 			err         = -DER_NOMEM;
 			goto cancel;
