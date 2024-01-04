@@ -5608,7 +5608,7 @@ init_myhook(void)
 	char    *env_log;
 	int      rc;
 	uint64_t eq_count_loc = 0;
-	uint64_t daos_min_fd = 0;
+	uint64_t daos_min_fd  = 0;
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -5681,8 +5681,8 @@ init_myhook(void)
 	if (rc != -DER_NONEXIST) {
 		if (daos_min_fd > MAX_DAOS_MIN_FD) {
 			/* set a limit in case env was set incorrectly */
-			D_WARN("Max DAOS_MIN_FD (%" PRIu64 ") should not exceed: %d",
-			       daos_min_fd, MAX_DAOS_MIN_FD);
+			D_WARN("Max DAOS_MIN_FD (%" PRIu64 ") should not exceed: %d", daos_min_fd,
+			       MAX_DAOS_MIN_FD);
 			daos_min_fd = MAX_DAOS_MIN_FD;
 		}
 		max_low_fd_blocked = (int)daos_min_fd - 1;

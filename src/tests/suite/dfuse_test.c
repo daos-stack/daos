@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -502,13 +502,13 @@ do_directory(void **state)
 void
 do_lowfd(void **state)
 {
-	int            fd;
-	int            rc;
-	int            i;
-	bool           pil4dfs_loaded = false;
-	char          *env_ldpreload;
-	char           fd_path[64];
-	char          *path;
+	int   fd;
+	int   rc;
+	int   i;
+	bool  pil4dfs_loaded = false;
+	char *env_ldpreload;
+	char  fd_path[64];
+	char *path;
 
 	env_ldpreload = getenv("LD_PRELOAD");
 	if (env_ldpreload == NULL)
