@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  (C) Copyright 2021-2023 Intel Corporation.
+#  (C) Copyright 2021-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -17,11 +17,18 @@ group_repo_post() {
 distro_custom() {
     # install avocado
 
-    pip install pip --upgrade
-    pip install --requirement utils/cq/requirements.txt
+    # TODO: This code is not exiting on failure.
+    set -e
+
+    dnf -y install python3.11 python3.11-devel
+
+    alternatives --set python3 /usr/bin/python3.11
 
     # for Launchable's pip install
     dnf -y install python3-setuptools.noarch
+
+    python3 -m pip install pip --upgrade
+    python3 -m pip install --requirement utils/cq/requirements.txt
 
 }
 
