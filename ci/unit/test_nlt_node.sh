@@ -25,10 +25,13 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 #			   --server-valgrind all
 
 python3 -m venv venv
+# shellcheck disable=SC1091
 source venv/bin/activate
-pip --quiet install --upgrade pip
-pip --quiet install --requirement requirements.txt
-pip --quiet install --requirement utils/cq/requirements.txt
+touch venv/pip.conf
+pip config set global.progress_bar off
+pip install --upgrade pip
+pip install --requirement requirements.txt
+pip install --requirement utils/cq/requirements.txt
 
 ./utils/node_local_test.py --max-log-size 1700MiB --dfuse-dir /localhome/jenkins/ \
     --log-usage-save nltir.xml --log-usage-export nltr.json all

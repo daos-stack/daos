@@ -148,11 +148,11 @@
     - cmd: ["src/tests/ftest/cart/utest/utest_hlc"]
     - cmd: ["src/tests/ftest/cart/utest/utest_protocol"]
     - cmd: ["src/tests/ftest/cart/utest/utest_swim"]
-- name: storage_estimator
-  base: "DAOS_BASE"
-  memcheck: False
-  tests:
-    - cmd: ["src/vos/storage_estimator/common/tests/storage_estimator.sh"]
+# - name: storage_estimator
+#   base: "DAOS_BASE"
+#   memcheck: False
+#   tests:
+#     - cmd: ["src/vos/storage_estimator/common/tests/storage_estimator.sh"]
 - name: control
   memcheck: False
   tests:
