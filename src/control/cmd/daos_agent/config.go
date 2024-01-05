@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -54,6 +54,13 @@ type Config struct {
 	DisableAutoEvict    bool                      `yaml:"disable_auto_evict,omitempty"`
 	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
+	TelemetryPort       int                       `yaml:"telemetry_port,omitempty"`
+	TelemetryRetain     time.Duration             `yaml:"telemetry_retain,omitempty"`
+}
+
+// TelemetryEnabled returns true if client telemetry collection/export is enabled.
+func (c *Config) TelemetryEnabled() bool {
+	return c.TelemetryPort > 0
 }
 
 // NUMAFabricConfig defines a list of fabric interfaces that belong to a NUMA
@@ -86,6 +93,10 @@ func LoadConfig(cfgPath string) (*Config, error) {
 
 	if !daos.SystemNameIsValid(cfg.SystemName) {
 		return nil, fmt.Errorf("invalid system name: %s", cfg.SystemName)
+	}
+
+	if cfg.TelemetryRetain > 0 && cfg.TelemetryPort == 0 {
+		return nil, errors.New("telemetry_retain requires telemetry_port")
 	}
 
 	return cfg, nil

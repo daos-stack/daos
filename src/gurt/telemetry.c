@@ -74,10 +74,11 @@ static struct d_tm_shmem {
 	struct d_tm_context	*ctx; /** context for the producer */
 	struct d_tm_node_t	*root; /** root node of shmem */
 	pthread_mutex_t		 add_lock; /** for synchronized access */
-	uint32_t		 retain:1, /* retain shmem region during exit */
-				 sync_access:1,
-				 retain_non_empty:1, /** retain shmem region if it is not empty */
-				 multiple_writer_lock:1; /** lock for multiple writer */
+	uint32_t                 retain : 1, /** retain shmem region during exit */
+	    sync_access                 : 1, /** enable sync access to shmem */
+	    retain_non_empty            : 1, /** retain shmem region if it is not empty */
+	    multiple_writer_lock        : 1, /** lock for multiple writer */
+	    other_rw                    : 1; /** allow rw access to other */
 	int			 id; /** Instance ID */
 } tm_shmem;
 
@@ -216,10 +217,16 @@ static int
 new_shmem(key_t key, size_t size, struct d_tm_shmem_hdr **shmem)
 {
 	int rc;
+	int flags = IPC_CREAT;
+
+	if (tm_shmem.other_rw == 1)
+		flags |= 0666;
+	else
+		flags |= 0660;
 
 	D_INFO("creating new shared memory segment, key=0x%x, size=%lu\n",
 	       key, size);
-	rc = attach_shmem(key, size, IPC_CREAT | 0660, shmem);
+	rc = attach_shmem(key, size, flags, shmem);
 	if (rc < 0)
 		D_ERROR("failed to create shared memory segment, key=0x%x: "DF_RC"\n", key,
 			DP_RC(rc));
@@ -793,9 +800,8 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 
 	memset(&tm_shmem, 0, sizeof(tm_shmem));
 
-	if ((flags & ~(D_TM_SERIALIZATION | D_TM_RETAIN_SHMEM |
-		       D_TM_RETAIN_SHMEM_IF_NON_EMPTY | D_TM_OPEN_OR_CREATE |
-		       D_TM_MULTIPLE_WRITER_LOCK)) != 0) {
+	if ((flags & ~(D_TM_SERIALIZATION | D_TM_RETAIN_SHMEM | D_TM_RETAIN_SHMEM_IF_NON_EMPTY |
+		       D_TM_OPEN_OR_CREATE | D_TM_MULTIPLE_WRITER_LOCK | D_TM_OTHER_RW)) != 0) {
 		D_ERROR("Invalid flags 0x%x\n", flags);
 		rc = -DER_INVAL;
 		goto failure;
@@ -819,6 +825,11 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	if (flags & D_TM_MULTIPLE_WRITER_LOCK) {
 		tm_shmem.multiple_writer_lock = 1;
 		D_INFO("Require multiple write protection for id %d\n", id);
+	}
+
+	if (flags & D_TM_OTHER_RW) {
+		tm_shmem.other_rw = 1;
+		D_INFO("Allowing read/write access to Other\n");
 	}
 
 	tm_shmem.id = id;
@@ -2584,7 +2595,6 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 
 	new_node = d_tm_find_metric(ctx, path);
 	if (new_node != NULL) {
-		D_ERROR("metric [%s] already exists\n", path);
 		D_GOTO(fail_unlock, rc = -DER_EXIST);
 	}
 
@@ -2646,8 +2656,8 @@ fail_ephemeral_unlock:
 	if (tm_shmem.multiple_writer_lock)
 		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 fail:
-	D_ERROR("Failed to add ephemeral dir [%s]: " DF_RC "\n", path,
-		DP_RC(rc));
+	if (rc != -DER_EXIST)
+		DL_ERROR(rc, "Failed to add ephemeral dir [%s]", path);
 	return rc;
 }
 
@@ -2717,7 +2727,7 @@ rm_ephemeral_dir(struct d_tm_context *ctx, struct d_tm_node_t *link)
 	head = &shmem->sh_subregions;
 	for (cur = conv_ptr(shmem, head->next); cur != head; cur = conv_ptr(shmem, cur->next)) {
 		curr = d_list_entry(cur, __typeof__(*curr), rl_link);
-		rc = rm_ephemeral_dir(ctx, curr->rl_link_node);
+		rc   = rm_ephemeral_dir(ctx, conv_ptr(shmem, curr->rl_link_node));
 		if (rc != 0) /* nothing much we can do to recover here */
 			D_ERROR("error removing tmp dir [%s]: "DF_RC"\n",
 				link->dtn_name, DP_RC(rc));

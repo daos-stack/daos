@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -126,6 +126,16 @@ func (cmd *startCmd) Execute(_ []string) error {
 		return errors.Wrap(err, "unable to start dRPC server")
 	}
 	cmd.Debugf("dRPC socket server started: %s", time.Since(drpcSrvStart))
+
+	if cmd.cfg.TelemetryEnabled() {
+		telemetryStart := time.Now()
+		shutdown, err := startPrometheusExporter(ctx, cmd, cmd.cfg)
+		if err != nil {
+			return errors.Wrap(err, "unable to start prometheus exporter")
+		}
+		defer shutdown()
+		cmd.Debugf("telemetry exporter started: %s", time.Since(telemetryStart))
+	}
 
 	cmd.Debugf("startup complete in %s", time.Since(startedAt))
 	cmd.Infof("%s (pid %d) listening on %s", versionString(), os.Getpid(), sockPath)

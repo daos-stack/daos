@@ -27,9 +27,10 @@ bool daos_client_metric_retain;
 int
 dc_tm_init(void)
 {
-	int    metrics_tag;
-	pid_t  pid;
-	int    rc;
+	struct d_tm_node_t *started_at;
+	int                 metrics_tag;
+	pid_t               pid;
+	int                 rc;
 
 	d_getenv_bool(DAOS_CLIENT_METRICS_ENABLE, &daos_client_metric);
 	if (!daos_client_metric)
@@ -64,10 +65,18 @@ dc_tm_init(void)
 	rc = d_tm_add_ephemeral_dir(NULL, MAX_IDS_SIZE(INIT_JOB_NUM), "%s/%u",
 				    dc_jobid, pid);
 	if (rc != 0) {
-		DL_ERROR(rc, "add metric %s/%u failed.\n", dc_jobid, pid);
+		DL_ERROR(rc, "add metric %s/%u failed.", dc_jobid, pid);
 		D_GOTO(out, rc);
 	}
 
+	rc = d_tm_add_metric(&started_at, D_TM_TIMESTAMP, "Timestamp of client startup", NULL,
+			     "%s/%u/%s", dc_jobid, pid, "started_at");
+	if (rc != 0) {
+		DL_ERROR(rc, "add metric %s/%u/started_at failed.", dc_jobid, pid);
+		D_GOTO(out, rc);
+	}
+
+	d_tm_record_timestamp(started_at);
 out:
 	if (rc)
 		d_tm_fini();
