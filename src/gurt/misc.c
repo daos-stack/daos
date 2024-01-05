@@ -977,6 +977,39 @@ dis_single_char_str(char *str)
  */
 static pthread_rwlock_t d_env_lock = PTHREAD_RWLOCK_INITIALIZER;
 
+static inline void
+d_env_rwlock_rdlock()
+{
+	int rc;
+
+	rc = pthread_rwlock_rdlock(&d_env_lock);
+	if (rc != 0)
+		fprintf(stderr, "d_env_rwlock_rdlock(%p) rc=%d %s\n", &d_env_lock, rc, strerror(rc));
+	assert(rc == 0);
+}
+
+static inline void
+d_env_rwlock_wrlock()
+{
+	int rc;
+
+	rc = pthread_rwlock_wrlock(&d_env_lock);
+	if (rc != 0)
+		fprintf(stderr, "d_env_rwlock_wrlock(%p) rc=%d %s\n", &d_env_lock, rc, strerror(rc));
+	assert(rc == 0);
+}
+
+static inline void
+d_env_rwlock_unlock()
+{
+	int rc;
+
+	rc = pthread_rwlock_unlock(&d_env_lock);
+	if (rc != 0)
+		fprintf(stderr, "d_env_rwlock_unlock(%p) rc=%d %s\n", &d_env_lock, rc, strerror(rc));
+	assert(rc == 0);
+}
+
 /**
  * Check if and environment variable is defined.
  *
@@ -988,9 +1021,9 @@ d_isenv_def(char *name)
 {
 	char *env;
 
-	pthread_rwlock_rdlock(&d_env_lock);
+	d_env_rwlock_rdlock();
 	env = getenv(name);
-	pthread_rwlock_unlock(&d_env_lock);
+	d_env_rwlock_unlock();
 
 	return env != NULL;
 }
@@ -1015,7 +1048,7 @@ d_getenv_str(char *str_val, size_t str_size, const char *name)
 	assert(str_val != NULL);
 	assert(str_size > 0);
 
-	pthread_rwlock_rdlock(&d_env_lock);
+	d_env_rwlock_rdlock();
 
 	tmp = getenv(name);
 	if (tmp == NULL) {
@@ -1034,7 +1067,7 @@ d_getenv_str(char *str_val, size_t str_size, const char *name)
 	str_val[len] = '\0';
 
 out:
-	pthread_rwlock_unlock(&d_env_lock);
+	d_env_rwlock_unlock();
 
 	return rc;
 }
@@ -1057,7 +1090,7 @@ d_agetenv_str(char **str_val, const char *name)
 
 	*str_val = NULL;
 
-	pthread_rwlock_rdlock(&d_env_lock);
+	d_env_rwlock_rdlock();
 
 	env = getenv(name);
 	if (env == NULL) {
@@ -1076,7 +1109,7 @@ d_agetenv_str(char **str_val, const char *name)
 	rc       = -DER_SUCCESS;
 
 out:
-	pthread_rwlock_unlock(&d_env_lock);
+	d_env_rwlock_unlock();
 
 	return rc;
 }
@@ -1118,7 +1151,7 @@ d_getenv_bool(const char *name, bool *bool_val)
 	assert(name != NULL);
 	assert(bool_val != NULL);
 
-	pthread_rwlock_rdlock(&d_env_lock);
+	d_env_rwlock_rdlock();
 
 	env = getenv(name);
 	if (env == NULL) {
@@ -1133,7 +1166,7 @@ d_getenv_bool(const char *name, bool *bool_val)
 	rc        = -DER_SUCCESS;
 
 out:
-	pthread_rwlock_unlock(&d_env_lock);
+	d_env_rwlock_unlock();
 
 	return rc;
 }
@@ -1155,7 +1188,7 @@ d_getenv_char(const char *name, char *char_val)
 	assert(name != NULL);
 	assert(char_val != NULL);
 
-	pthread_rwlock_rdlock(&d_env_lock);
+	d_env_rwlock_rdlock();
 
 	env = getenv(name);
 	if (env == NULL) {
@@ -1172,7 +1205,7 @@ d_getenv_char(const char *name, char *char_val)
 	rc        = -DER_SUCCESS;
 
 out:
-	pthread_rwlock_unlock(&d_env_lock);
+	d_env_rwlock_unlock();
 
 	return rc;
 }
@@ -1188,7 +1221,7 @@ d_getenv_ull(unsigned long long *val, const char *name)
 	assert(val != NULL);
 	assert(name != NULL);
 
-	pthread_rwlock_rdlock(&d_env_lock);
+	d_env_rwlock_rdlock();
 	env = getenv(name);
 	if (env == NULL) {
 		rc = -DER_NONEXIST;
@@ -1211,7 +1244,7 @@ d_getenv_ull(unsigned long long *val, const char *name)
 	rc   = -DER_SUCCESS;
 
 out:
-	pthread_rwlock_unlock(&d_env_lock);
+	d_env_rwlock_unlock();
 
 	return rc;
 }
@@ -1324,11 +1357,11 @@ d_putenv(char *name)
 	int env_errno;
 	int rc;
 
-	pthread_rwlock_wrlock(&d_env_lock);
+	d_env_rwlock_wrlock();
 	errno     = 0;
 	rc        = putenv(name);
 	env_errno = errno;
-	pthread_rwlock_unlock(&d_env_lock);
+	d_env_rwlock_unlock();
 
 	errno = env_errno;
 	return rc;
@@ -1348,11 +1381,11 @@ d_setenv(const char *name, const char *value, int overwrite)
 	int env_errno;
 	int rc;
 
-	pthread_rwlock_wrlock(&d_env_lock);
+	d_env_rwlock_wrlock();
 	errno     = 0;
 	rc        = setenv(name, value, overwrite);
 	env_errno = errno;
-	pthread_rwlock_unlock(&d_env_lock);
+	d_env_rwlock_unlock();
 
 	errno = env_errno;
 	return rc;
@@ -1370,11 +1403,11 @@ d_unsetenv(const char *name)
 	int env_errno;
 	int rc;
 
-	pthread_rwlock_wrlock(&d_env_lock);
+	d_env_rwlock_wrlock();
 	errno     = 0;
 	rc        = unsetenv(name);
 	env_errno = errno;
-	pthread_rwlock_unlock(&d_env_lock);
+	d_env_rwlock_unlock();
 
 	errno = env_errno;
 	return rc;
@@ -1391,9 +1424,9 @@ d_clearenv(void)
 {
 	int rc;
 
-	pthread_rwlock_wrlock(&d_env_lock);
+	d_env_rwlock_wrlock();
 	rc = clearenv();
-	pthread_rwlock_unlock(&d_env_lock);
+	d_env_rwlock_unlock();
 
 	return rc;
 }
