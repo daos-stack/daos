@@ -32,7 +32,6 @@ def load_conf():
 
 
 conf = load_conf()
-print(conf)
 
 args = {"sources": ["pydaos/pydaos_shim.c"], "libraries": ["daos", "duns"]}
 
@@ -42,7 +41,6 @@ if conf:
     args["runtime_library_dirs"] = args["library_dirs"]
 
 
-print(args)
 module1 = Extension("pydaos.pydaos_shim", **args)
 
 setup(
