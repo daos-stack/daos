@@ -17,6 +17,21 @@ fi
 # shellcheck disable=SC2153
 mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
 
+if  [ -d venv ]
+then
+    rm -rf venv
+fi
+
+python3 -m venv venv
+# shellcheck disable=SC1091
+source venv/bin/activate
+touch venv/pip.conf
+pip config set global.progress_bar off
+pip config set global.no_color true
+
+pip install --upgrade pip
+pip install -r /tmp/requirements-ftest.txt
+
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
     mkdir -p "$PWD"/install/tmp
@@ -81,16 +96,6 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     client_nodes=$(IFS=','; echo "${test_node_list[*]:8}")
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
-
-python3 -m venv venv
-# shellcheck disable=SC1091
-source venv/bin/activate
-touch venv/pip.conf
-pip config set global.progress_bar off
-pip config set global.no_color true
-
-pip install --upgrade pip
-pip install -r /tmp/requirements-ftest.txt
 
 # shellcheck disable=SC2086,SC2090,SC2048
 if ! python3 ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
