@@ -1229,7 +1229,8 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             sbatch_cmds.append("status=$?")
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 if mpi_module != self.mpi_module:
-                    sbatch_cmds.extend([f"module use {self.mpi_module_use}", f"module load {self.mpi_module}"])
+                    sbatch_cmds.extend(
+                        [f"module use {self.mpi_module_use}", f"module load {self.mpi_module}"])
                 sbatch_cmds.extend(stop_dfuse(dfuse))
             commands.append([sbatch_cmds, log_name])
             self.log.info(f"<<{job_spec.upper()} cmdlines>>:")
