@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -552,6 +552,8 @@ class SoakTestBase(TestWithServers):
         self.check_errors = []
         self.used = []
         self.mpi_module = self.params.get("mpi_module", "/run/*", default="mpi/mpich-x86_64")
+        self.mpi_module_use = self.params.get(
+            "mpi_module_use", "/run/*", default="/usr/share/modulefiles")
         enable_sudo = self.params.get("enable_sudo", "/run/*", default=True)
         test_to = self.params.get(self.test_id, os.path.join(test_param, "test_timeout", "*"))
         self.test_name = self.params.get("name", test_param + "*")
