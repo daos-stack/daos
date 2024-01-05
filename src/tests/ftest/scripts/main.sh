@@ -94,7 +94,7 @@ avocado -v
 avocado config
 avocado --paginator=off list --filter-by-tags=pr,-hw ./
 
-rpm --verify daos-client
+rpm --verify daos-client-tests
 
 head -n 1 launch.py
 
