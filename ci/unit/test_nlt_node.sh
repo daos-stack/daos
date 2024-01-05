@@ -32,8 +32,7 @@ pip config set global.progress_bar off
 pip config set global.no_color true
 
 pip install --upgrade pip
-pip install --requirement requirements.txt
-pip install --requirement utils/cq/requirements.txt
+pip install --requirement requirements-utest.txt
 
 cd src/client
 

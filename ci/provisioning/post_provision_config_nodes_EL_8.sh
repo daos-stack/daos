@@ -30,8 +30,7 @@ distro_custom() {
     # dnf -y install python3-setuptools.noarch
 
     pip3 install pip --upgrade
-    time pip3 install --requirement /tmp/requirements.txt
-    time pip3 install --requirement /tmp/cq-req.txt
+    time pip3 install --requirement /tmp/requirements-ftest.txt
 }
 
 install_mofed() {

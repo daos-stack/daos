@@ -72,10 +72,9 @@ ENV VIRTUAL_ENV=/home/daos/venv/
 
 # Install latest versions of python tools.
 # wheel is needed first to avoid a warning when installing pyyaml.
-COPY requirements.txt .
+COPY requirements-build.txt .
 RUN python3 -m pip --no-cache-dir install --upgrade pip && \
-    python3 -m pip --no-cache-dir install wheel && \
-    python3 -m pip --no-cache-dir install --requirement requirements.txt
+    python3 -m pip --no-cache-dir install --requirement requirements-build.txt
 
 WORKDIR /home/daos/pre
 RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components

@@ -1,14 +1,8 @@
-# Later versions require a python upgrade so stick to 100 for now.
-avocado-framework==82
-avocado-framework-plugin-result-html==82
-avocado-framework-plugin-varianter-yaml-to-mux==82
-clustershell
-paramiko
 pyenchant
 ## flake8 6 removed --diff option which breaks flake precommit hook.
 ## https://github.com/pycqa/flake8/issues/1389 https://github.com/PyCQA/flake8/pull/1720
 flake8<6.0.0
-#isort==5.13.2
-#pylint==3.0.3
-#yamllint==1.33.0
-#codespell==2.2.6
+isort==5.13.2
+pylint==3.0.3
+yamllint==1.33.0
+codespell==2.2.6

@@ -15,6 +15,7 @@ on:
       - utils/ci
       - ci
       - requirements.txt
+      - requirements-build.txt
 
 jobs:
 

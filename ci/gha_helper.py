@@ -16,6 +16,7 @@ BUILD_FILES = ['site_scons/prereq_tools',
                '.github/workflows/landing-builds.yml',
                '.dockerignore',
                'requirements.txt',
+               'requirements-build.txt',
                'ci/gha_helper.py']
 
 COMMIT_CMD = ['git', 'rev-parse', '--short', 'HEAD']
