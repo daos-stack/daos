@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2267,7 +2267,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	 * mode.
 	 */
 	if ((dfs->attr.da_mode & MODE_MASK) == DFS_RELAXED)
-		d_getenv_bool(&dfs->use_dtx, "DFS_USE_DTX");
+		d_getenv_bool("DFS_USE_DTX", &dfs->use_dtx);
 
 	/** Check if super object has the root entry */
 	strcpy(dfs->root.name, "/");

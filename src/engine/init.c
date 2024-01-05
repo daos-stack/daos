@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -314,7 +314,7 @@ dss_topo_init()
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
-	d_getenv_bool(&tgt_oversub, "DAOS_TARGET_OVERSUBSCRIBE");
+	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
 	dss_tgt_nr = nr_threads;
 
 	/* if no NUMA node was specified, or NUMA data unavailable */

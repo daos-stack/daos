@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -72,7 +72,7 @@ dc_obj_init(void)
 	}
 
 	obj_coll_punch_thd = OBJ_COLL_PUNCH_THD_MIN;
-	d_getenv_int("DAOS_OBJ_COLL_PUNCH_THD", &obj_coll_punch_thd);
+	d_getenv_uint("DAOS_OBJ_COLL_PUNCH_THD", &obj_coll_punch_thd);
 	if (obj_coll_punch_thd < OBJ_COLL_PUNCH_THD_MIN) {
 		D_WARN("Invalid collective punch threshold %u, it cannot be smaller than %u, "
 		       "use the default value %u\n", obj_coll_punch_thd,
@@ -82,7 +82,7 @@ dc_obj_init(void)
 	D_INFO("Set object collective punch threshold as %u\n", obj_coll_punch_thd);
 
 	tx_verify_rdg = false;
-	d_getenv_bool(&tx_verify_rdg, "DAOS_TX_VERIFY_RDG");
+	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);
 	D_INFO("%s TX redundancy group verification\n", tx_verify_rdg ? "Enable" : "Disable");
 
 out_class:

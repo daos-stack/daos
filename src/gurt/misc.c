@@ -1087,7 +1087,7 @@ out:
  * \param[in,out]	str_val		Copy of an environment string value.
  */
 void
-d_free_env(char **str_val)
+d_free_env_str(char **str_val)
 {
 	assert(str_val != NULL);
 
@@ -1101,14 +1101,14 @@ d_free_env(char **str_val)
 /**
  * get a bool type environment variables.
  *
+ * \param[in]		name		name of the environment variable.
  * \param[in,out]	bool_val	returned value of the ENV. Will not change the original
  *					value if ENV is not set. Set as false if the env is set to
  *					0, otherwise set as true.
- * \param[in]		name		name of the environment variable.
  * \return				0 on success, a negative value on error.
  */
 int
-d_getenv_bool(bool *bool_val, const char *name)
+d_getenv_bool(const char *name, bool *bool_val)
 {
 	char     *env;
 	char     *endptr;
@@ -1141,13 +1141,13 @@ out:
 /**
  * get single character environment variable.
  *
+ * \param[in]		name		name of the environment variable.
  * \param[in,out]	char_val	returned value of the ENV. Will not change the original
  *					value.
- * \param[in]		name		name of the environment variable.
  * \return				0 on success, a negative value on error.
  */
 int
-d_getenv_char(char *char_val, const char *name)
+d_getenv_char(const char *name, char *char_val)
 {
 	char *env;
 	int   rc;
@@ -1219,13 +1219,13 @@ out:
 /**
  * get an unsigned integer type environment variables.
  *
+ * \param[in]		name		name of the environment variable.
  * \param[in,out]	uint_val	returned value of the ENV. Will not change the original
  *					value if ENV is not set or set as a non-integer value.
- * \param[in]		name		name of the environment variable.
  * \return				0 on success, a negative value on error.
  */
 int
-d_getenv_uint(unsigned *uint_val, const char *name)
+d_getenv_uint(const char *name, unsigned *uint_val)
 {
 	int                rc;
 	unsigned long long tmp;
@@ -1251,13 +1251,13 @@ d_getenv_uint(unsigned *uint_val, const char *name)
 /**
  * get a 32bits unsigned integer type environment variables
  *
+ * \param[in]		name		name of the environment variable.
  * \param[in,out]	uint32_val	returned value of the ENV. Will not change the original
  *					value if ENV is not set or set as a non-integer value.
- * \param[in]		name		name of the environment variable.
  * \return				0 on success, a negative value on error.
  */
 int
-d_getenv_uint32_t(uint32_t *uint32_val, const char *name)
+d_getenv_uint32_t(const char *name, uint32_t *uint32_val)
 {
 	int                rc;
 	unsigned long long tmp;
@@ -1283,13 +1283,13 @@ d_getenv_uint32_t(uint32_t *uint32_val, const char *name)
 /**
  * get a 64bits unsigned integer type environment variables
  *
+ * \param[in]		name		name of the environment variable.
  * \param[in,out]	uint64_val	returned value of the ENV. Will not change the original
  *					value if ENV is not set or set as a non-integer value.
- * \param[in]		name		name of the environment variable.
  * \return				0 on success, a negative value on error.
  */
 int
-d_getenv_uint64_t(uint64_t *uint64_val, const char *name)
+d_getenv_uint64_t(const char *name, uint64_t *uint64_val)
 {
 	int                rc;
 	unsigned long long tmp;

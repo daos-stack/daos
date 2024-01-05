@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -616,7 +616,7 @@ d_fault_inject_init(void)
 out:
 	if (fp)
 		fclose(fp);
-	d_free_env(&config_file);
+	d_free_env_str(&config_file);
 	return rc;
 }
 

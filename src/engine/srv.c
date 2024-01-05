@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -393,7 +393,7 @@ dss_srv_handler(void *arg)
 	if (rc)
 		goto signal;
 
-	d_getenv_bool(&track_mem, D_MEMORY_TRACK_ENV);
+	d_getenv_bool(D_MEMORY_TRACK_ENV, &track_mem);
 	if (unlikely(track_mem))
 		d_set_alloc_track_cb(dss_mem_total_alloc_track, dss_mem_total_free_track,
 				     &dx->dx_mem_stats);
@@ -1027,17 +1027,17 @@ dss_xstreams_init(void)
 
 	D_ASSERT(dss_tgt_nr >= 1);
 
-	d_getenv_bool(&sched_prio_disabled, "DAOS_SCHED_PRIO_DISABLED");
+	d_getenv_bool("DAOS_SCHED_PRIO_DISABLED", &sched_prio_disabled);
 	if (sched_prio_disabled)
 		D_INFO("ULT prioritizing is disabled.\n");
 
 #ifdef ULT_MMAP_STACK
-	d_getenv_bool(&daos_ult_mmap_stack, "DAOS_ULT_MMAP_STACK");
+	d_getenv_bool("DAOS_ULT_MMAP_STACK", &daos_ult_mmap_stack);
 	if (daos_ult_mmap_stack == false)
 		D_INFO("ULT mmap()'ed stack allocation is disabled.\n");
 #endif
 
-	d_getenv_uint(&sched_relax_intvl, "DAOS_SCHED_RELAX_INTVL");
+	d_getenv_uint("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
 		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
@@ -1059,8 +1059,8 @@ dss_xstreams_init(void)
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
-	d_getenv_uint(&sched_unit_runtime_max, "DAOS_SCHED_UNIT_RUNTIME_MAX");
-	d_getenv_bool(&sched_watchdog_all, "DAOS_SCHED_WATCHDOG_ALL");
+	d_getenv_uint("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
 
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -132,7 +132,7 @@ d_signal_register()
 	if (registered)
 		return;
 
-	d_getenv_bool(&enabled, "DAOS_SIGNAL_REGISTER");
+	d_getenv_bool("DAOS_SIGNAL_REGISTER", &enabled);
 
 	if (!enabled)
 		return;

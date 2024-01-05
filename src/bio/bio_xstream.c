@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -195,9 +195,9 @@ set_faulty_criteria(void)
 	 */
 	glb_criteria.fc_max_csum_errs = UINT32_MAX;
 
-	d_getenv_bool(&glb_criteria.fc_enabled, "DAOS_NVME_AUTO_FAULTY_ENABLED");
-	d_getenv_uint32_t(&glb_criteria.fc_max_io_errs, "DAOS_NVME_AUTO_FAULTY_IO");
-	d_getenv_uint32_t(&glb_criteria.fc_max_csum_errs, "DAOS_NVME_AUTO_FAULTY_CSUM");
+	d_getenv_bool("DAOS_NVME_AUTO_FAULTY_ENABLED", &glb_criteria.fc_enabled);
+	d_getenv_uint32_t("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
+	d_getenv_uint32_t("DAOS_NVME_AUTO_FAULTY_CSUM", &glb_criteria.fc_max_csum_errs);
 
 	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u\n",
 	       glb_criteria.fc_enabled ? "enabled" : "disabled",
@@ -246,18 +246,18 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
-	d_getenv_bool(&bio_scm_rdma, "DAOS_SCM_RDMA_ENABLED");
+	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
-	d_getenv_uint(&bio_spdk_subsys_timeout, "DAOS_SPDK_SUBSYS_TIMEOUT");
+	d_getenv_uint("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
 	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
 
-	d_getenv_uint(&bio_spdk_max_unmap_cnt, "DAOS_SPDK_MAX_UNMAP_CNT");
+	d_getenv_uint("DAOS_SPDK_MAX_UNMAP_CNT", &bio_spdk_max_unmap_cnt);
 	if (bio_spdk_max_unmap_cnt == 0)
 		bio_spdk_max_unmap_cnt = UINT32_MAX;
 	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
 
-	d_getenv_uint(&bio_max_async_sz, "DAOS_MAX_ASYNC_SZ");
+	d_getenv_uint("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
 	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
 
 	/* Hugepages disabled */

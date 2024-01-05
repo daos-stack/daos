@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -313,7 +313,7 @@ ioil_init(void)
 	/* Check what progress to report on.  If the env is set but could not be
 	 * parsed then just show the summary (report_count will be 0).
 	 */
-	rc = d_getenv_uint64_t(&report_count, "D_IL_REPORT");
+	rc = d_getenv_uint64_t("D_IL_REPORT", &report_count);
 	if (rc != -DER_NONEXIST) {
 		ioil_iog.iog_show_summary = true;
 		ioil_iog.iog_report_count = report_count;
@@ -331,7 +331,7 @@ ioil_init(void)
 	if (rc)
 		return;
 
-	rc = d_getenv_uint64_t(&eq_count, "D_IL_MAX_EQ");
+	rc = d_getenv_uint64_t("D_IL_MAX_EQ", &eq_count);
 	if (rc != -DER_NONEXIST) {
 		if (eq_count > IOIL_MAX_EQ) {
 			DFUSE_LOG_WARNING("Max EQ count (%"PRIu64") should not exceed: %d",

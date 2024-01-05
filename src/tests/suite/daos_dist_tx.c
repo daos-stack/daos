@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2798,7 +2798,7 @@ dtx_38(void **state)
 	if (!test_runable(arg, 7))
 		skip();
 
-	d_getenv_bool(&rdg_verify, "DAOS_TX_VERIFY_RDG");
+	d_getenv_bool("DAOS_TX_VERIFY_RDG", &rdg_verify);
 	if (!rdg_verify)
 		skip();
 

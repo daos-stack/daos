@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,7 +44,7 @@ scrubbing_is_enabled()
 {
 	bool result = false;
 
-	d_getenv_bool(&result, "DAOS_CSUM_SCRUB_DISABLED");
+	d_getenv_bool("DAOS_CSUM_SCRUB_DISABLED", &result);
 	return !result;
 }
 

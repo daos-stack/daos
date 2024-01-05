@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -494,7 +494,7 @@ rdb_get_use_leases(void)
 	char   *name = "RDB_USE_LEASES";
 	bool	value = true;
 
-	d_getenv_bool(&value, name);
+	d_getenv_bool(name, &value);
 	return value;
 }
 

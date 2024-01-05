@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2140,7 +2140,7 @@ test_d_agetenv_str(void **state)
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_non_null(env);
 	assert_string_equal(env, "bar");
-	d_free_env(&env);
+	d_free_env_str(&env);
 	assert_null(env);
 
 	getenv_return = "";
@@ -2148,7 +2148,7 @@ test_d_agetenv_str(void **state)
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_non_null(env);
 	assert_string_equal(env, "");
-	d_free_env(&env);
+	d_free_env_str(&env);
 	assert_null(env);
 
 	getenv_return = NULL;
@@ -2173,79 +2173,79 @@ test_d_getenv_bool(void **state)
 	int  rc  = 0;
 
 	getenv_return = "bar";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val);
 
 	val           = false;
 	getenv_return = "true";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val);
 
 	val           = false;
 	getenv_return = "false";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val);
 
 	val           = false;
 	getenv_return = "1";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val);
 
 	val           = false;
 	getenv_return = "999999999999999999999999999999999999";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val);
 
 	val           = false;
 	getenv_return = "0dmlnv";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val);
 
 	val           = false;
 	getenv_return = "1";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val);
 
 	val           = false;
 	getenv_return = "03";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val);
 
 	val           = true;
 	getenv_return = "0";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_false(val);
 
 	val           = true;
 	getenv_return = "   0";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_false(val);
 
 	val           = false;
 	getenv_return = "0    ";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val);
 
 	val           = true;
 	getenv_return = "0000000";
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_false(val);
 
 	val           = true;
 	getenv_return = NULL;
-	rc            = d_getenv_bool(&val, "foo");
+	rc            = d_getenv_bool("foo", &val);
 	assert_int_equal(rc, -DER_NONEXIST);
 	assert_true(val);
 }
@@ -2257,22 +2257,22 @@ test_d_getenv_char(void **state)
 	int  rc  = 0;
 
 	getenv_return = "a";
-	rc            = d_getenv_char(&val, "foo");
+	rc            = d_getenv_char("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == 'a');
 
 	getenv_return = "";
-	rc            = d_getenv_char(&val, "foo");
+	rc            = d_getenv_char("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 'a');
 
 	getenv_return = "booo";
-	rc            = d_getenv_char(&val, "foo");
+	rc            = d_getenv_char("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 'a');
 
 	getenv_return = NULL;
-	rc            = d_getenv_char(&val, "foo");
+	rc            = d_getenv_char("foo", &val);
 	assert_int_equal(rc, -DER_NONEXIST);
 	assert_true(val == 'a');
 }
@@ -2284,37 +2284,37 @@ test_d_getenv_uint(void **state)
 	int      rc  = 0;
 
 	getenv_return = "4294967295";
-	rc            = d_getenv_uint(&val, "foo");
+	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == UINT_MAX);
 
 	getenv_return = "42";
-	rc            = d_getenv_uint(&val, "foo");
+	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == 42);
 
 	getenv_return = "4294967296";
-	rc            = d_getenv_uint(&val, "foo");
+	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "-42";
-	rc            = d_getenv_uint(&val, "foo");
+	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "booo";
-	rc            = d_getenv_uint(&val, "foo");
+	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "42booo";
-	rc            = d_getenv_uint(&val, "foo");
+	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = NULL;
-	rc            = d_getenv_uint(&val, "foo");
+	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_NONEXIST);
 	assert_true(val == 42);
 }
@@ -2326,42 +2326,42 @@ test_d_getenv_uint32_t(void **state)
 	int      rc  = 0;
 
 	getenv_return = "4294967295";
-	rc            = d_getenv_uint32_t(&val, "foo");
+	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == UINT32_MAX);
 
 	getenv_return = "42";
-	rc            = d_getenv_uint32_t(&val, "foo");
+	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == 42);
 
 	getenv_return = "4294967296";
-	rc            = d_getenv_uint32_t(&val, "foo");
+	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "-42";
-	rc            = d_getenv_uint32_t(&val, "foo");
+	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "booo";
-	rc            = d_getenv_uint32_t(&val, "foo");
+	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "42booo";
-	rc            = d_getenv_uint32_t(&val, "foo");
+	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "";
-	rc            = d_getenv_uint32_t(&val, "foo");
+	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = NULL;
-	rc            = d_getenv_uint32_t(&val, "foo");
+	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_NONEXIST);
 	assert_true(val == 42);
 }
@@ -2373,47 +2373,47 @@ test_d_getenv_uint64_t(void **state)
 	int      rc  = 0;
 
 	getenv_return = "18446744073709551615";
-	rc            = d_getenv_uint64_t(&val, "foo");
+	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == UINT64_MAX);
 
 	getenv_return = "42";
-	rc            = d_getenv_uint64_t(&val, "foo");
+	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == 42);
 
 	getenv_return = "18446744073709551616";
-	rc            = d_getenv_uint64_t(&val, "foo");
+	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "012345678901234567890";
-	rc            = d_getenv_uint64_t(&val, "foo");
+	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "-42";
-	rc            = d_getenv_uint64_t(&val, "foo");
+	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "booo";
-	rc            = d_getenv_uint64_t(&val, "foo");
+	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "42booo";
-	rc            = d_getenv_uint64_t(&val, "foo");
+	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = "";
-	rc            = d_getenv_uint64_t(&val, "foo");
+	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
 	assert_true(val == 42);
 
 	getenv_return = NULL;
-	rc            = d_getenv_uint64_t(&val, "foo");
+	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_NONEXIST);
 	assert_true(val == 42);
 }

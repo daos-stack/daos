@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -581,17 +581,17 @@ d_getenv_str(char *str_val, size_t str_size, const char *name);
 int
 d_agetenv_str(char **str_val, const char *name);
 void
-d_free_env(char **str_val);
+d_free_env_str(char **str_val);
 int
-d_getenv_bool(bool *bool_val, const char *env);
+d_getenv_bool(const char *name, bool *bool_val);
 int
-d_getenv_char(char *char_val, const char *env);
+d_getenv_char(const char *name, char *char_val);
 int
-d_getenv_uint(unsigned int *uint_val, const char *env);
+d_getenv_uint(const char *name, unsigned int *uint_val);
 int
-d_getenv_uint32_t(uint32_t *uint32_val, const char *env);
+d_getenv_uint32_t(const char *name, uint32_t *uint32_val);
 int
-d_getenv_uint64_t(uint64_t *uint64_val, const char *env);
+d_getenv_uint64_t(const char *name, uint64_t *uint64_val);
 int
 d_putenv(char *name);
 int
@@ -600,6 +600,13 @@ int
 d_unsetenv(const char *name);
 int
 d_clearenv(void);
+
+static inline int
+d_getenv_int(const char *name, unsigned int *uint_val)
+{
+	D_WARN("d_getenv_int() is deprecated, please use d_getenv_uint()");
+	return d_getenv_uint(name, uint_val);
+}
 
 int
 d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);

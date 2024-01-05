@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -5553,7 +5553,7 @@ init_myhook(void)
 	rc = D_MUTEX_INIT(&lock_eqh, NULL);
 	if (rc)
 		return;
-	rc = d_getenv_uint64_t(&eq_count_loc, "D_IL_MAX_EQ");
+	rc = d_getenv_uint64_t("D_IL_MAX_EQ", &eq_count_loc);
 	if (rc != -DER_NONEXIST) {
 		if (eq_count_loc > MAX_EQ) {
 			D_WARN("Max EQ count (%" PRIu64 ") should not exceed: %d", eq_count_loc,
