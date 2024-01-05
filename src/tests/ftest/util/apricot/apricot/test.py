@@ -694,7 +694,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_manager_class = self.params.get(
             "agent_manager_class", "/run/setup/*", self.agent_manager_class)
 
-        # Support configuring the startup of servers and agents by the setup()
+        # Support configuring the start-up of servers and agents by the setup()
         # method from the test yaml file
         self.setup_start_servers = self.params.get(
             "start_servers", "/run/setup/*", self.setup_start_servers)
