@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -854,6 +854,27 @@ failure:
 	return rc;
 }
 
+/* Check if all children are invalid */
+static bool
+is_node_empty(struct d_tm_node_t *node)
+{
+	struct d_tm_context   *ctx = tm_shmem.ctx;
+	struct d_tm_shmem_hdr *shmem;
+	struct d_tm_node_t    *child;
+
+	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
+	child = conv_ptr(shmem, node->dtn_child);
+	while (child != NULL && !is_cleared_link(ctx, child)) {
+		child = conv_ptr(shmem, child->dtn_sibling);
+		if (child->dtn_name != NULL) {
+			D_DEBUG(DB_TRACE, "still have child %s\n", child->dtn_name);
+			return false;
+		}
+	}
+
+	return true;
+}
+
 /**
  * Releases resources claimed by init
  */
@@ -872,7 +893,7 @@ d_tm_fini(void)
 		struct d_tm_node_t *root;
 
 		root = d_tm_get_root(tm_shmem.ctx);
-		if (root->dtn_child != NULL)
+		if (!is_node_empty(root))
 			destroy_shmem = false;
 	}
 
@@ -2393,14 +2414,18 @@ failure:
 }
 
 static void
-invalidate_link_node(struct d_tm_node_t *node)
+invalidate_link_node(struct d_tm_shmem_hdr *parent, struct d_tm_node_t *node)
 {
 	if (node == NULL || node->dtn_type != D_TM_LINK)
 		return;
 
 	node->dtn_name = NULL;
-	if (node->dtn_metric != NULL)
-		node->dtn_metric->dtm_data.value = 0;
+	if (node->dtn_metric != NULL) {
+		struct d_tm_metric_t *link_metric;
+
+		link_metric = conv_ptr(parent, node->dtn_metric);
+		link_metric->dtm_data.value = 0;
+	}
 }
 
 static int
@@ -2588,7 +2613,7 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 	return 0;
 
 fail_link:
-	invalidate_link_node(link_node);
+	invalidate_link_node(parent_shmem, link_node);
 fail_tracking:
 	close_shmem_for_key(ctx, key, true);
 	goto fail_unlock; /* shmem will be closed/destroyed already */
@@ -2681,11 +2706,34 @@ rm_ephemeral_dir(struct d_tm_context *ctx, struct d_tm_node_t *link)
 
 out_link:
 	/* invalidate since the link node can't be deleted from parent */
-	invalidate_link_node(link);
+	invalidate_link_node(parent_shmem, link);
 out:
 	return rc;
 }
 
+static int
+try_del_ephemeral_dir(char *path, bool force)
+{
+	struct d_tm_context	*ctx = tm_shmem.ctx;
+	struct d_tm_node_t	*link;
+	int			 rc = 0;
+
+	rc = d_tm_lock_shmem();
+	if (unlikely(rc != 0)) {
+		D_ERROR("failed to get producer mutex\n");
+		return rc;
+	}
+
+	link = get_node(ctx, path);
+	if (!force && !is_node_empty(link))
+		D_GOTO(unlock, rc == -DER_BUSY);
+
+	rc = rm_ephemeral_dir(ctx, link);
+
+unlock:
+	d_tm_unlock_shmem();
+	return rc;
+}
 /**
  * Deletes an ephemeral metrics directory from the metric tree.
  *
@@ -2697,11 +2745,9 @@ out:
 int
 d_tm_del_ephemeral_dir(const char *fmt, ...)
 {
-	struct d_tm_context	*ctx = tm_shmem.ctx;
-	struct d_tm_node_t	*link;
-	va_list			 args;
-	char			 path[D_TM_MAX_NAME_LEN] = {0};
-	int			 rc = 0;
+	va_list	 args;
+	char	 path[D_TM_MAX_NAME_LEN] = {0};
+	int	 rc = 0;
 
 	if (!is_initialized())
 		D_GOTO(out, rc = -DER_UNINIT);
@@ -2717,16 +2763,46 @@ d_tm_del_ephemeral_dir(const char *fmt, ...)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = d_tm_lock_shmem();
-	if (unlikely(rc != 0)) {
-		D_ERROR("failed to get producer mutex\n");
-		D_GOTO(out, rc);
+	rc = try_del_ephemeral_dir(path, true);
+out:
+	if (rc != 0)
+		D_ERROR("Failed to remove ephemeral dir: " DF_RC "\n",
+			DP_RC(rc));
+	else
+		D_INFO("Removed ephemeral directory [%s]\n", path);
+	return rc;
+}
+
+/**
+ * Deletes an ephemeral metrics directory from the metric tree, only if it is empty.
+ *
+ * \param[in]	fmt		Used to construct the path to be removed
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ */
+int
+d_tm_try_del_ephemeral_dir(const char *fmt, ...)
+{
+	va_list	 args;
+	char	 path[D_TM_MAX_NAME_LEN] = {0};
+	int	 rc = 0;
+
+	if (!is_initialized())
+		D_GOTO(out, rc = -DER_UNINIT);
+
+	if (fmt == NULL || strnlen(fmt, D_TM_MAX_NAME_LEN) == 0) {
+		D_ERROR("telemetry root cannot be deleted\n");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	link = get_node(ctx, path);
-	rc = rm_ephemeral_dir(ctx, link);
+	va_start(args, fmt);
+	rc = parse_path_fmt(path, sizeof(path), fmt, args);
+	va_end(args);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
-	d_tm_unlock_shmem();
+	rc = try_del_ephemeral_dir(path, false);
 out:
 	if (rc != 0)
 		D_ERROR("Failed to remove ephemeral dir: " DF_RC "\n",
@@ -3613,8 +3689,8 @@ allocate_shared_memory(key_t key, size_t mem_size,
 
 	D_INIT_LIST_HEAD(&header->sh_subregions);
 
-	D_DEBUG(DB_MEM, "Created shared memory region for key 0x%x, size=%lu\n",
-		key, mem_size);
+	D_DEBUG(DB_MEM, "Created shared memory region for key 0x%x, size=%lu header %p base %p free %p\n",
+		key, mem_size, header, (void *)header->sh_base_addr, (void *)header->sh_free_addr);
 
 	*shmem = header;
 
@@ -3719,8 +3795,8 @@ shmalloc(struct d_tm_shmem_hdr *shmem, int length)
 	shmem->sh_bytes_free -= length;
 	shmem->sh_free_addr += length;
 	D_DEBUG(DB_TRACE,
-		"Allocated %d bytes.  Now %" PRIu64 " remain\n",
-		length, shmem->sh_bytes_free);
+		"Allocated %d bytes.  Now %" PRIu64 " remain %p/%p\n",
+		length, shmem->sh_bytes_free, shmem, new_mem);
 	memset(conv_ptr(shmem, new_mem), 0, length);
 	return new_mem;
 }

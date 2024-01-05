@@ -52,10 +52,15 @@ dc_tm_init(void)
 		return rc;
 	}
 
+	D_INFO("INIT %s metrics\n", dc_jobid);
+	rc = d_tm_add_ephemeral_dir(NULL, MAX_IDS_SIZE(INIT_JOB_NUM), "%s", dc_jobid);
+	if (rc != 0 && rc != -DER_EXIST) {
+		DL_ERROR(rc, "add metric %s failed.\n", dc_jobid);
+		D_GOTO(out, rc);
+	}
+
 	pid = getpid();
 	D_INFO("INIT %s/%u metrics\n", dc_jobid, pid);
-
-	/** create new shmem space for per-pool metrics */
 	rc = d_tm_add_ephemeral_dir(NULL, MAX_IDS_SIZE(INIT_JOB_NUM), "%s/%u",
 				    dc_jobid, pid);
 	if (rc != 0) {
@@ -138,6 +143,10 @@ dc_tm_fini()
 
 	if (!daos_client_metric_retain) {
 		rc = d_tm_del_ephemeral_dir("%s/%d", dc_jobid, pid);
+		if (rc != 0)
+			DL_ERROR(rc, "delete tm directory %s/%d.", dc_jobid, pid);
+
+		rc = d_tm_try_del_ephemeral_dir("%s", dc_jobid);
 		if (rc != 0)
 			DL_ERROR(rc, "delete tm directory %s/%d.", dc_jobid, pid);
 	}

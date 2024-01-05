@@ -713,6 +713,7 @@ obj_shard_update_metrics_end(crt_rpc_t *rpc, uint64_t send_time, void *arg, int 
 		pool = rw_args->shard_args->auxi.obj_auxi->obj->cob_pool;
 		D_ASSERT(pool != NULL);
 		opm = pool->dp_metrics[DAOS_OBJ_MODULE];
+		D_ASSERTF(opm != NULL, "pool %p\n", pool);
 		if (opc == DAOS_OBJ_RPC_UPDATE) {
 			size = daos_sgls_packed_size(rw_args->rwaa_sgls, orw->orw_nr, NULL);
 			d_tm_inc_counter(opm->opm_update_bytes, size);

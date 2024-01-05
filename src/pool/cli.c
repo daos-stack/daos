@@ -577,6 +577,9 @@ dc_pool_metrics_stop(struct dc_pool *pool)
 	if (!daos_client_metric)
 		return;
 
+	if (!pool->dp_metrics_init)
+		return;
+
 	daos_module_fini_metrics(DAOS_CLI_TAG, pool->dp_metrics);
 	if (!daos_client_metric_retain) {
 		rc = d_tm_del_ephemeral_dir(pool->dp_path);
@@ -600,6 +603,13 @@ dc_pool_metrics_start(struct dc_pool *pool)
 	if (!daos_client_metric)
 		return 0;
 
+	D_MUTEX_LOCK(&pool->dp_client_lock);
+	if (pool->dp_metrics_init) {
+		D_MUTEX_UNLOCK(&pool->dp_client_lock);
+		return 0;
+	}
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+
 	snprintf(pool->dp_path, sizeof(pool->dp_path), "%s/%u/pool/"DF_UUIDF,
 		 dc_jobid, pid, DP_UUID(pool->dp_pool));
 
@@ -621,6 +631,9 @@ dc_pool_metrics_start(struct dc_pool *pool)
 		return rc;
 	}
 
+	D_MUTEX_LOCK(&pool->dp_client_lock);
+	pool->dp_metrics_init = 1;
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	D_INFO(DF_UUID ": created metrics for pool %s\n", DP_UUID(pool->dp_pool), pool->dp_path);
 
 	return 0;
@@ -647,10 +660,6 @@ init_pool(const char *label, uuid_t uuid, uint64_t capas, const char *grp,
 
 	/** attach to the server group and initialize rsvc_client */
 	rc = dc_mgmt_sys_attach(grp, &pool->dp_sys);
-	if (rc != 0)
-		D_GOTO(err_pool, rc);
-
-	rc = dc_pool_metrics_start(pool);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
 
@@ -697,6 +706,10 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 			  label ? label : "");
 		goto out;
 	}
+
+	rc = dc_pool_metrics_start(pool);
+	if (rc != 0)
+		D_GOTO(out, rc);
 
 	/** Pool connect RPC by UUID (provided, or looked up by label above) */
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, pool->dp_pool,
@@ -1189,6 +1202,10 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	rc = dc_mgmt_sys_decode(p, len - (p - (void *)pool_glob),
 				&pool->dp_sys);
 	if (rc < 0)
+		goto out;
+
+	rc = dc_pool_metrics_start(pool);
+	if (rc != 0)
 		goto out;
 
 	rc = pool_map_create(map_buf, pool_glob->dpg_map_version, &map);

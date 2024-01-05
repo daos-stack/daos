@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,7 +101,8 @@ struct dc_pool {
 	uint32_t		dp_map_version_known;
 	uint32_t		dp_disconnecting:1,
 				dp_slave:1, /* generated via g2l */
-				dp_rf_valid:1;
+				dp_rf_valid:1,
+				dp_metrics_init:1;
 	/* required/allocated pool map size */
 	size_t			dp_map_sz;
 
