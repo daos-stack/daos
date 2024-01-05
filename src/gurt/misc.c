@@ -984,7 +984,8 @@ d_env_rwlock_rdlock()
 
 	rc = pthread_rwlock_rdlock(&d_env_lock);
 	if (rc != 0)
-		fprintf(stderr, "d_env_rwlock_rdlock(%p) rc=%d %s\n", &d_env_lock, rc, strerror(rc));
+		fprintf(stderr, "d_env_rwlock_rdlock(%p) rc=%d %s\n", &d_env_lock, rc,
+			strerror(rc));
 	assert(rc == 0);
 }
 
@@ -995,7 +996,8 @@ d_env_rwlock_wrlock()
 
 	rc = pthread_rwlock_wrlock(&d_env_lock);
 	if (rc != 0)
-		fprintf(stderr, "d_env_rwlock_wrlock(%p) rc=%d %s\n", &d_env_lock, rc, strerror(rc));
+		fprintf(stderr, "d_env_rwlock_wrlock(%p) rc=%d %s\n", &d_env_lock, rc,
+			strerror(rc));
 	assert(rc == 0);
 }
 
@@ -1006,7 +1008,8 @@ d_env_rwlock_unlock()
 
 	rc = pthread_rwlock_unlock(&d_env_lock);
 	if (rc != 0)
-		fprintf(stderr, "d_env_rwlock_unlock(%p) rc=%d %s\n", &d_env_lock, rc, strerror(rc));
+		fprintf(stderr, "d_env_rwlock_unlock(%p) rc=%d %s\n", &d_env_lock, rc,
+			strerror(rc));
 	assert(rc == 0);
 }
 
