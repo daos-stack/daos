@@ -10,6 +10,7 @@ on:
       - master
       - 'feature/*'
       - 'release/*'
+      - 'trivy'
   pull_request:
 
 jobs:
@@ -18,7 +19,7 @@ jobs:
     runs-on: ubuntu-22.04
     strategy:
       matrix:
-        branch: [master, release/2.4]
+        branch: [trivy, master, release/2.4]
       fail-fast: false
 
     steps:
