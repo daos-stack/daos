@@ -82,6 +82,16 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
 
+python3 -m venv venv
+# shellcheck disable=SC1091
+source venv/bin/activate
+touch venv/pip.conf
+pip config set global.progress_bar off
+pip config set global.no_color true
+
+pip install --upgrade pip
+pip install -r /tmp/requirements-ftest.txt
+
 # shellcheck disable=SC2086,SC2090,SC2048
 if ! python3 ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}

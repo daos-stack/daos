@@ -8,6 +8,3 @@
 -r utils/cq/requirements.txt
 # Other...
 defusedxml
-jira
-pyyaml
-wheel
