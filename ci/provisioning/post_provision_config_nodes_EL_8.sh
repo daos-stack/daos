@@ -29,6 +29,13 @@ distro_custom() {
     # for Launchable's pip install
     # dnf -y install python3-setuptools.noarch
 
+    rpm -qa | grep -i pyyaml
+
+    yum remove python3-pyyaml
+
+    dnf -y remove python3-pyyaml
+    dnf -y remove python36-pyyaml
+
     pip3 install pip --upgrade
     time pip3 install --requirement /tmp/requirements-ftest.txt
 }
