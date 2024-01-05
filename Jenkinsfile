@@ -110,6 +110,10 @@ pipeline {
                             'stages.  Specifies the default provider to use the daos_server ' +
                             'config file when running functional tests (the launch.py ' +
                             '--provider argument; i.e. "ucx+dc_x", "ofi+verbs", "ofi+tcp")')
+        string(name: 'TestProviderUCX',
+               defaultValue: 'ucx+ud_x',
+               description: 'Test-provider to use for the Functional Hardware Medium UCX ' +
+                            'Provider Stage; i.e. "ucx+ud_x", "ucx+dc_x"')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of latest. example: 1.3.103-1, 1.2-2')
@@ -393,7 +397,7 @@ pipeline {
                             stage_tags: 'hw,medium,provider',
                             default_tags: isPr() ? 'always_passes' : 'pr daily_regression',
                             nvme: 'auto',
-                            provider: 'ucx+dc_x',
+                            provider: params.TestProviderUCX,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
