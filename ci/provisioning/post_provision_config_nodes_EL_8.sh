@@ -22,12 +22,7 @@ distro_custom() {
     # dnf -y remove python3-paramiko
     # dnf -y remove clustershell
 
-    find /usr/local/lib
- 
-    python3 -m pip list
-    python3.6 -m pip list
-
-    dnf -y install python39 python39-devel
+    time dnf -y install python39 python39-devel
 
     alternatives --set python3 /usr/bin/python3.9
 
@@ -35,8 +30,8 @@ distro_custom() {
     # dnf -y install python3-setuptools.noarch
 
     pip3 install pip --upgrade
-    pip3 install --requirement /tmp/requirements.txt
-    pip3 install --requirement /tmp/cq-req.txt
+    time pip3 install --requirement /tmp/requirements.txt
+    time pip3 install --requirement /tmp/cq-req.txt
 }
 
 install_mofed() {

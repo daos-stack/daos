@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -61,9 +61,9 @@ def update_path(logger, build_vars_file):
     path = os.environ.get("PATH")
 
     # Update PATH
-    print(f'Set path from: {os.environ["path"]}')
+    print(f'Set path from: {os.environ["PATH"]}')
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-    print(f'Set path to: {os.environ["path"]}')
+    print(f'Set path to: {os.environ["PATH"]}')
     logger.info("Testing with PATH=%s", os.environ["PATH"])
 
 
