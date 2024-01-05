@@ -1173,10 +1173,10 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			/* If the epoch is higher than EC aggregate boundary, then
 			 * it should use stable epoch to fetch the data, since
 			 * the data could be aggregated independently on parity
-			 * and data shard, so using stable epoch could make sure
-			 * the consistency view during rebuild. And also EC aggregation
-			 * should already aggregate the parity, so there should not
-			 * be any partial update on the parity as well.
+			 * and data shard, so it should select the minimum epoch
+			 * between stable epoch and boundary epoch as the recovery
+			 * epoch to make sure parity data rebuilt will not be interfered
+			 * by the newer update.
 			 *
 			 * Otherwise there might be partial update on this rebuilding
 			 * shard, so let's use the epoch from the parity shard to fetch
@@ -1187,7 +1187,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			 */
 			if (ds_cont->sc_ec_agg_eph_boundary >
 			    mrone->mo_iods_update_ephs_from_parity[i][j])
-				fetch_eph = mrone->mo_epoch;
+				fetch_eph = min(ds_cont->sc_ec_agg_eph_boundary, mrone->mo_epoch);
 			else
 				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
 
