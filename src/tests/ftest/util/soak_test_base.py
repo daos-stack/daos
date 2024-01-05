@@ -68,6 +68,7 @@ class SoakTestBase(TestWithServers):
         self.initial_resv_file = None
         self.resv_cont = None
         self.mpi_module = None
+        self.mpi_module_use = None
         self.sudo_cmd = None
         self.slurm_exclude_servers = True
         self.control = get_local_host()
