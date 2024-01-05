@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -529,7 +529,7 @@ dtx_ilog_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	ilog = umem_off2ptr(umm, umem_off2offset(rec));
 
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(umm, ilog, &cbs, &loh);
+	rc = ilog_open(umm, ilog, &cbs, false, &loh);
 	if (rc != 0)
 		return rc;
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,6 +81,8 @@ struct ilog_context {
 	bool				 ic_in_txn;
 	/** version needs incrementing */
 	bool				 ic_ver_inc;
+	/** For operation replay (rebuild) */
+	bool				 ic_replay;
 };
 
 D_CASSERT(sizeof(struct ilog_id) == sizeof(struct ilog_tree));
@@ -401,7 +403,7 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root)
 
 int
 ilog_open(struct umem_instance *umm, struct ilog_df *root,
-	  const struct ilog_desc_cbs *cbs, daos_handle_t *loh)
+	  const struct ilog_desc_cbs *cbs, bool replay, daos_handle_t *loh)
 {
 	struct ilog_context	*lctx;
 	int			 rc;
@@ -412,6 +414,7 @@ ilog_open(struct umem_instance *umm, struct ilog_df *root,
 	if (rc != 0)
 		return rc;
 
+	lctx->ic_replay = replay;
 	*loh = ilog_lctx2hdl(lctx);
 
 	return 0;
@@ -575,6 +578,10 @@ check_equal(struct ilog_context *lctx, struct ilog_id *id_out, const struct ilog
 		return 0;
 
 	if (update) {
+		/* For rebuild case, related modification must be either committed or committble. */
+		if (lctx->ic_replay)
+			return -DER_ALREADY;
+
 		rc = ilog_is_same_tx(lctx, id_out, is_equal);
 		if (rc != 0)
 			return rc;

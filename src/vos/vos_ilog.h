@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -138,6 +138,7 @@ vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
  * \param	info[IN,OUT]	incarnation log info
  * \param	cond[IN]	Conditional flags.
  * \param	ts_set[IN]	timestamp set.
+ * \param	replay[IN]	It is for rebuild or not.
  *
  * \return	0		Successful update
  *		other		Appropriate error code
@@ -147,7 +148,7 @@ int
 vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		 const daos_epoch_range_t *epr, daos_epoch_t bound,
 		 struct vos_ilog_info *parent, struct vos_ilog_info *info,
-		 uint32_t cond_flag, struct vos_ts_set *ts_set);
+		 uint32_t cond_flag, struct vos_ts_set *ts_set, bool replay);
 
 /**
  * Punch the incarnation log entry if it's the leaf.  Do conditional check if
@@ -265,7 +266,7 @@ vos_ilog_is_punched(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_ra
 })
 
 #define vos_ilog_update(cont, ilog, epr, bound, parent, info, cond,	\
-			ts_set)						\
+			replay, ts_set)					\
 ({									\
 	struct umem_instance	*__umm = vos_cont2umm(cont);		\
 	int			 __rc;					\
@@ -275,7 +276,7 @@ vos_ilog_is_punched(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_ra
 		umem_ptr2off(__umm, ilog), (epr)->epr_lo, (epr)->epr_hi,\
 		(bound), (cond));					\
 	__rc = vos_ilog_update_(cont, ilog, epr, bound, parent, info,	\
-				cond, ts_set);				\
+				cond, ts_set, replay);			\
 	D_DEBUG(DB_TRACE, "vos_ilog_update: returned "DF_RC" create="	\
 		DF_X64" pap="DF_X64".%d\n", DP_RC(__rc),		\
 		(info)->ii_create,					\

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1918,7 +1918,8 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
 			     ioc->ic_bound, &ioc->ic_dkey_info,
-			     &ioc->ic_akey_info, update_cond, ioc->ic_ts_set);
+			     &ioc->ic_akey_info, update_cond, ioc->ic_ts_set,
+			     ioc->ic_rebuild ? true : false);
 	if (update_cond == VOS_ILOG_COND_UPDATE && rc == -DER_NONEXIST) {
 		D_DEBUG(DB_IO, "Conditional update on non-existent akey\n");
 		goto out;
@@ -1984,7 +1985,8 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 
 	rc = vos_ilog_update(ioc->ic_cont, &krec->kr_ilog, &ioc->ic_epr,
 			     ioc->ic_bound, &obj->obj_ilog_info,
-			     &ioc->ic_dkey_info, update_cond, ioc->ic_ts_set);
+			     &ioc->ic_dkey_info, update_cond, ioc->ic_ts_set,
+			     ioc->ic_rebuild ? true : false);
 	if (update_cond == VOS_ILOG_COND_UPDATE && rc == -DER_NONEXIST) {
 		D_DEBUG(DB_IO, "Conditional update on non-existent akey\n");
 		goto out;
@@ -2393,6 +2395,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
+	uint64_t		 flags = VOS_OBJ_CREATE | VOS_OBJ_VISIBLE;
 	bool			 tx_started = false;
 	uint16_t                  minor_epc;
 
@@ -2430,10 +2433,11 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_FREE(daes);
 	}
 
+	if (ioc->ic_rebuild)
+		flags |= VOS_OBJ_REBUILD;
 	err = vos_obj_hold(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
 			   ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
-			   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_UPDATE,
-			   &ioc->ic_obj, ioc->ic_ts_set);
+			   flags, DAOS_INTENT_UPDATE, &ioc->ic_obj, ioc->ic_ts_set);
 	if (err != 0)
 		goto abort;
 

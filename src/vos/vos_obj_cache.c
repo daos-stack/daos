@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -455,7 +455,8 @@ check_object:
 	if (ts_set && ts_set->ts_flags & VOS_COND_UPDATE_OP_MASK)
 		cond_mask = VOS_ILOG_COND_UPDATE;
 	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr, bound, NULL,
-			     &obj->obj_ilog_info, cond_mask, ts_set);
+			     &obj->obj_ilog_info, cond_mask, ts_set,
+			     (flags & VOS_OBJ_REBUILD) != 0);
 	if (rc == -DER_TX_RESTART)
 		goto failed;
 	if (rc == -DER_NONEXIST && cond_mask)

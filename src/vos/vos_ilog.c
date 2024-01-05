@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -370,7 +370,7 @@ vos_ilog_update_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr)
 int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		     const daos_epoch_range_t *epr, daos_epoch_t bound,
 		     struct vos_ilog_info *parent, struct vos_ilog_info *info,
-		     uint32_t cond, struct vos_ts_set *ts_set)
+		     uint32_t cond, struct vos_ts_set *ts_set, bool replay)
 {
 	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	daos_epoch_range_t	 max_epr = *epr;
@@ -428,7 +428,7 @@ update:
 	}
 
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, replay, &loh);
 	if (rc != 0) {
 		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -525,7 +525,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 
 punch_log:
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, replay, &loh);
 	if (rc != 0) {
 		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -533,7 +533,7 @@ punch_log:
 
 	if (dth) {
 		minor_epc = dth->dth_op_seq;
-	} else if (replay) {
+	} else if (leaf && replay) {
 		/* If it's a replay, punch lower than the max in case there
 		 * are later visible updates with same major epoch.
 		 */

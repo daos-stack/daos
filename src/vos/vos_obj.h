@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,6 +62,8 @@ enum {
 	VOS_OBJ_DISCARD		= (1 << 2),
 	/** Hold the object for delete dkey */
 	VOS_OBJ_KILL_DKEY	= (1 << 3),
+	/** Hold the object for rebuild */
+	VOS_OBJ_REBUILD		= (1 << 4),
 };
 
 /**

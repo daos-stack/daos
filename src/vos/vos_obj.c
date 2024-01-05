@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -274,7 +274,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 		D_GOTO(out, rc);
 
 	rc = vos_ilog_punch(obj->obj_cont, &obj->obj_df->vo_ilog, &epr, bound,
-			    NULL, &info->ki_obj, ts_set, false, false);
+			    NULL, &info->ki_obj, ts_set, false, (flags & VOS_OF_REPLAY_PC) != 0);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -298,7 +298,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 
 	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, bound,
 			    &info->ki_obj, &info->ki_dkey, ts_set, false,
-			    false);
+			    (flags & VOS_OF_REPLAY_PC) != 0);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -505,6 +505,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	hold_flags = (flags & VOS_OF_COND_PUNCH) ? 0 : VOS_OBJ_CREATE;
 	hold_flags |= VOS_OBJ_VISIBLE;
+	if (flags & VOS_OF_REPLAY_PC)
+		hold_flags |= VOS_OBJ_REBUILD;
 	/* NB: punch always generate a new incarnation of the object */
 	rc = vos_obj_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb), vos_hdl2cont(coh),
 			  oid, &epr, bound, hold_flags, DAOS_INTENT_PUNCH, &obj, ts_set);
