@@ -80,7 +80,7 @@ pipeline {
                             'repeat each functional test. CAUTION: only use in combination with ' +
                             'a reduced number of tests specified with the TestTag parameter.')
         string(name: 'TestProvider',
-               defaultValue: 'ucx+dc_x',
+               defaultValue: 'ucx+ud_x',
                description: 'Provider to use for the Functional Hardware stages of this run (i.e. ucx+dc_x)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
