@@ -866,10 +866,8 @@ is_node_empty(struct d_tm_node_t *node)
 	child = conv_ptr(shmem, node->dtn_child);
 	while (child != NULL && !is_cleared_link(ctx, child)) {
 		child = conv_ptr(shmem, child->dtn_sibling);
-		if (child->dtn_name != NULL) {
-			D_DEBUG(DB_TRACE, "still have child %s\n", child->dtn_name);
+		if (child->dtn_name != NULL)
 			return false;
-		}
 	}
 
 	return true;
