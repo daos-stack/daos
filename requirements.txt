@@ -9,6 +9,5 @@
 # Other...
 defusedxml
 jira
-pyxattr
 pyyaml
 wheel
