@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -198,7 +198,6 @@ class Launch():
         return old_launch_log_dir
 
     def run(self, args):
-        # pylint: disable=too-many-return-statements
         """Perform the actions specified by the command line arguments.
 
         Args:
@@ -207,11 +206,11 @@ class Launch():
         Returns:
             int: exit status for the steps executed
         """
-        try:
-            status = self._run(args)
-        except Exception as error:      # pylint: disable=broad-except
-            message = f"Unknown exception raised during launch.py execution: {error}"
-            status = self.get_exit_status(1, message, "Unknown", sys.exc_info())
+        # try:
+        status = self._run(args)
+        # except Exception as error:      # pylint: disable=broad-except
+        #     message = f"Unknown exception raised during launch.py execution: {error}"
+        #    status = self.get_exit_status(1, message, "Unknown", sys.exc_info())
         return status
 
     def _run(self, args):
