@@ -34,6 +34,7 @@ distro_custom() {
 
     # pip3 install pip --upgrade
     # time pip3 install --requirement /tmp/requirements-ftest.txt
+    :
 }
 
 install_mofed() {
