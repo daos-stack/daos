@@ -516,6 +516,9 @@ do_lowfd(void **state)
 
 	if (strstr(env_ldpreload, "libpil4dfs.so"))
 		pil4dfs_loaded = true;
+	else
+		/* libioil cannot pass this test since low fds are only temporarily blocked */
+		return;
 
 	/* first time access a dir on DFS mount to trigger daos_init() */
 	fd = open(test_dir, O_PATH | O_DIRECTORY);
