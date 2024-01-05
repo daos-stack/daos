@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,9 +8,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -18,10 +23,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/cache"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/pkg/errors"
 )
 
 type testInfoCacheParams struct {
@@ -32,6 +35,8 @@ type testInfoCacheParams struct {
 	mockNetDevStateGetter  hardware.NetDevStateProvider
 	disableFabricCache     bool
 	disableAttachInfoCache bool
+	enableClientTelemetry  bool
+	retainClientTelemetry  bool
 	ctlInvoker             control.Invoker
 	cachedItems            []cache.Item
 }
@@ -43,15 +48,18 @@ func newTestInfoCache(t *testing.T, log logging.Logger, params testInfoCachePara
 	}
 
 	ic := &InfoCache{
-		log:            log,
-		getAttachInfo:  params.mockGetAttachInfo,
-		fabricScan:     params.mockScanFabric,
-		devClassGetter: params.mockNetDevClassGetter,
-		devStateGetter: params.mockNetDevStateGetter,
-		netIfaces:      params.mockNetIfaces,
-		client:         params.ctlInvoker,
-		cache:          c,
+		log:             log,
+		getAttachInfoCb: params.mockGetAttachInfo,
+		fabricScan:      params.mockScanFabric,
+		devClassGetter:  params.mockNetDevClassGetter,
+		devStateGetter:  params.mockNetDevStateGetter,
+		netIfaces:       params.mockNetIfaces,
+		client:          params.ctlInvoker,
+		cache:           c,
 	}
+
+	ic.clientTelemetryEnabled.Store(params.enableClientTelemetry)
+	ic.clientTelemetryRetain.Store(params.retainClientTelemetry)
 
 	if ic.netIfaces == nil {
 		ic.netIfaces = func() ([]net.Interface, error) {
@@ -714,6 +722,15 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			NetDevClass: uint32(hardware.Ether),
 		},
 	}
+	telemEnabledResp := copyGetAttachInfoResp(ctlResp)
+	telemEnabledResp.ClientNetHint.EnvVars = append(telemEnabledResp.ClientNetHint.EnvVars,
+		fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
+		fmt.Sprintf("%s=1", telemetry.ClientMetricsAgentMgmtEnv),
+	)
+	telemRetainedResp := copyGetAttachInfoResp(telemEnabledResp)
+	telemRetainedResp.ClientNetHint.EnvVars = append(telemRetainedResp.ClientNetHint.EnvVars,
+		fmt.Sprintf("%s=1", telemetry.ClientMetricsRetainEnv),
+	)
 
 	for name, tc := range map[string]struct {
 		getInfoCache func(logging.Logger) *InfoCache
@@ -734,7 +751,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 					disableAttachInfoCache: true,
 				})
 			},
-			remoteResp: ctlResp,
+			remoteResp: copyGetAttachInfoResp(ctlResp),
 			expResp:    ctlResp,
 			expRemote:  true,
 		},
@@ -748,11 +765,45 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 			expErr:    errors.New("mock remote"),
 			expRemote: true,
 		},
+		"cache disabled; client telemetry enabled": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					disableAttachInfoCache: true,
+					enableClientTelemetry:  true,
+				})
+			},
+			remoteResp: copyGetAttachInfoResp(ctlResp),
+			expResp:    telemEnabledResp,
+			expRemote:  true,
+		},
+		"cache enabled; client telemetry enabled": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					enableClientTelemetry: true,
+				})
+			},
+			remoteResp: copyGetAttachInfoResp(ctlResp),
+			expResp:    telemEnabledResp,
+			expRemote:  true,
+			expCached:  true,
+		},
+		"cache enabled; client telemetry enabled; client telemetry retained": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				return newTestInfoCache(t, l, testInfoCacheParams{
+					enableClientTelemetry: true,
+					retainClientTelemetry: true,
+				})
+			},
+			remoteResp: copyGetAttachInfoResp(ctlResp),
+			expResp:    telemRetainedResp,
+			expRemote:  true,
+			expCached:  true,
+		},
 		"enabled but empty": {
 			getInfoCache: func(l logging.Logger) *InfoCache {
 				return newTestInfoCache(t, l, testInfoCacheParams{})
 			},
-			remoteResp: ctlResp,
+			remoteResp: copyGetAttachInfoResp(ctlResp),
 			expResp:    ctlResp,
 			expRemote:  true,
 			expCached:  true,
@@ -772,7 +823,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 					fetch: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 						return nil, errors.New("shouldn't call cached remote")
 					},
-					lastResponse: ctlResp,
+					lastResponse: copyGetAttachInfoResp(ctlResp),
 					cacheItem:    cacheItem{lastCached: time.Now()},
 					system:       "test",
 				})
@@ -790,7 +841,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 					fetch: func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 						return nil, errors.New("shouldn't call cached remote")
 					},
-					lastResponse: ctlResp,
+					lastResponse: copyGetAttachInfoResp(ctlResp),
 					cacheItem:    cacheItem{lastCached: time.Now()},
 					system:       build.DefaultSystemName,
 				})
@@ -814,7 +865,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 				return ic
 			},
 			system:     "somethingelse",
-			remoteResp: ctlResp,
+			remoteResp: copyGetAttachInfoResp(ctlResp),
 			expResp:    ctlResp,
 			expCached:  true,
 			expRemote:  true,
@@ -831,7 +882,7 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 
 			calledRemote := false
 			if ic != nil {
-				ic.getAttachInfo = func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
+				ic.getAttachInfoCb = func(_ context.Context, _ control.UnaryInvoker, _ *control.GetAttachInfoReq) (*control.GetAttachInfoResp, error) {
 					calledRemote = true
 					return tc.remoteResp, tc.remoteErr
 				}

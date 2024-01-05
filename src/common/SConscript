@@ -11,6 +11,7 @@ COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                 'cipher.c', 'cipher_isal.c', 'qat.c', 'fault_domain.c',
                 'tls.c', 'metrics.c']
 
+
 def build_daos_common(denv, client):
     """ Building non-pmem version for client's common lib"""
     benv = denv.Clone()

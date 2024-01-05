@@ -444,7 +444,7 @@ static struct dss_module_ops ds_obj_mod_ops = {
 static void *
 obj_metrics_alloc(const char *path, int tgt_id)
 {
-	return obj_metrics_alloc_internal(path, tgt_id, false);
+	return obj_metrics_alloc_internal(path, tgt_id, true);
 }
 
 struct daos_module_metrics obj_metrics = {

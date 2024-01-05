@@ -244,24 +244,26 @@ daos_init(void)
 		D_GOTO(out_co, rc);
 
 	rc = dc_tm_init();
-	if (rc)
-		D_GOTO(out_obj, rc);
+	if (rc) {
+		/* should not be fatal */
+		DL_WARN(rc, "failed to initialize client telemetry");
+		rc = 0;
+	}
 
 #if BUILD_PIPELINE
 	/** set up pipeline */
 	rc = dc_pipeline_init();
 	if (rc != 0)
-		D_GOTO(out_tm, rc);
+		D_GOTO(out_obj, rc);
 #endif
 	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 
 #if BUILD_PIPELINE
-out_tm:
-	dc_tm_fini();
-#endif
 out_obj:
+	dc_tm_fini();
 	dc_obj_fini();
+#endif
 out_co:
 	dc_cont_fini();
 out_pool:

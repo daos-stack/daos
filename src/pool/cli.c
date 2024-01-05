@@ -95,7 +95,7 @@ dc_pool_metrics_alloc(uuid_t pool_uuid, struct dc_pool_metrics **metrics_p)
 
 	uuid_copy(metrics->dp_uuid, pool_uuid);
 	pid = getpid();
-	snprintf(metrics->dp_path, sizeof(metrics->dp_path), "%s/%u/pool/" DF_UUIDF, dc_jobid, pid,
+	snprintf(metrics->dp_path, sizeof(metrics->dp_path), "pool/" DF_UUIDF,
 		 DP_UUID(metrics->dp_uuid));
 
 	/** create new shmem space for per-pool metrics */
