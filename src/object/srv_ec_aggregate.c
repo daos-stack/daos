@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -125,7 +125,7 @@ struct ec_agg_param {
 	struct ec_agg_entry	 ap_agg_entry;	 /* entry used for each OID   */
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
 	daos_epoch_t		 ap_filter_eph;	 /* Aggregatable filter epoch */
-	daos_epoch_t		ap_min_unagg_eph; /* minum unaggregate epoch */
+	daos_epoch_t		ap_min_unagg_eph; /* minimum unaggregate epoch */
 	daos_handle_t		 ap_cont_handle; /* VOS container handle */
 	int			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
@@ -2137,7 +2137,7 @@ agg_shard_is_parity(struct ds_pool *pool, struct ec_agg_entry *agg_entry)
 		}
 	}
 
-	/* No parity shard is avaible */
+	/* No parity shard is available */
 	if (leader_shard == -1)
 		return false;
 
