@@ -43,6 +43,153 @@ struct pool_task_priv {
 	struct pool_update_state *state;   /* (pool_update_internal) */
 };
 
+struct dc_pool_metrics {
+	d_list_t dp_pool_list;	/* pool metrics list on this thread */
+	uuid_t	 dp_uuid;
+	char	 dp_path[D_TM_MAX_NAME_LEN];
+	void	 *dp_metrics[DAOS_NR_MODULE];
+	int	 dp_ref;
+};
+
+/**
+ * Destroy metrics for a specific pool.
+ *
+ * \param[in]	pool	pointer to ds_pool structure
+ */
+static void
+dc_pool_metrics_free(struct dc_pool_metrics *metrics)
+{
+	int rc;
+
+	if (!daos_client_metric)
+		return;
+
+	daos_module_fini_metrics(DAOS_CLI_TAG, metrics->dp_metrics);
+	if (!daos_client_metric_retain) {
+		rc = d_tm_del_ephemeral_dir(metrics->dp_path);
+		if (rc != 0) {
+			D_WARN(DF_UUID ": failed to remove pool metrics dir for pool: "
+			       DF_RC"\n", DP_UUID(metrics->dp_uuid), DP_RC(rc));
+			return;
+		}
+	}
+
+	D_INFO(DF_UUID ": destroyed ds_pool metrics: %s\n", DP_UUID(metrics->dp_uuid),
+	       metrics->dp_path);
+}
+
+static int
+dc_pool_metrics_alloc(uuid_t pool_uuid, struct dc_pool_metrics **metrics_p)
+{
+	struct dc_pool_metrics	*metrics = NULL;
+	int			pid;
+	size_t			size;
+	int			rc;
+
+	if (!daos_client_metric)
+		return 0;
+
+	D_ALLOC_PTR(metrics);
+	if (metrics == NULL)
+		return -DER_NOMEM;
+
+	uuid_copy(metrics->dp_uuid, pool_uuid);
+	pid = getpid();
+	snprintf(metrics->dp_path, sizeof(metrics->dp_path), "%s/%u/pool/"DF_UUIDF,
+		 dc_jobid, pid, DP_UUID(metrics->dp_uuid));
+
+	/** create new shmem space for per-pool metrics */
+	size = daos_module_nr_pool_metrics() * PER_METRIC_BYTES;
+	rc = d_tm_add_ephemeral_dir(NULL, size, metrics->dp_path);
+	if (rc != 0) {
+		D_WARN(DF_UUID ": failed to create metrics dir for pool: "
+		       DF_RC "\n", DP_UUID(metrics->dp_uuid), DP_RC(rc));
+		return rc;
+	}
+
+	/* initialize metrics on the system xstream for each module */
+	rc = daos_module_init_metrics(DAOS_CLI_TAG, metrics->dp_metrics,
+				      metrics->dp_path, pid);
+	if (rc != 0) {
+		D_WARN(DF_UUID ": failed to initialize module metrics: "
+		       DF_RC"\n", DP_UUID(metrics->dp_uuid), DP_RC(rc));
+		dc_pool_metrics_free(metrics);
+		return rc;
+	}
+
+	D_INFO(DF_UUID ": created metrics for pool %s\n", DP_UUID(metrics->dp_uuid),
+	       metrics->dp_path);
+	*metrics_p = metrics;
+
+	return 0;
+}
+
+struct dc_pool_metrics*
+dc_pool_metrics_lookup(struct dc_pool_tls *tls, uuid_t pool_uuid)
+{
+	struct dc_pool_metrics *metrics;
+
+	D_MUTEX_LOCK(&tls->dpc_metrics_list_lock);
+	d_list_for_each_entry(metrics, &tls->dpc_metrics_list, dp_pool_list) {
+		if (uuid_compare(pool_uuid, metrics->dp_uuid) == 0) {
+			D_MUTEX_UNLOCK(&tls->dpc_metrics_list_lock);
+			return metrics;
+		}
+	}
+	D_MUTEX_UNLOCK(&tls->dpc_metrics_list_lock);
+
+	return NULL;
+}
+
+static void*
+dc_pool_tls_init(int tags, int xs_id, int pid)
+{
+	struct dc_pool_tls *tls;
+	int		  rc;
+
+	D_ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	rc = D_MUTEX_INIT(&tls->dpc_metrics_list_lock, NULL);
+	if (rc != 0) {
+		D_FREE(tls);
+		return NULL;
+	}
+
+	D_INIT_LIST_HEAD(&tls->dpc_metrics_list);
+	return tls;
+}
+
+static void
+dc_pool_tls_fini(int tags, void *data)
+{
+	struct dc_pool_tls	*tls = data;
+	struct dc_pool_metrics	*dpm;
+	struct dc_pool_metrics	*tmp;
+
+	D_MUTEX_LOCK(&tls->dpc_metrics_list_lock);
+	d_list_for_each_entry_safe(dpm, tmp, &tls->dpc_metrics_list, dp_pool_list) {
+		if (dpm->dp_ref != 0)
+			D_WARN("still reference for pool "DF_UUID" metrics\n",
+			       DP_UUID(dpm->dp_uuid));
+		d_list_del_init(&dpm->dp_pool_list);
+		dc_pool_metrics_free(dpm);
+		D_FREE(dpm);
+	}
+	D_MUTEX_UNLOCK(&tls->dpc_metrics_list_lock);
+
+	D_MUTEX_DESTROY(&tls->dpc_metrics_list_lock);
+	D_FREE(tls);
+}
+
+struct daos_module_key dc_pool_module_key = {
+	.dmk_tags = DAOS_CLI_TAG,
+	.dmk_index = -1,
+	.dmk_init = dc_pool_tls_init,
+	.dmk_fini = dc_pool_tls_fini,
+};
+
 /**
  * Initialize pool interface
  */
@@ -51,6 +198,10 @@ dc_pool_init(void)
 {
 	uint32_t		ver_array[2] = {DAOS_POOL_VERSION - 1, DAOS_POOL_VERSION};
 	int			rc;
+
+	d_getenv_bool(DAOS_CLIENT_METRICS_ENV, &daos_client_metric);
+	if (daos_client_metric)
+		daos_register_key(&dc_pool_module_key);
 
 	dc_pool_proto_version = 0;
 	rc = daos_rpc_proto_query(pool_proto_fmt_v5.cpf_base, ver_array, 2, &dc_pool_proto_version);
@@ -93,6 +244,61 @@ dc_pool_fini(void)
 	}
 	if (rc != 0)
 		DL_ERROR(rc, "failed to unregister pool RPCs");
+
+	if (daos_client_metric)
+		daos_unregister_key(&dc_pool_module_key);
+}
+
+static int
+dc_pool_metrics_start(struct dc_pool *pool)
+{
+	struct dc_pool_tls     *tls;
+	struct dc_pool_metrics *metrics;
+	int		       rc;
+
+	if (pool->dp_metrics != NULL)
+		return 0;
+
+	tls = dc_pool_tls_get();
+	D_ASSERT(tls != NULL);
+
+	metrics = dc_pool_metrics_lookup(tls, pool->dp_pool);
+	if (metrics != NULL) {
+		metrics->dp_ref++;
+		pool->dp_metrics = metrics->dp_metrics;
+		return 0;
+	}
+
+	rc = dc_pool_metrics_alloc(pool->dp_pool, &metrics);
+	if (rc != 0)
+		return rc;
+
+	D_MUTEX_LOCK(&tls->dpc_metrics_list_lock);
+	d_list_add(&metrics->dp_pool_list, &tls->dpc_metrics_list);
+	D_MUTEX_UNLOCK(&tls->dpc_metrics_list_lock);
+	metrics->dp_ref++;
+	pool->dp_metrics = metrics->dp_metrics;
+
+	return 0;
+}
+
+static void
+dc_pool_metrics_stop(struct dc_pool *pool)
+{
+	struct dc_pool_metrics	*metrics;
+	struct dc_pool_tls	*tls;
+
+	if (pool->dp_metrics == NULL)
+		return;
+
+	tls = dc_pool_tls_get();
+	D_ASSERT(tls != NULL);
+
+	metrics = dc_pool_metrics_lookup(tls, pool->dp_pool);
+	if (metrics != NULL)
+		metrics->dp_ref--;
+
+	pool->dp_metrics = NULL;
 }
 
 static void
@@ -111,10 +317,10 @@ pool_free(struct d_hlink *hlink)
 	D_MUTEX_DESTROY(&pool->dp_client_lock);
 	D_RWLOCK_DESTROY(&pool->dp_co_list_lock);
 
-	dc_pool_metrics_stop(pool);
-
 	if (pool->dp_map != NULL)
 		pool_map_decref(pool->dp_map);
+
+	dc_pool_metrics_stop(pool);
 
 	rsvc_client_fini(&pool->dp_client);
 	if (pool->dp_sys != NULL)
@@ -562,81 +768,6 @@ out:
 		dc_task_set_priv(task, NULL);
 	}
 	return rc;
-}
-
-/**
- * Destroy metrics for a specific pool.
- *
- * \param[in]	pool	pointer to ds_pool structure
- */
-void
-dc_pool_metrics_stop(struct dc_pool *pool)
-{
-	int rc;
-
-	if (!daos_client_metric)
-		return;
-
-	if (!pool->dp_metrics_init)
-		return;
-
-	daos_module_fini_metrics(DAOS_CLI_TAG, pool->dp_metrics);
-	if (!daos_client_metric_retain) {
-		rc = d_tm_del_ephemeral_dir(pool->dp_path);
-		if (rc != 0) {
-			D_WARN(DF_UUID ": failed to remove pool metrics dir for pool: "
-			       DF_RC"\n", DP_UUID(pool->dp_pool), DP_RC(rc));
-			return;
-		}
-	}
-
-	D_INFO(DF_UUID ": destroyed ds_pool metrics: %s\n", DP_UUID(pool->dp_pool), pool->dp_path);
-}
-
-int
-dc_pool_metrics_start(struct dc_pool *pool)
-{
-	int pid = getpid();
-	size_t size = daos_module_nr_pool_metrics() * PER_METRIC_BYTES;
-	int rc;
-
-	if (!daos_client_metric)
-		return 0;
-
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	if (pool->dp_metrics_init) {
-		D_MUTEX_UNLOCK(&pool->dp_client_lock);
-		return 0;
-	}
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
-
-	snprintf(pool->dp_path, sizeof(pool->dp_path), "%s/%u/pool/"DF_UUIDF,
-		 dc_jobid, pid, DP_UUID(pool->dp_pool));
-
-	/** create new shmem space for per-pool metrics */
-	rc = d_tm_add_ephemeral_dir(NULL, size, pool->dp_path);
-	if (rc != 0) {
-		D_WARN(DF_UUID ": failed to create metrics dir for pool: "
-		       DF_RC "\n", DP_UUID(pool->dp_pool), DP_RC(rc));
-		return rc;
-	}
-
-	/* initialize metrics on the system xstream for each module */
-	rc = daos_module_init_metrics(DAOS_CLI_TAG, pool->dp_metrics,
-				      pool->dp_path, pid);
-	if (rc != 0) {
-		D_WARN(DF_UUID ": failed to initialize module metrics: "
-		       DF_RC"\n", DP_UUID(pool->dp_pool), DP_RC(rc));
-		dc_pool_metrics_stop(pool);
-		return rc;
-	}
-
-	D_MUTEX_LOCK(&pool->dp_client_lock);
-	pool->dp_metrics_init = 1;
-	D_MUTEX_UNLOCK(&pool->dp_client_lock);
-	D_INFO(DF_UUID ": created metrics for pool %s\n", DP_UUID(pool->dp_pool), pool->dp_path);
-
-	return 0;
 }
 
 /* allocate and initialize a dc_pool by label or uuid */

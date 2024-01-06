@@ -95,14 +95,12 @@ struct dc_pool {
 	pthread_rwlock_t	dp_map_lock;
 	struct pool_map	       *dp_map;
 	tse_task_t	       *dp_map_task;
-	void			*dp_metrics[DAOS_NR_MODULE];
-	char			dp_path[D_TM_MAX_NAME_LEN];
+	void			**dp_metrics;
 	/* highest known pool map version */
 	uint32_t		dp_map_version_known;
 	uint32_t		dp_disconnecting:1,
 				dp_slave:1, /* generated via g2l */
-				dp_rf_valid:1,
-				dp_metrics_init:1;
+				dp_rf_valid:1;
 	/* required/allocated pool map size */
 	size_t			dp_map_sz;
 
