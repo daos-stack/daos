@@ -256,6 +256,9 @@ dc_pool_metrics_start(struct dc_pool *pool)
 	struct dc_pool_metrics *metrics;
 	int		       rc;
 
+	if (!daos_client_metric)
+		return 0;
+
 	if (pool->dp_metrics != NULL)
 		return 0;
 
@@ -287,6 +290,9 @@ dc_pool_metrics_stop(struct dc_pool *pool)
 {
 	struct dc_pool_metrics	*metrics;
 	struct dc_pool_tls	*tls;
+
+	if (!daos_client_metric)
+		return;
 
 	if (pool->dp_metrics == NULL)
 		return;
