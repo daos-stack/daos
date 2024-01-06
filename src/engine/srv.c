@@ -976,7 +976,7 @@ dss_start_xs_id(int tag, int xs_id)
 		 * All system XS will reuse the first XS' core, but
 		 * the SWIM and DRPC XS will use separate core if enough cores
 		 */
-		if (xs_id > 1 || (xs_id == 0 && dss_core_nr > dss_tgt_nr))
+		if (xs_id > 1 || (xs_id == 0 && ((dss_core_nr > dss_tgt_nr) || dss_ht_enabled)))
 			hwloc_bitmap_clr(core_allocation_bitmap, idx);
 
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
@@ -989,25 +989,28 @@ dss_start_xs_id(int tag, int xs_id)
 		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
 		free(cpuset);
 	} else {
-		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
 		/*
 		 * All system XS will use the first core, but
 		 * the SWIM XS will use separate core if enough cores
 		 */
 		if (xs_id > 2)
-			xs_core_offset = xs_id - ((dss_core_nr > dss_tgt_nr) ? 1 : 2);
+			xs_core_offset = xs_id -
+					 (((dss_core_nr > dss_tgt_nr) || dss_ht_enabled) ? 1 : 2);
 		else if (xs_id == 1)
-			xs_core_offset = (dss_core_nr > dss_tgt_nr) ? 1 : 0;
+			xs_core_offset = ((dss_core_nr > dss_tgt_nr) || dss_ht_enabled) ? 1 : 0;
 		else
 			xs_core_offset = 0;
-		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,
-					     (xs_core_offset + dss_core_offset)
-					     % dss_core_nr);
+
+		idx = (xs_core_offset + dss_core_offset) % dss_core_nr;
+		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
 		if (obj == NULL) {
 			D_ERROR("Null core returned by hwloc for XS %d\n",
 				xs_id);
 			return -DER_INVAL;
 		}
+		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation, xs_id %d, idx %d, "
+			"xs_core_offset %d, dss_core_offset %d, dss_core_nr %d\n",
+			xs_id, idx, xs_core_offset, dss_core_offset, dss_core_nr);
 	}
 
 	rc = dss_start_one_xstream(obj->cpuset, tag, xs_id);

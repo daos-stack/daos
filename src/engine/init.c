@@ -68,6 +68,9 @@ unsigned int		dss_nvme_hugepage_size;
 /** I/O Engine instance index */
 unsigned int		dss_instance_idx;
 
+/** Whether or not use hyper-thread core */
+bool			dss_ht_enabled = true;
+
 /** HW topology */
 hwloc_topology_t	dss_topo;
 /** core depth of the topology */
@@ -299,19 +302,23 @@ out:
 static int
 dss_topo_init()
 {
-	int		depth;
-	int		numa_node_nr;
-	int		num_cores_visited;
-	char		*cpuset;
-	int		k;
-	hwloc_obj_t	corenode;
-	bool            tgt_oversub = false;
+	int			depth;
+	int			numa_node_nr;
+	int			num_cores_visited;
+	char			*cpuset;
+	int			k;
+	hwloc_obj_t		corenode;
+	hwloc_obj_type_t	coretype;
+	bool			tgt_oversub = false;
 
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
 
-	dss_core_depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_CORE);
-	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
+	coretype = dss_ht_enabled ? HWLOC_OBJ_PU : HWLOC_OBJ_CORE;
+	dss_core_depth = hwloc_get_type_depth(dss_topo, coretype);
+	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, coretype);
+	D_INFO("dss_core_nr %d, dss_core_depth %d, coretype %s\n",
+	       dss_core_nr, dss_core_depth, dss_ht_enabled ? "HWLOC_OBJ_PU" : "HWLOC_OBJ_CORE");
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);

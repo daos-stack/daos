@@ -122,6 +122,8 @@ extern struct engine_metrics dss_engine_metrics;
 extern char		dss_hostname[];
 /** Server node topology */
 extern hwloc_topology_t	dss_topo;
+/** Whether or not hyper-thread enabled */
+extern bool		dss_ht_enabled;
 /** core depth of the topology */
 extern int		dss_core_depth;
 /** number of physical cores, w/o hyper-threading */
