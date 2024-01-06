@@ -28,46 +28,38 @@ const (
 
 func TestBackend_substituteVMDAddresses(t *testing.T) {
 	for name, tc := range map[string]struct {
-		inAddrs     *hardware.PCIAddressSet
-		bdevCache   *storage.BdevScanResponse
-		expOutAddrs *hardware.PCIAddressSet
-		expErr      error
+		inAddrs      *hardware.PCIAddressSet
+		scannedBdevs storage.NvmeControllers
+		expOutAddrs  *hardware.PCIAddressSet
+		expErr       error
 	}{
 		"one vmd requested; no backing devices": {
 			inAddrs: addrListFromStrings(vmdAddr),
-			bdevCache: &storage.BdevScanResponse{
-				Controllers: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
-					"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
-					"850505:11:00.0", "850505:14:00.0"),
-			},
+			scannedBdevs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0"),
 			expOutAddrs: addrListFromStrings(vmdAddr),
 		},
 		"one vmd requested; two backing devices": {
-			inAddrs: addrListFromStrings(vmdAddr),
-			bdevCache: &storage.BdevScanResponse{
-				Controllers: ctrlrsFromPCIAddrs(vmdBackingAddr1, vmdBackingAddr2),
-			},
-			expOutAddrs: addrListFromStrings(vmdBackingAddr1, vmdBackingAddr2),
+			inAddrs:      addrListFromStrings(vmdAddr),
+			scannedBdevs: ctrlrsFromPCIAddrs(vmdBackingAddr1, vmdBackingAddr2),
+			expOutAddrs:  addrListFromStrings(vmdBackingAddr1, vmdBackingAddr2),
 		},
 		"two vmds requested; one has backing devices": {
 			inAddrs: addrListFromStrings(vmdAddr, "0000:85:05.5"),
-			bdevCache: &storage.BdevScanResponse{
-				Controllers: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
-					"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
-					"850505:11:00.0", "850505:14:00.0"),
-			},
+			scannedBdevs: ctrlrsFromPCIAddrs("850505:07:00.0", "850505:09:00.0",
+				"850505:0b:00.0", "850505:0d:00.0", "850505:0f:00.0",
+				"850505:11:00.0", "850505:14:00.0"),
 			expOutAddrs: addrListFromStrings(vmdAddr, "850505:07:00.0",
 				"850505:09:00.0", "850505:0b:00.0", "850505:0d:00.0",
 				"850505:0f:00.0", "850505:11:00.0", "850505:14:00.0"),
 		},
 		"two vmds requested; both have backing devices": {
 			inAddrs: addrListFromStrings(vmdAddr, "0000:85:05.5"),
-			bdevCache: &storage.BdevScanResponse{
-				Controllers: ctrlrsFromPCIAddrs(vmdBackingAddr1, vmdBackingAddr2,
-					"850505:07:00.0", "850505:09:00.0", "850505:0b:00.0",
-					"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
-					"850505:14:00.0"),
-			},
+			scannedBdevs: ctrlrsFromPCIAddrs(vmdBackingAddr1, vmdBackingAddr2,
+				"850505:07:00.0", "850505:09:00.0", "850505:0b:00.0",
+				"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
+				"850505:14:00.0"),
 			expOutAddrs: addrListFromStrings(vmdBackingAddr1, vmdBackingAddr2,
 				"850505:07:00.0", "850505:09:00.0", "850505:0b:00.0",
 				"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
@@ -75,12 +67,10 @@ func TestBackend_substituteVMDAddresses(t *testing.T) {
 		},
 		"input vmd backing devices": {
 			inAddrs: addrListFromStrings(vmdBackingAddr2, vmdBackingAddr1),
-			bdevCache: &storage.BdevScanResponse{
-				Controllers: ctrlrsFromPCIAddrs(vmdBackingAddr1, vmdBackingAddr2,
-					"850505:07:00.0", "850505:09:00.0", "850505:0b:00.0",
-					"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
-					"850505:14:00.0"),
-			},
+			scannedBdevs: ctrlrsFromPCIAddrs(vmdBackingAddr1, vmdBackingAddr2,
+				"850505:07:00.0", "850505:09:00.0", "850505:0b:00.0",
+				"850505:0d:00.0", "850505:0f:00.0", "850505:11:00.0",
+				"850505:14:00.0"),
 			expOutAddrs: addrListFromStrings(vmdBackingAddr1, vmdBackingAddr2),
 		},
 		"input vmd backing devices; no cache": {
@@ -92,7 +82,7 @@ func TestBackend_substituteVMDAddresses(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			gotAddrs, gotErr := substituteVMDAddresses(log, tc.inAddrs, tc.bdevCache)
+			gotAddrs, gotErr := substituteVMDAddresses(log, tc.inAddrs, tc.scannedBdevs)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
