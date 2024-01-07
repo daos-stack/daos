@@ -885,6 +885,9 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 	if (prov_data->cpg_max_unexp_size > 0)
 		init_info.na_init_info.max_unexpected_size = prov_data->cpg_max_unexp_size;
 
+	init_info.request_post_init = crt_gdata.cg_post_init;
+	init_info.request_post_incr = crt_gdata.cg_post_incr;
+
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
 		D_ERROR("Could not initialize HG class.\n");
@@ -1397,7 +1400,7 @@ out:
 void
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t	 hg_ret;
+	hg_return_t	hg_ret;
 
 	D_ASSERT(rpc_priv != NULL);
 
