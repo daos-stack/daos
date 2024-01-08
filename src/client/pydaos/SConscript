@@ -1,5 +1,18 @@
 """Build pydaos client"""
 import sys
+import os
+
+SOURCES=["pydaos_core.py", "pydaos_shim.c", "__init__.py"]
+SOURCES_RAW=["daos_cref.py",  "__init__.py", "conversion.py", "daos_api.py"]
+
+def install_shim_sources():
+    """Install the sources required to build pydaos"""
+
+    Import("env")
+
+    env.Install(os.path.join("$PREFIX", "lib/daos/python/pydaos"), SOURCES)
+    for source in SOURCES_RAW:
+        env.Install(os.path.join("$PREFIX", "lib/daos/python/pydaos/raw"), f"raw/{source}")
 
 
 def build_shim_module():
@@ -47,4 +60,5 @@ def build_shim_module():
 
 
 if __name__ == "SCons.Script":
+    install_shim_sources()
     build_shim_module()

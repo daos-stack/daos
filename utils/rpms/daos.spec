@@ -562,6 +562,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libgurt.so
 %{_libdir}/libcart.so
 %{_libdir}/*.a
+%{daoshome}/python
 
 %files firmware
 %doc README.md

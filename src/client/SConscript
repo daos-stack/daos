@@ -1,10 +1,11 @@
 """Build DAOS client"""
 
-Import('prereqs')
-
+import os
 
 def scons():
     """Execute build"""
+
+    Import('prereqs', 'env')
 
     if not (prereqs.client_requested() or prereqs.server_requested()):
         return
@@ -15,9 +16,11 @@ def scons():
     if prereqs.client_requested():
         SConscript('dfs/SConscript')
         SConscript('dfuse/SConscript')
-        SConscript('pydaos/SConscript')
         SConscript('serialize/SConscript')
         SConscript('ds3/SConscript')
+
+        SConscript("pydaos/SConscript")
+        env.Install(os.path.join("$PREFIX", "lib/daos/python"), "setup.py")
 
 
 if __name__ == "SCons.Script":

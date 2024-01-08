@@ -50,9 +50,6 @@ post_provision_config_nodes() {
 
     apt-get -y install lsb-core
 
-    pip install pip --upgrade
-    pip install --requirement utils/cq/requirements.txt
-
     # shellcheck disable=2086
     if [ -n "$INST_RPMS" ] &&
        ! apt-get -y install $INST_RPMS; then

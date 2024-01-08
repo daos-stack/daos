@@ -912,7 +912,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                    inst_rpms: functionalPackages(1, next_version, '{tests-internal,devel}'),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
