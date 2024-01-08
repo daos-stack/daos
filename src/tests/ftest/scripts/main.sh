@@ -38,11 +38,15 @@ if $TEST_RPMS; then
     #       the test nodes
     export DAOS_TEST_SHARED_DIR=${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}
     logs_prefix="/var/tmp"
+
+    pip install /usr/lib/daos/python
 else
     rm -rf "$DAOS_BASE"/install/tmp
     mkdir -p "$DAOS_BASE"/install/tmp
     logs_prefix="$DAOS_BASE/install/lib/daos/TESTING"
     cd "$DAOS_BASE"
+
+    pip install install/lib/daos/python/
 fi
 
 # Disable CRT_PHY_ADDR_STR to allow launch.py to set it
