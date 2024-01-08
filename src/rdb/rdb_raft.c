@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2413,7 +2413,7 @@ rdb_raft_get_election_timeout(void)
 	unsigned int	default_value = 7000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2428,7 +2428,7 @@ rdb_raft_get_request_timeout(void)
 	unsigned int	default_value = 3000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2443,7 +2443,7 @@ rdb_raft_get_lease_maintenance_grace(void)
 	unsigned int	default_value = 7000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2458,7 +2458,7 @@ rdb_raft_get_compact_thres(void)
 	unsigned int	default_value = 256;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0) {
 		D_WARN("%s not in (0, %u] (defaulting to %u)\n", name, UINT_MAX, default_value);
 		value = default_value;
@@ -2473,7 +2473,7 @@ rdb_raft_get_ae_max_entries(void)
 	unsigned int	default_value = 32;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0) {
 		D_WARN("%s not in (0, %u] (defaulting to %u)\n", name, UINT_MAX, default_value);
 		value = default_value;

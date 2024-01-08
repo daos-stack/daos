@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -860,26 +860,29 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.flush_pri = DLOG_WARN;
 	mst.log_id_cb = log_id_cb;
 
-	env = getenv(D_LOG_FLUSH_ENV);
+	d_agetenv_str(&env, D_LOG_FLUSH_ENV);
 	if (env) {
 		pri = d_log_str2pri(env, strlen(env) + 1);
 
 		if (pri != -1)
 			mst.flush_pri = pri;
+		d_free_env_str(&env);
 	}
 
-	env = getenv(D_LOG_TRUNCATE_ENV);
+	d_agetenv_str(&env, D_LOG_TRUNCATE_ENV);
 	if (env != NULL && atoi(env) > 0)
 		truncate = 1;
+	d_free_env_str(&env);
 
-	env = getenv(D_LOG_SIZE_ENV);
+	d_agetenv_str(&env, D_LOG_SIZE_ENV);
 	if (env != NULL) {
 		log_size = d_getenv_size(env);
 		if (log_size < LOG_SIZE_MIN)
 			log_size = LOG_SIZE_MIN;
+		d_free_env_str(&env);
 	}
 
-	env = getenv(D_LOG_FILE_APPEND_PID_ENV);
+	d_agetenv_str(&env, D_LOG_FILE_APPEND_PID_ENV);
 	if (logfile != NULL && env != NULL) {
 		if (strcmp(env, "0") != 0) {
 			/* Append pid/tgid to log file name */
@@ -892,6 +895,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 					    "continuing.\n");
 		}
 	}
+	d_free_env_str(&env);
 
 	/* quick sanity check (mst.tag is non-null if already open) */
 	if (d_log_xst.tag || !tag ||
@@ -933,9 +937,10 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		int         log_flags = O_RDWR | O_CREAT;
 		struct stat st;
 
-		env = getenv(D_LOG_STDERR_IN_LOG_ENV);
+		d_agetenv_str(&env, D_LOG_STDERR_IN_LOG_ENV);
 		if (env != NULL && atoi(env) > 0)
 			merge_stderr = true;
+		d_free_env_str(&env);
 
 		if (!truncate)
 			log_flags |= O_APPEND;
@@ -1062,24 +1067,35 @@ bool d_logfac_is_enabled(const char *fac_name)
 {
 	char *ddsubsys_env;
 	char *ddsubsys_fac;
-	int len = strlen(fac_name);
+	int   len = strlen(fac_name);
+	bool  rc;
 
 	/* read env DD_SUBSYS to enable corresponding facilities */
-	ddsubsys_env = getenv(DD_FAC_ENV);
+	d_agetenv_str(&ddsubsys_env, DD_FAC_ENV);
 	if (ddsubsys_env == NULL)
 		return true; /* enable all facilities by default */
 
-	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0)
-		return true; /* enable all facilities with DD_SUBSYS=all */
+	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0) {
+		rc = true; /* enable all facilities with DD_SUBSYS=all */
+		goto out;
+	}
 
 	ddsubsys_fac = strcasestr(ddsubsys_env, fac_name);
-	if (ddsubsys_fac == NULL)
-		return false;
+	if (ddsubsys_fac == NULL) {
+		rc = false;
+		goto out;
+	}
 
-	if (ddsubsys_fac[len] != '\0' && ddsubsys_fac[len] != ',')
-		return false;
+	if (ddsubsys_fac[len] != '\0' && ddsubsys_fac[len] != ',') {
+		rc = false;
+		goto out;
+	}
 
-	return true;
+	rc = true;
+
+out:
+	d_free_env_str(&ddsubsys_env);
+	return rc;
 }
 
 /*
