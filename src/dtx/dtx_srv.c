@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -377,7 +377,7 @@ dtx_init(void)
 	int	rc;
 
 	dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
-	d_getenv_int("DAOS_DTX_AGG_THD_CNT", &dtx_agg_thd_cnt_up);
+	d_getenv_uint32_t("DAOS_DTX_AGG_THD_CNT", &dtx_agg_thd_cnt_up);
 	if (dtx_agg_thd_cnt_up < DTX_AGG_THD_CNT_MIN || dtx_agg_thd_cnt_up > DTX_AGG_THD_CNT_MAX) {
 		D_WARN("Invalid DTX aggregation count threshold %u, the valid range is [%u, %u], "
 		       "use the default value %u\n", dtx_agg_thd_cnt_up, DTX_AGG_THD_CNT_MIN,
@@ -389,7 +389,7 @@ dtx_init(void)
 	D_INFO("Set DTX aggregation count threshold as %u (entries)\n", dtx_agg_thd_cnt_up);
 
 	dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
-	d_getenv_int("DAOS_DTX_AGG_THD_AGE", &dtx_agg_thd_age_up);
+	d_getenv_uint32_t("DAOS_DTX_AGG_THD_AGE", &dtx_agg_thd_age_up);
 	if (dtx_agg_thd_age_up < DTX_AGG_THD_AGE_MIN || dtx_agg_thd_age_up > DTX_AGG_THD_AGE_MAX) {
 		D_WARN("Invalid DTX aggregation age threshold %u, the valid range is [%u, %u], "
 		       "use the default value %u\n", dtx_agg_thd_age_up, DTX_AGG_THD_AGE_MIN,
@@ -401,7 +401,7 @@ dtx_init(void)
 	D_INFO("Set DTX aggregation time threshold as %u (seconds)\n", dtx_agg_thd_age_up);
 
 	dtx_batched_ult_max = DTX_BATCHED_ULT_DEF;
-	d_getenv_int("DAOS_DTX_BATCHED_ULT_MAX", &dtx_batched_ult_max);
+	d_getenv_uint32_t("DAOS_DTX_BATCHED_ULT_MAX", &dtx_batched_ult_max);
 	D_INFO("Set the max count of DTX batched commit ULTs as %d\n", dtx_batched_ult_max);
 
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,

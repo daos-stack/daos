@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -463,7 +463,7 @@ set_abt_max_num_xstreams(int n)
 	if (value == NULL)
 		return -DER_NOMEM;
 	D_INFO("Setting %s to %s\n", name, value);
-	rc = setenv(name, value, 1 /* overwrite */);
+	rc = d_setenv(name, value, 1 /* overwrite */);
 	D_FREE(value);
 	if (rc != 0)
 		return daos_errno2der(errno);

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -652,7 +652,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	daos_crt_init_opt.cio_use_sensors = server;
 
 	/** configure cart for maximum bulk threshold */
-	d_getenv_int("DAOS_RPC_SIZE_LIMIT", &limit);
+	d_getenv_uint32_t("DAOS_RPC_SIZE_LIMIT", &limit);
 
 	daos_crt_init_opt.cio_use_expected_size = 1;
 	daos_crt_init_opt.cio_max_expected_size = limit ? limit : DAOS_RPC_SIZE;
