@@ -2,6 +2,7 @@
 
 import os
 
+
 def scons():
     """Execute build"""
 

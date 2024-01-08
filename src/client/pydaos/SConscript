@@ -1,9 +1,10 @@
 """Build pydaos client"""
-import sys
 import os
+import sys
 
-SOURCES=["pydaos_core.py", "pydaos_shim.c", "__init__.py"]
-SOURCES_RAW=["daos_cref.py",  "__init__.py", "conversion.py", "daos_api.py"]
+SOURCES = ["pydaos_core.py", "pydaos_shim.c", "__init__.py"]
+SOURCES_RAW = ["daos_cref.py", "__init__.py", "conversion.py", "daos_api.py"]
+
 
 def install_shim_sources():
     """Install the sources required to build pydaos"""
