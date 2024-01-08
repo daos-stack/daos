@@ -2305,7 +2305,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
-	oci->oci_flags = ORF_CPD_LEADER;
+	oci->oci_flags = ORF_LEADER;
 	if (tx->tx_set_resend && !tx->tx_renew)
 		oci->oci_flags |= ORF_RESEND;
 	tx->tx_renew = 0;
