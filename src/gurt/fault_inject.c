@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -466,7 +466,7 @@ d_fault_inject_init(void)
 	}
 	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 
-	config_file = getenv(D_FAULT_CONFIG_ENV);
+	d_agetenv_str(&config_file, D_FAULT_CONFIG_ENV);
 	if (config_file == NULL || strlen(config_file) == 0) {
 		D_INFO("No config file, fault injection is OFF.\n");
 		D_GOTO(out, rc);
@@ -547,6 +547,7 @@ d_fault_inject_init(void)
 out:
 	if (fp)
 		fclose(fp);
+	d_free_env_str(&config_file);
 	return rc;
 }
 

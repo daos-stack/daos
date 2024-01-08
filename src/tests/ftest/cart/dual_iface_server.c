@@ -242,9 +242,9 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	struct stat		st;
 	crt_init_options_t	init_opts = {0};
 
-	setenv("FI_UNIVERSE_SIZE", "1024", 1);
-	setenv("D_LOG_MASK", "ERR", 1);
-	setenv("D_PORT_AUTO_ADJUST", "1", 1);
+	d_setenv("FI_UNIVERSE_SIZE", "1024", 1);
+	d_setenv("D_LOG_MASK", "ERR", 1);
+	d_setenv("D_PORT_AUTO_ADJUST", "1", 1);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
