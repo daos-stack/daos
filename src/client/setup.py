@@ -41,12 +41,10 @@ if conf:
     args["runtime_library_dirs"] = args["library_dirs"]
 
 
-module1 = Extension("pydaos.pydaos_shim", **args)
-
 setup(
     name="pydaos",
-    version="0.2",
+    version="0.3",
     packages=find_packages(),
     description="DAOS interface",
-    ext_modules=[module1],
+    ext_modules=[Extension("pydaos.pydaos_shim", **args)],
 )

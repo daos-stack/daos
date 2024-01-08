@@ -22,8 +22,7 @@ then
     rm -rf venv
 fi
 
-# Keep the system packages for now as this is where pydaos is installed.
-python3 -m venv venv --system-site-packages
+python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 
@@ -39,7 +38,13 @@ if $TEST_RPMS; then
     export DAOS_TEST_SHARED_DIR=${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}
     logs_prefix="/var/tmp"
 
-    pip install /usr/lib/daos/python
+    pip install wheel
+
+    # Copy the pydaos source locally and install it.
+    cp -a /usr/lib/daos/python pydaos
+    pip install ./pydaos
+    rm -rf pydaos
+
 else
     rm -rf "$DAOS_BASE"/install/tmp
     mkdir -p "$DAOS_BASE"/install/tmp

@@ -73,7 +73,8 @@ fi
 
 rm -rf "$test_log_dir"
 
-python3.9 -m venv venv
+# Use default python as that's where storage_estimator is installed.
+python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
 touch venv/pip.conf

@@ -2,3 +2,4 @@ tabulate
 junit_xml
 pyxattr
 PyYAML
+pytest
