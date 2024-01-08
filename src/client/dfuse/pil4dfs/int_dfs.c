@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,6 +80,18 @@
 
 #define MAX_EQ              64
 
+/* the default min fd that will be used by DAOS */
+#define DAOS_MIN_FD         10
+/* an upper limit is set in case that env was not set properly */
+#define MAX_DAOS_MIN_FD     128
+
+/* the number of low fd blocked */
+static uint16_t               low_fd_count;
+/* upper limit of low fd that will be blocked */
+static uint16_t               max_low_fd_blocked;
+/* the list of low fd blocked */
+static int                   *low_fd_list;
+
 /* In case of fork(), only the parent process could destroy daos env. */
 static bool                   context_reset;
 static __thread daos_handle_t td_eqh;
@@ -150,6 +162,7 @@ struct file_obj {
 	unsigned int     st_ino;
 	int              idx_mmap;
 	off_t            offset;
+	char            *path;
 	char             item_name[DFS_MAX_NAME];
 };
 
@@ -245,6 +258,7 @@ struct sigaction       old_segv;
 /* the flag to indicate whether initlization is finished or not */
 static bool            hook_enabled;
 static bool            hook_enabled_bak;
+static pthread_mutex_t lock_global;
 static pthread_mutex_t lock_dfs;
 static pthread_mutex_t lock_fd;
 static pthread_mutex_t lock_dirfd;
@@ -922,6 +936,61 @@ child_hdlr(void)
 	context_reset = true;
 }
 
+/* only free the blocked low fds when application exits or encounters error */
+static void
+free_blocked_low_fd(void)
+{
+	int i;
+
+	for (i = 0; i < low_fd_count; i++)
+		libc_close(low_fd_list[i]);
+	D_FREE(low_fd_list);
+}
+
+/* some applications especially bash scripts use specific low fds directly.
+ * It would be safer to avoid using such low fds (fd < DAOS_MIN_FD) in daos.
+ * We consume such low fds before any daos calls and close them only when
+ * application exits or encounters error.
+ */
+
+static int
+consume_low_fd(void)
+{
+	int rc = 0;
+
+	if (daos_inited)
+		return 0;
+
+	low_fd_count = 0;
+
+	D_ALLOC_ARRAY(low_fd_list, max_low_fd_blocked + 1);
+	if (low_fd_list == NULL)
+		return ENOMEM;
+
+	low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
+	while (1) {
+		if (low_fd_list[low_fd_count] < 0) {
+			DS_ERROR(errno, "failed to reserve a low fd");
+			goto err;
+		} else if (low_fd_list[low_fd_count] > max_low_fd_blocked) {
+			libc_close(low_fd_list[low_fd_count]);
+			break;
+		} else {
+			low_fd_count++;
+		}
+		low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
+	}
+
+	return rc;
+
+err:
+	rc = errno;
+	free_blocked_low_fd();
+	low_fd_count = 0;
+
+	return rc;
+}
+
 /** determine whether a path (both relative and absolute) is on DAOS or not. If yes,
  *  returns parent object, item name, full path of parent dir, full absolute path, and
  *  the pointer to struct dfs_mt.
@@ -1016,23 +1085,40 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		/* trying to avoid lock as much as possible */
 		if (!daos_inited) {
 			/* daos_init() is expensive to call. We call it only when necessary. */
+
+			D_MUTEX_LOCK(&lock_global);
+
+			rc = consume_low_fd();
+			if (rc) {
+				DS_ERROR(rc, "consume_low_fd() failed");
+				*is_target_path = 0;
+				D_MUTEX_UNLOCK(&lock_global);
+				goto out_normal;
+			}
 			rc = daos_init();
 			if (rc) {
 				DL_ERROR(rc, "daos_init() failed");
 				*is_target_path = 0;
+				D_MUTEX_UNLOCK(&lock_global);
 				goto out_normal;
 			}
 			if (eq_count_max) {
-				rc = daos_eq_create(&td_eqh);
-				if (rc)
-					DL_WARN(rc, "daos_eq_create() failed");
-				main_eqh = td_eqh;
-				rc       = pthread_atfork(NULL, NULL, &child_hdlr);
+				D_MUTEX_LOCK(&lock_eqh);
+				if (daos_handle_is_inval(main_eqh)) {
+					rc = daos_eq_create(&td_eqh);
+					if (rc)
+						DL_WARN(rc, "daos_eq_create() failed");
+					main_eqh = td_eqh;
+				}
+				D_MUTEX_UNLOCK(&lock_eqh);
+				rc = pthread_atfork(NULL, NULL, &child_hdlr);
 				D_ASSERT(rc == 0);
 			}
 
 			daos_inited = true;
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
+
+			D_MUTEX_UNLOCK(&lock_global);
 		}
 
 		/* dfs info can be set up after daos has been initialized. */
@@ -1451,6 +1537,7 @@ free_fd(int idx)
 		 *  make sure the code about adding and decreasing the reference to the struct
 		 *  working as expected.
 		 */
+		D_FREE(saved_obj->path);
 		memset(saved_obj, 0, sizeof(struct file_obj));
 		D_FREE(saved_obj);
 		if (rc)
@@ -1913,6 +2000,14 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	file_list[idx_fd]->open_flag   = oflags;
 	/* NEED to set at the end of file if O_APPEND!!!!!!!! */
 	file_list[idx_fd]->offset = 0;
+	if (strncmp(full_path, "/", 2) == 0)
+		D_STRNDUP(file_list[idx_fd]->path, dfs_mt->fs_root, DFS_MAX_PATH);
+	else
+		D_ASPRINTF(file_list[idx_fd]->path, "%s%s", dfs_mt->fs_root, full_path);
+	if (file_list[idx_fd]->path == NULL) {
+		free_fd(idx_fd);
+		D_GOTO(out_error, rc = ENOMEM);
+	}
 	strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
 
 	FREE(parent_dir);
@@ -2549,6 +2644,10 @@ new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat
 			return new_xstat(1, path, stat_buf);
 	}
 
+	if (dirfd >= FD_FILE_BASE && dirfd < FD_DIR_BASE && path[0] == 0)
+		/* same as fstat for a file. May need further work to handle flags */
+		return fstat(dirfd, stat_buf);
+
 	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
 	if (error)
 		goto out_err;
@@ -3184,11 +3283,11 @@ out_readdir:
 extern char **__environ;
 
 /* This number may be updated later to be consistent!*/
-#define N_ENV_CHECK (7)
+#define N_ENV_CHECK (8)
 /**
  * char    env_list[N_ENV_CHECK][32] = {"LD_PRELOAD", "D_IL_REPORT", "DAOS_MOUNT_POINT",
  *				     "DAOS_POOL", "DAOS_CONTAINER", "D_IL_MAX_EQ",
- *				     "D_IL_ENFORCE_EXEC_ENV"};
+ *				     "D_IL_ENFORCE_EXEC_ENV", "D_IL_DAOS_MIN_FD"};
  */
 
 static char **
@@ -3206,6 +3305,7 @@ pre_envp(char *const envp[])
 	bool    cont_included = false;
 	bool    maxeq_included = false;
 	bool    enforcement_included = false;
+	bool    daos_min_fd_included = false;
 	char   *fs_root   = NULL;
 	char   *pool      = NULL;
 	char   *container = NULL;
@@ -3217,6 +3317,7 @@ pre_envp(char *const envp[])
 	char   *str_cont = NULL;
 	char   *str_maxeq = NULL;
 	char   *str_enforcement = NULL;
+	char   *str_daos_min_fd = NULL;
 
 	if (envp == NULL) {
 		num_entry = 0;
@@ -3241,6 +3342,8 @@ pre_envp(char *const envp[])
 				maxeq_included = true;
 			} else if (strncmp(envp[num_entry], "D_IL_ENFORCE_EXEC_ENV", 21) == 0) {
 				enforcement_included = true;
+			} else if (strncmp(envp[num_entry], "D_IL_DAOS_MIN_FD", 16) == 0) {
+				daos_min_fd_included = true;
 			}
 			num_entry++;
 		}
@@ -3357,12 +3460,23 @@ pre_envp(char *const envp[])
 		new_envp[i] = str_enforcement;
 		i++;
 	}
+	if (!daos_min_fd_included) {
+		rc = asprintf(&str_daos_min_fd, "D_IL_DAOS_MIN_FD=%d", max_low_fd_blocked + 1);
+		if (rc < 0) {
+			printf("Error: failed to allocate memory for D_IL_DAOS_MIN_FD env!\n");
+			goto err_out8;
+		}
+		new_envp[i] = str_daos_min_fd;
+		i++;
+	}
 
 	/* NULL pointer to end */
 	new_envp[i] = NULL;
 
 	return new_envp;
 
+err_out8:
+	free(str_enforcement);
 err_out7:
 	free(str_maxeq);
 err_out6:
@@ -3381,19 +3495,92 @@ err_out0:
 	return (char **)envp;
 }
 
+/* check whether fd 0, 1, and 2 are located on DFS mount or not. If yes, reopen files and
+ * set offset.
+ */
+static void
+setup_fd_0_1_2(void)
+{
+	int   i, fd, idx, fd_tmp, fd_new, open_flag;
+	off_t offset;
+
+	if (num_fd_dup2ed == 0)
+		return;
+
+	for (i = 0; i < MAX_FD_DUP2ED; i++) {
+		/* only check fd 0, 1, and 2 */
+		if (fd_dup2_list[i].fd_src >= 0 && fd_dup2_list[i].fd_src <= 2) {
+			fd = fd_dup2_list[i].fd_src;
+			idx = fd_dup2_list[i].fd_dest - FD_FILE_BASE;
+			offset = file_list[idx]->offset;
+			open_flag = file_list[idx]->open_flag;
+
+			/* get a real fd from kernel */
+			fd_tmp = libc_open(file_list[idx]->path, open_flag);
+			if (fd_tmp < 0) {
+				printf("Error: open %s failed. %s\n", file_list[idx]->path,
+				       strerror(errno));
+				continue;
+			}
+			/* using dup2() to make sure we get desired fd */
+			fd_new = dup2(fd_tmp, fd);
+			if (fd_new < 0 || fd_new != fd) {
+				printf("Error: dup2 failed. %s\n", strerror(errno));
+				exit(1);
+			}
+			close(fd_tmp);
+			if (lseek(fd, offset, SEEK_SET) == -1) {
+				printf("Error: lseek failed to set offset. %s\n", strerror(errno));
+				exit(1);
+			}
+		}
+	}
+}
+
+/* close all real fds allocated by kernel larger than 2 */
+static void
+close_all_kernel_fd(void)
+{
+	int            fd, fd_using;
+	DIR           *dir;
+	struct dirent *entry;
+
+	dir = opendir("/proc/self/fd");
+	if (dir == NULL) {
+		printf("opendir() failed to open /proc/self/fd");
+		exit(1);
+	}
+	fd_using = dirfd(dir);
+	while ( (entry = readdir(dir)) != NULL) {
+		if (entry->d_name[0] >= '1' && entry->d_name[0] <= '9') {
+			fd = atoi(entry->d_name);
+			if(fd != 0)
+				continue;
+			if (fd > 2 && fd != fd_using)
+				close(fd);
+		}
+	}
+	closedir(dir);
+}
+
 static void
 reset_daos_env_before_exec(void)
 {
+	/* bash does fork(), then close opened files before exec(),
+	 * so the fd for log file could be invalid now. */
+	d_log_disable_logging();
+
+	setup_fd_0_1_2();
+
 	if (context_reset) {
-		/* bash does fork(), then close opened files before exec(),
-		 * so the fd for log file could be invalid now. */
-		d_log_disable_logging();
 		destroy_all_eqs();
 		daos_eq_lib_fini();
 		daos_inited       = false;
 		daos_debug_inited = false;
 		context_reset     = false;
 	}
+
+	close_all_kernel_fd();
 }
 
 int
@@ -3407,6 +3594,7 @@ execve(const char *filename, char *const argv[], char *const envp[])
 		return next_execve(filename, argv, envp);
 
 	reset_daos_env_before_exec();
+
 	if (!enforce_exec_env)
 		return next_execve(filename, argv, envp);
 
@@ -3424,6 +3612,7 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 		return next_execvpe(filename, argv, envp);
 
 	reset_daos_env_before_exec();
+
 	if (!enforce_exec_env)
 		return next_execvpe(filename, argv, envp);
 
@@ -3441,6 +3630,7 @@ execv(const char *filename, char *const argv[])
 		return next_execv(filename, argv);
 
 	reset_daos_env_before_exec();
+
 	if (!enforce_exec_env)
 		return next_execv(filename, argv);
 
@@ -3462,6 +3652,7 @@ execvp(const char *filename, char *const argv[])
 		return next_execvp(filename, argv);
 
 	reset_daos_env_before_exec();
+
 	if (!enforce_exec_env)
 		return next_execvp(filename, argv);
 
@@ -3483,6 +3674,7 @@ fexecve(int fd, char *const argv[], char *const envp[])
 		return next_fexecve(fd, argv, envp);
 
 	reset_daos_env_before_exec();
+
 	if (!enforce_exec_env)
 		return next_fexecve(fd, argv, envp);
 
@@ -5247,7 +5439,7 @@ dup(int oldfd)
 int
 dup2(int oldfd, int newfd)
 {
-	int fd, fd_directed, idx, rc, errno_save;
+	int fd, oldfd_directed, fd_directed, idx, rc, errno_save;
 
 	/* Need more work later. */
 	if (next_dup2 == NULL) {
@@ -5263,8 +5455,12 @@ dup2(int oldfd, int newfd)
 		else
 			return newfd;
 	}
-	if ((oldfd < FD_FILE_BASE) && (newfd < FD_FILE_BASE))
+	oldfd_directed = query_fd_forward_dest(oldfd);
+	if ((oldfd_directed < FD_FILE_BASE) && (oldfd < FD_FILE_BASE) && (newfd < FD_FILE_BASE))
 		return next_dup2(oldfd, newfd);
+
+	if (oldfd_directed >= FD_FILE_BASE && oldfd < FD_FILE_BASE)
+		oldfd = oldfd_directed;
 
 	if (newfd >= FD_FILE_BASE) {
 		DS_ERROR(ENOTSUP, "unimplemented yet for newfd >= FD_FILE_BASE");
@@ -5283,13 +5479,22 @@ dup2(int oldfd, int newfd)
 	else
 		fd_directed = query_fd_forward_dest(oldfd);
 	if (fd_directed >= FD_FILE_BASE) {
-		rc = close(newfd);
-		if (rc != 0 && errno != EBADF)
-			return -1;
-		fd = allocate_a_fd_from_kernel();
+		int fd_tmp;
+
+		fd_tmp = allocate_a_fd_from_kernel();
+		if (fd_tmp < 0) {
+			/* failed to allocate an fd from kernel */
+			errno_save = errno;
+			DS_ERROR(errno_save, "failed to get a fd from kernel");
+			errno = errno_save;
+			return (-1);
+		}
+		/* rely on dup2() to get the desired fd */
+		fd = next_dup2(fd_tmp, newfd);
 		if (fd < 0) {
 			/* failed to allocate an fd from kernel */
 			errno_save = errno;
+			close(fd_tmp);
 			DS_ERROR(errno_save, "failed to get a fd from kernel");
 			errno = errno_save;
 			return (-1);
@@ -5299,6 +5504,9 @@ dup2(int oldfd, int newfd)
 			errno = EBUSY;
 			return (-1);
 		}
+		rc = close(fd_tmp);
+		if (rc != 0)
+			return -1;
 		idx = allocate_dup2ed_fd(fd, fd_directed);
 		if (idx >= 0)
 			return fd;
@@ -5771,6 +5979,7 @@ init_myhook(void)
 	char    *env_exec;
 	int      rc;
 	uint64_t eq_count_loc = 0;
+	uint64_t daos_min_fd  = 0;
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -5817,6 +6026,10 @@ init_myhook(void)
 	}
 
 	update_cwd();
+	rc = D_MUTEX_INIT(&lock_global, NULL);
+	if (rc)
+		return;
+
 	rc = D_MUTEX_INIT(&lock_dfs, NULL);
 	if (rc)
 		return;
@@ -5838,6 +6051,20 @@ init_myhook(void)
 		eq_count_max = (uint16_t)eq_count_loc;
 	} else {
 		eq_count_max = MAX_EQ;
+	}
+
+	/* D_IL_DAOS_MIN_FD=3 or smaller value will disable blocking low fds */
+	rc = d_getenv_uint64_t("D_IL_DAOS_MIN_FD", &daos_min_fd);
+	if (rc != -DER_NONEXIST) {
+		if (daos_min_fd > MAX_DAOS_MIN_FD) {
+			/* set a limit in case env was set incorrectly */
+			D_WARN("Max DAOS_MIN_FD (%" PRIu64 ") should not exceed: %d", daos_min_fd,
+			       MAX_DAOS_MIN_FD);
+			daos_min_fd = MAX_DAOS_MIN_FD;
+		}
+		max_low_fd_blocked = (int)daos_min_fd - 1;
+	} else {
+		max_low_fd_blocked = DAOS_MIN_FD - 1;
 	}
 
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
@@ -5992,6 +6219,7 @@ finalize_myhook(void)
 		finalize_dfs();
 
 		D_MUTEX_DESTROY(&lock_eqh);
+		D_MUTEX_DESTROY(&lock_global);
 		D_MUTEX_DESTROY(&lock_dfs);
 		D_MUTEX_DESTROY(&lock_dirfd);
 		D_MUTEX_DESTROY(&lock_fd);
@@ -6109,6 +6337,7 @@ finalize_dfs(void)
 	if (daos_inited) {
 		uint32_t init_cnt, j;
 
+		free_blocked_low_fd();
 		init_cnt = atomic_load_relaxed(&daos_init_cnt);
 		for (j = 0; j < init_cnt; j++) {
 			rc = daos_fini();

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,7 +35,7 @@
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismde";
+static const char *all_tests = "ismdle";
 
 static void
 print_usage()
@@ -48,6 +48,7 @@ print_usage()
 	print_message("dfuse_test -s|--stream\n");
 	print_message("dfuse_test -m|--metadata\n");
 	print_message("dfuse_test -d|--directory\n");
+	print_message("dfuse_test -l|--lowfd\n");
 	print_message("dfuse_test -e|--exec\n");
 	/* checkenv is only run by exec test. Should not be executed directly */
 	/* print_message("dfuse_test -c|--checkenv\n");                       */
@@ -498,6 +499,67 @@ do_directory(void **state)
 	assert_return_code(rc, errno);
 }
 
+#define MIN_DAOS_FD 10
+/*
+ * Check whether daos network context uses low fds 0~9.
+ */
+void
+do_lowfd(void **state)
+{
+	int   fd;
+	int   rc;
+	int   i;
+	bool  pil4dfs_loaded = false;
+	char *env_ldpreload;
+	char  fd_path[64];
+	char *path;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (env_ldpreload == NULL)
+		return;
+
+	if (strstr(env_ldpreload, "libpil4dfs.so"))
+		pil4dfs_loaded = true;
+	else
+		/* libioil cannot pass this test since low fds are only temporarily blocked */
+		return;
+
+	/* first time access a dir on DFS mount to trigger daos_init() */
+	fd = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(fd, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* open the root dir and print fd */
+	fd = open("/", O_PATH | O_DIRECTORY);
+	assert_return_code(fd, errno);
+	printf("fd = %d\n", fd);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+	if (pil4dfs_loaded)
+		assert_true(fd >= MIN_DAOS_FD);
+
+	/* now check whether daos uses low fds */
+	path = malloc(PATH_MAX);
+	assert_non_null(path);
+	for (i = 0; i < MIN_DAOS_FD; i++) {
+		snprintf(fd_path, sizeof(fd_path) - 1, "/proc/self/fd/%d", i);
+		rc = readlink(fd_path, path, PATH_MAX - 1);
+		/* libioil only temporarily block low fds during daos_init().
+		 * libpil4dfs blocks low fds before daos_init() and does not free
+		 * them until applications end.
+		 */
+		if (!pil4dfs_loaded && rc == -1 && errno == ENOENT)
+			continue;
+		assert_true(rc > 0);
+		path[rc] = 0;
+		assert_true(strstr(path, "socket:") == NULL);
+		assert_true(strstr(path, "anon_inode:") == NULL);
+	}
+	free(path);
+}
+
 #define ERR_ENV_UNSET (2)
 
 void
@@ -677,6 +739,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(readdir_tests, NULL, NULL);
 			break;
 
+		case 'l':
+			printf("\n\n=================");
+			printf("dfuse low fd tests");
+			printf("=====================\n");
+			const struct CMUnitTest lowfd_tests[] = {
+			    cmocka_unit_test(do_lowfd),
+			};
+			nr_failed += cmocka_run_group_tests(lowfd_tests, NULL, NULL);
+			break;
+
 		case 'e':
 			printf("\n\n=================");
 			printf("dfuse exec tests");
@@ -711,11 +783,12 @@ main(int argc, char **argv)
 					       {"stream", no_argument, NULL, 's'},
 					       {"metadata", no_argument, NULL, 'm'},
 					       {"directory", no_argument, NULL, 'd'},
+					       {"lowfd", no_argument, NULL, 'l'},
 					       {"exec", no_argument, NULL, 'e'},
 					       {"checkenv", no_argument, NULL, 'c'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdec", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlec", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;

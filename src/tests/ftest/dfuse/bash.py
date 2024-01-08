@@ -119,6 +119,9 @@ class Cmd(DfuseTestBase):
                             f'realpath {link_name}',
                             f'head {fuse_root_dir}/src.c',
                             f'tail {fuse_root_dir}/src.c',
+                            'printf "exec 5>config.log\n{\ncat <<EOF\n------\nEOF\n} >&5\n"'
+                            f'> {fuse_root_dir}/1.sh; cd {fuse_root_dir}; '
+                            f'/usr/bin/sh {fuse_root_dir}/1.sh',
                             # f'more {fuse_root_dir}/src.c', # more hangs over ssh somehow
                             f'dos2unix {fuse_root_dir}/src.c',
                             f"gcc -o {fuse_root_dir}/output {fuse_root_dir}/src.c",
@@ -138,10 +141,10 @@ class Cmd(DfuseTestBase):
                             f"cksum {fuse_root_dir}/src.c",
                             f"bzip2 -z {fuse_root_dir}/lib.a",
                             f"chmod u-r {fuse_root_dir}/lib.a.bz2",
-                            "fio --readwrite=randwrite --name=test --size=\"2M\" --directory "\
-                            f"{fuse_root_dir}/ --bs=1M --numjobs=\"4\" --ioengine=psync "\
+                            'fio --readwrite=randwrite --name=test --size="2M" --directory '
+                            f'{fuse_root_dir}/ --bs=1M --numjobs="4" --ioengine=psync '
                             "--group_reporting --exitall_on_error --continue_on_error=none",
-                            f"curl \"https://www.google.com\" -o {fuse_root_dir}/download.html"]
+                            f'curl "https://www.google.com" -o {fuse_root_dir}/download.html']
                 for cmd in commands:
                     try:
                         # execute bash cmds

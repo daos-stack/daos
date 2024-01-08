@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2023 Intel Corporation.
+  (C) Copyright 2021-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -100,6 +100,8 @@ class DaosCoreTestDfuse(DfuseTestBase):
                 daos_test_env['D_IL_ENFORCE_EXEC_ENV'] = '1'
 
         command = [self.daos_test, '--test-dir', mount_dir, '--io', '--stream', '--exec']
+        if use_dfuse:
+            command.append('--lowfd')
         if cache_mode != 'writeback':
             command.append('--metadata')
 
