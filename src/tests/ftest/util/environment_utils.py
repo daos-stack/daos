@@ -53,18 +53,30 @@ def update_path(logger, build_vars_file):
         TestEnvironmentException: if there is an error obtaining the DAOS build environment
     """
     base_dir = get_build_environment(logger, build_vars_file)["PREFIX"]
-    bin_dir = os.path.join(base_dir, "bin")
-    sbin_dir = os.path.join(base_dir, "sbin")
+
+    print(f'Set path from: {os.environ["PATH"]}')
+
+    path = os.environ.get("PATH")
+
+    parts = path.split(":")
+
+    # If a custom prefix is used for the daos installation then prepend that to the path so that
+    # any binaries provided are picked up from there, else do not modify the path.
+    if base_dir != "/usr":
+        bin_dir = os.path.join(base_dir, "bin")
+        sbin_dir = os.path.join(base_dir, "sbin")
+
+        parts.insert(0, bin_dir)
+        parts.insert(0, sbin_dir)
 
     # /usr/sbin is not setup on non-root user for CI nodes.
     # SCM formatting tool mkfs.ext4 is located under /usr/sbin directory.
     usr_sbin = os.path.join(os.sep, "usr", "sbin")
-    path = os.environ.get("PATH")
 
-    # Update PATH
-    print(f'Set path from: {os.environ["PATH"]}')
-    os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-    print(f'Set path to: {os.environ["PATH"]}')
+    if usr_sbin not in parts:
+        parts.append(usr_sbin)
+
+    os.environ["PATH"] = ":".join(path)
     logger.info("Testing with PATH=%s", os.environ["PATH"])
 
 
