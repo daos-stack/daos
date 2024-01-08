@@ -1600,11 +1600,8 @@ def assert_file_size(ofd, size):
     assert_file_size_fd(ofd.fileno(), size)
 
 
-def import_daos(server, conf):
+def import_daos(server):
     """Return a handle to the pydaos module"""
-    pydir = f'python{sys.version_info.major}.{sys.version_info.minor}'
-
-    sys.path.append(join(conf['PREFIX'], 'lib64', pydir, 'site-packages'))
 
     os.environ['DD_MASK'] = 'all'
     os.environ['DD_SUBSYS'] = 'all'
@@ -4918,7 +4915,7 @@ def test_pydaos_kv(server, conf):
                                                   delete=False)
 
     os.environ['D_LOG_FILE'] = pydaos_log_file.name
-    daos = import_daos(server, conf)
+    daos = import_daos(server)
 
     pool = server.get_test_pool_obj()
 
@@ -4982,7 +4979,7 @@ def test_pydaos_kv_obj_class(server, conf):
         log_name = tmp_file.name
         os.environ['D_LOG_FILE'] = log_name
 
-    daos = import_daos(server, conf)
+    daos = import_daos(server)
 
     pool = server.get_test_pool_obj()
 
@@ -6028,8 +6025,8 @@ def run(wf, args):
                 fatal_errors.add_result(run_posix_tests(server, conf))
                 fatal_errors.add_result(run_dfuse(server, conf))
                 fatal_errors.add_result(run_duns_overlay_test(server, conf))
-                # test_pydaos_kv(server, conf)
-                # test_pydaos_kv_obj_class(server, conf)
+                test_pydaos_kv(server, conf)
+                test_pydaos_kv_obj_class(server, conf)
                 fatal_errors.add_result(server.set_fi())
             elif args.test == 'all':
                 fatal_errors.add_result(run_posix_tests(server, conf))
