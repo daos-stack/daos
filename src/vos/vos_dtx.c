@@ -2933,64 +2933,44 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		return;
 
 	cont = vos_hdl2cont(dth->dth_coh);
+	dae = dth->dth_ent;
 
 	if (dth->dth_pinned) {
 		/* Only keep the DTX entry (header) for handling resend RPC,
 		 * remove DTX records, purge related VOS objects from cache.
 		 */
-		dae = dth->dth_ent;
 		if (dae != NULL)
 			dtx_act_ent_cleanup(cont, dae, dth, true);
 	} else {
 		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
 		d_iov_set(&riov, NULL, 0);
-		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
-		if (rc == -DER_NONEXIST) {
-			rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
-			/* Cannot cleanup 'committed' DTX entry. */
-			if (rc == 0)
-				goto out;
-		}
 
-		if (rc != 0) {
-			if (rc != -DER_NONEXIST) {
-				D_ERROR("Fail to remove DTX entry "DF_DTI":"
-					DF_RC"\n",
-					DP_DTI(&dth->dth_xid), DP_RC(rc));
+		if (dae == NULL) {
+			rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+			/* Need not search committed table, since cannot cleanup 'committed' one. */
+			if (rc != 0)
+				return;
 
-				dae = dth->dth_ent;
-				if (dae != NULL) {
-					/* Cannot cleanup 'prepare'/'commit' DTX entry. */
-					if (vos_dae_is_prepare(dae) || vos_dae_is_commit(dae))
-						goto out;
-
-					dae->dae_aborted = 1;
-				}
-			} else {
-				rc = 0;
-			}
-		} else {
 			dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-			if (dth->dth_ent != NULL)
-				D_ASSERT(dth->dth_ent == dae);
-
-			/* Cannot cleanup 'prepare'/'commit' DTX entry. */
-			if (vos_dae_is_prepare(dae) || vos_dae_is_commit(dae))
-				goto out;
-
-			/* Skip the @dae if it belong to another instance for resent request. */
-			if (DAE_EPOCH(dae) != dth->dth_epoch)
-				goto out;
-
-			rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_BYPASS, &kiov, &dae);
-			D_ASSERT(rc == 0);
 		}
 
-		if (dae != NULL) {
-			dtx_act_ent_cleanup(cont, dae, dth, true);
-			if (rc == 0)
-				dtx_evict_lid(cont, dae);
-		}
+		/* Cannot cleanup 'prepare'/'commit' DTX entry. */
+		if (vos_dae_is_prepare(dae) || vos_dae_is_commit(dae))
+			goto out;
+
+		/* Skip the @dae if it belong to another instance for resent request. */
+		if (DAE_EPOCH(dae) != dth->dth_epoch)
+			goto out;
+
+		dtx_act_ent_cleanup(cont, dae, dth, true);
+
+		rc = dbtree_delete(cont->vc_dtx_active_hdl,
+				   riov.iov_buf != NULL ? BTR_PROBE_BYPASS : BTR_PROBE_EQ,
+				   &kiov, &dae);
+		if (rc == 0 || rc == -DER_NONEXIST)
+			dtx_evict_lid(cont, dae);
+		else
+			dae->dae_aborted = 1;
 
 out:
 		dth->dth_ent = NULL;
@@ -3008,7 +2988,7 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 
 	dae = dth->dth_ent;
 	if (dae == NULL) {
-		if (!dth->dth_active)
+		if (!dth->dth_active && !unpin)
 			return;
 	} else {
 		/* 'prepared'/'preparing' DTX can be either committed or aborted, not cleanup. */
