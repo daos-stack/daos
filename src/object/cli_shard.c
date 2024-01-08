@@ -1228,7 +1228,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	rw_args.shard_args = args;
 	/* remember the sgl to copyout the data inline for fetch */
 	rw_args.rwaa_sgls = sgls;
-	rw_args.send_time = daos_get_ntime();
+	rw_args.send_time = daos_client_metric ? daos_get_ntime() : 0;
 	obj_shard_update_metrics_begin(req);
 	if (args->reasb_req && args->reasb_req->orr_recov) {
 		rw_args.maps = NULL;
@@ -1367,7 +1367,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	cb_args.rpc = req;
 	cb_args.map_ver = &args->pa_auxi.map_ver;
 	cb_args.shard_args = args;
-	cb_args.send_time = daos_get_ntime();
+	cb_args.send_time = daos_client_metric ? daos_get_ntime() : 0;
 	obj_shard_update_metrics_begin(req);
 	rc = tse_task_register_comp_cb(task, obj_shard_punch_cb, &cb_args,
 				       sizeof(cb_args));
@@ -2054,7 +2054,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	enum_args.th = &obj_args->th;
 	enum_args.enqueue_id = &args->la_auxi.enqueue_id;
 	enum_args.max_delay = &args->la_auxi.obj_auxi->max_delay;
-	enum_args.send_time = daos_get_ntime();
+	enum_args.send_time = daos_client_metric ? daos_get_ntime() : 0;
 	obj_shard_update_metrics_begin(req);
 	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
 				       sizeof(enum_args));
@@ -2354,7 +2354,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	cb_args.max_epoch	= max_epoch;
 	cb_args.queue_id	= queue_id;
 	cb_args.max_delay	= max_delay;
-	cb_args.send_time	= daos_get_ntime();
+	cb_args.send_time 	= daos_client_metric ? daos_get_ntime() : 0;
 	obj_shard_update_metrics_begin(req);
 
 	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args, sizeof(cb_args));
@@ -2506,7 +2506,7 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	cb_args.map_ver		= &args->sa_auxi.map_ver;
 	cb_args.max_delay	= &args->sa_auxi.obj_auxi->max_delay;
 	cb_args.enqueue_id	= &args->sa_auxi.enqueue_id;
-	cb_args.send_time	= daos_get_ntime();
+	cb_args.send_time 	= daos_client_metric ? daos_get_ntime() : 0;
 	obj_shard_update_metrics_begin(req);
 	rc = tse_task_register_comp_cb(task, obj_shard_sync_cb, &cb_args,
 				       sizeof(cb_args));
@@ -2691,7 +2691,7 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	cb_args.shard = obj_shard->do_shard_idx;
 	cb_args.enqueue_id = &args->ka_auxi.enqueue_id;
 	cb_args.max_delay = &args->ka_auxi.obj_auxi->max_delay;
-	cb_args.send_time = daos_get_ntime();
+	cb_args.send_time = daos_client_metric ? daos_get_ntime() : 0;
 	obj_shard_update_metrics_begin(req);
 	rc = tse_task_register_comp_cb(task, dc_k2a_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)
