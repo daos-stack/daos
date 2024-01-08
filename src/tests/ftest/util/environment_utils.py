@@ -6,6 +6,7 @@
 import json
 import os
 import site
+import sys
 
 from ClusterShell.NodeSet import NodeSet
 # pylint: disable=import-error,no-name-in-module
@@ -81,6 +82,8 @@ def set_python_environment(logger):
         os.path.abspath("."),
     ]
 
+    logger.info("Initial path is=%s", sys.path)
+
     # Include the cart directory paths when running from sources
     for cart_dir in os.listdir(os.path.abspath("cart")):
         cart_path = os.path.join(os.path.abspath("cart"), cart_dir)
@@ -88,6 +91,9 @@ def set_python_environment(logger):
             required_python_paths.append(cart_path)
 
     required_python_paths.extend(site.getsitepackages())
+
+    required_python_paths.extend(['/usr/lib64/python3.6/site-packages',
+                                  '/usr/lib/python3.6/site-packages'])
 
     # Check the PYTHONPATH env definition
     python_path = os.environ.get("PYTHONPATH")
