@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1490,7 +1490,7 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD46: fail parity shard and data shards after overwrite",
 	 rebuild_ec_overwrite_fail_parity_data, rebuild_ec_8nodes_setup,
 	 test_teardown},
-	{"REBUILD46: fail parity shard and data shards after overwrite with aggregation",
+	{"REBUILD47: fail parity shard and data shards after overwrite with aggregation",
 	 rebuild_ec_overwrite_fail_parity_data_with_parity, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
