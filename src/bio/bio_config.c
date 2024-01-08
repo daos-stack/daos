@@ -422,7 +422,6 @@ add_traddrs_from_bdev_subsys(struct json_config_ctx *ctx, bool vmd_enabled,
 	}
 
 	if (strcmp(cfg.method, NVME_CONF_ATTACH_CONTROLLER) != 0) {
-		D_DEBUG(DB_MGMT, "skip config entry %s\n", cfg.method);
 		goto free_method;
 	}
 
@@ -510,7 +509,6 @@ check_name_from_bdev_subsys(struct json_config_ctx *ctx)
 
 	if (strcmp(cfg.method, NVME_CONF_ATTACH_CONTROLLER) != 0 &&
 	    strcmp(cfg.method, NVME_CONF_AIO_CREATE) != 0) {
-		D_DEBUG(DB_MGMT, "skip config entry %s\n", cfg.method);
 		goto free_method;
 	}
 
@@ -754,7 +752,7 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/* Capture daos object */
+	/* Capture daos_data JSON object */
 	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
 			    SPDK_JSON_VAL_OBJECT_BEGIN);
 	if (rc < 0) {
@@ -773,7 +771,6 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 	/* Get 'config' array first configuration entry */
 	ctx->config_it = spdk_json_array_first(ctx->config);
 	if (ctx->config_it == NULL) {
-		D_DEBUG(DB_MGMT, "Empty 'daos_data' section\n");
 		/* Entry not-found so return positive RC */
 		D_GOTO(out, rc = 1);
 	}
@@ -794,7 +791,6 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 	}
 
 	if (ctx->config_it == NULL) {
-		D_DEBUG(DB_MGMT, "No '%s' entry\n", method_name);
 		/* Entry not-found so return positive RC */
 		rc = 1;
 	}
@@ -824,8 +820,8 @@ get_hotplug_busid_range(const char *nvme_conf)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_DEBUG(DB_MGMT, "'%s' read from config: %X-%X\n", NVME_CONF_SET_HOTPLUG_RANGE,
-		hotplug_busid_range.begin, hotplug_busid_range.end);
+	D_INFO("'%s' read from config: %X-%X\n", NVME_CONF_SET_HOTPLUG_RANGE,
+	       hotplug_busid_range.begin, hotplug_busid_range.end);
 out:
 	if (cfg.method != NULL)
 		D_FREE(cfg.method);
@@ -907,7 +903,7 @@ bio_read_accel_props(const char *nvme_conf)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_DEBUG(DB_MGMT, "'%s' read from config, setting: %s, capabilities: move=%s,crc=%s\n",
+	D_INFO("'%s' read from config, setting: %s, capabilities: move=%s,crc=%s\n",
 	       NVME_CONF_SET_ACCEL_PROPS, accel_props.engine,
 	       CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_MOVE) ? "true" : "false",
 	       CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_CRC) ? "true" : "false");
@@ -960,8 +956,8 @@ bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock
 	*enable = rpc_srv_settings.enable;
 	*sock_addr = rpc_srv_settings.sock_addr;
 
-	D_DEBUG(DB_MGMT, "'%s' read from config: enabled=%d, addr %s\n",
-		NVME_CONF_SET_SPDK_RPC_SERVER, *enable, (char *)*sock_addr);
+	D_INFO("'%s' read from config: enabled=%d, addr %s\n", NVME_CONF_SET_SPDK_RPC_SERVER,
+	       *enable, (char *)*sock_addr);
 out:
 	if (cfg.method != NULL)
 		D_FREE(cfg.method);
