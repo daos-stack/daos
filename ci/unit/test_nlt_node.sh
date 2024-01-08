@@ -27,9 +27,9 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
-touch venv/pip.conf
-pip config set global.progress_bar off
-pip config set global.no_color true
+# touch venv/pip.conf
+# pip config set global.progress_bar off
+# pip config set global.no_color true
 
 pip install --upgrade pip
 pip install --requirement requirements-utest.txt
