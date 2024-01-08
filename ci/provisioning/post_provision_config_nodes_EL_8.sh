@@ -15,26 +15,9 @@ group_repo_post() {
 }
 
 distro_custom() {
-    # install avocado
-
     # TODO: This code is not exiting on failure.
 
-    # dnf -y remove python3-paramiko
-    # dnf -y remove clustershell
-
-    dnf -y install python39 python39-devel
-
-    # alternatives --set python3 /usr/bin/python3.9
-
-    # for Launchable's pip install
-    # dnf -y install python3-setuptools.noarch
-
-    # Do not do this as it removes lots of packages, some of which are needed.
-    # dnf -y remove python3-pyyaml
-
-    # pip3 install pip --upgrade
-    # time pip3 install --requirement /tmp/requirements-ftest.txt
-    :
+    dnf -y install python39 python39-devel gdb
 }
 
 install_mofed() {

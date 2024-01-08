@@ -22,7 +22,8 @@ then
     rm -rf venv
 fi
 
-python3 -m venv venv
+# Keep the system pacakges for now as this is where pydaos is installed.
+python3 -m venv venv --system-site-packages
 # shellcheck disable=SC1091
 source venv/bin/activate
 

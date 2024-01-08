@@ -92,8 +92,10 @@ def set_python_environment(logger):
 
     required_python_paths.extend(site.getsitepackages())
 
-    required_python_paths.extend(['/usr/lib64/python3.6/site-packages',
-                                  '/usr/lib/python3.6/site-packages'])
+    logger.info("Required paths are=%s", required_python_paths)
+
+    # required_python_paths.extend(['/usr/lib64/python3.6/site-packages',
+    #                               '/usr/lib/python3.6/site-packages'])
 
     # Check the PYTHONPATH env definition
     python_path = os.environ.get("PYTHONPATH")
