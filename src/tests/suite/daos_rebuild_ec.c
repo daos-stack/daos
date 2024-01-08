@@ -1254,7 +1254,8 @@ rebuild_ec_multiple_failure_tgts(void **state)
 }
 
 static void
-rebuild_ec_parity_overwrite_fail_parity(void **state)
+rebuild_ec_parity_overwrite_fail_parity_internal(void **state, int *kill_shards, int nr,
+						 bool aggregation)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -1262,13 +1263,17 @@ rebuild_ec_parity_overwrite_fail_parity(void **state)
 	char		*data;
 	char		*verify_data;
 	daos_recx_t	recx;
-	d_rank_t	data_ranks[2];
+	d_rank_t	data_ranks[4];
 	d_rank_t	parity_rank;
 	uint64_t	dkey_hash;
 	int		shard_idx;
 	int		stripe_size = 4 * CELL_SIZE;
+	int		i;
 
 	if (!test_runable(arg, 8))
+		return;
+
+	if (svc_nreplicas < 5)
 		return;
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
@@ -1282,6 +1287,9 @@ rebuild_ec_parity_overwrite_fail_parity(void **state)
 	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
 		     data, stripe_size, &req);
 
+	if (aggregation)
+		trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+					       0, DAOS_FORCE_EC_AGG);
 	make_buffer(data, 'b', 1000);
 	memcpy(verify_data, data, stripe_size);
 	recx.rx_idx = 0;
@@ -1297,12 +1305,12 @@ rebuild_ec_parity_overwrite_fail_parity(void **state)
 	rebuild_single_pool_rank(arg, parity_rank, true);
 
 	/* fail data shard */
-	shard_idx = (dkey_hash % 6 + 0) % 6;
-	data_ranks[0] = get_rank_by_oid_shard(arg, oid, shard_idx);
-	shard_idx = (dkey_hash % 6 + 1) % 6;
-	data_ranks[1] = get_rank_by_oid_shard(arg, oid, shard_idx);
+	for (i = 0; i < nr; i++) {
+		shard_idx = (dkey_hash % 6 + kill_shards[i]) % 6;
+		data_ranks[i] = get_rank_by_oid_shard(arg, oid, shard_idx);
+	}
 
-	rebuild_pools_ranks(&arg, 1, data_ranks, 2, true);
+	rebuild_pools_ranks(&arg, 1, data_ranks, nr, true);
 	recx.rx_idx = 0;	/* full stripe */
 	recx.rx_nr = stripe_size;
 	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
@@ -1310,7 +1318,7 @@ rebuild_ec_parity_overwrite_fail_parity(void **state)
 
 	assert_memory_equal(data, verify_data, stripe_size);
 
-	reintegrate_pools_ranks(&arg, 1, data_ranks, 2, true);
+	reintegrate_pools_ranks(&arg, 1, data_ranks, nr, true);
 	reintegrate_pools_ranks(&arg, 1, &parity_rank, 1, true);
 
 	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
@@ -1322,6 +1330,26 @@ rebuild_ec_parity_overwrite_fail_parity(void **state)
 	ioreq_fini(&req);
 	free(data);
 	free(verify_data);
+}
+
+static void
+rebuild_ec_overwrite_fail_parity_data(void **state)
+{
+	int kill_shards[2];
+
+	kill_shards[0] = 0;
+	kill_shards[1] = 1;
+	rebuild_ec_parity_overwrite_fail_parity_internal(state, kill_shards, 2, false);
+}
+
+static void
+rebuild_ec_overwrite_fail_parity_data_with_parity(void **state)
+{
+	int kill_shards[2];
+
+	kill_shards[0] = 1;
+	kill_shards[1] = 2;
+	rebuild_ec_parity_overwrite_fail_parity_internal(state, kill_shards, 2, true);
 }
 
 /** create a new pool/container for each test */
@@ -1457,7 +1485,10 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_ec_multiple_failure_tgts, rebuild_ec_8nodes_setup,
 	 test_teardown},
 	{"REBUILD46: fail parity shard and data shards after overwrite",
-	 rebuild_ec_parity_overwrite_fail_parity, rebuild_ec_8nodes_setup,
+	 rebuild_ec_overwrite_fail_parity_data, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD46: fail parity shard and data shards after overwrite with aggregation",
+	 rebuild_ec_overwrite_fail_parity_data_with_parity, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
 

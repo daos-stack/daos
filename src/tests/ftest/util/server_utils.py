@@ -1042,7 +1042,7 @@ class DaosServerManager(SubprocessManager):
         Use the specified data to generate and distribute the server configuration to the hosts.
 
         Also use this data to replace the engine storage configuration so that the storage options
-        defined in the specified data are configured correctly as part of the server startup.
+        defined in the specified data are configured correctly as part of the server start-up.
 
         Args:
             generated_yaml (YAMLObject): New server config data.

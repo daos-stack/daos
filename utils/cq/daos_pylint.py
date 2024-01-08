@@ -547,10 +547,6 @@ def main():
         print(full_version)
         sys.exit(0)
 
-    if args.diff:
-        print('This option is no longer used')
-        sys.exit(1)
-
     rc_tmp = None
 
     # If spellings are likely supported and using the default configuration file then enable using
