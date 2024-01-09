@@ -249,7 +249,7 @@ struct sigaction       old_segv;
 /* the flag to indicate whether initlization is finished or not */
 static bool            hook_enabled;
 static bool            hook_enabled_bak;
-static pthread_mutex_t lock_global;
+static pthread_mutex_t lock_reserve_fd;
 static pthread_mutex_t lock_dfs;
 static pthread_mutex_t lock_fd;
 static pthread_mutex_t lock_dirfd;
@@ -930,6 +930,7 @@ free_reserved_low_fd(void)
 
 	for (i = 0; i < low_fd_count; i++)
 		libc_close(low_fd_list[i]);
+	low_fd_count = 0;
 }
 
 /* some applications especially bash scripts use specific low fds directly.
@@ -943,11 +944,12 @@ consume_low_fd(void)
 {
 	int rc = 0;
 
+	D_MUTEX_LOCK(&lock_reserve_fd);
 	if (atomic_load_relaxed(&daos_inited) == true)
 		return 0;
 
 	low_fd_count              = 0;
-	low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
+	low_fd_list[low_fd_count] = libc_open("/", O_PATH | O_DIRECTORY);
 	while (1) {
 		if (low_fd_list[low_fd_count] < 0) {
 			DS_ERROR(errno, "failed to reserve a low fd");
@@ -961,12 +963,14 @@ consume_low_fd(void)
 		low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
 	}
 
+	D_MUTEX_UNLOCK(&lock_reserve_fd);
 	return rc;
 
 err:
 	rc = errno;
 	free_reserved_low_fd();
 	low_fd_count = 0;
+	D_MUTEX_UNLOCK(&lock_reserve_fd);
 
 	return rc;
 }
@@ -1066,15 +1070,12 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		if (atomic_load_relaxed(&daos_inited) == false) {
 			/* daos_init() is expensive to call. We call it only when necessary. */
 
-			D_MUTEX_LOCK(&lock_global);
 			rc = consume_low_fd();
 			if (rc) {
 				DS_ERROR(rc, "consume_low_fd() failed");
 				*is_target_path = 0;
-				D_MUTEX_UNLOCK(&lock_global);
 				goto out_normal;
 			}
-			D_MUTEX_UNLOCK(&lock_global);
 
 			rc = daos_init();
 			if (rc) {
@@ -4905,8 +4906,10 @@ futimens(int fd, const struct timespec times[2])
 
 /* check the fd to be closed. If the fd pointing to something like
  * 'socket:[xxxx]' or 'anon_inode:[eventpoll]', print out a warning
- * since DAOS network contexts may be using such fds.
+ * since DAOS network contexts may be using such fds. This might be
+ * helpful in debugging.
  */
+/*
 static void
 check_fd_to_close(int fd)
 {
@@ -4925,12 +4928,14 @@ check_fd_to_close(int fd)
 	}
 	path[len] = 0;
 	if (strncmp(path, "socket:", 7) == 0 || strncmp(path, "anon_inode:[eventpoll]", 22) == 0) {
-		D_WARN("dup2/fcntl is closing fd %d (%s) which may be used by DAOS!", fd, path);
+		D_DEBUG(DB_ANY, "dup2/fcntl is closing fd %d (%s) which may be used by DAOS!", fd,
+			path);
 	}
 
 out:
 	D_FREE(path);
 }
+*/
 
 /* The macro was added to fix the compiling issue on CentOS 7.9.
  * Those issues could be resolved by adding -D_FILE_OFFSET_BITS=64, however
@@ -4971,9 +4976,6 @@ new_fcntl(int fd, int cmd, ...)
 
 		if (!hook_enabled)
 			return libc_fcntl(fd, cmd, param);
-
-		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC))
-			check_fd_to_close(param);
 
 		if (cmd == F_GETFL) {
 			if (fd_directed >= FD_DIR_BASE)
@@ -5105,8 +5107,6 @@ dup2(int oldfd, int newfd)
 	}
 	if (!hook_enabled)
 		return next_dup2(oldfd, newfd);
-
-	check_fd_to_close(newfd);
 
 	if (oldfd == newfd) {
 		if (oldfd < FD_FILE_BASE)
@@ -5677,7 +5677,7 @@ init_myhook(void)
 	}
 
 	update_cwd();
-	rc = D_MUTEX_INIT(&lock_global, NULL);
+	rc = D_MUTEX_INIT(&lock_reserve_fd, NULL);
 	if (rc)
 		return;
 
@@ -5862,7 +5862,7 @@ finalize_myhook(void)
 		finalize_dfs();
 
 		D_MUTEX_DESTROY(&lock_eqh);
-		D_MUTEX_DESTROY(&lock_global);
+		D_MUTEX_DESTROY(&lock_reserve_fd);
 		D_MUTEX_DESTROY(&lock_dfs);
 		D_MUTEX_DESTROY(&lock_dirfd);
 		D_MUTEX_DESTROY(&lock_fd);
