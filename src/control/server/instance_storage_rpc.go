@@ -21,6 +21,12 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+var (
+	scanSmd                       = listSmdDevices
+	getCtrlrHealth                = getBioHealth
+	errEngineBdevScanEmptyDevList = errors.New("empty device list for engine instance")
+)
+
 // newMntRet creates and populates SCM mount result.
 // Currently only used for format operations.
 func (ei *EngineInstance) newMntRet(mountPoint string, inErr error) *ctlpb.ScmMountResult {
@@ -73,11 +79,26 @@ func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 	return ei.newMntRet(cfg.Scm.MountPoint, nil), nil
 }
 
-func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
+func formatEngineBdevs(ei *EngineInstance, ctrlrs storage.NvmeControllers) (results proto.NvmeControllerResults) {
+	// If no superblock exists, format NVMe and populate response with results.
+	needsSuperblock, err := ei.NeedsSuperblock()
+	if err != nil {
+		ei.log.Errorf("engine storage for %s instance %d: NeedsSuperblock(): %s",
+			build.DataPlaneName, ei.Index(), err)
+
+		return proto.NvmeControllerResults{
+			ei.newCret("", err),
+		}
+	}
+
+	if !needsSuperblock {
+		return
+	}
+
 	defer ei.logDuration(track(fmt.Sprintf(
 		"Format of NVMe storage for %s instance %d", build.DataPlaneName, ei.Index())))
 
-	for _, tr := range ei.storage.FormatBdevTiers() {
+	for _, tr := range ei.storage.FormatBdevTiers(ctrlrs) {
 		if tr.Error != nil {
 			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
 			continue
@@ -137,58 +158,174 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 	return
 }
 
-// StorageFormatNVMe performs format on NVMe if superblock needs writing.
-func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResults) {
-	// If no superblock exists, format NVMe and populate response with results.
-	needsSuperblock, err := ei.NeedsSuperblock()
-	if err != nil {
-		ei.log.Errorf("engine storage for %s instance %d: NeedsSuperblock(): %s",
-			build.DataPlaneName, ei.Index(), err)
+func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
+	state := ctrlr.DevState
+	if state != ctlpb.NvmeDevState_NORMAL && state != ctlpb.NvmeDevState_EVICTED {
+		engine.Debugf("skip fetching health stats on device %q in %q state",
+			ctrlr.PciAddr, ctlpb.NvmeDevState_name[int32(state)])
+		return false, nil
+	}
 
-		return proto.NvmeControllerResults{
-			ei.newCret("", err),
+	health, err := getCtrlrHealth(ctx, engine, req)
+	if err != nil {
+		return false, errors.Wrapf(err, "retrieve health stats for %q (state %q)", ctrlr,
+			state)
+	}
+	ctrlr.HealthStats = health
+
+	return true, nil
+}
+
+// Scan SMD devices over dRPC and reconstruct NVMe scan response from results.
+func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
+	scanSmdResp, err := scanSmd(ctx, engine, &ctlpb.SmdDevReq{})
+	if err != nil {
+		return nil, errors.Wrap(err, "scan smd")
+	}
+	if scanSmdResp == nil {
+		return nil, errors.New("nil smd scan resp")
+	}
+
+	// Re-link SMD devices inside NVMe controller structures and populate scan response.
+
+	pbResp := ctlpb.ScanNvmeResp{
+		State: new(ctlpb.ResponseState),
+	}
+	seenCtrlrs := make(map[string]*ctlpb.NvmeController)
+
+	for _, sd := range scanSmdResp.Devices {
+		if sd.Ctrlr == nil {
+			return nil, errors.Errorf("smd %q has no ctrlr ref", sd.Uuid)
+		}
+
+		addr := sd.Ctrlr.PciAddr
+
+		if _, exists := seenCtrlrs[addr]; !exists {
+			c := new(ctlpb.NvmeController)
+			*c = *sd.Ctrlr
+			c.SmdDevices = nil
+			c.HealthStats = nil
+			seenCtrlrs[addr] = c
+			pbResp.Ctrlrs = append(pbResp.Ctrlrs, c)
+		}
+
+		c := seenCtrlrs[addr]
+
+		// Populate health if requested.
+		healthUpdated := false
+		if pbReq.Health {
+			bhReq := &ctlpb.BioHealthReq{
+				DevUuid:  sd.Uuid,
+				MetaSize: pbReq.MetaSize,
+				RdbSize:  pbReq.RdbSize,
+			}
+			upd, err := populateCtrlrHealth(ctx, engine, bhReq, c)
+			if err != nil {
+				return nil, err
+			}
+			healthUpdated = upd
+		}
+
+		// Populate SMD (meta) if requested.
+		if pbReq.Meta {
+			nsd := new(ctlpb.SmdDevice)
+			*nsd = *sd
+			nsd.Ctrlr = nil
+			nsd.MetaSize = pbReq.MetaSize
+			nsd.RdbSize = pbReq.RdbSize
+			if healthUpdated {
+				// Populate space usage for each SMD device from health stats.
+				nsd.TotalBytes = c.HealthStats.TotalBytes
+				nsd.AvailBytes = c.HealthStats.AvailBytes
+				nsd.ClusterSize = c.HealthStats.ClusterSize
+				nsd.MetaWalSize = c.HealthStats.MetaWalSize
+				nsd.RdbWalSize = c.HealthStats.RdbWalSize
+			}
+			engineRank, err := engine.GetRank()
+			if err != nil {
+				return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
+			}
+			nsd.Rank = engineRank.Uint32()
+			c.SmdDevices = append(c.SmdDevices, nsd)
 		}
 	}
 
-	if needsSuperblock {
-		cResults = ei.bdevFormat()
+	return &pbResp, nil
+}
+
+func bdevScanEngineAssigned(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq, devList *storage.BdevDeviceList, isStarted *bool) (*ctlpb.ScanNvmeResp, error) {
+	*isStarted = engine.IsStarted()
+	if !*isStarted {
+		engine.Debugf("scanning engine-%d bdev tiers while engine is down", engine.Index())
+
+		// Retrieve engine cfg bdevs to restrict scan scope.
+		req := storage.BdevScanRequest{DeviceList: devList}
+
+		return bdevScanToProtoResp(engine.GetStorage().ScanBdevs, req)
+	}
+
+	engine.Debugf("scanning engine-%d bdev tiers while engine is up", engine.Index())
+
+	// If engine is started but not ready, wait for ready state. If partial number of engines
+	// return results, indicate errors for non-ready engines whilst returning successful scan
+	// results.
+	pollFn := func(e Engine) bool { return e.IsReady() }
+	if err := pollInstanceState(ctx, []Engine{engine}, pollFn); err != nil {
+		return nil, errors.Wrapf(err, "waiting for engine %d to be ready to receive drpcs",
+			engine.Index())
+	}
+
+	return scanEngineBdevsOverDrpc(ctx, engine, pbReq)
+}
+
+// bdevScanEngine calls either in to the private engine storage provider to scan bdevs if engine process
+// is not started, otherwise dRPC is used to retrieve details from the online engine.
+func bdevScanEngine(ctx context.Context, engine Engine, req *ctlpb.ScanNvmeReq) (resp *ctlpb.ScanNvmeResp, err error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	eCfgBdevs := storage.TierConfigs(engine.GetStorage().GetBdevConfigs()).Bdevs()
+	if eCfgBdevs.Len() == 0 {
+		return nil, errEngineBdevScanEmptyDevList
+	}
+
+	var isStarted bool
+	resp, err = bdevScanEngineAssigned(ctx, engine, req, eCfgBdevs, &isStarted)
+	if err != nil {
+		return nil, err
+	}
+
+	// Retry once if engine provider scan returns unexpected number of controllers in case
+	// engines claimed devices between when started state was checked and scan was executed.
+	if !isStarted && len(resp.Ctrlrs) != eCfgBdevs.Len() {
+		engine.Debugf("retrying engine bdev scan as unexpected nr returned, want %d got %d",
+			eCfgBdevs.Len(), len(resp.Ctrlrs))
+
+		resp, err = bdevScanEngineAssigned(ctx, engine, req, eCfgBdevs, &isStarted)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(resp.Ctrlrs) != eCfgBdevs.Len() {
+		engine.Debugf("engine bdev scan returned unexpected nr, want %d got %d",
+			eCfgBdevs.Len(), len(resp.Ctrlrs))
 	}
 
 	return
 }
 
-func smdGetHealth(ctx context.Context, ei *EngineInstance, dev *ctlpb.SmdDevice) error {
-	state := dev.Ctrlr.DevState
-	if state != ctlpb.NvmeDevState_NORMAL && state != ctlpb.NvmeDevState_EVICTED {
-		ei.log.Debugf("skip fetching health stats on device %q in %q state", dev,
-			ctlpb.NvmeDevState_name[int32(state)])
-		return nil
-	}
-
-	health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{DevUuid: dev.Uuid})
-	if err != nil {
-		return errors.Wrapf(err, "device %q, state %q", dev, state)
-	}
-	dev.Ctrlr.HealthStats = health
-
-	return nil
-}
-
 func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq) (*ctlpb.SmdQueryResp_RankResp, error) {
-	ei, ok := engine.(*EngineInstance)
-	if !ok {
-		return nil, errors.New("not EngineInstance")
-	}
-
-	engineRank, err := ei.GetRank()
+	engineRank, err := engine.GetRank()
 	if err != nil {
-		return nil, errors.Wrapf(err, "instance %d GetRank", ei.Index())
+		return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
 	}
 
 	rResp := new(ctlpb.SmdQueryResp_RankResp)
 	rResp.Rank = engineRank.Uint32()
 
-	listDevsResp, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
+	listDevsResp, err := listSmdDevices(ctx, engine, new(ctlpb.SmdDevReq))
 	if err != nil {
 		return nil, errors.Wrapf(err, "rank %d", engineRank)
 	}
@@ -198,7 +335,6 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 		return rResp, nil
 	}
 
-	// For each SmdDevice returned in list devs response, append a SmdDeviceWithHealth.
 	for _, sd := range listDevsResp.Devices {
 		if sd != nil {
 			rResp.Devices = append(rResp.Devices, sd)
@@ -211,7 +347,8 @@ func smdQueryEngine(ctx context.Context, engine Engine, pbReq *ctlpb.SmdQueryReq
 			continue // Skip health query if UUID doesn't match requested.
 		}
 		if pbReq.IncludeBioHealth {
-			if err := smdGetHealth(ctx, ei, dev); err != nil {
+			bhReq := &ctlpb.BioHealthReq{DevUuid: dev.Uuid}
+			if _, err := populateCtrlrHealth(ctx, engine, bhReq, dev.Ctrlr); err != nil {
 				return nil, err
 			}
 		}

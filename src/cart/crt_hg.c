@@ -1400,7 +1400,7 @@ out:
 void
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t	 hg_ret;
+	hg_return_t	hg_ret;
 
 	D_ASSERT(rpc_priv != NULL);
 
