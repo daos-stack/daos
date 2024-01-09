@@ -324,6 +324,7 @@ class CoreFileProcessing():
         if self.is_el() or "suse" in self.distro_info.name.lower():
             cmd.append("--enablerepo=*debug*")
         cmd.append("install")
+        cmd.append("--nobest")  # DAOS-14900
         for pkg in install_pkgs:
             try:
                 cmd.append(f"{pkg['name']}-{pkg['version']}-{pkg['release']}")
