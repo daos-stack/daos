@@ -189,7 +189,7 @@ dc_obj_init(void)
 	}
 
 	obj_coll_punch_thd = OBJ_COLL_PUNCH_THD_MIN;
-	d_getenv_int("DAOS_OBJ_COLL_PUNCH_THD", &obj_coll_punch_thd);
+	d_getenv_uint("DAOS_OBJ_COLL_PUNCH_THD", &obj_coll_punch_thd);
 	if (obj_coll_punch_thd < OBJ_COLL_PUNCH_THD_MIN) {
 		D_WARN("Invalid collective punch threshold %u, it cannot be smaller than %u, "
 		       "use the default value %u\n", obj_coll_punch_thd,
