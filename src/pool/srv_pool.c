@@ -875,53 +875,31 @@ out:
  * calling d_rank_list_free(*ranksp).
  */
 static int
-select_svc_ranks(int svc_rf, const d_rank_list_t *target_addrs, int ndomains,
-		 const uint32_t *domains, d_rank_list_t **ranksp)
+select_svc_ranks(int svc_rf, struct pool_buf *map_buf, uint32_t map_version,
+		 d_rank_list_t **ranksp)
 {
-	int			nreplicas = ds_pool_svc_rf_to_nreplicas(svc_rf);
-	int			selectable;
-	d_rank_list_t		*rnd_tgts;
-	d_rank_list_t		*ranks;
-	int			i;
-	int			j;
-	int			rc;
+	struct pool_map *map;
+	d_rank_list_t    replicas = {0};
+	d_rank_list_t   *to_add;
+	d_rank_list_t   *to_remove;
+	int              rc;
 
-	rc = d_rank_list_dup(&rnd_tgts, target_addrs);
+	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0)
 		return rc;
 
-	/* Shuffle the target ranks to avoid overloading any particular ranks. */
-	/*
-	 * DAOS-9177: Temporarily disable shuffle to give us more time to stabilize tests.
-	 */
-	/*daos_rank_list_shuffle(rnd_tgts);*/
+	rc = ds_pool_plan_svc_reconfs(svc_rf, map, &replicas, CRT_NO_RANK /* self */,
+				      false /* filter_only */, &to_add, &to_remove);
+	pool_map_decref(map);
+	if (rc != 0)
+		return rc;
+	D_ASSERTF(to_remove->rl_nr == 0, "to_remove=%u\n", to_remove->rl_nr);
+	d_rank_list_free(to_remove);
 
-	/* Determine the number of selectable targets. */
-	selectable = rnd_tgts->rl_nr;
+	d_rank_list_sort(to_add);
 
-	if (nreplicas > selectable)
-		nreplicas = selectable;
-	ranks = daos_rank_list_alloc(nreplicas);
-	if (ranks == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	/* TODO: Choose ranks according to failure domains. */
-	j = 0;
-	for (i = 0; i < rnd_tgts->rl_nr; i++) {
-		if (j == ranks->rl_nr)
-			break;
-		D_DEBUG(DB_MD, "ranks[%d]: %u\n", j, rnd_tgts->rl_ranks[i]);
-		ranks->rl_ranks[j] = rnd_tgts->rl_ranks[i];
-		j++;
-	}
-	D_ASSERTF(j == ranks->rl_nr, "%d == %u\n", j, ranks->rl_nr);
-
-	*ranksp = ranks;
-	rc = 0;
-
-out:
-	d_rank_list_free(rnd_tgts);
-	return rc;
+	*ranksp = to_add;
+	return 0;
 }
 
 /* TODO: replace all rsvc_complete_rpc() calls in this file with pool_rsvc_complete_rpc() */
@@ -973,6 +951,8 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 			daos_prop_t *prop, d_rank_list_t **svc_addrs)
 {
 	struct daos_prop_entry *svc_rf_entry;
+	struct pool_buf	       *map_buf;
+	uint32_t		map_version = 1;
 	d_rank_list_t	       *ranks;
 	d_iov_t			psid;
 	struct rsvc_client	client;
@@ -1004,6 +984,11 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	D_ASSERTF(ntargets == target_addrs->rl_nr, "ntargets=%d num=%u\n",
 		  ntargets, target_addrs->rl_nr);
 
+	rc = gen_pool_buf(NULL /* map */, &map_buf, map_version, ndomains, target_addrs->rl_nr,
+			  target_addrs->rl_nr * dss_tgt_nr, domains, dss_tgt_nr);
+	if (rc != 0)
+		goto out;
+
 	svc_rf_entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_REDUN_FAC);
 	D_ASSERT(svc_rf_entry != NULL && !(svc_rf_entry->dpe_flags & DAOS_PROP_ENTRY_NOT_SET));
 	D_ASSERTF(daos_svc_rf_is_valid(svc_rf_entry->dpe_val), DF_U64"\n", svc_rf_entry->dpe_val);
@@ -1011,9 +996,9 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	D_DEBUG(DB_MD, DF_UUID": creating PS: ntargets=%d ndomains=%d svc_rf="DF_U64"\n",
 		DP_UUID(pool_uuid), ntargets, ndomains, svc_rf_entry->dpe_val);
 
-	rc = select_svc_ranks(svc_rf_entry->dpe_val, target_addrs, ndomains, domains, &ranks);
+	rc = select_svc_ranks(svc_rf_entry->dpe_val, map_buf, map_version, &ranks);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out_map_buf;
 
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, RDB_NIL_TERM,
@@ -1053,6 +1038,7 @@ rechoose:
 		DL_ERROR(rc, DF_UUID ": failed to create POOL_CREATE RPC", DP_UUID(pool_uuid));
 		goto out_backoff_seq;
 	}
+	/* We could send map_buf to simplify things. */
 	pool_create_in_set_data(rpc, target_addrs, prop, ndomains, ntargets, domains);
 
 	/* Send the POOL_CREATE request. */
@@ -1089,6 +1075,8 @@ out_backoff_seq:
 	 */
 out_ranks:
 	d_rank_list_free(ranks);
+out_map_buf:
+	D_FREE(map_buf);
 out:
 	return rc;
 }
@@ -6509,8 +6497,8 @@ pool_svc_reconf_ult(void *varg)
 
 	if (arg->sca_map == NULL)
 		ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
-	rc = ds_pool_plan_svc_reconfs(svc->ps_svc_rf, map, current, dss_self_rank(), &to_add,
-				      &to_remove);
+	rc = ds_pool_plan_svc_reconfs(svc->ps_svc_rf, map, current, dss_self_rank(),
+				      arg->sca_sync_remove /* filter_only */, &to_add, &to_remove);
 	if (arg->sca_map == NULL)
 		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 	if (rc != 0) {
@@ -6567,9 +6555,6 @@ pool_svc_reconf_ult(void *varg)
 	}
 
 	if (rdb_get_ranks(svc->ps_rsvc.s_db, &new) == 0) {
-		d_rank_list_sort(current);
-		d_rank_list_sort(new);
-
 		if (svc->ps_force_notify || !d_rank_list_identical(new, current)) {
 			int rc_tmp;
 
