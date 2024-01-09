@@ -307,8 +307,9 @@ async_overlap(void **state)
 static inline int
 test_case_teardown(void **state)
 {
-	sigset_t	sigset;
-	bool		force = false;
+	char		*str = NULL;
+	sigset_t	 sigset;
+	bool		 force = false;
 
 	/*
 	 * If one of SIGFPE/SIGILL/SIGSEGV/SIGBUS/SIGSYS is in the signal mask, then the logic is
@@ -316,12 +317,22 @@ test_case_teardown(void **state)
 	 */
 	if (sigprocmask(0, NULL, &sigset) < 0) {
 		print_message("sigprocmask failure\n");
-	} else if (unlikely(sigismember(&sigset, SIGFPE) ||
-			    sigismember(&sigset, SIGILL) ||
-			    sigismember(&sigset, SIGSEGV) ||
-			    sigismember(&sigset, SIGBUS) ||
-			    sigismember(&sigset, SIGSYS))) {
-		force = true;
+	} else {
+		if (unlikely(sigismember(&sigset, SIGFPE)))
+			str = "SIGFPE";
+		else if (unlikely(sigismember(&sigset, SIGILL)))
+			str = "SIGILL";
+		else if (unlikely( sigismember(&sigset, SIGSEGV)))
+			str = "SIGBUS";
+		else if (unlikely(sigismember(&sigset, SIGBUS)))
+			str = "SIGBUS";
+		else if (unlikely(sigismember(&sigset, SIGSYS)))
+			str = "SIGSYS";
+
+		if (str != NULL) {
+			print_message("Hit corruption (%s), cleanup by force\n", str);
+			force = true;
+		}
 	}
 
 	assert_rc_equal(daos_event_priv_reset(force), 0);
