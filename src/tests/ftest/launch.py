@@ -33,6 +33,10 @@ DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 MAX_CI_REPETITIONS = 10
 
 
+class LaunchError(Exception):
+    """Error when launching Avocado"""
+
+
 class Launch():
     """Class to launch avocado tests."""
 
@@ -135,9 +139,10 @@ class Launch():
         self.avocado.set_config(overwrite_config)
 
         # Configure the logfile
-        self.avocado.set_version(logger)
-        self.logdir = self.avocado.get_directory(
-            logger, os.path.join("launch", self.name.lower()), False)
+        self.avocado.set_version()
+        if self.avocado.major < 82:
+            raise LaunchError("Avocado version 82 or above required")
+        self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()), False)
         self.logfile = os.path.join(self.logdir, "job.log")
 
         # Rename the launch log directory if one exists
@@ -160,8 +165,8 @@ class Launch():
         logger.info("-" * 80)
 
         # Results tracking settings
-        self.job_results_dir = self.avocado.get_logs_dir(logger)
-        max_chars = self.avocado.get_setting(logger, "job.run.result.xunit", "max_test_log_chars")
+        self.job_results_dir = self.avocado.get_logs_dir()
+        max_chars = self.avocado.get_setting("job.run.result.xunit", "max_test_log_chars")
         self.job = Job(
             self.name, xml_enabled="on", html_enabled="on", log_dir=self.logdir,
             max_chars=max_chars)
@@ -208,6 +213,8 @@ class Launch():
         """
         try:
             status = self._run(args)
+        except LaunchError as error:
+            return self.get_exit_status(1, error, error)
         except Exception as error:      # pylint: disable=broad-except
             message = f"Unknown exception raised during launch.py execution: {error}"
             status = self.get_exit_status(1, message, "Unknown", sys.exc_info())
