@@ -76,7 +76,7 @@ def update_path(logger, build_vars_file):
     if usr_sbin not in parts:
         parts.append(usr_sbin)
 
-    os.environ["PATH"] = ":".join(path)
+    os.environ["PATH"] = ":".join(parts)
     logger.info("Testing with PATH=%s", os.environ["PATH"])
 
 

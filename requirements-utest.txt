@@ -2,4 +2,5 @@ tabulate
 junit_xml
 pyxattr
 PyYAML
-pytest
+# Disabled for now because of DAOS-14688
+# pytest
