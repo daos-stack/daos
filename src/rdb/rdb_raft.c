@@ -2947,6 +2947,8 @@ rdb_raft_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 	}
 	ranks->rl_nr = i;
 
+	d_rank_list_sort(ranks);
+
 	*ranksp = ranks;
 	rc = 0;
 mutex:
