@@ -105,6 +105,8 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
 fi
 
 which clush
+avocado config
+
 
 # shellcheck disable=SC2086,SC2090,SC2048
 if ! python3 ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
