@@ -147,6 +147,21 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, stbuf0.st_size);
 
+	/* cornercase: fd for a regular file is passed into fstatat(). Path is empty. */
+	rc = fstatat(fd, "", &stbuf0, AT_EMPTY_PATH);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, stbuf0.st_size);
+
+	/* expected to fail */
+	rc = fstatat(fd, "", &stbuf0, 0);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	/* expected to fail */
+	rc = fstatat(fd, "entry", &stbuf0, 0);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOTDIR);
+
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
