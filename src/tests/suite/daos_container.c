@@ -2419,7 +2419,8 @@ co_rf_simple(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* Hang the rebuild */
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS, 0, NULL);
 	/* IO testing */
 	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
@@ -2868,7 +2869,8 @@ co_redun_lvl(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 	}
 
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS);
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS, 0, NULL);
 	print_message("obj update should success before RF broken\n");
 	io_oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
