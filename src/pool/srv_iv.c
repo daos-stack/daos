@@ -794,6 +794,31 @@ pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	return rc;
 }
 
+int
+ds_pool_iv_refresh_hdl(struct ds_pool *pool, struct pool_iv_hdl *pih)
+{
+	int rc;
+
+	if (!uuid_is_null(pool->sp_srv_cont_hdl)) {
+		if (uuid_compare(pool->sp_srv_cont_hdl,
+				 pih->pih_cont_hdl) == 0)
+			return 0;
+		ds_cont_tgt_close(pool->sp_srv_cont_hdl);
+		D_DEBUG(DB_MD, "delete hdl "DF_UUID"n", DP_UUID(pool->sp_srv_cont_hdl));
+		uuid_clear(pool->sp_srv_cont_hdl);
+		uuid_clear(pool->sp_srv_pool_hdl);
+	}
+
+	rc = ds_cont_tgt_open(pool->sp_uuid, pih->pih_cont_hdl, NULL, 0,
+			      ds_sec_get_rebuild_cont_capabilities(), 0);
+	if (rc == 0) {
+		uuid_copy(pool->sp_srv_cont_hdl, pih->pih_cont_hdl);
+		uuid_copy(pool->sp_srv_pool_hdl, pih->pih_pool_hdl);
+	}
+
+	return rc;
+}
+
 static int
 pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		   d_sg_list_t *src, void **priv)
@@ -877,6 +902,8 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				break;
 			conn = pool_iv_conn_next(conn);
 		}
+	} else if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
+		rc = ds_pool_iv_refresh_hdl(pool, &src_iv->piv_hdl);
 	}
 
 	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
@@ -894,30 +921,6 @@ out_put:
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
 	if (pool != NULL)
 		ds_pool_put(pool);
-	return rc;
-}
-
-int
-ds_pool_iv_refresh_hdl(struct ds_pool *pool, struct pool_iv_hdl *pih)
-{
-	int rc;
-
-	if (!uuid_is_null(pool->sp_srv_cont_hdl)) {
-		if (uuid_compare(pool->sp_srv_cont_hdl,
-				 pih->pih_cont_hdl) == 0)
-			return 0;
-		ds_cont_tgt_close(pool->sp_srv_cont_hdl);
-		uuid_clear(pool->sp_srv_cont_hdl);
-		uuid_clear(pool->sp_srv_pool_hdl);
-	}
-
-	rc = ds_cont_tgt_open(pool->sp_uuid, pih->pih_cont_hdl, NULL, 0,
-			      ds_sec_get_rebuild_cont_capabilities(), 0);
-	if (rc == 0) {
-		uuid_copy(pool->sp_srv_cont_hdl, pih->pih_cont_hdl);
-		uuid_copy(pool->sp_srv_pool_hdl, pih->pih_pool_hdl);
-	}
-
 	return rc;
 }
 
