@@ -946,7 +946,7 @@ consume_low_fd(void)
 	if (atomic_load_relaxed(&daos_inited) == true)
 		return 0;
 
-	low_fd_count = 0;
+	low_fd_count              = 0;
 	low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
 	while (1) {
 		if (low_fd_list[low_fd_count] < 0) {
@@ -1090,7 +1090,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 					if (rc)
 						DL_WARN(rc, "daos_eq_create() failed");
 					main_eqh = td_eqh;
-					rc = pthread_atfork(NULL, NULL, &child_hdlr);
+					rc       = pthread_atfork(NULL, NULL, &child_hdlr);
 					D_ASSERT(rc == 0);
 				}
 				D_MUTEX_UNLOCK(&lock_eqh);
@@ -4925,7 +4925,7 @@ check_fd_to_close(int fd)
 	}
 	path[len] = 0;
 	if (strncmp(path, "socket:", 7) == 0 || strncmp(path, "anon_inode:[eventpoll]", 22) == 0) {
-		D_WARN("dup2/fcntl is closing fd (%s) which may be used by DAOS!", path);
+		D_WARN("dup2/fcntl is closing fd %d (%s) which may be used by DAOS!", fd, path);
 	}
 
 out:
