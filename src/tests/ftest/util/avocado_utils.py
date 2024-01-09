@@ -5,8 +5,6 @@
 """
 import os
 
-import avocado.core
-
 
 class AvocadoException(Exception):
     """Exception for avocado utils methods."""
@@ -118,8 +116,10 @@ class AvocadoInfo():
         Args:
             logger (Logger): logger for the messages produced by this method
         """
-        self.major = int(avocado.core.version.MAJOR)
-        self.minor = int(avocado.core.version.MINOR)
+        # pylint: disable=import-outside-toplevel
+        from avocado.core.version import MAJOR, MINOR
+        self.major = int(MAJOR)
+        self.minor = int(MINOR)
 
     @staticmethod
     def get_setting(section, key, default=None):
@@ -134,7 +134,9 @@ class AvocadoInfo():
         Returns:
             object: value for the avocado setting or None if not defined
         """
-        config = avocado.core.settings.settings.as_dict()
+        # pylint: disable=import-outside-toplevel
+        from avocado.core.settings import settings
+        config = settings.as_dict()
         try:
             return config.get(".".join([section, key]))
         except KeyError:
