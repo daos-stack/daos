@@ -322,8 +322,8 @@ test_case_teardown(void **state)
 			str = "SIGFPE";
 		else if (unlikely(sigismember(&sigset, SIGILL)))
 			str = "SIGILL";
-		else if (unlikely( sigismember(&sigset, SIGSEGV)))
-			str = "SIGBUS";
+		else if (unlikely(sigismember(&sigset, SIGSEGV)))
+			str = "SIGSEGV";
 		else if (unlikely(sigismember(&sigset, SIGBUS)))
 			str = "SIGBUS";
 		else if (unlikely(sigismember(&sigset, SIGSYS)))
