@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -562,20 +562,20 @@ def move_files(logger, hosts, source, pattern, destination, depth, timeout, test
     # Clush -rcopy the temporary remote directory to this host
     command = ["clush", "-w", str(hosts), "-pv", "--rcopy", f"'{tmp_copy_dir}'", "--dest",
                f"'{rcopy_dest}'"]
-    try:
-        run_local(logger, " ".join(command), check=True, timeout=timeout)
-    except RunException:
-        message = f"Error copying remote files to {destination}"
-        test_result.fail_test(logger, "Process", message, sys.exc_info())
-        return_code = 16
+    # try:
+    run_local(logger, " ".join(command), check=True, timeout=timeout)
+    # except RunException:
+    #     message = f"Error copying remote files to {destination}"
+    #     test_result.fail_test(logger, "Process", message, sys.exc_info())
+    #      return_code = 16
 
-    finally:
-        # Remove the temporary remote directory on each host
-        command = f"{sudo_command}rm -fr '{tmp_copy_dir}'"
-        if not run_remote(logger, hosts, command).passed:
-            message = f"Error removing temporary remote copy directory '{tmp_copy_dir}'"
-            test_result.fail_test(logger, "Process", message)
-            return_code = 16
+    # finally:
+    #     # Remove the temporary remote directory on each host
+    #     command = f"{sudo_command}rm -fr '{tmp_copy_dir}'"
+    #     if not run_remote(logger, hosts, command).passed:
+    #         message = f"Error removing temporary remote copy directory '{tmp_copy_dir}'"
+    #         test_result.fail_test(logger, "Process", message)
+    #         return_code = 16
 
     return return_code
 
