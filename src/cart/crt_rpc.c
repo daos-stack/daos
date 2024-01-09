@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1725,8 +1725,8 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 
 	crt_rpc_inout_buff_init(rpc_priv);
 
-	if (srv_flag && rpc_priv->crp_req_hdr.cch_src_timeout != 0)
-		rpc_priv->crp_timeout_sec = rpc_priv->crp_req_hdr.cch_src_timeout;
+	if (srv_flag && *(rpc_priv->crp_header.p_src_timeout) != 0)
+		rpc_priv->crp_timeout_sec = *(rpc_priv->crp_header.p_src_timeout);
 	else
 		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
 					     ctx->cc_timeout_sec);
