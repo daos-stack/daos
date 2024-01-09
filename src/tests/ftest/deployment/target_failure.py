@@ -3,14 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import os
 import threading
+import time
 
+from command_utils_base import CommandFailure
+from general_utils import report_errors
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors
-from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 
 
@@ -48,8 +48,7 @@ class TargetFailure(IorTestBase):
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", '/run/ior/client_processes/*')
-        manager.ppn.update(ppn, 'mpirun.ppn')
-        manager.processes.update(None, 'mpirun.np')
+        manager.assign_processes(ppn=ppn)
 
         # Run the command.
         try:

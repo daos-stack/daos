@@ -4,10 +4,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from getpass import getuser
 import os
-import paramiko
+from getpass import getuser
 
+import paramiko
 from general_utils import get_remote_file_size
 from ior_test_base import IorTestBase
 

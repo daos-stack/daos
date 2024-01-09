@@ -27,8 +27,7 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
-D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
+#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
@@ -186,6 +185,19 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_del_ev;		/* Deleted EV records */
 	struct d_tm_node_t	*vam_merge_recs;	/* Total merged EV records */
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
+	struct d_tm_node_t	*vam_fail_count;	/* Aggregation failed */
+};
+
+struct vos_gc_metrics {
+	struct d_tm_node_t *vgm_duration;  /* Duration of each gc scan */
+	struct d_tm_node_t *vgm_cont_del;  /* containers reclaimed */
+	struct d_tm_node_t *vgm_obj_del;   /* objects reclaimed */
+	struct d_tm_node_t *vgm_dkey_del;  /* dkeys reclaimed */
+	struct d_tm_node_t *vgm_akey_del;  /* akeys reclaimed */
+	struct d_tm_node_t *vgm_ev_del;    /* EV records reclaimed */
+	struct d_tm_node_t *vgm_sv_del;    /* SV records reclaimed */
+	struct d_tm_node_t *vgm_slack_cnt; /* Slack mode count */
+	struct d_tm_node_t *vgm_tight_cnt; /* Tight mode count */
 };
 
 /*
@@ -200,10 +212,14 @@ struct vos_chkpt_metrics {
 };
 
 void vos_chkpt_metrics_init(struct vos_chkpt_metrics *vc_metrics, const char *path, int tgt_id);
+void
+vos_gc_metrics_init(struct vos_gc_metrics *vc_metrics, const char *path, int tgt_id);
 
 struct vos_space_metrics {
 	struct d_tm_node_t	*vsm_scm_used;		/* SCM space used */
 	struct d_tm_node_t	*vsm_nvme_used;		/* NVMe space used */
+	struct d_tm_node_t      *vsm_scm_total;         /* SCM space total */
+	struct d_tm_node_t      *vsm_nvme_total;        /* NVMe space total */
 	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
 };
 
@@ -219,6 +235,7 @@ struct vos_rh_metrics {
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
 	struct vos_agg_metrics	 vp_agg_metrics;
+	struct vos_gc_metrics    vp_gc_metrics;
 	struct vos_space_metrics vp_space_metrics;
 	struct vos_chkpt_metrics vp_chkpt_metrics;
 	struct vos_rh_metrics	 vp_rh_metrics;
@@ -255,6 +272,8 @@ struct vos_pool {
 	/** btr handle for the container table */
 	daos_handle_t		vp_cont_th;
 	/** GC statistics of this pool */
+	struct vos_gc_stat       vp_gc_stat_global;
+	/** GC per slice statistics of this pool */
 	struct vos_gc_stat	vp_gc_stat;
 	/** link chain on vos_tls::vtl_gc_pools */
 	d_list_t		vp_gc_link;
@@ -386,6 +405,7 @@ struct vos_dtx_act_ent {
 					 dae_maybe_shared:1,
 					 /* Need validation on leader before commit/committable. */
 					 dae_need_validation:1,
+					 dae_need_release:1,
 					 dae_preparing:1,
 					 dae_prepared:1;
 };
@@ -1546,13 +1566,6 @@ void
 vos_report_layout_incompat(const char *type, int version, int min_version,
 			   int max_version, uuid_t *uuid);
 
-#define VOS_NOTIFY_RAS_EVENTF(...)			\
-	do {						\
-		if (ds_notify_ras_eventf == NULL)	\
-			break;				\
-		ds_notify_ras_eventf(__VA_ARGS__);	\
-	} while (0)					\
-
 static inline int
 vos_offload_exec(int (*func)(void *), void *arg)
 {
@@ -1571,12 +1584,6 @@ vos_exec(void (*func)(void *), void *arg)
 	func(arg);
 
 	return 0;
-}
-
-static inline bool
-umoff_is_null(umem_off_t umoff)
-{
-	return umoff == UMOFF_NULL;
 }
 
 /* vos_csum_recalc.c */
@@ -1741,6 +1748,26 @@ vos_flush_wal_header(struct vos_pool *vp)
 		return bio_wal_flush_header(mc);
 
 	return 0;
+}
+
+/*
+ * Check if the NVMe context of a VOS target is healthy.
+ *
+ * \param[in] coh	VOS container
+ *
+ * \return		0		: VOS target is healthy
+ *			-DER_NVME_IO	: VOS target is faulty
+ */
+static inline int
+vos_tgt_health_check(struct vos_container *cont)
+{
+	D_ASSERT(cont != NULL);
+	D_ASSERT(cont->vc_pool != NULL);
+
+	if (cont->vc_pool->vp_sysdb)
+		return 0;
+
+	return bio_xsctxt_health_check(vos_xsctxt_get());
 }
 
 int

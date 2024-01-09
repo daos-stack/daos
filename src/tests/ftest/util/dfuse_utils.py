@@ -4,15 +4,15 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import time
 import os
-from ClusterShell.NodeSet import NodeSet
+import time
 
-from command_utils_base import FormattedParameter, BasicParameter
-from exception_utils import CommandFailure
+from ClusterShell.NodeSet import NodeSet
 from command_utils import ExecutableCommand
+from command_utils_base import BasicParameter, FormattedParameter
+from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file
-from run_utils import run_remote, command_as_user
+from run_utils import command_as_user, run_remote
 
 
 class DfuseCommand(ExecutableCommand):
@@ -468,7 +468,7 @@ class VerifyPermsCommand(ExecutableCommand):
             namespace (str): command namespace. Defaults to /run/verify_perms/*
 
         """
-        path = os.path.realpath(os.path.dirname(__file__))
+        path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
         super().__init__(namespace, "verify_perms.py", path)
 
         # verify_perms.py options

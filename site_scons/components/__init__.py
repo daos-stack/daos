@@ -21,9 +21,10 @@
 """Defines common components used by HPDD projects"""
 
 import platform
+
 import distro
-from SCons.Script import GetOption
 from prereq_tools import GitRepoRetriever
+from SCons.Script import GetOption
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -265,9 +266,9 @@ def define_components(reqs):
                 retriever=GitRepoRetriever('https://github.com/pmem/pmdk.git'),
                 commands=[['make',
                            'all',
-                           'BUILD_RPMEM=n',
                            'NDCTL_ENABLE=n',
-                           'NDCTL_DISABLE=y',
+                           'BUILD_EXAMPLES=n',
+                           'BUILD_BENCHMARKS=n',
                            'DOC=n',
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
