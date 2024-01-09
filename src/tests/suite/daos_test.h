@@ -20,6 +20,7 @@
 #include <linux/limits.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <signal.h>
 
 #include <cmocka.h>
 
@@ -306,7 +307,24 @@ async_overlap(void **state)
 static inline int
 test_case_teardown(void **state)
 {
-	assert_rc_equal(daos_event_priv_reset(true), 0);
+	sigset_t	sigset;
+	bool		force = false;
+
+	/*
+	 * If one of SIGFPE/SIGILL/SIGSEGV/SIGBUS/SIGSYS is in the signal mask, then the logic is
+	 * longjump from cmocka for handling the signal, then need force cleanup test environment.
+	 */
+	if (sigprocmask(0, NULL, &sigset) < 0) {
+		print_message("sigprocmask failure\n");
+	} else if (unlikely(sigismember(&sigset, SIGFPE) ||
+			    sigismember(&sigset, SIGILL) ||
+			    sigismember(&sigset, SIGSEGV) ||
+			    sigismember(&sigset, SIGBUS) ||
+			    sigismember(&sigset, SIGSYS))) {
+		force = true;
+	}
+
+	assert_rc_equal(daos_event_priv_reset(force), 0);
 	return 0;
 }
 
