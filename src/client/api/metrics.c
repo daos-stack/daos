@@ -31,7 +31,7 @@ dc_tm_init(void)
 	pid_t  pid;
 	int    rc;
 
-	d_getenv_bool(DAOS_CLIENT_METRICS_ENV, &daos_client_metric);
+	d_getenv_bool(DAOS_CLIENT_METRICS_ENABLE, &daos_client_metric);
 	if (!daos_client_metric)
 		return 0;
 
@@ -40,7 +40,7 @@ dc_tm_init(void)
 		D_GOTO(out, rc);
 
 	metrics_tag = D_TM_OPEN_OR_CREATE;
-	d_getenv_bool(DAOS_CLIENT_METRICS_RETAIN_ENV, &daos_client_metric_retain);
+	d_getenv_bool(DAOS_CLIENT_METRICS_RETAIN, &daos_client_metric_retain);
 	if (daos_client_metric_retain)
 		metrics_tag |= D_TM_RETAIN_SHMEM;
 	else
@@ -133,10 +133,11 @@ dc_tm_fini()
 	if (!daos_client_metric)
 		return;
 
-	dump_path = getenv(METRIC_DUMP_ENV);
-	D_INFO("dump path is %s\n", dump_path);
-	if (dump_path != NULL)
+	dump_path = getenv(DAOS_CLIENT_METRICS_DUMP_PATH);
+	if (dump_path != NULL) {
+		D_INFO("dump path is %s\n", dump_path);
 		dump_tm_file(dump_path);
+	}
 
 	dc_tls_fini();
 	dc_tls_key_delete();

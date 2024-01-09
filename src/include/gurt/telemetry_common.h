@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -178,7 +178,6 @@ enum {
 	D_TM_ITER_RESET			= 0x002,
 };
 
-#define DC_TM_JOB_ROOT_ID	256
 /**
  * @brief Statistics for gauge and duration metrics
  *

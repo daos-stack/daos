@@ -137,7 +137,7 @@ dc_obj_init(void)
 	uint32_t ver_array[2] = {DAOS_OBJ_VERSION - 1, DAOS_OBJ_VERSION};
 	int	 rc;
 
-	d_getenv_bool(DAOS_CLIENT_METRICS_ENV, &daos_client_metric);
+	d_getenv_bool(DAOS_CLIENT_METRICS_ENABLE, &daos_client_metric);
 	if (daos_client_metric) {
 		daos_register_key(&dc_obj_module_key);
 		rc = daos_register_metrics(DAOS_CLI_TAG, DAOS_OBJ_MODULE,
