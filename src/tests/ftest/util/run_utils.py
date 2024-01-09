@@ -352,9 +352,9 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
 
     except subprocess.CalledProcessError as error:
         # Raised if command yields a non-zero return status with check=True
-        log.debug(str(error))
-        log.debug("  output: %s", error.output)
-        log.debug("  stderr: %s", error.stderr)
+        log.info(str(error))
+        log.info("  output: %s", error.output)
+        log.info("  stderr: %s", error.stderr)
         raise RunException(f"Command '{command}' returned non-zero status") from error
 
     except KeyboardInterrupt as error:
