@@ -185,7 +185,8 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
-
+void
+ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child);
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
  */
