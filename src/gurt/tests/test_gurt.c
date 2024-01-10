@@ -2358,35 +2358,63 @@ test_d_getenv_uint(void **state)
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == UINT_MAX);
 
-	getenv_return = "42";
+	getenv_return = "-1";
+	rc            = d_getenv_uint("foo", &val);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == UINT_MAX);
+
+	getenv_return = "-10";
+	rc            = d_getenv_uint("foo", &val);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == UINT_MAX - 9);
+
+	getenv_return = "-4294967294";
+	rc            = d_getenv_uint("foo", &val);
+	assert_true(val == 2);
+
+	getenv_return = "-4294967295";
+	rc            = d_getenv_uint("foo", &val);
+	assert_true(val == 1);
+
+	getenv_return = "    000042";
 	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == 42);
 
+	getenv_return = "    -000042";
+	rc            = d_getenv_uint("foo", &val);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == -42);
+
 	getenv_return = "4294967296";
 	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
-	getenv_return = "-42";
+	getenv_return = "-4294967296";
 	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
 	getenv_return = "booo";
 	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
 	getenv_return = "42booo";
 	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
+
+	getenv_return = "";
+	rc            = d_getenv_uint("foo", &val);
+	assert_int_equal(rc, -DER_INVAL);
+	assert_true(val == -42);
 
 	getenv_return = NULL;
 	rc            = d_getenv_uint("foo", &val);
 	assert_int_equal(rc, -DER_NONEXIST);
-	assert_true(val == 42);
+	assert_true(val == -42);
 }
 
 static void
@@ -2400,40 +2428,63 @@ test_d_getenv_uint32_t(void **state)
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == UINT32_MAX);
 
-	getenv_return = "42";
+	getenv_return = "-1";
+	rc            = d_getenv_uint32_t("foo", &val);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == UINT32_MAX);
+
+	getenv_return = "-10";
+	rc            = d_getenv_uint32_t("foo", &val);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == UINT32_MAX - 9);
+
+	getenv_return = "-4294967294";
+	rc            = d_getenv_uint32_t("foo", &val);
+	assert_true(val == 2);
+
+	getenv_return = "-4294967295";
+	rc            = d_getenv_uint32_t("foo", &val);
+	assert_true(val == 1);
+
+	getenv_return = "    000042";
 	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == 42);
 
+	getenv_return = "    -000042";
+	rc            = d_getenv_uint32_t("foo", &val);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == -42);
+
 	getenv_return = "4294967296";
 	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
-	getenv_return = "-42";
+	getenv_return = "-4294967296";
 	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
 	getenv_return = "booo";
 	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
 	getenv_return = "42booo";
 	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
 	getenv_return = "";
 	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
 	getenv_return = NULL;
 	rc            = d_getenv_uint32_t("foo", &val);
 	assert_int_equal(rc, -DER_NONEXIST);
-	assert_true(val == 42);
+	assert_true(val == -42);
 }
 
 static void
@@ -2447,45 +2498,63 @@ test_d_getenv_uint64_t(void **state)
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == UINT64_MAX);
 
-	getenv_return = "42";
+	getenv_return = "-1";
+	rc            = d_getenv_uint64_t("foo", &val);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == UINT64_MAX);
+
+	getenv_return = "-10";
+	rc            = d_getenv_uint64_t("foo", &val);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == UINT64_MAX - 9);
+
+	getenv_return = "-18446744073709551614";
+	rc            = d_getenv_uint64_t("foo", &val);
+	assert_true(val == 2);
+
+	getenv_return = "-18446744073709551615";
+	rc            = d_getenv_uint64_t("foo", &val);
+	assert_true(val == 1);
+
+	getenv_return = "    000042";
 	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_true(val == 42);
 
+	getenv_return = "    -000042";
+	rc            = d_getenv_uint64_t("foo", &val);
+	assert_int_equal(rc, -DER_SUCCESS);
+	assert_true(val == -42);
+
 	getenv_return = "18446744073709551616";
 	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
-	getenv_return = "012345678901234567890";
+	getenv_return = "-18446744073709551616";
 	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
-
-	getenv_return = "-42";
-	rc            = d_getenv_uint64_t("foo", &val);
-	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
 	getenv_return = "booo";
 	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
 	getenv_return = "42booo";
 	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
 	getenv_return = "";
 	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_INVAL);
-	assert_true(val == 42);
+	assert_true(val == -42);
 
 	getenv_return = NULL;
 	rc            = d_getenv_uint64_t("foo", &val);
 	assert_int_equal(rc, -DER_NONEXIST);
-	assert_true(val == 42);
+	assert_true(val == -42);
 }
 
 static void
