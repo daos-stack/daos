@@ -1840,7 +1840,7 @@ out_readlink:
 		free(*full_path_out);
 		*full_path_out = NULL;
 	}
-	DS_ERROR(errno, "readlink() failed");
+	D_DEBUG(DB_ANY, "readlink() failed: %d (%s)\n", errno, strerror(errno));
 	return (-1);
 }
 
@@ -2571,6 +2571,17 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 			return new_lxstat(1, path, stat_buf);
 		else
 			return new_xstat(1, path, stat_buf);
+	}
+
+	if (dirfd >= FD_FILE_BASE && dirfd < FD_DIR_BASE) {
+		if (path[0] == 0 && flags & AT_EMPTY_PATH)
+			/* same as fstat for a file. May need further work to handle flags */
+			return fstat(dirfd, stat_buf);
+		else if (path[0] == 0)
+			error = ENOENT;
+		else
+			error = ENOTDIR;
+		goto out_err;
 	}
 
 	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
