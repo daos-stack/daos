@@ -9,8 +9,8 @@
 
 #include "ddb_common.h"
 
-#define DF_DDB_RECX	"{"DF_U64"-"DF_U64"}"
-#define DP_DDB_RECX(r)	(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
+#define DF_DDB_RECX          "{" DF_U64 "-" DF_U64 "}.0x" DF_X64 ""
+#define DP_DDB_RECX(r)       (r).drx_idx, ((r).drx_idx + (r).drx_nr - 1), (r).drx_epoch
 
 #define INVALID_IDX          (-1)
 #define INVALID_PATH "INVALID PATH"
@@ -50,7 +50,7 @@ struct indexed_tree_path_part {
 		uuid_t		itp_uuid;
 		daos_unit_oid_t itp_oid;
 		daos_key_t	itp_key; /* akey or dkey */
-		daos_recx_t	itp_recx;
+		struct ddb_recx itp_recx;
 	}		itp_part_value;
 	uint32_t        itp_part_idx;
 	bool            itp_has_part_idx;
@@ -108,8 +108,10 @@ bool itp_set_dkey(struct dv_indexed_tree_path *itp, daos_key_t *key, uint32_t id
 bool itp_set_dkey_part_value(struct dv_indexed_tree_path *itp, daos_key_t *key);
 bool itp_set_akey(struct dv_indexed_tree_path *itp, daos_key_t *key, uint32_t idx);
 bool itp_set_akey_part_value(struct dv_indexed_tree_path *itp, daos_key_t *key);
-bool itp_set_recx(struct dv_indexed_tree_path *itp, daos_recx_t *recx, uint32_t idx);
-bool itp_set_recx_part_value(struct dv_indexed_tree_path *itp, daos_recx_t *recx);
+bool
+itp_set_recx(struct dv_indexed_tree_path *itp, struct ddb_recx *recx, uint32_t idx);
+bool
+     itp_set_recx_part_value(struct dv_indexed_tree_path *itp, struct ddb_recx *recx);
 
 void itp_unset_recx(struct dv_indexed_tree_path *itp);
 void itp_unset_akey(struct dv_indexed_tree_path *itp);
@@ -158,7 +160,8 @@ uint8_t *itp_cont(struct dv_indexed_tree_path *itp);
 daos_unit_oid_t *itp_oid(struct dv_indexed_tree_path *itp);
 daos_key_t *itp_dkey(struct dv_indexed_tree_path *itp);
 daos_key_t *itp_akey(struct dv_indexed_tree_path *itp);
-daos_recx_t *itp_recx(struct dv_indexed_tree_path *itp);
+struct ddb_recx      *
+itp_recx(struct dv_indexed_tree_path *itp);
 
 /* Functions for getting specific parts' index */
 int itp_cont_idx(struct dv_indexed_tree_path *itp);
@@ -188,7 +191,7 @@ struct dv_tree_path {
 	daos_unit_oid_t vtp_oid;
 	daos_key_t	vtp_dkey;
 	daos_key_t	vtp_akey;
-	daos_recx_t	vtp_recx;
+	struct ddb_recx vtp_recx;
 	bool		vtp_is_recx;
 };
 

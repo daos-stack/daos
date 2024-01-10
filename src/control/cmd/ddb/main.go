@@ -34,14 +34,14 @@ func exitWithError(log logging.Logger, err error) {
 }
 
 type cliOptions struct {
-	Debug     bool   `long:"debug" description:"enable debug output"`
-	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
-	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
-	Version   bool   `short:"v" long:"version" description:"Show version"`
+	Debug     bool       `long:"debug" description:"enable debug output"`
+	WriteMode bool       `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
+	CmdFile   string     `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
+	Version   bool       `short:"v" long:"version" description:"Show version"`
+	VosPath   vosPathStr `long:"path" short:"p" description:"Path to the VOS file to connect to."`
 	Args      struct {
-		VosPath    vosPathStr `positional-arg-name:"vos_file_path"`
-		RunCmd     ddbCmdStr  `positional-arg-name:"ddb_command"`
-		RunCmdArgs []string   `positional-arg-name:"ddb_command_args"`
+		RunCmd     ddbCmdStr `positional-arg-name:"ddb_command"`
+		RunCmdArgs []string  `positional-arg-name:"ddb_command_args"`
 	} `positional-args:"yes"`
 }
 
@@ -175,23 +175,22 @@ Example Paths:
 	defer cleanup()
 	app := createGrumbleApp(ctx)
 
-	if opts.Args.VosPath != "" {
-		log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
-		if err := ddbOpen(ctx, string(opts.Args.VosPath), opts.WriteMode); err != nil {
-			return errors.Wrapf(err, "Error opening path: %s", opts.Args.VosPath)
+	if opts.VosPath != "" {
+		log.Debugf("Connect to path: %s\n", opts.VosPath)
+		if err := ddbOpen(ctx, string(opts.VosPath), opts.WriteMode); err != nil {
+			return errors.Wrapf(err, "Error opening path: %s", opts.VosPath)
 		}
 	}
 
 	if opts.Args.RunCmd != "" && opts.CmdFile != "" {
 		return errors.New("Cannot use both command file and a command string")
 	}
-
 	if opts.Args.RunCmd != "" || opts.CmdFile != "" {
 		// Non-interactive mode
 		if opts.Args.RunCmd != "" {
 			err := runCmdStr(app, string(opts.Args.RunCmd), opts.Args.RunCmdArgs...)
 			if err != nil {
-				log.Errorf("Error running command %s\n", string(opts.Args.RunCmd))
+				log.Errorf("Error running command %s: %v\n", string(opts.Args.RunCmd), err)
 			}
 		} else {
 			err := runFileCmds(log, app, opts.CmdFile)
@@ -213,7 +212,8 @@ Example Paths:
 	// Print the version upon entry
 	log.Infof("ddb version %s", build.DaosVersion)
 	// app.Run() uses the os.Args so need to clear them before running
-	os.Args = args
+	os.Args = nil
+	log.Debugf("args: %v", args)
 	result := app.Run()
 	// make sure pool is closed
 	if ddbPoolIsOpen(ctx) {
@@ -269,7 +269,9 @@ func createGrumbleApp(ctx *DdbContext) *grumble.App {
 	return app
 }
 
-// Run the command in 'run' using the grumble app. shlex is used to parse the string into an argv/c format
+// Run the command in 'run' using the grumble app.
 func runCmdStr(app *grumble.App, cmd string, args ...string) error {
-	return app.RunCommand(append([]string{cmd}, args...))
+	// Update the args so only has command args (not the command line args)
+	os.Args = append([]string{os.Args[0], cmd}, args...)
+	return app.Run()
 }

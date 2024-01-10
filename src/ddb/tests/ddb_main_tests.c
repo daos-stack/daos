@@ -235,13 +235,7 @@ get_help_tests(void **state)
 static int
 ddb_main_suit_setup(void **state)
 {
-	struct dt_vos_pool_ctx *tctx;
-
 	assert_success(ddb_test_setup_vos(state));
-
-	/* test setup creates the pool, but doesn't open it ... leave it open for these tests */
-	tctx = *state;
-	assert_success(dv_pool_open(tctx->dvt_pmem_file, &tctx->dvt_poh));
 
 	return 0;
 }
@@ -253,7 +247,6 @@ ddb_main_suit_teardown(void **state)
 
 	if (tctx == NULL)
 		fail_msg("Test not setup correctly");
-	assert_success(dv_pool_close(tctx->dvt_poh));
 	ddb_teardown_vos(state);
 
 	return 0;

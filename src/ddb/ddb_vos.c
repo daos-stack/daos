@@ -21,7 +21,7 @@ int
 dv_pool_open(char *path, daos_handle_t *poh)
 {
 	struct vos_file_parts	path_parts = {0};
-	uint32_t		flags = 0; /* Will need to be a flag to ignore uuid check */
+	uint32_t flags = VOS_POF_SKIP_UUID_CHECK; /* Will need to be a flag to ignore uuid check */
 	int			rc;
 
 	/*
@@ -89,7 +89,7 @@ struct search_args {
 	uuid_t		sa_uuid;
 	daos_unit_oid_t	sa_uoid;
 	daos_key_t	sa_key;
-	daos_recx_t	sa_recx;
+	struct ddb_recx sa_recx;
 };
 
 static int
@@ -120,7 +120,9 @@ get_by_idx_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	case VOS_ITER_SINGLE:
 		break;
 	case VOS_ITER_RECX:
-		args->sa_recx = entry->ie_orig_recx;
+		args->sa_recx.drx_nr    = entry->ie_orig_recx.rx_nr;
+		args->sa_recx.drx_idx   = entry->ie_orig_recx.rx_idx;
+		args->sa_recx.drx_epoch = entry->ie_epoch;
 		break;
 	case VOS_ITER_DTX:
 		break;
@@ -262,7 +264,7 @@ dv_get_akey(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, uint32_t 
 
 int
 dv_get_recx(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, daos_key_t *akey,
-	    uint32_t idx, daos_recx_t *recx)
+	    uint32_t idx, struct ddb_recx *recx)
 {
 	struct search_args args = {0};
 	int rc;
@@ -280,7 +282,8 @@ dv_get_recx(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, daos_key_
 	return rc;
 }
 
-#define daos_recx_match(a, b) ((a).rx_idx == (b.rx_idx) && (a).rx_nr == (b).rx_nr)
+#define daos_recx_match(a, b)                                                                      \
+	((a).drx_idx == (b.drx_idx) && (a).drx_nr == (b).drx_nr && (a).drx_epoch == (b).drx_epoch)
 
 struct path_verify_args {
 	struct dv_indexed_tree_path	*pva_itp;
@@ -303,7 +306,11 @@ compare_key(vos_iter_entry_t *entry, union itp_part_type *part)
 static bool
 compare_recx(vos_iter_entry_t *entry, union itp_part_type *part)
 {
-	return daos_recx_match(part->itp_recx, entry->ie_orig_recx);
+	struct ddb_recx compare = {.drx_nr    = entry->ie_orig_recx.rx_nr,
+				   .drx_idx   = entry->ie_orig_recx.rx_idx,
+				   .drx_epoch = entry->ie_epoch};
+
+	return daos_recx_match(part->itp_recx, compare);
 }
 
 static bool
@@ -338,7 +345,10 @@ set_key(vos_iter_entry_t *entry, union itp_part_type *part)
 static void
 set_recx(vos_iter_entry_t *entry, union itp_part_type *part)
 {
-	itp_part_set_recx(part, &entry->ie_orig_recx);
+	struct ddb_recx d_recx = {.drx_idx   = entry->ie_orig_recx.rx_idx,
+				  .drx_nr    = entry->ie_orig_recx.rx_nr,
+				  .drx_epoch = entry->ie_epoch};
+	itp_part_set_recx(part, &d_recx);
 }
 
 static void
@@ -559,6 +569,7 @@ struct ddb_iter_ctx {
 	daos_key_t			 current_akey;
 	uint32_t			 akey_seen;
 	uint32_t			 value_seen;
+	uint32_t                         iter_flags;
 };
 
 static int
@@ -750,7 +761,11 @@ handle_array(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	struct ddb_array value = {0};
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_array_handler);
-	itp_set_recx(&ctx->itp, &entry->ie_orig_recx, ctx->value_seen);
+	struct ddb_recx recx = {0};
+	recx.drx_nr          = entry->ie_orig_recx.rx_nr;
+	recx.drx_idx         = entry->ie_orig_recx.rx_idx;
+	recx.drx_epoch       = entry->ie_epoch;
+	itp_set_recx(&ctx->itp, &recx, ctx->value_seen);
 	value.ddba_path = &ctx->itp;
 	value.ddba_record_size = entry->ie_rsize;
 	value.ddba_recx = entry->ie_orig_recx;
@@ -793,6 +808,7 @@ iter_cont_recurse_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t 
 	vos_iter_param_t	 cont_param = {0};
 	struct vos_iter_anchors	 anchors = {0};
 	daos_handle_t		 coh;
+	struct ddb_iter_ctx     *ctx = cb_arg;
 	int			 rc;
 
 	D_ASSERT(type == VOS_ITER_COUUID);
@@ -808,6 +824,9 @@ iter_cont_recurse_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t 
 
 	cont_param.ip_hdl = coh;
 	cont_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	cont_param.ip_flags      = ctx->iter_flags;
+	cont_param.ip_epc_expr   = VOS_IT_EPC_RE;
+
 	rc = ddb_vos_iterate(&cont_param, VOS_ITER_OBJ, true, &anchors, handle_iter_cb, cb_arg);
 
 	if (rc != 0)
@@ -828,22 +847,28 @@ iter_cont_recurse(vos_iter_param_t *param, struct ddb_iter_ctx *ctx)
 
 int
 dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
-	   struct vos_tree_handlers *handlers, void *handler_args,
-	   struct dv_indexed_tree_path *itp)
+	   struct vos_tree_handlers *handlers, void *handler_args, struct dv_indexed_tree_path *itp,
+	   bool all_recx)
 {
 	vos_iter_param_t	param = {0};
 	struct vos_iter_anchors	anchors = {0};
 	int			rc;
 	daos_handle_t		coh = DAOS_HDL_INVAL;
 	vos_iter_type_t		type;
-	struct ddb_iter_ctx	ctx = {0};
+	struct ddb_iter_ctx     ctx = {0};
 
 	ctx.handlers = handlers;
 	ctx.handler_args = handler_args;
 	ctx.poh = poh;
 	itp_copy(&ctx.itp, itp);
 
+	if (all_recx)
+		ctx.iter_flags = VOS_IT_RECX_COVERED;
+	else
+		ctx.iter_flags = VOS_IT_RECX_VISIBLE;
+
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	param.ip_epc_expr   = VOS_IT_EPC_RE;
 
 	if (uuid_is_null(path->vtp_cont)) {
 		param.ip_hdl = poh;
@@ -873,6 +898,7 @@ dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
 	param.ip_oid = path->vtp_oid;
 	param.ip_dkey = path->vtp_dkey;
 	param.ip_akey = path->vtp_akey;
+	param.ip_flags = ctx.iter_flags;
 
 	if (!dv_has_obj(path))
 		type = VOS_ITER_OBJ;
@@ -935,6 +961,8 @@ dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dum
 	d_sg_list_t	sgl;
 	daos_handle_t	coh;
 	size_t		data_size;
+	daos_recx_t     recx  = {0};
+	daos_epoch_t    epoch = DAOS_EPOCH_MAX;
 	int		rc;
 
 	d_sgl_init(&sgl, 1);
@@ -943,14 +971,20 @@ dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dum
 	if (!SUCCESS(rc))
 		return rc;
 
+	recx.rx_idx = path->vtp_recx.drx_idx;
+	recx.rx_nr  = path->vtp_recx.drx_nr;
+
 	iod.iod_name = path->vtp_akey;
-	iod.iod_recxs = &path->vtp_recx;
+	iod.iod_recxs = &recx;
 	iod.iod_nr = 1;
 	iod.iod_size = 0;
-	iod.iod_type = path->vtp_recx.rx_nr == 0 ? DAOS_IOD_SINGLE : DAOS_IOD_ARRAY;
+	iod.iod_type  = path->vtp_recx.drx_nr == 0 ? DAOS_IOD_SINGLE : DAOS_IOD_ARRAY;
+	if (path->vtp_recx.drx_epoch > 0) {
+		epoch = path->vtp_recx.drx_epoch;
+	}
 
 	/* First, get record size */
-	rc = vos_obj_fetch(coh, path->vtp_oid, DAOS_EPOCH_MAX, 0, &path->vtp_dkey, 1, &iod, NULL);
+	rc = vos_obj_fetch(coh, path->vtp_oid, epoch, 0, &path->vtp_dkey, 1, &iod, NULL);
 	if (!SUCCESS(rc)) {
 		d_sgl_fini(&sgl, true);
 		vos_cont_close(coh);
@@ -960,15 +994,15 @@ dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dum
 
 	data_size = iod.iod_size;
 
-	if (path->vtp_recx.rx_nr > 0)
-		data_size *= path->vtp_recx.rx_nr;
+	if (path->vtp_recx.drx_nr > 0)
+		data_size *= path->vtp_recx.drx_nr;
 
 	D_ALLOC(sgl.sg_iovs[0].iov_buf, data_size);
 	if (sgl.sg_iovs[0].iov_buf == NULL)
 		return -DER_NOMEM;
 	sgl.sg_iovs[0].iov_buf_len = data_size;
 
-	rc = vos_obj_fetch(coh, path->vtp_oid, DAOS_EPOCH_MAX, 0, &path->vtp_dkey, 1, &iod, &sgl);
+	rc = vos_obj_fetch(coh, path->vtp_oid, epoch, 0, &path->vtp_dkey, 1, &iod, &sgl);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Unable to fetch object: "DF_RC"\n", DP_RC(rc));
 		d_sgl_fini(&sgl, true);
@@ -1415,12 +1449,23 @@ dv_delete(daos_handle_t poh, struct dv_tree_path *vtp)
 	if (!SUCCESS(rc))
 		return rc;
 
-	if (dv_has_akey(vtp))
+	if (dv_has_recx(vtp)) {
+		daos_epoch_range_t epr  = {.epr_lo = vtp->vtp_recx.drx_epoch,
+					   .epr_hi = vtp->vtp_recx.drx_epoch};
+		daos_recx_t        recx = {
+			   .rx_idx = vtp->vtp_recx.drx_idx,
+			   .rx_nr  = vtp->vtp_recx.drx_nr,
+                };
+
+		rc = vos_obj_array_remove(coh, vtp->vtp_oid, &epr, &vtp->vtp_dkey, &vtp->vtp_akey,
+					  &recx);
+	} else if (dv_has_akey(vtp)) {
 		rc = vos_obj_del_key(coh, vtp->vtp_oid, &vtp->vtp_dkey, &vtp->vtp_akey);
-	else if (dv_has_dkey(vtp))
+	} else if (dv_has_dkey(vtp)) {
 		rc = vos_obj_del_key(coh, vtp->vtp_oid, &vtp->vtp_dkey, NULL);
-	else /* delete object */
+	} else { /* delete object */
 		rc = vos_obj_delete(coh, vtp->vtp_oid);
+	}
 
 	dv_cont_close(&coh);
 
@@ -1428,7 +1473,7 @@ dv_delete(daos_handle_t poh, struct dv_tree_path *vtp)
 }
 
 int
-dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov)
+dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov, daos_size_t rec_size)
 {
 	daos_iod_t	iod = {0};
 	d_sg_list_t	sgl = {0};
@@ -1436,6 +1481,7 @@ dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov)
 	daos_handle_t	coh;
 	daos_epoch_t	epoch = 0;
 	uint32_t	pool_ver = 0;
+	daos_recx_t     recx     = {0};
 	int		rc;
 
 	if (!dvp_is_complete(vtp) || iov->iov_len == 0)
@@ -1451,16 +1497,23 @@ dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov)
 
 	iod.iod_name = vtp->vtp_akey;
 	iod.iod_nr = 1;
-	if (vtp->vtp_recx.rx_nr == 0) {
+	epoch        = d_hlc_get();
+
+	if (vtp->vtp_recx.drx_nr == 0) {
 		iod.iod_type = DAOS_IOD_SINGLE;
 		iod.iod_size = iov->iov_len;
 	} else {
 		iod.iod_type = DAOS_IOD_ARRAY;
-		iod.iod_recxs = &vtp->vtp_recx;
-		iod.iod_size = 1;
+		recx.rx_nr    = vtp->vtp_recx.drx_nr;
+		recx.rx_idx   = vtp->vtp_recx.drx_idx;
+		iod.iod_recxs = &recx;
+		iod.iod_size  = rec_size;
+		if (vtp->vtp_recx.drx_epoch > 0)
+			epoch = vtp->vtp_recx.drx_epoch;
+		else
+			vtp->vtp_recx.drx_epoch = epoch;
 	}
 
-	epoch = d_hlc_get();
 	rc = vos_obj_update(coh, vtp->vtp_oid, epoch, pool_ver, flags,
 			    &vtp->vtp_dkey, 1, &iod, NULL, &sgl);
 	if (rc == -DER_NO_PERM)
@@ -1468,7 +1521,8 @@ dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov)
 			"(Array vs SV)\n");
 	if (rc == -DER_REC2BIG)
 		D_ERROR("Unable to update. Data value might not be large enough to fill the "
-			"supplied recx\n");
+			"supplied recx: " DF_RECX ", iov_len: " DF_U64 "\n",
+			DP_RECX(recx), sgl.sg_iovs[0].iov_len);
 	d_sgl_fini(&sgl, false);
 	dv_cont_close(&coh);
 
@@ -1501,10 +1555,17 @@ find_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 		break;
 	case VOS_ITER_SINGLE:
 		break;
-	case VOS_ITER_RECX:
-		if (daos_recx_match(path->vtp_recx, entry->ie_orig_recx))
+	case VOS_ITER_RECX: {
+		struct ddb_recx compare = {.drx_nr    = entry->ie_orig_recx.rx_nr,
+					   .drx_idx   = entry->ie_orig_recx.rx_idx,
+					   .drx_epoch = 0};
+		if (path->vtp_recx.drx_epoch > 0)
+			/* Only compare epochs if specified in path */
+			compare.drx_epoch = path->vtp_recx.drx_epoch;
+		if (daos_recx_match(path->vtp_recx, compare))
 			return 1;
 		break;
+	}
 	case VOS_ITER_DTX:
 		break;
 	}
@@ -1554,7 +1615,7 @@ ddb_vtp_verify(daos_handle_t poh, struct dv_tree_path *vtp)
 	if (vtp->vtp_akey.iov_len > 0 && !part_is_valid(coh, vtp, VOS_ITER_AKEY))
 		D_GOTO(done, rc = -DER_NONEXIST);
 
-	if (vtp->vtp_recx.rx_nr > 0 && !part_is_valid(coh, vtp, VOS_ITER_RECX))
+	if (vtp->vtp_recx.drx_nr > 0 && !part_is_valid(coh, vtp, VOS_ITER_RECX))
 		D_GOTO(done, rc = -DER_NONEXIST);
 
 done:
@@ -1824,7 +1885,7 @@ dv_enumerate_vea(daos_handle_t poh, dv_vea_extent_handler cb, void *cb_arg)
 	pool = vos_hdl2pool(poh);
 	vsi = pool->vp_vea_info;
 	if (vsi == NULL)
-		return -DER_NONEXIST;
+		return 0; /* VEA not loaded, no NVME */
 
 	rc = vea_enumerate_free(vsi, vea_free_extent_cb, &args);
 	if (!SUCCESS(rc))

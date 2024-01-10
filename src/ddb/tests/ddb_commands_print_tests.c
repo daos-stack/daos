@@ -149,7 +149,7 @@ print_sv_test(void **state)
 	struct ddb_sv sv = {.ddbs_record_size = 19089555};
 
 	ddb_print_sv(&g_ctx, &sv, 0);
-	assert_printed_exact("[0] Single Value (Length: 19089555 bytes)\n");
+	assert_printed_exact("Single Value Length: 19089555 bytes\n");
 }
 
 static void

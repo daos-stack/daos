@@ -43,8 +43,7 @@ struct ddb_array {
 	uint64_t			ddba_record_size;
 	daos_recx_t			ddba_recx;
 	uint32_t			ddba_idx;
-	struct dv_indexed_tree_path	*ddba_path;
-
+	struct dv_indexed_tree_path    *ddba_path;
 };
 
 /* Open and close a pool for a ddb_ctx */
@@ -81,9 +80,10 @@ struct vos_tree_handlers {
  * @param handler_args	arguments to the handlers
  * @return		0 if success, else error
  */
-int dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
-	       struct vos_tree_handlers *handlers, void *handler_args,
-	       struct dv_indexed_tree_path *itp);
+int
+    dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
+	       struct vos_tree_handlers *handlers, void *handler_args, struct dv_indexed_tree_path *itp,
+	       bool all_recx);
 
 /* need a special function to get a container idx */
 int dv_get_cont_idx(daos_handle_t poh, uuid_t uuid);
@@ -93,8 +93,9 @@ int dv_get_object_oid(daos_handle_t coh, uint32_t idx, daos_unit_oid_t *uoid);
 int dv_get_dkey(daos_handle_t coh, daos_unit_oid_t uoid, uint32_t idx, daos_key_t *dkey);
 int dv_get_akey(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, uint32_t idx,
 		daos_key_t *akey);
-int dv_get_recx(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, daos_key_t *akey,
-		uint32_t idx, daos_recx_t *recx);
+int
+    dv_get_recx(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, daos_key_t *akey,
+		uint32_t idx, struct ddb_recx *recx);
 
 /**
  * Verify and update the tree path within the builder. For any indexes set in the builder, will
@@ -189,7 +190,8 @@ typedef int (*dv_vea_extent_handler)(void *cb_arg, struct vea_free_extent *free_
 int dv_enumerate_vea(daos_handle_t poh, dv_vea_extent_handler cb, void *cb_arg);
 int dv_vea_free_region(daos_handle_t poh, uint32_t offset, uint32_t blk_cnt);
 int dv_delete(daos_handle_t poh, struct dv_tree_path *vtp);
-int dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov);
+int
+     dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov, daos_size_t rec_size);
 
 void dv_oid_to_obj(daos_obj_id_t oid, struct ddb_obj *obj);
 

@@ -7,7 +7,7 @@
 #include "ddb_printer.h"
 
 static void
-print_indent(struct ddb_ctx *ctx, int c)
+print_indent(struct ddb_ctx *ctx, uint32_t c)
 {
 	int i;
 
@@ -135,9 +135,7 @@ void
 ddb_print_sv(struct ddb_ctx *ctx, struct ddb_sv *sv, uint32_t indent)
 {
 	print_indent(ctx, indent);
-	ddb_printf(ctx, DF_IDX" Single Value (Length: "DF_U64" bytes)\n",
-		   sv->ddbs_idx,
-		   sv->ddbs_record_size);
+	ddb_printf(ctx, "Single Value Length: " DF_U64 " bytes\n", sv->ddbs_record_size);
 }
 
 void

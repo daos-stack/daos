@@ -120,6 +120,7 @@ enum ddb_cmd {
 struct ls_options {
 	bool recursive;
 	bool details;
+	bool  all_recx;
 	char *path;
 };
 
