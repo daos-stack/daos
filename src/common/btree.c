@@ -1610,8 +1610,11 @@ btr_probe_embedded(struct btr_context *tcx, dbtree_probe_opc_t probe_opc, uint32
 			 * key for the embedded record
 			 */
 			rc2 = btr_embedded_create_hash(tcx, true);
-			if (rc2 != 0)
-				return rc2;
+			if (rc2 != 0) {
+				D_ERROR("Could not create hash key from anchor: " DF_RC "\n",
+					DP_RC(rc2));
+				D_GOTO(out, rc = PROBE_RC_ERR);
+			}
 			cmp       = btr_hkey_cmp(tcx, rec, &hkey[0]);
 			hash_flag = BTR_EMBEDDED_HASH;
 		}
@@ -1648,6 +1651,7 @@ btr_probe_embedded(struct btr_context *tcx, dbtree_probe_opc_t probe_opc, uint32
 
 	/** Static asserts are in place to ensure this works */
 	btr_trace_set(tcx, 0, rec->rec_off, 0, hash_flag | BTR_EMBEDDED_SET | cmp);
+out:
 	tcx->tc_probe_rc = rc;
 	if (rc == PROBE_RC_ERR)
 		D_ERROR("Failed to probe: rc = %d\n", tcx->tc_probe_rc);
