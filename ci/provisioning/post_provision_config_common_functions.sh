@@ -274,9 +274,6 @@ set_local_repo() {
             dnf -y config-manager \
                 --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
         fi
-        # Disable module filtering for our deps repo
-        deps_repo="daos-stack-deps-${DISTRO_GENERIC}-${VERSION_ID%%.*}-x86_64-stable-local-artifactory"
-        dnf config-manager --save --setopt "$deps_repo.module_hotfixes=true" "$deps_repo"
     fi
 
     dnf repolist
@@ -374,10 +371,10 @@ post_provision_config_nodes() {
             fi
         fi
         local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/$DISTRO_NAME/
-        dnf -y config-manager --add-repo="${repo_url}"
-        # Disable module filtering
-        repo=$(url_to_repo "$repo_url")
-        dnf config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
+        dnf -y config-manager --add-repo="$repo_url"
+        repo="$(url_to_repo "$repo_url")"
+        # PR-repos: should always be able to upgrade modular packages
+        dnf -y config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
         disable_gpg_check "$repo_url"
     done
 
