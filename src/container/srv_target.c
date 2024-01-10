@@ -859,7 +859,7 @@ ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child)
 		DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
 
 	d_list_for_each_entry(cont_child, &pool_child->spc_cont_list, sc_link)
-		cont_child->sc_ec_agg_eph = 0;
+		cont_child->sc_ec_agg_eph = cont_child->sc_ec_agg_eph_boundary;
 }
 
 static int
