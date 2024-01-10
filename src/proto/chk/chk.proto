@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -221,4 +221,5 @@ message CheckReport {
         repeated CheckInconsistAction act_choices = 16; // Interactive mode options (first is suggested).
         repeated string act_details = 17; // Details for each potential action (length should match actions).
         repeated string act_msgs = 18; // Formatted messages containing details for each action choice.
+	bool            dryrun   = 19; // Report was generated in dryrun mode (no changes made).
 }

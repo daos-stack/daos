@@ -1649,7 +1649,7 @@ const ProtobufCMessageDescriptor mgmt__check_query_pool__descriptor =
   (ProtobufCMessageInit) mgmt__check_query_pool__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[7] =
+static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[8] =
 {
   {
     "req_status",
@@ -1688,8 +1688,20 @@ static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "inconsistency",
+    "dryrun",
     4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__CheckQueryResp, dryrun),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "inconsistency",
+    5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
@@ -1701,7 +1713,7 @@ static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[
   },
   {
     "time",
-    5,
+    6,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_MESSAGE,
     0,   /* quantifier_offset */
@@ -1713,7 +1725,7 @@ static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[
   },
   {
     "pools",
-    6,
+    7,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__CheckQueryResp, n_pools),
@@ -1725,7 +1737,7 @@ static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[
   },
   {
     "reports",
-    7,
+    8,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_MESSAGE,
     offsetof(Mgmt__CheckQueryResp, n_reports),
@@ -1737,18 +1749,19 @@ static const ProtobufCFieldDescriptor mgmt__check_query_resp__field_descriptors[
   },
 };
 static const unsigned mgmt__check_query_resp__field_indices_by_name[] = {
-  3,   /* field[3] = inconsistency */
+  3,   /* field[3] = dryrun */
+  4,   /* field[4] = inconsistency */
   2,   /* field[2] = ins_phase */
   1,   /* field[1] = ins_status */
-  5,   /* field[5] = pools */
-  6,   /* field[6] = reports */
+  6,   /* field[6] = pools */
+  7,   /* field[7] = reports */
   0,   /* field[0] = req_status */
-  4,   /* field[4] = time */
+  5,   /* field[5] = time */
 };
 static const ProtobufCIntRange mgmt__check_query_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 7 }
+  { 0, 8 }
 };
 const ProtobufCMessageDescriptor mgmt__check_query_resp__descriptor =
 {
@@ -1758,7 +1771,7 @@ const ProtobufCMessageDescriptor mgmt__check_query_resp__descriptor =
   "Mgmt__CheckQueryResp",
   "mgmt",
   sizeof(Mgmt__CheckQueryResp),
-  7,
+  8,
   mgmt__check_query_resp__field_descriptors,
   mgmt__check_query_resp__field_indices_by_name,
   1,  mgmt__check_query_resp__number_ranges,

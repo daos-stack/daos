@@ -3250,6 +3250,7 @@ chk_leader_query(int pool_nr, uuid_t pools[], chk_query_head_cb_t head_cb,
 	int				 rc;
 	int				 i;
 	bool				 skip;
+	bool                             dryrun = false;
 
 	/*
 	 * NOTE: Similar as stop case, we need the ability to query check information from
@@ -3330,11 +3331,13 @@ again:
 		}
 	}
 
+	dryrun = ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN;
 	status = cbk->cb_ins_status;
 	phase = cbk->cb_phase;
 	chk_ins_merge_info(&status, cqa->cqa_ins_status, &phase, cqa->cqa_ins_phase, &gen,
 			   cqa->cqa_gen);
-	rc = head_cb(status, phase, &cbk->cb_statistics, &cbk->cb_time, cqa->cqa_count, buf);
+	rc = head_cb(status, phase, &cbk->cb_statistics, &cbk->cb_time, cqa->cqa_count, dryrun, 
+		     buf);
 	if (rc != 0)
 		goto out;
 
@@ -3529,6 +3532,7 @@ chk_leader_report(struct chk_report_unit *cru, uint64_t *seq, int *decision)
 	struct chk_rank_rec	*crr = NULL;
 	d_iov_t			 kiov;
 	d_iov_t			 riov;
+	bool                     dryrun = false;
 	int			 rc;
 
 	if (cbk->cb_magic != CHK_BK_MAGIC_LEADER)
@@ -3585,11 +3589,12 @@ new_seq:
 			goto log;
 	}
 
+	dryrun = ins->ci_prop.cp_flags & CHK__CHECK_FLAG__CF_DRYRUN;
 	rc = chk_report_upcall(cru->cru_gen, *seq, cru->cru_cla, cru->cru_act, cru->cru_result,
 			       cru->cru_rank, cru->cru_target, cru->cru_pool, cru->cru_pool_label,
 			       cru->cru_cont, cru->cru_cont_label, cru->cru_obj, cru->cru_dkey,
 			       cru->cru_akey, cru->cru_msg, cru->cru_option_nr, cru->cru_options,
-			       cru->cru_detail_nr, cru->cru_details);
+			       cru->cru_detail_nr, cru->cru_details, dryrun);
 	/* Check cpr->cpr_action for the case of "dmg check repair" by race. */
 	if (rc == 0 && pool != NULL &&
 	    likely(cpr->cpr_action == CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT))

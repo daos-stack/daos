@@ -52,7 +52,7 @@ void   chk__check_report__free_unpacked
   assert(message->base.descriptor == &chk__check_report__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[18] =
+static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[19] =
 {
   {
     "seq",
@@ -270,6 +270,18 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[18] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "dryrun",
+    19,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Chk__CheckReport, dryrun),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned chk__check_report__field_indices_by_name[] = {
   15,   /* field[15] = act_choices */
@@ -281,6 +293,7 @@ static const unsigned chk__check_report__field_indices_by_name[] = {
   9,   /* field[9] = cont_label */
   8,   /* field[8] = cont_uuid */
   11,   /* field[11] = dkey */
+  18,   /* field[18] = dryrun */
   14,   /* field[14] = msg */
   10,   /* field[10] = objid */
   7,   /* field[7] = pool_label */
@@ -294,7 +307,7 @@ static const unsigned chk__check_report__field_indices_by_name[] = {
 static const ProtobufCIntRange chk__check_report__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 18 }
+  { 0, 19 }
 };
 const ProtobufCMessageDescriptor chk__check_report__descriptor =
 {
@@ -304,7 +317,7 @@ const ProtobufCMessageDescriptor chk__check_report__descriptor =
   "Chk__CheckReport",
   "chk",
   sizeof(Chk__CheckReport),
-  18,
+  19,
   chk__check_report__field_descriptors,
   chk__check_report__field_indices_by_name,
   1,  chk__check_report__number_ranges,

@@ -360,6 +360,10 @@ struct  _Mgmt__CheckQueryResp
    */
   Chk__CheckScanPhase ins_phase;
   /*
+   * Dryrun indicates that the checker is running in dry-run mode (i.e. no changes made).
+   */
+  protobuf_c_boolean dryrun;
+  /*
    * Inconsistency statistics during the phases range
    * [CSP_PREPARE, CSP_POOL_LIST] for the whole system.
    */
@@ -381,7 +385,7 @@ struct  _Mgmt__CheckQueryResp
 };
 #define MGMT__CHECK_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_query_resp__descriptor) \
-    , 0, CHK__CHECK_INST_STATUS__CIS_INIT, CHK__CHECK_SCAN_PHASE__CSP_PREPARE, NULL, NULL, 0,NULL, 0,NULL }
+    , 0, CHK__CHECK_INST_STATUS__CIS_INIT, CHK__CHECK_SCAN_PHASE__CSP_PREPARE, 0, NULL, NULL, 0,NULL, 0,NULL }
 
 
 /*
