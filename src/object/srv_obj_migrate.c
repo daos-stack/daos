@@ -1110,7 +1110,12 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 
 		offset = iods[i].iod_recxs[0].rx_idx;
 		size = iods[i].iod_recxs[0].rx_nr;
-		parity_eph = ephs[i][0];
+		/* Use stable epoch for partial parity update to make sure
+		 * these partial updates are not below stable epoch boundary,
+		 * otherwise both EC and VOS aggregation might operate on
+		 * the same recxs.
+		 */
+		parity_eph = encode ? ephs[i][0] : mrone->mo_epoch;
 		tmp_iod = iods[i];
 		ptr = iov[i].iov_buf;
 		for (j = 1; j < iods[i].iod_nr; j++) {

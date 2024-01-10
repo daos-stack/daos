@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1304,6 +1304,9 @@ rebuild_ec_parity_overwrite_fail_parity_internal(void **state, int *kill_shards,
 	parity_rank = get_rank_by_oid_shard(arg, oid, shard_idx);
 	rebuild_single_pool_rank(arg, parity_rank, true);
 
+	print_message("sleep 60 seconds for aggregation\n");
+	sleep(60);
+
 	/* fail data shard */
 	for (i = 0; i < nr; i++) {
 		shard_idx = (dkey_hash % 6 + kill_shards[i]) % 6;
@@ -1487,7 +1490,7 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD46: fail parity shard and data shards after overwrite",
 	 rebuild_ec_overwrite_fail_parity_data, rebuild_ec_8nodes_setup,
 	 test_teardown},
-	{"REBUILD46: fail parity shard and data shards after overwrite with aggregation",
+	{"REBUILD47: fail parity shard and data shards after overwrite with aggregation",
 	 rebuild_ec_overwrite_fail_parity_data_with_parity, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };

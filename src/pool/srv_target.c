@@ -1475,6 +1475,7 @@ update_child_map(void *data)
 	if (child == NULL)
 		return -DER_NONEXIST;
 
+	ds_cont_child_reset_ec_agg_eph_all(child);
 	child->spc_map_version = pool->sp_map_version;
 	ds_pool_child_put(child);
 	return 0;
