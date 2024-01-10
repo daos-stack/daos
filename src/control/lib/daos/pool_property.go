@@ -106,7 +106,7 @@ func PoolProperties() PoolPropertyMap {
 						return nil, oeErr
 					}
 					if oeVal > 1 {
-						return nil, oeErr
+						return nil, errors.Wrap(oeErr, "value supplied is greater than 1")
 					}
 					return &PoolPropertyValue{oeVal}, nil
 				},

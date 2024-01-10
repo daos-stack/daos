@@ -828,8 +828,11 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 		rc = rdb_get_size(tx->dt_db, &rdb_size);
 		if (rc != 0)
 			goto out_map_buf;
-		if (rdb_size < DUP_OP_MIN_RDB_SIZE)
+		if (rdb_size < DUP_OP_MIN_RDB_SIZE) {
 			svc_ops_enabled = 0;
+			D_WARN("pool duplicate ops detection disabled due to rdb size %zu < %u\n",
+			       rdb_size, DUP_OP_MIN_RDB_SIZE);
+		}
 	}
 	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
 	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_ops_enabled, &value);
@@ -2833,8 +2836,6 @@ pool_op_check_delete_oldest(struct rdb_tx *tx, struct pool_svc *svc, bool dup_op
 	uint64_t                  t1_sec;
 	uint64_t                  t2_sec;
 	uint64_t                  age_sec;
-	uint32_t                  num_deleted = 0;
-	bool                      need_delete = false;
 
 	if (svc->ps_ops_enabled == 0)
 		return 0;
@@ -2855,26 +2856,25 @@ pool_op_check_delete_oldest(struct rdb_tx *tx, struct pool_svc *svc, bool dup_op
 		return rc;
 	}
 
-	/* If number of RPCs is at the limit, or the oldest is more than 5 minutes old,
+	/* If number of RPCs is at the limit, or the oldest is more than ps_ops_age old,
 	 * delete the oldest entry. TODO: evict many/all such entries (during periodic cleanup?).
 	 */
 	t1_sec  = d_hlc2sec(k1.ok_client_time);
 	t2_sec  = d_hlc2sec(d_hlc_get());
 	age_sec = t2_sec - t1_sec;
 
-	if ((*svc_ops_num >= svc->ps_ops_max) || (age_sec > svc->ps_ops_age))
-		need_delete = true;
+	if ((*svc_ops_num < svc->ps_ops_max) && (age_sec <= svc->ps_ops_age))
+		return 0;
 
-	if (need_delete) {
-		rc = rdb_tx_delete(tx, &svc->ps_ops, &key1_enc);
-		if (rc != 0) {
-			DL_ERROR(rc, "failed to delete oldest entry in ps_ops");
-			return rc;
-		}
-		num_deleted++;
+	D_DEBUG(DB_MD, DF_UUID ": will delete oldest entry, svc_ops_num=%u, age=%zu sec\n",
+		DP_UUID(svc->ps_uuid), *svc_ops_num, age_sec);
+	rc = rdb_tx_delete(tx, &svc->ps_ops, &key1_enc);
+	if (rc != 0) {
+		DL_ERROR(rc, "failed to delete oldest entry in ps_ops");
+		return rc;
 	}
 
-	*svc_ops_num -= num_deleted;
+	*svc_ops_num -= 1;
 	return 0;
 }
 

@@ -88,8 +88,8 @@ typedef uint64_t rdb_oid_t;
 /* Object ID class (see rdb_oid_t) */
 #define RDB_OID_CLASS_MASK    (3ULL << 62)
 #define RDB_OID_CLASS_GENERIC (0ULL << 62)
-#define RDB_OID_CLASS_INTEGER (1ULL << 62)
-#define RDB_OID_CLASS_LEXICAL (2ULL << 62)
+#define RDB_OID_CLASS_INTEGER (2ULL << 62)
+#define RDB_OID_CLASS_LEXICAL (1ULL << 62)
 
 /* D-key for all a-keys */
 extern d_iov_t rdb_dkey;

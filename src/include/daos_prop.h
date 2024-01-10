@@ -252,6 +252,7 @@ enum {
 #define DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT 50 /* 50 % WAL capacity */
 #define DAOS_PROP_PO_CHECKPOINT_THRESH_MAX     75 /* 75 % WAL capacity */
 #define DAOS_PROP_PO_CHECKPOINT_THRESH_MIN     10 /* 10 % WAL capacity */
+#define DAOS_PROP_PO_SVC_OPS_ENABLED_DEFAULT   1  /* true: enabled by default */
 
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
