@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -287,7 +287,7 @@ class CoreFileProcessing():
             cmds.append(["sudo", "rm", "-f", path])
 
         if self.USE_DEBUGINFO_INSTALL:
-            dnf_args = ["--exclude", "ompi-debuginfo"]
+            dnf_args = ["--nobest", "--exclude", "ompi-debuginfo"]
             if os.getenv("TEST_RPMS", 'false') == 'true':
                 if "suse" in self.distro_info.name.lower():
                     dnf_args.extend(["libpmemobj1", "python3", "openmpi3"])
@@ -324,7 +324,6 @@ class CoreFileProcessing():
         if self.is_el() or "suse" in self.distro_info.name.lower():
             cmd.append("--enablerepo=*debug*")
         cmd.append("install")
-        cmd.append("--nobest")  # DAOS-14900
         for pkg in install_pkgs:
             try:
                 cmd.append(f"{pkg['name']}-{pkg['version']}-{pkg['release']}")
