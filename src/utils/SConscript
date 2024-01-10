@@ -22,6 +22,7 @@ def scons():
         # Build crt_launch
         SConscript('crt_launch/SConscript')
 
+    if prereqs.server_requested():
         # Build daos_metrics
         SConscript('daos_metrics/SConscript')
 
