@@ -314,7 +314,9 @@ ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
 
-	/** For embedded value, we periodically need to fetch just the key */
+	/** For embedded value, we sometimes only need to fetch the key,
+	 *  to generate the hash.
+	 */
 	if (rbund == NULL) {
 		D_ASSERT(key_iov != NULL);
 		kbuf = vos_krec2key(krec);

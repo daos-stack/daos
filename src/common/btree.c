@@ -195,18 +195,21 @@ btr_has_tx(struct btr_context *tcx)
 	return umem_has_tx(btr_umm(tcx));
 }
 
+/** The tree has support for the embedded value feature */
 static inline bool
 btr_supports_embedded_value(struct btr_context *tcx)
 {
 	return (tcx->tc_feats & BTR_FEAT_EMBED_FIRST) != 0;
 }
 
+/** Returns true if we should insert an embedded value */
 static bool
 btr_use_embedded_value(struct btr_context *tcx)
 {
 	return (btr_supports_embedded_value(tcx) && tcx->tc_depth == 0);
 }
 
+/** Returns true if the tree currently has an embedded value */
 static bool
 btr_has_embedded_value(struct btr_context *tcx)
 {
@@ -984,6 +987,7 @@ btr_embedded_create_hash(struct btr_context *tcx, bool force)
 			return rc;
 		}
 		btr_hkey_gen(tcx, &old_key, &rec->rec_hkey[0]);
+		btr_embedded_hash_set(tcx);
 	}
 
 	return 0;
@@ -1043,7 +1047,6 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec, d_iov_t *key, bo
 			rc = btr_embedded_create_hash(tcx, false);
 			if (rc != 0)
 				return rc;
-			btr_embedded_hash_set(tcx);
 
 			cmp = btr_hkey_cmp(tcx, existing_rec, &rec->rec_hkey[0]);
 		} else {
@@ -1771,7 +1774,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	D_ASSERT(!UMOFF_IS_NULL(nd_off));
 
 	btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
-	btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
 
 	if (cmp == BTR_CMP_EQ && key && btr_has_collision(tcx)) {
 		cmp = btr_cmp(tcx, nd_off, at, NULL, key);
@@ -2335,7 +2337,7 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 		}
 
 	} else {
-		/* empty tree */
+		/* Tree is either empty or only has an embedded value */
 		D_DEBUG(DB_TRACE, "Add record %s to %s\n", rec_str,
 			btr_has_embedded_value(tcx) ? "tree with embedded value" : "empty tree");
 
@@ -2559,6 +2561,7 @@ btr_node_del_embed(struct btr_context *tcx, struct btr_trace *trace, struct btr_
 		return rc;
 
 	/** Now handle the embedding */
+	D_ASSERT(trace->tr_at <= 1);
 	rec = btr_node_rec_at(tcx, trace->tr_node, 1 - trace->tr_at);
 
 	if (btr_has_tx(tcx)) {
@@ -4490,12 +4493,13 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 
 	if ((*tree_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) ==
 	    (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) {
-		/** Integer keys are incompatible with this optimization so
-		 * disable it.  The reason is we want to embed the user
-		 * allocated offset in the tree root.  The key is normally
-		 * stored in this record but with integer keys, it's stored
-		 * in the btr_record. Therefore, we can't save an allocation
-		 * with integer keys making this optimization useless.
+		/** The key is normally stored in value but with integer
+		 * keys, it's stored in the btr_record. While we would
+		 * save an indirection if we added 8 bytes to the value
+		 * allocation, we would have 8 unrecoverable bytes stored
+		 * with that value.  It would also add some complication
+		 * to the key retrieval logic.  For now, integer keys are
+		 * not supported for this optimization.
 		 */
 		*tree_feats ^= BTR_FEAT_EMBED_FIRST;
 	}
