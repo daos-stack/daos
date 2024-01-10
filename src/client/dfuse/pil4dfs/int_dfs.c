@@ -2576,7 +2576,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	if (dirfd >= FD_FILE_BASE && dirfd < FD_DIR_BASE) {
 		if (path[0] == 0 && flags & AT_EMPTY_PATH)
 			/* same as fstat for a file. May need further work to handle flags */
-			return fstat(dirfd, stat_buf);
+			return new_fxstat(ver, dirfd, stat_buf);
 		else if (path[0] == 0)
 			error = ENOENT;
 		else
