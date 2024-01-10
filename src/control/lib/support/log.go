@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -61,10 +62,11 @@ type LogTypeSubCmd struct {
 }
 
 const (
-	MMDD        = "1-2"
-	HHMMSS      = "15:04:05"
-	MMDDHHMMSS  = "1/2-15:04:05"
-	MMDD_HHMMSS = "1/2 15:04:05"
+	MMDD            = "1-2"
+	HHMMSS          = "15:4:5"
+	MMDDHHMMSS      = "1/2-15:4:5"
+	MMDD_HHMMSS     = "1/2 15:4:5"
+	YYYYMMDD_HHMMSS = "2006/1/2 15:4:5"
 )
 
 // Folder names to copy logs and configs
@@ -716,6 +718,7 @@ func getDateTime(log logging.Logger, opts ...CollectLogsParams) (time.Time, time
 
 // Copy only specific lines from the server logs based on the Start/End date and time, provided by user.
 func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ...CollectLogsParams) error {
+
 	// Copy the full log file in case of no dates provided
 	if opts[0].LogStartDate == "" && opts[0].LogEndDate == "" {
 		return cpLogFile(srcFile, destFile, log)
@@ -746,13 +749,14 @@ func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ..
 	// Compare the date/time stamp against user provided date/time.
 	scanner := bufio.NewScanner(readFile)
 	var cpLogLine bool
-
 	if opts[0].LogCmd == "EngineLog" {
+		var validDateTime = regexp.MustCompile(`^\d\d\/\d\d-\d\d:\d\d:\d\d.\d\d`)
 		for scanner.Scan() {
 			lineData := scanner.Text()
 			lineDataSlice := strings.Split(lineData, " ")
 
-			if strings.ContainsAny(lineDataSlice[0], "-") == false {
+			// Verify if log line has date/time stamp and copy line if it's in range.
+			if validDateTime.MatchString(lineData) == false {
 				if cpLogLine {
 					_, err = writeFile.WriteString(lineData + "\n")
 					if err != nil {
@@ -763,31 +767,10 @@ func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ..
 			}
 
 			dateTime := strings.Split(lineDataSlice[0], "-")
-
-			// Copy line if it's in the user define range, even there is no date/time in log line
-			if len(dateTime) < 1 {
-				if cpLogLine {
-					_, err = writeFile.WriteString(lineData + "\n")
-					if err != nil {
-						return err
-					}
-				}
-				continue
-			}
-
-			if strings.ContainsAny(dateTime[1], ".") == false {
-				if cpLogLine {
-					_, err = writeFile.WriteString(lineData + "\n")
-					if err != nil {
-						return err
-					}
-				}
-				continue
-			}
-
 			timeOnly := strings.Split(dateTime[1], ".")
 			expDateTime := fmt.Sprintf("%s-%s", dateTime[0], timeOnly[0])
 			expLogTime, _ := time.Parse(MMDDHHMMSS, expDateTime)
+
 			// Copy line, if the log line has time stamp between the given range of start/end date and time.
 			if expLogTime.After(actStartTime) && expLogTime.Before(actEndTime) {
 				cpLogLine = true
@@ -810,19 +793,12 @@ func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ..
 	}
 
 	// Copy log line for Helper and Control log
-	// Set the date position for log file according to Helper or Control Log option.
-	datePosition := 1
-	if opts[0].LogCmd == "ControlLog" {
-		datePosition = 2
-	}
-
-	// Loop through each line and identify the date and time of each log line.
-	// Compare the date/time stamp against user provided date/time for Control/Helper Log
 	for scanner.Scan() {
+		var validDateTime = regexp.MustCompile(`\d\d\d\d/\d\d/\d\d \d\d:\d\d:\d\d`)
 		lineData := scanner.Text()
-		lineDataSlice := strings.Split(lineData, " ")
-		// Copy line if it's in the user define range, even there is no date/time in log line
-		if len(lineDataSlice) < (datePosition + 2) {
+
+		// Verify if log line has date/time stamp and copy line if it's in range.
+		if validDateTime.MatchString(lineData) == false {
 			if cpLogLine {
 				_, err = writeFile.WriteString(lineData + "\n")
 				if err != nil {
@@ -832,54 +808,11 @@ func cpLinesFromLog(log logging.Logger, srcFile string, destFile string, opts ..
 			continue
 		}
 
-		// Copy line if it's in the user define range, and line does not have the date format
-		if strings.ContainsAny(lineDataSlice[datePosition], "/") == false {
-			if cpLogLine {
-				_, err = writeFile.WriteString(lineData + "\n")
-				if err != nil {
-					return err
-				}
-			}
-			continue
-		}
-
-		// Copy the log line if there is no time but it's in the user defined range.
-		dateOnly := strings.Split(lineDataSlice[datePosition], "/")
-		if len(dateOnly) != 3 {
-			if cpLogLine {
-				_, err = writeFile.WriteString(lineData + "\n")
-				if err != nil {
-					return err
-				}
-			}
-			continue
-		}
-
-		// Copy the log line if there is no time but it's in the user defined range.
-		if strings.ContainsAny(lineDataSlice[datePosition+1], ":") == false {
-			if cpLogLine {
-				_, err = writeFile.WriteString(lineData + "\n")
-				if err != nil {
-					return err
-				}
-			}
-			continue
-		}
-
-		//Copy the line if time split doesn't have the required length but it's in user defined range.
-		timeCheck := strings.Split(lineDataSlice[datePosition+1], ":")
-		if len(timeCheck) != 3 {
-			if cpLogLine {
-				_, err = writeFile.WriteString(lineData + "\n")
-				if err != nil {
-					return err
-				}
-			}
-			continue
-		}
-
-		expDateTime := fmt.Sprintf("%s/%s %s", dateOnly[1], dateOnly[2], lineDataSlice[datePosition+1])
+		data := validDateTime.FindAllString(lineData, -1)
+		tm, _ := time.Parse(YYYYMMDD_HHMMSS, data[0])
+		expDateTime := fmt.Sprintf("%d/%d %d:%d:%d", int(tm.Month()), tm.Day(), tm.Hour(), tm.Minute(), tm.Second())
 		expLogTime, _ := time.Parse(MMDD_HHMMSS, expDateTime)
+
 		// Copy line, if the log line has time stamp between the given range of start/end date and time.
 		if expLogTime.After(actStartTime) && expLogTime.Before(actEndTime) {
 			cpLogLine = true
