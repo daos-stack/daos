@@ -5,7 +5,7 @@
 """
 
 from avocado.core.exceptions import TestFail
-from general_utils import DaosTestError, percent_change
+from general_utils import percent_change, DaosTestError
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
 
@@ -34,9 +34,9 @@ class IorPerRank(IorTestBase):
         self.add_pool(connect=False, target_list=[rank])
 
         # execute ior on given rank for different transfer sizes and collect the results
-        for idx, transfer_size in enumerate(self.transfer_sizes):
+        for idx, _ in enumerate(self.transfer_sizes):
             try:
-                self.ior_cmd.transfer_size.update(transfer_size)
+                self.ior_cmd.transfer_size.update(self.transfer_sizes[idx])
                 self.ior_cmd.flags.update(self.write_flags)
                 dfs_out = self.run_ior_with_pool(fail_on_warning=self.log.info)
                 dfs_perf_write = IorCommand.get_ior_metrics(dfs_out)
@@ -52,13 +52,13 @@ class IorPerRank(IorTestBase):
                 if idx == 0:
                     dfs_max_write = float(dfs_perf_write[0][IorMetrics.MAX_MIB])
                     dfs_max_read = float(dfs_perf_read[0][IorMetrics.MAX_MIB])
-                    actual_write_x = percent_change(dfs_max_write, self.expected_bw)
-                    actual_read_x = percent_change(dfs_max_read, self.expected_bw)
+                    actual_write_x = percent_change(self.expected_bw, dfs_max_write)
+                    actual_read_x = percent_change(self.expected_bw, dfs_max_read)
                 else:
                     dfs_max_write = float(dfs_perf_write[0][IorMetrics.MAX_OPS])
                     dfs_max_read = float(dfs_perf_read[0][IorMetrics.MAX_OPS])
-                    actual_write_x = percent_change(dfs_max_write, self.expected_iops)
-                    actual_read_x = percent_change(dfs_max_read, self.expected_iops)
+                    actual_write_x = percent_change(self.expected_iops, dfs_max_write)
+                    actual_read_x = percent_change(self.expected_iops, dfs_max_read)
 
                 # compare actual and expected perf data
                 self.assertLessEqual(abs(actual_write_x), self.write_x,
@@ -68,9 +68,9 @@ class IorPerRank(IorTestBase):
                 # collect list of good nodes
                 good_node = self.server_managers[0].get_host(rank)
                 if ((good_node not in self.good_nodes)
-                        and (good_node not in self.failed_nodes)):
+                        and (good_node not in self.failed_nodes.keys())):
                     self.good_nodes.append(good_node)
-            except (TestFail, DaosTestError):
+            except (TestFail, DaosTestError) as _error:
                 # collect bad nodes
                 failed_node = self.server_managers[0].get_host(rank)
                 if failed_node not in self.failed_nodes:
@@ -102,8 +102,8 @@ class IorPerRank(IorTestBase):
         self.failed_nodes = {}
         self.good_nodes = []
         self.transfer_sizes = self.params.get("transfer_sizes", self.ior_cmd.namespace)
-        self.write_flags = self.params.get("write_flags", self.ior_cmd.namespace)
-        self.read_flags = self.params.get("read_flags", self.ior_cmd.namespace)
+        self.write_flags = self.params.get("write_flags", '/run/ior/*')
+        self.read_flags = self.params.get("read_flags", '/run/ior/*')
 
         # Write/Read performance thresholds and expectations
         self.write_x = self.params.get("write_x", self.ior_cmd.namespace, None)

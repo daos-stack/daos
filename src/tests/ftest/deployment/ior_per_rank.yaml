@@ -21,8 +21,7 @@ server_config:
       log_file: daos_server1.log
       storage: auto
 pool:
-  mode: 146
-  size: 750G # Cannot use percentage, as it does not work when using pool create for per rank.
+  size: 750G # Cannot use percentage, as it does not work when using pool create for per rank. Change it to 3T for aurora.
   control_method: dmg
   properties: ec_cell_sz:128KiB
 container:
@@ -42,13 +41,11 @@ ior:
   dfs_oclass: 'SX'
   transfer_sizes:
     - 1M
-    - 256B
+#    - 256B                 # Enable if needed on aurora.
   block_size: 150G
-  # 0.5 only for CI, due to the varying nature of different clusters in CI.
-  # Change it to 15% (0.15) for Aurora.
-  write_x: 0.5
-  # 0.5 only for CI, due to the varying nature of different clusters in CI.
-  # Change it to 15% (0.15) for Aurora.
-  read_x: 0.5
+  write_x: 0.5             # 0.5 only for CI, due to the varying nature of different
+                           # clusters in CI. Change it to 15% (0.15) for Aurora.
+  read_x: 0.5              # 0.5 only for CI, due to the varying nature of different
+                           # clusters in CI. Change it to 15% (0.15) for Aurora.
   expected_bw: 2250        # BW is for transfer size 1M. Change to 22500 for Aurora.
   expected_iops: 450000    # IOPS are for transfer size 256B. Change to 600000 for Aurora.
