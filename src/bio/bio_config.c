@@ -982,9 +982,9 @@ int
 bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max_io_errs,
 			      uint32_t *max_csum_errs)
 {
-	struct config_entry cfg = {};
+	struct config_entry     cfg                  = {};
 	struct auto_faulty_info auto_faulty_criteria = {};
-	int                 rc;
+	int                     rc;
 
 	rc = decode_daos_data(nvme_conf, NVME_CONF_SET_AUTO_FAULTY, &cfg);
 	if (rc != 0)
