@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -504,7 +504,7 @@ ilog_test_update(void **state)
 	rc = ilog_create(umm, ilog);
 	LOG_FAIL(rc, 0, "Failed to create a new incarnation log\n");
 
-	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
 	LOG_FAIL(rc, 0, "Failed to open incarnation log\n");
 
 	version_cache_fetch(&version_cache, loh, true);
@@ -653,7 +653,7 @@ ilog_test_abort(void **state)
 	rc = ilog_create(umm, ilog);
 	LOG_FAIL(rc, 0, "Failed to create a new incarnation log\n");
 
-	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
 	LOG_FAIL(rc, 0, "Failed to open new incarnation log\n");
 	version_cache_fetch(&version_cache, loh, true);
 
@@ -765,7 +765,7 @@ ilog_test_persist(void **state)
 	rc = ilog_create(umm, ilog);
 	LOG_FAIL(rc, 0, "Failed to create a new incarnation log\n");
 
-	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
 	LOG_FAIL(rc, 0, "Failed to open incarnation log\n");
 	version_cache_fetch(&version_cache, loh, true);
 
@@ -849,7 +849,7 @@ ilog_test_aggregate(void **state)
 	rc = ilog_create(umm, ilog);
 	LOG_FAIL(rc, 0, "Failed to create a new incarnation log\n");
 
-	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
 	LOG_FAIL(rc, 0, "Failed to open incarnation log\n");
 
 	id.id_epoch = 1;
@@ -965,7 +965,7 @@ ilog_test_discard(void **state)
 	rc = ilog_create(umm, ilog);
 	LOG_FAIL(rc, 0, "Failed to create a new incarnation log\n");
 
-	rc = ilog_open(umm, ilog, &ilog_callbacks, &loh);
+	rc = ilog_open(umm, ilog, &ilog_callbacks, false, &loh);
 	LOG_FAIL(rc, 0, "Failed to open incarnation log\n");
 
 	id.id_epoch = 1;
