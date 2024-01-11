@@ -7672,6 +7672,12 @@ dc_obj_sync(tse_task_t *task)
 		D_GOTO(out_task, rc);
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_VC_SYNC_CORRUPTION)) {
+		/* It will trigger SIGFPE to simulate corruption. */
+		rc = args->epoch / *args->nr;
+		D_ASSERTF(rc < 0, "Unexpected result %d\n", rc);
+	}
+
 	obj_auxi->spec_shard = 0;
 	obj_auxi->spec_group = 0;
 

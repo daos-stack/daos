@@ -334,8 +334,44 @@ vc_8(void **state)
 	ioreq_fini(&req);
 }
 
+static inline int
+vc_test_teardown(void **state)
+{
+	daos_fail_loc_set(0);
+
+	return test_case_teardown(state);
+}
+
 static void
 vc_9(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("sync corruption during verify\n");
+
+	if (!test_runable(arg, dts_vc_replica_cnt))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
+
+	daos_fail_loc_set(DAOS_VC_SYNC_CORRUPTION | DAOS_FAIL_ONCE);
+
+	/* Do not care about consistency, just verify the cleanup logic after corruption. */
+	vc_obj_verify(arg, oid);
+
+	daos_fail_loc_set(0);
+	ioreq_fini(&req);
+}
+
+static void
+vc_10(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
@@ -378,8 +414,10 @@ static const struct CMUnitTest vc_tests[] = {
 	 vc_7, NULL, test_case_teardown},
 	{"VC8: verify with lost replica",
 	 vc_8, NULL, test_case_teardown},
-	{"VC9: verify with different dkey",
-	 vc_9, NULL, test_case_teardown},
+	{"VC9: sync corruption during verify",
+	 vc_9, NULL, vc_test_teardown},
+	{"VC10: verify with different dkey",
+	 vc_10, NULL, test_case_teardown},
 };
 
 static int
