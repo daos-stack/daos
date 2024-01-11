@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -54,6 +54,8 @@ static unsigned int bio_chk_cnt_init;
 bool bio_scm_rdma;
 /* Whether SPDK inited */
 bool bio_spdk_inited;
+/* Whether VMD is enabled */
+bool                bio_vmd_enabled;
 /* SPDK subsystem fini timeout */
 unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
@@ -93,6 +95,7 @@ bio_spdk_env_init(void)
 {
 	struct spdk_env_opts	opts;
 	bool			enable_rpc_srv = false;
+	bool                    vmd_enabled    = false;
 	int			rc;
 	int			roles = 0;
 
@@ -111,13 +114,14 @@ bio_spdk_env_init(void)
 	 */
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
-		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts, &roles);
+		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts, &roles, &vmd_enabled);
 		if (rc != 0) {
 			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
 				DP_RC(rc));
 			goto out;
 		}
 		nvme_glb.bd_nvme_roles = roles;
+		bio_vmd_enabled        = vmd_enabled;
 
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
@@ -192,8 +196,8 @@ set_faulty_criteria(void)
 	glb_criteria.fc_max_csum_errs = UINT32_MAX;
 
 	d_getenv_bool("DAOS_NVME_AUTO_FAULTY_ENABLED", &glb_criteria.fc_enabled);
-	d_getenv_int("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
-	d_getenv_int("DAOS_NVME_AUTO_FAULTY_CSUM", &glb_criteria.fc_max_csum_errs);
+	d_getenv_uint32_t("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
+	d_getenv_uint32_t("DAOS_NVME_AUTO_FAULTY_CSUM", &glb_criteria.fc_max_csum_errs);
 
 	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u\n",
 	       glb_criteria.fc_enabled ? "enabled" : "disabled",
@@ -245,15 +249,15 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
-	d_getenv_int("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
+	d_getenv_uint("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
 	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
 
-	d_getenv_int("DAOS_SPDK_MAX_UNMAP_CNT", &bio_spdk_max_unmap_cnt);
+	d_getenv_uint("DAOS_SPDK_MAX_UNMAP_CNT", &bio_spdk_max_unmap_cnt);
 	if (bio_spdk_max_unmap_cnt == 0)
 		bio_spdk_max_unmap_cnt = UINT32_MAX;
 	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
 
-	d_getenv_int("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
+	d_getenv_uint("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
 	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
 
 	/* Hugepages disabled */
@@ -996,15 +1000,13 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 			return -DER_EXIST;
 		}
 
-		D_INFO("Resetting LED on dev " DF_UUID " \n", DP_UUID(d_bdev->bb_uuid));
+		/* A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible */
 		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-		if (rc != 0) {
-			if (rc != -DER_NOSYS) {
-				D_ERROR("Reset LED on device:" DF_UUID " failed, " DF_RC "\n",
-					DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
-				return rc;
-			}
+		if ((rc != 0) && (rc != -DER_NOTSUPPORTED)) {
+			DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+				 DP_UUID(d_bdev->bb_uuid));
+			return rc;
 		}
 	}
 
@@ -1419,20 +1421,6 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	return 0;
 }
 
-static void
-bio_blobstore_free(struct bio_xs_blobstore *bxb, struct bio_xs_context *ctxt)
-{
-
-	struct bio_blobstore *bbs = bxb->bxb_blobstore;
-
-	if (bbs == NULL)
-		return;
-
-	put_bio_blobstore(bxb, ctxt);
-	if (is_bbs_owner(ctxt, bbs))
-		bio_fini_health_monitoring(ctxt, bbs);
-}
-
 /*
  * Finalize per-xstream NVMe context and SPDK env.
  *
@@ -1461,14 +1449,14 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			bxb->bxb_io_channel = NULL;
 		}
 
-		/*
-		 * Clear bxc_xs_blobstore[st] before bio_blobstore_free() to prevent the health
-		 * monitor from issuing health data collecting request, see cb_arg2dev_health().
-		 */
 		ctxt->bxc_xs_blobstores[st] = NULL;
 
 		if (bxb->bxb_blobstore != NULL) {
-			bio_blobstore_free(bxb, ctxt);
+			put_bio_blobstore(bxb, ctxt);
+
+			if (is_bbs_owner(ctxt, bxb->bxb_blobstore))
+				bio_fini_health_monitoring(ctxt, bxb->bxb_blobstore);
+
 			bxb->bxb_blobstore = NULL;
 		}
 		D_FREE(bxb);
@@ -1862,20 +1850,27 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	struct bio_bdev         *d_bdev;
 	int			 rc;
 
+	if (!bio_vmd_enabled)
+		return;
+
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
-			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for "DF_UUID"\n",
-				DP_UUID(d_bdev->bb_uuid));
-
-			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
+			/**
+			 * LED will be reset to faulty or normal state based on SSDs bio_bdevs.
+			 * A DER_NOTSUPPORTED RC indicates that VMD-LED control not possible.
+			 */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
-			if (rc != 0)
-				/* DER_NOSYS indicates that VMD-LED control is not enabled */
-				DL_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR, rc,
-					  "Reset LED on device:" DF_UUID " failed",
-					  DP_UUID(d_bdev->bb_uuid));
+			if (rc != 0) {
+				if (rc != -DER_NOTSUPPORTED)
+					DL_ERROR(rc, "Reset LED on device:" DF_UUID " failed",
+						 DP_UUID(d_bdev->bb_uuid));
+				continue;
+			}
+
+			D_DEBUG(DB_MGMT, "Cleared LED QUICK_BLINK state for " DF_UUID "\n",
+				DP_UUID(d_bdev->bb_uuid));
 		}
 	}
 }

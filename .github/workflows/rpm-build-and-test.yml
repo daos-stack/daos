@@ -60,6 +60,9 @@ jobs:
              echo "text<<EOF" >> $GITHUB_OUTPUT;
              git show -s --format=%B | escape_single_quotes >> $GITHUB_OUTPUT;
              echo "EOF" >> $GITHUB_OUTPUT;
+      - name: Identify Commit Pragmas
+        run: . ci/gha_functions.sh;
+             echo '${{steps.dequoted_commit_message.outputs.text }}' | get_commit_pragmas
 
   Import-commit-pragmas:
     name: Make commit pragma variables
