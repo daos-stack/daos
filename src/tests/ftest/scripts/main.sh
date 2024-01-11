@@ -27,7 +27,7 @@ python3 -m venv venv
 source venv/bin/activate
 
 pip install --upgrade pip
-pip install -r /tmp/requirements-ftest.txt
+pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
 
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
@@ -38,21 +38,19 @@ if $TEST_RPMS; then
     export DAOS_TEST_SHARED_DIR=${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}
     logs_prefix="/var/tmp"
 
-    pip install wheel
-
-    # Copy the pydaos source locally and install it.
-    cp -a /usr/lib/daos/python pydaos
-    pip install ./pydaos
-    rm -rf pydaos
-
 else
     rm -rf "$DAOS_BASE"/install/tmp
     mkdir -p "$DAOS_BASE"/install/tmp
     logs_prefix="$DAOS_BASE/install/lib/daos/TESTING"
     cd "$DAOS_BASE"
 
-    pip install install/lib/daos/python/
 fi
+
+# Copy the pydaos source locally and install it.
+cp -a "$PREFIX"/usr/lib/daos/python pydaos
+pip install ./pydaos
+rm -rf pydaos
+
 
 # Disable CRT_PHY_ADDR_STR to allow launch.py to set it
 unset CRT_PHY_ADDR_STR

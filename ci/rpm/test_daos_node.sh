@@ -101,6 +101,12 @@ sudo chmod 0755 /tmp/daos_sockets
 sudo chown "$me:$me" /tmp/daos_sockets
 
 FTEST=/usr/lib/daos/TESTING/ftest
+
+python -m venv venv
+source venv/bin/activate
+pip install -r $FTEST/requirements-ftest.txt
+
+FTEST=/usr/lib/daos/TESTING/ftest
 sudo PYTHONPATH="$FTEST/util"                               \
      $FTEST/config_file_gen.py -n "$HOSTNAME"               \
                                -a /etc/daos/daos_agent.yml  \
@@ -112,6 +118,9 @@ sudo PYTHONPATH="$FTEST/util"                        \
 cat /etc/daos/daos_server.yml
 cat /etc/daos/daos_agent.yml
 cat /etc/daos/daos_control.yml
+
+deactivate
+
 if ! module load "$OPENMPI"; then
     echo "Unable to load OpenMPI module: $OPENMPI"
     module avail
