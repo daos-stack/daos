@@ -105,6 +105,7 @@ FTEST=/usr/lib/daos/TESTING/ftest
 python3 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
+pip install --upgrade pip
 pip install -r $FTEST/requirements-ftest.txt
 
 FTEST=/usr/lib/daos/TESTING/ftest
