@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -81,6 +81,8 @@ struct ilog_context {
 	bool				 ic_in_txn;
 	/** version needs incrementing */
 	bool				 ic_ver_inc;
+	/** For operation with fixed epoch (rebuild, ec_agg, ec_rep, etc.) */
+	bool				 ic_fixed_epoch;
 };
 
 D_CASSERT(sizeof(struct ilog_id) == sizeof(struct ilog_tree));
@@ -401,7 +403,7 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root)
 
 int
 ilog_open(struct umem_instance *umm, struct ilog_df *root,
-	  const struct ilog_desc_cbs *cbs, daos_handle_t *loh)
+	  const struct ilog_desc_cbs *cbs, bool fixed_epoch, daos_handle_t *loh)
 {
 	struct ilog_context	*lctx;
 	int			 rc;
@@ -412,6 +414,7 @@ ilog_open(struct umem_instance *umm, struct ilog_df *root,
 	if (rc != 0)
 		return rc;
 
+	lctx->ic_fixed_epoch = fixed_epoch;
 	*loh = ilog_lctx2hdl(lctx);
 
 	return 0;
@@ -603,7 +606,15 @@ check_equal(struct ilog_context *lctx, struct ilog_id *id_out, const struct ilog
 			    id_out->id_update_minor_eph >
 			    id_out->id_punch_minor_eph)
 				return -DER_ALREADY;
+		} else if (lctx->ic_fixed_epoch) {
+			/*
+			 * For operation with fixed epoch, when update existing ilog entry,
+			 * regard them as the same and use minor epoch for further handling.
+			 */
+			*is_equal = true;
+			return 0;
 		}
+
 		D_DEBUG(DB_IO, "Access of incarnation log from multiple DTX"
 			" at same time is not allowed: rc=DER_TX_RESTART\n");
 		return -DER_TX_RESTART;
