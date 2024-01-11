@@ -47,7 +47,7 @@ else
 fi
 
 # Copy the pydaos source locally and install it.
-cp -a "$PREFIX"/usr/lib/daos/python pydaos
+cp -a "$PREFIX"/lib/daos/python pydaos
 pip install ./pydaos
 rm -rf pydaos
 
