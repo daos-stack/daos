@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -196,7 +196,7 @@ struct crt_quotas {
 	int			limit[CRT_QUOTA_COUNT];
 	ATOMIC uint32_t		current[CRT_QUOTA_COUNT];
 	bool			enabled[CRT_QUOTA_COUNT];
-	pthread_mutex_t		mutex;
+	DAOS_MUTEX              mutex;
 	d_list_t		rpc_waitq;
 };
 
