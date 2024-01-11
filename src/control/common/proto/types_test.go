@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -45,14 +45,18 @@ func TestProto_ConvertNvmeHealth(t *testing.T) {
 }
 
 func TestProto_ConvertSmdDevice(t *testing.T) {
-	pb := MockSmdDevice("0000:80:00.0", 1)
+	c := storage.MockNvmeController()
+	pb := MockSmdDevice(c, 1)
+	pb.Ctrlr.HealthStats = MockNvmeHealth(1)
 	native, err := (*SmdDevice)(pb).ToNative()
 	if err != nil {
 		t.Fatal(err)
 	}
-	expNative := storage.MockSmdDevice("0000:80:00.0", 1)
+	expNative := storage.MockSmdDevice(c, 1)
+	expNative.Ctrlr.HealthStats = storage.MockNvmeHealth(1)
 
-	if diff := cmp.Diff(expNative, native, test.DefaultCmpOpts()...); diff != "" {
+	co := cmpopts.IgnoreFields(storage.NvmeController{}, "Serial")
+	if diff := cmp.Diff(expNative, native, co); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }

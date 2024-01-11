@@ -61,29 +61,25 @@ obj_shard_addref(struct dc_obj_shard *shard)
 	D_SPIN_UNLOCK(&shard->do_obj->cob_spin);
 }
 
+static inline void
+obj_shard_addref_locked(struct dc_obj_shard *shard)
+{
+	shard->do_ref++;
+}
+
 int
 dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t oid,
 		  unsigned int mode, struct dc_obj_shard *shard)
 {
-	struct pool_target	*map_tgt;
-	int			rc;
-
 	D_ASSERT(obj != NULL && shard != NULL);
 	D_ASSERT(shard->do_obj == NULL);
 
-	rc = dc_pool_tgt_idx2ptr(obj->cob_pool, shard->do_target_id,
-				 &map_tgt);
-	if (rc)
-		return rc;
-
 	shard->do_id = oid;
-	shard->do_target_rank = map_tgt->ta_comp.co_rank;
-	shard->do_target_idx = map_tgt->ta_comp.co_index;
 	shard->do_obj = obj;
 	shard->do_co = obj->cob_co;
-	obj_shard_addref(shard); /* release this until obj_layout_free */
 
 	D_SPIN_LOCK(&obj->cob_spin);
+	obj_shard_addref_locked(shard); /* release this until obj_layout_free */
 	obj->cob_shards->do_open_count++;
 	D_SPIN_UNLOCK(&obj->cob_spin);
 
@@ -645,7 +641,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 {
 	struct rw_cb_args	*rw_args = arg;
 	struct obj_rw_in	*orw;
-	struct obj_rw_out	*orwo;
+	struct obj_rw_v10_out	*orwo;
 	daos_handle_t		th;
 	struct obj_reasb_req	*reasb_req;
 	daos_obj_rw_t		*api_args;
@@ -732,6 +728,17 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			D_INFO("rpc %p got DER_STALE, pool map update needed\n",
 			       rw_args->rpc);
 			D_GOTO(out, rc);
+		}
+
+		if (rc == -DER_OVERLOAD_RETRY) {
+			uint32_t	timeout = 0;
+
+			if (rw_args->shard_args->auxi.enqueue_id == 0)
+				rw_args->shard_args->auxi.enqueue_id =
+						orwo->orw_comm_out.req_out_enqueue_id;
+			crt_req_get_timeout(rw_args->rpc, &timeout);
+			if (timeout > rw_args->shard_args->auxi.obj_auxi->max_delay)
+				rw_args->shard_args->auxi.obj_auxi->max_delay = timeout;
 		}
 
 		/*
@@ -971,7 +978,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	unsigned int		 nr = api_args->nr;
 	d_sg_list_t		*sgls = api_args->sgls;
 	crt_rpc_t		*req = NULL;
-	struct obj_rw_in	*orw;
+	struct obj_rw_v10_in	*orw;
 	struct rw_cb_args	 rw_args;
 	crt_endpoint_t		 tgt_ep;
 	uuid_t			 cont_hdl_uuid;
@@ -1077,6 +1084,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	orw->orw_iod_array.oia_oiod_nr = (args->oiods == NULL) ?
 					 0 : nr;
 	orw->orw_iod_array.oia_offs = args->offs;
+	/* for retry RPC */
+	orw->orw_comm_in.req_in_enqueue_id = auxi->enqueue_id;
 
 	D_DEBUG(DB_IO, "rpc %p opc %d "DF_UOID" "DF_KEY" rank %d tag %d eph "
 		DF_U64", DTI = "DF_DTI" start shard %u ver %u\n", req, opc,
@@ -1173,8 +1182,9 @@ out:
 }
 
 struct obj_punch_cb_args {
-	crt_rpc_t	*rpc;
-	unsigned int	*map_ver;
+	crt_rpc_t		*rpc;
+	unsigned int		*map_ver;
+	struct shard_punch_args *shard_args;
 };
 
 static int
@@ -1182,12 +1192,25 @@ obj_shard_punch_cb(tse_task_t *task, void *data)
 {
 	struct obj_punch_cb_args	*cb_args;
 	crt_rpc_t			*rpc;
+	struct shard_punch_args		*shard_args;
 
 	cb_args = (struct obj_punch_cb_args *)data;
 	rpc = cb_args->rpc;
 	if (task->dt_result == 0) {
 		task->dt_result = obj_reply_get_status(rpc);
 		*cb_args->map_ver = obj_reply_map_version_get(rpc);
+		if (task->dt_result == -DER_OVERLOAD_RETRY) {
+			uint32_t		  timeout = 0;
+			struct obj_punch_v10_out *opo = crt_reply_get(cb_args->rpc);
+
+			shard_args = cb_args->shard_args;
+			if (shard_args->pa_auxi.enqueue_id == 0)
+				shard_args->pa_auxi.enqueue_id =
+						opo->opo_comm_out.req_out_enqueue_id;
+			crt_req_get_timeout(cb_args->rpc, &timeout);
+			if (timeout > shard_args->pa_auxi.obj_auxi->max_delay)
+				shard_args->pa_auxi.obj_auxi->max_delay = timeout;
+		}
 	}
 
 	crt_req_decref(rpc);
@@ -1203,7 +1226,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	daos_obj_punch_t		*obj_args;
 	daos_key_t			*dkey;
 	struct dc_pool			*pool;
-	struct obj_punch_in		*opi;
+	struct obj_punch_v10_in		*opi;
 	crt_rpc_t			*req;
 	struct obj_punch_cb_args	 cb_args;
 	daos_unit_oid_t			 oid;
@@ -1234,6 +1257,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	crt_req_addref(req);
 	cb_args.rpc = req;
 	cb_args.map_ver = &args->pa_auxi.map_ver;
+	cb_args.shard_args = args;
 	rc = tse_task_register_comp_cb(task, obj_shard_punch_cb, &cb_args,
 				       sizeof(cb_args));
 	if (rc != 0)
@@ -1260,12 +1284,13 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		opi->opi_shard_tgts.ca_arrays = NULL;
 	}
 	uuid_copy(opi->opi_pool_uuid, pool->dp_pool);
-	uuid_copy(opi->opi_co_hdl, args->pa_coh_uuid);
-	uuid_copy(opi->opi_co_uuid, args->pa_cont_uuid);
+	uuid_copy(opi->opi_co_hdl, shard->do_co->dc_cont_hdl);
+	uuid_copy(opi->opi_co_uuid, shard->do_co->dc_uuid);
 	daos_dti_copy(&opi->opi_dti, &args->pa_dti);
 	opi->opi_flags = args->pa_auxi.flags;
 	opi->opi_dti_cos.ca_count = 0;
 	opi->opi_dti_cos.ca_arrays = NULL;
+	opi->opi_comm_in.req_in_enqueue_id = args->pa_auxi.enqueue_id;
 
 	rc = daos_rpc_send(req, task);
 	return rc;
@@ -1274,6 +1299,142 @@ out_req:
 	crt_req_decref(req);
 	crt_req_decref(req);
 out:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+struct shard_coll_punch_cb_args {
+	crt_rpc_t		*cpca_rpc;
+	uint32_t		*cpca_ver;
+	struct shard_punch_args	*cpca_shard_args;
+};
+
+static int
+obj_shard_coll_punch_cb(tse_task_t *task, void *data)
+{
+	struct shard_coll_punch_cb_args	*cb_args = data;
+	crt_rpc_t			*rpc = cb_args->cpca_rpc;
+	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
+
+	if (task->dt_result == 0) {
+		task->dt_result = obj_reply_get_status(rpc);
+		*cb_args->cpca_ver = obj_reply_map_version_get(rpc);
+	}
+
+	if (task->dt_result == -DER_OVERLOAD_RETRY) {
+		struct obj_coll_punch_out	*ocpo = crt_reply_get(rpc);
+		struct shard_punch_args		*shard_args = cb_args->cpca_shard_args;
+		uint32_t			 timeout = 0;
+
+		if (shard_args->pa_auxi.enqueue_id == 0)
+			shard_args->pa_auxi.enqueue_id = ocpo->ocpo_comm_out.req_out_enqueue_id;
+		crt_req_get_timeout(rpc, &timeout);
+		if (timeout > shard_args->pa_auxi.obj_auxi->max_delay)
+			shard_args->pa_auxi.obj_auxi->max_delay = timeout;
+	}
+
+	DL_CDEBUG(task->dt_result < 0, DLOG_ERR, DB_IO, task->dt_result,
+		  "DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" with DTX "
+		  DF_DTI" for task %p, map_ver %u/%u, flags %lx/%x", rpc, DP_UOID(ocpi->ocpi_oid),
+		  DP_DTI(&ocpi->ocpi_xid), task, ocpi->ocpi_map_ver, *cb_args->cpca_ver,
+		  (unsigned long)ocpi->ocpi_api_flags, ocpi->ocpi_flags);
+
+	crt_req_decref(rpc);
+
+	return task->dt_result;
+}
+
+int
+dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *args,
+			struct dtx_memberships *mbs, uint32_t mbs_max_size, crt_bulk_t *bulks,
+			uint32_t bulk_sz, struct daos_coll_target *tgts, uint32_t tgt_nr,
+			uint32_t max_tgt_size, struct dtx_epoch *epoch, uint64_t api_flags,
+			uint32_t rpc_flags, uint32_t map_ver, uint32_t *rep_ver, tse_task_t *task)
+{
+	struct dc_pool			*pool = obj_shard_ptr2pool(shard);
+	crt_rpc_t			*req = NULL;
+	struct obj_coll_punch_in	*ocpi = NULL;
+	struct shard_coll_punch_cb_args	 cb_args = { 0 };
+	crt_endpoint_t			 tgt_ep = { 0 };
+	int				 rc = 0;
+
+	D_ASSERT(pool != NULL);
+
+	tgt_ep.ep_grp = pool->dp_sys->sy_group;
+	tgt_ep.ep_rank = shard->do_target_rank;
+	tgt_ep.ep_tag = shard->do_target_idx;
+
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_COLL_PUNCH, &req);
+	if (rc != 0)
+		goto out;
+
+	ocpi = crt_req_get(req);
+	D_ASSERT(ocpi != NULL);
+
+	ocpi->ocpi_xid = args->pa_dti;
+	ocpi->ocpi_mbs = mbs;
+	ocpi->ocpi_odm.odm_mbs_max_sz = mbs_max_size;
+	uuid_copy(ocpi->ocpi_po_uuid, pool->dp_pool);
+	uuid_copy(ocpi->ocpi_co_hdl, shard->do_co->dc_cont_hdl);
+	uuid_copy(ocpi->ocpi_co_uuid, shard->do_co->dc_uuid);
+	ocpi->ocpi_oid = shard->do_id;
+	ocpi->ocpi_epoch = epoch->oe_value;
+	ocpi->ocpi_api_flags = api_flags;
+	ocpi->ocpi_map_ver = map_ver;
+	ocpi->ocpi_flags = rpc_flags;
+
+	if (bulks != NULL) {
+		D_ASSERT(bulk_sz != 0);
+
+		ocpi->ocpi_bulk_tgt_sz = bulk_sz;
+		ocpi->ocpi_bulk_tgt_nr = tgt_nr;
+		ocpi->ocpi_tgt_bulk = bulks[0];
+		ocpi->ocpi_tgts.ca_count = 0;
+		ocpi->ocpi_tgts.ca_arrays = NULL;
+	} else {
+		D_ASSERT(tgts != NULL);
+
+		ocpi->ocpi_bulk_tgt_sz = 0;
+		ocpi->ocpi_bulk_tgt_nr = 0;
+		ocpi->ocpi_tgt_bulk = NULL;
+		ocpi->ocpi_tgts.ca_count = tgt_nr;
+		ocpi->ocpi_tgts.ca_arrays = tgts;
+	}
+
+	ocpi->ocpi_max_tgt_sz = max_tgt_size;
+	ocpi->ocpi_disp_width = 0;
+	ocpi->ocpi_disp_depth = 0;
+
+	ocpi->ocpi_comm_in.req_in_enqueue_id = args->pa_auxi.enqueue_id;
+
+	crt_req_addref(req);
+	cb_args.cpca_rpc = req;
+	cb_args.cpca_ver = rep_ver;
+	cb_args.cpca_shard_args = args;
+
+	rc = tse_task_register_comp_cb(task, obj_shard_coll_punch_cb, &cb_args, sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_req, rc);
+
+	D_DEBUG(DB_IO, "Sending DAOS_OBJ_RPC_COLL_PUNCH RPC %p for "DF_UOID" with DTX "
+		DF_DTI" for task %p, map_ver %u, flags %lx/%x, leader %u/%u, bulk_sz %u\n",
+		req, DP_UOID(shard->do_id), DP_DTI(&args->pa_dti), task, map_ver,
+		(unsigned long)api_flags, rpc_flags, tgt_ep.ep_rank, tgt_ep.ep_tag, bulk_sz);
+
+	return daos_rpc_send(req, task);
+
+out_req:
+	/* -1 for crt_req_addref(). */
+	crt_req_decref(req);
+	/* -1 for obj_req_create(). */
+	crt_req_decref(req);
+out:
+	D_ERROR("DAOS_OBJ_RPC_COLL_PUNCH RPC failed for "DF_UOID" with DTX "
+		DF_DTI" for task %p, map_ver %u, flags %lx/%x, leader %u/%u: "DF_RC"\n",
+		DP_UOID(shard->do_id), DP_DTI(&args->pa_dti), task, map_ver,
+		(unsigned long)api_flags, rpc_flags, tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
+
+	obj_shard_decref(shard);
 	tse_task_complete(task, rc);
 	return rc;
 }
@@ -1294,6 +1455,8 @@ struct obj_enum_args {
 	d_iov_t			*csum;
 	struct dtx_epoch	*epoch;
 	daos_handle_t		*th;
+	uint64_t		*enqueue_id;
+	uint32_t		*max_delay;
 };
 
 /**
@@ -1539,6 +1702,16 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		} else if (rc == -DER_TX_RESTART) {
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need restart: "DF_RC"\n",
 				enum_args->rpc, opc, DP_RC(rc));
+		} else if (rc == -DER_OVERLOAD_RETRY) {
+			uint32_t		     timeout = 0;
+			struct obj_key_enum_v10_out *oeo_v10 = (struct obj_key_enum_v10_out *)oeo;
+
+			if (*enum_args->enqueue_id == 0)
+				*enum_args->enqueue_id =
+						oeo_v10->oeo_comm_out.req_out_enqueue_id;
+			crt_req_get_timeout(enum_args->rpc, &timeout);
+			if (timeout > *enum_args->max_delay)
+				*enum_args->max_delay = timeout;
 		} else {
 			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
 				enum_args->rpc, opc, DP_RC(rc));
@@ -1625,20 +1798,21 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		  void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		  uint32_t fw_cnt, tse_task_t *task)
 {
-	struct shard_list_args *args = shard_args;
-	daos_obj_list_t		*obj_args = dc_task_get_args(args->la_auxi.obj_auxi->obj_task);
-	daos_key_desc_t	       *kds = args->la_kds;
-	d_sg_list_t	       *sgl = args->la_sgl;
-	crt_endpoint_t		tgt_ep;
-	struct dc_pool	       *pool = NULL;
-	crt_rpc_t	       *req;
-	uuid_t			cont_hdl_uuid;
-	uuid_t			cont_uuid;
-	struct obj_key_enum_in	*oei;
-	struct obj_enum_args	enum_args;
-	daos_size_t		sgl_size = 0;
-	int			rc;
+	struct shard_list_args		*args = shard_args;
+	daos_obj_list_t			*obj_args;
+	daos_key_desc_t			*kds = args->la_kds;
+	d_sg_list_t			*sgl = args->la_sgl;
+	crt_endpoint_t			 tgt_ep;
+	struct dc_pool			*pool = NULL;
+	crt_rpc_t			*req;
+	uuid_t				 cont_hdl_uuid;
+	uuid_t				 cont_uuid;
+	struct obj_key_enum_v10_in	*oei;
+	struct obj_enum_args		 enum_args;
+	daos_size_t			 sgl_size = 0;
+	int				 rc;
 
+	obj_args = dc_task_get_args(args->la_auxi.obj_auxi->obj_task);
 	D_ASSERT(obj_shard != NULL);
 	obj_shard_addref(obj_shard);
 
@@ -1695,6 +1869,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 
 	oei->oei_nr		= args->la_nr;
 	oei->oei_rec_type	= obj_args->type;
+	oei->oei_comm_in.req_in_enqueue_id = args->la_auxi.enqueue_id;
 	uuid_copy(oei->oei_pool_uuid, pool->dp_pool);
 	uuid_copy(oei->oei_co_hdl, cont_hdl_uuid);
 	uuid_copy(oei->oei_co_uuid, cont_uuid);
@@ -1760,6 +1935,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	enum_args.eaa_recxs = args->la_recxs;
 	enum_args.epoch = &args->la_auxi.epoch;
 	enum_args.th = &obj_args->th;
+	enum_args.enqueue_id = &args->la_auxi.enqueue_id;
+	enum_args.max_delay = &args->la_auxi.obj_auxi->max_delay;
 	rc = tse_task_register_comp_cb(task, dc_enumerate_cb, &enum_args,
 				       sizeof(enum_args));
 	if (rc != 0)
@@ -1791,6 +1968,8 @@ struct obj_query_key_cb_args {
 	struct dc_obj_shard	*shard;
 	struct dtx_epoch	epoch;
 	daos_handle_t		th;
+	uint32_t		*max_delay;
+	uint64_t		*queue_id;
 };
 
 static void
@@ -1897,12 +2076,25 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 			D_GOTO(set_max_epoch, rc = 0);
 		}
 
-		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY)
+		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY || rc == -DER_OVERLOAD_RETRY)
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
 				cb_args->rpc, opc, rc);
 		else
 			D_ERROR("rpc %p RPC %d failed: %d\n",
 				cb_args->rpc, opc, rc);
+
+		if (rc == -DER_OVERLOAD_RETRY) {
+			uint32_t			 timeout = 0;
+			struct obj_query_key_v10_out	*okqo_v10;
+
+			okqo_v10 = crt_reply_get(cb_args->rpc);
+			if (*cb_args->queue_id == 0)
+				*cb_args->queue_id = okqo_v10->okqo_comm_out.req_out_enqueue_id;
+			crt_req_get_timeout(cb_args->rpc, &timeout);
+			if (timeout > *cb_args->max_delay)
+				*cb_args->max_delay = timeout;
+
+		}
 		D_GOTO(out, rc);
 	}
 
@@ -1999,10 +2191,11 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 		       uint32_t req_map_ver, struct dc_object *obj,
 		       daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 		       daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
-		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task)
+		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task,
+		       uint32_t *max_delay, uint64_t *queue_id)
 {
 	struct dc_pool			*pool = NULL;
-	struct obj_query_key_in		*okqi;
+	struct obj_query_key_v10_in	*okqi;
 	crt_rpc_t			*req;
 	struct obj_query_key_cb_args	 cb_args;
 	daos_unit_oid_t			 oid;
@@ -2038,6 +2231,8 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	cb_args.epoch		= *epoch;
 	cb_args.th		= th;
 	cb_args.max_epoch	= max_epoch;
+	cb_args.queue_id	= queue_id;
+	cb_args.max_delay	= max_delay;
 
 	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)
@@ -2065,6 +2260,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	uuid_copy(okqi->okqi_co_hdl, coh_uuid);
 	uuid_copy(okqi->okqi_co_uuid, cont_uuid);
 	daos_dti_copy(&okqi->okqi_dti, dti);
+	okqi->okqi_comm_in.req_in_enqueue_id = *queue_id;
 
 	rc = daos_rpc_send(req, task);
 	return rc;
@@ -2081,6 +2277,8 @@ struct obj_shard_sync_cb_args {
 	crt_rpc_t	*rpc;
 	daos_epoch_t	*epoch;
 	uint32_t	*map_ver;
+	uint32_t	*max_delay;
+	uint64_t	*enqueue_id;
 };
 
 static int
@@ -2105,13 +2303,24 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 	if (rc == -DER_NONEXIST)
 		D_GOTO(out, rc = 0);
 
-	if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
+	if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY || rc == -DER_OVERLOAD_RETRY) {
 		D_DEBUG(DB_TRACE,
 			"rpc %p OBJ_SYNC_RPC may need retry: rc = "DF_RC"\n",
 			rpc, DP_RC(rc));
+		if (rc == -DER_OVERLOAD_RETRY) {
+			uint32_t			 timeout = 0;
+			struct obj_sync_v10_out		*oso_v10;
+
+			oso_v10 = crt_reply_get(rpc);
+			if (*cb_args->enqueue_id == 0)
+				*cb_args->enqueue_id = oso_v10->oso_comm_out.req_out_enqueue_id;
+			crt_req_get_timeout(rpc, &timeout);
+			if (timeout > *cb_args->max_delay)
+				*cb_args->max_delay = timeout;
+
+		}
 		D_GOTO(out, rc);
 	}
-
 	if (rc != 0) {
 		D_ERROR("rpc %p OBJ_SYNC_RPC failed: rc = "DF_RC"\n", rpc,
 			DP_RC(rc));
@@ -2138,7 +2347,7 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	struct dc_pool			*pool = NULL;
 	uuid_t				 cont_hdl_uuid;
 	uuid_t				 cont_uuid;
-	struct obj_sync_in		*osi;
+	struct obj_sync_v10_in		*osi;
 	crt_rpc_t			*req;
 	struct obj_shard_sync_cb_args	 cb_args;
 	crt_endpoint_t			 tgt_ep;
@@ -2166,9 +2375,11 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out, rc);
 
 	crt_req_addref(req);
-	cb_args.rpc	= req;
-	cb_args.epoch	= args->sa_epoch;
-	cb_args.map_ver = &args->sa_auxi.map_ver;
+	cb_args.rpc		= req;
+	cb_args.epoch		= args->sa_epoch;
+	cb_args.map_ver		= &args->sa_auxi.map_ver;
+	cb_args.max_delay	= &args->sa_auxi.obj_auxi->max_delay;
+	cb_args.enqueue_id	= &args->sa_auxi.enqueue_id;
 
 	rc = tse_task_register_comp_cb(task, obj_shard_sync_cb, &cb_args,
 				       sizeof(cb_args));
@@ -2181,9 +2392,10 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	uuid_copy(osi->osi_co_hdl, cont_hdl_uuid);
 	uuid_copy(osi->osi_pool_uuid, pool->dp_pool);
 	uuid_copy(osi->osi_co_uuid, cont_uuid);
-	osi->osi_oid		= shard->do_id;
-	osi->osi_epoch		= args->sa_auxi.epoch.oe_value;
-	osi->osi_map_ver	= args->sa_auxi.map_ver;
+	osi->osi_oid			   = shard->do_id;
+	osi->osi_epoch			   = args->sa_auxi.epoch.oe_value;
+	osi->osi_map_ver		   = args->sa_auxi.map_ver;
+	osi->osi_comm_in.req_in_enqueue_id = args->sa_auxi.enqueue_id;
 
 	return daos_rpc_send(req, task);
 
@@ -2205,6 +2417,8 @@ struct obj_k2a_args {
 	daos_handle_t		*th;
 	daos_anchor_t		*anchor;
 	uint32_t		shard;
+	uint64_t		*enqueue_id;
+	uint32_t		*max_delay;
 };
 
 static int
@@ -2242,9 +2456,21 @@ dc_k2a_cb(tse_task_t *task, void *arg)
 	}
 
 	if (rc != 0) {
-		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
+		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY || rc == -DER_OVERLOAD_RETRY) {
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "DF_RC"\n",
 				k2a_args->rpc, DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(rc));
+			if (rc == -DER_OVERLOAD_RETRY) {
+				uint32_t			 timeout = 0;
+				struct obj_key2anchor_v10_out	*oko_v10;
+
+				oko_v10 = crt_reply_get(k2a_args->rpc);
+				if (*k2a_args->enqueue_id == 0)
+					*k2a_args->enqueue_id =
+						oko_v10->oko_comm_out.req_out_enqueue_id;
+				crt_req_get_timeout(k2a_args->rpc, &timeout);
+				if (timeout > *k2a_args->max_delay)
+					*k2a_args->max_delay = timeout;
+			}
 		} else if (rc == -DER_TX_RESTART) {
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need restart: "DF_RC"\n",
 				k2a_args->rpc, DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(rc));
@@ -2280,7 +2506,7 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	crt_rpc_t			*req;
 	uuid_t				cont_hdl_uuid;
 	uuid_t				cont_uuid;
-	struct obj_key2anchor_in	*oki;
+	struct obj_key2anchor_v10_in	*oki;
 	struct obj_k2a_args		cb_args;
 	int				rc;
 
@@ -2316,6 +2542,7 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		oki->oki_akey = *obj_args->akey;
 	oki->oki_oid		= obj_shard->do_id;
 	oki->oki_map_ver	= args->ka_auxi.map_ver;
+	oki->oki_comm_in.req_in_enqueue_id = args->ka_auxi.enqueue_id;
 	uuid_copy(oki->oki_pool_uuid, pool->dp_pool);
 	uuid_copy(oki->oki_co_hdl, cont_hdl_uuid);
 	uuid_copy(oki->oki_co_uuid, cont_uuid);
@@ -2332,6 +2559,8 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	cb_args.th = &obj_args->th;
 	cb_args.anchor = args->ka_anchor;
 	cb_args.shard = obj_shard->do_shard_idx;
+	cb_args.enqueue_id = &args->ka_auxi.enqueue_id;
+	cb_args.max_delay = &args->ka_auxi.obj_auxi->max_delay;
 	rc = tse_task_register_comp_cb(task, dc_k2a_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)
 		D_GOTO(out_eaa, rc);
