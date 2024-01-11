@@ -110,11 +110,12 @@ pip install -r $FTEST/requirements-ftest.txt
 
 FTEST=/usr/lib/daos/TESTING/ftest
 sudo PYTHONPATH="$FTEST/util"                        \
-     python $FTEST/config_file_gen.py -n "$HOSTNAME" \
+     "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py -n "$HOSTNAME" \
         -a /etc/daos/daos_agent.yml -s /etc/daos/daos_server.yml
 sudo bash -c 'echo "system_ram_reserved: 4" >> /etc/daos/daos_server.yml'
 sudo PYTHONPATH="$FTEST/util"                        \
-     python $FTEST/config_file_gen.py -n "$HOSTNAME" -d /etc/daos/daos_control.yml
+     "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py \
+     -n "$HOSTNAME" -d /etc/daos/daos_control.yml
 cat /etc/daos/daos_server.yml
 cat /etc/daos/daos_agent.yml
 cat /etc/daos/daos_control.yml
