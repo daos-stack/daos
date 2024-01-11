@@ -50,6 +50,7 @@ agg_rate_ctl(void *arg)
 	struct ds_cont_child	*cont = param->ap_cont;
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct sched_request	*req = cont2req(cont, param->ap_vos_agg);
+	uint32_t		 msecs;
 
 	/* Abort current round of aggregation */
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
@@ -62,28 +63,16 @@ agg_rate_ctl(void *arg)
 	if (pool->sp_rebuilding && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
 
-	/* System is idle, let aggregation run in tight mode */
-	if (!dss_xstream_is_busy()) {
+	/* When system is idle or under space pressure, let aggregation run in tight mode */
+	if (!dss_xstream_is_busy() || sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 		sched_req_yield(req);
 		return 0;
 	}
 
-	/*
-	 * When it's under space pressure, aggregation will continue run in slack
-	 * mode no matter what reclaim policy is used, otherwise, it'll take an extra
-	 * sleep to minimize the performance impact.
-	 */
-	if (sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
-		uint32_t msecs;
+	msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY) ? 1000 : 50;
+	sched_req_sleep(req, msecs);
 
-		/* Sleep 2 seconds in lazy mode, it's kind of pausing aggregation */
-		msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY) ? 2000 : 50;
-		sched_req_sleep(req, msecs);
-	} else {
-		sched_req_yield(req);
-	}
-
-	/* System is busy, let aggregation run in slack mode */
+	/* System is busy and no space pressure, let aggregation run in slack mode */
 	return 1;
 }
 
@@ -238,6 +227,14 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		D_DEBUG(DB_EPC, "Pool reclaim strategy is disabled\n");
 		return false;
 	}
+
+	/*
+	 * EC aggregation must proceed no matter if the target is busy or not,
+	 * otherwise, the global EC boundary won't be bumped promptly, and that
+	 * will impact VOS aggregation on every target.
+	 */
+	if (!vos_agg)
+		return true;
 
 	if (pool->sp_reclaim == DAOS_RECLAIM_LAZY && dss_xstream_is_busy() &&
 	    sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
@@ -852,6 +849,18 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 					  struct ds_cont_child, sc_link);
 		cont_child_stop(cont_child);
 	}
+}
+
+void
+ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child)
+{
+	struct ds_cont_child	*cont_child;
+
+	D_DEBUG(DB_MD, DF_UUID"[%d]: reset all containers EC aggregate epoch.\n",
+		DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	d_list_for_each_entry(cont_child, &pool_child->spc_cont_list, sc_link)
+		cont_child->sc_ec_agg_eph = cont_child->sc_ec_agg_eph_boundary;
 }
 
 static int
@@ -1654,6 +1663,8 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	struct dss_coll_ops	coll_ops = { 0 };
 	struct dss_coll_args	coll_args = { 0 };
 	struct ds_pool		*pool;
+	int			*exclude_tgts = NULL;
+	uint32_t		exclude_tgt_nr = 0;
 	int			rc;
 
 	/* Only for debugging purpose to compare srv_cont_hdl with cont_hdl_uuid */
@@ -1686,18 +1697,22 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	coll_args.ca_func_args	= &arg;
 
 	/* setting aggregator args */
-	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
-					&coll_args.ca_exclude_tgts_cnt);
-	if (rc) {
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0) {
 		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		return rc;
+		goto out;
+	}
+
+	if (exclude_tgts != NULL) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	D_FREE(coll_args.ca_exclude_tgts);
-
-	if (rc != 0) {
+	if (rc != 0)
 		/* Once it exclude the target from the pool, since the target
 		 * might still in the cart group, so IV cont open might still
 		 * come to this target, especially if cont open/close will be
@@ -1707,9 +1722,10 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		D_ERROR("open "DF_UUID"/"DF_UUID"/"DF_UUID":"DF_RC"\n",
 			DP_UUID(pool_uuid), DP_UUID(cont_uuid),
 			DP_UUID(cont_hdl_uuid), DP_RC(rc));
-		return rc;
-	}
 
+out:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	return rc;
 }
 
