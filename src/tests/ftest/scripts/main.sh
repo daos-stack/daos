@@ -37,20 +37,17 @@ if $TEST_RPMS; then
     #       the test nodes
     export DAOS_TEST_SHARED_DIR=${DAOS_TEST_SHARED_DIR:-$PWD/install/tmp}
     logs_prefix="/var/tmp"
-
 else
     rm -rf "$DAOS_BASE"/install/tmp
     mkdir -p "$DAOS_BASE"/install/tmp
     logs_prefix="$DAOS_BASE/install/lib/daos/TESTING"
     cd "$DAOS_BASE"
-
 fi
 
 # Copy the pydaos source locally and install it.
 cp -a "$PREFIX"/lib/daos/python pydaos
 pip install ./pydaos
 rm -rf pydaos
-
 
 # Disable CRT_PHY_ADDR_STR to allow launch.py to set it
 unset CRT_PHY_ADDR_STR
@@ -101,10 +98,6 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     client_nodes=$(IFS=','; echo "${test_node_list[*]:8}")
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
-
-which clush
-avocado config
-
 
 # shellcheck disable=SC2086,SC2090,SC2048
 if ! python3 ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then

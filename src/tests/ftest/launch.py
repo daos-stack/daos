@@ -211,13 +211,13 @@ class Launch():
         Returns:
             int: exit status for the steps executed
         """
-        # try:
-        status = self._run(args)
-        # except LaunchError as error:
-        #     return self.get_exit_status(1, error, error)
-        # except Exception as error:      # pylint: disable=broad-except
-        #     message = f"Unknown exception raised during launch.py execution: {error}"
-        #     status = self.get_exit_status(1, message, "Unknown", sys.exc_info())
+        try:
+            status = self._run(args)
+        except LaunchError as error:
+            return self.get_exit_status(1, error, error)
+        except Exception as error:      # pylint: disable=broad-except
+            message = f"Unknown exception raised during launch.py execution: {error}"
+            status = self.get_exit_status(1, message, "Unknown", sys.exc_info())
         return status
 
     def _run(self, args):
