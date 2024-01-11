@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3053,6 +3053,78 @@ dfs_test_fix_chunk_size(void **state)
 	D_FREE(buf);
 }
 
+static void
+dfs_test_oflags(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	char			*filename_file1 = "file1";
+	char			*path_file1 = "/file1";
+	mode_t			create_mode = S_IWUSR | S_IRUSR;
+	mode_t			mode;
+	int			create_flags = O_RDWR | O_CREAT | O_EXCL;
+	int			rc;
+	struct stat		stbuf;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** Testing O_APPEND & O_TRUNC in dfs_open/dfs_lookup_rel */
+
+	/** remove /file1 if existing */
+	dfs_remove(dfs_mt, NULL, filename_file1, 0, NULL);
+
+	/** Create /file1 with O_APPEND, should fail */
+	rc = dfs_open(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
+		      create_flags | O_APPEND, 0, 0, NULL, &obj);
+	assert_int_equal(rc, ENOTSUP);
+
+	/** Create /file1 with O_APPEND using dfs_lookup, should fail */
+	rc = dfs_lookup(dfs_mt, path_file1, create_flags | O_APPEND, &obj, &mode, NULL);
+	assert_int_equal(rc, ENOTSUP);
+
+	/** Create /file1 and write 5 bytes */
+	rc = dfs_test_file_gen(filename_file1, 0, OC_S1, 5);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 with O_TRUNC, size should be zero */
+	rc = dfs_open(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
+		      O_RDWR | O_TRUNC, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify file size after truncating */
+	rc = dfs_lookup(dfs_mt, path_file1, O_RDONLY, &obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, filename_file1, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 and write 5 bytes */
+	rc = dfs_test_file_gen(filename_file1, 0, OC_S1, 5);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 with O_TRUNC, size should be zero */
+	rc = dfs_lookup(dfs_mt, path_file1, O_RDWR | O_TRUNC, &obj, &mode, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify file size after truncating */
+	rc = dfs_lookup(dfs_mt, path_file1, O_RDONLY, &obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, filename_file1, 0, NULL);
+	assert_int_equal(rc, 0);
+}
+
 #define NUM_ENTRIES	1024
 #define NR_ENUM		64
 
@@ -3231,6 +3303,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST27: dfs pipeline find",
 	  dfs_test_pipeline_find, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST28: dfs open/lookup flags",
+	  dfs_test_oflags, async_disable, test_case_teardown},
 };
 
 static int
@@ -3301,7 +3375,7 @@ run_dfs_unit_test(int rank, int size)
 	par_barrier(PAR_COMM_WORLD);
 
 	/** run tests again with DTX */
-	setenv("DFS_USE_DTX", "1", 1);
+	d_setenv("DFS_USE_DTX", "1", 1);
 
 	par_barrier(PAR_COMM_WORLD);
 	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,

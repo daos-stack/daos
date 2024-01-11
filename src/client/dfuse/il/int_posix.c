@@ -21,11 +21,14 @@
 #include <sys/ioctl.h>
 #include <string.h>
 
-#include "dfuse_log.h"
 #include <gurt/list.h>
 #include <gurt/atomic.h>
+
+#include <daos/event.h>
+#include <dfuse_ioctl.h>
+
+#include "dfuse_log.h"
 #include "intercept.h"
-#include "dfuse_ioctl.h"
 #include "dfuse_vector.h"
 #include "dfuse_common.h"
 
@@ -798,8 +801,9 @@ child_hdlr(void)
 {
 	int rc;
 
+	daos_eq_lib_reset_after_fork();
 	daos_dti_reset();
-	ioil_eqh = DAOS_HDL_INVAL;
+	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
 	rc = daos_eq_create(&ioil_eqh);
 	if (rc)
 		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
@@ -2176,7 +2180,7 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 		if (nread != nmemb)
 			entry->fd_eof = true;
 	} else if (bytes_read < 0) {
-		entry->fd_err = bytes_read;
+		entry->fd_err = errcode;
 	} else {
 		entry->fd_eof = true;
 	}
@@ -2235,7 +2239,7 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 		nwrite        = bytes_written / size;
 		entry->fd_pos = oldpos + (nwrite * size);
 	} else if (bytes_written < 0) {
-		entry->fd_err = bytes_written;
+		entry->fd_err = errcode;
 	}
 
 	vector_decref(&fd_table, entry);

@@ -377,7 +377,7 @@ daos_prop_t *get_daos_prop_with_owner_and_acl(char *owner, uint32_t owner_type,
 typedef int (*test_setup_cb_t)(void **state);
 typedef int (*test_teardown_cb_t)(void **state);
 
-bool test_runable(test_arg_t *arg, unsigned int required_tgts);
+bool test_runable(test_arg_t *arg, unsigned int required_nodes);
 int test_pool_get_info(test_arg_t *arg, daos_pool_info_t *pinfo, d_rank_list_t **engine_ranks);
 int test_get_leader(test_arg_t *arg, d_rank_t *rank);
 bool test_rebuild_query(test_arg_t **args, int args_cnt);
@@ -671,5 +671,9 @@ out:
 	D_FREE(fullpath);
 	return rc;
 }
+
+void test_set_engine_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc);
+void test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value);
+void test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num);
 
 #endif

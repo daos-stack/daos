@@ -10,8 +10,8 @@
 #ifndef __CRT_SWIM_H__
 #define __CRT_SWIM_H__
 
-#include "gurt/list.h"
-#include "cart/swim.h"
+#include <gurt/list.h>
+#include <cart/swim.h>
 #include "swim/swim_internal.h"
 
 #define CRT_SWIM_NGLITCHES_TRESHOLD	10

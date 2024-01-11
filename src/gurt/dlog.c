@@ -1,13 +1,11 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements message logging system.
  */
-
-#define DLOG_MUTEX
 
 #include <fcntl.h>
 #include <errno.h>
@@ -21,9 +19,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#ifdef DLOG_MUTEX
 #include <pthread.h>
-#endif
 
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -85,10 +81,9 @@ struct d_log_state {
 	int flush_pri;		/* flush priority */
 	bool append_rank;	/* append rank to the log filename */
 	bool rank_appended;	/* flag to indicate if rank is already appended */
-#ifdef DLOG_MUTEX
-	pthread_mutex_t clogmux;	/* protect clog in threaded env */
-#endif
 };
+
+static pthread_mutex_t clogmux = PTHREAD_MUTEX_INITIALIZER; /* protect clog in threaded env */
 
 struct cache_entry {
 	int		*ce_cache;
@@ -111,13 +106,8 @@ static const char        *default_fac0name = "CLOG";
 /* whether we should merge log and stderr */
 static bool               merge_stderr;
 
-#ifdef DLOG_MUTEX
-#define clog_lock()   D_MUTEX_LOCK(&mst.clogmux)
-#define clog_unlock() D_MUTEX_UNLOCK(&mst.clogmux)
-#else
-#define clog_lock()
-#define clog_unlock()
-#endif
+#define clog_lock()   pthread_mutex_lock(&clogmux)
+#define clog_unlock() pthread_mutex_unlock(&clogmux)
 
 static int d_log_write(char *buf, int len, bool flush);
 static const char *clog_pristr(int);
@@ -129,9 +119,9 @@ static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
 /**
  * clog_pristr: convert priority to 4 byte symbolic name.
  *
- * \param pri [IN]		the priority to convert to a string
+ * \param[in] pri	the priority to convert to a string
  *
- * \return			the string (symbolic name) of the priority
+ * \return		the string (symbolic name) of the priority
  */
 static const char *clog_pristr(int pri)
 {
@@ -149,9 +139,9 @@ static const char *clog_pristr(int pri)
  * clog_setnfac: set the number of facilities allocated (including default
  * to a given value).   clog must be open for this to do anything.
  * we set the default name for facility 0 here.
- * caller must hold clog_lock.
+ * caller must hold clogmux.
  *
- * \param n [IN]	the number of facilities to allocate space for now.
+ * \param[in] n		the number of facilities to allocate space for now.
  *
  * \return		zero on success, -1 on error.
  */
@@ -162,7 +152,7 @@ static int clog_setnfac(int n)
 
 	/*
 	 * no need to check d_log_xst.tag to see if clog is open or not,
-	 * since caller holds clog_lock already it must be ok.
+	 * since caller holds clogmux already it must be ok.
 	 */
 
 	/* hmm, already done */
@@ -256,7 +246,7 @@ reset_caches(bool lock_held)
 void
 d_log_add_cache(int *cache, int nr)
 {
-	struct cache_entry	*ce;
+	struct cache_entry *ce;
 
 	/* Can't use D_ALLOC yet */
 	ce = malloc(sizeof(*ce));
@@ -272,11 +262,7 @@ d_log_add_cache(int *cache, int nr)
 
 /**
  * dlog_cleanout: release previously allocated resources (e.g. from a
- * close or during a failed open).  this function assumes the clogmux
- * has been allocated (caller must ensure that this is true or we'll
- * die when attempting a clog_lock()).  we will dispose of clogmux.
- * (XXX: might want to switch over to a PTHREAD_MUTEX_INITIALIZER for
- * clogmux at some point?).
+ * close or during a failed open).
  *
  * the caller handles cleanout of d_log_xst.tag (not us).
  */
@@ -334,13 +320,6 @@ static void dlog_cleanout(void)
 				      struct cache_entry, ce_link)))
 		free(ce);
 	clog_unlock();
-#ifdef DLOG_MUTEX
-	/* XXX
-	 * do not destroy mutex to allow correct execution of dlog_sync()
-	 * which as been registered using atexit() and to be run upon exit()
-	 */
-	 /* D_MUTEX_DESTROY(&mst.clogmux); */
-#endif
 }
 
 static __thread int	 pre_err;
@@ -562,7 +541,7 @@ d_log_sync(void)
  * we vsnprintf the message into a holding buffer to format it.  then we
  * send it to all target output logs.  the holding buffer is set to
  * DLOG_TBSIZ, if the message is too long it will be silently truncated.
- * caller should not hold clog_lock, d_vlog will grab it as needed.
+ * caller should not hold clogmux, d_vlog will grab it as needed.
  *
  * @param flags returned by d_log_check
  * @param fmt the printf(3) format to use
@@ -862,26 +841,29 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.flush_pri = DLOG_WARN;
 	mst.log_id_cb = log_id_cb;
 
-	env = getenv(D_LOG_FLUSH_ENV);
+	d_agetenv_str(&env, D_LOG_FLUSH_ENV);
 	if (env) {
 		pri = d_log_str2pri(env, strlen(env) + 1);
 
 		if (pri != -1)
 			mst.flush_pri = pri;
+		d_free_env_str(&env);
 	}
 
-	env = getenv(D_LOG_TRUNCATE_ENV);
+	d_agetenv_str(&env, D_LOG_TRUNCATE_ENV);
 	if (env != NULL && atoi(env) > 0)
 		truncate = 1;
+	d_free_env_str(&env);
 
-	env = getenv(D_LOG_SIZE_ENV);
+	d_agetenv_str(&env, D_LOG_SIZE_ENV);
 	if (env != NULL) {
 		log_size = d_getenv_size(env);
 		if (log_size < LOG_SIZE_MIN)
 			log_size = LOG_SIZE_MIN;
+		d_free_env_str(&env);
 	}
 
-	env = getenv(D_LOG_FILE_APPEND_PID_ENV);
+	d_agetenv_str(&env, D_LOG_FILE_APPEND_PID_ENV);
 	if (logfile != NULL && env != NULL) {
 		if (strcmp(env, "0") != 0) {
 			rc = asprintf(&buffer, "%s.%d", logfile, getpid());
@@ -893,10 +875,12 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 					    "continuing.\n");
 		}
 	}
+	d_free_env_str(&env);
 
-	env = getenv(D_LOG_FILE_APPEND_RANK_ENV);
+	d_agetenv_str(&env, D_LOG_FILE_APPEND_RANK_ENV);
 	if (env && strcmp(env, "0") != 0)
 		mst.append_rank = true;
+	d_free_env_str(&env);
 
 	/* quick sanity check (mst.tag is non-null if already open) */
 	if (d_log_xst.tag || !tag ||
@@ -915,13 +899,6 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		fprintf(stderr, "d_log_open calloc failed.\n");
 		goto early_error;
 	}
-#ifdef DLOG_MUTEX		/* create lock */
-	if (D_MUTEX_INIT(&mst.clogmux, NULL) != 0) {
-		/* XXX: consider cvt to PTHREAD_MUTEX_INITIALIZER */
-		fprintf(stderr, "d_log_open D_MUTEX_INIT failed.\n");
-		goto early_error;
-	}
-#endif
 	/* it is now safe to use dlog_cleanout() for error handling */
 
 	clog_lock();		/* now locked */
@@ -938,9 +915,10 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		int         log_flags = O_RDWR | O_CREAT;
 		struct stat st;
 
-		env = getenv(D_LOG_STDERR_IN_LOG_ENV);
+		d_agetenv_str(&env, D_LOG_STDERR_IN_LOG_ENV);
 		if (env != NULL && atoi(env) > 0)
 			merge_stderr = true;
+		d_free_env_str(&env);
 
 		if (!truncate)
 			log_flags |= O_APPEND;
@@ -1102,24 +1080,35 @@ bool d_logfac_is_enabled(const char *fac_name)
 {
 	char *ddsubsys_env;
 	char *ddsubsys_fac;
-	int len = strlen(fac_name);
+	int   len = strlen(fac_name);
+	bool  rc;
 
 	/* read env DD_SUBSYS to enable corresponding facilities */
-	ddsubsys_env = getenv(DD_FAC_ENV);
+	d_agetenv_str(&ddsubsys_env, DD_FAC_ENV);
 	if (ddsubsys_env == NULL)
 		return true; /* enable all facilities by default */
 
-	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0)
-		return true; /* enable all facilities with DD_SUBSYS=all */
+	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0) {
+		rc = true; /* enable all facilities with DD_SUBSYS=all */
+		goto out;
+	}
 
 	ddsubsys_fac = strcasestr(ddsubsys_env, fac_name);
-	if (ddsubsys_fac == NULL)
-		return false;
+	if (ddsubsys_fac == NULL) {
+		rc = false;
+		goto out;
+	}
 
-	if (ddsubsys_fac[len] != '\0' && ddsubsys_fac[len] != ',')
-		return false;
+	if (ddsubsys_fac[len] != '\0' && ddsubsys_fac[len] != ',') {
+		rc = false;
+		goto out;
+	}
 
-	return true;
+	rc = true;
+
+out:
+	d_free_env_str(&ddsubsys_env);
+	return rc;
 }
 
 /*

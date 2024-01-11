@@ -5,41 +5,39 @@
 """
 # pylint: disable=too-many-lines
 
-from ast import literal_eval
-import os
 import json
+import os
+import random
 import re
 import sys
+from ast import literal_eval
 from time import time
-import random
-
-from avocado import fail_on, skip, TestFail
-from avocado import Test as avocadoTest
-from avocado.core import exceptions
-from ClusterShell.NodeSet import NodeSet
-from pydaos.raw import DaosContext, DaosLog, DaosApiError
 
 from agent_utils import DaosAgentManager, include_local_host
+from avocado import Test as avocadoTest
+from avocado import TestFail, fail_on, skip
+from avocado.core import exceptions
 from cart_ctl_utils import CartCtl
+from ClusterShell.NodeSet import NodeSet
 from command_utils_base import EnvironmentVariables
-from exception_utils import CommandFailure
 from daos_utils import DaosCommand
 from distro_utils import detect
 from dmg_utils import get_dmg_command
+from exception_utils import CommandFailure
 from fault_config_utils import FaultInjection
-from general_utils import \
-    get_default_config_file, pcmd, get_file_listing, DaosTestError, run_command, \
-    dump_engines_stacks, get_avocado_config_value, set_avocado_config_value, \
-    nodeset_append_suffix, dict_to_str
-from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
-from logger_utils import TestLogger
-from server_utils import DaosServerManager
-from run_utils import stop_processes, run_remote, command_as_user
-from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
-from test_utils_container import TestContainer
-from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
-from write_host_file import write_host_file
+from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
+                           get_avocado_config_value, get_default_config_file, get_file_listing,
+                           nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
+from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
 from job_manager_utils import get_job_manager
+from logger_utils import TestLogger
+from pydaos.raw import DaosApiError, DaosContext, DaosLog
+from run_utils import command_as_user, run_remote, stop_processes
+from server_utils import DaosServerManager
+from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
+from test_utils_container import TestContainer
+from test_utils_pool import POOL_NAMESPACE, LabelGenerator, add_pool
+from write_host_file import write_host_file
 
 
 def skipForTicket(ticket):  # pylint: disable=invalid-name
@@ -142,13 +140,12 @@ class Test(avocadoTest):
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
         self._test_step = 1
 
-        # Random generator that could be seeded for reproducibility
-        seed = random.randrange(sys.maxsize)  # nosec
-        self.log.info("Test.random seed = %s", seed)
-        self.random = random.Random(seed)
-
         # Avoid concatenating diff output.
         self.maxDiff = None  # pylint: disable=invalid-name
+
+        # Random generator
+        self.rand_seed = None
+        self.random = None
 
     def setUp(self):
         """Set up each test case."""
@@ -166,6 +163,20 @@ class Test(avocadoTest):
         self.check_variant_skip()
         self.log.info("*** SETUP running on %s ***", str(detect()))
         super().setUp()
+
+        # Random generator that could be seeded for reproducibility
+        env_seed = os.environ.get("DAOS_TEST_RANDOM_SEED", None)
+        if env_seed is None:
+            self.rand_seed = int.from_bytes(os.urandom(8), byteorder='little')
+        else:
+            try:
+                self.rand_seed = int(env_seed)
+            except ValueError:
+                self.fail(
+                    "ERROR: The env variable DAOS_TEST_RANDOM_SEED "
+                    "does not define a valid integer: got='{}'".format(env_seed))
+        self.log.info("Test.random seed = %d", self.rand_seed)
+        self.random = random.Random(self.rand_seed)
 
     def add_test_data(self, filename, data):
         """Add a file to the test variant specific data directory.
@@ -538,7 +549,8 @@ class TestWithoutServers(Test):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
-        self._teardown_errors.extend(self.fault_injection.stop())
+        if self.fault_injection:
+            self._teardown_errors.extend(self.fault_injection.stop())
         super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
@@ -682,7 +694,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_manager_class = self.params.get(
             "agent_manager_class", "/run/setup/*", self.agent_manager_class)
 
-        # Support configuring the startup of servers and agents by the setup()
+        # Support configuring the start-up of servers and agents by the setup()
         # method from the test yaml file
         self.setup_start_servers = self.params.get(
             "start_servers", "/run/setup/*", self.setup_start_servers)

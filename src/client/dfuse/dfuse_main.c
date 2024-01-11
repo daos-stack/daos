@@ -19,9 +19,9 @@
 
 #include "dfuse.h"
 
-#include "daos_fs.h"
-#include "daos_api.h"
-#include "daos_uns.h"
+#include <daos_fs.h>
+#include <daos_api.h>
+#include <daos_uns.h>
 
 #include <gurt/common.h>
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
@@ -240,9 +240,7 @@ show_version(char *name)
 	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n", name, DAOS_VERSION,
 		DAOS_API_VERSION_MAJOR, DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 	fprintf(stdout, "Using fuse %s\n", fuse_pkgversion());
-#if HAVE_CACHE_READDIR
 	fprintf(stdout, "Kernel readdir support enabled\n");
-#endif
 };
 
 static void
@@ -281,7 +279,7 @@ show_help(char *name)
 	    "Alternatively, the mountpoint directory can also be specified with the -m or\n"
 	    "--mountpoint= option but this usage is deprecated.\n"
 	    "\n"
-	    "The DAOS pool and container can be specified in several different ways"
+	    "The DAOS pool and container can be specified in several different ways\n"
 	    "(only one way of specifying the pool and container should be used):\n"
 	    "* The DAOS pool and container can be explicitly specified on the command line\n"
 	    "  as positional arguments, using either UUIDs or labels. This is the most\n"
@@ -415,6 +413,8 @@ main(int argc, char **argv)
 					     {"help", no_argument, 0, 'h'},
 					     {0, 0, 0, 0}};
 
+	d_signal_stack_enable(true);
+
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -429,7 +429,7 @@ main(int argc, char **argv)
 	dfuse_info->di_eq_count = 1;
 
 	while (1) {
-		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
 
 		if (c == -1)
 			break;

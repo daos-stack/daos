@@ -346,11 +346,14 @@
 #
 #  bypass_health_chk: true
 #
-#  # Specify the fabric network interface and interface port that will
-#  # be used by this engine. The fabric_iface_port must be different
-#  # for each engine on a DAOS server.
+#  # Specify the fabric network interface used for this engine.
 #
 #  fabric_iface: ib0
+#
+#  # Specify the fabric network interface port that will be used by this engine.
+#  # The fabric_iface_port must be different for each engine on a DAOS server
+#  # if each engine is assigned to the same fabric_iface.
+#
 #  fabric_iface_port: 20000
 #
 #  # Force specific debug mask for the engine at start up time.
@@ -446,27 +449,6 @@
 #    - wal
 #
 #
-#  # Specify accelerator engine setting (experimental).
-#
-#  # Acceleration engine options are:
-#  # - "none" do not use an acceleration engine. (default)
-#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
-#  # - "dml" te set DML as accelerator engine.
-#
-#  # Optional capability settings are:
-#  # - "move" to enable acceleration of MOVE instructions.
-#  # - "crc" to enable acceleration of CRC instructions.
-#
-#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
-#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
-#
-#  acceleration:
-#    engine: spdk
-#    options:
-#    - move
-#    - crc
-#
-#
 #-
 #  # Number of I/O service threads (and network endpoints) per engine.
 #  # Immutable after running "dmg storage format".
@@ -519,14 +501,15 @@
 #
 #  bypass_health_chk: true
 #
-#  # Use specific network interface.
-#  # Specify the fabric network interface that will be used by this engine.
-#  # Optionally specify the fabric network interface port that will be used
-#  # by this engine but please only if you have a specific need, this will
-#  # normally be chosen automatically.
+#  # Specify the fabric network interface used for this engine.
 #
 #  fabric_iface: ib1
-#  fabric_iface_port: 20000
+#
+#  # Specify the fabric network interface port that will be used by this engine.
+#  # The fabric_iface_port must be different for each engine on a DAOS server
+#  # if each engine is assigned to the same fabric_iface.
+#
+#  fabric_iface_port: 21000
 #
 #  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
@@ -613,23 +596,3 @@
 #
 #    # See about bdev_roles above.
 #    bdev_roles: [wal, meta, data]
-#
-#
-#  # Specify accelerator engine setting (experimental).
-#
-#  # Acceleration engine options are:
-#  # - "none" do not use an acceleration engine. (default)
-#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
-#  # - "dml" te set DML as accelerator engine.
-#
-#  # Optional capability settings are:
-#  # - "move" to enable acceleration of MOVE instructions.
-#  # - "crc" to enable acceleration of CRC instructions.
-#
-#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
-#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
-#
-#  acceleration:
-#    engine: dml
-#    options:
-#    - crc

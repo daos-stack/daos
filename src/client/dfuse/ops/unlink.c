@@ -20,6 +20,7 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 	struct dfuse_inode_entry *ie;
 	int                       rc;
 	fuse_ino_t                ino;
+	ino_t                     parent_ino;
 
 	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
 
@@ -33,6 +34,11 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 
 	ie->ie_unlinked = true;
 
+	parent_ino = parent->ie_stat.st_ino;
+
+	/* At this point the request is complete so the kernel is free to drop any refs on parent
+	 * so it should not be accessed.
+	 */
 	DFUSE_REPLY_ZERO(parent, req);
 
 	/* If caching is enabled then invalidate the data and attribute caches.  As this came a
@@ -42,21 +48,20 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 	 */
 	rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, ino, 0, 0);
 	if (rc && rc != -ENOENT)
-		DFUSE_TRA_ERROR(ie, "inval_inode() returned: %d (%s)", rc, strerror(-rc));
+		DHS_ERROR(ie, -rc, "inval_inode() error");
 
 	/* If the kernel was aware of this inode at an old location then remove that which should
 	 * trigger a forget call.  Checking the test logs shows that we do see the forget anyway
 	 * for cases where the kernel knows which file it deleted.
 	 */
-	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
-		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
+	if ((ie->ie_parent != parent_ino) || (strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
 		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx " DF_DE, ie->ie_parent,
 				DP_DE(ie->ie_name));
 
 		rc = fuse_lowlevel_notify_delete(dfuse_info->di_session, ie->ie_parent, ino,
 						 ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 		if (rc && rc != -ENOENT)
-			DFUSE_TRA_ERROR(ie, "notify_delete() returned: %d (%s)", rc, strerror(-rc));
+			DHS_ERROR(ie, -rc, "notify_delete() error");
 	}
 
 	/* Drop the ref again */

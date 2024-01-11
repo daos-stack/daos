@@ -766,16 +766,17 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_entry *vfe)
 	return 0;
 }
 
-#define FLUSH_INTVL		5	/* seconds */
 #define EXPIRE_INTVL		10	/* seconds */
+#define UNMAP_SIZE_THRESH	(1UL << 20)	/* 1MB */
 
 static int
-flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_list_t *unmap_sgl)
+flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_list_t *unmap_sgl,
+	       d_sg_list_t *free_sgl)
 {
 	struct vea_free_entry	*entry, *tmp;
 	struct vea_free_extent	 vfe;
 	struct vea_free_entry	 free_entry;
-	d_iov_t			*unmap_iov;
+	d_iov_t			*ext_iov;
 	int			 i, rc = 0;
 	d_iov_t			 key;
 	struct vea_bitmap_entry	*bitmap;
@@ -784,6 +785,7 @@ flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_l
 
 	D_ASSERT(umem_tx_none(vsi->vsi_umem));
 	D_ASSERT(unmap_sgl->sg_nr_out == 0);
+	D_ASSERT(free_sgl->sg_nr_out == 0);
 
 	D_ALLOC_ARRAY(flush_bitmaps, MAX_FLUSH_FRAGS);
 	if (!flush_bitmaps)
@@ -813,25 +815,37 @@ flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_l
 			break;
 		}
 
-		flush_bitmaps[unmap_sgl->sg_nr_out] = bitmap;
-		/* Unmap callback may yield, so we can't call it directly in this tight loop */
-		unmap_sgl->sg_nr_out++;
-		unmap_iov = &unmap_sgl->sg_iovs[unmap_sgl->sg_nr_out - 1];
-		unmap_iov->iov_buf = (void *)vfe.vfe_blk_off;
-		unmap_iov->iov_len = vfe.vfe_blk_cnt;
+		flush_bitmaps[free_sgl->sg_nr_out] = bitmap;
+		ext_iov = &free_sgl->sg_iovs[free_sgl->sg_nr_out];
+		ext_iov->iov_buf = (void *)vfe.vfe_blk_off;
+		ext_iov->iov_len = vfe.vfe_blk_cnt;
+		free_sgl->sg_nr_out++;
+		/*
+		 * Unmap callback may yield, so we can't call it directly in this tight loop.
+		 *
+		 * Given that unmap a tiny extent (much smaller than a SSD erase block) doesn't
+		 * make sense and too many parallel unmap calls could impact I/O performance, we
+		 * opt to unmap only large enough extent.
+		 */
+		if (vfe.vfe_blk_cnt >= (UNMAP_SIZE_THRESH / vsi->vsi_md->vsd_blk_sz)) {
+			ext_iov = &unmap_sgl->sg_iovs[unmap_sgl->sg_nr_out];
+			ext_iov->iov_buf = (void *)vfe.vfe_blk_off;
+			ext_iov->iov_len = vfe.vfe_blk_cnt;
+			unmap_sgl->sg_nr_out++;
+		}
 
-		if (unmap_sgl->sg_nr_out == MAX_FLUSH_FRAGS)
+		if (free_sgl->sg_nr_out == MAX_FLUSH_FRAGS)
 			break;
 	}
 
 	vsi->vsi_flush_time = cur_time;
 
 	/*
-	 * According to NVMe spec, unmap isn't an expensive non-queue command
-	 * anymore, so we should just unmap as soon as the extent is freed.
+	 * According to NVMe spec, unmap isn't an expensive non-queue command anymore, so we
+	 * should just unmap as soon as the extent is freed.
 	 *
-	 * Since unmap could yield, it must be called before the compound_free(),
-	 * otherwise, the extent could be visible for allocation before unmap done.
+	 * Since unmap could yield, it must be called before the compound_free(), otherwise,
+	 * the extent could be visible for allocation before unmap done.
 	 */
 	if (vsi->vsi_unmap_ctxt.vnc_unmap != NULL && unmap_sgl->sg_nr_out > 0) {
 		rc = vsi->vsi_unmap_ctxt.vnc_unmap(unmap_sgl, vsi->vsi_md->vsd_blk_sz,
@@ -841,11 +855,11 @@ flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_l
 				unmap_sgl->sg_nr_out, DP_RC(rc));
 	}
 
-	for (i = 0; i < unmap_sgl->sg_nr_out; i++) {
-		unmap_iov = &unmap_sgl->sg_iovs[i];
+	for (i = 0; i < free_sgl->sg_nr_out; i++) {
+		ext_iov = &free_sgl->sg_iovs[i];
 
-		free_entry.vfe_ext.vfe_blk_off = (uint64_t)unmap_iov->iov_buf;
-		free_entry.vfe_ext.vfe_blk_cnt = unmap_iov->iov_len;
+		free_entry.vfe_ext.vfe_blk_off = (uint64_t)ext_iov->iov_buf;
+		free_entry.vfe_ext.vfe_blk_cnt = ext_iov->iov_len;
 		free_entry.vfe_ext.vfe_age = cur_time;
 		free_entry.vfe_bitmap = flush_bitmaps[i];
 
@@ -858,22 +872,6 @@ flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_l
 	D_FREE(flush_bitmaps);
 
 	return rc;
-}
-
-static inline bool
-need_aging_flush(struct vea_space_info *vsi, uint32_t cur_time, bool force)
-{
-	if (d_list_empty(&vsi->vsi_agg_lru))
-		return false;
-
-	/* External flush controls the flush rate externally */
-	if (vsi->vsi_unmap_ctxt.vnc_ext_flush)
-		return true;
-
-	if (!force && cur_time < (vsi->vsi_flush_time + FLUSH_INTVL))
-		return false;
-
-	return true;
 }
 
 void
@@ -906,7 +904,7 @@ free:
 }
 
 static int
-reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim, uint32_t *nr_reclaimed)
+reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim)
 {
 	int				 i;
 	struct vea_bitmap_entry		*bitmap_entry;
@@ -966,8 +964,8 @@ reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim, uint32_t 
 					"tree error: "DF_RC"\n", blk_off, blk_cnt, DP_RC(rc));
 				goto abort;
 			}
-			/* call persistent_free_extent instead */
-			rc = persistent_free(vsi, &fca->fca_vfe);
+
+			rc = persistent_free_extent(vsi, &fca->fca_vfe.vfe_ext);
 			if (rc) {
 				D_ERROR("Remove ["DF_U64", %u] from persistent "
 					"extent tree error: "DF_RC"\n", blk_off,
@@ -986,102 +984,54 @@ abort:
 				return rc;
 			nr++;
 			if (nr >= nr_reclaim)
-				goto out;
+				return rc;
 		}
 	}
 
-out:
-	if (nr_reclaimed)
-		*nr_reclaimed = nr;
 	return rc;
 }
 
 int
-trigger_aging_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush,
-		    uint32_t *nr_flushed)
+trigger_aging_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
 {
-	d_sg_list_t	 unmap_sgl;
+	d_sg_list_t	 unmap_sgl, free_sgl;
 	uint32_t	 cur_time, tot_flushed = 0;
 	int		 rc;
 
 	D_ASSERT(nr_flush > 0);
-	if (!umem_tx_none(vsi->vsi_umem)) {
-		rc = -DER_INVAL;
-		goto out;
-	}
+	D_ASSERT(umem_tx_none(vsi->vsi_umem));
 
 	cur_time = get_current_age();
-	if (!need_aging_flush(vsi, cur_time, force)) {
-		rc = 0;
+	rc = reclaim_unused_bitmap(vsi, MAX_FLUSH_FRAGS);
+	if (rc)
 		goto out;
-	}
 
 	rc = d_sgl_init(&unmap_sgl, MAX_FLUSH_FRAGS);
 	if (rc)
 		goto out;
+	rc = d_sgl_init(&free_sgl, MAX_FLUSH_FRAGS);
+	if (rc) {
+		d_sgl_fini(&unmap_sgl, false);
+		goto out;
+	}
 
 	while (tot_flushed < nr_flush) {
-		rc = flush_internal(vsi, force, cur_time, &unmap_sgl);
+		rc = flush_internal(vsi, force, cur_time, &unmap_sgl, &free_sgl);
 
-		tot_flushed += unmap_sgl.sg_nr_out;
-		if (rc || unmap_sgl.sg_nr_out < MAX_FLUSH_FRAGS)
+		tot_flushed += free_sgl.sg_nr_out;
+		if (rc || free_sgl.sg_nr_out < MAX_FLUSH_FRAGS)
 			break;
 
 		unmap_sgl.sg_nr_out = 0;
+		free_sgl.sg_nr_out = 0;
 	}
 
 	d_sgl_fini(&unmap_sgl, false);
+	d_sgl_fini(&free_sgl, false);
 
-	rc = reclaim_unused_bitmap(vsi, MAX_FLUSH_FRAGS, NULL);
-	if (rc)
-		goto out;
 out:
 	if (nr_flushed != NULL)
 		*nr_flushed = tot_flushed;
 
 	return rc;
-}
-
-static void
-flush_end_cb(void *data, bool noop)
-{
-	struct vea_space_info	*vsi = data;
-
-	if (!noop)
-		trigger_aging_flush(vsi, false, MAX_FLUSH_FRAGS * 20, NULL);
-
-	vsi->vsi_flush_scheduled = false;
-}
-
-int
-schedule_aging_flush(struct vea_space_info *vsi)
-{
-	int	rc;
-
-	D_ASSERT(vsi != NULL);
-
-	if (vsi->vsi_unmap_ctxt.vnc_ext_flush)
-		return 0;
-
-	/* Check flush condition in advance to avoid unnecessary umem_tx_add_callback() */
-	if (!need_aging_flush(vsi, get_current_age(), false))
-		return 0;
-
-	/* Schedule one transaction end callback flush is enough */
-	if (vsi->vsi_flush_scheduled)
-		return 0;
-
-	/*
-	 * Perform the flush in transaction end callback, since the flush operation
-	 * could yield on blob unmap.
-	 */
-	rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, UMEM_STAGE_NONE,
-				  flush_end_cb, vsi);
-	if (rc) {
-		D_ERROR("Add transaction end callback error "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-	vsi->vsi_flush_scheduled = true;
-
-	return 0;
 }

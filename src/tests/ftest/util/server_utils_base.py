@@ -3,14 +3,13 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import os
 import re
+from logging import getLogger
 
 from ClusterShell.NodeSet import NodeSet
-
-from command_utils_base import FormattedParameter, CommandWithParameters
-from command_utils import YamlCommand, CommandWithSubCommand
+from command_utils import CommandWithSubCommand, YamlCommand
+from command_utils_base import CommandWithParameters, FormattedParameter
 from data_utils import dict_extract_values, list_flatten
 from dmg_utils import get_dmg_response
 from exception_utils import CommandFailure
@@ -539,7 +538,7 @@ class DaosServerCommand(YamlCommand):
                     "/run/daos_server/storage/prepare/*", "prepare")
 
                 # daos_server storage prepare command options:
-                #   --pci-allowlist=    Whitespace separated list of PCI
+                #   --pci-allowlist=    White-space separated list of PCI
                 #                       devices (by address) to be unbound from
                 #                       Kernel driver and used with SPDK
                 #                       (default is all PCI devices).

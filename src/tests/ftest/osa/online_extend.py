@@ -3,14 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import threading
+import time
 
-from test_utils_pool import add_pool
-from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
+from test_utils_pool import add_pool
+from write_host_file import write_host_file
 
 
 class OSAOnlineExtend(OSAUtils):
@@ -33,7 +33,7 @@ class OSAOnlineExtend(OSAUtils):
         self.extra_servers = self.get_hosts_from_yaml(
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.pool = None
         self.dmg_command.exit_status_exception = True
         self.daos_racer = None

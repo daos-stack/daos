@@ -5,10 +5,11 @@
 """
 
 import os
+
 from dfuse_test_base import DfuseTestBase
-from mdtest_utils import MdtestCommand
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
+from mdtest_utils import MdtestCommand
 
 
 class MdtestBase(DfuseTestBase):
@@ -123,11 +124,11 @@ class MdtestBase(DfuseTestBase):
         """
         env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
         manager.assign_hosts(self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
-        if self.ppn is None:
-            manager.assign_processes(processes)
+        # Pass only processes or ppn to be compatible with previous behavior
+        if self.ppn is not None:
+            manager.assign_processes(ppn=self.ppn)
         else:
-            manager.ppn.update(self.ppn, 'mpirun.ppn')
-            manager.processes.update(None, 'mpirun.np')
+            manager.assign_processes(processes=processes)
 
         manager.assign_environment(env)
 
