@@ -27,7 +27,7 @@ DSL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
 DSG_REPO_var="DAOS_STACK_${DISTRO}_GROUP_REPO"
 DSA_REPO_var="DAOS_STACK_${DISTRO}_APPSTREAM_REPO"
 
-retry_cmd 300 clush -B -S -l root -w "$NODESTRING" --copy requirements-ftest.txt ci_key* --dest=/tmp/
+retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
 
 # shellcheck disable=SC2001
 sanitized_commit_message="$(echo "$COMMIT_MESSAGE" | sed -e 's/\(["\$]\)/\\\1/g')"

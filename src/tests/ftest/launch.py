@@ -142,7 +142,7 @@ class Launch():
         self.avocado.set_version()
         if self.avocado.major < 82:
             raise LaunchError("Avocado version 82 or above required")
-        self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()), False)
+        self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()))
         self.logfile = os.path.join(self.logdir, "job.log")
 
         # Rename the launch log directory if one exists

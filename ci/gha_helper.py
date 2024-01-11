@@ -15,6 +15,7 @@ BUILD_FILES = ['site_scons/prereq_tools',
                'SConstruct',
                '.github/workflows/landing-builds.yml',
                '.dockerignore',
+               'requirements.txt',
                'requirements-build.txt',
                'requirements-utest.txt',
                'ci/gha_helper.py']
