@@ -120,7 +120,10 @@ cat /etc/daos/daos_server.yml
 cat /etc/daos/daos_agent.yml
 cat /etc/daos/daos_control.yml
 
+# Python 3.6 does not like deactivate with -u set, later versions are OK with it however.
+set +u
 deactivate
+set -u
 
 if ! module load "$OPENMPI"; then
     echo "Unable to load OpenMPI module: $OPENMPI"
