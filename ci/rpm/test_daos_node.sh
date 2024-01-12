@@ -108,12 +108,17 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r $FTEST/requirements-ftest.txt
 
+# TODO: Remove this line
+head -n 1 $FTEST/config_file_gen.py
+
 FTEST=/usr/lib/daos/TESTING/ftest
 sudo PYTHONPATH="$FTEST/util"                        \
-  $FTEST/config_file_gen.py -n "$HOSTNAME" -a /etc/daos/daos_agent.yml -s /etc/daos/daos_server.yml
+     "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py -n "$HOSTNAME" \
+        -a /etc/daos/daos_agent.yml -s /etc/daos/daos_server.yml
 sudo bash -c 'echo "system_ram_reserved: 4" >> /etc/daos/daos_server.yml'
 sudo PYTHONPATH="$FTEST/util"                        \
-      $FTEST/config_file_gen.py -n "$HOSTNAME" -d /etc/daos/daos_control.yml
+     "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py \
+     -n "$HOSTNAME" -d /etc/daos/daos_control.yml
 cat /etc/daos/daos_server.yml
 cat /etc/daos/daos_agent.yml
 cat /etc/daos/daos_control.yml
