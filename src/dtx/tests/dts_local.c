@@ -384,12 +384,109 @@ too_complex_transaction(void **state)
 	validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
 }
 
+static void
+overlapping_updates(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
+
+	int                    rc = 0;
+	char                   buf[BUF_SIZE];
+
+	struct dtx_handle     *dth         = NULL;
+	const char            *test_data_1 = "Hello";
+	const char            *test_data_2 = "Bye";
+	daos_key_t            *dkey        = &la->dkey[0];
+
+	print_message("Test:\n");
+
+	print_message("- begin local transaction\n");
+	rc =
+	    dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, 256, 0, NULL, NULL, 0, DTX_LOCAL, NULL, &dth);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dth);
+
+	la->iod.iod_size = strlen(test_data_1);
+	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data_1, la->iod.iod_size);
+
+	print_message("- insert at DKEY[0] (rc=0)\n");
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch, 0, 0, dkey, 1, &la->iod,
+			       NULL, &la->sgl, dth);
+	assert_rc_equal(rc, 0);
+
+	la->iod.iod_size = strlen(test_data_2);
+	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data_2, la->iod.iod_size);
+
+	print_message("- insert at DKEY[0] on the same epoch (rc=0)\n");
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, dkey, 1, &la->iod,
+			       NULL, &la->sgl, dth);
+	assert_rc_equal(rc, 0);
+
+	print_message("- commit the transaction (rc=0)\n");
+	rc = dtx_end(dth, NULL, rc);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
+
+	print_message("- try fetching the value inserted at DKEY[0]\n");
+	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, dkey, &la->iod, &la->fetch_sgl);
+	validate_fetch(&la->iod, &la->fetch_sgl, test_data_2, true);
+}
+
+static void
+overlapping_update_and_punch(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
+
+	int                    rc = 0;
+	char                   buf[BUF_SIZE];
+
+	struct dtx_handle     *dth       = NULL;
+	const char            *test_data = "Hello";
+	daos_key_t            *dkey      = &la->dkey[0];
+
+	print_message("Test:\n");
+
+	print_message("- begin local transaction\n");
+	rc =
+	    dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, 256, 0, NULL, NULL, 0, DTX_LOCAL, NULL, &dth);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dth);
+
+	la->iod.iod_size = strlen(test_data);
+	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data, la->iod.iod_size);
+
+	print_message("- insert at DKEY[0] (rc=0)\n");
+	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch, 0, 0, dkey, 1, &la->iod,
+			       NULL, &la->sgl, dth);
+	assert_rc_equal(rc, 0);
+
+	print_message("- punch DKEY[0] on the same epoch (rc=0)\n");
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, dkey, 0, NULL, dth);
+	assert_rc_equal(rc, 0);
+
+	print_message("- commit the transaction (rc=0)\n");
+	rc = dtx_end(dth, NULL, rc);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
+
+	print_message("- exptect no value at DKEY[0]\n");
+	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, dkey, &la->iod, &la->fetch_sgl);
+	validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
+}
+
 static const struct CMUnitTest local_tests_all[] = {
     {"DTX100: Simple local transaction", local_transaction, setup_local_args, teardown_local_args},
     {"DTX101: Simple local transaction with pre-existing data", local_transaction, warmup, cleanup},
     {"DTX102: Big local transaction", big_local_transaction, warmup, cleanup},
     {"DTX103: Too complex transaction", too_complex_transaction, setup_local_args,
      teardown_local_args},
+    {"DTX104: Transaction with an overlapping updates", overlapping_updates, setup_local_args,
+     teardown_local_args},
+    {"DTX105: Transaction with an overlapping update and punch", overlapping_update_and_punch,
+     setup_local_args, teardown_local_args},
 };
 
 int
