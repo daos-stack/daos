@@ -42,7 +42,7 @@ addFilter("daos-client-tests\.x86_64: W: files-duplicate \/usr\/lib\/daos\/TESTI
 # per Ashley, we want to supply these even though they cannot be debugged
 addFilter("E: static-library-without-debuginfo \/usr\/lib64\/lib(dfuse|ioil)\.a")
 
-# We want python scripts to use correct pyton command so they can be invoked properly with
+# We want python scripts to use correct python command so they can be invoked properly with
 # virtual environments enabled.
 addFilter("E: env-script-interpreter /usr/lib/daos/TESTING/ftest/cart/cart_logtest.py /usr/bin/env python3")
 addFilter("E: env-script-interpreter /usr/lib/daos/TESTING/ftest/config_file_gen.py /usr/bin/env python3")
