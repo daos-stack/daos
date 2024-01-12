@@ -443,8 +443,10 @@
 #    - meta
 #    - wal
 #
-#  # Set criteria for automatic detection and eviction of faulty NVMe devices.
-#
+#  # Set criteria for automatic detection and eviction of faulty NVMe devices. The
+#  # default criteria parameters are `enable: true`, `max_io_errs: 10` and
+#  # `max_csum_errs: <uint32_max>` (essentially eviction due to checksum errors is
+#  # disabled by default).
 #  bdev_auto_faulty:
 #    enable: true
 #    max_io_errs: 100
@@ -599,7 +601,10 @@
 #    # See about bdev_roles above.
 #    bdev_roles: [wal, meta, data]
 #
-#  # Disable automatic detection and eviction of faulty NVMe devices.
+#  # Disable automatic detection and eviction of faulty NVMe devices. The default
+#  # criteria parameters are `enable: true`, `max_io_errs: 10` and
+#  # `max_csum_errs: <uint32_max>` (essentially eviction due to checksum errors is
+#  # disabled by default).
 #
 #  bdev_auto_faulty:
 #    enable: false

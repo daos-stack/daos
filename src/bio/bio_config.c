@@ -1000,8 +1000,8 @@ bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max
 
 	*enable = auto_faulty_criteria.enable;
 	if (*enable == false) {
-		*max_io_errs   = 0;
-		*max_csum_errs = 0;
+		*max_io_errs   = UINT32_MAX;
+		*max_csum_errs = UINT32_MAX;
 		goto out;
 	}
 	*max_io_errs = auto_faulty_criteria.max_io_errs;
