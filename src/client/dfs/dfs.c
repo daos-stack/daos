@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3416,13 +3416,10 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 lookup_rel_path_loop:
 
 		/*
-		 * Open the directory object one level up.
-		 * Since fetch_entry does not support ".",
-		 * we can't support ".." as the last entry,
-		 * nor can we support "../.." because we don't
-		 * have parent.parent_oid and parent.mode.
-		 * For now, represent this partial state with
-		 * parent_fully_valid.
+		 * Open the directory object one level up.  Since fetch_entry does not support ".",
+		 * we can't support ".." as the last entry, nor can we support "../.." because we
+		 * don't have parent.parent_oid and parent.mode.  For now, represent this partial
+		 * state with parent_fully_valid.
 		 */
 		parent_fully_valid = true;
 		if (strcmp(token, "..") == 0) {
@@ -3508,15 +3505,23 @@ lookup_rel_path_loop:
 			}
 
 			if (stbuf) {
-				daos_size_t size;
+				daos_array_stbuf_t array_stbuf = {0};
 
-				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size, NULL);
+				rc = daos_array_stat(obj->oh, DAOS_TX_NONE, &array_stbuf, NULL);
 				if (rc) {
 					daos_array_close(obj->oh, NULL);
 					D_GOTO(err_obj, rc = daos_der2errno(rc));
 				}
-				stbuf->st_size = size;
+
+				stbuf->st_size   = array_stbuf.st_size;
 				stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
+
+				rc = update_stbuf_times(entry, array_stbuf.st_max_epoch, stbuf,
+							NULL);
+				if (rc) {
+					daos_array_close(obj->oh, NULL);
+					D_GOTO(err_obj, rc);
+				}
 			}
 			break;
 		}
@@ -3617,14 +3622,28 @@ lookup_rel_path_loop:
 		}
 
 		obj->d.chunk_size = entry.chunk_size;
-		obj->d.oclass = entry.oclass;
-		if (stbuf)
-			stbuf->st_size = sizeof(entry);
-
+		obj->d.oclass     = entry.oclass;
 		oid_cp(&parent.oid, obj->oid);
 		oid_cp(&parent.parent_oid, obj->parent_oid);
 		parent.oh = obj->oh;
 		parent.mode = entry.mode;
+
+		if (stbuf) {
+			daos_epoch_t ep;
+
+			rc = daos_obj_query_max_epoch(obj->oh, DAOS_TX_NONE, &ep, NULL);
+			if (rc) {
+				daos_obj_close(obj->oh, NULL);
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			}
+
+			rc = update_stbuf_times(entry, ep, stbuf, NULL);
+			if (rc) {
+				daos_obj_close(obj->oh, NULL);
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			}
+			stbuf->st_size = sizeof(entry);
+		}
 	}
 
 	if (mode)
@@ -3632,16 +3651,49 @@ lookup_rel_path_loop:
 
 	if (stbuf) {
 		if (is_root) {
+			daos_epoch_t ep;
+
+			/** refresh possibly stale root stbuf */
+			rc = fetch_entry(dfs->layout_v, dfs->super_oh, DAOS_TX_NONE, "/", 1, false,
+					 &exists, &entry, 0, NULL, NULL, NULL);
+			if (rc) {
+				D_ERROR("fetch_entry() failed: %d (%s)\n", rc, strerror(rc));
+				D_GOTO(err_obj, rc);
+			}
+
+			if (!exists || !S_ISDIR(entry.mode)) {
+				/** something really bad happened! */
+				D_ERROR("Root object corrupted!");
+				D_GOTO(err_obj, rc = EIO);
+			}
+
+			if (mode)
+				*mode = entry.mode;
+			dfs->root_stbuf.st_mode = entry.mode;
+			dfs->root_stbuf.st_uid  = entry.uid;
+			dfs->root_stbuf.st_gid  = entry.gid;
+
+			rc = daos_obj_query_max_epoch(dfs->root.oh, DAOS_TX_NONE, &ep, NULL);
+			if (rc)
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+
+			/** object was updated since creation */
+			rc = update_stbuf_times(entry, ep, &dfs->root_stbuf, NULL);
+			if (rc)
+				D_GOTO(err_obj, rc);
+			if (tspec_gt(dfs->root_stbuf.st_ctim, dfs->root_stbuf.st_mtim)) {
+				dfs->root_stbuf.st_atim.tv_sec  = entry.ctime;
+				dfs->root_stbuf.st_atim.tv_nsec = entry.ctime_nano;
+			} else {
+				dfs->root_stbuf.st_atim.tv_sec  = entry.mtime;
+				dfs->root_stbuf.st_atim.tv_nsec = entry.mtime_nano;
+			}
 			memcpy(stbuf, &dfs->root_stbuf, sizeof(struct stat));
 		} else {
 			stbuf->st_nlink = 1;
 			stbuf->st_mode = obj->mode;
 			stbuf->st_uid = entry.uid;
-			stbuf->st_gid = entry.gid;
-			stbuf->st_mtim.tv_sec = entry.mtime;
-			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
-			stbuf->st_ctim.tv_sec = entry.ctime;
-			stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+			stbuf->st_gid   = entry.gid;
 			if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
 				stbuf->st_atim.tv_sec = entry.ctime;
 				stbuf->st_atim.tv_nsec = entry.ctime_nano;
