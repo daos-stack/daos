@@ -108,9 +108,6 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r $FTEST/requirements-ftest.txt
 
-# TODO: Remove this line
-head -n 1 $FTEST/config_file_gen.py
-
 FTEST=/usr/lib/daos/TESTING/ftest
 sudo PYTHONPATH="$FTEST/util"                        \
      "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py -n "$HOSTNAME" \
