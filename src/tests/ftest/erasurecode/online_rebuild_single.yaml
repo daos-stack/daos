@@ -33,9 +33,7 @@ pool:
   svcn: 1
   control_method: dmg
   pool_query_timeout: 30
-  rf: !mux
-    rf1:
-      properties: rd_fac:2
+  properties: rd_fac:2
 container:
   type: POSIX
   control_method: API
