@@ -826,25 +826,6 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 			},
 			expSvc: svcWithState(testPoolService, system.PoolServiceStateDestroying),
 		},
-		"force=true, evict dRPC fails due to engine error": {
-			req: &mgmtpb.PoolDestroyReq{Id: mockUUID, Force: true, Recursive: true},
-			expDrpcEvReq: &mgmtpb.PoolEvictReq{
-				Sys:          build.DefaultSystemName,
-				Id:           mockUUID,
-				SvcRanks:     []uint32{0, 1, 2},
-				Destroy:      true,
-				ForceDestroy: true,
-			},
-			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
-					Status: int32(daos.MiscError),
-				}, nil)
-			},
-			expResp: &mgmtpb.PoolDestroyResp{
-				Status: int32(daos.MiscError),
-			},
-			expSvc: svcWithState(testPoolService, system.PoolServiceStateDestroying),
-		},
 		"already destroying, destroy dRPC fails due to engine error": {
 			req: &mgmtpb.PoolDestroyReq{Id: mockUUID, Recursive: true},
 			expDrpcReq: &mgmtpb.PoolDestroyReq{

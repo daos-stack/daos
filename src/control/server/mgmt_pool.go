@@ -699,7 +699,7 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 
 		// Perform separate PoolEvict _before_ possible transition to destroying state.
 		evStatus, err := svc.poolEvictConnections(ctx, req)
-		if err != nil {
+		if !req.Force && (err != nil) {
 			return nil, err
 		}
 
@@ -713,7 +713,7 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 			}
 		}
 
-		if evStatus != daos.Success {
+		if !req.Force && evStatus != daos.Success {
 			svc.log.Errorf("PoolEvict during pool destroy failed: %s", evStatus)
 			resp.Status = int32(evStatus)
 			return resp, nil
