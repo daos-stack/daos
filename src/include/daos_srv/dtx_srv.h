@@ -38,6 +38,13 @@ struct dtx_local_oid_record {
 
 /**
  * DAOS two-phase commit transaction handle in DRAM.
+ *
+ * There may be many instances of this particular structure at runtime in DRAM.
+ * So its size has to be well looked after.
+ *
+ * Please limit the amount of necessary padding by ordering the fields in
+ * the most optimal way (packed). Please make sure that all necessary padding
+ * is explicit so it could be used in the future.
  */
 struct dtx_handle {
 	union {
@@ -107,7 +114,7 @@ struct dtx_handle {
 	    /* Local transaction */
 	    dth_local                             : 1,
 	    /* Flag to commit the local transaction */
-	    dth_local_complete                    : 1;
+	    dth_local_complete : 1, padding1 : 13;
 
 	/* The count the DTXs in the dth_dti_cos array. */
 	uint32_t			 dth_dti_cos_count;
@@ -125,12 +132,15 @@ struct dtx_handle {
 	/** Modification sequence in the distributed transaction. */
 	uint16_t			 dth_op_seq;
 
+	uint32_t                         padding2;
+
 	union {
 		struct {
 			/** The count of objects that are modified by this DTX. */
 			uint16_t         dth_oid_cnt;
 			/** The total slots in the dth_oid_array. */
 			uint16_t         dth_oid_cap;
+			uint32_t         padding3;
 			/** If more than one objects are modified, the IDs are reocrded here. */
 			daos_unit_oid_t *dth_oid_array;
 		};
@@ -139,6 +149,7 @@ struct dtx_handle {
 			uint16_t                     dth_local_oid_cnt;
 			/** The total slots in the dth_local_oid_array. */
 			uint16_t                     dth_local_oid_cap;
+			uint32_t                     padding4;
 			/** The record of all objects touched by the local transaction. */
 			struct dtx_local_oid_record *dth_local_oid_array;
 		};
@@ -162,6 +173,7 @@ struct dtx_handle {
 	/* DTX list to be checked */
 	d_list_t			 dth_share_tbd_list;
 	int                               dth_share_tbd_count;
+	uint32_t                          padding5;
 };
 
 /* Each sub transaction handle to manage each sub thandle */

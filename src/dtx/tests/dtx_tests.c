@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +21,9 @@
 
 int
 run_local_tests(const char *cfg);
+
+int
+run_structs_tests(const char *cfg);
 
 static void
 print_usage()
@@ -44,6 +47,7 @@ run_all_tests(int keys)
 	dts_create_config(cfg_desc_io, "keys=%d", keys);
 
 	failed += run_local_tests(cfg_desc_io);
+	failed += run_structs_tests(cfg_desc_io);
 
 	return failed;
 }
