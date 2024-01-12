@@ -96,6 +96,14 @@ class DaosCoreBase(TestWithServers):
                         ["=".join(items) for items in list(env_dict.items())]
                     )
 
+        # Update any other server settings unique to this test method
+        for setting in ("crt_timeout"):
+            value = self.get_test_param(setting)
+            if value:
+                for server_mgr in self.server_managers:
+                    for engine_params in server_mgr.manager.job.yaml.engine_params:
+                        engine_params.set_value(setting, value)
+
         # Start the servers
         return super().start_server_managers(force=force)
 
