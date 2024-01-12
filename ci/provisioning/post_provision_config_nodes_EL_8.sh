@@ -17,6 +17,9 @@ group_repo_post() {
 distro_custom() {
     # TODO: This code is not exiting on failure.
 
+    # Use a more recent python version for unit testing, this allows us to also test installing
+    # pydaos into virtual environments.
+    # TODO: el8 should have python3.11 available but our CI does not for some reason.
     dnf -y install python39 python39-devel
 }
 
