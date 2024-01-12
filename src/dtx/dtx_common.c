@@ -881,10 +881,10 @@ dtx_handle_reinit(struct dtx_handle *dth)
  * Init local dth handle.
  */
 static int
-dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
-		bool leader, uint16_t sub_modification_cnt, uint32_t pm_ver,
-		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos, int dti_cos_cnt,
-		uint32_t flags, struct dtx_memberships *mbs, struct dtx_handle *dth)
+dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, bool leader,
+		uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+		struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
+		struct dtx_memberships *mbs, struct dtx_handle *dth)
 {
 	int rc;
 
@@ -899,11 +899,11 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 
 	if (flags & DTX_LOCAL) {
 		dth->dth_xid.dti_hlc = 1;
-		dth->dth_poh         = coh;
+		dth->dth_poh         = xoh;
 	} else {
 		dth->dth_xid        = *dti;
 		dth->dth_leader_oid = *leader_oid;
-		dth->dth_coh        = coh;
+		dth->dth_coh        = xoh;
 	}
 
 	dth->dth_ver = pm_ver;
@@ -967,7 +967,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	}
 
 	if (flags & DTX_LOCAL) {
-		rc = vos_dtx_local_begin(dth, coh);
+		rc = vos_dtx_local_begin(dth, xoh);
 		if (rc) {
 			goto error;
 		}
@@ -1494,7 +1494,7 @@ out:
 /**
  * Prepare the DTX handle in DRAM.
  *
- * \param coh		[IN]	Container handle or pool handle.
+ * \param xoh		[IN]	Container handle or pool handle.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param sub_modification_cnt
@@ -1510,11 +1510,10 @@ out:
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_begin(daos_handle_t coh, struct dtx_id *dti,
-	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
-	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
-	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
-	  struct dtx_memberships *mbs, struct dtx_handle **p_dth)
+dtx_begin(daos_handle_t xoh, struct dtx_id *dti, struct dtx_epoch *epoch,
+	  uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags, struct dtx_memberships *mbs,
+	  struct dtx_handle **p_dth)
 {
 	struct dtx_handle	*dth;
 	int			 rc;
@@ -1523,8 +1522,8 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	if (dth == NULL)
 		return -DER_NOMEM;
 
-	rc = dtx_handle_init(dti, coh, epoch, false, sub_modification_cnt, pm_ver,
-			     leader_oid, dti_cos, dti_cos_cnt, flags, mbs, dth);
+	rc = dtx_handle_init(dti, xoh, epoch, false, sub_modification_cnt, pm_ver, leader_oid,
+			     dti_cos, dti_cos_cnt, flags, mbs, dth);
 	if (rc == 0 && sub_modification_cnt > 0 && !(flags & DTX_LOCAL))
 		rc = vos_dtx_attach(dth, false, false);
 
