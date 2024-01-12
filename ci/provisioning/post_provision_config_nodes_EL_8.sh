@@ -17,7 +17,7 @@ group_repo_post() {
 distro_custom() {
     # TODO: This code is not exiting on failure.
 
-    dnf -y install python39 python39-devel gdb
+    dnf -y install python39 python39-devel
 }
 
 install_mofed() {

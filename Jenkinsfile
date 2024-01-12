@@ -2,7 +2,7 @@
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
-/* Copyright 2019-2024 Intel Corporation
+/* Copyright 2019-2023 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -890,7 +890,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, '{tests-internal,devel}'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -912,7 +912,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, '{tests-internal,devel}'),
+                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -934,7 +934,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, '{tests-internal,devel}'),
+                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -956,7 +956,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, '{tests-internal,devel}'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -978,7 +978,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, '{tests-internal,devel}'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {

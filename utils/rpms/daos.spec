@@ -207,12 +207,11 @@ packages
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
-Requires: python3-distro
-Requires: python3-tabulate
-Requires: python3-defusedxml
+Requires: %{name}-devel%{?_isa} = %{version}-%{release}
 Requires: protobuf-c-devel
 Requires: fio
 Requires: git
+Requires: gdb
 Requires: dbench
 Requires: lbzip2
 Requires: attr
