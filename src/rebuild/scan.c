@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -768,7 +768,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID" rebuild_nr %d\n", DP_UOID(oid), rc);
+	D_INFO("rebuild obj "DF_UOID" rebuild_nr %d\n", DP_UOID(oid), rc);
 	rebuild_nr = rc;
 	rc = 0;
 	for (i = 0; i < rebuild_nr; i++) {
@@ -882,12 +882,13 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	/* Wait for EC aggregation to finish. NB: migrate needs to wait for EC aggregation to finish */
-	while (cont_child->sc_ec_agg_active) {
+	while (cont_child->sc_ec_agg_active &&
+	       rpt->rt_rebuild_op != RB_OP_RECLAIM &&
+	       rpt->rt_rebuild_op != RB_OP_FAIL_RECLAIM) {
 		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
 			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
 			/* Wait for EC aggregation to abort before discard the object */
-		D_DEBUG(DB_REBUILD, DF_UUID" wait for ec agg abort.\n",
-			DP_UUID(entry->ie_couuid));
+		D_INFO(DF_UUID" wait for ec agg abort.\n", DP_UUID(entry->ie_couuid));
 		dss_sleep(1000);
 		if (rpt->rt_abort || rpt->rt_finishing) {
 			D_DEBUG(DB_REBUILD, DF_CONT" rebuild op %s ver %u abort %u/%u.\n",
@@ -964,13 +965,14 @@ rebuild_scanner(void *data)
 		D_GOTO(out, rc = 0);
 	}
 
+	D_INFO(DF_UUID" rebuild scanner begin\n", DP_UUID(rpt->rt_pool_uuid));
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
 		/* Skip reclaim OP for HANG failure injection */
 		if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
 		    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM)
 			break;
 
-		D_DEBUG(DB_REBUILD, "sleep 2 seconds then retry\n");
+		D_INFO("sleep 2 seconds then retry\n");
 		dss_sleep(2 * 1000);
 	}
 	D_ASSERT(daos_handle_is_inval(tls->rebuild_tree_hdl));
@@ -1018,8 +1020,8 @@ out:
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
 
-	D_DEBUG(DB_REBUILD, DF_UUID" iterate pool done: "DF_RC"\n",
-		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
+	D_INFO(DF_UUID" iterate pool done: "DF_RC"\n",
+	       DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	return rc;
 }
 
@@ -1057,15 +1059,15 @@ rebuild_scan_leader(void *data)
 		}
 	}
 
-	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
-		DP_UUID(rpt->rt_pool_uuid));
+	D_INFO("rebuild scan collective "DF_UUID" begin.\n",
+	       DP_UUID(rpt->rt_pool_uuid));
 
 	rc = dss_thread_collective(rebuild_scanner, rpt, DSS_ULT_DEEP_STACK);
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" done.\n",
-		DP_UUID(rpt->rt_pool_uuid));
+	D_INFO("rebuild scan collective "DF_UUID" done.\n",
+	       DP_UUID(rpt->rt_pool_uuid));
 
 	ABT_mutex_lock(rpt->rt_lock);
 	rc = dss_task_collective(rebuild_scan_done, rpt, 0);
@@ -1076,8 +1078,8 @@ rebuild_scan_leader(void *data)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_REBUILD, DF_UUID" sent objects to initiator: "DF_RC"\n",
-		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
+	D_INFO(DF_UUID" sent objects to initiator: "DF_RC"\n",
+	       DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 out:
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
