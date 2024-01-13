@@ -1086,7 +1086,7 @@ process_ilog_entries(daos_handle_t coh, struct umem_instance *umm, struct ilog_d
 	if (!SUCCESS(rc))
 		return rc;
 
-	rc = ilog_open(umm, ilog, &cbs, &loh);
+	rc = ilog_open(umm, ilog, &cbs, false, &loh);
 	if (rc != 0)
 		return rc;
 	ilog_foreach_entry(&entries, &e) {

@@ -242,23 +242,21 @@ type NvmeNamespace struct {
 // SmdDevice contains DAOS storage device information, including
 // health details if requested.
 type SmdDevice struct {
-	UUID        string        `json:"uuid"`
-	TargetIDs   []int32       `hash:"set" json:"tgt_ids"`
-	NvmeState   NvmeDevState  `json:"dev_state"`
-	LedState    LedState      `json:"led_state"`
-	Rank        ranklist.Rank `json:"rank"`
-	TotalBytes  uint64        `json:"total_bytes"`
-	AvailBytes  uint64        `json:"avail_bytes"`
-	UsableBytes uint64        `json:"usable_bytes"`
-	ClusterSize uint64        `json:"cluster_size"`
-	MetaSize    uint64        `json:"meta_size"`
-	MetaWalSize uint64        `json:"meta_wal_size"`
-	RdbSize     uint64        `json:"rdb_size"`
-	RdbWalSize  uint64        `json:"rdb_wal_size"`
-	Health      *NvmeHealth   `json:"health"`
-	TrAddr      string        `json:"tr_addr"`
-	Roles       BdevRoles     `json:"roles"`
-	HasSysXS    bool          `json:"has_sys_xs"`
+	UUID             string         `json:"uuid"`
+	TargetIDs        []int32        `hash:"set" json:"tgt_ids"`
+	Rank             ranklist.Rank  `json:"rank"`
+	TotalBytes       uint64         `json:"total_bytes"`
+	AvailBytes       uint64         `json:"avail_bytes"`
+	UsableBytes      uint64         `json:"usable_bytes"`
+	ClusterSize      uint64         `json:"cluster_size"`
+	MetaSize         uint64         `json:"meta_size"`
+	MetaWalSize      uint64         `json:"meta_wal_size"`
+	RdbSize          uint64         `json:"rdb_size"`
+	RdbWalSize       uint64         `json:"rdb_wal_size"`
+	Roles            BdevRoles      `json:"roles"`
+	HasSysXS         bool           `json:"has_sys_xs"`
+	Ctrlr            NvmeController `json:"ctrlr"`
+	CtrlrNamespaceID uint32         `json:"ctrlr_namespace_id"`
 }
 
 func (sd *SmdDevice) String() string {
@@ -333,10 +331,14 @@ type NvmeController struct {
 	Serial      string           `hash:"ignore" json:"serial"`
 	PciAddr     string           `json:"pci_addr"`
 	FwRev       string           `json:"fw_rev"`
+	VendorID    string           `json:"vendor_id"`
+	PciType     string           `json:"pci_type"`
 	SocketID    int32            `json:"socket_id"`
 	HealthStats *NvmeHealth      `json:"health_stats"`
 	Namespaces  []*NvmeNamespace `hash:"set" json:"namespaces"`
 	SmdDevices  []*SmdDevice     `hash:"set" json:"smd_devices"`
+	NvmeState   NvmeDevState     `json:"dev_state"`
+	LedState    LedState         `json:"led_state"`
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.
@@ -500,9 +502,8 @@ type (
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList  *BdevDeviceList
-		VMDEnabled  bool
-		BypassCache bool
+		DeviceList *BdevDeviceList
+		VMDEnabled bool
 	}
 
 	// BdevScanResponse contains information gleaned during a successful Scan operation.
@@ -523,12 +524,12 @@ type (
 	// BdevFormatRequest defines the parameters for a Format operation.
 	BdevFormatRequest struct {
 		pbin.ForwardableRequest
-		Properties BdevTierProperties
-		OwnerUID   int
-		OwnerGID   int
-		VMDEnabled bool
-		Hostname   string
-		BdevCache  *BdevScanResponse
+		Properties   BdevTierProperties
+		OwnerUID     int
+		OwnerGID     int
+		Hostname     string
+		VMDEnabled   bool
+		ScannedBdevs NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
@@ -538,14 +539,14 @@ type (
 		OwnerUID          int
 		OwnerGID          int
 		TierProps         []BdevTierProperties
-		VMDEnabled        bool
 		HotplugEnabled    bool
 		HotplugBusidBegin uint8
 		HotplugBusidEnd   uint8
 		Hostname          string
-		BdevCache         *BdevScanResponse
 		AccelProps        AccelProps
 		SpdkRpcSrvProps   SpdkRpcServer
+		VMDEnabled        bool
+		ScannedBdevs      NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.

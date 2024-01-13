@@ -384,7 +384,7 @@
    fun:mdb_txn_commit
 }
 {
-   go internal syscall
+   go_runtime_syscall_param
    Memcheck:Param
    write(buf)
    fun:runtime/internal/syscall.Syscall6
@@ -395,4 +395,3 @@
    fun:_ZN6__tsan9ShadowSetEPNS_9RawShadowES1_S0_
    fun:racecall
 }
-

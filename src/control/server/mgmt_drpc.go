@@ -83,8 +83,6 @@ func (mod *srvModule) HandleCall(ctx context.Context, session *drpc.Session, met
 	switch method {
 	case drpc.MethodNotifyReady:
 		return nil, mod.handleNotifyReady(req)
-	case drpc.MethodBIOError:
-		return nil, mod.handleBioErr(req)
 	case drpc.MethodGetPoolServiceRanks:
 		return mod.handleGetPoolServiceRanks(req)
 	case drpc.MethodPoolFindByLabel:
@@ -178,26 +176,6 @@ func (mod *srvModule) handleNotifyReady(reqb []byte) error {
 	}
 
 	mod.engines[req.InstanceIdx].NotifyDrpcReady(req)
-
-	return nil
-}
-
-func (mod *srvModule) handleBioErr(reqb []byte) error {
-	req := &srvpb.BioErrorReq{}
-	if err := proto.Unmarshal(reqb, req); err != nil {
-		return errors.Wrap(err, "unmarshal BioError request")
-	}
-
-	if req.InstanceIdx >= uint32(len(mod.engines)) {
-		return errors.Errorf("instance index %v is out of range (%v instances)",
-			req.InstanceIdx, len(mod.engines))
-	}
-
-	if err := checkDrpcClientSocketPath(req.DrpcListenerSock); err != nil {
-		return errors.Wrap(err, "check BioErr request socket path")
-	}
-
-	mod.engines[req.InstanceIdx].BioErrorNotify(req)
 
 	return nil
 }

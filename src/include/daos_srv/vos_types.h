@@ -27,15 +27,6 @@ struct dtx_rsrvd_uint {
 	d_list_t		dru_nvme;
 };
 
-enum dtx_cos_flags {
-	DCF_SHARED		= (1 << 0),
-	/* Some DTX (such as for the distributed transaction across multiple
-	 * RDGs, or for EC object modification) need to be committed via DTX
-	 * RPC instead of piggyback via other dispatched update/punch RPC.
-	 */
-	DCF_EXP_CMT		= (1 << 1),
-};
-
 enum dtx_stat_flags {
 	/* Skip bad DTX entries (such as corruptted ones) when stat. */
 	DSF_SKIP_BAD		= (1 << 1),

@@ -402,6 +402,7 @@ struct rebuild_scan_arg {
 	int				snapshot_cnt;
 	uint32_t			yield_freq;
 	int32_t				obj_yield_cnt;
+	struct ds_cont_child		*cont_child;
 };
 
 /**
@@ -696,7 +697,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	int				i;
 	int				rc = 0;
 
-	if (rpt->rt_abort) {
+	if (rpt->rt_abort || arg->cont_child->sc_stopping) {
 		D_DEBUG(DB_REBUILD, "rebuild is aborted\n");
 		return 1;
 	}
@@ -839,35 +840,45 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
+	if (rc == -DER_NONEXIST) {
+		D_DEBUG(DB_REBUILD, DF_UUID" already destroyed\n", DP_UUID(arg->co_uuid));
+		return 0;
+	}
+
 	if (rc != 0) {
 		D_ERROR("Open container "DF_UUID" failed: "DF_RC"\n",
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
 		return rc;
 	}
 
+	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
+	if (rc == -DER_NONEXIST || rc == -DER_SHUTDOWN) {
+		D_DEBUG(DB_REBUILD, DF_UUID" already destroyed or destroying\n",
+			DP_UUID(arg->co_uuid));
+		rc = 0;
+		D_GOTO(close, rc);
+	}
+
+	if (rc != 0) {
+		D_ERROR("Container "DF_UUID", ds_cont_child_lookup failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		D_GOTO(close, rc);
+	}
+	cont_child->sc_rebuilding = 1;
+
 	rc = ds_cont_fetch_snaps(rpt->rt_pool->sp_iv_ns, entry->ie_couuid, NULL,
 				 &snapshot_cnt);
 	if (rc) {
 		D_ERROR("Container "DF_UUID", ds_cont_fetch_snaps failed: "DF_RC"\n",
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
-		vos_cont_close(coh);
-		return rc;
+		D_GOTO(close, rc);
 	}
 
 	rc = ds_cont_get_props(&arg->co_props, rpt->rt_pool->sp_uuid, entry->ie_couuid);
 	if (rc) {
 		D_ERROR("Container "DF_UUID", ds_cont_get_props failed: "DF_RC"\n",
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
-		vos_cont_close(coh);
-		return rc;
-	}
-
-	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
-	if (rc != 0) {
-		D_ERROR("Container "DF_UUID", ds_cont_child_lookup failed: "DF_RC"\n",
-			DP_UUID(entry->ie_couuid), DP_RC(rc));
-		vos_cont_close(coh);
-		return rc;
+		D_GOTO(close, rc);
 	}
 
 	/* Wait for EC aggregation to finish. NB: migrate needs to wait for EC aggregation to finish */
@@ -899,6 +910,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	uuid_copy(arg->co_uuid, entry->ie_couuid);
 	arg->snapshot_cnt = snapshot_cnt;
+	arg->cont_child = cont_child;
 
 	/* If there is no snapshots, then rebuild does not need to migrate
 	 * punched objects at all. Ideally, it should ignore any objects
@@ -914,8 +926,11 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 close:
 	vos_cont_close(coh);
 
-	if (cont_child != NULL)
+	if (cont_child != NULL) {
+		cont_child->sc_rebuilding = 0;
+		ABT_cond_broadcast(cont_child->sc_rebuild_cond);
 		ds_cont_child_put(cont_child);
+	}
 
 	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid),
@@ -1070,8 +1085,7 @@ out:
 	D_ASSERT(tls != NULL);
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
-	D_DEBUG(DB_REBUILD, DF_UUID"scan leader done: "DF_RC"\n",
-		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
+	D_INFO(DF_UUID"scan leader done: "DF_RC"\n", DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	rpt_put(rpt);
 }
 
@@ -1088,10 +1102,10 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
-	D_DEBUG(DB_REBUILD, "%d/"DF_UUID" scan ver %d gen %u leader %u term "DF_U64" op:%s\n",
-		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
-		rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen, rsi->rsi_master_rank,
-		rsi->rsi_leader_term, RB_OP_STR(rsi->rsi_rebuild_op));
+	D_INFO("%d/"DF_UUID" scan ver %d gen %u leader %u term "DF_U64" op:%s\n",
+	       dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
+	       rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen, rsi->rsi_master_rank,
+	       rsi->rsi_leader_term, RB_OP_STR(rsi->rsi_rebuild_op));
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous

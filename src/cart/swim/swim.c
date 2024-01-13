@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,7 +25,7 @@ swim_prot_period_len_default(void)
 {
 	unsigned int val = SWIM_PROTOCOL_PERIOD_LEN;
 
-	d_getenv_int("SWIM_PROTOCOL_PERIOD_LEN", &val);
+	d_getenv_uint("SWIM_PROTOCOL_PERIOD_LEN", &val);
 	return val;
 }
 
@@ -34,7 +34,7 @@ swim_suspect_timeout_default(void)
 {
 	unsigned int val = SWIM_SUSPECT_TIMEOUT;
 
-	d_getenv_int("SWIM_SUSPECT_TIMEOUT", &val);
+	d_getenv_uint("SWIM_SUSPECT_TIMEOUT", &val);
 	return val;
 }
 
@@ -43,7 +43,7 @@ swim_ping_timeout_default(void)
 {
 	unsigned int val = SWIM_PING_TIMEOUT;
 
-	d_getenv_int("SWIM_PING_TIMEOUT", &val);
+	d_getenv_uint("SWIM_PING_TIMEOUT", &val);
 	return val;
 }
 
