@@ -480,7 +480,7 @@ boro-11
 
 - Automatic exclusion of an NVMe SSD:
 
-Automatic exclusion based on faulty criteria is the default behaviour in DAOS
+Automatic exclusion based on faulty criteria is the default behavior in DAOS
 release 2.6. The default criteria parameters are `max_io_errs: 10` and
 `max_csum_errs: <uint32_max>` (essentially eviction due to checksum errors is
 disabled by default).
