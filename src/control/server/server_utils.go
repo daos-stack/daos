@@ -414,6 +414,10 @@ func updateHugeMemValues(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 }
 
 func cleanEngineHugepages(srv *server) error {
+	if srv.cfg.DisableHugepages {
+		return nil
+	}
+
 	req := storage.BdevPrepareRequest{
 		CleanHugepagesOnly: true,
 	}

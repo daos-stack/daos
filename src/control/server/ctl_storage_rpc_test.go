@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -60,6 +60,7 @@ var (
 func TestServer_bdevScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req                 *ctlpb.ScanNvmeReq
+		disableHPs          bool
 		provRes             *storage.BdevScanResponse
 		provErr             error
 		engTierCfgs         []storage.TierConfigs // one per-engine
@@ -72,6 +73,28 @@ func TestServer_bdevScan(t *testing.T) {
 	}{
 		"nil request": {
 			expErr: errors.New("nil request"),
+		},
+		"hugepages disabled": {
+			req: &ctlpb.ScanNvmeReq{},
+			provRes: &storage.BdevScanResponse{
+				Controllers: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+				},
+			},
+			engTierCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmMountPoint("/mnt/daos0").
+						WithScmDeviceList("/dev/pmem0"),
+				},
+			},
+			disableHPs: true,
+			engStopped: []bool{false},
+			expResp: &ctlpb.ScanNvmeResp{
+				State: new(ctlpb.ResponseState),
+			},
 		},
 		"scan local; no bdevs in config; scan fails": {
 			req:         &ctlpb.ScanNvmeReq{Health: true},
@@ -570,7 +593,8 @@ func TestServer_bdevScan(t *testing.T) {
 				engCfg := engine.MockConfig().WithStorage(tcs...)
 				engCfgs = append(engCfgs, engCfg)
 			}
-			sCfg := config.DefaultServer().WithEngines(engCfgs...)
+			sCfg := config.DefaultServer().WithEngines(engCfgs...).
+				WithDisableHugepages(tc.disableHPs)
 
 			bmbc := &bdev.MockBackendConfig{
 				ScanRes: tc.provRes,
@@ -657,6 +681,10 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
 			tierCfgs: storage.TierConfigs{
+				storage.NewTierConfig().
+					WithStorageClass(storage.ClassDcpm.String()).
+					WithScmMountPoint("/mnt/daos0").
+					WithScmDeviceList("/dev/pmem0"),
 				storage.NewTierConfig().
 					WithStorageClass(storage.ClassNvme.String()).
 					WithBdevDeviceList(ctrlr.PciAddr, test.MockPCIAddr(2)),
@@ -1010,6 +1038,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		bmbcs            []*bdev.MockBackendConfig
 		awaitTimeout     time.Duration
 		getMemInfo       func() (*common.MemInfo, error)
+		disableHPs       bool
 		expAwaitExit     bool
 		expAwaitErr      error
 		expResp          *ctlpb.StorageFormatResp
@@ -1037,6 +1066,48 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			bmbcs:   []*bdev.MockBackendConfig{{}},
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State:    new(ctlpb.ResponseState),
+					},
+				},
+			},
+		},
+		"nvme and ram; use of hugepages disabled": {
+			sMounts: []string{"/mnt/daos"},
+			sClass:  storage.ClassRam,
+			sDevs:   []string{"/dev/pmem1"}, // ignored if SCM class is ram
+			sSize:   6,
+			bClass:  storage.ClassNvme,
+			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
+			bmbcs: []*bdev.MockBackendConfig{
+				{
+					ScanRes: &storage.BdevScanResponse{
+						Controllers: storage.NvmeControllers{
+							mockNvmeController0,
+						},
+					},
+					FormatRes: &storage.BdevFormatResponse{
+						DeviceResponses: storage.BdevDeviceFormatResponses{
+							mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+								Formatted: true,
+							},
+						},
+					},
+				},
+			},
+			disableHPs: true,
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: storage.NilBdevAddress,
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   fmt.Sprintf(msgNvmeFormatSkipHPD, 0),
+						},
+					},
+				},
 				Mrets: []*ctlpb.ScmMountResult{
 					{
 						Mntpoint: "/mnt/daos",
@@ -1175,7 +1246,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
+							Info: fmt.Sprintf(msgNvmeFormatSkipNotDone,
+								0),
 						},
 					},
 				},
@@ -1213,7 +1285,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
+							Info: fmt.Sprintf(msgNvmeFormatSkipNotDone,
+								0),
 						},
 					},
 				},
@@ -1325,7 +1398,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 						PciAddr: storage.NilBdevAddress,
 						State: &ctlpb.ResponseState{
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
-							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
+							Info: fmt.Sprintf(msgNvmeFormatSkipNotDone,
+								0),
 						},
 					},
 				},
@@ -1497,7 +1571,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				}
 			}
 
-			config := config.DefaultServer()
+			config := config.DefaultServer().WithDisableHugepages(tc.disableHPs)
 
 			// validate test parameters
 			if len(tc.sDevs) > 0 {
@@ -1731,6 +1805,7 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req         *ctlpb.NvmeRebindReq
 		bmbc        *bdev.MockBackendConfig
+		disableHPs  bool
 		expErr      error
 		expResp     *ctlpb.NvmeRebindResp
 		expPrepCall *storage.BdevPrepareRequest
@@ -1756,6 +1831,16 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 				},
 			},
 		},
+		"hugepages disabled": {
+			req: &ctlpb.NvmeRebindReq{
+				PciAddr: test.MockPCIAddr(1),
+			},
+			disableHPs: true,
+			bmbc: &bdev.MockBackendConfig{
+				PrepareErr: errors.New("failure"),
+			},
+			expErr: config.FaultConfigHugepagesDisabledBadAction,
+		},
 		"success": {
 			req: &ctlpb.NvmeRebindReq{
 				PciAddr: test.MockPCIAddr(1),
@@ -1777,6 +1862,12 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 			scs := NewMockStorageControlService(log, nil, nil,
 				scm.NewMockProvider(log, nil, nil), mbp, nil)
 			cs := &ControlService{StorageControlService: *scs}
+
+			if tc.disableHPs {
+				cs.srvCfg = &config.Server{
+					DisableHugepages: true,
+				}
+			}
 
 			resp, err := cs.StorageNvmeRebind(test.Context(t), tc.req)
 
@@ -1812,6 +1903,7 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 		req         *ctlpb.NvmeAddDeviceReq
 		bmbc        *bdev.MockBackendConfig
 		storageCfgs []storage.TierConfigs
+		disableHPs  bool
 		expErr      error
 		expDevList  []string
 		expResp     *ctlpb.NvmeAddDeviceResp
@@ -1853,6 +1945,20 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 				},
 			},
 			expErr: errors.New("no bdev storage tiers"),
+		},
+		"hugepages disabled": {
+			req: &ctlpb.NvmeAddDeviceReq{
+				PciAddr:          test.MockPCIAddr(1),
+				StorageTierIndex: -1,
+			},
+			disableHPs: true,
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()),
+				},
+			},
+			expErr: config.FaultConfigHugepagesDisabledBadAction,
 		},
 		"missing bdev config index 0": {
 			req: &ctlpb.NvmeAddDeviceReq{
@@ -2093,8 +2199,8 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 				ec.Index = uint32(idx)
 				engineCfgs = append(engineCfgs, ec)
 			}
-			serverCfg := config.DefaultServer().WithEngines(engineCfgs...)
-
+			serverCfg := config.DefaultServer().WithEngines(engineCfgs...).
+				WithDisableHugepages(tc.disableHPs)
 			cs := mockControlService(t, log, serverCfg, tc.bmbc, nil, nil)
 
 			resp, err := cs.StorageNvmeAddDevice(test.Context(t), tc.req)

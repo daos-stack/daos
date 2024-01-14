@@ -91,10 +91,15 @@ var (
 		"the fault domain path may have a maximum of 2 levels below the root",
 		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
-	FaultConfigHugepagesDisabled = serverConfigFault(
-		code.ServerConfigHugepagesDisabled,
+	FaultConfigHugepagesDisabledWithBdevs = serverConfigFault(
+		code.ServerConfigHugepagesDisabledWithBdevs,
 		"hugepages cannot be disabled if bdevs have been specified in config",
 		"remove nr_hugepages parameter from config to have the value automatically calculated",
+	)
+	FaultConfigHugepagesDisabledBadAction = serverConfigFault(
+		code.ServerConfigHugepagesDisabledBadAction,
+		"action cannot be performed as the use of hugepages has been disabled in the server config",
+		"set false (or remove) disable_hugepages parameter in config and restart the control server",
 	)
 	FaultConfigVMDSettingDuplicate = serverConfigFault(
 		code.ServerConfigVMDSettingDuplicate,
