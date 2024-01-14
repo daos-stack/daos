@@ -449,27 +449,6 @@
 #    - wal
 #
 #
-#  # Specify accelerator engine setting (experimental).
-#
-#  # Acceleration engine options are:
-#  # - "none" do not use an acceleration engine. (default)
-#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
-#  # - "dml" te set DML as accelerator engine.
-#
-#  # Optional capability settings are:
-#  # - "move" to enable acceleration of MOVE instructions.
-#  # - "crc" to enable acceleration of CRC instructions.
-#
-#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
-#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
-#
-#  acceleration:
-#    engine: spdk
-#    options:
-#    - move
-#    - crc
-#
-#
 #-
 #  # Number of I/O service threads (and network endpoints) per engine.
 #  # Immutable after running "dmg storage format".
@@ -617,23 +596,3 @@
 #
 #    # See about bdev_roles above.
 #    bdev_roles: [wal, meta, data]
-#
-#
-#  # Specify accelerator engine setting (experimental).
-#
-#  # Acceleration engine options are:
-#  # - "none" do not use an acceleration engine. (default)
-#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
-#  # - "dml" te set DML as accelerator engine.
-#
-#  # Optional capability settings are:
-#  # - "move" to enable acceleration of MOVE instructions.
-#  # - "crc" to enable acceleration of CRC instructions.
-#
-#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
-#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
-#
-#  acceleration:
-#    engine: dml
-#    options:
-#    - crc
