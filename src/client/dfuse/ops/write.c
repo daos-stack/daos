@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,8 +35,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	struct dfuse_event   *ev;
 	uint64_t              eqt_idx;
 	bool                  wb_cache = false;
-
-	D_RWLOCK_RDLOCK(&oh->doh_ie->ie_wlock);
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_WRITE);
 
