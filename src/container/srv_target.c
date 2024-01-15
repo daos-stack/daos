@@ -850,6 +850,18 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 	}
 }
 
+void
+ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child)
+{
+	struct ds_cont_child	*cont_child;
+
+	D_DEBUG(DB_MD, DF_UUID"[%d]: reset all containers EC aggregate epoch.\n",
+		DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	d_list_for_each_entry(cont_child, &pool_child->spc_cont_list, sc_link)
+		cont_child->sc_ec_agg_eph = cont_child->sc_ec_agg_eph_boundary;
+}
+
 static int
 cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		 bool *started, struct ds_cont_child **cont_out)
@@ -1650,6 +1662,8 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	struct dss_coll_ops	coll_ops = { 0 };
 	struct dss_coll_args	coll_args = { 0 };
 	struct ds_pool		*pool;
+	int			*exclude_tgts = NULL;
+	uint32_t		exclude_tgt_nr = 0;
 	int			rc;
 
 	/* Only for debugging purpose to compare srv_cont_hdl with cont_hdl_uuid */
@@ -1682,18 +1696,22 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	coll_args.ca_func_args	= &arg;
 
 	/* setting aggregator args */
-	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
-					&coll_args.ca_exclude_tgts_cnt);
-	if (rc) {
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0) {
 		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
-		return rc;
+		goto out;
+	}
+
+	if (exclude_tgts != NULL) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	D_FREE(coll_args.ca_exclude_tgts);
-
-	if (rc != 0) {
+	if (rc != 0)
 		/* Once it exclude the target from the pool, since the target
 		 * might still in the cart group, so IV cont open might still
 		 * come to this target, especially if cont open/close will be
@@ -1703,9 +1721,10 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		D_ERROR("open "DF_UUID"/"DF_UUID"/"DF_UUID":"DF_RC"\n",
 			DP_UUID(pool_uuid), DP_UUID(cont_uuid),
 			DP_UUID(cont_hdl_uuid), DP_RC(rc));
-		return rc;
-	}
 
+out:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	return rc;
 }
 
