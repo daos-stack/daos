@@ -1110,8 +1110,6 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_open_write_count, 0);
 	atomic_init(&ie->ie_il_count, 0);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
-
-	D_MUTEX_INIT(&ie->ie_lock, NULL);
 }
 
 void
@@ -1145,8 +1143,6 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 	}
-
-	D_MUTEX_DESTROY(&ie->ie_lock);
 
 	dfuse_ie_free(dfuse_info, ie);
 }
