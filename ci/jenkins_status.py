@@ -183,8 +183,16 @@ def main():
 
     job_name = f"PR-{args.pr}"
 
-    data = je_load(job_name)
+    try:
+        data = je_load(job_name)
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            print("Unable to query Jenkins, invaid PR number")
+            sys.exit(1)
 
+    if not data["lastCompletedBuild"]:
+        print("PR has no completed jobs")
+        sys.exit(1)
     lcb = data["lastCompletedBuild"]["number"]
 
     all_failed = set()
