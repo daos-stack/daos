@@ -108,7 +108,6 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r $FTEST/requirements-ftest.txt
 
-FTEST=/usr/lib/daos/TESTING/ftest
 sudo PYTHONPATH="$FTEST/util"                        \
      "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py -n "$HOSTNAME" \
         -a /etc/daos/daos_agent.yml -s /etc/daos/daos_server.yml

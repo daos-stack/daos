@@ -44,7 +44,9 @@ else
     cd "$DAOS_BASE"
 fi
 
-# Copy the pydaos source locally and install it.
+# Copy the pydaos source locally and install it, in an ideal world this would install
+# from the read-only tree directly but for now that isn't working.
+# https://github.com/pypa/setuptools/issues/3237
 cp -a "$PREFIX"/lib/daos/python pydaos
 pip install ./pydaos
 rm -rf pydaos
