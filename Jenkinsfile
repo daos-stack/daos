@@ -322,27 +322,41 @@ pipeline {
                 }
             }
         }
-        stage('Get Commit Message') {
-            steps {
-                script {
-                    env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
-                                            returnStdout: true).trim()
-                    Map pragmas = [:]
-                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
-                    env.COMMIT_MESSAGE.split('\n').each { line ->
-                        String key, value
-                        try {
-                            (key, value) = line.split(':', 2)
-                            if (key.contains(' ')) {
-                                return
+        stage('Prepare Environment Variables') {
+            parallel {
+                stage('Get Commit Message') {
+                    steps {
+                        script {
+                            env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
+                                                    returnStdout: true).trim()
+                            Map pragmas = [:]
+                            // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
+                            env.COMMIT_MESSAGE.split('\n').each { line ->
+                                String key, value
+                                try {
+                                    (key, value) = line.split(':', 2)
+                                    if (key.contains(' ')) {
+                                        return
+                                    }
+                                    pragmas[key.toLowerCase()] = value
+                                /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
+                                } catch (ArrayIndexOutOfBoundsException ignored) {
+                                    // ignore and move on to the next line
+                                }
                             }
-                            pragmas[key.toLowerCase()] = value
-                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
-                        } catch (ArrayIndexOutOfBoundsException ignored) {
-                            // ignore and move on to the next line
+                            env.pragmas = pragmas
                         }
                     }
-                    env.pragmas = pragmas
+                }
+                stage('Determine Base Branch') {
+                    steps {
+                        script {
+                            env.BASE_BRANCH_NAME = sh label: 'Determine base branch name',
+                                                      script: 'utils/scripts/get_base_branch',
+                                                      returnStdout: true
+                            echo 'Base branch == ' + env.BASE_BRANCH_NAME
+                        }
+                    }
                 }
             }
         }

@@ -1,6 +1,6 @@
 #!/bin/bash
 # /*
-#  * (C) Copyright 2023 Intel Corporation.
+#  * (C) Copyright 2024 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -22,18 +22,20 @@ fi
 if command -v gh > /dev/null 2>&1; then
     # If there is no PR created yet then do not check anything.
     if ! TARGET="$ORIGIN"/$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}"); then
-        TARGET=HEAD
+        TARGET=""
     else
         state=$(gh pr view "$BRANCH" --json state -t "{{.state}}")
         if [ ! "$state" = "OPEN" ]; then
-            TARGET=HEAD
+            TARGET=""
         fi
     fi
-else
-    # With no 'gh' command installed, use the "closest" branch as the target,
-    # calculated as the sum of the commits this branch is ahead and behind.
+fi
+
+if [ -z "$TARGET" ]; then
+    # With no 'gh' command installed, or no PR open yet, use the "closest" branch
+    # as the target, calculated as the sum of the commits this branch is ahead and
+    # behind.
     # check master, then current release branches, then current feature branches.
-    # shellcheck disable=SC2034
     all_bases=("master" "release/2.4" "feature/cat_recovery" "feature/multiprovider")
     TARGET="$ORIGIN/master"
     min_diff=-1
