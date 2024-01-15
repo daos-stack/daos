@@ -187,7 +187,7 @@ def main():
         data = je_load(job_name)
     except urllib.error.HTTPError as error:
         if error.code == 404:
-            print("Unable to query Jenkins, invaid PR number")
+            print("Unable to query Jenkins, invalid PR number")
             sys.exit(1)
 
     if not data["lastCompletedBuild"]:
