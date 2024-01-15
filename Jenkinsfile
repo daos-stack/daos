@@ -2,7 +2,7 @@
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
-/* Copyright 2019-2023 Intel Corporation
+/* Copyright 2019-2024 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -322,27 +322,22 @@ pipeline {
                 }
             }
         }
-        stage('Get Commit Message') {
-            steps {
-                script {
-                    env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
-                                            returnStdout: true).trim()
-                    Map pragmas = [:]
-                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
-                    env.COMMIT_MESSAGE.split('\n').each { line ->
-                        String key, value
-                        try {
-                            (key, value) = line.split(':', 2)
-                            if (key.contains(' ')) {
-                                return
-                            }
-                            pragmas[key.toLowerCase()] = value
-                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
-                        } catch (ArrayIndexOutOfBoundsException ignored) {
-                            // ignore and move on to the next line
+        stage('Prepare Environment Variables') {
+            parallel {
+                stage('Get Commit Message') {
+                    steps {
+                        pragmasToEnv()
+                    }
+                }
+                stage('Determine Base Branch') {
+                    steps {
+                        script {
+                            env.BASE_BRANCH_NAME = sh(label: 'Determine base branch name',
+                                                      script: 'utils/rpms/packaging/get_base_branch',
+                                                      returnStdout: true).trim()
+                            echo 'Base branch == ' + env.BASE_BRANCH_NAME
                         }
                     }
-                    env.pragmas = pragmas
                 }
             }
         }
@@ -449,8 +444,11 @@ pipeline {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=38'
-                            args '--cap-add=SYS_ADMIN'
+                            args '--group-add mock'     +
+                                 ' --cap-add=SYS_ADMIN' +
+                                 ' -v /scratch:/scratch'
+                            additionalBuildArgs dockerBuildArgs()
+
                         }
                     }
                     steps {
@@ -486,8 +484,10 @@ pipeline {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=38'
-                            args '--cap-add=SYS_ADMIN'
+                            args '--group-add mock'     +
+                                 ' --cap-add=SYS_ADMIN' +
+                                 ' -v /scratch:/scratch'
+                            additionalBuildArgs dockerBuildArgs()
                         }
                     }
                     steps {
@@ -523,8 +523,10 @@ pipeline {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=38'
-                            args  '--cap-add=SYS_ADMIN'
+                            args '--group-add mock'     +
+                                 ' --cap-add=SYS_ADMIN' +
+                                 ' -v /scratch:/scratch'
+                            additionalBuildArgs dockerBuildArgs()
                         }
                     }
                     steps {
@@ -560,8 +562,8 @@ pipeline {
                             filename 'packaging/Dockerfile.ubuntu.20.04'
                             dir 'utils/rpms'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
+                            additionalBuildArgs dockerBuildArgs()
                         }
                     }
                     steps {
