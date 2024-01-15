@@ -3,11 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import json
 # pylint: disable=too-many-lines
 import logging
 import os
 import re
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -793,21 +795,44 @@ class TestGroup():
                     tag = ",".join((tag, fault_tag))
                 self.tag_filters.append(f"--filter-by-tags={tag}")
 
-        # Get the avocado list command to find all the tests that match the specified files and tags
-        command = self._avocado.get_list_command()
-        command.extend(self.tag_filters)
-        command.extend(test_files)
-        if not test_files:
-            command.append("./")
+        if self._avocado.major > 82:
+            with tempfile.NamedTemporaryFile() as tmpf:
+                command = ["avocado", "list", "--json", tmpf.name]
+                command.extend(self.tag_filters)
+                command.extend(test_files)
+                if not test_files:
+                    command.append("./")
 
-        # Find all the test files that contain tests matching the tags
-        logger.debug("-" * 80)
-        logger.info("Detecting tests matching tags: %s", " ".join(command))
-        output = run_local(logger, " ".join(command), check=True)
-        unique_test_files = set(re.findall(self._avocado.get_list_regex(), output.stdout))
-        for index, test_file in enumerate(unique_test_files):
-            self.tests.append(TestInfo(test_file, index + 1, self._yaml_extension))
-            logger.info("  %s", self.tests[-1])
+                # Find all the test files that contain tests matching the tags
+                logger.debug("-" * 80)
+                logger.info("Detecting tests matching tags: %s", " ".join(command))
+                run_local(logger, " ".join(command), check=True)
+                data = json.load(tmpf)
+                index = 1
+                for test in data:
+                    if test["Type"] != "avocado-instrumented":
+                        continue
+                    self.tests.append(TestInfo(test["Test"], index, self._yaml_extension))
+                    index += 1
+                    logger.info("  %s", self.tests[-1])
+
+        else:
+            # Get the avocado list command to find all the tests that match the specified files and
+            # #tags
+            command = ["avocado", "--paginator=off", "list"]
+            command.extend(self.tag_filters)
+            command.extend(test_files)
+            if not test_files:
+                command.append("./")
+
+            # Find all the test files that contain tests matching the tags
+            logger.debug("-" * 80)
+            logger.info("Detecting tests matching tags: %s", " ".join(command))
+            output = run_local(logger, " ".join(command), check=True)
+            unique_test_files = set(re.findall(r"INSTRUMENTED\s+(.*):", output.stdout))
+            for index, test_file in enumerate(unique_test_files):
+                self.tests.append(TestInfo(test_file, index + 1, self._yaml_extension))
+                logger.info("  %s", self.tests[-1])
 
         # List all of the possible tags if no matches where found and verbose is set
         if not self.tests and verbose:
