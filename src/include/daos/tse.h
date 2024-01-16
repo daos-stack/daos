@@ -15,6 +15,10 @@
 
 #include <gurt/list.h>
 
+#include <pthread.h>
+#include <inttypes.h>
+#include <stdbool.h>
+
 /** tse_task arguments max length (pthread_mutex_t is of different size between x86 and aarch64). */
 #define TSE_TASK_ARG_LEN	(840 + sizeof(pthread_mutex_t))
 /** internal tse private data size (struct tse_task_private) */
