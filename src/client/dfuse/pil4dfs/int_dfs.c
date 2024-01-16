@@ -82,15 +82,11 @@
 
 /* the default min fd that will be used by DAOS */
 #define DAOS_MIN_FD         10
-/* an upper limit is set in case that env was not set properly */
-#define MAX_DAOS_MIN_FD     128
 
-/* the number of low fd blocked */
+/* the number of low fd reserved */
 static uint16_t               low_fd_count;
-/* upper limit of low fd that will be blocked */
-static uint16_t               max_low_fd_blocked;
-/* the list of low fd blocked */
-static int                   *low_fd_list;
+/* the list of low fd reserved */
+static int                    low_fd_list[DAOS_MIN_FD];
 
 /* In case of fork(), only the parent process could destroy daos env. */
 static bool                   context_reset;
@@ -142,7 +138,7 @@ static bool             report;
 static bool             enforce_exec_env;
 static long int         page_size;
 
-static bool             daos_inited;
+static _Atomic bool     daos_inited;
 static bool             daos_debug_inited;
 static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
@@ -258,7 +254,7 @@ struct sigaction       old_segv;
 /* the flag to indicate whether initlization is finished or not */
 static bool            hook_enabled;
 static bool            hook_enabled_bak;
-static pthread_mutex_t lock_global;
+static pthread_mutex_t lock_reserve_fd;
 static pthread_mutex_t lock_dfs;
 static pthread_mutex_t lock_fd;
 static pthread_mutex_t lock_dirfd;
@@ -922,7 +918,7 @@ child_hdlr(void)
 	int rc;
 
 	/* daos is not initialized yet */
-	if (!daos_inited)
+	if (atomic_load_relaxed(&daos_inited) == false)
 		return;
 
 	daos_eq_lib_reset_after_fork();
@@ -936,15 +932,15 @@ child_hdlr(void)
 	context_reset = true;
 }
 
-/* only free the blocked low fds when application exits or encounters error */
+/* only free the reserved low fds when application exits or encounters error */
 static void
-free_blocked_low_fd(void)
+free_reserved_low_fd(void)
 {
 	int i;
 
 	for (i = 0; i < low_fd_count; i++)
 		libc_close(low_fd_list[i]);
-	D_FREE(low_fd_list);
+	low_fd_count = 0;
 }
 
 /* some applications especially bash scripts use specific low fds directly.
@@ -958,21 +954,17 @@ consume_low_fd(void)
 {
 	int rc = 0;
 
-	if (daos_inited)
+	if (atomic_load_relaxed(&daos_inited) == true)
 		return 0;
 
-	low_fd_count = 0;
-
-	D_ALLOC_ARRAY(low_fd_list, max_low_fd_blocked + 1);
-	if (low_fd_list == NULL)
-		return ENOMEM;
-
-	low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
+	D_MUTEX_LOCK(&lock_reserve_fd);
+	low_fd_count              = 0;
+	low_fd_list[low_fd_count] = libc_open("/", O_PATH | O_DIRECTORY);
 	while (1) {
 		if (low_fd_list[low_fd_count] < 0) {
 			DS_ERROR(errno, "failed to reserve a low fd");
 			goto err;
-		} else if (low_fd_list[low_fd_count] > max_low_fd_blocked) {
+		} else if (low_fd_list[low_fd_count] >= DAOS_MIN_FD) {
 			libc_close(low_fd_list[low_fd_count]);
 			break;
 		} else {
@@ -981,12 +973,14 @@ consume_low_fd(void)
 		low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
 	}
 
+	D_MUTEX_UNLOCK(&lock_reserve_fd);
 	return rc;
 
 err:
 	rc = errno;
-	free_blocked_low_fd();
+	free_reserved_low_fd();
 	low_fd_count = 0;
+	D_MUTEX_UNLOCK(&lock_reserve_fd);
 
 	return rc;
 }
@@ -1083,25 +1077,23 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 	if (idx_dfs >= 0) {
 		/* trying to avoid lock as much as possible */
-		if (!daos_inited) {
+		if (atomic_load_relaxed(&daos_inited) == false) {
 			/* daos_init() is expensive to call. We call it only when necessary. */
-
-			D_MUTEX_LOCK(&lock_global);
 
 			rc = consume_low_fd();
 			if (rc) {
 				DS_ERROR(rc, "consume_low_fd() failed");
 				*is_target_path = 0;
-				D_MUTEX_UNLOCK(&lock_global);
 				goto out_normal;
 			}
+
 			rc = daos_init();
 			if (rc) {
 				DL_ERROR(rc, "daos_init() failed");
 				*is_target_path = 0;
-				D_MUTEX_UNLOCK(&lock_global);
 				goto out_normal;
 			}
+
 			if (eq_count_max) {
 				D_MUTEX_LOCK(&lock_eqh);
 				if (daos_handle_is_inval(main_eqh)) {
@@ -1109,16 +1101,14 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 					if (rc)
 						DL_WARN(rc, "daos_eq_create() failed");
 					main_eqh = td_eqh;
+					rc       = pthread_atfork(NULL, NULL, &child_hdlr);
+					D_ASSERT(rc == 0);
 				}
 				D_MUTEX_UNLOCK(&lock_eqh);
-				rc = pthread_atfork(NULL, NULL, &child_hdlr);
-				D_ASSERT(rc == 0);
 			}
 
-			daos_inited = true;
+			atomic_store_relaxed(&daos_inited, true);
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
-
-			D_MUTEX_UNLOCK(&lock_global);
 		}
 
 		/* dfs info can be set up after daos has been initialized. */
@@ -1861,7 +1851,7 @@ out_readlink:
 		free(*full_path_out);
 		*full_path_out = NULL;
 	}
-	DS_ERROR(errno, "readlink() failed");
+	D_DEBUG(DB_ANY, "readlink() failed: %d (%s)\n", errno, strerror(errno));
 	return (-1);
 }
 
@@ -2602,6 +2592,17 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 			return new_xstat(1, path, stat_buf);
 	}
 
+	if (dirfd >= FD_FILE_BASE && dirfd < FD_DIR_BASE) {
+		if (path[0] == 0 && flags & AT_EMPTY_PATH)
+			/* same as fstat for a file. May need further work to handle flags */
+			return new_fxstat(ver, dirfd, stat_buf);
+		else if (path[0] == 0)
+			error = ENOENT;
+		else
+			error = ENOTDIR;
+		goto out_err;
+	}
+
 	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
 	if (error)
 		goto out_err;
@@ -2644,9 +2645,16 @@ new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat
 			return new_xstat(1, path, stat_buf);
 	}
 
-	if (dirfd >= FD_FILE_BASE && dirfd < FD_DIR_BASE && path[0] == 0)
-		/* same as fstat for a file. May need further work to handle flags */
-		return fstat(dirfd, stat_buf);
+	if (dirfd >= FD_FILE_BASE && dirfd < FD_DIR_BASE) {
+		if (path[0] == 0 && flags & AT_EMPTY_PATH)
+			/* same as fstat for a file. May need further work to handle flags */
+			return fstat(dirfd, stat_buf);
+		else if (path[0] == 0)
+			error = ENOENT;
+		else
+			error = ENOTDIR;
+		goto out_err;
+	}
 
 	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
 	if (error)
@@ -3283,11 +3291,11 @@ out_readdir:
 extern char **__environ;
 
 /* This number may be updated later to be consistent!*/
-#define N_ENV_CHECK (8)
+#define N_ENV_CHECK (7)
 /**
  * char    env_list[N_ENV_CHECK][32] = {"LD_PRELOAD", "D_IL_REPORT", "DAOS_MOUNT_POINT",
  *				     "DAOS_POOL", "DAOS_CONTAINER", "D_IL_MAX_EQ",
- *				     "D_IL_ENFORCE_EXEC_ENV", "D_IL_DAOS_MIN_FD"};
+ *				     "D_IL_ENFORCE_EXEC_ENV"};
  */
 
 static char **
@@ -3305,7 +3313,6 @@ pre_envp(char *const envp[])
 	bool    cont_included = false;
 	bool    maxeq_included = false;
 	bool    enforcement_included = false;
-	bool    daos_min_fd_included = false;
 	char   *fs_root   = NULL;
 	char   *pool      = NULL;
 	char   *container = NULL;
@@ -3317,7 +3324,6 @@ pre_envp(char *const envp[])
 	char   *str_cont = NULL;
 	char   *str_maxeq = NULL;
 	char   *str_enforcement = NULL;
-	char   *str_daos_min_fd = NULL;
 
 	if (envp == NULL) {
 		num_entry = 0;
@@ -3342,8 +3348,6 @@ pre_envp(char *const envp[])
 				maxeq_included = true;
 			} else if (strncmp(envp[num_entry], "D_IL_ENFORCE_EXEC_ENV", 21) == 0) {
 				enforcement_included = true;
-			} else if (strncmp(envp[num_entry], "D_IL_DAOS_MIN_FD", 16) == 0) {
-				daos_min_fd_included = true;
 			}
 			num_entry++;
 		}
@@ -3460,23 +3464,12 @@ pre_envp(char *const envp[])
 		new_envp[i] = str_enforcement;
 		i++;
 	}
-	if (!daos_min_fd_included) {
-		rc = asprintf(&str_daos_min_fd, "D_IL_DAOS_MIN_FD=%d", max_low_fd_blocked + 1);
-		if (rc < 0) {
-			printf("Error: failed to allocate memory for D_IL_DAOS_MIN_FD env!\n");
-			goto err_out8;
-		}
-		new_envp[i] = str_daos_min_fd;
-		i++;
-	}
 
 	/* NULL pointer to end */
 	new_envp[i] = NULL;
 
 	return new_envp;
 
-err_out8:
-	free(str_enforcement);
 err_out7:
 	free(str_maxeq);
 err_out6:
@@ -5278,6 +5271,39 @@ futimens(int fd, const struct timespec times[2])
 	return 0;
 }
 
+/* check the fd to be closed. If the fd pointing to something like
+ * 'socket:[xxxx]' or 'anon_inode:[eventpoll]', print out a warning
+ * since DAOS network contexts may be using such fds. This might be
+ * helpful in debugging.
+ */
+/*
+static void
+check_fd_to_close(int fd)
+{
+	char    fd_path[64];
+	char   *path;
+	ssize_t len;
+
+	D_ALLOC(path, DFS_MAX_PATH);
+	if (path == NULL)
+		return;
+	snprintf(fd_path, sizeof(fd_path) - 1, "/proc/self/fd/%d", fd);
+	len = readlink(fd_path, path, DFS_MAX_PATH - 1);
+	if (len < 0) {
+		DS_ERROR(errno, "readlink() failed");
+		goto out;
+	}
+	path[len] = 0;
+	if (strncmp(path, "socket:", 7) == 0 || strncmp(path, "anon_inode:[eventpoll]", 22) == 0) {
+		D_DEBUG(DB_ANY, "dup2/fcntl is closing fd %d (%s) which may be used by DAOS!", fd,
+			path);
+	}
+
+out:
+	D_FREE(path);
+}
+*/
+
 /* The macro was added to fix the compiling issue on CentOS 7.9.
  * Those issues could be resolved by adding -D_FILE_OFFSET_BITS=64, however
  * this flag causes other issues too.
@@ -5979,7 +6005,6 @@ init_myhook(void)
 	char    *env_exec;
 	int      rc;
 	uint64_t eq_count_loc = 0;
-	uint64_t daos_min_fd  = 0;
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -6026,7 +6051,7 @@ init_myhook(void)
 	}
 
 	update_cwd();
-	rc = D_MUTEX_INIT(&lock_global, NULL);
+	D_MUTEX_INIT(&lock_reserve_fd, NULL);
 	if (rc)
 		return;
 
@@ -6051,20 +6076,6 @@ init_myhook(void)
 		eq_count_max = (uint16_t)eq_count_loc;
 	} else {
 		eq_count_max = MAX_EQ;
-	}
-
-	/* D_IL_DAOS_MIN_FD=3 or smaller value will disable blocking low fds */
-	rc = d_getenv_uint64_t("D_IL_DAOS_MIN_FD", &daos_min_fd);
-	if (rc != -DER_NONEXIST) {
-		if (daos_min_fd > MAX_DAOS_MIN_FD) {
-			/* set a limit in case env was set incorrectly */
-			D_WARN("Max DAOS_MIN_FD (%" PRIu64 ") should not exceed: %d", daos_min_fd,
-			       MAX_DAOS_MIN_FD);
-			daos_min_fd = MAX_DAOS_MIN_FD;
-		}
-		max_low_fd_blocked = (int)daos_min_fd - 1;
-	} else {
-		max_low_fd_blocked = DAOS_MIN_FD - 1;
 	}
 
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
@@ -6219,7 +6230,7 @@ finalize_myhook(void)
 		finalize_dfs();
 
 		D_MUTEX_DESTROY(&lock_eqh);
-		D_MUTEX_DESTROY(&lock_global);
+		D_MUTEX_DESTROY(&lock_reserve_fd);
 		D_MUTEX_DESTROY(&lock_dfs);
 		D_MUTEX_DESTROY(&lock_dirfd);
 		D_MUTEX_DESTROY(&lock_fd);
@@ -6334,10 +6345,10 @@ finalize_dfs(void)
 		D_FREE(dfs_list[i].fs_root);
 	}
 
-	if (daos_inited) {
+	if (atomic_load_relaxed(&daos_inited)) {
 		uint32_t init_cnt, j;
 
-		free_blocked_low_fd();
+		free_reserved_low_fd();
 		init_cnt = atomic_load_relaxed(&daos_init_cnt);
 		for (j = 0; j < init_cnt; j++) {
 			rc = daos_fini();
