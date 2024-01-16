@@ -7,8 +7,10 @@
 #include <errno.h>
 #include <getopt.h>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
+#include <string.h>
 
 #include <sys/types.h>
 #include <hwloc.h>
@@ -17,9 +19,9 @@
 
 #include "dfuse.h"
 
-#include "daos_fs.h"
-#include "daos_api.h"
-#include "daos_uns.h"
+#include <daos_fs.h>
+#include <daos_api.h>
+#include <daos_uns.h>
 
 #include <gurt/common.h>
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
@@ -238,9 +240,7 @@ show_version(char *name)
 	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n", name, DAOS_VERSION,
 		DAOS_API_VERSION_MAJOR, DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 	fprintf(stdout, "Using fuse %s\n", fuse_pkgversion());
-#if HAVE_CACHE_READDIR
 	fprintf(stdout, "Kernel readdir support enabled\n");
-#endif
 };
 
 static void
@@ -279,7 +279,7 @@ show_help(char *name)
 	    "Alternatively, the mountpoint directory can also be specified with the -m or\n"
 	    "--mountpoint= option but this usage is deprecated.\n"
 	    "\n"
-	    "The DAOS pool and container can be specified in several different ways"
+	    "The DAOS pool and container can be specified in several different ways\n"
 	    "(only one way of specifying the pool and container should be used):\n"
 	    "* The DAOS pool and container can be explicitly specified on the command line\n"
 	    "  as positional arguments, using either UUIDs or labels. This is the most\n"
@@ -348,6 +348,35 @@ show_help(char *name)
 	    name, DAOS_VERSION);
 }
 
+/*
+ * Checks whether a mountpoint path is a valid file descriptor.
+ *
+ * Returns the file descriptor on success, -1 on failure.
+ */
+static int
+check_fd_mountpoint(const char *mountpoint)
+{
+	int fd  = -1;
+	int len = 0;
+	int fd_flags;
+	int res;
+
+	res = sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len);
+	if (res != 1) {
+		return -1;
+	}
+	if (len != strnlen(mountpoint, NAME_MAX)) {
+		return -1;
+	}
+
+	fd_flags = fcntl(fd, F_GETFD);
+	if (fd_flags == -1) {
+		return -1;
+	}
+
+	return fd;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -384,6 +413,8 @@ main(int argc, char **argv)
 					     {"help", no_argument, 0, 'h'},
 					     {0, 0, 0, 0}};
 
+	d_signal_stack_enable(true);
+
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -398,7 +429,7 @@ main(int argc, char **argv)
 	dfuse_info->di_eq_count = 1;
 
 	while (1) {
-		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
 
 		if (c == -1)
 			break;
@@ -627,8 +658,18 @@ main(int argc, char **argv)
 		duns_destroy_attr(&duns_attr);
 
 	} else if (rc == ENOENT) {
-		printf("Mount point does not exist\n");
-		D_GOTO(out_daos, rc = daos_errno2der(rc));
+		/* In order to allow FUSE daemons to run without privileges, libfuse
+		 * allows the caller to open /dev/fuse and pass the file descriptor by
+		 * specifying /dev/fd/N as the mountpoint. In some cases, realpath may
+		 * fail for these paths.
+		 */
+		int fd = check_fd_mountpoint(dfuse_info->di_mountpoint);
+		if (fd < 0) {
+			DFUSE_TRA_WARNING(dfuse_info, "Mount point is not a valid file descriptor");
+			printf("Mount point does not exist\n");
+			D_GOTO(out_daos, rc = daos_errno2der(rc));
+		}
+		DFUSE_LOG_INFO("Mounting FUSE file descriptor %d", fd);
 	} else if (rc == ENOTCONN) {
 		printf("Stale mount point, run fusermount3 and retry\n");
 		D_GOTO(out_daos, rc = daos_errno2der(rc));

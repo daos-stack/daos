@@ -26,11 +26,11 @@
 #endif
 #include <daos/common.h>
 #include <daos/object.h>
-#include "dfuse_ioctl.h"
-#include "daos_types.h"
-#include "daos.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
+#include <dfuse_ioctl.h>
+#include <daos_types.h>
+#include <daos.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
 
 #ifndef FUSE_SUPER_MAGIC
 #define FUSE_SUPER_MAGIC	0x65735546
@@ -859,7 +859,7 @@ duns_link_lustre_path(const char *pool, const char *cont, daos_cont_layout_t typ
 {
 	char			str[DUNS_MAX_XATTR_LEN + 1];
 	int			len;
-	int			rc, rc2;
+	int			rc;
 
 	/* XXX if liblustreapi is not binded, do it now ! */
 	if (liblustre_binded == false && liblustre_notfound == false) {
@@ -1247,7 +1247,9 @@ duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
 #ifdef LUSTRE_INCLUDE
 		struct statfs   fs;
 		char            *dir, *dirp;
+		size_t          path_len;
 
+		path_len = strnlen(path, PATH_MAX);
 		D_STRNDUP(dir, path, path_len);
 		if (dir == NULL)
 			D_GOTO(out_cont, rc = ENOMEM);

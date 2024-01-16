@@ -9,6 +9,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos/stack_mmap.h>
 #include <gurt/telemetry_common.h>
+#include <gurt/heap.h>
 
 /**
  * Argobots ULT pools for different tasks, NET_POLL & NVME_POLL
@@ -32,6 +33,7 @@ struct sched_stats {
 	struct d_tm_node_t	*ss_sq_len;		/* Sleep queue length */
 	struct d_tm_node_t	*ss_cycle_duration;	/* Cycle duration (ms) */
 	struct d_tm_node_t	*ss_cycle_size;		/* Total ULTs in a cycle */
+	struct d_tm_node_t	*ss_total_reject;	/* Total Rejected requests */
 	uint64_t		 ss_busy_ts;		/* Last busy timestamp (ms) */
 	uint64_t		 ss_watchdog_ts;	/* Last watchdog print ts (ms) */
 	void			*ss_last_unit;		/* Last executed unit */
@@ -41,6 +43,7 @@ struct sched_info {
 	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
 	uint64_t		 si_cur_seq;	/* Current schedule sequence */
 	uint64_t		 si_ult_start;	/* Start time of last executed unit */
+	uint64_t		 si_cur_id;	/* Current sequence ID for incoming RPC */
 	void			*si_ult_func;	/* Function addr of last executed unit */
 	struct sched_stats	 si_stats;	/* Sched stats */
 	d_list_t		 si_idle_list;	/* All unused requests */
@@ -48,10 +51,22 @@ struct sched_info {
 	d_list_t		 si_fifo_list;	/* All IO requests in FIFO */
 	d_list_t		 si_purge_list;	/* Stale sched_pool_info */
 	struct d_hash_table	*si_pool_hash;	/* All sched_pool_info */
-	uint32_t		 si_req_cnt;	/* Total inuse request count */
+	struct d_binheap	 si_heap;	/* All retried RPC */
+	/* Total inuse request count */
+	uint32_t		 si_total_req_cnt;
+	/* Request count for each type of inuse request */
+	uint32_t		 si_req_cnt[SCHED_REQ_MAX];
 	int			 si_sleep_cnt;	/* Sleeping request count */
 	int			 si_wait_cnt;	/* Long wait request count */
+	/* Number of kicked requests for each type in current cycle */
+	uint32_t		 si_kicked_req_cnt[SCHED_REQ_MAX];
 	unsigned int		 si_stop:1;
+};
+
+struct mem_stats {
+	struct d_tm_node_t	*ms_total_usage;	/* Total memory usage (bytes) */
+	struct d_tm_node_t	*ms_mallinfo;		/* memory allocate information */
+	uint64_t		ms_current;
 };
 
 /** Per-xstream configuration data */
@@ -80,6 +95,7 @@ struct dss_xstream {
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
+	struct mem_stats	dx_mem_stats;	/* memory usages stats on this xstream */
 #ifdef ULT_MMAP_STACK
 	/* per-xstream pool/list of free stacks */
 	struct stack_pool	*dx_sp;
@@ -95,6 +111,7 @@ struct engine_metrics {
 	struct d_tm_node_t	*rank_id;
 	struct d_tm_node_t	*dead_rank_events;
 	struct d_tm_node_t	*last_event_time;
+	struct d_tm_node_t	*meminfo;
 };
 
 extern struct engine_metrics dss_engine_metrics;
@@ -150,6 +167,8 @@ void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
+void dss_mem_total_alloc_track(void *arg, daos_size_t bytes);
+void dss_mem_total_free_track(void *arg, daos_size_t bytes);
 
 /* srv_metrics.c */
 int dss_engine_metrics_init(void);

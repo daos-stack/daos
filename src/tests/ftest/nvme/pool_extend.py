@@ -3,12 +3,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import threading
+import time
 
+from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
-from dmg_utils import check_system_query_status
 
 
 class NvmePoolExtend(OSAUtils):
@@ -30,7 +30,7 @@ class NvmePoolExtend(OSAUtils):
         super().setUp()
 
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.dmg_command.exit_status_exception = True
 
     def run_nvme_pool_extend(self, num_pool, oclass=None):

@@ -3,10 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import traceback
 import ctypes
-from avocado.core.exceptions import TestFail
+import traceback
+
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 
 
 class BadConnectTest(TestWithServers):

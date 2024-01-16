@@ -353,17 +353,24 @@ struct bio_dev_info {
 	uint32_t		bdi_tgt_cnt;
 	int		       *bdi_tgts;
 	char		       *bdi_traddr;
-	uint32_t		bdi_dev_type;	/* reserved */
-	uint32_t		bdi_dev_roles;	/* reserved */
+	uint32_t                bdi_dev_roles;
+	struct nvme_ctrlr_t    *bdi_ctrlr; /* defined in control.h */
 };
 
 static inline void
 bio_free_dev_info(struct bio_dev_info *dev_info)
 {
-	if (dev_info->bdi_tgts != NULL)
-		D_FREE(dev_info->bdi_tgts);
-	if (dev_info->bdi_traddr != NULL)
-		D_FREE(dev_info->bdi_traddr);
+	D_FREE(dev_info->bdi_tgts);
+	D_FREE(dev_info->bdi_traddr);
+	if (dev_info->bdi_ctrlr != NULL) {
+		D_FREE(dev_info->bdi_ctrlr->model);
+		D_FREE(dev_info->bdi_ctrlr->serial);
+		D_FREE(dev_info->bdi_ctrlr->fw_rev);
+		D_FREE(dev_info->bdi_ctrlr->vendor_id);
+		D_FREE(dev_info->bdi_ctrlr->pci_type);
+		D_FREE(dev_info->bdi_ctrlr->nss);
+		D_FREE(dev_info->bdi_ctrlr);
+	}
 	D_FREE(dev_info);
 }
 
@@ -391,7 +398,6 @@ int bio_dev_list(struct bio_xs_context *ctxt, d_list_t *dev_list, int *dev_cnt);
 struct bio_reaction_ops {
 	int (*faulty_reaction)(int *tgt_ids, int tgt_cnt);
 	int (*reint_reaction)(int *tgt_ids, int tgt_cnt);
-	int (*ioerr_reaction)(int err_type, int tgt_id);
 };
 
 /*
@@ -473,6 +479,16 @@ int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_pollin
  * \returns		N/A
  */
 void bio_xsctxt_free(struct bio_xs_context *ctxt);
+
+/*
+ * Health check on the per-xstream NVMe context
+ *
+ * \param[in] xs_ctxt	Per-xstream NVMe context
+ *
+ * \returns		0:		NVMe context is healthy
+ *			-DER_NVME_IO:	NVMe context is faulty
+ */
+int bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt);
 
 /**
  * NVMe poller to poll NVMe I/O completions.
@@ -1064,7 +1080,7 @@ struct bio_wal_info {
 };
 
 /*
- * Qeury WAL total blocks & used blocks.
+ * Query WAL total blocks & used blocks.
  */
 void bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info);
 

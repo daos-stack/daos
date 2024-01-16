@@ -3,16 +3,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import re
+from grp import getgrgid
 # pylint: disable=too-many-lines
 from logging import getLogger
-from grp import getgrgid
 from pwd import getpwuid
-import re
 
-from exception_utils import CommandFailure
 from dmg_utils_base import DmgCommandBase
-from general_utils import get_numeric_list, dict_to_str
-from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+from dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
+from exception_utils import CommandFailure
+from general_utils import dict_to_str, get_numeric_list
 
 
 class DmgJsonCommandFailure(CommandFailure):
@@ -406,6 +406,8 @@ class DmgCommand(DmgCommandBase):
         #               "serial": "CVFT534200AY400BGN",
         #               "pci_addr": "0000:05:00.0",
         #               "fw_rev": "8DV10131",
+        #               "vendor_id": "0x8086",
+        #               "pci_type": "",
         #               "socket_id": 0,
         #               "health_stats": null,
         #               "namespaces": [
@@ -416,7 +418,7 @@ class DmgCommand(DmgCommandBase):
         #               ],
         #               "smd_devices": [
         #                 {
-        #                   "dev_state": "NORMAL",
+        #                   "role_bits": 0,
         #                   "uuid": "259608d1-c469-4684-9986-9f7708b20ca3",
         #                   "tgt_ids": [ 0, 1, 2, 3, 4, 5, 6, 7 ],
         #                   "rank": 0,
@@ -428,12 +430,28 @@ class DmgCommand(DmgCommandBase):
         #                   "meta_wal_size": 0,
         #                   "rdb_size": 134217728,
         #                   "rdb_wal_size": 268435456,
-        #                   "health": null,
-        #                   "tr_addr": "0000:05:00.0",
-        #                   "roles": "data",
-        #                   "has_sys_xs": false
+        #                   "roles": "NA",
+        #                   "has_sys_xs": false,
+        #                   "ctrlr": {
+        #                     "info": "",
+        #                     "model": "",
+        #                     "serial": "",
+        #                     "pci_addr": "",
+        #                     "fw_rev": "",
+        #                     "vendor_id": "",
+        #                     "pci_type": "",
+        #                     "socket_id": 0,
+        #                     "health_stats": null,
+        #                     "namespaces": null,
+        #                     "smd_devices": null,
+        #                     "dev_state": "UNKNOWN",
+        #                     "led_state": "OFF"
+        #                   },
+        #                   "ctrlr_namespace_id": 1
         #                 }
         #               ]
+        #               "dev_state": "NORMAL",
+        #               "led_state": "NA",
         #             }
         #           ],
         #           "scm_modules": null,

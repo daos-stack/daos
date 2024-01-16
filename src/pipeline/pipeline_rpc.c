@@ -29,52 +29,6 @@ crt_proc_daos_key_desc_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_key_desc_t
 }
 
 static int
-crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
-{
-	int i;
-	int rc;
-
-	if (FREEING(proc_op)) {
-		/* NB: don't need free in crt_proc_d_iov_t() */
-		D_FREE(p->sg_iovs);
-		return 0;
-	}
-
-	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr);
-	if (unlikely(rc))
-		return rc;
-
-	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr_out);
-	if (unlikely(rc))
-		return rc;
-
-	if (p->sg_nr == 0)
-		return 0;
-
-	switch (proc_op) {
-	case CRT_PROC_DECODE:
-		D_ALLOC_ARRAY(p->sg_iovs, p->sg_nr);
-		if (p->sg_iovs == NULL)
-			return -DER_NOMEM;
-		/* fall through to fill sg_iovs */
-	case CRT_PROC_ENCODE:
-		for (i = 0; i < p->sg_nr; i++) {
-			rc = crt_proc_d_iov_t(proc, proc_op, &p->sg_iovs[i]);
-			if (unlikely(rc)) {
-				if (DECODING(proc_op))
-					D_FREE(p->sg_iovs);
-				return rc;
-			}
-		}
-		break;
-	default:
-		return -DER_INVAL;
-	}
-
-	return rc;
-}
-
-static int
 crt_proc_daos_unit_oid_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_unit_oid_t *p)
 {
 	return crt_proc_memcpy(proc, proc_op, p, sizeof(*p));
@@ -392,7 +346,7 @@ crt_proc_daos_pipeline_stats_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_pipe
 
 CRT_RPC_DEFINE(pipeline_run, DAOS_ISEQ_PIPELINE_RUN, DAOS_OSEQ_PIPELINE_RUN)
 
-#define X(a, b, c, d, e, f)                                                                        \
+#define X(a, b, c, ...)                                                                            \
 	{                                                                                          \
 	    .prf_flags   = b,                                                                      \
 	    .prf_req_fmt = c,                                                                      \

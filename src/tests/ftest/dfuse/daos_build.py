@@ -135,9 +135,11 @@ class DaosBuild(DfuseTestBase):
 
         # Note that run_on_vms does not tell ftest where to run, this should be set according to
         # the test tags so the test can run with appropriate settings.
+        remote_env = {}
         if run_on_vms:
             dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
             build_jobs = 6 * 2
+            remote_env['D_IL_MAX_EQ'] = '0'
 
         intercept_jobs = build_jobs
         if intercept:
@@ -189,7 +191,6 @@ class DaosBuild(DfuseTestBase):
         mount_dir = self.dfuse.mount_dir.value
         build_dir = os.path.join(mount_dir, 'daos')
 
-        remote_env = {}
         remote_env['PATH'] = '{}:$PATH'.format(os.path.join(mount_dir, 'venv', 'bin'))
         remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
         remote_env['COVFILE'] = os.environ['COVFILE']
@@ -215,7 +216,9 @@ class DaosBuild(DfuseTestBase):
                 'daos filesystem query {}'.format(mount_dir),
                 'daos filesystem evict {}'.format(build_dir),
                 'daos filesystem query {}'.format(mount_dir),
-                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
+                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs),
+                'scons -C {} --jobs {} install'.format(build_dir, intercept_jobs),
+                'daos filesystem query {}'.format(mount_dir)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.

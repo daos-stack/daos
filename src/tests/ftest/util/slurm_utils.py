@@ -3,17 +3,15 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import os
 import random
-import time
-import threading
 import re
+import threading
+import time
 
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
-
-from run_utils import run_remote, run_local, RunException
+# pylint: disable=import-error,no-name-in-module
+from util.run_utils import RunException, run_local, run_remote
 
 PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
 W_LOCK = threading.Lock()

@@ -3,20 +3,19 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import ctypes
+import json
 # pylint: disable=too-many-lines
 import os
 from time import sleep, time
-import ctypes
-import json
 
-from avocado import fail_on, TestFail
-from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-
-from test_utils_base import TestDaosApiBase, LabelGenerator
+from avocado import TestFail, fail_on
 from command_utils import BasicParameter
-from exception_utils import CommandFailure
-from general_utils import check_pool_files, DaosTestError
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
+from exception_utils import CommandFailure
+from general_utils import DaosTestError, check_file_exists
+from pydaos.raw import DaosApiError, DaosPool, c_uuid_to_str, daos_cref
+from test_utils_base import LabelGenerator, TestDaosApiBase
 
 POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200
@@ -330,6 +329,10 @@ class TestPool(TestDaosApiBase):
             raise TypeError("Invalid 'dmg' object type: {}".format(type(value)))
         self._dmg = value
 
+    def no_exception(self):
+        """Temporarily disable raising exceptions for failed commands."""
+        return self.dmg.no_exception()
+
     def skip_cleanup(self):
         """Prevent pool from being removed during cleanup.
 
@@ -444,8 +447,8 @@ class TestPool(TestDaosApiBase):
         if self.pool and not self.connected:
             kwargs = {"flags": permission}
             self.log.info(
-                "Connecting to pool %s with permission %s (flag: %s)",
-                self.uuid, permission, kwargs["flags"])
+                "Connecting to %s with permission %s (flag: %s)",
+                str(self), permission, kwargs["flags"])
             self._call_method(self.pool.connect, kwargs)
             self.connected = True
             return True
@@ -461,7 +464,7 @@ class TestPool(TestDaosApiBase):
 
         """
         if self.pool and self.connected:
-            self.log.info("Disconnecting from pool %s", self.uuid)
+            self.log.info("Disconnecting from %s", str(self))
             self._call_method(self.pool.disconnect, {})
             self.connected = False
             return True
@@ -523,7 +526,7 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_delete_acl(pool=self.identifier, principal=principal)
+        return self.dmg.pool_delete_acl(self.identifier, principal=principal)
 
     @fail_on(CommandFailure)
     def drain(self, rank, tgt_idx=None):
@@ -636,29 +639,6 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_get_prop(self.identifier, *args, **kwargs)
 
-    def get_prop_values(self, *args, **kwargs):
-        """Get pool property values from the dmg pool get-prop json output.
-
-        Args:
-            args (tuple, optional): positional arguments to DmgCommand.pool_get_prop
-            kwargs (dict, optional): named arguments to DmgCommand.pool_get_prop
-
-        Raises:
-            TestFailure: if there is an error running dmg pool get-prop
-
-        Returns:
-            list: a list of values matching the or specified property names.
-
-        """
-        values = []
-        self.log.info("Getting property values for %s", self)
-        data = self.get_prop(*args, **kwargs)
-        if data['status'] != 0:
-            return values
-        for entry in data['response']:
-            values.append(entry['value'])
-        return values
-
     @fail_on(CommandFailure)
     def get_property(self, prop_name):
         """Get the pool property with the specified name.
@@ -729,10 +709,10 @@ class TestPool(TestDaosApiBase):
                         "test yaml parameter.".format(
                             self.pool_query_timeout.value, self.identifier)) from error
 
-                if self.pool_query_delay:
+                if self.pool_query_delay.value:
                     self.log.info(
                         "Waiting %s seconds before issuing next dmg pool query",
-                        self.pool_query_delay)
+                        self.pool_query_delay.value)
                     sleep(self.pool_query_delay.value)
 
     @fail_on(CommandFailure)
@@ -997,18 +977,20 @@ class TestPool(TestDaosApiBase):
             if key != "self" and val is not None]
         return self._check_info(checks)
 
-    def check_files(self, hosts):
+    def check_files(self, hosts, scm_mount):
         """Check if pool files exist on the specified list of hosts.
 
         Args:
             hosts (NodeSet): hosts on which to check files
+            scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
+                obtained as self.server_managers[0].get_config_value("scm_mount")
 
         Returns:
             bool: True if the files for this pool exist on each host; False
                 otherwise
 
         """
-        return check_pool_files(self.log, hosts, self.uuid.lower())
+        return self.check_pool_files(hosts, self.uuid.lower(), scm_mount)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
@@ -1093,7 +1075,7 @@ class TestPool(TestDaosApiBase):
             for key in sorted(daos_space.keys())
             for index, item in enumerate(daos_space[key])]
         self.log.info(
-            "Pool %s space%s:\n  %s", self.uuid,
+            "%s space%s:\n  %s", str(self),
             " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
 
     def pool_percentage_used(self):
@@ -1418,3 +1400,47 @@ class TestPool(TestDaosApiBase):
         self.wait_for_rebuild_to_end(interval=interval)
         duration = time() - start
         self.log.info("%s duration: %.1f sec", operation, duration)
+
+    def check_pool_files(self, hosts, uuid, scm_mount):
+        """Check if pool files exist on the specified list of hosts.
+
+        Args:
+            hosts (NodeSet): list of hosts
+            uuid (str): uuid file name to look for in /mnt/daos.
+            scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
+                obtained as self.server_managers[0].get_config_value("scm_mount")
+
+        Returns:
+            bool: True if the files for this pool exist on each host; False
+                otherwise
+
+        """
+        status = True
+        self.log.info("Checking for pool data on %s", hosts)
+        pool_files = [uuid, "superblock"]
+        for filename in [f"{scm_mount}/{item}" for item in pool_files]:
+            result = check_file_exists(hosts, filename, sudo=True)
+            if not result[0]:
+                self.log.error("%s: %s not found", result[1], filename)
+                status = False
+        return status
+
+    def verify_uuid_directory(self, host, scm_mount):
+        """Check if pool folder exist on server.
+
+        Args:
+            host (NodeSet): Server host name
+            scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
+                obtained as self.server_managers[0].get_config_value("scm_mount")
+
+        Returns:
+            bool: True if pool folder exists, False otherwise
+
+        """
+        pool_dir = f"{scm_mount}/{self.uuid.lower()}"
+        result = check_file_exists(host, pool_dir, directory=True, sudo=True)
+        if result[0]:
+            self.log.info("%s exists on %s", pool_dir, host)
+        else:
+            self.log.info("%s does not exist on %s", pool_dir, host)
+        return result[0]

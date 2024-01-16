@@ -12,11 +12,13 @@
 #define __CRT_RPC_H__
 
 #include <gurt/heap.h>
-#include "gurt/common.h"
+#include <gurt/common.h>
 
 /* default RPC timeout 60 seconds */
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
 #define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
+
+#define CRT_QUOTA_RPCS_DEFAULT 64
 
 /* uri lookup max retry times */
 #define CRT_URI_LOOKUP_RETRY_MAX	(8)
@@ -130,6 +132,8 @@ struct crt_rpc_priv {
 	d_list_t		crp_epi_link;
 	/* tmp_link used in crt_context_req_untrack */
 	d_list_t		crp_tmp_link;
+	/* link for crt_context::cc_quotas.rpc_waitq */
+	d_list_t		crp_waitq_link;
 	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */
 	d_list_t		crp_parent_link;
 	/* binheap node for timeout management, in crt_context::cc_bh_timeout */
@@ -220,7 +224,7 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 #define CRT_PROTO_FI_VERSION 3
 #define CRT_PROTO_ST_VERSION 1
 #define CRT_PROTO_CTL_VERSION 1
-#define CRT_PROTO_IV_VERSION 1
+#define CRT_PROTO_IV_VERSION       2
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -308,7 +312,7 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 		crt_hdlr_iv_update, NULL)				\
 	X(CRT_OPC_IV_SYNC,						\
 		0, &CQF_crt_iv_sync,					\
-		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)			\
+		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a,
@@ -476,7 +480,8 @@ CRT_RPC_DECLARE(crt_st_status_req,
 	((d_rank_t)		(ifi_root_node)		CRT_VAR)
 
 #define CRT_OSEQ_IV_FETCH	/* output fields */		 \
-	((int32_t)		(ifo_rc)		CRT_VAR)
+	((d_sg_list_t)		(ifo_sgl)		CRT_VAR) \
+	((int32_t)		(ifo_rc)		CRT_VAR) \
 
 CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 
@@ -491,6 +496,7 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 	((d_iov_t)		(ivu_sync_type)		CRT_VAR) \
 	/* Bulk handle for iv value */				 \
 	((crt_bulk_t)		(ivu_iv_value_bulk)	CRT_VAR) \
+	((d_sg_list_t)		(ivu_iv_sgl)		CRT_VAR) \
 	/* Root node for IV UPDATE */				 \
 	((d_rank_t)		(ivu_root_node)		CRT_VAR) \
 	/* Original node that issued crt_iv_update call */	 \
@@ -500,7 +506,8 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 	((uint32_t)		(padding)		CRT_VAR)
 
 #define CRT_OSEQ_IV_UPDATE	/* output fields */		 \
-	((uint64_t)		(rc)			CRT_VAR)
+	((uint64_t)		(rc)			CRT_VAR) \
+	((d_sg_list_t)		(ivo_iv_sgl)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 
@@ -513,8 +520,9 @@ CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 	((d_iov_t)		(ivs_key)		CRT_VAR) \
 	/* IOV for sync type */					 \
 	((d_iov_t)		(ivs_sync_type)		CRT_VAR) \
+	((d_sg_list_t)		(ivs_sync_sgl)		CRT_VAR) \
 	/* IV Class ID */					 \
-	((uint32_t)		(ivs_class_id)		CRT_VAR)
+	((uint32_t)		(ivs_class_id)		CRT_VAR) \
 
 #define CRT_OSEQ_IV_SYNC	/* output fields */		 \
 	((int32_t)		(rc)			CRT_VAR)
@@ -684,8 +692,9 @@ crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 	rpc_priv->crp_timeout_ts = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 }
 
-/* Convert opcode to string. Only returns string for internal RPCs */
-char *crt_opc_to_str(crt_opcode_t opc);
+/*  decode cart opcode into module and rpc opcode strings */
+void
+crt_opc_decode(crt_opcode_t opc, char **module_name, char **opc_name);
 
 bool crt_rpc_completed(struct crt_rpc_priv *rpc_priv);
 

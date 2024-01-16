@@ -20,28 +20,21 @@
 # -*- coding: utf-8 -*-
 """Classes for building external prerequisite components"""
 
+import configparser
+import datetime
+import errno
+import json
 # pylint: disable=too-many-lines
 import os
-from copy import deepcopy
-import sys
-import json
-import datetime
-import traceback
-import errno
 import shutil
 import subprocess  # nosec
-import configparser
-from SCons.Variables import BoolVariable
-from SCons.Variables import EnumVariable
-from SCons.Variables import ListVariable
-from SCons.Variables import PathVariable
-from SCons.Script import Dir
-from SCons.Script import Exit
-from SCons.Script import GetOption
-from SCons.Script import SetOption
-from SCons.Script import WhereIs
-from SCons.Script import BUILD_TARGETS
+import sys
+import traceback
+from copy import deepcopy
+
 from SCons.Errors import InternalError
+from SCons.Script import BUILD_TARGETS, Dir, Exit, GetOption, SetOption, WhereIs
+from SCons.Variables import BoolVariable, EnumVariable, ListVariable, PathVariable
 
 
 class DownloadFailure(Exception):
@@ -525,10 +518,10 @@ class PreReqComponent():
     def run_build(self, opts):
         """Build and dependencies"""
         # argobots is not really needed by client but it's difficult to separate
-        common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
-                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
+        common_reqs = ['ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
+                       'lz4', 'isal', 'isal_crypto']
         client_reqs = ['fuse', 'json-c', 'capstone']
-        server_reqs = ['pmdk', 'spdk', 'ipmctl']
+        server_reqs = ['argobots', 'pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
 
         reqs = []
@@ -679,7 +672,7 @@ class PreReqComponent():
         self.__build_info.save('.build_vars.json')
 
     def __parse_build_deps(self):
-        """Parse the build dependances command line flag"""
+        """Parse the build dependencies command line flag"""
         build_deps = GetOption('build_deps')
         if build_deps in ('yes', 'only'):
             self.download_deps = True
