@@ -42,7 +42,10 @@ static inline void
 evt_rect_read(struct evt_rect *rout, const struct evt_rect_df *rin)
 {
 	rout->rc_epc = rin->rd_epc;
-	rout->rc_minor_epc = rin->rd_minor_epc;
+	if (rin->rd_minor_epc != EVT_TX_MINOR_MAX_DF)
+		rout->rc_minor_epc = rin->rd_minor_epc;
+	else
+		rout->rc_minor_epc = VOS_SUB_OP_MAX;
 	evt_ext_read(&rout->rc_ex, rin);
 };
 
@@ -52,8 +55,11 @@ evt_rect_write(struct evt_rect_df *rout, const struct evt_rect *rin)
 {
 	evt_len_write(rout, evt_rect_width(rin));
 	rout->rd_epc = rin->rc_epc;
-	rout->rd_minor_epc = rin->rc_minor_epc;
 	rout->rd_lo = rin->rc_ex.ex_lo;
+	if (rin->rc_minor_epc != VOS_SUB_OP_MAX)
+		rout->rd_minor_epc = rin->rc_minor_epc;
+	else
+		rout->rd_minor_epc = EVT_TX_MINOR_MAX_DF;
 };
 
 #define DF_BUF_LEN	128
@@ -159,10 +165,20 @@ time_cmp(uint64_t t1, uint64_t t2, int *out)
 		return true;
 	}
 
-	if (t1 < t2)
+	if (t1 < t2) {
+		/** Even if t2 is rebuild, overwrite just works here */
 		*out = RT_OVERLAP_OVER;
-	else
+	} else {
 		*out = RT_OVERLAP_UNDER;
+		if (t2 == EVT_REBUILD_MINOR_MIN) {
+			/** If t1 is also a rebuild, we should return
+			 * RT_OVERLAP_SAME to force adjustment of new rebuild
+			 * minor epoch.
+			 */
+			if (t1 < EVT_REBUILD_MINOR_MAX)
+				*out = RT_OVERLAP_SAME;
+		}
+	}
 
 	return false;
 }
@@ -2249,6 +2265,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	struct evt_filter		 filter;
 	int				 rc;
 	int				 alt_rc = 0;
+	bool                             overwrite = false;
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
@@ -2279,6 +2296,13 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 
 	evt_ent_array_init(ent_array, 1);
 
+	/* For evt_remove_all, we only insert removals for things that
+	 * are visible, so we shouldn't need to check for overwrite at
+	 * all.
+	 */
+	if (entry->ei_rect.rc_minor_epc == EVT_MINOR_EPC_MAX)
+		goto run_tx;
+
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
 	filter.fr_epr.epr_hi = entry->ei_bound;
@@ -2293,61 +2317,41 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		return rc;
 
 	if (ent_array->ea_ent_nr == 1) {
-		if (entry->ei_rect.rc_minor_epc == EVT_MINOR_EPC_MAX) {
-			/** Special case.   This is an overlapping delete record
-			 *  which can happen when there are minor epochs
-			 *  involved.   Rather than rejecting, insert prefix
-			 *  and/or suffix extents.
+		ent = evt_ent_array_get(ent_array, 0);
+		if (entry->ei_rect.rc_minor_epc == EVT_REBUILD_MINOR_MIN) {
+			ent_cpy                      = *entry;
+			ent_cpy.ei_rect.rc_minor_epc = ent->en_minor_epc + 1;
+			D_ASSERTF(ent_cpy.ei_rect.rc_minor_epc <= EVT_REBUILD_MINOR_MAX,
+				  "minor_epc=%d\n", ent_cpy.ei_rect.rc_minor_epc);
+			/* This should never happen because otherwise, we would
+			 * return no overlap.
 			 */
-			ent = evt_ent_array_get(ent_array, 0);
-			if (ent->en_ext.ex_lo <= entry->ei_rect.rc_ex.ex_lo &&
-			    ent->en_ext.ex_hi >= entry->ei_rect.rc_ex.ex_hi) {
-				/** Nothing to do, existing extent contains
-				 *  the new one
-				 */
-				return 0;
-			}
+			D_ASSERTF(ent_cpy.ei_rect.rc_minor_epc > EVT_REBUILD_MINOR_MIN,
+				  "minor_epc=%d\n", ent_cpy.ei_rect.rc_minor_epc);
+			entryp = &ent_cpy;
+			goto run_tx;
 		}
+		overwrite = true;
 	}
 
+run_tx:
 	rc = evt_tx_begin(tcx);
 	if (rc != 0)
 		return rc;
 
 	if (tcx->tc_depth == 0) { /* empty tree */
-		rc = evt_root_activate(tcx, entry);
+		rc = evt_root_activate(tcx, entryp);
 		if (rc != 0)
 			goto out;
-	} else if (tcx->tc_inob == 0 && entry->ei_inob != 0) {
+	} else if (tcx->tc_inob == 0 && entryp->ei_inob != 0) {
 		rc = evt_root_tx_add(tcx);
 		if (rc != 0)
 			goto out;
-		tcx->tc_inob = tcx->tc_root->tr_inob = entry->ei_inob;
+		tcx->tc_inob = tcx->tc_root->tr_inob = entryp->ei_inob;
 	}
 
 	D_ASSERT(ent_array->ea_ent_nr <= 1);
-	if (ent_array->ea_ent_nr == 1) {
-		if (ent != NULL) {
-			memcpy(&ent_cpy, entry, sizeof(*entry));
-			entryp = &ent_cpy;
-			/** We need to edit the existing extent */
-			if (entry->ei_rect.rc_ex.ex_lo < ent->en_ext.ex_lo) {
-				ent_cpy.ei_rect.rc_ex.ex_hi = ent->en_ext.ex_lo - 1;
-				if (entry->ei_rect.rc_ex.ex_hi <= ent->en_ext.ex_hi)
-					goto insert;
-				/* There is also a suffix, so insert the prefix */
-				rc = evt_insert_entry(tcx, entryp, csum_bufp);
-				if (rc != 0)
-					goto out;
-			}
-
-			D_ASSERT(entry->ei_rect.rc_ex.ex_hi > ent->en_ext.ex_hi);
-			ent_cpy.ei_rect.rc_ex.ex_hi = entry->ei_rect.rc_ex.ex_hi;
-			ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_hi + 1;
-
-			/* Now insert the suffix */
-			goto insert;
-		}
+	if (overwrite) {
 		/*
 		 * NB: This is part of the current hack to keep "supporting"
 		 * overwrite for same epoch, full overwrite.
@@ -2358,7 +2362,6 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		goto out;
 	}
 
-insert:
 	/* Phase-2: Inserting */
 	rc = evt_insert_entry(tcx, entryp, csum_bufp);
 
@@ -2584,7 +2587,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	int				 at;
 	int				 i;
 	int				 rc = 0;
-	bool				 has_agg = false;
+	bool                             has_agg = false;
 
 	V_TRACE(DB_TRACE, "Searching rectangle "DF_RECT" opc=%d\n",
 		DP_RECT(rect), find_opc);
@@ -2704,27 +2707,29 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 					  " overlaps with " DF_RECT "\n",
 					  DP_RECT(&rtmp), DP_RECT(rect));
 
-				/* NB: This is temporary to allow full overwrite
-				 * in same epoch to avoid breaking rebuild.
-				 * Without some sequence number and client
-				 * identifier, we can't do this robustly.
-				 * There can be a race between rebuild and
-				 * client doing different updates.  But this
-				 * isn't any worse than what we already have in
-				 * place so I did it this way to minimize
-				 * change while we decide how to handle this
-				 * properly.
-				 */
-				if (range_overlap != RT_OVERLAP_SAME) {
-					D_ERROR("Same epoch partial "
-						"overwrite not supported:"
-						DF_RECT" overlaps with "DF_RECT
-						"\n", DP_RECT(rect),
-						DP_RECT(&rtmp));
-					rc = -DER_VOS_PARTIAL_UPDATE;
-					goto out;
+				if (rect->rc_minor_epc != EVT_REBUILD_MINOR_MIN) {
+					if (range_overlap != RT_OVERLAP_SAME) {
+						D_ERROR("Same epoch partial overwrite not "
+							"supported: " DF_RECT
+							" overlaps with " DF_RECT "\n",
+							DP_RECT(rect), DP_RECT(&rtmp));
+						rc = -DER_VOS_PARTIAL_UPDATE;
+						goto out;
+					}
 				}
-				break; /* we can update the record in place */
+
+				if (ent_array->ea_ent_nr == 0)
+					break;
+
+				/** If the extent is an overlap, partial or
+				 * otherwise, we want to keep only the one with
+				 * the highest minor epoch and let the caller
+				 * deal with it.
+				 */
+				ent = evt_ent_array_get(ent_array, 0);
+				if (ent->en_minor_epc > rtmp.rc_minor_epc)
+					continue;
+				goto replace_ent;
 			case EVT_FIND_SAME:
 				if (range_overlap != RT_OVERLAP_SAME)
 					continue;
@@ -2762,6 +2767,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				goto out;
 			}
 
+replace_ent:
 			evt_entry_fill(tcx, node, i, rect, intent, ent);
 			switch (find_opc) {
 			default:

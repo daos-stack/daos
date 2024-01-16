@@ -9,48 +9,57 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define SHOW_FLAG(HANDLE, FLAGS, FLAG)                                                             \
+#define SHOW_FLAG(HANDLE, CAP, WANT, FLAG)                                                         \
 	do {                                                                                       \
-		DFUSE_TRA_INFO(HANDLE, "Flag " #FLAG " %s",                                        \
-			       (FLAGS & FLAG) ? "enabled" : "disabled");                           \
-		FLAGS &= ~FLAG;                                                                    \
+		DFUSE_TRA_INFO(HANDLE, "%s %s " #FLAG "",                                          \
+			       (CAP & FLAG) ? "available" : "         ",                           \
+			       (WANT & FLAG) ? "enabled" : "       ");                             \
+		CAP &= ~FLAG;                                                                      \
+		WANT &= ~FLAG;                                                                     \
 	} while (0)
 
 static void
-dfuse_show_flags(void *handle, unsigned int in)
+dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 {
-	SHOW_FLAG(handle, in, FUSE_CAP_ASYNC_READ);
-	SHOW_FLAG(handle, in, FUSE_CAP_POSIX_LOCKS);
-	SHOW_FLAG(handle, in, FUSE_CAP_ATOMIC_O_TRUNC);
-	SHOW_FLAG(handle, in, FUSE_CAP_EXPORT_SUPPORT);
-	SHOW_FLAG(handle, in, FUSE_CAP_DONT_MASK);
-	SHOW_FLAG(handle, in, FUSE_CAP_SPLICE_WRITE);
-	SHOW_FLAG(handle, in, FUSE_CAP_SPLICE_MOVE);
-	SHOW_FLAG(handle, in, FUSE_CAP_SPLICE_READ);
-	SHOW_FLAG(handle, in, FUSE_CAP_FLOCK_LOCKS);
-	SHOW_FLAG(handle, in, FUSE_CAP_IOCTL_DIR);
-	SHOW_FLAG(handle, in, FUSE_CAP_AUTO_INVAL_DATA);
-	SHOW_FLAG(handle, in, FUSE_CAP_READDIRPLUS);
-	SHOW_FLAG(handle, in, FUSE_CAP_READDIRPLUS_AUTO);
-	SHOW_FLAG(handle, in, FUSE_CAP_ASYNC_DIO);
-	SHOW_FLAG(handle, in, FUSE_CAP_WRITEBACK_CACHE);
-	SHOW_FLAG(handle, in, FUSE_CAP_NO_OPEN_SUPPORT);
-	SHOW_FLAG(handle, in, FUSE_CAP_PARALLEL_DIROPS);
-	SHOW_FLAG(handle, in, FUSE_CAP_POSIX_ACL);
-	SHOW_FLAG(handle, in, FUSE_CAP_HANDLE_KILLPRIV);
+	DFUSE_TRA_INFO(handle, "Capability supported by kernel %#x", cap);
+
+	DFUSE_TRA_INFO(handle, "Capability requested %#x", want);
+
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_ASYNC_READ);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_POSIX_LOCKS);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_ATOMIC_O_TRUNC);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPORT_SUPPORT);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_DONT_MASK);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_SPLICE_WRITE);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_SPLICE_MOVE);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_SPLICE_READ);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_FLOCK_LOCKS);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_IOCTL_DIR);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_AUTO_INVAL_DATA);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_READDIRPLUS);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_READDIRPLUS_AUTO);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_ASYNC_DIO);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_WRITEBACK_CACHE);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_NO_OPEN_SUPPORT);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_PARALLEL_DIROPS);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_POSIX_ACL);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_HANDLE_KILLPRIV);
 
 #ifdef FUSE_CAP_CACHE_SYMLINKS
-	SHOW_FLAG(handle, in, FUSE_CAP_CACHE_SYMLINKS);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_CACHE_SYMLINKS);
 #endif
 #ifdef FUSE_CAP_NO_OPENDIR_SUPPORT
-	SHOW_FLAG(handle, in, FUSE_CAP_NO_OPENDIR_SUPPORT);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_NO_OPENDIR_SUPPORT);
 #endif
 #ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
-	SHOW_FLAG(handle, in, FUSE_CAP_EXPLICIT_INVAL_DATA);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPLICIT_INVAL_DATA);
 #endif
 
-	if (in)
-		DFUSE_TRA_WARNING(handle, "Unknown flags %#x", in);
+	if (cap)
+		DFUSE_TRA_WARNING(handle, "Unknown capability flags %#x", cap);
+
+	if (want)
+		DFUSE_TRA_WARNING(handle, "Unknown requested flags %#x", want);
 }
 
 /* Called on filesystem init.  It has the ability to both observe configuration
@@ -76,12 +85,6 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	DFUSE_TRA_INFO(dfuse_info, "kernel readdir cache support compiled in");
 
-	DFUSE_TRA_INFO(dfuse_info, "Capability supported by kernel %#x", conn->capable);
-
-	dfuse_show_flags(dfuse_info, conn->capable);
-
-	DFUSE_TRA_INFO(dfuse_info, "Capability requested %#x", conn->want);
-
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 
@@ -90,7 +93,10 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	if (dfuse_info->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
-	dfuse_show_flags(dfuse_info, conn->want);
+#ifdef FUSE_CAP_CACHE_SYMLINKS
+	conn->want |= FUSE_CAP_CACHE_SYMLINKS;
+#endif
+	dfuse_show_flags(dfuse_info, conn->capable, conn->want);
 
 	conn->max_background       = 16;
 	conn->congestion_threshold = 8;
@@ -366,6 +372,11 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
+/* Do not allow security xattrs to be set or read, see DAOS-14639 */
+#define XATTR_SEC   "security."
+/* Do not allow either system.posix_acl_default or system.posix_acl_access */
+#define XATTR_P_ACL "system.posix_acl"
+
 void
 df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size,
 	       int flags)
@@ -378,6 +389,12 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *val
 	if (strncmp(name, DFUSE_XATTR_PREFIX, sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
 		D_GOTO(err, rc = EPERM);
 	}
+
+	if (strncmp(name, XATTR_SEC, sizeof(XATTR_SEC) - 1) == 0)
+		D_GOTO(err, rc = ENOTSUP);
+
+	if (strncmp(name, XATTR_P_ACL, sizeof(XATTR_P_ACL) - 1) == 0)
+		D_GOTO(err, rc = ENOTSUP);
 
 	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
@@ -399,6 +416,12 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *inode;
 	int                       rc;
+
+	if (strncmp(name, XATTR_SEC, sizeof(XATTR_SEC) - 1) == 0)
+		D_GOTO(err, rc = ENODATA);
+
+	if (strncmp(name, XATTR_P_ACL, sizeof(XATTR_P_ACL) - 1) == 0)
+		D_GOTO(err, rc = ENODATA);
 
 	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 

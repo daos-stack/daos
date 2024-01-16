@@ -18,8 +18,8 @@
 #include <daos/array.h>
 #include <daos/object.h>
 
-#include "daos.h"
-#include "daos_fs.h"
+#include <daos.h>
+#include <daos_fs.h>
 #include "dfs_internal.h"
 
 /** D-key name of SB metadata */
@@ -4539,9 +4539,11 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	if (rc)
 		D_GOTO(err_params, rc);
 
-	rc = dc_task_schedule(task, true);
-	if (rc)
-		D_GOTO(err_task, rc);
+	/*
+	 * dc_task_schedule() calls tse_task_complete() even on error (which also calls the
+	 * completion cb that frees params in this case, so we can just ignore the rc here.
+	 */
+	dc_task_schedule(task, true);
 	return 0;
 
 err_params:
