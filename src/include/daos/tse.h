@@ -62,7 +62,7 @@ typedef int (*tse_task_func_t)(tse_task_t *);
 /** CB type for prepare, completion, and result processing */
 typedef int (*tse_task_cb_t)(tse_task_t *, void *arg);
 
-/** Covert from task to arg */
+/** Convert from task to arg */
 void *
 tse_task2arg(tse_task_t *task);
 
