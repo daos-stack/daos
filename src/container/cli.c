@@ -668,14 +668,6 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 		else
 			delay = 0;
 
-		rc = tse_task_reinit_with_delay(task, delay);
-		if (rc) {
-			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), resched"
-				" failed, "DF_RC"\n", DP_UUID(pool->dp_pool),
-				pm_ver, cb_arg->pra_pm_ver, DP_RC(rc));
-			goto out;
-		}
-
 		rc = tse_task_register_comp_cb(task, pmap_refresh_cb, cb_arg,
 					       sizeof(*cb_arg));
 		if (rc) {
@@ -690,6 +682,15 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 		D_DEBUG(DB_TRACE, DF_UUID": pmap_refresh version (%d:%d), "
 			"in %d retry\n", DP_UUID(pool->dp_pool), pm_ver,
 			cb_arg->pra_pm_ver, cb_arg->pra_retry_nr);
+
+		rc = tse_task_reinit_with_delay(task, delay);
+		if (rc) {
+			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), resched"
+				" failed, "DF_RC"\n", DP_UUID(pool->dp_pool),
+				pm_ver, cb_arg->pra_pm_ver, DP_RC(rc));
+			goto out;
+		}
+
 		return rc;
 	}
 out:
@@ -2404,7 +2405,8 @@ enum creq_cleanup_stage {
 };
 
 static void
-cont_req_cleanup(enum creq_cleanup_stage stage, bool free_tpriv, struct cont_req_arg *args)
+cont_req_cleanup(enum creq_cleanup_stage stage, tse_task_t *task, bool free_tpriv,
+		 struct cont_req_arg *args)
 {
 	switch (stage) {
 	case CLEANUP_ALL:
@@ -2415,8 +2417,10 @@ cont_req_cleanup(enum creq_cleanup_stage stage, bool free_tpriv, struct cont_req
 	case CLEANUP_RPC:
 		crt_req_decref(args->cra_rpc);
 	case CLEANUP_TASK_PRIV:
-		if (free_tpriv)
+		if (free_tpriv) {
 			D_FREE(args->cra_tpriv);
+			dc_task_set_priv(task, NULL);
+		}
 	case CLEANUP_POOL:
 		dc_pool_put(args->cra_pool);
 	case CLEANUP_CONT:
@@ -2462,7 +2466,7 @@ cont_req_complete(tse_task_t *task, void *data)
 	if (args->cra_callback != NULL)
 		args->cra_callback(task, data);
 out:
-	cont_req_cleanup(CLEANUP_BULK, free_tpriv, args);
+	cont_req_cleanup(CLEANUP_BULK, task, free_tpriv, args);
 	return rc;
 }
 
@@ -2484,12 +2488,12 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 	if (tpriv == NULL) {
 		D_ALLOC_PTR(tpriv);
 		if (tpriv == NULL) {
-			cont_req_cleanup(CLEANUP_POOL, false /* free_tpriv */, args);
+			cont_req_cleanup(CLEANUP_POOL, task, false /* free_tpriv */, args);
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		dc_task_set_priv(task, tpriv);
-		args->cra_tpriv = tpriv;
 	}
+	args->cra_tpriv = tpriv;
 
 	ep.ep_grp  = args->cra_pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */,
@@ -2501,8 +2505,7 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(args->cra_pool->dp_pool,
 				args->cra_cont->dc_uuid), DP_RC(rc));
-		cont_req_cleanup(CLEANUP_TASK_PRIV, true /* free_tpriv */, args);
-		dc_task_set_priv(task, NULL);
+		cont_req_cleanup(CLEANUP_TASK_PRIV, task, true /* free_tpriv */, args);
 		goto out;
 	}
 
@@ -2510,8 +2513,7 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 			     args->cra_cont->dc_cont_hdl, &tpriv->rq_time, &args->cra_rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		cont_req_cleanup(CLEANUP_TASK_PRIV, true /* free_tpriv */, args);
-		dc_task_set_priv(task, NULL);
+		cont_req_cleanup(CLEANUP_TASK_PRIV, task, true /* free_tpriv */, args);
 		goto out;
 	}
 
@@ -2569,7 +2571,7 @@ dc_cont_list_attr(tse_task_t *task)
 		};
 		rc = crt_bulk_create(daos_task2ctx(task), &sgl, CRT_BULK_RW, &bulk);
 		if (rc != 0) {
-			cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
+			cont_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &cb_args);
 			D_GOTO(out, rc);
 		}
 	}
@@ -2581,7 +2583,7 @@ dc_cont_list_attr(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
+		cont_req_cleanup(CLEANUP_BULK, task, true /* free_tpriv */, &cb_args);
 		D_GOTO(out, rc);
 	}
 
@@ -2778,7 +2780,7 @@ dc_cont_get_attr(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
+		cont_req_cleanup(CLEANUP_BULK, task, true /* free_tpriv */, &cb_args);
 		D_GOTO(out, rc);
 	}
 
@@ -2786,7 +2788,7 @@ dc_cont_get_attr(tse_task_t *task)
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
 out_rpc:
-	cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
+	cont_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to get container attributes: "DF_RC"\n",
@@ -2888,7 +2890,7 @@ dc_cont_set_attr(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
+		cont_req_cleanup(CLEANUP_BULK, task, true /* free_tpriv */, &cb_args);
 		D_GOTO(out, rc);
 	}
 
@@ -2896,7 +2898,7 @@ dc_cont_set_attr(tse_task_t *task)
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
 out_rpc:
-	cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
+	cont_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to set container attributes: "DF_RC"\n",
@@ -2970,7 +2972,7 @@ dc_cont_del_attr(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
+		cont_req_cleanup(CLEANUP_BULK, task, true /* free_tpriv */, &cb_args);
 		D_GOTO(out, rc);
 	}
 
@@ -2978,7 +2980,7 @@ dc_cont_del_attr(tse_task_t *task)
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
 out_rpc:
-	cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
+	cont_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to del container attributes: "DF_RC"\n",
@@ -2995,17 +2997,19 @@ struct epoch_op_arg {
 static int
 cont_epoch_op_req_complete(tse_task_t *task, void *data)
 {
-	struct epoch_op_arg      *arg = data;
-	struct cont_epoch_op_out *op_out;
+	struct epoch_op_arg *arg = data;
 	int rc;
 
 	rc = cont_req_complete(task, &arg->eoa_req);
 	if (rc)
 		return rc;
 
-	op_out = crt_reply_get(arg->eoa_req.cra_rpc);
+	/* Only assign epoch if the task is really done (i.e., cont_req_complete did not reinit) */
+	if (arg->eoa_req.cra_tpriv == NULL) {
+		struct cont_epoch_op_out *op_out = crt_reply_get(arg->eoa_req.cra_rpc);
 
-	*arg->eoa_epoch = op_out->ceo_epoch;
+		*arg->eoa_epoch = op_out->ceo_epoch;
+	}
 
 	return 0;
 }
@@ -3014,9 +3018,9 @@ static int
 dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch, unsigned int opts,
 	    tse_task_t *task)
 {
-	struct epoch_op_arg	 arg;
-	daos_epoch_t             epc = 0;
-	int			 rc;
+	struct epoch_op_arg arg;
+	daos_epoch_t        epc = 0;
+	int                 rc;
 
 	/* Check incoming arguments. For CONT_SNAP_CREATE, epoch is out only. */
 	D_ASSERT(epoch != NULL);
@@ -3029,9 +3033,8 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch, unsigned i
 	if (rc != 0)
 		goto out;
 
-	D_DEBUG(DB_MD, DF_CONT": op=%u; hdl="DF_UUID";\n",
-		DP_CONT(arg.eoa_req.cra_pool->dp_pool_hdl,
-			arg.eoa_req.cra_cont->dc_uuid), opc,
+	D_DEBUG(DB_MD, DF_CONT ": op=%u; hdl=" DF_UUID ";\n",
+		DP_CONT(arg.eoa_req.cra_pool->dp_pool_hdl, arg.eoa_req.cra_cont->dc_uuid), opc,
 		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl));
 
 	if (opc != CONT_SNAP_CREATE)
@@ -3040,10 +3043,9 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch, unsigned i
 
 	arg.eoa_epoch = epoch;
 
-	rc = tse_task_register_comp_cb(task, cont_epoch_op_req_complete,
-				       &arg, sizeof(arg));
+	rc = tse_task_register_comp_cb(task, cont_epoch_op_req_complete, &arg, sizeof(arg));
 	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &arg.eoa_req);
+		cont_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &arg.eoa_req);
 		goto out;
 	}
 
@@ -3201,7 +3203,7 @@ int dc_cont_snap_oit_oid_get(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_get_oit_oid_req_complete,
 				       &arg, sizeof(arg));
 	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &arg.goo_req);
+		cont_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &arg.goo_req);
 		goto out;
 	}
 
@@ -3295,7 +3297,7 @@ dc_cont_list_snap(tse_task_t *task)
 
 		rc = crt_bulk_create(daos_task2ctx(task), &sgl, CRT_BULK_RW, &bulk);
 		if (rc != 0) {
-			cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
+			cont_req_cleanup(CLEANUP_RPC, task, true /* free_tpriv */, &cb_args);
 			D_GOTO(out, rc);
 		}
 	}
@@ -3307,7 +3309,7 @@ dc_cont_list_snap(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
+		cont_req_cleanup(CLEANUP_BULK, task, true /* free_tpriv */, &cb_args);
 		D_GOTO(out, rc);
 	}
 
