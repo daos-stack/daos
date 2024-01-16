@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -152,6 +152,7 @@ const (
 	ServerIncompatibleComponents
 	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
+	ServerHugepagesDisabledBadAction
 )
 
 // server config fault codes
@@ -183,7 +184,6 @@ const (
 	ServerConfigFaultDomainTooManyLayers
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabledWithBdevs
-	ServerConfigHugepagesDisabledBadAction
 	ServerConfigVMDSettingDuplicate
 	ServerConfigEngineNUMAImbalance
 	ServerConfigControlMetadataNoPath

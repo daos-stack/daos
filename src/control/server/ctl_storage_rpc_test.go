@@ -1839,7 +1839,7 @@ func TestServer_CtlSvc_StorageNvmeRebind(t *testing.T) {
 			bmbc: &bdev.MockBackendConfig{
 				PrepareErr: errors.New("failure"),
 			},
-			expErr: config.FaultConfigHugepagesDisabledBadAction,
+			expErr: FaultHugepagesDisabledBadAction,
 		},
 		"success": {
 			req: &ctlpb.NvmeRebindReq{
@@ -1958,7 +1958,7 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 						WithStorageClass(storage.ClassDcpm.String()),
 				},
 			},
-			expErr: config.FaultConfigHugepagesDisabledBadAction,
+			expErr: FaultHugepagesDisabledBadAction,
 		},
 		"missing bdev config index 0": {
 			req: &ctlpb.NvmeAddDeviceReq{

@@ -56,6 +56,11 @@ var (
 		"cannot destroy a pool with existing containers",
 		"retry the operation with the recursive flag set to remove containers along with the pool",
 	)
+	FaultHugepagesDisabledBadAction = serverFault(
+		code.ServerHugepagesDisabledBadAction,
+		"action cannot be performed as the use of hugepages has been disabled in the server config",
+		"set false (or remove) disable_hugepages parameter in config and reformat storage before retrying the desired action",
+	)
 )
 
 func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {

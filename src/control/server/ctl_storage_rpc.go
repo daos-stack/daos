@@ -24,7 +24,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -1021,7 +1020,7 @@ func (cs *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.Nvme
 		return nil, errors.New("nil request")
 	}
 	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
-		return nil, config.FaultConfigHugepagesDisabledBadAction
+		return nil, FaultHugepagesDisabledBadAction
 	}
 
 	cu, err := user.Current()
@@ -1061,7 +1060,7 @@ func (cs *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.N
 		return nil, errors.New("nil request")
 	}
 	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
-		return nil, config.FaultConfigHugepagesDisabledBadAction
+		return nil, FaultHugepagesDisabledBadAction
 	}
 
 	engines := cs.harness.Instances()

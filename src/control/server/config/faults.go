@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -94,12 +94,7 @@ var (
 	FaultConfigHugepagesDisabledWithBdevs = serverConfigFault(
 		code.ServerConfigHugepagesDisabledWithBdevs,
 		"hugepages cannot be disabled if bdevs have been specified in config",
-		"remove nr_hugepages parameter from config to have the value automatically calculated",
-	)
-	FaultConfigHugepagesDisabledBadAction = serverConfigFault(
-		code.ServerConfigHugepagesDisabledBadAction,
-		"action cannot be performed as the use of hugepages has been disabled in the server config",
-		"set false (or remove) disable_hugepages parameter in config and restart the control server",
+		"either set false (or remove) disable_hugepages parameter or remove nvme storage assignment in config and restart the control server",
 	)
 	FaultConfigVMDSettingDuplicate = serverConfigFault(
 		code.ServerConfigVMDSettingDuplicate,
