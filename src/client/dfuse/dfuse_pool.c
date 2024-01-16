@@ -6,9 +6,9 @@
 
 #include "dfuse_common.h"
 #include "dfuse.h"
-#include "daos_fs.h"
-#include "daos_api.h"
-#include "daos_security.h"
+#include <daos_fs.h>
+#include <daos_api.h>
+#include <daos_security.h>
 
 /* Lookup a pool */
 void
