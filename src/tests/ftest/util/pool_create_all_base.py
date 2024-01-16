@@ -60,10 +60,8 @@ class PoolCreateAllTestBase(TestWithServers):
 
             nvme_bytes = 0
             for nvme_device in host_storage["storage"]["nvme_devices"]:
-                if nvme_device["smd_devices"] is None:
-                    continue
-                for smd_device in nvme_device["smd_devices"]:
-                    if smd_device["ctrlr"]["dev_state"] == "NORMAL":
+                if nvme_device["dev_state"] == "NORMAL":
+                    for smd_device in (nvme_device["smd_devices"] or []):
                         nvme_bytes += smd_device["usable_bytes"]
             nvme_engine_bytes = min(nvme_engine_bytes, nvme_bytes)
 
@@ -310,11 +308,10 @@ class PoolCreateAllTestBase(TestWithServers):
 
             nvme_bytes = 0
             for nvme_device in host_storage["storage"]["nvme_devices"]:
-                for smd_device in nvme_device["smd_devices"]:
-                    if smd_device["ctrlr"]["dev_state"] != "NORMAL":
-                        continue
-                    nvme_bytes += smd_device["total_bytes"]
-                    nvme_bytes -= smd_device["avail_bytes"]
+                if nvme_device["dev_state"] == "NORMAL":
+                    for smd_device in (nvme_device["smd_devices"] or []):
+                        nvme_bytes += smd_device["total_bytes"]
+                        nvme_bytes -= smd_device["avail_bytes"]
             if nvme_bytes < nvme_used_bytes[0]:
                 nvme_used_bytes[0] = nvme_bytes
             if nvme_bytes > nvme_used_bytes[1]:
