@@ -14,7 +14,6 @@ on:
       - 'utils/scripts/helpers/*'
       - utils/ci
       - ci
-      - requirements-build
       - requirements-build.txt
       - requirements-utest.txt
 

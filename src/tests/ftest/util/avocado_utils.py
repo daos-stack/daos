@@ -111,11 +111,7 @@ class AvocadoInfo():
                     f"Error writing avocado config file {sysinfo_commands_file}") from error
 
     def set_version(self):
-        """Set the avocado major and minor versions.
-
-        Args:
-            logger (Logger): logger for the messages produced by this method
-        """
+        """Set the avocado major and minor versions"""
         # pylint: disable=import-outside-toplevel
         from avocado.core.version import MAJOR, MINOR
         self.major = int(MAJOR)
@@ -126,7 +122,6 @@ class AvocadoInfo():
         """Get the value for the specified avocado setting.
 
         Args:
-            logger (Logger): logger for the messages produced by this method
             section (str): avocado setting section name
             key (str): avocado setting key name
             default (object): default value to use if setting is undefined
@@ -146,9 +141,6 @@ class AvocadoInfo():
     def get_logs_dir(self):
         """Get the avocado directory in which the test results are stored.
 
-        Args:
-            logger (Logger): logger for the messages produced by this method
-
         Returns:
             str: the directory used by avocado to log test results
         """
@@ -160,7 +152,6 @@ class AvocadoInfo():
         """Get the avocado test directory for the test.
 
         Args:
-            logger (Logger): logger for the messages produced by this method
             directory (str): name of the sub directory to add to the logs directory
 
         Returns:

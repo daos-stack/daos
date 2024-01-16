@@ -42,15 +42,6 @@ addFilter("daos-client-tests\.x86_64: W: files-duplicate \/usr\/lib\/daos\/TESTI
 # per Ashley, we want to supply these even though they cannot be debugged
 addFilter("E: static-library-without-debuginfo \/usr\/lib64\/lib(dfuse|ioil)\.a")
 
-# We want python scripts to use correct python command so they can be invoked properly with
-# virtual environments enabled.
-addFilter("E: env-script-interpreter /usr/lib/daos/TESTING/ftest/cart/cart_logtest.py /usr/bin/env python3")
-addFilter("E: env-script-interpreter /usr/lib/daos/TESTING/ftest/config_file_gen.py /usr/bin/env python3")
-addFilter("E: env-script-interpreter /usr/lib/daos/TESTING/ftest/launch.py /usr/bin/env python3")
-addFilter("E: env-script-interpreter /usr/lib/daos/TESTING/ftest/slurm_setup.py /usr/bin/env python3")
-addFilter("E: env-script-interpreter /usr/lib/daos/TESTING/ftest/verify_perms.py /usr/bin/env python3")
-addFilter("E: env-script-interpreter /usr/bin/daos_storage_estimator.py /usr/bin/env python3")
-
 # these need to be fixed:
 # https://daosio.atlassian.net/browse/DAOS-11539
 addFilter("W: no-soname \/usr\/lib64\/lib(ds3|daos_(common|cmd_hdlrs|tests|serialize|common_pmem)|dfs|dfuse|duns|ioil|pil4dfs|dpar(|_mpi)).so")
