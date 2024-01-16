@@ -65,7 +65,7 @@ control_config_val: !mux
       - "34, 35, 10001"
       - "FAIL"
   port_multi_list_value:
-  r config_val:
+    config_val:
       - "port"
       - [1, 2, 10001]
       - "FAIL"
