@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -221,6 +221,7 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *parent_inode;
+	int                       rc;
 
 	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
 
@@ -234,6 +235,10 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		D_GOTO(err, rc);
 
 	parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode, name);
+
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(parent_inode, req, rc);
 }
 
 static void
