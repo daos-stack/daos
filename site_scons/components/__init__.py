@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Intel Corporation
+# Copyright 2016-2024 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -226,6 +226,8 @@ def define_common(reqs):
     reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'], package='libuuid-devel')
 
     reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
+
+    reqs.define('archive', libs=['archive'], headers=['archive.h'], package='libarchive-devel')
 
     if ARM_PLATFORM:
         reqs.define('ipmctl', skip_arch=True)

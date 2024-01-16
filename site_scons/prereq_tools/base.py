@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Intel Corporation
+# Copyright 2016-2024 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -521,7 +521,7 @@ class PreReqComponent():
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
                        'lz4', 'isal', 'isal_crypto']
-        client_reqs = ['fuse', 'json-c', 'capstone', 'aio']
+        client_reqs = ['fuse', 'json-c', 'capstone', 'aio', 'archive']
         server_reqs = ['argobots', 'pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
 
