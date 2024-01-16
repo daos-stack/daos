@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
 """Check that all daos headers can be included stand-alone"""
 
+import json
 import os
 import subprocess  # nosec
 import tempfile
 
-INCLUDE_DIR = "install/include"
 
-
-def check_dir(sub_dir):
+def check_dir(include_dir, sub_dir):
     """Check all files in one directory"""
 
-    h_dir = INCLUDE_DIR
+    h_dir = include_dir
 
     if sub_dir:
-        h_dir = os.path.join(INCLUDE_DIR, sub_dir)
+        h_dir = os.path.join(include_dir, sub_dir)
     for entry in sorted(os.listdir(h_dir)):
         if not os.path.isfile(os.path.join(h_dir, entry)):
-            check_dir(entry)
+            check_dir(include_dir, entry)
             continue
         with tempfile.NamedTemporaryFile(suffix=".c", mode="w+t") as tf:
             header = entry
@@ -27,13 +26,19 @@ def check_dir(sub_dir):
             tf.write("int main() {return 0;}")
             tf.flush()
             print(f"Checking {header}")
-            subprocess.run(["gcc", "-I", INCLUDE_DIR, tf.name], check=True)
+            subprocess.run(["gcc", "-I", include_dir, tf.name], check=True)
             print(f"Header file {header} is OK.")
 
 
 def main():
     """Check the whole tree"""
-    check_dir(None)
+
+    with open(".build_vars.json", "r") as ofh:
+        bc = json.load(ofh)
+
+    include_dir = f"{bc['PREFIX']}/include"
+
+    check_dir(include_dir, None)
     os.unlink("a.out")
 
 
