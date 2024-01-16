@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,10 +23,8 @@ extern "C" {
 #include <daos_cont.h>
 #include <daos_pool.h>
 #include <daos_mgmt.h>
+#include <daos/tse.h>
 #include <daos_pipeline.h>
-
-typedef struct tse_task  tse_task_t;
-typedef struct tse_sched tse_sched_t;
 
 /** DAOS operation codes for task creation */
 typedef enum {
