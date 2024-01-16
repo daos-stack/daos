@@ -944,10 +944,10 @@ consume_low_fd(void)
 {
 	int rc = 0;
 
-	D_MUTEX_LOCK(&lock_reserve_fd);
 	if (atomic_load_relaxed(&daos_inited) == true)
 		return 0;
 
+	D_MUTEX_LOCK(&lock_reserve_fd);
 	low_fd_count              = 0;
 	low_fd_list[low_fd_count] = libc_open("/", O_PATH | O_DIRECTORY);
 	while (1) {
