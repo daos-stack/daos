@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,7 +33,7 @@ static int
 on_faulty(struct bio_blobstore *bbs)
 {
 	int	tgt_ids[BIO_XS_CNT_MAX];
-	int	tgt_cnt, i, rc;
+	int	tgt_cnt, i, rc, tgt_idx = 0;
 
 	/* Transit to next state if faulty reaction isn't registered */
 	if (ract_ops == NULL || ract_ops->faulty_reaction == NULL)
@@ -47,10 +47,15 @@ on_faulty(struct bio_blobstore *bbs)
 	tgt_cnt = bbs->bb_ref;
 	D_ASSERT(tgt_cnt <= BIO_XS_CNT_MAX && tgt_cnt > 0);
 
-	for (i = 0; i < tgt_cnt; i++)
-		tgt_ids[i] = bbs->bb_xs_ctxts[i]->bxc_tgt_id;
+	for (i = 0; i < tgt_cnt; i++) {
+		if (bio_ignore_sys_fault && bbs->bb_xs_ctxts[i]->bxc_tgt_id == BIO_SYS_TGT_ID)
+			continue;
+		tgt_ids[tgt_idx] = bbs->bb_xs_ctxts[i]->bxc_tgt_id;
+		tgt_idx++;
+	}
+	D_ASSERT(tgt_idx > 0);
 
-	rc = ract_ops->faulty_reaction(tgt_ids, tgt_cnt);
+	rc = ract_ops->faulty_reaction(tgt_ids, tgt_idx);
 	if (rc < 0)
 		D_ERROR("Faulty reaction failed. "DF_RC"\n", DP_RC(rc));
 
@@ -503,7 +508,7 @@ on_normal(struct bio_blobstore *bbs)
 {
 	struct bio_bdev	*bdev = bbs->bb_dev;
 	int		 tgt_ids[BIO_XS_CNT_MAX];
-	int		 tgt_cnt, i, rc;
+	int		 tgt_cnt, i, rc, tgt_idx = 0;
 
 	/*
 	 * Trigger auto reint only when faulty is replaced by new hot
@@ -532,8 +537,13 @@ on_normal(struct bio_blobstore *bbs)
 	tgt_cnt = bbs->bb_ref;
 	D_ASSERT(tgt_cnt <= BIO_XS_CNT_MAX && tgt_cnt > 0);
 
-	for (i = 0; i < tgt_cnt; i++)
-		tgt_ids[i] = bbs->bb_xs_ctxts[i]->bxc_tgt_id;
+	for (i = 0; i < tgt_cnt; i++) {
+		if (bio_ignore_sys_fault && bbs->bb_xs_ctxts[i]->bxc_tgt_id == BIO_SYS_TGT_ID)
+			continue;
+		tgt_ids[tgt_idx] = bbs->bb_xs_ctxts[i]->bxc_tgt_id;
+		tgt_idx++;
+	}
+	D_ASSERT(tgt_idx > 0);
 
 	rc = ract_ops->reint_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)

@@ -22,6 +22,7 @@ server_config:
       log_mask: DEBUG
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
+        - DAOS_IGNORE_SYS_SSD_FAULT=1
       storage: auto
     1:
       pinned_numa_node: 1
@@ -32,6 +33,7 @@ server_config:
       log_mask: DEBUG
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
+        - DAOS_IGNORE_SYS_SSD_FAULT=1
       storage: auto
   transport_config:
     allow_insecure: true

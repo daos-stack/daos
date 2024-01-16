@@ -61,6 +61,8 @@ unsigned int bio_spdk_subsys_timeout = 25000;	/* ms */
 /* How many blob unmap calls can be called in a row */
 unsigned int bio_spdk_max_unmap_cnt = 32;
 unsigned int bio_max_async_sz = (1UL << 20) /* 1MB */;
+/* Ignore sys device faulty (only used for testing) */
+bool bio_ignore_sys_fault;
 
 struct bio_nvme_data {
 	ABT_mutex		 bd_mutex;
@@ -261,6 +263,9 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	d_getenv_uint("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
 	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
+
+	d_getenv_bool("DAOS_IGNORE_SYS_SSD_FAULT", &bio_ignore_sys_fault);
+	D_INFO("SYS SSD fault is %s\n", bio_ignore_sys_fault ? "ignored" : "enabled");
 
 	/* Hugepages disabled */
 	if (mem_size == 0) {
