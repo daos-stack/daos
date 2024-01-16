@@ -715,7 +715,7 @@ class TransportCredentials(YamlParameters):
         """
         super().__init__(namespace, None, title)
         self._log_dir = log_dir
-        default_insecure = str(os.environ.get("DAOS_INSECURE_MODE", True))
+        default_insecure = str(os.environ.get("DAOS_TEST_INSECURE_MODE", True))
         default_insecure = default_insecure.lower() == "true"
         self.ca_cert = LogParameter(self._log_dir, None, "daosCA.crt")
         self.allow_insecure = BasicParameter(None, default_insecure)
