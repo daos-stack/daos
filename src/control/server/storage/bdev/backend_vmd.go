@@ -118,19 +118,19 @@ func substVMDAddrs(inPCIAddrs *hardware.PCIAddressSet, foundCtrlrs storage.NvmeC
 // substituteVMDAddresses wraps around substVMDAddrs to substitute VMD addresses with the relevant
 // backing device addresses.
 // Function takes a BdevScanResponse reference to derive address map and a logger.
-func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressSet, bdevCache *storage.BdevScanResponse) (*hardware.PCIAddressSet, error) {
+func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressSet, ctrlrs storage.NvmeControllers) (*hardware.PCIAddressSet, error) {
 	if inPCIAddrs == nil {
 		return nil, errors.New("nil input PCIAddressSet")
 	}
-	if bdevCache == nil || len(bdevCache.Controllers) == 0 {
-		log.Debugf("no bdev cache to find vmd backing devices (devs: %v)", inPCIAddrs)
+	if len(ctrlrs) == 0 {
+		log.Debugf("no bdev info to find vmd backing devices (devs: %v)", inPCIAddrs)
 		return inPCIAddrs, nil
 	}
 
 	msg := fmt.Sprintf("vmd detected, processing addresses (input %v, existing %v)",
-		inPCIAddrs, bdevCache.Controllers)
+		inPCIAddrs, ctrlrs)
 
-	dl, err := substVMDAddrs(inPCIAddrs, bdevCache.Controllers)
+	dl, err := substVMDAddrs(inPCIAddrs, ctrlrs)
 	if err != nil {
 		return nil, errors.Wrapf(err, msg)
 	}
@@ -257,11 +257,11 @@ func updatePrepareRequest(log logging.Logger, req *storage.BdevPrepareRequest, v
 	}
 
 	if vmdPCIAddrs.IsEmpty() {
-		log.Debug("no vmd devices found")
+		log.Debug("no volume management devices (vmd) found")
 		req.EnableVMD = false
 		return nil
 	}
-	log.Debugf("volume management devices found: %v", vmdPCIAddrs)
+	log.Debugf("volume management devices (vmd) found: %v", vmdPCIAddrs)
 
 	allowList, blockList, err := vmdFilterAddresses(log, req, vmdPCIAddrs)
 	if err != nil {
@@ -274,7 +274,7 @@ func updatePrepareRequest(log logging.Logger, req *storage.BdevPrepareRequest, v
 			vmdPCIAddrs, req.PCIAllowList, req.PCIBlockList)
 		req.EnableVMD = false
 	} else {
-		log.Debugf("volume management devices selected: %v", allowList)
+		log.Debugf("volume management devices (vmd) selected: %v", allowList)
 		req.PCIAllowList = allowList.String()
 		// Retain block list in request to cater for the case where NVMe SSDs are being
 		// protected against unbinding so they can continue to be used via kernel driver.

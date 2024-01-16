@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,7 +97,7 @@ daos_eq_lib_init()
 
 	eq_ref = 1;
 
-	d_getenv_int("D_POLL_TIMEOUT", &ev_prog_timeout);
+	d_getenv_uint32_t("D_POLL_TIMEOUT", &ev_prog_timeout);
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
@@ -105,6 +105,14 @@ unlock:
 crt:
 	crt_finalize();
 	D_GOTO(unlock, rc);
+}
+
+int
+daos_eq_lib_reset_after_fork(void)
+{
+	eq_ref            = 0;
+	ev_thpriv_is_init = false;
+	return daos_eq_lib_init();
 }
 
 int

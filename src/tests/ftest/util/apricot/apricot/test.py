@@ -140,13 +140,12 @@ class Test(avocadoTest):
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
         self._test_step = 1
 
-        # Random generator that could be seeded for reproducibility
-        seed = random.randrange(sys.maxsize)  # nosec
-        self.log.info("Test.random seed = %s", seed)
-        self.random = random.Random(seed)
-
         # Avoid concatenating diff output.
         self.maxDiff = None  # pylint: disable=invalid-name
+
+        # Random generator
+        self.rand_seed = None
+        self.random = None
 
     def setUp(self):
         """Set up each test case."""
@@ -164,6 +163,20 @@ class Test(avocadoTest):
         self.check_variant_skip()
         self.log.info("*** SETUP running on %s ***", str(detect()))
         super().setUp()
+
+        # Random generator that could be seeded for reproducibility
+        env_seed = os.environ.get("DAOS_TEST_RANDOM_SEED", None)
+        if env_seed is None:
+            self.rand_seed = int.from_bytes(os.urandom(8), byteorder='little')
+        else:
+            try:
+                self.rand_seed = int(env_seed)
+            except ValueError:
+                self.fail(
+                    "ERROR: The env variable DAOS_TEST_RANDOM_SEED "
+                    "does not define a valid integer: got='{}'".format(env_seed))
+        self.log.info("Test.random seed = %d", self.rand_seed)
+        self.random = random.Random(self.rand_seed)
 
     def add_test_data(self, filename, data):
         """Add a file to the test variant specific data directory.
@@ -536,7 +549,8 @@ class TestWithoutServers(Test):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
-        self._teardown_errors.extend(self.fault_injection.stop())
+        if self.fault_injection:
+            self._teardown_errors.extend(self.fault_injection.stop())
         super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
@@ -680,7 +694,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_manager_class = self.params.get(
             "agent_manager_class", "/run/setup/*", self.agent_manager_class)
 
-        # Support configuring the startup of servers and agents by the setup()
+        # Support configuring the start-up of servers and agents by the setup()
         # method from the test yaml file
         self.setup_start_servers = self.params.get(
             "start_servers", "/run/setup/*", self.setup_start_servers)

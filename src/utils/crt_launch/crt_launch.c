@@ -156,7 +156,7 @@ get_self_uri(struct host *h, int rank)
 	if (str_port == NULL)
 		return -DER_NOMEM;
 
-	setenv("OFI_PORT", str_port, 1);
+	d_setenv("OFI_PORT", str_port, 1);
 
 	rc = crt_init(0, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
@@ -233,7 +233,7 @@ generate_group_file(int world_size, struct host *h)
 	}
 
 	fclose(f);
-	setenv("CRT_L_GRP_CFG", grp_info_template, true);
+	d_setenv("CRT_L_GRP_CFG", grp_info_template, true);
 
 	return 0;
 }
@@ -248,7 +248,7 @@ int main(int argc, char **argv)
 	char		str_rank[255];
 	char		str_port[255];
 
-	setenv("D_PORT_AUTO_ADJUST", "1", true);
+	d_setenv("D_PORT_AUTO_ADJUST", "1", true);
 
 	if (argc < 2) {
 		show_usage("Insufficient number of arguments");
@@ -314,8 +314,8 @@ int main(int argc, char **argv)
 	sprintf(str_rank, "%d", hostbuf->my_rank);
 	sprintf(str_port, "%d", hostbuf->ofi_port);
 	/* Set CRT_L_RANK and OFI_PORT */
-	setenv("CRT_L_RANK", str_rank, true);
-	setenv("D_PORT", str_port, true);
+	d_setenv("CRT_L_RANK", str_rank, true);
+	d_setenv("D_PORT", str_port, true);
 
 exit:
 	if (hostbuf)
