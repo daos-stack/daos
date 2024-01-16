@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """Check that all daos headers can be included stand-alone"""
 
 import os
