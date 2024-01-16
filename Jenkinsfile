@@ -330,15 +330,16 @@ pipeline {
                         // pragmasToEnv()
                         script {
                             env.pragmas = pragmasToEnv()
+                            println(env.pragmas)
                         }
                     }
                 }
                 stage('Determine Base Branch') {
                     steps {
                         script {
-                            env.BASE_BRANCH_NAME = sh label: 'Determine base branch name',
+                            env.BASE_BRANCH_NAME = sh(label: 'Determine base branch name',
                                                       script: 'utils/scripts/get_base_branch',
-                                                      returnStdout: true
+                                                      returnStdout: true).trim()
                             echo 'Base branch == ' + env.BASE_BRANCH_NAME
                         }
                     }
