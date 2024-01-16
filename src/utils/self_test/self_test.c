@@ -14,7 +14,7 @@
 #include <math.h>
 
 #include "crt_utils.h"
-#include "daos_errno.h"
+#include <daos_errno.h>
 
 #include <daos/agent.h>
 #include <daos/mgmt.h>

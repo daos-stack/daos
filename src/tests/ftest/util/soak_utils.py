@@ -436,8 +436,8 @@ def launch_vmd_identify_check(self, name, results, args):
         for value in list(result['response']['host_storage_map'].values()):
             if value['storage']['smd_info']['devices']:
                 for device in value['storage']['smd_info']['devices']:
-                    if device['led_state'] != "QUICK_BLINK":
-                        failing_vmd.append([device['tr_addr'], value['hosts']])
+                    if device['ctrlr']['led_state'] != "QUICK_BLINK":
+                        failing_vmd.append([device['ctrlr']['pci_addr'], value['hosts']])
                         status = False
 
     params = {"name": name,

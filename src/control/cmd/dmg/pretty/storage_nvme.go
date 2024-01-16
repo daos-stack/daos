@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,6 +7,7 @@
 package pretty
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -283,6 +284,9 @@ func PrintNvmeMetaMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintCo
 		}
 
 		for _, controller := range hss.HostStorage.NvmeDevices {
+			if controller == nil {
+				return errors.New("nil controller in NvmeDevices")
+			}
 			if err := printNvmeControllerSummary(controller, out, opts...); err != nil {
 				return err
 			}
@@ -292,6 +296,10 @@ func PrintNvmeMetaMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintCo
 
 				for _, device := range controller.SmdDevices {
 					iw1 := txtfmt.NewIndentWriter(iw)
+
+					// Attach parent controller details to SMD before printing.
+					device.Ctrlr = *controller
+
 					if err := printSmdDevice(device, iw1, opts...); err != nil {
 						return err
 					}

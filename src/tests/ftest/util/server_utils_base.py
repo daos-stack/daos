@@ -538,7 +538,7 @@ class DaosServerCommand(YamlCommand):
                     "/run/daos_server/storage/prepare/*", "prepare")
 
                 # daos_server storage prepare command options:
-                #   --pci-allowlist=    Whitespace separated list of PCI
+                #   --pci-allowlist=    White-space separated list of PCI
                 #                       devices (by address) to be unbound from
                 #                       Kernel driver and used with SPDK
                 #                       (default is all PCI devices).

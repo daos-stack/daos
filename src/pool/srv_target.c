@@ -26,6 +26,7 @@
 
 #include <daos_srv/pool.h>
 
+#include <sys/stat.h>
 #include <gurt/telemetry_producer.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
@@ -123,32 +124,21 @@ gc_rate_ctl(void *arg)
 	struct ds_pool_child	*child = (struct ds_pool_child *)arg;
 	struct ds_pool		*pool = child->spc_pool;
 	struct sched_request	*req = child->spc_gc_req;
+	uint32_t		 msecs;
 
 	if (dss_ult_exiting(req))
 		return -1;
 
-	/* Let GC ULT run in tight mode when system is idle */
-	if (!dss_xstream_is_busy()) {
+	/* Let GC ULT run in tight mode when system is idle or under space pressure */
+	if (!dss_xstream_is_busy() || sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 		sched_req_yield(req);
 		return 0;
 	}
 
-	/*
-	 * When it's under space pressure, GC will continue run in slack mode
-	 * no matter what reclaim policy is used, otherwise, it'll take an extra
-	 * sleep to minimize the performance impact.
-	 */
-	if (sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
-		uint32_t msecs;
-
-		msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY ||
-			 pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ? 2000 : 50;
-		sched_req_sleep(req, msecs);
-	} else {
-		sched_req_yield(req);
-	}
-
-	/* Let GC ULT run in slack mode when system is busy */
+	msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY ||
+			pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ? 1000 : 50;
+	sched_req_sleep(req, msecs);
+	/* Let GC ULT run in slack mode when system is busy and no space pressure */
 	return 1;
 }
 
@@ -272,12 +262,20 @@ start_flush_ult(struct ds_pool_child *child)
 
 /* This query API could be called from any xstream */
 uint32_t
-ds_pool_child_state(struct ds_pool *pool, uint32_t tgt_id)
+ds_pool_child_state(uuid_t pool_uuid, uint32_t tgt_id)
 {
 	struct dss_module_info	*info = dss_get_module_info();
+	struct ds_pool_child	*child;
 
 	D_ASSERT(info->dmi_tgt_id < dss_tgt_nr);
-	return pool->sp_states[info->dmi_tgt_id];
+	child = pool_child_lookup_noref(pool_uuid);
+	if (child == NULL) {
+		D_ERROR(DF_UUID": Pool child isn't found.\n", DP_UUID(pool_uuid));
+		return POOL_CHILD_NEW;
+	}
+
+	D_ASSERT(child->spc_pool != NULL);
+	return child->spc_pool->sp_states[info->dmi_tgt_id];
 }
 
 static void
@@ -343,7 +341,56 @@ out_free:
 }
 
 static int
-pool_child_start(struct ds_pool_child *child)
+pool_child_recreate(struct ds_pool_child *child)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct smd_pool_info	*pool_info;
+	struct stat		 lstat;
+	char			*path;
+	int			 rc;
+
+	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	if (rc != 0)
+		return rc;
+
+	rc = stat(path, &lstat);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": Stat VOS pool file failed.", DP_UUID(child->spc_uuid));
+		rc = daos_errno2der(errno);
+		goto out;
+	}
+	if (lstat.st_size == 0) {
+		D_ERROR(DF_UUID": VOS pool file isn't fallocated.", DP_UUID(child->spc_uuid));
+		goto out;
+	}
+
+	rc = smd_pool_get_info(child->spc_uuid, &pool_info);
+	if (rc) {
+		DL_ERROR(rc, DF_UUID": Get pool info failed.", DP_UUID(child->spc_uuid));
+		goto out;
+	}
+
+	rc = vos_pool_kill(child->spc_uuid, 0);
+	if (rc) {
+		DL_ERROR(rc, DF_UUID": Destroy VOS pool failed.", DP_UUID(child->spc_uuid));
+		goto pool_info;
+	}
+
+	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
+			     0, NULL);
+	if (rc)
+		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
+
+pool_info:
+	smd_pool_free_info(pool_info);
+out:
+	D_FREE(path);
+	return rc;
+
+}
+
+static int
+pool_child_start(struct ds_pool_child *child, bool recreate)
 {
 	struct dss_module_info	*info = dss_get_module_info();
 	char			*path;
@@ -353,6 +400,12 @@ pool_child_start(struct ds_pool_child *child)
 	D_ASSERT(!d_list_empty(&child->spc_list));
 
 	*child->spc_state = POOL_CHILD_STARTING;
+
+	if (recreate) {
+		rc = pool_child_recreate(child);
+		if (rc != 0)
+			goto out;
+	}
 
 	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
 	if (rc != 0)
@@ -365,8 +418,8 @@ pool_child_start(struct ds_pool_child *child)
 	D_FREE(path);
 
 	if (rc) {
-		D_ERROR(DF_UUID": Open VOS pool failed. "DF_RC"\n",
-			DP_UUID(child->spc_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NVME_IO, DB_MGMT, DLOG_ERR, rc,
+			  DF_UUID": Open VOS pool failed.", DP_UUID(child->spc_uuid));
 		goto out;
 	}
 
@@ -411,7 +464,7 @@ out:
 }
 
 int
-ds_pool_child_start(uuid_t pool_uuid)
+ds_pool_child_start(uuid_t pool_uuid, bool recreate)
 {
 	struct ds_pool_child	*child;
 	int			 rc;
@@ -433,9 +486,9 @@ ds_pool_child_start(uuid_t pool_uuid)
 		return 0;
 	}
 
-	rc = pool_child_start(child);
+	rc = pool_child_start(child, recreate);
 	if (rc)
-		D_ERROR(DF_UUID": Pool start failed. "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID": Pool start failed.", DP_UUID(pool_uuid));
 
 	return rc;
 }
@@ -531,10 +584,12 @@ pool_child_add_one(void *varg)
 		return -DER_NOMEM;
 	}
 
-	rc = pool_child_start(child);
+	rc = pool_child_start(child, false);
 	if (rc) {
-		D_ERROR(DF_UUID": Pool start failed. "DF_RC"\n",
-			DP_UUID(child->spc_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NVME_IO, DLOG_WARN, DLOG_ERR, rc,
+			  DF_UUID": Pool start failed.", DP_UUID(child->spc_uuid));
+		if (rc == -DER_NVME_IO)
+			rc = 0;
 		pool_child_free(child);
 	}
 
@@ -1338,10 +1393,12 @@ pool_query_one(void *vin)
 static int
 pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 {
-	struct dss_coll_ops		coll_ops;
-	struct dss_coll_args		coll_args = { 0 };
-	struct pool_query_xs_arg	agg_arg = { 0 };
-	int				rc;
+	struct dss_coll_ops		 coll_ops;
+	struct dss_coll_args		 coll_args = { 0 };
+	struct pool_query_xs_arg	 agg_arg = { 0 };
+	int				*exclude_tgts = NULL;
+	uint32_t			 exclude_tgt_nr = 0;
+	int				 rc = 0;
 
 	D_ASSERT(ps != NULL);
 	memset(ps, 0, sizeof(*ps));
@@ -1359,24 +1416,32 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	coll_args.ca_aggregator		= &agg_arg;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
-	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid,
-					&coll_args.ca_exclude_tgts,
-					&coll_args.ca_exclude_tgts_cnt);
-	if (rc) {
+	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to get index : rc "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
-		return rc;
+		goto out;
+	}
+
+	if (exclude_tgts != NULL) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	D_FREE(coll_args.ca_exclude_tgts);
-	if (rc) {
+	if (rc != 0) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
 	*ps = agg_arg.qxa_space;
+
+out:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	return rc;
 }
 
@@ -1542,10 +1607,14 @@ update_child_map(void *data)
 	struct ds_pool		*pool = (struct ds_pool *)data;
 	struct ds_pool_child	*child;
 
+	/* The pool child could be stopped */
 	child = ds_pool_child_lookup(pool->sp_uuid);
-	if (child == NULL)
-		return -DER_NONEXIST;
+	if (child == NULL) {
+		D_DEBUG(DB_MD, DF_UUID": Pool child isn't found.", DP_UUID(pool->sp_uuid));
+		return 0;
+	}
 
+	ds_cont_child_reset_ec_agg_eph_all(child);
 	child->spc_map_version = pool->sp_map_version;
 	ds_pool_child_put(child);
 	return 0;
@@ -2100,9 +2169,11 @@ ds_pool_tgt_discard_ult(void *data)
 {
 	struct ds_pool		*pool;
 	struct tgt_discard_arg	*arg = data;
-	struct dss_coll_ops	coll_ops = { 0 };
-	struct dss_coll_args	coll_args = { 0 };
-	int			rc;
+	struct dss_coll_ops	 coll_ops = { 0 };
+	struct dss_coll_args	 coll_args = { 0 };
+	int			*exclude_tgts = NULL;
+	uint32_t		 exclude_tgt_nr = 0;
+	int			 rc = 0;
 
 	/* If discard failed, let's still go ahead, since reintegration might
 	 * still succeed, though it might leave some garbage on the reintegration
@@ -2125,21 +2196,28 @@ ds_pool_tgt_discard_ult(void *data)
 		 */
 		status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN |
 			 PO_COMP_ST_DOWN | PO_COMP_ST_NEW;
-		rc = ds_pool_get_tgt_idx_by_state(arg->pool_uuid, status,
-						  &coll_args.ca_exclude_tgts,
-						  &coll_args.ca_exclude_tgts_cnt);
-		if (rc) {
+		rc = ds_pool_get_tgt_idx_by_state(arg->pool_uuid, status, &exclude_tgts,
+						  &exclude_tgt_nr);
+		if (rc != 0) {
 			D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
 				DP_UUID(arg->pool_uuid), DP_RC(rc));
 			D_GOTO(put, rc);
 		}
+
+		if (exclude_tgts != NULL) {
+			rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr,
+						   &coll_args.ca_tgt_bitmap, &coll_args.ca_tgt_bitmap_sz);
+			if (rc != 0)
+				goto put;
+		}
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
-	if (coll_args.ca_exclude_tgts)
-		D_FREE(coll_args.ca_exclude_tgts);
 	DL_CDEBUG(rc == 0, DB_MD, DLOG_ERR, rc, DF_UUID " tgt discard", DP_UUID(arg->pool_uuid));
+
 put:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	pool->sp_need_discard = 0;
 	pool->sp_discard_status = rc;
 

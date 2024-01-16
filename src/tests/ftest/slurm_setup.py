@@ -562,7 +562,7 @@ def main():
         logger.error(str(error))
         sys.exit(1)
 
-    # Slurm Startup
+    # Slurm Start-up
     try:
         slurm_setup.start_slurm(args.user, args.debug)
     except SlurmSetupException as error:
