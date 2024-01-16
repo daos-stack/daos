@@ -2,7 +2,7 @@
 """Check that all daos headers can be included stand-alone"""
 
 import os
-import subprocess
+import subprocess  # nosec
 import tempfile
 
 INCLUDE_DIR = "install/include"
