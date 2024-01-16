@@ -118,7 +118,7 @@ daos_compressor_init(struct daos_compressor **obj,
 	int			rc = DC_STATUS_ERR;
 
 	if (!ft) {
-		D_ERROR("No function table");
+		D_ERROR("No function table\n");
 		return DC_STATUS_ERR;
 	}
 

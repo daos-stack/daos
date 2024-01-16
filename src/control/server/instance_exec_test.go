@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -83,7 +82,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			hn, _ := os.Hostname()
 			engine.OnInstanceExit(createPublishInstanceExitFunc(fakePublish, hn))
 
-			engine.handleExit(context.Background(), tc.expExPid, exitErr)
+			engine.handleExit(test.Context(t), tc.expExPid, exitErr)
 
 			test.AssertEqual(t, 1, len(rxEvts),
 				"unexpected number of events published")

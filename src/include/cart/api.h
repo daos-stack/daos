@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,6 +35,27 @@ extern "C" {
 /** @addtogroup CART
  * @{
  */
+
+/**
+ * Get information on protocols that are supported by underlying mercury plugins. If
+ * \info_string is NULL, a list of all supported protocols by all plugins will
+ * be returned. The returned list must be freed using crt_protocol_info_free().
+ * 
+ * \param[in]  info_string     NULL or "<protocol>" or "<plugin+protocol>"
+ * \param[out] protocol_info_p linked-list of protocol infos
+ * 
+ * \return                     DER_SUCCESS on success, negative value if error
+*/
+int
+crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protocol_info_p);
+
+/**
+ * Free protocol_info from crt_protocol_info_get().
+ * 
+ * \param[in,out] protocol_info linked-list of protocol infos
+*/
+void
+crt_protocol_info_free(struct crt_protocol_info *protocol_info);
 
 /**
  * Initialize CRT transport layer. Must be called on both the server side and
@@ -326,9 +347,8 @@ crt_req_get_timeout(crt_rpc_t *req, uint32_t *timeout_sec);
  *
  * \param[in] req              pointer to RPC request
  *
- * \return                     DER_SUCCESS on success, negative value if error
  */
-int
+void
 crt_req_addref(crt_rpc_t *req);
 
 /**
@@ -336,9 +356,8 @@ crt_req_addref(crt_rpc_t *req);
  *
  * \param[in] req              pointer to RPC request
  *
- * \return                     DER_SUCCESS on success, negative value if error
  */
-int
+void
 crt_req_decref(crt_rpc_t *req);
 
 /**
@@ -428,6 +447,18 @@ crt_req_dst_rank_get(crt_rpc_t *req, d_rank_t *rank);
  */
 int
 crt_req_dst_tag_get(crt_rpc_t *req, uint32_t *tag);
+
+/**
+ * Return source timeout in seconds
+ *
+ * \param[in] req              Pointer to RPC request
+ * \param[out] timeout         Returned timeout
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ */
+int
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout);
 
 /**
  * Return reply buffer
@@ -1600,6 +1631,18 @@ int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *data);
 
 /**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *data);
+
+/**
  * Create the processor object.
  *
  * \param[in] crt_ctx		Associated cart context
@@ -1872,12 +1915,14 @@ crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t
  * Set self rank.
  *
  * \param[in] rank              Rank to set on self.
+ * \param[in] group_version_min Minimum group version, that is, the version in
+ *                              which we join the system.
  *
  * \return                      DER_SUCCESS on success, negative value on
  *                              failure.
  */
 int
-crt_rank_self_set(d_rank_t rank);
+crt_rank_self_set(d_rank_t rank, uint32_t group_version_min);
 
 /**
  * Retrieve URI of the requested rank:tag pair.
@@ -2201,6 +2246,40 @@ crt_quiet_error(int err)
 {
 	return err == -DER_GRPVER;
 }
+
+/**
+ * Change the quota limit.
+ *
+ * \param[in] crt_ctx          CaRT context
+ * \param[in] quota            Quota type
+ * \param[in] val              Value
+ *
+ * \return                     DER_SUCCESS on success, negative value on
+ *                             failure.
+ */
+int crt_context_quota_limit_set(crt_context_t crt_ctx, crt_quota_type_t quota, int value);
+
+/**
+ * Query the quota limit.
+ *
+ * \param[in] crt_ctx          CaRT context
+ * \param[in] quota            Quota type
+ * \param[out] val             Returned value
+ *
+ * \return                     DER_SUCCESS on success, negative value on
+ *                             failure.
+ */
+int crt_context_quota_limit_get(crt_context_t crt_ctx, crt_quota_type_t quota, int *value);
+
+/**
+ * Get the proto version of an RPC request.
+ *
+ * \param[in] req              pointer to RPC request
+ *
+ * \return                     positive version or negative error.
+ */
+int
+crt_req_get_proto_ver(crt_rpc_t *req);
 
 /** @}
  */

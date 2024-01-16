@@ -178,8 +178,7 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	}
 
 	/** Connect to pool */
-	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh,
-			       NULL, NULL);
+	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh, NULL, NULL);
 	if (rc)
 		goto out;
 
@@ -202,22 +201,22 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	/** Verify that this is a python container */
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_PYTHON) {
-		D_ERROR("Container is not a python container\n");
 		rc = -DER_INVAL;
+		D_ERROR("Container is not a python container: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
 	/** Fetch root object ID */
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	if (entry == NULL) {
-		D_ERROR("Invalid entry in properties for root object ID\n");
 		rc = -DER_INVAL;
+		D_ERROR("Invalid entry in properties for root object ID: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
 	if (roots->cr_oids[0].hi == 0 && roots->cr_oids[0].lo == 0) {
-		D_ERROR("Invalid root object ID in properties\n");
 		rc = -DER_INVAL;
+		D_ERROR("Invalid root object ID in properties: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -371,8 +370,7 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 	if (hdl->alloc.hi >= MAX_OID_HI) {
 		rc = daos_cont_alloc_oids(hdl->coh, 1, &hdl->alloc.lo, NULL);
 		if (rc) {
-			D_ERROR("daos_cont_alloc_oids() Failed "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("daos_cont_alloc_oids() failed: "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 		if (hdl->alloc.lo == 0)
@@ -464,8 +462,10 @@ oit_mark(daos_handle_t oh, daos_handle_t oit)
 	int			rc = 0;
 
 	D_ALLOC(buf, buf_size);
-	if (buf == NULL)
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
 		goto out;
+	}
 
 	d_iov_set(&marker, &mark_data, sizeof(mark_data));
 	d_iov_set(&sg_iov, buf, buf_size);
@@ -505,7 +505,7 @@ oit_mark(daos_handle_t oh, daos_handle_t oit)
 
 			rc = daos_oit_mark(oit, entry.oid, &marker, NULL);
 			if (rc) {
-				D_ERROR("Failed to mark OID in OIT: "DF_RC"\n", DP_RC(rc));
+				D_ERROR("daos_oit_mark() failed: "DF_RC"\n", DP_RC(rc));
 				goto out;
 			}
 		}
@@ -545,8 +545,8 @@ cont_check(int ret, char *pool, char *cont, int flags)
 	if (rc)
 		goto out;
 
-	/** Open container. TODO - need exclusive open when available */
-	rc = daos_cont_open(poh, cont, DAOS_COO_RW, &coh, NULL, NULL);
+	/** Open container. */
+	rc = daos_cont_open(poh, cont, DAOS_COO_EX, &coh, NULL, NULL);
 	if (rc)
 		goto out;
 
@@ -575,36 +575,38 @@ cont_check(int ret, char *pool, char *cont, int flags)
 	/** Verify that this is a python container */
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_PYTHON) {
-		D_ERROR("Container is not a python container\n");
 		rc = -DER_INVAL;
+		D_ERROR("Container is not a python container: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
 	/** Fetch root object ID */
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	if (entry == NULL) {
-		D_ERROR("Invalid entry in properties for root object ID\n");
 		rc = -DER_INVAL;
+		D_ERROR("Invalid entry in properties for root object ID: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
 	if (roots->cr_oids[0].hi == 0 && roots->cr_oids[0].lo == 0) {
-		D_ERROR("Invalid root object ID in properties\n");
 		rc = -DER_INVAL;
+		D_ERROR("Invalid root object ID in properties: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
 	roots->cr_oids[0].hi |= (uint64_t)DAOS_OT_KV_HASHED << OID_FMT_TYPE_SHIFT;
 	/** Open root object */
 	rc = daos_kv_open(coh, roots->cr_oids[0], DAOS_OO_RW, &oh, NULL);
-	if (rc)
+	if (rc) {
+		D_ERROR("daos_kv_open() failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
+	}
 
 	/** Mark the root */
 	d_iov_set(&marker, &mark_data, sizeof(mark_data));
 	rc = daos_oit_mark(oit, roots->cr_oids[0], &marker, NULL);
 	if (rc) {
-		D_ERROR("Failed to mark OID for Root KV in OIT: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("daos_oit_mark() failed: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -618,8 +620,10 @@ cont_check(int ret, char *pool, char *cont, int flags)
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr_entries = ITER_NR;
 		rc = daos_oit_list_unmarked(oit, oids, &nr_entries, &anchor, NULL);
-		if (rc)
+		if (rc) {
+			D_ERROR("daos_oit_list_unmarked() failed: "DF_RC"\n", DP_RC(rc));
 			goto out;
+		}
 
 		for (i = 0; i < nr_entries; i++) {
 			struct pydaos_df	dentry = {0};
@@ -642,8 +646,10 @@ cont_check(int ret, char *pool, char *cont, int flags)
 
 			rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, oid_name,
 					 sizeof(dentry), &dentry, NULL);
-			if (rc)
+			if (rc) {
+				D_ERROR("daos_kv_put() failed: "DF_RC"\n", DP_RC(rc));
 				goto out;
+			}
 		}
 	}
 
@@ -1478,13 +1484,13 @@ PyMODINIT_FUNC PyInit_pydaos_shim(void)
 
 	module = PyModule_Create(&moduledef);
 
-#define DEFINE_PY_RETURN_CODE(name, desc, errstr) \
-	PyModule_AddIntConstant(module, ""#name, desc);
+#define DEFINE_PY_RETURN_CODE(name, errstr) PyModule_AddIntConstant(module, "" #name, name);
 
 	/** export return codes */
 	D_FOREACH_GURT_ERR(DEFINE_PY_RETURN_CODE);
 	D_FOREACH_DAOS_ERR(DEFINE_PY_RETURN_CODE);
 	PyModule_AddIntConstant(module, "DER_SUCCESS", DER_SUCCESS);
+	PyModule_AddIntConstant(module, "DER_UNKNOWN", DER_UNKNOWN);
 
 	/** export object type */
 	PyModule_AddIntConstant(module, "PYDAOS_DICT", PYDAOS_DICT);

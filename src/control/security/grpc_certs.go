@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func GetServerTransportCredentials(cfg *TransportConfig) (credentials.TransportCredentials, error) {
@@ -67,7 +68,7 @@ func DialOptionForTransportConfig(cfg *TransportConfig) (grpc.DialOption, error)
 	}
 
 	if cfg.AllowInsecure {
-		return grpc.WithInsecure(), nil
+		return grpc.WithTransportCredentials(insecure.NewCredentials()), nil
 	}
 
 	if cfg.ServerName == "" {

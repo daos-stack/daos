@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,13 +17,18 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
 var netSubsystems = []string{"cxi", "infiniband", "net"}
 
-const cxiProvider = "ofi+cxi"
+const (
+	cxiProvider     = "ofi+cxi"
+	netvscSubsystem = "net"
+	netvscDriver    = "hv_netvsc"
+)
 
 func isNetwork(subsystem string) bool {
 	for _, netSubsystem := range netSubsystems {
@@ -33,6 +38,20 @@ func isNetwork(subsystem string) bool {
 	}
 
 	return false
+}
+
+func isNetvscDevice(path string, subsystem string) bool {
+	if subsystem != netvscSubsystem {
+		return false
+	}
+
+	content, err := ioutil.ReadFile(filepath.Join(path, "device", "uevent"))
+	if err != nil {
+		return false
+	}
+
+	val, err := common.FindKeyValue(strings.Split(string(content), "\n"), "DRIVER")
+	return err == nil && val == netvscDriver
 }
 
 // NewProvider creates a new SysfsProvider.
@@ -86,7 +105,7 @@ func (s *Provider) GetTopology(ctx context.Context) (*hardware.Topology, error) 
 	topo := &hardware.Topology{}
 
 	for _, subsystem := range s.topologySubsystems() {
-		if err := s.addPCIDevices(topo, subsystem); err != nil {
+		if err := s.addSubsystemDevices(topo, subsystem); err != nil {
 			return nil, err
 		}
 	}
@@ -103,7 +122,8 @@ func (s *Provider) topologySubsystems() []string {
 	return netSubsystems
 }
 
-func (s *Provider) addPCIDevices(topo *hardware.Topology, subsystem string) error {
+func (s *Provider) addSubsystemDevices(topo *hardware.Topology, subsystem string) error {
+	var netvscPaths []string
 	subsysRoot := s.sysPath("class", subsystem)
 	err := filepath.Walk(subsysRoot, func(path string, fi os.FileInfo, err error) error {
 		if fi == nil {
@@ -118,41 +138,53 @@ func (s *Provider) addPCIDevices(topo *hardware.Topology, subsystem string) erro
 			return nil
 		}
 
-		var dev *hardware.PCIDevice
-		switch {
-		case isNetwork(subsystem):
-			dev, err = s.getNetworkDevice(path, subsystem)
-			if err != nil {
-				s.log.Debug(err.Error())
-				return nil
-			}
-		default:
+		if isNetvscDevice(path, subsystem) {
+			netvscPaths = append(netvscPaths, path)
 			return nil
 		}
 
-		numaID, err := s.getNUMANode(path)
-		if err != nil {
-			s.log.Debugf("using default NUMA node, unable to get: %s", err.Error())
-			numaID = 0
-		}
-
-		pciAddr, err := s.getPCIAddress(path)
-		if err != nil {
-			s.log.Debug(err.Error())
-			return nil
-		}
-		dev.PCIAddr = *pciAddr
-
-		s.log.Debugf("adding device found at %q (type %s, NUMA node %d)", path, dev.Type, numaID)
-
-		return topo.AddDevice(uint(numaID), dev)
+		return s.addPCIDevice(topo, subsystem, path)
 	})
 
-	if err == io.EOF || err == nil {
+	if err != io.EOF && err != nil {
+		return err
+	}
+
+	for _, path := range netvscPaths {
+		if err := s.addNetvscDevice(topo, path); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Provider) addPCIDevice(topo *hardware.Topology, subsystem string, path string) error {
+	if !isNetwork(subsystem) {
 		return nil
 	}
 
-	return err
+	dev, err := s.getNetworkDevice(path, subsystem)
+	if err != nil {
+		s.log.Tracef(err.Error())
+		return nil
+	}
+
+	numaID, err := s.getNUMANode(path)
+	if err != nil {
+		s.log.Tracef("using default NUMA node, unable to get: %s", err.Error())
+		numaID = 0
+	}
+
+	pciAddr, err := s.getPCIAddress(path)
+	if err != nil {
+		s.log.Trace(err.Error())
+		return nil
+	}
+	dev.PCIAddr = *pciAddr
+
+	s.log.Tracef("adding device found at %q (type %s, NUMA node %d)", path, dev.Type, numaID)
+	return topo.AddDevice(uint(numaID), dev)
 }
 
 func (s *Provider) getNetworkDevice(path, subsystem string) (*hardware.PCIDevice, error) {
@@ -191,7 +223,7 @@ func (s *Provider) getNUMANode(path string) (uint, error) {
 
 	numaID, err := strconv.Atoi(numaStr)
 	if err != nil || numaID < 0 {
-		s.log.Debugf("invalid NUMA node ID %q, using NUMA node 0", numaStr)
+		s.log.Tracef("invalid NUMA node ID %q, using NUMA node 0", numaStr)
 		numaID = 0
 	}
 	return uint(numaID), nil
@@ -216,6 +248,30 @@ func (s *Provider) getPCIAddress(path string) (*hardware.PCIAddress, error) {
 	return nil, errors.Errorf("unable to parse PCI address from %q", path)
 }
 
+func (s *Provider) addNetvscDevice(topo *hardware.Topology, path string) error {
+	ifaceName := filepath.Base(path)
+
+	virt := &hardware.VirtualDevice{
+		Name: ifaceName,
+		Type: hardware.DeviceTypeNetInterface,
+	}
+
+	backingDev, err := s.getBackingDevice(path, topo.AllDevices())
+	if err != nil {
+		s.log.Noticef("Skipping NetVSC network adapter %q: physical backing device not found",
+			ifaceName)
+		return nil
+	}
+	s.log.Tracef("NetVSC network adapter %q has physical backing device %q",
+		ifaceName, backingDev.DeviceName())
+	virt.BackingDevice = backingDev
+
+	s.log.Tracef("Adding NetVSC network adapter at %q", path)
+	topo.VirtualDevices = append(topo.VirtualDevices, virt)
+
+	return nil
+}
+
 func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
 	virtualDevices := make([]*hardware.VirtualDevice, 0)
 	addedDevices := topo.AllDevices()
@@ -223,7 +279,7 @@ func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
 	netPath := s.sysPath("devices", "virtual", "net")
 	netIfaces, err := ioutil.ReadDir(netPath)
 	if err != nil {
-		s.log.Debugf("unable to read any virtual net interfaces: %s", err.Error())
+		s.log.Tracef("unable to read any virtual net interfaces: %s", err.Error())
 		return nil
 	}
 
@@ -236,16 +292,19 @@ func (s *Provider) addVirtualNetDevices(topo *hardware.Topology) error {
 		ifacePath := filepath.Join(netPath, iface.Name())
 
 		if backingDev, err := s.getBackingDevice(ifacePath, addedDevices); err == nil {
-			s.log.Debugf("virtual device %q has physical backing device %q", iface.Name(), backingDev.DeviceName())
+			s.log.Tracef("virtual device %q has physical backing device %q", iface.Name(), backingDev.DeviceName())
 			virt.BackingDevice = backingDev
 		}
 
-		s.log.Debugf("adding virtual device at %q", ifacePath)
+		s.log.Tracef("adding virtual device at %q", ifacePath)
 		virtualDevices = append(virtualDevices, virt)
 	}
 
 	if len(virtualDevices) > 0 {
-		topo.VirtualDevices = virtualDevices
+		if len(topo.VirtualDevices) == 0 {
+			topo.VirtualDevices = make([]*hardware.VirtualDevice, 0)
+		}
+		topo.VirtualDevices = append(topo.VirtualDevices, virtualDevices...)
 	}
 
 	return nil
@@ -268,7 +327,7 @@ func (s *Provider) getBackingDevice(ifacePath string, devices map[string]hardwar
 
 	ifaceFiles, err := ioutil.ReadDir(ifacePath)
 	if err != nil {
-		s.log.Debugf("unable to read contents of %s", ifacePath)
+		s.log.Tracef("unable to read contents of %s", ifacePath)
 		return nil, err
 	}
 
@@ -324,14 +383,14 @@ func (s *Provider) GetFabricInterfaces(ctx context.Context, provider string) (*h
 func (s *Provider) getCXIFabricInterfaces() ([]*hardware.FabricInterface, error) {
 	cxiDevs, err := ioutil.ReadDir(s.sysPath("class", "cxi"))
 	if os.IsNotExist(err) {
-		s.log.Debugf("no cxi subsystem in sysfs")
+		s.log.Tracef("no cxi subsystem in sysfs")
 		return []*hardware.FabricInterface{}, nil
 	} else if err != nil {
 		return nil, err
 	}
 
 	if len(cxiDevs) == 0 {
-		s.log.Debugf("no cxi devices in sysfs")
+		s.log.Tracef("no cxi devices in sysfs")
 		return []*hardware.FabricInterface{}, nil
 	}
 
@@ -396,7 +455,7 @@ func (s *Provider) getNetOperState(iface string) (hardware.NetDevState, error) {
 
 	// Operational states as described in kernel docs:
 	// https://www.kernel.org/doc/html/latest/networking/operstates.html#tlv-ifla-operstate
-	state := hardware.NetDevStateUnknown
+	var state hardware.NetDevState
 	switch stateStr {
 	case "up":
 		state = hardware.NetDevStateReady
@@ -484,7 +543,7 @@ func (s *Provider) ibStateToNetDevState(stateStr string) hardware.NetDevState {
 	stateSubstrs := strings.Split(string(stateStr), ": ")
 	stateNum, err := strconv.Atoi(stateSubstrs[0])
 	if err != nil {
-		s.log.Debugf("unable to parse IB state %q: %s", stateStr, err.Error())
+		s.log.Noticef("unable to parse IB state %q: %s", stateStr, err.Error())
 		return hardware.NetDevStateUnknown
 	}
 

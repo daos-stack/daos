@@ -23,6 +23,7 @@ func TestLogLevelToString(t *testing.T) {
 		"Notice":     {expected: "NOTICE", level: logging.LogLevelNotice},
 		"Info":       {expected: "INFO", level: logging.LogLevelInfo},
 		"Debug":      {expected: "DEBUG", level: logging.LogLevelDebug},
+		"Trace":      {expected: "TRACE", level: logging.LogLevelTrace},
 		"Unknown":    {expected: "UNKNOWN", level: logging.LogLevel(42)},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -51,6 +52,8 @@ func TestLogLevelFromString(t *testing.T) {
 		"info":      {expected: logging.LogLevelInfo},
 		"Debug":     {expected: logging.LogLevelDebug},
 		"debug":     {expected: logging.LogLevelDebug},
+		"Trace":     {expected: logging.LogLevelTrace},
+		"trace":     {expected: logging.LogLevelTrace},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var level logging.LogLevel

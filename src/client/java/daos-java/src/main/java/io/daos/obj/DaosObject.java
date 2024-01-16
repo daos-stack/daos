@@ -64,12 +64,12 @@ public class DaosObject {
   }
 
   /**
-   * open object with default mode, {@linkplain OpenMode#UNKNOWN}.
+   * open object with default mode, {@linkplain OpenMode#DAOS_OO_RW}.
    *
    * @throws DaosObjectException
    */
   public void open() throws DaosObjectException {
-    open(OpenMode.UNKNOWN);
+    open(OpenMode.DAOS_OO_RW);
   }
 
   /**

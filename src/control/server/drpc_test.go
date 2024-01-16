@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -258,7 +257,7 @@ func TestDrpc_Errors(t *testing.T) {
 			}
 			mc := newMockDrpcClient(cfg)
 
-			_, err := makeDrpcCall(context.TODO(), log,
+			_, err := makeDrpcCall(test.Context(t), log,
 				mc, drpc.MethodPoolCreate,
 				&mgmtpb.PoolCreateReq{})
 			test.CmpErr(t, tc.expErr, err)

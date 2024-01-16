@@ -1,19 +1,18 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-import random
 import base64
 import traceback
 
-from general_utils import get_random_bytes, wait_for_result, check_ping, check_ssh
-from run_utils import run_remote, run_local
+from general_utils import check_ping, check_ssh, get_random_bytes, wait_for_result
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from pydaos.raw import DaosApiError
+from run_utils import run_local, run_remote
 from server_utils_base import DaosServerCommand
-from storage_utils import StorageInfo, StorageException
+from storage_utils import StorageException, StorageInfo
 
 
 class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
@@ -31,8 +30,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.setup_start_agents = False
         self.setup_start_servers = False
 
-    @staticmethod
-    def create_data_set(num_attributes):
+    def create_data_set(self, num_attributes):
         """Create the large attribute dictionary.
 
         Args:
@@ -43,7 +41,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         """
         data_set = {}
         for index in range(num_attributes):
-            size = random.randint(1, 10)  # nosec
+            size = self.random.randint(1, 10)
             key = str(index).encode("utf-8")
             data_set[key] = get_random_bytes(size)
         return data_set
@@ -282,21 +280,14 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.log.info("===(%s)===Container create and attributes test", step)
         self.add_container(self.pool)
         self.container.open()
-        daos_cmd = self.get_daos_command()
         num_attributes = self.params.get("num_attributes", '/run/attrtests/*')
         attr_dict = self.create_data_set(num_attributes)
         try:
             self.container.container.set_attr(data=attr_dict)
-            data = daos_cmd.container_list_attrs(
-                pool=self.pool.uuid,
-                cont=self.container.uuid,
-                verbose=False)
+            data = self.container.list_attrs(verbose=False)
             self.verify_list_attr(attr_dict, data['response'])
 
-            data = daos_cmd.container_list_attrs(
-                pool=self.pool.uuid,
-                cont=self.container.uuid,
-                verbose=True)
+            data = self.container.list_attrs(verbose=True)
             self.verify_get_attr(attr_dict, data['response'])
         except DaosApiError as excep:
             self.log.info(excep)

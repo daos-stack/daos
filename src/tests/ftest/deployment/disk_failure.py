@@ -9,12 +9,11 @@ import time
 
 from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
-
-from dmg_utils import get_storage_query_device_info, get_dmg_response
+from dmg_utils import get_dmg_response, get_storage_query_device_info
 from exception_utils import CommandFailure
 from general_utils import list_to_str
-from test_utils_pool import add_pool
 from osa_utils import OSAUtils
+from test_utils_pool import add_pool
 
 
 class DiskFailureTest(OSAUtils):
@@ -29,7 +28,6 @@ class DiskFailureTest(OSAUtils):
         super().setUp()
         self.targets = self.params.get("targets", "/run/server_config/servers/0/*")
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/*')
-        self.daos_command = self.get_daos_command()
 
     @fail_on(CommandFailure)
     def verify_disk_failure(self, num_pool):
@@ -113,10 +111,7 @@ class DiskFailureTest(OSAUtils):
             self.run_ior_thread("Read", oclass=self.ior_cmd.dfs_oclass.value,
                                 test=self.ior_test_sequence[0])
             self.container = self.pool_cont_dict[self.pool][0]
-            kwargs = {"pool": self.pool.uuid,
-                      "cont": self.container.uuid}
-            output = self.daos_command.container_check(**kwargs)
-            self.log.info(output)
+            self.container.check()
 
     def test_disk_failure_w_rf(self):
         """Jira ID: DAOS-11284.

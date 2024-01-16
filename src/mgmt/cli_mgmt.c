@@ -16,7 +16,6 @@
 
 #include <daos/agent.h>
 #include <daos/drpc_modules.h>
-#include <daos/drpc.pb-c.h>
 #include <daos/event.h>
 #include <daos/job.h>
 #include <daos/pool.h>
@@ -349,7 +348,7 @@ alloc_rank_uris(Mgmt__GetAttachInfoResp *resp, struct daos_rank_uri **out)
 	for (i = 0; i < resp->n_rank_uris; i++) {
 		uris[i].dru_rank = resp->rank_uris[i]->rank;
 
-		D_ASPRINTF(uris[i].dru_uri, resp->rank_uris[i]->uri);
+		D_STRNDUP(uris[i].dru_uri, resp->rank_uris[i]->uri, CRT_ADDR_STR_MAX_LEN - 1);
 		if (uris[i].dru_uri == NULL) {
 			free_rank_uris(uris, i);
 			return -DER_NOMEM;
@@ -477,11 +476,11 @@ int dc_mgmt_net_cfg(const char *name)
 
 			rc = _split_env(env, &v_name, &v_value);
 			if (rc != 0) {
-				D_ERROR("invalid client env var: %s", env);
+				D_ERROR("invalid client env var: %s\n", env);
 				continue;
 			}
 
-			rc = setenv(v_name, v_value, 0);
+			rc = d_setenv(v_name, v_value, 0);
 			if (rc != 0)
 				D_GOTO(cleanup, rc = d_errno2der(errno));
 			D_DEBUG(DB_MGMT, "set server-supplied client env: %s", env);
@@ -492,19 +491,19 @@ int dc_mgmt_net_cfg(const char *name)
 	g_num_serv_ranks = resp->n_rank_uris;
 	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
 	/* These two are always set */
-	rc = setenv("CRT_PHY_ADDR_STR", info.provider, 1);
+	rc = d_setenv("CRT_PHY_ADDR_STR", info.provider, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	sprintf(buf, "%d", info.crt_ctx_share_addr);
-	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
+	rc = d_setenv("CRT_CTX_SHARE_ADDR", buf, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* If the server has set this, the client must use the same value. */
 	if (info.srv_srx_set != -1) {
 		sprintf(buf, "%d", info.srv_srx_set);
-		rc = setenv("FI_OFI_RXM_USE_SRX", buf, 1);
+		rc = d_setenv("FI_OFI_RXM_USE_SRX", buf, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 		D_INFO("Using server's value for FI_OFI_RXM_USE_SRX: %s\n",
@@ -523,7 +522,7 @@ int dc_mgmt_net_cfg(const char *name)
 	crt_timeout = getenv("CRT_TIMEOUT");
 	if (!crt_timeout) {
 		sprintf(buf, "%d", info.crt_timeout);
-		rc = setenv("CRT_TIMEOUT", buf, 1);
+		rc = d_setenv("CRT_TIMEOUT", buf, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
@@ -534,7 +533,7 @@ int dc_mgmt_net_cfg(const char *name)
 	ofi_interface = getenv("OFI_INTERFACE");
 	ofi_domain = getenv("OFI_DOMAIN");
 	if (!ofi_interface) {
-		rc = setenv("OFI_INTERFACE", info.interface, 1);
+		rc = d_setenv("OFI_INTERFACE", info.interface, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 
@@ -546,7 +545,7 @@ int dc_mgmt_net_cfg(const char *name)
 			D_WARN("Ignoring OFI_DOMAIN '%s' because OFI_INTERFACE is not set; using "
 			       "automatic configuration instead\n", ofi_domain);
 
-		rc = setenv("OFI_DOMAIN", info.domain, 1);
+		rc = d_setenv("OFI_DOMAIN", info.domain, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
@@ -1094,13 +1093,12 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	rc = rpc_out->pfo_rc;
 	if (rc != 0) {
 		if (label) {
-			D_CDEBUG(rc == -DER_NONEXIST, DB_MGMT, DLOG_ERR,
-				 "%s: MGMT_POOL_FIND rpc failed to %d ranks, " DF_RC "\n", label,
-				 ms_ranks->rl_nr, DP_RC(rc));
+			DL_CDEBUG(rc == -DER_NONEXIST, DB_MGMT, DLOG_ERR, rc,
+				  "%s: MGMT_POOL_FIND rpc failed to %d ranks", label,
+				  ms_ranks->rl_nr);
 		} else {
-			D_ERROR(DF_UUID ": MGMT_POOL_FIND rpc failed to %d "
-					"ranks, " DF_RC "\n",
-				DP_UUID(puuid), ms_ranks->rl_nr, DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": MGMT_POOL_FIND rpc failed to %d ranks",
+				 DP_UUID(puuid), ms_ranks->rl_nr);
 		}
 		goto decref;
 	}

@@ -9,8 +9,8 @@ import random
 from apricot import TestWithServers
 from command_utils import ExecutableCommand
 from command_utils_base import BasicParameter, FormattedParameter
-from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
+from exception_utils import CommandFailure, MPILoadError
 from job_manager_utils import Orterun
 
 
@@ -42,8 +42,13 @@ class IoConfGen(ExecutableCommand):
         self.filename = BasicParameter(None, filename)
         self.mpi_type = mpi_type
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
@@ -53,7 +58,7 @@ class IoConfGen(ExecutableCommand):
         if not load_mpi(self.mpi_type):
             raise MPILoadError(self.mpi_type)
 
-        return super().run()
+        return super().run(raise_exception)
 
     def run_conf(self, dmg_config_file):
         """Run the daos_run_io_conf command as a foreground process.

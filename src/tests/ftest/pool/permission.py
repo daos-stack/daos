@@ -1,11 +1,11 @@
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
+from pydaos.raw import DaosApiError, DaosContainer
 
 RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"

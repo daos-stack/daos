@@ -12,6 +12,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
@@ -25,7 +26,7 @@ type ContCmd struct {
 type ContSetOwnerCmd struct {
 	baseCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	GroupName ui.ACLPrincipalFlag `short:"g" long:"group" description:"New owner-group for the container, format name@domain"`
 	UserName  ui.ACLPrincipalFlag `short:"u" long:"user" description:"New owner-user for the container, format name@domain"`
 	ContUUID  string              `short:"c" long:"cont" required:"1" description:"UUID of the DAOS container"`
@@ -52,6 +53,10 @@ func (c *ContSetOwnerCmd) Execute(args []string) error {
 	err := control.ContSetOwner(ctx, c.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "FAILED").Error()
+	}
+
+	if c.JSONOutputEnabled() {
+		return c.OutputJSON(nil, err)
 	}
 
 	c.Infof("Container-set-owner command %s\n", msg)

@@ -29,6 +29,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -40,7 +41,7 @@ type telemCmd struct {
 type telemConfigCmd struct {
 	baseCmd
 	cfgCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	InstallDir string `long:"install-dir" short:"i" required:"1" description:"Install directory for telemetry binary"`
 	System     string `long:"system" short:"s" default:"prometheus" description:"Telemetry system to configure"`
 }
@@ -303,7 +304,7 @@ type metricsCmd struct {
 // metricsListCmd provides a list of metrics available from the requested DAOS servers.
 type metricsListCmd struct {
 	baseCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	singleHostCmd
 	Port uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
 }
@@ -319,7 +320,7 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	req.Port = cmd.Port
 	req.Host = host
 
-	if !cmd.shouldEmitJSON {
+	if !cmd.JSONOutputEnabled() {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
@@ -328,11 +329,11 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.shouldEmitJSON {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
-	err = pretty.PrintMetricsListResp(cmd.writer, resp)
+	err = pretty.PrintMetricsListResp(os.Stdout, resp)
 	if err != nil {
 		return err
 	}
@@ -357,7 +358,7 @@ func getConnectingMsg(host string, port uint32) string {
 // metricsQueryCmd collects the requested metrics from the requested DAOS servers.
 type metricsQueryCmd struct {
 	baseCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	singleHostCmd
 	Port    uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
 	Metrics string `short:"m" long:"metrics" default:"" description:"Comma-separated list of metric names"`
@@ -375,7 +376,7 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req.Host = host
 	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
-	if !cmd.shouldEmitJSON {
+	if !cmd.JSONOutputEnabled() {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
@@ -384,11 +385,11 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.shouldEmitJSON {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
-	err = pretty.PrintMetricsQueryResp(cmd.writer, resp)
+	err = pretty.PrintMetricsQueryResp(os.Stdout, resp)
 	if err != nil {
 		return err
 	}

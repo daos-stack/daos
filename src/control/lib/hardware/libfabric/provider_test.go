@@ -46,7 +46,7 @@ func TestLibfabric_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 
 			p := NewProvider(log)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(test.Context(t), 10*time.Second)
 			defer cancel()
 
 			result, err := p.GetFabricInterfaces(ctx, tc.provider)

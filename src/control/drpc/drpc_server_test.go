@@ -17,6 +17,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -46,7 +48,7 @@ func TestSession_ProcessIncomingMessage_ReadError(t *testing.T) {
 	socket.ReadOutputError = errors.New("mock read error")
 	s := NewSession(socket, NewModuleService(log))
 
-	err := s.ProcessIncomingMessage(context.Background())
+	err := s.ProcessIncomingMessage(test.Context(t))
 
 	test.CmpErr(t, socket.ReadOutputError, err)
 }
@@ -59,7 +61,7 @@ func TestSession_ProcessIncomingMessage_WriteError(t *testing.T) {
 	socket.WriteOutputError = errors.New("mock write error")
 	s := NewSession(socket, NewModuleService(log))
 
-	err := s.ProcessIncomingMessage(context.Background())
+	err := s.ProcessIncomingMessage(test.Context(t))
 
 	test.CmpErr(t, socket.WriteOutputError, err)
 }
@@ -87,7 +89,7 @@ func TestSession_ProcessIncomingMessage_Success(t *testing.T) {
 
 	s := NewSession(socket, svc)
 
-	if err = s.ProcessIncomingMessage(context.Background()); err != nil {
+	if err = s.ProcessIncomingMessage(test.Context(t)); err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
@@ -144,52 +146,119 @@ func TestNewDomainSocketServer(t *testing.T) {
 	test.AssertEqual(t, dss.sockFile, expectedSock, "wrong sockfile")
 }
 
-func TestServer_Start_CantUnlinkSocket(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
-
-	tmpDir, tmpCleanup := test.CreateTestDir(t)
-	defer tmpCleanup()
-
-	path := filepath.Join(tmpDir, "test.sock")
-
-	// Forbid searching the directory
-	if err := os.Chmod(tmpDir, 0000); err != nil {
-		t.Fatalf("Couldn't change permissions on dir: %v", err)
+func TestDrpc_DomainSocketServer_Start(t *testing.T) {
+	sockPath := func(dir string) string {
+		return filepath.Join(dir, "test.sock")
 	}
-	defer func() {
-		_ = os.Chmod(tmpDir, 0700)
-	}()
 
-	dss, _ := NewDomainSocketServer(log, path, testFileMode)
+	for name, tc := range map[string]struct {
+		nilServer bool
+		setup     func(t *testing.T, dir string) func()
+		expErr    error
+	}{
+		"nil": {
+			nilServer: true,
+			expErr:    errors.New("nil"),
+		},
+		"unused existing socket file": {
+			setup: func(t *testing.T, dir string) func() {
+				t.Helper()
 
-	err := dss.Start(context.Background())
+				f, err := os.Create(sockPath(dir))
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = f.Close()
+				return func() {}
+			},
+		},
+		"can't unlink old socket file": {
+			setup: func(t *testing.T, dir string) func() {
+				t.Helper()
 
-	test.CmpErr(t, errors.New("unlink"), err)
-}
+				sockFile := sockPath(dir)
+				f, err := os.Create(sockFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = f.Close()
 
-func TestServer_Start_CantListen(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
+				if err := os.Chmod(dir, 0500); err != nil {
+					t.Fatalf("Couldn't change permissions on dir: %v", err)
+				}
+				return func() {
+					_ = os.Chmod(dir, 0700)
+				}
+			},
+			expErr: errors.New("unlink"),
+		},
+		"socket file in use": {
+			setup: func(t *testing.T, dir string) func() {
+				t.Helper()
+				log, buf := logging.NewTestLogger(t.Name())
+				defer test.ShowBufferOnFailure(t, buf)
 
-	tmpDir, tmpCleanup := test.CreateTestDir(t)
-	defer tmpCleanup()
+				other, err := NewDomainSocketServer(log, sockPath(dir), testFileMode)
+				if err != nil {
+					t.Fatalf("can't create first server: %s", err.Error())
+				}
 
-	path := filepath.Join(tmpDir, "test.sock")
+				err = other.Start(test.Context(t))
+				if err != nil {
+					t.Fatalf("can't start up first server: %s", err.Error())
+				}
 
-	// Forbid writing the directory
-	if err := os.Chmod(tmpDir, 0500); err != nil {
-		t.Fatalf("Couldn't change permissions on dir: %v", err)
+				// NB: The started server is shut down when the test context is canceled.
+				return func() {}
+			},
+			expErr: FaultSocketFileInUse(""),
+		},
+		"listen fails": {
+			setup: func(t *testing.T, dir string) func() {
+				t.Helper()
+
+				if err := os.Chmod(dir, 0500); err != nil {
+					t.Fatalf("Couldn't change permissions on dir: %v", err)
+				}
+				return func() {
+					_ = os.Chmod(dir, 0700)
+				}
+			},
+			expErr: errors.New("listen"),
+		},
+		"success": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			tmpDir, tmpCleanup := test.CreateTestDir(t)
+			defer tmpCleanup()
+
+			if tc.setup != nil {
+				teardown := tc.setup(t, tmpDir)
+				defer teardown()
+			}
+
+			// Test hack - make sure the right path is included in the fault message for comparison
+			if fault.IsFaultCode(tc.expErr, code.SocketFileInUse) {
+				tc.expErr = FaultSocketFileInUse(sockPath(tmpDir))
+			}
+
+			var err error
+			var dss *DomainSocketServer
+			if !tc.nilServer {
+				dss, err = NewDomainSocketServer(log, sockPath(tmpDir), testFileMode)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			err = dss.Start(test.Context(t))
+
+			test.CmpErr(t, tc.expErr, err)
+		})
 	}
-	defer func() {
-		_ = os.Chmod(tmpDir, 0700)
-	}()
-
-	dss, _ := NewDomainSocketServer(log, path, testFileMode)
-
-	err := dss.Start(context.Background())
-
-	test.CmpErr(t, errors.New("listen"), err)
 }
 
 func TestServer_RegisterModule(t *testing.T) {
@@ -221,7 +290,7 @@ func TestServer_Listen_AcceptError(t *testing.T) {
 	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 	dss.listener = lis
 
-	dss.Listen(context.Background()) // should return instantly
+	dss.Listen(test.Context(t)) // should return instantly
 
 	test.AssertEqual(t, lis.acceptCallCount, 1, "should have returned after first error")
 }
@@ -235,7 +304,7 @@ func TestServer_Listen_AcceptConnection(t *testing.T) {
 	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 	dss.listener = lis
 
-	dss.Listen(context.Background()) // will return when error is sent
+	dss.Listen(test.Context(t)) // will return when error is sent
 
 	test.AssertEqual(t, lis.acceptCallCount, lis.acceptNumConns+1,
 		"should have returned after listener errored")
@@ -253,7 +322,7 @@ func TestServer_ListenSession_Error(t *testing.T) {
 	session := NewSession(conn, dss.service)
 	dss.sessions[conn] = session
 
-	dss.listenSession(context.Background(), session) // will return when error is sent
+	dss.listenSession(test.Context(t), session) // will return when error is sent
 
 	test.AssertEqual(t, conn.ReadCallCount, 1,
 		"should have only hit the error once")
@@ -267,7 +336,7 @@ func TestServer_Shutdown(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx, shutdown := context.WithCancel(context.Background())
+	ctx, shutdown := context.WithCancel(test.Context(t))
 
 	dss, _ := NewDomainSocketServer(log, "dontcare.sock", testFileMode)
 	lis := newCtxMockListener(ctx)
@@ -304,7 +373,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 	mod := newTestModule(0)
 	dss.RegisterRPCModule(mod)
 
-	ctx, shutdown := context.WithCancel(context.Background())
+	ctx, shutdown := context.WithCancel(test.Context(t))
 	defer shutdown()
 
 	// Stand up a server loop
@@ -314,7 +383,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 
 	// Now start a client...
 	client := NewClientConnection(path)
-	if err := client.Connect(); err != nil {
+	if err := client.Connect(context.Background()); err != nil {
 		t.Fatalf("failed to connect client: %v", err)
 	}
 	defer client.Close()
@@ -322,7 +391,7 @@ func TestServer_IntegrationNoMethod(t *testing.T) {
 	call := &Call{
 		Module: int32(mod.ID()),
 	}
-	resp, err := client.SendMsg(context.TODO(), call)
+	resp, err := client.SendMsg(test.Context(t), call)
 	if err != nil {
 		t.Fatalf("failed to send message: %v", err)
 	}

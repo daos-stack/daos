@@ -17,6 +17,8 @@ PROTOBUF_C__BEGIN_DECLS
 
 typedef struct _Ctl__BioHealthReq Ctl__BioHealthReq;
 typedef struct _Ctl__BioHealthResp Ctl__BioHealthResp;
+typedef struct _Ctl__NvmeController Ctl__NvmeController;
+typedef struct _Ctl__NvmeController__Namespace Ctl__NvmeController__Namespace;
 typedef struct _Ctl__SmdDevice Ctl__SmdDevice;
 typedef struct _Ctl__SmdDevReq Ctl__SmdDevReq;
 typedef struct _Ctl__SmdDevResp Ctl__SmdDevResp;
@@ -25,7 +27,6 @@ typedef struct _Ctl__SmdPoolResp Ctl__SmdPoolResp;
 typedef struct _Ctl__SmdPoolResp__Pool Ctl__SmdPoolResp__Pool;
 typedef struct _Ctl__SmdQueryReq Ctl__SmdQueryReq;
 typedef struct _Ctl__SmdQueryResp Ctl__SmdQueryResp;
-typedef struct _Ctl__SmdQueryResp__SmdDeviceWithHealth Ctl__SmdQueryResp__SmdDeviceWithHealth;
 typedef struct _Ctl__SmdQueryResp__Pool Ctl__SmdQueryResp__Pool;
 typedef struct _Ctl__SmdQueryResp__RankResp Ctl__SmdQueryResp__RankResp;
 typedef struct _Ctl__LedManageReq Ctl__LedManageReq;
@@ -42,21 +43,25 @@ typedef struct _Ctl__SmdManageResp__RankResp Ctl__SmdManageResp__RankResp;
 
 typedef enum _Ctl__NvmeDevState {
   /*
+   * Device state is unknown, zero value
+   */
+  CTL__NVME_DEV_STATE__UNKNOWN = 0,
+  /*
    * Device is in a normal operational state
    */
-  CTL__NVME_DEV_STATE__NORMAL = 0,
+  CTL__NVME_DEV_STATE__NORMAL = 1,
   /*
    * Device is new and is not yet in-use
    */
-  CTL__NVME_DEV_STATE__NEW = 1,
+  CTL__NVME_DEV_STATE__NEW = 2,
   /*
    * Device is faulty and has been evicted
    */
-  CTL__NVME_DEV_STATE__EVICTED = 2,
+  CTL__NVME_DEV_STATE__EVICTED = 3,
   /*
    * Device has been physically removed
    */
-  CTL__NVME_DEV_STATE__UNPLUGGED = 3
+  CTL__NVME_DEV_STATE__UNPLUGGED = 4
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__NVME_DEV_STATE)
 } Ctl__NvmeDevState;
 typedef enum _Ctl__LedState {
@@ -95,10 +100,18 @@ struct  _Ctl__BioHealthReq
 {
   ProtobufCMessage base;
   char *dev_uuid;
+  /*
+   * Size of the metadata (i.e. vos file index) blob
+   */
+  uint64_t meta_size;
+  /*
+   * Size of the RDB blob
+   */
+  uint64_t rdb_size;
 };
 #define CTL__BIO_HEALTH_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_req__descriptor) \
-    , (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0, 0 }
 
 
 /*
@@ -195,10 +208,104 @@ struct  _Ctl__BioHealthResp
    * blobstore cluster size in bytes
    */
   uint64_t cluster_size;
+  /*
+   * metadata WAL blob size
+   */
+  uint64_t meta_wal_size;
+  /*
+   * RDB WAL blob size
+   */
+  uint64_t rdb_wal_size;
 };
 #define CTL__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_resp__descriptor) \
-    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+
+
+/*
+ * Namespace represents a namespace created on an NvmeController.
+ */
+struct  _Ctl__NvmeController__Namespace
+{
+  ProtobufCMessage base;
+  /*
+   * namespace id
+   */
+  uint32_t id;
+  /*
+   * device capacity in bytes
+   */
+  uint64_t size;
+  /*
+   * parent controller PCI address
+   */
+  char *ctrlr_pci_addr;
+};
+#define CTL__NVME_CONTROLLER__NAMESPACE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__nvme_controller__namespace__descriptor) \
+    , 0, 0, (char *)protobuf_c_empty_string }
+
+
+/*
+ * NvmeController represents an NVMe Controller (SSD).
+ */
+struct  _Ctl__NvmeController
+{
+  ProtobufCMessage base;
+  /*
+   * model name
+   */
+  char *model;
+  /*
+   * serial number
+   */
+  char *serial;
+  /*
+   * pci address
+   */
+  char *pci_addr;
+  /*
+   * firmware revision
+   */
+  char *fw_rev;
+  /*
+   * NUMA socket ID
+   */
+  int32_t socket_id;
+  /*
+   * controller's health stats
+   */
+  Ctl__BioHealthResp *health_stats;
+  /*
+   * controller's namespaces
+   */
+  size_t n_namespaces;
+  Ctl__NvmeController__Namespace **namespaces;
+  /*
+   * controller's blobstores
+   */
+  size_t n_smd_devices;
+  Ctl__SmdDevice **smd_devices;
+  /*
+   * NVMe device operational state
+   */
+  Ctl__NvmeDevState dev_state;
+  /*
+   * NVMe device LED state
+   */
+  Ctl__LedState led_state;
+  /*
+   * PCI device type, vmd or pci
+   */
+  char *pci_dev_type;
+  /*
+   * controller's vendor ID
+   */
+  char *vendor_id;
+};
+#define CTL__NVME_CONTROLLER__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__nvme_controller__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,NULL, 0,NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__OFF, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*
@@ -218,23 +325,11 @@ struct  _Ctl__SmdDevice
   size_t n_tgt_ids;
   int32_t *tgt_ids;
   /*
-   * Transport address of blobstore
-   */
-  char *tr_addr;
-  /*
-   * NVMe device state
-   */
-  Ctl__NvmeDevState dev_state;
-  /*
-   * LED state
-   */
-  Ctl__LedState led_state;
-  /*
    * blobstore clusters total bytes
    */
   uint64_t total_bytes;
   /*
-   * blobstore clusters available bytes
+   * Available RAW storage for data
    */
   uint64_t avail_bytes;
   /*
@@ -245,10 +340,42 @@ struct  _Ctl__SmdDevice
    * DAOS I/O Engine using controller
    */
   uint32_t rank;
+  /*
+   * Device active roles (bitmask)
+   */
+  uint32_t role_bits;
+  /*
+   * Size of the metadata (i.e. vos file index) blob
+   */
+  uint64_t meta_size;
+  /*
+   * Size of the metadata WAL blob
+   */
+  uint64_t meta_wal_size;
+  /*
+   * Size of the RDB blob
+   */
+  uint64_t rdb_size;
+  /*
+   * Size of the RDB WAL blob
+   */
+  uint64_t rdb_wal_size;
+  /*
+   * Effective storage available for data
+   */
+  uint64_t usable_bytes;
+  /*
+   * Backing NVMe controller of SMD device
+   */
+  Ctl__NvmeController *ctrlr;
+  /*
+   * NVMe namespace id hosting SMD blobstore
+   */
+  uint32_t ctrlr_namespace_id;
 };
 #define CTL__SMD_DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, CTL__NVME_DEV_STATE__NORMAL, CTL__LED_STATE__OFF, 0, 0, 0, 0 }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, 0 }
 
 
 struct  _Ctl__SmdDevReq
@@ -345,20 +472,6 @@ struct  _Ctl__SmdQueryReq
     , 0, 0, 0, (char *)protobuf_c_empty_string, 0 }
 
 
-struct  _Ctl__SmdQueryResp__SmdDeviceWithHealth
-{
-  ProtobufCMessage base;
-  Ctl__SmdDevice *details;
-  /*
-   * optional BIO health
-   */
-  Ctl__BioHealthResp *health;
-};
-#define CTL__SMD_QUERY_RESP__SMD_DEVICE_WITH_HEALTH__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_query_resp__smd_device_with_health__descriptor) \
-    , NULL, NULL }
-
-
 struct  _Ctl__SmdQueryResp__Pool
 {
   ProtobufCMessage base;
@@ -393,7 +506,7 @@ struct  _Ctl__SmdQueryResp__RankResp
    * List of devices on the rank
    */
   size_t n_devices;
-  Ctl__SmdQueryResp__SmdDeviceWithHealth **devices;
+  Ctl__SmdDevice **devices;
   /*
    * List of pools on the rank
    */
@@ -615,6 +728,28 @@ Ctl__BioHealthResp *
 void   ctl__bio_health_resp__free_unpacked
                      (Ctl__BioHealthResp *message,
                       ProtobufCAllocator *allocator);
+/* Ctl__NvmeController__Namespace methods */
+void   ctl__nvme_controller__namespace__init
+                     (Ctl__NvmeController__Namespace         *message);
+/* Ctl__NvmeController methods */
+void   ctl__nvme_controller__init
+                     (Ctl__NvmeController         *message);
+size_t ctl__nvme_controller__get_packed_size
+                     (const Ctl__NvmeController   *message);
+size_t ctl__nvme_controller__pack
+                     (const Ctl__NvmeController   *message,
+                      uint8_t             *out);
+size_t ctl__nvme_controller__pack_to_buffer
+                     (const Ctl__NvmeController   *message,
+                      ProtobufCBuffer     *buffer);
+Ctl__NvmeController *
+       ctl__nvme_controller__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   ctl__nvme_controller__free_unpacked
+                     (Ctl__NvmeController *message,
+                      ProtobufCAllocator *allocator);
 /* Ctl__SmdDevice methods */
 void   ctl__smd_device__init
                      (Ctl__SmdDevice         *message);
@@ -732,9 +867,6 @@ Ctl__SmdQueryReq *
 void   ctl__smd_query_req__free_unpacked
                      (Ctl__SmdQueryReq *message,
                       ProtobufCAllocator *allocator);
-/* Ctl__SmdQueryResp__SmdDeviceWithHealth methods */
-void   ctl__smd_query_resp__smd_device_with_health__init
-                     (Ctl__SmdQueryResp__SmdDeviceWithHealth         *message);
 /* Ctl__SmdQueryResp__Pool methods */
 void   ctl__smd_query_resp__pool__init
                      (Ctl__SmdQueryResp__Pool         *message);
@@ -888,6 +1020,12 @@ typedef void (*Ctl__BioHealthReq_Closure)
 typedef void (*Ctl__BioHealthResp_Closure)
                  (const Ctl__BioHealthResp *message,
                   void *closure_data);
+typedef void (*Ctl__NvmeController__Namespace_Closure)
+                 (const Ctl__NvmeController__Namespace *message,
+                  void *closure_data);
+typedef void (*Ctl__NvmeController_Closure)
+                 (const Ctl__NvmeController *message,
+                  void *closure_data);
 typedef void (*Ctl__SmdDevice_Closure)
                  (const Ctl__SmdDevice *message,
                   void *closure_data);
@@ -908,9 +1046,6 @@ typedef void (*Ctl__SmdPoolResp_Closure)
                   void *closure_data);
 typedef void (*Ctl__SmdQueryReq_Closure)
                  (const Ctl__SmdQueryReq *message,
-                  void *closure_data);
-typedef void (*Ctl__SmdQueryResp__SmdDeviceWithHealth_Closure)
-                 (const Ctl__SmdQueryResp__SmdDeviceWithHealth *message,
                   void *closure_data);
 typedef void (*Ctl__SmdQueryResp__Pool_Closure)
                  (const Ctl__SmdQueryResp__Pool *message,
@@ -956,6 +1091,8 @@ extern const ProtobufCEnumDescriptor    ctl__led_state__descriptor;
 extern const ProtobufCEnumDescriptor    ctl__led_action__descriptor;
 extern const ProtobufCMessageDescriptor ctl__bio_health_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__bio_health_resp__descriptor;
+extern const ProtobufCMessageDescriptor ctl__nvme_controller__descriptor;
+extern const ProtobufCMessageDescriptor ctl__nvme_controller__namespace__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_device__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_dev_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_dev_resp__descriptor;
@@ -964,7 +1101,6 @@ extern const ProtobufCMessageDescriptor ctl__smd_pool_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_pool_resp__pool__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_resp__descriptor;
-extern const ProtobufCMessageDescriptor ctl__smd_query_resp__smd_device_with_health__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_resp__pool__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_query_resp__rank_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__led_manage_req__descriptor;

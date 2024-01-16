@@ -14,11 +14,91 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/metadata"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 func getNilRequestResp() *pbin.Response {
 	return pbin.NewResponseWithError(errors.New("nil request"))
+}
+
+// metadataHandler provides the ability to set up the metadata.Provider for metadata methods.
+type metadataHandler struct {
+	mdProvider storage.MetadataProvider
+}
+
+func (h *metadataHandler) setupProvider(log logging.Logger) {
+	if h.mdProvider == nil {
+		h.mdProvider = metadata.DefaultProvider(log)
+	}
+}
+
+// metadataMountHandler handles metadata storage mount and unmount requests.
+type metadataMountHandler struct {
+	metadataHandler
+}
+
+// Handle handles metadata storage mount and unmount requests.
+func (h *metadataMountHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+	if req == nil {
+		return getNilRequestResp()
+	}
+
+	var mReq storage.MetadataMountRequest
+	if err := json.Unmarshal(req.Payload, &mReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	var mRes *storage.MountResponse
+	var err error
+	switch req.Method {
+	case "MetadataMount":
+		mRes, err = h.mdProvider.Mount(mReq)
+	case "MetadataUnmount":
+		mRes, err = h.mdProvider.Unmount(mReq)
+	}
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+	return pbin.NewResponseWithPayload(mRes)
+}
+
+// metadataFormatHandler handles metadata storage format requests.
+type metadataFormatHandler struct {
+	metadataHandler
+}
+
+// Handle handles metadata storage format requests.
+func (h *metadataFormatHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+	if req == nil {
+		return getNilRequestResp()
+	}
+
+	var mReq storage.MetadataFormatRequest
+	if err := json.Unmarshal(req.Payload, &mReq); err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+
+	h.setupProvider(log)
+
+	var err error
+	resp := &pbin.Response{}
+	switch req.Method {
+	case "MetadataFormat":
+		err = h.mdProvider.Format(mReq)
+	case "MetadataNeedsFormat":
+		var result bool
+		result, err = h.mdProvider.NeedsFormat(mReq)
+		if err == nil {
+			resp = pbin.NewResponseWithPayload(&result)
+		}
+	}
+	if err != nil {
+		return pbin.NewResponseWithError(err)
+	}
+	return resp
 }
 
 // scmHandler provides the ability to set up the scm.Provider for SCM method handlers.

@@ -5,26 +5,26 @@
 """
 # pylint: disable=too-many-lines
 
-from logging import getLogger
-import os
-import re
-import random
-import string
-import time
 import ctypes
 import math
+import os
+import random
+import re
+import string
+import time
+from datetime import datetime
 from getpass import getuser
 from importlib import import_module
+from logging import getLogger
 from socket import gethostname
 
 from avocado.core.settings import settings
 from avocado.core.version import MAJOR
 from avocado.utils import process
-from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
-
+from ClusterShell.Task import task_self
+from run_utils import RunException, get_clush_command, run_local, run_remote
 from user_utils import get_chown_command, get_primary_group
-from run_utils import get_clush_command, run_remote, run_local, RunException
 
 
 class DaosTestError(Exception):
@@ -47,19 +47,19 @@ class SimpleProfiler():
         """Clean the metrics collect so far."""
         self._stats = {}
 
-    def run(self, fn, tag, *args, **kwargs):
+    def run(self, fun, tag, *args, **kwargs):
         """Run a function and update its stats.
 
         Args:
-            fn (function): Function to be executed
+            fun (function): Function to be executed
             args  (tuple): Argument list
-            kwargs (dict): Keyworded, variable-length argument list
+            kwargs (dict): variable-length named arguments
         """
-        self._logger.info("Running function: %s()", fn.__name__)
+        self._logger.info("Running function: %s()", fun.__name__)
 
         start_time = time.time()
 
-        ret = fn(*args, **kwargs)
+        ret = fun(*args, **kwargs)
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -89,7 +89,7 @@ class SimpleProfiler():
 
         return self._calculate_metrics(data[1])
 
-    def set_logger(self, fn):
+    def set_logger(self, fun):
         """Assign the function to be used for logging.
 
         Set the function that will be used to print the elapsed time on each
@@ -97,10 +97,10 @@ class SimpleProfiler():
         performed silently.
 
         Parameters:
-            fn (function): Function to be used for logging.
+            fun (function): Function to be used for logging.
 
         """
-        self._logger = fn
+        self._logger = fun
 
     def print_stats(self):
         """Print all the stats collected so far.
@@ -146,32 +146,24 @@ def human_to_bytes(size):
         DaosTestError: when an invalid human readable size value is provided
 
     Returns:
-        int: value translated to bytes.
+        int|float: value translated to bytes.
 
     """
-    conversion_sizes = ("", "k", "m", "g", "t", "p", "e")
-    conversion = {
-        1000: ["{}b".format(item) for item in conversion_sizes],
-        1024: ["{}ib".format(item) for item in conversion_sizes],
-    }
-    match = re.findall(r"([0-9.]+)\s*([a-zA-Z]+|)", size)
+    conversion = {}
+    for index, unit in enumerate(('', 'k', 'm', 'g', 't', 'p', 'e')):
+        conversion[unit] = 1000 ** index
+        conversion[f'{unit}b'] = 1000 ** index
+        conversion[f'{unit}ib'] = 1024 ** index
     try:
-        multiplier = 1
-        if match[0][1]:
-            multiplier = -1
-            unit = match[0][1].lower()
-            for item in conversion:
-                if unit in conversion[item]:
-                    multiplier = item ** conversion[item].index(unit)
-                    break
-            if multiplier == -1:
-                raise DaosTestError(
-                    "Invalid unit detected, not in {}: {}".format(
-                        conversion[1000] + conversion[1024][1:], unit))
-        value = float(match[0][0]) * multiplier
-    except IndexError as error:
-        raise DaosTestError(
-            "Invalid human readable size format: {}".format(size)) from error
+        match = re.findall(r'([0-9.]+)\s*([a-zA-Z]+|)', str(size))
+        number = match[0][0]
+        unit = match[0][1].lower()
+    except (TypeError, IndexError) as error:
+        raise DaosTestError(f'Invalid human readable size format: {size}') from error
+    try:
+        value = float(number) * conversion[unit]
+    except KeyError as error:
+        raise DaosTestError(f'Invalid unit detected, not in {conversion.keys()}: {unit}') from error
     return int(value) if value.is_integer() else value
 
 
@@ -209,7 +201,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     This method uses the avocado.utils.process.run() method to run the specified
     command string on the local host using subprocess.Popen(). Even though the
     command is specified as a string, since shell=False is passed to process.run
-    it will use shlex.spit() to break up the command into a list before it is
+    it will use shlex.split() to break up the command into a list before it is
     passed to subprocess.Popen. The shell=False is forced for security. As a
     result typically any command containing ";", "|", "&&", etc. will fail.
 
@@ -289,6 +281,8 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     if msg is not None:
         log.info(msg)
         raise DaosTestError(msg)
+
+    return None
 
 
 def run_task(hosts, command, timeout=None, verbose=False):
@@ -479,9 +473,9 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
 
         # Determine the unique interrupted state for each host with the same
         # output and exit status
-        for exit_status in output_exit_status:
+        for exit_status, _hosts in output_exit_status.items():
             output_interrupted = {}
-            for host in list(output_exit_status[exit_status]):
+            for host in list(_hosts):
                 is_interrupted = host in host_interrupted
                 if is_interrupted not in output_interrupted:
                     output_interrupted[is_interrupted] = NodeSet()
@@ -489,10 +483,10 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
 
             # Add a result entry for each group of hosts with the same output,
             # exit status, and interrupted status
-            for interrupted in output_interrupted:
+            for interrupted, _hosts in output_interrupted.items():
                 results.append({
                     "command": command,
-                    "hosts": output_interrupted[interrupted],
+                    "hosts": _hosts,
                     "exit_status": exit_status,
                     "interrupted": interrupted,
                     "stdout": [
@@ -506,13 +500,13 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         for item in results
         if expect_rc is not None and item["exit_status"] != expect_rc]
     if verbose or bad_exit_status:
-        log.info(colate_results(command, results))
+        log.info(collate_results(command, results))
 
     return results
 
 
-def colate_results(command, results):
-    """Colate the output of run_pcmd.
+def collate_results(command, results):
+    """Collate the output of run_pcmd.
 
     Args:
         command (str): command used to obtain the data on each server
@@ -522,7 +516,7 @@ def colate_results(command, results):
                         return for details)
 
     Returns:
-        str: a string colating run_pcmd()'s results
+        str: a string collating run_pcmd()'s results
 
     """
     res = ""
@@ -554,7 +548,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     """
     log = getLogger()
     host_data = []
-    DATA_ERROR = "[ERROR]"
+    data_error = "[ERROR]"
 
     # Find the data for each specified servers
     log.info("  Obtaining %s data on %s", text, hosts)
@@ -572,7 +566,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
                     result["interrupted"], result["command"])
                 for line in result["stdout"]:
                     log.info("        %s", line)
-        host_data.append({"hosts": hosts, "data": DATA_ERROR})
+        host_data.append({"hosts": hosts, "data": data_error})
     else:
         for result in results:
             host_data.append(
@@ -643,26 +637,6 @@ def check_file_exists(hosts, filename, user=None, directory=False,
             missing_file.add(NodeSet.fromlist(node_list))
 
     return len(missing_file) == 0, missing_file
-
-
-def check_for_pool(host, uuid):
-    """Check if pool folder exist on server.
-
-    Args:
-        host (NodeSet): Server host name
-        uuid (str): Pool uuid to check if exists
-
-    Returns:
-        bool: True if pool folder exists, False otherwise
-
-    """
-    pool_dir = "/mnt/daos/{}".format(uuid)
-    result = check_file_exists(host, pool_dir, directory=True, sudo=True)
-    if result[0]:
-        print("{} exists on {}".format(pool_dir, host))
-    else:
-        print("{} does not exist on {}".format(pool_dir, host))
-    return result[0]
 
 
 def process_host_list(hoststr):
@@ -750,28 +724,17 @@ def get_random_bytes(length, exclude=None, encoding="utf-8"):
     return get_random_string(length, exclude).encode(encoding)
 
 
-def check_pool_files(log, hosts, uuid):
-    """Check if pool files exist on the specified list of hosts.
+def join(joiner, *args):
+    """Join one or more objects together with a specified string.
 
     Args:
-        log (logging): logging object used to display messages
-        hosts (NodeSet): list of hosts
-        uuid (str): uuid file name to look for in /mnt/daos.
+        joiner (str): string to use to join the other objects
+        *args: the objects to join. Any non-None object will be passed to str().
 
     Returns:
-        bool: True if the files for this pool exist on each host; False
-            otherwise
-
+        str: a string containing all the objects joined by the joiner string
     """
-    status = True
-    log.info("Checking for pool data on %s", hosts)
-    pool_files = [uuid, "superblock"]
-    for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
-        result = check_file_exists(hosts, filename, sudo=True)
-        if not result[0]:
-            log.error("%s: %s not found", result[1], filename)
-            status = False
-    return status
+    return joiner.join(filter(None, map(str, args)))
 
 
 def list_to_str(value, joiner=","):
@@ -785,7 +748,7 @@ def list_to_str(value, joiner=","):
         str: a string of each list entry joined by the joiner string
 
     """
-    return joiner.join(map(str, value))
+    return join(joiner, *value)
 
 
 def dict_to_list(value, joiner="="):
@@ -881,20 +844,6 @@ def get_log_file(name):
     return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)
 
 
-def check_uuid_format(uuid):
-    """Check for a correct UUID format.
-
-    Args:
-        uuid (str): Pool or Container UUID.
-
-    Returns:
-        bool: status of valid or invalid uuid
-
-    """
-    pattern = re.compile("([0-9a-fA-F-]+)")
-    return bool(len(uuid) == 36 and pattern.match(uuid))
-
-
 def get_numeric_list(numeric_range):
     """Convert a string of numeric ranges into an expanded list of integers.
 
@@ -946,35 +895,30 @@ def get_remote_file_size(host, file_name):
     return int(result.stdout_text)
 
 
-def error_count(error, hostlist, log_file):
-    """Count the number of specific ERRORs found in the log file.
-
-    This function also returns a count of the other ERRORs from same log file.
+def get_errors_count(hostlist, file_glob):
+    """Count the number of errors found in log files.
 
     Args:
-        error (str): DAOS error to look for in .log file. for example -1007
         hostlist (list): System list to looks for an error.
-        log_file (str): Log file name (server/client log).
+        file_glob (str): Glob pattern of the log file to parse.
 
     Returns:
-        tuple: a tuple of the count of errors matching the specified error type
-            and the count of other errors (int, int)
+        dict: A dictionary of the count of errors.
 
     """
     # Get the Client side Error from client_log file.
-    requested_error_count = 0
-    other_error_count = 0
-    command = 'cat {} | grep \" ERR \"'.format(get_log_file(log_file))
-    results = run_pcmd(hostlist, command, False, None, None)
-    for result in results:
-        for line in result["stdout"]:
-            if 'ERR' in line:
-                if error in line:
-                    requested_error_count += 1
-                else:
-                    other_error_count += 1
+    cmd = "cat {} | sed -n -E -e ".format(get_log_file(file_glob))
+    cmd += r"'/^.+[[:space:]]ERR[[:space:]].+[[:space:]]DER_[^(]+\([^)]+\).+$/"
+    cmd += r"s/^.+[[:space:]]DER_[^(]+\((-[[:digit:]]+)\).+$/\1/p'"
+    results = run_pcmd(hostlist, cmd, False, None, None)
+    errors_count = {}
+    for error_str in sum([result["stdout"] for result in results], []):
+        error = int(error_str)
+        if error not in errors_count:
+            errors_count[error] = 0
+        errors_count[error] += 1
 
-    return requested_error_count, other_error_count
+    return errors_count
 
 
 def get_module_class(name, module):
@@ -1301,6 +1245,20 @@ def get_display_size(size):
         bytes_to_human(size, binary=False))
 
 
+def append_error(errors, title, details=None):
+    """Helper adding an error to the list of errors
+
+    Args:
+        errors (list): List of error messages
+        title (str): Error message title
+        details (list, optional): List of string of the error details
+    """
+    msg = title
+    if details:
+        msg += "\n\t" + "\n\t".join(details)
+    errors.append(msg)
+
+
 def report_errors(test, errors):
     """Print errors and fail the test if there's any errors.
 
@@ -1389,6 +1347,19 @@ def get_journalctl(hosts, since, until, journalctl_type):
     return get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 
 
+def journalctl_time(when=None):
+    # pylint: disable=wrong-spelling-in-docstring
+    """Get time formatted for journalctl.
+
+    Args:
+        when (datetime, optional): time to format. Defaults to datetime.now()
+
+    Returns:
+        str: the time in journalctl format
+    """
+    return (when or datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def get_avocado_config_value(section, key):
     """Get an avocado configuration value.
 
@@ -1401,7 +1372,7 @@ def get_avocado_config_value(section, key):
 
     """
     if int(MAJOR) >= 82:
-        config = settings.as_dict()
+        config = settings.as_dict()  # pylint: disable=no-member
         return config.get(".".join([section, key]))
     return settings.get_value(section, key)     # pylint: disable=no-member
 
@@ -1415,7 +1386,7 @@ def set_avocado_config_value(section, key, value):
         value (object): the value to set
     """
     if int(MAJOR) >= 82:
-        settings.update_option(".".join([section, key]), value)
+        settings.update_option(".".join([section, key]), value)  # pylint: disable=no-member
     else:
         settings.config.set(section, key, str(value))
 

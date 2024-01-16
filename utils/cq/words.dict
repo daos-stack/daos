@@ -135,7 +135,6 @@ debian
 debuginfo
 defusedxml
 del
-dependances
 deps
 dereference
 dereferencing
@@ -162,6 +161,7 @@ dst
 dsync
 dtx
 eg
+enablement
 endswith
 enospace
 enum
@@ -175,10 +175,10 @@ fchmod
 fcntl
 filename
 filesystem
+findall
 findcmd
 fini
 fio
-fnctl
 formattable
 fpp
 fs
@@ -198,11 +198,13 @@ groupadd
 groupname
 grp
 hackery
+hexdump
 hfi
 hostfile
 hostlist
 hostname
 hostnames
+https
 hugepage
 hugepages
 hwloc
@@ -233,6 +235,7 @@ junit
 kds
 kv
 kwargs
+launchable
 ldflags
 len
 libaio
@@ -252,6 +255,7 @@ logfile
 logfiles
 logmasks
 lseek
+lsblk
 lspci
 lua
 lustre
@@ -311,6 +315,7 @@ params
 patchelf
 pci
 pda
+parallelized
 pdesc
 perf
 performant
@@ -322,6 +327,7 @@ pkill
 pmdk
 pmem
 poh
+Popen
 posix
 postfix
 pparent
@@ -329,6 +335,7 @@ ppn
 prebuild
 prebuilding
 prebuilt
+predefine
 preload
 prepend
 prepended
@@ -339,6 +346,7 @@ preprocessor
 prereqs
 proc
 procs
+profiler
 protoc
 ps
 puuid
@@ -354,10 +362,13 @@ readdir
 readlink
 realloc
 rebase
+relink
+relinked
 recurse
 redistributions
 refactor
 repo
+reproducibility
 returncode
 rf
 rmdir
@@ -383,7 +394,9 @@ shlex
 simul
 sinfo
 slurm
+slurmd
 slurmctl
+slurmctld
 spdk
 squeue
 src
@@ -432,6 +445,7 @@ testdata
 testFile
 testname
 testrunner
+testsuites
 tgt
 timestamp
 timestamps
@@ -451,12 +465,14 @@ uint
 umount
 umounting
 unicode
+uninterruptible
 unittest
 unlink
 unlinked
 unlinking
 unmangle
 unmount
+unordered
 unwritable
 uri
 url
@@ -473,6 +489,7 @@ uuidstr
 valgrind
 vendored
 ver
+versa
 versioned
 vm
 vos

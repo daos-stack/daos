@@ -9,7 +9,7 @@ from apricot import TestWithoutServers
 from cmocka_utils import CmockaUtils
 from command_utils import SubProcessCommand
 from exception_utils import CommandFailure
-from job_manager_utils import Orterun, Mpirun
+from job_manager_utils import Mpirun, Orterun
 
 
 class HarnessBasicTest(TestWithoutServers):
@@ -22,8 +22,9 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code.
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,harness_basic_test
-        :avocado: tags=always_fails,test_always_fails
+        :avocado: tags=HarnessBasicTest,always_fails,test_always_fails
         """
         self.fail("NOOP test to do nothing but fail")
 
@@ -33,7 +34,7 @@ class HarnessBasicTest(TestWithoutServers):
         :avocado: tags=all
         :avocado: tags=hw,large,medium,small
         :avocado: tags=harness,harness_basic_test
-        :avocado: tags=always_fails,test_always_fails_hw
+        :avocado: tags=HarnessBasicTest,always_fails,test_always_fails_hw
         """
         self.test_always_fails()
 
@@ -54,6 +55,16 @@ class HarnessBasicTest(TestWithoutServers):
         :avocado: tags=hw,medium,large
         :avocado: tags=harness,harness_basic_test,always_passes
         :avocado: tags=HarnessBasicTest,test_always_passes_hw
+        """
+        self.test_always_passes()
+
+    def test_always_passes_hw_provider(self):
+        """Simple test of apricot test code.
+
+        :avocado: tags=all
+        :avocado: tags=hw,medium,large,provider
+        :avocado: tags=harness,harness_basic_test,always_passes
+        :avocado: tags=HarnessBasicTest,test_always_passes_hw_provider
         """
         self.test_always_passes()
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -99,6 +99,38 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query --rank-hosts bar9,foo-[0-100] --ranks 0,2,4-8",
 			"",
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
+		},
+		{
+			"system query with not-ok specified",
+			"system query --not-ok",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{
+					NotOK: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system query with states specified",
+			"system query --with-states joined,Excluded",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{
+					WantedStates: system.MemberStateJoined | system.MemberStateExcluded,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system query with invalid state specified",
+			"system query --with-states Joined,Exclud",
+			"",
+			errors.New("invalid state name"),
+		},
+		{
+			"system query with both not-ok and with-states specified",
+			"system query --not-ok --with-states Joined",
+			"",
+			errors.New("--not-ok and --with-states options cannot be set together"),
 		},
 		{
 			"system query verbose",
@@ -208,6 +240,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"leader query",
 			"system leader-query",
 			strings.Join([]string{
+				printRequest(t, &control.LeaderQueryReq{}),
 				printRequest(t, &control.LeaderQueryReq{}),
 			}, " "),
 			nil,

@@ -5,6 +5,7 @@ hosts:
 server_config:
   name: daos_server
   engines_per_host: 2
+  crt_timeout: 20
   engines:
     0:
       pinned_numa_node: 0
@@ -20,6 +21,7 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       storage: auto
+  system_ram_reserved: 8
 pool:
   control_method: dmg
   scm_size: 80G

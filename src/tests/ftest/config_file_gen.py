@@ -1,25 +1,22 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
+# pylint: disable=fixme
 # TODO: Find out why this is required and remove it.
 # pylint: disable=import-error,no-name-in-module
 
 import logging
 import sys
-
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
+
+from util.agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from util.command_utils_base import CommonConfig
+from util.dmg_utils_params import DmgTransportCredentials, DmgYamlParameters
 from util.exception_utils import CommandFailure
-from util.agent_utils_params import \
-    DaosAgentYamlParameters, DaosAgentTransportCredentials
-from util.server_utils_params import \
-    DaosServerYamlParameters, DaosServerTransportCredentials
-from util.dmg_utils_params import \
-    DmgYamlParameters, DmgTransportCredentials
+from util.server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 
 
 def generate_agent_config(args):
@@ -53,7 +50,7 @@ def generate_server_config(args):
     config = DaosServerYamlParameters(args.server_file, common_cfg)
     config.engine_params[0].storage.storage_tiers[0].storage_class.value = "ram"
     config.engine_params[0].storage.storage_tiers[0].scm_mount.value = "/mnt/daos"
-    config.engine_params[0].storage.storage_tiers[0].scm_size.value = 16
+    config.engine_params[0].storage.storage_tiers[0].scm_size.value = 0
     # Update the configuration file access points
     config.other_params.access_points.value = args.node_list.split(",")
     return create_config(args, config)

@@ -1,0 +1,37 @@
+hosts:
+  test_servers: 2
+  test_clients: 2
+
+timeout: 200
+
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      storage: auto
+
+pool:
+  # size: 50%
+  size: 50G
+
+container:
+  control_method: daos
+  type: POSIX
+  dfs_oclass: SX
+
+ior: &ior_base
+  client_processes:
+    ppn: 4
+  api: DFS
+  transfer_size: 512K
+  block_size: 1G
+  dfs_oclass: SX
+
+ior_write:
+  <<: *ior_base
+  flags: "-k -v -w -W -G 1"
+
+ior_read:
+  <<: *ior_base
+  flags: "-v -r -R -G 1"

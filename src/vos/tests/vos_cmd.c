@@ -131,7 +131,7 @@ print_usage(const char *prog)
 	printf("\t--remove, -R      <key>[@start-length]   Remove dkey range\n");
 	printf("\t--remove_all, -A  <key>[@start-length]   Remove all dkey range\n");
 	printf("\t--punch, -p       <key>                  Punch dkey\n");
-	printf("\t--randomize, -z   <key>@<start>-<length> Randomize I/O over a range\n");
+	printf("\t--randomize, -x   <key>@<start>-<length> Randomize I/O over a range\n");
 	printf("\t--iterate, -i                            Iterate\n");
 	printf("\t--aggregate, -a                          Aggregate\n");
 	printf("\t--discard, -r                            Discard writes\n");

@@ -3,11 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
-
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError
 from general_utils import get_random_bytes
+from pydaos.raw import DaosApiError, DaosContainer, DaosSnapshot
 
 
 class BasicSnapshot(TestWithServers):
@@ -47,7 +45,7 @@ class BasicSnapshot(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=container,snap,snapshot
-        :avocado: tags=basicsnap,test_basic_snapshot
+        :avocado: tags=BasicSnapshot,test_basic_snapshot
         """
         # Set up the pool and container.
         try:
@@ -95,7 +93,7 @@ class BasicSnapshot(TestWithServers):
                 "Committing 500 additional transactions to the same KV")
             more_transactions = 500
             while more_transactions:
-                size = random.randint(1, 250) + 1  # nosec
+                size = self.random.randint(1, 250) + 1
                 new_data = get_random_bytes(size)
                 new_obj = self.container.write_an_obj(
                     new_data, size, dkey, akey, obj_cls=obj_cls)

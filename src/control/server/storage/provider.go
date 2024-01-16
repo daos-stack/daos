@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -21,10 +21,14 @@ import (
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
 
+const defaultMetadataPath = "/mnt/daos"
+
 // SystemProvider provides operating system capabilities.
 type SystemProvider interface {
 	system.IsMountedProvider
+	system.MountProvider
 	GetfsUsage(string) (uint64, uint64, error)
+	Mkfs(system.MkfsReq) error
 }
 
 // Provider provides storage specific capabilities.
@@ -34,9 +38,9 @@ type Provider struct {
 	engineIndex   int
 	engineStorage *Config
 	Sys           SystemProvider
+	metadata      MetadataProvider
 	scm           ScmProvider
 	bdev          BdevProvider
-	bdevCache     BdevScanResponse
 	vmdEnabled    bool
 }
 
@@ -46,7 +50,153 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 		engineStorage = new(Config)
 	}
 	return NewProvider(log, idx, engineStorage, system.DefaultProvider(),
-		NewScmForwarder(log), NewBdevForwarder(log))
+		NewScmForwarder(log), NewBdevForwarder(log), NewMetadataForwarder(log))
+}
+
+// FormatControlMetadata formats the storage used for control metadata.
+func (p *Provider) FormatControlMetadata(engineIdxs []uint) error {
+	if p == nil {
+		return errors.New("nil provider")
+	}
+
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// Nothing to do
+		p.log.Debug("no control metadata path")
+		return nil
+	}
+
+	req := MetadataFormatRequest{
+		RootPath:   p.engineStorage.ControlMetadata.Path,
+		Device:     p.engineStorage.ControlMetadata.DevicePath,
+		DataPath:   p.engineStorage.ControlMetadata.Directory(),
+		OwnerUID:   os.Geteuid(),
+		OwnerGID:   os.Getegid(),
+		EngineIdxs: engineIdxs,
+	}
+	p.log.Debugf("calling metadata storage provider format: %+v", req)
+	return p.metadata.Format(req)
+}
+
+// ControlMetadataNeedsFormat checks whether we need to format the control metadata storage before
+// using it.
+func (p *Provider) ControlMetadataNeedsFormat() (bool, error) {
+	if p == nil {
+		return false, errors.New("nil provider")
+	}
+
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// No metadata section defined, so we fall back to using SCM
+		return false, nil
+	}
+
+	req := MetadataFormatRequest{
+		RootPath: p.engineStorage.ControlMetadata.Path,
+		Device:   p.engineStorage.ControlMetadata.DevicePath,
+		DataPath: p.engineStorage.ControlMetadata.Directory(),
+	}
+	p.log.Debugf("checking metadata storage provider format: %+v", req)
+	return p.metadata.NeedsFormat(req)
+}
+
+// ControlMetadataPathConfigured checks whether metadata section is defined
+func (p *Provider) ControlMetadataPathConfigured() bool {
+	if p == nil {
+		return false
+	}
+	if p.engineStorage.ControlMetadata.HasPath() {
+		return true
+	}
+	return false
+}
+
+// ControlMetadataPath returns the path where control plane metadata is stored.
+func (p *Provider) ControlMetadataPath() string {
+	if p == nil {
+		return defaultMetadataPath
+	}
+
+	if p.engineStorage.ControlMetadata.HasPath() {
+		return p.engineStorage.ControlMetadata.Directory()
+	}
+
+	return p.scmMetadataPath()
+}
+
+func (p *Provider) GetControlMetadata() *ControlMetadata {
+	if p == nil {
+		return nil
+	}
+	return &p.engineStorage.ControlMetadata
+}
+
+func (p *Provider) scmMetadataPath() string {
+	cfg, err := p.GetScmConfig()
+	if err != nil {
+		p.log.Errorf("unable to get SCM config: %s", err)
+		return defaultMetadataPath
+	}
+
+	storagePath := cfg.Scm.MountPoint
+	if storagePath == "" {
+		storagePath = defaultMetadataPath
+	}
+
+	return storagePath
+}
+
+// ControlMetadataEnginePath returns the path where control plane metadata for the engine is stored.
+func (p *Provider) ControlMetadataEnginePath() string {
+	if p == nil {
+		return defaultMetadataPath
+	}
+
+	if p.engineStorage.ControlMetadata.HasPath() {
+		return p.engineStorage.ControlMetadata.EngineDirectory(uint(p.engineIndex))
+	}
+
+	return p.scmMetadataPath()
+}
+
+// MountControlMetadata mounts the storage for control metadata, if it is on a separate device.
+func (p *Provider) MountControlMetadata() error {
+	if p == nil {
+		return errors.New("nil provider")
+	}
+
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// If there's no control metadata path, we use SCM for control metadata
+		return p.MountScm()
+	}
+
+	req := MetadataMountRequest{
+		RootPath: p.engineStorage.ControlMetadata.Path,
+		Device:   p.engineStorage.ControlMetadata.DevicePath,
+	}
+
+	p.log.Debugf("calling metadata storage provider mount: %+v", req)
+	_, err := p.metadata.Mount(req)
+
+	return err
+}
+
+// ControlMetadataIsMounted determines whether the control metadata storage is already mounted.
+func (p *Provider) ControlMetadataIsMounted() (bool, error) {
+	if p == nil {
+		return false, errors.New("nil provider")
+	}
+
+	p.log.Debugf("control metadata config: %+v", p.engineStorage.ControlMetadata)
+	if !p.engineStorage.ControlMetadata.HasPath() {
+		// If there's no control metadata path, we use SCM for control metadata
+		return p.ScmIsMounted()
+	}
+
+	if p.engineStorage.ControlMetadata.DevicePath == "" {
+		p.log.Debug("no metadata device defined")
+		return false, nil
+	}
+
+	return p.Sys.IsMounted(p.engineStorage.ControlMetadata.Path)
 }
 
 // PrepareScm calls into storage SCM provider to attempt to configure PMem devices to be usable by
@@ -141,6 +291,33 @@ func (p *Provider) MountScm() error {
 	}
 
 	p.log.Debugf("%s mounted: %t", res.Target, res.Mounted)
+	return nil
+}
+
+// UnmountTmpfs unmounts SCM based on provider config.
+func (p *Provider) UnmountTmpfs() error {
+	cfg, err := p.GetScmConfig()
+	if err != nil {
+		return err
+	}
+
+	if cfg.Class != ClassRam {
+		p.log.Debugf("skipping unmount tmpfs as scm class is not ram")
+		return nil
+	}
+
+	req := ScmMountRequest{
+		Target: cfg.Scm.MountPoint,
+	}
+
+	p.log.Debugf("attempting to unmount %s\n", cfg.Scm.MountPoint)
+
+	res, err := p.scm.Unmount(req)
+	if err != nil {
+		return err
+	}
+
+	p.log.Debugf("%s unmounted: %t", res.Target, !res.Mounted)
 	return nil
 }
 
@@ -247,8 +424,9 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	if err == nil && resp != nil && !req.CleanHugePagesOnly {
+	if err == nil && resp != nil && !req.CleanHugepagesOnly {
 		p.vmdEnabled = resp.VMDPrepared
+		p.log.Debugf("setting vmd=%v on storage provider", p.vmdEnabled)
 	}
 	return resp, err
 }
@@ -264,11 +442,11 @@ func (p *Provider) HasBlockDevices() bool {
 // BdevTierPropertiesFromConfig returns BdevTierProperties struct from given TierConfig.
 func BdevTierPropertiesFromConfig(cfg *TierConfig) BdevTierProperties {
 	return BdevTierProperties{
-		Class:      cfg.Class,
-		DeviceList: cfg.Bdev.DeviceList,
-		// cfg size in nr GiBytes
+		Class:          cfg.Class,
+		DeviceList:     cfg.Bdev.DeviceList,
 		DeviceFileSize: uint64(humanize.GiByte * cfg.Bdev.FileSize),
 		Tier:           cfg.Tier,
+		DeviceRoles:    cfg.Bdev.DeviceRoles,
 	}
 }
 
@@ -300,7 +478,7 @@ type BdevTierFormatResult struct {
 
 // FormatBdevTiers formats all the Bdev tiers in the engine storage
 // configuration.
-func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
+func (p *Provider) FormatBdevTiers(ctrlrs NvmeControllers) (results []BdevTierFormatResult) {
 	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierFormatResult, len(bdevCfgs))
 
@@ -313,20 +491,20 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 		p.log.Infof("Instance %d: starting format of %s block devices %v",
 			p.engineIndex, cfg.Class, cfg.Bdev.DeviceList)
 
-		results[i].Tier = cfg.Tier
 		req, err := BdevFormatRequestFromConfig(p.log, cfg)
 		if err != nil {
 			results[i].Error = err
 			p.log.Errorf("Instance %d: format failed (%s)", err)
 			continue
 		}
+		req.ScannedBdevs = ctrlrs
 
 		p.RLock()
-		req.BdevCache = &p.bdevCache
 		req.VMDEnabled = p.vmdEnabled
 		results[i].Result, results[i].Error = p.bdev.Format(req)
 		p.RUnlock()
 
+		results[i].Tier = cfg.Tier
 		if err := results[i].Error; err != nil {
 			p.log.Errorf("Instance %d: format failed (%s)", err)
 			continue
@@ -416,7 +594,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
-func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) error {
+func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger, ctrlrs NvmeControllers) error {
 	p.RLock()
 	vmdEnabled := p.vmdEnabled
 	engineIndex := p.engineIndex
@@ -428,16 +606,10 @@ func (p *Provider) WriteNvmeConfig(ctx context.Context, log logging.Logger) erro
 	if err != nil {
 		return errors.Wrap(err, "creating write config request")
 	}
-	if req == nil {
-		return errors.New("BdevWriteConfigRequestFromConfig returned nil request")
-	}
+	req.ScannedBdevs = ctrlrs
 
 	log.Infof("Writing NVMe config file for engine instance %d to %q", engineIndex,
 		req.ConfigOutputPath)
-
-	p.RLock()
-	defer p.RUnlock()
-	req.BdevCache = &p.bdevCache
 
 	_, err = p.bdev.WriteConfig(*req)
 
@@ -450,107 +622,36 @@ type BdevTierScanResult struct {
 	Result *BdevScanResponse
 }
 
-func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierScanResult, err error) {
-	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
-	results = make([]BdevTierScanResult, 0, len(bdevCfgs))
-
-	// A config with SCM and no block devices is valid.
-	if len(bdevCfgs) == 0 {
-		return
-	}
-
-	for ti, cfg := range bdevCfgs {
-		if cfg.Class != ClassNvme {
-			continue
-		}
-		if cfg.Bdev.DeviceList.Len() == 0 {
-			continue
-		}
-
-		p.RLock()
-		req := BdevScanRequest{
-			DeviceList:  cfg.Bdev.DeviceList,
-			BypassCache: direct,
-			VMDEnabled:  p.vmdEnabled,
-		}
-
-		bsr, err := scanBdevs(p.log, req, &p.bdevCache, scan)
-		p.RUnlock()
-		if err != nil {
-			return nil, err
-		}
-
-		p.log.Debugf("storage provider for engine %d: scan tier-%d, bdevs %v, direct %v",
-			p.engineIndex, ti, req.DeviceList, req.BypassCache)
-
-		result := BdevTierScanResult{
-			Tier:   cfg.Tier,
-			Result: bsr,
-		}
-		results = append(results, result)
-	}
-
-	return
-}
-
-// ScanBdevTiers scans all Bdev tiers in the provider's engine storage configuration.
-// If direct is set to true, bypass cache to retrieve up-to-date details.
-func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err error) {
-	return p.scanBdevTiers(direct, p.bdev.Scan)
-}
-
-type scanFn func(BdevScanRequest) (*BdevScanResponse, error)
-
-func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResponse, scan scanFn) (*BdevScanResponse, error) {
-	if !req.BypassCache && cachedResp != nil && len(cachedResp.Controllers) != 0 {
-		log.Debugf("returning bdev storage provider scan cache: %+v", req)
-		return cachedResp, nil
-	}
-
-	log.Debugf("calling bdev storage provider scan: %+v", req)
-	return scan(req)
-}
-
-// ScanBdevs either calls into bdev storage provider to scan SSDs or returns cached results
-// if BypassCache is set to false in the request.
+// ScanBdevs calls into bdev storage provider to scan SSDs, always bypassing cache.
+// Function should not be called when engines have been started and SSDs have been claimed by SPDK.
 func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	p.RLock()
 	defer p.RUnlock()
 
 	req.VMDEnabled = p.vmdEnabled
-	return scanBdevs(p.log, req, &p.bdevCache, p.bdev.Scan)
-}
-
-func (p *Provider) GetBdevCache() BdevScanResponse {
-	p.RLock()
-	defer p.RUnlock()
-
-	return p.bdevCache
-}
-
-// SetBdevCache stores given scan response in provider bdev cache.
-func (p *Provider) SetBdevCache(resp BdevScanResponse) error {
-	p.Lock()
-	defer p.Unlock()
-
-	// Enumerate scan results and filter out any controllers not specified in provider's engine
-	// storage config.
-	if err := filterBdevScanResponse(p.engineStorage.GetBdevs(), &resp); err != nil {
-		return errors.Wrap(err, "filtering scan response before caching")
-	}
-
-	p.log.Debugf("setting bdev cache in storage provider for engine %d: %v", p.engineIndex,
-		resp.Controllers)
-	p.bdevCache = resp
-	p.vmdEnabled = resp.VMDEnabled
-
-	return nil
+	return p.bdev.Scan(req)
 }
 
 // WithVMDEnabled enables VMD on storage provider.
-func (p *Provider) WithVMDEnabled() *Provider {
-	p.vmdEnabled = true
+func (p *Provider) WithVMDEnabled(b bool) *Provider {
+	p.vmdEnabled = b
 	return p
+}
+
+// IsVMDEnabled queries whether VMD is enabled on storage provider.
+func (p *Provider) IsVMDEnabled() bool {
+	return p.vmdEnabled
+}
+
+func (p *Provider) BdevRoleMetaConfigured() bool {
+	bdevConfigs := p.GetBdevConfigs()
+	for _, bc := range bdevConfigs {
+		bits := bc.Bdev.DeviceRoles.OptionBits
+		if (bits & BdevRoleMeta) != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // QueryBdevFirmware queries NVMe SSD firmware.
@@ -564,7 +665,7 @@ func (p *Provider) UpdateBdevFirmware(req NVMeFirmwareUpdateRequest) (*NVMeFirmw
 }
 
 // NewProvider returns an initialized storage provider.
-func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
+func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider, meta MetadataProvider) *Provider {
 	return &Provider{
 		log:           log,
 		engineIndex:   idx,
@@ -572,5 +673,6 @@ func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemP
 		Sys:           sys,
 		scm:           scm,
 		bdev:          bdev,
+		metadata:      meta,
 	}
 }

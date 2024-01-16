@@ -13,7 +13,7 @@ def scons():
         return
 
     denv = env.Clone()
-    prereqs.require(denv, 'pmdk')
+    denv.require('pmdk')
 
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     denv.d_static_library('vea', FILES, LIBS=['daos_common_pmem'])

@@ -20,6 +20,17 @@
 
 #include <stdint.h>
 #include <gurt/types.h>
+
+/**
+ * Protocol info used to query list of protocols and devices.
+*/
+struct crt_protocol_info {
+	struct crt_protocol_info *next;          /**< Pointer to the next info */
+	char                     *class_name;    /**< Name of the Mercury class */
+	char                     *protocol_name; /**< Name of this protocol */
+	char                     *device_name;   /**< Name of associated device */
+};
+
 /**
  * Initialization options passed during crt_init() call.
  *
@@ -89,35 +100,6 @@ typedef struct crt_init_options {
 	/** If set, used as the authentication key instead of D_PROVIDER_AUTH_KEY env */
 	char		*cio_auth_key;
 } crt_init_options_t;
-
-/**
- * Enumeration specifying providers supported by the library
- */
-typedef enum {
-	CRT_PROV_SM		= 0,
-	CRT_PROV_OFI_SOCKETS	= 1,
-	CRT_PROV_OFI_VERBS_RXM	= 2,
-	CRT_PROV_OFI_GNI	= 3,
-	CRT_PROV_OFI_PSM2	= 4,
-	CRT_PROV_OFI_TCP_RXM	= 5,
-	CRT_PROV_OFI_CXI	= 6,
-	CRT_PROV_OFI_LAST	= CRT_PROV_OFI_CXI,
-	CRT_PROV_UCX_RC		= 7,
-	CRT_PROV_UCX_UD		= 8,
-	CRT_PROV_UCX_RC_UD	= 9,
-	CRT_PROV_UCX_RC_O	= 10,
-	CRT_PROV_UCX_UD_O	= 11,
-	CRT_PROV_UCX_RC_UD_O	= 12,
-	CRT_PROV_UCX_RC_X	= 13,
-	CRT_PROV_UCX_UD_X	= 14,
-	CRT_PROV_UCX_RC_UD_X	= 15,
-	CRT_PROV_UCX_DC_X	= 16,
-	CRT_PROV_UCX_TCP	= 17,
-	CRT_PROV_UCX_LAST	= CRT_PROV_UCX_TCP,
-	/* Note: This entry should be the last valid one in enum */
-	CRT_PROV_COUNT,
-	CRT_PROV_UNKNOWN = -1,
-} crt_provider_t;
 
 
 typedef int		crt_status_t;
@@ -457,6 +439,17 @@ typedef enum {
 	/** Total count of supported operations */
 	CRT_GROUP_MOD_OP_COUNT,
 } crt_group_mod_op_t;
+
+/**
+ * Quotas supported by CaRT.
+ */
+typedef enum {
+	/** Limit of number of inflight rpcs */
+	CRT_QUOTA_RPCS,
+
+	/** Total count of supported quotas */
+	CRT_QUOTA_COUNT,
+} crt_quota_type_t;
 
 /** @}
  */

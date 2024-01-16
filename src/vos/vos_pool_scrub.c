@@ -283,7 +283,7 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 		}
 	} else if (sc_mode(ctx) == DAOS_SCRUB_MODE_LAZY) {
 		sc_sleep(ctx, 0);
-		while (!ctx->sc_is_idle_fn()) {
+		while (!sc_is_idle(ctx) && sc_mode(ctx) == DAOS_SCRUB_MODE_LAZY) {
 			sc_m_track_busy(ctx);
 			/* Don't actually know how long it will be but wait for 1 second before
 			 * trying again
@@ -292,7 +292,10 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 		}
 		sc_m_track_idle(ctx);
 	} else {
-		D_ASSERTF(false, "Unknown Scrub Mode\n");
+		D_ERROR("Unknown Scrub Mode: %d, Pool: " DF_UUID "\n", sc_mode(ctx),
+			DP_UUID(ctx->sc_pool->sp_uuid));
+		/* sleep for 5 minutes to give pool property chance to resolve */
+		sc_sleep(ctx, 1000 * 60 * 5);
 	}
 }
 
@@ -302,19 +305,6 @@ sc_verify_finish(struct scrub_ctx *ctx)
 	sc_csum_calc_inc(ctx);
 	sc_m_pool_csum_inc(ctx);
 	sc_wait_until_should_continue(ctx);
-}
-
-static void
-sc_raise_ras(struct scrub_ctx *ctx)
-{
-	if (ds_notify_ras_event != NULL) {
-		ds_notify_ras_event(RAS_POOL_CORRUPTION_DETECTED,
-				    "Data corruption detected",
-				    RAS_TYPE_INFO,
-				    RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
-				    &ctx->sc_pool_uuid, sc_cont_uuid(ctx),
-				    NULL, NULL, NULL);
-	}
 }
 
 static int
@@ -368,12 +358,14 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 	if (rc > 0) /** value no longer exists */
 		return 0;
 
-	sc_raise_ras(ctx);
+	ras_notify_event(RAS_POOL_CORRUPTION_DETECTED, "Data corruption detected",
+			 RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
+			 &ctx->sc_pool_uuid, sc_cont_uuid(ctx), NULL, NULL, NULL);
 	sc_m_pool_corr_inc(ctx);
 	rc = sc_mark_corrupt(ctx);
 
 	if (sc_is_nvme(ctx))
-		bio_log_csum_err(ctx->sc_dmi->dmi_nvme_ctxt);
+		bio_log_data_csum_err(ctx->sc_dmi->dmi_nvme_ctxt);
 	if (rc != 0) {
 		/* Log error but don't let it stop the scrubbing process */
 		D_ERROR("Error trying to mark corrupt: "DF_RC"\n", DP_RC(rc));
@@ -384,9 +376,8 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 		ctx->sc_dmi->dmi_tgt_id,
 		ctx->sc_pool_tgt_corrupted_detected);
 	if (sc_should_evict(ctx)) {
-		D_ERROR("Corruption threshold reached. %d >= %d",
-			ctx->sc_pool_tgt_corrupted_detected,
-			sc_thresh(ctx));
+		D_ERROR("Corruption threshold reached. %d >= %d\n",
+			ctx->sc_pool_tgt_corrupted_detected, sc_thresh(ctx));
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs, 0);
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs_last, 0);
 		rc = sc_pool_drain(ctx);
@@ -508,6 +499,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	daos_iod_t		*iod = &ctx->sc_iod;
 	uint64_t		 data_len;
 	struct bio_io_context	*bio_ctx;
+	struct umem_instance	*umem;
 	struct vos_iterator	*iter;
 	struct vos_obj_iter	*oiter;
 	int			 rc;
@@ -532,8 +524,9 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	/* Fetch data */
 	iter = vos_hdl2iter(ih);
 	oiter = vos_iter2oiter(iter);
-	bio_ctx = oiter->it_obj->obj_cont->vc_pool->vp_io_ctxt;
-	rc = bio_read(bio_ctx, biov->bi_addr, &data);
+	bio_ctx = vos_data_ioctxt(oiter->it_obj->obj_cont->vc_pool);
+	umem = &oiter->it_obj->obj_cont->vc_pool->vp_umm;
+	rc = vos_media_read(bio_ctx, umem, biov->bi_addr, &data);
 
 	if (BIO_ADDR_IS_CORRUPTED(&biov->bi_addr)) {
 		/* Already know this is corrupt so just return */

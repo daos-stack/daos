@@ -93,16 +93,18 @@ read_snap_list(struct rdb_tx *tx, struct cont *cont, daos_epoch_t **buf, int *co
 }
 
 int
-ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			struct cont *cont, struct container_hdl *hdl,
-			crt_rpc_t *rpc)
+ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+			struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
 {
 	struct cont_epoch_op_in	*in = crt_req_get(rpc);
-	daos_epoch_t		 epoch = in->cei_epoch;
+	daos_epoch_t             epoch;
+	uint64_t                 opts;
 	int			 rc = 0;
 
+	cont_epoch_op_in_get_data(rpc, CONT_EPOCH_AGGREGATE, cont_proto_ver, &epoch, &opts);
+
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p epoch=" DF_U64 "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, in->cei_epoch);
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, epoch);
 
 	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -115,7 +117,7 @@ ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	if (epoch >= DAOS_EPOCH_MAX) {
 		rc = -DER_INVAL;
 		goto out;
-	} else if (in->cei_epoch == 0) {
+	} else if (epoch == 0) {
 		epoch = d_hlc_get();
 	}
 
@@ -285,13 +287,14 @@ out:
 }
 
 int
-ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		    struct cont *cont, struct container_hdl *hdl,
-		    crt_rpc_t *rpc)
+ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+		    struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver,
+		    struct ds_pool_svc_op_val *op_val)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
 	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
 	daos_epoch_t			snap_eph;
+	uint64_t                        opts;
 	int				rc;
 
 	D_DEBUG(DB_MD, DF_CONT": processing rpc %p\n",
@@ -305,10 +308,13 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	rc = snap_create_bcast(tx, cont, in->cei_op.ci_hdl, in->cei_opts,
-			       rpc->cr_ctx, &snap_eph);
-	if (rc == 0)
+	cont_epoch_op_in_get_data(rpc, CONT_SNAP_CREATE, cont_proto_ver, &snap_eph, &opts);
+
+	rc = snap_create_bcast(tx, cont, in->cei_op.ci_hdl, opts, rpc->cr_ctx, &snap_eph);
+	if (rc == 0) {
 		out->ceo_epoch = snap_eph;
+		*(daos_epoch_t *)op_val->ov_resvd = snap_eph;
+	}
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
@@ -316,10 +322,12 @@ out:
 }
 
 int
-ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+			struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
+	uint64_t                        epoch;
+	uint64_t                        opts;
 	int				rc;
 	d_iov_t				key;
 	d_iov_t				value;
@@ -335,17 +343,18 @@ ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	d_iov_set(&key, &in->cei_epoch, sizeof(daos_epoch_t));
+	cont_epoch_op_in_get_data(rpc, CONT_SNAP_OIT_CREATE, cont_proto_ver, &epoch, &opts);
+
+	d_iov_set(&key, &epoch, sizeof(daos_epoch_t));
 	d_iov_set(&value, NULL, 0);
 	rc = rdb_tx_lookup(tx, &cont->c_snaps, &key, &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to lookup snapshot [%lu]: "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->cei_epoch, DP_RC(rc));
+		D_ERROR(DF_CONT ": failed to lookup snapshot [%lu]: " DF_RC "\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch, DP_RC(rc));
 		goto out;
 	}
 
-	rc = snap_oit_create(tx, cont, in->cei_op.ci_hdl, DAOS_SNAP_OPT_OIT,
-			     rpc->cr_ctx, &in->cei_epoch);
+	rc = snap_oit_create(tx, cont, in->cei_op.ci_hdl, DAOS_SNAP_OPT_OIT, rpc->cr_ctx, &epoch);
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
@@ -353,10 +362,12 @@ out:
 }
 
 int
-ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			 struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+			 struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
+	uint64_t                        epoch;
+	uint64_t                        opts;
 	int				rc;
 	d_iov_t				key;
 	d_iov_t				value;
@@ -372,28 +383,29 @@ ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	d_iov_set(&key, &in->cei_epoch, sizeof(daos_epoch_t));
+	cont_epoch_op_in_get_data(rpc, CONT_SNAP_OIT_DESTROY, cont_proto_ver, &epoch, &opts);
+
+	d_iov_set(&key, &epoch, sizeof(daos_epoch_t));
 	d_iov_set(&value, NULL, 0);
 	rc = rdb_tx_lookup(tx, &cont->c_snaps, &key, &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to lookup snapshot [%lu]: "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->cei_epoch, DP_RC(rc));
+		D_ERROR(DF_CONT ": failed to lookup snapshot [%lu]: " DF_RC "\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch, DP_RC(rc));
 		goto out;
 	}
 
 	d_iov_set(&value, NULL, 0);
 	rc = rdb_tx_lookup(tx, &cont->c_oit_oids, &key, &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to lookup oit oid for snapshot [%lu]: "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->cei_epoch, DP_RC(rc));
+		D_ERROR(DF_CONT ": failed to lookup oit oid for snapshot [%lu]: " DF_RC "\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch, DP_RC(rc));
 		goto out;
 	}
 
 	rc = rdb_tx_delete(tx, &cont->c_oit_oids, &key);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to delete oit oid for snapshot [%lu]: %d\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-			in->cei_epoch, rc);
+		D_ERROR(DF_CONT ": failed to delete oit oid for snapshot [%lu]: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch, rc);
 		goto out;
 	}
 
@@ -404,18 +416,21 @@ out:
 }
 
 int
-ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		    struct cont *cont, struct container_hdl *hdl,
-		    crt_rpc_t *rpc)
+ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+		     struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
 {
 	struct cont_epoch_op_in		*in = crt_req_get(rpc);
+	uint64_t                         epoch;
+	uint64_t                         opts;
 	d_iov_t				 key;
 	d_iov_t				 value;
 	uint32_t			 nsnapshots;
 	int				 rc;
 
+	cont_epoch_op_in_get_data(rpc, CONT_SNAP_DESTROY, cont_proto_ver, &epoch, &opts);
+
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p epoch=" DF_U64 "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, in->cei_epoch);
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, epoch);
 
 	/* Verify the handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -426,35 +441,33 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 	/* Lookup snapshot, so that nsnapshots-- does not occur if snapshot does not exist */
-	d_iov_set(&key, &in->cei_epoch, sizeof(daos_epoch_t));
+	d_iov_set(&key, &epoch, sizeof(daos_epoch_t));
 	d_iov_set(&value, NULL, 0);
 	rc = rdb_tx_lookup(tx, &cont->c_snaps, &key, &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to lookup snapshot [%lu]: "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->cei_epoch, DP_RC(rc));
+		D_ERROR(DF_CONT ": failed to lookup snapshot [%lu]: " DF_RC "\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch, DP_RC(rc));
 		goto out;
 	}
 
 	rc = rdb_tx_delete(tx, &cont->c_snaps, &key);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to delete snapshot [%lu]: %d\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-			in->cei_epoch, rc);
+		D_ERROR(DF_CONT ": failed to delete snapshot [%lu]: %d\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch, rc);
 		goto out;
 	}
 
 	d_iov_set(&value, NULL, 0);
 	rc = rdb_tx_lookup(tx, &cont->c_oit_oids, &key, &value);
 	if (rc != 0 && rc != -DER_NONEXIST) {
-		D_ERROR(DF_CONT": failed to lookup oit oid for snapshot [%lu]: "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->cei_epoch, DP_RC(rc));
+		D_ERROR(DF_CONT ": failed to lookup oit oid for snapshot [%lu]: " DF_RC "\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch, DP_RC(rc));
 		goto out;
 	} else if (rc == 0) {
 		rc = rdb_tx_delete(tx, &cont->c_oit_oids, &key);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to delete oit oid for snapshot [%lu]: %d\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
-				in->cei_epoch, rc);
+			D_ERROR(DF_CONT ": failed to delete oit oid for snapshot [%lu]: %d\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch, rc);
 			goto out;
 		}
 	}
@@ -475,9 +488,8 @@ ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	D_DEBUG(DB_MD, DF_CONT": deleted snapshot [%lu]\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid),
-		in->cei_epoch);
+	D_DEBUG(DB_MD, DF_CONT ": deleted snapshot [%lu]\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), epoch);
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));
@@ -485,17 +497,20 @@ out:
 }
 
 int
-ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-			 struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+			 struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
 {
+	daos_epoch_t                      epoch;
 	d_iov_t				  key;
 	d_iov_t				  value;
 	int				  rc;
 	struct cont_snap_oit_oid_get_in	 *in = crt_req_get(rpc);
 	struct cont_snap_oit_oid_get_out *out = crt_reply_get(rpc);
 
+	cont_snap_oit_oid_get_in_get_data(rpc, CONT_SNAP_OIT_OID_GET, cont_proto_ver, &epoch);
+
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p epoch=" DF_U64 "\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ogi_op.ci_uuid), rpc, in->ogi_epoch);
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ogi_op.ci_uuid), rpc, epoch);
 
 	/* Verify the handle has read access */
 	if (!ds_sec_cont_can_read_data(hdl->ch_sec_capas)) {
@@ -505,12 +520,12 @@ ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	d_iov_set(&key, &in->ogi_epoch, sizeof(daos_epoch_t));
+	d_iov_set(&key, &epoch, sizeof(daos_epoch_t));
 	d_iov_set(&value, &out->ogo_oid, sizeof(out->ogo_oid));
 	rc = rdb_tx_lookup(tx, &cont->c_oit_oids, &key, &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to lookup snapshot [%lu]: "DF_RC"\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), in->ogi_epoch, DP_RC(rc));
+		D_ERROR(DF_CONT ": failed to lookup snapshot [%lu]: " DF_RC "\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), epoch, DP_RC(rc));
 		goto out;
 	}
 out:
@@ -622,11 +637,12 @@ out:
 }
 
 int
-ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-		  struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc)
+ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+		  struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
 {
 	struct cont_snap_list_in	*in		= crt_req_get(rpc);
 	struct cont_snap_list_out	*out		= crt_reply_get(rpc);
+	crt_bulk_t                       bulk;
 	int				 snap_count;
 	int				 rc;
 
@@ -642,7 +658,9 @@ ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	rc = xfer_snap_list(tx, pool_hdl, cont, hdl, rpc, in->sli_bulk, &snap_count);
+	cont_snap_list_in_get_data(rpc, CONT_SNAP_LIST, cont_proto_ver, &bulk);
+
+	rc = xfer_snap_list(tx, pool_hdl, cont, hdl, rpc, bulk, &snap_count);
 	if (rc)
 		goto out;
 	out->slo_count = snap_count;

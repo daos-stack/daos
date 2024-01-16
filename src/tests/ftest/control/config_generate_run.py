@@ -5,7 +5,6 @@
 '''
 
 import yaml
-
 from apricot import TestWithServers
 from server_utils import ServerFailed
 
@@ -44,11 +43,18 @@ class ConfigGenerateRun(TestWithServers):
         net_provider = self.params.get("net_provider", "/run/config_generate_params/*/")
         use_tmpfs_scm = self.params.get("use_tmpfs_scm", "/run/config_generate_params/*/")
 
+        # use_tmpfs_scm specifies that a MD-on-SSD conf should be generated and control metadata
+        # path needs to be set in that case.
+        ext_md_path = ""
+        if use_tmpfs_scm:
+            ext_md_path = self.test_dir
+
         # Call dmg config generate. AP is always the first server host.
         server_host = self.hostlist_servers[0]
         result = self.get_dmg_command().config_generate(
             access_points=server_host, num_engines=num_engines, scm_only=scm_only,
-            net_class=net_class, net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm)
+            net_class=net_class, net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
+            control_metadata_path=ext_md_path)
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)
@@ -56,7 +62,7 @@ class ConfigGenerateRun(TestWithServers):
             self.fail(f"Error loading dmg generated config! {error}")
 
         # Stop and restart daos_server. self.start_server_managers() has the
-        # server startup check built into it, so if there's something wrong,
+        # server start-up check built into it, so if there's something wrong,
         # it'll throw an error.
         self.log.info("Stopping servers")
         self.stop_servers()

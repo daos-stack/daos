@@ -21,9 +21,10 @@
 """Defines common components used by HPDD projects"""
 
 import platform
+
 import distro
-from SCons.Script import GetOption
 from prereq_tools import GitRepoRetriever
+from SCons.Script import GetOption
 
 # Check if this is an ARM platform
 PROCESSOR = platform.machine()
@@ -58,7 +59,7 @@ class InstalledComps():
             self.installed.append(name)
             return True
 
-        if not GetOption('help'):
+        if not GetOption('help') and not GetOption('silent'):
             print(f'Using build version of {name}')
         self.not_installed.append(name)
         return False
@@ -90,12 +91,14 @@ def check(reqs, name, built_str, installed_str=""):
 
 def ofi_config(config):
     """Check ofi version"""
-    print('Checking for libfabric > 1.11...', end=' ')
+    if not GetOption('silent'):
+        print('Checking for libfabric > 1.11...', end=' ')
     code = """#include <rdma/fabric.h>
 _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
                "libfabric must be >= 1.11");"""
     rc = config.TryCompile(code, ".c")
-    print('yes' if rc else 'no')
+    if not GetOption('silent'):
+        print('yes' if rc else 'no')
     return rc
 
 
@@ -108,43 +111,20 @@ def define_mercury(reqs):
     else:
         reqs.define('rt', libs=['rt'])
 
-    reqs.define('psm2',
-                retriever=GitRepoRetriever('https://github.com/intel/opa-psm2.git'),
-                # psm2 hard-codes installing into /usr/...
-                commands=[['sed',
-                           '-i',
-                           '-e',
-                           's/\\(.{DESTDIR}\\/\\)usr\\//\\1/',
-                           '-e',
-                           's/\\(INSTALL_LIB_TARG=\\/usr\\/lib\\)64/\\1/',
-                           '-e',
-                           's/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/',
-                           'Makefile',
-                           'compat/Makefile'],
-                          ['make', 'LIBDIR=/lib64'],
-                          ['make', 'DESTDIR=$PSM2_PREFIX', 'LIBDIR=/lib64', 'install']],
-                headers=['psm2.h'],
-                libs=['psm2'])
-
+    # pylint: disable-next=wrong-spelling-in-comment,fixme
+    # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
                  '--disable-efa',
+                 '--disable-psm2',
                  '--disable-psm3',
                  '--disable-opx',
                  '--without-gdrcopy']
+
     if reqs.target_type == 'debug':
         ofi_build.append('--enable-debug')
     else:
         ofi_build.append('--disable-debug')
-
-    ofi_build.extend(include(reqs,
-                             'psm2',
-                             check(reqs,
-                                   'psm2',
-                                   ['--enable-psm2=$PSM2_PREFIX',
-                                    'LDFLAGS=-Wl,--enable-new-dtags -Wl,-rpath=$PSM2_PREFIX/lib64'],
-                                   ['--enable-psm2']),
-                             ['--disable-psm2']))
 
     reqs.define('ofi',
                 retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
@@ -153,9 +133,9 @@ def define_mercury(reqs):
                           ['make'],
                           ['make', 'install']],
                 libs=['fabric'],
-                requires=include(reqs, 'psm2', ['psm2'], []),
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
+                pkgconfig='libfabric',
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'],
                 build_env={'CFLAGS': "-fstack-usage"})
@@ -183,6 +163,7 @@ def define_mercury(reqs):
                           ['make', 'install'],
                           ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
                           ['cp', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
+                build_env={'CFLAGS': '-Wno-error'},
                 package='ucx-devel' if inst(reqs, 'ucx') else None)
 
     mercury_build = ['cmake',
@@ -206,12 +187,6 @@ def define_mercury(reqs):
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
-
-    mercury_build.extend(check(reqs,
-                               'ofi',
-                               ['-DOFI_INCLUDE_DIR:PATH=$OFI_PREFIX/include',
-                                '-DOFI_LIBRARY:FILEPATH=$OFI_PREFIX/lib/libfabric.so'],
-                               []))
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
@@ -252,6 +227,11 @@ def define_common(reqs):
 
     reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
 
+    if ARM_PLATFORM:
+        reqs.define('ipmctl', skip_arch=True)
+    else:
+        reqs.define('ipmctl', headers=['nvm_management.h'], package='libipmctl-devel')
+
 
 def define_ompi(reqs):
     """OMPI and related components"""
@@ -286,9 +266,9 @@ def define_components(reqs):
                 retriever=GitRepoRetriever('https://github.com/pmem/pmdk.git'),
                 commands=[['make',
                            'all',
-                           'BUILD_RPMEM=n',
                            'NDCTL_ENABLE=n',
-                           'NDCTL_DISABLE=y',
+                           'BUILD_EXAMPLES=n',
+                           'BUILD_BENCHMARKS=n',
                            'DOC=n',
                            'EXTRA_CFLAGS="-Wno-error"',
                            'install',
@@ -367,7 +347,7 @@ def define_components(reqs):
                           ['cp', 'build/examples/identify', '$SPDK_PREFIX/bin/spdk_nvme_identify'],
                           ['cp', 'build/examples/perf', '$SPDK_PREFIX/bin/spdk_nvme_perf']],
                 headers=['spdk/nvme.h'],
-                patch_rpath=['lib'])
+                patch_rpath=['lib', 'bin'])
 
     reqs.define('protobufc',
                 retriever=GitRepoRetriever('https://github.com/protobuf-c/protobuf-c.git'),
@@ -378,6 +358,16 @@ def define_components(reqs):
                 libs=['protobuf-c'],
                 headers=['protobuf-c/protobuf-c.h'],
                 package='protobuf-c-devel')
+
+    os_name = dist[0].split()[0]
+    if os_name == 'Ubuntu':
+        capstone_pkg = 'libcapstone-dev'
+    elif os_name == 'openSUSE':
+        capstone_pkg = 'libcapstone-devel'
+    else:
+        capstone_pkg = 'capstone-devel'
+    reqs.define('capstone', libs=['capstone'], headers=['capstone/capstone.h'],
+                package=capstone_pkg)
 
 
 __all__ = ['define_components']

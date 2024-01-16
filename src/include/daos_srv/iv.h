@@ -139,9 +139,9 @@ typedef bool (*ds_iv_key_cmp_t)(void *key1, void *key2);
 /**
  * Init class entry.
  *
- * \param iv_key [IN]	iv_key of the class to be init.
- * \param data [IN]	data to help allocate class entry.
- * \param entry [IN/OUT] class entry to be initialized.
+ * \param[in] iv_key	iv_key of the class to be init.
+ * \param[in] data	data to help allocate class entry.
+ * \param[in,out] entry	class entry to be initialized.
  *
  * \return		0 if succeeds, error code otherwise.
  */
@@ -164,9 +164,8 @@ typedef int (*ds_iv_ent_get_t)(struct ds_iv_entry *ent, void **priv);
  * \param ent [IN]	iv class entry to get.
  * \param priv [IN]	private ptr from crt IV callback.
  *
- * \return		0 if succeeds, error code otherwise.
  */
-typedef int (*ds_iv_ent_put_t)(struct ds_iv_entry *ent, void *priv);
+typedef void (*ds_iv_ent_put_t)(struct ds_iv_entry *ent, void *priv);
 
 /**
  * Destroy the data attached to the entry.
@@ -309,8 +308,6 @@ void ds_iv_ns_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_leader_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_start(struct ds_iv_ns *ns);
 void ds_iv_ns_put(struct ds_iv_ns *ns);
-void ds_iv_ns_get(struct ds_iv_ns *ns);
-void ds_iv_ns_destroy(void *ns);
 
 unsigned int ds_iv_ns_id_get(void *ns);
 

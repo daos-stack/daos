@@ -14,8 +14,7 @@ def scons():
     # Testing internal interfaces ...
     denv.AppendUnique(CPPPATH=[Dir('../../').srcnode()])
 
-    rpc_test = denv.d_program('rpc_tests', sources, LIBS=libs)
-    env.Install('$PREFIX/bin/', rpc_test)
+    denv.d_test_program('rpc_tests', sources, LIBS=libs)
 
 
 if __name__ == "SCons.Script":

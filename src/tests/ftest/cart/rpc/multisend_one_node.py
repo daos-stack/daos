@@ -18,8 +18,9 @@ class CartMultisendOneNodeTest(CartTest):
         """Test multi-send
 
         :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
         :avocado: tags=cart,rpc,one_node,memcheck,multisend,bulk
-        :avocado: tags=test_cart_multisend
+        :avocado: tags=CartMultisendOneNodeTest,test_cart_multisend
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 

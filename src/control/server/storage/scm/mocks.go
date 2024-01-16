@@ -20,6 +20,10 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/mount"
 )
 
+const (
+	defaultMountOpts = "defaults"
+)
+
 const testXMLRegions = `<?xml version="1.0"?>
  <RegionList>
   <Region>

@@ -27,6 +27,7 @@ apt-get install \
     kmod \
     libaio-dev \
     libboost-dev \
+    libcapstone-dev \
     libcmocka-dev \
     libcunit1-dev \
     libfuse3-dev \

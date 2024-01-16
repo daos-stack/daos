@@ -1,9 +1,9 @@
 """Build DAOS Control Plane"""
 # pylint: disable=too-many-locals
 import os
-from os.path import join
-from os import urandom
 from binascii import b2a_hex
+from os import urandom
+from os.path import join
 
 
 def is_firmware_mgmt_build(benv):
@@ -18,6 +18,8 @@ def get_build_tags(benv):
         tags.append("firmware")
     if not is_release_build(benv):
         tags.append("pprof")
+    else:
+        tags.append("release")
     return f"-tags {','.join(tags)}"
 
 

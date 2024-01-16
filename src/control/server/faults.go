@@ -158,6 +158,14 @@ func FaultIncompatibleComponents(self, other *build.VersionedComponent) *fault.F
 	)
 }
 
+func FaultNoCompatibilityInsecure(self, other build.Version) *fault.Fault {
+	return serverFault(
+		code.ServerNoCompatibilityInsecure,
+		fmt.Sprintf("versions %s and %s are not compatible in insecure mode", self, other),
+		"enable certificates or use identical component versions",
+	)
+}
+
 func serverFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "server",

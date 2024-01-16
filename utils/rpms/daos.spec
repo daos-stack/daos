@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0-6%{?dist}
+%global mercury_version 2.3.1-1%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.106
-Release:       2%{?relval}%{?dist}
+Version:       2.5.100
+Release:       13%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -31,10 +31,11 @@ BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
-BuildRequires: openmpi-devel
+%global openmpi openmpi
 %else
-BuildRequires: openmpi3-devel
+%global openmpi openmpi3
 %endif
+BuildRequires: %{openmpi}-devel
 BuildRequires: hwloc-devel
 %if ("%{?compiler_args}" == "COMPILER=covc")
 BuildRequires: bullseye
@@ -48,7 +49,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 1.12.1~rc1
+BuildRequires: libpmemobj-devel >= 2.0.0
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -58,9 +59,11 @@ BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
+BuildRequires: libcapstone-devel
 %else
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
+BuildRequires: capstone-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
@@ -70,7 +73,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
+BuildRequires: daos-raft-devel = 0.10.1-2.411.gefa15f4%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -83,7 +86,11 @@ BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
+%if (0%{?rhel} >= 9)
+BuildRequires: python-devel
+%else
 BuildRequires: python36-devel
+%endif
 BuildRequires: python3-distro
 BuildRequires: Lmod
 %else
@@ -138,15 +145,16 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
+Requires: libpmemobj1 >= 2.0.0-1.suse1500
+Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
+Requires: libpmemobj >= 2.0.0-1%{?dist}
 %endif
+Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= %{libfabric_version}
 Requires: numactl
 %{?systemd_requires}
 
@@ -165,22 +173,11 @@ Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
-%if (0%{?rhel} >= 8)
-Requires: fuse3 >= 3
-%else
-Requires: fuse3 >= 3.4.2
-%endif
 %if (0%{?suse_version} >= 1500)
+Requires: libfabric1 >= %{libfabric_version}
 Requires: libfuse3-3 >= 3.4.2
-%else
-# because our repo has a deprecated fuse-3.x RPM, make sure we don't
-# get it when fuse3 Requires: /etc/fuse.conf
-%if (0%{?rhel} >= 8)
-Requires: fuse3 >= 3
-%else
-Requires: fuse < 3, fuse3-libs >= 3.4.2
 %endif
-%endif
+Requires: /usr/bin/fusermount3
 %{?systemd_requires}
 
 %description client
@@ -198,6 +195,8 @@ This is the package is a metapackage to install all of the test packages
 Summary: The entire internal DAOS test suite
 Requires: %{name}-tests = %{version}-%{release}
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests-mpich = %{version}-%{release}
+Requires: %{name}-serialize%{?_isa} = %{version}-%{release}
 BuildArch: noarch
 
 %description tests-internal
@@ -217,10 +216,19 @@ Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
+Requires: ior
+Requires: go >= 1.18
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
+Requires: libcapstone-devel
 %else
 Requires: Lmod
+Requires: capstone-devel
+%endif
+%if (0%{?rhel} >= 8)
+Requires: fuse3-devel >= 3
+%else
+Requires: fuse3-devel >= 3.4.2
 %endif
 
 %description client-tests
@@ -229,9 +237,31 @@ This is the package needed to run the DAOS test suite (client tests)
 %package client-tests-openmpi
 Summary: The DAOS client test suite - tools which need openmpi
 Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+Requires: hdf5-%{openmpi}-tests
+Requires: hdf5-vol-daos-%{openmpi}-tests
+Requires: MACSio-%{openmpi}
+Requires: simul-%{openmpi}
 
 %description client-tests-openmpi
 This is the package needed to run the DAOS client test suite openmpi tools
+
+%package client-tests-mpich
+Summary: The DAOS client test suite - tools which need mpich
+BuildArch: noarch
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+Requires: mpifileutils-mpich
+Requires: testmpio
+Requires: mpich
+Requires: ior
+Requires: hdf5-mpich-tests
+Requires: hdf5-vol-daos-mpich-tests
+Requires: MACSio-mpich
+Requires: simul-mpich
+Requires: romio-tests
+Requires: python3-mpi4py-tests
+
+%description client-tests-mpich
+This is the package needed to run the DAOS client test suite mpich tools
 
 %package server-tests
 Summary: The DAOS server test suite (server tests)
@@ -334,10 +364,10 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,util/verify_perms}.py,%{_bindir}/daos_storage_estimator.py,%{_datarootdir}/daos/control/setup_spdk.sh}
+sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,verify_perms}.py,%{_bindir}/daos_storage_estimator.py,%{_datarootdir}/daos/control/setup_spdk.sh}
 
 # shouldn't have source files in a non-devel RPM
-rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,swim}.c,wrap_cmocka.h}
+rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -419,6 +449,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
 %{_libdir}/daos_srv/libplacement.so
+%{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
@@ -454,6 +485,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/libpil4dfs.so
 %dir %{python3_sitearch}/pydaos
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
@@ -477,7 +509,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{daoshome}/TESTING/ftest/avocado_tests.yaml
 %{_bindir}/hello_drpc
 %{_libdir}/libdaos_tests.so
-%{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
 %{_bindir}/drpc_engine_test
@@ -506,6 +537,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %doc README.md
 %{_libdir}/libdpar_mpi.so
 
+%files client-tests-mpich
+%doc README.md
+
 %files server-tests
 %doc README.md
 %{_bindir}/evt_ctl
@@ -514,9 +548,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/rdbt
 %{_bindir}/ring_pl_map
 %{_bindir}/smd_ut
-%{_bindir}/srv_checksum_tests
-%{_bindir}/pool_scrubbing_tests
-%{_bindir}/rpc_tests
+%{_bindir}/bio_ut
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
@@ -553,6 +585,77 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Dec 06 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-13
+- Update for EL 8.8 and Leap 15.5
+- Update raft to 0.10.1-2.411.gefa15f4
+
+* Fri Nov 17 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.5.100-12
+- Update to PMDK 2.0.0
+  * Remove libpmemblk from dependencies.
+  * Start using BUILD_EXAMPLES=n and BUILD_BENCHMARKS=n instead of patches.
+  * Stop using BUILD_RPMEM=n (removed) and NDCTL_DISABLE=y (invalid).
+  * Point https://github.com/pmem/pmdk as the main PMDK reference source.
+  NOTE: PMDK upgrade to 2.0.0 does not affect any API call used by DAOS.
+        libpmemobj (and libpmem) API stays unchanged.
+
+* Wed Nov 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.5.100-11
+- Bump mercury min version to 2.3.1
+
+* Fri Nov 03 2023 Phillip Henderson <phillip.henderson@intel.com> 2.5.100-10
+- Move verify_perms.py location
+
+* Wed Aug 23 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-9
+- Update fuse3 requirement to R: /usr/bin/fusermount3 by path
+  rather than by package name, for portability and future-proofing
+- Adding fuse3-devel as a requirement for daos-client-tests subpackage
+
+* Tue Aug 08 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-8
+- Build on EL9
+- Add a client-tests-mpich subpackage for mpich test dependencies.
+
+* Fri Jul 07 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-7
+- Fix golang daos-client-tests dependency to be go instead
+
+* Thu Jun 29 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.5.100-6
+- Install golang >= 1.18 as a daos-client-tests dependency
+
+* Thu Jun 22 2023 Li Wei <wei.g.li@intel.com> 2.5.100-5
+- Update raft to 0.10.1-1.408.g9524cdb
+
+* Wed Jun 14 2023 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 2.5.100-4
+- Add pipeline lib
+
+* Wed Jun 14 2023 Wang Shilong <shilong.wang@intel.com> 2.5.100-3
+- Remove lmdb-devel for MD on SSD
+
+* Wed Jun 07 2023 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-2
+- Removed unnecessary test files
+
+* Tue Jun 06 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.5.100-1
+- Switch version to 2.5.100 for 2.6 test builds
+
+* Mon Jun  5 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-7
+- Remove libfabric pinning and allow for 1.18 builds
+
+* Fri May 26 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.107-6
+- Add lmdb-devel and bio_ut for MD on SSD
+
+* Tue May 23 2023 Lei Huang <lei.huang@intel.com> 2.3.107-5
+- Add libcapstone-devel to deps of client-tests package
+
+* Tue May 16 2023 Lei Huang <lei.huang@intel.com> 2.3.107-4
+- Add libcapstone as a new prerequisite package
+- Add libpil4dfs.so in daos-client rpm
+
+* Mon May 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-3
+- Fix libfabric/libfabric1 dependency mismatch on SuSE
+
+* Wed May 10 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-2
+- Temporarily pin libfabric to < 1.18
+
+* Fri May 5 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.107-1
+- Bump version to 2.3.107
+
 * Fri Mar 17 2023 Tom Nabarro <tom.nabarro@intel.com> 2.3.106-2
 - Add numactl requires for server package
 

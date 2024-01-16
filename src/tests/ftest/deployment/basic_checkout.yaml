@@ -141,6 +141,8 @@ ior_dm:
 mdtest:
   client_processes:
     ppn: 16
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
   test_dir: "/"
   iteration: 1
   dfs_destroy: true

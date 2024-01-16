@@ -141,6 +141,13 @@ struct daos_obj_md {
 	 * use pl_map's default value PL_DEFAULT_DOMAIN (PO_COMP_TP_RANK).
 	 */
 	uint32_t		omd_fdom_lvl;
+	/* Performance domain affinity */
+	uint32_t		omd_pda;
+	/* Performance domain level - PO_COMP_TP_ROOT or PO_COMP_TP_GRP.
+	 * Now will enable the performance domain feature only when omd_pdom_lvl set as
+	 * PO_COMP_TP_GRP and with PO_COMP_TP_GRP layer in pool map.
+	 */
+	uint32_t		omd_pdom_lvl;
 };
 
 /** object shard metadata stored in each container shard */
@@ -199,6 +206,84 @@ struct daos_shard_tgt {
 	uint8_t			st_flags;	/* see daos_tgt_flags */
 };
 
+struct daos_coll_shard {
+	uint16_t		 dcs_nr;
+	uint16_t		 dcs_cap;
+	uint32_t		 dcs_inline;
+	/* The shards (ID) in the buffer locate on the same VOS target. */
+	uint32_t		*dcs_buf;
+
+	/*
+	 * Index (in layout) of the first shard corresponding to "dcs_buf[0]" on this target,
+	 * do not pack on-wire.
+	 */
+	uint32_t		 dcs_idx;
+};
+
+struct daos_coll_target {
+	uint32_t		 dct_rank;
+	/*
+	 * The size (in byte) of dct_bitmap. It (s << 3) may be smaller than dss_tgt_nr if only
+	 * some VOS targets are involved. It also maybe larger than dss_tgt_nr if dss_tgt_nr is
+	 * not 2 ^ n aligned.
+	 */
+	uint8_t			 dct_bitmap_sz;
+	/* The max shard in dct_shards, it may be smaller than the sparse array length. */
+	uint8_t			 dct_max_shard;
+	/*
+	 * How many valid object shards reside on the engine. If the real count exceeds the
+	 * max capacity of sizeof(uint8_t) can hold, just set as the max. That is no matter.
+	 */
+	uint8_t			 dct_tgt_nr;
+	/*
+	 * The capacity for the dct_tgt_ids array.
+	 * For non-modification case, it is always zero to avoid sending dct_tgt_ids on wire.
+	 */
+	uint8_t			 dct_tgt_cap;
+	/* Bitmap for the VOS targets (on the rank) that are involved in the operation. */
+	uint8_t			*dct_bitmap;
+	/* Sparse array for object shards' identifiers, sorted with VOS targets index. */
+	struct daos_coll_shard	*dct_shards;
+	/*
+	 * It stores the identifiers of shards on the engine, in spite of on which VOS target,
+	 * only for modification case.
+	 */
+	uint32_t		*dct_tgt_ids;
+};
+
+static inline void
+daos_coll_shard_cleanup(struct daos_coll_shard *shards, uint32_t count)
+{
+	struct daos_coll_shard	*shard;
+	int			 i;
+
+	if (shards != NULL) {
+		for (i = 0; i < count; i++) {
+			shard = &shards[i];
+			if (shard->dcs_buf != &shard->dcs_inline)
+				D_FREE(shard->dcs_buf);
+		}
+		D_FREE(shards);
+	}
+}
+
+static inline void
+daos_coll_target_cleanup(struct daos_coll_target *dcts, uint32_t count)
+{
+	struct daos_coll_target	*dct;
+	int			 i;
+
+	if (dcts != NULL) {
+		for (i = 0; i < count; i++) {
+			dct = &dcts[i];
+			daos_coll_shard_cleanup(dct->dct_shards, dct->dct_max_shard + 1);
+			D_FREE(dct->dct_bitmap);
+			D_FREE(dct->dct_tgt_ids);
+		}
+		D_FREE(dcts);
+	}
+}
+
 static inline bool
 daos_oid_is_null(daos_obj_id_t oid)
 {
@@ -240,8 +325,9 @@ int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
-int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
-			enum daos_obj_redun *ord, uint32_t *nr);
+int
+daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum daos_obj_redun *ord,
+		    uint32_t *nr, uint32_t rf_factor);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
 int daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
 			uint32_t args, daos_oclass_id_t *cid);
@@ -478,6 +564,7 @@ int dc_obj_query_class(tse_task_t *task);
 int dc_obj_list_class(tse_task_t *task);
 int dc_obj_open(tse_task_t *task);
 int dc_obj_close(tse_task_t *task);
+int dc_obj_close_direct(daos_handle_t oh);
 int dc_obj_punch_task(tse_task_t *task);
 int dc_obj_punch_dkeys_task(tse_task_t *task);
 int dc_obj_punch_akeys_task(tse_task_t *task);
@@ -496,8 +583,12 @@ int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
+int dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md);
 int dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
 int dc_obj_hdl2oid(daos_handle_t oh, daos_obj_id_t *oid);
+uint32_t dc_obj_hdl2redun_lvl(daos_handle_t oh);
+uint32_t dc_obj_hdl2pda(daos_handle_t oh);
+uint32_t dc_obj_hdl2pdom(daos_handle_t oh);
 
 int dc_tx_open(tse_task_t *task);
 int dc_tx_commit(tse_task_t *task);
@@ -516,6 +607,8 @@ dc_obj_anchor2shard(daos_anchor_t *anchor)
 {
 	return anchor->da_shard;
 }
+
+uint32_t dc_obj_hdl2layout_ver(daos_handle_t oh);
 
 /** Encode shard into enumeration anchor. */
 static inline void
@@ -547,6 +640,8 @@ enum daos_io_flags {
 	DIOF_EC_RECOV_FROM_PARITY = 0x200,
 	/* Force fetch/list to do degraded enumeration/fetch */
 	DIOF_FOR_FORCE_DEGRADE = 0x400,
+	/* reverse enumeration for recx */
+	DIOF_RECX_REVERSE = 0x800,
 };
 
 /**
@@ -767,16 +862,14 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 	}
 	for (i = 0; i < nr; i++) {
 		list = &lists[i];
-		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, "
-			"re_ep_valid %d, re_snapshot %d:\n",
-			i, list->re_nr, list->re_total, list->re_ep_valid,
-			list->re_snapshot);
+		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, re_ep_valid %d, re_snapshot %d:\n",
+			i, list->re_nr, list->re_total, list->re_ep_valid, list->re_snapshot);
 		for (j = 0; j < list->re_nr; j++) {
 			recx_ep = &list->re_items[j];
-			D_ERROR("[type %d, ["DF_X64","DF_X64"], "DF_X64"]  ", recx_ep->re_type,
-				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr, recx_ep->re_ep);
+			D_ERROR("[type %d, [" DF_X64 "," DF_X64 "], " DF_X64 "]\n",
+				recx_ep->re_type, recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
+				recx_ep->re_ep);
 		}
-		D_ERROR("\n");
 	}
 }
 

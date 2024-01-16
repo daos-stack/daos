@@ -28,6 +28,7 @@ typedef enum {
 	RB_OP_RECLAIM,
 	RB_OP_FAIL_RECLAIM,
 	RB_OP_UPGRADE,
+	RB_OP_NONE	= 0xffff,
 } daos_rebuild_opc_t;
 
 #define RB_OP_STR(rb_op) ((rb_op) == RB_OP_EXCLUDE ? "Rebuild" : \
@@ -37,6 +38,7 @@ typedef enum {
 			  (rb_op) == RB_OP_RECLAIM ? "Reclaim" : \
 			  (rb_op) == RB_OP_FAIL_RECLAIM ? "Reclaim fail" : \
 			  (rb_op) == RB_OP_UPGRADE ? "Upgrade" : \
+			  (rb_op) == RB_OP_NONE ? "None" : \
 			  "Unknown")
 
 int ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,

@@ -13,28 +13,31 @@ class ScrubberUtils(TelemetryUtils):
         """This method is used to check whether scrubber is started.
 
         Returns:
-            info (dict): Scrubber started output.
+            dict: Scrubber started output.
         """
-        TEST_METRICS = "engine_pool_scrubber_scrubber_started"
-        info = self.get_metrics(TEST_METRICS)
-        return info
+        return self.get_metrics("engine_pool_scrubber_scrubber_started")
 
     def get_scrub_corrupt_metrics(self):
         """This method is used to get scrubber corrupt metrics.
 
         Returns:
-            info (dict): scrubber corrupt metrics.
+            dict: scrubber corrupt metrics.
         """
-        CORRUPT_METRICS = "engine_pool_scrubber_corruption_total"
-        info = self.get_metrics(CORRUPT_METRICS)
-        return info
+        return self.get_metrics("engine_pool_scrubber_corruption_total")
 
     def get_csum_total_metrics(self):
         """This method is used to get scrubber csum total metrics.
 
         Returns:
-            info (dict): scrubber csum total metrics.
+            dict: scrubber csum total metrics.
         """
-        CSUM_METRICS = "engine_pool_scrubber_csums_total"
-        info = self.get_metrics(CSUM_METRICS)
-        return info
+        return self.get_metrics("engine_pool_scrubber_csums_total")
+
+    def get_scrubber_bytes_scrubbed_total(self):
+        """This method is used to get scrubber bytes scrubbed total
+        metrics information.
+
+        Returns:
+            dict: scrubber bytes scrubbed total.
+        """
+        return self.get_metrics("engine_pool_scrubber_bytes_scrubbed_total")

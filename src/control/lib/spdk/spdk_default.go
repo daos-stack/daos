@@ -86,7 +86,7 @@ func (ei *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	// Only print error and more severe to stderr.
 	C.spdk_log_set_print_level(C.SPDK_LOG_ERROR)
 
-	if err := opts.sanitizeAllowList(log); err != nil {
+	if err := opts.sanitizeAllowList(); err != nil {
 		return errors.Wrap(err, "sanitizing PCI include list")
 	}
 

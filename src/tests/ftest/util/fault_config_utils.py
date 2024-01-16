@@ -5,8 +5,9 @@
 """
 
 import os
+
 import yaml
-from general_utils import distribute_files, run_command, DaosTestError
+from general_utils import DaosTestError, distribute_files, run_command
 from run_utils import get_clush_command
 
 # a lookup table of predefined faults
@@ -283,7 +284,7 @@ class FaultInjection():
         self._fault_list = fault_list
         self._test_dir = test_dir
         if self._fault_list:
-            # not using workdir because the huge path was messing up
+            # not using "workdir" because the huge path was messing up
             # orterun or something, could re-evaluate this later
             self.write_fault_file(None)
 
@@ -303,6 +304,9 @@ class FaultInjection():
         Returns:
            error_list (list) : Errors during removing fault files (if any).
         """
+        if not self.fault_file:
+            return []
+
         # Remove the fault injection files on the hosts.
         error_list = []
         command = "rm -f {}".format(self.fault_file)

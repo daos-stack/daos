@@ -5,9 +5,9 @@
 '''
 import ctypes
 
-from telemetry_test_base import TestWithTelemetry
-from pydaos.raw import DaosContainer, IORequest, DaosObjClass
 from general_utils import create_string_buffer
+from pydaos.raw import DaosContainer, DaosObjClass, IORequest
+from telemetry_test_base import TestWithTelemetry
 
 
 class DkeyAkeyEnumPunch(TestWithTelemetry):

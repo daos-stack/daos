@@ -16,9 +16,10 @@ import (
 type (
 	MockBackendConfig struct {
 		VMDEnabled   bool // VMD is disabled by default
-		ResetErr     error
 		PrepareRes   *storage.BdevPrepareResponse
 		PrepareErr   error
+		ResetRes     *storage.BdevPrepareResponse
+		ResetErr     error
 		ScanRes      *storage.BdevScanResponse
 		ScanErr      error
 		FormatRes    *storage.BdevFormatResponse
@@ -93,16 +94,19 @@ func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 	}
 }
 
-func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) error {
+func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	mb.Lock()
 	mb.ResetCalls = append(mb.ResetCalls, req)
 	mb.Unlock()
 
-	if mb.cfg.ResetErr != nil {
-		return mb.cfg.ResetErr
+	switch {
+	case mb.cfg.ResetErr != nil:
+		return nil, mb.cfg.ResetErr
+	case mb.cfg.ResetRes == nil:
+		return &storage.BdevPrepareResponse{}, nil
+	default:
+		return mb.cfg.ResetRes, nil
 	}
-
-	return nil
 }
 
 func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {

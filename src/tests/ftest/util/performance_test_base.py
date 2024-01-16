@@ -6,15 +6,14 @@
 import os
 import time
 
+import oclass_utils
 from avocado.core.exceptions import TestFail
-
+from exception_utils import CommandFailure
+from general_utils import get_subprocess_stdout
 from ior_test_base import IorTestBase
+from ior_utils import IorMetrics
 from mdtest_test_base import MdtestBase
 from mdtest_utils import MdtestMetrics
-from general_utils import get_subprocess_stdout
-from ior_utils import IorMetrics
-import oclass_utils
-from exception_utils import CommandFailure
 
 
 class PerformanceTestBase(IorTestBase, MdtestBase):
@@ -471,6 +470,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         params = {}
         if self.mdtest_cmd.dfs_oclass.value:
             params['oclass'] = self.mdtest_cmd.dfs_oclass.value
+        if self.mdtest_cmd.dfs_dir_oclass.value:
+            params['dir_oclass'] = self.mdtest_cmd.dfs_dir_oclass.value
         if self.mdtest_cmd.dfs_chunk.value:
             params['chunk_size'] = self.mdtest_cmd.dfs_chunk.value
         self.container = self.get_container(self.pool, create=False, **params)

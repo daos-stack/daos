@@ -15,7 +15,7 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 4
+  system_ram_reserved: 1
   transport_config:
     allow_insecure: true
 agent_config:
@@ -32,8 +32,13 @@ agent_config_val: !mux
   name_special_chars:
     config_val:
       - "name"
-      - "! @#$%^&*()_+{}|:<>?-=[];',./"
+      - "! @#$%^&*()_+{}"
       - "PASS"
+  name_exceeds_max_length:
+    config_val:
+      - "name"
+      - "! @#$%^&*()_+{}|:<>?-=[];',./"
+      - "FAIL"
   name_alphanumeric:
     config_val:
       - "name"

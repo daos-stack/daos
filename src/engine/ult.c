@@ -97,6 +97,9 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 	int				xs_nr;
 	int				rc;
 	int				tid;
+	int				tgt_id = dss_get_module_info()->dmi_tgt_id;
+	uint32_t			bm_len;
+	bool				self = false;
 
 	if (ops == NULL || args == NULL || ops->co_func == NULL) {
 		D_DEBUG(DB_MD, "mandatory args missing dss_collective_reduce");
@@ -115,6 +118,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		return -DER_CANCELED;
 	}
 
+	bm_len = args->ca_tgt_bitmap_sz << 3;
 	xs_nr = dss_tgt_nr;
 	stream_args = &args->ca_stream_args;
 	D_ALLOC_ARRAY(stream_args->csa_streams, xs_nr);
@@ -156,17 +160,16 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		stream			= &stream_args->csa_streams[tid];
 		stream->st_coll_args	= &carg;
 
-		if (args->ca_exclude_tgts_cnt) {
-			int i;
-
-			for (i = 0; i < args->ca_exclude_tgts_cnt; i++)
-				if (args->ca_exclude_tgts[i] == tid)
-					break;
-
-			if (i < args->ca_exclude_tgts_cnt) {
+		if (args->ca_tgt_bitmap != NULL) {
+			if (tid >= bm_len || isclr(args->ca_tgt_bitmap, tid)) {
 				D_DEBUG(DB_TRACE, "Skip tgt %d\n", tid);
 				rc = ABT_future_set(future, (void *)stream);
 				D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
+				continue;
+			}
+
+			if (tgt_id == tid && flags & DSS_USE_CURRENT_ULT) {
+				self = true;
 				continue;
 			}
 		}
@@ -207,6 +210,12 @@ next:
 			rc = ABT_future_set(future, (void *)stream);
 			D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 		}
+	}
+
+	if (self) {
+		stream = &stream_args->csa_streams[tgt_id];
+		stream->st_coll_args = &carg;
+		collective_func(stream);
 	}
 
 	ABT_future_wait(future);
@@ -322,6 +331,45 @@ dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags)
 	return dss_collective_internal(func, arg, true, flags);
 }
 
+int
+dss_build_coll_bitmap(int *exclude_tgts, uint32_t exclude_cnt, uint8_t **p_bitmap,
+		      uint32_t *bitmap_sz)
+{
+	uint8_t		*bitmap = NULL;
+	uint32_t	 size = ((dss_tgt_nr - 1) >> 3) + 1;
+	uint32_t	 bits = size << 3;
+	int		 rc = 0;
+	int		 i;
+
+	D_ALLOC(bitmap, size);
+	if (bitmap == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	for (i = 0; i < size; i++)
+		bitmap[i] = 0xff;
+
+	for (i = dss_tgt_nr; i < bits; i++)
+		clrbit(bitmap, i);
+
+	if (exclude_tgts == NULL)
+		goto out;
+
+	for (i = 0; i < exclude_cnt; i++) {
+		D_ASSERT(exclude_tgts[i] < dss_tgt_nr);
+		clrbit(bitmap, exclude_tgts[i]);
+	}
+
+out:
+	if (rc == 0) {
+		*p_bitmap = bitmap;
+		*bitmap_sz = size;
+	} else {
+		D_ERROR("Failed to build bitmap for collective task: "DF_RC"\n", DP_RC(rc));
+	}
+
+	return rc;
+}
+
 /* ============== ULT create functions =================================== */
 
 static inline int
@@ -329,7 +377,8 @@ sched_ult2xs(int xs_type, int tgt_id)
 {
 	uint32_t	xs_id;
 
-	D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
+	if (xs_type == DSS_XS_VOS || xs_type == DSS_XS_OFFLOAD || xs_type == DSS_XS_IOFW)
+		D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
 	switch (xs_type) {
 	case DSS_XS_SELF:
 		return DSS_XS_SELF;
@@ -597,4 +646,15 @@ dss_offload_exec(int (*func)(void *), void *arg)
 	D_ASSERT(info->dmi_xstream->dx_main_xs);
 
 	return dss_ult_execute(func, arg, NULL, NULL, DSS_XS_OFFLOAD, info->dmi_tgt_id, 0);
+}
+
+int
+dss_main_exec(void (*func)(void *), void *arg)
+{
+	struct dss_module_info *info = dss_get_module_info();
+
+	D_ASSERT(info != NULL);
+	D_ASSERT(info->dmi_xstream->dx_main_xs || info->dmi_xs_id == 0);
+
+	return dss_ult_create(func, arg, DSS_XS_SELF, info->dmi_tgt_id, 0, NULL);
 }

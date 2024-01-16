@@ -1,0 +1,72 @@
+# Example configuration file for Metadata on SSD.
+
+name: daos_server           # sys group daos_server
+access_points: ['example']  # management service leader (bootstrap)
+# port: 10001               # control listen port, default 10001
+provider: ofi+tcp
+control_log_mask: INFO
+control_log_file: /tmp/daos_server.log
+transport_config:
+  allow_insecure: true
+control_metadata:
+  path: /var/daos/config # Location to store control-plane metadata in MD-on-SSD mode.
+
+telemetry_port: 9191
+
+engines:
+  -
+    pinned_numa_node: 0
+    targets: 4              # number of I/O service threads per-engine
+    nr_xs_helpers: 1        # count of I/O offload threads per engine
+    fabric_iface: eth0
+    fabric_iface_port: 31316
+    log_file: /tmp/daos_engine.0.log
+
+    env_vars:
+      - FI_SOCKETS_MAX_CONN_RETRY=1
+      - FI_SOCKETS_CONN_TIMEOUT=2000
+
+    # Storage definitions for Metadata on SSD.
+
+    # Without persistent SCM storage, the first tier uses RAM to hold metadata.
+    # Metadata updates are persisted to a write-ahead log (wal) in NVMe, which
+    # is checkpointed (meta) to NVME.  Each of the (bdev) tiers specified after
+    # the first ram class has a combination of the following roles:
+    # wal, meta, data
+
+    # The DAOS server assigns the roles to the bdev tiers specified in the
+    # storage description.  If these default assignments are not suitable,
+    # the roles can be assigned explicitly.  To do this, each of the roles
+    # must be assigned to a bdev tier.  Each tier must have one or more roles
+    # assigned.  The wal and meta roles must be assigned to exactly one tier,
+    # while the data role may be assigned to multiple tiers.
+    storage:
+      -
+        # MD on SSD roles only apply when class: ram is specified.  For dcpm,
+        # only one bdev tier is supported and and it will have the data role.
+        class: ram
+        scm_size: 50       # assuming 3% metadata, 50GB RAM for 1.6TB NVMe data
+        scm_mount: /mnt/daos
+      -
+        # Omit all bdev_roles to use the default assignments.
+        class: nvme
+        bdev_list: ["0000:81:00.0"]
+        bdev_roles: [wal]
+      -
+        class: nvme
+        bdev_list: ["0000:82:00.0"]
+        bdev_roles: [meta]
+      -
+        class: nvme
+        bdev_list: ["0000:83:00.0"]
+        bdev_roles: [data]
+
+        # Alternatively, the two bdev tiers could be defined this way.
+        # -
+        #   class: nvme
+        #   bdev_list: ["0000:81:00.0"]
+        #   bdev_roles: [wal]
+        # -
+        #   class: nvme
+        #   bdev_list: ["0000:82:00.0"]
+        #   bdev_roles: [meta,data]

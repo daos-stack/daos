@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -156,6 +156,9 @@ crt_proc_msg_installsnapshot_response_t(crt_proc_t proc, crt_proc_op_t proc_op,
 	rc = crt_proc_int32_t(proc, proc_op, &p->complete);
 	if (unlikely(rc))
 		return rc;
+	rc = crt_proc_int64_t(proc, proc_op, &p->lease);
+	if (unlikely(rc))
+		return rc;
 
 	return 0;
 }
@@ -194,17 +197,15 @@ CRT_RPC_DEFINE(rdb_installsnapshot, DAOS_ISEQ_RDB_INSTALLSNAPSHOT,
 /* Define for cont_rpcs[] array population below.
  * See RDB_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
-{				\
-	.prf_flags   = b,	\
-	.prf_req_fmt = c,	\
-	.prf_hdlr    = NULL,	\
-	.prf_co_ops  = NULL,	\
-}
+#define X(a, b, c, d, e)                                                                           \
+	{                                                                                          \
+	    .prf_flags   = b,                                                                      \
+	    .prf_req_fmt = c,                                                                      \
+	    .prf_hdlr    = NULL,                                                                   \
+	    .prf_co_ops  = NULL,                                                                   \
+	},
 
-static struct crt_proto_rpc_format rdb_proto_rpc_fmt[] = {
-	RDB_PROTO_SRV_RPC_LIST,
-};
+static struct crt_proto_rpc_format rdb_proto_rpc_fmt[] = {RDB_PROTO_SRV_RPC_LIST};
 
 #undef X
 

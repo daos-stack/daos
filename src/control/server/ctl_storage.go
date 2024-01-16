@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"path/filepath"
 	"strings"
 
@@ -50,45 +49,29 @@ func (scs *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storag
 
 // WithVMDEnabled enables VMD support in storage provider.
 func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
-	scs.storage.WithVMDEnabled()
+	scs.storage.WithVMDEnabled(true)
 	return scs
 }
 
-func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider, miFn common.GetMemInfoFn) *StorageControlService {
+// NewStorageControlService returns an initialized *StorageControlService
+func NewStorageControlService(log logging.Logger, ecs []*engine.Config) *StorageControlService {
+	topCfg := &storage.Config{
+		Tiers: nil,
+	}
+	if len(ecs) > 0 {
+		topCfg.ControlMetadata = ecs[0].Storage.ControlMetadata
+	}
 	instanceStorage := make(map[uint32]*storage.Config)
 	for i, c := range ecs {
 		instanceStorage[uint32(i)] = &c.Storage
 	}
 
 	return &StorageControlService{
-		log:             l,
-		storage:         sp,
+		log:             log,
 		instanceStorage: instanceStorage,
-		getMemInfo:      miFn,
+		storage:         storage.DefaultProvider(log, 0, topCfg),
+		getMemInfo:      common.GetMemInfo,
 	}
-}
-
-// NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *StorageControlService {
-	return newStorageControlService(log, engineCfgs,
-		storage.DefaultProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}),
-		common.GetMemInfo,
-	)
-}
-
-// NewMockStorageControlService returns a StorageControlService with a mocked
-// storage provider consisting of the given sys, scm and bdev providers.
-func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Config, sys storage.SystemProvider, scm storage.ScmProvider, bdev storage.BdevProvider) *StorageControlService {
-	return newStorageControlService(log, engineCfgs,
-		storage.MockProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}, sys, scm, bdev),
-		func() (*common.MemInfo, error) {
-			return nil, nil
-		},
-	)
 }
 
 func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.ScmNamespace {
@@ -169,56 +152,4 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 	}
 
 	return &storage.ScmScanResponse{Namespaces: nss}, nil
-}
-
-// scanAssignedBdevs retrieves up-to-date NVMe controller info including
-// health statistics and stored server meta-data. If I/O Engines are running
-// then query is issued over dRPC as go-spdk bindings cannot be used to access
-// controller claimed by another process. Only update info for controllers
-// assigned to I/O Engines.
-func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
-	instances := cs.harness.Instances()
-	ctrlrs := new(storage.NvmeControllers)
-
-	for _, ei := range instances {
-		if !ei.GetStorage().HasBlockDevices() {
-			continue
-		}
-
-		tsrs, err := ei.ScanBdevTiers()
-		if err != nil {
-			return nil, err
-		}
-
-		// Build slice of controllers in all tiers.
-		tierCtrlrs := make([]storage.NvmeController, 0)
-		for _, tsr := range tsrs {
-			for _, c := range tsr.Result.Controllers {
-				tierCtrlrs = append(tierCtrlrs, *c)
-			}
-		}
-
-		// If the engine is not running or we aren't interested in temporal
-		// statistics for the bdev devices then continue to next engine.
-		if !ei.IsReady() || !statsReq {
-			ctrlrs.Update(tierCtrlrs...)
-			continue
-		}
-
-		cs.log.Debugf("updating stats for %d bdev(s) on instance %d", len(tierCtrlrs),
-			ei.Index())
-
-		// If engine is running and has claimed the assigned devices for
-		// each tier, iterate over scan results for each tier and send query
-		// over drpc to update controller details with current health stats
-		// and smd info.
-		updatedCtrlrs, err := ei.updateInUseBdevs(ctx, tierCtrlrs)
-		if err != nil {
-			return nil, errors.Wrapf(err, "instance %d: update online bdevs", ei.Index())
-		}
-
-		ctrlrs.Update(updatedCtrlrs...)
-	}
-
-	return &storage.BdevScanResponse{Controllers: *ctrlrs}, nil
 }

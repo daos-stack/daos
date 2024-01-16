@@ -1,27 +1,33 @@
 #
-# Copyright 2018-2022 Intel Corporation
+# Copyright 2018-2023 Intel Corporation
 #
 # 'recipe' for Docker to build an RPM
 #
 
 # Pull base image
-FROM fedora:latest
+ARG FVERSION=latest
+FROM fedora:$FVERSION
+# Needed for later use of FVERSION
+ARG FVERSION
 LABEL maintainer="daos@daos.groups.io"
 
 # Use local repo server if present
 ARG REPO_FILE_URL
 RUN if [ -n "$REPO_FILE_URL" ]; then                            \
         cd /etc/yum.repos.d/ &&                                 \
-        curl -f -o daos_ci-fedora-artifactory.repo.tmp          \
+        curl -k -f -o daos_ci-fedora-artifactory.repo.tmp       \
              "$REPO_FILE_URL"daos_ci-fedora-artifactory.repo && \
-        rm -f *.repo &&                                         \
+        for file in *.repo; do                                  \
+            true > $file;                                       \
+        done;                                                   \
         mv daos_ci-fedora-artifactory.repo{.tmp,};              \
     fi
 
 # Install basic tools
 RUN dnf -y install mock make                                        \
                    rpm-build createrepo rpmlint redhat-lsb-core git \
-                   python-srpm-macros rpmdevtools
+                   python-srpm-macros rpmdevtools &&                \
+    dnf -y clean all
 
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
@@ -42,7 +48,8 @@ RUN dnf -y upgrade && \
 # https://github.com/rpm-software-management/rpmlint/pull/795 in it
 # But make sure to patch after dnf upgrade so that an upgraded rpmlint
 # RPM doesn't wipe out our patch
-COPY packaging/rpmlint--ignore-unused-rpmlintrc.patch .
+ARG PACKAGINGDIR=packaging
+COPY ${PACKAGINGDIR}/rpmlint--ignore-unused-rpmlintrc.patch .
 RUN (cd $(python3 -c 'import site; print(site.getsitepackages()[-1])') &&                      \
      if ! grep -e --ignore-unused-rpmlintrc rpmlint/cli.py; then                               \
          if ! patch -p1; then                                                                  \

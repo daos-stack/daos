@@ -3,15 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
-import sys
 import ctypes
-import avocado
+import sys
 
+import avocado
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, IORequest, DaosApiError
 from general_utils import create_string_buffer
+from pydaos.raw import DaosApiError, DaosContainer, IORequest
 
 
 class CreateManyDkeys(TestWithServers):

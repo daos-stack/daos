@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -261,7 +260,7 @@ func TestControl_NetworkScan(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := NetworkScan(ctx, mi, &NetworkScanReq{})
@@ -365,7 +364,7 @@ func TestControl_GetAttachInfo(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := GetAttachInfo(ctx, mi, tc.req)

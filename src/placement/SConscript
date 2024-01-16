@@ -7,7 +7,7 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
-    prereqs.require(env, 'isal')
+    env.require('isal')
 
     denv = env.Clone()
 

@@ -32,6 +32,7 @@ OPS_SRC = ['create',
            'statfs']
 
 IOIL_SRC = ['int_posix.c', 'int_read.c', 'int_write.c']
+PIL4DFS_SRC = ['int_dfs.c', 'hook.c']
 
 
 def build_common(env, files, is_shared):
@@ -62,12 +63,28 @@ def build_client_libs_shared(env, prereqs):
     il_obj = []
     for src in IOIL_SRC:
         il_obj += ilenv.SharedObject(os.path.join('il', src), SHOBJPREFIX='s_')
+
+    pil4dfsenv = env.Clone()
+    if '-fvisibility=hidden' in pil4dfsenv['CFLAGS']:
+        pil4dfsenv['CFLAGS'].remove('-fvisibility=hidden')
+    pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
+    pil4dfsenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
+    pil4dfsenv.AppendUnique(LIBPATH=[Dir('../api')])
+    pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'duns', 'dl'])
+    pil4dfsenv.require('capstone')
+    pil4dfs_obj = []
+    for src in PIL4DFS_SRC:
+        pil4dfs_obj += pil4dfsenv.SharedObject(os.path.join('pil4dfs', src))
+
     common = build_common(penv, COMMON_SRC, True)
 
     # Now build the interception library
     il_lib = ilenv.d_library('il/libioil', il_obj + common)
     env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), il_lib)
     dfuse_lib = ilenv.d_library('dfuse', common)
+
+    pil4dfs_lib = pil4dfsenv.d_library('pil4dfs/libpil4dfs', pil4dfs_obj)
+    env.InstallVersionedLib(os.path.join("$PREFIX", 'lib64'), pil4dfs_lib)
 
     gen_script = ilenv.d_program('il/gen_script', ['il/gen_script.c'], LIBS=[])
     if prereqs.test_requested():
@@ -129,7 +146,7 @@ my_ioctl (fuse_req_t req, fuse_ino_t ino, %s cmd,
 
 struct fuse_lowlevel_ops ops = {.ioctl = my_ioctl};
 
-""" % ctype
+""" % ctype  # pylint: disable=consider-using-f-string
 
     rc = context.TryCompile(src, '.c')
     context.Result(rc)
@@ -142,13 +159,7 @@ def configure_fuse(cenv):
         return
 
     check = Configure(cenv,
-                      custom_tests={'CheckStructMember': check_struct_member,
-                                    'CheckFuseIoctl': check_ioctl_def})
-
-    if check.CheckStructMember('#include <fuse3/fuse.h>',
-                               'struct fuse_file_info',
-                               'cache_readdir'):
-        cenv.AppendUnique(CPPDEFINES={'HAVE_CACHE_READDIR': '1'})
+                      custom_tests={'CheckFuseIoctl': check_ioctl_def})
 
     if check.CheckFuseIoctl('unsigned int'):
         pass
@@ -200,7 +211,7 @@ def scons():
 
     cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
-    prereqs.require(cenv, 'fuse')
+    cenv.require('hwloc', 'fuse')
 
     configure_fuse(cenv)
 

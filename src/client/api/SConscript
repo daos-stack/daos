@@ -1,7 +1,7 @@
 """Build DAOS client"""
 
 LIBDAOS_SRC = ['agent.c', 'array.c', 'container.c', 'event.c', 'init.c', 'job.c', 'kv.c', 'mgmt.c',
-               'object.c', 'pool.c', 'rpc.c', 'task.c', 'tx.c']
+               'object.c', 'pool.c', 'rpc.c', 'task.c', 'tx.c', 'pipeline.c']
 
 
 def scons():
@@ -11,7 +11,7 @@ def scons():
     env.d_add_build_rpath()
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
-    prereqs.require(denv, 'protobufc')
+    denv.require('protobufc')
     libdaos_tgts[:0] = denv.SharedObject(LIBDAOS_SRC)
 
     if prereqs.client_requested():

@@ -501,6 +501,8 @@ update_ro(void **state)
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
+	par_barrier(PAR_COMM_WORLD);
+
 	/** close container handle */
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);

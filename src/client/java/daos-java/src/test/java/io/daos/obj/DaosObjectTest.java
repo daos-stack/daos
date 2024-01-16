@@ -32,7 +32,7 @@ public class DaosObjectTest {
     long address = oid.getBuffer().memoryAddress();
     long objPtr = 6789;
     Mockito.when(client.getContPtr()).thenReturn(contPtr);
-    Mockito.when(client.openObject(contPtr, address, OpenMode.UNKNOWN.getValue())).thenReturn(objPtr);
+    Mockito.when(client.openObject(contPtr, address, OpenMode.DAOS_OO_RW.getValue())).thenReturn(objPtr);
     object = new DaosObject(client, oid);
   }
 

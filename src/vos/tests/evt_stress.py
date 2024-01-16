@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Run evt_ctl with a specific pattern that causes a segfault with the default sort algorithm"""
+import argparse
+import json
 import os
 from os.path import join
-import json
-import argparse
 
 
 class EVTStress():
@@ -22,7 +22,7 @@ class EVTStress():
                 break
             file_self = os.path.dirname(file_self)
             if file_self == '/':
-                raise Exception('build file not found')
+                raise FileNotFoundError('build file not found')
         with open(json_file, 'r', encoding='utf-8') as ofh:
             self._bc = json.load(ofh)
 

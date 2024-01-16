@@ -169,7 +169,7 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 	}
 
 	// Forward the request to the I/O Engine via dRPC
-	if err = client.Connect(); err != nil {
+	if err = client.Connect(ctx); err != nil {
 		if te, ok := errors.Cause(err).(interface{ Temporary() bool }); ok {
 			if !te.Temporary() {
 				return nil, FaultDataPlaneNotStarted
@@ -177,7 +177,11 @@ func makeDrpcCall(ctx context.Context, log logging.Logger, client drpc.DomainSoc
 		}
 		return nil, errors.Wrap(err, "connect to client")
 	}
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			log.Errorf("error closing dRPC client: %s", err)
+		}
+	}()
 
 	if drpcResp, err = client.SendMsg(ctx, drpcCall); err != nil {
 		return nil, errors.Wrapf(err, "failed to send %dB message", proto.Size(msg))

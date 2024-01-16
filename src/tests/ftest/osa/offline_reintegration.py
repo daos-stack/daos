@@ -4,9 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
-from osa_utils import OSAUtils
-from daos_utils import DaosCommand
+
 from nvme_utils import ServerFillUp
+from osa_utils import OSAUtils
 from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
@@ -25,14 +25,12 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.ior_test_repetitions = self.params.get("pool_test_repetitions", '/run/pool_capacity/*')
         self.loop_test_cnt = 1
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.dmg_command.exit_status_exception = True
 
     def run_offline_reintegration_test(self, num_pool, data=False, server_boot=False, oclass=None,
@@ -176,10 +174,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
                     self.container = self.pool_cont_dict[self.pool][0]
-                    kwargs = {"pool": self.pool.uuid,
-                              "cont": self.container.uuid}
-                    output = self.daos_command.container_check(**kwargs)
-                    self.log.info(output)
+                    self.container.check()
 
     def test_osa_offline_reintegration_without_checksum(self):
         """Test ID: DAOS-6923.

@@ -1,11 +1,10 @@
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-from ior_test_base import IorTestBase
 from avocado.core.exceptions import TestFail
+from ior_test_base import IorTestBase
 
 
 class IorSmall(IorTestBase):
@@ -27,7 +26,7 @@ class IorSmall(IorTestBase):
             Run ior with Read, Write, CheckWrite, CheckRead in FPP mode.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=daosio,mpiio,checksum,mpich,dfuse,ior,dfs,hdf5
         :avocado: tags=IorSmall,test_ior_small
         """

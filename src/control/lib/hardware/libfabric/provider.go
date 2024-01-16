@@ -79,7 +79,7 @@ func (p *Provider) getFabricInterfaces(provider string, ch chan *fabricResult) {
 		fis.Update(newFI)
 	}
 
-	p.log.Debugf("found fabric interfaces:\n%s", fis)
+	p.log.Tracef("found fabric interfaces:\n%s", fis)
 
 	ch <- &fabricResult{
 		fiSet: fis,

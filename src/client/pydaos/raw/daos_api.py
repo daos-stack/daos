@@ -1,27 +1,23 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
 # pylint: disable=raise-missing-from
-
-# pylint: disable=relative-beyond-top-level
-from .. import pydaos_shim
-# pylint: enable=relative-beyond-top-level
+# pylint: disable=consider-using-f-string
 
 import ctypes
-import threading
-import os
-import inspect
-import sys
-import time
 import enum
+import inspect
+import os
+import sys
+import threading
+import time
 
-from . import daos_cref
-from . import conversion
+from .. import pydaos_shim  # pylint: disable=relative-beyond-top-level
 from .. import DaosClient
-
+from . import conversion, daos_cref
 
 DaosObjClass = enum.Enum(
     "DaosObjClass",
@@ -97,7 +93,7 @@ class DaosPool():
             event = daos_cref.DaosEvent()
             params = [bytes(uuid_str, encoding='utf-8'), self.group, c_flags,
                       ctypes.byref(self.handle), ctypes.byref(c_info), event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -116,7 +112,7 @@ class DaosPool():
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -176,7 +172,7 @@ class DaosPool():
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -200,7 +196,7 @@ class DaosPool():
         event = daos_cref.DaosEvent()
         params = [self.handle, None, ctypes.byref(self.pool_info), None,
                   event]
-        thread = threading.Thread(target=daos_cref.AsyncWorker1,
+        thread = threading.Thread(target=daos_cref.async_worker,
                                   args=(func,
                                         params,
                                         self.context,
@@ -223,7 +219,7 @@ class DaosPool():
 
         event = daos_cref.DaosEvent()
         params = [self.handle, tgt, rank, ctypes.byref(self.target_info), event]
-        thread = threading.Thread(target=daos_cref.AsyncWorker1,
+        thread = threading.Thread(target=daos_cref.async_worker,
                                   args=(func,
                                         params,
                                         self.context,
@@ -280,7 +276,7 @@ class DaosPool():
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, buff, total_size, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -330,7 +326,7 @@ class DaosPool():
         else:
             event = daos_cref.DaosEvent()
             params = [self.handle, no_of_att, names, values, sizes, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -380,10 +376,10 @@ class DaosPool():
             # Construct the results dictionary from buff and sizes set in the function
             # call.
             results = {}
-            i = 0
+            index = 0
             for attr in attr_names:
-                results[attr] = buff[i][:sizes[i]]
-                i += 1
+                results[attr] = buff[index][:sizes[index]]
+                index += 1
             return results
 
         # Asynchronous mode.
@@ -391,7 +387,7 @@ class DaosPool():
         params = [self.handle, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff),
                   sizes, event]
         thread = threading.Thread(
-            target=daos_cref.AsyncWorker1, args=(
+            target=daos_cref.async_worker, args=(
                 func, params, self.context, cb_func, self))
         thread.start()
 
@@ -623,9 +619,9 @@ class DaosObj():
         if ret == 0:
             shards = obj_layout_ptr[0].ol_shards[0][0].os_replica_nr
             del self.tgt_rank_list[:]
-            for i in range(0, shards):
+            for index in range(shards):
                 self.tgt_rank_list.append(
-                    obj_layout_ptr[0].ol_shards[0][0].os_shard_loc[i].sd_rank)
+                    obj_layout_ptr[0].ol_shards[0][0].os_shard_loc[index].sd_rank)
         else:
             raise DaosApiError("get_layout returned. RC: {0}".format(ret))
 
@@ -652,7 +648,7 @@ class DaosObj():
         else:
             event = daos_cref.DaosEvent()
             params = [self.obj_handle, c_tx, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -683,13 +679,13 @@ class DaosObj():
         else:
             c_len_dkeys = ctypes.c_uint(len(dkeys))
             c_dkeys = (daos_cref.IOV * len(dkeys))()
-            i = 0
+            index = 0
             for dkey in dkeys:
                 c_dkey = ctypes.create_string_buffer(dkey)
-                c_dkeys[i].iov_buf = ctypes.cast(c_dkey, ctypes.c_void_p)
-                c_dkeys[i].iov_buf_len = ctypes.sizeof(c_dkey)
-                c_dkeys[i].iov_len = ctypes.sizeof(c_dkey)
-                i += 1
+                c_dkeys[index].iov_buf = ctypes.cast(c_dkey, ctypes.c_void_p)
+                c_dkeys[index].iov_buf_len = ctypes.sizeof(c_dkey)
+                c_dkeys[index].iov_len = ctypes.sizeof(c_dkey)
+                index += 1
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
@@ -705,7 +701,7 @@ class DaosObj():
             params = [
                 self.obj_handle, c_tx, c_len_dkeys, ctypes.byref(c_dkeys),
                 event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -739,13 +735,13 @@ class DaosObj():
 
         c_len_akeys = ctypes.c_uint(len(akeys))
         c_akeys = (daos_cref.IOV * len(akeys))()
-        i = 0
+        index = 0
         for akey in akeys:
             c_akey = ctypes.create_string_buffer(akey)
-            c_akeys[i].iov_buf = ctypes.cast(c_akey, ctypes.c_void_p)
-            c_akeys[i].iov_buf_len = ctypes.sizeof(c_akey)
-            c_akeys[i].iov_len = ctypes.sizeof(c_akey)
-            i += 1
+            c_akeys[index].iov_buf = ctypes.cast(c_akey, ctypes.c_void_p)
+            c_akeys[index].iov_buf_len = ctypes.sizeof(c_akey)
+            c_akeys[index].iov_len = ctypes.sizeof(c_akey)
+            index += 1
 
         # the callback function is optional, if not supplied then run the
         # create synchronously, if its there then run it in a thread
@@ -760,7 +756,7 @@ class DaosObj():
             event = daos_cref.DaosEvent()
             params = [self.obj_handle, c_tx, ctypes.byref(c_dkey_iov),
                       c_len_akeys, ctypes.byref(c_akeys), event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -893,9 +889,9 @@ class IORequest():
         # setup the scatter/gather list, we are only handling an
         # an arbitrary number of consecutive array entries of the same size
         sgl_iov_list = (daos_cref.IOV * rec_count.value)()
-        for i in range(rec_count.value):
-            sgl_iov_list[i].iov_buf_len = rec_size
-            sgl_iov_list[i].iov_buf = (
+        for index in range(rec_count.value):
+            sgl_iov_list[index].iov_buf_len = rec_size
+            sgl_iov_list[index].iov_buf = (
                 ctypes.cast(ctypes.create_string_buffer(rec_size.value),
                             ctypes.c_void_p))
         self.sgl.sg_iovs = ctypes.cast(ctypes.pointer(sgl_iov_list),
@@ -920,8 +916,8 @@ class IORequest():
         # convert the output into a python list rather than return C types
         # outside this file
         output = []
-        for i in range(rec_count.value):
-            output.append(ctypes.string_at(sgl_iov_list[i].iov_buf,
+        for index in range(rec_count.value):
+            output.append(ctypes.string_at(sgl_iov_list[index].iov_buf,
                                            rec_size.value))
         return output
 
@@ -1063,7 +1059,7 @@ class IORequest():
         c_count = ctypes.c_uint(count)
         iods = (daos_cref.DaosIODescriptor * count)()
         sgl_list = (daos_cref.SGL * count)()
-        i = 0
+        index = 0
         for tup in data:
 
             sgl_iov = daos_cref.IOV()
@@ -1071,18 +1067,18 @@ class IORequest():
             sgl_iov.iov_buf_len = ctypes.c_size_t(len(tup[1]) + 1)
             sgl_iov.iov_buf = ctypes.cast(tup[1], ctypes.c_void_p)
 
-            sgl_list[i].sg_nr_out = 1
-            sgl_list[i].sg_nr = 1
-            sgl_list[i].sg_iovs = ctypes.pointer(sgl_iov)
+            sgl_list[index].sg_nr_out = 1
+            sgl_list[index].sg_nr = 1
+            sgl_list[index].sg_iovs = ctypes.pointer(sgl_iov)
 
-            iods[i].iod_name.iov_buf = ctypes.cast(tup[0], ctypes.c_void_p)
-            iods[i].iod_name.iov_buf_len = ctypes.sizeof(tup[0])
-            iods[i].iod_name.iov_len = ctypes.sizeof(tup[0])
-            iods[i].iod_type = 1
-            iods[i].iod_size = len(tup[1]) + 1
-            iods[i].iod_flags = 0
-            iods[i].iod_nr = 1
-            i += 1
+            iods[index].iod_name.iov_buf = ctypes.cast(tup[0], ctypes.c_void_p)
+            iods[index].iod_name.iov_buf_len = ctypes.sizeof(tup[0])
+            iods[index].iod_name.iov_len = ctypes.sizeof(tup[0])
+            iods[index].iod_type = 1
+            iods[index].iod_size = len(tup[1]) + 1
+            iods[index].iod_flags = 0
+            iods[index].iod_nr = 1
+            index += 1
         iod_ptr = ctypes.pointer(iods)
         sgl_ptr = ctypes.pointer(sgl_list)
 
@@ -1120,7 +1116,7 @@ class IORequest():
         # create the descriptor
         count = len(keys)
         c_count = ctypes.c_uint(count)
-        i = 0
+        index = 0
         sgl_list = (daos_cref.SGL * count)()
         iods = (daos_cref.DaosIODescriptor * count)()
         for key in keys:
@@ -1130,19 +1126,19 @@ class IORequest():
             buf = ctypes.create_string_buffer(key[1].value + 1)
             sgl_iov.iov_buf = ctypes.cast(buf, ctypes.c_void_p)
 
-            sgl_list[i].sg_nr_out = 1
-            sgl_list[i].sg_nr = 1
-            sgl_list[i].sg_iovs = ctypes.pointer(sgl_iov)
+            sgl_list[index].sg_nr_out = 1
+            sgl_list[index].sg_nr = 1
+            sgl_list[index].sg_iovs = ctypes.pointer(sgl_iov)
 
-            iods[i].iod_name.iov_buf = ctypes.cast(key[0], ctypes.c_void_p)
-            iods[i].iod_name.iov_buf_len = ctypes.sizeof(key[0])
-            iods[i].iod_name.iov_len = ctypes.sizeof(key[0])
-            iods[i].iod_type = 1
-            iods[i].iod_size = ctypes.c_ulong(key[1].value + 1)
-            iods[i].iod_flags = 0
+            iods[index].iod_name.iov_buf = ctypes.cast(key[0], ctypes.c_void_p)
+            iods[index].iod_name.iov_buf_len = ctypes.sizeof(key[0])
+            iods[index].iod_name.iov_len = ctypes.sizeof(key[0])
+            iods[index].iod_type = 1
+            iods[index].iod_size = ctypes.c_ulong(key[1].value + 1)
+            iods[index].iod_flags = 0
 
-            iods[i].iod_nr = 1
-            i += 1
+            iods[index].iod_nr = 1
+            index += 1
         sgl_ptr = ctypes.pointer(sgl_list)
 
         dkey_iov = daos_cref.IOV()
@@ -1159,12 +1155,12 @@ class IORequest():
             raise DaosApiError("multikey fetch returned non-zero. RC: {0}"
                                .format(ret))
         result = {}
-        i = 0
+        index = 0
         for sgl in sgl_list:
             char_p = ctypes.cast((sgl.sg_iovs).contents.iov_buf,
                                  ctypes.c_char_p)
-            result[(keys[i][0]).value] = char_p.value
-            i += 1
+            result[(keys[index][0]).value] = char_p.value
+            index += 1
 
         return result
 
@@ -1238,9 +1234,9 @@ class IORequest():
         keys = []
 
         cur = 0
-        for i in range(key_count):
-            keys.append(buf[cur:cur + daos_kds[i].kd_key_len])
-            cur += daos_kds[i].kd_key_len
+        for index in range(key_count):
+            keys.append(buf[cur:cur + daos_kds[index].kd_key_len])
+            cur += daos_kds[index].kd_key_len
 
         return keys
 
@@ -1275,7 +1271,7 @@ class IORequest():
             key_len (int): Approximate length of each dkey. Use the longest key
                 size to be safe. Defaults to 512. This is the typical default
                 value used by some of the C object tests.
-            txn (Daos_handle_t): Transaction handle.
+            txn (DaosHandle): Transaction handle.
                 Defaults to daos_cref.DAOS_TX_NONE. This is the typical default
                 value used in other methods as well as some of the C client and
                 test code.
@@ -1341,7 +1337,7 @@ class IORequest():
             key_len (int): Approximate length of each dkey. Use the longest key
                 size to be safe. Defaults to 512. This is the typical default
                 value used by some of the C object tests.
-            txn (Daos_handle_t): Transaction handle.
+            txn (DaosHandle): Transaction handle.
                 Defaults to daos_cref.DAOS_TX_NONE. This is the typical default
                 value used in other methods as well as some of the C client and
                 test code.
@@ -1576,7 +1572,7 @@ class DaosContainer():
             else:
                 params = [self.poh, ctypes.byref(self.uuid), ctypes.byref(self.cont_prop),
                           event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -1610,7 +1606,7 @@ class DaosContainer():
         else:
             event = daos_cref.DaosEvent()
             params = [self.poh, bytes(uuid_str, encoding='utf-8'), c_force, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -1651,7 +1647,7 @@ class DaosContainer():
             event = daos_cref.DaosEvent()
             params = [self.poh, bytes(uuid_str, encoding='utf-8'), c_flags,
                       ctypes.byref(self.coh), ctypes.byref(self.info), event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -1679,7 +1675,7 @@ class DaosContainer():
         else:
             event = daos_cref.DaosEvent()
             params = [self.coh, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -1722,7 +1718,7 @@ class DaosContainer():
 
         event = daos_cref.DaosEvent()
         params = [self.coh, ctypes.byref(self.info), None, event]
-        thread = threading.Thread(target=daos_cref.AsyncWorker1,
+        thread = threading.Thread(target=daos_cref.async_worker,
                                   args=(func, params, self.context,
                                         cb_func, self))
         thread.start()
@@ -2056,7 +2052,7 @@ class DaosContainer():
         else:
             event = daos_cref.DaosEvent()
             params = [self.coh, buff, total_size, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -2107,7 +2103,7 @@ class DaosContainer():
         else:
             event = daos_cref.DaosEvent()
             params = [self.coh, no_of_att, names, values, sizes, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -2160,17 +2156,17 @@ class DaosContainer():
             # Construct the results dictionary from buff and sizes set in the function
             # call.
             results = {}
-            i = 0
+            index = 0
             for attr in attr_names:
-                results[attr] = buff[i][:sizes[i]]
-                i += 1
+                results[attr] = buff[index][:sizes[index]]
+                index += 1
             return results
 
         event = daos_cref.DaosEvent()
         params = [self.coh, no_of_att, ctypes.byref(attr_names_c), ctypes.byref(buff),
                   sizes, event]
         thread = threading.Thread(
-            target=daos_cref.AsyncWorker1, args=(
+            target=daos_cref.async_worker, args=(
                 func, params, self.context, cb_func, self))
         thread.start()
 
@@ -2203,7 +2199,7 @@ class DaosContainer():
         else:
             event = daos_cref.DaosEvent()
             params = [coh, epoch, event]
-            thread = threading.Thread(target=daos_cref.AsyncWorker1,
+            thread = threading.Thread(target=daos_cref.async_worker,
                                       args=(func,
                                             params,
                                             self.context,
@@ -2307,8 +2303,7 @@ class DaosSnapshot():
         epr.epr_hi = epoch
         retcode = func(coh, epr, evnt)
         if retcode != 0:
-            raise Exception("Failed to destroy the snapshot. RC: {0}"
-                            .format(retcode))
+            raise DaosApiError("Failed to destroy the snapshot. RC: {}".format(retcode))
 
 
 class DaosContext():

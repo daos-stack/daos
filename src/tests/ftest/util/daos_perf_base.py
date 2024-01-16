@@ -53,3 +53,5 @@ class DaosPerfBase(TestWithServers):
         except CommandFailure as error:
             self.log.error("DAOS PERF Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
+
+        return None

@@ -20,30 +20,21 @@
 # -*- coding: utf-8 -*-
 """Classes for building external prerequisite components"""
 
+import configparser
+import datetime
+import errno
+import json
 # pylint: disable=too-many-lines
 import os
-from copy import deepcopy
-import sys
-import json
-import datetime
-import traceback
-import errno
 import shutil
 import subprocess  # nosec
-import configparser
-from SCons.Variables import BoolVariable
-from SCons.Variables import EnumVariable
-from SCons.Variables import ListVariable
-from SCons.Variables import PathVariable
-from SCons.Script import Dir
-from SCons.Script import Exit
-from SCons.Script import GetOption
-from SCons.Script import SetOption
-from SCons.Script import WhereIs
-from SCons.Script import BUILD_TARGETS
-from SCons.Errors import InternalError
+import sys
+import traceback
+from copy import deepcopy
 
-OPTIONAL_COMPS = ['psm2']
+from SCons.Errors import InternalError
+from SCons.Script import BUILD_TARGETS, Dir, Exit, GetOption, SetOption, WhereIs
+from SCons.Variables import BoolVariable, EnumVariable, ListVariable, PathVariable
 
 
 class DownloadFailure(Exception):
@@ -443,7 +434,6 @@ class PreReqComponent():
 
         RUNNER.initialize(self.__env)
 
-        opts.Add(ListVariable('INCLUDE', "Optional components to build", 'none', OPTIONAL_COMPS))
         opts.Add(PathVariable('PREFIX', 'Installation path', install_dir,
                               PathVariable.PathIsDirCreate))
         opts.Add('ALT_PREFIX', f'Specifies {os.pathsep} separated list of alternative paths to add',
@@ -528,10 +518,10 @@ class PreReqComponent():
     def run_build(self, opts):
         """Build and dependencies"""
         # argobots is not really needed by client but it's difficult to separate
-        common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
-                       'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
-        client_reqs = ['fuse', 'json-c']
-        server_reqs = ['pmdk', 'spdk']
+        common_reqs = ['ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
+                       'lz4', 'isal', 'isal_crypto']
+        client_reqs = ['fuse', 'json-c', 'capstone']
+        server_reqs = ['argobots', 'pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
 
         reqs = []
@@ -682,7 +672,7 @@ class PreReqComponent():
         self.__build_info.save('.build_vars.json')
 
     def __parse_build_deps(self):
-        """Parse the build dependances command line flag"""
+        """Parse the build dependencies command line flag"""
         build_deps = GetOption('build_deps')
         if build_deps in ('yes', 'only'):
             self.download_deps = True
@@ -724,6 +714,7 @@ class PreReqComponent():
             extra_include_path -- Subdirectories to add to dependent component path
             out_of_src_build -- Build from a different directory if set to True
             build_env -- Environment variables to set for build
+            skip_arch -- not required on this architecture
         """
         use_installed = False
         if 'all' in self.installed or name in self.installed:
@@ -813,8 +804,6 @@ class PreReqComponent():
     def included(self, *comps):
         """Returns true if the components are included in the build"""
         for comp in comps:
-            if comp not in OPTIONAL_COMPS:
-                continue
             if not set([comp, 'all']).intersection(set(self.include)):
                 return False
         return True
@@ -956,6 +945,7 @@ class _Component():
         out_of_src_build -- Build from a different directory if set to True
         patch_rpath -- Add appropriate relative rpaths to binaries
         build_env -- Environment variable(s) to add to build environment
+        skip_arch -- not required on this platform
     """
 
     def __init__(self,
@@ -997,6 +987,12 @@ class _Component():
         self.include_path.extend(kw.get("extra_include_path", []))
         self.out_of_src_build = kw.get("out_of_src_build", False)
         self.patch_path = self.prereqs.get_build_dir()
+        self.skip_arch = kw.get("skip_arch", False)
+
+    @staticmethod
+    def _sanitize_patch_path(path):
+        """Remove / and https:// from path"""
+        return "".join(path.split("://")[-1].split("/")[1:])
 
     def _resolve_patches(self):
         """Parse the patches variable"""
@@ -1013,7 +1009,7 @@ class _Component():
             if "https://" not in raw:
                 patches[raw] = patch_subdir
                 continue
-            patch_name = f'{self.name}_patch_{patchnum:d}'
+            patch_name = f'{self.name}_{self._sanitize_patch_path(raw)}_{patchnum:d}'
             patch_path = os.path.join(self.patch_path, patch_name)
             patchnum += 1
             patches[patch_path] = patch_subdir
@@ -1023,6 +1019,20 @@ class _Component():
                         '-o', patch_path, raw]]
             if not RUNNER.run_commands(command):
                 raise BuildFailure(raw)
+        # Remove old patches
+        for fname in os.listdir(self.patch_path):
+            if not fname.startswith(f"{self.name}_"):
+                continue
+            found = False
+            for key in patches:
+                if fname in key:
+                    found = True
+                    break
+            if not found:
+                old_patch = os.path.join(self.patch_path, fname)
+                print(f"Removing old, unused patch file {old_patch}")
+                os.unlink(old_patch)
+
         return patches
 
     def get(self):
@@ -1108,10 +1118,19 @@ class _Component():
 
         return
 
+    def _print(self, msg):
+        if GetOption('silent'):
+            return
+        print(msg)
+
     def has_missing_targets(self, env):
         """Check for expected build targets (e.g. libraries or headers)"""
         # pylint: disable=too-many-return-statements
         if self.targets_found:
+            return False
+
+        if self.skip_arch:
+            self.targets_found = True
             return False
 
         if self.__check_only:
@@ -1130,7 +1149,7 @@ class _Component():
             print('help set')
             return True
 
-        print(f"Checking targets for component '{self.name}'")
+        self._print(f"Checking targets for component '{self.name}'")
 
         config = env.Configure()
         config_cb = self.key_words.get("config_cb", None)
@@ -1202,6 +1221,9 @@ class _Component():
 
     def configure(self):
         """Setup paths for a required component"""
+        if self.skip_arch:
+            return
+
         if not self.retriever:
             self.prebuilt_path = "/usr"
         else:
@@ -1220,6 +1242,9 @@ class _Component():
 
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with the external component"""
+        if self.skip_arch:
+            return
+
         lib_paths = []
 
         # Make sure CheckProg() looks in the component's bin/ dir
@@ -1306,7 +1331,9 @@ class _Component():
         rpath = ["$$ORIGIN"]
         norigin = []
         comp_path = self.component_prefix
-        if not comp_path or comp_path.startswith("/usr"):
+        if not comp_path:
+            return
+        if comp_path.startswith('/usr') and '/prereq/' not in comp_path:
             return
         if not os.path.exists(comp_path):
             return
@@ -1343,7 +1370,8 @@ class _Component():
             path = os.path.join(comp_path, folder)
             files = os.listdir(path)
             for lib in files:
-                if not lib.endswith(".so"):
+                if folder != 'bin' and not lib.endswith(".so"):
+                    # Assume every file in bin can be patched
                     continue
                 full_lib = os.path.join(path, lib)
                 cmd = ['patchelf', '--set-rpath', ':'.join(rpath), full_lib]

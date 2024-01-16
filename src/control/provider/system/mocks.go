@@ -8,9 +8,14 @@ package system
 
 import (
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/daos-stack/daos/src/control/logging"
+)
+
+const (
+	defaultMountOpts = "defaults"
 )
 
 type (
@@ -22,7 +27,7 @@ type (
 
 	MountMap struct {
 		sync.RWMutex
-		mounted map[string]bool
+		mounted map[string]string
 	}
 
 	// MockSysConfig alters mock SystemProvider behavior.
@@ -39,6 +44,8 @@ type (
 		SourceToTarget  map[string]string
 		GetfsIndex      int
 		GetfsUsageResps []GetfsUsageRetval
+		GetFsTypeRes    *FsType
+		GetFsTypeErr    []error
 		StatErrors      map[string]error
 		RealStat        bool
 	}
@@ -46,32 +53,41 @@ type (
 	// MockSysProvider gives a mock SystemProvider implementation.
 	MockSysProvider struct {
 		sync.RWMutex
-		log       logging.Logger
-		cfg       MockSysConfig
-		isMounted MountMap
+		log             logging.Logger
+		cfg             MockSysConfig
+		isMounted       MountMap
+		IsMountedInputs []string
+		GetFsTypeCount  int
 	}
 )
 
-func (mm *MountMap) Set(mount string, mounted bool) {
+func (mm *MountMap) Set(mount string, mountOpts string) {
 	mm.Lock()
 	defer mm.Unlock()
 
-	mm.mounted[mount] = mounted
+	mm.mounted[mount] = mountOpts
 }
 
-func (mm *MountMap) Get(mount string) (bool, bool) {
+func (mm *MountMap) Get(mount string) (string, bool) {
 	mm.RLock()
 	defer mm.RUnlock()
 
-	mounted, exists := mm.mounted[mount]
-	return mounted, exists
+	opts, exists := mm.mounted[mount]
+	return opts, exists
 }
 
-func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
+func (msp *MockSysProvider) GetMountOpts(target string) (string, error) {
 	err := msp.cfg.IsMountedErr
+	// hack... don't fail the format tests which also want
+	// to make sure that the device isn't already formatted.
+	if os.IsNotExist(err) && strings.HasPrefix(target, "/dev") {
+		err = nil
+	}
 
 	msp.Lock()
 	defer msp.Unlock()
+
+	msp.IsMountedInputs = append(msp.IsMountedInputs, target)
 
 	// lookup target of a given source device (target actually a source
 	// device in this case)
@@ -80,17 +96,33 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 		target = mount
 	}
 
-	isMounted, exists := msp.isMounted.Get(target)
+	opts, exists := msp.isMounted.Get(target)
 	if !exists {
-		return msp.cfg.IsMountedBool, err
+		if msp.cfg.IsMountedBool {
+			opts = defaultMountOpts
+		}
+		return opts, err
 	}
-	return isMounted, err
+
+	return opts, nil
 }
 
-func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) error {
+func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
+	opts, err := msp.GetMountOpts(target)
+	if err != nil {
+		return false, err
+	}
+
+	return opts != "", nil
+}
+
+func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, opts string) error {
 	if msp.cfg.MountErr == nil {
+		if opts == "" {
+			opts = defaultMountOpts
+		}
 		msp.Lock()
-		msp.isMounted.Set(target, true)
+		msp.isMounted.Set(target, opts)
 		msp.Unlock()
 	}
 	return msp.cfg.MountErr
@@ -99,13 +131,13 @@ func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) erro
 func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
 		msp.Lock()
-		msp.isMounted.Set(target, false)
+		msp.isMounted.Set(target, "")
 		msp.Unlock()
 	}
 	return msp.cfg.UnmountErr
 }
 
-func (msp *MockSysProvider) Mkfs(_, _ string, _ bool) error {
+func (msp *MockSysProvider) Mkfs(_ MkfsReq) error {
 	return msp.cfg.MkfsErr
 }
 
@@ -128,6 +160,22 @@ func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
 	}
 	resp := msp.cfg.GetfsUsageResps[msp.cfg.GetfsIndex-1]
 	return resp.Total, resp.Avail, resp.Err
+}
+
+func (msp *MockSysProvider) GetFsType(path string) (*FsType, error) {
+	idx := msp.GetFsTypeCount
+	msp.GetFsTypeCount++
+	var err error
+	var result *FsType
+	if idx < len(msp.cfg.GetFsTypeErr) {
+		err = msp.cfg.GetFsTypeErr[idx]
+	}
+
+	if err == nil {
+		result = msp.cfg.GetFsTypeRes
+	}
+
+	return result, err
 }
 
 func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
@@ -154,7 +202,7 @@ func NewMockSysProvider(log logging.Logger, cfg *MockSysConfig) *MockSysProvider
 		log: log,
 		cfg: *cfg,
 		isMounted: MountMap{
-			mounted: make(map[string]bool),
+			mounted: make(map[string]string),
 		},
 	}
 	log.Debugf("creating MockSysProvider with cfg: %+v", msp.cfg)

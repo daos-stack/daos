@@ -3,14 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import time
-import tempfile
+import codecs
 import json
 import os
-import struct
-import codecs
-import subprocess  # nosec
 import shlex
+import struct
+import subprocess  # nosec
+import tempfile
+import time
 import traceback
 
 from cart_utils import CartTest
@@ -143,25 +143,23 @@ class CartIvOneNodeTest(CartTest):
                         'Error code {!s} running command "{!s}"'.format(
                             cli_rtn, command))
 
-                # Read the result into test_result and remove the temp file
-                log_file = open(log_path)
-
                 # Try to induce "No JSON object could be decoded" error
                 #
                 # 1.
-                # with open(log_path, "a") as myfile:
-                # myfile.write("some-invalid-junk-appended-to-json")
+                # with open(log_path, "a") as my_file:
+                # my_file.write("some-invalid-junk-appended-to-json")
                 #
                 # 2.
                 # codecs.open(log_file, "w", "unicode").write('')
 
                 # DEBUGGING: dump contents of JSON file to screen
-                with open(log_path, 'r') as f:
-                    print(f.read())
+                with open(log_path, 'r') as file:
+                    print(file.read())
 
-                test_result = json.load(log_file)
+                # Read the result into test_result and remove the temp file
+                with open(log_path, 'r') as log_file:
+                    test_result = json.load(log_file)
 
-                log_file.close()
                 os.close(log_fd)
                 os.remove(log_path)
 
@@ -256,20 +254,21 @@ class CartIvOneNodeTest(CartTest):
                         'Error code {!s} running command "{!s}"'.format(
                             cli_rtn, command))
 
-    def test_cart_iv(self):
+    def test_cart_iv_one_node(self):
         """Test CaRT IV.
 
         :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
         :avocado: tags=cart,iv,one_node,memcheck
-        :avocado: tags=test_cart_iv
+        :avocado: tags=CartIvOneNodeTest,test_cart_iv_one_node
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 
         try:
             srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
-        except Exception as e:
-            self.print("Exception in launching server : {}".format(e))
+        except Exception as error:
+            self.print("Exception in launching server : {}".format(error))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
@@ -498,9 +497,9 @@ class CartIvOneNodeTest(CartTest):
             try:
                 subprocess.call(shlex.split(clicmdt))
             # pylint: disable=broad-except
-            except Exception as e:
+            except Exception as error:
                 failed = True
-                self.print("Exception in launching client : {}".format(e))
+                self.print("Exception in launching client : {}".format(error))
 
         time.sleep(1)
 
@@ -510,9 +509,9 @@ class CartIvOneNodeTest(CartTest):
         try:
             subprocess.call(shlex.split(clicmd))
         # pylint: disable=broad-except
-        except Exception as e:
+        except Exception as error:
             failed = True
-            self.print("Exception in launching client : {}".format(e))
+            self.print("Exception in launching client : {}".format(error))
 
         # wait for servers to finish shutting down
         time.sleep(2)

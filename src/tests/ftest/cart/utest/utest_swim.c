@@ -30,7 +30,7 @@ test_swim(void **state)
 	rc = crt_swim_init(0);
 	assert_int_equal(rc, 0);
 
-	rc = crt_rank_self_set(0);
+	rc = crt_rank_self_set(0, 1 /* group_version_min */);
 	assert_int_equal(rc, 0);
 
 	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 1, d_hlc_get());
@@ -60,8 +60,8 @@ init_tests(void **state)
 	fprintf(stdout, "Seeding this test run with seed=%u\n", seed);
 	srand(seed);
 
-	setenv("CRT_PHY_ADDR_STR", "ofi+tcp", 1);
-	setenv("OFI_INTERFACE", "lo", 1);
+	d_setenv("CRT_PHY_ADDR_STR", "ofi+tcp", 1);
+	d_setenv("OFI_INTERFACE", "lo", 1);
 
 	return 0;
 }

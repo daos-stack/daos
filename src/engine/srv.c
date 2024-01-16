@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,14 +16,17 @@
 #define D_LOGFAC       DD_FAC(server)
 
 #include <abt.h>
+#include <libgen.h>
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/sys_db.h>
 #include <daos_errno.h>
 #include <daos_mgmt.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/smd.h>
 #include <daos_srv/vos.h>
 #include <gurt/list.h>
+#include <gurt/telemetry_producer.h>
 #include "drpc_internal.h"
 #include "srv_internal.h"
 
@@ -118,7 +121,6 @@ struct dss_xstream_data {
 	/** barrier for all ULTs to enter handling loop */
 	ABT_cond		  xd_ult_barrier;
 	ABT_mutex		  xd_mutex;
-	struct dss_thread_local_storage *xd_dtc;
 };
 
 static struct dss_xstream_data	xstream_data;
@@ -275,6 +277,11 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
 		return 0;
+
+	rc = crt_req_get_timeout(rpc, &attr.sra_timeout);
+	D_ASSERT(rc == 0);
+	/* convert it to msec */
+	attr.sra_timeout *= 1000;
 	/*
 	 * The mod_id for the RPC originated from CART is 0xfe, and 'module'
 	 * will be NULL for this case.
@@ -288,7 +295,20 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 		attr.sra_type = SCHED_REQ_ANONYM;
 	}
 
-	return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
+	rc = sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
+	if (rc != -DER_OVERLOAD_RETRY)
+		return rc;
+
+	if (module != NULL && module->sm_mod_ops != NULL &&
+	    module->sm_mod_ops->dms_set_req != NULL) {
+		rc = module->sm_mod_ops->dms_set_req(rpc, &attr);
+		if (rc == -DER_OVERLOAD_RETRY)
+			return crt_reply_send(rpc);
+	}
+	/*
+	 * No RPC protocol to return hint, just return timeout.
+	 */
+	return -DER_TIMEDOUT;
 }
 
 static void
@@ -297,7 +317,7 @@ dss_nvme_poll_ult(void *args)
 	struct dss_module_info	*dmi = dss_get_module_info();
 	struct dss_xstream	*dx = dss_current_xstream();
 
-	D_ASSERT(dx->dx_main_xs);
+	D_ASSERT(dss_xstream_has_nvme(dx));
 	while (!dss_xstream_exiting(dx)) {
 		bio_nvme_poll(dmi->dmi_nvme_ctxt);
 		ABT_thread_yield();
@@ -352,6 +372,7 @@ wait_all_exited(struct dss_xstream *dx, struct dss_module_info *dmi)
 	D_DEBUG(DB_TRACE, "XS(%d) drained ULTs.\n", dx->dx_xs_id);
 }
 
+#define D_MEMORY_TRACK_ENV "D_MEMORY_TRACK"
 /*
  * The server handler ULT first sets CPU affinity, initialize the per-xstream
  * TLS, CRT(comm) context, NVMe context, creates the long-run ULTs (GC & NVMe
@@ -365,11 +386,17 @@ dss_srv_handler(void *arg)
 	struct dss_thread_local_storage	*dtc;
 	struct dss_module_info		*dmi;
 	int				 rc;
+	bool				 track_mem = false;
 	bool				 signal_caller = true;
 
 	rc = dss_xstream_set_affinity(dx);
 	if (rc)
 		goto signal;
+
+	d_getenv_bool(D_MEMORY_TRACK_ENV, &track_mem);
+	if (unlikely(track_mem))
+		d_set_alloc_track_cb(dss_mem_total_alloc_track, dss_mem_total_free_track,
+				     &dx->dx_mem_stats);
 
 	/* initialize xstream-local storage */
 	dtc = dss_tls_init(dx->dx_tag, dx->dx_xs_id, dx->dx_tgt_id);
@@ -454,11 +481,13 @@ dss_srv_handler(void *arg)
 		goto crt_destroy;
 	}
 
-	if (dx->dx_main_xs) {
+	if (dss_xstream_has_nvme(dx)) {
 		ABT_thread_attr attr;
 
 		/* Initialize NVMe context for main XS which accesses NVME */
-		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt, dmi->dmi_tgt_id, false);
+		rc = bio_xsctxt_alloc(&dmi->dmi_nvme_ctxt,
+				      dmi->dmi_tgt_id < 0 ? BIO_SYS_TGT_ID : dmi->dmi_tgt_id,
+				      false);
 		if (rc != 0) {
 			D_ERROR("failed to init spdk context for xstream(%d) "
 				"rc:%d\n", dmi->dmi_xs_id, rc);
@@ -540,8 +569,9 @@ dss_srv_handler(void *arg)
 		daos_profile_destroy(dmi->dmi_dp);
 		dmi->dmi_dp = NULL;
 	}
+
 nvme_fini:
-	if (dx->dx_main_xs)
+	if (dss_xstream_has_nvme(dx))
 		bio_xsctxt_free(dmi->dmi_nvme_ctxt);
 tse_fini:
 	tse_sched_fini(&dx->dx_sched_dsc);
@@ -639,6 +669,46 @@ dss_xstream_free(struct dss_xstream *dx)
 	D_FREE(dx);
 }
 
+static void
+dss_mem_stats_init(struct mem_stats *stats, int xs_id)
+{
+	int rc;
+
+	rc = d_tm_add_metric(&stats->ms_total_usage, D_TM_GAUGE,
+			     "Total memory usage", "byte", "mem/total_mem/xs_%u", xs_id);
+	if (rc)
+		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->ms_mallinfo, D_TM_MEMINFO,
+			     "Total memory arena", "", "mem/meminfo/xs_%u", xs_id);
+	if (rc)
+		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
+	stats->ms_current = 0;
+}
+
+void
+dss_mem_total_alloc_track(void *arg, daos_size_t bytes)
+{
+	struct mem_stats *stats = arg;
+
+	D_ASSERT(arg != NULL);
+
+	d_tm_inc_gauge(stats->ms_total_usage, bytes);
+	/* Only retrieve mallocinfo every 10 allocation */
+	if ((stats->ms_current++ % 10) == 0)
+		d_tm_record_meminfo(stats->ms_mallinfo);
+}
+
+void
+dss_mem_total_free_track(void *arg, daos_size_t bytes)
+{
+	struct mem_stats *stats = arg;
+
+	D_ASSERT(arg != NULL);
+
+	d_tm_dec_gauge(stats->ms_total_usage, bytes);
+}
+
 /**
  * Start one xstream.
  *
@@ -709,7 +779,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 	 * Generate name for each xstreams so that they can be easily identified
 	 * and monitored independently (e.g. via ps(1))
 	 */
-	dx->dx_tgt_id	= dss_xs2tgt(xs_id);
+	dx->dx_tgt_id = dss_xs2tgt(xs_id);
 	if (xs_id < dss_sys_xs_nr) {
 		/** system xtreams are named daos_sys_$num */
 		snprintf(dx->dx_name, DSS_XS_NAME_LEN, DSS_SYS_XS_NAME_FMT,
@@ -730,6 +800,8 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 		D_ERROR("create scheduler fails: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_dx, rc);
 	}
+
+	dss_mem_stats_init(&dx->dx_mem_stats, xs_id);
 
 	/** start XS, ABT rank 0 is reserved for the primary xstream */
 	rc = ABT_xstream_create_with_rank(dx->dx_sched, xs_id + 1,
@@ -895,7 +967,7 @@ dss_start_xs_id(int tag, int xs_id)
 	if (numa_obj) {
 		idx = hwloc_bitmap_first(core_allocation_bitmap);
 		if (idx == -1) {
-			D_ERROR("No core available for XS: %d", xs_id);
+			D_ERROR("No core available for XS: %d\n", xs_id);
 			return -DER_INVAL;
 		}
 		D_DEBUG(DB_TRACE,
@@ -965,7 +1037,7 @@ dss_xstreams_init(void)
 		D_INFO("ULT mmap()'ed stack allocation is disabled.\n");
 #endif
 
-	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
+	d_getenv_uint("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
 		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
@@ -987,7 +1059,7 @@ dss_xstreams_init(void)
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
-	d_getenv_int("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+	d_getenv_uint("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
 	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
 
 	/* start the execution streams */
@@ -1142,12 +1214,12 @@ dss_acc_offload(struct dss_acc_task *at_args)
 	return rc;
 }
 
-/*
+/**
  * Set parameters on the server.
  *
- * param key_id [IN]		key id
- * param value [IN]		the value of the key.
- * param value_extra [IN]	the extra value of the key.
+ * \param[in] key_id		key id
+ * \param[in] value		the value of the key.
+ * \param[in] value_extra	the extra value of the key.
  *
  * return	0 if setting succeeds.
  *              negative errno if fails.
@@ -1184,10 +1256,15 @@ enum {
 	XD_INIT_TLS_REG,
 	XD_INIT_TLS_INIT,
 	XD_INIT_SYS_DB,
-	XD_INIT_NVME,
 	XD_INIT_XSTREAMS,
 	XD_INIT_DRPC,
 };
+
+static void
+dss_sys_db_fini(void)
+{
+	vos_db_fini();
+}
 
 /**
  * Entry point to start up and shutdown the service
@@ -1208,14 +1285,11 @@ dss_srv_fini(bool force)
 	case XD_INIT_XSTREAMS:
 		dss_xstreams_fini(force);
 		/* fall through */
-	case XD_INIT_NVME:
-		bio_nvme_fini();
-		/* fall through */
 	case XD_INIT_SYS_DB:
-		vos_db_fini();
+		dss_sys_db_fini();
 		/* fall through */
 	case XD_INIT_TLS_INIT:
-		dss_tls_fini(xstream_data.xd_dtc);
+		vos_standalone_tls_fini();
 		/* fall through */
 	case XD_INIT_TLS_REG:
 		pthread_key_delete(dss_tls_key);
@@ -1235,6 +1309,43 @@ dss_srv_fini(bool force)
 		D_DEBUG(DB_TRACE, "Finalized everything\n");
 	}
 	return 0;
+}
+
+static int
+dss_sys_db_init()
+{
+	int	 rc;
+	char	*sys_db_path = NULL;
+	char	*nvme_conf_path = NULL;
+
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		goto db_init;
+
+	if (dss_nvme_conf == NULL) {
+		D_ERROR("nvme conf path not set\n");
+		return -DER_INVAL;
+	}
+
+	D_STRNDUP(nvme_conf_path, dss_nvme_conf, PATH_MAX);
+	if (nvme_conf_path == NULL)
+		return -DER_NOMEM;
+	D_STRNDUP(sys_db_path, dirname(nvme_conf_path), PATH_MAX);
+	D_FREE(nvme_conf_path);
+	if (sys_db_path == NULL)
+		return -DER_NOMEM;
+
+db_init:
+	rc = vos_db_init(bio_nvme_configured(SMD_DEV_TYPE_META) ? sys_db_path : dss_storage_path);
+	if (rc)
+		goto out;
+
+	rc = smd_init(vos_db_get());
+	if (rc)
+		vos_db_fini();
+out:
+	D_FREE(sys_db_path);
+
+	return rc;
 }
 
 int
@@ -1287,28 +1398,20 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_TLS_REG;
 
 	/* initialize xstream-local storage */
-	xstream_data.xd_dtc = dss_tls_init(DAOS_SERVER_TAG - DAOS_TGT_TAG, 0, -1);
-	if (!xstream_data.xd_dtc) {
+	rc = vos_standalone_tls_init(DAOS_SERVER_TAG - DAOS_TGT_TAG);
+	if (rc) {
 		D_ERROR("Not enough DRAM to initialize XS local storage.\n");
 		D_GOTO(failed, rc = -DER_NOMEM);
 	}
 	xstream_data.xd_init_step = XD_INIT_TLS_INIT;
 
-	rc = vos_db_init(dss_storage_path);
+	rc = dss_sys_db_init();
 	if (rc != 0) {
 		D_ERROR("Failed to initialize local DB: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
-	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
-			   dss_nvme_hugepage_size, dss_tgt_nr, vos_db_get(),
-			   dss_nvme_bypass_health_check);
-	if (rc != 0) {
-		D_ERROR("Failed to initialize nvme: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(failed, rc);
-	}
-	xstream_data.xd_init_step = XD_INIT_NVME;
 	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
 
 	/* start xstreams */
@@ -1338,10 +1441,16 @@ failed:
 	return rc;
 }
 
+bool
+dss_srv_shutting_down(void)
+{
+	return dss_get_module_info()->dmi_srv_shutting_down;
+}
+
 static void
 set_draining(void *arg)
 {
-	dss_get_module_info()->dmi_srv_shutting_down = 1;
+	dss_get_module_info()->dmi_srv_shutting_down = true;
 }
 
 /*
@@ -1367,8 +1476,6 @@ dss_srv_set_shutting_down(void)
 		rc = ABT_task_free(&task);
 		D_ASSERTF(rc == ABT_SUCCESS, "join task: %d\n", rc);
 	}
-
-	dss_get_module_info()->dmi_srv_shutting_down = 1;
 }
 
 void
@@ -1535,4 +1642,16 @@ bool
 dss_has_enough_helper(void)
 {
 	return dss_tgt_offload_xs_nr > 0;
+}
+
+/**
+ * Miscellaneous routines
+ */
+void
+dss_bind_to_xstream_cpuset(int tgt_id)
+{
+	struct dss_xstream *dx;
+
+	dx = dss_get_xstream(DSS_MAIN_XS_ID(tgt_id));
+	(void)dss_xstream_set_affinity(dx);
 }

@@ -179,7 +179,7 @@ Pools
 ```
 
 <a id="81"></a>
-- Query Device Health Data: **$dmg storage query (device-health**
+- Query Device Health Data: **$dmg storage query device-health**
 
 ```
 $ dmg storage query device-health --uuid=9fb3ce57-1841-43e6-8b70-2a5e7fb2a1d0

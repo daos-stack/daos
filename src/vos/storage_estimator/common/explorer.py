@@ -4,13 +4,13 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
-import os
 import copy
+import os
 import sys
 
-from storage_estimator.vos_structures import VosObject, AKey, DKey, Container, \
-    VosValue, Overhead, ValType, KeyType
 from storage_estimator.util import CommonBase, ObjectClass
+from storage_estimator.vos_structures import (AKey, Container, DKey, KeyType, Overhead, ValType,
+                                              VosObject, VosValue)
 
 
 class FileInfo():
@@ -113,7 +113,7 @@ class AverageFS(CommonBase):
             symlink_per_dir = self._total_symlinks // self._total_dirs
             symlink_per_dir += (self._total_symlinks % self._total_dirs) > 0
             self._debug(
-                'adding {0} symlinks of name size {1} bytes and size {2} bytes per directory'.format(
+                'adding {} symlinks of name size {} bytes and size {} bytes per directory'.format(
                     symlink_per_dir,
                     self._avg_name_size,
                     self._avg_symlink_size))
@@ -517,7 +517,6 @@ class FileSystemExplorer(CommonBase):
         self._traverse_directories()
 
     def print_stats(self):
-        pretty_size = self._to_human(self._file_size)
         pretty_file_size = self._to_human(self._file_size)
         pretty_sym_size = self._to_human(self._sym_size)
         pretty_name_size = self._to_human(self._name_size)
@@ -556,7 +555,7 @@ class FileSystemExplorer(CommonBase):
         self._debug('Gloabal Stripe Stats')
         self._dfs._all_ec_stats.show()
 
-        container = self._dfs.get_container()
+        _ = self._dfs.get_container()
 
         return self._dfs
 
@@ -588,7 +587,7 @@ class FileSystemExplorer(CommonBase):
 
         dfs = averageFS.get_dfs()
 
-        container = dfs.get_container()
+        _ = dfs.get_container()
 
         return dfs
 

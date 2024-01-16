@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import random
 import threading
+import time
 
-from write_host_file import write_host_file
 from osa_utils import OSAUtils
-from daos_utils import DaosCommand
 from test_utils_pool import add_pool
+from write_host_file import write_host_file
 
 
 class OSAOnlineDrain(OSAUtils):
@@ -25,13 +24,11 @@ class OSAOnlineDrain(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get(
             "ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.dmg_command.exit_status_exception = True
         self.pool = None
 
@@ -117,9 +114,7 @@ class OSAOnlineDrain(OSAUtils):
                 self.pool.display_pool_daos_space(display_string)
                 self.run_ior_thread("Read", oclass, test_seq)
                 self.container = self.pool_cont_dict[self.pool][0]
-                output = self.daos_command.container_check(pool=self.pool.identifier,
-                                                           cont=self.container.identifier)
-                self.log.info(output)
+                self.container.check()
 
     def test_osa_online_drain(self):
         """Test ID: DAOS-4750
@@ -127,9 +122,10 @@ class OSAOnlineDrain(OSAUtils):
         enabled.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_drain,online_drain,online_drain_with_csum,test_osa_online_drain
+        :avocado: tags=osa_drain,online_drain,online_drain_with_csum
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain
         """
         self.log.info("Online Drain : With Checksum")
         self.run_online_drain_test(1)
@@ -140,10 +136,10 @@ class OSAOnlineDrain(OSAUtils):
         checksum.
 
         :avocado: tags=all,pr,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa
         :avocado: tags=osa_drain,online_drain,online_drain_without_csum
-        :avocado: tags=test_osa_online_drain_no_csum
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_no_csum
         """
         self.log.info("Online Drain : No Checksum")
         self.test_with_checksum = self.params.get("test_with_checksum",
@@ -156,9 +152,10 @@ class OSAOnlineDrain(OSAUtils):
         object class.
 
         :avocado: tags=all,pr,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_drain,online_drain,online_drain_oclass,test_osa_online_drain_oclass
+        :avocado: tags=osa_drain,online_drain,online_drain_oclass
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_oclass
         """
         self.log.info("Online Drain : Oclass")
         for oclass in self.test_oclass:
@@ -170,10 +167,10 @@ class OSAOnlineDrain(OSAUtils):
         object class.
 
         :avocado: tags=all,pr,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
         :avocado: tags=osa_drain,online_drain,online_drain_with_aggregation
-        :avocado: tags=test_osa_online_drain_with_aggregation
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_with_aggregation
         """
         self.log.info("Online Drain : Aggregation")
         self.test_during_aggregation = self.params.get("test_with_aggregation",
@@ -186,9 +183,10 @@ class OSAOnlineDrain(OSAUtils):
         running during the testing.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=osa,checksum
-        :avocado: tags=osa_drain,online_drain,online_drain_mdtest,test_osa_online_drain_mdtest
+        :avocado: tags=osa_drain,online_drain,online_drain_mdtest
+        :avocado: tags=OSAOnlineDrain,test_osa_online_drain_mdtest
         """
         self.log.info("Online Drain : With Mdtest")
         self.run_online_drain_test(1, app_name="mdtest")

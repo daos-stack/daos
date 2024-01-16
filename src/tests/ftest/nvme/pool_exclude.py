@@ -3,17 +3,17 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from multiprocessing import Queue
-import time
 import random
-import threading
 import re
+import threading
+import time
+from multiprocessing import Queue
 
 from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
-from test_utils_pool import add_pool
 from osa_utils import OSAUtils
+from test_utils_pool import add_pool
 from write_host_file import write_host_file
 
 
@@ -30,11 +30,9 @@ class NvmePoolExclude(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = self.get_daos_command()
         self.ior_test_sequence = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.pool = None
         self.cont_list = []
         self.dmg_command.exit_status_exception = True
@@ -161,10 +159,7 @@ class NvmePoolExclude(OSAUtils):
 
                 display_string = "Pool{} space at the End".format(val)
                 self.pool.display_pool_daos_space(display_string)
-                kwargs = {"pool": self.pool.uuid,
-                          "cont": self.container.uuid}
-                output = self.daos_command.container_check(**kwargs)
-                self.log.info(output)
+                self.container.check()
 
     def test_nvme_pool_excluded(self):
         """Test ID: DAOS-2086.

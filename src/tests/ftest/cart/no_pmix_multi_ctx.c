@@ -135,7 +135,7 @@ int main(int argc, char **argv)
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, 20, true, true);
 
-	rc = crt_rank_self_set(0);
+	rc = crt_rank_self_set(0, 1 /* group_version_min */);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(0) failed; rc=%d\n", rc);
 		assert(0);

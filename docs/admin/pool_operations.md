@@ -215,6 +215,23 @@ Pool-destroy command succeeded
 
 The pool's UUID can be used instead of the pool label.
 
+To destroy a pool which has active connections (open pool handles will be evicted before pool is
+destroyed):
+
+```bash
+$ dmg pool destroy tank --force
+Pool-destroy command succeeded
+```
+
+To destroy a pool despite the existence of associated containers:
+
+```bash
+$ dmg pool destroy tank --recursive
+Pool-destroy command succeeded
+```
+
+Without the --recursive flag, destroy will fail if containers exist in the pool.
+
 ### Querying a Pool
 
 The pool query operation retrieves information (i.e., the number of targets,
@@ -272,6 +289,111 @@ The example below shows a rebuild in progress and NVMe space allocated.
 
 Additional status and telemetry data is planned to be exported through
 management tools and will be documented here once available.
+
+### Upgrading a Pool
+
+The pool upgrade operation upgrades a pool's disk format to the latest
+pool format while preserving its data. The existing containers should
+be accessible after the upgrade with the same level of functionality as
+before the upgrade. New features available at the pool, container or
+object level won’t be automatically enabled on existing pools unless
+upgrade is performed.
+
+NB: The pool upgrade operation will evict any existing connections
+to this pool - pool will be unavailable to connect during pool upgrading.
+
+To see all UpgradeNeeded pools:
+
+```bash
+$ dmg pool list
+```
+
+Below is an example of pool list
+
+```bash
+   Pool  Size   State Used Imbalance Disabled UpgradeNeeded?
+   ----  ----   ----- ---- --------- -------- --------------
+   pool1 1.0 GB Ready 0%   0%        0/4      1->2
+   pool2 1.0 GB Ready 0%   0%        0/4      1->2
+```
+
+For the above example, pool1 and pool2 need to be upgraded from pool
+version 1 to pool version 2.
+
+NB: jump upgrading is not supported; e.g. upgrading pools created from
+DAOS v2.0 to DAOS v2.2 is ok, but not for DAOS v2.0 to v2.4 directly.
+
+The example below shows before and after pool upgrade.
+
+```bash
+$ dmg pool get-prop pool1
+
+   Pool pool1 properties:
+   Name                                                                             Value
+   ----                                                                             -----
+   WAL Checkpointing behavior (checkpoint)                                          value not set
+   WAL Checkpointing frequency, in seconds (checkpoint_freq)                        not set
+   Usage of WAL before checkpoint is triggered, as a percentage (checkpoint_thresh) not set
+   EC cell size (ec_cell_sz)                                                        64 KiB
+   Performance domain affinity level of EC (ec_pda)                                 1
+   Global Version (global_version)                                                  1
+   Pool label (label)                                                               pool1
+   Pool performance domain (perf_domain)                                            value not set
+   Tier placement policy (policy)                                                   type=io_size
+   Pool redundancy factor (rd_fac)                                                  0
+   Reclaim strategy (reclaim)                                                       lazy
+   Performance domain affinity level of RP (rp_pda)                                 3
+   Checksum scrubbing mode (scrub)                                                  value not set
+   Checksum scrubbing frequency (scrub-freq)                                        not set
+   Checksum scrubbing threshold (scrub-thresh)                                      not set
+   Self-healing policy (self_heal)                                                  exclude
+   Rebuild space ratio (space_rb)                                                   0%
+   Pool service replica list (svc_list)                                             [0]
+   Pool service redundancy factor (svc_rf)                                          not set
+   Upgrade Status (upgrade_status)                                                  not started
+
+$ dmg pool upgrade pool1
+   Pool-upgrade command succeeded
+
+$ dmg pool get-prop pool1
+
+   Pool pool1 properties:
+   Name                                                                             Value
+   ----                                                                             -----
+   WAL Checkpointing behavior (checkpoint)                                          timed
+   WAL Checkpointing frequency, in seconds (checkpoint_freq)                        5
+   Usage of WAL before checkpoint is triggered, as a percentage (checkpoint_thresh) 50
+   EC cell size (ec_cell_sz)                                                        64 KiB
+   Performance domain affinity level of EC (ec_pda)                                 1
+   Global Version (global_version)                                                  1
+   Pool label (label)                                                               pool1
+   Pool performance domain (perf_domain)                                            root
+   Tier placement policy (policy)                                                   type=io_size
+   Pool redundancy factor (rd_fac)                                                  0
+   Reclaim strategy (reclaim)                                                       lazy
+   Performance domain affinity level of RP (rp_pda)                                 3
+   Checksum scrubbing mode (scrub)                                                  off
+   Checksum scrubbing frequency (scrub-freq)                                        604800
+   Checksum scrubbing threshold (scrub-thresh)                                      0
+   Self-healing policy (self_heal)                                                  exclude
+   Rebuild space ratio (space_rb)                                                   0%
+   Pool service replica list (svc_list)                                             [0]
+   Pool service redundancy factor (svc_rf)                                          2
+   Upgrade Status (upgrade_status)                                                  in progress
+```
+
+Duration of upgrade depends on possible format change across different DAOS releases.
+It might trigger rebuild to re-place objects data which might be time-consuming.
+So `dmg pool upgrade` will return within seconds, but it might take hours to see Pool Status
+change from 'in progress' to 'completed'. The pool will stay offline and deny any pool connection until
+pool upgrade status becomes 'completed'.
+
+NB: once upgrade status is "completed", then the container/pool can do normal I/O,
+but rebuild status might not finish due to reclaim. pool reintegrate/drain/extend can
+only proceed once rebuild status is "done".
+
+!!! warning
+    Once upgrade was done, upgraded pools will become unavailable if downgrading software.
 
 ### Evicting Users
 
@@ -392,13 +514,56 @@ to tolerate. Valid values are between 0 to 4, inclusive, with 2 being the
 default. If specified during a pool create operation, this property overrides
 any `--nsvc` options. This property cannot yet be changed afterward.
 
-See [Erasure Code](https://docs.daos.io/v2.4/user/container/#erasure-code) for details on
+See [Erasure Code](https://docs.daos.io/v2.6/user/container/#erasure-code) for details on
 erasure coding at the container level.
+
+### Properties for Controlling Checkpoints (Metadata on SSD only)
+
+Checkpointing is a background process that flushes VOS metadata from the ephemeral
+copy to the metadata blob storing the VOS file, enabling Write Ahead Log (WAL) space
+to be reclaimed.  These properties are available to allow a user experiment with
+timing of checkpointing.  They are experimental and may be removed in future versions
+of DAOS.
+
+#### Checkpoint policy (checkpoint)
+
+This property controls how checkpoints are triggered for each target.  When enabled,
+checkpointing will always trigger if there is space pressure in the WAL. There are
+three supported options:
+
+* "timed"       : Checkpointing is also triggered periodically (default option).
+* "lazy"        : Checkpointing is only triggered when there is WAL space pressure.
+* "disabled"    : Checkpointing is disabled.  WAL space may be exhausted.
+
+#### Checkpoint frequency (checkpoint\_freq)
+
+This property controls how often checkpoints are triggered. It is only relevant
+if the checkpoint policy is "timed". The value is specified in seconds in the
+range [1, 1000000] with a default of 5.  Values outside the range are
+automatically adjusted.
+
+#### Checkpoint threshold (checkpoint\_thresh)
+
+This property controls the percentage of WAL usage to automatically trigger a checkpoint.
+It is not relevant when the checkpoint policy is "disabled". The value is specified
+as a percentage in the range [10-75] with a default of 50. Values outside the range are
+automatically adjusted.
+
+#### Reintegration mode (reintegration)
+
+This property controls how reintegration will recover data. Two options are supported:
+"data_sync" (default strategy) and "no_data_sync". with "data_sync", reintegration will
+discard pool data and trigger rebuild to sync data. While with "no_data_sync", reintegration
+only updates pool map to include rank.
+
+NB: with "no_data_sync" enabled, containers will be turned to read-only, daos won't trigger
+rebuild to restore the pool data redundancy on the surviving storage engines if there are
+dead rank events.
 
 ## Access Control Lists
 
 Client user and group access for pools are controlled by
-[Access Control Lists (ACLs)](https://docs.daos.io/v2.4/overview/security/#access-control-lists).
+[Access Control Lists (ACLs)](https://docs.daos.io/v2.6/overview/security/#access-control-lists).
 Most pool-related tasks are performed using the DMG administrative tool, which
 is authenticated by the administrative certificate rather than user-specific
 credentials.
@@ -414,7 +579,7 @@ Access-controlled client pool accesses include:
 * Deleting containers in the pool.
 
 This is reflected in the set of supported
-[pool permissions](https://docs.daos.io/v2.4/overview/security/#permissions).
+[pool permissions](https://docs.daos.io/v2.6/overview/security/#permissions).
 
 A user must be able to connect to the pool in order to access any containers
 inside, regardless of their permissions on those containers.
@@ -437,7 +602,7 @@ To create a pool with a custom ACL:
 $ dmg pool create --size <size> --acl-file <path> <pool_label>
 ```
 
-The ACL file format is detailed in [here](https://docs.daos.io/v2.4/overview/security/#acl-file).
+The ACL file format is detailed in [here](https://docs.daos.io/v2.6/overview/security/#acl-file).
 
 ### Displaying ACL
 
@@ -579,6 +744,8 @@ This allows the drained entity to continue to perform I/O while the rebuild
 operation is ongoing. Drain additionally enables non-replicated data to be
 rebuilt onto another target whereas in a conventional failure scenario non-replicated
 data would not be integrated into a rebuild and would be lost.
+Drain operation is not allowed if there are other ongoing rebuild operations, otherwise
+it will return -DER_BUSY.
 
 To drain a target from a pool:
 
@@ -598,6 +765,8 @@ and reintegrate the affected engines or targets to restore the pool to its
 original state.
 The operator can either reintegrate specific targets for an engine rank by
 supplying a target idx list, or reintegrate an entire engine rank by omitting the list.
+Reintegrate operation is not allowed if there are other ongoing rebuild operations,
+otherwise it will return -DER_BUSY.
 
 ```
 $ dmg pool reintegrate $DAOS_POOL --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
@@ -648,6 +817,8 @@ An operator can choose to extend a pool to include ranks not currently in the
 pool.
 This will automatically trigger a server rebalance operation where objects
 within the extended pool will be rebalanced across the new storage.
+Extend operation is not allowed if there are other ongoing rebuild operations,
+otherwise it will return -DER_BUSY.
 
 ```
 $ dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...
@@ -669,7 +840,7 @@ without adding new ones) is currently not supported and is under consideration.
 
 A DAOS pool is instantiated on each target by a set of pmemobj files
 managed by PMDK and SPDK blobs on SSDs. Tools to verify and repair this
-persistent data is scheduled for DAOS v2.4 and will be documented here
+persistent data is scheduled for DAOS v3.0 and will be documented here
 once available.
 
 Meanwhile, PMDK provides a recovery tool (i.e., pmempool check) to verify
@@ -696,7 +867,7 @@ $ dmg cont set-owner --pool <UUID> --cont <UUID> --group <owner-group>
 ```
 
 The user and group names are case sensitive and must be formatted as
-[DAOS ACL user/group principals](https://docs.daos.io/v2.4/overview/security/#principal).
+[DAOS ACL user/group principals](https://docs.daos.io/v2.6/overview/security/#principal).
 
 Because this is an administrative action, it does not require the administrator
 to have any privileges assigned in the container ACL.

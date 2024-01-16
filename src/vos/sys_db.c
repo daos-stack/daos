@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,7 @@
 
 #include <sys/stat.h>
 #include <daos_srv/vos.h>
+#include <daos/sys_db.h>
 #include "vos_internal.h"
 
 /* Reserved system pool and container UUIDs
@@ -70,6 +71,12 @@ db2vos(struct sys_db *db)
 	return container_of(db, struct vos_sys_db, db_pub);
 }
 
+uuid_t *
+vos_db_pool_uuid()
+{
+	return &vos_db.db_pool;
+}
+
 static void
 db_close(struct sys_db *db)
 {
@@ -123,13 +130,13 @@ db_open_create(struct sys_db *db, bool try_create)
 	D_DEBUG(DB_IO, "Opening %s, try_create=%d\n", vdb->db_file, try_create);
 	if (try_create) {
 		rc = vos_pool_create(vdb->db_file, vdb->db_pool, SYS_DB_SIZE, 0,
-				     0, &vdb->db_poh);
+				     VOS_POF_SYSDB, &vdb->db_poh);
 		if (rc) {
 			D_CRIT("sys pool create error: "DF_RC"\n", DP_RC(rc));
 			goto failed;
 		}
 	} else {
-		rc = vos_pool_open(vdb->db_file, vdb->db_pool, 0, &vdb->db_poh);
+		rc = vos_pool_open(vdb->db_file, vdb->db_pool, VOS_POF_SYSDB, &vdb->db_poh);
 		if (rc) {
 			/**
 			 * The access checks above should ensure the file
@@ -425,7 +432,7 @@ vos_db_fini(void)
 		if (vos_db.db_destroy_db) {
 			int rc;
 
-			rc = vos_pool_destroy(vos_db.db_file, vos_db.db_pool);
+			rc = vos_pool_destroy_ex(vos_db.db_file, vos_db.db_pool, 0);
 			if (rc != 0)
 				D_ERROR(DF_UUID": failed to destroy %s: %d\n",
 					DP_UUID(vos_db.db_pool), vos_db.db_file, rc);

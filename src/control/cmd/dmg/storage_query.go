@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +14,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
@@ -33,15 +34,15 @@ type smdQueryCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 }
 
 func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...pretty.PrintConfigOption) error {
 	req.SetHostList(cmd.getHostList())
 	resp, err := control.SmdQuery(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -70,7 +71,7 @@ type storageQueryCmd struct {
 
 type devHealthQueryCmd struct {
 	smdQueryCmd
-	UUID string `short:"u" long:"uuid" required:"1" description:"Device UUID"`
+	UUID string `short:"u" long:"uuid" description:"Device UUID. All devices queried if arg not set"`
 }
 
 func (cmd *devHealthQueryCmd) Execute(_ []string) error {
@@ -127,7 +128,7 @@ type usageQueryCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 }
 
 // Execute is run when usageQueryCmd activates.
@@ -139,8 +140,8 @@ func (cmd *usageQueryCmd) Execute(_ []string) error {
 	req.SetHostList(cmd.getHostList())
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -165,15 +166,15 @@ type smdManageCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 }
 
 func (cmd *smdManageCmd) makeRequest(ctx context.Context, req *control.SmdManageReq, opts ...pretty.PrintConfigOption) error {
 	req.SetHostList(cmd.getHostList())
 	resp, err := control.SmdManage(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -206,7 +207,7 @@ type nvmeSetFaultyCmd struct {
 // Set the SMD device state of the given device to "FAULTY"
 func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 	cmd.Notice("This command will permanently mark the device as unusable!")
-	if !cmd.Force && !cmd.jsonOutputEnabled() {
+	if !cmd.Force && !cmd.JSONOutputEnabled() {
 		if !common.GetConsent(cmd.Logger) {
 			return errors.New("consent not given")
 		}
@@ -257,7 +258,7 @@ type ledCmd struct {
 	smdManageCmd
 
 	Args struct {
-		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device UUIDs"`
+		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device UUIDs. All SSDs selected if arg not provided."`
 	} `positional-args:"yes"`
 }
 
@@ -277,7 +278,7 @@ type ledIdentifyCmd struct {
 // Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY" (4Hz blink).
 func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 	if cmd.Args.IDs == "" {
-		return errors.New("neither a pci address or a uuid has been supplied")
+		cmd.Debugf("neither a pci address or a uuid has been supplied so select all")
 	}
 	req := &control.SmdManageReq{
 		Operation:       control.LedBlinkOp,
@@ -302,7 +303,7 @@ type ledCheckCmd struct {
 // Runs SPDK VMD API commands to query the LED state on VMD devices
 func (cmd *ledCheckCmd) Execute(_ []string) error {
 	if cmd.Args.IDs == "" {
-		return errors.New("neither a pci address or a uuid has been supplied")
+		cmd.Debugf("neither a pci address or a uuid has been supplied so select all")
 	}
 	req := &control.SmdManageReq{
 		Operation: control.LedCheckOp,

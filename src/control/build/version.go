@@ -35,39 +35,40 @@ func MustNewVersion(in string) Version {
 		panic(err)
 	}
 
-	return *v
+	return v
 }
 
 // NewVersion creates a new version from a string.
-func NewVersion(in string) (*Version, error) {
+func NewVersion(in string) (Version, error) {
 	var (
 		major, minor, patch int
 		err                 error
 	)
+	nilVersion := Version{}
 
 	in = strings.TrimPrefix(in, "v")
 
 	parts := strings.Split(in, ".")
 	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid version format %q", in)
+		return nilVersion, fmt.Errorf("invalid version format %q", in)
 	}
 
 	major, err = strconv.Atoi(parts[0])
 	if err != nil {
-		return nil, fmt.Errorf("invalid major version %q: %v", parts[0], err)
+		return nilVersion, fmt.Errorf("invalid major version %q: %v", parts[0], err)
 	}
 
 	minor, err = strconv.Atoi(parts[1])
 	if err != nil {
-		return nil, fmt.Errorf("invalid minor version %q: %v", parts[1], err)
+		return nilVersion, fmt.Errorf("invalid minor version %q: %v", parts[1], err)
 	}
 
 	patch, err = strconv.Atoi(parts[2])
 	if err != nil {
-		return nil, fmt.Errorf("invalid patch version %q: %v", parts[2], err)
+		return nilVersion, fmt.Errorf("invalid patch version %q: %v", parts[2], err)
 	}
 
-	return &Version{
+	return Version{
 		Major: major,
 		Minor: minor,
 		Patch: patch,

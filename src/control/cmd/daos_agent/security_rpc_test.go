@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"net"
 	"testing"
@@ -54,7 +53,7 @@ func TestAgentSecurityModule_BadMethod(t *testing.T) {
 }
 
 func callRequestCreds(mod *SecurityModule, t *testing.T, log logging.Logger, conn net.Conn) ([]byte, error) {
-	return mod.HandleCall(context.Background(), newTestSession(t, log, conn), drpc.MethodRequestCredentials, nil)
+	return mod.HandleCall(test.Context(t), newTestSession(t, log, conn), drpc.MethodRequestCredentials, nil)
 }
 
 func setupTestUnixConn(t *testing.T) (*net.UnixConn, func()) {
@@ -76,7 +75,7 @@ func setupTestUnixConn(t *testing.T) (*net.UnixConn, func()) {
 
 func getClientConn(t *testing.T, path string) *drpc.ClientConnection {
 	client := drpc.NewClientConnection(path)
-	if err := client.Connect(); err != nil {
+	if err := client.Connect(test.Context(t)); err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
 	return client
@@ -106,6 +105,7 @@ func TestAgentSecurityModule_RequestCreds_OK(t *testing.T) {
 	defer cleanup()
 
 	mod := NewSecurityModule(log, defaultTestTransportConfig())
+	mod.ext = auth.NewMockExtWithUser("agent-test", 0, 0)
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
 	if err != nil {

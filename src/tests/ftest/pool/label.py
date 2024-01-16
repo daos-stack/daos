@@ -7,8 +7,8 @@ import string
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from general_utils import report_errors, get_random_string
 from exception_utils import CommandFailure
+from general_utils import get_random_string, report_errors
 
 
 class Label(TestWithServers):

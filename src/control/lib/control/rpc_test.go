@@ -113,7 +113,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 		},
 		"parent context canceled": {
 			withCancel: func() *ctxCancel {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(test.Context(t))
 				return &ctxCancel{
 					ctx:    ctx,
 					cancel: cancel,
@@ -154,7 +154,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				WithClientLogger(log),
 			)
 
-			outerCtx := context.TODO()
+			outerCtx := test.Context(t)
 			if tc.withCancel != nil {
 				outerCtx = tc.withCancel.ctx
 			}
@@ -299,7 +299,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 		},
 		"parent context canceled": {
 			withCancel: func() *ctxCancel {
-				ctx, cancel := context.WithCancel(context.Background())
+				ctx, cancel := context.WithCancel(test.Context(t))
 				return &ctxCancel{
 					ctx:    ctx,
 					cancel: cancel,
@@ -506,7 +506,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 				WithClientLogger(log),
 			)
 
-			outerCtx := context.TODO()
+			outerCtx := test.Context(t)
 			if tc.withCancel != nil {
 				outerCtx = tc.withCancel.ctx
 			}

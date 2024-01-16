@@ -3,14 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
-import random
-import threading
 import copy
 import queue
-from osa_utils import OSAUtils
-from daos_utils import DaosCommand
+import random
+import threading
+import time
+
 from dmg_utils import check_system_query_status
+from osa_utils import OSAUtils
 from test_utils_pool import add_pool
 
 
@@ -28,9 +28,7 @@ class OSAOfflineParallelTest(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         # Start an additional server.
         self.extra_servers = self.get_hosts_from_yaml(
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
@@ -80,7 +78,6 @@ class OSAOfflineParallelTest(OSAUtils):
         """
         # Create a pool
         pool = {}
-        pool_uuid = []
         target_list = []
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
@@ -98,7 +95,6 @@ class OSAOfflineParallelTest(OSAUtils):
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]
-            pool_uuid.append(self.pool.uuid)
             # Use only pool UUID while running the test.
             self.pool.use_label = False
             self.pool.set_property("reclaim", "disabled")
@@ -139,10 +135,11 @@ class OSAOfflineParallelTest(OSAUtils):
             threads = []
             # Action dictionary with OSA dmg command parameters
             action_kwargs = {
-                "drain": {"pool": self.pool.uuid, "rank": rank, "tgt_idx": None},
-                "exclude": {"pool": self.pool.uuid, "rank": (rank + 1), "tgt_idx": t_string},
-                "reintegrate": {"pool": self.pool.uuid, "rank": (rank + 1), "tgt_idx": t_string},
-                "extend": {"pool": self.pool.uuid, "ranks": (rank + 2)}
+                "drain": {"pool": self.pool.identifier, "rank": rank, "tgt_idx": None},
+                "exclude": {"pool": self.pool.identifier, "rank": (rank + 1), "tgt_idx": t_string},
+                "reintegrate": {
+                    "pool": self.pool.identifier, "rank": (rank + 1), "tgt_idx": t_string},
+                "extend": {"pool": self.pool.identifier, "ranks": (rank + 2)}
             }
             for action in sorted(action_kwargs):
                 # Add a dmg thread
@@ -188,10 +185,7 @@ class OSAOfflineParallelTest(OSAUtils):
                 if oclass != "S1":
                     self.run_mdtest_thread()
                 self.container = self.pool_cont_dict[self.pool][0]
-                kwargs = {"pool": self.pool.uuid,
-                          "cont": self.container.uuid}
-                output = self.daos_command.container_check(**kwargs)
-                self.log.info(output)
+                self.container.check()
 
     def test_osa_offline_parallel_test(self):
         """JIRA ID: DAOS-4752.

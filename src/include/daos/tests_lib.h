@@ -118,7 +118,7 @@ dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
  *
  * @param sgl		Scatter gather list to initialize
  * @param count		Number of IO Vectors that will be created in the SGL
- * @param repeat	Number of tiems to repeat the string
+ * @param repeat	Number of times to repeat the string
  * @param d		First string that will be used
  * @param ...		Rest of strings, up to count
  */
@@ -128,6 +128,17 @@ dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 
 void
 dts_sgl_alloc_single_iov(d_sg_list_t *sgl, daos_size_t size);
+
+void
+dts_sgl_generate(d_sg_list_t *sgl, uint32_t iov_nr, daos_size_t data_size, uint8_t value);
+
+/** easily setup an iov with a string */
+static inline void
+dts_iov_alloc_str(d_iov_t *iov, const char *str)
+{
+	daos_iov_alloc(iov, strlen(str) + 1, true);
+	strcpy(iov->iov_buf, str);
+}
 
 #define DTS_CFG_MAX 256
 __attribute__ ((__format__(__printf__, 2, 3)))
@@ -238,6 +249,44 @@ int dmg_pool_destroy(const char *dmg_config_file,
 		     const uuid_t uuid, const char *grp, int force);
 
 /**
+ * Evict any open handles on a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for handles eviction
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ */
+int
+dmg_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp);
+
+/**
+ * Update/add an access control entry to a pool's access control list.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for handles eviction
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param ace		[IN]	Access Control Entry (ACE) string in the form:
+ *				TYPE:FLAGS:PRINCIPAL:PERMISSIONS
+ */
+int
+dmg_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *ace);
+
+/**
+ * Delete an access control entry from a pool's access control list.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for handles eviction
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param principal	[IN]	Principal whose entry should be removed
+ */
+int
+    dmg_pool_delete_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+			const char *principal);
+
+/**
  * Exclude an entire rank or a target on that rank from a pool.
  *
  * \param dmg_config_file
@@ -332,13 +381,11 @@ int dmg_storage_set_nvme_fault(const char *dmg_config_file,
 /**
  * Get NVMe Device health stats.
  *
- * \param dmg_config_file
- *		[IN]	DMG config file
- * \param host	[IN]	Get device-health from the given host.
- * \param uuid	[IN]	UUID of the device.
- * \param stats	[IN/OUT]
- *			[in] Health stats for which to get counter value.
- *			[out] Stats counter value.
+ * \param[in] dmg_config_file	DMG config file
+ * \param[in] host		Get device-health from the given host.
+ * \param[in] uuid		UUID of the device.
+ * \param[in,out] stats		[in] Health stats for which to get counter value.
+ *				[out] Stats counter value.
  */
 int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 				    char *stats, const uuid_t uuid);
@@ -377,5 +424,27 @@ int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
 int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
 
 const char *daos_target_state_enum_to_str(int state);
+
+/* Used to easily setup data needed for tests */
+struct test_data {
+	d_sg_list_t		*td_sgls;
+	daos_iod_t		*td_iods;
+	daos_iom_t		*td_maps;
+	uint64_t		*td_sizes;
+	uint32_t		 td_iods_nr;
+	daos_key_t		 dkey;
+};
+
+struct td_init_args {
+	daos_iod_type_t ca_iod_types[10];
+	uint32_t        ca_recx_nr[10];
+	uint32_t        ca_data_size;
+};
+
+void td_init(struct test_data *td, uint32_t iod_nr, struct td_init_args args);
+void td_init_single_values(struct test_data *td, uint32_t iod_nr);
+void td_init_array_values(struct test_data *td, uint32_t iod_nr, uint32_t recx_nr,
+			  uint32_t data_size, uint32_t chunksize);
+void td_destroy(struct test_data *td);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

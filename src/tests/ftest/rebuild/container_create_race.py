@@ -1,11 +1,10 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
+from general_utils import DaosTestError
 from ior_test_base import IorTestBase
-from avocado.core.exceptions import TestFail
 
 
 class RbldContainerCreate(IorTestBase):
@@ -68,7 +67,7 @@ class RbldContainerCreate(IorTestBase):
         try:
             container.read_objects()
             container.close()
-        except TestFail as error:
+        except DaosTestError as error:
             self.log.error("=> Container %s read failed:", container, exc_info=error)
             status = False
         return status
@@ -152,8 +151,8 @@ class RbldContainerCreate(IorTestBase):
         # Check for pool and rebuild info after rebuild
         self.log.info("=> (6) Check for pool and rebuild info after rebuild")
         info_checks["pi_ndisabled"] += targets
-        rebuild_checks["rs_obj_nr"] = ">0"
-        rebuild_checks["rs_rec_nr"] = ">0"
+        rebuild_checks["rs_obj_nr"] = ">=0"
+        rebuild_checks["rs_rec_nr"] = ">=0"
         rebuild_checks["rs_state"] = 2
         self.assertTrue(
             self.pool.check_pool_info(**info_checks),

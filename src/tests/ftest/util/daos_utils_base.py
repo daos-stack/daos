@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from command_utils_base import FormattedParameter, CommandWithParameters, BasicParameter
 from command_utils import CommandWithSubCommand
+from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 
 
 class DaosCommandBase(CommandWithSubCommand):
@@ -237,6 +237,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container create command object."""
                 super().__init__("create")
+                # pylint: disable=wrong-spelling-in-comment
                 # Additional daos container create parameters:
                 #  [label]
                 #       Optional container label
@@ -335,6 +336,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container get-acl command object."""
                 super().__init__("get-acl")
+                # pylint: disable=wrong-spelling-in-comment
                 # Additional daos container create parameters:
                 #   --verbose
                 #           verbose mode (get-acl)

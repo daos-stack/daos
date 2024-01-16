@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
+from general_utils import DaosTestError
 from pydaos.raw import DaosApiError, c_uuid_to_str
 
 
-class EvictTests(TestWithServers):
+class PoolEvictTest(TestWithServers):
     """
     Tests DAOS client eviction from a pool that the client is using.
 
@@ -18,17 +17,18 @@ class EvictTests(TestWithServers):
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize an EvictTests object."""
+        """Initialize an PoolEvictTest object."""
         super().__init__(*args, **kwargs)
         self.start_agents_once = False
         self.start_servers_once = False
 
-    def connected_pool(self, hostlist, targets=None):
+    def connected_pool(self, hostlist, scm_mount, targets=None):
         """Create a pool, check the pool file in /mnt/daos, and connect.
 
         Args:
             hostlist (NodeSet): Hosts where pool is created.
             targets (list): List of server ranks to create the pool. Defaults to None.
+            scm_mount (str): SCM mount point such as "/mnt/daos"
 
         Returns:
             TestPool: Created pool.
@@ -43,7 +43,7 @@ class EvictTests(TestWithServers):
         pool.create()
 
         # Check that the pool was created
-        status = pool.check_files(hostlist)
+        status = pool.check_files(hostlist, scm_mount)
         if not status:
             self.fail("Invalid pool - pool data not detected on servers")
 
@@ -85,7 +85,7 @@ class EvictTests(TestWithServers):
         if pool.dmg.result.exit_status != 0:
             self.fail("Pool evict failed!")
 
-    def test_evict(self):
+    def test_pool_evict(self):
         """
         Test Steps:
         1. Create 2 pools on all server ranks.
@@ -108,7 +108,7 @@ class EvictTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_evict
-        :avocado: tags=pool_evict_basic,test_evict
+        :avocado: tags=PoolEvictTest,test_pool_evict
         """
         # Do not use self.pool. It will cause -1002 error when disconnecting.
         pools = []
@@ -135,24 +135,28 @@ class EvictTests(TestWithServers):
         half_hosts_with = self.get_host_list(ranks=half_ranks_with)
         half_hosts_without = self.get_host_list(ranks=half_ranks_without)
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Step 1 to 4. Create two pools, container, and write data.
         for _ in range(2):
             # Create a pool over all of the hosts, check the pool file, and connect.
-            pools.append(self.connected_pool(hostlist=all_hosts, targets=all_ranks))
+            pools.append(
+                self.connected_pool(
+                    hostlist=all_hosts, targets=all_ranks, scm_mount=scm_mount))
             # Create a container and write data to it.
             containers.append(self.get_container(pool=pools[-1]))
             containers[-1].write_objects()
 
         # Create a pool over the half of the hosts, check the pool file, and connect.
         pools.append(self.connected_pool(
-            hostlist=half_hosts_with, targets=half_ranks_with))
+            hostlist=half_hosts_with, targets=half_ranks_with, scm_mount=scm_mount))
         # Create a container and write data to it.
         containers.append(self.get_container(pool=pools[-1]))
         containers[-1].write_objects()
 
         # Step 5. Verify that the third pool's file doesn't exist on the half of the
         # hosts that this pool wasn't created on.
-        if pools[-1].check_files(half_hosts_without):
+        if pools[-1].check_files(half_hosts_without, scm_mount):
             self.fail("Pool # 2 with UUID {} exists".format(pools[-1].uuid))
         else:
             self.log.info("Pool # 2 with UUID %s does not exist", pools[-1].uuid)
@@ -170,7 +174,7 @@ class EvictTests(TestWithServers):
                 hosts = half_hosts_with
                 failure_expected = True
 
-            if pool.check_files(hosts):
+            if pool.check_files(hosts, scm_mount):
                 self.log.info(
                     "Pool # %d with UUID %s still exists", index, pool.uuid)
             else:
@@ -206,7 +210,7 @@ class EvictTests(TestWithServers):
                 if failure_expected:
                     self.fail(
                         "Pool {} was evicted, but write_objects worked!".format(index))
-            except TestFail as error:
+            except DaosTestError as error:
                 if failure_expected and "-1002" in str(error):
                     msg = "Pool # {}: write_objects failed as expected.\n\t{}".format(
                         index, error)

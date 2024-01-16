@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -79,7 +78,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolGetACL(ctx, mi, tc.req)
@@ -154,7 +153,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolOverwriteACL(ctx, mi, tc.req)
@@ -229,7 +228,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolUpdateACL(ctx, mi, tc.req)
@@ -310,7 +309,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolDeleteACL(ctx, mi, tc.req)

@@ -76,6 +76,10 @@ struct io_test_args {
 	int			 akey_size;
 	int			 dkey_size;
 	int			 co_create_step;
+	bool			 checkpoint;
+	bool			 no_replay;
+	bool			 fail_replay;
+	bool			 fail_checkpoint;
 };
 
 /** test counters */
@@ -124,6 +128,16 @@ hash_key(d_iov_t *key, int flag)
 
 	return d_hash_string_u32((char *)key->iov_buf, key->iov_len);
 }
+
+/* vts_aggregate.c */
+void
+update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
+	     uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
+	     daos_size_t iod_size, daos_recx_t *recx, char *buf);
+void
+fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
+	    uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
+	    daos_size_t iod_size, daos_recx_t *recx, char *buf);
 
 #endif
 

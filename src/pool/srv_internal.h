@@ -16,8 +16,17 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 
-/* Map status of ranks that make up the pool group */
-#define POOL_GROUP_MAP_STATUS (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
+/* Map states of ranks that make up the pool group */
+#define POOL_GROUP_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
+
+/* Map states of ranks that make up the pool service */
+#define POOL_SVC_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN)
+
+/*
+ * Since we want all PS replicas to belong to the pool group,
+ * POOL_SVC_MAP_STATES must be a subset of POOL_GROUP_MAP_STATES.
+ */
+D_CASSERT((POOL_SVC_MAP_STATES & POOL_GROUP_MAP_STATES) == POOL_SVC_MAP_STATES);
 
 /**
  * Global pool metrics
@@ -73,11 +82,16 @@ struct pool_iv_prop {
 	uint32_t	pip_global_version;
 	uint32_t	pip_upgrade_status;
 	uint64_t	pip_svc_redun_fac;
+	uint32_t	pip_checkpoint_mode;
+	uint32_t	pip_checkpoint_freq;
+	uint32_t	pip_checkpoint_thresh;
 	uint32_t	pip_obj_version;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
 	uint32_t	pip_svc_list_offset;
+	uint32_t	pip_perf_domain;
+	uint32_t	pip_reint_mode;
 	char		pip_iv_buf[0];
 };
 
@@ -129,30 +143,64 @@ struct pool_map_refresh_ult_arg {
  */
 void ds_pool_rsvc_class_register(void);
 void ds_pool_rsvc_class_unregister(void);
+uint32_t ds_pool_get_vos_pool_df_version(uint32_t pool_global_version);
 int ds_pool_start_all(void);
 int ds_pool_stop_all(void);
 int ds_pool_hdl_is_from_srv(struct ds_pool *pool, uuid_t hdl);
+int ds_pool_svc_upgrade_vos_pool(struct ds_pool *pool);
 void ds_pool_create_handler(crt_rpc_t *rpc);
-void ds_pool_connect_handler_v4(crt_rpc_t *rpc);
+void
+     ds_pool_connect_handler_v6(crt_rpc_t *rpc);
 void ds_pool_connect_handler_v5(crt_rpc_t *rpc);
-void ds_pool_disconnect_handler(crt_rpc_t *rpc);
-void ds_pool_query_handler_v4(crt_rpc_t *rpc);
+void
+ds_pool_disconnect_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_disconnect_handler_v5(crt_rpc_t *rpc);
+void
+     ds_pool_query_handler_v6(crt_rpc_t *rpc);
 void ds_pool_query_handler_v5(crt_rpc_t *rpc);
 void ds_pool_prop_get_handler(crt_rpc_t *rpc);
 void ds_pool_prop_set_handler(crt_rpc_t *rpc);
 void ds_pool_acl_update_handler(crt_rpc_t *rpc);
 void ds_pool_acl_delete_handler(crt_rpc_t *rpc);
-void ds_pool_update_handler(crt_rpc_t *rpc);
+void
+ds_pool_update_handler_v6(crt_rpc_t *rpc);
+void
+     ds_pool_update_handler_v5(crt_rpc_t *rpc);
 void ds_pool_extend_handler(crt_rpc_t *rpc);
 void ds_pool_evict_handler(crt_rpc_t *rpc);
-void ds_pool_svc_stop_handler(crt_rpc_t *rpc);
-void ds_pool_attr_list_handler(crt_rpc_t *rpc);
-void ds_pool_attr_get_handler(crt_rpc_t *rpc);
-void ds_pool_attr_set_handler(crt_rpc_t *rpc);
-void ds_pool_attr_del_handler(crt_rpc_t *rpc);
-void ds_pool_list_cont_handler(crt_rpc_t *rpc);
-void ds_pool_filter_cont_handler(crt_rpc_t *rpc);
-void ds_pool_query_info_handler(crt_rpc_t *rpc);
+void
+ds_pool_svc_stop_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_svc_stop_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_list_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_list_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_get_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_get_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_set_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_set_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_attr_del_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_attr_del_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_list_cont_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_list_cont_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_filter_cont_handler_v6(crt_rpc_t *rpc);
+void
+ds_pool_filter_cont_handler_v5(crt_rpc_t *rpc);
+void
+ds_pool_query_info_handler_v6(crt_rpc_t *rpc);
+void
+     ds_pool_query_info_handler_v5(crt_rpc_t *rpc);
 void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 void ds_pool_upgrade_handler(crt_rpc_t *rpc);
 
@@ -181,7 +229,7 @@ void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
  */
 bool ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank);
 int ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas,
-			     d_rank_t self, d_rank_list_t **to_add_out,
+			     d_rank_t self, bool filter_only, d_rank_list_t **to_add_out,
 			     d_rank_list_t **to_remove_out);
 int ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 			     crt_rpc_t *rpc, crt_bulk_t remote_bulk,

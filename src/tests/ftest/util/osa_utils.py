@@ -1,20 +1,20 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import ctypes
 import queue
-import time
-import threading
 import re
+import threading
+import time
 
 from avocado import fail_on
+from exception_utils import CommandFailure
+from general_utils import create_string_buffer, run_command
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from exception_utils import CommandFailure
-from pydaos.raw import DaosContainer, IORequest, DaosObj, DaosApiError
-from general_utils import create_string_buffer, run_command
+from pydaos.raw import DaosApiError, DaosContainer, DaosObj, IORequest
 
 
 class OSAUtils(MdtestBase, IorTestBase):
@@ -181,7 +181,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.log.info("Writing the Single Dataset")
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) * self.record_length)
+                indata = str(akey)[0] * self.record_length
                 d_key_value = "dkey {0}".format(dkey)
                 c_dkey = create_string_buffer(d_key_value)
                 a_key_value = "akey {0}".format(akey)
@@ -201,7 +201,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.log.info("Single Dataset Verification -- Started")
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) * self.record_length)
+                indata = str(akey)[0] * self.record_length
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
                 c_akey = create_string_buffer("akey {0}".format(akey))
                 val = self.ioreq.single_fetch(c_dkey, c_akey, len(indata) + 1)
@@ -232,7 +232,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.log.info(self.pool_cont_dict)
         # If pool is not in the dictionary,
         # initialize its container list to None
-        # {poolA : [None, None], [None, None]}
+        # {pool : [None, None], [None, None]}
         if self.pool not in self.pool_cont_dict:
             self.pool_cont_dict[self.pool] = [None] * 4
         # Create container if the pool doesn't have one.
@@ -427,7 +427,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.cleanup_queue()
         self.pool = pool
         self.ior_cmd.get_params(self)
-        self.ior_cmd.set_daos_params(self.server_group, self.pool)
+        self.ior_cmd.set_daos_params(self.server_group, self.pool, None)
         self.log.info("Redundancy Factor : %s", self.test_with_rf)
         self.ior_cmd.dfs_oclass.update(oclass)
         self.ior_cmd.dfs_dir_oclass.update(oclass)
@@ -456,8 +456,11 @@ class OSAUtils(MdtestBase, IorTestBase):
                 "Detected container redundancy factor: %s", self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
             self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
+        # Run run_ior_with_pool without invoking the pool query method for
+        # displaying pool space information (display_space=False)
         self.run_ior_with_pool(create_pool=False, create_cont=False,
                                fail_on_warning=fail_on_warning,
+                               display_space=False,
                                out_queue=self.out_queue)
         if fail_on_warning and not self.out_queue.empty():
             self.assert_on_exception()

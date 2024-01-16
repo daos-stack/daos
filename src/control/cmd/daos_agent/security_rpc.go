@@ -59,17 +59,18 @@ func (m *SecurityModule) getCredential(session *drpc.Session) ([]byte, error) {
 
 	signingKey, err := m.config.PrivateKey()
 	if err != nil {
-		m.log.Error(err.Error())
+		m.log.Errorf("%s: failed to get signing key: %s", info, err)
 		// something is wrong with the cert config
 		return m.credRespWithStatus(daos.BadCert)
 	}
 
 	cred, err := auth.AuthSysRequestFromCreds(m.ext, info, signingKey)
 	if err != nil {
-		m.log.Errorf("Failed to get AuthSys struct: %s", err)
+		m.log.Errorf("%s: failed to get AuthSys struct: %s", info, err)
 		return m.credRespWithStatus(daos.MiscError)
 	}
 
+	m.log.Tracef("%s: successfully signed credential", info)
 	resp := &auth.GetCredResp{Cred: cred}
 	return drpc.Marshal(resp)
 }

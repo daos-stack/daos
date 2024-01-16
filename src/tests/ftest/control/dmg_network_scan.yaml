@@ -6,7 +6,7 @@ timeout: 180
 server_config:
   name: daos_server
   port: 10001
-  control_log_mask: INFO
+  control_log_mask: TRACE
   engines_per_host: 1
   engines:
     0:
@@ -14,4 +14,3 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 16

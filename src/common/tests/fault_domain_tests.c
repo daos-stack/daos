@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -255,6 +255,39 @@ test_fd_get_exp_num_domains(void **state)
 	assert_int_equal(result, 3);
 }
 
+static void
+test_fd_node_is_group(void **state)
+{
+	struct d_fd_node	dom_node = {0};
+	struct d_fd_node	rank_node = {0};
+	struct d_fault_domain	dom = {0};
+
+	/* setup domain node */
+	dom_node.fdn_type = D_FD_NODE_TYPE_DOMAIN;
+	dom_node.fdn_val.dom = &dom;
+
+	/* setup rank node */
+	rank_node.fdn_type = D_FD_NODE_TYPE_RANK;
+
+	/* null input */
+	assert_false(d_fd_node_is_group(NULL));
+
+	/* rank node */
+	assert_false(d_fd_node_is_group(&rank_node));
+
+	/* group level */
+	dom.fd_level = D_FD_GROUP_DOMAIN_LEVEL;
+	assert_true(d_fd_node_is_group(&dom_node));
+
+	/* level higher than group */
+	dom.fd_level = D_FD_GROUP_DOMAIN_LEVEL + 1;
+	assert_false(d_fd_node_is_group(&dom_node));
+
+	/* level lower than group */
+	dom.fd_level = D_FD_GROUP_DOMAIN_LEVEL - 1;
+	assert_false(d_fd_node_is_group(&dom_node));
+}
+
 int
 main(void)
 {
@@ -268,6 +301,7 @@ main(void)
 		cmocka_unit_test(test_fd_tree_next_len_bigger_than_tree),
 		cmocka_unit_test(test_fd_tree_reset),
 		cmocka_unit_test(test_fd_get_exp_num_domains),
+		cmocka_unit_test(test_fd_node_is_group),
 	};
 
 	return cmocka_run_group_tests_name("common_fault_domain",

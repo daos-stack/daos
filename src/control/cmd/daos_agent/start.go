@@ -48,10 +48,10 @@ type startCmd struct {
 
 func (cmd *startCmd) Execute(_ []string) error {
 	if err := common.CheckDupeProcess(); err != nil {
-		return err
+		cmd.Notice(err.Error())
 	}
 
-	cmd.Debugf("Starting %s (pid %d)", versionString(), os.Getpid())
+	cmd.Infof("Starting %s (pid %d)", versionString(), os.Getpid())
 	startedAt := time.Now()
 
 	parent, shutdown := context.WithCancel(context.Background())
@@ -72,16 +72,6 @@ func (cmd *startCmd) Execute(_ []string) error {
 	}
 	cmd.Debugf("created dRPC server: %s", time.Since(createDrpcStart))
 
-	aicEnabled := !cmd.attachInfoCacheDisabled()
-	if !aicEnabled {
-		cmd.Debug("GetAttachInfo agent caching has been disabled")
-	}
-
-	ficEnabled := !cmd.fabricCacheDisabled()
-	if !ficEnabled {
-		cmd.Debug("Local fabric interface caching has been disabled")
-	}
-
 	hwprovInitStart := time.Now()
 	hwprovFini, err := hwprov.Init(cmd.Logger)
 	if err != nil {
@@ -90,35 +80,35 @@ func (cmd *startCmd) Execute(_ []string) error {
 	defer hwprovFini()
 	cmd.Debugf("initialized hardware providers: %s", time.Since(hwprovInitStart))
 
+	cacheStart := time.Now()
+	cache := NewInfoCache(ctx, cmd.Logger, cmd.ctlInvoker, cmd.cfg)
+	if cmd.attachInfoCacheDisabled() {
+		cache.DisableAttachInfoCache()
+		cmd.Debug("GetAttachInfo agent caching has been disabled")
+	}
+
+	if cmd.fabricCacheDisabled() {
+		cache.DisableFabricCache()
+		cmd.Debug("Local fabric interface caching has been disabled")
+	}
+	cmd.Debugf("created cache: %s", time.Since(cacheStart))
+
 	procmonStart := time.Now()
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 
-	fabricCacheStart := time.Now()
-	fabricCache := newLocalFabricCache(cmd.Logger, ficEnabled).WithConfig(cmd.cfg)
-	if len(cmd.cfg.FabricInterfaces) > 0 {
-		// Cache is required to use user-defined fabric interfaces
-		fabricCache.enabled.SetTrue()
-		nf := NUMAFabricFromConfig(cmd.Logger, cmd.cfg.FabricInterfaces)
-		fabricCache.Cache(ctx, nf)
-	}
-	cmd.Debugf("created fabric cache: %s", time.Since(fabricCacheStart))
-
 	drpcRegStart := time.Now()
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
-	drpcServer.RegisterRPCModule(&mgmtModule{
-		log:            cmd.Logger,
-		sys:            cmd.cfg.SystemName,
-		ctlInvoker:     cmd.ctlInvoker,
-		attachInfo:     newAttachInfoCache(cmd.Logger, aicEnabled),
-		fabricInfo:     fabricCache,
-		numaGetter:     hwprov.DefaultProcessNUMAProvider(cmd.Logger),
-		fabricScanner:  hwprov.DefaultFabricScanner(cmd.Logger),
-		devClassGetter: hwprov.DefaultNetDevClassProvider(cmd.Logger),
-		devStateGetter: hwprov.DefaultNetDevStateProvider(cmd.Logger),
-		monitor:        procmon,
-	})
+	mgmtMod := &mgmtModule{
+		log:        cmd.Logger,
+		sys:        cmd.cfg.SystemName,
+		ctlInvoker: cmd.ctlInvoker,
+		cache:      cache,
+		numaGetter: hwprov.DefaultProcessNUMAProvider(cmd.Logger),
+		monitor:    procmon,
+	}
+	drpcServer.RegisterRPCModule(mgmtMod)
 	cmd.Debugf("registered dRPC modules: %s", time.Since(drpcRegStart))
 
 	hwlocStart := time.Now()
@@ -133,8 +123,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	drpcSrvStart := time.Now()
 	err = drpcServer.Start(hwlocCtx)
 	if err != nil {
-		cmd.Errorf("Unable to start socket server on %s: %v", sockPath, err)
-		return err
+		return errors.Wrap(err, "unable to start dRPC server")
 	}
 	cmd.Debugf("dRPC socket server started: %s", time.Since(drpcSrvStart))
 
@@ -149,7 +138,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	signals := make(chan os.Signal)
 	finish := make(chan struct{})
 
-	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGPIPE, syscall.SIGUSR1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGPIPE, syscall.SIGUSR1, syscall.SIGUSR2)
 	// Anonymous goroutine to wait on the signals channel and tell the
 	// program to finish when it receives a signal. Since we notify on
 	// SIGINT and SIGTERM we should only catch these on a kill or ctrl+c
@@ -165,6 +154,9 @@ func (cmd *startCmd) Execute(_ []string) error {
 			case syscall.SIGUSR1:
 				cmd.Infof("Signal received.  Caught %s; flushing open pool handles", sig)
 				procmon.FlushAllHandles(ctx)
+			case syscall.SIGUSR2:
+				cmd.Infof("Signal received. Caught %s; refreshing caches", sig)
+				mgmtMod.RefreshCache(ctx)
 			default:
 				shutdownRcvd = time.Now()
 				cmd.Infof("Signal received.  Caught %s; shutting down", sig)

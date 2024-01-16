@@ -6,10 +6,10 @@
 
 import time
 
-from file_count_test_base import FileCountTestBase
-from data_mover_test_base import DataMoverTestBase
-from general_utils import human_to_bytes
 import security_test_base as secTestBase
+from data_mover_test_base import DataMoverTestBase
+from file_count_test_base import FileCountTestBase
+from general_utils import human_to_bytes
 from test_utils_pool import check_pool_creation
 
 
@@ -56,10 +56,10 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
             for cont_idx in range(1, 4):
                 self.add_container_qty(1, self.pool[-1],
                                        namespace="/run/container_{}/".format(cont_idx))
-                daos.container_set_owner(self.pool[-1].uuid, self.container[-1].uuid,
+                daos.container_set_owner(self.pool[-1].identifier, self.container[-1].identifier,
                                          new_test_user, new_test_group)
 
-            daos.container_list(self.pool[-1].uuid)
+            daos.container_list(self.pool[-1].identifier)
             self.destroy_containers(self.container)
             self.container = None
             self.destroy_pools(self.pool)
@@ -85,7 +85,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.container[-1].destroy_snap(epc=self.container[-1].epoch)
         # Now check if the space is returned back.
         counter = 1
-        returned_space = (self.get_free_space()[1] - nvme_free_space_before_snap_destroy)
+        returned_space = self.get_free_space()[1] - nvme_free_space_before_snap_destroy
 
         data_written = (int(self.ppn) * human_to_bytes(self.ior_cmd.block_size.value))
         while returned_space < int(data_written):
@@ -99,7 +99,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
                 self.fail("Aggregation did not complete as expected")
 
             time.sleep(60)
-            returned_space = (self.get_free_space()[1] - nvme_free_space_before_snap_destroy)
+            returned_space = self.get_free_space()[1] - nvme_free_space_before_snap_destroy
             counter += 1
 
         self.log.info("#####Starting FS_COPY Test")

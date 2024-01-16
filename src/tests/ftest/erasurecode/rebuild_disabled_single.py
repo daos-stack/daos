@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
+
 from ec_utils import ErasureCodeSingle
 
 
@@ -23,9 +24,9 @@ class EcodDisabledRebuildSingle(ErasureCodeSingle):
                   read data with parity 2 and verify the content.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_single,ec_disabled_rebuild,rebuild
-        :avocado: tags=ec_disabled_rebuild_single,test_ec_degrade_single_value
+        :avocado: tags=EcodDisabledRebuildSingle,test_ec_degrade_single_value
         """
         # Disabled pool Rebuild
         self.pool.set_property("self_heal", "exclude")

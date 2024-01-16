@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,12 +16,15 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 type testStatus struct {
@@ -59,7 +62,7 @@ func TestServer_unaryStatusInterceptor(t *testing.T) {
 			handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 				return tc.handlerResp, tc.handlerErr
 			}
-			gotResp, gotErr := unaryStatusInterceptor(context.TODO(), nil, nil, handler)
+			gotResp, gotErr := unaryStatusInterceptor(test.Context(t), nil, nil, handler)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -122,31 +125,118 @@ func TestServer_checkVersion(t *testing.T) {
 		"secure pre-2.0.0 component with version somehow is still incompatible": {
 			selfVersion:  "2.2.0",
 			otherVersion: "1.0.0",
-			ctx:          newTestAuthCtx(context.TODO(), "admin"),
+			ctx:          newTestAuthCtx(test.Context(t), "admin"),
 			expErr:       errors.New("not compatible"),
 		},
 		"unknown secure component rejected": {
 			selfVersion:  "2.4.0",
 			otherVersion: "2.4.0",
-			ctx:          newTestAuthCtx(context.TODO(), "3v1l"),
+			ctx:          newTestAuthCtx(test.Context(t), "3v1l"),
 			expErr:       errors.New("not compatible"),
 		},
-		"insecure versioned component defaults to server": {
+		"insecure components not compatible": {
 			selfVersion:  "2.4.0",
 			otherVersion: "2.4.1",
+			expErr:       errors.New("not compatible in insecure mode"),
 		},
 		"secure versioned component": {
 			selfVersion:  "2.4.0",
 			otherVersion: "2.4.0",
-			ctx:          newTestAuthCtx(context.TODO(), "agent"),
+			ctx:          newTestAuthCtx(test.Context(t), "agent"),
 		},
-		"non-sys msg bypasses version checks": {
+		"non-sys msg bypasses version checks in secure mode": {
 			selfVersion: "2.4.0",
+			ctx:         newTestAuthCtx(test.Context(t), "agent"),
 			nonSysMsg:   true,
+		},
+		"insecure prelease agent with 2.4.0 server": {
+			selfVersion: "2.4.0",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, build.ComponentAgent.String(),
+				proto.DaosVersionHeader, "2.3.108",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.4.1 agent with 2.4.0 server": {
+			selfVersion: "2.4.0",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, build.ComponentAgent.String(),
+				proto.DaosVersionHeader, "2.4.1",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.4.0 agent with 2.4.1 server": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, build.ComponentAgent.String(),
+				proto.DaosVersionHeader, "2.4.0",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.6.0 agent with 2.4.1 server": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, build.ComponentAgent.String(),
+				proto.DaosVersionHeader, "2.6.0",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.4.1 dmg with 2.4.0 server": {
+			selfVersion: "2.4.0",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, build.ComponentAdmin.String(),
+				proto.DaosVersionHeader, "2.4.1",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.6.0 dmg with 2.4.0 server": {
+			selfVersion: "2.4.0",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, build.ComponentAdmin.String(),
+				proto.DaosVersionHeader, "2.6.0",
+			)),
+			nonSysMsg: true,
+			expErr:    errors.New("not compatible"),
+		},
+		"insecure 2.4.0 server with 2.4.1 server": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, build.ComponentServer.String(),
+				proto.DaosVersionHeader, "2.4.0",
+			)),
+			nonSysMsg: true,
+		},
+		"insecure 2.6.0 server with 2.4.1 server": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, build.ComponentServer.String(),
+				proto.DaosVersionHeader, "2.6.0",
+			)),
+			nonSysMsg: true,
+			expErr:    errors.New("not compatible"),
+		},
+		"invalid component": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, "banana",
+				proto.DaosVersionHeader, "2.6.0",
+			)),
+			nonSysMsg: true,
+			expErr:    errors.New("invalid component"),
+		},
+		"header/certificate component mismatch": {
+			selfVersion: "2.4.0",
+			ctx: newTestAuthCtx(
+				metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+					proto.DaosComponentHeader, build.ComponentServer.String(),
+					proto.DaosVersionHeader, "2.6.0"),
+				), "agent"),
+			nonSysMsg: true,
+			expErr:    errors.New("component mismatch"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			if tc.ctx != nil {
 				ctx = tc.ctx
 			}
@@ -168,7 +258,10 @@ func TestServer_checkVersion(t *testing.T) {
 				req = verReq
 			}
 
-			gotErr := checkVersion(ctx, selfComp, req)
+			log, buf := logging.NewTestLogger(name)
+			test.ShowBufferOnFailure(t, buf)
+
+			gotErr := checkVersion(ctx, log, selfComp, req)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})
 	}

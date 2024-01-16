@@ -3,17 +3,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from multiprocessing import Queue
 import threading
+from multiprocessing import Queue
 
+from apricot import TestWithServers
 from avocado import fail_on
-
-from dmg_utils import get_storage_query_device_info, get_dmg_response
+from dmg_utils import get_dmg_response, get_storage_query_device_info
 from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
 from nvme_utils import set_device_faulty
-from apricot import TestWithServers
 
 
 class NvmeFaultReintegrate(TestWithServers):
@@ -27,7 +26,6 @@ class NvmeFaultReintegrate(TestWithServers):
     def setUp(self):
         """Set up for test case."""
         super().setUp()
-        self.daos_command = self.get_daos_command()
         self.dmg = self.get_dmg_command()
         self.dmg.hostlist = self.hostlist_servers[0]
 
@@ -64,8 +62,10 @@ class NvmeFaultReintegrate(TestWithServers):
                 for device in value['storage']['smd_info']['devices']:
                     self.log.debug(
                         'Verifying: dev_state (%s == %s) and led_state (%s == %s)',
-                        device['dev_state'], dev_state, device['led_state'], led_state)
-                    if device['dev_state'] == dev_state and device['led_state'] == led_state:
+                        device['ctrlr']['dev_state'], dev_state, device['ctrlr']['led_state'],
+                        led_state)
+                    if device['ctrlr']['dev_state'] == dev_state and \
+                            device['ctrlr']['led_state'] == led_state:
                         return True
         return False
 
@@ -213,15 +213,12 @@ class NvmeFaultReintegrate(TestWithServers):
             run_ior(**ior_kwargs)
         except CommandFailure as error:
             self.fail("Error in ior read {}.".format(error))
-        kwargs = {"pool": self.pool.identifier,
-                  "cont": self.container.identifier}
-        output = self.daos_command.container_check(**kwargs)
-        self.log.info(output)
+        self.container.check()
 
         # 9.
         self.log_step("Replace the same drive back.")
         result = get_dmg_response(
-            self, self.dmg.storage_replace_nvme, old_uuid=test_dev, new_uuid=test_dev)
+            self.dmg.storage_replace_nvme, old_uuid=test_dev, new_uuid=test_dev)
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()
         # Wait for rebuild to complete

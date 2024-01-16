@@ -1,10 +1,10 @@
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from telemetry_test_base import TestWithTelemetry
 from apricot import TestWithServers
+from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
 
 
@@ -36,7 +36,7 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
         :avocado: tags=control,telemetry,nvme
         :avocado: tags=TestWithTelemetryNvme,test_nvme_telemetry_metrics
         """
-        metrics_data = self.telemetry.get_nvme_metrics(self.server_managers[0])
+        metrics_data = self.telemetry.get_nvme_metrics()
         self.display_nvme_test_metrics(metrics_data)
 
         # Get and verify NVMe metrics
@@ -52,7 +52,7 @@ class TestWithTelemetryNvme(TestWithTelemetry, TestWithServers):
             yaml_key = "_".join([group.lower().replace("engine_", ""), "valid"])
             threshold = self.params.get(yaml_key, "/run/*", [None, None])
             test_metrics = getattr(TelemetryUtils, group)
-            metrics_data = self.telemetry.get_nvme_metrics(self.server_managers[0], test_metrics)
+            metrics_data = self.telemetry.get_nvme_metrics(test_metrics)
             desc = " ".join([item.lower() if item != "NVME" else item for item in group.split("_")])
             self.log.info("Verify %s", desc)
             status = self.telemetry.verify_metric_value(metrics_data, threshold[0], threshold[1])

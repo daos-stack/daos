@@ -53,7 +53,7 @@ func NewVersionedComponent(comp Component, version string) (*VersionedComponent,
 	case ComponentServer, ComponentAdmin, ComponentAgent, ComponentAny:
 		return &VersionedComponent{
 			Component: comp,
-			Version:   *v,
+			Version:   v,
 		}, nil
 	default:
 		return nil, errors.Errorf("invalid component %q", comp)

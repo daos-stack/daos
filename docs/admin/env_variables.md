@@ -35,6 +35,8 @@ Environment variables in this section only apply to the server side.
 |----------------------|-----------|
 |RDB\_ELECTION\_TIMEOUT|Raft election timeout used by RDBs in milliseconds. INTEGER. Default to 7000 ms.|
 |RDB\_REQUEST\_TIMEOUT |Raft request timeout used by RDBs in milliseconds. INTEGER. Default to 3000 ms.|
+|RDB_LEASE_MAINTENANCE_GRACE|Raft grace period of leadership lease maintenance used by RDBs in milliseconds. INTEGER. Default to 7000 ms. If a Raft leader is unable to maintain leadership leases from a majority for more than RDB_ELECTION_TIMEOUT + RDB_LEASE_MAINTENANCE_GRACE, it steps down voluntarily.|
+|RDB_USE_LEASES|Whether RDBs shall use Raft leadership leases, instead of RPCs, to verify leadership. BOOL. Default to true. Rafts track leadership leases regardless; this environment variable essentially controls whether RDBs use Raft leadership leases to improve RDB TX performance.|
 |RDB\_COMPACT\_THRESHOLD|Raft log compaction threshold in applied entries. INTEGER. Default to 256 entries.|
 |RDB\_AE\_MAX\_ENTRIES |Maximum number of entries in a Raft AppendEntries request. INTEGER. Default to 32.|
 |RDB\_AE\_MAX\_SIZE    |Maximum total size in bytes of all entries in a Raft AppendEntries request. INTEGER. Default to 1 MB.|
@@ -68,6 +70,7 @@ Environment variables in this section only apply to the client side.
 |Variable                 |Description|
 |-------------------------|-----------|
 |FI\_MR\_CACHE\_MAX\_COUNT|Enable MR (Memory Registration) caching in OFI layer. Recommended to be set to 0 (disable) when CRT\_DISABLE\_MEM\_PIN is NOT set to 1. INTEGER. Default to unset.|
+|D\_POLL\_TIMEOUT|Polling timeout passed to network progress for synchronous operations. Default to 0 (busy polling), value in micro-seconds otherwise.|
 
 
 ## Debug System (Client & Server)

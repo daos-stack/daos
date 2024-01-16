@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,9 +7,12 @@
 package common
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 // ScrubEnvironment modifies the environment variables set for
@@ -75,10 +78,47 @@ func BoolAsInt(b bool) int {
 	return 0
 }
 
-// MergeEnvVars merges and deduplicates two slices of environment
-// variables. Conflicts are resolved by taking the value from the
-// second list.
-func MergeEnvVars(curVars []string, newVars []string) (merged []string) {
+// FindKeyValue will return value from supplied name key if found in input slice of key-pairs
+// (e.g. environment). ErrNotExist error returned if key cannot be found.
+func FindKeyValue(keyPairs []string, name string) (string, error) {
+	for _, pair := range keyPairs {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) == 2 && kv[0] == name {
+			return kv[1], nil
+		}
+	}
+
+	return "", errors.Wrapf(os.ErrNotExist, "Undefined environment variable %q", name)
+}
+
+// UpdateKeyValue updates a value for existing key and returns new slice of key-value pairs.
+func UpdateKeyValue(keyPairs []string, name, newValue string) ([]string, error) {
+	for i, pair := range keyPairs {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) == 2 && kv[0] == name {
+			keyPairs[i] = fmt.Sprintf("%s=%s", name, newValue)
+			return keyPairs, nil
+		}
+	}
+
+	return nil, errors.Wrapf(os.ErrNotExist, "Undefined environment variable %q", name)
+}
+
+// DeleteKeyValue removes an existing key and returns new slice of key-value pairs.
+func DeleteKeyValue(keyPairs []string, name string) ([]string, error) {
+	for i, pair := range keyPairs {
+		kv := strings.SplitN(pair, "=", 2)
+		if len(kv) == 2 && kv[0] == name {
+			return append(keyPairs[:i], keyPairs[i+1:]...), nil
+		}
+	}
+
+	return nil, errors.Wrapf(os.ErrNotExist, "Undefined environment variable %q", name)
+}
+
+// MergeKeyValues merges and deduplicates two slices of key-value pairs.  Conflicts are resolved by
+// taking the value from the second list.
+func MergeKeyValues(curVars []string, newVars []string) (merged []string) {
 	mergeMap := make(map[string]string)
 	for _, pair := range curVars {
 		kv := strings.SplitN(pair, "=", 2)

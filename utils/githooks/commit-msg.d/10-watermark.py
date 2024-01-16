@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Disable check for module name. disable-next doesn't work here.
+# pylint: disable=invalid-name
+# pylint: enable=invalid-name
 """Add watermark to commit message"""
 import os
 import sys

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,11 +7,11 @@
 package sysfs
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -34,6 +34,61 @@ func TestSysfs_NewProvider(t *testing.T) {
 	}
 
 	test.AssertEqual(t, "/sys", p.root, "")
+}
+
+func TestSysfs_isNetvscDevice(t *testing.T) {
+	mkUeventFile := func(testDir string, content string) {
+		t.Helper()
+
+		dirPath := path.Join(testDir, "device")
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		filePath := path.Join(dirPath, "uevent")
+		if err := ioutil.WriteFile(filePath, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		subsystem string
+		content   string
+		expRes    bool
+	}{
+		"nil": {
+			expRes: false,
+		},
+		"valid NetvscDevice": {
+			subsystem: "net",
+			content: `42
+FOO=BAR
+DRIVER=hv_netvsc`,
+			expRes: true,
+		},
+		"invalid subsystem": {
+			subsystem: "ib",
+			content: `42
+FOO=BAR
+DRIVER=hv_netvsc`,
+			expRes: false,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			testDir, cleanupTestDir := test.CreateTestDir(t)
+			defer cleanupTestDir()
+
+			if tc.content != "" {
+				mkUeventFile(testDir, tc.content)
+			}
+
+			res := isNetvscDevice(testDir, tc.subsystem)
+			test.AssertEqual(t, tc.expRes, res, "")
+		})
+	}
 }
 
 func setupTestNetDevClasses(t *testing.T, root string, devClasses map[string]uint32) {
@@ -196,6 +251,35 @@ func setupVirtualIB(t *testing.T, root, virtDev, parent string) {
 
 	_, err = f.WriteString(fmt.Sprintf("%s\n", parent))
 	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func setupNetvscDev(t *testing.T, root, devName, backingDevName string) {
+	devPath := filepath.Join(root, "devices", "netsvc", devName)
+	if err := os.MkdirAll(devPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(devPath, filepath.Join(root, "class", "net", devName)); err != nil {
+		t.Fatal(err)
+	}
+
+	if backingDevName != "" {
+		backingDevPath := filepath.Join(root, "class", "net", backingDevName)
+		if err := os.Symlink(backingDevPath, filepath.Join(devPath, "lower_"+backingDevName)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	setupClassLink(t, root, "net", devPath)
+
+	dirPath := path.Join(devPath, "device")
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	filePath := path.Join(dirPath, "uevent")
+	if err := ioutil.WriteFile(filePath, []byte("DRIVER=hv_netvsc"), 0644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -367,6 +451,44 @@ func TestProvider_GetTopology(t *testing.T) {
 				},
 			},
 		},
+		"NetVSC devices": {
+			setup: func(t *testing.T, root string) {
+				for _, dev := range []struct {
+					class string
+					name  string
+				}{
+					{class: "net", name: "net0"},
+					{class: "cxi", name: "cxi0"},
+					{class: "infiniband", name: "mlx0"},
+				} {
+					path := setupPCIDev(t, root, validPCIAddr, dev.class, dev.name)
+					setupClassLink(t, root, dev.class, path)
+					setupNUMANode(t, path, "2\n")
+				}
+
+				// Virtual IB device
+				setupVirtualIB(t, root, "virt_ib0", "net0")
+
+				setupNetvscDev(t, root, "eth0", "net0")
+				setupNetvscDev(t, root, "eth1", "")
+			},
+			p: &Provider{},
+			expResult: &hardware.Topology{
+				NUMANodes: testTopo.NUMANodes,
+				VirtualDevices: []*hardware.VirtualDevice{
+					{
+						Name:          "eth0",
+						Type:          hardware.DeviceTypeNetInterface,
+						BackingDevice: testTopo.AllDevices()["net0"].(*hardware.PCIDevice),
+					},
+					{
+						Name:          "virt_ib0",
+						Type:          hardware.DeviceTypeNetInterface,
+						BackingDevice: testTopo.AllDevices()["net0"].(*hardware.PCIDevice),
+					},
+				},
+			},
+		},
 		"no NUMA node": {
 			setup: func(t *testing.T, root string) {
 				path := setupPCIDev(t, root, validPCIAddr, "net", "net0")
@@ -509,7 +631,7 @@ func TestProvider_GetTopology(t *testing.T) {
 				tc.p.root = testDir
 			}
 
-			result, err := tc.p.GetTopology(context.Background())
+			result, err := tc.p.GetTopology(test.Context(t))
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -616,7 +738,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 				tc.p.root = testDir
 			}
 
-			result, err := tc.p.GetFabricInterfaces(context.Background(), tc.provider)
+			result, err := tc.p.GetFabricInterfaces(test.Context(t), tc.provider)
 
 			test.CmpErr(t, tc.expErr, err)
 

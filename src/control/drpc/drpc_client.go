@@ -20,7 +20,7 @@ import (
 type DomainSocketClient interface {
 	sync.Locker
 	IsConnected() bool
-	Connect() error
+	Connect(context.Context) error
 	Close() error
 	SendMsg(context.Context, *Call) (*Response, error)
 	GetSocketPath() string
@@ -28,7 +28,7 @@ type DomainSocketClient interface {
 
 // domainSocketDialer is an interface that connects to a Unix Domain Socket
 type domainSocketDialer interface {
-	dial(socketPath string) (net.Conn, error)
+	dial(ctx context.Context, socketPath string) (net.Conn, error)
 }
 
 // ClientConnection represents a client connection to a dRPC server
@@ -54,7 +54,7 @@ func (c *ClientConnection) IsConnected() bool {
 }
 
 // Connect opens a connection to the internal Unix Domain Socket path
-func (c *ClientConnection) Connect() error {
+func (c *ClientConnection) Connect(ctx context.Context) error {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
 
@@ -63,7 +63,7 @@ func (c *ClientConnection) Connect() error {
 		return nil
 	}
 
-	conn, err := c.dialer.dial(c.socketPath)
+	conn, err := c.dialer.dial(ctx, c.socketPath)
 	if err != nil {
 		return errors.Wrap(err, "dRPC connect")
 	}
@@ -86,8 +86,7 @@ func (c *ClientConnection) close() error {
 		return nil
 	}
 
-	err := c.conn.Close()
-	if err != nil {
+	if err := c.conn.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
 		return errors.Wrap(err, "dRPC close")
 	}
 
@@ -118,7 +117,9 @@ func (c *ClientConnection) sendCall(ctx context.Context, msg *Call) error {
 	if _, err := c.conn.Write(callBytes); err != nil {
 		if ctx.Err() != nil {
 			err = ctx.Err()
-			c.close()
+			if cErr := c.close(); cErr != nil {
+				err = errors.Wrapf(err, "failed to close dRPC connection: %v", cErr)
+			}
 		}
 		return errors.Wrap(err, "dRPC send")
 	}
@@ -142,7 +143,9 @@ func (c *ClientConnection) recvResponse(ctx context.Context) (*Response, error) 
 	if err != nil {
 		if ctx.Err() != nil {
 			err = ctx.Err()
-			c.close()
+			if cErr := c.close(); cErr != nil {
+				err = errors.Wrapf(err, "failed to close dRPC connection: %v", cErr)
+			}
 		}
 		return nil, errors.Wrap(err, "dRPC recv")
 	}
@@ -196,10 +199,11 @@ type clientDialer struct {
 }
 
 // dial connects to the real unix domain socket located at socketPath
-func (c *clientDialer) dial(socketPath string) (net.Conn, error) {
-	addr := &net.UnixAddr{
+func (c *clientDialer) dial(ctx context.Context, socketPath string) (net.Conn, error) {
+	var d net.Dialer
+	addr := net.UnixAddr{
 		Net:  "unixpacket",
 		Name: socketPath,
 	}
-	return net.DialUnix("unixpacket", nil, addr)
+	return d.DialContext(ctx, "unixpacket", addr.String())
 }

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,8 @@ import (
 	"os"
 	"runtime"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -36,6 +38,26 @@ var (
 )
 
 const debugLogFlags = log.Lmicroseconds | log.Lshortfile
+
+// DefaultTraceLogger implements the TraceLogger interface by
+// wrapping the DefaultDebugLogger implementation.
+type DefaultTraceLogger DefaultDebugLogger
+
+// Tracef emits a formatted trace message.
+func (l *DefaultTraceLogger) Tracef(format string, args ...interface{}) {
+	(*DefaultDebugLogger)(l).Debugf(format, args...)
+}
+
+// NewTraceLogger returns a DebugLogger configured for outputting
+// trace-level messages.
+func NewTraceLogger(dest io.Writer) *DefaultTraceLogger {
+	return &DefaultTraceLogger{
+		baseLogger{
+			dest: dest,
+			log:  log.New(dest, "TRACE ", debugLogFlags),
+		},
+	}
+}
 
 // NewDebugLogger returns a DebugLogger configured for outputting
 // debugging messages.
@@ -80,4 +102,9 @@ func (l *DefaultDebugLogger) Debugf(format string, args ...interface{}) {
 	if err := l.log.Output(depth, out); err != nil {
 		fmt.Fprintf(os.Stderr, "logger Debugf() failed: %s\n", err)
 	}
+}
+
+// ShortUUID returns a truncated UUID string suitable for debug logging.
+func ShortUUID(u uuid.UUID) string {
+	return u.String()[:8]
 }

@@ -13,6 +13,6 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 16
+  system_ram_reserved: 2
 agent_config:
   exclude_fabric_ifaces: ["fake_iface1", "fake_iface2"]

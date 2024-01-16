@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """Wrapper script for calling pylint"""
 
-import os
-import sys
-import re
-from collections import Counter
-import tempfile
-import subprocess  # nosec
 import argparse
 import json
+import os
+import re
+import subprocess  # nosec
+import sys
+import tempfile
+from collections import Counter
+
 for arg in sys.argv:
     if arg.startswith('--import='):
         sys.path.append(arg[9:])
 try:
+    from pylint.constants import full_version
     from pylint.lint import Run
     from pylint.reporters.collecting_reporter import CollectingReporter
-    from pylint.constants import full_version
 except ImportError:
 
     if os.path.exists('venv'):
@@ -23,9 +24,9 @@ except ImportError:
                                      f'python{sys.version_info.major}.{sys.version_info.minor}',
                                      'site-packages'))
         try:
+            from pylint.constants import full_version
             from pylint.lint import Run
             from pylint.reporters.collecting_reporter import CollectingReporter
-            from pylint.constants import full_version
         except ImportError:
             print('detected venv unusable, install pylint to enable this check')
             sys.exit(0)
@@ -209,10 +210,6 @@ class FileTypeList():
         self.files = []
         self._regions = {}
         self._reports = []
-
-    def add_regions(self, file, regions):
-        """Mark that only some regions for file should be reported"""
-        self._regions[file] = regions
 
     def file_count(self):
         """Return the number of files to be checked"""
@@ -413,11 +410,7 @@ sys.path.append('site_scons')"""
         types = Counter()
         symbols = Counter()
 
-        # List of errors that are in modified files but not modified code.
-        file_warnings = []
-
         for msg in results.linter.reporter.messages:
-            promote_to_error = False
             # Spelling mistakes. There are a lot of code to silence code blocks and examples
             # in comments.  Be strict for everything but ftest code currently.
             if not scons and msg.msg_id in ('C0401', 'C0402'):
@@ -432,38 +425,16 @@ sys.path.append('site_scons')"""
                 if word_is_allowed(word, code):
                     continue
 
-                # Finally, promote any spelling mistakes not silenced above or in ftest to error.
-                if not ftest:
-                    promote_to_error = True
-
             # Inserting code can cause wrong-module-order.
             if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
                 continue
 
+            failed = True
+
             vals = parse_msg(msg)
-
-            # Flag some serious warnings as errors
-            if msg.symbol in ('condition-evals-to-constant'):
-                promote_to_error = True
-
-            # All non-scons code should be clean now.
-            if scons:
-                promote_to_error = True
-
-            if promote_to_error:
-                vals['category'] = 'error'
 
             types[vals['category']] += 1
             symbols[msg.symbol] += 1
-
-            if vals['path'] in self._regions:
-                line_changed = self._regions[vals['path']].in_region(vals['line'])
-                if line_changed:
-                    print('Warning is in modified code:')
-                    vals['category'] = 'error'
-                elif vals['category'] != 'error':
-                    file_warnings.append(msg)
-                    continue
 
             if args.output_format == 'json':
                 report = {'type': vals['category'],
@@ -493,41 +464,13 @@ sys.path.append('site_scons')"""
                 if args.promote_to_error:
                     report['type'] = 'error'
                 self._reports.append(report)
+            elif args.output_format == 'github':
+                print(args.msg_template.format(**vals))
+                if vals['category'] in ('convention', 'refactor'):
+                    vals['category'] = 'warning'
+                msg_to_github(vals)
             else:
                 print(args.msg_template.format(**vals))
-
-            if args.format == 'github':
-                if vals['category'] in ('convention', 'refactor'):
-                    continue
-                if vals['category'] == 'warning':
-                    continue
-                failed = True
-                msg_to_github(vals)
-
-        if file_warnings:
-            print('Warnings from modified files:')
-
-            # Low priority warnings, these are reported but are reported last.  As GitHub only
-            # displays 10 annotations at a given severity level this means they will only be shown
-            # to the user if there are no other warnings in modified files.
-            lp_warnings_i = []
-            lp_warnings_f = []
-            for msg in file_warnings:
-                vals = parse_msg(msg)
-                print(args.msg_template.format(**vals))
-                if args.format == 'github':
-                    if msg.symbol == 'invalid-name':
-                        lp_warnings_i.append(msg)
-                    elif msg.symbol == 'consider-using-f-string':
-                        lp_warnings_f.append(msg)
-                    else:
-                        # Report all messages in modified files, but do it at the notice level.
-                        vals['category'] = 'notice'
-                        msg_to_github(vals)
-            for msg in lp_warnings_i + lp_warnings_f:
-                vals = parse_msg(msg)
-                vals['category'] = 'notice'
-                msg_to_github(vals)
 
         if not types or args.reports == 'n':
             return failed
@@ -547,29 +490,11 @@ def get_git_files(directory=None):
     if directory:
         cmd.append(directory)
 
-    ret = subprocess.run(cmd, check=True, capture_output=True)
+    ret = subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout = ret.stdout.decode('utf-8')
     for file in stdout.splitlines():
         all_files.add(file)
     return all_files
-
-
-class OutPutRegion:
-    """Class for managing file regions"""
-
-    def __init__(self):
-        self.regions = []
-
-    def add_region(self, base, length):
-        """Add regions to file"""
-        self.regions.append((base, base + length))
-
-    def in_region(self, line):
-        """Check if line is in region"""
-        for region in self.regions:
-            if region[0] < line < region[1]:
-                return True
-        return False
 
 
 def main():
@@ -594,23 +519,21 @@ def main():
 
     rcfile = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pylintrc')
 
-    # Args that atom uses.
     parser.add_argument('--msg-template',
                         default='{path}:{line}:{column}: {message-id}: {message} ({symbol})')
     parser.add_argument('--reports', choices=['y', 'n'], default='y')
-    parser.add_argument('--output-format', choices=['text', 'json'], default='text')
+    parser.add_argument('--output-format', choices=['text', 'json', 'github'], default='text')
     parser.add_argument('--rcfile', default=rcfile)
-    parser.add_argument('--diff', action='store_true')
+    parser.add_argument('--files-from-stdin', action='store_true')
     parser.add_argument('--version', action='store_true')
     parser.add_argument('--promote-to-error', action='store_true')
+
+    # Legacy, option kept only to return appropriate error.
+    parser.add_argument('--diff', action='store_true')
 
     # Args that VS Code uses.
     parser.add_argument('--import')
     parser.add_argument('--clear-cache-post-run', choices=['y', 'n'], default='y')
-
-    # pylint: disable-next=wrong-spelling-in-comment
-    # A --format github option as yamllint uses.
-    parser.add_argument('--format', choices=['text', 'github'], default='text')
 
     # File list, zero or more.
     parser.add_argument('files', nargs='*')
@@ -641,46 +564,16 @@ def main():
         rc_tmp.flush()
         args.rcfile = rc_tmp.name
 
-    if args.diff:
-        # There are to be two different ways of driving this, for a commit-hook where we only
-        # check files changed and in GitHub actions where we check the entire tree and are more
-        # strict for files which have changed.
-        if args.git:
-            all_files = get_git_files()
-        else:
-            all_files = FileTypeList()
-        regions = None
-        file = None
-        lineno = 0
+    if args.files_from_stdin:
+        assert not args.git, 'No longer supported'
+        all_files = FileTypeList()
         for line in sys.stdin.readlines():
-            lineno += 1
-            if line.startswith('diff --git a/'):
-                parts = line.split(' ')
-                file = parts[3][2:-1]
-                regions = OutPutRegion()
-                all_files.add_regions(file, regions)
-                if not args.git:
-                    if os.path.exists(file):
-                        all_files.add(file)
-                    else:
-                        print(f'Skipping {file} as it does not exist')
-                continue
-            if line.startswith('@@ '):
-                parts = line.split(' ')
-                if parts[2] == '+1':
-                    # Handle new, one line files.
-                    post_start = 0
-                    post_len = 1
-                else:
-                    (post_start, post_len) = parts[2][1:].split(',')
-                regions.add_region(int(post_start), int(post_len))
-                continue
-        if file and regions:
-            all_files.add_regions(file, regions)
-        failed = all_files.run(args)
-        if failed:
+            if os.path.exists(line):
+                all_files.add(line)
+        if all_files.run(args):
             sys.exit(1)
         return
+
     if args.git:
         all_files = get_git_files()
         if all_files.run(args):

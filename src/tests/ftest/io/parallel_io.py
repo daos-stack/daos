@@ -4,11 +4,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import threading
+import os
 import subprocess  # nosec
+import threading
 import time
 from getpass import getuser
-
 
 from exception_utils import CommandFailure
 from fio_test_base import FioBase
@@ -38,8 +38,8 @@ class ParallelIo(FioBase, IorTestBase):
         """Create a TestPool object to use with ior."""
         self.pool.append(self.get_pool(connect=False))
 
-    def stat_bfree(self, path):
-        """Get stat bfree.
+    def _stat_free_blocks(self, path):
+        """Get stat free blocks.
 
         Args:
             path (str): path to get free block size of.
@@ -70,7 +70,7 @@ class ParallelIo(FioBase, IorTestBase):
         statvfs_list = []
         for _, pool in enumerate(self.pool):
             dfuse_pool_dir = str(path + "/" + pool.uuid)
-            statvfs_info = self.stat_bfree(dfuse_pool_dir)
+            statvfs_info = self._stat_free_blocks(dfuse_pool_dir)
             statvfs_list.append(statvfs_info)
             self.log.info("Statvfs List Output: %s", statvfs_list)
 
@@ -246,10 +246,9 @@ class ParallelIo(FioBase, IorTestBase):
                     self.fail("Failed to {}".format(cmd))
 
                 # run ior on all containers
-                test_file = dfuse_cont_dir + "/testfile"
-                self.ior_cmd.test_file.update(test_file)
+                self.ior_cmd.test_file.update(os.path.join(dfuse_cont_dir, 'testfile'))
                 self.ior_cmd.set_daos_params(
-                    self.server_group, pool, self.container[cont_num].uuid)
+                    self.server_group, pool, self.container[cont_num].identifier)
                 thread = threading.Thread(
                     target=self.run_ior,
                     args=(self.get_ior_job_manager_command(), processes, None,

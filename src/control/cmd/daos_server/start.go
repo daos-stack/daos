@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -27,13 +27,14 @@ type startCmd struct {
 	Port                uint16  `short:"p" long:"port" description:"Port for the gRPC management interfect to listen on"`
 	MountPath           string  `short:"s" long:"storage" description:"Storage path"`
 	Modules             *string `short:"m" long:"modules" description:"List of server modules to load"`
-	Targets             uint16  `short:"t" long:"targets" description:"number of targets to use (default use all cores)"`
-	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"number of helper XS per VOS target"`
-	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread"`
+	Targets             uint16  `short:"t" long:"targets" description:"Number of targets to use (default use all cores)"`
+	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"Number of helper XS per VOS target"`
+	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"Index of first core for service thread"`
 	Group               string  `short:"g" long:"group" description:"Server group name"`
 	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_engine sockets"`
-	Insecure            bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
-	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"recreate missing superblocks rather than failing"`
+	Insecure            bool    `short:"i" long:"insecure" description:"Allow for insecure connections"`
+	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"Recreate missing superblocks rather than failing"`
+	AutoFormat          bool    `long:"auto-format" description:"Automatically format storage on server start to bring-up engines without requiring dmg storage format command"`
 }
 
 func (cmd *startCmd) setCLIOverrides() error {
@@ -64,7 +65,9 @@ func (cmd *startCmd) setCLIOverrides() error {
 	if cmd.Modules != nil {
 		cmd.config.WithModules(*cmd.Modules)
 	}
-	cmd.config.RecreateSuperblocks = cmd.RecreateSuperblocks
+	if cmd.RecreateSuperblocks {
+		cmd.Notice("--recreate-superblocks is deprecated and no longer needed to use externally-managed tmpfs")
+	}
 
 	for _, srv := range cmd.config.Engines {
 		if cmd.Targets > 0 {
@@ -91,9 +94,15 @@ func (cmd *startCmd) configureLogging() error {
 	// unless it was explicitly set to debug via CLI flag.
 	applyLogConfig := func() error {
 		switch logging.LogLevel(cmd.config.ControlLogMask) {
+		case logging.LogLevelTrace:
+			log.SetLevel(logging.LogLevelTrace)
+			cmd.Debugf("Switching control log level to TRACE")
 		case logging.LogLevelDebug:
 			log.SetLevel(logging.LogLevelDebug)
 			cmd.Debugf("Switching control log level to DEBUG")
+		case logging.LogLevelNotice:
+			log.SetLevel(logging.LogLevelNotice)
+			cmd.Debugf("Switching control log level to NOTICE")
 		case logging.LogLevelError:
 			cmd.Debugf("Switching control log level to ERROR")
 			log.SetLevel(logging.LogLevelError)
@@ -131,8 +140,10 @@ func (cmd *startCmd) configureLogging() error {
 		// to the specified file.
 		cmd.Logger = log.
 			WithErrorLogger(logging.NewErrorLogger(hostname, f)).
+			WithNoticeLogger(logging.NewNoticeLogger(hostname, f)).
 			WithInfoLogger(logging.NewInfoLogger(hostname, f)).
-			WithDebugLogger(logging.NewDebugLogger(f))
+			WithDebugLogger(logging.NewDebugLogger(f)).
+			WithTraceLogger(logging.NewTraceLogger(f))
 
 		return applyLogConfig()
 	}
@@ -150,6 +161,8 @@ func (cmd *startCmd) Execute(args []string) error {
 	if err := cmd.configureLogging(); err != nil {
 		return err
 	}
+
+	cmd.config.AutoFormat = cmd.AutoFormat
 
 	return cmd.start(cmd.Logger, cmd.config)
 }

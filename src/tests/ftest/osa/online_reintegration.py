@@ -3,16 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
+import queue
 import random
 import threading
-import queue
+import time
 
-from test_utils_pool import add_pool
-from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
-from daos_utils import DaosCommand
+from test_utils_pool import add_pool
+from write_host_file import write_host_file
 
 
 class OSAOnlineReintegration(OSAUtils):
@@ -29,11 +28,10 @@ class OSAOnlineReintegration(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.pool = None
         self.ds_racer_queue = queue.Queue()
         self.daos_racer = None
@@ -75,7 +73,7 @@ class OSAOnlineReintegration(OSAUtils):
             pool[val] = add_pool(self, connect=False)
             pool[val].set_property("reclaim", "disabled")
 
-        # Exclude and reintegrate the pool_uuid, rank and targets
+        # Exclude and reintegrate the pool, rank and targets
         for val in range(0, num_pool):
             threads = []
             self.pool = pool[val]
@@ -152,10 +150,7 @@ class OSAOnlineReintegration(OSAUtils):
             self.pool.display_pool_daos_space(display_string)
             self.run_ior_thread("Read", oclass, test_seq)
             self.container = self.pool_cont_dict[self.pool][0]
-            kwargs = {"pool": self.pool.uuid,
-                      "cont": self.container.uuid}
-            output = self.daos_command.container_check(**kwargs)
-            self.log.info(output)
+            self.container.check()
 
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.

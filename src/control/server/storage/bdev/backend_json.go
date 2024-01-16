@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -222,7 +222,9 @@ func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubs
 		}
 
 		for index, dev := range tier.DeviceList.Devices() {
-			name := fmt.Sprintf("%s_%d_%d", req.Hostname, index, tier.Tier)
+			// Encode bdev tier info in RPC name field.
+			name := fmt.Sprintf("%s_%d_%d_%d", req.Hostname, index, tier.Tier,
+				tier.DeviceRoles.OptionBits)
 			sscs = append(sscs, f(name, dev))
 		}
 	}

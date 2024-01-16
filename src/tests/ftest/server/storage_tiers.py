@@ -1,11 +1,11 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import yaml
 
+import yaml
 from apricot import TestWithServers
 from command_utils_base import CommonConfig
 from server_utils import DaosServerTransportCredentials, DaosServerYamlParameters
@@ -58,6 +58,9 @@ class StorageTiers(TestWithServers):
                         "class": storage_class,
                         "bdev_list": self.params.get("bdev_list", namespace),
                     }
+                    storage_roles = self.params.get("roles", namespace, None)
+                    if storage_roles:
+                        data["roles"] = storage_roles
                 storage.append(data)
             expected.append(storage)
         self.log.info("expected:\n%s", yaml.dump(expected, default_flow_style=False))

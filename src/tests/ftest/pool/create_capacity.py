@@ -7,10 +7,10 @@ import time
 
 from apricot import TestWithServers
 from server_utils import ServerFailed
-from test_utils_pool import add_pool, get_size_params, check_pool_creation, time_pool_create
+from test_utils_pool import add_pool, check_pool_creation
 
 
-class PoolCreateTests(TestWithServers):
+class PoolCreateCapacityTests(TestWithServers):
     # pylint: disable=too-few-public-methods
     """Pool create tests.
 
@@ -36,46 +36,53 @@ class PoolCreateTests(TestWithServers):
             Verify that DAOS is ready to accept requests within 2 minutes.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=PoolCreateTests,test_create_pool_quantity
+        :avocado: tags=PoolCreateCapacityTests,test_create_pool_quantity
         """
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
+        storage = self.server_managers[0].get_available_storage()
+        if storage['nvme'] < 750156374016:
+            self.log.info(
+                'Reducing pool quantity from %s -> 150 due to insufficient NVMe capacity (%s < '
+                '750156374016)', quantity, storage['nvme'])
+            quantity = 150
 
-        # for multiple pool creation cases, enabling and disabling
-        # log mask setting to DEBUG explicitly to save run time..
+        # Define all the pools with the same size defined in the test yaml
+        self.log_step('Defining {} pools'.format(quantity))
+        pools = []
+        for _ in range(quantity):
+            pools.append(add_pool(self, create=False))
+
+        # Create all the pools
+        self.log_step('Creating {} pools (dmg pool create)'.format(quantity))
         self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)
-        pools = [add_pool(self, create=False)]
-
-        # Create the first pool
-        durations = [time_pool_create(self.log, 1, pools[0])]
-
-        # Add additional pools of the same size as the first pool
-        for _ in range(quantity - 1):
-            pools.append(add_pool(self, create=False, **get_size_params(pools[0])))
-
-        # Create the remaining pools
-        check_pool_creation(self, pools[1:], 30, 2, durations)
+        check_pool_creation(self, pools, 30, 2)
         self.get_dmg_command().server_set_logmasks(raise_exception=False)
 
         # Verify DAOS can be restarted in less than 2 minutes
+        self.log_step('Stopping all engines (dmg system stop)')
         try:
             self.server_managers[0].system_stop()
         except ServerFailed as error:
             self.fail(error)
 
         start = float(time.time())
+        self.log_step('Starting all engines (dmg system start)')
         try:
             self.server_managers[0].system_start()
         except ServerFailed as error:
             self.fail(error)
 
-        if float(time.time()) - start > 120:
+        duration = float(time.time()) - start
+        self.log_step('Verifying all engines started in 120 seconds: {}'.format(duration))
+        if duration > 120:
             self.fail("DAOS not ready to accept requests within 2 minutes after restart")
 
         # Verify all the pools exists after the restart
+        self.log_step('Verifying all {} pools exist after engine restart'.format(quantity))
         self.get_dmg_command().timeout = 360
         pool_uuids = self.get_dmg_command().get_pool_list_uuids(no_query=True)
         detected_pools = [uuid.lower() for uuid in pool_uuids]
@@ -86,8 +93,9 @@ class PoolCreateTests(TestWithServers):
                 missing_pools.append(pool_uuid)
         if missing_pools:
             self.fail(
-                "The following created pools were not detected in the pool "
-                "list after rebooting the servers:\n  [{}]: {}".format(
+                'The following created pools were not detected in the pool '
+                'list after rebooting the servers:\n  [{}]: {}'.format(
                     len(missing_pools), ", ".join(missing_pools)))
         if len(pools) != len(detected_pools):
-            self.fail("Incorrect number of pools detected after rebooting the servers")
+            self.fail('Incorrect number of pools detected after rebooting the servers')
+        self.log_step('Test passed')

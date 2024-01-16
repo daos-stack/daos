@@ -96,7 +96,9 @@ func (n *NUMAFabric) Add(numaNode int, fi *FabricInterface) error {
 // selecting a device.
 func (n *NUMAFabric) WithIgnoredDevices(ifaces common.StringSet) *NUMAFabric {
 	n.ignoreIfaces = ifaces
-	n.log.Debugf("NUMAFabric ignoring devices: %s", n.ignoreIfaces)
+	if len(ifaces) > 0 {
+		n.log.Tracef("ignoring fabric devices: %s", n.ignoreIfaces)
+	}
 	return n
 }
 
@@ -188,28 +190,25 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass hardware.NetDev
 		fabricIF := n.getNextDevice(numaNode)
 
 		if n.ignoreIfaces.Has(fabricIF.Name) {
-			n.log.Debugf("Excluding device: %q (domain: %q). Device is on ignore list: %s", fabricIF.Name,
-				fabricIF.Domain, n.ignoreIfaces.String())
+			n.log.Tracef("device %s: ignored (ignore list %s)", fabricIF, n.ignoreIfaces)
 			continue
 		}
 
 		// Manually-provided interfaces can be assumed to support what's needed by the system.
 		if fabricIF.NetDevClass != FabricDevClassManual {
 			if fabricIF.NetDevClass != netDevClass {
-				n.log.Debugf("Excluding device: %q (domain: %q), network device class: %s. Does not match requested network device class: %s",
-					fabricIF.Name, fabricIF.Domain, fabricIF.NetDevClass, netDevClass)
+				n.log.Tracef("device %s: excluded (netDevClass %s != %s)", fabricIF, fabricIF.NetDevClass, netDevClass)
 				continue
 			}
 
 			if !fabricIF.HasProvider(provider) {
-				n.log.Debugf("Excluding device: %q (domain: %q), network device class: %s. Doesn't support provider",
-					fabricIF.Name, fabricIF.Domain, fabricIF.NetDevClass)
+				n.log.Tracef("device %s: excluded (provider %s not supported)", fabricIF, provider)
 				continue
 			}
 		}
 
 		if err := n.validateDevice(fabricIF); err != nil {
-			n.log.Infof("Excluding device %q: %s", fabricIF.Name, err.Error())
+			n.log.Noticef("device %s: excluded (%s)", fabricIF, err)
 			continue
 		}
 
@@ -240,7 +239,7 @@ func (n *NUMAFabric) validateDevice(fi *FabricInterface) error {
 	}
 
 	for _, a := range addrs {
-		n.log.Debugf("Interface: %s, Addr: %s %s", fi.Name, a.Network(), a.String())
+		n.log.Tracef("device %s: %s/%s", fi.Name, a.Network(), a.String())
 		if ipAddr, isIP := a.(*net.IPNet); isIP && ipAddr.IP != nil && !ipAddr.IP.IsUnspecified() {
 			return nil
 		}
@@ -262,7 +261,7 @@ func (n *NUMAFabric) findOnAnyNUMA(netDevClass hardware.NetDevClass, provider st
 		n.currentNUMANode = (n.currentNUMANode + 1) % numNodes
 		fi, err := n.getDeviceFromNUMA(nodes[n.currentNUMANode], netDevClass, provider)
 		if err == nil {
-			n.log.Debugf("Suitable fabric interface %q found on NUMA node %d", fi.Name, n.currentNUMANode)
+			n.log.Tracef("device %s: selected on NUMA node %d)", fi, n.currentNUMANode)
 			return fi, nil
 		}
 	}
@@ -320,13 +319,12 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan *hardware.
 			numa := int(fi.NUMANode)
 			fabric.Add(numa, newIF)
 
-			log.Debugf("Added device %q, domain %q for NUMA %d, device number %d",
-				newIF.Name, newIF.Domain, numa, fabric.NumDevices(numa)-1)
+			log.Tracef("device %s: [%d] added to NUMA node %d", newIF, fabric.NumDevices(numa)-1, numa)
 		}
 	}
 
 	if fabric.NumNUMANodes() == 0 {
-		log.Info("No network devices detected in fabric scan")
+		log.Notice("no network devices detected in fabric scan")
 	}
 
 	return fabric

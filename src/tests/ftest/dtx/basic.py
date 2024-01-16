@@ -1,15 +1,13 @@
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import time
 import traceback
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
+from pydaos.raw import DaosApiError, DaosContainer, c_uuid_to_str
 
 
 class BasicTxTest(TestWithServers):
@@ -32,7 +30,7 @@ class BasicTxTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=container,smoke,tx
-        :avocado: tags=basictx,test_tx_basics
+        :avocado: tags=BasicTxTest,test_tx_basics
         """
         # initialize a python pool object then create the underlying
         # daos storage and connect to the pool
@@ -91,6 +89,7 @@ class BasicTxTest(TestWithServers):
             # an alternative to below code once model is complete, maybe
             # read from a snapshot or read from TX_NONE etc.
 
+            # pylint: disable=wrong-spelling-in-comment
             # the original data should still be there too
             # thedata5 = container.read_an_obj(thedatasize, dkey, akey,
             #                                 oid, transaction)

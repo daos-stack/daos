@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
 
 from agent_utils import include_local_host
 from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables
 from exception_utils import CommandFailure
-from results_utils import TestName, TestResult, Results, Job, create_xml
+from results_utils import Job, Results, TestName, TestResult, create_xml
 from run_utils import get_clush_command, run_local, run_remote
 
 
@@ -77,7 +76,8 @@ class CmockaUtils():
             "CMOCKA_MESSAGE_OUTPUT": "xml",
         })
 
-    def get_cmocka_command(self, command):
+    @staticmethod
+    def get_cmocka_command(command):
         """Get an ExecutableCommand representing the provided command string.
 
         Adds detection of any bad keywords in the command output that, if found, will result in a
@@ -90,7 +90,8 @@ class CmockaUtils():
             ExecutableCommand: the object setup to run the command
 
         """
-        keywords = ["Process received signal", "stack smashing detected", "End of error message"]
+        keywords = ["Process received signal", "stack smashing detected", "End of error message",
+                    "buffer overflow detected"]
         return ExecutableCommand(namespace=None, command=command, check_results=keywords)
 
     def run_cmocka_test(self, test, command):

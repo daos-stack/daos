@@ -1,11 +1,12 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
+
 from apricot import TestWithServers
-from general_utils import get_random_bytes, DaosTestError
+from general_utils import DaosTestError, get_random_bytes
 from test_utils_container import TestContainerData
 
 
@@ -50,7 +51,7 @@ class FullPoolContainerCreate(TestWithServers):
         # query the pool
         self.log.info("Pool Query before write")
         self.pool.set_query_data()
-        self.log.info("Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
+        self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
 
         # create a container
         self.add_container(self.pool)
@@ -87,7 +88,7 @@ class FullPoolContainerCreate(TestWithServers):
         # query the pool
         self.log.info("Pool Query after filling")
         self.pool.set_query_data()
-        self.log.info("Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
+        self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
 
         # destroy container
         self.container.destroy()

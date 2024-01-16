@@ -412,6 +412,10 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 			} else if (provider == CRT_PROV_OFI_CXI) {
 				rc = generate_cxi_uris(provider, base_addr, tag, ui);
 			} else {
+				/*
+				 * TODO: implement generate_opx_uris() function. Once done OPX
+				 * 'contig_ep' setting should be set to true
+				 */
 				D_ERROR("Unknown provider %d for uri='%s'\n", provider, uri);
 				rc = -DER_INVAL;
 			}
@@ -1176,12 +1180,11 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 }
 
 /**
- * Validates an input group id string. Checks both length and for presence of
- * invalid characters.
+ * Validates an input group id string. Checks both length and for presence of invalid characters.
  *
- * \param grpid [IN]		unique group ID.
+ * \param[in] grpid	unique group ID.
  *
- * \return			zero if grpid is valid, -DER_INVAL otherwise
+ * \return		zero if grpid is valid, -DER_INVAL otherwise
  */
 int
 crt_validate_grpid(const crt_group_id_t grpid) {
@@ -1822,24 +1825,23 @@ crt_group_config_path_set(const char *path)
 	int rc;
 
 	if (path == NULL) {
-		D_ERROR("path can't be NULL");
+		D_ERROR("path can't be NULL\n");
 		return -DER_INVAL;
 	}
 
 	if (strlen(path) >= CRT_MAX_ATTACH_PREFIX) {
-		D_ERROR("specified path must be fewer than %d characters",
-			CRT_MAX_ATTACH_PREFIX);
+		D_ERROR("specified path must be fewer than %d characters\n", CRT_MAX_ATTACH_PREFIX);
 		return -DER_INVAL;
 	}
 
 	rc = stat(path, &buf);
 	if (rc != 0) {
-		D_ERROR("bad path specified: %s", path);
+		D_ERROR("bad path specified: %s\n", path);
 		return d_errno2der(errno);
 	}
 
 	if (!S_ISDIR(buf.st_mode)) {
-		D_ERROR("not a directory: %s", path);
+		D_ERROR("not a directory: %s\n", path);
 		return -DER_NOTDIR;
 	}
 
@@ -2400,10 +2402,11 @@ grp_regen_linear_list(struct crt_grp_priv *grp_priv)
 	/* If group size changed - reallocate the list */
 	if (!linear_list->rl_ranks ||
 	    linear_list->rl_nr != grp_priv->gp_size) {
-		linear_list = d_rank_list_realloc(linear_list,
-						  grp_priv->gp_size);
-		if (linear_list == NULL)
-			return -DER_NOMEM;
+		int rc;
+
+		rc = d_rank_list_resize(linear_list, grp_priv->gp_size);
+		if (rc != 0)
+			return rc;
 	}
 
 	index = 0;
@@ -2456,9 +2459,9 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t inc
 		first = membs->rl_nr;
 		new_amount = first + RANK_LIST_REALLOC_SIZE;
 
-		membs = d_rank_list_realloc(membs, new_amount);
-		if (membs == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+		rc = d_rank_list_resize(membs, new_amount);
+		if (rc != 0)
+			D_GOTO(out, rc);
 
 		for (i = first; i < first + RANK_LIST_REALLOC_SIZE; i++) {
 			membs->rl_ranks[i] = CRT_NO_RANK;
@@ -2535,7 +2538,7 @@ out:
 }
 
 int
-crt_rank_self_set(d_rank_t rank)
+crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 {
 	int rc = 0;
 	struct crt_grp_priv	*default_grp_priv;
@@ -2547,11 +2550,22 @@ crt_rank_self_set(d_rank_t rank)
 
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
-	D_INFO("Setting self rank to %d\n", rank);
+	D_INFO("Setting self rank to %u and minimum group version to %u\n", rank,
+	       group_version_min);
 
 	if (!crt_is_service()) {
 		D_WARN("Setting self rank is not supported on client\n");
 		return 0;
+	}
+
+	if (rank == CRT_NO_RANK) {
+		D_ERROR("Self rank should not be %u\n", CRT_NO_RANK);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (group_version_min == 0) {
+		D_ERROR("Minimum group version should not be zero\n");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (default_grp_priv->gp_self != CRT_NO_RANK) {
@@ -2562,6 +2576,7 @@ crt_rank_self_set(d_rank_t rank)
 
 	D_RWLOCK_WRLOCK(&default_grp_priv->gp_rwlock);
 	default_grp_priv->gp_self = rank;
+	default_grp_priv->gp_membs_ver_min = group_version_min;
 	rc = grp_add_to_membs_list(default_grp_priv, rank, CRT_NO_INCARNATION);
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 
@@ -2593,6 +2608,7 @@ crt_rank_self_set(d_rank_t rank)
 		}
 	}
 
+	d_log_rank_setup(rank);
 unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 out:
@@ -3408,6 +3424,17 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	}
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
+
+	if (grp_priv->gp_membs_ver_min == 0) {
+		D_INFO("Minimum group version not known yet\n");
+		D_GOTO(unlock, rc = -DER_UNINIT);
+	}
+
+	if (version < grp_priv->gp_membs_ver_min || version <= grp_priv->gp_membs_ver) {
+		D_INFO("Incoming group version too low: incoming=%u min=%u current=%u\n", version,
+		       grp_priv->gp_membs_ver_min, grp_priv->gp_membs_ver);
+		D_GOTO(unlock, rc = -DER_ALREADY);
+	}
 
 	grp_membs = grp_priv_get_membs(grp_priv);
 

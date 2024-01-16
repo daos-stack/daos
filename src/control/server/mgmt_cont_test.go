@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -85,7 +84,7 @@ func TestMgmt_ListContainers(t *testing.T) {
 				db := raft.MockDatabase(t, log)
 				ms := system.MockMembership(t, log, db, mockTCPResolver)
 				return newMgmtSvc(NewEngineHarness(log), ms, db, nil,
-					events.NewPubSub(context.Background(), log))
+					events.NewPubSub(test.Context(t), log))
 			},
 			req:    validListContReq(),
 			expErr: FaultHarnessNotStarted,
@@ -138,7 +137,7 @@ func TestMgmt_ListContainers(t *testing.T) {
 				tc.setupDrpc(t, svc)
 			}
 
-			resp, err := svc.ListContainers(context.TODO(), tc.req)
+			resp, err := svc.ListContainers(test.Context(t), tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp, test.DefaultCmpOpts()...); diff != "" {
@@ -184,7 +183,7 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 				db := raft.MockDatabase(t, log)
 				ms := system.MockMembership(t, log, db, mockTCPResolver)
 				return newMgmtSvc(NewEngineHarness(log), ms, db, nil,
-					events.NewPubSub(context.Background(), log))
+					events.NewPubSub(test.Context(t), log))
 			},
 			req:    validContSetOwnerReq(),
 			expErr: FaultHarnessNotStarted,
@@ -228,7 +227,7 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 				tc.setupDrpc(t, svc)
 			}
 
-			resp, err := svc.ContSetOwner(context.TODO(), tc.req)
+			resp, err := svc.ContSetOwner(test.Context(t), tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp, test.DefaultCmpOpts()...); diff != "" {

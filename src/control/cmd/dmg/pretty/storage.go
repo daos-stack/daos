@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,7 +26,7 @@ func printHostStorageMapVerbose(hsm control.HostStorageMap, out io.Writer, opts 
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
-		fmt.Fprintf(out, "HugePage Size: %d KB\n", hss.HostStorage.MemInfo.HugePageSizeKb)
+		fmt.Fprintf(out, "HugePage Size: %d KB\n", hss.HostStorage.MemInfo.HugepageSizeKiB)
 		if len(hss.HostStorage.ScmNamespaces) == 0 {
 			if err := PrintScmModules(hss.HostStorage.ScmModules, out, opts...); err != nil {
 				return err
@@ -179,7 +179,7 @@ func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOpt
 	fc := getPrintConfig(opts...)
 
 	if fc.LEDInfoOnly {
-		if _, err := fmt.Fprintf(iw, "TrAddr:%s", dev.TrAddr); err != nil {
+		if _, err := fmt.Fprintf(iw, "TrAddr:%s", dev.Ctrlr.PciAddr); err != nil {
 			return err
 		}
 		if dev.UUID != "" {
@@ -187,18 +187,23 @@ func printSmdDevice(dev *storage.SmdDevice, iw io.Writer, opts ...PrintConfigOpt
 				return err
 			}
 		}
-		if _, err := fmt.Fprintf(iw, " LED:%s\n", dev.LedState); err != nil {
+		if _, err := fmt.Fprintf(iw, " LED:%s\n", dev.Ctrlr.LedState); err != nil {
 			return err
 		}
 		return nil
 	}
 
-	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s]\n", dev.UUID, dev.TrAddr); err != nil {
+	if _, err := fmt.Fprintf(iw, "UUID:%s [TrAddr:%s]\n", dev.UUID, dev.Ctrlr.PciAddr); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(txtfmt.NewIndentWriter(iw), "Targets:%+v Rank:%d State:%s LED:%s\n",
-		dev.TargetIDs, dev.Rank, dev.NvmeState.String(), dev.LedState); err != nil {
 
+	var hasSysXS string
+	if dev.HasSysXS {
+		hasSysXS = "SysXS "
+	}
+	if _, err := fmt.Fprintf(txtfmt.NewIndentWriter(iw),
+		"Roles:%s %sTargets:%+v Rank:%d State:%s LED:%s\n", &dev.Roles, hasSysXS,
+		dev.TargetIDs, dev.Rank, dev.Ctrlr.NvmeState, dev.Ctrlr.LedState); err != nil {
 		return err
 	}
 
@@ -242,13 +247,14 @@ func PrintSmdInfoMap(omitDevs, omitPools bool, hsm control.HostStorageMap, out i
 					if err := printSmdDevice(device, iw1, opts...); err != nil {
 						return err
 					}
-					if device.Health != nil {
-						iw2 := txtfmt.NewIndentWriter(iw1)
-						if err := printNvmeHealth(device.Health, iw2, opts...); err != nil {
-							return err
-						}
-						fmt.Fprintln(out)
+					if device.Ctrlr.HealthStats == nil {
+						continue
 					}
+					if err := printNvmeHealth(device.Ctrlr.HealthStats,
+						txtfmt.NewIndentWriter(iw1), opts...); err != nil {
+						return err
+					}
+					fmt.Fprintln(out)
 				}
 			} else {
 				fmt.Fprintln(iw, "No devices found")

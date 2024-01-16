@@ -5,9 +5,8 @@
 """
 
 
-from command_utils_base import FormattedParameter
-from command_utils_base import BasicParameter
 from command_utils import ExecutableCommand
+from command_utils_base import BasicParameter, FormattedParameter
 from job_manager_utils import Mpirun
 
 
@@ -63,6 +62,7 @@ class Dbench(DbenchCommand):
 
     def run(self, processes=1):
         # pylint: disable=arguments-differ
+        # pylint: disable=arguments-renamed
         """Run the dbench command.
 
         Args:
@@ -80,7 +80,7 @@ class Dbench(DbenchCommand):
         mpirun.assign_processes(processes)
         mpirun.exit_status_exception = True
 
-        # run dcp
+        # run dbench
         out = mpirun.run()
 
         return out

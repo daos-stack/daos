@@ -5,9 +5,10 @@
 """
 
 import os
+
+from general_utils import percent_change
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
-from general_utils import percent_change
 
 
 class IorInterceptTestBase(IorTestBase):
@@ -16,7 +17,7 @@ class IorInterceptTestBase(IorTestBase):
     :avocado: recursive
     """
 
-    def run_il_perf_check(self):
+    def run_il_perf_check(self, libname):
         """Verify IOR performance with DFUSE + IL is similar to DFS.
 
         Steps:
@@ -25,6 +26,8 @@ class IorInterceptTestBase(IorTestBase):
             Verify performance with DFUSE + IL is similar to DFS.
 
         """
+        if libname is None:
+            self.fail("libname is not set for function interception.")
         # Write and read performance thresholds
         write_x = self.params.get("write_x", self.ior_cmd.namespace, None)
         read_x = self.params.get("read_x", self.ior_cmd.namespace, None)
@@ -45,7 +48,7 @@ class IorInterceptTestBase(IorTestBase):
         # Run IOR with dfuse + IL
         self.ior_cmd.api.update("POSIX")
         dfuse_out = self.run_ior_with_pool(
-            intercept=os.path.join(self.prefix, 'lib64', 'libioil.so'),
+            intercept=os.path.join(self.prefix, 'lib64', libname),
             fail_on_warning=self.log.info)
         dfuse_perf = IorCommand.get_ior_metrics(dfuse_out)
 
@@ -55,6 +58,7 @@ class IorInterceptTestBase(IorTestBase):
         # Log some params for debugging.
         server_provider = self.server_managers[0].get_config_value("provider")
         self.log.info("Provider:           %s", server_provider)
+        self.log.info("Library:            %s", libname)
         self.log.info("Servers:            %s", self.hostlist_servers)
         self.log.info("Clients:            %s", self.hostlist_clients)
         self.log.info("PPN:                %s", self.ppn)

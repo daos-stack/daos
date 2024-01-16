@@ -9,8 +9,15 @@
 #define D_LOGFAC	DD_FAC(rpc)
 
 #include <semaphore.h>
-
+#include <daos_task.h>
 #include "crt_internal.h"
+#include <daos/rpc.h>
+
+#include "../mgmt/rpc.h"
+#include "../pool/rpc.h"
+#include "../container/rpc.h"
+#include "../pipeline/pipeline_rpc.h"
+#include "../object/obj_rpc.h"
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
 
@@ -96,7 +103,7 @@ crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
 
 	rc = d_fault_attr_set(in_args_fi_attr->fa_fault_id, fa_in);
 	if (rc != 0)
-		D_ERROR("d_fault_attr_set() failed. rc: %d\n", rc);
+		D_ERROR("d_fault_attr_set() failed. rc: " DF_RC "\n", DP_RC(rc));
 
 	out_args_fi_attr->fa_ret = rc;
 	rc = crt_reply_send(rpc_req);
@@ -210,26 +217,114 @@ static struct crt_proto_rpc_format crt_iv_rpcs[] = {
 
 #undef X
 
-#define X(a, b, c, d, e) case a: return #a;
-
 /* Helper function to convert internally registered RPC opc to str */
-char
-*crt_opc_to_str(crt_opcode_t opc)
+void
+crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 {
-	if (crt_opc_is_swim(opc))
-		return "SWIM";
+	char         *module = NULL;
+	char         *opc    = NULL;
+	unsigned long base;
+	bool          daos_module = false;
+	bool          cart_module = false;
+	int           mod_id;
+	int           op_id;
 
-	switch (opc) {
-		CRT_INTERNAL_RPCS_LIST
-		CRT_FI_RPCS_LIST
-		CRT_IV_RPCS_LIST
-		CRT_ST_RPCS_LIST
-		CRT_CTL_RPCS_LIST
+	mod_id = opc_get_mod_id(crt_opc);
+	op_id  = opc_get(crt_opc);
+
+	/* CaRT keeps all base codes as unsigned longs */
+	base = crt_opc & CRT_PROTO_BASEOPC_MASK;
+
+	/* First, find if one of internal modules */
+	switch (base) {
+	case CRT_OPC_INTERNAL_BASE:
+	case CRT_OPC_FI_BASE:
+	case CRT_OPC_ST_BASE:
+	case CRT_OPC_CTL_BASE:
+	case CRT_OPC_IV_BASE:
+		module      = "CART";
+		cart_module = true;
+		break;
+	case CRT_OPC_SWIM_BASE:
+		module      = "SWIM";
+		cart_module = true;
+		break;
 	}
-	return "DAOS";
-}
+
+	/* Check if daos module */
+	if (module == NULL) {
+		module = daos_opc_to_module_str(crt_opc);
+
+		if (module)
+			daos_module = true;
+		else
+			module = "CUSTOM";
+	}
+
+/* Redefining X macro allows to reuse existing lists */
+#define X(a, ...)                                                                                  \
+	case a:                                                                                    \
+		opc = #a;                                                                          \
+		break;
+
+	/* Next find the opcode name if available for the module  */
+	if (cart_module) {
+		switch (crt_opc) {
+			CRT_INTERNAL_RPCS_LIST
+			CRT_FI_RPCS_LIST
+			CRT_IV_RPCS_LIST
+			CRT_ST_RPCS_LIST
+			CRT_CTL_RPCS_LIST
+		}
+	}
+
+	/* TODO: Cover all daos modules eventually */
+	if (daos_module) {
+		switch (mod_id) {
+		case DAOS_MGMT_MODULE:
+			switch (op_id) {
+				MGMT_PROTO_CLI_RPC_LIST
+				MGMT_PROTO_SRV_RPC_LIST
+			}
+			break;
+		case DAOS_POOL_MODULE:
+			switch (op_id) {
+				POOL_PROTO_RPC_LIST
+			}
+			break;
+		case DAOS_CONT_MODULE:
+			switch (op_id) {
+				CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8)
+				CONT_PROTO_SRV_RPC_LIST
+			}
+			break;
+		case DAOS_OBJ_MODULE:
+			opc = obj_opc_to_str(op_id);
+			break;
+		case DAOS_PIPELINE_MODULE:
+			switch (op_id) {
+				PIPELINE_PROTO_CLI_RPC_LIST
+			}
+			break;
+
+			/* TODO: RDB module header needs to reorg as it pulls many dependencies
+					case DAOS_RDB_MODULE:
+						switch (op_id) {
+						RDB_PROTO_SRV_RPC_LIST
+						}
+						break;
+			*/
+		}
+	}
 
 #undef X
+
+	if (opc == NULL)
+		opc = "";
+
+	*module_name = module;
+	*opc_name    = opc;
+}
 
 /* CRT RPC related APIs or internal functions */
 int
@@ -483,6 +578,8 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_DESTROY(&rpc_priv->crp_mutex);
 	D_SPIN_DESTROY(&rpc_priv->crp_lock);
 
+	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
+
 	D_FREE(rpc_priv);
 }
 
@@ -560,9 +657,9 @@ int
 crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req)
 {
-	int rc = 0;
-	struct crt_grp_priv *grp_priv = NULL;
+	struct crt_grp_priv	*grp_priv = NULL;
 	struct crt_rpc_priv	*rpc_priv;
+	int			rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
@@ -682,40 +779,16 @@ crt_req_destroy(struct crt_rpc_priv *rpc_priv)
 	crt_hg_req_destroy(rpc_priv);
 }
 
-int
+void
 crt_req_addref(crt_rpc_t *req)
 {
-	struct crt_rpc_priv	*rpc_priv;
-	int			rc = 0;
-
-	if (req == NULL) {
-		D_ERROR("invalid parameter (NULL req).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
-	RPC_ADDREF(rpc_priv);
-
-out:
-	return rc;
+	RPC_PUB_ADDREF(req);
 }
 
-int
+void
 crt_req_decref(crt_rpc_t *req)
 {
-	struct crt_rpc_priv	*rpc_priv;
-	int			rc = 0;
-
-	if (req == NULL) {
-		D_ERROR("invalid parameter (NULL req).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
-	RPC_DECREF(rpc_priv);
-
-out:
-	return rc;
+	RPC_PUB_DECREF(req);
 }
 
 static inline int
@@ -1650,8 +1723,11 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 
 	crt_rpc_inout_buff_init(rpc_priv);
 
-	rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
-				     ctx->cc_timeout_sec);
+	if (srv_flag && rpc_priv->crp_req_hdr.cch_src_timeout != 0)
+		rpc_priv->crp_timeout_sec = rpc_priv->crp_req_hdr.cch_src_timeout;
+	else
+		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
+					     ctx->cc_timeout_sec);
 }
 
 void
@@ -1898,6 +1974,23 @@ out:
 }
 
 int
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
+{
+	struct crt_rpc_priv	*rpc_priv;
+	int			rc = 0;
+
+	if (rpc == NULL || timeout == NULL) {
+		D_ERROR("NULL pointer passed\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	*timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
+out:
+	return rc;
+}
+
+int
 crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg)
 {
 	int rc = 0;
@@ -1923,4 +2016,10 @@ crt_trigger_hlc_error_cb(void)
 
 	if (handler)
 		handler(arg);
+}
+
+int
+crt_req_get_proto_ver(crt_rpc_t *req)
+{
+	return (req->cr_opc & CRT_PROTO_VER_MASK) >> 16;
 }

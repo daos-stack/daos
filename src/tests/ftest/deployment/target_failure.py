@@ -3,14 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import os
 import threading
+import time
 
+from command_utils_base import CommandFailure
+from general_utils import report_errors
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors
-from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 
 
@@ -40,16 +40,15 @@ class TargetFailure(IorTestBase):
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
-        ior_cmd.set_daos_params(self.server_group, pool, container.uuid)
-        testfile = os.path.join("/", file_name)
+        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+        testfile = os.path.join(os.sep, file_name)
         ior_cmd.test_file.update(testfile)
 
         manager = get_job_manager(test=self, job=ior_cmd, subprocess=self.subprocess)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", '/run/ior/client_processes/*')
-        manager.ppn.update(ppn, 'mpirun.ppn')
-        manager.processes.update(None, 'mpirun.np')
+        manager.assign_processes(ppn=ppn)
 
         # Run the command.
         try:
@@ -198,7 +197,7 @@ class TargetFailure(IorTestBase):
         9. Verify that there's no error this time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=deployment,target_failure,rebuild
         :avocado: tags=TargetFailure,test_target_failure_wo_rf
         """

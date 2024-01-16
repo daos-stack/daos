@@ -24,12 +24,10 @@ class EcodCellSizeProperty(IorTestBase):
         Args:
             expected_size (int): expected container cell size
         """
-        daos_cmd = self.get_daos_command()
-        cont_prop = daos_cmd.container_get_prop(
-            pool=self.pool.uuid, cont=self.container.uuid, properties=["ec_cell_sz"])
+        cont_prop = self.container.get_prop(properties=["ec_cell_sz"])
         actual_size = cont_prop["response"][0]["value"]
 
-        self.assertEqual(expected_size, actual_size)
+        self.assertEqual(expected_size, actual_size, "unexpected container ec_cell_sz")
 
     def test_ec_pool_property(self):
         """Jira ID: DAOS-7321.
@@ -48,9 +46,9 @@ class EcodCellSizeProperty(IorTestBase):
             Verify the cont ec_cell_sz property after IOR.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_ior,daos_cmd
-        :avocado: tags=ec_cell_property,test_ec_pool_property
+        :avocado: tags=EcodCellSizeProperty,ec_cell_property,test_ec_pool_property
         """
         ior_transfer_size = self.params.get("ior_transfer_size",
                                             '/run/ior/iorflags/*')
