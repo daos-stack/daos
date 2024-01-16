@@ -19,6 +19,10 @@
 extern "C" {
 #endif
 
+#include <daos_types.h>
+#include <daos_obj.h>
+#include <daos_obj_class.h>
+
 /** Range of contiguous records */
 typedef struct {
 	/** Index of the first record in the range */

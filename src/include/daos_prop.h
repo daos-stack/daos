@@ -15,6 +15,7 @@ extern "C" {
 #endif
 
 #include <ctype.h>
+
 #include <daos_types.h>
 
 /**

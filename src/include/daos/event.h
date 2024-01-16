@@ -34,8 +34,6 @@ enum daos_ev_flags {
 	DAOS_EVF_NEED_LAUNCH	= (1 << 1),
 };
 
-struct tse_task_t;
-
 /**
  * Finish event queue library.
  */

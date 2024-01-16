@@ -16,6 +16,8 @@
 extern "C" {
 #endif
 
+#include <daos_types.h>
+
 /** Flags for daos_tx_open */
 enum {
 	/** The transaction is read only. */

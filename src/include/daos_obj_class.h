@@ -10,6 +10,11 @@
 extern "C" {
 #endif
 
+#include <sys/types.h>
+#include <inttypes.h>
+
+#include <daos_types.h>
+
 #define MAX_OBJ_CLASS_NAME_LEN       24
 
 #define MAX_NUM_GROUPS               ((1 << 16UL) - 1)

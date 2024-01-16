@@ -16,9 +16,7 @@ extern "C" {
 
 #include <uuid/uuid.h>
 
-#include <daos_event.h>
-#include <daos_types.h>
-#include <daos_pool.h>
+#include <daos_cont.h>
 
 /**
  * Get the DAOS system information in a newly allocated structure.
