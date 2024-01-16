@@ -3503,9 +3503,9 @@ setup_fd_0_1_2(void)
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		/* only check fd 0, 1, and 2 */
 		if (fd_dup2_list[i].fd_src >= 0 && fd_dup2_list[i].fd_src <= 2) {
-			fd = fd_dup2_list[i].fd_src;
-			idx = fd_dup2_list[i].fd_dest - FD_FILE_BASE;
-			offset = file_list[idx]->offset;
+			fd        = fd_dup2_list[i].fd_src;
+			idx       = fd_dup2_list[i].fd_dest - FD_FILE_BASE;
+			offset    = file_list[idx]->offset;
 			open_flag = file_list[idx]->open_flag;
 
 			/* get a real fd from kernel */
@@ -3544,10 +3544,10 @@ close_all_kernel_fd(void)
 		exit(1);
 	}
 	fd_using = dirfd(dir);
-	while ( (entry = readdir(dir)) != NULL) {
+	while ((entry = readdir(dir)) != NULL) {
 		if (entry->d_name[0] >= '1' && entry->d_name[0] <= '9') {
 			fd = atoi(entry->d_name);
-			if(fd != 0)
+			if (fd != 0)
 				continue;
 			if (fd > 2 && fd != fd_using)
 				close(fd);

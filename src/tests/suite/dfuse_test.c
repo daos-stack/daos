@@ -652,7 +652,7 @@ do_exec(void **state)
 	printf("Found libpil4dfs.so.\n");
 	exe_path = malloc(PATH_MAX);
 	assert_non_null(exe_path);
-	rc = readlink("/proc/self/exe", exe_path, PATH_MAX - 1);	
+	rc = readlink("/proc/self/exe", exe_path, PATH_MAX - 1);
 	assert_true(rc > 0);
 	exe_path[rc] = 0;
 
