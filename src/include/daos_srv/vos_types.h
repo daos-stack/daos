@@ -15,7 +15,7 @@
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
-#define VOS_SUB_OP_MAX	((uint16_t)-2)
+#define VOS_SUB_OP_MAX  (((uint16_t)-1) >> 2)
 
 #define VOS_POOL_DF_2_2 24
 #define VOS_POOL_DF_2_4 25
@@ -24,15 +24,6 @@
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
 	d_list_t		dru_nvme;
-};
-
-enum dtx_cos_flags {
-	DCF_SHARED		= (1 << 0),
-	/* Some DTX (such as for the distributed transaction across multiple
-	 * RDGs, or for EC object modification) need to be committed via DTX
-	 * RPC instead of piggyback via other dispatched update/punch RPC.
-	 */
-	DCF_EXP_CMT		= (1 << 1),
 };
 
 enum dtx_stat_flags {

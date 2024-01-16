@@ -9,7 +9,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 #include <cart/api.h>
-#include "gurt/debug.h"
+#include <gurt/debug.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,12 +63,11 @@ test_tcp(void **state)
 	print_info("tcp");
 }
 
-// disabled until memleak is resolved in mercury
-// static void
-// test_ofi_tcp(void **state)
-// {
-// 	print_info("ofi+tcp");
-// }
+static void
+test_ofi_tcp(void **state)
+{
+	print_info("ofi+tcp");
+}
 
 static int
 init_tests(void **state)
@@ -88,8 +87,9 @@ int
 main(int argc, char *argv[])
 {
 	const struct CMUnitTest tests[] = {
-	    cmocka_unit_test(test_all), cmocka_unit_test(test_tcp),
-	    //     cmocka_unit_test(test_ofi_tcp),
+	    cmocka_unit_test(test_all),
+	    cmocka_unit_test(test_tcp),
+	    cmocka_unit_test(test_ofi_tcp),
 	};
 
 	d_register_alt_assert(mock_assert);

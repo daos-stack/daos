@@ -12,11 +12,13 @@
 #define __CRT_RPC_H__
 
 #include <gurt/heap.h>
-#include "gurt/common.h"
+#include <gurt/common.h>
 
 /* default RPC timeout 60 seconds */
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
 #define CRT_DEFAULT_TIMEOUT_US	(CRT_DEFAULT_TIMEOUT_S * 1e6) /* micro-second */
+
+#define CRT_QUOTA_RPCS_DEFAULT 64
 
 /* uri lookup max retry times */
 #define CRT_URI_LOOKUP_RETRY_MAX	(8)
@@ -130,6 +132,8 @@ struct crt_rpc_priv {
 	d_list_t		crp_epi_link;
 	/* tmp_link used in crt_context_req_untrack */
 	d_list_t		crp_tmp_link;
+	/* link for crt_context::cc_quotas.rpc_waitq */
+	d_list_t		crp_waitq_link;
 	/* link to parent RPC crp_opc_info->co_child_rpcs/co_replied_rpcs */
 	d_list_t		crp_parent_link;
 	/* binheap node for timeout management, in crt_context::cc_bh_timeout */
@@ -216,11 +220,11 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
 }
 
-#define CRT_PROTO_INTERNAL_VERSION 5
+#define CRT_PROTO_INTERNAL_VERSION 4
 #define CRT_PROTO_FI_VERSION 3
 #define CRT_PROTO_ST_VERSION 1
 #define CRT_PROTO_CTL_VERSION 1
-#define CRT_PROTO_IV_VERSION 1
+#define CRT_PROTO_IV_VERSION       2
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -688,8 +692,9 @@ crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 	rpc_priv->crp_timeout_ts = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 }
 
-/* Convert opcode to string. Only returns string for internal RPCs */
-char *crt_opc_to_str(crt_opcode_t opc);
+/*  decode cart opcode into module and rpc opcode strings */
+void
+crt_opc_decode(crt_opcode_t opc, char **module_name, char **opc_name);
 
 bool crt_rpc_completed(struct crt_rpc_priv *rpc_priv);
 
