@@ -1275,6 +1275,25 @@ NVMe PCI Format Result
 
 func TestPretty_PrintSmdInfoMap(t *testing.T) {
 	mockController := storage.MockNvmeController(1)
+	newCtrlr := storage.NvmeController{
+		PciAddr:   "0000:8a:00.0",
+		NvmeState: storage.NvmeStateNew,
+		LedState:  storage.LedStateNormal,
+	}
+	identCtrlr := storage.NvmeController{
+		PciAddr:   "0000:db:00.0",
+		NvmeState: storage.NvmeStateNormal,
+		LedState:  storage.LedStateIdentify,
+	}
+	faultCtrlr := storage.NvmeController{
+		PciAddr:   "0000:8b:00.0",
+		NvmeState: storage.NvmeStateFaulty,
+		LedState:  storage.LedStateFaulty,
+	}
+	unknoCtrlr := storage.NvmeController{
+		PciAddr:  "0000:da:00.0",
+		LedState: storage.LedStateUnknown,
+	}
 
 	for name, tc := range map[string]struct {
 		noDevs      bool
@@ -1387,40 +1406,31 @@ host1
 							Devices: []*storage.SmdDevice{
 								{
 									UUID:      test.MockUUID(0),
-									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
-									Rank:      0,
-									NvmeState: storage.NvmeStateNew,
-									LedState:  storage.LedStateNormal,
 									HasSysXS:  true,
 									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
+									Ctrlr:     newCtrlr,
 								},
 								{
 									UUID:      test.MockUUID(1),
-									TrAddr:    "0000:8b:00.0",
 									TargetIDs: []int32{3, 4, 5},
-									Rank:      0,
-									NvmeState: storage.NvmeStateFaulty,
-									LedState:  storage.LedStateFaulty,
 									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
+									Ctrlr:     faultCtrlr,
 								},
 								{
 									UUID:      test.MockUUID(2),
-									TrAddr:    "0000:da:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
-									LedState:  storage.LedStateUnknown,
 									HasSysXS:  true,
 									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
+									Ctrlr:     unknoCtrlr,
 								},
 								{
 									UUID:      test.MockUUID(3),
-									TrAddr:    "0000:db:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      1,
-									NvmeState: storage.NvmeStateNormal,
-									LedState:  storage.LedStateIdentify,
 									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
+									Ctrlr:     identCtrlr,
 								},
 							},
 						},
@@ -1471,9 +1481,7 @@ host1
 									UUID:      test.MockUUID(0),
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      0,
-									NvmeState: storage.NvmeStateNormal,
-									LedState:  storage.LedStateNormal,
-									Health:    mockController.HealthStats,
+									Ctrlr:     *mockController,
 									Roles:     storage.BdevRoles{storage.BdevRoleAll},
 								},
 							},
@@ -1486,7 +1494,7 @@ host1
 host1
 -----
   Devices
-    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:]
+    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:01:00.0]
       Roles:data,meta,wal Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
       Health Stats:
         Temperature:%dK(%.02fC)
@@ -1558,9 +1566,8 @@ host1
 						SmdInfo: &control.SmdInfo{
 							Devices: []*storage.SmdDevice{
 								{
-									UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-									TrAddr:   "0000:8a:00.0",
-									LedState: storage.LedStateIdentify,
+									UUID:  "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+									Ctrlr: identCtrlr,
 								},
 							},
 						},
@@ -1572,10 +1579,10 @@ host1
 host1
 -----
   Devices
-    TrAddr:0000:8a:00.0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
+    TrAddr:0000:db:00.0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
 `,
 		},
-		"identify led; transport address specified": {
+		"identify led; no uuid specified": {
 			noPools: true,
 			opts:    []PrintConfigOption{PrintOnlyLEDInfo()},
 			hsm: mockHostStorageMap(t,
@@ -1585,8 +1592,7 @@ host1
 						SmdInfo: &control.SmdInfo{
 							Devices: []*storage.SmdDevice{
 								{
-									TrAddr:   "0000:8a:00.0",
-									LedState: storage.LedStateIdentify,
+									Ctrlr: identCtrlr,
 								},
 							},
 						},
@@ -1598,7 +1604,7 @@ host1
 host1
 -----
   Devices
-    TrAddr:0000:8a:00.0 LED:QUICK_BLINK
+    TrAddr:0000:db:00.0 LED:QUICK_BLINK
 `,
 		},
 	} {

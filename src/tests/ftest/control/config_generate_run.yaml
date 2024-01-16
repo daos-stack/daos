@@ -2,6 +2,8 @@ hosts:
   test_servers: 1
 timeout: 250
 server_config:
+  transport_config:
+    allow_insecure: False
   engines_per_host: 1
   engines:
     0:
@@ -9,8 +11,17 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos0
+# Force the use of certificates regardless of the launch.py --insecure setting.
 pool:
   control_method: dmg
+  transport_config:
+    allow_insecure: False
+agent_config:
+  transport_config:
+    allow_insecure: False
+dmg:
+  transport_config:
+    allow_insecure: False
 setup:
   start_servers_once: False
 config_generate_params: !mux

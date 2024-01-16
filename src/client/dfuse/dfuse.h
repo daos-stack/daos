@@ -17,8 +17,8 @@
 #include <gurt/atomic.h>
 #include <gurt/slab.h>
 
-#include "daos.h"
-#include "daos_fs.h"
+#include <daos.h>
+#include <daos_fs.h>
 
 #include "dfs_internal.h"
 
