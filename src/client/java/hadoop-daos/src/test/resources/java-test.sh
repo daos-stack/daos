@@ -1,5 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 
+set -e
 cd /root/daos
 first=$1
 shift

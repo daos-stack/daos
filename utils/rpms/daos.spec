@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       12%{?relval}%{?dist}
+Release:       13%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -73,7 +73,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.10.1-2.409.gc354cd7%{?dist}
+BuildRequires: daos-raft-devel = 0.10.1-2.411.gefa15f4%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -585,6 +585,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Dec 06 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-13
+- Update for EL 8.8 and Leap 15.5
+- Update raft to 0.10.1-2.411.gefa15f4
+
 * Fri Nov 17 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.5.100-12
 - Update to PMDK 2.0.0
   * Remove libpmemblk from dependencies.
