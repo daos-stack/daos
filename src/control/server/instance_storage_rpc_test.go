@@ -181,6 +181,19 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 				State: new(ctlpb.ResponseState),
 			},
 		},
+		"scan over drpc; unplugged ctrlr not shown": {
+			req: ctlpb.ScanNvmeReq{Meta: true},
+			smdRes: func() *ctlpb.SmdDevResp {
+				ssr := defSmdScanRes()
+				ssr.Devices[0].Ctrlr.DevState = ctlpb.NvmeDevState_UNPLUGGED
+				return ssr
+			}(),
+			healthRes: healthRespWithUsage(),
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{},
+				State:  new(ctlpb.ResponseState),
+			},
+		},
 		"scan over drpc; with smd and health; missing ctrlr in smd": {
 			req: ctlpb.ScanNvmeReq{Meta: true, Health: true},
 			smdRes: func() *ctlpb.SmdDevResp {

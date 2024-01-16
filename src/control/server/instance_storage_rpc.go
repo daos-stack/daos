@@ -198,6 +198,9 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 			return nil, errors.Errorf("smd %q has no ctrlr ref", sd.Uuid)
 		}
 
+		if sd.Ctrlr.DevState == ctlpb.NvmeDevState_UNPLUGGED {
+			continue
+		}
 		addr := sd.Ctrlr.PciAddr
 
 		if _, exists := seenCtrlrs[addr]; !exists {

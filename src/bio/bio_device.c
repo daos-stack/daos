@@ -460,7 +460,10 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 	D_ASSERT(b_info->bdi_ctrlr == NULL);
 
 	if (dev_name == NULL) {
-		D_DEBUG(DB_MGMT, "missing bdev device name, skipping ctrlr info fetch\n");
+		D_DEBUG(DB_MGMT,
+			"missing bdev device name for device " DF_UUID ", skipping ctrlr "
+			"info fetch\n",
+			DP_UUID(dev_id));
 		return 0;
 	}
 
