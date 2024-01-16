@@ -225,6 +225,8 @@ def define_common(reqs):
 
     reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
 
+    reqs.define('archive', libs=['archive'], headers=['archive.h'], package='libarchive-devel')
+
     if ARM_PLATFORM:
         reqs.define('ipmctl', skip_arch=True)
     else:
