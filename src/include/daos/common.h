@@ -25,17 +25,21 @@
 #include <byteswap.h>
 
 #include <daos_errno.h>
-#include <daos/debug.h>
-#include <gurt/hash.h>
-#include <gurt/common.h>
-#include <cart/api.h>
 #include <daos_types.h>
 #include <daos_obj.h>
 #include <daos_prop.h>
 #include <daos_security.h>
+#include <daos_task.h>
+
+#include <daos/debug.h>
+#include <gurt/hash.h>
+#include <gurt/common.h>
+#include <cart/api.h>
+
 #include <daos/profile.h>
 #include <daos/dtx.h>
 #include <daos/cmd_parser.h>
+#include <daos/tse.h>
 
 #define DAOS_ON_VALGRIND D_ON_VALGRIND
 

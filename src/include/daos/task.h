@@ -12,7 +12,6 @@
 
 #include <daos_types.h>
 #include <daos_api.h>
-#include <daos/tse.h>
 #include <daos/common.h>
 #include <daos_task.h>
 

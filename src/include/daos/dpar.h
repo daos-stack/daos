@@ -9,10 +9,6 @@
 #include <stdbool.h>
 #include <inttypes.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #define DPAR_MAJOR 2
 #define DPAR_MINOR 0
 
@@ -92,11 +88,6 @@ par_comm_split(uint32_t comm, int color, int key, uint32_t *new_comm);
 /** Free a communicator */
 int
 par_comm_free(uint32_t comm);
-
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /** __DAOS_PAR_LIB_H__ */
 

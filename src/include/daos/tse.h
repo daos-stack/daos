@@ -22,7 +22,7 @@
 /* tse_task is used to track single asynchronous operation (8 bytes used for public members). */
 #define TSE_TASK_SIZE		(TSE_PRIV_SIZE + 8)
 
-typedef struct tse_task {
+struct tse_task {
 	int			dt_result;
 	/** padding bytes */
 	int			dt_pad32;
@@ -30,12 +30,12 @@ typedef struct tse_task {
 	struct {
 		char		dt_space[TSE_PRIV_SIZE];
 	}			dt_private;
-} tse_task_t;
+};
 
 /**
  * Track all of the tasks under a scheduler.
  */
-typedef struct {
+struct tse_sched {
 	int		ds_result;
 
 	/* user data associated with the scheduler (completion cb data, etc.) */
@@ -45,7 +45,7 @@ typedef struct {
 	struct {
 		uint64_t	ds_space[48];
 	}			ds_private;
-} tse_sched_t;
+};
 
 typedef int (*tse_sched_comp_cb_t)(void *args, int rc);
 typedef int (*tse_task_func_t)(tse_task_t *);

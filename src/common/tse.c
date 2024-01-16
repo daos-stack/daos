@@ -17,8 +17,10 @@
 
 #include <stdint.h>
 #include <pthread.h>
+#include <daos_task.h>
+
 #include <daos/common.h>
-#include <daos/tse.h>
+
 #include "tse_internal.h"
 
 D_CASSERT(sizeof(struct tse_task) == TSE_TASK_SIZE);

@@ -11,7 +11,6 @@
 #define D_LOGFAC	DD_FAC(kv)
 
 #include <daos/common.h>
-#include <daos/tse.h>
 #include <daos/object.h>
 #include <daos/kv.h>
 #include <daos_api.h>
