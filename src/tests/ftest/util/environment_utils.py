@@ -91,10 +91,8 @@ def set_python_environment(logger):
     ]
 
     # Include the cart directory paths when running from sources
-    for cart_dir in os.listdir(os.path.abspath("cart")):
-        cart_path = os.path.join(os.path.abspath("cart"), cart_dir)
-        if os.path.isdir(cart_path):
-            required_python_paths.append(cart_path)
+    cart_utils_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cart", "util")
+    required_python_paths.append(cart_utils_dir)
 
     required_python_paths.extend(site.getsitepackages())
 
