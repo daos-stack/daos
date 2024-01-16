@@ -20,6 +20,10 @@
 extern "C" {
 #endif
 
+#include <daos_prop.h>
+#include <daos_obj_class.h>
+#include <daos_cont.h>
+
 /** Flags for duns_resolve_path */
 enum {
 	/*

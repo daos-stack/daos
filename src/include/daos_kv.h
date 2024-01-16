@@ -19,6 +19,9 @@
 extern "C" {
 #endif
 
+#include <daos_types.h>
+#include <daos_obj.h>
+
 /** Conditional Op: Insert key if it doesn't exist, fail otherwise */
 #define DAOS_COND_KEY_INSERT	DAOS_COND_DKEY_INSERT
 /** Conditional Op: Update key if it exists, fail otherwise */

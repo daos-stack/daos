@@ -15,6 +15,11 @@
 extern "C" {
 #endif
 
+#include <inttypes.h>
+#include <uuid/uuid.h>
+
+#include <daos_prop.h>
+
 /** Type of storage target */
 typedef enum {
 	DAOS_TP_UNKNOWN,

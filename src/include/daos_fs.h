@@ -21,7 +21,14 @@ extern "C" {
 #endif
 
 #include <dirent.h>
+#include <inttypes.h>
 #include <sys/stat.h>
+
+#include <daos_types.h>
+#include <daos_obj.h>
+#include <daos_obj_class.h>
+#include <daos_array.h>
+#include <daos_cont.h>
 
 /** Maximum Name length */
 #define DFS_MAX_NAME		NAME_MAX
