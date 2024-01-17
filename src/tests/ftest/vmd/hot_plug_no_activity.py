@@ -5,8 +5,8 @@
 """
 import time
 
-from general_utils import run_pcmd, report_errors
-from dmg_utils import get_storage_query_device_info, check_system_query_status
+from dmg_utils import check_system_query_status, get_storage_query_device_info
+from general_utils import report_errors, run_pcmd
 from ior_test_base import IorTestBase
 
 
@@ -30,7 +30,7 @@ class HotPlugNoActivityTest(IorTestBase):
         for count in range(2):
             time.sleep(30)
             device_info = get_storage_query_device_info(dmg=dmg_command)
-            self.log.info(f"device_info = {device_info}")
+            self.log.info("device_info = %s", device_info)
             # We'll use the first device.
             device_control = device_info[0]["ctrlr"]
             dev_state = device_control["dev_state"]
@@ -38,7 +38,7 @@ class HotPlugNoActivityTest(IorTestBase):
             if dev_state == exp_disk_state and led_state == exp_led_state:
                 removed_state = True
                 break
-            self.log.info(f"{count}: Disk state = {dev_state}; LED state = {led_state}")
+            self.log.info("%d: Disk state = %s; LED state = %s", count, dev_state, led_state)
         if not removed_state:
             errors.append(error_msg)
 
@@ -61,7 +61,7 @@ class HotPlugNoActivityTest(IorTestBase):
         for value in usage_out["response"]["HostStorage"].values():
             smd_devices = value["storage"]["nvme_devices"][0]["smd_devices"]
             hosts_to_smd_devices[value["hosts"]] = smd_devices
-        self.log.info(f"hosts_to_smd_devices = {hosts_to_smd_devices}")
+        self.log.info("hosts_to_smd_devices = %s", hosts_to_smd_devices)
         port_num = dmg_command.yaml.port.value
         host_port = f"{str(self.hostlist_servers)}:{port_num}"
         total_bytes = hosts_to_smd_devices[host_port][0]["total_bytes"]
@@ -101,13 +101,14 @@ class HotPlugNoActivityTest(IorTestBase):
         self.log_step(msg)
         dmg_command = self.get_dmg_command()
         device_info = get_storage_query_device_info(dmg=dmg_command)
-        self.log.info(f"device_info = {device_info}")
+        self.log.info("device_info = %s", device_info)
         # We'll use the first device.
         device_control = device_info[0]["ctrlr"]
         pci_addr = device_control["pci_addr"]
         dev_state = device_control["dev_state"]
         led_state = device_control["led_state"]
-        self.log.info(f"pci_addr = {pci_addr}; dev_state = {dev_state}; led_state = {led_state}")
+        self.log.info(
+            "pci_addr = %s; dev_state = %s; led_state = %s", pci_addr, dev_state, led_state)
         errors = []
         exp_disk_state = "NORMAL"
         if dev_state != exp_disk_state:
@@ -147,7 +148,7 @@ class HotPlugNoActivityTest(IorTestBase):
         # '        "state": "enabled",',
         # ...
         # We'll remove the first and the last bracket, concatenate all items into a single string,
-        # then pass it into yaml.safe_load(). (It works even there are whitespaces at the beginning
+        # then pass it into yaml.safe_load(). (It works even there are white spaces at the beginning
         # of each line.)
         # stdout = rpc_out[0]["stdout"]
         # First and last item of stdout is "[" and "]", so remove them.
