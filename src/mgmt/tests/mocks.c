@@ -478,6 +478,12 @@ dss_init_state_set(enum dss_init_state state)
 {
 }
 
+enum dss_init_state
+dss_init_state_get()
+{
+	return 0;
+}
+
 int
 dss_module_setup_all()
 {

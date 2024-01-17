@@ -2569,6 +2569,10 @@ crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 	}
 
 	if (default_grp_priv->gp_self != CRT_NO_RANK) {
+		if (default_grp_priv->gp_self == rank) {
+			D_WARN("Self rank was already set to %d, skip\n", rank);
+			D_GOTO(out, rc);
+		}
 		D_ERROR("Self rank was already set to %d\n",
 			default_grp_priv->gp_self);
 		D_GOTO(out, rc = -DER_INVAL);

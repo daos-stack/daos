@@ -804,6 +804,7 @@ enum dss_media_error_type {
 };
 
 void dss_init_state_set(enum dss_init_state state);
+enum dss_init_state dss_init_state_get();
 
 /** Call module setup from drpc setup call handler. */
 int dss_module_setup_all(void);

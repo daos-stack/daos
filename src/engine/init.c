@@ -429,6 +429,12 @@ dss_init_state_set(enum dss_init_state state)
 	ABT_mutex_unlock(server_init_state_mutex);
 }
 
+enum dss_init_state
+dss_init_state_get()
+{
+	return server_init_state;
+}
+
 static int
 abt_max_num_xstreams(void)
 {

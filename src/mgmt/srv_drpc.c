@@ -2415,24 +2415,33 @@ pack_resp:
 	ctl__dev_replace_req__free_unpacked(req, &alloc.alloc);
 }
 
+static pthread_mutex_t server_setup_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 void
 ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
-	int		rc;
+	int             rc   = 0;
 
 	D_INFO("Received request to setup engine\n");
+
+	D_MUTEX_LOCK(&server_setup_mutex);
+	if (dss_init_state_get() >= DSS_INIT_STATE_SET_UP) {
+		D_WARN("server has started, skip module setup");
+		goto out;
+	}
 
 	rc = dss_module_setup_all();
 	if (rc != 0) {
 		D_ERROR("Module setup failed: %d\n", rc);
-		goto err;
+		goto out;
 	}
 
 	D_INFO("Modules successfully set up\n");
 
 	dss_init_state_set(DSS_INIT_STATE_SET_UP);
-err:
+out:
+	D_MUTEX_UNLOCK(&server_setup_mutex);
 	resp.status = rc;
 	pack_daos_response(&resp, drpc_resp);
 }
