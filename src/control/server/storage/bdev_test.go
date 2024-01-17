@@ -126,12 +126,12 @@ func Test_LedState(t *testing.T) {
 
 // Test_Convert_SmdDevice verifies proto->native and native->native JSON conversions.
 func Test_Convert_SmdDevice(t *testing.T) {
-	native := MockSmdDevice(test.MockPCIAddr(1))
+	native := MockSmdDevice(MockNvmeController(1))
 	origTgts := native.TargetIDs
 	// Validate target IDs get de-duplicated and HasSysXS set appropriately
 	native.TargetIDs = append(native.TargetIDs, sysXSTgtID, native.TargetIDs[0])
-	native.NvmeState = NvmeStateFaulty
-	native.LedState = LedStateFaulty
+	native.Ctrlr.NvmeState = NvmeStateFaulty
+	native.Ctrlr.LedState = LedStateFaulty
 
 	proto := new(ctlpb.SmdDevice)
 	if err := convert.Types(native, proto); err != nil {
@@ -140,8 +140,10 @@ func Test_Convert_SmdDevice(t *testing.T) {
 
 	test.AssertEqual(t, proto.Uuid, native.UUID, "uuid match")
 	test.AssertEqual(t, proto.TgtIds, native.TargetIDs, "targets match")
-	test.AssertEqual(t, NvmeDevState(proto.DevState), native.NvmeState, "nvme dev state match")
-	test.AssertEqual(t, LedState(proto.LedState), native.LedState, "dev led state match")
+	test.AssertEqual(t, NvmeDevState(proto.Ctrlr.DevState), native.Ctrlr.NvmeState,
+		"nvme dev state match")
+	test.AssertEqual(t, LedState(proto.Ctrlr.LedState), native.Ctrlr.LedState,
+		"dev led state match")
 	test.AssertEqual(t, OptionBits(proto.RoleBits), native.Roles.OptionBits, "roles match")
 
 	convertedNative := new(SmdDevice)
@@ -165,17 +167,37 @@ func Test_Convert_SmdDevice(t *testing.T) {
 		t.Fatalf("expected new device to match original (-want, +got):\n%s\n", diff)
 	}
 
+	newNative.Ctrlr.Serial = ""
+
 	out, err := json.Marshal(newNative)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expOut := `{"role_bits":7,"uuid":"00000001-0001-0001-0001-000000000001","tgt_ids":[5,6,7,8],` +
-		`"dev_state":"EVICTED","led_state":"ON","rank":0,"total_bytes":0,"avail_bytes":0,` +
-		`"usable_bytes":0,"cluster_size":0,"meta_size":0,"meta_wal_size":0,"rdb_size":0,` +
-		`"rdb_wal_size":0,"health":null,"tr_addr":"0000:01:00.0","roles":"data,meta,wal",` +
-		`"has_sys_xs":true}`
+	expOut := `{"role_bits":7,"uuid":"00000001-0001-0001-0001-000000000001","` +
+		`tgt_ids":[5,6,7,8],"rank":0,"total_bytes":0,"avail_bytes":0,"` +
+		`usable_bytes":0,"cluster_size":0,"meta_size":0,"meta_wal_size":0,"` +
+		`rdb_size":0,"rdb_wal_size":0,"roles":"data,meta,wal","has_sys_xs"` +
+		`:true,"ctrlr":{"info":"","model":"model-1","serial":"","pci_addr` +
+		`":"0000:01:00.0","fw_rev":"fwRev-1","vendor_id":"","pci_type":""` +
+		`,"socket_id":1,"health_stats":{"timestamp":0,"warn_temp_time":1,"` +
+		`crit_temp_time":1,"ctrl_busy_time":1,"power_cycles":1,"power_on_hours":1,"` +
+		`unsafe_shutdowns":1,"media_errs":1,"err_log_entries":1,"bio_read_errs` +
+		`":1,"bio_write_errs":1,"bio_unmap_errs":1,"checksum_errs":1,"` +
+		`temperature":1,"temp_warn":true,"avail_spare_warn":true,"dev_reliability` +
+		`_warn":true,"read_only_warn":true,"volatile_mem_warn":true` +
+		`,"program_fail_cnt_norm":1,"program_fail_cnt_raw":1,"erase_fail` +
+		`_cnt_norm":1,"erase_fail_cnt_raw":1,"wear_leveling_cnt_norm":1,` +
+		`"wear_leveling_cnt_min":1,"wear_leveling_cnt_max":1,"wear_leveling` +
+		`_cnt_avg":1,"endtoend_err_cnt_raw":1,"crc_err_cnt_raw":1,"media` +
+		`_wear_raw":1,"host_reads_raw":1,"workload_timer_raw":1,"thermal` +
+		`_throttle_status":1,"thermal_throttle_event_cnt":1,"retry_buffer` +
+		`_overflow_cnt":1,"pll_lock_loss_cnt":1,"nand_bytes_written":1,"` +
+		`host_bytes_written":1,"cluster_size":0,"meta_wal_size":0,"rdb_wal` +
+		`_size":0},"namespaces":[{"id":1,"size":2000000000000}],"smd_devices` +
+		`":null,"dev_state":"EVICTED","led_state":"ON"},"ctrlr_namespace` +
+		`_id":0}`
 	if diff := cmp.Diff(expOut, string(out)); diff != "" {
-		t.Fatalf("expected json output to be human readable (-want, +got):\n%s\n", diff)
+		t.Fatalf("expected json output to match (-want, +got):\n%s\n", diff)
 	}
 }
 
@@ -183,12 +205,9 @@ func Test_NvmeController_Update(t *testing.T) {
 	mockCtrlrs := MockNvmeControllers(5)
 
 	// Verify in-place update.
-	test.AssertEqual(t, mockCtrlrs[1].SmdDevices[0].UUID, test.MockUUID(1), "unexpected uuid")
 	c1 := MockNvmeController(1)
-	c1.SmdDevices[0].UUID = test.MockUUID(10)
 	mockCtrlrs.Update(*c1)
 	test.AssertEqual(t, len(mockCtrlrs), 5, "expected 5")
-	test.AssertEqual(t, mockCtrlrs[1].SmdDevices[0].UUID, test.MockUUID(10), "unexpected uuid")
 
 	// Verify multiple new controllers are added.
 	c2 := MockNvmeController(6)

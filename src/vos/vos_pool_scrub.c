@@ -307,19 +307,6 @@ sc_verify_finish(struct scrub_ctx *ctx)
 	sc_wait_until_should_continue(ctx);
 }
 
-static void
-sc_raise_ras(struct scrub_ctx *ctx)
-{
-	if (ds_notify_ras_event != NULL) {
-		ds_notify_ras_event(RAS_POOL_CORRUPTION_DETECTED,
-				    "Data corruption detected",
-				    RAS_TYPE_INFO,
-				    RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
-				    &ctx->sc_pool_uuid, sc_cont_uuid(ctx),
-				    NULL, NULL, NULL);
-	}
-}
-
 static int
 sc_mark_corrupt(struct scrub_ctx *ctx)
 {
@@ -371,7 +358,9 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 	if (rc > 0) /** value no longer exists */
 		return 0;
 
-	sc_raise_ras(ctx);
+	ras_notify_event(RAS_POOL_CORRUPTION_DETECTED, "Data corruption detected",
+			 RAS_TYPE_INFO, RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
+			 &ctx->sc_pool_uuid, sc_cont_uuid(ctx), NULL, NULL, NULL);
 	sc_m_pool_corr_inc(ctx);
 	rc = sc_mark_corrupt(ctx);
 

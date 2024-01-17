@@ -434,20 +434,20 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 
 	/* These two are always set */
 	D_INFO("setenv CRT_PHY_ADDR_STR=%s\n", crt_net_cfg_info.provider);
-	rc = setenv("CRT_PHY_ADDR_STR", crt_net_cfg_info.provider, 1);
+	rc = d_setenv("CRT_PHY_ADDR_STR", crt_net_cfg_info.provider, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	sprintf(buf, "%d", crt_net_cfg_info.crt_ctx_share_addr);
 	D_INFO("setenv CRT_CTX_SHARE_ADDR=%d\n", crt_net_cfg_info.crt_ctx_share_addr);
-	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
+	rc = d_setenv("CRT_CTX_SHARE_ADDR", buf, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* If the server has set this, the client must use the same value. */
 	if (crt_net_cfg_info.srv_srx_set != -1) {
 		sprintf(buf, "%d", crt_net_cfg_info.srv_srx_set);
-		rc = setenv("FI_OFI_RXM_USE_SRX", buf, 1);
+		rc = d_setenv("FI_OFI_RXM_USE_SRX", buf, 1);
 		D_INFO("setenv FI_OFI_RXM_USE_SRX=%d\n", crt_net_cfg_info.srv_srx_set);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
@@ -467,7 +467,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	crt_timeout = getenv("CRT_TIMEOUT");
 	if (!crt_timeout) {
 		sprintf(buf, "%d", crt_net_cfg_info.crt_timeout);
-		rc = setenv("CRT_TIMEOUT", buf, 1);
+		rc = d_setenv("CRT_TIMEOUT", buf, 1);
 		D_INFO("setenv CRT_TIMEOUT=%d\n", crt_net_cfg_info.crt_timeout);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
@@ -477,7 +477,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 
 	ofi_interface = getenv("OFI_INTERFACE");
 	if (!ofi_interface) {
-		rc = setenv("OFI_INTERFACE", crt_net_cfg_info.interface, 1);
+		rc = d_setenv("OFI_INTERFACE", crt_net_cfg_info.interface, 1);
 		D_INFO("Setting OFI_INTERFACE=%s\n", crt_net_cfg_info.interface);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
@@ -489,7 +489,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 
 	ofi_domain = getenv("OFI_DOMAIN");
 	if (!ofi_domain) {
-		rc = setenv("OFI_DOMAIN", crt_net_cfg_info.domain, 1);
+		rc = d_setenv("OFI_DOMAIN", crt_net_cfg_info.domain, 1);
 		D_INFO("Setting OFI_DOMAIN=%s\n", crt_net_cfg_info.domain);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
