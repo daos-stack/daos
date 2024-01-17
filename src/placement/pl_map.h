@@ -85,6 +85,8 @@ struct failed_shard {
 	uint32_t        fs_shard_idx;
 	uint32_t        fs_fseq;
 	uint32_t        fs_tgt_id;
+	uint16_t	fs_rank;
+	uint8_t		fs_index;
 	uint8_t         fs_status;
 };
 

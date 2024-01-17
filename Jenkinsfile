@@ -400,66 +400,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('checkpatch') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.checkpatch'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false)
-                        }
-                    }
-                    steps {
-                        checkPatch user: GITHUB_USER_USR,
-                                   password: GITHUB_USER_PSW,
-                                   ignored_files: 'src/control/vendor/*:' +
-                                                  '*.pb-c.[ch]:' +
-                                                  'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
-                                                  'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
-                                                  /* groovylint-disable-next-line LineLength */
-                                                  'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
-                                                  '*.crt:' +
-                                                  '*.pem:' +
-                                                  '*_test.go:' +
-                                                  'src/cart/_structures_from_macros_.h:' +
-                                                  'src/tests/ftest/*.patch:' +
-                                                  'src/tests/ftest/large_stdout.txt'
-                    }
-                    post {
-                        always {
-                            job_status_update()
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        /* temporarily moved some stuff into stepResult due to JENKINS-39203
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        } */
-                    }
-                } // stage('checkpatch')
                 stage('Python Bandit check') {
                     when {
                         beforeAgent true
@@ -1100,78 +1040,78 @@ pipeline {
                         }
                     }
                 } // stage('Fault inection testing on EL 8.8')
-                // stage('Test RPMs on EL 8.6') {
-                //     when {
-                //         beforeAgent true
-                //         expression { ! skipStage() }
-                //     }
-                //     agent {
-                //         label params.CI_UNIT_VM1_LABEL
-                //     }
-                //     steps {
-                //         job_step_update(
-                //             testRpm(inst_repos: daosRepos(),
-                //                     daos_pkg_version: daosPackagesVersion(next_version))
-                //         )
-                //     }
-                //     post {
-                //         always {
-                //             rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                //         }
-                //     }
-                // } // stage('Test CentOS 7 RPMs')
-                // stage('Test RPMs on Leap 15.4') {
-                //     when {
-                //         beforeAgent true
-                //         expression { ! skipStage() }
-                //     }
-                //     agent {
-                //         label params.CI_UNIT_VM1_LABEL
-                //     }
-                //     steps {
-                //         /* neither of these work as FTest strips the first node
-                //            out of the pool requiring 2 node clusters at minimum
-                //          * additionally for this use-case, can't override
-                //            ftest_arg with this :-(
-                //         script {
-                //             'Test RPMs on Leap 15.4': getFunctionalTestStage(
-                //                 name: 'Test RPMs on Leap 15.4',
-                //                 pragma_suffix: '',
-                //                 label: params.CI_UNIT_VM1_LABEL,
-                //                 next_version: next_version,
-                //                 stage_tags: '',
-                //                 default_tags: 'test_daos_management',
-                //                 nvme: 'auto',
-                //                 run_if_pr: true,
-                //                 run_if_landing: true,
-                //                 job_status: job_status_internal
-                //             )
-                //         }
-                //            job_step_update(
-                //             functionalTest(
-                //                 test_tag: 'test_daos_management',
-                //                 ftest_arg: '--yaml_extension single_host',
-                //                 inst_repos: daosRepos(),
-                //                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                //                 test_function: 'runTestFunctionalV2'))
-                //     }
-                //     post {
-                //         always {
-                //             functionalTestPostV2()
-                //             job_status_update()
-                //         }
-                //     } */
-                //         job_step_update(
-                //             testRpm(inst_repos: daosRepos(),
-                //                     daos_pkg_version: daosPackagesVersion(next_version))
-                //         )
-                //     }
-                //     post {
-                //         always {
-                //             rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                //         }
-                //     }
-                // } // stage('Test Leap 15 RPMs')
+                stage('Test RPMs on EL 8.6') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            testRpm(inst_repos: daosRepos(),
+                                    daos_pkg_version: daosPackagesVersion(next_version))
+                        )
+                    }
+                    post {
+                        always {
+                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
+                        }
+                    }
+                } // stage('Test CentOS 7 RPMs')
+                stage('Test RPMs on Leap 15.4') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        /* neither of these work as FTest strips the first node
+                           out of the pool requiring 2 node clusters at minimum
+                         * additionally for this use-case, can't override
+                           ftest_arg with this :-(
+                        script {
+                            'Test RPMs on Leap 15.4': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.4',
+                                pragma_suffix: '',
+                                label: params.CI_UNIT_VM1_LABEL,
+                                next_version: next_version,
+                                stage_tags: '',
+                                default_tags: 'test_daos_management',
+                                nvme: 'auto',
+                                run_if_pr: true,
+                                run_if_landing: true,
+                                job_status: job_status_internal
+                            )
+                        }
+                           job_step_update(
+                            functionalTest(
+                                test_tag: 'test_daos_management',
+                                ftest_arg: '--yaml_extension single_host',
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                test_function: 'runTestFunctionalV2'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } */
+                        job_step_update(
+                            testRpm(inst_repos: daosRepos(),
+                                    daos_pkg_version: daosPackagesVersion(next_version))
+                        )
+                    }
+                    post {
+                        always {
+                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
+                        }
+                    }
+                } // stage('Test Leap 15 RPMs')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
@@ -1262,7 +1202,7 @@ pipeline {
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            provider: 'ucx+dc_x',
+                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
