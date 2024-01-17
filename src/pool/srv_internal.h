@@ -20,7 +20,7 @@
 #define POOL_GROUP_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
 
 /* Map states of ranks that make up the pool service */
-#define POOL_SVC_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN)
+#define POOL_SVC_MAP_STATES (PO_COMP_ST_UPIN)
 
 /*
  * Since we want all PS replicas to belong to the pool group,
