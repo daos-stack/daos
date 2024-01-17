@@ -586,9 +586,8 @@ int
 d_getenv_bool(const char *name, bool *bool_val);
 int
 d_getenv_char(const char *name, char *char_val);
-/* DAOS-14981 XXX d_getenv_int() is deprecated, please use d_getenv_uint() */
 int
-d_getenv_int(const char *name, unsigned int *uint_val);
+d_getenv_int(const char *name, unsigned int *uint_val) __attribute__ ((deprecated ("use d_getenv_uint")));
 int
 d_getenv_uint(const char *name, unsigned int *uint_val);
 int
