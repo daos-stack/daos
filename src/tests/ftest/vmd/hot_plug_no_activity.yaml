@@ -1,0 +1,43 @@
+hosts:
+  # wolf
+  # test_servers: 1
+  test_servers: 2
+
+timeout: 300
+
+server_config:
+  enable_hotplug: true
+  # wolf
+  # engines_per_host: 1
+  engines_per_host: 2
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage: auto
+      # wolf
+      # storage:
+      #   0:
+      #     class: dcpm
+      #     scm_mount: /mnt/daos0
+      #     scm_list: [/dev/pmem0]
+      #   1:
+      #     class: nvme
+      #     bdev_list: ["5d0505:01:00.0"]
+      # spdk_rpc_server:
+      #   enable: true
+      #   sock_addr: /var/tmp/spdk_0.sock
+
+pool:
+  size: 5G
+
+container:
+  type: POSIX
+  control_method: daos
+
+ior:
+  flags: -v -W -w
+  api: DFS
+  transfer_size: 1M
+  block_size: 1G
+  dfs_oclass: SX

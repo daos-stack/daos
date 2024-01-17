@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -160,6 +160,9 @@ class DaosServerYamlParameters(YamlParameters):
         # Fault domain path & callback
         self.fault_path = BasicParameter(None)
         self.fault_cb = BasicParameter(None)
+
+        # VMD hot-plug support.
+        self.enable_hotplug = BasicParameter(None)
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -512,6 +515,9 @@ class EngineYamlParameters(YamlParameters):
         # the storage configuration for this engine
         self.storage = StorageYamlParameters(self.namespace, max_storage_tiers)
 
+        # For spdk_rpc_server field that defines enable and sock_addr.
+        self.spdk_rpc_server = SpdkRpcServerYamlParameters(self.namespace)
+
     def get_params(self, test):
         """Get values for the daos server yaml config file.
 
@@ -554,6 +560,9 @@ class EngineYamlParameters(YamlParameters):
             new_env_vars = ["=".join([key, str(value)]) for key, value in env_var_dict.items()]
             self.env_vars.update(new_env_vars, "env_var")
 
+        # Create spdk_rpc_server fields.
+        self.spdk_rpc_server.get_params(test)
+
     @property
     def using_nvme(self):
         """Is the configuration file setup to use NVMe devices.
@@ -595,21 +604,26 @@ class EngineYamlParameters(YamlParameters):
         # Add the storage tier yaml parameters
         yaml_data.update(self.storage.get_yaml_data())
 
+        # Add the spdk_rpc_server yaml parameters.
+        yaml_data.update(self.spdk_rpc_server.get_yaml_data())
+
         return yaml_data
 
     def is_yaml_data_updated(self):
         """Determine if any of the yaml file parameters have been updated.
 
         Returns:
-            bool: whether or not a yaml file parameter has been updated
+            bool: whether the yaml file parameter has been updated
 
         """
-        return super().is_yaml_data_updated() or self.storage.is_yaml_data_updated()
+        return super().is_yaml_data_updated() or self.storage.is_yaml_data_updated() or \
+            self.spdk_rpc_server.is_yaml_data_updated()
 
     def reset_yaml_data_updated(self):
         """Reset each yaml file parameter updated state to False."""
         super().reset_yaml_data_updated()
         self.storage.reset_yaml_data_updated()
+        self.spdk_rpc_server.reset_yaml_data_updated()
 
     def set_value(self, name, value):
         """Set the value for a specified attribute name.
@@ -662,6 +676,7 @@ class EngineYamlParameters(YamlParameters):
 
         Returns:
             EngineYamlParameters: a new EngineYamlParameters object
+
         """
         return EngineYamlParameters(
             self._base_namespace, self._index, self._provider, self._max_storage_tiers)
@@ -948,3 +963,115 @@ class StorageTierYamlParameters(YamlParameters):
             StorageTierYamlParameters: a new StorageTierYamlParameters object
         """
         return StorageTierYamlParameters(self._base_namespace, self._tier)
+
+
+class SpdkRpcServerYamlParameters(YamlParameters):
+    """Defines the configuration yaml parameters for spdk_rpc_server block in an engine field."""
+
+    def __init__(self, base_namespace):
+        """Create a SpdkRpcServerYamlParameters object.
+
+        Args:
+            base_namespace (str): namespace for the server engine configuration
+        """
+        super().__init__(os.path.join(base_namespace))
+        self.spdk_rpc_server_tier = SpdkRpcServerTierYamlParameters(self.namespace)
+
+    def get_params(self, test):
+        """Get values for the daos server yaml config file.
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super().get_params(test)
+        self.spdk_rpc_server_tier.get_params(test)
+
+    def get_yaml_data(self):
+        """Convert the parameters into a dictionary to use to write a yaml file.
+
+        Returns:
+            dict: a dictionary of parameter name keys and values
+
+        """
+        # Get the common config yaml parameters
+        yaml_data = super().get_yaml_data()
+        yaml_data["spdk_rpc_server"] = self.spdk_rpc_server_tier.get_yaml_data()
+        return yaml_data
+
+    def is_yaml_data_updated(self):
+        """Determine if any of the yaml file parameters have been updated.
+
+        Returns:
+            bool: whether or not a yaml file parameter has been updated
+
+        """
+        if super().is_yaml_data_updated():
+            return True
+
+        return self.spdk_rpc_server_tier.is_yaml_data_updated()
+
+    def set_value(self, name, value):
+        """Set the value for a specified attribute name.
+
+        Args:
+            name (str): name of the attribute for which to set the value
+            value (object): the value to set
+
+        Returns:
+            bool: if the attribute name was found and the value was set
+
+        """
+        if super().set_value(name, value):
+            return True
+
+        return self.spdk_rpc_server_tier.set_value(name, value)
+
+    def get_value(self, name):
+        """Get the value of the specified attribute name.
+
+        Args:
+            name (str): name of the attribute from which to get the value
+
+        Returns:
+            object: the object's value referenced by the attribute name
+
+        """
+        value = super().get_value(name)
+        if value:
+            return value
+
+        return self.spdk_rpc_server_tier.get_value(name)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            SpdkRpcServerYamlParameters: a new SpdkRpcServerYamlParameters object
+        """
+        return SpdkRpcServerYamlParameters(self.namespace)
+
+
+class SpdkRpcServerTierYamlParameters(YamlParameters):
+    """Defines the configuration yaml parameters for each field in spdk_rpc_server."""
+
+    def __init__(self, base_namespace):
+        """Create a SpdkRpcServerTierYamlParameters object.
+
+        Args:
+            base_namespace (str): namespace for the server engine configuration
+        """
+        namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["spdk_rpc_server", "*"]
+        self._base_namespace = base_namespace
+        super().__init__(os.path.join(*namespace))
+
+        self.enable = BasicParameter(None, position=1)
+        self.sock_addr = BasicParameter(None, position=2)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            SpdkRpcServerTierYamlParameters: a new SpdkRpcServerTierYamlParameters object
+
+        """
+        return SpdkRpcServerTierYamlParameters(self.namespace)
