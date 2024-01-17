@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -29,7 +29,7 @@
 #include <daos_obj.h>
 #include <daos_prop.h>
 #include <daos_security.h>
-#include <daos_task.h>
+#include <daos/tse.h>
 
 #include <daos/debug.h>
 #include <gurt/hash.h>
@@ -39,7 +39,6 @@
 #include <daos/profile.h>
 #include <daos/dtx.h>
 #include <daos/cmd_parser.h>
-#include <daos/tse.h>
 
 #define DAOS_ON_VALGRIND D_ON_VALGRIND
 
