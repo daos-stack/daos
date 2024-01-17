@@ -588,7 +588,7 @@ int
 d_getenv_char(const char *name, char *char_val);
 int
 d_getenv_int(const char *name, unsigned int *uint_val)
-    __attribute__ ((deprecated ("use d_getenv_uint")));
+    __attribute__((deprecated("use d_getenv_uint")));
 int
 d_getenv_uint(const char *name, unsigned int *uint_val);
 int
