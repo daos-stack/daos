@@ -7,6 +7,7 @@
 #define __DD_OBJ_H__
 
 #include <daos/common.h>
+#include <daos/tse.h>
 #include <daos_obj.h>
 
 /* EC parity is stored in a private address range that is selected by setting

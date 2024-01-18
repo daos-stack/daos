@@ -15,6 +15,7 @@
 #define __DRPC_API_H__
 
 #include <daos/common.h>
+#include <daos/tse.h>
 #include <cart/api.h>
 
 /* Opcode registered in crt will be

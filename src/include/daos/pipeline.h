@@ -9,7 +9,7 @@
 #define __DD_PIPE_H__
 
 #include <daos/common.h>
-
+#include <daos/tse.h>
 #include <daos_pipeline.h>
 
 int

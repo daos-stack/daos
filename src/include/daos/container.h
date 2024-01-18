@@ -12,6 +12,7 @@
 
 #include <daos/common.h>
 #include <daos/pool_map.h>
+#include <daos/tse.h>
 #include <daos_types.h>
 #include <daos_cont.h>
 #include <daos/cont_props.h>

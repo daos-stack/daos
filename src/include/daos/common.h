@@ -29,7 +29,6 @@
 #include <daos_obj.h>
 #include <daos_prop.h>
 #include <daos_security.h>
-#include <daos/tse.h>
 
 #include <daos/debug.h>
 #include <gurt/hash.h>
