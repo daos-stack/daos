@@ -13,7 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
-#include <drpc.pb-c.h>
+#include "drpc.pb-c.h"
 #include <daos/drpc_modules.h>
 #include <daos/tests_lib.h>
 #include <daos/test_mocks.h>

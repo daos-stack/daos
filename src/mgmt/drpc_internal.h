@@ -12,7 +12,7 @@
 #ifndef __MGMT_DRPC_INTERNAL_H__
 #define __MGMT_DRPC_INTERNAL_H__
 
-#include <drpc.pb-c.h>
+#include "drpc.pb-c.h"
 
 void
 ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);

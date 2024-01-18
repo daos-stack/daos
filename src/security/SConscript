@@ -8,7 +8,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
     denv.d_internal_headers()
-
+    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     denv.require('protobufc')
 
     sec_obj = denv.SharedObject('cli_security.c')

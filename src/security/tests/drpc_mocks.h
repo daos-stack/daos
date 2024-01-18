@@ -12,7 +12,7 @@
 #define __DAOS_DRPC_MOCKS_H__
 
 #include <daos/drpc.h>
-#include "../auth.pb-c.h"
+#include "auth.pb-c.h"
 
 /**
  * drpc_connect mock values

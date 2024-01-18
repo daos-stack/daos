@@ -25,7 +25,7 @@
 #include <pwd.h>
 #include <linux/limits.h>
 
-#include "../auth.pb-c.h"
+#include "auth.pb-c.h"
 #include "drpc_mocks.h"
 #include "sec_test_util.h"
 

@@ -538,8 +538,10 @@ def Platform():
 def Depends(*_args, **_kw):
     """Fake Depends"""
 
+
 def EnsurePythonVersion(major, minor):
     pass
+
 
 COMMAND_LINE_TARGETS = []
 BUILD_TARGETS = []

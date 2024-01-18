@@ -19,7 +19,7 @@
 #include <daos/event.h>
 #include <daos/job.h>
 #include <daos/pool.h>
-#include <svc.pb-c.h>
+#include "svc.pb-c.h"
 #include "rpc.h"
 #include <errno.h>
 #include <stdlib.h>

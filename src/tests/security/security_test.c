@@ -12,8 +12,8 @@
 #include <daos_security.h>
 #include <daos/security.h>
 #include <daos/common.h>
-#include "../../security/srv_internal.h"
-#include "../../security/auth.pb-c.h"
+#include "srv_internal.h"
+#include "auth.pb-c.h"
 
 /**
  * This is a bit of a hack to deal with the fact that the security module

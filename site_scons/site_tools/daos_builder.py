@@ -242,6 +242,7 @@ def _configure_mpi(self):
     _print("No MPI installed")
     return None
 
+
 def _add_includes(self):
     """Add paths to use internal headers"""
 
@@ -254,6 +255,7 @@ def _add_includes(self):
             target = Dir('../../../include/internal').srcnode()
 
     self.AppendUnique(CPPPATH=[target])
+
 
 def generate(env):
     """Add daos specific methods to environment"""

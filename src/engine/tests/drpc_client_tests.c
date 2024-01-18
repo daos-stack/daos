@@ -9,10 +9,10 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
-#include "../drpc_internal.h"
-#include "../srv.pb-c.h"
-#include "../event.pb-c.h"
-#include "../srv_internal.h"
+#include "drpc_internal.h"
+#include "srv.pb-c.h"
+#include "event.pb-c.h"
+#include "srv_internal.h"
 #include <daos/tests_lib.h>
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>

@@ -7,7 +7,7 @@
 #ifndef __DAOS_DRPC_H__
 #define __DAOS_DRPC_H__
 
-#include <drpc.pb-c.h>
+#include "drpc.pb-c.h"
 #include <daos/common.h>
 
 /*
