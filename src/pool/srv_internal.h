@@ -20,7 +20,7 @@
 #define POOL_GROUP_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
 
 /* Map states of ranks that make up the pool service */
-#define POOL_SVC_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN)
+#define POOL_SVC_MAP_STATES (PO_COMP_ST_UPIN)
 
 /*
  * Since we want all PS replicas to belong to the pool group,
@@ -229,7 +229,7 @@ void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
  */
 bool ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank);
 int ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas,
-			     d_rank_t self, d_rank_list_t **to_add_out,
+			     d_rank_t self, bool filter_only, d_rank_list_t **to_add_out,
 			     d_rank_list_t **to_remove_out);
 int ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 			     crt_rpc_t *rpc, crt_bulk_t remote_bulk,
