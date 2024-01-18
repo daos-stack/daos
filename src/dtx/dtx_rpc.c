@@ -1361,6 +1361,7 @@ struct crt_corpc_ops dtx_coll_check_co_ops = {
 };
 
 struct dtx_coll_rpc_args {
+	struct dss_chore	 dcra_chore;
 	struct ds_cont_child	*dcra_cont;
 	struct dtx_id		 dcra_xid;
 	uint32_t		 dcra_opc;
@@ -1372,7 +1373,6 @@ struct dtx_coll_rpc_args {
 	uint32_t		 dcra_committed;
 	uint32_t		 dcra_completed:1;
 	int			 dcra_result;
-	ABT_thread		 dcra_helper;
 	ABT_future		 dcra_future;
 };
 
@@ -1405,13 +1405,6 @@ dtx_coll_rpc(struct dtx_coll_rpc_args *dcra)
 	struct dtx_coll_in	*dci;
 	int			 rc;
 
-	rc = ABT_future_create(1, NULL, &dcra->dcra_future);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT_future_create failed for coll DTX ("DF_DTI") RPC %u: rc = %d\n",
-			DP_DTI(&dcra->dcra_xid), dcra->dcra_opc, rc);
-		D_GOTO(out, rc = dss_abterr2der(rc));
-	}
-
 	rc = crt_corpc_req_create(dss_get_module_info()->dmi_ctx, NULL, dcra->dcra_ranks,
 				  DAOS_RPC_OPCODE(dcra->dcra_opc, DAOS_DTX_MODULE,
 						  DAOS_DTX_VERSION),
@@ -1442,23 +1435,26 @@ out:
 	if (rc != 0 && !dcra->dcra_completed) {
 		dcra->dcra_result = rc;
 		dcra->dcra_completed = 1;
-		if (dcra->dcra_future != ABT_FUTURE_NULL)
-			ABT_future_set(dcra->dcra_future, NULL);
+		ABT_future_set(dcra->dcra_future, NULL);
 	}
 
 	return rc;
 }
 
-static void
-dtx_coll_rpc_helper(void *arg)
+static enum dss_chore_status
+dtx_coll_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 {
-	struct dtx_coll_rpc_args	*dcra = arg;
+	struct dtx_coll_rpc_args	*dcra;
 	int				 rc;
+
+	dcra = container_of(chore, struct dtx_coll_rpc_args, dcra_chore);
 
 	rc = dtx_coll_rpc(dcra);
 
 	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE,
-		 "Collective DTX helper ULT for %u exit: %d\n", dcra->dcra_opc, rc);
+		 "Collective DTX helper chore for %u done: %d\n", dcra->dcra_opc, rc);
+
+	return DSS_CHORE_DONE;
 }
 
 static int
@@ -1475,14 +1471,20 @@ dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_coll_entry *dce, uint32
 	dcra->dcra_ranks = dce->dce_ranks;
 	dcra->dcra_hints = dce->dce_hints;
 	dcra->dcra_hint_sz = dce->dce_hint_sz;
-	dcra->dcra_future = ABT_FUTURE_NULL;
-	dcra->dcra_helper = ABT_THREAD_NULL;
 
-	if (dss_has_enough_helper())
-		rc = dss_ult_create(dtx_coll_rpc_helper, dcra, DSS_XS_IOFW,
-				    dss_get_module_info()->dmi_tgt_id, 0, &dcra->dcra_helper);
-	else
-		rc = dtx_coll_rpc(dcra);
+	rc = ABT_future_create(1, NULL, &dcra->dcra_future);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT_future_create failed for coll DTX ("DF_DTI") RPC %u: rc = %d\n",
+			DP_DTI(&dcra->dcra_xid), dcra->dcra_opc, rc);
+		return dss_abterr2der(rc);
+	}
+
+	if (dss_has_enough_helper()) {
+		rc = dss_chore_delegate(&dcra->dcra_chore, dtx_coll_rpc_helper);
+	} else {
+		dss_chore_diy(&dcra->dcra_chore, dtx_coll_rpc_helper);
+		rc = 0;
+	}
 
 	return rc;
 }
@@ -1492,16 +1494,11 @@ dtx_coll_rpc_post(struct dtx_coll_rpc_args *dcra, int ret)
 {
 	int	rc;
 
-	if (dcra->dcra_helper != ABT_THREAD_NULL)
-		ABT_thread_free(&dcra->dcra_helper);
-
-	if (dcra->dcra_future != ABT_FUTURE_NULL) {
-		rc = ABT_future_wait(dcra->dcra_future);
-		D_CDEBUG(rc != ABT_SUCCESS, DLOG_ERR, DB_TRACE,
-			 "Collective DTX wait req for opc %u, future %p done, rc %d, result %d\n",
-			 dcra->dcra_opc, dcra->dcra_future, rc, dcra->dcra_result);
-		ABT_future_free(&dcra->dcra_future);
-	}
+	rc = ABT_future_wait(dcra->dcra_future);
+	D_CDEBUG(rc != ABT_SUCCESS, DLOG_ERR, DB_TRACE,
+		 "Collective DTX wait req for opc %u, future %p done, rc %d, result %d\n",
+		 dcra->dcra_opc, dcra->dcra_future, rc, dcra->dcra_result);
+	ABT_future_free(&dcra->dcra_future);
 
 	return ret != 0 ? ret : dcra->dcra_result;
 }
