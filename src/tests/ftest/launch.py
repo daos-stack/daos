@@ -8,6 +8,7 @@ import getpass
 import json
 import logging
 import os
+import re
 import sys
 from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
 from collections import OrderedDict
@@ -414,36 +415,21 @@ def __arg_type_nodeset(val):
         raise ArgumentTypeError(f'Invalid NodeSet: {val}') from err
 
 
-def __arg_type_num_bytes(val):
-    """Parse a bytes argument, optionally with B, K, M, G, T suffix.
+def __arg_type_find_size(val):
+    """Parse a find -size argument.
 
     Args:
-        val (str): string representation of bytes to parse
+        val (str): string representation of find -size argument
 
     Returns:
-        str: the bytes normalized as an integer
+        str: the find -size argument
 
     Raises:
-        ArgumentTypeError: if val cannot be parsed as a number of bytes
+        ArgumentTypeError: if val cannot be parsed as a find -size argument
     """
-    suffixes = {
-        'KB': 1024,
-        'K': 1024,
-        'MB': 1024**2,
-        'M': 1024**2,
-        'GB': 1024**3,
-        'G': 1024**3,
-        'TB': 1024**4,
-        'T': 1024**4,
-        'B': 1,  # Check B last in case e.g. KB is used
-    }
-    try:
-        for suffix, multiplier in suffixes.items():
-            if val.endswith(suffix):
-                return str(int(val.rstrip(suffix)) * multiplier)
-        return str(int(val))
-    except Exception as err:  # pylint: disable=broad-except
-        raise ArgumentTypeError(f'Invalid number of bytes: {val}') from err
+    if not re.match(r'^[0-9]+[bcwkMG]?$', val):
+        raise ArgumentTypeError(f'Invalid find -size argument: {val}')
+    return val
 
 
 def main():
@@ -653,10 +639,10 @@ def main():
     parser.add_argument(
         "-th", "--logs_threshold",
         action="store",
-        type=__arg_type_num_bytes,
+        type=__arg_type_find_size,
         help="collect log sizes and report log sizes that go past provided"
              "threshold. e.g. '-th 5M'"
-             "Valid threshold units are: B, K, M, G, T")
+             "Valid threshold units are: b, c, w, k, M, G for find -size")
     parser.add_argument(
         "-tm", "--timeout_multiplier",
         action="store",
