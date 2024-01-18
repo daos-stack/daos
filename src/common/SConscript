@@ -57,9 +57,7 @@ def scons():
     env.d_add_build_rpath()
 
     denv = env.Clone()
-    # generated protoc header should really move to this directory.
-    denv.AppendUnique(CPPPATH=[Dir("../include/daos").srcnode()])
-    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    denv.d_internal_headers()
     denv.require('isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
     build_daos_common(denv, True)

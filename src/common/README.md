@@ -74,7 +74,7 @@ Several other functionality on the task API exists to support:
 - generic task lists
 
 More detail about that functionality can be found in the TSE header in the DAOS
-code [here](/src/include/daos/internal/tse.h).
+code [here](/src/include/daos/tse.h).
 
 ## dRPC C API
 

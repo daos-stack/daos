@@ -38,7 +38,7 @@ def scons():
     env.d_add_build_rpath()
 
     denv = env.Clone()
-    denv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
+    denv.d_internal_headers()
 
     configure_lustre(denv)
 

@@ -8,7 +8,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    denv.d_internal_headers()
     denv.require('protobufc')
 
     common = denv.SharedObject(['rpc.c'])

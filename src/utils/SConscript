@@ -29,7 +29,7 @@ def scons():
     SConscript('ctl/SConscript')
 
     denv = env.Clone()
-    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    denv.d_internal_headers()
 
     denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
     denv.AppendUnique(CPPPATH=[Dir('../client/dfs').srcnode()])

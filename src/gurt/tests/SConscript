@@ -17,7 +17,7 @@ def scons():
     Import('env', 'gurt_targets')
 
     test_env = env.Clone()
-    test_env.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
+    test_env.d_internal_headers()
     test_env.require('mercury', 'uuid')
     test_env.AppendUnique(LIBS=['pthread', 'cmocka', 'm', 'dl'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])

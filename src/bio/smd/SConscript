@@ -9,7 +9,7 @@ def scons():
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
+    denv.d_internal_headers()
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     denv.require('pmdk', 'argobots', 'protobufc')
 

@@ -10,7 +10,7 @@ def scons():
     env.require('isal')
 
     denv = env.Clone()
-    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    denv.d_internal_headers()
 
     libraries = ['isal']
 

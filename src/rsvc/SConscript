@@ -10,7 +10,7 @@ def scons():
 
     # rsvc-specific env
     denv = env.Clone()
-    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    denv.d_internal_headers()
     denv.require('argobots', 'protobufc')
 
     # ds_rsvc

@@ -73,7 +73,7 @@ def scons():
     denv.AppendUnique(LIBS=['gurt'])
     denv.require('mercury')
 
-    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    denv.d_internal_headers()
 
     cart_targets = denv.SharedObject(SRC)
 

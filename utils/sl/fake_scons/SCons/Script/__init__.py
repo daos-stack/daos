@@ -26,6 +26,7 @@ import sys
 # pylint: disable=too-many-public-methods
 # pylint: disable=too-few-public-methods
 # pylint: disable=unused-argument
+# pylint: disable=missing-docstring
 
 
 class SConscript():
@@ -338,6 +339,9 @@ class DefaultEnvironment():
         """Fake require"""
         return
 
+    def d_internal_headers(self):
+        return
+
 
 class Variables():
     """Fake variables"""
@@ -534,6 +538,8 @@ def Platform():
 def Depends(*_args, **_kw):
     """Fake Depends"""
 
+def EnsurePythonVersion(major, minor):
+    pass
 
 COMMAND_LINE_TARGETS = []
 BUILD_TARGETS = []
@@ -564,6 +570,7 @@ __all__ = ['DefaultEnvironment',
            'Builder',
            'AddOption',
            'VariantDir',
+           'EnsurePythonVersion',
            'COMMAND_LINE_TARGETS',
            'BUILD_TARGETS',
            'DEFAULT_TARGETS']

@@ -2,19 +2,12 @@
 import errno
 import os
 import subprocess  # nosec
-import sys
 import time
 
 import SCons.Warnings
 from prereq_tools import PreReqComponent  # pylint: disable=reimported
 
-if sys.version_info.major < 3:
-    print(""""Python 2.7 is no longer supported in the DAOS build.
-Install python3 version of SCons.   On some platforms this package does not
-install the scons binary so your command may need to use scons-3 instead of
-scons or you will need to create an alias or script by the same name to
-wrap scons-3.""")
-    Exit(1)
+EnsurePythonVersion(3,6)
 
 SCons.Warnings.warningAsException()
 

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,6 +7,7 @@
 #include <daos/common.h>
 #include <daos/drpc.h>
 #include <daos_errno.h>
+
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/types.h>

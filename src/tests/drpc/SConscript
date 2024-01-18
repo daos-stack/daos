@@ -9,7 +9,7 @@ def scons():
     sources = ['drpc_test.c', 'drpc_test.pb-c.c']
 
     denv = env.Clone()
-    denv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
+    denv.d_internal_headers()
 
     denv.AppendUnique(CFLAGS=['-std=gnu99'])
     denv.AppendUnique(CPPDEFINES=['TEST'])

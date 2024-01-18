@@ -6,7 +6,7 @@ def scons():
     Import('env', 'libdaos_tgts')
 
     denv = env.Clone()
-    denv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
+    denv.d_internal_headers()
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     libdaos_tgts.extend(denv.SharedObject(['dc_array.c']))

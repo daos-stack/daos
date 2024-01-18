@@ -186,11 +186,11 @@ def scons():
         il_env['CXX'] = None
         il_env.compiler_setup()
 
-    il_env.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
+    il_env.d_internal_headers()
 
     # Set options which are used throughout the src.
     dfuse_env = env.Clone(LIBS=[])
-    dfuse_env.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
+    dfuse_env.d_internal_headers()
     dfuse_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     dfuse_env.AppendUnique(CFLAGS=['-pthread'])
     dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])

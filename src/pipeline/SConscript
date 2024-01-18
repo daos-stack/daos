@@ -13,7 +13,7 @@ def scons():
     # Common pipeline code
     common_tgts = denv.SharedObject(['pipeline_rpc.c', 'common_pipeline.c'])
 
-    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    denv.d_internal_headers()
 
     # Pipeline client library
     dc_pipeline_tgts = denv.SharedObject(['cli_pipeline.c', 'pipeline_task.c', 'cli_mod.c'])

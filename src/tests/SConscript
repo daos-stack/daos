@@ -6,7 +6,7 @@ def build_dts_library(env, dc_credit):
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    denv.d_internal_headers()
     denv.require('argobots', 'protobufc')
 
     denv.d_static_library('dts', [dc_credit, 'dts.c'])
@@ -16,7 +16,7 @@ def build_tests(env):
     """build the tests"""
     Import('libdaos_tgts', 'cmd_parser')
     denv = env.Clone()
-    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    denv.d_internal_headers()
     denv.compiler_setup()
 
     libs_server = ['dts', 'daos_tests', 'daos_common_pmem', 'cart', 'gurt', 'uuid', 'pthread',
@@ -116,7 +116,7 @@ def scons():
 
     libs_client = ['daos_tests', 'daos', 'daos_common', 'cart', 'gurt', 'uuid', 'dfs']
 
-    denv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    denv.d_internal_headers()
 
     denv.d_program('simple_array', 'simple_array.c', LIBS=libs_client)
     denv.d_program('simple_obj', 'simple_obj.c', LIBS=libs_client)

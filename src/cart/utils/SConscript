@@ -14,7 +14,7 @@ def scons():
 
     cenv = env.Clone()
 
-    cenv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
+    cenv.d_internal_headers()
     cenv.require('protobufc', 'mercury')
 
     # Generate cart utility shared objects
