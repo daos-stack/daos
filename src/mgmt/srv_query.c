@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -340,6 +340,9 @@ add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
 {
 	int rc = 0;
 
+	rc = copy_str2ctrlr(&ctrlr->pci_addr, dev_info->bdi_traddr);
+	if (rc != 0)
+		return rc;
 	rc = copy_str2ctrlr(&ctrlr->model, dev_info->bdi_ctrlr->model);
 	if (rc != 0)
 		return rc;
@@ -459,10 +462,6 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		ctl__nvme_controller__init(resp->devices[i]->ctrlr);
 		/* Set string fields to NULL to allow D_FREE to work as expected on cleanup */
 		ctrlr_reset_str_fields(resp->devices[i]->ctrlr);
-
-		rc = copy_str2ctrlr(&resp->devices[i]->ctrlr->pci_addr, dev_info->bdi_traddr);
-		if (rc != 0)
-			break;
 
 		if (dev_info->bdi_ctrlr != NULL) {
 			rc = add_ctrlr_details(resp->devices[i]->ctrlr, dev_info);
