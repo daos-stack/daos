@@ -447,7 +447,17 @@ uint64_t d_hash_murmur64(const unsigned char *key, unsigned int key_len,
 			    unsigned int seed);
 uint32_t d_hash_jump(uint64_t key, uint32_t num_buckets);
 
-/* Why did this conflict? */
+#define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
+
+static inline unsigned int
+d_power2_nbits(unsigned int val)
+{
+	unsigned int shift;
+
+	for (shift = 1; (val >> shift) != 0; shift++);
+
+	return val == LOWEST_BIT_SET(val) ? shift - 1 : shift;
+}
 
 int d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src);
 int d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src);
