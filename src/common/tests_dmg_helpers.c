@@ -1032,6 +1032,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 {
 	struct json_object	*tmp;
 	struct json_object	*dev = NULL;
+	struct json_object      *ctrlr  = NULL;
 	struct json_object	*target = NULL;
 	struct json_object	*targets;
 	int			tgts_len;
@@ -1081,19 +1082,24 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		}
 		devices[*disks].n_tgtidx = tgts_len;
 
-		if (!json_object_object_get_ex(dev, "dev_state", &tmp)) {
-			D_ERROR("unable to extract state from JSON\n");
-			return -DER_INVAL;
-		}
-
-		snprintf(devices[*disks].state, sizeof(devices[*disks].state),
-			 "%s", json_object_to_json_string(tmp));
-
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
 			return -DER_INVAL;
 		}
 		devices[*disks].rank = atoi(json_object_to_json_string(tmp));
+
+		if (!json_object_object_get_ex(dev, "ctrlr", &ctrlr)) {
+			D_ERROR("unable to extract ctrlr obj from JSON\n");
+			return -DER_INVAL;
+		}
+
+		if (!json_object_object_get_ex(ctrlr, "dev_state", &tmp)) {
+			D_ERROR("unable to extract state from JSON\n");
+			return -DER_INVAL;
+		}
+
+		snprintf(devices[*disks].state, sizeof(devices[*disks].state), "%s",
+			 json_object_to_json_string(tmp));
 		*disks = *disks + 1;
 	}
 
