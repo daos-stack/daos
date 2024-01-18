@@ -177,7 +177,7 @@ class Cmd(DfuseTestBase):
             commands.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=vm
         :avocado: tags=dfuse
         :avocado: tags=Cmd,test_bashcmd
         """
@@ -192,7 +192,7 @@ class Cmd(DfuseTestBase):
             commands.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=vm
         :avocado: tags=dfuse,il
         :avocado: tags=Cmd,test_bashcmd_ioil
         """
@@ -207,7 +207,7 @@ class Cmd(DfuseTestBase):
             commands.
 
         :avocado: tags=all
-        :avocado: tags=hw,medium
+        :avocado: tags=vm
         :avocado: tags=dfuse,pil4dfs
         :avocado: tags=Cmd,test_bashcmd_pil4dfs
         """
