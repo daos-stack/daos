@@ -159,17 +159,17 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 }
 
 func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
-	state := ctrlr.DevState
-	if state != ctlpb.NvmeDevState_NORMAL && state != ctlpb.NvmeDevState_EVICTED {
+	stateName := ctlpb.NvmeDevState_name[int32(ctrlr.DevState)]
+	if !ctrlr.CanSupplyHealthStats() {
 		engine.Debugf("skip fetching health stats on device %q in %q state",
-			ctrlr.PciAddr, ctlpb.NvmeDevState_name[int32(state)])
+			ctrlr.PciAddr, stateName)
 		return false, nil
 	}
 
 	health, err := getCtrlrHealth(ctx, engine, req)
 	if err != nil {
 		return false, errors.Wrapf(err, "retrieve health stats for %q (state %q)", ctrlr,
-			state)
+			stateName)
 	}
 	ctrlr.HealthStats = health
 
@@ -198,9 +198,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 			return nil, errors.Errorf("smd %q has no ctrlr ref", sd.Uuid)
 		}
 
-		if sd.Ctrlr.DevState != ctlpb.NvmeDevState_NORMAL &&
-			sd.Ctrlr.DevState != ctlpb.NvmeDevState_NEW &&
-			sd.Ctrlr.DevState != ctlpb.NvmeDevState_EVICTED {
+		if !sd.Ctrlr.IsScannable() {
 			engine.Debugf("smd %q skip ctrlr %+v with bad state", sd.Uuid, sd.Ctrlr)
 			continue
 		}
