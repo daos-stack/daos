@@ -15,7 +15,7 @@ def check_dir(include_dir, sub_dir):
     if sub_dir:
         h_dir = os.path.join(include_dir, sub_dir)
     for entry in sorted(os.listdir(h_dir)):
-        if not os.path.isfile(os.path.join(h_dir, entry)):
+        if os.path.isdir(os.path.join(h_dir, entry)):
             check_dir(include_dir, entry)
             continue
         with tempfile.NamedTemporaryFile(suffix=".c", mode="w+t") as tf:
@@ -34,9 +34,9 @@ def main():
     """Check the whole tree"""
 
     with open(".build_vars.json", "r") as ofh:
-        bc = json.load(ofh)
+        bv = json.load(ofh)
 
-    include_dir = f"{bc['PREFIX']}/include"
+    include_dir = os.path.join(bv["PREFIX"], "include")
 
     check_dir(include_dir, None)
     os.unlink("a.out")
