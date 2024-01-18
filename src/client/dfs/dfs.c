@@ -1026,10 +1026,14 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 			return daos_der2errno(rc);
 		}
 
-		rc = daos_obj_query_max_epoch(dir_oh, th, &ep, NULL);
-		if (rc) {
-			daos_obj_close(dir_oh, NULL);
-			return daos_der2errno(rc);
+		if (dc_supports_epoch_query()) {
+			rc = daos_obj_query_max_epoch(dir_oh, th, &ep, NULL);
+			if (rc) {
+				daos_obj_close(dir_oh, NULL);
+				return daos_der2errno(rc);
+			}
+		} else {
+			ep = 0;
 		}
 
 		rc = daos_obj_close(dir_oh, NULL);
@@ -4130,10 +4134,14 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		if (stbuf) {
 			daos_epoch_t	ep;
 
-			rc = daos_obj_query_max_epoch(obj->oh, DAOS_TX_NONE, &ep, NULL);
-			if (rc) {
-				daos_obj_close(obj->oh, NULL);
-				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			if (dc_supports_epoch_query()) {
+				rc = daos_obj_query_max_epoch(obj->oh, DAOS_TX_NONE, &ep, NULL);
+				if (rc) {
+					daos_obj_close(obj->oh, NULL);
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
+				}
+			} else {
+				ep = 0;
 			}
 
 			rc = update_stbuf_times(entry, ep, stbuf, NULL);
@@ -4658,9 +4666,11 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	if (rc)
 		D_GOTO(err_params, rc);
 
-	rc = dc_task_schedule(task, true);
-	if (rc)
-		D_GOTO(err_task, rc);
+	/*
+	 * dc_task_schedule() calls tse_task_complete() even on error (which also calls the
+	 * completion cb that frees params in this case, so we can just ignore the rc here.
+	 */
+	dc_task_schedule(task, true);
 	return 0;
 
 err_params:

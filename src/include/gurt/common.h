@@ -406,7 +406,7 @@ void d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 			bool exclude);
 int d_rank_list_merge(d_rank_list_t *src_set, d_rank_list_t *merge_set);
 d_rank_list_t *d_rank_list_alloc(uint32_t size);
-d_rank_list_t *d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size);
+int d_rank_list_resize(d_rank_list_t *ptr, uint32_t size);
 void d_rank_list_free(d_rank_list_t *rank_list);
 int d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src);
 void d_rank_list_shuffle(d_rank_list_t *rank_list);
@@ -460,6 +460,38 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 	D_FREE(sgl->sg_iovs);
 	sgl->sg_nr_out = 0;
 	sgl->sg_nr = 0;
+}
+
+static inline size_t  __attribute__((nonnull))
+d_sgl_buf_size(d_sg_list_t *sgl)
+{
+	size_t		size = 0;
+	uint32_t	i;
+
+	if (sgl->sg_iovs == NULL)
+		return 0;
+
+	for (i = 0, size = 0; i < sgl->sg_nr; i++)
+		size += sgl->sg_iovs[i].iov_buf_len;
+
+	return size;
+}
+
+static inline void
+d_sgl_buf_copy(d_sg_list_t *dst_sgl, d_sg_list_t *src_sgl)
+{
+	uint32_t i;
+
+	D_ASSERT(dst_sgl->sg_nr >= src_sgl->sg_nr);
+	for (i = 0; i < src_sgl->sg_nr; i++) {
+		D_ASSERT(dst_sgl->sg_iovs[i].iov_buf_len >=
+			 src_sgl->sg_iovs[i].iov_buf_len);
+
+		memcpy(dst_sgl->sg_iovs[i].iov_buf, src_sgl->sg_iovs[i].iov_buf,
+		       src_sgl->sg_iovs[i].iov_buf_len);
+		dst_sgl->sg_iovs[i].iov_len = src_sgl->sg_iovs[i].iov_len;
+		dst_sgl->sg_iovs[i].iov_buf_len = src_sgl->sg_iovs[i].iov_buf_len;
+	}
 }
 
 void d_getenv_bool(const char *env, bool *bool_val);

@@ -3,12 +3,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import threading
+import time
 
+from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
-from dmg_utils import check_system_query_status
 
 
 class NvmePoolExtend(OSAUtils):

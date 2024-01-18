@@ -5,9 +5,8 @@
 """
 import os
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 from general_utils import bytes_to_human, human_to_bytes
 from run_utils import run_remote
 

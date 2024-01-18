@@ -5,8 +5,9 @@
 """
 
 import os
+
 import yaml
-from general_utils import distribute_files, run_command, DaosTestError
+from general_utils import DaosTestError, distribute_files, run_command
 from run_utils import get_clush_command
 
 # a lookup table of predefined faults

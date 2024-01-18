@@ -3,21 +3,17 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import socket
-import re
 import os
+import re
+import socket
 from getpass import getuser
 
+from agent_utils_params import DaosAgentTransportCredentials, DaosAgentYamlParameters
 from ClusterShell.NodeSet import NodeSet
-
-from command_utils_base import \
-    FormattedParameter, EnvironmentVariables, \
-    CommonConfig
+from command_utils import CommandWithSubCommand, SubprocessManager, YamlCommand
+from command_utils_base import CommonConfig, EnvironmentVariables, FormattedParameter
 from exception_utils import CommandFailure
-from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
 from general_utils import get_log_file, run_pcmd
-from agent_utils_params import \
-    DaosAgentTransportCredentials, DaosAgentYamlParameters
 
 
 def include_local_host(hosts):

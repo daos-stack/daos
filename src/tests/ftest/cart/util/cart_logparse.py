@@ -10,10 +10,10 @@ LogIter and LogLine class definitions.
 This provides a way of querying CaRT logfiles for processing.
 """
 
-from collections import OrderedDict
 import bz2
 import os
 import re
+from collections import OrderedDict
 
 
 class InvalidPid(Exception):
