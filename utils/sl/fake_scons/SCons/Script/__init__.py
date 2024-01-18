@@ -1,5 +1,5 @@
 """Fake scons environment shutting up pylint on SCons files"""
-# Copyright 2016-2023 Intel Corporation
+# Copyright 2016-2024 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -339,7 +339,7 @@ class DefaultEnvironment():
         """Fake require"""
         return
 
-    def d_internal_headers(self):
+    def d_internal_headers(self, src_dir=None):
         return
 
 

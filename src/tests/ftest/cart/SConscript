@@ -39,7 +39,7 @@ def scons():
 
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
     tenv.AppendUnique(LIBS=['daos', 'daos_common'])
-    tenv.AppendUnique(CPPPATH=[Dir('../../../cart/utils').srcnode()])
+    tenv.d_internal_headers(src_dir="cart/utils")
     tenv.require('crypto', 'mercury', 'protobufc')
 
     tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')

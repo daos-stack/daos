@@ -77,7 +77,7 @@ def scons():
         return
 
     tlibenv = env.Clone(LIBS=[])
-    tlibenv.AppendUnique(CPPPATH=[Dir('../include/internal').srcnode()])
+    tlibenv.d_internal_headers()
     tlibenv.require('argobots', 'isal', 'isal_crypto', 'protobufc')
     tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
 

@@ -10,7 +10,6 @@ def scons():
                  'pmemobj', 'cmocka', 'gomp']
 
     tenv = denv.Clone()
-    tenv.Append(CPPPATH=[Dir('..').srcnode()])
 
     tenv.require('isal', 'argobots')
 
@@ -24,7 +23,8 @@ def scons():
                     'vts_pm.c', 'vts_ts.c', 'vts_mvcc.c', 'vos_cmd.c', 'vts_wal.c',
                     '../../object/srv_csum.c', '../../object/srv_io_map.c']
     vos_tests = tenv.d_program('vos_tests', vos_test_src, LIBS=libraries)
-    tenv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
+    tenv.d_internal_headers(src_dir="common/tests")
+
     evt_ctl = tenv.d_program('evt_ctl', ['evt_ctl.c', utest_utils, cmd_parser], LIBS=libraries)
 
     tenv.Install('$PREFIX/bin/', [vos_tests, evt_ctl])

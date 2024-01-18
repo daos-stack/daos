@@ -32,7 +32,7 @@ def scons():
     denv.d_internal_headers()
 
     denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
-    denv.AppendUnique(CPPPATH=[Dir('../client/dfs').srcnode()])
+    denv.d_internal_headers(src_dir="client/dfs")
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
 
     daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c', 'daos_dfs_hdlr.c']

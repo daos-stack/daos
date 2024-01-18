@@ -10,7 +10,7 @@ def scons():
     denv = env.Clone()
 
     denv.d_internal_headers()
-    denv.require('protobufc')
+    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 
     pb_objs = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
                                  'smd.pb-c.c', 'cont.pb-c.c', 'server.pb-c.c'])

@@ -7,7 +7,7 @@ import time
 import SCons.Warnings
 from prereq_tools import PreReqComponent  # pylint: disable=reimported
 
-EnsurePythonVersion(3,6)
+EnsurePythonVersion(3, 6)
 
 SCons.Warnings.warningAsException()
 

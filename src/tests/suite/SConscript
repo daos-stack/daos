@@ -14,8 +14,7 @@ def scons():
     denv.Install('$PREFIX/bin/', dfusetest)
 
     denv.AppendUnique(LIBPATH=[Dir('../../client/dfs')])
-    denv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
-
+    denv.d_internal_headers(src_dir="client/dfs")
     daos_test_tgt = denv.SharedObject(['daos_test_common.c'])
     # These two are exported below but that isn't detected by pylint so disable the warning here.
     # pylint: disable-next=unused-variable
@@ -45,7 +44,7 @@ def scons():
                                 LIBS=['daos_common'] + libraries)
 
     c_files = ['dfs_unit_test.c', 'dfs_par_test.c', 'dfs_test.c', 'dfs_sys_unit_test.c']
-    newenv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
+    newenv.d_internal_headers(src_dir="client/dfs")
     dfstest = newenv.d_program('dfs_test', c_files + daos_test_tgt,
                                LIBS=['daos_common'] + libraries)
 

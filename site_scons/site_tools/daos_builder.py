@@ -243,16 +243,15 @@ def _configure_mpi(self):
     return None
 
 
-def _add_includes(self):
+def _add_includes(self, src_dir="include/internal"):
     """Add paths to use internal headers"""
 
-    src_dir = Dir("..").srcnode()
-    if str(src_dir).endswith("src"):
-        target = Dir('../include/internal').srcnode()
+    if str(Dir("..").srcnode()).endswith("src"):
+        target = Dir(os.path.join("..", src_dir)).srcnode()
     else:
-        target = Dir('../../include/internal').srcnode()
-        if not str(target).endswith("src/include/internal"):
-            target = Dir('../../../include/internal').srcnode()
+        target = Dir(os.path.join("..", "..", src_dir)).srcnode()
+        if not str(target).endswith(os.path.join("src", src_dir)):
+            target = Dir(os.path.join("..", "..", "..", src_dir)).srcnode()
 
     self.AppendUnique(CPPPATH=[target])
 

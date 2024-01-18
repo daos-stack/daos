@@ -8,7 +8,7 @@ def build_dts_library(env, dc_credit):
 
     denv.d_internal_headers()
     denv.require('argobots', 'protobufc')
-
+    denv.AppendUnique(CPPPATH=[Dir('suite').srcnode()])
     denv.d_static_library('dts', [dc_credit, 'dts.c'])
 
 
@@ -101,7 +101,6 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('../utils/wrap/mpi')])
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
-    denv.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
     build_tests(denv)
 
     if not base_env_mpi:

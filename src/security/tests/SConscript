@@ -4,7 +4,6 @@
 def scons():
     """Execute build"""
     Import('denv', 'dc_security_tgts', 'acl_tgts')
-
     mocks = denv.Object('drpc_mocks.c')
     util = denv.Object('sec_test_util.c')
     # Isolated unit tests

@@ -68,7 +68,7 @@ def build_client_libs_shared(env, prereqs):
     if '-fvisibility=hidden' in pil4dfsenv['CFLAGS']:
         pil4dfsenv['CFLAGS'].remove('-fvisibility=hidden')
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
-    pil4dfsenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
+    pil4dfsenv.d_internal_headers(src_dir="client/dfs")
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../api')])
     pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'duns', 'dl'])
     pil4dfsenv.require('capstone')
@@ -210,8 +210,7 @@ def scons():
 
     cenv = dfuse_env.Clone()
     cenv.AppendUnique(LIBPATH=[Dir('../dfs')])
-    cenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
-
+    cenv.d_internal_headers(src_dir="client/dfs")
     cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
     cenv.require('hwloc', 'fuse')

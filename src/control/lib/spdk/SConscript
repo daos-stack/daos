@@ -1,5 +1,4 @@
 """Build DAOS SPDK Go bindings"""
-from os.path import join
 
 
 def scons():
@@ -14,7 +13,7 @@ def scons():
         # Avoid need to link Intel libraries in go build
         senv["CC"] = "gcc"
 
-    senv.AppendUnique(CPPPATH=[join(Dir('.').srcnode().abspath, "include")])
+    senv.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     senv.AppendUnique(OBJPREFIX='s_')
 
     # Explicitly link RTE & SPDK libs for CGO access

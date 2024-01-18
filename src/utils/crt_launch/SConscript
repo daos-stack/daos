@@ -8,7 +8,7 @@ def scons():
     Import('env')
 
     tenv = env.Clone()
-    tenv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
+    tenv.d_internal_headers()
 
     libs = ['dpar', 'cart', 'gurt', 'pthread', 'm']
 

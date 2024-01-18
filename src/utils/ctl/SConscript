@@ -10,9 +10,9 @@ def scons():
 
     tenv = env.Clone(LIBS=[])
     tenv.d_internal_headers()
+    tenv.d_internal_headers(src_dir="cart")
+    tenv.d_internal_headers(src_dir="cart/utils")
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'daos', 'daos_common'])
-    tenv.AppendUnique(CPPPATH=[Dir('../../cart').srcnode()])
-    tenv.AppendUnique(CPPPATH=[Dir('../../cart/utils').srcnode()])
 
     tenv.require('mercury', 'protobufc')
 

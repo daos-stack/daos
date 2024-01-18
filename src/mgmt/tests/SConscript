@@ -7,8 +7,6 @@ def scons():
 
     tenv = denv.Clone()
 
-    tenv.AppendUnique(CPPPATH=[Dir('../').srcnode()])
-
     mocks = tenv.Object("mocks.c")
 
     tenv.Append(CPPDEFINES={'DRPC_TEST': '1'})

@@ -57,6 +57,8 @@ def scons():
     denv = env.Clone()
 
     denv.d_internal_headers()
+    denv.Append(CPPPATH=[Dir('.').srcnode()])
+
     denv.require('pmdk', 'argobots', 'protobufc')
 
     # Compiler options
