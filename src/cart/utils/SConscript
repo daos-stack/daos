@@ -13,7 +13,6 @@ def scons():
     env.d_add_build_rpath()
 
     cenv = env.Clone()
-
     cenv.d_internal_headers()
     cenv.require('protobufc', 'mercury')
 

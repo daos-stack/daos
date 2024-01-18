@@ -16,7 +16,6 @@ def scons():
 
     denv = env.Clone()
     denv.d_internal_headers()
-
     denv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     denv.require('pmdk', 'spdk', 'argobots', 'protobufc')

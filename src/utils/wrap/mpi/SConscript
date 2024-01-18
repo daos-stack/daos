@@ -6,7 +6,6 @@ def build_dpar(env, mpi_env):
 
     senv = env.Clone()
     senv.d_internal_headers()
-
     senv.compiler_setup()
 
     serial_lib = senv.d_library('dpar', ['dpar_stub.c'], LIBS=['pthread', 'dl'])
@@ -17,7 +16,6 @@ def build_dpar(env, mpi_env):
 
     denv = mpi_env.Clone()
     denv.d_internal_headers()
-
     mpi_lib = denv.d_library('dpar_mpi', ['dpar_mpi.c'])
     denv.Install('$PREFIX/lib64/', mpi_lib)
     return

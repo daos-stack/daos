@@ -8,7 +8,6 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-
     denv.d_internal_headers()
     denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 

@@ -69,11 +69,9 @@ def scons():
     env.require('isal', headers_only=True)
 
     denv = env.Clone(LIBS=[])
-
+    denv.d_internal_headers()
     denv.AppendUnique(LIBS=['gurt'])
     denv.require('mercury')
-
-    denv.d_internal_headers()
 
     cart_targets = denv.SharedObject(SRC)
 

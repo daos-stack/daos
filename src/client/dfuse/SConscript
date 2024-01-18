@@ -185,7 +185,6 @@ def scons():
         il_env['CC'] = 'gcc'
         il_env['CXX'] = None
         il_env.compiler_setup()
-
     il_env.d_internal_headers()
 
     # Set options which are used throughout the src.

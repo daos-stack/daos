@@ -7,7 +7,6 @@ def scons():
 
     denv = env.Clone()
     denv.d_internal_headers()
-
     libraries = ['daos', 'dfs']
     denv.AppendUnique(LIBPATH=["../dfs"])
 

@@ -8,12 +8,11 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
+    denv.d_internal_headers()
     denv.require('protobufc', 'hwloc')
 
     # Common pipeline code
     common_tgts = denv.SharedObject(['pipeline_rpc.c', 'common_pipeline.c'])
-
-    denv.d_internal_headers()
 
     # Pipeline client library
     dc_pipeline_tgts = denv.SharedObject(['cli_pipeline.c', 'pipeline_task.c', 'cli_mod.c'])

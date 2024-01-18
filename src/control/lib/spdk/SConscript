@@ -13,7 +13,7 @@ def scons():
         # Avoid need to link Intel libraries in go build
         senv["CC"] = "gcc"
 
-    senv.AppendUnique(CPPPATH=[Dir('include').srcnode()])
+    senv.AppendUnique(CPPPATH=[Dir("include").srcnode()])
     senv.AppendUnique(OBJPREFIX='s_')
 
     # Explicitly link RTE & SPDK libs for CGO access
