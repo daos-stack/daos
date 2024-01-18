@@ -28,8 +28,6 @@ source venv/bin/activate
 
 pip install --upgrade pip
 pip install -r "$PREFIX"/lib/daos/TESTING/ftest/requirements-ftest.txt
-# for mpiio tests.
-pip install mpi4py
 
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
