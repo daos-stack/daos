@@ -37,6 +37,17 @@ class DaosCoreBase(TestWithServers):
         # obtain separate logs
         self.update_log_file_names(self.subtest_name)
 
+        # Default to starting servers/clients for each test variant to support unique logs per test
+        # and the ability for tests to define unique server configs via start_server_managers().
+        # Overriding the behavior is still supported with these test yaml entries but it can limit
+        # the ability for the test to override the server config if the servers are not restarted
+        # before running that test:
+        #  setup:
+        #    start_agents_once: true
+        #    start_servers_once: true
+        self.start_agents_once = False
+        self.start_servers_once = False
+
         super().setUp()
 
     def get_test_param(self, name, default=None):
@@ -99,10 +110,9 @@ class DaosCoreBase(TestWithServers):
         # Update any other server settings unique to this test method
         for setting in ["crt_timeout"]:
             value = self.get_test_param(setting)
-            if value:
+            if value is not None:
                 for server_mgr in self.server_managers:
-                    for engine_params in server_mgr.manager.job.yaml.engine_params:
-                        engine_params.set_value(setting, value)
+                    server_mgr.manager.job.yaml.set_value(setting, value)
 
         # Start the servers
         return super().start_server_managers(force=force)
