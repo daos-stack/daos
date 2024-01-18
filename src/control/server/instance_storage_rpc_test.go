@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,6 +26,15 @@ import (
 
 func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 	c := storage.MockNvmeController(2)
+	withState := func(ctrlr *ctlpb.NvmeController, state ctlpb.NvmeDevState) *ctlpb.NvmeController {
+		ctrlr.DevState = state
+		ctrlr.HealthStats = nil
+		return ctrlr
+	}
+	withDevState := func(smd *ctlpb.SmdDevice, state ctlpb.NvmeDevState) *ctlpb.SmdDevice {
+		smd.Ctrlr.DevState = state
+		return smd
+	}
 	defSmdScanRes := func() *ctlpb.SmdDevResp {
 		return &ctlpb.SmdDevResp{
 			Devices: []*ctlpb.SmdDevice{
@@ -181,17 +190,30 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 				State: new(ctlpb.ResponseState),
 			},
 		},
-		"scan over drpc; unplugged ctrlr not shown": {
-			req: ctlpb.ScanNvmeReq{Meta: true},
-			smdRes: func() *ctlpb.SmdDevResp {
-				ssr := defSmdScanRes()
-				ssr.Devices[0].Ctrlr.DevState = ctlpb.NvmeDevState_UNPLUGGED
-				return ssr
-			}(),
+		"scan over drpc; only ctrlrs with valid states shown": {
+			req: ctlpb.ScanNvmeReq{},
+			smdRes: &ctlpb.SmdDevResp{
+				Devices: proto.SmdDevices{
+					withDevState(proto.MockSmdDevice(storage.MockNvmeController(1), 1),
+						ctlpb.NvmeDevState_UNPLUGGED),
+					withDevState(proto.MockSmdDevice(storage.MockNvmeController(2), 2),
+						ctlpb.NvmeDevState_UNKNOWN),
+					withDevState(proto.MockSmdDevice(storage.MockNvmeController(3), 3),
+						ctlpb.NvmeDevState_NORMAL),
+					withDevState(proto.MockSmdDevice(storage.MockNvmeController(4), 4),
+						ctlpb.NvmeDevState_NEW),
+					withDevState(proto.MockSmdDevice(storage.MockNvmeController(5), 5),
+						ctlpb.NvmeDevState_EVICTED),
+				},
+			},
 			healthRes: healthRespWithUsage(),
 			expResp: &ctlpb.ScanNvmeResp{
-				Ctrlrs: proto.NvmeControllers{},
-				State:  new(ctlpb.ResponseState),
+				Ctrlrs: proto.NvmeControllers{
+					withState(proto.MockNvmeController(3), ctlpb.NvmeDevState_NORMAL),
+					withState(proto.MockNvmeController(4), ctlpb.NvmeDevState_NEW),
+					withState(proto.MockNvmeController(5), ctlpb.NvmeDevState_EVICTED),
+				},
+				State: new(ctlpb.ResponseState),
 			},
 		},
 		"scan over drpc; with smd and health; missing ctrlr in smd": {

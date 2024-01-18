@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -198,7 +198,10 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 			return nil, errors.Errorf("smd %q has no ctrlr ref", sd.Uuid)
 		}
 
-		if sd.Ctrlr.DevState == ctlpb.NvmeDevState_UNPLUGGED {
+		if sd.Ctrlr.DevState != ctlpb.NvmeDevState_NORMAL &&
+			sd.Ctrlr.DevState != ctlpb.NvmeDevState_NEW &&
+			sd.Ctrlr.DevState != ctlpb.NvmeDevState_EVICTED {
+			engine.Debugf("smd %q skip ctrlr %+v with bad state", sd.Uuid, sd.Ctrlr)
 			continue
 		}
 		addr := sd.Ctrlr.PciAddr
@@ -216,7 +219,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 
 		// Populate health if requested.
 		healthUpdated := false
-		if pbReq.Health {
+		if pbReq.Health && c.HealthStats == nil {
 			bhReq := &ctlpb.BioHealthReq{
 				DevUuid:  sd.Uuid,
 				MetaSize: pbReq.MetaSize,
