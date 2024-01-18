@@ -11,6 +11,11 @@
 
 #include <abt.h>
 
+#include <gurt/types.h>
+#include <gurt/list.h>
+
+#include <cart/iv.h>
+
 /* DAOS iv cache provide a general interface for daos to use cart IV.
  * Each pool has one iv namespace, which is created when the  pool is
  * connected, and destroyed when pool is disconnected. Each DAOS IV
