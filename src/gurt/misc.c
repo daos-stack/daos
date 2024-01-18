@@ -47,6 +47,19 @@ d_rand()
 	return result;
 }
 
+/* Return a random integer in [0, n), where n must be positive. */
+long int
+d_randn(long int n)
+{
+	long int i;
+
+	D_ASSERT(n > 0);
+	i = ((double)d_rand() / D_RAND_MAX) * n;
+	if (i >= n)
+		i = 0;
+	return i;
+}
+
 void
 d_free(void *ptr)
 {
