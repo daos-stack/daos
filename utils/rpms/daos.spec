@@ -519,8 +519,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/fault_status
 %{_bindir}/crt_launch
 # For avocado tests
-%{daoshome}/.build_vars.json
-%{daoshome}/.build_vars.sh
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
