@@ -1,10 +1,10 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import json
 # pylint: disable=too-many-lines
+import json
 import logging
 import os
 import re
@@ -812,7 +812,8 @@ class TestGroup():
                 for test in data:
                     if test["Type"] != "avocado-instrumented":
                         continue
-                    self.tests.append(TestInfo(test["Test"], index, self._yaml_extension))
+                    test_name = test["Test"].split(":")[0]
+                    self.tests.append(TestInfo(test_name, index, self._yaml_extension))
                     index += 1
                     logger.info("  %s", self.tests[-1])
 
