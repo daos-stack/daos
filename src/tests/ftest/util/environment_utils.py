@@ -39,7 +39,7 @@ def _get_build_environment(logger, build_vars_file):
             return json.load(vars_file)["PREFIX"]
 
     except FileNotFoundError:
-        return
+        return None
 
     except Exception as error:      # pylint: disable=broad-except
         raise TestEnvironmentException("Error obtaining build environment:", str(error)) from error
@@ -551,7 +551,7 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         # Update the PATH environment variable
         build_vars_file = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", ".build_vars.json")
-#            os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", "..", ".build_vars.json")
+#           os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", "..", ".build_vars.json")
         _update_path(logger, build_vars_file)
 
         # Get the default fabric interface and provider
