@@ -257,7 +257,6 @@ Requires: hdf5-vol-daos-mpich-tests
 Requires: MACSio-mpich
 Requires: simul-mpich
 Requires: romio-tests
-Requires: python3-mpi4py-tests
 
 %description client-tests-mpich
 This is the package needed to run the DAOS client test suite mpich tools
