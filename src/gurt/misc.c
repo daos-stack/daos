@@ -1257,6 +1257,21 @@ d_getenv_uint(const char *name, unsigned *uint_val)
 }
 
 /**
+ * get an unsigned integer type environment variables.
+ *
+ * \param[in]		name		name of the environment variable.
+ * \param[in,out]	uint_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \return				0 on success, a negative value on error.
+ * \deprecated				d_getenv_int() is deprecated, please use d_getenv_uint().
+ */
+int
+d_getenv_int(const char *name, unsigned *uint_val)
+{
+	return d_getenv_uint(name, uint_val);
+}
+
+/**
  * get a 32bits unsigned integer type environment variables
  *
  * \param[in]		name		name of the environment variable.
