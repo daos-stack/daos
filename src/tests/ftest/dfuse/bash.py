@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -176,9 +176,9 @@ class Cmd(DfuseTestBase):
             for different container and pool sizes and perform basic bash
             commands.
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse
+        :avocado: tags=dfuse,dfs
         :avocado: tags=Cmd,test_bashcmd
         """
         self.run_bashcmd()
@@ -193,7 +193,7 @@ class Cmd(DfuseTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=dfuse,il
+        :avocado: tags=dfuse,il,dfs
         :avocado: tags=Cmd,test_bashcmd_ioil
         """
         self.run_bashcmd(il_lib="libioil.so")
@@ -208,7 +208,7 @@ class Cmd(DfuseTestBase):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=dfuse,pil4dfs
+        :avocado: tags=dfuse,pil4dfs,dfs
         :avocado: tags=Cmd,test_bashcmd_pil4dfs
         """
         self.run_bashcmd(il_lib="libpil4dfs.so")
