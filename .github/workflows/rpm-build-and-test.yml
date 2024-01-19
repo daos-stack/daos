@@ -5,10 +5,10 @@ env:
   #       build is done on the lowest version and test on the highest with a "sanity test"
   #       stage done on all versions in the list ecept the highest
   EL8_BUILD_VERSION: 8.6
-  EL8_VERSION: 8
+  EL8_VERSION: 8.8
   EL9_BUILD_VERSION: 9
   EL9_VERSION: 9
-  LEAP15_VERSION: 15.4
+  LEAP15_VERSION: 15.5
 
 on:
   workflow_dispatch:
@@ -60,6 +60,9 @@ jobs:
              echo "text<<EOF" >> $GITHUB_OUTPUT;
              git show -s --format=%B | escape_single_quotes >> $GITHUB_OUTPUT;
              echo "EOF" >> $GITHUB_OUTPUT;
+      - name: Identify Commit Pragmas
+        run: . ci/gha_functions.sh;
+             echo '${{steps.dequoted_commit_message.outputs.text }}' | get_commit_pragmas
 
   Import-commit-pragmas:
     name: Make commit pragma variables

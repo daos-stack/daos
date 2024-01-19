@@ -103,12 +103,16 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
  *
  * \param coh		[IN]	Container open handle.
  * \param dti		[IN]	Pointer to the DTX identifier.
+ * \param oid		[OUT]	Pointer to the ID for the DTX leader object shard.
  * \param mbs		[OUT]	Pointer to the DTX participants information.
  *
- * \return		Zero on success, negative value if error.
+ * \return		Zero on success.
+ *			Positive if DTX has been committed.
+ *			Negative value if error.
  */
 int
-vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs);
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
+		 struct dtx_memberships **mbs);
 
 /**
  * Commit the specified DTXs.
@@ -833,6 +837,14 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
  */
 void
 vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth);
+
+/**
+ * Renew the epoch for the DTX entry.
+ *
+ * \param dth	[IN]	Pointer to the DTX handle.
+ */
+void
+vos_dtx_renew_epoch(struct dtx_handle *dth);
 
 /**
  * Get the recx/epoch list.

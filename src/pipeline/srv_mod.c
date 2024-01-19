@@ -22,12 +22,12 @@ pipeline_mod_fini(void)
 	return 0;
 }
 
-#define X(a, b, c, d, e, f)	\
-{				\
-	.dr_opc		= a,	\
-	.dr_hdlr	= d,	\
-	.dr_corpc_ops	= e,	\
-},
+#define X(a, b, c, d, e, ...)                                                                      \
+	{                                                                                          \
+	    .dr_opc       = a,                                                                     \
+	    .dr_hdlr      = d,                                                                     \
+	    .dr_corpc_ops = e,                                                                     \
+	},
 
 static struct daos_rpc_handler pipeline_handlers[] = {
 	PIPELINE_PROTO_CLI_RPC_LIST

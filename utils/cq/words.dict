@@ -315,6 +315,7 @@ params
 patchelf
 pci
 pda
+parallelized
 pdesc
 perf
 performant
@@ -335,6 +336,7 @@ pragmas
 prebuild
 prebuilding
 prebuilt
+predefine
 preload
 prepend
 prepended
@@ -367,6 +369,7 @@ recurse
 redistributions
 refactor
 repo
+reproducibility
 returncode
 rf
 rmdir
@@ -463,12 +466,14 @@ uint
 umount
 umounting
 unicode
+uninterruptible
 unittest
 unlink
 unlinked
 unlinking
 unmangle
 unmount
+unordered
 unwritable
 uri
 url
@@ -485,6 +490,7 @@ uuidstr
 valgrind
 vendored
 ver
+versa
 versioned
 vm
 vos

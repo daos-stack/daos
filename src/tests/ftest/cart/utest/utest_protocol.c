@@ -9,7 +9,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 #include <cart/api.h>
-#include "gurt/debug.h"
+#include <gurt/debug.h>
 
 #include <stdio.h>
 #include <stdlib.h>
