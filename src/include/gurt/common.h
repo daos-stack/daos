@@ -508,6 +508,9 @@ d_getenv_bool(const char *name, bool *bool_val);
 int
 d_getenv_char(const char *name, char *char_val);
 int
+d_getenv_int(const char *name, unsigned int *uint_val)
+    __attribute__((deprecated("use d_getenv_uint")));
+int
 d_getenv_uint(const char *name, unsigned int *uint_val);
 int
 d_getenv_uint32_t(const char *name, uint32_t *uint32_val);
@@ -521,13 +524,6 @@ int
 d_unsetenv(const char *name);
 int
 d_clearenv(void);
-
-static inline int
-d_getenv_int(const char *name, unsigned int *uint_val)
-{
-	D_WARN("d_getenv_int() is deprecated, please use d_getenv_uint()");
-	return d_getenv_uint(name, uint_val);
-}
 
 int
 d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
