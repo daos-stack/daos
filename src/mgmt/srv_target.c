@@ -272,6 +272,8 @@ struct dead_pool {
 static int
 clear_vos_pool(uuid_t uuid)
 {
+	d_list_t	    *dead_list = arg;
+	struct dead_pool    *dp;
 	struct tgt_kill_arg kill_arg;
 	int		    rc;
 
