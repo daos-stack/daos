@@ -79,15 +79,42 @@ out:
 }
 
 static int
+oid_iv_ent_get(struct ds_iv_entry *entry, void **_priv)
+{
+	struct oid_iv_priv	*priv;
+
+	D_DEBUG(DB_TRACE, "%u: OID GET\n", dss_self_rank());
+
+	D_ALLOC_PTR(priv);
+	if (priv == NULL)
+		return -DER_NOMEM;
+
+	*_priv = priv;
+	return 0;
+}
+
+static void
+oid_iv_ent_put(struct ds_iv_entry *entry, void *priv)
+{
+	D_ASSERT(priv != NULL);
+	D_DEBUG(DB_TRACE, "%u: ON PUT\n", dss_self_rank());
+	D_FREE(priv);
+}
+
+static int
 cont_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 {
+	if (entry->iv_class->iv_class_id == IV_OID)
+		return oid_iv_ent_get(entry, priv);
+
 	return 0;
 }
 
 static void
 cont_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
-	return;
+	if (entry->iv_class->iv_class_id == IV_OID)
+		oid_iv_ent_put(entry, priv);
 }
 
 static int
@@ -579,8 +606,203 @@ cont_iv_ent_agg_eph_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 }
 
 static int
-cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
-		   d_sg_list_t *src, void **priv)
+cont_iv_ent_oid_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *iv_key,
+			d_sg_list_t *src, int ref_rc, void **_priv)
+{
+	struct oid_iv_priv	*priv = (struct oid_iv_priv *)_priv;
+	struct cont_iv_key	*key = key2priv(iv_key);
+	daos_handle_t		root_hdl;
+	d_iov_t			key_iov;
+	d_iov_t			val_iov;
+	daos_size_t		requested_oids;
+	struct oid_iv_entry	*entry;
+	struct oid_iv_range	*oids;
+	struct oid_iv_range	*avail;
+	int			rc;
+
+	if (ref_rc != 0)
+		return ref_rc;
+
+	memcpy(&root_hdl, iv_entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
+	d_iov_set(&key_iov, &key->cont_uuid, sizeof(key->cont_uuid));
+	if (src == NULL) {
+		/* If src == NULL, it is invalidate */
+		if (uuid_is_null(key->cont_uuid))
+			rc = dbtree_empty(root_hdl);
+		else
+			rc = dbtree_delete(root_hdl, BTR_PROBE_EQ, &key_iov, NULL);
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		return rc;
+	}
+
+	d_iov_set(&key_iov, &key->cont_uuid, sizeof(key->cont_uuid));
+	d_iov_set(&val_iov, NULL, 0);
+	rc = dbtree_lookup(root_hdl, &key_iov, &val_iov);
+	D_ASSERTF(rc == 0, DF_UUID" rc: %d\n", DP_UUID(key->cont_uuid), rc);
+
+	D_ASSERT(priv);
+	requested_oids = priv->num_oids;
+	D_ASSERT(requested_oids != 0);
+	D_DEBUG(DB_MD, "%u: ON REFRESH %zu\n", dss_self_rank(), requested_oids);
+
+	entry = val_iov.iov_buf;
+	D_ASSERT(entry != NULL);
+	avail = &entry->rg;
+
+	if (entry->rg_req != priv) {
+		struct oid_iv_priv *req_num = entry->rg_req;
+
+		D_WARN("%u: entry %p request "DF_U64"\n", dss_self_rank(),
+			entry, req_num->num_oids);
+		return ref_rc;
+	}
+
+	oids = src->sg_iovs[0].iov_buf;
+
+	/** Update the entry by allocated oids */
+	avail->num_oids = oids->num_oids;
+	avail->oid = oids->oid;
+
+	/* Check allocated OID and requested oids, it should either fail or non-less tha
+	 * requested oids */
+	D_ASSERTF(avail->num_oids >= requested_oids, "requested "DF_U64" num_oids "DF_U64"\n",
+		  requested_oids, avail->num_oids);
+
+	/* Allocate the requested oid */
+	avail->num_oids -= requested_oids;
+	avail->oid += requested_oids;
+	D_DEBUG(DB_MD, "%u: ON REFRESH %zu/%zu avail %zu/%zu\n", dss_self_rank(),
+		oids->oid, oids->num_oids, avail->oid, avail->num_oids);
+
+	entry->rg_req = NULL;
+	/* Update IV cache */
+	d_iov_set(&val_iov, entry, sizeof(entry));
+	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+	if (rc) {
+		D_ERROR(DF_UUID" update failure: %d\n", DP_UUID(key->cont_uuid), rc);
+		ref_rc = rc;
+	}
+
+	return ref_rc;
+}
+
+#define OID_BLOCK 32
+static int
+cont_iv_ent_oid_update(struct ds_iv_entry *iv_entry, struct ds_iv_key *iv_key,
+		       d_sg_list_t *src, void **_priv)
+{
+	struct cont_iv_key	*key = key2priv(iv_key);
+	struct oid_iv_priv	*priv = (struct oid_iv_priv *)_priv;
+	daos_handle_t		root_hdl;
+	d_iov_t			key_iov;
+	d_iov_t			val_iov;
+	struct oid_iv_range	*oids;
+	daos_size_t		num_oids;
+	struct oid_iv_entry	*oid_entry;
+	struct oid_iv_range	*avail;
+	d_rank_t		myrank = dss_self_rank();
+	int			rc;
+
+	memcpy(&root_hdl, iv_entry->iv_value.sg_iovs[0].iov_buf, sizeof(root_hdl));
+	d_iov_set(&key_iov, &key->cont_uuid, sizeof(key->cont_uuid));
+	d_iov_set(&val_iov, NULL, 0);
+	rc = dbtree_lookup(root_hdl, &key_iov, &val_iov);
+	if (rc == -DER_NONEXIST) {
+		struct oid_iv_entry	entry = { 0 };
+
+		d_iov_set(&val_iov, &entry, sizeof(entry));
+		d_iov_set(&key_iov, &key->cont_uuid, sizeof(key->cont_uuid));
+		rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+		if (rc) {
+			D_ERROR(DF_UUID" update failure: %d\n", DP_UUID(key->cont_uuid), rc);
+			return rc;
+		}
+
+		d_iov_set(&val_iov, NULL, 0);
+		rc = dbtree_lookup(root_hdl, &key_iov, &val_iov);
+		D_ASSERT(rc == 0);
+	}
+
+	D_ASSERT(src != NULL);
+	oid_entry = val_iov.iov_buf;
+	avail = &oid_entry->rg;
+	oids = src->sg_iovs[0].iov_buf;
+	num_oids = oids->num_oids;
+	if (iv_entry->ns->iv_master_rank == myrank) {
+		rc = ds_cont_oid_fetch_add(iv_entry->ns->iv_pool_uuid, key->cont_uuid, num_oids,
+					   &avail->oid);
+		if (rc) {
+			D_ERROR(DF_CONT" failed to fetch and update max_oid "DF_RC"\n",
+				DP_CONT(iv_entry->ns->iv_pool_uuid, key->cont_uuid), DP_RC(rc));
+			return rc;
+		}
+		oids->oid = avail->oid;
+		oids->num_oids = num_oids;
+		D_DEBUG(DB_MD, "%u: ROOT MAX_OID = %"PRIu64" num %zu \n", myrank, avail->oid,
+			num_oids);
+		priv->num_oids = 0;
+		return 0;
+	}
+
+	if (avail->num_oids >= num_oids) {
+		struct oid_iv_entry	entry = { 0 };
+
+		D_DEBUG(DB_TRACE, "%u: IDs available avail num oids %zu oid "DF_U64" req %zu\n",
+			myrank, avail->num_oids, avail->oid, num_oids);
+		/** set the oid value in the iv value */
+		oids->oid = avail->oid;
+		oids->num_oids = num_oids;
+
+		/** Update the current entry */
+		avail->num_oids -= num_oids;
+		avail->oid += num_oids;
+
+		/* Update the IV cache */
+		entry.rg = *avail;
+		d_iov_set(&val_iov, &entry, sizeof(entry));
+		d_iov_set(&key_iov, &key->cont_uuid, sizeof(key->cont_uuid));
+		rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+		if (rc) {
+			D_ERROR(DF_UUID" update failure: %d\n", DP_UUID(key->cont_uuid), rc);
+			return rc;
+		}
+		priv->num_oids = 0;
+
+		return 0;
+	}
+
+	if (oid_entry->rg_req != NULL) {
+		D_DEBUG(DB_MD, DF_UUID" another request in flight.\n", DP_UUID(key->cont_uuid));
+		return -DER_BUSY;
+	}
+
+	/** increase the number of oids requested before forwarding */
+	if (num_oids < OID_BLOCK)
+		oids->num_oids = OID_BLOCK;
+	else
+		oids->num_oids = (num_oids / OID_BLOCK) * OID_BLOCK * 2;
+
+	/** Keep track of how much this node originally requested */
+	priv->num_oids = num_oids;
+	if (oid_entry->rg_req != NULL && oid_entry->rg_req != priv) {
+		struct oid_iv_priv *req_priv = oid_entry->rg_req;
+
+		D_WARN("%u oid_entry already has some requesting OID "DF_U64" priv %p\n",
+			myrank, req_priv->num_oids, priv);
+	}
+	oid_entry->rg_req = priv;
+
+	D_DEBUG(DB_TRACE, "%u: IDs not available, FORWARD %zu oids\n",
+		myrank, oids->num_oids);
+
+	/** entry->lock will be released in on_refresh() */
+	return -DER_IVCB_FORWARD;
+}
+
+static int
+cont_iv_ent_update_internal(struct ds_iv_entry *entry, struct ds_iv_key *key,
+			    d_sg_list_t *src, int ref_rc, void **priv)
 {
 	daos_handle_t		root_hdl;
 	struct cont_iv_key	*civ_key = key2priv(key);
@@ -687,7 +909,21 @@ cont_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		    d_sg_list_t *src, int ref_rc, void **priv)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	return cont_iv_ent_update(entry, key, src, priv);
+	if (entry->iv_class->iv_class_id == IV_OID)
+		return cont_iv_ent_oid_refresh(entry, key, src, ref_rc, priv);
+
+	return cont_iv_ent_update_internal(entry, key, src, ref_rc, priv);
+}
+
+static int
+cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
+		   d_sg_list_t *src, void **priv)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	if (entry->iv_class->iv_class_id == IV_OID)
+		return cont_iv_ent_oid_update(entry, key, src, priv);
+
+	return cont_iv_ent_update_internal(entry, key, src, 0, priv);
 }
 
 static int
@@ -1160,9 +1396,9 @@ cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid)
 	int rc;
 
 	/* delete all entries for this container */
-	rc = oid_iv_invalidate(ns, pool_uuid, cont_uuid);
+	rc = cont_iv_invalidate(ns, IV_OID, cont_uuid, CRT_IV_SYNC_NONE);
 	if (rc != 0)
-		D_DEBUG(DB_MD, "delete snap "DF_UUID"\n", DP_UUID(cont_uuid));
+		D_DEBUG(DB_MD, "delete oid "DF_UUID"\n", DP_UUID(cont_uuid));
 
 	/* delete all entries for this container */
 	rc = cont_iv_invalidate(ns, IV_CONT_SNAP, cont_uuid, CRT_IV_SYNC_NONE);
@@ -1633,9 +1869,39 @@ ds_cont_find_hdl(uuid_t po_uuid, uuid_t coh_uuid, struct ds_cont_hdl **coh_p)
 }
 
 int
+oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg_list_t *value)
+{
+	struct cont_iv_key	*civ_key;
+	struct ds_iv_key        key;
+	struct oid_iv_range	*oids;
+	int		rc;
+
+	D_DEBUG(DB_MD, "%d: OID alloc CUUID "DF_UUIDF"/"DF_UUIDF" num_oids %"
+		PRIu64"\n", dss_self_rank(), DP_UUID(po_uuid), DP_UUID(co_uuid),
+		num_oids);
+
+	memset(&key, 0, sizeof(key));
+	key.class_id = IV_OID;
+	civ_key = key2priv(&key);
+	uuid_copy(civ_key->cont_uuid, co_uuid);
+	civ_key->entry_size = sizeof(struct oid_iv_range);
+
+	oids = value->sg_iovs[0].iov_buf;
+	oids->num_oids = num_oids;
+
+	rc = ds_iv_update(ns, &key, value, CRT_IV_SHORTCUT_TO_ROOT,
+			  CRT_IV_SYNC_NONE, CRT_IV_SYNC_BIDIRECTIONAL, true /* retry */);
+	if (rc)
+		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
+
+	return rc;
+}
+
+int
 ds_cont_iv_fini(void)
 {
 	ds_iv_class_unregister(IV_CONT_SNAP);
+	ds_iv_class_unregister(IV_OID);
 	ds_iv_class_unregister(IV_CONT_CAPA);
 	ds_iv_class_unregister(IV_CONT_PROP);
 	ds_iv_class_unregister(IV_CONT_AGG_EPOCH_REPORT);
@@ -1649,6 +1915,10 @@ ds_cont_iv_init(void)
 	int rc;
 
 	rc = ds_iv_class_register(IV_CONT_SNAP, &iv_cache_ops, &cont_iv_ops);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = ds_iv_class_register(IV_OID, &iv_cache_ops, &cont_iv_ops);
 	if (rc)
 		D_GOTO(out, rc);
 

@@ -111,6 +111,19 @@ struct oid_iv_range {
 	daos_size_t	num_oids;
 };
 
+/** IV cache entry will be represented by this structure on each node. */
+struct oid_iv_entry {
+	/** value of the IV entry */
+	struct oid_iv_range	rg;
+	void			*rg_req;
+};
+
+/** Priv data in the iv layer */
+struct oid_iv_priv {
+	/** num of oids requested before forwarding the request */
+	daos_size_t	num_oids;
+};
+
 /* Container IV structure */
 struct cont_iv_snapshot {
 	uint64_t snap_cnt;
@@ -271,13 +284,6 @@ int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				daos_epoch_t eph);
 int ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop);
 
-/* oid_iv.c */
-int ds_oid_iv_init(void);
-int ds_oid_iv_fini(void);
-int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uint64_t num_oids,
-		   d_sg_list_t *value);
-int oid_iv_invalidate(void *ns, uuid_t pool_uuid, uuid_t cont_uuid);
-
 /* container_iv.c */
 int ds_cont_iv_init(void);
 int ds_cont_iv_fini(void);
@@ -295,6 +301,8 @@ int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 int cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid);
+int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uint64_t num_oids,
+		   d_sg_list_t *value);
 
 /* srv_metrics.c*/
 void *ds_cont_metrics_alloc(const char *path, int tgt_id);

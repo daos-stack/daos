@@ -21,13 +21,9 @@ init(void)
 {
 	int rc;
 
-	rc = ds_oid_iv_init();
-	if (rc)
-		D_GOTO(err, rc);
-
 	rc = ds_cont_iv_init();
 	if (rc)
-		D_GOTO(err_oid_iv, rc);
+		D_GOTO(err, rc);
 
 	rc = ds_cont_prop_default_init();
 	if (rc)
@@ -37,8 +33,6 @@ init(void)
 
 err_cont_iv:
 	ds_cont_iv_fini();
-err_oid_iv:
-	ds_oid_iv_fini();
 err:
 	return rc;
 }
@@ -47,7 +41,6 @@ static int
 fini(void)
 {
 	ds_cont_iv_fini();
-	ds_oid_iv_fini();
 	ds_cont_prop_default_fini();
 
 	return 0;
