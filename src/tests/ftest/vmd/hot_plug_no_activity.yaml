@@ -1,32 +1,56 @@
 hosts:
   # wolf
   # test_servers: 1
+  # CI
   test_servers: 2
 
 timeout: 300
 
+# wolf
+# server_config:
+#   enable_hotplug: true
+#   engines_per_host: 1
+#   engines:
+#     0:
+#       targets: 4
+#       nr_xs_helpers: 0
+#       storage:
+#         0:
+#           class: dcpm
+#           scm_mount: /mnt/daos0
+#           scm_list: [/dev/pmem0]
+#         1:
+#           class: nvme
+#           bdev_list: ["5d0505:01:00.0"]
+#       spdk_rpc_server:
+#         enable: true
+#         sock_addr: /var/tmp/spdk_0.sock
+
+# CI
 server_config:
   enable_hotplug: true
-  # wolf
-  # engines_per_host: 1
   engines_per_host: 2
   engines:
     0:
-      targets: 4
+      fabric_iface: ib0
+      fabric_iface_port: 31416
+      log_file: daos_server_0.log
       nr_xs_helpers: 0
       storage: auto
-      # wolf
-      # storage:
-      #   0:
-      #     class: dcpm
-      #     scm_mount: /mnt/daos0
-      #     scm_list: [/dev/pmem0]
-      #   1:
-      #     class: nvme
-      #     bdev_list: ["5d0505:01:00.0"]
-      # spdk_rpc_server:
-      #   enable: true
-      #   sock_addr: /var/tmp/spdk_0.sock
+      targets: 4
+      spdk_rpc_server:
+        enable: true
+        sock_addr: /var/tmp/spdk_0.sock
+    1:
+      fabric_iface: ib1
+      fabric_iface_port: 31516
+      log_file: daos_server_1.log
+      nr_xs_helpers: 0
+      storage: auto
+      targets: 4
+      spdk_rpc_server:
+        enable: true
+        sock_addr: /var/tmp/spdk_1.sock
 
 pool:
   size: 5G
