@@ -1365,7 +1365,7 @@ func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControl
 		for _, smdDevice := range controller.SmdDevices {
 			if !smdDevice.Roles.IsEmpty() && (smdDevice.Roles.OptionBits&storage.BdevRoleData) == 0 {
 				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not used for storing data",
-					smdDevice.UUID, smdDevice.Rank, controller.PciAddr, smdDevice.Rank)
+					smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
 				continue
 			}
 
@@ -1377,7 +1377,7 @@ func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControl
 
 			if !filterRank(smdDevice.Rank) {
 				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not in ranklist",
-					smdDevice.UUID, smdDevice.Rank, controller.PciAddr, smdDevice.Rank)
+					smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
 				continue
 			}
 
