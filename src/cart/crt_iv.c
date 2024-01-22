@@ -3508,8 +3508,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else {
-		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
-			  "ivo_on_update failed");
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER || rc == -DER_BUSY,
+			  DLOG_INFO, DLOG_ERR, rc, "ivo_on_update failed");
 
 		update_comp_cb(ivns, class_id, iv_key, NULL,
 			       iv_value, rc, cb_arg);
