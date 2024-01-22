@@ -2,8 +2,8 @@
 # pylint: disable=too-many-locals
 import os
 import socket
-from datetime import datetime, timezone
 from binascii import b2a_hex
+from datetime import datetime, timezone
 from os import urandom
 from os.path import join
 
