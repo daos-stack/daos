@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -127,7 +127,7 @@ def check_pool_creation(test, pools, max_duration, offset=1, durations=None, min
     Returns:
         list: list of created pools.
     """
-    DER_NOSPACE = "DER_NOSPACE(-1007)"
+    der_nospace_str = "DER_NOSPACE(-1007)"
 
     if durations is None:
         durations = []
@@ -137,14 +137,14 @@ def check_pool_creation(test, pools, max_duration, offset=1, durations=None, min
             duration = time_pool_create(test.log, index + offset, pool)
             if duration > max_duration:
                 test.log.debug(
-                    "Creating pool %s tooks longer than expected: max=%i, got=%f",
+                    "Creating pool %s took longer than expected: max=%i, got=%f",
                     pool, max_duration, duration)
                 exceeding_duration += 1
         except TestFail as error:
             if minimum is None:
                 raise error
-            if DER_NOSPACE not in str(error):
-                test.fail(f'"Unexpected error occurred: wait="{DER_NOSPACE}", got="{error}"')
+            if der_nospace_str not in str(error):
+                test.fail(f'"Unexpected error occurred: wait="{der_nospace_str}", got="{error}"')
             if index < minimum:
                 test.fail(f'Minimum pool quantity ({index}/{minimum}) not reached: {error}')
 
