@@ -18,8 +18,6 @@ class PoolCreateCapacityTests(TestWithServers):
     :avocado: recursive
     """
 
-    DER_NOSPACE = "DER_NOSPACE(-1007)"
-
     def setUp(self):
         """Set up each test case."""
         # Create test-case-specific DAOS log files
