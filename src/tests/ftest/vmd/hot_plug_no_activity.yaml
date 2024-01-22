@@ -53,7 +53,7 @@ server_config:
         sock_addr: /var/tmp/spdk_1.sock
 
 pool:
-  size: 5G
+  size: 10%
 
 container:
   type: POSIX
