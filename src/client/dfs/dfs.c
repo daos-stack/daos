@@ -5365,11 +5365,12 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	bool			set_size = false;
 	bool			set_mtime = false;
 	bool			set_ctime = false;
-	int			i = 0;
-	size_t			len;
-	int			rc;
+	int                     i = 0, hlc_recx_idx = 0;
+	size_t                  len;
 	uint64_t		obj_hlc = 0;
 	struct stat		rstat = {};
+	daos_array_stbuf_t      array_stbuf = {0};
+	int                     rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -5466,6 +5467,10 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		d_iov_set(&sg_iovs[i], &obj_hlc, sizeof(uint64_t));
 		recxs[i].rx_idx = HLC_IDX;
 		recxs[i].rx_nr = sizeof(uint64_t);
+		if (flags & DFS_SET_ATTR_SIZE) {
+			/** we need to update this again after the set size */
+			hlc_recx_idx = i;
+		}
 		i++;
 
 		set_mtime = true;
@@ -5515,38 +5520,41 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rstat.st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 		rstat.st_size = stbuf->st_size;
 
-		/* mtime and ctime need to be updated too only if not set earlier */
-		if (!set_mtime || !set_ctime) {
-			daos_array_stbuf_t	array_stbuf = {0};
+		/**
+		 * if mtime is set, we need to to just update the hlc on the entry. if mtime and/or
+		 * ctime were not set, we need to update the stat buf returned. both cases require
+		 * an array stat for the hlc.
+		 */
+		/** TODO - need an array API to just stat the max epoch without size */
+		rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
+		if (rc)
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
 
-			/** TODO - need an array API to just stat the max epoch without size */
-			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
-			if (rc)
+		if (!set_mtime) {
+			rc = d_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_mtim);
+			if (rc) {
+				D_ERROR("d_hlc2timespec() failed " DF_RC "\n", DP_RC(rc));
 				D_GOTO(out_obj, rc = daos_der2errno(rc));
-
-			if (!set_mtime) {
-				rc = d_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_mtim);
-				if (rc) {
-					D_ERROR("d_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
-					D_GOTO(out_obj, rc = daos_der2errno(rc));
-				}
 			}
+		} else {
+			D_ASSERT(hlc_recx_idx > 0);
+			D_ASSERT(recxs[hlc_recx_idx].rx_idx == HLC_IDX);
+			d_iov_set(&sg_iovs[hlc_recx_idx], &array_stbuf.st_max_epoch,
+				  sizeof(uint64_t));
+		}
 
-			if (!set_ctime) {
-				rc = d_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_ctim);
-				if (rc) {
-					D_ERROR("d_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
-					D_GOTO(out_obj, rc = daos_der2errno(rc));
-				}
+		if (!set_ctime) {
+			rc = d_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_ctim);
+			if (rc) {
+				D_ERROR("d_hlc2timespec() failed " DF_RC "\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
 			}
 		}
 	}
 
 	iod.iod_nr = i;
-
 	if (i == 0)
 		D_GOTO(out_stat, rc = 0);
-
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iovs[0];

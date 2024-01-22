@@ -1454,6 +1454,11 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	struct timespec		prev_ts, first_ts;
 	daos_size_t		size;
 	dfs_obj_t		*tmp_obj;
+	struct tm                tm = {0};
+	time_t                   ts;
+	char                    *p;
+	struct tm               *timeptr;
+	char                     time_str[64];
 	int			rc;
 
 	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
@@ -1541,8 +1546,34 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
-	/** set size on file with dfs_osetattr and stat at same time */
 	if (S_ISREG(mode)) {
+		/** set mtime and size at the same time; mtime should be what we set */
+		memset(&stbuf, 0, sizeof(stbuf));
+		stbuf.st_size = 1000;
+		p             = strptime("2023-12-31", "%Y-%m-%d", &tm);
+		assert_non_null(p);
+		ts                    = mktime(&tm);
+		stbuf.st_mtim.tv_sec  = ts;
+		stbuf.st_mtim.tv_nsec = 0;
+		rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_SIZE | DFS_SET_ATTR_MTIME);
+		assert_int_equal(rc, 0);
+		assert_int_equal(stbuf.st_size, 1000);
+		/** check the mtime was updated with the setattr */
+		assert_int_equal(ts, stbuf.st_mtim.tv_sec);
+		timeptr = localtime(&stbuf.st_mtim.tv_sec);
+		strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
+		print_message("mtime = %s\n", time_str);
+		assert_true(strncmp("2023", time_str, 4) == 0);
+
+		memset(&stbuf, 0, sizeof(stbuf));
+		rc = dfs_ostat(dfs_mt, obj, &stbuf);
+		assert_int_equal(rc, 0);
+		assert_int_equal(stbuf.st_size, 1000);
+		timeptr = localtime(&stbuf.st_mtim.tv_sec);
+		strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
+		assert_int_equal(ts, stbuf.st_mtim.tv_sec);
+		assert_true(strncmp("2023", time_str, 4) == 0);
+
 		memset(&stbuf, 0, sizeof(stbuf));
 		stbuf.st_size = 1024;
 		rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_SIZE);
@@ -1551,12 +1582,6 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 		/** check the mtime was updated with the setattr */
 		assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	}
-
-	struct tm	tm = {0};
-	time_t		ts;
-	char		*p;
-	struct tm       *timeptr;
-	char		time_str[64];
 
 	/** set the mtime to 2020 */
 	p = strptime("2020-12-31", "%Y-%m-%d", &tm);
