@@ -2838,6 +2838,7 @@ class PosixTests():
         print(os.listdir(path))
         cmd = ['cont', 'destroy', '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
 
         path = join(self.dfuse.dir, 'uns_link2')
         cmd = ['cont', 'link', self.pool.id(), container2.id(), '--path', path]
