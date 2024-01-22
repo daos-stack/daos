@@ -326,11 +326,7 @@ pipeline {
             parallel {
                 stage('Get Commit Message') {
                     steps {
-                        // at some point soon, this can be factored down to
-                        // pragmasToEnv()
-                        script {
-                            pragmasToEnv()
-                        }
+                        pragmasToEnv()
                     }
                 }
                 stage('Determine Base Branch') {
