@@ -330,10 +330,9 @@ pipeline {
                         // at some point soon, this can be factored down to
                         // pragmasToEnv()
                         script {
-                            //env.pragmas = pragmasToEnv()
-                            String foo = pragmasToEnv()
+                            // pragmasToEnv()
+                            env.pragmas = pragmasToEnv()
                             println('env.pragmas: ' + env.pragmas)
-                            println('foo: ' + foo)
                         }
                     }
                 }
