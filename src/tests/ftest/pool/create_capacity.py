@@ -1,13 +1,12 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
 from apricot import TestWithServers
-from avocado.core.exceptions import TestFail
-from test_utils_pool import add_pool
+from test_utils_pool import add_pool, check_pool_creation
 
 
 class PoolCreateCapacityTests(TestWithServers):
@@ -21,66 +20,12 @@ class PoolCreateCapacityTests(TestWithServers):
 
     DER_NOSPACE = "DER_NOSPACE(-1007)"
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a PoolCreateCapacityTests object."""
-        super().__init__(*args, **kwargs)
-
-        self.daos_restart_duration = 0
-        self.pool_create_duration = 0
-        self.pool_quantity = None
-        self.pools = []
-
     def setUp(self):
         """Set up each test case."""
         # Create test-case-specific DAOS log files
         self.update_log_file_names()
 
         super().setUp()
-
-        self.daos_restart_duration = self.params.get("restart_duration", "/run/server_config/*", 0)
-        self.pool_create_duration = self.params.get("create_duration", "/run/pool/*", 0)
-        self.pool_quantity = self.params.get("quantity", "/run/pool/*", None)
-
-    def tearDown(self):
-        """Tear down each test case."""
-        self.destroy_pools(self.pools)
-
-        super().tearDown()
-
-    def create_pools(self):
-        """Create a given number of pools."""
-        self.log.debug("Defining pools to create")
-        for _ in range(self.pool_quantity[1]):
-            self.pools.append(add_pool(self, create=False))
-
-        self.log.debug('Creating %i pools (dmg pool create)', self.pool_quantity)
-        try:
-            for index, pool in enumerate(self.pools):
-                start = time.time()
-                pool.create()
-                duration = time.time() - start
-
-                if duration > self.pool_create_duration:
-                    self.fail(
-                        f"Creating pool {index} took longer than "
-                        f"{self.pool_create_duration}s: got={duration}s")
-
-        except TestFail as error:
-            self.assertIn(
-                self.DER_NOSPACE, str(error),
-                f"Unexpected error occurred: wait={self.DER_NOSPACE}, got={str(error)}")
-
-            self.destroy_pools(self.pools[index])
-            self.pools = self.pools[:index]
-
-            self.assertGreaterEqual(
-                index, self.pool_quantity[0],
-                'Quantity of pools created should be greater or equal to '
-                f"{self.pool_quantity[0]}: got={index}")
-
-            self.log.info(
-                "Quantity of pools created lower than expected: wait=%i, got=%i",
-                self.pool_quantity[1], index)
 
     def test_create_pool_quantity(self):
         """JIRA ID: DAOS-5114 / SRS-2 / SRS-4.
@@ -97,9 +42,21 @@ class PoolCreateCapacityTests(TestWithServers):
         :avocado: tags=pool
         :avocado: tags=PoolCreateCapacityTests,test_create_pool_quantity
         """
+        daos_restart_duration = self.params.get("restart_duration", "/run/server_config/*", 0)
+        pool_create_duration = self.params.get("create_duration", "/run/pool/*", 0)
+        pool_quantity = self.params.get("quantity", "/run/pool/*", None)
+
         # Define all the pools with the same size defined in the test yaml
-        self.log_step('Creating {} pools'.format(self.pool_quantity[1]))
-        self.create_pools()
+        self.log_step(f"Defining {pool_quantity[1]} pools to create")
+        pools = []
+        for _ in range(pool_quantity[1]):
+            pools.append(add_pool(self, create=False))
+
+        # Create all the pools
+        self.log_step(f"Attempt to create {pool_quantity[1]} pools (dmg pool create)")
+        self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)
+        pools = check_pool_creation(self, pools, pool_create_duration, minimum=pool_quantity[0])
+        self.get_dmg_command().server_set_logmasks(raise_exception=False)
 
         # Shutdown  DAOS file system')
         self.log_step('Stopping all engines (dmg system stop)')
@@ -113,19 +70,19 @@ class PoolCreateCapacityTests(TestWithServers):
 
         # Verify that DAOS is ready to accept requests within a duration defined in the test yaml
         self.log_step(
-            f"Verifying all engines started in {self.daos_restart_duration}s")
-        if duration > self.daos_restart_duration:
+            f"Verifying all engines started in {daos_restart_duration}s")
+        if duration > daos_restart_duration:
             self.fail(
                 'DAOS file system is not ready to accept requests within '
-                f"{self.daos_restart_duration}s after restart: got={duration}s")
+                f"{daos_restart_duration}s after restart: got={duration}s")
 
         # Verify all the pools exists after the restart
-        self.log_step(f"Verifying all {len(self.pools)} pools exist after engines restart")
+        self.log_step(f"Verifying all {len(pools)} pools exist after engines restart")
         self.get_dmg_command().timeout = 360
         pool_uuids = self.get_dmg_command().get_pool_list_uuids(no_query=True)
         detected_pools = [uuid.lower() for uuid in pool_uuids]
         missing_pools = []
-        for pool in self.pools:
+        for pool in pools:
             pool_uuid = pool.uuid.lower()
             if pool_uuid not in detected_pools:
                 missing_pools.append(pool_uuid)
@@ -133,9 +90,9 @@ class PoolCreateCapacityTests(TestWithServers):
             self.fail(
                 f"{len(missing_pools)} pools are missing after engines restart: "
                 f"miss=[{', '.join(missing_pools)}]")
-        if len(self.pools) != len(detected_pools):
+        if len(pools) != len(detected_pools):
             self.fail(
                 'Incorrect number of pools detected after engines restart: '
-                f"wait={len(self.pools)}, got={len(detected_pools)}")
+                f"wait={len(pools)}, got={len(detected_pools)}")
 
         self.log_step('Test passed')

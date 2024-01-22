@@ -112,7 +112,7 @@ def get_size_params(pool):
             "nvme_size": pool.nvme_per_rank}
 
 
-def check_pool_creation(test, pools, max_duration, offset=1, durations=None):
+def check_pool_creation(test, pools, max_duration, offset=1, durations=None, minimum=None):
     """Check the duration of each pool creation meets the requirement.
 
     Args:
@@ -122,21 +122,44 @@ def check_pool_creation(test, pools, max_duration, offset=1, durations=None):
         offset (int, optional): pool index offset. Defaults to 1.
         durations (list, optional): list of other pool create durations to include in the check.
             Defaults to None.
+        minimum (int, optional): minimum number of pools that must be created if specified.
+
+    Returns:
+        list: list of created pools.
     """
+    DER_NOSPACE = "DER_NOSPACE(-1007)"
+
     if durations is None:
         durations = []
-    for index, pool in enumerate(pools):
-        durations.append(time_pool_create(test.log, index + offset, pool))
-
     exceeding_duration = 0
-    for index, duration in enumerate(durations):
-        if duration > max_duration:
-            exceeding_duration += 1
+    for index, pool in enumerate(pools):
+        try:
+            duration = time_pool_create(test.log, index + offset, pool)
+            if duration > max_duration:
+                test.log.debug(
+                    "Creating pool %s tooks longer than expected: max=%i, got=%f",
+                    pool, max_duration, duration)
+                exceeding_duration += 1
+        except TestFail as error:
+            if minimum is None:
+                raise error
+            if DER_NOSPACE not in str(error):
+                test.fail(f'"Unexpected error occurred: wait="{DER_NOSPACE}", got="{error}"')
+            if index < minimum:
+                test.fail(f'Minimum pool quantity ({index}/{minimum}) not reached: {error}')
 
-    if exceeding_duration:
+            test.log.info(
+                "Quantity of pools created lower than expected: wait=%i, min=%i, got=%i",
+                len(pools), minimum, index)
+            pools = pools[:index]
+            break
+
+    if exceeding_duration > 0:
         test.fail(
             "Pool creation took longer than {} seconds on {} pool(s)".format(
                 max_duration, exceeding_duration))
+
+    return pools
 
 
 def time_pool_create(log, number, pool):
