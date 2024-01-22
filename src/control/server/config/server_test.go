@@ -289,9 +289,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithEnvVars("CRT_TIMEOUT=30").
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("INFO").
-			WithStorageEnableHotplug(true).
-			WithStorageAccelProps(storage.AccelEngineSPDK,
-				storage.AccelOptCRCFlag|storage.AccelOptMoveFlag),
+			WithStorageEnableHotplug(true),
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -318,8 +316,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithEnvVars("CRT_TIMEOUT=100").
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("INFO").
-			WithStorageEnableHotplug(true).
-			WithStorageAccelProps(storage.AccelEngineDML, storage.AccelOptCRCFlag),
+			WithStorageEnableHotplug(true),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 
