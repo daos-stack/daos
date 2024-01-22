@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <daos/common.h>
 #include <daos/event.h>
+#include <daos/tse.h>
 #include <daos/task.h>
 #include <daos/placement.h>
 #include <daos/btree.h>

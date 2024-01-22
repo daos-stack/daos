@@ -11,6 +11,7 @@
 #define __DC_MGMT_H__
 
 #include <daos_types.h>
+#include <daos/tse.h>
 
 #include <daos/common.h>
 #include <daos/pool.h>

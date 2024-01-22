@@ -16,6 +16,7 @@
 #include <daos_prop.h>
 #include <daos_pool.h>
 #include <daos_task.h>
+#include <daos/tse.h>
 
 #include <daos/common.h>
 #include <gurt/hash.h>
