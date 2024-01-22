@@ -15,7 +15,8 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-@Library(value='pipeline-lib@bmurrell/hw-testing-from-map-debugging') _
+@Library(value=['system-pipeline-lib@bmurrell/commit-pragma-debug',
+                'pipeline-lib@bmurrell/hw-testing-from-map-debugging']) _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
