@@ -2432,7 +2432,7 @@ dfs_test_checker(void **state)
 	test_arg_t		*arg = *state;
 	dfs_t			*dfs;
 	int			nr = 100, i;
-	dfs_obj_t		*root, *lf;
+	dfs_obj_t               *root, *lf, *sym;
 	daos_obj_id_t		root_oid;
 	daos_handle_t		root_oh;
 	daos_handle_t		coh;
@@ -2502,6 +2502,12 @@ dfs_test_checker(void **state)
 		rc = dfs_release(dir);
 		assert_int_equal(rc, 0);
 	}
+
+	/** create a symlink with a non-existent target in the container */
+	rc = dfs_open(dfs, NULL, "SL1", S_IFLNK | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, "/usr/local", &sym);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(sym);
 
 	rc = dfs_disconnect(dfs);
 	assert_int_equal(rc, 0);

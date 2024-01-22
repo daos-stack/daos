@@ -6591,7 +6591,7 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	}
 
 	/** open the entry name and get the oid */
-	rc = dfs_lookup_rel(dfs, parent, name, O_RDONLY, &obj, NULL, NULL);
+	rc = dfs_lookup_rel(dfs, parent, name, O_RDONLY | O_NOFOLLOW, &obj, NULL, NULL);
 	if (rc) {
 		D_ERROR("dfs_lookup_rel() of %s failed: %d\n", name, rc);
 		return rc;
