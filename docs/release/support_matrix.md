@@ -133,9 +133,12 @@ distribute the load by allocating different network ports to different tasks.
 The DAOS software stack is built and supported on
 Linux for the x86\_64 architecture.
 
-DAOS Version 2.4 has been primarily validated
+DAOS Version 2.4.0 has been primarily validated
 on [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8_6/)
 and [openSUSE Leap 15.4](https://en.opensuse.org/openSUSE:Roadmap).
+DAOS Version 2.4.1 has been primarily validated
+on [Rocky Linux 8.8](https://docs.rockylinux.org/release_notes/8_8/)
+and [openSUSE Leap 15.5](https://en.opensuse.org/openSUSE:Roadmap).
 The following subsections provide details on the Linux distributions
 which DAOS Version 2.4 supports on DAOS servers.
 
@@ -146,21 +149,26 @@ cluster can run the same or different Linux distributions.
 
 ### SUSE Linux Enterprise Server 15 and openSUSE Leap 15
 
-DAOS Version 2.4 is supported on SLES 15 SP4 and openSUSE Leap 15.4.
+DAOS Version 2.4.0 is supported on SLES 15 SP4 and openSUSE Leap 15.4.
+DAOS Version 2.4.1 is supported on SLES 15 SP5 and openSUSE Leap 15.5.
 
 General support for SLES 15 SP3 has ended on 31-Dec-2022.
-DAOS nodes running SLES 15 SP3 or openSUSE 15.3
-have to be updated to 15.4 before updating DAOS to version 2.4.
+General support for SLES 15 SP4 has ended on 31-Dec-2023.
+DAOS nodes running unsupported SLES 15 or openSUSE Leap 15 levels
+have to be updated to a supported SLES 15 or openSUSE Leap 15 level
+before updating DAOS to version 2.4.
 
 Links to SLES 15 Release Notes:
 
 * [SLES 15 SP3](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP3/)
 * [SLES 15 SP4](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP4/)
+* [SLES 15 SP5](https://www.suse.com/releasenotes/x86_64/SUSE-SLES/15-SP5/)
 
 Links to openSUSE Leap 15 Release Notes:
 
 * [openSUSE Leap 15.3](https://doc.opensuse.org/release-notes/x86_64/openSUSE/Leap/15.3/)
 * [openSUSE Leap 15.4](https://doc.opensuse.org/release-notes/x86_64/openSUSE/Leap/15.4/)
+* [openSUSE Leap 15.5](https://doc.opensuse.org/release-notes/x86_64/openSUSE/Leap/15.5/)
 
 Refer to the [SLES Life Cycle](https://www.suse.com/lifecycle/)
 description on the SUSE support website for information on SLES support phases.
@@ -169,11 +177,10 @@ description on the SUSE support website for information on SLES support phases.
 ### Enterprise Linux 8 (EL8): RHEL 8, Rocky Linux 8, AlmaLinux 8
 
 DAOS Version 2.4.0 is supported on EL 8.6 with Extended Update Support (EUS).
-Support for the EL 8.7 release has ended, and DAOS Version 2.4 is not supported on EL 8.7.
-Validation of DAOS Version 2.4 on EL 8.8 is in progress.
+DAOS Version 2.4.1 is supported on EL 8.8.
 
-!!! note
-    Most validation of DAOS Version 2.4 has been done on the Rocky Linux 8.6 release.
+Support for the EL 8.7 release has ended, and DAOS Version 2.4 is not supported on EL 8.7.
+EL 8.9 has not been validated with DAOS 2.4.
 
 !!! note
     CentOS Linux 8 is not supported by DAOS Version 2.4.
@@ -184,18 +191,21 @@ Links to RHEL 8 Release Notes:
 * [RHEL 8.6](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.6_release_notes/index)
 * [RHEL 8.7](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.7_release_notes/index)
 * [RHEL 8.8](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.8_release_notes/index)
+* [RHEL 8.9](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/8.9_release_notes/index)
 
 Links to Rocky Linux 8 Release Notes:
 
 * [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8_6/)
 * [Rocky Linux 8.7](https://docs.rockylinux.org/release_notes/8_7/)
 * [Rocky Linux 8.8](https://docs.rockylinux.org/release_notes/8_8/)
+* [Rocky Linux 8.9](https://docs.rockylinux.org/release_notes/8_9/)
 
 Links to AlmaLinux 8 Release Notes:
 
 * [AlmaLinux 8.6](https://wiki.almalinux.org/release-notes/8.6.html)
 * [AlmaLinux 8.7](https://wiki.almalinux.org/release-notes/8.7.html)
 * [AlmaLinux 8.8](https://wiki.almalinux.org/release-notes/8.8.html)
+* [AlmaLinux 8.9](https://wiki.almalinux.org/release-notes/8.9.html)
 
 Refer to the [RHEL Life Cycle](https://access.redhat.com/support/policy/updates/errata/)
 description on the Red Hat support website for information on RHEL support phases.
@@ -203,7 +213,7 @@ description on the Red Hat support website for information on RHEL support phase
 
 ### Enterprise Linux 9 (EL9): RHEL 9, Rocky Linux 9, AlmaLinux 9
 
-DAOS Version 2.4.0 has not been validated and is not supported on EL9.
+DAOS Version 2.4 has not been validated and is not supported on EL9.
 Support for EL 9.2 (or later) will be added in DAOS Version 2.6.
 
 Links to RHEL 9 Release Notes:
@@ -211,18 +221,21 @@ Links to RHEL 9 Release Notes:
 * [RHEL 9.0](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/9.0_release_notes/index)
 * [RHEL 9.1](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/9.1_release_notes/index)
 * [RHEL 9.2](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/9.2_release_notes/index)
+* [RHEL 9.3](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/9/html/9.3_release_notes/index)
 
 Links to Rocky Linux Release Notes:
 
 * [Rocky Linux 9.0](https://docs.rockylinux.org/release_notes/9_0/)
 * [Rocky Linux 9.1](https://docs.rockylinux.org/release_notes/9_1/)
 * [Rocky Linux 9.2](https://docs.rockylinux.org/release_notes/9_2/)
+* [Rocky Linux 9.3](https://docs.rockylinux.org/release_notes/9_3/)
 
 Links to AlmaLinux Release Notes:
 
 * [AlmaLinux 9.0](https://wiki.almalinux.org/release-notes/9.0.html)
 * [AlmaLinux 9.1](https://wiki.almalinux.org/release-notes/9.1.html)
 * [AlmaLinux 9.2](https://wiki.almalinux.org/release-notes/9.2.html)
+* [AlmaLinux 9.3](https://wiki.almalinux.org/release-notes/9.3.html)
 
 
 ### Unsupported Linux Distributions
@@ -262,8 +275,10 @@ to vendor-specific information for the supported networking hardware.
 
 ### OFI libfabric
 
-With the exception of UCX for InfiniBand networks, OFI libfabric is the recommended
-networking stack for DAOS.  DAOS Version 2.4 ships with version 1.18.1 of
+With the exception of UCX for InfiniBand networks,
+OFI libfabric is the recommended networking stack for DAOS.
+DAOS Version 2.4.0 ships with version 1.18.1 and
+DAOS Version 2.4.1 ships with version 1.19.0 of
 [libfabric](https://ofiwg.github.io/libfabric/)
 (but see below for DAOS on HPE Slingshot).
 It is strongly recommended to use exactly the provided libfabric version
@@ -273,6 +288,7 @@ Links to libfabric releases on github
 (the RPM distribution of DAOS includes libfabric RPM packages with the correct version):
 
 * [libfabric 1.18.1](https://github.com/ofiwg/libfabric/releases/tag/v1.18.1)
+* [libfabric 1.19.0](https://github.com/ofiwg/libfabric/releases/tag/v1.19.0)
 
 Not all libfabric core providers listed in
 [fi\_provider(7)](https://ofiwg.github.io/libfabric/main/man/fi_provider.7.html)
@@ -306,17 +322,21 @@ are supported by DAOS. The following providers are supported:
 For InfiniBand fabrics, DAOS 2.4 also supports [UCX](https://openucx.org/),
 which is maintained by the Unified Communication Framework (UCF) consortium.
 
-DAOS Version 2.4 has been validated primarily with UCX Version 1.14.0-1,
-which is included in the MLNX\_OFED 5.8 levels listed in the next section.
-UCX Version 1.15.0-1 (included in MLNX\_OFED 5.9 and 23.04 and 23.07)
-has also been validated with DAOS 2.4.0.
+DAOS Version 2.4 has been validated with UCX Version 1.14.0-1
+(included in MLNX\_OFED 5.8)
+and with UCX Version 1.15.0-1 (included in MLNX\_OFED 5.9 and 23.04 and 23.07).
+MLNX\_OFED 23.10 includes UCX 1.16.0-1 and has not been validated with DAOS yet.
 
-* The `ucx+dc_x` provider has been validated and is supported with DAOS Version 2.4.
-  It is the recommended fabric provider on InfiniBand fabrics.
+* The `ucx+ud_x` provider has been validated and is supported with DAOS Version 2.4.1.
+  It is the recommended fabric provider on large InfiniBand fabrics.
 
-* The `ucx+tcp` and `ucx+ud_x` providers can be used for evaluation and testing
-  purposes, but they have not been fully validated with DAOS Version 2.4
-  and are not supported for use in production environments.
+* The `ucx+dc_x` provider has been validated and is supported with DAOS Version 2.4.0
+  and 2.4.1. It does not scale as high as `ucx+ud_x` but may provide better performance
+  in smaller-scale InfiniBand fabrics.
+
+* The `ucx+tcp` provider can be used for evaluation and testing
+  purposes, but it has not been fully validated with DAOS Version 2.4
+  and is not supported for use in production environments.
 
 
 ### NVIDIA/Mellanox OFED (MLNX\_OFED)
@@ -326,21 +346,26 @@ fabrics, DAOS requires that the
 [Mellanox OFED (MLNX\_OFED)](https://www.mellanox.com/products/infiniband-drivers/linux/mlnx_ofed)
 software stack is installed on the DAOS servers and DAOS clients.
 
-DAOS Version 2.4 has been primarily validated with MLNX\_OFED Version 5.8 (LTS),
-and Versions older than 5.8-1 are not supported by DAOS 2.4.
-
-Validation of MLNX\_OFED 5.9 and 23.04 is in progress.
+DAOS Version 2.4 has been validated with MLNX\_OFED Version 5.8 (LTS) and Version 23.04.
+MLNX\_OFED versions older than 5.8-1 are not supported by DAOS 2.4.
+MLNX\_OFED 23.10 has not been validated with DAOS yet (and includes a newer UCX version).
 
 Links to MLNX\_OFED Release Notes:
 
 * [MLNX\_OFED 5.8-1.0.1.1](https://docs.nvidia.com/networking/display/MLNXOFEDv581011/Release+Notes) (October 31, 2022)
-* [MLNX\_OFED 5.8-1.1.2.1](https://docs.nvidia.com/networking/display/MLNXOFEDv581121LTS/Release+Notes) (December 1, 2022)
-* [MLNX\_OFED 5.8-2.0.3.0](https://docs.nvidia.com/networking/display/MLNXOFEDv582030LTS/Release+Notes) (February 28, 2023)
-* [MLNX\_OFED 5.8-3.0.7.0](https://docs.nvidia.com/networking/display/MLNXOFEDv583070LTS/Release+Notes) (July 09, 2023)
+* [MLNX\_OFED 5.8-1.1.2.1 LTS](https://docs.nvidia.com/networking/display/MLNXOFEDv581121LTS/Release+Notes) (December 1, 2022)
+* [MLNX\_OFED 5.8-2.0.3.0 LTS](https://docs.nvidia.com/networking/display/MLNXOFEDv582030LTS/Release+Notes) (February 28, 2023)
+* [MLNX\_OFED 5.8-3.0.7.0 LTS](https://docs.nvidia.com/networking/display/MLNXOFEDv583070LTS/Release+Notes) (July 09, 2023)
+* [MLNX\_OFED 5.8-4.1.5.0 LTS](https://docs.nvidia.com/networking/display/mlnxofedv584150lts/release+notes) (December 31, 2023)
+
 * [MLNX\_OFED 5.9-0.5.6.0](https://docs.nvidia.com/networking/display/MLNXOFEDv590560/Release+Notes) (February 2, 2023)
+* [MLNX\_OFED 5.9-0.5.9.0](https://docs.nvidia.com/networking/display/mlnxofedv590590/release+notes) (April 11, 2023)
+
 * [MLNX\_OFED 23.04-0.5.3.3](https://docs.nvidia.com/networking/display/MLNXOFEDv23040533/Release+Notes) (May 8, 2023)
 * [MLNX\_OFED 23.04-1.1.3.0](https://docs.nvidia.com/networking/display/MLNXOFEDv23041130/Release+Notes) (June 1, 2023)
 * [MLNX\_OFED 23.07-0.5.0.0](https://docs.nvidia.com/networking/display/MLNXOFEDv23070500/Release+Notes) (August 10, 2023)
+* [MLNX\_OFED 23.10-0.5.5.0](https://docs.nvidia.com/networking/display/mlnxofedv23100550/release+notes) (November 7, 2023)
+* [MLNX\_OFED 23.10-1.1.9.0 LTS](https://docs.nvidia.com/networking/display/mlnxofedv23101190lts/release+notes) (December 11, 2023)
 
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of MLNX\_OFED, and that the InfiniBand adapters are
@@ -395,8 +420,8 @@ in a DAOS system, because the number of storage targets is encoded in
 
 DAOS Version 2.4 has been validated at the following scales:
 
-* DAOS client nodes in a DAOS system:   256
-* DAOS servers in a DAOS system:        256
+* DAOS client nodes in a DAOS system:   300
+* DAOS servers in a DAOS system:        642
 * DAOS engines per DAOS server:         1, 2 and 4
 * DAOS engines per CPU socket:          1 and 2
 * DAOS targets per DAOS engine:         4-32
@@ -405,6 +430,6 @@ DAOS Version 2.4 has been validated at the following scales:
 * DAOS pools in a DAOS system:          100
 * DAOS containers in a DAOS pool:       100
 * DAOS objects in a DAOS container:     6 billion (in mdtest benchmarks)
-* Application tasks accessing a DAOS container: 3072 (using verbs)
+* Application tasks accessing a DAOS container: 31200 (using Slingshot); 23744 (using UCX/UD)
 
 This test coverage will be expanded in subsequent DAOS releases.
