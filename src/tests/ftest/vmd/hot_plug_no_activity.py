@@ -215,7 +215,7 @@ class HotPlugNoActivityTest(IorTestBase):
         error_msg = "Disk and LED state didn't turn to plugged state. (NORMAL and OFF)"
         self.repeat_query_list_devices(
             exp_disk_state="NORMAL", exp_led_state="OFF", error_msg=error_msg, errors=errors,
-            dmg_command=dmg_command, rank = rank)
+            dmg_command=dmg_command, rank=rank)
 
         # 10. Verify that the disk space is back to the original.
         self.log_step("Verify that the disk space is back to the original.")
