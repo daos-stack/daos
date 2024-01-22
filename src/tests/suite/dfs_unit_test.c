@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1344,15 +1344,45 @@ dfs_test_chown(void **state)
 	char		*filename_file2 = "open_stat2";
 	mode_t		create_mode = S_IWUSR | S_IRUSR;
 	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
+	struct timespec  ctime_orig, mtime_orig;
+	mode_t           orig_mode;
 	int		rc;
 
 	if (arg->myrank != 0)
 		return;
 
-	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &dir, NULL, &stbuf);
+	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &dir, &orig_mode, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, geteuid());
 	assert_int_equal(stbuf.st_gid, getegid());
+	mtime_orig.tv_sec  = stbuf.st_mtim.tv_sec;
+	mtime_orig.tv_nsec = stbuf.st_mtim.tv_nsec;
+	ctime_orig.tv_sec  = stbuf.st_ctim.tv_sec;
+	ctime_orig.tv_nsec = stbuf.st_ctim.tv_nsec;
+
+	/** chown of root and see if visible */
+	print_message("Running chown tests on root object...\n");
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_uid          = 3;
+	stbuf.st_gid          = 4;
+	stbuf.st_mtim.tv_sec  = mtime_orig.tv_sec + 10;
+	stbuf.st_mtim.tv_nsec = mtime_orig.tv_nsec;
+	stbuf.st_mode         = orig_mode | S_IROTH | S_IWOTH | S_IXOTH;
+	rc                    = dfs_osetattr(dfs_mt, dir, &stbuf,
+					     DFS_SET_ATTR_UID | DFS_SET_ATTR_GID | DFS_SET_ATTR_MTIME |
+						 DFS_SET_ATTR_MODE);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &dir, NULL, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, orig_mode | S_IROTH | S_IWOTH | S_IXOTH);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+	assert_true(check_ts(ctime_orig, stbuf.st_ctim));
+	assert_int_equal(mtime_orig.tv_sec + 10, stbuf.st_mtim.tv_sec);
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
 
