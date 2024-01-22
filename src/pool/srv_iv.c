@@ -1502,63 +1502,6 @@ out:
 	return rc;
 }
 
-struct srv_hdl_ult_arg {
-	struct ds_pool	*pool;
-	ABT_eventual	eventual;
-};
-
-static void
-pool_iv_srv_hdl_fetch_ult(void *data)
-{
-	struct srv_hdl_ult_arg *arg = data;
-	int rc;
-
-	rc = ds_pool_iv_srv_hdl_fetch(arg->pool, NULL, NULL);
-
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
-}
-
-int
-ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl,
-				 uuid_t *srv_pool_hdl)
-{
-	struct srv_hdl_ult_arg	arg;
-	ABT_eventual		eventual;
-	int			*status;
-	int			rc;
-
-	/* Fetch the capability from the leader. To avoid extra locks,
-	 * all metadatas are maintained by xstream 0, so let's create
-	 * an ULT on xstream 0 to let xstream 0 to handle capa fetch
-	 * and update.
-	 */
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	arg.pool = pool;
-	arg.eventual = eventual;
-	rc = dss_ult_create(pool_iv_srv_hdl_fetch_ult, &arg, DSS_XS_SYS,
-			    0, 0, NULL);
-	if (rc)
-		D_GOTO(out_eventual, rc);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-	if (*status != 0)
-		D_GOTO(out_eventual, rc = *status);
-
-	if (srv_cont_hdl)
-		uuid_copy(*srv_cont_hdl, pool->sp_srv_cont_hdl);
-	if (srv_pool_hdl)
-		uuid_copy(*srv_pool_hdl, pool->sp_srv_pool_hdl);
-
-out_eventual:
-	ABT_eventual_free(&eventual);
-	return rc;
-}
-
 int
 ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 {
