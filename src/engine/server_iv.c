@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1053,7 +1053,7 @@ _iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
-	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
+	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER || rc == -DER_BUSY)) {
 		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
 		    sync && (sync->ivs_mode == CRT_IV_SYNC_LAZY ||
 			     sync->ivs_mode == CRT_IV_SYNC_EAGER)) {
@@ -1070,7 +1070,7 @@ retry:
 		 * but in-flight fetch request return IVCB_FORWARD, then queued RPC will
 		 * reply IVCB_FORWARD.
 		 */
-		D_WARN("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n", ns->iv_ns_id,
+		D_INFO("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n", ns->iv_ns_id,
 		       key->class_id, opc, key->rank, ns->iv_master_rank, DP_RC(rc));
 		/* sleep 1sec and retry */
 		dss_sleep(1000);
