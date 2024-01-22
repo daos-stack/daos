@@ -331,7 +331,7 @@ pipeline {
                         // pragmasToEnv()
                         script {
                             env.pragmas = pragmasToEnv()
-                            println(env.pragmas)
+                            println('env.pragmas: ' + env.pragmas)
                         }
                     }
                 }
