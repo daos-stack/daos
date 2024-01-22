@@ -18,7 +18,7 @@ class TestEnvironmentException(Exception):
     """Exception for launch.py execution."""
 
 
-def get_build_environment(logger, build_vars_file):
+def _get_build_environment(logger, build_vars_file):
     """Obtain DAOS build environment variables from the .build_vars.json file.
 
     Args:
@@ -29,19 +29,22 @@ def get_build_environment(logger, build_vars_file):
         TestEnvironmentException: if there is an error obtaining the DAOS build environment
 
     Returns:
-        dict: a dictionary of DAOS build environment variable names and values
-
+        str: The prefix of the DAOS install.
+        None: If the file is not present.
     """
     logger.debug("Obtaining DAOS build environment from %s", build_vars_file)
     try:
         with open(build_vars_file, encoding="utf-8") as vars_file:
-            return json.load(vars_file)
+            return json.load(vars_file)["PREFIX"]
+
+    except FileNotFoundError:
+        return None
 
     except Exception as error:      # pylint: disable=broad-except
         raise TestEnvironmentException("Error obtaining build environment:", str(error)) from error
 
 
-def update_path(logger, build_vars_file):
+def _update_path(logger, build_vars_file):
     """Update the PATH environment variable for functional testing.
 
     Args:
@@ -51,7 +54,7 @@ def update_path(logger, build_vars_file):
     Raises:
         TestEnvironmentException: if there is an error obtaining the DAOS build environment
     """
-    base_dir = get_build_environment(logger, build_vars_file)["PREFIX"]
+    base_dir = _get_build_environment(logger, build_vars_file)
 
     path = os.environ.get("PATH")
 
@@ -59,7 +62,7 @@ def update_path(logger, build_vars_file):
 
     # If a custom prefix is used for the daos installation then prepend that to the path so that
     # any binaries provided are picked up from there, else do not modify the path.
-    if base_dir != "/usr":
+    if base_dir:
         bin_dir = os.path.join(base_dir, "bin")
         sbin_dir = os.path.join(base_dir, "sbin")
 
