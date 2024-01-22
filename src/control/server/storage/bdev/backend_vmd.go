@@ -118,19 +118,19 @@ func substVMDAddrs(inPCIAddrs *hardware.PCIAddressSet, foundCtrlrs storage.NvmeC
 // substituteVMDAddresses wraps around substVMDAddrs to substitute VMD addresses with the relevant
 // backing device addresses.
 // Function takes a BdevScanResponse reference to derive address map and a logger.
-func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressSet, bdevCache *storage.BdevScanResponse) (*hardware.PCIAddressSet, error) {
+func substituteVMDAddresses(log logging.Logger, inPCIAddrs *hardware.PCIAddressSet, ctrlrs storage.NvmeControllers) (*hardware.PCIAddressSet, error) {
 	if inPCIAddrs == nil {
 		return nil, errors.New("nil input PCIAddressSet")
 	}
-	if bdevCache == nil || len(bdevCache.Controllers) == 0 {
-		log.Debugf("no bdev cache to find vmd backing devices (devs: %v)", inPCIAddrs)
+	if len(ctrlrs) == 0 {
+		log.Debugf("no bdev info to find vmd backing devices (devs: %v)", inPCIAddrs)
 		return inPCIAddrs, nil
 	}
 
 	msg := fmt.Sprintf("vmd detected, processing addresses (input %v, existing %v)",
-		inPCIAddrs, bdevCache.Controllers)
+		inPCIAddrs, ctrlrs)
 
-	dl, err := substVMDAddrs(inPCIAddrs, bdevCache.Controllers)
+	dl, err := substVMDAddrs(inPCIAddrs, ctrlrs)
 	if err != nil {
 		return nil, errors.Wrapf(err, msg)
 	}

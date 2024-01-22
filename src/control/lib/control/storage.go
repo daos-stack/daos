@@ -237,10 +237,10 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 				Usage: req.Usage,
 			},
 			Nvme: &ctlpb.ScanNvmeReq{
-				Health: req.NvmeHealth,
-				// NVMe meta option will populate usage statistics
-				Meta:  req.NvmeMeta || req.Usage,
 				Basic: req.NvmeBasic,
+				// Health and meta details required to populate usage statistics.
+				Health: req.NvmeHealth || req.Usage,
+				Meta:   req.NvmeMeta || req.Usage,
 			},
 		})
 	})
