@@ -24,16 +24,20 @@
   tests:
     - cmd: ["src/common/tests/btree.sh", "perf"]
     - cmd: ["src/common/tests/btree.sh", "perf", "direct"]
+    - cmd: ["src/common/tests/btree.sh", "perf", "direct", "emb"]
     - cmd: ["src/common/tests/btree.sh", "perf", "ukey"]
     - cmd: ["src/common/tests/btree.sh", "dyn", "perf"]
     - cmd: ["src/common/tests/btree.sh", "dyn", "perf", "ukey"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "perf", "emb"]
 - name: btree
   tests:
     - cmd: ["src/common/tests/btree.sh"]
     - cmd: ["src/common/tests/btree.sh", "direct"]
+    - cmd: ["src/common/tests/btree.sh", "direct", "emb"]
     - cmd: ["src/common/tests/btree.sh", "ukey"]
     - cmd: ["src/common/tests/btree.sh", "dyn", "ukey"]
     - cmd: ["src/common/tests/btree.sh", "dyn"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "emb"]
 - name: drpc
   base: "BUILD_DIR"
   tests:
