@@ -509,6 +509,9 @@ ivc_on_refresh(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	       crt_iv_ver_t iv_ver, d_sg_list_t *iv_value,
 	       bool invalidate, int refresh_rc, void *priv)
 {
+	if (refresh_rc != 0)
+		return refresh_rc;
+
 	return iv_on_update_internal(ivns, iv_key, iv_ver, iv_value, invalidate,
 				     true, refresh_rc, priv);
 }
