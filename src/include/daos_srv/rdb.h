@@ -208,8 +208,9 @@ d_iov_t		prefix ## name = {					\
 
 /** KVS classes */
 enum rdb_kvs_class {
-	RDB_KVS_GENERIC,	/**< hash-ordered byte-stream keys */
-	RDB_KVS_INTEGER		/**< numerically-ordered uint64_t keys */
+	RDB_KVS_GENERIC, /**< hash-ordered byte-stream keys */
+	RDB_KVS_INTEGER, /**< numerically-ordered uint64_t keys */
+	RDB_KVS_LEXICAL  /**< lexically-ordered byte-stream keys */
 };
 
 /** KVS attributes */
