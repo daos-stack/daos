@@ -969,7 +969,6 @@ consume_low_fd(void)
 err:
 	rc = errno;
 	free_reserved_low_fd();
-	low_fd_count = 0;
 	D_MUTEX_UNLOCK(&lock_reserve_fd);
 
 	return rc;
@@ -4914,39 +4913,6 @@ futimens(int fd, const struct timespec times[2])
 
 	return 0;
 }
-
-/* check the fd to be closed. If the fd pointing to something like
- * 'socket:[xxxx]' or 'anon_inode:[eventpoll]', print out a warning
- * since DAOS network contexts may be using such fds. This might be
- * helpful in debugging.
- */
-/*
-static void
-check_fd_to_close(int fd)
-{
-	char    fd_path[64];
-	char   *path;
-	ssize_t len;
-
-	D_ALLOC(path, DFS_MAX_PATH);
-	if (path == NULL)
-		return;
-	snprintf(fd_path, sizeof(fd_path) - 1, "/proc/self/fd/%d", fd);
-	len = readlink(fd_path, path, DFS_MAX_PATH - 1);
-	if (len < 0) {
-		DS_ERROR(errno, "readlink() failed");
-		goto out;
-	}
-	path[len] = 0;
-	if (strncmp(path, "socket:", 7) == 0 || strncmp(path, "anon_inode:[eventpoll]", 22) == 0) {
-		D_DEBUG(DB_ANY, "dup2/fcntl is closing fd %d (%s) which may be used by DAOS!", fd,
-			path);
-	}
-
-out:
-	D_FREE(path);
-}
-*/
 
 /* The macro was added to fix the compiling issue on CentOS 7.9.
  * Those issues could be resolved by adding -D_FILE_OFFSET_BITS=64, however
