@@ -329,11 +329,11 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		if (ret)
 			DL_WARN(rc, "Failed to create network glitch counter");
 
-		ret = d_tm_add_metric(&ctx->cc_net_delay, D_TM_STATS_GAUGE,
-				      "Network delay measurements", "delay", "net/%s/delay/ctx_%u",
-				      prov, ctx->cc_idx);
+		ret = d_tm_add_metric(&ctx->cc_swim_delay, D_TM_STATS_GAUGE,
+				      "SWIM delay measurements", "delay",
+				      "net/%s/swim_delay/ctx_%u", prov, ctx->cc_idx);
 		if (ret)
-			DL_WARN(rc, "Failed to create network delay gauge");
+			DL_WARN(rc, "Failed to create SWIM delay gauge");
 	}
 
 	if (crt_is_service() &&
