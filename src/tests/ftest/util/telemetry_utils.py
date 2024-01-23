@@ -298,17 +298,15 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
-        "engine_net_glitch",
         "engine_net_failed_addr",
+        "engine_net_glitch",
+        "engine_net_quota_exceeded",
         "engine_net_req_timeout",
-        "engine_net_swim_delay_stddev",
-        "engine_net_swim_delay_max",
-        "engine_net_swim_delay_mean",
-        "engine_net_swim_delay",
-        "engine_net_swim_delay_min",
+        *_gen_stats_metrics("engine_net_swim_delay"),
         "engine_net_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
-        "engine_net_uri_lookup_self"]
+        "engine_net_uri_lookup_self",
+        "engine_net_waitq_depth"]
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     ENGINE_NVME_HEALTH_METRICS = [
