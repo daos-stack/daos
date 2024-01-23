@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1873,6 +1873,11 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	} else {
 		uuid_generate(pool_hdl_uuid);
 		uuid_generate(cont_hdl_uuid);
+		/* Only copy server handle to make is_from_srv() check correctly, and
+		 * container server handle will not be copied here, otherwise
+		 * ds_pool_iv_refresh_hdl will not open the server container handle.
+		 */
+		uuid_copy(svc->ps_pool->sp_srv_pool_hdl, pool_hdl_uuid);
 	}
 
 	rc = ds_pool_iv_srv_hdl_update(svc->ps_pool, pool_hdl_uuid,
@@ -4387,8 +4392,7 @@ out_lock:
 	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 
 	/* See comment above, rebuild doesn't connect the pool */
-	if ((query_bits & DAOS_PO_QUERY_SPACE) &&
-	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl)) {
+	if (query_bits & DAOS_PO_QUERY_SPACE) {
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
 					    &out->pqo_space);
 		if (unlikely(rc))
