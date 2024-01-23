@@ -40,7 +40,7 @@ class DmgStorageQuery(ControlTestBase):
                     for item, device in enumerate(sorted(tier.bdev_list.value)):
                         bdev_info.append(
                             {'bdev': device,
-                             'roles': ','.join(tier.bdev_roles.value or []),
+                             'roles': ','.join(tier.bdev_roles.value or ['NA']),
                              'tier': index,
                              'tgt_ids': list(range(item, targets, len(tier.bdev_list.value)))})
 
