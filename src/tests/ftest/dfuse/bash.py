@@ -5,10 +5,8 @@
 """
 import os
 
-import general_utils
-from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
-from exception_utils import CommandFailure
+from util.run_utils import run_remote
 
 
 class Cmd(DfuseTestBase):
@@ -47,7 +45,6 @@ class Cmd(DfuseTestBase):
         dd_blocksize = 512
 
         if il_lib is not None:
-            # no need to run multiple pools and containers with interception lib loaded
             lib_path = os.path.join(self.prefix, "lib64", il_lib)
             if compatible_mode:
                 env_str = f"export LD_PRELOAD={lib_path}; export D_IL_COMPATIBLE=1; "
@@ -59,7 +56,7 @@ class Cmd(DfuseTestBase):
         # Create a pool if one does not already exist.
         self.add_pool(connect=False)
         self.add_container(self.pool)
-        mount_dir = f"/tmp/{self.pool.uuid}_daos_dfuse"
+        mount_dir = f"/tmp/{self.pool.identifier}_daos_dfuse"
         self.start_dfuse(self.hostlist_clients, self.pool, self.container, mount_dir=mount_dir)
         if il_lib is not None:
             # unmount dfuse and mount again with caching disabled
@@ -132,26 +129,9 @@ class Cmd(DfuseTestBase):
             f'curl "https://www.google.com" -o {fuse_root_dir}/download.html',
         ]
         for cmd in commands:
-            try:
-                # execute bash cmds
-                ret_code = general_utils.pcmd(self.hostlist_clients, env_str + cmd, timeout=120)
-                if 0 not in ret_code:
-                    error_hosts = NodeSet(
-                        ",".join(
-                            [
-                                str(node_set)
-                                for code, node_set in list(ret_code.items())
-                                if code != 0
-                            ]
-                        )
-                    )
-                    raise CommandFailure(
-                        f"Error running '{cmd}' on the following hosts: {error_hosts}"
-                    )
-            # report error if any command fails
-            except CommandFailure as error:
-                self.log.error("BashCmd Test Failed: %s", str(error))
-                self.fail("Test was expected to pass but it failed.\n")
+            result = run_remote(self.log, self.hostlist_clients, env_str + cmd)
+            if not result.passed:
+                self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
         # stop dfuse
         self.stop_dfuse()
