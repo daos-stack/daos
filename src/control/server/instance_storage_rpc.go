@@ -218,7 +218,7 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 		// homogeneous hosts.
 		engineRank, err := engine.GetRank()
 		if err != nil {
-			return nil, errors.Wrapf(err, "instance %d GetRank: %s", engine.Index())
+			return nil, errors.Wrapf(err, "instance %d GetRank", engine.Index())
 		}
 		nsd := &ctlpb.SmdDevice{
 			RoleBits:         sd.RoleBits,

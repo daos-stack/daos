@@ -185,22 +185,7 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			req:    ctlpb.ScanNvmeReq{},
 			rank:   -1,
 			smdRes: defSmdScanRes(),
-			expResp: &ctlpb.ScanNvmeResp{
-				Ctrlrs: proto.NvmeControllers{
-					func() *ctlpb.NvmeController {
-						c := proto.MockNvmeController(2)
-						c.HealthStats = nil
-						c.SmdDevices = []*ctlpb.SmdDevice{
-							{
-								Rank:     uint32(ranklist.NilRank),
-								RoleBits: storage.BdevRoleAll,
-							},
-						}
-						return c
-					}(),
-				},
-				State: new(ctlpb.ResponseState),
-			},
+			expErr: errors.New("nil superblock"),
 		},
 		"scan over drpc; with health": {
 			req:       ctlpb.ScanNvmeReq{Health: true},
