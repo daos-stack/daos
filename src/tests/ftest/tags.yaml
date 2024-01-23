@@ -1,0 +1,25 @@
+#  (C) Copyright 2023 Intel Corporation.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
+exclude:
+  - src/tests/ftest*  # special handling in tags.py
+include:
+  - src/tests/ftest/util/*
+map:
+  .*: pr
+  src/cart/: cart
+  src/client/dfuse/dfuse.*: dfuse
+  src/client/dfuse/il/: dfuse,il
+  src/client/dfuse/ops/: dfuse
+  src/client/dfuse/pil4dfs/: pil4dfs
+  src/client/dfs/: dfs dfuse
+  src/container/: container
+  src/control/: control
+  src/control/security/: security
+  src/object/: object
+  src/pool/: pool
+  src/rebuild/: rebuild
+  src/security/: security
+  src/tests/suite/daos.*: daos_test
+  src/tests/suite/dfs.*: dfs_test
+  src/tests/suite/dfuse.*: dfuse_test
