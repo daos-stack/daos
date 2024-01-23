@@ -5411,7 +5411,7 @@ class AllocFailTest():
 
         fatal_errors = False
 
-        max_load_avg = 50
+        max_load_avg = 100
 
         # Now run all iterations in parallel up to max_child.  Iterations will be launched
         # in order but may not finish in order, rather they are processed in the order they
@@ -5434,10 +5434,11 @@ class AllocFailTest():
                         max_child -= 5
                     else:
                         max_child -= 1
-                    max_child = max(max_child, 10)
+                    max_child = max(max_child, 20)
                     print(f"High load average of {load_avg}, "
                           f"pausing and decreasing parallelism to {max_child} {max_count}")
-                    time.sleep(2)
+                    if max_child > 20:
+                        time.sleep(2)
 
             if not finished:
                 while start_this_iteration > 0 and len(active) < max_child:
