@@ -124,13 +124,13 @@ func (nds *NvmeDevState) UnmarshalJSON(data []byte) error {
 // LedState represents the LED state of device.
 type LedState int32
 
-// LedState values representing the VMD LED state (see include/spdk/vmd.h).
+// LedState values representing the VMD LED state (see src/proto/ctl/smd.proto).
 const (
-	LedStateNormal LedState = iota
+	LedStateUnknown LedState = iota
 	LedStateIdentify
 	LedStateFaulty
 	LedStateRebuild
-	LedStateUnknown
+	LedStateNormal
 )
 
 func (vls LedState) String() string {
@@ -389,7 +389,11 @@ type NvmeControllers []*NvmeController
 func (ncs NvmeControllers) String() string {
 	var ss []string
 	for _, c := range ncs {
-		ss = append(ss, c.PciAddr)
+		s := c.PciAddr
+		for _, sd := range c.SmdDevices {
+			s += fmt.Sprintf("-nsid%d-%s", sd.CtrlrNamespaceID, sd.Roles.String())
+		}
+		ss = append(ss, s)
 	}
 	return strings.Join(ss, ", ")
 }
