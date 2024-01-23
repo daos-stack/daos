@@ -472,7 +472,7 @@ overlapping_update_and_punch(void **state)
 
 	d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
 
-	print_message("- exptect no value at DKEY[0]\n");
+	print_message("- expect no value at DKEY[0]\n");
 	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, dkey, &la->iod, &la->fetch_sgl);
 	validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
 }
