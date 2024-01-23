@@ -679,13 +679,11 @@ dss_mem_stats_init(struct mem_stats *stats, int xs_id)
 	if (rc)
 		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
 
-	if (xs_id == DSS_MAIN_XS_ID(0)) {
-		rc = d_tm_add_metric(&stats->ms_mallinfo, D_TM_MEMINFO,
-				     "Total memory arena", "", "mem/meminfo/xs_%u", xs_id);
-		if (rc)
-			D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
-		stats->ms_current = 0;
-	}
+	rc = d_tm_add_metric(&stats->ms_mallinfo, D_TM_MEMINFO,
+			     "Total memory arena", "", "mem/meminfo/xs_%u", xs_id);
+	if (rc)
+		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
+	stats->ms_current = 0;
 }
 
 void
@@ -700,8 +698,8 @@ dss_mem_total_alloc_track(void *arg, daos_size_t bytes)
 	if (stats->ms_mallinfo == NULL)
 		return;
 
-	/* Only retrieve mallocinfo every 100 allocation */
-	if ((stats->ms_current++ % 100) == 0)
+	/* Only retrieve mallocinfo every 3000 allocation */
+	if ((stats->ms_current++ % 3000) == 0)
 		d_tm_record_meminfo(stats->ms_mallinfo);
 }
 
