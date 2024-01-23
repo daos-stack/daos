@@ -782,7 +782,7 @@ dss_chore_queue_ult(void *arg)
 				stop = true;
 				break;
 			}
-			sched_cond_wait(queue->chq_cond, queue->chq_mutex);
+			sched_cond_wait_for_business(queue->chq_cond, queue->chq_mutex);
 		}
 		ABT_mutex_unlock(queue->chq_mutex);
 

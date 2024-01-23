@@ -343,6 +343,13 @@ int sched_req_space_check(struct sched_request *req);
 void sched_cond_wait(ABT_cond cond, ABT_mutex mutex);
 
 /**
+ * Wrapper of ABT_cond_wait(), inform scheduler that it's going
+ * to be blocked for a relative long time. Unlike sched_cond_wait,
+ * after waking up, this function will prevent relaxing for a while.
+ */
+void sched_cond_wait_for_business(ABT_cond cond, ABT_mutex mutex);
+
+/**
  * Get current monotonic time in milli-seconds.
  */
 uint64_t sched_cur_msec(void);

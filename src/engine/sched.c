@@ -1656,8 +1656,8 @@ sched_stop(struct dss_xstream *dx)
 	process_all(dx);
 }
 
-void
-sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
+static void
+cond_wait(ABT_cond cond, ABT_mutex mutex, bool for_business)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
 	struct sched_info	*info = &dx->dx_sched_info;
@@ -1666,6 +1666,20 @@ sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
 	ABT_cond_wait(cond, mutex);
 	D_ASSERT(info->si_wait_cnt > 0);
 	info->si_wait_cnt -= 1;
+	if (for_business)
+		info->si_stats.ss_busy_ts = info->si_cur_ts;
+}
+
+void
+sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
+{
+	cond_wait(cond, mutex, false /* for_business */);
+}
+
+void
+sched_cond_wait_for_business(ABT_cond cond, ABT_mutex mutex)
+{
+	cond_wait(cond, mutex, true /* for_business */);
 }
 
 uint64_t
