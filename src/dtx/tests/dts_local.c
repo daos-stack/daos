@@ -64,7 +64,7 @@ setup_local_args(void **state)
 		set_iov(&la->dkey[i], &la->dkey_buf[i][0], int_flag);
 	}
 
-	/** Pprepare AKEYs */
+	/** prepare AKEYs */
 	vts_key_gen(&la->akey_buf[0], arg->akey_size, true, arg);
 	set_iov(&la->akey, &la->akey_buf[0], int_flag);
 
@@ -463,7 +463,7 @@ overlapping_update_and_punch(void **state)
 	assert_rc_equal(rc, 0);
 
 	print_message("- punch DKEY[0] on the same epoch (rc=0)\n");
-	rc = vos_obj_punch(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, dkey, 0, NULL, dth);
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, dkey, 1, &la->akey, dth);
 	assert_rc_equal(rc, 0);
 
 	print_message("- commit the transaction (rc=0)\n");

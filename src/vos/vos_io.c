@@ -2579,6 +2579,9 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (dtx_is_real_handle(dth))
 		epoch = dth->dth_epoch;
 
+	if (dth && dth->dth_local)
+		++dth->dth_op_seq;
+
 	D_DEBUG(DB_TRACE,
 		"Prepare IOC for " DF_UOID ", iod_nr %d, epc " DF_X64 ", flags=" DF_X64 "\n",
 		DP_UOID(oid), iod_nr, (dtx_is_real_handle(dth) ? dth->dth_epoch : epoch), flags);

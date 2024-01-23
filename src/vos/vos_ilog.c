@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -435,7 +435,7 @@ update:
 	}
 
 	rc = ilog_update(loh, &max_epr, epr->epr_hi,
-			 (dtx_is_real_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX), false);
+			 (dtx_is_valid_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX), false);
 
 	ilog_close(loh);
 
@@ -531,7 +531,7 @@ punch_log:
 		return rc;
 	}
 
-	if (dtx_is_real_handle(dth)) {
+	if (dth) {
 		minor_epc = dth->dth_op_seq;
 	} else if (replay) {
 		/* If it's a replay, punch lower than the max in case there
