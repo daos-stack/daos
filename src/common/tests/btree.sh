@@ -16,7 +16,7 @@ elif [ "$USE_VALGRIND" = "pmemcheck" ]; then
     VCMD="valgrind --tool=pmemcheck"
 fi
 
-ORDER=${ORDER:-3}
+ORDER=${ORDER:-11}
 DDEBUG=${DDEBUG:-0}
 
 
@@ -65,6 +65,12 @@ while [ $# -gt 0 ]; do
     ukey)
         shift
         UINT="+"
+        test_conf_pre="${test_conf_pre} ukey"
+        ;;
+    emb)
+        shift
+        # reuse this flag since they are mutually exclusive
+        UINT="%"
         test_conf_pre="${test_conf_pre} ukey"
         ;;
     direct)
