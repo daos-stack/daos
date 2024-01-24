@@ -654,8 +654,8 @@ daos_der2errno(int err)
 static inline bool
 daos_crt_network_error(int err)
 {
-	return err == -DER_HG || err == -DER_UNREACH || err == -DER_CANCELED ||
-	       err == -DER_NOREPLY || err == -DER_OOG;
+	return err == -DER_HG || err == -DER_HG_FATAL || err == -DER_UNREACH ||
+	       err == -DER_CANCELED || err == -DER_NOREPLY || err == -DER_OOG;
 }
 
 /** See crt_quiet_error. */
