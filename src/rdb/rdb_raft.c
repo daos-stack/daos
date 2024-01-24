@@ -61,6 +61,7 @@ rdb_raft_rc(int raft_rc)
 	case RAFT_ERR_NOMEM:			return -DER_NOMEM;
 	case RAFT_ERR_SNAPSHOT_ALREADY_LOADED:	return -DER_ALREADY;
 	case RAFT_ERR_INVALID_CFG_CHANGE:	return -DER_INVAL;
+	case RAFT_ERR_MIGHT_VIOLATE_LEASE:	return -DER_NO_PERM;
 	default:				return -DER_MISC;
 	}
 }
@@ -2977,7 +2978,7 @@ rdb_raft_campaign(struct rdb *db)
 	node = raft_get_my_node(db->d_raft);
 	if (node == NULL || !raft_node_is_voting(node)) {
 		D_DEBUG(DB_MD, DF_DB": must be voting node\n", DP_DB(db));
-		rc = -DER_INVAL;
+		rc = -DER_NO_PERM;
 		goto out_mutex;
 	}
 

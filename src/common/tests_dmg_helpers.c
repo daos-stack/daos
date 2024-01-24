@@ -749,6 +749,48 @@ dmg_pool_create(const char *dmg_config_file,
 				D_GOTO(out, rc = -DER_NOMEM);
 			has_label = true;
 		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SCRUB_MODE);
+		if (entry != NULL) {
+			const char *scrub_str = NULL;
+
+			switch (entry->dpe_val) {
+			case DAOS_SCRUB_MODE_OFF:
+				scrub_str = "off";
+				break;
+			case DAOS_SCRUB_MODE_LAZY:
+				scrub_str = "lazy";
+				break;
+			case DAOS_SCRUB_MODE_TIMED:
+				scrub_str = "timed";
+				break;
+			default:
+				break;
+			}
+
+			if (scrub_str) {
+				args = cmd_push_arg(args, &argcount, "--properties=scrub:%s ",
+						    scrub_str);
+				if (args == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+			}
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENABLED);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=svc_ops_enabled:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SPACE_RB);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=space_rb:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
 	}
 
 	if (!has_label) {

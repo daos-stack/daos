@@ -63,6 +63,7 @@ type Engine interface {
 	GetStorage() *storage.Provider
 	SetCheckerMode(bool)
 	Debugf(format string, args ...interface{})
+	Tracef(format string, args ...interface{})
 }
 
 // EngineHarness is responsible for managing Engine instances.

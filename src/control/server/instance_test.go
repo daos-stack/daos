@@ -289,3 +289,7 @@ func (mi *MockInstance) GetStorage() *storage.Provider {
 func (mi *MockInstance) Debugf(format string, args ...interface{}) {
 	return
 }
+
+func (mi *MockInstance) Tracef(format string, args ...interface{}) {
+	return
+}
