@@ -194,6 +194,14 @@ class ConfigGenerateOutput(TestWithServers):
         self.prepare_expected_data()
 
         # 1. Call dmg config generate.
+                if storage["class"] == "ram":
+                    # Verify scm_list value is not set:
+                    if "scm_list" in storage:
+                        errors.append("unexpected scm_list field exists in ram tier")
+                    # Verify scm_size value is set:
+                    if "scm_size" not in storage:
+                        errors.append("Expected scm_size field does not exist in ram tier")
+                    scm_found = True
         result = self.get_dmg_command().config_generate(
             access_points="wolf-a", net_provider=self.def_provider)
         generated_yaml = yaml.safe_load(result.stdout)

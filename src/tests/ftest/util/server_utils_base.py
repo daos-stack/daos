@@ -34,7 +34,7 @@ class DaosServerCommand(YamlCommand):
 
     DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
 
-    def __init__(self, path="", yaml_cfg=None, timeout=45):
+    def __init__(self, path="", yaml_cfg=None, timeout=180):
         """Create a daos_server command object.
 
         Args:
@@ -397,7 +397,7 @@ class DaosServerCommand(YamlCommand):
                 self.pci_block_list = FormattedParameter("--pci-block-list={}")
                 self.hugepages = FormattedParameter("--hugepages={}")
                 self.target_user = FormattedParameter("--target-user={}")
-                self.disable_vfio = FormattedParameter("--disable-vfio", False)
+                self.disable_vfio = FormattedParameter("--disable-vfio={}")
 
         class ResetSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server nvme reset command."""
@@ -419,7 +419,7 @@ class DaosServerCommand(YamlCommand):
                 self.ignore_config = FormattedParameter("--ignore-config", False)
                 self.pci_block_list = FormattedParameter("--pci-block-list={}")
                 self.target_user = FormattedParameter("--target-user={}")
-                self.disable_vfio = FormattedParameter("--disable-vfio", False)
+                self.disable_vfio = FormattedParameter("--disable-vfio={}")
 
         class ScanSubCommand(CommandWithSubCommand):
             """Defines an object for the daos_server nvme scan command."""
