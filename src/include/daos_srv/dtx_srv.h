@@ -123,6 +123,7 @@ struct dtx_handle {
 	struct dtx_rsrvd_uint		 dth_rsrvd_inline;
 	struct dtx_rsrvd_uint		*dth_rsrvds;
 	void				**dth_deferred;
+	void				*dth_local_stub;
 	/* NVME extents to release */
 	d_list_t			 dth_deferred_nvme;
 	/* Committed or comittable DTX list */
