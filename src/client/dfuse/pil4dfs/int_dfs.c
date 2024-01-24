@@ -1860,7 +1860,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
 	char            *parent_dir = NULL;
-	char            *full_path = NULL;
+	char            *full_path  = NULL;
 
 	if (pathname == NULL) {
 		errno = EFAULT;
@@ -1922,8 +1922,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			      0, 0, NULL, &dfs_obj);
 		mode_query = S_IFREG;
 	} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
-		rc = dfs_lookup(dfs_mt->dfs, "/", oflags & (~O_APPEND), &dfs_obj, &mode_query,
-				NULL);
+		rc =
+		    dfs_lookup(dfs_mt->dfs, "/", oflags & (~O_APPEND), &dfs_obj, &mode_query, NULL);
 	} else {
 		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags & (~O_APPEND), &dfs_obj,
 				    &mode_query, NULL);
@@ -1989,7 +1989,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	FREE(parent_dir);
 
 	if (oflags & O_APPEND) {
-		struct stat      fstat;
+		struct stat fstat;
 
 		rc = new_fxstat(1, idx_fd + FD_FILE_BASE, &fstat);
 		if (rc != 0)
@@ -4192,8 +4192,8 @@ chdir(const char *path)
 	dfs_obj_t       *parent;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             *parent_dir = NULL;
-	char             *full_path  = NULL;
+	char            *parent_dir = NULL;
+	char            *full_path  = NULL;
 
 	if (next_chdir == NULL) {
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
