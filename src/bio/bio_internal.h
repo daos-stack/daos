@@ -656,11 +656,17 @@ int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /* bio_config.c */
 int
-    bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *roles,
-			  bool *vmd_enabled);
-int bio_set_hotplug_filter(const char *nvme_conf);
-int bio_read_accel_props(const char *nvme_conf);
-int bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr);
+bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *roles,
+		      bool *vmd_enabled);
+int
+bio_set_hotplug_filter(const char *nvme_conf);
+int
+bio_read_accel_props(const char *nvme_conf);
+int
+bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr);
+int
+bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max_io_errs,
+			      uint32_t *max_csum_errs);
 int
 bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_size);
 #endif /* __BIO_INTERNAL_H__ */
