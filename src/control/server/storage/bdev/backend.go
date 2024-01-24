@@ -273,7 +273,7 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 
 // groomDiscoveredBdevs ensures that for a non-empty device list, restrict output controller data
 // to only those devices discovered and in device list and confirm that the devices specified in
-// the device list have all been discovered.
+// the device list have all been discovered. VMD addresses with no backing devices return error.
 func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.NvmeControllers, vmdEnabled bool) (storage.NvmeControllers, error) {
 	// if the request does not specify a device filter, return all discovered controllers
 	if reqDevs.IsEmpty() {
@@ -319,7 +319,7 @@ func groomDiscoveredBdevs(reqDevs *hardware.PCIAddressSet, discovered storage.Nv
 	}
 
 	if !missing.IsEmpty() {
-		return nil, storage.FaultBdevNotFound(missing.Strings()...)
+		return nil, storage.FaultBdevNotFound(vmdEnabled, missing.Strings()...)
 	}
 
 	return out, nil
@@ -348,6 +348,7 @@ func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanRespo
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover nvme")
 	}
+	sb.log.Debugf("spdk backend scan (bindings discover call) resp: %+v", foundDevs)
 
 	outDevs, err := groomDiscoveredBdevs(needDevs, foundDevs, req.VMDEnabled)
 	if err != nil {
@@ -465,7 +466,7 @@ func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.Bdev
 
 	if req.VMDEnabled {
 		sb.log.Debug("vmd support enabled during nvme format")
-		dl, err := substituteVMDAddresses(sb.log, needDevs, req.BdevCache)
+		dl, err := substituteVMDAddresses(sb.log, needDevs, req.ScannedBdevs)
 		if err != nil {
 			return nil, err
 		}
@@ -500,7 +501,6 @@ func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.Bdev
 func (sb *spdkBackend) Format(req storage.BdevFormatRequest) (resp *storage.BdevFormatResponse, err error) {
 	sb.log.Debugf("spdk backend format (bindings call): %+v", req)
 
-	// TODO (DAOS-3844): Kick off device formats in parallel?
 	switch req.Properties.Class {
 	case storage.ClassFile:
 		return sb.formatAioFile(&req)
@@ -528,7 +528,7 @@ func (sb *spdkBackend) writeNvmeConfig(req storage.BdevWriteConfigRequest, confW
 
 			bdevs := &props.DeviceList.PCIAddressSet
 
-			dl, err := substituteVMDAddresses(sb.log, bdevs, req.BdevCache)
+			dl, err := substituteVMDAddresses(sb.log, bdevs, req.ScannedBdevs)
 			if err != nil {
 				return errors.Wrapf(err, "storage tier %d", props.Tier)
 			}

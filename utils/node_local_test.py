@@ -1322,6 +1322,7 @@ class DFuse():
 
     def start(self, v_hint=None, single_threaded=False, use_oopt=False):
         """Start a dfuse instance"""
+        # pylint: disable=too-many-branches
         dfuse_bin = join(self.conf['PREFIX'], 'bin', 'dfuse')
 
         pre_inode = os.stat(self.dir).st_ino
@@ -1369,6 +1370,9 @@ class DFuse():
 
         if single_threaded:
             cmd.append('--singlethread')
+        elif not self.cores:
+            # Use a lower default thread-count for NLT due to running tests in parallel.
+            cmd.extend(['--thread-count', '4'])
 
         if not self.caching:
             cmd.append('--disable-caching')
@@ -2834,6 +2838,7 @@ class PosixTests():
         print(os.listdir(path))
         cmd = ['cont', 'destroy', '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
 
         path = join(self.dfuse.dir, 'uns_link2')
         cmd = ['cont', 'link', self.pool.id(), container2.id(), '--path', path]

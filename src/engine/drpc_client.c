@@ -203,56 +203,6 @@ out:
 	return rc;
 }
 
-/*
- * Notify daos_server that there has been a I/O error. This function doesn't
- * Argobots-schedule.
- */
-int
-ds_notify_bio_error(int media_err_type, int tgt_id)
-{
-	Srv__BioErrorReq	 bioerr_req = SRV__BIO_ERROR_REQ__INIT;
-	uint8_t			*req;
-	size_t			 req_size;
-	int			 rc;
-
-	rc = crt_self_uri_get(0 /* tag */, &bioerr_req.uri);
-	if (rc != 0)
-		return rc;
-
-	/* TODO: add checksum error */
-	if (media_err_type == MET_UNMAP)
-		bioerr_req.unmaperr = true;
-	else if (media_err_type == MET_WRITE)
-		bioerr_req.writeerr = true;
-	else if (media_err_type == MET_READ)
-		bioerr_req.readerr = true;
-	bioerr_req.tgtid = tgt_id;
-	bioerr_req.instanceidx = dss_instance_idx;
-	bioerr_req.drpclistenersock = drpc_listener_socket_path;
-
-	req_size = srv__bio_error_req__get_packed_size(&bioerr_req);
-	D_ALLOC(req, req_size);
-	if (req == NULL)
-		D_GOTO(out_uri, rc = -DER_NOMEM);
-	srv__bio_error_req__pack(&bioerr_req, req);
-
-	/*
-	 * Do not wait for the response, so that we don't Argobots-schedule or
-	 * pthread-block.
-	 */
-	rc = dss_drpc_call(DRPC_MODULE_SRV, DRPC_METHOD_SRV_BIO_ERR, req,
-			   req_size, DSS_DRPC_NO_RESP, NULL /* resp */);
-	if (rc != 0)
-		goto out_req;
-
-out_req:
-	D_FREE(req);
-out_uri:
-	D_FREE(bioerr_req.uri);
-
-	return rc;
-}
-
 int
 ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 {
