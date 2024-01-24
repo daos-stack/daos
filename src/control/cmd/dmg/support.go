@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -49,7 +48,7 @@ func (cmd *collectLogCmd) rsyncLog() error {
 		LogFunction:  support.RsyncLogEnum,
 	}
 	cmd.Debugf("Rsync logs from servers to %s:%s ", hostName, cmd.TargetFolder)
-	resp, err := control.CollectLog(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.CollectLog(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil && cmd.Stop {
 		return err
 	}
@@ -76,7 +75,7 @@ func (cmd *collectLogCmd) archLogsOnServer() error {
 		LogFunction:  support.ArchiveLogsEnum,
 	}
 	cmd.Debugf("Archiving the Log Folder %s", cmd.TargetFolder)
-	resp, err := control.CollectLog(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.CollectLog(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil && cmd.Stop {
 		return err
 	}
@@ -152,7 +151,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	for logFunc, logCmdSet := range LogCollection {
 		for _, logCmd := range logCmdSet {
 			cmd.Debugf("Log Function %d -- Log Collect Cmd %s ", logFunc, logCmd)
-			ctx := context.Background()
+			ctx := cmd.MustLogCtx()
 			req := &control.CollectLogReq{
 				TargetFolder: cmd.TargetFolder,
 				ExtraLogsDir: cmd.ExtraLogsDir,
