@@ -1527,10 +1527,16 @@ dtx_begin(daos_handle_t xoh, struct dtx_id *dti, struct dtx_epoch *epoch,
 	if (rc == 0 && sub_modification_cnt > 0 && !(flags & DTX_LOCAL))
 		rc = vos_dtx_attach(dth, false, false);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
-		"epoch "DF_X64", dti_cos_cnt %d, flags %x: "DF_RC"\n",
-		DP_DTI(dti), sub_modification_cnt,
-		dth->dth_ver, epoch->oe_value, dti_cos_cnt, flags, DP_RC(rc));
+	if (flags & DTX_LOCAL) {
+		D_DEBUG(DB_IO, "Start local DTX sub modification %d, ver %u, flags %x: " DF_RC "\n",
+			sub_modification_cnt, dth->dth_ver, flags, DP_RC(rc));
+	} else {
+		D_DEBUG(DB_IO,
+			"Start DTX " DF_DTI " sub modification %d, ver %u, epoch " DF_X64
+			", dti_cos_cnt %d, flags %x: " DF_RC "\n",
+			DP_DTI(dti), sub_modification_cnt, dth->dth_ver, epoch->oe_value,
+			dti_cos_cnt, flags, DP_RC(rc));
+	}
 
 	if (rc != 0)
 		D_FREE(dth);
