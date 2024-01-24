@@ -291,7 +291,6 @@ type fsCheckCmd struct {
 
 	FsckFlags FsCheckFlag `long:"flags" short:"f" description:"comma-separated flags: print, remove, relink, verify, evict"`
 	DirName   string      `long:"dir-name" short:"n" description:"directory name under lost+found to store leaked oids (a timestamp dir would be created if this is not specified)"`
-	Evict     bool        `long:"evict" short:"e" description:"evict all open handles on the container"`
 }
 
 func (cmd *fsCheckCmd) Execute(_ []string) error {
