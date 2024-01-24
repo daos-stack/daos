@@ -62,13 +62,13 @@ class CsumErrorLog(DaosCoreBase):
         host_devices = get_dmg_smd_info(dmg.storage_query_list_devices, 'devices')
         for host, devices in host_devices.items():
             for device in devices:
-                for entry in ('uuid', 'tgt_ids', 'role_bits', 'roles'):
+                for entry in ('uuid', 'tgt_ids', 'role_bits'):
                     if entry not in device:
                         self.fail(
                             'Missing {} info from dmg storage query list devices'.format(entry))
                 self.log.info(
-                    'Host %s device: uuid=%s, targets=%s, role=%s, role_bits=%s',
-                    host, device['uuid'], device['tgt_ids'], device['roles'], device['role_bits'])
+                    'Host %s device: uuid=%s, targets=%s, role_bits=%s',
+                    host, device['uuid'], device['tgt_ids'], device['role_bits'])
                 if not device['tgt_ids']:
                     self.log_step('Skipping device without targets on {}'.format(device['uuid']))
                     continue
