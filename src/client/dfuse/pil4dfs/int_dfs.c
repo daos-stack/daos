@@ -412,6 +412,8 @@ static ssize_t (*next_pwrite)(int fd, const void *buf, size_t size, off_t offset
 static off_t (*libc_lseek)(int fd, off_t offset, int whence);
 static off_t (*pthread_lseek)(int fd, off_t offset, int whence);
 
+static int new_fxstat(int vers, int fd, struct stat *buf);
+
 static int (*next_fxstat)(int vers, int fd, struct stat *buf);
 static int (*next_fstat)(int fd, struct stat *buf);
 
@@ -1653,14 +1655,16 @@ close_dup_fd_dest_fakefd(int fd)
  * the fake fd if dest_closed is true.
  */
 static int
-close_dup_fd_src(int (*next_close)(int fd), int fd)
+close_dup_fd_src(int (*next_close)(int fd), int fd, bool close_fd)
 {
 	int i, rc, idx_dup = -1, fd_dest = -1;
 
-	/* close the fd from kernel */
-	rc = next_close(fd);
-	if (rc != 0)
-		return (-1);
+	if (close_fd) {
+		/* close the fd from kernel */
+		rc = next_close(fd);
+		if (rc != 0)
+			return (-1);
+	}
 
 	/* remove the fd_dup entry */
 	D_MUTEX_LOCK(&lock_fd_dup2ed);
@@ -1769,7 +1773,7 @@ close_all_duped_fd(void)
 	/* Only the main thread will call this function in the destruction phase */
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		if (fd_dup2_list[i].fd_src >= 0)
-			close_dup_fd_src(libc_close, fd_dup2_list[i].fd_src);
+			close_dup_fd_src(libc_close, fd_dup2_list[i].fd_src, true);
 	}
 	num_fd_dup2ed = 0;
 }
@@ -1854,8 +1858,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	mode_t           mode_query = 0, mode_parent = 0;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             *parent_dir = NULL;
-	char             *full_path = NULL;
+	char            *parent_dir = NULL;
+	char            *full_path = NULL;
 
 	if (pathname == NULL) {
 		errno = EFAULT;
@@ -1913,14 +1917,15 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	}
 	/* file/dir should be handled by DFS */
 	if (oflags & O_CREAT) {
-		rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFREG, oflags, 0, 0, NULL,
-			      &dfs_obj);
+		rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFREG, oflags & (~O_APPEND),
+			      0, 0, NULL, &dfs_obj);
 		mode_query = S_IFREG;
 	} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
-		rc = dfs_lookup(dfs_mt->dfs, "/", oflags, &dfs_obj, &mode_query, NULL);
+		rc = dfs_lookup(dfs_mt->dfs, "/", oflags & (~O_APPEND), &dfs_obj, &mode_query,
+				NULL);
 	} else {
-		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj, &mode_query,
-				    NULL);
+		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags & (~O_APPEND), &dfs_obj,
+				    &mode_query, NULL);
 	}
 
 	if (rc)
@@ -1981,6 +1986,15 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
 
 	FREE(parent_dir);
+
+	if (oflags & O_APPEND) {
+		struct stat      fstat;
+
+		rc = new_fxstat(1, idx_fd + FD_FILE_BASE, &fstat);
+		if (rc != 0)
+			return (-1);
+		file_list[idx_fd]->offset = fstat.st_size;
+	}
 
 	return (idx_fd + FD_FILE_BASE);
 
@@ -2085,7 +2099,7 @@ new_close_common(int (*next_close)(int fd), int fd)
 	} else if (fd_directed >= FD_FILE_BASE) {
 		/* This fd is a kernel fd. There was a duplicate fd created. */
 		if (fd < FD_FILE_BASE)
-			return close_dup_fd_src(next_close, fd);
+			return close_dup_fd_src(next_close, fd, true);
 
 		/* This fd is a fake fd. There exists a associated kernel fd with dup2. */
 		close_dup_fd_dest_fakefd(fd);
@@ -4051,6 +4065,8 @@ getcwd(char *buf, size_t size)
 	if (buf == NULL) {
 		size_t len;
 
+		if (size == 0)
+			size = PATH_MAX;
 		len = strnlen(cur_dir, size);
 		if (len >= size) {
 			errno = ERANGE;
@@ -4171,14 +4187,12 @@ out_err:
 int
 chdir(const char *path)
 {
-	int              is_target_path, rc, len_str, errno_save;
+	int              is_target_path, rc, len_str;
 	dfs_obj_t       *parent;
-	struct stat      stat_buf;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
 	char             *parent_dir = NULL;
 	char             *full_path  = NULL;
-	bool             is_root;
 
 	if (next_chdir == NULL) {
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
@@ -4191,36 +4205,22 @@ chdir(const char *path)
 			&full_path, &dfs_mt);
 	if (rc)
 		D_GOTO(out_err, rc);
+
+	rc = next_chdir(path);
+	if (rc)
+		D_GOTO(out_err, rc = errno);
+
 	if (!is_target_path) {
-		FREE(parent_dir);
-		rc = next_chdir(path);
-		errno_save = errno;
-		if (rc == 0)
-			update_cwd();
-		errno = errno_save;
-		return rc;
+		strncpy(cur_dir, full_path, DFS_MAX_PATH);
+		if (cur_dir[DFS_MAX_PATH - 1] != 0) {
+			D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
+				strerror(ENAMETOOLONG));
+			D_GOTO(out_err, rc = ENAMETOOLONG);
+		}
+		D_GOTO(out, rc);
 	}
 
-	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
-		is_root = true;
-		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, &stat_buf);
-	} else {
-		is_root = false;
-		rc = dfs_stat(dfs_mt->dfs, parent, item_name, &stat_buf);
-	}
-	if (rc)
-		D_GOTO(out_err, rc);
-	if (!S_ISDIR(stat_buf.st_mode)) {
-		D_DEBUG(DB_ANY, "%s is not a directory: %d (%s)\n", path, ENOTDIR,
-			strerror(ENOTDIR));
-		D_GOTO(out_err, rc = ENOTDIR);
-	}
-	if (is_root)
-		rc = dfs_access(dfs_mt->dfs, NULL, NULL, X_OK);
-	else
-		rc = dfs_access(dfs_mt->dfs, parent, item_name, X_OK);
-	if (rc)
-		D_GOTO(out_err, rc);
+	/* assuming the path exists and it is backed by dfuse */
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
 	if (len_str >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
@@ -4228,6 +4228,7 @@ chdir(const char *path)
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
+out:
 	FREE(parent_dir);
 	return 0;
 
@@ -5075,7 +5076,7 @@ dup(int oldfd)
 int
 dup2(int oldfd, int newfd)
 {
-	int fd, oldfd_directed, fd_directed, idx, rc, errno_save;
+	int fd, oldfd_directed, newfd_directed, fd_directed, idx, rc, errno_save;
 
 	/* Need more work later. */
 	if (next_dup2 == NULL) {
@@ -5092,7 +5093,9 @@ dup2(int oldfd, int newfd)
 			return newfd;
 	}
 	oldfd_directed = query_fd_forward_dest(oldfd);
-	if ((oldfd_directed < FD_FILE_BASE) && (oldfd < FD_FILE_BASE) && (newfd < FD_FILE_BASE))
+	newfd_directed = query_fd_forward_dest(newfd);
+	if ((oldfd_directed < FD_FILE_BASE) && (oldfd < FD_FILE_BASE) &&
+	    (newfd_directed < FD_FILE_BASE) && (newfd < FD_FILE_BASE))
 		return next_dup2(oldfd, newfd);
 
 	if (oldfd_directed >= FD_FILE_BASE && oldfd < FD_FILE_BASE)
@@ -5104,7 +5107,12 @@ dup2(int oldfd, int newfd)
 		return -1;
 	}
 	fd_directed = query_fd_forward_dest(newfd);
-	if (fd_directed >= FD_FILE_BASE) {
+	if (fd_directed >= FD_FILE_BASE && newfd < FD_FILE_BASE && oldfd_directed < FD_FILE_BASE &&
+	    oldfd < FD_FILE_BASE) {
+		/* need to remove newfd from forward list and decrease refcount in file_list[] */
+		close_dup_fd_src(libc_close, newfd, false);
+		return next_dup2(oldfd, newfd);
+	} else if (fd_directed >= FD_FILE_BASE) {
 		DS_ERROR(ENOTSUP, "unimplemented yet for fd_directed >= FD_FILE_BASE");
 		errno = ENOTSUP;
 		return -1;
