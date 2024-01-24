@@ -712,10 +712,10 @@ class DaosServerManager(SubprocessManager):
 
         if self.manager.job.using_nvme:
             # Reset the storage
-            try:
-                self.reset_storage()
-            except ServerFailed as error:
-                messages.append(str(error))
+            #try:
+            #    self.reset_storage()
+            #except ServerFailed as error:
+            #    messages.append(str(error))
 
             # Make sure the mount directory belongs to non-root user
             self.set_scm_mount_ownership()
