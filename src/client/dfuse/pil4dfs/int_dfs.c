@@ -241,7 +241,7 @@ struct statx {
 #endif
 
 /* working dir of current process */
-static char            cur_dir[DFS_MAX_PATH] = "";
+static char            cur_dir[DFS_MAX_PATH + 1] = "";
 static bool            segv_handler_inited;
 /* Old segv handler */
 struct sigaction       old_segv;
