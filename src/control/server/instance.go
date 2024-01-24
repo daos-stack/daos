@@ -362,3 +362,11 @@ func (ei *EngineInstance) callSetUp(ctx context.Context) error {
 
 	return nil
 }
+
+func (ei *EngineInstance) Debugf(format string, args ...interface{}) {
+	ei.log.Debugf(format, args...)
+}
+
+func (ei *EngineInstance) Tracef(format string, args ...interface{}) {
+	ei.log.Tracef(format, args...)
+}

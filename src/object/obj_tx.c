@@ -2634,7 +2634,12 @@ dc_tx_restart(tse_task_t *task)
 			/*
 			 * Reinitialize task with a delay to implement the
 			 * backoff and call dc_tx_restart_end below.
+			 *
+			 * We don't need to get an extra tx reference, because
+			 * the reinitialized task must acquire tx->tx_lock
+			 * first.
 			 */
+			tse_task_set_priv_internal(task, tx);
 			rc = tse_task_reinit_with_delay(task, backoff);
 			if (rc != 0) {
 				/* Skip the backoff. */
@@ -2643,8 +2648,6 @@ dc_tx_restart(tse_task_t *task)
 				goto out_tx_lock;
 			}
 			D_MUTEX_UNLOCK(&tx->tx_lock);
-			/* Pass our tx reference to task. */
-			tse_task_set_priv_internal(task, tx);
 			return 0;
 		}
 
