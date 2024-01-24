@@ -1561,7 +1561,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			svc.harness.started.SetTrue()
 
 			for i, e := range svc.harness.instances {
-				srv := e.(*EngineInstance)
+				ei := e.(*EngineInstance)
 				cfg := new(mockDrpcClientConfig)
 				if tc.junkResp {
 					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
@@ -1570,8 +1570,8 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
-				srv.ready.SetTrue()
+				ei.setDrpcClient(newMockDrpcClient(cfg))
+				ei.ready.SetTrue()
 			}
 			if tc.harnessStopped {
 				svc.harness.started.SetFalse()
