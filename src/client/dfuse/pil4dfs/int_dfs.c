@@ -1025,7 +1025,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 	if (strncmp(szInput, ".", 2) == 0) {
 		/* special case for current work directory */
-		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH);
+		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH + 1);
 		len = (int)(pt_end - full_path_parse);
 		if (len >= DFS_MAX_PATH) {
 			D_DEBUG(DB_ANY, "full_path_parse[] is not large enough: %d (%s)\n",
