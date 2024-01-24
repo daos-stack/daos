@@ -1176,6 +1176,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 				D_GOTO(out_err, rc);
 		}
 	} else {
+		strncpy(*full_path, full_path_parse, len + 1);
 		*is_target_path = 0;
 		item_name[0]    = '\0';
 	}
@@ -4241,6 +4242,7 @@ out_err:
 int
 fchdir(int dirfd)
 {
+	int   rc;
 	char *pt_end = NULL;
 
 	if (next_fchdir == NULL) {
@@ -4252,6 +4254,15 @@ fchdir(int dirfd)
 
 	if (dirfd < FD_DIR_BASE)
 		return next_fchdir(dirfd);
+
+	/* assume dfuse is running. call chdir() to update cwd. */
+	if (next_chdir == NULL) {
+		next_chdir = dlsym(RTLD_NEXT, "chdir");
+		D_ASSERT(next_chdir != NULL);
+	}
+	rc = next_chdir(dir_list[dirfd - FD_DIR_BASE]->path);
+	if (rc)
+		return rc;
 
 	pt_end = stpncpy(cur_dir, dir_list[dirfd - FD_DIR_BASE]->path, DFS_MAX_PATH - 1);
 	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
