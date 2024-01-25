@@ -235,12 +235,6 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
-	if cs.srvCfg.DisableHugepages {
-		cs.log.Notice("bdev scan skipped as use of hugepages disabled in config")
-		return &ctlpb.ScanNvmeResp{
-			State: new(ctlpb.ResponseState),
-		}, nil
-	}
 
 	defer func() {
 		if err == nil && req.Meta {
@@ -710,11 +704,18 @@ func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageSca
 	}
 	resp.Scm = respScm
 
-	respNvme, err := scanBdevs(ctx, cs, req.Nvme, respScm.Namespaces)
-	if err != nil {
-		return nil, err
+	if cs.srvCfg.DisableHugepages {
+		cs.log.Notice("bdev scan skipped as use of hugepages disabled in config")
+		resp.Nvme = &ctlpb.ScanNvmeResp{
+			State: new(ctlpb.ResponseState),
+		}
+	} else {
+		respNvme, err := scanBdevs(ctx, cs, req.Nvme, respScm.Namespaces)
+		if err != nil {
+			return nil, err
+		}
+		resp.Nvme = respNvme
 	}
-	resp.Nvme = respNvme
 
 	mi, err := cs.getMemInfo()
 	if err != nil {
@@ -870,12 +871,11 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 }
 
 type formatNvmeReq struct {
-	log               logging.Logger
-	instances         []Engine
-	errored           map[int]string
-	skipped           map[int]bool
-	mdFormatted       bool
-	hugepagesDisabled bool
+	log         logging.Logger
+	instances   []Engine
+	errored     map[int]string
+	skipped     map[int]bool
+	mdFormatted bool
 }
 
 func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageFormatResp) error {
@@ -884,17 +884,11 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 		_, hasError := req.errored[idx]
 		_, skipped := req.skipped[idx]
 
-		// Skip NVMe format in the following cases:
-		// - the use of hugepages has been disabled
-		// - scm failed to format
-		// - scm was already formatted
+		// Skip NVMe format if scm was already formatted or failed to format.
 		skipReason := ""
-		switch {
-		case req.hugepagesDisabled:
-			skipReason = msgNvmeFormatSkipHPD
-		case hasError:
+		if hasError {
 			skipReason = msgNvmeFormatSkipFail
-		case skipped && !req.mdFormatted:
+		} else if skipped && !req.mdFormatted {
 			skipReason = msgNvmeFormatSkipNotDone
 		}
 		if skipReason != "" {
@@ -983,19 +977,20 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 		return nil, err
 	}
 
-	fnr := formatNvmeReq{
-		log:         cs.log,
-		instances:   instances,
-		errored:     instanceErrors,
-		skipped:     instanceSkips,
-		mdFormatted: mdFormatted,
-	}
+	hugepagesDisabled := false
 	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
-		cs.log.Notice("skipping bdev format as use of hugepages disabled in config")
-		fnr.hugepagesDisabled = true
+		cs.log.Debug("skipping bdev format as use of hugepages disabled in config")
+	} else {
+		fnr := formatNvmeReq{
+			log:         cs.log,
+			instances:   instances,
+			errored:     instanceErrors,
+			skipped:     instanceSkips,
+			mdFormatted: mdFormatted,
+		}
+		cs.log.Tracef("formatNvmeReq: %+v", fnr)
+		formatNvme(ctx, fnr, resp)
 	}
-	cs.log.Tracef("formatNvmeReq: %+v", fnr)
-	formatNvme(ctx, fnr, resp)
 
 	cs.log.Tracef("StorageFormatResp: %+v", resp)
 
@@ -1004,6 +999,12 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 	// VFIO device or resource busy when starting I/O Engines
 	// because devices have already been claimed during format.
 	for idx, ei := range instances {
+		if hugepagesDisabled {
+			// Populate skip NVMe format results for all engines.
+			ret := engine.newCret(storage.NilBdevAddress, nil)
+			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkipHPD, engine.Index())
+			resp.Crets = append(resp.Crets, ret)
+		}
 		if msg, hasError := instanceErrors[idx]; hasError {
 			cs.log.Errorf("instance %d: %s", idx, msg)
 			continue
