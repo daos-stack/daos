@@ -795,6 +795,18 @@ pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct pool_iv_entry	*iv_entry = entry->iv_value.sg_iovs[0].iov_buf;
 	int			rc;
 
+	if (dss_self_rank() == entry->ns->iv_master_rank) {
+		/* The PS leader might still in initialization phase, the IV entry may
+		 * not be fully initialized yet.
+		 */
+		if (!entry->iv_valid) {
+			D_INFO(DF_UUID" master %u is still stepping up: %d.\n",
+			       DP_UUID(entry->ns->iv_pool_uuid), entry->ns->iv_master_rank,
+			       -DER_NOTLEADER);
+			return -DER_NOTLEADER;
+		}
+	}
+
 	rc = pool_iv_ent_copy(key, dst_sgl, iv_entry, false);
 
 	return rc;
