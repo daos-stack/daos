@@ -2095,7 +2095,9 @@ watchdog_enabled(struct dss_xstream *dx)
 	if (sched_unit_runtime_max == 0)
 		return false;
 
-	return dx->dx_xs_id == 0 || (sched_watchdog_all && dx->dx_main_xs);
+	/* Enable watchdog for system and swim xstream by default. */
+	return dx->dx_xs_id == 0 || dx->dx_xs_id == 1 ||
+			(sched_watchdog_all && dx->dx_xs_id != 2);
 }
 
 int
