@@ -3,6 +3,40 @@
 We are pleased to announce the release of DAOS version 2.4.
 
 
+## DAOS Version 2.4.1 (2024-01-19)
+
+### Updates in this Release
+
+The DAOS 2.4.1 release contains the following updates on top of DAOS 2.4.0:
+
+* Operating System support for SLES 15.5 and Leap 15.5.
+
+* Operating System support for EL8.8 (RHEL, Rocky Linux, Alma Linux).
+
+* MLNX\_OFED Version 23.04 has been validated on InfiniBand fabrics.
+
+* The [UCX](https://docs.daos.io/v2.4/admin/ucx/) provider support on
+  InfiniBand fabrics has been expanded to include `ucx+ud_x`,
+  which is now the recommended provider for large InfiniBand fabrics.
+
+* The following prerequisite software packages that are included
+  in the DAOS RPM builds have been updated with DAOS 2.4.1:
+
+  - Argobots has been updated to 1.1-3
+  - DPDK has been updated to 21.11.2-2
+  - Libfabric has been updated to 1.19.0-1
+  - Mercury has been updated to 2.3.1-2
+  - Raft has been updated to 0.10.1-2
+  - SPDK has been update to 22.01.2-5
+
+### Bug fixes
+
+The DAOS 2.4.1 release includes fixes for several defects.
+For details, please refer to the Github
+[release/2.4 commit history](https://github.com/daos-stack/daos/commits/release/2.4)
+and the associated [Jira tickets](https://jira.daos.io/) as stated in the commit messages.
+
+
 ## DAOS Version 2.4.0 (2023-09-22)
 
 ### General Support
