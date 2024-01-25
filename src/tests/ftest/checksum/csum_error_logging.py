@@ -72,7 +72,7 @@ class CsumErrorLog(DaosCoreBase):
                 if not device['tgt_ids']:
                     self.log_step('Skipping device without targets on {}'.format(device['uuid']))
                     continue
-                if device['roles'] and not int(device['role_bits']) & 1:
+                if device['roles'] != "NA" and not int(device['role_bits']) & 1:
                     self.log_step(
                         'Skipping {} device without data on {}'.format(
                             device['role_bits'], device['uuid']))
