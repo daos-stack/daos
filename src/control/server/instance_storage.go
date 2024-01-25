@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -118,7 +118,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 
 	if !needsMetaFormat && !needsScmFormat {
 		ei.log.Debugf("instance %d: no SCM format required; checking for superblock", idx)
-		needsSuperblock, err := ei.NeedsSuperblock()
+		needsSuperblock, err := ei.needsSuperblock()
 		if err != nil {
 			ei.log.Errorf("instance %d: failed to check instance superblock: %s", idx, err)
 		}
@@ -167,17 +167,4 @@ func (ei *EngineInstance) logScmStorage() error {
 		humanize.IBytes(mp.TotalBytes), humanize.IBytes(mp.AvailBytes))
 
 	return nil
-}
-
-// ScanBdevTiers calls in to the private engine storage provider to scan bdev
-// tiers. Scan will avoid using any cached results if direct is set to true.
-func (ei *EngineInstance) ScanBdevTiers() ([]storage.BdevTierScanResult, error) {
-	isUp := ei.IsReady()
-	upDn := "down"
-	if isUp {
-		upDn = "up"
-	}
-	ei.log.Debugf("scanning engine-%d bdev tiers while engine is %s", ei.Index(), upDn)
-
-	return ei.storage.ScanBdevTiers(!isUp)
 }

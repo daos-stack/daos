@@ -1155,7 +1155,7 @@ process_pool_cb(d_list_t *rlink, void *arg)
 		for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
 			if (is_system_req(i))
 				continue;
-			tmp = kick[i] * MAX_KICKED_REQ_CNT / rpc_cnt;
+			tmp = (uint64_t)kick[i] * MAX_KICKED_REQ_CNT / rpc_cnt;
 			kick[i] = tmp;
 		}
 	}
@@ -1356,7 +1356,7 @@ req_need_reject(struct sched_req_attr *attr, struct sched_info *info)
 	 */
 	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
 		if (!is_system_req(i)) {
-			estimated_time += info->si_req_cnt[i] * req_latencys[i];
+			estimated_time += (uint64_t)info->si_req_cnt[i] * req_latencys[i];
 			req_num += info->si_req_cnt[i];
 		}
 	}
@@ -2094,7 +2094,9 @@ watchdog_enabled(struct dss_xstream *dx)
 	if (sched_unit_runtime_max == 0)
 		return false;
 
-	return dx->dx_xs_id == 0 || (sched_watchdog_all && dx->dx_main_xs);
+	/* Enable watchdog for system and swim xstream by default. */
+	return dx->dx_xs_id == 0 || dx->dx_xs_id == 1 ||
+			(sched_watchdog_all && dx->dx_xs_id != 2);
 }
 
 int

@@ -279,12 +279,23 @@ static int
 vos_meta_flush_post(daos_handle_t fh, int err)
 {
 	struct bio_desc	*biod = (struct bio_desc *)fh.cookie;
-	int		 rc;
 
-	rc = bio_iod_post(biod, err);
+	D_ASSERT(err == 0);
+	err = bio_iod_post(biod, err);
 	bio_iod_free(biod);
+	if (err) {
+		DL_ERROR(err, "Checkpointing flush failed.");
+		/* See the comment in vos_wal_commit() */
+		if (err != -DER_NVME_IO) {
+			D_ERROR("Checkpointing flush hit fatal error, kill engine...\n");
+			err = kill(getpid(), SIGKILL);
+			if (err != 0)
+				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
+		}
+		err = 0;
+	}
 
-	return rc;
+	return err;
 }
 
 static inline int
@@ -320,6 +331,27 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 
 	D_ASSERT(store && store->stor_priv != NULL);
 	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod);
+	if (rc) {
+		DL_ERROR(rc, "WAL commit failed.");
+		/*
+		 * WAL commit could fail due to faulty NVMe or other fatal errors like ENOMEM
+		 * or software bug.
+		 *
+		 * On NVMe I/O error, the NVMe device should have been marked as faulty (in
+		 * the BIO module), and a series actions will be automatically triggered to
+		 * take DOWN all impacted pool targets. We just suppress the error here since
+		 * the caller (DAV) can't cope with commit error.
+		 *
+		 * On other fatal error, the best we can do is killing the engine...
+		 */
+		if (rc != -DER_NVME_IO) {
+			D_ERROR("WAL commit hit fatal error, kill engine...\n");
+			rc = kill(getpid(), SIGKILL);
+			if (rc != 0)
+				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
+		}
+		rc = 0;
+	}
 
 	pool = store->vos_priv;
 	if (unlikely(pool == NULL))
@@ -1096,11 +1128,9 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 		pool->vp_dying = 1;
 		vos_pool_decref(pool); /* -1 for lookup */
 
-		D_WARN(DF_UUID": Open reference exists, pool destroy is deferred\n",
-		       DP_UUID(uuid));
-		VOS_NOTIFY_RAS_EVENTF(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
-				      NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
-				      "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
+		ras_notify_eventf(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
+				  NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
+				  "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
@@ -1356,6 +1386,12 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 			*poh = vos_pool2hdl(pool);
 			return 0;
 		}
+	}
+
+	rc = bio_xsctxt_health_check(vos_xsctxt_get());
+	if (rc) {
+		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
+		return rc;
 	}
 
 	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, metrics, &ph);

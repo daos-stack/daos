@@ -749,6 +749,48 @@ dmg_pool_create(const char *dmg_config_file,
 				D_GOTO(out, rc = -DER_NOMEM);
 			has_label = true;
 		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SCRUB_MODE);
+		if (entry != NULL) {
+			const char *scrub_str = NULL;
+
+			switch (entry->dpe_val) {
+			case DAOS_SCRUB_MODE_OFF:
+				scrub_str = "off";
+				break;
+			case DAOS_SCRUB_MODE_LAZY:
+				scrub_str = "lazy";
+				break;
+			case DAOS_SCRUB_MODE_TIMED:
+				scrub_str = "timed";
+				break;
+			default:
+				break;
+			}
+
+			if (scrub_str) {
+				args = cmd_push_arg(args, &argcount, "--properties=scrub:%s ",
+						    scrub_str);
+				if (args == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+			}
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENABLED);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=svc_ops_enabled:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SPACE_RB);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=space_rb:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
 	}
 
 	if (!has_label) {
@@ -848,6 +890,108 @@ dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp
 				args, argcount, &dmg_out);
 	if (rc != 0) {
 		D_ERROR("dmg failed\n");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool evict", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		DL_ERROR(rc, "dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *ace)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", "--entry=");
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", ace);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool update-acl", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		DL_ERROR(rc, "dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_delete_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *principal)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", "--principal=");
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", principal);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool delete-acl", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		DL_ERROR(rc, "dmg failed");
 		goto out_json;
 	}
 

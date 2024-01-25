@@ -40,7 +40,7 @@ class DmgStorageQuery(ControlTestBase):
                     for item, device in enumerate(sorted(tier.bdev_list.value)):
                         bdev_info.append(
                             {'bdev': device,
-                             'roles': ','.join(tier.bdev_roles.value or []),
+                             'roles': ','.join(tier.bdev_roles.value or ['NA']),
                              'tier': index,
                              'tgt_ids': list(range(item, targets, len(tier.bdev_list.value)))})
 
@@ -58,10 +58,10 @@ class DmgStorageQuery(ControlTestBase):
         """
         errors = 0
         for device in device_info:
-            if device['dev_state'] != state:
+            if device['ctrlr']['dev_state'] != state:
                 self.log.info(
                     "Device %s not found in the %s state: %s",
-                    device['uuid'], state, device['dev_state'])
+                    device['uuid'], state, device['ctrlr']['dev_state'])
                 errors += 1
         if errors:
             self.fail("Found {} device(s) not in the {} state".format(errors, state))
@@ -95,15 +95,16 @@ class DmgStorageQuery(ControlTestBase):
         self.log_step('Verify storage device targets and roles')
         errors = 0
         for device in device_info:
-            self.log.info('Verifying device %s', device['tr_addr'])
+            self.log.info('Verifying device %s', device['ctrlr']['pci_addr'])
             messages = []
             for bdev in expected_bdev_info:
-                # Convert the bdev address (e.g., '0000:85:05.5') to a VMD-style tr_addr (e.g.,
+                # Convert the bdev address (e.g., '0000:85:05.5') to a VMD-style pci_addr (e.g.,
                 # '850505:') by splitting the bdev address on either ':' or '.' and joining the
                 # last three elements as double digit hex characters.
-                bdev_tr_addr = '{:02x}{:02x}{:02x}:'.format(
+                bdev_pci_addr = '{:02x}{:02x}{:02x}:'.format(
                     *list(map(int, re.split(r'[:.]', bdev['bdev'])[1:], [16] * 3)))
-                if device['tr_addr'] == bdev['bdev'] or device['tr_addr'].startswith(bdev_tr_addr):
+                if device['ctrlr']['pci_addr'] == bdev['bdev'] or \
+                        device['ctrlr']['pci_addr'].startswith(bdev_pci_addr):
                     for key in ('tgt_ids', 'roles'):
                         messages.append(
                             '{}:   detected={}, expected={}'.format(key, device[key], bdev[key]))
@@ -186,24 +187,27 @@ class DmgStorageQuery(ControlTestBase):
         device_info = get_storage_query_device_info(self.dmg, health=True)
         for device in device_info:
             self.log.info("Health Info for %s:", device['uuid'])
-            for key in sorted(device['health']):
+            for key in sorted(device['ctrlr']['health_stats']):
                 if key == 'temperature':
-                    self.log.info("  %s: %s", key, device['health'][key])
+                    self.log.info("  %s: %s", key, device['ctrlr']['health_stats'][key])
                     # Verify temperature, convert from Kelvins to Celsius
-                    celsius = int(device['health'][key]) - 273.15
+                    celsius = int(device['ctrlr']['health_stats'][key]) - 273.15
                     if not 0.00 <= celsius <= 71.00:
                         self.log.info("    Out of range (0-71 C) temperature detected: %s", celsius)
                         errors.append(key)
                 elif key == 'temp_warn':
-                    self.log.info("  %s: %s", key, device['health'][key])
-                    if device['health'][key]:
-                        self.log.info("    Temperature warning detected: %s", device['health'][key])
+                    self.log.info("  %s: %s", key, device['ctrlr']['health_stats'][key])
+                    if device['ctrlr']['health_stats'][key]:
+                        self.log.info(
+                            "    Temperature warning detected: %s",
+                            device['ctrlr']['health_stats'][key])
                         errors.append(key)
                 elif 'temp_time' in key:
-                    self.log.info("  %s: %s", key, device['health'][key])
-                    if device['health'][key] != 0:
+                    self.log.info("  %s: %s", key, device['ctrlr']['health_stats'][key])
+                    if device['ctrlr']['health_stats'][key] != 0:
                         self.log.info(
-                            "    Temperature time issue detected: %s", device['health'][key])
+                            "    Temperature time issue detected: %s",
+                            device['ctrlr']['health_stats'][key])
                         errors.append(key)
         if errors:
             self.fail("Temperature error detected on SSDs: {}".format(list_to_str(errors)))

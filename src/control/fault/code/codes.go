@@ -50,6 +50,7 @@ const (
 	PrivilegedHelperNotPrivileged
 	PrivilegedHelperNotAvailable
 	PrivilegedHelperRequestFailed
+	SocketFileInUse
 )
 
 // generic storage fault codes

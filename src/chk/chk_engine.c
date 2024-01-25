@@ -2807,6 +2807,8 @@ chk_engine_cont_list(uint64_t gen, uuid_t pool_uuid, uuid_t **conts, uint32_t *c
 	struct dss_coll_ops		 coll_ops = { 0 };
 	struct chk_cont_rec		*ccr;
 	uuid_t				*uuids;
+	int				*exclude_tgts = NULL;
+	uint32_t			 exclude_tgt_nr = 0;
 	int				 i = 0;
 	int				 rc = 0;
 
@@ -2817,10 +2819,16 @@ chk_engine_cont_list(uint64_t gen, uuid_t pool_uuid, uuid_t **conts, uint32_t *c
 	if (rc != 0)
 		goto out;
 
-	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
-					&coll_args.ca_exclude_tgts_cnt);
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &exclude_tgts, &exclude_tgt_nr);
 	if (rc != 0)
 		goto out;
+
+	if (exclude_tgt_nr != 0) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
+	}
 
 	coll_args.ca_func_args = &coll_args.ca_stream_args;
 	coll_args.ca_aggregator = &aggregator;
@@ -2831,7 +2839,6 @@ chk_engine_cont_list(uint64_t gen, uuid_t pool_uuid, uuid_t **conts, uint32_t *c
 	coll_ops.co_reduce_arg_free = chk_engine_cont_list_free;
 
 	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
-	D_FREE(coll_args.ca_exclude_tgts);
 
 out:
 	if (rc == 0 && aggregator.ccla_count > 0) {
@@ -2853,6 +2860,8 @@ out:
 	}
 
 	chk_engine_cont_list_fini(&aggregator);
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 
 	return rc;
 }
