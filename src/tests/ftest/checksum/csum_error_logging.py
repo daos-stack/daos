@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -72,7 +72,7 @@ class CsumErrorLog(DaosCoreBase):
                 if not device['tgt_ids']:
                     self.log_step('Skipping device without targets on {}'.format(device['uuid']))
                     continue
-                if not int(device['role_bits']) & 1:
+                if (int(device['role_bits']) > 0) and not int(device['role_bits']) & 1:
                     self.log_step(
                         'Skipping {} device without data on {}'.format(
                             device['role_bits'], device['uuid']))
