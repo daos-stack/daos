@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1241,9 +1241,10 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	struct json_object	*storage_map = NULL;
 	struct json_object	*smd_info = NULL;
 	struct json_object	*storage_info = NULL;
-	struct json_object	*health_info = NULL;
+	struct json_object       *health_stats = NULL;
 	struct json_object	*devices = NULL;
 	struct json_object	*dev_info = NULL;
+	struct json_object       *ctrlr_info   = NULL;
 	struct json_object	*tmp = NULL;
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			argcount = 0;
@@ -1290,10 +1291,13 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 		}
 
 		dev_info = json_object_array_get_idx(devices, 0);
-		json_object_object_get_ex(dev_info, "health", &health_info);
-		if (health_info != NULL) {
-			json_object_object_get_ex(health_info, stats,
-						  &tmp);
+		if (!json_object_object_get_ex(dev_info, "ctrlr", &ctrlr_info)) {
+			D_ERROR("unable to extract ctrlr details from JSON\n");
+			D_GOTO(out_json, rc = -DER_INVAL);
+		}
+		json_object_object_get_ex(ctrlr_info, "health_stats", &health_stats);
+		if (health_stats != NULL) {
+			json_object_object_get_ex(health_stats, stats, &tmp);
 			strcpy(stats, json_object_to_json_string(tmp));
 		}
 	}
