@@ -85,8 +85,7 @@ struct cont_svc {
 	rdb_path_t		cs_root;	/* root KVS */
 	rdb_path_t		cs_uuids;	/* container UUIDs KVS */
 	rdb_path_t		cs_conts;	/* container KVS */
-	rdb_path_t		cs_hdls;	/* container handle KVS */
-	rdb_path_t              cs_ops;         /* metadata ops KVS */
+	rdb_path_t              cs_hdls;        /* container handle KVS */
 	struct ds_pool	       *cs_pool;
 
 	/* Manage the EC aggregation epoch */

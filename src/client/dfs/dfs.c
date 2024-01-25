@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -3416,13 +3416,10 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 lookup_rel_path_loop:
 
 		/*
-		 * Open the directory object one level up.
-		 * Since fetch_entry does not support ".",
-		 * we can't support ".." as the last entry,
-		 * nor can we support "../.." because we don't
-		 * have parent.parent_oid and parent.mode.
-		 * For now, represent this partial state with
-		 * parent_fully_valid.
+		 * Open the directory object one level up.  Since fetch_entry does not support ".",
+		 * we can't support ".." as the last entry, nor can we support "../.." because we
+		 * don't have parent.parent_oid and parent.mode.  For now, represent this partial
+		 * state with parent_fully_valid.
 		 */
 		parent_fully_valid = true;
 		if (strcmp(token, "..") == 0) {
@@ -3508,15 +3505,23 @@ lookup_rel_path_loop:
 			}
 
 			if (stbuf) {
-				daos_size_t size;
+				daos_array_stbuf_t array_stbuf = {0};
 
-				rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size, NULL);
+				rc = daos_array_stat(obj->oh, DAOS_TX_NONE, &array_stbuf, NULL);
 				if (rc) {
 					daos_array_close(obj->oh, NULL);
 					D_GOTO(err_obj, rc = daos_der2errno(rc));
 				}
-				stbuf->st_size = size;
+
+				stbuf->st_size   = array_stbuf.st_size;
 				stbuf->st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
+
+				rc = update_stbuf_times(entry, array_stbuf.st_max_epoch, stbuf,
+							NULL);
+				if (rc) {
+					daos_array_close(obj->oh, NULL);
+					D_GOTO(err_obj, rc);
+				}
 			}
 			break;
 		}
@@ -3617,14 +3622,28 @@ lookup_rel_path_loop:
 		}
 
 		obj->d.chunk_size = entry.chunk_size;
-		obj->d.oclass = entry.oclass;
-		if (stbuf)
-			stbuf->st_size = sizeof(entry);
-
+		obj->d.oclass     = entry.oclass;
 		oid_cp(&parent.oid, obj->oid);
 		oid_cp(&parent.parent_oid, obj->parent_oid);
 		parent.oh = obj->oh;
 		parent.mode = entry.mode;
+
+		if (stbuf) {
+			daos_epoch_t ep;
+
+			rc = daos_obj_query_max_epoch(obj->oh, DAOS_TX_NONE, &ep, NULL);
+			if (rc) {
+				daos_obj_close(obj->oh, NULL);
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			}
+
+			rc = update_stbuf_times(entry, ep, stbuf, NULL);
+			if (rc) {
+				daos_obj_close(obj->oh, NULL);
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			}
+			stbuf->st_size = sizeof(entry);
+		}
 	}
 
 	if (mode)
@@ -3632,16 +3651,49 @@ lookup_rel_path_loop:
 
 	if (stbuf) {
 		if (is_root) {
+			daos_epoch_t ep;
+
+			/** refresh possibly stale root stbuf */
+			rc = fetch_entry(dfs->layout_v, dfs->super_oh, DAOS_TX_NONE, "/", 1, false,
+					 &exists, &entry, 0, NULL, NULL, NULL);
+			if (rc) {
+				D_ERROR("fetch_entry() failed: %d (%s)\n", rc, strerror(rc));
+				D_GOTO(err_obj, rc);
+			}
+
+			if (!exists || !S_ISDIR(entry.mode)) {
+				/** something really bad happened! */
+				D_ERROR("Root object corrupted!");
+				D_GOTO(err_obj, rc = EIO);
+			}
+
+			if (mode)
+				*mode = entry.mode;
+			dfs->root_stbuf.st_mode = entry.mode;
+			dfs->root_stbuf.st_uid  = entry.uid;
+			dfs->root_stbuf.st_gid  = entry.gid;
+
+			rc = daos_obj_query_max_epoch(dfs->root.oh, DAOS_TX_NONE, &ep, NULL);
+			if (rc)
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+
+			/** object was updated since creation */
+			rc = update_stbuf_times(entry, ep, &dfs->root_stbuf, NULL);
+			if (rc)
+				D_GOTO(err_obj, rc);
+			if (tspec_gt(dfs->root_stbuf.st_ctim, dfs->root_stbuf.st_mtim)) {
+				dfs->root_stbuf.st_atim.tv_sec  = entry.ctime;
+				dfs->root_stbuf.st_atim.tv_nsec = entry.ctime_nano;
+			} else {
+				dfs->root_stbuf.st_atim.tv_sec  = entry.mtime;
+				dfs->root_stbuf.st_atim.tv_nsec = entry.mtime_nano;
+			}
 			memcpy(stbuf, &dfs->root_stbuf, sizeof(struct stat));
 		} else {
 			stbuf->st_nlink = 1;
 			stbuf->st_mode = obj->mode;
 			stbuf->st_uid = entry.uid;
-			stbuf->st_gid = entry.gid;
-			stbuf->st_mtim.tv_sec = entry.mtime;
-			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
-			stbuf->st_ctim.tv_sec = entry.ctime;
-			stbuf->st_ctim.tv_nsec = entry.ctime_nano;
+			stbuf->st_gid   = entry.gid;
 			if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
 				stbuf->st_atim.tv_sec = entry.ctime;
 				stbuf->st_atim.tv_nsec = entry.ctime_nano;
@@ -5408,11 +5460,12 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	bool			set_size = false;
 	bool			set_mtime = false;
 	bool			set_ctime = false;
-	int			i = 0;
-	size_t			len;
-	int			rc;
+	int                     i = 0, hlc_recx_idx = 0;
+	size_t                  len;
 	uint64_t		obj_hlc = 0;
 	struct stat		rstat = {};
+	daos_array_stbuf_t      array_stbuf = {0};
+	int                     rc;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -5509,6 +5562,10 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		d_iov_set(&sg_iovs[i], &obj_hlc, sizeof(uint64_t));
 		recxs[i].rx_idx = HLC_IDX;
 		recxs[i].rx_nr = sizeof(uint64_t);
+		if (flags & DFS_SET_ATTR_SIZE) {
+			/** we need to update this again after the set size */
+			hlc_recx_idx = i;
+		}
 		i++;
 
 		set_mtime = true;
@@ -5558,38 +5615,41 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 		rstat.st_blocks = (stbuf->st_size + (1 << 9) - 1) >> 9;
 		rstat.st_size = stbuf->st_size;
 
-		/* mtime and ctime need to be updated too only if not set earlier */
-		if (!set_mtime || !set_ctime) {
-			daos_array_stbuf_t	array_stbuf = {0};
+		/**
+		 * if mtime is set, we need to to just update the hlc on the entry. if mtime and/or
+		 * ctime were not set, we need to update the stat buf returned. both cases require
+		 * an array stat for the hlc.
+		 */
+		/** TODO - need an array API to just stat the max epoch without size */
+		rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
+		if (rc)
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
 
-			/** TODO - need an array API to just stat the max epoch without size */
-			rc = daos_array_stat(obj->oh, th, &array_stbuf, NULL);
-			if (rc)
+		if (!set_mtime) {
+			rc = d_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_mtim);
+			if (rc) {
+				D_ERROR("d_hlc2timespec() failed " DF_RC "\n", DP_RC(rc));
 				D_GOTO(out_obj, rc = daos_der2errno(rc));
-
-			if (!set_mtime) {
-				rc = d_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_mtim);
-				if (rc) {
-					D_ERROR("d_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
-					D_GOTO(out_obj, rc = daos_der2errno(rc));
-				}
 			}
+		} else {
+			D_ASSERT(hlc_recx_idx > 0);
+			D_ASSERT(recxs[hlc_recx_idx].rx_idx == HLC_IDX);
+			d_iov_set(&sg_iovs[hlc_recx_idx], &array_stbuf.st_max_epoch,
+				  sizeof(uint64_t));
+		}
 
-			if (!set_ctime) {
-				rc = d_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_ctim);
-				if (rc) {
-					D_ERROR("d_hlc2timespec() failed "DF_RC"\n", DP_RC(rc));
-					D_GOTO(out_obj, rc = daos_der2errno(rc));
-				}
+		if (!set_ctime) {
+			rc = d_hlc2timespec(array_stbuf.st_max_epoch, &rstat.st_ctim);
+			if (rc) {
+				D_ERROR("d_hlc2timespec() failed " DF_RC "\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
 			}
 		}
 	}
 
 	iod.iod_nr = i;
-
 	if (i == 0)
 		D_GOTO(out_stat, rc = 0);
-
 	sgl.sg_nr	= i;
 	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= &sg_iovs[0];
