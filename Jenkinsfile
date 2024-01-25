@@ -1223,7 +1223,11 @@ pipeline {
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
-                                test_function: 'runTestFunctionalV2'))
+                                test_function: 'runTestFunctionalV2',
+                                ftest_arg: getFunctionalArgs(
+                                    pragma_suffix: '-hw-medium-ucx-provider',
+                                    default_nvme: 'auto:-3DNAND',
+                                    provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'))['ftest_arg']))
                     }
                     post {
                         always {
