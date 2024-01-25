@@ -6,7 +6,7 @@
 import os
 
 from dfuse_test_base import DfuseTestBase
-from util.run_utils import run_remote
+from run_utils import run_remote
 
 
 class Cmd(DfuseTestBase):
