@@ -4564,7 +4564,8 @@ obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
 			}
 			if (iov->iov_len > iov->iov_buf_len) {
 				DL_ERROR(-DER_INVAL,
-					 "invalid args, iov_len " DF_U64 ", iov_buf_len " DF_U64,
+					 "invalid args, iov_len " DF_U64 ", iov_buf_len " DF_U64
+					 "\n",
 					 iov->iov_len, iov->iov_buf_len);
 				return -DER_INVAL;
 			} else if (iov->iov_len < iov->iov_buf_len) {
@@ -4573,7 +4574,7 @@ obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
 			count++;
 		}
 		if (count == 0 && iod->iod_size != DAOS_REC_ANY) {
-			DL_ERROR(-DER_INVAL, "invalid args, sgl contained only 0 length entries");
+			DL_ERROR(-DER_INVAL, "invalid args, sgl contained only 0 length entries\n");
 			return -DER_INVAL;
 		}
 	}
