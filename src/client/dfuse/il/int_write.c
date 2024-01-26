@@ -92,7 +92,7 @@ ioil_do_pwritev(const struct iovec *iov, int count, off_t position, struct fd_en
 		return -1;
 	}
 
-	for (i = 0, new_count = 0;; i < count; i++) {
+	for (i = 0, new_count = 0; i < count; i++) {
 		/** See DAOS-15089. This is a workaround */
 		if (iov[i].iov_len == 0)
 			continue;
