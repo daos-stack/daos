@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1590,10 +1590,18 @@ placement_handles_multiple_states(void **state)
 	 * Compute find_reint() using the correct version of rebuild which
 	 * would have launched when reintegration started
 	 *
-	 * find_reint() should find two shards to move at this version, one for
-	 * reint(UP), one for rebuild(DOWN).
+	 * find_reint() should find only singe shard to be reintegrate, since
+	 * it use the version after reint.
 	 */
 	ctx.ver = ver_after_reint;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.reint.out_nr, 1);
+
+	ctx.ver = ver_after_fail;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.reint.out_nr, 2);
+
+	ctx.ver = ver_after_drain;
 	jtc_scan(&ctx);
 	assert_int_equal(ctx.reint.out_nr, 3);
 
@@ -1607,7 +1615,7 @@ placement_handles_multiple_states(void **state)
 	 */
 	ctx.ver = ver_after_fail;
 	jtc_scan(&ctx);
-	assert_int_equal(ctx.rebuild.out_nr, 2);
+	assert_int_equal(ctx.rebuild.out_nr, 1);
 
 	/* Complete the rebuild */
 	ctx.ver = ver_after_reint_complete; /* Restore the version first */

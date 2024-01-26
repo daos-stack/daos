@@ -1,6 +1,6 @@
 /**
  *
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,11 @@
 #include <daos/pool_map.h>
 #include <isa-l.h>
 
+/* NB: this function is to check if the component should be
+ * included in jump hash layout generation process, so those
+ * targets, which are in NEW status or being added afterwards
+ * should be excluded.
+ */
 static bool
 is_excluded_comp(struct pool_component *comp, uint32_t allow_version,
 		 enum layout_gen_mode gen_mode)
