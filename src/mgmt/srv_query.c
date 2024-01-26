@@ -338,7 +338,7 @@ ctrlr_reset_str_fields(Ctl__NvmeController *ctrlr)
 static int
 add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
 {
-	int rc = 0;
+	int rc;
 
 	rc = copy_str2ctrlr(&ctrlr->pci_addr, dev_info->bdi_traddr);
 	if (rc != 0)
@@ -363,32 +363,6 @@ add_ctrlr_details(Ctl__NvmeController *ctrlr, struct bio_dev_info *dev_info)
 	D_DEBUG(DB_MGMT, "ctrlr details: '%s' '%s' '%s' '%s' '%s' '%s' '%d'\n", ctrlr->pci_addr,
 		ctrlr->model, ctrlr->serial, ctrlr->fw_rev, ctrlr->vendor_id, ctrlr->pci_dev_type,
 		ctrlr->socket_id);
-
-	/* Populate NVMe namespace id and capacity */
-
-	if (dev_info->bdi_ctrlr->nss == NULL) {
-		D_ERROR("nss not initialized in bio_dev_info");
-		return -DER_INVAL;
-	}
-	D_ASSERT(dev_info->bdi_ctrlr->nss->next == NULL);
-
-	/* When describing a SMD, only one NVMe namespace is relevant */
-	D_ALLOC_ARRAY(ctrlr->namespaces, 1);
-	if (ctrlr->namespaces == NULL) {
-		return -DER_NOMEM;
-	}
-	D_ALLOC_PTR(ctrlr->namespaces[0]);
-	if (ctrlr->namespaces[0] == NULL) {
-		return -DER_NOMEM;
-	}
-	ctrlr->n_namespaces = 1;
-	ctl__nvme_controller__namespace__init(ctrlr->namespaces[0]);
-
-	ctrlr->namespaces[0]->id   = dev_info->bdi_ctrlr->nss->id;
-	ctrlr->namespaces[0]->size = dev_info->bdi_ctrlr->nss->size;
-
-	D_DEBUG(DB_MGMT, "ns id/size: '%d' '%ld'\n", ctrlr->namespaces[0]->id,
-		ctrlr->namespaces[0]->size);
 
 	return 0;
 }
@@ -452,6 +426,12 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		for (j = 0; j < dev_info->bdi_tgt_cnt; j++)
 			resp->devices[i]->tgt_ids[j] = dev_info->bdi_tgts[j];
 
+		if (dev_info->bdi_ctrlr == NULL) {
+			D_ERROR("ctrlr not initialized in bio_dev_info");
+			rc = -DER_INVAL;
+			break;
+		}
+
 		/* Populate NVMe controller details */
 
 		D_ALLOC_PTR(resp->devices[i]->ctrlr);
@@ -463,14 +443,40 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 		/* Set string fields to NULL to allow D_FREE to work as expected on cleanup */
 		ctrlr_reset_str_fields(resp->devices[i]->ctrlr);
 
-		if (dev_info->bdi_ctrlr != NULL) {
-			rc = add_ctrlr_details(resp->devices[i]->ctrlr, dev_info);
-			if (rc != 0)
-				break;
-			resp->devices[i]->ctrlr_namespace_id = dev_info->bdi_ctrlr->nss->id;
-		} else {
-			D_DEBUG(DB_MGMT, "ctrlr not initialized in bio_dev_info, unplugged?");
+		rc = add_ctrlr_details(resp->devices[i]->ctrlr, dev_info);
+		if (rc != 0)
+			break;
+
+		/* Populate NVMe namespace id and capacity */
+
+		if (dev_info->bdi_ctrlr->nss == NULL) {
+			D_ERROR("nss not initialized in bio_dev_info");
+			rc = -DER_INVAL;
+			break;
 		}
+		D_ASSERT(dev_info->bdi_ctrlr->nss->next == NULL);
+
+		/* When describing a SMD, only one NVMe namespace is relevant */
+		D_ALLOC_ARRAY(resp->devices[i]->ctrlr->namespaces, 1);
+		if (resp->devices[i]->ctrlr->namespaces == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		D_ALLOC_PTR(resp->devices[i]->ctrlr->namespaces[0]);
+		if (resp->devices[i]->ctrlr->namespaces[0] == NULL) {
+			rc = -DER_NOMEM;
+			break;
+		}
+		resp->devices[i]->ctrlr->n_namespaces = 1;
+		ctl__nvme_controller__namespace__init(resp->devices[i]->ctrlr->namespaces[0]);
+
+		resp->devices[i]->ctrlr->namespaces[0]->id   = dev_info->bdi_ctrlr->nss->id;
+		resp->devices[i]->ctrlr->namespaces[0]->size = dev_info->bdi_ctrlr->nss->size;
+		resp->devices[i]->ctrlr_namespace_id         = dev_info->bdi_ctrlr->nss->id;
+
+		D_DEBUG(DB_MGMT, "ns id/size: '%d' '%ld'\n",
+			resp->devices[i]->ctrlr->namespaces[0]->id,
+			resp->devices[i]->ctrlr->namespaces[0]->size);
 
 		/* Populate NVMe device state */
 
@@ -478,6 +484,7 @@ ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp)
 			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__UNPLUGGED;
 			goto next_dev;
 		}
+
 		if ((dev_info->bdi_flags & NVME_DEV_FL_FAULTY) != 0)
 			resp->devices[i]->ctrlr->dev_state = CTL__NVME_DEV_STATE__EVICTED;
 		else if ((dev_info->bdi_flags & NVME_DEV_FL_INUSE) == 0)

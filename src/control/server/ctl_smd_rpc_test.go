@@ -27,7 +27,6 @@ const (
 	devStateNew    = ctlpb.NvmeDevState_NEW
 	devStateNormal = ctlpb.NvmeDevState_NORMAL
 	devStateFaulty = ctlpb.NvmeDevState_EVICTED
-	devStateUnplug = ctlpb.NvmeDevState_UNPLUGGED
 
 	ledStateIdentify = ctlpb.LedState_QUICK_BLINK
 	ledStateNormal   = ctlpb.LedState_OFF
@@ -268,15 +267,6 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 										LedState: ledStateFault,
 									},
 								},
-								{
-									Uuid:   test.MockUUID(2),
-									TgtIds: []int32{},
-									Ctrlr: &ctlpb.NvmeController{
-										PciAddr:  "0000:8b:00.0",
-										DevState: devStateUnplug,
-										LedState: ledStateUnknown,
-									},
-								},
 							},
 						},
 					},
@@ -286,7 +276,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevice{
 								{
-									Uuid:   test.MockUUID(3),
+									Uuid:   test.MockUUID(2),
 									TgtIds: []int32{0, 1, 2},
 									Ctrlr: &ctlpb.NvmeController{
 										PciAddr:  "0000:da:00.0",
@@ -295,7 +285,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 									},
 								},
 								{
-									Uuid:   test.MockUUID(4),
+									Uuid:   test.MockUUID(3),
 									TgtIds: []int32{3, 4, 5},
 									Ctrlr: &ctlpb.NvmeController{
 										PciAddr:  "0000:db:00.0",
@@ -330,22 +320,13 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 									LedState: ledStateFault,
 								},
 							},
-							{
-								Uuid:   test.MockUUID(2),
-								TgtIds: []int32{},
-								Ctrlr: &ctlpb.NvmeController{
-									PciAddr:  "0000:8b:00.0",
-									DevState: devStateUnplug,
-									LedState: ledStateUnknown,
-								},
-							},
 						},
 						Rank: uint32(0),
 					},
 					{
 						Devices: []*ctlpb.SmdDevice{
 							{
-								Uuid:   test.MockUUID(3),
+								Uuid:   test.MockUUID(2),
 								TgtIds: []int32{0, 1, 2},
 								Ctrlr: &ctlpb.NvmeController{
 									PciAddr:  "0000:da:00.0",
@@ -354,7 +335,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 								},
 							},
 							{
-								Uuid:   test.MockUUID(4),
+								Uuid:   test.MockUUID(3),
 								TgtIds: []int32{3, 4, 5},
 								Ctrlr: &ctlpb.NvmeController{
 									PciAddr:  "0000:db:00.0",
