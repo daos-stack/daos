@@ -377,6 +377,7 @@ struct bio_xs_blobstore {
 	struct bio_blobstore	*bxb_blobstore;
 	/* All I/O contexts for this xstream blobstore */
 	d_list_t		 bxb_io_ctxts;
+	bool			 bxb_ready;
 };
 
 /* Per-xstream NVMe context */
@@ -392,6 +393,7 @@ struct bio_xs_context {
 struct bio_io_context {
 	d_list_t		 bic_link; /* link to bxb_io_ctxts */
 	struct spdk_blob	*bic_blob;
+	spdk_blob_id		 bic_blob_id;
 	struct bio_xs_blobstore	*bic_xs_blobstore;
 	struct bio_xs_context	*bic_xs_ctxt;
 	uint32_t		 bic_inflight_dmas;
@@ -657,11 +659,17 @@ int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
 /* bio_config.c */
 int
-    bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *roles,
-			  bool *vmd_enabled);
-int bio_set_hotplug_filter(const char *nvme_conf);
-int bio_read_accel_props(const char *nvme_conf);
-int bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr);
+bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *roles,
+		      bool *vmd_enabled);
+int
+bio_set_hotplug_filter(const char *nvme_conf);
+int
+bio_read_accel_props(const char *nvme_conf);
+int
+bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock_addr);
+int
+bio_read_auto_faulty_criteria(const char *nvme_conf, bool *enable, uint32_t *max_io_errs,
+			      uint32_t *max_csum_errs);
 int
 bio_decode_bdev_params(struct bio_dev_info *b_info, const void *json, int json_size);
 #endif /* __BIO_INTERNAL_H__ */
