@@ -343,6 +343,8 @@ func bdevScanEngine(ctx context.Context, engine Engine, req *ctlpb.ScanNvmeReq) 
 		return nil, err
 	}
 
+	// Compare number of VMD domain addresses rather than the number of backing devices found
+	// behind it as the domain is what is specified in the server config file.
 	nrBdevs, err := getEffCtrlrCount(resp.Ctrlrs)
 	if err != nil {
 		return nil, err
@@ -370,7 +372,7 @@ func bdevScanEngine(ctx context.Context, engine Engine, req *ctlpb.ScanNvmeReq) 
 			nrCfgBdevs, nrBdevs)
 	}
 
-	// Filter unusable devices from response.
+	// Filter devices in an unusable state from the response.
 	outCtrlrs := make([]*ctlpb.NvmeController, 0, len(resp.Ctrlrs))
 	for _, c := range resp.Ctrlrs {
 		if c.IsScannable() {
