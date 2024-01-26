@@ -193,7 +193,6 @@ struct mmap_obj {
 
 struct fd_dup2 {
 	int fd_src, fd_dest;
-//	bool dest_closed;
 };
 
 /* Add the data structure for statx_timestamp and statx
