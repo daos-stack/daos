@@ -4542,7 +4542,7 @@ obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
 	d_sg_list_t	*sg, *sg_dup;
 	d_iov_t		*iov, *iov_dup;
 	bool		 dup = false;
-	uint32_t         i, j, count;
+	uint32_t	 i, j;
 	int		 rc = 0;
 
 	sgls = args->sgls;
@@ -4552,30 +4552,16 @@ obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
 	for (i = 0; i < args->nr; i++) {
 		sg = &sgls[i];
 		iod = &args->iods[i];
-		for (j = 0, count = 0; j < sg->sg_nr; j++) {
+		for (j = 0; j < sg->sg_nr; j++) {
 			iov = &sg->sg_iovs[j];
-			if (iov->iov_len == 0) {
-				/** POSIX supports passing 0 length entries in
-				 * iov.  Since lower layers don't support this,
-				 * let's remove them when we duplicate
-				 */
-				dup = true;
-				continue;
-			}
-			if (iov->iov_len > iov->iov_buf_len) {
-				DL_ERROR(-DER_INVAL,
-					 "invalid args, iov_len " DF_U64 ", iov_buf_len " DF_U64
-					 "\n",
-					 iov->iov_len, iov->iov_buf_len);
+			if (iov->iov_len > iov->iov_buf_len ||
+			    (iov->iov_len == 0 && iod->iod_size != DAOS_REC_ANY)) {
+				D_ERROR("invalid args, iov_len "DF_U64", iov_buf_len "DF_U64"\n",
+					iov->iov_len, iov->iov_buf_len);
 				return -DER_INVAL;
 			} else if (iov->iov_len < iov->iov_buf_len) {
 				dup = true;
 			}
-			count++;
-		}
-		if (count == 0 && iod->iod_size != DAOS_REC_ANY) {
-			DL_ERROR(-DER_INVAL, "invalid args, sgl contained only 0 length entries\n");
-			return -DER_INVAL;
 		}
 	}
 	if (dup == false)
@@ -4592,15 +4578,12 @@ obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
 		if (rc)
 			goto failed;
 
-		for (j = 0, count = 0; j < sg_dup->sg_nr; j++) {
+		for (j = 0; j < sg_dup->sg_nr; j++) {
+			iov_dup = &sg_dup->sg_iovs[j];
 			iov = &sg->sg_iovs[j];
-			if (iov->iov_len == 0)
-				continue;
-			iov_dup              = &sg_dup->sg_iovs[count++];
 			*iov_dup = *iov;
 			iov_dup->iov_buf_len = iov_dup->iov_len;
 		}
-		sg_dup->sg_nr = count;
 	}
 	obj_auxi->reasb_req.orr_usgls = sgls;
 	obj_auxi->rw_args.sgls_dup = sgls_dup;
