@@ -94,6 +94,7 @@ ioil_do_preadv(const struct iovec *iov, int count, off_t position, struct fd_ent
 	}
 
 	for (i = 0, new_count = 0; i < count; i++) {
+		/** See DAOS-15089. This is a workaround */
 		if (iov[i].iov_len == 0)
 			continue;
 		d_iov_set(&diov[new_count++], iov[i].iov_base, iov[i].iov_len);
