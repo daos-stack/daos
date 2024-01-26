@@ -82,8 +82,9 @@ ioil_do_pwritev(const struct iovec *iov, int count, off_t position, struct fd_en
 	d_iov_t    *diov;
 	d_sg_list_t sgl         = {};
 	size_t      total_write = 0;
-	int     i;
+	int         i;
 	int         rc;
+	int         new_count;
 
 	D_ALLOC_ARRAY(diov, count);
 	if (diov == NULL) {
@@ -91,12 +92,14 @@ ioil_do_pwritev(const struct iovec *iov, int count, off_t position, struct fd_en
 		return -1;
 	}
 
-	for (i = 0; i < count; i++) {
-		d_iov_set(&diov[i], iov[i].iov_base, iov[i].iov_len);
+	for (i = 0, new_count = 0;; i < count; i++) {
+		if (iov[i].iov_len == 0)
+			continue;
+		d_iov_set(&diov[new_count++], iov[i].iov_base, iov[i].iov_len);
 		total_write += iov[i].iov_len;
 	}
 
-	sgl.sg_nr   = count;
+	sgl.sg_nr   = new_count;
 	sgl.sg_iovs = diov;
 
 	rc = ioil_do_writesgl(&sgl, total_write, position, entry, errcode);

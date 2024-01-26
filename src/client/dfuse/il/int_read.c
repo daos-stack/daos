@@ -82,9 +82,10 @@ ioil_do_preadv(const struct iovec *iov, int count, off_t position, struct fd_ent
 {
 	d_iov_t    *diov;
 	d_sg_list_t sgl        = {};
-	ssize_t total_read = 0;
-	int     i;
+	ssize_t     total_read = 0;
+	int         i;
 	int         rc;
+	int         new_count;
 
 	D_ALLOC_ARRAY(diov, count);
 	if (diov == NULL) {
@@ -92,12 +93,14 @@ ioil_do_preadv(const struct iovec *iov, int count, off_t position, struct fd_ent
 		return -1;
 	}
 
-	for (i = 0; i < count; i++) {
-		d_iov_set(&diov[i], iov[i].iov_base, iov[i].iov_len);
+	for (i = 0, new_count = 0; i < count; i++) {
+		if (iov[i].iov_len == 0)
+			continue;
+		d_iov_set(&diov[new_count++], iov[i].iov_base, iov[i].iov_len);
 		total_read += iov[i].iov_len;
 	}
 
-	sgl.sg_nr   = count;
+	sgl.sg_nr   = new_count;
 	sgl.sg_iovs = diov;
 
 	rc = read_bulksgl(&sgl, total_read, position, entry, errcode);
