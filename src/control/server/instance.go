@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -274,6 +274,11 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 }
 
 func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
+	if ei.IsReady() {
+		ei.log.Debugf("SetupRank called on an already set-up instance %d", ei.Index())
+		return nil
+	}
+
 	if err := ei.callSetRank(ctx, rank, map_version); err != nil {
 		return errors.Wrap(err, "SetRank failed")
 	}
@@ -365,4 +370,8 @@ func (ei *EngineInstance) callSetUp(ctx context.Context) error {
 
 func (ei *EngineInstance) Debugf(format string, args ...interface{}) {
 	ei.log.Debugf(format, args...)
+}
+
+func (ei *EngineInstance) Tracef(format string, args ...interface{}) {
+	ei.log.Tracef(format, args...)
 }
