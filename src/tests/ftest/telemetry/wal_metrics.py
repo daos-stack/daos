@@ -1,26 +1,38 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
-from interface_utils import CommonTI, IorTI, ServerTI, TelemetryTI
+from ior_utils import write_data
+from telemetry_test_base import TestWithTelemetry
 from test_utils_pool import add_pool
 
 
-class WalMetrics(CommonTI, IorTI, ServerTI, TelemetryTI):
+class WalMetrics(TestWithTelemetry):
     """Tests for new specific metrics to track activity of md_on_ssd.
 
     :avocado: recursive
     """
 
+    def verify_metrics(self, metrics, **kwargs):
+        """Collect and verify telemetry metrics data.
+
+        Args:
+            details (str): description of the telemetry data
+            metrics (list): list of metric names to collect and verify
+            kwargs (dict): optional 'min_value' and 'max_value' arguments for verify_metric_value()
+        """
+        kwargs['metrics_data'] = self.telemetry.get_nvme_metrics(metrics)
+        return self.telemetry.verify_metric_value(**kwargs)
+
     def test_wal_commit_metrics(self):
         """JIRA ID: DAOS-11626.
 
         The WAL commit metrics is per-engine metrics in 'dmabuff', it includes 'wal_sz', 'wal_qd'
-        and 'wal_waiters' today (see dma_metrics_init() in src/bio/bio_buffer.c). WAL replay
-        metrics are only updated when open a pool on engine start (or when creating a pool).
+        and 'wal_waiters' today (see dma_metrics_init() in src/bio/bio_buffer.c). WAL commit metrics
+        are updated on each local transaction (for example, transaction for a update request, etc.)
 
         Test steps:
         1) Verify WAL commit metrics are 0 before pool creation
@@ -32,19 +44,28 @@ class WalMetrics(CommonTI, IorTI, ServerTI, TelemetryTI):
         :avocado: tags=telemetry
         :avocado: tags=WalMetrics,test_wal_commit_metrics
         """
+        ppn = self.params.get('ppn', '/run/ior_write/*', 1)
         wal_metrics = [item for item in self.telemetry.ENGINE_DMABUFF_METRICS if '_wal_' in item]
-        verify_kwargs = {'min_value': 0, 'max_value': 0}
-        verify_kwargs = {'min_value': 1}
+        verify_after = {'min_value': 1}
         if not self.server_managers[0].manager.job.using_control_metadata:
             # WAL commit metrics are not expected to increase when not using MD on SSD
-            verify_kwargs = {'min_value': 0, 'max_value': 0}
-
-        self.verify_metrics('before pool creation', wal_metrics, verify_kwargs)
+            verify_after = {'min_value': 0, 'max_value': 0}
 
         self.log_step('Creating a pool (dmg pool create)')
-        add_pool(self)
+        pool = add_pool(self)
+        self.log_step('Creating a container (daos container create)')
+        container = self.get_container(pool)
 
-        self.verify_metrics('after pool creation', wal_metrics, verify_kwargs)
+        self.log_step('Verify WAL commit metrics before writing data (dmg telemetry metrics query)')
+        if not self.verify_metrics(wal_metrics, min_value=0, max_value=0):
+            self.fail('Unexpected WAL commit metrics before pool creation')
+
+        self.log_step('Writing data (ior)')
+        write_data(self, container, ppn)
+
+        self.log_step('Verify WAL commit metrics after writing data (dmg telemetry metrics query)')
+        if not self.verify_metrics('after pool creation', wal_metrics, **verify_after):
+            self.fail('Unexpected WAL commit metrics after pool creation')
 
         self.log_step('Test passed')
 
@@ -53,22 +74,35 @@ class WalMetrics(CommonTI, IorTI, ServerTI, TelemetryTI):
 
         The WAL replay metrics is per-pool metrics in 'vos_rehydration' under each pool folder, it
         includes 'replay_size', 'replay_time', 'replay_entries', 'replay_count' and
-        'replay_transactions' (see vos_metrics_alloc() in src/vos/vos_common.c). WAL commit metrics
-        are updated on each local transaction (for example, transaction for a update request, etc.)
+        'replay_transactions' (see vos_metrics_alloc() in src/vos/vos_common.c). WAL replay
+        metrics are only updated when open a pool on engine start (or when creating a pool).
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=telemetry
         :avocado: tags=WalMetrics,test_wal_reply_metrics
         """
-        ppn = self.params.get('ppn', '/run/ior_write/*', 1)
-        container = self.create_container()
-        self.write_data(container, ppn)
-        self.stop_engines()
-        self.restart_engines()
+        wal_metrics = self.telemetry.ENGINE_POOL_VOS_REHYDRATION_METRICS
+        verify_after = {'min_value': 1}
+        if not self.server_managers[0].manager.job.using_control_metadata:
+            # WAL commit metrics are not expected to increase when not using MD on SSD
+            verify_after = {'min_value': 0, 'max_value': 0}
 
-        self.telemetry.get_pool_metrics()
-        self.telemetry.list_metrics()
+        self.log_step('Verify WAL reply metrics before pool creation (dmg telemetry metrics query)')
+        if not self.verify_metrics(wal_metrics, min_value=0, max_value=0):
+            self.fail('Unexpected WAL reply metrics before pool creation')
+
+        self.log_step('Creating a pool (dmg pool create)')
+        add_pool(self)
+
+        self.log_step('Verify WAL reply metrics after pool creation (dmg telemetry metrics query)')
+        if not self.verify_metrics('after pool creation', wal_metrics, **verify_after):
+            self.fail('Unexpected WAL reply metrics after pool creation')
+
+        # write_data(self, container, ppn)
+        # self.stop_engines()
+        # self.restart_engines()
+
         self.log_step('Test passed')
 
     def test_wal_checkpoint_metrics(self):
@@ -88,14 +122,32 @@ class WalMetrics(CommonTI, IorTI, ServerTI, TelemetryTI):
         """
         ppn = self.params.get('ppn', '/run/ior_write/*', 1)
         frequency = 5
-        container = self.create_container(
-            properties=f'checkpoint:timed,checkpoint_freq:{frequency}')
+        wal_metrics = self.telemetry.ENGINE_POOL_CHECKPOINT_METRICS
+        verify_after = {'min_value': 1}
+        if not self.server_managers[0].manager.job.using_control_metadata:
+            # WAL commit metrics are not expected to increase when not using MD on SSD
+            verify_after = {'min_value': 0, 'max_value': 0}
+
+        self.log_step('Creating a pool (dmg pool create)')
+        pool = add_pool(self, properties=f'checkpoint:timed,checkpoint_freq:{frequency}')
+        self.log_step('Creating a container (daos container create)')
+        container = self.get_container(pool)
         self.log.info('%s check point frequency: %s seconds', container.pool, frequency)
-        self.write_data(container, ppn)
+
+        self.log_step(
+            'Verify WAL checkpoint metrics before pool creation (dmg telemetry metrics query)')
+        if not self.verify_metrics(wal_metrics, min_value=0, max_value=0):
+            self.fail('Unexpected WAL reply metric values before pool creation')
+
+        self.log_step('Writing data (ior)')
+        write_data(self, container, ppn)
 
         self.log_step(f'Waiting for check pointing to complete (sleep {frequency * 2})')
         time.sleep(frequency * 2)
 
-        self.telemetry.get_pool_metrics()
-        self.telemetry.list_metrics()
+        self.log_step(
+            'Verify WAL checkpoint metrics after pool creation (dmg telemetry metrics query)')
+        if not self.verify_metrics('after pool creation', wal_metrics, **verify_after):
+            self.fail('Unexpected WAL reply metric values after pool creation')
+
         self.log_step('Test passed')

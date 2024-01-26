@@ -24,9 +24,54 @@ class TelemetryUtils():
         "engine_pool_ops_cont_create",
         "engine_pool_ops_cont_destroy",
         "engine_pool_ops_cont_query"]
-    ENGINE_POOL_METRICS = [
+    ENGINE_POOL_ACTION_METRICS = [
+        "engine_pool_resent",
+        "engine_pool_restarted",
+        "engine_pool_retry",
+        "engine_pool_started_at",
+        "engine_pool_xferred_fetch",
+        "engine_pool_xferred_update"]
+    ENGINE_POOL_BLOCK_ALLOCATOR_METRICS = [
+        "engine_pool_block_allocator_alloc_hint",
+        "engine_pool_block_allocator_alloc_large",
+        "engine_pool_block_allocator_alloc_small",
+        "engine_pool_block_allocator_frags_aging",
+        "engine_pool_block_allocator_frags_large",
+        "engine_pool_block_allocator_frags_small",
+        "engine_pool_block_allocator_free_blks"]
+    ENGINE_POOL_CHECKPOINT_METRICS = [
+        "engine_pool_checkpoint_dirty_chunks",
+        "engine_pool_checkpoint_dirty_chunks_max",
+        "engine_pool_checkpoint_dirty_chunks_mean",
+        "engine_pool_checkpoint_dirty_chunks_min",
+        "engine_pool_checkpoint_dirty_chunks_stddev",
+        "engine_pool_checkpoint_dirty_pages",
+        "engine_pool_checkpoint_dirty_pages_max",
+        "engine_pool_checkpoint_dirty_pages_mean",
+        "engine_pool_checkpoint_dirty_pages_min",
+        "engine_pool_checkpoint_dirty_pages_stddev",
+        "engine_pool_checkpoint_duration",
+        "engine_pool_checkpoint_duration_max",
+        "engine_pool_checkpoint_duration_mean",
+        "engine_pool_checkpoint_duration_min",
+        "engine_pool_checkpoint_duration_stddev",
+        "engine_pool_checkpoint_iovs_copied",
+        "engine_pool_checkpoint_iovs_copied_max",
+        "engine_pool_checkpoint_iovs_copied_mean",
+        "engine_pool_checkpoint_iovs_copied_min",
+        "engine_pool_checkpoint_iovs_copied_stddev",
+        "engine_pool_checkpoint_wal_purged",
+        "engine_pool_checkpoint_wal_purged_max",
+        "engine_pool_checkpoint_wal_purged_mean",
+        "engine_pool_checkpoint_wal_purged_min",
+        "engine_pool_checkpoint_wal_purged_stddev"]
+    ENGINE_POOL_EC_UPDATE_METRICS = [
+        "engine_pool_EC_update_full_stripe",
+        "engine_pool_EC_update_partial"]
+    ENGINE_POOL_ENTRIES_METRICS = [
         "engine_pool_entries_dtx_batched_degree",
-        "engine_pool_entries_dtx_batched_total",
+        "engine_pool_entries_dtx_batched_total"]
+    ENGINE_POOL_OPS_METRICS = [
         "engine_pool_ops_akey_enum",
         "engine_pool_ops_akey_punch",
         "engine_pool_ops_compound",
@@ -43,6 +88,7 @@ class TelemetryUtils():
         "engine_pool_ops_ec_rep",
         "engine_pool_ops_fetch",
         "engine_pool_ops_key_query",
+        "engine_pool_ops_key2anchor",
         "engine_pool_ops_migrate",
         "engine_pool_ops_obj_enum",
         "engine_pool_ops_obj_punch",
@@ -57,10 +103,8 @@ class TelemetryUtils():
         "engine_pool_ops_pool_disconnect",
         "engine_pool_ops_pool_evict",
         "engine_pool_ops_pool_query",
-        "engine_pool_ops_pool_query_space",
-        "engine_pool_resent",
-        "engine_pool_restarted",
-        "engine_pool_retry",
+        "engine_pool_ops_pool_query_space"]
+    ENGINE_POOL_SCRUBBER_METRICS = [
         "engine_pool_scrubber_busy_time",
         "engine_pool_scrubber_bytes_scrubbed_current",
         "engine_pool_scrubber_bytes_scrubbed_prev",
@@ -78,8 +122,8 @@ class TelemetryUtils():
         "engine_pool_scrubber_prev_duration_min",
         "engine_pool_scrubber_prev_duration_stddev",
         "engine_pool_scrubber_scrubber_started",
-        "engine_pool_scrubber_scrubs_completed",
-        "engine_pool_started_at",
+        "engine_pool_scrubber_scrubs_completed"]
+    ENGINE_POOL_VOS_AGGREGATION_METRICS = [
         "engine_pool_vos_aggregation_akey_deleted",
         "engine_pool_vos_aggregation_akey_scanned",
         "engine_pool_vos_aggregation_akey_skipped",
@@ -99,21 +143,26 @@ class TelemetryUtils():
         "engine_pool_vos_aggregation_obj_deleted",
         "engine_pool_vos_aggregation_obj_scanned",
         "engine_pool_vos_aggregation_obj_skipped",
-        "engine_pool_vos_aggregation_uncommitted",
+        "engine_pool_vos_aggregation_uncommitted"]
+    ENGINE_POOL_VOS_REHYDRATION_METRICS = [
+        "engine_pool_vos_rehydration_replay_count",
+        "engine_pool_vos_rehydration_replay_entries",
+        "engine_pool_vos_rehydration_replay_size",
+        "engine_pool_vos_rehydration_replay_time",
+        "engine_pool_vos_rehydration_replay_transactions"]
+    ENGINE_POOL_VOS_SPACE_METRICS = [
         "engine_pool_vos_space_nvme_used",
-        "engine_pool_vos_space_scm_used",
-        "engine_pool_xferred_fetch",
-        "engine_pool_xferred_update",
-        "engine_pool_EC_update_full_stripe",
-        "engine_pool_EC_update_partial",
-        "engine_pool_block_allocator_alloc_hint",
-        "engine_pool_block_allocator_alloc_large",
-        "engine_pool_block_allocator_alloc_small",
-        "engine_pool_block_allocator_frags_aging",
-        "engine_pool_block_allocator_frags_large",
-        "engine_pool_block_allocator_frags_small",
-        "engine_pool_block_allocator_free_blks",
-        "engine_pool_ops_key2anchor"]
+        "engine_pool_vos_space_scm_used"]
+    ENGINE_POOL_METRICS = ENGINE_POOL_ACTION_METRICS +\
+        ENGINE_POOL_BLOCK_ALLOCATOR_METRICS +\
+        ENGINE_POOL_CHECKPOINT_METRICS +\
+        ENGINE_POOL_EC_UPDATE_METRICS +\
+        ENGINE_POOL_ENTRIES_METRICS +\
+        ENGINE_POOL_OPS_METRICS +\
+        ENGINE_POOL_SCRUBBER_METRICS +\
+        ENGINE_POOL_VOS_AGGREGATION_METRICS +\
+        ENGINE_POOL_VOS_REHYDRATION_METRICS +\
+        ENGINE_POOL_VOS_SPACE_METRICS
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",

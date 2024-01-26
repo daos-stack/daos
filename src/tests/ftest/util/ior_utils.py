@@ -13,6 +13,7 @@ from command_utils_base import BasicParameter, FormattedParameter
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from general_utils import get_log_file
+from job_manager_utils import get_job_manager
 
 
 def get_ior(test, manager, hosts, path, slots, namespace="/run/ior/*", ior_params=None):
@@ -137,6 +138,73 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
     finally:
         manager.verbose = saved_verbose
         thread_queue.put(thread_result)
+
+
+def write_data(test, container, ppn, dfuse=None, namespace='/run/ior_write/*'):
+    """Write data to the container/dfuse using ior.
+
+    Simple method for test classes to use to write data with ior. While not required, this is setup
+    by default to pull in ior parameters from the test yaml using a format similar to:
+
+        ior: &ior_base
+          api: DFS
+          transfer_size: 512K
+          block_size: 1G
+
+        ior_write:
+          <<: *ior_base
+          flags: "-k -v -w -W -G 1"
+
+        ior_read:
+          <<: *ior_base
+          flags: "-v -r -R -G 1"
+
+    Args:
+        test (Test): avocado Test object
+        container (TestContainer): the container to populate
+        ppn (int): processes per node to use with the ior command
+        dfuse (Dfuse, optional): dfuse object defining the dfuse mount point. Defaults to None.
+        namespace (str, optional): path to ior yaml parameters. Defaults to '/run/ior_write/*'.
+
+    Returns:
+        Ior: the Ior object used to populate the container
+    """
+    job_manager = get_job_manager(test, subprocess=False, timeout=60)
+    ior = get_ior(test, job_manager, test.hostlist_clients, test.workdir, None, namespace)
+    ior.run(test.server_group, container.pool, container, None, ppn, dfuse=dfuse)
+    return ior
+
+
+def read_data(test, ior, container, ppn, dfuse=None, namespace='/run/ior_read/*'):
+    """Verify the data used to populate the container.
+
+    Simple method for test classes to use to read data with ior designed to be used with the Ior
+    object returned by the write_data() method. While not required, this is setup by default to pull
+    in ior parameters from the test yaml using a format similar to:
+
+        ior: &ior_base
+          api: DFS
+          transfer_size: 512K
+          block_size: 1G
+
+        ior_write:
+          <<: *ior_base
+          flags: "-k -v -w -W -G 1"
+
+        ior_read:
+          <<: *ior_base
+          flags: "-v -r -R -G 1"
+
+    Args:
+        test (Test): avocado Test object
+        ior (Ior): the ior command used to populate the container
+        container (TestContainer): the container to verify
+        ppn (int): processes per node to use with the ior command
+        dfuse (Dfuse, optional): dfuse object defining the dfuse mount point. Defaults to None.
+        namespace (str, optional): path to ior yaml parameters. Defaults to '/run/ior_read/*'.
+    """
+    ior.update('flags', test.params.get('flags', namespace))
+    ior.run(test.server_group, container.pool, container, None, ppn, dfuse=dfuse)
 
 
 class IorCommand(SubProcessCommand):
