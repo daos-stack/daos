@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -926,11 +926,6 @@ is_rebuild_scanning_tgt(struct rebuild_tgt_pool_tracker *rpt)
 	D_ASSERT(rpt->rt_pool != NULL);
 	D_ASSERT(rpt->rt_pool->sp_map != NULL);
 
-	/* Let's use NULL for now, because subgroup == master group for
-	 * all of test anyway. Once we resolve the race between cart
-	 * group destroy and rebuild, it should use cart group inside
-	 * ds_pool. (DAOS-1943) FIXME
-	 */
 	crt_group_rank(NULL, &rank);
 	rc = pool_map_find_target_by_rank_idx(rpt->rt_pool->sp_map, rank,
 					      idx, &tgt);

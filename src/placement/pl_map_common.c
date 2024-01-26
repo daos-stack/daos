@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -261,7 +261,7 @@ is_comp_avaible(struct pool_component *comp, uint32_t allow_version,
 	 * Get the original status of the target, in case the pool map might
 	 * change during this time.
 	 */
-	if (status == (PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN)) {
+	if (status & (PO_COMP_ST_DOWN | PO_COMP_ST_DRAIN)) {
 		if (comp->co_fseq > allow_version)
 			status = PO_COMP_ST_UPIN;
 	} else if (status == PO_COMP_ST_UP) {

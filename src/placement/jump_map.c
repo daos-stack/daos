@@ -1,6 +1,6 @@
 /**
  *
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -192,6 +192,9 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 		pool_map_find_target(jmap->jmp_map.pl_poolmap, original_target,
 				     &temp_tgt);
 
+		/* Note: the delay rebuild targets(DOWN2UP target) should be
+		 * choosen to be rebuilt as well.
+		 */
 		if (reint_tgt != original_target ||
 		    (for_reint && original->ol_shards[index].po_rebuilding) ||
 		    (temp_tgt->ta_comp.co_flags & PO_COMPF_DOWN2UP &&

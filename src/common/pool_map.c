@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1870,10 +1870,10 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 			break;
 		case PO_COMP_ST_UP:
 			/* Dom should only be changed to UP if its original
-			 * status is NEW.
+			 * status is NEW|DOWN|DOWNOUT.
 			 */
 			if (child->do_comp.co_status &
-			    (PO_COMP_ST_NEW | PO_COMP_ST_DOWN)) {
+			    (PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT)) {
 				if (child->do_comp.co_status == PO_COMP_ST_DOWN)
 					child->do_comp.co_flags = PO_COMPF_DOWN2UP;
 				D_DEBUG(DB_MD, "rank %u id %u status %u --> %u\n",
@@ -1911,7 +1911,8 @@ update_dom_status(struct pool_domain *domain, uint32_t id, uint32_t status, uint
 					child->do_comp.co_flags = PO_COMPF_DOWN2OUT;
 
 				child->do_comp.co_status = status;
-				child->do_comp.co_fseq = version;
+				if (status == PO_COMP_ST_DOWN)
+					child->do_comp.co_fseq = version;
 				*updated = true;
 			}
 		}
@@ -1933,15 +1934,12 @@ int
 update_dom_status_by_tgt_id(struct pool_map *map, uint32_t tgt_id, uint32_t status,
 			    uint32_t version, bool *updated)
 {
-	if (map->po_tree) {
-		int rc;
+	int rc;
 
-		rc = update_dom_status(map->po_tree, tgt_id, status, version, updated);
-		if (rc < 0)
-			return rc;
-		return 0;
-	}
-
+	D_ASSERT(map->po_tree != NULL);
+	rc = update_dom_status(map->po_tree, tgt_id, status, version, updated);
+	if (rc < 0)
+		return rc;
 	return 0;
 }
 

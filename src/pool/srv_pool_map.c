@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  *
@@ -22,24 +22,17 @@ update_tgt_up_to_upin(struct pool_map *map, struct pool_target *target, bool pri
 }
 
 static void
-update_tgt_down_to_downout(struct pool_map *map, struct pool_target *target,
-			   bool print_changes, uint32_t *version)
+update_tgt_down_drain_to_downout(struct pool_map *map, struct pool_target *target,
+				 bool print_changes, uint32_t *version)
 {
 	if (target->ta_comp.co_status == PO_COMP_ST_DOWN)
 		target->ta_comp.co_flags = PO_COMPF_DOWN2OUT;
-	if (target->ta_comp.co_status == PO_COMP_ST_UP &&
-	    target->ta_comp.co_fseq == 1) {
-		D_DEBUG(DB_MD, "change "DF_TARGET" to NEW %p\n",
-			DP_TARGET(target), map);
-		target->ta_comp.co_status = PO_COMP_ST_NEW;
-		target->ta_comp.co_in_ver = 0;
-		++(*version);
-	} else {
-		D_DEBUG(DB_MD, "change "DF_TARGET" to DOWNOUT %p fseq %u\n",
-			DP_TARGET(target), map, target->ta_comp.co_fseq);
-		target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
-		target->ta_comp.co_out_ver = ++(*version);
-	}
+
+	D_DEBUG(DB_MD, "change "DF_TARGET" to DOWNOUT %p fseq %u\n",
+		DP_TARGET(target), map, target->ta_comp.co_fseq);
+	target->ta_comp.co_status = PO_COMP_ST_DOWNOUT;
+	target->ta_comp.co_out_ver = ++(*version);
+
 	if (print_changes)
 		D_PRINT(DF_TARGET" is excluded\n", DP_TARGET(target));
 	else
@@ -225,7 +218,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			break;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
-			update_tgt_down_to_downout(map, target, print_changes, version);
+			update_tgt_down_drain_to_downout(map, target, print_changes, version);
 			rc = 1;
 			break;
 		}
@@ -241,7 +234,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			break;
 		case PO_COMP_ST_DOWN:
 		case PO_COMP_ST_DRAIN:
-			update_tgt_down_to_downout(map, target, print_changes, version);
+			update_tgt_down_drain_to_downout(map, target, print_changes, version);
 			rc = 1;
 			break;
 		case PO_COMP_ST_UP:
