@@ -126,7 +126,8 @@ const (
 	//PoolPropertyPerfDomain is pool performance domain
 	PoolPropertyPerfDomain = C.DAOS_PROP_PO_PERF_DOMAIN
 	//PoolPropertyReintMode is pool reintegration mode
-	PoolPropertyReintMode = C.DAOS_PROP_PO_REINT_MODE
+	PoolPropertyReintMode     = C.DAOS_PROP_PO_REINT_MODE
+	PoolPropertySvcOpsEnabled = C.DAOS_PROP_PO_SVC_OPS_ENABLED
 )
 
 const (

@@ -699,7 +699,7 @@ obj_set_reply_nrs(crt_rpc_t *rpc, daos_handle_t ioh, d_sg_list_t *echo_sgl, uint
 	uint32_t		 nrs_count = orw->orw_nr;
 	int			 i, j, idx;
 
-	if (nrs_count == 0)
+	if (nrs_count == 0 || (orw->orw_flags & ORF_CHECK_EXISTENCE))
 		return 0;
 
 	/* Re-entry case. */
@@ -1409,11 +1409,11 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		struct daos_recx_ep_list	*shadows = NULL;
 
 		bulk_op = CRT_BULK_PUT;
+		if (orw->orw_flags & ORF_CHECK_EXISTENCE)
+			fetch_flags = VOS_OF_FETCH_CHECK_EXISTENCE;
 		if (!rma && orw->orw_sgls.ca_arrays == NULL) {
 			spec_fetch = true;
-			if (orw->orw_flags & ORF_CHECK_EXISTENCE)
-				fetch_flags = VOS_OF_FETCH_CHECK_EXISTENCE;
-			else
+			if (!(orw->orw_flags & ORF_CHECK_EXISTENCE))
 				fetch_flags = VOS_OF_FETCH_SIZE_ONLY;
 		}
 

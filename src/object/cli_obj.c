@@ -7063,7 +7063,12 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	if (rc != 0)
 		goto out;
 
+	leader = coa->coa_dct_nr;
+
 	if (auxi->io_retry) {
+		if (unlikely(spa->pa_auxi.shard >= obj->cob_shards_nr))
+			goto new_leader;
+
 		/* Try to reuse the same leader. */
 		rc = obj_shard_open(obj, spa->pa_auxi.shard, map_ver, &shard);
 		if (rc == 0) {
@@ -7081,10 +7086,13 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 		/* Then change to new leader for retry. */
 	}
 
-	/* Randomly select a rank as the leader. */
-	leader = d_rand() % coa->coa_dct_nr;
-
 new_leader:
+	if (leader == coa->coa_dct_nr)
+		/* Randomly select a rank as the leader. */
+		leader = d_rand() % coa->coa_dct_nr;
+	else
+		leader = (leader + 1) % coa->coa_dct_nr;
+
 	dct = &coa->coa_dcts[leader];
 	len = dct->dct_bitmap_sz << 3;
 
@@ -7101,8 +7109,6 @@ new_leader:
 		}
 	}
 
-	/* Try another for leader. */
-	leader = (leader + 1) % coa->coa_dct_nr;
 	goto new_leader;
 
 gen_mbs:

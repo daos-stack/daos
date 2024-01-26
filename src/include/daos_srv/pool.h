@@ -12,6 +12,8 @@
 #ifndef __DAOS_SRV_POOL_H__
 #define __DAOS_SRV_POOL_H__
 
+#include <endian.h>
+
 #include <abt.h>
 #include <daos/common.h>
 #include <daos/lru.h>
@@ -30,6 +32,8 @@
  */
 #define DS_POOL_OBJ_VERSION		1
 
+/* age of an entry in svc_ops KVS before it may be evicted */
+#define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
 /*
  * Pool object
  *
@@ -190,6 +194,48 @@ struct ds_pool_svc_op_val {
 	int  ov_rc;
 	char ov_resvd[60];
 };
+
+/* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.
+ * allocates the byte-stream, caller must free with D_FREE().
+ */
+static inline int
+ds_pool_svc_op_key_encode(struct ds_pool_svc_op_key *in, d_iov_t *enc_out)
+{
+	struct ds_pool_svc_op_key *out;
+
+	/* encoding is simple for this type, just another struct ds_pool_svc_op_key */
+	D_ALLOC_PTR(out);
+	if (out == NULL)
+		return -DER_NOMEM;
+
+	out->ok_client_time = htobe64(in->ok_client_time);
+	uuid_copy(out->ok_client_id, in->ok_client_id);
+	d_iov_set(enc_out, (void *)out, sizeof(*out));
+
+	return 0;
+}
+
+static inline int
+ds_pool_svc_op_key_decode(d_iov_t *enc_in, struct ds_pool_svc_op_key *out)
+{
+	struct ds_pool_svc_op_key *in = enc_in->iov_buf;
+
+	if (enc_in->iov_len < sizeof(struct ds_pool_svc_op_key))
+		return -DER_INVAL;
+
+	out->ok_client_time = be64toh(in->ok_client_time);
+	uuid_copy(out->ok_client_id, in->ok_client_id);
+
+	return 0;
+}
+
+struct rdb_tx;
+int
+ds_pool_svc_ops_lookup(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t *cli_uuidp,
+		       uint64_t cli_time, bool *is_dup, struct ds_pool_svc_op_val *valp);
+int
+ds_pool_svc_ops_save(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t *cli_uuidp,
+		     uint64_t cli_time, bool dup_op, int rc_in, struct ds_pool_svc_op_val *op_valp);
 
 /* Find ds_pool_child in cache, hold one reference */
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
@@ -366,8 +412,7 @@ ds_pool_get_version(struct ds_pool *pool)
 int
 ds_start_chkpt_ult(struct ds_pool_child *child);
 void
-ds_stop_chkpt_ult(struct ds_pool_child *child);
-struct rdb_tx;
+    ds_stop_chkpt_ult(struct ds_pool_child *child);
 int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 			    d_iov_t *cred);
 
