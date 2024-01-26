@@ -719,19 +719,20 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 
 func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
+	creating := system.PoolServiceStateCreating
+	ready := system.PoolServiceStateReady
+	destroying := system.PoolServiceStateDestroying
 	testPoolService := func() *system.PoolService {
 		return &system.PoolService{
 			PoolLabel: "test-pool",
 			PoolUUID:  uuid.MustParse(mockUUID),
 			Replicas:  []ranklist.Rank{0, 1, 2},
-			State:     system.PoolServiceStateReady,
+			State:     ready,
 			Storage: &system.PoolServiceStorage{
 				CreationRankStr: ranklist.MustCreateRankSet("0-7").String(),
 			},
 		}
 	}
-	ready := system.PoolServiceStateReady
-	destroying := system.PoolServiceStateDestroying
 	curTestPoolSvc := new(system.PoolService)
 	svcWithState := func(in *system.PoolService, state system.PoolServiceState) *system.PoolService {
 		out := new(system.PoolService)
@@ -795,6 +796,54 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				SvcRanks: []uint32{0, 1, 2},
 			},
 			expErr: errors.New("not an access point"),
+		},
+		// Note: evict dRPC fails as no pool service alive, remains in creating state.
+		// getPoolService() returns TryAgain in resp before list-cont dRPC is issued.
+		"already creating, evict dRPC fails -DER_AGAIN, remains creating": {
+			req:          &mgmtpb.PoolDestroyReq{Id: mockUUID},
+			poolSvcState: &creating,
+			expResp: &mgmtpb.PoolDestroyResp{
+				Status: int32(daos.TryAgain), // Returned from list-cont call.
+			},
+			expSvcState: &creating,
+		},
+		// getPoolService() returns error before evict dRPC is issued.
+		"recursive=true, already creating, evict dRPC fails -DER_AGAIN, remains creating": {
+			req:          &mgmtpb.PoolDestroyReq{Id: mockUUID, Recursive: true},
+			poolSvcState: &creating,
+			expErr:       daos.TryAgain,
+			expSvcState:  &creating,
+		},
+		// getPoolService() returns TryAgain during list-cont and evict but errors ignored.
+		"force=true, already creating, evict dRPC fails -DER_AGAIN, remains creating": {
+			req:          &mgmtpb.PoolDestroyReq{Id: mockUUID, Force: true},
+			poolSvcState: &creating,
+			expResp: &mgmtpb.PoolDestroyResp{
+				Status: int32(daos.TryAgain), // Returned from list-cont call.
+			},
+			expSvcState: &creating,
+		},
+		// getPoolService() returns TryAgain during list-cont and evict but errors ignored.
+		"force=true, recursive=true, already creating, evict dRPC fails -DER_AGAIN, destroy succeeds": {
+			req: &mgmtpb.PoolDestroyReq{
+				Id:        mockUUID,
+				Force:     true,
+				Recursive: true,
+			},
+			poolSvcState: &creating,
+			drpcResps: []*mockDrpcResponse{
+				&mockDrpcResponse{
+					Message: &mgmtpb.PoolDestroyResp{},
+				},
+			},
+			expDrpcReq: &mgmtpb.PoolDestroyReq{
+				Sys:       build.DefaultSystemName,
+				Id:        mockUUID,
+				SvcRanks:  []uint32{0, 1, 2, 3, 4, 5, 6, 7},
+				Recursive: true,
+				Force:     true,
+			},
+			expResp: &mgmtpb.PoolDestroyResp{},
 		},
 		// Note: evict dRPC fails but because of Busy status, remains in ready state.
 		"recursive=true, evict dRPC fails -DER_BUSY due to open handles, pool still ready": {
