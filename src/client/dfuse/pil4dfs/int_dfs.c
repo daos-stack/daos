@@ -61,7 +61,7 @@
 #define MAX_DAOS_MT         (8)
 
 #define READ_DIR_BATCH_SIZE (96)
-#define MAX_FD_DUP2ED       (8)
+#define MAX_FD_DUP2ED       (16)
 
 #define MAX_MMAP_BLOCK      (64)
 
@@ -193,7 +193,7 @@ struct mmap_obj {
 
 struct fd_dup2 {
 	int fd_src, fd_dest;
-	bool dest_closed;
+//	bool dest_closed;
 };
 
 /* Add the data structure for statx_timestamp and statx
@@ -543,6 +543,8 @@ remove_dot_dot(char path[], int *len);
 static int
 remove_dot_and_cleanup(char szPath[], int len);
 
+/* reference count of fake fd duplicated by real fd with dup2() */
+static int                dup_ref_count[MAX_OPENED_FILE];
 static struct file_obj   *file_list[MAX_OPENED_FILE];
 static struct dir_obj    *dir_list[MAX_OPENED_DIR];
 static struct mmap_obj    mmap_list[MAX_MMAP_BLOCK];
@@ -559,7 +561,7 @@ find_next_available_dirfd(struct dir_obj *obj, int *new_fd);
 static int
 find_next_available_map(int *idx);
 static void
-free_fd(int idx);
+free_fd(int idx, bool closing_dup_fd);
 static void
 free_dirfd(int idx);
 static void
@@ -1373,6 +1375,7 @@ find_next_available_fd(struct file_obj *obj, int *new_fd)
 		new_obj->ref_count++;
 		file_list[idx] = new_obj;
 	}
+	dup_ref_count[idx] = 0;
 	if (next_free_fd > last_fd)
 		last_fd = next_free_fd;
 	next_free_fd = -1;
@@ -1390,6 +1393,24 @@ find_next_available_fd(struct file_obj *obj, int *new_fd)
 
 	*new_fd = idx;
 	return 0;
+}
+
+static void
+inc_dup_ref_count(int fd)
+{
+	D_MUTEX_LOCK(&lock_fd);
+	dup_ref_count[fd - FD_FILE_BASE]++;
+	file_list[fd - FD_FILE_BASE]->ref_count++;
+	D_MUTEX_UNLOCK(&lock_fd);
+}
+
+static void
+dec_dup_ref_count(int fd)
+{
+	D_MUTEX_LOCK(&lock_fd);
+	dup_ref_count[fd - FD_FILE_BASE]--;
+	file_list[fd - FD_FILE_BASE]->ref_count--;
+	D_MUTEX_UNLOCK(&lock_fd);
 }
 
 static int
@@ -1476,7 +1497,7 @@ find_next_available_map(int *idx)
 
 /* May need to support duplicated fd as duplicated dirfd too. */
 static void
-free_fd(int idx)
+free_fd(int idx, bool closing_dup_fd)
 {
 	int              i, rc;
 	struct file_obj *saved_obj = NULL;
@@ -1489,9 +1510,15 @@ free_fd(int idx)
 		return;
 	}
 
+	if (closing_dup_fd)
+		dup_ref_count[idx]--;
 	file_list[idx]->ref_count--;
 	if (file_list[idx]->ref_count == 0)
 		saved_obj = file_list[idx];
+	if (dup_ref_count[idx] > 0) {
+		D_MUTEX_UNLOCK(&lock_fd);
+		return;
+	}
 	file_list[idx] = NULL;
 
 	if (idx < next_free_fd)
@@ -1583,7 +1610,7 @@ free_map(int idx)
 	mmap_list[idx].addr = NULL;
 	/* Need to call free_fd(). */
 	if (file_list[mmap_list[idx].fd - FD_FILE_BASE]->idx_mmap >= MAX_MMAP_BLOCK)
-		free_fd(mmap_list[idx].fd - FD_FILE_BASE);
+		free_fd(mmap_list[idx].fd - FD_FILE_BASE, false);
 	mmap_list[idx].fd = -1;
 
 	if (idx < next_free_map)
@@ -1624,44 +1651,19 @@ get_fd_redirected(int fd)
 	return fd_ret;
 }
 
-/* This fd is a fake fd. There exists a associated kernel fd with dup2.
- * Need to check whether fd is in fd_dup2_list[], set dest_closed true
- * if yes. Otherwise, close the fake fd.
- */
-static void
-close_dup_fd_dest_fakefd(int fd)
-{
-	int i;
-
-	if (fd < FD_FILE_BASE)
-		return;
-
-	D_MUTEX_LOCK(&lock_fd_dup2ed);
-	if (num_fd_dup2ed > 0) {
-		for (i = 0; i < MAX_FD_DUP2ED; i++) {
-			if (fd_dup2_list[i].fd_dest == fd) {
-				fd_dup2_list[i].dest_closed = true;
-				D_MUTEX_UNLOCK(&lock_fd_dup2ed);
-				return;
-			}
-		}
-	}
-	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
-
-	free_fd(fd - FD_FILE_BASE);
-}
-
 /* This fd is a fd from kernel and it is associated with a fake fd.
- * Need to 1) close(fd) 2) remove the entry in fd_dup2_list[] 3) close
- * the fake fd if dest_closed is true.
+ * Need to 1) close(fd) 2) remove the entry in fd_dup2_list[] 3) decrease
+ * the dup reference count of the fake fd.
  */
+
 static int
-close_dup_fd_src(int (*next_close)(int fd), int fd, bool close_fd)
+close_dup_fd(int (*next_close)(int fd), int fd, bool close_fd)
 {
 	int i, rc, idx_dup = -1, fd_dest = -1;
 
 	if (close_fd) {
 		/* close the fd from kernel */
+		assert(fd < FD_FILE_BASE);
 		rc = next_close(fd);
 		if (rc != 0)
 			return (-1);
@@ -1673,12 +1675,10 @@ close_dup_fd_src(int (*next_close)(int fd), int fd, bool close_fd)
 		for (i = 0; i < MAX_FD_DUP2ED; i++) {
 			if (fd_dup2_list[i].fd_src == fd) {
 				idx_dup = i;
-				if (fd_dup2_list[i].dest_closed)
-					fd_dest = fd_dup2_list[i].fd_dest;
+				fd_dest = fd_dup2_list[i].fd_dest;
 				/* clear the value to free */
 				fd_dup2_list[i].fd_src  = -1;
 				fd_dup2_list[i].fd_dest = -1;
-				fd_dup2_list[i].dest_closed = false;
 				num_fd_dup2ed--;
 				break;
 			}
@@ -1692,8 +1692,7 @@ close_dup_fd_src(int (*next_close)(int fd), int fd, bool close_fd)
 		errno = EINVAL;
 		return (-1);
 	}
-	if (fd_dest > 0)
-		free_fd(fd_dest - FD_FILE_BASE);
+	free_fd(fd_dest - FD_FILE_BASE, true);
 
 	return 0;
 }
@@ -1707,7 +1706,6 @@ init_fd_dup2_list(void)
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		fd_dup2_list[i].fd_src  = -1;
 		fd_dup2_list[i].fd_dest = -1;
-		fd_dup2_list[i].dest_closed = false;
 	}
 	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 }
@@ -1717,6 +1715,9 @@ allocate_dup2ed_fd(const int fd_src, const int fd_dest)
 {
 	int i;
 
+	/* increase reference count of the fake fd */
+	inc_dup_ref_count(fd_dest);
+
 	/* Not many applications use dup2(). Normally the number of fd duped is small. */
 	D_MUTEX_LOCK(&lock_fd_dup2ed);
 	if (num_fd_dup2ed < MAX_FD_DUP2ED) {
@@ -1724,7 +1725,6 @@ allocate_dup2ed_fd(const int fd_src, const int fd_dest)
 			if (fd_dup2_list[i].fd_src == -1) {
 				fd_dup2_list[i].fd_src  = fd_src;
 				fd_dup2_list[i].fd_dest = fd_dest;
-				fd_dup2_list[i].dest_closed = false;
 				num_fd_dup2ed++;
 				D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 				return i;
@@ -1733,6 +1733,8 @@ allocate_dup2ed_fd(const int fd_src, const int fd_dest)
 	}
 	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 
+	/* decrease dup reference count in error */
+	dec_dup_ref_count(fd_dest);
 	DS_ERROR(EMFILE, "fd_dup2_list[] is out of space");
 	errno = EMFILE;
 	return (-1);
@@ -1774,7 +1776,7 @@ close_all_duped_fd(void)
 	/* Only the main thread will call this function in the destruction phase */
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		if (fd_dup2_list[i].fd_src >= 0)
-			close_dup_fd_src(libc_close, fd_dup2_list[i].fd_src, true);
+			close_dup_fd(libc_close, fd_dup2_list[i].fd_src, true);
 	}
 	num_fd_dup2ed = 0;
 }
@@ -2100,10 +2102,10 @@ new_close_common(int (*next_close)(int fd), int fd)
 	} else if (fd_directed >= FD_FILE_BASE) {
 		/* This fd is a kernel fd. There was a duplicate fd created. */
 		if (fd < FD_FILE_BASE)
-			return close_dup_fd_src(next_close, fd, true);
+			return close_dup_fd(next_close, fd, true);
 
 		/* This fd is a fake fd. There exists a associated kernel fd with dup2. */
-		close_dup_fd_dest_fakefd(fd);
+		free_fd(fd - FD_FILE_BASE, false);
 		return 0;
 	}
 
@@ -5121,7 +5123,7 @@ dup2(int oldfd, int newfd)
 	if (fd_directed >= FD_FILE_BASE && newfd < FD_FILE_BASE && oldfd_directed < FD_FILE_BASE &&
 	    oldfd < FD_FILE_BASE) {
 		/* need to remove newfd from forward list and decrease refcount in file_list[] */
-		close_dup_fd_src(libc_close, newfd, false);
+		close_dup_fd(libc_close, newfd, false);
 		return next_dup2(oldfd, newfd);
 	} else if (fd_directed >= FD_FILE_BASE) {
 		DS_ERROR(ENOTSUP, "unimplemented yet for fd_directed >= FD_FILE_BASE");
@@ -5159,7 +5161,7 @@ dup2(int oldfd, int newfd)
 			errno = EBUSY;
 			return (-1);
 		}
-		rc = close(fd_tmp);
+		rc = libc_close(fd_tmp);
 		if (rc != 0)
 			return -1;
 		idx = allocate_dup2ed_fd(fd, fd_directed);
@@ -5808,7 +5810,7 @@ close_all_fd(void)
 
 	for (i = 0; i <= last_fd; i++) {
 		if (file_list[i])
-			free_fd(i);
+			free_fd(i, false);
 	}
 }
 
