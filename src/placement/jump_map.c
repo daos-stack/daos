@@ -193,7 +193,7 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 				     &temp_tgt);
 
 		/* Note: the delay rebuild targets(DOWN2UP target) should be
-		 * choosen to be rebuilt as well.
+		 * chosen to be rebuilt as well.
 		 */
 		if (reint_tgt != original_target ||
 		    (for_reint && original->ol_shards[index].po_rebuilding) ||
