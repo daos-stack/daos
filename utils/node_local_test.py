@@ -5411,16 +5411,40 @@ class AllocFailTest():
 
         fatal_errors = False
 
+        max_load_avg = 100
+
         # Now run all iterations in parallel up to max_child.  Iterations will be launched
         # in order but may not finish in order, rather they are processed in the order they
         # finish.  After each repetition completes then check for re-launch new processes
         # to keep the pipeline full.
         while not finished or active:
 
+            load_avg, _, _ = os.getloadavg()
+
+            # DAOS-14164 Back off on launching tests if the system is loaded.  If the node is above
+            # a certain load average then pause and lower the level of expected parallelism.  If the
+            # node is close to the maximum then do not decrease the count but put preference to
+            # completing running tests and only launch one test before re-sampling the load average.
+
+            start_this_iteration = 10
+            if max_child > 1 and load_avg > 0.8 * max_load_avg:
+                start_this_iteration = 1
+                if load_avg > max_load_avg:
+                    if max_count < max_child:
+                        max_child -= 5
+                    else:
+                        max_child -= 1
+                    max_child = max(max_child, 20)
+                    print(f"High load average of {load_avg}, "
+                          f"pausing and decreasing parallelism to {max_child} {max_count}")
+                    if max_child > 20:
+                        time.sleep(2)
+
             if not finished:
-                while len(active) < max_child:
+                while start_this_iteration > 0 and len(active) < max_child:
                     active.append(self._run_cmd(fid))
                     fid += 1
+                    start_this_iteration -= 1
 
                     if len(active) > max_count:
                         max_count = len(active)
@@ -5442,7 +5466,7 @@ class AllocFailTest():
                 break
 
         print(f'Completed, fid {fid}')
-        print(f'Max in flight {max_count}')
+        print(f'Max in flight {max_count}/{max_child}')
         if to_rerun:
             print(f'Number of indexes to re-run {len(to_rerun)}')
 
