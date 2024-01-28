@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -512,14 +512,14 @@ do_directory(void **state)
 void
 do_cachingcheck(void **state)
 {
-	int            fd;
-	int            rc;
-	int            pid;
-	int            status;
-	char           dir_name[256];
-	char           file_name[256];
-	char           exe_name[] = "/usr/bin/cat";
-	char           *argv[3];
+	int   fd;
+	int   rc;
+	int   pid;
+	int   status;
+	char  dir_name[256];
+	char  file_name[256];
+	char  exe_name[] = "/usr/bin/cat";
+	char *argv[3];
 
 	snprintf(dir_name, 256, "%s/%s", test_dir, "test_dir");
 	snprintf(file_name, 256, "%s/%s/%s", test_dir, "test_dir", "test_file");

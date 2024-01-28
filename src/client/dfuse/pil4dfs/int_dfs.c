@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -351,8 +351,8 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, dfs_obj_t **o
 	if (rlink != NULL) {
 		hdl  = hdl_obj(rlink);
 		if ((t_now.tv_sec > hdl->t_expire.tv_sec) ||
-					((t_now.tv_sec == hdl->t_expire.tv_sec) &&
-					 (t_now.tv_nsec >= hdl->t_expire.tv_nsec))) {
+		    ((t_now.tv_sec == hdl->t_expire.tv_sec) &&
+		     (t_now.tv_nsec >= hdl->t_expire.tv_nsec))) {
 			/* dcache expired. remove this entry */
 			d_hash_rec_decref(mt->dfs_dir_hash, rlink);
 		} else {
@@ -401,8 +401,8 @@ out_release:
 static void
 remove_dir_in_dcache(struct dfs_mt *mt, const char *path)
 {
-	d_list_t       *rlink;
-	int             len;
+	d_list_t *rlink;
+	int       len;
 
 	len   = strnlen(path, DFS_MAX_PATH);
 	rlink = d_hash_rec_find(mt->dfs_dir_hash, path, len);
