@@ -152,7 +152,7 @@ const (
 	ServerIncompatibleComponents
 	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
-	ServerHugepagesDisabledBadAction
+	ServerHugepagesDisabled
 )
 
 // server config fault codes

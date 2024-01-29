@@ -1044,7 +1044,7 @@ func (cs *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.Nvme
 		return nil, errNoSrvCfg
 	}
 	if cs.srvCfg.DisableHugepages {
-		return nil, FaultHugepagesDisabledBadAction
+		return nil, FaultHugepagesDisabled
 	}
 
 	cu, err := user.Current()
@@ -1087,7 +1087,7 @@ func (cs *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.N
 		return nil, errNoSrvCfg
 	}
 	if cs.srvCfg.DisableHugepages {
-		return nil, FaultHugepagesDisabledBadAction
+		return nil, FaultHugepagesDisabled
 	}
 
 	engines := cs.harness.Instances()
