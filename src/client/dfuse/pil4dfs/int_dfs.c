@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -77,6 +77,10 @@
 #define FAKE_ST_INO(path)   (d_hash_string_u32(path, strnlen(path, DFS_MAX_PATH)))
 
 #define MAX_EQ              64
+
+/* default dir cache time-out in seconds*/
+#define DCACHE_TIMEOUT      10
+static uint16_t               dcache_timeout;
 
 /* In case of fork(), only the parent process could destroy daos env. */
 static bool                   context_reset;
@@ -262,10 +266,11 @@ get_eqh(daos_handle_t *eqh);
  * entity.
  */
 struct dir_hdl {
-	d_list_t   entry;
-	dfs_obj_t *oh;
-	size_t     name_size;
-	char       name[];
+	d_list_t        entry;
+	dfs_obj_t      *oh;
+	struct timespec t_expire;
+	size_t          name_size;
+	char            name[];
 };
 
 static inline struct dir_hdl *
@@ -335,15 +340,25 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, dfs_obj_t **o
 	d_list_t       *rlink;
 	mode_t          mode;
 	int             rc;
+	struct timespec t_now;
 
 	/* TODO: Remove this after testing. */
 	D_ASSERT(strlen(name) == len);
 
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &t_now);
+
 	rlink = d_hash_rec_find(mt->dfs_dir_hash, name, len);
 	if (rlink != NULL) {
 		hdl  = hdl_obj(rlink);
-		*obj = hdl->oh;
-		return 0;
+		if ((t_now.tv_sec > hdl->t_expire.tv_sec) ||
+		    ((t_now.tv_sec == hdl->t_expire.tv_sec) &&
+		     (t_now.tv_nsec >= hdl->t_expire.tv_nsec))) {
+			/* dcache expired. remove this entry */
+			d_hash_rec_decref(mt->dfs_dir_hash, rlink);
+		} else {
+			*obj = hdl->oh;
+			return 0;
+		}
 	}
 
 	rc = dfs_lookup(mt->dfs, name, O_RDWR, &oh, &mode, NULL);
@@ -363,8 +378,10 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, dfs_obj_t **o
 	if (hdl == NULL)
 		D_GOTO(out_release, rc = ENOMEM);
 
-	hdl->name_size = len;
-	hdl->oh        = oh;
+	hdl->t_expire.tv_sec  = t_now.tv_sec + dcache_timeout;
+	hdl->t_expire.tv_nsec = t_now.tv_nsec;
+	hdl->name_size        = len;
+	hdl->oh               = oh;
 	strncpy(hdl->name, name, len);
 
 	rlink = d_hash_rec_find_insert(mt->dfs_dir_hash, hdl->name, len, &hdl->entry);
@@ -379,6 +396,19 @@ out_release:
 	dfs_release(oh);
 	D_FREE(hdl);
 	return rc;
+}
+
+static void
+remove_dir_in_dcache(struct dfs_mt *mt, const char *path)
+{
+	d_list_t *rlink;
+	int       len;
+
+	len   = strnlen(path, DFS_MAX_PATH);
+	rlink = d_hash_rec_find(mt->dfs_dir_hash, path, len);
+	if (rlink == NULL)
+		return;
+	d_hash_rec_decref(mt->dfs_dir_hash, rlink);
 }
 
 static int (*ld_open)(const char *pathname, int oflags, ...);
@@ -3348,6 +3378,9 @@ rmdir(const char *path)
 	if (rc)
 		D_GOTO(out_err, rc);
 
+	/* need to remove this dir in dir cache */
+	remove_dir_in_dcache(dfs_mt, full_path);
+
 	FREE(parent_dir);
 	return 0;
 
@@ -4191,6 +4224,9 @@ new_unlink(const char *path)
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc)
 		D_GOTO(out_err, rc);
+
+	/* need to remove this dir in dir cache */
+	remove_dir_in_dcache(dfs_mt, full_path);
 
 	FREE(parent_dir);
 	return 0;
@@ -5501,7 +5537,8 @@ init_myhook(void)
 	mode_t   umask_old;
 	char    *env_log;
 	int      rc;
-	uint64_t eq_count_loc = 0;
+	uint64_t eq_count_loc       = 0;
+	uint64_t dcache_timeout_loc = 0;
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -5564,6 +5601,12 @@ init_myhook(void)
 	} else {
 		eq_count_max = MAX_EQ;
 	}
+
+	rc = d_getenv_uint64_t("D_IL_DCACHE_TIMEOUT", &dcache_timeout_loc);
+	if (rc != -DER_NONEXIST)
+		dcache_timeout = (uint16_t)dcache_timeout_loc;
+	else
+		dcache_timeout = DCACHE_TIMEOUT;
 
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
 	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&libc_open));
