@@ -222,6 +222,33 @@ func Test_BdevWriteRequestFromConfig(t *testing.T) {
 				},
 			},
 		},
+		"auto faulty criteria applied": {
+			cfg: &Config{
+				Tiers: TierConfigs{
+					mockScmTier,
+					NewTierConfig().WithStorageClass(ClassNvme.String()),
+				},
+				AutoFaultyProps: BdevAutoFaulty{
+					Enable:      true,
+					MaxIoErrs:   10000,
+					MaxCsumErrs: 20000,
+				},
+			},
+			getTopoFn: MockGetTopology,
+			expReq: &BdevWriteConfigRequest{
+				OwnerUID: os.Geteuid(),
+				OwnerGID: os.Getegid(),
+				TierProps: []BdevTierProperties{
+					{Class: ClassNvme},
+				},
+				Hostname: hostname,
+				AutoFaultyProps: BdevAutoFaulty{
+					Enable:      true,
+					MaxIoErrs:   10000,
+					MaxCsumErrs: 20000,
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
