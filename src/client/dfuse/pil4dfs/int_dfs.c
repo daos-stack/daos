@@ -3542,8 +3542,8 @@ setup_fd_0_1_2(void)
 				printf("Error: dup2 failed. %s\n", strerror(errno));
 				exit(1);
 			}
-			close(fd_tmp);
-			if (lseek(fd, offset, SEEK_SET) == -1) {
+			libc_close(fd_tmp);
+			if (libc_lseek(fd, offset, SEEK_SET) == -1) {
 				printf("Error: lseek failed to set offset. %s\n", strerror(errno));
 				exit(1);
 			}
@@ -3571,7 +3571,7 @@ close_all_kernel_fd(void)
 			if (fd != 0)
 				continue;
 			if (fd > 2 && fd != fd_using)
-				close(fd);
+				libc_close(fd);
 		}
 	}
 	closedir(dir);
@@ -3694,22 +3694,6 @@ fexecve(int fd, char *const argv[], char *const envp[])
 
 	return next_fexecve(fd, argv, pre_envp(envp));
 }
-
-/*
- *static pid_t
- *new_fork(void)
- *{
- *	pid_t pid;
- *	pid = real_fork();
- *	if (pid) {
- *		// parent process: do nothing
- *		return pid;
- *	} else {
- *		init_dfs();
- *		return pid;
- *	}
- *}
- */
 
 int
 mkdir(const char *path, mode_t mode)
@@ -5288,39 +5272,6 @@ futimens(int fd, const struct timespec times[2])
 
 	return 0;
 }
-
-/* check the fd to be closed. If the fd pointing to something like
- * 'socket:[xxxx]' or 'anon_inode:[eventpoll]', print out a warning
- * since DAOS network contexts may be using such fds. This might be
- * helpful in debugging.
- */
-/*
-static void
-check_fd_to_close(int fd)
-{
-	char    fd_path[64];
-	char   *path;
-	ssize_t len;
-
-	D_ALLOC(path, DFS_MAX_PATH);
-	if (path == NULL)
-		return;
-	snprintf(fd_path, sizeof(fd_path) - 1, "/proc/self/fd/%d", fd);
-	len = readlink(fd_path, path, DFS_MAX_PATH - 1);
-	if (len < 0) {
-		DS_ERROR(errno, "readlink() failed");
-		goto out;
-	}
-	path[len] = 0;
-	if (strncmp(path, "socket:", 7) == 0 || strncmp(path, "anon_inode:[eventpoll]", 22) == 0) {
-		D_DEBUG(DB_ANY, "dup2/fcntl is closing fd %d (%s) which may be used by DAOS!", fd,
-			path);
-	}
-
-out:
-	D_FREE(path);
-}
-*/
 
 /* The macro was added to fix the compiling issue on CentOS 7.9.
  * Those issues could be resolved by adding -D_FILE_OFFSET_BITS=64, however

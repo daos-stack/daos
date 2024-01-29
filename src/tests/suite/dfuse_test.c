@@ -639,7 +639,7 @@ do_exec(void **state)
 	pid_t pid;
 	int   status, rc, fd;
 	char *envp[1] = {NULL};
-	char *argv[3] = {"dfuse_test", "-c", NULL};
+	char *argv[3] = {"dfuse_test", "-v", NULL};
 	char *exe_path;
 	char *env_ldpreload;
 
@@ -692,7 +692,7 @@ do_exec(void **state)
 	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
 
-	/* fork and call execvpe() */
+	/* fork and call fexecve() */
 	printf("Testing fexecve().\n");
 	fd = open(exe_path, O_RDONLY);
 	assert_true(fd > 0);
