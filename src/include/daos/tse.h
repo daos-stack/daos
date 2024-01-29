@@ -52,7 +52,7 @@ typedef struct {
 	}			ds_private;
 } tse_sched_t;
 
-/** Callback function for when all taks in scheduler are complete */
+/** Callback function for when all tasks in scheduler are complete */
 typedef int (*tse_sched_comp_cb_t)(void *args, int rc);
 /** A task callback function */
 typedef int (*tse_task_func_t)(tse_task_t *);
