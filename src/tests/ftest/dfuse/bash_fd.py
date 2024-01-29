@@ -1,5 +1,5 @@
 """
-  (C) Copyright 24 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -80,7 +80,7 @@ exit 0
 class FdTest(DfuseTestBase):
     """Base FdTest test class.
 
-    "avocado: recursive
+    :avocado: recursive
     """
 
     def run_bashfd(self, il_lib=None):
