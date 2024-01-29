@@ -488,7 +488,8 @@ func TestServer_bdevScan(t *testing.T) {
 				Ctrlrs: proto.NvmeControllers{
 					func() *ctlpb.NvmeController {
 						nc := &ctlpb.NvmeController{
-							PciAddr: "050505:01:00.0",
+							PciAddr:  "050505:01:00.0",
+							DevState: ctlpb.NvmeDevState_NORMAL,
 						}
 						nc.SmdDevices = []*ctlpb.SmdDevice{
 							{Rank: uint32(ranklist.NilRank)},
@@ -497,7 +498,8 @@ func TestServer_bdevScan(t *testing.T) {
 					}(),
 					func() *ctlpb.NvmeController {
 						nc := &ctlpb.NvmeController{
-							PciAddr: "050505:03:00.0",
+							PciAddr:  "050505:03:00.0",
+							DevState: ctlpb.NvmeDevState_NORMAL,
 						}
 						nc.SmdDevices = []*ctlpb.SmdDevice{
 							{Rank: uint32(ranklist.NilRank)},
