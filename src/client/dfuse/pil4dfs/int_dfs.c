@@ -1930,7 +1930,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	}
 	/* file/dir should be handled by DFS */
 	/* O_APPEND causes failure in dfs_open/dfs_lookup. We allows O_APPEND here to support bash
-	 * scripts like configure. Currently, we only query file size one time when openning the
+	 * scripts like configure. Currently, we only query file size one time when opening the
 	 * file, then set file pointer to the end of the file. We DO NOT move file pointer to the
 	 * end of the file in all following write to avoid expensive stat. We may need shared lock
 	 * across all processes on current node to better support O_APPEND later.
@@ -3322,29 +3322,29 @@ extern char **__environ;
 static char **
 pre_envp(char *const envp[])
 {
-	int	i, rc, num_entry = 0;
-	int     idx_preload = -1;
-	int     len, len2, len_total;
-	char  **new_envp;
-	bool    preload_included = false;
-	bool    pil4dfs_in_preload = false;
-	bool    report_included = false;
-	bool    mp_included = false;
-	bool    pool_included = false;
-	bool    cont_included = false;
-	bool    maxeq_included = false;
-	bool    enforcement_included = false;
-	char   *fs_root   = NULL;
-	char   *pool      = NULL;
-	char   *container = NULL;
-	char   *new_preload_str = NULL;
-	char   *pil4df_path;
-	char   *str_report = NULL;
-	char   *str_mp = NULL;
-	char   *str_pool = NULL;
-	char   *str_cont = NULL;
-	char   *str_maxeq = NULL;
-	char   *str_enforcement = NULL;
+	int    i, rc, num_entry = 0;
+	int    idx_preload = -1;
+	int    len, len2, len_total;
+	char **new_envp;
+	bool   preload_included = false;
+	bool   pil4dfs_in_preload = false;
+	bool   report_included = false;
+	bool   mp_included = false;
+	bool   pool_included = false;
+	bool   cont_included = false;
+	bool   maxeq_included = false;
+	bool   enforcement_included = false;
+	char  *fs_root   = NULL;
+	char  *pool      = NULL;
+	char  *container = NULL;
+	char  *new_preload_str = NULL;
+	char  *pil4df_path;
+	char  *str_report = NULL;
+	char  *str_mp = NULL;
+	char  *str_pool = NULL;
+	char  *str_cont = NULL;
+	char  *str_maxeq = NULL;
+	char  *str_enforcement = NULL;
 
 	if (envp == NULL) {
 		num_entry = 0;
