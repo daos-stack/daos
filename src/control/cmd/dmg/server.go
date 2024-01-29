@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -49,7 +48,7 @@ func (cmd *serverSetLogMasksCmd) Execute(_ []string) (errOut error) {
 
 	cmd.Debugf("set log masks request: %+v", req)
 
-	resp, err := control.SetEngineLogMasks(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.SetEngineLogMasks(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}

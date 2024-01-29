@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -14,15 +14,6 @@ class ContRedundancyFactor(RebuildTestBase):
 
     :avocado: recursive
     """
-
-    def create_test_container(self):
-        """Create a container and write objects."""
-        self.log.info(
-            "==>(1)Create pool and container with redundant factor,"
-            " start background IO object write")
-        self.container.create()
-        self.container.write_objects(self.inputs.rank.value[0], self.inputs.object_class.value)
-
     def verify_rank_has_objects(self):
         """Verify the first rank to be excluded has at least one object."""
         rank_list = self.container.get_target_rank_lists(" before rebuild")
@@ -136,19 +127,21 @@ class ContRedundancyFactor(RebuildTestBase):
                     self.fail("#Negative test, container redundancy factor "
                               "test failed, return error RC: -1003 not found")
 
-    def execute_cont_rf_test(self, mode, create_container=True):
+    def execute_cont_rf_test(self, create_container=True, mode=None):
         """Execute the rebuild test steps for container rd_fac test.
 
         Args:
             mode (str): "cont_rf_with_rebuild" or "cont_rf_enforcement"
             create_container (bool, optional): should the test create a
                 container. Defaults to True.
+            mode (str): either "cont_rf_with_rebuild" or "cont_rf_enforcement"
         """
         # Get the test params and var
         self.setup_test_pool()
         if create_container:
             self.setup_test_container()
         oclass = self.inputs.object_class.value
+        # Negative testing pertains to RF enforcement when creating objects - not rebuild
         negative_test = True
         rd_fac = ''.join(self.container.properties.value.split(":"))
         rf_match = re.search(r"rd_fac([0-9]+)", rd_fac)
@@ -163,6 +156,7 @@ class ContRedundancyFactor(RebuildTestBase):
         self.create_test_pool()
         # Create a container and write objects
         self.create_test_container_and_write_obj(negative_test)
+
         if mode == "cont_rf_with_rebuild":
             num_of_ranks = len(self.inputs.rank.value)
             if num_of_ranks > rf_num:
@@ -191,4 +185,4 @@ class ContRedundancyFactor(RebuildTestBase):
         elif mode == "cont_rf_enforcement":
             self.log.info("Container rd_fac test passed")
         else:
-            self.fail("#Unsupported container_rf test mode")
+            self.fail(f"Unsupported container_rf test mode: {mode}")

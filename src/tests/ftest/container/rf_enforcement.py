@@ -39,4 +39,4 @@ class ContRfEnforce(ContRedundancyFactor):
         :avocado: tags=container_rf,cont_rf_oclass_enforcement
         :avocado: tags=ContRfEnforce,test_container_redundancy_factor_oclass_enforcement
         """
-        self.execute_cont_rf_test("cont_rf_enforcement")
+        self.execute_cont_rf_test(mode="cont_rf_enforcement")
