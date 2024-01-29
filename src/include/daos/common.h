@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2024 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,16 +25,14 @@
 #include <byteswap.h>
 
 #include <daos_errno.h>
-#include <daos_types.h>
-#include <daos_obj.h>
-#include <daos_prop.h>
-#include <daos_security.h>
-
 #include <daos/debug.h>
 #include <gurt/hash.h>
 #include <gurt/common.h>
 #include <cart/api.h>
-
+#include <daos_types.h>
+#include <daos_obj.h>
+#include <daos_prop.h>
+#include <daos_security.h>
 #include <daos/profile.h>
 #include <daos/dtx.h>
 #include <daos/cmd_parser.h>

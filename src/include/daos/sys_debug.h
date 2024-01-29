@@ -10,7 +10,7 @@
 #ifndef __DC_DEBUG_H__
 #define __DC_DEBUG_H__
 
-#include <daos_task.h>
+#include <daos/tse.h>
 
 int dc_debug_set_params(tse_task_t *task);
 int dc_debug_add_mark(const char *mark);

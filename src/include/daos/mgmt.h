@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,10 +10,9 @@
 #ifndef __DC_MGMT_H__
 #define __DC_MGMT_H__
 
-#include <daos_types.h>
-#include <daos/tse.h>
-
 #include <daos/common.h>
+#include <daos/tse.h>
+#include <daos_types.h>
 #include <daos/pool.h>
 #include "svc.pb-c.h"
 

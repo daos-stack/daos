@@ -26,9 +26,9 @@
 /** tse_task is used to track single asynchronous operation (8 bytes used for public members). */
 #define TSE_TASK_SIZE		(TSE_PRIV_SIZE + 8)
 
-/** A single task */
+/** struct for a task object that is used for tracking an operation */
 typedef struct tse_task {
-	/** the result */
+	/** result of the task operation - valid after task completion */
 	int			dt_result;
 	/** padding bytes */
 	int			dt_pad32;
@@ -38,11 +38,9 @@ typedef struct tse_task {
 	}			dt_private;
 } tse_task_t;
 
-/**
- * Track all of the tasks under a scheduler.
- */
+/** struct for a schedule object that is used for tracking a number of tasks */
 typedef struct {
-	/** the result */
+	/** culmulative result of all task operations - valid after schedule completion */
 	int		ds_result;
 
 	/** user data associated with the scheduler (completion cb data, etc.) */
@@ -54,9 +52,9 @@ typedef struct {
 	}			ds_private;
 } tse_sched_t;
 
-/** Callaback function for when a scheduler is done */
+/** Callback function for when all taks in scheduler are complete */
 typedef int (*tse_sched_comp_cb_t)(void *args, int rc);
-/** Callaback function for when a task is done */
+/** A task callback function */
 typedef int (*tse_task_func_t)(tse_task_t *);
 
 /** CB type for prepare, completion, and result processing */
