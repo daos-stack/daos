@@ -17,8 +17,8 @@
 #include <gurt/atomic.h>
 #include <gurt/slab.h>
 
-#include "daos.h"
-#include "daos_fs.h"
+#include <daos.h>
+#include <daos_fs.h>
 
 #include "dfs_internal.h"
 
@@ -28,7 +28,7 @@ struct dfuse_info {
 	struct fuse_session *di_session;
 	char                *di_group;
 	char                *di_mountpoint;
-	uint32_t             di_thread_count;
+	int32_t              di_thread_count;
 	uint32_t             di_eq_count;
 	bool                 di_threaded;
 	bool                 di_foreground;

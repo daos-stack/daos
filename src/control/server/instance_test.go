@@ -280,3 +280,11 @@ func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountR
 func (mi *MockInstance) GetStorage() *storage.Provider {
 	return nil
 }
+
+func (mi *MockInstance) Debugf(format string, args ...interface{}) {
+	return
+}
+
+func (mi *MockInstance) Tracef(format string, args ...interface{}) {
+	return
+}

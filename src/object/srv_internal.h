@@ -236,11 +236,14 @@ obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_si
 }
 
 struct ds_obj_exec_arg {
-	crt_rpc_t		*rpc;
-	struct obj_io_context	*ioc;
-	void			*args;
-	uint32_t		 flags;
-	uint32_t		 start; /* The start shard for EC obj. */
+	crt_rpc_t			*rpc;
+	struct obj_io_context		*ioc;
+	void				*args;
+	uint32_t			 flags;
+	uint32_t			 start; /* The start shard for EC obj. */
+	struct daos_coll_shard		*coll_shards;
+	struct daos_coll_target		*coll_tgts;
+	struct obj_coll_disp_cursor	 coll_cur;
 };
 
 int
@@ -252,6 +255,9 @@ ds_obj_remote_punch(struct dtx_leader_handle *dth, void *arg, int idx,
 int
 ds_obj_cpd_dispatch(struct dtx_leader_handle *dth, void *arg, int idx,
 		    dtx_sub_comp_cb_t comp_cb);
+int
+ds_obj_coll_punch_remote(struct dtx_leader_handle *dth, void *arg, int idx,
+			 dtx_sub_comp_cb_t comp_cb);
 
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
@@ -266,6 +272,7 @@ void ds_obj_migrate_handler(crt_rpc_t *rpc);
 void ds_obj_ec_agg_handler(crt_rpc_t *rpc);
 void ds_obj_ec_rep_handler(crt_rpc_t *rpc);
 void ds_obj_cpd_handler(crt_rpc_t *rpc);
+void ds_obj_coll_punch_handler(crt_rpc_t *rpc);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
 struct daos_cpd_args {

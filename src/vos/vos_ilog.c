@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -428,7 +428,7 @@ update:
 	}
 
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, dth == NULL, &loh);
 	if (rc != 0) {
 		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -525,7 +525,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 
 punch_log:
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, dth == NULL, &loh);
 	if (rc != 0) {
 		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
 		return rc;

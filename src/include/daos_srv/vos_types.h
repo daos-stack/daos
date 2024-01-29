@@ -26,15 +26,6 @@ struct dtx_rsrvd_uint {
 	d_list_t		dru_nvme;
 };
 
-enum dtx_cos_flags {
-	DCF_SHARED		= (1 << 0),
-	/* Some DTX (such as for the distributed transaction across multiple
-	 * RDGs, or for EC object modification) need to be committed via DTX
-	 * RPC instead of piggyback via other dispatched update/punch RPC.
-	 */
-	DCF_EXP_CMT		= (1 << 1),
-};
-
 enum dtx_stat_flags {
 	/* Skip bad DTX entries (such as corruptted ones) when stat. */
 	DSF_SKIP_BAD		= (1 << 1),
@@ -289,7 +280,7 @@ enum {
 	/** Dynamic evtree root supported for this pool */
 	VOS_POOL_FEAT_DYN_ROOT = (1ULL << 2),
 	/** Embedded value in tree root supported */
-	VOS_POOL_FEAT_EMB_VALUE = (1ULL << 3),
+	VOS_POOL_FEAT_EMBED_FIRST = (1ULL << 3),
 	/** Flat DKEY support enabled */
 	VOS_POOL_FEAT_FLAT_DKEY = (1ULL << 4),
 };

@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -21,6 +20,7 @@ import (
 type dumpAttachInfoCmd struct {
 	configCmd
 	ctlInvokerCmd
+	cmdutil.LogCmd
 	cmdutil.JSONOutputCmd
 	Output      string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
 	ProviderIdx *uint  `short:"n" long:"provider_idx" description:"Index of provider to fetch (if multiple)"`
@@ -37,7 +37,7 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		out = f
 	}
 
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	req := &control.GetAttachInfoReq{
 		AllRanks: true,
 	}
