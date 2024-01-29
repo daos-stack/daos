@@ -174,6 +174,7 @@ export TEST_RPMS
 export DAOS_BASE
 export DAOS_TEST_APP_SRC=${DAOS_TEST_APP_SRC:-"/scratch/daos_test/apps"}
 export DAOS_TEST_APP_DIR=${DAOS_TEST_APP_DIR:-"${DAOS_TEST_SHARED_DIR}/daos_test/apps"}
+export COVFN_DISABLED
 
 launch_node_args="-ts ${TEST_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then

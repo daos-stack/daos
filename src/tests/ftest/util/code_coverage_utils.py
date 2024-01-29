@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -24,6 +24,7 @@ class CodeCoverage():
 
     def check(self, logger, hosts):
         """Determine if bullseye code coverage collection is enabled.
+           Check if COVFN_DISABLED is set to False.
 
         Args:
             logger (Logger): logger for the messages produced by this method
@@ -31,10 +32,10 @@ class CodeCoverage():
         """
         logger.debug("-" * 80)
         logger.debug("Checking for bullseye code coverage configuration")
-        result = run_remote(logger, hosts, " ".join(["ls", "-al", self.__test_env.bullseye_src]))
-        if not result.passed:
-            logger.info(
-                "Bullseye code coverage collection not configured on %s", result.failed_hosts)
+        bullseye_disabled = os.environ.get("COVFN_DISABLED", True)
+        logger.debug("  COVFN_DISABLED = %s", bullseye_disabled)
+        if str(bullseye_disabled).lower() == "true":
+            logger.info("Bullseye code coverage collection not configured")
             self.__hosts = None
         else:
             logger.info("Bullseye code coverage collection configured on %s", hosts)
@@ -64,10 +65,10 @@ class CodeCoverage():
             result.fail_test(logger, "Run", message, None)
             return False
 
-        logger.debug("Copying %s bullseye code coverage source file", self.__test_env.bullseye_src)
-        command = ["cp", self.__test_env.bullseye_src, self.__test_env.bullseye_file]
+        logger.debug("Creating %s bullseye code coverage source file", self.__test_env.bullseye_src)
+        command = ["touch", self.__test_env.bullseye_file]
         if not run_remote(logger, self.__hosts, " ".join(command)).passed:
-            message = "Error copying bullseye code coverage file on at least one host"
+            message = "Error creating bullseye code coverage file on at least one host"
             result.fail_test(logger, "Run", message, None)
             return False
 
