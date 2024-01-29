@@ -974,6 +974,13 @@ libpil4dfs intercepting summary for ops on DFS:
 [op_sum ]  5003
 ```
 
+### Change dir cache timeout with env
+
+Directory caching is employed for better performance. The default timeout is 10 seconds. User can change it if necessary. The unit is second and an integer should be provided.
+```
+$ export D_IL_DCACHE_TIMEOUT=5
+```
+
 ### Limitations of using libpil4dfs
 Stability issues: This is a preview version. Some features are not implemented yet. Many APIs are involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc. 
 
