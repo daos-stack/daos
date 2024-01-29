@@ -376,6 +376,7 @@ struct bio_xs_blobstore {
 	struct bio_blobstore	*bxb_blobstore;
 	/* All I/O contexts for this xstream blobstore */
 	d_list_t		 bxb_io_ctxts;
+	bool			 bxb_ready;
 };
 
 /* Per-xstream NVMe context */
@@ -391,6 +392,7 @@ struct bio_xs_context {
 struct bio_io_context {
 	d_list_t		 bic_link; /* link to bxb_io_ctxts */
 	struct spdk_blob	*bic_blob;
+	spdk_blob_id		 bic_blob_id;
 	struct bio_xs_blobstore	*bic_xs_blobstore;
 	struct bio_xs_context	*bic_xs_ctxt;
 	uint32_t		 bic_inflight_dmas;
