@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/ioctl.h>
@@ -37,7 +38,7 @@
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdlfe";
+static const char *all_tests = "ismdlfec";
 
 static void
 print_usage()
@@ -55,6 +56,7 @@ print_usage()
 	print_message("dfuse_test -e|--exec\n");
 	/* verifyenv is only run by exec test. Should not be executed directly */
 	/* print_message("dfuse_test    --verifyenv\n");                       */
+	print_message("dfuse_test -c|--cache\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -782,6 +784,72 @@ do_exec(void **state)
 		assert_int_equal(WEXITSTATUS(status), 0);
 }
 
+/*
+ * Check the consistency of dir caching in interception library.
+ *
+ * Create a directory
+ * Create a file under this directory
+ * Remove the file
+ * Remove the directory
+ * Create this directory again
+ * Create the same file again
+ * Create a child process with fork and executable cat to show the content of the file
+ *
+ * Failure to pass means dir caching has inconsistency
+ */
+void
+do_cachingcheck(void **state)
+{
+	int   fd;
+	int   rc;
+	int   pid;
+	int   status;
+	char  dir_name[256];
+	char  file_name[256];
+	char  exe_name[] = "/usr/bin/cat";
+	char *argv[3];
+
+	snprintf(dir_name, 256, "%s/%s", test_dir, "test_dir");
+	snprintf(file_name, 256, "%s/%s/%s", test_dir, "test_dir", "test_file");
+
+	rc = mkdir(dir_name, 0740);
+	assert_return_code(rc, errno);
+
+	fd = open(file_name, O_WRONLY | O_TRUNC | O_CREAT, 0640);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(file_name);
+	assert_return_code(rc, errno);
+
+	rc = rmdir(dir_name);
+	assert_return_code(rc, errno);
+
+	rc = mkdir(dir_name, 0740);
+	assert_return_code(rc, errno);
+
+	fd = open(file_name, O_WRONLY | O_TRUNC | O_CREAT, 0640);
+	assert_return_code(fd, errno);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* fork() to create a child process and exec() to run "cat test_file" */
+	pid = fork();
+	if (pid == 0) {
+		argv[0] = exe_name;
+		argv[1] = file_name;
+		argv[2] = NULL;
+		/* Run command "cat test_file" in a new process */
+		execv(exe_name, argv);
+	}
+	rc = unlink(file_name);
+	assert_return_code(rc, errno);
+
+	rc = rmdir(dir_name);
+	assert_return_code(rc, errno);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -803,6 +871,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			};
 			nr_failed += cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;
+
 		case 's':
 			printf("\n\n=================");
 			printf("dfuse streaming tests");
@@ -864,6 +933,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(exec_tests, NULL, NULL);
 			break;
 
+		case 'c':
+			printf("\n\n=================");
+			printf("dfuse dir cache consistency check");
+			printf("=====================\n");
+			const struct CMUnitTest cache_tests[] = {
+			    cmocka_unit_test(do_cachingcheck),
+			};
+			nr_failed += cmocka_run_group_tests(cache_tests, NULL, NULL);
+			break;
+
 		default:
 			assert_true(0);
 		}
@@ -891,10 +970,11 @@ main(int argc, char **argv)
 					       {"mmap", no_argument, NULL, 'f'},
 					       {"lowfd", no_argument, NULL, 'l'},
 					       {"exec", no_argument, NULL, 'e'},
-					       {"verifyenv", no_argument, NULL, 'c'},
+					       {"verifyenv", no_argument, NULL, 't'},
+					       {"cache", no_argument, NULL, 'c'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdlfe", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlfetc", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
@@ -906,7 +986,7 @@ main(int argc, char **argv)
 		case 'M':
 			test_dir = optarg;
 			break;
-		case 'c':
+		case 't':
 			/* only run by child process */
 			verify_pil4dfs_env();
 			break;

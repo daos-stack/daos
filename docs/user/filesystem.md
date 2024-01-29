@@ -50,30 +50,30 @@ The following features from POSIX are not supported:
 
 * Hard links
 * mmap support with MAP\_SHARED will be consistent from single client only and only when data
-  caching is enabled. Note that this is supported through DFUSE only (i.e. not through the DFS API).
-  The dfuse-data-cache=otoc container attribute allows this without enabling other caching.
+caching is enabled. Note that this is supported through DFUSE only (i.e. not through the DFS API).
+The dfuse-data-cache=otoc container attribute allows this without enabling other caching.
 * Char devices, block devices, sockets and pipes
 * User/group quotas
 * setuid(), setgid() programs, supplementary groups, POSIX ACLs are not supported
-  within the DFS namespace.
+within the DFS namespace.
 * [access/change/modify] time not updated appropriately, potentially on close only.
 * Flock (maybe at dfuse local node level only)
 * Block size in stat buf is not accurate (no account for holes, extended attributes)
 * Various parameters reported via statfs like number of blocks, files,
-  free/available space
+free/available space
 * POSIX permissions inside an encapsulated namespace
-  * Still enforced at the DAOS pool/container level
-  * Effectively means that all files belong to the same "project"
+* Still enforced at the DAOS pool/container level
+* Effectively means that all files belong to the same "project"
 
 !!! note
-    DFS directories do not include the `.` (current directory) and `..` (parent directory)
-    directory entries that are known from other POSIX filesystems.
-    Commands like `ls -al` will not include these entries in their output.
-    Those directory entries are not required by POSIX, so this is not a limitation to POSIX
-    compliance. But scripts that parse directory listings under the assumption that those dot
-    directories are present may need to be adapted to correctly handle this situation.
-    Note that operations like `cd .` or `cd ..` will still succeed in dfuse-mounted POSIX
-    containers.
+DFS directories do not include the `.` (current directory) and `..` (parent directory)
+directory entries that are known from other POSIX filesystems.
+Commands like `ls -al` will not include these entries in their output.
+Those directory entries are not required by POSIX, so this is not a limitation to POSIX
+compliance. But scripts that parse directory listings under the assumption that those dot
+directories are present may need to be adapted to correctly handle this situation.
+Note that operations like `cd .` or `cd ..` will still succeed in dfuse-mounted POSIX
+containers.
 
 It is possible to use `libdfs` in a parallel application from multiple nodes.
 DFS provides two modes that offer different levels of consistency. The modes can
@@ -92,26 +92,26 @@ it can be accessed in relaxed or balanced mode. In either mode, there is a
 consistency semantic issue that is not properly handled:
 
 * Open-unlink semantics: This occurs when a client obtains an open handle on an
-  object (file or directory), and accesses that object (reads/writes data or
-  create other files), while another client removes that object that the other
-  client has opened from under it. In DAOS, we don't track object open handles
-  as that would be very expensive, and so in such conflicting cases, the worst
-  case scenario is the lost/leaked space that is written to those orphan objects
-  that have been unlinked from the namespace.
+object (file or directory), and accesses that object (reads/writes data or
+create other files), while another client removes that object that the other
+client has opened from under it. In DAOS, we don't track object open handles
+as that would be very expensive, and so in such conflicting cases, the worst
+case scenario is the lost/leaked space that is written to those orphan objects
+that have been unlinked from the namespace.
 
 Other consistency issues are handled differently between the two consistency mode:
 
 * Same Operation Executed Concurrently (Supported in both Relaxed and Balanced
-  Mode): For example, clients try to create or remove the same file
-  concurrently, one should succeed and others will fail.
+Mode): For example, clients try to create or remove the same file
+concurrently, one should succeed and others will fail.
 * Create/Unlink/Rename Conflicts (Supported in Balanced Mode only): For example,
-  a client renames a file, but another unlinks the old file at the same time.
+a client renames a file, but another unlinks the old file at the same time.
 * Operation Atomicity (Supported only in Balanced mode): If a client crashes in
-  the middle of the rename, the state of the container should be consistent as
-  if the operation never happened.
+the middle of the rename, the state of the container should be consistent as
+if the operation never happened.
 * Visibility (Supported in Balanced and Relaxed mode): A write from one client
-  should be visible to another client with a simple coordination between the
-  clients.
+should be visible to another client with a simple coordination between the
+clients.
 
 ## Unified NameSpace (UNS)
 
@@ -263,17 +263,17 @@ $  dmg pool create --scm-size=8G --nvme-size=64G --label=samirrav_pool -u samirr
 Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
 Pool created with 11.11%,88.89% storage tier ratio
 --------------------------------------------------
-  UUID                 : b43b06fe-4013-4177-911c-6d230b88fe6e
-  Service Ranks        : [1-5]
-  Storage Ranks        : [0-7]
-  Total Size           : 576 GB
-  Storage tier 0 (SCM) : 64 GB (8.0 GB / rank)
-  Storage tier 1 (NVMe): 512 GB (64 GB / rank)
+UUID                 : b43b06fe-4013-4177-911c-6d230b88fe6e
+Service Ranks        : [1-5]
+Storage Ranks        : [0-7]
+Total Size           : 576 GB
+Storage tier 0 (SCM) : 64 GB (8.0 GB / rank)
+Storage tier 1 (NVMe): 512 GB (64 GB / rank)
 
 $  daos cont create samirrav_pool samirrav_cont --type=POSIX
-  Container UUID : 6efdc02c-5eaa-4a29-a34b-a062f1fe3371
-  Container Label: samirrav_cont
-  Container Type : POSIX
+Container UUID : 6efdc02c-5eaa-4a29-a34b-a062f1fe3371
+Container Label: samirrav_cont
+Container Type : POSIX
 
 Successfully created container 6efdc02c-5eaa-4a29-a34b-a062f1fe3371
 $  daos cont get-prop samirrav_pool samirrav_cont
@@ -322,17 +322,17 @@ $  dmg pool create --scm-size=8G --nvme-size=64G --label=admin_pool
 Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
 Pool created with 11.11%,88.89% storage tier ratio
 --------------------------------------------------
-  UUID                 : 97196853-a487-41b2-a5d2-286e62f14e9e
-  Service Ranks        : [1-5]
-  Storage Ranks        : [0-7]
-  Total Size           : 576 GB
-  Storage tier 0 (SCM) : 64 GB (8.0 GB / rank)
-  Storage tier 1 (NVMe): 512 GB (64 GB / rank)
+UUID                 : 97196853-a487-41b2-a5d2-286e62f14e9e
+Service Ranks        : [1-5]
+Storage Ranks        : [0-7]
+Total Size           : 576 GB
+Storage tier 0 (SCM) : 64 GB (8.0 GB / rank)
+Storage tier 1 (NVMe): 512 GB (64 GB / rank)
 
 $  daos cont create admin_pool admin_cont --type=POSIX
-  Container UUID : ac4fb4db-a15e-45bf-8225-b71d34e3e578
-  Container Label: admin_cont
-  Container Type : POSIX
+Container UUID : ac4fb4db-a15e-45bf-8225-b71d34e3e578
+Container Label: admin_cont
+Container Type : POSIX
 
 Successfully created container ac4fb4db-a15e-45bf-8225-b71d34e3e578
 $  daos cont get-prop admin_pool admin_cont
@@ -379,17 +379,17 @@ $ dmg pool create --scm-size=8G --nvme-size=64G samirrav_pool -u samirrav@ -g sa
 Creating DAOS pool with manual per-engine storage allocation: 8.0 GB SCM, 64 GB NVMe (12.50% ratio)
 Pool created with 11.11%,88.89% storage tier ratio
 --------------------------------------------------
-  UUID                 : a635cc99-22b3-4af4-8cee-d756463b5ca0
-  Service Ranks        : [0-1]
-  Storage Ranks        : [0-1]
-  Total Size           : 144 GB
-  Storage tier 0 (SCM) : 16 GB (8.0 GB / rank)
-  Storage tier 1 (NVMe): 128 GB (64 GB / rank)
+UUID                 : a635cc99-22b3-4af4-8cee-d756463b5ca0
+Service Ranks        : [0-1]
+Storage Ranks        : [0-1]
+Total Size           : 144 GB
+Storage tier 0 (SCM) : 16 GB (8.0 GB / rank)
+Storage tier 1 (NVMe): 128 GB (64 GB / rank)
 
 $ daos cont create samirrav_pool --type='POSIX' samirrav_cont
-  Container UUID : 8dc1a401-1b55-486e-ba70-c4a713eb3c0d
-  Container Label: samirrav_cont
-  Container Type : POSIX
+Container UUID : 8dc1a401-1b55-486e-ba70-c4a713eb3c0d
+Container Label: samirrav_cont
+Container Type : POSIX
 
 Successfully created container 8dc1a401-1b55-486e-ba70-c4a713eb3c0d
 $
@@ -410,18 +410,18 @@ samirrav_dfuse.service         disabled
 
 $ systemctl --user status samirrav_dfuse.service
 ● samirrav_dfuse.service
-   Loaded: loaded (/home/samirrav/.config/systemd/user/samirrav_dfuse.service; disabled; vendor preset: enabled)
-   Active: inactive (dead)
+Loaded: loaded (/home/samirrav/.config/systemd/user/samirrav_dfuse.service; disabled; vendor preset: enabled)
+Active: inactive (dead)
 
 $ systemctl --user start samirrav_dfuse.service
 
 $ systemctl --user status samirrav_dfuse.service
 ● samirrav_dfuse.service
-   Loaded: loaded (/home/samirrav/.config/systemd/user/samirrav_dfuse.service; disabled; vendor preset: enabled)
-   Active: active (running) since Thu 2022-10-20 15:41:46 UTC; 1s ago
- Main PID: 2845753 (dfuse)
-   CGroup: /user.slice/user-11832957.slice/user@11832957.service/samirrav_dfuse.service
-           └─2845753 /usr/bin/dfuse --foreground -m /scratch_fs/samirrav_dfuse/ --pool samirrav_pool --cont samirrav_cont
+Loaded: loaded (/home/samirrav/.config/systemd/user/samirrav_dfuse.service; disabled; vendor preset: enabled)
+Active: active (running) since Thu 2022-10-20 15:41:46 UTC; 1s ago
+Main PID: 2845753 (dfuse)
+CGroup: /user.slice/user-11832957.slice/user@11832957.service/samirrav_dfuse.service
+   └─2845753 /usr/bin/dfuse --foreground -m /scratch_fs/samirrav_dfuse/ --pool samirrav_pool --cont samirrav_cont
 
 $ df -h | grep fuse
 dfuse                         135G  1.3G  133G   1% /scratch_fs/samirrav_dfuse
@@ -470,12 +470,12 @@ $  cp -rf /tmp/scratch_fs-root_dfuse.mount  /usr/lib/systemd/system/
 $  systemctl daemon-reload
 $  systemctl status scratch_fs-root_dfuse.mount
 ● scratch_fs-root_dfuse.mount - /scratch_fs/root_dfuse
-   Loaded: loaded (/etc/fstab; generated)
-   Active: inactive (dead) since Fri 2022-09-23 15:55:33 UTC; 1min 50s ago
-    Where: /scratch_fs/root_dfuse
-     What: dfuse
-     Docs: man:fstab(5)
-           man:systemd-fstab-generator(8)
+Loaded: loaded (/etc/fstab; generated)
+Active: inactive (dead) since Fri 2022-09-23 15:55:33 UTC; 1min 50s ago
+Where: /scratch_fs/root_dfuse
+What: dfuse
+Docs: man:fstab(5)
+   man:systemd-fstab-generator(8)
 
 Sep 23 15:55:33 wolf-170.wolf.hpdd.intel.com systemd[1]: scratch_fs-root_dfuse.mount: Succeeded.
 $  systemctl start scratch_fs-root_dfuse.mount
@@ -485,31 +485,31 @@ $  ls -l /scratch_fs/root_dfuse/
 total 0
 $  systemctl status scratch_fs-root_dfuse.mount
 ● scratch_fs-root_dfuse.mount - /scratch_fs/root_dfuse
-   Loaded: loaded (/etc/fstab; generated)
-   Active: active (mounted) since Fri 2022-09-23 15:57:53 UTC; 31s ago
-    Where: /scratch_fs/root_dfuse
-     What: dfuse
-     Docs: man:fstab(5)
-           man:systemd-fstab-generator(8)
-    Tasks: 63 (limit: 1648282)
-   Memory: 51.5M
-   CGroup: /system.slice/scratch_fs-root_dfuse.mount
-           └─4173 dfuse /scratch_fs/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
+Loaded: loaded (/etc/fstab; generated)
+Active: active (mounted) since Fri 2022-09-23 15:57:53 UTC; 31s ago
+Where: /scratch_fs/root_dfuse
+What: dfuse
+Docs: man:fstab(5)
+   man:systemd-fstab-generator(8)
+Tasks: 63 (limit: 1648282)
+Memory: 51.5M
+CGroup: /system.slice/scratch_fs-root_dfuse.mount
+   └─4173 dfuse /scratch_fs/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
 
 Sep 23 15:57:52 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
 Sep 23 15:57:53 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
 $  systemctl stop scratch_fs-root_dfuse.mount
 $  systemctl status scratch_fs-root_dfuse.mount
 ● scratch_fs-root_dfuse.mount - /scratch_fs/root_dfuse
-   Loaded: loaded (/etc/fstab; generated)
-   Active: inactive (dead) since Fri 2022-09-23 15:58:32 UTC; 2s ago
-    Where: /scratch_fs/root_dfuse
-     What: dfuse
-     Docs: man:fstab(5)
-           man:systemd-fstab-generator(8)
-    Tasks: 0 (limit: 1648282)
-   Memory: 540.0K
-   CGroup: /system.slice/scratch_fs-root_dfuse.mount
+Loaded: loaded (/etc/fstab; generated)
+Active: inactive (dead) since Fri 2022-09-23 15:58:32 UTC; 2s ago
+Where: /scratch_fs/root_dfuse
+What: dfuse
+Docs: man:fstab(5)
+   man:systemd-fstab-generator(8)
+Tasks: 0 (limit: 1648282)
+Memory: 540.0K
+CGroup: /system.slice/scratch_fs-root_dfuse.mount
 
 Sep 23 15:57:52 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
 Sep 23 15:57:53 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
@@ -521,7 +521,7 @@ $
 
 #### Via systemd during system power ON
 
-  Same systemd file mention in previous example is used to mount the fuse during system power ON.
+Same systemd file mention in previous example is used to mount the fuse during system power ON.
 
 ```
 $  echo -e '\n[Install]\nWantedBy = multi-user.target' >> /usr/lib/systemd/system/scratch_fs-root_dfuse.mount
@@ -560,16 +560,16 @@ $  df -h | grep fuse
 dfuse                         537G  5.1G  532G   1% /scratch_fs/root_dfuse
 $  systemctl status scratch_fs-root_dfuse.mount
 ● scratch_fs-root_dfuse.mount - /scratch_fs/root_dfuse
-   Loaded: loaded (/etc/fstab; enabled; vendor preset: disabled)
-   Active: active (mounted) since Fri 2022-09-23 16:13:35 UTC; 4min 8s ago
-    Where: /scratch_fs/root_dfuse
-     What: dfuse
-     Docs: man:fstab(5)
-           man:systemd-fstab-generator(8)
-    Tasks: 63 (limit: 1648282)
-   Memory: 56.2M
-   CGroup: /system.slice/scratch_fs-root_dfuse.mount
-           └─2346 dfuse /scratch_fs/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
+Loaded: loaded (/etc/fstab; enabled; vendor preset: disabled)
+Active: active (mounted) since Fri 2022-09-23 16:13:35 UTC; 4min 8s ago
+Where: /scratch_fs/root_dfuse
+What: dfuse
+Docs: man:fstab(5)
+   man:systemd-fstab-generator(8)
+Tasks: 63 (limit: 1648282)
+Memory: 56.2M
+CGroup: /system.slice/scratch_fs-root_dfuse.mount
+   └─2346 dfuse /scratch_fs/root_dfuse -o rw pool=admin_pool container=admin_cont dev suid
 
 Sep 23 16:13:34 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounting /scratch_fs/root_dfuse...
 Sep 23 16:13:35 wolf-170.wolf.hpdd.intel.com systemd[1]: Mounted /scratch_fs/root_dfuse.
@@ -622,9 +622,9 @@ $ ls -l
 total 0
 -rw-rw-r-- 1 samirrav samirrav 0 Sep 23 16:31 foo
 $ daos cont create tank mycont3 --type POSIX --path ./link_to_external_container
-  Container UUID : 03f9dc7d-ca6a-4f1e-8246-fd89072cfeca
-  Container Label: mycont3
-  Container Type : POSIX
+Container UUID : 03f9dc7d-ca6a-4f1e-8246-fd89072cfeca
+Container Label: mycont3
+Container Type : POSIX
 
 Successfully created container 03f9dc7d-ca6a-4f1e-8246-fd89072cfeca type POSIX
 $ ls -lrt
@@ -658,9 +658,9 @@ The following types of data will be cached by default.
 * MMAP write optimization
 
 !!! warning
-    Caching is enabled by default in dfuse. This might cause some parallel
-    applications to fail. Please disable caching (--disable-caching option) if
-    you experience this or want up to date data sharing between nodes.
+Caching is enabled by default in dfuse. This might cause some parallel
+applications to fail. Please disable caching (--disable-caching option) if
+you experience this or want up to date data sharing between nodes.
 
 To selectively control caching within a container the following container
 attributes should be used, if any attribute is set then the rest are assumed
@@ -860,10 +860,10 @@ $ D_IL_REPORT=-1 LD_PRELOAD=/usr/lib64/libioil.so dd if=/dev/zero of=./bar bs=1G
 ```
 
 !!! note
-    Some programs, most GNU utilities from the 'coreutils' package have a destructor
-    function to close stderr on exit, so for many basic commands such as cp and cat
-    whilst the interception library will work it is not possible to see the summary
-    generated by the interception library.
+Some programs, most GNU utilities from the 'coreutils' package have a destructor
+function to close stderr on exit, so for many basic commands such as cp and cat
+whilst the interception library will work it is not possible to see the summary
+generated by the interception library.
 
 ### Advanced Usage
 
@@ -880,15 +880,15 @@ will have to be provided from an external source.
 
 ```
 $ daos cont create tank  mycont --type POSIX
-  Container UUID : 7dee7162-8ab2-4704-ad22-8b43f2eb5279
-  Container Label: mycont
-  Container Type : POSIX
+Container UUID : 7dee7162-8ab2-4704-ad22-8b43f2eb5279
+Container Label: mycont
+Container Type : POSIX
 
 Successfully created container 7dee7162-8ab2-4704-ad22-8b43f2eb5279
 $ daos cont create tank  mycont2 --type POSIX
-  Container UUID : 8437e099-b19a-4b33-85da-81f5b3b7a833
-  Container Label: mycont2
-  Container Type : POSIX
+Container UUID : 8437e099-b19a-4b33-85da-81f5b3b7a833
+Container Label: mycont2
+Container Type : POSIX
 
 Successfully created container 8437e099-b19a-4b33-85da-81f5b3b7a833
 $ dfuse -m /scratch_fs/dfuse --pool tank
@@ -987,7 +987,21 @@ libpil4dfs intercepting summary for ops on DFS:
 ```
 
 ### Force pil4dfs related env set in child processes when calling execve and its variants
-Normally child processes inherit environmental variables from parent processes. In rare cases, e.g. scons, envs are striped off when calling execve(). It might be useful to force pil4dfs related env set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 if not set.
+
+Normally child processes inherit environmental variables from parent processes.
+In rare cases, e.g. scons, envs are striped off when calling execve().
+It might be useful to force pil4dfs related env set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1".
+This flag is 0 if not set.
+
+### Change dir cache timeout with env
+
+Directory caching is employed for better performance.
+The default timeout is 10 seconds.
+User can change it if necessary.
+The unit is second and an integer should be provided.
+```
+$ export D_IL_DCACHE_TIMEOUT=5
+```
 
 ### Limitations of using libpil4dfs
 Stability issues: This is a preview version. Some features are not implemented yet. Many APIs are involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc. 
