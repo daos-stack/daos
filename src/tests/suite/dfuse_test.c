@@ -50,8 +50,8 @@ print_usage()
 	print_message("dfuse_test -d|--directory\n");
 	print_message("dfuse_test -l|--lowfd\n");
 	print_message("dfuse_test -e|--exec\n");
-	/* checkenv is only run by exec test. Should not be executed directly */
-	/* print_message("dfuse_test -c|--checkenv\n");                       */
+	/* verifyenv is only run by exec test. Should not be executed directly */
+	/* print_message("dfuse_test -v|--verifyenv\n");                       */
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -578,7 +578,7 @@ do_lowfd(void **state)
 #define ERR_ENV_UNSET (2)
 
 void
-check_pil4dfs_env()
+verify_pil4dfs_env()
 {
 	char *p;
 
@@ -800,10 +800,10 @@ main(int argc, char **argv)
 					       {"directory", no_argument, NULL, 'd'},
 					       {"lowfd", no_argument, NULL, 'l'},
 					       {"exec", no_argument, NULL, 'e'},
-					       {"checkenv", no_argument, NULL, 'c'},
+					       {"verifyenv", no_argument, NULL, 'v'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdlec", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlev", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
@@ -815,9 +815,9 @@ main(int argc, char **argv)
 		case 'M':
 			test_dir = optarg;
 			break;
-		case 'c':
+		case 'v':
 			/* only run by child process */
-			check_pil4dfs_env();
+			verify_pil4dfs_env();
 			break;
 		default:
 			printf("Unknown Option\n");
