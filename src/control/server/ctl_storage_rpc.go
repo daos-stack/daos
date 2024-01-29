@@ -50,6 +50,11 @@ const (
 	mdFsScmBytes uint64 = humanize.MiByte
 )
 
+var (
+	errNoSrvCfg = errors.New("ControlService has no server config")
+	errNilReq   = errors.New("nil request")
+)
+
 // newResponseState creates, populates and returns ResponseState.
 func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg string) *ctlpb.ResponseState {
 	rs := new(ctlpb.ResponseState)
@@ -234,7 +239,7 @@ func bdevScanAssigned(ctx context.Context, cs *ControlService, req *ctlpb.ScanNv
 // or not. If running, scan over dRPC. If not running then use engine's storage provider.
 func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, nsps []*ctlpb.ScmNamespace) (resp *ctlpb.ScanNvmeResp, err error) {
 	if req == nil {
-		return nil, errors.New("nil request")
+		return nil, errNilReq
 	}
 	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
 		return nil, errors.New("cannot scan bdevs if hugepages have been disabled")
@@ -698,7 +703,10 @@ func (cs *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 // StorageScan discovers non-volatile storage hardware on node.
 func (cs *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	if req == nil {
-		return nil, errors.New("nil request")
+		return nil, errNilReq
+	}
+	if cs.srvCfg == nil {
+		return nil, errNoSrvCfg
 	}
 	resp := new(ctlpb.StorageScanResp)
 
@@ -954,6 +962,13 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
 func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq) (*ctlpb.StorageFormatResp, error) {
+	if req == nil {
+		return nil, errNilReq
+	}
+	if cs.srvCfg == nil {
+		return nil, errNoSrvCfg
+	}
+
 	instances := cs.harness.Instances()
 	resp := new(ctlpb.StorageFormatResp)
 	resp.Mrets = make([]*ctlpb.ScmMountResult, 0, len(instances))
@@ -982,7 +997,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 	}
 
 	hugepagesDisabled := false
-	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
+	if cs.srvCfg.DisableHugepages {
 		cs.log.Debug("skipping bdev format as use of hugepages disabled in config")
 		hugepagesDisabled = true
 	} else {
@@ -1023,9 +1038,12 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 // StorageNvmeRebind rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
 func (cs *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeRebindReq) (*ctlpb.NvmeRebindResp, error) {
 	if req == nil {
-		return nil, errors.New("nil request")
+		return nil, errNilReq
 	}
-	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
+	if cs.srvCfg == nil {
+		return nil, errNoSrvCfg
+	}
+	if cs.srvCfg.DisableHugepages {
 		return nil, FaultHugepagesDisabledBadAction
 	}
 
@@ -1063,9 +1081,12 @@ func (cs *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.Nvme
 // If StorageTierIndex is set to -1 in request, add the device to the first configured bdev tier.
 func (cs *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {
 	if req == nil {
-		return nil, errors.New("nil request")
+		return nil, errNilReq
 	}
-	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
+	if cs.srvCfg == nil {
+		return nil, errNoSrvCfg
+	}
+	if cs.srvCfg.DisableHugepages {
 		return nil, FaultHugepagesDisabledBadAction
 	}
 
