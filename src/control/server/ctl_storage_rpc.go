@@ -235,6 +235,9 @@ func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, n
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
+	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
+		return nil, errors.New("cannot scan bdevs if hugepages have been disabled")
+	}
 
 	defer func() {
 		if err == nil && req.Meta {
@@ -980,6 +983,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 	hugepagesDisabled := false
 	if cs.srvCfg != nil && cs.srvCfg.DisableHugepages {
 		cs.log.Debug("skipping bdev format as use of hugepages disabled in config")
+		hugepagesDisabled = true
 	} else {
 		fnr := formatNvmeReq{
 			log:         cs.log,
@@ -998,7 +1002,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 	// Block until all instances have formatted NVMe to avoid
 	// VFIO device or resource busy when starting I/O Engines
 	// because devices have already been claimed during format.
-	for idx, ei := range instances {
+	for idx, engine := range instances {
 		if hugepagesDisabled {
 			// Populate skip NVMe format results for all engines.
 			ret := engine.newCret(storage.NilBdevAddress, nil)
@@ -1009,7 +1013,7 @@ func (cs *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageF
 			cs.log.Errorf("instance %d: %s", idx, msg)
 			continue
 		}
-		ei.NotifyStorageReady()
+		engine.NotifyStorageReady()
 	}
 
 	return resp, nil

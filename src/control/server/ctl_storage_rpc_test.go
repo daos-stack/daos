@@ -75,26 +75,9 @@ func TestServer_bdevScan(t *testing.T) {
 			expErr: errors.New("nil request"),
 		},
 		"hugepages disabled": {
-			req: &ctlpb.ScanNvmeReq{},
-			provRes: &storage.BdevScanResponse{
-				Controllers: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-				},
-			},
-			engTierCfgs: []storage.TierConfigs{
-				{
-					storage.NewTierConfig().
-						WithStorageClass(storage.ClassDcpm.String()).
-						WithScmMountPoint("/mnt/daos0").
-						WithScmDeviceList("/dev/pmem0"),
-				},
-			},
+			req:        &ctlpb.ScanNvmeReq{},
 			disableHPs: true,
-			engStopped: []bool{false},
-			expResp: &ctlpb.ScanNvmeResp{
-				State: new(ctlpb.ResponseState),
-			},
+			expErr:     errors.New("hugepages have been disabled"),
 		},
 		"scan local; no bdevs in config; scan fails": {
 			req:         &ctlpb.ScanNvmeReq{Health: true},
@@ -665,6 +648,7 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 		smbc            *scm.MockBackendConfig
 		tierCfgs        storage.TierConfigs
 		enginesNotReady bool
+		disableHPs      bool
 		expResp         *ctlpb.StorageScanResp
 		expErr          error
 	}{
@@ -785,6 +769,29 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
+		"hugepages disabled": {
+			bdevScanRes: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					ctrlrPB,
+				},
+				State: new(ctlpb.ResponseState),
+			},
+			smbc: &scm.MockBackendConfig{
+				GetModulesRes:    storage.ScmModules{storage.MockScmModule()},
+				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+			},
+			disableHPs: true,
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					State: &ctlpb.ResponseState{},
+				},
+				Scm: &ctlpb.ScanScmResp{
+					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
+					State:      new(ctlpb.ResponseState),
+				},
+				MemInfo: proto.MockPBMemInfo(),
+			},
+		},
 		"scm module discovery failure": {
 			bdevScanRes: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
@@ -879,7 +886,8 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 
 			engineCfg := engine.MockConfig().WithStorage(tc.tierCfgs...)
 			engineCfgs := []*engine.Config{engineCfg}
-			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
+			sCfg := config.DefaultServer().WithEngines(engineCfgs...).
+				WithDisableHugepages(tc.disableHPs)
 
 			var cs *ControlService
 			if tc.enginesNotReady {
