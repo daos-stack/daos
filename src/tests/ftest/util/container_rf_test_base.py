@@ -131,7 +131,6 @@ class ContRedundancyFactor(RebuildTestBase):
         """Execute the rebuild test steps for container rd_fac test.
 
         Args:
-            mode (str): "cont_rf_with_rebuild" or "cont_rf_enforcement"
             create_container (bool, optional): should the test create a
                 container. Defaults to True.
             mode (str): either "cont_rf_with_rebuild" or "cont_rf_enforcement"
