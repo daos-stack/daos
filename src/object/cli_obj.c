@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -4893,7 +4893,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 		if (task->dt_result == -DER_TX_ID_REUSED && obj_auxi->retry_cnt != 0)
 			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
-			D_ABORT("Miss 'RESEND' flag (%x) when resend the RPC for task %p: %u\n",
+			D_ABORT("Miss 'RESEND' flag (%x) when resend the RPC for task %p: %u",
 				obj_auxi->flags, task, obj_auxi->retry_cnt);
 
 		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {

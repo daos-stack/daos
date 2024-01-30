@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -363,7 +363,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 
 #define D_ABORT(reason, ...)                                                                       \
 	do {                                                                                       \
-		D_FATAL("Fatal error, unable to continue: " reason, ##__VA_ARGS__);                \
+		D_FATAL("Fatal error, unable to continue: " reason "\n", ##__VA_ARGS__);           \
 		if (d_alt_assert != NULL)                                                          \
 			d_alt_assert(0, "fatal", __FILE__, __LINE__);                              \
 		assert(0);                                                                         \

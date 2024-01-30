@@ -568,7 +568,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 
 	/** TODO - not supported yet */
 	if (strcmp(name, ".") == 0)
-		D_ABORT(". not supported");
+		D_ASSERT(0);
 
 	if (xnr) {
 		D_ALLOC_ARRAY(pxnames, xnr);

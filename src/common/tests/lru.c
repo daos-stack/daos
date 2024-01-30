@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -129,8 +129,7 @@ main(int argc, char **argv)
 	rc = daos_lru_cache_create(csize, D_HASH_FT_RWLOCK,
 				   &uint_ref_llink_ops,
 				   &tcache);
-	if (rc)
-		D_ABORT("Error in creating lru cache\n");
+	D_ASSERTF(rc == 0, "Error in creating lru cache\n");
 
 	/* make sure csize and num_keys can
 	 * fit into int variable, since
@@ -143,8 +142,7 @@ main(int argc, char **argv)
 	}
 
 	D_ALLOC_ARRAY(keys, (num_keys + 2));
-	if (keys == NULL)
-		D_ABORT("Error in allocating keys_array\n");
+	D_ASSERTF(keys, "Error in allocating keys_array\n");
 
 	keys[0] = 0; keys[1] = 1;
 

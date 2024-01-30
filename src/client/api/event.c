@@ -1308,9 +1308,8 @@ daos_event_priv_wait()
 	}
 
 	/** on success, the event should have been reset to ready stat by the progress cb */
-	if (rc == 0) {
-		D_ASSERT(evx->evx_status == DAOS_EVS_READY);
-	}
+	D_ASSERT(rc != 0 || evx->evx_status == DAOS_EVS_READY);
+
 	rc2 = daos_event_priv_reset();
 	if (rc2) {
 		if (rc == 0)

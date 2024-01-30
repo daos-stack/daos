@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  *
@@ -322,7 +322,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				dom->do_comp.co_out_ver =
 					target->ta_comp.co_out_ver;
 			} else
-				D_ABORT("evict rank by %d\n", opc);
+				D_ABORT("evict rank by %d", opc);
 			D_DEBUG(DB_MD, "change rank %u to DOWN\n",
 				dom->do_comp.co_rank);
 			version++;

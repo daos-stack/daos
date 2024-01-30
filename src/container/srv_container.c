@@ -516,7 +516,7 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 		result = lookup_val - 1;
 		break;
 	default:
-		D_ABORT("invalid op=%d\n", op);
+		D_ABORT("invalid op=%d", op);
 		break;
 	}
 
@@ -706,7 +706,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 				entry->dpe_type);
 			return -DER_INVAL;
 		default:
-			D_ABORT("bad dpt_type %d.\n", entry->dpe_type);
+			D_ABORT("bad dpt_type %d", entry->dpe_type);
 			break;
 		}
 	}
@@ -3479,7 +3479,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 				break;
 
 			default:
-				D_ABORT("bad dpe_type %d\n", entry->dpe_type);
+				D_ABORT("bad dpe_type %d", entry->dpe_type);
 				break;
 			};
 		}

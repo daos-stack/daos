@@ -1,10 +1,10 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
-  * Implementation for aggregation and discard
+ * Implementation for aggregation and discard
  */
 #define D_LOGFAC	DD_FAC(vos)
 
@@ -485,7 +485,7 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	agg_param->ap_max_epoch = 0;
 	/* The merge window for EV tree aggregation should have been closed */
 	if (merge_window_status(&agg_param->ap_window) != MW_CLOSED)
-		D_ABORT("Merge window isn't closed.\n");
+		D_ABORT("Merge window isn't closed");
 
 	return 0;
 }
@@ -2349,7 +2349,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 		break;
 	default:
-		D_ABORT("Invalid iter type\n");
+		D_ABORT("Invalid iter type");
 		rc = -DER_INVAL;
 		break;
 	}
@@ -2418,7 +2418,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	case VOS_ITER_RECX:
 		return 0;
 	default:
-		D_ABORT("Invalid iter type\n");
+		D_ABORT("Invalid iter type");
 		return -DER_INVAL;
 	}
 
@@ -2735,7 +2735,7 @@ exit:
 	aggregate_exit(cont, AGG_MODE_AGGREGATE);
 
 	if (run_agg && merge_window_status(&ad->ad_agg_param.ap_window) != MW_CLOSED)
-		D_ABORT("Merge window resource leaked.\n");
+		D_ABORT("Merge window resource leaked");
 
 free_agg_data:
 	D_FREE(ad);

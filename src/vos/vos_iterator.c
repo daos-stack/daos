@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -493,7 +493,7 @@ type2anchor(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 		D_ASSERT(anchors->ia_reprobe_co == 0);
 		return &anchors->ia_co;
 	default:
-		D_ABORT("invalid iter type %d\n", type);
+		D_ABORT("invalid iter type %d", type);
 		return NULL;
 	}
 }
@@ -525,7 +525,7 @@ reset_anchors(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 		anchors->ia_reprobe_sv = 0;
 		break;
 	default:
-		D_ABORT("invalid iter type %d\n", type);
+		D_ABORT("invalid iter type %d", type);
 		break;
 	}
 }
@@ -566,7 +566,7 @@ set_reprobe(vos_iter_type_t type, unsigned int acts,
 			anchors->ia_reprobe_co = 1;
 		break;
 	default:
-		D_ABORT("invalid iter type %d\n", type);
+		D_ABORT("invalid iter type %d", type);
 		break;
 	}
 }
@@ -602,7 +602,7 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 		anchors->ia_reprobe_co = 0;
 		break;
 	default:
-		D_ABORT("invalid iter type %d\n", type);
+		D_ABORT("invalid iter type %d", type);
 		reprobe = false;
 		break;
 	}
@@ -851,7 +851,7 @@ probe:
 				child_param.ip_akey = iter_ent.ie_key;
 				break;
 			default:
-				D_ABORT("invalid iter type:%d\n", type);
+				D_ABORT("invalid iter type:%d", type);
 				rc = -DER_INVAL;
 				goto out;
 			}
@@ -1022,7 +1022,7 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 		anchor = &iter->it_anchors->ia_sv;
 		break;
 	default:
-		D_ABORT("Unexpected iterator type %d\n", iter->it_type);
+		D_ABORT("Unexpected iterator type %d", iter->it_type);
 	}
 
 	old = vos_dth_get(is_sysdb);

@@ -1157,7 +1157,7 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 			goto err;
 		}
 	} else {
-		D_ABORT("Unknown entry type %d\n", entry->type);
+		D_ABORT("Unknown entry type %d", entry->type);
 	}
 
 	/*
