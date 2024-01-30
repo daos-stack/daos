@@ -13,6 +13,7 @@ void d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value);
 void d_tm_inc_counter(struct d_tm_node_t *metric, uint64_t value);
 void d_tm_record_timestamp(struct d_tm_node_t *metric);
 void d_tm_record_meminfo(struct d_tm_node_t *metric);
+void d_tm_update_memusage(struct d_tm_node_t *metric, int bytes);
 void d_tm_take_timer_snapshot(struct d_tm_node_t *metric, int clk_id);
 void d_tm_mark_duration_start(struct d_tm_node_t *metric, int clk_id);
 void d_tm_mark_duration_end(struct d_tm_node_t *metric);

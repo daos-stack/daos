@@ -165,7 +165,7 @@ main(int argc, char **argv)
 
 	if (filter == 0)
 		filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP | D_TM_MEMINFO |
-			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE | D_TM_STATS_GAUGE;
+			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE | D_TM_STATS_GAUGE | D_TM_MEMUSAGE;
 
 	ctx = d_tm_open(srv_idx);
 	if (!ctx)

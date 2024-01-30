@@ -140,6 +140,7 @@ enum {
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x200,
 	D_TM_LINK			= 0x400,
 	D_TM_MEMINFO			= 0x800,
+	D_TM_MEMUSAGE			= 0x1000,
 	D_TM_ALL_NODES			= (D_TM_DIRECTORY | \
 					   D_TM_COUNTER | \
 					   D_TM_TIMESTAMP | \
@@ -148,7 +149,7 @@ enum {
 					   D_TM_GAUGE | \
 					   D_TM_STATS_GAUGE | \
 					   D_TM_LINK | \
-					   D_TM_MEMINFO)
+					   D_TM_MEMINFO | D_TM_MEMUSAGE)
 };
 
 enum {
@@ -217,6 +218,7 @@ struct d_tm_metric_t {
 		uint64_t	value;
 		struct		timespec tms[2];
 		struct d_tm_meminfo_t meminfo;
+		long long int	memusage;
 	}			dtm_data;
 	struct d_tm_stats_t	*dtm_stats;
 	struct d_tm_histogram_t	*dtm_histogram;

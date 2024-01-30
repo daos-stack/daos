@@ -674,7 +674,7 @@ dss_mem_stats_init(struct mem_stats *stats, int xs_id)
 {
 	int rc;
 
-	rc = d_tm_add_metric(&stats->ms_total_usage, D_TM_GAUGE,
+	rc = d_tm_add_metric(&stats->ms_total_usage, D_TM_MEMUSAGE,
 			     "Total memory usage", "byte", "mem/total_mem/xs_%u", xs_id);
 	if (rc)
 		D_WARN("Failed to create memory telemetry: "DF_RC"\n", DP_RC(rc));
@@ -693,13 +693,13 @@ dss_mem_total_alloc_track(void *arg, daos_size_t bytes)
 
 	D_ASSERT(arg != NULL);
 
-	d_tm_inc_gauge(stats->ms_total_usage, bytes);
+	d_tm_update_memusage(stats->ms_total_usage, bytes);
 
 	if (stats->ms_mallinfo == NULL)
 		return;
 
-	/* Only retrieve mallocinfo every 3000 allocation */
-	if ((stats->ms_current++ % 3000) == 0)
+	/* Only retrieve mallocinfo every 100 allocation */
+	if ((stats->ms_current++ % 100) == 0)
 		d_tm_record_meminfo(stats->ms_mallinfo);
 }
 
@@ -710,7 +710,7 @@ dss_mem_total_free_track(void *arg, daos_size_t bytes)
 
 	D_ASSERT(arg != NULL);
 
-	d_tm_dec_gauge(stats->ms_total_usage, bytes);
+	d_tm_update_memusage(stats->ms_total_usage, -bytes);
 }
 
 /**

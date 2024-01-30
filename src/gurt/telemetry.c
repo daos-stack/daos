@@ -935,6 +935,25 @@ d_tm_print_timestamp(time_t *clk, char *name, int format, int opt_fields,
 }
 
 static void
+d_tm_print_memusage(long long int val, char *name, int format,
+		    int opt_fields, FILE *stream)
+{
+	if ((name == NULL) || (stream == NULL))
+		return;
+
+	if (format == D_TM_CSV) {
+		fprintf(stream, "%s", name);
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, ",memusage");
+		fprintf(stream, ",%lld", val);
+	} else {
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, "type: counter, ");
+		fprintf(stream, "%s: %lld", name, val);
+	}
+}
+
+static void
 d_tm_print_meminfo(struct d_tm_meminfo_t *meminfo, char *name, int format,
 		   int opt_fields, FILE *stream)
 {
@@ -1172,6 +1191,10 @@ d_tm_print_metadata(char *desc, char *units, int format, FILE *stream)
 static int
 d_tm_get_meminfo(struct d_tm_context *ctx, struct d_tm_meminfo_t *meminfo,
 		 struct d_tm_node_t *node);
+static int
+d_tm_get_memusage(struct d_tm_context *ctx, long long int *memusage,
+		  struct d_tm_node_t *node);
+
 /**
  * Prints a single \a node.
  * Used as a convenience function to demonstrate usage for the client
@@ -1209,6 +1232,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 	bool                show_timestamp = false;
 	bool                show_meta      = false;
 	int                 i              = 0;
+	long long int	    memusage;
 	int                 rc;
 
 	if (node == NULL)
@@ -1280,6 +1304,14 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 			break;
 		}
 		d_tm_print_meminfo(&meminfo, name, format, opt_fields, stream);
+		break;
+	case D_TM_MEMUSAGE:
+		rc = d_tm_get_memusage(ctx, &memusage, node);
+		if (rc != DER_SUCCESS) {
+			fprintf(stream, "Error on memusage read: %d\n", rc);
+			break;
+		}
+		d_tm_print_memusage(memusage, name, format, opt_fields, stream);
 		break;
 	case D_TM_TIMER_SNAPSHOT:
 	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
@@ -1812,6 +1844,31 @@ d_tm_record_meminfo(struct d_tm_node_t *metric)
 	metric->dtn_metric->dtm_data.meminfo.uordblks = mi.uordblks;
 	metric->dtn_metric->dtm_data.meminfo.fordblks = mi.fordblks;
 	d_tm_node_unlock(metric);
+}
+
+/**
+ * Update the current memusage
+ *
+ * \param[in]	metric	Pointer to the metric
+ * \param[in]	bytes	number to be updated
+ */
+void
+d_tm_update_memusage(struct d_tm_node_t *metric, int bytes)
+{
+
+	if (metric == NULL)
+		return;
+
+	if (metric->dtn_type != D_TM_MEMUSAGE) {
+		D_ERROR("Failed to update memusage on item %s not a "
+			"memusage.  Operation mismatch: " DF_RC "\n",
+			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
+		return;
+	}
+	d_tm_node_lock(metric);
+	metric->dtn_metric->dtm_data.memusage += bytes;
+	d_tm_node_unlock(metric);
+
 }
 
 /**
@@ -3075,6 +3132,34 @@ d_tm_get_meminfo(struct d_tm_context *ctx, struct d_tm_meminfo_t *meminfo,
 	return DER_SUCCESS;
 }
 
+static int
+d_tm_get_memusage(struct d_tm_context *ctx, long long int *memusage,
+		  struct d_tm_node_t *node)
+{
+	struct d_tm_metric_t	*metric_data = NULL;
+	struct d_tm_shmem_hdr	*shmem = NULL;
+	int			 rc;
+
+	if (ctx == NULL || memusage == NULL || node == NULL)
+		return -DER_INVAL;
+
+	rc = validate_node_ptr(ctx, node, &shmem);
+	if (rc != 0)
+		return rc;
+
+	if (node->dtn_type != D_TM_MEMUSAGE)
+		return -DER_OP_NOT_PERMITTED;
+
+	metric_data = conv_ptr(shmem, node->dtn_metric);
+	if (metric_data != NULL) {
+		d_tm_node_lock(node);
+		*memusage = metric_data->dtm_data.memusage;
+		d_tm_node_unlock(node);
+	} else {
+		return -DER_METRIC_NOT_FOUND;
+	}
+	return DER_SUCCESS;
+}
 
 /**
  * Client function to read the specified high resolution timer.
