@@ -92,6 +92,7 @@ struct pool_iv_prop {
 	uint32_t	pip_svc_list_offset;
 	uint32_t	pip_perf_domain;
 	uint32_t	pip_reint_mode;
+	uint32_t         pip_svc_ops_enabled;
 	char		pip_iv_buf[0];
 };
 
