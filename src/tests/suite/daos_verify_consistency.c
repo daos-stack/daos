@@ -352,8 +352,7 @@ vc_9(void **state)
 	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	vc_gen_modifications(arg, &req, oid, 7, 7, 7,
-			     DAOS_VC_DIFF_DKEY, 0, 0);
+	vc_gen_modifications(arg, &req, oid, 7, 7, 7, DAOS_VC_DIFF_DKEY | DAOS_FAIL_ALWAYS, 0, 0);
 
 	rc = vc_obj_verify(arg, oid);
 	assert_rc_equal(rc, -DER_MISMATCH);

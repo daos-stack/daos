@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/pkg/errors"
@@ -163,17 +164,17 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 }
 
 func populateCtrlrHealth(ctx context.Context, engine Engine, req *ctlpb.BioHealthReq, ctrlr *ctlpb.NvmeController) (bool, error) {
-	state := ctrlr.DevState
-	if state != ctlpb.NvmeDevState_NORMAL && state != ctlpb.NvmeDevState_EVICTED {
+	stateName := ctlpb.NvmeDevState_name[int32(ctrlr.DevState)]
+	if !ctrlr.CanSupplyHealthStats() {
 		engine.Debugf("skip fetching health stats on device %q in %q state",
-			ctrlr.PciAddr, ctlpb.NvmeDevState_name[int32(state)])
+			ctrlr.PciAddr, stateName)
 		return false, nil
 	}
 
 	health, err := getCtrlrHealth(ctx, engine, req)
 	if err != nil {
 		return false, errors.Wrapf(err, "retrieve health stats for %q (state %q)", ctrlr,
-			state)
+			stateName)
 	}
 	ctrlr.HealthStats = health
 
@@ -226,9 +227,15 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 			Rank:             engineRank.Uint32(),
 		}
 
+		if !sd.Ctrlr.IsScannable() {
+			engine.Debugf("smd %q partial update of ctrlr %+v with bad state",
+				sd.Uuid, sd.Ctrlr)
+			continue
+		}
+
 		// Populate health if requested.
 		healthUpdated := false
-		if pbReq.Health {
+		if pbReq.Health && c.HealthStats == nil {
 			bhReq := &ctlpb.BioHealthReq{
 				DevUuid:  sd.Uuid,
 				MetaSize: pbReq.MetaSize,
@@ -261,8 +268,14 @@ func scanEngineBdevsOverDrpc(ctx context.Context, engine Engine, pbReq *ctlpb.Sc
 		c.SmdDevices = append(c.SmdDevices, nsd)
 	}
 
-	for _, c := range seenCtrlrs {
-		engine.Tracef("nvme ssd scanned: %+v", c)
+	var keys []string
+	for k := range seenCtrlrs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		c := seenCtrlrs[k]
+		engine.Tracef("bdev discovered: %+v", c)
 		pbResp.Ctrlrs = append(pbResp.Ctrlrs, c)
 	}
 
@@ -330,36 +343,45 @@ func bdevScanEngine(ctx context.Context, engine Engine, req *ctlpb.ScanNvmeReq) 
 		return nil, err
 	}
 
-	nrScannedBdevs, err := getEffCtrlrCount(resp.Ctrlrs)
+	// Compare number of VMD domain addresses rather than the number of backing devices found
+	// behind it as the domain is what is specified in the server config file.
+	nrBdevs, err := getEffCtrlrCount(resp.Ctrlrs)
 	if err != nil {
 		return nil, err
-	}
-	if nrScannedBdevs == nrCfgBdevs {
-		return resp, nil
 	}
 
 	// Retry once if engine provider scan returns unexpected number of controllers in case
 	// engines claimed devices between when started state was checked and scan was executed.
-	if !isStarted {
+	if nrBdevs != nrCfgBdevs && !isStarted {
 		engine.Debugf("retrying engine bdev scan as unexpected nr returned, want %d got %d",
-			nrCfgBdevs, nrScannedBdevs)
+			nrCfgBdevs, nrBdevs)
 
 		resp, err = bdevScanEngineAssigned(ctx, engine, req, bdevCfgs, &isStarted)
 		if err != nil {
 			return nil, err
 		}
 
-		nrScannedBdevs, err := getEffCtrlrCount(resp.Ctrlrs)
+		nrBdevs, err = getEffCtrlrCount(resp.Ctrlrs)
 		if err != nil {
 			return nil, err
 		}
-		if nrScannedBdevs == nrCfgBdevs {
-			return resp, nil
-		}
 	}
 
-	engine.Debugf("engine bdev scan returned unexpected nr, want %d got %d", nrCfgBdevs,
-		nrScannedBdevs)
+	if nrBdevs != nrCfgBdevs {
+		engine.Debugf("engine bdev scan returned unexpected nr, want %d got %d",
+			nrCfgBdevs, nrBdevs)
+	}
+
+	// Filter devices in an unusable state from the response.
+	outCtrlrs := make([]*ctlpb.NvmeController, 0, len(resp.Ctrlrs))
+	for _, c := range resp.Ctrlrs {
+		if c.IsScannable() {
+			outCtrlrs = append(outCtrlrs, c)
+		} else {
+			engine.Tracef("excluding bdev from scan results: %+v", c)
+		}
+	}
+	resp.Ctrlrs = outCtrlrs
 
 	return resp, nil
 }
