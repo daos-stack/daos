@@ -581,55 +581,57 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 
 	while (*tests != '\0') {
 		switch (*tests) {
-		case 'i':
-			printf("\n\n=================");
-			printf("dfuse IO tests");
-			printf("=====================\n");
+		case 'i': {
 			const struct CMUnitTest io_tests[] = {
 			    cmocka_unit_test(do_openat),
 			    cmocka_unit_test(do_ioctl),
 			};
+			printf("\n\n=================");
+			printf("dfuse IO tests");
+			printf("=====================\n");
 			nr_failed += cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;
-		case 's':
-			printf("\n\n=================");
-			printf("dfuse streaming tests");
-			printf("=====================\n");
+		}
+		case 's': {
 			const struct CMUnitTest stream_tests[] = {
 			    cmocka_unit_test(do_stream),
 			};
+			printf("\n\n=================");
+			printf("dfuse streaming tests");
+			printf("=====================\n");
 			nr_failed += cmocka_run_group_tests(stream_tests, NULL, NULL);
 			break;
-
-		case 'm':
-			printf("\n\n=================");
-			printf("dfuse metadata tests");
-			printf("=====================\n");
+		}
+		case 'm': {
 			const struct CMUnitTest metadata_tests[] = {
 			    cmocka_unit_test(do_mtime),
 			};
+			printf("\n\n=================");
+			printf("dfuse metadata tests");
+			printf("=====================\n");
 			nr_failed += cmocka_run_group_tests(metadata_tests, NULL, NULL);
 			break;
-
-		case 'd':
-			printf("\n\n=================");
-			printf("dfuse directory tests");
-			printf("=====================\n");
+		}
+		case 'd': {
 			const struct CMUnitTest readdir_tests[] = {
 			    cmocka_unit_test(do_directory),
 			};
+			printf("\n\n=================");
+			printf("dfuse directory tests");
+			printf("=====================\n");
 			nr_failed += cmocka_run_group_tests(readdir_tests, NULL, NULL);
 			break;
-		case 'l':
-			printf("\n\n=================");
-			printf("dfuse low fd tests");
-			printf("=====================\n");
+		}
+		case 'l': {
 			const struct CMUnitTest lowfd_tests[] = {
 			    cmocka_unit_test(do_lowfd),
 			};
+			printf("\n\n=================");
+			printf("dfuse low fd tests");
+			printf("=====================\n");
 			nr_failed += cmocka_run_group_tests(lowfd_tests, NULL, NULL);
 			break;
-
+		}
 		default:
 			assert_true(0);
 		}
