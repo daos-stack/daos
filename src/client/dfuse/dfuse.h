@@ -408,6 +408,9 @@ struct dfuse_pool {
 
 	/** Hash table of open containers in pool */
 	struct d_hash_table dfp_cont_table;
+
+	/** List of no longer accessed containers */
+	d_list_t            dfp_historic;
 };
 
 /* Statistics that dfuse keeps per container.  Logged at umount and can be queried through
@@ -464,7 +467,7 @@ struct dfuse_cont {
 	dfs_t                  *dfs_ns;
 
 	/** UUID of the container */
-	uuid_t                  dfs_cont;
+	uuid_t                  dfc_uuid;
 
 	/** Container handle */
 	daos_handle_t           dfs_coh;
@@ -1046,6 +1049,9 @@ dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *tim
 
 int
 ival_add_cont_buckets(struct dfuse_cont *dfc);
+
+void
+ival_dec_cont_buckets(struct dfuse_cont *dfc);
 
 void
 ival_drop_inode(struct dfuse_inode_entry *inode);

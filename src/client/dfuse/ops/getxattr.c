@@ -42,7 +42,7 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode, const char *n
 	if (inode->ie_root) {
 		if (strncmp(name, DUNS_XATTR_NAME, sizeof(DUNS_XATTR_NAME)) == 0) {
 			rc = _dfuse_attr_create("POSIX", inode->ie_dfs->dfs_dfp->dfp_pool,
-						inode->ie_dfs->dfs_cont, &value, &out_size);
+						inode->ie_dfs->dfc_uuid, &value, &out_size);
 			if (rc != 0)
 				goto err;
 

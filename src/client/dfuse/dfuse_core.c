@@ -235,6 +235,7 @@ ph_decref(struct d_hash_table *htable, d_list_t *link)
 static void
 _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp)
 {
+	struct dfuse_cont *dfc, *dfcn;
 	int rc;
 
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
@@ -253,6 +254,10 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp)
 		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: " DF_RC, DP_RC(rc));
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_pool_count, 1);
+
+	d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_entry, dfs_entry) {
+		D_FREE(dfc);
+	}
 
 	D_FREE(dfp);
 }
@@ -285,7 +290,7 @@ ch_rec_hash(struct d_hash_table *htable, d_list_t *link)
 
 	dfc = container_of(link, struct dfuse_cont, dfs_entry);
 
-	return ch_key_hash(NULL, &dfc->dfs_cont, sizeof(dfc->dfs_cont));
+	return ch_key_hash(NULL, &dfc->dfc_uuid, sizeof(dfc->dfc_uuid));
 }
 
 static bool
@@ -294,7 +299,7 @@ ch_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key, unsigne
 	struct dfuse_cont *dfc;
 
 	dfc = container_of(link, struct dfuse_cont, dfs_entry);
-	return uuid_compare(dfc->dfs_cont, key) == 0;
+	return uuid_compare(dfc->dfc_uuid, key) == 0;
 }
 
 static void
@@ -341,7 +346,7 @@ container_stats_log(struct dfuse_cont *dfc)
 }
 
 static void
-_ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
+_ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used)
 {
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
@@ -358,17 +363,23 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
 	}
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_container_count, 1);
-	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfc->dfs_dfp->dfp_entry);
+
+	ival_dec_cont_buckets(dfc);
 
 	container_stats_log(dfc);
 
-	D_FREE(dfc);
+	/* Put on list */
+	if (used)
+		d_list_add(&dfc->dfs_entry, &dfc->dfs_dfp->dfp_entry);
+
+	/* Do not drop the reference on the poool until after adding to the historic list */
+	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfc->dfs_dfp->dfp_entry);
 }
 
 static void
 ch_free(struct d_hash_table *htable, d_list_t *link)
 {
-	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry));
+	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry), true);
 }
 
 d_hash_table_ops_t cont_hops = {
@@ -704,7 +715,7 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 		D_GOTO(err_free, rc = daos_der2errno(rc));
 	}
 
-	uuid_copy(dfc->dfs_cont, c_info.ci_uuid);
+	uuid_copy(dfc->dfc_uuid, c_info.ci_uuid);
 
 	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 	if (rc) {
@@ -767,7 +778,7 @@ int
 dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *cont,
 		struct dfuse_cont **_dfc)
 {
-	struct dfuse_cont *dfc = NULL;
+	struct dfuse_cont *dfc;
 	d_list_t          *rlink;
 	int                rc = -DER_SUCCESS;
 
@@ -791,12 +802,23 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 		DFUSE_TRA_UP(dfc, dfp, "dfc");
 	}
 
+	/* Walk the new list */
+
+	if (!uuid_is_null(*cont)) {
+		struct dfuse_cont *dfcp;
+
+		d_list_for_each_entry(dfcp, &dfp->dfp_entry, dfs_entry) {
+			if (uuid_compare(dfcp->dfc_uuid, *cont) == 0)
+				D_ERROR("Would re-use a container at this point");
+		}
+	}
+
 	/* No existing container found, so setup dfs and connect to one */
 
 	atomic_init(&dfc->dfs_ref, 1);
 
-	DFUSE_TRA_DEBUG(dfp, "New cont "DF_UUIDF" in pool "DF_UUIDF,
-			DP_UUID(cont), DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_DEBUG(dfp, "New cont " DF_UUIDF " in pool " DF_UUIDF, DP_UUID(cont),
+			DP_UUID(dfp->dfp_pool));
 
 	dfc->dfs_dfp = dfp;
 
@@ -819,8 +841,10 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 		int  dfs_flags = O_RDWR;
 
 		dfc->dfs_ops = &dfuse_dfs_ops;
-		uuid_copy(dfc->dfs_cont, *cont);
-		uuid_unparse(dfc->dfs_cont, str);
+
+		/* TODO, can this be improved? */
+		uuid_copy(dfc->dfc_uuid, *cont);
+		uuid_unparse(dfc->dfc_uuid, str);
 		rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RW, &dfc->dfs_coh, NULL, NULL);
 		if (rc == -DER_NO_PERM) {
 			dfs_flags = O_RDONLY;
@@ -879,19 +903,18 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 	 * container if there is a race to insert, so if that happens
 	 * just use that one.
 	 */
-	rlink = d_hash_rec_find_insert(&dfp->dfp_cont_table,
-				       &dfc->dfs_cont, sizeof(dfc->dfs_cont),
+	rlink = d_hash_rec_find_insert(&dfp->dfp_cont_table, &dfc->dfc_uuid, sizeof(dfc->dfc_uuid),
 				       &dfc->dfs_entry);
 
 	if (rlink != &dfc->dfs_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing container, reusing");
 
-		_ch_free(dfuse_info, dfc);
+		_ch_free(dfuse_info, dfc, false);
 
 		dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 	}
 
-	DFUSE_TRA_DEBUG(dfc, "Returning dfs for " DF_UUID " ref %d", DP_UUID(dfc->dfs_cont),
+	DFUSE_TRA_DEBUG(dfc, "Returning dfs for " DF_UUID " ref %d", DP_UUID(dfc->dfc_uuid),
 			dfc->dfs_ref);
 
 	*_dfc = dfc;
@@ -1446,8 +1469,8 @@ dfuse_cont_close_cb(d_list_t *rlink, void *handle)
 
 	dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 
-	DFUSE_TRA_ERROR(dfc, "Failed to close cont ref %d "DF_UUID,
-			dfc->dfs_ref, DP_UUID(dfc->dfs_cont));
+	DFUSE_TRA_ERROR(dfc, "Failed to close cont ref %d " DF_UUID, dfc->dfs_ref,
+			DP_UUID(dfc->dfc_uuid));
 	return 0;
 }
 
