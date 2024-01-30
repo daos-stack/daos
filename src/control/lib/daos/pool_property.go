@@ -120,6 +120,31 @@ func PoolProperties() PoolPropertyMap {
 				valueMarshaler: numericMarshaler,
 			},
 		},
+		"svc_ops_entry_age": {
+			Property: PoolProperty{
+				Number:      PoolPropertySvcOpsEntryAge,
+				Description: "Metadata duplicate operations KVS max entry age, in seconds",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					oeErr := errors.Errorf("invalid svc_ops_entry_age %s (valid values: %d-%d)", s, PoolSvcOpsEntryAgeMin, PoolSvcOpsEntryAgeMax)
+					oeVal, err := strconv.ParseUint(s, 10, 32)
+					if err != nil {
+						return nil, oeErr
+					}
+					if oeVal < PoolSvcOpsEntryAgeMin || oeVal > PoolSvcOpsEntryAgeMax {
+						return nil, errors.Wrap(oeErr, "value supplied is out of range")
+					}
+					return &PoolPropertyValue{oeVal}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				valueMarshaler: numericMarshaler,
+			},
+		},
 		"label": {
 			Property: PoolProperty{
 				Number:      PoolPropertyLabel,
