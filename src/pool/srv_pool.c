@@ -3071,7 +3071,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	bool                            transfer_map    = false;
 	bool                            fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
 	bool                            fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
-	int                             diff;
 
 	D_DEBUG(DB_MD, DF_UUID ": processing rpc: %p hdl=" DF_UUID "\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -3157,7 +3156,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 	/*
 	 * Reject pool connection if old clients try to connect new format pool.
 	 */
-	diff = DAOS_POOL_GLOBAL_VERSION - cli_pool_version;
+	int diff = DAOS_POOL_GLOBAL_VERSION - cli_pool_version;
 	if (cli_pool_version <= DAOS_POOL_GLOBAL_VERSION) {
 		if (diff >= NUM_POOL_VERSIONS) {
 			rc = -DER_NOTSUPPORTED;

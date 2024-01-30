@@ -504,48 +504,46 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 
 	while (*tests != '\0') {
 		switch (*tests) {
-		case 'i': {
+		case 'i':
+			printf("\n\n=================");
+			printf("dfuse IO tests");
+			printf("=====================\n");
 			const struct CMUnitTest io_tests[] = {
 			    cmocka_unit_test(do_openat),
 			    cmocka_unit_test(do_ioctl),
 			};
-			printf("\n\n=================");
-			printf("dfuse IO tests");
-			printf("=====================\n");
 			nr_failed += cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;
-		}
-		case 's': {
-			const struct CMUnitTest stream_tests[] = {
-			    cmocka_unit_test(do_stream),
-			};
+		case 's':
 			printf("\n\n=================");
 			printf("dfuse streaming tests");
 			printf("=====================\n");
-
+			const struct CMUnitTest stream_tests[] = {
+			    cmocka_unit_test(do_stream),
+			};
 			nr_failed += cmocka_run_group_tests(stream_tests, NULL, NULL);
 			break;
-		}
-		case 'm': {
-			const struct CMUnitTest metadata_tests[] = {
-			    cmocka_unit_test(do_mtime),
-			};
+
+		case 'm':
 			printf("\n\n=================");
 			printf("dfuse metadata tests");
 			printf("=====================\n");
+			const struct CMUnitTest metadata_tests[] = {
+			    cmocka_unit_test(do_mtime),
+			};
 			nr_failed += cmocka_run_group_tests(metadata_tests, NULL, NULL);
 			break;
-		}
-		case 'd': {
-			const struct CMUnitTest readdir_tests[] = {
-			    cmocka_unit_test(do_directory),
-			};
+
+		case 'd':
 			printf("\n\n=================");
 			printf("dfuse directory tests");
 			printf("=====================\n");
+			const struct CMUnitTest readdir_tests[] = {
+			    cmocka_unit_test(do_directory),
+			};
 			nr_failed += cmocka_run_group_tests(readdir_tests, NULL, NULL);
 			break;
-		}
+
 		default:
 			assert_true(0);
 		}
