@@ -25,7 +25,7 @@ class CheckCsumMetricsMdtest(TestWithScrubber, MdtestBase):
             and compare it with initial values.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=scrubber
+        :avocado: tags=scrubber,mdtest
         :avocado: tags=CheckCsumMetricsMdtest,test_scrubber_csum_metrics_with_mdtest
 
         """

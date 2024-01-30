@@ -522,10 +522,14 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 			expStorageSet: &HostStorageSet{
 				HostSet: hostlist.MustCreateSet("host[1-2]"),
 				HostStorage: &HostStorage{
-					NvmeDevices:   storage.NvmeControllers{storage.MockNvmeController()},
-					ScmModules:    storage.ScmModules{storage.MockScmModule()},
-					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
-					MemInfo:       MockMemInfo(),
+					NvmeDevices: storage.NvmeControllers{
+						mockNvmeCtrlrWithSmd(storage.OptionBits(0)),
+					},
+					ScmModules: storage.ScmModules{storage.MockScmModule()},
+					ScmNamespaces: storage.ScmNamespaces{
+						storage.MockScmNamespace(0),
+					},
+					MemInfo: MockMemInfo(),
 				},
 			},
 		},
@@ -569,7 +573,7 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 			}, defResCmpOpts()...)
 
 			if diff := cmp.Diff(tc.expStorageSet, storageSet, cmpOpts...); diff != "" {
-				t.Fatalf("unexpected network set (-want, +got):\n%s\n", diff)
+				t.Fatalf("unexpected storage set (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
