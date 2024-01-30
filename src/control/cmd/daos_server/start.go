@@ -7,12 +7,15 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -153,9 +156,62 @@ func (cmd *startCmd) configureLogging() error {
 	return applyLogConfig()
 }
 
+func (cmd *startCmd) fetchLocalConfig(ctx context.Context) (*config.Server, error) {
+	// TODO: Receive access points, provider and use-tmpfs-scm on commandline.
+	//       This can be done by embedding cmdutil.ConfGenerateCmd into startCmd.
+	cmd.Info("generating config to start server with")
+
+	hf, err := getLocalFabric(ctx, cmd.Logger, "") // Fetch all providers.
+	if err != nil {
+		return nil, err
+	}
+	cmd.Debugf("fetched host fabric info on localhost: %+v", hf)
+
+	hs, err := getLocalStorage(ctx, cmd.Logger, false) // Include NVMe-prep.
+	if err != nil {
+		return nil, err
+	}
+	cmd.Debugf("fetched host storage info on localhost: %+v", hs)
+
+	req := control.ConfGenerateReq{
+		Log: cmd.Logger,
+		// TODO: hardcode defaults for the moment until taken from commandline
+		NetClass:     hardware.Infiniband,
+		AccessPoints: []string{"localhost"},
+		// NetProvider:  cmd.NetProvider,
+		// AccessPoints: accessPoints,
+	}
+	if len(hs.ScmNamespaces) == 0 {
+		req.UseTmpfsSCM = true
+	}
+
+	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
+
+	resp, err := control.ConfGenerate(req, control.DefaultEngineCfg, hf, hs)
+	if err != nil {
+		return nil, err
+	}
+
+	cmd.Debugf("control API ConfGenerate resp: %+v", resp)
+	return &resp.Server, nil
+}
+
 func (cmd *startCmd) Execute(args []string) error {
 	if cmd.start == nil {
 		cmd.start = server.Start
+	}
+
+	if cmd.AutoFormat {
+		// TODO: pass context from here into start
+		ctx := context.TODO()
+		cfg, err := cmd.fetchLocalConfig(ctx)
+		if err != nil {
+			return errors.WithMessage(err, "starting with auto config")
+		}
+		cfg.AutoFormat = true
+		// TODO: hardcoded for the moment ???
+		cfg.TransportConfig.AllowInsecure = true
+		cmd.config = cfg
 	}
 
 	if err := cmd.configureLogging(); err != nil {
