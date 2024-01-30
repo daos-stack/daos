@@ -38,7 +38,7 @@ def get_build_flags(benv):
 
 def gen_build_id():
     """generate a unique build id per binary for use by RPM
-    https://fedoraproject.org/wiki/PackagingDrafts/Go#Build_ID"""
+       https://fedoraproject.org/wiki/PackagingDrafts/Go#Build_ID"""
     buildid = b2a_hex(urandom(20))
     return '0x' + buildid.decode()
 
@@ -48,13 +48,9 @@ def go_ldflags():
 
     Import('daos_version', 'conf_dir')
     path = 'github.com/daos-stack/daos/src/control/build'
-    return ' '.join(
-        [
-            f'-X {path}.DaosVersion={daos_version}',
-            f'-X {path}.ConfigDir={conf_dir}',
-            f'-B $({gen_build_id()}$)',
-        ]
-    )
+    return ' '.join([f'-X {path}.DaosVersion={daos_version}',
+                     f'-X {path}.ConfigDir={conf_dir}',
+                     f'-B $({gen_build_id()}$)'])
 
 
 def install_go_bin(env, name, libs=None, install_man=False):
@@ -74,16 +70,12 @@ def install_go_bin(env, name, libs=None, install_man=False):
         libs = []
     libs.extend(['daos_common', 'cart', 'gurt'])
 
-    target = env.d_run_command(
-        name,
-        sources,
-        libs,
-        f'cd {gosrc}; {env.d_go_bin} build -mod vendor '
-        + f'-ldflags "{go_ldflags()}" '
-        + f'{get_build_flags(env)} '
-        + f'{get_build_tags(env)} '
-        + f'-o {build_bin} {install_src}',
-    )
+    target = env.d_run_command(name, sources, libs,
+                               f'cd {gosrc}; {env.d_go_bin} build -mod vendor '
+                               + f'-ldflags "{go_ldflags()}" '
+                               + f'{get_build_flags(env)} '
+                               + f'{get_build_tags(env)} '
+                               + f'-o {build_bin} {install_src}')
     env.Install('$PREFIX/bin', target)
     if install_man:
         gen_bin = join('$BUILD_DIR/src/control', name)
@@ -106,7 +98,6 @@ def scons():
     prefix = denv.subst("$PREFIX")
     sprefix = denv.subst("$SPDK_PREFIX")
     if sprefix not in ["", prefix]:
-
         def install_dir(srcdir):
             """walk a directory and install targets"""
             for root, _dirs, files in os.walk(srcdir):
@@ -130,17 +121,14 @@ def scons():
             install_go_bin(denv, "hello_drpc")
 
         dbenv = denv.Clone()
-        dblibs = dbenv.subst(
-            "-L$BUILD_DIR/src/gurt "
-            "-L$BUILD_DIR/src/cart "
-            "-L$BUILD_DIR/src/common "
-            "-L$BUILD_DIR/src/client/dfs "
-            "-L$BUILD_DIR/src/utils $_RPATH"
-        )
+        dblibs = dbenv.subst("-L$BUILD_DIR/src/gurt "
+                             "-L$BUILD_DIR/src/cart "
+                             "-L$BUILD_DIR/src/common "
+                             "-L$BUILD_DIR/src/client/dfs "
+                             "-L$BUILD_DIR/src/utils $_RPATH")
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
-        install_go_bin(
-            dbenv, 'daos', libs=['daos_cmd_hdlrs', 'dfs', 'duns', 'daos'], install_man=True
-        )
+        install_go_bin(dbenv, 'daos', libs=['daos_cmd_hdlrs', 'dfs', 'duns', 'daos'],
+                       install_man=True)
 
     if not prereqs.server_requested():
         return
@@ -163,25 +151,20 @@ def scons():
 
     aenv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     aenv.Replace(RPATH=[])
-    cgolibdirs = aenv.subst(
-        "-L$BUILD_DIR/src/control/lib/spdk "
-        "-L$BUILD_DIR/src/gurt "
-        "-L$BUILD_DIR/src/cart "
-        "-L$BUILD_DIR/src/common "
-        "-L$SPDK_PREFIX/lib "
-        "-L$OFI_PREFIX/lib $_RPATH"
-    )
+    cgolibdirs = aenv.subst("-L$BUILD_DIR/src/control/lib/spdk "
+                            "-L$BUILD_DIR/src/gurt "
+                            "-L$BUILD_DIR/src/cart "
+                            "-L$BUILD_DIR/src/common "
+                            "-L$SPDK_PREFIX/lib "
+                            "-L$OFI_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access
-    ldopts = (
-        cgolibdirs
-        + " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool"
-        + " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
-    )
+    ldopts = cgolibdirs + " -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool" + \
+        " -lrte_mempool_ring -lrte_bus_pci -lnvme_control -lnuma -ldl"
     aenv.AppendENVPath("CGO_LDFLAGS", ldopts, sep=" ")
 
-    aenv.AppendENVPath(
-        "CGO_CFLAGS", senv.subst("-I$SPDK_PREFIX/include -I$OFI_PREFIX/include"), sep=" "
-    )
+    aenv.AppendENVPath("CGO_CFLAGS",
+                       senv.subst("-I$SPDK_PREFIX/include -I$OFI_PREFIX/include"),
+                       sep=" ")
 
     # Sets CGO_LDFLAGS for rpath
     aenv.d_add_rpaths(None, True, True)
