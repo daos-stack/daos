@@ -64,7 +64,7 @@ class WalMetrics(TestWithTelemetry):
         write_data(self, container, ppn)
 
         self.log_step('Verify WAL commit metrics after writing data (dmg telemetry metrics query)')
-        if not self.verify_metrics('after pool creation', wal_metrics, **verify_after):
+        if not self.verify_metrics(wal_metrics, **verify_after):
             self.fail('Unexpected WAL commit metrics after pool creation')
 
         self.log_step('Test passed')
@@ -96,7 +96,7 @@ class WalMetrics(TestWithTelemetry):
         add_pool(self)
 
         self.log_step('Verify WAL reply metrics after pool creation (dmg telemetry metrics query)')
-        if not self.verify_metrics('after pool creation', wal_metrics, **verify_after):
+        if not self.verify_metrics(wal_metrics, **verify_after):
             self.fail('Unexpected WAL reply metrics after pool creation')
 
         # write_data(self, container, ppn)
@@ -111,7 +111,7 @@ class WalMetrics(TestWithTelemetry):
         The WAL checkpoint metrics is per-pool metrics in 'checkpoint' under each pool folder, it
         includes 'duration', 'dirty_pages', 'dirty_chunks', 'iovs_copied' and 'wal_purged' (see
         vos_chkpt_metrics_init() in src/vos/vos_pool.c). WAL checkpoint metrics are update on
-        checkpointing, checkpointing regularly happens in background (See the 'Checkpoint policy'
+        check pointing, check pointing regularly happens in background (See the 'Checkpoint policy'
         in manual), when there is nothing to be checkpoint-ed (no new commits since last
         checkpoint), the checkpoint would be no-op and metrics won’t updated.
 
@@ -147,7 +147,7 @@ class WalMetrics(TestWithTelemetry):
 
         self.log_step(
             'Verify WAL checkpoint metrics after pool creation (dmg telemetry metrics query)')
-        if not self.verify_metrics('after pool creation', wal_metrics, **verify_after):
+        if not self.verify_metrics(wal_metrics, **verify_after):
             self.fail('Unexpected WAL reply metric values after pool creation')
 
         self.log_step('Test passed')
