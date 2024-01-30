@@ -106,7 +106,7 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 
 	rc = daos_init();
 	if ((rc == 0) && (use_glob_eq == 0)) {
-		override = getenv("PYDAOS_GLOB_EQ");
+		d_agetenv_str(&override, "PYDAOS_GLOB_EQ");
 		if ((override == NULL) || strcmp(override, "0")) {
 			use_glob_eq = 1;
 			ret = daos_eq_create(&glob_eq);
@@ -115,6 +115,7 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 				use_glob_eq = 0;
 			}
 		}
+		d_freeenv_str(&override);
 	}
 
 	return PyInt_FromLong(rc);
