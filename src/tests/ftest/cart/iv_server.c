@@ -1241,13 +1241,14 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	env_self_rank = getenv("CRT_L_RANK");
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	if (env_self_rank == NULL) {
 		printf("CRT_L_RANK was not set\n");
 		return -1;
 	}
 
 	my_rank = atoi(env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -1274,7 +1275,7 @@ int main(int argc, char **argv)
 	init_work_contexts();
 
 	/* Load the group configuration file */
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	rc = d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
 	if (grp_cfg_file == NULL) {
 		D_ERROR("CRT_L_GRP_CFG was not set\n");
 		assert(0);
@@ -1288,6 +1289,7 @@ int main(int argc, char **argv)
 		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
 		assert(0);
 	}
+	d_freeenv_str(&grp_cfg_file);
 
 	/* Start the server for myself */
 	DBG_PRINT("Server starting, self_rank=%d\n", my_rank);
