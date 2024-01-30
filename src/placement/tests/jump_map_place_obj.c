@@ -1590,7 +1590,7 @@ placement_handles_multiple_states(void **state)
 	 * Compute find_reint() using the correct version of rebuild which
 	 * would have launched when reintegration started
 	 *
-	 * find_reint() should find only singe shard to be reintegrate, since
+	 * find_reint() should find only single shard to be reintegrate, since
 	 * it use the version after reint.
 	 */
 	ctx.ver = ver_after_reint;
