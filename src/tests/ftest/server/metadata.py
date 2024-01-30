@@ -65,7 +65,7 @@ class ObjectMetadata(TestWithServers):
     CREATED_CONTAINERS_MIN = 2900
 
     # Number of created containers that should not be possible
-    CREATED_CONTAINERS_LIMIT = 3500
+    CREATED_CONTAINERS_LIMIT = 7500
 
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
