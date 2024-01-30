@@ -126,5 +126,5 @@ func (cmd *configGenCmd) confGenPrint(ctx context.Context) error {
 // parameters suitable to be used across all hosts in provided host list. Use the control API to
 // generate config from remote scan results.
 func (cmd *configGenCmd) Execute(_ []string) error {
-	return cmd.confGenPrint(context.Background())
+	return cmd.confGenPrint(cmd.MustLogCtx())
 }
