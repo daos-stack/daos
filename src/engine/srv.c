@@ -1030,13 +1030,14 @@ dss_xstreams_init(void)
 		       sched_relax_intvl);
 	}
 
-	env = getenv("DAOS_SCHED_RELAX_MODE");
+	d_agetenv_str(&env, "DAOS_SCHED_RELAX_MODE");
 	if (env) {
 		sched_relax_mode = sched_relax_str2mode(env);
 		if (sched_relax_mode == SCHED_RELAX_MODE_INVALID) {
 			D_WARN("Invalid relax mode [%s]\n", env);
 			sched_relax_mode = SCHED_RELAX_MODE_NET;
 		}
+		d_freeenv_str(&env);
 	}
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));

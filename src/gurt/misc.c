@@ -1077,7 +1077,7 @@ out:
  * \param[in,out]	str_val		Copy of an environment string value.
  */
 void
-d_free_env_str(char **str_val)
+d_freeenv_str(char **str_val)
 {
 	assert(str_val != NULL);
 

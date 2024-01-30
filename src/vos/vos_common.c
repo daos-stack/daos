@@ -987,7 +987,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto failed;
 	}
 
-	evt_mode = getenv("DAOS_EVTREE_MODE");
+	rc = d_agetenv_str(&evt_mode, "DAOS_EVTREE_MODE");
 	if (evt_mode) {
 		if (strcasecmp("soff", evt_mode) == 0) {
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
@@ -996,6 +996,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
 			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
 		}
+		d_freeenv_str(&evt_mode);
 	}
 	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:
