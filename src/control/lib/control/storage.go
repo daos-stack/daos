@@ -141,7 +141,6 @@ type (
 		unaryRequest
 		Usage      bool
 		NvmeHealth bool
-		NvmeMeta   bool
 		NvmeBasic  bool
 	}
 
@@ -240,7 +239,7 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 				Basic: req.NvmeBasic,
 				// Health and meta details required to populate usage statistics.
 				Health: req.NvmeHealth || req.Usage,
-				Meta:   req.NvmeMeta || req.Usage,
+				Meta:   req.Usage,
 			},
 		})
 	})
@@ -306,6 +305,13 @@ func (sfr *StorageFormatResp) addHostResponse(hr *HostResponse) (err error) {
 			hs.NvmeDevices = append(hs.NvmeDevices, &storage.NvmeController{
 				Info:    info,
 				PciAddr: nr.GetPciAddr(),
+				SmdDevices: []*storage.SmdDevice{
+					{
+						Roles: storage.BdevRoles{
+							storage.OptionBits(nr.RoleBits),
+						},
+					},
+				},
 			})
 		default:
 			if err := ctlStateToErr(nr.GetState()); err != nil {
