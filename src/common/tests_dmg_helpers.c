@@ -681,6 +681,14 @@ dmg_pool_create(const char *dmg_config_file,
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
 
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENTRY_AGE);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=svc_ops_entry_age:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SPACE_RB);
 		if (entry != NULL) {
 			args = cmd_push_arg(args, &argcount, "--properties=space_rb:%zu ",

@@ -499,6 +499,7 @@ pool_properties(void **state)
 	daos_prop_t		*prop_query;
 	struct daos_prop_entry	*entry;
 	daos_pool_info_t	 info = {0};
+	const uint64_t           svc_ops_age = 180;
 	int			 rc;
 	char			*expected_owner;
 	char			*expected_group;
@@ -510,7 +511,7 @@ pool_properties(void **state)
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-	prop = daos_prop_alloc(4);
+	prop = daos_prop_alloc(5);
 	/* label - set arg->pool_label to use daos_pool_connect() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	D_STRNDUP_S(prop->dpp_entries[0].dpe_str, label);
@@ -524,8 +525,11 @@ pool_properties(void **state)
 	prop->dpp_entries[2].dpe_type = DAOS_PROP_PO_SVC_OPS_ENABLED;
 	prop->dpp_entries[2].dpe_val  = 0; /* disabled */
 
-	prop->dpp_entries[3].dpe_type = DAOS_PROP_PO_SPACE_RB;
-	prop->dpp_entries[3].dpe_val  = space_rb;
+	prop->dpp_entries[3].dpe_type = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE;
+	prop->dpp_entries[3].dpe_val  = svc_ops_age; /* seconds */
+
+	prop->dpp_entries[4].dpe_type = DAOS_PROP_PO_SPACE_RB;
+	prop->dpp_entries[4].dpe_val  = space_rb;
 
 	while (!rc && arg->setup_state != SETUP_POOL_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, prop, NULL);
@@ -557,6 +561,11 @@ pool_properties(void **state)
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SVC_OPS_ENABLED);
 	if (entry == NULL || (entry->dpe_val != 0)) {
 		fail_msg("svc_ops_enabled verification failed.\n");
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SVC_OPS_ENTRY_AGE);
+	if (entry == NULL || (entry->dpe_val != svc_ops_age)) {
+		fail_msg("svc_ops_entry_age verification failed.\n");
 	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
