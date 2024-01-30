@@ -102,7 +102,8 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 		/* Skip if file has no saved key */
 		rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_KEY_XATTR, key, &size);
 		if (rc != 0) {
-			D_DEBUG(DB_ALL, "No key xattr, skipping upload_id= %s\n", upload_id);
+			D_DEBUG(DB_ALL, "No key xattr, skipping upload_id " DF_DE,
+				DP_DE(upload_id));
 			rc = dfs_release(upload_dir);
 			if (rc != 0)
 				goto err_key;
@@ -136,8 +137,8 @@ ds3_bucket_list_multipart(const char *bucket_name, uint32_t *nmp,
 				rc = dfs_getxattr(ds3->meta_dfs, upload_dir, RGW_DIR_ENTRY_XATTR,
 						  mps[mpi].encoded, &mps[mpi].encoded_length);
 				if (rc != 0) {
-					D_DEBUG(DB_ALL, "No dirent, skipping upload_id= %s\n",
-						upload_id);
+					D_DEBUG(DB_ALL, "No dirent, skipping upload_id " DF_DE,
+						DP_DE(upload_id));
 					rc = dfs_release(upload_dir);
 					if (rc != 0)
 						goto err_key;
@@ -238,7 +239,7 @@ ds3_upload_list_parts(const char *bucket_name, const char *upload_id, uint32_t *
 
 		part_num = strtol(part_name, &err, 10);
 		if (errno || err != part_name + strlen(part_name)) {
-			D_DEBUG(DB_ALL, "bad part number: %s", part_name);
+			D_DEBUG(DB_ALL, "bad part number " DF_DE, DP_DE(part_name));
 			continue;
 		}
 

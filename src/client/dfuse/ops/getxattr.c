@@ -37,8 +37,6 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode, const char *n
 	char  *value    = NULL;
 	int    rc;
 
-	DFUSE_TRA_DEBUG(inode, "Attribute '%s' size %#lx", name, size);
-
 	if (inode->ie_root) {
 		if (strncmp(name, DUNS_XATTR_NAME, sizeof(DUNS_XATTR_NAME)) == 0) {
 			rc = _dfuse_attr_create("POSIX", inode->ie_dfs->dfs_dfp->dfp_pool,

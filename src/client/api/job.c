@@ -67,7 +67,9 @@ dc_job_init(void)
 
 	dc_jobid = jobid;
 
+	/* d_log_check: disable=print-string */
 	D_INFO("Using JOBID ENV: %s\n", dc_jobid_env);
+	/* d_log_check: disable=print-string */
 	D_INFO("Using JOBID %s\n", dc_jobid);
 	return 0;
 

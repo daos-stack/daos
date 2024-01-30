@@ -20,8 +20,6 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	int	rc;
 	bool	duns_attr = false;
 
-	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
-
 	if (strncmp(name, DUNS_XATTR_NAME, sizeof(DUNS_XATTR_NAME)) == 0) {
 		struct duns_attr_t dattr = {};
 

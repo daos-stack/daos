@@ -329,6 +329,7 @@ void stack_pool_destroy(struct stack_pool *sp)
 		D_DEBUG(DB_MEM, "munmap() of pool %p, desc %p, stack %p of size %zu, ",
 			sp, desc, desc->stack, desc->stack_size);
 		rc = munmap(desc->stack, desc->stack_size);
+		/* d_log_check: disable=print-string */
 		D_DEBUG(DB_MEM, "has been %ssuccessfully munmap()'ed%s%s\n",
 			(rc ? "un" : ""), (rc ? " : " : ""), (rc ? strerror(errno) : ""));
 		--sp->sp_free_stacks;

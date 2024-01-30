@@ -2026,17 +2026,15 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
-			DP_RC(rc), DP_UOID(ent->ie_oid));
+		D_DEBUG(DB_REBUILD, "retry by " DF_UOID "/%d", DP_UOID(ent->ie_oid), rc);
 		dss_sleep(d_backoff_seq_next(&backoff_seq));
 	} while (1);
 
 	d_backoff_seq_fini(&backoff_seq);
 
 	if (rc != 0)
-		D_ERROR("discard object pool/object "DF_UUID"/"DF_UOID" rc: "DF_RC"\n",
-			DP_UUID(arg->tgt_discard->pool_uuid), DP_UOID(ent->ie_oid),
-			DP_RC(rc));
+		DL_ERROR(rc, "discard object pool/object " DF_UUID "/" DF_UOID,
+			 DP_UUID(arg->tgt_discard->pool_uuid), DP_UOID(ent->ie_oid));
 	return rc;
 }
 
@@ -2092,8 +2090,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
-			DP_RC(rc), DP_UUID(entry->ie_couuid));
+		D_DEBUG(DB_REBUILD, "retry by " DF_UUID "/%d", DP_UUID(entry->ie_couuid), rc);
 		dss_sleep(d_backoff_seq_next(&backoff_seq));
 	} while (1);
 
@@ -2149,8 +2146,7 @@ pool_child_discard(void *data)
 		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
-			DP_RC(rc), DP_UUID(arg->pool_uuid));
+		D_DEBUG(DB_REBUILD, "retry by " DF_UUID "/%d", DP_UUID(arg->pool_uuid), rc);
 		dss_sleep(d_backoff_seq_next(&backoff_seq));
 	} while (1);
 
