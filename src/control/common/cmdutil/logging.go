@@ -7,6 +7,8 @@
 package cmdutil
 
 import (
+	"context"
+
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -29,4 +31,19 @@ type (
 // SetLog sets the logger for the command.
 func (cmd *LogCmd) SetLog(log logging.Logger) {
 	cmd.Logger = log
+}
+
+// LogCtx returns a context with the command's logger set.
+func (cmd *LogCmd) LogCtx() (context.Context, error) {
+	return logging.ToContext(context.Background(), cmd.Logger)
+}
+
+// MustLogCtx returns a context with the command's logger set.
+// NB: Panics on error.
+func (cmd *LogCmd) MustLogCtx() context.Context {
+	ctx, err := cmd.LogCtx()
+	if err != nil {
+		panic(err)
+	}
+	return ctx
 }
