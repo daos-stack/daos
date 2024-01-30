@@ -519,7 +519,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
+	if (!dfuse_info->di_foreground && d_isenv_def("PMIX_RANK")) {
 		DFUSE_TRA_WARNING(dfuse_info,
 				  "Not running in background under orterun");
 		dfuse_info->di_foreground = true;
