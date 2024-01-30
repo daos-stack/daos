@@ -7132,23 +7132,6 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	if (!updated)
 		D_GOTO(out, rc);
 
-	switch (opc) {
-	case POOL_EXCLUDE:
-		op = RB_OP_EXCLUDE;
-		break;
-	case POOL_DRAIN:
-		op = RB_OP_DRAIN;
-		break;
-	case POOL_REINT:
-		op = RB_OP_REINT;
-		break;
-	case POOL_EXTEND:
-		op = RB_OP_EXTEND;
-		break;
-	default:
-		D_GOTO(out, rc);
-	}
-
 	env = getenv(REBUILD_ENV);
 	if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
 	     daos_fail_check(DAOS_REBUILD_DISABLE)) {
