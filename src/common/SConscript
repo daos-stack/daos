@@ -1,6 +1,5 @@
 """Build common libraries"""
 
-
 COMMON_FILES = [
     'debug.c',
     'mem.c',

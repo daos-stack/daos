@@ -1,8 +1,9 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
 # pylint: disable=too-few-public-methods
 # pylint: disable=pylint-missing-docstring
 import ctypes

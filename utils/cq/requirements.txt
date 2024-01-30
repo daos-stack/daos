@@ -14,3 +14,4 @@ isort==5.13.2
 pylint==3.0.3
 yamllint==1.33.0
 codespell==2.2.6
+black

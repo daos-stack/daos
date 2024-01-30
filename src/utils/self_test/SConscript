@@ -1,6 +1,5 @@
 """Build self test"""
 
-
 SELF_TEST = 'self_test.c'
 
 

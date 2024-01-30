@@ -1,6 +1,5 @@
 """Build cart_ctl test"""
 
-
 SRC = ['cart_ctl.c']
 
 
