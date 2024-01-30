@@ -2626,8 +2626,19 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 update_hae:
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
-		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph)
+		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph) {
+			uint64_t orig, cur;
+
+			orig = d_hlc2sec(*cont->sc_ec_query_agg_eph);
+			cur = d_hlc2sec(cont->sc_ec_agg_eph);
+			if (orig && cur > orig && (cur - orig) >= 600)
+				D_WARN(DF_CONT" Sluggish EC boundary bumping: "
+				       ""DF_U64" -> "DF_U64", gap:"DF_U64"\n",
+				       DP_CONT(cont->sc_pool_uuid, cont->sc_uuid),
+				       orig, cur, cur - orig);
+
 			*cont->sc_ec_query_agg_eph = cont->sc_ec_agg_eph;
+		}
 	}
 
 	return rc;
