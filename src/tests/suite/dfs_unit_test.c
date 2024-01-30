@@ -3204,8 +3204,8 @@ dfs_test_pipeline_find(void **state)
 	struct dirent	*dents = NULL;
 	daos_obj_id_t	*oids = NULL;
 	daos_size_t	*csizes = NULL;
-	uint64_t	nr_total = 0,
-	uint64_t	nr_matched = 0,
+	uint64_t         nr_total   = 0;
+	uint64_t         nr_matched = 0;
 	uint64_t	nr_scanned;
 
 	rc = dfs_open(dfs_mt, NULL, dirname, create_mode | S_IFDIR, create_flags,
