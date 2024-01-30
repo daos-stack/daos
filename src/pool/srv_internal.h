@@ -20,7 +20,7 @@
 #define POOL_GROUP_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
 
 /* Map states of ranks that make up the pool service */
-#define POOL_SVC_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN)
+#define POOL_SVC_MAP_STATES (PO_COMP_ST_UPIN)
 
 /*
  * Since we want all PS replicas to belong to the pool group,
@@ -92,6 +92,7 @@ struct pool_iv_prop {
 	uint32_t	pip_svc_list_offset;
 	uint32_t	pip_perf_domain;
 	uint32_t	pip_reint_mode;
+	uint32_t         pip_svc_ops_enabled;
 	char		pip_iv_buf[0];
 };
 
@@ -254,10 +255,6 @@ int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 int ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
-
-int ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool,
-				     uuid_t *srv_cont_hdl,
-				     uuid_t *srv_pool_hdl);
 
 /*
  * srv_metrics.c
