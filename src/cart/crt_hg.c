@@ -1643,7 +1643,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 	} else {
 		D_ERROR("HG_Bulk_create failed, hg_ret: " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
-		rc = crt_hgret_2_der(hg_ret);
+		rc = -DER_HG_FATAL;
 	}
 
 out:
@@ -1666,7 +1666,7 @@ crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
 		D_ERROR("HG_Bulk_bind failed, hg_ret " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
 
-	return crt_hgret_2_der(hg_ret);
+	return -DER_HG_FATAL;
 }
 
 int
@@ -1726,7 +1726,7 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_access failed, hg_ret: " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
-		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	D_ASSERT(actual_sgnum == bulk_sgnum);
 
