@@ -47,7 +47,7 @@ test_cluster() {
         NODELIST=${tnodes}                              \
         BUILD_URL=\"${BUILD_URL:-Unknown in GHA}\"      \
         STAGE_NAME=\"$STAGE_NAME\"                      \
-	$(cat ci/functional/test_main_prep_node.sh)"
+        $(cat ci/functional/test_main_prep_node.sh)"
 }
 
 clush -B -S -o '-i ci_key' -l root -w "${first_node}" \
