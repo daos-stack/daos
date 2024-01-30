@@ -194,6 +194,10 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 		return -DER_INVAL;
 	}
 
+	rc = ival_thread_start(dfuse_info);
+	if (rc != 0)
+		D_GOTO(umount, rc = daos_errno2der(rc));
+
 	rc = dfuse_send_to_fg(0);
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
@@ -205,6 +209,8 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 		rc = fuse_session_loop(dfuse_info->di_session);
 	if (rc != 0)
 		DHS_ERROR(dfuse_info, rc, "Fuse loop exited");
+
+umount:
 
 	fuse_session_unmount(dfuse_info->di_session);
 
@@ -717,6 +723,8 @@ out_cont:
 out_pool:
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_daos:
+	ival_thread_stop();
+
 	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
