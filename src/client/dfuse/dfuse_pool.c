@@ -38,10 +38,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	 * lookups.
 	 */
 	if (uuid_parse(name, pool) < 0) {
-		struct fuse_entry_param entry = {.entry_timeout = 60};
-
 		DFUSE_TRA_DEBUG(parent, "Invalid pool uuid");
-		DFUSE_REPLY_ENTRY(parent, req, entry);
+		DFUSE_REPLY_NO_ENTRY(parent, req, 60);
 		return;
 	}
 
@@ -134,12 +132,8 @@ decref:
 	dfuse_ie_free(dfuse_info, ie);
 	daos_prop_free(prop);
 err:
-	if (rc == ENOENT) {
-		struct fuse_entry_param entry = {0};
-
-		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
-		DFUSE_REPLY_ENTRY(parent, req, entry);
-	} else {
+	if (rc == ENOENT)
+		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
+	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	}
 }
