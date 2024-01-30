@@ -1748,27 +1748,35 @@ retry:
 
 	for (i = 0; i < ec_agg->ea_servers_num; i++) {
 		if (ec_agg->ea_server_ephs[i].rank == rank) {
-			if (ec_agg->ea_server_ephs[i].eph < eph)
+			D_ERROR(DF_CONT" got eph "DF_X64" from rank %d, "
+				"ec_agg->ea_server_ephs[%d].eph "DF_X64"\n",
+				DP_CONT(pool_uuid, cont_uuid), eph, rank,
+				i, ec_agg->ea_server_ephs[i].eph);
+			if (ec_agg->ea_server_ephs[i].eph < eph) {
 				ec_agg->ea_server_ephs[i].eph = eph;
+				D_ERROR(DF_CONT" UPDATE ea_server_ephs[%d].eph "DF_X64"\n",
+					DP_CONT(pool_uuid, cont_uuid), i,
+					ec_agg->ea_server_ephs[i].eph);
+			}
 			break;
 		}
 	}
 
 	if (i == ec_agg->ea_servers_num) {
 		if (!retried) {
-			D_DEBUG(DB_MD, "rank %u eph "DF_U64" retry for"
+			D_ERROR("rank %u eph "DF_U64" retry for"
 				DF_CONT"\n", rank, eph,
 				DP_CONT(pool_uuid, cont_uuid));
 			retried = true;
 			ec_agg->ea_deleted = 1;
 			goto retry;
 		} else {
-			D_WARN("rank %u eph "DF_U64" does not exist for "
+			D_ERROR("rank %u eph "DF_U64" does not exist for "
 			       DF_CONT"\n", rank, eph,
 			       DP_CONT(pool_uuid, cont_uuid));
 		}
 	} else {
-		D_DEBUG(DB_MD, DF_CONT" update eph rank %u eph "DF_U64"\n",
+		D_ERROR(DF_CONT" update eph rank %u eph "DF_X64"\n",
 			DP_CONT(pool_uuid, cont_uuid), rank, eph);
 	}
 
@@ -1794,7 +1802,7 @@ cont_refresh_vos_agg_eph_one(void *data)
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_MD, DF_CONT": %s agg boundary eph "DF_X64"->"DF_X64"\n",
+	D_ERROR(DF_CONT": %s agg boundary eph "DF_X64"->"DF_X64"\n",
 		DP_CONT(arg->pool_uuid, arg->cont_uuid),
 		cont_child->sc_ec_agg_eph_boundary < arg->min_eph ? "update" : "ignore",
 		cont_child->sc_ec_agg_eph_boundary, arg->min_eph);
@@ -1879,15 +1887,19 @@ cont_agg_eph_leader_ult(void *arg)
 					min_eph = ec_agg->ea_server_ephs[i].eph;
 			}
 
-			if (min_eph == ec_agg->ea_current_eph)
+			if (min_eph == ec_agg->ea_current_eph) {
+				D_ERROR(DF_CONT" same ea_current_eph "DF_X64"\n",
+					DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
+					ec_agg->ea_current_eph);
 				continue;
+			}
 
 			/**
 			 * NB: during extending or reintegration, the new
 			 * server might cause the minimum epoch is less than
 			 * ea_current_eph.
 			 */
-			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "DF_U64"\n",
+			D_ERROR(DF_CONT" minimum "DF_U64" current "DF_U64"\n",
 				DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
 				min_eph, ec_agg->ea_current_eph);
 

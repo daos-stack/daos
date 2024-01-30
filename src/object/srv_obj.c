@@ -2509,6 +2509,8 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 				DP_RC(rc));
 end:
 		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, &ioc.ioc_io_size, NULL);
+		D_ERROR("oid:"DF_UOID":"DF_KEY" , update new parity "DF_RECX", rc %d\n",
+			 DP_UOID(oea->ea_oid), DP_KEY(dkey), DP_RECX(iod->iod_recxs[0]), rc);
 		if (rc) {
 			if (rc == -DER_NO_PERM) {
 				/* Parity already exists, May need a
@@ -2534,6 +2536,8 @@ end:
 	rc1 = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
 				  &oea->ea_epoch_range, dkey,
 				  &iod->iod_name, &recx);
+	D_ERROR("oid:"DF_UOID":"DF_KEY" , remove replica ext "DF_RECX", rc %d\n",
+		 DP_UOID(oea->ea_oid), DP_KEY(dkey), DP_RECX(recx), rc1);
 	if (rc1)
 		D_ERROR(DF_UOID ": array_remove failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
 			DP_RC(rc1));

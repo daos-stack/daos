@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -344,12 +344,13 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	adjust_upper_bound(cont, param->ap_vos_agg, &epoch_max);
 
 	if (epoch_min >= epoch_max) {
-		D_DEBUG(DB_EPC, "epoch min "DF_X64" >= max "DF_X64"\n", epoch_min, epoch_max);
+		D_ERROR("epoch min "DF_X64" >= max "DF_X64", vos_agg %d\n", epoch_min, epoch_max,
+			param->ap_vos_agg);
 		return 0;
 	}
 
-	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64"\n",
-		hlc, epoch_max, epoch_min, cont->sc_aggregation_max);
+	D_ERROR("hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64", vos_agg %d.\n",
+		hlc, epoch_max, epoch_min, cont->sc_aggregation_max, param->ap_vos_agg);
 
 	if (cont->sc_snapshots_nr + 1 < MAX_SNAPSHOT_LOCAL) {
 		snapshots = snapshots_local;
@@ -399,16 +400,16 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	if (epoch_range.epr_lo >= epoch_max)
 		D_GOTO(free, rc = 0);
 
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: "DF_X64"; HLC: "DF_X64"\n",
+	D_ERROR(DF_CONT"[%d]: MIN: "DF_X64"; HLC: "DF_X64", vos_agg %d\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		tgt_id, epoch_min, hlc);
+		tgt_id, epoch_min, hlc, param->ap_vos_agg);
 
 	for ( ; i < snapshots_nr && snapshots[i] < epoch_max; ++i) {
 		epoch_range.epr_hi = snapshots[i];
-		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> "
-			DF_X64"}\n",
+		D_ERROR(DF_CONT"[%d]: Aggregating {"DF_X64" -> "
+			DF_X64"}, vos_agg %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi, param->ap_vos_agg);
 
 		flags |= VOS_AGG_FL_FORCE_MERGE;
 		rc = agg_cb(cont, &epoch_range, flags, param);
@@ -422,9 +423,9 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		goto out;
 
 	epoch_range.epr_hi = epoch_max;
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> "DF_X64"}\n",
+	D_ERROR(DF_CONT"[%d]: Aggregating {"DF_X64" -> "DF_X64"}, vos_agg %d.\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
+		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi, param->ap_vos_agg);
 
 	if (dss_xstream_is_busy())
 		flags &= ~VOS_AGG_FL_FORCE_MERGE;
@@ -433,8 +434,8 @@ out:
 	if (rc == 0 && epoch_min == 0)
 		param->ap_full_scan_hlc = hlc;
 
-	D_DEBUG(DB_EPC, DF_CONT "[%d]: Aggregating finished. %d\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, rc);
+	D_ERROR(DF_CONT "[%d]: Aggregating finished. %d, vos_agg %d.\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, rc, param->ap_vos_agg);
 free:
 	if (snapshots != NULL && snapshots != snapshots_local)
 		D_FREE(snapshots);
@@ -2470,6 +2471,9 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 					}
 				}
 
+				D_ERROR("ec_eph->ce_ephs_cnt %d, ec_eph->ce_ephs[%d]: "DF_X64
+					", is_failed_tgts %d\n", ec_eph->ce_ephs_cnt, i,
+					ec_eph->ce_ephs[i], is_failed_tgts);
 				if (!is_failed_tgts)
 					min_eph = min(min_eph, ec_eph->ce_ephs[i]);
 			}
@@ -2481,20 +2485,20 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,
 						DP_UUID(ec_eph->ce_cont_uuid));
 				else
-					D_DEBUG(DB_MD, "Skip eph "DF_X64"/"DF_X64
+					D_ERROR("Skip eph "DF_X64"/"DF_X64
 						" "DF_UUID"\n", min_eph, ec_eph->ce_last_eph,
 						DP_UUID(ec_eph->ce_cont_uuid));
 				continue;
 			}
 
-			D_DEBUG(DB_MD, "Update eph "DF_X64" "DF_UUID"\n",
+			D_ERROR("Update eph "DF_X64" "DF_UUID"\n",
 				min_eph, DP_UUID(ec_eph->ce_cont_uuid));
 			rc = cont_iv_ec_agg_eph_update(pool->sp_iv_ns, ec_eph->ce_cont_uuid,
 						       min_eph);
 			if (rc == 0)
 				ec_eph->ce_last_eph = min_eph;
 			else
-				D_INFO(DF_CONT": Update min epoch: %d\n",
+				D_ERROR(DF_CONT": Update min epoch: %d\n",
 				       DP_CONT(pool->sp_uuid, ec_eph->ce_cont_uuid), rc);
 		}
 		D_FREE(failed_tgts);

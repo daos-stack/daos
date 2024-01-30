@@ -823,6 +823,8 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 		rc = vos_obj_update(ap->ap_cont_handle, entry->ae_oid,
 				    entry->ae_cur_stripe.as_hi_epoch, 0, 0,
 				    &entry->ae_dkey, 1, &iod, iod_csums, &sgl);
+		D_ERROR("oid:"DF_UOID":"DF_KEY" , update new parity "DF_RECX", rc %d\n",
+			 DP_UOID(entry->ae_oid), DP_KEY(&entry->ae_dkey), DP_RECX(recx), rc);
 		if (csummer != NULL && iod_csums != NULL)
 			daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
@@ -841,6 +843,9 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 					   &entry->ae_dkey,
 					   &entry->ae_akey,
 					   &ext->ae_recx);
+		D_ERROR("oid:"DF_UOID":"DF_KEY" , remove replica ext "DF_RECX", rc %d\n",
+			 DP_UOID(entry->ae_oid), DP_KEY(&entry->ae_dkey), DP_RECX(ext->ae_recx),
+			 err);
 		if (err)
 			D_ERROR("array_remove fails: "DF_RC"\n", DP_RC(err));
 		if (!rc && err)
@@ -1864,6 +1869,8 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 			rc = agg_encode_local_parity(entry);
 		} else {
 			update_vos = false;
+			D_ERROR("stripe full ap_min_unagg_eph "DF_X64", as_lo_epoch "DF_X64"\n",
+				agg_param->ap_min_unagg_eph, entry->ae_cur_stripe.as_lo_epoch);
 			agg_param->ap_min_unagg_eph = min(agg_param->ap_min_unagg_eph,
 							  entry->ae_cur_stripe.as_lo_epoch);
 		}
@@ -1878,6 +1885,8 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 
 	if (!entry->ae_is_leader) {
 		update_vos = false;
+		D_ERROR("ap_min_unagg_eph "DF_X64", as_lo_epoch "DF_X64"\n",
+			agg_param->ap_min_unagg_eph, entry->ae_cur_stripe.as_lo_epoch);
 		agg_param->ap_min_unagg_eph = min(agg_param->ap_min_unagg_eph,
 						  entry->ae_cur_stripe.as_lo_epoch);
 		goto out;
@@ -2183,7 +2192,7 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 						&agg_entry->ae_dkey);
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 	if(agg_shard_is_parity(agg_param->ap_pool_info.api_pool, agg_entry)) {
-		D_DEBUG(DB_EPC, "oid:"DF_UOID":"DF_KEY" ec agg starting leader %s\n",
+		D_ERROR("oid:"DF_UOID":"DF_KEY" ec agg starting leader %s\n",
 			DP_UOID(agg_entry->ae_oid), DP_KEY(&agg_entry->ae_dkey),
 			agg_entry->ae_is_leader ? "yes" : "no");
 		agg_reset_dkey_entry(&agg_param->ap_agg_entry, entry);
@@ -2352,6 +2361,25 @@ done:
 	return rc;
 }
 
+static void
+ec_agg_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout, struct daos_oclass_attr *oca)
+{
+	int i;
+
+	D_ERROR("dump layout for "DF_OID", ver %d, k %d, p %d.\n",
+		DP_OID(oid), layout->ol_ver, obj_ec_data_tgt_nr(oca), obj_ec_parity_tgt_nr(oca));
+
+	for (i = 0; i < layout->ol_nr; i++)
+		D_ERROR("%d: shard_id %d, tgt_id %d, f_seq %d, %s %s\n",
+			i, layout->ol_shards[i].po_shard,
+			layout->ol_shards[i].po_target,
+			layout->ol_shards[i].po_fseq,
+			layout->ol_shards[i].po_rebuilding ?
+			"rebuilding" : "healthy",
+			layout->ol_shards[i].po_reintegrating ?
+			"reintegrating" : "healthy");
+}
+
 /* Iterator pre-callback for objects. Determines if object is subject
  * to aggregation. Skips objects that are not EC, or are not led by
  * this target.
@@ -2387,6 +2415,8 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_pda = props.dcp_ec_pda;
 	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
+	if (rc == 0)
+		ec_agg_layout_dump(agg_entry->ae_oid.id_pub, agg_entry->ae_obj_layout, &oca);
 
 out:
 	return rc;
@@ -2627,6 +2657,9 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
+	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
+	D_ERROR("set ap_min_unagg_eph as DAOS_EPOCH_MAX\n");
+
 	if (flags & VOS_AGG_FL_FORCE_SCAN) {
 		/** We don't want to use the latest container aggregation epoch for the filter
 		 *  in this case.   We instead use the lower bound of the epoch range.
@@ -2660,7 +2693,6 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
-	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, NULL);
 
@@ -2699,6 +2731,11 @@ update_hae:
 
 			*cont->sc_ec_query_agg_eph = min(ec_agg_param->ap_min_unagg_eph,
 							 cont->sc_ec_agg_eph);
+			D_ERROR(DF_CONT" ec_agg_param->ap_min_unagg_eph "DF_X64
+				", cont->sc_ec_agg_eph "DF_X64", *cont->sc_ec_query_agg_eph "DF_X64
+				"\n", DP_CONT(cont->sc_pool_uuid, cont->sc_uuid),
+				ec_agg_param->ap_min_unagg_eph, cont->sc_ec_agg_eph,
+				*cont->sc_ec_query_agg_eph);
 		}
 	}
 
