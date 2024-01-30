@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1726,7 +1726,7 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_access failed, hg_ret: " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc = -DER_HG_FATAL);
 	}
 	D_ASSERT(actual_sgnum == bulk_sgnum);
 
