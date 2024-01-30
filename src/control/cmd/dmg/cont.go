@@ -7,8 +7,6 @@
 package main
 
 import (
-	"context"
-
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
@@ -49,7 +47,7 @@ func (c *ContSetOwnerCmd) Execute(args []string) error {
 		Group:    c.GroupName.String(),
 	}
 
-	ctx := context.Background()
+	ctx := c.MustLogCtx()
 	err := control.ContSetOwner(ctx, c.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "FAILED").Error()

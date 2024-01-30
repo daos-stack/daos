@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -26,7 +26,7 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
@@ -58,9 +58,9 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=daosio,dfuse,il,dfs
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
         self.run_build_test("writethrough", True, run_on_vms=True)
@@ -106,7 +106,7 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
