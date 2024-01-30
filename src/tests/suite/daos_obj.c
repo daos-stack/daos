@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2166,7 +2166,7 @@ basic_byte_array(void **state)
 	daos_handle_t	 oh;
 	d_iov_t		 dkey;
 	d_sg_list_t	 sgl;
-	d_iov_t		 sg_iov[2];
+	d_iov_t		 sg_iov[3];
 	daos_iod_t	 iod;
 	daos_recx_t	 recx[5];
 	char		 stack_buf_out[STACK_BUF_LEN];
@@ -2201,9 +2201,10 @@ next_step:
 	D_ASSERT(step == 1 || step == 2);
 	buf = step == 1 ? stack_buf : bulk_buf;
 	buf_len = step == 1 ? STACK_BUF_LEN : TEST_BULK_BUF_LEN;
-	d_iov_set(&sg_iov[0], buf, buf_len);
-	sgl.sg_nr	= 1;
-	sgl.sg_nr_out	= 1;
+	d_iov_set(&sg_iov[0], NULL, 0);
+	d_iov_set(&sg_iov[1], buf, buf_len);
+	sgl.sg_nr	= 2;
+	sgl.sg_nr_out	= 0;
 	sgl.sg_iovs	= sg_iov;
 
 	/** init I/O descriptor */
@@ -2228,11 +2229,13 @@ next_step:
 
 	/** fetch */
 	print_message("fetch with zero iov_len\n");
+	d_iov_set(&sg_iov[0], NULL, 0);
+	d_iov_set(&sg_iov[1], buf, buf_len);
 	iod.iod_size	= 1;
 	recx[0].rx_idx	= 0;
 	recx[0].rx_nr	= tmp_len * 1;
 	iod.iod_nr	= 1;
-	sg_iov[0].iov_len = 0;
+	sg_iov[1].iov_len = 0;
 	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL,
 			    NULL);
 	assert_rc_equal(rc, 0);
