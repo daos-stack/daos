@@ -9,8 +9,9 @@ or for older systems:
 
 python3 setup.py install
 
-If run from within a compiled DAOS source tree this it will detect the
-install path automatically, otherwise it'll use the defaults.
+This can be run from either the installed daos packages or from a install directory, however python
+requires write access to the directory to install so if installing from rpms then a copy may have to
+be made before install.
 """
 import os
 
