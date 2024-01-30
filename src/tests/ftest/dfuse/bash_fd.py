@@ -77,7 +77,7 @@ exit 0
 """
 
 
-class FdTest(DfuseTestBase):
+class DFuseFdTest(DfuseTestBase):
     """Base FdTest test class.
 
     :avocado: recursive
@@ -87,6 +87,9 @@ class FdTest(DfuseTestBase):
         """Run a shell script which opens and writes to files.
 
         This attempts to replicate the way that configure scripts manipulate fds in bash.
+
+        Args:
+            il_lib (str, optional): interception library to run with. Defaults to None
         """
 
         if il_lib is not None:
@@ -95,10 +98,9 @@ class FdTest(DfuseTestBase):
         else:
             env_str = ""
 
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
-        mount_dir = f"/tmp/{self.pool.identifier}_daos_dfuse"
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container, mount_dir=mount_dir)
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
+        self.start_dfuse(self.hostlist_clients, pool, container)
 
         fuse_root_dir = self.dfuse.mount_dir.value
 
@@ -118,13 +120,6 @@ class FdTest(DfuseTestBase):
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
-        # stop dfuse
-        self.stop_dfuse()
-        # destroy container
-        self.container.destroy()
-        # destroy pool
-        self.pool.destroy()
-
     def test_bashfd(self):
         """
 
@@ -134,7 +129,7 @@ class FdTest(DfuseTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,dfs
-        :avocado: tags=FdTest,test_bashfd
+        :avocado: tags=DFuseFdTest,test_bashfd
         """
         self.run_bashfd()
 
@@ -147,7 +142,7 @@ class FdTest(DfuseTestBase):
         :avocado: tags=all,pr,full_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,il,dfs
-        :avocado: tags=FdTest,test_bashfd_ioil
+        :avocado: tags=DFuseFdTest,test_bashfd_ioil
         """
         self.run_bashfd(il_lib="libioil.so")
 
@@ -160,6 +155,6 @@ class FdTest(DfuseTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pil4dfs,dfs
-        :avocado: tags=FdTest,test_bashfd_pil4dfs
+        :avocado: tags=DFuseFdTest,test_bashfd_pil4dfs
         """
         self.run_bashfd(il_lib="libpil4dfs.so")
