@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC1113
 # /*
-#  * (C) Copyright 2016-2023 Intel Corporation.
+#  * (C) Copyright 2016-2024 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -174,7 +174,7 @@ export TEST_RPMS
 export DAOS_BASE
 export DAOS_TEST_APP_SRC=${DAOS_TEST_APP_SRC:-"/scratch/daos_test/apps"}
 export DAOS_TEST_APP_DIR=${DAOS_TEST_APP_DIR:-"${DAOS_TEST_SHARED_DIR}/daos_test/apps"}
-export COVFN_DISABLED
+export COVFN_DISABLED=${COVFN_DISABLED:-"true"}
 
 launch_node_args="-ts ${TEST_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then

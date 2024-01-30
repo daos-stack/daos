@@ -1,6 +1,6 @@
 #!/bin/bash
 # /*
-#  * (C) Copyright 2016-2022 Intel Corporation.
+#  * (C) Copyright 2016-2024 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 #  */
@@ -117,7 +117,7 @@ if ! ssh -A $SSH_KEY_ARGS ${REMOTE_ACCT:-jenkins}@"${nodes[0]}" \
      LAUNCH_OPT_ARGS=\"$LAUNCH_OPT_ARGS\"
      WITH_VALGRIND=\"$WITH_VALGRIND\"
      STAGE_NAME=\"$STAGE_NAME\"
-     COVFN_DISABLED=\"$COVFN_DISABLED\"
+     COVFN_DISABLED=\"${COVFN_DISABLED:-true}\"
      $(sed -e '1,/^$/d' "$SCRIPT_LOC"/main.sh)"; then
     rc=${PIPESTATUS[0]}
     if ${SETUP_ONLY:-false}; then

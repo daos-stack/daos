@@ -10,6 +10,6 @@ export TEST_RPMS=true
 export REMOTE_ACCT=jenkins
 export WITH_VALGRIND="$WITH_VALGRIND"
 export STAGE_NAME="$STAGE_NAME"
-export COVFN_DISABLED="$COVFN_DISABLED"
+export COVFN_DISABLED="${COVFN_DISABLED:-true}"
 
 /usr/lib/daos/TESTING/ftest/ftest.sh "$TEST_TAG" "$TNODES" "$FTEST_ARG"
