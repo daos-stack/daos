@@ -1,17 +1,15 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
 
 from apricot import TestWithServers
-from server_utils import ServerFailed
 from test_utils_pool import add_pool, check_pool_creation
 
 
 class PoolCreateCapacityTests(TestWithServers):
-    # pylint: disable=too-few-public-methods
     """Pool create tests.
 
     All of the tests verify pool create performance with 7 servers and 1 client.
@@ -24,65 +22,60 @@ class PoolCreateCapacityTests(TestWithServers):
         """Set up each test case."""
         # Create test-case-specific DAOS log files
         self.update_log_file_names()
+
         super().setUp()
 
     def test_create_pool_quantity(self):
         """JIRA ID: DAOS-5114 / SRS-2 / SRS-4.
 
         Test Description:
-            Create 200 pools on all of the servers.
+            Create a given number pools on all of the servers.
             Perform an orderly system shutdown via cmd line (dmg).
             Restart the system via cmd line tool (dmg).
             Verify that DAOS is ready to accept requests within 2 minutes.
+            Verify that all the created pools exists after the restart
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
         :avocado: tags=PoolCreateCapacityTests,test_create_pool_quantity
         """
-        # Create some number of pools each using a equal amount of 60% of the
-        # available capacity, e.g. 0.6% for 100 pools.
-        quantity = self.params.get("quantity", "/run/pool/*", 1)
-        storage = self.server_managers[0].get_available_storage()
-        if storage['nvme'] < 750156374016:
-            self.log.info(
-                'Reducing pool quantity from %s -> 150 due to insufficient NVMe capacity (%s < '
-                '750156374016)', quantity, storage['nvme'])
-            quantity = 150
+        daos_restart_duration = self.params.get("restart_duration", "/run/server_config/*", 0)
+        pool_create_duration = self.params.get("create_duration", "/run/pool/*", 0)
+        pool_quantity = self.params.get("quantity", "/run/pool/*", None)
 
         # Define all the pools with the same size defined in the test yaml
-        self.log_step('Defining {} pools'.format(quantity))
+        self.log_step(f"Defining {pool_quantity[1]} pools to create")
         pools = []
-        for _ in range(quantity):
+        for _ in range(pool_quantity[1]):
             pools.append(add_pool(self, create=False))
 
         # Create all the pools
-        self.log_step('Creating {} pools (dmg pool create)'.format(quantity))
+        self.log_step(f"Attempt to create {pool_quantity[1]} pools (dmg pool create)")
         self.get_dmg_command().server_set_logmasks("DEBUG", raise_exception=False)
-        check_pool_creation(self, pools, 30, 2)
+        pools = check_pool_creation(self, pools, pool_create_duration, minimum=pool_quantity[0])
         self.get_dmg_command().server_set_logmasks(raise_exception=False)
 
-        # Verify DAOS can be restarted in less than 2 minutes
+        # Shutdown  DAOS file system')
         self.log_step('Stopping all engines (dmg system stop)')
-        try:
-            self.server_managers[0].system_stop()
-        except ServerFailed as error:
-            self.fail(error)
+        self.server_managers[0].system_stop()
 
-        start = float(time.time())
+        # Restarting DAOS file system
         self.log_step('Starting all engines (dmg system start)')
-        try:
-            self.server_managers[0].system_start()
-        except ServerFailed as error:
-            self.fail(error)
-
+        start = float(time.time())
+        self.server_managers[0].system_start()
         duration = float(time.time()) - start
-        self.log_step('Verifying all engines started in 120 seconds: {}'.format(duration))
-        if duration > 120:
-            self.fail("DAOS not ready to accept requests within 2 minutes after restart")
+
+        # Verify that DAOS is ready to accept requests within a duration defined in the test yaml
+        self.log_step(
+            f"Verifying all engines started in {daos_restart_duration}s")
+        if duration > daos_restart_duration:
+            self.fail(
+                'DAOS file system is not ready to accept requests within '
+                f"{daos_restart_duration}s after restart: got={duration}s")
 
         # Verify all the pools exists after the restart
-        self.log_step('Verifying all {} pools exist after engine restart'.format(quantity))
+        self.log_step(f"Verifying all {len(pools)} pools exist after engines restart")
         self.get_dmg_command().timeout = 360
         pool_uuids = self.get_dmg_command().get_pool_list_uuids(no_query=True)
         detected_pools = [uuid.lower() for uuid in pool_uuids]
@@ -93,9 +86,11 @@ class PoolCreateCapacityTests(TestWithServers):
                 missing_pools.append(pool_uuid)
         if missing_pools:
             self.fail(
-                'The following created pools were not detected in the pool '
-                'list after rebooting the servers:\n  [{}]: {}'.format(
-                    len(missing_pools), ", ".join(missing_pools)))
+                f"{len(missing_pools)} pools are missing after engines restart: "
+                f"miss=[{', '.join(missing_pools)}]")
         if len(pools) != len(detected_pools):
-            self.fail('Incorrect number of pools detected after rebooting the servers')
+            self.fail(
+                'Incorrect number of pools detected after engines restart: '
+                f"wait={len(pools)}, got={len(detected_pools)}")
+
         self.log_step('Test passed')
