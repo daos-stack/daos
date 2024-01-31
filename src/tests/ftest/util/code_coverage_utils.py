@@ -7,7 +7,7 @@ import os
 
 # pylint: disable=import-error,no-name-in-module
 from util.collection_utils import archive_files
-from util.run_utils import run_remote
+#from util.run_utils import run_remote
 
 
 class CodeCoverage():
@@ -73,8 +73,8 @@ class CodeCoverage():
 #            result.fail_test(logger, "Run", message, None)
 #            return False
 
-        logger.debug(
-            "Skp==Updating %s bullseye code coverage file permissions", self.__test_env.bullseye_file)
+#        logger.debug(
+#            "Updating %s bullseye code coverage file permissions", self.__test_env.bullseye_file)
 #        command = ["chmod", "777", self.__test_env.bullseye_file]
 #        if not run_remote(logger, self.__hosts, " ".join(command)).passed:
 #            message = "Error updating bullseye code coverage file on at least one host"
