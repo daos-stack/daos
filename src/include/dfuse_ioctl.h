@@ -7,7 +7,7 @@
 #define __DFUSE_IOCTL_H__
 
 #include <asm/ioctl.h>
-#include "daos.h"
+#include <daos.h>
 
 #define DFUSE_IOCTL_TYPE         0xA3 /* Arbitrary "unique" type of the IOCTL */
 #define DFUSE_IOCTL_REPLY_BASE   0xC1 /* Number of the IOCTL.  Also arbitrary */

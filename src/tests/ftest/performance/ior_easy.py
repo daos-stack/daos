@@ -57,54 +57,6 @@ class IorEasy(PerformanceTestBase):
         """
         self.run_performance_ior(namespace="/run/ior_dfuse_ec_16p2gx/*")
 
-    def test_performance_ior_easy_dfs_ec_4p2gx_stop_write(self):
-        """Test Description: Run IOR Easy, DFS, EC_4P2GX, stop a rank during write
-
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium
-        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfs
-        :avocado: tags=IorEasy,test_performance_ior_easy_dfs_ec_4p2gx_stop_write
-        """
-        self.run_performance_ior(
-            namespace="/run/ior_dfs_ec_4p2gx/*",
-            stop_delay_write=0.5)
-
-    def test_performance_ior_easy_dfs_ec_4p2gx_stop_read(self):
-        """Test Description: Run IOR Easy, DFS, EC_4P2GX, stop a rank during read.
-
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium
-        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfs
-        :avocado: tags=IorEasy,test_performance_ior_easy_dfs_ec_4p2gx_stop_read
-        """
-        self.run_performance_ior(
-            namespace="/run/ior_dfs_ec_4p2gx/*",
-            stop_delay_read=0.5)
-
-    def test_performance_ior_easy_dfs_ec_16p2gx_stop_write(self):
-        """Test Description: Run IOR Easy, DFS, EC_16P2GX, stop a rank during write.
-
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium
-        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfs
-        :avocado: tags=IorEasy,test_performance_ior_easy_dfs_ec_16p2gx_stop_write
-        """
-        self.run_performance_ior(
-            namespace="/run/ior_dfs_ec_16p2gx/*",
-            stop_delay_write=0.5)
-
-    def test_performance_ior_easy_dfs_ec_16p2gx_stop_read(self):
-        """Test Description: Run IOR Easy, DFS, EC_16P2GX, stop a rank during read.
-
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium
-        :avocado: tags=performance,performance_ior,performance_ior_easy,performance_dfs
-        :avocado: tags=IorEasy,test_performance_ior_easy_dfs_ec_16p2gx_stop_read
-        """
-        self.run_performance_ior(
-            namespace="/run/ior_dfs_ec_16p2gx/*",
-            stop_delay_read=0.5)
-
     def test_performance_ior_easy_hdf5_sx(self):
         """Test Description: Run IOR Easy, HDF5, SX.
 

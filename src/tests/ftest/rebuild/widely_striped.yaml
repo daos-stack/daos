@@ -18,15 +18,14 @@ testparams:
 pool:
   scm_size: 10G
   nvme_size: 60G
-  svcn: 5
-  control_method: dmg
   rebuild_timeout: 240
   pool_query_timeout: 60
+  properties: rd_fac:2
 container:
   type: POSIX
   control_method: daos
   oclass: RP_3G1
-  properties: "rd_fac:2"
+  properties: rd_fac:2
 mdtest:
   api: DFS
   client_processes:

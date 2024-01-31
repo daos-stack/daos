@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -290,8 +290,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelProps(storage.AccelEngineSPDK,
-				storage.AccelOptCRCFlag|storage.AccelOptMoveFlag),
+			WithStorageAutoFaultyCriteria(true, 100, 200),
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -319,7 +318,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelProps(storage.AccelEngineDML, storage.AccelOptCRCFlag),
+			WithStorageAutoFaultyCriteria(false, 0, 0),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 

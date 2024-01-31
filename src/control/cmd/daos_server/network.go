@@ -83,7 +83,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 		return err
 	}
 
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	fs := hwprov.DefaultFabricScanner(cmd.Logger)
 
 	var prov string

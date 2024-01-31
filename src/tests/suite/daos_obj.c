@@ -5115,6 +5115,79 @@ oit_list_filter(void **state)
 	test_teardown((void **)&arg);
 }
 
+#define DTS_DKEY_CNT	8
+#define DTS_DKEY_SIZE	16
+#define DTS_IOSIZE	64
+
+static void
+obj_coll_punch(test_arg_t *arg, daos_oclass_id_t oclass)
+{
+	char		 buf[DTS_IOSIZE];
+	char		 dkeys[DTS_DKEY_CNT][DTS_DKEY_SIZE];
+	const char	*akey = "daos_io_akey";
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	int		 i;
+
+	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	for (i = 0; i < DTS_DKEY_CNT; i++) {
+		dts_buf_render(dkeys[i], DTS_DKEY_SIZE);
+		dts_buf_render(buf, DTS_IOSIZE);
+		insert_single(dkeys[i], akey, 0, buf, DTS_IOSIZE, DAOS_TX_NONE, &req);
+	}
+
+	print_message("Collective punch object\n");
+	punch_obj(DAOS_TX_NONE, &req);
+
+	print_message("Fetch after punch\n");
+	arg->expect_result = -DER_NONEXIST;
+	for (i = 0; i < DTS_DKEY_CNT; i++)
+		lookup_empty_single(dkeys[i], akey, 0, buf, DTS_IOSIZE, DAOS_TX_NONE, &req);
+
+	ioreq_fini(&req);
+}
+
+static void
+io_50(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective punch object - OC_SX\n");
+
+	if (!test_runable(arg, 2))
+		return;
+
+	obj_coll_punch(arg, OC_SX);
+}
+
+static void
+io_51(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective punch object - OC_EC_2P1G2\n");
+
+	if (!test_runable(arg, 3))
+		return;
+
+	obj_coll_punch(arg, OC_EC_2P1G2);
+}
+
+static void
+io_52(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective punch object - OC_EC_4P1GX\n");
+
+	if (!test_runable(arg, 5))
+		return;
+
+	obj_coll_punch(arg, OC_EC_4P1GX);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -5213,6 +5286,12 @@ static const struct CMUnitTest io_tests[] = {
 	{ "IO47: obj_open perf", obj_open_perf, async_disable, test_case_teardown},
 	{ "IO48: oit_list_filter", oit_list_filter, async_disable, test_case_teardown},
 	{ "IO49: oit_list_filter async", oit_list_filter, async_enable, test_case_teardown},
+	{ "IO50: collective punch object - OC_SX",
+	  io_50, NULL, test_case_teardown},
+	{ "IO51: collective punch object - OC_EC_2P1G2",
+	  io_51, NULL, test_case_teardown},
+	{ "IO52: collective punch object - OC_EC_4P1GX",
+	  io_52, NULL, test_case_teardown},
 };
 
 int

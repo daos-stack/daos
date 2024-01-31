@@ -89,30 +89,48 @@ static void sk_key_decode(struct btr_instance *tins,
 }
 
 static int
-sk_key_cmp(struct btr_instance *tins, struct btr_record *rec,
-	   d_iov_t *key_iov)
+key_cmp(const void *k1, const void *k2)
 {
-	struct sk_rec	*srec;
-	char		*s1;
-	char		*s2;
-	uint64_t	 len;
-	int		 rc;
+	const d_iov_t *key1 = k1;
+	const d_iov_t *key2 = k2;
+	const char    *s1   = key1->iov_buf;
+	const char    *s2   = key2->iov_buf;
+	uint64_t       len;
+	int            rc;
 
-	srec = (struct sk_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	len = min(key1->iov_len, key2->iov_len);
 
-	/* NB: Since strings are null terminated, this should suffice to
-	 * make shorter string less than larger one
-	 */
-	len = min(srec->sr_key_len, key_iov->iov_len);
-
-	s1 = &srec->sr_key[0];
-	s2 = key_iov->iov_buf;
 	rc = strncasecmp(s1, s2, len);
 
 	if (rc != 0)
-		return dbtree_key_cmp_rc(rc);
+		return rc;
 
-	return dbtree_key_cmp_rc(strncmp(s1, s2, len));
+	return strncmp(s1, s2, len);
+}
+
+struct kv_node {
+	d_iov_t key;
+	d_iov_t val;
+};
+
+/* Sort the keys (for sanity check) */
+static void
+sk_btr_sort_keys(struct kv_node *kv, unsigned int key_nr)
+{
+	qsort(kv, key_nr, sizeof(*kv), key_cmp);
+}
+
+static int
+sk_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key_iov2)
+{
+	struct sk_rec *srec;
+	d_iov_t        key_iov1;
+
+	srec = (struct sk_rec *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
+
+	d_iov_set(&key_iov1, &srec->sr_key[0], srec->sr_key_len);
+
+	return dbtree_key_cmp_rc(key_cmp(&key_iov1, key_iov2));
 }
 
 static int
@@ -299,6 +317,10 @@ sk_btr_open_create(void **state)
 	}
 
 	if (create && arg != NULL) {
+		if (arg[0] == '%') {
+			feats = BTR_FEAT_EMBED_FIRST;
+			arg += 1;
+		}
 		if (arg[0] == 'i') { /* inplace create/open */
 			inplace = true;
 			if (arg[1] != SK_SEP) {
@@ -681,12 +703,6 @@ pass:
 	D_PRINT("Test Passed\n");
 }
 
-struct kv_node {
-	d_iov_t key;
-	d_iov_t val;
-};
-
-
 /* Mix up the keys */
 static void
 sk_btr_mix_keys(struct kv_node *kv, unsigned int key_nr)
@@ -704,33 +720,6 @@ sk_btr_mix_keys(struct kv_node *kv, unsigned int key_nr)
 			kv[nr - 1] = tmp;
 		}
 	}
-}
-
-static int
-key_cmp(const void *k1, const void *k2)
-{
-	const d_iov_t	*key1 = k1;
-	const d_iov_t	*key2 = k2;
-	const char		*s1 = key1->iov_buf;
-	const char		*s2 = key2->iov_buf;
-	uint64_t		 len;
-	int			 rc;
-
-	len = min(key1->iov_len, key2->iov_len);
-
-	rc = strncasecmp(s1, s2, len);
-
-	if (rc != 0)
-		return rc;
-
-	return strncmp(s1, s2, len);
-}
-
-/* Sort the keys (for sanity check) */
-static void
-sk_btr_sort_keys(struct kv_node *kv, unsigned int key_nr)
-{
-	qsort(kv, key_nr, sizeof(*kv), key_cmp);
 }
 
 const char valid[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -1161,7 +1150,8 @@ main(int argc, char **argv)
 	if (rc != 0)
 		return rc;
 
-	rc = dbtree_class_register(SK_TREE_CLASS, BTR_FEAT_DIRECT_KEY, &sk_ops);
+	rc = dbtree_class_register(SK_TREE_CLASS, BTR_FEAT_EMBED_FIRST | BTR_FEAT_DIRECT_KEY,
+				   &sk_ops);
 	D_ASSERT(rc == 0);
 
 	stop_idx = argc-1;

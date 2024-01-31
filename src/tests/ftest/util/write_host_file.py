@@ -4,18 +4,18 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import random
 from logging import getLogger
+from tempfile import mkstemp
 
 
-def write_host_file(hosts, path='/tmp', slots=1):
+def write_host_file(hosts, path='/tmp', slots=None):
     """Write out a hostfile suitable for orterun.
 
     Args:
         hosts (NodeSet): hosts to write to the hostfile
         path (str, optional): where to write the hostfile. Defaults to '/tmp'.
         slots (int, optional): slots per host to specify in the hostfile.
-            Defaults to 1.
+            Defaults to None.
 
     Raises:
         ValueError: if no hosts have been specified
@@ -24,23 +24,19 @@ def write_host_file(hosts, path='/tmp', slots=1):
         str: the full path of the written hostfile
 
     """
-    log = getLogger()
-    unique = random.randint(1, 100000)  # nosec
-
-    if not os.path.exists(path):
-        os.makedirs(path)
-    hostfile = os.path.join(path, "".join(["hostfile", str(unique)]))
-
     if not hosts:
-        raise ValueError("host list parameter must be provided.")
+        raise ValueError("hosts parameter must be provided.")
+
+    log = getLogger()
+    os.makedirs(path, exist_ok=True)
+
+    _, hostfile = mkstemp(dir=path, prefix='hostfile_')
 
     log.debug("Writing hostfile: %s (hosts=%s, slots=%s)", hostfile, hosts, slots)
     with open(hostfile, "w") as hostfile_handle:
-        for host in hosts:
-            hostfile_line = [host]
-            if slots:
-                hostfile_line.append(f"slots={slots}")
-            hostfile_handle.write(f"{' '.join(hostfile_line)}\n")
-            log.debug("  %s", " ".join(hostfile_line))
+        if slots:
+            hostfile_handle.writelines(f'{host} slots={slots}\n' for host in sorted(hosts))
+        else:
+            hostfile_handle.writelines(f'{host}\n' for host in sorted(hosts))
 
     return hostfile

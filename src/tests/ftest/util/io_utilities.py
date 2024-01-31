@@ -105,7 +105,7 @@ class DirTree():
     def get_probe(self):
         """
         Returns a tuple containing a needle file name randomly selected and the
-        absolute pathname of that file, in that order.
+        absolute path-name of that file, in that order.
         """
         if not self._needles_paths:
             raise ValueError(

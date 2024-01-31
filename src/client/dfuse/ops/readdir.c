@@ -7,7 +7,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#include "daos_uns.h"
+#include <daos_uns.h>
 
 /* Initial number of dentries to read when doing readdirplus */
 #define READDIR_PLUS_COUNT 26

@@ -1,0 +1,25 @@
+# Copyright 2021-2023 Intel Corporation
+# All rights reserved.
+#
+# This is a simple example of the DAOS agent configuration file.  For the detailed information about
+# this configuration file, refer to the official example available at
+# https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml
+
+name: daos_server
+access_points: ['localhost']
+port: 10001
+runtime_dir: /var/run/daos_agent
+control_log_mask: debug
+log_file: /tmp/daos_agent.log
+
+transport_config:
+  allow_insecure: false
+  ca_cert: /etc/daos/certs/daosCA.crt
+  cert: /etc/daos/certs/agent.crt
+  key: /etc/daos/certs/agent.key
+
+fabric_ifaces:
+  - numa_node: 0
+    devices:
+      - iface: eth0
+        domain: eth0

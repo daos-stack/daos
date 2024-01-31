@@ -793,8 +793,7 @@ crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info)
 int
 crt_hg_init(void)
 {
-	int	rc = 0;
-	char	*env;
+	int rc = 0;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -803,10 +802,8 @@ crt_hg_init(void)
 
 	#define EXT_FAC DD_FAC(external)
 
-	env = getenv("HG_LOG_SUBSYS");
-	if (!env) {
-		env = getenv("HG_LOG_LEVEL");
-		if (!env)
+	if (!d_isenv_def("HG_LOG_SUBSYS")) {
+		if (!d_isenv_def("HG_LOG_LEVEL"))
 			HG_Set_log_level("warning");
 		HG_Set_log_subsys("hg,na");
 	}
@@ -1400,7 +1397,7 @@ out:
 void
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t	 hg_ret;
+	hg_return_t	hg_ret;
 
 	D_ASSERT(rpc_priv != NULL);
 

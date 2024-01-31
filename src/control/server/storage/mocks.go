@@ -96,19 +96,18 @@ func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 }
 
 // MockSmdDevice returns struct with examples values.
-func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
+func MockSmdDevice(c *NvmeController, varIdx ...int32) *SmdDevice {
 	idx := test.GetIndex(varIdx...)
 	startTgt := (idx * 4) + 1
-	return &SmdDevice{
+	sd := SmdDevice{
 		UUID:      test.MockUUID(idx),
 		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
 		Roles:     BdevRoles{OptionBits(BdevRoleAll)},
-		Ctrlr: NvmeController{
-			NvmeState: NvmeStateNormal,
-			LedState:  LedStateNormal,
-			PciAddr:   parentTrAddr,
-		},
 	}
+	if c != nil {
+		sd.Ctrlr = *c
+	}
+	return &sd
 }
 
 // MockNvmeController returns struct with examples values.
@@ -126,7 +125,6 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 		LedState:    LedStateNormal,
 		HealthStats: MockNvmeHealth(idx),
 		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(1)},
-		SmdDevices:  []*SmdDevice{MockSmdDevice(pciAddr, idx)},
 	}
 }
 

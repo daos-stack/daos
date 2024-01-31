@@ -1,0 +1,21 @@
+# Copyright 2021-2023 Intel Corporation
+# All rights reserved.
+#
+# Docker Compose file allowing to deploy a DAOS admin service with Docker stack
+
+version: "3.8"
+
+services:
+  daos_admin:
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-admin-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
+    tty: true
+    secrets:
+      - source: daos_admin-certs
+        target: daos_admin-certs.txz
+        uid: '0'
+        gid: '0'
+        mode: 0600
+
+secrets:
+  daos_admin-certs:
+    external: true

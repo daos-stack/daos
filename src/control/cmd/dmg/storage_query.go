@@ -75,7 +75,7 @@ type devHealthQueryCmd struct {
 }
 
 func (cmd *devHealthQueryCmd) Execute(_ []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	req := &control.SmdQueryReq{
 		OmitPools:        true,
 		IncludeBioHealth: true,
@@ -94,7 +94,7 @@ type listDevicesQueryCmd struct {
 }
 
 func (cmd *listDevicesQueryCmd) Execute(_ []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	req := &control.SmdQueryReq{
 		OmitPools:        true,
@@ -114,7 +114,7 @@ type listPoolsQueryCmd struct {
 }
 
 func (cmd *listPoolsQueryCmd) Execute(_ []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	req := &control.SmdQueryReq{
 		OmitDevices: true,
 		Rank:        cmd.GetRank(),
@@ -135,7 +135,7 @@ type usageQueryCmd struct {
 //
 // Queries NVMe and SCM usage on hosts.
 func (cmd *usageQueryCmd) Execute(_ []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	req := &control.StorageScanReq{Usage: true}
 	req.SetHostList(cmd.getHostList())
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
@@ -217,7 +217,7 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 		Operation: control.SetFaultyOp,
 		IDs:       cmd.UUID,
 	}
-	return cmd.makeRequest(context.Background(), req)
+	return cmd.makeRequest(cmd.MustLogCtx(), req)
 }
 
 // storageReplaceCmd is the struct representing the replace storage subcommand
@@ -251,7 +251,7 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 		ReplaceUUID:    cmd.NewDevUUID,
 		ReplaceNoReint: cmd.NoReint,
 	}
-	return cmd.makeRequest(context.Background(), req)
+	return cmd.makeRequest(cmd.MustLogCtx(), req)
 }
 
 type ledCmd struct {
@@ -291,7 +291,7 @@ func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 		}
 		req.Operation = control.LedResetOp
 	}
-	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
+	return cmd.makeRequest(cmd.MustLogCtx(), req, pretty.PrintOnlyLEDInfo())
 }
 
 type ledCheckCmd struct {
@@ -309,5 +309,5 @@ func (cmd *ledCheckCmd) Execute(_ []string) error {
 		Operation: control.LedCheckOp,
 		IDs:       cmd.Args.IDs,
 	}
-	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
+	return cmd.makeRequest(cmd.MustLogCtx(), req, pretty.PrintOnlyLEDInfo())
 }

@@ -27,6 +27,7 @@ const (
 	devStateNew    = ctlpb.NvmeDevState_NEW
 	devStateNormal = ctlpb.NvmeDevState_NORMAL
 	devStateFaulty = ctlpb.NvmeDevState_EVICTED
+	devStateUnplug = ctlpb.NvmeDevState_UNPLUGGED
 
 	ledStateIdentify = ctlpb.LedState_QUICK_BLINK
 	ledStateNormal   = ctlpb.LedState_OFF
@@ -267,6 +268,15 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 										LedState: ledStateFault,
 									},
 								},
+								{
+									Uuid:   test.MockUUID(2),
+									TgtIds: []int32{},
+									Ctrlr: &ctlpb.NvmeController{
+										PciAddr:  "0000:8b:00.0",
+										DevState: devStateUnplug,
+										LedState: ledStateUnknown,
+									},
+								},
 							},
 						},
 					},
@@ -276,7 +286,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 						Message: &ctlpb.SmdDevResp{
 							Devices: []*ctlpb.SmdDevice{
 								{
-									Uuid:   test.MockUUID(2),
+									Uuid:   test.MockUUID(3),
 									TgtIds: []int32{0, 1, 2},
 									Ctrlr: &ctlpb.NvmeController{
 										PciAddr:  "0000:da:00.0",
@@ -285,7 +295,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 									},
 								},
 								{
-									Uuid:   test.MockUUID(3),
+									Uuid:   test.MockUUID(4),
 									TgtIds: []int32{3, 4, 5},
 									Ctrlr: &ctlpb.NvmeController{
 										PciAddr:  "0000:db:00.0",
@@ -320,13 +330,22 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 									LedState: ledStateFault,
 								},
 							},
+							{
+								Uuid:   test.MockUUID(2),
+								TgtIds: []int32{},
+								Ctrlr: &ctlpb.NvmeController{
+									PciAddr:  "0000:8b:00.0",
+									DevState: devStateUnplug,
+									LedState: ledStateUnknown,
+								},
+							},
 						},
 						Rank: uint32(0),
 					},
 					{
 						Devices: []*ctlpb.SmdDevice{
 							{
-								Uuid:   test.MockUUID(2),
+								Uuid:   test.MockUUID(3),
 								TgtIds: []int32{0, 1, 2},
 								Ctrlr: &ctlpb.NvmeController{
 									PciAddr:  "0000:da:00.0",
@@ -335,7 +354,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 								},
 							},
 							{
-								Uuid:   test.MockUUID(3),
+								Uuid:   test.MockUUID(4),
 								TgtIds: []int32{3, 4, 5},
 								Ctrlr: &ctlpb.NvmeController{
 									PciAddr:  "0000:db:00.0",
@@ -1561,7 +1580,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			svc.harness.started.SetTrue()
 
 			for i, e := range svc.harness.instances {
-				srv := e.(*EngineInstance)
+				ei := e.(*EngineInstance)
 				cfg := new(mockDrpcClientConfig)
 				if tc.junkResp {
 					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
@@ -1570,8 +1589,8 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 						cfg.setSendMsgResponseList(t, mock)
 					}
 				}
-				srv.setDrpcClient(newMockDrpcClient(cfg))
-				srv.ready.SetTrue()
+				ei.setDrpcClient(newMockDrpcClient(cfg))
+				ei.ready.SetTrue()
 			}
 			if tc.harnessStopped {
 				svc.harness.started.SetFalse()

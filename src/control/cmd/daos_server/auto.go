@@ -192,5 +192,5 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		return err
 	}
 
-	return cmd.confGenPrint(context.Background(), getLocalFabric, getLocalStorage)
+	return cmd.confGenPrint(cmd.MustLogCtx(), getLocalFabric, getLocalStorage)
 }

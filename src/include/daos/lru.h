@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -156,6 +156,15 @@ static inline void
 daos_lru_ref_add(struct daos_llink *llink)
 {
 	llink->ll_ref++;
+}
+
+/**
+ * Return true if the caller is the last user of the LRU element.
+ */
+static inline bool
+daos_lru_is_last_user(struct daos_llink *llink)
+{
+	return llink->ll_ref <= 2;
 }
 
 #endif

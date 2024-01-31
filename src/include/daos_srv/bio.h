@@ -480,6 +480,16 @@ int bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_pollin
  */
 void bio_xsctxt_free(struct bio_xs_context *ctxt);
 
+/*
+ * Health check on the per-xstream NVMe context
+ *
+ * \param[in] xs_ctxt	Per-xstream NVMe context
+ *
+ * \returns		0:		NVMe context is healthy
+ *			-DER_NVME_IO:	NVMe context is faulty
+ */
+int bio_xsctxt_health_check(struct bio_xs_context *xs_ctxt);
+
 /**
  * NVMe poller to poll NVMe I/O completions.
  *

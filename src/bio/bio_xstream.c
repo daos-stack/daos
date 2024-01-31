@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -89,15 +89,66 @@ struct bio_nvme_data {
 };
 
 static struct bio_nvme_data nvme_glb;
+struct bio_faulty_criteria  glb_criteria;
+
+static int
+bio_spdk_conf_read(struct spdk_env_opts *opts)
+{
+	bool			enable_rpc_srv = false;
+	bool                    vmd_enabled    = false;
+	int			roles = 0;
+	int                     rc;
+
+	rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, opts, &roles, &vmd_enabled);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to add allowed devices to SPDK env");
+		return rc;
+	}
+	nvme_glb.bd_nvme_roles = roles;
+	bio_vmd_enabled        = vmd_enabled;
+
+	rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to set hotplug filter");
+		return rc;
+	}
+
+	rc = bio_read_accel_props(nvme_glb.bd_nvme_conf);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to read acceleration properties");
+		return rc;
+	}
+
+	rc = bio_read_rpc_srv_settings(nvme_glb.bd_nvme_conf, &enable_rpc_srv,
+				       &nvme_glb.bd_rpc_srv_addr);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to read SPDK JSON-RPC server settings");
+		return rc;
+	}
+#ifdef DAOS_BUILD_RELEASE
+	if (enable_rpc_srv) {
+		D_ERROR("SPDK JSON-RPC server may not be enabled for release builds.\n");
+		return -DER_INVAL;
+	}
+#endif
+	nvme_glb.bd_enable_rpc_srv = enable_rpc_srv;
+
+	rc = bio_read_auto_faulty_criteria(nvme_glb.bd_nvme_conf, &glb_criteria.fc_enabled,
+					   &glb_criteria.fc_max_io_errs,
+					   &glb_criteria.fc_max_csum_errs);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to read NVMe auto-faulty criteria");
+		return rc;
+	}
+
+	return 0;
+}
 
 static int
 bio_spdk_env_init(void)
 {
-	struct spdk_env_opts	opts;
-	bool			enable_rpc_srv = false;
-	bool                    vmd_enabled    = false;
-	int			rc;
-	int			roles = 0;
+	struct spdk_env_opts opts;
+	int                  rc;
 
 	/* Only print error and more severe to stderr. */
 	spdk_log_set_print_level(SPDK_LOG_ERROR);
@@ -114,45 +165,11 @@ bio_spdk_env_init(void)
 	 */
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
-		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts, &roles, &vmd_enabled);
+		rc = bio_spdk_conf_read(&opts);
 		if (rc != 0) {
-			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Failed to process nvme config");
 			goto out;
 		}
-		nvme_glb.bd_nvme_roles = roles;
-		bio_vmd_enabled        = vmd_enabled;
-
-		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
-		if (rc != 0) {
-			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
-			goto out;
-		}
-
-		rc = bio_read_accel_props(nvme_glb.bd_nvme_conf);
-		if (rc != 0) {
-			D_ERROR("Failed to read acceleration properties, "DF_RC"\n", DP_RC(rc));
-			goto out;
-		}
-
-		/**
-		 * Read flag to indicate whether to enable the SPDK JSON-RPC server and the
-		 * socket file address from the JSON config used to initialize SPDK subsystems.
-		 */
-		rc = bio_read_rpc_srv_settings(nvme_glb.bd_nvme_conf, &enable_rpc_srv,
-					       &nvme_glb.bd_rpc_srv_addr);
-		if (rc != 0) {
-			D_ERROR("Failed to read SPDK JSON-RPC server settings, "DF_RC"\n",
-				DP_RC(rc));
-			goto out;
-		}
-#ifdef DAOS_BUILD_RELEASE
-		if (enable_rpc_srv) {
-			D_ERROR("SPDK JSON-RPC server may not be enabled for release builds.\n");
-			D_GOTO(out, rc = -DER_INVAL);
-		}
-#endif
-		nvme_glb.bd_enable_rpc_srv = enable_rpc_srv;
 	}
 
 	rc = spdk_env_init(&opts);
@@ -179,29 +196,6 @@ bool
 bypass_health_collect()
 {
 	return nvme_glb.bd_bypass_health_collect;
-}
-
-struct bio_faulty_criteria	glb_criteria;
-
-/* TODO: Make it configurable through control plane */
-static inline void
-set_faulty_criteria(void)
-{
-	glb_criteria.fc_enabled = true;
-	glb_criteria.fc_max_io_errs = 10;
-	/*
-	 * FIXME: Don't enable csum error criterion for now, otherwise, targets
-	 *	  be unexpectedly down in CSUM tests.
-	 */
-	glb_criteria.fc_max_csum_errs = UINT32_MAX;
-
-	d_getenv_bool("DAOS_NVME_AUTO_FAULTY_ENABLED", &glb_criteria.fc_enabled);
-	d_getenv_int("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
-	d_getenv_int("DAOS_NVME_AUTO_FAULTY_CSUM", &glb_criteria.fc_max_csum_errs);
-
-	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u\n",
-	       glb_criteria.fc_enabled ? "enabled" : "disabled",
-	       glb_criteria.fc_max_io_errs, glb_criteria.fc_max_csum_errs);
 }
 
 int
@@ -242,6 +236,14 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		goto free_mutex;
 	}
 
+	glb_criteria.fc_enabled     = true;
+	glb_criteria.fc_max_io_errs = 10;
+	/*
+	 * FIXME: Don't enable csum error criterion by default otherwise targets will be
+	 *	  unexpectedly down in CSUM tests.
+	 */
+	glb_criteria.fc_max_csum_errs = UINT32_MAX;
+
 	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
 	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
@@ -249,15 +251,15 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
 
-	d_getenv_int("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
+	d_getenv_uint("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
 	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
 
-	d_getenv_int("DAOS_SPDK_MAX_UNMAP_CNT", &bio_spdk_max_unmap_cnt);
+	d_getenv_uint("DAOS_SPDK_MAX_UNMAP_CNT", &bio_spdk_max_unmap_cnt);
 	if (bio_spdk_max_unmap_cnt == 0)
 		bio_spdk_max_unmap_cnt = UINT32_MAX;
 	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
 
-	d_getenv_int("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
+	d_getenv_uint("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
 	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
 
 	/* Hugepages disabled */
@@ -291,11 +293,12 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
-	env = getenv("VOS_BDEV_CLASS");
+	d_agetenv_str(&env, "VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "AIO") == 0) {
 		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
+	d_freeenv_str(&env);
 
 	if (numa_node > 0) {
 		bio_numa_node = (unsigned int)numa_node;
@@ -332,7 +335,6 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled");
 
 	bio_spdk_inited = true;
-	set_faulty_criteria();
 
 	return 0;
 
@@ -778,6 +780,7 @@ replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 
 	new_dev->bb_blobstore = old_dev->bb_blobstore;
 	new_dev->bb_blobstore->bb_dev = new_dev;
+	new_dev->bb_roles = old_dev->bb_roles;
 	old_dev->bb_blobstore = NULL;
 
 	new_dev->bb_tgt_cnt = old_dev->bb_tgt_cnt;
@@ -1135,22 +1138,6 @@ get_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 	return bb;
 }
 
-static inline unsigned int
-dev_type2role(enum smd_dev_type st)
-{
-	switch (st) {
-	case SMD_DEV_TYPE_DATA:
-		return NVME_ROLE_DATA;
-	case SMD_DEV_TYPE_META:
-		return NVME_ROLE_META;
-	case SMD_DEV_TYPE_WAL:
-		return NVME_ROLE_WAL;
-	default:
-		D_ASSERT(0);
-		return NVME_ROLE_DATA;
-	}
-}
-
 static inline bool
 is_role_match(unsigned int roles, unsigned int req_role)
 {
@@ -1169,7 +1156,7 @@ bio_nvme_configured(enum smd_dev_type type)
 	if (type >= SMD_DEV_TYPE_MAX)
 		return true;
 
-	return is_role_match(nvme_glb.bd_nvme_roles, dev_type2role(type));
+	return is_role_match(nvme_glb.bd_nvme_roles, smd_dev_type2role(type));
 }
 
 static struct bio_bdev *
@@ -1204,7 +1191,7 @@ choose_device(int tgt_id, enum smd_dev_type st)
 			d_bdev->bb_tgt_cnt_init = 1;
 		}
 		/* Choose the least used one */
-		if (is_role_match(d_bdev->bb_roles, dev_type2role(st)) &&
+		if (is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)) &&
 		    d_bdev->bb_tgt_cnt < lowest_tgt_cnt) {
 			lowest_tgt_cnt = d_bdev->bb_tgt_cnt;
 			chosen_bdev = d_bdev;
@@ -1236,7 +1223,7 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 	int			rc;
 
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
-		if (!is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 
 		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st);
@@ -1268,7 +1255,7 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 
 		D_DEBUG(DB_MGMT, "Successfully mapped dev "DF_UUID"/%d/%u to tgt %d role %u\n",
 			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_tgt_cnt, d_bdev->bb_roles,
-			tgt_id, dev_type2role(st));
+			tgt_id, smd_dev_type2role(st));
 
 		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 			break;
@@ -1277,7 +1264,7 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 	return assigned ? 0 : -DER_INVAL;
 error:
 	for (st = SMD_DEV_TYPE_DATA; st < failed_st; st++) {
-		if (!is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+		if (!is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 		/* TODO Error cleanup by smd_dev_del_tgt() */
 	}
@@ -1346,7 +1333,6 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	unsigned int		 dev_state;
 	int			 rc;
 
-	D_ASSERT(!ctxt->bxc_ready);
 	D_ASSERT(ctxt->bxc_xs_blobstores[st] == NULL);
 
 	if (d_list_empty(&nvme_glb.bd_bdevs)) {
@@ -1437,20 +1423,6 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	return 0;
 }
 
-static void
-bio_blobstore_free(struct bio_xs_blobstore *bxb, struct bio_xs_context *ctxt)
-{
-
-	struct bio_blobstore *bbs = bxb->bxb_blobstore;
-
-	if (bbs == NULL)
-		return;
-
-	put_bio_blobstore(bxb, ctxt);
-	if (is_bbs_owner(ctxt, bbs))
-		bio_fini_health_monitoring(ctxt, bbs);
-}
-
 /*
  * Finalize per-xstream NVMe context and SPDK env.
  *
@@ -1469,7 +1441,6 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (ctxt == NULL)
 		return;
 
-	ctxt->bxc_ready = 0;
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = ctxt->bxc_xs_blobstores[st];
 		if (bxb == NULL)
@@ -1480,14 +1451,14 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			bxb->bxb_io_channel = NULL;
 		}
 
-		/*
-		 * Clear bxc_xs_blobstore[st] before bio_blobstore_free() to prevent the health
-		 * monitor from issuing health data collecting request, see cb_arg2dev_health().
-		 */
 		ctxt->bxc_xs_blobstores[st] = NULL;
 
 		if (bxb->bxb_blobstore != NULL) {
-			bio_blobstore_free(bxb, ctxt);
+			put_bio_blobstore(bxb, ctxt);
+
+			if (is_bbs_owner(ctxt, bxb->bxb_blobstore))
+				bio_fini_health_monitoring(ctxt, bxb->bxb_blobstore);
+
 			bxb->bxb_blobstore = NULL;
 		}
 		D_FREE(bxb);
@@ -1679,7 +1650,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		if (st == SMD_DEV_TYPE_DATA && tgt_id == BIO_SYS_TGT_ID)
 			continue;
 		/* Share the same device/blobstore used by previous type */
-		if (d_bdev && is_role_match(d_bdev->bb_roles, dev_type2role(st)))
+		if (d_bdev && is_role_match(d_bdev->bb_roles, smd_dev_type2role(st)))
 			continue;
 		/* No Meta/WAL blobstore if Metadata on SSD is not configured */
 		if (st != SMD_DEV_TYPE_DATA && !bio_nvme_configured(SMD_DEV_TYPE_META))
@@ -1703,8 +1674,6 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		rc = -DER_NOMEM;
 		goto out;
 	}
-	ctxt->bxc_ready = 1;
-
 out:
 	ABT_mutex_unlock(nvme_glb.bd_mutex);
 	if (rc != 0)
@@ -1941,17 +1910,14 @@ bio_nvme_poll(struct bio_xs_context *ctxt)
 	if (!is_server_started())
 		return 0;
 
-	/*
-	 * Query and print the SPDK device health stats for only the device
-	 * owner xstream.
-	 */
+	/* Monitor device health on the device owner xstream */
 	for (st = SMD_DEV_TYPE_DATA; st < SMD_DEV_TYPE_MAX; st++) {
 		bxb = ctxt->bxc_xs_blobstores[st];
-		if (bxb && bxb->bxb_blobstore &&
-		    is_bbs_owner(ctxt, bxb->bxb_blobstore))
+		if (bxb && bxb->bxb_blobstore && is_bbs_owner(ctxt, bxb->bxb_blobstore))
 			bio_bs_monitor(ctxt, st, now);
 	}
 
+	/* Detect new plugged device, manage LED on init xstream */
 	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);
 		bio_led_event_monitor(ctxt, now);

@@ -14,10 +14,10 @@
 
 #include <gurt/atomic.h>
 
-#include "daos.h"
-#include "daos_fs.h"
+#include <daos.h>
+#include <daos_fs.h>
 
-#include "daos_fs_sys.h"
+#include <daos_fs_sys.h>
 
 /** Number of entries for readdir */
 #define DFS_SYS_NUM_DIRENTS 24

@@ -54,7 +54,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	cmd.Infof("Starting %s (pid %d)", versionString(), os.Getpid())
 	startedAt := time.Now()
 
-	parent, shutdown := context.WithCancel(context.Background())
+	parent, shutdown := context.WithCancel(cmd.MustLogCtx())
 	defer shutdown()
 
 	var shuttingDown atm.Bool

@@ -32,8 +32,7 @@ class NvmePoolExclude(OSAUtils):
         self.dmg_command = self.get_dmg_command()
         self.ior_test_sequence = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.pool = None
         self.cont_list = []
         self.dmg_command.exit_status_exception = True

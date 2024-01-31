@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,6 +61,7 @@ rdb_raft_rc(int raft_rc)
 	case RAFT_ERR_NOMEM:			return -DER_NOMEM;
 	case RAFT_ERR_SNAPSHOT_ALREADY_LOADED:	return -DER_ALREADY;
 	case RAFT_ERR_INVALID_CFG_CHANGE:	return -DER_INVAL;
+	case RAFT_ERR_MIGHT_VIOLATE_LEASE:	return -DER_NO_PERM;
 	default:				return -DER_MISC;
 	}
 }
@@ -2424,7 +2425,7 @@ rdb_raft_get_election_timeout(void)
 	unsigned int	default_value = 7000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2439,7 +2440,7 @@ rdb_raft_get_request_timeout(void)
 	unsigned int	default_value = 3000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2454,7 +2455,7 @@ rdb_raft_get_lease_maintenance_grace(void)
 	unsigned int	default_value = 7000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2469,7 +2470,7 @@ rdb_raft_get_compact_thres(void)
 	unsigned int	default_value = 256;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0) {
 		D_WARN("%s not in (0, %u] (defaulting to %u)\n", name, UINT_MAX, default_value);
 		value = default_value;
@@ -2484,7 +2485,7 @@ rdb_raft_get_ae_max_entries(void)
 	unsigned int	default_value = 32;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0) {
 		D_WARN("%s not in (0, %u] (defaulting to %u)\n", name, UINT_MAX, default_value);
 		value = default_value;
@@ -2977,7 +2978,7 @@ rdb_raft_campaign(struct rdb *db)
 	node = raft_get_my_node(db->d_raft);
 	if (node == NULL || !raft_node_is_voting(node)) {
 		D_DEBUG(DB_MD, DF_DB": must be voting node\n", DP_DB(db));
-		rc = -DER_INVAL;
+		rc = -DER_NO_PERM;
 		goto out_mutex;
 	}
 
@@ -3069,6 +3070,8 @@ rdb_raft_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 		ranks->rl_ranks[i] = rdb_node->dn_rank;
 	}
 	ranks->rl_nr = i;
+
+	d_rank_list_sort(ranks);
 
 	*ranksp = ranks;
 	rc = 0;

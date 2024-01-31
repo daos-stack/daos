@@ -20,13 +20,18 @@ def scons():
     test_env.require('mercury', 'uuid')
     test_env.AppendUnique(LIBS=['pthread', 'cmocka', 'm', 'dl'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
-    tests = []
 
+    mocks_ld_script = f"{Dir('.').srcnode()}/mocks-gurt-ld-opts"
+    test_env.AppendUnique(LINKFLAGS=[f'-Wl,@{mocks_ld_script}'])
+    mocks = test_env.SharedObject(['mocks_gurt.c'])
+    Export('mocks')
+
+    tests = []
     for test in TEST_SRC:
         testobj = test_env.Object(test)
         testname = os.path.splitext(test)[0]
         testprog = test_env.d_test_program(target=testname,
-                                           source=testobj + gurt_targets,
+                                           source=testobj + gurt_targets + [mocks],
                                            LIBS=test_env["LIBS"] + ['yaml'])
         tests.append(testprog)
 

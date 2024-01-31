@@ -264,7 +264,8 @@ crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 /* Redefining X macro allows to reuse existing lists */
 #define X(a, ...)                                                                                  \
 	case a:                                                                                    \
-		opc = #a;
+		opc = #a;                                                                          \
+		break;
 
 	/* Next find the opcode name if available for the module  */
 	if (cart_module) {
@@ -656,9 +657,9 @@ int
 crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req)
 {
-	int rc = 0;
-	struct crt_grp_priv *grp_priv = NULL;
+	struct crt_grp_priv	*grp_priv = NULL;
 	struct crt_rpc_priv	*rpc_priv;
+	int			rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
@@ -1722,8 +1723,11 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 
 	crt_rpc_inout_buff_init(rpc_priv);
 
-	rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
-				     ctx->cc_timeout_sec);
+	if (srv_flag && rpc_priv->crp_req_hdr.cch_src_timeout != 0)
+		rpc_priv->crp_timeout_sec = rpc_priv->crp_req_hdr.cch_src_timeout;
+	else
+		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
+					     ctx->cc_timeout_sec);
 }
 
 void
@@ -1970,18 +1974,13 @@ out:
 }
 
 int
-crt_req_src_timeout_get(crt_rpc_t *rpc, uint16_t *timeout)
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 {
-	struct crt_rpc_priv	*rpc_priv = NULL;
+	struct crt_rpc_priv	*rpc_priv;
 	int			rc = 0;
 
-	if (rpc == NULL) {
-		D_ERROR("NULL rpc passed\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	if (timeout == NULL) {
-		D_ERROR("NULL timeout passed\n");
+	if (rpc == NULL || timeout == NULL) {
+		D_ERROR("NULL pointer passed\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

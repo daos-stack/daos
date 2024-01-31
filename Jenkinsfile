@@ -1041,78 +1041,78 @@ pipeline {
                         }
                     }
                 } // stage('Fault inection testing on EL 8.8')
-                // stage('Test RPMs on EL 8.6') {
-                //     when {
-                //         beforeAgent true
-                //         expression { ! skipStage() }
-                //     }
-                //     agent {
-                //         label params.CI_UNIT_VM1_LABEL
-                //     }
-                //     steps {
-                //         job_step_update(
-                //             testRpm(inst_repos: daosRepos(),
-                //                     daos_pkg_version: daosPackagesVersion(next_version))
-                //         )
-                //     }
-                //     post {
-                //         always {
-                //             rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                //         }
-                //     }
-                // } // stage('Test CentOS 7 RPMs')
-                // stage('Test RPMs on Leap 15.4') {
-                //     when {
-                //         beforeAgent true
-                //         expression { ! skipStage() }
-                //     }
-                //     agent {
-                //         label params.CI_UNIT_VM1_LABEL
-                //     }
-                //     steps {
-                //         /* neither of these work as FTest strips the first node
-                //            out of the pool requiring 2 node clusters at minimum
-                //          * additionally for this use-case, can't override
-                //            ftest_arg with this :-(
-                //         script {
-                //             'Test RPMs on Leap 15.4': getFunctionalTestStage(
-                //                 name: 'Test RPMs on Leap 15.4',
-                //                 pragma_suffix: '',
-                //                 label: params.CI_UNIT_VM1_LABEL,
-                //                 next_version: next_version,
-                //                 stage_tags: '',
-                //                 default_tags: 'test_daos_management',
-                //                 nvme: 'auto',
-                //                 run_if_pr: true,
-                //                 run_if_landing: true,
-                //                 job_status: job_status_internal
-                //             )
-                //         }
-                //            job_step_update(
-                //             functionalTest(
-                //                 test_tag: 'test_daos_management',
-                //                 ftest_arg: '--yaml_extension single_host',
-                //                 inst_repos: daosRepos(),
-                //                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                //                 test_function: 'runTestFunctionalV2'))
-                //     }
-                //     post {
-                //         always {
-                //             functionalTestPostV2()
-                //             job_status_update()
-                //         }
-                //     } */
-                //         job_step_update(
-                //             testRpm(inst_repos: daosRepos(),
-                //                     daos_pkg_version: daosPackagesVersion(next_version))
-                //         )
-                //     }
-                //     post {
-                //         always {
-                //             rpm_test_post(env.STAGE_NAME, env.NODELIST)
-                //         }
-                //     }
-                // } // stage('Test Leap 15 RPMs')
+                stage('Test RPMs on EL 8.6') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            testRpm(inst_repos: daosRepos(),
+                                    daos_pkg_version: daosPackagesVersion(next_version))
+                        )
+                    }
+                    post {
+                        always {
+                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
+                        }
+                    }
+                } // stage('Test CentOS 7 RPMs')
+                stage('Test RPMs on Leap 15.4') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        /* neither of these work as FTest strips the first node
+                           out of the pool requiring 2 node clusters at minimum
+                         * additionally for this use-case, can't override
+                           ftest_arg with this :-(
+                        script {
+                            'Test RPMs on Leap 15.4': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.4',
+                                pragma_suffix: '',
+                                label: params.CI_UNIT_VM1_LABEL,
+                                next_version: next_version,
+                                stage_tags: '',
+                                default_tags: 'test_daos_management',
+                                nvme: 'auto',
+                                run_if_pr: true,
+                                run_if_landing: true,
+                                job_status: job_status_internal
+                            )
+                        }
+                           job_step_update(
+                            functionalTest(
+                                test_tag: 'test_daos_management',
+                                ftest_arg: '--yaml_extension single_host',
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                test_function: 'runTestFunctionalV2'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } */
+                        job_step_update(
+                            testRpm(inst_repos: daosRepos(),
+                                    daos_pkg_version: daosPackagesVersion(next_version))
+                        )
+                    }
+                    post {
+                        always {
+                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
+                        }
+                    }
+                } // stage('Test Leap 15 RPMs')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep on EL 8.8') {
@@ -1203,7 +1203,7 @@ pipeline {
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            provider: 'ucx+dc_x',
+                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal

@@ -76,15 +76,6 @@ func wrapCleanError(inErr error, cleanErr error) (outErr error) {
 	return
 }
 
-func ctrlrPCIAddresses(ctrlrs storage.NvmeControllers) []string {
-	pciAddrs := make([]string, 0, len(ctrlrs))
-	for _, c := range ctrlrs {
-		pciAddrs = append(pciAddrs, c.PciAddr)
-	}
-
-	return pciAddrs
-}
-
 func resultPCIAddresses(results []*FormatResult) []string {
 	pciAddrs := make([]string, 0, len(results))
 	for _, r := range results {

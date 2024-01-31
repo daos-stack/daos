@@ -45,7 +45,7 @@ test_cluster() {
         FIRST_NODE=${first_node}                        \
         TEST_RPMS=${TEST_RPMS}                          \
         NODELIST=${tnodes}                              \
-        BUILD_URL=\"$BUILD_URL\"                        \
+        BUILD_URL=\"${BUILD_URL:-Unknown in GHA}\"      \
         STAGE_NAME=\"$STAGE_NAME\"                      \
         $(cat ci/functional/test_main_prep_node.sh)"
 }

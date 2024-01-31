@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -40,7 +40,7 @@ type SetOptionsParams struct {
 	BdevIoCacheSize uint64 `json:"bdev_io_cache_size"`
 }
 
-func (sop SetOptionsParams) isSpdkSubsystemConfigParams() {}
+func (_ SetOptionsParams) isSpdkSubsystemConfigParams() {}
 
 // NvmeSetOptionsParams specifies details for a storage.ConfBdevNvmeSetOptions method.
 type NvmeSetOptionsParams struct {
@@ -51,7 +51,7 @@ type NvmeSetOptionsParams struct {
 	NvmeIoqPollPeriodUsec    uint32 `json:"nvme_ioq_poll_period_us"`
 }
 
-func (nsop NvmeSetOptionsParams) isSpdkSubsystemConfigParams() {}
+func (_ NvmeSetOptionsParams) isSpdkSubsystemConfigParams() {}
 
 // NvmeAttachControllerParams specifies details for a storage.ConfBdevNvmeAttachController
 // method.
@@ -61,7 +61,7 @@ type NvmeAttachControllerParams struct {
 	TransportAddress string `json:"traddr"`
 }
 
-func (napp NvmeAttachControllerParams) isSpdkSubsystemConfigParams() {}
+func (_ NvmeAttachControllerParams) isSpdkSubsystemConfigParams() {}
 
 // NvmeSetHotplugParams specifies details for a storage.ConfBdevNvmeSetHotplug method.
 type NvmeSetHotplugParams struct {
@@ -69,7 +69,7 @@ type NvmeSetHotplugParams struct {
 	PeriodUsec uint64 `json:"period_us"`
 }
 
-func (nshp NvmeSetHotplugParams) isSpdkSubsystemConfigParams() {}
+func (_ NvmeSetHotplugParams) isSpdkSubsystemConfigParams() {}
 
 // VmdEnableParams specifies details for a storage.ConfVmdEnable method.
 type VmdEnableParams struct{}
@@ -83,7 +83,7 @@ type AioCreateParams struct {
 	Filename   string `json:"filename"`
 }
 
-func (acp AioCreateParams) isSpdkSubsystemConfigParams() {}
+func (_ AioCreateParams) isSpdkSubsystemConfigParams() {}
 
 // HotplugBusidRangeParams specifies details for a storage.ConfSetHotplugBusidRange method.
 type HotplugBusidRangeParams struct {
@@ -91,17 +91,22 @@ type HotplugBusidRangeParams struct {
 	End   uint8 `json:"end"`
 }
 
-func (hbrp HotplugBusidRangeParams) isDaosConfigParams() {}
+func (_ HotplugBusidRangeParams) isDaosConfigParams() {}
 
 // AccelPropsParams specifies details for a storage.ConfSetAccelProps method.
 type AccelPropsParams storage.AccelProps
 
-func (app AccelPropsParams) isDaosConfigParams() {}
+func (_ AccelPropsParams) isDaosConfigParams() {}
 
 // SpdkRpcServerParams specifies details for a storage.ConfSetSpdkRpcServer method.
 type SpdkRpcServerParams storage.SpdkRpcServer
 
-func (srsp SpdkRpcServerParams) isDaosConfigParams() {}
+func (_ SpdkRpcServerParams) isDaosConfigParams() {}
+
+// AutoFaultyParams specifies details for a storage.ConfSetAutoFaultyProp method.
+type AutoFaultyParams storage.BdevAutoFaulty
+
+func (_ AutoFaultyParams) isDaosConfigParams() {}
 
 // SpdkSubsystemConfig entries apply to any SpdkSubsystem.
 type SpdkSubsystemConfig struct {
@@ -301,6 +306,17 @@ func rpcSrvSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 	}
 }
 
+// Add NVMe auto-faulty settings to DAOS config data.
+func autoFaultySet(req *storage.BdevWriteConfigRequest, data *DaosData) {
+	props := req.AutoFaultyProps
+	if props.Enable {
+		data.Configs = append(data.Configs, &DaosConfig{
+			Method: storage.ConfSetAutoFaultyProps,
+			Params: AutoFaultyParams(props),
+		})
+	}
+}
+
 func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
 
@@ -338,6 +354,7 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 
 	accelPropSet(req, sc.DaosData)
 	rpcSrvSet(req, sc.DaosData)
+	autoFaultySet(req, sc.DaosData)
 
 	return sc.WithBdevConfigs(log, req), nil
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,8 +8,9 @@ import getpass
 import json
 import logging
 import os
+import re
 import sys
-from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from argparse import ArgumentParser, ArgumentTypeError, RawDescriptionHelpFormatter
 from collections import OrderedDict
 from tempfile import TemporaryDirectory
 
@@ -253,32 +254,15 @@ class Launch():
         for key in sorted(args.__dict__.keys()):
             logger.debug("  %s = %s", key, getattr(args, key))
 
-        # Convert host specifications into NodeSets
-        try:
-            test_servers = NodeSet(args.test_servers)
-        except TypeError:
-            message = f"Invalid '--test_servers={args.test_servers}' argument"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-        try:
-            test_clients = NodeSet(args.test_clients)
-        except TypeError:
-            message = f"Invalid '--test_clients={args.test_clients}' argument"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-        try:
-            control_host = NodeSet(args.slurm_control_node)
-        except TypeError:
-            message = f"Invalid '--slurm_control_node={args.slurm_control_node}' argument"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-
         # A list of server hosts is required
-        if not test_servers and not args.list:
+        if not args.test_servers and not args.list:
             return self.get_exit_status(1, "Missing required '--test_servers' argument", "Setup")
-        logger.info("Testing with hosts:       %s", test_servers.union(test_clients))
-        self.details["test hosts"] = str(test_servers.union(test_clients))
+        logger.info("Testing with hosts:       %s", args.test_servers.union(args.test_clients))
+        self.details["test hosts"] = str(args.test_servers.union(args.test_clients))
 
         # Add the installed packages to the details json
         # pylint: disable=unsupported-binary-operation
-        all_hosts = test_servers | test_clients | self.local_host
+        all_hosts = args.test_servers | args.test_clients | self.local_host
         self.details["installed packages"] = find_packages(
             logger, all_hosts, "'^(daos|libfabric|mercury|ior|openmpi|mpifileutils)-'")
 
@@ -289,8 +273,8 @@ class Launch():
                 set_test_environment(logger)
             else:
                 set_test_environment(
-                    logger, test_env, test_servers, test_clients, args.provider, args.insecure_mode,
-                    self.details)
+                    logger, test_env, args.test_servers, args.test_clients, args.provider,
+                    args.insecure_mode, self.details)
         except TestEnvironmentException as error:
             message = f"Error setting up test environment: {str(error)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -310,8 +294,8 @@ class Launch():
 
         # Define the test configs specified by the arguments
         group = TestGroup(
-            self.avocado, test_env, test_servers, test_clients, control_host, args.tags, args.nvme,
-            yaml_dir, args.yaml_extension)
+            self.avocado, test_env, args.test_servers, args.test_clients, args.slurm_control_node,
+            args.tags, args.nvme, yaml_dir, args.yaml_extension)
         try:
             group.list_tests(logger, args.verbose)
         except RunException:
@@ -329,7 +313,7 @@ class Launch():
 
         # Setup the fuse configuration
         try:
-            setup_fuse_config(logger, test_servers | test_clients)
+            setup_fuse_config(logger, args.test_servers | args.test_clients)
         except LaunchException:
             # Warn but don't fail
             message = "Issue detected setting up the fuse configuration"
@@ -339,7 +323,7 @@ class Launch():
         core_files = {}
         if args.process_cores:
             try:
-                all_hosts = test_servers | test_clients | self.local_host
+                all_hosts = args.test_servers | args.test_clients | self.local_host
                 core_files = get_core_file_pattern(logger, all_hosts)
             except LaunchException:
                 message = "Error obtaining the core file pattern information"
@@ -350,7 +334,7 @@ class Launch():
         # Determine if bullseye code coverage collection is enabled
         code_coverage = CodeCoverage(test_env)
         # pylint: disable=unsupported-binary-operation
-        code_coverage.check(logger, test_servers | self.local_host)
+        code_coverage.check(logger, args.test_servers | self.local_host)
 
         # Update the test yaml files for the tests in this test group
         try:
@@ -394,6 +378,58 @@ class Launch():
         # Return the appropriate return code and mark the test result to account for any non-test
         # execution steps complete
         return self.get_exit_status(status, "Executing tests complete")
+
+
+def __arg_type_file(val):
+    """Parse a file argument.
+
+    Args:
+        val (str): path to a file
+
+    Returns:
+        str: the file path
+
+    Raises:
+        ArgumentTypeError: if val is not a file
+    """
+    if not os.path.isfile(val):
+        raise ArgumentTypeError(f'File not found: {val}')
+    return val
+
+
+def __arg_type_nodeset(val):
+    """Parse a NodeSet argument.
+
+    Args:
+        val (str): string representation of a NodeSet to parse
+
+    Returns:
+        NodeSet: the NodeSet
+
+    Raises:
+        ArgumentTypeError: if val cannot be parsed as a NodeSet
+    """
+    try:
+        return NodeSet(val)
+    except Exception as err:  # pylint: disable=broad-except
+        raise ArgumentTypeError(f'Invalid NodeSet: {val}') from err
+
+
+def __arg_type_find_size(val):
+    """Parse a find -size argument.
+
+    Args:
+        val (str): string representation of find -size argument
+
+    Returns:
+        str: the find -size argument
+
+    Raises:
+        ArgumentTypeError: if val cannot be parsed as a find -size argument
+    """
+    if not re.match(r'^[0-9]+[bcwkMG]?$', val):
+        raise ArgumentTypeError(f'Invalid find -size argument: {val}')
+    return val
 
 
 def main():
@@ -473,7 +509,7 @@ def main():
         "-e", "--extra_yaml",
         action="append",
         default=None,
-        type=str,
+        type=__arg_type_file,
         help="additional yaml file to include with the test yaml file. Any "
              "entries in the extra yaml file can be used to replace an "
              "existing entry in the test yaml file.")
@@ -560,8 +596,8 @@ def main():
     parser.add_argument(
         "-sc", "--slurm_control_node",
         action="store",
-        default=str(get_local_host()),
-        type=str,
+        type=__arg_type_nodeset,
+        default=get_local_host(),
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
@@ -596,14 +632,17 @@ def main():
     parser.add_argument(
         "-tc", "--test_clients",
         action="store",
+        type=__arg_type_nodeset,
+        default=NodeSet(),
         help="comma-separated list of hosts to use as replacement values for "
              "client placeholders in each test's yaml file")
     parser.add_argument(
         "-th", "--logs_threshold",
         action="store",
+        type=__arg_type_find_size,
         help="collect log sizes and report log sizes that go past provided"
              "threshold. e.g. '-th 5M'"
-             "Valid threshold units are: B, K, M, G, T")
+             "Valid threshold units are: b, c, w, k, M, G for find -size")
     parser.add_argument(
         "-tm", "--timeout_multiplier",
         action="store",
@@ -613,6 +652,8 @@ def main():
     parser.add_argument(
         "-ts", "--test_servers",
         action="store",
+        type=__arg_type_nodeset,
+        default=NodeSet(),
         help="comma-separated list of hosts to use as replacement values for "
              "server placeholders in each test's yaml file.  If the "
              "'--test_clients' argument is not specified, this list of hosts "

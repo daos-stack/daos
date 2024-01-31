@@ -1,0 +1,16 @@
+# Copyright 2021-2023 Intel Corporation
+# All rights reserved.
+#
+# This is a simple example of the DAOS manager (dmg) configuration file.  For the detailed
+# information about this configuration file, refer to the official example available at
+# https://github.com/daos-stack/daos/blob/master/utils/config/daos_control.yml
+
+name: daos_server
+hostlist: ['localhost']
+port: 10001
+
+transport_config:
+  allow_insecure: false
+  ca_cert: /etc/daos/certs/daosCA.crt
+  cert: /etc/daos/certs/admin.crt
+  key: /etc/daos/certs/admin.key

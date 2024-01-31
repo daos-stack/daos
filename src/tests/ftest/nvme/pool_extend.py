@@ -30,7 +30,7 @@ class NvmePoolExtend(OSAUtils):
         super().setUp()
 
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.dmg_command.exit_status_exception = True
 
     def run_nvme_pool_extend(self, num_pool, oclass=None):

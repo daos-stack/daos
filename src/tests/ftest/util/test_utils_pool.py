@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -112,7 +112,7 @@ def get_size_params(pool):
             "nvme_size": pool.nvme_per_rank}
 
 
-def check_pool_creation(test, pools, max_duration, offset=1, durations=None):
+def check_pool_creation(test, pools, max_duration, offset=1, durations=None, minimum=None):
     """Check the duration of each pool creation meets the requirement.
 
     Args:
@@ -122,21 +122,44 @@ def check_pool_creation(test, pools, max_duration, offset=1, durations=None):
         offset (int, optional): pool index offset. Defaults to 1.
         durations (list, optional): list of other pool create durations to include in the check.
             Defaults to None.
+        minimum (int, optional): minimum number of pools that must be created if specified.
+
+    Returns:
+        list: list of created pools.
     """
+    der_nospace_str = "DER_NOSPACE(-1007)"
+
     if durations is None:
         durations = []
-    for index, pool in enumerate(pools):
-        durations.append(time_pool_create(test.log, index + offset, pool))
-
     exceeding_duration = 0
-    for index, duration in enumerate(durations):
-        if duration > max_duration:
-            exceeding_duration += 1
+    for index, pool in enumerate(pools):
+        try:
+            duration = time_pool_create(test.log, index + offset, pool)
+            if duration > max_duration:
+                test.log.debug(
+                    "Creating pool %s took longer than expected: max=%i, got=%f",
+                    pool, max_duration, duration)
+                exceeding_duration += 1
+        except TestFail as error:
+            if minimum is None:
+                raise error
+            if der_nospace_str not in str(error):
+                test.fail(f'"Unexpected error occurred: wait="{der_nospace_str}", got="{error}"')
+            if index < minimum:
+                test.fail(f'Minimum pool quantity ({index}/{minimum}) not reached: {error}')
 
-    if exceeding_duration:
+            test.log.info(
+                "Quantity of pools created lower than expected: wait=%i, min=%i, got=%i",
+                len(pools), minimum, index)
+            pools = pools[:index]
+            break
+
+    if exceeding_duration > 0:
         test.fail(
             "Pool creation took longer than {} seconds on {} pool(s)".format(
                 max_duration, exceeding_duration))
+
+    return pools
 
 
 def time_pool_create(log, number, pool):
@@ -354,7 +377,7 @@ class TestPool(TestDaosApiBase):
             self.pool = TestPool(self.context, DmgCommand(self.bin))
 
         If it wants to use --nsvc option, it needs to set the value to
-        svcn.value. Otherwise, 1 is used. If it wants to use --group, it needs
+        svcn.value. If it wants to use --group, it needs
         to set groupname.value. If it wants to use --user, it needs to set
         username.value. If it wants to add other options, directly set it
         to self.dmg.action_command. Refer dmg_utils.py pool_create method for

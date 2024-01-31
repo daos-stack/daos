@@ -55,19 +55,21 @@ install_mofed() {
     stream=false
     gversion="$VERSION_ID"
     if [ "$gversion" == "8" ]; then
-        gversion="8.6"
+        # Mellanox does not have a release for 8.9 yet.
+        gversion="8.8"
         stream=true
      elif [[ $gversion = *.*.* ]]; then
         gversion="${gversion%.*}"
     fi
 
     # Add a repo to install MOFED RPMS
-    repo_url=https://artifactory.dc.hpdd.intel.com/artifactory/mlnx_ofed/"$MLNX_VER_NUM-rhel$gversion"-x86_64/
+    artifactory_base_url="https://artifactory.dc.hpdd.intel.com/artifactory/"
+    mellanox_proxy="${artifactory_base_url}mellanox-proxy/mlnx_ofed/"
+    mellanox_key_url="${artifactory_base_url}mlnx_ofed/RPM-GPG-KEY-Mellanox"
+    rpm --import "$mellanox_key_url"
+    repo_url="$mellanox_proxy$MLNX_VER_NUM/rhel$gversion/x86_64/"
     dnf -y config-manager --add-repo="$repo_url"
-    curl -L -O "$repo_url"RPM-GPG-KEY-Mellanox
     dnf -y config-manager --save --setopt="$(url_to_repo "$repo_url")".gpgcheck=1
-    rpm --import RPM-GPG-KEY-Mellanox
-    rm -f RPM-GPG-KEY-Mellanox
     dnf repolist || true
 
     time dnf -y install mlnx-ofed-basic ucx-cma ucx-ib ucx-knem ucx-rdmacm ucx-xpmem

@@ -486,7 +486,10 @@ enum btr_feats {
 	BTR_FEAT_DYNAMIC_ROOT = (1 << 2),
 	/** Skip rebalance leaf when delete some record from the leaf. */
 	BTR_FEAT_SKIP_LEAF_REBAL = (1 << 3),
-
+	/** Tree supports embedded root. */
+	BTR_FEAT_EMBED_FIRST = (1 << 4),
+	/** Marks that the current root is an embedded value */
+	BTR_FEAT_EMBEDDED = (1 << 5),
 	/** Put new entries above this line */
 	/** Convenience entry for calculating mask for all feats */
 	BTR_FEAT_HELPER,

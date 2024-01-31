@@ -32,12 +32,12 @@
 #include <daos/debug.h>
 #include <daos/object.h>
 
-#include "daos_types.h"
-#include "daos_api.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
-#include "daos_prop.h"
-#include "daos_fs_sys.h"
+#include <daos_types.h>
+#include <daos_api.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
+#include <daos_prop.h>
+#include <daos_fs_sys.h>
 
 #include "daos_hdlr.h"
 

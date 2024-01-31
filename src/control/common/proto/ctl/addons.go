@@ -51,3 +51,14 @@ func (vls *LedState) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
+
+// IsScannable returns true if NVMe device state indicates controller details are accessible.
+func (nc *NvmeController) IsScannable() bool {
+	return nc.DevState == NvmeDevState_NORMAL || nc.DevState == NvmeDevState_EVICTED ||
+		nc.DevState == NvmeDevState_NEW
+}
+
+// CanSupplyHealthStats returns true if NVMe device state indicates health stats are accessible.
+func (nc *NvmeController) CanSupplyHealthStats() bool {
+	return nc.DevState == NvmeDevState_NORMAL || nc.DevState == NvmeDevState_EVICTED
+}

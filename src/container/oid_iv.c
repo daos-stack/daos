@@ -31,6 +31,7 @@ struct oid_iv_entry {
 	struct oid_iv_range	rg;
 	/** protect the entry */
 	ABT_mutex		lock;
+	void			*current_req;
 };
 
 /** Priv data in the iv layer */
@@ -130,7 +131,14 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	D_ASSERT(priv != NULL);
 
 	entry = ns_entry->iv_value.sg_iovs[0].iov_buf;
-	ABT_mutex_lock(entry->lock);
+	rc = ABT_mutex_trylock(entry->lock);
+	/* For retry requests, from _iv_op(), the lock may not be released
+	 * in some cases.
+	 */
+	if (rc == ABT_ERR_MUTEX_LOCKED && entry->current_req != src)
+		return -DER_BUSY;
+
+	entry->current_req = src;
 	avail = &entry->rg;
 
 	oids = src->sg_iovs[0].iov_buf;

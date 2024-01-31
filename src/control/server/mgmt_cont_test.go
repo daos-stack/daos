@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	mockUUID = "11111111-1111-1111-1111-111111111111"
+	mockUUID    = "11111111-1111-1111-1111-111111111111"
+	badMockUUID = "00000000-1111-1111-1111-111111111111"
 )
 
 func makeBadBytes(count int) (badBytes []byte) {

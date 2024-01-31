@@ -54,10 +54,10 @@ func PrintScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintCon
 		return w.Err
 	}
 
-	physicalIdTitle := "SCM Module ID"
-	socketTitle := "Socket ID"
-	memCtrlrTitle := "Memory Ctrlr ID"
-	channelTitle := "Channel ID"
+	physicalIdTitle := "SCM Module"
+	socketTitle := "Socket"
+	memCtrlrTitle := "Memory Ctrlr"
+	channelTitle := "Channel"
 	slotTitle := "Channel Slot"
 	capacityTitle := "Capacity"
 
@@ -96,7 +96,7 @@ func PrintScmNamespaces(namespaces storage.ScmNamespaces, out io.Writer, opts ..
 	}
 
 	deviceTitle := "SCM Namespace"
-	socketTitle := "Socket ID"
+	socketTitle := "Socket"
 	capacityTitle := "Capacity"
 
 	formatter := txtfmt.NewTableFormatter(deviceTitle, socketTitle, capacityTitle)

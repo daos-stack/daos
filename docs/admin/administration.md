@@ -478,6 +478,59 @@ boro-11
 ```
 #### Exclusion and Hotplug
 
+- Automatic exclusion of an NVMe SSD:
+
+Automatic exclusion based on faulty criteria is the default behavior in DAOS
+release 2.6. The default criteria parameters are `max_io_errs: 10` and
+`max_csum_errs: <uint32_max>` (essentially eviction due to checksum errors is
+disabled by default).
+
+Setting auto-faulty criteria parameters can be done through the server config
+file by adding the following YAML to the engine section of the server config
+file.
+
+```yaml
+engines:
+-  bdev_auto_faulty:
+     enable: true
+     max_io_errs: 1
+     max_csum_errs: 2
+```
+
+On formatting the storage for the engine, these settings result in the
+following `daos_server` log entries to indicate the parameters are written to
+the engine's NVMe config:
+
+```bash
+DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugBusidBegin:0 HotplugBusidEnd:0 Hostname:wolf-310.wolf.hpdd.intel.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
+Writing NVMe config file for engine instance 0 to "/mnt/daos0/daos_nvme.conf"
+```
+
+The engine's NVMe config (produced during format) then contains the following
+JSON to apply the criteria:
+
+```json
+[tanabarr@wolf-310 ~]$ cat /mnt/daos0/daos_nvme.conf
+{
+  "daos_data": {
+    "config": [
+      {
+        "params": {
+          "enable": true,
+          "max_io_errs": 1,
+          "max_csum_errs": 2
+        },
+        "method": "auto_faulty"
+ ...
+```
+
+These engine logfile entries indicate that the settings have been read and
+applied:
+
+```bash
+01/12-13:59:41.36 wolf-310 DAOS[1299350/-1/0] bio  INFO src/bio/bio_config.c:1016 bio_read_auto_faulty_criteria() NVMe auto faulty is enabled. Criteria: max_io_errs:1, max_csum_errs:2
+```
+
 - Manually exclude an NVMe SSD:
 ```bash
 $ dmg storage set nvme-faulty --help
@@ -491,7 +544,7 @@ Usage:
       -f, --force     Do not require confirmation
 ```
 
-To manually evict an NVMe SSD (auto eviction will be supported in a future release),
+To manually evict an NVMe SSD (auto eviction is covered later in this section),
 the device state needs to be set faulty by running the following command:
 ```bash
 $ dmg -l boro-11 storage set nvme-faulty --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19

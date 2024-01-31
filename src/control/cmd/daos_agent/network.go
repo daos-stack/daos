@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -32,7 +31,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 
 	fabricScanner := hwprov.DefaultFabricScanner(cmd.Logger)
 
-	results, err := fabricScanner.Scan(context.Background(), prov)
+	results, err := fabricScanner.Scan(cmd.MustLogCtx(), prov)
 	if err != nil {
 		return nil
 	}

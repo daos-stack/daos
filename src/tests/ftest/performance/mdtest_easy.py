@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -43,27 +43,3 @@ class MdtestEasy(PerformanceTestBase):
         :avocado: tags=MdtestEasy,test_performance_mdtest_easy_dfuse_s1,dfuse
         """
         self.run_performance_mdtest(namespace="/run/mdtest_dfuse_s1/*")
-
-    def test_performance_mdtest_easy_dfs_ec_4p2g1_stop(self):
-        """Test Description: Run MDTest Easy, DFS, EC_4P2G1, stop a rank.
-
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium
-        :avocado: tags=performance,performance_mdtest,performance_mdtest_easy,performance_dfs
-        :avocado: tags=MdtestEasy,test_performance_mdtest_easy_dfs_ec_4p2g1_stop
-        """
-        self.run_performance_mdtest(
-            namespace="/run/mdtest_dfs_ec_4p2g1/*",
-            stop_delay=0.5)
-
-    def test_performance_mdtest_easy_dfs_ec_16p2g1_stop(self):
-        """Test Description: Run MDTest Easy, DFS, EC_16P2G1, stop a rank.
-
-        :avocado: tags=all,manual
-        :avocado: tags=hw,medium
-        :avocado: tags=performance,performance_mdtest,performance_mdtest_easy,performance_dfs
-        :avocado: tags=MdtestEasy,test_performance_mdtest_easy_dfs_ec_16p2g1_stop
-        """
-        self.run_performance_mdtest(
-            namespace="/run/mdtest_dfs_ec_16p2g1/*",
-            stop_delay=0.5)
