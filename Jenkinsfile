@@ -323,19 +323,20 @@ pipeline {
             }
         }
         stage('Prepare Environment Variables') {
+            // TODO: Could/should these be moved to the environment block?
             parallel {
                 stage('Get Commit Message') {
                     steps {
                         pragmasToEnv()
                     }
                 }
-                stage('Determine Base Branch') {
+                stage('Determine Release Branch') {
                     steps {
                         script {
-                            env.BASE_BRANCH_NAME = sh(label: 'Determine base branch name',
-                                                      script: 'utils/rpms/packaging/get_base_branch',
-                                                      returnStdout: true).trim()
-                            echo 'Base branch == ' + env.BASE_BRANCH_NAME
+                            env.RELEASE_BRANCH = sh(label: 'Determine release branch name',
+                                                    script: 'utils/rpms/packaging/get_release_branch',
+                                                    returnStdout: true).trim()
+                            echo 'Release branch == ' + env.RELEASE_BRANCH
                         }
                     }
                 }

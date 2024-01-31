@@ -19,7 +19,7 @@ fi
 
 # Try and use the gh command to work out the target branch, or if not installed
 # then assume origin/master.
-if command -v gh > /dev/null 2>&1; then
+if ${USE_GH:-true} && command -v gh > /dev/null 2>&1; then
     # If there is no PR created yet then do not check anything.
     if ! TARGET="$ORIGIN"/$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}"); then
         TARGET=""
@@ -36,19 +36,7 @@ if [ -z "$TARGET" ]; then
     # as the target, calculated as the sum of the commits this branch is ahead and
     # behind.
     # check master, then current release branches, then current feature branches.
-    all_bases=("master" "release/2.4" "feature/cat_recovery" "feature/multiprovider")
-    TARGET="$ORIGIN/master"
-    min_diff=-1
-    for base in "${all_bases[@]}"; do
-        git rev-parse --verify "$ORIGIN/$base" &> /dev/null || continue
-        commits_ahead=$(git log --oneline "$ORIGIN/$base..HEAD" | wc -l)
-        commits_behind=$(git log --oneline "HEAD..$ORIGIN/$base" | wc -l)
-        commits_diff=$((commits_ahead + commits_behind))
-        if [ "$min_diff" -eq -1 ] || [ "$min_diff" -gt "$commits_diff" ]; then
-            TARGET="$ORIGIN/$base"
-            min_diff=$commits_diff
-        fi
-    done
+    TARGET="$ORIGIN/$(utils/rpms/packaging/get_release_branch "feature/cat_recovery feature/multiprovider")"
     echo "  Install gh command to auto-detect target branch, assuming $TARGET."
 fi
 
