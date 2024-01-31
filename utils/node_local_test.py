@@ -14,6 +14,7 @@ import argparse
 import copy
 import errno
 import functools
+import getpass
 import json
 import os
 import pickle  # nosec
@@ -2846,7 +2847,7 @@ class PosixTests():
                                       self.pool.id(),
                                       self.container.id(),
                                       '--entry',
-                                      f'A::{os.getlogin()}@:rwta'])
+                                      f'A::{getpass.getuser()}@:rwta'])
         print(rc)
 
         # Assign the container to someone else.
@@ -2951,7 +2952,7 @@ class PosixTests():
                                       self.pool.id(),
                                       self.container.id(),
                                       '--entry',
-                                      f'A::{os.getlogin()}@:rta'])
+                                      f'A::{getpass.getuser()}@:rta'])
         print(rc)
         assert rc.returncode == 0
 
