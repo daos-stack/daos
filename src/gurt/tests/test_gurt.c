@@ -2138,7 +2138,7 @@ test_d_agetenv_str(void **state)
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_non_null(env);
 	assert_string_equal(env, "bar");
-	d_free_env_str(&env);
+	d_freeenv_str(&env);
 	assert_null(env);
 
 	getenv_return = "";
@@ -2146,7 +2146,7 @@ test_d_agetenv_str(void **state)
 	assert_int_equal(rc, -DER_SUCCESS);
 	assert_non_null(env);
 	assert_string_equal(env, "");
-	d_free_env_str(&env);
+	d_freeenv_str(&env);
 	assert_null(env);
 
 	getenv_return = NULL;

@@ -271,8 +271,9 @@ int main(int argc, char **argv)
 		crtu_set_shutdown_delay(2);
 	}
 
-	env_self_rank = getenv("CRT_L_RANK");
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -326,7 +327,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
 
 	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
@@ -351,6 +352,7 @@ int main(int argc, char **argv)
 
 	DBG_PRINT("self_rank=%d uri=%s grp_cfg_file=%s\n", my_rank,
 			my_uri, grp_cfg_file);
+	d_freeenv_str(&grp_cfg_file);
 	D_FREE(my_uri);
 
 	rc = crt_group_size(NULL, &grp_size);
