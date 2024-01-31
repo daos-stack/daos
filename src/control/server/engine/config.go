@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -164,6 +164,25 @@ func (c *Config) Validate() error {
 		return errors.New("cannot specify both pinned_numa_node and first_core")
 	}
 
+	errNegative := func(s string) error {
+		return errors.Errorf("%s must not be negative", s)
+	}
+	if c.TargetCount < 0 {
+		return errNegative("target count")
+	}
+	if c.HelperStreamCount < 0 {
+		return errNegative("helper stream count")
+	}
+	if c.ServiceThreadCore < 0 {
+		return errNegative("service thread core index")
+	}
+	if c.MemSize < 0 {
+		return errNegative("mem size")
+	}
+	if c.HugepageSz < 0 {
+		return errNegative("hugepage size")
+	}
+
 	if c.TargetCount == 0 {
 		return errors.New("target count must be nonzero")
 	}
@@ -274,10 +293,10 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		env = common.MergeEnvVars(env, sEnv)
+		env = common.MergeKeyValues(env, sEnv)
 	}
 
-	return common.MergeEnvVars(c.EnvVars, env), nil
+	return common.MergeKeyValues(c.EnvVars, env), nil
 }
 
 // HasEnvVar returns true if the configuration contains
@@ -299,16 +318,16 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 		return "", err
 	}
 
-	env = common.MergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+	env = common.MergeKeyValues(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
 
-	return common.FindEnvValue(env, name)
+	return common.FindKeyValue(env, name)
 }
 
 // WithEnvVars applies the supplied list of environment
 // variables to any existing variables, with new values
 // overwriting existing values.
 func (c *Config) WithEnvVars(newVars ...string) *Config {
-	c.EnvVars = common.MergeEnvVars(c.EnvVars, newVars)
+	c.EnvVars = common.MergeKeyValues(c.EnvVars, newVars)
 
 	return c
 }
@@ -521,6 +540,14 @@ func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits
 func (c *Config) WithStorageSpdkRpcSrvProps(enable bool, sockAddr string) *Config {
 	c.Storage.SpdkRpcSrvProps.Enable = enable
 	c.Storage.SpdkRpcSrvProps.SockAddr = sockAddr
+	return c
+}
+
+// WithStorageAutoFaultyCriteria specifies NVMe auto-faulty settings in the I/O Engine.
+func (c *Config) WithStorageAutoFaultyCriteria(enable bool, maxIoErrs, maxCsumErrs uint32) *Config {
+	c.Storage.AutoFaultyProps.Enable = enable
+	c.Storage.AutoFaultyProps.MaxIoErrs = maxIoErrs
+	c.Storage.AutoFaultyProps.MaxCsumErrs = maxCsumErrs
 	return c
 }
 

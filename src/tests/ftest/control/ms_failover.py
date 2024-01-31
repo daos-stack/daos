@@ -6,9 +6,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import socket
 import time
 
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
 
 
 class ManagementServiceFailover(TestWithServers):
@@ -34,7 +33,7 @@ class ManagementServiceFailover(TestWithServers):
             str: hostname of the MS leader, or None
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
-        l_addr = sys_leader_info["response"]["CurrentLeader"]
+        l_addr = sys_leader_info["response"]["current_leader"]
 
         if not l_addr:
             return None

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,6 +57,7 @@
  * purposes, have their own rules described separately in the API documentation
  * of rdb_tx_begin_local.) Ending a TX without committing it discards all its
  * updates. Ending a query-only TX without committing is fine at the moment.
+ * rdb_tx_discard() will, without ending the TX, discard the updates made so far.
  *
  * A query sees all (conflicting) updates committed (successfully) before its
  * rdb_tx_begin(). It may or may not see updates committed after its
@@ -164,9 +165,12 @@ int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
+int
+		rdb_get_size(struct rdb *db, size_t *sizep);
 int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_ping(struct rdb *db, uint64_t caller_term);
+int rdb_upgrade_vos_pool(struct rdb *db, uint32_t df_version);
 
 /**
  * Path (opaque)
@@ -204,8 +208,9 @@ d_iov_t		prefix ## name = {					\
 
 /** KVS classes */
 enum rdb_kvs_class {
-	RDB_KVS_GENERIC,	/**< hash-ordered byte-stream keys */
-	RDB_KVS_INTEGER		/**< numerically-ordered uint64_t keys */
+	RDB_KVS_GENERIC, /**< hash-ordered byte-stream keys */
+	RDB_KVS_INTEGER, /**< numerically-ordered uint64_t keys */
+	RDB_KVS_LEXICAL  /**< lexically-ordered byte-stream keys */
 };
 
 /** KVS attributes */
@@ -236,6 +241,8 @@ struct rdb_tx {
 /** TX methods */
 int rdb_tx_begin(struct rdb *db, uint64_t term, struct rdb_tx *tx);
 int rdb_tx_begin_local(struct rdb_storage *storage, struct rdb_tx *tx);
+void
+     rdb_tx_discard(struct rdb_tx *tx);
 int rdb_tx_commit(struct rdb_tx *tx);
 void rdb_tx_end(struct rdb_tx *tx);
 

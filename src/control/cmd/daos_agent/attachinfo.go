@@ -7,13 +7,12 @@
 package main
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
@@ -21,8 +20,9 @@ import (
 type dumpAttachInfoCmd struct {
 	configCmd
 	ctlInvokerCmd
+	cmdutil.LogCmd
+	cmdutil.JSONOutputCmd
 	Output string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
-	JSON   bool   `short:"j" long:"json" description:"Enable JSON output"`
 }
 
 func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
@@ -36,7 +36,7 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		out = f
 	}
 
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	req := &control.GetAttachInfoReq{
 		AllRanks: true,
 	}
@@ -46,14 +46,8 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		return errors.Wrap(err, "GetAttachInfo failed")
 	}
 
-	if cmd.JSON {
-		data, err := json.MarshalIndent(resp, "", "  ")
-		if err != nil {
-			return err
-		}
-
-		_, err = out.Write(append(data, []byte("\n")...))
-		return err
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	system := cmd.cfg.SystemName

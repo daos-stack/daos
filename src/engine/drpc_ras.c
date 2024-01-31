@@ -77,7 +77,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	evt->proc_id = (uint64_t)getpid();
 
 	if (dmi == NULL) {
-		D_ERROR("failed to retrieve xstream id");
+		D_ERROR("failed to retrieve xstream id\n");
 		D_GOTO(out_ts, rc = -DER_UNINIT);
 	}
 	evt->thread_id = (uint64_t)dmi->dmi_xs_id;
@@ -183,7 +183,20 @@ log_event(Shared__RASEvent *evt)
 
 out:
 	fclose(stream);
-	D_INFO("&&& RAS EVENT%s\n", buf);
+	switch (evt->severity) {
+	case RAS_SEV_ERROR:
+		D_ERROR("&&& RAS EVENT%s\n", buf);
+		break;
+	case RAS_SEV_NOTICE:
+		D_INFO("&&& RAS EVENT%s\n", buf);
+		break;
+	case RAS_SEV_WARNING:
+		D_WARN("&&& RAS EVENT%s\n", buf);
+		break;
+	default:
+		D_ERROR("&&& RAS EVENT%s\n", buf);
+		break;
+	}
 	free(buf);
 }
 

@@ -18,7 +18,6 @@ def build_daos_common(denv, client):
     stack_mmap_files = []
     ad_mem_files = []
     dav_src = []
-    sys_lmdb_files = []
 
     common_libs = ['isal', 'isal_crypto', 'cart', 'gurt', 'lz4', 'protobuf-c', 'uuid', 'pthread']
     if client:
@@ -31,22 +30,19 @@ def build_daos_common(denv, client):
                    'dav/ravl_interval.c', 'dav/recycler.c', 'dav/stats.c', 'dav/tx.c', 'dav/ulog.c',
                    'dav/util.c', 'dav/wal_tx.c']
         ad_mem_files = ['ad_mem.c', 'ad_tx.c']
-        sys_lmdb_files = ['sys_lmdb.c']
-        common_libs.extend(['pmemobj', 'lmdb', 'abt'])
+        common_libs.extend(['pmemobj', 'abt'])
         benv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
         benv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
         benv.Append(OBJPREFIX="v_")
         libname = 'daos_common_pmem'
         benv.require('pmdk', 'argobots')
 
-    if benv["STACK_MMAP"] == 1:
-        common_libs.extend(['abt'])
-        stack_mmap_files = ['stack_mmap.c']
-        benv.require('argobots')
-        benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
+        if benv["STACK_MMAP"] == 1:
+            stack_mmap_files = ['stack_mmap.c']
+            benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
-    common = benv.d_library(libname, COMMON_FILES + dav_src + ad_mem_files + stack_mmap_files
-                            + sys_lmdb_files, LIBS=common_libs)
+    common = benv.d_library(libname, COMMON_FILES + dav_src + ad_mem_files + stack_mmap_files,
+                            LIBS=common_libs)
     benv.Install('$PREFIX/lib64/', common)
     return common
 
@@ -60,16 +56,7 @@ def scons():
     base_env.d_add_build_rpath()
     env.d_add_build_rpath()
 
-    # Hack alert, the argobots headers are required but the shared
-    # library isn't so add the dependency so the include path
-    # is correct, but set _libs to [] so that the library isn't
-    # linked in.
-    env.require('argobots')
-
-    # Arm can build ISA-L
-    env.require('isal', 'isal_crypto')
-
-    denv = env.Clone(LIBS=[])
+    denv = env.Clone()
     # generated protoc header should really move to this directory.
     denv.AppendUnique(CPPPATH=[Dir("../include/daos").srcnode()])
     denv.require('isal', 'isal_crypto', 'protobufc')
@@ -91,7 +78,7 @@ def scons():
         return
 
     tlibenv = env.Clone(LIBS=[])
-    tlibenv.require('isal', 'isal_crypto', 'protobufc')
+    tlibenv.require('argobots', 'isal', 'isal_crypto', 'protobufc')
     tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
 
     tests_lib = tlibenv.d_library('daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])

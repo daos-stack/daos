@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -26,6 +26,11 @@ RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_enabled);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_max);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_num);
+RDB_STRING_KEY(ds_pool_prop_, svc_ops_age);
 
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
@@ -47,6 +52,7 @@ RDB_STRING_KEY(ds_pool_prop_, obj_version);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_mode);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_freq);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_thresh);
+RDB_STRING_KEY(ds_pool_prop_, reint_mode);
 
 /** default properties, should cover all optional pool properties */
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
@@ -128,7 +134,8 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
     {
 	.dpe_type = DAOS_PROP_PO_OBJ_VERSION,
 	.dpe_val  = DS_POOL_OBJ_VERSION,
-    }, {
+    },
+    {
 	.dpe_type = DAOS_PROP_PO_PERF_DOMAIN,
 	.dpe_val  = DAOS_PROP_PO_PERF_DOMAIN_DEFAULT,
     },
@@ -144,7 +151,18 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 	.dpe_type = DAOS_PROP_PO_CHECKPOINT_THRESH,
 	.dpe_val  = DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT,
     },
-};
+    {
+	.dpe_type = DAOS_PROP_PO_REINT_MODE,
+	.dpe_val  = DAOS_PROP_PO_REINT_MODE_DEFAULT,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_SVC_OPS_ENABLED,
+	.dpe_val  = DAOS_PROP_PO_SVC_OPS_ENABLED_DEFAULT,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
+	.dpe_val  = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT,
+    }};
 
 daos_prop_t pool_prop_default = {
 	.dpp_nr		= DAOS_PROP_PO_NUM,

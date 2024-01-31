@@ -290,43 +290,74 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 		bmbc          *bdev.MockBackendConfig
 		iommuDisabled bool
 		expErr        error
-		expResetCall  *storage.BdevPrepareRequest
+		expResetCalls []storage.BdevPrepareRequest
 	}{
 		"no devices; success": {
-			expResetCall: &storage.BdevPrepareRequest{
-				EnableVMD: true,
-				Reset_:    true,
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					EnableVMD: true,
+					// If empty TargetUser in cmd, expect current user in call.
+					TargetUser: getCurrentUsername(t),
+					Reset_:     true,
+				},
 			},
 		},
-		"succeeds; user params": {
+		"succeeds; user params; vmd prepared": {
 			resetCmd: newResetCmd(),
-			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: defaultSingleAddrList,
-				PCIBlockList: spaceSepMultiAddrList,
-				EnableVMD:    true,
-				Reset_:       true,
+			bmbc: &bdev.MockBackendConfig{
+				ResetRes: &storage.BdevPrepareResponse{
+					// Response flag indicates VMD is active and triggers
+					// second reset call.
+					VMDPrepared: true,
+				},
+			},
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					PCIAllowList: defaultSingleAddrList,
+					PCIBlockList: spaceSepMultiAddrList,
+					EnableVMD:    true,
+					TargetUser:   getCurrentUsername(t),
+					Reset_:       true,
+				},
+				// VMD was acted on in first call so reset called a second time
+				// without allow list. EnableVMD is false to prevent VMD domain
+				// addresses being automatically added to allow list in backend.
+				{
+					TargetUser: getCurrentUsername(t),
+					Reset_:     true,
+				},
 			},
 		},
-		"succeeds; different target user; multi allow list": {
-			resetCmd: newResetCmd().WithTargetUser("bob").WithPCIAllowList(defaultMultiAddrList),
-			expResetCall: &storage.BdevPrepareRequest{
-				TargetUser:   "bob",
-				PCIAllowList: spaceSepMultiAddrList,
-				PCIBlockList: spaceSepMultiAddrList,
-				EnableVMD:    true,
-				Reset_:       true,
+		"succeeds; different target user; multi allow list; vmd not prepared": {
+			resetCmd: newResetCmd().
+				WithTargetUser("bob").
+				WithPCIAllowList(defaultMultiAddrList),
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					EnableVMD:    true,
+					TargetUser:   "bob",
+					PCIAllowList: spaceSepMultiAddrList,
+					PCIBlockList: spaceSepMultiAddrList,
+					Reset_:       true,
+				},
 			},
 		},
 		"fails; user params": {
 			resetCmd: newResetCmd(),
 			bmbc: &bdev.MockBackendConfig{
+				ResetRes: &storage.BdevPrepareResponse{
+					VMDPrepared: true,
+				},
 				ResetErr: errors.New("backend prep reset failed"),
 			},
-			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: defaultSingleAddrList,
-				PCIBlockList: spaceSepMultiAddrList,
-				EnableVMD:    true,
-				Reset_:       true,
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					EnableVMD:    true,
+					PCIAllowList: defaultSingleAddrList,
+					PCIBlockList: spaceSepMultiAddrList,
+					TargetUser:   getCurrentUsername(t),
+					Reset_:       true,
+				},
 			},
 			expErr: errors.New("backend prep reset failed"),
 		},
@@ -341,12 +372,14 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 		"root; vfio disabled; iommu not detected": {
 			resetCmd:      newResetCmd().WithTargetUser("root").WithDisableVFIO(true),
 			iommuDisabled: true,
-			expResetCall: &storage.BdevPrepareRequest{
-				TargetUser:   "root",
-				PCIAllowList: defaultSingleAddrList,
-				PCIBlockList: spaceSepMultiAddrList,
-				DisableVFIO:  true,
-				Reset_:       true,
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					TargetUser:   "root",
+					PCIAllowList: defaultSingleAddrList,
+					PCIBlockList: spaceSepMultiAddrList,
+					DisableVFIO:  true,
+					Reset_:       true,
+				},
 			},
 		},
 		"config parameters ignored; settings exist": {
@@ -358,11 +391,14 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 						WithBdevDeviceList(test.MockPCIAddr(8)))).
 				WithBdevExclude(test.MockPCIAddr(9)).
 				WithNrHugepages(1024),
-			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: defaultSingleAddrList,
-				PCIBlockList: spaceSepMultiAddrList,
-				EnableVMD:    true,
-				Reset_:       true,
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					EnableVMD:    true,
+					PCIAllowList: defaultSingleAddrList,
+					PCIBlockList: spaceSepMultiAddrList,
+					TargetUser:   getCurrentUsername(t),
+					Reset_:       true,
+				},
 			},
 		},
 		"config parameters ignored; set ignore-config in cmd": {
@@ -380,9 +416,12 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				WithBdevExclude(test.MockPCIAddr(9)).
 				WithNrHugepages(1024).
 				WithDisableVMD(true),
-			expResetCall: &storage.BdevPrepareRequest{
-				EnableVMD: true,
-				Reset_:    true,
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					EnableVMD:  true,
+					TargetUser: getCurrentUsername(t),
+					Reset_:     true,
+				},
 			},
 		},
 		"config parameters applied; disable vmd": {
@@ -400,11 +439,14 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				WithBdevExclude(test.MockPCIAddr(9)).
 				WithNrHugepages(1024).
 				WithDisableVMD(true),
-			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
-					test.MockPCIAddr(8)),
-				PCIBlockList: test.MockPCIAddr(9),
-				Reset_:       true,
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7),
+						storage.BdevPciAddrSep, test.MockPCIAddr(8)),
+					PCIBlockList: test.MockPCIAddr(9),
+					TargetUser:   getCurrentUsername(t),
+					Reset_:       true,
+				},
 			},
 		},
 		"config parameters applied; disable vfio": {
@@ -419,25 +461,30 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 					WithLegacyStorage(engine.LegacyStorage{
 						BdevClass: storage.ClassNvme,
 						BdevConfig: storage.BdevConfig{
-							DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(7)),
+							DeviceList: storage.MustNewBdevDeviceList(
+								test.MockPCIAddr(7)),
 						},
 					}),
 				engine.NewConfig().
 					WithLegacyStorage(engine.LegacyStorage{
 						BdevClass: storage.ClassNvme,
 						BdevConfig: storage.BdevConfig{
-							DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddr(8)),
+							DeviceList: storage.MustNewBdevDeviceList(
+								test.MockPCIAddr(8)),
 						},
 					}),
 			).
 				WithBdevExclude(test.MockPCIAddr(9)).
 				WithNrHugepages(1024).
 				WithDisableVMD(true),
-			expResetCall: &storage.BdevPrepareRequest{
-				PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7), storage.BdevPciAddrSep,
-					test.MockPCIAddr(8)),
-				PCIBlockList: test.MockPCIAddr(9),
-				Reset_:       true,
+			expResetCalls: []storage.BdevPrepareRequest{
+				{
+					PCIAllowList: fmt.Sprintf("%s%s%s", test.MockPCIAddr(7),
+						storage.BdevPciAddrSep, test.MockPCIAddr(8)),
+					PCIBlockList: test.MockPCIAddr(9),
+					TargetUser:   getCurrentUsername(t),
+					Reset_:       true,
+				},
 			},
 		},
 	} {
@@ -482,23 +529,9 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				mbb.PrepareCalls[0]); diff != "" {
 				t.Fatalf("unexpected clean hugepage calls (-want, +got):\n%s\n", diff)
 			}
-			if tc.expResetCall == nil {
-				if len(mbb.ResetCalls) != 0 {
-					t.Fatalf("unexpected number of reset calls, want 0 got %d",
-						len(mbb.ResetCalls))
-				}
-			} else {
-				if len(mbb.ResetCalls) != 1 {
-					t.Fatalf("unexpected number of reset calls, want 1 got %d",
-						len(mbb.ResetCalls))
-				}
-				// If empty TargetUser in cmd, expect current user in call.
-				if tc.resetCmd.TargetUser == "" {
-					tc.expResetCall.TargetUser = getCurrentUsername(t)
-				}
-				if diff := cmp.Diff(*tc.expResetCall, mbb.ResetCalls[0]); diff != "" {
-					t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
-				}
+
+			if diff := cmp.Diff(tc.expResetCalls, mbb.ResetCalls); diff != "" {
+				t.Fatalf("unexpected reset calls (-want, +got):\n%s\n", diff)
 			}
 			mbb.RUnlock()
 		})

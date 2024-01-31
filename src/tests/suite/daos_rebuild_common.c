@@ -141,6 +141,9 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 			return;
 		}
 		args[i]->rebuild_pre_pool_ver = pool_info.pi_map_ver;
+		if (op_type == RB_OP_TYPE_FAIL)
+			print_message("before exclude, got pool " DF_UUIDF "info, map_ver=%d\n",
+				      DP_UUID(args[i]->pool.pool_uuid), pool_info.pi_map_ver);
 	}
 
 	for (i = 0; i < args_cnt; i++)
@@ -1126,6 +1129,16 @@ ec_parity_nr_get(daos_obj_id_t oid)
 	oca = daos_oclass_attr_find(oid, NULL);
 	assert_true(oca->ca_resil == DAOS_RES_EC);
 	return oca->u.ec.e_p;
+}
+
+int
+ec_tgt_nr_get(daos_obj_id_t oid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid, NULL);
+	assert_true(oca->ca_resil == DAOS_RES_EC);
+	return oca->u.ec.e_k + oca->u.ec.e_p;
 }
 
 void

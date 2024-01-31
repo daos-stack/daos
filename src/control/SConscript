@@ -1,9 +1,11 @@
 """Build DAOS Control Plane"""
 # pylint: disable=too-many-locals
 import os
-from os.path import join
-from os import urandom
+import socket
 from binascii import b2a_hex
+from datetime import datetime, timezone
+from os import urandom
+from os.path import join
 
 
 def is_firmware_mgmt_build(benv):
@@ -18,6 +20,8 @@ def get_build_tags(benv):
         tags.append("firmware")
     if not is_release_build(benv):
         tags.append("pprof")
+    else:
+        tags.append("release")
     return f"-tags {','.join(tags)}"
 
 
@@ -41,13 +45,19 @@ def gen_build_id():
     return '0x' + buildid.decode()
 
 
-def go_ldflags():
+def go_ldflags(benv):
     "Create the ldflags option for the Go build."
 
+    build_host = ''
+    if not is_release_build(benv):
+        build_host = socket.getfqdn()
+    build_time = datetime.now(timezone.utc).astimezone().isoformat()
     Import('daos_version', 'conf_dir')
     path = 'github.com/daos-stack/daos/src/control/build'
     return ' '.join([f'-X {path}.DaosVersion={daos_version}',
                      f'-X {path}.ConfigDir={conf_dir}',
+                     f'-X {path}.BuildTime={build_time}',
+                     f'-X {path}.BuildHost={build_host}',
                      f'-B $({gen_build_id()}$)'])
 
 
@@ -70,7 +80,7 @@ def install_go_bin(env, name, libs=None, install_man=False):
 
     target = env.d_run_command(name, sources, libs,
                                f'cd {gosrc}; {env.d_go_bin} build -mod vendor '
-                               + f'-ldflags "{go_ldflags()}" '
+                               + f'-ldflags "{go_ldflags(env)}" '
                                + f'{get_build_flags(env)} '
                                + f'{get_build_tags(env)} '
                                + f'-o {build_bin} {install_src}')

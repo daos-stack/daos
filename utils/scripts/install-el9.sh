@@ -44,7 +44,6 @@ dnf --nodocs install \
     libtool-ltdl-devel \
     libunwind-devel \
     libuuid-devel \
-    lmdb-devel \
     libyaml-devel \
     lz4-devel \
     make \

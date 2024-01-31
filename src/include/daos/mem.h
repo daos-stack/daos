@@ -27,8 +27,23 @@
 
 int umempobj_settings_init(bool md_on_ssd);
 
+/* convert backend type to umem class id */
+int umempobj_backend_type2class_id(int backend);
+
 /* umem persistent object property flags */
 #define	UMEMPOBJ_ENABLE_STATS	0x1
+
+#ifdef DAOS_PMEM_BUILD
+enum {
+	DAOS_MD_PMEM	= 0,
+	DAOS_MD_BMEM	= 1,
+	DAOS_MD_ADMEM	= 2,
+};
+
+/* return umem backend type */
+int umempobj_get_backend_type(void);
+
+#endif
 
 struct umem_wal_tx;
 
@@ -134,6 +149,10 @@ struct umem_store {
 	 * the storage device.
 	 */
 	struct umem_store_ops	*stor_ops;
+	/* backend type */
+	int			 store_type;
+	/* standalone store */
+	bool			 store_standalone;
 };
 
 struct umem_slab_desc {
@@ -301,7 +320,6 @@ enum {
 /* Hints for umem atomic copy operation primarily for bmem implementation */
 enum acopy_hint {
 	UMEM_COMMIT_IMMEDIATE = 0, /* commit immediate, do not call within a tx */
-	UMEM_COMMIT_DEFER,	/* OK to defer commit to blob to a later point */
 	UMEM_RESERVED_MEM	/* memory from dav_reserve(), commit on publish */
 };
 

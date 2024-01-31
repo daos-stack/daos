@@ -54,13 +54,13 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 }
 
 /**
-   * Allocate a new failed shard then add it into remap list
-   *
-   * \param[in] remap_list        List for the failed shard to be added onto.
-   * \param[in] shard_idx         The shard number of the failed shard.
-   * \paramp[in] tgt              The failed target that will be added to the
-   *                              remap list.
-   */
+ * Allocate a new failed shard then add it into remap list
+ *
+ * \param[in] remap_list        List for the failed shard to be added onto.
+ * \param[in] shard_idx         The shard number of the failed shard.
+ * \param[in] tgt               The failed target that will be added to the
+ *                              remap list.
+ */
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		struct pool_target *tgt, bool for_reint, void *data)
@@ -74,6 +74,8 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	D_INIT_LIST_HEAD(&f_new->fs_list);
 	f_new->fs_shard_idx = shard_idx;
 	f_new->fs_fseq = tgt->ta_comp.co_fseq;
+	f_new->fs_rank = tgt->ta_comp.co_rank;
+	f_new->fs_index = tgt->ta_comp.co_index;
 	f_new->fs_status = tgt->ta_comp.co_status;
 	f_new->fs_data = data;
 
@@ -321,13 +323,16 @@ next_fail:
 		/* The selected spare target is up and ready */
 		l_shard->po_target = spare_tgt->ta_comp.co_id;
 		l_shard->po_fseq = f_shard->fs_fseq;
+		l_shard->po_rank = spare_tgt->ta_comp.co_rank;
+		l_shard->po_index = spare_tgt->ta_comp.co_index;
 
 		/*
 		 * Mark the shard as 'rebuilding' so that read will
 		 * skip this shard.
 		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN)
+		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
+		    pool_target_down(spare_tgt))
 			l_shard->po_rebuilding = 1;
 	} else {
 		l_shard->po_shard = -1;
@@ -420,6 +425,8 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 		new_shards[grp_idx].po_fseq = f_shard->fs_fseq;
 		new_shards[grp_idx].po_shard = f_shard->fs_shard_idx;
 		new_shards[grp_idx].po_target = f_shard->fs_tgt_id;
+		new_shards[grp_idx].po_rank = f_shard->fs_rank;
+		new_shards[grp_idx].po_index = f_shard->fs_index;
 		if (f_shard->fs_status != PO_COMP_ST_DRAIN)
 			new_shards[grp_idx].po_rebuilding = 1;
 

@@ -5,8 +5,8 @@
 """
 from copy import deepcopy
 
-from ior_test_base import IorTestBase
 from control_test_base import ControlTestBase
+from ior_test_base import IorTestBase
 
 
 class DmgPoolQueryTest(ControlTestBase, IorTestBase):
@@ -59,6 +59,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # but this yields an empty dictionary (the default), so it needs to be defined manually:
         exp_info = {
             "status": self.params.get("pool_status", path="/run/exp_vals/*"),
+            'state': self.params.get("pool_state", path="/run/exp_vals/*"),
             "uuid": self.pool.uuid.lower(),
             "total_targets": self.params.get("total_targets", path="/run/exp_vals/*"),
             "active_targets": self.params.get("active_targets", path="/run/exp_vals/*"),
@@ -76,8 +77,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     "total": self.params.get("total", path="/run/exp_vals/nvme/*")
                 }
             ],
-            "pool_layout_ver": 2,
-            "upgrade_layout_ver": 2,
+            "pool_layout_ver": 3,
+            "upgrade_layout_ver": 3,
             "rebuild": {
                 "status": self.params.get("rebuild_status", path="/run/exp_vals/rebuild/*"),
                 "state": self.params.get("state", path="/run/exp_vals/rebuild/*"),

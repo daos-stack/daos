@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -523,7 +523,7 @@ dmg_pool_set_prop(const char *dmg_config_file,
 	rc = daos_dmg_json_pipe("pool set-prop", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -646,6 +646,56 @@ dmg_pool_create(const char *dmg_config_file,
 				D_GOTO(out, rc = -DER_NOMEM);
 			has_label = true;
 		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SCRUB_MODE);
+		if (entry != NULL) {
+			const char *scrub_str = NULL;
+
+			switch (entry->dpe_val) {
+			case DAOS_SCRUB_MODE_OFF:
+				scrub_str = "off";
+				break;
+			case DAOS_SCRUB_MODE_LAZY:
+				scrub_str = "lazy";
+				break;
+			case DAOS_SCRUB_MODE_TIMED:
+				scrub_str = "timed";
+				break;
+			default:
+				break;
+			}
+
+			if (scrub_str) {
+				args = cmd_push_arg(args, &argcount, "--properties=scrub:%s ",
+						    scrub_str);
+				if (args == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+			}
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENABLED);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=svc_ops_enabled:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENTRY_AGE);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=svc_ops_entry_age:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SPACE_RB);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=space_rb:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
 	}
 
 	if (!has_label) {
@@ -678,7 +728,7 @@ dmg_pool_create(const char *dmg_config_file,
 	rc = daos_dmg_json_pipe("pool create", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -744,7 +794,109 @@ dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp
 	rc = daos_dmg_json_pipe("pool destroy", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool evict", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		DL_ERROR(rc, "dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *ace)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", "--entry=");
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", ace);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool update-acl", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		DL_ERROR(rc, "dmg failed");
+		goto out_json;
+	}
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_delete_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *principal)
+{
+	char                uuid_str[DAOS_UUID_STR_SIZE];
+	int                 argcount = 0;
+	char              **args     = NULL;
+	struct json_object *dmg_out  = NULL;
+	int                 rc       = 0;
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", "--principal=");
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, "%s", principal);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool delete-acl", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		DL_ERROR(rc, "dmg failed");
 		goto out_json;
 	}
 
@@ -790,7 +942,7 @@ dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid,
 	rc = daos_dmg_json_pipe(cmd, dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -860,7 +1012,7 @@ dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
 	rc = daos_dmg_json_pipe("pool extend", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -892,7 +1044,7 @@ dmg_pool_list(const char *dmg_config_file, const char *group,
 	rc = daos_dmg_json_pipe("pool list", dmg_config_file,
 				NULL, 0, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -930,6 +1082,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 {
 	struct json_object	*tmp;
 	struct json_object	*dev = NULL;
+	struct json_object      *ctrlr  = NULL;
 	struct json_object	*target = NULL;
 	struct json_object	*targets;
 	int			tgts_len;
@@ -979,19 +1132,24 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		}
 		devices[*disks].n_tgtidx = tgts_len;
 
-		if (!json_object_object_get_ex(dev, "dev_state", &tmp)) {
-			D_ERROR("unable to extract state from JSON\n");
-			return -DER_INVAL;
-		}
-
-		snprintf(devices[*disks].state, sizeof(devices[*disks].state),
-			 "%s", json_object_to_json_string(tmp));
-
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
 			return -DER_INVAL;
 		}
 		devices[*disks].rank = atoi(json_object_to_json_string(tmp));
+
+		if (!json_object_object_get_ex(dev, "ctrlr", &ctrlr)) {
+			D_ERROR("unable to extract ctrlr obj from JSON\n");
+			return -DER_INVAL;
+		}
+
+		if (!json_object_object_get_ex(ctrlr, "dev_state", &tmp)) {
+			D_ERROR("unable to extract state from JSON\n");
+			return -DER_INVAL;
+		}
+
+		snprintf(devices[*disks].state, sizeof(devices[*disks].state), "%s",
+			 json_object_to_json_string(tmp));
 		*disks = *disks + 1;
 	}
 
@@ -1020,7 +1178,7 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 				NULL, 0, &dmg_out);
 	if (rc != 0) {
 		D_FREE(disk);
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 		goto out_json;
 	}
 
@@ -1113,7 +1271,7 @@ dmg_storage_set_nvme_fault(const char *dmg_config_file,
 	rc = daos_dmg_json_pipe("storage set nvme-faulty ", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg command failed");
+		D_ERROR("dmg command failed\n");
 		goto out_json;
 	}
 
@@ -1133,9 +1291,10 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	struct json_object	*storage_map = NULL;
 	struct json_object	*smd_info = NULL;
 	struct json_object	*storage_info = NULL;
-	struct json_object	*health_info = NULL;
+	struct json_object       *health_stats = NULL;
 	struct json_object	*devices = NULL;
 	struct json_object	*dev_info = NULL;
+	struct json_object       *ctrlr_info   = NULL;
 	struct json_object	*tmp = NULL;
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			argcount = 0;
@@ -1154,7 +1313,7 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	rc = daos_dmg_json_pipe("storage query device-health ", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg command failed");
+		D_ERROR("dmg command failed\n");
 		goto out_json;
 	}
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
@@ -1182,10 +1341,13 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 		}
 
 		dev_info = json_object_array_get_idx(devices, 0);
-		json_object_object_get_ex(dev_info, "health", &health_info);
-		if (health_info != NULL) {
-			json_object_object_get_ex(health_info, stats,
-						  &tmp);
+		if (!json_object_object_get_ex(dev_info, "ctrlr", &ctrlr_info)) {
+			D_ERROR("unable to extract ctrlr details from JSON\n");
+			D_GOTO(out_json, rc = -DER_INVAL);
+		}
+		json_object_object_get_ex(ctrlr_info, "health_stats", &health_stats);
+		if (health_stats != NULL) {
+			json_object_object_get_ex(health_stats, stats, &tmp);
 			strcpy(stats, json_object_to_json_string(tmp));
 		}
 	}
@@ -1248,7 +1410,7 @@ int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force)
 	rc = daos_dmg_json_pipe("system stop", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0)
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
@@ -1272,7 +1434,7 @@ int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank)
 	rc = daos_dmg_json_pipe("system start", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0)
-		D_ERROR("dmg failed");
+		D_ERROR("dmg failed\n");
 
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);

@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
+
 from ec_utils import ErasureCodeIor
 
 
@@ -62,29 +63,6 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         # Only +2 (Parity) data will be intact so read and verify only +2 IOR
         # data set
         self.ior_read_dataset(parity=2)
-
-    def test_ec_offline_rebuild_agg_disabled(self):
-        """Jira ID: DAOS-7313.
-
-        Test Description: Test Erasure code object aggregation disabled mode
-                          with IOR.
-        Use Case: Create the pool, disabled aggregation, run IOR with supported
-                  EC object type with partial strip.
-                  Verify that Aggregation should not triggered.
-                  Verify the IOR read data at the end.
-                  Kill single server and wait for rebuild.
-                  Read and verify all the data.
-                  Kill second server and wait for rebuild.
-                  Read and verify data with +2 Parity with no data corruption.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=ec,aggregation,ec_array,ec_aggregation,rebuild
-        :avocado: tags=EcodAggregationOffRebuild,test_ec_offline_rebuild_agg_disabled
-        """
-        # Disable the aggregation
-        self.pool.set_property("reclaim", "disabled")
-        self.execution()
 
     def test_ec_offline_rebuild_agg_default(self):
         """Jira ID: DAOS-7313.

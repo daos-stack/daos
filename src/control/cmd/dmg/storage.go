@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,12 +7,12 @@
 package main
 
 import (
-	"context"
 	"strings"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -33,42 +33,37 @@ type storageScanCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
 	NvmeHealth bool `short:"n" long:"nvme-health" description:"Display NVMe device health statistics"`
-	NvmeMeta   bool `short:"m" long:"nvme-meta" description:"Display server meta data held on NVMe storage"`
 }
 
 // Execute is run when storageScanCmd activates.
 //
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(_ []string) error {
-	if cmd.NvmeHealth && cmd.NvmeMeta {
-		return errors.New("cannot use --nvme-health and --nvme-meta together")
-	}
-	if cmd.Verbose && (cmd.NvmeHealth || cmd.NvmeMeta) {
-		return errors.New("cannot use --verbose with --nvme-health or --nvme-meta")
+	if cmd.Verbose && cmd.NvmeHealth {
+		return errors.New("cannot use --verbose with --nvme-health")
 	}
 
 	req := &control.StorageScanReq{
 		NvmeHealth: cmd.NvmeHealth,
-		NvmeMeta:   cmd.NvmeMeta,
-		// don't strip nvme details if verbose or health or meta set
-		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth || cmd.NvmeMeta),
+		// Strip nvme details if verbose and health flags are unset.
+		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth),
 	}
 	req.SetHostList(cmd.getHostList())
 
 	cmd.Debugf("storage scan request: %+v", req)
 
-	resp, err := control.StorageScan(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.StorageScan(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
 
 	cmd.Debugf("storage scan response: %+v", resp.HostStorage)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	var outErr strings.Builder
@@ -80,16 +75,11 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 	}
 
 	var out strings.Builder
-	switch {
-	case cmd.NvmeHealth:
+	if cmd.NvmeHealth {
 		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &out); err != nil {
 			return err
 		}
-	case cmd.NvmeMeta:
-		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &out); err != nil {
-			return err
-		}
-	default:
+	} else {
 		verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
 		if err := pretty.PrintHostStorageMap(resp.HostStorage, &out, verbose); err != nil {
 			return err
@@ -105,7 +95,7 @@ type storageFormatCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
 	Force   bool `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
 }
@@ -114,7 +104,7 @@ type storageFormatCmd struct {
 //
 // Run NVMe and SCM storage format on all connected servers.
 func (cmd *storageFormatCmd) Execute(args []string) (err error) {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	req := &control.StorageFormatReq{Reformat: cmd.Force}
 	req.SetHostList(cmd.getHostList())
@@ -124,8 +114,8 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 		return err
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	return cmd.printFormatResp(resp)
@@ -155,7 +145,7 @@ type nvmeRebindCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	PCIAddr string `short:"a" long:"pci-address" required:"1" description:"NVMe SSD PCI address to rebind."`
 }
 
@@ -163,7 +153,7 @@ type nvmeRebindCmd struct {
 //
 // Rebind NVMe SSD from kernel driver and bind to user-space driver on single server.
 func (cmd *nvmeRebindCmd) Execute(args []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	if len(cmd.getHostList()) != 1 {
 		return errors.New("command expects a single host in hostlist")
@@ -177,8 +167,8 @@ func (cmd *nvmeRebindCmd) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	var outErr strings.Builder
@@ -202,7 +192,7 @@ type nvmeAddDeviceCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	PCIAddr          string `short:"a" long:"pci-address" required:"1" description:"NVMe SSD PCI address to add."`
 	EngineIndex      uint32 `short:"e" long:"engine-index" required:"1" description:"Index of DAOS engine to add NVMe device to."`
 	StorageTierIndex int32  `short:"t" long:"tier-index" default:"-1" description:"Index of storage tier on DAOS engine to add NVMe device to."`
@@ -212,7 +202,7 @@ type nvmeAddDeviceCmd struct {
 //
 // Add recently inserted NVMe SSD to a running engine by updating relevant NVMe config file.
 func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	if len(cmd.getHostList()) != 1 {
 		return errors.New("command expects a single host in hostlist")
@@ -231,8 +221,8 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	var outErr strings.Builder

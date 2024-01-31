@@ -7,11 +7,11 @@
 package main
 
 import (
-	"context"
 	"io"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -31,7 +31,7 @@ type firmwareQueryCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	DeviceType  string `short:"t" long:"type" choice:"nvme" choice:"scm" choice:"all" default:"all" description:"Type of storage devices to query"`
 	Devices     string `short:"d" long:"devices" description:"Comma-separated list of device identifiers to query"`
 	ModelID     string `short:"m" long:"model" description:"Model ID to filter results by"`
@@ -41,7 +41,7 @@ type firmwareQueryCmd struct {
 
 // Execute runs the firmware query command.
 func (cmd *firmwareQueryCmd) Execute(args []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	req := &control.FirmwareQueryReq{
 		SCM:         cmd.isSCMRequested(),
@@ -57,8 +57,8 @@ func (cmd *firmwareQueryCmd) Execute(args []string) error {
 	req.SetHostList(cmd.getHostList())
 	resp, err := control.FirmwareQuery(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -115,7 +115,7 @@ type firmwareUpdateCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	DeviceType  string `short:"t" long:"type" choice:"nvme" choice:"scm" required:"1" description:"Type of storage devices to update"`
 	FilePath    string `short:"p" long:"path" required:"1" description:"Path to the firmware file accessible from all nodes"`
 	Devices     string `short:"d" long:"devices" description:"Comma-separated list of device identifiers to update"`
@@ -126,7 +126,7 @@ type firmwareUpdateCmd struct {
 
 // Execute runs the firmware update command.
 func (cmd *firmwareUpdateCmd) Execute(args []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 
 	req := &control.FirmwareUpdateReq{
 		FirmwarePath: cmd.FilePath,
@@ -147,8 +147,8 @@ func (cmd *firmwareUpdateCmd) Execute(args []string) error {
 	req.SetHostList(cmd.getHostList())
 	resp, err := control.FirmwareUpdate(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {

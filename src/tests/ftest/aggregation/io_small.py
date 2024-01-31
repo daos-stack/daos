@@ -5,8 +5,9 @@
 """
 
 import time
-from ior_test_base import IorTestBase
+
 from general_utils import human_to_bytes
+from ior_test_base import IorTestBase
 
 
 class DaosAggregationIOSmall(IorTestBase):

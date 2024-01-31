@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -290,8 +290,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelProps(storage.AccelEngineSPDK,
-				storage.AccelOptCRCFlag|storage.AccelOptMoveFlag),
+			WithStorageAutoFaultyCriteria(true, 100, 200),
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -309,7 +308,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithBdevDeviceRoles(storage.BdevRoleAll),
 			).
 			WithFabricInterface("ib1").
-			WithFabricInterfacePort(20000).
+			WithFabricInterfacePort(21000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithFabricAuthKey("foo:bar").
 			WithCrtCtxShareAddr(0).
@@ -319,7 +318,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelProps(storage.AccelEngineDML, storage.AccelOptCRCFlag),
+			WithStorageAutoFaultyCriteria(false, 0, 0),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 
@@ -866,7 +865,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigHugepagesDisabled,
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
 		},
 		"disabled hugepages; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -886,7 +885,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigHugepagesDisabled,
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
 		},
 		"disabled hugepages; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -1009,7 +1008,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 11
 				return c.WithNrHugepages(16896)
 			},
-			expErr: FaultConfigRamdiskOverMaxMem(humanize.GiByte*11, humanize.GiByte*10, 0),
+			expErr: FaultConfigRamdiskOverMaxMem(humanize.GiByte*11, humanize.GiByte*9, 0),
 		},
 		"low mem": {
 			// 46 total - 40 reserved = 6 for tmpfs (3 gib per engine - too low)
@@ -1019,7 +1018,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			},
 			// error indicates min RAM needed = 40 + 4 gib per engine
 			expErr: storage.FaultRamdiskLowMem("Total", storage.MinRamdiskMem,
-				humanize.GiByte*48, humanize.GiByte*46),
+				humanize.GiByte*50, humanize.GiByte*46),
 		},
 		"custom value set": {
 			memTotBytes: humanize.GiByte * 60,
@@ -1036,7 +1035,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugepages(16896)
 			},
-			expRamdiskSize: 10,
+			expRamdiskSize: 9,
 		},
 		"custom system_ram_reserved value set": {
 			// 33 huge mem + 2 sys rsv + 2 engine rsv = 37 gib reserved mem
@@ -1046,7 +1045,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 				c.SystemRamReserved = 2
 				return c.WithNrHugepages(16896)
 			},
-			expRamdiskSize: 11,
+			expRamdiskSize: 10,
 		},
 		"no scm configured on second engine": {
 			memTotBytes: humanize.GiByte * 80,
@@ -1617,7 +1616,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 					WithStorageClass("ram").
 					WithScmMountPoint("b"),
 			).
-			WithPinnedNumaNode(0).
+			WithPinnedNumaNode(1).
 			WithTargetCount(8)
 	}
 
@@ -1625,6 +1624,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 		configA *engine.Config
 		configB *engine.Config
 		expErr  error
+		expLog  string
 	}{
 		"successful validation": {
 			configA: configA(),
@@ -1690,15 +1690,15 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(2)),
 				),
 			configB: configB().
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
 				),
-			expErr: errors.New("valid PCI addresses"),
+			expErr: errors.New("engine 1 overlaps with entries in engine 0"),
 		},
 		"mismatched scm_class": {
 			configA: configA(),
@@ -1711,6 +1711,21 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				),
 			expErr: FaultConfigScmDiffClass(1, 0),
 		},
+		"mismatched nr bdev_list": {
+			configA: configA().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(1)),
+				),
+			configB: configB().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(3)),
+				),
+			expLog: "engine 1 has 2 but engine 0 has 1",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1722,6 +1737,11 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 
 			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)
+
+			if tc.expLog != "" {
+				hasEntry := strings.Contains(buf.String(), tc.expLog)
+				AssertTrue(t, hasEntry, "expected entries not found in log")
+			}
 		})
 	}
 }
@@ -1738,7 +1758,7 @@ func TestServerConfig_SaveActiveConfig(t *testing.T) {
 	}{
 		"successful write": {
 			cfgPath:   testDir,
-			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, configOut),
+			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, ConfigOut),
 		},
 		"missing directory": {
 			cfgPath:   filepath.Join(testDir, "non-existent/"),

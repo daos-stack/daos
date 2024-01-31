@@ -9,6 +9,77 @@ set -eux
 : "${STAGE_NAME:=Unknown_Stage}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
 
+# functions common to more than one distro specific provisioning
+url_to_repo() {
+    local url="$1"
+
+    local repo=${url#*://}
+    repo="${repo#/}"
+    repo="${repo//%/}"
+    repo="${repo//\//_}"
+
+    echo "$repo"
+}
+
+add_repo() {
+    local match="$1"
+    local add_repo="$2"
+    local gpg_check="${3:-true}"
+
+    if [ -z "$match" ]; then
+        # we cannot try to add a repo that has no match
+        return
+    fi
+
+    local repo
+    # see if a package we know is in the repo is present
+    if repo=$(dnf -y repoquery --qf "%{repoid}" "$1" 2>/dev/null | grep ..\*); then
+        DNF_REPO_ARGS+=" --enablerepo=$repo"
+    else
+        local repo_url="${REPOSITORY_URL}${add_repo}"
+        local repo_name
+        repo_name=$(url_to_repo "$repo_url")
+        if ! dnf -y repolist | grep "$repo_name"; then
+            dnf -y config-manager --add-repo="${repo_url}" >&2
+            if ! $gpg_check; then
+                disable_gpg_check "$add_repo" >&2
+            fi
+        fi
+        DNF_REPO_ARGS+=" --enablerepo=$repo_name"
+    fi
+}
+
+add_group_repo() {
+    local match="$1"
+
+    add_repo "$match" "$DAOS_STACK_GROUP_REPO"
+    group_repo_post
+}
+
+add_local_repo() {
+    add_repo 'argobots' "$DAOS_STACK_LOCAL_REPO" false
+}
+
+disable_gpg_check() {
+    local url="$1"
+
+    repo="$(url_to_repo "$url")"
+    # bug in EL7 DNF: this needs to be enabled before it can be disabled
+    dnf -y config-manager --save --setopt="$repo".gpgcheck=1
+    dnf -y config-manager --save --setopt="$repo".gpgcheck=0
+    # but even that seems to be not enough, so just brute-force it
+    if [ -d /etc/yum.repos.d ] &&
+       ! grep gpgcheck /etc/yum.repos.d/"$repo".repo; then
+        echo "gpgcheck=0" >> /etc/yum.repos.d/"$repo".repo
+    fi
+}
+
+dump_repos() {
+    for file in "$REPOS_DIR"/*.repo; do
+        echo "---- $file ----"
+        cat "$file"
+    done
+}
 retry_dnf() {
     local monitor_threshold="$1"
     shift
@@ -55,6 +126,13 @@ send_mail() {
     local subject="$1"
     local message="${2:-}"
 
+    local recipients
+    if mail --help | grep s-nail; then
+        recipients="${OPERATIONS_EMAIL//, }"
+    else
+        recipients="${OPERATIONS_EMAIL}"
+    fi
+
     set +x
     {
         echo "Build: $BUILD_URL"
@@ -62,7 +140,7 @@ send_mail() {
         echo "Host:  $HOSTNAME"
         echo ""
         echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
+    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$recipients"
     set -x
 }
 
@@ -146,7 +224,8 @@ timeout_cmd() {
 fetch_repo_config() {
     local repo_server="$1"
 
-    local repo_file="daos_ci-${DISTRO_NAME}-$repo_server"
+    . /etc/os-release
+    local repo_file="daos_ci-${ID}${VERSION_ID%%.*}-$repo_server"
     local repopath="${REPOS_DIR}/$repo_file"
     if ! curl -f -o "$repopath" "$REPO_FILE_URL$repo_file.repo"; then
         return 1
@@ -182,20 +261,21 @@ rpm_test_version() {
 set_local_repo() {
     local repo_server="$1"
 
-    rm -f "$REPOS_DIR"/daos_ci-"$DISTRO_NAME".repo
-    ln "$REPOS_DIR"/daos_ci-"$DISTRO_NAME"{-"$repo_server",.repo}
+    . /etc/os-release
 
-    local version
-    version="$(lsb_release -sr)"
-    version=${version%%.*}
-    if [ "$repo_server" = "artifactory" ] &&
-       { [[ $(pr_repos) = *daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
-       [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[.-0-9A-Za-z]+-testing ]]; then
-        # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
-        # used for daos packages
-        dnf -y config-manager \
-            --disable daos-stack-daos-"${DISTRO_GENERIC}"-"$version"-x86_64-stable-local-artifactory
+    rm -f "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}".repo
+    ln "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}"{-"$repo_server",.repo}
+
+    if [ "$repo_server" = "artifactory" ]; then
+        if { [[ \ $(pr_repos) = *\ daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
+           [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-.0-9A-Za-z]+-testing ]]; then
+            # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
+            # used for daos packages
+            dnf -y config-manager \
+                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
+        fi
     fi
+
     dnf repolist
 }
 
@@ -247,17 +327,56 @@ post_provision_config_nodes() {
     # Reserve port ranges 31416-31516 for DAOS and CART servers
     echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
 
+    # Remove DAOS dependencies to prevent masking packaging bugs
+    if rpm -qa | grep fuse3; then
+        dnf -y erase fuse3\*
+    fi
+
     if $CONFIG_POWER_ONLY; then
         rm -f "$REPOS_DIR"/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
-        time dnf -y erase fio fuse ior-hpc mpich-autoload               \
+        time dnf -y erase fio fuse ior-hpc mpich-autoload          \
                      ompi argobots cart daos daos-client dpdk      \
                      fuse-libs libisa-l libpmemobj mercury mpich   \
                      pmix protobuf-c spdk libfabric libpmem        \
-                     libpmemblk munge-libs munge slurm             \
+                     munge-libs munge slurm                        \
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
-    lsb_release -a
+    cat /etc/os-release
+
+    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
+        # Remove OPA and install MOFED
+        install_mofed
+    fi
+
+    local repos_added=()
+    local repo
+    local inst_repos=()
+    # shellcheck disable=SC2153
+    read -ra inst_repos <<< "$INST_REPOS"
+    for repo in "${inst_repos[@]}"; do
+        branch="master"
+        build_number="lastSuccessfulBuild"
+        if [[ $repo = *@* ]]; then
+            branch="${repo#*@}"
+            repo="${repo%@*}"
+            if [[ \ ${repos_added[*]+${repos_added[*]}}\  = *\ ${repo}\ * ]]; then
+                # don't add duplicates, first found wins
+                continue
+            fi
+            repos_added+=("$repo")
+            if [[ $branch = *:* ]]; then
+                build_number="${branch#*:}"
+                branch="${branch%:*}"
+            fi
+        fi
+        local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/$DISTRO_NAME/
+        dnf -y config-manager --add-repo="$repo_url"
+        repo="$(url_to_repo "$repo_url")"
+        # PR-repos: should always be able to upgrade modular packages
+        dnf -y config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
+        disable_gpg_check "$repo_url"
+    done
 
     # start with everything fully up-to-date
     # all subsequent package installs beyond this will install the newest packages
@@ -273,52 +392,22 @@ post_provision_config_nodes() {
         return 1
     fi
 
-    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
-        # Remove OPA and install MOFED
-        install_mofed
-    fi
-
-    if [ -n "$INST_REPOS" ]; then
-        local repo
-        for repo in $INST_REPOS; do
-            branch="master"
-            build_number="lastSuccessfulBuild"
-            if [[ $repo = *@* ]]; then
-                branch="${repo#*@}"
-                repo="${repo%@*}"
-                if [[ $branch = *:* ]]; then
-                    build_number="${branch#*:}"
-                    branch="${branch%:*}"
-                fi
-            fi
-            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
-            dnf -y config-manager --add-repo="${repo_url}"
-            disable_gpg_check "$repo_url"
-        done
-    fi
-    inst_rpms=()
+    local inst_rpms=()
+    # shellcheck disable=SC2153
     if [ -n "$INST_RPMS" ]; then
+        # use eval here, rather than say, read -ra to take advantage of bash globbing
         eval "inst_rpms=($INST_RPMS)"
-        time dnf -y erase "${inst_rpms[@]}"
+        time dnf -y erase "${inst_rpms[@]}" libfabric
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    if [ -n "${LSB_RELEASE:-}" ]; then
-        if ! rpm -q "$LSB_RELEASE"; then
-            retry_dnf 360 install "$LSB_RELEASE"
-        fi
-    fi
 
     # shellcheck disable=SC2001
-    if ! rpm -q "$(echo "$INST_RPMS" |
-                   sed -e 's/--exclude [^ ]*//'                 \
-                       -e 's/[^ ]*-daos-[0-9][0-9]*//g')"; then
-        if [ -n "$INST_RPMS" ]; then
-            if ! retry_dnf 360 install "${inst_rpms[@]}"; then
-                rc=${PIPESTATUS[0]}
-                dump_repos
-                return "$rc"
-            fi
+    if [ ${#inst_rpms[@]} -gt 0 ]; then
+        if ! retry_dnf 360 install "${inst_rpms[@]}"; then
+            rc=${PIPESTATUS[0]}
+            dump_repos
+            return "$rc"
         fi
     fi
 
@@ -348,16 +437,15 @@ setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-$version
 EOF
 
         printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
-    fi 
+    fi
 
     distro_custom
 
-    lsb_release -a
+    cat /etc/os-release
 
     if [ -f /etc/do-release ]; then
         cat /etc/do-release
     fi
-    cat /etc/os-release
 
     return 0
 }

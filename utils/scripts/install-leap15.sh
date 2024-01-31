@@ -6,7 +6,7 @@
 # Switch to dnf as it seems a bit faster.
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
-# *** Keep these in as much alphbetical order as possible ***
+# *** Keep these in as much alphabetical order as possible ***
 
 set -e
 
@@ -24,8 +24,8 @@ dnf --nodocs install \
     gcc \
     gcc-c++ \
     git \
-    go1.18 \
-    go1.18-race \
+    go \
+    go-race \
     graphviz \
     gzip \
     hwloc-devel \
@@ -45,7 +45,6 @@ dnf --nodocs install \
     libunwind-devel \
     libuuid-devel \
     libyaml-devel \
-    lmdb-devel \
     lua-lmod \
     make \
     maven \

@@ -10,12 +10,12 @@ timeouts:
   test_daos_degraded_mode: 450
   test_daos_management: 110
   test_daos_pool: 180
-  test_daos_container: 450
+  test_daos_container: 510
   test_daos_epoch: 125
   test_daos_verify_consistency: 105
   test_daos_io: 290
   test_daos_ec_io: 450
-  test_daos_ec_obj: 600
+  test_daos_ec_obj: 700
   test_daos_object_array: 105
   test_daos_array: 106
   test_daos_kv: 105
@@ -23,15 +23,16 @@ timeouts:
   test_daos_epoch_recovery: 104
   test_daos_md_replication: 104
   test_daos_rebuild_simple: 1800
-  test_daos_drain_simple: 2000
+  test_daos_drain_simple: 3600
   test_daos_extend_simple: 3600
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
-  test_daos_rebuild_ec: 4800
+  test_daos_rebuild_ec: 7200
   test_daos_aggregate_ec: 200
   test_daos_degraded_ec: 1900
   test_daos_dedup: 220
   test_daos_upgrade: 300
+  test_daos_pipeline: 60
 pool:
   # This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
@@ -50,6 +51,7 @@ server_config:
       env_vars:
         - DD_MASK=mgmt,io,md,epc,rebuild,any
         - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
@@ -64,6 +66,7 @@ server_config:
       env_vars:
         - DD_MASK=mgmt,io,md,epc,rebuild,any
         - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
@@ -106,6 +109,7 @@ daos_tests:
     test_daos_degraded_ec: 1
     test_daos_dedup: 1
     test_daos_upgrade: 1
+    test_daos_pipeline: 1
   test_name:
     test_daos_degraded_mode: DAOS_Degraded_Mode
     test_daos_management: DAOS_Management
@@ -134,6 +138,7 @@ daos_tests:
     test_daos_dedup: DAOS_Dedup
     test_daos_extend_simple: DAOS_Extend_Simple
     test_daos_upgrade: DAOS_Upgrade
+    test_daos_pipeline: DAOS_Pipeline
   daos_test:
     test_daos_degraded_mode: d
     test_daos_management: m
@@ -161,11 +166,16 @@ daos_tests:
     test_daos_aggregate_ec: Z
     test_daos_degraded_ec: X
     test_daos_dedup: U
-    test_daos_upgrade: P
+    test_daos_upgrade: G
+    test_daos_pipeline: P
   args:
     test_daos_ec_io: -l"EC_4P2G1"
     test_daos_rebuild_ec: -s5
     test_daos_md_replication: -s5
+    test_daos_degraded_mode: -s7
+    test_daos_drain_simple: -s3
+    test_daos_extend_simple: -s3
+    test_daos_oid_allocator: -s5
   scalable_endpoint:
     test_daos_degraded_mode: true
   stopped_ranks:

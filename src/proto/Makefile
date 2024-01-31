@@ -45,6 +45,7 @@ GO_CONTROL_FILES = common/proto/shared/ranks.pb.go\
 		   common/proto/ctl/storage_scm.pb.go\
 		   common/proto/ctl/ctl.pb.go\
 		   common/proto/ctl/network.pb.go\
+		   common/proto/ctl/support.pb.go\
 		   common/proto/ctl/firmware.pb.go\
 		   common/proto/ctl/ranks.pb.go\
 		   common/proto/srv/srv.pb.go\

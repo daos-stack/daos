@@ -78,9 +78,9 @@ func BoolAsInt(b bool) int {
 	return 0
 }
 
-// FindEnvValue will return value from supplied name key if found in input slice of key-pairs
-// (environment). ErrNotExist error returned if key cannot be found.
-func FindEnvValue(keyPairs []string, name string) (string, error) {
+// FindKeyValue will return value from supplied name key if found in input slice of key-pairs
+// (e.g. environment). ErrNotExist error returned if key cannot be found.
+func FindKeyValue(keyPairs []string, name string) (string, error) {
 	for _, pair := range keyPairs {
 		kv := strings.SplitN(pair, "=", 2)
 		if len(kv) == 2 && kv[0] == name {
@@ -91,8 +91,8 @@ func FindEnvValue(keyPairs []string, name string) (string, error) {
 	return "", errors.Wrapf(os.ErrNotExist, "Undefined environment variable %q", name)
 }
 
-// UpdateEnvValue updates a value for existing key and returns new slice of key-value pairs.
-func UpdateEnvValue(keyPairs []string, name, newValue string) ([]string, error) {
+// UpdateKeyValue updates a value for existing key and returns new slice of key-value pairs.
+func UpdateKeyValue(keyPairs []string, name, newValue string) ([]string, error) {
 	for i, pair := range keyPairs {
 		kv := strings.SplitN(pair, "=", 2)
 		if len(kv) == 2 && kv[0] == name {
@@ -104,8 +104,8 @@ func UpdateEnvValue(keyPairs []string, name, newValue string) ([]string, error) 
 	return nil, errors.Wrapf(os.ErrNotExist, "Undefined environment variable %q", name)
 }
 
-// DeleteEnvValue removes an existing key and returns new slice of key-value pairs.
-func DeleteEnvValue(keyPairs []string, name string) ([]string, error) {
+// DeleteKeyValue removes an existing key and returns new slice of key-value pairs.
+func DeleteKeyValue(keyPairs []string, name string) ([]string, error) {
 	for i, pair := range keyPairs {
 		kv := strings.SplitN(pair, "=", 2)
 		if len(kv) == 2 && kv[0] == name {
@@ -116,10 +116,9 @@ func DeleteEnvValue(keyPairs []string, name string) ([]string, error) {
 	return nil, errors.Wrapf(os.ErrNotExist, "Undefined environment variable %q", name)
 }
 
-// MergeEnvVars merges and deduplicates two slices of environment
-// variables. Conflicts are resolved by taking the value from the
-// second list.
-func MergeEnvVars(curVars []string, newVars []string) (merged []string) {
+// MergeKeyValues merges and deduplicates two slices of key-value pairs.  Conflicts are resolved by
+// taking the value from the second list.
+func MergeKeyValues(curVars []string, newVars []string) (merged []string) {
 	mergeMap := make(map[string]string)
 	for _, pair := range curVars {
 		kv := strings.SplitN(pair, "=", 2)

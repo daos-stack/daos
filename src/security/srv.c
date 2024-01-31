@@ -40,17 +40,17 @@ fini(void)
 	return 0;
 }
 
-struct dss_module security_module =  {
-	.sm_name	= "security",
-	.sm_mod_id	= DAOS_SEC_MODULE,
-	.sm_ver		= DAOS_SEC_VERSION,
-	.sm_proto_count	= 1,
-	.sm_init	= init,
-	.sm_fini	= fini,
-	.sm_setup	= NULL,
-	.sm_cleanup	= NULL,
-	.sm_proto_fmt	= NULL,
-	.sm_cli_count	= 0,
-	.sm_handlers	= NULL,
-	.sm_key		= NULL,
+struct dss_module security_module = {
+    .sm_name        = "security",
+    .sm_mod_id      = DAOS_SEC_MODULE,
+    .sm_ver         = DAOS_SEC_VERSION,
+    .sm_proto_count = 1,
+    .sm_init        = init,
+    .sm_fini        = fini,
+    .sm_setup       = NULL,
+    .sm_cleanup     = NULL,
+    .sm_proto_fmt   = {NULL},
+    .sm_cli_count   = {0},
+    .sm_handlers    = {NULL},
+    .sm_key         = NULL,
 };

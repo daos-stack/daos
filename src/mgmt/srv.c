@@ -41,17 +41,14 @@ static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
 /* Define for cont_rpcs[] array population below.
  * See MGMT_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
-{				\
-	.dr_opc       = a,	\
-	.dr_hdlr      = d,	\
-	.dr_corpc_ops = e,	\
-}
+#define X(a, b, c, d, e)                                                                           \
+	{                                                                                          \
+	    .dr_opc       = a,                                                                     \
+	    .dr_hdlr      = d,                                                                     \
+	    .dr_corpc_ops = e,                                                                     \
+	},
 
-static struct daos_rpc_handler mgmt_handlers[] = {
-	MGMT_PROTO_CLI_RPC_LIST,
-	MGMT_PROTO_SRV_RPC_LIST,
-};
+static struct daos_rpc_handler mgmt_handlers[] = {MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
 
 #undef X
 
@@ -448,16 +445,16 @@ ds_mgmt_cleanup()
 }
 
 struct dss_module mgmt_module = {
-	.sm_name		= "mgmt",
-	.sm_mod_id		= DAOS_MGMT_MODULE,
-	.sm_ver			= DAOS_MGMT_VERSION,
-	.sm_proto_count		= 1,
-	.sm_init		= ds_mgmt_init,
-	.sm_fini		= ds_mgmt_fini,
-	.sm_setup		= ds_mgmt_setup,
-	.sm_cleanup		= ds_mgmt_cleanup,
-	.sm_proto_fmt		= &mgmt_proto_fmt,
-	.sm_cli_count		= MGMT_PROTO_CLI_COUNT,
-	.sm_handlers		= mgmt_handlers,
-	.sm_drpc_handlers	= mgmt_drpc_handlers,
+    .sm_name          = "mgmt",
+    .sm_mod_id        = DAOS_MGMT_MODULE,
+    .sm_ver           = DAOS_MGMT_VERSION,
+    .sm_proto_count   = 1,
+    .sm_init          = ds_mgmt_init,
+    .sm_fini          = ds_mgmt_fini,
+    .sm_setup         = ds_mgmt_setup,
+    .sm_cleanup       = ds_mgmt_cleanup,
+    .sm_proto_fmt     = {&mgmt_proto_fmt},
+    .sm_cli_count     = {MGMT_PROTO_CLI_COUNT},
+    .sm_handlers      = {mgmt_handlers},
+    .sm_drpc_handlers = mgmt_drpc_handlers,
 };

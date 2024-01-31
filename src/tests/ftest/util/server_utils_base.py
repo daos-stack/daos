@@ -3,14 +3,14 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import os
 import re
+from logging import getLogger
 
 from ClusterShell.NodeSet import NodeSet
-
-from command_utils_base import FormattedParameter, CommandWithParameters
-from command_utils import YamlCommand, CommandWithSubCommand
+from command_utils import CommandWithSubCommand, YamlCommand
+from command_utils_base import CommandWithParameters, FormattedParameter
+from data_utils import dict_extract_values, list_flatten
 from dmg_utils import get_dmg_response
 from exception_utils import CommandFailure
 from general_utils import get_display_size
@@ -27,7 +27,7 @@ class AutosizeCancel(Exception):
 class DaosServerCommand(YamlCommand):
     """Defines an object representing the daos_server command."""
 
-    NORMAL_PATTERN = "DAOS I/O Engine.*started"
+    NORMAL_PATTERN = "DAOS I/O Engine.*process [0-9]+ started on"
     FORMAT_PATTERN = "(SCM format required)(?!;)"
     REFORMAT_PATTERN = "Metadata format required"
     SYSTEM_QUERY_PATTERN = "joined"
@@ -59,8 +59,8 @@ class DaosServerCommand(YamlCommand):
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
         self.json_logs = FormattedParameter("--json-logging", False)
+        self.json = FormattedParameter("--json", False)
         self.config = FormattedParameter("--config={}", default_yaml_file)
-
         # Additional daos_server command line parameters:
         #     --allow-proxy  Allow proxy configuration via environment
         self.allow_proxy = FormattedParameter("--allow-proxy", False)
@@ -93,6 +93,7 @@ class DaosServerCommand(YamlCommand):
         #   scm            Perform tasks related to locally-attached SCM storage
         #   start          Start daos_server
         #   storage        Perform tasks related to locally-attached storage
+        #   support        Perform tasks related to debug the system to help support team
         #   version        Print daos_server version
         if sub_command == "ms":
             self.sub_command_class = self.MsSubCommand()
@@ -106,6 +107,8 @@ class DaosServerCommand(YamlCommand):
             self.sub_command_class = self.StartSubCommand()
         elif sub_command == "storage":
             self.sub_command_class = self.StorageSubCommand()
+        elif sub_command == "support":
+            self.sub_command_class = self.SupportSubCommand()
         elif sub_command == "version":
             self.sub_command_class = self.VersionSubCommand()
         else:
@@ -142,6 +145,20 @@ class DaosServerCommand(YamlCommand):
         else:
             self.pattern = self.NORMAL_PATTERN
         self.pattern_count = host_qty * len(self.yaml.engine_params)
+
+    def update_pattern_timeout(self):
+        """Update the pattern timeout if undefined."""
+        if self.pattern_timeout.value is None:
+            self.log.debug('Updating pattern timeout based upon server config')
+            try:
+                data = self.yaml.get_yaml_data()
+                bdev_lists = list_flatten(dict_extract_values(data, ['storage', '*', 'bdev_list']))
+                self.log.debug('  Detected bdev_list entries: %s', bdev_lists)
+            except (AttributeError, TypeError, RecursionError):
+                # Default if the bdev_list cannot be obtained from the server configuration
+                bdev_lists = []
+            self.pattern_timeout.update(
+                max(len(bdev_lists), 2) * 20, 'DaosServerCommand.pattern_timeout')
 
     @property
     def using_nvme(self):
@@ -521,7 +538,7 @@ class DaosServerCommand(YamlCommand):
                     "/run/daos_server/storage/prepare/*", "prepare")
 
                 # daos_server storage prepare command options:
-                #   --pci-allowlist=    Whitespace separated list of PCI
+                #   --pci-allowlist=    White-space separated list of PCI
                 #                       devices (by address) to be unbound from
                 #                       Kernel driver and used with SPDK
                 #                       (default is all PCI devices).
@@ -546,6 +563,42 @@ class DaosServerCommand(YamlCommand):
                 self.reset = FormattedParameter("--reset", False)
                 self.force = FormattedParameter("--force", False)
                 self.scm_ns_per_socket = FormattedParameter("--scm-ns-per-socket={}")
+
+    class SupportSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server support sub command."""
+
+        def __init__(self):
+            """Create a support subcommand object."""
+            super().__init__("/run/daos_server/support/*", "support")
+
+        def get_sub_command_class(self):
+            """Get the daos_server support sub command object."""
+            # Available sub-commands:
+            #   collect-log  Collect logs on servers
+            if self.sub_command.value == "collect-log":
+                self.sub_command_class = self.CollectLogSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CollectLogSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server support collect-log command."""
+
+            def __init__(self):
+                """Create a support collect-log subcommand object."""
+                super().__init__(
+                    "/run/daos_server/support/collect-log/*", "collect-log")
+
+                # daos_server support collect-log command options:
+                #   --stop-on-error     Stop the collect-log command on very first error
+                #   --target-folder=    Target Folder location where log will be copied
+                #   --archive=          Archive the log/config files
+                #   --extra-logs-dir=   Collect the Logs from given custom directory
+                #   --target-host=      R sync the logs to target-host system
+                self.stop_on_error = FormattedParameter("--stop-on-error", False)
+                self.target_folder = FormattedParameter("--target-folder={}")
+                self.archive = FormattedParameter("--archive", False)
+                self.extra_logs_dir = FormattedParameter("--extra-logs-dir={}")
+                self.target_host = FormattedParameter("--target-host={}")
 
     class VersionSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server version sub command."""
@@ -892,11 +945,10 @@ class DaosServerCommandRunner(DaosServerCommand):
         """Call daos_server version.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the daos_server command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos_server version command fails.
 
         """
-        return self._get_result(["version"])
+        return self._get_json_result(("version",))

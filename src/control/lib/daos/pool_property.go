@@ -51,19 +51,23 @@ func PoolProperties() PoolPropertyMap {
 					if err != nil {
 						return "not set"
 					}
-					switch {
-					case n&PoolSelfHealingAutoExclude > 0:
+					switch n {
+					case PoolSelfHealingAutoExclude:
 						return "exclude"
-					case n&PoolSelfHealingAutoRebuild > 0:
+					case PoolSelfHealingAutoRebuild:
 						return "rebuild"
+					case PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild:
+						return "exclude,rebuild"
 					default:
 						return "unknown"
 					}
 				},
 			},
 			values: map[string]uint64{
-				"exclude": PoolSelfHealingAutoExclude,
-				"rebuild": PoolSelfHealingAutoRebuild,
+				"exclude":         PoolSelfHealingAutoExclude,
+				"rebuild":         PoolSelfHealingAutoRebuild,
+				"exclude,rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				"rebuild,exclude": PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
 			},
 		},
 		"space_rb": {
@@ -87,6 +91,56 @@ func PoolProperties() PoolPropertyMap {
 						return "not set"
 					}
 					return fmt.Sprintf("%d%%", n)
+				},
+				valueMarshaler: numericMarshaler,
+			},
+		},
+		"svc_ops_enabled": {
+			Property: PoolProperty{
+				Number:      PoolPropertySvcOpsEnabled,
+				Description: "Metadata duplicate operations detection enabled",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					oeErr := errors.Errorf("invalid svc_ops_enabled value %s (valid values: 0-1)", s)
+					oeVal, err := strconv.ParseUint(s, 10, 32)
+					if err != nil {
+						return nil, oeErr
+					}
+					if oeVal > 1 {
+						return nil, errors.Wrap(oeErr, "value supplied is greater than 1")
+					}
+					return &PoolPropertyValue{oeVal}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				valueMarshaler: numericMarshaler,
+			},
+		},
+		"svc_ops_entry_age": {
+			Property: PoolProperty{
+				Number:      PoolPropertySvcOpsEntryAge,
+				Description: "Metadata duplicate operations KVS max entry age, in seconds",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					oeErr := errors.Errorf("invalid svc_ops_entry_age %s (valid values: %d-%d)", s, PoolSvcOpsEntryAgeMin, PoolSvcOpsEntryAgeMax)
+					oeVal, err := strconv.ParseUint(s, 10, 32)
+					if err != nil {
+						return nil, oeErr
+					}
+					if oeVal < PoolSvcOpsEntryAgeMin || oeVal > PoolSvcOpsEntryAgeMax {
+						return nil, errors.Wrap(oeErr, "value supplied is out of range")
+					}
+					return &PoolPropertyValue{oeVal}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
 				},
 				valueMarshaler: numericMarshaler,
 			},
@@ -302,10 +356,8 @@ func PoolProperties() PoolPropertyMap {
 				Description: "Pool performance domain",
 			},
 			values: map[string]uint64{
-				"root":   PoolPerfDomainRoot,
-				"node":   PoolPerfDomainNode,
-				"target": PoolPerfDomainTarget,
-				"rank":   PoolPerfDomainRank,
+				"root":  PoolPerfDomainRoot,
+				"group": PoolPerfDomainGrp,
 			},
 		},
 		"svc_rf": {
@@ -405,6 +457,16 @@ func PoolProperties() PoolPropertyMap {
 					return fmt.Sprintf("%d", n)
 				},
 				valueMarshaler: numericMarshaler,
+			},
+		},
+		"reintegration": {
+			Property: PoolProperty{
+				Number:      PoolPropertyReintMode,
+				Description: "Reintegration mode",
+			},
+			values: map[string]uint64{
+				"data_sync":    PoolReintModeDataSync,
+				"no_data_sync": PoolReintModeNoDataSync,
 			},
 		},
 	}

@@ -56,8 +56,8 @@ func (cmd *containerSnapCreateCmd) Execute(args []string) error {
 		return errors.Wrapf(err, "failed to create snapshot of container %s", cmd.ContainerID())
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(snapshot{
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(snapshot{
 			Epoch:     uint64(cEpoch),
 			Timestamp: common.FormatTime(daos.HLC(cEpoch).ToTime()),
 			Name:      cmd.Name,
@@ -229,8 +229,8 @@ func (cmd *containerSnapListCmd) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(snaps, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(snaps, nil)
 	}
 
 	cmd.Info("Container's snapshots :")

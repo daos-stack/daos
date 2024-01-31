@@ -148,6 +148,7 @@ Unit and functional testing is performed at many layers.
 commont_test
 vos_tests -z
 srv_checksum_tests
+cli_checksum_tests
 pool_scrubbing_tests
 rpc_tests
 ```

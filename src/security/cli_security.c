@@ -14,7 +14,6 @@
 #include <daos_errno.h>
 #include <daos/drpc.h>
 #include <daos/drpc_modules.h>
-#include <daos/drpc.pb-c.h>
 #include <daos/agent.h>
 #include <daos/security.h>
 
@@ -133,7 +132,7 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 	if (alloc.oom)
 		return -DER_NOMEM;
 	if (cred_resp == NULL) {
-		D_ERROR("Body was not a GetCredentialResp");
+		D_ERROR("Body was not a GetCredentialResp\n");
 		return -DER_PROTO;
 	}
 

@@ -6,9 +6,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import socket
 import time
 
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
 from run_utils import stop_processes
 
 
@@ -92,7 +91,7 @@ class ManagementServiceResilience(TestWithServers):
 
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
-        l_addr = sys_leader_info["response"]["CurrentLeader"]
+        l_addr = sys_leader_info["response"]["current_leader"]
 
         return get_hostname(l_addr)
 

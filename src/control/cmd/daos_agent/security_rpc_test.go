@@ -105,6 +105,7 @@ func TestAgentSecurityModule_RequestCreds_OK(t *testing.T) {
 	defer cleanup()
 
 	mod := NewSecurityModule(log, defaultTestTransportConfig())
+	mod.ext = auth.NewMockExtWithUser("agent-test", 0, 0)
 	respBytes, err := callRequestCreds(mod, t, log, conn)
 
 	if err != nil {

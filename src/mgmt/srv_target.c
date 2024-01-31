@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -264,23 +264,40 @@ struct dead_pool {
 	uuid_t		dp_uuid;
 };
 
-/* Remove leftover SPDK resources from pools not fully created/destroyed */
 static int
-cleanup_leftover_cb(uuid_t uuid, void *arg)
+clear_vos_pool(uuid_t uuid)
 {
-	d_list_t		*dead_list = arg;
-	struct dead_pool	*dp;
 	int			 rc;
 	struct d_uuid		 id;
 
 	/* destroy blobIDs */
 	D_DEBUG(DB_MGMT, "Clear SPDK blobs for pool "DF_UUID"\n", DP_UUID(uuid));
+	rc = vos_pool_kill(uuid, VOS_POF_RDB);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": kill pool service VOS pool: "DF_RC"\n", DP_UUID(uuid), DP_RC(rc));
+		return rc;
+	}
 	uuid_copy(id.uuid, uuid);
 	rc = dss_thread_collective(tgt_kill_pool, &id, 0);
 	if (rc != 0) {
 		D_ERROR("tgt_kill_pool, rc: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
+
+	return 0;
+}
+
+/* Remove leftover SPDK resources from pools not fully created/destroyed */
+static int
+cleanup_leftover_cb(uuid_t uuid, void *arg)
+{
+	d_list_t         *dead_list = arg;
+	struct dead_pool *dp;
+	int               rc;
+
+	rc = clear_vos_pool(uuid);
+	if (rc != 0)
+		return rc;
 
 	D_ALLOC_PTR(dp);
 	if (dp == NULL)
@@ -1070,6 +1087,14 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	if (tca.tca_newborn != NULL) {
 		struct vos_pool_arg vpa = {0};
 
+		/* clear any orphaned blobs that are associated with this uuid */
+		rc = clear_vos_pool(tc_in->tc_pool_uuid);
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": failed to clear orphan blobs",
+				 DP_UUID(tc_in->tc_pool_uuid));
+			goto out;
+		}
+
 		D_ASSERT(dss_tgt_nr > 0);
 		uuid_copy(vpa.vpa_uuid, tc_in->tc_pool_uuid);
 		/* A zero size accommodates the existing file */
@@ -1298,6 +1323,12 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	rc = access(path, F_OK);
 	if (rc >= 0) {
 		/** target is still there, destroy it */
+		rc = vos_pool_kill(td_in->td_pool_uuid, VOS_POF_RDB);
+		if (rc != 0 && rc != -DER_BUSY) {
+			D_ERROR(DF_UUID": kill pool service VOS pool: "DF_RC"\n",
+				DP_UUID(td_in->td_pool_uuid), DP_RC(rc));
+			goto out_path;
+		}
 		rc = tgt_destroy(td_req->cr_input, path);
 	} else if (errno == ENOENT) {
 		char	*zombie;
@@ -1319,6 +1350,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		rc = daos_errno2der(errno);
 	}
 
+out_path:
 	D_FREE(path);
 out:
 	td_out->td_rc = rc;

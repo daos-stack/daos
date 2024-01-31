@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -103,12 +103,6 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 void
 vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict);
 
-static inline int
-vos_obj_refcount(struct vos_object *obj)
-{
-	return obj->obj_llink.ll_ref;
-}
-
 /** Evict an object reference from the cache */
 void vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj);
 
@@ -137,9 +131,9 @@ void vos_obj_cache_evict(struct daos_lru_cache *occ,
 			 struct vos_container *cont);
 
 /**
- * Return object cache for the current thread.
+ * Return object cache for the current IO.
  */
-struct daos_lru_cache *vos_obj_cache_current(void);
+struct daos_lru_cache *vos_obj_cache_current(bool standalone);
 
 /**
  * Object Index API and handles

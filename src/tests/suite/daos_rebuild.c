@@ -1089,7 +1089,7 @@ rebuild_multiple_failures(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, OBJ_NR);
 
-	/* Remove this inflight IO temporarily XXX */
+	/* Remove this in-flight IO temporarily XXX */
 	arg->rebuild_cb = rebuild_io_cb;
 	arg->rebuild_cb_arg = cb_arg_oids;
 	/* Disable data validation because of DAOS-2915. */
@@ -1114,7 +1114,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	struct daos_obj_shard *shard;
 	int		rc;
 
-	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 3)
+	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 5)
 		return;
 
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R2S_SPEC_RANK, 0, 0,
@@ -1172,11 +1172,11 @@ rebuild_fail_all_replicas(void **state)
 	int		rc;
 
 	/* This test will kill 3 replicas, which might include the ranks
-	 * in svcs, so make sure there are at least 6 ranks in svc, so
+	 * in svcs, so make sure there are at least 7 ranks in svc, so
 	 * the new leader can be chosen.
 	 */
-	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 6) {
-		print_message("need at least 6 svcs, -s6\n");
+	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 7) {
+		print_message("need at least 7 svcs, -s7\n");
 		return;
 	}
 

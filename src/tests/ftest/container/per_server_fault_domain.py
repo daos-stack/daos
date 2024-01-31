@@ -91,7 +91,7 @@ class PerServerFaultDomainTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=container
-        :avocado: tags=per_server_fault_domain,rf1_healthy
+        :avocado: tags=PerServerFaultDomainTest,test_rf1_healthy
         """
         # 1. Determine the ranks to stop; two ranks in the same node.
         # Select one host. (It doesn't matter which host to select.)
@@ -124,7 +124,7 @@ class PerServerFaultDomainTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=container
-        :avocado: tags=per_server_fault_domain,rf1_unclean
+        :avocado: tags=PerServerFaultDomainTest,test_rf1_unclean
         """
         # 1. Determine the ranks to stop; two ranks in different node.
         rank_to_host = self.server_managers[0].ranks
@@ -162,7 +162,7 @@ class PerServerFaultDomainTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=container
-        :avocado: tags=per_server_fault_domain,rf2_healthy
+        :avocado: tags=PerServerFaultDomainTest,test_rf2_healthy
         """
         # 1. Determine the ranks to stop; four ranks in two nodes. We can select up to two
         # ranks from service ranks. If we stop more than two service ranks, many of the
@@ -238,7 +238,7 @@ class PerServerFaultDomainTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=container
-        :avocado: tags=per_server_fault_domain,rf2_unclean
+        :avocado: tags=PerServerFaultDomainTest,test_rf2_unclean
         """
         # 1. Determine the ranks to stop; three ranks in three nodes. We can select up to
         # two ranks from service ranks. If we stop more than two service ranks, many of

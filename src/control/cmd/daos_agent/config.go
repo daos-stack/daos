@@ -8,7 +8,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/pkg/errors"
@@ -16,13 +16,13 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
 const (
 	defaultConfigFile = "daos_agent.yml"
 	defaultRuntimeDir = "/var/run/daos_agent"
-	defaultLogFile    = "/tmp/daos_agent.log"
 )
 
 type refreshMinutes time.Duration
@@ -72,17 +72,22 @@ type FabricInterfaceConfig struct {
 // LoadConfig reads a config file and uses it to populate a Config.
 func LoadConfig(cfgPath string) (*Config, error) {
 	if cfgPath == "" {
-		return nil, errors.New("no path supplied")
+		return nil, errors.New("no config path supplied")
 	}
-	data, err := ioutil.ReadFile(cfgPath)
+	data, err := os.ReadFile(cfgPath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "reading config file")
 	}
 
 	cfg := DefaultConfig()
 	if err := yaml.UnmarshalStrict(data, cfg); err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "parsing config: %s", cfgPath)
 	}
+
+	if !daos.SystemNameIsValid(cfg.SystemName) {
+		return nil, fmt.Errorf("invalid system name: %s", cfg.SystemName)
+	}
+
 	return cfg, nil
 }
 
@@ -94,7 +99,6 @@ func DefaultConfig() *Config {
 		ControlPort:     build.DefaultControlPort,
 		AccessPoints:    []string{localServer},
 		RuntimeDir:      defaultRuntimeDir,
-		LogFile:         defaultLogFile,
 		LogLevel:        common.DefaultControlLogLevel,
 		TransportConfig: security.DefaultAgentTransportConfig(),
 	}

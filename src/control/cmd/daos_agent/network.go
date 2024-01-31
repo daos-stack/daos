@@ -7,8 +7,6 @@
 package main
 
 import (
-	"context"
-	"os"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -21,15 +19,8 @@ import (
 
 type netScanCmd struct {
 	cmdutil.LogCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is all local providers)"`
-}
-
-func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
-	if cmd.jsonOutputEnabled() {
-		return
-	}
-	cmd.Infof(fmtStr, args...)
 }
 
 func (cmd *netScanCmd) Execute(_ []string) error {
@@ -40,7 +31,7 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 
 	fabricScanner := hwprov.DefaultFabricScanner(cmd.Logger)
 
-	results, err := fabricScanner.Scan(context.Background(), prov)
+	results, err := fabricScanner.Scan(cmd.MustLogCtx(), prov)
 	if err != nil {
 		return nil
 	}
@@ -51,8 +42,8 @@ func (cmd *netScanCmd) Execute(_ []string) error {
 		return err
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, hfm)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(hfm, nil)
 	}
 
 	var bld strings.Builder

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,22 +47,19 @@ vos_report_layout_incompat(const char *type, int version, int min_version,
 		 min_version, max_version);
 	buf[DF_MAX_BUF - 1] = 0; /* Shut up any static analyzers */
 
-	if (ds_notify_ras_event == NULL) {
-		D_CRIT("%s\n", buf);
-		return;
-	}
-
-	ds_notify_ras_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO,
-			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, uuid,
-			    NULL, NULL, NULL, NULL);
+	ras_notify_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO, RAS_SEV_ERROR,
+			 NULL, NULL, NULL, NULL, uuid, NULL, NULL, NULL, NULL);
 }
 
 struct vos_tls *
-vos_tls_get(void)
+vos_tls_get(bool standalone)
 {
 #ifdef VOS_STANDALONE
 	return self_mode.self_tls;
 #else
+	if (standalone)
+		return self_mode.self_tls;
+
 	return dss_module_key_get(dss_tls_get(), &vos_module_key);
 #endif
 }
@@ -103,46 +100,16 @@ vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 	}
 }
 
-#ifdef VOS_STANDALONE
-int
-vos_profile_start(char *path, int avg)
-{
-	struct vos_tls *tls = vos_tls_get();
-	struct daos_profile *dp;
-	int rc;
-
-	if (tls == NULL)
-		return 0;
-
-	rc = daos_profile_init(&dp, path, avg, 0, 0);
-	if (rc)
-		return rc;
-
-	tls->vtl_dp = dp;
-	return 0;
-}
-
-void
-vos_profile_stop()
-{
-	struct vos_tls *tls = vos_tls_get();
-
-	if (tls == NULL || tls->vtl_dp == NULL)
-		return;
-
-	daos_profile_dump(tls->vtl_dp);
-	daos_profile_destroy(tls->vtl_dp);
-	tls->vtl_dp = NULL;
-}
-
-#endif
-
 struct bio_xs_context *
 vos_xsctxt_get(void)
 {
 #ifdef VOS_STANDALONE
 	return self_mode.self_xs_ctxt;
 #else
+	/* main thread doesn't have TLS and XS context*/
+	if (dss_tls_get() == NULL)
+		return NULL;
+
 	return dss_get_module_info()->dmi_nvme_ctxt;
 #endif
 }
@@ -227,27 +194,28 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 }
 
 int
-vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
 {
 	int	rc;
 
 	if (dth == NULL)
-		return umem_tx_begin(umm, vos_txd_get());
+		return umem_tx_begin(umm, vos_txd_get(is_sysdb));
 
+	D_ASSERT(!is_sysdb);
 	/** Note: On successful return, dth tls gets set and will be cleared by the corresponding
 	 *        call to vos_tx_end.  This is to avoid ever keeping that set after a call to
 	 *        umem_tx_end, which may yield for bio operations.
 	 */
 
 	if (dth->dth_local_tx_started) {
-		vos_dth_set(dth);
+		vos_dth_set(dth, false);
 		return 0;
 	}
 
-	rc = umem_tx_begin(umm, vos_txd_get());
+	rc = umem_tx_begin(umm, vos_txd_get(is_sysdb));
 	if (rc == 0) {
 		dth->dth_local_tx_started = 1;
-		vos_dth_set(dth);
+		vos_dth_set(dth, false);
 	}
 
 	return rc;
@@ -290,7 +258,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 	/* Not the last modification. */
 	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq) {
-		vos_dth_set(NULL);
+		vos_dth_set(NULL, cont->vc_pool->vp_sysdb);
 		return 0;
 	}
 
@@ -302,7 +270,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	if (err == 0)
 		err = vos_tx_publish(dth, true);
 
-	vos_dth_set(NULL);
+	vos_dth_set(NULL, cont->vc_pool->vp_sysdb);
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_META) && biod != NULL)
 		err = umem_tx_end_ex(vos_cont2umm(cont), err, biod);
@@ -312,10 +280,21 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 cancel:
 	if (dtx_is_valid_handle(dth_in)) {
 		dae = dth->dth_ent;
-		if (dae != NULL)
-			dae->dae_preparing = 0;
+		if (dae != NULL) {
+			if (err == 0 && unlikely(dae->dae_preparing && dae->dae_aborting)) {
+				rc = vos_dtx_abort_internal(cont, dae, true);
+				D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
+					 "Delay abort DTX "DF_DTI" (1): rc = %d\n",
+					 DP_DTI(&dth->dth_xid), rc);
 
-		if (unlikely(dth->dth_need_validation && dth->dth_active)) {
+				/* Aborted by race, return -DER_INPROGRESS for client retry. */
+				return -DER_INPROGRESS;
+			}
+
+			dae->dae_preparing = 0;
+		}
+
+		if (err == 0 && unlikely(dth->dth_need_validation && dth->dth_active)) {
 			/* Aborted by race during the yield for local TX commit. */
 			rc = vos_dtx_validation(dth);
 			switch (rc) {
@@ -423,8 +402,39 @@ vos_tls_fini(int tags, void *data)
 
 	umem_fini_txd(&tls->vtl_txd);
 	if (tls->vtl_ts_table)
-		vos_ts_table_free(&tls->vtl_ts_table);
+		vos_ts_table_free(&tls->vtl_ts_table, tls);
 	D_FREE(tls);
+}
+
+void
+vos_standalone_tls_fini(void)
+{
+	if (self_mode.self_tls) {
+		vos_tls_fini(DAOS_TGT_TAG, self_mode.self_tls);
+		self_mode.self_tls = NULL;
+	}
+}
+
+void
+vos_lru_alloc_track(void *arg, daos_size_t size)
+{
+	struct vos_tls *tls = arg;
+
+	if (tls == NULL || tls->vtl_lru_alloc_size == NULL)
+		return;
+
+	d_tm_inc_gauge(tls->vtl_lru_alloc_size, size);
+}
+
+void
+vos_lru_free_track(void *arg, daos_size_t size)
+{
+	struct vos_tls *tls = arg;
+
+	if (tls == NULL || tls->vtl_lru_alloc_size == NULL)
+		return;
+
+	d_tm_dec_gauge(tls->vtl_lru_alloc_size, size);
 }
 
 static void *
@@ -469,16 +479,12 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 	}
 
 	if (tags & DAOS_TGT_TAG) {
-		rc = vos_ts_table_alloc(&tls->vtl_ts_table);
+		rc = vos_ts_table_alloc(&tls->vtl_ts_table, tls);
 		if (rc) {
 			D_ERROR("Error in creating timestamp table: %d\n", rc);
 			goto failed;
 		}
 	}
-
-	if (tgt_id < 0)
-		/** skip sensor setup on standalone vos & sys xstream */
-		return tls;
 
 	rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
 			     "Number of committed entries kept around for reply"
@@ -487,12 +493,54 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
 		       DP_RC(rc));
+	if (tgt_id >= 0) {
+		rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
+				     "Number of committed entries kept around for reply"
+				     " reconstruction", "entries",
+				     "io/dtx/committed/tgt_%u", tgt_id);
+		if (rc)
+			D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
+			       DP_RC(rc));
+
+		rc = d_tm_add_metric(&tls->vtl_dtx_cmt_ent_cnt, D_TM_GAUGE,
+				     "Number of committed entries", "entry",
+				     "mem/vos/dtx_cmt_ent_%u/tgt_%u",
+				     sizeof(struct vos_dtx_cmt_ent), tgt_id);
+		if (rc)
+			D_WARN("Failed to create committed cnt: "DF_RC"\n",
+			       DP_RC(rc));
+
+		rc = d_tm_add_metric(&tls->vtl_obj_cnt, D_TM_GAUGE,
+				     "Number of cached vos object", "entry",
+				     "mem/vos/vos_obj_%u/tgt_%u",
+				     sizeof(struct vos_object), tgt_id);
+		if (rc)
+			D_WARN("Failed to create vos obj cnt: "DF_RC"\n", DP_RC(rc));
+
+	}
+
+	rc = d_tm_add_metric(&tls->vtl_lru_alloc_size, D_TM_GAUGE,
+			     "Active DTX table LRU size", "byte",
+			     "mem/vos/vos_lru_size/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create LRU alloc size: "DF_RC"\n", DP_RC(rc));
 
 	return tls;
 failed:
 	vos_tls_fini(tags, tls);
 	return NULL;
 }
+
+int
+vos_standalone_tls_init(int tags)
+{
+	self_mode.self_tls = vos_tls_init(tags, 0, -1);
+	if (!self_mode.self_tls)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
 
 struct dss_module_key vos_module_key = {
     .dmk_tags  = DAOS_RDB_TAG | DAOS_TGT_TAG,
@@ -549,7 +597,7 @@ vos_mod_init(void)
 	if (rc)
 		D_ERROR("Failed to initialize incarnation log capability\n");
 
-	d_getenv_int("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
+	d_getenv_uint("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
 	if (vos_agg_nvme_thresh == 0 || vos_agg_nvme_thresh > 256)
 		vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
 	/* Round down to 2^n blocks */
@@ -705,6 +753,12 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* VOS aggregation failed */
+	rc = d_tm_add_metric(&vam->vam_fail_count, D_TM_COUNTER, "aggregation failures", NULL,
+			     "%s/%s/fail_count/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create 'fail_count' telemetry");
+
 	/* Metrics related to VOS checkpointing */
 	vos_chkpt_metrics_init(&vp_metrics->vp_chkpt_metrics, path, tgt_id);
 
@@ -719,6 +773,21 @@ vos_metrics_alloc(const char *path, int tgt_id)
 			     "%s/%s/nvme_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'nvme_used' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS space SCM total metric */
+	rc = d_tm_add_metric(&vsm->vsm_scm_total, D_TM_GAUGE, "SCM space total", "bytes",
+			     "%s/%s/scm_total/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'scm_total' telemetry : " DF_RC "\n", DP_RC(rc));
+
+	/* VOS space NVME total metric */
+	rc = d_tm_add_metric(&vsm->vsm_nvme_total, D_TM_GAUGE, "NVME space total", "bytes",
+			     "%s/%s/nvme_total/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'nvme_total' telemetry : " DF_RC "\n", DP_RC(rc));
+
+	/** garbage collection metrics */
+	vos_gc_metrics_init(&vp_metrics->vp_gc_metrics, path, tgt_id);
 
 	/* Initialize the vos_space_metrics timeout counter */
 	vsm->vsm_last_update_ts = 0;
@@ -839,16 +908,10 @@ vos_self_fini_locked(void)
 		self_mode.self_xs_ctxt = NULL;
 	}
 
-	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
-		vos_db_fini();
-	else
-		lmm_db_fini();
+	vos_db_fini();
 	vos_self_nvme_fini();
 
-	if (self_mode.self_tls) {
-		vos_tls_fini(DAOS_TGT_TAG, self_mode.self_tls);
-		self_mode.self_tls = NULL;
-	}
+	vos_standalone_tls_fini();
 	ABT_finalize();
 }
 
@@ -892,8 +955,8 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	vos_start_epoch = 0;
 
 #if VOS_STANDALONE
-	self_mode.self_tls = vos_tls_init(DAOS_TGT_TAG, 0, -1);
-	if (!self_mode.self_tls) {
+	rc = vos_standalone_tls_init(DAOS_TGT_TAG);
+	if (rc) {
 		ABT_finalize();
 		goto out;
 	}
@@ -906,23 +969,14 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	if (rc)
 		goto failed;
 
-	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		/* LMM DB path same as VOS DB path argument in self init case */
-		if (use_sys_db)
-			rc = lmm_db_init(db_path);
-		else
-			rc = lmm_db_init_ex(db_path, "self_db", true, true);
-		db = lmm_db_get();
-	} else {
-		if (use_sys_db)
-			rc = vos_db_init(db_path);
-		else
-			rc = vos_db_init_ex(db_path, "self_db", true, true);
-		db = vos_db_get();
-	}
+	if (use_sys_db)
+		rc = vos_db_init(db_path);
+	else
+		rc = vos_db_init_ex(db_path, "self_db", true, true);
 	if (rc)
 		goto failed;
 
+	db = vos_db_get();
 	rc = smd_init(db);
 	if (rc)
 		goto failed;
@@ -933,7 +987,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto failed;
 	}
 
-	evt_mode = getenv("DAOS_EVTREE_MODE");
+	rc = d_agetenv_str(&evt_mode, "DAOS_EVTREE_MODE");
 	if (evt_mode) {
 		if (strcasecmp("soff", evt_mode) == 0) {
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
@@ -942,6 +996,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
 			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
 		}
+		d_freeenv_str(&evt_mode);
 	}
 	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:

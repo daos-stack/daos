@@ -85,12 +85,7 @@ func processFabricProvider(cfg *config.Server) {
 }
 
 func shouldAppendRXM(provider string) bool {
-	for _, rxmProv := range []string{"ofi+verbs", "ofi+tcp"} {
-		if rxmProv == provider {
-			return true
-		}
-	}
-	return false
+	return provider == "ofi+verbs"
 }
 
 // server struct contains state and components of DAOS Server.
@@ -193,6 +188,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	cliCfg := control.DefaultConfig()
 	cliCfg.TransportConfig = srv.cfg.TransportConfig
 	rpcClient := control.NewClient(
+		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(srv.log))
 
@@ -287,8 +283,12 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
 
-	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,
-		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
+	sp := storage.DefaultProvider(srv.log, idx, &cfg.Storage).
+		WithVMDEnabled(srv.ctlSvc.storage.IsVMDEnabled())
+
+	engine := NewEngineInstance(srv.log, sp, joinFn, engine.NewRunner(srv.log, cfg)).
+		WithHostFaultDomain(srv.harness.faultDomain)
+
 	if idx == 0 {
 		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)
 	}
@@ -312,27 +312,14 @@ func (srv *server) addEngines(ctx context.Context) error {
 		return err
 	}
 
-	// Retrieve NVMe device details (before engines are started) so static details can be
-	// recovered by the engine storage provider(s) during scan even if devices are in use.
-	nvmeScanResp, err := scanBdevStorage(srv)
-	if err != nil {
-		return err
-	}
-
 	if len(srv.cfg.Engines) == 0 {
 		return nil
 	}
 
-	nrEngineBdevsIdx := -1
-	nrEngineBdevs := -1
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
 			return errors.Wrap(err, "creating engine instances")
-		}
-
-		if err := setEngineBdevs(engine, nvmeScanResp, &nrEngineBdevsIdx, &nrEngineBdevs); err != nil {
-			return errors.Wrap(err, "setting engine bdevs")
 		}
 
 		registerEngineEventCallbacks(srv, engine, &allStarted)
@@ -471,6 +458,14 @@ func (srv *server) start(ctx context.Context) error {
 	}()
 
 	srv.mgmtSvc.startAsyncLoops(ctx)
+
+	if srv.cfg.AutoFormat {
+		srv.log.Notice("--auto flag set on server start so formatting storage now")
+		if _, err := srv.ctlSvc.StorageFormat(ctx, &ctlpb.StorageFormatReq{}); err != nil {
+			return errors.WithMessage(err, "attempting to auto format")
+		}
+	}
+
 	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.cfg),
 		"%s harness exited", build.ControlPlaneName)
 }

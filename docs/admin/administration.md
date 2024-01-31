@@ -401,7 +401,7 @@ Usage:
 ...
 
 [device-health command options]
-      -u, --uuid=     Device UUID
+      -u, --uuid=     Device UUID. All devices queried if arg not set
 ```
 ```bash
 $ dmg storage scan --nvme-health --help
@@ -478,6 +478,59 @@ boro-11
 ```
 #### Exclusion and Hotplug
 
+- Automatic exclusion of an NVMe SSD:
+
+Automatic exclusion based on faulty criteria is the default behavior in DAOS
+release 2.6. The default criteria parameters are `max_io_errs: 10` and
+`max_csum_errs: <uint32_max>` (essentially eviction due to checksum errors is
+disabled by default).
+
+Setting auto-faulty criteria parameters can be done through the server config
+file by adding the following YAML to the engine section of the server config
+file.
+
+```yaml
+engines:
+-  bdev_auto_faulty:
+     enable: true
+     max_io_errs: 1
+     max_csum_errs: 2
+```
+
+On formatting the storage for the engine, these settings result in the
+following `daos_server` log entries to indicate the parameters are written to
+the engine's NVMe config:
+
+```bash
+DEBUG 13:59:29.229795 provider.go:592: BdevWriteConfigRequest: &{ForwardableRequest:{Forwarded:false} ConfigOutputPath:/mnt/daos0/daos_nvme.conf OwnerUID:10695475 OwnerGID:10695475 TierProps:[{Class:nvme DeviceList:0000:5e:00.0 DeviceFileSize:0 Tier:1 DeviceRoles:{OptionBits:0}}] HotplugEnabled:false HotplugBusidBegin:0 HotplugBusidEnd:0 Hostname:wolf-310.wolf.hpdd.intel.com AccelProps:{Engine: Options:0} SpdkRpcSrvProps:{Enable:false SockAddr:} AutoFaultyProps:{Enable:true MaxIoErrs:1 MaxCsumErrs:2} VMDEnabled:false ScannedBdevs:}
+Writing NVMe config file for engine instance 0 to "/mnt/daos0/daos_nvme.conf"
+```
+
+The engine's NVMe config (produced during format) then contains the following
+JSON to apply the criteria:
+
+```json
+[tanabarr@wolf-310 ~]$ cat /mnt/daos0/daos_nvme.conf
+{
+  "daos_data": {
+    "config": [
+      {
+        "params": {
+          "enable": true,
+          "max_io_errs": 1,
+          "max_csum_errs": 2
+        },
+        "method": "auto_faulty"
+ ...
+```
+
+These engine logfile entries indicate that the settings have been read and
+applied:
+
+```bash
+01/12-13:59:41.36 wolf-310 DAOS[1299350/-1/0] bio  INFO src/bio/bio_config.c:1016 bio_read_auto_faulty_criteria() NVMe auto faulty is enabled. Criteria: max_io_errs:1, max_csum_errs:2
+```
+
 - Manually exclude an NVMe SSD:
 ```bash
 $ dmg storage set nvme-faulty --help
@@ -491,7 +544,7 @@ Usage:
       -f, --force     Do not require confirmation
 ```
 
-To manually evict an NVMe SSD (auto eviction will be supported in a future release),
+To manually evict an NVMe SSD (auto eviction is covered later in this section),
 the device state needs to be set faulty by running the following command:
 ```bash
 $ dmg -l boro-11 storage set nvme-faulty --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
@@ -619,7 +672,7 @@ Usage:
 
 [identify command arguments]
   ids:                Comma-separated list of identifiers which could be either VMD backing device
-                      (NVMe SSD) PCI addresses or device
+                      (NVMe SSD) PCI addresses or device. All SSDs selected if arg not provided.
 ```
 
 To identify a single SSD, any of the Device-UUIDs can be used which can be found from
@@ -669,11 +722,16 @@ in the command.
 
 Upon issuing a device identify command with specified device IDs and optional custom timeout value,
 an admin now can quickly identify a device in question.
+
 After issuing the identify command, the status LED on the VMD device is now set to a "QUICK_BLINK"
 state, representing a quick, 4Hz blinking amber light.
+
 The device will quickly blink for the specified timeout (in minutes) or the default (2 minutes) if
 no value is specified on the command line, after which the LED state will return to the previous
 state (faulty "ON" or default "OFF").
+
+The led identify command will set (or --reset) the state of all devices on the specified host(s) if
+no positional arguments are supplied.
 
 - Check LED state of SSDs:
 
@@ -689,6 +747,9 @@ boro-11
     TrAddr:850505:0b:00.0 LED:QUICK_BLINK
     TrAddr:850505:11:00.0 LED:QUICK_BLINK
 ```
+
+The led check command will return the state of all devices on the specified host(s) if no positional
+arguments are supplied.
 
 - Locate an Evicted SSD:
 
@@ -947,3 +1008,33 @@ required that all engines in the same system run the same DAOS version.
 
 !!! warning
     Rolling upgrade is not supporting at this time.
+
+DAOS v2.2 client connections to pools which were created by DAOS v2.4
+will be rejected. DAOS v2.4 client should work with DAOS v2.4 and DAOS v2.2
+server. To upgrade all pools to latest format after software upgrade, run
+`dmg pool upgrade <pool>`
+
+### Interoperability Matrix
+
+The following table is intended to visually depict the interoperability
+policies for all major components in a DAOS system.
+
+
+||Server<br>(daos_server)|Engine<br>(daos_engine)|Agent<br>(daos_agent)|Client<br>(libdaos)|Admin<br>(dmg)|
+|:---|:---:|:---:|:---:|:---:|:---:|
+|Server|x.y.z|x.y.z|x.(y±1)|n/a|x.y|
+|Engine|x.y.z|x.y.z|n/a|x.(y±1)|n/a|
+|Agent|x.(y±1)|n/a|n/a|x.y.z|n/a|
+|Client|n/a|x.(y±1)|x.y.z|n/a|n/a|
+|Admin|x.y|n/a|n/a|n/a|n/a|
+
+Key:
+  * x.y.z: Major.Minor.Patch must be equal
+  * x.y: Major.Minor must be equal
+  * x.(y±1): Major must be equal, Minor must be equal or -1/+1 release version
+  * n/a: Components do not communicate
+
+Examples:
+  * daos_server 2.4.0 is only compatible with daos_engine 2.4.0
+  * daos_agent 2.6.0 is compatible with daos_server 2.4.0 (2.5 is a development version)
+  * dmg 2.4.1 is compatible with daos_server 2.4.0

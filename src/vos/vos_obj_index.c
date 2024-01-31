@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -71,7 +71,8 @@ static int
 oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	     d_iov_t *val_iov, struct btr_record *rec, d_iov_t *val_out)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		*key;
 	umem_off_t		 obj_off;
@@ -132,9 +133,12 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct oi_delete_arg	*del_arg = args;
 	daos_handle_t		 coh = { 0 };
 	int			 rc;
+	struct vos_pool		*pool;
 
 	obj = umem_off2ptr(umm, rec->rec_off);
 
+	D_ASSERT(tins->ti_priv);
+	pool = (struct vos_pool *)tins->ti_priv;
 	/* Normally it should delete both ilog and vo_tree, but during upgrade
 	 * the new OID (with new layout version) will share the same ilog and
 	 * vos_tree with the old OID (with old layout version), so it will only
@@ -152,10 +156,9 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 			return rc;
 		}
 
-		vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ);
+		vos_ilog_ts_evict(&obj->vo_ilog, VOS_TS_TYPE_OBJ, pool->vp_sysdb);
 	}
 
-	D_ASSERT(tins->ti_priv);
 
 	if (del_arg != NULL)
 		coh = vos_cont2hdl((struct vos_container *)del_arg->cont);
@@ -245,7 +248,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		  daos_epoch_t epoch, bool log, struct vos_obj_df **obj_p,
 		  struct vos_ts_set *ts_set)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	struct vos_obj_df	*obj = NULL;
 	d_iov_t			 key_iov;
 	d_iov_t			 val_iov;
@@ -285,7 +288,7 @@ do_log:
 	if (!log)
 		goto skip_log;
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, &loh);
+	rc = ilog_open(vos_cont2umm(cont), &obj->vo_ilog, &cbs, dth == NULL, &loh);
 	if (rc != 0)
 		return rc;
 
@@ -512,7 +515,7 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 {
 	struct vos_oi_iter	*oiter = NULL;
 	struct vos_container	*cont = NULL;
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth;
 	int			rc = 0;
 
 	if (type != VOS_ITER_OBJ) {
@@ -524,6 +527,8 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	cont = vos_hdl2cont(param->ip_hdl);
 	if (cont == NULL)
 		return -DER_INVAL;
+
+	dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
@@ -552,6 +557,8 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->oit_iter.it_for_discard = 1;
 	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
 		oiter->oit_iter.it_for_migration = 1;
+	if (cont->vc_pool->vp_sysdb)
+		oiter->oit_iter.it_for_sysdb = 1;
 
 	rc = dbtree_iter_prepare(cont->vc_btr_hdl, 0, &oiter->oit_hdl);
 	if (rc)
@@ -580,6 +587,7 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 	uint64_t		 feats;
 	unsigned int		 acts;
 	int			 rc;
+	bool			 is_sysdb = !!iter->it_for_sysdb;
 
 	while (1) {
 		struct vos_obj_df *obj;
@@ -605,22 +613,21 @@ oi_iter_match_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t f
 				/* Upgrading case, set it to latest known epoch */
 				if (obj->vo_max_write == 0)
 					vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
-							     &desc.id_agg_write);
+							     &desc.id_agg_write,
+							     !!iter->it_for_sysdb);
 				else
 					desc.id_agg_write = obj->vo_max_write;
 			}
 			acts = 0;
-			start_seq = vos_sched_seq();
-			dth = vos_dth_get();
-			if (dth != NULL)
-				vos_dth_set(NULL);
+			start_seq = vos_sched_seq(is_sysdb);
+			dth = vos_dth_get(is_sysdb);
+			vos_dth_set(NULL, is_sysdb);
 			rc = iter->it_filter_cb(vos_iter2hdl(iter), &desc, iter->it_filter_arg,
 						&acts);
-			if (dth != NULL)
-				vos_dth_set(dth);
+			vos_dth_set(dth, is_sysdb);
 			if (rc != 0)
 				goto failed;
-			if (start_seq != vos_sched_seq())
+			if (start_seq != vos_sched_seq(is_sysdb))
 				acts |= VOS_ITER_CB_YIELD;
 			if (acts & (VOS_ITER_CB_EXIT | VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART |
 				    VOS_ITER_CB_DELETE | VOS_ITER_CB_YIELD))
@@ -720,7 +727,7 @@ oi_iter_fill(struct vos_obj_df *obj, struct vos_oi_iter *oiter, bool check_exist
 	/* Upgrading case, set it to latest known epoch */
 	if (obj->vo_max_write == 0)
 		vos_ilog_last_update(&obj->vo_ilog, VOS_TS_TYPE_OBJ,
-				     &ent->ie_last_update);
+				     &ent->ie_last_update, oiter->oit_iter.it_for_sysdb);
 	else
 		ent->ie_last_update = obj->vo_max_write;
 
@@ -817,7 +824,7 @@ oi_iter_check_punch(daos_handle_t ih)
 	D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
 		DP_UOID(oid));
 	/* Evict the object from cache */
-	rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+	rc = vos_obj_evict_by_oid(vos_obj_cache_current(oiter->oit_cont->vc_pool->vp_sysdb),
 				  oiter->oit_cont, oid);
 	if (rc != 0)
 		D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
@@ -876,7 +883,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		 */
 
 		/* Evict the object from cache */
-		rc = vos_obj_evict_by_oid(vos_obj_cache_current(),
+		rc = vos_obj_evict_by_oid(vos_obj_cache_current(oiter->oit_cont->vc_pool->vp_sysdb),
 					  oiter->oit_cont, oid);
 		if (rc != 0)
 			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",

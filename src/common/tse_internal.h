@@ -43,17 +43,17 @@ struct tse_task_private {
 	/* daos complete task callback list */
 	d_list_t			 dtp_comp_cb_list;
 
-	uint32_t			/* task has been completed, no chance to
-					 * be re-initialized.
-					 */
-					 dtp_completed:1,
-					/* task is in running state */
-					 dtp_running:1,
-					/* Don't propagate err-code from dependent tasks */
-					 dtp_no_propagate:1,
-					 dtp_dep_cnt:28;
+	/* task has been completed */
+	ATOMIC uint8_t			dtp_completed;
+	/* task is in running state */
+	ATOMIC uint8_t			dtp_running;
+	/* Don't propagate err-code from dependent tasks */
+	uint8_t				dtp_no_propagate;
+	uint8_t				dtp_pad;
+	/* number of dependent tasks */
+	uint16_t			 dtp_dep_cnt;
 	/* refcount of the task */
-	uint32_t			 dtp_refcnt;
+	uint16_t			 dtp_refcnt;
 	/**
 	 * task parameter pointer, it can be assigned while creating task,
 	 * or explicitly call API tse_task_priv_set. User can just use

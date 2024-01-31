@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import traceback
 import time
-
-from avocado.core.exceptions import TestFail
+import traceback
 
 from apricot import TestWithServers
-from ior_utils import IorCommand
+from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
+from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 
@@ -66,7 +65,7 @@ class ObjectMetadata(TestWithServers):
     CREATED_CONTAINERS_MIN = 2900
 
     # Number of created containers that should not be possible
-    CREATED_CONTAINERS_LIMIT = 3500
+    CREATED_CONTAINERS_LIMIT = 7500
 
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""

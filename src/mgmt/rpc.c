@@ -47,18 +47,16 @@ CRT_RPC_DEFINE(mgmt_get_bs_state, DAOS_ISEQ_MGMT_GET_BS_STATE,
 /* Define for cont_rpcs[] array population below.
  * See MGMT_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
-{				\
-	.prf_flags   = b,	\
-	.prf_req_fmt = c,	\
-	.prf_hdlr    = NULL,	\
-	.prf_co_ops  = NULL,	\
-}
+#define X(a, b, c, d, e)                                                                           \
+	{                                                                                          \
+	    .prf_flags   = b,                                                                      \
+	    .prf_req_fmt = c,                                                                      \
+	    .prf_hdlr    = NULL,                                                                   \
+	    .prf_co_ops  = NULL,                                                                   \
+	},
 
 static struct crt_proto_rpc_format mgmt_proto_rpc_fmt[] = {
-	MGMT_PROTO_CLI_RPC_LIST,
-	MGMT_PROTO_SRV_RPC_LIST,
-};
+    MGMT_PROTO_CLI_RPC_LIST MGMT_PROTO_SRV_RPC_LIST};
 
 #undef X
 

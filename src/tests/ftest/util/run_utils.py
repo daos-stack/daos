@@ -3,10 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from socket import gethostname
-import subprocess   # nosec
 import shlex
+import subprocess  # nosec
 import time
+from socket import gethostname
+
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -15,38 +16,64 @@ class RunException(Exception):
     """Base exception for this module."""
 
 
+class ResultData():
+    # pylint: disable=too-few-public-methods
+    """Command result data for the set of hosts."""
+
+    def __init__(self, command, returncode, hosts, stdout, stderr, timeout):
+        """Initialize a ResultData object.
+
+        Args:
+            command (str): the executed command
+            returncode (int): the return code of the executed command
+            hosts (NodeSet): the host(s) on which the executed command yielded this result
+            stdout (list): the result of the executed command split by newlines
+            timeout (bool): indicator for a command timeout
+        """
+        self.command = command
+        self.returncode = returncode
+        self.hosts = hosts
+        self.stdout = stdout
+        self.stderr = stderr
+        self.timeout = timeout
+
+    def __lt__(self, other):
+        """Determine if another ResultData object is less than this one.
+
+        Args:
+            other (NodeSet): the other NodSet to compare
+
+        Returns:
+            bool: True if this object is less than the other ResultData object; False otherwise
+        """
+        if not isinstance(other, ResultData):
+            raise NotImplementedError
+        return str(self.hosts) < str(other.hosts)
+
+    def __gt__(self, other):
+        """Determine if another ResultData object is greater than this one.
+
+        Args:
+            other (NodeSet): the other NodSet to compare
+
+        Returns:
+            bool: True if this object is greater than the other ResultData object; False otherwise
+        """
+        return not self.__lt__(other)
+
+    @property
+    def passed(self):
+        """Did the command pass.
+
+        Returns:
+            bool: if the command was successful
+
+        """
+        return self.returncode == 0
+
+
 class RemoteCommandResult():
     """Stores the command result from a Task object."""
-
-    class ResultData():
-        # pylint: disable=too-few-public-methods
-        """Command result data for the set of hosts."""
-
-        def __init__(self, command, returncode, hosts, stdout, timeout):
-            """Initialize a ResultData object.
-
-            Args:
-                command (str): the executed command
-                returncode (int): the return code of the executed command
-                hosts (NodeSet): the host(s) on which the executed command yielded this result
-                stdout (list): the result of the executed command split by newlines
-                timeout (bool): indicator for a command timeout
-            """
-            self.command = command
-            self.returncode = returncode
-            self.hosts = hosts
-            self.stdout = stdout
-            self.timeout = timeout
-
-        @property
-        def passed(self):
-            """Did the command pass.
-
-            Returns:
-                bool: if the command was successful
-
-            """
-            return self.returncode == 0
 
     def __init__(self, command, task):
         """Create a RemoteCommandResult object.
@@ -122,6 +149,19 @@ class RemoteCommandResult():
             stdout[str(data.hosts)] = '\n'.join(data.stdout)
         return stdout
 
+    @property
+    def all_stderr(self):
+        """Get all of the stderr from the issued command from each host.
+
+        Returns:
+            dict: the stderr (the values) from each set of hosts (the keys, as a str of the NodeSet)
+
+        """
+        stderr = {}
+        for data in self.output:
+            stderr[str(data.hosts)] = '\n'.join(data.stderr)
+        return stderr
+
     def _process_task(self, task, command):
         """Populate the output list and determine the passed result for the specified task.
 
@@ -137,23 +177,67 @@ class RemoteCommandResult():
 
         # Populate the a list of unique output for each NodeSet
         for code in sorted(results):
-            output_data = list(task.iter_buffers(results[code]))
-            if not output_data:
-                output_data = [["<NONE>", results[code]]]
-            for output, output_hosts in output_data:
+            stdout_data = self._sanitize_iter_data(
+                results[code], list(task.iter_buffers(results[code])), '')
+
+            for stdout_raw, stdout_hosts in stdout_data:
                 # In run_remote(), task.run() is executed with the stderr=False default.
                 # As a result task.iter_buffers() will return combined stdout and stderr.
-                stdout = []
-                for line in output.splitlines():
-                    if isinstance(line, bytes):
-                        stdout.append(line.decode("utf-8"))
-                    else:
-                        stdout.append(line)
-                self.output.append(
-                    self.ResultData(command, code, NodeSet.fromlist(output_hosts), stdout, False))
+                stdout = self._msg_tree_elem_to_list(stdout_raw)
+                stderr_data = self._sanitize_iter_data(
+                    stdout_hosts, list(task.iter_errors(stdout_hosts)), '')
+                for stderr_raw, stderr_hosts in stderr_data:
+                    stderr = self._msg_tree_elem_to_list(stderr_raw)
+                    self.output.append(
+                        ResultData(
+                            command, code, NodeSet.fromlist(stderr_hosts), stdout, stderr, False))
         if timed_out:
             self.output.append(
-                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, True))
+                ResultData(command, 124, NodeSet.fromlist(timed_out), None, None, True))
+
+    @staticmethod
+    def _sanitize_iter_data(hosts, data, default_entry):
+        """Ensure the data generated from an iter function has entries for each host.
+
+        Args:
+            hosts (list): lists of host which generated data
+            data (list): data from an iter function as a list
+            default_entry (object): entry to add to data for missing hosts in data
+
+        Returns:
+            list: a list of tuples of entries and list of hosts
+        """
+        if not data:
+            return [(default_entry, hosts)]
+
+        source_keys = NodeSet.fromlist(hosts)
+        data_keys = NodeSet()
+        for _, keys in data:
+            data_keys.add(NodeSet.fromlist(keys))
+
+        sanitized_data = data.copy()
+        missing_keys = source_keys - data_keys
+        if missing_keys:
+            sanitized_data.append((default_entry, list(missing_keys)))
+        return sanitized_data
+
+    @staticmethod
+    def _msg_tree_elem_to_list(msg_tree_elem):
+        """Convert a ClusterShell.MsgTree.MsgTreeElem to a list of strings.
+
+        Args:
+            msg_tree_elem (MsgTreeElem): output from Task.iter_* method.
+
+        Returns:
+            list: list of strings
+        """
+        msg_tree_elem_list = []
+        for line in msg_tree_elem.splitlines():
+            if isinstance(line, bytes):
+                msg_tree_elem_list.append(line.decode("utf-8"))
+            else:
+                msg_tree_elem_list.append(line)
+        return msg_tree_elem_list
 
     def log_output(self, log):
         """Log the command result.
@@ -174,14 +258,21 @@ def log_result_data(log, data):
         data (ResultData): command result common to a set of hosts
     """
     info = " timed out" if data.timeout else ""
-    if not data.stdout:
+    if not data.stdout and not data.stderr:
         log.debug("  %s (rc=%s)%s: <no output>", str(data.hosts), data.returncode, info)
-    elif len(data.stdout) == 1:
+    elif data.stdout and len(data.stdout) == 1 and not data.stderr:
         log.debug("  %s (rc=%s)%s: %s", str(data.hosts), data.returncode, info, data.stdout[0])
     else:
         log.debug("  %s (rc=%s)%s:", str(data.hosts), data.returncode, info)
+        indent = 6 if data.stderr else 4
+        if data.stdout and data.stderr:
+            log.debug("    <stdout>:")
         for line in data.stdout:
-            log.debug("    %s", line)
+            log.debug("%s%s", " " * indent, line)
+        if data.stderr:
+            log.debug("    <stderr>:")
+        for line in data.stderr:
+            log.debug("%s%s", " " * indent, line)
 
 
 def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False):
@@ -289,7 +380,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
     return result
 
 
-def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False):
+def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False):
     """Run the command on the remote hosts.
 
     Args:
@@ -300,6 +391,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
         timeout (int, optional): number of seconds to wait for the command to complete.
             Defaults to 120 seconds.
         task_debug (bool, optional): whether to enable debug for the task object. Defaults to False.
+        stderr (bool, optional): whether to enable stdout/stderr separation. Defaults to False.
 
     Returns:
         RemoteCommandResult: a grouping of the command results from the same hosts with the same
@@ -307,8 +399,8 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
 
     """
     task = task_self()
-    if task_debug:
-        task.set_info('debug', True)
+    task.set_info('debug', task_debug)
+    task.set_default("stderr", stderr)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
     if verbose:

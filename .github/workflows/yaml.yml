@@ -11,6 +11,7 @@ on:
     paths:
       - '**/*.yaml'
       - '**/*.yml'
+      - utils/cq/requirements.txt
 
 jobs:
   yaml-lint:
@@ -25,5 +26,7 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3'
+      - name: Install extra python packages
+        run: pip install --requirement utils/cq/requirements.txt
       - name: Run check
         run: yamllint --format github .

@@ -12,7 +12,7 @@ def scons():
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
 
-    tenv.require('argobots')
+    tenv.require('isal', 'argobots')
 
     # Add runtime paths for daos libraries
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
@@ -35,10 +35,20 @@ def scons():
 
     libraries = ['daos_common_pmem', 'daos_tests', 'gurt', 'cart', 'cmocka',
                  'vos', 'uuid', 'pmem', 'pmemobj', 'bio', 'pthread', 'abt']
-    test = unit_env.d_test_program('pool_scrubbing_tests',
-                                   ['pool_scrubbing_tests.c', '../vos_pool_scrub.c'],
-                                   LIBS=libraries)
-    unit_env.Install('$PREFIX/bin/', test)
+    unit_env.d_test_program('pool_scrubbing_tests', ['pool_scrubbing_tests.c',
+                                                     '../vos_pool_scrub.c'],
+                            LIBS=libraries)
+
+    tenv = denv.Clone()
+    tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    tenv.Append(CPPDEFINES={'VOS_STANDALONE': '1'})
+
+    libraries = ['uuid', 'bio', 'gurt', 'cmocka', 'daos_common_pmem', 'daos_tests', 'vos', 'abt']
+
+    tenv.require('spdk')
+    bio_ut_src = ['bio_ut.c', 'wal_ut.c']
+    bio_ut = tenv.d_test_program('bio_ut', bio_ut_src, LIBS=libraries)
+    tenv.Install('$PREFIX/bin/', bio_ut)
 
 
 if __name__ == "SCons.Script":

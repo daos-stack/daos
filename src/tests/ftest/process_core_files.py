@@ -3,21 +3,17 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import logging
+import os
+import re
+import sys
 from argparse import ArgumentParser
 from collections import defaultdict
 from fnmatch import fnmatch
-import logging
-import os
-import sys
 
 # pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
-from util.run_utils import run_local, find_command, RunException
-
-# Set up a logger for the console messages
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
+from util.run_utils import RunException, find_command, run_local, run_remote
 
 # One of the dfuse tests intermittently creates core files which is known so make a special case
 # for that test.
@@ -26,6 +22,47 @@ CORE_FILES_IGNORE = {'./dfuse/daos_build.py': ('./conftest')}
 
 class CoreFileException(Exception):
     """Base exception for this module."""
+
+
+def get_core_file_pattern(log, hosts):
+    """Get the core file pattern information from the hosts if collecting core files.
+
+    Args:
+        log (Logger): logger for the messages produced by this method
+        clients (NodeSet): hosts designated for the client role in testing
+
+    Raises:
+        CoreFileException: if there was an error obtaining the core file pattern information
+
+    Returns:
+        dict: a dictionary containing the path and pattern for the core files per NodeSet
+    """
+    core_files = {}
+
+    # Determine the core file pattern being used by the hosts
+    command = "cat /proc/sys/kernel/core_pattern"
+    result = run_remote(log, hosts, command)
+
+    # Verify all the hosts have the same core file pattern
+    if not result.passed:
+        raise CoreFileException("Error obtaining the core file pattern")
+
+    # Get the path and pattern information from the core pattern
+    for data in result.output:
+        str_hosts = str(data.hosts)
+        try:
+            info = os.path.split(result.output[0].stdout[-1])
+        except (TypeError, IndexError) as error:
+            raise CoreFileException(
+                "Error obtaining the core file pattern and directory") from error
+        if not info[0]:
+            raise CoreFileException("Error obtaining the core file pattern directory")
+        core_files[str_hosts] = {"path": info[0], "pattern": re.sub(r"%[A-Za-z]", "*", info[1])}
+        log.info(
+            "Collecting any '%s' core files written to %s on %s",
+            core_files[str_hosts]["pattern"], core_files[str_hosts]["path"], str_hosts)
+
+    return core_files
 
 
 class CoreFileProcessing():
@@ -222,8 +259,16 @@ class CoreFileProcessing():
         self.log.info("Installing debuginfo packages for stacktrace creation")
         install_pkgs = [{'name': 'gdb'}]
         if self.is_el():
-            install_pkgs.append({'name': 'python3-debuginfo'})
-
+            if self.distro_info.name.lower() == "almalinux":
+                # pylint: disable=consider-using-f-string
+                install_pkgs.append({'name': 'python%s.%s-debuginfo' % (sys.version_info.major,
+                                                                        sys.version_info.minor)})
+            elif self.distro_info.name.lower() == "rocky":
+                # https://bugs.rockylinux.org/view.php?id=3499
+                pass
+            else:
+                # pylint: disable=consider-using-f-string
+                install_pkgs.append({'name': 'python%s-debuginfo' % sys.version_info.major})
         cmds = []
 
         # -debuginfo packages that don't get installed with debuginfo-install
@@ -250,9 +295,9 @@ class CoreFileProcessing():
                     dnf_args.extend(
                         ["--enablerepo=*-debuginfo", "--exclude", "nvml-debuginfo", "libpmemobj",
                          "python36", "openmpi3", "gcc"])
-                elif self.is_el() and self.distro_info.version == "8":
+                elif self.is_el() and int(self.distro_info.version) >= 8:
                     dnf_args.extend(
-                        ["--enablerepo=*-debuginfo", "libpmemobj", "python3", "openmpi", "gcc"])
+                        ["libpmemobj", "python3", "openmpi", "gcc"])
                 else:
                     raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
@@ -428,4 +473,10 @@ def main():
 
 
 if __name__ == "__main__":
+    # Set up a logger for the console messages
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
     main()
+else:
+    logger = logging.getLogger()
