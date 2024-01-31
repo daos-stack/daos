@@ -1656,14 +1656,17 @@ out:
 int
 crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
 {
-	hg_return_t	  hg_ret = HG_SUCCESS;
+	hg_return_t hg_ret;
 
 	hg_ret = HG_Bulk_bind(bulk_hdl, hg_ctx->chc_hgctx);
-	if (hg_ret != HG_SUCCESS)
+
+	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_bind failed, hg_ret " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
+		return -DER_HG_FATAL;
+	}
 
-	return -DER_HG_FATAL;
+	return DER_SUCCESS;
 }
 
 int
