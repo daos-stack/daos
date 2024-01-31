@@ -2358,7 +2358,12 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc < 0) {
+		struct vos_agg_metrics *vam = agg_cont2metrics(cont);
+
 		D_ERROR("VOS aggregation failed: "DF_RC"\n", DP_RC(rc));
+		if (vam && vam->vam_fail_count)
+			d_tm_inc_counter(vam->vam_fail_count, 1);
+
 		return rc;
 	}
 
@@ -2431,7 +2436,11 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		inc_agg_counter(agg_param, type, AGG_OP_DEL);
 		rc = 0;
 	} else if (rc != 0) {
+		struct vos_agg_metrics *vam = agg_cont2metrics(cont);
+
 		D_ERROR("VOS aggregation failed: %d\n", rc);
+		if (vam && vam->vam_fail_count)
+			d_tm_inc_counter(vam->vam_fail_count, 1);
 
 		/*
 		 * -DER_TX_BUSY error indicates current ilog aggregation
@@ -2442,8 +2451,6 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		 * orphan the current entry due to incarnation log semantics.
 		 */
 		if (rc == -DER_TX_BUSY) {
-			struct vos_agg_metrics	*vam = agg_cont2metrics(cont);
-
 			agg_param->ap_in_progress = 1;
 			rc = 0;
 			switch (type) {
@@ -2735,6 +2742,13 @@ exit:
 
 free_agg_data:
 	D_FREE(ad);
+
+	if (rc < 0) {
+		struct vos_agg_metrics *vam = agg_cont2metrics(cont);
+
+		if (vam && vam->vam_fail_count)
+			d_tm_inc_counter(vam->vam_fail_count, 1);
+	}
 
 	return rc;
 }

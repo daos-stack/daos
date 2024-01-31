@@ -393,6 +393,12 @@ vos_space_update_metrics(struct vos_pool *pool)
 	if (!vpm)
 		return;
 
+	if (vpm->vp_space_metrics.vsm_last_update_ts == 0) {
+		/* Set the constant values */
+		d_tm_set_gauge(vpm->vp_space_metrics.vsm_scm_total, pool->vp_pool_df->pd_scm_sz);
+		d_tm_set_gauge(vpm->vp_space_metrics.vsm_nvme_total, pool->vp_pool_df->pd_nvme_sz);
+	}
+
 	now = daos_gettime_coarse();
 	if (now < vpm->vp_space_metrics.vsm_last_update_ts + VOS_SPACE_METRICS_INTV) {
 		return;
