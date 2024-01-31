@@ -114,7 +114,7 @@ func bdevScanToProtoResp(scan scanBdevsFn, bdevCfgs storage.TierConfigs) (*ctlpb
 	}
 
 	if bdevCfgs.HaveRealNVMe() {
-		// Update proto Ctrlrs with role info for offline display.
+		// Update proto Ctrlrs with role info and normal (DAOS) state for off-line display.
 		for _, c := range pbCtrlrs {
 			pciAddrStr, err := ctrlrToPciStr(c)
 			if err != nil {
@@ -133,6 +133,7 @@ func bdevScanToProtoResp(scan scanBdevsFn, bdevCfgs storage.TierConfigs) (*ctlpb
 				RoleBits: uint32(bc.Bdev.DeviceRoles.OptionBits),
 				Rank:     uint32(ranklist.NilRank),
 			})
+			c.DevState = ctlpb.NvmeDevState_NORMAL
 		}
 	}
 
