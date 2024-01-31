@@ -7,8 +7,9 @@ import os
 
 # pylint: disable=import-error,no-name-in-module
 from util.collection_utils import archive_files
+from util.run_utils import run_remote
 
-## from util.run_utils import run_remote
+
 class CodeCoverage():
     """Test bullseye code coverage class."""
 
@@ -58,9 +59,10 @@ class CodeCoverage():
         logger.info("Setting up bullseye code coverage on %s:", self.__hosts)
 
         logger.debug("Skp==Removing any existing %s file", self.__test_env.bullseye_file)
-#        command = ["rm", "-fr", self.__test_env.bullseye_file]
-#        if not run_remote(logger, self.__hosts, " ".join(command)).passed:
-#            message = "Error removing bullseye code coverage file on at least one host"
+        command = ["rm", "-fr", self.__test_env.bullseye_file]
+        command = ["ls", self.__test_env.bullseye_file]
+        if not run_remote(logger, self.__hosts, " ".join(command)).passed:
+            message = "Error removing bullseye code coverage file on at least one host"
 #            result.fail_test(logger, "Run", message, None)
 #            return False
 
