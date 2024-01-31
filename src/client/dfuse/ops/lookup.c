@@ -7,7 +7,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#include "daos_uns.h"
+#include <daos_uns.h>
 
 char *duns_xattr_name = DUNS_XATTR_NAME;
 
@@ -292,12 +292,8 @@ out_release:
 out_free:
 	dfuse_ie_free(dfuse_info, ie);
 out:
-	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
-		struct fuse_entry_param entry = {};
-
-		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
-		DFUSE_REPLY_ENTRY(parent, req, entry);
-	} else {
+	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0)
+		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
+	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	}
 }

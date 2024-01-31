@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -294,7 +294,7 @@ cancel:
 			dae->dae_preparing = 0;
 		}
 
-		if (unlikely(dth->dth_need_validation && dth->dth_active)) {
+		if (err == 0 && unlikely(dth->dth_need_validation && dth->dth_active)) {
 			/* Aborted by race during the yield for local TX commit. */
 			rc = vos_dtx_validation(dth);
 			switch (rc) {
@@ -597,7 +597,7 @@ vos_mod_init(void)
 	if (rc)
 		D_ERROR("Failed to initialize incarnation log capability\n");
 
-	d_getenv_int("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
+	d_getenv_uint("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
 	if (vos_agg_nvme_thresh == 0 || vos_agg_nvme_thresh > 256)
 		vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
 	/* Round down to 2^n blocks */
@@ -989,7 +989,7 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 		goto failed;
 	}
 
-	evt_mode = getenv("DAOS_EVTREE_MODE");
+	rc = d_agetenv_str(&evt_mode, "DAOS_EVTREE_MODE");
 	if (evt_mode) {
 		if (strcasecmp("soff", evt_mode) == 0) {
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
@@ -998,6 +998,7 @@ vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_in
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
 			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
 		}
+		d_freeenv_str(&evt_mode);
 	}
 	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:

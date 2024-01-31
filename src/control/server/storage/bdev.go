@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +52,7 @@ const (
 	ConfSetHotplugBusidRange     = C.NVME_CONF_SET_HOTPLUG_RANGE
 	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
 	ConfSetSpdkRpcServer         = C.NVME_CONF_SET_SPDK_RPC_SERVER
+	ConfSetAutoFaultyProps       = C.NVME_CONF_SET_AUTO_FAULTY
 )
 
 // Acceleration related constants for engine setting and optional capabilities.
@@ -124,13 +125,13 @@ func (nds *NvmeDevState) UnmarshalJSON(data []byte) error {
 // LedState represents the LED state of device.
 type LedState int32
 
-// LedState values representing the VMD LED state (see include/spdk/vmd.h).
+// LedState values representing the VMD LED state (see src/proto/ctl/smd.proto).
 const (
-	LedStateNormal LedState = iota
+	LedStateUnknown LedState = iota
 	LedStateIdentify
 	LedStateFaulty
 	LedStateRebuild
-	LedStateUnknown
+	LedStateNormal
 )
 
 func (vls LedState) String() string {
@@ -389,7 +390,11 @@ type NvmeControllers []*NvmeController
 func (ncs NvmeControllers) String() string {
 	var ss []string
 	for _, c := range ncs {
-		ss = append(ss, c.PciAddr)
+		s := c.PciAddr
+		for _, sd := range c.SmdDevices {
+			s += fmt.Sprintf("-nsid%d-%s", sd.CtrlrNamespaceID, sd.Roles.String())
+		}
+		ss = append(ss, s)
 	}
 	return strings.Join(ss, ", ")
 }
@@ -502,9 +507,8 @@ type (
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList  *BdevDeviceList
-		VMDEnabled  bool
-		BypassCache bool
+		DeviceList *BdevDeviceList
+		VMDEnabled bool
 	}
 
 	// BdevScanResponse contains information gleaned during a successful Scan operation.
@@ -525,12 +529,12 @@ type (
 	// BdevFormatRequest defines the parameters for a Format operation.
 	BdevFormatRequest struct {
 		pbin.ForwardableRequest
-		Properties BdevTierProperties
-		OwnerUID   int
-		OwnerGID   int
-		VMDEnabled bool
-		Hostname   string
-		BdevCache  *BdevScanResponse
+		Properties   BdevTierProperties
+		OwnerUID     int
+		OwnerGID     int
+		Hostname     string
+		VMDEnabled   bool
+		ScannedBdevs NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
@@ -540,14 +544,15 @@ type (
 		OwnerUID          int
 		OwnerGID          int
 		TierProps         []BdevTierProperties
-		VMDEnabled        bool
 		HotplugEnabled    bool
 		HotplugBusidBegin uint8
 		HotplugBusidEnd   uint8
 		Hostname          string
-		BdevCache         *BdevScanResponse
 		AccelProps        AccelProps
 		SpdkRpcSrvProps   SpdkRpcServer
+		AutoFaultyProps   BdevAutoFaulty
+		VMDEnabled        bool
+		ScannedBdevs      NvmeControllers // VMD needs address mapping for backing devices.
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -124,32 +124,21 @@ gc_rate_ctl(void *arg)
 	struct ds_pool_child	*child = (struct ds_pool_child *)arg;
 	struct ds_pool		*pool = child->spc_pool;
 	struct sched_request	*req = child->spc_gc_req;
+	uint32_t		 msecs;
 
 	if (dss_ult_exiting(req))
 		return -1;
 
-	/* Let GC ULT run in tight mode when system is idle */
-	if (!dss_xstream_is_busy()) {
+	/* Let GC ULT run in tight mode when system is idle or under space pressure */
+	if (!dss_xstream_is_busy() || sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 		sched_req_yield(req);
 		return 0;
 	}
 
-	/*
-	 * When it's under space pressure, GC will continue run in slack mode
-	 * no matter what reclaim policy is used, otherwise, it'll take an extra
-	 * sleep to minimize the performance impact.
-	 */
-	if (sched_req_space_check(req) == SCHED_SPACE_PRESS_NONE) {
-		uint32_t msecs;
-
-		msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY ||
-			 pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ? 2000 : 50;
-		sched_req_sleep(req, msecs);
-	} else {
-		sched_req_yield(req);
-	}
-
-	/* Let GC ULT run in slack mode when system is busy */
+	msecs = (pool->sp_reclaim == DAOS_RECLAIM_LAZY ||
+			pool->sp_reclaim == DAOS_RECLAIM_DISABLED) ? 1000 : 50;
+	sched_req_sleep(req, msecs);
+	/* Let GC ULT run in slack mode when system is busy and no space pressure */
 	return 1;
 }
 
@@ -675,6 +664,16 @@ pool_obj(struct daos_llink *llink)
 	return container_of(llink, struct ds_pool, sp_entry);
 }
 
+static inline void
+pool_put_sync(void *args)
+{
+	struct ds_pool	*pool = args;
+
+	D_ASSERT(pool != NULL);
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	daos_lru_ref_release(pool_cache, &pool->sp_entry);
+}
+
 struct ds_pool_create_arg {
 	uint32_t	pca_map_version;
 };
@@ -895,7 +894,7 @@ ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
 	*pool = pool_obj(llink);
 	if ((*pool)->sp_stopping) {
 		D_DEBUG(DB_MD, DF_UUID": is in stopping\n", DP_UUID(uuid));
-		ds_pool_put(*pool);
+		pool_put_sync(*pool);
 		*pool = NULL;
 		return -DER_SHUTDOWN;
 	}
@@ -914,9 +913,31 @@ ds_pool_get(struct ds_pool *pool)
 void
 ds_pool_put(struct ds_pool *pool)
 {
-	D_ASSERT(pool != NULL);
-	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	daos_lru_ref_release(pool_cache, &pool->sp_entry);
+	int	rc;
+
+	/*
+	 * Someone has stopped the pool. Current user may be the one that is holding the last
+	 * reference on the pool, then drop such reference will trigger pool_free_ref() as to
+	 * stop related container that may wait current user (ULT) to exit. To avoid deadlock,
+	 * let's use independent ULT to drop the reference asynchronously and make current ULT
+	 * to go ahead.
+	 *
+	 * An example of the deadlock scenarios is something like that:
+	 *
+	 * cont_iv_prop_fetch_ult => ds_pool_put => pool_free_ref [WAIT]=> cont_child_stop =>
+	 * cont_stop_agg [WAIT]=> cont_agg_ult => ds_cont_csummer_init => ds_cont_get_props =>
+	 * cont_iv_prop_fetch [WAIT]=> cont_iv_prop_fetch_ult
+	 */
+	if (unlikely(pool->sp_stopping) && daos_lru_is_last_user(&pool->sp_entry)) {
+		rc = dss_ult_create(pool_put_sync, pool, DSS_XS_SELF, 0, 0, NULL);
+		if (unlikely(rc != 0)) {
+			D_ERROR("Failed to create ULT to async put ref on the pool "DF_UUID"\n",
+				DP_UUID(pool->sp_uuid));
+			pool_put_sync(pool);
+		}
+	} else {
+		pool_put_sync(pool);
+	}
 }
 
 void
@@ -1201,7 +1222,7 @@ ds_pool_start(uuid_t uuid)
 failure_ult:
 	pool_fetch_hdls_ult_abort(pool);
 failure_pool:
-	ds_pool_put(pool);
+	pool_put_sync(pool);
 	return rc;
 }
 
@@ -1229,7 +1250,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
 	ds_migrate_stop(pool, -1, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
-	ds_pool_put(pool);
+	pool_put_sync(pool);
 	D_INFO(DF_UUID": pool stopped\n", DP_UUID(uuid));
 }
 
@@ -1532,10 +1553,12 @@ pool_query_one(void *vin)
 static int
 pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 {
-	struct dss_coll_ops		coll_ops;
-	struct dss_coll_args		coll_args = { 0 };
-	struct pool_query_xs_arg	agg_arg = { 0 };
-	int				rc;
+	struct dss_coll_ops		 coll_ops;
+	struct dss_coll_args		 coll_args = { 0 };
+	struct pool_query_xs_arg	 agg_arg = { 0 };
+	int				*exclude_tgts = NULL;
+	uint32_t			 exclude_tgt_nr = 0;
+	int				 rc = 0;
 
 	D_ASSERT(ps != NULL);
 	memset(ps, 0, sizeof(*ps));
@@ -1553,24 +1576,32 @@ pool_tgt_query(struct ds_pool *pool, struct daos_pool_space *ps)
 	coll_args.ca_aggregator		= &agg_arg;
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
-	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid,
-					&coll_args.ca_exclude_tgts,
-					&coll_args.ca_exclude_tgts_cnt);
-	if (rc) {
+	rc = ds_pool_get_failed_tgt_idx(pool->sp_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to get index : rc "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
-		return rc;
+		goto out;
+	}
+
+	if (exclude_tgts != NULL) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
-	D_FREE(coll_args.ca_exclude_tgts);
-	if (rc) {
+	if (rc != 0) {
 		D_ERROR("Pool query on pool "DF_UUID" failed, "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
 	*ps = agg_arg.qxa_space;
+
+out:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	return rc;
 }
 
@@ -1743,6 +1774,7 @@ update_child_map(void *data)
 		return 0;
 	}
 
+	ds_cont_child_reset_ec_agg_eph_all(child);
 	child->spc_map_version = pool->sp_map_version;
 	ds_pool_child_put(child);
 	return 0;
@@ -2300,9 +2332,11 @@ ds_pool_tgt_discard_ult(void *data)
 {
 	struct ds_pool		*pool;
 	struct tgt_discard_arg	*arg = data;
-	struct dss_coll_ops	coll_ops = { 0 };
-	struct dss_coll_args	coll_args = { 0 };
-	int			rc;
+	struct dss_coll_ops	 coll_ops = { 0 };
+	struct dss_coll_args	 coll_args = { 0 };
+	int			*exclude_tgts = NULL;
+	uint32_t		 exclude_tgt_nr = 0;
+	int			 rc = 0;
 
 	/* If discard failed, let's still go ahead, since reintegration might
 	 * still succeed, though it might leave some garbage on the reintegration
@@ -2325,21 +2359,28 @@ ds_pool_tgt_discard_ult(void *data)
 		 */
 		status = PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN |
 			 PO_COMP_ST_DOWN | PO_COMP_ST_NEW;
-		rc = ds_pool_get_tgt_idx_by_state(arg->pool_uuid, status,
-						  &coll_args.ca_exclude_tgts,
-						  &coll_args.ca_exclude_tgts_cnt);
-		if (rc) {
+		rc = ds_pool_get_tgt_idx_by_state(arg->pool_uuid, status, &exclude_tgts,
+						  &exclude_tgt_nr);
+		if (rc != 0) {
 			D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
 				DP_UUID(arg->pool_uuid), DP_RC(rc));
 			D_GOTO(put, rc);
 		}
+
+		if (exclude_tgts != NULL) {
+			rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr,
+						   &coll_args.ca_tgt_bitmap, &coll_args.ca_tgt_bitmap_sz);
+			if (rc != 0)
+				goto put;
+		}
 	}
 
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
-	if (coll_args.ca_exclude_tgts)
-		D_FREE(coll_args.ca_exclude_tgts);
 	DL_CDEBUG(rc == 0, DB_MD, DLOG_ERR, rc, DF_UUID " tgt discard", DP_UUID(arg->pool_uuid));
+
 put:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	pool->sp_need_discard = 0;
 	pool->sp_discard_status = rc;
 

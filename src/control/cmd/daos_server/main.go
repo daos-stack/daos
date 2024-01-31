@@ -37,7 +37,7 @@ type mainOpts struct {
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
 	// subcommand's -d flag when we default to running it.
 	Debug   bool `short:"b" long:"debug" description:"Enable debug output"`
-	JSON    bool `long:"json" short:"j" description:"enable JSON output"`
+	JSON    bool `long:"json" short:"j" description:"Enable JSON output"`
 	JSONLog bool `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 

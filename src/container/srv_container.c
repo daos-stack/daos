@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,12 +25,13 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_producer.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_MDTIMES 2
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES 2
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_EX_EVICT 2
+#define DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS 2
 
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
@@ -131,18 +132,8 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 	if (rc != 0)
 		goto err_hdls;
 
-	/* cs_ops */
-	rc = rdb_path_clone(&svc->cs_root, &svc->cs_ops);
-	if (rc != 0)
-		goto err_hdls;
-	rc = rdb_path_push(&svc->cs_ops, &ds_cont_prop_svc_ops);
-	if (rc != 0)
-		goto err_svcops;
-
 	return 0;
 
-err_svcops:
-	rdb_path_fini(&svc->cs_ops);
 err_hdls:
 	rdb_path_fini(&svc->cs_hdls);
 err_conts:
@@ -160,7 +151,6 @@ err:
 static void
 cont_svc_fini(struct cont_svc *svc)
 {
-	rdb_path_fini(&svc->cs_ops);
 	rdb_path_fini(&svc->cs_hdls);
 	rdb_path_fini(&svc->cs_conts);
 	rdb_path_fini(&svc->cs_uuids);
@@ -1241,15 +1231,17 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *sv
 	}
 
 	/* Create the oit oids index KVS. */
-	attr.dsa_class = RDB_KVS_GENERIC;
-	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_oit_oids, &attr);
-	if (rc != 0) {
-		D_ERROR(DF_CONT" failed to create container oit oids KVS: "
-			""DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cci_op.ci_uuid), DP_RC(rc));
-		D_GOTO(out_kvs, rc);
+	if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
+		attr.dsa_class = RDB_KVS_GENERIC;
+		attr.dsa_order = 16;
+		rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_oit_oids, &attr);
+		if (rc != 0) {
+			D_ERROR(DF_CONT" failed to create container oit oids KVS: "
+				""DF_RC"\n",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid,
+					in->cci_op.ci_uuid), DP_RC(rc));
+			D_GOTO(out_kvs, rc);
+		}
 	}
 
 out_kvs:
@@ -1540,6 +1532,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct d_ownership		owner;
 	uint32_t                        force;
 	struct daos_acl		       *acl;
+	bool				need_destroy_oid_oit_kvs = false;
 
 	cont_destroy_in_get_data(rpc, opc_get(rpc->cr_opc), cont_proto_ver, &force, NULL);
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p force=%u\n",
@@ -1580,10 +1573,29 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
 
+        if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
+                need_destroy_oid_oit_kvs = true;
+        } else {
+                d_iov_t value;
+
+                d_iov_set(&value, NULL, 0);
+                rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
+                if (rc && rc != -DER_NONEXIST) {
+                        DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
+                                 DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+                        goto out_prop;
+                }
+                /* There was a bug that oit oids might be created already see DAOS-14799 */
+		if (rc == 0)
+			need_destroy_oid_oit_kvs = true;
+        }
+
 	/* Destroy oit oids index KVS. */
-	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_oit_oids);
-	if (rc != 0)
-		goto out_prop;
+	if (need_destroy_oid_oit_kvs) {
+		rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_oit_oids);
+		if (rc != 0)
+			goto out_prop;
+	}
 
 	/* Destroy the handle index KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_handles);
@@ -1798,10 +1810,12 @@ int
 ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 			    daos_epoch_t eph)
 {
-	struct dss_coll_ops		coll_ops = { 0 };
-	struct dss_coll_args		coll_args = { 0 };
-	struct refresh_vos_agg_eph_arg	arg;
-	int				rc;
+	struct dss_coll_ops		 coll_ops = { 0 };
+	struct dss_coll_args		 coll_args = { 0 };
+	struct refresh_vos_agg_eph_arg	 arg;
+	int				*exclude_tgts = NULL;
+	uint32_t			 exclude_tgt_nr = 0;
+	int				 rc;
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_uuid, cont_uuid);
@@ -1810,13 +1824,22 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	coll_ops.co_func = cont_refresh_vos_agg_eph_one;
 	coll_args.ca_func_args = &arg;
 
-	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &coll_args.ca_exclude_tgts,
-					&coll_args.ca_exclude_tgts_cnt);
-	if (rc == 0) {
-		rc = dss_task_collective_reduce(&coll_ops, &coll_args, DSS_ULT_FL_PERIODIC);
-		D_FREE(coll_args.ca_exclude_tgts);
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0)
+		goto out;
+
+	if (exclude_tgt_nr != 0) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
 	}
 
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, DSS_ULT_FL_PERIODIC);
+
+out:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	return rc;
 }
 
@@ -1828,6 +1851,7 @@ cont_agg_eph_leader_ult(void *arg)
 	struct ds_pool		*pool = svc->cs_pool;
 	struct cont_ec_agg	*ec_agg;
 	struct cont_ec_agg	*tmp;
+	uint64_t		cur_eph, new_eph;
 	int			rc = 0;
 
 	if (svc->cs_ec_leader_ephs_req == NULL)
@@ -1884,11 +1908,18 @@ cont_agg_eph_leader_ult(void *arg)
 			 * server might cause the minimum epoch is less than
 			 * ea_current_eph.
 			 */
-			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "
-				DF_U64"\n",
-				DP_CONT(svc->cs_pool_uuid,
-					ec_agg->ea_cont_uuid),
+			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "DF_U64"\n",
+				DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
 				min_eph, ec_agg->ea_current_eph);
+
+			cur_eph = d_hlc2sec(ec_agg->ea_current_eph);
+			new_eph = d_hlc2sec(min_eph);
+			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
+				D_WARN(DF_CONT": Sluggish EC boundary reporting. "
+				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
+				       DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
+				       cur_eph, new_eph, new_eph - cur_eph);
+
 			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
 							ec_agg->ea_cont_uuid,
 							min_eph);
@@ -4656,18 +4687,29 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		goto out;
 	}
 
-	if (from_global_ver < 2) {
+	if (from_global_ver < DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
 		struct rdb_kvs_attr	attr;
 
-		/* Create the oit oids index KVS. */
-		attr.dsa_class = RDB_KVS_GENERIC;
-		attr.dsa_order = 16;
-		rc = rdb_tx_create_kvs(ap->tx, &cont->c_prop, &ds_cont_prop_oit_oids, &attr);
-		if (rc != 0) {
-			D_ERROR(DF_CONT" failed to create container oit oids KVS: "
-				""DF_RC"\n",
-				DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
+		/* There was a bug that oit oids might be created already see DAOS-14799 */
+		if (rc && rc != -DER_NONEXIST) {
+			DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
+				 DP_CONT(ap->pool_uuid, cont_uuid));
 			goto out;
+		}
+
+		/* Create the oit oids index KVS. */
+		if (rc == -DER_NONEXIST) {
+			attr.dsa_class = RDB_KVS_GENERIC;
+			attr.dsa_order = 16;
+			rc = rdb_tx_create_kvs(ap->tx, &cont->c_prop, &ds_cont_prop_oit_oids, &attr);
+			if (rc != 0) {
+				D_ERROR(DF_CONT" failed to create container oit oids KVS: "
+					""DF_RC"\n",
+					DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+				goto out;
+			}
 		}
 	}
 
@@ -5265,142 +5307,47 @@ static int
 cont_op_lookup(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	       crt_rpc_t *rpc, int cont_proto_ver, bool *is_dup, struct ds_pool_svc_op_val *valp)
 {
-	struct cont_op_v8_in     *in8 = crt_req_get(rpc);
-	struct ds_pool_svc_op_key op_key;
-	struct ds_pool_svc_op_val op_val;
-	d_iov_t                   key;
-	d_iov_t                   val;
-	uint32_t                  svc_ops_enabled;
-	bool                      proto_enabled;
-	bool                      dup = false;
-	crt_opcode_t              opc = opc_get(rpc->cr_opc);
-	int                       rc  = 0;
+	struct cont_op_v8_in *in8 = crt_req_get(rpc);
+	crt_opcode_t          opc = opc_get(rpc->cr_opc);
+	int                   rc  = 0;
 
 	/* If client didn't provide a key (old protocol), skip */
-	proto_enabled = (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY);
-	if (!proto_enabled)
+	if (cont_proto_ver < CONT_PROTO_VER_WITH_SVC_OP_KEY)
 		goto out;
 
 	/* If the operation is not a write, skip (read-only ops not tracked for duplicates) */
 	if (!cont_op_is_write(opc))
 		goto out;
 
-	/* If enabled, lookup client-provided op key, assign dup_op accordingly. */
-	/* TODO: lookup from a cached value in struct pool_svc rather than rdb */
-	d_iov_set(&val, &svc_ops_enabled, sizeof(svc_ops_enabled));
-	rc = rdb_tx_lookup(tx, &svc->cs_root, &ds_cont_prop_svc_ops_enabled, &val);
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-		goto out;
-	} else if (rc != 0) {
-		DL_ERROR(rc, DF_CONT ": failed to lookup svc_ops_enabled",
-			 DP_CONT(pool_hdl->sph_pool->sp_uuid, in8->ci_uuid));
-		goto out;
-	}
-	if (!svc_ops_enabled)
-		goto out;
-
-	uuid_copy(op_key.ok_client_id, in8->ci_cli_id);
-	op_key.ok_client_time = in8->ci_time;
-	d_iov_set(&key, &op_key, sizeof(op_key));
-	d_iov_set(&val, &op_val, sizeof(op_val));
-
-	rc = rdb_tx_lookup(tx, &svc->cs_ops, &key, &val);
-	if (rc == 0) {
-		/* found - this is a retry/duplicate RPC being handled */
-		D_DEBUG(DB_MD,
-			DF_CONT ": retry RPC detected client=" DF_UUID " time=" DF_X64 " rc=%d\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in8->ci_uuid), DP_UUID(in8->ci_cli_id),
-			in8->ci_time, op_val.ov_rc);
-		dup = true;
-	} else if (rc == -DER_NONEXIST) {
-		/* not found - new, unique RPC being handled */
-		rc = 0;
-	} else {
-		DL_ERROR(rc, DF_CONT ": failed to lookup RPC client=" DF_UUID " time=" DF_X64,
-			 DP_CONT(pool_hdl->sph_pool->sp_uuid, in8->ci_uuid),
-			 DP_UUID(in8->ci_cli_id), in8->ci_time);
-		goto out;
-	}
+	rc = ds_pool_svc_ops_lookup(tx, NULL /* pool_svc */, pool_hdl->sph_pool->sp_uuid,
+				    &in8->ci_cli_id, in8->ci_time, is_dup, valp);
 
 out:
-	if (rc == 0) {
-		*is_dup = dup;
-		if (dup)
-			*valp = op_val;
-	}
 	return rc;
 }
 
 /* Save results of the operation in svc_ops KVS, in the existing rdb_tx context. */
 static int
 cont_op_save(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, crt_rpc_t *rpc,
-	     int cont_proto_ver, int rc_in, struct ds_pool_svc_op_val *op_valp)
+	     bool dup_op, int cont_proto_ver, int rc_in, struct ds_pool_svc_op_val *op_valp)
 {
 	struct cont_op_v8_in     *in8 = crt_req_get(rpc);
-	d_iov_t                   key;
-	d_iov_t                   val;
-	struct ds_pool_svc_op_key op_key;
-	uint32_t                  svc_ops_enabled;
-	bool                      proto_enabled;
 	crt_opcode_t              opc = opc_get(rpc->cr_opc);
 	int                       rc  = 0;
 
-	op_valp->ov_rc = rc_in;
+	if (!dup_op)
+		op_valp->ov_rc = rc_in;
 
 	/* If client didn't provide a key (old protocol), skip */
-	proto_enabled = (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY);
-	if (!proto_enabled)
+	if (cont_proto_ver < CONT_PROTO_VER_WITH_SVC_OP_KEY)
 		goto out;
 
 	/* If the operation is not a write, skip (read-only ops not tracked for duplicates) */
 	if (!cont_op_is_write(opc))
 		goto out;
 
-	/* If enabled, save client-provided op key and result of the operation. */
-	d_iov_set(&val, &svc_ops_enabled, sizeof(svc_ops_enabled));
-	rc = rdb_tx_lookup(tx, &svc->cs_root, &ds_cont_prop_svc_ops_enabled, &val);
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-		goto out;
-	} else if (rc != 0) {
-		DL_ERROR(rc, DF_CONT ": failed to lookup svc_ops_enabled",
-			 DP_CONT(pool_hdl->sph_pool->sp_uuid, in8->ci_uuid));
-		goto out;
-	}
-	if (!svc_ops_enabled)
-		goto out;
-
-	/* TODO: implement mechanism to constrain rdb space usage by this KVS. */
-	goto out;
-
-	/* Save result in cs_ops KVS, only if the return code is "definitive" (not retryable). */
-	if (!daos_rpc_retryable_rc(op_valp->ov_rc)) {
-		/* If the write operation failed, discard its (unwanted) updates first. */
-		if (op_valp->ov_rc != 0)
-			rdb_tx_discard(tx);
-
-		uuid_copy(op_key.ok_client_id, in8->ci_cli_id);
-		op_key.ok_client_time = in8->ci_time;
-		d_iov_set(&key, &op_key, sizeof(op_key));
-		d_iov_set(&val, op_valp, sizeof(*op_valp));
-
-		rc = rdb_tx_lookup(tx, &svc->cs_ops, &key, &val);
-		if (rc != -DER_NONEXIST) {
-			D_ASSERT(rc != 0);
-			goto out;
-		}
-
-		rc = rdb_tx_update(tx, &svc->cs_ops, &key, &val);
-		if (rc != 0) {
-			DL_ERROR(rc,
-				 DF_CONT ": failed to update svc_ops client=" DF_UUID
-					 " time=" DF_X64,
-				 DP_CONT(pool_hdl->sph_pool->sp_uuid, in8->ci_uuid),
-				 DP_UUID(in8->ci_cli_id), in8->ci_time);
-			goto out;
-		}
-	}
+	rc = ds_pool_svc_ops_save(tx, NULL /* pool_svc */, svc->cs_pool_uuid, &in8->ci_cli_id,
+				  in8->ci_time, dup_op, rc_in, op_valp);
 
 out:
 	return rc;
@@ -5427,7 +5374,12 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	struct ds_pool_svc_op_val     op_val;
 	bool                          fi_pass_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY);
 	bool                          fi_fail_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY);
+	bool                          fi_pass_nl_noreply;
+	bool                          fi_fail_nl_noreply;
 	int                           rc;
+
+	fi_pass_nl_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_PASS_NOREPLY_NEWLDR);
+	fi_fail_nl_noreply = DAOS_FAIL_CHECK(DAOS_MD_OP_FAIL_NOREPLY_NEWLDR);
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -5442,7 +5394,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	rc = cont_op_lookup(&tx, pool_hdl, svc, rpc, cont_proto_ver, &dup_op, &op_val);
 	if (rc != 0)
 		goto out_lock;
-	else if (fi_fail_noreply)
+	else if (fi_fail_noreply || fi_fail_nl_noreply)
 		goto out_commit;
 
 	switch (opc) {
@@ -5467,6 +5419,8 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		uuid_copy(olbl_out->colo_uuid, cont->c_uuid);
 		break;
 	case CONT_DESTROY_BYLABEL:
+		if (dup_op)
+			goto out_commit;
 		cont_op_in_get_label(rpc, opc, cont_proto_ver, &clbl);
 		rc = cont_lookup_bylabel(&tx, svc, clbl, &cont);
 		if (rc != 0)
@@ -5475,6 +5429,8 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 				       dup_op, &op_val);
 		break;
 	default:
+		if ((opc == CONT_DESTROY) && dup_op)
+			goto out_commit;
 		rc = cont_lookup(&tx, svc, in->ci_uuid, &cont);
 		if (rc != 0)
 			goto out_commit;
@@ -5493,10 +5449,9 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		goto out_commit;
 
 out_commit:
-	if ((rc == 0) && !dup_op && fi_fail_noreply)
+	if ((rc == 0) && !dup_op && (fi_fail_noreply || fi_fail_nl_noreply))
 		rc = -DER_MISC;
-	if (!dup_op)
-		rc = cont_op_save(&tx, pool_hdl, svc, rpc, cont_proto_ver, rc, &op_val);
+	rc = cont_op_save(&tx, pool_hdl, svc, rpc, dup_op, cont_proto_ver, rc, &op_val);
 	if (rc != 0)
 		goto out_contref;
 
@@ -5526,13 +5481,25 @@ out:
 
 	if ((rc == 0) && !dup_op && fi_pass_noreply) {
 		rc = -DER_TIMEDOUT;
-		D_DEBUG(DB_MD, DF_UUID ": fault injected: DAOS_MD_OP_PASS_NOREPLY\n",
-			DP_UUID(in->ci_uuid));
+		D_DEBUG(DB_MD, DF_CONT ": fault injected: DAOS_MD_OP_PASS_NOREPLY\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid));
 	}
 	if ((rc == -DER_MISC) && !dup_op && fi_fail_noreply) {
 		rc = -DER_TIMEDOUT;
-		D_DEBUG(DB_MD, DF_UUID ": fault injected: DAOS_MD_OP_FAIL_NOREPLY\n",
-			DP_UUID(in->ci_uuid));
+		D_DEBUG(DB_MD, DF_CONT ": fault injected: DAOS_MD_OP_FAIL_NOREPLY\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid));
+	}
+	if ((rc == 0) && !dup_op && fi_pass_nl_noreply) {
+		rc = -DER_TIMEDOUT;
+		D_DEBUG(DB_MD, DF_CONT ": fault injected: DAOS_MD_OP_PASS_NOREPLY_NEWLDR\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid));
+		rdb_resign(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term);
+	}
+	if ((rc == -DER_MISC) && !dup_op && fi_fail_nl_noreply) {
+		rc = -DER_TIMEDOUT;
+		D_DEBUG(DB_MD, DF_CONT ": fault injected: DAOS_MD_OP_FAIL_NOREPLY_NEWLDR\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid));
+		rdb_resign(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term);
 	}
 
 	D_DEBUG(DB_MD, DF_CONT": opc=%d returning, "DF_RC"\n",
