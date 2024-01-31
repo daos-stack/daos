@@ -554,7 +554,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		D_GOTO(out, rc);
 	}
 
-	/* By default set the rpc header version to the local verison */
+	/* By default set the rpc header version to the local version */
 	crt_rpc_hdr_version_set(rpc_priv, CRT_RPC_HEADER_VERSION_LOCAL);
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "(opc: %#x rpc_pub: %p) allocated.\n",
