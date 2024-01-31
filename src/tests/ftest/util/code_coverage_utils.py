@@ -65,10 +65,10 @@ class CodeCoverage():
             result.fail_test(logger, "Run", message, None)
             return False
 
-        logger.debug("Creating %s bullseye code coverage source file", self.__test_env.bullseye_src)
-        command = ["touch", self.__test_env.bullseye_file]
+        logger.debug("Copying %s bullseye code coverage source file", self.__test_env.bullseye_src)
+        command = ["cp", self.__test_env.bullseye_src, self.__test_env.bullseye_file]
         if not run_remote(logger, self.__hosts, " ".join(command)).passed:
-            message = "Error creating bullseye code coverage file on at least one host"
+            message = "Error copying bullseye code coverage file on at least one host"
             result.fail_test(logger, "Run", message, None)
             return False
 
