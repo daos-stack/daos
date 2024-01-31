@@ -76,5 +76,4 @@ client:
   env_vars:
     - D_LOG_MASK=INFO
 mpirun:
-  bind_to: hwthread
-  map_by: socket
+  args: "--bind-to hwthread --map-by socket"
