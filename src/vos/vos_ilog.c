@@ -53,11 +53,10 @@ vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
 	*same = false;
 
 	if (dtx_is_committed(tx_id, vos_hdl2cont(coh), epoch)) {
-		/** If it's committed and the current update is not
-		 * transactional, treat it as the same transaction and let the
-		 * minor epoch handle any conflicts.
-		 */
-		if (!dtx_is_valid_handle(dth))
+		/** If it's committed and the current update is not part of a distributed
+		 * transaction (meaning it is not transactional or part of a local transaction),
+		 * treat it as the same transaction and let the minor epoch handle any conflicts. */
+		if (!dtx_is_real_handle(dth))
 			*same = true;
 	} else if (tx_id == dtx) {
 		*same = true;
