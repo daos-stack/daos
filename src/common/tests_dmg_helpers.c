@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -681,6 +681,14 @@ dmg_pool_create(const char *dmg_config_file,
 				D_GOTO(out, rc = -DER_NOMEM);
 		}
 
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENTRY_AGE);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=svc_ops_entry_age:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
 		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SPACE_RB);
 		if (entry != NULL) {
 			args = cmd_push_arg(args, &argcount, "--properties=space_rb:%zu ",
@@ -1074,6 +1082,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 {
 	struct json_object	*tmp;
 	struct json_object	*dev = NULL;
+	struct json_object      *ctrlr  = NULL;
 	struct json_object	*target = NULL;
 	struct json_object	*targets;
 	int			tgts_len;
@@ -1123,19 +1132,24 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		}
 		devices[*disks].n_tgtidx = tgts_len;
 
-		if (!json_object_object_get_ex(dev, "dev_state", &tmp)) {
-			D_ERROR("unable to extract state from JSON\n");
-			return -DER_INVAL;
-		}
-
-		snprintf(devices[*disks].state, sizeof(devices[*disks].state),
-			 "%s", json_object_to_json_string(tmp));
-
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
 			return -DER_INVAL;
 		}
 		devices[*disks].rank = atoi(json_object_to_json_string(tmp));
+
+		if (!json_object_object_get_ex(dev, "ctrlr", &ctrlr)) {
+			D_ERROR("unable to extract ctrlr obj from JSON\n");
+			return -DER_INVAL;
+		}
+
+		if (!json_object_object_get_ex(ctrlr, "dev_state", &tmp)) {
+			D_ERROR("unable to extract state from JSON\n");
+			return -DER_INVAL;
+		}
+
+		snprintf(devices[*disks].state, sizeof(devices[*disks].state), "%s",
+			 json_object_to_json_string(tmp));
 		*disks = *disks + 1;
 	}
 
@@ -1277,9 +1291,10 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	struct json_object	*storage_map = NULL;
 	struct json_object	*smd_info = NULL;
 	struct json_object	*storage_info = NULL;
-	struct json_object	*health_info = NULL;
+	struct json_object       *health_stats = NULL;
 	struct json_object	*devices = NULL;
 	struct json_object	*dev_info = NULL;
+	struct json_object       *ctrlr_info   = NULL;
 	struct json_object	*tmp = NULL;
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			argcount = 0;
@@ -1326,10 +1341,13 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 		}
 
 		dev_info = json_object_array_get_idx(devices, 0);
-		json_object_object_get_ex(dev_info, "health", &health_info);
-		if (health_info != NULL) {
-			json_object_object_get_ex(health_info, stats,
-						  &tmp);
+		if (!json_object_object_get_ex(dev_info, "ctrlr", &ctrlr_info)) {
+			D_ERROR("unable to extract ctrlr details from JSON\n");
+			D_GOTO(out_json, rc = -DER_INVAL);
+		}
+		json_object_object_get_ex(ctrlr_info, "health_stats", &health_stats);
+		if (health_stats != NULL) {
+			json_object_object_get_ex(health_stats, stats, &tmp);
 			strcpy(stats, json_object_to_json_string(tmp));
 		}
 	}

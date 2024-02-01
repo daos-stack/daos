@@ -42,10 +42,7 @@
 #define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3
 
 #define PS_OPS_PER_SEC                            4096
-#define DEFAULT_PS_OPS_ENTRY_AGE_SEC              300ULL
-#define MIN_PS_OPS_ENTRY_AGE_SEC                  150
-#define MAX_PS_OPS_ENTRY_AGE_SEC                  600
-#define DAOS_MD_OPS_AGE_SEC_ENV                   "DAOS_MD_OPS_AGE_SEC"
+
 /*
  * Return the corresponding VOS pool DF version or 0 if pool_global_version is
  * not supported.
@@ -374,6 +371,7 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_SVC_REDUN_FAC:
 		case DAOS_PROP_PO_PERF_DOMAIN:
 		case DAOS_PROP_PO_SVC_OPS_ENABLED:
+		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
 			entry_def->dpe_val = entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_POLICY:
@@ -682,6 +680,13 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			if (rc)
 				return rc;
 			break;
+		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
+			val32 = entry->dpe_val;
+			d_iov_set(&value, &val32, sizeof(val32));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_ops_age, &value);
+			if (rc)
+				return rc;
+			break;
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
 			return -DER_INVAL;
@@ -693,25 +698,6 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 		}
 	}
 	return rc;
-}
-
-static uint32_t
-get_svc_ops_age(void)
-{
-	const uint32_t ops_age_default = DEFAULT_PS_OPS_ENTRY_AGE_SEC;
-	char          *v;
-	int            n;
-
-	v = getenv(DAOS_MD_OPS_AGE_SEC_ENV); /* in MB */
-	if (v == NULL)
-		return ops_age_default;
-	n = atoi(v);
-	if ((n < MIN_PS_OPS_ENTRY_AGE_SEC) || (n > MAX_PS_OPS_ENTRY_AGE_SEC)) {
-		D_ERROR("metadata ps ops age %d out of range %u..%u; using %u sec\n", n,
-			MIN_PS_OPS_ENTRY_AGE_SEC, MAX_PS_OPS_ENTRY_AGE_SEC, ops_age_default);
-		return ops_age_default;
-	}
-	return n;
 }
 
 static int
@@ -729,7 +715,7 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	uint32_t		upgrade_global_version = DAOS_POOL_GLOBAL_VERSION;
 	uint32_t                svc_ops_enabled        = 1;
 	/* max number of entries in svc_ops KVS: equivalent of max age (sec) x PS_OPS_PER_SEC */
-	uint32_t                svc_ops_age;
+	uint32_t                svc_ops_age = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT;
 	uint32_t                svc_ops_max;
 	uint32_t                svc_ops_num;
 	uint64_t                rdb_size;
@@ -841,10 +827,12 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 		goto out_map_buf;
 	}
 
-	/* Maximum number of RPCs that may be kept in svc_ops.
-	 * Default: number of RPCs equivalent to PS_OPS_PER_SEC x DEFAULT_PS_OPS_ENTRY_AGE_SEC.
+	/* Maximum number of RPCs that may be kept in svc_ops, from SVC_OPS_ENTRY_AGE property.
+	 * Default: PS_OPS_PER_SEC x DEFAULT_SVC_OPS_ENTRY_AGE_SEC.
 	 */
-	svc_ops_age = get_svc_ops_age();
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENTRY_AGE);
+	if (entry)
+		svc_ops_age = entry->dpe_val;
 	svc_ops_max = PS_OPS_PER_SEC * svc_ops_age;
 	svc_ops_num = 0;
 	d_iov_set(&value, &svc_ops_age, sizeof(svc_ops_age));
@@ -2775,6 +2763,27 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 
+	if (bits & DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE) {
+		d_iov_set(&value, &val32, sizeof(val32));
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops_age, &value);
+		if (rc == -DER_NONEXIST && global_ver < DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS) {
+			/* needs to be upgraded */
+			rc    = 0;
+			val32 = 0;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+		} else if (rc != 0) {
+			DL_ERROR(rc, DF_UUID ": DAOS_PROP_PO_SVC_OPS_ENTRY_AGE missing from pool",
+				 DP_UUID(svc->ps_uuid));
+			D_GOTO(out_prop, rc);
+		}
+		if (rc != 0)
+			D_GOTO(out_prop, rc);
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE;
+		prop->dpp_entries[idx].dpe_val  = val32;
+		idx++;
+	}
+
 	*prop_out = prop;
 	return 0;
 
@@ -4519,6 +4528,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, int handler_version)
 			case DAOS_PROP_PO_CHECKPOINT_THRESH:
 			case DAOS_PROP_PO_REINT_MODE:
 			case DAOS_PROP_PO_SVC_OPS_ENABLED:
+			case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -5982,6 +5992,11 @@ ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t *prop)
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENTRY_AGE)) {
+		D_ERROR("Can't set pool svc_ops_entry_age on existing pool.\n");
+		D_GOTO(out, rc = -DER_NO_PERM);
+	}
+
 	/* Disallow to begin with; will support in the future. */
 	if (daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_REDUN_FAC)) {
 		D_ERROR(DF_UUID ": cannot set pool service redundancy factor on existing pool\n",
@@ -7148,12 +7163,14 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
-	env = getenv(REBUILD_ENV);
+	d_agetenv_str(&env, REBUILD_ENV);
 	if ((env && !strcasecmp(env, REBUILD_ENV_DISABLED)) ||
 	     daos_fail_check(DAOS_REBUILD_DISABLE)) {
 		D_DEBUG(DB_TRACE, "Rebuild is disabled\n");
+		d_freeenv_str(&env);
 		D_GOTO(out, rc = 0);
 	}
+	d_freeenv_str(&env);
 
 	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
 	if (rc)
