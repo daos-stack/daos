@@ -291,8 +291,8 @@ func TestSrvModule_handleGetPoolServiceRanks(t *testing.T) {
 
 			db := raft.MockDatabase(t, log)
 			mod := &srvModule{
-				log:   log,
-				sysdb: db,
+				log:    log,
+				poolDB: db,
 			}
 			if tc.testPool != nil {
 				lock, err := db.TakePoolLock(ctx, tc.testPool.PoolUUID)
@@ -375,8 +375,8 @@ func TestSrvModule_handlePoolFindByLabel(t *testing.T) {
 
 			db := raft.MockDatabase(t, log)
 			mod := &srvModule{
-				log:   log,
-				sysdb: db,
+				log:    log,
+				poolDB: db,
 			}
 			if tc.testPool != nil {
 				lock, err := db.TakePoolLock(ctx, tc.testPool.PoolUUID)

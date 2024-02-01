@@ -698,8 +698,10 @@ dtx_batched_commit(void *arg)
 		struct dtx_stat		 stat = { 0 };
 		int			 sleep_time = 50; /* ms */
 
-		if (d_list_empty(&dmi->dmi_dtx_batched_cont_open_list))
+		if (d_list_empty(&dmi->dmi_dtx_batched_cont_open_list)) {
+			sleep_time = 500;
 			goto check;
+		}
 
 		if (DAOS_FAIL_CHECK(DAOS_DTX_NO_BATCHED_CMT) ||
 		    DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
