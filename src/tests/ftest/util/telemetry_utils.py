@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -912,7 +912,7 @@ class TelemetryUtils():
         """Get the NVMe telemetry metrics.
 
         Args:
-            specific_metrics(list): list of specific NVMe metrics
+            specific_metrics (list): list of specific NVMe metrics
 
         Returns:
             dict: dictionary of dictionaries of NVMe metric names and
@@ -951,6 +951,64 @@ class TelemetryUtils():
                                     "    %-12s %-4s %s",
                                     host, rank, metric["value"])
         return data
+
+    def get_metric_values(self, metric_names):
+        """Get the telemetry metric values.
+
+        Args:
+            metric_names (list): list of metric names
+
+        Returns:
+            dict: dictionary of dictionaries of NVMe metric names and values per server host key
+
+        """
+        data = {}
+        info = self.get_metrics(",".join(metric_names))
+        for name in metric_names:
+            for host, name in info.items():
+                if name not in data:
+                    data[name] = {}
+                for metric in info[host][name]["metrics"]:
+                    if "labels" not in metric or "value" not in metric:
+                        continue
+                    keys = sorted(metric["labels"].keys())
+                    value = metric["value"]
+                    if value not in data[name]:
+                        data[name][value] = {}
+                    for key in keys + ["host"]:
+                        if key not in data[name][value]:
+                            data[name][value][key] = NodeSet()
+                        if key == "host":
+                            data[name][value][key].add(host)
+                        else:
+                            data[name][value][key].add(str(metric["labels"][key]))
+        return data
+
+    def display_metric_values(self, data):
+        """Display the telemetry metric values.
+
+        Args:
+            data (dict): dictionary of dictionaries of NVMe metric names and values per server host
+                key
+        """
+        self.log.info("Telemetry Metric Information")
+        label_keys = set()
+        widths = [[]]
+        for name, value in data.items():
+            widths[0].append(len(name))
+            for index, key in enumerate(sorted(value)):
+                if len(widths) == index + 1:
+                    widths.append([])
+                widths[index + 1].append(len(str(value[key])))
+                label_keys |= set(value[key].keys())
+        widths.append([5])
+        format_str = "  ".join([f"%-{max(width)}s" for width in widths])
+        self.log.info(format_str, "Metric", *[sorted(label_keys)], "Value")
+        self.log.info(format_str, *["-" * max(width) for width in widths])
+        for name in sorted(data):
+            for value in sorted(data[name]):
+                keys = [data[name][value][key] for key in sorted(data[name][value])]
+                self.log.info(format_str, name, *keys, value)
 
     def verify_metric_value(self, metrics_data, min_value=None, max_value=None):
         """ Verify telemetry metrics from metrics_data.

@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -140,7 +140,7 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
         thread_queue.put(thread_result)
 
 
-def write_data(test, container, ppn, dfuse=None, namespace='/run/ior_write/*'):
+def write_data(test, container, namespace='/run/ior_write/*', **ior_run_params):
     """Write data to the container/dfuse using ior.
 
     Simple method for test classes to use to write data with ior. While not required, this is setup
@@ -165,13 +165,23 @@ def write_data(test, container, ppn, dfuse=None, namespace='/run/ior_write/*'):
         ppn (int): processes per node to use with the ior command
         dfuse (Dfuse, optional): dfuse object defining the dfuse mount point. Defaults to None.
         namespace (str, optional): path to ior yaml parameters. Defaults to '/run/ior_write/*'.
+        ior_run_params (dict): optional params for the Ior.run() command, like ppn, dfuse, etc.
 
     Returns:
         Ior: the Ior object used to populate the container
     """
     job_manager = get_job_manager(test, subprocess=False, timeout=60)
     ior = get_ior(test, job_manager, test.hostlist_clients, test.workdir, None, namespace)
-    ior.run(test.server_group, container.pool, container, None, ppn, dfuse=dfuse)
+
+    # Normally Ior.run() requires the 'processes' argument and 'ppn' is optional
+    if 'processes' not in ior_run_params and 'ppn' in ior_run_params:
+        # Add 'processes=None' for Ior.run() when only using 'ppn' to satisfy its required params
+        ior_run_params['processes'] = None
+    elif 'processes' not in ior_run_params:
+        # Use a default (or yaml specified) 'ppn' if neither 'processes' nor 'ppn' are provided
+        ior_run_params['ppn'] = test.params.get('ppn', namespace, 1)
+
+    ior.run(test.server_group, container.pool, container, **ior_run_params)
     return ior
 
 
