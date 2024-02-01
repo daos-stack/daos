@@ -121,8 +121,12 @@ struct vos_pool_df {
 	 * a new format, containers with old format can be attached at here.
 	 */
 	uint64_t				pd_reserv_upgrade;
-	/** Reserved for future usage */
-	uint64_t				pd_reserv;
+	/**
+	 * Offset to area for DAOS check related information (chk_pool_info) for this pool.
+	 * The chk_pool_info::cpi_statistics contains the inconsistency statistics during
+	 * the phases range [CSP_DTX_RESYNC, CSP_AGGREGATION] for the pool shard on the target.
+	 */
+	umem_off_t				pd_chk;
 	/** Unique PoolID for each VOS pool assigned on creation */
 	uuid_t					pd_id;
 	/** Total space in bytes on SCM */

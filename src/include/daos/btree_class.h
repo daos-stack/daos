@@ -100,9 +100,31 @@ extern btr_ops_t dbtree_recx_ops;
 
 /** Integer-fixed-value pairs
  *
- *  Each key is uint64_t integer, values have fixed size for a given key.  Keys ordered numerically.
+ *  Each key is uint64_t integer, values have fixed size for
+ *  a given key.  Keys ordered numerically.
  */
 #define DBTREE_CLASS_IFV     (DBTREE_DSM_BEGIN + 8)
+
+/**
+ * DAOS check pool tree, the key is pool uuid
+ */
+#define DBTREE_CLASS_CHK_POOL (DBTREE_DSM_BEGIN + 9)
+
+/**
+ * DAOS check rank tree, the key is rank ID
+ */
+#define DBTREE_CLASS_CHK_RANK (DBTREE_DSM_BEGIN + 10)
+
+/**
+ * DAOS check pending action tree, the key is 64-bit sequence
+ */
+#define DBTREE_CLASS_CHK_PA (DBTREE_DSM_BEGIN + 11)
+
+/**
+ * DAOS check container tree, the key is container uuid
+ */
+#define DBTREE_CLASS_CHK_CONT (DBTREE_DSM_BEGIN + 12)
+
 extern btr_ops_t dbtree_ifv_ops;
 
 #endif /* __DAOS_SRV_BTREE_CLASS_H__ */
