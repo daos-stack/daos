@@ -139,7 +139,7 @@ class DFuseFdTest(DfuseTestBase):
         Test Description:
             Test a typical I/O pattern for bash based configure scripts.
 
-        :avocado: tags=all,pr,full_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=dfuse,il,dfs
         :avocado: tags=DFuseFdTest,test_bashfd_ioil
