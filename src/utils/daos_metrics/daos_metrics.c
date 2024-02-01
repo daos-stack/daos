@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,10 +52,10 @@ print_usage(const char *prog_name)
 	       "--gauge, -g\n"
 	       "\tInclude gauges\n"
 	       "--read, -r\n"
-		"\tInclude timestamp of when metric was read\n"
-		"--reset, -e\n"
-		"\tReset all metrics to zero\n",
-		prog_name);
+	       "\tInclude timestamp of when metric was read\n"
+	       "--reset, -e\n"
+	       "\tReset all metrics to zero\n",
+	       prog_name);
 }
 
 int
