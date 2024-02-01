@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -536,6 +536,7 @@ jtc_get_layout_rebuild_count(struct jm_test_ctx *ctx)
 static bool
 jtc_layout_has_duplicate(struct jm_test_ctx *ctx)
 {
+	int      i;
 	int      target_num;
 	bool    *target_set;
 	bool     result = false;
@@ -548,7 +549,7 @@ jtc_layout_has_duplicate(struct jm_test_ctx *ctx)
 	D_ALLOC_ARRAY(target_set, total_targets);
 	D_ASSERT(target_set != NULL);
 
-	for (int i = 0; i < ctx->layout->ol_nr; i++) {
+	for (i = 0; i < ctx->layout->ol_nr; i++) {
 		target_num = ctx->layout->ol_shards[i].po_target;
 
 		if (target_num != -1) {

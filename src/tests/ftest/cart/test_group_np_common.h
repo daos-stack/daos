@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -583,7 +583,6 @@ parse_verify_swim_status_arg(char *source)
 	size_t maxMatches = 2;
 	size_t maxGroups  = 3;
 
-	unsigned int	 m;
 	regex_t		 regexCompiled;
 	regmatch_t	 groupArray[maxGroups];
 	char		*cursor;
@@ -593,11 +592,9 @@ parse_verify_swim_status_arg(char *source)
 		return ss;
 	};
 
-	m = 0;
 	cursor = source;
 
-	for (m = 0; m < maxMatches; m++) {
-		unsigned int g      = 0;
+	for (unsigned int m = 0; m < maxMatches; m++) {
 		unsigned int offset = 0;
 
 		if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0)) {
@@ -605,7 +602,7 @@ parse_verify_swim_status_arg(char *source)
 			break;	/* No more matches */
 		}
 
-		for (g = 0; g < maxGroups; g++) {
+		for (unsigned int g = 0; g < maxGroups; g++) {
 			char cC[strlen(cursor) + 1];
 
 			if (groupArray[g].rm_so == (size_t)-1) {

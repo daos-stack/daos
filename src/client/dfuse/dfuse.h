@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -785,8 +785,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_CREATE(inode, req, entry, fi)                                                  \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
-		DFUSE_TRA_DEBUG(_ie, "Returning create");                                          \
+		DFUSE_TRA_DEBUG(inode, "Returning create");                                        \
 		ival_update_inode(inode, (entry).entry_timeout);                                   \
 		(inode) = NULL;                                                                    \
 		__rc    = fuse_reply_create(req, &entry, fi);                                      \
