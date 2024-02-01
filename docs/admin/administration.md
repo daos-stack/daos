@@ -66,13 +66,13 @@ severity, message, description, and cause.
 Engine logging is configured on `daos_server` start-up by setting the `log_file` and `log_mask`
 parameters in the server config file.
 
-The `DD_MASK` and `DD_SUBSYS` environment variables can be defined within the "env\_vars" list
+The `DD_MASK` and `DD_SUBSYS` environment variables can be defined within the `env_vars` list
 parameter of the engine section of the server config file to tune log output.
 
 Engine log levels can be changed dynamically (at runtime) by setting log masks for a set of
 facilities to a given level.
 Settings will be applied to all running DAOS I/O Engines present in the configured dmg hostlist
-using the set-logmasks command.
+using the `dmg server set-logmasks` command.
 The command accepts named arguments for masks `[-m|--masks]` (equivalent to `D_LOG_MASK`),
 streams `[-d|--streams]` (equivalent to `DD_MASK`) and subsystems `[-s|--subsystems]` (equivalent
 to `DD_SUBSYS`):
@@ -136,7 +136,7 @@ Help Options:
 
 If an arg is not passed, then that logging parameter for each engine process is reset to the
 values set in the server config file that was used when starting `daos_server`.
-- `--masks` will be reset to the value of the engine config `log\_mask` parameter.
+- `--masks` will be reset to the value of the engine config `log_mask` parameter.
 - `--streams` will be reset to the `env_vars` `DD_MASK` environment variable value or to an empty
 string if not set.
 - `--subsystems` will be reset to the `env_vars` `DD_SUBSYS` environment variable value or to an
