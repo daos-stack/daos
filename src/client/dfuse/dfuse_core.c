@@ -255,7 +255,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp)
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_pool_count, 1);
 
-	d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_entry, dfs_entry) {
+	d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
 		D_FREE(dfc);
 	}
 
@@ -346,7 +346,7 @@ container_stats_log(struct dfuse_cont *dfc)
 }
 
 static void
-_ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used)
+_ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool ref)
 {
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
@@ -356,8 +356,10 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used)
 			DHS_ERROR(dfc, rc, "dfs_umount() failed");
 
 		rc = daos_cont_close(dfc->dfs_coh, NULL);
+#if 0
 		if (rc == -DER_NOMEM)
 			rc = daos_cont_close(dfc->dfs_coh, NULL);
+#endif
 		if (rc != 0)
 			DHL_ERROR(dfc, rc, "daos_cont_close() failed");
 	}
@@ -373,7 +375,8 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used)
 		d_list_add(&dfc->dfs_entry, &dfc->dfs_dfp->dfp_historic);
 
 	/* Do not drop the reference on the poool until after adding to the historic list */
-	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfc->dfs_dfp->dfp_entry);
+	if (ref)
+		d_hash_rec_decref(&dfuse_info->di_pool_table, &dfc->dfs_dfp->dfp_entry);
 
 	if (!used)
 		D_FREE(dfc);
@@ -382,7 +385,7 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used)
 static void
 ch_free(struct d_hash_table *htable, d_list_t *link)
 {
-	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry), true);
+	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry), true, true);
 }
 
 d_hash_table_ops_t cont_hops = {
@@ -913,7 +916,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 	if (rlink != &dfc->dfs_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing container, reusing");
 
-		_ch_free(dfuse_info, dfc, false);
+		_ch_free(dfuse_info, dfc, false, true);
 
 		dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 	}
@@ -1221,7 +1224,6 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 		DFUSE_TRA_INFO(ie, "Closing poh %d coh %d", daos_handle_is_valid(dfp->dfp_poh),
 			       daos_handle_is_valid(dfc->dfs_coh));
-
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 	}
 
@@ -1432,7 +1434,40 @@ err:
 }
 
 static int
-ino_flush(d_list_t *rlink, void *arg)
+ino_dfs_flush(d_list_t *rlink, void *arg)
+{
+	struct dfuse_info        *dfuse_info = arg;
+	struct dfuse_inode_entry *ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	d_list_del(&ie->ie_htl);
+
+	atomic_store_relaxed(&ie->ie_ref, 0);
+
+	dfuse_ie_close(dfuse_info, ie);
+
+	return -DER_SUCCESS;
+}
+
+static int
+ino_dfs_flush_nr(d_list_t *rlink, void *arg)
+{
+	struct dfuse_info        *dfuse_info = arg;
+	struct dfuse_inode_entry *ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	if (ie->ie_root)
+		return 0;
+
+	d_list_del(&ie->ie_htl);
+
+	atomic_store_relaxed(&ie->ie_ref, 0);
+
+	dfuse_ie_close(dfuse_info, ie);
+
+	return -DER_SUCCESS;
+}
+
+static int
+ino_kernel_flush(d_list_t *rlink, void *arg)
 {
 	struct dfuse_info        *dfuse_info = arg;
 	struct dfuse_inode_entry *ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
@@ -1475,6 +1510,10 @@ dfuse_cont_close_cb(d_list_t *rlink, void *handle)
 
 	DFUSE_TRA_ERROR(dfc, "Failed to close cont ref %d " DF_UUID, dfc->dfs_ref,
 			DP_UUID(dfc->dfc_uuid));
+
+	d_list_del(&dfc->dfs_entry);
+
+	_ch_free(handle, dfc, false, false);
 	return 0;
 }
 
@@ -1489,30 +1528,33 @@ dfuse_cont_close_cb(d_list_t *rlink, void *handle)
 static int
 dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 {
+	struct dfuse_info *dfuse_info = handle;
 	struct dfuse_pool *dfp;
-	int rc;
+	int                rc;
 
 	dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 
 	DFUSE_TRA_ERROR(dfp, "Failed to close pool ref %d "DF_UUID,
 			dfp->dfp_ref, DP_UUID(dfp->dfp_pool));
 
-	d_hash_table_traverse(&dfp->dfp_cont_table,
-			      dfuse_cont_close_cb, NULL);
+	d_hash_table_traverse(&dfp->dfp_cont_table, dfuse_cont_close_cb, handle);
 
-	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
+	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, true);
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfp, "Failed to close cont table");
 
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 		if (rc != -DER_SUCCESS)
-			DFUSE_TRA_ERROR(dfp,
-					"daos_pool_disconnect() failed: "DF_RC,
-					DP_RC(rc));
+			DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
 	}
 
-	return 0;
+	atomic_fetch_sub_relaxed(&dfuse_info->di_pool_count, 1);
+
+	d_list_del(&dfp->dfp_entry);
+	D_FREE(dfp);
+
+	return rc;
 }
 
 /* Called as part of shutdown, if the startup was successful.  Releases resources created during
@@ -1521,9 +1563,6 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 int
 dfuse_fs_stop(struct dfuse_info *dfuse_info)
 {
-	d_list_t *rlink;
-	uint64_t  refs    = 0;
-	int       handles = 0;
 	int       rc;
 	int       i;
 
@@ -1548,46 +1587,45 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 		sem_destroy(&eqt->de_sem);
 	}
 
-	rc = d_hash_table_traverse(&dfuse_info->dpi_iet, ino_flush, dfuse_info);
+	/* First flush, instruct the kernel to forget items.  This will run and work in ideal cases
+	 * but often if the filesystem is unmounted it'll abort part-way through.
+	 */
+	rc = d_hash_table_traverse(&dfuse_info->dpi_iet, ino_kernel_flush, dfuse_info);
 
-	DFUSE_TRA_INFO(dfuse_info, "Flush complete: " DF_RC, DP_RC(rc));
+	DHL_INFO(dfuse_info, rc, "Kernel flush complete");
 
+	/* At this point there's a number of inodes which are in memory, traverse these and free
+	 * them, along with any resources.
+	 * The reference count on inodes match kernel references but the fuse module is disconnected
+	 * at this point so simply set this to 0.
+	 * Inodes do not hold a reference on their parent so removing a single entry should not
+	 * affect other entries in the list, however pools and contaienrs are more tricy, first
+	 * iterate over the list and release inodes which are not the root of a container, then
+	 * do a second pass and release everything.  This will ensure that all dfs ojects in a
+	 * container are released before dfs_umount() is called.
+	 */
 	DFUSE_TRA_INFO(dfuse_info, "Draining inode table");
-	do {
-		struct dfuse_inode_entry *ie;
-		uint32_t ref;
 
-		rlink = d_hash_rec_first(&dfuse_info->dpi_iet);
+	rc = d_hash_table_traverse(&dfuse_info->dpi_iet, ino_dfs_flush_nr, dfuse_info);
 
-		if (!rlink)
-			break;
+	DHL_INFO(dfuse_info, rc, "First flush complete");
 
-		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	/* Second pass, this should close all containers and pools which in turn will empty the
+	 * pool table
+	 */
+	rc = d_hash_table_traverse(&dfuse_info->dpi_iet, ino_dfs_flush, dfuse_info);
 
-		ref = atomic_load_relaxed(&ie->ie_ref);
+	DHL_INFO(dfuse_info, rc, "Second flush complete");
 
-		atomic_store_relaxed(&ie->ie_il_count, 0);
-		atomic_store_relaxed(&ie->ie_open_count, 0);
-
-		DFUSE_TRA_DEBUG(ie, "Dropping %d", ref);
-
-		refs += ref;
-		d_hash_rec_ndecref(&dfuse_info->dpi_iet, ref, rlink);
-		handles++;
-	} while (rlink);
-
-	if (handles && rc != -DER_SUCCESS && rc != -DER_NO_HDL)
-		DFUSE_TRA_WARNING(dfuse_info, "dropped %lu refs on %u inodes", refs, handles);
-	else
-		DFUSE_TRA_INFO(dfuse_info, "dropped %lu refs on %u inodes", refs, handles);
-
-	d_hash_table_traverse(&dfuse_info->di_pool_table, dfuse_pool_close_cb, NULL);
+	/* This hash table should now be empty, but check it anyway and fail if any entries */
+	rc = d_hash_table_traverse(&dfuse_info->di_pool_table, dfuse_pool_close_cb, dfuse_info);
+	DHL_INFO(dfuse_info, rc, "Handle flush complete");
 
 	ival_fini();
 
 	d_slab_destroy(&dfuse_info->di_slab);
 
-	return 0;
+	return rc;
 }
 
 /* Called as part of shutdown, after fs_stop(), and regardless of if dfuse started or not.
@@ -1624,7 +1662,7 @@ dfuse_fs_fini(struct dfuse_info *dfuse_info)
 
 	rc2 = d_hash_table_destroy_inplace(&dfuse_info->di_pool_table, false);
 	if (rc2) {
-		DFUSE_TRA_WARNING(dfuse_info, "Failed to close pools");
+		DHL_WARN(dfuse_info, rc2, "Failed to destroy pool hash table");
 		if (rc == -DER_SUCCESS)
 			rc = rc2;
 	}

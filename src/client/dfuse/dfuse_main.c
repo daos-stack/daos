@@ -729,7 +729,7 @@ out_daos:
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 out_fini:
-	if (dfuse_info) {
+	if (dfuse_info && rc == -DER_SUCCESS) {
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_inode_count) == 0);
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_fh_count) == 0);
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_pool_count) == 0);
@@ -740,7 +740,7 @@ out_fini:
 	daos_fini();
 out_debug:
 	D_FREE(dfuse_info);
-	DFUSE_LOG_INFO("Exiting with status %d", rc);
+	DL_INFO(rc, "Exiting with status");
 	daos_debug_fini();
 out:
 	dfuse_send_to_fg(rc);

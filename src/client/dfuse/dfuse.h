@@ -790,7 +790,6 @@ struct fuse_lowlevel_ops dfuse_ops;
 		int __rc;                                                                          \
 		DFUSE_TRA_DEBUG(inode, "Returning create");                                        \
 		ival_update_inode(inode, (entry).entry_timeout);                                   \
-		_Static_assert(IS_IE(inode), "Param is not inode entry");                          \
 		(inode) = NULL;                                                                    \
 		__rc    = fuse_reply_create(req, &entry, fi);                                      \
 		if (__rc != 0)                                                                     \

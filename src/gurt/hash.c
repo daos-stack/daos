@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -903,9 +903,11 @@ d_hash_table_traverse(struct d_hash_table *htable, d_hash_traverse_cb_t cb,
 	}
 
 	for (idx = 0; idx < nr && !rc; idx++) {
+		d_list_t *linkn;
+
 		bucket = &htable->ht_buckets[idx];
 		ch_bucket_lock(htable, idx, true);
-		d_list_for_each(link, &bucket->hb_head) {
+		d_list_for_each_safe(link, linkn, &bucket->hb_head) {
 			rc = cb(link, arg);
 			if (rc)
 				break;

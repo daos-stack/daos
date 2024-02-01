@@ -31,10 +31,11 @@
  *
  * Separately have a thread which periodically will walk each list starting at the front and
  * invalidate any entries where the timeout has expired.
- *
+ * TODO: Ensure all public facing information about thread counts is correct.
  * In this way the lists are never traversed, on access a entry is removed from where it is and
  * appended to the end, and the timeout starts at the front of the list and traverses only as far
  * as it needs to until the front entry is to be kept.
+ *
  *
  * As lookups will not be repeated by the kernel until after timeout has expired allow some leeway
  * before eviction to allow re-validation of in-use datasets without triggering entire tree

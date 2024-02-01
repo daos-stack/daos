@@ -1542,11 +1542,7 @@ class DFuse():
 
         Returns the raw numbers in a dict.
         """
-        cmd = ['filesystem', 'query']
-        if qpath:
-            cmd.append(qpath)
-        else:
-            cmd.append(self.dir)
+        cmd = ['filesystem', 'query', qpath or self.dir]
 
         if ino is not None:
             cmd.extend(['--inode', str(ino)])
