@@ -1331,14 +1331,6 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 		return rc;
 	}
 
-	/** Destroy the container */
-	rc = daos_cont_destroy(poh, dattr.da_cont, 1, NULL);
-	if (rc) {
-		D_ERROR("Failed to destroy container (%d)\n", rc);
-		/** recreate the link ? */
-		return daos_der2errno(rc);
-	}
-
 	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 #ifdef LUSTRE_INCLUDE
 		if (dattr.da_on_lustre)
@@ -1367,6 +1359,14 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 				dattr.da_on_lustre ? "Lustre " : " ", path, strerror(errno));
 			return err;
 		}
+	}
+
+	/** Destroy the container */
+	rc = daos_cont_destroy(poh, dattr.da_cont, 1, NULL);
+	if (rc) {
+		D_ERROR("Failed to destroy container (%d)\n", rc);
+		/** recreate the link ? */
+		return daos_der2errno(rc);
 	}
 
 	return 0;
