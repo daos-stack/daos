@@ -641,7 +641,7 @@ rdbt_init_handler(crt_rpc_t *rpc)
 		D_WARN("ranks[%u]=%u\n", ri, ranks->rl_ranks[ri]);
 
 	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, in->tii_uuid, ranks, RDB_NIL_TERM,
-				true /* create */, true /* bootstrap */, DB_CAP));
+				DS_RSVC_CREATE, true /* bootstrap */, DB_CAP));
 	crt_reply_send(rpc);
 }
 
@@ -825,6 +825,35 @@ out:
 	out->rtse_rc = rc;
 	crt_reply_send(rpc);
 
+}
+
+static void
+rdbt_dictate_handler(crt_rpc_t *rpc)
+{
+	struct ds_rsvc		*rsvc;
+	uuid_t			 db_uuid;
+	struct rdbt_dictate_in	*in = crt_req_get(rpc);
+	struct rdbt_dictate_out	*out = crt_reply_get(rpc);
+	d_rank_list_t		*ranks;
+
+	D_WARN("calling dictate on rank %u\n", dss_self_rank());
+
+	MUST(ds_rsvc_lookup(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc));
+	uuid_copy(db_uuid, rsvc->s_db_uuid);
+	ds_rsvc_put(rsvc);
+
+	MUST(d_rank_list_dup(&ranks, in->rti_ranks));
+	MUST(d_rank_list_del(ranks, in->rti_rank));
+	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL, RDB_NIL_TERM, true));
+
+	ranks->rl_ranks[0] = in->rti_rank;
+	ranks->rl_nr = 1;
+	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, db_uuid, ranks, RDB_NIL_TERM,
+				DS_RSVC_DICTATE, false /* bootstrap */, 0 /* size */));
+
+	d_rank_list_free(ranks);
+	out->rto_rc = 0;
+	crt_reply_send(rpc);
 }
 
 /* Define for cont_rpcs[] array population below.

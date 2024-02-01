@@ -75,6 +75,7 @@ type (
 		MapVersion    uint32
 		Members       *MemberDatabase
 		Pools         *PoolDatabase
+		Checker       *CheckerDatabase
 		System        *SystemDatabase
 		SchemaVersion uint
 	}
@@ -258,6 +259,9 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 				Ranks:  make(PoolRankMap),
 				Uuids:  make(PoolUuidMap),
 				Labels: make(PoolLabelMap),
+			},
+			Checker: &CheckerDatabase{
+				Findings: make(CheckerFindingMap),
 			},
 			System: &SystemDatabase{
 				Attributes: make(map[string]string),
@@ -785,6 +789,8 @@ func (db *Database) UpdateMember(m *system.Member) error {
 	}
 	db.Lock()
 	defer db.Unlock()
+
+	db.log.Tracef("updating member: %+v", m)
 
 	_, err := db.FindMemberByUUID(m.UUID)
 	if err != nil {

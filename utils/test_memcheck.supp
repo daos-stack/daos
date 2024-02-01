@@ -389,3 +389,9 @@
    write(buf)
    fun:runtime/internal/syscall.Syscall6
 }
+{
+   go ShadowSet race
+   Memcheck:Value8
+   fun:_ZN6__tsan9ShadowSetEPNS_9RawShadowES1_S0_
+   fun:racecall
+}

@@ -9,6 +9,7 @@ timeout: 600
 timeouts:
   test_daos_degraded_mode: 450
   test_daos_management: 110
+  test_daos_cat_recovery: 3100
   test_daos_pool: 180
   test_daos_container: 510
   test_daos_epoch: 125
@@ -84,6 +85,7 @@ daos_tests:
   num_clients:
     test_daos_degraded_mode: 1
     test_daos_management: 1
+    test_daos_cat_recovery: 1
     test_daos_pool: 2
     test_daos_container: 1
     test_daos_epoch: 1
@@ -113,6 +115,7 @@ daos_tests:
   test_name:
     test_daos_degraded_mode: DAOS_Degraded_Mode
     test_daos_management: DAOS_Management
+    test_daos_cat_recovery: DAOS_Cat_Recovery
     test_daos_pool: DAOS_Pool
     test_daos_container: DAOS_Container
     test_daos_epoch: DAOS_Epoch
@@ -142,6 +145,7 @@ daos_tests:
   daos_test:
     test_daos_degraded_mode: d
     test_daos_management: m
+    test_daos_cat_recovery: F
     test_daos_pool: p
     test_daos_container: c
     test_daos_epoch: e

@@ -127,7 +127,12 @@ func (svc *mgmtSvc) checkSystemRequest(req proto.Message) error {
 // checkLeaderRequest performs sanity-checking on a request that must
 // be run on the current MS leader.
 func (svc *mgmtSvc) checkLeaderRequest(req proto.Message) error {
-	if err := svc.checkSystemRequest(req); err != nil {
+	unwrapped, err := svc.unwrapCheckerReq(req)
+	if err != nil {
+		return err
+	}
+
+	if err := svc.checkSystemRequest(unwrapped); err != nil {
 		return err
 	}
 	return svc.sysdb.CheckLeader()
@@ -136,7 +141,12 @@ func (svc *mgmtSvc) checkLeaderRequest(req proto.Message) error {
 // checkReplicaRequest performs sanity-checking on a request that must
 // be run on a MS replica.
 func (svc *mgmtSvc) checkReplicaRequest(req proto.Message) error {
-	if err := svc.checkSystemRequest(req); err != nil {
+	unwrapped, err := svc.unwrapCheckerReq(req)
+	if err != nil {
+		return err
+	}
+
+	if err := svc.checkSystemRequest(unwrapped); err != nil {
 		return err
 	}
 	return svc.sysdb.CheckReplica()

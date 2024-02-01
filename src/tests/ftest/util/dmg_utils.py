@@ -1028,6 +1028,26 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("system", "cleanup"), machinename=machinename, verbose=verbose)
 
+    def system_clear_exclude(self, ranks, rank_hosts):
+        """Clear exclude ranks from system.
+
+        Either ranks or rank_hosts is necessary. Pass in None to one of them.
+
+        Args:
+            ranks (str): comma separated ranks to exclude.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            CommandFailure: if the dmg system clear-exclude command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("system", "clear-exclude"), ranks=ranks, rank_hosts=rank_hosts)
+
     def system_query(self, ranks=None, verbose=True):
         """Query system to obtain the status of the servers.
 
@@ -1110,6 +1130,26 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_json_result(("system", "erase"))
+
+    def system_exclude(self, ranks, rank_hosts):
+        """Exclude ranks from system.
+
+        Either ranks or rank_hosts is necessary. Pass in None to one of them.
+
+        Args:
+            ranks (str): comma separated ranks to exclude.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            CommandFailure: if the dmg system exclude command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("system", "exclude"), ranks=ranks, rank_hosts=rank_hosts)
 
     def system_start(self, ranks=None):
         """Start the system.
@@ -1360,6 +1400,146 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_json_result(("version",))
+
+    def check_enable(self, pool=None, stop=True):
+        """Call dmg check enable.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+            stop (bool): Stop the system first before enabling checker. Defaults to True.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        if stop:
+            self.system_stop(force=True)
+
+        return self._get_json_result(("check", "enable"), pool=pool)
+
+    def check_set_policy(self, reset_defaults=False, all_interactive=False, policies=None):
+        """Call dmg check set-policy [options] [policies].
+
+        Args:
+            reset_defaults (bool, optional): Set all policies to default action. Defaults to False.
+            all_interactive (bool, optional): Set all policies to interactive. Defaults to False.
+            policies (str, optional): The policies for DAOS checker. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary.
+
+        """
+        return self._get_json_result(
+            ("check", "set-policy"), reset_defaults=reset_defaults,
+            all_interactive=all_interactive, policies=policies)
+
+    def check_repair(self, seq_num, action):
+        """Call dmg check repair.
+
+        Args:
+            seq_num (str): Pool ID to repair.
+            action (str): Repair action number.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("check", "repair"), seq_num=seq_num, action=action)
+
+    def check_start(self, pool=None, dry_run=False, reset=False, failout=None, auto=None,
+                    find_orphans=False, policies=None):
+        """Call dmg check start.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+            dry_run (bool): Scan only; do not initiate repairs. Defaults to False.
+            reset (bool): Reset the system check state. Defaults to False.
+            failout (str): Stop on failure [on|off]. Defaults to None.
+            auto (str): Attempt to automatically repair problems [on|off]. Defaults to
+                None.
+            find_orphans (bool): Find orphaned pools. Defaults to False.
+            policies (str): Set repair policies. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("check", "start"), pool=pool, dry_run=dry_run, reset=reset, failout=failout,
+            auto=auto, find_orphans=find_orphans, policies=policies)
+
+    def check_stop(self, pool=None):
+        """Call dmg check stop.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("check", "stop"), pool=pool)
+
+    def check_query(self, pool=None):
+        """Call dmg check query.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("check", "query"), pool=pool)
+
+    def check_disable(self, pool=None, start=True):
+        """Call dmg check disable.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+            start (bool): Start the system after disabling checker. Defaults to True.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        res = self._get_json_result(("check", "disable"), pool=pool)
+
+        if start:
+            self.system_start()
+
+        return res
+
+    def faults_mgmt_svc_pool(self, pool, checker_report_class):
+        """Call dmg faults mgmt-svc pool <pool> <checker_report_class>
+
+        Args:
+            pool (str): Pool label or UUID.
+            checker_report_class (str): Fault type to inject such as
+                CIC_POOL_NONEXIST_ON_MS.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("faults", "mgmt-svc", "pool"), pool=pool,
+            checker_report_class=checker_report_class)
+
+    def faults_pool_svc(self, pool, checker_report_class):
+        """Call dmg faults pool-svc <pool> <checker_report_class>
+
+        Args:
+            pool (str): Pool label or UUID.
+            checker_report_class (str): Fault type to inject such as
+                CIC_POOL_NONEXIST_ON_ENGINE.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("faults", "pool-svc"), pool=pool, checker_report_class=checker_report_class)
 
 
 def check_system_query_status(data):

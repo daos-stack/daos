@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,8 @@ package srv;
 
 option go_package = "github.com/daos-stack/daos/src/control/common/proto/srv";
 
+import "chk/chk.proto";
+
 message NotifyReadyReq {
 	string uri = 1; // CaRT URI
 	uint32 nctxs = 2; // Number of CaRT contexts
@@ -18,6 +20,7 @@ message NotifyReadyReq {
 	uint32 instanceIdx = 4; // I/O Engine instance index
 	uint32 ntgts = 5; // number of VOS targets allocated in I/O Engine
 	uint64 incarnation = 6; // HLC incarnation number
+	bool   check_mode = 7; // True if engine started in checker mode
 }
 
 // NotifyReadyResp is nil.
@@ -39,4 +42,48 @@ message PoolFindByLabelResp {
 	int32 status = 1; // DAOS error code
 	string uuid = 2; // Pool UUID
 	repeated uint32 svcreps = 3; // Pool service replica ranks
+}
+
+// List all the known pools from MS.
+message CheckListPoolReq {
+}
+
+message CheckListPoolResp {
+	message OnePool {
+		string uuid = 1; // Pool UUID.
+		string label = 2; // Pool label.
+		repeated uint32 svcreps = 3; // Pool service replica ranks.
+	}
+	int32 status = 1; // DAOS error code.
+	repeated OnePool pools = 2; // The list of pools.
+}
+
+// Register pool to MS.
+message CheckRegPoolReq {
+	uint64 seq = 1; // DAOS Check event sequence, unique for the instance.
+	string uuid = 2; // Pool UUID.
+	string label = 3; // Pool label.
+	repeated uint32 svcreps = 4; // Pool service replica ranks.
+}
+
+message CheckRegPoolResp {
+	int32 status = 1; // DAOS error code.
+}
+
+// Deregister pool from MS.
+message CheckDeregPoolReq {
+	uint64 seq = 1; // DAOS Check event sequence, unique for the instance.
+	string uuid = 2; // The pool to be deregistered.
+}
+
+message CheckDeregPoolResp {
+	int32 status = 1; // DAOS error code.
+}
+
+message CheckReportReq {
+	chk.CheckReport report = 1; // Report payload
+}
+
+message CheckReportResp {
+	int32 status = 1; // DAOS error code.
 }

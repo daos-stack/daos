@@ -41,6 +41,7 @@ message JoinReq {
 	string srvFaultDomain = 7; // Fault domain for this instance's server
 	uint32 idx = 8;		// Instance index on server node.
 	uint64 incarnation = 9; // rank incarnation
+	bool   check_mode = 10; // rank started in check mode
 }
 
 message JoinResp {
@@ -49,6 +50,7 @@ message JoinResp {
 	enum State {
 		IN = 0;		// Server in the system.
 		OUT = 1;	// Server excluded from the system.
+		CHECK = 2;	// Server should start in checker mode.
 	}
 	State state = 3;	// Server state in the system map.
 	string faultDomain = 4; // Fault domain for the instance

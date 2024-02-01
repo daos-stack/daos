@@ -117,6 +117,7 @@ type SystemJoinReq struct {
 	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
 	InstanceIdx uint32              `json:"Idx"`
 	Incarnation uint64              `json:"Incarnation"`
+	CheckMode   bool                `json:"check_mode"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
@@ -141,6 +142,30 @@ type SystemJoinResp struct {
 	State      system.MemberState
 	LocalJoin  bool
 	MapVersion uint32 `json:"map_version"`
+}
+
+func (resp *SystemJoinResp) UnmarshalJSON(data []byte) error {
+	type fromJSON SystemJoinResp
+	aux := &struct {
+		State mgmtpb.JoinResp_State `json:"state"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(resp),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	switch aux.State {
+	case mgmtpb.JoinResp_IN:
+		resp.State = system.MemberStateJoined
+	case mgmtpb.JoinResp_OUT:
+		resp.State = system.MemberStateExcluded
+	case mgmtpb.JoinResp_CHECK:
+		resp.State = system.MemberStateCheckerStarted
+	}
+
+	return nil
 }
 
 // SystemJoin will attempt to join a new member to the DAOS system.
@@ -353,11 +378,11 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 		return nil, errors.Errorf("nil %T request", req)
 	}
 
-	pbReq := new(mgmtpb.SystemStartReq)
-	pbReq.Hosts = req.Hosts.String()
-	pbReq.Ranks = req.Ranks.String()
-	pbReq.Sys = req.getSystem(rpcClient)
-
+	pbReq := &mgmtpb.SystemStartReq{
+		Hosts: req.Hosts.String(),
+		Ranks: req.Ranks.String(),
+		Sys:   req.getSystem(rpcClient),
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, pbReq)
 	})
@@ -687,8 +712,9 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 type RanksReq struct {
 	unaryRequest
 	respReportCb HostResponseReportFn
-	Ranks        string
-	Force        bool
+	Ranks        string `json:"ranks"`
+	Force        bool   `json:"force"`
+	CheckMode    bool   `json:"check_mode"`
 }
 
 func (r *RanksReq) reportResponse(resp *HostResponse) {

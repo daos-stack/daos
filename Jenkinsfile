@@ -108,7 +108,8 @@ void fixup_rpmlintrc() {
                     '/usr/bin/hello_drpc',
                     '/usr/bin/daos_firmware',
                     '/usr/bin/daos_admin',
-                    '/usr/bin/daos_server']
+                    '/usr/bin/daos_server',
+                    '/usr/bin/ddb']
 
     String content = readFile(file: 'utils/rpms/daos.rpmlintrc') + '\n\n' +
                      '# https://daosio.atlassian.net/browse/DAOS-11534\n'

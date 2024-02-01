@@ -910,7 +910,7 @@ vos_self_fini(void)
 #define LMMDB_PATH	"/var/daos/"
 
 int
-vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init)
 {
 	char		*evt_mode;
 	int		 rc = 0;
@@ -935,9 +935,11 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto out;
 	}
 #endif
-	rc = vos_self_nvme_init(db_path);
-	if (rc)
-		goto failed;
+	if (nvme_init) {
+		rc = vos_self_nvme_init(db_path);
+		if (rc)
+			goto failed;
+	}
 
 	rc = vos_mod_init();
 	if (rc)
@@ -992,4 +994,10 @@ failed:
 	vos_self_fini_locked();
 	D_MUTEX_UNLOCK(&self_mode.self_lock);
 	return rc;
+}
+
+int
+vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
+{
+	return vos_self_init_ext(db_path, use_sys_db, tgt_id, true);
 }
