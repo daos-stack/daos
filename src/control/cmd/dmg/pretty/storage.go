@@ -280,7 +280,7 @@ func PrintSmdInfoMap(omitDevs, omitPools bool, hsm control.HostStorageMap, out i
 					fmt.Fprintln(out)
 				}
 			} else {
-				fmt.Fprintln(iw, "No pools found")
+				fmt.Fprintln(iw, "No pools with NVMe found")
 			}
 		}
 	}
