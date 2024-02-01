@@ -32,7 +32,7 @@ jobs:
         with:
           target: origin/${{ github.event.pull_request.base.ref }}
       - name: Export changes
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: format-patch-for-pr-${{ github.event.pull_request.number }}
