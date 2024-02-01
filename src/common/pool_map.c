@@ -421,6 +421,7 @@ pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 			buf->pb_domain_nr++;
 
 		buf->pb_comps[nr] = comps[0];
+		buf->pb_comps[nr].co_flags &= ~PO_COMPF_CHK_DONE;
 
 		D_DEBUG(DB_TRACE, "nr %d %s\n", nr,
 			pool_comp_type2str(comps[0].co_type));
@@ -2549,7 +2550,7 @@ pmap_comp_failed(struct pool_component *comp)
 {
 	return (comp->co_status == PO_COMP_ST_DOWN) ||
 	       (comp->co_status == PO_COMP_ST_DOWNOUT &&
-		comp->co_flags == PO_COMPF_DOWN2OUT);
+		comp->co_flags & PO_COMPF_DOWN2OUT);
 }
 
 static bool
@@ -3090,6 +3091,18 @@ pool_map_set_version(struct pool_map *map, uint32_t version)
 
 	map->po_version = version;
 	return 0;
+}
+
+/**
+ * Bump the pool map version.
+ */
+uint32_t
+pool_map_bump_version(struct pool_map *map)
+{
+	map->po_version++;
+	D_DEBUG(DB_TRACE, "Bump pool map to version %u\n", map->po_version);
+
+	return map->po_version;
 }
 
 int

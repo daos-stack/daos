@@ -264,6 +264,9 @@ vos_dtx_local_end(struct dtx_handle *dth, int result);
 int
 vos_self_init(const char *db_path, bool use_sys_db, int tgt_id);
 
+int
+vos_self_init_ext(const char *db_path, bool use_sys_db, int tgt_id, bool nvme_init);
+
 /**
  * Finalize the environment for a VOS instance
  * Must be called for clean up at the end of using a vos instance

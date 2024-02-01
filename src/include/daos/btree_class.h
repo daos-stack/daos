@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -93,6 +93,33 @@ extern btr_ops_t dbtree_recx_ops;
  */
 #define DBTREE_CLASS_DTX_CF (DBTREE_DSM_BEGIN + 6)
 
+/*
+ * NOTE: unorder the new DBTREE_CLASS for CHK module to avoid merge conflict.
+ *	 That will be adjusted after landing to master.
+ *
+ *	 'DBTREE_DSM_BEGIN + 9' is reserved for collective operation lgoic.
+ */
+
+/**
+ * DAOS check pool tree, the key is pool uuid
+ */
+#define DBTREE_CLASS_CHK_POOL (DBTREE_DSM_BEGIN + 10)
+
+/**
+ * DAOS check rank tree, the key is rank ID
+ */
+#define DBTREE_CLASS_CHK_RANK (DBTREE_DSM_BEGIN + 11)
+
+/**
+ * DAOS check pending action tree, the key is 64-bit sequence
+ */
+#define DBTREE_CLASS_CHK_PA (DBTREE_DSM_BEGIN + 12)
+
+/**
+ * DAOS check container tree, the key is container uuid
+ */
+#define DBTREE_CLASS_CHK_CONT (DBTREE_DSM_BEGIN + 13)
+
 /**
  * The key is dtx_cos_key: oid + dkey_hash
  */
@@ -100,7 +127,8 @@ extern btr_ops_t dbtree_recx_ops;
 
 /** Integer-fixed-value pairs
  *
- *  Each key is uint64_t integer, values have fixed size for a given key.  Keys ordered numerically.
+ *  Each key is uint64_t integer, values have fixed size for
+ *  a given key.  Keys ordered numerically.
  */
 #define DBTREE_CLASS_IFV     (DBTREE_DSM_BEGIN + 8)
 extern btr_ops_t dbtree_ifv_ops;

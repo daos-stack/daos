@@ -10,6 +10,7 @@ def scons():
 
     denv = env.Clone()
 
+    denv.AppendUnique(CPPPATH=[Dir('..').srcnode()])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv']
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']

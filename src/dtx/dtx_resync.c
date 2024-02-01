@@ -756,12 +756,16 @@ dtx_resync_one(void *data)
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
+	if (unlikely(child->spc_no_storage))
+		D_GOTO(put, rc = 0);
+
 	cb_arg.arg = *arg;
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 container_scan_cb, NULL, &cb_arg, NULL);
 
+put:
 	ds_pool_child_put(child);
 out:
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
