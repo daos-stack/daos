@@ -1599,9 +1599,9 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 	 * The reference count on inodes match kernel references but the fuse module is disconnected
 	 * at this point so simply set this to 0.
 	 * Inodes do not hold a reference on their parent so removing a single entry should not
-	 * affect other entries in the list, however pools and contaienrs are more tricy, first
+	 * affect other entries in the list, however pools and containers are more tricy, first
 	 * iterate over the list and release inodes which are not the root of a container, then
-	 * do a second pass and release everything.  This will ensure that all dfs ojects in a
+	 * do a second pass and release everything.  This will ensure that all dfs objects in a
 	 * container are released before dfs_umount() is called.
 	 */
 	DFUSE_TRA_INFO(dfuse_info, "Draining inode table");
