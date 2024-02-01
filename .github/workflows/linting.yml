@@ -22,6 +22,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v5
+        with:
+          python-version: '3'
       - uses: isort/isort-action@master
         with:
           requirementsFiles: "requirements.txt utils/cq/requirements.txt"
