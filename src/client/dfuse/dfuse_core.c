@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -370,10 +370,13 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used)
 
 	/* Put on list */
 	if (used)
-		d_list_add(&dfc->dfs_entry, &dfc->dfs_dfp->dfp_entry);
+		d_list_add(&dfc->dfs_entry, &dfc->dfs_dfp->dfp_historic);
 
 	/* Do not drop the reference on the poool until after adding to the historic list */
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfc->dfs_dfp->dfp_entry);
+
+	if (!used)
+		D_FREE(dfc);
 }
 
 static void
@@ -413,6 +416,7 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 		D_GOTO(err, rc = ENOMEM);
 
 	atomic_init(&dfp->dfp_ref, 1);
+	D_INIT_LIST_HEAD(&dfp->dfp_historic);
 
 	DFUSE_TRA_UP(dfp, dfuse_info, "dfp");
 
@@ -809,7 +813,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 
 		d_list_for_each_entry(dfcp, &dfp->dfp_entry, dfs_entry) {
 			if (uuid_compare(dfcp->dfc_uuid, *cont) == 0)
-				D_ERROR("Would re-use a container at this point");
+				D_ERROR("Would reuse a container at this point");
 		}
 	}
 
@@ -1578,6 +1582,8 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 		DFUSE_TRA_INFO(dfuse_info, "dropped %lu refs on %u inodes", refs, handles);
 
 	d_hash_table_traverse(&dfuse_info->di_pool_table, dfuse_pool_close_cb, NULL);
+
+	ival_fini();
 
 	d_slab_destroy(&dfuse_info->di_slab);
 

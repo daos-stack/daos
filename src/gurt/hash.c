@@ -947,6 +947,12 @@ d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 	uint32_t		 i;
 	int			 rc = 0;
 
+	if (htable->ht_buckets == NULL) {
+		rc = -DER_UNINIT;
+		DHL_ERROR(htable, rc, "d_hash_table not initialized (NULL buckets)");
+		D_GOTO(out, 0);
+	}
+
 	for (i = 0; i < nr; i++) {
 		bucket = &htable->ht_buckets[i];
 		while (!d_list_empty(&bucket->hb_head)) {

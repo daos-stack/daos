@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -313,8 +313,6 @@ out:
 void
 ival_thread_stop()
 {
-	struct dfuse_time_entry *dte, *dtep;
-
 	ival_stop = true;
 	/* Stop and drain evict queues */
 	sem_post(&ival_sem);
@@ -322,6 +320,12 @@ ival_thread_stop()
 	if (ival_thread)
 		pthread_join(ival_thread, NULL);
 	ival_thread = 0;
+}
+
+void
+ival_fini()
+{
+	struct dfuse_time_entry *dte, *dtep;
 
 	/* Walk the list, oldest first */
 	d_list_for_each_entry_safe(dte, dtep, &ival_data.time_entry_list, dte_list) {

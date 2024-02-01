@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1067,6 +1067,9 @@ ival_thread_start(struct dfuse_info *dfuse_info);
 
 void
 ival_thread_stop();
+
+void
+ival_fini();
 
 /* Data caching functions */
 
