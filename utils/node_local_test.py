@@ -2718,6 +2718,31 @@ class PosixTests():
             for (key, value) in xattr.get_all(fd):
                 print(f'xattr is {key}:{value}')
 
+    @needs_dfuse_with_opt(caching=False)
+    def test_stable_inode(self):
+        """Ensure that container inodes are persistent
+
+        Create a container via dfuse, access it to query the inode, evict the inode and then access
+        it again forcing a re-connect and verify the inode is unchanged.
+        """
+        child_path = join(self.dfuse.dir, 'test_cont')
+
+        new_cont = create_cont(self.conf, self.pool, path=child_path)
+
+        pre = os.stat(child_path)
+
+        self.dfuse.evict_and_wait([child_path])
+
+        post = os.stat(child_path)
+
+        # Close and detach again.
+        self.dfuse.evict_and_wait([child_path])
+        new_cont.destroy()
+
+        print(pre)
+        print(post)
+        assert pre.st_ino == post.st_ino
+
     @needs_dfuse
     def test_evict(self):
         """Evict a file from dfuse"""

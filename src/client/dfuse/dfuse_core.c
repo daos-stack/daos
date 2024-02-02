@@ -777,12 +777,10 @@ err_free:
 /*
  * Return a container connection by uuid.
  *
- * Reuse an existing connection if possible, otherwise open new connection
- * and setup dfs.
+ * Reuse an existing connection if possible, otherwise open new connection and setup dfs.
  *
- * In the case of a container which has been created by mkdir _dfs will be a
- * valid pointer, with dfs_ns and dfs_coh set already.  Failure in this case
- * will result in the memory being freed.
+ * If called from dfuse_cont_open_by_label() _dfs will be a valid pointer, with dfs_ns and dfs_coh
+ * set already.  Failure in this case will result in the memory being freed.
  *
  * If successful will pass out a dfs pointer, with one reference held.
  *
@@ -795,6 +793,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 	struct dfuse_cont *dfc;
 	d_list_t          *rlink;
 	int                rc = -DER_SUCCESS;
+	ino_t              inode_num = 0;
 
 	if (*_dfc) {
 		dfc = *_dfc;
@@ -817,13 +816,13 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 	}
 
 	/* Walk the new list */
-
 	if (!uuid_is_null(*cont)) {
 		struct dfuse_cont *dfcp;
 
-		d_list_for_each_entry(dfcp, &dfp->dfp_entry, dfs_entry) {
+		d_list_for_each_entry(dfcp, &dfp->dfp_historic, dfs_entry) {
 			if (uuid_compare(dfcp->dfc_uuid, *cont) == 0)
-				D_ERROR("Would reuse a container at this point");
+				inode_num = dfcp->dfs_ino;
+			break;
 		}
 	}
 
@@ -906,7 +905,10 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 		dfc->dfs_ops = &dfuse_dfs_ops;
 	}
 
-	dfc->dfs_ino = atomic_fetch_add_relaxed(&dfuse_info->di_ino_next, 1);
+	if (inode_num)
+		dfc->dfs_ino = inode_num;
+	else
+		dfc->dfs_ino = atomic_fetch_add_relaxed(&dfuse_info->di_ino_next, 1);
 
 	/* Take a reference on the pool */
 	d_hash_rec_addref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
