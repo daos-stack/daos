@@ -160,26 +160,6 @@ class AvocadoInfo():
         logs_dir = self.get_logs_dir()
         return os.path.join(logs_dir, directory)
 
-    def get_list_command(self):
-        """Get the avocado list command for this version of avocado.
-
-        Returns:
-            list: avocado list command parts
-        """
-        if self.major >= 83:
-            return ["avocado", "list"]
-        return ["avocado", "--paginator=off", "list"]
-
-    def get_list_regex(self):
-        """Get the regular expression used to get the test file from the avocado list command.
-
-        Returns:
-            str: regular expression to use to get the test file from the avocado list command output
-        """
-        if self.major >= 92:
-            return r"avocado-instrumented\s+(.*):"
-        return r"INSTRUMENTED\s+(.*):"
-
     def get_run_command(self, test, tag_filters, sparse, failfast):
         """Get the avocado run command for this version of avocado.
 

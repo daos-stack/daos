@@ -554,6 +554,7 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         # Update the PATH environment variable
         build_vars_file = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", ".build_vars.json")
+#           os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", "..", ".build_vars.json")
         _update_path(logger, build_vars_file)
 
         # Get the default fabric interface and provider
