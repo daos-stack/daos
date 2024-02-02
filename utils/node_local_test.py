@@ -4762,6 +4762,7 @@ def run_in_fg(server, conf, args):
         cont_attrs = {'dfuse-data-cache': False,
                       'dfuse-attr-time': 60,
                       'dfuse-dentry-time': 60,
+                      'dfuse-dentry-dir-time': 10,
                       'dfuse-ndentry-time': 60,
                       'dfuse-direct-io-disable': False}
         container.set_attrs(cont_attrs)

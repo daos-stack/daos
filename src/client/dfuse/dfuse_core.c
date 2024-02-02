@@ -389,7 +389,7 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 		bool               on_list = false;
 
 		D_SPIN_LOCK(&dfuse_info->di_lock);
-		if (daos_handle_is_valid(dfc->dfs_coh)) {
+		if (daos_handle_is_inval(dfc->dfs_coh)) {
 			d_list_for_each_entry(dfcp, &dfc->dfs_dfp->dfp_historic, dfs_entry) {
 				if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0) {
 					on_list = true;
