@@ -1663,8 +1663,8 @@ dtx_reindex_ult(void *arg)
 	struct dss_module_info		*dmi	= dss_get_module_info();
 	int				 rc	= 0;
 
-	D_INFO(DF_CONT": starting DTX reindex ULT on xstream %d, ver %u\n",
-	       DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont));
+	D_DEBUG(DB_MD, DF_CONT": starting DTX reindex ULT on xstream %d, ver %u\n",
+		DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont));
 
 	while (!cont->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
 		rc = vos_dtx_cmt_reindex(cont->sc_hdl);
@@ -1674,7 +1674,7 @@ dtx_reindex_ult(void *arg)
 		ABT_thread_yield();
 	}
 
-	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
+	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_DBG,
 		 DF_CONT": stopping DTX reindex ULT on stream %d, ver %u: rc = %d\n",
 		 DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont), rc);
 

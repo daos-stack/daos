@@ -42,7 +42,7 @@ class RbldWidelyStriped(MdtestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=rebuild
+        :avocado: tags=rebuild,mdtest
         :avocado: tags=RbldWidelyStriped,test_rebuild_widely_striped
         """
         # set params

@@ -126,8 +126,9 @@ const (
 	//PoolPropertyPerfDomain is pool performance domain
 	PoolPropertyPerfDomain = C.DAOS_PROP_PO_PERF_DOMAIN
 	//PoolPropertyReintMode is pool reintegration mode
-	PoolPropertyReintMode     = C.DAOS_PROP_PO_REINT_MODE
-	PoolPropertySvcOpsEnabled = C.DAOS_PROP_PO_SVC_OPS_ENABLED
+	PoolPropertyReintMode      = C.DAOS_PROP_PO_REINT_MODE
+	PoolPropertySvcOpsEnabled  = C.DAOS_PROP_PO_SVC_OPS_ENABLED
+	PoolPropertySvcOpsEntryAge = C.DAOS_PROP_PO_SVC_OPS_ENTRY_AGE
 )
 
 const (
@@ -186,6 +187,8 @@ const (
 	PoolSvcRedunFacMax = C.DAOS_PROP_PO_SVC_REDUN_FAC_MAX
 	// PoolSvcRedunFacDefault defines the default value of PoolPropertySvcRedunFac.
 	PoolSvcRedunFacDefault = C.DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT
+	PoolSvcOpsEntryAgeMin  = C.DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN
+	PoolSvcOpsEntryAgeMax  = C.DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MAX
 )
 
 const (
