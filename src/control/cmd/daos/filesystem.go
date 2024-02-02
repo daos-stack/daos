@@ -110,7 +110,7 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 	cmd.Infof("    Links:       %d", ap.fs_copy_stats.num_links)
 
 	if ap.fs_copy_stats.num_chmod_enotsup > 0 {
-		return errors.New(fmt.Sprintf("Copy completed successfully, but %d files had unsupported mode bits that could not be applied. Run with --ignore-unsupported to suppress this warning.", ap.fs_copy_stats.num_chmod_enotsup))
+		return errors.Errorf("Copy completed successfully, but %d files had unsupported mode bits that could not be applied. Run with --ignore-unsupported to suppress this warning.", ap.fs_copy_stats.num_chmod_enotsup)
 	}
 
 	return nil
