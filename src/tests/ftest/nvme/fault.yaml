@@ -31,7 +31,7 @@ dmg:
   transport_config:
     allow_insecure: True
 pool:
-  scm_size: 50GB
+  size: 96%
   control_method: dmg
 container:
   type: POSIX
