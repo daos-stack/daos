@@ -181,3 +181,7 @@ daos_tests:
     test_daos_extend_simple: 5
     test_daos_rebuild_ec: 43
     test_daos_degraded_ec: 29
+client:
+  env_vars:
+    - UCX_ERROR_SIGNALS=""
+    - UCX_MEM_EVENTS=no
