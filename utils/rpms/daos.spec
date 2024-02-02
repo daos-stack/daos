@@ -582,6 +582,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Feb 02 2024 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.3.103-15
+- Update pydaos install process
+- Add a depency from daos-client-tests to daos-devel and gdb
+
 * Tue Jan 09 2024 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-14
 - Move /etc/ld.so.conf.d/daos.conf to daos-server sub-package
 

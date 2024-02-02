@@ -7,6 +7,7 @@
 import os
 import site
 
+from apricot import skipForTicket
 from mpiio_test_base import MpiioTests
 
 
@@ -55,6 +56,7 @@ class LlnlMpi4py(MpiioTests):
         test_repo = self.params.get("llnl", '/run/test_repo/')
         self.run_test(test_repo, "llnl")
 
+    @SkipForTicket("DAOS-14369")
     def test_mpi4py(self):
         """Jira ID: DAOS-2231
 
