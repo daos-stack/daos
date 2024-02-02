@@ -38,7 +38,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 	DFUSE_TRA_DEBUG(parent, "Lookup of " DF_UUID, DP_UUID(cont));
 
-	rc = dfuse_cont_open(dfuse_info, dfp, &cont, &dfc);
+	rc = dfuse_cont_get_handle(dfuse_info, dfp, cont, &dfc);
 	if (rc)
 		D_GOTO(err, rc);
 

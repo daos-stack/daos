@@ -23,7 +23,6 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	daos_pool_info_t          pool_info = {};
 	int                       rc;
 	uuid_t                    pool;
-	uuid_t                    cont = {};
 
 	/*
 	 * This code is only supposed to support one level of directory descent
@@ -49,7 +48,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	if (rc != 0)
 		goto err;
 
-	rc = dfuse_cont_open(dfuse_info, dfp, &cont, &dfc);
+	rc = dfuse_cont_open(dfuse_info, dfp, NULL, &dfc);
 	if (rc != 0)
 		goto err;
 

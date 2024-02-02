@@ -194,7 +194,7 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 	if (rc != 0)
 		D_GOTO(out_err, rc);
 
-	rc = dfuse_cont_open(dfuse_info, dfp, &dattr.da_cuuid, &dfs);
+	rc = dfuse_cont_get_handle(dfuse_info, dfp, dattr.da_cuuid, &dfs);
 	if (rc != 0)
 		D_GOTO(out_dfp, rc);
 

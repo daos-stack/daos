@@ -497,13 +497,15 @@ struct dfuse_cont {
 void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 
+/* Connect to a container via a label */
 int
-dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
-			 struct dfuse_cont **_dfs);
-
-int
-dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *cont,
+dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
 		struct dfuse_cont **_dfs);
+
+/* Returns a connect for a container uuid */
+int
+dfuse_cont_get_handle(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t cont,
+		      struct dfuse_cont **_dfc);
 
 /* Connect to a pool via either a label or uuid.
  *
