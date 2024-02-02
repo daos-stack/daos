@@ -1380,7 +1380,6 @@ rebuild_ec_combined_ops(void **state)
 	extend_single_pool_rank(arg, 6);
 	print_message("sleep 5 seconds for extend be scheduled/combined \n");
 	sleep(5);
-	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 
 	arg->no_rebuild = 0;
 	if (arg->myrank == 0)
