@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -724,6 +724,7 @@ out_pool:
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_daos:
 	ival_thread_stop();
+	ival_fini();
 
 	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)

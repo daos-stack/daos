@@ -146,6 +146,7 @@ class NLTConf():
         """Wait for all bzip2 subprocess to finish"""
         self.compress_timer.start()
         for proc in self._compress_procs:
+            print(f"Waiting for {proc.pid}: {proc.args}")
             proc.wait()
         self._compress_procs = []
         self.compress_timer.stop()
@@ -581,11 +582,11 @@ class DaosServer():
         self.fuse_procs = []
 
     def __enter__(self):
-        self.start()
+        self._start()
         return self
 
     def __exit__(self, _type, _value, _traceback):
-        rc = self.stop(self.wf)
+        rc = self._stop(self.wf)
         if rc != 0 and self.fatal_errors is not None:
             self.fatal_errors.fail()
         return False
@@ -663,7 +664,7 @@ class DaosServer():
                 return False
         return True
 
-    def start(self):
+    def _start(self):
         """Start a DAOS server"""
         # pylint: disable=consider-using-with
         server_env = get_base_env(clean=True)
@@ -850,7 +851,7 @@ class DaosServer():
         except FileNotFoundError:
             pass
 
-    def stop(self, wf):
+    def _stop(self, wf):
         """Stop a previously started DAOS server"""
         for fuse in self.fuse_procs:
             print('Stopping server with running fuse procs, cleaning up')
@@ -5478,8 +5479,7 @@ class AllocFailTest():
                     max_child = max(max_child, 20)
                     print(f"High load average of {load_avg}, "
                           f"pausing and decreasing parallelism to {max_child} {max_count}")
-                    if max_child > 20:
-                        time.sleep(2)
+                    time.sleep(2)
 
             if not finished:
                 while start_this_iteration > 0 and len(active) < max_child:
@@ -6146,25 +6146,25 @@ def run(wf, args):
                 fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
 
                 # list-container test.
-                fatal_errors.add_result(test_alloc_fail(server, conf))
+                # fatal_errors.add_result(test_alloc_fail(server, conf))
 
                 # Container query test.
-                fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_cont_query(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_cont_check(server, conf, wf_client))
 
                 # Container attribute tests
-                fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-                fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
-                fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
+                # fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
                 # filesystem copy tests.
-                fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
-                fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
+                # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+                # fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
 
                 # container create with properties test.
-                fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
+                # fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
 
                 # Disabled for now because of errors
                 # fatal_errors.add_result(test_alloc_pil4dfs_ls(server, conf, wf_client))

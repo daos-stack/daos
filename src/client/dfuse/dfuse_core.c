@@ -238,6 +238,19 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp)
 	struct dfuse_cont *dfc, *dfcn;
 	int rc;
 
+	/* Iterate over all historic containers in this pool forgetting about them.  If the handle
+	 * is still valid, for example because of a previous failed attempt to close it then re-try
+	 * here
+	 */
+	d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
+		if (daos_handle_is_valid(dfc->dfs_coh)) {
+			rc = daos_cont_close(dfc->dfs_coh, NULL);
+			if (rc != 0)
+				DHL_ERROR(dfc, rc, "daos_cont_close() failed");
+		}
+		D_FREE(dfc);
+	}
+
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 		/* Hook for fault injection testing, if the disconnect fails with out of memory
@@ -254,10 +267,6 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp)
 		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: " DF_RC, DP_RC(rc));
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_pool_count, 1);
-
-	d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
-		D_FREE(dfc);
-	}
 
 	D_FREE(dfp);
 }
@@ -356,11 +365,9 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 			DHS_ERROR(dfc, rc, "dfs_umount() failed");
 
 		rc = daos_cont_close(dfc->dfs_coh, NULL);
-#if 0
-		if (rc == -DER_NOMEM)
-			rc = daos_cont_close(dfc->dfs_coh, NULL);
-#endif
-		if (rc != 0)
+		if (rc == -DER_SUCCESS)
+			dfc->dfs_coh = DAOS_HDL_INVAL;
+		else
 			DHL_ERROR(dfc, rc, "daos_cont_close() failed");
 	}
 
@@ -1160,6 +1167,7 @@ err_eq:
 	}
 
 	ival_thread_stop();
+	ival_fini();
 err_it:
 	d_hash_table_destroy_inplace(&dfuse_info->dpi_iet, false);
 err_pt:
@@ -1541,7 +1549,7 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 
 	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, true);
 	if (rc != -DER_SUCCESS)
-		DFUSE_TRA_ERROR(dfp, "Failed to close cont table");
+		DHL_ERROR(dfp, rc, "Failed to close cont table");
 
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
@@ -1610,8 +1618,8 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 
 	DHL_INFO(dfuse_info, rc, "First flush complete");
 
-	/* Second pass, this should close all containers and pools which in turn will empty the
-	 * pool table
+	/* Second pass, this should close all inodes which are the root of containers and therefore
+	 * close all containers and pools.
 	 */
 	rc = d_hash_table_traverse(&dfuse_info->dpi_iet, ino_dfs_flush, dfuse_info);
 
