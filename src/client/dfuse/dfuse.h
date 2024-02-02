@@ -40,6 +40,8 @@ struct dfuse_info {
 	 * This is used to lock readdir against closedir where they share a readdir handle,
 	 * so this could be per inode however that's lots of additional memory and the locking
 	 * is only needed for minimal list management so isn't locked often or for long.
+	 *
+	 * Also used for the historic lists for disconnected containers on pool handles.
 	 */
 	pthread_spinlock_t   di_lock;
 
@@ -497,12 +499,18 @@ struct dfuse_cont {
 void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 
-/* Connect to a container via a label */
+/* Connect to a container via a label
+ * Called eiter for labels on the command line or via dfuse_cont_get_handle() if opening via uuid
+ *
+ * Returns a system error code.
+ */
 int
 dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
 		struct dfuse_cont **_dfs);
 
-/* Returns a connect for a container uuid */
+/* Returns a connection for a container uuid, connnecting as required.
+ * Takes a ref on the container and returns a system error code.
+ */
 int
 dfuse_cont_get_handle(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t cont,
 		      struct dfuse_cont **_dfc);

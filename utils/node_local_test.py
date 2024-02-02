@@ -932,8 +932,8 @@ class DaosServer():
         ret = self._sp.wait(timeout=5)
         print(f'rc from server is {ret}')
 
-        self.conf.compress_file(self.agent_log.name)
         self.conf.compress_file(self.control_log.name)
+        self.conf.compress_file(self.agent_log.name)
 
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf, skip_fi=self._fi)

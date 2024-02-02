@@ -242,6 +242,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp)
 	 * is still valid, for example because of a previous failed attempt to close it then re-try
 	 * here
 	 */
+	D_SPIN_LOCK(&dfuse_info->di_lock);
 	d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
 		if (daos_handle_is_valid(dfc->dfs_coh)) {
 			rc = daos_cont_close(dfc->dfs_coh, NULL);
@@ -250,6 +251,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp)
 		}
 		D_FREE(dfc);
 	}
+	D_SPIN_UNLOCK(&dfuse_info->di_lock);
 
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
@@ -377,9 +379,30 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 
 	container_stats_log(dfc);
 
-	/* Put on list */
-	if (used)
-		d_list_add(&dfc->dfs_entry, &dfc->dfs_dfp->dfp_historic);
+	/* If this container has been used then save the entry against the pool handle so that
+	 * the inode number can be reused later if the pool is ever accessed again.  The container
+	 * handle only needs to go on the list if a matching handle is not already on the list or
+	 * there was a problem closing the container.
+	 */
+	if (used) {
+		struct dfuse_cont *dfcp;
+		bool               on_list = false;
+
+		D_SPIN_LOCK(&dfuse_info->di_lock);
+		if (daos_handle_is_valid(dfc->dfs_coh)) {
+			d_list_for_each_entry(dfcp, &dfc->dfs_dfp->dfp_historic, dfs_entry) {
+				if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0) {
+					on_list = true;
+					break;
+				}
+			}
+		}
+		if (on_list)
+			used = false;
+		else
+			d_list_add(&dfc->dfs_entry, &dfc->dfs_dfp->dfp_historic);
+		D_SPIN_UNLOCK(&dfuse_info->di_lock);
+	}
 
 	/* Do not drop the reference on the poool until after adding to the historic list */
 	if (ref)
@@ -433,18 +456,16 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 	/* Handle the case where no identifier is supplied, this is for when dfuse
 	 * is started without any pool on the command line.
 	 */
-	if (label[0]) {
+	if (label) {
 		daos_pool_info_t p_info = {};
 
 		rc = daos_pool_connect(label, dfuse_info->di_group, DAOS_PC_RO, &dfp->dfp_poh,
 				       &p_info, NULL);
 		if (rc) {
 			if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
-				DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC,
-					       DP_RC(rc));
+				DHS_INFO(dfp, rc, "daos_pool_connect() failed");
 			else
-				DFUSE_TRA_ERROR(dfp, "daos_pool_connect() '%s' failed, " DF_RC,
-						label, DP_RC(rc));
+				DHS_ERROR(dfp, rc, "daos_pool_connect() failed");
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
 
@@ -724,22 +745,15 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 
 	atomic_init(&dfc->dfs_ref, 1);
 
-	DFUSE_TRA_DEBUG(dfp, "New cont %s in pool " DF_UUIDF, label, DP_UUID(dfp->dfp_pool));
-
 	dfc->dfs_dfp = dfp;
 
-	D_ASSERT(*_dfc == NULL);
-
-	/* Allow for uuid to be NULL, in which case this represents a pool */
+	/* Allow for label to be NULL, in which case this represents a pool */
 	if (label == NULL) {
 		if (uuid_is_null(dfp->dfp_pool))
 			dfc->dfs_ops = &dfuse_pool_ops;
 		else
 			dfc->dfs_ops = &dfuse_cont_ops;
 
-		/* Turn on some caching of metadata, otherwise container
-		 * operations will be very frequent
-		 */
 		dfc->dfc_attr_timeout       = 60 * 5;
 		dfc->dfc_dentry_dir_timeout = 60 * 5;
 		dfc->dfc_ndentry_timeout    = 60 * 5;
@@ -747,23 +761,25 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 	} else {
 		daos_cont_info_t   c_info = {};
 		struct dfuse_cont *dfcp;
-		int  dfs_flags = O_RDWR;
+		int                dfs_flags = O_RDWR;
 
 		dfc->dfs_ops = &dfuse_dfs_ops;
 
 		rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh, &c_info, NULL);
 		if (rc == -DER_NO_PERM) {
 			dfs_flags = O_RDONLY;
-			rc        = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh,
-						   &c_info, NULL);
+
+			rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh,
+					    &c_info, NULL);
 		}
-		if (rc == -DER_NONEXIST) {
-			DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
-			D_GOTO(err_free, rc = daos_der2errno(rc));
-		} else if (rc != -DER_SUCCESS) {
-			DFUSE_TRA_ERROR(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
+		if (rc != -DER_SUCCESS) {
+			if (rc == -DER_NONEXIST || rc == -DER_NO_PERM)
+				DHS_INFO(dfc, rc, "daos_cont_open() failed");
+			else
+				DHS_ERROR(dfc, rc, "daos_cont_open() failed");
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
+
 		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 		if (rc) {
 			DHS_ERROR(dfc, rc, "dfs mount() failed");
@@ -775,30 +791,31 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		if (dfuse_info->di_caching) {
 			rc = dfuse_cont_get_cache(dfc);
 			if (rc == ENODATA) {
-				/* If there are no container attributes then use defaults */
 				DFUSE_TRA_INFO(dfc, "Using default caching values");
 				dfuse_set_default_cont_cache_values(dfc);
 			} else if (rc != 0) {
 				D_GOTO(err_umount, rc);
 			}
-
-		} else {
-			DFUSE_TRA_INFO(dfc, "Caching disabled");
 		}
 
 		rc = ival_add_cont_buckets(dfc);
 		if (rc != 0)
 			goto err_umount;
 
-		/* Check if this container has been accessed in the past and if so then re-use
-		 * the inode number.
+		/* Check if this container has been accessed in the past and if so then reuse the
+		 * inode number.
 		 */
+		D_SPIN_LOCK(&dfuse_info->di_lock);
 		d_list_for_each_entry(dfcp, &dfp->dfp_historic, dfs_entry) {
 			if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0)
 				dfc->dfs_ino = dfcp->dfs_ino;
 			break;
 		}
+		D_SPIN_UNLOCK(&dfuse_info->di_lock);
 	}
+
+	DFUSE_TRA_DEBUG(dfp, "New cont " DF_UUIDF " in pool " DF_UUIDF, DP_UUID(dfc->dfc_uuid),
+			DP_UUID(dfp->dfp_pool));
 
 	if (dfc->dfs_ino == 0)
 		dfc->dfs_ino = atomic_fetch_add_relaxed(&dfuse_info->di_ino_next, 1);
@@ -814,18 +831,15 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 	 */
 	rlink = d_hash_rec_find_insert(&dfp->dfp_cont_table, &dfc->dfc_uuid, sizeof(dfc->dfc_uuid),
 				       &dfc->dfs_entry);
-
 	if (rlink != &dfc->dfs_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing container, reusing");
 
 		_ch_free(dfuse_info, dfc, false, true);
 
 		dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
+		DFUSE_TRA_DEBUG(dfc, "Returning dfs for " DF_UUID " ref %d", DP_UUID(dfc->dfc_uuid),
+				dfc->dfs_ref);
 	}
-
-	DFUSE_TRA_DEBUG(dfc, "Returning dfs for " DF_UUID " ref %d", DP_UUID(dfc->dfc_uuid),
-			dfc->dfs_ref);
-
 	*_dfc = dfc;
 
 	return rc;
