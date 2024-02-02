@@ -304,8 +304,9 @@ bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st
 {
 	struct bio_xs_blobstore *bxb = NULL;
 
-	if (st != SMD_DEV_TYPE_DATA)
+	if (st != SMD_DEV_TYPE_DATA) {
 		D_ASSERT(bio_nvme_configured(SMD_DEV_TYPE_META));
+	}
 
 	switch (st) {
 	case SMD_DEV_TYPE_WAL:

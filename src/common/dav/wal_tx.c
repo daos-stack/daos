@@ -498,7 +498,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			*p &= ~mask;
 		break;
 	default:
-		D_ASSERT(0);
+		D_ABORT("Invalid opc %d", act->ac_opc);
 		break;
 	}
 

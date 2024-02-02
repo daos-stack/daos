@@ -425,8 +425,9 @@ rdbt_remove_replica_rank(crt_group_t *group, d_rank_t ldr_rank,
 	replicas_to_remove->rl_ranks[0] = rem_rank;
 	in->rtmi_ranks = replicas_to_remove;
 	rc = invoke_rpc(rpc);
-	if (rem_rank != ldr_rank)
+	if (rem_rank != ldr_rank) {
 		D_ASSERTF(rc == 0, "%d\n", rc);
+	}
 	out = crt_reply_get(rpc);
 	rc = out->rtmo_rc;
 	*hintp = out->rtmo_hint;

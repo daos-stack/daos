@@ -423,14 +423,15 @@ iv_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	/* just to test API usage */
 	rc = crt_iv_get_nchildren(ivns, 0, iv_key, &nchildren);
-	if (rc == 0)
+	if (rc == 0) {
 		DBG_PRINT("in IV tree, nchildren: %d.\n", nchildren);
-	else
+	} else {
 		/*
 		 * Just to catch the error earlier than fetch completion
 		 * callback for testing.
 		 */
 		D_ASSERTF(rc == 0, "crt_iv_get_nchildren failed, rc=%d.\n", rc);
+	}
 
 	key_struct = (struct iv_key_struct *)iv_key->iov_buf;
 

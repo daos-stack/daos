@@ -376,8 +376,9 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 				true /* all_ranks */,
 				&crt_net_cfg_info,
 				&crt_net_cfg_resp);
-	if (opts.assert_on_error)
+	if (opts.assert_on_error) {
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
+	}
 
 	if (rc != 0) {
 		D_ERROR("dc_get_attach_info() failed, rc=%d\n", rc);
@@ -428,8 +429,9 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	/* Query the agent for the CaRT network configuration parameters */
 	rc = dc_get_attach_info(name, true /* all_ranks */,
 				&crt_net_cfg_info, &crt_net_cfg_resp);
-	if (opts.assert_on_error)
+	if (opts.assert_on_error) {
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
+	}
 
 	if (rc != 0) {
 		D_ERROR("dc_get_attach_info() failed, rc=%d\n", rc);
@@ -545,8 +547,9 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 	uint32_t	 grp_size;
 	int		 rc = 0;
 
-	if (opts.assert_on_error)
+	if (opts.assert_on_error) {
 		D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
+	}
 
 	rc = d_log_init();
 	if (rc != 0)
@@ -674,8 +677,9 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	d_rank_t	 my_rank;
 	int		 rc = 0;
 
-	if (opts.assert_on_error)
+	if (opts.assert_on_error) {
 		D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
+	}
 
 	rc = d_getenv_uint32_t("CRT_L_RANK", &my_rank);
 	D_ASSERTF(rc == DER_SUCCESS, "Rank can not be retrieve: " DF_RC "\n", DP_RC(rc));
@@ -829,9 +833,10 @@ crtu_sem_timedwait(sem_t *sem, int sec, int line_number)
 
 	rc = clock_gettime(CLOCK_REALTIME, &deadline);
 	if (rc != 0) {
-		if (opts.assert_on_error)
-			D_ASSERTF(rc == 0, "clock_gettime() failed at "
-				  "line %d rc: %d\n", line_number, rc);
+		if (opts.assert_on_error) {
+			D_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
+				  line_number, rc);
+		}
 		D_ERROR("clock_gettime() failed, rc = %d\n", rc);
 		D_GOTO(out, rc);
 	}
@@ -839,9 +844,10 @@ crtu_sem_timedwait(sem_t *sem, int sec, int line_number)
 	deadline.tv_sec += sec;
 	rc = sem_timedwait(sem, &deadline);
 	if (rc != 0) {
-		if (opts.assert_on_error)
-			D_ASSERTF(rc == 0, "sem_timedwait() failed at "
-				  "line %d rc: %d\n", line_number, rc);
+		if (opts.assert_on_error) {
+			D_ASSERTF(rc == 0, "sem_timedwait() failed at line %d rc: %d\n",
+				  line_number, rc);
+		}
 		D_ERROR("sem_timedwait() failed, rc = %d\n", rc);
 		D_GOTO(out, rc);
 	}

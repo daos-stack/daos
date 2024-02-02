@@ -989,8 +989,9 @@ rebuild_scan_broadcast(struct ds_pool *pool, struct rebuild_global_pool_tracker 
 	rsi->rsi_leader_term = rgt->rgt_leader_term;
 	rsi->rsi_rebuild_ver = rgt->rgt_rebuild_ver;
 	rsi->rsi_rebuild_gen = rgt->rgt_rebuild_gen;
-	if (rebuild_op == RB_OP_RECLAIM || rebuild_op == RB_OP_FAIL_RECLAIM)
+	if (rebuild_op == RB_OP_RECLAIM || rebuild_op == RB_OP_FAIL_RECLAIM) {
 		D_ASSERT(rgt->rgt_reclaim_epoch != 0);
+	}
 
 	rsi->rsi_reclaim_epoch = rgt->rgt_reclaim_epoch;
 	rsi->rsi_layout_ver = layout_version;

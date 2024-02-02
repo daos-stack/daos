@@ -296,12 +296,11 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		 * try next spare.
 		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN)
-			D_ASSERTF(spare_tgt->ta_comp.co_status !=
-				  PO_COMP_ST_DOWNOUT,
-				  "down fseq(%u) < downout fseq(%u)\n",
-				  f_shard->fs_fseq,
+		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
+			D_ASSERTF(spare_tgt->ta_comp.co_status != PO_COMP_ST_DOWNOUT,
+				  "down fseq(%u) < downout fseq(%u)\n", f_shard->fs_fseq,
 				  spare_tgt->ta_comp.co_fseq);
+		}
 
 		f_shard->fs_fseq = spare_tgt->ta_comp.co_fseq;
 		f_shard->fs_status = spare_tgt->ta_comp.co_status;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -180,7 +180,7 @@ rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 		type = DAOS_OT_MULTI_LEXICAL;
 		break;
 	default:
-		D_ASSERT(0);
+		D_ABORT("invalid oid");
 	}
 
 	daos_obj_set_oid(&uoid->id_pub, type, OR_RP_1, 1, 0);
@@ -262,8 +262,9 @@ rdb_vos_set_sgls(enum rdb_vos_op op, int n, d_iov_t values[],
 	for (i = 0; i < n; i++) {
 		sgls[i].sg_nr = 1;
 		sgls[i].sg_nr_out = 0;
-		if (op == RDB_VOS_UPDATE)
+		if (op == RDB_VOS_UPDATE) {
 			D_ASSERT(values[i].iov_len > 0);
+		}
 		sgls[i].sg_iovs = &values[i];
 	}
 }

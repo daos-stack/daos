@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -329,7 +329,14 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		fflush(stdout);						\
 	} while (0)
 
-/* Assert cond is true */
+#ifdef DAOS_ASSERT_DISABLE
+
+#define D_ASSERT(cond)
+
+#define D_ASSERTF(cond, fmt, ...)
+
+#else
+
 #define D_ASSERT(e)							\
 	do {								\
 		if (likely(e))						\
@@ -350,6 +357,16 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		if (d_alt_assert != NULL)					\
 			d_alt_assert(0, #cond, __FILE__, __LINE__);		\
 		assert(0);							\
+	} while (0)
+
+#endif
+
+#define D_ABORT(reason, ...)                                                                       \
+	do {                                                                                       \
+		D_FATAL("Fatal error, unable to continue: " reason "\n", ##__VA_ARGS__);           \
+		if (d_alt_assert != NULL)                                                          \
+			d_alt_assert(0, "fatal", __FILE__, __LINE__);                              \
+		assert(0);                                                                         \
 	} while (0)
 
 #define D_CASSERT(cond, ...)						\

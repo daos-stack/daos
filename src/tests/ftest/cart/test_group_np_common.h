@@ -214,16 +214,17 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
 		  rank, e_req->exp_status);
 
-	if (e_req->exp_status == CRT_EVT_ALIVE)
+	if (e_req->exp_status == CRT_EVT_ALIVE) {
 		D_ASSERTF(rc_alive == 0,
 			  "Swim status alive sequence (%s) "
 			  "does not match '%s' for rank %d.\n",
 			  swim_seq_by_rank[rank], alive_regex, rank);
-	else if (e_req->exp_status == CRT_EVT_DEAD)
+	} else if (e_req->exp_status == CRT_EVT_DEAD) {
 		D_ASSERTF(rc_dead == 0,
 			  "Swim status dead sequence (%s) "
 			  "does not match '%s' for rank %d..\n",
 			  swim_seq_by_rank[rank], dead_regex, rank);
+	}
 
 	DBG_PRINT("Rank [%d] SWIM state sequence (%s) for "
 		  "status [%d] is as expected.\n",
