@@ -35,10 +35,6 @@ popd
 
 cp "$TMP_DIR"/*.json .
 cp "$TMP_DIR"/*.xml .
-
-# Look for a bug as in https://build.hpdd.intel.com/job/daos-stack/job/daos/job/PR-13698/2/
-ps auwx
-
 sudo chmod -R o+r "$TMP_DIR"/nlt_logs
 cp -r "$TMP_DIR"/nlt_logs .
 
