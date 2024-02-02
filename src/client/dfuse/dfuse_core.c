@@ -463,9 +463,9 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 				       &p_info, NULL);
 		if (rc) {
 			if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
-				DHS_INFO(dfp, rc, "daos_pool_connect() failed");
+				DHL_INFO(dfp, rc, "daos_pool_connect() failed");
 			else
-				DHS_ERROR(dfp, rc, "daos_pool_connect() failed");
+				DHL_ERROR(dfp, rc, "daos_pool_connect() failed");
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
 
@@ -774,9 +774,9 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		}
 		if (rc != -DER_SUCCESS) {
 			if (rc == -DER_NONEXIST || rc == -DER_NO_PERM)
-				DHS_INFO(dfc, rc, "daos_cont_open() failed");
+				DHL_INFO(dfc, rc, "daos_cont_open() failed");
 			else
-				DHS_ERROR(dfc, rc, "daos_cont_open() failed");
+				DHL_ERROR(dfc, rc, "daos_cont_open() failed");
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
 

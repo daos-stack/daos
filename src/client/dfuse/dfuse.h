@@ -500,7 +500,7 @@ void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 
 /* Connect to a container via a label
- * Called eiter for labels on the command line or via dfuse_cont_get_handle() if opening via uuid
+ * Called either for labels on the command line or via dfuse_cont_get_handle() if opening via uuid
  *
  * Returns a system error code.
  */
@@ -508,7 +508,7 @@ int
 dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
 		struct dfuse_cont **_dfs);
 
-/* Returns a connection for a container uuid, connnecting as required.
+/* Returns a connection for a container uuid, connecting as required.
  * Takes a ref on the container and returns a system error code.
  */
 int

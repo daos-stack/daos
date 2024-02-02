@@ -685,7 +685,7 @@ main(int argc, char **argv)
 	}
 
 	/* Connect to a pool */
-	rc = dfuse_pool_connect(dfuse_info, cont_name[0] ? pool_name : NULL, &dfp);
+	rc = dfuse_pool_connect(dfuse_info, pool_name[0] ? pool_name : NULL, &dfp);
 	if (rc != 0) {
 		printf("Failed to connect to pool: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
