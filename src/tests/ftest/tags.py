@@ -8,7 +8,7 @@ import ast
 import os
 import re
 import sys
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
@@ -355,7 +355,7 @@ def run_linter(paths=None):
         _error_handler(tests_wo_method_as_tag, 'tests without method name as tag'),
         _error_handler(tests_wo_hw_vm_manual, 'tests without HW, VM, or manual tag'),
         _error_handler(tests_w_empty_tag, 'tests with an empty tag'),
-        _error_handler(tests_wo_a_feature_tag, 'tests without a feature tag'),]))
+        _error_handler(tests_wo_a_feature_tag, 'tests without a feature tag')]))
     if errors:
         raise errors[0]
 
@@ -418,7 +418,14 @@ def run_list(paths):
 
 def main():
     """main function execution"""
-    parser = ArgumentParser()
+    description = '\n'.join([
+        'Commands',
+        '  lint - lint ftest avocado tags',
+        '  list - list ftest avocado tags associated with test files',
+        '  dump - dump the file/class/method/tag structure for test files'
+    ])
+
+    parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description=description)
     parser.add_argument(
         "command",
         choices=("lint", "list", "dump"),
