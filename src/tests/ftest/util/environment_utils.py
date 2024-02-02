@@ -168,8 +168,12 @@ class TestEnvironment():
         all_hosts = NodeSet()
         all_hosts.update(servers)
         all_hosts.update(clients)
-        self.provider = provider
-        self.insecure_mode = insecure_mode
+
+        # Override values if explicitly specified
+        if provider is not None:
+            self.provider = provider
+        if insecure_mode is not None:
+            self.insecure_mode = insecure_mode
 
         if self.log_dir is None:
             self.log_dir = self.default_log_dir()

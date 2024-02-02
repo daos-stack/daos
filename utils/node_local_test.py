@@ -1446,7 +1446,8 @@ class DFuse():
 
         print('Stopping fuse')
 
-        self.run_query()
+        if self.container:
+            self.run_query()
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
@@ -1535,12 +1536,17 @@ class DFuse():
         print(rc)
         return rc
 
-    def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None):
+    def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None,
+                    qpath=None):
         """Query and verify the dfuse statistics.
 
         Returns the raw numbers in a dict.
         """
-        cmd = ['filesystem', 'query', self.dir]
+        cmd = ['filesystem', 'query']
+        if qpath:
+            cmd.append(qpath)
+        else:
+            cmd.append(self.dir)
 
         if ino is not None:
             cmd.extend(['--inode', str(ino)])
@@ -1567,7 +1573,7 @@ class DFuse():
 
         return rc.json['response']
 
-    def evict_and_wait(self, paths):
+    def evict_and_wait(self, paths, qpath=None):
         """Evict a number of paths from dfuse"""
         inodes = []
         for path in paths:
@@ -1579,7 +1585,7 @@ class DFuse():
         for inode in inodes:
             found = True
             while found:
-                rc = self.check_usage(inode)
+                rc = self.check_usage(inode, qpath=qpath)
                 print(rc)
                 found = rc['resident']
                 if not found:
@@ -1886,10 +1892,11 @@ class needs_dfuse_with_opt():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, caching=None, wbcache=True, single_threaded=False):
+    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True):
         self.caching = caching
         self.wbcache = wbcache
         self.single_threaded = single_threaded
+        self.dfuse_inval = dfuse_inval
 
     def __call__(self, method):
         """Wrapper function"""
@@ -1901,9 +1908,18 @@ class needs_dfuse_with_opt():
                 if obj.call_index == 0:
                     caching = True
                     obj.needs_more = True
-                    obj.test_name = f'{method.__name__}_with_caching'
+                    obj.test_name = f'{method.__name__}_caching_on'
                 else:
                     caching = False
+                    obj.test_name = f'{method.__name__}_caching_off'
+
+            if not self.dfuse_inval:
+                assert self.caching is True
+                cont_attrs = {'dfuse-attr-time': '5m',
+                              'dfuse-dentry-time': '5m',
+                              'dfuse-dentry-dir-time': '5m',
+                              'dfuse-ndentry-time': '5m'}
+                obj.container.set_attrs(cont_attrs)
 
             obj.dfuse = DFuse(obj.server,
                               obj.conf,
@@ -2812,19 +2828,35 @@ class PosixTests():
         rc = self.dfuse.run_query(use_json=True)
         assert rc.returncode == 0
 
-    @needs_dfuse
+    @needs_dfuse_with_opt(dfuse_inval=False, caching=True)
     def test_uns_link(self):
-        """Simple test to create a container then create a path for it in dfuse"""
+        """Test to create a container then create a path for it in dfuse.
+
+        Runs with dfuse already started, creates two new containers without links.
+
+        Links one container into UNS and then destroys it through the link.
+
+        Links the second container into UNS and then destroys it through the link, but checking
+        the inode counts before and after.
+
+        This test requires caching attributes to be set on the second container so that it does
+        not get evicted before the inode count check.
+        """
+        # Create a new container which not linked
         container1 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link1')
         cmd = ['cont', 'query', self.pool.id(), container1.id()]
         rc = run_daos_cmd(self.conf, cmd)
         assert rc.returncode == 0
 
+        # Create a second new container which is not linked
         container2 = create_cont(self.conf, self.pool, ctype="POSIX", label='mycont_uns_link2')
-        cmd = ['cont', 'query', self.pool.id(), container2.id()]
-        rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
+        cont_attrs = {'dfuse-attr-time': '5m',
+                      'dfuse-dentry-time': '5m',
+                      'dfuse-dentry-dir-time': '5m',
+                      'dfuse-ndentry-time': '5m'}
+        container2.set_attrs(cont_attrs)
 
+        # Link and then destroy the first container
         path = join(self.dfuse.dir, 'uns_link1')
         cmd = ['cont', 'link', self.pool.id(), 'mycont_uns_link1', '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
@@ -2837,6 +2869,8 @@ class PosixTests():
         rc = run_daos_cmd(self.conf, cmd)
         assert rc.returncode == 0
 
+        # Link and then destroy the second container but check inode count before and after
+        # destroying.
         path = join(self.dfuse.dir, 'uns_link2')
         cmd = ['cont', 'link', self.pool.id(), container2.id(), '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
@@ -3288,6 +3322,12 @@ class PosixTests():
         server = self.server
         conf = self.conf
 
+        cont_attrs = {'dfuse-attr-time': '5m',
+                      'dfuse-dentry-time': '5m',
+                      'dfuse-dentry-dir-time': '5m',
+                      'dfuse-ndentry-time': '5m'}
+        container.set_attrs(cont_attrs)
+
         # Start dfuse on the container.
         dfuse = DFuse(server, conf, container=container, caching=False)
         dfuse.start('uns-0')
@@ -3309,8 +3349,10 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
+        uns_container.set_attrs(cont_attrs)
+
         print('Trying UNS')
-        dfuse = DFuse(server, conf, caching=False)
+        dfuse = DFuse(server, conf, caching=True)
         dfuse.start('uns-1')
 
         # List the root container.
@@ -3323,6 +3365,9 @@ class PosixTests():
         # Make a link within the new container.
         print('Inserting entry point')
         uns_container_2 = create_cont(conf, pool=self.pool, path=uns_path)
+
+        uns_container_2.set_attrs(cont_attrs)
+        dfuse.evict_and_wait([uns_path], qpath=join(dfuse.dir, pool, container.uuid))
 
         # List the root container again.
         print(os.listdir(join(dfuse.dir, pool, container.uuid)))
@@ -3346,7 +3391,7 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
         print('Trying UNS with previous cont')
-        dfuse = DFuse(server, conf, caching=False)
+        dfuse = DFuse(server, conf, caching=True)
         dfuse.start('uns-3')
 
         second_path = join(dfuse.dir, pool, uns_container.uuid)
