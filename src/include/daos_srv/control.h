@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,6 +51,7 @@ dpdk_cli_override_opts;
 #define NVME_CONF_SET_HOTPLUG_RANGE	"hotplug_busid_range"
 #define NVME_CONF_SET_ACCEL_PROPS	"accel_props"
 #define NVME_CONF_SET_SPDK_RPC_SERVER	"spdk_rpc_srv"
+#define NVME_CONF_SET_AUTO_FAULTY       "auto_faulty"
 
 /** Supported acceleration engine settings */
 #define NVME_ACCEL_NONE		"none"

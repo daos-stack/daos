@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       13%{?relval}%{?dist}
+Release:       14%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -381,6 +381,7 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 %preun server
 %systemd_preun %{server_svc_name}
 
+# all of these macros are empty on EL so keep rpmlint happy
 %if (0%{?suse_version} > 0)
 %postun server
 %{?run_ldconfig}
@@ -406,7 +407,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files
 %defattr(-, root, root, -)
 %doc README.md
-%{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %attr(0755,root,root) %{conf_dir}/certs
 %config(noreplace) %{conf_dir}/memcheck-cart.supp
 %dir %{conf_dir}
@@ -431,6 +431,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
+%{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
@@ -518,7 +519,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 %{_bindir}/crt_launch
-# For avocado tests
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
@@ -582,6 +582,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Feb 02 2024 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.3.103-15
+- Update pydaos install process
+- Add a depency from daos-client-tests to daos-devel and gdb
+
+* Tue Jan 09 2024 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-14
+- Move /etc/ld.so.conf.d/daos.conf to daos-server sub-package
+
 * Wed Dec 06 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-13
 - Update for EL 8.8 and Leap 15.5
 - Update raft to 0.10.1-2.411.gefa15f4

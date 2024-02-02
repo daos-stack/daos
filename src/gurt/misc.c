@@ -1120,7 +1120,7 @@ out:
  * \param[in,out]	str_val		Copy of an environment string value.
  */
 void
-d_free_env_str(char **str_val)
+d_freeenv_str(char **str_val)
 {
 	assert(str_val != NULL);
 
@@ -1300,6 +1300,21 @@ d_getenv_uint(const char *name, unsigned *uint_val)
 
 	*uint_val = (unsigned)tmp;
 	return -DER_SUCCESS;
+}
+
+/**
+ * get an unsigned integer type environment variables.
+ *
+ * \param[in]		name		name of the environment variable.
+ * \param[in,out]	uint_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \return				0 on success, a negative value on error.
+ * \deprecated				d_getenv_int() is deprecated, please use d_getenv_uint().
+ */
+int
+d_getenv_int(const char *name, unsigned *uint_val)
+{
+	return d_getenv_uint(name, uint_val);
 }
 
 /**

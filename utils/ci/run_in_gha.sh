@@ -69,10 +69,8 @@ echo ::group::Config file after ALT_PREFIX build
 cat daos.conf
 echo ::endgroup::
 
-echo ::group::Install pydaos
-cd src/client
-python3 setup.py install
-cd -
+echo ::group::Install pydaos via pip
+pip install /opt/daos/lib/daos/python
 echo ::endgroup::
 
 echo ::group::Setting up daos_server_helper

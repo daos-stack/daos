@@ -1,3 +1,15 @@
+daos (2.5.100-15) unstable; urgency=medium
+  [ Ashley M. Pittman ]
+  * Updated pydaos install process
+
+ -- Ashley M. Pittman <ashley.m.pittman@intel.com>  Fri, 02 Feb 2024 09:15:00 -0800
+
+daos (2.5.100-14) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 09 Jan 2024 13:59:01 -0500
+
 daos (2.5.100-13) unstable; urgency=medium
   [ Brian J. Murrell ]
   * Update for EL 8.8 and Leap 15.5

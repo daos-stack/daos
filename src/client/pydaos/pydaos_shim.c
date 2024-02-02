@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,8 +84,8 @@ do {									\
 	}								\
 } while (0)
 
-static daos_handle_t	glob_eq;
-static int		use_glob_eq;
+static daos_handle_t glob_eq;
+static bool          use_glob_eq;
 
 /**
  * Implementations of baseline shim functions
@@ -95,18 +95,17 @@ static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
 {
 	int rc;
-	int ret;
-	char *override;
 
 	rc = daos_init();
 	if ((rc == 0) && (use_glob_eq == 0)) {
-		override = getenv("PYDAOS_GLOB_EQ");
-		if ((override == NULL) || strcmp(override, "0")) {
-			use_glob_eq = 1;
+		d_getenv_bool("PYDAOS_GLOB_EQ", &use_glob_eq);
+		if (use_glob_eq) {
+			int ret;
+
 			ret = daos_eq_create(&glob_eq);
 			if (ret) {
-				D_ERROR("Failed to create global eq, "DF_RC"\n", DP_RC(ret));
-				use_glob_eq = 0;
+				DL_ERROR(ret, "Failed to create global eq");
+				use_glob_eq = false;
 			}
 		}
 	}
@@ -123,7 +122,7 @@ __shim_handle__daos_fini(PyObject *self, PyObject *args)
 		rc =  daos_eq_destroy(glob_eq, DAOS_EQ_DESTROY_FORCE);
 		if (rc)
 			D_ERROR("Failed to destroy global eq, "DF_RC"\n", DP_RC(rc));
-		use_glob_eq = 0;
+		use_glob_eq = false;
 	}
 
 	rc = daos_fini();
