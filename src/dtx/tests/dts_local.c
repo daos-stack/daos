@@ -15,6 +15,12 @@
 #include <daos/object.h>
 
 #include "vts_io.h"
+#include "dtx_internal.h"
+
+#define DKEY_ID0    0
+#define DKEY_ID1    1
+#define DKEY_ID2    2
+#define DKEY_ID3    3
 
 #define DKEY_NUM    4
 #define START_EPOCH 5
@@ -36,11 +42,146 @@ struct dts_local_args {
 	daos_epoch_t    epoch;
 };
 
-static struct dts_local_args local_args;
+/** Utilities */
 
 #define BUF_SIZE 32
 
 static char invalid_data[BUF_SIZE];
+
+static void
+dts_print_start_message()
+{
+	print_message("Test:\n");
+}
+
+static struct dtx_handle *
+dts_local_begin(daos_handle_t poh, uint16_t sub_modification_cnt)
+{
+	struct dtx_handle *dth;
+
+	print_message("- begin local transaction\n");
+	int rc = dtx_begin(poh, NULL, NULL, sub_modification_cnt, 0, NULL, NULL, 0, DTX_LOCAL, NULL,
+			   &dth);
+	assert_rc_equal(rc, 0);
+	assert_non_null(dth);
+
+	return dth;
+}
+
+static void
+dts_local_commit(struct dtx_handle *dth)
+{
+	print_message("- commit the transaction\n");
+	int rc = dtx_end(dth, NULL, 0);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+dts_local_abort(struct dtx_handle *dth)
+{
+	print_message("- abort the transaction\n");
+
+	int passed_rc = -DER_EXIST;
+	int rc        = dtx_end(dth, NULL, passed_rc);
+	assert_rc_equal(rc, passed_rc);
+}
+
+#define UPDATE_FORMAT "- update at DKEY[%u] epoch=%" PRIu64 " (rc=%d)\n"
+
+static void
+dts_update(daos_handle_t coh, struct dts_local_args *la, unsigned dkey_id, const char *value,
+	   struct dtx_handle *dth)
+{
+	print_message(UPDATE_FORMAT, dkey_id, la->epoch, 0);
+
+	la->iod.iod_size = strlen(value);
+	d_iov_set(&la->sgl.sg_iovs[0], (void *)value, la->iod.iod_size);
+
+	int rc = vos_obj_update_ex(coh, la->oid, la->epoch, 0, 0, &la->dkey[dkey_id], 1, &la->iod,
+				   NULL, &la->sgl, dth);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+dts_punch_dkey(daos_handle_t coh, struct dts_local_args *la, unsigned dkey_id,
+	       struct dtx_handle *dth)
+{
+	print_message("- punch at DKEY[%u] epoch=%" PRIu64 "\n", dkey_id, la->epoch);
+
+	int rc = vos_obj_punch(coh, la->oid, la->epoch, 0, 0, &la->dkey[dkey_id], 0, NULL, dth);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+dts_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch, daos_key_t *dkey,
+	  daos_iod_t *iod, d_sg_list_t *sgl)
+{
+	strncpy(sgl->sg_iovs[0].iov_buf, invalid_data, BUF_SIZE);
+	iod->iod_size = UINT64_MAX;
+	int rc        = vos_obj_fetch(coh, oid, epoch, 0, dkey, 1, iod, sgl);
+	assert_rc_equal(rc, 0);
+}
+
+#define EXISTING     true
+#define NON_EXISTING false
+
+/**
+ * Validate the fetch results.
+ *
+ * \param[in] exp_buf	The expected contents of the buffer after fetch
+ * \param[in] existing	The fetched value was expected to exist (true) or not exist (false)
+ */
+static void
+dts_validate(daos_iod_t *iod, d_sg_list_t *sgl, const char *exp_buf, bool existing)
+{
+	const char *iov_buf = (char *)sgl->sg_iovs[0].iov_buf;
+	int         fetched_size;
+
+	if (existing) {
+		fetched_size = (int)strlen(exp_buf);
+	} else {
+		exp_buf      = invalid_data;
+		fetched_size = 0;
+	}
+
+	assert_int_equal(iod->iod_size, fetched_size);
+	assert_int_equal(sgl->sg_iovs[0].iov_len, fetched_size);
+	assert_memory_equal(iov_buf, exp_buf, strlen(exp_buf));
+
+	print_message("buf = %.*s\n", (int)strlen(exp_buf), iov_buf);
+}
+
+/**
+ * Fetch and validate the result.
+ *
+ * It is intended to be used via DTS_FETCH_*() macros.
+ */
+static void
+_dts_fetch_and_validate(daos_handle_t coh, struct dts_local_args *la, unsigned dkey_id,
+			const char *exp_buf, bool existing, const char *msg)
+{
+	char buf[BUF_SIZE];
+
+	d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
+
+	print_message("- %s at DKEY[%u] epoch=%" PRIu64 "\n", msg, dkey_id, la->epoch);
+	dts_fetch(coh, la->oid, la->epoch, &la->dkey[dkey_id], &la->iod, &la->fetch_sgl);
+
+	dts_validate(&la->iod, &la->fetch_sgl, exp_buf, existing);
+}
+
+#define FETCH_EXISTING_STR     "fetch existing value(s)"
+#define FETCH_NON_EXISTING_STR "fetch non-existing value(s)"
+
+#define DTS_FETCH_EXISTING(coh, la, dkey_id, exp_buf)                                              \
+	_dts_fetch_and_validate((coh), (la), (dkey_id), exp_buf, EXISTING, FETCH_EXISTING_STR)
+
+#define DTS_FETCH_NON_EXISTING(coh, la, dkey_id)                                                   \
+	_dts_fetch_and_validate((coh), (la), (dkey_id), NULL, NON_EXISTING, FETCH_NON_EXISTING_STR)
+
+/** Setup and teardown functions */
+
+static struct dts_local_args local_args;
 
 static int
 setup_local_args(void **state)
@@ -104,186 +245,98 @@ teardown_local_args(void **state)
 	return 0;
 }
 
-static void
-fetch(daos_handle_t chl, daos_unit_oid_t oid, daos_epoch_t epoch, daos_key_t *dkey, daos_iod_t *iod,
-      d_sg_list_t *sgl)
-{
-	strncpy(sgl->sg_iovs[0].iov_buf, invalid_data, BUF_SIZE);
-	iod->iod_size = UINT64_MAX;
-	int rc        = vos_obj_fetch(chl, oid, epoch, 0, dkey, 1, iod, sgl);
-	assert_rc_equal(rc, 0);
-}
-
-/**
- * Validate the fetch results.
- *
- * \param[in] exp_buf	The expected contents of the buffer after fetch
- * \param[in] existing	The fetched value was expected to exist (true) or not exist (false)
- */
-static void
-validate_fetch(daos_iod_t *iod, d_sg_list_t *sgl, const char *exp_buf, bool existing)
-{
-	int         fetched_size = existing ? (int)strlen(exp_buf) : 0;
-	const char *iov_buf      = (char *)sgl->sg_iovs[0].iov_buf;
-
-	assert_int_equal(iod->iod_size, fetched_size);
-	assert_int_equal(sgl->sg_iovs[0].iov_len, fetched_size);
-	assert_memory_equal(iov_buf, exp_buf, strlen(exp_buf));
-
-	print_message("buf = %.*s\n", (int)strlen(exp_buf), iov_buf);
-}
+static const char *pre_test_data = "Aloha";
 
 /**
  * Fill up the container with some data.
  */
 static int
-warmup(void **state)
+setup_warm(void **state)
 {
 	setup_local_args(state);
 
 	struct io_test_args   *arg = *state;
+	daos_handle_t          coh = arg->ctx.tc_co_hdl;
 	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
-
-	int                    rc = 0;
-	char                   buf[BUF_SIZE];
-	const char            *pre_test_data = "Aloha";
-
-	daos_key_t            *used_dkey   = &la->dkey[2];
-	daos_key_t            *unused_dkey = &la->dkey[3];
 
 	print_message("Warmup:\n");
 
-	print_message("- store initial value\n");
-	la->iod.iod_size = strlen(pre_test_data);
-	d_iov_set(&la->sgl.sg_iovs[0], (void *)pre_test_data, la->iod.iod_size);
-	rc = vos_obj_update(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, used_dkey, 1, &la->iod,
-			    NULL, &la->sgl);
-	assert_rc_equal(rc, 0);
+	dts_update(coh, la, DKEY_ID2, pre_test_data, NULL);
 
-	d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
-
-	print_message("- fetch the inserted value\n");
-	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, used_dkey, &la->iod, &la->fetch_sgl);
-	validate_fetch(&la->iod, &la->fetch_sgl, pre_test_data, true);
-
-	print_message("- fetch a non-existing value\n");
-	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, unused_dkey, &la->iod, &la->fetch_sgl);
-	validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
+	DTS_FETCH_EXISTING(coh, la, DKEY_ID2, pre_test_data);
+	DTS_FETCH_NON_EXISTING(coh, la, DKEY_ID3);
 
 	return 0;
 }
 
 static int
-cleanup(void **state)
+teardown_warm(void **state)
 {
 	struct io_test_args   *arg = *state;
+	daos_handle_t          coh = arg->ctx.tc_co_hdl;
 	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
-
-	char                   buf[BUF_SIZE];
-	/** as inserted in the warmup function */
-	const char            *pre_test_data = "Aloha";
-
-	daos_key_t            *used_dkey = &la->dkey[2];
 
 	print_message("Cleanup:\n");
 
-	d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
-
-	print_message("- fetch the initial value\n");
-	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, used_dkey, &la->iod, &la->fetch_sgl);
-	validate_fetch(&la->iod, &la->fetch_sgl, pre_test_data, true);
+	DTS_FETCH_EXISTING(coh, la, DKEY_ID2, pre_test_data);
 
 	teardown_local_args(state);
 
 	return 0;
 }
 
+/** Tests */
+
 #define ABORT_ROUND  0
 #define COMMIT_ROUND 1
+#define MAX_ROUND    2
 
 static void
-local_transaction(void **state)
+ut_local_transaction(void **state)
 {
 	struct io_test_args   *arg = *state;
+	daos_handle_t          coh = arg->ctx.tc_co_hdl;
 	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
 
-	int                    rc = 0;
-	int                    passed_rc;
-	char                   buf[BUF_SIZE];
 	struct dtx_handle     *dth       = NULL;
 	const char            *test_data = "Hello";
 
-	daos_key_t            *insert_dkey           = &la->dkey[0];
-	daos_key_t            *insert_and_punch_dkey = &la->dkey[1];
+	dts_print_start_message();
 
-	print_message("Test:\n");
+	for (int i = 0; i < MAX_ROUND; i++) {
+		dth = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
 
-	for (int i = 0; i < 2; i++) {
-		print_message("- begin local transaction\n");
-		rc = dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, 256, 0, NULL, NULL, 0, DTX_LOCAL,
-			       NULL, &dth);
-		assert_rc_equal(rc, 0);
-		assert_non_null(dth);
-
-		la->iod.iod_size = strlen(test_data);
-		d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data, la->iod.iod_size);
-
-		print_message("- insert at DKEY[0]\n");
-		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, insert_dkey,
-				       1, &la->iod, NULL, &la->sgl, dth);
-		assert_rc_equal(rc, 0);
-
-		print_message("- insert and punch at DKEY[1]\n");
-		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0,
-				       insert_and_punch_dkey, 1, &la->iod, NULL, &la->sgl, dth);
-		assert_rc_equal(rc, 0);
-		rc = vos_obj_punch(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0,
-				   insert_and_punch_dkey, 0, NULL, dth);
-		assert_rc_equal(rc, 0);
+		dts_update(coh, la, DKEY_ID0, test_data, dth);
+		dts_update(coh, la, DKEY_ID1, test_data, dth);
+		++la->epoch;
+		dts_punch_dkey(coh, la, DKEY_ID1, dth);
 
 		if (i == ABORT_ROUND) {
-			/** abort the first time */
-			print_message("- abort the transaction\n");
-			passed_rc = -DER_EXIST;
+			/** On abort, both values are expected to be non-existing. */
+			dts_local_abort(dth);
+			DTS_FETCH_NON_EXISTING(coh, la, DKEY_ID0);
+			DTS_FETCH_NON_EXISTING(coh, la, DKEY_ID1);
 		} else { /** COMMIT_ROUND */
-			/** commit the second time */
-			print_message("- commit the transaction\n");
-			passed_rc = 0;
-		}
-		rc = dtx_end(dth, NULL, passed_rc);
-		assert_rc_equal(rc, passed_rc);
-
-		d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
-
-		print_message("- try fetching the inserted value\n");
-		fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, insert_dkey, &la->iod,
-		      &la->fetch_sgl);
-
-		if (i == ABORT_ROUND) {
-			validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
-		} else { /** COMMIT_ROUND */
-			validate_fetch(&la->iod, &la->fetch_sgl, test_data, true);
+			/** On commit, only the non-punched value is expected to exists. */
+			dts_local_commit(dth);
+			DTS_FETCH_EXISTING(coh, la, DKEY_ID0, test_data);
+			DTS_FETCH_NON_EXISTING(coh, la, DKEY_ID1);
 		}
 
-		print_message("- try fetching the inserted and punched value\n");
-		fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, insert_and_punch_dkey, &la->iod,
-		      &la->fetch_sgl);
-		validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
-
-		la->epoch++;
+		++la->epoch;
 	}
 }
 
 #define OIDS_NUM 100
 
 static void
-big_local_transaction(void **state)
+ut_big_local_transaction(void **state)
 {
 	struct io_test_args   *arg = *state;
+	daos_handle_t          coh = arg->ctx.tc_co_hdl;
 	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
 
 	int                    rc = 0;
-	int                    passed_rc;
 	char                   buf[BUF_SIZE];
 	struct dtx_handle     *dth       = NULL;
 	const char            *test_data = "Hello";
@@ -296,197 +349,173 @@ big_local_transaction(void **state)
 		oids[i] = gen_oid(arg->otype);
 	}
 
-	print_message("Test:\n");
+	dts_print_start_message();
 
-	print_message("- begin local transaction\n");
-	rc =
-	    dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, 256, 0, NULL, NULL, 0, DTX_LOCAL, NULL, &dth);
-	assert_rc_equal(rc, 0);
-	assert_non_null(dth);
+	for (int r = 0; r < MAX_ROUND; r++) {
+		dth = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
 
-	la->iod.iod_size = strlen(test_data);
-	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data, la->iod.iod_size);
+		print_message("- insert at all %d OIDs\n", OIDS_NUM);
+		la->iod.iod_size = strlen(test_data);
+		d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data, la->iod.iod_size);
+		for (int i = 0; i < OIDS_NUM; ++i) {
+			rc = vos_obj_update_ex(coh, oids[i], la->epoch, 0, 0, dkey, 1, &la->iod,
+					       NULL, &la->sgl, dth);
+			assert_rc_equal(rc, 0);
+		}
 
-	print_message("- insert at all OIDs\n");
-	for (int i = 0; i < OIDS_NUM; ++i) {
-		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oids[i], la->epoch++, 0, 0, dkey, 1,
-				       &la->iod, NULL, &la->sgl, dth);
-		assert_rc_equal(rc, 0);
+		if (r == ABORT_ROUND) {
+			dts_local_abort(dth);
+			print_message("- " FETCH_NON_EXISTING_STR "\n");
+		} else { /** COMMIT_ROUND */
+			dts_local_commit(dth);
+			print_message("- " FETCH_EXISTING_STR "\n");
+		}
+
+		for (int i = 0; i < OIDS_NUM; ++i) {
+			d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
+			dts_fetch(coh, oids[i], la->epoch, dkey, &la->iod, &la->fetch_sgl);
+
+			if (r == ABORT_ROUND) {
+				dts_validate(&la->iod, &la->fetch_sgl, NULL, NON_EXISTING);
+			} else { /** COMMIT_ROUND */
+				dts_validate(&la->iod, &la->fetch_sgl, test_data, EXISTING);
+			}
+		}
 	}
-
-	print_message("- abort the transaction\n");
-	passed_rc = -DER_EXIST;
-	rc        = dtx_end(dth, NULL, passed_rc);
-	assert_rc_equal(rc, passed_rc);
-
-	print_message("- try fetching the inserted values\n");
-	for (int i = 0; i < OIDS_NUM; ++i) {
-		d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
-		fetch(arg->ctx.tc_co_hdl, oids[i], la->epoch, dkey, &la->iod, &la->fetch_sgl);
-
-		validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
-	}
-
-	la->epoch++;
 }
 
 #undef OIDS_NUM
 
 static void
-too_complex_transaction(void **state)
+ut_too_many_submodifications(void **state)
 {
 	struct io_test_args   *arg = *state;
+	daos_handle_t          coh = arg->ctx.tc_co_hdl;
 	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
 
-	int                    rc = 0;
-	char                   buf[BUF_SIZE];
+	int                    rc        = 0;
 	struct dtx_handle     *dth       = NULL;
 	const char            *test_data = "Hello";
-	daos_key_t            *dkey0     = &la->dkey[0];
-	daos_key_t            *dkey1     = &la->dkey[1];
+	daos_key_t            *dkey1     = &la->dkey[DKEY_ID1];
 
-	print_message("Test:\n");
+	dts_print_start_message();
 
-	print_message("- begin local transaction\n");
-	uint16_t sub_modification_cnt = 0;
-	rc = dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, sub_modification_cnt, 0, NULL, NULL, 0,
-		       DTX_LOCAL, NULL, &dth);
-	assert_rc_equal(rc, 0);
-	assert_non_null(dth);
+	dth = dts_local_begin(arg->ctx.tc_po_hdl, 0 /** sub_modification_cnt */);
 
-	la->iod.iod_size = strlen(test_data);
-	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data, la->iod.iod_size);
+	/** there is always a single inline slot available */
+	dts_update(coh, la, DKEY_ID0, test_data, dth);
 
-	/* there is always a single inline slot available */
-	print_message("- insert at DKEY[0] (rc=0)\n");
-	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, dkey0, 1, &la->iod,
-			       NULL, &la->sgl, dth);
-	assert_rc_equal(rc, 0);
-
-	/* there should not be slot available to record another operation */
-	print_message("- insert at DKEY[1] (rc=-DER_NOMEM)\n");
-	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, dkey1, 1, &la->iod,
-			       NULL, &la->sgl, dth);
+	/** there should not be available slot to record another operation */
+	print_message(UPDATE_FORMAT, DKEY_ID1, la->epoch, -DER_NOMEM);
+	rc = vos_obj_update_ex(coh, la->oid, la->epoch, 0, 0, dkey1, 1, &la->iod, NULL, &la->sgl,
+			       dth);
 	assert_rc_equal(rc, -DER_NOMEM);
 
-	print_message("- abort the transaction (rc=-DER_NOMEM)\n");
-	rc = dtx_end(dth, NULL, rc);
-	assert_rc_equal(rc, -DER_NOMEM);
+	/** When an operation in a transaction fail the whole transaction has to be aborted. */
+	dts_local_abort(dth);
 
-	d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
-
-	print_message("- try fetching the value inserted at DKEY[0]\n");
-	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, dkey0, &la->iod, &la->fetch_sgl);
-	validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
-
-	print_message("- try fetching the value that failed to be inserted at DKEY[1]\n");
-	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, dkey1, &la->iod, &la->fetch_sgl);
-	validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
+	DTS_FETCH_NON_EXISTING(coh, la, DKEY_ID0);
+	DTS_FETCH_NON_EXISTING(coh, la, DKEY_ID1);
 }
 
 static void
-overlapping_updates(void **state)
+ut_overlapping(void **state)
 {
 	struct io_test_args   *arg = *state;
+	daos_handle_t          coh = arg->ctx.tc_co_hdl;
 	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
-
-	int                    rc = 0;
-	char                   buf[BUF_SIZE];
 
 	struct dtx_handle     *dth         = NULL;
 	const char            *test_data_1 = "Hello";
 	const char            *test_data_2 = "Bye";
-	daos_key_t            *dkey        = &la->dkey[0];
 
-	print_message("Test:\n");
+	dts_print_start_message();
 
-	print_message("- begin local transaction\n");
-	rc =
-	    dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, 256, 0, NULL, NULL, 0, DTX_LOCAL, NULL, &dth);
-	assert_rc_equal(rc, 0);
-	assert_non_null(dth);
+	/** Overlapping operations affecting the existence of an entity are allowed as long as they
+	 * take place in the same transactions.
+	 * - overlapping operations - targeting the same major epoch and the same entity
+	 * - entity - fully described by OID + DKEY + AKEY path
+	 *
+	 * The overwrites tested here are possible by leveraging the minor epoch comparison. Each
+	 * next operation in the local transaction belongs to next minor epoch. So an operation that
+	 * happens later in the transaction can overwrite what has happened earlier in the
+	 * transaction.
+	 *
+	 * Note: Punch operations targeting just an OID or DKEY/AKEY affect all entities that have
+	 * them specified on their OID + DKEY + AKEY path.
+	 *
+	 * Note: Updating already existing value or punching already punched value does not affect
+	 * the entity's existence.
+	 * */
+	dth = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
 
-	la->iod.iod_size = strlen(test_data_1);
-	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data_1, la->iod.iod_size);
+	dts_update(coh, la, DKEY_ID0, test_data_1, dth);
+	dts_update(coh, la, DKEY_ID0, test_data_2, dth);
 
-	print_message("- insert at DKEY[0] (rc=0)\n");
-	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch, 0, 0, dkey, 1, &la->iod,
-			       NULL, &la->sgl, dth);
-	assert_rc_equal(rc, 0);
+	dts_update(coh, la, DKEY_ID1, test_data_1, dth);
+	dts_punch_dkey(coh, la, DKEY_ID1, dth);
 
-	la->iod.iod_size = strlen(test_data_2);
-	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data_2, la->iod.iod_size);
+	dts_punch_dkey(coh, la, DKEY_ID2, dth);
+	dts_update(coh, la, DKEY_ID2, test_data_1, dth);
 
-	print_message("- insert at DKEY[0] on the same epoch (rc=0)\n");
-	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, dkey, 1, &la->iod,
-			       NULL, &la->sgl, dth);
-	assert_rc_equal(rc, 0);
+	dts_punch_dkey(coh, la, DKEY_ID3, dth);
+	dts_punch_dkey(coh, la, DKEY_ID3, dth);
 
-	print_message("- commit the transaction (rc=0)\n");
-	rc = dtx_end(dth, NULL, rc);
-	assert_rc_equal(rc, 0);
+	dts_local_commit(dth);
 
-	d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
-
-	print_message("- try fetching the value inserted at DKEY[0]\n");
-	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, dkey, &la->iod, &la->fetch_sgl);
-	validate_fetch(&la->iod, &la->fetch_sgl, test_data_2, true);
+	DTS_FETCH_EXISTING(coh, la, DKEY_ID0, test_data_2);
+	DTS_FETCH_NON_EXISTING(coh, la, DKEY_ID1);
+	DTS_FETCH_EXISTING(coh, la, DKEY_ID2, test_data_1);
+	DTS_FETCH_NON_EXISTING(coh, la, DKEY_ID3);
 }
 
 static void
-overlapping_update_and_punch(void **state)
+ut_rdb_mc(void **state)
 {
 	struct io_test_args   *arg = *state;
+	daos_handle_t          coh = arg->ctx.tc_co_hdl;
 	struct dts_local_args *la  = (struct dts_local_args *)arg->custom;
 
-	int                    rc = 0;
-	char                   buf[BUF_SIZE];
+	struct dtx_handle     *dth         = NULL;
+	const char            *test_data_1 = "Hello";
+	const char            *test_data_2 = "Bye";
 
-	struct dtx_handle     *dth       = NULL;
-	const char            *test_data = "Hello";
-	daos_key_t            *dkey      = &la->dkey[0];
+	dts_print_start_message();
 
-	print_message("Test:\n");
+	dth = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
+	dts_update(coh, la, DKEY_ID0, test_data_1, dth);
+	dts_local_commit(dth);
+	DTS_FETCH_EXISTING(coh, la, DKEY_ID0, test_data_1);
 
-	print_message("- begin local transaction\n");
-	rc =
-	    dtx_begin(arg->ctx.tc_po_hdl, NULL, NULL, 256, 0, NULL, NULL, 0, DTX_LOCAL, NULL, &dth);
-	assert_rc_equal(rc, 0);
-	assert_non_null(dth);
+	/** In general re-using the same epoch by consecutive local transactions is discouraged e.g.
+	 * in this case, attempting to punch already existing value will result in undefined
+	 * behaviour. Updating already existing values at already used epoch may have also undefined
+	 * consequences in regard to snapshotting and aggregation.
+	 */
 
-	la->iod.iod_size = strlen(test_data);
-	d_iov_set(&la->sgl.sg_iovs[0], (void *)test_data, la->iod.iod_size);
-
-	print_message("- insert at DKEY[0] (rc=0)\n");
-	rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, la->oid, la->epoch, 0, 0, dkey, 1, &la->iod,
-			       NULL, &la->sgl, dth);
-	assert_rc_equal(rc, 0);
-
-	print_message("- punch DKEY[0] on the same epoch (rc=0)\n");
-	rc = vos_obj_punch(arg->ctx.tc_co_hdl, la->oid, la->epoch++, 0, 0, dkey, 1, &la->akey, dth);
-	assert_rc_equal(rc, 0);
-
-	print_message("- commit the transaction (rc=0)\n");
-	rc = dtx_end(dth, NULL, rc);
-	assert_rc_equal(rc, 0);
-
-	d_iov_set(&la->fetch_sgl.sg_iovs[0], (void *)buf, BUF_SIZE);
-
-	print_message("- expect no value at DKEY[0]\n");
-	fetch(arg->ctx.tc_co_hdl, la->oid, la->epoch, dkey, &la->iod, &la->fetch_sgl);
-	validate_fetch(&la->iod, &la->fetch_sgl, invalid_data, false);
+	dth = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
+	dts_update(coh, la, DKEY_ID0, test_data_2, dth);
+	dts_local_commit(dth);
+	DTS_FETCH_EXISTING(coh, la, DKEY_ID0, test_data_2);
 }
 
+#define BASIC_UT(NO, NAME, FUNC)                                                                   \
+	{                                                                                          \
+		"DTX" #NO ": " NAME, FUNC, setup_local_args, teardown_local_args                   \
+	}
+
+#define WARM_UT(NO, NAME, FUNC)                                                                    \
+	{                                                                                          \
+		"DTX" #NO ": " NAME, FUNC, setup_warm, teardown_warm                               \
+	}
+
 static const struct CMUnitTest local_tests_all[] = {
-    {"DTX100: Simple local transaction", local_transaction, setup_local_args, teardown_local_args},
-    {"DTX101: Simple local transaction with pre-existing data", local_transaction, warmup, cleanup},
-    {"DTX102: Big local transaction", big_local_transaction, warmup, cleanup},
-    {"DTX103: Too complex transaction", too_complex_transaction, setup_local_args,
-     teardown_local_args},
-    {"DTX104: Transaction with an overlapping updates", overlapping_updates, setup_local_args,
-     teardown_local_args},
-    {"DTX105: Transaction with an overlapping update and punch", overlapping_update_and_punch,
-     setup_local_args, teardown_local_args},
+    BASIC_UT(100, "Simple local transaction", ut_local_transaction),
+    WARM_UT(101, "Simple local transaction with pre-existing data", ut_local_transaction),
+    WARM_UT(102, "Big local transaction", ut_big_local_transaction),
+    BASIC_UT(103, "Too many  submodifications", ut_too_many_submodifications),
+    BASIC_UT(104, "Overlapping updates", ut_overlapping),
+    BASIC_UT(105, "RDB's MC update scheme", ut_rdb_mc),
 };
 
 int

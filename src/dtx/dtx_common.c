@@ -804,11 +804,6 @@ dtx_epoch_bound(struct dtx_epoch *epoch)
 	return limit;
 }
 
-/** VOS reserves highest two minor epoch values for internal use so we must
- *  limit the number of dtx sub modifications to avoid conflict.
- */
-#define DTX_SUB_MOD_MAX	(((uint16_t)-1) - 2)
-
 static void
 dtx_shares_init(struct dtx_handle *dth)
 {
