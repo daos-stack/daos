@@ -33,22 +33,22 @@ class EngineEvents(TestWithTelemetry):
         metric_to_data = {}
         for metric in self.telemetry.ENGINE_EVENT_METRICS:
             metric_to_data[metric] = self.telemetry.get_metrics(name=metric)
-        self.log.debug(f"## metric_to_data = {metric_to_data}")
+        self.log.info("metric_to_data = %s", metric_to_data)
 
         # Omit "engine" from the variable name for brevity. The indices correspond to ranks.
         events_dead_ranks = [None for _ in range(rank_count)]
         hosts = list(self.hostlist_servers)
         for host in hosts:
-            metrics = metric_to_data["engine_events_dead_ranks"][host]["engine_events_dead_ranks"]\
-            ["metrics"]
+            engine_events_dead_ranks = metric_to_data["engine_events_dead_ranks"]
+            metrics = engine_events_dead_ranks[host]["engine_events_dead_ranks"]["metrics"]
             for metric in metrics:
                 rank = int(metric["labels"]["rank"])
                 events_dead_ranks[rank] = metric["value"]
 
         events_last_event_ts = [None for _ in range(rank_count)]
         for host in hosts:
-            metrics = metric_to_data["engine_events_last_event_ts"][host]\
-            ["engine_events_last_event_ts"]["metrics"]
+            engine_events_last_event_ts = metric_to_data["engine_events_last_event_ts"]
+            metrics = engine_events_last_event_ts[host]["engine_events_last_event_ts"]["metrics"]
             for metric in metrics:
                 rank = int(metric["labels"]["rank"])
                 events_last_event_ts[rank] = metric["value"]
@@ -67,10 +67,10 @@ class EngineEvents(TestWithTelemetry):
                 rank = int(metric["labels"]["rank"])
                 started_at[rank] = metric["value"]
 
-        self.log.info(f"events_dead_ranks = {events_dead_ranks}")
-        self.log.info(f"events_last_event_ts = {events_last_event_ts}")
-        self.log.info(f"servicing_at = {servicing_at}")
-        self.log.info(f"started_at = {started_at}")
+        self.log.info("events_dead_ranks = %s", events_dead_ranks)
+        self.log.info("events_last_event_ts =%s", events_last_event_ts)
+        self.log.info("servicing_at = %s", servicing_at)
+        self.log.info("started_at = %s", started_at)
 
         return (events_dead_ranks, events_last_event_ts, servicing_at, started_at)
 
@@ -121,9 +121,9 @@ class EngineEvents(TestWithTelemetry):
                         rank_stopped = True
                         break
             if rank_stopped:
-                self.log.info(f"Rank {restart_rank} is stopped. count = {count}")
+                self.log.info("Rank %d is stopped. count = %d", restart_rank, count)
                 break
-            self.log.info(f"Rank {restart_rank} is not stopped. Check again. count = {count}")
+            self.log.info("Rank %d is not stopped. Check again. count = %d", restart_rank, count)
         if not rank_stopped:
             self.fail(f"Rank {restart_rank} didn't stop!")
 
@@ -143,9 +143,9 @@ class EngineEvents(TestWithTelemetry):
                         rank_restarted = True
                         break
             if rank_restarted:
-                self.log.info(f"Rank {restart_rank} is joined. count = {count}")
+                self.log.info("Rank %d is joined. count = %d", restart_rank, count)
                 break
-            self.log.info(f"Rank {restart_rank} is not joined. Check again. count = {count}")
+            self.log.info("Rank %d is not joined. Check again. count = %d", restart_rank, count)
         if not rank_restarted:
             self.fail(f"Rank {restart_rank} didn't restart!")
 
