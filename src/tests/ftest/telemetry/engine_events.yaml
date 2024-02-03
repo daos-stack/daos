@@ -13,20 +13,10 @@ server_config:
       fabric_iface_port: 31416
       log_file: daos_server_0.log
       storage: auto
-      # storage:
-      #   0:
-      #     class: ram
-      #     scm_mount: /mnt/daos0
-      #     scm_size: 5
     1:
       targets: 4
       nr_xs_helpers: 0
-      fabric_iface: ib0
+      fabric_iface: ib1
       fabric_iface_port: 31516
       log_file: daos_server_1.log
       storage: auto
-      # storage:
-      #   0:
-      #     class: ram
-      #     scm_mount: /mnt/daos1
-      #     scm_size: 5
