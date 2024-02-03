@@ -74,6 +74,57 @@ class EngineEvents(TestWithTelemetry):
 
         return (events_dead_ranks, events_last_event_ts, servicing_at, started_at)
 
+    def check_rank_stopped(self, restart_rank, dmg_command):
+        """Check the restart_rank is stopped.
+
+        If it hasn't been stopped, fail the test. This method is created to avoid the pylint error.
+
+        Args:
+            restart_rank (int): Restarted rank.
+            dmg_command (DmgCommand): DmgCommand object.
+        """
+        rank_stopped = False
+        for count in range(3):
+            time.sleep(5)
+            query_out = dmg_command.system_query()
+            for member in query_out["response"]["members"]:
+                if member["rank"] == restart_rank:
+                    if member["state"] == "stopped" or member["state"] == "excluded":
+                        rank_stopped = True
+                        break
+            if rank_stopped:
+                self.log.info("Rank %d is stopped. count = %d", restart_rank, count)
+                break
+            self.log.info("Rank %d is not stopped. Check again. count = %d", restart_rank, count)
+        if not rank_stopped:
+            self.fail(f"Rank {restart_rank} didn't stop!")
+
+    def check_rank_restarted(self, restart_rank, dmg_command):
+        """Check the restart_rank is restarted.
+
+        If it hasn't been restarted, fail the test. This method is created to avoid the pylint
+        error.
+
+        Args:
+            restart_rank (int): Restarted rank.
+            dmg_command (DmgCommand): DmgCommand object.
+        """
+        rank_restarted = False
+        for count in range(3):
+            time.sleep(5)
+            query_out = dmg_command.system_query()
+            for member in query_out["response"]["members"]:
+                if member["rank"] == restart_rank:
+                    if member["state"] == "joined":
+                        rank_restarted = True
+                        break
+            if rank_restarted:
+                self.log.info("Rank %d is joined. count = %d", restart_rank, count)
+                break
+            self.log.info("Rank %d is not joined. Check again. count = %d", restart_rank, count)
+        if not rank_restarted:
+            self.fail(f"Rank {restart_rank} didn't restart!")
+
     def test_engine_events(self):
         """Test engine-related events after an engine is restarted.
 
@@ -111,21 +162,7 @@ class EngineEvents(TestWithTelemetry):
 
         # 4. Verify the desired rank has stopped successfully.
         self.log_step("Verify the desired rank has stopped successfully.")
-        rank_stopped = False
-        for count in range(3):
-            time.sleep(5)
-            query_out = dmg_command.system_query()
-            for member in query_out["response"]["members"]:
-                if member["rank"] == restart_rank:
-                    if member["state"] == "stopped" or member["state"] == "excluded":
-                        rank_stopped = True
-                        break
-            if rank_stopped:
-                self.log.info("Rank %d is stopped. count = %d", restart_rank, count)
-                break
-            self.log.info("Rank %d is not stopped. Check again. count = %d", restart_rank, count)
-        if not rank_stopped:
-            self.fail(f"Rank {restart_rank} didn't stop!")
+        self.check_rank_stopped(restart_rank=restart_rank, dmg_command=dmg_command)
 
         # 5. Restart the stopped rank after several seconds.
         self.log_step("Restart the stopped rank after a few seconds.")
@@ -133,21 +170,7 @@ class EngineEvents(TestWithTelemetry):
 
         # 6. Verify the desired rank restarted successfully.
         self.log_step("Verify the desired rank restarted successfully.")
-        rank_restarted = False
-        for count in range(3):
-            time.sleep(5)
-            query_out = dmg_command.system_query()
-            for member in query_out["response"]["members"]:
-                if member["rank"] == restart_rank:
-                    if member["state"] == "joined":
-                        rank_restarted = True
-                        break
-            if rank_restarted:
-                self.log.info("Rank %d is joined. count = %d", restart_rank, count)
-                break
-            self.log.info("Rank %d is not joined. Check again. count = %d", restart_rank, count)
-        if not rank_restarted:
-            self.fail(f"Rank {restart_rank} didn't restart!")
+        self.check_rank_restarted(restart_rank=restart_rank, dmg_command=dmg_command)
 
         # 7. Gather final data for required metrics with the same command as in step 2.
         self.log_step("Gather final data for required metrics with the same command as in step 2.")
