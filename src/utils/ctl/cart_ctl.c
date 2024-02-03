@@ -760,6 +760,7 @@ main(int argc, char **argv)
 	if (rc != 0)
 		error_exit("Failed to init log; rc=%d\n", rc);
 
+	sleep(5);
 	rc = parse_args(argc, argv);
 	if (rc != 0)
 		error_exit("Failed to parse some arguments\n");
