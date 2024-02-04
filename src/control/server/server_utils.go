@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -523,9 +523,11 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	engine.OnStorageReady(func(_ context.Context) error {
 		srv.log.Debugf("engine %d: storage ready", engine.Index())
 
-		// Attempt to remove unused hugepages, log error only.
-		if err := cleanEngineHugepages(srv); err != nil {
-			srv.log.Errorf(err.Error())
+		if !srv.cfg.DisableHugepages {
+			// Attempt to remove unused hugepages, log error only.
+			if err := cleanEngineHugepages(srv); err != nil {
+				srv.log.Errorf(err.Error())
+			}
 		}
 
 		// Retrieve up-to-date meminfo to check resource availability.
