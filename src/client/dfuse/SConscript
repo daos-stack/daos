@@ -173,6 +173,23 @@ def configure_fuse(cenv):
     check.Finish()
 
 
+def find_static_fuse(cenv, newlib):
+    """Find and copy static fuse library"""
+
+    fuse_prefix = '/usr'
+    if os.path.exists(cenv.subst('$FUSE_PREFIX')):
+        fuse_prefix = cenv.subst('$FUSE_PREFIX')
+
+    newpath = os.path.join(Dir('.').abspath, newlib)
+
+    for path in ['lib64', 'lib/x86_64-linux-gnu', 'lib']:
+        fuselib = os.path.join(fuse_prefix, path, "libfuse3.a")
+        if os.path.exists(fuselib):
+            return cenv.Command(newpath, fuselib, [f"cp {fuselib} {newpath}"])
+    print("Could not find libfuse3.a")
+    return None
+
+
 def scons():
     """Scons function"""
 
@@ -212,7 +229,9 @@ def scons():
 
     cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
-    cenv.require('hwloc', 'fuse')
+    cenv.require('hwloc')
+    cenv.require('fuse', headers_only=True)
+    static_fuse = find_static_fuse(cenv, 'libdaosfuse.a')
 
     configure_fuse(cenv)
 
@@ -221,8 +240,8 @@ def scons():
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', f'{src}.c'))
-    cenv.AppendUnique(LIBS=['gurt'])
-    dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj)
+    cenv.AppendUnique(LIBS=['gurt', 'dl'])
+    dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj + static_fuse)
 
     Default(dfuse_bin)
 
