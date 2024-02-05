@@ -5872,7 +5872,7 @@ def test_fi_list_attr(server, conf, wf):
     """Run daos cont list-attr with fault injection"""
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool)
+    container = create_cont(conf, pool, label="attr_cont")
 
     container.set_attrs({'my-test-attr-1': 'some-value',
                         'my-test-attr-2': 'some-other-value'})
@@ -5895,7 +5895,7 @@ def test_fi_get_prop(server, conf, wf):
     """Run daos cont get-prop with fault injection"""
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool, ctype='POSIX')
+    container = create_cont(conf, pool, ctype='POSIX', label="prop_cont")
 
     cmd = ['daos',
            'container',
@@ -5916,7 +5916,7 @@ def test_fi_get_attr(server, conf, wf):
     """Run daos cont get-attr with fault injection"""
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool)
+    container = create_cont(conf, pool, label="getattr-cont")
 
     attr_name = 'my-test-attr'
 
@@ -5944,7 +5944,7 @@ def test_fi_cont_query(server, conf, wf):
     """Run daos cont query with fault injection"""
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool, ctype='POSIX')
+    container = create_cont(conf, pool, ctype='POSIX', label="cont_query")
 
     cmd = ['daos',
            'container',
@@ -5967,7 +5967,7 @@ def test_fi_cont_check(server, conf, wf):
     """Run daos cont check with fault injection"""
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool)
+    container = create_cont(conf, pool, label="cont_check")
 
     cmd = ['daos',
            'container',
@@ -5998,7 +5998,7 @@ def test_alloc_fail(server, conf):
 
     # Create at least one container, and record what the output should be when
     # the command works.
-    container = create_cont(conf, pool)
+    container = create_cont(conf, pool, label="listing_container")
 
     rc = test_cmd.launch()
     container.destroy()

@@ -235,7 +235,12 @@ ph_decref(struct d_hash_table *htable, d_list_t *link)
 static void
 _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 {
-	int rc;
+	struct dfuse_cont *dfc, *dfcn;
+	bool               free = !used;
+	int                rc;
+
+	if (dfuse_info->di_shutdown)
+		free = true;
 
 	/* Iterate over all historic containers in this pool forgetting about them.  If the handle
 	 * is still valid, for example because of a previous failed attempt to close it then re-try
@@ -243,24 +248,31 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 	 * Other uses of this list are protected by dfuse_info->di_lock however this is in pool free
 	 * so no references are held on the pool at this point so no lock is required here.
 	 */
-	if (used) {
-		struct dfuse_cont *dfc, *dfcn;
-		d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
-			if (daos_handle_is_valid(dfc->dfs_coh)) {
-				rc = daos_cont_close(dfc->dfs_coh, NULL);
-				if (rc != 0)
-					DHL_ERROR(dfc, rc, "daos_cont_close() failed");
-			}
+
+	d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
+		rc = -DER_SUCCESS;
+
+		if (daos_handle_is_valid(dfc->dfs_coh)) {
+			rc = daos_cont_close(dfc->dfs_coh, NULL);
+			if (rc == -DER_SUCCESS)
+				dfc->dfs_coh = DAOS_HDL_INVAL;
+			else
+				DHL_ERROR(dfc, rc, "daos_cont_close() failed");
+		}
+		if (free && rc == -DER_SUCCESS) {
+			d_list_del(&dfc->dfs_entry);
 			D_FREE(dfc);
 		}
 	}
 
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
-		if (rc == -DER_SUCCESS)
+		if (rc == -DER_SUCCESS) {
 			dfp->dfp_poh = DAOS_HDL_INVAL;
-		else
+		} else {
+			free = false;
 			DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
+		}
 	}
 
 	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
@@ -269,7 +281,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_pool_count, 1);
 
-	if (used) {
+	if (!free) {
 		struct dfuse_pool *dfpp;
 		bool               on_list = false;
 
@@ -379,6 +391,11 @@ container_stats_log(struct dfuse_cont *dfc)
 static void
 _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool ref)
 {
+	bool free = !used;
+
+	if (dfuse_info->di_shutdown)
+		free = false;
+
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
 
@@ -404,7 +421,7 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 	 * handle only needs to go on the list if a matching handle is not already on the list or
 	 * there was a problem closing the container.
 	 */
-	if (used) {
+	if (!free) {
 		struct dfuse_cont *dfcp;
 		bool               on_list = false;
 
@@ -418,7 +435,7 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 			}
 		}
 		if (on_list)
-			used = false;
+			free = true;
 		else
 			d_list_add(&dfc->dfs_entry, &dfc->dfs_dfp->dfp_historic);
 		D_SPIN_UNLOCK(&dfuse_info->di_lock);
@@ -428,7 +445,7 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 	if (ref)
 		d_hash_rec_decref(&dfuse_info->di_pool_table, &dfc->dfs_dfp->dfp_entry);
 
-	if (!used)
+	if (free)
 		D_FREE(dfc);
 }
 
