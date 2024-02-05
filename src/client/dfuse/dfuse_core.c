@@ -396,10 +396,10 @@ container_stats_log(struct dfuse_cont *dfc)
 static void
 _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool ref)
 {
-	bool free = !used;
+	bool keep = used;
 
 	if (dfuse_info->di_shutdown)
-		free = false;
+		keep = false;
 
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
@@ -426,22 +426,20 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 	 * handle only needs to go on the list if a matching handle is not already on the list or
 	 * there was a problem closing the container.
 	 */
-	if (!free) {
+	if (keep) {
 		struct dfuse_cont *dfcp;
-		bool               on_list = false;
 
 		D_SPIN_LOCK(&dfuse_info->di_lock);
 		if (daos_handle_is_inval(dfc->dfs_coh)) {
 			d_list_for_each_entry(dfcp, &dfc->dfs_dfp->dfp_historic, dfs_entry) {
 				if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0) {
-					on_list = true;
+					keep = false;
 					break;
 				}
 			}
 		}
-		if (on_list)
-			free = true;
-		else
+
+		if (keep)
 			d_list_add(&dfc->dfs_entry, &dfc->dfs_dfp->dfp_historic);
 		D_SPIN_UNLOCK(&dfuse_info->di_lock);
 	}
@@ -450,7 +448,7 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 	if (ref)
 		d_hash_rec_decref(&dfuse_info->di_pool_table, &dfc->dfs_dfp->dfp_entry);
 
-	if (free)
+	if (!keep)
 		D_FREE(dfc);
 }
 

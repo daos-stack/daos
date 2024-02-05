@@ -2742,6 +2742,67 @@ class PosixTests():
         print(post)
         assert pre.st_ino == post.st_ino
 
+    def test_stable_cont_inode(self):
+        """Ensure that container inodes are persistent
+
+        Create a container outside of dfuse.
+        Start dfuse with no container on command line.
+        Access pool path and read ino
+        Wait for pool path to be evicted
+        Access container path read ino
+        Wait for pool path to be evicted
+        Access container path check ino
+        """
+
+        # Magic value for how long to sleep.  This needs to be long enough for entry timeout,
+        # whatever grace period is configured and some additional to let the eviction process
+        # happen.  This makes for a very long test, plus in addition there is no way of telling
+        # if the eviction has actually happened.
+        # A second test pool would be useful here so we could use filesystem query to check the
+        # inode count.
+        sleep_time = 307 + 5 + 10
+
+        cont0 = create_cont(self.conf, self.pool, label="stable1", ctype="POSIX")
+        cont1 = create_cont(self.conf, self.pool, label="stable2", ctype="POSIX")
+
+        dfuse = DFuse(self.server, self.conf)
+        dfuse.start()
+
+        root_data = os.stat(dfuse.dir)
+        print(root_data)
+
+        pool_data = os.stat(join(dfuse.dir, self.pool.uuid))
+        print(pool_data)
+
+        time.sleep(sleep_time)
+
+        pool_data_post = os.stat(join(dfuse.dir, self.pool.uuid))
+        print(pool_data_post)
+
+        time.sleep(sleep_time)
+
+        cont_data = os.stat(join(dfuse.dir, self.pool.uuid, cont0.uuid))
+        print(cont_data)
+
+        time.sleep(sleep_time)
+
+        cont_data_post = os.stat(join(dfuse.dir, self.pool.uuid, cont0.uuid))
+        print(cont_data_post)
+
+        cont1_data = os.stat(join(dfuse.dir, self.pool.uuid, cont1.uuid))
+        print(cont1_data)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        cont0.destroy()
+        assert root_data.st_ino == 1
+        assert pool_data.st_ino == 2
+        assert pool_data_post.st_ino == pool_data.st_ino
+        assert cont_data.st_ino == 3
+        assert cont_data_post.st_ino == cont_data.st_ino
+        assert cont1_data.st_ino == 4
+
     @needs_dfuse
     def test_evict(self):
         """Evict a file from dfuse"""
@@ -4345,7 +4406,7 @@ def run_posix_tests(server, conf, test=None):
 
         threads = []
 
-        slow_tests = ['test_readdir_25', 'test_uns_basic', 'test_daos_fs_tool']
+        slow_tests = ['test_uns_basic', 'test_daos_fs_tool', 'test_stable_cont_inode']
 
         tests = dir(pto)
         tests.sort(key=lambda x: x not in slow_tests)
