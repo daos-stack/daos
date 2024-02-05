@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -143,6 +143,7 @@ struct dtx_sub_status {
 	int				dss_result;
 	uint32_t			dss_version;
 	uint32_t			dss_comp:1;
+	void				*dss_data;
 };
 
 struct dtx_coll_entry {
@@ -157,7 +158,7 @@ struct dtx_coll_entry {
 };
 
 struct dtx_leader_handle;
-typedef int (*dtx_agg_cb_t)(struct dtx_leader_handle *dlh, int allow_failure);
+typedef int (*dtx_agg_cb_t)(struct dtx_leader_handle *dlh, void *arg);
 
 /* Transaction handle on the leader node to manage the transaction */
 struct dtx_leader_handle {
@@ -176,10 +177,11 @@ struct dtx_leader_handle {
 	/* The future to wait for sub requests to finish. */
 	ABT_future			dlh_future;
 
-	dtx_agg_cb_t			dlh_agg_cb;
 	int32_t				dlh_allow_failure;
 					/* Normal sub requests have been processed. */
 	uint32_t			dlh_normal_sub_done:1,
+					dlh_need_agg:1,
+					dlh_agg_done:1,
 					/* For collective DTX. */
 					dlh_coll:1,
 					/* Only forward RPC, but neither commit nor abort DTX. */
