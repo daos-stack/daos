@@ -31,7 +31,7 @@
  *
  * Separately have a thread which periodically will walk each list starting at the front and
  * invalidate any entries where the timeout has expired.
- * TODO: Ensure all public facing information about thread counts is correct.
+ *
  * In this way the lists are never traversed, on access a entry is removed from where it is and
  * appended to the end, and the timeout starts at the front of the list and traverses only as far
  * as it needs to until the front entry is to be kept.
@@ -74,8 +74,6 @@
 
 /* Grace period before invalidating directories or non-directories.  Needs to be long enough so that
  * entries in the working set are invalidated but short enough to be meaningful.
- * Directories that are used as the cwd for processes can cause problems with being invalidated too
- * early so use a higher value here.
  */
 #define INVAL_DIRECTORY_GRACE 5
 #define INVAL_FILE_GRACE      2
