@@ -260,7 +260,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 		if (rc == -DER_SUCCESS)
 			dfp->dfp_poh = DAOS_HDL_INVAL;
 		else
-			DHL_ERROR(dfc, rc, "daos_pool_disconnect() failed");
+			DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
 	}
 
 	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
@@ -778,7 +778,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		} else {
 			/* This represents the case where a pool is being accessed without a
 			 * container, so either just a pool is specified or neither is and this is
-			 * a second level directory.  If this is a second level direcory then it
+			 * a second level directory.  If this is a second level directory then it
 			 * could expire and be re-accessed so save the allocated inode.
 			 */
 			struct dfuse_pool *dfpp;
