@@ -138,7 +138,7 @@ class NLTConf():
         a new process is launched then reap any previous ones which have completed.
         """
         # pylint: disable=consider-using-with
-        self._compress_procs[:] = (proc for proc in self._compress_procs if proc.poll())
+        self._compress_procs[:] = (proc for proc in self._compress_procs if proc.poll() is None)
         self._compress_procs.append(subprocess.Popen(['bzip2', '--best', filename]))
 
     def flush_bz2(self):
@@ -2588,6 +2588,7 @@ class PosixTests():
         print(os.listdir(path))
         cmd = ['cont', 'destroy', '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
 
         path = join(self.dfuse.dir, 'uns_link2')
         cmd = ['cont', 'link', self.pool.id(), container2.id(), '--path', path]
