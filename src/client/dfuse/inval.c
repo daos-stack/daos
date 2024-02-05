@@ -447,7 +447,9 @@ ival_bucket_dec_value(double timeout)
 	}
 }
 
-/* Ensure the correct buckets exist for a attached container */
+/* Ensure the correct buckets exist for a attached container.  Pools have a zero dentry timeout
+ * so skip zero values
+ */
 int
 ival_add_cont_buckets(struct dfuse_cont *dfc)
 {
@@ -455,12 +457,14 @@ ival_add_cont_buckets(struct dfuse_cont *dfc)
 
 	D_MUTEX_LOCK(&ival_lock);
 
-	rc = ival_bucket_add_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
+	rc = ival_bucket_add_value(dfc->dfc_dentry_dir_timeout + INVAL_FILE_GRACE);
 	if (rc != 0)
 		goto out;
-	rc = ival_bucket_add_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
-	if (rc != 0)
-		ival_bucket_dec_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
+	if (dfc->dfc_dentry_timeout != 0) {
+		rc = ival_bucket_add_value(dfc->dfc_dentry_timeout + INVAL_DIRECTORY_GRACE);
+		if (rc != 0)
+			ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + INVAL_FILE_GRACE);
+	}
 
 out:
 	D_MUTEX_UNLOCK(&ival_lock);
@@ -472,7 +476,8 @@ void
 ival_dec_cont_buckets(struct dfuse_cont *dfc)
 {
 	D_MUTEX_LOCK(&ival_lock);
-	ival_bucket_dec_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
+	if (dfc->dfc_dentry_timeout != 0)
+		ival_bucket_dec_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
 	ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
 	D_MUTEX_UNLOCK(&ival_lock);
 }

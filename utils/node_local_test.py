@@ -4759,10 +4759,10 @@ def run_in_fg(server, conf, args):
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
         cont_attrs = {'dfuse-data-cache': False,
-                      'dfuse-attr-time': 60,
-                      'dfuse-dentry-time': 60,
-                      'dfuse-dentry-dir-time': 10,
-                      'dfuse-ndentry-time': 60,
+                      'dfuse-attr-time': 67,
+                      'dfuse-dentry-time': 19,
+                      'dfuse-dentry-dir-time': 31,
+                      'dfuse-ndentry-time': 61,
                       'dfuse-direct-io-disable': False}
         container.set_attrs(cont_attrs)
         container = container.uuid
@@ -5604,7 +5604,7 @@ def test_dfuse_start(server, conf, wf):
     """
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool, ctype='POSIX')
+    container = create_cont(conf, pool, ctype='POSIX', label="dfuse_fi_start")
 
     mount_point = join(conf.dfuse_parent_dir, 'fi-mount')
 

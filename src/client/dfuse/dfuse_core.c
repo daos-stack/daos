@@ -235,7 +235,6 @@ ph_decref(struct d_hash_table *htable, d_list_t *link)
 static void
 _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 {
-	struct dfuse_cont *dfc, *dfcn;
 	int rc;
 
 	/* Iterate over all historic containers in this pool forgetting about them.  If the handle
@@ -245,6 +244,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 	 * so no references are held on the pool at this point so no lock is required here.
 	 */
 	if (used) {
+		struct dfuse_cont *dfc, *dfcn;
 		d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
 			if (daos_handle_is_valid(dfc->dfs_coh)) {
 				rc = daos_cont_close(dfc->dfs_coh, NULL);
@@ -863,7 +863,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		d_list_for_each_entry(dfcp, &dfp->dfp_historic, dfs_entry) {
 			if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0) {
 				dfc->dfs_ino = dfcp->dfs_ino;
-			break;
+				break;
 			}
 		}
 		D_SPIN_UNLOCK(&dfuse_info->di_lock);
@@ -1612,7 +1612,6 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 	d_list_for_each_entry_safe(dfp, dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
 		if (daos_handle_is_valid(dfp->dfp_poh)) {
 			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
-			/* TODO: clang-format does not like this code for some reason */
 			if (rc != -DER_SUCCESS) {
 				DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
 			}
