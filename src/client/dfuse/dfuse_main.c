@@ -171,7 +171,8 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 int
 dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 {
-	int rc;
+	pthread_t self;
+	int       rc;
 
 	dfuse_info->di_session = fuse_session_new(args, &dfuse_ops, sizeof(dfuse_ops), dfuse_info);
 	if (dfuse_info->di_session == NULL) {
@@ -201,6 +202,9 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 	rc = dfuse_send_to_fg(0);
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
+
+	self = pthread_self();
+	pthread_setname_np(self, "main");
 
 	/* Blocking */
 	if (dfuse_info->di_threaded)
@@ -264,7 +268,7 @@ show_help(char *name)
 	    "	   --path=<path>	Path to load UNS pool/container data\n"
 	    "	   --sys-name=STR	DAOS system name context for servers\n"
 	    "\n"
-	    "	-S --singlethread	Single threaded\n"
+	    "	-S --singlethread	Single threaded (deprecated)\n"
 	    "	-t --thread-count=count	Total number of threads to use\n"
 	    "	-e --eq-count=count	Number of event queues to use\n"
 	    "	-f --foreground		Run in foreground\n"
@@ -316,20 +320,22 @@ show_help(char *name)
 	    "\n"
 	    "Threading and resource usage:\n"
 	    "dfuse has two types of threads: fuse threads which accept and process requests from\n"
-	    "the kernel, and progress threads which complete asynchronous read/write operations.\n"
+	    "the kernel, and progress threads which complete asynchronous read/write and some\n"
+	    "metadata operations.\n"
 	    "Each asynchronous progress thread uses one DAOS event queue to consume additional\n"
 	    "network resources. As all metadata operations are blocking, the level of concurrency\n"
 	    "in dfuse is limited by the number of fuse threads.\n"
-	    "By default, the total thread count is one per available core to allow maximum\n"
-	    "throughput. If hyperthreading is enabled, then one thread per hyperthread core\n"
-	    "is used. This can be modified in two ways: Reducing the number of available\n"
-	    "cores by running dfuse in a cpuset via numactl or similar tools,\n"
+	    "By default, the total thread count is controlled by the number available cores,\n"
+	    "if dfuse is not restricted via a cpuset it will use a maximum of 16 cores, however\n"
+	    "if a cpuset is active it will use the entire cpuset\n"
+	    "If hyperthreading is enabled, then one thread per hyperthread core is used. This can\n"
+	    "be modified in two ways: Reducing the number of available cores by running dfuse in\n"
+	    "a cpuset via numactl or similar tools,\n"
 	    "or by using the --thread-count, --eq-count or --singlethread options:\n"
 	    "* The --thread-count option controls the total number of threads.\n"
 	    "* Increasing the --eq-count option at a fixed --thread-count will reduce the number\n"
 	    "  of fuse threads accordingly. The default value for --eq-count is 1.\n"
-	    "* The --singlethread mode will use one thread for handling fuse requests and a\n"
-	    "  second thread for a single event queue, for a total of two threads.\n"
+	    "dfuse will also always run one main thread and one invalidation thread\n"
 	    "\n"
 	    "If dfuse is running in background mode (the default unless launched via mpirun)\n"
 	    "then it will stay in the foreground until the mount is registered with the\n"

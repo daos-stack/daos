@@ -708,7 +708,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
 			dfuse_mcache_set_time(ie);                                                 \
 		}                                                                                  \
-		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %.1lf",   \
 				(attr)->st_ino, (attr)->st_mode, (attr)->st_size, timeout);        \
 		__rc = fuse_reply_attr(req, attr, timeout);                                        \
 		(ie) = NULL;                                                                       \
@@ -719,7 +719,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ATTR_FORCE(ie, req, timeout)                                                   \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %.1lf",   \
 				(ie)->ie_stat.st_ino, (ie)->ie_stat.st_mode,                       \
 				(ie)->ie_stat.st_size, timeout);                                   \
 		__rc = fuse_reply_attr(req, &ie->ie_stat, timeout);                                \
