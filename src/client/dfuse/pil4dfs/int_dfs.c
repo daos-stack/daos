@@ -2822,8 +2822,6 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 	}
 
 	file_list[fd_directed - FD_FILE_BASE]->offset = new_offset;
-	/* clear errno since it could be set elsewhere */
-	errno = 0;
 	return new_offset;
 }
 
