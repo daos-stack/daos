@@ -1133,8 +1133,8 @@ next2:
 				if (rc1 != DTX_ST_COMMITTED && rc1 != DTX_ST_ABORTED &&
 				    rc1 != -DER_NONEXIST) {
 					if (!for_io)
-						D_INFO("Hit some long-time DTX "DF_DTI", %d\n",
-						       DP_DTI(&dsp->dsp_xid), rc1);
+						D_WARN("Hit unexpected long-time DTX "
+						       DF_DTI": %d\n", DP_DTI(&dsp->dsp_xid), rc1);
 					else if (rc == 0)
 						rc = -DER_INPROGRESS;
 				}
