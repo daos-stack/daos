@@ -140,7 +140,8 @@ scripts of any resource manager or scheduler in use.
 
 ### Core binding and threads
 
-DFuse will launch one thread per available core by default, although this can be
+DFuse will launch one thread per available core by default, limited to 16 if not
+constrained by a taskset.  This can be
 changed by the `--thread-count` option. To change the cores that DFuse runs on
 use kernel level tasksets which will bind DFuse to a subset of cores. This can be
 done via the `tasket` or `numactl` programs or similar. If doing this then DFuse
@@ -149,10 +150,13 @@ operations will block a thread until completed so if restricting DFuse to a smal
 number of cores then overcommiting via the `--thread-count` option may be desirable.
 
 DFuse will use two types of threads: fuse threads to accept and process requests
-and event queue threads.  The `--thread-count` option will dictate the total number of
+and event queue progress threads.  The `--thread-count` option will dictate the total number of
 threads and each eq-thread will reduce this.  Each event queue thread will create a
 daos event queue so consumes additional network resources.  The `--eq-count` option
 will control the event queues and associated threads.
+
+In addition DFuse will always also use a single main thread and a invalidation thread
+to manage dentry timeouts.
 
 ### Restrictions
 
