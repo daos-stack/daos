@@ -233,40 +233,44 @@ ph_decref(struct d_hash_table *htable, d_list_t *link)
 }
 
 static void
-_ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp)
+_ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 {
 	struct dfuse_cont *dfc, *dfcn;
 	int rc;
 
 	/* Iterate over all historic containers in this pool forgetting about them.  If the handle
 	 * is still valid, for example because of a previous failed attempt to close it then re-try
-	 * here
+	 * here.
+	 * Other uses of this list are protected by dfuse_info->di_lock however this is in pool free
+	 * so no references are held on the pool at this point so no lock is required here.
 	 */
-	D_SPIN_LOCK(&dfuse_info->di_lock);
-	d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
-		if (daos_handle_is_valid(dfc->dfs_coh)) {
-			rc = daos_cont_close(dfc->dfs_coh, NULL);
-			if (rc != 0)
-				DHL_ERROR(dfc, rc, "daos_cont_close() failed");
+	if (used) {
+		d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
+			if (daos_handle_is_valid(dfc->dfs_coh)) {
+				rc = daos_cont_close(dfc->dfs_coh, NULL);
+				if (rc != 0)
+					DHL_ERROR(dfc, rc, "daos_cont_close() failed");
+			}
+			D_FREE(dfc);
 		}
-		D_FREE(dfc);
 	}
-	D_SPIN_UNLOCK(&dfuse_info->di_lock);
 
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+#if 0
 		/* Hook for fault injection testing, if the disconnect fails with out of memory
 		 * then simply try it again.
 		 */
 		if (rc == -DER_NOMEM)
 			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+#endif
 		if (rc != -DER_SUCCESS)
-			DFUSE_TRA_ERROR(dfp, "daos_pool_disconnect() failed: " DF_RC, DP_RC(rc));
+			DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
 	}
 
 	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
 	if (rc != -DER_SUCCESS)
-		DFUSE_TRA_ERROR(dfp, "Failed to destroy pool hash table: " DF_RC, DP_RC(rc));
+		DHL_ERROR(dfp, rc, "Failed to destroy pool hash table");
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_pool_count, 1);
 
@@ -276,7 +280,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp)
 static void
 ph_free(struct d_hash_table *htable, d_list_t *link)
 {
-	_ph_free(htable->ht_priv, container_of(link, struct dfuse_pool, dfp_entry));
+	_ph_free(htable->ht_priv, container_of(link, struct dfuse_pool, dfp_entry), true);
 }
 
 static d_hash_table_ops_t pool_hops = {
@@ -486,7 +490,7 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 
 	if (rlink != &dfp->dfp_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing pool, reusing");
-		_ph_free(dfuse_info, dfp);
+		_ph_free(dfuse_info, dfp, false);
 		dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 	}
 
