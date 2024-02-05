@@ -805,7 +805,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		}
 
 		dfc->dfc_attr_timeout       = 60 * 5;
-		dfc->dfc_dentry_dir_timeout = 5;
+		dfc->dfc_dentry_dir_timeout = 60 * 5;
 		dfc->dfc_ndentry_timeout    = 60 * 5;
 
 		rc = ival_add_cont_buckets(dfc);
@@ -1579,18 +1579,6 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 		sem_destroy(&eqt->de_sem);
 	}
 
-	d_list_for_each_entry_safe(dfp, dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
-		if (daos_handle_is_inval(dfp->dfp_poh)) {
-			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
-			/* TODO: clang-format does not like this code for some reason */
-			if (rc != -DER_SUCCESS) {
-			DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
-			}
-		}
-		d_list_del(&dfp->dfp_entry);
-		D_FREE(dfp);
-	}
-
 	/* First flush, instruct the kernel to forget items.  This will run and work in ideal cases
 	 * but often if the filesystem is unmounted it'll abort part-way through.
 	 */
@@ -1620,6 +1608,18 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 	rc = d_hash_table_traverse(&dfuse_info->dpi_iet, ino_dfs_flush, dfuse_info);
 
 	DHL_INFO(dfuse_info, rc, "Second flush complete");
+
+	d_list_for_each_entry_safe(dfp, dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
+		if (daos_handle_is_valid(dfp->dfp_poh)) {
+			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+			/* TODO: clang-format does not like this code for some reason */
+			if (rc != -DER_SUCCESS) {
+				DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
+			}
+		}
+		d_list_del(&dfp->dfp_entry);
+		D_FREE(dfp);
+	}
 
 	/* This hash table should now be empty, but check it anyway and fail if any entries */
 	rc = d_hash_table_traverse(&dfuse_info->di_pool_table, dfuse_pool_close_cb, dfuse_info);
