@@ -913,7 +913,6 @@ dfuse_cont_get_handle(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uui
 		      struct dfuse_cont **_dfc)
 {
 	d_list_t *rlink;
-	char      uuid_str[37];
 
 	rlink = d_hash_rec_find(&dfp->dfp_cont_table, cont, sizeof(*cont));
 	if (rlink) {
@@ -921,9 +920,14 @@ dfuse_cont_get_handle(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uui
 		return 0;
 	}
 
-	uuid_unparse(cont, uuid_str);
+	if (uuid_is_null(cont)) {
+		return dfuse_cont_open(dfuse_info, dfp, NULL, _dfc);
+	} else {
+		char uuid_str[37];
 
-	return dfuse_cont_open(dfuse_info, dfp, uuid_str, _dfc);
+		uuid_unparse(cont, uuid_str);
+		return dfuse_cont_open(dfuse_info, dfp, uuid_str, _dfc);
+	}
 }
 
 /* Set a timer to mark cache entry as valid */
