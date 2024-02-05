@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -26,12 +27,20 @@ import (
 
 func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 	c := storage.MockNvmeController(2)
+	withState := func(ctrlr *ctlpb.NvmeController, state ctlpb.NvmeDevState) *ctlpb.NvmeController {
+		ctrlr.DevState = state
+		ctrlr.HealthStats = nil
+		// scanEngineBdevsOverDrpc will always populate RoleBits in ctrlr.SmdDevices
+		ctrlr.SmdDevices = []*ctlpb.SmdDevice{{RoleBits: 7}}
+		return ctrlr
+	}
+	withDevState := func(smd *ctlpb.SmdDevice, state ctlpb.NvmeDevState) *ctlpb.SmdDevice {
+		smd.Ctrlr.DevState = state
+		return smd
+	}
 	defSmdScanRes := func() *ctlpb.SmdDevResp {
-		return &ctlpb.SmdDevResp{
-			Devices: []*ctlpb.SmdDevice{
-				proto.MockSmdDevice(c, 2),
-			},
-		}
+		sd := proto.MockSmdDevice(c, 2)
+		return &ctlpb.SmdDevResp{Devices: []*ctlpb.SmdDevice{sd}}
 	}
 	healthRespWithUsage := func() *ctlpb.BioHealthResp {
 		mh := proto.MockNvmeHealth(2)
@@ -43,6 +52,7 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req                 ctlpb.ScanNvmeReq
 		bdevAddrs           []string
+		rank                int
 		provRes             *storage.BdevScanResponse
 		provErr             error
 		engStopped          bool
@@ -69,8 +79,20 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			},
 			expResp: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
-					proto.MockNvmeController(1),
-					proto.MockNvmeController(2),
+					func() *ctlpb.NvmeController {
+						c := proto.MockNvmeController(1)
+						c.SmdDevices = []*ctlpb.SmdDevice{
+							{Rank: uint32(ranklist.NilRank)},
+						}
+						return c
+					}(),
+					func() *ctlpb.NvmeController {
+						c := proto.MockNvmeController(2)
+						c.SmdDevices = []*ctlpb.SmdDevice{
+							{Rank: uint32(ranklist.NilRank)},
+						}
+						return c
+					}(),
 				},
 				State: new(ctlpb.ResponseState),
 			},
@@ -86,7 +108,13 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			engStopped: true,
 			expResp: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
-					proto.MockNvmeController(1),
+					func() *ctlpb.NvmeController {
+						c := proto.MockNvmeController(1)
+						c.SmdDevices = []*ctlpb.SmdDevice{
+							{Rank: uint32(ranklist.NilRank)},
+						}
+						return c
+					}(),
 				},
 				State: new(ctlpb.ResponseState),
 			},
@@ -106,27 +134,81 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			provErr:    errors.New("provider scan fail"),
 			expErr:     errors.New("provider scan fail"),
 		},
-		"scan over drpc; no health or meta": {
-			smdRes:    defSmdScanRes(),
-			healthRes: proto.MockNvmeHealth(2),
+		"engines stopped; scan over engine provider; vmd enabled": {
+			bdevAddrs:  []string{"0000:05:05.5"},
+			engStopped: true,
+			provRes: &storage.BdevScanResponse{
+				Controllers: storage.NvmeControllers{
+					&storage.NvmeController{
+						PciAddr:   "050505:01:00.0",
+						NvmeState: storage.NvmeStateNormal,
+					},
+					&storage.NvmeController{
+						PciAddr:   "050505:03:00.0",
+						NvmeState: storage.NvmeStateNormal,
+					},
+				},
+			},
 			expResp: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
 					func() *ctlpb.NvmeController {
-						c := proto.MockNvmeController(2)
-						c.HealthStats = nil
-						c.SmdDevices = nil
-						return c
+						nc := &ctlpb.NvmeController{
+							PciAddr:  "050505:01:00.0",
+							DevState: ctlpb.NvmeDevState_NORMAL,
+						}
+						nc.SmdDevices = []*ctlpb.SmdDevice{
+							{Rank: uint32(ranklist.NilRank)},
+						}
+						return nc
+					}(),
+					func() *ctlpb.NvmeController {
+						nc := &ctlpb.NvmeController{
+							PciAddr:  "050505:03:00.0",
+							DevState: ctlpb.NvmeDevState_NORMAL,
+						}
+						nc.SmdDevices = []*ctlpb.SmdDevice{
+							{Rank: uint32(ranklist.NilRank)},
+						}
+						return nc
 					}(),
 				},
 				State: new(ctlpb.ResponseState),
+			},
+			expBackendScanCalls: []storage.BdevScanRequest{
+				{DeviceList: storage.MustNewBdevDeviceList("0000:05:05.5")},
 			},
 		},
 		"scan fails over drpc": {
 			smdErr: errors.New("drpc fail"),
 			expErr: errors.New("drpc fail"),
 		},
+		"scan over drpc; no req flags; rank and roles populated": {
+			req:    ctlpb.ScanNvmeReq{},
+			rank:   1,
+			smdRes: defSmdScanRes(),
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					func() *ctlpb.NvmeController {
+						c := proto.MockNvmeController(2)
+						c.HealthStats = nil
+						c.SmdDevices = []*ctlpb.SmdDevice{
+							{Rank: 1, RoleBits: storage.BdevRoleAll},
+						}
+						return c
+					}(),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+		},
+		"scan over drpc; no req flags; invalid rank": {
+			req:    ctlpb.ScanNvmeReq{},
+			rank:   -1,
+			smdRes: defSmdScanRes(),
+			expErr: errors.New("nil superblock"),
+		},
 		"scan over drpc; with health": {
 			req:       ctlpb.ScanNvmeReq{Health: true},
+			rank:      1,
 			smdRes:    defSmdScanRes(),
 			healthRes: healthRespWithUsage(),
 			expResp: &ctlpb.ScanNvmeResp{
@@ -134,15 +216,18 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 					func() *ctlpb.NvmeController {
 						c := proto.MockNvmeController(2)
 						c.HealthStats = healthRespWithUsage()
-						c.SmdDevices = nil
+						c.SmdDevices = []*ctlpb.SmdDevice{
+							{Rank: 1, RoleBits: storage.BdevRoleAll},
+						}
 						return c
 					}(),
 				},
 				State: new(ctlpb.ResponseState),
 			},
 		},
-		"scan over drpc; with smd": {
+		"scan over drpc; with meta": {
 			req:       ctlpb.ScanNvmeReq{Meta: true},
+			rank:      1,
 			smdRes:    defSmdScanRes(),
 			healthRes: healthRespWithUsage(),
 			expResp: &ctlpb.ScanNvmeResp{
@@ -150,9 +235,9 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 					func() *ctlpb.NvmeController {
 						c := proto.MockNvmeController(2)
 						c.HealthStats = nil
-						c.SmdDevices = []*ctlpb.SmdDevice{
-							proto.MockSmdDevice(nil, 2),
-						}
+						sd := proto.MockSmdDevice(nil, 2)
+						sd.Rank = 1
+						c.SmdDevices = []*ctlpb.SmdDevice{sd}
 						return c
 					}(),
 				},
@@ -161,6 +246,7 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 		},
 		"scan over drpc; with smd and health; usage and wal size reported": {
 			req:       ctlpb.ScanNvmeReq{Meta: true, Health: true},
+			rank:      1,
 			smdRes:    defSmdScanRes(),
 			healthRes: healthRespWithUsage(),
 			expResp: &ctlpb.ScanNvmeResp{
@@ -169,6 +255,7 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 						c := proto.MockNvmeController(2)
 						c.HealthStats = healthRespWithUsage()
 						sd := proto.MockSmdDevice(nil, 2)
+						sd.Rank = 1
 						sd.TotalBytes = c.HealthStats.TotalBytes
 						sd.AvailBytes = c.HealthStats.AvailBytes
 						sd.ClusterSize = c.HealthStats.ClusterSize
@@ -177,6 +264,45 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 						c.SmdDevices = []*ctlpb.SmdDevice{sd}
 						return c
 					}(),
+				},
+				State: new(ctlpb.ResponseState),
+			},
+		},
+		"scan over drpc; only ctrlrs with valid states shown": {
+			req: ctlpb.ScanNvmeReq{},
+			bdevAddrs: []string{
+				test.MockPCIAddr(1), test.MockPCIAddr(2),
+				test.MockPCIAddr(1), test.MockPCIAddr(2),
+				test.MockPCIAddr(5),
+			},
+			smdRes: &ctlpb.SmdDevResp{
+				Devices: proto.SmdDevices{
+					withDevState(proto.MockSmdDevice(
+						storage.MockNvmeController(1), 1),
+						ctlpb.NvmeDevState_UNPLUGGED),
+					withDevState(proto.MockSmdDevice(
+						storage.MockNvmeController(2), 2),
+						ctlpb.NvmeDevState_UNKNOWN),
+					withDevState(proto.MockSmdDevice(
+						storage.MockNvmeController(3), 3),
+						ctlpb.NvmeDevState_NORMAL),
+					withDevState(proto.MockSmdDevice(
+						storage.MockNvmeController(4), 4),
+						ctlpb.NvmeDevState_NEW),
+					withDevState(proto.MockSmdDevice(
+						storage.MockNvmeController(5), 5),
+						ctlpb.NvmeDevState_EVICTED),
+				},
+			},
+			healthRes: healthRespWithUsage(),
+			expResp: &ctlpb.ScanNvmeResp{
+				Ctrlrs: proto.NvmeControllers{
+					withState(proto.MockNvmeController(3),
+						ctlpb.NvmeDevState_NORMAL),
+					withState(proto.MockNvmeController(4),
+						ctlpb.NvmeDevState_NEW),
+					withState(proto.MockNvmeController(5),
+						ctlpb.NvmeDevState_EVICTED),
 				},
 				State: new(ctlpb.ResponseState),
 			},
@@ -250,6 +376,13 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			cs := newMockControlServiceFromBackends(t, log, sCfg, bmb, smb, nil,
 				tc.engStopped)
 			ei := cs.harness.Instances()[0].(*EngineInstance)
+			if tc.rank < 0 {
+				ei.setSuperblock(nil)
+			} else {
+				ei.setSuperblock(&Superblock{
+					Rank: ranklist.NewRankPtr(uint32(tc.rank)), ValidRank: true,
+				})
+			}
 
 			resp, err := bdevScanEngine(test.Context(t), ei, &tc.req)
 			test.CmpErr(t, tc.expErr, err)

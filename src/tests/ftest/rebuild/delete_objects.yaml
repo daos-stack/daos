@@ -16,9 +16,7 @@ server_config:
   system_ram_reserved: 1
 pool:
   scm_size: 1073741824
-  svcn: 2
   debug: true
-  control_method: dmg
   pool_query_timeout: 30
   properties: rd_fac:2
 container:
