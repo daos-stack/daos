@@ -197,7 +197,7 @@ ph_rec_hash(struct d_hash_table *htable, d_list_t *link)
 
 	dfp = container_of(link, struct dfuse_pool, dfp_entry);
 
-	return ph_key_hash(NULL, &dfp->dfp_pool, sizeof(dfp->dfp_pool));
+	return ph_key_hash(NULL, &dfp->dfp_uuid, sizeof(dfp->dfp_uuid));
 }
 
 static bool
@@ -206,7 +206,7 @@ ph_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key, unsigne
 	struct dfuse_pool *dfp;
 
 	dfp = container_of(link, struct dfuse_pool, dfp_entry);
-	return uuid_compare(dfp->dfp_pool, key) == 0;
+	return uuid_compare(dfp->dfp_uuid, key) == 0;
 }
 
 static void
@@ -276,7 +276,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 		D_SPIN_LOCK(&dfuse_info->di_lock);
 		if (daos_handle_is_inval(dfp->dfp_poh)) {
 			d_list_for_each_entry(dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
-				if (uuid_compare(dfpp->dfp_pool, dfp->dfp_pool) == 0) {
+				if (uuid_compare(dfpp->dfp_uuid, dfp->dfp_uuid) == 0) {
 					on_list = true;
 					break;
 				}
@@ -489,7 +489,7 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
 
-		uuid_copy(dfp->dfp_pool, p_info.pi_uuid);
+		uuid_copy(dfp->dfp_uuid, p_info.pi_uuid);
 	}
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL, 3, dfuse_info,
@@ -501,8 +501,8 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 
 	atomic_fetch_add_relaxed(&dfuse_info->di_pool_count, 1);
 
-	rlink = d_hash_rec_find_insert(&dfuse_info->di_pool_table, &dfp->dfp_pool,
-				       sizeof(dfp->dfp_pool), &dfp->dfp_entry);
+	rlink = d_hash_rec_find_insert(&dfuse_info->di_pool_table, &dfp->dfp_uuid,
+				       sizeof(dfp->dfp_uuid), &dfp->dfp_entry);
 
 	if (rlink != &dfp->dfp_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing pool, reusing");
@@ -510,7 +510,7 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 		dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 	}
 
-	DFUSE_TRA_DEBUG(dfp, "Returning dfp for " DF_UUID, DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_DEBUG(dfp, "Returning dfp for " DF_UUID, DP_UUID(dfp->dfp_uuid));
 
 	*_dfp = dfp;
 	return rc;
@@ -769,7 +769,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 
 	/* Allow for label to be NULL, in which case this represents a pool */
 	if (label == NULL) {
-		if (uuid_is_null(dfp->dfp_pool)) {
+		if (uuid_is_null(dfp->dfp_uuid)) {
 			/* This represents the root of the mount where no pool is set so entries
 			 * in the directory will be pool uuids only.
 			 */
@@ -787,7 +787,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 
 			D_SPIN_LOCK(&dfuse_info->di_lock);
 			d_list_for_each_entry(dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
-				if (uuid_compare(dfpp->dfp_pool, dfp->dfp_pool) == 0) {
+				if (uuid_compare(dfpp->dfp_uuid, dfp->dfp_uuid) == 0) {
 					dfp->dfp_ino = dfpp->dfp_ino;
 					dfc->dfs_ino = dfpp->dfp_ino;
 					DFUSE_TRA_INFO(dfc, "Reusing inode number %ld",
@@ -870,7 +870,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 	}
 
 	DFUSE_TRA_DEBUG(dfp, "New cont " DF_UUIDF " in pool " DF_UUIDF, DP_UUID(dfc->dfc_uuid),
-			DP_UUID(dfp->dfp_pool));
+			DP_UUID(dfp->dfp_uuid));
 
 	if (dfc->dfs_ino == 0)
 		dfc->dfs_ino = atomic_fetch_add_relaxed(&dfuse_info->di_ino_next, 1);
@@ -1526,8 +1526,8 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 
 	dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
 
-	DFUSE_TRA_ERROR(dfp, "Failed to close pool ref %d "DF_UUID,
-			dfp->dfp_ref, DP_UUID(dfp->dfp_pool));
+	DFUSE_TRA_ERROR(dfp, "Failed to close pool ref %d " DF_UUID, dfp->dfp_ref,
+			DP_UUID(dfp->dfp_uuid));
 
 	d_hash_table_traverse(&dfp->dfp_cont_table, dfuse_cont_close_cb, handle);
 

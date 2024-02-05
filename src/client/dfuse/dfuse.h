@@ -403,7 +403,7 @@ extern struct dfuse_inode_ops dfuse_pool_ops;
  */
 struct dfuse_pool {
 	/** UUID of the pool */
-	uuid_t              dfp_pool;
+	uuid_t              dfp_uuid;
 	/** Pool handle */
 	daos_handle_t       dfp_poh;
 	/** Hash table entry in dpi_pool_table */
