@@ -2144,7 +2144,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 
 out:
-	obj_shard_update_metrics_end(rpc, cb_args->send_time, cb_args, ret == 0 ? rc : ret);
+	obj_shard_update_metrics_end(rpc, cb_args->send_time, cb_args, rc);
 	crt_req_decref(rpc);
 	return rc;
 }
