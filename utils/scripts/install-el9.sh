@@ -23,7 +23,6 @@ dnf --nodocs install \
     file \
     flex \
     fuse3 \
-    fuse3-devel \
     gcc \
     gcc-c++ \
     git \
@@ -36,6 +35,7 @@ dnf --nodocs install \
     java-1.8.0-openjdk \
     json-c-devel \
     libaio-devel \
+    libarchive-devel \
     libcmocka-devel \
     libevent-devel \
     libipmctl-devel \

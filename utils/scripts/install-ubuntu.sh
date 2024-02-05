@@ -21,11 +21,11 @@ apt-get install \
     clang-format \
     cmake \
     curl \
-    fuse3 \
     git \
     golang-go \
     kmod \
     libaio-dev \
+    libarchive-dev \
     libboost-dev \
     libcapstone-dev \
     libcmocka-dev \
