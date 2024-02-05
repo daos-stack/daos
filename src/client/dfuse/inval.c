@@ -143,13 +143,13 @@ ival_loop(int *sleep_time)
 	d_list_for_each_entry_safe(dte, dtep, &ival_data.time_entry_list, dte_list) {
 		struct dfuse_inode_entry *inode, *inodep;
 
+		DFUSE_TRA_DEBUG(dte, "Iterating for timeout %.1lf ref %d", dte->time, dte->ref);
+
 		if (dte->ref == 0 && d_list_empty(&dte->inode_list)) {
 			d_list_del(&dte->dte_list);
 			D_FREE(dte);
 			continue;
 		}
-
-		DFUSE_TRA_DEBUG(dte, "Iterating for timeout %.1lf", dte->time);
 
 		d_list_for_each_entry_safe(inode, inodep, &dte->inode_list, ie_evict_entry) {
 			double timeout;
@@ -205,7 +205,7 @@ out:
 			ival_data.session_dead = true;
 	}
 
-	return true;
+	return (idx == EVICT_COUNT);
 }
 
 /* Main loop for eviction thread.  Spins until ready for exit waking after one second and iterates
@@ -442,9 +442,14 @@ ival_bucket_dec_value(double timeout)
 	DFUSE_TRA_INFO(&ival_data, "Dropping ref for %.1lf", timeout);
 
 	d_list_for_each_entry(dte, &ival_data.time_entry_list, dte_list) {
-		if (dte->time == timeout)
-			dte->ref -= 1;
+		if (dte->time == timeout) {
+			dte->ref--;
+			DFUSE_TRA_INFO(&ival_data, "Dropped ref on %.1lf to %d", timeout, dte->ref);
+			return;
+		}
 	}
+
+	DFUSE_TRA_ERROR(&ival_data, "Unable to find ref for %.1lf", timeout);
 }
 
 /* Ensure the correct buckets exist for a attached container.  Pools have a zero dentry timeout
@@ -457,13 +462,13 @@ ival_add_cont_buckets(struct dfuse_cont *dfc)
 
 	D_MUTEX_LOCK(&ival_lock);
 
-	rc = ival_bucket_add_value(dfc->dfc_dentry_dir_timeout + INVAL_FILE_GRACE);
+	rc = ival_bucket_add_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
 	if (rc != 0)
 		goto out;
 	if (dfc->dfc_dentry_timeout != 0) {
-		rc = ival_bucket_add_value(dfc->dfc_dentry_timeout + INVAL_DIRECTORY_GRACE);
+		rc = ival_bucket_add_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
 		if (rc != 0)
-			ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + INVAL_FILE_GRACE);
+			ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
 	}
 
 out:

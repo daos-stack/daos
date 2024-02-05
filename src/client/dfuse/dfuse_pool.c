@@ -93,7 +93,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 	rc = daos_pool_query(dfp->dfp_poh, NULL, &pool_info, prop, NULL);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfp, "daos_pool_query() failed: (%d)", rc);
+		DHS_ERROR(dfp, rc, "daos_pool_query() failed");
 		D_GOTO(decref, rc = daos_der2errno(rc));
 	}
 

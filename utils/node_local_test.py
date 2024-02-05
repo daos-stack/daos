@@ -4753,6 +4753,9 @@ def run_in_fg(server, conf, args):
             container = cont.uuid
             break
 
+    # Set to False to run dfuse without a pool.
+    pool_on_cmd_line = True
+
     if not container:
         container = create_cont(conf, pool, label=label, ctype="POSIX")
 
@@ -4767,17 +4770,24 @@ def run_in_fg(server, conf, args):
         container.set_attrs(cont_attrs)
         container = container.uuid
 
+    dargs = {"caching": True,
+             "wbcache": True,
+             "multi_user": args.multi_user}
+
+    if pool_on_cmd_line:
+        dargs['pool'] = pool.uuid
+
     dfuse = DFuse(server,
                   conf,
-                  pool=pool.uuid,
-                  caching=True,
-                  wbcache=False,
-                  multi_user=args.multi_user)
+                  **dargs)
 
     dfuse.log_flush = True
     dfuse.start()
 
-    t_dir = join(dfuse.dir, container)
+    if pool_on_cmd_line:
+        t_dir = join(dfuse.dir, container)
+    else:
+        t_dir = join(dfuse.dir, pool.uuid, container)
 
     print(f'Running at {t_dir}')
     print(f'export PATH={join(conf["PREFIX"], "bin")}:$PATH')

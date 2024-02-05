@@ -236,11 +236,11 @@ static void
 _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 {
 	struct dfuse_cont *dfc, *dfcn;
-	bool               free = !used;
+	bool               keep = used;
 	int                rc;
 
 	if (dfuse_info->di_shutdown)
-		free = true;
+		keep = false;
 
 	/* Iterate over all historic containers in this pool forgetting about them.  If the handle
 	 * is still valid, for example because of a previous failed attempt to close it then re-try
@@ -259,7 +259,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 			else
 				DHL_ERROR(dfc, rc, "daos_cont_close() failed");
 		}
-		if (free && rc == -DER_SUCCESS) {
+		if (!keep && rc == -DER_SUCCESS) {
 			d_list_del(&dfc->dfs_entry);
 			D_FREE(dfc);
 		}
@@ -270,7 +270,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 		if (rc == -DER_SUCCESS) {
 			dfp->dfp_poh = DAOS_HDL_INVAL;
 		} else {
-			free = false;
+			keep = true;
 			DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
 		}
 	}
@@ -281,26 +281,31 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_pool_count, 1);
 
-	if (!free) {
+	if (keep) {
 		struct dfuse_pool *dfpp;
-		bool               on_list = false;
 
 		D_SPIN_LOCK(&dfuse_info->di_lock);
-		if (daos_handle_is_inval(dfp->dfp_poh)) {
-			d_list_for_each_entry(dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
-				if (uuid_compare(dfpp->dfp_uuid, dfp->dfp_uuid) == 0) {
-					on_list = true;
-					break;
-				}
-			}
+		d_list_for_each_entry(dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
+			if (uuid_compare(dfpp->dfp_uuid, dfp->dfp_uuid) != 0)
+				continue;
+			keep = false;
+			d_list_splice_init(&dfp->dfp_historic, &dfpp->dfp_historic);
+			break;
 		}
-		if (on_list)
-			used = false;
-		else
+
+		if (daos_handle_is_valid(dfp->dfp_poh))
+			keep = true;
+
+		if (keep)
 			d_list_add(&dfp->dfp_entry, &dfuse_info->di_pool_historic);
 		D_SPIN_UNLOCK(&dfuse_info->di_lock);
+	}
 
-	} else {
+	if (!keep) {
+		d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
+			d_list_del(&dfc->dfs_entry);
+			D_FREE(dfc);
+		}
 		D_FREE(dfp);
 	}
 }
@@ -821,9 +826,9 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 			}
 		}
 
-		dfc->dfc_attr_timeout       = 60 * 5;
-		dfc->dfc_dentry_dir_timeout = 60 * 5;
-		dfc->dfc_ndentry_timeout    = 60 * 5;
+		dfc->dfc_attr_timeout       = 307;
+		dfc->dfc_dentry_dir_timeout = 307;
+		dfc->dfc_ndentry_timeout    = 307;
 
 		rc = ival_add_cont_buckets(dfc);
 		if (rc != 0)
@@ -883,6 +888,30 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 				break;
 			}
 		}
+		if (dfc->dfs_ino == 0) {
+			struct dfuse_pool *dfpp;
+
+			DFUSE_TRA_INFO(dfc, "Looking for inode");
+
+			d_list_for_each_entry(dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
+				DFUSE_TRA_INFO(dfc, "Looking for inode " DF_UUID,
+					       DP_UUID(dfpp->dfp_uuid));
+
+				if (uuid_compare(dfpp->dfp_uuid, dfp->dfp_uuid) != 0)
+					continue;
+				d_list_for_each_entry(dfcp, &dfpp->dfp_historic, dfs_entry) {
+					DFUSE_TRA_INFO(
+					    dfc, "Looking for inode " DF_UUID " " DF_UUID,
+					    DP_UUID(dfpp->dfp_uuid), DP_UUID(dfcp->dfc_uuid));
+
+					if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0) {
+						dfc->dfs_ino = dfcp->dfs_ino;
+						break;
+					}
+				}
+			}
+		}
+
 		D_SPIN_UNLOCK(&dfuse_info->di_lock);
 	}
 
@@ -1631,13 +1660,20 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 	DHL_INFO(dfuse_info, rc, "Second flush complete");
 
 	d_list_for_each_entry_safe(dfp, dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
+		struct dfuse_cont *dfc, *dfcn;
+
 		if (daos_handle_is_valid(dfp->dfp_poh)) {
 			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 			if (rc != -DER_SUCCESS) {
 				DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
 			}
 		}
-		d_list_del(&dfp->dfp_entry);
+
+		d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
+			d_list_del(&dfc->dfs_entry);
+			D_FREE(dfc);
+		}
+
 		D_FREE(dfp);
 	}
 
