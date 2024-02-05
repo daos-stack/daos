@@ -18,6 +18,8 @@
 #include "dts_utils.h"
 #include "dtx_internal.h"
 
+#define SKIP_MINOR_EPOCHS_FORMAT "- skip %" PRIu16 " minor epochs"
+
 static void
 ut_rdb_mc(void **state)
 {
@@ -29,9 +31,16 @@ ut_rdb_mc(void **state)
 	const char            *test_data_1 = "Hello";
 	const char            *test_data_2 = "Bye";
 
+	/** Assuming the same major epoch. Overwriting me2 > me1 is normal. Since the second
+	 * transaction will use an unrelated minor epoch the tricky part is when me2 < me1. */
+	const uint16_t         minor_e1 = 100;
+	const uint16_t         minor_e2 = 50;
+
 	dts_print_start_message();
 
 	dth = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
+	dth->dth_op_seq = minor_e1;
+	DTS_PRINT(SKIP_MINOR_EPOCHS_FORMAT, dth->dth_op_seq);
 	dts_update(coh, la, DKEY_ID0, test_data_1, dth);
 	dts_local_commit(dth);
 	DTS_FETCH_EXISTING(coh, la, DKEY_ID0, test_data_1);
@@ -43,6 +52,8 @@ ut_rdb_mc(void **state)
 	 */
 
 	dth = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
+	dth->dth_op_seq = minor_e2;
+	DTS_PRINT(SKIP_MINOR_EPOCHS_FORMAT, dth->dth_op_seq);
 	dts_update(coh, la, DKEY_ID0, test_data_2, dth);
 	dts_local_commit(dth);
 	DTS_FETCH_EXISTING(coh, la, DKEY_ID0, test_data_2);
