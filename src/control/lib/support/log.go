@@ -686,8 +686,15 @@ func getDateTime(log logging.Logger, opts ...CollectLogsParams) (time.Time, time
 	startTimeStr := fmt.Sprintf("%s %s", opts[0].LogStartDate, opts[0].LogStartTime)
 	endTimeStr := fmt.Sprintf("%s %s", opts[0].LogEndDate, opts[0].LogEndTime)
 
-	actStartTime, _ := time.Parse(MMDDYYYY_HHMMSS, startTimeStr)
-	actEndTime, _ := time.Parse(MMDDYYYY_HHMMSS, endTimeStr)
+	actStartTime, err := time.Parse(MMDDYYYY_HHMMSS, startTimeStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+
+	actEndTime, err := time.Parse(MMDDYYYY_HHMMSS, endTimeStr)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
 
 	return actStartTime, actEndTime, nil
 }

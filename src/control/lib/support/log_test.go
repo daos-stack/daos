@@ -1184,6 +1184,20 @@ func TestSupport_getDateTime(t *testing.T) {
 			expEndTime:   "01-03-2023 23:59:59",
 			expErr:       nil,
 		},
+		"Valid Date and Invalid Start Time": {
+			logStartDate: "1-2-2023",
+			logEndDate:   "1-3-2023",
+			logStartTime: "99:99:99",
+			logEndTime:   "12:12:12",
+			expErr:       errors.New("parsing time \"1-2-2023 99:99:99\": hour out of range"),
+		},
+		"Valid Date and Invalid End Time": {
+			logStartDate: "1-2-2023",
+			logEndDate:   "1-3-2023",
+			logStartTime: "10:10:10",
+			logEndTime:   "99:99:99",
+			expErr:       errors.New("parsing time \"1-3-2023 99:99:99\": hour out of range"),
+		},
 		"Valid Date and Time": {
 			logStartDate: "1-2-2023",
 			logEndDate:   "1-3-2023",
