@@ -122,7 +122,7 @@ struct_dtx_handle(void **state)
 }
 
 static const struct CMUnitTest structs_tests_all[] = {
-    {"DTX200: struct dtx_handle checks", struct_dtx_handle, NULL, NULL},
+    {"DTX300: struct dtx_handle checks", struct_dtx_handle, NULL, NULL},
 };
 
 int

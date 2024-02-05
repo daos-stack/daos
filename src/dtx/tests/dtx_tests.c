@@ -21,7 +21,8 @@
 
 int
 run_local_tests(const char *cfg);
-
+int
+run_local_rdb_tests(const char *cfg);
 int
 run_structs_tests(const char *cfg);
 
@@ -47,6 +48,7 @@ run_all_tests(int keys)
 	dts_create_config(cfg_desc_io, "keys=%d", keys);
 
 	failed += run_local_tests(cfg_desc_io);
+	failed += run_local_rdb_tests(cfg_desc_io);
 	failed += run_structs_tests(cfg_desc_io);
 
 	return failed;
