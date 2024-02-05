@@ -257,15 +257,10 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
-#if 0
-		/* Hook for fault injection testing, if the disconnect fails with out of memory
-		 * then simply try it again.
-		 */
-		if (rc == -DER_NOMEM)
-			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
-#endif
-		if (rc != -DER_SUCCESS)
-			DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
+		if (rc == -DER_SUCCESS)
+			dfp->dfp_poh = DAOS_HDL_INVAL;
+		else
+			DHL_ERROR(dfc, rc, "daos_pool_disconnect() failed");
 	}
 
 	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
@@ -274,7 +269,28 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_pool_count, 1);
 
-	D_FREE(dfp);
+	if (used) {
+		struct dfuse_pool *dfpp;
+		bool               on_list = false;
+
+		D_SPIN_LOCK(&dfuse_info->di_lock);
+		if (daos_handle_is_inval(dfp->dfp_poh)) {
+			d_list_for_each_entry(dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
+				if (uuid_compare(dfpp->dfp_pool, dfp->dfp_pool) == 0) {
+					on_list = true;
+					break;
+				}
+			}
+		}
+		if (on_list)
+			used = false;
+		else
+			d_list_add(&dfp->dfp_entry, &dfuse_info->di_pool_historic);
+		D_SPIN_UNLOCK(&dfuse_info->di_lock);
+
+	} else {
+		D_FREE(dfp);
+	}
 }
 
 static void
@@ -753,14 +769,48 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 
 	/* Allow for label to be NULL, in which case this represents a pool */
 	if (label == NULL) {
-		if (uuid_is_null(dfp->dfp_pool))
+		if (uuid_is_null(dfp->dfp_pool)) {
+			/* This represents the root of the mount where no pool is set so entries
+			 * in the directory will be pool uuids only.
+			 */
 			dfc->dfs_ops = &dfuse_pool_ops;
-		else
+			dfc->dfs_ino = 1;
+		} else {
+			/* This represents the case where a pool is being accessed without a
+			 * container, so either just a pool is specified or neither is and this is
+			 * a second level directory.  If this is a second level direcory then it
+			 * could expire and be re-accessed so save the allocated inode.
+			 */
+			struct dfuse_pool *dfpp;
+
 			dfc->dfs_ops = &dfuse_cont_ops;
 
+			D_SPIN_LOCK(&dfuse_info->di_lock);
+			d_list_for_each_entry(dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
+				if (uuid_compare(dfpp->dfp_pool, dfp->dfp_pool) == 0) {
+					dfp->dfp_ino = dfpp->dfp_ino;
+					dfc->dfs_ino = dfpp->dfp_ino;
+					DFUSE_TRA_INFO(dfc, "Reusing inode number %ld",
+						       dfc->dfs_ino);
+					break;
+				}
+			}
+			D_SPIN_UNLOCK(&dfuse_info->di_lock);
+
+			if (dfp->dfp_ino == 0) {
+				dfp->dfp_ino =
+				    atomic_fetch_add_relaxed(&dfuse_info->di_ino_next, 1);
+				dfc->dfs_ino = dfp->dfp_ino;
+			}
+		}
+
 		dfc->dfc_attr_timeout       = 60 * 5;
-		dfc->dfc_dentry_dir_timeout = 60 * 5;
+		dfc->dfc_dentry_dir_timeout = 5;
 		dfc->dfc_ndentry_timeout    = 60 * 5;
+
+		rc = ival_add_cont_buckets(dfc);
+		if (rc != 0)
+			goto err_free;
 
 	} else {
 		daos_cont_info_t   c_info = {};
@@ -811,9 +861,10 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		 */
 		D_SPIN_LOCK(&dfuse_info->di_lock);
 		d_list_for_each_entry(dfcp, &dfp->dfp_historic, dfs_entry) {
-			if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0)
+			if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0) {
 				dfc->dfs_ino = dfcp->dfs_ino;
 			break;
+			}
 		}
 		D_SPIN_UNLOCK(&dfuse_info->di_lock);
 	}
@@ -1024,6 +1075,8 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 	D_ALLOC_ARRAY(dfuse_info->di_eqt, dfuse_info->di_eq_count);
 	if (dfuse_info->di_eqt == NULL)
 		D_GOTO(err, rc = -DER_NOMEM);
+
+	D_INIT_LIST_HEAD(&dfuse_info->di_pool_historic);
 
 	atomic_init(&dfuse_info->di_inode_count, 0);
 	atomic_init(&dfuse_info->di_fh_count, 0);
@@ -1502,14 +1555,14 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 int
 dfuse_fs_stop(struct dfuse_info *dfuse_info)
 {
-	int       rc;
-	int       i;
+	struct dfuse_pool *dfp, *dfpp;
+	int                rc;
 
 	DFUSE_TRA_INFO(dfuse_info, "Flushing inode table");
 
 	dfuse_info->di_shutdown = true;
 
-	for (i = 0; i < dfuse_info->di_eq_count; i++) {
+	for (int i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
 
 		sem_post(&eqt->de_sem);
@@ -1518,12 +1571,24 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 	/* Stop and drain invalidation queues */
 	ival_thread_stop();
 
-	for (i = 0; i < dfuse_info->di_eq_count; i++) {
+	for (int i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
 
 		pthread_join(eqt->de_thread, NULL);
 
 		sem_destroy(&eqt->de_sem);
+	}
+
+	d_list_for_each_entry_safe(dfp, dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
+		if (daos_handle_is_inval(dfp->dfp_poh)) {
+			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+			/* TODO: clang-format does not like this code for some reason */
+			if (rc != -DER_SUCCESS) {
+			DHL_ERROR(dfp, rc, "daos_pool_disconnect() failed");
+			}
+		}
+		d_list_del(&dfp->dfp_entry);
+		D_FREE(dfp);
 	}
 
 	/* First flush, instruct the kernel to forget items.  This will run and work in ideal cases

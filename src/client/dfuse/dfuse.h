@@ -52,6 +52,9 @@ struct dfuse_info {
 	struct d_hash_table  dpi_iet;
 	/** Hash table of open pools */
 	struct d_hash_table  di_pool_table;
+
+	d_list_t             di_pool_historic;
+
 	/** Next available inode number */
 	ATOMIC uint64_t      di_ino_next;
 	bool                 di_shutdown;
@@ -413,6 +416,8 @@ struct dfuse_pool {
 
 	/** List of no longer accessed containers */
 	d_list_t            dfp_historic;
+
+	ino_t               dfp_ino;
 };
 
 /* Statistics that dfuse keeps per container.  Logged at umount and can be queried through
@@ -815,9 +820,9 @@ struct fuse_lowlevel_ops dfuse_ops;
 		}                                                                                  \
 		ival_update_inode(inode, (entry).entry_timeout);                                   \
 		DFUSE_TRA_DEBUG(inode,                                                             \
-				"Returning entry inode %#lx mode %#o size  %#zx timeout %lf",      \
+				"Returning entry inode %#lx mode %#o size %#zx et %.1lf at %.1lf", \
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size,   \
-				(entry).attr_timeout);                                             \
+				(entry).entry_timeout, (entry).attr_timeout);                      \
 		(inode) = NULL;                                                                    \
 		__rc    = fuse_reply_entry(req, &entry);                                           \
 		if (__rc != 0)                                                                     \
@@ -829,7 +834,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 		int                     __rc;                                                      \
 		struct fuse_entry_param _entry = {};                                               \
 		_entry.entry_timeout           = timeout;                                          \
-		DFUSE_TRA_DEBUG(parent, "Returning negative entry parent %#lx timeout %lf",        \
+		DFUSE_TRA_DEBUG(parent, "Returning negative entry parent %#lx et %.1lf",           \
 				(parent)->ie_stat.st_ino, _entry.entry_timeout);                   \
 		(parent) = NULL;                                                                   \
 		__rc     = fuse_reply_entry(req, &_entry);                                         \

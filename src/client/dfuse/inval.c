@@ -77,7 +77,7 @@
  * Directories that are used as the cwd for processes can cause problems with being invalidated too
  * early so use a higher value here.
  */
-#define INVAL_DIRECTORY_GRACE 60
+#define INVAL_DIRECTORY_GRACE 5
 #define INVAL_FILE_GRACE      2
 
 /* Represents one timeout value (time).  Maintains a ordered list of dentries that are using
@@ -149,13 +149,13 @@ ival_loop(int *sleep_time)
 			continue;
 		}
 
-		DFUSE_TRA_DEBUG(dte, "Iterating for timeout %lf", dte->time);
+		DFUSE_TRA_DEBUG(dte, "Iterating for timeout %.1lf", dte->time);
 
 		d_list_for_each_entry_safe(inode, inodep, &dte->inode_list, ie_evict_entry) {
 			double timeout;
 
 			if (dfuse_dentry_get_valid(inode, dte->time, &timeout)) {
-				DFUSE_TRA_DEBUG(inode, "Keeping left %lf " DF_DE, timeout,
+				DFUSE_TRA_DEBUG(inode, "Keeping left %.1lf " DF_DE, timeout,
 						DP_DE(inode->ie_name));
 				if (timeout < sleep)
 					sleep = timeout;
@@ -257,6 +257,7 @@ ival_bucket_add(d_list_t *list, double timeout)
 	DFUSE_TRA_UP(dte, &ival_data, "time bucket");
 
 	dte->time = timeout;
+	dte->ref  = 1;
 	D_INIT_LIST_HEAD(&dte->inode_list);
 
 	d_list_add_tail(&dte->dte_list, list);
@@ -365,6 +366,7 @@ ival_update_inode(struct dfuse_inode_entry *inode, double timeout)
 	 */
 	d_list_for_each_entry(dte, &ival_data.time_entry_list, dte_list) {
 		/* If the entry is draining then do not add any new entries to it */
+
 		if (dte->ref == 0)
 			continue;
 
@@ -374,7 +376,7 @@ ival_update_inode(struct dfuse_inode_entry *inode, double timeout)
 		if (d_list_empty(&dte->inode_list))
 			wake = true;
 
-		DFUSE_TRA_DEBUG(inode, "timeout %lf wake:" DF_BOOL " %#lx " DF_DE, timeout,
+		DFUSE_TRA_DEBUG(inode, "timeout %.1lf wake:" DF_BOOL " %#lx " DF_DE, timeout,
 				DP_BOOL(wake), inode->ie_parent, DP_DE(inode->ie_name));
 
 		d_list_move_tail(&inode->ie_evict_entry, &dte->inode_list);
@@ -399,14 +401,16 @@ ival_bucket_add_value(double timeout)
 {
 	struct dfuse_time_entry *dte;
 	double                   lower = -1;
-	int                      rc    = 0;
+	int                      rc    = -DER_SUCCESS;
 
-	DFUSE_TRA_INFO(&ival_data, "Setting up timeout queue for %lf", timeout);
+	DFUSE_TRA_INFO(&ival_data, "Setting up timeout queue for %.1lf", timeout);
 
 	/* Walk smallest to largest */
 	d_list_for_each_entry_reverse(dte, &ival_data.time_entry_list, dte_list) {
-		if (dte->time == timeout)
-			D_GOTO(out, rc = -DER_SUCCESS);
+		if (dte->time == timeout) {
+			dte->ref += 1;
+			goto out;
+		}
 		if (dte->time < timeout)
 			lower = dte->time;
 		if (dte->time > timeout)
@@ -435,7 +439,7 @@ ival_bucket_dec_value(double timeout)
 {
 	struct dfuse_time_entry *dte;
 
-	DFUSE_TRA_INFO(&ival_data, "Dropping ref for %lf", timeout);
+	DFUSE_TRA_INFO(&ival_data, "Dropping ref for %.1lf", timeout);
 
 	d_list_for_each_entry(dte, &ival_data.time_entry_list, dte_list) {
 		if (dte->time == timeout)
