@@ -241,7 +241,7 @@ struct dtx_leader_handle {
 	struct dtx_sub_status		*dlh_subs;
 };
 
-_Static_assert(sizeof(struct dtx_leader_handle) == 368,
+_Static_assert(sizeof(struct dtx_leader_handle) == 360,
 	       "The size of this structure may be tracked by other modules e.g. telemetry");
 
 struct dtx_stat {
