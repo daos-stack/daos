@@ -38,7 +38,7 @@ ut_rdb_mc(void **state)
 
 	dts_print_start_message();
 
-	dth = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
+	dth             = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
 	dth->dth_op_seq = minor_e1;
 	DTS_PRINT(SKIP_MINOR_EPOCHS_FORMAT, dth->dth_op_seq);
 	dts_update(coh, la, DKEY_ID0, test_data_1, dth);
@@ -51,7 +51,7 @@ ut_rdb_mc(void **state)
 	 * consequences in regard to snapshotting and aggregation.
 	 */
 
-	dth = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
+	dth             = dts_local_begin(arg->ctx.tc_po_hdl, DTX_SUB_MOD_MAX);
 	dth->dth_op_seq = minor_e2;
 	DTS_PRINT(SKIP_MINOR_EPOCHS_FORMAT, dth->dth_op_seq);
 	dts_update(coh, la, DKEY_ID0, test_data_2, dth);
