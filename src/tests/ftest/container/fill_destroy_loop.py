@@ -6,8 +6,7 @@
 import os
 
 from apricot import TestWithServers
-from avocado.core.exceptions import TestFail
-from general_utils import bytes_to_human, human_to_bytes
+from general_utils import DaosTestError, bytes_to_human, human_to_bytes
 from run_utils import run_remote
 
 
@@ -96,7 +95,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
 
             try:
                 container.write_objects()
-            except TestFail as excep:
+            except DaosTestError as excep:
                 if self.DER_NOSPACE in str(excep):
                     self.log.info(
                         "--%i.(4)DER_NOSPACE %s detected, pool is unable for an additional"
