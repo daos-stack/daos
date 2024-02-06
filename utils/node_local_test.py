@@ -5490,17 +5490,14 @@ class AllocFailTest():
                     if len(active) > max_count:
                         max_count = len(active)
 
-                    if fid == 500:
-                        print("DAOS-15109, waiting for 15 minutes")
-                        time.sleep(15*60)
-
             # Now complete as many as have finished.
             for ret in active:
                 if not ret.has_finished():
                     continue
                 active.remove(ret)
-                print()
-                print(ret)
+                # DAOS-15109 Flush output after every iteration.
+                print(ret, flush=True)
+
                 if ret.returncode < 0:
                     fatal_errors = True
                     to_rerun.append(ret.loc)
