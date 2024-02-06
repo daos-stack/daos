@@ -5478,7 +5478,8 @@ class AllocFailTest():
                         max_child -= 1
                     max_child = max(max_child, 20)
                     print(f"High load average of {load_avg}, "
-                          f"pausing and decreasing parallelism to {max_child} {max_count}")
+                          f"pausing and decreasing parallelism to {max_child} {max_count}",
+                          flush=True)
                     time.sleep(2)
 
             if not finished:
