@@ -62,7 +62,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 		DFUSE_TRA_INFO(ie, "Reusing existing pool entry without reconnect");
 
-		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
+		d_hash_rec_decref(dfp->dfp_cont_table, &dfc->dfs_entry);
 		entry.attr          = ie->ie_stat;
 		entry.attr_timeout  = dfc->dfc_attr_timeout;
 		entry.entry_timeout = dfc->dfc_dentry_dir_timeout;

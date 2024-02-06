@@ -506,6 +506,13 @@ class LogTest():
                         # If a pointer is freed then automatically remove the descriptor
                         if pointer in active_desc:
                             del active_desc[pointer]
+                    elif line.is_realloc():
+                        # If a pointer is reallocated then update any descriptor for it.
+                        (new_pointer, old_pointer) = line.realloc_pointers()
+                        if new_pointer != old_pointer and old_pointer in active_desc:
+                            active_desc[new_pointer] = active_desc[old_pointer]
+                            del active_desc[old_pointer]
+
 
         if not self.ftest_mode:
             mem_r.active_desc = active_desc

@@ -722,7 +722,7 @@ main(int argc, char **argv)
 	goto out_fini;
 out_cont:
 	dfuse_info->di_shutdown = true;
-	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
+	d_hash_rec_decref(dfp->dfp_cont_table, &dfs->dfs_entry);
 out_pool:
 	dfuse_info->di_shutdown = true;
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);

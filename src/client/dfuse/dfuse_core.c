@@ -274,7 +274,7 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 		}
 	}
 
-	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, false);
+	rc = d_hash_table_destroy(dfp->dfp_cont_table, false);
 	if (rc != -DER_SUCCESS)
 		DHL_ERROR(dfp, rc, "Failed to destroy pool hash table");
 
@@ -512,8 +512,8 @@ dfuse_pool_connect(struct dfuse_info *dfuse_info, const char *label, struct dfus
 		uuid_copy(dfp->dfp_uuid, p_info.pi_uuid);
 	}
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL, 3, dfuse_info,
-					 &cont_hops, &dfp->dfp_cont_table);
+	rc = d_hash_table_create(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL, 3, dfuse_info, &cont_hops,
+				 &dfp->dfp_cont_table);
 	if (rc != -DER_SUCCESS) {
 		DFUSE_TRA_ERROR(dfp, "Failed to create hash table: " DF_RC, DP_RC(rc));
 		D_GOTO(err_disconnect, rc = daos_der2errno(rc));
@@ -807,28 +807,28 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 
 			D_SPIN_LOCK(&dfuse_info->di_lock);
 			d_list_for_each_entry(dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
-				if (uuid_compare(dfpp->dfp_uuid, dfp->dfp_uuid) == 0) {
-					dfp->dfp_ino = dfpp->dfp_ino;
-					dfc->dfs_ino = dfpp->dfp_ino;
-					DFUSE_TRA_INFO(dfc, "Reusing inode number %ld",
-						       dfc->dfs_ino);
+				struct dfuse_cont_core *dfcc;
+
+				if (uuid_compare(dfpp->dfp_uuid, dfp->dfp_uuid) != 0)
+					continue;
+
+				d_list_for_each_entry(dfcc, &dfpp->dfp_historic, dfcc_entry) {
+					if (dfcc->dfcc_ino == 0)
+						continue;
+					if (!uuid_is_null(dfcc->dfcc_uuid))
+						continue;
+					dfc->dfs_ino = dfcc->dfcc_ino;
 					break;
 				}
+				if (dfc->dfs_ino != 0)
+					break;
 			}
 			D_SPIN_UNLOCK(&dfuse_info->di_lock);
-
-			if (dfp->dfp_ino == 0) {
-				dfp->dfp_ino =
-				    atomic_fetch_add_relaxed(&dfuse_info->di_ino_next, 1);
-				dfc->dfs_ino = dfp->dfp_ino;
-			}
 		}
 
 		dfc->dfc_attr_timeout       = 307;
 		dfc->dfc_dentry_dir_timeout = 307;
 		dfc->dfc_ndentry_timeout    = 307;
-
-		dfc->dfc_dentry_dir_timeout = 37;
 
 		rc = ival_add_cont_buckets(dfc);
 		if (rc != 0)
@@ -924,6 +924,10 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 	if (dfc->dfs_ino == 0) {
 		dfc->dfs_ino = atomic_fetch_add_relaxed(&dfuse_info->di_ino_next, 1);
 		dfc->dfc_save_ino = true;
+		DFUSE_TRA_INFO(dfc, "Assigned new inode number %ld", dfc->dfs_ino);
+
+	} else {
+		DFUSE_TRA_INFO(dfc, "Reusing inode number %ld", dfc->dfs_ino);
 	}
 
 	/* Take a reference on the pool */
@@ -935,7 +939,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 	 * container if there is a race to insert, so if that happens
 	 * just use that one.
 	 */
-	rlink = d_hash_rec_find_insert(&dfp->dfp_cont_table, &dfc->dfc_uuid, sizeof(dfc->dfc_uuid),
+	rlink = d_hash_rec_find_insert(dfp->dfp_cont_table, &dfc->dfc_uuid, sizeof(dfc->dfc_uuid),
 				       &dfc->dfs_entry);
 	if (rlink != &dfc->dfs_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing container, reusing");
@@ -965,7 +969,7 @@ dfuse_cont_get_handle(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uui
 {
 	d_list_t *rlink;
 
-	rlink = d_hash_rec_find(&dfp->dfp_cont_table, cont, sizeof(*cont));
+	rlink = d_hash_rec_find(dfp->dfp_cont_table, cont, sizeof(*cont));
 	if (rlink) {
 		*_dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 		return 0;
@@ -1271,7 +1275,7 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 		DFUSE_TRA_INFO(ie, "Closing poh %d coh %d", daos_handle_is_valid(dfp->dfp_poh),
 			       daos_handle_is_valid(dfc->dfs_coh));
-		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
+		d_hash_rec_decref(dfp->dfp_cont_table, &dfc->dfs_entry);
 	}
 
 	D_MUTEX_DESTROY(&ie->ie_lock);
@@ -1584,9 +1588,9 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 	DFUSE_TRA_ERROR(dfp, "Failed to close pool ref %d " DF_UUID, dfp->dfp_ref,
 			DP_UUID(dfp->dfp_uuid));
 
-	d_hash_table_traverse(&dfp->dfp_cont_table, dfuse_cont_close_cb, handle);
+	d_hash_table_traverse(dfp->dfp_cont_table, dfuse_cont_close_cb, handle);
 
-	rc = d_hash_table_destroy_inplace(&dfp->dfp_cont_table, true);
+	rc = d_hash_table_destroy(dfp->dfp_cont_table, true);
 	if (rc != -DER_SUCCESS)
 		DHL_ERROR(dfp, rc, "Failed to close cont table");
 

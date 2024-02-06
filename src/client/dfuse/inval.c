@@ -401,7 +401,7 @@ ival_bucket_add_value(double timeout)
 	double                   lower = -1;
 	int                      rc    = -DER_SUCCESS;
 
-	DFUSE_TRA_INFO(&ival_data, "Setting up timeout queue for %.1lf", timeout);
+	DFUSE_TRA_DEBUG(&ival_data, "Setting up timeout queue for %.1lf", timeout);
 
 	/* Walk smallest to largest */
 	d_list_for_each_entry_reverse(dte, &ival_data.time_entry_list, dte_list) {
@@ -437,12 +437,13 @@ ival_bucket_dec_value(double timeout)
 {
 	struct dfuse_time_entry *dte;
 
-	DFUSE_TRA_INFO(&ival_data, "Dropping ref for %.1lf", timeout);
+	DFUSE_TRA_DEBUG(&ival_data, "Dropping ref for %.1lf", timeout);
 
 	d_list_for_each_entry(dte, &ival_data.time_entry_list, dte_list) {
 		if (dte->time == timeout) {
 			dte->ref--;
-			DFUSE_TRA_INFO(&ival_data, "Dropped ref on %.1lf to %d", timeout, dte->ref);
+			DFUSE_TRA_DEBUG(&ival_data, "Dropped ref on %.1lf to %d", timeout,
+					dte->ref);
 			return;
 		}
 	}

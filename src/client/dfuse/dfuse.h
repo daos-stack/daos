@@ -395,11 +395,12 @@ extern struct dfuse_inode_ops dfuse_pool_ops;
 
 /** Pool information
  *
- * This represents a pool that DFUSE is accessing.  All pools contain
- * a hash table of open containers.
+ * This represents a pool that DFUSE is accessing.  All pools contain a hash table of open
+ * containers.  After a pool is disconnected this struct may be kept on a historic list forever
+ * in order to remember the inode numbers allocated, as this struct is smaller the "core" method
+ * used for containers is not used here.
  *
  * uuid may be NULL for root inode where there is no pool.
- *
  */
 struct dfuse_pool {
 	/** UUID of the pool */
@@ -407,17 +408,16 @@ struct dfuse_pool {
 	/** Pool handle */
 	daos_handle_t       dfp_poh;
 	/** Hash table entry in dpi_pool_table */
-	d_list_t            dfp_entry;
-	/** Hash table reference count */
-	ATOMIC uint32_t     dfp_ref;
+	d_list_t             dfp_entry;
 
 	/** Hash table of open containers in pool */
-	struct d_hash_table dfp_cont_table;
+	struct d_hash_table *dfp_cont_table;
 
 	/** List of no longer accessed containers */
-	d_list_t            dfp_historic;
+	d_list_t             dfp_historic;
 
-	ino_t               dfp_ino;
+	/** Hash table reference count */
+	ATOMIC uint32_t      dfp_ref;
 };
 
 /* Statistics that dfuse keeps per container.  Logged at umount and can be queried through
@@ -456,12 +456,14 @@ enum dfuse_stat_id {
 
 /** Container information
  *
- * This represents a container that DFUSE is accessing.  All containers will have a valid dfs
- * handle.
+ * This represents something that dfuse is present to the user, either a container or the root of
+ * a pool, in which case uuid is NULL and coh is not set.
+ *
+ * Initially a struct dfuse_cont is allocated and used, however once complete then there may be a
+ * need to keep the ino around for re-use, in which case the struct is re-allocated to just keep
+ * the dfuse_cont_core element.
  *
  * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's members.
- *
- * uuid may be NULL for pool inodes.
  */
 struct dfuse_cont_core {
 	/** Hash table entry entry in dfp_cont_table */

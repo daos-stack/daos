@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -225,7 +225,7 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 
 	return rc;
 out_dfs:
-	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
+	d_hash_rec_decref(dfp->dfp_cont_table, &dfs->dfs_entry);
 out_dfp:
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_err:
