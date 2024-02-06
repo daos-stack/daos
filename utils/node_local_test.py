@@ -580,12 +580,8 @@ class DaosServer():
 
         self.fuse_procs = []
 
-    def __enter__(self):
-        self.start()
-        return self
-
     def __exit__(self, _type, _value, _traceback):
-        rc = self.stop(self.wf)
+        rc = self._stop(self.wf)
         if rc != 0 and self.fatal_errors is not None:
             self.fatal_errors.fail()
         return False
@@ -663,7 +659,7 @@ class DaosServer():
                 return False
         return True
 
-    def start(self):
+    def __enter__(self):
         """Start a DAOS server"""
         # pylint: disable=consider-using-with
         server_env = get_base_env(clean=True)
@@ -839,6 +835,7 @@ class DaosServer():
         self._add_test_case('start', duration=duration)
         print(f'Server started in {duration:.2f} seconds')
         self.fetch_pools()
+        return self
 
     def _stop_agent(self):
         self._agent.send_signal(signal.SIGINT)
@@ -850,7 +847,7 @@ class DaosServer():
         except FileNotFoundError:
             pass
 
-    def stop(self, wf):
+    def _stop(self, wf):
         """Stop a previously started DAOS server"""
         for fuse in self.fuse_procs:
             print('Stopping server with running fuse procs, cleaning up')
@@ -5456,7 +5453,7 @@ class AllocFailTest():
 
         fatal_errors = False
 
-        max_load_avg = 100
+        max_load_avg = 75
 
         # Now run all iterations in parallel up to max_child.  Iterations will be launched
         # in order but may not finish in order, rather they are processed in the order they
@@ -5482,8 +5479,7 @@ class AllocFailTest():
                     max_child = max(max_child, 20)
                     print(f"High load average of {load_avg}, "
                           f"pausing and decreasing parallelism to {max_child} {max_count}")
-                    if max_child > 20:
-                        time.sleep(2)
+                    time.sleep(2)
 
             if not finished:
                 while start_this_iteration > 0 and len(active) < max_child:
@@ -5493,6 +5489,10 @@ class AllocFailTest():
 
                     if len(active) > max_count:
                         max_count = len(active)
+
+                    if fid == 500:
+                        print("DAOS-15109, waiting for 15 minutes")
+                        time.sleep(15*60)
 
             # Now complete as many as have finished.
             for ret in active:
