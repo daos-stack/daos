@@ -53,7 +53,6 @@
  * Additional changes to consider in the future could include:
  *  Better handing of eviction timeouts, "max(time * 1.1, 10)" would be better than a flat +x/+5
  *  Use arrays rather than lists for the buckets for faster iteration.
- *  Reference counting the timeout buckets.
  *
  * Locking: The ival_lock is contended, it is accessed several places, however none do any more
  * than list management.  As inodes might be removed from one list and re-inserted into another
@@ -76,7 +75,7 @@
  * entries in the working set are invalidated but short enough to be meaningful.
  */
 #define INVAL_DIRECTORY_GRACE 5
-#define INVAL_FILE_GRACE      2
+#define INVAL_FILE_GRACE      11
 
 /* Represents one timeout value (time).  Maintains a ordered list of dentries that are using
  * this timeout.
@@ -85,13 +84,10 @@ struct dfuse_time_entry {
 	d_list_t inode_list;
 	double   time;
 	d_list_t dte_list;
-	/* Reference count on the time value.  If zero then no new entries should be added but the
-	 * entry won't be removed until no inodes are using it
-	 */
 	int      ref;
 };
 
-/* Core data structure, maintains a list of struct dfuse_time_entry lists.*/
+/* Core data structure, maintains a list of struct dfuse_time_entry lists */
 struct dfuse_ival {
 	d_list_t             time_entry_list;
 	struct fuse_session *session;
@@ -107,7 +103,6 @@ struct dfuse_ival {
 struct inode_core {
 	char       name[NAME_MAX + 1];
 	fuse_ino_t parent;
-	bool       dir;
 };
 
 /* Number of dentries to invalidate per iteration. This value affects how long the lock is held,
@@ -166,11 +161,9 @@ ival_loop(int *sleep_time)
 				continue;
 			}
 
-			/* Log the mode here, but possibly just evict dirs anyway */
 			ic[idx].parent = inode->ie_parent;
 			strncpy(ic[idx].name, inode->ie_name, NAME_MAX + 1);
 			ic[idx].name[NAME_MAX] = '\0';
-			ic[idx].dir            = S_ISDIR(inode->ie_stat.st_mode);
 
 			d_list_del_init(&inode->ie_evict_entry);
 
@@ -192,8 +185,8 @@ out:
 	for (int i = 0; i < idx; i++) {
 		int rc;
 
-		DFUSE_TRA_DEBUG(&ival_data, "Evicting entry %#lx " DF_DE " dir:" DF_BOOL,
-				ic[i].parent, DP_DE(ic[i].name), DP_BOOL(ic[i].dir));
+		DFUSE_TRA_DEBUG(&ival_data, "Evicting entry %#lx " DF_DE, ic[i].parent,
+				DP_DE(ic[i].name));
 
 		rc = fuse_lowlevel_notify_inval_entry(ival_data.session, ic[i].parent, ic[i].name,
 						      strnlen(ic[i].name, NAME_MAX));
@@ -364,7 +357,6 @@ ival_update_inode(struct dfuse_inode_entry *inode, double timeout)
 	 */
 	d_list_for_each_entry(dte, &ival_data.time_entry_list, dte_list) {
 		/* If the entry is draining then do not add any new entries to it */
-
 		if (dte->ref == 0)
 			continue;
 
