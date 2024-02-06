@@ -15,7 +15,6 @@ from pathlib import Path
 
 THIS_FILE = os.path.realpath(__file__)
 FTEST_DIR = os.path.dirname(THIS_FILE)
-ROOT_DIR = os.path.realpath(os.path.join(FTEST_DIR, '..', '..', '..'))
 
 
 class LintFailure(Exception):
