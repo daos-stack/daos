@@ -303,7 +303,7 @@ def define_components(reqs):
                 commands=[['meson', 'setup', '../fuse'],
                           ['meson', 'configure', '--prefix=$FUSE_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSE_PREFIX/udev', '-Dutils=False',
-                           '--default-library', 'static'],
+                           '--default-library', 'both'],
                           ['ninja', '-v'],
                           ['ninja', 'install']],
                 headers=['fuse3/fuse.h'],
