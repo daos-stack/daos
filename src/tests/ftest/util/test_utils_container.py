@@ -620,31 +620,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             if key != "self" and val is not None]
         return self._check_info(checks)
 
-    def write_objects_wo_failon(self, rank=None, obj_class=None):
-        """Write objects to the container without fail_on DaosTestError,
-           for negative test on container write_objects.
-
-        Args:
-            rank (int, optional): server rank. Defaults to None.
-            obj_class (int, optional): daos object class. Defaults to None.
-
-        """
-        self.open()
-        self.log.info(
-            "Writing %s object(s), with %s record(s) of %s bytes(s) each, in "
-            "container %s%s%s",
-            self.object_qty.value, self.record_qty.value, self.data_size.value,
-            str(self), " on rank {}".format(rank) if rank is not None else "",
-            " with object class {}".format(obj_class)
-            if obj_class is not None else "")
-        for _ in range(self.object_qty.value):
-            self.written_data.append(TestContainerData(self.debug.value))
-            self.written_data[-1].write_object(
-                self, self.record_qty.value, self.akey_size.value,
-                self.dkey_size.value, self.data_size.value, rank, obj_class,
-                self.data_array_size.value)
-
-    @fail_on(DaosTestError)
     def write_objects(self, rank=None, obj_class=None):
         """Write objects to the container.
 
@@ -671,7 +646,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 self.dkey_size.value, self.data_size.value, rank, obj_class,
                 self.data_array_size.value)
 
-    @fail_on(DaosTestError)
     def read_objects(self, txn=None):
         """Read the objects from the container and verify they match.
 
@@ -980,26 +954,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         """
         return self.daos.container_get_prop(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
-
-    def get_prop_values(self, *args, **kwargs):
-        """Get container property values by calling daos container get-prop.
-
-        Args:
-            args (tuple, optional): positional arguments to DaosCommand.container_get_prop
-            kwargs (dict, optional): named arguments to DaosCommand.container_get_prop
-
-        Returns:
-            list: a list of values matching the or specified property names.
-
-        """
-        values = []
-        self.log.info("Getting property values for container %s", self)
-        data = self.get_prop(*args, **kwargs)
-        if data['status'] != 0:
-            return values
-        for entry in data['response']:
-            values.append(entry['value'])
-        return values
 
     def verify_prop(self, expected_props):
         """Verify daos container get-prop returns expected values.

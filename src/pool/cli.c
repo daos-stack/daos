@@ -1692,6 +1692,9 @@ map_refresh_cb(tse_task_t *task, void *varg)
 	bool				reinit = false;
 	int				rc = task->dt_result;
 
+	/* Get an extra reference for the reinit case. */
+	dc_pool_get(pool);
+
 	/*
 	 * If it turns out below that we do need to update the cached pool map,
 	 * then holding the lock while doing so will be okay, since we probably
@@ -1816,6 +1819,7 @@ out:
 		dc_pool_put(arg->mra_pool);
 	}
 
+	dc_pool_put(pool);
 	return rc;
 }
 
@@ -1829,6 +1833,9 @@ map_refresh(tse_task_t *task)
 	crt_rpc_t		       *rpc;
 	struct map_refresh_cb_arg	cb_arg;
 	int				rc;
+
+	/* Get an extra reference for the reinit cases. */
+	dc_pool_get(pool);
 
 	if (arg->mra_passive) {
 		/*
@@ -1894,7 +1901,7 @@ map_refresh(tse_task_t *task)
 				DP_UUID(pool->dp_pool), task, DP_RC(rc));
 			goto out_task;
 		}
-		goto out;
+		goto out_pool;
 	}
 
 	if (pool->dp_map_task == NULL) {
@@ -1942,7 +1949,7 @@ map_refresh(tse_task_t *task)
 				DP_UUID(pool->dp_pool), query_task, DP_RC(rc));
 			goto out_map_task;
 		}
-		goto out;
+		goto out_pool;
 	}
 
 	/*
@@ -1974,6 +1981,7 @@ map_refresh(tse_task_t *task)
 
 	D_DEBUG(DB_MD, DF_UUID": %p: asking rank %u for version > %u\n",
 		DP_UUID(pool->dp_pool), task, rank, version);
+	dc_pool_put(pool);
 	return daos_rpc_send(rpc, task);
 
 out_cb_arg:
@@ -1987,7 +1995,8 @@ out_task:
 	d_backoff_seq_fini(&arg->mra_backoff_seq);
 	dc_pool_put(arg->mra_pool);
 	tse_task_complete(task, rc);
-out:
+out_pool:
+	dc_pool_put(pool);
 	return rc;
 }
 
