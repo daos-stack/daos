@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1920,36 +1920,6 @@ has_stats(struct d_tm_node_t *metric)
 
 	return (metric->dtn_type & D_TM_DURATION ||
 		metric->dtn_type == D_TM_STATS_GAUGE);
-}
-
-/**
- * Set the gauge value to zero if not already zeroed.
- * Avoids unnecessary stats churn.
- *
- * \param[in,out]	metric	Pointer to the metric
- */
-void
-d_tm_zero_gauge(struct d_tm_node_t *metric)
-{
-	if (metric == NULL)
-		return;
-
-	if (!is_gauge(metric)) {
-		D_ERROR("Failed to zero gauge [%s] on item "
-			"not a gauge.  Operation mismatch: " DF_RC "\n",
-			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
-		return;
-	}
-
-	d_tm_node_lock(metric);
-	if (metric->dtn_metric->dtm_data.value != 0) {
-		metric->dtn_metric->dtm_data.value = 0;
-		if (has_stats(metric)) {
-			d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
-			d_tm_compute_histogram(metric, 0);
-		}
-	}
-	d_tm_node_unlock(metric);
 }
 
 /**

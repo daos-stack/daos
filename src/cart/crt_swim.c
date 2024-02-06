@@ -1017,10 +1017,7 @@ crt_metrics_sample_delay(crt_context_t crt_ctx, uint64_t delay, bool glitch)
 
 	ctx = crt_ctx;
 
-	if (delay == 0)
-		d_tm_zero_gauge(ctx->cc_swim_delay);
-	else
-		d_tm_set_gauge(ctx->cc_swim_delay, delay);
+	d_tm_set_gauge(ctx->cc_swim_delay, delay);
 
 	if (glitch)
 		d_tm_inc_counter(ctx->cc_net_glitches, 1);
