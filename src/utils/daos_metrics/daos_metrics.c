@@ -53,11 +53,11 @@ print_usage(const char *prog_name)
 	       "--gauge, -g\n"
 	       "\tInclude gauges\n"
 	       "--read, -r\n"
+	       "\tInclude timestamp of when metric was read\n"
 	       "--reset, -e\n"
-	       "\tReset metrics value to 0\n"
+	       "\tReset all metrics to zero\n"
 	       "--jobid, -j\n"
-	       "\tDisplay metrics of the specified job\n"
-	       "\tInclude timestamp of when metric was read\n",
+	       "\tDisplay metrics of the specified job\n",
 	       prog_name);
 }
 
