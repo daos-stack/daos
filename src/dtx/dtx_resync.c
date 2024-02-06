@@ -793,7 +793,8 @@ dtx_resync_ult(void *data)
 	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
 		dss_sleep(5 * 1000);
 
-	rc = dss_thread_collective(dtx_resync_one, arg, DSS_ULT_DEEP_STACK);
+	rc = ds_pool_thread_collective(arg->pool_uuid, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
+				       PO_COMP_ST_NEW, dtx_resync_one, arg, DSS_ULT_DEEP_STACK);
 	if (rc) {
 		/* If dtx resync fails, then let's still update
 		 * sp_dtx_resync_version, so the rebuild can go ahead,

@@ -654,7 +654,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		}
 		if (entry->iv_class->iv_class_id == IV_CONT_CAPA &&
 		    !uuid_is_null(civ_key->cont_uuid)) {
-			rc = ds_cont_tgt_close(civ_key->cont_uuid);
+			rc = ds_cont_tgt_close(entry->ns->iv_pool_uuid,
+					       civ_key->cont_uuid);
 			if (rc)
 				D_GOTO(out, rc);
 		}
