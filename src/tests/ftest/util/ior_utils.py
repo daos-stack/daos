@@ -150,6 +150,7 @@ def write_data(test, container, namespace='/run/ior_write/*', **ior_run_params):
           api: DFS
           transfer_size: 512K
           block_size: 1G
+          ppn: 2
 
         ior_write:
           <<: *ior_base
@@ -162,8 +163,6 @@ def write_data(test, container, namespace='/run/ior_write/*', **ior_run_params):
     Args:
         test (Test): avocado Test object
         container (TestContainer): the container to populate
-        ppn (int): processes per node to use with the ior command
-        dfuse (Dfuse, optional): dfuse object defining the dfuse mount point. Defaults to None.
         namespace (str, optional): path to ior yaml parameters. Defaults to '/run/ior_write/*'.
         ior_run_params (dict): optional params for the Ior.run() command, like ppn, dfuse, etc.
 
@@ -173,19 +172,16 @@ def write_data(test, container, namespace='/run/ior_write/*', **ior_run_params):
     job_manager = get_job_manager(test, subprocess=False, timeout=60)
     ior = get_ior(test, job_manager, test.hostlist_clients, test.workdir, None, namespace)
 
-    # Normally Ior.run() requires the 'processes' argument and 'ppn' is optional
-    if 'processes' not in ior_run_params and 'ppn' in ior_run_params:
-        # Add 'processes=None' for Ior.run() when only using 'ppn' to satisfy its required params
-        ior_run_params['processes'] = None
-    elif 'processes' not in ior_run_params:
-        # Use a default (or yaml specified) 'ppn' if neither 'processes' nor 'ppn' are provided
+    if 'processes' not in ior_run_params:
+        ior_run_params['processes'] = test.params.get('processes', namespace, None)
+    elif 'ppn' not in ior_run_params:
         ior_run_params['ppn'] = test.params.get('ppn', namespace, 1)
 
     ior.run(test.server_group, container.pool, container, **ior_run_params)
     return ior
 
 
-def read_data(test, ior, container, ppn, dfuse=None, namespace='/run/ior_read/*'):
+def read_data(test, ior, container, namespace='/run/ior_read/*', **ior_run_params):
     """Verify the data used to populate the container.
 
     Simple method for test classes to use to read data with ior designed to be used with the Ior
@@ -196,6 +192,7 @@ def read_data(test, ior, container, ppn, dfuse=None, namespace='/run/ior_read/*'
           api: DFS
           transfer_size: 512K
           block_size: 1G
+          ppn: 2
 
         ior_write:
           <<: *ior_base
@@ -209,12 +206,15 @@ def read_data(test, ior, container, ppn, dfuse=None, namespace='/run/ior_read/*'
         test (Test): avocado Test object
         ior (Ior): the ior command used to populate the container
         container (TestContainer): the container to verify
-        ppn (int): processes per node to use with the ior command
-        dfuse (Dfuse, optional): dfuse object defining the dfuse mount point. Defaults to None.
         namespace (str, optional): path to ior yaml parameters. Defaults to '/run/ior_read/*'.
+        ior_run_params (dict): optional params for the Ior.run() command, like ppn, dfuse, etc.
     """
+    if 'processes' not in ior_run_params:
+        ior_run_params['processes'] = test.params.get('processes', namespace, None)
+    elif 'ppn' not in ior_run_params:
+        ior_run_params['ppn'] = test.params.get('ppn', namespace, 1)
     ior.update('flags', test.params.get('flags', namespace))
-    ior.run(test.server_group, container.pool, container, None, ppn, dfuse=dfuse)
+    ior.run(test.server_group, container.pool, container, **ior_run_params)
 
 
 class IorCommand(SubProcessCommand):

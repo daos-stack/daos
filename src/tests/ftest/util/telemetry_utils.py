@@ -991,24 +991,32 @@ class TelemetryUtils():
             data (dict): dictionary of dictionaries of NVMe metric names and values per server host
                 key
         """
-        self.log.info("Telemetry Metric Information")
+        print("Telemetry Metric Information")
         label_keys = set()
-        widths = [[]]
-        for name, value in data.items():
-            widths[0].append(len(name))
-            for index, key in enumerate(sorted(value)):
-                if len(widths) == index + 1:
-                    widths.append([])
-                widths[index + 1].append(len(str(value[key])))
-                label_keys |= set(value[key].keys())
-        widths.append([5])
-        format_str = "  ".join([f"%-{max(width)}s" for width in widths])
-        self.log.info(format_str, "Metric", *[sorted(label_keys)], "Value")
-        self.log.info(format_str, *["-" * max(width) for width in widths])
-        for name in sorted(data):
-            for value in sorted(data[name]):
-                keys = [data[name][value][key] for key in sorted(data[name][value])]
-                self.log.info(format_str, name, *keys, value)
+        widths = {'metric': [len('metric')], 'value': [len('value')]}
+        for metric, values in data.items():
+            widths['metric'].append(len(metric))
+            for value, labels in values.items():
+                widths['value'].append(len(str(value)))
+                for name in sorted(labels):
+                    label_keys.add(name)
+                    if name not in widths:
+                        widths[name] = []
+                    widths[name].append(len(str(name)))
+                    widths[name].append(len(str(labels[name])))
+        display_order = ['metric'] + sorted(label_keys) + ['value']
+        format_str = "  ".join([f"%-{max(widths[name])}s" for name in display_order])
+        self.log.info(format_str, *[name.title() for name in display_order])
+        self.log.info(format_str, *["-" * max(widths[name]) for name in display_order])
+        for metric in sorted(data):
+            for value, labels in data[metric].items():
+                label_values = []
+                for name in sorted(label_keys):
+                    if name in labels:
+                        label_values.append(labels[name])
+                    else:
+                        label_values.append('-')
+                self.log.info(format_str, metric, *label_values, value)
 
     def verify_metric_value(self, metrics_data, min_value=None, max_value=None):
         """ Verify telemetry metrics from metrics_data.
