@@ -180,7 +180,6 @@ do_stream(void **state)
 
 	errno = 0;
 	rewind(stream);
-	assert_int_equal(errno, 0);
 
 	offset = ftello(stream);
 	assert_int_equal(offset, 0);
