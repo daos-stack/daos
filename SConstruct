@@ -92,7 +92,7 @@ def parse_and_save_conf(env, opts_file):
     opts.Add(EnumVariable('SCONS_ENV', "Default SCons environment inheritance",
                           'minimal', ['minimal', 'full'], ignorecase=2))
 
-    opts.Add(BoolVariable('STATIC_FUSE', "Build with static libfuse library", 0))
+    opts.Add(BoolVariable('STATIC_FUSE', "Build with static libfuse library", 1))
 
     opts.Add('GO_BIN', 'Full path to go binary', None)
 
