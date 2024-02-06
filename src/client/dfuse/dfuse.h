@@ -404,9 +404,9 @@ extern struct dfuse_inode_ops dfuse_pool_ops;
  */
 struct dfuse_pool {
 	/** UUID of the pool */
-	uuid_t              dfp_uuid;
+	uuid_t               dfp_uuid;
 	/** Pool handle */
-	daos_handle_t       dfp_poh;
+	daos_handle_t        dfp_poh;
 	/** Hash table entry in dpi_pool_table */
 	d_list_t             dfp_entry;
 
@@ -460,7 +460,7 @@ enum dfuse_stat_id {
  * a pool, in which case uuid is NULL and coh is not set.
  *
  * Initially a struct dfuse_cont is allocated and used, however once complete then there may be a
- * need to keep the ino around for re-use, in which case the struct is re-allocated to just keep
+ * need to keep the ino around for reuse, in which case the struct is re-allocated to just keep
  * the dfuse_cont_core element.
  *
  * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's members.

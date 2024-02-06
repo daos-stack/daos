@@ -236,8 +236,8 @@ static void
 _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 {
 	struct dfuse_cont_core *dfcc, *dfccn;
-	bool               keep = used;
-	int                rc;
+	bool                    keep = used;
+	int                     rc;
 
 	if (dfuse_info->di_shutdown)
 		keep = false;
@@ -393,10 +393,10 @@ container_stats_log(struct dfuse_cont *dfc)
 }
 
 static void
-_ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool ref)
+_ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used)
 {
 	struct dfuse_pool *dfp  = dfc->dfs_dfp;
-	bool keep = used;
+	bool               keep = used;
 
 	if (dfuse_info->di_shutdown)
 		keep = false;
@@ -445,8 +445,7 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 	}
 
 	/* Do not drop the reference on the poool until after adding to the historic list */
-	if (ref)
-		d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 
 	if (!keep)
 		D_FREE(dfc);
@@ -455,7 +454,7 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 static void
 ch_free(struct d_hash_table *htable, d_list_t *link)
 {
-	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry), true, true);
+	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry), true);
 }
 
 d_hash_table_ops_t cont_hops = {
@@ -835,9 +834,9 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 			goto err_free;
 
 	} else {
-		daos_cont_info_t   c_info = {};
+		daos_cont_info_t        c_info = {};
 		struct dfuse_cont_core *dfcc;
-		int                dfs_flags = O_RDWR;
+		int                     dfs_flags = O_RDWR;
 
 		dfc->dfs_ops = &dfuse_dfs_ops;
 
@@ -922,7 +921,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 			DP_UUID(dfp->dfp_uuid));
 
 	if (dfc->dfs_ino == 0) {
-		dfc->dfs_ino = atomic_fetch_add_relaxed(&dfuse_info->di_ino_next, 1);
+		dfc->dfs_ino      = atomic_fetch_add_relaxed(&dfuse_info->di_ino_next, 1);
 		dfc->dfc_save_ino = true;
 		DFUSE_TRA_INFO(dfc, "Assigned new inode number %ld", dfc->dfs_ino);
 
@@ -944,7 +943,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 	if (rlink != &dfc->dfs_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing container, reusing");
 
-		_ch_free(dfuse_info, dfc, false, true);
+		_ch_free(dfuse_info, dfc, false);
 
 		dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 		DFUSE_TRA_DEBUG(dfc, "Returning dfs for " DF_UUID " ref %d", DP_UUID(dfc->dfc_uuid),
@@ -1561,17 +1560,13 @@ dfuse_cont_close_cb(d_list_t *rlink, void *handle)
 
 	DFUSE_TRA_ERROR(dfc, "Failed to close cont ref %d " DF_UUID, dfc->dfs_ref,
 			DP_UUID(dfc->dfc_uuid));
-
-	d_list_del(&dfc->dfs_entry);
-
-	_ch_free(handle, dfc, false, false);
 	return 0;
 }
 
 /* Called during shutdown on still-open pools.  We've already stopped
  * taking requests from the kernel at this point and joined all the thread
  * as well as drained the inode table and dropped all references held there
- * so anything still held at this point represents a reference leak.
+ * so anything still held at this point represents a reference leak and a dfuse bug.
  *
  * As such log what we have as an error, and attempt to close/free everything.
  * the dfp itself will remain allocated as well as some hash table metadata.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# (C) Copyright 2018-2023 Intel Corporation
+# (C) Copyright 2018-2024 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -512,7 +512,6 @@ class LogTest():
                         if new_pointer != old_pointer and old_pointer in active_desc:
                             active_desc[new_pointer] = active_desc[old_pointer]
                             del active_desc[old_pointer]
-
 
         if not self.ftest_mode:
             mem_r.active_desc = active_desc

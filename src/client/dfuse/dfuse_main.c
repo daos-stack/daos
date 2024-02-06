@@ -721,7 +721,6 @@ main(int argc, char **argv)
 	fuse_session_destroy(dfuse_info->di_session);
 	goto out_fini;
 out_cont:
-	dfuse_info->di_shutdown = true;
 	d_hash_rec_decref(dfp->dfp_cont_table, &dfs->dfs_entry);
 out_pool:
 	dfuse_info->di_shutdown = true;
