@@ -12,6 +12,8 @@ src/common @daos-stack/common-watchers
 
 # Notify vos-watcher of files touched affecting VOS
 src/vos/ @daos-stack/vos-owners @daos-stack/vos-watchers
+src/bio/ @daos-stack/vos-owners @daos-stack/vos-watchers
+src/vea/ @daos-stack/vos-owners @daos-stack/vos-watchers
 src/common/btree*.* @daos-stack/vos-owners @daos-stack/vos-watchers
 src/include/daos/btree*.* @daos-stack/vos-owners @daos-stack/vos-watchers
 src/include/daos_srv/vos*.* @daos-stack/vos-owners @daos-stack/vos-watchers
