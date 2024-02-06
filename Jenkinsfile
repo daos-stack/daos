@@ -333,9 +333,7 @@ pipeline {
                 stage('Determine Release Branch') {
                     steps {
                         script {
-                            env.RELEASE_BRANCH = sh(label: 'Determine release branch name',
-                                                    script: 'utils/rpms/packaging/get_release_branch',
-                                                    returnStdout: true).trim()
+                            env.RELEASE_BRANCH = releaseBranch()
                             echo 'Release branch == ' + env.RELEASE_BRANCH
                         }
                     }
