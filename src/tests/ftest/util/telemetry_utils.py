@@ -979,10 +979,10 @@ class TelemetryUtils():
         data = {}
         info = self.get_metrics(",".join(metric_names))
         for name in metric_names:
-            for host, name in info.items():
+            for host, metrics in info.items():
                 if name not in data:
                     data[name] = {}
-                for metric in info[host][name]["metrics"]:
+                for metric in metrics[name]["metrics"]:
                     if "labels" not in metric or "value" not in metric:
                         continue
                     keys = sorted(metric["labels"].keys())
