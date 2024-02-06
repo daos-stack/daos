@@ -55,7 +55,7 @@ dc_tm_init(void)
 	D_INFO("INIT %s metrics\n", dc_jobid);
 	rc = d_tm_add_ephemeral_dir(NULL, MAX_IDS_SIZE(INIT_JOB_NUM), "%s", dc_jobid);
 	if (rc != 0 && rc != -DER_EXIST) {
-		DL_ERROR(rc, "add metric %s failed.\n", dc_jobid);
+		DL_ERROR(rc, "add metric %s failed", dc_jobid);
 		D_GOTO(out, rc);
 	}
 

@@ -54,7 +54,12 @@ static const char      *crt_env_names[] = {"D_PROVIDER",
 					   "D_QUOTA_RPCS",
 					   "D_POST_INIT",
 					   "D_POST_INCR",
-					   "DAOS_SIGNAL_REGISTER"};
+					   "DAOS_SIGNAL_REGISTER",
+					   "D_CLIENT_METRICS_ENABLE",
+					   "D_CLIENT_METRICS_RETAIN",
+					   "D_CLIENT_METRICS_DUMP_PATH",
+
+};
 
 static void
 crt_lib_init(void) __attribute__((__constructor__));

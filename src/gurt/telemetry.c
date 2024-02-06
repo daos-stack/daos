@@ -2455,7 +2455,11 @@ get_free_region_entry(struct d_tm_shmem_hdr *shmem,
 	}
 
 	next = conv_ptr(shmem, head->next);
-	cur = head->next;
+	if (d_list_empty(&shmem->sh_subregions))
+		cur = (d_list_t *)(shmem->sh_base_addr +
+		       (uint64_t)(&((struct d_tm_shmem_hdr *)(0))->sh_subregions));
+	else
+		cur = head->next;
 
 	head->next = &tmp->rl_link;
 	next->prev = &tmp->rl_link;
