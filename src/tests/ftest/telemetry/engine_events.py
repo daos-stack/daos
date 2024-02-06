@@ -83,21 +83,16 @@ class EngineEvents(TestWithTelemetry):
             restart_rank (int): Restarted rank.
             dmg_command (DmgCommand): DmgCommand object.
         """
-        rank_stopped = False
         for count in range(3):
             time.sleep(5)
             query_out = dmg_command.system_query()
             for member in query_out["response"]["members"]:
                 if member["rank"] == restart_rank:
                     if member["state"] == "stopped" or member["state"] == "excluded":
-                        rank_stopped = True
-                        break
-            if rank_stopped:
-                self.log.info("Rank %d is stopped. count = %d", restart_rank, count)
-                break
+                        self.log.info("Rank %d is stopped. count = %d", restart_rank, count)
+                        return
             self.log.info("Rank %d is not stopped. Check again. count = %d", restart_rank, count)
-        if not rank_stopped:
-            self.fail(f"Rank {restart_rank} didn't stop!")
+        self.fail(f"Rank {restart_rank} didn't stop!")
 
     def check_rank_restarted(self, restart_rank, dmg_command):
         """Check the restart_rank is restarted.
@@ -140,7 +135,7 @@ class EngineEvents(TestWithTelemetry):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=telemetry
-        :avocado: tags=test_engine_events
+        :avocado: tags=EngineEvents,test_engine_events
         """
         # 1. Check that all ranks have started.
         self.log_step("Check that all ranks have started.")
