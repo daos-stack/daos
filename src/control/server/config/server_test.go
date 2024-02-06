@@ -865,7 +865,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigHugepagesDisabled,
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
 		},
 		"disabled hugepages; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -885,7 +885,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigHugepagesDisabled,
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
 		},
 		"disabled hugepages; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {

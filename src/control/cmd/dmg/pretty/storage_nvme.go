@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -168,13 +168,14 @@ func parseNvmeFormatResults(inResults storage.NvmeControllers) storage.NvmeContr
 			parsedResults = append(parsedResults, result)
 		}
 	}
-
 	return parsedResults
 }
 
-func printNvmeFormatResults(ctrlrs storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
+func printNvmeFormatResults(inCtrlrs storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
+	ctrlrs := parseNvmeFormatResults(inCtrlrs)
+	iw := txtfmt.NewIndentWriter(out)
 	if len(ctrlrs) == 0 {
-		fmt.Fprintln(out, "\tNo NVMe devices found")
+		fmt.Fprintln(iw, "No NVMe devices were formatted")
 		return nil
 	}
 
@@ -188,13 +189,13 @@ func printNvmeFormatResults(ctrlrs storage.NvmeControllers, out io.Writer, opts 
 
 	sort.Slice(ctrlrs, func(i, j int) bool { return ctrlrs[i].PciAddr < ctrlrs[j].PciAddr })
 
-	for _, ctrlr := range parseNvmeFormatResults(ctrlrs) {
-		row := txtfmt.TableRow{pciTitle: ctrlr.PciAddr}
-		row[resultTitle] = ctrlr.Info
+	for _, c := range ctrlrs {
+		row := txtfmt.TableRow{pciTitle: c.PciAddr}
+		row[resultTitle] = c.Info
 		roles := "NA"
 		// Assumes that all SMD devices on a controller have the same roles.
-		if len(ctrlr.SmdDevices) > 0 {
-			roles = fmt.Sprintf("%s", ctrlr.SmdDevices[0].Roles.String())
+		if len(c.SmdDevices) > 0 {
+			roles = fmt.Sprintf("%s", c.SmdDevices[0].Roles.String())
 		}
 		row[rolesTitle] = roles
 
@@ -209,8 +210,9 @@ func printNvmeFormatResults(ctrlrs storage.NvmeControllers, out io.Writer, opts 
 func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
+	iw := txtfmt.NewIndentWriter(out)
 	if len(controllers) == 0 {
-		fmt.Fprintln(out, "\tNo NVMe devices found")
+		fmt.Fprintln(iw, "No NVMe devices found")
 		return w.Err
 	}
 
