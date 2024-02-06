@@ -463,7 +463,22 @@ enum dfuse_stat_id {
  *
  * uuid may be NULL for pool inodes.
  */
+struct dfuse_cont_core {
+	/** Hash table entry entry in dfp_cont_table */
+	d_list_t      dfcc_entry;
+
+	/** UUID of the container */
+	uuid_t        dfcc_uuid;
+
+	/** Container handle */
+	daos_handle_t dfcc_coh;
+
+	/** Inode number of the root of this container */
+	ino_t         dfcc_ino;
+};
+
 struct dfuse_cont {
+	struct dfuse_cont_core  core;
 	/** Fuse handlers to use for this container */
 	struct dfuse_inode_ops *dfs_ops;
 
@@ -473,19 +488,11 @@ struct dfuse_cont {
 	/** dfs mount handle */
 	dfs_t                  *dfs_ns;
 
-	/** UUID of the container */
-	uuid_t                  dfc_uuid;
-
 	/** Container handle */
 	daos_handle_t           dfs_coh;
 
-	/** Hash table entry entry in dfp_cont_table */
-	d_list_t                dfs_entry;
 	/** Hash table reference count */
 	ATOMIC uint32_t         dfs_ref;
-
-	/** Inode number of the root of this container */
-	ino_t                   dfs_ino;
 
 	ATOMIC uint64_t         dfs_stat_value[DS_LIMIT];
 
@@ -496,7 +503,15 @@ struct dfuse_cont {
 	double                  dfc_ndentry_timeout;
 	double                  dfc_data_timeout;
 	bool                    dfc_direct_io_disable;
+
+	/* Set to true if the inode was allocated to this structure, so should be kept on close*/
+	bool                    dfc_save_ino;
 };
+
+#define dfs_entry core.dfcc_entry
+#define dfc_uuid  core.dfcc_uuid
+#define dfs_ino   core.dfcc_ino
+#define dfs_coh   core.dfcc_coh
 
 #define DFUSE_IE_STAT_ADD(_ie, _stat)                                                              \
 	atomic_fetch_add_relaxed(&(_ie)->ie_dfs->dfs_stat_value[(_stat)], 1)

@@ -235,7 +235,7 @@ ph_decref(struct d_hash_table *htable, d_list_t *link)
 static void
 _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 {
-	struct dfuse_cont *dfc, *dfcn;
+	struct dfuse_cont_core *dfcc, *dfccn;
 	bool               keep = used;
 	int                rc;
 
@@ -249,19 +249,18 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 	 * so no references are held on the pool at this point so no lock is required here.
 	 */
 
-	d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
-		rc = -DER_SUCCESS;
-
-		if (daos_handle_is_valid(dfc->dfs_coh)) {
-			rc = daos_cont_close(dfc->dfs_coh, NULL);
+	d_list_for_each_entry_safe(dfcc, dfccn, &dfp->dfp_historic, dfcc_entry) {
+		if (daos_handle_is_valid(dfcc->dfcc_coh)) {
+			rc = daos_cont_close(dfcc->dfcc_coh, NULL);
 			if (rc == -DER_SUCCESS)
-				dfc->dfs_coh = DAOS_HDL_INVAL;
+				dfcc->dfcc_coh = DAOS_HDL_INVAL;
 			else
-				DHL_ERROR(dfc, rc, "daos_cont_close() failed");
+				DHL_ERROR(dfcc, rc, "daos_cont_close() failed");
 		}
-		if (!keep && rc == -DER_SUCCESS) {
-			d_list_del(&dfc->dfs_entry);
-			D_FREE(dfc);
+
+		if (daos_handle_is_inval(dfcc->dfcc_coh) && dfcc->dfcc_ino == 0) {
+			d_list_del(&dfcc->dfcc_entry);
+			D_FREE(dfcc);
 		}
 	}
 
@@ -302,9 +301,9 @@ _ph_free(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, bool used)
 	}
 
 	if (!keep) {
-		d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
-			d_list_del(&dfc->dfs_entry);
-			D_FREE(dfc);
+		d_list_for_each_entry_safe(dfcc, dfccn, &dfp->dfp_historic, dfcc_entry) {
+			d_list_del(&dfcc->dfcc_entry);
+			D_FREE(dfcc);
 		}
 		D_FREE(dfp);
 	}
@@ -396,10 +395,16 @@ container_stats_log(struct dfuse_cont *dfc)
 static void
 _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool ref)
 {
+	struct dfuse_pool *dfp  = dfc->dfs_dfp;
 	bool keep = used;
 
 	if (dfuse_info->di_shutdown)
 		keep = false;
+
+	if (!dfc->dfc_save_ino) {
+		dfc->dfs_ino = 0;
+		keep         = false;
+	}
 
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
@@ -411,8 +416,10 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 		rc = daos_cont_close(dfc->dfs_coh, NULL);
 		if (rc == -DER_SUCCESS)
 			dfc->dfs_coh = DAOS_HDL_INVAL;
-		else
+		else {
+			keep = true;
 			DHL_ERROR(dfc, rc, "daos_cont_close() failed");
+		}
 	}
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_container_count, 1);
@@ -421,32 +428,25 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc, bool used, bool 
 
 	container_stats_log(dfc);
 
-	/* If this container has been used then save the entry against the pool handle so that
-	 * the inode number can be reused later if the pool is ever accessed again.  The container
-	 * handle only needs to go on the list if a matching handle is not already on the list or
-	 * there was a problem closing the container.
+	/* If the container was allocated a fresh inode number or has a open container handle
+	 * then keep a copy, else discard it.
 	 */
 	if (keep) {
-		struct dfuse_cont *dfcp;
+		struct dfuse_cont_core *dfcc;
+		void                   *old = dfc;
+
+		D_REALLOC(dfcc, old, sizeof(*dfc), sizeof(*dfcc));
+		if (dfcc == NULL)
+			dfcc = &dfc->core;
 
 		D_SPIN_LOCK(&dfuse_info->di_lock);
-		if (daos_handle_is_inval(dfc->dfs_coh)) {
-			d_list_for_each_entry(dfcp, &dfc->dfs_dfp->dfp_historic, dfs_entry) {
-				if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0) {
-					keep = false;
-					break;
-				}
-			}
-		}
-
-		if (keep)
-			d_list_add(&dfc->dfs_entry, &dfc->dfs_dfp->dfp_historic);
+		d_list_add(&dfcc->dfcc_entry, &dfp->dfp_historic);
 		D_SPIN_UNLOCK(&dfuse_info->di_lock);
 	}
 
 	/* Do not drop the reference on the poool until after adding to the historic list */
 	if (ref)
-		d_hash_rec_decref(&dfuse_info->di_pool_table, &dfc->dfs_dfp->dfp_entry);
+		d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 
 	if (!keep)
 		D_FREE(dfc);
@@ -828,13 +828,15 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		dfc->dfc_dentry_dir_timeout = 307;
 		dfc->dfc_ndentry_timeout    = 307;
 
+		dfc->dfc_dentry_dir_timeout = 37;
+
 		rc = ival_add_cont_buckets(dfc);
 		if (rc != 0)
 			goto err_free;
 
 	} else {
 		daos_cont_info_t   c_info = {};
-		struct dfuse_cont *dfcp;
+		struct dfuse_cont_core *dfcc;
 		int                dfs_flags = O_RDWR;
 
 		dfc->dfs_ops = &dfuse_dfs_ops;
@@ -880,11 +882,13 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		 * inode number.
 		 */
 		D_SPIN_LOCK(&dfuse_info->di_lock);
-		d_list_for_each_entry(dfcp, &dfp->dfp_historic, dfs_entry) {
-			if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0) {
-				dfc->dfs_ino = dfcp->dfs_ino;
-				break;
-			}
+		d_list_for_each_entry(dfcc, &dfp->dfp_historic, dfcc_entry) {
+			if (dfcc->dfcc_ino == 0)
+				continue;
+			if (uuid_compare(dfcc->dfcc_uuid, dfc->dfc_uuid) != 0)
+				continue;
+			dfc->dfs_ino = dfcc->dfcc_ino;
+			break;
 		}
 		if (dfc->dfs_ino == 0) {
 			struct dfuse_pool *dfpp;
@@ -897,27 +901,30 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 
 				if (uuid_compare(dfpp->dfp_uuid, dfp->dfp_uuid) != 0)
 					continue;
-				d_list_for_each_entry(dfcp, &dfpp->dfp_historic, dfs_entry) {
+
+				d_list_for_each_entry(dfcc, &dfpp->dfp_historic, dfcc_entry) {
 					DFUSE_TRA_INFO(
 					    dfc, "Looking for inode " DF_UUID " " DF_UUID,
-					    DP_UUID(dfpp->dfp_uuid), DP_UUID(dfcp->dfc_uuid));
-
-					if (uuid_compare(dfcp->dfc_uuid, dfc->dfc_uuid) == 0) {
-						dfc->dfs_ino = dfcp->dfs_ino;
-						break;
-					}
+					    DP_UUID(dfpp->dfp_uuid), DP_UUID(dfcc->dfcc_uuid));
+					if (dfcc->dfcc_ino == 0)
+						continue;
+					if (uuid_compare(dfcc->dfcc_uuid, dfc->dfc_uuid) != 0)
+						continue;
+					dfc->dfs_ino = dfcc->dfcc_ino;
+					break;
 				}
 			}
 		}
-
 		D_SPIN_UNLOCK(&dfuse_info->di_lock);
 	}
 
 	DFUSE_TRA_DEBUG(dfp, "New cont " DF_UUIDF " in pool " DF_UUIDF, DP_UUID(dfc->dfc_uuid),
 			DP_UUID(dfp->dfp_uuid));
 
-	if (dfc->dfs_ino == 0)
+	if (dfc->dfs_ino == 0) {
 		dfc->dfs_ino = atomic_fetch_add_relaxed(&dfuse_info->di_ino_next, 1);
+		dfc->dfc_save_ino = true;
+	}
 
 	/* Take a reference on the pool */
 	d_hash_rec_addref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
@@ -1658,7 +1665,7 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 	DHL_INFO(dfuse_info, rc, "Second flush complete");
 
 	d_list_for_each_entry_safe(dfp, dfpp, &dfuse_info->di_pool_historic, dfp_entry) {
-		struct dfuse_cont *dfc, *dfcn;
+		struct dfuse_cont_core *dfcc, *dfccn;
 
 		if (daos_handle_is_valid(dfp->dfp_poh)) {
 			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
@@ -1667,9 +1674,9 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 			}
 		}
 
-		d_list_for_each_entry_safe(dfc, dfcn, &dfp->dfp_historic, dfs_entry) {
-			d_list_del(&dfc->dfs_entry);
-			D_FREE(dfc);
+		d_list_for_each_entry_safe(dfcc, dfccn, &dfp->dfp_historic, dfcc_entry) {
+			d_list_del(&dfcc->dfcc_entry);
+			D_FREE(dfcc);
 		}
 
 		D_FREE(dfp);
