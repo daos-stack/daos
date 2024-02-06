@@ -488,7 +488,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	}
 
 	if cfg.DisableHugepages {
-		return FaultConfigHugepagesDisabled
+		return FaultConfigHugepagesDisabledWithBdevs
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.

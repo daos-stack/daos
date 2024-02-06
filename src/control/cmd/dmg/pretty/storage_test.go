@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -472,7 +472,8 @@ Errors:
 host1
 -----
 HugePage Size: 2048 KB
-	No SCM modules found
+
+  No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
@@ -501,11 +502,12 @@ Errors:
 host1
 -----
 HugePage Size: 2048 KB
+
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
 
-	No NVMe devices found
+  No NVMe devices found
 
 `,
 		},
@@ -535,9 +537,10 @@ Errors:
 host[1-2]
 ---------
 HugePage Size: 2048 KB
-	No SCM modules found
 
-	No NVMe devices found
+  No SCM modules found
+
+  No NVMe devices found
 
 `,
 		},
@@ -561,9 +564,10 @@ HugePage Size: 2048 KB
 host[1-2]
 ---------
 HugePage Size: 2048 KB
-	No SCM modules found
 
-	No NVMe devices found
+  No SCM modules found
+
+  No NVMe devices found
 
 `,
 		},
@@ -583,6 +587,7 @@ HugePage Size: 2048 KB
 host1
 -----
 HugePage Size: 2048 KB
+
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -609,6 +614,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host1
 -----
 HugePage Size: 2048 KB
+
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
 pmem0         0         1.0 TB   
@@ -639,6 +645,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[1-2]
 ---------
 HugePage Size: 2048 KB
+
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -669,17 +676,19 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host1
 -----
 HugePage Size: 2048 KB
+
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
 
-	No NVMe devices found
+  No NVMe devices found
 
 -----
 host2
 -----
 HugePage Size: 2048 KB
-	No SCM modules found
+
+  No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
@@ -699,6 +708,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[0-1023]
 ------------
 HugePage Size: 2048 KB
+
 SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
 ------------- --------- --------------- ---------- ------------ -------- 
 1             1         1               1          1            954 MiB  
@@ -737,7 +747,8 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host-[0001-0004]
 ----------------
 HugePage Size: 2048 KB
-	No SCM modules found
+
+  No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
@@ -773,7 +784,8 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host-j-[0001-0004]
 ------------------
 HugePage Size: 2048 KB
-	No SCM modules found
+
+  No SCM modules found
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
@@ -809,6 +821,7 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[1,3]
 ---------
 HugePage Size: 2048 KB
+
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
 pmem0         0         1.0 TB   
@@ -823,6 +836,7 @@ NVMe PCI     Model FW Revision Socket ID Capacity
 host[2,4]
 ---------
 HugePage Size: 2048 KB
+
 SCM Namespace Socket ID Capacity 
 ------------- --------- -------- 
 pmem0         0         1.0 TB   
@@ -1060,6 +1074,41 @@ Format Summary:
   host1 2           2            
 `,
 		},
+		"1 SCM, NVMe skipped": {
+			resp: &control.StorageFormatResp{
+				HostErrorsResp: control.HostErrorsResp{
+					HostErrors: make(control.HostErrorsMap),
+				},
+				HostStorage: func() control.HostStorageMap {
+					hsm := make(control.HostStorageMap)
+					hs := &control.HostStorage{
+						ScmMountPoints: []*storage.ScmMountPoint{
+							{
+								Info: "success",
+								Path: "/mnt/0",
+							},
+						},
+						NvmeDevices: []*storage.NvmeController{
+							{
+								Info:    "skipping",
+								PciAddr: storage.NilBdevAddress,
+							},
+						},
+					}
+					if err := hsm.Add("host1", hs); err != nil {
+						t.Fatal(err)
+					}
+					return hsm
+				}(),
+			},
+			expPrintStr: `
+
+Format Summary:
+  Hosts SCM Devices NVMe Devices 
+  ----- ----------- ------------ 
+  host1 1           0            
+`,
+		},
 		"2 Hosts, 2 SCM, 2 NVMe; first SCM fails": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
 				Hosts:       2,
@@ -1253,6 +1302,46 @@ NVMe PCI Format Result
 -------- ------------- 
 1        CTL_SUCCESS   
 2        CTL_SUCCESS   
+
+`,
+		},
+		"1 SCM, NVMe skipped": {
+			resp: &control.StorageFormatResp{
+				HostErrorsResp: control.HostErrorsResp{
+					HostErrors: make(control.HostErrorsMap),
+				},
+				HostStorage: func() control.HostStorageMap {
+					hsm := make(control.HostStorageMap)
+					hs := &control.HostStorage{
+						ScmMountPoints: []*storage.ScmMountPoint{
+							{
+								Info: "CTL_SUCCESS",
+								Path: "/mnt/0",
+							},
+						},
+						NvmeDevices: []*storage.NvmeController{
+							{
+								Info:    "skipping",
+								PciAddr: storage.NilBdevAddress,
+							},
+						},
+					}
+					if err := hsm.Add("host1", hs); err != nil {
+						t.Fatal(err)
+					}
+					return hsm
+				}(),
+			},
+			expPrintStr: `
+
+-----
+host1
+-----
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/0    CTL_SUCCESS   
+
+  No NVMe devices were formatted
 
 `,
 		},

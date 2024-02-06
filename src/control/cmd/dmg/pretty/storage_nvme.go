@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -168,13 +168,14 @@ func parseNvmeFormatResults(inResults storage.NvmeControllers) storage.NvmeContr
 			parsedResults = append(parsedResults, result)
 		}
 	}
-
 	return parsedResults
 }
 
-func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
-	if len(devices) == 0 {
-		fmt.Fprintln(out, "\tNo NVMe devices found")
+func printNvmeFormatResults(inCtrlrs storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
+	ctrlrs := parseNvmeFormatResults(inCtrlrs)
+	iw := txtfmt.NewIndentWriter(out)
+	if len(ctrlrs) == 0 {
+		fmt.Fprintln(iw, "No NVMe devices were formatted")
 		return nil
 	}
 
@@ -185,12 +186,11 @@ func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts
 	formatter.InitWriter(out)
 	var table []txtfmt.TableRow
 
-	sort.Slice(devices, func(i, j int) bool { return devices[i].PciAddr < devices[j].PciAddr })
+	sort.Slice(ctrlrs, func(i, j int) bool { return ctrlrs[i].PciAddr < ctrlrs[j].PciAddr })
 
-	for _, device := range parseNvmeFormatResults(devices) {
-		row := txtfmt.TableRow{pciTitle: device.PciAddr}
-		row[resultTitle] = device.Info
-
+	for _, c := range ctrlrs {
+		row := txtfmt.TableRow{pciTitle: c.PciAddr}
+		row[resultTitle] = c.Info
 		table = append(table, row)
 	}
 
@@ -202,8 +202,9 @@ func printNvmeFormatResults(devices storage.NvmeControllers, out io.Writer, opts
 func PrintNvmeControllers(controllers storage.NvmeControllers, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
 
+	iw := txtfmt.NewIndentWriter(out)
 	if len(controllers) == 0 {
-		fmt.Fprintln(out, "\tNo NVMe devices found")
+		fmt.Fprintln(iw, "No NVMe devices found")
 		return w.Err
 	}
 

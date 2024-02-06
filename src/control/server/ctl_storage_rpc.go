@@ -29,8 +29,11 @@ import (
 )
 
 const (
-	msgFormatErr      = "instance %d: failure formatting storage, check RPC response for details"
-	msgNvmeFormatSkip = "NVMe format skipped on instance %d as SCM format did not complete"
+	msgFormatErr             = "instance %d: failure formatting storage, check RPC response for details"
+	msgNvmeFormatSkip        = "NVMe format skipped on instance %d"
+	msgNvmeFormatSkipHPD     = msgNvmeFormatSkip + ", use of hugepages disabled in config"
+	msgNvmeFormatSkipFail    = msgNvmeFormatSkip + ", SCM format failed"
+	msgNvmeFormatSkipNotDone = msgNvmeFormatSkip + ", SCM was not formatted"
 	// Storage size reserved for storing DAOS metadata stored on SCM device.
 	//
 	// NOTE This storage size value is larger than the minimal size observed (i.e. 36864B),
@@ -45,6 +48,11 @@ const (
 	// NOTE DAOS-12750 Define an arbitrary storage space reserved of the filesystem used for
 	// mounting an SCM device: ext4 for DCPM and tmpfs for RAM.
 	mdFsScmBytes uint64 = humanize.MiByte
+)
+
+var (
+	errNoSrvCfg = errors.New("ControlService has no server config")
+	errNilReq   = errors.New("nil request")
 )
 
 // newResponseState creates, populates and returns ResponseState.
@@ -106,7 +114,10 @@ func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *storage.BdevScanResponse, i
 // is requested otherwise just retrieves cached static controller details.
 func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq, nsps []*ctlpb.ScmNamespace) (*ctlpb.ScanNvmeResp, error) {
 	if req == nil {
-		return nil, errors.New("nil bdev request")
+		return nil, errNilReq
+	}
+	if c.srvCfg != nil && c.srvCfg.DisableHugepages {
+		return nil, errors.New("cannot scan bdevs if hugepages have been disabled")
 	}
 
 	var bdevsInCfg bool
@@ -524,7 +535,10 @@ func checkEnginesReady(instances []Engine) error {
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	if req == nil {
-		return nil, errors.New("nil request")
+		return nil, errNilReq
+	}
+	if c.srvCfg == nil {
+		return nil, errNoSrvCfg
 	}
 	resp := new(ctlpb.StorageScanResp)
 
@@ -548,14 +562,21 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	}
 	resp.Scm = respScm
 
-	respNvme, err := c.scanBdevs(ctx, req.Nvme, respScm.Namespaces)
-	if err != nil {
-		return nil, err
+	if c.srvCfg.DisableHugepages {
+		c.log.Notice("bdev scan skipped as use of hugepages disabled in config")
+		resp.Nvme = &ctlpb.ScanNvmeResp{
+			State: new(ctlpb.ResponseState),
+		}
+	} else {
+		respNvme, err := c.scanBdevs(ctx, req.Nvme, respScm.Namespaces)
+		if err != nil {
+			return nil, err
+		}
+		if req.Nvme.GetMeta() {
+			c.adjustNvmeSize(respNvme)
+		}
+		resp.Nvme = respNvme
 	}
-	if req.Nvme.GetMeta() {
-		c.adjustNvmeSize(respNvme)
-	}
-	resp.Nvme = respNvme
 
 	mi, err := c.getMemInfo()
 	if err != nil {
@@ -724,10 +745,17 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 	for idx, ei := range req.instances {
 		_, hasError := req.errored[idx]
 		_, skipped := req.skipped[idx]
-		if hasError || (skipped && !req.mdFormatted) {
-			// if scm failed to format or was already formatted, indicate skipping bdev format
+
+		// Skip NVMe format if scm was already formatted or failed to format.
+		skipReason := ""
+		if hasError {
+			skipReason = msgNvmeFormatSkipFail
+		} else if skipped && !req.mdFormatted {
+			skipReason = msgNvmeFormatSkipNotDone
+		}
+		if skipReason != "" {
 			ret := ei.newCret(storage.NilBdevAddress, nil)
-			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
+			ret.State.Info = fmt.Sprintf(skipReason, ei.Index())
 			resp.Crets = append(resp.Crets, ret)
 			continue
 		}
@@ -758,6 +786,13 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 // Send response containing multiple results of format operations on scm mounts
 // and nvme controllers.
 func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFormatReq) (*ctlpb.StorageFormatResp, error) {
+	if req == nil {
+		return nil, errNilReq
+	}
+	if c.srvCfg == nil {
+		return nil, errNoSrvCfg
+	}
+
 	instances := c.harness.Instances()
 	resp := new(ctlpb.StorageFormatResp)
 	resp.Mrets = make([]*ctlpb.ScmMountResult, 0, len(instances))
@@ -779,30 +814,46 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		instances:  instances,
 		getMemInfo: c.getMemInfo,
 	}
+	c.log.Tracef("formatScmReq: %+v", fsr)
 	instanceErrors, instanceSkips, err := formatScm(ctx, fsr, resp)
 	if err != nil {
 		return nil, err
 	}
 
-	fnr := formatNvmeReq{
-		log:         c.log,
-		instances:   instances,
-		errored:     instanceErrors,
-		skipped:     instanceSkips,
-		mdFormatted: mdFormatted,
+	hugepagesDisabled := false
+	if c.srvCfg.DisableHugepages {
+		c.log.Debug("skipping bdev format as use of hugepages disabled in config")
+		hugepagesDisabled = true
+	} else {
+		fnr := formatNvmeReq{
+			log:         c.log,
+			instances:   instances,
+			errored:     instanceErrors,
+			skipped:     instanceSkips,
+			mdFormatted: mdFormatted,
+		}
+		c.log.Tracef("formatNvmeReq: %+v", fnr)
+		formatNvme(ctx, fnr, resp)
 	}
-	formatNvme(ctx, fnr, resp)
+
+	c.log.Tracef("StorageFormatResp: %+v", resp)
 
 	// Notify storage ready for instances formatted without error.
 	// Block until all instances have formatted NVMe to avoid
 	// VFIO device or resource busy when starting I/O Engines
 	// because devices have already been claimed during format.
-	for idx, ei := range instances {
+	for idx, engine := range instances {
+		if hugepagesDisabled {
+			// Populate skip NVMe format results for all engines.
+			ret := engine.newCret(storage.NilBdevAddress, nil)
+			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkipHPD, engine.Index())
+			resp.Crets = append(resp.Crets, ret)
+		}
 		if msg, hasError := instanceErrors[idx]; hasError {
 			c.log.Errorf("instance %d: %s", idx, msg)
 			continue
 		}
-		ei.NotifyStorageReady()
+		engine.NotifyStorageReady()
 	}
 
 	return resp, nil
@@ -811,7 +862,13 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 // StorageNvmeRebind rebinds SSD from kernel and binds to user-space to allow DAOS to use it.
 func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeRebindReq) (*ctlpb.NvmeRebindResp, error) {
 	if req == nil {
-		return nil, errors.New("nil request")
+		return nil, errNilReq
+	}
+	if c.srvCfg == nil {
+		return nil, errNoSrvCfg
+	}
+	if c.srvCfg.DisableHugepages {
+		return nil, FaultHugepagesDisabled
 	}
 
 	cu, err := user.Current()
@@ -848,7 +905,13 @@ func (c *ControlService) StorageNvmeRebind(ctx context.Context, req *ctlpb.NvmeR
 // If StorageTierIndex is set to -1 in request, add the device to the first configured bdev tier.
 func (c *ControlService) StorageNvmeAddDevice(ctx context.Context, req *ctlpb.NvmeAddDeviceReq) (resp *ctlpb.NvmeAddDeviceResp, err error) {
 	if req == nil {
-		return nil, errors.New("nil request")
+		return nil, errNilReq
+	}
+	if c.srvCfg == nil {
+		return nil, errNoSrvCfg
+	}
+	if c.srvCfg.DisableHugepages {
+		return nil, FaultHugepagesDisabled
 	}
 
 	engines := c.harness.Instances()
