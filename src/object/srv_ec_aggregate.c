@@ -1300,9 +1300,9 @@ agg_peer_update_ult(void *arg)
 	iod.iod_size = entry->ae_rsize;
 	obj = obj_hdl2ptr(entry->ae_obj_hdl);
 	for (peer = 0; peer < p; peer++) {
-		/* Only update the available parities */
-		if (peer == pidx || entry->ae_peer_pshards[peer].sd_rank == DAOS_TGT_IGNORE)
+		if (peer == pidx)
 			continue;
+		D_ASSERT(entry->ae_peer_pshards[peer].sd_rank != DAOS_TGT_IGNORE);
 		tgt_ep.ep_rank = entry->ae_peer_pshards[peer].sd_rank;
 		tgt_ep.ep_tag = entry->ae_peer_pshards[peer].sd_tgt_idx;
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
@@ -1429,6 +1429,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	struct daos_shard_loc	*peer_loc;
 	uint32_t		 failed_tgts_cnt = 0;
 	uint32_t		 p = ec_age2p(entry);
+	uint32_t		 pidx = ec_age2pidx(entry);
 	uint32_t		 peer;
 	int			 i, tid, rc = 0;
 
@@ -1450,24 +1451,19 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 		return rc;
 	}
 
-	rc = agg_get_obj_handle(entry);
-	if (rc) {
-		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
-		goto out;
-	}
-
 	if (targets != NULL) {
 		for (peer = 0; peer < p; peer++) {
+			if (peer == pidx)
+				continue;
 			peer_loc = &entry->ae_peer_pshards[peer];
 			for (i = 0; i < failed_tgts_cnt; i++) {
-				if (targets[i].ta_comp.co_rank == peer_loc->sd_rank ||
-				    peer_loc->sd_rank == DAOS_TGT_IGNORE) {
-					D_DEBUG(DB_EPC, DF_UOID" peer parity "
-						"tgt gailed rank %d, tgt_idx "
-						"%d.\n", DP_UOID(entry->ae_oid),
-						peer_loc->sd_rank,
-						peer_loc->sd_tgt_idx);
-					goto out;
+				if (peer_loc->sd_rank == DAOS_TGT_IGNORE ||
+				    (targets[i].ta_comp.co_rank == peer_loc->sd_rank &&
+				     targets[i].ta_comp.co_index == peer_loc->sd_tgt_idx)) {
+					D_DEBUG(DB_EPC, DF_UOID" peer parity tgt failed rank %d, "
+						"tgt_idx %d.\n", DP_UOID(entry->ae_oid),
+						peer_loc->sd_rank, peer_loc->sd_tgt_idx);
+					D_GOTO(out, rc = -1);
 				}
 			}
 		}
@@ -1624,7 +1620,10 @@ agg_process_holes_ult(void *arg)
 			continue;
 
 		for (i = 0; targets && i < failed_tgts_cnt; i++) {
-			if (targets[i].ta_comp.co_rank == entry->ae_peer_pshards[peer].sd_rank) {
+			if (entry->ae_peer_pshards[peer].sd_rank == DAOS_TGT_IGNORE ||
+			    (targets[i].ta_comp.co_rank == entry->ae_peer_pshards[peer].sd_rank &&
+			     targets[i].ta_comp.co_index ==
+			     entry->ae_peer_pshards[peer].sd_tgt_idx)) {
 				D_ERROR(DF_UOID" peer %d parity tgt failed\n",
 					DP_UOID(entry->ae_oid), peer);
 				rc = -1;
