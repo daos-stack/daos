@@ -756,6 +756,7 @@ main(int argc, char **argv)
 {
 	int rc = 0;
 
+	sleep(5);
 	rc = d_log_init();
 	if (rc != 0)
 		error_exit("Failed to init log; rc=%d\n", rc);
