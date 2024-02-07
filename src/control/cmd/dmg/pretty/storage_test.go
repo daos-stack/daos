@@ -1374,7 +1374,7 @@ host1
 -----
 host1
 -----
-  No pools found
+  No pools with NVMe found
 `,
 		},
 		"list-devices": {
