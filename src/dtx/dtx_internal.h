@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -180,7 +180,12 @@ extern uint32_t dtx_batched_ult_max;
  */
 #define DTX_INLINE_MBS_SIZE		512
 
-#define DTX_COLL_TREE_WIDTH		16
+/*
+ * The branch ratio for the KNOMIAL tree when bcast collective DTX RPC (commit/abort/check)
+ * to related engines. Based on the experience, the value which is not less than 4 may give
+ * relative better performance, cannot be too large (such as more than 10).
+ */
+#define DTX_COLL_TREE_WIDTH		8
 
 extern struct crt_corpc_ops	dtx_coll_commit_co_ops;
 extern struct crt_corpc_ops	dtx_coll_abort_co_ops;
