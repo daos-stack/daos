@@ -182,7 +182,6 @@ struct pool_svc {
 	bool                    ps_force_notify; /* MS of PS membership */
 	struct pool_svc_sched	ps_reconf_sched;
 	struct pool_svc_sched   ps_rfcheck_sched;      /* Check all containers RF for the pool */
-	uint32_t                ps_global_map_version; /* global pool map version on all targets */
 	uint32_t                ps_ops_enabled;        /* cached ds_pool_prop_svc_ops_enabled */
 	uint32_t                ps_ops_max;            /* cached ds_pool_prop_svc_ops_max */
 	uint32_t                ps_ops_age;            /* cached ds_pool_prop_svc_ops_age */
@@ -2028,7 +2027,7 @@ pool_svc_drain_cb(struct ds_rsvc *rsvc)
 }
 
 static int
-pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
+pool_svc_map_dist_cb(struct ds_rsvc *rsvc, uint32_t *version)
 {
 	struct pool_svc	       *svc = pool_svc_obj(rsvc);
 	struct rdb_tx		tx;
@@ -2055,7 +2054,8 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 			 map_version);
 		D_GOTO(out, rc);
 	}
-	svc->ps_global_map_version = max(svc->ps_global_map_version, map_version);
+
+	*version = map_version;
 out:
 	if (map_buf != NULL)
 		D_FREE(map_buf);
@@ -8183,7 +8183,7 @@ ds_pool_iv_ns_update(struct ds_pool *pool, unsigned int master_rank,
 }
 
 int
-ds_pool_svc_global_map_version_get(uuid_t uuid, uint32_t *version)
+ds_pool_svc_query_map_dist(uuid_t uuid, uint32_t *version, bool *idle)
 {
 	struct pool_svc	*svc;
 	int		rc;
@@ -8192,7 +8192,7 @@ ds_pool_svc_global_map_version_get(uuid_t uuid, uint32_t *version)
 	if (rc != 0)
 		return rc;
 
-	*version = svc->ps_global_map_version;
+	ds_rsvc_query_map_dist(&svc->ps_rsvc, version, idle);
 
 	pool_svc_put_leader(svc);
 	return 0;

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1443,7 +1443,7 @@ rebuild_task_ult(void *arg)
 {
 	struct rebuild_task			*task = arg;
 	struct ds_pool				*pool;
-	uint32_t				global_ver = 0;
+	uint32_t				map_dist_ver = 0;
 	struct rebuild_global_pool_tracker	*rgt = NULL;
 	d_rank_t				myrank;
 	uint64_t				cur_ts = 0;
@@ -1468,25 +1468,24 @@ rebuild_task_ult(void *arg)
 		/* Check if the leader pool map has been synced to all other targets
 		 * to avoid -DER_GRP error.
 		 */
-		rc = ds_pool_svc_global_map_version_get(task->dst_pool_uuid, &global_ver);
+		rc = ds_pool_svc_query_map_dist(task->dst_pool_uuid, &map_dist_ver, NULL);
 		if (rc) {
-			D_ERROR("Get pool service version failed: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": failed to get pool map distribution version",
+				 DP_UUID(task->dst_pool_uuid));
 			D_GOTO(out_pool, rc);
 		}
 
-		D_DEBUG(DB_REBUILD, "global_ver %u map ver %u\n", global_ver,
+		D_DEBUG(DB_REBUILD, "map_dist_ver %u map ver %u\n", map_dist_ver,
 			task->dst_map_ver);
 
 		if (pool->sp_stopping)
 			D_GOTO(out_pool, rc = -DER_SHUTDOWN);
 
-		if (pool->sp_map_version <= global_ver)
+		if (pool->sp_map_version <= map_dist_ver)
 			break;
 
 		dss_sleep(1000);
 	}
-
 
 	rc = crt_group_rank(pool->sp_group, &myrank);
 	D_ASSERT(rc == 0);

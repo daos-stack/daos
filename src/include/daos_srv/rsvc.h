@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -75,10 +75,10 @@ struct ds_rsvc_class {
 	void (*sc_drain)(struct ds_rsvc *svc);
 
 	/**
-	 * Distribute the system/pool map in the system/pool. This callback is
-	 * optional.
+	 * Distribute the system/pool map in the system/pool and return its
+	 * version. This callback is optional.
 	 */
-	int (*sc_map_dist)(struct ds_rsvc *svc);
+	int (*sc_map_dist)(struct ds_rsvc *svc, uint32_t *version);
 };
 
 void ds_rsvc_class_register(enum ds_rsvc_class_id id,
@@ -105,7 +105,6 @@ struct ds_rsvc {
 	char		       *s_db_path;
 	uuid_t			s_db_uuid;
 	int			s_ref;
-	uint32_t		s_gen;
 	ABT_mutex		s_mutex;	/* for the following members */
 	bool			s_stop;
 	bool			s_destroy;	/* when putting last ref */
@@ -114,7 +113,9 @@ struct ds_rsvc {
 	ABT_cond		s_state_cv;
 	int			s_leader_ref;	/* on leader state */
 	ABT_cond		s_leader_ref_cv;
-	bool			s_map_dist;	/* has a map dist request? */
+	bool			s_map_dist;	/* has a queued map dist request? */
+	bool			s_map_dist_inp;	/* has a in-progress map dist request? */
+	uint32_t		s_map_dist_ver;	/* highest map version distributed */
 	ABT_cond		s_map_dist_cv;
 	ABT_thread		s_map_distd;
 	bool			s_map_distd_stop;
@@ -175,6 +176,7 @@ int ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 size_t ds_rsvc_get_md_cap(void);
 
 void ds_rsvc_request_map_dist(struct ds_rsvc *svc);
+void ds_rsvc_query_map_dist(struct ds_rsvc *svc, uint32_t *version, bool *idle);
 void ds_rsvc_wait_map_dist(struct ds_rsvc *svc);
 
 #endif /* DAOS_SRV_RSVC_H */

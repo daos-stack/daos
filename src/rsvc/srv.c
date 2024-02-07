@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -406,8 +406,9 @@ init_map_distd(struct ds_rsvc *svc)
 	int rc;
 
 	D_ASSERT(svc->s_map_distd == ABT_THREAD_NULL);
-	svc->s_gen = 0;
 	svc->s_map_dist = false;
+	svc->s_map_dist_inp = false;
+	svc->s_map_dist_ver = 0;
 	svc->s_map_distd_stop = false;
 
 	ds_rsvc_get(svc);
@@ -608,45 +609,55 @@ static void
 map_distd(void *arg)
 {
 	struct ds_rsvc *svc = arg;
-	uint32_t	gen = 0;
-	int		rc;
-	bool		stop;
 
 	D_DEBUG(DB_MD, "%s: start\n", svc->s_name);
+	ABT_mutex_lock(svc->s_mutex);
 	for (;;) {
-		ABT_mutex_lock(svc->s_mutex);
+		uint32_t version;
+		int      rc;
+
 		for (;;) {
-			stop = svc->s_map_distd_stop;
-			if (stop)
-				break;
+			if (svc->s_map_distd_stop)
+				goto break_out;
 			if (svc->s_map_dist) {
-				gen = svc->s_gen;
+				/* Dequeue the request and start serving it. */
+				svc->s_map_dist = false;
+				svc->s_map_dist_inp = true;
 				break;
 			}
 			sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
 		}
 		ABT_mutex_unlock(svc->s_mutex);
-		if (stop)
-			break;
-		rc = rsvc_class(svc->s_class)->sc_map_dist(svc);
+
+		rc = rsvc_class(svc->s_class)->sc_map_dist(svc, &version);
 		if (rc != 0) {
 			/*
 			 * Try again, but back off a little bit to limit the
 			 * retry rate.
 			 */
 			dss_sleep(3000 /* ms */);
-		} else {
-			ABT_mutex_lock(svc->s_mutex);
-			if (gen == svc->s_gen) {
-				svc->s_map_dist = false;
-				ABT_cond_broadcast(svc->s_map_dist_cv);
+		}
+
+		ABT_mutex_lock(svc->s_mutex);
+		/* Stop serving the request. */
+		svc->s_map_dist_inp = false;
+		if (rc == 0) {
+			if (version > svc->s_map_dist_ver) {
+				D_DEBUG(DB_MD, "%s: version=%u->%u\n", svc->s_name,
+					svc->s_map_dist_ver, version);
+				svc->s_map_dist_ver = version;
 			}
-			ABT_mutex_unlock(svc->s_mutex);
+			ABT_cond_broadcast(svc->s_map_dist_cv);
+		} else {
+			/* Enqueue the request again. */
+			svc->s_map_dist = true;
 		}
 	}
+break_out:
+	ABT_mutex_unlock(svc->s_mutex);
 	put_leader(svc);
-	ds_rsvc_put(svc);
 	D_DEBUG(DB_MD, "%s: stop\n", svc->s_name);
+	ds_rsvc_put(svc);
 }
 
 /**
@@ -658,27 +669,48 @@ map_distd(void *arg)
 void
 ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 {
-	svc->s_gen++;
 	svc->s_map_dist = true;
 	ABT_cond_broadcast(svc->s_map_dist_cv);
 	D_DEBUG(DB_MD, "%s: requested map distribution\n", svc->s_name);
 }
 
+/**
+ * Query the map distribution state.
+ * 
+ * \param[in]	svc	replicated service
+ * \param[out]	version	if not NULL, highest map version distributed
+ *			successfully
+ * \param[out]	idle	if not NULL, whether map distribution is idle (i.e., no
+ *			in-progress or pending request)
+ */
+void
+ds_rsvc_query_map_dist(struct ds_rsvc *svc, uint32_t *version, bool *idle)
+{
+	if (version != NULL)
+		*version = svc->s_map_dist_ver;
+	if (idle != NULL)
+		*idle = !svc->s_map_dist_inp && !svc->s_map_dist;
+}
+
+/**
+ * Wait until map distribution is idle or stopping.
+ * 
+ * \param[in]	svc	replicated service
+ */
 void
 ds_rsvc_wait_map_dist(struct ds_rsvc *svc)
 {
-	D_DEBUG(DB_MD, "%s: waiting map dist %u\n", svc->s_name, svc->s_gen);
-
+	D_DEBUG(DB_MD, "%s: begin", svc->s_name);
 	ABT_mutex_lock(svc->s_mutex);
 	for (;;) {
-		if (svc->s_map_distd_stop || !svc->s_map_dist)
+		if (svc->s_map_distd_stop)
 			break;
-
+		if (!svc->s_map_dist && !svc->s_map_dist_inp)
+			break;
 		sched_cond_wait(svc->s_map_dist_cv, svc->s_mutex);
 	}
 	ABT_mutex_unlock(svc->s_mutex);
-
-	D_DEBUG(DB_MD, "%s: map dist done %u\n", svc->s_name, svc->s_gen);
+	D_DEBUG(DB_MD, "%s: end", svc->s_name);
 }
 
 static char *
