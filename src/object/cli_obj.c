@@ -4444,14 +4444,14 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
  * For that case, we duplicate the sgls and make its iov_buf_len = iov_len.
  */
 static int
-obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
+obj_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args, bool update)
 {
 	daos_iod_t	*iod;
 	d_sg_list_t	*sgls_dup, *sgls;
 	d_sg_list_t	*sg, *sg_dup;
 	d_iov_t		*iov, *iov_dup;
 	bool		 dup = false;
-	uint32_t	 i, j;
+	uint32_t	 i, j, count;
 	int		 rc = 0;
 
 	sgls = args->sgls;
@@ -4461,16 +4461,29 @@ obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
 	for (i = 0; i < args->nr; i++) {
 		sg = &sgls[i];
 		iod = &args->iods[i];
-		for (j = 0; j < sg->sg_nr; j++) {
+		for (j = 0, count = 0; j < sg->sg_nr; j++) {
 			iov = &sg->sg_iovs[j];
-			if (iov->iov_len > iov->iov_buf_len ||
-			    (iov->iov_len == 0 && iod->iod_size != DAOS_REC_ANY)) {
-				D_ERROR("invalid args, iov_len "DF_U64", iov_buf_len "DF_U64"\n",
-					iov->iov_len, iov->iov_buf_len);
+			if (iov->iov_len > iov->iov_buf_len) {
+				DL_ERROR(-DER_INVAL,
+					 "invalid args, iov_len " DF_U64 ", iov_buf_len" DF_U64,
+					 iov->iov_len, iov->iov_buf_len);
 				return -DER_INVAL;
-			} else if (iov->iov_len < iov->iov_buf_len) {
-				dup = true;
 			}
+			if ((update && iov->iov_len == 0) || iov->iov_buf_len == 0) {
+				/** POSIX supports passing 0 length entries in
+				 * iov. Since lower layers don't support this,
+				 * let's remove them when we duplicate.
+				 */
+				dup = true;
+				continue;
+			}
+			if (update && iov->iov_len < iov->iov_buf_len)
+				dup = true;
+			count++;
+		}
+		if (count == 0 && iod->iod_size != DAOS_REC_ANY) {
+			DL_ERROR(-DER_INVAL, "invalid args, sgl contained only 0 length entries");
+			return -DER_INVAL;
 		}
 	}
 	if (dup == false)
@@ -4487,12 +4500,16 @@ obj_update_sgls_dup(struct obj_auxi_args *obj_auxi, daos_obj_update_t *args)
 		if (rc)
 			goto failed;
 
-		for (j = 0; j < sg_dup->sg_nr; j++) {
-			iov_dup = &sg_dup->sg_iovs[j];
+		for (j = 0, count = 0; j < sg_dup->sg_nr; j++) {
 			iov = &sg->sg_iovs[j];
+			if ((update && iov->iov_len == 0) || iov->iov_buf_len == 0)
+				continue;
+			iov_dup = &sg_dup->sg_iovs[count++];
 			*iov_dup = *iov;
-			iov_dup->iov_buf_len = iov_dup->iov_len;
+			if (update)
+				iov_dup->iov_buf_len = iov_dup->iov_len;
 		}
+		sg_dup->sg_nr = count;
 	}
 	obj_auxi->reasb_req.orr_usgls = sgls;
 	obj_auxi->rw_args.sgls_dup = sgls_dup;
@@ -4509,11 +4526,12 @@ failed:
 }
 
 static void
-obj_update_sgls_free(struct obj_auxi_args *obj_auxi)
+obj_dup_sgls_free(struct obj_auxi_args *obj_auxi)
 {
 	int	i;
 
-	if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE && obj_auxi->rw_args.sgls_dup != NULL) {
+	if ((obj_auxi->opc == DAOS_OBJ_RPC_UPDATE || obj_auxi->opc == DAOS_OBJ_RPC_FETCH) &&
+	    obj_auxi->rw_args.sgls_dup != NULL) {
 		daos_obj_rw_t	*api_args;
 
 		for (i = 0; i < obj_auxi->iod_nr; i++)
@@ -4538,7 +4556,7 @@ obj_reasb_io_fini(struct obj_auxi_args *obj_auxi, bool retry)
 	}
 	obj_bulk_fini(obj_auxi);
 	obj_auxi_free_failed_tgt_list(obj_auxi);
-	obj_update_sgls_free(obj_auxi);
+	obj_dup_sgls_free(obj_auxi);
 	obj_reasb_req_fini(&obj_auxi->reasb_req, obj_auxi->iod_nr);
 	obj_auxi->req_reasbed = false;
 
@@ -5503,6 +5521,12 @@ dc_obj_fetch_task(tse_task_t *task)
 		D_GOTO(out_task, rc);
 	}
 
+	rc = obj_sgls_dup(obj_auxi, args, false);
+	if (rc) {
+		D_ERROR(DF_OID" obj_sgls_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
+		D_GOTO(out_task, rc);
+	}
+
 	if (obj_req_with_cond_flags(args->flags)) {
 		rc = obj_cond_fetch_prep(task, obj_auxi);
 		D_ASSERT(rc <= 1);
@@ -5702,9 +5726,9 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		D_GOTO(out_task, rc);
 	}
 
-	rc = obj_update_sgls_dup(obj_auxi, args);
+	rc = obj_sgls_dup(obj_auxi, args, true);
 	if (rc) {
-		D_ERROR(DF_OID" obj_update_sgls_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
+		D_ERROR(DF_OID" obj_sgls_dup failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
 		D_GOTO(out_task, rc);
 	}
 
