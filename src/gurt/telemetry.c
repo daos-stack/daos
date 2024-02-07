@@ -31,12 +31,17 @@ struct shmem_region_list {
 struct d_tm_shmem_hdr {
 	uint64_t		 sh_base_addr;	/** address of this struct */
 	key_t			 sh_key;	/** key to access region */
-	bool			 sh_deleted;	/** marked for deletion */
+	uint32_t		 sh_deleted:1,	/** marked for deletion */
+				 sh_require_ephemeral_lock:1; /** ephemeral_lock required */
 	uint8_t			 sh_reserved[3]; /** for alignment */
 	uint64_t		 sh_bytes_total; /** total size of region */
 	uint64_t		 sh_bytes_free; /** free bytes in this region */
 	void			*sh_free_addr;	/** start of free space */
 	struct d_tm_node_t	*sh_root;	/** root of metric tree */
+
+	/* lock to create and remove ephemeral_dir_lock */
+	pthread_mutex_t		 sh_ephemeral_dir_lock;
+
 	/**
 	 * List of all ephemeral regions attached to this shmem region.
 	 */
@@ -71,7 +76,8 @@ static struct d_tm_shmem {
 	pthread_mutex_t		 add_lock; /** for synchronized access */
 	uint32_t		 retain:1, /* retain shmem region during exit */
 				 sync_access:1,
-				 retain_non_empty:1; /** retain shmem region if it is not empty */
+				 retain_non_empty:1, /** retain shmem region if it is not empty */
+				 ephemeral_dir_lock:1; /** lock for ephemeral directory */
 	int			 id; /** Instance ID */
 } tm_shmem;
 
@@ -333,7 +339,7 @@ close_local_shmem_entry(struct local_shmem_list *entry, bool destroy)
 {
 	d_list_del(&entry->link);
 	if (destroy)
-		entry->region->sh_deleted = true;
+		entry->region->sh_deleted = 1;
 	close_shmem(entry->region);
 
 	if (destroy)
@@ -806,6 +812,11 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 
 	if (flags & D_TM_RETAIN_SHMEM_IF_NON_EMPTY) {
 		tm_shmem.retain_non_empty = 1;
+		D_INFO("Retaining shared memory for id %d if not empty\n", id);
+	}
+
+	if (flags & D_TM_EPHEMERAL_DIR_LOCK) {
+		tm_shmem.ephemeral_dir_lock = 1;
 		D_INFO("Retaining shared memory for id %d if not empty\n", id);
 	}
 
@@ -2560,10 +2571,13 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 	if (rc != 0)
 		D_GOTO(fail, rc);
 
+	if (tm_shmem.ephemeral_dir_lock)
+		D_MUTEX_LOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
+
 	rc = d_tm_lock_shmem();
 	if (unlikely(rc != 0)) {
 		D_ERROR("failed to get producer mutex\n");
-		D_GOTO(fail, rc);
+		D_GOTO(fail_ephemeral_unlock, rc);
 	}
 
 	new_node = d_tm_find_metric(ctx, path);
@@ -2612,6 +2626,8 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		*node = new_node;
 
 	d_tm_unlock_shmem();
+	if (tm_shmem.ephemeral_dir_lock)
+		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
 	return 0;
 
 fail_link:
@@ -2624,6 +2640,9 @@ fail_shmem:
 	destroy_shmem(new_shmid);
 fail_unlock:
 	d_tm_unlock_shmem();
+fail_ephemeral_unlock:
+	if (tm_shmem.ephemeral_dir_lock)
+		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
 fail:
 	D_ERROR("Failed to add ephemeral dir [%s]: " DF_RC "\n", path,
 		DP_RC(rc));
@@ -3670,6 +3689,7 @@ allocate_shared_memory(key_t key, size_t mem_size,
 {
 	int			 shmid;
 	struct d_tm_shmem_hdr	*header;
+	int			rc;
 
 	D_ASSERT(shmem != NULL);
 
@@ -3690,6 +3710,14 @@ allocate_shared_memory(key_t key, size_t mem_size,
 	header->sh_free_addr = (void *)header + sizeof(struct d_tm_shmem_hdr);
 
 	D_INIT_LIST_HEAD(&header->sh_subregions);
+
+	if (tm_shmem.ephemeral_dir_lock) {
+		rc = D_MUTEX_INIT(&header->sh_ephemeral_dir_lock, NULL);
+		if (rc) {
+			DL_ERROR(rc, "create ephemeral dir lock failed");
+			return -DER_NO_SHMEM;
+		}
+	}
 
 	D_DEBUG(DB_MEM, "Created shared memory region for key 0x%x, size=%lu header %p base %p free %p\n",
 		key, mem_size, header, (void *)header->sh_base_addr, (void *)header->sh_free_addr);

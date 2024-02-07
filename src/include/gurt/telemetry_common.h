@@ -157,6 +157,7 @@ enum {
 	D_TM_RETAIN_SHMEM		= 0x002,
 	D_TM_RETAIN_SHMEM_IF_NON_EMPTY	= 0x004,
 	D_TM_OPEN_OR_CREATE		= 0x008,
+	D_TM_EPHEMERAL_DIR_LOCK		= 0x010,
 };
 
 /** Output formats */
