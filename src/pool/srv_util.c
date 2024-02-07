@@ -392,7 +392,7 @@ int
 ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas, d_rank_t self,
 			 d_rank_list_t **to_add_out, d_rank_list_t **to_remove_out)
 {
-	const pool_comp_state_t	 desired_states = PO_COMP_ST_UP | PO_COMP_ST_UPIN;
+	const pool_comp_state_t	 desired_states = PO_COMP_ST_UPIN;
 	struct pool_domain	*nodes = NULL;
 	int			 nnodes;
 	int			 objective;

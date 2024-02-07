@@ -42,9 +42,10 @@ type fsCmd struct {
 type fsCopyCmd struct {
 	daosCmd
 
-	Source   string `long:"src" short:"s" description:"copy source" required:"1"`
-	Dest     string `long:"dst" short:"d" description:"copy destination" required:"1"`
-	Preserve string `long:"preserve-props" short:"m" description:"preserve container properties, requires HDF5 library" required:"0"`
+	Source      string `long:"src" short:"s" description:"copy source" required:"1"`
+	Dest        string `long:"dst" short:"d" description:"copy destination" required:"1"`
+	Preserve    string `long:"preserve-props" short:"m" description:"preserve container properties, requires HDF5 library" required:"0"`
+	IgnoreUnsup bool   `long:"ignore-unsupported" description:"ignore unsupported filesystem features when copying to DFS" required:"0"`
 }
 
 func (cmd *fsCopyCmd) Execute(_ []string) error {
@@ -62,6 +63,7 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 		ap.preserve_props = C.CString(cmd.Preserve)
 		defer freeString(ap.preserve_props)
 	}
+	ap.ignore_unsup = C.bool(cmd.IgnoreUnsup)
 
 	ap.fs_op = C.FS_COPY
 	rc := C.fs_copy_hdlr(ap)
@@ -104,6 +106,10 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 	cmd.Infof("    Directories: %d", ap.fs_copy_stats.num_dirs)
 	cmd.Infof("    Files:       %d", ap.fs_copy_stats.num_files)
 	cmd.Infof("    Links:       %d", ap.fs_copy_stats.num_links)
+
+	if ap.fs_copy_stats.num_chmod_enotsup > 0 {
+		return errors.Errorf("Copy completed successfully, but %d files had unsupported mode bits that could not be applied. Run with --ignore-unsupported to suppress this warning.", ap.fs_copy_stats.num_chmod_enotsup)
+	}
 
 	return nil
 }
@@ -283,7 +289,6 @@ type fsCheckCmd struct {
 
 	FsckFlags FsCheckFlag `long:"flags" short:"f" description:"comma-separated flags: print, remove, relink, verify, evict"`
 	DirName   string      `long:"dir-name" short:"n" description:"directory name under lost+found to store leaked oids (a timestamp dir would be created if this is not specified)"`
-	Evict     bool        `long:"evict" short:"e" description:"evict all open handles on the container"`
 }
 
 func (cmd *fsCheckCmd) Execute(_ []string) error {

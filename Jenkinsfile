@@ -1226,6 +1226,7 @@ pipeline {
                                 test_function: 'runTestFunctionalV2',
                                 ftest_arg: getFunctionalArgs(
                                     pragma_suffix: '-hw-medium-ucx-provider',
+                                    default_nvme: 'auto:-3DNAND',
                                     provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'))['ftest_arg']))
                     }
                     post {
