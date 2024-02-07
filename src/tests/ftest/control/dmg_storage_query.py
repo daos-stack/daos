@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -238,7 +238,8 @@ class DmgStorageQuery(ControlTestBase):
             if str(device['has_sys_xs']).lower() == 'true':
                 # Setting a SysXS device faulty will kill the engine
                 self.log.debug("Expecting server to die after setting SysXS device faulty")
-                self.server_managers[0].update_expected_states(0, ["Stopped", "Excluded"])
+                for manager in self.server_managers:
+                    manager.update_expected_states(0, ["Errored"])
                 expect_failed_engine = True
             try:
                 self.dmg.storage_set_faulty(uuid=device['uuid'])
