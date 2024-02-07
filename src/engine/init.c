@@ -829,12 +829,8 @@ exit_nvme_init:
 exit_mod_loaded:
 	ds_iv_fini();
 	dss_module_unload_all();
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		daos_fini();
-	} else {
-		pl_fini();
-		daos_hhash_fini();
-	}
+	pl_fini();
+	daos_hhash_fini();
 exit_crt:
 	crt_finalize();
 exit_mod_init:
@@ -889,12 +885,8 @@ server_fini(bool force)
 	 * Client stuff finalization needs be done after all ULTs drained
 	 * in dss_srv_fini().
 	 */
-	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
-		daos_fini();
-	} else {
-		pl_fini();
-		daos_hhash_fini();
-	}
+	pl_fini();
+	daos_hhash_fini();
 	D_INFO("daos_fini() or pl_fini() done\n");
 	crt_finalize();
 	D_INFO("crt_finalize() done\n");

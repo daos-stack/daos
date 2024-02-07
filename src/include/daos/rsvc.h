@@ -14,8 +14,6 @@
 
 #include <daos_types.h>
 
-#define RECHOOSE_SLEEP_MS 250
-
 /** Flags in rsvc_hint::sh_flags (opaque) */
 enum rsvc_hint_flag {
 	RSVC_HINT_VALID	= 1	/* sh_term and sh_rank contain valid info */
