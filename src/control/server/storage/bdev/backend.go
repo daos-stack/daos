@@ -466,7 +466,7 @@ func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.Bdev
 
 	if req.VMDEnabled {
 		sb.log.Debug("vmd support enabled during nvme format")
-		dl, err := substituteVMDAddresses(sb.log, needDevs, req.BdevCache)
+		dl, err := substituteVMDAddresses(sb.log, needDevs, req.ScannedBdevs)
 		if err != nil {
 			return nil, err
 		}
@@ -501,7 +501,6 @@ func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.Bdev
 func (sb *spdkBackend) Format(req storage.BdevFormatRequest) (resp *storage.BdevFormatResponse, err error) {
 	sb.log.Debugf("spdk backend format (bindings call): %+v", req)
 
-	// TODO (DAOS-3844): Kick off device formats in parallel?
 	switch req.Properties.Class {
 	case storage.ClassFile:
 		return sb.formatAioFile(&req)
@@ -529,7 +528,7 @@ func (sb *spdkBackend) writeNvmeConfig(req storage.BdevWriteConfigRequest, confW
 
 			bdevs := &props.DeviceList.PCIAddressSet
 
-			dl, err := substituteVMDAddresses(sb.log, bdevs, req.BdevCache)
+			dl, err := substituteVMDAddresses(sb.log, bdevs, req.ScannedBdevs)
 			if err != nil {
 				return errors.Wrapf(err, "storage tier %d", props.Tier)
 			}

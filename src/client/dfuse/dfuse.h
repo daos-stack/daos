@@ -28,7 +28,7 @@ struct dfuse_info {
 	struct fuse_session *di_session;
 	char                *di_group;
 	char                *di_mountpoint;
-	uint32_t             di_thread_count;
+	int32_t              di_thread_count;
 	uint32_t             di_eq_count;
 	bool                 di_threaded;
 	bool                 di_foreground;
@@ -782,13 +782,14 @@ struct fuse_lowlevel_ops dfuse_ops;
 			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
 	} while (0)
 
-#define DFUSE_REPLY_CREATE(_ie, req, entry, fi)                                                    \
+#define DFUSE_REPLY_CREATE(inode, req, entry, fi)                                                  \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_ie, "Returning create");                                          \
-		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
-		(_ie) = NULL;                                                                      \
-		__rc  = fuse_reply_create(req, &entry, fi);                                        \
+		DFUSE_TRA_DEBUG(inode, "Returning create");                                        \
+		ival_update_inode(inode, (entry).entry_timeout);                                   \
+		_Static_assert(IS_IE(inode), "Param is not inode entry");                          \
+		(inode) = NULL;                                                                    \
+		__rc    = fuse_reply_create(req, &entry, fi);                                      \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_create() error");                              \
 	} while (0)
@@ -796,17 +797,30 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %#zx",            \
-				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
 		if ((entry).attr_timeout > 0) {                                                    \
 			(inode)->ie_stat = (entry).attr;                                           \
 			dfuse_mcache_set_time(inode);                                              \
 		}                                                                                  \
-		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi timeout %lf", \
+		ival_update_inode(inode, (entry).entry_timeout);                                   \
+		DFUSE_TRA_DEBUG(inode,                                                             \
+				"Returning entry inode %#lx mode %#o size  %#zx timeout %lf",      \
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size,   \
 				(entry).attr_timeout);                                             \
 		(inode) = NULL;                                                                    \
 		__rc    = fuse_reply_entry(req, &entry);                                           \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_entry() error");                               \
+	} while (0)
+
+#define DFUSE_REPLY_NO_ENTRY(parent, req, timeout)                                                 \
+	do {                                                                                       \
+		int                     __rc;                                                      \
+		struct fuse_entry_param _entry = {};                                               \
+		_entry.entry_timeout           = timeout;                                          \
+		DFUSE_TRA_DEBUG(parent, "Returning negative entry parent %#lx timeout %lf",        \
+				(parent)->ie_stat.st_ino, _entry.entry_timeout);                   \
+		(parent) = NULL;                                                                   \
+		__rc     = fuse_reply_entry(req, &_entry);                                         \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_entry() error");                               \
 	} while (0)
@@ -884,6 +898,9 @@ struct dfuse_inode_entry {
 	/* Time of last kernel cache metadata update */
 	struct timespec           ie_mcache_last_update;
 
+	/* Time of last kernel cache dentry update */
+	struct timespec           ie_dentry_last_update;
+
 	/* Time of last kernel cache data update, also used for kernel readdir caching. */
 	struct timespec           ie_dcache_last_update;
 
@@ -920,6 +937,9 @@ struct dfuse_inode_entry {
 	 * Checked on open of a file to determine if pre-caching is used.
 	 */
 	ATOMIC bool               ie_linear_read;
+
+	/* Entry on the evict list */
+	d_list_t                  ie_evict_entry;
 };
 
 /* Lookup an inode and take a ref on it. */
@@ -1017,6 +1037,30 @@ dfuse_mcache_evict(struct dfuse_inode_entry *ie);
 /* Check the metadata cache setting against a given timeout, and return time left */
 bool
 dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+/* Check the dentry cache setting against a given timeout, and return time left */
+bool
+dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+/* inval.c */
+
+int
+ival_add_cont_buckets(struct dfuse_cont *dfc);
+
+void
+ival_drop_inode(struct dfuse_inode_entry *inode);
+
+int
+ival_update_inode(struct dfuse_inode_entry *inode, double timeout);
+
+int
+ival_init(struct dfuse_info *dfuse_info);
+
+int
+ival_thread_start(struct dfuse_info *dfuse_info);
+
+void
+ival_thread_stop();
 
 /* Data caching functions */
 
