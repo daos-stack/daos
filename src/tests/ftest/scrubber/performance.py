@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -45,7 +45,8 @@ class TestWithScrubberPerf(IorTestBase):
         self.log.info("====================================")
         self.log.info("ior_write_size = %d", ior_write_size_without_scrubber)
         self.log.info("ior_read_size = %d", ior_read_size_without_scrubber)
-        self.pool.set_prop(properties="scrub:timed,scrub-freq:1")
+        self.pool.set_prop(properties="scrub:lazy")
+        # self.pool.set_prop(properties="scrub:timed,scrub-freq:1")
         # Wait for the scrubber to scan objects.
         time.sleep(15)
         # Get the write metrics with scrubber enabled.
