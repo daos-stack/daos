@@ -57,19 +57,6 @@ d_rand()
 	return result;
 }
 
-/* Return a random integer in [0, n), where n must be positive. */
-long int
-d_randn(long int n)
-{
-	long int i;
-
-	D_ASSERT(n > 0);
-	i = ((double)d_rand() / D_RAND_MAX) * n;
-	if (i >= n)
-		i = 0;
-	return i;
-}
-
 /* Developer/debug version, poison memory on free.
  * This tries several ways to access the buffer size however none of them are perfect so for now
  * this is no in release builds.
@@ -544,7 +531,7 @@ d_rank_list_shuffle(d_rank_list_t *rank_list)
 		return;
 
 	for (i = 0; i < rank_list->rl_nr; i++) {
-		j = rand() % rank_list->rl_nr;
+		j = d_rand() % rank_list->rl_nr;
 		tmp = rank_list->rl_ranks[i];
 		rank_list->rl_ranks[i] = rank_list->rl_ranks[j];
 		rank_list->rl_ranks[j] = tmp;
