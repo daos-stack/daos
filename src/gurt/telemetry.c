@@ -794,7 +794,8 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	memset(&tm_shmem, 0, sizeof(tm_shmem));
 
 	if ((flags & ~(D_TM_SERIALIZATION | D_TM_RETAIN_SHMEM |
-		       D_TM_RETAIN_SHMEM_IF_NON_EMPTY | D_TM_OPEN_OR_CREATE)) != 0) {
+		       D_TM_RETAIN_SHMEM_IF_NON_EMPTY | D_TM_OPEN_OR_CREATE |
+		       D_TM_EPHEMERAL_DIR_LOCK)) != 0) {
 		D_ERROR("Invalid flags 0x%x\n", flags);
 		rc = -DER_INVAL;
 		goto failure;
