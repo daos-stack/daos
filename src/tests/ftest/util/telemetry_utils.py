@@ -658,6 +658,7 @@ class TelemetryUtils():
         self.log = getLogger(__name__)
         self.dmg = dmg
         self.hosts = NodeSet.fromlist(servers)
+        self._data = MetricData()
 
     def get_all_server_metrics_names(self, server, with_pools=False):
         """Get all the telemetry metrics names for this server.
@@ -723,6 +724,33 @@ class TelemetryUtils():
                         if "name" in entry and not self.is_excluded_metric(entry["name"]):
                             info[host].append(entry["name"])
         return info
+
+    def collect_data(self, names):
+        """Collect telemetry data for the specified metrics.
+
+        Args:
+            names (list): list of metric names
+        """
+        self._data.collect(self.log, names, self.hosts, self.dmg)
+
+    def display_data(self):
+        """Display the telemetry metric values."""
+        self._data.display(self.log)
+
+    def verify_data(self, ranges):
+        """Verify the telemetry metric values.
+
+        Args:
+            ranges (dict): dictionary of min/max lists for each metric to be verified, e.g.
+                {
+                    <metric_a>: [10],       <--- will verify value of <metric_a> is at least 10
+                    <metric_b>: [0, 9]      <--- will verify value of <metric_b> is between 0-9
+                }
+
+        Returns:
+            bool: True if all metric values are within the ranges specified; False otherwise
+        """
+        return self._data.verify(self.log, ranges)
 
     def get_metrics(self, name):
         """Obtain the specified metric information for each host.
@@ -966,72 +994,6 @@ class TelemetryUtils():
                                     host, rank, metric["value"])
         return data
 
-    def get_metric_values(self, metric_names):
-        """Get the telemetry metric values.
-
-        Args:
-            metric_names (list): list of metric names
-
-        Returns:
-            dict: dictionary of dictionaries of NVMe metric names and values per server host key
-
-        """
-        data = {}
-        info = self.get_metrics(",".join(metric_names))
-        for name in metric_names:
-            for host, metrics in info.items():
-                if name not in data:
-                    data[name] = {}
-                for metric in metrics[name]["metrics"]:
-                    if "labels" not in metric or "value" not in metric:
-                        continue
-                    keys = sorted(metric["labels"].keys())
-                    value = metric["value"]
-                    if value not in data[name]:
-                        data[name][value] = {}
-                    for key in keys + ["host"]:
-                        if key not in data[name][value]:
-                            data[name][value][key] = NodeSet()
-                        if key == "host":
-                            data[name][value][key].add(host)
-                        else:
-                            data[name][value][key].add(str(metric["labels"][key]))
-        return data
-
-    def display_metric_values(self, data):
-        """Display the telemetry metric values.
-
-        Args:
-            data (dict): dictionary of dictionaries of NVMe metric names and values per server host
-                key
-        """
-        print("Telemetry Metric Information")
-        label_keys = set()
-        widths = {'metric': [len('metric')], 'value': [len('value')]}
-        for metric, values in data.items():
-            widths['metric'].append(len(metric))
-            for value, labels in values.items():
-                widths['value'].append(len(str(value)))
-                for name in sorted(labels):
-                    label_keys.add(name)
-                    if name not in widths:
-                        widths[name] = []
-                    widths[name].append(len(str(name)))
-                    widths[name].append(len(str(labels[name])))
-        display_order = ['metric'] + sorted(label_keys) + ['value']
-        format_str = "  ".join([f"%-{max(widths[name])}s" for name in display_order])
-        self.log.info(format_str, *[name.title() for name in display_order])
-        self.log.info(format_str, *["-" * max(widths[name]) for name in display_order])
-        for metric in sorted(data):
-            for value, labels in data[metric].items():
-                label_values = []
-                for name in sorted(label_keys):
-                    if name in labels:
-                        label_values.append(labels[name])
-                    else:
-                        label_values.append('-')
-                self.log.info(format_str, metric, *label_values, value)
-
     def verify_metric_value(self, metrics_data, min_value=None, max_value=None):
         """ Verify telemetry metrics from metrics_data.
 
@@ -1069,3 +1031,181 @@ class TelemetryUtils():
                     self.log.info("    %-12s %-4s %s %s",
                                   host, rank, value, invalid)
         return status
+
+
+class MetricData():
+    """Defines a object used to collect, display, and verify telemetry metric data."""
+
+    def __init__(self):
+        """Initialize a MetricData object."""
+        self._data = {}
+        self._labels = set()
+        self._widths = {}
+
+    def collect(self, log, names, hosts, dmg):
+        """Collect telemetry data for the specified metrics.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            names (list): list of metric names
+            hosts (NodeSet): set of servers from which to collect the telemetry metrics
+            dmg (DmgCommand): the DmgCommand object configured to communicate with the servers
+        """
+        info = self._get_metrics(log, ','.join(names), hosts, dmg)
+        self._data = self._get_data(names, info)
+        self._set_labels()
+
+    def display(self, log):
+        """Display the telemetry metric values.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+        """
+        columns = ['metric'] + self._labels + ['value']
+        format_str = '  '.join([f'%-{self._widths[name]}s' for name in columns])
+
+        log.info('Telemetry Metric Information')
+        log.info(format_str, *[name.title() for name in columns])
+        log.info(format_str, *['-' * self._widths[name] for name in columns])
+        for metric in sorted(self._data):
+            for value, labels in self._data[metric].items():
+                log.info(format_str, metric, *self._label_values(labels), value)
+
+    def verify(self, log, ranges):
+        """Verify the telemetry metric values.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            ranges (dict): dictionary of min/max lists for each metric to be verified, e.g.
+                {
+                    <metric_a>: [10],       <--- will verify value of <metric_a> is at least 10
+                    <metric_b>: [0, 9]      <--- will verify value of <metric_b> is between 0-9
+                }
+
+        Returns:
+            bool: True if all metric values are within the ranges specified; False otherwise
+        """
+        status = True
+        columns = ['metric'] + self._labels + ['value', 'check']
+        format_str = '  '.join([f'%-{self._widths[name]}s' for name in columns])
+
+        log.info('Telemetry Metric Verification')
+        log.info(format_str, *[name.title() for name in columns])
+        log.info(format_str, *['-' * self._widths[name] for name in columns])
+        for metric in sorted(self._data):
+            for value, labels in self._data[metric].items():
+                check = 'Value in range'
+                if metric not in ranges:
+                    check = 'No range provided'
+                elif len(ranges[metric]) < 1:
+                    check = 'No min/max range provided'
+                elif value < ranges[metric][0]:
+                    check = f'Value < {ranges[metric][0]}'
+                    status = False
+                elif len(ranges[metric]) > 1 and value > ranges[metric][1]:
+                    check = f'Value > {ranges[metric][1]}'
+                    status = False
+                log.info(format_str, metric, *self._label_values(labels), value, check)
+        return status
+
+    def _get_metrics(self, log, names, hosts, dmg):
+        """Obtain the specified metric information for each host.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            names (str): Comma-separated list of metric names to query.
+            hosts (NodeSet): set of servers from which to collect the telemetry metrics
+            dmg (DmgCommand): the DmgCommand object configured to communicate with the servers
+
+        Returns:
+            dict: a dictionary of host keys linked to metric data for each metric name specified
+        """
+        info = {}
+        log.info('Querying telemetry metric %s from %s', names, hosts)
+        for host in hosts:
+            data = dmg.telemetry_metrics_query(host=host, metrics=names)
+            info[host] = {}
+            if 'response' in data:
+                if 'metric_sets' in data['response']:
+                    for entry in data['response']['metric_sets']:
+                        info[host][entry['name']] = {
+                            'description': entry['description'],
+                            'metrics': entry['metrics']
+                        }
+        return info
+
+    def _get_data(self, names, info):
+        """Set the telemetry metric data values.
+
+        Values are stored per metric name with common label information (e.g. rank, target, pool,
+        etc.) stored as NodeSets.
+
+        Args:
+            names (list): list of metric names
+            info (dict): a dictionary of host keys linked to metric data for each metric name
+
+        Returns:
+            dict: dictionary of metric names and value dictionaries of labels associated with
+                the each value, e.g.
+                    <metric_name>: {
+                        <value_1>: {'rank': NodeSet('0-1'), 'host': NodeSet()}
+                        <value_2>: {'rank': NodeSet('2'),   'host': NodeSet()}
+                    }
+        """
+        data = {}
+        for name in names:
+            for host, metrics in info.items():
+                if name not in data:
+                    data[name] = {}
+                for metric in metrics[name]['metrics']:
+                    if 'labels' not in metric or 'value' not in metric:
+                        continue
+                    keys = sorted(metric['labels'].keys())
+                    value = metric['value']
+                    if value not in data[name]:
+                        data[name][value] = {}
+                    for key in keys + ['host']:
+                        if key not in data[name][value]:
+                            data[name][value][key] = NodeSet()
+                        if key == 'host':
+                            data[name][value][key].add(host)
+                        else:
+                            data[name][value][key].add(str(metric['labels'][key]))
+        return data
+
+    def _set_labels(self):
+        """Set the ordered list of the labels associated with the metric data.
+
+        Also set the dictionary of widths for each label that can be used to define a format string.
+        """
+        unique_labels = set()
+        widths = {name: [len(name)] for name in ['metric', 'value', 'check']}
+        for metric, values in self._data.items():
+            widths['metric'].append(len(metric))
+            for value, labels in values.items():
+                widths['value'].append(len(str(value)))
+                for name in sorted(labels):
+                    unique_labels.add(name)
+                    if name not in widths:
+                        widths[name] = []
+                    widths[name].append(len(str(name)))
+                    widths[name].append(len(str(labels[name])))
+        self._labels = sorted(unique_labels)
+        self._widths = {name: max(widths[name]) for name in widths}
+
+    def _label_values(self, label_data):
+        """Get the values for each telemetry metric label.
+
+        Args:
+            label_data (dict): _description_
+
+        Returns:
+            list: list of values for each telemetry metric label
+        """
+        label_values = []
+        for name in self._labels:
+            if name in label_data:
+                label_values.append(label_data[name])
+            else:
+                label_values.append('-')
+        return label_values
