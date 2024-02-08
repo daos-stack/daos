@@ -2740,10 +2740,13 @@ try_del_ephemeral_dir(char *path, bool force)
 	struct d_tm_node_t	*link;
 	int			 rc = 0;
 
+	if (tm_shmem.ephemeral_dir_lock)
+		D_MUTEX_LOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
+
 	rc = d_tm_lock_shmem();
 	if (unlikely(rc != 0)) {
 		D_ERROR("failed to get producer mutex\n");
-		return rc;
+		D_GOTO(ephemeral_unlock, rc);
 	}
 
 	link = get_node(ctx, path);
@@ -2754,6 +2757,11 @@ try_del_ephemeral_dir(char *path, bool force)
 
 unlock:
 	d_tm_unlock_shmem();
+
+ephemeral_unlock:
+	if (tm_shmem.ephemeral_dir_lock)
+		D_MUTEX_LOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
+
 	return rc;
 }
 /**
