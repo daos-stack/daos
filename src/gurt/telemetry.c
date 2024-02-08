@@ -2760,7 +2760,7 @@ unlock:
 
 ephemeral_unlock:
 	if (tm_shmem.ephemeral_dir_lock)
-		D_MUTEX_LOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
+		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
 
 	return rc;
 }
