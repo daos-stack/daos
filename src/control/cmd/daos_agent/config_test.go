@@ -87,7 +87,7 @@ transport_config:
 		expErr    error
 	}{
 		"empty path": {
-			expErr: errors.New("no path"),
+			expErr: errors.New("no config path"),
 		},
 		"bad path": {
 			path:   "/not/real/path",
