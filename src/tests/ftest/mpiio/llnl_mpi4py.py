@@ -27,7 +27,7 @@ class LlnlMpi4py(MpiioTests):
         """
         test_repo = self.params.get(name, '/run/test_repo/')
         # DAOS-14369: Always check the python3 install for test sources.
-        for packages in site.getsitepackages() + "/usr/lib64/python3.6/site-packages":
+        for packages in site.getsitepackages() + ["/usr/lib64/python3.6/site-packages"]:
             test_path = os.path.join(packages, test_repo)
             if os.path.exists(test_path):
                 return test_path
