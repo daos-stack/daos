@@ -360,8 +360,7 @@ dtx_coll_local_exec(uuid_t po_uuid, uuid_t co_uuid, struct dtx_id *xid, daos_epo
 	coll_args.ca_tgt_bitmap_sz = bitmap_sz;
 	coll_args.ca_tgt_bitmap = bitmap;
 
-	rc = ds_pool_thread_collective_reduce(po_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-					      PO_COMP_ST_DOWNOUT, &coll_ops, &coll_args,
+	rc = ds_pool_thread_collective_reduce(po_uuid, 0, &coll_ops, &coll_args,
 					      DSS_USE_CURRENT_ULT);
 	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE,
 		 "Locally exec collective DTX PRC %u for "DF_DTI": "DF_RC"\n",
