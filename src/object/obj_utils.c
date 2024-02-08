@@ -7,7 +7,7 @@
 /**
  * common helper functions for object
  */
-#define DDSUBSYS	DDFAC(object)
+#define D_LOGFAC DD_FAC(object)
 
 #include <daos_types.h>
 #include "obj_internal.h"
@@ -86,12 +86,10 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 		D_FREE(iods);
 }
 
-static void
-obj_query_merge_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
-		     daos_recx_t *src_recx, daos_recx_t *tgt_recx, bool get_max, bool changed,
-		     uint32_t *shard, bool server_merge)
+static bool
+obj_query_fix_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
+		   daos_recx_t *recx, bool get_max, uint32_t *shard, bool server_merge)
 {
-	daos_recx_t	tmp_recx = *src_recx;
 	uint64_t	tmp_end;
 	uint32_t	tgt_off;
 	bool		from_data_tgt;
@@ -100,37 +98,52 @@ obj_query_merge_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key
 	uint64_t	cell_rec_nr;
 
 	if (!daos_oclass_is_ec(oca))
-		D_GOTO(out, changed = true);
+		return false;
 
 	dkey_hash = obj_dkey2hash(oid.id_pub, dkey);
 	tgt_off = obj_ec_shard_off_by_oca(oid.id_layout_ver, dkey_hash, oca, oid.id_shard);
 	from_data_tgt = is_ec_data_shard_by_tgt_off(tgt_off, oca);
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	cell_rec_nr = obj_ec_cell_rec_nr(oca);
-	D_ASSERT(!(src_recx->rx_idx & PARITY_INDICATOR));
+	D_ASSERT(!(recx->rx_idx & PARITY_INDICATOR));
 
 	/*
 	 * Data ext from data shard needs to be converted to daos ext,
 	 * replica ext from parity shard needs not to convert.
 	 */
-	tmp_end = DAOS_RECX_END(tmp_recx);
-	D_DEBUG(DB_IO, "shard %d/%u get recx "DF_U64" "DF_U64"\n",
-		oid.id_shard, tgt_off, tmp_recx.rx_idx, tmp_recx.rx_nr);
+	tmp_end = DAOS_RECX_END(*recx);
+	D_DEBUG(DB_IO, "shard %d/%u get recx " DF_U64 " " DF_U64 "\n", oid.id_shard, tgt_off,
+		recx->rx_idx, recx->rx_nr);
 
 	if (tmp_end > 0 && from_data_tgt) {
 		if (get_max) {
-			tmp_recx.rx_idx = max(tmp_recx.rx_idx, rounddown(tmp_end - 1, cell_rec_nr));
-			tmp_recx.rx_nr = tmp_end - tmp_recx.rx_idx;
+			recx->rx_idx = max(recx->rx_idx, rounddown(tmp_end - 1, cell_rec_nr));
+			recx->rx_nr  = tmp_end - recx->rx_idx;
 		} else {
-			tmp_recx.rx_nr = min(tmp_end, roundup(tmp_recx.rx_idx + 1, cell_rec_nr)) -
-					 tmp_recx.rx_idx;
+			recx->rx_nr =
+			    min(tmp_end, roundup(recx->rx_idx + 1, cell_rec_nr)) - recx->rx_idx;
 		}
 
 		if (!server_merge)
-			tmp_recx.rx_idx = obj_ec_idx_vos2daos(tmp_recx.rx_idx, stripe_rec_nr,
-							      cell_rec_nr, tgt_off);
-		tmp_end = DAOS_RECX_END(tmp_recx);
+			recx->rx_idx =
+			    obj_ec_idx_vos2daos(recx->rx_idx, stripe_rec_nr, cell_rec_nr, tgt_off);
 	}
+
+	return true;
+}
+
+static void
+obj_query_reduce_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
+		      daos_recx_t *src_recx, daos_recx_t *tgt_recx, bool get_max, bool changed,
+		      uint32_t *shard, bool server_merge)
+{
+	daos_recx_t tmp_recx = *src_recx;
+	uint64_t    tmp_end;
+
+	if (!obj_query_fix_recx(oca, oid, dkey, &tmp_recx, get_max, shard, server_merge))
+		D_GOTO(out, changed = true);
+
+	tmp_end = DAOS_RECX_END(tmp_recx);
 
 	if ((get_max && DAOS_RECX_END(*tgt_recx) < tmp_end) ||
 	    (!get_max && DAOS_RECX_END(*tgt_recx) > tmp_end))
@@ -145,8 +158,8 @@ out:
 }
 
 static inline void
-obj_query_merge_key(uint64_t *tgt_val, uint64_t src_val, bool *changed, bool dkey,
-		    uint32_t *tgt_shard, uint32_t src_shard)
+obj_query_reduce_key(uint64_t *tgt_val, uint64_t src_val, bool *changed, bool dkey,
+		     uint32_t *tgt_shard, uint32_t src_shard)
 {
 	D_DEBUG(DB_TRACE, "%s update "DF_U64"->"DF_U64"\n",
 		dkey ? "dkey" : "akey", *tgt_val, src_val);
@@ -234,12 +247,12 @@ daos_obj_merge_query_merge(struct obj_query_merge_args *args)
 		/* For first merge, just set the dkey. */
 		if (first) {
 			args->tgt_dkey->iov_len = args->src_dkey->iov_len;
-			obj_query_merge_key(cur, *val, &changed, true, args->shard,
-					    args->oid.id_shard);
+			obj_query_reduce_key(cur, *val, &changed, true, args->shard,
+					     args->oid.id_shard);
 		} else if (get_max) {
 			if (*val > *cur)
-				obj_query_merge_key(cur, *val, &changed, true, args->shard,
-						    args->oid.id_shard);
+				obj_query_reduce_key(cur, *val, &changed, true, args->shard,
+						     args->oid.id_shard);
 			else if (!daos_oclass_is_ec(args->oca) || *val < *cur)
 				/*
 				 * No change, don't check akey and recx for replica obj. EC obj
@@ -248,8 +261,8 @@ daos_obj_merge_query_merge(struct obj_query_merge_args *args)
 				check = false;
 		} else if (args->flags & DAOS_GET_MIN) {
 			if (*val < *cur)
-				obj_query_merge_key(cur, *val, &changed, true, args->shard,
-						    args->oid.id_shard);
+				obj_query_reduce_key(cur, *val, &changed, true, args->shard,
+						     args->oid.id_shard);
 			else if (!daos_oclass_is_ec(args->oca))
 				check = false;
 		} else {
@@ -263,14 +276,14 @@ daos_obj_merge_query_merge(struct obj_query_merge_args *args)
 
 		/* If first merge or dkey changed, set akey. */
 		if (first || changed)
-			obj_query_merge_key(cur, *val, &changed, false, NULL, args->oid.id_shard);
+			obj_query_reduce_key(cur, *val, &changed, false, NULL, args->oid.id_shard);
 	}
 
 	if (check && args->flags & DAOS_GET_RECX)
-		obj_query_merge_recx(args->oca, args->oid,
-				     (args->flags & DAOS_GET_DKEY) ? args->src_dkey : args->in_dkey,
-				     args->src_recx, args->tgt_recx, get_max, changed, args->shard,
-				     args->server_merge);
+		obj_query_reduce_recx(
+		    args->oca, args->oid,
+		    (args->flags & DAOS_GET_DKEY) ? args->src_dkey : args->in_dkey, args->src_recx,
+		    args->tgt_recx, get_max, changed, args->shard, args->server_merge);
 
 set_max_epoch:
 	if (args->tgt_epoch != NULL && *args->tgt_epoch < args->src_epoch)
