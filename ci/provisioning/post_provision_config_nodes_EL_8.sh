@@ -25,6 +25,7 @@ distro_custom() {
 
     cat /etc/dnf/vars/releasever
     echo 8.6 > /etc/dnf/vars/releasever
+    dnf -y update
     dnf -y install python3.11
 }
 
