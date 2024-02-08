@@ -96,8 +96,8 @@ obj_query_merge_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key
 	uint32_t	tgt_off;
 	bool		from_data_tgt;
 	uint64_t	dkey_hash;
-	uint64_t	stripe_rec_nr;
-	uint64_t	cell_rec_nr;
+	uint32_t	stripe_rec_nr;
+	uint32_t	cell_rec_nr;
 
 	if (!daos_oclass_is_ec(oca))
 		D_GOTO(out, changed = true);
@@ -114,8 +114,12 @@ obj_query_merge_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key
 	 * replica ext from parity shard needs not to convert.
 	 */
 	tmp_end = DAOS_RECX_END(tmp_recx);
-	D_DEBUG(DB_IO, "shard %d/%u get recx "DF_U64" "DF_U64"\n",
-		oid.id_shard, tgt_off, tmp_recx.rx_idx, tmp_recx.rx_nr);
+
+	D_DEBUG(DB_IO, "Before merge: "DF_UOID", stripe_nr %u, cell_nr %u, tgt_off %u, from %s, %s"
+		"ori recx "DF_U64"/"DF_U64", get recx "DF_U64"/"DF_U64", tmp_end "DF_U64"\n",
+		DP_UOID(oid), stripe_rec_nr, cell_rec_nr, tgt_off,
+		from_data_tgt ? "data" : "parity", get_max ? "max" : "min",
+		tgt_recx->rx_idx, tgt_recx->rx_nr, tmp_recx.rx_idx, tmp_recx.rx_nr, tmp_end);
 
 	if (tmp_end > 0 && from_data_tgt) {
 		if (get_max) {
@@ -135,6 +139,12 @@ obj_query_merge_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key
 	    (!get_max && DAOS_RECX_END(*tgt_recx) > tmp_end))
 		changed = true;
 
+	if (changed)
+		D_DEBUG(DB_IO, "After merge: "DF_UOID", change recx from "DF_U64"/"DF_U64" to "
+			DF_U64"/"DF_U64", shard %d -> %u\n",
+			DP_UOID(oid), tgt_recx->rx_idx, tgt_recx->rx_nr, tmp_recx.rx_idx,
+			tmp_recx.rx_nr, shard != NULL ? *shard : -1, oid.id_shard);
+
 out:
 	if (changed) {
 		*tgt_recx = tmp_recx;
@@ -147,8 +157,8 @@ static inline void
 obj_query_merge_key(uint64_t *tgt_val, uint64_t src_val, bool *changed, bool dkey,
 		    uint32_t *tgt_shard, uint32_t src_shard)
 {
-	D_DEBUG(DB_TRACE, "%s update "DF_U64"->"DF_U64"\n",
-		dkey ? "dkey" : "akey", *tgt_val, src_val);
+	D_DEBUG(DB_IO, "%s update "DF_U64"->"DF_U64" on shard %u\n",
+		dkey ? "dkey" : "akey", *tgt_val, src_val, src_shard);
 
 	*tgt_val = src_val;
 	/* Set to change akey and recx. */
