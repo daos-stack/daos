@@ -23,12 +23,12 @@ server_config:
 pool:
   mode: 146
   size: 750G # Cannot use percentage, as it does not work when using pool create for per rank.
-  control_method: dmg
   properties: ec_cell_sz:128KiB
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
+  oclass: SX
 ior:
   client_processes:
     ppn: 32
@@ -36,13 +36,11 @@ ior:
   test_file: testFile
   write_flags: "-w -C -e -g -G 27 -k -Q 1"
   read_flags: "-r -R -C -e -g -G 27 -k -Q 1"
-  sw_deadline: 30
+  sw_deadline: 15
   sw_wearout: 1
   sw_status_file: "/var/tmp/daos_testing/stoneWallingStatusFile"
-  dfs_oclass: 'SX'
-  transfer_sizes:
-    - 1M
-    - 256B
+  dfs_oclass: SX
+  transfer_size: 1M
   block_size: 150G
   # 0.5 only for CI, due to the varying nature of different clusters in CI.
   # Change it to 15% (0.15) for Aurora.
