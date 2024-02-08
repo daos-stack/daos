@@ -21,6 +21,7 @@ distro_custom() {
     # pydaos into virtual environments.
     # TODO: el8 should have python3.11 available but our CI does not for some reason.
     dnf -y install python39 python39-devel
+    dnf -y install python3.11
 }
 
 install_mofed() {
