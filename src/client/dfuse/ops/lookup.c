@@ -219,7 +219,7 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 
 	ie->ie_dfs = dfs;
 
-	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %#lx", dfs->dfs_ino);
+	DFUSE_TRA_DEBUG(dfs, "UNS entry point activated, root %#lx", dfs->dfs_ino);
 
 	duns_destroy_attr(&dattr);
 

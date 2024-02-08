@@ -1272,8 +1272,8 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 		struct dfuse_cont *dfc = ie->ie_dfs;
 		struct dfuse_pool *dfp = dfc->dfs_dfp;
 
-		DFUSE_TRA_INFO(ie, "Closing poh %d coh %d", daos_handle_is_valid(dfp->dfp_poh),
-			       daos_handle_is_valid(dfc->dfs_coh));
+		DFUSE_TRA_DEBUG(ie, "Closing poh %d coh %d", daos_handle_is_valid(dfp->dfp_poh),
+				daos_handle_is_valid(dfc->dfs_coh));
 		d_hash_rec_decref(dfp->dfp_cont_table, &dfc->dfs_entry);
 	}
 
