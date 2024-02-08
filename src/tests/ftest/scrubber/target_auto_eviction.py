@@ -6,6 +6,7 @@
 import time
 
 from scrubber_test_base import TestWithScrubber
+from general_utils import get_journalctl, journalctl_time
 
 
 class TestWithScrubberTargetEviction(TestWithScrubber):
@@ -32,10 +33,24 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
         self.dmg_cmd.pool_query(self.pool.identifier)
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
+        t_start = journalctl_time()
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         # Wait for a minute for the scrubber to take action and evict target
         # after corruption threshold reached.
         time.sleep(60)
+        t_end = journalctl_time()
+        # Check the journalctl for data corrupt message.
+        results = get_journalctl(hosts=self.hostlist_servers, since=t_start,
+                                 until=t_end, journalctl_type="daos_server")
+        str_to_match = "Corruption found"
+        occurrence = 0
+        for count, _ in enumerate(self.hostlist_servers):
+            occurrence = results[count]["data"].count(str_to_match)
+            if occurrence != 0:
+                self.log.info("Data corrupted occurrence %s", occurrence)
+            else:
+                self.log.info("RAS data corrupted messages missing on system logs")
+                self.fail("------Test Failed------")
         self.dmg_cmd.pool_query(self.pool.identifier)
         final_metrics = self.scrubber.get_scrub_corrupt_metrics()
         status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
