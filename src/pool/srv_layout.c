@@ -158,6 +158,10 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
     {
 	.dpe_type = DAOS_PROP_PO_SVC_OPS_ENABLED,
 	.dpe_val  = DAOS_PROP_PO_SVC_OPS_ENABLED_DEFAULT,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE,
+	.dpe_val  = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT,
     }};
 
 daos_prop_t pool_prop_default = {

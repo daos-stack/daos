@@ -46,11 +46,13 @@ class EcodDisabledRebuildSingle(ErasureCodeSingle):
         # Read data set and verify for different EC object for parity 1 and 2.
         self.read_single_type_dataset()
 
-        # Kill another server rank and wait for 20 seconds,
-        # Rebuild is disabled so data will not be rebuild.
-        self.server_managers[0].stop_ranks(
-            [self.server_count - 2], self.d_log, force=True)
-        time.sleep(20)
+        # To kill n ranks, we need 2n + 1 ranks total
+        if self.server_count >= 5:
+            # Kill another server rank and wait for 20 seconds,
+            # Rebuild is disabled so data will not be rebuild.
+            self.server_managers[0].stop_ranks(
+                [self.server_count - 2], self.d_log, force=True)
+            time.sleep(20)
 
-        # Read data set and verify for different EC object for 2 only.
-        self.read_single_type_dataset(parity=2)
+            # Read data set and verify for different EC object for 2 only.
+            self.read_single_type_dataset(parity=2)
