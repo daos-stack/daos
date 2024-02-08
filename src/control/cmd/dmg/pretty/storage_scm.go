@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,8 +18,9 @@ import (
 )
 
 func printScmMountPoints(mountpoints storage.ScmMountPoints, out io.Writer, opts ...PrintConfigOption) error {
+	iw := txtfmt.NewIndentWriter(out)
 	if len(mountpoints) == 0 {
-		fmt.Fprintln(out, "\tNo SCM mount results")
+		fmt.Fprintln(iw, "No SCM mount results")
 		return nil
 	}
 
@@ -48,16 +49,16 @@ func printScmMountPoints(mountpoints storage.ScmMountPoints, out io.Writer, opts
 // TODO: un-export function when not needed in cmd/daos_server/storage.go
 func PrintScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
-
+	iw := txtfmt.NewIndentWriter(out)
 	if len(modules) == 0 {
-		fmt.Fprintln(out, "\tNo SCM modules found")
+		fmt.Fprintln(iw, "No SCM modules found")
 		return w.Err
 	}
 
-	physicalIdTitle := "SCM Module ID"
-	socketTitle := "Socket ID"
-	memCtrlrTitle := "Memory Ctrlr ID"
-	channelTitle := "Channel ID"
+	physicalIdTitle := "SCM Module"
+	socketTitle := "Socket"
+	memCtrlrTitle := "Memory Ctrlr"
+	channelTitle := "Channel"
 	slotTitle := "Channel Slot"
 	capacityTitle := "Capacity"
 
@@ -89,14 +90,14 @@ func PrintScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintCon
 // TODO: un-export function when not needed in cmd/daos_server/storage.go
 func PrintScmNamespaces(namespaces storage.ScmNamespaces, out io.Writer, opts ...PrintConfigOption) error {
 	w := txtfmt.NewErrWriter(out)
-
+	iw := txtfmt.NewIndentWriter(out)
 	if len(namespaces) == 0 {
-		fmt.Fprintln(out, "\tNo SCM namespaces found")
+		fmt.Fprintln(iw, "No SCM namespaces found")
 		return w.Err
 	}
 
 	deviceTitle := "SCM Namespace"
-	socketTitle := "Socket ID"
+	socketTitle := "Socket"
 	capacityTitle := "Capacity"
 
 	formatter := txtfmt.NewTableFormatter(deviceTitle, socketTitle, capacityTitle)

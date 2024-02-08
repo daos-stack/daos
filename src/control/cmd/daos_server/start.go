@@ -7,11 +7,8 @@
 package main
 
 import (
-	"os"
-
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
@@ -85,72 +82,17 @@ func (cmd *startCmd) setCLIOverrides() error {
 }
 
 func (cmd *startCmd) configureLogging() error {
-	log, ok := cmd.Logger.(*logging.LeveledLogger)
-	if !ok {
-		return errors.New("logger is not a LeveledLogger")
-	}
-
-	// Set log level mask for default logger from config,
-	// unless it was explicitly set to debug via CLI flag.
-	applyLogConfig := func() error {
-		switch logging.LogLevel(cmd.config.ControlLogMask) {
-		case logging.LogLevelTrace:
-			log.SetLevel(logging.LogLevelTrace)
-			cmd.Debugf("Switching control log level to TRACE")
-		case logging.LogLevelDebug:
-			log.SetLevel(logging.LogLevelDebug)
-			cmd.Debugf("Switching control log level to DEBUG")
-		case logging.LogLevelNotice:
-			log.SetLevel(logging.LogLevelNotice)
-			cmd.Debugf("Switching control log level to NOTICE")
-		case logging.LogLevelError:
-			cmd.Debugf("Switching control log level to ERROR")
-			log.SetLevel(logging.LogLevelError)
-		}
-
-		if cmd.config.ControlLogJSON {
-			cmd.Logger = log.WithJSONOutput()
-		}
-
-		return nil
-	}
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-
 	for i, srv := range cmd.config.Engines {
 		if srv.LogFile == "" {
 			cmd.Errorf("no daos log file specified for server %d", i)
 		}
 	}
 
-	// Set log file for default logger if specified in config.
-	if cmd.config.ControlLogFile != "" {
-		f, err := common.AppendFile(cmd.config.ControlLogFile)
-		if err != nil {
-			return errors.WithMessage(err, "create log file")
-		}
-
-		cmd.Infof("%s logging to file %s",
-			os.Args[0], cmd.config.ControlLogFile)
-
-		// Create an additional set of loggers which append everything
-		// to the specified file.
-		cmd.Logger = log.
-			WithErrorLogger(logging.NewErrorLogger(hostname, f)).
-			WithNoticeLogger(logging.NewNoticeLogger(hostname, f)).
-			WithInfoLogger(logging.NewInfoLogger(hostname, f)).
-			WithDebugLogger(logging.NewDebugLogger(f)).
-			WithTraceLogger(logging.NewTraceLogger(f))
-
-		return applyLogConfig()
-	}
-
-	cmd.Info("no control log file specified; logging to stdout")
-
-	return applyLogConfig()
+	return cmdutil.ConfigureLogger(cmd.Logger, cmdutil.LogConfig{
+		LogFile:  cmd.config.ControlLogFile,
+		LogLevel: cmd.config.ControlLogMask,
+		JSON:     cmd.config.ControlLogJSON,
+	})
 }
 
 func (cmd *startCmd) Execute(args []string) error {

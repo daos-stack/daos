@@ -57,8 +57,11 @@ func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error)
 
 	ctrlrs, err := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
 
-	pciAddrs := ctrlrPCIAddresses(ctrlrs)
-	log.Debugf("discovered nvme ssds: %v", pciAddrs)
+	pciAddrs := make([]string, 0, len(ctrlrs))
+	for _, c := range ctrlrs {
+		log.Debugf("nvme ssd scanned: %+v", c)
+		pciAddrs = append(pciAddrs, c.PciAddr)
+	}
 
 	return ctrlrs, wrapCleanError(err, cleanLockfiles(log, realRemove, pciAddrs...))
 }

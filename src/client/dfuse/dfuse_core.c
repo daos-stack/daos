@@ -723,9 +723,14 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 		} else if (rc != 0) {
 			D_GOTO(err_close, rc);
 		}
+
 	} else {
 		DFUSE_TRA_INFO(dfc, "Caching disabled");
 	}
+
+	rc = ival_add_cont_buckets(dfc);
+	if (rc)
+		goto err_close;
 
 	rc = dfuse_cont_open(dfuse_info, dfp, &c_info.ci_uuid, &dfc);
 	if (rc) {
@@ -805,9 +810,9 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 		/* Turn on some caching of metadata, otherwise container
 		 * operations will be very frequent
 		 */
-		dfc->dfc_attr_timeout       = 60;
-		dfc->dfc_dentry_dir_timeout = 60;
-		dfc->dfc_ndentry_timeout    = 60;
+		dfc->dfc_attr_timeout       = 60 * 5;
+		dfc->dfc_dentry_dir_timeout = 60 * 5;
+		dfc->dfc_ndentry_timeout    = 60 * 5;
 
 	} else if (*_dfc == NULL) {
 		char str[37];
@@ -845,9 +850,15 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 			} else if (rc != 0) {
 				D_GOTO(err_umount, rc);
 			}
+
 		} else {
 			DFUSE_TRA_INFO(dfc, "Caching disabled");
 		}
+
+		rc = ival_add_cont_buckets(dfc);
+		if (rc != 0)
+			goto err_umount;
+
 	} else {
 		/* This is either a container where a label is set on the
 		 * command line, or one created through mkdir, in either case
@@ -948,6 +959,38 @@ dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *tim
 	return use;
 }
 
+bool
+dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout)
+{
+	bool            use = false;
+	struct timespec now;
+	struct timespec left;
+	double          time_left;
+
+	D_ASSERT(max_age != -1);
+	D_ASSERT(max_age >= 0);
+
+	if (ie->ie_dentry_last_update.tv_sec == 0)
+		return false;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+
+	left.tv_sec  = now.tv_sec - ie->ie_dentry_last_update.tv_sec;
+	left.tv_nsec = now.tv_nsec - ie->ie_dentry_last_update.tv_nsec;
+	if (left.tv_nsec < 0) {
+		left.tv_sec--;
+		left.tv_nsec += 1000000000;
+	}
+	time_left = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
+	if (time_left > 0)
+		use = true;
+
+	if (use && timeout)
+		*timeout = time_left;
+
+	return use;
+}
+
 /* Set a timer to mark cache entry as valid */
 void
 dfuse_dcache_set_time(struct dfuse_inode_entry *ie)
@@ -1029,6 +1072,10 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 	if (rc != 0)
 		D_GOTO(err_pt, rc);
 
+	rc = ival_init(dfuse_info);
+	if (rc != 0)
+		D_GOTO(err_it, rc = d_errno2der(rc));
+
 	atomic_init(&dfuse_info->di_ino_next, 2);
 	atomic_init(&dfuse_info->di_eqt_idx, 0);
 
@@ -1081,6 +1128,9 @@ err_eq:
 		sem_destroy(&eqt->de_sem);
 		DFUSE_TRA_DOWN(eqt);
 	}
+
+	ival_thread_stop();
+err_it:
 	d_hash_table_destroy_inplace(&dfuse_info->dpi_iet, false);
 err_pt:
 	d_hash_table_destroy_inplace(&dfuse_info->di_pool_table, false);
@@ -1110,7 +1160,7 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_open_write_count, 0);
 	atomic_init(&ie->ie_il_count, 0);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
-
+	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
 	D_MUTEX_INIT(&ie->ie_lock, NULL);
 }
 
@@ -1119,6 +1169,8 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {
 	int      rc;
 	uint32_t ref;
+
+	ival_drop_inode(ie);
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
 	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",
@@ -1457,6 +1509,9 @@ dfuse_fs_stop(struct dfuse_info *dfuse_info)
 
 		sem_post(&eqt->de_sem);
 	}
+
+	/* Stop and drain invalidation queues */
+	ival_thread_stop();
 
 	for (i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
