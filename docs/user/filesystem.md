@@ -684,6 +684,10 @@ is controlled by dfuse passing a flag to the kernel on open. If data-cache is en
 be allowed for files if that file is already open, and timeout value will be the duration between
 a previous close call which reduced the open count to zero and the next subsequent call to open.
 
+Processes running with a working directory within the dfuse mount do not hold a reference on the
+directory so cache expiry can in this case cause getcwd() to fail.  Should this happen then a
+larger value for "dfuse-dentry-dir-time" should avoid the issue.
+
 dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,
 however if this is enabled then the O\_DIRECT flag will be ignored, and all
 files will use the page cache.  This default value for this is disabled.
