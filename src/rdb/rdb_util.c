@@ -162,16 +162,26 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, d_iov_t *iov)
 void
 rdb_oid_to_uoid(rdb_oid_t oid, daos_unit_oid_t *uoid)
 {
-	enum daos_otype_t type = DAOS_OT_MULTI_HASHED;
+	enum daos_otype_t type;
 
 	uoid->id_pub.lo = oid & ~RDB_OID_CLASS_MASK;
 	uoid->id_pub.hi = 0;
 	uoid->id_shard  = 0;
 	uoid->id_layout_ver = 0;
 	uoid->id_padding = 0;
-	/* Since we don't really use d-keys, use HASHED for both classes. */
-	if ((oid & RDB_OID_CLASS_MASK) != RDB_OID_CLASS_GENERIC)
+	switch (oid & RDB_OID_CLASS_MASK) {
+	case RDB_OID_CLASS_GENERIC:
+		type = DAOS_OT_MULTI_HASHED;
+		break;
+	case RDB_OID_CLASS_INTEGER:
 		type = DAOS_OT_AKEY_UINT64;
+		break;
+	case RDB_OID_CLASS_LEXICAL:
+		type = DAOS_OT_MULTI_LEXICAL;
+		break;
+	default:
+		D_ASSERT(0);
+	}
 
 	daos_obj_set_oid(&uoid->id_pub, type, OR_RP_1, 1, 0);
 }

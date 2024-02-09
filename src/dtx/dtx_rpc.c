@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -517,7 +517,6 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head, int *
 		/* Skip non-healthy one. */
 		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
 		    target->ta_comp.co_status != PO_COMP_ST_UPIN &&
-		    target->ta_comp.co_status != PO_COMP_ST_NEW &&
 		    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
 			continue;
 
@@ -1101,8 +1100,8 @@ next2:
 				if (rc1 != DTX_ST_COMMITTED && rc1 != DTX_ST_ABORTED &&
 				    rc1 != -DER_NONEXIST) {
 					if (!for_io)
-						D_INFO("Hit some long-time DTX "DF_DTI", %d\n",
-						       DP_DTI(&dsp->dsp_xid), rc1);
+						D_WARN("Hit unexpected long-time DTX "
+						       DF_DTI": %d\n", DP_DTI(&dsp->dsp_xid), rc1);
 					else if (rc == 0)
 						rc = -DER_INPROGRESS;
 				}

@@ -704,6 +704,9 @@ dtx_resend_delay(test_arg_t *arg, daos_oclass_id_t oclass)
 	daos_fail_loc_set(0);
 	dtx_set_fail_loc(arg, 0);
 
+	/* Wait for the former delayed RPC before destroying the container to avoid DER_BUSY. */
+	sleep(2);
+
 	D_FREE(update_buf);
 	D_FREE(fetch_buf);
 	ioreq_fini(&req);
@@ -941,9 +944,9 @@ static const struct CMUnitTest dtx_tests[] = {
 	{"DTX19: DTX resend during bulk data transfer - multiple reps",
 	 dtx_19, NULL, test_case_teardown},
 	{"DTX20: race between DTX refresh and DTX resync",
-	 dtx_20, dtx_base_rf1_setup, test_case_teardown},
+	 dtx_20, dtx_base_rf1_setup, rebuild_sub_teardown},
 	{"DTX21: do not abort partially committed DTX",
-	 dtx_21, dtx_base_rf0_setup, test_case_teardown},
+	 dtx_21, dtx_base_rf0_setup, rebuild_sub_teardown},
 };
 
 static int
