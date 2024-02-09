@@ -24,7 +24,6 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
-#include <daos_srv/policy.h>
 
 /**
  * Each individual object layout format, like oid layout, dkey to group,
@@ -57,7 +56,7 @@ struct ds_pool {
 	uint32_t		sp_global_version;
 	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
-	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
+	uint32_t		sp_data_thresh;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;

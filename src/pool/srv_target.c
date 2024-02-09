@@ -701,8 +701,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
-	pool->sp_policy_desc.policy =
-			DAOS_MEDIA_POLICY_IO_SIZE; /* default tiering policy */
+	pool->sp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
 
 	/** set up ds_pool metrics */
 	rc = ds_pool_metrics_start(pool);
@@ -1812,7 +1811,6 @@ update_vos_prop_on_targets(void *in)
 {
 	struct ds_pool       *pool        = (struct ds_pool *)in;
 	struct ds_pool_child *child       = NULL;
-	struct policy_desc_t  policy_desc = {0};
 	uint32_t              df_version;
 	int                   ret = 0;
 
@@ -1820,8 +1818,7 @@ update_vos_prop_on_targets(void *in)
 	if (child == NULL)
 		return -DER_NONEXIST;	/* no child created yet? */
 
-	policy_desc = pool->sp_policy_desc;
-	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
+	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_DATA_THRESH, &pool->sp_data_thresh);
 	if (ret)
 		goto out;
 
@@ -1867,6 +1864,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
 	pool->sp_perf_domain = iv_prop->pip_perf_domain;
 	pool->sp_space_rb = iv_prop->pip_space_rb;
+	pool->sp_data_thresh = iv_prop->pip_data_thresh;
 
 	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_DATA_SYNC &&
 	    iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
@@ -1874,12 +1872,6 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	else
 		pool->sp_disable_rebuild = 1;
 
-	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
-				   &pool->sp_policy_desc)) {
-		D_ERROR("Failed to parse policy string: %s\n",
-			iv_prop->pip_policy_str);
-		return -DER_MISMATCH;
-	}
 	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
 		iv_prop->pip_scrub_mode);
 	pool->sp_scrub_mode = iv_prop->pip_scrub_mode;
