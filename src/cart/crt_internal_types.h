@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -237,6 +237,10 @@ struct crt_context {
 	struct d_tm_node_t	*cc_timedout_uri;
 	/** Total number of failed address resolution, of type counter */
 	struct d_tm_node_t	*cc_failed_addr;
+	/** Counter for number of network glitches */
+	struct d_tm_node_t      *cc_net_glitches;
+	/** Stats gauge of reported SWIM delays */
+	struct d_tm_node_t      *cc_swim_delay;
 
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
