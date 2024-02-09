@@ -415,20 +415,79 @@ def run_list(paths):
     print(' '.join(sorted(tags)))
 
 
+def run_unit(verbose):
+    """Run unit tests for FtestTagMap.
+
+    Args:
+        verbose (bool): whether to print verbose output for debugging
+    """
+    # pylint: disable=protected-access
+    print('Unit Tests')
+    tag_map = FtestTagMap([])
+    os.chdir('/')
+
+    def print_step(*args):
+        """Print a step."""
+        print('  ', *args)
+
+    def print_verbose(*args):
+        """Conditionally print if verbose is True."""
+        if verbose:
+            print('    ', *args)
+
+    print_step('__norm_path')
+    assert tag_map._FtestTagMap__norm_path('foo') == '/foo'
+    assert tag_map._FtestTagMap__norm_path('/foo') == '/foo'
+
+    print_step('__parse_avocado_tags')
+    assert tag_map._FtestTagMap__parse_avocado_tags('') == set()
+    assert tag_map._FtestTagMap__parse_avocado_tags('not tags') == set()
+    assert tag_map._FtestTagMap__parse_avocado_tags('avocado tags=foo') == set()
+    assert tag_map._FtestTagMap__parse_avocado_tags(':avocado: tags=foo') == set(['foo'])
+    assert tag_map._FtestTagMap__parse_avocado_tags(':avocado: tags=foo,bar') == set(['foo', 'bar'])
+    assert tag_map._FtestTagMap__parse_avocado_tags(
+        ':avocado: tags=foo,bar\n:avocado: tags=foo2,bar2') == set(['foo', 'bar', 'foo2', 'bar2'])
+
+    print_step('__update')
+    tag_map._FtestTagMap__update('/foo1', 'class_1', 'test_1', set(['class_1', 'test_1', 'foo1']))
+    tag_map._FtestTagMap__update('/foo2', 'class_2', 'test_2', set(['class_2', 'test_2', 'foo2']))
+    print_verbose(tag_map._FtestTagMap__mapping)
+    assert tag_map._FtestTagMap__mapping == {
+        '/foo1': {'class_1': {'test_1': {'foo1', 'test_1', 'class_1'}}},
+        '/foo2': {'class_2': {'test_2': {'foo2', 'class_2', 'test_2'}}}}
+
+    print_step('__iter__')
+    print_verbose(list(iter(tag_map)))
+    assert list(iter(tag_map)) == [
+        ('/foo1', {'class_1': {'test_1': {'class_1', 'test_1', 'foo1'}}}),
+        ('/foo2', {'class_2': {'test_2': {'class_2', 'test_2', 'foo2'}}})
+    ]
+
+    print_step('__tags_to_tests')
+    assert tag_map._FtestTagMap__tags_to_tests(
+        [set(['foo1']), set(['foo2'])]) == ['test_1', 'test_2']
+    assert tag_map._FtestTagMap__tags_to_tests([set(['foo1', 'class_1'])]) == ['test_1']
+
+
 def main():
     """main function execution"""
     description = '\n'.join([
         'Commands',
         '  lint - lint ftest avocado tags',
         '  list - list ftest avocado tags associated with test files',
-        '  dump - dump the file/class/method/tag structure for test files'
+        '  dump - dump the file/class/method/tag structure for test files',
+        '  unit - run self unit tests'
     ])
 
     parser = ArgumentParser(formatter_class=RawDescriptionHelpFormatter, description=description)
     parser.add_argument(
         "command",
-        choices=("lint", "list", "dump"),
+        choices=("lint", "list", "dump", "unit"),
         help="command to run")
+    parser.add_argument(
+        "-v", "--verbose",
+        action='store_true',
+        help="print verbose output for some commands")
     parser.add_argument(
         "paths",
         nargs="*",
@@ -450,6 +509,10 @@ def main():
 
     if args.command == "list":
         run_list(args.paths)
+        sys.exit(0)
+
+    if args.command == "unit":
+        run_unit(args.verbose)
         sys.exit(0)
 
 
