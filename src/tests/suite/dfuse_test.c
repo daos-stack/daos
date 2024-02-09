@@ -49,6 +49,7 @@ print_usage()
 	print_message("dfuse_test -m|--metadata\n");
 	print_message("dfuse_test -d|--directory\n");
 	print_message("dfuse_test -l|--lowfd\n");
+	print_message("dfuse_test -f|--mmap\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -524,8 +525,19 @@ do_mmap(void **state)
 	fd = openat(root, "file", O_CREAT, S_IRUSR | S_IWUSR);
 	assert_return_code(root, errno);
 
-	addr = mmap(NULL, 1024 * 1024, PROT_READ, MAP_PRIVATE, fd, 0);
+	addr = mmap(NULL, 1024 * 1024, PROT_WRITE, MAP_PRIVATE, fd, 0);
 	assert_ptr_not_equal(addr, NULL);
+
+	memset(addr, '0', 1024 * 1024);
+
+	rc = munmap(addr, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	addr = mmap(NULL, 1024 * 1024, PROT_READ, MAP_SHARED, fd, 0);
+	assert_ptr_not_equal(addr, NULL);
+
+	rc = munmap(addr, 1024 * 1024);
+	assert_return_code(rc, errno);
 
 	rc = close(fd);
 	assert_return_code(rc, errno);
@@ -654,16 +666,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(lowfd_tests, NULL, NULL);
 			break;
 
-		case 'f':
-			printf("\n\n=================");
-			printf("dfuse mmap tests");
-			printf("=====================\n");
+		case 'f': {
 			const struct CMUnitTest mmap_tests[] = {
 			    cmocka_unit_test(do_mmap),
 			};
+			printf("\n\n=================");
+			printf("dfuse mmap tests");
+			printf("=====================\n");
 			nr_failed += cmocka_run_group_tests(mmap_tests, NULL, NULL);
 			break;
-
+		}
 		default:
 			assert_true(0);
 		}
