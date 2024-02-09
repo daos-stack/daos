@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,7 +34,7 @@ dfuse_do_work(void *arg)
 	struct dfuse_thread *dt  = arg;
 	struct dfuse_tm     *dtm = dt->dt_tm;
 	int                  rc;
-	struct fuse_chan    *chan = fused_clone_chan(dtm->tm_se);
+	struct fuse_chan    *chan = fuse_clone_chan(dtm->tm_se);
 
 	while (!fuse_session_exited(dtm->tm_se)) {
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
