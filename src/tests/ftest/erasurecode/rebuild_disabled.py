@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -23,6 +23,7 @@ class EcodDisabledRebuild(ErasureCodeIor):
         Use Case: Create the pool, disabled rebuild, run IOR with supported
                   EC object type class for small and large transfer sizes.
                   kill single server, verify all IOR read data and verified.
+                  Kill another server and verify IOR again.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
@@ -50,12 +51,13 @@ class EcodDisabledRebuild(ErasureCodeIor):
         # written before killing the single server
         self.ior_read_dataset()
 
-        # Kill the another server rank and wait for 20 seconds,Rebuild will
-        # not happens because i's disabled.Read/verify data with Parity 2.
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
-                                           force=True)
-        time.sleep(20)
+        # To kill n ranks, we need 2n + 1 ranks total
+        if self.server_count >= 5:
+            # Kill the another server rank and wait for 20 seconds,Rebuild will
+            # not happens because i's disabled.Read/verify data with Parity 2.
+            self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log, force=True)
+            time.sleep(20)
 
-        # Read IOR data and verify for different EC object and different sizes
-        # written before killing the single server
-        self.ior_read_dataset(parity=2)
+            # Read IOR data and verify for different EC object and different sizes
+            # written before killing the single server
+            self.ior_read_dataset(parity=2)
