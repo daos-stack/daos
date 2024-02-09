@@ -557,3 +557,9 @@
    Memcheck:Value8
    fun:aeshashbody
 }
+{
+   DAOS-15159
+   Memcheck:Param
+   write(buf)
+   fun:runtime/internal/syscall.Syscall6
+}
