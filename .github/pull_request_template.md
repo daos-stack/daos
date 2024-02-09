@@ -9,7 +9,7 @@
 ### Gatekeeper:
 
 * [ ] You are the appropriate gatekeeper to be landing the patch.
-* [ ] The PR has 2 reviews by people familiar with the code, including appropriate watchers.
+* [ ] The PR has 2 reviews by people familiar with the code, including appropriate owners.
 * [ ] Githooks were used. If not, request that user install them and check copyright dates.
 * [ ] Checkpatch issues are resolved.  Pay particular attention to ones that will show up on future PRs.
 * [ ] All builds have passed.  Check non-required builds for any new compiler warnings.
