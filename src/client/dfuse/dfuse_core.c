@@ -582,6 +582,10 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 				have_cache_off        = true;
 				dfc->dfc_data_timeout = 0;
 				DFUSE_TRA_INFO(dfc, "setting '%s' is disabled", cont_attr_names[i]);
+			} else if (strncasecmp(buff_addrs[i], "otoc", sizes[i]) == 0) {
+				dfc->dfc_data_otoc = true;
+				DFUSE_TRA_INFO(dfc, "setting '%s' is open-to-close",
+					       cont_attr_names[i]);
 			} else if (dfuse_parse_time(buff_addrs[i], sizes[i], &value) == 0) {
 				DFUSE_TRA_INFO(dfc, "setting '%s' is %u seconds",
 					       cont_attr_names[i], value);
