@@ -25,7 +25,7 @@ server_config:
       storage: auto
 pool:
   size: 93%
-  svcn: 1
+  svcn: 5
   control_method: dmg
 container:
   type: POSIX

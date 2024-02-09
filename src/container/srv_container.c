@@ -1791,6 +1791,7 @@ cont_agg_eph_leader_ult(void *arg)
 	struct ds_pool		*pool = svc->cs_pool;
 	struct cont_ec_agg	*ec_agg;
 	struct cont_ec_agg	*tmp;
+	uint64_t		cur_eph, new_eph;
 	int			rc = 0;
 
 	if (svc->cs_ec_leader_ephs_req == NULL)
@@ -1847,11 +1848,18 @@ cont_agg_eph_leader_ult(void *arg)
 			 * server might cause the minimum epoch is less than
 			 * ea_current_eph.
 			 */
-			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "
-				DF_U64"\n",
-				DP_CONT(svc->cs_pool_uuid,
-					ec_agg->ea_cont_uuid),
+			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "DF_U64"\n",
+				DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
 				min_eph, ec_agg->ea_current_eph);
+
+			cur_eph = d_hlc2sec(ec_agg->ea_current_eph);
+			new_eph = d_hlc2sec(min_eph);
+			if (cur_eph && new_eph > cur_eph && (new_eph - cur_eph) >= 600)
+				D_WARN(DF_CONT": Sluggish EC boundary reporting. "
+				       "cur:"DF_U64" new:"DF_U64" gap:"DF_U64"\n",
+				       DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
+				       cur_eph, new_eph, new_eph - cur_eph);
+
 			rc = cont_iv_ec_agg_eph_refresh(pool->sp_iv_ns,
 							ec_agg->ea_cont_uuid,
 							min_eph);
