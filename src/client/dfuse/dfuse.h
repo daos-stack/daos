@@ -466,7 +466,7 @@ enum dfuse_stat_id {
  * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's members.
  */
 struct dfuse_cont_core {
-	/** Hash table entry entry in dfp_cont_table */
+	/** Hash table entry in dfp_cont_table */
 	d_list_t      dfcc_entry;
 
 	/** UUID of the container */

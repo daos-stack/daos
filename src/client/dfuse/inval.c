@@ -74,8 +74,8 @@
 /* Grace period before invalidating directories or non-directories.  Needs to be long enough so that
  * entries in the working set are not invalidated but short enough to be meaningful.
  */
-#define INVAL_DIRECTORY_GRACE 300
-#define INVAL_FILE_GRACE      25
+#define INVAL_DIRECTORY_GRACE (60 * 30)
+#define INVAL_FILE_GRACE      2
 
 /* Represents one timeout value (time).  Maintains a ordered list of dentries that are using
  * this timeout.

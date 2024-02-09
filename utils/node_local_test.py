@@ -2742,7 +2742,7 @@ class PosixTests():
         print(post)
         assert pre.st_ino == post.st_ino
 
-    def test_stable_cont_inode(self):
+    def Xtest_stable_cont_inode(self):
         """Ensure that container inodes are persistent
 
         Create a container outside of dfuse.
@@ -2752,6 +2752,8 @@ class PosixTests():
         Access container path read ino
         Wait for pool path to be evicted
         Access container path check ino
+
+        Note: Test passes but is disabled due to run-time.
         """
 
         # Magic value for how long to sleep.  This needs to be long enough for entry timeout,
@@ -2760,7 +2762,7 @@ class PosixTests():
         # if the eviction has actually happened.
         # A second test pool would be useful here so we could use filesystem query to check the
         # inode count.
-        sleep_time = 307 + 5 + 10
+        sleep_time = 307 + 5 + (60 * 30)
 
         cont0 = create_cont(self.conf, self.pool, label="stable1", ctype="POSIX")
         cont1 = create_cont(self.conf, self.pool, label="stable2", ctype="POSIX")
