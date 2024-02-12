@@ -28,6 +28,17 @@ distro_custom() {
     # for Launchable's pip install
     dnf -y install python3-setuptools.noarch
 
+
+    echo AMD: Testing.
+    dnf -y update
+    dnf -y upgrade
+    dnf -y install python3.11
+    cat /etc/dnf/vars/releasever
+    echo 8.8 > /etc/dnf/vars/releasever
+    dnf -y update
+    dnf -y upgrade
+    dnf -y install python3.11
+    false
 }
 
 install_mofed() {
