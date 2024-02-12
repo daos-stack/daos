@@ -522,8 +522,11 @@ do_mmap(void **state)
 	root = open(test_dir, O_PATH | O_DIRECTORY);
 	assert_return_code(root, errno);
 
-	fd = openat(root, "file", O_CREAT, S_IRUSR | S_IWUSR);
+	fd = openat(root, "file", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 	assert_return_code(root, errno);
+
+	rc = ftruncate(fd, 1024 * 1024);
+	assert_return_code(rc, errno);
 
 	addr = mmap(NULL, 1024 * 1024, PROT_WRITE, MAP_PRIVATE, fd, 0);
 	assert_ptr_not_equal(addr, NULL);

@@ -236,7 +236,7 @@ def scons():
     else:
         cenv.require('fuse')
         static_fuse = []
-        extra_libs = []
+        extra_libs = ['dl']
 
     configure_fuse(cenv)
 
