@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  (C) Copyright 2021-2023 Intel Corporation.
+#  (C) Copyright 2021-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -28,8 +28,10 @@ distro_custom() {
     # for Launchable's pip install
     dnf -y install python3-setuptools.noarch
 
-
     echo AMD: Testing.
+    cat /etc/os-release
+    rpm -qf /etc/os-release
+    rpm -q glibc
     dnf -y update
     dnf -y upgrade
     dnf -y install python3.11
@@ -38,6 +40,9 @@ distro_custom() {
     dnf -y update
     dnf -y upgrade
     dnf -y install python3.11
+    cat /etc/os-release
+    rpm -qf /etc/os-release
+    rpm -q glibc
     false
 }
 
