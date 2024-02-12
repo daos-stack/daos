@@ -112,7 +112,8 @@ class NvmeHealth(ServerFillUp):
 
         # Get the device health
         errors = 0
-        for host, uuid_list in device_ids.items():   # pylint: disable=too-many-nested-blocks
+        for host, uuid_dict in device_ids.items():   # pylint: disable=too-many-nested-blocks
+            uuid_list = sorted(uuid_dict.keys())
             for uuid in uuid_list:
                 dmg.hostlist = host
                 try:
