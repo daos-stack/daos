@@ -9,7 +9,6 @@
  */
 #include <malloc.h>
 #include <sys/mman.h>
-#include <sys/time.h>
 #include <sys/resource.h>
 #include "crt_internal.h"
 
@@ -68,6 +67,7 @@ crt_lib_init(void)
 {
 	int		rc;
 	uint64_t	start_rpcid;
+	struct timespec	now;
 
 	rc = D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
 	D_ASSERT(rc == 0);
@@ -82,7 +82,9 @@ crt_lib_init(void)
 	crt_gdata.cg_inited = 0;
 	crt_gdata.cg_primary_prov = CRT_PROV_OFI_TCP_RXM;
 
-	d_srand(d_timeus_secdiff(0) + getpid());
+	rc = d_gettime(&now);
+	D_ASSERTF(rc == 0, "d_gettime: " DF_RC "\n", DP_RC(rc));
+	d_srand(now.tv_sec * 1000 * 1000 * 1000 + now.tv_nsec + getpid());
 	start_rpcid = ((uint64_t)d_rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
@@ -610,8 +612,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	char          *domain_env = NULL;
 	char          *auth_key;
 	char          *auth_key_env = NULL;
-	struct timeval now;
-	unsigned int   seed;
 	char          *path;
 	bool           server        = flags & CRT_FLAG_BIT_SERVER;
 	int            rc            = 0;
@@ -673,11 +673,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 	if (crt_gdata.cg_inited == 0) {
-		/* feed a seed for pseudo-random number generator */
-		gettimeofday(&now, NULL);
-		seed = (unsigned int)(now.tv_sec * 1000000 + now.tv_usec);
-		d_srand(seed);
-
 		crt_gdata.cg_server = server;
 		crt_gdata.cg_auto_swim_disable =
 			(flags & CRT_FLAG_BIT_AUTO_SWIM_DISABLE) ? 1 : 0;

@@ -422,6 +422,14 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
+			val = prop->dpp_entries[i].dpe_val;
+			if ((val < DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN) ||
+			    (val > DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MAX)) {
+				D_ERROR("invalid svc_ops_entry_age " DF_U64 ".\n", val);
+				return false;
+			}
+			break;
 		/* container-only properties */
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
