@@ -2929,19 +2929,33 @@ dfs_obj_copy_attr(dfs_obj_t *obj, dfs_obj_t *src_obj)
 int
 dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 {
-	int	rc;
+	int rc = 0;
 
 	if (obj == NULL || info == NULL)
 		return EINVAL;
 
 	switch (obj->mode & S_IFMT) {
 	case S_IFDIR:
+		/** the oclass of the directory object itself */
+		info->doi_oclass_id = daos_obj_id2class(obj->oid);
+
+		/** what is the default oclass files and dirs will be created with in this dir */
 		if (obj->d.oclass) {
-			info->doi_oclass_id = obj->d.oclass;
-		} else if (dfs->attr.da_dir_oclass_id) {
-			info->doi_oclass_id = dfs->attr.da_dir_oclass_id;
+			info->doi_dir_oclass_id  = obj->d.oclass;
+			info->doi_file_oclass_id = obj->d.oclass;
 		} else {
-			rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0, &info->doi_oclass_id);
+			if (dfs->attr.da_dir_oclass_id)
+				info->doi_dir_oclass_id = dfs->attr.da_dir_oclass_id;
+			else
+				rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0,
+							 &info->doi_dir_oclass_id);
+
+			if (dfs->attr.da_file_oclass_id)
+				info->doi_file_oclass_id = dfs->attr.da_file_oclass_id;
+			else
+				rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0,
+							 &info->doi_file_oclass_id);
+
 			if (rc) {
 				D_ERROR("daos_obj_get_oclass() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
