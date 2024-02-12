@@ -282,12 +282,12 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 			jsonAttrs := struct {
 				ObjAttr struct {
 					ObjClass string `json:"oclass"`
-				} `json:"Object"`
+				} `json:"object"`
 				DirAttr struct {
 					DirObjClass  string `json:"dir_oclass"`
 					FileObjClass string `json:"file_oclass"`
 					ChunkSize    uint64 `json:"chunk_size"`
-				} `json:"Directory"`
+				} `json:"directory"`
 			}{
 				ObjAttr: struct {
 					ObjClass string `json:"oclass"`
