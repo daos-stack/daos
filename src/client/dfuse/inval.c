@@ -114,7 +114,7 @@ struct inode_core {
  */
 #define EVICT_COUNT 8
 
-static pthread_mutex_t   ival_lock = PTHREAD_MUTEX_INITIALIZER;
+static DAOS_MUTEX        ival_lock = DAOS_MUTEX_INITIALIZER;
 static bool              ival_stop;
 static pthread_t         ival_thread;
 static sem_t             ival_sem;
