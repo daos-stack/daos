@@ -213,7 +213,7 @@ class SoakTestBase(TestWithServers):
         if harasser == "snapshot":
             method = launch_snapshot
             name = "SNAPSHOT"
-            params = (self, self.pool[0], name)
+            params = (self, self.pool[1], name)
             job = threading.Thread(target=method, args=params, name=name)
         elif harasser == "exclude":
             method = launch_exclude_reintegrate

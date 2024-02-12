@@ -322,7 +322,7 @@ def wait_for_pool_rebuild(self, pool, name):
 
 
 def launch_snapshot(self, pool, name):
-    """Create a basic snapshot of the reserved pool.
+    """Create a basic snapshot.
 
     Args:
         self (obj): soak obj
@@ -333,16 +333,13 @@ def launch_snapshot(self, pool, name):
         "<<<PASS %s: %s started at %s>>>", self.loop, name, time.ctime())
     status = True
     # Create container
-    container = TestContainer(pool)
-    container.namespace = "/run/container_reserved/*"
-    container.get_params(self)
-    container.create()
-    container.open()
+    add_containers(self, pool, path='/run/container_reserved/*')
+    container = self.container[-1]
     obj_cls = self.params.get(
-        "object_class", '/run/container_reserved/*')
+        "file_class", '/run/container_reserved/*')
 
     # write data to object
-    data_pattern = get_random_bytes(500)
+    data_pattern = get_random_bytes(500000000)
     datasize = len(data_pattern) + 1
     dkey = b"dkey"
     akey = b"akey"
@@ -359,7 +356,7 @@ def launch_snapshot(self, pool, name):
     if status:
         self.log.info("Snapshot Created")
         # write more data to object
-        data_pattern2 = get_random_bytes(500)
+        data_pattern2 = get_random_bytes(500000)
         datasize2 = len(data_pattern2) + 1
         dkey = b"dkey"
         akey = b"akey"
@@ -388,9 +385,7 @@ def launch_snapshot(self, pool, name):
     except (RuntimeError, TestFail, DaosApiError) as error:
         self.log.error("Failed to destroy snapshot %s", error)
         status &= False
-    # cleanup
-    container.close()
-    container.destroy()
+
     params = {"name": name, "status": status, "vars": {}}
     with H_LOCK:
         self.harasser_job_done(params)

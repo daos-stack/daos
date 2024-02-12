@@ -86,12 +86,14 @@ soak_harassers:
   # one harrasser is run during each pass of soak jobs
   harasserlist:
     test_soak_offline_harassers:
+      - snapshot
       - exclude_reintegrate-offline
       - server-stop_server-start-offline
       - server-stop_server-reintegrate-offline
       - extend-pool-offline
       # - vmd-identify-check-offline
     test_soak_online_harassers:
+      - snapshot
       - exclude_reintegrate
       - server-stop_server-start
       - server-stop_server-reintegrate
