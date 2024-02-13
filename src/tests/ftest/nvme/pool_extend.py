@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -45,7 +45,7 @@ class NvmePoolExtend(OSAUtils):
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
 
-        total_servers = self.server_manager[0].engines()
+        total_servers = self.server_managers[0].engines()
         self.log.info("Total Daos Servers (Initial): %d", total_servers)
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
