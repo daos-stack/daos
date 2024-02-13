@@ -66,5 +66,4 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Check DAOS ftest tags.
-        run: \[ ! -x src/tests/ftest/tags.py \] ||
-             ./src/tests/ftest/tags.py unit && ./src/tests/ftest/tags.py lint
+        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint

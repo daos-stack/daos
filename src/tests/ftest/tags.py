@@ -415,14 +415,19 @@ def run_list(paths):
     print(' '.join(sorted(tags)))
 
 
-def run_unit(verbose):
+def test_tags_util(verbose=False):
     """Run unit tests for FtestTagMap.
+
+    Can be ran directly as:
+        tags.py unit
+    Or with pytest as:
+        python3 -m pytest tags.py
 
     Args:
         verbose (bool): whether to print verbose output for debugging
     """
     # pylint: disable=protected-access
-    print('Unit Tests')
+    print('Ftest Tags Utility Unit Tests')
     tag_map = FtestTagMap([])
     os.chdir('/')
 
@@ -468,6 +473,8 @@ def run_unit(verbose):
         [set(['foo1']), set(['foo2'])]) == ['test_1', 'test_2']
     assert tag_map._FtestTagMap__tags_to_tests([set(['foo1', 'class_1'])]) == ['test_1']
 
+    print('Ftest Tags Utility Unit Tests PASSED')
+
 
 def main():
     """main function execution"""
@@ -512,7 +519,7 @@ def main():
         sys.exit(0)
 
     if args.command == "unit":
-        run_unit(args.verbose)
+        test_tags_util(args.verbose)
         sys.exit(0)
 
 
