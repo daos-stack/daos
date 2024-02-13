@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -1756,6 +1757,8 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc == 0) {
+		struct stat buf;
+
 		DFUSE_LOG_DEBUG("mmap(address=%p, length=%zu, prot=%d, flags=%d,"
 				" fd=%d, offset=%zd) "
 				"intercepted, disabling kernel bypass ", address,
@@ -1765,6 +1768,9 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 			__real_lseek(fd, entry->fd_pos, SEEK_SET);
 		/* Disable kernel bypass */
 		entry->fd_status = DFUSE_IO_DIS_MMAP;
+
+		/* DAOS-14494: Force the kernel to update the size before mapping. */
+		__real___fxstat(_STAT_VER, fd, &buf);
 
 		vector_decref(&fd_table, entry);
 	}

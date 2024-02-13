@@ -518,10 +518,14 @@ do_mmap(void **state)
 	int   fd;
 	int   rc;
 	void *addr;
-	struct stat buf;
 
 	root = open(test_dir, O_PATH | O_DIRECTORY);
 	assert_return_code(root, errno);
+
+	/* Always unlink the file but do not check for errors.  If running the test manually the
+	 * file might pre-exist and affect the behaviour.
+	 */
+	unlinkat(root, "file", 0);
 
 	fd = openat(root, "file", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
 	assert_return_code(root, errno);
@@ -529,11 +533,13 @@ do_mmap(void **state)
 	rc = ftruncate(fd, 1024 * 1024);
 	assert_return_code(rc, errno);
 
+#if 0
 	/* TODO: This shouldn't be required but forces the kernel to refresh the file size */
 	rc = fstatat(root, "file", &buf, 0);
 	assert_return_code(rc, errno);
 
 	assert_int_equal(buf.st_size, 1024 * 1024);
+#endif
 
 	addr = mmap(NULL, 1024 * 1024, PROT_WRITE, MAP_PRIVATE, fd, 0);
 	assert_ptr_not_equal(addr, MAP_FAILED);
