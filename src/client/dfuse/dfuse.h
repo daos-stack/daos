@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -954,7 +954,7 @@ struct dfuse_inode_entry {
 
 #define DFUSE_IE_WFLUSH(_ie)                                                                       \
 	do {                                                                                       \
-		if ((_ie)->ie_dfs->dfc_wb_cache) {                                                 \
+		if ((_ie)->ie_dfs->dfc_wb_cache && S_ISREG((_ie)->ie_stat.st_mode)) {              \
 			D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                         \
 			D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                         \
 		}                                                                                  \
