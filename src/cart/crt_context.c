@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -322,6 +322,18 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		if (ret)
 			D_WARN("Failed to create failed addr counter: "DF_RC
 			       "\n", DP_RC(ret));
+
+		ret = d_tm_add_metric(&ctx->cc_net_glitches, D_TM_COUNTER,
+				      "Total number of network glitch errors", "errors",
+				      "net/%s/glitch/ctx_%u", prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(rc, "Failed to create network glitch counter");
+
+		ret = d_tm_add_metric(&ctx->cc_swim_delay, D_TM_STATS_GAUGE,
+				      "SWIM delay measurements", "delay",
+				      "net/%s/swim_delay/ctx_%u", prov, ctx->cc_idx);
+		if (ret)
+			DL_WARN(rc, "Failed to create SWIM delay gauge");
 	}
 
 	if (crt_is_service() &&

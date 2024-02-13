@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -342,6 +342,13 @@ obj_get_req_attr(crt_rpc_t *rpc, struct sched_req_attr *attr)
 		sched_req_attr_init(attr, SCHED_REQ_UPDATE, &ocpi->ocpi_po_uuid);
 		break;
 	}
+	case DAOS_OBJ_RPC_COLL_QUERY: {
+		struct obj_coll_query_in *ocqi = crt_req_get(rpc);
+
+		attr->sra_enqueue_id = ocqi->ocqi_comm_in.req_in_enqueue_id;
+		sched_req_attr_init(attr, SCHED_REQ_FETCH, &ocqi->ocqi_po_uuid);
+		break;
+	}
 	default:
 		/* Other requests will not be queued, see dss_rpc_hdlr() */
 		rc = -DER_NOSYS;
@@ -444,6 +451,13 @@ obj_set_req(crt_rpc_t *rpc, struct sched_req_attr *attr)
 
 		ocpo->ocpo_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
 		ocpo->ocpo_ret = -DER_OVERLOAD_RETRY;
+		break;
+	}
+	case DAOS_OBJ_RPC_COLL_QUERY: {
+		struct obj_coll_query_out *ocqo = crt_reply_get(rpc);
+
+		ocqo->ocqo_comm_out.req_out_enqueue_id = attr->sra_enqueue_id;
+		ocqo->ocqo_ret = -DER_OVERLOAD_RETRY;
 		break;
 	}
 	default:
