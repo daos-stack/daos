@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,12 +62,25 @@ extern ABT_key stack_key;
 
 extern bool daos_ult_mmap_stack;
 
-/* pool of free stacks */
+/* pool of free stacks, is a binary tree */
+struct stack_pool_by_size {
+	/* size of stacks in sub-pool */
+	size_t sps_stack_size;
+	/* list of sizes */
+	d_list_t sps_size_list;
+	/* per-size free-list of stacks */
+	d_list_t sps_stack_free_list;
+};
+
 struct stack_pool {
-	/* per-xstream pool/list of free stacks */
-	d_list_t		sp_stack_free_list;
+	/* root of binary tree */
+	void *sp_root;
 	/* nb of free stacks in pool/list */
 	uint64_t		sp_free_stacks;
+	/* nb of sizes in pool */
+	uint sp_nb_sizes;
+	/* list of sizes */
+	d_list_t sp_stack_size_list;
 };
 
 /* since being allocated before start of stack its size must be a
