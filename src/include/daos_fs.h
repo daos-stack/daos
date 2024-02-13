@@ -1171,6 +1171,20 @@ enum {
 int
 dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
+/**
+ * Scan the DFS namespace and report statistics about file/dir size and namespace structure.
+ *
+ * \param[in]	poh	Open pool handle.
+ * \param[in]	cont	POSIX container label.
+ * \param[in]	flags	Unused flag, added for future use.
+ * \param[in]	name	Optional subdirectory path to scan from.
+ *			Start from container root if not specified.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
+
 /*
  * The Pipeline DFS API (everything under this comment) is under heavy development and should not be
  * used in production. The API is subject to change.
