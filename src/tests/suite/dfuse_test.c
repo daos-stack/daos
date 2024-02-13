@@ -529,7 +529,9 @@ do_mmap(void **state)
 	assert_return_code(rc, errno);
 
 	addr = mmap(NULL, 1024 * 1024, PROT_WRITE, MAP_PRIVATE, fd, 0);
-	assert_ptr_not_equal(addr, NULL);
+	assert_ptr_not_equal(addr, MAP_FAILED);
+
+	printf("Mapped private to %p\n", addr);
 
 	memset(addr, '0', 1024 * 1024);
 
@@ -537,12 +539,17 @@ do_mmap(void **state)
 	assert_return_code(rc, errno);
 
 	addr = mmap(NULL, 1024 * 1024, PROT_READ, MAP_SHARED, fd, 0);
-	assert_ptr_not_equal(addr, NULL);
+	assert_ptr_not_equal(addr, MAP_FAILED);
+
+	printf("Mapped shared to %p\n", addr);
 
 	rc = munmap(addr, 1024 * 1024);
 	assert_return_code(rc, errno);
 
 	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
