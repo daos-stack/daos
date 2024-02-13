@@ -1,4 +1,4 @@
-#  (C) Copyright 2023 Intel Corporation.
+#  (C) Copyright 2023-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 - name: common
@@ -175,4 +175,4 @@
 - name: ftest
   memcheck: False
   tests:
-    - cmd: ["src/tests/ftest/tags.py unit"]
+    - cmd: ["src/tests/ftest/tags.py", "unit"]
