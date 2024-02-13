@@ -197,7 +197,7 @@ mdtest_harasser:
     - 0
   dfs_oclass:
     - ["EC_2P1G1", "RP_2G1"]
-    - ["EC_4P2GX", "RP_3G1"]
+    - ["EC_4P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
