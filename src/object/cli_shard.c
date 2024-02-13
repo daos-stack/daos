@@ -751,7 +751,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		else
-			D_ERROR(DF_CONT DF_UOID " rpc %p opc %d to rank %d tag %d: " DF_RC "\n",
+			D_ERROR(DF_CONT DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
 				DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
@@ -1999,32 +1999,25 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		}
 	}
 
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST) {
-			D_SPIN_LOCK(&cb_args->obj->cob_spin);
-			D_GOTO(set_max_epoch, rc = 0);
-		}
-
-		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY || rc == -DER_OVERLOAD_RETRY)
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
-				cb_args->rpc, opc, rc);
-		else
-			D_ERROR("rpc %p RPC %d failed: %d\n", cb_args->rpc, opc, rc);
-
-		if (rc == -DER_OVERLOAD_RETRY) {
-			uint32_t			 timeout = 0;
-			struct obj_query_key_v10_out	*okqo_v10;
-
-			okqo_v10 = crt_reply_get(cb_args->rpc);
-			if (*cb_args->queue_id == 0)
-				*cb_args->queue_id = okqo_v10->okqo_comm_out.req_out_enqueue_id;
-			crt_req_get_timeout(cb_args->rpc, &timeout);
-			if (timeout > *cb_args->max_delay)
-				*cb_args->max_delay = timeout;
-
-		}
-		D_GOTO(out, rc);
-	}
+	oqma.oca = &cb_args->obj->cob_oca;
+	oqma.oid = okqi->okqi_oid;
+	oqma.src_epoch = okqo->okqo_max_epoch;
+	oqma.in_dkey = &okqi->okqi_dkey;
+	oqma.src_dkey = &okqo->okqo_dkey;
+	oqma.tgt_dkey = cb_args->dkey;
+	oqma.src_akey = &okqo->okqo_akey;
+	oqma.tgt_akey = cb_args->akey;
+	oqma.src_recx = &okqo->okqo_recx;
+	oqma.tgt_recx = cb_args->recx;
+	oqma.tgt_epoch = cb_args->max_epoch;
+	oqma.tgt_map_ver = cb_args->map_ver;
+	oqma.max_delay = cb_args->max_delay;
+	oqma.queue_id = cb_args->queue_id;
+	oqma.rpc = cb_args->rpc;
+	oqma.flags = okqi->okqi_api_flags;
+	oqma.opc = DAOS_OBJ_RPC_QUERY_KEY;
+	oqma.src_map_ver = obj_reply_map_version_get(rpc);
+	oqma.ret = rc;
 
 	D_SPIN_LOCK(&cb_args->obj->cob_spin);
 	rc = daos_obj_merge_query_merge(&oqma);
