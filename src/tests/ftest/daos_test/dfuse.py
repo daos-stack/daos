@@ -59,7 +59,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
-        elif cache_mode == 'nocache':
+        elif cache_mode == 'otoc':
             cont_attrs['dfuse-data-cache'] = 'otoc'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
