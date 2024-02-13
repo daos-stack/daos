@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,7 +30,6 @@ from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
 from run_utils import run_remote
-from test_utils_container import TestContainer
 
 H_LOCK = threading.Lock()
 
@@ -333,10 +332,9 @@ def launch_snapshot(self, pool, name):
         "<<<PASS %s: %s started at %s>>>", self.loop, name, time.ctime())
     status = True
     # Create container
-    add_containers(self, pool, path='/run/container_reserved/*')
+    add_containers(self, pool, path='/run/container_snapshot/*')
     container = self.container[-1]
-    obj_cls = self.params.get(
-        "file_class", '/run/container_reserved/*')
+    obj_cls = self.params.get("oclass", '/run/container_snapshot/*')
 
     # write data to object
     data_pattern = get_random_bytes(500000000)
