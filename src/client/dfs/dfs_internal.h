@@ -131,6 +131,10 @@ dfs_relink_root(daos_handle_t coh);
 int
 dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev);
 
+/** Internal routine to chown the root object when changing container ownership */
+int
+dfs_root_chown(daos_handle_t coh, d_string_t user, d_string_t group);
+
 #if defined(__cplusplus)
 }
 #endif

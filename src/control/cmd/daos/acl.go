@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -403,6 +403,10 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 		return errors.Wrapf(err,
 			"failed to set owner for container %s",
 			cmd.ContainerID())
+	}
+
+	if err := dfsError(C.dfs_root_chown(ap.cont, user, group)); err != nil {
+		return errors.Wrapf(err, "%s failed", fsOpString((ap.fs_op)))
 	}
 
 	if cmd.JSONOutputEnabled() {

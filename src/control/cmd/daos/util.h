@@ -33,6 +33,7 @@
 #include <dfuse_ioctl.h>
 
 #include "daos_hdlr.h"
+#include "dfs_internal.h"
 
 int resolve_duns_path(struct cmd_args_s *ap);
 int resolve_duns_pool(struct cmd_args_s *ap);

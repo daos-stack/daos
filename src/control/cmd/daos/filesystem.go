@@ -17,15 +17,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-func dfsError(rc C.int) error {
-	if rc == 0 {
-		return nil
-	}
-
-	strErr := C.strerror(rc)
-	return errors.New(fmt.Sprintf("errno %d (%s)", rc, C.GoString(strErr)))
-}
-
 type fsCmd struct {
 	Check          fsCheckCmd          `command:"check" description:"Run the DFS Checker on the container"`
 	FixSB          fsFixSBCmd          `command:"fix-sb" description:"Recreate / Fix the SB on the container"`

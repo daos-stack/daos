@@ -448,10 +448,10 @@ int
 daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 		    daos_event_t *ev)
 {
-	daos_prop_t	*prop;
-	uint32_t	nr = 0;
-	uint32_t	i = 0;
-	int		rc;
+	daos_prop_t *prop;
+	uint32_t     nr = 0;
+	uint32_t     i  = 0;
+	int          rc;
 
 	if (user != NULL) {
 		if (!daos_acl_principal_is_valid(user)) {
@@ -495,7 +495,6 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 	}
 
 	rc = daos_cont_set_prop(coh, prop, ev);
-
 	daos_prop_free(prop);
 	return rc;
 }

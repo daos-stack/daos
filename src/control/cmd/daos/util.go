@@ -26,7 +26,7 @@ import (
 /*
 // NB: There should only be one set of CFLAGS/LDFLAGS definitions
 // for the whole package!
-#cgo CFLAGS: -I${SRCDIR}/../../../utils
+#cgo CFLAGS: -I${SRCDIR}/../../../utils -I${SRCDIR}/../../../client/dfs
 #cgo LDFLAGS: -lgurt -lcart -ldaos -ldaos_common -lduns -ldfs -luuid -ldaos_cmd_hdlrs
 
 #include "util.h"
@@ -67,6 +67,15 @@ func daosError(rc C.int) error {
 		return nil
 	}
 	return daos.Status(rc)
+}
+
+func dfsError(rc C.int) error {
+	if rc == 0 {
+		return nil
+	}
+
+	strErr := C.strerror(rc)
+	return errors.New(fmt.Sprintf("errno %d (%s)", rc, C.GoString(strErr)))
 }
 
 func goBool2int(in bool) (out C.int) {
