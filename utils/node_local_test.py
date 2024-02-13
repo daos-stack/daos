@@ -2764,7 +2764,7 @@ class PosixTests():
         print(post)
         assert pre.st_ino == post.st_ino
 
-    def Xtest_stable_cont_inode(self):
+    def xtest_stable_cont_inode(self):
         """Ensure that container inodes are persistent
 
         Create a container outside of dfuse.
