@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,7 +61,7 @@ umempobj_settings_init(bool md_on_ssd)
 		return rc;
 	}
 
-	d_getenv_int("DAOS_MD_ON_SSD_MODE", &md_mode);
+	d_getenv_uint("DAOS_MD_ON_SSD_MODE", &md_mode);
 
 	switch (md_mode) {
 	case DAOS_MD_BMEM:
@@ -1195,10 +1195,8 @@ bmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
 	if (hint == UMEM_RESERVED_MEM) {
 		memcpy(dest, src, len);
 		return dest;
-	} else if (hint == UMEM_COMMIT_IMMEDIATE) {
+	} else { /* UMEM_COMMIT_IMMEDIATE */
 		return dav_memcpy_persist(pop, dest, src, len);
-	} else { /* UMEM_COMMIT_DEFER */
-		return dav_memcpy_persist_relaxed(pop, dest, src, len);
 	}
 }
 
@@ -1700,7 +1698,7 @@ struct umem_page_info {
 	d_list_t pi_link;
 	/** page memory address */
 	uint8_t *pi_addr;
-	/** Information about inflight checkpoint */
+	/** Information about in-flight checkpoint */
 	void    *pi_chkpt_data;
 	/** bitmap for each dirty 16K unit */
 	uint64_t pi_bmap[UMEM_CACHE_BMAP_SZ];
@@ -1954,7 +1952,7 @@ umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos
 #define MAX_IOD_PER_SET   (2 * MAX_IOD_PER_PAGE)
 
 struct umem_checkpoint_data {
-	/** List link for inflight sets */
+	/** List link for in-flight sets */
 	d_list_t                 cd_link;
 	/* List of storage ranges being checkpointed */
 	struct umem_store_iod    cd_store_iod;
@@ -2077,11 +2075,12 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	d_list_t                     free_list;
 	d_list_t                     waiting_list;
 	int                          i;
-	int                          rc;
+	int                          rc = 0;
 	int                          inflight = 0;
 	int                          pages_scanned = 0;
 	int                          dchunks_copied = 0;
 	int                          iovs_used = 0;
+	int			     nr_copying_pgs = 0;
 
 	if (cache == NULL)
 		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
@@ -2097,7 +2096,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 	if (chkpt_data_all == NULL)
 		return -DER_NOMEM;
 
-	/** Setup the inflight IODs */
+	/** Setup the in-flight IODs */
 	for (i = 0; i < MAX_INFLIGHT_SETS; i++) {
 		chkpt_data = &chkpt_data_all[i];
 		d_list_add_tail(&chkpt_data->cd_link, &free_list);
@@ -2117,6 +2116,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		pinfo->pi_waiting = 1;
 		if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_inflight, chkpt_id) > 0)
 			chkpt_id = pinfo->pi_last_inflight;
+		nr_copying_pgs++;
 	}
 
 	do {
@@ -2159,10 +2159,31 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 				pinfo->pi_last_checkpoint = pinfo->pi_last_inflight;
 			}
 
+			/*
+			 * DAV allocator uses valgrind macros to mark certain portions of
+			 * heap as no access for user. Prevent valgrind from reporting
+			 * invalid read while checkpointing these address ranges.
+			 */
+			if (DAOS_ON_VALGRIND) {
+				d_sg_list_t  *sgl = &chkpt_data->cd_sg_list;
+
+				for (i = 0; i < sgl->sg_nr; i++)
+					VALGRIND_DISABLE_ADDR_ERROR_REPORTING_IN_RANGE(
+						sgl->sg_iovs[i].iov_buf, sgl->sg_iovs[i].iov_len);
+			}
+
 			rc = store->stor_ops->so_flush_copy(chkpt_data->cd_fh,
 							    &chkpt_data->cd_sg_list);
 			/** If this fails, it means invalid argument, so assertion here is fine */
 			D_ASSERT(rc == 0);
+
+			if (DAOS_ON_VALGRIND) {
+				d_sg_list_t  *sgl = &chkpt_data->cd_sg_list;
+
+				for (i = 0; i < sgl->sg_nr; i++)
+					VALGRIND_ENABLE_ADDR_ERROR_REPORTING_IN_RANGE(
+						sgl->sg_iovs[i].iov_buf, sgl->sg_iovs[i].iov_len);
+			}
 
 			for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
 				pinfo             = chkpt_data->cd_pages[i];
@@ -2177,7 +2198,7 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 
 		chkpt_data = d_list_pop_entry(&waiting_list, struct umem_checkpoint_data, cd_link);
 
-		/* Wait for inflight transactions committed, or yield to make progress */
+		/* Wait for in-flight transactions committed, or yield to make progress */
 		wait_cb(arg, chkpt_data ? chkpt_data->cd_max_tx : 0, &committed_tx);
 
 		/* The so_flush_prep() could fail when the DMA buffer is under pressure */
@@ -2207,6 +2228,13 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		iovs_used      += chkpt_data->cd_sg_list.sg_nr_out;
 		d_list_add(&chkpt_data->cd_link, &free_list);
 
+		if (DAOS_FAIL_CHECK(DAOS_MEM_FAIL_CHECKPOINT) &&
+		    pages_scanned >= nr_copying_pgs / 2) {
+			d_list_move(&cache->ca_pgs_copying, &cache->ca_pgs_dirty);
+			rc = -DER_AGAIN;
+			break;
+		}
+
 	} while (inflight != 0 || !d_list_empty(&cache->ca_pgs_copying));
 
 	D_FREE(chkpt_data_all);
@@ -2218,6 +2246,6 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		stats->uccs_nr_iovs    = iovs_used;
 	}
 
-	return 0;
+	return rc;
 }
 #endif

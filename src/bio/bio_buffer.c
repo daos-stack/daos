@@ -536,37 +536,51 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 	return -DER_REC2BIG;
 }
 
-static int
-iterate_biov(struct bio_desc *biod,
-	     int (*cb_fn)(struct bio_desc *, struct bio_iov *, void *data),
-	     void *data)
+static void
+copy_one_setup(struct bio_desc *biod, int idx, void *data)
 {
-	int i, j, rc = 0;
+	struct bio_copy_args *arg = data;
 
-	for (i = 0; i < biod->bd_sgl_cnt; i++) {
+	D_ASSERT(idx < arg->ca_sgl_cnt);
+	arg->ca_sgl_idx = idx;
+	arg->ca_iov_idx = 0;
+	arg->ca_iov_off = 0;
+	if (biod->bd_type == BIO_IOD_TYPE_FETCH)
+		arg->ca_sgls[idx].sg_nr_out = 0;
+}
+
+static void
+map_one_setup(struct bio_desc *biod, int idx, void *data)
+{
+	struct bio_bulk_args *arg = data;
+
+	arg->ba_sgl_idx = idx;
+}
+
+static int
+iterate_biov(struct bio_desc *biod, int (*cb_fn)(struct bio_desc *, struct bio_iov *, void *data),
+	     void            *data)
+{
+	void (*prep_fn)(struct bio_desc *, int, void *) = NULL;
+	int rc                                          = 0;
+
+	if (data != NULL) {
+		if (cb_fn == copy_one)
+			prep_fn = copy_one_setup;
+		else if (cb_fn == bulk_map_one)
+			prep_fn = map_one_setup;
+	}
+
+	for (int i = 0; i < biod->bd_sgl_cnt; i++) {
 		struct bio_sglist *bsgl = &biod->bd_sgls[i];
 
-		if (data != NULL) {
-			if (cb_fn == copy_one) {
-				struct bio_copy_args *arg = data;
-
-				D_ASSERT(i < arg->ca_sgl_cnt);
-				arg->ca_sgl_idx = i;
-				arg->ca_iov_idx = 0;
-				arg->ca_iov_off = 0;
-				if (biod->bd_type == BIO_IOD_TYPE_FETCH)
-					arg->ca_sgls[i].sg_nr_out = 0;
-			} else if (cb_fn == bulk_map_one) {
-				struct bio_bulk_args *arg = data;
-
-				arg->ba_sgl_idx = i;
-			}
-		}
+		if (prep_fn)
+			prep_fn(biod, i, data);
 
 		if (bsgl->bs_nr_out == 0)
 			continue;
 
-		for (j = 0; j < bsgl->bs_nr_out; j++) {
+		for (int j = 0; j < bsgl->bs_nr_out; j++) {
 			struct bio_iov *biov = &bsgl->bs_iovs[j];
 
 			rc = cb_fn(biod, biov, data);
@@ -1240,7 +1254,7 @@ static inline bool
 iod_should_retry(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 {
 	/*
-	 * When there isn't any inflight IODs, it means the whole DMA buffer
+	 * When there isn't any in-flight IODs, it means the whole DMA buffer
 	 * isn't large enough to satisfy current huge IOD, don't retry.
 	 *
 	 * When current IOD is for copy target, take the source IOD into account.
@@ -1859,16 +1873,19 @@ free:
 	return NULL;
 }
 
-struct bio_copy_desc *
+int
 bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
-	      struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst)
+	      struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+	      struct bio_copy_desc **desc)
 {
 	struct bio_copy_desc	*copy_desc;
-	int			 rc;
+	int			 rc, ret;
 
 	copy_desc = alloc_copy_desc(ioctxt, umem, bsgl_src, bsgl_dst);
-	if (copy_desc == NULL)
-		return NULL;
+	if (copy_desc == NULL) {
+		*desc = NULL;
+		return -DER_NOMEM;
+	}
 
 	rc = bio_iod_prep(copy_desc->bcd_iod_src, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc)
@@ -1877,15 +1894,17 @@ bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	copy_desc->bcd_iod_dst->bd_copy_dst = 1;
 	rc = bio_iod_prep(copy_desc->bcd_iod_dst, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc) {
-		rc = bio_iod_post(copy_desc->bcd_iod_src, 0);
-		D_ASSERT(rc == 0);
+		ret = bio_iod_post(copy_desc->bcd_iod_src, 0);
+		D_ASSERT(ret == 0);
 		goto free;
 	}
 
-	return copy_desc;
+	*desc = copy_desc;
+	return 0;
 free:
 	free_copy_desc(copy_desc);
-	return NULL;
+	*desc = NULL;
+	return rc;
 }
 
 int
@@ -1950,9 +1969,9 @@ bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	struct bio_copy_desc	*copy_desc;
 	int			 rc;
 
-	copy_desc = bio_copy_prep(ioctxt, umem, bsgl_src, bsgl_dst);
-	if (copy_desc == NULL)
-		return -DER_NOMEM;
+	rc = bio_copy_prep(ioctxt, umem, bsgl_src, bsgl_dst, &copy_desc);
+	if (rc)
+		return rc;
 
 	rc = bio_copy_run(copy_desc, copy_size, csum_desc);
 	rc = bio_copy_post(copy_desc, rc);

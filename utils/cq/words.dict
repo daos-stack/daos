@@ -135,7 +135,6 @@ debian
 debuginfo
 defusedxml
 del
-dependances
 deps
 dereference
 dereferencing
@@ -176,6 +175,7 @@ fchmod
 fcntl
 filename
 filesystem
+findall
 findcmd
 fini
 fio
@@ -198,6 +198,7 @@ groupadd
 groupname
 grp
 hackery
+hexdump
 hfi
 hostfile
 hostlist
@@ -215,6 +216,7 @@ iface
 indata
 infiniband
 init
+inode
 interoperability
 io
 iod
@@ -234,6 +236,7 @@ junit
 kds
 kv
 kwargs
+launchable
 ldflags
 len
 libaio
@@ -253,6 +256,7 @@ logfile
 logfiles
 logmasks
 lseek
+lsblk
 lspci
 lua
 lustre
@@ -312,6 +316,7 @@ params
 patchelf
 pci
 pda
+parallelized
 pdesc
 perf
 performant
@@ -331,6 +336,7 @@ ppn
 prebuild
 prebuilding
 prebuilt
+predefine
 preload
 prepend
 prepended
@@ -363,6 +369,7 @@ recurse
 redistributions
 refactor
 repo
+reproducibility
 returncode
 rf
 rmdir
@@ -388,7 +395,9 @@ shlex
 simul
 sinfo
 slurm
+slurmd
 slurmctl
+slurmctld
 spdk
 squeue
 src
@@ -437,6 +446,7 @@ testdata
 testFile
 testname
 testrunner
+testsuites
 tgt
 timestamp
 timestamps
@@ -456,12 +466,14 @@ uint
 umount
 umounting
 unicode
+uninterruptible
 unittest
 unlink
 unlinked
 unlinking
 unmangle
 unmount
+unordered
 unwritable
 uri
 url
@@ -478,6 +490,7 @@ uuidstr
 valgrind
 vendored
 ver
+versa
 versioned
 vm
 vos

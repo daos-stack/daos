@@ -3,18 +3,18 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
+import copy
+import queue
 import random
 import threading
-import copy
-
+import time
 from itertools import product
-import queue
-from write_host_file import write_host_file
-from exception_utils import CommandFailure
-from daos_racer_utils import DaosRacerCommand
-from osa_utils import OSAUtils
+
 from apricot import skipForTicket
+from daos_racer_utils import DaosRacerCommand
+from exception_utils import CommandFailure
+from osa_utils import OSAUtils
+from write_host_file import write_host_file
 
 
 class OSAOnlineParallelTest(OSAUtils):
@@ -35,7 +35,7 @@ class OSAOnlineParallelTest(OSAUtils):
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.ior_dfs_oclass = self.params.get("obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.pool = None
         self.out_queue = queue.Queue()
         self.ds_racer_queue = queue.Queue()

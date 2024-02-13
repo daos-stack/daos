@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,7 +17,6 @@ RDB_STRING_KEY(ds_cont_prop_, cuuids);
 RDB_STRING_KEY(ds_cont_prop_, conts);
 RDB_STRING_KEY(ds_cont_prop_, cont_handles);
 RDB_STRING_KEY(ds_cont_prop_, oit_oids);
-
 /* Container properties KVS */
 RDB_STRING_KEY(ds_cont_prop_, ghce);
 RDB_STRING_KEY(ds_cont_prop_, ghpce);
@@ -49,6 +48,7 @@ RDB_STRING_KEY(ds_cont_prop_, roots);
 RDB_STRING_KEY(ds_cont_prop_, ec_cell_sz);
 RDB_STRING_KEY(ds_cont_prop_, ec_pda);
 RDB_STRING_KEY(ds_cont_prop_, rp_pda);
+RDB_STRING_KEY(ds_cont_prop_, perf_domain);
 RDB_STRING_KEY(ds_cont_prop_, cont_global_version);
 RDB_STRING_KEY(ds_cont_prop_, scrubber_disabled);
 RDB_STRING_KEY(ds_cont_prop_, co_md_times);
@@ -201,6 +201,9 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val	= 0,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_OBJ_VERSION,
+		.dpe_val	= 0, /* inherit from pool by default */
+	}, {
+		.dpe_type	= DAOS_PROP_CO_PERF_DOMAIN,
 		.dpe_val	= 0, /* inherit from pool by default */
 	}
 };

@@ -46,8 +46,6 @@ type CtlSvcClient interface {
 	PrepShutdownRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)
 	StopRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
-	// Ping DAOS I/O Engines on a host. (gRPC fanout)
-	PingRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// ResetFormat DAOS I/O Engines on a host. (gRPC fanout)
 	ResetFormatRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
@@ -172,15 +170,6 @@ func (c *ctlSvcClient) StopRanks(ctx context.Context, in *RanksReq, opts ...grpc
 	return out, nil
 }
 
-func (c *ctlSvcClient) PingRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
-	out := new(RanksResp)
-	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/PingRanks", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *ctlSvcClient) ResetFormatRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
 	out := new(RanksResp)
 	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/ResetFormatRanks", in, out, opts...)
@@ -236,8 +225,6 @@ type CtlSvcServer interface {
 	PrepShutdownRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)
 	StopRanks(context.Context, *RanksReq) (*RanksResp, error)
-	// Ping DAOS I/O Engines on a host. (gRPC fanout)
-	PingRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// ResetFormat DAOS I/O Engines on a host. (gRPC fanout)
 	ResetFormatRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
@@ -286,9 +273,6 @@ func (UnimplementedCtlSvcServer) PrepShutdownRanks(context.Context, *RanksReq) (
 }
 func (UnimplementedCtlSvcServer) StopRanks(context.Context, *RanksReq) (*RanksResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StopRanks not implemented")
-}
-func (UnimplementedCtlSvcServer) PingRanks(context.Context, *RanksReq) (*RanksResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PingRanks not implemented")
 }
 func (UnimplementedCtlSvcServer) ResetFormatRanks(context.Context, *RanksReq) (*RanksResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ResetFormatRanks not implemented")
@@ -528,24 +512,6 @@ func _CtlSvc_StopRanks_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
-func _CtlSvc_PingRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RanksReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CtlSvcServer).PingRanks(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ctl.CtlSvc/PingRanks",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CtlSvcServer).PingRanks(ctx, req.(*RanksReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _CtlSvc_ResetFormatRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RanksReq)
 	if err := dec(in); err != nil {
@@ -654,10 +620,6 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "StopRanks",
 			Handler:    _CtlSvc_StopRanks_Handler,
-		},
-		{
-			MethodName: "PingRanks",
-			Handler:    _CtlSvc_PingRanks_Handler,
 		},
 		{
 			MethodName: "ResetFormatRanks",

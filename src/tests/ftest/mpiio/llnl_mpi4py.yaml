@@ -24,4 +24,4 @@ client_processes:
   np: 8
 test_repo:
   llnl: "testmpio"
-  mpi4py: "/usr/lib64/python3.6/site-packages/mpi4py/tests"
+  mpi4py: "mpi4py/tests"

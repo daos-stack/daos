@@ -341,7 +341,7 @@ daos_array_stat(daos_handle_t oh, daos_handle_t th, daos_array_stbuf_t *stbuf, d
 
 /**
  * Set the array size (truncate) in records. If array is shrinking, we punch
- * dkeys/records above the required size. If the array is epxanding, we insert 1
+ * dkeys/records above the required size. If the array is expanding, we insert 1
  * record at the corresponding size. This is NOT equivalent to an allocate.
  *
  *

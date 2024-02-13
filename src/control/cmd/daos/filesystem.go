@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,19 +32,22 @@ type fsCmd struct {
 	FixRoot        fsFixRootCmd        `command:"fix-root" description:"Relink root object in the container"`
 	FixEntry       fsFixEntryCmd       `command:"fix-entry" description:"Fix Entries in case the type or chunk size were corrupted"`
 	Copy           fsCopyCmd           `command:"copy" description:"copy to and from a POSIX filesystem"`
-	SetAttr        fsSetAttrCmd        `command:"set-attr" description:"set fs attributes"`
-	GetAttr        fsGetAttrCmd        `command:"get-attr" description:"get fs attributes"`
-	ResetAttr      fsResetAttrCmd      `command:"reset-attr" description:"reset fs attributes"`
-	ResetChunkSize fsResetChunkSizeCmd `command:"reset-chunk-size" description:"reset fs chunk size"`
-	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset fs obj class"`
+	SetAttr        fsSetAttrCmd        `command:"set-attr" description:"set default object class and/or chunk size"`
+	GetAttr        fsGetAttrCmd        `command:"get-attr" description:"get default object class and chunk size"`
+	ResetAttr      fsResetAttrCmd      `command:"reset-attr" description:"reset default creation attributes on a directory"`
+	ResetChunkSize fsResetChunkSizeCmd `command:"reset-chunk-size" description:"reset default creation chunk size on a directory"`
+	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset default creation object class on a directory"`
+	DfuseQuery     fsDfuseQueryCmd     `command:"query" description:"Query dfuse for memory usage"`
+	DfuseEvict     fsDfuseEvictCmd     `command:"evict" description:"Evict object from dfuse"`
 }
 
 type fsCopyCmd struct {
 	daosCmd
 
-	Source   string `long:"src" short:"s" description:"copy source" required:"1"`
-	Dest     string `long:"dst" short:"d" description:"copy destination" required:"1"`
-	Preserve string `long:"preserve-props" short:"m" description:"preserve container properties, requires HDF5 library" required:"0"`
+	Source      string `long:"src" short:"s" description:"copy source" required:"1"`
+	Dest        string `long:"dst" short:"d" description:"copy destination" required:"1"`
+	Preserve    string `long:"preserve-props" short:"m" description:"preserve container properties, requires HDF5 library" required:"0"`
+	IgnoreUnsup bool   `long:"ignore-unsupported" description:"ignore unsupported filesystem features when copying to DFS" required:"0"`
 }
 
 func (cmd *fsCopyCmd) Execute(_ []string) error {
@@ -62,6 +65,7 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 		ap.preserve_props = C.CString(cmd.Preserve)
 		defer freeString(ap.preserve_props)
 	}
+	ap.ignore_unsup = C.bool(cmd.IgnoreUnsup)
 
 	ap.fs_op = C.FS_COPY
 	rc := C.fs_copy_hdlr(ap)
@@ -69,14 +73,14 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to copy %s -> %s", cmd.Source, cmd.Dest)
 	}
 
-	if cmd.shouldEmitJSON {
+	if cmd.JSONOutputEnabled() {
 		type CopyStats struct {
 			NumDirs  uint64 `json:"num_dirs"`
 			NumFiles uint64 `json:"num_files"`
 			NumLinks uint64 `json:"num_links"`
 		}
 
-		return cmd.outputJSON(struct {
+		return cmd.OutputJSON(struct {
 			SourcePool string    `json:"src_pool"`
 			SourceCont string    `json:"src_cont"`
 			DestPool   string    `json:"dst_pool"`
@@ -100,11 +104,14 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 		fsType = "POSIX"
 	}
 	// Compat with old-style output
-	cmd.Infof("Successfully created container %s", C.GoString(&ap.dm_args.dst_cont[0]))
 	cmd.Infof("Successfully copied to %s: %s", fsType, cmd.Dest)
 	cmd.Infof("    Directories: %d", ap.fs_copy_stats.num_dirs)
 	cmd.Infof("    Files:       %d", ap.fs_copy_stats.num_files)
 	cmd.Infof("    Links:       %d", ap.fs_copy_stats.num_links)
+
+	if ap.fs_copy_stats.num_chmod_enotsup > 0 {
+		return errors.Errorf("Copy completed successfully, but %d files had unsupported mode bits that could not be applied. Run with --ignore-unsupported to suppress this warning.", ap.fs_copy_stats.num_chmod_enotsup)
+	}
 
 	return nil
 }
@@ -255,27 +262,69 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	defer cleanup()
 
 	var attrs C.dfs_obj_info_t
-	if err := dfsError(C.fs_dfs_get_attr_hdlr(ap, &attrs)); err != nil {
+	var cmode C.mode_t
+	if err := dfsError(C.fs_dfs_get_attr_hdlr(ap, &attrs, &cmode)); err != nil {
 		return errors.Wrapf(err, "%s failed", fsOpString((ap.fs_op)))
 	}
 
 	var oclassName [16]C.char
 	C.daos_oclass_id2name(attrs.doi_oclass_id, &oclassName[0])
 
-	if cmd.jsonOutputEnabled() {
-		jsonAttrs := &struct {
-			ObjClass  string `json:"oclass"`
-			ChunkSize uint64 `json:"chunk_size"`
-		}{
-			ObjClass:  C.GoString(&oclassName[0]),
-			ChunkSize: uint64(attrs.doi_chunk_size),
+	var diroclassName [16]C.char
+	var fileoclassName [16]C.char
+	if C.mode_is_dir(cmode) {
+		C.daos_oclass_id2name(attrs.doi_dir_oclass_id, &diroclassName[0])
+		C.daos_oclass_id2name(attrs.doi_file_oclass_id, &fileoclassName[0])
+	}
+
+	if cmd.JSONOutputEnabled() {
+		if C.mode_is_dir(cmode) {
+			jsonAttrs := struct {
+				ObjAttr struct {
+					ObjClass string `json:"oclass"`
+				} `json:"object"`
+				DirAttr struct {
+					DirObjClass  string `json:"dir_oclass"`
+					FileObjClass string `json:"file_oclass"`
+					ChunkSize    uint64 `json:"chunk_size"`
+				} `json:"directory"`
+			}{
+				ObjAttr: struct {
+					ObjClass string `json:"oclass"`
+				}{
+					ObjClass: C.GoString(&oclassName[0]),
+				},
+				DirAttr: struct {
+					DirObjClass  string `json:"dir_oclass"`
+					FileObjClass string `json:"file_oclass"`
+					ChunkSize    uint64 `json:"chunk_size"`
+				}{
+					FileObjClass: C.GoString(&diroclassName[0]),
+					DirObjClass:  C.GoString(&fileoclassName[0]),
+					ChunkSize:    uint64(attrs.doi_chunk_size),
+				},
+			}
+			return cmd.OutputJSON(jsonAttrs, nil)
+		} else {
+			jsonAttrs := &struct {
+				ObjClass  string `json:"oclass"`
+				ChunkSize uint64 `json:"chunk_size"`
+			}{
+				ObjClass:  C.GoString(&oclassName[0]),
+				ChunkSize: uint64(attrs.doi_chunk_size),
+			}
+			return cmd.OutputJSON(jsonAttrs, nil)
 		}
-		return cmd.outputJSON(jsonAttrs, nil)
 	}
 
 	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
-	cmd.Infof("Object Chunk Size = %d", attrs.doi_chunk_size)
-
+	if C.mode_is_dir(cmode) {
+		cmd.Infof("Directory Creation Object Class = %s", C.GoString(&diroclassName[0]))
+		cmd.Infof("File Creation Object Class = %s", C.GoString(&fileoclassName[0]))
+		cmd.Infof("File Creation Chunk Size = %d", attrs.doi_chunk_size)
+	} else {
+		cmd.Infof("Object Chunk Size = %d", attrs.doi_chunk_size)
+	}
 	return nil
 }
 
@@ -284,7 +333,6 @@ type fsCheckCmd struct {
 
 	FsckFlags FsCheckFlag `long:"flags" short:"f" description:"comma-separated flags: print, remove, relink, verify, evict"`
 	DirName   string      `long:"dir-name" short:"n" description:"directory name under lost+found to store leaked oids (a timestamp dir would be created if this is not specified)"`
-	Evict     bool        `long:"evict" short:"e" description:"evict all open handles on the container"`
 }
 
 func (cmd *fsCheckCmd) Execute(_ []string) error {
@@ -425,6 +473,133 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 	if err := dfsError(C.fs_relink_root_hdlr(ap)); err != nil {
 		return errors.Wrapf(err, "Relink Root failed")
 	}
+
+	return nil
+}
+
+type fsDfuseQueryCmd struct {
+	daosCmd
+
+	Ino uint64 `long:"inode" description:"inode number to query"`
+
+	Args struct {
+		Path string `positional-arg-name:"path" description:"DFuse path to query" required:"1"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+
+	ap.path = C.CString(cmd.Args.Path)
+	defer freeString(ap.path)
+	defer deallocCmdArgs()
+
+	if cmd.Ino != 0 {
+		ap.dfuse_mem.ino = C.ulong(cmd.Ino)
+	}
+
+	rc := C.dfuse_count_query(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
+	}
+
+	if cmd.JSONOutputEnabled() {
+		if cmd.Ino == 0 {
+			jsonAttrs := &struct {
+				NumInodes      uint64 `json:"inodes"`
+				NumFileHandles uint64 `json:"open_files"`
+				NumPools       uint64 `json:"pools"`
+				NumContainers  uint64 `json:"containers"`
+			}{
+				NumInodes:      uint64(ap.dfuse_mem.inode_count),
+				NumFileHandles: uint64(ap.dfuse_mem.fh_count),
+				NumPools:       uint64(ap.dfuse_mem.pool_count),
+				NumContainers:  uint64(ap.dfuse_mem.container_count),
+			}
+			return cmd.OutputJSON(jsonAttrs, nil)
+		} else {
+			jsonAttrs := &struct {
+				NumInodes      uint64 `json:"inodes"`
+				NumFileHandles uint64 `json:"open_files"`
+				NumPools       uint64 `json:"pools"`
+				NumContainers  uint64 `json:"containers"`
+				Found          bool   `json:"resident"`
+			}{
+				NumInodes:      uint64(ap.dfuse_mem.inode_count),
+				NumFileHandles: uint64(ap.dfuse_mem.fh_count),
+				NumPools:       uint64(ap.dfuse_mem.pool_count),
+				NumContainers:  uint64(ap.dfuse_mem.container_count),
+				Found:          bool(ap.dfuse_mem.found),
+			}
+			return cmd.OutputJSON(jsonAttrs, nil)
+		}
+	}
+
+	cmd.Infof("DFuse descriptor usage.")
+	cmd.Infof("      Pools: %d", ap.dfuse_mem.pool_count)
+	cmd.Infof(" Containers: %d", ap.dfuse_mem.container_count)
+	cmd.Infof("     Inodes: %d", ap.dfuse_mem.inode_count)
+	cmd.Infof(" Open files: %d", ap.dfuse_mem.fh_count)
+	if cmd.Ino != 0 {
+		if ap.dfuse_mem.found {
+			cmd.Infof(" Inode %d resident", cmd.Ino)
+		} else {
+			cmd.Infof(" Inode %d not resident", cmd.Ino)
+		}
+	}
+
+	return nil
+}
+
+type fsDfuseEvictCmd struct {
+	daosCmd
+
+	Args struct {
+		Path string `positional-arg-name:"path" description:"Path to evict from dfuse" required:"1"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+
+	ap.path = C.CString(cmd.Args.Path)
+	defer freeString(ap.path)
+	defer deallocCmdArgs()
+
+	rc := C.dfuse_evict(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "failed to evict %s", cmd.Args.Path)
+	}
+
+	if cmd.JSONOutputEnabled() {
+		jsonAttrs := &struct {
+			NumInodes      uint64 `json:"inodes"`
+			NumFileHandles uint64 `json:"open_files"`
+			NumPools       uint64 `json:"pools"`
+			NumContainers  uint64 `json:"containers"`
+			Inode          uint64 `json:"inode,omitempty"`
+		}{
+			NumInodes:      uint64(ap.dfuse_mem.inode_count),
+			NumFileHandles: uint64(ap.dfuse_mem.fh_count),
+			NumPools:       uint64(ap.dfuse_mem.pool_count),
+			NumContainers:  uint64(ap.dfuse_mem.container_count),
+			Inode:          uint64(ap.dfuse_mem.ino),
+		}
+		return cmd.OutputJSON(jsonAttrs, nil)
+	}
+
+	cmd.Infof("DFuse descriptor usage.")
+	cmd.Infof(" Evicted inode: %d", ap.dfuse_mem.ino)
+	cmd.Infof("         Pools: %d", ap.dfuse_mem.pool_count)
+	cmd.Infof("    Containers: %d", ap.dfuse_mem.container_count)
+	cmd.Infof("        Inodes: %d", ap.dfuse_mem.inode_count)
+	cmd.Infof("    Open files: %d", ap.dfuse_mem.fh_count)
 
 	return nil
 }

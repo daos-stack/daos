@@ -5,11 +5,10 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
-from general_utils import get_default_config_file, check_pool_files
+from avocado.core.exceptions import TestFail
 from dmg_utils import get_dmg_command
+from general_utils import get_default_config_file
 
 
 class DestroyTests(TestWithServers):
@@ -80,17 +79,20 @@ class DestroyTests(TestWithServers):
         # Start servers with the server group
         self.start_servers(self.get_group(group_name, hosts))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Validate the creation of a pool
-        self.validate_pool_creation(hosts)
+        self.validate_pool_creation(hosts, scm_mount)
 
         # Validate pool destruction
-        self.validate_pool_destroy(hosts, case, exception_expected)
+        self.validate_pool_destroy(hosts, case, scm_mount, exception_expected)
 
-    def validate_pool_creation(self, hosts):
+    def validate_pool_creation(self, hosts, scm_mount):
         """Validate the creation of a pool on the specified list of hosts.
 
         Args:
             hosts (NodeSet): hosts running servers serving the pool
+            scm_mount (str): SCM mount point such as "/mnt/daos"
         """
         # Create a pool
         self.log.info("Create a pool")
@@ -100,16 +102,17 @@ class DestroyTests(TestWithServers):
 
         # Check that the pool was created.
         self.assertTrue(
-            self.pool.check_files(hosts),
+            self.pool.check_files(hosts, scm_mount),
             "Pool data not detected on servers before destroy")
 
-    def validate_pool_destroy(self, hosts, case, exception_expected=False,
+    def validate_pool_destroy(self, hosts, case, scm_mount, exception_expected=False,
                               new_dmg=None, valid_uuid=None):
         """Validate a pool destroy.
 
         Args:
             hosts (NodeSet): hosts running servers serving the pool
             case (str): pool description message
+            scm_mount (str): SCM mount point such as "/mnt/daos"
             exception_expected (bool, optional): is an exception expected to be
                 raised when destroying the pool. Defaults to False.
             new_dmg (DmgCommand): Used to test wrong daos_control.yaml. Defaults to None.
@@ -148,13 +151,15 @@ class DestroyTests(TestWithServers):
         if exception_detected:
             self.log.info("Check pool data still exists after a failed pool destroy")
             self.assertTrue(
-                check_pool_files(log=self.log, hosts=hosts, uuid=valid_uuid.lower()),
+                self.pool.check_pool_files(
+                    hosts=hosts, uuid=valid_uuid.lower(), scm_mount=scm_mount),
                 "Pool data was not detected on servers after "
                 "failing to destroy a pool {}".format(case))
         else:
             self.log.info("Check pool data does not exist after the pool destroy")
             self.assertFalse(
-                check_pool_files(log=self.log, hosts=hosts, uuid=valid_uuid.lower()),
+                self.pool.check_pool_files(
+                    hosts=hosts, uuid=valid_uuid.lower(), scm_mount=scm_mount),
                 "Pool data was detected on servers after destroying a pool {}".format(
                     case))
 
@@ -168,7 +173,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_destroy_single,test_destroy_single
+        :avocado: tags=DestroyTests,test_destroy_single
         """
         hostlist_servers = self.hostlist_servers[:1]
         setname = self.params.get("setname", '/run/setnames/validsetname/')
@@ -182,7 +187,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_destroy_multi,test_destroy_multi
+        :avocado: tags=DestroyTests,test_destroy_multi
         """
         hostlist_servers = self.hostlist_servers[:2]
         setname = self.params.get("setname", '/run/setnames/validsetname/')
@@ -199,24 +204,26 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_destroy_single_loop,test_destroy_single_loop
+        :avocado: tags=DestroyTests,test_destroy_single_loop
         """
         hostlist_servers = self.hostlist_servers[:1]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         counter = 0
         while counter < 10:
             counter += 1
 
             # Create a pool
-            self.validate_pool_creation(hostlist_servers)
+            self.validate_pool_creation(hostlist_servers, scm_mount)
 
             # Attempt to destroy the pool
             self.validate_pool_destroy(
                 hostlist_servers,
-                "with a single server - pass {}".format(counter))
+                "with a single server - pass {}".format(counter), scm_mount)
 
     def test_destroy_multi_loop(self):
         """Test destroy on a large (relative) number of servers.
@@ -224,24 +231,26 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_destroy_multi_loop,test_destroy_multi_loop
+        :avocado: tags=DestroyTests,test_destroy_multi_loop
         """
         hostlist_servers = self.hostlist_servers[:6]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         counter = 0
         while counter < 10:
             counter += 1
 
             # Create a pool
-            self.validate_pool_creation(hostlist_servers)
+            self.validate_pool_creation(hostlist_servers, scm_mount)
 
             # Attempt to destroy the pool
             self.validate_pool_destroy(
                 hostlist_servers,
-                "with multiple servers - pass {}".format(counter))
+                "with multiple servers - pass {}".format(counter), scm_mount)
 
     def test_destroy_invalid_uuid(self):
         """Test destroying a pool uuid that doesn't exist.
@@ -249,7 +258,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_destroy_invalid_uuid,test_destroy_invalid_uuid
+        :avocado: tags=DestroyTests,test_destroy_invalid_uuid
         """
         hostlist_servers = self.hostlist_servers[:1]
         setname = self.params.get("setname", '/run/setnames/validsetname/')
@@ -257,8 +266,10 @@ class DestroyTests(TestWithServers):
         # Start servers
         self.start_servers(self.get_group(setname, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Create a pool
-        self.validate_pool_creation(hostlist_servers)
+        self.validate_pool_creation(hostlist_servers, scm_mount)
 
         # Change the pool uuid
         valid_uuid = self.pool.uuid
@@ -269,9 +280,8 @@ class DestroyTests(TestWithServers):
         # Attempt to destroy the pool with an invalid UUID
         self.validate_pool_destroy(
             hosts=hostlist_servers,
-            case="with an invalid UUID {}".format(
-                self.pool.pool.get_uuid_str()),
-            exception_expected=True, valid_uuid=valid_uuid)
+            case="with an invalid UUID {}".format(self.pool.pool.get_uuid_str()),
+            scm_mount=scm_mount, exception_expected=True, valid_uuid=valid_uuid)
 
         # Restore the valid uuid to allow tearDown() to pass
         self.log.info("Restoring the pool's valid uuid: %s", valid_uuid)
@@ -284,7 +294,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_destroy_invalid_label,test_destroy_invalid_label
+        :avocado: tags=DestroyTests,test_destroy_invalid_label
         """
         hostlist_servers = self.hostlist_servers[:1]
         setname = self.params.get("setname", '/run/setnames/validsetname/')
@@ -292,8 +302,10 @@ class DestroyTests(TestWithServers):
         # Start servers
         self.start_servers(self.get_group(setname, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Create a pool
-        self.validate_pool_creation(hostlist_servers)
+        self.validate_pool_creation(hostlist_servers, scm_mount)
 
         # Change the pool label
         valid_label = self.pool.label.value
@@ -303,7 +315,7 @@ class DestroyTests(TestWithServers):
         # Attempt to destroy the pool with an invalid label
         self.validate_pool_destroy(
             hosts=hostlist_servers,
-            case="with an invalid label {}".format(valid_label),
+            case="with an invalid label {}".format(valid_label), scm_mount=scm_mount,
             exception_expected=True)
 
         # Restore the valid label to allow tearDown() to pass
@@ -344,7 +356,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_destroy_wrong_group,test_destroy_wrong_group
+        :avocado: tags=DestroyTests,test_destroy_wrong_group
         """
         server_group_a = self.server_group + "_a"
         server_group_b = self.server_group + "_b"
@@ -372,6 +384,11 @@ class DestroyTests(TestWithServers):
         }
         self.start_servers(server_groups=server_groups_a_b)
 
+        # In all three cases, we check whether the pool directory exists in server group a
+        # (hostlist_servers[0:1]). Because server managers are created by iterating the
+        # dictionary, first item is added to server_managers first, so we use index 0.
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         self.add_pool(connect=False)
 
         # Get dmg_c instance that uses daos_control_c.yml. Server group is b.
@@ -391,21 +408,21 @@ class DestroyTests(TestWithServers):
         # of the group name mismatch.
         case_c = "Pool is in a, hostlist is a, and name is b."
         self.validate_pool_destroy(
-            hosts=self.hostlist_servers[0:1], case=case_c,
+            hosts=self.hostlist_servers[0:1], case=case_c, scm_mount=scm_mount,
             exception_expected=True, new_dmg=dmg_c)
 
         # Try destroying the pool in server a with the dmg that uses
         # daos_control_b.yml. Should fail because the pool doesn't exist in b.
         case_b = "Pool is in a, hostlist is b, and name is b."
         self.validate_pool_destroy(
-            hosts=self.hostlist_servers[0:1], case=case_b,
+            hosts=self.hostlist_servers[0:1], case=case_b, scm_mount=scm_mount,
             exception_expected=True, new_dmg=self.server_managers[1].dmg)
 
         # Try destroying the pool in server a with the dmg that uses
         # daos_control_a.yml. Should pass.
         case_a = "Pool is in a, hostlist is a, and name is a."
         self.validate_pool_destroy(
-            hosts=self.hostlist_servers[0:1], case=case_a,
+            hosts=self.hostlist_servers[0:1], case=case_a, scm_mount=scm_mount,
             exception_expected=False, new_dmg=self.server_managers[0].dmg)
 
     def test_destroy_connected(self):
@@ -417,15 +434,17 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_destroy_connected,test_destroy_connected
+        :avocado: tags=DestroyTests,test_destroy_connected
         """
         hostlist_servers = self.hostlist_servers[0:1]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Create the pool
-        self.validate_pool_creation(hostlist_servers)
+        self.validate_pool_creation(hostlist_servers, scm_mount)
 
         # Connect to the pool
         self.assertTrue(
@@ -452,7 +471,7 @@ class DestroyTests(TestWithServers):
 
         self.log.info("Check if files still exist")
         self.assertTrue(
-            self.pool.check_files(hostlist_servers),
+            self.pool.check_files(hostlist_servers, scm_mount),
             "Pool UUID {} should not be removed when connected".format(self.pool.uuid))
 
         self.assertTrue(
@@ -467,15 +486,17 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_force_destroy_connected,test_forcedestroy_connected
+        :avocado: tags=DestroyTests,test_forcedestroy_connected
         """
         hostlist_servers = self.hostlist_servers[0:1]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Create the pool
-        self.validate_pool_creation(hostlist_servers)
+        self.validate_pool_creation(hostlist_servers, scm_mount)
 
         # Connect to the pool
         self.assertTrue(
@@ -508,12 +529,14 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_destroy_with_containers,test_destroy_with_containers
+        :avocado: tags=DestroyTests,test_destroy_with_containers
         """
         hostlist_servers = self.hostlist_servers[0:1]
 
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
+
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
 
         # Create the pool
         self.add_pool()
@@ -538,7 +561,7 @@ class DestroyTests(TestWithServers):
 
         self.log.info("Check if files still exist")
         self.assertTrue(
-            self.pool.check_files(hostlist_servers),
+            self.pool.check_files(hostlist_servers, scm_mount),
             "Pool UUID {} should not be removed when containers exist".format(self.pool.uuid))
 
         self.assertTrue(
@@ -553,7 +576,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=pool_recursive_destroy_with_containers,test_recursivedestroy_with_containers
+        :avocado: tags=DestroyTests,test_recursivedestroy_with_containers
         """
         hostlist_servers = self.hostlist_servers[0:1]
 

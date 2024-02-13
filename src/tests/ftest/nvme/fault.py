@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from nvme_utils import ServerFillUp
 from exception_utils import CommandFailure
+from nvme_utils import ServerFillUp
 
 
 class NvmeFault(ServerFillUp):
@@ -37,7 +37,7 @@ class NvmeFault(ServerFillUp):
         :avocado: tags=nvme_fault,test_nvme_fault
         """
         # Create the Pool with Maximum NVMe size
-        self.create_pool_max_size(nvme=True)
+        self.add_pool()
 
         # Start the IOR Command and generate the NVMe fault.
         self.start_ior_load(operation="Auto_Write", percent=self.capacity)

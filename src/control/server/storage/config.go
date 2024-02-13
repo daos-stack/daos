@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -43,6 +43,7 @@ const (
 	accelOptMoveName = "move"
 	accelOptCRCName  = "crc"
 
+	bdevRoleNoneName = "na"
 	bdevRoleDataName = "data"
 	bdevRoleMetaName = "meta"
 	bdevRoleWALName  = "wal"
@@ -252,10 +253,18 @@ func (tcs TierConfigs) getBdevs(nvmeOnly bool) *BdevDeviceList {
 }
 
 func (tcs TierConfigs) Bdevs() *BdevDeviceList {
+	if len(tcs) == 0 {
+		return new(BdevDeviceList)
+	}
+
 	return tcs.getBdevs(false)
 }
 
 func (tcs TierConfigs) NVMeBdevs() *BdevDeviceList {
+	if len(tcs) == 0 {
+		return new(BdevDeviceList)
+	}
+
 	return tcs.getBdevs(true)
 }
 
@@ -281,18 +290,34 @@ func (tcs TierConfigs) checkBdevs(nvmeOnly, emulOnly bool) bool {
 }
 
 func (tcs TierConfigs) HaveBdevs() bool {
+	if len(tcs) == 0 {
+		return false
+	}
+
 	return tcs.checkBdevs(false, false)
 }
 
 func (tcs TierConfigs) HaveRealNVMe() bool {
+	if len(tcs) == 0 {
+		return false
+	}
+
 	return tcs.checkBdevs(true, false)
 }
 
 func (tcs TierConfigs) HaveEmulatedNVMe() bool {
+	if len(tcs) == 0 {
+		return false
+	}
+
 	return tcs.checkBdevs(false, true)
 }
 
 func (tcs TierConfigs) HasBdevRoleMeta() bool {
+	if len(tcs) == 0 {
+		return false
+	}
+
 	for _, bc := range tcs.BdevConfigs() {
 		bits := bc.Bdev.DeviceRoles.OptionBits
 		if (bits & BdevRoleMeta) != 0 {
@@ -441,16 +466,22 @@ func (tcs TierConfigs) validateBdevRoles() error {
 //     second bdev tier and Data to all remaining bdev tiers.
 //   - If the scm tier is of class dcpm, the first (and only) bdev tier should have the Data role.
 //   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
-func (tcs TierConfigs) AssignBdevTierRoles() error {
+func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
+	if len(tcs) == 0 {
+		return errors.New("no storage tiers configured")
+	}
+
+	if extMetadataPath == "" {
+		return nil // MD-on-SSD not enabled.
+	}
+
 	scs := tcs.ScmConfigs()
 
-	// Require tier-0 to be a SCM tier.
 	if len(scs) != 1 || scs[0].Tier != 0 {
-		return errors.New("first storage tier is not scm")
+		return errors.New("first storage tier is not of type scm")
 	}
-	// No roles should be assigned if scm tier is DCPM.
 	if scs[0].Class == ClassDcpm {
-		return nil
+		return errors.New("external metadata path for md-on-ssd invalid with dcpm scm-class")
 	}
 	// Skip role assignment and validation if no real NVMe tiers exist.
 	if !tcs.HaveRealNVMe() {
@@ -844,6 +875,9 @@ func (obs *OptionBits) fromStrings(optStr2Flag optFlagMap, opts ...string) error
 		if len(opt) == 0 {
 			continue
 		}
+		if strings.ToLower(opt) == bdevRoleNoneName {
+			break
+		}
 		flag, exists := optStr2Flag[opt]
 		if !exists {
 			return FaultBdevConfigOptFlagUnknown(opt, optStr2Flag.keys()...)
@@ -891,13 +925,19 @@ func (bdr BdevRoles) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON decodes user readable roles string into bitmask.
 func (bdr *BdevRoles) UnmarshalJSON(data []byte) error {
 	str := strings.Trim(strings.ToLower(string(data)), "\"")
+	if str == bdevRoleNoneName {
+		bdr.OptionBits = OptionBits(0)
+		return nil
+	}
+
 	return bdr.fromStrings(roleOptFlags, strings.Split(str, ",")...)
 }
 
 func (bdr *BdevRoles) String() string {
-	if bdr == nil {
-		return "none"
+	if bdr == nil || bdr.IsEmpty() {
+		return strings.ToUpper(bdevRoleNoneName)
 	}
+
 	return bdr.toString(roleOptFlags)
 }
 
@@ -1058,6 +1098,14 @@ type SpdkRpcServer struct {
 	SockAddr string `yaml:"sock_addr,omitempty" json:"sock_addr"`
 }
 
+// BdevAutoFaulty struct describes settings for detection of faulty NVMe devices within the BIO
+// module of the engine process.
+type BdevAutoFaulty struct {
+	Enable      bool   `yaml:"enable,omitempty" json:"enable"`
+	MaxIoErrs   uint32 `yaml:"max_io_errs,omitempty" json:"max_io_errs"`
+	MaxCsumErrs uint32 `yaml:"max_csum_errs,omitempty" json:"max_csum_errs"`
+}
+
 type Config struct {
 	ControlMetadata  ControlMetadata `yaml:"-"` // inherited from server
 	EngineIdx        uint            `yaml:"-"`
@@ -1068,6 +1116,7 @@ type Config struct {
 	NumaNodeIndex    uint            `yaml:"-"`
 	AccelProps       AccelProps      `yaml:"acceleration,omitempty"`
 	SpdkRpcSrvProps  SpdkRpcServer   `yaml:"spdk_rpc_server,omitempty"`
+	AutoFaultyProps  BdevAutoFaulty  `yaml:"bdev_auto_faulty,omitempty"`
 }
 
 func (c *Config) SetNUMAAffinity(node uint) {

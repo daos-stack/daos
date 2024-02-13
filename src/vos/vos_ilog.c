@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -273,8 +273,7 @@ vos_ilog_fetch_internal(struct umem_instance *umm, daos_handle_t coh, uint32_t i
 	if (rc == -DER_NONEXIST)
 		goto init;
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
-			 "Could not fetch ilog: "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR, rc, "Could not fetch ilog");
 		return rc;
 	}
 
@@ -429,7 +428,7 @@ update:
 	}
 
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, dth == NULL, &loh);
 	if (rc != 0) {
 		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -526,7 +525,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 
 punch_log:
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, dth == NULL, &loh);
 	if (rc != 0) {
 		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
 		return rc;

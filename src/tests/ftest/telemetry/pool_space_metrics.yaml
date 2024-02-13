@@ -1,7 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 1
-timeout: 120
+timeout: 180
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -44,7 +44,7 @@ ior:
   env_vars:
     - D_LOG_MASK=INFO
 mpirun:
-  bind_to: socket
+  args: "--bind-to socket"
 
 scm_metric_thresholds:
   # Maximal metadata size is empirically adjusted to 8MiB

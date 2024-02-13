@@ -7,8 +7,10 @@
 #include <errno.h>
 #include <getopt.h>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
+#include <string.h>
 
 #include <sys/types.h>
 #include <hwloc.h>
@@ -17,9 +19,9 @@
 
 #include "dfuse.h"
 
-#include "daos_fs.h"
-#include "daos_api.h"
-#include "daos_uns.h"
+#include <daos_fs.h>
+#include <daos_api.h>
+#include <daos_uns.h>
 
 #include <gurt/common.h>
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
@@ -192,6 +194,10 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 		return -DER_INVAL;
 	}
 
+	rc = ival_thread_start(dfuse_info);
+	if (rc != 0)
+		D_GOTO(umount, rc = daos_errno2der(rc));
+
 	rc = dfuse_send_to_fg(0);
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
@@ -202,8 +208,9 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 	else
 		rc = fuse_session_loop(dfuse_info->di_session);
 	if (rc != 0)
-		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d (%s)", rc, strerror(rc));
+		DHS_ERROR(dfuse_info, rc, "Fuse loop exited");
+
+umount:
 
 	fuse_session_unmount(dfuse_info->di_session);
 
@@ -239,19 +246,18 @@ show_version(char *name)
 	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n", name, DAOS_VERSION,
 		DAOS_API_VERSION_MAJOR, DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 	fprintf(stdout, "Using fuse %s\n", fuse_pkgversion());
-#if HAVE_CACHE_READDIR
 	fprintf(stdout, "Kernel readdir support enabled\n");
-#endif
 };
 
 static void
 show_help(char *name)
 {
 	printf(
-	    "usage: %s <mountpoint> [pool] [container]\n"
+	    "usage: %s [OPTIONS] [mountpoint [pool container]]\n"
+	    "\n"
 	    "Options:\n"
 	    "\n"
-	    "	-m --mountpoint=<path>	Mount point to use\n"
+	    "	-m --mountpoint=<path>	Mount point to use (deprecated, use positional argument)\n"
 	    "\n"
 	    "	   --pool=name		pool UUID/label\n"
 	    "	   --container=name	container UUID/label\n"
@@ -259,8 +265,8 @@ show_help(char *name)
 	    "	   --sys-name=STR	DAOS system name context for servers\n"
 	    "\n"
 	    "	-S --singlethread	Single threaded\n"
-	    "	-t --thread-count=count	Number of threads to use\n"
-	    "   -e --eq-count=count     Number of event queues to use\n"
+	    "	-t --thread-count=count	Total number of threads to use\n"
+	    "	-e --eq-count=count	Number of event queues to use\n"
 	    "	-f --foreground		Run in foreground\n"
 	    "	   --enable-caching	Enable all caching (default)\n"
 	    "	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
@@ -268,51 +274,113 @@ show_help(char *name)
 	    "	   --disable-wb-cache	Use write-through rather than write-back cache\n"
 	    "	-o options		mount style options string\n"
 	    "\n"
-	    "      --multi-user		Run dfuse in multi user mode\n"
+	    "	   --multi-user		Run dfuse in multi user mode\n"
 	    "\n"
 	    "	-h --help		Show this help\n"
 	    "	-v --version		Show version\n"
 	    "\n"
-	    "Specifying pool and container are optional. If not set then dfuse can connect to\n"
-	    "many using the uuids as leading components of the path.\n"
-	    "Pools and containers can be specified using either uuids or labels.\n"
+	    "dfuse performs a user space mount of a DAOS POSIX container at the mountpoint\n"
+	    "directory that is specified as the first positional argument. This directory\n"
+	    "has to exist and has to be accessible to the user, or the mount will fail.\n"
+	    "Alternatively, the mountpoint directory can also be specified with the -m or\n"
+	    "--mountpoint= option but this usage is deprecated.\n"
 	    "\n"
-	    "The path option can be use to set a filesystem path from which Namespace attributes\n"
-	    "will be loaded, or if path is not set then the mount directory will also be\n"
-	    "checked.  Only one way of setting pool and container data should be used.\n"
+	    "The DAOS pool and container can be specified in several different ways\n"
+	    "(only one way of specifying the pool and container should be used):\n"
+	    "* The DAOS pool and container can be explicitly specified on the command line\n"
+	    "  as positional arguments, using either UUIDs or labels. This is the most\n"
+	    "  common way to use dfuse to mount a POSIX container.\n"
+	    "* The DAOS pool and container can be explicitly specified on the command line\n"
+	    "  using the --pool and --container options, with either UUIDs or labels.\n"
+	    "  This usage is deprecated in favor of using positional arguments.\n"
+	    "* When the --path option is used, DAOS namespace attributes are loaded from\n"
+	    "  that filesystem path, including the DAOS pool and container information.\n"
+	    "* When the --path option is not used, then the mountpoint directory will also\n"
+	    "  be checked and DAOS namespace attributes will be loaded from there if present.\n"
+	    "* When using the -o mount option string, pool= and container= keys in the mount\n"
+	    "  option string identify the DAOS pool and container.\n"
+	    "* When the pool and container are not specified through any of these methods,\n"
+	    "  dfuse will construct filesystem pathnames under the mountpoint by using the\n"
+	    "  pool and container UUIDs (not labels) of *all* pools and POSIX containers to\n"
+	    "  which the user running dfuse has access as pathname components.\n"
+	    "  - A path to a POSIX container that is mounted this way can be traversed to\n"
+	    "    access the root of that container, for example by changing directory to\n"
+	    "    /mountpoint/pool_uuid/cont_uuid/.\n"
+	    "  - However, listing the /mountpoint/ directory is not supported and will not\n"
+	    "    show the pool UUIDs that are mounted there.\n"
+	    "  - Similarly, while the user can change directory into a /mountpoint/pool_uuid/\n"
+	    "    directory, listing that directory is not supported and will not show the\n"
+	    "    container UUIDs that are mounted there.\n"
+	    "  - Running 'fusermount3 -u /mountpoint' will unmount *all* POSIX containers that\n"
+	    "    have been mounted this way, as well as the /mountpoint/pool_uuid/ directories.\n"
 	    "\n"
-	    "The default thread count is one per available core to allow maximum throughput,\n"
-	    "this can be modified by running dfuse in a cpuset via numactl or similar tools or\n"
-	    "by using the --thread-count option.\n"
-	    "dfuse has two types of threads: fuse threads which accept requests from the kernel\n"
-	    "and process them, and progress threads which complete asynchronous read/write\n"
-	    "operations.  Each asynchronous thread will have one daos event queue so consume\n"
-	    "additional network resources.  The --thread-count option will control the total\n"
-	    "number of threads, increasing the --eq-count option will reduce the number of\n"
-	    "fuse threads accordingly.  The default value for eq-count is 1.\n"
-	    "As all metadata operations are blocking the level of concurrency is limited by the\n"
-	    "number of fuse threads."
-	    "Singlethreaded mode will use one thread for handling fuse requests and a second\n"
-	    "thread for a single event queue for a total of two threads\n"
+	    "Threading and resource usage:\n"
+	    "dfuse has two types of threads: fuse threads which accept and process requests from\n"
+	    "the kernel, and progress threads which complete asynchronous read/write operations.\n"
+	    "Each asynchronous progress thread uses one DAOS event queue to consume additional\n"
+	    "network resources. As all metadata operations are blocking, the level of concurrency\n"
+	    "in dfuse is limited by the number of fuse threads.\n"
+	    "By default, the total thread count is one per available core to allow maximum\n"
+	    "throughput. If hyperthreading is enabled, then one thread per hyperthread core\n"
+	    "is used. This can be modified in two ways: Reducing the number of available\n"
+	    "cores by running dfuse in a cpuset via numactl or similar tools,\n"
+	    "or by using the --thread-count, --eq-count or --singlethread options:\n"
+	    "* The --thread-count option controls the total number of threads.\n"
+	    "* Increasing the --eq-count option at a fixed --thread-count will reduce the number\n"
+	    "  of fuse threads accordingly. The default value for --eq-count is 1.\n"
+	    "* The --singlethread mode will use one thread for handling fuse requests and a\n"
+	    "  second thread for a single event queue, for a total of two threads.\n"
 	    "\n"
 	    "If dfuse is running in background mode (the default unless launched via mpirun)\n"
 	    "then it will stay in the foreground until the mount is registered with the\n"
 	    "kernel to allow appropriate error reporting.\n"
 	    "\n"
-	    "The -o is to allow use of dfuse via fstab or similar and accepts standard mount\n"
-	    "options.  This will be treated as a comma separated list of key=value pairs and\n"
-	    "dfuse will use pool= and container= keys from this string.\n"
+	    "The -o option can be used to run dfuse via fstab or similar and accepts standard\n"
+	    "mount options.  This will be treated as a comma separated list of key=value pairs,\n"
+	    "and dfuse will use pool= and container= keys from this string.\n"
 	    "\n"
-	    "Caching is on by default with short metadata timeouts and write-back data cache,\n"
-	    "this can be disabled entirely for the mount by the use of command line options.\n"
-	    "Further settings can be set on a per-container basis via the use of container\n"
-	    "attributes.  If the --disable-caching option is given then no caching will be\n"
-	    "performed and the container attributes are not used, if --disable-wb-cache is\n"
-	    "given the data caching for the whole mount is performed in write-back mode and\n"
-	    "the container attributes are still used\n"
+	    "Caching is on by default. The caching behavior for a dfuse mount can be controlled\n"
+	    "by command line options. Further caching controls can be set on a per-container\n"
+	    "basis through container attributes.\n"
+	    "* If the --disable-caching option is used then no caching will be performed, and the\n"
+	    "  container attributes are not used. The default is --enable-caching.\n"
+	    "* If --disable-wb-cache is used then the write operations for the whole mount are\n"
+	    "  performed in write-through mode, and the container attributes are still used.\n"
+	    "  The default is --enable-wb-cache.\n"
+	    "* If --disable-caching and --enable-wb-cache are both specified,\n"
+	    "  the --enable-wb-cache option is ignored and no caching is performed.\n"
 	    "\n"
-	    "version: %s\n",
+	    "Version: %s\n",
 	    name, DAOS_VERSION);
+}
+
+/*
+ * Checks whether a mountpoint path is a valid file descriptor.
+ *
+ * Returns the file descriptor on success, -1 on failure.
+ */
+static int
+check_fd_mountpoint(const char *mountpoint)
+{
+	int fd  = -1;
+	int len = 0;
+	int fd_flags;
+	int res;
+
+	res = sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len);
+	if (res != 1) {
+		return -1;
+	}
+	if (len != strnlen(mountpoint, NAME_MAX)) {
+		return -1;
+	}
+
+	fd_flags = fcntl(fd, F_GETFD);
+	if (fd_flags == -1) {
+		return -1;
+	}
+
+	return fd;
 }
 
 int
@@ -351,6 +419,8 @@ main(int argc, char **argv)
 					     {"help", no_argument, 0, 'h'},
 					     {0, 0, 0, 0}};
 
+	d_signal_stack_enable(true);
+
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -365,7 +435,7 @@ main(int argc, char **argv)
 	dfuse_info->di_eq_count = 1;
 
 	while (1) {
-		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
+		c = getopt_long(argc, argv, "Mm:St:o:fhe:v", long_options, NULL);
 
 		if (c == -1)
 			break;
@@ -457,7 +527,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (!dfuse_info->di_foreground && getenv("PMIX_RANK")) {
+	if (!dfuse_info->di_foreground && d_isenv_def("PMIX_RANK")) {
 		DFUSE_TRA_WARNING(dfuse_info,
 				  "Not running in background under orterun");
 		dfuse_info->di_foreground = true;
@@ -550,8 +620,7 @@ main(int argc, char **argv)
 		}
 
 		rc = duns_resolve_path(path, &path_attr);
-		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path: %d (%s)", rc,
-			       strerror(rc));
+		DHS_INFO(dfuse_info, rc, "duns_resolve_path() on path");
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -595,8 +664,18 @@ main(int argc, char **argv)
 		duns_destroy_attr(&duns_attr);
 
 	} else if (rc == ENOENT) {
-		printf("Mount point does not exist\n");
-		D_GOTO(out_daos, rc = daos_errno2der(rc));
+		/* In order to allow FUSE daemons to run without privileges, libfuse
+		 * allows the caller to open /dev/fuse and pass the file descriptor by
+		 * specifying /dev/fd/N as the mountpoint. In some cases, realpath may
+		 * fail for these paths.
+		 */
+		int fd = check_fd_mountpoint(dfuse_info->di_mountpoint);
+		if (fd < 0) {
+			DFUSE_TRA_WARNING(dfuse_info, "Mount point is not a valid file descriptor");
+			printf("Mount point does not exist\n");
+			D_GOTO(out_daos, rc = daos_errno2der(rc));
+		}
+		DFUSE_LOG_INFO("Mounting FUSE file descriptor %d", fd);
 	} else if (rc == ENOTCONN) {
 		printf("Stale mount point, run fusermount3 and retry\n");
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -644,10 +723,19 @@ out_cont:
 out_pool:
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_daos:
+	ival_thread_stop();
+
 	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 out_fini:
+	if (dfuse_info) {
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_inode_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_fh_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_pool_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_container_count) == 0);
+	}
+
 	DFUSE_TRA_DOWN(dfuse_info);
 	daos_fini();
 out_debug:

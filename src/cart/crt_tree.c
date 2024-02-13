@@ -27,7 +27,7 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	rc = d_rank_list_dup_sort_uniq(&grp_rank_list, membs);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup failed, rc: %d.\n", rc);
+		D_ERROR("d_rank_list_dup failed, rc " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(grp_rank_list != NULL);
@@ -213,8 +213,8 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 					    &grp_rank_list, &allocated);
 	if (rc != 0) {
 		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
-			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-			root, self, rc);
+			"self %d) failed, rc " DF_RC "\n",
+			grp_priv->gp_pub.cg_grpid, root, self, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

@@ -31,7 +31,8 @@ The current state of work can be summarized as follows :
     pools/containers as `<pool-uuid>/<container-uuid>` relative paths.
 
 -   `daos` foreign support is enabled at mount time with the `symlink=` option
-    present or dynamically, through the `llite.*.daos_enable` setting.
+    present or dynamically, through the `llite.*.foreign_symlink_enable` Lustre
+    dynamic tuneable.
 
 ### Building and using a DAOS-aware Lustre version
 

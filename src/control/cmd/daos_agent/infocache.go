@@ -139,9 +139,6 @@ func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
 		return errors.New("cachedAttachInfo is nil")
 	}
 
-	ci.Lock()
-	defer ci.Unlock()
-
 	req := &control.GetAttachInfoReq{System: ci.system, AllRanks: true}
 	resp, err := ci.fetch(ctx, ci.rpcClient, req)
 	if err != nil {
@@ -184,9 +181,6 @@ func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
 	if cfi == nil {
 		return errors.New("cachedFabricInfo is nil")
 	}
-
-	cfi.Lock()
-	defer cfi.Unlock()
 
 	results, err := cfi.fetch(ctx)
 	if err != nil {
@@ -328,7 +322,28 @@ func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.Get
 		return nil, errors.Errorf("unexpected attach info data type %T", item)
 	}
 
-	return cai.lastResponse, nil
+	return copyGetAttachInfoResp(cai.lastResponse), nil
+}
+
+func copyGetAttachInfoResp(orig *control.GetAttachInfoResp) *control.GetAttachInfoResp {
+	if orig == nil {
+		return nil
+	}
+
+	cp := new(control.GetAttachInfoResp)
+	*cp = *orig
+
+	// Copy slices instead of using original pointers
+	cp.MSRanks = make([]uint32, len(orig.MSRanks))
+	_ = copy(cp.MSRanks, orig.MSRanks)
+	cp.ServiceRanks = make([]*control.PrimaryServiceRank, len(orig.ServiceRanks))
+	_ = copy(cp.ServiceRanks, orig.ServiceRanks)
+
+	if orig.ClientNetHint.EnvVars != nil {
+		cp.ClientNetHint.EnvVars = make([]string, len(orig.ClientNetHint.EnvVars))
+		_ = copy(cp.ClientNetHint.EnvVars, orig.ClientNetHint.EnvVars)
+	}
+	return cp
 }
 
 func (c *InfoCache) getAttachInfoRemote(ctx context.Context, sys string) (*control.GetAttachInfoResp, error) {

@@ -5,9 +5,9 @@
 """
 
 from ClusterShell.NodeSet import NodeSet
+from dbench_utils import Dbench
 from dfuse_test_base import DfuseTestBase
 from exception_utils import CommandFailure
-from dbench_utils import Dbench
 
 
 class DbenchTest(DfuseTestBase):

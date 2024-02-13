@@ -43,7 +43,7 @@ dfs_hdl_insert(const char *str, int type, const char *pool, daos_handle_t *oh,
 	       struct dfs_mnt_hdls **_hdl);
 int
 dfs_hdl_cont_destroy(const char *pool, const char *cont, bool force);
-int
+bool
 dfs_is_init();
 
 /*
@@ -126,6 +126,10 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr);
  */
 int
 dfs_relink_root(daos_handle_t coh);
+
+/** Internal routine for async ostat.*/
+int
+dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

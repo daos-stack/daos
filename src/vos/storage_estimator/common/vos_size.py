@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import random
 import math
+import random
 
 
 def convert(stat):

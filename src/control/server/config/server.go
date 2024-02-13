@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -39,26 +40,25 @@ const (
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
-	ControlPort         int                       `yaml:"port"`
-	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
-	Engines             []*engine.Config          `yaml:"engines"`
-	BdevExclude         []string                  `yaml:"bdev_exclude,omitempty"`
-	DisableVFIO         bool                      `yaml:"disable_vfio"`
-	DisableVMD          *bool                     `yaml:"disable_vmd"`
-	EnableHotplug       bool                      `yaml:"enable_hotplug"`
-	NrHugepages         int                       `yaml:"nr_hugepages"`        // total for all engines
-	SystemRamReserved   int                       `yaml:"system_ram_reserved"` // total for all engines
-	DisableHugepages    bool                      `yaml:"disable_hugepages"`
-	ControlLogMask      common.ControlLogLevel    `yaml:"control_log_mask"`
-	ControlLogFile      string                    `yaml:"control_log_file,omitempty"`
-	ControlLogJSON      bool                      `yaml:"control_log_json,omitempty"`
-	HelperLogFile       string                    `yaml:"helper_log_file,omitempty"`
-	FWHelperLogFile     string                    `yaml:"firmware_helper_log_file,omitempty"`
-	RecreateSuperblocks bool                      `yaml:"recreate_superblocks,omitempty"`
-	FaultPath           string                    `yaml:"fault_path,omitempty"`
-	TelemetryPort       int                       `yaml:"telemetry_port,omitempty"`
-	CoreDumpFilter      uint8                     `yaml:"core_dump_filter,omitempty"`
-	ClientEnvVars       []string                  `yaml:"client_env_vars,omitempty"`
+	ControlPort       int                       `yaml:"port"`
+	TransportConfig   *security.TransportConfig `yaml:"transport_config"`
+	Engines           []*engine.Config          `yaml:"engines"`
+	BdevExclude       []string                  `yaml:"bdev_exclude,omitempty"`
+	DisableVFIO       bool                      `yaml:"disable_vfio"`
+	DisableVMD        *bool                     `yaml:"disable_vmd"`
+	EnableHotplug     bool                      `yaml:"enable_hotplug"`
+	NrHugepages       int                       `yaml:"nr_hugepages"`        // total for all engines
+	SystemRamReserved int                       `yaml:"system_ram_reserved"` // total for all engines
+	DisableHugepages  bool                      `yaml:"disable_hugepages"`
+	ControlLogMask    common.ControlLogLevel    `yaml:"control_log_mask"`
+	ControlLogFile    string                    `yaml:"control_log_file,omitempty"`
+	ControlLogJSON    bool                      `yaml:"control_log_json,omitempty"`
+	HelperLogFile     string                    `yaml:"helper_log_file,omitempty"`
+	FWHelperLogFile   string                    `yaml:"firmware_helper_log_file,omitempty"`
+	FaultPath         string                    `yaml:"fault_path,omitempty"`
+	TelemetryPort     int                       `yaml:"telemetry_port,omitempty"`
+	CoreDumpFilter    uint8                     `yaml:"core_dump_filter,omitempty"`
+	ClientEnvVars     []string                  `yaml:"client_env_vars,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
@@ -78,18 +78,14 @@ type Server struct {
 
 	// Legacy config file parameters stored in a separate struct.
 	Legacy ServerLegacy `yaml:",inline"`
+
+	// Behavior flags
+	AutoFormat bool `yaml:"-"`
 }
 
 // WithCoreDumpFilter sets the core dump filter written to /proc/self/coredump_filter.
 func (cfg *Server) WithCoreDumpFilter(filter uint8) *Server {
 	cfg.CoreDumpFilter = filter
-	return cfg
-}
-
-// WithRecreateSuperblocks indicates that a missing superblock should not be treated as
-// an error. The server will create new superblocks as necessary.
-func (cfg *Server) WithRecreateSuperblocks() *Server {
-	cfg.RecreateSuperblocks = true
 	return cfg
 }
 
@@ -132,7 +128,7 @@ func (cfg *Server) WithFabricProvider(provider string) *Server {
 // WithFabricAuthKey sets the top-level fabric authorization key.
 func (cfg *Server) WithFabricAuthKey(key string) *Server {
 	cfg.Fabric.AuthKey = key
-	cfg.ClientEnvVars = common.MergeEnvVars(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
+	cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	for _, engine := range cfg.Engines {
 		engine.Fabric.AuthKey = cfg.Fabric.AuthKey
 	}
@@ -354,6 +350,10 @@ func (cfg *Server) Load() error {
 			cfg.Path)
 	}
 
+	if !daos.SystemNameIsValid(cfg.SystemName) {
+		return errors.Errorf("invalid system name: %q", cfg.SystemName)
+	}
+
 	// Update server config based on legacy parameters.
 	if err := updateFromLegacyParams(cfg); err != nil {
 		return errors.Wrap(err, "updating config from legacy parameters")
@@ -365,7 +365,7 @@ func (cfg *Server) Load() error {
 	}
 
 	if cfg.Fabric.AuthKey != "" {
-		cfg.ClientEnvVars = common.MergeEnvVars(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
+		cfg.ClientEnvVars = common.MergeKeyValues(cfg.ClientEnvVars, []string{cfg.Fabric.GetAuthKeyEnv()})
 	}
 
 	return nil
@@ -409,21 +409,23 @@ func (cfg *Server) SaveActiveConfig(log logging.Logger) {
 	log.Debugf("active config saved to %s (read-only)", activeConfig)
 }
 
-func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
+// GetAccessPointPort returns port number suffixed to AP address after its validation or 0 if no
+// port number specified. Error returned if validation fails.
+func GetAccessPointPort(log logging.Logger, addr string) (int, error) {
 	if !common.HasPort(addr) {
-		return fmt.Sprintf("%s:%d", addr, portDefault), nil
+		return 0, nil
 	}
 
-	host, port, err := net.SplitHostPort(addr)
+	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		log.Errorf("invalid access point %q: %s", addr, err)
-		return "", FaultConfigBadAccessPoints
+		return 0, FaultConfigBadAccessPoints
 	}
 
 	portNum, err := strconv.Atoi(port)
 	if err != nil {
 		log.Errorf("invalid access point port: %s", err)
-		return "", FaultConfigBadControlPort
+		return 0, FaultConfigBadControlPort
 	}
 	if portNum <= 0 {
 		m := "zero"
@@ -431,16 +433,34 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 			m = "negative"
 		}
 		log.Errorf("access point port cannot be %s", m)
-		return "", FaultConfigBadControlPort
+		return 0, FaultConfigBadControlPort
 	}
 
-	// warn if access point port differs from config control port
+	return portNum, nil
+}
+
+// getAccessPointAddrWithPort appends default port number to address if custom port is not
+// specified, otherwise custom specified port is validated.
+func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
+	portNum, err := GetAccessPointPort(log, addr)
+	if err != nil {
+		return "", err
+	}
+	if portNum == 0 {
+		return fmt.Sprintf("%s:%d", addr, portDefault), nil
+	}
+
+	// Warn if access point port differs from config control port.
 	if portDefault != portNum {
-		log.Debugf("access point (%s) port (%s) differs from default port (%d)",
-			host, port, portDefault)
+		log.Debugf("access point %q port differs from default port %q",
+			addr, portDefault)
 	}
 
 	return addr, nil
+}
+
+func hugePageBytes(hpNr, hpSz int) uint64 {
+	return uint64(hpNr*hpSz) * humanize.KiByte
 }
 
 // SetNrHugepages calculates minimum based on total target count if using nvme.
@@ -468,7 +488,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	}
 
 	if cfg.DisableHugepages {
-		return FaultConfigHugepagesDisabled
+		return FaultConfigHugepagesDisabledWithBdevs
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
@@ -487,6 +507,8 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		log.Debugf("calculated nr_hugepages: %d for %d targets%s", minHugepages,
 			cfgTargetCount, msgSysXS)
 		cfg.NrHugepages = minHugepages
+		log.Infof("hugepage count automatically set to %d (%s)", minHugepages,
+			humanize.IBytes(hugePageBytes(minHugepages, mi.HugepageSizeKiB)))
 	}
 
 	if cfg.NrHugepages < minHugepages {
@@ -505,13 +527,17 @@ func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (u
 	memTotal := uint64(memKiB * humanize.KiByte)
 
 	// Calculate assigned hugepage memory in bytes.
-	memHuge := uint64(cfg.NrHugepages * hpSizeKiB * humanize.KiByte)
+	memHuge := hugePageBytes(cfg.NrHugepages, hpSizeKiB)
 
 	// Calculate reserved system memory in bytes.
 	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
 
-	return storage.CalcRamdiskSize(log, memTotal, memHuge, memSys,
-		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+	if len(cfg.Engines) == 0 {
+		return 0, errors.New("no engines in config")
+	}
+
+	return storage.CalcRamdiskSize(log, memTotal, memHuge, memSys, cfg.Engines[0].TargetCount,
+		len(cfg.Engines))
 }
 
 // CalcMemForRamdiskSize calculates minimum memory needed for a given RAM-disk size.
@@ -522,8 +548,12 @@ func (cfg *Server) CalcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramd
 	// Calculate reserved system memory in bytes.
 	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
 
+	if len(cfg.Engines) == 0 {
+		return 0, errors.New("no engines in config")
+	}
+
 	return storage.CalcMemForRamdiskSize(log, ramdiskSize, memHuge, memSys,
-		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+		cfg.Engines[0].TargetCount, len(cfg.Engines))
 }
 
 // SetRamdiskSize calculates maximum RAM-disk size using total memory as reported by /proc/meminfo.
@@ -577,6 +607,8 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 			// Apply calculated size in config as not already set.
 			log.Debugf("%s: auto-sized ram-disk in engine-%d config", msg, idx)
 			scs[0].WithScmRamdiskSize(uint(maxRamdiskSize / humanize.GiByte))
+			log.Infof("engine-%d: ramdisk size automatically set to %s", idx,
+				humanize.IBytes(maxRamdiskSize))
 		} else if confSize > maxRamdiskSize {
 			// Total RAM is not enough to meet tmpfs size requested in config.
 			log.Errorf("%s: engine-%d config size too large for total memory", msg,
@@ -707,7 +739,7 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenValues := make(map[string]int)
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
-	seenIdx := 0
+	seenIdx := -1
 	seenBdevCount := -1
 	seenTargetCount := -1
 	seenHelperStreamCount := -1
@@ -774,8 +806,8 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 			// Log error but don't fail in order to be lenient with unbalanced device
 			// counts in particular cases e.g. using different capacity SSDs or VMDs
 			// with different number of backing devices.
-			err := FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
-			log.Noticef(err.Error())
+			e := FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
+			log.Noticef(e.Error())
 		}
 		if seenTargetCount != -1 && engine.TargetCount != seenTargetCount {
 			return FaultConfigTargetCountMismatch(idx, engine.TargetCount, seenIdx,

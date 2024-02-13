@@ -104,14 +104,16 @@ unsigned int daos_io_bypass;
 static void
 io_bypass_init(void)
 {
-	char	*str = getenv(DENV_IO_BYPASS);
-	char	*tok;
-	char	*saved_ptr;
+	char *str;
+	char *tok;
+	char *saved_ptr;
+	char *env;
 
-	if (!str)
+	d_agetenv_str(&env, DENV_IO_BYPASS);
+	if (env == NULL)
 		return;
 
-	tok = strtok_r(str, ",", &saved_ptr);
+	tok = strtok_r(env, ",", &saved_ptr);
 	while (tok) {
 		struct io_bypass *iob;
 
@@ -129,6 +131,7 @@ io_bypass_init(void)
 		}
 		tok = str;
 	};
+	d_freeenv_str(&env);
 }
 
 void
@@ -162,17 +165,18 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 	}
 
 	/* honor the env variable first */
-	logfile = getenv(D_LOG_FILE_ENV);
+	rc = d_agetenv_str(&logfile, D_LOG_FILE_ENV);
 	if (logfile == NULL || strlen(logfile) == 0) {
 		flags |= DLOG_FLV_STDOUT;
-		logfile = NULL;
+		d_freeenv_str(&logfile);
 	} else if (!strncmp(logfile, "/dev/null", 9)) {
 		/* Don't set up logging or log to stdout if the log file is /dev/null */
-		logfile = NULL;
+		d_freeenv_str(&logfile);
 	}
 
 	rc = d_log_init_adv("DAOS", logfile, flags, logmask, DLOG_CRIT,
 			    log_id_cb);
+	d_freeenv_str(&logfile);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
 			DP_RC(rc));
@@ -258,7 +262,8 @@ DP_UUID(const void *uuid)
 }
 
 #ifndef DAOS_BUILD_RELEASE
-#define DF_KEY_MAX		8
+#define DF_KEY_STR_SIZE 64
+#define DF_KEY_MAX      8
 
 static __thread int thread_key_buf_idx;
 static __thread char thread_key_buf[DF_KEY_MAX][DF_KEY_STR_SIZE];
@@ -280,7 +285,7 @@ daos_key2str(daos_key_t *key)
 		for (i = 0 ; i < len ; i++) {
 			if (akey[i] == '\0')
 				break;
-			if (!isprint(akey[i])) {
+			if (!isprint(akey[i]) || akey[i] == '\'') {
 				can_print = false;
 				break;
 			}
@@ -301,5 +306,29 @@ daos_key2str(daos_key_t *key)
 	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;
 	return buf;
 }
-#endif
 
+/* Format a directory entry suitable for logging.
+ * Take a directory entry (filename) and return something suitable for printing, no not modify the
+ * input itself, either return the input as-is for printing or some metadata about it.
+ * TODO: Check boundary case.
+ */
+char *
+daos_de2str(const char *de)
+{
+	int i;
+
+	if (!de)
+		return "<NULL>";
+
+	for (i = 0; i < NAME_MAX; i++) {
+		if (de[i] == '\0')
+			return (char *)de;
+		if (de[i] == '/')
+			return "<contains slash>";
+		if (!isprint(de[i]) || de[i] == '\'')
+			return "<not printable>";
+	}
+	return "<entry too long>";
+}
+
+#endif

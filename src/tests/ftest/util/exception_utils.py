@@ -5,7 +5,8 @@
 """
 
 import os
-from env_modules import show_avail, get_module_list
+
+from env_modules import get_module_list, show_avail
 from general_utils import run_command
 
 
@@ -28,7 +29,7 @@ class MPILoadError(Exception):
                   "Installed *{0}* RPMs:\n{2}\nEnvironment:\n{4}".format(
                       module, show_avail(),
                       "\n".join(list(filter(
-                          lambda x: "openmpi" in x,
+                          lambda x: module in x,
                           run_command("rpm -qa").stdout_text.split("\n")))),
                       ' '.join(get_module_list(module)),
                       "\n".join([f"{k}: {v}" for k, v in sorted(os.environ.items())]))

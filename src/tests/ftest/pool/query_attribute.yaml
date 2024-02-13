@@ -6,7 +6,7 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      targets: 8
+      targets: 4
       nr_xs_helpers: 0
       storage:
         0:

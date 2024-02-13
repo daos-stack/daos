@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2023 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -50,6 +50,7 @@ const (
 	PrivilegedHelperNotPrivileged
 	PrivilegedHelperNotAvailable
 	PrivilegedHelperRequestFailed
+	SocketFileInUse
 )
 
 // generic storage fault codes
@@ -79,6 +80,7 @@ const (
 	ScmBadRegion
 	ScmInvalidPMem
 	ScmRamdiskLowMem
+	ScmRamdiskBadSize
 	ScmConfigTierMissing
 )
 
@@ -150,6 +152,7 @@ const (
 	ServerIncompatibleComponents
 	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
+	ServerHugepagesDisabled
 )
 
 // server config fault codes
@@ -180,7 +183,7 @@ const (
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
 	ServerConfigNrHugepagesOutOfRange
-	ServerConfigHugepagesDisabled
+	ServerConfigHugepagesDisabledWithBdevs
 	ServerConfigVMDSettingDuplicate
 	ServerConfigEngineNUMAImbalance
 	ServerConfigControlMetadataNoPath

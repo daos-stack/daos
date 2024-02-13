@@ -9,10 +9,6 @@ server_config:
   engines:
     0:
       targets: 8
-      env_vars:
-        - SWIM_PROTOCOL_PERIOD_LEN=2000
-        - SWIM_SUSPECT_TIMEOUT=19000
-        - SWIM_PING_TIMEOUT=1900
       storage: auto
 testparams:
   ranks_to_kill:
@@ -22,15 +18,14 @@ testparams:
 pool:
   scm_size: 10G
   nvme_size: 60G
-  svcn: 5
-  control_method: dmg
   rebuild_timeout: 240
   pool_query_timeout: 60
+  properties: rd_fac:2
 container:
   type: POSIX
   control_method: daos
   oclass: RP_3G1
-  properties: "rd_fac:2"
+  properties: rd_fac:2
 mdtest:
   api: DFS
   client_processes:

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -125,6 +125,10 @@ const (
 	PoolPropertyCheckpointThresh = C.DAOS_PROP_PO_CHECKPOINT_THRESH
 	//PoolPropertyPerfDomain is pool performance domain
 	PoolPropertyPerfDomain = C.DAOS_PROP_PO_PERF_DOMAIN
+	//PoolPropertyReintMode is pool reintegration mode
+	PoolPropertyReintMode      = C.DAOS_PROP_PO_REINT_MODE
+	PoolPropertySvcOpsEnabled  = C.DAOS_PROP_PO_SVC_OPS_ENABLED
+	PoolPropertySvcOpsEntryAge = C.DAOS_PROP_PO_SVC_OPS_ENTRY_AGE
 )
 
 const (
@@ -183,6 +187,8 @@ const (
 	PoolSvcRedunFacMax = C.DAOS_PROP_PO_SVC_REDUN_FAC_MAX
 	// PoolSvcRedunFacDefault defines the default value of PoolPropertySvcRedunFac.
 	PoolSvcRedunFacDefault = C.DAOS_PROP_PO_SVC_REDUN_FAC_DEFAULT
+	PoolSvcOpsEntryAgeMin  = C.DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN
+	PoolSvcOpsEntryAgeMax  = C.DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MAX
 )
 
 const (
@@ -250,15 +256,6 @@ func PoolPolicyIsValid(polStr string) bool {
 	return bool(C.daos_policy_try_parse(cStr, &polDesc))
 }
 
-// PerfDomainIsValid return a boolean indicating whether or not the
-// pool performance domain string is valid.
-func PerfDomainIsValid(perfdomain string) bool {
-	cPerfDomain := C.CString(perfdomain)
-	defer C.free(unsafe.Pointer(cPerfDomain))
-
-	return bool(C.daos_perf_domain_is_valid(cPerfDomain))
-}
-
 const (
 	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
 	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
@@ -273,7 +270,13 @@ const (
 
 const (
 	PoolPerfDomainRoot   = C.PO_COMP_TP_ROOT
+	PoolPerfDomainGrp    = C.PO_COMP_TP_GRP
 	PoolPerfDomainNode   = C.PO_COMP_TP_NODE
 	PoolPerfDomainRank   = C.PO_COMP_TP_RANK
 	PoolPerfDomainTarget = C.PO_COMP_TP_TARGET
+)
+
+const (
+	PoolReintModeDataSync   = C.DAOS_REINT_MODE_DATA_SYNC
+	PoolReintModeNoDataSync = C.DAOS_REINT_MODE_NO_DATA_SYNC
 )

@@ -6,9 +6,8 @@
 from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
-
-from command_utils_base import FormattedParameter, CommandWithParameters, BasicParameter
 from command_utils import CommandWithSubCommand, YamlCommand
+from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 from general_utils import nodeset_append_suffix
 
 
@@ -320,6 +319,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.SetPropSubCommand()
             elif self.sub_command.value == "update-acl":
                 self.sub_command_class = self.UpdateAclSubCommand()
+            elif self.sub_command.value == "upgrade":
+                self.sub_command_class = self.UpgradeSubCommand()
             elif self.sub_command.value == "reintegrate":
                 self.sub_command_class = self.ReintegrateSubCommand()
             else:
@@ -488,6 +489,14 @@ class DmgCommandBase(YamlCommand):
                 self.pool = BasicParameter(None, position=1)
                 self.acl_file = FormattedParameter("-a {}", None)
                 self.entry = FormattedParameter("-e {}", None)
+
+        class UpgradeSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool upgrade command."""
+
+            def __init__(self):
+                """Create a dmg pool upgrade command object."""
+                super().__init__("/run/dmg/pool/upgrade/*", "upgrade")
+                self.pool = BasicParameter(None, position=1)
 
     class ServerSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg server sub command."""

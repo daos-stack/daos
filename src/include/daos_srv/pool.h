@@ -12,6 +12,8 @@
 #ifndef __DAOS_SRV_POOL_H__
 #define __DAOS_SRV_POOL_H__
 
+#include <endian.h>
+
 #include <abt.h>
 #include <daos/common.h>
 #include <daos/lru.h>
@@ -30,6 +32,8 @@
  */
 #define DS_POOL_OBJ_VERSION		1
 
+/* age of an entry in svc_ops KVS before it may be evicted */
+#define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
 /*
  * Pool object
  *
@@ -48,6 +52,8 @@ struct ds_pool {
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
+	/* Performance Domain level */
+	uint32_t		sp_perf_domain;
 	uint32_t		sp_global_version;
 	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
@@ -56,6 +62,7 @@ struct ds_pool {
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
 	struct ds_iv_ns		*sp_iv_ns;
+	uint32_t		*sp_states;	/* pool child state array */
 
 	/* structure related to EC aggregate epoch query */
 	d_list_t		sp_ec_ephs_list;
@@ -77,7 +84,9 @@ struct ds_pool {
 	 */
 	uint32_t		sp_rebuild_gen;
 
-	int			sp_reintegrating;
+	int			sp_rebuilding;
+
+	int			sp_discard_status;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
 
@@ -96,6 +105,7 @@ struct ds_pool {
 	uint32_t                 sp_checkpoint_mode;
 	uint32_t                 sp_checkpoint_freq;
 	uint32_t                 sp_checkpoint_thresh;
+	uint32_t		 sp_reint_mode;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -122,6 +132,13 @@ struct ds_pool_hdl {
 
 struct ds_pool_hdl *ds_pool_hdl_lookup(const uuid_t uuid);
 void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
+
+enum pool_child_state {
+	POOL_CHILD_NEW	= 0,
+	POOL_CHILD_STARTING,
+	POOL_CHILD_STARTED,
+	POOL_CHILD_STOPPING,
+};
 
 /*
  * Per-thread pool object
@@ -155,7 +172,9 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1;
+	uint32_t	spc_discard_done:1;
+	uint32_t	spc_reint_mode;
+	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a
@@ -165,9 +184,69 @@ struct ds_pool_child {
 	void			*spc_metrics[DAOS_NR_MODULE];
 };
 
+struct ds_pool_svc_op_key {
+	uint64_t ok_client_time;
+	uuid_t   ok_client_id;
+	/* TODO: add a (cart) opcode to the key? */
+};
+
+struct ds_pool_svc_op_val {
+	int  ov_rc;
+	char ov_resvd[60];
+};
+
+/* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.
+ * allocates the byte-stream, caller must free with D_FREE().
+ */
+static inline int
+ds_pool_svc_op_key_encode(struct ds_pool_svc_op_key *in, d_iov_t *enc_out)
+{
+	struct ds_pool_svc_op_key *out;
+
+	/* encoding is simple for this type, just another struct ds_pool_svc_op_key */
+	D_ALLOC_PTR(out);
+	if (out == NULL)
+		return -DER_NOMEM;
+
+	out->ok_client_time = htobe64(in->ok_client_time);
+	uuid_copy(out->ok_client_id, in->ok_client_id);
+	d_iov_set(enc_out, (void *)out, sizeof(*out));
+
+	return 0;
+}
+
+static inline int
+ds_pool_svc_op_key_decode(d_iov_t *enc_in, struct ds_pool_svc_op_key *out)
+{
+	struct ds_pool_svc_op_key *in = enc_in->iov_buf;
+
+	if (enc_in->iov_len < sizeof(struct ds_pool_svc_op_key))
+		return -DER_INVAL;
+
+	out->ok_client_time = be64toh(in->ok_client_time);
+	uuid_copy(out->ok_client_id, in->ok_client_id);
+
+	return 0;
+}
+
+struct rdb_tx;
+int
+ds_pool_svc_ops_lookup(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t *cli_uuidp,
+		       uint64_t cli_time, bool *is_dup, struct ds_pool_svc_op_val *valp);
+int
+ds_pool_svc_ops_save(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t *cli_uuidp,
+		     uint64_t cli_time, bool dup_op, int rc_in, struct ds_pool_svc_op_val *op_valp);
+
+/* Find ds_pool_child in cache, hold one reference */
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
-struct ds_pool_child *ds_pool_child_get(struct ds_pool_child *child);
+/* Put the reference held by ds_pool_child_lookup() */
 void ds_pool_child_put(struct ds_pool_child *child);
+/* Start ds_pool child */
+int ds_pool_child_start(uuid_t pool_uuid, bool recreate);
+/* Stop ds_pool_child */
+int ds_pool_child_stop(uuid_t pool_uuid);
+/* Query pool child state */
+uint32_t ds_pool_child_state(uuid_t pool_uuid, uint32_t tgt_id);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 enum daos_module_id module, crt_opcode_t opcode,
@@ -191,9 +270,10 @@ int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
-int ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
-			    const d_rank_list_t *target_addrs, int ndomains,
-			    const uint32_t *domains, daos_prop_t *prop, d_rank_list_t **svc_addrs);
+int
+     ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
+			     d_rank_list_t *target_addrs, int ndomains, uint32_t *domains,
+			     daos_prop_t *prop, d_rank_list_t **svc_addrs);
 int ds_pool_svc_stop(uuid_t pool_uuid);
 int ds_pool_svc_rf_to_nreplicas(int svc_rf);
 int ds_pool_svc_rf_from_nreplicas(int nreplicas);
@@ -208,9 +288,9 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   enum daos_acl_principal_type principal_type,
 			   const char *principal_name);
 
-int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		      daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		      uint32_t *upgrade_layout_ver);
+int dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
+		       d_rank_list_t **ranks, daos_pool_info_t *pool_info,
+		       uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
 int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
 			     uint32_t tgt_idx, daos_target_info_t *ti);
 
@@ -330,8 +410,7 @@ ds_pool_get_version(struct ds_pool *pool)
 int
 ds_start_chkpt_ult(struct ds_pool_child *child);
 void
-ds_stop_chkpt_ult(struct ds_pool_child *child);
-struct rdb_tx;
+    ds_stop_chkpt_ult(struct ds_pool_child *child);
 int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 			    d_iov_t *cred);
 

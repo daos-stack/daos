@@ -8,11 +8,9 @@ package support
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -22,31 +20,6 @@ import (
 )
 
 const mockSocketDir = "/tmp/mock_socket_dir/"
-
-// Run fake daos_engine process.
-func startFakeEngine(t *testing.T) bool {
-	runCmd := strings.Join([]string{"exec -a daos_engine sleep 60 | echo -d", mockSocketDir}, " ")
-	cmd := exec.Command("bash", "-c", runCmd)
-	err := cmd.Start()
-	if err != nil {
-		return false
-	}
-
-	return true
-}
-
-// Kill fake daos_engine process.
-func killFakeEngine(t *testing.T) bool {
-	cmd := exec.Command("bash", "-c", "pkill -f daos_engine")
-	err := cmd.Start()
-	// Sleep for second to clean the process stat.
-	time.Sleep(1 * time.Second)
-	if err != nil {
-		return false
-	}
-
-	return true
-}
 
 func TestSupport_Display(t *testing.T) {
 	progress := ProgressBar{
@@ -95,31 +68,18 @@ func TestSupport_checkEngineState(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	for name, tc := range map[string]struct {
-		engStart  bool
 		expResult bool
 		expErr    error
 	}{
-		"When process is running": {
-			engStart:  true,
-			expResult: true,
-			expErr:    nil,
-		},
 		"When process is not running": {
-			engStart:  false,
 			expResult: false,
 			expErr:    errors.New("daos_engine is not running on server: exit status 1"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if tc.engStart {
-				startFakeEngine(t)
-			}
 			gotOutput, gotErr := checkEngineState(log)
 			test.AssertEqual(t, tc.expResult, gotOutput, "Result is not as expected")
 			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.engStart {
-				killFakeEngine(t)
-			}
 		})
 	}
 }
@@ -129,31 +89,18 @@ func TestSupport_getRunningConf(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	for name, tc := range map[string]struct {
-		engStart  bool
 		expResult string
 		expErr    error
 	}{
 		"default config is null if no engine is running": {
-			engStart:  false,
 			expResult: "",
 			expErr:    errors.New("daos_engine is not running on server: exit status 1"),
 		},
-		"valid config when engine is running": {
-			engStart:  true,
-			expResult: mockSocketDir + config.ConfigOut,
-			expErr:    nil,
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if tc.engStart {
-				startFakeEngine(t)
-			}
 			gotOutput, gotErr := getRunningConf(log)
 			test.AssertEqual(t, tc.expResult, gotOutput, "Result is not as expected")
 			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.engStart {
-				killFakeEngine(t)
-			}
 		})
 	}
 }
@@ -163,31 +110,18 @@ func TestSupport_getServerConf(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	for name, tc := range map[string]struct {
-		engStart  bool
 		expResult string
 		expErr    error
 	}{
 		"default config path if no engine is running": {
-			engStart:  false,
-			expResult: config.ConfigOut,
-			expErr:    nil,
-		},
-		"valid config when engine is running": {
-			engStart:  true,
 			expResult: config.ConfigOut,
 			expErr:    nil,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if tc.engStart {
-				startFakeEngine(t)
-			}
 			gotOutput, gotErr := getServerConf(log)
 			test.AssertEqual(t, tc.expResult, filepath.Base(gotOutput), "daos server config file is not what we expected")
 			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.engStart {
-				killFakeEngine(t)
-			}
 		})
 	}
 }
@@ -302,7 +236,7 @@ func TestSupport_cpOutputToFile(t *testing.T) {
 		"Check valid Command with option": {
 			target:    targetTestDir,
 			cmd:       "hostname",
-			option:    "-d",
+			option:    "-s",
 			expResult: hostName,
 			expErr:    nil,
 		},
@@ -311,7 +245,7 @@ func TestSupport_cpOutputToFile(t *testing.T) {
 			cmd:       "hostnamefoo",
 			option:    "",
 			expResult: "",
-			expErr:    errors.New("sh: hostnamefoo: command not found"),
+			expErr:    errors.New("command not found"),
 		},
 		"Check valid Command with invalid target directory": {
 			target:    targetTestDir + "/dir1",
@@ -410,28 +344,23 @@ func TestSupport_rsyncLog(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		targetFolder string
-		TargetHost   string
+		AdminNode    string
 		expErr       error
 	}{
 		"rsync to invalid Target directory": {
 			targetFolder: targetTestDir + "/foo/bar",
-			TargetHost:   hostName + ":/tmp/foo/bar/",
-			expErr:       errors.New("Error running command"),
-		},
-		"rsync to invalid Target Host": {
-			targetFolder: targetTestDir + "/foo/bar",
-			TargetHost:   "invalid-host",
+			AdminNode:    hostName + ":/tmp/foo/bar/",
 			expErr:       errors.New("Error running command"),
 		},
 		"rsync invalid log directory": {
 			targetFolder: srcPath + "/file1",
-			TargetHost:   hostName,
+			AdminNode:    hostName,
 			expErr:       errors.New("not a directory"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			rsLog.TargetFolder = tc.targetFolder
-			rsLog.TargetHost = tc.TargetHost
+			rsLog.AdminNode = tc.AdminNode
 			gotErr := rsyncLog(log, rsLog)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})

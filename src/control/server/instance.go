@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -274,6 +274,11 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 }
 
 func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
+	if ei.IsReady() {
+		ei.log.Debugf("SetupRank called on an already set-up instance %d", ei.Index())
+		return nil
+	}
+
 	if err := ei.callSetRank(ctx, rank, map_version); err != nil {
 		return errors.Wrap(err, "SetRank failed")
 	}
@@ -287,7 +292,7 @@ func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map
 }
 
 func (ei *EngineInstance) callSetRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32(), MapVersion: map_version})
+	dresp, err := ei.callDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32(), MapVersion: map_version})
 	if err != nil {
 		return err
 	}
@@ -338,14 +343,6 @@ func (ei *EngineInstance) setHugepageSz(hpSizeMb int) {
 	ei.runner.GetConfig().HugepageSz = hpSizeMb
 }
 
-// setTargetCount updates target count in engine config.
-func (ei *EngineInstance) setTargetCount(numTargets int) {
-	ei.Lock()
-	defer ei.Unlock()
-
-	ei.runner.GetConfig().TargetCount = numTargets
-}
-
 // GetTargetCount returns the target count set for this instance.
 func (ei *EngineInstance) GetTargetCount() int {
 	ei.RLock()
@@ -355,7 +352,7 @@ func (ei *EngineInstance) GetTargetCount() int {
 }
 
 func (ei *EngineInstance) callSetUp(ctx context.Context) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetUp, nil)
+	dresp, err := ei.callDrpc(ctx, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}
@@ -371,9 +368,10 @@ func (ei *EngineInstance) callSetUp(ctx context.Context) error {
 	return nil
 }
 
-// BioErrorNotify logs a blob I/O error.
-func (ei *EngineInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
+func (ei *EngineInstance) Debugf(format string, args ...interface{}) {
+	ei.log.Debugf(format, args...)
+}
 
-	ei.log.Errorf("I/O Engine instance %d (target %d) has detected blob I/O error! %v",
-		ei.Index(), bio.TgtId, bio)
+func (ei *EngineInstance) Tracef(format string, args ...interface{}) {
+	ei.log.Tracef(format, args...)
 }

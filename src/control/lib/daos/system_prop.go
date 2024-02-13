@@ -18,6 +18,21 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
+/*
+#include <daos_types.h>
+*/
+import "C"
+
+// SystemNameIsValid returns true if the given name is valid for a DAOS system.
+func SystemNameIsValid(name string) bool {
+	// NB: So far, this seems to be the only constraint on system names.
+	if name == "" || len(name) > C.DAOS_SYS_NAME_MAX {
+		return false
+	}
+
+	return true
+}
+
 // BoolPropVal is a boolean property value.
 type BoolPropVal bool
 

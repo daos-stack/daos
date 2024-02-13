@@ -10,7 +10,7 @@
 
 set -e
 
-arch=$(uname -i)
+arch=$(uname -m)
 
 dnf --nodocs install \
     boost-python3-devel \
@@ -25,7 +25,6 @@ dnf --nodocs install \
     file \
     flex \
     fuse3 \
-    fuse3-devel \
     gcc \
     gcc-c++ \
     git \

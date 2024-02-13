@@ -48,6 +48,12 @@ daos_eq_lib_fini(void);
 int
 daos_eq_lib_init(void);
 
+/**
+ * reset context after fork
+ */
+int
+daos_eq_lib_reset_after_fork(void);
+
 crt_context_t *
 daos_task2ctx(tse_task_t *task);
 

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,11 +11,36 @@
 
 #include <stdarg.h>
 #include <math.h>
+#include <malloc.h>
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <dlfcn.h>
+#include <pthread.h>
+#include <limits.h>
+#include <stdint.h>
+
+#include <malloc.h>
+
 #include <gurt/common.h>
+#include <gurt/atomic.h>
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};
+
+d_alloc_track_cb_t d_alloc_track_cb;
+d_alloc_track_cb_t d_free_track_cb;
+static __thread void *track_arg;
+
+void
+d_set_alloc_track_cb(d_alloc_track_cb_t alloc_cb, d_alloc_track_cb_t free_cb, void *arg)
+{
+	d_alloc_track_cb = alloc_cb;
+	d_free_track_cb = free_cb;
+	track_arg = arg;
+
+	D_INFO("memory track is enabled for the engine.\n");
+}
 
 void
 d_srand(long int seedval)
@@ -32,34 +57,115 @@ d_rand()
 	return result;
 }
 
+/* Developer/debug version, poison memory on free.
+ * This tries several ways to access the buffer size however none of them are perfect so for now
+ * this is no in release builds.
+ */
+
+#ifdef DAOS_BUILD_RELEASE
 void
 d_free(void *ptr)
 {
+	if (unlikely(track_arg != NULL)) {
+		size_t size = malloc_usable_size(ptr);
+
+		d_free_track_cb(track_arg, size);
+	}
+
 	free(ptr);
 }
+
+#else
+
+static size_t
+_f_get_alloc_size(void *ptr)
+{
+	size_t size = malloc_usable_size(ptr);
+	size_t obs;
+
+	obs = __builtin_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+
+#if __USE_FORTIFY_LEVEL > 2
+	obs = __builtin_dynamic_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+#endif
+
+	return size;
+}
+
+void
+d_free(void *ptr)
+{
+	size_t msize = _f_get_alloc_size(ptr);
+
+	memset(ptr, 0x42, msize);
+	free(ptr);
+}
+
+#endif
 
 void *
 d_calloc(size_t count, size_t eltsize)
 {
-	return calloc(count, eltsize);
+	void *ptr;
+
+	ptr = calloc(count, eltsize);
+	if (unlikely(track_arg != NULL)) {
+		if (ptr != NULL)
+			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
+	}
+
+	return ptr;
 }
 
 void *
 d_malloc(size_t size)
 {
-	return malloc(size);
+	void *ptr;
+
+	ptr = malloc(size);
+	if (unlikely(track_arg != NULL)) {
+		if (ptr != NULL)
+			d_alloc_track_cb(track_arg, size);
+	}
+
+	return ptr;
 }
 
 void *
 d_realloc(void *ptr, size_t size)
 {
-	return realloc(ptr, size);
+	void *new_ptr;
+
+	if (unlikely(track_arg != NULL)) {
+		size_t old_size = malloc_usable_size(ptr);
+
+		new_ptr = realloc(ptr, size);
+		if (new_ptr != NULL) {
+			d_free_track_cb(track_arg, old_size);
+			d_alloc_track_cb(track_arg, size);
+		}
+	} else {
+		new_ptr = realloc(ptr, size);
+	}
+	return new_ptr;
 }
 
 char *
 d_strndup(const char *s, size_t n)
 {
-	return strndup(s, n);
+	char *ptr;
+
+	ptr = strndup(s, n);
+	if (unlikely(track_arg != NULL)) {
+		if (ptr != NULL)
+			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
+	}
+
+	return ptr;
 }
 
 int
@@ -72,22 +178,61 @@ d_asprintf(char **strp, const char *fmt, ...)
 	rc = vasprintf(strp, fmt, ap);
 	va_end(ap);
 
+	if (unlikely(track_arg != NULL)) {
+		if (rc > 0 && *strp != NULL)
+			d_alloc_track_cb(track_arg, (size_t)rc);
+	}
+
 	return rc;
+}
+
+char *
+d_asprintf2(int *_rc, const char *fmt, ...)
+{
+	char   *str = NULL;
+	va_list ap;
+	int     rc;
+
+	va_start(ap, fmt);
+	rc = vasprintf(&str, fmt, ap);
+	va_end(ap);
+
+	*_rc = rc;
+
+	if (rc == -1)
+		return NULL;
+
+	return str;
 }
 
 char *
 d_realpath(const char *path, char *resolved_path)
 {
-	return realpath(path, resolved_path);
+	char *ptr;
+
+	ptr = realpath(path, resolved_path);
+	if (unlikely(track_arg != NULL)) {
+		if (ptr != NULL)
+			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
+	}
+
+	return ptr;
 }
 
 void *
 d_aligned_alloc(size_t alignment, size_t size, bool zero)
 {
-	void *buf = aligned_alloc(alignment, size);
+	void *buf;
+
+	buf = aligned_alloc(alignment, size);
+	if (unlikely(track_arg != NULL)) {
+		if (buf != NULL)
+			d_alloc_track_cb(track_arg, size);
+	}
 
 	if (!zero || buf == NULL)
 		return buf;
+
 	memset(buf, 0, size);
 	return buf;
 }
@@ -160,22 +305,15 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 		if (rank_tmp == rank_list->rl_ranks[i]) {
 			identical_num++;
 			for (j = i; j < rank_num; j++)
-				rank_list->rl_ranks[j - 1] =
-					rank_list->rl_ranks[j];
-			D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed "
-				"identical rank[%d](%d).\n", __FILE__, __LINE__,
-				rank_list, i, rank_tmp);
+				rank_list->rl_ranks[j - 1] = rank_list->rl_ranks[j];
 
 			i--;
 			rank_num--;
 		}
 		rank_tmp = rank_list->rl_ranks[i];
 	}
-	if (identical_num != 0) {
+	if (identical_num != 0)
 		rank_list->rl_nr -= identical_num;
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed %d ranks.\n",
-			__FILE__, __LINE__, rank_list, identical_num);
-	}
 
 out:
 	return rc;
@@ -213,18 +351,12 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 			continue;
 		filter_num++;
 		for (j = i; j < rank_num - 1; j++)
-			dst_set->rl_ranks[j] =
-				dst_set->rl_ranks[j + 1];
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter rank[%d](%d).\n",
-			__FILE__, __LINE__, dst_set, i, rank);
+			dst_set->rl_ranks[j] = dst_set->rl_ranks[j + 1];
 		/* as dst_set moved one item ahead */
 		i--;
 	}
-	if (filter_num != 0) {
+	if (filter_num != 0)
 		dst_set->rl_nr -= filter_num;
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter %d ranks.\n",
-			__FILE__, __LINE__, dst_set, filter_num);
-	}
 }
 
 int
@@ -310,26 +442,27 @@ d_rank_list_alloc(uint32_t size)
 	return rank_list;
 }
 
-d_rank_list_t *
-d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
+int
+d_rank_list_resize(d_rank_list_t *ptr, uint32_t size)
 {
 	d_rank_t *new_rl_ranks;
 
 	if (ptr == NULL)
-		return d_rank_list_alloc(size);
+		return -DER_INVAL;
 	if (size == 0) {
-		d_rank_list_free(ptr);
-		return NULL;
+		D_FREE(ptr->rl_ranks);
+		ptr->rl_nr = 0;
+		return 0;
 	}
 	D_REALLOC_ARRAY(new_rl_ranks, ptr->rl_ranks, ptr->rl_nr, size);
 	if (new_rl_ranks != NULL) {
 		ptr->rl_ranks = new_rl_ranks;
 		ptr->rl_nr = size;
 	} else {
-		ptr = NULL;
+		return -DER_NOMEM;
 	}
 
-	return ptr;
+	return 0;
 }
 
 void
@@ -352,12 +485,11 @@ d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src)
 	}
 
 	if (dst->rl_nr != src->rl_nr) {
-		dst = d_rank_list_realloc(dst, src->rl_nr);
-		if (dst == NULL) {
-			D_ERROR("d_rank_list_realloc() failed.\n");
-			D_GOTO(out, rc = -DER_NOMEM);
+		rc = d_rank_list_resize(dst, src->rl_nr);
+		if (rc != 0) {
+			D_ERROR("d_rank_list_resize() failed.\n");
+			D_GOTO(out, rc);
 		}
-		dst->rl_nr = src->rl_nr;
 	}
 
 	memcpy(dst->rl_ranks, src->rl_ranks, dst->rl_nr * sizeof(d_rank_t));
@@ -399,7 +531,7 @@ d_rank_list_shuffle(d_rank_list_t *rank_list)
 		return;
 
 	for (i = 0; i < rank_list->rl_nr; i++) {
-		j = rand() % rank_list->rl_nr;
+		j = d_rand() % rank_list->rl_nr;
 		tmp = rank_list->rl_ranks[i];
 		rank_list->rl_ranks[i] = rank_list->rl_ranks[j];
 		rank_list->rl_ranks[j] = tmp;
@@ -455,10 +587,10 @@ d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 	D_ASSERT(idx <= new_num);
 	num_bytes = (new_num - idx) * sizeof(d_rank_t);
 	memmove(dest, src, num_bytes);
-	rank_list = d_rank_list_realloc(rank_list, new_num);
-	if (rank_list == NULL) {
-		D_ERROR("d_rank_list_realloc() failed.\n");
-		D_GOTO(out, rc = -DER_NOMEM);
+	rc = d_rank_list_resize(rank_list, new_num);
+	if (rc != 0) {
+		D_ERROR("d_rank_list_resize() failed.\n");
+		D_GOTO(out, rc);
 	}
 out:
 	return rc;
@@ -467,16 +599,15 @@ out:
 int
 d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 {
-	uint32_t		 old_num = rank_list->rl_nr;
-	d_rank_list_t		*new_rank_list;
-	int			 rc = 0;
+	uint32_t	old_num = rank_list->rl_nr;
+	int		rc = 0;
 
-	new_rank_list = d_rank_list_realloc(rank_list, old_num + 1);
-	if (new_rank_list == NULL) {
-		D_ERROR("d_rank_list_realloc() failed.\n");
-		D_GOTO(out, rc = -DER_NOMEM);
+	rc = d_rank_list_resize(rank_list, old_num + 1);
+	if (rc != 0) {
+		D_ERROR("d_rank_list_resize() failed.\n");
+		D_GOTO(out, rc);
 	}
-	new_rank_list->rl_ranks[old_num] = rank;
+	rank_list->rl_ranks[old_num] = rank;
 
 out:
 	return rc;
@@ -805,149 +936,508 @@ d_rank_range_list_free(d_rank_range_list_t *range_list)
 }
 
 static inline bool
-dis_integer_str(char *str)
+dis_signed_str(char *str)
 {
-	char	*p;
+	char  *eos;
+	size_t str_size;
 
-	p = str;
-	if (p == NULL || strlen(p) == 0)
-		return false;
+	str_size = strlen(str);
+	eos      = str + str_size;
+	while (str != eos && *str != '-' && (*str < '0' || *str > '9'))
+		++str;
 
-	while (*p != '\0') {
-		if (*p <= '9' && *p >= '0') {
-			p++;
-			continue;
-		} else {
-			return false;
-		}
-	}
-
-	return true;
+	return *str == '-';
 }
 
 static inline bool
 dis_single_char_str(char *str)
 {
-	return strlen(str) == 1;
+	return strnlen(str, 2) == 1;
 }
 
 /**
- * get a bool type environment variables
+ * Overloads to hook the unsafe getenv()/[un]setenv()/putenv()/clearenv()
+ * functions from glibc.
+ */
+static pthread_rwlock_t d_env_lock = PTHREAD_RWLOCK_INITIALIZER;
+
+static inline void
+d_env_rwlock_rdlock()
+{
+	int rc;
+
+	rc = pthread_rwlock_rdlock(&d_env_lock);
+	if (rc != 0)
+		fprintf(stderr, "d_env_rwlock_rdlock(%p) rc=%d %s\n", &d_env_lock, rc,
+			strerror(rc));
+	assert(rc == 0);
+}
+
+static inline void
+d_env_rwlock_wrlock()
+{
+	int rc;
+
+	rc = pthread_rwlock_wrlock(&d_env_lock);
+	if (rc != 0)
+		fprintf(stderr, "d_env_rwlock_wrlock(%p) rc=%d %s\n", &d_env_lock, rc,
+			strerror(rc));
+	assert(rc == 0);
+}
+
+static inline void
+d_env_rwlock_unlock()
+{
+	int rc;
+
+	rc = pthread_rwlock_unlock(&d_env_lock);
+	if (rc != 0)
+		fprintf(stderr, "d_env_rwlock_unlock(%p) rc=%d %s\n", &d_env_lock, rc,
+			strerror(rc));
+	assert(rc == 0);
+}
+
+/**
+ * Check if and environment variable is defined.
  *
- * \param[in]		env		name of the environment variable
+ * \param[in]		name		name of the environment variable.
+ * \return				true iff the environment variable is defined.
+ */
+bool
+d_isenv_def(char *name)
+{
+	char *env;
+
+	d_env_rwlock_rdlock();
+	env = getenv(name);
+	d_env_rwlock_unlock();
+
+	return env != NULL;
+}
+
+/**
+ * Get a string type environment variables
+ *
+ * \param[in,out]	str_val		returned value of the ENV. Will not change the original
+ *					value if ENV is not set.
+ * \param[in]		str_size	Size of the input string.
+ * \param[in]		name		name of the environment variable.
+ * \return				0 on success, a negative value on error.
+ */
+int
+d_getenv_str(char *str_val, size_t str_size, const char *name)
+{
+	char *tmp;
+	int   len;
+	int   rc = -DER_SUCCESS;
+
+	assert(name != NULL);
+	assert(str_val != NULL);
+	assert(str_size > 0);
+
+	d_env_rwlock_rdlock();
+
+	tmp = getenv(name);
+	if (tmp == NULL) {
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+
+	len = strnlen(tmp, str_size);
+	memcpy(str_val, tmp, len);
+
+	if (len == str_size) {
+		fprintf(stderr, "ENV '%s' has been truncated\n", name);
+		rc = -DER_TRUNC;
+		--len;
+	}
+	str_val[len] = '\0';
+
+out:
+	d_env_rwlock_unlock();
+
+	return rc;
+}
+
+/**
+ * Get a string type environment variables
+ *
+ * \param[in,out]	str_val		returned value of the ENV on success, NULL on error.
+ * \param[in]		name		name of the environment variable.
+ * \return				0 on success, a negative value on error.
+ */
+int
+d_agetenv_str(char **str_val, const char *name)
+{
+	char *env;
+	char *tmp;
+	int   rc;
+
+	assert(name != NULL);
+
+	*str_val = NULL;
+
+	d_env_rwlock_rdlock();
+
+	env = getenv(name);
+	if (env == NULL) {
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+
+	/* DAOS-14532 There is no limit to environment variable size */
+	tmp = strdup(env);
+	if (tmp == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	*str_val = tmp;
+	rc       = -DER_SUCCESS;
+
+out:
+	d_env_rwlock_unlock();
+
+	return rc;
+}
+
+/**
+ * Frees memory space of an environment string value.
+ *
+ * \param[in,out]	str_val		Copy of an environment string value.
+ */
+void
+d_freeenv_str(char **str_val)
+{
+	assert(str_val != NULL);
+
+	if (*str_val == NULL)
+		return;
+
+	free(*str_val);
+	*str_val = NULL;
+}
+
+/**
+ * get a bool type environment variables.
+ *
+ * \param[in]		name		name of the environment variable.
  * \param[in,out]	bool_val	returned value of the ENV. Will not change the original
  *					value if ENV is not set. Set as false if the env is set to
  *					0, otherwise set as true.
+ * \return				0 on success, a negative value on error.
  */
-void
-d_getenv_bool(const char *env, bool *bool_val)
+int
+d_getenv_bool(const char *name, bool *bool_val)
 {
-	char *env_val;
+	char     *env;
+	char     *endptr;
+	long long val;
+	int       rc;
 
-	if (env == NULL)
-		return;
-	D_ASSERT(bool_val != NULL);
+	assert(name != NULL);
+	assert(bool_val != NULL);
 
-	env_val = getenv(env);
-	if (!env_val)
-		return;
+	d_env_rwlock_rdlock();
+
+	env = getenv(name);
+	if (env == NULL) {
+		rc = -DER_NONEXIST;
+		goto out;
+	}
 
 	/* treats any valid non-integer string as true */
-	if (!dis_integer_str(env_val))
-		*bool_val = true;
+	errno     = 0;
+	val       = strtoll(env, &endptr, 10);
+	*bool_val = errno != 0 || endptr == env || *endptr != '\0' || val != 0;
+	rc        = -DER_SUCCESS;
 
-	*bool_val = (atoi(env_val) == 0 ? false : true);
+out:
+	d_env_rwlock_unlock();
+
+	return rc;
 }
 
 /**
- * get single character environment variable
+ * get single character environment variable.
  *
- * \param[in]           env     name of the environment variable
- * \param[in,out]       char_val returned value of the ENV. Will not change the original value
+ * \param[in]		name		name of the environment variable.
+ * \param[in,out]	char_val	returned value of the ENV. Will not change the original
+ *					value.
+ * \return				0 on success, a negative value on error.
  */
-void
-d_getenv_char(const char *env, char *char_val)
-{
-	char		*env_val;
-
-	if (env == NULL || char_val == NULL)
-		return;
-
-	env_val = getenv(env);
-	if (!env_val)
-		return;
-
-	if (!dis_single_char_str(env_val)) {
-		D_ERROR("ENV %s is not single character.\n", env_val);
-		return;
-	}
-	*char_val = *env_val;
-}
-
-/**
- * get an integer type environment variables
- *
- * \param[in]		env	name of the environment variable
- * \param[in,out]	int_val	returned value of the ENV. Will not change the original value if ENV
- *				is not set or set as a
- *				non-integer value.
- */
-void
-d_getenv_int(const char *env, unsigned *int_val)
-{
-	char		*env_val;
-	unsigned	 value;
-
-	if (env == NULL || int_val == NULL)
-		return;
-
-	env_val = getenv(env);
-	if (!env_val)
-		return;
-
-	if (!dis_integer_str(env_val)) {
-		D_ERROR("ENV %s is not integer.\n", env_val);
-		return;
-	}
-
-	value = atoi(env_val);
-	D_DEBUG(DB_TRACE, "get ENV %s as %d.\n", env, value);
-	*int_val = value;
-}
-
 int
-d_getenv_uint64_t(const char *env, uint64_t *val)
+d_getenv_char(const char *name, char *char_val)
 {
-	char		*env_val;
-	size_t		env_len;
-	int		matched;
-	uint64_t	new_val;
-	int		count;
+	char *env;
+	int   rc;
 
-	env_val = getenv(env);
-	if (!env_val) {
-		D_DEBUG(DB_TRACE, "ENV '%s' unchanged at %"PRId64"\n", env, *val);
-		return -DER_NONEXIST;
+	assert(name != NULL);
+	assert(char_val != NULL);
+
+	d_env_rwlock_rdlock();
+
+	env = getenv(name);
+	if (env == NULL) {
+		rc = -DER_NONEXIST;
+		goto out;
 	}
 
-	env_len = strnlen(env_val, 128);
-	if (env_len == 128) {
-		D_ERROR("ENV '%s' is invalid\n", env);
-		return -DER_INVAL;
+	if (!dis_single_char_str(env)) {
+		rc = -DER_INVAL;
+		goto out;
 	}
 
-	/* Now do scanf, check that the number was matched, and there are no extra unmatched
-	 * characters at the end.
+	*char_val = *env;
+	rc        = -DER_SUCCESS;
+
+out:
+	d_env_rwlock_unlock();
+
+	return rc;
+}
+
+static int
+d_getenv_ull(unsigned long long *val, const char *name, size_t val_size)
+{
+	char              *env;
+	char              *env_tmp = NULL;
+	char              *endptr;
+	unsigned long long val_tmp;
+	int                rc;
+
+	assert(val != NULL);
+	assert(name != NULL);
+	assert(val_size <= sizeof(unsigned long long));
+
+	d_env_rwlock_rdlock();
+	env = getenv(name);
+	if (env == NULL) {
+		rc = -DER_NONEXIST;
+		d_env_rwlock_unlock();
+		goto out;
+	}
+
+	/* DAOS-14896 NOTES:
+	 * - Duplicate env to reduce data race condition with external libraries not using the DAOS
+	 *   thread safe environment variables management API.
+	 * - Use of strdup() as there is no limit to environment variable size.
 	 */
-	matched = sscanf(env_val, "%"PRId64"%n", &new_val, &count);
-	if (matched == 1 && env_len == count) {
-		*val = new_val;
-		D_DEBUG(DB_TRACE, "ENV '%s' set to %"PRId64"\n", env, *val);
-		return -DER_SUCCESS;
+	env_tmp = strdup(env);
+	if (env_tmp == NULL) {
+		rc = -DER_NOMEM;
+		d_env_rwlock_unlock();
+		goto out;
+	}
+	d_env_rwlock_unlock();
+
+	errno   = 0;
+	val_tmp = strtoull(env_tmp, &endptr, 10);
+	if (errno != 0 || endptr == env_tmp || *endptr != '\0') {
+		rc = -DER_INVAL;
+		goto out;
 	}
 
-	D_ERROR("ENV '%s' is invalid: '%s'\n", env, env_val);
-	return -DER_INVAL;
+	if (val_size != sizeof(unsigned long long)) {
+		const unsigned long long val_max   = (1ull << val_size * 8) - 1;
+		const bool               is_signed = dis_signed_str(env_tmp);
+
+		if (is_signed)
+			val_tmp = ~val_tmp;
+		if (val_tmp > val_max || (is_signed && val_tmp >= val_max)) {
+			rc = -DER_INVAL;
+			goto out;
+		}
+		if (is_signed) {
+			val_tmp = ~val_tmp;
+			val_tmp <<= (sizeof(unsigned long long) - val_size) * 8;
+			val_tmp >>= (sizeof(unsigned long long) - val_size) * 8;
+		}
+	}
+
+	*val = val_tmp;
+	rc   = -DER_SUCCESS;
+
+out:
+	free(env_tmp);
+
+	return rc;
+}
+
+/**
+ * get an unsigned integer type environment variables.
+ *
+ * \param[in]		name		name of the environment variable.
+ * \param[in,out]	uint_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \return				0 on success, a negative value on error.
+ */
+int
+d_getenv_uint(const char *name, unsigned *uint_val)
+{
+	int                rc;
+	unsigned long long tmp;
+
+	assert(uint_val != NULL);
+	assert(name != NULL);
+
+	rc = d_getenv_ull(&tmp, name, sizeof(unsigned));
+	if (rc != -DER_SUCCESS)
+		return rc;
+
+	*uint_val = (unsigned)tmp;
+	return -DER_SUCCESS;
+}
+
+/**
+ * get an unsigned integer type environment variables.
+ *
+ * \param[in]		name		name of the environment variable.
+ * \param[in,out]	uint_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \return				0 on success, a negative value on error.
+ * \deprecated				d_getenv_int() is deprecated, please use d_getenv_uint().
+ */
+int
+d_getenv_int(const char *name, unsigned *uint_val)
+{
+	return d_getenv_uint(name, uint_val);
+}
+
+/**
+ * get a 32bits unsigned integer type environment variables
+ *
+ * \param[in]		name		name of the environment variable.
+ * \param[in,out]	uint32_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \return				0 on success, a negative value on error.
+ */
+int
+d_getenv_uint32_t(const char *name, uint32_t *uint32_val)
+{
+	int                rc;
+	unsigned long long tmp;
+
+	assert(uint32_val != NULL);
+	assert(name != NULL);
+
+	rc = d_getenv_ull(&tmp, name, sizeof(uint32_t));
+	if (rc != -DER_SUCCESS)
+		return rc;
+
+	*uint32_val = (uint32_t)tmp;
+	return -DER_SUCCESS;
+}
+
+/**
+ * get a 64bits unsigned integer type environment variables
+ *
+ * \param[in]		name		name of the environment variable.
+ * \param[in,out]	uint64_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \return				0 on success, a negative value on error.
+ */
+int
+d_getenv_uint64_t(const char *name, uint64_t *uint64_val)
+{
+	int                rc;
+	unsigned long long tmp;
+
+	assert(uint64_val != NULL);
+	assert(name != NULL);
+
+	rc = d_getenv_ull(&tmp, name, sizeof(uint64_t));
+	if (rc != -DER_SUCCESS)
+		return rc;
+
+	*uint64_val = (uint64_t)tmp;
+	return -DER_SUCCESS;
+}
+
+/**
+ * Thread safe wrapper of the libc putenv() function.
+ *
+ * \param[in]	name	name of the environment variable.
+ * \return		0 on success, a negative value on error.
+ */
+int
+d_putenv(char *name)
+{
+	int env_errno;
+	int rc;
+
+	d_env_rwlock_wrlock();
+	errno     = 0;
+	rc        = putenv(name);
+	env_errno = errno;
+	d_env_rwlock_unlock();
+
+	errno = env_errno;
+	return rc;
+}
+
+/**
+ * Thread safe wrapper of the libc setenv() function.
+ *
+ * \param[in]	name		name of the environment variable.
+ * \param[in]	value		value of the environment variable.
+ * \param[in]	overwrite	overwrite when nonzero.
+ * \return			0 on success, a negative value on error.
+ */
+int
+d_setenv(const char *name, const char *value, int overwrite)
+{
+	int env_errno;
+	int rc;
+
+	d_env_rwlock_wrlock();
+	errno     = 0;
+	rc        = setenv(name, value, overwrite);
+	env_errno = errno;
+	d_env_rwlock_unlock();
+
+	errno = env_errno;
+	return rc;
+}
+
+/**
+ * Thread safe wrapper of the libc unsetenv() function.
+ *
+ * \param[in]	name		name of the environment variable.
+ * \return			0 on success, a negative value on error.
+ */
+int
+d_unsetenv(const char *name)
+{
+	int env_errno;
+	int rc;
+
+	d_env_rwlock_wrlock();
+	errno     = 0;
+	rc        = unsetenv(name);
+	env_errno = errno;
+	d_env_rwlock_unlock();
+
+	errno = env_errno;
+	return rc;
+}
+
+/**
+ * Thread safe wrapper of the libc clearenv() function.
+ *
+ * \param[in]	name		name of the environment variable.
+ * \return			0 on success, a negative value on error.
+ */
+int
+d_clearenv(void)
+{
+	int rc;
+
+	d_env_rwlock_wrlock();
+	rc = clearenv();
+	d_env_rwlock_unlock();
+
+	return rc;
 }
 
 /**

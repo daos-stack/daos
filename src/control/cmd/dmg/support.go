@@ -7,17 +7,14 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/pkg/errors"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
@@ -33,70 +30,32 @@ type collectLogCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	support.CollectLogSubCmd
+	bld strings.Builder
 }
 
-// Copy Admin logs to TargetHost (central location) if option is provided.
-func (cmd *collectLogCmd) rsyncAdminLog() error {
-
-	runcmd := strings.Join([]string{
-		"rsync",
-		"-av",
-		"--blocking-io",
-		cmd.TargetFolder + "/",
-		cmd.TargetHost + ":" + cmd.TargetFolder}, " ")
-
-	cmd.Debugf("Rsync Admin Log command = %s", runcmd)
-	rsyncCmd := exec.Command("sh", "-c", runcmd)
-	var stdout, stderr bytes.Buffer
-	rsyncCmd.Stdout = &stdout
-	rsyncCmd.Stderr = &stderr
-	err := rsyncCmd.Run()
-	outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
-	if err != nil {
-		return errors.Wrapf(err, "Error running command %s with %s", rsyncCmd, err)
-	}
-	cmd.Debugf("rsyncCmd:= %s stdout:\n%s\nstderr:\n%s\n", rsyncCmd, outStr, errStr)
-
-	return nil
-}
-
-// gRPC call to initiate the rsync and copy the logs to Admin/TargetHost (central location).
+// gRPC call to initiate the rsync and copy the logs to Admin (central location).
 func (cmd *collectLogCmd) rsyncLog() error {
 	hostName, err := support.GetHostName()
 	if err != nil {
 		return err
 	}
 
-	// Admin host will be the central host to collect all the logs from servers.
-	// Logs will be rsync to TargetHost is provided.
-	if cmd.TargetHost == "" {
-		cmd.TargetHost = hostName
-	} else {
-		// initiate the rsync and copy the Admin logs to targetHost
-		err = cmd.rsyncAdminLog()
-		if err != nil && cmd.Stop {
-			return err
-		}
-	}
-
 	req := &control.CollectLogReq{
 		TargetFolder: cmd.TargetFolder,
-		TargetHost:   cmd.TargetHost,
+		AdminNode:    hostName,
 		LogFunction:  support.RsyncLogEnum,
 	}
-	cmd.Debugf("Rsync logs from servers to %s:%s ", cmd.TargetHost, cmd.TargetFolder)
-	resp, err := control.CollectLog(context.Background(), cmd.ctlInvoker, req)
+	cmd.Debugf("Rsync logs from servers to %s:%s ", hostName, cmd.TargetFolder)
+	resp, err := control.CollectLog(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil && cmd.Stop {
 		return err
 	}
 	if len(resp.GetHostErrors()) > 0 {
-		var bld strings.Builder
-		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+		if err := pretty.UpdateErrorSummary(resp, "rsync", &cmd.bld); err != nil {
 			return err
 		}
-		cmd.Info(bld.String())
 		return resp.Errors()
 	}
 
@@ -105,22 +64,25 @@ func (cmd *collectLogCmd) rsyncLog() error {
 
 // gRPC call to Archive the logs on individual servers.
 func (cmd *collectLogCmd) archLogsOnServer() error {
+	hostName, err := support.GetHostName()
+	if err != nil {
+		return err
+	}
+
 	req := &control.CollectLogReq{
 		TargetFolder: cmd.TargetFolder,
-		TargetHost:   cmd.TargetHost,
+		AdminNode:    hostName,
 		LogFunction:  support.ArchiveLogsEnum,
 	}
 	cmd.Debugf("Archiving the Log Folder %s", cmd.TargetFolder)
-	resp, err := control.CollectLog(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.CollectLog(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil && cmd.Stop {
 		return err
 	}
 	if len(resp.GetHostErrors()) > 0 {
-		var bld strings.Builder
-		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+		if err := pretty.UpdateErrorSummary(resp, "archive", &cmd.bld); err != nil {
 			return err
 		}
-		cmd.Info(bld.String())
 		return resp.Errors()
 	}
 
@@ -146,7 +108,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	// set of support collection steps to show in progress bar
 	progress := support.ProgressBar{
 		Total:     len(LogCollection) + len(DmgInfoCollection) + 1, // Extra 1 is for rsync operation.
-		NoDisplay: cmd.jsonOutputEnabled(),
+		NoDisplay: cmd.JSONOutputEnabled(),
 	}
 
 	// Add custom log location
@@ -162,8 +124,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	progress.Steps = 100 / progress.Total
 
 	// Default TargetFolder location where logs will be copied.
+	// Included Date and time stamp to the log folder.
 	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = filepath.Join(os.TempDir(), "daos_support_server_logs")
+		folderName := fmt.Sprintf("daos_support_server_logs_%s", time.Now().Format(time.RFC3339))
+		cmd.TargetFolder = filepath.Join(os.TempDir(), folderName)
 	}
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
 	if err := os.Mkdir(cmd.TargetFolder, 0700); err != nil && !os.IsExist(err) {
@@ -187,7 +151,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	for logFunc, logCmdSet := range LogCollection {
 		for _, logCmd := range logCmdSet {
 			cmd.Debugf("Log Function %d -- Log Collect Cmd %s ", logFunc, logCmd)
-			ctx := context.Background()
+			ctx := cmd.MustLogCtx()
 			req := &control.CollectLogReq{
 				TargetFolder: cmd.TargetFolder,
 				ExtraLogsDir: cmd.ExtraLogsDir,
@@ -201,11 +165,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				return err
 			}
 			if len(resp.GetHostErrors()) > 0 {
-				var bld strings.Builder
-				if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+				if err := pretty.UpdateErrorSummary(resp, logCmd, &cmd.bld); err != nil {
 					return err
 				}
-				cmd.Info(bld.String())
+
 				if cmd.Stop {
 					return resp.Errors()
 				}
@@ -219,7 +182,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.Config = cmd.cfgCmd.config.Path
 	params.TargetFolder = cmd.TargetFolder
 	params.ExtraLogsDir = cmd.ExtraLogsDir
-	params.JsonOutput = cmd.jsonOutputEnabled()
+	params.JsonOutput = cmd.JSONOutputEnabled()
 	params.Hostlist = strings.Join(cmd.hostlist, " ")
 	for logFunc, logCmdSet := range DmgInfoCollection {
 		for _, logCmd := range logCmdSet {
@@ -228,7 +191,6 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
-				fmt.Println(err)
 				if cmd.Stop {
 					return err
 				}
@@ -266,8 +228,16 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 	fmt.Printf(progress.Display())
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
+	}
+
+	// Print the support command summary.
+	if len(cmd.bld.String()) == 0 {
+		fmt.Println("Summary : All Commands Successfully Executed")
+	} else {
+		fmt.Println("Summary :")
+		cmd.Info(cmd.bld.String())
 	}
 
 	return nil

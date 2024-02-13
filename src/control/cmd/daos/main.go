@@ -9,7 +9,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"runtime/debug"
@@ -21,102 +20,36 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
-	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-type (
-	jsonOutputter interface {
-		enableJsonOutput(bool, io.Writer, *atm.Bool)
-		jsonOutputEnabled() bool
-		outputJSON(interface{}, error) error
-		errorJSON(error) error
-	}
-
-	jsonOutputCmd struct {
-		wroteJSON      *atm.Bool
-		writer         io.Writer
-		shouldEmitJSON bool
-	}
-)
-
-func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool, w io.Writer, wj *atm.Bool) {
-	cmd.shouldEmitJSON = emitJson
-	cmd.writer = w
-	cmd.wroteJSON = wj
-}
-
-func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
-	return cmd.shouldEmitJSON
-}
-
-func outputJSON(out io.Writer, in interface{}, cmdErr error) error {
-	status := 0
-	var errStr *string
-	if cmdErr != nil {
-		errStr = func() *string { str := cmdErr.Error(); return &str }()
-		if s, ok := errors.Cause(cmdErr).(daos.Status); ok {
-			status = int(s)
-		} else {
-			status = int(daos.MiscError)
-		}
-	}
-
-	data, err := json.MarshalIndent(struct {
-		Response interface{} `json:"response"`
-		Error    *string     `json:"error"`
-		Status   int         `json:"status"`
-	}{in, errStr, status}, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	if _, err = out.Write(append(data, []byte("\n")...)); err != nil {
-		return err
-	}
-
-	return cmdErr
-}
-
-func (cmd *jsonOutputCmd) outputJSON(in interface{}, cmdErr error) error {
-	if cmd.wroteJSON.IsTrue() {
-		return cmdErr
-	}
-	cmd.wroteJSON.SetTrue()
-	return outputJSON(cmd.writer, in, cmdErr)
-}
-
-func errorJSON(err error) error {
-	return outputJSON(os.Stdout, nil, err)
-}
-
-func (cmd *jsonOutputCmd) errorJSON(err error) error {
-	return cmd.outputJSON(nil, err)
-}
-
-var _ jsonOutputter = (*jsonOutputCmd)(nil)
-
-type cmdLogger interface {
-	setLog(*logging.LeveledLogger)
-}
-
 type cliOptions struct {
-	Debug      bool           `long:"debug" description:"enable debug output"`
-	Verbose    bool           `long:"verbose" description:"enable verbose output (when applicable)"`
-	JSON       bool           `long:"json" short:"j" description:"enable JSON output"`
-	Container  containerCmd   `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
-	Pool       poolCmd        `command:"pool" description:"perform tasks related to DAOS pools"`
+	Debug      bool           `long:"debug" description:"Enable debug output"`
+	Verbose    bool           `long:"verbose" description:"Enable verbose output (when applicable)"`
+	JSON       bool           `long:"json" short:"j" description:"Enable JSON output"`
+	Container  containerCmd   `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
+	Pool       poolCmd        `command:"pool" description:"Perform tasks related to DAOS pools"`
 	Filesystem fsCmd          `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
 	Object     objectCmd      `command:"object" alias:"obj" description:"DAOS object operations"`
 	System     systemCmd      `command:"system" alias:"sys" description:"DAOS system operations"`
-	Version    versionCmd     `command:"version" description:"print daos version"`
+	Version    versionCmd     `command:"version" description:"Print daos version"`
 	ManPage    cmdutil.ManCmd `command:"manpage" hidden:"true"`
 }
 
-type versionCmd struct{}
+type versionCmd struct {
+	cmdutil.JSONOutputCmd
+}
 
 func (cmd *versionCmd) Execute(_ []string) error {
-	fmt.Printf("daos version %s, libdaos %s\n", build.DaosVersion, apiVersion())
+	if cmd.JSONOutputEnabled() {
+		buf, err := build.MarshalJSON(build.CLIUtilName)
+		if err != nil {
+			return err
+		}
+		return cmd.OutputJSON(json.RawMessage(buf), nil)
+	}
+
+	fmt.Printf("%s, libdaos v%s\n", build.String(build.CLIUtilName), apiVersion())
 	os.Exit(0)
 	return nil
 }
@@ -161,12 +94,10 @@ or query/manage an object inside a container.`
 			log.Debug("debug output enabled")
 		}
 
-		if jsonCmd, ok := cmd.(jsonOutputter); ok {
-			jsonCmd.enableJsonOutput(opts.JSON, os.Stdout, &wroteJSON)
-			if opts.JSON {
-				// disable output on stdout other than JSON
-				log.ClearLevel(logging.LogLevelInfo)
-			}
+		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
+			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
+			// disable output on stdout other than JSON
+			log.ClearLevel(logging.LogLevelInfo)
 		}
 
 		if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
@@ -232,7 +163,7 @@ or query/manage an object inside a container.`
 
 	_, err = p.ParseArgs(args)
 	if opts.JSON && wroteJSON.IsFalse() {
-		return errorJSON(err)
+		return cmdutil.OutputJSON(os.Stdout, nil, err)
 	}
 	return err
 }

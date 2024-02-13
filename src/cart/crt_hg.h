@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,10 +27,43 @@
 /** number of prepost HG handles when enable pool */
 #define CRT_HG_POOL_PREPOST_NUM	(16)
 
+/** default values for init / incr to prepost handles */
+#define CRT_HG_POST_INIT        (512)
+#define CRT_HG_POST_INCR        (512)
+
 struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
 
+/**
+ * Enumeration specifying providers supported by the library
+ */
+typedef enum {
+	CRT_PROV_SM		= 0,
+	CRT_PROV_OFI_SOCKETS,
+	CRT_PROV_OFI_VERBS_RXM,
+	CRT_PROV_OFI_GNI,
+	CRT_PROV_OFI_TCP,
+	CRT_PROV_OFI_TCP_RXM,
+	CRT_PROV_OFI_CXI,
+	CRT_PROV_OFI_OPX,
+	CRT_PROV_OFI_LAST	= CRT_PROV_OFI_OPX,
+	CRT_PROV_UCX_RC,
+	CRT_PROV_UCX_UD,
+	CRT_PROV_UCX_RC_UD,
+	CRT_PROV_UCX_RC_O,
+	CRT_PROV_UCX_UD_O,
+	CRT_PROV_UCX_RC_UD_O,
+	CRT_PROV_UCX_RC_X,
+	CRT_PROV_UCX_UD_X,
+	CRT_PROV_UCX_RC_UD_X,
+	CRT_PROV_UCX_DC_X,
+	CRT_PROV_UCX_TCP,
+	CRT_PROV_UCX_LAST	= CRT_PROV_UCX_TCP,
+	/* Note: This entry should be the last valid one in enum */
+	CRT_PROV_COUNT,
+	CRT_PROV_UNKNOWN = -1,
+} crt_provider_t;
 
 crt_provider_t
 crt_prov_str_to_prov(const char *prov_str);
@@ -97,6 +130,8 @@ struct crt_hg_context {
 };
 
 /* crt_hg.c */
+int crt_hg_get_protocol_info(const char *info_string, struct na_protocol_info **na_protocol_info_p);
+void crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info);
 int crt_hg_init(void);
 int crt_hg_fini(void);
 int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx, bool primary);
@@ -141,6 +176,7 @@ crt_provider_get_na_config(bool primary, int provider);
 static inline int
 crt_hgret_2_der(int hg_ret)
 {
+	/* Note: DAOS will only consider DER_HG and DER_CANCELED as retryable */
 	switch (hg_ret) {
 	case HG_SUCCESS:
 		return 0;
@@ -158,11 +194,11 @@ crt_hgret_2_der(int hg_ret)
 	case HG_BUSY:
 		return -DER_BUSY;
 	case HG_FAULT:
-	case HG_PROTOCOL_ERROR:
 		return -DER_HG_FATAL;
 	case HG_PERMISSION:
 	case HG_ACCESS:
 		return -DER_NO_PERM;
+	case HG_PROTOCOL_ERROR:
 	default:
 		return -DER_HG;
 	};

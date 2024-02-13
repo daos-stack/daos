@@ -23,46 +23,46 @@ struct vos_iter_dict {
 };
 
 static struct vos_iter_dict vos_iterators[] = {
-	{
-		.id_type	= VOS_ITER_COUUID,
-		.id_name	= "co",
-		.id_ops		= &vos_cont_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_OBJ,
-		.id_name	= "obj",
-		.id_ops		= &vos_oi_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_DKEY,
-		.id_name	= "dkey",
-		.id_ops		= &vos_obj_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_AKEY,
-		.id_name	= "akey",
-		.id_ops		= &vos_obj_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_SINGLE,
-		.id_name	= "single",
-		.id_ops		= &vos_obj_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_RECX,
-		.id_name	= "recx",
-		.id_ops		= &vos_obj_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_DTX,
-		.id_name	= "dtx",
-		.id_ops		= &vos_dtx_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_NONE,
-		.id_name	= "unknown",
-		.id_ops		= NULL,
-	},
+    {
+	.id_type = VOS_ITER_COUUID,
+	.id_name = "co",
+	.id_ops  = &vos_cont_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_OBJ,
+	.id_name = "obj",
+	.id_ops  = &vos_oi_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_DKEY,
+	.id_name = "dkey",
+	.id_ops  = &vos_obj_dkey_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_AKEY,
+	.id_name = "akey",
+	.id_ops  = &vos_obj_akey_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_SINGLE,
+	.id_name = "single",
+	.id_ops  = &vos_obj_sv_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_RECX,
+	.id_name = "recx",
+	.id_ops  = &vos_obj_ev_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_DTX,
+	.id_name = "dtx",
+	.id_ops  = &vos_dtx_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_NONE,
+	.id_name = "unknown",
+	.id_ops  = NULL,
+    },
 };
 
 const char *
@@ -84,15 +84,14 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	struct vos_iterator	*iter = vos_hdl2iter(param->ip_ih);
 	struct vos_iterator	*citer;
 	struct dtx_handle	*old;
-	struct vos_iter_info	 info;
+	struct vos_iter_info     info = {};
 	int			 rc;
 
 	D_ASSERT(iter->it_ops != NULL);
 
 	if (dict->id_ops->iop_nested_prepare == NULL ||
 	    iter->it_ops->iop_nested_tree_fetch == NULL) {
-		D_ERROR("nested iterator prepare isn't supported for %s",
-			dict->id_name);
+		D_ERROR("nested iterator prepare isn't supported for %s\n", dict->id_name);
 		return -DER_NOSYS;
 	}
 
@@ -118,13 +117,11 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 
 	info.ii_epc_expr = param->ip_epc_expr;
 	info.ii_recx = param->ip_recx;
-	info.ii_flags = param->ip_flags;
-	info.ii_akey = &param->ip_akey;
+	info.ii_flags    = param->ip_flags;
 
 	rc = dict->id_ops->iop_nested_prepare(type, &info, &citer);
 	if (rc != 0) {
-		D_ERROR("Failed to prepare %s iterator: %d\n", dict->id_name,
-			rc);
+		D_ERROR("Failed to prepare %s iterator: " DF_RC "\n", dict->id_name, DP_RC(rc));
 		goto out;
 	}
 
@@ -365,7 +362,8 @@ static inline int
 iter_verify_state(struct vos_iterator *iter)
 {
 	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialize cursor\n");
+		D_ERROR("Please call vos_iter_probe to initialize cursor " DF_RC "\n",
+			DP_RC(-DER_NO_PERM));
 		return -DER_NO_PERM;
 	} else if (iter->it_state == VOS_ITS_END) {
 		D_DEBUG(DB_TRACE, "The end of iteration\n");

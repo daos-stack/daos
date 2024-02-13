@@ -316,7 +316,7 @@ sudo ipcrm -M 0x10242049
 1. Verify that the `access_points` host is accessible and the port is not used.
 1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide for determining the right provider to use.
 1. Check `fabric_iface` in `engines`. They should be available and enabled.
-1. Check that `socket_dir` is writeable by the daos_server.
+1. Check that `socket_dir` is writable by the daos_server.
 
 ### Errors creating a Pool
 1. Check which engine rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
@@ -463,6 +463,15 @@ fabric_iface_port: 31316
 # engine 1
 fabric_iface_port: 31416
 ```
+### daos_agent cache of engine URIs is stale
+
+The `daos_agent` cache may become invalid if `daos_engine` processes restart with different
+configurations or IP addresses, or if the DAOS system is reformatted.
+If this happens, the `daos` tool (as well as other I/O or `libdaos` operations) may return
+`-DER_BAD_TARGET` (-1035) errors.
+
+To resolve the issue, a privileged user may send a `SIGUSR2` signal to the `daos_agent` process to
+force an immediate cache refresh.
 
 ## Diagnostic and Recovery Tools
 
@@ -898,7 +907,7 @@ Please refer the [ndctl list](https://docs.pmem.io/ndctl-user-guide/ndctl-man-pa
 
 The pmempool is a management tool for Persistent Memory pool files created by PMDK libraries.
 DAOS uses the PMDK library to manage persistence inside ext4 files.
-[pmempool](https://pmem.io/pmdk/manpages/linux/v1.9/pmempool/pmempool-check.1/) can check consistency of a given pool file.
+[pmempool](https://github.com/pmem/pmdk/blob/stable-2.0/doc/pmempool/pmempool-check.1.md) can check consistency of a given pool file.
 It can be run with -r (repair) option which can fix some of the issues with pool file. DAOS will have more number of such pool file (vos-*), based
 on number of targets mention per daos engine. User may need to check each vos pool file for corruption on faulty pool.
 

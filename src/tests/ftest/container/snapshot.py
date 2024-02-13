@@ -5,10 +5,9 @@
 """
 import traceback
 
-from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError, c_uuid_to_str
-
 from apricot import TestWithServers
 from general_utils import get_random_bytes
+from pydaos.raw import DaosApiError, DaosContainer, DaosSnapshot, c_uuid_to_str
 
 
 # pylint: disable=broad-except
@@ -141,7 +140,7 @@ class Snapshot(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=container,smoke,snap,snapshot
-        :avocado: tags=snapshot_negative,snapshotcreate_negative,test_snapshot_negativecases
+        :avocado: tags=Snapshot,test_snapshot_negativecases
         """
 
         # DAOS-1322 Create a new container, verify snapshot state as expected
@@ -315,7 +314,7 @@ class Snapshot(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,smoke,snap,snapshot
-        :avocado: tags=snapshots,test_snapshots
+        :avocado: tags=Snapshot,test_snapshots
         """
 
         test_data = []

@@ -69,7 +69,7 @@ call_abt_method(void *arg, enum AbtThreadCreateType flag,
 						  newthread);
 	} else {
 		rc = ABT_ERR_INV_ARG;
-		D_ERROR("unsupported ABT_thread_create[_...]() API type");
+		D_ERROR("unsupported ABT_thread_create[_...]() API type\n");
 	}
 	return rc;
 }
