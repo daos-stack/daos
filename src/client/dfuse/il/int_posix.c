@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1757,7 +1757,9 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc == 0) {
+#ifdef _STAT_VER
 		struct stat buf;
+#endif
 
 		DFUSE_LOG_DEBUG("mmap(address=%p, length=%zu, prot=%d, flags=%d,"
 				" fd=%d, offset=%zd) "
@@ -1770,7 +1772,9 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 		entry->fd_status = DFUSE_IO_DIS_MMAP;
 
 		/* DAOS-14494: Force the kernel to update the size before mapping. */
+#ifdef _STAT_VER
 		__real___fxstat(_STAT_VER, fd, &buf);
+#endif
 
 		vector_decref(&fd_table, entry);
 	}

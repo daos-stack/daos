@@ -523,7 +523,7 @@ do_mmap(void **state)
 	assert_return_code(root, errno);
 
 	/* Always unlink the file but do not check for errors.  If running the test manually the
-	 * file might pre-exist and affect the behaviour.
+	 * file might pre-exist and affect the behavior.
 	 */
 	unlinkat(root, "file", 0);
 
