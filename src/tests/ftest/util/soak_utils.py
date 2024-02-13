@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -67,10 +67,10 @@ def add_pools(self, pool_names, ranks=None):
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         properties = self.params.get('properties', path, "")
-        # allow yaml pool property to overide the scrub default; whether scrubber is enabled or not
+        # allow yaml pool property to override the scrub default; whether scrubber is enabled or not
         if self.enable_scrubber and "scrub" not in properties:
             scrubber_properties = "scrub:timed,scrub-freq:10"
-        params['properties'] = (",").join(filter(None, [properties,scrubber_properties]))
+        params['properties'] = (",").join(filter(None, [properties, scrubber_properties]))
         # Create a pool and add it to the overall list of pools
         self.pool.append(self.get_pool(
             namespace=path,
