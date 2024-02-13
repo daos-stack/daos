@@ -82,6 +82,9 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(dfuse_info, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(dfuse_info, "readahead %#x", conn->max_readahead);
 
+	if (conn->capable & FUSE_CAP_PARALLEL_DIROPS)
+		conn->want |= FUSE_CAP_PARALLEL_DIROPS;
+
 	DFUSE_TRA_INFO(dfuse_info, "kernel readdir cache support compiled in");
 
 	conn->want |= FUSE_CAP_READDIRPLUS;
