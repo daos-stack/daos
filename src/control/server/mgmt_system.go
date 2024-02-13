@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -152,7 +152,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		return nil, errors.Wrapf(err, "invalid server fault domain %q", req.SrvFaultDomain)
 	}
 
-	if err := svc.checkReqFabricProvider(req, svc.events); err != nil {
+	if err := svc.checkReqFabricProvider(req, peerAddr, svc.events); err != nil {
 		return nil, err
 	}
 
@@ -203,7 +203,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 	return resp, nil
 }
 
-func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, publisher events.Publisher) error {
+func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, peerAddr *net.TCPAddr, publisher events.Publisher) error {
 	joinProv, err := getProviderFromURI(req.Uri)
 	if err != nil {
 		return err
@@ -218,7 +218,7 @@ func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, publisher events
 		msg := fmt.Sprintf("rank %d fabric provider %q does not match system provider %q",
 			req.Rank, joinProv, sysProv)
 
-		publisher.Publish(events.NewEngineJoinFailedEvent(req.Addr, req.Idx, req.Rank, msg))
+		publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, msg))
 		return errors.New(msg)
 	}
 

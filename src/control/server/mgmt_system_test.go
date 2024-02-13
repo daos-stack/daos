@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -2266,7 +2266,11 @@ func TestMgmtSvc_checkReqFabricProvider(t *testing.T) {
 				Uri:  tc.joinURI,
 				Rank: 12,
 			}
-			err := svc.checkReqFabricProvider(req, mockPub)
+			addr := &net.TCPAddr{
+				IP:   net.IPv4(1, 2, 3, 4),
+				Port: 5678,
+			}
+			err := svc.checkReqFabricProvider(req, addr, mockPub)
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -2278,6 +2282,7 @@ func TestMgmtSvc_checkReqFabricProvider(t *testing.T) {
 				test.AssertEqual(t, events.RASEngineJoinFailed, gotEvent.ID, "")
 				test.AssertEqual(t, events.RASSeverityError, gotEvent.Severity, "")
 				test.AssertEqual(t, req.Rank, gotEvent.Rank, "")
+				test.AssertEqual(t, addr.String(), gotEvent.Hostname, "")
 			}
 		})
 	}
