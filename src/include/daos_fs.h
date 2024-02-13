@@ -98,6 +98,10 @@ typedef struct {
 	daos_oclass_id_t	doi_oclass_id;
 	/** chunk size */
 	daos_size_t		doi_chunk_size;
+	/** In case of dir, return default object class for dirs created in that dir */
+	daos_oclass_id_t        doi_dir_oclass_id;
+	/** In case of dir, return default object class for files created in that dir */
+	daos_oclass_id_t        doi_file_oclass_id;
 } dfs_obj_info_t;
 
 /**
