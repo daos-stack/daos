@@ -751,10 +751,10 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		else
-			DL_ERROR(rc, DF_CONT DF_UOID " rpc %p opc %d to rank %d tag %d",
-				 DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
-				 DP_UOID(orw->orw_oid), rw_args->rpc, opc,
-				 rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag);
+			D_ERROR(DF_CONT DF_UOID " rpc %p opc %d to rank %d tag %d: " DF_RC "\n",
+				DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
+				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
+				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 
 		if (opc == DAOS_OBJ_RPC_FETCH) {
 			/* For EC obj fetch, set orr_epoch as highest server
@@ -2080,7 +2080,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
 				cb_args->rpc, opc, rc);
 		else
-			DL_ERROR(rc, "rpc %p RPC %d failed", cb_args->rpc, opc);
+			D_ERROR("rpc %p RPC %d failed: %d\n", cb_args->rpc, opc, rc);
 
 		if (rc == -DER_OVERLOAD_RETRY) {
 			uint32_t			 timeout = 0;
