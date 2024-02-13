@@ -209,21 +209,12 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 
 	ie->ie_obj = 0;
 
-	/* Due to DAOS-14476 using the lookup to perform a stat will always succeed, so instead
-	 * call ostat afterwards
-	 */
-	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, NULL);
+	/* This is where a I/O failure will happen when accessing a idle but evicted container */
+	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
 		DFUSE_TRA_ERROR(dfs, "dfs_lookup() returned: %d (%s)", rc, strerror(rc));
-		D_GOTO(out_dfs, rc);
-	}
-
-	rc = dfs_ostat(dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
-	if (rc) {
 		ie->ie_stat.st_ino = dfs->dfs_ino;
-		ie->ie_dfs         = NULL;
-		DHS_ERROR(dfs, rc, "dfs_ostat() failed");
-		goto out_dfs;
+		D_GOTO(out_dfs, rc);
 	}
 
 	ie->ie_stat.st_ino = dfs->dfs_ino;
@@ -320,7 +311,6 @@ out:
 		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
 	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	}
 
 	if (evict) {
 		D_INFO("Calling inval_entry %#lx " DF_DE " cinode %#lx", pinode, DP_DE(name),
