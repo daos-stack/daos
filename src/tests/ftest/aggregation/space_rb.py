@@ -40,7 +40,7 @@ class SpaceRb(IorTestBase):
             job_num (int): Indicator to be used in the message.
             block_size (str): Block size parameter for the IOR.
             transfer_size (str): Transfer size parameter for the IOR.
-            errors (list): List to collect the errors occured during the test.
+            errors (list): List to collect the errors occurred during the test.
         """
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
