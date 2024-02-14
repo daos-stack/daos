@@ -1,0 +1,29 @@
+hosts:
+  test_servers: 1
+  test_clients: 1
+
+timeout: 480
+
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server_0.log
+      storage: auto
+
+pool:
+  size: 80G
+  properties: space_rb:50
+
+container:
+  type: POSIX
+  control_method: daos
+
+ior:
+  flags: -w
+  api: DFS
