@@ -1,8 +1,8 @@
 daos (2.5.100-15) unstable; urgency=medium
-  [ Dalton Bohning ]
-  * Add tags.py
+  [ Ryon Jensen ]
+  * NOOP change to keep in parity with RPM version
 
- -- Dalton Bohning <dalton.bohning@intel.com>  Thu, 08 Feb 2024 12:00:00 -0500
+ -- Ryon Jensen <ryon.jensen@intel.com>  Mon, 12 Feb 2024 11:16:00 -0700
 
 daos (2.5.100-14) unstable; urgency=medium
   [ Brian J. Murrell ]

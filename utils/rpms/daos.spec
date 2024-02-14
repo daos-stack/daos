@@ -67,7 +67,7 @@ BuildRequires: capstone-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
-BuildRequires: libisa-l-devel
+BuildRequires: isa-l-devel
 BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
@@ -586,8 +586,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thu Feb 08 2024 Dalton Bohning <dalton.bohning@intel.com> 2.5.100-15
-- Add ftest/tags.py
+* Mon Feb 12 2024 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-15
+- Updated isa-l package name to match EPEL
 
 * Tue Jan 09 2024 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-14
 - Move /etc/ld.so.conf.d/daos.conf to daos-server sub-package
