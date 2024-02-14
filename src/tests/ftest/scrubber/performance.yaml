@@ -46,7 +46,7 @@ ior:
   read_flags: "-r -R -C -e -g -G 27 -k -Q 1 -v"
   api: DFS
   block_size: 150G
-  dfs_oclass: RP_2G1
+  dfs_oclass: RP_2GX
   dfs_chunk: 4MiB
   transfer_size: 4MiB
   sw_deadline: 30
