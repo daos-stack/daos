@@ -502,17 +502,25 @@ Rank UUID                                 Control Address Fault Domain State   R
 
 Alternately, monitoring RAS events will alert you to these failures. Relevant RAS event IDs are:
 
-- system_fabric_provider_changed: This informational event will be generated when an MS leader node
+- `system_fabric_provider_changed`: This informational event will be generated when an MS leader node
   detects that the provider changed locally.
-- engine_join_failed: One of these error events will be generated for each rank that fails to join.
+- `engine_join_failed`: One of these error events will be generated for each rank that fails to join.
 
-Example from syslog:
+Examples from syslog:
 
 ```
 daos_server[3302185]: id: [system_fabric_provider_changed] ts: [2024-02-13T20:08:50.956+00:00] host: [boro-74.boro.hpdd.intel.com] type: [INFO] sev: [NOTICE] msg: [system fabric provider has changed: ofi+tcp -> ofi+tcp;ofi_rxm] pid: [3302185]
 daos_server[3302185]: id: [engine_join_failed] ts: [2024-02-13T20:08:57.607+00:00] host: [10.7.1.75:10001] type: [INFO] sev: [ERROR] msg: [DAOS engine 0 (rank 1) was not allowed to join the system] pid: [3302185] rank: [1] data: [rank 1 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"]
 daos_server[3302185]: id: [engine_join_failed] ts: [2024-02-13T20:08:57.869+00:00] host: [10.7.1.75:10001] type: [INFO] sev: [ERROR] msg: [DAOS engine 1 (rank 3) was not allowed to join the system] pid: [3302185] rank: [3] data: [rank 3 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"]
 ```
+
+To resolve the issue:
+
+- Determine which `daos_server` hosts need their fabric provider updated by analyzing which ranks were errored.
+- Stop all `daos_server` processes.
+- Update the configuration files with the correct fabric provider.
+- Start all `daos_server` processes.
+- Verify that all ranks were able to re-join via `dmg system query`.
 
 ## Diagnostic and Recovery Tools
 
