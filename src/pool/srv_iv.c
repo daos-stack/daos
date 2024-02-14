@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1312,7 +1312,7 @@ retry:
 	pool_key->pik_entry_size = iv_entry_size;
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
+		D_INFO(DF_UUID" iv fetch failed "DF_RC"\n", DP_UUID(pool->sp_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

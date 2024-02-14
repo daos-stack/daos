@@ -722,7 +722,7 @@ pool_fetch_hdls_ult(void *data)
 	}
 	rc = ds_pool_iv_conn_hdl_fetch(pool);
 	if (rc) {
-		D_ERROR("iv conn fetch %d\n", rc);
+		D_INFO(DF_UUID" iv conn fetch %d\n", DP_UUID(pool->sp_uuid), rc);
 		D_GOTO(out, rc);
 	}
 
