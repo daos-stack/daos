@@ -1,12 +1,14 @@
 """
-(C) Copyright 2022-2023 Intel Corporation.
+(C) Copyright 2022-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import sys
+import time
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
+from command_utils_base import CommandFailure
 from general_utils import bytes_to_human
 
 
@@ -73,6 +75,24 @@ class PoolCreateAllTestBase(TestWithServers):
 
         return host_size * scm_engine_bytes, host_size * nvme_engine_bytes
 
+    def wait_for_pool_destroyed(self, pool_idx):
+        """Repeatedly query the pool until the command fails to detect if the pool is destroyed.
+
+        Args:
+            pool_idx (int): Pool index to indicate which pool to query.
+        """
+        count = 0
+        while True:
+            self.log.info("Wait for a few seconds for the pool to be destroyed...")
+            time.sleep(5)
+            try:
+                self.dmg.pool_query(pool=self.pool[pool_idx].identifier)
+                self.log.info("Pool query worked. Pool hasn't been destroyed. Try again. %d", count)
+                count += 1
+            except CommandFailure as error:
+                self.log.info("Pool query failed. Pool should have been destroyed. %s", error)
+                break
+
     def check_pool_full_storage(self, scm_delta_bytes, nvme_delta_bytes=None, ranks=None):
         """Check the creation of one pool with all the storage capacity.
 
@@ -106,6 +126,7 @@ class PoolCreateAllTestBase(TestWithServers):
                 "Pool with invalid ranks: wait={} got={}".format(wait_ranks, got_ranks))
         self.log.info("Pool created: scm_size=%d, nvme_size=%d", *tier_bytes)
         self.pool[pool_idx].destroy()
+        self.wait_for_pool_destroyed(pool_idx=pool_idx)
         pool_idx += 1
 
         rank_count = len(ranks) if ranks is not None else self.engines_count
@@ -127,6 +148,7 @@ class PoolCreateAllTestBase(TestWithServers):
             self.pool[pool_idx].target_list.update(ranks, "pool[{}].target_list".format(pool_idx))
         self.pool[pool_idx].create()
         self.pool[pool_idx].destroy()
+        self.wait_for_pool_destroyed(pool_idx=pool_idx)
         pool_idx += 1
 
         self.log.info(
