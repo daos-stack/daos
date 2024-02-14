@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,12 +12,14 @@ package srv;
 option go_package = "github.com/daos-stack/daos/src/control/common/proto/srv";
 
 message NotifyReadyReq {
-	string uri = 1; // CaRT URI
-	uint32 nctxs = 2; // Number of CaRT contexts
+	string uri = 1; // Primary CaRT URI
+	uint32 nctxs = 2; // Number of primary CaRT contexts
 	string drpcListenerSock = 3; // Path to I/O Engine's dRPC listener socket
 	uint32 instanceIdx = 4; // I/O Engine instance index
 	uint32 ntgts = 5; // number of VOS targets allocated in I/O Engine
 	uint64 incarnation = 6; // HLC incarnation number
+	repeated string secondaryUris = 7; // secondary CaRT URIs
+	repeated uint32 secondaryNctxs = 8; // number of CaRT contexts for each secondary provider
 }
 
 // NotifyReadyResp is nil.

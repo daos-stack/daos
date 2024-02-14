@@ -878,17 +878,25 @@ func mockGetAddrInterface(name string) (addrFI, error) {
 }
 
 func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
-	testSet := hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
-		Name:          "dev0",
-		NetInterfaces: common.NewStringSet("test0"),
-		DeviceClass:   hardware.Ether,
-		Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
-	})
+	testSet := hardware.NewFabricInterfaceSet(
+		&hardware.FabricInterface{
+			Name:          "dev0",
+			NetInterfaces: common.NewStringSet("test0"),
+			DeviceClass:   hardware.Ether,
+			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
+		},
+		&hardware.FabricInterface{
+			Name:          "dev1",
+			NetInterfaces: common.NewStringSet("test1"),
+			DeviceClass:   hardware.Ether,
+			Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
+		})
 
 	for name, tc := range map[string]struct {
 		getInfoCache    func(logging.Logger) *InfoCache
 		devClass        hardware.NetDevClass
 		provider        string
+		iface           string
 		fabricResp      *hardware.FabricInterfaceSet
 		fabricErr       error
 		expResult       *FabricInterface
@@ -1001,12 +1009,7 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 				Domain:      "dev0",
 				NetDevClass: hardware.Ether,
 			},
-			expCachedFabric: hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
-				Name:          "dev0",
-				NetInterfaces: common.NewStringSet("test0"),
-				DeviceClass:   hardware.Ether,
-				Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
-			}),
+			expCachedFabric: testSet,
 		},
 		"requested not found": {
 			getInfoCache: func(l logging.Logger) *InfoCache {
@@ -1022,16 +1025,36 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 				})
 				return ic
 			},
+			devClass:        hardware.Ether,
+			provider:        "bad",
+			fabricErr:       errors.New("shouldn't call scan"),
+			expErr:          errors.New("no suitable fabric interface"),
+			expCachedFabric: testSet,
+		},
+		"specific interface": {
+			getInfoCache: func(l logging.Logger) *InfoCache {
+				ic := newTestInfoCache(t, l, testInfoCacheParams{})
+				nf := NUMAFabricFromScan(test.Context(t), l, testSet)
+				nf.getAddrInterface = mockGetAddrInterface
+				ic.cache.Set(&cachedFabricInfo{
+					fetch: func(ctx context.Context, providers ...string) (*NUMAFabric, error) {
+						return nil, errors.New("shouldn't call cached fetch")
+					},
+					lastResults: nf,
+					cacheItem:   cacheItem{lastCached: time.Now()},
+				})
+				return ic
+			},
 			devClass:  hardware.Ether,
-			provider:  "bad",
+			provider:  "testprov",
+			iface:     "test1",
 			fabricErr: errors.New("shouldn't call scan"),
-			expErr:    errors.New("no suitable fabric interface"),
-			expCachedFabric: hardware.NewFabricInterfaceSet(&hardware.FabricInterface{
-				Name:          "dev0",
-				NetInterfaces: common.NewStringSet("test0"),
-				DeviceClass:   hardware.Ether,
-				Providers:     hardware.NewFabricProviderSet(&hardware.FabricProvider{Name: "testprov"}),
-			}),
+			expResult: &FabricInterface{
+				Name:        "test1",
+				Domain:      "dev1",
+				NetDevClass: hardware.Ether,
+			},
+			expCachedFabric: testSet,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1056,7 +1079,11 @@ func TestAgent_InfoCache_GetFabricDevice(t *testing.T) {
 				}
 			}
 
-			result, err := ic.GetFabricDevice(test.Context(t), 0, tc.devClass, tc.provider)
+			result, err := ic.GetFabricDevice(test.Context(t), &FabricIfaceParams{
+				DevClass:  tc.devClass,
+				Provider:  tc.provider,
+				Interface: tc.iface,
+			})
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(FabricInterface{})); diff != "" {

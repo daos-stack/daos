@@ -100,7 +100,12 @@ type scmCmd struct {
 
 func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 	return func(l logging.Logger, e *engine.Config) (uint, error) {
-		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
+		prov, err := e.Fabric.GetPrimaryProvider()
+		if err != nil {
+			return 0, errors.Wrap(err, "getting primary provider")
+		}
+
+		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, prov)
 		if err != nil {
 			return 0, err
 		}
@@ -111,7 +116,12 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 func getAffinitySource(log logging.Logger, cfg *config.Server) (config.EngineAffinityFn, error) {
 	scanner := hwprov.DefaultFabricScanner(log)
 
-	fiSet, err := scanner.Scan(context.Background(), cfg.Fabric.Provider)
+	provs, err := cfg.Fabric.GetProviders()
+	if err != nil {
+		return nil, errors.Wrap(err, "getting configured providers")
+	}
+
+	fiSet, err := scanner.Scan(context.Background(), provs...)
 	if err != nil {
 		return nil, errors.Wrap(err, "scan fabric")
 	}

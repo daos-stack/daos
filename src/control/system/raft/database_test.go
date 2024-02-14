@@ -915,14 +915,38 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			expGroupMap: &GroupMap{
 				Version: 11,
 				RankEntries: map[Rank]RankEntry{
-					0:  {URI: MockControlAddr(t, 0).String()},
-					2:  {URI: MockControlAddr(t, 2).String()},
-					3:  {URI: MockControlAddr(t, 3).String()},
-					4:  {URI: MockControlAddr(t, 4).String()},
-					5:  {URI: MockControlAddr(t, 5).String()},
-					6:  {URI: MockControlAddr(t, 6).String()},
-					9:  {URI: MockControlAddr(t, 9).String()},
-					10: {URI: MockControlAddr(t, 10).String()},
+					0: {
+						PrimaryURI:     MockControlAddr(t, 0).String(),
+						NumPrimaryCtxs: 0,
+					},
+					2: {
+						PrimaryURI:     MockControlAddr(t, 2).String(),
+						NumPrimaryCtxs: 2,
+					},
+					3: {
+						PrimaryURI:     MockControlAddr(t, 3).String(),
+						NumPrimaryCtxs: 3,
+					},
+					4: {
+						PrimaryURI:     MockControlAddr(t, 4).String(),
+						NumPrimaryCtxs: 4,
+					},
+					5: {
+						PrimaryURI:     MockControlAddr(t, 5).String(),
+						NumPrimaryCtxs: 5,
+					},
+					6: {
+						PrimaryURI:     MockControlAddr(t, 6).String(),
+						NumPrimaryCtxs: 6,
+					},
+					9: {
+						PrimaryURI:     MockControlAddr(t, 9).String(),
+						NumPrimaryCtxs: 9,
+					},
+					10: {
+						PrimaryURI:     MockControlAddr(t, 10).String(),
+						NumPrimaryCtxs: 10,
+					},
 				},
 			},
 		},
@@ -931,8 +955,14 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			expGroupMap: &GroupMap{
 				Version: 2,
 				RankEntries: map[Rank]RankEntry{
-					0: {URI: MockControlAddr(t, 0).String()},
-					1: {URI: MockControlAddr(t, 1).String()},
+					0: {
+						PrimaryURI:     MockControlAddr(t, 0).String(),
+						NumPrimaryCtxs: 0,
+					},
+					1: {
+						PrimaryURI:     MockControlAddr(t, 1).String(),
+						NumPrimaryCtxs: 1,
+					},
 				},
 				MSRanks: []Rank{1},
 			},
@@ -944,7 +974,43 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			expGroupMap: &GroupMap{
 				Version: 2,
 				RankEntries: map[Rank]RankEntry{
-					0: {URI: MockControlAddr(t, 0).String()},
+					0: {
+						PrimaryURI:     MockControlAddr(t, 0).String(),
+						NumPrimaryCtxs: 0,
+					},
+				},
+			},
+		},
+		"secondary URIs": {
+			members: []*Member{
+				{
+					Rank:                  2,
+					UUID:                  uuid.MustParse(test.MockUUID(2)),
+					PrimaryFabricURI:      MockControlAddr(t, 2).String(),
+					PrimaryFabricContexts: 8,
+					SecondaryFabricURIs: []string{
+						MockControlAddr(t, 3).String(),
+						MockControlAddr(t, 4).String(),
+					},
+					SecondaryFabricContexts: []uint32{4, 6},
+					Addr:                    MockControlAddr(t, 2),
+					State:                   MemberStateJoined,
+					FaultDomain:             MustCreateFaultDomain(),
+					LastUpdate:              time.Now(),
+				},
+			},
+			expGroupMap: &GroupMap{
+				Version: 1,
+				RankEntries: map[Rank]RankEntry{
+					2: {
+						PrimaryURI:     MockControlAddr(t, 2).String(),
+						NumPrimaryCtxs: 8,
+						SecondaryURIs: []string{
+							MockControlAddr(t, 3).String(),
+							MockControlAddr(t, 4).String(),
+						},
+						NumSecondaryCtxs: []uint32{4, 6},
+					},
 				},
 			},
 		},

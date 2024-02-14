@@ -54,6 +54,7 @@ type Config struct {
 	DisableAutoEvict    bool                      `yaml:"disable_auto_evict,omitempty"`
 	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
+	ProviderIdx         uint                      // TODO: Enable with multiprovider functionality
 }
 
 // NUMAFabricConfig defines a list of fabric interfaces that belong to a NUMA

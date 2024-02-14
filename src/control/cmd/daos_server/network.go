@@ -93,7 +93,10 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 			prov = cmd.FabricProvider
 		}
 	case cmd.config.Fabric.Provider != "":
-		prov = cmd.config.Fabric.Provider
+		priProv, err := cmd.config.Fabric.GetPrimaryProvider()
+		if err == nil {
+			prov = priProv
+		}
 	}
 
 	hf, err := GetLocalFabricIfaces(ctx, fs, prov)

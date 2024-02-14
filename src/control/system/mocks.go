@@ -32,7 +32,7 @@ func MockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
 }
 
 // MockMemberFullSpec returns a reference to a new member struct.
-func MockMemberFullSpec(t *testing.T, rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
+func MockMemberFullSpec(t *testing.T, rank Rank, uuidStr string, uri string, addr *net.TCPAddr, state MemberState) *Member {
 	t.Helper()
 
 	newUUID, err := uuid.Parse(uuidStr)
@@ -41,13 +41,13 @@ func MockMemberFullSpec(t *testing.T, rank Rank, uuidStr, uri string, addr *net.
 	}
 
 	return &Member{
-		Rank:        rank,
-		UUID:        newUUID,
-		FabricURI:   uri,
-		Addr:        addr,
-		State:       state,
-		FaultDomain: MustCreateFaultDomain(),
-		LastUpdate:  time.Now(),
+		Rank:             rank,
+		UUID:             newUUID,
+		PrimaryFabricURI: uri,
+		Addr:             addr,
+		State:            state,
+		FaultDomain:      MustCreateFaultDomain(),
+		LastUpdate:       time.Now(),
 	}
 }
 
@@ -57,7 +57,7 @@ func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Me
 
 	addr := MockControlAddr(t, idx)
 	m := MockMemberFullSpec(t, Rank(idx), test.MockUUID(int32(idx)), addr.String(), addr, state)
-	m.FabricContexts = idx
+	m.PrimaryFabricContexts = idx
 	if len(info) > 0 {
 		m.Info = info[0]
 	}

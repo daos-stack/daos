@@ -879,7 +879,7 @@ func TestServer_getNetDevClass(t *testing.T) {
 	for name, tc := range map[string]struct {
 		configA      *engine.Config
 		configB      *engine.Config
-		expNetDevCls hardware.NetDevClass
+		expNetDevCls []hardware.NetDevClass
 		expErr       error
 	}{
 		"successful validation with matching Infiniband": {
@@ -887,14 +887,21 @@ func TestServer_getNetDevClass(t *testing.T) {
 				WithFabricInterface("ib1"),
 			configB: configB().
 				WithFabricInterface("ib0"),
-			expNetDevCls: hardware.Infiniband,
+			expNetDevCls: []hardware.NetDevClass{hardware.Infiniband},
 		},
 		"successful validation with matching Ethernet": {
 			configA: configA().
 				WithFabricInterface("eth0"),
 			configB: configB().
 				WithFabricInterface("eth1"),
-			expNetDevCls: hardware.Ether,
+			expNetDevCls: []hardware.NetDevClass{hardware.Ether},
+		},
+		"multi interface": {
+			configA: configA().
+				WithFabricInterface(strings.Join([]string{"eth0", "ib0"}, engine.MultiProviderSeparator)),
+			configB: configB().
+				WithFabricInterface(strings.Join([]string{"eth1", "ib1"}, engine.MultiProviderSeparator)),
+			expNetDevCls: []hardware.NetDevClass{hardware.Ether, hardware.Infiniband},
 		},
 		"mismatching net dev class with primary server as ib0 / Infiniband": {
 			configA: configA().
