@@ -10,11 +10,11 @@ export COVFILE="$WORKSPACE/test.cov"
 export PATH="/opt/BullseyeCoverage/bin:$PATH"
 
 echo "======>"
-ls $WORKSPACE/covc_test_logs/
-ls $WORKSPACE/Functional_Hardware_Large/bullseye_coverage_logs/
-ls $WORKSPACE/Functional_Hardware_Medium/bullseye_coverage_logs
-ls $WORKSPACE/Functional_Hardware_Medium_Verbs_Provider/bullseye_coverage_logs/
-ls $WORKSPACE/Functional_on_EL_8.8/bullseye_coverage_logs/
+ls "$WORKSPACE/covc_test_logs/"
+ls "$WORKSPACE/Functional_Hardware_Large/bullseye_coverage_logs/"
+ls "$WORKSPACE/Functional_Hardware_Medium/bullseye_coverage_logs"
+ls "$WORKSPACE/Functional_Hardware_Medium_Verbs_Provider/bullseye_coverage_logs/"
+ls "$WORKSPACE/Functional_on_EL_8.8/bullseye_coverage_logs/"
 echo "<======"
 
 # Decompress any zipped bullseye files, e.g.
