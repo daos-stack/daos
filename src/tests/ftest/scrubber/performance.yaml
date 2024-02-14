@@ -1,7 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 2
-timeout: 1800
+timeout: 660
 setup:
   start_servers_once: false
 server_config:
@@ -28,17 +28,8 @@ server_config:
       env_vars:
         - DD_MASK=mgmt,md,rebuild
       storage: auto
-  transport_config:
-    allow_insecure: true
-agent_config:
-  transport_config:
-    allow_insecure: true
-dmg:
-  transport_config:
-    allow_insecure: true
 pool:
   size: 95%
-  control_method: dmg
   rebuild_timeout: 120
   pool_query_timeout: 30
 container:
@@ -56,7 +47,6 @@ ior:
   api: DFS
   block_size: 150G
   dfs_oclass: RP_2G1
-  dfs_dir_oclass: RP_2GX
   dfs_chunk: 4MiB
   transfer_size: 4MiB
   sw_deadline: 30
