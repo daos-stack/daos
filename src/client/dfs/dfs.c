@@ -568,7 +568,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 
 	/** TODO - not supported yet */
 	if (strcmp(name, ".") == 0)
-		D_ASSERT(0);
+		return ENOTSUP;
 
 	if (xnr) {
 		D_ALLOC_ARRAY(pxnames, xnr);
@@ -2929,19 +2929,33 @@ dfs_obj_copy_attr(dfs_obj_t *obj, dfs_obj_t *src_obj)
 int
 dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 {
-	int	rc;
+	int rc = 0;
 
 	if (obj == NULL || info == NULL)
 		return EINVAL;
 
 	switch (obj->mode & S_IFMT) {
 	case S_IFDIR:
+		/** the oclass of the directory object itself */
+		info->doi_oclass_id = daos_obj_id2class(obj->oid);
+
+		/** what is the default oclass files and dirs will be created with in this dir */
 		if (obj->d.oclass) {
-			info->doi_oclass_id = obj->d.oclass;
-		} else if (dfs->attr.da_dir_oclass_id) {
-			info->doi_oclass_id = dfs->attr.da_dir_oclass_id;
+			info->doi_dir_oclass_id  = obj->d.oclass;
+			info->doi_file_oclass_id = obj->d.oclass;
 		} else {
-			rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0, &info->doi_oclass_id);
+			if (dfs->attr.da_dir_oclass_id)
+				info->doi_dir_oclass_id = dfs->attr.da_dir_oclass_id;
+			else
+				rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0,
+							 &info->doi_dir_oclass_id);
+
+			if (dfs->attr.da_file_oclass_id)
+				info->doi_file_oclass_id = dfs->attr.da_file_oclass_id;
+			else
+				rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0,
+							 &info->doi_file_oclass_id);
+
 			if (rc) {
 				D_ERROR("daos_obj_get_oclass() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
@@ -3790,11 +3804,8 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 			D_GOTO(out, rc = daos_der2errno(rc));
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
-			int len;
-
-			len = snprintf(dirs[key_nr].d_name,
-				       kds[i].kd_key_len + 1, "%s", ptr);
-			D_ASSERT(len >= kds[i].kd_key_len);
+			memcpy(dirs[key_nr].d_name, ptr, kds[i].kd_key_len);
+			dirs[key_nr].d_name[kds[i].kd_key_len] = '\0';
 			ptr += kds[i].kd_key_len;
 
 			/** stat the entry if requested */
@@ -6542,8 +6553,6 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			continue;
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
-			int len;
-
 			if (strncmp("x:", ptr, 2) != 0) {
 				ptr += kds[i].kd_key_len;
 				continue;
@@ -6556,10 +6565,8 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			if (list_size < kds[i].kd_key_len - 2)
 				continue;
 
-			len = snprintf(ptr_list, kds[i].kd_key_len - 1, "%s",
-				       ptr + 2);
-			D_ASSERT(len >= kds[i].kd_key_len - 2);
-
+			memcpy(ptr_list, ptr + 2, kds[i].kd_key_len - 2);
+			ptr_list[kds[i].kd_key_len - 2] = '\0';
 			list_size -= kds[i].kd_key_len - 1;
 			ptr_list += kds[i].kd_key_len - 1;
 			ptr += kds[i].kd_key_len;
