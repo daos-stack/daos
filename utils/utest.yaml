@@ -1,6 +1,9 @@
-#  (C) Copyright 2023 Intel Corporation.
+#  (C) Copyright 2023-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
+- name: include checks
+  tests:
+    - cmd: ["utils/include_test.py"]
 - name: common
   base: "BUILD_DIR"
   tests:
