@@ -139,9 +139,9 @@ static bool             enforce_exec_env;
 /* current application is bash or sh.  */
 static bool             is_bash;
 /* the exe name extract from /proc/self/cmdline */
-static char             exe_path[DFS_MAX_PATH];
+static char             exe_path[DFS_MAX_PATH + 1];
 /* the short exe name from exe_path */
-static char             exe_short[DFS_MAX_NAME];
+static char             exe_short[DFS_MAX_NAME + 1];
 static long int         page_size;
 
 static _Atomic bool     daos_inited;
@@ -628,13 +628,14 @@ query_dfs_mount(const char *path)
 static int
 discover_daos_mount_with_env(void)
 {
-	int   idx, len_fs_root, rc;
-	char *fs_root   = NULL;
-	char *pool      = NULL;
-	char *container = NULL;
+	int    idx, rc;
+	char  *fs_root   = NULL;
+	char  *pool      = NULL;
+	char  *container = NULL;
+	size_t len_fs_root, len_pool, len_container;
 
 	/* Add the mount if env DAOS_MOUNT_POINT is set. */
-	fs_root = getenv("DAOS_MOUNT_POINT");
+	rc = d_agetenv_str(&fs_root, "DAOS_MOUNT_POINT");
 	if (fs_root == NULL)
 		/* env DAOS_MOUNT_POINT is undefined, return success (0) */
 		D_GOTO(out, rc = 0);
@@ -661,31 +662,56 @@ discover_daos_mount_with_env(void)
 		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
-	pool = getenv("DAOS_POOL");
+	d_agetenv_str(&pool, "DAOS_POOL");
 	if (pool == NULL) {
 		D_FATAL("DAOS_POOL is not set.\n");
 		D_GOTO(out, rc = EINVAL);
 	}
 
-	container = getenv("DAOS_CONTAINER");
+	len_pool = strnlen(pool, DAOS_PROP_MAX_LABEL_BUF_LEN);
+	if (len_pool >= DAOS_PROP_MAX_LABEL_BUF_LEN) {
+		D_FATAL("DAOS_POOL is too long.\n");
+		D_GOTO(out, rc = ENAMETOOLONG);
+	}
+
+	rc = d_agetenv_str(&container, "DAOS_CONTAINER");
 	if (container == NULL) {
 		D_FATAL("DAOS_CONTAINER is not set.\n");
 		D_GOTO(out, rc = EINVAL);
+	}
+
+	len_container = strnlen(container, DAOS_PROP_MAX_LABEL_BUF_LEN);
+	if (len_container >= DAOS_PROP_MAX_LABEL_BUF_LEN) {
+		D_FATAL("DAOS_CONTAINER is too long.\n");
+		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
 	if (dfs_list[num_dfs].fs_root == NULL)
 		D_GOTO(out, rc = ENOMEM);
 
-	dfs_list[num_dfs].pool         = pool;
-	dfs_list[num_dfs].cont         = container;
+	D_STRNDUP(dfs_list[num_dfs].pool, pool, len_pool);
+	if (dfs_list[num_dfs].pool == NULL)
+		D_GOTO(free_fs_root, rc = ENOMEM);
+
+	D_STRNDUP(dfs_list[num_dfs].cont, container, len_container);
+	if (dfs_list[num_dfs].cont == NULL)
+		D_GOTO(free_pool, rc = ENOMEM);
+
 	dfs_list[num_dfs].dfs_dir_hash = NULL;
-	dfs_list[num_dfs].len_fs_root  = len_fs_root;
+	dfs_list[num_dfs].len_fs_root  = (int)len_fs_root;
 	atomic_init(&dfs_list[num_dfs].inited, 0);
 	num_dfs++;
-	rc = 0;
+	D_GOTO(out, rc = 0);
 
+free_pool:
+	D_FREE(dfs_list[num_dfs].pool);
+free_fs_root:
+	D_FREE(dfs_list[num_dfs].fs_root);
 out:
+	d_freeenv_str(&container);
+	d_freeenv_str(&pool);
+	d_freeenv_str(&fs_root);
 	return rc;
 }
 
@@ -6058,11 +6084,12 @@ init_myhook(void)
 	else
 		daos_debug_inited = true;
 
-	env_log = getenv("D_IL_REPORT");
+	d_agetenv_str(&env_log, "D_IL_REPORT");
 	if (env_log) {
 		report = true;
 		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
 			report = false;
+		d_freeenv_str(&env_log);
 	}
 	enforce_exec_env = true;
 	env_exec         = getenv("D_IL_ENFORCE_EXEC_ENV");
@@ -6354,6 +6381,8 @@ finalize_dfs(void)
 	for (i = 0; i < num_dfs; i++) {
 		if (dfs_list[i].dfs_dir_hash == NULL) {
 			D_FREE(dfs_list[i].fs_root);
+			D_FREE(dfs_list[i].pool);
+			D_FREE(dfs_list[i].cont);
 			continue;
 		}
 
@@ -6385,6 +6414,8 @@ finalize_dfs(void)
 			continue;
 		}
 		D_FREE(dfs_list[i].fs_root);
+		D_FREE(dfs_list[i].pool);
+		D_FREE(dfs_list[i].cont);
 	}
 
 	if (atomic_load_relaxed(&daos_inited)) {
