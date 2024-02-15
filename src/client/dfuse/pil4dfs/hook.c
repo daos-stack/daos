@@ -94,7 +94,8 @@ static char     **lib_name_list;
 static char     *path_ld;
 static char     *path_libc;
 static char     *path_libpthread;
-/* This is needed all the time. */
+/* This holds the path of libpil4dfs.so. It is needed when we want to
+ * force child processes append libpil4dfs.so to env LD_PRELOAD. */
 static char      path_libpil4dfs[PATH_MAX];
 
 #define MAX_MAP_SIZE	(512*1024)
