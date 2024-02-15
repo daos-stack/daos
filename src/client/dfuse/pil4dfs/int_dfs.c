@@ -3395,29 +3395,28 @@ pre_envp(char *const envp[])
 				num_entry_found++;
 				if (strstr(envp[num_entry], "libpil4dfs.so"))
 					pil4dfs_in_preload = true;
-			} else if (strncmp(envp[num_entry], "D_IL_REPORT", sizeof("D_IL_REPORT") -
-				   1) == 0) {
+			} else if (strncmp(envp[num_entry], "D_IL_REPORT",
+					   sizeof("D_IL_REPORT") - 1) == 0) {
 				report_included = true;
 				num_entry_found++;
 			} else if (strncmp(envp[num_entry], "DAOS_MOUNT_POINT",
-				   sizeof("DAOS_MOUNT_POINT") - 1) == 0) {
+					   sizeof("DAOS_MOUNT_POINT") - 1) == 0) {
 				mp_included = true;
 				num_entry_found++;
-			} else if (strncmp(envp[num_entry], "DAOS_POOL", sizeof("DAOS_POOL") - 1)
-				   == 0) {
+			} else if (strncmp(envp[num_entry], "DAOS_POOL",
+					   sizeof("DAOS_POOL") - 1) == 0) {
 				pool_included = true;
 				num_entry_found++;
 			} else if (strncmp(envp[num_entry], "DAOS_CONTAINER",
-				   sizeof("DAOS_CONTAINER") - 1) == 0) {
+					   sizeof("DAOS_CONTAINER") - 1) == 0) {
 				cont_included = true;
 				num_entry_found++;
-			} else if (strncmp(envp[num_entry], "D_IL_MAX_EQ", sizeof("D_IL_MAX_EQ") -
-				   1)
-				   == 0) {
+			} else if (strncmp(envp[num_entry], "D_IL_MAX_EQ",
+					   sizeof("D_IL_MAX_EQ") - 1) == 0) {
 				maxeq_included = true;
 				num_entry_found++;
 			} else if (strncmp(envp[num_entry], "D_IL_ENFORCE_EXEC_ENV",
-				   sizeof("D_IL_ENFORCE_EXEC_ENV") - 1) == 0) {
+					   sizeof("D_IL_ENFORCE_EXEC_ENV") - 1) == 0) {
 				enforcement_included = true;
 				num_entry_found++;
 			}
@@ -3533,11 +3532,11 @@ pre_envp(char *const envp[])
 	}
 	if (!enforcement_included) {
 		if (enforce_exec_env)
-			str_enforcement = strndup("D_IL_ENFORCE_EXEC_ENV=1",
-				sizeof("D_IL_ENFORCE_EXEC_ENV=1"));
+			str_enforcement =
+			    strndup("D_IL_ENFORCE_EXEC_ENV=1", sizeof("D_IL_ENFORCE_EXEC_ENV=1"));
 		else
-			str_enforcement = strndup("D_IL_ENFORCE_EXEC_ENV=0",
-				sizeof("D_IL_ENFORCE_EXEC_ENV=0"));
+			str_enforcement =
+			    strndup("D_IL_ENFORCE_EXEC_ENV=0", sizeof("D_IL_ENFORCE_EXEC_ENV=0"));
 		if (str_enforcement == NULL) {
 			printf("Error: failed to allocate memory for D_IL_ENFORCE_EXEC_ENV env.\n");
 			goto err_out7;
@@ -5501,11 +5500,13 @@ dup2(int oldfd, int newfd)
 		int fd_tmp;
 
 		if (is_bash && newfd <= 2) {
-			/* Linux fds created with dup2 share same status across parent and child processes.
-			 * This is a special case for bash/sh. It is needed to allow configure run.
+			/* Linux fds created with dup2 share same status across parent and child
+			 * processes. This is a special case for bash/sh. It is needed to allow
+			 * configure run.
 			 */
 			fd_tmp = libc_open(file_list[fd_directed - FD_FILE_BASE]->path,
-				file_list[fd_directed - FD_FILE_BASE]->open_flag & (~(O_TRUNC | O_CREAT)));
+					   file_list[fd_directed - FD_FILE_BASE]->open_flag &
+					   (~(O_TRUNC | O_CREAT)));
 			if (fd_tmp < 0) {
 				DS_ERROR(errno, "open() failed");
 				return (-1);
@@ -5520,8 +5521,8 @@ dup2(int oldfd, int newfd)
 				return (-1);
 			}
 			libc_close(fd_tmp);
-			if (libc_lseek(fd, file_list[fd_directed - FD_FILE_BASE]->offset, SEEK_SET)
-				       == -1) {
+			if (libc_lseek(fd, file_list[fd_directed - FD_FILE_BASE]->offset,
+				       SEEK_SET) == -1) {
 				errno_save = errno;
 				libc_close(fd);
 				errno = errno_save;
@@ -6027,7 +6028,7 @@ extract_exe_path(void)
 {
 	FILE *fIn;
 	char *line;
-	int readsize, len, pos;
+	int   readsize, len, pos;
 
 	exe_path[0]  = 0;
 	exe_short[0] = 0;
@@ -6036,12 +6037,12 @@ extract_exe_path(void)
 	if (line == NULL)
 		return;
 	fIn = fopen("/proc/self/cmdline", "r");
-	if (fIn == NULL)        {
+	if (fIn == NULL) {
 		DS_ERROR(errno, "Fail to open file: /proc/self/cmdline");
 		goto out;
 	}
 	readsize = fread(line, 1, DFS_MAX_PATH, fIn);
-	if (readsize <= 0)   {
+	if (readsize <= 0) {
 		DS_ERROR(errno, "Fail to determine the executable file name");
 		fclose(fIn);
 		goto out;
