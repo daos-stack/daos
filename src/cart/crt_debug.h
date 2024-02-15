@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#ifndef __CRT_DEBUG_H__
-#define __CRT_DEBUG_H__
+#pragma once
 
 #ifndef CRT_USE_GURT_FAC
 #ifndef DD_FAC
@@ -17,8 +16,8 @@
 #define D_LOGFAC DD_FAC(crt)
 #endif
 
-#include <gurt/dlog.h>
 #include <gurt/debug_setup.h>
+#include <gurt/dlog.h>
 
 #define CRT_FOREACH_LOG_FAC(ACTION, arg)	\
 	ACTION(crt,   cart,        arg)	\
@@ -37,6 +36,5 @@
 CRT_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, D_NOOP)
 #endif
 
-int crt_setup_log_fac(void);
-
-#endif /* __CRT_DEBUG_H__ */
+int
+crt_setup_log_fac(void);

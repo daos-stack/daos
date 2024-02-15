@@ -7,12 +7,12 @@
  * This file is part of CaRT. It's the header for crt_swim.c.
  */
 
-#ifndef __CRT_SWIM_H__
-#define __CRT_SWIM_H__
+#pragma once
 
-#include <gurt/list.h>
-#include <cart/swim.h>
 #include "swim/swim_internal.h"
+
+#include <cart/swim.h>
+#include <gurt/list.h>
 
 #define CRT_SWIM_NGLITCHES_TRESHOLD	10
 #define CRT_SWIM_NMESSAGES_TRESHOLD	1000
@@ -88,6 +88,8 @@ crt_swim_rpc_timeout(void)
 	return timeout_sec;
 }
 
+struct crt_grp_priv;
+
 int  crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);
 int  crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);
 void crt_swim_disable_all(void);
@@ -97,6 +99,5 @@ int  crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t in
 int  crt_swim_rank_del(struct crt_grp_priv *grp_priv, d_rank_t rank);
 void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv);
 void crt_swim_rank_shuffle(struct crt_grp_priv *grp_priv);
-int crt_swim_rank_check(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation);
-
-#endif /* __CRT_SWIM_H__ */
+int
+crt_swim_rank_check(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation);

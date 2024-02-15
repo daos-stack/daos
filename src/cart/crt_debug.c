@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
 #include "crt_internal.h"
 
 #define CART_FAC_MAX_LEN (128)

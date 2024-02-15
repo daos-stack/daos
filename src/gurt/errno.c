@@ -6,12 +6,13 @@
 /**
  * This file is part of GURT.
  */
+
 #include <string.h>
 
 #include <daos_errno.h>
+#include <gurt/common.h>
 #include <gurt/debug.h>
 #include <gurt/list.h>
-#include <gurt/common.h>
 
 static D_LIST_HEAD(g_error_reg_list);
 

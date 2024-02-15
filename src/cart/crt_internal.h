@@ -8,23 +8,21 @@
  * all other .c files of CaRT.
  */
 
-#ifndef __CRT_INTERNAL_H__
-#define __CRT_INTERNAL_H__
+#pragma once
 
 #include "crt_debug.h"
-
-#include <gurt/common.h>
-#include <gurt/fault_inject.h>
-#include <cart/api.h>
-
-#include "crt_hg.h"
-#include "crt_internal_types.h"
-#include "crt_internal_fns.h"
-#include "crt_rpc.h"
 #include "crt_group.h"
-#include "crt_tree.h"
+#include "crt_hg.h"
+#include "crt_internal_fns.h"
+#include "crt_internal_types.h"
+#include "crt_rpc.h"
 #include "crt_self_test.h"
 #include "crt_swim.h"
+#include "crt_tree.h"
+
+#include <cart/api.h>
+#include <gurt/common.h>
+#include <gurt/fault_inject.h>
 
 /* A wrapper around D_TRACE_DEBUG that ensures the ptr option is a RPC */
 #define RPC_TRACE(mask, rpc, fmt, ...)                                                             \
@@ -97,4 +95,3 @@ crt_hdlr_ctl_get_pid(crt_rpc_t *rpc_req);
 
 void
 crt_iv_init(crt_init_options_t *ops);
-#endif /* __CRT_INTERNAL_H__ */

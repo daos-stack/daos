@@ -7,8 +7,8 @@
  * This file is part of gurt, it implements the debug subsystem based on clog.
  */
 
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <gurt/common.h>
 

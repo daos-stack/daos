@@ -3,11 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-
-#ifndef __CRT_SELF_TEST_H__
-#define __CRT_SELF_TEST_H__
-
-
+#pragma once
 
 /*
  * List of supported self-test strategies:
@@ -271,6 +267,5 @@ void crt_self_test_msg_handler(crt_rpc_t *rpc_req);
 void crt_self_test_open_session_handler(crt_rpc_t *rpc_req);
 void crt_self_test_close_session_handler(crt_rpc_t *rpc_req);
 void crt_self_test_start_handler(crt_rpc_t *rpc_req);
-void crt_self_test_status_req_handler(crt_rpc_t *rpc_req);
-
-#endif /* __CRT_SELF_TEST_H__ */
+void
+crt_self_test_status_req_handler(crt_rpc_t *rpc_req);

@@ -8,9 +8,10 @@
  */
 #define D_LOGFAC	DD_FAC(grp)
 
-#include <sys/types.h>
-#include <sys/stat.h>
 #include "crt_internal.h"
+
+#include <sys/stat.h>
+#include <sys/types.h>
 
 static int crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 					  d_rank_t rank, int tag,

@@ -9,6 +9,7 @@
  */
 
 #include "crt_internal.h"
+
 #include <gurt/atomic.h>
 
 #define MAX_HOSTNAME_SIZE 1024

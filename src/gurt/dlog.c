@@ -7,33 +7,29 @@
  * This file is part of CaRT. It implements message logging system.
  */
 
-#include <fcntl.h>
+#include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/utsname.h>
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
 
-#include <pthread.h>
-
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/utsname.h>
-#include <sys/syscall.h>
-#include <sys/stat.h>
-
-#include <netdb.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
-
-#include <gurt/dlog.h>
 #include <gurt/common.h>
+#include <gurt/dlog.h>
 #include <gurt/list.h>
 
 /* extra tag bytes to alloc for a pid */

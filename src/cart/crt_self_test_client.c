@@ -5,8 +5,9 @@
  */
 #define D_LOGFAC	DD_FAC(st)
 
-#include <pthread.h>
 #include "crt_internal.h"
+
+#include <pthread.h>
 
 #define ISBULK(type) ((type) == CRT_SELF_TEST_MSG_TYPE_BULK_GET || \
 		      (type) == CRT_SELF_TEST_MSG_TYPE_BULK_PUT)

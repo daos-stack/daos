@@ -9,8 +9,9 @@
  */
 #define D_LOGFAC	DD_FAC(rpc)
 
-#include <semaphore.h>
 #include "crt_internal.h"
+
+#include <semaphore.h>
 
 static int
 crt_proto_query_local(crt_opcode_t base_opc, uint32_t ver);

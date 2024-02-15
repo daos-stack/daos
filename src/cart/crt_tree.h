@@ -8,8 +8,7 @@
  * declarations for tree topo.
  */
 
-#ifndef __CRT_TREE_H__
-#define __CRT_TREE_H__
+#pragma once
 
 /*
  * Query specific tree topo's number of children, child rank number, or parent
@@ -122,5 +121,3 @@ crt_grprank_2_teerank(uint32_t grp_size, uint32_t grp_root, uint32_t grp_rank)
 
 	return (grp_rank + grp_size - grp_root) % grp_size;
 }
-
-#endif /* __CRT_TREE_H__ */

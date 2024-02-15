@@ -10,8 +10,8 @@
  */
 
 #include <stdint.h>
-#include <gurt/atomic.h>
 
+#include <gurt/atomic.h>
 
 static ATOMIC uint64_t d_hlct;
 

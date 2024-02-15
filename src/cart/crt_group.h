@@ -7,11 +7,14 @@
  * This file is part of CaRT. It gives out the internal data structure of group.
  */
 
-#ifndef __CRT_GROUP_H__
-#define __CRT_GROUP_H__
+#pragma once
 
-#include <gurt/atomic.h>
+#include "crt_internal_types.h"
 #include "crt_swim.h"
+
+#include <cart/types.h>
+#include <gurt/atomic.h>
+#include <gurt/hash.h>
 
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
 #define CRT_LOOKUP_CACHE_BITS	(4)
@@ -44,8 +47,6 @@ struct crt_grp_priv_sec {
 	struct crt_grp_priv	*gps_priv;
 	d_list_t		gps_link;
 };
-
-struct crt_grp_priv;
 
 struct crt_grp_priv {
 	d_list_t		 gp_link; /* link to crt_grp_list */
@@ -379,5 +380,3 @@ int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
 
 int
 grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation);
-
-#endif /* __CRT_GROUP_H__ */

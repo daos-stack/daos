@@ -9,16 +9,17 @@
  */
 #define D_LOGFAC	DD_FAC(telem)
 
-#include <math.h>
 #include <float.h>
-#include <pthread.h>
 #include <malloc.h>
+#include <math.h>
+#include <pthread.h>
+#include <sys/shm.h>
+
 #include <gurt/common.h>
 #include <gurt/list.h>
-#include <sys/shm.h>
 #include <gurt/telemetry_common.h>
-#include <gurt/telemetry_producer.h>
 #include <gurt/telemetry_consumer.h>
+#include <gurt/telemetry_producer.h>
 
 /** minimal list of shared memory regions with a global ID */
 struct shmem_region_list {

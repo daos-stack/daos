@@ -6,8 +6,8 @@
 
 #define D_LOGFAC DD_FAC(misc)
 
-#include <signal.h>
 #include <execinfo.h>
+#include <signal.h>
 
 #include <gurt/common.h>
 

@@ -11,9 +11,10 @@
 /* (1 << D_FA_TABLE_BITS) is the number of buckets of fa hash table */
 #define D_FA_TABLE_BITS           (13)
 
+#include <yaml.h>
+
 #include <gurt/common.h>
 #include <gurt/hash.h>
-#include <yaml.h>
 
 /*
  * global switch for fault injection. zero globally turns off fault injection,
