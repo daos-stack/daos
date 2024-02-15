@@ -8,9 +8,11 @@
  */
 #ifndef __DAOS_LRU_H__
 #define __DAOS_LRU_H__
-#include <gurt/list.h>
+
+#include "daos/common.h"
+
 #include <gurt/hash.h>
-#include <daos/common.h>
+#include <gurt/list.h>
 
 struct daos_llink;
 

@@ -14,9 +14,10 @@
 #ifndef __DRPC_API_H__
 #define __DRPC_API_H__
 
-#include <daos/common.h>
-#include <daos/tse.h>
+#include "daos/common.h"
+
 #include <cart/api.h>
+#include <daos/tse.h>
 
 /* Opcode registered in crt will be
  * client/server | mod_id | rpc_version | op_code

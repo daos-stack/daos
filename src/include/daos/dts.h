@@ -7,7 +7,7 @@
 #ifndef __DTS_COMMON_H__
 #define __DTS_COMMON_H__
 
-#include <daos/credit.h>
+#include "daos/credit.h"
 
 /**
  * Initialize I/O test context:

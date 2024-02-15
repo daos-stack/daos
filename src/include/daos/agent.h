@@ -7,7 +7,7 @@
 #ifndef __DAOS_AGENT_H__
 #define __DAOS_AGENT_H__
 
-#include <daos/drpc.h>
+#include "daos/drpc.h"
 
 /**
  *  Called during library initialization to craft socket path for agent.

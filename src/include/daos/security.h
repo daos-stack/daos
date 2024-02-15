@@ -7,10 +7,11 @@
 #ifndef __DAOS_SECURITY_INT_H__
 #define __DAOS_SECURITY_INT_H__
 
-#include <stdint.h>
 #include <stddef.h>
-#include <daos_types.h>
+#include <stdint.h>
+
 #include <daos_prop.h>
+#include <daos_types.h>
 
 /** Structure representing a resource's ownership by user and group, respectively. */
 struct d_ownership {

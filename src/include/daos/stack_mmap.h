@@ -27,9 +27,12 @@
  */
 
 #ifdef ULT_MMAP_STACK
-#include <sys/mman.h>
+
 #include <search.h>
+#include <sys/mman.h>
+
 #include <abt.h>
+
 #include <gurt/atomic.h>
 
 /* the minimum value for vm.max_map_count to allow for mmap()'ed ULT stacks

@@ -12,7 +12,7 @@
 #ifndef __DAOS_POOL_MAP_H__
 #define __DAOS_POOL_MAP_H__
 
-#include <daos/common.h>
+#include "daos/common.h"
 
 #define POOL_MAP_VER_1		(1)
 #define POOL_MAP_VER_2		(2)

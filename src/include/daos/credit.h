@@ -7,8 +7,8 @@
 #ifndef __CREDIT_H__
 #define __CREDIT_H__
 
-#include <daos_types.h>
 #include <daos_obj.h>
+#include <daos_types.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="

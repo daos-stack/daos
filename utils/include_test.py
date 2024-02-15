@@ -30,7 +30,7 @@ def check_dir(include_dir, sub_dir):
             print(f"Header file {header} is OK.")
 
 
-E_SYSTEM_HEADERS = ("float.h", "stdarg.h")
+E_SYSTEM_HEADERS = ("float.h", "stdarg.h", "stdbool.h", "stddef.h")
 
 
 def check_paths(src_dir, src_file):
@@ -76,6 +76,7 @@ def check_paths(src_dir, src_file):
             line = linef.rstrip()
 
             if line == "":
+                # There is a bug here where headers do not have a blank line before them.
                 if not have_headers:
                     last_pre_blank = idx
                 continue
@@ -129,6 +130,11 @@ def check_paths(src_dir, src_file):
                     h_daos.add(fname)
                 else:
                     h_internal.add(fname)
+                continue
+
+            # This is a hack but needed for now at least.
+            if fname.endswith("pb-c.h"):
+                h_internal.add(fname)
                 continue
 
             print(f"Unable to find location of {fname}")
@@ -207,6 +213,7 @@ def main():
 
     check_paths_dir("src/cart")
     check_paths_dir("src/gurt")
+    check_paths_dir("src/include/daos")
 
     with open(".build_vars.json", "r") as ofh:
         bv = json.load(ofh)

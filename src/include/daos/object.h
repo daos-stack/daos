@@ -6,7 +6,8 @@
 #ifndef __DD_OBJ_H__
 #define __DD_OBJ_H__
 
-#include <daos/common.h>
+#include "daos/common.h"
+
 #include <daos/tse.h>
 #include <daos_obj.h>
 

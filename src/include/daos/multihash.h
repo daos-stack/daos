@@ -7,9 +7,9 @@
 #ifndef __DAOS_MULTIHASH_H
 #define __DAOS_MULTIHASH_H
 
-#include <daos_types.h>
 #include <daos_obj.h>
 #include <daos_prop.h>
+#include <daos_types.h>
 
 /** Convert a string into a property value for csum property */
 int

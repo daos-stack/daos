@@ -7,11 +7,11 @@
 #ifndef __DAOS_CHECKSUM_H
 #define __DAOS_CHECKSUM_H
 
-#include <daos_types.h>
+#include "daos/multihash.h"
+
 #include <daos_obj.h>
 #include <daos_prop.h>
-
-#include <daos/multihash.h>
+#include <daos_types.h>
 
 #define	CSUM_NO_CHUNK -1
 

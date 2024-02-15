@@ -12,8 +12,9 @@
 #ifndef __DAOS_MEM_H__
 #define __DAOS_MEM_H__
 
+#include "daos/common.h"
+
 #include <daos_types.h>
-#include <daos/common.h>
 
 /**
  * Terminologies:

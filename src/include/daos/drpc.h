@@ -7,8 +7,8 @@
 #ifndef __DAOS_DRPC_H__
 #define __DAOS_DRPC_H__
 
-#include <daos/drpc.pb-c.h>
-#include <daos/common.h>
+#include "daos/common.h"
+#include "daos/drpc.pb-c.h"
 
 /*
  * Using a packetsocket over the unix domain socket means that we receive

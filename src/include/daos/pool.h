@@ -12,16 +12,16 @@
 #ifndef __DD_POOL_H__
 #define __DD_POOL_H__
 
-#include <daos_types.h>
-#include <daos_prop.h>
-#include <daos_pool.h>
-#include <daos_task.h>
-#include <daos/tse.h>
+#include "daos/common.h"
+#include "daos/pool_map.h"
+#include "daos/rsvc.h"
 
-#include <daos/common.h>
+#include <daos/tse.h>
+#include <daos_pool.h>
+#include <daos_prop.h>
+#include <daos_task.h>
+#include <daos_types.h>
 #include <gurt/hash.h>
-#include <daos/pool_map.h>
-#include <daos/rsvc.h>
 
 /** pool query request bits */
 #define DAOS_PO_QUERY_SPACE			(1ULL << 0)

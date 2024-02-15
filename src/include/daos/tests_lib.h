@@ -7,12 +7,14 @@
 #ifndef __DAOS_TESTS_LIB_H__
 #define __DAOS_TESTS_LIB_H__
 
+#include "daos/common.h"
+#include "daos/credit.h"
+#include "daos/object.h"
+
 #include <getopt.h>
-#include <daos_types.h>
-#include <daos/common.h>
+
 #include <daos_mgmt.h>
-#include <daos/object.h>
-#include <daos/credit.h>
+#include <daos_types.h>
 
 #define assert_rc_equal(rc, expected_rc)                                                           \
 	do {                                                                                       \

@@ -7,12 +7,13 @@
 #ifndef __DAOS_PROFILE_H__
 #define __DAOS_PROFILE_H__
 
-#include <daos_errno.h>
-#include <daos/debug.h>
-#include <gurt/hash.h>
-#include <gurt/common.h>
+#include "daos/debug.h"
+
 #include <cart/api.h>
+#include <daos_errno.h>
 #include <daos_types.h>
+#include <gurt/common.h>
+#include <gurt/hash.h>
 
 struct daos_profile_chunk {
 	d_list_t	dpc_chunk_list;

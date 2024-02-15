@@ -10,11 +10,12 @@
 #ifndef __DAOS_CLI_TASK_H__
 #define __DAOS_CLI_TASK_H__
 
-#include <daos_types.h>
-#include <daos_api.h>
+#include "daos/common.h"
+
 #include <daos/tse.h>
-#include <daos/common.h>
+#include <daos_api.h>
 #include <daos_task.h>
+#include <daos_types.h>
 
 /* size of daos_task_args should within limitation of TSE_TASK_ARG_LEN */
 struct daos_task_args {
