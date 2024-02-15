@@ -30,39 +30,36 @@ class EngineEvents(TestWithTelemetry):
             list: Four lists. Each list contains the above telemetry value for each rank.
 
         """
-        metric_to_data = {}
-        for metric in self.telemetry.ENGINE_EVENT_METRICS:
-            metric_to_data[metric] = self.telemetry.get_metrics(name=metric)
+        metric_to_data = self.telemetry.get_metrics(
+            name=','.join(self.telemetry.ENGINE_EVENT_METRICS))
         self.log.info("metric_to_data = %s", metric_to_data)
 
         # Omit "engine" from the variable name for brevity. The indices correspond to ranks.
         events_dead_ranks = [None for _ in range(rank_count)]
         hosts = list(self.hostlist_servers)
         for host in hosts:
-            engine_events_dead_ranks = metric_to_data["engine_events_dead_ranks"]
-            metrics = engine_events_dead_ranks[host]["engine_events_dead_ranks"]["metrics"]
+            metrics = metric_to_data[host]["engine_events_dead_ranks"]["metrics"]
             for metric in metrics:
                 rank = int(metric["labels"]["rank"])
                 events_dead_ranks[rank] = metric["value"]
 
         events_last_event_ts = [None for _ in range(rank_count)]
         for host in hosts:
-            engine_events_last_event_ts = metric_to_data["engine_events_last_event_ts"]
-            metrics = engine_events_last_event_ts[host]["engine_events_last_event_ts"]["metrics"]
+            metrics = metric_to_data[host]["engine_events_last_event_ts"]["metrics"]
             for metric in metrics:
                 rank = int(metric["labels"]["rank"])
                 events_last_event_ts[rank] = metric["value"]
 
         servicing_at = [None for _ in range(rank_count)]
         for host in hosts:
-            metrics = metric_to_data["engine_servicing_at"][host]["engine_servicing_at"]["metrics"]
+            metrics = metric_to_data[host]["engine_servicing_at"]["metrics"]
             for metric in metrics:
                 rank = int(metric["labels"]["rank"])
                 servicing_at[rank] = metric["value"]
 
         started_at = [None for _ in range(rank_count)]
         for host in hosts:
-            metrics = metric_to_data["engine_started_at"][host]["engine_started_at"]["metrics"]
+            metrics = metric_to_data[host]["engine_started_at"]["metrics"]
             for metric in metrics:
                 rank = int(metric["labels"]["rank"])
                 started_at[rank] = metric["value"]
@@ -184,27 +181,47 @@ class EngineEvents(TestWithTelemetry):
         servicing_at_1 = telemetry_after[2]
         started_at_1 = telemetry_after[3]
         errors = []
+        events_dead_ranks_results = ["engine_events_dead_ranks Results", "--------------------"]
+        events_last_event_ts_results = ["engine_events_last_event_ts Results", "------------------"]
+        servicing_at_results = ["engine_servicing_at Results", "--------------------"]
+        started_at_results = ["engine_started_at Results", "--------------------"]
 
         # engine_events_dead_ranks requirements:
         # 1. Restarted rank value shouldn't change before and after.
         # 2. For the non-restarted-ranks, at least one after value should be higher than before.
         # 3. For the non-restarted-ranks, after value shouldn't go down.
+        result = ""
         if events_dead_ranks_0[restart_rank] != events_dead_ranks_1[restart_rank]:
             msg = (f"engine_events_dead_ranks value for restarted rank {restart_rank} "
                    f"changed before and after! Before = {events_dead_ranks_0[restart_rank]}; "
                    f"After = {events_dead_ranks_1[restart_rank]}")
             errors.append(msg)
+            result = (f"Rank {restart_rank}: {events_dead_ranks_0[restart_rank]} -> "
+                      f"{events_dead_ranks_1[restart_rank]} Fail (Value changed)")
+        else:
+            result = (f"Rank {restart_rank}: {events_dead_ranks_0[restart_rank]} -> "
+                      f"{events_dead_ranks_1[restart_rank]} Pass (Value unchanged)")
+        events_dead_ranks_results.append(result)
 
         increase_found = False
         for rank in range(rank_count):
             if rank != restart_rank:
+                result = ""
                 if events_dead_ranks_0[rank] < events_dead_ranks_1[rank]:
                     increase_found = True
+                    result = (f"Rank {rank}: {events_dead_ranks_0[rank]} -> "
+                              f"{events_dead_ranks_1[rank]} Pass (Value increased)")
                 elif events_dead_ranks_0[rank] > events_dead_ranks_1[rank]:
                     msg = (f"engine_events_dead_ranks value for rank {rank} went down! "
                            f"Before = {events_dead_ranks_0[rank]}; "
                            f"After = {events_dead_ranks_1[rank]}")
                     errors.append(msg)
+                    result = (f"Rank {rank}: {events_dead_ranks_0[rank]} -> "
+                              f"{events_dead_ranks_1[rank]} Fail (Value decreased)")
+                else:
+                    result = (f"Rank {rank}: {events_dead_ranks_0[rank]} -> "
+                              f"{events_dead_ranks_1[rank]} Pass (Value unchanged)")
+                events_dead_ranks_results.append(result)
         if not increase_found:
             msg = (f"No value increase detected for engine_events_dead_ranks! "
                    f"Before = {events_dead_ranks_0}; After = {events_dead_ranks_1}")
@@ -214,52 +231,100 @@ class EngineEvents(TestWithTelemetry):
         # 1. Restarted rank value shouldn't change before and after.
         # 2. All after values except for restarted rank should go up.
         for rank in range(rank_count):
+            result = ""
             if rank == restart_rank:
                 if events_last_event_ts_0[rank] != events_last_event_ts_1[rank]:
                     msg = (f"engine_events_last_events_ts value for restarted rank {rank} "
                            f"changed! Before = {events_last_event_ts_0[rank]}; "
                            f"After = {events_last_event_ts_1[rank]}")
                     errors.append(msg)
+                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
+                              f"{events_last_event_ts_1[rank]} Fail (Value changed)")
+                else:
+                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
+                              f"{events_last_event_ts_1[rank]} Pass (Value unchanged)")
             else:
                 if events_last_event_ts_0[rank] >= events_last_event_ts_1[rank]:
                     msg = (f"No increase detected in engine_events_last_events_ts for rank {rank}! "
                            f"Before = {events_last_event_ts_0[rank]}; "
                            f"After = {events_last_event_ts_1[rank]}")
                     errors.append(msg)
+                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
+                              f"{events_last_event_ts_1[rank]} Fail (Value decreased/unchanged)")
+                else:
+                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
+                              f"{events_last_event_ts_1[rank]} Pass (Value increased)")
+            events_last_event_ts_results.append(result)
 
         # engine_servicing_at requirements:
         # 1. Restarted rank value should increase.
         # 2. All after values except for restarted rank should remain the same.
         for rank in range(rank_count):
+            result = ""
             if rank == restart_rank:
                 if servicing_at_0[rank] >= servicing_at_1[rank]:
                     msg = (f"engine_servicing_at value for restarted rank {rank} "
                            f"didn't increase! Before = {servicing_at_0[rank]}; "
                            f"After = {servicing_at_1[rank]}")
                     errors.append(msg)
+                    result = (f"Rank {rank}: {servicing_at_0[rank]} -> "
+                              f"{servicing_at_1[rank]} Fail (Value decreased/unchanged)")
+                else:
+                    result = (f"Rank {rank}: {servicing_at_0[rank]} -> "
+                              f"{servicing_at_1[rank]} Pass (Value increased)")
             else:
                 if servicing_at_0[rank] != servicing_at_1[rank]:
                     msg = (f"engine_servicing_at for rank {rank} changed! "
                            f"Before = {servicing_at_0[rank]}; "
                            f"After = {servicing_at_1[rank]}")
                     errors.append(msg)
+                    result = (f"Rank {rank}: {servicing_at_0[rank]} -> "
+                              f"{servicing_at_1[rank]} Fail (Value changed)")
+                else:
+                    result = (f"Rank {rank}: {servicing_at_0[rank]} -> "
+                              f"{servicing_at_1[rank]} Pass (Value unchanged)")
+            servicing_at_results.append(result)
 
         # engine_started_at requirements:
         # 1. Restarted rank value should increase.
         # 2. All after values except for restarted rank should remain the same.
         for rank in range(rank_count):
+            result = ""
             if rank == restart_rank:
                 if started_at_0[rank] >= started_at_1[rank]:
                     msg = (f"engine_started_at value for restarted rank {rank} "
                            f"didn't increase! Before = {started_at_0[rank]}; "
                            f"After = {started_at_1[rank]}")
                     errors.append(msg)
+                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
+                              f"{started_at_1[rank]} Fail (Value decreased/unchanged)")
+                else:
+                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
+                              f"{started_at_1[rank]} Pass (Value increased)")
             else:
                 if started_at_0[rank] != started_at_1[rank]:
                     msg = (f"engine_started_at for rank {rank} changed! "
                            f"Before = {started_at_0[rank]}; "
                            f"After = {started_at_1[rank]}")
                     errors.append(msg)
+                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
+                              f"{started_at_1[rank]} Fail (Value changed)")
+                else:
+                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
+                              f"{started_at_1[rank]} Pass (Value unchanged)")
+            started_at_results.append(result)
 
-        self.log.info("######## Errors ########")
+        self.log.info("######## Test Summary ########")
+        for line in events_dead_ranks_results:
+            self.log.info(line)
+        self.log.info("")
+        for line in events_last_event_ts_results:
+            self.log.info(line)
+        self.log.info("")
+        for line in servicing_at_results:
+            self.log.info(line)
+        self.log.info("")
+        for line in started_at_results:
+            self.log.info(line)
+        self.log.info("")
         report_errors(test=self, errors=errors)
