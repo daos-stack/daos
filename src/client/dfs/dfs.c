@@ -7947,6 +7947,7 @@ struct dfs_scan_args {
 	uint64_t	max_depth;
 	uint64_t	num_files;
 	uint64_t	num_dirs;
+	uint64_t	num_symlinks;
 	uint64_t	total_bytes;
 	uint64_t	largest_file;
 	uint64_t	largest_dir;
@@ -7976,16 +7977,12 @@ scan_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 		scan_args->print_time = current_time.tv_sec;
 	}
 
-	/** open the entry name and get the oid */
+	/** open the entry name */
 	rc = dfs_lookup_rel(dfs, parent, name, O_RDONLY | O_NOFOLLOW, &obj, NULL, NULL);
 	if (rc) {
 		D_ERROR("dfs_lookup_rel() of %s failed: %d\n", name, rc);
 		return rc;
 	}
-
-	rc = dfs_obj2id(obj, &oid);
-	if (rc)
-		D_GOTO(out_obj, rc);
 
 	/** descend into directories */
 	if (S_ISDIR(obj->mode))	{
@@ -8008,6 +8005,8 @@ scan_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 		}
 		if (scan_args->largest_dir < nr_total)
 			scan_args->largest_dir = nr_total;
+	} else if (S_ISLNK(obj->mode)) {
+		scan_args->num_symlinks++;
 	} else {
 		struct stat stbuf;
 
@@ -8094,6 +8093,7 @@ dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *s
 
 	D_PRINT("DFS scanner: "DF_U64" scanned objects\n", scan_args.num_scanned);
 	D_PRINT("DFS scanner: "DF_U64" files\n", scan_args.num_files);
+	D_PRINT("DFS scanner: "DF_U64" symlinks\n", scan_args.num_symlinks);
 	D_PRINT("DFS scanner: "DF_U64" directories\n", scan_args.num_dirs);
 	D_PRINT("DFS scanner: "DF_U64" max tree depth\n", scan_args.max_depth);
 	D_PRINT("DFS scanner: "DF_U64" bytes of total data\n", scan_args.total_bytes);
