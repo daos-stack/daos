@@ -70,6 +70,8 @@ def build_client_libs_shared(env, prereqs):
         pil4dfsenv['CFLAGS'].remove('-fvisibility=hidden')
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     pil4dfsenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
+    pil4dfsenv.AppendUnique(LIBPATH=[Dir('../../gurt')])
+    pil4dfsenv.AppendUnique(CPPPATH=[Dir('../../gurt').srcnode()])
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../api')])
     pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'duns', 'gurt', 'dl'])
     pil4dfsenv.require('capstone')
