@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,13 +12,16 @@
 #ifndef __DD_POOL_H__
 #define __DD_POOL_H__
 
+#include <daos_types.h>
+#include <daos_prop.h>
+#include <daos_pool.h>
+#include <daos_task.h>
+#include <daos/tse.h>
+
 #include <daos/common.h>
 #include <gurt/hash.h>
 #include <daos/pool_map.h>
 #include <daos/rsvc.h>
-#include <daos/tse.h>
-#include <daos_types.h>
-#include <daos_pool.h>
 
 /** pool query request bits */
 #define DAOS_PO_QUERY_SPACE			(1ULL << 0)
@@ -50,7 +53,9 @@
 #define DAOS_PO_QUERY_PROP_CHECKPOINT_FREQ      (1ULL << (PROP_BIT_START + 22))
 #define DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH    (1ULL << (PROP_BIT_START + 23))
 #define DAOS_PO_QUERY_PROP_REINT_MODE		(1ULL << (PROP_BIT_START + 24))
-#define DAOS_PO_QUERY_PROP_BIT_END              40
+#define DAOS_PO_QUERY_PROP_SVC_OPS_ENABLED      (1ULL << (PROP_BIT_START + 25))
+#define DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE    (1ULL << (PROP_BIT_START + 26))
+#define DAOS_PO_QUERY_PROP_BIT_END              42
 
 #define DAOS_PO_QUERY_PROP_ALL                                                                     \
 	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB | DAOS_PO_QUERY_PROP_SELF_HEAL |   \
@@ -63,7 +68,8 @@
 	 DAOS_PO_QUERY_PROP_SCRUB_THRESH | DAOS_PO_QUERY_PROP_SVC_REDUN_FAC |                      \
 	 DAOS_PO_QUERY_PROP_OBJ_VERSION | DAOS_PO_QUERY_PROP_PERF_DOMAIN |                         \
 	 DAOS_PO_QUERY_PROP_CHECKPOINT_MODE | DAOS_PO_QUERY_PROP_CHECKPOINT_FREQ |                 \
-	 DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH | DAOS_PO_QUERY_PROP_REINT_MODE)
+	 DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH | DAOS_PO_QUERY_PROP_REINT_MODE |                    \
+	 DAOS_PO_QUERY_PROP_SVC_OPS_ENABLED | DAOS_PO_QUERY_PROP_SVC_OPS_ENTRY_AGE)
 
 /*
  * Version 1 corresponds to 2.2 (aggregation optimizations)

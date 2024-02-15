@@ -6,22 +6,16 @@ server_config:
   engines_per_host: 1
   engines:
     0:
+      targets: 4
+      nr_xs_helpers: 0
       storage:
         0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
+          class: ram
           scm_mount: /mnt/daos
+  system_ram_reserved: 1
 pool:
   scm_size: 1000000000
   control_method: dmg
-  pool_count: 5
 container:
   type: POSIX
   control_method: daos
-  cont_count: 5
-bashcmd:
-  dirname: test
-  filename1: testfile1.txt
-  filename2: testfile2.txt
-  dd_count: 512
-  dd_blocksize: 512

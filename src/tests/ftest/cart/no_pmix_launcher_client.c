@@ -107,7 +107,7 @@ int main(int argc, char **argv)
 				progress_function, &crt_ctx);
 	assert(rc == 0);
 
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
 	DBG_PRINT("Client starting with cfg_file=%s\n", grp_cfg_file);
 
 	/* load group info from a config file and delete file upon return */
@@ -116,6 +116,7 @@ int main(int argc, char **argv)
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
+	d_freeenv_str(&grp_cfg_file);
 
 	rc = crt_group_size(grp, &grp_size);
 	if (rc != 0) {
