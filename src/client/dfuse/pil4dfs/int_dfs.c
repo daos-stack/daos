@@ -136,6 +136,12 @@ static _Atomic uint32_t        daos_init_cnt;
 static bool             report;
 /* always load libpil4dfs related env variables in exec() */
 static bool             enforce_exec_env;
+/* current application is bash or sh.  */
+static bool             is_bash;
+/* the exe name extract from /proc/self/cmdline */
+static char             exe_path[DFS_MAX_PATH];
+/* the short exe name from exe_path */
+static char             exe_short[DFS_MAX_NAME];
 static long int         page_size;
 
 static _Atomic bool     daos_inited;
@@ -715,7 +721,7 @@ discover_dfuse_mounts(void)
 			pt_dfs_mt->dfs_dir_hash = NULL;
 			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
+				D_DEBUG(DB_ANY, "mnt_dir[] is too long. Skip this entry.\n");
 				D_GOTO(out, rc = ENAMETOOLONG);
 			}
 			if (access(fs_entry->mnt_dir, R_OK)) {
@@ -1929,12 +1935,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			D_GOTO(out_error, rc = EACCES);
 	}
 	/* file/dir should be handled by DFS */
-	/* O_APPEND causes failure in dfs_open/dfs_lookup. We allows O_APPEND here to support bash
-	 * scripts like configure. Currently, we only query file size one time when opening the
-	 * file, then set file pointer to the end of the file. We DO NOT move file pointer to the
-	 * end of the file in all following write to avoid expensive stat. We may need shared lock
-	 * across all processes on current node to better support O_APPEND later.
-	 */
 	if (oflags & O_CREAT) {
 		rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFREG, oflags & (~O_APPEND),
 			      0, 0, NULL, &dfs_obj);
@@ -2790,6 +2790,7 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 
 	if (!hook_enabled)
 		return next_lseek(fd, offset, whence);
+
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_lseek(fd, offset, whence);
@@ -3311,19 +3312,28 @@ out_readdir:
 
 extern char **__environ;
 
-/* This number may be updated later to be consistent!*/
-#define N_ENV_CHECK (7)
+/* This is the number of environmental variables that would be forced to set in child process. */
+#define N_ENV_APPEND (7)
 /**
- * char    env_list[N_ENV_CHECK][32] = {"LD_PRELOAD", "D_IL_REPORT", "DAOS_MOUNT_POINT",
- *				     "DAOS_POOL", "DAOS_CONTAINER", "D_IL_MAX_EQ",
- *				     "D_IL_ENFORCE_EXEC_ENV"};
+ * char    env_list[N_ENV_APPEND][32] = {"LD_PRELOAD", "D_IL_REPORT", "DAOS_MOUNT_POINT",
+ *                                       "DAOS_POOL", "DAOS_CONTAINER", "D_IL_MAX_EQ",
+ *                                       "D_IL_ENFORCE_EXEC_ENV"};
  */
 
+/* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
+ * related env properly set, we intercept execve and its variants to check envp[] and append our
+ * env when needed.
+ * pre_envp() scans provided envp to look for libpil4dfs related envs (env_list[]) and returns a
+ * new envp with missing libpil4dfs related envs appended.
+ * The fd for daos logging may be not valid here, so printf() is used in this function.
+ */
 static char **
 pre_envp(char *const envp[])
 {
-	int    i, rc, num_entry = 0;
-	int    idx_preload = -1;
+	int    i, rc;
+	int    num_entry       = 0;
+	int    num_entry_found = 0;
+	int    idx_preload     = -1;
 	int    len, len2, len_total;
 	char **new_envp;
 	char  *pil4df_path;
@@ -3352,62 +3362,85 @@ pre_envp(char *const envp[])
 		num_entry = 0;
 	} else {
 		while (envp[num_entry]) {
-			if (strncmp(envp[num_entry], "LD_PRELOAD", 10) == 0) {
+			/* scan the env in env_list[] to check whether they exist or not */
+			if (strncmp(envp[num_entry], "LD_PRELOAD", sizeof("LD_PRELOAD") - 1) == 0) {
 				preload_included = true;
 				idx_preload      = num_entry;
+				num_entry_found++;
 				if (strstr(envp[num_entry], "libpil4dfs.so"))
 					pil4dfs_in_preload = true;
-			} else if (strncmp(envp[num_entry], "D_IL_REPORT", 11) == 0) {
+			} else if (strncmp(envp[num_entry], "D_IL_REPORT", sizeof("D_IL_REPORT") -
+				   1) == 0) {
 				report_included = true;
-			} else if (strncmp(envp[num_entry], "DAOS_MOUNT_POINT", 16) == 0) {
+				num_entry_found++;
+			} else if (strncmp(envp[num_entry], "DAOS_MOUNT_POINT",
+				   sizeof("DAOS_MOUNT_POINT") - 1) == 0) {
 				mp_included = true;
-			} else if (strncmp(envp[num_entry], "DAOS_POOL", 9) == 0) {
+				num_entry_found++;
+			} else if (strncmp(envp[num_entry], "DAOS_POOL", sizeof("DAOS_POOL") - 1)
+				   == 0) {
 				pool_included = true;
-			} else if (strncmp(envp[num_entry], "DAOS_CONTAINER", 14) == 0) {
+				num_entry_found++;
+			} else if (strncmp(envp[num_entry], "DAOS_CONTAINER",
+				   sizeof("DAOS_CONTAINER") - 1) == 0) {
 				cont_included = true;
-			} else if (strncmp(envp[num_entry], "D_IL_MAX_EQ", 11) == 0) {
+				num_entry_found++;
+			} else if (strncmp(envp[num_entry], "D_IL_MAX_EQ", sizeof("D_IL_MAX_EQ") -
+				   1)
+				   == 0) {
 				maxeq_included = true;
-			} else if (strncmp(envp[num_entry], "D_IL_ENFORCE_EXEC_ENV", 21) == 0) {
+				num_entry_found++;
+			} else if (strncmp(envp[num_entry], "D_IL_ENFORCE_EXEC_ENV",
+				   sizeof("D_IL_ENFORCE_EXEC_ENV") - 1) == 0) {
 				enforcement_included = true;
+				num_entry_found++;
 			}
 			num_entry++;
 		}
 	}
 
-	/* The fd for daos logging may be not valid here, so use plain printf */
-	new_envp = malloc(sizeof(char *) * (num_entry + N_ENV_CHECK + 1));
+	/* All required env are found and pil4dfs is in LD_PRELOAD. No need to create a new envp. */
+	if (num_entry_found == N_ENV_APPEND && pil4dfs_in_preload == true)
+		return (char **)envp;
+
+	/* the new envp holds the existing envs & the envs forced to append plus NULL at the end */
+	new_envp = malloc(sizeof(char *) * (num_entry + N_ENV_APPEND + 1));
 	if (new_envp == NULL) {
 		printf("Error: failed to allocate memory for new_envp. Use existing envp\n");
 		goto err_out0;
 	}
 
-	pil4df_path = query_pil4dfs_path();
-	len2        = strnlen(pil4df_path, PATH_MAX);
-	/* copy existing entries */
+	/* Copy all existing entries to the new envp[] */
 	for (i = 0; i < num_entry; i++)	{
-		if (preload_included == true && pil4dfs_in_preload == false && idx_preload == i) {
-			/* need to replace the existing string */
-			len = strnlen(envp[i], MAX_ARG_STRLEN);
-			/* 2 for ':' and '\0' */
-			len_total = len + len2 + 2;
-			if (len_total > MAX_ARG_STRLEN) {
-				printf("Error: env for LD_PRELOAD is too long!\n");
-				goto err_out1;
-			}
-			rc = asprintf(&new_preload_str, "%s:%s", envp[i], pil4df_path);
-			if (rc < 0) {
-				printf("Error: failed to allocate memory for LD_PRELOAD env!\n");
-				goto err_out1;
-			}
-			new_envp[i] = new_preload_str;
-			continue;
-		}
 		new_envp[i] = envp[i];
 	}
-	if (preload_included == false && pil4dfs_in_preload == false) {
+	/* LD_PRELOAD is a special case. If LD_PRELOAD is found but libpil4dfs.so is not in
+	 * LD_PRELOAD env, then allocate a buffer for the concatenation of existing LD_PRELOAD
+	 * env and the full path of libpil4dfs.so.
+	 */
+	pil4df_path = query_pil4dfs_path();
+	len2        = strnlen(pil4df_path, PATH_MAX);
+	if (preload_included == true && pil4dfs_in_preload == false) {
+		/* need to replace the existing string */
+		len = strnlen(envp[idx_preload], MAX_ARG_STRLEN);
+		/* 2 extra bytes for ':' and '\0' */
+		len_total = len + len2 + 2;
+		if (len_total > MAX_ARG_STRLEN) {
+			printf("Error: env for LD_PRELOAD is too long.\n");
+			goto err_out1;
+		}
+		rc = asprintf(&new_preload_str, "%s:%s", envp[idx_preload], pil4df_path);
+		if (rc < 0) {
+			printf("Error: failed to allocate memory for LD_PRELOAD env.\n");
+			goto err_out1;
+		}
+		new_envp[idx_preload] = new_preload_str;
+	}
+	/* append LD_PRELOAD env */
+	if (!preload_included) {
 		rc = asprintf(&new_preload_str, "LD_PRELOAD=%s", pil4df_path);
 		if (rc < 0) {
-			printf("Error: failed to allocate memory for LD_PRELOAD env!\n");
+			printf("Error: failed to allocate memory for LD_PRELOAD env.\n");
 			goto err_out1;
 		}
 		new_envp[i] = new_preload_str;
@@ -3415,11 +3448,11 @@ pre_envp(char *const envp[])
 	}
 	if (!report_included) {
 		if (report)
-			str_report = strndup("D_IL_REPORT=1", 14);
+			str_report = strndup("D_IL_REPORT=1", sizeof("D_IL_REPORT=1"));
 		else
-			str_report = strndup("D_IL_REPORT=0", 14);
+			str_report = strndup("D_IL_REPORT=0", sizeof("D_IL_REPORT=0"));
 		if (str_report == NULL) {
-			printf("Error: failed to allocate memory for D_IL_REPORT env!\n");
+			printf("Error: failed to allocate memory for D_IL_REPORT env.\n");
 			goto err_out2;
 		}
 		new_envp[i] = str_report;
@@ -3431,7 +3464,7 @@ pre_envp(char *const envp[])
 			rc = asprintf(&str_mp, "DAOS_MOUNT_POINT=%s", fs_root);
 			if (rc < 0) {
 				printf("Error: failed to allocate memory for DAOS_MOUNT_POINT "
-				       "env!\n");
+				       "env.\n");
 				goto err_out3;
 			}
 			new_envp[i] = str_mp;
@@ -3443,8 +3476,7 @@ pre_envp(char *const envp[])
 		if (pool) {
 			rc = asprintf(&str_pool, "DAOS_POOL=%s", pool);
 			if (rc < 0) {
-				printf("Error: failed to allocate memory for DAOS_MOUNT_POINT "
-				       "env!\n");
+				printf("Error: failed to allocate memory for DAOS_POOL env.\n");
 				goto err_out4;
 			}
 			new_envp[i] = str_pool;
@@ -3457,7 +3489,7 @@ pre_envp(char *const envp[])
 			rc = asprintf(&str_cont, "DAOS_CONTAINER=%s", container);
 			if (rc < 0) {
 				printf("Error: failed to allocate memory for DAOS_CONTAINER "
-				       "env!\n");
+				       "env.\n");
 				goto err_out5;
 			}
 			new_envp[i] = str_cont;
@@ -3467,7 +3499,7 @@ pre_envp(char *const envp[])
 	if (!maxeq_included) {
 		rc = asprintf(&str_maxeq, "D_IL_MAX_EQ=%d", eq_count_max);
 		if (rc < 0) {
-			printf("Error: failed to allocate memory for D_IL_MAX_EQ env!\n");
+			printf("Error: failed to allocate memory for D_IL_MAX_EQ env.\n");
 			goto err_out6;
 		}
 		new_envp[i] = str_maxeq;
@@ -3475,18 +3507,20 @@ pre_envp(char *const envp[])
 	}
 	if (!enforcement_included) {
 		if (enforce_exec_env)
-			str_enforcement = strndup("D_IL_ENFORCE_EXEC_ENV=1", 24);
+			str_enforcement = strndup("D_IL_ENFORCE_EXEC_ENV=1",
+				sizeof("D_IL_ENFORCE_EXEC_ENV=1"));
 		else
-			str_enforcement = strndup("D_IL_ENFORCE_EXEC_ENV=0", 24);
+			str_enforcement = strndup("D_IL_ENFORCE_EXEC_ENV=0",
+				sizeof("D_IL_ENFORCE_EXEC_ENV=0"));
 		if (str_enforcement == NULL) {
-			printf("Error: failed to allocate memory for D_IL_ENFORCE_EXEC_ENV env!\n");
+			printf("Error: failed to allocate memory for D_IL_ENFORCE_EXEC_ENV env.\n");
 			goto err_out7;
 		}
 		new_envp[i] = str_enforcement;
 		i++;
 	}
 
-	/* NULL pointer to end */
+	/* append NULL pointer to the end of new_envp */
 	new_envp[i] = NULL;
 
 	return new_envp;
@@ -3509,48 +3543,6 @@ err_out0:
 	return (char **)envp;
 }
 
-/* check whether fd 0, 1, and 2 are located on DFS mount or not. If yes, reopen files and
- * set offset.
- */
-static void
-setup_fd_0_1_2(void)
-{
-	int   i, fd, idx, fd_tmp, fd_new, open_flag;
-	off_t offset;
-
-	if (num_fd_dup2ed == 0)
-		return;
-
-	for (i = 0; i < MAX_FD_DUP2ED; i++) {
-		/* only check fd 0, 1, and 2 */
-		if (fd_dup2_list[i].fd_src >= 0 && fd_dup2_list[i].fd_src <= 2) {
-			fd        = fd_dup2_list[i].fd_src;
-			idx       = fd_dup2_list[i].fd_dest - FD_FILE_BASE;
-			offset    = file_list[idx]->offset;
-			open_flag = file_list[idx]->open_flag;
-
-			/* get a real fd from kernel */
-			fd_tmp = libc_open(file_list[idx]->path, open_flag);
-			if (fd_tmp < 0) {
-				printf("Error: open %s failed. %s\n", file_list[idx]->path,
-				       strerror(errno));
-				continue;
-			}
-			/* using dup2() to make sure we get desired fd */
-			fd_new = dup2(fd_tmp, fd);
-			if (fd_new < 0 || fd_new != fd) {
-				printf("Error: dup2 failed. %s\n", strerror(errno));
-				exit(1);
-			}
-			libc_close(fd_tmp);
-			if (libc_lseek(fd, offset, SEEK_SET) == -1) {
-				printf("Error: lseek failed to set offset. %s\n", strerror(errno));
-				exit(1);
-			}
-		}
-	}
-}
-
 /* close all real fds allocated by kernel larger than 2 */
 static void
 close_all_kernel_fd(void)
@@ -3568,7 +3560,8 @@ close_all_kernel_fd(void)
 	while ((entry = readdir(dir)) != NULL) {
 		if (entry->d_name[0] >= '1' && entry->d_name[0] <= '9') {
 			fd = atoi(entry->d_name);
-			if (fd != 0)
+			/* atoi() returns zero in error */
+			if (fd == 0)
 				continue;
 			if (fd > 2 && fd != fd_using)
 				libc_close(fd);
@@ -3583,8 +3576,6 @@ reset_daos_env_before_exec(void)
 	/* bash does fork(), then close opened files before exec(),
 	 * so the fd for log file could be invalid now. */
 	d_log_disable_logging();
-
-	setup_fd_0_1_2();
 
 	if (context_reset) {
 		destroy_all_eqs();
@@ -5483,6 +5474,38 @@ dup2(int oldfd, int newfd)
 	if (fd_directed >= FD_FILE_BASE) {
 		int fd_tmp;
 
+		if (is_bash && newfd <= 2) {
+			/* Linux fds created with dup2 share same status across parent and child processes.
+			 * This is a special case for bash/sh. It is needed to allow configure run.
+			 */
+			fd_tmp = libc_open(file_list[fd_directed - FD_FILE_BASE]->path,
+				file_list[fd_directed - FD_FILE_BASE]->open_flag & (~(O_TRUNC | O_CREAT)));
+			if (fd_tmp < 0) {
+				DS_ERROR(errno, "open() failed");
+				return (-1);
+			}
+			/* using dup2() to make sure we get desired fd */
+			fd = next_dup2(fd_tmp, newfd);
+			if (fd < 0 || fd != newfd) {
+				errno_save = errno;
+				libc_close(fd_tmp);
+				errno = errno_save;
+				DS_ERROR(errno, "dup2() failed");
+				return (-1);
+			}
+			libc_close(fd_tmp);
+			if (libc_lseek(fd, file_list[fd_directed - FD_FILE_BASE]->offset, SEEK_SET)
+				       == -1) {
+				errno_save = errno;
+				libc_close(fd);
+				errno = errno_save;
+				DS_ERROR(errno, "lseek() failed");
+				return (-1);
+			}
+			/* This is a special case. Do not add into duplicated fd list. */
+			return fd;
+		}
+
 		fd_tmp = allocate_a_fd_from_kernel();
 		if (fd_tmp < 0) {
 			/* failed to allocate an fd from kernel */
@@ -5973,6 +5996,47 @@ register_handler(int sig, struct sigaction *old_handler)
 	}
 }
 
+static void
+extract_exe_path(void)
+{
+	FILE *fIn;
+	char *line;
+	int readsize, len, pos;
+
+	exe_path[0]  = 0;
+	exe_short[0] = 0;
+
+	D_ALLOC(line, DFS_MAX_PATH);
+	if (line == NULL)
+		return;
+	fIn = fopen("/proc/self/cmdline", "r");
+	if (fIn == NULL)        {
+		DS_ERROR(errno, "Fail to open file: /proc/self/cmdline");
+		goto out;
+	}
+	readsize = fread(line, 1, DFS_MAX_PATH, fIn);
+	if (readsize <= 0)   {
+		DS_ERROR(errno, "Fail to determine the executable file name");
+		fclose(fIn);
+		goto out;
+	}
+	fclose(fIn);
+	strncpy(exe_path, line, DFS_MAX_PATH);
+	len = strnlen(exe_path, DFS_MAX_PATH);
+	for (pos = len - 1; pos > 0; pos--) {
+		if (exe_path[pos] == '/') {
+			strncpy(exe_short, exe_path + pos + 1, DFS_MAX_NAME);
+			break;
+		}
+	}
+	if (strncmp(exe_short, "bash", 5) == 0 || strncmp(exe_short, "sh", 3) == 0)
+		is_bash = true;
+
+out:
+	D_FREE(line);
+	return;
+}
+
 static __attribute__((constructor)) void
 init_myhook(void)
 {
@@ -6095,6 +6159,8 @@ init_myhook(void)
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
 
 	init_fd_dup2_list();
+
+	extract_exe_path();
 
 	install_hook();
 	hook_enabled = 1;

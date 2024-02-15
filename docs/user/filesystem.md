@@ -992,3 +992,5 @@ No support of creating a process with the executable and shared object files sto
 No support for applications using fork yet
 
 Those unsupported features are still available through dfuse.
+
+DFS (dfs_open / dfs_lookup) does not support O_APPEND currently. We allow O_APPEND flag in open in libpil4dfs to support bash scripts like configure. Currently, we only query file size one time when opening the file, then set file pointer to the end of the file. We DO NOT move file pointer to the end of the file in all following write to avoid expensive stat. Futher work is required for rigorous O_APPEND support.

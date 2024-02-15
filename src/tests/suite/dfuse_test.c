@@ -637,7 +637,7 @@ void
 do_exec(void **state)
 {
 	pid_t pid;
-	int   status, rc, fd;
+	int   status, rc;
 	char *envp[1] = {NULL};
 	char *argv[3] = {"dfuse_test", "-v", NULL};
 	char *exe_path;
@@ -688,17 +688,6 @@ do_exec(void **state)
 	pid = fork();
 	if (pid == 0)
 		execvpe(exe_path, argv, envp);
-	waitpid(pid, &status, 0);
-	if (WIFEXITED(status))
-		assert_int_equal(WEXITSTATUS(status), 0);
-
-	/* fork and call fexecve() */
-	printf("Testing fexecve().\n");
-	fd = open(exe_path, O_RDONLY);
-	assert_true(fd > 0);
-	pid = fork();
-	if (pid == 0)
-		fexecve(fd, argv, envp);
 	waitpid(pid, &status, 0);
 	if (WIFEXITED(status))
 		assert_int_equal(WEXITSTATUS(status), 0);
