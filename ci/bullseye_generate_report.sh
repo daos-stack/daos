@@ -12,6 +12,7 @@ export PATH="/opt/BullseyeCoverage/bin:$PATH"
 echo "======>"
 pwd
 ls
+ls "$WORKSPACE/"
 ls "$WORKSPACE/covc_test_logs/"
 ls "$WORKSPACE/Functional_Hardware_Large/bullseye_coverage_logs/"
 ls "$WORKSPACE/Functional_Hardware_Medium/bullseye_coverage_logs"
