@@ -126,7 +126,6 @@ class PoolCreateAllTestBase(TestWithServers):
                 "Pool with invalid ranks: wait={} got={}".format(wait_ranks, got_ranks))
         self.log.info("Pool created: scm_size=%d, nvme_size=%d", *tier_bytes)
         self.pool[pool_idx].destroy()
-        self.wait_for_pool_destroyed(pool_idx=pool_idx)
         pool_idx += 1
 
         rank_count = len(ranks) if ranks is not None else self.engines_count
@@ -148,7 +147,6 @@ class PoolCreateAllTestBase(TestWithServers):
             self.pool[pool_idx].target_list.update(ranks, "pool[{}].target_list".format(pool_idx))
         self.pool[pool_idx].create()
         self.pool[pool_idx].destroy()
-        self.wait_for_pool_destroyed(pool_idx=pool_idx)
         pool_idx += 1
 
         self.log.info(
@@ -235,6 +233,7 @@ class PoolCreateAllTestBase(TestWithServers):
             self.log.info(
                 "Pool %d created: scm_size=%d, nvme_size=%d", index, *pool_size)
             self.pool[index].destroy()
+            self.wait_for_pool_destroyed(pool_idx=index)
 
             if first_pool_size is None:
                 first_pool_size = pool_size
