@@ -24,6 +24,10 @@
 
 #include "dfuse_common.h"
 
+/* TODO: This should update the container open flags once the update has landed
+ * https://github.com/daos-stack/daos/pull/13702
+ */
+
 struct dfuse_info {
 	struct fuse_session *di_session;
 	char                *di_group;
@@ -35,6 +39,7 @@ struct dfuse_info {
 	bool                 di_caching;
 	bool                 di_multi_user;
 	bool                 di_wb_cache;
+	bool                 di_read_only;
 
 	/* Per process spinlock
 	 * This is used to lock readdir against closedir where they share a readdir handle,
@@ -401,9 +406,12 @@ struct dfuse_event {
 	struct stat de_attr;
 };
 
-extern struct dfuse_inode_ops dfuse_dfs_ops;
-extern struct dfuse_inode_ops dfuse_cont_ops;
-extern struct dfuse_inode_ops dfuse_pool_ops;
+extern const struct dfuse_inode_ops dfuse_dfs_ops;
+extern const struct dfuse_inode_ops dfuse_cont_ops;
+extern const struct dfuse_inode_ops dfuse_pool_ops;
+
+struct fuse_session *
+dfuse_session_new(struct fuse_args *args, struct dfuse_info *dfuse_info);
 
 /** Pool information
  *
@@ -472,7 +480,7 @@ enum dfuse_stat_id {
  */
 struct dfuse_cont {
 	/** Fuse handlers to use for this container */
-	struct dfuse_inode_ops *dfs_ops;
+	const struct dfuse_inode_ops *dfs_ops;
 
 	/** Pointer to parent pool, where a reference is held */
 	struct dfuse_pool      *dfs_dfp;
@@ -569,9 +577,6 @@ dfuse_fs_fini(struct dfuse_info *dfuse_info);
 
 extern int
 dfuse_loop(struct dfuse_info *dfuse_info);
-
-extern
-struct fuse_lowlevel_ops dfuse_ops;
 
 /* Helper macros for open() and creat() to log file access modes */
 #define LOG_MODE(HANDLE, FLAGS, MODE) do {			\

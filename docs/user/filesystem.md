@@ -217,6 +217,7 @@ Additionally, there are several optional command-line options:
 | --singlethreaded           | run single threaded              |
 | --thread-count=<count>     | Number of threads to use         |
 | --multi-user               | Run in multi user mode           |
+| --read-only                | Mount in read-only mode          |
 
 The `--pool` and `--container` options can also be passed as the second and third positional
 arguments.

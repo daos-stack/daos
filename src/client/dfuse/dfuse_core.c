@@ -1268,7 +1268,7 @@ int
 dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 {
 	struct fuse_args          args     = {0};
-	struct dfuse_inode_entry *ie       = NULL;
+	struct dfuse_inode_entry *ie;
 	struct d_slab_reg         read_slab  = {.sr_init    = dfuse_event_init,
 						.sr_reset   = dfuse_read_event_reset,
 						.sr_release = dfuse_event_release,
@@ -1277,10 +1277,13 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 						.sr_reset   = dfuse_write_event_reset,
 						.sr_release = dfuse_event_release,
 						POOL_TYPE_INIT(dfuse_event, de_list)};
-	int                       i;
 	int                       rc;
+	int                       idx = 0;
 
 	args.argc = 5;
+
+	if (dfuse_info->di_read_only)
+		args.argc++;
 
 	if (dfuse_info->di_multi_user)
 		args.argc++;
@@ -1293,31 +1296,46 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	if (!args.argv)
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	args.argv[0] = strdup("");
-	if (!args.argv[0])
+	args.argv[idx] = strdup("");
+	if (!args.argv[idx])
 		D_GOTO(err, rc = -DER_NOMEM);
+	idx++;
 
-	args.argv[1] = strdup("-ofsname=dfuse");
-	if (!args.argv[1])
+	args.argv[idx] = strdup("-ofsname=dfuse");
+	if (!args.argv[idx])
 		D_GOTO(err, rc = -DER_NOMEM);
+	idx++;
 
-	args.argv[2] = strdup("-osubtype=daos");
-	if (!args.argv[2])
+	args.argv[idx] = strdup("-osubtype=daos");
+	if (!args.argv[idx])
 		D_GOTO(err, rc = -DER_NOMEM);
+	idx++;
 
-	args.argv[3] = strdup("-odefault_permissions");
-	if (!args.argv[3])
+	args.argv[idx] = strdup("-odefault_permissions");
+	if (!args.argv[idx])
 		D_GOTO(err, rc = -DER_NOMEM);
+	idx++;
 
-	args.argv[4] = strdup("-onoatime");
-	if (!args.argv[4])
+	args.argv[idx] = strdup("-onoatime");
+	if (!args.argv[idx])
 		D_GOTO(err, rc = -DER_NOMEM);
+	idx++;
+
+	if (dfuse_info->di_read_only) {
+		args.argv[idx] = strdup("-oro");
+		if (!args.argv[idx])
+			D_GOTO(err, rc = -DER_NOMEM);
+		idx++;
+	}
 
 	if (dfuse_info->di_multi_user) {
-		args.argv[5] = strdup("-oallow_other");
-		if (!args.argv[5])
+		args.argv[idx] = strdup("-oallow_other");
+		if (!args.argv[idx])
 			D_GOTO(err, rc = -DER_NOMEM);
+		idx++;
 	}
+
+	D_ASSERT(idx == args.argc);
 
 	/* Create the root inode and insert into table */
 	D_ALLOC_PTR(ie);
@@ -1353,7 +1371,7 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	if (rc != -DER_SUCCESS)
 		D_GOTO(err_ie_remove, rc);
 
-	for (i = 0; i < dfuse_info->di_eq_count; i++) {
+	for (int i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
 
 		rc = d_slab_register(&dfuse_info->di_slab, &read_slab, eqt, &eqt->de_read_slab);
@@ -1378,7 +1396,7 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	}
 
 err_threads:
-	for (i = 0; i < dfuse_info->di_eq_count; i++) {
+	for (int i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
 
 		if (!eqt->de_thread)
