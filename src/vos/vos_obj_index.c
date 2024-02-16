@@ -319,9 +319,8 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	D_DEBUG(DB_TRACE, "Punch obj "DF_UOID", epoch="DF_U64".\n",
 		DP_UOID(oid), epoch);
 
-	rc = vos_ilog_punch(cont, &obj->vo_ilog, &epr, bound, NULL,
-			    info, ts_set, true,
-			    (flags & VOS_OF_REPLAY_PC) != 0);
+	rc = vos_ilog_punch(cont, &obj->vo_ilog, &epr, bound, NULL, info, ts_set, true,
+			    (flags & VOS_OF_REBUILD) != 0);
 
 	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;

@@ -17,7 +17,6 @@
 #include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos/common.h>
-#include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/vos.h>
@@ -612,7 +611,7 @@ vos_pool_hash_del(struct vos_pool *pool)
  * Getting object cache
  * Wrapper for TLS and standalone mode
  */
-static inline struct daos_lru_cache *
+static inline struct vos_obj_cache *
 vos_get_obj_cache(void)
 {
 	return vos_tls_get(false)->vtl_ocache;

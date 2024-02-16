@@ -47,21 +47,23 @@ struct vos_object {
 	struct vos_obj_df		*obj_df;
 	/** backref to container */
 	struct vos_container		*obj_cont;
-	/** nobody should access this object */
-	bool				obj_zombie;
-	/** Object is in discard */
-	bool				obj_discard;
+	uint64_t                         obj_zombie : 1, /** nobody should access this object */
+	    obj_discard                             : 1, /** object is in discard */
+	    obj_ephemeral                           : 1, /** Object is in ephemeral cache */
+	    obj_dropped                             : 1; /** Object dropped from ephemeral cache */
 };
 
 enum {
 	/** Only return the object if it's visible */
-	VOS_OBJ_VISIBLE		= (1 << 0),
+	VOS_OBJ_VISIBLE = (1 << 0),
 	/** Create the object if it doesn't exist */
-	VOS_OBJ_CREATE		= (1 << 1),
+	VOS_OBJ_CREATE = (1 << 1),
 	/** Hold for object specific discard */
-	VOS_OBJ_DISCARD		= (1 << 2),
+	VOS_OBJ_DISCARD = (1 << 2),
 	/** Hold the object for delete dkey */
-	VOS_OBJ_KILL_DKEY	= (1 << 3),
+	VOS_OBJ_KILL_DKEY = (1 << 3),
+	/** Object is likely short lived and shouldn't pollute the cache */
+	VOS_OBJ_EPHEMERAL = (1 << 4),
 };
 
 /**
@@ -90,10 +92,9 @@ enum {
  *		other			Another error occurred
  */
 int
-vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
-	     daos_unit_oid_t oid, daos_epoch_range_t *epr, daos_epoch_t bound,
-	     uint64_t flags, uint32_t intent, struct vos_object **obj_p,
-	     struct vos_ts_set *ts_set);
+vos_obj_hold(struct vos_obj_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
+	     daos_epoch_range_t *epr, daos_epoch_t bound, uint64_t flags, uint32_t intent,
+	     struct vos_object **obj_p, struct vos_ts_set *ts_set);
 
 /**
  * Release the object cache reference.
@@ -101,13 +102,16 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
  * \param obj	[IN]	Reference to be released.
  */
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict);
+vos_obj_release(struct vos_obj_cache *occ, struct vos_object *obj, bool evict);
 
 /** Evict an object reference from the cache */
-void vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj);
+void
+vos_obj_evict(struct vos_obj_cache *occ, struct vos_object *obj);
 
-int vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
-			 daos_unit_oid_t oid);
+int
+vos_obj_evict_by_oid(struct vos_obj_cache *occ, struct vos_container *cont, daos_unit_oid_t oid);
+
+struct vos_obj_cache;
 
 /**
  * Create an object cache.
@@ -116,7 +120,7 @@ int vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
  * \param occ_p		[OUT]	Newly created cache.
  */
 int
-vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ_p);
+vos_obj_cache_create(int32_t cache_size, struct vos_obj_cache **occ_p);
 
 /**
  * Destroy an object cache, and release all cached object references.
@@ -124,16 +128,17 @@ vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ_p);
  * \param occ	[IN]	Cache to be destroyed.
  */
 void
-vos_obj_cache_destroy(struct daos_lru_cache *occ);
+vos_obj_cache_destroy(struct vos_obj_cache *occ);
 
 /** evict cached objects for the specified container */
-void vos_obj_cache_evict(struct daos_lru_cache *occ,
-			 struct vos_container *cont);
+void
+vos_obj_cache_evict(struct vos_obj_cache *occ, struct vos_container *cont);
 
 /**
  * Return object cache for the current IO.
  */
-struct daos_lru_cache *vos_obj_cache_current(bool standalone);
+struct vos_obj_cache *
+vos_obj_cache_current(bool standalone);
 
 /**
  * Object Index API and handles
@@ -221,7 +226,7 @@ vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool only_delete_
  *		0		Success
  */
 int
-vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
+vos_obj_discard_hold(struct vos_obj_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
 		     struct vos_object **objp);
 
 /** Release object held for range discard
@@ -230,6 +235,6 @@ vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, dao
  * \param[in]	obj	Object to release
  */
 void
-vos_obj_discard_release(struct daos_lru_cache *occ, struct vos_object *obj);
+vos_obj_discard_release(struct vos_obj_cache *occ, struct vos_object *obj);
 
 #endif

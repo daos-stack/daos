@@ -58,6 +58,8 @@ struct pf_param {
 			bool	verify;
 			/* dkey flag */
 			bool	dkey_flag;
+			/* for VOS mode, set rebuild flag */
+			uint64_t flags;
 		} pa_rw;
 		struct {
 			/* full scan */
@@ -68,9 +70,8 @@ struct pf_param {
 	};
 };
 
-typedef int (*pf_update_or_fetch_fn_t)(int, enum ts_op_type,
-				       struct io_credit *, daos_epoch_t,
-				       bool, double *);
+typedef int (*pf_update_or_fetch_fn_t)(int, enum ts_op_type, struct io_credit *, daos_epoch_t, bool,
+				       double *, uint64_t);
 typedef int (*pf_parse_cb_t)(char *, struct pf_param *, char **);
 
 struct pf_test {

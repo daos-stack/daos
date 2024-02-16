@@ -2396,9 +2396,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct umem_instance	*umem;
 	bool			 tx_started = false;
 	uint16_t                  minor_epc;
+	uint64_t                  flags = VOS_OBJ_CREATE | VOS_OBJ_VISIBLE;
 
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
+
+	if (ioc->ic_rebuild)
+		flags |= VOS_OBJ_EPHEMERAL;
 
 	umem = vos_ioc2umm(ioc);
 
@@ -2431,9 +2435,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_FREE(daes);
 	}
 
-	err = vos_obj_hold(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
-			   ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
-			   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_UPDATE,
+	err = vos_obj_hold(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb), ioc->ic_cont,
+			   ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound, flags, DAOS_INTENT_UPDATE,
 			   &ioc->ic_obj, ioc->ic_ts_set);
 	if (err != 0)
 		goto abort;

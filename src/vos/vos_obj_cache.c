@@ -38,6 +38,26 @@ struct obj_lru_key {
 	daos_unit_oid_t		 olk_oid;
 };
 
+struct vos_obj_cache {
+	/** The main object cache */
+	struct daos_lru_cache *oc_lru;
+	/** Temporary scratch space for holding an object before caching it. */
+	struct vos_object      oc_scratch;
+	/** For objects that are not cached with an expected short life such as
+	 *  for rebuild or aggregation where we are working on one at at a time
+	 *  and post many operations for the same object without a yield. Avoid
+	 *  polluting the object cache for user I/O.
+	 */
+	struct vos_object     *oc_ephemeral;
+	/** container for ephemeral object (for same oid case) */
+	struct vos_container  *oc_eph_cont;
+	/** Set this flag when using the ephemeral entry.  Due to the yield at
+	 * vos_tx_end, another ult may need to drop the ephemeral entry from cache and
+	 * notify the writer via a flag to free it.
+	 */
+	bool                   oc_eph_in_use;
+};
+
 static inline void
 init_object(struct vos_object *obj, daos_unit_oid_t oid, struct vos_container *cont)
 {
@@ -156,23 +176,40 @@ static struct daos_llink_ops obj_lru_ops = {
 };
 
 int
-vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
+vos_obj_cache_create(int32_t cache_size, struct vos_obj_cache **occp)
 {
 	int	rc;
+	struct vos_obj_cache *occ = NULL;
+
+	D_ASSERT(occp != NULL);
+
+	D_ALLOC_PTR(occ);
+	if (occ == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	D_DEBUG(DB_TRACE, "Creating an object cache %d\n", (1 << cache_size));
-	rc = daos_lru_cache_create(cache_size, D_HASH_FT_NOLOCK,
-				   &obj_lru_ops, occ);
-	if (rc)
+	rc = daos_lru_cache_create(cache_size, D_HASH_FT_NOLOCK, &obj_lru_ops, &occ->oc_lru);
+	if (rc) {
 		D_ERROR("Error in creating lru cache: "DF_RC"\n", DP_RC(rc));
+		D_FREE(occ);
+	}
+out:
+	*occp = occ;
+
 	return rc;
 }
 
 void
-vos_obj_cache_destroy(struct daos_lru_cache *occ)
+vos_obj_cache_destroy(struct vos_obj_cache *occ)
 {
 	D_ASSERT(occ != NULL);
-	daos_lru_cache_destroy(occ);
+	daos_lru_cache_destroy(occ->oc_lru);
+	if (occ->oc_eph_cont != NULL) {
+		occ->oc_ephemeral->obj_cont = NULL;
+		clean_object(occ->oc_ephemeral);
+		D_FREE(occ->oc_ephemeral);
+	}
+	D_FREE(occ);
 }
 
 static bool
@@ -189,42 +226,54 @@ obj_cache_evict_cond(struct daos_llink *llink, void *args)
 }
 
 void
-vos_obj_cache_evict(struct daos_lru_cache *cache, struct vos_container *cont)
+vos_obj_cache_evict(struct vos_obj_cache *cache, struct vos_container *cont)
 {
-	daos_lru_cache_evict(cache, obj_cache_evict_cond, cont);
+	daos_lru_cache_evict(cache->oc_lru, obj_cache_evict_cond, cont);
 }
 
 /**
  * Return object cache for the current IO.
  */
-struct daos_lru_cache *
+struct vos_obj_cache *
 vos_obj_cache_current(bool standalone)
 {
 	return vos_obj_cache_get(standalone);
 }
 
-static __thread struct vos_object	 obj_local = {0};
-
 void
-vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
+vos_obj_release(struct vos_obj_cache *occ, struct vos_object *obj, bool evict)
 {
+	D_ASSERT((occ != NULL) && (obj != NULL));
 
-	if (obj == &obj_local) {
+	if (obj == &occ->oc_scratch) {
 		clean_object(obj);
 		memset(obj, 0, sizeof(*obj));
 		return;
 	}
 
-	D_ASSERT((occ != NULL) && (obj != NULL));
+	if (obj->obj_dropped) {
+		D_FREE(obj);
+		return;
+	}
+
+	if (obj->obj_ephemeral) {
+		if (evict) {
+			clean_object(obj);
+			D_FREE(obj);
+			occ->oc_eph_cont = NULL;
+		}
+		occ->oc_eph_in_use = false;
+		return;
+	}
 
 	if (evict)
-		daos_lru_ref_evict(occ, &obj->obj_llink);
+		daos_lru_ref_evict(occ->oc_lru, &obj->obj_llink);
 
-	daos_lru_ref_release(occ, &obj->obj_llink);
+	daos_lru_ref_release(occ->oc_lru, &obj->obj_llink);
 }
 
 int
-vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
+vos_obj_discard_hold(struct vos_obj_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
 		     struct vos_object **objp)
 {
 	struct vos_object	*obj = NULL;
@@ -238,58 +287,124 @@ vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, dao
 
 	D_ASSERTF(!obj->obj_discard, "vos_obj_hold should return an error if already in discard\n");
 
-	obj->obj_discard = true;
+	obj->obj_discard = 1;
 	*objp = obj;
 
 	return 0;
 }
 
 void
-vos_obj_discard_release(struct daos_lru_cache *occ, struct vos_object *obj)
+vos_obj_discard_release(struct vos_obj_cache *occ, struct vos_object *obj)
 {
-	obj->obj_discard = false;
+	obj->obj_discard = 0;
 
 	vos_obj_release(occ, obj, false);
 }
 
-/** Move local object to the lru cache */
-static inline int
-cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
+enum {
+	VOS_OBJ_EPH_NONE = 0,
+	VOS_OBJ_EPH_DROP = 1,
+	VOS_OBJ_EPH_FREE = 2,
+};
+
+static inline void
+move_object(struct vos_object *obj_new, struct vos_object *obj_old, int action)
 {
-	struct vos_object	*obj_new;
-	struct daos_llink	*lret;
-	struct obj_lru_key	 lkey;
-	int			 rc;
-
-	*objp = NULL;
-
-	D_ASSERT(obj_local.obj_cont != NULL);
-
-	lkey.olk_cont = obj_local.obj_cont;
-	lkey.olk_oid = obj_local.obj_id;
-
-	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), obj_local.obj_cont, &lret);
-	if (rc != 0) {
-		clean_object(&obj_local);
-		memset(&obj_local, 0, sizeof(obj_local));
-		return rc; /* Can't cache new object */
-	}
-
-	/** Object is in cache */
-	obj_new = container_of(lret, struct vos_object, obj_llink);
 	/* This object should not be cached */
 	D_ASSERT(obj_new->obj_df == NULL);
 
-	vos_ilog_fetch_move(&obj_new->obj_ilog_info, &obj_local.obj_ilog_info);
-	obj_new->obj_toh = obj_local.obj_toh;
-	obj_new->obj_ih = obj_local.obj_ih;
-	obj_new->obj_sync_epoch = obj_local.obj_sync_epoch;
-	obj_new->obj_df = obj_local.obj_df;
-	obj_new->obj_zombie = obj_local.obj_zombie;
-	obj_local.obj_toh = DAOS_HDL_INVAL;
-	obj_local.obj_ih = DAOS_HDL_INVAL;
-	clean_object(&obj_local);
-	memset(&obj_local, 0, sizeof(obj_local));
+	vos_ilog_fetch_move(&obj_new->obj_ilog_info, &obj_old->obj_ilog_info);
+	obj_new->obj_toh        = obj_old->obj_toh;
+	obj_new->obj_ih         = obj_old->obj_ih;
+	obj_new->obj_sync_epoch = obj_old->obj_sync_epoch;
+	obj_new->obj_df         = obj_old->obj_df;
+	obj_new->obj_zombie     = obj_old->obj_zombie;
+	obj_old->obj_toh        = DAOS_HDL_INVAL;
+	obj_old->obj_ih         = DAOS_HDL_INVAL;
+	clean_object(obj_old);
+	switch (action) {
+	default:
+		D_ASSERTF(0, "Invalid action: %d\n", action);
+	case VOS_OBJ_EPH_NONE:
+		memset(obj_old, 0, sizeof(*obj_old));
+		break;
+	case VOS_OBJ_EPH_DROP:
+		obj_old->obj_dropped = 1;
+		break;
+	case VOS_OBJ_EPH_FREE:
+		D_FREE(obj_old);
+	}
+}
+
+/** Move an object to the lru cache */
+static inline int
+cache_object(struct vos_obj_cache *occ, bool ephemeral, struct vos_object *obj_old,
+	     struct vos_object **objp)
+{
+	struct vos_object       *obj_new = NULL;
+	struct daos_llink	*lret;
+	struct obj_lru_key	 lkey;
+	struct vos_object       *old_eph = NULL;
+	int                      rc      = 0;
+	int                      action  = VOS_OBJ_EPH_NONE;
+
+	*objp = NULL;
+
+	D_ASSERT(obj_old->obj_cont != NULL);
+
+	if (obj_old->obj_ephemeral) {
+		/* If it's in use, we are taking it over, otherwise, we are
+		 * replacing it and need to free the old entry
+		 */
+		action = occ->oc_eph_in_use ? VOS_OBJ_EPH_DROP : VOS_OBJ_EPH_FREE;
+	} else if (occ->oc_eph_cont != NULL) {
+		old_eph = occ->oc_ephemeral; /* If we replace, we will need to clean this one */
+	}
+
+	if (ephemeral) {
+		D_ALLOC_PTR(obj_new);
+		if (obj_new == NULL)
+			rc = -DER_NOMEM;
+		else
+			init_object(obj_new, obj_old->obj_id, obj_old->obj_cont);
+	} else {
+		lkey.olk_cont = obj_old->obj_cont;
+		lkey.olk_oid  = obj_old->obj_id;
+
+		rc = daos_lru_ref_hold(occ->oc_lru, &lkey, sizeof(lkey), obj_old->obj_cont, &lret);
+		if (rc == 0) {
+			/** Object is in cache */
+			obj_new = container_of(lret, struct vos_object, obj_llink);
+		}
+	}
+
+	if (rc != 0) {
+		if (!obj_old->obj_ephemeral) {
+			clean_object(obj_old);
+			memset(obj_old, 0, sizeof(*obj_old));
+		}
+		return rc;
+	}
+
+	move_object(obj_new, obj_old, action);
+
+	if (ephemeral) {
+		if (old_eph) {
+			clean_object(old_eph);
+			if (occ->oc_eph_in_use)
+				old_eph->obj_dropped = 1;
+			else
+				D_FREE(old_eph);
+		}
+		occ->oc_eph_in_use     = true;
+		occ->oc_eph_cont       = obj_new->obj_cont;
+		obj_new->obj_ephemeral = 1;
+		occ->oc_ephemeral      = obj_new;
+
+	} else if (obj_old == occ->oc_ephemeral) {
+		occ->oc_eph_cont       = NULL;
+		obj_new->obj_ephemeral = 0;
+	}
 
 	*objp = obj_new;
 
@@ -297,10 +412,9 @@ cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
 }
 
 int
-vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
-	     daos_unit_oid_t oid, daos_epoch_range_t *epr, daos_epoch_t bound,
-	     uint64_t flags, uint32_t intent, struct vos_object **obj_p,
-	     struct vos_ts_set *ts_set)
+vos_obj_hold(struct vos_obj_cache *occ, struct vos_container *cont, daos_unit_oid_t oid,
+	     daos_epoch_range_t *epr, daos_epoch_t bound, uint64_t flags, uint32_t intent,
+	     struct vos_object **obj_p, struct vos_ts_set *ts_set)
 {
 	struct vos_object	*obj;
 	struct daos_llink	*lret;
@@ -309,6 +423,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	int			 tmprc;
 	uint32_t		 cond_mask = 0;
 	bool			 create;
+	bool                     ephemeral;
 	void			*create_flag = NULL;
 	bool			 visible_only;
 
@@ -320,12 +435,16 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (cont->vc_pool->vp_dying)
 		return -DER_SHUTDOWN;
 
+	ephemeral    = flags & VOS_OBJ_EPHEMERAL;
 	create = flags & VOS_OBJ_CREATE;
 	visible_only = flags & VOS_OBJ_VISIBLE;
-	/** Pass NULL as the create_args if we are not creating the object so we avoid
-	 *  evicting an entry until we need to
+	/** ephemeral can only be used for non-conditional writes */
+	D_ASSERT((ephemeral && create) || !ephemeral);
+
+	/** Pass NULL as the create_args if we are not creating the object or the current
+	 *  object is ephemeral so we avoid evicting an entry until we need to.
 	 */
-	if (create)
+	if (create && !ephemeral)
 		create_flag = cont;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
@@ -337,10 +456,41 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	lkey.olk_cont = cont;
 	lkey.olk_oid = oid;
 
-	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), create_flag, &lret);
+	/** Note: Ephemeral entries may only be used by writers for
+	 * unconditional operations.  Writes only hold the object for a single
+	 * VOS transaction. If the ephemeral entry is in use here, it means that
+	 * the writer has yielded during or after the commit phase of the
+	 * transaction.  At this point, the writer is actually done with the
+	 * object and can free it when done with the transaction.  For
+	 * simplicity, any time there is sharing of the same object, the new ULT
+	 * will allocate a new cache entry, ephemeral or otherwise, take over
+	 * the contents of the object, and inform the user to free it.
+	 */
+	if (occ->oc_ephemeral != NULL && occ->oc_eph_cont == cont &&
+	    !memcmp(&occ->oc_ephemeral->obj_id, &oid, sizeof(oid))) {
+		if (ephemeral) {
+			obj = occ->oc_ephemeral;
+			if (occ->oc_eph_in_use) {
+				rc = cache_object(occ, true, occ->oc_ephemeral, &obj);
+				if (rc != 0)
+					goto failed_2;
+			}
+			occ->oc_eph_in_use = true;
+			goto ilog;
+		}
+
+		/** If new change is not ephemeral, let's just take over the entry and
+		 * put it in the cache */
+		rc = cache_object(occ, false, occ->oc_ephemeral, &obj);
+		if (rc != 0)
+			goto failed_2;
+		goto check;
+	}
+
+	rc = daos_lru_ref_hold(occ->oc_lru, &lkey, sizeof(lkey), create_flag, &lret);
 	if (rc == -DER_NONEXIST) {
-		D_ASSERT(obj_local.obj_cont == NULL);
-		obj = &obj_local;
+		D_ASSERT(occ->oc_scratch.obj_cont == NULL);
+		obj = &occ->oc_scratch;
 		init_object(obj, oid, cont);
 	} else if (rc != 0) {
 		D_GOTO(failed_2, rc);
@@ -352,19 +502,21 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (obj->obj_zombie)
 		D_GOTO(failed, rc = -DER_AGAIN);
 
+check:
 	if (intent == DAOS_INTENT_KILL && !(flags & VOS_OBJ_KILL_DKEY)) {
-		if (obj != &obj_local) {
+		if (!obj->obj_ephemeral && obj != &occ->oc_scratch) {
 			if (!daos_lru_is_last_user(&obj->obj_llink))
 				D_GOTO(failed, rc = -DER_BUSY);
 
 			vos_obj_evict(occ, obj);
 		}
 		/* no one else can hold it */
-		obj->obj_zombie = true;
+		obj->obj_zombie = 1;
 		if (obj->obj_df)
 			goto out; /* Ok to delete */
 	}
 
+ilog:
 	if (obj->obj_df) {
 		D_DEBUG(DB_TRACE, "looking up object ilog");
 		if (create || intent == DAOS_INTENT_PUNCH)
@@ -490,9 +642,9 @@ out:
 		D_GOTO(failed, rc = -DER_TX_RESTART);
 	}
 
-	if (obj == &obj_local) {
+	if (obj == &occ->oc_scratch) {
 		/** Ok, it's successful, go ahead and cache the object. */
-		rc = cache_object(occ, &obj);
+		rc = cache_object(occ, ephemeral, obj, &obj);
 		if (rc != 0)
 			goto failed_2;
 	}
@@ -509,16 +661,15 @@ failed_2:
 }
 
 void
-vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj)
+vos_obj_evict(struct vos_obj_cache *occ, struct vos_object *obj)
 {
-	if (obj == &obj_local)
+	if (obj == &occ->oc_scratch)
 		return;
-	daos_lru_ref_evict(occ, &obj->obj_llink);
+	daos_lru_ref_evict(occ->oc_lru, &obj->obj_llink);
 }
 
 int
-vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
-		     daos_unit_oid_t oid)
+vos_obj_evict_by_oid(struct vos_obj_cache *occ, struct vos_container *cont, daos_unit_oid_t oid)
 {
 	struct obj_lru_key	 lkey;
 	struct daos_llink	*lret;
@@ -527,10 +678,10 @@ vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
 	lkey.olk_cont = cont;
 	lkey.olk_oid = oid;
 
-	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), NULL, &lret);
+	rc = daos_lru_ref_hold(occ->oc_lru, &lkey, sizeof(lkey), NULL, &lret);
 	if (rc == 0) {
-		daos_lru_ref_evict(occ, lret);
-		daos_lru_ref_release(occ, lret);
+		daos_lru_ref_evict(occ->oc_lru, lret);
+		daos_lru_ref_release(occ->oc_lru, lret);
 	}
 
 	return rc == -DER_NONEXIST ? 0 : rc;

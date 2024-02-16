@@ -33,9 +33,8 @@ int	ts_mode = TS_MODE_DAOS;
 int	ts_class = OC_SX;
 
 static int
-daos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
-		     struct io_credit *cred, daos_epoch_t epoch,
-		     bool sync, double *duration)
+daos_update_or_fetch(int obj_idx, enum ts_op_type op_type, struct io_credit *cred,
+		     daos_epoch_t epoch, bool sync, double *duration, uint64_t flags)
 {
 	daos_event_t *evp = sync ? NULL : cred->tc_evp;
 	uint64_t      start = 0;

@@ -671,7 +671,7 @@ vos_obj_array_remove(daos_handle_t coh, daos_unit_oid_t oid,
  *			is provided.
  * \param pm_ver [IN]   Pool map version for this update, which will be
  *			used during rebuild.
- * \param flags [IN]	Object punch flags, including VOS_OF_REPLAY_PC and
+ * \param flags [IN]	Object punch flags, including VOS_OF_REBUILD and
  *			conditional flags
  * \param dkey	[IN]	Optional, the dkey will be punched if \a akeys is not
  *			provided.

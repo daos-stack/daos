@@ -101,9 +101,8 @@ ts_abt_fini(void)
 }
 
 static int
-_vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
-		     struct io_credit *cred, daos_epoch_t epoch,
-		     double *duration)
+_vos_update_or_fetch(int obj_idx, enum ts_op_type op_type, struct io_credit *cred,
+		     daos_epoch_t epoch, double *duration, uint64_t flags)
 {
 	uint64_t	start = 0;
 	int		rc = 0;
@@ -111,9 +110,8 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	TS_TIME_START(duration, start);
 	if (!ts_zero_copy) {
 		if (op_type == TS_DO_UPDATE)
-			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoids[obj_idx],
-					    epoch, 0, 0, &cred->tc_dkey, 1,
-					    &cred->tc_iod, NULL, &cred->tc_sgl);
+			rc = vos_obj_update(ts_ctx.tsc_coh, ts_uoids[obj_idx], epoch, 0, flags,
+					    &cred->tc_dkey, 1, &cred->tc_iod, NULL, &cred->tc_sgl);
 		else
 			rc = vos_obj_fetch(ts_ctx.tsc_coh, ts_uoids[obj_idx],
 					   epoch, 0, &cred->tc_dkey, 1,
@@ -123,10 +121,9 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		daos_handle_t		 ioh;
 
 		if (op_type == TS_DO_UPDATE)
-			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoids[obj_idx],
-					      epoch, 0, &cred->tc_dkey, 1,
-					      &cred->tc_iod, NULL, 0, &ioh,
-					      NULL);
+			rc =
+			    vos_update_begin(ts_ctx.tsc_coh, ts_uoids[obj_idx], epoch, flags,
+					     &cred->tc_dkey, 1, &cred->tc_iod, NULL, 0, &ioh, NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoids[obj_idx],
 					     epoch, &cred->tc_dkey, 1,
@@ -170,6 +167,7 @@ end:
 struct vos_ult_arg {
 	struct io_credit	*cred;
 	double			*duration;
+	uint64_t                 flags;
 	daos_epoch_t		 epoch;
 	enum ts_op_type		 op_type;
 	int			 obj_idx;
@@ -181,31 +179,27 @@ vos_update_or_fetch_ult(void *arg)
 {
 	struct vos_ult_arg *ult_arg = arg;
 
-	ult_arg->status = _vos_update_or_fetch(ult_arg->obj_idx,
-					       ult_arg->op_type,
-					       ult_arg->cred,
-					       ult_arg->epoch,
-					       ult_arg->duration);
+	ult_arg->status = _vos_update_or_fetch(ult_arg->obj_idx, ult_arg->op_type, ult_arg->cred,
+					       ult_arg->epoch, ult_arg->duration, ult_arg->flags);
 }
 
 static int
-vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
-		    struct io_credit *cred, daos_epoch_t epoch,
-		    bool sync, double *duration)
+vos_update_or_fetch(int obj_idx, enum ts_op_type op_type, struct io_credit *cred,
+		    daos_epoch_t epoch, bool sync, double *duration, uint64_t flags)
 {
 	ABT_thread		thread;
 	struct vos_ult_arg	ult_arg;
 	int			rc;
 
 	if (!ts_in_ult)
-		return _vos_update_or_fetch(obj_idx, op_type, cred, epoch,
-					    duration);
+		return _vos_update_or_fetch(obj_idx, op_type, cred, epoch, duration, flags);
 
 	ult_arg.op_type = op_type;
 	ult_arg.cred = cred;
 	ult_arg.epoch = epoch;
 	ult_arg.duration = duration;
 	ult_arg.obj_idx = obj_idx;
+	ult_arg.flags    = flags;
 	rc = daos_abt_thread_create_on_xstream(sp, NULL, abt_xstream,
 					       vos_update_or_fetch_ult,
 					       &ult_arg, ABT_THREAD_ATTR_NULL,
@@ -339,7 +333,8 @@ punch_objects(daos_epoch_t *epoch, struct pf_param *param)
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		if (param->pa_verbose)
 			D_PRINT("Punch "DF_UOID"\n", DP_UOID(ts_uoids[i]));
-		rc = vos_obj_punch(ts_ctx.tsc_coh, ts_uoids[i], *epoch, 0, 0, NULL, 0, NULL, NULL);
+		rc = vos_obj_punch(ts_ctx.tsc_coh, ts_uoids[i], *epoch, 0, param->pa_rw.flags, NULL,
+				   0, NULL, NULL);
 		(*epoch)++;
 
 		if (rc)
@@ -358,7 +353,8 @@ punch_keys(daos_key_t *dkey, daos_epoch_t *epoch, struct pf_param *param)
 		if (param->pa_verbose)
 			D_PRINT("Punch "DF_UOID" dkey="DF_KEY"\n", DP_UOID(ts_uoids[i]),
 				DP_KEY(dkey));
-		rc = vos_obj_punch(ts_ctx.tsc_coh, ts_uoids[i], *epoch, 0, 0, dkey, 0, NULL, NULL);
+		rc = vos_obj_punch(ts_ctx.tsc_coh, ts_uoids[i], *epoch, 0, param->pa_rw.flags, dkey,
+				   0, NULL, NULL);
 		(*epoch)++;
 
 		if (rc)

@@ -320,7 +320,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 		}
 	}
 
-	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
+	if (rc == 0 && (flags & VOS_OF_REBUILD) == 0) {
 		/** Check if we need to propagate the punch */
 		rc = vos_propagate_check(obj, &krec->kr_known_akey, toh, ts_set, &epr,
 					 VOS_ITER_AKEY);
@@ -344,7 +344,7 @@ punch_dkey:
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0) {
+	if (rc == 0 && (flags & VOS_OF_REBUILD) == 0) {
 		/** Check if we need to propagate to object */
 		rc = vos_propagate_check(obj, &obj->obj_df->vo_known_dkey, obj->obj_toh, ts_set,
 					 &epr, VOS_ITER_DKEY);
@@ -366,7 +366,7 @@ static int
 obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	  daos_epoch_t bound, uint64_t flags, struct vos_ts_set *ts_set)
 {
-	struct daos_lru_cache	*occ;
+	struct vos_obj_cache    *occ;
 	struct vos_container	*cont;
 	struct vos_ilog_info	*info;
 	int			 rc;
@@ -546,7 +546,7 @@ reset:
 
 	if (rc == 0 || rc == -DER_NONEXIST) {
 		/** We must prevent underpunch with regular I/O */
-		if (rc == 0 && (flags & VOS_OF_REPLAY_PC) == 0)
+		if (rc == 0 && (flags & VOS_OF_REBUILD) == 0)
 			bound = DAOS_EPOCH_MAX;
 		if (vos_ts_wcheck(ts_set, epr.epr_hi, bound))
 			rc = -DER_TX_RESTART;
@@ -594,7 +594,7 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 {
 	struct vos_container  *cont;
 	struct vos_krec_df    *krec = NULL;
-	struct daos_lru_cache *occ;
+	struct vos_obj_cache  *occ;
 	int                    rc;
 	int                    flags = 0;
 	struct vos_object     *obj;
@@ -674,7 +674,7 @@ static int
 vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool only_delete_entry)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
-	struct daos_lru_cache	*occ  = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
+	struct vos_obj_cache    *occ  = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
 	struct umem_instance	*umm = vos_cont2umm(cont);
 	struct vos_object	*obj;
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
@@ -726,7 +726,7 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		daos_key_t *akey)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
-	struct daos_lru_cache	*occ  = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
+	struct vos_obj_cache    *occ  = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
 	struct umem_instance	*umm  = vos_cont2umm(cont);
 	struct vos_object	*obj;
 	daos_key_t		*key;

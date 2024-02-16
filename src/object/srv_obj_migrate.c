@@ -1497,10 +1497,9 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 		D_DEBUG(DB_REBUILD, DF_UOID" punch dkey "DF_KEY"/"DF_U64"\n",
 			DP_UOID(mrone->mo_oid), DP_KEY(&mrone->mo_dkey),
 			mrone->mo_dkey_punch_eph);
-		rc = vos_obj_punch(cont->sc_hdl, mrone->mo_oid,
-				   mrone->mo_dkey_punch_eph,
-				   tls->mpt_version, VOS_OF_REPLAY_PC,
-				   &mrone->mo_dkey, 0, NULL, NULL);
+		rc =
+		    vos_obj_punch(cont->sc_hdl, mrone->mo_oid, mrone->mo_dkey_punch_eph,
+				  tls->mpt_version, VOS_OF_REBUILD, &mrone->mo_dkey, 0, NULL, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch dkey failed: "DF_RC"\n",
 				DP_UOID(mrone->mo_oid), DP_RC(rc));
@@ -1527,10 +1526,8 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 			DP_KEY(&mrone->mo_dkey),
 			DP_KEY(&mrone->mo_iods[i].iod_name), eph);
 
-		rc = vos_obj_punch(cont->sc_hdl, mrone->mo_oid,
-				   eph, tls->mpt_version,
-				   VOS_OF_REPLAY_PC, &mrone->mo_dkey,
-				   1, &mrone->mo_iods[i].iod_name,
+		rc = vos_obj_punch(cont->sc_hdl, mrone->mo_oid, eph, tls->mpt_version,
+				   VOS_OF_REBUILD, &mrone->mo_dkey, 1, &mrone->mo_iods[i].iod_name,
 				   NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch akey failed: "DF_RC"\n",
@@ -1655,10 +1652,8 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 	/* punch the object */
 	if (mrone->mo_obj_punch_eph) {
-		rc = vos_obj_punch(cont->sc_hdl, mrone->mo_oid,
-				   mrone->mo_obj_punch_eph,
-				   tls->mpt_version, VOS_OF_REPLAY_PC,
-				   NULL, 0, NULL, NULL);
+		rc = vos_obj_punch(cont->sc_hdl, mrone->mo_oid, mrone->mo_obj_punch_eph,
+				   tls->mpt_version, VOS_OF_REBUILD, NULL, 0, NULL, NULL);
 		if (rc) {
 			D_ERROR(DF_UOID" punch obj failed: "DF_RC"\n",
 				DP_UOID(mrone->mo_oid), DP_RC(rc));
@@ -2529,9 +2524,8 @@ migrate_obj_punch_one(void *data)
 		D_GOTO(put, rc);
 
 	D_ASSERT(arg->punched_epoch != 0);
-	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->punched_epoch,
-			   tls->mpt_version, VOS_OF_REPLAY_PC,
-			   NULL, 0, NULL, NULL);
+	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->punched_epoch, tls->mpt_version,
+			   VOS_OF_REBUILD, NULL, 0, NULL, NULL);
 	ds_cont_child_put(cont);
 put:
 	if (rc)

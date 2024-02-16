@@ -15,7 +15,6 @@
 #include <gurt/hash.h>
 #include <daos/btree.h>
 #include <daos/common.h>
-#include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/dtx_srv.h>
@@ -25,6 +24,7 @@
 /* Forward declarations */
 struct vos_ts_table;
 struct dtx_handle;
+struct vos_obj_cache;
 
 /** VOS thread local storage structure */
 struct vos_tls {
@@ -52,7 +52,7 @@ struct vos_tls {
 	/** profile for standalone vos test */
 	struct daos_profile		*vtl_dp;
 	/** In-memory object cache for the PMEM object table */
-	struct daos_lru_cache		*vtl_ocache;
+	struct vos_obj_cache            *vtl_ocache;
 	/** pool open handle hash table */
 	struct d_hash_table		*vtl_pool_hhash;
 	/** container open handle hash table */
@@ -83,7 +83,7 @@ vos_cont_hhash_get(bool is_sysdb)
 	return vos_tls_get(is_sysdb)->vtl_cont_hhash;
 }
 
-static inline struct daos_lru_cache *
+static inline struct vos_obj_cache *
 vos_obj_cache_get(bool standalone)
 {
 	return vos_tls_get(standalone)->vtl_ocache;

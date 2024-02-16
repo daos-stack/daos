@@ -2691,7 +2691,7 @@ int
 vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 {
 	struct vos_container	*cont;
-	struct daos_lru_cache	*occ;
+	struct vos_obj_cache    *occ;
 	struct vos_object	*obj;
 	daos_epoch_range_t	 epr = {0, epoch};
 	int	rc;
