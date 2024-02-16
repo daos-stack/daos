@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1640,10 +1640,7 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 	} else {
 		D_ERROR("HG_Bulk_create failed, hg_ret: " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
-
 		rc = crt_hgret_2_der(hg_ret);
-		if (rc == -DER_HG)
-			rc = -DER_HG_FATAL;
 	}
 
 out:
@@ -1659,20 +1656,14 @@ out:
 int
 crt_hg_bulk_bind(crt_bulk_t bulk_hdl, struct crt_hg_context *hg_ctx)
 {
-	int		rc;
-	hg_return_t	hg_ret;
+	hg_return_t	  hg_ret = HG_SUCCESS;
 
 	hg_ret = HG_Bulk_bind(bulk_hdl, hg_ctx->chc_hgctx);
-
 	if (hg_ret != HG_SUCCESS)
 		D_ERROR("HG_Bulk_bind failed, hg_ret " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
 
-	rc = crt_hgret_2_der(hg_ret);
-	if (rc == -DER_HG)
-		rc = -DER_HG_FATAL;
-
-	return rc;
+	return crt_hgret_2_der(hg_ret);
 }
 
 int
@@ -1732,12 +1723,7 @@ crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 	if (hg_ret != HG_SUCCESS) {
 		D_ERROR("HG_Bulk_access failed, hg_ret: " DF_HG_RC "\n",
 			DP_HG_RC(hg_ret));
-
-		rc = crt_hgret_2_der(hg_ret);
-		if (rc == -DER_HG)
-			rc = -DER_HG_FATAL;
-
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 	D_ASSERT(actual_sgnum == bulk_sgnum);
 
