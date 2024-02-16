@@ -1,10 +1,9 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC        DD_FAC(tests)
-
 
 #include "daos/checksum.h"
 #include "daos/common.h"
