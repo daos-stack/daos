@@ -50,4 +50,4 @@ ls
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
       --filter="include daos*.log" --filter="include test.cov" \
       --filter="exclude *" "$test_log_dir/"
-echo "<===rsync done.
+echo "<===rsync done"
