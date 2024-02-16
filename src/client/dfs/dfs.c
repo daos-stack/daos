@@ -7959,7 +7959,6 @@ scan_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 {
 	struct dfs_scan_args	*scan_args = (struct dfs_scan_args *)args;
 	dfs_obj_t		*obj;
-	daos_obj_id_t		oid;
 	struct timespec		current_time;
 	int			rc;
 
