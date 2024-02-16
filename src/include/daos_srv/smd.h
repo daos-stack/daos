@@ -10,12 +10,14 @@
 #ifndef __SMD_H__
 #define __SMD_H__
 
+#include "daos/common.h"
+#include "daos_srv/control.h"
+
 #include <uuid/uuid.h>
+
+#include <daos_types.h>
 #include <gurt/common.h>
 #include <gurt/list.h>
-#include <daos/common.h>
-#include <daos_types.h>
-#include <daos_srv/control.h>
 
 enum smd_dev_state {
 	SMD_DEV_NORMAL	= 0,

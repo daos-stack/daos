@@ -13,10 +13,11 @@
 #ifndef __REBUILD_RPC_H__
 #define __REBUILD_RPC_H__
 
+#include "daos/object.h"
+#include "daos/rpc.h"
+
 #include <stdint.h>
 #include <uuid/uuid.h>
-#include <daos/object.h>
-#include <daos/rpc.h>
 
 /*
  * RPC operation codes

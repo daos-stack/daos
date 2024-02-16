@@ -6,10 +6,11 @@
 
 #define D_LOGFAC DD_FAC(dfuse)
 
+#include "dfuse.h"
+
 #include <pthread.h>
 
 #include <fuse3/fuse_lowlevel.h>
-#include "dfuse.h"
 
 struct dfuse_thread {
 	d_list_t         dt_threads;

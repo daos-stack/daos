@@ -11,9 +11,9 @@
 #define __CRT_GROUP_H__
 
 #include "crt_internal_types.h"
+#include "crt_swim.h"
 
 #include <gurt/atomic.h>
-#include "crt_swim.h"
 
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
 #define CRT_LOOKUP_CACHE_BITS	(4)

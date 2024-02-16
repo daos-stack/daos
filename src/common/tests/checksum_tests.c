@@ -6,19 +6,21 @@
 #define D_LOGFAC        DD_FAC(tests)
 
 
-#include <string.h>
+#include "daos/checksum.h"
+#include "daos/common.h"
+#include "daos/cont_props.h"
+#include "daos/test_perf.h"
+#include "daos/tests_lib.h"
 
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <setjmp.h>
 #include <stdint.h>
+#include <string.h>
+
 #include <cmocka.h>
+
 #include <gurt/types.h>
-#include <daos/checksum.h>
-#include <daos/common.h>
-#include <daos/cont_props.h>
-#include <daos/tests_lib.h>
-#include <daos/test_perf.h>
 
 static bool verbose;
 

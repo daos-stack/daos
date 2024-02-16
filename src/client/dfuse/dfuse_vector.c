@@ -4,15 +4,18 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <inttypes.h>
-#include <stdbool.h>
-#include <pthread.h>
-#include <string.h>
-#include <stdlib.h>
-#include <gurt/common.h>
-#include <gurt/atomic.h>
 #include "dfuse_obj_da.h"
+
 #include "dfuse_vector.h"
+
+#include <inttypes.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <gurt/atomic.h>
+#include <gurt/common.h>
 
 #define CAS(valuep, old, new) \
 	atomic_compare_exchange(valuep, old, new)

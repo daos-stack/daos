@@ -18,13 +18,16 @@
 #define MAX_SWIM_STATUSES	1024
 #define CRT_CTL_MAX_ARG_STR_LEN (1 << 16)
 
-#include "test_group_rpc.h"
 #include "crt_utils.h"
-#include <stdbool.h>
-#include <getopt.h>
-#include <gurt/types.h>
-#include <regex.h>
+
+#include "test_group_rpc.h"
+
 #include <ctype.h>
+#include <getopt.h>
+#include <regex.h>
+#include <stdbool.h>
+
+#include <gurt/types.h>
 
 struct t_swim_status {
 	int rank;

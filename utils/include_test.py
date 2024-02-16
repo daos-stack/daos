@@ -3,6 +3,7 @@
 
 import json
 import os
+import sys
 import subprocess  # nosec
 import tempfile
 
@@ -280,6 +281,11 @@ def check_paths_dir(src_dir):
 
 def main():
     """Check the whole tree"""
+
+    if len(sys.argv) == 2:
+        full_name = sys.argv[1]
+        check_paths(os.path.dirname(full_name), os.path.basename(full_name))
+        return
 
     check_paths_dir("src")
 

@@ -4,16 +4,16 @@
 * SPDX-License-Identifier: BSD-2-Clause-Patent
 */
 
+#include "daos/checksum.h"
+#include "daos/tests_lib.h"
+#include "object/rpc_csum.h"
+
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
+
 #include <cmocka.h>
-
-#include <daos/checksum.h>
-#include <daos/tests_lib.h>
-
-#include <object/rpc_csum.h>
 
 bool g_verbose;
 

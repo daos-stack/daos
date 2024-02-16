@@ -12,22 +12,24 @@
 
 #define D_LOGFAC	DD_FAC(server)
 
-#include <signal.h>
-#include <abt.h>
-#include <stdlib.h>
-#include <getopt.h>
+#include "drpc_internal.h"
+#include "srv_internal.h"
+
+#include "daos/btree_class.h"
+#include "daos/common.h"
+#include "daos/placement.h"
+
 #include <errno.h>
 #include <execinfo.h>
+#include <getopt.h>
+#include <signal.h>
+#include <stdlib.h>
 
-#include <daos/btree_class.h>
-#include <daos/common.h>
-#include <daos/placement.h>
-#include "srv_internal.h"
-#include "drpc_internal.h"
-#include <gurt/telemetry_common.h>
-#include <gurt/telemetry_producer.h>
+#include <abt.h>
 
 #include <daos.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 #define MAX_MODULE_OPTIONS	64
 #if BUILD_PIPELINE

@@ -5,8 +5,11 @@
  */
 #ifndef __SIMPLE_COMMON_H__
 #define __SIMPLE_COMMON_H__
-#include <mpi.h>
+
 #include <stdio.h>
+
+#include <mpi.h>
+
 #include <daos.h>
 #include <gurt/common.h>
 

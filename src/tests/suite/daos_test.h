@@ -10,25 +10,27 @@
 #ifndef __DAOS_TEST_H
 #define __DAOS_TEST_H
 
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include "daos/debug.h"
+
+#include "daos/common.h"
+#include "daos/dpar.h"
+#include "daos/mgmt.h"
+#include "daos/sys_debug.h"
+#include "daos/tests_lib.h"
+
+#include <dirent.h>
+#include <linux/limits.h>
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <setjmp.h>
-#include <time.h>
-#include <linux/limits.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/stat.h>
-#include <dirent.h>
+#include <time.h>
+#include <unistd.h>
 
 #include <cmocka.h>
 
-#include <daos/dpar.h>
-#include <daos/debug.h>
-#include <daos/common.h>
-#include <daos/mgmt.h>
-#include <daos/sys_debug.h>
-#include <daos/tests_lib.h>
 #include <daos.h>
 
 #if FAULT_INJECTION

@@ -6,23 +6,23 @@
 
 #define D_LOGFAC DD_FAC(dfuse)
 
-#include <errno.h>
-#include <getopt.h>
-#include <dlfcn.h>
-#include <fcntl.h>
-#include <fuse3/fuse.h>
-#include <fuse3/fuse_lowlevel.h>
-#include <string.h>
-
-#include <sys/types.h>
-#include <hwloc.h>
-
 #include "dfuse.h"
 
-#include <daos_fs.h>
-#include <daos_api.h>
-#include <daos_uns.h>
+#include <dlfcn.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <getopt.h>
+#include <hwloc.h>
+#include <string.h>
+#include <sys/types.h>
 
+#include <fuse3/fuse.h>
+#include <fuse3/fuse_lowlevel.h>
+
+#include <daos_api.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
+#include <gurt/common.h>
 #include <gurt/common.h>
 /* Signal handler for SIGCHLD, it doesn't need to do anything, but it's
  * presence makes pselect() return EINTR in the dfuse_bg() function which

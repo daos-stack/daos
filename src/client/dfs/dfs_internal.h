@@ -16,6 +16,7 @@ extern "C" {
 #endif
 
 #include <sys/stat.h>
+
 #include <daos.h>
 #include <daos_fs.h>
 #include <gurt/list.h>

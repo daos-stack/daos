@@ -6,15 +6,16 @@
 #define D_LOGFAC        DD_FAC(tests)
 
 #define USE_TIME_PROFILING
-#include <getopt.h>
-
-#include <daos/common.h>
-#include <daos/placement.h>
-#include <daos.h>
-
-#include "place_obj_common.h"
 
 #include "benchmark_util.h"
+#include "place_obj_common.h"
+
+#include "daos/common.h"
+#include "daos/placement.h"
+
+#include <getopt.h>
+
+#include <daos.h>
 
 extern int  obj_class_init(void);
 extern void obj_class_fini(void);

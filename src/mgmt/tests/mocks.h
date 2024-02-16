@@ -11,11 +11,12 @@
 #ifndef __MGMT_TESTS_MOCKS_H__
 #define __MGMT_TESTS_MOCKS_H__
 
-#include "daos_pool.h"
-#include <gurt/types.h>
-#include <daos_types.h>
-#include <daos_security.h>
 #include "../rpc.h"
+
+#include <daos_pool.h>
+#include <daos_security.h>
+#include <daos_types.h>
+#include <gurt/types.h>
 
 /*
  * Mock ds_mgmt_pool_get_acl

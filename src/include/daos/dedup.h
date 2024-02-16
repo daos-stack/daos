@@ -7,8 +7,8 @@
 #ifndef __DAOS_DEDUP_H
 #define __DAOS_DEDUP_H
 
-#include <daos/cont_props.h>
-#include <daos/checksum.h>
+#include "daos/checksum.h"
+#include "daos/cont_props.h"
 
 int
 dedup_get_csum_algo(struct cont_props *cont_props);

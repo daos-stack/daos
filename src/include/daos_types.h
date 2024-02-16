@@ -14,14 +14,13 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdbool.h>
-
 #include <uuid/uuid.h>
-#include <cart/types.h>
 
+#include <cart/types.h>
 #include <daos_errno.h>
 
 /** Maximum length (excluding the '\0') of a DAOS system name */

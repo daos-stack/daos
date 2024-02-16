@@ -5,14 +5,16 @@
  */
 #define D_LOGFAC        DD_FAC(tests)
 
-#include <string.h>
+#include "daos/common.h"
+#include "daos/tests_lib.h"
+
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <setjmp.h>
+#include <string.h>
+
 #include <cmocka.h>
-#include <daos/common.h>
-#include <daos/tests_lib.h>
 
 static void test_sgl_get_bytes_with_single_iov(void **state)
 {

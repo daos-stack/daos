@@ -4,11 +4,14 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <pthread.h>
+#include "dfuse_obj_da.h"
+
 #include "dfuse_log.h"
+
+#include <pthread.h>
+
 #include <gurt/common.h>
 #include <gurt/list.h>
-#include "dfuse_obj_da.h"
 
 /* A hack to assert that the sizeof obj_da_t is large enough */
 struct tpv_data {

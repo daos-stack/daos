@@ -4,17 +4,18 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <pwd.h>
+#include "daos/common.h"
+#include "daos/tests_lib.h"
+#include "daos_srv/bio.h"
+
 #include <grp.h>
 #include <json-c/json.h>
+#include <pwd.h>
 #include <stdlib.h>
-#include <sys/wait.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 
-#include <daos/common.h>
-#include <daos/tests_lib.h>
 #include <daos.h>
-#include <daos_srv/bio.h>
 
 /* linux/limits.h defines this, then bits/param.h undefined it */
 #ifndef ARG_MAX

@@ -9,17 +9,18 @@
  */
 #define D_LOGFAC	DD_FAC(ctl)
 
-#include <stdio.h>
-#include <pthread.h>
-#include <getopt.h>
-#include <semaphore.h>
+#include "crt_utils.h"
 
 #include "crt_internal.h"
-#include "crt_utils.h"
-#include <daos/agent.h>
-#include <daos/mgmt.h>
+
+#include "daos/agent.h"
+#include "daos/mgmt.h"
 #include "svc.pb-c.h"
 
+#include <getopt.h>
+#include <pthread.h>
+#include <semaphore.h>
+#include <stdio.h>
 
 /* max number of ranks that can be queried at once */
 #define CRT_CTL_MAX		1024

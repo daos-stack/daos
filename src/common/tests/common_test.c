@@ -4,14 +4,16 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <stddef.h>
+#include "common_test.h"
+
 #include <getopt.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
+
 #include <cmocka.h>
+
 #include <gurt/debug.h>
-#include "common_test.h"
 
 static void
 print_usage(char *name)

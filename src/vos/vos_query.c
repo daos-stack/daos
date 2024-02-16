@@ -10,14 +10,15 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
-#include <daos/common.h>
-#include <daos/btree.h>
-#include <daos_types.h>
-#include <daos_srv/vos.h>
-#include <daos_api.h>
-#include <daos/checksum.h>
+#include "daos/btree.h"
+#include "daos/checksum.h"
+#include "daos/common.h"
+#include "daos_srv/vos.h"
 #include "vos_internal.h"
 #include "vos_ts.h"
+
+#include <daos_api.h>
+#include <daos_types.h>
 
 struct open_query {
 	struct vos_object	*qt_obj;

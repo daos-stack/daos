@@ -11,9 +11,10 @@
 #define __COMMON_H__
 
 #include <stdio.h>
-#include <gurt/common.h>
-#include <cart/types.h>
+
 #include <cart/api.h>
+#include <cart/types.h>
+#include <gurt/common.h>
 
 static inline int drain_queue(crt_context_t ctx)
 {

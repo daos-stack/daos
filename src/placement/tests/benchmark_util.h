@@ -9,16 +9,16 @@
 
 #ifdef USE_TIME_PROFILING
 
+#include <errno.h>
+#include <float.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <time.h>
-#include <float.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 
 #define COMPILER_BARRIER() asm volatile("" ::: "memory")
 

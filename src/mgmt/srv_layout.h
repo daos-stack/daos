@@ -15,9 +15,11 @@
 #ifndef __MGMT_SRV_LAYOUT_H__
 #define __MGMT_SRV_LAYOUT_H__
 
-#include <daos_types.h>
 #include "srv_internal.h"
+
 #include "daos_srv/daos_engine.h"
+
+#include <daos_types.h>
 
 /* Root KVS (RDB_KVS_GENERIC) */
 extern d_iov_t ds_mgmt_prop_servers;		/* server KVS */

@@ -6,10 +6,12 @@
 /**
  * This file is part of GURT. Hybrid Logical Clock (HLC) implementation.
  */
-#include <gurt/common.h>
-#include <gurt/atomic.h>
-#include <time.h>
+
 #include <stdint.h>
+#include <time.h>
+
+#include <gurt/atomic.h>
+#include <gurt/common.h>
 
 /**
  * HLC timestamp unit (given in the HLC timestamp value for 1 ns) (i.e.,

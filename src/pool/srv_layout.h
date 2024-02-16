@@ -24,9 +24,10 @@
 #ifndef __POOL_SRV_LAYOUT_H__
 #define __POOL_SRV_LAYOUT_H__
 
-#include <daos_types.h>
 #include <sys/param.h>
+
 #include <daos_prop.h>
+#include <daos_types.h>
 
 /*
  * Root KVS (RDB_KVS_GENERIC): pool properties

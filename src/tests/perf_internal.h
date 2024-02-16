@@ -6,10 +6,11 @@
 #ifndef __PERF_INTERNAL_H__
 #define __PERF_INTERNAL_H__
 
+#include "daos/common.h"
+#include "daos/dts.h"
+#include "daos/object.h"
+
 #include <getopt.h>
-#include <daos/common.h>
-#include <daos/dts.h>
-#include <daos/object.h>
 
 #define RANK_ZERO	(0)
 #define STRIDE_MIN	(4) /* Should be changed with updating NB places */

@@ -8,18 +8,20 @@
  */
 
 #include "daos/debug.h"
+
+#include "crt_utils.h"
+
+#include "../crt_internal.h"
+#include "daos/event.h"
+#include "daos/mgmt.h"
+
 #include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include <cart/api.h>
-#include <unistd.h>
-#include <daos/mgmt.h>
-#include <daos/event.h>
-
-#include "../crt_internal.h"
-#include "crt_utils.h"
 
 /* Global structures */
 struct test_options opts = { .is_initialized = false };

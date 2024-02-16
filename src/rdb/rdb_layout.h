@@ -72,7 +72,8 @@
 #define RDB_LAYOUT_H
 
 #include <inttypes.h>
-#include "daos_types.h"
+
+#include <daos_types.h>
 
 /* Default layout version */
 #define RDB_LAYOUT_VERSION 1

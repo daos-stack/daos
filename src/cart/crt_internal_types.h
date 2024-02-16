@@ -17,16 +17,17 @@
 #define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
 #endif
 
+#include "crt_hg.h"
+
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 
 #include <cart/api.h>
-#include "crt_hg.h"
 #include <cart/types.h>
-#include <gurt/list.h>
+#include <gurt/atomic.h>
 #include <gurt/hash.h>
 #include <gurt/heap.h>
-#include <gurt/atomic.h>
+#include <gurt/list.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 

@@ -5,15 +5,17 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-#include <daos/common.h>
-#include <daos/placement.h>
-#include <daos.h>
-#include <daos/object.h>
-#include <math.h>
-
 #include "place_obj_common.h"
+
 #include "../../pool/rpc.h"
 #include "../../pool/srv_pool_map.h"
+#include "daos/common.h"
+#include "daos/object.h"
+#include "daos/placement.h"
+
+#include <math.h>
+
+#include <daos.h>
 
 static int test_num_objs = 1024;
 static int test_obj_class = OC_EC_8P2G2;

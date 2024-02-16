@@ -5,14 +5,16 @@
  */
 #define D_LOGFAC	DD_FAC(rdb)
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <daos_srv/daos_engine.h>
-#include <daos_srv/rdb.h>
-#include <daos_srv/rsvc.h>
-#include "../rdb_internal.h"
 #include "rpc.h"
+
+#include "../rdb_internal.h"
+#include "daos_srv/daos_engine.h"
+#include "daos_srv/rdb.h"
+#include "daos_srv/rsvc.h"
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #define DB_CAP	(1L << 25)
 
