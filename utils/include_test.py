@@ -3,8 +3,8 @@
 
 import json
 import os
-import sys
 import subprocess  # nosec
+import sys
 import tempfile
 
 
@@ -31,7 +31,14 @@ def check_dir(include_dir, sub_dir):
             print(f"Header file {header} is OK.")
 
 
-E_SYSTEM_HEADERS = ("float.h", "stdarg.h", "stdbool.h", "stddef.h", "stdatomic.h", "math.h")
+E_SYSTEM_HEADERS = (
+    "float.h",
+    "stdarg.h",
+    "stdbool.h",
+    "stddef.h",
+    "stdatomic.h",
+    "math.h",
+)
 E_LOCAL_HEADERS = (
     "cmocka.h",
     "mpi.h",
@@ -48,7 +55,6 @@ E_LOCAL_HEADERS = (
     "icp_sal_user.h",
     "icp_sal_poll.h",
     "qae_mem.h",
-
 )
 E_INTERNAL_HEADERS = (
     "daos_test.h",
@@ -63,7 +69,7 @@ E_INTERNAL_HEADERS = (
     "dfuse_common.h",
     "dfuse.h",
     "dfuse_log.h",
-    "dfuse_vector.h"
+    "dfuse_vector.h",
     "vos_internal.h",
     "raft.h",
     "utest_common.h",
@@ -74,7 +80,7 @@ E_INTERNAL_HEADERS = (
     "evt_priv.h",
     "vos_layout.h",
     "vos_ts.h",
-    "vos_obj.h"
+    "vos_obj.h",
 )
 
 
@@ -208,7 +214,7 @@ def check_paths(src_dir, src_file):
 
     # Hack for debug headers, if required this needs to come before other headers.
     # Needed for RPC definitions
-    for head in ('daos/debug', 'crt_utils', 'crt_internal'):
+    for head in ("daos/debug", "crt_utils", "crt_internal"):
         if f"{head}.h" in h_internal:
             hblobs.append(f'#include "{head}.h"')
             h_internal.remove(f"{head}.h")
