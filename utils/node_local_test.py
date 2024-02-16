@@ -3254,8 +3254,6 @@ class PosixTests():
                       caching=False)
 
         dfuse.start(v_hint='cont_chown_1')
-
-        stat_log = PrintStat(dfuse.dir)
         assert pwd.getpwnam('root').pw_uid == os.stat(dfuse.dir).st_uid
         assert pwd.getpwnam('root').pw_gid == os.stat(dfuse.dir).st_gid
 
