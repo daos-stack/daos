@@ -9,11 +9,12 @@
 #include "daos_srv/bio.h"
 
 #include <grp.h>
-#include <json-c/json.h>
 #include <pwd.h>
 #include <stdlib.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
+
+#include <json-c/json.h>
 
 #include <daos.h>
 

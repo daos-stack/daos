@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,9 +12,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
-#include <hwloc.h>
 #include <string.h>
 #include <sys/types.h>
+
+#include <hwloc.h>
 
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>

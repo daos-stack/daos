@@ -7,6 +7,8 @@ import subprocess  # nosec
 import sys
 import tempfile
 
+# pylint: disable=wrong-spelling-in-comment
+
 
 def check_dir(include_dir, sub_dir):
     """Check all files in one directory"""
@@ -101,6 +103,8 @@ def check_paths(src_dir, src_file):
 
     # pylint: disable=too-many-branches
 
+    # Headers which come from glibc-headers
+    h_core_sys = set()
     # Headers which come from /usr/include
     h_sys = set()
     # Headers which come from 3rd party libraries
@@ -151,7 +155,7 @@ def check_paths(src_dir, src_file):
             fname = header[1:-1]
             brace_include = header[0] == "<"
             if fname in E_SYSTEM_HEADERS:
-                h_sys.add(fname)
+                h_core_sys.add(fname)
                 continue
             if fname in E_LOCAL_HEADERS:
                 h_local.add(fname)
@@ -161,8 +165,14 @@ def check_paths(src_dir, src_file):
                 continue
 
             if brace_include:
+                if os.path.exists(f"i/usr/include/{fname}"):
+                    h_core_sys.add(fname)
+                    continue
                 if os.path.exists(f"/usr/include/{fname}"):
-                    h_sys.add(fname)
+                    if fname.startswith("linux"):
+                        h_core_sys.add(fname)
+                    else:
+                        h_sys.add(fname)
                     continue
                 found = False
                 for dep in os.listdir("install/prereq/release/"):
@@ -225,6 +235,9 @@ def check_paths(src_dir, src_file):
     if h_internal:
         hblobs.append(set_to_txt(h_internal))
 
+    if h_core_sys:
+        hblobs.append(set_to_txt(h_core_sys, public=True))
+
     if h_sys:
         hblobs.append(set_to_txt(h_sys, public=True))
 
@@ -283,6 +296,12 @@ def check_paths_dir(src_dir):
         if not entry.endswith(".c") and not entry.endswith(".h"):
             continue
         check_paths(src_dir, entry)
+
+# To run this then the glibc-headers rpm is needed locally
+# mkdir i
+# cd i
+# yum install --downloadonly --downloaddir=. glibc-headers
+# rpm2cpio glibc-headers-*.x86_64.rpm | cpio -idmv
 
 
 def main():
