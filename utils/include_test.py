@@ -113,7 +113,7 @@ def check_paths(src_dir, src_file):
     h_daos = set()
     # Internal daos headers
     h_internal = set()
-    # Internal local headers
+    # Internal local headers (from the same directory)
     h_dir = set()
 
     fixup_src = True
@@ -160,9 +160,6 @@ def check_paths(src_dir, src_file):
             if fname in E_LOCAL_HEADERS:
                 h_local.add(fname)
                 continue
-            if fname in E_INTERNAL_HEADERS:
-                h_internal.add(fname)
-                continue
 
             if brace_include:
                 if os.path.exists(f"i/usr/include/{fname}"):
@@ -203,6 +200,10 @@ def check_paths(src_dir, src_file):
 
             # This is a hack but needed for now at least.
             if fname.endswith("pb-c.h"):
+                h_internal.add(fname)
+                continue
+
+            if fname in E_INTERNAL_HEADERS:
                 h_internal.add(fname)
                 continue
 
@@ -302,6 +303,9 @@ def check_paths_dir(src_dir):
 # cd i
 # yum install --downloadonly --downloaddir=. glibc-headers
 # rpm2cpio glibc-headers-*.x86_64.rpm | cpio -idmv
+#
+# Commits can then be patched with
+# git diff master... --name-only | xargs -l1 ./utils/include_test.py
 
 
 def main():

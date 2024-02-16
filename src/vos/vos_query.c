@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,12 +10,13 @@
  */
 #define D_LOGFAC	DD_FAC(vos)
 
+#include "vos_internal.h"
+#include "vos_ts.h"
+
 #include "daos/btree.h"
 #include "daos/checksum.h"
 #include "daos/common.h"
 #include "daos_srv/vos.h"
-#include "vos_internal.h"
-#include "vos_ts.h"
 
 #include <daos_api.h>
 #include <daos_types.h>

@@ -1,11 +1,10 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "dfuse_obj_da.h"
-
 #include "dfuse_vector.h"
 
 #include <inttypes.h>
