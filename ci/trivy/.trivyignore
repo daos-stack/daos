@@ -1,17 +1,30 @@
-## Accept the risk
-CVE-2022-40149
-CVE-2022-40150
-CVE-2022-45685
-CVE-2022-45693
-CVE-2023-1436
-CVE-2023-34453
-CVE-2023-34454
-CVE-2023-34455
-GHSA-58qw-p7qm-5rvh
+## Ignored hadoop related CVE
 CVE-2021-22569
 CVE-2021-22570
 CVE-2022-3509
 CVE-2022-3510
 CVE-2022-3171
+
+## CVEs to be resolved
+## CVE-2023-39410,HIGH,7.5,"apache-avro: Apache Avro Java SDK: Memory when deserializing untrusted data in Avro Java SDK","org.apache.avro:avro","1.7.7","1.11.3",https://avd.aquasec.com/nvd/cve-2023-39410
 CVE-2023-39410
+## CVE-2022-40150,HIGH,7.5,"jettison: memory exhaustion via user-supplied XML or JSON data","org.codehaus.jettison:jettison","1.1","1.5.2",https://avd.aquasec.com/nvd/cve-2022-40150
+CVE-2022-40150
+## CVE-2022-45685,HIGH,7.5,"jettison: stack overflow in JSONObject() allows attackers to cause a Denial of Service (DoS) via crafted JSON data","org.codehaus.jettison:jettison","1.1","1.5.2",https://avd.aquasec.com/nvd/cve-2022-45685
+CVE-2022-45685
+## CVE-2022-45693,HIGH,7.5,"jettison:  If the value in map is the map's self, the new new JSONObject(map) cause StackOverflowError which may lead to dos","org.codehaus.jettison:jettison","1.1","1.5.2",https://avd.aquasec.com/nvd/cve-2022-45693
+CVE-2022-45693
+## CVE-2023-1436,HIGH,7.5,"jettison: Uncontrolled Recursion in JSONArray","org.codehaus.jettison:jettison","1.1","1.5.4",https://avd.aquasec.com/nvd/cve-2023-1436
+CVE-2023-1436
+## CVE-2022-40149,MEDIUM,7.5,"jettison: parser crash by stackoverflow","org.codehaus.jettison:jettison","1.1","1.5.1",https://avd.aquasec.com/nvd/cve-2022-40149
+CVE-2022-40149
+## GHSA-58qw-p7qm-5rvh,LOW,,"Eclipse Jetty XmlParser allows arbitrary DOCTYPE declarations","org.eclipse.jetty:jetty-xml","9.4.51.v20230217","10.0.16, 11.0.16, 12.0.0, 9.4.52",https://github.com/advisories/GHSA-58qw-p7qm-5rvh
+GHSA-58qw-p7qm-5rvh
+## CVE-2023-34455,HIGH,7.5,"snappy-java: Unchecked chunk length leads to DoS","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.1",https://avd.aquasec.com/nvd/cve-2023-34455
+CVE-2023-34455
+## CVE-2023-43642,HIGH,7.5,"snappy-java: Missing upper bound check on chunk length in snappy-java can lead to Denial of Service (DoS) impact","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.4",https://avd.aquasec.com/nvd/cve-2023-43642
 CVE-2023-43642
+## CVE-2023-34453,MEDIUM,7.5,"snappy-java: Integer overflow in shuffle leads to DoS","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.1",https://avd.aquasec.com/nvd/cve-2023-34453
+CVE-2023-34453
+## CVE-2023-34454,MEDIUM,7.5,"snappy-java: Integer overflow in compress leads to DoS","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.1",https://avd.aquasec.com/nvd/cve-2023-34454
+CVE-2023-34454
