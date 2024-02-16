@@ -483,7 +483,7 @@ class TestEnvironment():
         Returns:
             str: the default bullseye source file
         """
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
 
     @property
     def bullseye_file(self):

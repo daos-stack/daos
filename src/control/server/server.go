@@ -390,6 +390,11 @@ func (srv *server) registerEvents() {
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
 			srv.log.Infof("MS leader running on %s", srv.hostname)
+
+			if err := srv.mgmtSvc.updateFabricProviders([]string{srv.cfg.Fabric.Provider}, srv.pubSub); err != nil {
+				srv.log.Errorf(err.Error())
+			}
+
 			srv.mgmtSvc.startLeaderLoops(ctx)
 			registerLeaderSubscriptions(srv)
 			srv.log.Debugf("requesting immediate GroupUpdate after leader change")

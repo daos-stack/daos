@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,8 +17,9 @@
 
 #include <stdint.h>
 #include <pthread.h>
+
 #include <daos/common.h>
-#include <daos/tse.h>
+
 #include "tse_internal.h"
 
 D_CASSERT(sizeof(struct tse_task) == TSE_TASK_SIZE);

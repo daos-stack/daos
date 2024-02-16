@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,10 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+#include <daos_types.h>
+#include <daos_obj.h>
+#include <daos_obj_class.h>
 
 /** Range of contiguous records */
 typedef struct {
