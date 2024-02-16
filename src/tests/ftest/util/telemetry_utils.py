@@ -1139,7 +1139,7 @@ class MetricData():
             for value, labels in self._display['data'][metric].items():
                 log.info(
                     format_str, metric, *self._label_values(labels), value,
-                    self._label_values(labels, ['check']))
+                    *self._label_values(labels, ['check']))
         return status
 
     def _get_metrics(self, log, names, hosts, dmg):
@@ -1238,7 +1238,8 @@ class MetricData():
                     if label_name not in all_widths:
                         all_widths[label_name] = []
                     all_widths[label_name].append(len(str(label_name)))
-                    all_widths[label_name].append(len(str(label_value)))
+                    all_widths[label_name].append(
+                        len(str(self._display['data'][metric][value][label_name])))
         self._display['labels'] = sorted(unique_labels)
         self._display['widths'] = {name: max(value) for name, value in all_widths.items()}
         return status
