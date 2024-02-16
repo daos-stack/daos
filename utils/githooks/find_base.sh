@@ -19,6 +19,7 @@ fi
 
 # Try and use the gh command to work out the target branch, or if not installed
 # then assume origin/master.
+TARGET=""
 if ${USE_GH:-true} && command -v gh > /dev/null 2>&1; then
     # If there is no PR created yet then do not check anything.
     if ! TARGET="$ORIGIN"/$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}"); then
