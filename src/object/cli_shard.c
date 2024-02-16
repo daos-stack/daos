@@ -1977,7 +1977,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	struct obj_query_key_in		*okqi = crt_req_get(cb_args->rpc);
 	struct obj_query_key_out	*okqo;
 	struct obj_query_merge_args	 oqma = { 0 };
-	int				 rc = task->dt_result;
+	int                              rc   = task->dt_result;
 
 	if (rc != 0) {
 		D_ERROR("Regular query failed: "DF_RC"\n", DP_RC(rc));

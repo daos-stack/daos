@@ -2563,12 +2563,12 @@ dfs_test_checker(void **state)
 	uint64_t		nr_oids = 0;
 	char			*cname = "cont_chkr";
 	int			rc;
-	int			num_files = 0;
-	int			num_dirs = 0;
-	daos_anchor_t		anchor = {0};
-	uint32_t		num_ents = 10;
-	struct dirent		ents[10];
-	struct stat		stbufs[10];
+	int                      num_files = 0;
+	int                      num_dirs  = 0;
+	daos_anchor_t            anchor    = {0};
+	uint32_t                 num_ents  = 10;
+	struct dirent            ents[10];
+	struct stat              stbufs[10];
 
 	rc = dfs_init();
 	assert_int_equal(rc, 0);
@@ -3197,16 +3197,16 @@ dfs_test_pipeline_find(void **state)
 	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
 	char		*dirname = "pipeline_dir";
 	int		rc;
-	dfs_predicate_t	pred = {0};
-	dfs_pipeline_t	*dpipe = NULL;
-	uint32_t	num_split = 0, j;
-	daos_anchor_t	*anchors;
-	struct dirent	*dents = NULL;
-	daos_obj_id_t	*oids = NULL;
-	daos_size_t	*csizes = NULL;
+	dfs_predicate_t  pred      = {0};
+	dfs_pipeline_t  *dpipe     = NULL;
+	uint32_t         num_split = 0, j;
+	daos_anchor_t   *anchors;
+	struct dirent   *dents      = NULL;
+	daos_obj_id_t   *oids       = NULL;
+	daos_size_t     *csizes     = NULL;
 	uint64_t         nr_total   = 0;
 	uint64_t         nr_matched = 0;
-	uint64_t	nr_scanned;
+	uint64_t         nr_scanned;
 
 	rc = dfs_open(dfs_mt, NULL, dirname, create_mode | S_IFDIR, create_flags,
 		      OC_SX, 0, NULL, &dir1);
