@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,7 +37,6 @@
 CRT_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, D_NOOP)
 #endif
 
-int
-crt_setup_log_fac(void);
+int crt_setup_log_fac(void);
 
 #endif /* __CRT_DEBUG_H__ */

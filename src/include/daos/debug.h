@@ -7,6 +7,9 @@
 #ifndef __DAOS_DEBUG_H__
 #define __DAOS_DEBUG_H__
 
+#include <stdio.h>
+#include <daos_errno.h>
+
 #ifndef DD_FAC
 #define DD_FAC(name)	daos_##name##_logfac
 #endif /* !DD_FAC */
@@ -14,9 +17,6 @@
 #define D_LOGFAC DD_FAC(daos)
 #endif /* !D_LOGFAC */
 
-#include <stdio.h>
-
-#include <daos_errno.h>
 #include <gurt/debug_setup.h>
 
 /**
@@ -75,8 +75,8 @@
 DAOS_FOREACH_DB(D_LOG_DECLARE_DB, D_NOOP);
 DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
 
-#include <gurt/common.h>
 #include <gurt/debug.h>
+#include <gurt/common.h>
 
 #define DB_DEFAULT	DLOG_DBG
 #define DB_NULL		0

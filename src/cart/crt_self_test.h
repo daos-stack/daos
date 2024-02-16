@@ -1,11 +1,13 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __CRT_SELF_TEST_H__
 #define __CRT_SELF_TEST_H__
+
+
 
 /*
  * List of supported self-test strategies:
@@ -269,7 +271,6 @@ void crt_self_test_msg_handler(crt_rpc_t *rpc_req);
 void crt_self_test_open_session_handler(crt_rpc_t *rpc_req);
 void crt_self_test_close_session_handler(crt_rpc_t *rpc_req);
 void crt_self_test_start_handler(crt_rpc_t *rpc_req);
-void
-crt_self_test_status_req_handler(crt_rpc_t *rpc_req);
+void crt_self_test_status_req_handler(crt_rpc_t *rpc_req);
 
 #endif /* __CRT_SELF_TEST_H__ */
