@@ -666,6 +666,22 @@ class TelemetryUtils():
         self.hosts = NodeSet.fromlist(servers)
         self._data = MetricData()
 
+    @property
+    def data(self):
+        """Get the collected telemetry metric data.
+
+        Returns:
+            dict: dictionary of metric values keyed by the metric name and combination of metric
+                labels and values, e.g.
+                    <metric_name>: {
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_1>,
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_2>,
+                        ...
+                    },
+                    ...
+        """
+        return self._data.data
+
     def get_all_server_metrics_names(self, server, with_pools=False):
         """Get all the telemetry metrics names for this server.
 
@@ -741,7 +757,7 @@ class TelemetryUtils():
 
     def display_data(self):
         """Display the telemetry metric values."""
-        self._data.display(self.log)
+        return self._data.display(self.log)
 
     def verify_data(self, ranges):
         """Verify the telemetry metric values.
@@ -1045,8 +1061,23 @@ class MetricData():
     def __init__(self):
         """Initialize a MetricData object."""
         self._data = {}
-        self._labels = set()
-        self._widths = {}
+        self._display = {'data': {}, 'labels': set(), 'widths': {}}
+
+    @property
+    def data(self):
+        """Get the collected telemetry metric data.
+
+        Returns:
+            dict: dictionary of metric values keyed by the metric name and combination of metric
+                labels and values, e.g.
+                    <metric_name>: {
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_1>,
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_2>,
+                        ...
+                    },
+                    ...
+        """
+        return self._data
 
     def collect(self, log, names, hosts, dmg):
         """Collect telemetry data for the specified metrics.
@@ -1059,7 +1090,6 @@ class MetricData():
         """
         info = self._get_metrics(log, ','.join(names), hosts, dmg)
         self._data = self._get_data(names, info)
-        self._set_labels()
 
     def display(self, log):
         """Display the telemetry metric values.
@@ -1067,14 +1097,16 @@ class MetricData():
         Args:
             log (logger): logger for the messages produced by this method
         """
-        columns = ['metric'] + self._labels + ['value']
-        format_str = '  '.join([f'%-{self._widths[name]}s' for name in columns])
+        self._set_display()
+        columns = ['metric'] + self._display['labels'] + ['value']
+        format_str = '  '.join([f"%-{self._display['widths'][name]}s" for name in columns])
 
+        log.info('-' * 80)
         log.info('Telemetry Metric Information')
         log.info(format_str, *[name.title() for name in columns])
-        log.info(format_str, *['-' * self._widths[name] for name in columns])
-        for metric in sorted(self._data):
-            for value, labels in self._data[metric].items():
+        log.info(format_str, *['-' * self._display['widths'][name] for name in columns])
+        for metric in sorted(self._display['data']):
+            for value, labels in self._display['data'][metric].items():
                 log.info(format_str, metric, *self._label_values(labels), value)
 
     def verify(self, log, ranges):
@@ -1082,36 +1114,32 @@ class MetricData():
 
         Args:
             log (logger): logger for the messages produced by this method
-            ranges (dict): dictionary of min/max lists for each metric to be verified, e.g.
-                {
-                    <metric_a>: [10],       <--- will verify value of <metric_a> is at least 10
-                    <metric_b>: [0, 9]      <--- will verify value of <metric_b> is between 0-9
-                }
+            ranges (dict): dictionary of expected metric value ranges with a minimum metric key and
+                optional label key to at least a minimum metric value and optional maximum metric
+                value, e.g.
+                    {<metric>: <min_value>} or
+                    {<metric>: [<min_value>]} or
+                    {<metric>: [<min_value>, <max_value>]} or
+                    {<metric>: {<label>: <min_value>}} or
+                    {<metric>: {<label>: [<min_value>]}} or
+                    {<metric>: {<label>: [<min_value>, <max_value>]}}
 
         Returns:
             bool: True if all metric values are within the ranges specified; False otherwise
         """
-        status = True
-        columns = ['metric'] + self._labels + ['value', 'check']
-        format_str = '  '.join([f'%-{self._widths[name]}s' for name in columns])
+        status = self._set_display(ranges)
+        columns = ['metric'] + self._display['labels'] + ['value', 'check']
+        format_str = '  '.join([f"%-{self._display['widths'][name]}s" for name in columns])
 
+        log.info('-' * 80)
         log.info('Telemetry Metric Verification')
         log.info(format_str, *[name.title() for name in columns])
-        log.info(format_str, *['-' * self._widths[name] for name in columns])
-        for metric in sorted(self._data):
-            for value, labels in self._data[metric].items():
-                check = 'Value in range'
-                if metric not in ranges:
-                    check = 'No range provided'
-                elif len(ranges[metric]) < 1:
-                    check = 'No min/max range provided'
-                elif value < ranges[metric][0]:
-                    check = f'Value < {ranges[metric][0]}'
-                    status = False
-                elif len(ranges[metric]) > 1 and value > ranges[metric][1]:
-                    check = f'Value > {ranges[metric][1]}'
-                    status = False
-                log.info(format_str, metric, *self._label_values(labels), value, check)
+        log.info(format_str, *['-' * self._display['widths'][name] for name in columns])
+        for metric in sorted(self._display['data']):
+            for value, labels in self._display['data'][metric].items():
+                log.info(
+                    format_str, metric, *self._label_values(labels), value,
+                    self._label_values(labels, ['check']))
         return status
 
     def _get_metrics(self, log, names, hosts, dmg):
@@ -1151,12 +1179,14 @@ class MetricData():
             info (dict): a dictionary of host keys linked to metric data for each metric name
 
         Returns:
-            dict: dictionary of metric names and value dictionaries of labels associated with
-                the each value, e.g.
+            dict: dictionary of metric values keyed by the metric name and combination of metric
+                labels and values, e.g.
                     <metric_name>: {
-                        <value_1>: {'rank': NodeSet('0-1'), 'host': NodeSet()}
-                        <value_2>: {'rank': NodeSet('2'),   'host': NodeSet()}
-                    }
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_1>,
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_2>,
+                        ...
+                    },
+                    ...
         """
         data = {}
         for name in names:
@@ -1166,52 +1196,107 @@ class MetricData():
                 for metric in metrics[name]['metrics']:
                     if 'labels' not in metric or 'value' not in metric:
                         continue
-                    keys = sorted(metric['labels'].keys())
-                    value = metric['value']
-                    if value not in data[name]:
-                        data[name][value] = {}
-                    for key in keys + ['host']:
-                        if key not in data[name][value]:
-                            data[name][value][key] = NodeSet()
-                        if key == 'host':
-                            data[name][value][key].add(host)
-                        else:
-                            data[name][value][key].add(str(metric['labels'][key]))
+                    labels = [f'host:{host}']
+                    for key, value in metric['labels'].items():
+                        labels.append(":".join([str(key), str(value)]))
+                    label_key = ",".join(sorted(labels))
+                    data[name][label_key] = metric['value']
         return data
 
-    def _set_labels(self):
-        """Set the ordered list of the labels associated with the metric data.
+    def _set_display(self, compare=None):
+        """Set the data to display along with the column labels and widths.
 
-        Also set the dictionary of widths for each label that can be used to define a format string.
+        Args:
+            compare (dict, optional): dictionary of expected metric value ranges with a minimum
+                metric key and optional label key to at least a minimum metric value and optional
+                maximum metric value. Defaults to None.
+
+        Returns:
+            bool: True if all the comparisons passed; False otherwise
         """
+        status = True
+        self._display['data'] = {}
         unique_labels = set()
-        widths = {name: [len(name)] for name in ['metric', 'value', 'check']}
-        for metric, values in self._data.items():
-            widths['metric'].append(len(metric))
-            for value, labels in values.items():
-                widths['value'].append(len(str(value)))
-                for name in sorted(labels):
-                    unique_labels.add(name)
-                    if name not in widths:
-                        widths[name] = []
-                    widths[name].append(len(str(name)))
-                    widths[name].append(len(str(labels[name])))
-        self._labels = sorted(unique_labels)
-        self._widths = {name: max(widths[name]) for name in widths}
+        all_widths = {name: [len(name)] for name in ['metric', 'value', 'check']}
+        for metric in sorted(self._data):
+            self._display['data'][metric] = {}
+            all_widths['metric'].append(len(metric))
+            for combined_label, value in self._data[metric].items():
+                if value not in self._display['data'][metric]:
+                    self._display['data'][metric][value] = {}
+                all_widths['value'].append(len(str(value)))
+                combined_label = self._add_check_label(combined_label, metric, compare, value)
+                for label_entry in combined_label.split(','):
+                    label_name, label_value = label_entry.split(':')
+                    if label_name != 'check':
+                        unique_labels.add(label_name)
+                    elif 'Fail' in label_value:
+                        status = False
+                    if label_name not in self._display['data'][metric][value]:
+                        self._display['data'][metric][value][label_name] = NodeSet()
+                    self._display['data'][metric][value][label_name].add(label_value)
+                    if label_name not in all_widths:
+                        all_widths[label_name] = []
+                    all_widths[label_name].append(len(str(label_name)))
+                    all_widths[label_name].append(len(str(label_value)))
+        self._display['labels'] = sorted(unique_labels)
+        self._display['widths'] = {name: max(value) for name, value in all_widths.items()}
+        return status
 
-    def _label_values(self, label_data):
+    def _label_values(self, label_data, names=None):
         """Get the values for each telemetry metric label.
 
         Args:
-            label_data (dict): _description_
+            label_data (dict): dictionary of label names and values from which to generate a list of
+                values
+            names (list, optional): list of label names to include. If not specified
+                self._display['labels'] is used.
 
         Returns:
             list: list of values for each telemetry metric label
         """
         label_values = []
-        for name in self._labels:
+        if names is None:
+            names = self._display['labels']
+        for name in names:
             if name in label_data:
                 label_values.append(label_data[name])
             else:
                 label_values.append('-')
         return label_values
+
+    def _add_check_label(self, label, metric, compare, value):
+        """Add a 'check' label to the provided label indicating if the value is in the range.
+
+        Args:
+            label (str): current label (an optional key in the compare dictionary)
+            metric (str): metric name (a key in the compare dictionary)
+            compare (dict): dictionary of expected metric value ranges with a minimum metric key and
+                optional label key to at least a minimum metric value and optional maximum metric
+                value, e.g.
+                    {<metric>: <min_value>} or
+                    {<metric>: [<min_value>]} or
+                    {<metric>: [<min_value>, <max_value>]} or
+                    {<metric>: {<label>: <min_value>}} or
+                    {<metric>: {<label>: [<min_value>]}} or
+                    {<metric>: {<label>: [<min_value>, <max_value>]}}
+            value (int): current value to compare
+
+        Returns:
+            str: the current label with a added entry for the check result
+        """
+        def _validate_range(_value, _range):
+            if not isinstance(_range, (list, tuple)):
+                if _value < _range:
+                    return f'Fail (<{_range})'
+            elif len(_range) > 1 and _value > _range[1]:
+                return f'Fail (>{_range[1]})'
+            elif len(_range) > 0 and _value < _range[0]:
+                return f'Fail (<{_range[0]})'
+            return 'Pass'
+
+        if compare is None or metric not in compare:
+            return label + ',check:Pass'
+        if label not in compare[metric]:
+            return label + f',check:{_validate_range(value, compare[metric])}'
+        return label + f',check:{_validate_range(value, compare[metric][label])}'

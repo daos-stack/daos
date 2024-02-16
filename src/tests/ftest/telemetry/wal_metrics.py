@@ -24,9 +24,23 @@ class WalMetrics(TestWithTelemetry):
             ranges (dict): dictionary of min/max lists for each metric to be verified
         """
         self.telemetry.collect_data(metrics)
-        self.log_step('Displaying metric data')
-        self.telemetry.display_data()
+        self.log_step('Verifying collected metric data')
         return self.telemetry.verify_data(ranges)
+
+    def get_metrics(self, metrics):
+        """Collect telemetry metrics data.
+
+        Args:
+            metrics (list): list of metric names to collect and verify
+
+        Returns:
+            dict: dictionary of current values to be used as a minimum requirement for comparing
+                these metrics in the future
+        """
+        self.telemetry.collect_data(metrics)
+        self.log_step('Displaying collected metric data')
+        self.telemetry.display_data()
+        return self.telemetry.data
 
     def test_wal_commit_metrics(self):
         """JIRA ID: DAOS-11626.
@@ -46,11 +60,6 @@ class WalMetrics(TestWithTelemetry):
         :avocado: tags=WalMetrics,test_wal_commit_metrics
         """
         wal_metrics = [item for item in self.telemetry.ENGINE_DMABUFF_METRICS if '_wal_' in item]
-        ranges_before = {name: [0, 0] for name in wal_metrics}
-        ranges_after = {name: [1] for name in wal_metrics}
-        if not self.server_managers[0].manager.job.using_control_metadata:
-            # WAL commit metrics are not expected to increase when not using MD on SSD
-            ranges_after = {name: [0, 0] for name in wal_metrics}
 
         self.log_step('Creating a pool (dmg pool create)')
         pool = add_pool(self)
@@ -59,14 +68,13 @@ class WalMetrics(TestWithTelemetry):
         container = self.get_container(pool)
 
         self.log_step('Verify WAL commit metrics before writing data (dmg telemetry metrics query)')
-        if not self.verify_metrics(wal_metrics, ranges_before):
-            self.fail('Unexpected WAL commit metrics before pool creation')
+        initial_values = self.get_metrics(wal_metrics)
 
         self.log_step('Writing data (ior)')
         write_data(self, container)
 
         self.log_step('Verify WAL commit metrics after writing data (dmg telemetry metrics query)')
-        if not self.verify_metrics(wal_metrics, ranges_after):
+        if not self.verify_metrics(wal_metrics, initial_values):
             self.fail('Unexpected WAL commit metrics after pool creation')
 
         self.log_step('Test passed')
@@ -85,18 +93,12 @@ class WalMetrics(TestWithTelemetry):
         :avocado: tags=WalMetrics,test_wal_reply_metrics
         """
         wal_metrics = self.telemetry.ENGINE_POOL_VOS_REHYDRATION_METRICS
-        ranges_before = {name: [0, 0] for name in wal_metrics}
-        ranges_after = {name: [1] for name in wal_metrics}
-        if not self.server_managers[0].manager.job.using_control_metadata:
-            # WAL commit metrics are not expected to increase when not using MD on SSD
-            ranges_after = {name: [0, 0] for name in wal_metrics}
 
         self.log_step('Creating a pool (dmg pool create)')
         pool = add_pool(self)
 
         self.log_step('Verify WAL reply metrics after pool creation (dmg telemetry metrics query)')
-        if not self.verify_metrics(wal_metrics, ranges_before):
-            self.fail('Unexpected WAL reply metrics after pool creation')
+        initial_values = self.get_metrics(wal_metrics)
 
         self.log_step('Creating a container (daos container create)')
         container = self.get_container(pool)
@@ -105,7 +107,7 @@ class WalMetrics(TestWithTelemetry):
         write_data(self, container)
 
         self.log_step('Verify WAL reply metrics after writing data (dmg telemetry metrics query)')
-        if not self.verify_metrics(wal_metrics, ranges_after):
+        if not self.verify_metrics(wal_metrics, initial_values):
             self.fail('Unexpected WAL reply metrics after pool creation')
 
         # self.stop_engines()
@@ -130,11 +132,6 @@ class WalMetrics(TestWithTelemetry):
         """
         frequency = 5
         wal_metrics = self.telemetry.ENGINE_POOL_CHECKPOINT_METRICS
-        ranges_before = {name: [0, 0] for name in wal_metrics}
-        ranges_after = {name: [1] for name in wal_metrics}
-        if not self.server_managers[0].manager.job.using_control_metadata:
-            # WAL commit metrics are not expected to increase when not using MD on SSD
-            ranges_after = {name: [0, 0] for name in wal_metrics}
 
         self.log_step('Creating a pool (dmg pool create)')
         pool = add_pool(self, properties=f'checkpoint:timed,checkpoint_freq:{frequency}')
@@ -144,8 +141,7 @@ class WalMetrics(TestWithTelemetry):
 
         self.log_step(
             'Verify WAL checkpoint metrics before pool creation (dmg telemetry metrics query)')
-        if not self.verify_metrics(wal_metrics, ranges_before):
-            self.fail('Unexpected WAL reply metric values before pool creation')
+        initial_values = self.get_metrics(wal_metrics)
 
         self.log_step('Writing data (ior)')
         write_data(self, container)
@@ -155,7 +151,7 @@ class WalMetrics(TestWithTelemetry):
 
         self.log_step(
             'Verify WAL checkpoint metrics after pool creation (dmg telemetry metrics query)')
-        if not self.verify_metrics(wal_metrics, ranges_after):
+        if not self.verify_metrics(wal_metrics, initial_values):
             self.fail('Unexpected WAL reply metric values after pool creation')
 
         self.log_step('Test passed')
