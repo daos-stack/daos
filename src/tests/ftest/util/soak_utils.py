@@ -334,7 +334,8 @@ def launch_snapshot(self, pool, name):
     # Create container
     add_containers(self, pool, path='/run/container_snapshot/*')
     container = self.container[-1]
-    obj_cls = self.params.get("oclass", '/run/container_snapshot/*')
+    oclass = self.params.get("oclass", '/run/container_snapshot/*')
+    obj_cls = "_".join(["OC", str(oclass)])
 
     # write data to object
     data_pattern = get_random_bytes(500000000)
@@ -387,6 +388,8 @@ def launch_snapshot(self, pool, name):
     params = {"name": name, "status": status, "vars": {}}
     with H_LOCK:
         self.harasser_job_done(params)
+    self.log.info("Harasser results: {%s: %s}", name, status)
+    self.log.info("Harasser args: {%s}", params)
     self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 

@@ -62,7 +62,7 @@ container_reserved:
 container_snapshot:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
-  oclass: EC_2P1GX
+  oclass: RP_2GX
   control_method: daos
   daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
@@ -92,7 +92,7 @@ soak_harassers:
   # one harrasser is run during each pass of soak jobs
   harasserlist:
     test_soak_offline_harassers:
-      - snapshot
+      - snapshot-offline
       - exclude_reintegrate-offline
       - server-stop_server-start-offline
       - server-stop_server-reintegrate-offline
