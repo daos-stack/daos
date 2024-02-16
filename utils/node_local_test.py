@@ -3234,7 +3234,7 @@ class PosixTests():
         print(rc)
         assert rc.returncode == 0
 
-        # Assign the container to someone else.
+        # get owner to verify.
         rc = run_daos_cmd(self.conf, ['container',
                                       'get-acl',
                                       self.pool.id(),
