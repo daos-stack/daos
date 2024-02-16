@@ -26,7 +26,7 @@ jobs:
         if: always()
         uses: thollander/actions-comment-pull-request@v2
         with:
-          comment_includes: 'Bug-tracker data'
+          comment_tag: 'Bug-tracker data'
           message: |
             Bug-tracker data:
             ${{ steps.jira-data.outputs.message }}
