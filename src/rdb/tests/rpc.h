@@ -8,6 +8,7 @@
 #define RDB_TESTS_RPC_H
 
 #include <daos/rsvc.h>
+#include "daos/rpc.h"
 
 /*
  * RPC operation codes

@@ -14,15 +14,15 @@
 #ifndef __CRT_API_H__
 #define __CRT_API_H__
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdbool.h>
 #include <uuid/uuid.h>
 
-#include <cart/types.h>
-#include <daos_errno.h>
 #include <cart/iv.h>
 #include <cart/swim.h>
+#include <cart/types.h>
+#include <daos_errno.h>
 
 #if defined(__cplusplus)
 extern "C" {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,10 +12,9 @@
 #ifndef __DAOS_BTREE_H__
 #define __DAOS_BTREE_H__
 
-#include "daos/common.h"
-#include "daos/mem.h"
-
+#include <daos/common.h>
 #include <daos_types.h>
+#include <daos/mem.h>
 
 /**
  * KV record of the btree.

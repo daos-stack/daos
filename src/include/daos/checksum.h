@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,11 +7,11 @@
 #ifndef __DAOS_CHECKSUM_H
 #define __DAOS_CHECKSUM_H
 
-#include "daos/multihash.h"
-
+#include <daos_types.h>
 #include <daos_obj.h>
 #include <daos_prop.h>
-#include <daos_types.h>
+
+#include <daos/multihash.h>
 
 #define	CSUM_NO_CHUNK -1
 

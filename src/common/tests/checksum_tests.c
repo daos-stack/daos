@@ -10,7 +10,7 @@
 
 #include <stdarg.h>
 #include <stddef.h>
-#include <setjmp.h> /* For cmocka.h */
+#include <setjmp.h>
 #include <stdint.h>
 #include <cmocka.h>
 #include <gurt/types.h>

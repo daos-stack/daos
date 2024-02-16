@@ -10,7 +10,6 @@
 #include <daos.h>
 #include <daos/object.h>
 #include "place_obj_common.h"
-/* Gain some internal knowledge of pool server */
 #include "../../pool/rpc.h"
 #include "../../pool/srv_pool_map.h"
 

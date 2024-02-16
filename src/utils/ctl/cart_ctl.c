@@ -14,7 +14,6 @@
 #include <getopt.h>
 #include <semaphore.h>
 
-/* for crt_register_proto_fi() */
 #include "crt_internal.h"
 #include "crt_utils.h"
 #include <daos/agent.h>

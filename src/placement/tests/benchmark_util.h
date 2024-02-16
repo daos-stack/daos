@@ -9,6 +9,7 @@
 
 #ifdef USE_TIME_PROFILING
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <time.h>
 #include <float.h>

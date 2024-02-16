@@ -16,8 +16,10 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 
+#include <daos_types.h>
 #include <daos/tse.h>
 #include <gurt/atomic.h>
+#include <daos/common.h>
 
 struct tse_task_private {
 	struct tse_sched_private	*dtp_sched;

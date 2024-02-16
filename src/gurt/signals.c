@@ -1,13 +1,13 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #define D_LOGFAC DD_FAC(misc)
 
-#include <execinfo.h>
 #include <signal.h>
+#include <execinfo.h>
 
 #include <gurt/common.h>
 

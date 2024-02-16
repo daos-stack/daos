@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,10 +9,9 @@
 #define D_LOGFAC	DD_FAC(mem)
 
 #include <pthread.h>
-
 #include <gurt/common.h>
-#include <gurt/hash.h>
 #include <gurt/list.h>
+#include <gurt/hash.h>
 
 enum d_hash_lru {
 	D_HASH_LRU_TAIL = -1,

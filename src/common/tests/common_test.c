@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 #include <getopt.h>
-#include <setjmp.h> /** For cmocka.h */
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <cmocka.h>

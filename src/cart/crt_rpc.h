@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,8 +8,11 @@
  * CaRT and not in other specific header files.
  */
 
-#include <gurt/common.h>
+#ifndef __CRT_RPC_H__
+#define __CRT_RPC_H__
+
 #include <gurt/heap.h>
+#include <gurt/common.h>
 
 /* default RPC timeout 60 seconds */
 #define CRT_DEFAULT_TIMEOUT_S	(60) /* second */
@@ -712,3 +715,5 @@ int crt_iv_sync_corpc_pre_forward(crt_rpc_t *rpc, void *arg);
 /* crt_register.c */
 int
 crt_proto_register_internal(struct crt_proto_format *crf);
+
+#endif /* __CRT_RPC_H__ */

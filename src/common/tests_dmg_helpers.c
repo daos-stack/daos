@@ -6,7 +6,6 @@
 
 #include <pwd.h>
 #include <grp.h>
-#include <linux/limits.h>
 #include <json-c/json.h>
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -16,6 +15,11 @@
 #include <daos/tests_lib.h>
 #include <daos.h>
 #include <daos_srv/bio.h>
+
+/* linux/limits.h defines this, then bits/param.h undefined it */
+#ifndef ARG_MAX
+#define ARG_MAX 131072
+#endif
 
 static void
 cmd_free_args(char **args, int argcount)

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#define D_LOGFAC DD_FAC(dfuse)
+
 #include <errno.h>
 #include <getopt.h>
 #include <dlfcn.h>
@@ -14,8 +16,6 @@
 
 #include <sys/types.h>
 #include <hwloc.h>
-
-#define D_LOGFAC DD_FAC(dfuse)
 
 #include "dfuse.h"
 

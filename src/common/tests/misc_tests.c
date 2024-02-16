@@ -9,7 +9,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <setjmp.h> /** For cmocka.h */
+#include <setjmp.h>
 #include <cmocka.h>
 #include <daos/common.h>
 #include <daos/tests_lib.h>

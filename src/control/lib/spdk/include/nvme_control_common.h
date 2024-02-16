@@ -8,8 +8,11 @@
 #define NVMECONTROL_COMMON_H
 
 #include <stdbool.h>
+#include <spdk/nvme.h>
+#include <spdk/nvme_spec.h>
 #include <spdk/nvme_intel.h>
 #include <daos_srv/control.h>
+#include <spdk/env.h>
 
 /**
  * \brief NVMECONTROL return codes

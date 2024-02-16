@@ -8,7 +8,8 @@
  * CaRT and not in other specific header files.
  */
 
-#pragma once
+#ifndef __CRT_INTERNAL_TYPES_H__
+#define __CRT_INTERNAL_TYPES_H__
 
 #define CRT_CONTEXT_NULL         (NULL)
 
@@ -16,19 +17,21 @@
 #define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
 #endif
 
-#include "crt_hg.h"
-
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 
 #include <cart/api.h>
+#include "crt_hg.h"
 #include <cart/types.h>
-#include <gurt/atomic.h>
+#include <gurt/list.h>
 #include <gurt/hash.h>
 #include <gurt/heap.h>
-#include <gurt/list.h>
+#include <gurt/atomic.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
+
+struct crt_hg_gdata;
+struct crt_grp_gdata;
 
 struct crt_na_config {
 	int32_t		 noc_port;
@@ -336,3 +339,5 @@ struct crt_opc_map {
 
 void
 crt_na_config_fini(bool primary, crt_provider_t provider);
+
+#endif /* __CRT_INTERNAL_TYPES_H__ */

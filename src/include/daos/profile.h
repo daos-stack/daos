@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,13 +7,12 @@
 #ifndef __DAOS_PROFILE_H__
 #define __DAOS_PROFILE_H__
 
-#include "daos/debug.h"
-
-#include <cart/api.h>
 #include <daos_errno.h>
-#include <daos_types.h>
-#include <gurt/common.h>
+#include <daos/debug.h>
 #include <gurt/hash.h>
+#include <gurt/common.h>
+#include <cart/api.h>
+#include <daos_types.h>
 
 struct daos_profile_chunk {
 	d_list_t	dpc_chunk_list;

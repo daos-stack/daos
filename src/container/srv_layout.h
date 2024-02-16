@@ -33,6 +33,7 @@
 #define __CONTAINER_SRV_LAYOUT_H__
 
 #include <daos_types.h>
+#include <daos_prop.h>
 
 /*
  * Root KVS (RDB_KVS_GENERIC)

@@ -1,9 +1,8 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-
 #include "crt_internal.h"
 
 #define CART_FAC_MAX_LEN (128)

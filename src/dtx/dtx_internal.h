@@ -10,7 +10,12 @@
 #ifndef __DTX_INTERNAL_H__
 #define __DTX_INTERNAL_H__
 
+#include "daos_srv/dtx_srv.h"
+#include "daos_srv/daos_engine.h"
+#include "daos_srv/container.h"
+#include <abt.h>
 #include <uuid/uuid.h>
+#include <daos/object.h>
 #include <daos/rpc.h>
 #include <daos/btree.h>
 #include <gurt/telemetry_common.h>

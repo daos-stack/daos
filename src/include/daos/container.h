@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,15 +10,13 @@
 #ifndef __DD_CONT_H__
 #define __DD_CONT_H__
 
-#include "checksum.h"
-
-#include "daos/common.h"
-#include "daos/cont_props.h"
-#include "daos/pool_map.h"
-
+#include <daos/common.h>
+#include <daos/pool_map.h>
 #include <daos/tse.h>
-#include <daos_cont.h>
 #include <daos_types.h>
+#include <daos_cont.h>
+#include <daos/cont_props.h>
+#include "checksum.h"
 
 /* Client container handle */
 struct dc_cont {

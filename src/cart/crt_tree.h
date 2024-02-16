@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,7 +8,8 @@
  * declarations for tree topo.
  */
 
-#pragma once
+#ifndef __CRT_TREE_H__
+#define __CRT_TREE_H__
 
 /*
  * Query specific tree topo's number of children, child rank number, or parent
@@ -121,3 +122,5 @@ crt_grprank_2_teerank(uint32_t grp_size, uint32_t grp_root, uint32_t grp_rank)
 
 	return (grp_rank + grp_size - grp_root) % grp_size;
 }
+
+#endif /* __CRT_TREE_H__ */

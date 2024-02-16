@@ -5,6 +5,7 @@
  */
 #define D_LOGFAC        DD_FAC(tests)
 
+#define USE_TIME_PROFILING
 #include <getopt.h>
 
 #include <daos/common.h>
@@ -13,7 +14,6 @@
 
 #include "place_obj_common.h"
 
-#define USE_TIME_PROFILING
 #include "benchmark_util.h"
 
 extern int  obj_class_init(void);

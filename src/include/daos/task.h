@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,12 +10,11 @@
 #ifndef __DAOS_CLI_TASK_H__
 #define __DAOS_CLI_TASK_H__
 
-#include "daos/common.h"
-
-#include <daos/tse.h>
-#include <daos_api.h>
-#include <daos_task.h>
 #include <daos_types.h>
+#include <daos_api.h>
+#include <daos/tse.h>
+#include <daos/common.h>
+#include <daos_task.h>
 
 /* size of daos_task_args should within limitation of TSE_TASK_ARG_LEN */
 struct daos_task_args {

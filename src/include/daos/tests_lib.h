@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,14 +7,12 @@
 #ifndef __DAOS_TESTS_LIB_H__
 #define __DAOS_TESTS_LIB_H__
 
-#include "daos/common.h"
-#include "daos/credit.h"
-#include "daos/object.h"
-
 #include <getopt.h>
-
-#include <daos_mgmt.h>
 #include <daos_types.h>
+#include <daos/common.h>
+#include <daos_mgmt.h>
+#include <daos/object.h>
+#include <daos/credit.h>
 
 #define assert_rc_equal(rc, expected_rc)                                                           \
 	do {                                                                                       \

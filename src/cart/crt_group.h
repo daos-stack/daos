@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,14 +7,13 @@
  * This file is part of CaRT. It gives out the internal data structure of group.
  */
 
-#pragma once
+#ifndef __CRT_GROUP_H__
+#define __CRT_GROUP_H__
 
 #include "crt_internal_types.h"
-#include "crt_swim.h"
 
-#include <cart/types.h>
 #include <gurt/atomic.h>
-#include <gurt/hash.h>
+#include "crt_swim.h"
 
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
 #define CRT_LOOKUP_CACHE_BITS	(4)
@@ -380,3 +379,5 @@ int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
 
 int
 grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation);
+
+#endif /* __CRT_GROUP_H__ */

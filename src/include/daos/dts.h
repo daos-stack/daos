@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,7 +7,7 @@
 #ifndef __DTS_COMMON_H__
 #define __DTS_COMMON_H__
 
-#include "daos/credit.h"
+#include <daos/credit.h>
 
 /**
  * Initialize I/O test context:

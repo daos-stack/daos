@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,12 +7,12 @@
  * This file is part of CaRT. It's the header for crt_swim.c.
  */
 
-#pragma once
+#ifndef __CRT_SWIM_H__
+#define __CRT_SWIM_H__
 
-#include "swim/swim_internal.h"
-
-#include <cart/swim.h>
 #include <gurt/list.h>
+#include <cart/swim.h>
+#include "swim/swim_internal.h"
 
 #define CRT_SWIM_NGLITCHES_TRESHOLD	10
 #define CRT_SWIM_NMESSAGES_TRESHOLD	1000
@@ -101,3 +101,5 @@ void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv);
 void crt_swim_rank_shuffle(struct crt_grp_priv *grp_priv);
 int
 crt_swim_rank_check(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation);
+
+#endif /* __CRT_SWIM_H__ */

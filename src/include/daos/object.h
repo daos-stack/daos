@@ -1,13 +1,12 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __DD_OBJ_H__
 #define __DD_OBJ_H__
 
-#include "daos/common.h"
-
+#include <daos/common.h>
 #include <daos/tse.h>
 #include <daos_obj.h>
 

@@ -23,16 +23,6 @@
 
 #include <cmocka.h>
 
-#if FAULT_INJECTION
-#define FAULT_INJECTION_REQUIRED() do { } while (0)
-#else
-#define FAULT_INJECTION_REQUIRED() \
-	do { \
-		print_message("Fault injection required for test, skipping...\n"); \
-		skip();\
-	} while (0)
-#endif /* FAULT_INJECTION */
-
 #include <daos/dpar.h>
 #include <daos/debug.h>
 #include <daos/common.h>
@@ -40,6 +30,18 @@
 #include <daos/sys_debug.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+
+#if FAULT_INJECTION
+#define FAULT_INJECTION_REQUIRED()                                                                 \
+	do {                                                                                       \
+	} while (0)
+#else
+#define FAULT_INJECTION_REQUIRED()                                                                 \
+	do {                                                                                       \
+		print_message("Fault injection required for test, skipping...\n");                 \
+		skip();                                                                            \
+	} while (0)
+#endif /* FAULT_INJECTION */
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="

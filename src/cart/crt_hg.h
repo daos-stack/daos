@@ -6,18 +6,20 @@
 /**
  * This file is part of CaRT. It is the header file of bridging to mercury.
  */
-#pragma once
+#ifndef __CRT_MERCURY_H__
+#define __CRT_MERCURY_H__
+
+#include <cart/types.h>
+
+#include <gurt/list.h>
+#include "daos_errno.h"
 
 #include <mercury.h>
-#include <mercury_log.h>
+#include <mercury_types.h>
 #include <mercury_macros.h>
 #include <mercury_proc.h>
 #include <mercury_proc_string.h>
-#include <mercury_types.h>
-
-#include <cart/types.h>
-#include <daos_errno.h>
-#include <gurt/list.h>
+#include <mercury_log.h>
 
 /** the shared HG RPC ID used for all CRT opc */
 #define CRT_HG_RPCID		(0xDA036868)
@@ -234,3 +236,5 @@ int crt_hg_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl);
 int
 crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
 		     crt_bulk_opid_t *opid, bool bind);
+
+#endif /* __CRT_MERCURY_H__ */

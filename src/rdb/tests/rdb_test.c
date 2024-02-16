@@ -8,7 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <daos_srv/daos_engine.h>	/* for dss_module */
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include "../rdb_internal.h"

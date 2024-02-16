@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +11,7 @@
 #ifndef __DAOS_TEST_UTILS_H__
 #define __DAOS_TEST_UTILS_H__
 
-#include "daos/drpc.h"
+#include <daos/drpc.h>
 
 /*
  * drpc unit test utilities

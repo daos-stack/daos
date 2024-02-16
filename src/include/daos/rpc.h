@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,10 +14,9 @@
 #ifndef __DRPC_API_H__
 #define __DRPC_API_H__
 
-#include "daos/common.h"
-
-#include <cart/api.h>
+#include <daos/common.h>
 #include <daos/tse.h>
+#include <cart/api.h>
 
 /* Opcode registered in crt will be
  * client/server | mod_id | rpc_version | op_code

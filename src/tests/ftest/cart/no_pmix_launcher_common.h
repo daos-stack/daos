@@ -6,6 +6,9 @@
 #ifndef __NO_PMIX_LAUNCHER_COMMON_H__
 #define __NO_PMIX_LAUNCHER_COMMON_H__
 
+#include "crt_utils.h"
+#include <cart/types.h>
+
 #define MY_BASE 0x010000000
 #define MY_VER  0
 

@@ -17,6 +17,7 @@
 
 #include <daos_types.h>
 #include "srv_internal.h"
+#include "daos_srv/daos_engine.h"
 
 /* Root KVS (RDB_KVS_GENERIC) */
 extern d_iov_t ds_mgmt_prop_servers;		/* server KVS */

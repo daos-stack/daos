@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include <uuid/uuid.h>
+#include <daos/object.h>
 #include <daos/rpc.h>
 
 /*

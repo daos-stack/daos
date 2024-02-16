@@ -16,7 +16,7 @@
 
 #include <daos_srv/container.h>
 
-#include <daos_api.h>	/* for daos_prop_alloc/_free() */
+#include <daos_api.h>
 #include <daos/rpc.h>
 #include <daos/pool.h>
 #include <daos_srv/pool.h>

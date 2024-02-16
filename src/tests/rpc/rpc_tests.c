@@ -13,7 +13,6 @@
 #include <daos/checksum.h>
 #include <daos/tests_lib.h>
 
-/* Testing internal interfaces */
 #include <object/rpc_csum.h>
 
 bool g_verbose;

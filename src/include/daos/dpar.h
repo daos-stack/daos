@@ -6,9 +6,8 @@
 
 #ifndef __DAOS_PAR_LIB_H__
 #define __DAOS_PAR_LIB_H__
-
-#include <inttypes.h>
 #include <stdbool.h>
+#include <inttypes.h>
 
 #define DPAR_MAJOR 2
 #define DPAR_MINOR 0

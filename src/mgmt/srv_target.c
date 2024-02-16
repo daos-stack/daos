@@ -21,7 +21,7 @@
 #include <daos_mgmt.h>
 
 #include "srv_internal.h"
-#include "srv_layout.h"		/* for a couple of constants only */
+#include "srv_layout.h"
 
 /** directory for newly created pool, reclaimed on restart */
 static char *newborns_path;

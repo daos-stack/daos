@@ -9,19 +9,21 @@
  */
 #define D_LOGFAC	DD_FAC(misc)
 
-#include <dlfcn.h>
-#include <errno.h>
-#include <limits.h>
-#include <malloc.h>
-#include <math.h>
-#include <pthread.h>
 #include <stdarg.h>
-#include <stdint.h>
-#include <stdlib.h>
+#include <math.h>
+#include <malloc.h>
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <dlfcn.h>
+#include <pthread.h>
+#include <limits.h>
+#include <stdint.h>
 
-#include <gurt/atomic.h>
+#include <malloc.h>
+
 #include <gurt/common.h>
+#include <gurt/atomic.h>
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};

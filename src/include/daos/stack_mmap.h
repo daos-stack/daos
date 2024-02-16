@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,12 +27,9 @@
  */
 
 #ifdef ULT_MMAP_STACK
-
-#include <search.h>
 #include <sys/mman.h>
-
+#include <search.h>
 #include <abt.h>
-
 #include <gurt/atomic.h>
 
 /* the minimum value for vm.max_map_count to allow for mmap()'ed ULT stacks

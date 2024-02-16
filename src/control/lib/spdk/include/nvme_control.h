@@ -7,6 +7,8 @@
 #ifndef NVMECONTROL_H
 #define NVMECONTROL_H
 
+#include <stddef.h>
+
 /**
  * Discover NVMe controllers and namespaces, as well as return device health
  * information.

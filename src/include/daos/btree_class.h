@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,9 +10,8 @@
 #ifndef __DAOS_SRV_BTREE_CLASS_H__
 #define __DAOS_SRV_BTREE_CLASS_H__
 
-#include "daos/btree.h"
-#include "daos/common.h"
-
+#include <daos/common.h>
+#include <daos/btree.h>
 #include <daos_types.h>
 
 /* name-value: hash-ordered keys */

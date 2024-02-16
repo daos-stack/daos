@@ -27,7 +27,7 @@
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 
-#include <daos.h> /* for daos_init() */
+#include <daos.h>
 
 #define MAX_MODULE_OPTIONS	64
 #if BUILD_PIPELINE

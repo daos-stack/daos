@@ -9,7 +9,6 @@
 #define D_LOGFAC	DD_FAC(mem)
 
 #include <pthread.h>
-
 #include <gurt/common.h>
 #include <gurt/heap.h>
 

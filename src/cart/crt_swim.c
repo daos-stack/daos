@@ -9,10 +9,9 @@
 #define D_LOGFAC	DD_FAC(swim)
 #define CRT_USE_GURT_FAC
 
+#include <ctype.h>
 #include "crt_internal.h"
 #include "crt_internal_fns.h"
-
-#include <ctype.h>
 
 #define CRT_OPC_SWIM_VERSION	2
 #define CRT_SWIM_FAIL_BASE	((CRT_OPC_SWIM_BASE >> 16) | \

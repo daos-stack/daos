@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,18 +8,16 @@
  */
 #define D_LOGFAC	DD_FAC(rpc)
 
-#include "crt_internal.h"
-
-#include "../container/rpc.h"
-#include "../mgmt/rpc.h"
-#include "../object/obj_rpc.h"
-#include "../pipeline/pipeline_rpc.h"
-#include "../pool/rpc.h"
-#include "daos/rpc.h"
-
 #include <semaphore.h>
-
 #include <daos_task.h>
+#include "crt_internal.h"
+#include <daos/rpc.h>
+
+#include "../mgmt/rpc.h"
+#include "../pool/rpc.h"
+#include "../container/rpc.h"
+#include "../pipeline/pipeline_rpc.h"
+#include "../object/obj_rpc.h"
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
 

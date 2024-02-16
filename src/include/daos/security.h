@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,11 +7,10 @@
 #ifndef __DAOS_SECURITY_INT_H__
 #define __DAOS_SECURITY_INT_H__
 
-#include <stddef.h>
 #include <stdint.h>
-
-#include <daos_prop.h>
+#include <stddef.h>
 #include <daos_types.h>
+#include <daos_prop.h>
 
 /** Structure representing a resource's ownership by user and group, respectively. */
 struct d_ownership {

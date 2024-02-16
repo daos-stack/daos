@@ -10,13 +10,12 @@
 #ifndef __DAOS_EVENTX_H__
 #define __DAOS_EVENTX_H__
 
-#include "daos/task.h"
-
-#include <daos_errno.h>
-#include <daos_task.h>
 #include <daos_types.h>
-#include <gurt/hash.h>
+#include <daos_errno.h>
 #include <gurt/list.h>
+#include <gurt/hash.h>
+#include <daos_task.h>
+#include <daos/task.h>
 
 enum daos_ev_flags {
 	/**

@@ -8,25 +8,27 @@
  */
 #define D_LOGFAC	DD_FAC(client)
 
-#include <daos/agent.h>
-#include <daos/common.h>
-#include <daos/event.h>
-#include <daos/mgmt.h>
-#include <daos/sys_debug.h>
-#include <daos/pool.h>
-#include <daos/container.h>
-#include <daos/object.h>
-#include <daos/task.h>
-#include <daos/array.h>
-#include <daos/kv.h>
-#include <daos/btree.h>
-#include <daos/btree_class.h>
-#include <daos/placement.h>
-#include <daos/job.h>
-#if BUILD_PIPELINE
-#include <daos/pipeline.h>
-#endif
 #include "task_internal.h"
+
+#include "daos/agent.h"
+#include "daos/array.h"
+#include "daos/btree.h"
+#include "daos/btree_class.h"
+#include "daos/common.h"
+#include "daos/container.h"
+#include "daos/event.h"
+#include "daos/job.h"
+#include "daos/kv.h"
+#include "daos/mgmt.h"
+#include "daos/object.h"
+#if BUILD_PIPELINE
+#include "daos/pipeline.h"
+#endif
+#include "daos/placement.h"
+#include "daos/pool.h"
+#include "daos/sys_debug.h"
+#include "daos/task.h"
+
 #include <pthread.h>
 
 /** protect against concurrent daos_init/fini calls */

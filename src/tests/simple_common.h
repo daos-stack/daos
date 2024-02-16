@@ -8,6 +8,7 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <daos.h>
+#include <gurt/common.h>
 
 extern char			 node[128];
 #define FAIL(fmt, ...)						\

@@ -6,6 +6,8 @@
 /**
  * Common functions to be shared among tests
  */
+
+#include "daos/debug.h"
 #include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -19,9 +19,7 @@ extern "C" {
 #include <string.h>
 #include <stdbool.h>
 
-/** uuid_t */
 #include <uuid/uuid.h>
-/** for d_rank_t & d_rank_list_t */
 #include <cart/types.h>
 
 #include <daos_errno.h>

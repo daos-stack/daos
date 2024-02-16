@@ -8,6 +8,7 @@
  */
 #include <stdio.h>
 #include "threaded_rpc.h"
+#include <gurt/atomic.h>
 
 static int		done;
 static crt_context_t	crt_ctx;

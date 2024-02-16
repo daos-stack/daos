@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,7 +8,10 @@
  * declarations which are not included by other specific header files.
  */
 
-#pragma once
+#ifndef __CRT_INTERNAL_FNS_H__
+#define __CRT_INTERNAL_FNS_H__
+
+#include <stdbool.h>
 
 /** crt_init.c */
 bool crt_initialized(void);
@@ -71,3 +74,5 @@ crt_trigger_hlc_error_cb(void);
 void
 crt_trigger_event_cbs(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		      enum crt_event_type type);
+
+#endif /* __CRT_INTERNAL_FNS_H__ */

@@ -12,7 +12,8 @@
 
 #include <stdio.h>
 #include <gurt/common.h>
-#include <gurt/atomic.h>
+#include <cart/types.h>
+#include <cart/api.h>
 
 static inline int drain_queue(crt_context_t ctx)
 {

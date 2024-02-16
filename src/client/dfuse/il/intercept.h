@@ -6,13 +6,16 @@
 
 #ifndef __INTERCEPT_H__
 #define __INTERCEPT_H__
-#include <unistd.h>
-#include <stdlib.h>
-#include <wchar.h>
-#include <sys/uio.h>
-#include "dfuse_log.h"
-#include "ioil_io.h"
+
 #include "ioil_api.h"
+#include "ioil_io.h"
+
+#include "dfuse_log.h"
+
+#include <stdlib.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#include <wchar.h>
 
 /* Low level I/O functions we intercept
  *

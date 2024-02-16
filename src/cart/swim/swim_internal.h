@@ -7,23 +7,24 @@
 #ifndef __SWIM_INTERNAL_H__
 #define __SWIM_INTERNAL_H__
 
+#include <errno.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/queue.h>
+#include <time.h>
+#include <unistd.h>
+
 #ifdef _USE_ABT_SYNC_
 #include <abt.h>
 #else
 #include <pthread.h>
 #endif
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/queue.h>
-#include <errno.h>
-#include <time.h>
 
 #include <cart/swim.h>
-#include <gurt/debug.h>
 #include <gurt/common.h>
+#include <gurt/debug.h>
 
 /* Use debug capability from CaRT */
 #define SWIM_INFO(fmt, ...)	D_DEBUG(DLOG_DBG, fmt, ##__VA_ARGS__)

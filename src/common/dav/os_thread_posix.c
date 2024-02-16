@@ -5,15 +5,7 @@
  * os_thread_posix.c -- Posix thread abstraction layer
  */
 
-#ifndef __FreeBSD__
-#ifndef	_GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-#endif
 #include <pthread.h>
-#ifdef __FreeBSD__
-#include <pthread_np.h>
-#endif
 #include <semaphore.h>
 
 #include "os_thread.h"

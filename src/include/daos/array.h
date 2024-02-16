@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,8 +10,8 @@
 #ifndef __DAOS_ARRAYX_H__
 #define  __DAOS_ARRAYX_H__
 
-#include <daos/tse.h>
 #include <daos_types.h>
+#include <daos/tse.h>
 
 /* task functions for array operations */
 int dc_array_create(tse_task_t *task);

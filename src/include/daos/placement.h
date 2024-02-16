@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,9 +12,9 @@
 #ifndef __DAOS_PLACEMENT_H__
 #define __DAOS_PLACEMENT_H__
 
-#include "daos/common.h"
-#include "daos/object.h"
-#include "daos/pool_map.h"
+#include <daos/common.h>
+#include <daos/pool_map.h>
+#include <daos/object.h>
 
 /** default placement map when none are specified */
 #define DEFAULT_PL_TYPE PL_TYPE_JUMP_MAP

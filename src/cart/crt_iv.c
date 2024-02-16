@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -19,7 +19,6 @@
 #define D_LOGFAC	DD_FAC(iv)
 
 #include "crt_internal.h"
-
 #include <cart/iv.h>
 
 #define IV_DBG(key, msg, ...) \

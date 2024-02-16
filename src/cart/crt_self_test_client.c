@@ -1,13 +1,12 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(st)
 
-#include "crt_internal.h"
-
 #include <pthread.h>
+#include "crt_internal.h"
 
 #define ISBULK(type) ((type) == CRT_SELF_TEST_MSG_TYPE_BULK_GET || \
 		      (type) == CRT_SELF_TEST_MSG_TYPE_BULK_PUT)

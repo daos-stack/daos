@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,7 +7,7 @@
 #ifndef __DAOS_AGENT_H__
 #define __DAOS_AGENT_H__
 
-#include "daos/drpc.h"
+#include <daos/drpc.h>
 
 /**
  *  Called during library initialization to craft socket path for agent.

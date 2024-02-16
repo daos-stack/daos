@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,9 +9,8 @@
  */
 #define D_LOGFAC	DD_FAC(rpc)
 
-#include "crt_internal.h"
-
 #include <semaphore.h>
+#include "crt_internal.h"
 
 static int
 crt_proto_query_local(crt_opcode_t base_opc, uint32_t ver);

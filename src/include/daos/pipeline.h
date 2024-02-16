@@ -8,8 +8,7 @@
 #ifndef __DD_PIPE_H__
 #define __DD_PIPE_H__
 
-#include "daos/common.h"
-
+#include <daos/common.h>
 #include <daos/tse.h>
 #include <daos_pipeline.h>
 

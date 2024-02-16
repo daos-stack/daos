@@ -1,14 +1,14 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-
 #include <stdlib.h>
 #include <string.h>
 
-#include <gurt/common.h>
 #include <gurt/debug.h>
+#include <gurt/common.h>
+
 #include <gurt/slab.h>
 
 static void

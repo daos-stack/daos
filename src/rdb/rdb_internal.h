@@ -13,6 +13,7 @@
 #define RDB_INTERNAL_H
 
 #include <abt.h>
+#include <daos_srv/rdb.h>
 #include <raft.h>
 #include <gurt/hash.h>
 #include <daos/lru.h>

@@ -6,6 +6,9 @@
 #ifndef __TEST_EP_CRED_COMMON_H__
 #define __TEST_EP_CRED_COMMON_H__
 
+#include "gurt/common.h"
+#include "cart/types.h"
+#include "crt_utils.h"
 #include <getopt.h>
 #include <semaphore.h>
 

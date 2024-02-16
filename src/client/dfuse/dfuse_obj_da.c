@@ -6,7 +6,7 @@
 
 #include <pthread.h>
 #include "dfuse_log.h"
-#include <gurt/common.h> /* container_of */
+#include <gurt/common.h>
 #include <gurt/list.h>
 #include "dfuse_obj_da.h"
 

@@ -30,7 +30,51 @@ def check_dir(include_dir, sub_dir):
             print(f"Header file {header} is OK.")
 
 
-E_SYSTEM_HEADERS = ("float.h", "stdarg.h", "stdbool.h", "stddef.h")
+E_SYSTEM_HEADERS = ("float.h", "stdarg.h", "stdbool.h", "stddef.h", "stdatomic.h", "math.h")
+E_LOCAL_HEADERS = (
+    "cmocka.h",
+    "mpi.h",
+    "lustre/lustreapi.h",
+    "linux/lustre/lustre_idl.h",
+    "qat.h",
+    "Python.h",
+    "jni.h",
+    "nvme_internal.h",
+    "nvme_control_common.h",
+    "nvme_control.h",
+    "cpa.h",
+    "cpa_dc.h",
+    "icp_sal_user.h",
+    "icp_sal_poll.h",
+    "qae_mem.h",
+
+)
+E_INTERNAL_HEADERS = (
+    "daos_test.h",
+    "crt_utils.h",
+    "crt_internal.h",
+    "object/rpc_csum.h",
+    "daos_iotest.h",
+    "dfs_internal.h",
+    "daos_jni_common.h",
+    "io_daos_DaosClient.h",
+    "io_daos_dfs_DaosFsClient.h",
+    "dfuse_common.h",
+    "dfuse.h",
+    "dfuse_log.h",
+    "dfuse_vector.h"
+    "vos_internal.h",
+    "raft.h",
+    "utest_common.h",
+    "dfuse_vector.h",
+    "vos_internal.h",
+    "object/rpc_csum.h",
+    "daos_hdlr.h",
+    "evt_priv.h",
+    "vos_layout.h",
+    "vos_ts.h",
+    "vos_obj.h"
+)
 
 
 def check_paths(src_dir, src_file):
@@ -76,7 +120,6 @@ def check_paths(src_dir, src_file):
             line = linef.rstrip()
 
             if line == "":
-                # There is a bug here where headers do not have a blank line before them.
                 if not have_headers:
                     last_pre_blank = idx
                 continue
@@ -86,6 +129,8 @@ def check_paths(src_dir, src_file):
                     if first_post_line is None:
                         first_post_line = idx - 1
                     finished_headers = True
+                else:
+                    last_pre_blank = idx + 1
                 continue
 
             have_headers = True
@@ -98,10 +143,17 @@ def check_paths(src_dir, src_file):
             _, header = line.split(" ", maxsplit=1)
             fname = header[1:-1]
             brace_include = header[0] == "<"
+            if fname in E_SYSTEM_HEADERS:
+                h_sys.add(fname)
+                continue
+            if fname in E_LOCAL_HEADERS:
+                h_local.add(fname)
+                continue
+            if fname in E_INTERNAL_HEADERS:
+                h_internal.add(fname)
+                continue
+
             if brace_include:
-                if fname in E_SYSTEM_HEADERS:
-                    h_sys.add(fname)
-                    continue
                 if os.path.exists(f"/usr/include/{fname}"):
                     h_sys.add(fname)
                     continue
@@ -152,6 +204,14 @@ def check_paths(src_dir, src_file):
         return "\n".join(lines)
 
     hblobs = []
+
+    # Hack for debug headers, if required this needs to come before other headers.
+    # Needed for RPC definitions
+    for head in ('daos/debug', 'crt_utils', 'crt_internal'):
+        if f"{head}.h" in h_internal:
+            hblobs.append(f'#include "{head}.h"')
+            h_internal.remove(f"{head}.h")
+
     if h_dir:
         hblobs.append(set_to_txt(h_dir))
 
@@ -167,19 +227,23 @@ def check_paths(src_dir, src_file):
     if h_daos:
         hblobs.append(set_to_txt(h_daos, public=True))
 
-    if not hblobs:
-        return
-
     header_text = "\n\n".join(hblobs)
 
     if not can_fixup:
-        print(f"File {src_file} cannot be fixed")
+        print(f"File {src_dir}/{src_file} cannot be fixed")
+        # print("Header text would be")
+        # print(header_text)
         return
+
+    if not hblobs:
+        return
+
+    # print(f"Re-writing {src_file} from {last_pre_blank} to {first_post_line}")
 
     if not fixup_src:
         return
 
-    print(f"Re-writing {src_file}")
+    # print(f"Re-writing {src_file}")
     tname = None
     with open(os.path.join(src_dir, src_file)) as fd:
         with tempfile.NamedTemporaryFile(
@@ -202,18 +266,22 @@ def check_paths(src_dir, src_file):
 
 def check_paths_dir(src_dir):
     """Check all headers in a dir"""
-    for fname in os.listdir(src_dir):
-        if not fname.endswith(".c") and not fname.endswith(".h"):
+
+    if src_dir == "src/rdb/raft":
+        return
+    for entry in os.listdir(src_dir):
+        if os.path.isdir(os.path.join(src_dir, entry)):
+            check_paths_dir(os.path.join(src_dir, entry))
             continue
-        check_paths(src_dir, fname)
+        if not entry.endswith(".c") and not entry.endswith(".h"):
+            continue
+        check_paths(src_dir, entry)
 
 
 def main():
     """Check the whole tree"""
 
-    check_paths_dir("src/cart")
-    check_paths_dir("src/gurt")
-    check_paths_dir("src/include/daos")
+    check_paths_dir("src")
 
     with open(".build_vars.json", "r") as ofh:
         bv = json.load(ofh)

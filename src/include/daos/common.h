@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,36 +7,35 @@
 #ifndef __DAOS_COMMON_H__
 #define __DAOS_COMMON_H__
 
-#include "daos/cmd_parser.h"
-#include "daos/debug.h"
-#include "daos/dtx.h"
-#include "daos/profile.h"
-
-#include <assert.h>
-#include <byteswap.h>
-#include <ctype.h>
-#include <errno.h>
-#include <inttypes.h>
-#include <pthread.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/param.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <time.h>
+#include <sys/param.h>
+#include <stdint.h>
+#include <inttypes.h>
 #include <unistd.h>
+#include <stdbool.h>
+#include <string.h>
+#include <ctype.h>
+#include <errno.h>
+#include <assert.h>
+#include <time.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <pthread.h>
+#include <byteswap.h>
 
-#include <cart/api.h>
 #include <daos_errno.h>
+#include <daos/debug.h>
+#include <gurt/hash.h>
+#include <gurt/common.h>
+#include <cart/api.h>
+#include <daos_types.h>
 #include <daos_obj.h>
 #include <daos_prop.h>
 #include <daos_security.h>
-#include <daos_types.h>
-#include <gurt/common.h>
-#include <gurt/hash.h>
+#include <daos/profile.h>
+#include <daos/dtx.h>
+#include <daos/cmd_parser.h>
 
 #define DAOS_ON_VALGRIND D_ON_VALGRIND
 

@@ -10,6 +10,7 @@
 #ifndef __CONTAINER_CLIENT_INTERNAL_H__
 #define __CONTAINER_CLIENT_INTERNAL_H__
 
+#include <daos/container.h>
 void dc_cont_hdl_link(struct dc_cont *dc);
 void dc_cont_hdl_unlink(struct dc_cont *dc);
 

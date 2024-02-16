@@ -8,11 +8,13 @@
  *
  * src/tests/suite/daos_pipeline.c
  */
+
+#include "daos_test.h"
+
 #include <daos.h>
 #if BUILD_PIPELINE
 #include <daos_pipeline.h>
 #endif
-#include "daos_test.h"
 
 #if BUILD_PIPELINE
 #define NUM_AKEYS 4

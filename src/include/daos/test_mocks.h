@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,16 +12,14 @@
 #ifndef __DAOS_DRPC_MOCKS_INTERNAL_H__
 #define __DAOS_DRPC_MOCKS_INTERNAL_H__
 
-#include "daos/drpc.h"
-
-#include <fcntl.h>
-#include <poll.h>
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
-
+#include <fcntl.h>
+#include <poll.h>
 #include <abt.h>
+#include <daos/drpc.h>
 
 void mock_socket_setup(void);
 extern int socket_return; /* value to be returned by socket() */

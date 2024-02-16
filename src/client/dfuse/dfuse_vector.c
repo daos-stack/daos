@@ -9,7 +9,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <stdlib.h>
-#include <gurt/common.h> /* container_of */
+#include <gurt/common.h>
 #include <gurt/atomic.h>
 #include "dfuse_obj_da.h"
 #include "dfuse_vector.h"

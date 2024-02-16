@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,8 +7,8 @@
 #ifndef __DAOS_DEDUP_H
 #define __DAOS_DEDUP_H
 
-#include "daos/checksum.h"
-#include "daos/cont_props.h"
+#include <daos/cont_props.h>
+#include <daos/checksum.h>
 
 int
 dedup_get_csum_algo(struct cont_props *cont_props);

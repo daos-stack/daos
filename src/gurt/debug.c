@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,8 +7,8 @@
  * This file is part of gurt, it implements the debug subsystem based on clog.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include <gurt/common.h>
 

@@ -9,6 +9,7 @@
  * - Randomize size of keys and values
  * - Return shared buffer instead of a copy during fetch
  */
+#define _SERVER /* For iv_common.h */
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -21,7 +22,6 @@
 #include <gurt/list.h>
 #include <cart/api.h>
 
-#define _SERVER
 #include "iv_common.h"
 
 #define MY_IVNS_ID 0xABCD

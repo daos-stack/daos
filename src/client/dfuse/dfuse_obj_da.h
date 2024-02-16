@@ -8,6 +8,7 @@
 #define __DFUSE_OBJ_DA_H__
 
 #include <daos_errno.h>
+#include <stddef.h>
 
 /* This data structure is intended for small objects */
 #define MAX_POOL_OBJ_SIZE 256

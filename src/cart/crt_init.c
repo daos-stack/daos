@@ -7,12 +7,10 @@
  * This file is part of CaRT. It implements CaRT init and finalize related
  * APIs/handling.
  */
-
-#include "crt_internal.h"
-
 #include <malloc.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
+#include "crt_internal.h"
 
 struct crt_gdata	crt_gdata;
 static volatile int	gdata_init_flag;

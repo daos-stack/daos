@@ -10,6 +10,8 @@
 #ifndef __POOL_CLIENT_INTERNAL_H__
 #define __POOL_CLIENT_INTERNAL_H__
 
+#include <daos/pool.h>
+
 void dc_pool_hdl_link(struct dc_pool *pool);
 void dc_pool_hdl_unlink(struct dc_pool *pool);
 struct dc_pool *dc_pool_alloc(unsigned int nr);

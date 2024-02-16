@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,8 +7,8 @@
 #ifndef __CREDIT_H__
 #define __CREDIT_H__
 
-#include <daos_obj.h>
 #include <daos_types.h>
+#include <daos_obj.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="

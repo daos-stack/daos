@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,8 +7,8 @@
 #ifndef __DAOS_DRPC_H__
 #define __DAOS_DRPC_H__
 
-#include "daos/common.h"
-#include "daos/drpc.pb-c.h"
+#include <daos/drpc.pb-c.h>
+#include <daos/common.h>
 
 /*
  * Using a packetsocket over the unix domain socket means that we receive

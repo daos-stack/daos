@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#pragma once
+
 /* Set array indices into my_proto_fmt_test_group arrays */
 #define TEST_OPC_CHECKIN	CRT_PROTO_OPC(0x010000000, 0, 0)
 #define TEST_OPC_PING_DELAY	CRT_PROTO_OPC(0x010000000, 0, 3)

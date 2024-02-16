@@ -1,10 +1,11 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#pragma once
+#ifndef __CRT_DEBUG_H__
+#define __CRT_DEBUG_H__
 
 #ifndef CRT_USE_GURT_FAC
 #ifndef DD_FAC
@@ -16,8 +17,8 @@
 #define D_LOGFAC DD_FAC(crt)
 #endif
 
-#include <gurt/debug_setup.h>
 #include <gurt/dlog.h>
+#include <gurt/debug_setup.h>
 
 #define CRT_FOREACH_LOG_FAC(ACTION, arg)	\
 	ACTION(crt,   cart,        arg)	\
@@ -38,3 +39,5 @@ CRT_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, D_NOOP)
 
 int
 crt_setup_log_fac(void);
+
+#endif /* __CRT_DEBUG_H__ */

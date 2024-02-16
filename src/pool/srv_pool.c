@@ -20,7 +20,7 @@
 #include <sys/stat.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
-#include <daos_api.h> /* for daos_prop_alloc/_free() */
+#include <daos_api.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/pool.h>
