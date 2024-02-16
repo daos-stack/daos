@@ -7941,7 +7941,7 @@ out:
 }
 
 int
-dfs_root_chown(daos_handle_t coh, d_string_t user, d_string_t group)
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 {
 	uid_t                      uid;
 	gid_t                      gid;
@@ -7972,22 +7972,30 @@ dfs_root_chown(daos_handle_t coh, d_string_t user, d_string_t group)
 		D_GOTO(out_prop, rc = daos_der2errno(rc));
 	}
 
-	/** if not a POSIX type, nothing to do */
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
-	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_POSIX)
-		D_GOTO(out_prop, rc = 0);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_POSIX) {
+		rc = EINVAL;
+		D_ERROR("container is not of type POSIX: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc);
+	}
 
-	/** otherwise change the owner of the root group */
+	rc = daos_cont_set_owner(coh, user, group, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_set_owner() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	/** Change the owner of the root group */
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	if (entry == NULL) {
-		rc = -DER_INVAL;
-		D_ERROR("Missing ROOTS property from POSIX container, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out_prop, rc = daos_der2errno(rc));
+		rc = EINVAL;
+		D_ERROR("Missing ROOTS property from POSIX container: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc);
 	}
 
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
 	if (daos_obj_id_is_nil(roots->cr_oids[0]) || daos_obj_id_is_nil(roots->cr_oids[1])) {
-		D_ERROR("Invalid superblock or root object ID\n");
+		D_ERROR("Invalid superblock or root object ID: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_prop, rc = EIO);
 	}
 

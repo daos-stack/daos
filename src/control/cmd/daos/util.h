@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,7 +33,6 @@
 #include <dfuse_ioctl.h>
 
 #include "daos_hdlr.h"
-#include "dfs_internal.h"
 
 int resolve_duns_path(struct cmd_args_s *ap);
 int resolve_duns_pool(struct cmd_args_s *ap);

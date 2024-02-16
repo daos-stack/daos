@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -67,15 +67,6 @@ func daosError(rc C.int) error {
 		return nil
 	}
 	return daos.Status(rc)
-}
-
-func dfsError(rc C.int) error {
-	if rc == 0 {
-		return nil
-	}
-
-	strErr := C.strerror(rc)
-	return errors.New(fmt.Sprintf("errno %d (%s)", rc, C.GoString(strErr)))
 }
 
 func goBool2int(in bool) (out C.int) {

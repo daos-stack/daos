@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -495,6 +495,7 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 	}
 
 	rc = daos_cont_set_prop(coh, prop, ev);
+
 	daos_prop_free(prop);
 	return rc;
 }
