@@ -216,6 +216,7 @@ iface
 indata
 infiniband
 init
+inode
 interoperability
 io
 iod
@@ -352,6 +353,7 @@ ps
 puuid
 py
 pydaos
+pytest
 ramdisk
 randrw
 ranklist
