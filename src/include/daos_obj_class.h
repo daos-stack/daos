@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,6 +9,11 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+#include <sys/types.h>
+#include <inttypes.h>
+
+#include <daos_types.h>
 
 #define MAX_OBJ_CLASS_NAME_LEN       24
 
