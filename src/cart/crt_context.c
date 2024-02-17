@@ -377,7 +377,7 @@ crt_context_create_on_iface_idx(uint32_t iface_index, crt_context_t *crt_ctx)
 	uint32_t num_ifaces;
 
 	if (crt_is_service()) {
-		D_ERROR("API not avaialble on servers\n");
+		D_ERROR("API not available on servers\n");
 		return -DER_NOSYS;
 	}
 

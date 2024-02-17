@@ -1155,7 +1155,7 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 		}
 
 		if (crt_provider_is_sep(primary, provider) && count > 1) {
-			D_ERROR("Multi-interface not avaialble with SEP\n");
+			D_ERROR("Multi-interface not available with SEP\n");
 			D_GOTO(out, rc = -DER_NOSYS);
 		}
 
