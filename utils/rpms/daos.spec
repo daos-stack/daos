@@ -582,6 +582,9 @@ fi
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 %{_bindir}/crt_launch
+%{_bindir}/crt_perf_server
+%{_bindir}/crt_rate
+%{_bindir}/crt_bw*
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
