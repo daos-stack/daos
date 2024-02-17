@@ -32,7 +32,7 @@ enum {
 };
 
 int crt_context_req_track(struct crt_rpc_priv *rpc_priv);
-bool crt_context_empty(int provider, int locked);
+bool crt_context_empty(crt_provider_t provider, int locked);
 void crt_context_req_untrack(struct crt_rpc_priv *rpc_priv);
 crt_context_t crt_context_lookup(int ctx_idx);
 crt_context_t crt_context_lookup_locked(int ctx_idx);
