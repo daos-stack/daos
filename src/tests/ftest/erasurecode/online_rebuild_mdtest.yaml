@@ -7,7 +7,7 @@ hosts:
     12_server:
       test_servers: server-[1-6]
   test_clients: 2
-timeout: 1000
+timeout: 1500
 setup:
   start_agents_once: False
   start_servers_once: False
@@ -21,6 +21,9 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31416
       log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,io,rebuild
       storage: auto
     1:
       pinned_numa_node: 1
@@ -28,6 +31,9 @@ server_config:
       fabric_iface: ib1
       fabric_iface_port: 31517
       log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,io,rebuild
       storage: auto
 pool:
   control_method: dmg
