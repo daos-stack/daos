@@ -19,6 +19,8 @@ import json
 import os
 import pickle  # nosec
 import pprint
+import pwd
+import random
 import re
 import shutil
 import signal
@@ -2897,6 +2899,56 @@ class PosixTests():
         # assert data == 'read-only-data'
         # print(data)
         os.close(fd)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    def test_cont_chown(self):
+        """Test ownership change of a POSIX container"""
+        # Update container ACLs so current user can mount.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'update-acl',
+                                      self.pool.id(),
+                                      self.container.id(),
+                                      '--entry',
+                                      f'A::{os.getlogin()}@:rwta'])
+        print(rc)
+        assert rc.returncode == 0
+
+        # Assign the container to someone else.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'set-owner',
+                                      self.pool.id(),
+                                      self.container.id(),
+                                      '--user',
+                                      'root@',
+                                      '--group',
+                                      'root@'])
+        print(rc)
+        assert rc.returncode == 0
+
+        # get owner to verify.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'get-acl',
+                                      self.pool.id(),
+                                      self.container.id()],
+                          use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        data = rc.json
+        assert data['status'] == 0, rc
+        assert data['error'] is None, rc
+        assert data['response']['owner_user'] == 'root@'
+        assert data['response']['owner_group'] == 'root@'
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      container=self.container,
+                      caching=False)
+
+        dfuse.start(v_hint='cont_chown_1')
+        assert pwd.getpwnam('root').pw_uid == os.stat(dfuse.dir).st_uid
+        assert pwd.getpwnam('root').pw_gid == os.stat(dfuse.dir).st_gid
 
         if dfuse.stop():
             self.fatal_errors = True

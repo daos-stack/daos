@@ -1167,6 +1167,19 @@ enum {
 int
 dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
+/**
+ * Update a POSIX's container's owner user and/or owner group. This is the same as calling
+ * daos_cont_set_owner() but will also update the owner of the root directory in the container.
+ *
+ * \param[in]	coh	Open container handle
+ * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	group	New owner group (NULL if not updating)
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group);
+
 #if defined(__cplusplus)
 }
 #endif /* __cplusplus */

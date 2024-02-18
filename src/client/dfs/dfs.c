@@ -7428,3 +7428,136 @@ out:
 		D_FREE(entry.value);
 	return rc;
 }
+
+int
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
+{
+	uid_t                      uid;
+	gid_t                      gid;
+	daos_key_t                 dkey;
+	d_sg_list_t                sgl;
+	d_iov_t                    sg_iovs[4];
+	daos_iod_t                 iod;
+	daos_recx_t                recxs[4];
+	daos_handle_t              oh;
+	int                        i;
+	struct timespec            now;
+	daos_prop_t               *prop;
+	uint32_t                   props[]   = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS};
+	const int                  num_props = ARRAY_SIZE(props);
+	struct daos_prop_entry    *entry;
+	struct daos_prop_co_roots *roots;
+	int                        rc;
+
+	prop = daos_prop_alloc(num_props);
+	if (prop == NULL)
+		return ENOMEM;
+
+	for (i = 0; i < num_props; i++)
+		prop->dpp_entries[i].dpe_type = props[i];
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_query() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_POSIX) {
+		rc = EINVAL;
+		D_ERROR("container is not of type POSIX: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = daos_cont_set_owner(coh, user, group, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_set_owner() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	/** Change the owner of the root group */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
+	if (entry == NULL) {
+		rc = EINVAL;
+		D_ERROR("Missing ROOTS property from POSIX container: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc);
+	}
+
+	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
+	if (daos_obj_id_is_nil(roots->cr_oids[0]) || daos_obj_id_is_nil(roots->cr_oids[1])) {
+		D_ERROR("Invalid superblock or root object ID: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc = EIO);
+	}
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		D_GOTO(out_prop, rc = errno);
+
+	i               = 0;
+	recxs[i].rx_idx = CTIME_IDX;
+	recxs[i].rx_nr  = sizeof(uint64_t);
+	d_iov_set(&sg_iovs[i], &now.tv_sec, sizeof(uint64_t));
+	i++;
+
+	recxs[i].rx_idx = CTIME_NSEC_IDX;
+	recxs[i].rx_nr  = sizeof(uint64_t);
+	d_iov_set(&sg_iovs[i], &now.tv_nsec, sizeof(uint64_t));
+	i++;
+
+	if (user != NULL) {
+		rc = daos_acl_principal_to_uid(user, &uid);
+		if (rc) {
+			D_ERROR("daos_acl_principal_to_uid() failed: " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out_prop, rc = daos_der2errno(rc));
+		}
+		d_iov_set(&sg_iovs[i], &uid, sizeof(uid_t));
+		recxs[i].rx_idx = UID_IDX;
+		recxs[i].rx_nr  = sizeof(uid_t);
+		i++;
+	}
+
+	if (group != NULL) {
+		rc = daos_acl_principal_to_gid(group, &gid);
+		if (rc) {
+			D_ERROR("daos_acl_principal_to_gid() failed: " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out_prop, rc = daos_der2errno(rc));
+		}
+		d_iov_set(&sg_iovs[i], &gid, sizeof(gid_t));
+		recxs[i].rx_idx = GID_IDX;
+		recxs[i].rx_nr  = sizeof(gid_t);
+		i++;
+	}
+
+	/** set root dkey as the entry name */
+	d_iov_set(&dkey, "/", 1);
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iod.iod_nr    = i;
+	iod.iod_recxs = recxs;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_size  = 1;
+
+	/** set sgl for update */
+	sgl.sg_nr     = i;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &sg_iovs[0];
+
+	/** Open SB object */
+	rc = daos_obj_open(coh, roots->cr_oids[0], DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_open() Failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
+	if (rc) {
+		daos_obj_close(oh, NULL);
+		D_ERROR("Failed to update owner/group, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+	rc = daos_obj_close(oh, NULL);
+	if (rc)
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+
+out_prop:
+	daos_prop_free(prop);
+	return rc;
+}
