@@ -152,7 +152,7 @@ def run_cmd(cmd, output_log=None, env=None):
             ret = subprocess.run(cmd, check=False, env=env, stdout=output,
                                  stderr=subprocess.STDOUT)
     else:
-        print(f"RUNNING COMMAND {' '.join(cmd)}")
+        print(f"RUNNING COMMAND {' '.join(cmd)}", flush=True)
         ret = subprocess.run(cmd, check=False, env=env)
     print(f'rc is {ret.returncode}')
     return ret.returncode
@@ -554,8 +554,7 @@ class Suite():
     def run_suite(self, args, aio):
         """Run the test suite"""
         if self.gha:
-            # Need to flush here to ensure output from subcommands is grouped correctly.
-            print(f"::group:: {self.name}", flush=True)
+            print(f"::group:: {self.name}")
         else:
             print(f"\nRunning suite {self.name}")
         results = BaseResults()
