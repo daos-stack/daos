@@ -442,7 +442,6 @@ class Test():
 
         if self.suite.gha:
             retval = run_cmd(cmd, env=self.env)
-            print("::endgroup::")
         else:
             output_log = os.path.join(self.log_dir(), "output.log")
             retval = run_cmd(cmd, output_log=output_log, env=self.env)

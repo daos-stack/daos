@@ -178,6 +178,7 @@
   tests:
     - cmd: ["bin/ddb_tests"]
 - name: ftest
+  gha: True
   memcheck: False
   tests:
     - cmd: ["src/tests/ftest/tags.py", "unit"]
