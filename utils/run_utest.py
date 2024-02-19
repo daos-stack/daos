@@ -463,7 +463,8 @@ class Test():
         """Remove empty log files, they are useless"""
         if not os.path.isdir(log_dir):
             return
-        print(f"Processing logs for {self.name}")
+        if not self.suite.gha:
+            print(f"Processing logs for {self.name}")
         for log in os.listdir(log_dir):
             fname = os.path.join(log_dir, log)
             if not os.path.isfile(fname):
