@@ -44,6 +44,11 @@
 
 #include "hook.h"
 
+/* useful in strncmp() and strndup() */
+#define STR_AND_SIZE(s) s, sizeof(s)
+/* useful in strncmp() to check whether a string start with a target string. Not including \0 */
+#define STR_AND_SIZE_M1(s) s, sizeof(s) - 1
+
 /* D_ALLOC and D_FREE can not be used in query_path(). It causes dead lock during daos_init(). */
 #define FREE(ptr)	do {free(ptr); (ptr) = NULL; } while (0)
 
@@ -743,7 +748,7 @@ discover_dfuse_mounts(void)
 			abort();
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
-		if (strncmp(fs_entry->mnt_type, MNT_TYPE_FUSE, sizeof(MNT_TYPE_FUSE)) == 0) {
+		if (strncmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
 			pt_dfs_mt->dfs_dir_hash = NULL;
 			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
@@ -1048,9 +1053,9 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	}
 
 	/* handle special cases. Needed to work with git. */
-	if ((strncmp(szInput, "http://", 7) == 0) ||
-	    (strncmp(szInput, "https://", 8) == 0) ||
-	    (strncmp(szInput, "git://", 6) == 0)) {
+	if ((strncmp(szInput, STR_AND_SIZE_M1("http://")) == 0) ||
+	    (strncmp(szInput, STR_AND_SIZE_M1("https://")) == 0) ||
+	    (strncmp(szInput, STR_AND_SIZE_M1("git://")) == 0)) {
 		*is_target_path = 0;
 		return 0;
 	}
@@ -3389,34 +3394,31 @@ pre_envp(char *const envp[])
 	} else {
 		while (envp[num_entry]) {
 			/* scan the env in env_list[] to check whether they exist or not */
-			if (strncmp(envp[num_entry], "LD_PRELOAD", sizeof("LD_PRELOAD") - 1) == 0) {
+			if (strncmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0) {
 				preload_included = true;
 				idx_preload      = num_entry;
 				num_entry_found++;
 				if (strstr(envp[num_entry], "libpil4dfs.so"))
 					pil4dfs_in_preload = true;
-			} else if (strncmp(envp[num_entry], "D_IL_REPORT",
-					   sizeof("D_IL_REPORT") - 1) == 0) {
+			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_REPORT")) == 0) {
 				report_included = true;
 				num_entry_found++;
-			} else if (strncmp(envp[num_entry], "DAOS_MOUNT_POINT",
-					   sizeof("DAOS_MOUNT_POINT") - 1) == 0) {
+			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_MOUNT_POINT"))
+				   == 0) {
 				mp_included = true;
 				num_entry_found++;
-			} else if (strncmp(envp[num_entry], "DAOS_POOL",
-					   sizeof("DAOS_POOL") - 1) == 0) {
+			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_POOL")) == 0) {
 				pool_included = true;
 				num_entry_found++;
-			} else if (strncmp(envp[num_entry], "DAOS_CONTAINER",
-					   sizeof("DAOS_CONTAINER") - 1) == 0) {
+			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_CONTAINER")) == 0)
+				{
 				cont_included = true;
 				num_entry_found++;
-			} else if (strncmp(envp[num_entry], "D_IL_MAX_EQ",
-					   sizeof("D_IL_MAX_EQ") - 1) == 0) {
+			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_MAX_EQ")) == 0) {
 				maxeq_included = true;
 				num_entry_found++;
-			} else if (strncmp(envp[num_entry], "D_IL_ENFORCE_EXEC_ENV",
-					   sizeof("D_IL_ENFORCE_EXEC_ENV") - 1) == 0) {
+			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_ENFORCE_EXEC_ENV")
+				  ) == 0) {
 				enforcement_included = true;
 				num_entry_found++;
 			}
@@ -3473,9 +3475,9 @@ pre_envp(char *const envp[])
 	}
 	if (!report_included) {
 		if (report)
-			str_report = strndup("D_IL_REPORT=1", sizeof("D_IL_REPORT=1"));
+			str_report = strndup(STR_AND_SIZE("D_IL_REPORT=1"));
 		else
-			str_report = strndup("D_IL_REPORT=0", sizeof("D_IL_REPORT=0"));
+			str_report = strndup(STR_AND_SIZE("D_IL_REPORT=0"));
 		if (str_report == NULL) {
 			printf("Error: failed to allocate memory for D_IL_REPORT env.\n");
 			goto err_out2;
@@ -3533,10 +3535,10 @@ pre_envp(char *const envp[])
 	if (!enforcement_included) {
 		if (enforce_exec_env)
 			str_enforcement =
-			    strndup("D_IL_ENFORCE_EXEC_ENV=1", sizeof("D_IL_ENFORCE_EXEC_ENV=1"));
+			    strndup(STR_AND_SIZE("D_IL_ENFORCE_EXEC_ENV=1"));
 		else
 			str_enforcement =
-			    strndup("D_IL_ENFORCE_EXEC_ENV=0", sizeof("D_IL_ENFORCE_EXEC_ENV=0"));
+			    strndup(STR_AND_SIZE("D_IL_ENFORCE_EXEC_ENV=0"));
 		if (str_enforcement == NULL) {
 			printf("Error: failed to allocate memory for D_IL_ENFORCE_EXEC_ENV env.\n");
 			goto err_out7;
@@ -3568,38 +3570,12 @@ err_out0:
 	return (char **)envp;
 }
 
-/* close all real fds allocated by kernel larger than 2 */
-static void
-close_all_kernel_fd(void)
-{
-	int            fd, fd_using;
-	DIR           *dir;
-	struct dirent *entry;
-
-	dir = opendir("/proc/self/fd");
-	if (dir == NULL) {
-		printf("opendir() failed to open /proc/self/fd");
-		exit(1);
-	}
-	fd_using = dirfd(dir);
-	while ((entry = readdir(dir)) != NULL) {
-		if (entry->d_name[0] >= '1' && entry->d_name[0] <= '9') {
-			fd = atoi(entry->d_name);
-			/* atoi() returns zero in error */
-			if (fd == 0)
-				continue;
-			if (fd > 2 && fd != fd_using)
-				libc_close(fd);
-		}
-	}
-	closedir(dir);
-}
-
 static void
 reset_daos_env_before_exec(void)
 {
 	/* bash does fork(), then close opened files before exec(),
-	 * so the fd for log file could be invalid now. */
+	 * so the fd for log file probably is invalid now.
+	 */
 	d_log_disable_logging();
 
 	if (context_reset) {
@@ -3609,8 +3585,6 @@ reset_daos_env_before_exec(void)
 		daos_debug_inited = false;
 		context_reset     = false;
 	}
-
-	close_all_kernel_fd();
 }
 
 int
@@ -3664,11 +3638,11 @@ execv(const char *filename, char *const argv[])
 	if (!enforce_exec_env)
 		return next_execv(filename, argv);
 
-	if (next_execvpe == NULL) {
-		next_execvpe = dlsym(RTLD_NEXT, "execvpe");
-		D_ASSERT(next_execvpe != NULL);
+	if (next_execve == NULL) {
+		next_execve = dlsym(RTLD_NEXT, "execve");
+		D_ASSERT(next_execve != NULL);
 	}
-	return next_execvpe(filename, argv, pre_envp(__environ));
+	return next_execve(filename, argv, pre_envp(__environ));
 }
 
 int
@@ -5499,40 +5473,6 @@ dup2(int oldfd, int newfd)
 	if (fd_directed >= FD_FILE_BASE) {
 		int fd_tmp;
 
-		if (is_bash && newfd <= 2) {
-			/* Linux fds created with dup2 share same status across parent and child
-			 * processes. This is a special case for bash/sh. It is needed to allow
-			 * configure run.
-			 */
-			fd_tmp = libc_open(file_list[fd_directed - FD_FILE_BASE]->path,
-					   file_list[fd_directed - FD_FILE_BASE]->open_flag &
-					   (~(O_TRUNC | O_CREAT)));
-			if (fd_tmp < 0) {
-				DS_ERROR(errno, "open() failed");
-				return (-1);
-			}
-			/* using dup2() to make sure we get desired fd */
-			fd = next_dup2(fd_tmp, newfd);
-			if (fd < 0 || fd != newfd) {
-				errno_save = errno;
-				libc_close(fd_tmp);
-				errno = errno_save;
-				DS_ERROR(errno, "dup2() failed");
-				return (-1);
-			}
-			libc_close(fd_tmp);
-			if (libc_lseek(fd, file_list[fd_directed - FD_FILE_BASE]->offset,
-				       SEEK_SET) == -1) {
-				errno_save = errno;
-				libc_close(fd);
-				errno = errno_save;
-				DS_ERROR(errno, "lseek() failed");
-				return (-1);
-			}
-			/* This is a special case. Do not add into duplicated fd list. */
-			return fd;
-		}
-
 		fd_tmp = allocate_a_fd_from_kernel();
 		if (fd_tmp < 0) {
 			/* failed to allocate an fd from kernel */
@@ -6092,11 +6032,12 @@ init_myhook(void)
 			report = false;
 		d_freeenv_str(&env_log);
 	}
-	enforce_exec_env = true;
-	env_exec         = getenv("D_IL_ENFORCE_EXEC_ENV");
+	enforce_exec_env = false;
+	d_agetenv_str(&env_exec, "D_IL_ENFORCE_EXEC_ENV");
 	if (env_exec) {
-		if (strncmp(env_exec, "0", 2) == 0 || strncasecmp(env_exec, "false", 6) == 0)
-			enforce_exec_env = false;
+		if (strncmp(env_exec, "1", 2) == 0 || strncasecmp(env_exec, "true", 5) == 0)
+			enforce_exec_env = true;
+		d_freeenv_str(&env_exec);
 	}
 
 	/* Find dfuse mounts from /proc/mounts */

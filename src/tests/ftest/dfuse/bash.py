@@ -105,13 +105,6 @@ class Cmd(DfuseTestBase):
             f"realpath {link_name}",
             f"head {fuse_root_dir}/src.c",
             f"tail {fuse_root_dir}/src.c",
-            'printf "{\n  echo \\"cat >conf <<_ACEOF\\" &&\n  echo \\"Hello World!\\" | sed '
-            f'\\"s/H/E/g\\" &&\n  echo \\"_ACEOF\\"\n" > {fuse_root_dir}/1.sh;cp '
-            f'{fuse_root_dir}/1.sh {fuse_root_dir}/2.sh; echo "}} > {fuse_root_dir}/output"'
-            f' >>{fuse_root_dir}/1.sh;  echo "}} > /dev/shm/output" >>{fuse_root_dir}/2.sh;'
-            f'cd {fuse_root_dir};/usr/bin/sh ./1.sh; /usr/bin/sh ./2.sh;'
-            f'mv /dev/shm/output {fuse_root_dir}/output0;'
-            f'diff {fuse_root_dir}/output {fuse_root_dir}/output0',
             # f'more {fuse_root_dir}/src.c', # more hangs over ssh somehow
             f"dos2unix {fuse_root_dir}/src.c",
             f"gcc -o {fuse_root_dir}/output {fuse_root_dir}/src.c",

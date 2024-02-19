@@ -93,9 +93,9 @@ class DaosCoreTestDfuse(DfuseTestBase):
             daos_test_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
             if il_lib == 'libpil4dfs.so':
                 daos_test_env['D_IL_REPORT'] = '0'
-                daos_test_env['DAOS_MOUNT_POINT'] = f'{mount_dir}'
-                daos_test_env['DAOS_POOL'] = f'{self.pool.identifier}'
-                daos_test_env['DAOS_CONTAINER'] = f'{self.container.uuid}'
+                daos_test_env['DAOS_MOUNT_POINT'] = mount_dir
+                daos_test_env['DAOS_POOL'] = self.pool.identifier
+                daos_test_env['DAOS_CONTAINER'] = self.container.identifier
                 daos_test_env['D_IL_MAX_EQ'] = '2'
                 daos_test_env['D_IL_ENFORCE_EXEC_ENV'] = '1'
 
