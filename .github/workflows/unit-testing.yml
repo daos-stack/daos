@@ -1,4 +1,4 @@
-name: Uniting testing (small)
+name: Uniting testing
 
 on:
   pull_request:
