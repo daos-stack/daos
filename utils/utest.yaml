@@ -5,7 +5,7 @@
   memcheck: False
   gha: True
   tests:
-    - cmd: ["utils/include_test.py"]
+    - cmd: ["utils/unit/include_test.py"]
 - name: common
   base: "BUILD_DIR"
   tests:
@@ -166,6 +166,11 @@
   memcheck: False
   tests:
     - cmd: ["src/control/run_go_tests.sh"]
+- name: Go formatting
+  memcheck: False
+  gha: True
+  tests:
+    - cmd: ["./utils/unit/check_gofmt.sh"]
 - name: spdk
   base: "PREFIX"
   memcheck: False

@@ -553,6 +553,7 @@ class Suite():
     def run_suite(self, args, aio):
         """Run the test suite"""
         if self.gha:
+            # Need to flush here to ensure output from subcommands is grouped correctly.
             print(f"::group:: {self.name}", flush=True)
         else:
             print(f"\nRunning suite {self.name}")
@@ -671,6 +672,9 @@ def main():
     with open(path_info["UTEST_YAML"], "r", encoding="UTF-8") as file:
         all_suites = yaml.safe_load(file)
 
+    if args.gha:
+        print("::group:: Preamble", flush=True)
+
     for suite_yaml in all_suites:
         try:
             real_suite = Suite(path_info, suite_yaml, args)
@@ -684,6 +688,9 @@ def main():
             raise exception
         suites.append(real_suite)
     results = Results(args.memcheck)
+    if args.gha:
+        print("::endgroup::")
+
     run_suites(args, suites, results, aio=aio)
 
     results.print_results()

@@ -24,5 +24,4 @@ jobs:
             --build-arg DAOS_JAVA_BUILD=yes
             --tag gha-amd-${{github.run_number}}
       - name: Run Unit Testing
-        run: docker run gha-amd-${{github.run_number}} ./daos/utils/run_utest.py --gha
-              --sudo no --no-fail-on-error
+        run: docker run gha-amd-${{github.run_number}} ./daos/utils/ci/run_unit_tests_in_gha.sh

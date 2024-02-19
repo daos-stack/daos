@@ -117,50 +117,6 @@ function setup_environment()
 	fi
 }
 
-function emit_junit_failure()
-{
-    local cname="run_go_tests"
-    local tname="${1:-subtest}"
-    local fname="${DAOS_BASE}/test_results/${cname}.${tname}.xml"
-
-    local teststr="    <testcase classname=\"$cname\" name=\"$tname\">
-    <failure type=\"format\">
-      <![CDATA[$2
-        ]]>
-    </failure>
-    </testcase>"
-
-    cat > "${fname}" << EOF
-<?xml version="1.0" encoding="UTF-8" ?>
-<testsuites>
-  <testsuite tests="1" failures="1" errors="0" skipped="0" >
-    ${teststr}
-  </testsuite>
-</testsuites>
-EOF
-}
-
-function check_formatting()
-{
-	srcdir=${1:-"./"}
-	output=$(find "$srcdir/" -name '*.go' -and -not -path '*vendor*' \
-		-print0 | xargs -0 gofmt -d)
-	if [ -n "$output" ]; then
-		errmsg="ERROR: Your code hasn't been run through gofmt!
-Please configure your editor to run gofmt on save.
-Alternatively, at a minimum, run the following command:
-find $srcdir/ -name '*.go' -and -not -path '*vendor*' | xargs gofmt -w
-
-gofmt check found the following:
-
-$output
-"
-		emit_junit_failure "gofmt" "$errmsg"
-		echo "$errmsg"
-		exit 1
-	fi
-}
-
 function get_test_runner()
 {
 	test_args="-mod vendor -race -cover -v ./... -tags firmware"
@@ -194,8 +150,6 @@ GO_TEST_RUNNER=$(get_test_runner)
 GO_TEST_EXTRA_ARGS=${*:-""}
 
 controldir="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
-
-check_formatting "$controldir"
 
 echo "Environment:"
 echo "  GO VERSION: $(go version | awk '{print $3" "$4}')"
