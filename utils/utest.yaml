@@ -2,6 +2,8 @@
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 - name: include checks
+  memcheck: False
+  gha: True
   tests:
     - cmd: ["utils/include_test.py"]
 - name: common

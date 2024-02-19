@@ -481,6 +481,7 @@ class Suite():
             raise SuiteConfigError()
         self.sudo = config.get("sudo", None)
         self.memcheck = config.get("memcheck", True)
+        self.gha = config.get("gha", False)
         self.tests = []
         self.has_aio = False
 
@@ -524,6 +525,11 @@ class Suite():
         if args.memcheck and not self.memcheck:
             print(f"Skipped  suite {self.name}, valgrind not supported")
             raise SuiteSkipped()
+
+        if args.gha and not self.gha:
+            print(f"Skipped  suite {self.name}, running on GitHub Actions")
+            raise SuiteSkipped()
+
         return False
 
     def needs_aio(self):
@@ -603,6 +609,7 @@ def get_args():
     """Parse the arguments"""
     parser = argparse.ArgumentParser(description='Run DAOS unit tests')
     parser.add_argument('--memcheck', action='store_true', help='Run tests with Valgrind memcheck')
+    parser.add_argument('--gha', action='store_true', help='Run tests tagged for GitHub Actions')
     parser.add_argument('--test_filter', default=None,
                         help='Regular expression to select tests to run')
     parser.add_argument('--suite_filter', default=None,
