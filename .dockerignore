@@ -17,6 +17,7 @@
 !utils/scripts
 !utils/run_utest.py
 !utils/utest.yaml
+!utils/include_test.py
 !SConstruct
 !VERSION
 !LICENSE
