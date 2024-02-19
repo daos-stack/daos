@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """Check that all daos headers can be included stand-alone"""
 
+import argparse
 import json
 import os
 import subprocess  # nosec
-import sys
 import tempfile
-
-# pylint: disable=wrong-spelling-in-comment
 
 
 def check_dir(include_dir, sub_dir):
@@ -97,6 +95,15 @@ class OrderChecker:
             ["rpm", "-ql", "glibc-headers"], capture_output=True, check=True
         )
         self._system_headers = output.stdout.decode().splitlines()
+        self._component_dirs = []
+        for component, val in build_vars.items():
+            if not component.endswith("_PREFIX"):
+                continue
+            if val == "/usr":
+                continue
+            c_dir = os.path.join(val, "include")
+            if os.path.isdir(c_dir):
+                self._component_dirs.append(c_dir)
 
     def check_paths(self, src_dir, src_file):
         """Checks a single source file for the order in which it includes headers
@@ -183,10 +190,8 @@ class OrderChecker:
                             h_sys.add(fname)
                         continue
                     found = False
-                    for dep in os.listdir("install/prereq/release/"):
-                        if os.path.exists(
-                            f"install/prereq/release/{dep}/include/{fname}"
-                        ):
+                    for dep in self._component_dirs:
+                        if os.path.exists(os.path.join(dep, fname)):
                             h_local.add(fname)
                             found = True
                             break
@@ -311,20 +316,35 @@ class OrderChecker:
             self.check_paths(src_dir, entry)
 
 
+# Commits can then be patched with
+# git diff master... --name-only | xargs -l1 ./utils/include_test.py --fix --check-file
+
+
 def main():
     """Check the whole tree"""
 
     with open(".build_vars.json", "r") as ofh:
         bv = json.load(ofh)
 
-    if len(sys.argv) == 2:
-        full_name = sys.argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check-include-order", action="store_true")
+    parser.add_argument("--check-file", nargs="*")
+    parser.add_argument("--fix", action="store_true")
+    args = parser.parse_args()
+
+    if args.check_file:
         oc = OrderChecker(bv)
-        oc.check_paths(os.path.dirname(full_name), os.path.basename(full_name))
+        if args.fix:
+            oc.fix = True
+        for fname in args.check_file:
+            oc.check_paths(os.path.dirname(fname), os.path.basename(fname))
         return
 
-    oc = OrderChecker(bv)
-    oc.check_paths_dir("src")
+    if args.check_include_order:
+        oc = OrderChecker(bv)
+        if args.fix:
+            oc.fix = True
+        oc.check_paths_dir("src")
 
     include_dir = os.path.join(bv["PREFIX"], "include")
 
