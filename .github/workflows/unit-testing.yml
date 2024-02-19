@@ -20,7 +20,9 @@ jobs:
         run: docker build . --file utils/docker/Dockerfile.el.9
             --build-arg DEPS_JOBS=50
             --build-arg DAOS_KEEP_SRC=yes
+            --build-arg DAOS_TARGET_TYPE=debug
             --build-arg DAOS_JAVA_BUILD=yes
-            --tag gha-amd-${{github.run_number}}
+            --tag gha-amd-${{github.run_id}}-${{github.run_attempt}}
       - name: Run Unit Testing
-        run: docker run gha-amd-${{github.run_number}} ./daos/utils/ci/run_unit_tests_in_gha.sh
+        run: docker run gha-amd-${{github.run_id}}-${{github.run_attempt}}
+            ./daos/utils/ci/run_unit_tests_in_gha.sh
