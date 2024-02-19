@@ -7,6 +7,8 @@ import os
 import subprocess  # nosec
 import tempfile
 
+# pylint: disable-wrong-spelling-in-comment
+
 
 def check_dir(include_dir, sub_dir):
     """Check all files in one directory"""
@@ -94,7 +96,9 @@ class OrderChecker:
         output = subprocess.run(
             ["rpm", "-ql", "glibc-headers"], capture_output=True, check=True
         )
-        self._system_headers = output.stdout.decode().splitlines()
+        self._system_headers = []
+        for sh in output.stdout.decode().splitlines():
+            self._system_headers.append(sh[13:])
         self._component_dirs = []
         for component, val in build_vars.items():
             if not component.endswith("_PREFIX"):
@@ -317,7 +321,7 @@ class OrderChecker:
 
 
 # Commits can then be patched with
-# git diff master... --name-only | xargs -l1 ./utils/include_test.py --fix --check-file
+# git diff master... --name-only | xargs ./utils/include_test.py --fix --check-file
 
 
 def main():
