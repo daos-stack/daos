@@ -554,7 +554,7 @@ class Suite():
     def run_suite(self, args, aio):
         """Run the test suite"""
         if self.gha:
-            print(f"::group {self.name}")
+            print(f"::group:: {self.name}")
         else:
             print(f"\nRunning suite {self.name}")
         results = BaseResults()

@@ -33,7 +33,7 @@ def check_dir(include_dir, sub_dir):
 def main():
     """Check the whole tree"""
 
-    with open(".build_vars.json", "r") as ofh:
+    with open("daos/.build_vars.json", "r") as ofh:
         bv = json.load(ofh)
 
     include_dir = os.path.join(bv["PREFIX"], "include")
