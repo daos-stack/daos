@@ -1,8 +1,8 @@
 /**
-* (C) Copyright 2023 Intel Corporation.
-*
-* SPDX-License-Identifier: BSD-2-Clause-Patent
-*/
+ * (C) Copyright 2023-2024 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 
 #include "daos/checksum.h"
 #include "daos/tests_lib.h"
