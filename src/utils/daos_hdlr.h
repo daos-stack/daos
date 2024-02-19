@@ -70,9 +70,10 @@ enum sh_op {
 };
 
 struct fs_copy_stats {
-	uint64_t		num_dirs;
-	uint64_t		num_files;
-	uint64_t		num_links;
+	uint64_t num_dirs;
+	uint64_t num_files;
+	uint64_t num_links;
+	uint64_t num_chmod_enotsup;
 };
 
 struct dm_args {
@@ -89,8 +90,7 @@ struct dm_args {
 	uint32_t	cont_prop_oid;
 	uint32_t	cont_prop_layout;
 	uint64_t	cont_layout;
-	uint64_t	cont_oid;
-
+	uint64_t         cont_oid;
 };
 
 /* cmd_args_s: consolidated result of parsing command-line arguments
@@ -139,7 +139,8 @@ struct cmd_args_s {
 	/* Container datamover related */
 	struct dm_args		*dm_args;	/* datamover arguments */
 	struct fs_copy_stats	*fs_copy_stats;	/* fs copy stats */
-	bool			 fs_copy_posix; /* fs copy to POSIX */
+	bool                     ignore_unsup;  /* ignore unsupported filesystem features */
+	bool                     fs_copy_posix; /* fs copy to POSIX */
 
 	FILE			*outstream;	/* normal output stream */
 	FILE			*errstream;	/* errors stream */
