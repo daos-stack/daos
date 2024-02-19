@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,6 +17,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+
 #include <uuid/uuid.h>
 
 #include <cart/iv.h>
