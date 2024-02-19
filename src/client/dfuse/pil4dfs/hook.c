@@ -87,16 +87,16 @@ static uint64_t addr_min[MAX_NUM_SEG], addr_max[MAX_NUM_SEG];
 static uint64_t lib_base_addr[MAX_NUM_LIB];
 
 /* List of names of loaded libraries */
-static char     **lib_name_list;
+static char   **lib_name_list;
 
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
-static char     *path_ld;
-static char     *path_libc;
-static char     *path_libpthread;
+static char    *path_ld;
+static char    *path_libc;
+static char    *path_libpthread;
 /* This holds the path of libpil4dfs.so. It is needed when we want to
  * force child processes append libpil4dfs.so to env LD_PRELOAD. */
-static char      path_libpil4dfs[PATH_MAX];
+static char     path_libpil4dfs[PATH_MAX];
 
 #define MAX_MAP_SIZE	(512*1024)
 #define MAP_SIZE_LIMIT	(16*1024*1024)

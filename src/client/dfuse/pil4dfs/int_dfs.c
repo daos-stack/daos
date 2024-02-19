@@ -45,7 +45,7 @@
 #include "hook.h"
 
 /* useful in strncmp() and strndup() */
-#define STR_AND_SIZE(s) s, sizeof(s)
+#define STR_AND_SIZE(s)    s, sizeof(s)
 /* useful in strncmp() to check whether a string start with a target string. Not including \0 */
 #define STR_AND_SIZE_M1(s) s, sizeof(s) - 1
 
@@ -141,12 +141,6 @@ static _Atomic uint32_t        daos_init_cnt;
 static bool             report;
 /* always load libpil4dfs related env variables in exec() */
 static bool             enforce_exec_env;
-/* current application is bash or sh.  */
-static bool             is_bash;
-/* the exe name extract from /proc/self/cmdline */
-static char             exe_path[DFS_MAX_PATH + 1];
-/* the short exe name from exe_path */
-static char             exe_short[DFS_MAX_NAME + 1];
 static long int         page_size;
 
 static _Atomic bool     daos_inited;
@@ -3403,22 +3397,22 @@ pre_envp(char *const envp[])
 			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_REPORT")) == 0) {
 				report_included = true;
 				num_entry_found++;
-			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_MOUNT_POINT"))
-				   == 0) {
+			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_MOUNT_POINT")) ==
+				   0) {
 				mp_included = true;
 				num_entry_found++;
 			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_POOL")) == 0) {
 				pool_included = true;
 				num_entry_found++;
-			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_CONTAINER")) == 0)
-				{
+			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_CONTAINER")) ==
+				   0) {
 				cont_included = true;
 				num_entry_found++;
 			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_MAX_EQ")) == 0) {
 				maxeq_included = true;
 				num_entry_found++;
-			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_ENFORCE_EXEC_ENV")
-				  ) == 0) {
+			} else if (strncmp(envp[num_entry],
+					   STR_AND_SIZE_M1("D_IL_ENFORCE_EXEC_ENV")) == 0) {
 				enforcement_included = true;
 				num_entry_found++;
 			}
@@ -3438,7 +3432,7 @@ pre_envp(char *const envp[])
 	}
 
 	/* Copy all existing entries to the new envp[] */
-	for (i = 0; i < num_entry; i++)	{
+	for (i = 0; i < num_entry; i++) {
 		new_envp[i] = envp[i];
 	}
 	/* LD_PRELOAD is a special case. If LD_PRELOAD is found but libpil4dfs.so is not in
@@ -3534,11 +3528,9 @@ pre_envp(char *const envp[])
 	}
 	if (!enforcement_included) {
 		if (enforce_exec_env)
-			str_enforcement =
-			    strndup(STR_AND_SIZE("D_IL_ENFORCE_EXEC_ENV=1"));
+			str_enforcement = strndup(STR_AND_SIZE("D_IL_ENFORCE_EXEC_ENV=1"));
 		else
-			str_enforcement =
-			    strndup(STR_AND_SIZE("D_IL_ENFORCE_EXEC_ENV=0"));
+			str_enforcement = strndup(STR_AND_SIZE("D_IL_ENFORCE_EXEC_ENV=0"));
 		if (str_enforcement == NULL) {
 			printf("Error: failed to allocate memory for D_IL_ENFORCE_EXEC_ENV env.\n");
 			goto err_out7;
@@ -5963,47 +5955,6 @@ register_handler(int sig, struct sigaction *old_handler)
 	}
 }
 
-static void
-extract_exe_path(void)
-{
-	FILE *fIn;
-	char *line;
-	int   readsize, len, pos;
-
-	exe_path[0]  = 0;
-	exe_short[0] = 0;
-
-	D_ALLOC(line, DFS_MAX_PATH);
-	if (line == NULL)
-		return;
-	fIn = fopen("/proc/self/cmdline", "r");
-	if (fIn == NULL) {
-		DS_ERROR(errno, "Fail to open file: /proc/self/cmdline");
-		goto out;
-	}
-	readsize = fread(line, 1, DFS_MAX_PATH, fIn);
-	if (readsize <= 0) {
-		DS_ERROR(errno, "Fail to determine the executable file name");
-		fclose(fIn);
-		goto out;
-	}
-	fclose(fIn);
-	strncpy(exe_path, line, DFS_MAX_PATH);
-	len = strnlen(exe_path, DFS_MAX_PATH);
-	for (pos = len - 1; pos > 0; pos--) {
-		if (exe_path[pos] == '/') {
-			strncpy(exe_short, exe_path + pos + 1, DFS_MAX_NAME);
-			break;
-		}
-	}
-	if (strncmp(exe_short, "bash", 5) == 0 || strncmp(exe_short, "sh", 3) == 0)
-		is_bash = true;
-
-out:
-	D_FREE(line);
-	return;
-}
-
 static __attribute__((constructor)) void
 init_myhook(void)
 {
@@ -6128,8 +6079,6 @@ init_myhook(void)
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
 
 	init_fd_dup2_list();
-
-	extract_exe_path();
 
 	install_hook();
 	hook_enabled = 1;
