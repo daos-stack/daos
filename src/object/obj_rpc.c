@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1266,6 +1266,7 @@ CRT_RPC_DEFINE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 CRT_RPC_DEFINE(obj_key2anchor, DAOS_ISEQ_OBJ_KEY2ANCHOR, DAOS_OSEQ_OBJ_KEY2ANCHOR)
 CRT_RPC_DEFINE(obj_key2anchor_v10, DAOS_ISEQ_OBJ_KEY2ANCHOR_V10, DAOS_OSEQ_OBJ_KEY2ANCHOR_V10)
 CRT_RPC_DEFINE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUNCH)
+CRT_RPC_DEFINE(obj_coll_query, DAOS_ISEQ_OBJ_COLL_QUERY, DAOS_OSEQ_OBJ_COLL_QUERY)
 
 /* Define for obj_proto_rpc_fmt[] array population below.
  * See OBJ_PROTO_*_RPC_LIST macro definition
@@ -1350,6 +1351,9 @@ obj_reply_set_status(crt_rpc_t *rpc, int status)
 	case DAOS_OBJ_RPC_COLL_PUNCH:
 		((struct obj_coll_punch_out *)reply)->ocpo_ret = status;
 		break;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		((struct obj_coll_query_out *)reply)->ocqo_ret = status;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -1391,6 +1395,8 @@ obj_reply_get_status(crt_rpc_t *rpc)
 		return ((struct obj_ec_rep_out *)reply)->er_status;
 	case DAOS_OBJ_RPC_COLL_PUNCH:
 		return ((struct obj_coll_punch_out *)reply)->ocpo_ret;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		return ((struct obj_coll_query_out *)reply)->ocqo_ret;
 	default:
 		D_ASSERT(0);
 	}
@@ -1443,6 +1449,9 @@ obj_reply_map_version_set(crt_rpc_t *rpc, uint32_t map_version)
 	case DAOS_OBJ_RPC_COLL_PUNCH:
 		((struct obj_coll_punch_out *)reply)->ocpo_map_version = map_version;
 		break;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		((struct obj_coll_query_out *)reply)->ocqo_map_version = map_version;
+		break;
 	default:
 		D_ASSERT(0);
 	}
@@ -1480,6 +1489,8 @@ obj_reply_map_version_get(crt_rpc_t *rpc)
 		return ((struct obj_cpd_out *)reply)->oco_map_version;
 	case DAOS_OBJ_RPC_COLL_PUNCH:
 		return ((struct obj_coll_punch_out *)reply)->ocpo_map_version;
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		return ((struct obj_coll_query_out *)reply)->ocqo_map_version;
 	default:
 		D_ASSERT(0);
 	}
