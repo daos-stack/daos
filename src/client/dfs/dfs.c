@@ -568,7 +568,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 
 	/** TODO - not supported yet */
 	if (strcmp(name, ".") == 0)
-		D_ASSERT(0);
+		return ENOTSUP;
 
 	if (xnr) {
 		D_ALLOC_ARRAY(pxnames, xnr);
@@ -2929,19 +2929,33 @@ dfs_obj_copy_attr(dfs_obj_t *obj, dfs_obj_t *src_obj)
 int
 dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 {
-	int	rc;
+	int rc = 0;
 
 	if (obj == NULL || info == NULL)
 		return EINVAL;
 
 	switch (obj->mode & S_IFMT) {
 	case S_IFDIR:
+		/** the oclass of the directory object itself */
+		info->doi_oclass_id = daos_obj_id2class(obj->oid);
+
+		/** what is the default oclass files and dirs will be created with in this dir */
 		if (obj->d.oclass) {
-			info->doi_oclass_id = obj->d.oclass;
-		} else if (dfs->attr.da_dir_oclass_id) {
-			info->doi_oclass_id = dfs->attr.da_dir_oclass_id;
+			info->doi_dir_oclass_id  = obj->d.oclass;
+			info->doi_file_oclass_id = obj->d.oclass;
 		} else {
-			rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0, &info->doi_oclass_id);
+			if (dfs->attr.da_dir_oclass_id)
+				info->doi_dir_oclass_id = dfs->attr.da_dir_oclass_id;
+			else
+				rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0,
+							 &info->doi_dir_oclass_id);
+
+			if (dfs->attr.da_file_oclass_id)
+				info->doi_file_oclass_id = dfs->attr.da_file_oclass_id;
+			else
+				rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0,
+							 &info->doi_file_oclass_id);
+
 			if (rc) {
 				D_ERROR("daos_obj_get_oclass() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
@@ -3790,11 +3804,8 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 			D_GOTO(out, rc = daos_der2errno(rc));
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
-			int len;
-
-			len = snprintf(dirs[key_nr].d_name,
-				       kds[i].kd_key_len + 1, "%s", ptr);
-			D_ASSERT(len >= kds[i].kd_key_len);
+			memcpy(dirs[key_nr].d_name, ptr, kds[i].kd_key_len);
+			dirs[key_nr].d_name[kds[i].kd_key_len] = '\0';
 			ptr += kds[i].kd_key_len;
 
 			/** stat the entry if requested */
@@ -6542,8 +6553,6 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			continue;
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
-			int len;
-
 			if (strncmp("x:", ptr, 2) != 0) {
 				ptr += kds[i].kd_key_len;
 				continue;
@@ -6556,10 +6565,8 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			if (list_size < kds[i].kd_key_len - 2)
 				continue;
 
-			len = snprintf(ptr_list, kds[i].kd_key_len - 1, "%s",
-				       ptr + 2);
-			D_ASSERT(len >= kds[i].kd_key_len - 2);
-
+			memcpy(ptr_list, ptr + 2, kds[i].kd_key_len - 2);
+			ptr_list[kds[i].kd_key_len - 2] = '\0';
 			list_size -= kds[i].kd_key_len - 1;
 			ptr_list += kds[i].kd_key_len - 1;
 			ptr += kds[i].kd_key_len;
@@ -7930,5 +7937,138 @@ out:
 	D_FREE(kds);
 	D_FREE(buf_recs);
 	D_FREE(buf_keys);
+	return rc;
+}
+
+int
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
+{
+	uid_t                      uid;
+	gid_t                      gid;
+	daos_key_t                 dkey;
+	d_sg_list_t                sgl;
+	d_iov_t                    sg_iovs[4];
+	daos_iod_t                 iod;
+	daos_recx_t                recxs[4];
+	daos_handle_t              oh;
+	int                        i;
+	struct timespec            now;
+	daos_prop_t               *prop;
+	uint32_t                   props[]   = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS};
+	const int                  num_props = ARRAY_SIZE(props);
+	struct daos_prop_entry    *entry;
+	struct daos_prop_co_roots *roots;
+	int                        rc;
+
+	prop = daos_prop_alloc(num_props);
+	if (prop == NULL)
+		return ENOMEM;
+
+	for (i = 0; i < num_props; i++)
+		prop->dpp_entries[i].dpe_type = props[i];
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_query() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_POSIX) {
+		rc = EINVAL;
+		D_ERROR("container is not of type POSIX: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = daos_cont_set_owner(coh, user, group, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_set_owner() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	/** Change the owner of the root group */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
+	if (entry == NULL) {
+		rc = EINVAL;
+		D_ERROR("Missing ROOTS property from POSIX container: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc);
+	}
+
+	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
+	if (daos_obj_id_is_nil(roots->cr_oids[0]) || daos_obj_id_is_nil(roots->cr_oids[1])) {
+		D_ERROR("Invalid superblock or root object ID: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc = EIO);
+	}
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		D_GOTO(out_prop, rc = errno);
+
+	i               = 0;
+	recxs[i].rx_idx = CTIME_IDX;
+	recxs[i].rx_nr  = sizeof(uint64_t);
+	d_iov_set(&sg_iovs[i], &now.tv_sec, sizeof(uint64_t));
+	i++;
+
+	recxs[i].rx_idx = CTIME_NSEC_IDX;
+	recxs[i].rx_nr  = sizeof(uint64_t);
+	d_iov_set(&sg_iovs[i], &now.tv_nsec, sizeof(uint64_t));
+	i++;
+
+	if (user != NULL) {
+		rc = daos_acl_principal_to_uid(user, &uid);
+		if (rc) {
+			D_ERROR("daos_acl_principal_to_uid() failed: " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out_prop, rc = daos_der2errno(rc));
+		}
+		d_iov_set(&sg_iovs[i], &uid, sizeof(uid_t));
+		recxs[i].rx_idx = UID_IDX;
+		recxs[i].rx_nr  = sizeof(uid_t);
+		i++;
+	}
+
+	if (group != NULL) {
+		rc = daos_acl_principal_to_gid(group, &gid);
+		if (rc) {
+			D_ERROR("daos_acl_principal_to_gid() failed: " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out_prop, rc = daos_der2errno(rc));
+		}
+		d_iov_set(&sg_iovs[i], &gid, sizeof(gid_t));
+		recxs[i].rx_idx = GID_IDX;
+		recxs[i].rx_nr  = sizeof(gid_t);
+		i++;
+	}
+
+	/** set root dkey as the entry name */
+	d_iov_set(&dkey, "/", 1);
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iod.iod_nr    = i;
+	iod.iod_recxs = recxs;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_size  = 1;
+
+	/** set sgl for update */
+	sgl.sg_nr     = i;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &sg_iovs[0];
+
+	/** Open SB object */
+	rc = daos_obj_open(coh, roots->cr_oids[0], DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_open() Failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
+	if (rc) {
+		daos_obj_close(oh, NULL);
+		D_ERROR("Failed to update owner/group, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+	rc = daos_obj_close(oh, NULL);
+	if (rc)
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+
+out_prop:
+	daos_prop_free(prop);
 	return rc;
 }

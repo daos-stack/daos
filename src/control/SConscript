@@ -56,8 +56,10 @@ def go_ldflags(benv):
     path = 'github.com/daos-stack/daos/src/control/build'
     return ' '.join([f'-X {path}.DaosVersion={daos_version}',
                      f'-X {path}.ConfigDir={conf_dir}',
-                     f'-X {path}.BuildTime={build_time}',
                      f'-X {path}.BuildHost={build_host}',
+                     # NB: dynamic values should be enclosed in $(...$)
+                     # to avoid unnecessary rebuilds
+                     f'-X $({path}.BuildTime={build_time}$)',
                      f'-B $({gen_build_id()}$)'])
 
 

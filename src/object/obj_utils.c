@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,6 +84,199 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 
 	if (need_free)
 		D_FREE(iods);
+}
+
+static void
+obj_query_merge_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
+		     daos_recx_t *src_recx, daos_recx_t *tgt_recx, bool get_max, bool changed,
+		     uint32_t *shard, bool server_merge)
+{
+	daos_recx_t	tmp_recx = *src_recx;
+	uint64_t	tmp_end;
+	uint32_t	tgt_off;
+	bool		from_data_tgt;
+	uint64_t	dkey_hash;
+	uint64_t	stripe_rec_nr;
+	uint64_t	cell_rec_nr;
+
+	if (!daos_oclass_is_ec(oca))
+		D_GOTO(out, changed = true);
+
+	dkey_hash = obj_dkey2hash(oid.id_pub, dkey);
+	tgt_off = obj_ec_shard_off_by_oca(oid.id_layout_ver, dkey_hash, oca, oid.id_shard);
+	from_data_tgt = is_ec_data_shard_by_tgt_off(tgt_off, oca);
+	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	cell_rec_nr = obj_ec_cell_rec_nr(oca);
+	D_ASSERT(!(src_recx->rx_idx & PARITY_INDICATOR));
+
+	/*
+	 * Data ext from data shard needs to be converted to daos ext,
+	 * replica ext from parity shard needs not to convert.
+	 */
+	tmp_end = DAOS_RECX_END(tmp_recx);
+	D_DEBUG(DB_IO, "shard %d/%u get recx "DF_U64" "DF_U64"\n",
+		oid.id_shard, tgt_off, tmp_recx.rx_idx, tmp_recx.rx_nr);
+
+	if (tmp_end > 0 && from_data_tgt) {
+		if (get_max) {
+			tmp_recx.rx_idx = max(tmp_recx.rx_idx, rounddown(tmp_end - 1, cell_rec_nr));
+			tmp_recx.rx_nr = tmp_end - tmp_recx.rx_idx;
+		} else {
+			tmp_recx.rx_nr = min(tmp_end, roundup(tmp_recx.rx_idx + 1, cell_rec_nr)) -
+					 tmp_recx.rx_idx;
+		}
+
+		if (!server_merge)
+			tmp_recx.rx_idx = obj_ec_idx_vos2daos(tmp_recx.rx_idx, stripe_rec_nr,
+							      cell_rec_nr, tgt_off);
+		tmp_end = DAOS_RECX_END(tmp_recx);
+	}
+
+	if ((get_max && DAOS_RECX_END(*tgt_recx) < tmp_end) ||
+	    (!get_max && DAOS_RECX_END(*tgt_recx) > tmp_end))
+		changed = true;
+
+out:
+	if (changed) {
+		*tgt_recx = tmp_recx;
+		if (shard != NULL)
+			*shard = oid.id_shard;
+	}
+}
+
+static inline void
+obj_query_merge_key(uint64_t *tgt_val, uint64_t src_val, bool *changed, bool dkey,
+		    uint32_t *tgt_shard, uint32_t src_shard)
+{
+	D_DEBUG(DB_TRACE, "%s update "DF_U64"->"DF_U64"\n",
+		dkey ? "dkey" : "akey", *tgt_val, src_val);
+
+	*tgt_val = src_val;
+	/* Set to change akey and recx. */
+	*changed = true;
+	if (tgt_shard != NULL)
+		*tgt_shard = src_shard;
+}
+
+int
+daos_obj_merge_query_merge(struct obj_query_merge_args *args)
+{
+	uint64_t	*val;
+	uint64_t	*cur;
+	uint32_t	 timeout = 0;
+	bool		 check = true;
+	bool		 changed = false;
+	bool		 get_max = (args->flags & DAOS_GET_MAX) ? true : false;
+	bool		 first = false;
+	int		 rc = 0;
+
+	D_ASSERT(args->oca != NULL);
+	args->opc = opc_get(args->opc);
+
+	if (args->ret != 0) {
+		if (args->ret == -DER_NONEXIST)
+			D_GOTO(set_max_epoch, rc = 0);
+
+		if (args->ret == -DER_INPROGRESS || args->ret == -DER_TX_BUSY ||
+		    args->ret == -DER_OVERLOAD_RETRY)
+			D_DEBUG(DB_TRACE, "%s query rpc needs retry: "DF_RC"\n",
+				args->opc == DAOS_OBJ_RPC_COLL_QUERY ? "Collective" : "Regular",
+				DP_RC(args->ret));
+		else
+			D_ERROR("%s query rpc failed: "DF_RC"\n",
+				args->opc == DAOS_OBJ_RPC_COLL_QUERY ? "Collective" : "Regular",
+				DP_RC(args->ret));
+
+		if (args->ret == -DER_OVERLOAD_RETRY && args->rpc != NULL) {
+			D_ASSERT(args->max_delay != NULL);
+			D_ASSERT(args->queue_id != NULL);
+
+			if (args->opc == DAOS_OBJ_RPC_COLL_QUERY) {
+				struct obj_coll_query_out	*ocqo = crt_reply_get(args->rpc);
+
+				if (*args->queue_id == 0)
+					*args->queue_id = ocqo->ocqo_comm_out.req_out_enqueue_id;
+			} else {
+				struct obj_query_key_v10_out	*okqo = crt_reply_get(args->rpc);
+
+				if (*args->queue_id == 0)
+					*args->queue_id = okqo->okqo_comm_out.req_out_enqueue_id;
+			}
+
+			crt_req_get_timeout(args->rpc, &timeout);
+			if (timeout > *args->max_delay)
+				*args->max_delay = timeout;
+		}
+
+		D_GOTO(out, rc = args->ret);
+	}
+
+	if (*args->tgt_map_ver < args->src_map_ver)
+		*args->tgt_map_ver = args->src_map_ver;
+
+	if (args->flags == 0)
+		goto set_max_epoch;
+
+	if (args->tgt_dkey->iov_len == 0)
+		first = true;
+
+	if (args->flags & DAOS_GET_DKEY) {
+		val = (uint64_t *)args->src_dkey->iov_buf;
+		cur = (uint64_t *)args->tgt_dkey->iov_buf;
+
+		D_ASSERT(cur != NULL);
+
+		if (args->src_dkey->iov_len != sizeof(uint64_t)) {
+			D_ERROR("Invalid dkey obtained: %d\n", (int)args->src_dkey->iov_len);
+			D_GOTO(out, rc = -DER_IO);
+		}
+
+		/* For first merge, just set the dkey. */
+		if (first) {
+			args->tgt_dkey->iov_len = args->src_dkey->iov_len;
+			obj_query_merge_key(cur, *val, &changed, true, args->shard,
+					    args->oid.id_shard);
+		} else if (get_max) {
+			if (*val > *cur)
+				obj_query_merge_key(cur, *val, &changed, true, args->shard,
+						    args->oid.id_shard);
+			else if (!daos_oclass_is_ec(args->oca) || *val < *cur)
+				/*
+				 * No change, don't check akey and recx for replica obj. EC obj
+				 * needs to check again as it maybe from different data shards.
+				 */
+				check = false;
+		} else if (args->flags & DAOS_GET_MIN) {
+			if (*val < *cur)
+				obj_query_merge_key(cur, *val, &changed, true, args->shard,
+						    args->oid.id_shard);
+			else if (!daos_oclass_is_ec(args->oca))
+				check = false;
+		} else {
+			D_ASSERT(0);
+		}
+	}
+
+	if (check && args->flags & DAOS_GET_AKEY) {
+		val = (uint64_t *)args->src_akey->iov_buf;
+		cur = (uint64_t *)args->tgt_akey->iov_buf;
+
+		/* If first merge or dkey changed, set akey. */
+		if (first || changed)
+			obj_query_merge_key(cur, *val, &changed, false, NULL, args->oid.id_shard);
+	}
+
+	if (check && args->flags & DAOS_GET_RECX)
+		obj_query_merge_recx(args->oca, args->oid,
+				     (args->flags & DAOS_GET_DKEY) ? args->src_dkey : args->in_dkey,
+				     args->src_recx, args->tgt_recx, get_max, changed, args->shard,
+				     args->server_merge);
+
+set_max_epoch:
+	if (args->tgt_epoch != NULL && *args->tgt_epoch < args->src_epoch)
+		*args->tgt_epoch = args->src_epoch;
+out:
+	return rc;
 }
 
 struct recx_rec {

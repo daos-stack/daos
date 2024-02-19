@@ -162,6 +162,7 @@ func (mdb *MemberDatabase) updateMember(m *system.Member) {
 	cur.Info = m.Info
 	cur.LastUpdate = m.LastUpdate
 	cur.Incarnation = m.Incarnation
+	cur.FabricURI = m.FabricURI
 
 	mdb.removeFromFaultDomainTree(cur)
 	cur.FaultDomain = m.FaultDomain
