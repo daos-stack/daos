@@ -72,8 +72,7 @@ class CmockaUtils():
 
         """
         return EnvironmentVariables({
-            "CMOCKA_XML_FILE": os.path.join(self.cmocka_dir, "%g_cmocka_results.xml"),
-            "CMOCKA_MESSAGE_OUTPUT": "xml",
+            "CMOCKA_TEST_ABORT": "1",
         })
 
     @staticmethod
