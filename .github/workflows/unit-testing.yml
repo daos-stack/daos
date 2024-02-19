@@ -22,7 +22,7 @@ jobs:
             --build-arg DEPS_JOBS=50
             --build-arg DAOS_KEEP_SRC=yes
             --build-arg DAOS_JAVA_BUILD=yes
-            --tag gha-amd-build-image2
+            --tag gha-amd-${{github.run_number}}
       - name: Run Unit Testing
-        run: docker run gha-amd-build-image2 ./daos/utils/run_utest.py --gha
+        run: docker run gha-amd-${{github.run_number}} ./daos/utils/run_utest.py --gha
               --sudo no --no-fail-on-error

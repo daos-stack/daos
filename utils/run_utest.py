@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2023-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -332,8 +332,9 @@ class Test():
 
     test_num = 1
 
-    def __init__(self, config, path_info, args):
+    def __init__(self, suite, config, path_info, args):
         """Initialize a test"""
+        self.suite = suite
         self.cmd = self.subst(config["cmd"], config.get("replace_path", {}), path_info)
         self.env = os.environ.copy()
         self.last = []
@@ -439,8 +440,12 @@ class Test():
             cmd = new_cmd
         self.last = cmd
 
-        output_log = os.path.join(self.log_dir(), "output.log")
-        retval = run_cmd(cmd, output_log=output_log, env=self.env)
+        if self.suite.gha:
+            retval = run_cmd(cmd, env=self.env)
+            print("::endgroup::")
+        else:
+            output_log = os.path.join(self.log_dir(), "output.log")
+            retval = run_cmd(cmd, output_log=output_log, env=self.env)
 
         return retval
 
@@ -490,7 +495,7 @@ class Suite():
 
         for test in config["tests"]:
             try:
-                real_test = Test(test, path_info, args)
+                real_test = Test(self, test, path_info, args)
             except TestSkipped:
                 continue
             if real_test.needs_aio():
@@ -548,7 +553,10 @@ class Suite():
 
     def run_suite(self, args, aio):
         """Run the test suite"""
-        print(f"\nRunning suite {self.name}")
+        if self.gha:
+            print(f"::group {self.name}")
+        else:
+            print(f"\nRunning suite {self.name}")
         results = BaseResults()
 
         if self.needs_aio() and aio is not None:
@@ -581,6 +589,8 @@ class Suite():
 
         if self.needs_aio() and aio is not None:
             aio.finalize()
+        if self.gha:
+            print("::endgroup::")
         return results
 
 
