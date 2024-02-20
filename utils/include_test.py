@@ -131,6 +131,9 @@ class OrderChecker:
         https://google.github.io/styleguide/cppguide.html#Names_and_Order_of_Includes
         """
 
+        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-branches
+
         if not src_file.endswith(".h") and not src_file.endswith(".c"):
             return
 
