@@ -179,10 +179,8 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_RP_PDA:
 			iv_prop->pip_rp_pda = prop_entry->dpe_val;
 			break;
-		case DAOS_PROP_PO_POLICY:
-			D_ASSERT(strlen(prop_entry->dpe_str) <=
-				 DAOS_PROP_POLICYSTR_MAX_LEN);
-			strcpy(iv_prop->pip_policy_str, prop_entry->dpe_str);
+		case DAOS_PROP_PO_DATA_THRESH:
+			iv_prop->pip_data_thresh = prop_entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			iv_prop->pip_global_version = prop_entry->dpe_val;
@@ -330,14 +328,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_RP_PDA:
 			prop_entry->dpe_val = iv_prop->pip_rp_pda;
 			break;
-		case DAOS_PROP_PO_POLICY:
-			D_ASSERT(strnlen(iv_prop->pip_policy_str,
-					DAOS_PROP_POLICYSTR_MAX_LEN) <=
-				 DAOS_PROP_POLICYSTR_MAX_LEN);
-			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_policy_str,
-				  DAOS_PROP_POLICYSTR_MAX_LEN);
-			if (prop_entry->dpe_str == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
+		case DAOS_PROP_PO_DATA_THRESH:
+			prop_entry->dpe_val = iv_prop->pip_data_thresh;
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			prop_entry->dpe_val = iv_prop->pip_global_version;
