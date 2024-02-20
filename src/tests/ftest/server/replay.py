@@ -278,7 +278,7 @@ class ReplayTests(TestWithServers):
             # Settable pool attributes
             {'checkpoint_freq': list(range(1, 10)),
              'checkpoint_thresh': list(range(25, 75)),
-             'scrub-freq': list(range(604200, 605200))},
+             'scrub_freq': list(range(604200, 605200))},
             # Settable container attributes
             {'label': [join('_', 'RenamedContainer', str(num)) for num in range(10, 20)]},
         ]

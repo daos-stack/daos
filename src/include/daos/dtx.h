@@ -9,6 +9,13 @@
 
 #include <time.h>
 #include <uuid/uuid.h>
+#include <inttypes.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include <daos_types.h>
+#include <gurt/debug.h>
+#include <gurt/common.h>
 
 /* If the count of committable DTXs on leader exceeds this threshold,
  * it will trigger batched DTX commit globally. We will optimize the
