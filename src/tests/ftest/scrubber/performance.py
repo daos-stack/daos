@@ -43,7 +43,7 @@ class TestWithScrubberPerf(IorTestBase):
         self.log.info("====================================")
         self.log.info("ior_write_size = %d", ior_write_size_without_scrubber)
         self.log.info("ior_read_size = %d", ior_read_size_without_scrubber)
-        self.pool.set_prop(properties="scrub:timed,scrub-freq:1")
+        self.pool.set_prop(properties="scrub:timed,scrub_freq:1")
         # Wait for the scrubber to scan objects.
         self.log.info("Waiting for 15 seconds")
         time.sleep(15)
