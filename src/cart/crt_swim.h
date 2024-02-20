@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,10 +10,9 @@
 #ifndef __CRT_SWIM_H__
 #define __CRT_SWIM_H__
 
-#include "swim/swim_internal.h"
-
-#include <cart/swim.h>
 #include <gurt/list.h>
+#include <cart/swim.h>
+#include "swim/swim_internal.h"
 
 #define CRT_SWIM_NGLITCHES_TRESHOLD	10
 #define CRT_SWIM_NMESSAGES_TRESHOLD	1000
@@ -88,8 +87,6 @@ crt_swim_rpc_timeout(void)
 
 	return timeout_sec;
 }
-
-struct crt_grp_priv;
 
 int  crt_swim_enable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);
 int  crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);

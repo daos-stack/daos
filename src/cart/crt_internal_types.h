@@ -30,10 +30,7 @@
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 
-#include "crt_hg.h"
-
-struct crt_hg_gdata;
-struct crt_grp_gdata;
+struct crt_grp_priv;
 
 struct crt_na_config {
 	int32_t		 noc_port;
