@@ -684,7 +684,7 @@ rdb_resign(struct rdb *db, uint64_t term)
  *
  * \param[in]	db	database
  *
- * \retval -DER_INVAL	not a voting replica
+ * \retval -DER_NO_PERM	not a voting replica or might violate a lease
  */
 int
 rdb_campaign(struct rdb *db)

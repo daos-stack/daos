@@ -325,7 +325,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 	}
 
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	req := &control.PoolCreateReq{
 		User:       cmd.UserName.String(),
 		UserGroup:  cmd.GroupName.String(),
@@ -408,7 +408,7 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		NoQuery: cmd.NoQuery,
 	}
 
-	initialResp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
+	initialResp, err := control.ListPools(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
@@ -486,7 +486,7 @@ func (cmd *PoolDestroyCmd) Execute(args []string) error {
 		Recursive: cmd.Recursive,
 	}
 
-	err := control.PoolDestroy(context.Background(), cmd.ctlInvoker, req)
+	err := control.PoolDestroy(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -508,7 +508,7 @@ func (cmd *PoolEvictCmd) Execute(args []string) error {
 
 	req := &control.PoolEvictReq{ID: cmd.PoolID().String()}
 
-	err := control.PoolEvict(context.Background(), cmd.ctlInvoker, req)
+	err := control.PoolEvict(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -536,7 +536,7 @@ func (cmd *PoolExcludeCmd) Execute(args []string) error {
 
 	req := &control.PoolExcludeReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
 
-	err := control.PoolExclude(context.Background(), cmd.ctlInvoker, req)
+	err := control.PoolExclude(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -565,7 +565,7 @@ func (cmd *PoolDrainCmd) Execute(args []string) error {
 
 	req := &control.PoolDrainReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
 
-	err := control.PoolDrain(context.Background(), cmd.ctlInvoker, req)
+	err := control.PoolDrain(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -590,7 +590,7 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 		Ranks: cmd.RankList.Ranks(),
 	}
 
-	err := control.PoolExtend(context.Background(), cmd.ctlInvoker, req)
+	err := control.PoolExtend(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -623,7 +623,7 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 		Targetidx: idxlist,
 	}
 
-	err := control.PoolReintegrate(context.Background(), cmd.ctlInvoker, req)
+	err := control.PoolReintegrate(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		msg = errors.WithMessage(err, "failed").Error()
 	}
@@ -653,7 +653,7 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	req.IncludeEnabledRanks = cmd.ShowEnabledRanks
 	req.IncludeDisabledRanks = cmd.ShowDisabledRanks
 
-	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.PoolQuery(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)
@@ -693,7 +693,7 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 		Targets: tgtsList,
 	}
 
-	resp, err := control.PoolQueryTargets(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.PoolQueryTargets(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)
@@ -722,7 +722,7 @@ func (cmd *PoolUpgradeCmd) Execute(args []string) error {
 		ID: cmd.PoolID().String(),
 	}
 
-	err := control.PoolUpgrade(context.Background(), cmd.ctlInvoker, req)
+	err := control.PoolUpgrade(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if err != nil {
 		return errors.Wrap(err, "pool upgrade failed")
 	}
@@ -762,7 +762,7 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 		Properties: cmd.Args.Props.ToSet,
 	}
 
-	err := control.PoolSetProp(context.Background(), cmd.ctlInvoker, req)
+	err := control.PoolSetProp(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(nil, err)
 	}
@@ -790,7 +790,7 @@ func (cmd *PoolGetPropCmd) Execute(_ []string) error {
 		Properties: cmd.Args.Props.ToGet,
 	}
 
-	resp, err := control.PoolGetProp(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.PoolGetProp(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)
 	}
@@ -819,7 +819,7 @@ type PoolGetACLCmd struct {
 func (cmd *PoolGetACLCmd) Execute(args []string) error {
 	req := &control.PoolGetACLReq{ID: cmd.PoolID().String()}
 
-	resp, err := control.PoolGetACL(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.PoolGetACL(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)
 	}
@@ -889,7 +889,7 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 		ACL: acl,
 	}
 
-	resp, err := control.PoolOverwriteACL(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.PoolOverwriteACL(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)
 	}
@@ -937,7 +937,7 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 		ACL: acl,
 	}
 
-	resp, err := control.PoolUpdateACL(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.PoolUpdateACL(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)
 	}
@@ -967,7 +967,7 @@ func (cmd *PoolDeleteACLCmd) Execute(args []string) error {
 		Principal: cmd.Principal,
 	}
 
-	resp, err := control.PoolDeleteACL(context.Background(), cmd.ctlInvoker, req)
+	resp, err := control.PoolDeleteACL(cmd.MustLogCtx(), cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)
 	}

@@ -68,7 +68,7 @@ struct pool_iv_prop {
 	char		pip_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
-	char		pip_policy_str[DAOS_PROP_POLICYSTR_MAX_LEN];
+	uint64_t	pip_data_thresh;
 	uint64_t	pip_space_rb;
 	uint64_t	pip_self_heal;
 	uint64_t	pip_scrub_mode;
@@ -92,6 +92,8 @@ struct pool_iv_prop {
 	uint32_t	pip_svc_list_offset;
 	uint32_t	pip_perf_domain;
 	uint32_t	pip_reint_mode;
+	uint32_t         pip_svc_ops_enabled;
+	uint32_t         pip_svc_ops_entry_age;
 	char		pip_iv_buf[0];
 };
 
@@ -254,10 +256,6 @@ int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 int ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_fetch(struct ds_pool *pool);
 int ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid);
-
-int ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool,
-				     uuid_t *srv_cont_hdl,
-				     uuid_t *srv_pool_hdl);
 
 /*
  * srv_metrics.c

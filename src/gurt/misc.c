@@ -57,19 +57,6 @@ d_rand()
 	return result;
 }
 
-/* Return a random integer in [0, n), where n must be positive. */
-long int
-d_randn(long int n)
-{
-	long int i;
-
-	D_ASSERT(n > 0);
-	i = ((double)d_rand() / D_RAND_MAX) * n;
-	if (i >= n)
-		i = 0;
-	return i;
-}
-
 /* Developer/debug version, poison memory on free.
  * This tries several ways to access the buffer size however none of them are perfect so for now
  * this is no in release builds.
@@ -544,7 +531,7 @@ d_rank_list_shuffle(d_rank_list_t *rank_list)
 		return;
 
 	for (i = 0; i < rank_list->rl_nr; i++) {
-		j = rand() % rank_list->rl_nr;
+		j = d_rand() % rank_list->rl_nr;
 		tmp = rank_list->rl_ranks[i];
 		rank_list->rl_ranks[i] = rank_list->rl_ranks[j];
 		rank_list->rl_ranks[j] = tmp;
@@ -1120,7 +1107,7 @@ out:
  * \param[in,out]	str_val		Copy of an environment string value.
  */
 void
-d_free_env_str(char **str_val)
+d_freeenv_str(char **str_val)
 {
 	assert(str_val != NULL);
 
@@ -1300,6 +1287,21 @@ d_getenv_uint(const char *name, unsigned *uint_val)
 
 	*uint_val = (unsigned)tmp;
 	return -DER_SUCCESS;
+}
+
+/**
+ * get an unsigned integer type environment variables.
+ *
+ * \param[in]		name		name of the environment variable.
+ * \param[in,out]	uint_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \return				0 on success, a negative value on error.
+ * \deprecated				d_getenv_int() is deprecated, please use d_getenv_uint().
+ */
+int
+d_getenv_int(const char *name, unsigned *uint_val)
+{
+	return d_getenv_uint(name, uint_val);
 }
 
 /**

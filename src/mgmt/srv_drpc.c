@@ -1976,8 +1976,12 @@ ds_mgmt_smd_free_dev(Ctl__SmdDevice *dev)
 		D_FREE(dev->ctrlr->fw_rev);
 		D_FREE(dev->ctrlr->vendor_id);
 		D_FREE(dev->ctrlr->pci_dev_type);
-		if (dev->ctrlr->namespaces != NULL)
+		if (dev->ctrlr->namespaces != NULL) {
 			D_FREE(dev->ctrlr->namespaces[0]);
+			D_FREE(dev->ctrlr->namespaces);
+			dev->ctrlr->namespaces   = NULL;
+			dev->ctrlr->n_namespaces = 0;
+		}
 	}
 }
 

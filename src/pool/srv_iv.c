@@ -179,10 +179,8 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_RP_PDA:
 			iv_prop->pip_rp_pda = prop_entry->dpe_val;
 			break;
-		case DAOS_PROP_PO_POLICY:
-			D_ASSERT(strlen(prop_entry->dpe_str) <=
-				 DAOS_PROP_POLICYSTR_MAX_LEN);
-			strcpy(iv_prop->pip_policy_str, prop_entry->dpe_str);
+		case DAOS_PROP_PO_DATA_THRESH:
+			iv_prop->pip_data_thresh = prop_entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			iv_prop->pip_global_version = prop_entry->dpe_val;
@@ -219,6 +217,12 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 			break;
 		case DAOS_PROP_PO_REINT_MODE:
 			iv_prop->pip_reint_mode = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_SVC_OPS_ENABLED:
+			iv_prop->pip_svc_ops_enabled = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
+			iv_prop->pip_svc_ops_entry_age = prop_entry->dpe_val;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -324,14 +328,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_RP_PDA:
 			prop_entry->dpe_val = iv_prop->pip_rp_pda;
 			break;
-		case DAOS_PROP_PO_POLICY:
-			D_ASSERT(strnlen(iv_prop->pip_policy_str,
-					DAOS_PROP_POLICYSTR_MAX_LEN) <=
-				 DAOS_PROP_POLICYSTR_MAX_LEN);
-			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_policy_str,
-				  DAOS_PROP_POLICYSTR_MAX_LEN);
-			if (prop_entry->dpe_str == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
+		case DAOS_PROP_PO_DATA_THRESH:
+			prop_entry->dpe_val = iv_prop->pip_data_thresh;
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			prop_entry->dpe_val = iv_prop->pip_global_version;
@@ -359,6 +357,12 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_REINT_MODE:
 			prop_entry->dpe_val = iv_prop->pip_reint_mode;
+			break;
+		case DAOS_PROP_PO_SVC_OPS_ENABLED:
+			prop_entry->dpe_val = iv_prop->pip_svc_ops_enabled;
+			break;
+		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
+			prop_entry->dpe_val = iv_prop->pip_svc_ops_entry_age;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -1493,63 +1497,6 @@ ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 	if (cont_hdl_uuid)
 		uuid_copy(*cont_hdl_uuid, iv_entry.piv_hdl.pih_cont_hdl);
 out:
-	return rc;
-}
-
-struct srv_hdl_ult_arg {
-	struct ds_pool	*pool;
-	ABT_eventual	eventual;
-};
-
-static void
-pool_iv_srv_hdl_fetch_ult(void *data)
-{
-	struct srv_hdl_ult_arg *arg = data;
-	int rc;
-
-	rc = ds_pool_iv_srv_hdl_fetch(arg->pool, NULL, NULL);
-
-	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));
-}
-
-int
-ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool, uuid_t *srv_cont_hdl,
-				 uuid_t *srv_pool_hdl)
-{
-	struct srv_hdl_ult_arg	arg;
-	ABT_eventual		eventual;
-	int			*status;
-	int			rc;
-
-	/* Fetch the capability from the leader. To avoid extra locks,
-	 * all metadatas are maintained by xstream 0, so let's create
-	 * an ULT on xstream 0 to let xstream 0 to handle capa fetch
-	 * and update.
-	 */
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		return dss_abterr2der(rc);
-
-	arg.pool = pool;
-	arg.eventual = eventual;
-	rc = dss_ult_create(pool_iv_srv_hdl_fetch_ult, &arg, DSS_XS_SYS,
-			    0, 0, NULL);
-	if (rc)
-		D_GOTO(out_eventual, rc);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-	if (*status != 0)
-		D_GOTO(out_eventual, rc = *status);
-
-	if (srv_cont_hdl)
-		uuid_copy(*srv_cont_hdl, pool->sp_srv_cont_hdl);
-	if (srv_pool_hdl)
-		uuid_copy(*srv_pool_hdl, pool->sp_srv_pool_hdl);
-
-out_eventual:
-	ABT_eventual_free(&eventual);
 	return rc;
 }
 
