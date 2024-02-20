@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -405,14 +405,6 @@ struct obj_auxi_tgt_list {
 	uint32_t	tl_nr;
 };
 
-struct coll_query_args {
-	union {
-		struct shard_auxi_args	cqa_auxi;
-		struct coll_oper_args	cqa_coa;
-	};
-	struct obj_coll_disp_cursor	cqa_cur;
-};
-
 /* Auxiliary args for object I/O */
 struct obj_auxi_args {
 	tse_task_t			*obj_task;
@@ -478,7 +470,6 @@ struct obj_auxi_args {
 		struct shard_list_args		l_args;
 		struct shard_k2a_args		k_args;
 		struct shard_sync_args		s_args;
-		struct coll_query_args		cq_args;
 	};
 };
 
@@ -645,16 +636,8 @@ int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, 
 			   uint32_t req_map_ver, struct dc_object *obj,
 			   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 			   daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
-			   struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th,
-			   tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
-
-int dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
-			    uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
-			    daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
-			    const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
-			    uint32_t *map_ver, struct daos_coll_target *tgts, uint32_t tgt_nr,
-			    uint32_t max_tgt_size, uint32_t disp_width, daos_handle_t th,
-			    tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
+			   struct dtx_id *dti, uint32_t *map_ver,
+			   daos_handle_t th, tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
@@ -682,11 +665,6 @@ int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 			unsigned int map_ver, tse_task_t **taskp);
 bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
-
-int queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
-			       struct dtx_epoch *epoch, int shard, unsigned int map_ver,
-			       struct dc_object *obj, struct dtx_id *dti, uuid_t coh_uuid,
-			       uuid_t cont_uuid, struct daos_coll_target *dcts, uint32_t dct_nr);
 
 int obj_grp_leader_get(struct dc_object *obj, int grp_idx, uint64_t dkey_hash,
 		       bool has_condition, unsigned int map_ver, uint8_t *bit_map);
@@ -939,31 +917,7 @@ void obj_class_fini(void);
 #define COLL_DISP_WIDTH_MIN	8
 #define COLL_DISP_WIDTH_DIF	4
 
-struct obj_query_merge_args {
-	struct daos_oclass_attr	*oca;
-	daos_unit_oid_t		 oid;
-	daos_epoch_t		 src_epoch;
-	daos_key_t		*in_dkey;
-	daos_key_t		*src_dkey;
-	daos_key_t		*tgt_dkey; /* output */
-	daos_key_t		*src_akey;
-	daos_key_t		*tgt_akey; /* output */
-	daos_recx_t		*src_recx;
-	daos_recx_t		*tgt_recx; /* output */
-	daos_epoch_t		*tgt_epoch; /* output */
-	uint32_t		*tgt_map_ver; /* output */
-	uint32_t		*shard; /* output */
-	uint32_t		*max_delay; /* output */
-	uint64_t		*queue_id; /* output */
-	crt_rpc_t		*rpc;
-	uint64_t		 flags;
-	uint32_t		 opc;
-	uint32_t		 src_map_ver;
-	int			 ret;
-};
-
 /* obj_utils.c */
-int daos_obj_merge_query_merge(struct obj_query_merge_args *args);
 void obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
 			uint32_t start, uint32_t max_width, struct obj_coll_disp_cursor *ocdc);
 void obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *tgts,
@@ -979,28 +933,6 @@ dc_tx_check_pmv(daos_handle_t th);
 int
 dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 			uint32_t *pmv);
-
-/* cli_coll.c */
-int
-obj_coll_oper_args_init(struct coll_oper_args *coa, struct dc_object *obj, bool for_modify);
-
-void
-obj_coll_oper_args_fini(struct coll_oper_args *coa);
-
-int
-obj_coll_oper_args_collapse(struct coll_oper_args *coa, uint32_t *size);
-
-int
-obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
-		  uint32_t map_ver, uint32_t idx);
-
-int
-dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
-		  uint32_t map_ver, daos_obj_punch_t *args, struct obj_auxi_args *auxi);
-
-int
-queue_coll_query_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi, struct dc_object *obj,
-		      struct dtx_id *xid, struct dtx_epoch *epoch, uint32_t map_ver);
 
 /** See dc_tx_get_epoch. */
 enum dc_tx_get_epoch_rc {

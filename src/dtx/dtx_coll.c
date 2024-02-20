@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2023-2024 Intel Corporation.
+ * (C) Copyright 2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -161,6 +161,7 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 			/* Skip non-healthy one. */
 			if (target->ta_comp.co_status != PO_COMP_ST_UP &&
 			    target->ta_comp.co_status != PO_COMP_ST_UPIN &&
+			    target->ta_comp.co_status != PO_COMP_ST_NEW &&
 			    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
 				continue;
 
@@ -237,6 +238,7 @@ dtx_coll_prep(uuid_t po_uuid, daos_unit_oid_t oid, struct dtx_id *xid, struct dt
 		/* Skip non-healthy one. */
 		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
 		    target->ta_comp.co_status != PO_COMP_ST_UPIN &&
+		    target->ta_comp.co_status != PO_COMP_ST_NEW &&
 		    target->ta_comp.co_status != PO_COMP_ST_DRAIN)
 			continue;
 
