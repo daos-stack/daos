@@ -88,7 +88,7 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 
 static void
 obj_query_fix_ec_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
-		      daos_recx_t *recx, bool get_max, uint32_t *shard, bool server_merge)
+		      daos_recx_t *recx, bool get_max, bool server_merge, uint32_t *shard)
 {
 	uint64_t	tmp_end;
 	uint32_t	tgt_off;
@@ -130,7 +130,7 @@ obj_query_fix_ec_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_ke
 static void
 obj_query_reduce_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
 		      daos_recx_t *src_recx, daos_recx_t *tgt_recx, bool get_max, bool changed,
-		      uint32_t *shard, bool server_merge)
+		      bool server_merge, uint32_t *shard)
 {
 	daos_recx_t tmp_recx = *src_recx;
 	uint64_t    tmp_end;
@@ -138,7 +138,7 @@ obj_query_reduce_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_ke
 	if (!daos_oclass_is_ec(oca))
 		D_GOTO(out, changed = true);
 
-	obj_query_fix_ec_recx(oca, oid, dkey, &tmp_recx, get_max, shard, server_merge);
+	obj_query_fix_ec_recx(oca, oid, dkey, &tmp_recx, get_max, server_merge, shard);
 
 	tmp_end = DAOS_RECX_END(tmp_recx);
 
@@ -168,123 +168,136 @@ obj_query_reduce_key(uint64_t *tgt_val, uint64_t src_val, bool *changed, bool dk
 		*tgt_shard = src_shard;
 }
 
+/*
+ * Merge object query results from different components.
+ * We will do at most four level query results merge:
+ *
+ * L1: merge the results from different shards on the same VOS target.
+ * L2: merge the results from different VOS targets on the same engine.
+ * L3: the relay engine merge the results from other child (relay) engines.
+ * L4: the client merge the results from all (relay or direct leaf) engines.
+ */
 int
-daos_obj_merge_query_merge(struct obj_query_merge_args *args)
+daos_obj_query_merge(struct obj_query_merge_args *oqma)
 {
 	uint64_t	*val;
 	uint64_t	*cur;
 	uint32_t	 timeout = 0;
 	bool		 check = true;
 	bool		 changed = false;
-	bool		 get_max = (args->flags & DAOS_GET_MAX) ? true : false;
+	bool		 get_max = (oqma->oqma_flags & DAOS_GET_MAX) ? true : false;
 	bool		 first = false;
 	int		 rc = 0;
 
-	D_ASSERT(args->oca != NULL);
-	args->opc = opc_get(args->opc);
+	D_ASSERT(oqma->oqma_oca != NULL);
+	oqma->oqma_opc = opc_get(oqma->oqma_opc);
 
-	if (args->ret != 0) {
-		if (args->ret == -DER_NONEXIST)
+	if (oqma->oqma_ret != 0) {
+		if (oqma->oqma_ret == -DER_NONEXIST)
 			D_GOTO(set_max_epoch, rc = 0);
 
-		if (args->ret == -DER_INPROGRESS || args->ret == -DER_TX_BUSY ||
-		    args->ret == -DER_OVERLOAD_RETRY)
+		if (oqma->oqma_ret == -DER_INPROGRESS || oqma->oqma_ret == -DER_TX_BUSY ||
+		    oqma->oqma_ret == -DER_OVERLOAD_RETRY)
 			D_DEBUG(DB_TRACE, "%s query rpc needs retry: "DF_RC"\n",
-				args->opc == DAOS_OBJ_RPC_COLL_QUERY ? "Collective" : "Regular",
-				DP_RC(args->ret));
+				oqma->oqma_opc == DAOS_OBJ_RPC_COLL_QUERY ? "Coll" : "Regular",
+				DP_RC(oqma->oqma_ret));
 		else
 			D_ERROR("%s query rpc failed: "DF_RC"\n",
-				args->opc == DAOS_OBJ_RPC_COLL_QUERY ? "Collective" : "Regular",
-				DP_RC(args->ret));
+				oqma->oqma_opc == DAOS_OBJ_RPC_COLL_QUERY ? "Coll" : "Regular",
+				DP_RC(oqma->oqma_ret));
 
-		if (args->ret == -DER_OVERLOAD_RETRY && args->rpc != NULL) {
-			D_ASSERT(args->max_delay != NULL);
-			D_ASSERT(args->queue_id != NULL);
+		if (oqma->oqma_ret == -DER_OVERLOAD_RETRY && oqma->oqma_rpc != NULL) {
+			D_ASSERT(oqma->oqma_max_delay != NULL);
+			D_ASSERT(oqma->oqma_queue_id != NULL);
 
-			if (args->opc == DAOS_OBJ_RPC_COLL_QUERY) {
-				struct obj_coll_query_out	*ocqo = crt_reply_get(args->rpc);
+			if (oqma->oqma_opc == DAOS_OBJ_RPC_COLL_QUERY) {
+				struct obj_coll_query_out *ocqo = crt_reply_get(oqma->oqma_rpc);
 
-				if (*args->queue_id == 0)
-					*args->queue_id = ocqo->ocqo_comm_out.req_out_enqueue_id;
+				if (*oqma->oqma_queue_id == 0)
+					*oqma->oqma_queue_id =
+						ocqo->ocqo_comm_out.req_out_enqueue_id;
 			} else {
-				struct obj_query_key_v10_out	*okqo = crt_reply_get(args->rpc);
+				struct obj_query_key_v10_out *okqo = crt_reply_get(oqma->oqma_rpc);
 
-				if (*args->queue_id == 0)
-					*args->queue_id = okqo->okqo_comm_out.req_out_enqueue_id;
+				if (*oqma->oqma_queue_id == 0)
+					*oqma->oqma_queue_id =
+						okqo->okqo_comm_out.req_out_enqueue_id;
 			}
 
-			crt_req_get_timeout(args->rpc, &timeout);
-			if (timeout > *args->max_delay)
-				*args->max_delay = timeout;
+			crt_req_get_timeout(oqma->oqma_rpc, &timeout);
+			if (timeout > *oqma->oqma_max_delay)
+				*oqma->oqma_max_delay = timeout;
 		}
 
-		D_GOTO(out, rc = args->ret);
+		D_GOTO(out, rc = oqma->oqma_ret);
 	}
 
-	if (*args->tgt_map_ver < args->src_map_ver)
-		*args->tgt_map_ver = args->src_map_ver;
+	if (*oqma->oqma_tgt_map_ver < oqma->oqma_src_map_ver)
+		*oqma->oqma_tgt_map_ver = oqma->oqma_src_map_ver;
 
-	if (args->flags == 0)
+	if (oqma->oqma_flags == 0)
 		goto set_max_epoch;
 
-	if (args->tgt_dkey->iov_len == 0)
+	if (oqma->oqma_tgt_dkey->iov_len == 0)
 		first = true;
 
-	if (args->flags & DAOS_GET_DKEY) {
-		val = (uint64_t *)args->src_dkey->iov_buf;
-		cur = (uint64_t *)args->tgt_dkey->iov_buf;
+	if (oqma->oqma_flags & DAOS_GET_DKEY) {
+		val = (uint64_t *)oqma->oqma_src_dkey->iov_buf;
+		cur = (uint64_t *)oqma->oqma_tgt_dkey->iov_buf;
 
 		D_ASSERT(cur != NULL);
 
-		if (args->src_dkey->iov_len != sizeof(uint64_t)) {
-			D_ERROR("Invalid dkey obtained: %d\n", (int)args->src_dkey->iov_len);
+		if (oqma->oqma_src_dkey->iov_len != sizeof(uint64_t)) {
+			D_ERROR("Invalid dkey obtained: %d\n", (int)oqma->oqma_src_dkey->iov_len);
 			D_GOTO(out, rc = -DER_IO);
 		}
 
 		/* For first merge, just set the dkey. */
 		if (first) {
-			args->tgt_dkey->iov_len = args->src_dkey->iov_len;
-			obj_query_reduce_key(cur, *val, &changed, true, args->shard,
-					     args->oid.id_shard);
+			oqma->oqma_tgt_dkey->iov_len = oqma->oqma_src_dkey->iov_len;
+			obj_query_reduce_key(cur, *val, &changed, true, oqma->oqma_shard,
+					     oqma->oqma_oid.id_shard);
 		} else if (get_max) {
 			if (*val > *cur)
-				obj_query_reduce_key(cur, *val, &changed, true, args->shard,
-						     args->oid.id_shard);
-			else if (!daos_oclass_is_ec(args->oca) || *val < *cur)
+				obj_query_reduce_key(cur, *val, &changed, true, oqma->oqma_shard,
+						     oqma->oqma_oid.id_shard);
+			else if (!daos_oclass_is_ec(oqma->oqma_oca) || *val < *cur)
 				/*
 				 * No change, don't check akey and recx for replica obj. EC obj
 				 * needs to check again as it maybe from different data shards.
 				 */
 				check = false;
-		} else if (args->flags & DAOS_GET_MIN) {
+		} else if (oqma->oqma_flags & DAOS_GET_MIN) {
 			if (*val < *cur)
-				obj_query_reduce_key(cur, *val, &changed, true, args->shard,
-						     args->oid.id_shard);
-			else if (!daos_oclass_is_ec(args->oca))
+				obj_query_reduce_key(cur, *val, &changed, true, oqma->oqma_shard,
+						     oqma->oqma_oid.id_shard);
+			else if (!daos_oclass_is_ec(oqma->oqma_oca))
 				check = false;
 		} else {
 			D_ASSERT(0);
 		}
 	}
 
-	if (check && args->flags & DAOS_GET_AKEY) {
-		val = (uint64_t *)args->src_akey->iov_buf;
-		cur = (uint64_t *)args->tgt_akey->iov_buf;
+	if (check && oqma->oqma_flags & DAOS_GET_AKEY) {
+		val = (uint64_t *)oqma->oqma_src_akey->iov_buf;
+		cur = (uint64_t *)oqma->oqma_tgt_akey->iov_buf;
 
 		/* If first merge or dkey changed, set akey. */
 		if (first || changed)
-			obj_query_reduce_key(cur, *val, &changed, false, NULL, args->oid.id_shard);
+			obj_query_reduce_key(cur, *val, &changed, false, NULL,
+					     oqma->oqma_oid.id_shard);
 	}
 
-	if (check && args->flags & DAOS_GET_RECX)
-		obj_query_reduce_recx(
-		    args->oca, args->oid,
-		    (args->flags & DAOS_GET_DKEY) ? args->src_dkey : args->in_dkey, args->src_recx,
-		    args->tgt_recx, get_max, changed, args->shard, args->server_merge);
+	if (check && oqma->oqma_flags & DAOS_GET_RECX)
+		obj_query_reduce_recx(oqma->oqma_oca, oqma->oqma_oid,
+				      (oqma->oqma_flags & DAOS_GET_DKEY) ?
+				      oqma->oqma_src_dkey : oqma->oqma_in_dkey,
+				      oqma->oqma_src_recx, oqma->oqma_tgt_recx,
+				      get_max, changed, oqma->oqma_server_merge, oqma->oqma_shard);
 
 set_max_epoch:
-	if (args->tgt_epoch != NULL && *args->tgt_epoch < args->src_epoch)
-		*args->tgt_epoch = args->src_epoch;
+	if (oqma->oqma_tgt_epoch != NULL && *oqma->oqma_tgt_epoch < oqma->oqma_src_epoch)
+		*oqma->oqma_tgt_epoch = oqma->oqma_src_epoch;
 out:
 	return rc;
 }
