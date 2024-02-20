@@ -49,6 +49,28 @@ def _scan_go_file(node, env, _path):
     return includes
 
 
+def get_go_version(output):
+    """Convert from a "go version" string to a well-formatted major.minor.point string"""
+    go_version = output.split(' ')[2].replace('go', '')
+    if '-' in go_version:
+        go_version = go_version.split('-')[0]
+    parts = []
+    for part in go_version.split("."):
+        if 'rc' in part:
+            parts.append(part.split("rc", maxsplit=1)[0])
+        else:
+            parts.append(part)
+    return ".".join(parts)
+
+
+def test_go():
+    """Quick unit test"""
+    assert "1.20.10" == get_go_version("go version go1.20.10 linux/amd64")
+    assert "1.2.3" == get_go_version("go version go1.2.3 Linux/amd64")
+    assert "1.20.10" == get_go_version("go version go1.20.10-daos linux/amd64")
+    assert "1.20.10" == get_go_version("go version go1.20rc2.10 linux/amd64")
+
+
 def generate(env):
     """Setup the go compiler"""
 
@@ -69,9 +91,7 @@ def generate(env):
             return 0
 
         # go version go1.2.3 Linux/amd64
-        go_version = out.split(' ')[2].replace('go', '')
-        if '-' in go_version:
-            go_version = go_version.split('-')[0]
+        go_version = get_go_version(out)
         if len([x for x, y in
                 zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
                 if int(x) < int(y)]) > 0:
