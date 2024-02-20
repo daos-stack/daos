@@ -1338,8 +1338,13 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 	}
 	rebuild_io(arg, oids, OBJ_NR);
 
-	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-			 arg->pool.alive_svc, 6);
+	/* kill non-leader rank */
+	if (leader != 6)
+		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+				 arg->pool.alive_svc, 6);
+	else
+		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+				 arg->pool.alive_svc, 5);
 	/* hang the rebuild */
 	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
