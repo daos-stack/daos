@@ -232,7 +232,7 @@ determine_lib_path(void)
 		}
 	}
 	if (path_offset == 0) {
-		D_ERROR("Fail to determine path_offset in /proc/self/maps!\n");
+		D_ERROR("Fail to determine path_offset in /proc/self/maps.\n");
 		quit_hook_init();
 	}
 
@@ -241,12 +241,12 @@ determine_lib_path(void)
 		/* try a different format */
 		pos = strstr(read_buff_map, "ld-2.");
 	if (pos == NULL) {
-		D_ERROR("Failed to find ld.so!\n");
+		D_ERROR("Failed to find ld.so.\n");
 		goto err;
 	}
 	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
 	if (start == NULL || end == NULL) {
-		D_ERROR("get_path_pos() failed to determine the path for ld.so!\n");
+		D_ERROR("get_path_pos() failed to determine the path for ld.so.\n");
 		goto err;
 	}
 	if ((end - start + 1) >= PATH_MAX) {
@@ -263,12 +263,12 @@ determine_lib_path(void)
 		/* try a different format */
 		pos = strstr(read_buff_map, "libc-2.");
 	if (pos == NULL) {
-		D_ERROR("Failed to find the path of libc.so!\n");
+		D_ERROR("Failed to find the path of libc.so.\n");
 		goto err;
 	}
 	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
 	if (start == NULL || end == NULL) {
-		D_ERROR("get_path_pos() failed to determine the path for libc.so.!\n");
+		D_ERROR("get_path_pos() failed to determine the path for libc.so.\n");
 		goto err;
 	}
 	if ((end - start + 1) >= PATH_MAX) {
@@ -312,12 +312,12 @@ determine_lib_path(void)
 
 	pos = strstr(read_buff_map, "libpil4dfs.so");
 	if (pos == NULL) {
-		D_ERROR("Failed to find the path of libpil4dfs.so!\n");
+		D_ERROR("Failed to find the path of libpil4dfs.so.\n");
 		goto err;
 	}
 	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
 	if (start == NULL || end == NULL) {
-		D_ERROR("get_path_pos() failed to determine the path for libpil4dfs.so.!\n");
+		D_ERROR("get_path_pos() failed to determine the path for libpil4dfs.so.\n");
 		goto err;
 	}
 	if ((end - start + 1) >= PATH_MAX) {
@@ -796,7 +796,7 @@ install_hook(void)
 	allocate_memory_block_for_patches();
 
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle)) {
-		D_ERROR("cs_open() failed to initialize capstone engine!\n");
+		D_ERROR("cs_open() failed to initialize capstone engine.\n");
 		quit_hook_init();
 	}
 	cs_opt_skipdata skipdata = {

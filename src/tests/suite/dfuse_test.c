@@ -51,7 +51,7 @@ print_usage()
 	print_message("dfuse_test -l|--lowfd\n");
 	print_message("dfuse_test -e|--exec\n");
 	/* verifyenv is only run by exec test. Should not be executed directly */
-	/* print_message("dfuse_test -v|--verifyenv\n");                       */
+	/* print_message("dfuse_test    --verifyenv\n");                       */
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -638,7 +638,7 @@ do_exec(void **state)
 	pid_t pid;
 	int   status, rc;
 	char *envp[1] = {NULL};
-	char *argv[3] = {"dfuse_test", "-v", NULL};
+	char *argv[3] = {"dfuse_test", "--verifyenv", NULL};
 	char *exe_path;
 	char *env_ldpreload;
 
@@ -788,10 +788,10 @@ main(int argc, char **argv)
 					       {"directory", no_argument, NULL, 'd'},
 					       {"lowfd", no_argument, NULL, 'l'},
 					       {"exec", no_argument, NULL, 'e'},
-					       {"verifyenv", no_argument, NULL, 'v'},
+					       {"verifyenv", no_argument, NULL, 'c'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdlev", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdle", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
@@ -803,7 +803,7 @@ main(int argc, char **argv)
 		case 'M':
 			test_dir = optarg;
 			break;
-		case 'v':
+		case 'c':
 			/* only run by child process */
 			verify_pil4dfs_env();
 			break;

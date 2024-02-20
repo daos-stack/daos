@@ -3337,13 +3337,12 @@ out_readdir:
 
 extern char **__environ;
 
-/* This is the number of environmental variables that would be forced to set in child process. */
-#define N_ENV_APPEND (7)
-/**
- * char    env_list[N_ENV_APPEND][32] = {"LD_PRELOAD", "D_IL_REPORT", "DAOS_MOUNT_POINT",
- *                                       "DAOS_POOL", "DAOS_CONTAINER", "D_IL_MAX_EQ",
- *                                       "D_IL_ENFORCE_EXEC_ENV"};
+/* This is the number of environmental variables that would be forced to set in child process.
+ * "LD_PRELOAD" is a special case and it is not included in the list.
  */
+#define LEN_ENV_LIST (10)
+/* Including LEN_ENV_LIST and "LD_PRELOAD" */
+#define N_ENV_APPEND (LEN_ENV_LIST + 1)
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
@@ -3355,31 +3354,26 @@ extern char **__environ;
 static char **
 pre_envp(char *const envp[])
 {
-	int    i, rc;
-	int    num_entry       = 0;
-	int    num_entry_found = 0;
-	int    idx_preload     = -1;
+	int    i, j, rc;
 	int    len, len2, len_total;
 	char **new_envp;
 	char  *pil4df_path;
-	bool   preload_included     = false;
-	bool   pil4dfs_in_preload   = false;
-	bool   report_included      = false;
-	bool   mp_included          = false;
-	bool   pool_included        = false;
-	bool   cont_included        = false;
-	bool   maxeq_included       = false;
-	bool   enforcement_included = false;
-	char  *fs_root              = NULL;
-	char  *pool                 = NULL;
-	char  *container            = NULL;
-	char  *new_preload_str      = NULL;
-	char  *str_report           = NULL;
-	char  *str_mp               = NULL;
-	char  *str_pool             = NULL;
-	char  *str_cont             = NULL;
-	char  *str_maxeq            = NULL;
-	char  *str_enforcement      = NULL;
+	char  *new_preload_str;
+	int    num_entry                  = 0;
+	int    num_entry_found            = 0;
+	int    idx_preload                = -1;
+	bool   preload_included           = false;
+	bool   pil4dfs_in_preload         = false;
+
+	/* "LD_PRELOAD" is a special case which needs .*/
+	char   env_list[LEN_ENV_LIST][32] = {"D_IL_REPORT", "DAOS_MOUNT_POINT", "DAOS_POOL",
+					     "DAOS_CONTAINER", "D_IL_MAX_EQ", "D_LOG_FILE",
+					     "D_IL_ENFORCE_EXEC_ENV",  "DD_MASK", "DD_SUBSYS",
+					     "D_LOG_MASK"};
+	bool   env_found[LEN_ENV_LIST]    = {false};
+	/* the buffer allocated for the env string to append */
+	char  *env_buf_list[LEN_ENV_LIST] = {NULL};
+	char  *env_value                  = NULL;
 
 	if (envp == NULL) {
 		num_entry = 0;
@@ -3394,27 +3388,18 @@ pre_envp(char *const envp[])
 				num_entry_found++;
 				if (strstr(envp[num_entry], "libpil4dfs.so"))
 					pil4dfs_in_preload = true;
-			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_REPORT")) == 0) {
-				report_included = true;
-				num_entry_found++;
-			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_MOUNT_POINT")) ==
-				   0) {
-				mp_included = true;
-				num_entry_found++;
-			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_POOL")) == 0) {
-				pool_included = true;
-				num_entry_found++;
-			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("DAOS_CONTAINER")) ==
-				   0) {
-				cont_included = true;
-				num_entry_found++;
-			} else if (strncmp(envp[num_entry], STR_AND_SIZE_M1("D_IL_MAX_EQ")) == 0) {
-				maxeq_included = true;
-				num_entry_found++;
-			} else if (strncmp(envp[num_entry],
-					   STR_AND_SIZE_M1("D_IL_ENFORCE_EXEC_ENV")) == 0) {
-				enforcement_included = true;
-				num_entry_found++;
+			}
+			/* The list of env is not too long. We use a simple loop to lookup for
+			 * simplicity. This function is not performance critical.
+			 */
+			for (i = 0; i < LEN_ENV_LIST; i++) {
+				if (!env_found[i]) {
+					if (strncmp(envp[num_entry], STR_AND_SIZE_M1(env_list[i]))
+					    == 0) {
+						env_found[i] = true;
+						num_entry_found++;
+					}
+				}
 			}
 			num_entry++;
 		}
@@ -3435,6 +3420,7 @@ pre_envp(char *const envp[])
 	for (i = 0; i < num_entry; i++) {
 		new_envp[i] = envp[i];
 	}
+
 	/* LD_PRELOAD is a special case. If LD_PRELOAD is found but libpil4dfs.so is not in
 	 * LD_PRELOAD env, then allocate a buffer for the concatenation of existing LD_PRELOAD
 	 * env and the full path of libpil4dfs.so.
@@ -3467,76 +3453,27 @@ pre_envp(char *const envp[])
 		new_envp[i] = new_preload_str;
 		i++;
 	}
-	if (!report_included) {
-		if (report)
-			str_report = strndup(STR_AND_SIZE("D_IL_REPORT=1"));
-		else
-			str_report = strndup(STR_AND_SIZE("D_IL_REPORT=0"));
-		if (str_report == NULL) {
-			printf("Error: failed to allocate memory for D_IL_REPORT env.\n");
-			goto err_out2;
-		}
-		new_envp[i] = str_report;
-		i++;
-	}
-	if (!mp_included) {
-		fs_root = getenv("DAOS_MOUNT_POINT");
-		if (fs_root) {
-			rc = asprintf(&str_mp, "DAOS_MOUNT_POINT=%s", fs_root);
-			if (rc < 0) {
-				printf("Error: failed to allocate memory for DAOS_MOUNT_POINT "
-				       "env.\n");
-				goto err_out3;
+
+	for (j = 0; j < LEN_ENV_LIST; j++) {
+		/* env is not found. Need to be appended if present in current process. */
+		if (!env_found[j]) {
+			rc = d_agetenv_str(&env_value, env_list[j]);
+			if (rc != -DER_NONEXIST && rc != -DER_SUCCESS) {
+				printf("Error: failed to allocate memory in querying env %s.\n",
+				       env_list[j]);
+				goto err_out2;
 			}
-			new_envp[i] = str_mp;
-			i++;
-		}
-	}
-	if (!pool_included) {
-		pool = getenv("DAOS_POOL");
-		if (pool) {
-			rc = asprintf(&str_pool, "DAOS_POOL=%s", pool);
+			rc = asprintf(&env_buf_list[j], "%s=%s", env_list[j], env_value);
 			if (rc < 0) {
-				printf("Error: failed to allocate memory for DAOS_POOL env.\n");
-				goto err_out4;
+				printf("Error: failed to allocate memory for env %s.\n",
+				       env_list[j]);
+				goto err_out2;
 			}
-			new_envp[i] = str_pool;
+			new_envp[i] = env_buf_list[j];
 			i++;
+			/* free the buffer allocated by d_agetenv_str() */
+			free(env_value);
 		}
-	}
-	if (!cont_included) {
-		container = getenv("DAOS_CONTAINER");
-		if (container) {
-			rc = asprintf(&str_cont, "DAOS_CONTAINER=%s", container);
-			if (rc < 0) {
-				printf("Error: failed to allocate memory for DAOS_CONTAINER "
-				       "env.\n");
-				goto err_out5;
-			}
-			new_envp[i] = str_cont;
-			i++;
-		}
-	}
-	if (!maxeq_included) {
-		rc = asprintf(&str_maxeq, "D_IL_MAX_EQ=%d", eq_count_max);
-		if (rc < 0) {
-			printf("Error: failed to allocate memory for D_IL_MAX_EQ env.\n");
-			goto err_out6;
-		}
-		new_envp[i] = str_maxeq;
-		i++;
-	}
-	if (!enforcement_included) {
-		if (enforce_exec_env)
-			str_enforcement = strndup(STR_AND_SIZE("D_IL_ENFORCE_EXEC_ENV=1"));
-		else
-			str_enforcement = strndup(STR_AND_SIZE("D_IL_ENFORCE_EXEC_ENV=0"));
-		if (str_enforcement == NULL) {
-			printf("Error: failed to allocate memory for D_IL_ENFORCE_EXEC_ENV env.\n");
-			goto err_out7;
-		}
-		new_envp[i] = str_enforcement;
-		i++;
 	}
 
 	/* append NULL pointer to the end of new_envp */
@@ -3544,17 +3481,15 @@ pre_envp(char *const envp[])
 
 	return new_envp;
 
-err_out7:
-	free(str_maxeq);
-err_out6:
-	free(str_cont);
-err_out5:
-	free(str_pool);
-err_out4:
-	free(str_mp);
-err_out3:
-	free(str_report);
 err_out2:
+	/* free the memory allocated for all env buffer */
+	for (j = 0; j < LEN_ENV_LIST; j++) {
+		if (env_buf_list[j])
+			free(env_buf_list[j]);
+	}
+	/* free the buffer returned from d_agetenv_str */
+	if (env_value)
+		free(env_value);
 	free(new_preload_str);
 err_out1:
 	free(new_envp);
@@ -5960,9 +5895,9 @@ init_myhook(void)
 {
 	mode_t   umask_old;
 	char    *env_log;
-	char    *env_exec;
 	int      rc;
 	uint64_t eq_count_loc = 0;
+	char     buf_max_eq[16];
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -5976,20 +5911,19 @@ init_myhook(void)
 	else
 		daos_debug_inited = true;
 
-	d_agetenv_str(&env_log, "D_IL_REPORT");
+	rc = d_agetenv_str(&env_log, "D_IL_REPORT");
 	if (env_log) {
 		report = true;
 		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
 			report = false;
 		d_freeenv_str(&env_log);
+	} else if (rc == -DER_NONEXIST) {
+		d_setenv("D_IL_REPORT", "0", 1);
 	}
 	enforce_exec_env = false;
-	d_agetenv_str(&env_exec, "D_IL_ENFORCE_EXEC_ENV");
-	if (env_exec) {
-		if (strncmp(env_exec, "1", 2) == 0 || strncasecmp(env_exec, "true", 5) == 0)
-			enforce_exec_env = true;
-		d_freeenv_str(&env_exec);
-	}
+	rc = d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
+	if (rc == -DER_NONEXIST)
+		d_setenv("D_IL_ENFORCE_EXEC_ENV", "0", 1);
 
 	/* Find dfuse mounts from /proc/mounts */
 	rc = discover_dfuse_mounts();
@@ -6036,6 +5970,8 @@ init_myhook(void)
 		eq_count_max = (uint16_t)eq_count_loc;
 	} else {
 		eq_count_max = MAX_EQ;
+		snprintf(buf_max_eq, sizeof(buf_max_eq), "%d", MAX_EQ);
+		d_setenv("D_IL_MAX_EQ", buf_max_eq, 1);
 	}
 
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
