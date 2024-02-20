@@ -4069,7 +4069,6 @@ again:
 			oqma.src_dkey = p_dkey;
 			oqma.src_akey = p_akey;
 			oqma.src_recx = p_recx;
-			oqma.server_merge = 1;
 			/*
 			 * Merge (L1) the results from different shards on the same VOS target
 			 * into current otqa that stands for the result for current VOS target.

@@ -431,7 +431,6 @@ obj_coll_query_merge_tgts(struct obj_coll_query_in *ocqi, struct daos_oclass_att
 		oqma.src_akey = &tmp->akey_copy;
 		oqma.src_recx = &tmp->recx;
 		oqma.src_map_ver = tmp->version;
-		oqma.server_merge = 1;
 		/*
 		 * Merge (L2) the results from other VOS targets on the same engine
 		 * into current otqa that stands for the results for current engine.
@@ -580,7 +579,6 @@ obj_coll_query_agg_cb(struct dtx_leader_handle *dlh, void *arg)
 		oqma.src_recx = &ocqo->ocqo_recx;
 		oqma.flags = ocqi->ocqi_api_flags;
 		oqma.src_map_ver = obj_reply_map_version_get(rpc);
-		oqma.server_merge = 1;
 		/*
 		 * Merge (L3) the results from other engines into current otqa that stands for the
 		 * results for related engines' group, including current engine.
