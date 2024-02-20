@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -98,7 +98,13 @@
 	X(DAOS_OBJ_RPC_KEY2ANCHOR,					\
 		0, ver == 9 ? &CQF_obj_key2anchor :			\
 				&CQF_obj_key2anchor_v10,		\
-		ds_obj_key2anchor_handler, NULL, "key2anchor")
+		ds_obj_key2anchor_handler, NULL, "key2anchor")		\
+	X(DAOS_OBJ_RPC_COLL_PUNCH,					\
+		0, &CQF_obj_coll_punch, ds_obj_coll_punch_handler,	\
+		NULL, "obj_coll_punch")					\
+	X(DAOS_OBJ_RPC_COLL_QUERY,					\
+		0, &CQF_obj_coll_query, ds_obj_coll_query_handler,	\
+		NULL, "obj_coll_query")
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e, f) a,
@@ -149,8 +155,8 @@ enum obj_rpc_flags {
 	 * oei_epr.epr_hi is epoch.
 	 */
 	ORF_ENUM_WITHOUT_EPR	= (1 << 8),
-	/* CPD RPC leader */
-	ORF_CPD_LEADER		= (1 << 9),
+	/* RPC leader */
+	ORF_LEADER		= (1 << 9),
 	/* Bulk data transfer for CPD RPC. */
 	ORF_CPD_BULK		= (1 << 10),
 	/* Contain EC split req, only used on CPD leader locally. Obsolete - DAOS-10348. */
@@ -707,6 +713,78 @@ struct daos_cpd_sg {
 
 CRT_RPC_DECLARE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 
+struct obj_dtx_mbs {
+	struct dtx_id		 odm_xid;
+	uint32_t		 odm_mbs_max_sz;
+	uint32_t		 odm_padding;
+	struct dtx_memberships	*odm_mbs;
+};
+
+#define DAOS_ISEQ_OBJ_COLL_PUNCH	/* input fields */				\
+	((struct obj_dtx_mbs)		(ocpi_odm)			CRT_VAR)	\
+	((uuid_t)			(ocpi_po_uuid)			CRT_VAR)	\
+	((uuid_t)			(ocpi_co_hdl)			CRT_VAR)	\
+	((uuid_t)			(ocpi_co_uuid)			CRT_VAR)	\
+	((daos_unit_oid_t)		(ocpi_oid)			CRT_RAW)	\
+	((uint64_t)			(ocpi_epoch)			CRT_VAR)	\
+	((uint64_t)			(ocpi_api_flags)		CRT_VAR)	\
+	((uint32_t)			(ocpi_map_ver)			CRT_VAR)	\
+	((uint32_t)			(ocpi_flags)			CRT_VAR)	\
+	((uint32_t)			(ocpi_bulk_tgt_sz)		CRT_VAR)	\
+	((uint32_t)			(ocpi_bulk_tgt_nr)		CRT_VAR)	\
+	((crt_bulk_t)			(ocpi_tgt_bulk)			CRT_VAR)	\
+	((uint32_t)			(ocpi_max_tgt_sz)		CRT_VAR)	\
+	((uint16_t)			(ocpi_disp_width)		CRT_VAR)	\
+	((uint16_t)			(ocpi_disp_depth)		CRT_VAR)	\
+	((struct daos_coll_target)	(ocpi_tgts)			CRT_ARRAY)	\
+	((struct daos_req_comm_in)	(ocpi_comm_in)			CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_COLL_PUNCH	/* output fields */				\
+	((int32_t)			(ocpo_ret)			CRT_VAR)	\
+	((uint32_t)			(ocpo_map_version)		CRT_VAR)	\
+	((struct daos_req_comm_out)	(ocpo_comm_out)			CRT_VAR)
+
+CRT_RPC_DECLARE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUNCH)
+
+#define ocpi_xid	ocpi_odm.odm_xid
+#define ocpi_mbs	ocpi_odm.odm_mbs
+
+#define DAOS_ISEQ_OBJ_COLL_QUERY	/* input fields */				\
+	((struct dtx_id)		(ocqi_xid)			CRT_VAR)	\
+	((uuid_t)			(ocqi_po_uuid)			CRT_VAR)	\
+	((uuid_t)			(ocqi_co_hdl)			CRT_VAR)	\
+	((uuid_t)			(ocqi_co_uuid)			CRT_VAR)	\
+	((daos_unit_oid_t)		(ocqi_oid)			CRT_RAW)	\
+	((uint64_t)			(ocqi_epoch)			CRT_VAR)	\
+	((uint64_t)			(ocqi_epoch_first)		CRT_VAR)	\
+	((uint64_t)			(ocqi_api_flags)		CRT_VAR)	\
+	((uint32_t)			(ocqi_map_ver)			CRT_VAR)	\
+	((uint32_t)			(ocqi_flags)			CRT_VAR)	\
+	((daos_key_t)			(ocqi_dkey)			CRT_VAR)	\
+	((daos_key_t)			(ocqi_akey)			CRT_VAR)	\
+	((uint32_t)			(ocqi_max_tgt_sz)		CRT_VAR)	\
+	((uint16_t)			(ocqi_disp_width)		CRT_VAR)	\
+	((uint16_t)			(ocqi_disp_depth)		CRT_VAR)	\
+	((struct daos_coll_target)	(ocqi_tgts)			CRT_ARRAY)	\
+	((struct daos_req_comm_in)	(ocqi_comm_in)			CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_COLL_QUERY	/* output fields */				\
+	((int32_t)			(ocqo_ret)			CRT_VAR)	\
+	((uint32_t)			(ocqo_map_version)		CRT_VAR)	\
+	/* The id_shard corresponding to ocqo_recx */					\
+	((uint32_t)			(ocqo_shard)			CRT_VAR)	\
+	((uint32_t)			(ocqo_padding)			CRT_VAR)	\
+	((uint64_t)			(ocqo_epoch)			CRT_VAR)	\
+	((daos_key_t)			(ocqo_dkey)			CRT_VAR)	\
+	((daos_key_t)			(ocqo_akey)			CRT_VAR)	\
+	/* recx for visible extent */							\
+	((daos_recx_t)			(ocqo_recx)			CRT_VAR)	\
+	/* epoch for max write */							\
+	((uint64_t)			(ocqo_max_epoch)		CRT_VAR)	\
+	((struct daos_req_comm_out)	(ocqo_comm_out)			CRT_VAR)
+
+CRT_RPC_DECLARE(obj_coll_query, DAOS_ISEQ_OBJ_COLL_QUERY, DAOS_OSEQ_OBJ_COLL_QUERY)
+
 static inline int
 obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req)
@@ -730,6 +808,8 @@ uint32_t obj_reply_map_version_get(crt_rpc_t *rpc);
 
 int crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 				     struct daos_cpd_sub_req *dcsr, bool with_oid);
+int crt_proc_struct_daos_coll_target(crt_proc_t proc, crt_proc_op_t proc_op,
+				     struct daos_coll_target *dct);
 
 static inline bool
 obj_is_modification_opc(uint32_t opc)
@@ -739,7 +819,7 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
-		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS || opc == DAOS_OBJ_RPC_COLL_PUNCH;
 }
 
 #define DAOS_OBJ_UPDATE_MODE_MASK	(DAOS_OO_RW | DAOS_OO_EXCL |	\
@@ -749,6 +829,15 @@ static inline bool
 obj_is_fetch_opc(uint32_t opc)
 {
 	return opc == DAOS_OBJ_RPC_FETCH;
+}
+
+static inline bool
+obj_is_enum_opc(uint32_t opc)
+{
+	return (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_AKEY_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_RECX_RPC_ENUMERATE);
 }
 
 static inline bool
@@ -769,69 +858,6 @@ static inline bool
 obj_rpc_is_fetch(crt_rpc_t *rpc)
 {
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
-}
-
-static inline bool
-obj_rpc_is_punch(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_DKEYS ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_AKEYS ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
-}
-
-static inline bool
-obj_rpc_is_migrate(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_MIGRATE;
-}
-
-static inline bool
-obj_is_enum_opc(uint32_t opc)
-{
-	return (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
-		opc == DAOS_OBJ_RPC_ENUMERATE ||
-		opc == DAOS_OBJ_AKEY_RPC_ENUMERATE ||
-		opc == DAOS_OBJ_RECX_RPC_ENUMERATE);
-}
-
-static inline bool
-obj_rpc_is_query(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_QUERY_KEY;
-}
-
-static inline bool
-obj_rpc_is_sync(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_SYNC;
-}
-
-static inline bool
-obj_rpc_is_key2anchor(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_KEY2ANCHOR;
-}
-
-static inline bool
-obj_rpc_is_ec_agg(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_EC_AGGREGATE;
-
-}
-
-static inline bool
-obj_rpc_is_ec_rep(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_EC_REPLICATE;
-}
-
-static inline bool
-obj_rpc_is_cpd(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_CPD;
 }
 
 #endif /* __DAOS_OBJ_RPC_H__ */

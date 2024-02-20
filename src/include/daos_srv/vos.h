@@ -103,12 +103,16 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
  *
  * \param coh		[IN]	Container open handle.
  * \param dti		[IN]	Pointer to the DTX identifier.
+ * \param oid		[OUT]	Pointer to the ID for the DTX leader object shard.
  * \param mbs		[OUT]	Pointer to the DTX participants information.
  *
- * \return		Zero on success, negative value if error.
+ * \return		Zero on success.
+ *			Positive if DTX has been committed.
+ *			Negative value if error.
  */
 int
-vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs);
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
+		 struct dtx_memberships **mbs);
 
 /**
  * Commit the specified DTXs.
@@ -1209,8 +1213,8 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
-	/** Set pool tiering policy */
-	VOS_PO_CTL_SET_POLICY,
+	/** Set pool data threshold size to store data on bdev */
+	VOS_PO_CTL_SET_DATA_THRESH,
 	/** Set space reserve ratio for rebuild */
 	VOS_PO_CTL_SET_SPACE_RB,
 };

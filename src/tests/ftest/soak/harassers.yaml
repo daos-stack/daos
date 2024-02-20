@@ -25,18 +25,20 @@ server_config:
       nr_xs_helpers: 2
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      log_mask: ERR
+      log_mask: INFO
       env_vars:
         - FI_UNIVERSE_SIZE=16383
+        - DD_MASK=rebuild
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 2
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      log_mask: ERR
+      log_mask: INFO
       env_vars:
         - FI_UNIVERSE_SIZE=16383
+        - DD_MASK=rebuild
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
@@ -97,13 +99,14 @@ soak_harassers:
       - server-stop_server-reintegrate
       - extend-pool
       # - vmd-identify-check
-  harasser_to: 600
+  harasser_to: 1200
   # drain rank from all pools before stopping server
   enable_drain: true
   # continue test if container destroy fails
   ignore_soak_errors: true
   enable_intercept_lib: false
   enable_remote_logging: false
+  enable_scrubber: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -197,7 +200,7 @@ mdtest_harasser:
     - 0
   dfs_oclass:
     - ["EC_2P1G1", "RP_2G1"]
-    - ["EC_4P2GX", "RP_3G1"]
+    - ["EC_4P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"

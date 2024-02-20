@@ -1114,7 +1114,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	struct daos_obj_shard *shard;
 	int		rc;
 
-	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 3)
+	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 5)
 		return;
 
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R2S_SPEC_RANK, 0, 0,
@@ -1172,11 +1172,11 @@ rebuild_fail_all_replicas(void **state)
 	int		rc;
 
 	/* This test will kill 3 replicas, which might include the ranks
-	 * in svcs, so make sure there are at least 6 ranks in svc, so
+	 * in svcs, so make sure there are at least 7 ranks in svc, so
 	 * the new leader can be chosen.
 	 */
-	if (!test_runable(arg, 6) || arg->pool.alive_svc->rl_nr < 6) {
-		print_message("need at least 6 svcs, -s6\n");
+	if (!test_runable(arg, 7) || arg->pool.alive_svc->rl_nr < 7) {
+		print_message("need at least 7 svcs, -s7\n");
 		return;
 	}
 
@@ -1338,8 +1338,13 @@ rebuild_kill_PS_leader_during_rebuild(void **state)
 	}
 	rebuild_io(arg, oids, OBJ_NR);
 
-	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-			 arg->pool.alive_svc, 6);
+	/* kill non-leader rank */
+	if (leader != 6)
+		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+				 arg->pool.alive_svc, 6);
+	else
+		daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+				 arg->pool.alive_svc, 5);
 	/* hang the rebuild */
 	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
