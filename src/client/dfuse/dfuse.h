@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,10 +23,6 @@
 #include "dfs_internal.h"
 
 #include "dfuse_common.h"
-
-/* TODO: This should update the container open flags once the update has landed
- * https://github.com/daos-stack/daos/pull/13702
- */
 
 struct dfuse_info {
 	struct fuse_session *di_session;
