@@ -12,9 +12,6 @@
 
 #define D_LOGFAC	DD_FAC(server)
 
-#include "drpc_internal.h"
-#include "srv_internal.h"
-
 #include "daos/btree_class.h"
 #include "daos/common.h"
 #include "daos/placement.h"
@@ -26,6 +23,9 @@
 #include <stdlib.h>
 
 #include <abt.h>
+
+#include "drpc_internal.h"
+#include "srv_internal.h"
 
 #include <daos.h>
 #include <gurt/telemetry_common.h>

@@ -7,13 +7,13 @@
 
 #define USE_TIME_PROFILING
 
-#include "benchmark_util.h"
-#include "place_obj_common.h"
-
 #include "daos/common.h"
 #include "daos/placement.h"
 
 #include <getopt.h>
+
+#include "benchmark_util.h"
+#include "place_obj_common.h"
 
 #include <daos.h>
 

@@ -17,10 +17,10 @@
 #define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
 #endif
 
-#include "crt_hg.h"
-
 #include <arpa/inet.h>
 #include <ifaddrs.h>
+
+#include "crt_hg.h"
 
 #include <cart/api.h>
 #include <cart/types.h>

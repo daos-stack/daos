@@ -7,7 +7,7 @@ import os
 import subprocess  # nosec
 import tempfile
 
-# pylint: disable-wrong-spelling-in-comment
+# pylint: disable=wrong-spelling-in-comment
 
 
 def check_dir(include_dir, sub_dir):
@@ -112,38 +112,51 @@ class OrderChecker:
     def check_paths(self, src_dir, src_file):
         """Checks a single source file for the order in which it includes headers
 
-        This is loosely based on the below.  The logic is to first include any headers in blocks
+        This is based on the below.  The logic is to first include any headers in blocks
         ordered by where the header is located:
 
-        * Headers in the same directory
-        * Internal headers from elsewhere in the source
-        * System/installed library headers.
-        * Headers from non-os packages that DAOS uses
-        * External daos headers
+        * daos/debug.h  This is a special case as it sets up the logging subsystem
+        * "Component" headers.  For src/X/*.c this means src/include/daos_srv/X*.h
+        * crt_utils.h and crt_internal.h  These are widely included from test code and do not like
+                                          being included from other areas.
+        * libc or kernel headers.
+        * Other library headers from /usr/include.  This includes uuid.h, distro packages that we
+                                                    use but do not modify.
+        * headers of daos dependencies. This is libraries that DAOS uses directory and builds from
+                                        source or re-packages.  For example mercury and argobots.
+        * Headers in the same or parent directory.  These should be local to the directory.
+        * Internal headers from elsewhere.  Headers from src/ but not in src/internal/ . or ..
+        * Public daos headers
 
         https://google.github.io/styleguide/cppguide.html#Names_and_Order_of_Includes
         """
+
+        if not src_file.endswith(".h") and not src_file.endswith(".c"):
+            return
 
         # pylint: disable=too-many-branches
 
         # Headers which come from glibc-headers
         h_core_sys = set()
-        # Headers which come from /usr/include
+        # Headers which come from distro rpms in /usr/include
         h_sys = set()
         # Headers which come from 3rd party libraries
         h_local = set()
         # Public daos headers
         h_daos = set()
-        # Internal daos headers
+        # Headers which are internal to daos in src/include
         h_internal = set()
         # Internal local headers (from the same directory)
         h_dir = set()
+        h_component = set()
 
         last_pre_blank = None
         first_post_line = None
         have_headers = False
         finished_headers = False
         can_fixup = True
+
+        src_component = src_dir.split("/")[1]
 
         with open(os.path.join(src_dir, src_file)) as fd:
             idx = 0
@@ -217,7 +230,10 @@ class OrderChecker:
                     ):
                         h_daos.add(fname)
                     else:
-                        h_internal.add(fname)
+                        if fname.startswith(f"daos_srv/{src_component}"):
+                            h_component.add(fname)
+                        else:
+                            h_internal.add(fname)
                     continue
 
                 # This is a hack but needed for now at least.
@@ -252,8 +268,8 @@ class OrderChecker:
                 hblobs.append(f'#include "{head}.h"')
                 h_internal.remove(f"{head}.h")
 
-        if h_dir:
-            hblobs.append(set_to_txt(h_dir))
+        if h_component:
+            hblobs.append(set_to_txt(h_component))
 
         if h_internal:
             hblobs.append(set_to_txt(h_internal))
@@ -266,6 +282,9 @@ class OrderChecker:
 
         if h_local:
             hblobs.append(set_to_txt(h_local, public=True))
+
+        if h_dir:
+            hblobs.append(set_to_txt(h_dir))
 
         if h_daos:
             hblobs.append(set_to_txt(h_daos, public=True))

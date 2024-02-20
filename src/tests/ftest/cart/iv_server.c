@@ -11,8 +11,6 @@
  */
 #define _SERVER /* For iv_common.h */
 
-#include "iv_common.h"
-
 #include <assert.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -21,6 +19,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#include "iv_common.h"
 
 #include <cart/api.h>
 #include <gurt/list.h>

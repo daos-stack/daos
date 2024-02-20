@@ -5,13 +5,13 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-#include "place_obj_common.h"
-
 #include "../../pool/rpc.h"
 #include "../../pool/srv_pool_map.h"
 #include "daos/common.h"
 #include "daos/object.h"
 #include "daos/placement.h"
+
+#include "place_obj_common.h"
 
 #include <daos.h>
 

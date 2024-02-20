@@ -5,11 +5,11 @@
  * os_thread_posix.c -- Posix thread abstraction layer
  */
 
-#include "os_thread.h"
-#include "util.h"
-
 #include <pthread.h>
 #include <semaphore.h>
+
+#include "os_thread.h"
+#include "util.h"
 
 typedef struct {
 	pthread_t thread;

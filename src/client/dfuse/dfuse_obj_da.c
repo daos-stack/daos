@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#include <pthread.h>
+
 #include "dfuse_log.h"
 #include "dfuse_obj_da.h"
-
-#include <pthread.h>
 
 #include <gurt/common.h>
 #include <gurt/list.h>

@@ -6,8 +6,6 @@
 
 #define D_LOGFAC DD_FAC(dfuse)
 
-#include "dfuse.h"
-
 #include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -19,6 +17,8 @@
 
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
+
+#include "dfuse.h"
 
 #include <daos_api.h>
 #include <daos_fs.h>

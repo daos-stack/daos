@@ -15,9 +15,9 @@
 #ifndef __MGMT_SRV_LAYOUT_H__
 #define __MGMT_SRV_LAYOUT_H__
 
-#include "srv_internal.h"
-
 #include "daos_srv/daos_engine.h"
+
+#include "srv_internal.h"
 
 #include <daos_types.h>
 

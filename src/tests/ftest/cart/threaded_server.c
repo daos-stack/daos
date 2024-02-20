@@ -7,9 +7,9 @@
  * This tests a threaded server handling RPCs on a single context
  */
 
-#include "threaded_rpc.h"
-
 #include <stdio.h>
+
+#include "threaded_rpc.h"
 
 #include <gurt/atomic.h>
 

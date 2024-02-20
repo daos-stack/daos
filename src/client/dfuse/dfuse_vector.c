@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include "dfuse_obj_da.h"
-#include "dfuse_vector.h"
-
 #include <inttypes.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "dfuse_obj_da.h"
+#include "dfuse_vector.h"
 
 #include <gurt/atomic.h>
 #include <gurt/common.h>

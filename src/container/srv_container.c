@@ -14,16 +14,17 @@
 
 #define D_LOGFAC DD_FAC(container)
 
-#include "rpc.h"
-#include "srv_internal.h"
-#include "srv_layout.h"
+#include "daos_srv/container.h"
 
 #include "daos/pool.h"
 #include "daos/rpc.h"
-#include "daos_srv/container.h"
 #include "daos_srv/pool.h"
 #include "daos_srv/rdb.h"
 #include "daos_srv/security.h"
+
+#include "rpc.h"
+#include "srv_internal.h"
+#include "srv_layout.h"
 
 #include <daos_api.h>
 #include <gurt/telemetry_common.h>

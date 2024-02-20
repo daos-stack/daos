@@ -12,15 +12,16 @@
 #ifndef RDB_INTERNAL_H
 #define RDB_INTERNAL_H
 
-#include "rdb_layout.h"
+#include "daos_srv/rdb.h"
 
 #include "daos/lru.h"
 #include "daos/object.h"
 #include "daos/rpc.h"
-#include "daos_srv/rdb.h"
 #include "raft.h"
 
 #include <abt.h>
+
+#include "rdb_layout.h"
 
 #include <gurt/hash.h>
 
