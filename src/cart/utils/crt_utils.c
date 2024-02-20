@@ -7,8 +7,6 @@
  * Common functions to be shared among tests
  */
 
-#include "crt_utils.h"
-
 #include "../crt_internal.h"
 #include "daos/event.h"
 #include "daos/mgmt.h"
@@ -20,6 +18,8 @@
 #include <unistd.h>
 
 #include <cart/api.h>
+
+#include "crt_utils.h"
 
 /* Global structures */
 struct test_options opts = { .is_initialized = false };

@@ -267,7 +267,7 @@ class OrderChecker:
 
         # Hack for debug headers, if required this needs to come before other headers.
         # Needed for RPC definitions
-        for head in ("daos/debug", "crt_debug", "crt_utils", "crt_internal"):
+        for head in ("daos/debug", "crt_debug", "crt_internal"):
             if f"{head}.h" in h_internal:
                 hblobs.append(f'#include "{head}.h"')
                 h_internal.remove(f"{head}.h")
