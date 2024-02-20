@@ -290,10 +290,10 @@ daos_obj_query_merge(struct obj_query_merge_args *oqma)
 
 	if (check && oqma->oqma_flags & DAOS_GET_RECX)
 		obj_query_reduce_recx(oqma->oqma_oca, oqma->oqma_oid,
-				      (oqma->oqma_flags & DAOS_GET_DKEY) ?
-				      oqma->oqma_src_dkey : oqma->oqma_in_dkey,
-				      oqma->oqma_src_recx, oqma->oqma_tgt_recx,
-				      get_max, changed, oqma->oqma_server_merge, oqma->oqma_shard);
+				      (oqma->oqma_flags & DAOS_GET_DKEY) ? oqma->oqma_src_dkey
+									 : oqma->oqma_in_dkey,
+				      oqma->oqma_src_recx, oqma->oqma_tgt_recx, get_max, changed,
+				      oqma->oqma_server_merge, oqma->oqma_shard);
 
 set_max_epoch:
 	if (oqma->oqma_tgt_epoch != NULL && *oqma->oqma_tgt_epoch < oqma->oqma_src_epoch)
