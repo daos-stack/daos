@@ -117,6 +117,49 @@ class EngineEvents(TestWithTelemetry):
         if not rank_restarted:
             self.fail(f"Rank {restart_rank} didn't restart!")
 
+    def verify_events_last_events_ts(self, rank_count, restart_rank, events_last_event_ts_0,
+                                     events_last_event_ts_1, errors, events_last_event_ts_results):
+        """Verify engine_events_last_events_ts values.
+
+        Requirements:
+        1. Restarted rank value shouldn't change before and after.
+        2. All after values except for restarted rank should go up.
+
+        Args:
+            rank_count (int): Rank count.
+            restart_rank (int): Restarted rank.
+            events_last_event_ts_0 (dict): engine_events_last_event_ts values before.
+            events_last_event_ts_1 (dict): engine_events_last_event_ts values after.
+            errors (list): Errors.
+            events_last_event_ts_results (list): Dictionary to store the results, which are printed
+                at the end of the test.
+        """
+        for rank in range(rank_count):
+            result = ""
+            if rank == restart_rank:
+                if events_last_event_ts_0[rank] != events_last_event_ts_1[rank]:
+                    msg = (f"engine_events_last_events_ts value for restarted rank {rank} "
+                           f"changed! Before = {events_last_event_ts_0[rank]}; "
+                           f"After = {events_last_event_ts_1[rank]}")
+                    errors.append(msg)
+                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
+                              f"{events_last_event_ts_1[rank]} Fail (Value changed)")
+                else:
+                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
+                              f"{events_last_event_ts_1[rank]} Pass (Value unchanged)")
+            else:
+                if events_last_event_ts_0[rank] >= events_last_event_ts_1[rank]:
+                    msg = (f"No increase detected in engine_events_last_events_ts for rank {rank}! "
+                           f"Before = {events_last_event_ts_0[rank]}; "
+                           f"After = {events_last_event_ts_1[rank]}")
+                    errors.append(msg)
+                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
+                              f"{events_last_event_ts_1[rank]} Fail (Value decreased/unchanged)")
+                else:
+                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
+                              f"{events_last_event_ts_1[rank]} Pass (Value increased)")
+            events_last_event_ts_results.append(result)
+
     def test_engine_events(self):
         """Test engine-related events after an engine is restarted.
 
@@ -230,31 +273,11 @@ class EngineEvents(TestWithTelemetry):
         # engine_events_last_event_ts requirements:
         # 1. Restarted rank value shouldn't change before and after.
         # 2. All after values except for restarted rank should go up.
-        for rank in range(rank_count):
-            result = ""
-            if rank == restart_rank:
-                if events_last_event_ts_0[rank] != events_last_event_ts_1[rank]:
-                    msg = (f"engine_events_last_events_ts value for restarted rank {rank} "
-                           f"changed! Before = {events_last_event_ts_0[rank]}; "
-                           f"After = {events_last_event_ts_1[rank]}")
-                    errors.append(msg)
-                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
-                              f"{events_last_event_ts_1[rank]} Fail (Value changed)")
-                else:
-                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
-                              f"{events_last_event_ts_1[rank]} Pass (Value unchanged)")
-            else:
-                if events_last_event_ts_0[rank] >= events_last_event_ts_1[rank]:
-                    msg = (f"No increase detected in engine_events_last_events_ts for rank {rank}! "
-                           f"Before = {events_last_event_ts_0[rank]}; "
-                           f"After = {events_last_event_ts_1[rank]}")
-                    errors.append(msg)
-                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
-                              f"{events_last_event_ts_1[rank]} Fail (Value decreased/unchanged)")
-                else:
-                    result = (f"Rank {rank}: {events_last_event_ts_0[rank]} -> "
-                              f"{events_last_event_ts_1[rank]} Pass (Value increased)")
-            events_last_event_ts_results.append(result)
+        self.verify_events_last_events_ts(
+            rank_count=rank_count, restart_rank=restart_rank,
+            events_last_event_ts_0=events_last_event_ts_0,
+            events_last_event_ts_1=events_last_event_ts_1, errors=errors,
+            events_last_event_ts_results=events_last_event_ts_results)
 
         # engine_servicing_at requirements:
         # 1. Restarted rank value should increase.
