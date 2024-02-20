@@ -1,16 +1,14 @@
 /**
- * (C) Copyright 2021-2024 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __PERF_INTERNAL_H__
 #define __PERF_INTERNAL_H__
 
-#include "daos/common.h"
-#include "daos/dts.h"
-#include "daos/object.h"
-
 #include <getopt.h>
+#include <daos/common.h>
+#include <daos/dts.h>
 
 #define RANK_ZERO	(0)
 #define STRIDE_MIN	(4) /* Should be changed with updating NB places */

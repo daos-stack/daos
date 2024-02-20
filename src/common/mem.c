@@ -12,13 +12,12 @@
  */
 #define D_LOGFAC	DD_FAC(common)
 
-#include "daos/common.h"
-#include "daos/mem.h"
+#include <daos/common.h>
+#include <daos/mem.h>
 #ifdef DAOS_PMEM_BUILD
-#include "daos_srv/ad_mem.h"
-#include "dav/dav.h"
-
 #include <libpmemobj.h>
+#include <daos_srv/ad_mem.h>
+#include "dav/dav.h"
 #endif
 
 #define UMEM_TX_DATA_MAGIC	(0xc01df00d)

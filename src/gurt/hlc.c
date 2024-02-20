@@ -1,17 +1,15 @@
 /*
- * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of GURT. Hybrid Logical Clock (HLC) implementation.
  */
-
-#include <stdint.h>
-#include <time.h>
-
+#include <gurt/common.h>	/* for NSEC_PER_SEC */
 #include <gurt/atomic.h>
-#include <gurt/common.h>
+#include <time.h>
+#include <stdint.h>
 
 /**
  * HLC timestamp unit (given in the HLC timestamp value for 1 ns) (i.e.,

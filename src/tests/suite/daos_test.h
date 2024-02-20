@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,40 +10,36 @@
 #ifndef __DAOS_TEST_H
 #define __DAOS_TEST_H
 
-#include "daos/debug.h"
-
-#include "daos/common.h"
-#include "daos/dpar.h"
-#include "daos/mgmt.h"
-#include "daos/sys_debug.h"
-#include "daos/tests_lib.h"
-
-#include <dirent.h>
-#include <linux/limits.h>
-#include <setjmp.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/stat.h>
+#include <setjmp.h>
 #include <time.h>
-#include <unistd.h>
+#include <linux/limits.h>
+#include <sys/stat.h>
+#include <dirent.h>
 
 #include <cmocka.h>
 
-#include <daos.h>
-
 #if FAULT_INJECTION
-#define FAULT_INJECTION_REQUIRED()                                                                 \
-	do {                                                                                       \
-	} while (0)
+#define FAULT_INJECTION_REQUIRED() do { } while (0)
 #else
-#define FAULT_INJECTION_REQUIRED()                                                                 \
-	do {                                                                                       \
-		print_message("Fault injection required for test, skipping...\n");                 \
-		skip();                                                                            \
+#define FAULT_INJECTION_REQUIRED() \
+	do { \
+		print_message("Fault injection required for test, skipping...\n"); \
+		skip();\
 	} while (0)
 #endif /* FAULT_INJECTION */
+
+#include <daos/dpar.h>
+#include <daos/debug.h>
+#include <daos/common.h>
+#include <daos/mgmt.h>
+#include <daos/sys_debug.h>
+#include <daos/tests_lib.h>
+#include <daos.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="

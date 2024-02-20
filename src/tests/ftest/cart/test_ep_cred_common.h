@@ -1,18 +1,13 @@
 /*
- * (C) Copyright 2018-2024 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __TEST_EP_CRED_COMMON_H__
 #define __TEST_EP_CRED_COMMON_H__
 
-#include "crt_utils.h"
-
 #include <getopt.h>
 #include <semaphore.h>
-
-#include <cart/types.h>
-#include <gurt/common.h>
 
 #define OPC_MY_PROTO    (0x01000000)
 #define OPC_PING	(0x01000000)

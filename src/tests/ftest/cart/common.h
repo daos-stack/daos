@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,10 +11,8 @@
 #define __COMMON_H__
 
 #include <stdio.h>
-
-#include <cart/api.h>
-#include <cart/types.h>
 #include <gurt/common.h>
+#include <gurt/atomic.h>
 
 static inline int drain_queue(crt_context_t ctx)
 {

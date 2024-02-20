@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,16 +14,15 @@
 #ifndef __CRT_API_H__
 #define __CRT_API_H__
 
-#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-
+#include <stdbool.h>
 #include <uuid/uuid.h>
 
-#include <cart/iv.h>
-#include <cart/swim.h>
 #include <cart/types.h>
 #include <daos_errno.h>
+#include <cart/iv.h>
+#include <cart/swim.h>
 
 #if defined(__cplusplus)
 extern "C" {

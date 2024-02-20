@@ -1,21 +1,20 @@
 /**
- * (C) Copyright 2022-2024 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-#include "../../pool/rpc.h"
-#include "../../pool/srv_pool_map.h"
-#include "daos/common.h"
-#include "daos/object.h"
-#include "daos/placement.h"
-
+#include <daos/common.h>
+#include <daos/placement.h>
+#include <daos.h>
+#include <daos/object.h>
 #include <math.h>
 
 #include "place_obj_common.h"
-
-#include <daos.h>
+/* Gain some internal knowledge of pool server */
+#include "../../pool/rpc.h"
+#include "../../pool/srv_pool_map.h"
 
 static int test_num_objs = 1024;
 static int test_obj_class = OC_EC_8P2G2;

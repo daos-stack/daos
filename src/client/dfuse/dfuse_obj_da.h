@@ -1,13 +1,11 @@
 /**
- * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DFUSE_OBJ_DA_H__
 #define __DFUSE_OBJ_DA_H__
-
-#include <stddef.h>
 
 #include <daos_errno.h>
 

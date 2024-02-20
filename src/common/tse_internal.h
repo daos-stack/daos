@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,10 +16,7 @@
  * Author: Di Wang  <di.wang@intel.com>
  */
 
-#include "daos/common.h"
-
 #include <daos/tse.h>
-#include <daos_types.h>
 #include <gurt/atomic.h>
 
 struct tse_task_private {

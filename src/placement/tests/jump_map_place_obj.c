@@ -1,19 +1,18 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
+#include <daos/common.h>
+#include <daos/placement.h>
+#include <daos.h>
+#include <daos/object.h>
+#include "place_obj_common.h"
+/* Gain some internal knowledge of pool server */
 #include "../../pool/rpc.h"
 #include "../../pool/srv_pool_map.h"
-#include "daos/common.h"
-#include "daos/object.h"
-#include "daos/placement.h"
-
-#include "place_obj_common.h"
-
-#include <daos.h>
 
 bool g_verbose;
 

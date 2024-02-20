@@ -1,17 +1,13 @@
 /*
- * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This tests a threaded server handling RPCs on a single context
  */
-
 #include <stdio.h>
-
 #include "threaded_rpc.h"
-
-#include <gurt/atomic.h>
 
 static int		done;
 static crt_context_t	crt_ctx;

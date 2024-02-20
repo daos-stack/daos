@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,21 +9,20 @@
  * - Randomize size of keys and values
  * - Return shared buffer instead of a copy during fetch
  */
-#define _SERVER /* For iv_common.h */
-
-#include <assert.h>
-#include <fcntl.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <sys/mman.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <assert.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <unistd.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 
-#include "iv_common.h"
-
-#include <cart/api.h>
 #include <gurt/list.h>
+#include <cart/api.h>
+
+#define _SERVER
+#include "iv_common.h"
 
 #define MY_IVNS_ID 0xABCD
 

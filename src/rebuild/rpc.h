@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,12 +13,9 @@
 #ifndef __REBUILD_RPC_H__
 #define __REBUILD_RPC_H__
 
-#include "daos/object.h"
-#include "daos/rpc.h"
-
 #include <stdint.h>
-
 #include <uuid/uuid.h>
+#include <daos/rpc.h>
 
 /*
  * RPC operation codes

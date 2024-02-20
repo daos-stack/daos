@@ -1,24 +1,20 @@
 /**
- * (C) Copyright 2020-2024 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC        DD_FAC(tests)
-
-#include "daos/common.h"
-#include "daos/compression.h"
-#include "daos/cont_props.h"
-#include "daos/tests_lib.h"
-
-#include <setjmp.h>
+#include <string.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <setjmp.h> /** For cmocka.h */
 #include <stdint.h>
-#include <string.h>
-
 #include <cmocka.h>
-
 #include <gurt/types.h>
+#include <daos/compression.h>
+#include <daos/common.h>
+#include <daos/cont_props.h>
+#include <daos/tests_lib.h>
 
 static bool verbose;
 

@@ -1,12 +1,17 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __TELEMETRY_COMMON_H__
 #define __TELEMETRY_COMMON_H__
 
-#include <gurt/common.h>
+#include <inttypes.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 
 #define D_TM_VERSION			1
 #define D_TM_MAX_NAME_LEN		256

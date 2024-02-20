@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,8 +10,11 @@
  */
 #define D_LOGFAC	DD_FAC(container)
 
-#include "srv_internal.h"
+#include "daos/debug.h"
+
 #include <gurt/telemetry_producer.h>
+
+#include "srv_internal.h"
 
 /**
  * Initialize global metrics used in the server container module.

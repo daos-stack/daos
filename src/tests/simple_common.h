@@ -1,17 +1,13 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __SIMPLE_COMMON_H__
 #define __SIMPLE_COMMON_H__
-
-#include <stdio.h>
-
 #include <mpi.h>
-
+#include <stdio.h>
 #include <daos.h>
-#include <gurt/common.h>
 
 extern char			 node[128];
 #define FAIL(fmt, ...)						\

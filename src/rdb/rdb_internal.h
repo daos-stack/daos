@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,18 +12,13 @@
 #ifndef RDB_INTERNAL_H
 #define RDB_INTERNAL_H
 
-#include "daos_srv/rdb.h"
-
-#include "daos/lru.h"
-#include "daos/object.h"
-#include "daos/rpc.h"
-#include "raft.h"
-
 #include <abt.h>
-
-#include "rdb_layout.h"
-
+#include <raft.h>
 #include <gurt/hash.h>
+#include <daos/lru.h>
+#include <daos/rpc.h>
+#include <daos/object.h>
+#include "rdb_layout.h"
 
 /* rdb_raft.c (parts required by struct rdb) **********************************/
 

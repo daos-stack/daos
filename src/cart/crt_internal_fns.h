@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,8 +10,6 @@
 
 #ifndef __CRT_INTERNAL_FNS_H__
 #define __CRT_INTERNAL_FNS_H__
-
-#include <stdbool.h>
 
 /** crt_init.c */
 bool crt_initialized(void);

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,12 +11,10 @@
 #ifndef __MGMT_TESTS_MOCKS_H__
 #define __MGMT_TESTS_MOCKS_H__
 
-#include "../rpc.h"
-
-#include <daos_pool.h>
-#include <daos_security.h>
-#include <daos_types.h>
 #include <gurt/types.h>
+#include <daos_types.h>
+#include <daos_security.h>
+#include "../rpc.h"
 
 /*
  * Mock ds_mgmt_pool_get_acl

@@ -1,19 +1,17 @@
 /**
- * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#include <stddef.h>
 #include <getopt.h>
-#include <setjmp.h>
+#include <setjmp.h> /** For cmocka.h */
 #include <stdarg.h>
 #include <stddef.h>
-
 #include <cmocka.h>
-
-#include "common_test.h"
-
 #include <gurt/debug.h>
+#include "common_test.h"
 
 static void
 print_usage(char *name)

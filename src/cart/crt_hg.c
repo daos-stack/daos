@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,8 +9,6 @@
 #define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
-
-#include <daos_errno.h>
 
 /*
  * List of supported CaRT providers. The table is terminated with the last entry

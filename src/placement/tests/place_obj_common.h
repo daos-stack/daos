@@ -1,21 +1,25 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(tests)
 
 #ifndef __PL_MAP_COMMON_H__
 #define __PL_MAP_COMMON_H__
 
-#include <daos/common.h>
-#include <daos/placement.h>
-#include <daos.h>
+#define D_LOGFAC DD_FAC(tests)
 
+#include "daos/common.h"
+#include "daos/placement.h"
+#include "daos/tests_lib.h"
+
+#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
-#include <setjmp.h>
+
 #include <cmocka.h>
+
+#include <daos.h>
 #include <daos/tests_lib.h>
 #define STR_HELPER(x) #x
 #define STR(x) STR_HELPER(x)

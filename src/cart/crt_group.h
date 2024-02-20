@@ -10,10 +10,12 @@
 #ifndef __CRT_GROUP_H__
 #define __CRT_GROUP_H__
 
+#include <cart/types.h>
+#include <gurt/atomic.h>
+#include <gurt/hash.h>
+
 #include "crt_internal_types.h"
 #include "crt_swim.h"
-
-#include <gurt/atomic.h>
 
 /* (1 << CRT_LOOKUP_CACHE_BITS) is the number of buckets of lookup hash table */
 #define CRT_LOOKUP_CACHE_BITS	(4)
@@ -46,6 +48,8 @@ struct crt_grp_priv_sec {
 	struct crt_grp_priv	*gps_priv;
 	d_list_t		gps_link;
 };
+
+struct crt_grp_priv;
 
 struct crt_grp_priv {
 	d_list_t		 gp_link; /* link to crt_grp_list */

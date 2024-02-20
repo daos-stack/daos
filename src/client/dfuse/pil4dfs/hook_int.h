@@ -8,8 +8,6 @@
 #ifndef __HOOK_INT
 #define __HOOK_INT
 
-#include <stddef.h>
-
 /* The max number of shared objects we intercept. */
 #define MAX_MODULE             (16)
 

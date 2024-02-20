@@ -18,7 +18,6 @@
 
 #include <daos_types.h>
 #include <gurt/common.h>
-#include <gurt/debug.h>
 
 /* If the count of committable DTXs on leader exceeds this threshold,
  * it will trigger batched DTX commit globally. We will optimize the

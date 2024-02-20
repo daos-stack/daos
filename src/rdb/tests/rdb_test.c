@@ -1,20 +1,17 @@
 /**
- * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(rdb)
 
-#include "daos_srv/rdb.h"
-
-#include "../rdb_internal.h"
-#include "daos_srv/daos_engine.h"
-#include "daos_srv/rsvc.h"
-
-#include <fcntl.h>
-#include <sys/stat.h>
 #include <sys/types.h>
-
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <daos_srv/daos_engine.h>	/* for dss_module */
+#include <daos_srv/rdb.h>
+#include <daos_srv/rsvc.h>
+#include "../rdb_internal.h"
 #include "rpc.h"
 
 #define DB_CAP	(1L << 25)

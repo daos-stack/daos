@@ -17,10 +17,9 @@
 #define CRT_SRV_CONTEXT_NUM (64)	/* Maximum number of contexts */
 #endif
 
+
 #include <arpa/inet.h>
 #include <ifaddrs.h>
-
-#include "crt_hg.h"
 
 #include <cart/api.h>
 #include <cart/types.h>
@@ -30,6 +29,8 @@
 #include <gurt/list.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
+
+#include "crt_hg.h"
 
 struct crt_hg_gdata;
 struct crt_grp_gdata;

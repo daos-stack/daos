@@ -16,11 +16,11 @@
 #include "daos/checksum.h"
 #include "daos/common.h"
 
-#include "vos_internal.h"
-#include "vos_ts.h"
-
 #include <daos_api.h>
 #include <daos_types.h>
+
+#include "vos_internal.h"
+#include "vos_ts.h"
 
 struct open_query {
 	struct vos_object	*qt_obj;

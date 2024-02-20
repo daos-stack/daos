@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,16 +9,14 @@
 #ifndef __CRT_MERCURY_H__
 #define __CRT_MERCURY_H__
 
+#include <gurt/list.h>
+
 #include <mercury.h>
-#include <mercury_log.h>
+#include <mercury_types.h>
 #include <mercury_macros.h>
 #include <mercury_proc.h>
 #include <mercury_proc_string.h>
-#include <mercury_types.h>
-
-#include <cart/types.h>
-#include <daos_errno.h>
-#include <gurt/list.h>
+#include <mercury_log.h>
 
 /** the shared HG RPC ID used for all CRT opc */
 #define CRT_HG_RPCID		(0xDA036868)

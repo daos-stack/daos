@@ -1,21 +1,20 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC        DD_FAC(tests)
 
-#define USE_TIME_PROFILING
-
-#include "daos/common.h"
-#include "daos/placement.h"
-
 #include <getopt.h>
 
-#include "benchmark_util.h"
+#include <daos/common.h>
+#include <daos/placement.h>
+#include <daos.h>
+
 #include "place_obj_common.h"
 
-#include <daos.h>
+#define USE_TIME_PROFILING
+#include "benchmark_util.h"
 
 extern int  obj_class_init(void);
 extern void obj_class_fini(void);

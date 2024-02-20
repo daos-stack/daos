@@ -12,9 +12,6 @@
 
 #ifndef __ILOG_H__
 #define __ILOG_H__
-
-#include "daos/mem.h"
-
 #include <daos_types.h>
 
 struct ilog_id {

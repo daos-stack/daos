@@ -9,6 +9,8 @@
 
 #include "daos/debug.h"
 
+#include "crt_utils.h"
+
 #include "../crt_internal.h"
 #include "daos/event.h"
 #include "daos/mgmt.h"
@@ -18,8 +20,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-#include "crt_utils.h"
 
 #include <cart/api.h>
 

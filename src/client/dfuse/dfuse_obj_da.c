@@ -1,16 +1,14 @@
 /**
- * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <pthread.h>
-
 #include "dfuse_log.h"
-#include "dfuse_obj_da.h"
-
-#include <gurt/common.h>
+#include <gurt/common.h> /* container_of */
 #include <gurt/list.h>
+#include "dfuse_obj_da.h"
 
 /* A hack to assert that the sizeof obj_da_t is large enough */
 struct tpv_data {

@@ -1,14 +1,10 @@
 /*
- * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __NO_PMIX_LAUNCHER_COMMON_H__
 #define __NO_PMIX_LAUNCHER_COMMON_H__
-
-#include "crt_utils.h"
-
-#include <cart/types.h>
 
 #define MY_BASE 0x010000000
 #define MY_VER  0

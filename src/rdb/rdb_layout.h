@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2024 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -70,10 +70,6 @@
 
 #ifndef RDB_LAYOUT_H
 #define RDB_LAYOUT_H
-
-#include <inttypes.h>
-
-#include <daos_types.h>
 
 /* Default layout version */
 #define RDB_LAYOUT_VERSION 1

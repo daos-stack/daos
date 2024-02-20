@@ -148,6 +148,7 @@ class OrderChecker:
         h_internal = set()
         # Internal local headers (from the same directory)
         h_dir = set()
+        # Internal headers from the same component
         h_component = set()
 
         last_pre_blank = None
@@ -215,7 +216,10 @@ class OrderChecker:
                     if found:
                         continue
                 else:
-                    if os.path.exists(f"{src_dir}/{fname}"):
+                    if os.path.exists(f"{src_dir}/{fname}") or os.path.exists(
+                        f"{src_dir}/../{fname}"
+                    ):
+
                         if "/" in fname:
                             h_internal.add(fname)
                         else:
@@ -263,10 +267,14 @@ class OrderChecker:
 
         # Hack for debug headers, if required this needs to come before other headers.
         # Needed for RPC definitions
-        for head in ("daos/debug", "crt_utils", "crt_internal"):
+        for head in ("daos/debug", "crt_debug", "crt_utils", "crt_internal"):
             if f"{head}.h" in h_internal:
                 hblobs.append(f'#include "{head}.h"')
                 h_internal.remove(f"{head}.h")
+
+            if f"{head}.h" in h_dir:
+                hblobs.append(f'#include "{head}.h"')
+                h_dir.remove(f"{head}.h")
 
         if h_component:
             hblobs.append(set_to_txt(h_component))
@@ -283,11 +291,11 @@ class OrderChecker:
         if h_local:
             hblobs.append(set_to_txt(h_local, public=True))
 
-        if h_dir:
-            hblobs.append(set_to_txt(h_dir))
-
         if h_daos:
             hblobs.append(set_to_txt(h_daos, public=True))
+
+        if h_dir:
+            hblobs.append(set_to_txt(h_dir))
 
         header_text = "\n\n".join(hblobs)
 

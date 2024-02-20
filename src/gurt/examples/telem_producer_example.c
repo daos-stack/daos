@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,6 +7,7 @@
  * This file shows an example of using the telemetry API to produce metrics
  */
 
+#include <gurt/common.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,11 +15,8 @@
 #ifndef __MGMT_SRV_LAYOUT_H__
 #define __MGMT_SRV_LAYOUT_H__
 
-#include "daos_srv/daos_engine.h"
-
-#include "srv_internal.h"
-
 #include <daos_types.h>
+#include "srv_internal.h"
 
 /* Root KVS (RDB_KVS_GENERIC) */
 extern d_iov_t ds_mgmt_prop_servers;		/* server KVS */

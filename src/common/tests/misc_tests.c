@@ -1,20 +1,18 @@
 /**
- * (C) Copyright 2019-2024 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC        DD_FAC(tests)
 
-#include "daos/common.h"
-#include "daos/tests_lib.h"
-
-#include <setjmp.h>
+#include <string.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
-
+#include <setjmp.h> /** For cmocka.h */
 #include <cmocka.h>
+#include <daos/common.h>
+#include <daos/tests_lib.h>
 
 static void test_sgl_get_bytes_with_single_iov(void **state)
 {

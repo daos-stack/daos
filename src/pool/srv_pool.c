@@ -14,32 +14,29 @@
 
 #define D_LOGFAC DD_FAC(pool)
 
-#include "daos_srv/pool.h"
-
-#include "daos/pool.h"
-#include "daos/pool_map.h"
-#include "daos/rpc.h"
-#include "daos/rsvc.h"
-#include "daos_srv/container.h"
-#include "daos_srv/daos_engine.h"
-#include "daos_srv/daos_mgmt_srv.h"
-#include "daos_srv/rdb.h"
-#include "daos_srv/rebuild.h"
-#include "daos_srv/security.h"
+#include <daos_srv/pool.h>
 
 #include <fcntl.h>
 #include <sys/stat.h>
-
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
+#include <daos_api.h> /* for daos_prop_alloc/_free() */
+#include <daos/pool_map.h>
+#include <daos/rpc.h>
+#include <daos/pool.h>
+#include <daos/rsvc.h>
+#include <daos_srv/container.h>
+#include <daos_srv/daos_mgmt_srv.h>
+#include <daos_srv/daos_engine.h>
+#include <daos_srv/rdb.h>
+#include <daos_srv/rebuild.h>
+#include <daos_srv/security.h>
+#include <cart/api.h>
+#include <cart/iv.h>
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
 #include "srv_pool_map.h"
-
-#include <cart/api.h>
-#include <cart/iv.h>
-#include <daos_api.h>
-#include <gurt/telemetry_common.h>
-#include <gurt/telemetry_producer.h>
 
 #define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED    1
 #define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3

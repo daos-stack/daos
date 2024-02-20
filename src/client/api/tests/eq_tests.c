@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,24 +12,25 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-#include "../client_internal.h"
-#include "daos/common.h"
-#include "daos/event.h"
-
 #include <pthread.h>
-#include <setjmp.h>
 #include <stdarg.h>
 #include <stdlib.h>
-
+#include <setjmp.h>
 #include <cmocka.h>
-
+#include <daos/common.h>
 #include <daos_event.h>
-#include <gurt/hash.h>
+#include <daos/event.h>
 #include <gurt/list.h>
+#include <gurt/hash.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
+
+/* XXX For the testing purpose, this test case will use
+ * some internal api of event queue, and for real use
+ * cases, this daos_eq_internal should not be exposed */
+#include "../client_internal.h"
 
 #define EQT_EV_COUNT		1000
 #define EQ_COUNT		5

@@ -21,13 +21,11 @@
 #include "crt_utils.h"
 
 #include <ctype.h>
-#include <getopt.h>
 #include <regex.h>
-#include <stdbool.h>
-
-#include "test_group_rpc.h"
 
 #include <gurt/types.h>
+
+#include "test_group_rpc.h"
 
 struct t_swim_status {
 	int rank;

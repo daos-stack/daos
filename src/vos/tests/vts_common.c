@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,26 +10,30 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-#include <stdio.h>
+#include "daos_srv/vos.h"
+
+#include "daos/common.h"
+#include "daos/tests_lib.h"
+#include "vos_internal.h"
+
+#include <errno.h>
 #include <fcntl.h>
-#include <linux/falloc.h>
-#include <string.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-#include <sys/ioctl.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <getopt.h>
-#include <daos_srv/vos.h>
-#include <daos/common.h>
-#include <daos/tests_lib.h>
-#include <errno.h>
-#include <vos_internal.h>
-#include "vts_common.h"
-#include <cmocka.h>
+#include <linux/falloc.h>
 #include <linux/limits.h>
+#include <setjmp.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <cmocka.h>
+
+#include "vts_common.h"
 
 enum {
 	TCX_NONE,

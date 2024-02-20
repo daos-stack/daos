@@ -9,7 +9,10 @@
  */
 
 #include <getopt.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_consumer.h>
 

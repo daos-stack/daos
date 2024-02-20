@@ -1,19 +1,20 @@
 /**
- * (C) Copyright 2023-2024 Intel Corporation.
- *
- * SPDX-License-Identifier: BSD-2-Clause-Patent
- */
-
-#include "daos/checksum.h"
-#include "daos/tests_lib.h"
-#include "object/rpc_csum.h"
+* (C) Copyright 2023 Intel Corporation.
+*
+* SPDX-License-Identifier: BSD-2-Clause-Patent
+*/
 
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
-
 #include <cmocka.h>
+
+#include <daos/checksum.h>
+#include <daos/tests_lib.h>
+
+/* Testing internal interfaces */
+#include <object/rpc_csum.h>
 
 bool g_verbose;
 

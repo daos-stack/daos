@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,9 +24,6 @@
 #ifndef __POOL_SRV_LAYOUT_H__
 #define __POOL_SRV_LAYOUT_H__
 
-#include <sys/param.h>
-
-#include <daos_prop.h>
 #include <daos_types.h>
 
 /*

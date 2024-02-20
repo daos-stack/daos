@@ -8,21 +8,20 @@
  */
 #define D_LOGFAC	DD_FAC(mgmt)
 
-#include "daos_srv/daos_mgmt_srv.h"
-#include "daos_srv/pool.h"
-#include "daos_srv/vos.h"
-
-#include <dirent.h>
-#include <fcntl.h>
-#include <ftw.h>
-#include <linux/falloc.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <linux/falloc.h>
 #include <sys/sysinfo.h>
+#include <ftw.h>
+#include <dirent.h>
+
+#include <daos_srv/vos.h>
+#include <daos_srv/pool.h>
+#include <daos_srv/daos_mgmt_srv.h>
+#include <daos_mgmt.h>
 
 #include "srv_internal.h"
-#include "srv_layout.h"
-
-#include <daos_mgmt.h>
+#include "srv_layout.h"		/* for a couple of constants only */
 
 /** directory for newly created pool, reclaimed on restart */
 static char *newborns_path;
