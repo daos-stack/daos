@@ -2523,11 +2523,11 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 out:
 	if (rc) {
 		if (rpt) {
-			rpt_put(rpt);
 			if (!d_list_empty(&rpt->rt_list)) {
 				d_list_del_init(&rpt->rt_list);
 				rpt_put(rpt);
 			}
+			rpt_put(rpt);
 		}
 		ds_pool_put(pool);
 	}
