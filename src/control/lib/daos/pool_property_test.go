@@ -207,15 +207,15 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "-1",
 			expErr: errors.New("invalid"),
 		},
-		"policy-valid": {
-			name:    "policy",
-			value:   "type=io_size",
-			expStr:  "policy:type=io_size",
-			expJson: []byte(`{"name":"policy","description":"Tier placement policy","value":"type=io_size"}`),
+		"data_thresh-valid": {
+			name:    "data_thresh",
+			value:   "8KiB",
+			expStr:  "data_thresh:8.0 KiB",
+			expJson: []byte(`{"name":"data_thresh","description":"Data bdev threshold size","value":8192}`),
 		},
-		"policy-invalid": {
-			name:   "policy",
-			value:  "deadd00d",
+		"data_thresh-invalid": {
+			name:   "data_thresh",
+			value:  "-2",
 			expErr: errors.New("invalid"),
 		},
 		"perf_domain-valid": {
