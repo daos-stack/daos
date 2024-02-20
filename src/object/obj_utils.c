@@ -86,9 +86,9 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 		D_FREE(iods);
 }
 
-static bool
-obj_query_fix_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
-		   daos_recx_t *recx, bool get_max, uint32_t *shard, bool server_merge)
+static void
+obj_query_fix_ec_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
+		      daos_recx_t *recx, bool get_max, uint32_t *shard, bool server_merge)
 {
 	uint64_t	tmp_end;
 	uint32_t	tgt_off;
@@ -96,9 +96,6 @@ obj_query_fix_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t
 	uint64_t	dkey_hash;
 	uint64_t	stripe_rec_nr;
 	uint64_t	cell_rec_nr;
-
-	if (!daos_oclass_is_ec(oca))
-		return false;
 
 	dkey_hash = obj_dkey2hash(oid.id_pub, dkey);
 	tgt_off = obj_ec_shard_off_by_oca(oid.id_layout_ver, dkey_hash, oca, oid.id_shard);
@@ -128,8 +125,6 @@ obj_query_fix_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t
 			recx->rx_idx =
 			    obj_ec_idx_vos2daos(recx->rx_idx, stripe_rec_nr, cell_rec_nr, tgt_off);
 	}
-
-	return true;
 }
 
 static void
@@ -140,8 +135,10 @@ obj_query_reduce_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_ke
 	daos_recx_t tmp_recx = *src_recx;
 	uint64_t    tmp_end;
 
-	if (!obj_query_fix_recx(oca, oid, dkey, &tmp_recx, get_max, shard, server_merge))
+	if (!daos_oclass_is_ec(oca))
 		D_GOTO(out, changed = true);
+
+	obj_query_fix_ec_recx(oca, oid, dkey, &tmp_recx, get_max, shard, server_merge);
 
 	tmp_end = DAOS_RECX_END(tmp_recx);
 
