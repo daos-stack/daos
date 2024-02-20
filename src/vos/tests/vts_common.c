@@ -14,7 +14,6 @@
 
 #include "daos/common.h"
 #include "daos/tests_lib.h"
-#include "vos_internal.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -33,6 +32,7 @@
 
 #include <cmocka.h>
 
+#include "vos_internal.h"
 #include "vts_common.h"
 
 enum {

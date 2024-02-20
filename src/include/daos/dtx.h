@@ -7,17 +7,12 @@
 #ifndef __DAOS_DTX_H__
 #define __DAOS_DTX_H__
 
-#include "daos/debug.h"
-
 #include <inttypes.h>
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
 
 #include <uuid/uuid.h>
-
-#include <daos_types.h>
-#include <gurt/common.h>
 
 /* If the count of committable DTXs on leader exceeds this threshold,
  * it will trigger batched DTX commit globally. We will optimize the

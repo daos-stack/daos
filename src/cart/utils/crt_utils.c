@@ -7,8 +7,6 @@
  * Common functions to be shared among tests
  */
 
-#include "daos/debug.h"
-
 #include "crt_utils.h"
 
 #include "../crt_internal.h"
@@ -469,7 +467,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 
-		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n", cli_srx_set);
+		D_DEBUG(DB_NET, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n", cli_srx_set);
 	} else {
 		/* Client may not set it if the server hasn't. */
 		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");
@@ -493,7 +491,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
+		D_DEBUG(DB_NET, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
 	}
 
 	d_agetenv_str(&ofi_interface_env, "OFI_INTERFACE");
@@ -505,9 +503,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
 		ofi_interface = ofi_interface_env;
-		D_DEBUG(DB_MGMT,
-			"Using client provided OFI_INTERFACE: %s\n",
-			ofi_interface);
+		D_DEBUG(DB_NET, "Using client provided OFI_INTERFACE: %s\n", ofi_interface);
 	}
 
 	d_agetenv_str(&ofi_domain_env, "OFI_DOMAIN");
@@ -519,7 +515,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
 		ofi_domain = ofi_domain_env;
-		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+		D_DEBUG(DB_NET, "Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
 
 	D_INFO("CaRT env setup with:\n"
