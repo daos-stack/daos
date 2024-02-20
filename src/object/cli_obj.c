@@ -7003,7 +7003,6 @@ dc_obj_query_key(tse_task_t *api_task)
 	struct dtx_id		dti;
 	int			i = 0;
 	int			rc;
-	bool			coll = false;
 
 	D_ASSERTF(api_args != NULL,
 		  "Task Argument OPC does not match DC OPC\n");
@@ -7085,17 +7084,6 @@ dc_obj_query_key(tse_task_t *api_task)
 	D_ASSERT(!obj_auxi->args_initialized);
 	D_ASSERT(d_list_empty(head));
 
-	/* Some optimization for get dkey collectively since 2.6 which version is 10. */
-	if (api_args->flags & DAOS_GET_DKEY && grp_nr > 1 && dc_obj_proto_version >= 10) {
-re_scan:
-		rc = obj_coll_oper_args_init(&obj_auxi->cq_args.cqa_coa, obj, false);
-		if (rc != 0)
-			goto out_task;
-
-		obj_auxi->opc = DAOS_OBJ_RPC_COLL_QUERY;
-		coll = true;
-	}
-
 	grp_size = daos_oclass_grp_size(&obj->cob_oca);
 
 	for (i = grp_idx; i < grp_idx + grp_nr; i++) {
@@ -7114,18 +7102,9 @@ re_scan:
 				    !is_ec_parity_shard(obj, obj_auxi->dkey_hash, leader))
 					goto non_leader;
 
-				if (coll) {
-					rc = obj_coll_prep_one(&obj_auxi->cq_args.cqa_coa, obj,
-							       map_ver, leader);
-					if (unlikely(rc == -DER_AGAIN)) {
-						obj_coll_oper_args_fini(&obj_auxi->cq_args.cqa_coa);
-						goto re_scan;
-					}
-				} else {
-					rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch,
-									leader, map_ver, obj, &dti,
-									co_hdl, co_uuid, NULL, 0);
-				}
+				rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch,
+								leader, map_ver, obj, &dti,
+								co_hdl, co_uuid, NULL, 0);
 				if (rc != 0)
 					D_GOTO(out_task, rc);
 
@@ -7150,17 +7129,9 @@ non_leader:
 			if (obj_shard_is_invalid(obj, j, DAOS_OBJ_RPC_QUERY_KEY))
 				continue;
 
-			if (coll) {
-				rc = obj_coll_prep_one(&obj_auxi->cq_args.cqa_coa, obj, map_ver, j);
-				if (unlikely(rc == -DER_AGAIN)) {
-					obj_coll_oper_args_fini(&obj_auxi->cq_args.cqa_coa);
-					goto re_scan;
-				}
-			} else {
-				rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, j,
-								map_ver, obj, &dti, co_hdl, co_uuid,
-								NULL, 0);
-			}
+			rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, j,
+							map_ver, obj, &dti, co_hdl, co_uuid,
+							NULL, 0);
 			if (rc != 0)
 				D_GOTO(out_task, rc);
 
@@ -7173,12 +7144,6 @@ non_leader:
 				DP_OID(obj->cob_md.omd_id), i, shard_cnt);
 			D_GOTO(out_task, rc = -DER_DATA_LOSS);
 		}
-	}
-
-	if (coll) {
-		rc = queue_coll_query_task(api_task, obj_auxi, obj, &dti, &epoch, map_ver);
-		if (rc != 0)
-			goto out_task;
 	}
 
 	obj_auxi->args_initialized = 1;
