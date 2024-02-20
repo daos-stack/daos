@@ -963,7 +963,10 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct ds_pool		*pool = 0;
 	int			rc;
 
-	rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+	if (src == NULL)
+		rc = ds_pool_lookup_internal(entry->ns->iv_pool_uuid, &pool);
+	else
+		rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
 	if (rc) {
 		D_WARN("No pool "DF_UUID": %d\n", DP_UUID(entry->ns->iv_pool_uuid), rc);
 		if (rc == -DER_NONEXIST)

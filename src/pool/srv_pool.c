@@ -2069,8 +2069,6 @@ pool_stop_all(void *arg)
 	if (rc != 0)
 		D_ERROR("failed to stop all pool svcs: "DF_RC"\n", DP_RC(rc));
 
-	ds_pool_hdl_delete_all();
-
 	rc = ds_mgmt_tgt_pool_iterate(stop_one, NULL /* arg */);
 	if (rc != 0)
 		D_ERROR("failed to stop all pools: "DF_RC"\n", DP_RC(rc));
