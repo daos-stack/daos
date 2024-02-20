@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -691,10 +691,16 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 
 	DFUSE_TRA_UP(dfc, dfp, "dfc");
 
-	rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh, &c_info, NULL);
-	if (rc == -DER_NO_PERM) {
+	if (dfuse_info->di_read_only) {
 		dfs_flags = O_RDONLY;
 		rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh, &c_info, NULL);
+	} else {
+		rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh, &c_info, NULL);
+		if (rc == -DER_NO_PERM) {
+			dfs_flags = O_RDONLY;
+			rc        = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh,
+						   &c_info, NULL);
+		}
 	}
 	if (rc == -DER_NONEXIST) {
 		DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
@@ -821,11 +827,18 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 		dfc->dfs_ops = &dfuse_dfs_ops;
 		uuid_copy(dfc->dfs_cont, *cont);
 		uuid_unparse(dfc->dfs_cont, str);
-		rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RW, &dfc->dfs_coh, NULL, NULL);
-		if (rc == -DER_NO_PERM) {
+		if (dfuse_info->di_read_only) {
 			dfs_flags = O_RDONLY;
 			rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RO, &dfc->dfs_coh, NULL,
 					    NULL);
+		} else {
+			rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RW, &dfc->dfs_coh, NULL,
+					    NULL);
+			if (rc == -DER_NO_PERM) {
+				dfs_flags = O_RDONLY;
+				rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RO, &dfc->dfs_coh,
+						    NULL, NULL);
+			}
 		}
 		if (rc == -DER_NONEXIST) {
 			DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: " DF_RC, DP_RC(rc));
