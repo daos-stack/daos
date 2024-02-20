@@ -1403,8 +1403,8 @@ rebuild_object_with_csum_error(void **state)
 
 	/* setup pool to have scrubbing turned on */
 	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub", "timed", pool_uuid));
-	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub-freq", "1", pool_uuid));
-	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub-thresh", "2", pool_uuid));
+	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub_freq", "1", pool_uuid));
+	assert_success(dmg_pool_set_prop(dmg_config_file, "scrub_thresh", "2", pool_uuid));
 
 	/* setup container */
 	cont_props = daos_prop_alloc(3);
