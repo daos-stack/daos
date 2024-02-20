@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1069,6 +1069,17 @@ rpt_put(struct rebuild_tgt_pool_tracker	*rpt)
 	if (rpt->rt_refcount == 1 && rpt->rt_finishing)
 		ABT_cond_signal(rpt->rt_fini_cond);
 	ABT_mutex_unlock(rpt->rt_lock);
+	if (rpt->rt_refcount == 0) {
+		/* If rebuild tracker ULT is started successfully, then
+		 * the rpt will be destroyed in rebuild_tgt_fini().
+		 * Otherwise the rpt might be destroyed if the tracking
+		 * ULT is not started. Since it will happen in system
+		 * XS, no need lock here.
+		 */
+		D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+		d_list_del_init(&rpt->rt_list);
+		rpt_destroy(rpt);
+	}
 }
 
 static void
@@ -2160,16 +2171,10 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		       DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
-	d_list_del_init(&rpt->rt_list);
-	rpt_put(rpt);
-	/* No one should access rpt after rebuild_fini_one.
-	 */
-	D_ASSERT(rpt->rt_refcount == 0);
-
+	/* No one should access rpt after rebuild_fini_one. */
 	D_INFO("Finalized rebuild for "DF_UUID", map_ver=%u.\n",
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
-
-	rpt_destroy(rpt);
+	rpt_put(rpt);
 }
 
 void
