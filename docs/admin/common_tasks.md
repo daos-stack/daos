@@ -108,3 +108,13 @@ differ by at least 100.
 - Each engine must have a different `log_file`.
 - Use different `fabric_iface` for the best performance.
 - Each engine must have unique `scm_mount`, `scm_list`, and `bdev_list`.
+
+## Change fabric provider on a DAOS system
+
+1. Stop all DAOS client I/O.
+1. Evict client pool handles to ensure I/O has stopped.
+1. Shut down all `daos_server` processes.
+1. Update the fabric provider and interfaces in all `daos_server` configuration files. All `daos_server` configurations must use the same fabric provider.
+1. Restart all `daos_server` processes to re-load the configuration file.
+1. Ensure all ranks have re-joined by running `dmg system query`. If some ranks fail to join, check logs to troubleshoot.
+1. After all ranks have joined, restart `daos_agent` processes on client nodes, or alternately send SIGUSR2 to all of these processes to refresh network information.

@@ -1039,6 +1039,7 @@ struct obj_query_merge_args {
 	uint32_t		 opc;
 	uint32_t		 src_map_ver;
 	int			 ret;
+	uint32_t		 server_merge:1;
 };
 
 /* obj_utils.c */

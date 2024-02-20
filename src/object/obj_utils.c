@@ -243,7 +243,7 @@ obj_metrics_alloc_internal(const char *path, int tgt_id, bool server)
 static void
 obj_query_merge_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
 		     daos_recx_t *src_recx, daos_recx_t *tgt_recx, bool get_max, bool changed,
-		     uint32_t *shard)
+		     uint32_t *shard, bool server_merge)
 {
 	daos_recx_t	tmp_recx = *src_recx;
 	uint64_t	tmp_end;
@@ -280,8 +280,9 @@ obj_query_merge_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key
 					 tmp_recx.rx_idx;
 		}
 
-		tmp_recx.rx_idx = obj_ec_idx_vos2daos(tmp_recx.rx_idx, stripe_rec_nr, cell_rec_nr,
-						      tgt_off);
+		if (!server_merge)
+			tmp_recx.rx_idx = obj_ec_idx_vos2daos(tmp_recx.rx_idx, stripe_rec_nr,
+							      cell_rec_nr, tgt_off);
 		tmp_end = DAOS_RECX_END(tmp_recx);
 	}
 
@@ -422,7 +423,8 @@ daos_obj_merge_query_merge(struct obj_query_merge_args *args)
 	if (check && args->flags & DAOS_GET_RECX)
 		obj_query_merge_recx(args->oca, args->oid,
 				     (args->flags & DAOS_GET_DKEY) ? args->src_dkey : args->in_dkey,
-				     args->src_recx, args->tgt_recx, get_max, changed, args->shard);
+				     args->src_recx, args->tgt_recx, get_max, changed, args->shard,
+				     args->server_merge);
 
 set_max_epoch:
 	if (args->tgt_epoch != NULL && *args->tgt_epoch < args->src_epoch)
