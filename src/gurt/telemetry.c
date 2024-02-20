@@ -32,15 +32,15 @@ struct d_tm_shmem_hdr {
 	uint64_t		 sh_base_addr;	/** address of this struct */
 	key_t			 sh_key;	/** key to access region */
 	uint32_t		 sh_deleted:1,	/** marked for deletion */
-				 sh_require_ephemeral_lock:1; /** ephemeral_lock required */
+				 sh_multiple_writer:1; /** require lock to protect */
 	uint8_t			 sh_reserved[3]; /** for alignment */
 	uint64_t		 sh_bytes_total; /** total size of region */
 	uint64_t		 sh_bytes_free; /** free bytes in this region */
 	void			*sh_free_addr;	/** start of free space */
 	struct d_tm_node_t	*sh_root;	/** root of metric tree */
 
-	/* lock to create and remove ephemeral_dir_lock */
-	pthread_mutex_t		 sh_ephemeral_dir_lock;
+	/* lock to protect update, mostly for create and remove ephemeral dir */
+	pthread_mutex_t		 sh_multiple_writer_lock;
 
 	/**
 	 * List of all ephemeral regions attached to this shmem region.
@@ -77,7 +77,7 @@ static struct d_tm_shmem {
 	uint32_t		 retain:1, /* retain shmem region during exit */
 				 sync_access:1,
 				 retain_non_empty:1, /** retain shmem region if it is not empty */
-				 ephemeral_dir_lock:1; /** lock for ephemeral directory */
+				 multiple_writer_lock:1; /** lock for multiple writer */
 	int			 id; /** Instance ID */
 } tm_shmem;
 
@@ -795,7 +795,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 
 	if ((flags & ~(D_TM_SERIALIZATION | D_TM_RETAIN_SHMEM |
 		       D_TM_RETAIN_SHMEM_IF_NON_EMPTY | D_TM_OPEN_OR_CREATE |
-		       D_TM_EPHEMERAL_DIR_LOCK)) != 0) {
+		       D_TM_MULTIPLE_WRITER_LOCK)) != 0) {
 		D_ERROR("Invalid flags 0x%x\n", flags);
 		rc = -DER_INVAL;
 		goto failure;
@@ -816,9 +816,9 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 		D_INFO("Retaining shared memory for id %d if not empty\n", id);
 	}
 
-	if (flags & D_TM_EPHEMERAL_DIR_LOCK) {
-		tm_shmem.ephemeral_dir_lock = 1;
-		D_INFO("Retaining shared memory for id %d if not empty\n", id);
+	if (flags & D_TM_MULTIPLE_WRITER_LOCK) {
+		tm_shmem.multiple_writer_lock = 1;
+		D_INFO("Require multiple write protection for id %d\n", id);
 	}
 
 	tm_shmem.id = id;
@@ -2467,6 +2467,7 @@ get_free_region_entry(struct d_tm_shmem_hdr *shmem,
 	}
 
 	next = conv_ptr(shmem, head->next);
+	/* NB: sh_subregions is initialized by D_INIT_LIST_HEAD(), so it is not shmem address */
 	if (d_list_empty(&shmem->sh_subregions))
 		cur = (d_list_t *)(shmem->sh_base_addr +
 		       (uint64_t)(&((struct d_tm_shmem_hdr *)(0))->sh_subregions));
@@ -2572,8 +2573,8 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 	if (rc != 0)
 		D_GOTO(fail, rc);
 
-	if (tm_shmem.ephemeral_dir_lock)
-		D_MUTEX_LOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
+	if (tm_shmem.multiple_writer_lock)
+		D_MUTEX_LOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 
 	rc = d_tm_lock_shmem();
 	if (unlikely(rc != 0)) {
@@ -2627,8 +2628,8 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		*node = new_node;
 
 	d_tm_unlock_shmem();
-	if (tm_shmem.ephemeral_dir_lock)
-		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
+	if (tm_shmem.multiple_writer_lock)
+		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 	return 0;
 
 fail_link:
@@ -2642,8 +2643,8 @@ fail_shmem:
 fail_unlock:
 	d_tm_unlock_shmem();
 fail_ephemeral_unlock:
-	if (tm_shmem.ephemeral_dir_lock)
-		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
+	if (tm_shmem.multiple_writer_lock)
+		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 fail:
 	D_ERROR("Failed to add ephemeral dir [%s]: " DF_RC "\n", path,
 		DP_RC(rc));
@@ -2740,8 +2741,8 @@ try_del_ephemeral_dir(char *path, bool force)
 	struct d_tm_node_t	*link;
 	int			 rc = 0;
 
-	if (tm_shmem.ephemeral_dir_lock)
-		D_MUTEX_LOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
+	if (tm_shmem.multiple_writer_lock)
+		D_MUTEX_LOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 
 	rc = d_tm_lock_shmem();
 	if (unlikely(rc != 0)) {
@@ -2759,8 +2760,8 @@ unlock:
 	d_tm_unlock_shmem();
 
 ephemeral_unlock:
-	if (tm_shmem.ephemeral_dir_lock)
-		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_ephemeral_dir_lock);
+	if (tm_shmem.multiple_writer_lock)
+		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 
 	return rc;
 }
@@ -3720,10 +3721,10 @@ allocate_shared_memory(key_t key, size_t mem_size,
 
 	D_INIT_LIST_HEAD(&header->sh_subregions);
 
-	if (tm_shmem.ephemeral_dir_lock) {
-		rc = D_MUTEX_INIT(&header->sh_ephemeral_dir_lock, NULL);
+	if (tm_shmem.multiple_writer_lock) {
+		rc = D_MUTEX_INIT(&header->sh_multiple_writer_lock, NULL);
 		if (rc) {
-			DL_ERROR(rc, "create ephemeral dir lock failed");
+			DL_ERROR(rc, "multiple writer lock failed");
 			return -DER_NO_SHMEM;
 		}
 	}

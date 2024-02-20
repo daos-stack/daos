@@ -39,7 +39,7 @@ dc_tm_init(void)
 	if (rc)
 		D_GOTO(out, rc);
 
-	metrics_tag = D_TM_OPEN_OR_CREATE | D_TM_EPHEMERAL_DIR_LOCK;
+	metrics_tag = D_TM_OPEN_OR_CREATE | D_TM_MULTIPLE_WRITER_LOCK;
 	d_getenv_bool(DAOS_CLIENT_METRICS_RETAIN, &daos_client_metric_retain);
 	if (daos_client_metric_retain)
 		metrics_tag |= D_TM_RETAIN_SHMEM;
