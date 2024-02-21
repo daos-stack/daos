@@ -3340,9 +3340,9 @@ extern char **__environ;
 /* This is the number of environmental variables that would be forced to set in child process.
  * "LD_PRELOAD" is a special case and it is not included in the list.
  */
-#define LEN_ENV_LIST (10)
-/* Including LEN_ENV_LIST and "LD_PRELOAD" */
-#define N_ENV_APPEND (LEN_ENV_LIST + 1)
+static char  *env_list[] = {"D_IL_REPORT", "DAOS_MOUNT_POINT", "DAOS_POOL", "DAOS_CONTAINER",
+			    "D_IL_MAX_EQ", "D_LOG_FILE", "D_IL_ENFORCE_EXEC_ENV",  "DD_MASK",
+			    "DD_SUBSYS", "D_LOG_MASK"};
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
@@ -3356,24 +3356,22 @@ pre_envp(char *const envp[])
 {
 	int    i, j, rc;
 	int    len, len2, len_total;
+	int    num_env_append;
 	char **new_envp;
 	char  *pil4df_path;
 	char  *new_preload_str;
-	int    num_entry                  = 0;
-	int    num_entry_found            = 0;
-	int    idx_preload                = -1;
-	bool   preload_included           = false;
-	bool   pil4dfs_in_preload         = false;
-
-	/* "LD_PRELOAD" is a special case which needs .*/
-	char   env_list[LEN_ENV_LIST][32] = {"D_IL_REPORT", "DAOS_MOUNT_POINT", "DAOS_POOL",
-					     "DAOS_CONTAINER", "D_IL_MAX_EQ", "D_LOG_FILE",
-					     "D_IL_ENFORCE_EXEC_ENV",  "DD_MASK", "DD_SUBSYS",
-					     "D_LOG_MASK"};
-	bool   env_found[LEN_ENV_LIST]    = {false};
+	int    num_entry       = 0;
+	int    num_entry_found = 0;
+	int    idx_preload     = -1;
+	bool   preload_included                   = false;
+	bool   pil4dfs_in_preload                 = false;
+	bool   env_found[ARRAY_SIZE(env_list)]    = {false};
 	/* the buffer allocated for the env string to append */
-	char  *env_buf_list[LEN_ENV_LIST] = {NULL};
-	char  *env_value                  = NULL;
+	char  *env_buf_list[ARRAY_SIZE(env_list)] = {NULL};
+	char  *env_value                          = NULL;
+
+	/* Including env_list[] and "LD_PRELOAD" */
+	num_env_append = ARRAY_SIZE(env_list) + 1;
 
 	if (envp == NULL) {
 		num_entry = 0;
@@ -3392,7 +3390,7 @@ pre_envp(char *const envp[])
 			/* The list of env is not too long. We use a simple loop to lookup for
 			 * simplicity. This function is not performance critical.
 			 */
-			for (i = 0; i < LEN_ENV_LIST; i++) {
+			for (i = 0; i < ARRAY_SIZE(env_list); i++) {
 				if (!env_found[i]) {
 					if (strncmp(envp[num_entry], STR_AND_SIZE_M1(env_list[i]))
 					    == 0) {
@@ -3406,11 +3404,11 @@ pre_envp(char *const envp[])
 	}
 
 	/* All required env are found and pil4dfs is in LD_PRELOAD. No need to create a new envp. */
-	if (num_entry_found == N_ENV_APPEND && pil4dfs_in_preload == true)
+	if (num_entry_found == num_env_append && pil4dfs_in_preload == true)
 		return (char **)envp;
 
 	/* the new envp holds the existing envs & the envs forced to append plus NULL at the end */
-	new_envp = malloc(sizeof(char *) * (num_entry + N_ENV_APPEND + 1));
+	new_envp = malloc(sizeof(char *) * (num_entry + num_env_append + 1));
 	if (new_envp == NULL) {
 		printf("Error: failed to allocate memory for new_envp. Use existing envp\n");
 		goto err_out0;
@@ -3454,15 +3452,19 @@ pre_envp(char *const envp[])
 		i++;
 	}
 
-	for (j = 0; j < LEN_ENV_LIST; j++) {
+	for (j = 0; j < ARRAY_SIZE(env_list); j++) {
 		/* env is not found. Need to be appended if present in current process. */
 		if (!env_found[j]) {
 			rc = d_agetenv_str(&env_value, env_list[j]);
-			if (rc != -DER_NONEXIST && rc != -DER_SUCCESS) {
+			if (rc == -DER_NONEXIST) {
+				/* Do nthing if env does not exist*/
+				continue;
+			} else if (rc == -DER_NOMEM) {
 				printf("Error: failed to allocate memory in querying env %s.\n",
 				       env_list[j]);
 				goto err_out2;
 			}
+			/* In case d_agetenv_str() returns -DER_SUCCESS, append the env */
 			rc = asprintf(&env_buf_list[j], "%s=%s", env_list[j], env_value);
 			if (rc < 0) {
 				printf("Error: failed to allocate memory for env %s.\n",
@@ -3483,7 +3485,7 @@ pre_envp(char *const envp[])
 
 err_out2:
 	/* free the memory allocated for all env buffer */
-	for (j = 0; j < LEN_ENV_LIST; j++) {
+	for (j = 0; j < ARRAY_SIZE(env_list); j++) {
 		if (env_buf_list[j])
 			free(env_buf_list[j]);
 	}
