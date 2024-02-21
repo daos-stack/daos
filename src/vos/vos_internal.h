@@ -20,7 +20,6 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/policy.h>
 #include <daos_srv/vos.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
@@ -297,10 +296,10 @@ struct vos_pool {
 	void                    *vp_chkpt_arg;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
-	/** Tiering policy */
-	struct policy_desc_t	vp_policy_desc;
+	/** Data threshold size */
+	uint32_t		 vp_data_thresh;
 	/** Space (in percentage) reserved for rebuild */
-	unsigned int		vp_space_rb;
+	unsigned int		 vp_space_rb;
 };
 
 /**
@@ -1805,6 +1804,21 @@ vos_fake_anchor_create(daos_anchor_t *anchor)
 {
 	memset(&anchor->da_buf[0], 0, sizeof(anchor->da_buf));
 	anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
+}
+
+static inline bool
+vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum vos_io_stream ios)
+{
+	if (pool->vp_vea_info == NULL)
+		return true;
+
+	if (pool->vp_data_thresh == 0)
+		return true;
+
+	if (size < pool->vp_data_thresh)
+		return true;
+
+	return false;
 }
 
 #endif /* __VOS_INTERNAL_H__ */

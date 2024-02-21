@@ -87,6 +87,7 @@ smoke:
   resv_bytes: 500
   enable_intercept_lib: true
   enable_remote_logging: false
+  enable_scrubber: true
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO

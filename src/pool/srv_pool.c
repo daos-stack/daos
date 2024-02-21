@@ -372,14 +372,8 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_PERF_DOMAIN:
 		case DAOS_PROP_PO_SVC_OPS_ENABLED:
 		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
+		case DAOS_PROP_PO_DATA_THRESH:
 			entry_def->dpe_val = entry->dpe_val;
-			break;
-		case DAOS_PROP_PO_POLICY:
-			D_FREE(entry_def->dpe_str);
-			D_STRNDUP(entry_def->dpe_str, entry->dpe_str,
-				  DAOS_PROP_POLICYSTR_MAX_LEN);
-			if (entry_def->dpe_str == NULL)
-				return -DER_NOMEM;
 			break;
 		case DAOS_PROP_PO_ACL:
 			if (entry->dpe_val_ptr != NULL) {
@@ -532,17 +526,13 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_redun_fac,
 					   &value);
 			break;
-		case DAOS_PROP_PO_POLICY:
-			if (entry->dpe_str == NULL ||
-			    strlen(entry->dpe_str) == 0) {
-				entry = daos_prop_entry_get(&pool_prop_default,
-							    entry->dpe_type);
-				D_ASSERT(entry != NULL);
+		case DAOS_PROP_PO_DATA_THRESH:
+			if (!daos_data_thresh_valid(entry->dpe_val)) {
+				rc = -DER_INVAL;
+				break;
 			}
-			d_iov_set(&value, entry->dpe_str,
-				     strlen(entry->dpe_str));
-			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_policy,
-					   &value);
+			d_iov_set(&value, &entry->dpe_val, sizeof(entry->dpe_val));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_data_thresh, &value);
 			break;
 		case DAOS_PROP_PO_SVC_LIST:
 			break;
@@ -2215,8 +2205,6 @@ pool_stop_all(void *arg)
 	if (rc != 0)
 		D_ERROR("failed to stop all pool svcs: "DF_RC"\n", DP_RC(rc));
 
-	ds_pool_hdl_delete_all();
-
 	rc = ds_mgmt_tgt_pool_iterate(stop_one, NULL /* arg */);
 	if (rc != 0)
 		D_ERROR("failed to stop all pools: "DF_RC"\n", DP_RC(rc));
@@ -2488,31 +2476,14 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 
-	if (bits & DAOS_PO_QUERY_PROP_POLICY) {
-		d_iov_set(&value, NULL, 0);
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_policy,
-				   &value);
-		if (rc == -DER_NONEXIST && global_ver < 1) {
-			value.iov_buf = DAOS_PROP_POLICYSTR_DEFAULT;
-			value.iov_len = strlen(DAOS_PROP_POLICYSTR_DEFAULT);
-		} else  if (rc != 0) {
+	if (bits & DAOS_PO_QUERY_PROP_DATA_THRESH) {
+		d_iov_set(&value, &val, sizeof(val));
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_data_thresh, &value);
+		if (rc != 0)
 			D_GOTO(out_prop, rc);
-		}
-		if (value.iov_len > DAOS_PROP_POLICYSTR_MAX_LEN) {
-			D_ERROR("bad policy string length %zu (> %d).\n",
-				value.iov_len, DAOS_PROP_POLICYSTR_MAX_LEN);
-			D_GOTO(out_prop, rc = -DER_IO);
-		}
 		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_POLICY;
-		D_STRNDUP(prop->dpp_entries[idx].dpe_str, value.iov_buf,
-			  value.iov_len);
-		if (prop->dpp_entries[idx].dpe_str == NULL)
-			D_GOTO(out_prop, rc = -DER_NOMEM);
-		if (rc == -DER_NONEXIST) {
-			rc = 0;
-			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
-		}
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_DATA_THRESH;
+		prop->dpp_entries[idx].dpe_val = val;
 		idx++;
 	}
 
@@ -4503,6 +4474,7 @@ ds_pool_query_handler(crt_rpc_t *rpc, int handler_version)
 			case DAOS_PROP_PO_REINT_MODE:
 			case DAOS_PROP_PO_SVC_OPS_ENABLED:
 			case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
+			case DAOS_PROP_PO_DATA_THRESH:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -4510,18 +4482,6 @@ ds_pool_query_handler(crt_rpc_t *rpc, int handler_version)
 						iv_entry->dpe_val);
 					rc = -DER_IO;
 					}
-				break;
-			case DAOS_PROP_PO_POLICY:
-				D_ASSERT(strnlen(entry->dpe_str,
-						 DAOS_PROP_POLICYSTR_MAX_LEN) <=
-					 DAOS_PROP_POLICYSTR_MAX_LEN);
-				if (strncmp(entry->dpe_str, iv_entry->dpe_str,
-					    DAOS_PROP_POLICYSTR_MAX_LEN) != 0) {
-					D_ERROR("mismatch %s - %s.\n",
-						entry->dpe_str,
-						iv_entry->dpe_str);
-					rc = -DER_IO;
-				}
 				break;
 			case DAOS_PROP_PO_ACL:
 				if (daos_prop_entry_cmp_acl(entry,
@@ -5324,20 +5284,16 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		need_commit = true;
 	}
 
-	d_iov_set(&value, NULL, 0);
-	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_policy,
-			   &value);
+	d_iov_set(&value, &val, sizeof(val));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_data_thresh, &value);
 	if (rc && rc != -DER_NONEXIST) {
-		return rc;
+		D_GOTO(out_free, rc);
 	} else if (rc == -DER_NONEXIST) {
-		value.iov_buf = DAOS_PROP_POLICYSTR_DEFAULT;
-		value.iov_len = strlen(DAOS_PROP_POLICYSTR_DEFAULT);
-		value.iov_buf_len = value.iov_len;
-		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_policy,
-				   &value);
+		val = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_data_thresh, &value);
 		if (rc) {
-			D_ERROR(DF_UUID": failed to upgrade pool policy of pool "
-				"%d.\n", DP_UUID(pool_uuid), rc);
+			D_ERROR(DF_UUID": failed to upgrade 'data threshold' "
+				"of pool, %d.\n", DP_UUID(pool_uuid), rc);
 			D_GOTO(out_free, rc);
 		}
 		need_commit = true;
