@@ -31,9 +31,12 @@ def get_device_ids(dmg, servers):
         devices (dict): a dictionary of host keys with dictionary values of uuid keys and device
             attribute values
     """
-    return {
-        host.split(':')[0]: uuid_dict
-        for host, uuid_dict in get_storage_query_device_uuids(dmg).items() if host in servers}
+    device_ids = {}
+    for host_port, uuid_dict in get_storage_query_device_uuids(dmg).items():
+        host = host_port.split(':')[0]
+        if host in servers:
+            device_ids[host] = uuid_dict
+    return device_ids
 
 
 def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
