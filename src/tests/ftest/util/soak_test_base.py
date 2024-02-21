@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -260,12 +260,12 @@ class SoakTestBase(TestWithServers):
         job.join(timeout)
         if job.is_alive():
             self.log.error("<< ERROR: harasser %s is alive, failed to join>>", job.name)
-            if name not in ["REBUILD", "SNAPSHOT"]:
+            if name not in ["SNAPSHOT"]:
                 job.terminate()
                 status_msg = "<<FAILED: {} has been terminated.".format(name)
             raise SoakTestError(
                 "<<FAILED: Soak failed while running {} . ".format(name))
-        if name not in ["REBUILD", "SNAPSHOT"]:
+        if name not in ["SNAPSHOT"]:
             self.harasser_results = results.get()
             self.harasser_args = args.get()
         # Check if the completed job passed

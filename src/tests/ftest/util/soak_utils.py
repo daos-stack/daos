@@ -388,8 +388,10 @@ def launch_snapshot(self, pool, name):
     params = {"name": name, "status": status, "vars": {}}
     with H_LOCK:
         self.harasser_job_done(params)
-    self.log.info("Harasser results: {%s: %s}", name, status)
-    self.log.info("Harasser args: {%s}", params)
+    self.harasser_results["SNAPSHOT"] = status
+    self.harasser_args["SNAPSHOT"] = params
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
     self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
