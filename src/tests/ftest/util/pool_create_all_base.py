@@ -75,24 +75,6 @@ class PoolCreateAllTestBase(TestWithServers):
 
         return host_size * scm_engine_bytes, host_size * nvme_engine_bytes
 
-    def wait_for_pool_destroyed(self, pool_idx):
-        """Repeatedly query the pool until the command fails to detect if the pool is destroyed.
-
-        Args:
-            pool_idx (int): Pool index to indicate which pool to query.
-        """
-        count = 0
-        while True:
-            self.log.info("Wait for a few seconds for the pool to be destroyed...")
-            time.sleep(5)
-            try:
-                self.dmg.pool_query(pool=self.pool[pool_idx].identifier)
-                self.log.info("Pool query worked. Pool hasn't been destroyed. Try again. %d", count)
-                count += 1
-            except CommandFailure as error:
-                self.log.info("Pool query failed. Pool should have been destroyed. %s", error)
-                break
-
     def check_pool_full_storage(self, scm_delta_bytes, nvme_delta_bytes=None, ranks=None):
         """Check the creation of one pool with all the storage capacity.
 
@@ -233,7 +215,21 @@ class PoolCreateAllTestBase(TestWithServers):
             self.log.info(
                 "Pool %d created: scm_size=%d, nvme_size=%d", index, *pool_size)
             self.pool[index].destroy()
-            self.wait_for_pool_destroyed(pool_idx=index)
+
+            # Creating a pool immediately after destroy intermittently causes an error during the
+            # create. Wait for a few seconds and check that the pool was destroyed.
+            count = 0
+            while True:
+                self.log.info("Wait for a few seconds for the pool to be destroyed...")
+                time.sleep(5)
+                try:
+                    self.dmg.pool_query(pool=self.pool[index].identifier)
+                    self.log.info(
+                        "Pool query worked. Pool hasn't been destroyed. Try again. %d", count)
+                    count += 1
+                except CommandFailure as error:
+                    self.log.info("Pool query failed. Pool should have been destroyed. %s", error)
+                    break
 
             if first_pool_size is None:
                 first_pool_size = pool_size
