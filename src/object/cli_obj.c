@@ -6893,11 +6893,10 @@ shard_query_key_task(tse_task_t *task)
 			 * For collective query, the shard was just opened, so there
 			 * must be something wrong. Otherwise, skip a failed target.
 			 */
-			if (args->kqa_dcts != NULL)
-				D_ASSERTF(0, "Something wrong on %u shard\n",
-					  args->kqa_auxi.shard);
-			else
-				rc = 0;
+			D_ASSERTF(args->kqa_dcts == NULL,
+				  "Something wrong on %u shard for collective query\n",
+				  args->kqa_auxi.shard);
+			rc = 0;
 		}
 
 		obj_task_complete(task, rc);
