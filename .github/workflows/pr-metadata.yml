@@ -6,8 +6,7 @@ on:
   # Trigger for the defaults plus "edited" so that it re-runs if a PR title is modified as that's
   # what it's checking.  This probably doesn't need to run on synchronize however if a PR is being
   # worked then re-checking the Jira metadata is no bad thing.
-  pull_request_target:
-    types: [opened, synchronize, reopened, edited]
+  pull_request:
 
 
 jobs:
@@ -17,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: install jira
         run: python3 -m pip install jira
       - name: Load jira metadata
