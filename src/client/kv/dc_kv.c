@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,7 +11,6 @@
 #define D_LOGFAC	DD_FAC(kv)
 
 #include <daos/common.h>
-#include <daos/tse.h>
 #include <daos/object.h>
 #include <daos/kv.h>
 #include <daos_api.h>
