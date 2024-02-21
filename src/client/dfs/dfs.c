@@ -568,7 +568,7 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 
 	/** TODO - not supported yet */
 	if (strcmp(name, ".") == 0)
-		D_ASSERT(0);
+		return ENOTSUP;
 
 	if (xnr) {
 		D_ALLOC_ARRAY(pxnames, xnr);
@@ -2929,19 +2929,33 @@ dfs_obj_copy_attr(dfs_obj_t *obj, dfs_obj_t *src_obj)
 int
 dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info)
 {
-	int	rc;
+	int rc = 0;
 
 	if (obj == NULL || info == NULL)
 		return EINVAL;
 
 	switch (obj->mode & S_IFMT) {
 	case S_IFDIR:
+		/** the oclass of the directory object itself */
+		info->doi_oclass_id = daos_obj_id2class(obj->oid);
+
+		/** what is the default oclass files and dirs will be created with in this dir */
 		if (obj->d.oclass) {
-			info->doi_oclass_id = obj->d.oclass;
-		} else if (dfs->attr.da_dir_oclass_id) {
-			info->doi_oclass_id = dfs->attr.da_dir_oclass_id;
+			info->doi_dir_oclass_id  = obj->d.oclass;
+			info->doi_file_oclass_id = obj->d.oclass;
 		} else {
-			rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0, &info->doi_oclass_id);
+			if (dfs->attr.da_dir_oclass_id)
+				info->doi_dir_oclass_id = dfs->attr.da_dir_oclass_id;
+			else
+				rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0,
+							 &info->doi_dir_oclass_id);
+
+			if (dfs->attr.da_file_oclass_id)
+				info->doi_file_oclass_id = dfs->attr.da_file_oclass_id;
+			else
+				rc = daos_obj_get_oclass(dfs->coh, 0, 0, 0,
+							 &info->doi_file_oclass_id);
+
 			if (rc) {
 				D_ERROR("daos_obj_get_oclass() failed "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
@@ -3790,11 +3804,8 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 			D_GOTO(out, rc = daos_der2errno(rc));
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
-			int len;
-
-			len = snprintf(dirs[key_nr].d_name,
-				       kds[i].kd_key_len + 1, "%s", ptr);
-			D_ASSERT(len >= kds[i].kd_key_len);
+			memcpy(dirs[key_nr].d_name, ptr, kds[i].kd_key_len);
+			dirs[key_nr].d_name[kds[i].kd_key_len] = '\0';
 			ptr += kds[i].kd_key_len;
 
 			/** stat the entry if requested */
@@ -6542,8 +6553,6 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			continue;
 
 		for (ptr = enum_buf, i = 0; i < number; i++) {
-			int len;
-
 			if (strncmp("x:", ptr, 2) != 0) {
 				ptr += kds[i].kd_key_len;
 				continue;
@@ -6556,10 +6565,8 @@ dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size)
 			if (list_size < kds[i].kd_key_len - 2)
 				continue;
 
-			len = snprintf(ptr_list, kds[i].kd_key_len - 1, "%s",
-				       ptr + 2);
-			D_ASSERT(len >= kds[i].kd_key_len - 2);
-
+			memcpy(ptr_list, ptr + 2, kds[i].kd_key_len - 2);
+			ptr_list[kds[i].kd_key_len - 2] = '\0';
 			list_size -= kds[i].kd_key_len - 1;
 			ptr_list += kds[i].kd_key_len - 1;
 			ptr += kds[i].kd_key_len;
@@ -7930,5 +7937,310 @@ out:
 	D_FREE(kds);
 	D_FREE(buf_recs);
 	D_FREE(buf_keys);
+	return rc;
+}
+
+int
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
+{
+	uid_t                      uid;
+	gid_t                      gid;
+	daos_key_t                 dkey;
+	d_sg_list_t                sgl;
+	d_iov_t                    sg_iovs[4];
+	daos_iod_t                 iod;
+	daos_recx_t                recxs[4];
+	daos_handle_t              oh;
+	int                        i;
+	struct timespec            now;
+	daos_prop_t               *prop;
+	uint32_t                   props[]   = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS};
+	const int                  num_props = ARRAY_SIZE(props);
+	struct daos_prop_entry    *entry;
+	struct daos_prop_co_roots *roots;
+	int                        rc;
+
+	prop = daos_prop_alloc(num_props);
+	if (prop == NULL)
+		return ENOMEM;
+
+	for (i = 0; i < num_props; i++)
+		prop->dpp_entries[i].dpe_type = props[i];
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_query() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_POSIX) {
+		rc = EINVAL;
+		D_ERROR("container is not of type POSIX: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc);
+	}
+
+	rc = daos_cont_set_owner(coh, user, group, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_set_owner() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	/** Change the owner of the root group */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
+	if (entry == NULL) {
+		rc = EINVAL;
+		D_ERROR("Missing ROOTS property from POSIX container: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc);
+	}
+
+	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
+	if (daos_obj_id_is_nil(roots->cr_oids[0]) || daos_obj_id_is_nil(roots->cr_oids[1])) {
+		D_ERROR("Invalid superblock or root object ID: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_prop, rc = EIO);
+	}
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		D_GOTO(out_prop, rc = errno);
+
+	i               = 0;
+	recxs[i].rx_idx = CTIME_IDX;
+	recxs[i].rx_nr  = sizeof(uint64_t);
+	d_iov_set(&sg_iovs[i], &now.tv_sec, sizeof(uint64_t));
+	i++;
+
+	recxs[i].rx_idx = CTIME_NSEC_IDX;
+	recxs[i].rx_nr  = sizeof(uint64_t);
+	d_iov_set(&sg_iovs[i], &now.tv_nsec, sizeof(uint64_t));
+	i++;
+
+	if (user != NULL) {
+		rc = daos_acl_principal_to_uid(user, &uid);
+		if (rc) {
+			D_ERROR("daos_acl_principal_to_uid() failed: " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out_prop, rc = daos_der2errno(rc));
+		}
+		d_iov_set(&sg_iovs[i], &uid, sizeof(uid_t));
+		recxs[i].rx_idx = UID_IDX;
+		recxs[i].rx_nr  = sizeof(uid_t);
+		i++;
+	}
+
+	if (group != NULL) {
+		rc = daos_acl_principal_to_gid(group, &gid);
+		if (rc) {
+			D_ERROR("daos_acl_principal_to_gid() failed: " DF_RC "\n", DP_RC(rc));
+			D_GOTO(out_prop, rc = daos_der2errno(rc));
+		}
+		d_iov_set(&sg_iovs[i], &gid, sizeof(gid_t));
+		recxs[i].rx_idx = GID_IDX;
+		recxs[i].rx_nr  = sizeof(gid_t);
+		i++;
+	}
+
+	/** set root dkey as the entry name */
+	d_iov_set(&dkey, "/", 1);
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	iod.iod_nr    = i;
+	iod.iod_recxs = recxs;
+	iod.iod_type  = DAOS_IOD_ARRAY;
+	iod.iod_size  = 1;
+
+	/** set sgl for update */
+	sgl.sg_nr     = i;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs   = &sg_iovs[0];
+
+	/** Open SB object */
+	rc = daos_obj_open(coh, roots->cr_oids[0], DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_open() Failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
+	if (rc) {
+		daos_obj_close(oh, NULL);
+		D_ERROR("Failed to update owner/group, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+	rc = daos_obj_close(oh, NULL);
+	if (rc)
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+
+out_prop:
+	daos_prop_free(prop);
+	return rc;
+}
+
+struct dfs_scan_args {
+	time_t		start_time;
+	time_t		print_time;
+	uint64_t	cur_depth;
+	uint64_t	max_depth;
+	uint64_t	num_files;
+	uint64_t	num_dirs;
+	uint64_t	num_symlinks;
+	uint64_t	total_bytes;
+	uint64_t	largest_file;
+	uint64_t	largest_dir;
+	uint64_t	num_scanned;
+};
+
+static int
+scan_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
+{
+	struct dfs_scan_args	*scan_args = (struct dfs_scan_args *)args;
+	dfs_obj_t		*obj;
+	struct timespec		current_time;
+	int			rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &current_time);
+	if (rc)
+		return errno;
+
+	scan_args->num_scanned++;
+	if (scan_args->cur_depth > scan_args->max_depth)
+		scan_args->max_depth = scan_args->cur_depth;
+
+	if (current_time.tv_sec - scan_args->print_time >= DFS_ELAPSED_TIME) {
+		D_PRINT("DFS scanner: Scanned "DF_U64" files/directories (runtime: "DF_U64" sec)\n",
+			scan_args->num_scanned, current_time.tv_sec - scan_args->start_time);
+		scan_args->print_time = current_time.tv_sec;
+	}
+
+	/** open the entry name */
+	rc = dfs_lookup_rel(dfs, parent, name, O_RDONLY | O_NOFOLLOW, &obj, NULL, NULL);
+	if (rc) {
+		D_ERROR("dfs_lookup_rel() of %s failed: %d\n", name, rc);
+		return rc;
+	}
+
+	/** descend into directories */
+	if (S_ISDIR(obj->mode))	{
+		daos_anchor_t	anchor = {0};
+		uint32_t	nr_entries = DFS_ITER_NR;
+		uint64_t	nr_total = 0;
+
+		scan_args->num_dirs++;
+		while (!daos_anchor_is_eof(&anchor)) {
+			scan_args->cur_depth++;
+			rc = dfs_iterate(dfs, obj, &anchor, &nr_entries, DFS_MAX_NAME * nr_entries,
+					 scan_cb, args);
+			scan_args->cur_depth--;
+			if (rc) {
+				D_ERROR("dfs_iterate() failed: %d\n", rc);
+				D_GOTO(out_obj, rc);
+			}
+			nr_total += nr_entries;
+			nr_entries = DFS_ITER_NR;
+		}
+		if (scan_args->largest_dir < nr_total)
+			scan_args->largest_dir = nr_total;
+	} else if (S_ISLNK(obj->mode)) {
+		scan_args->num_symlinks++;
+	} else {
+		struct stat stbuf;
+
+		scan_args->num_files++;
+		rc = dfs_ostat(dfs, obj, &stbuf);
+		if (rc) {
+			D_ERROR("dfs_ostat() failed: %d\n", rc);
+			D_GOTO(out_obj, rc);
+		}
+		scan_args->total_bytes += stbuf.st_size;
+		if (scan_args->largest_file < stbuf.st_size)
+			scan_args->largest_file = stbuf.st_size;
+	}
+
+out_obj:
+	rc = dfs_release(obj);
+	return rc;
+}
+
+int
+dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *subdir)
+{
+	dfs_t			*dfs;
+	daos_handle_t		coh;
+	struct dfs_scan_args	scan_args = {0};
+	daos_anchor_t		anchor = {0};
+	uint32_t		nr_entries = DFS_ITER_NR;
+	uint64_t		nr_total = 0;
+	struct timespec		now, current_time;
+	char			now_name[24];
+	struct tm		*now_tm;
+	daos_size_t		len;
+	int			rc, rc2;
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		return errno;
+	now_tm = localtime(&now.tv_sec);
+	len = strftime(now_name, sizeof(now_name), "%Y-%m-%d-%H:%M:%S", now_tm);
+	if (len == 0)
+		return EINVAL;
+	D_PRINT("DFS scanner: Start (%s)\n", now_name);
+
+	rc = daos_cont_open(poh, cont, DAOS_COO_RO, &coh, NULL, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_open() failed: " DF_RC "\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	rc = dfs_mount(poh, coh, O_RDONLY, &dfs);
+	if (rc) {
+		D_ERROR("dfs_mount() failed (%d)\n", rc);
+		D_GOTO(out_cont, rc);
+	}
+
+	scan_args.start_time = now.tv_sec;
+	scan_args.print_time = now.tv_sec;
+	scan_args.cur_depth = 1; /** starting from root at depth 1 */
+
+	/** TODO: add support for starting from the subdir args */
+
+	/** iterate through the namespace */
+	while (!daos_anchor_is_eof(&anchor)) {
+
+		rc = dfs_iterate(dfs, &dfs->root, &anchor, &nr_entries, DFS_MAX_NAME * nr_entries,
+				 scan_cb, &scan_args);
+		if (rc) {
+			D_ERROR("dfs_iterate() failed: %d\n", rc);
+			D_GOTO(out, rc);
+		}
+
+		nr_total += nr_entries;
+		nr_entries = DFS_ITER_NR;
+	}
+
+	if (scan_args.largest_dir < nr_total)
+		scan_args.largest_dir = nr_total;
+
+	rc = clock_gettime(CLOCK_REALTIME, &current_time);
+	if (rc)
+		D_GOTO(out, rc = errno);
+	D_PRINT("DFS scanner: Done! (runtime: "DF_U64" sec)\n",
+		current_time.tv_sec - scan_args.start_time);
+
+	D_PRINT("DFS scanner: "DF_U64" scanned objects\n", scan_args.num_scanned);
+	D_PRINT("DFS scanner: "DF_U64" files\n", scan_args.num_files);
+	D_PRINT("DFS scanner: "DF_U64" symlinks\n", scan_args.num_symlinks);
+	D_PRINT("DFS scanner: "DF_U64" directories\n", scan_args.num_dirs);
+	D_PRINT("DFS scanner: "DF_U64" max tree depth\n", scan_args.max_depth);
+	D_PRINT("DFS scanner: "DF_U64" bytes of total data\n", scan_args.total_bytes);
+	D_PRINT("DFS scanner: "DF_U64" bytes per file on average\n", scan_args.total_bytes / scan_args.num_files);
+	D_PRINT("DFS scanner: "DF_U64" bytes is largest file size\n", scan_args.largest_file);
+	D_PRINT("DFS scanner: "DF_U64" entries in the largest directory\n", scan_args.largest_dir);
+
+out:
+	rc2 = dfs_umount(dfs);
+	if (rc == 0)
+		rc = rc2;
+out_cont:
+	rc2 = daos_cont_close(coh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+
 	return rc;
 }

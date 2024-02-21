@@ -155,8 +155,12 @@ class TestEnvironment():
         all_hosts = NodeSet()
         all_hosts.update(servers)
         all_hosts.update(clients)
-        self.provider = provider
-        self.insecure_mode = insecure_mode
+
+        # Override values if explicitly specified
+        if provider is not None:
+            self.provider = provider
+        if insecure_mode is not None:
+            self.insecure_mode = insecure_mode
 
         if self.log_dir is None:
             self.log_dir = self.default_log_dir()
@@ -479,7 +483,7 @@ class TestEnvironment():
         Returns:
             str: the default bullseye source file
         """
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test.cov")
 
     @property
     def bullseye_file(self):
