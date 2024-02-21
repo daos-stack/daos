@@ -84,10 +84,10 @@ type (
 		path   string
 		desc   string
 		units  string
-		min    float64
-		max    float64
+		min    uint64
+		max    uint64
 		Cur    float64 // value - may be exact or approximate
-		sum    float64
+		sum    uint64
 		mean   float64
 		stddev float64
 		str    string // string of regex to compare String() against
@@ -131,7 +131,7 @@ func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 			if rc != 0 {
 				t.Fatalf("failed to add %s: %s", tm.Name, daos.Status(rc))
 			}
-			for _, val := range []float64{tm.min, tm.max, tm.Cur} {
+			for _, val := range []uint64{tm.min, tm.max, uint64(tm.Cur)} {
 				C.d_tm_set_gauge(tm.node, C.uint64_t(val))
 			}
 		case MetricTypeCounter:

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2024 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -77,6 +77,18 @@ func (c *metricsCollector) Collect(ch chan<- prometheus.Metric) {
 			telemetry.MetricTypeSnapshot:
 			err = sm.gvm.set(sm.baseName, sm.metric.FloatValue(), sm.labels)
 		case telemetry.MetricTypeStatsGauge, telemetry.MetricTypeDuration:
+			if telemetry.HasBuckets(sm.metric) {
+				sample, err := telemetry.SampleHistogram(sm.metric)
+				if err != nil {
+					c.log.Errorf("[%s]: failed to get histogram sample", sm.baseName)
+					break
+				}
+				if err := sm.hvm.set(sm.baseName, sm.labels, sample.Count, sample.Sum, sample.Values); err != nil {
+					c.log.Errorf("[%s]: failed to set bucket values: %+v", sm.baseName, err)
+				}
+				break
+			}
+
 			if err = sm.gvm.set(sm.baseName, sm.metric.FloatValue(), sm.labels); err != nil {
 				break
 			}

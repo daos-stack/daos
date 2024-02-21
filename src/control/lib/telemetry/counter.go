@@ -24,6 +24,9 @@ import (
 	"fmt"
 )
 
+var _ Metric = (*Counter)(nil)
+
+// Counter is a counter metric.
 type Counter struct {
 	metricBase
 }

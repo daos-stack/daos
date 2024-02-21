@@ -24,6 +24,9 @@ import (
 	"fmt"
 )
 
+var _ Metric = (*Gauge)(nil)
+var _ StatsMetric = (*StatsGauge)(nil)
+
 // Gauge is a metric that consists of a single value that may increase or decrease.
 type Gauge struct {
 	metricBase
@@ -89,6 +92,7 @@ func GetGauge(ctx context.Context, name string) (*Gauge, error) {
 // StatsGauge is a gauge with statistics gathered.
 type StatsGauge struct {
 	statsMetric
+	hist *Histogram // optional histogram data
 }
 
 // Type returns the type of the gauge with stats.
@@ -128,9 +132,11 @@ func newStatsGauge(hdl *handle, path string, name *string, node *C.struct_d_tm_n
 			},
 		},
 	}
+	g.hist = newHistogram(&g.statsMetric)
 
 	// Load up the stats
 	_ = g.Value()
+
 	return g
 }
 

@@ -10,6 +10,7 @@
 package promexp
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 
@@ -25,6 +26,7 @@ func (lm labelMap) keys() (keys []string) {
 	for label := range lm {
 		keys = append(keys, label)
 	}
+	sort.Strings(keys)
 
 	return
 }
@@ -108,6 +110,28 @@ func (m cvMap) set(name string, value float64, labels labelMap) error {
 	return nil
 }
 
+type hvMap map[string]*daosHistogramVec
+
+func (m hvMap) add(name, help string, labels labelMap, buckets []float64) {
+	if _, found := m[name]; !found {
+		hv := newDaosHistogramVec(prometheus.HistogramOpts{
+			Name:    name,
+			Help:    help,
+			Buckets: buckets,
+		}, labels.keys())
+		m[name] = hv
+	}
+}
+
+func (m hvMap) set(name string, labels labelMap, samples, sum uint64, values []uint64) error {
+	hv, found := m[name]
+	if !found {
+		return errors.Errorf("histogram vector %s not found", name)
+	}
+
+	return hv.With(prometheus.Labels(labels)).AddSample(samples, float64(sum), values)
+}
+
 type metricStat struct {
 	name  string
 	desc  string
@@ -121,15 +145,16 @@ func getMetricStats(baseName string, m telemetry.Metric) (stats []*metricStat) {
 	}
 
 	for name, s := range map[string]struct {
-		fn   func() float64
-		desc string
+		fn        func() float64
+		desc      string
+		isCounter bool
 	}{
 		"min": {
-			fn:   ms.FloatMin,
+			fn:   func() float64 { return float64(ms.Min()) },
 			desc: " (min value)",
 		},
 		"max": {
-			fn:   ms.FloatMax,
+			fn:   func() float64 { return float64(ms.Max()) },
 			desc: " (max value)",
 		},
 		"mean": {
@@ -139,6 +164,11 @@ func getMetricStats(baseName string, m telemetry.Metric) (stats []*metricStat) {
 		"stddev": {
 			fn:   ms.StdDev,
 			desc: " (std dev)",
+		},
+		"samples": {
+			fn:        func() float64 { return float64(ms.SampleSize()) },
+			desc:      " (samples)",
+			isCounter: true,
 		},
 	} {
 		stats = append(stats, &metricStat{

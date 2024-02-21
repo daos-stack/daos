@@ -86,6 +86,7 @@ type sourceMetric struct {
 	labels   labelMap
 	gvm      gvMap
 	cvm      cvMap
+	hvm      hvMap
 }
 
 func (bm *sourceMetric) collect(ch chan<- prometheus.Metric) {
@@ -94,6 +95,9 @@ func (bm *sourceMetric) collect(ch chan<- prometheus.Metric) {
 	}
 	for _, cv := range bm.cvm {
 		cv.Collect(ch)
+	}
+	for _, hv := range bm.hvm {
+		hv.Collect(ch)
 	}
 }
 
@@ -104,6 +108,9 @@ func (bm *sourceMetric) resetVecs() {
 	for _, cv := range bm.cvm {
 		cv.Reset()
 	}
+	for _, hv := range bm.hvm {
+		hv.Reset()
+	}
 }
 
 func newSourceMetric(log logging.Logger, m telemetry.Metric, baseName string, labels labelMap) *sourceMetric {
@@ -113,6 +120,7 @@ func newSourceMetric(log logging.Logger, m telemetry.Metric, baseName string, la
 		labels:   labels,
 		gvm:      make(gvMap),
 		cvm:      make(cvMap),
+		hvm:      make(hvMap),
 	}
 
 	desc := m.Desc()
@@ -122,6 +130,20 @@ func newSourceMetric(log logging.Logger, m telemetry.Metric, baseName string, la
 		telemetry.MetricTypeSnapshot:
 		sm.gvm.add(sm.baseName, desc, sm.labels)
 	case telemetry.MetricTypeStatsGauge, telemetry.MetricTypeDuration:
+		if telemetry.HasBuckets(sm.metric) {
+			buckets, err := telemetry.GetBuckets(sm.metric)
+			if err != nil {
+				log.Errorf("[%s]: failed to get histogram buckets", baseName)
+				break
+			}
+			cfgBuckets := make([]float64, 0, len(buckets))
+			for _, b := range buckets {
+				cfgBuckets = append(cfgBuckets, float64(b.Max))
+			}
+			sm.hvm.add(sm.baseName, desc, sm.labels, cfgBuckets)
+			break // We don't need the parent metric, as its sum value is included in the histogram
+		}
+
 		sm.gvm.add(sm.baseName, desc, sm.labels)
 		for _, ms := range getMetricStats(sm.baseName, sm.metric) {
 			sm.gvm.add(ms.name, ms.desc, sm.labels)
