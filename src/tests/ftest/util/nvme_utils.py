@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -32,7 +32,7 @@ def get_device_ids(dmg, servers):
             attribute values
     """
     return {
-        host: uuid_dict
+        host.split(':')[0]: uuid_dict
         for host, uuid_dict in get_storage_query_device_uuids(dmg).items() if host in servers}
 
 
@@ -262,7 +262,7 @@ class ServerFillUp(IorTestBase):
             drives (int): number of drives to remove from each server
 
         Returns:
-            list: a list of hosts with 
+            list: a list of hosts with SysXS devices on which servers are expected to be stopped
         """
         servers_stopped = set()
 
@@ -277,9 +277,8 @@ class ServerFillUp(IorTestBase):
                 uuid = uuid_list[disk_id]
                 set_device_faulty(self, dmg, server, uuid, self.pool)
                 if device_ids[server][uuid]['has_sys_xs']:
-                    servers_stopped.append(server)
+                    servers_stopped.add(server)
         return list(servers_stopped)
-
 
     def get_max_storage_sizes(self, percentage=96):
         """Get the maximum pool sizes for the current server configuration.

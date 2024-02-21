@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -50,6 +50,7 @@ class NvmeFault(ServerFillUp):
         # Set the device faulty
         self.log_step('Setting the devices faulty')
         servers_stopped = self.set_device_faulty_loop(dmg, no_of_servers, no_of_drives)
+        self.log.debug('Servers expected to be stopped: %s', servers_stopped)
 
         # Wait to finish the IOR thread
         self.log_step('Waiting for I/O to complete (ior thread)')
