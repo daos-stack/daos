@@ -12,9 +12,8 @@ export PATH="/opt/BullseyeCoverage/bin:$PATH"
 echo "======>"
 pwd
 ls
+ls "/var/tmp/ftest/avocado/job-results/bullseye_coverage_logs/"
 ls "$WORKSPACE/"
-ls "$WORKSPACE/covc_test_logs/"
-ls "$WORKSPACE/Functional_on_EL_8.8/bullseye_coverage_logs/"
 echo "<======"
 
 # Decompress any zipped bullseye files, e.g.
