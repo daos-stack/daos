@@ -69,7 +69,7 @@ class WalMetrics(TestWithTelemetry):
 
         self.log_step('Verify WAL commit metrics before writing data (dmg telemetry metrics query)')
         initial_values = self.get_metrics(wal_metrics)
-        for key in initial_values:
+        for key in list(initial_values):
             if key.endswith('_stddev') or key.endswith('_mean'):
                 initial_values.pop(key)
 
@@ -145,7 +145,7 @@ class WalMetrics(TestWithTelemetry):
         self.log_step(
             'Verify WAL checkpoint metrics before pool creation (dmg telemetry metrics query)')
         initial_values = self.get_metrics(wal_metrics)
-        for key in initial_values:
+        for key in list(initial_values):
             if key.endswith('_stddev') or key.endswith('_mean'):
                 initial_values.pop(key)
 
