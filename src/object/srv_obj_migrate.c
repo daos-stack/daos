@@ -413,19 +413,13 @@ migrate_pool_tls_create_one(void *data)
 	struct migrate_pool_tls_create_arg *arg = data;
 	struct obj_tls			   *tls = obj_tls_get();
 	struct migrate_pool_tls		   *pool_tls;
-	struct ds_pool_child		   *child;
 	int rc;
-
-	child = ds_pool_child_lookup(arg->pool_uuid);
-	if (child == NULL)
-		return -DER_NO_HDL;
 
 	pool_tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (pool_tls != NULL) {
 		/* Some one else already created, because collective function
 		 * might yield xstream.
 		 */
-		ds_pool_child_put(child);
 		migrate_pool_tls_put(pool_tls);
 		return 0;
 	}
@@ -458,7 +452,9 @@ migrate_pool_tls_create_one(void *data)
 	pool_tls->mpt_executed_ult = 0;
 	pool_tls->mpt_root_hdl = DAOS_HDL_INVAL;
 	pool_tls->mpt_max_eph = arg->max_eph;
-	pool_tls->mpt_pool = child;
+	pool_tls->mpt_pool = ds_pool_child_lookup(arg->pool_uuid);
+	if (pool_tls->mpt_pool == NULL)
+		D_GOTO(out, rc = -DER_NO_HDL);
 	pool_tls->mpt_new_layout_ver = arg->new_layout_ver;
 	pool_tls->mpt_opc = arg->opc;
 	pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE;
