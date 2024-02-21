@@ -40,8 +40,11 @@ struct migrate_pool_tls {
 	 * should provide the pool/handle uuid
 	 */
 	uuid_t			mpt_poh_uuid;
-	uuid_t			mpt_coh_uuid;
 	daos_handle_t		mpt_pool_hdl;
+
+	/* container handle list for the migrate pool */
+	uuid_t			mpt_coh_uuid;
+	d_list_t		mpt_cont_hdl_list;
 
 	/* Container/objects to be migrated will be attached to the tree */
 	daos_handle_t		mpt_root_hdl;
@@ -67,16 +70,16 @@ struct migrate_pool_tls {
 	uint64_t		mpt_max_eph;
 
 	/* The ULT number generated on the xstream */
-	uint64_t		mpt_generated_ult;
+	uint32_t		mpt_generated_ult;
 
 	/* The ULT number executed on the xstream */
-	uint64_t		mpt_executed_ult;
+	uint32_t		mpt_executed_ult;
 
 	/* The ULT number generated for object on the xstream */
-	uint64_t		mpt_obj_generated_ult;
+	uint32_t		mpt_obj_generated_ult;
 
 	/* The ULT number executed on the xstream */
-	uint64_t		mpt_obj_executed_ult;
+	uint32_t		mpt_obj_executed_ult;
 
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
@@ -88,7 +91,7 @@ struct migrate_pool_tls {
 	uint64_t		mpt_inflight_max_size;
 	ABT_cond		mpt_inflight_cond;
 	ABT_mutex		mpt_inflight_mutex;
-	int			mpt_inflight_max_ult;
+	uint32_t		mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
 
 	ABT_cond		mpt_init_cond;
@@ -102,6 +105,12 @@ struct migrate_pool_tls {
 				mpt_init_tls:1,
 				mpt_init_failed:1,
 				mpt_fini:1;
+};
+
+struct migrate_cont_hdl {
+	uuid_t		mch_uuid;
+	daos_handle_t	mch_hdl;
+	d_list_t	mch_list;
 };
 
 struct obj_bulk_args {
