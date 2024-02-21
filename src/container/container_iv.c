@@ -1008,7 +1008,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	arg.eventual = eventual;
 	arg.invalidate_current = invalidate_current;
 	rc = dss_ult_create(cont_iv_capa_refresh_ult, &arg, DSS_XS_SYS,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(out_eventual, rc);
 
