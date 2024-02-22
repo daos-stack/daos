@@ -5902,7 +5902,6 @@ dfs_move_internal(dfs_t *dfs, unsigned int flags, dfs_obj_t *parent, const char 
 	size_t			len;
 	size_t			new_len;
 	int			rc;
-	struct timespec         now;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -6031,6 +6030,8 @@ restart:
 		D_GOTO(out, rc);
 	}
 
+	struct timespec		now;
+
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
 		D_GOTO(out, rc = errno);
@@ -6107,7 +6108,6 @@ dfs_exchange(dfs_t *dfs, dfs_obj_t *parent1, const char *name1, dfs_obj_t *paren
 	size_t			len1;
 	size_t			len2;
 	int			rc;
-	struct timespec         now;
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
@@ -6172,6 +6172,8 @@ restart:
 		D_ERROR("Punch entry %s failed (%d)\n", name2, rc);
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
+
+	struct timespec		now;
 
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
