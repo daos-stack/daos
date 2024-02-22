@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1506,7 +1506,6 @@ def get_storage_query_device_uuids(dmg, **kwargs):
         for device in devices:
             try:
                 uuids[host][device['uuid']] = {key: device[key] for key in ('has_sys_xs', 'roles')}
-                # uuids[host].append(device['uuid'])
             except KeyError as error:
                 raise CommandFailure(
                     "Error parsing dmg.storage_query_list_devices({}) json output".format(

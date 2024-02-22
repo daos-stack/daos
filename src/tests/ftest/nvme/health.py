@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -113,8 +113,7 @@ class NvmeHealth(ServerFillUp):
         # Get the device health
         errors = 0
         for host, uuid_dict in device_ids.items():   # pylint: disable=too-many-nested-blocks
-            uuid_list = sorted(uuid_dict.keys())
-            for uuid in uuid_list:
+            for uuid in sorted(uuid_dict.keys()):
                 dmg.hostlist = host
                 try:
                     info = get_dmg_smd_info(dmg.storage_query_device_health, 'devices', uuid=uuid)
