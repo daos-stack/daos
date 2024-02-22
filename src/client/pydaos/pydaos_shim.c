@@ -62,7 +62,9 @@ struct open_handle {
 		if (magic != PY_SHIM_MAGIC_NUMBER) {                                               \
 			D_ERROR("MAGIC number does not match, expected %d got %d\n",               \
 				PY_SHIM_MAGIC_NUMBER, magic);                                      \
-			PyErr_SetString(PyExc_TypeError, "Bad magic value in pydaos");             \
+			PyErr_Format(PyExc_TypeError,                                              \
+				     "Bad magic value in pydaos(%s), expected %d got %d",          \
+				     __func__, PY_SHIM_MAGIC_NUMBER, magic);                       \
 			return NULL;                                                               \
 		}                                                                                  \
 	} while (0)
@@ -168,7 +170,7 @@ cont_open(int ret, char *pool, char *cont, int ro)
 	/** Retrieve container properties via cont_query() */
 	prop = daos_prop_alloc(0);
 	if (prop == NULL) {
-		rc = -ENOMEM;
+		rc = -DER_NOMEM;
 		goto out;
 	}
 
