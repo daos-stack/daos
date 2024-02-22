@@ -30,8 +30,7 @@ server_config:
         - D_LOG_STDERR_IN_LOG=1
       storage: auto
 pool:
-  scm_size: 200G
-  nvme_size: 200G
+  size: 200G
 container:
   type: POSIX
   control_method: daos
