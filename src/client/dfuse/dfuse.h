@@ -19,8 +19,7 @@
 
 #include <daos.h>
 #include <daos_fs.h>
-
-#include "dfs_internal.h"
+#include <daos/dfs_lib_int.h>
 
 #include "dfuse_common.h"
 
