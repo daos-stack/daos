@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,46 +49,23 @@ struct open_handle {
 	daos_obj_id_t	alloc; /** last allocated objid */
 };
 
-static int
-__is_magic_valid(int input)
-{
-	if (input != PY_SHIM_MAGIC_NUMBER) {
-		D_ERROR("MAGIC number does not match, expected %d got %d\n",
-			PY_SHIM_MAGIC_NUMBER, input);
-		return 0;
-	}
-
-	return 1;
-}
-
-/* Macro that parses out magic value and verifies it */
-#define RETURN_NULL_IF_BAD_MAGIC(args)					\
-do {									\
-	int magic;							\
-	if (!PyArg_ParseTuple(args, "i", &magic)) {			\
-		DEBUG_PRINT("Bad arguments passed to %s", __func__);	\
-		return NULL;						\
-	}								\
-									\
-	if (!__is_magic_valid(magic)) {					\
-		return NULL;						\
-	}								\
-} while (0)
-
-
-/* Parse arguments and magic number out*/
-#define RETURN_NULL_IF_FAILED_TO_PARSE(args, format, x...)		\
-do {									\
-	int magic;							\
-	if (!PyArg_ParseTuple(args, "i"format, &magic, x)) {		\
-		D_DEBUG(DB_ANY, "Bad args passed to %s", __func__);	\
-		return NULL;						\
-	}								\
-									\
-	if (!__is_magic_valid(magic)) {					\
-		return NULL;						\
-	}								\
-} while (0)
+/* Parse arguments and magic number.  As well as returning NULL this sets the Python exception
+ * state as required
+ */
+#define RETURN_NULL_IF_FAILED_TO_PARSE(args, format, x...)                                         \
+	do {                                                                                       \
+		int magic;                                                                         \
+		if (!PyArg_ParseTuple(args, "i" format, &magic, x)) {                              \
+			D_DEBUG(DB_ANY, "Bad args passed to %s", __func__);                        \
+			return NULL;                                                               \
+		}                                                                                  \
+		if (magic != PY_SHIM_MAGIC_NUMBER) {                                               \
+			D_ERROR("MAGIC number does not match, expected %d got %d\n",               \
+				PY_SHIM_MAGIC_NUMBER, magic);                                      \
+			PyErr_SetString(PyExc_TypeError, "Bad magic value in pydaos");             \
+			return NULL;                                                               \
+		}                                                                                  \
+	} while (0)
 
 static daos_handle_t	glob_eq;
 static int		use_glob_eq;
@@ -161,7 +138,7 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
  */
 
 static PyObject *
-cont_open(int ret, char *pool, char *cont, bool ro)
+cont_open(int ret, char *pool, char *cont, int ro)
 {
 	PyObject			*return_list;
 	struct open_handle		*hdl = NULL;
@@ -276,7 +253,7 @@ __shim_handle__cont_open(PyObject *self, PyObject *args)
 {
 	char	*pool;
 	char	*cont;
-	bool     ro;
+	int      ro;
 
 	/** Parse arguments, flags not used for now */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssp", &pool, &cont, &ro);
@@ -291,7 +268,7 @@ __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 	PyObject                *obj;
 	struct duns_attr_t	 attr = {0};
 	int			 rc;
-	bool                     ro;
+	int                      ro;
 
 	/** Parse arguments, flags not used for now */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "sp", &path, &ro);
