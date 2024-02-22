@@ -70,7 +70,9 @@ def add_pools(self, pool_names, ranks=None):
         # allow yaml pool property to override the scrub default; whether scrubber is enabled or not
         if self.enable_scrubber and "scrub" not in properties:
             scrubber_properties = "scrub:timed,scrub_freq:120"
-        params['properties'] = (",").join(filter(None, [properties, scrubber_properties]))
+            params['properties'] = (",").join(filter(None, [properties, scrubber_properties]))
+        else:
+            params['properties'] = properties
         # Create a pool and add it to the overall list of pools
         self.pool.append(self.get_pool(
             namespace=path,
