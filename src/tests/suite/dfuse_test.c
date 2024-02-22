@@ -682,6 +682,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			printf("=====================\n");
 			nr_failed += cmocka_run_group_tests(lowfd_tests, NULL, NULL);
 			break;
+		}
 		case 'f': {
 			const struct CMUnitTest mmap_tests[] = {
 			    cmocka_unit_test(do_mmap),
