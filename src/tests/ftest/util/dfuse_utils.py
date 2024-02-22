@@ -424,7 +424,7 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
     if pool:
         params['pool'] = pool.identifier
     if container:
-        params['cont'] = container.uuid
+        params['cont'] = container.identifier
     if params:
         dfuse.update_params(**params)
 

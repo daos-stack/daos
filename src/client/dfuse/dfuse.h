@@ -19,8 +19,7 @@
 
 #include <daos.h>
 #include <daos_fs.h>
-
-#include "dfs_internal.h"
+#include <daos/dfs_lib_int.h>
 
 #include "dfuse_common.h"
 
@@ -506,6 +505,7 @@ struct dfuse_cont {
 	double                  dfc_dentry_dir_timeout;
 	double                  dfc_ndentry_timeout;
 	double                  dfc_data_timeout;
+	bool                    dfc_data_otoc;
 	bool                    dfc_direct_io_disable;
 };
 
