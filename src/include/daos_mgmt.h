@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,9 +16,7 @@ extern "C" {
 
 #include <uuid/uuid.h>
 
-#include <daos_event.h>
-#include <daos_types.h>
-#include <daos_pool.h>
+#include <daos_cont.h>
 
 /**
  * Get the DAOS system information in a newly allocated structure.
