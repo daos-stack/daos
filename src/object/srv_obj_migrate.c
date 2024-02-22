@@ -405,6 +405,8 @@ struct migrate_pool_tls_create_arg {
 	unsigned int generation;
 	uint32_t opc;
 	uint32_t new_layout_ver;
+	/* for sys sstream */
+	bool	 track_status;
 };
 
 int
@@ -427,6 +429,8 @@ migrate_pool_tls_create_one(void *data)
 	D_ALLOC_PTR(pool_tls);
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_INIT_LIST_HEAD(&pool_tls->mpt_list);
 
 	rc = ABT_eventual_create(0, &pool_tls->mpt_done_eventual);
 	if (rc != ABT_SUCCESS)
@@ -452,9 +456,12 @@ migrate_pool_tls_create_one(void *data)
 	pool_tls->mpt_executed_ult = 0;
 	pool_tls->mpt_root_hdl = DAOS_HDL_INVAL;
 	pool_tls->mpt_max_eph = arg->max_eph;
-	pool_tls->mpt_pool = ds_pool_child_lookup(arg->pool_uuid);
-	if (pool_tls->mpt_pool == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	/* @mpt_pool is never used on system xstream */
+	if (arg->track_status == false) {
+		pool_tls->mpt_pool = ds_pool_child_lookup(arg->pool_uuid);
+		if (pool_tls->mpt_pool == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
+	}
 	pool_tls->mpt_new_layout_ver = arg->new_layout_ver;
 	pool_tls->mpt_opc = arg->opc;
 	pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE;
@@ -518,7 +525,11 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	arg.max_eph = max_eph;
 	arg.new_layout_ver = new_layout_ver;
 	arg.generation = generation;
-	/* dss_task_collective does not do collective on xstream 0 */
+	/*
+	 * dss_task_collective does not do collective on sys xstrem,
+	 * sys xstream need some information to track rebuild status.
+	 */
+	arg.track_status = true;
 	rc = migrate_pool_tls_create_one(&arg);
 	if (rc)
 		D_GOTO(out, rc);
@@ -547,6 +558,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
 	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
+	arg.track_status = false;
 	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create migrate tls: "DF_RC"\n",
