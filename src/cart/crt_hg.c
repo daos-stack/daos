@@ -532,6 +532,13 @@ crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx)
 	if (prov_data->cpg_na_config.noc_interface == NULL)
 		return NULL;
 
+	/*
+ 	 * CXI provider requires domain names instead of interfaces.
+ 	 * Returning NULL here will cause crt_get_info_string() to use domain names instead
+	 * */
+	if (provider == CRT_PROV_OFI_CXI)
+		return NULL;
+
 	D_ASSERTF(iface_idx < prov_data->cpg_na_config.noc_iface_total,
 		  "Bad iface_idx=%d\n", iface_idx);
 

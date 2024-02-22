@@ -756,22 +756,25 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		 * a primary provider on eth0 and secondary on eth1.
 		 * "eth0,eth1" on the other hand will indicate a single provider mode initialized on
 		 * both eth0 and eth1 interfaces.
+		 *
+		 * Domain, port and auth_key are handled similarly
 		 */
 
 		rc = __split_arg(interface, ":", &iface0, &iface1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
-		rc = __split_arg(domain, ",", &domain0, &domain1);
+		rc = __split_arg(domain, ":", &domain0, &domain1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
-		rc = __split_arg(port, ",", &port0, &port1);
+		rc = __split_arg(port, ":", &port0, &port1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
-		rc = __split_arg(auth_key, ",", &auth_key0, &auth_key1);
+		rc = __split_arg(auth_key, ":", &auth_key0, &auth_key1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
 
-		if (iface0 == NULL)
+		/* CXI doesn't use interface value, instead uses domain */
+		if (iface0 == NULL && primary_provider != CRT_PROV_OFI_CXI)
 			D_WARN("No interface specified\n");
 
 		rc = prov_data_init(&crt_gdata.cg_prov_gdata_primary,
@@ -1125,10 +1128,26 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 
 	na_cfg = crt_provider_get_na_config(primary, provider);
 
+	/* CXI provider requires domain to be set */
+	if (provider == CRT_PROV_OFI_CXI && !domain) {
+		D_ERROR("Domain must be set for CXI provider\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
 	if (interface) {
-		D_STRNDUP(na_cfg->noc_interface, interface, 64);
-		if (!na_cfg->noc_interface)
-			D_GOTO(out, rc = -DER_NOMEM);
+		if (provider == CRT_PROV_OFI_CXI) {
+			D_WARN("Interface '%s' ignored for CXI. Using domain '%s' instead\n",
+			       interface, domain);
+
+			/* Note: crt_provider_iface_str_get() returns interface name  */
+			D_STRNDUP(na_cfg->noc_interface, domain, 64);
+			if (!na_cfg->noc_interface)
+				D_GOTO(out, rc = -DER_NOMEM);
+		} else {
+			D_STRNDUP(na_cfg->noc_interface, interface, 64);
+			if (!na_cfg->noc_interface)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
 	}
 
 	if (domain) {
