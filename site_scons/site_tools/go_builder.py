@@ -85,7 +85,7 @@ def generate(env):
 
         context.Display(f'Checking {env.d_go_bin} version... ')
         cmd_rc = subprocess.run([env.d_go_bin, 'version'], check=True, stdout=subprocess.PIPE)
-        out = cmd_rc.stdout.decode('utf-8')
+        out = cmd_rc.stdout.decode('utf-8').strip()
         if len(out.split(' ')) < 3:
             context.Result(f'failed to get version from "{out}"')
             return 0
