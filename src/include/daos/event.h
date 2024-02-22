@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2021 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,8 +34,6 @@ enum daos_ev_flags {
 	DAOS_EVF_NEED_LAUNCH	= (1 << 1),
 };
 
-struct tse_task_t;
-
 /**
  * Finish event queue library.
  */
@@ -47,6 +45,12 @@ daos_eq_lib_fini(void);
  */
 int
 daos_eq_lib_init(void);
+
+/**
+ * reset context after fork
+ */
+int
+daos_eq_lib_reset_after_fork(void);
 
 crt_context_t *
 daos_task2ctx(tse_task_t *task);

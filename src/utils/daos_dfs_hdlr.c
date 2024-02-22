@@ -18,11 +18,11 @@
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/debug.h>
+#include <daos/dfs_lib_int.h>
+#include <daos_types.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
 
-#include "daos_types.h"
-#include "daos_fs.h"
-#include "dfs_internal.h"
-#include "daos_uns.h"
 #include "daos_hdlr.h"
 
 int
@@ -152,7 +152,7 @@ out_umount:
 }
 
 int
-fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs)
+fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs, mode_t *mode)
 {
 	int		 flags = O_RDONLY;
 	int		 rc;
@@ -178,15 +178,19 @@ fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs)
 
 	rc = dfs_lookup(dfs, ap->dfs_path, flags, &obj, NULL, NULL);
 	if (rc) {
-		fprintf(ap->errstream, "failed to lookup %s (%s)\n",
-			ap->dfs_path, strerror(rc));
+		fprintf(ap->errstream, "failed to lookup %s (%s)\n", ap->dfs_path, strerror(rc));
 		D_GOTO(out_umount, rc);
 	}
 
 	rc = dfs_obj_get_info(dfs, obj, attrs);
 	if (rc) {
-		fprintf(ap->errstream, "failed to get obj info (%s)\n",
-			strerror(rc));
+		fprintf(ap->errstream, "failed to get obj info (%s)\n", strerror(rc));
+		D_GOTO(out_release, rc);
+	}
+
+	rc = dfs_get_mode(obj, mode);
+	if (rc) {
+		fprintf(ap->errstream, "failed to get obj mode (%s)\n", strerror(rc));
 		D_GOTO(out_release, rc);
 	}
 

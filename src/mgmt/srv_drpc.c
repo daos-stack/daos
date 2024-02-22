@@ -1962,6 +1962,27 @@ out:
 }
 
 void
+ds_mgmt_smd_free_dev(Ctl__SmdDevice *dev)
+{
+	D_FREE(dev->uuid);
+	D_FREE(dev->tgt_ids);
+	if (dev->ctrlr != NULL) {
+		D_FREE(dev->ctrlr->model);
+		D_FREE(dev->ctrlr->serial);
+		D_FREE(dev->ctrlr->pci_addr);
+		D_FREE(dev->ctrlr->fw_rev);
+		D_FREE(dev->ctrlr->vendor_id);
+		D_FREE(dev->ctrlr->pci_dev_type);
+		if (dev->ctrlr->namespaces != NULL) {
+			D_FREE(dev->ctrlr->namespaces[0]);
+			D_FREE(dev->ctrlr->namespaces);
+			dev->ctrlr->namespaces   = NULL;
+			dev->ctrlr->n_namespaces = 0;
+		}
+	}
+}
+
+void
 ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
@@ -2016,12 +2037,7 @@ ds_mgmt_drpc_smd_list_devs(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	for (i = 0; i < resp->n_devices; i++) {
 		if (resp->devices[i] != NULL) {
-			if (resp->devices[i]->uuid != NULL)
-				D_FREE(resp->devices[i]->uuid);
-			if (resp->devices[i]->tgt_ids != NULL)
-				D_FREE(resp->devices[i]->tgt_ids);
-			if (resp->devices[i]->tr_addr != NULL)
-				D_FREE(resp->devices[i]->tr_addr);
+			ds_mgmt_smd_free_dev(resp->devices[i]);
 			D_FREE(resp->devices[i]);
 		}
 	}
@@ -2244,8 +2260,7 @@ drpc_dev_manage_free(Ctl__DevManageResp *resp)
 {
 	if (resp != NULL) {
 		if (resp->device != NULL) {
-			if (resp->device->uuid != NULL)
-				D_FREE(resp->device->uuid);
+			ds_mgmt_smd_free_dev(resp->device);
 			D_FREE(resp->device);
 		}
 		D_FREE(resp);

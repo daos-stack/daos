@@ -175,8 +175,6 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 					return
 				}
 			}
-
-			mi.log.Debug("sending mock response")
 			responses <- hr
 		}
 		close(responses)
@@ -318,21 +316,30 @@ func MockMemInfo() *common.MemInfo {
 	}
 }
 
+func mockNvmeCtrlrWithSmd(bdevRoles storage.OptionBits, varIdx ...int32) *storage.NvmeController {
+	idx := test.GetIndex(varIdx...)
+	nc := storage.MockNvmeController(idx)
+	sd := storage.MockSmdDevice(nil, idx)
+	sd.Roles = storage.BdevRoles{bdevRoles}
+	nc.SmdDevices = []*storage.SmdDevice{sd}
+	return nc
+}
+
 func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 	pbSsr := &ctlpb.StorageScanResp{
 		Nvme:    &ctlpb.ScanNvmeResp{},
 		Scm:     &ctlpb.ScanScmResp{},
 		MemInfo: commonpb.MockPBMemInfo(),
 	}
+
 	nvmeControllers := storage.NvmeControllers{
-		storage.MockNvmeController(),
-	}
-	scmModules := storage.ScmModules{
-		storage.MockScmModule(),
+		mockNvmeCtrlrWithSmd(storage.OptionBits(0)),
 	}
 	if err := convert.Types(nvmeControllers, &pbSsr.Nvme.Ctrlrs); err != nil {
 		t.Fatal(err)
 	}
+
+	scmModules := storage.ScmModules{storage.MockScmModule()}
 	if err := convert.Types(scmModules, &pbSsr.Scm.Modules); err != nil {
 		t.Fatal(err)
 	}
@@ -355,7 +362,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 	ctrlrs := func(idxs ...int) storage.NvmeControllers {
 		ncs := make(storage.NvmeControllers, 0, len(idxs))
 		for _, i := range idxs {
-			nc := storage.MockNvmeController(int32(i))
+			nc := mockNvmeCtrlrWithSmd(storage.BdevRoleAll, int32(i))
 			ncs = append(ncs, nc)
 		}
 		return ncs
@@ -377,7 +384,7 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		for _, i := range []int{1, 2, 3, 4, 5, 6, 7, 8} {
 			nc := storage.MockNvmeController(int32(i))
 			nc.SocketID = int32(i % 2)
-			sd := storage.MockSmdDevice(nc.PciAddr, int32(i))
+			sd := storage.MockSmdDevice(nc, int32(i))
 			sd.TotalBytes = uint64(humanize.TByte) * uint64(i)
 			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i)  // 25% used
 			sd.UsableBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
@@ -541,6 +548,7 @@ type MockFormatConf struct {
 	NvmePerHost  int
 	ScmFailures  map[int]struct{}
 	NvmeFailures map[int]struct{}
+	NvmeRoleBits int
 }
 
 // MockFormatResp returns a populated StorageFormatResp based on input config.
@@ -583,6 +591,13 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 			hs.NvmeDevices = append(hs.NvmeDevices, &storage.NvmeController{
 				Info:    ctlpb.ResponseStatus_CTL_SUCCESS.String(),
 				PciAddr: fmt.Sprintf("%d", j+1),
+				SmdDevices: []*storage.SmdDevice{
+					{
+						Roles: storage.BdevRoles{
+							storage.OptionBits(mfc.NvmeRoleBits),
+						},
+					},
+				},
 			})
 		}
 		if err := hsm.Add(hostName, hs); err != nil {
@@ -673,17 +688,18 @@ func MockStorageScanResp(t *testing.T,
 	nvmeControllers := make(storage.NvmeControllers, 0, len(mockNvmeConfigArray))
 	for index, mockNvmeConfig := range mockNvmeConfigArray {
 		nvmeController := storage.MockNvmeController(int32(index))
-		smdDevice := nvmeController.SmdDevices[0]
+		smdDevice := storage.MockSmdDevice(nvmeController, int32(index))
 		smdDevice.AvailBytes = mockNvmeConfig.AvailBytes
 		smdDevice.UsableBytes = mockNvmeConfig.UsableBytes
 		smdDevice.TotalBytes = mockNvmeConfig.TotalBytes
 		if mockNvmeConfig.NvmeState != nil {
-			smdDevice.NvmeState = *mockNvmeConfig.NvmeState
+			nvmeController.NvmeState = *mockNvmeConfig.NvmeState
 		}
 		if mockNvmeConfig.NvmeRole != nil {
 			smdDevice.Roles = *mockNvmeConfig.NvmeRole
 		}
 		smdDevice.Rank = mockNvmeConfig.Rank
+		nvmeController.SmdDevices = []*storage.SmdDevice{smdDevice}
 		nvmeControllers = append(nvmeControllers, nvmeController)
 	}
 	if err := convert.Types(nvmeControllers, &serverScanResponse.Nvme.Ctrlrs); err != nil {

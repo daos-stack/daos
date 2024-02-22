@@ -14,6 +14,7 @@ IndentCaseLabels: false
 ForEachMacros: ['d_list_for_each_entry',
                 'd_list_for_each_safe',
                 'd_list_for_each_entry_safe',
+                'd_list_for_each_entry_reverse',
                 'evt_ent_array_for_each']
 PointerAlignment: Right
 AlignTrailingComments: true
@@ -28,3 +29,6 @@ AlignConsecutiveBitFields: AcrossEmptyLinesAndComments
 SpaceBeforeParens: ControlStatementsExceptForEachMacros
 KeepEmptyLinesAtTheStartOfBlocks: false
 MaxEmptyLinesToKeep: 1
+---
+Language: Json
+IndentWidth: 2

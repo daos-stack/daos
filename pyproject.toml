@@ -1,3 +1,5 @@
 [tool.isort]
 supported_extensions = ["py"]
-skip = [".git/", "src/rdb/raft", "build", "install"]
+skip = [".git/", "src/rdb/raft", "build", "install", "venv", "src/control/vendor/", "_topdir"]
+line_length = 99
+skip_gitignore = true

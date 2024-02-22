@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -91,10 +91,10 @@ var (
 		"the fault domain path may have a maximum of 2 levels below the root",
 		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
-	FaultConfigHugepagesDisabled = serverConfigFault(
-		code.ServerConfigHugepagesDisabled,
+	FaultConfigHugepagesDisabledWithBdevs = serverConfigFault(
+		code.ServerConfigHugepagesDisabledWithBdevs,
 		"hugepages cannot be disabled if bdevs have been specified in config",
-		"remove nr_hugepages parameter from config to have the value automatically calculated",
+		"either set false (or remove) disable_hugepages parameter or remove nvme storage assignment in config and restart the control server",
 	)
 	FaultConfigVMDSettingDuplicate = serverConfigFault(
 		code.ServerConfigVMDSettingDuplicate,
@@ -147,7 +147,7 @@ func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
 func FaultConfigScmDiffClass(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigScmDiffClass,
-		fmt.Sprintf("the SCM class in I/O Engine %d is different from I/O Engine %d",
+		fmt.Sprintf("the SCM class in engine %d is different from engine %d",
 			curIdx, seenIdx),
 		"ensure that each I/O Engine has a single SCM tier with the same class and restart",
 	)
@@ -156,7 +156,7 @@ func FaultConfigScmDiffClass(curIdx, seenIdx int) *fault.Fault {
 func FaultConfigOverlappingBdevDeviceList(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
 		code.ServerConfigOverlappingBdevDeviceList,
-		fmt.Sprintf("the bdev_list value in I/O Engine %d overlaps with entries in server %d", curIdx, seenIdx),
+		fmt.Sprintf("the bdev_list value in engine %d overlaps with entries in engine %d", curIdx, seenIdx),
 		"ensure that each I/O Engine has a unique set of bdev_list entries and restart",
 	)
 }

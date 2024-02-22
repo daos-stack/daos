@@ -11,7 +11,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "daos_fs.h"
+#include <daos_fs.h>
 
 struct ioil_cont {
 	/* Container open handle */

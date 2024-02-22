@@ -1,0 +1,71 @@
+name: Linting
+
+# Always run on Pull Requests as then these checks can be marked as required.
+on:
+  push:
+    branches:
+      - master
+      - 'feature/*'
+      - 'release/*'
+  pull_request:
+
+jobs:
+  # Run isort on the tree.
+  # This checks .py files only so misses SConstruct and SConscript files are not checked, rather
+  # for these files check them afterwards.  The output-filter will not be installed for this part
+  # so regressions will be detected but not annotated.
+  isort:
+    name: Python isort
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3'
+      - uses: isort/isort-action@master
+        with:
+          requirementsFiles: "requirements.txt utils/cq/requirements.txt"
+      - name: Run on SConstruct file.
+        run: isort --check-only SConstruct
+      - name: Run on build files.
+        run: find . -name SConscript | xargs isort --check-only
+
+  shell-check:
+    name: ShellCheck
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Run
+        run: sudo apt-get update && sudo apt-get install shellcheck
+      - name: Add error parser
+        run: echo -n "::add-matcher::ci/shellcheck-matcher.json"
+      - name: Run Shellcheck
+        # The check will run with this file from the target branch but the code from the PR so
+        # test for this file before calling it to prevent failures on PRs where this check is
+        # in the target branch but the PR is not updated to include it.
+        run: \[ ! -x ci/run_shellcheck.sh \] || ./ci/run_shellcheck.sh
+
+  log-check:
+    name: Logging macro checking
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Check DAOS logging macro use.
+        run: ./utils/cq/d_logging_check.py --github src
+
+  ftest-tags:
+    name: Ftest tag check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Check DAOS ftest tags.
+        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint

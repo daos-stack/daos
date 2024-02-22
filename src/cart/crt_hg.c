@@ -619,7 +619,7 @@ crt_provider_get_ctx_idx(bool primary, int provider)
 	struct crt_prov_gdata	*prov_data = crt_get_prov_gdata(primary, provider);
 	int			i;
 
-	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
+	for (i = 0; i < prov_data->cpg_ctx_max_num; i++) {
 		if (prov_data->cpg_used_idx[i] == false) {
 			prov_data->cpg_used_idx[i] = true;
 			prov_data->cpg_ctx_num++;
@@ -793,8 +793,7 @@ crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info)
 int
 crt_hg_init(void)
 {
-	int	rc = 0;
-	char	*env;
+	int rc = 0;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -803,10 +802,8 @@ crt_hg_init(void)
 
 	#define EXT_FAC DD_FAC(external)
 
-	env = getenv("HG_LOG_SUBSYS");
-	if (!env) {
-		env = getenv("HG_LOG_LEVEL");
-		if (!env)
+	if (!d_isenv_def("HG_LOG_SUBSYS")) {
+		if (!d_isenv_def("HG_LOG_LEVEL"))
 			HG_Set_log_level("warning");
 		HG_Set_log_subsys("hg,na");
 	}
@@ -884,6 +881,9 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 
 	if (prov_data->cpg_max_unexp_size > 0)
 		init_info.na_init_info.max_unexpected_size = prov_data->cpg_max_unexp_size;
+
+	init_info.request_post_init = crt_gdata.cg_post_init;
+	init_info.request_post_incr = crt_gdata.cg_post_incr;
 
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
 	if (hg_class == NULL) {
@@ -1397,7 +1397,7 @@ out:
 void
 crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 {
-	hg_return_t	 hg_ret;
+	hg_return_t	hg_ret;
 
 	D_ASSERT(rpc_priv != NULL);
 

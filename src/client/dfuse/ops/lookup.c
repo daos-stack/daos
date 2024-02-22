@@ -7,7 +7,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#include "daos_uns.h"
+#include <daos_uns.h>
 
 char *duns_xattr_name = DUNS_XATTR_NAME;
 
@@ -152,12 +152,13 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 	rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, wipe_parent, wipe_name,
 					      strnlen(wipe_name, NAME_MAX));
 	if (rc && rc != -ENOENT)
-		DFUSE_TRA_ERROR(ie, "inval_entry() returned: %d (%s)", rc, strerror(-rc));
+		DS_ERROR(-rc, "inval_entry() failed");
 
 	return;
 out_err:
-	DFUSE_REPLY_ERR_RAW(ie, req, rc);
+	/* TODO: Verify ie reference here */
 	dfs_release(ie->ie_obj);
+	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
 /* Check for and set a unified namespace entry point.
@@ -291,12 +292,8 @@ out_release:
 out_free:
 	dfuse_ie_free(dfuse_info, ie);
 out:
-	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
-		struct fuse_entry_param entry = {};
-
-		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
-		DFUSE_REPLY_ENTRY(parent, req, entry);
-	} else {
+	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0)
+		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
+	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	}
 }

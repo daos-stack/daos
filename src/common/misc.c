@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -656,7 +656,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	daos_crt_init_opt.cio_use_sensors = server;
 
 	/** configure cart for maximum bulk threshold */
-	d_getenv_int("DAOS_RPC_SIZE_LIMIT", &limit);
+	d_getenv_uint32_t("DAOS_RPC_SIZE_LIMIT", &limit);
 
 	daos_crt_init_opt.cio_use_expected_size = 1;
 	daos_crt_init_opt.cio_max_expected_size = limit ? limit : DAOS_RPC_SIZE;
@@ -684,13 +684,15 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	 * 1) now sockets provider cannot create more than 16 contexts for SEP
 	 * 2) some problems if SEP communicates with regular EP.
 	 */
-	addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
+	d_agetenv_str(&addr_env, CRT_PHY_ADDR_ENV);
 	if (addr_env != NULL &&
 	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
 		D_INFO("for sockets provider force it to use regular EP.\n");
 		daos_crt_init_opt.cio_use_sep = 0;
+		d_freeenv_str(&addr_env);
 		goto out;
 	}
+	d_freeenv_str(&addr_env);
 
 	daos_crt_init_opt.cio_use_sep = 1;
 
@@ -729,6 +731,17 @@ void
 daos_dti_reset(void)
 {
 	memset(dti_uuid, 0, sizeof(dti_uuid));
+}
+
+/**
+ * daos_get_client_uuid to get (and lazily initialize) client thread dti_uuid.
+ */
+void
+daos_get_client_uuid(uuid_t *uuidp)
+{
+	if (uuid_is_null(dti_uuid))
+		uuid_generate(dti_uuid);
+	uuid_copy(*uuidp, dti_uuid);
 }
 
 /**

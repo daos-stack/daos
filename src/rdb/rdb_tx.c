@@ -389,6 +389,27 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op, bool is_critical)
 }
 
 /**
+ * Discard all updates (if any) in \a tx.
+ */
+void
+rdb_tx_discard(struct rdb_tx *tx)
+{
+	D_ASSERT(!(tx->dt_flags & RDB_TX_LOCAL));
+	D_ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 && tx->dt_entry_len == 0) ||
+		      (tx->dt_entry != NULL && tx->dt_entry_cap > 0 &&
+		       tx->dt_entry_len <= tx->dt_entry_cap),
+		  "entry=%p cap=%zu len=%zu\n", tx->dt_entry, tx->dt_entry_cap, tx->dt_entry_len);
+
+	if (tx->dt_entry) {
+		D_FREE(tx->dt_entry);
+		tx->dt_entry = NULL;
+	}
+	tx->dt_entry_len = 0;
+	tx->dt_entry_cap = 0;
+	tx->dt_num_ops   = 0;
+}
+
+/**
  * Commit \a tx. If successful, then all updates in \a tx are revealed to
  * queries. If an error occurs, then \a tx is aborted.
  *
@@ -656,6 +677,9 @@ rdb_oid_class(enum rdb_kvs_class class, rdb_oid_t *oid_class)
 		return 0;
 	case RDB_KVS_INTEGER:
 		*oid_class = RDB_OID_CLASS_INTEGER;
+		return 0;
+	case RDB_KVS_LEXICAL:
+		*oid_class = RDB_OID_CLASS_LEXICAL;
 		return 0;
 	default:
 		return -DER_IO;

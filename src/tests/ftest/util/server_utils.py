@@ -18,14 +18,12 @@ from command_utils import SubprocessManager
 from command_utils_base import BasicParameter, CommonConfig
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import (get_default_config_file, get_display_size,
-                           get_log_file, list_to_str, pcmd, run_pcmd)
+from general_utils import (get_default_config_file, get_display_size, get_log_file, list_to_str,
+                           pcmd, run_pcmd)
 from host_utils import get_local_host
 from run_utils import run_remote, stop_processes
-from server_utils_base import (DaosServerCommand, DaosServerInformation,
-                               ServerFailed)
-from server_utils_params import (DaosServerTransportCredentials,
-                                 DaosServerYamlParameters)
+from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
+from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
 
 
@@ -1044,7 +1042,7 @@ class DaosServerManager(SubprocessManager):
         Use the specified data to generate and distribute the server configuration to the hosts.
 
         Also use this data to replace the engine storage configuration so that the storage options
-        defined in the specified data are configured correctly as part of the server startup.
+        defined in the specified data are configured correctly as part of the server start-up.
 
         Args:
             generated_yaml (YAMLObject): New server config data.

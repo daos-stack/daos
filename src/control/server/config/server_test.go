@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -290,8 +290,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelProps(storage.AccelEngineSPDK,
-				storage.AccelOptCRCFlag|storage.AccelOptMoveFlag),
+			WithStorageAutoFaultyCriteria(true, 100, 200),
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -319,7 +318,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelProps(storage.AccelEngineDML, storage.AccelOptCRCFlag),
+			WithStorageAutoFaultyCriteria(false, 0, 0),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 
@@ -866,7 +865,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigHugepagesDisabled,
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
 		},
 		"disabled hugepages; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -886,7 +885,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigHugepagesDisabled,
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
 		},
 		"disabled hugepages; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -1617,7 +1616,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 					WithStorageClass("ram").
 					WithScmMountPoint("b"),
 			).
-			WithPinnedNumaNode(0).
+			WithPinnedNumaNode(1).
 			WithTargetCount(8)
 	}
 
@@ -1625,6 +1624,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 		configA *engine.Config
 		configB *engine.Config
 		expErr  error
+		expLog  string
 	}{
 		"successful validation": {
 			configA: configA(),
@@ -1690,15 +1690,15 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(2)),
 				),
 			configB: configB().
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
 				),
-			expErr: errors.New("valid PCI addresses"),
+			expErr: errors.New("engine 1 overlaps with entries in engine 0"),
 		},
 		"mismatched scm_class": {
 			configA: configA(),
@@ -1711,6 +1711,21 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				),
 			expErr: FaultConfigScmDiffClass(1, 0),
 		},
+		"mismatched nr bdev_list": {
+			configA: configA().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(1)),
+				),
+			configB: configB().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(3)),
+				),
+			expLog: "engine 1 has 2 but engine 0 has 1",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1722,6 +1737,11 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 
 			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)
+
+			if tc.expLog != "" {
+				hasEntry := strings.Contains(buf.String(), tc.expLog)
+				AssertTrue(t, hasEntry, "expected entries not found in log")
+			}
 		})
 	}
 }

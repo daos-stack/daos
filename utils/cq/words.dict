@@ -216,6 +216,7 @@ iface
 indata
 infiniband
 init
+inode
 interoperability
 io
 iod
@@ -235,6 +236,7 @@ junit
 kds
 kv
 kwargs
+launchable
 ldflags
 len
 libaio
@@ -314,6 +316,7 @@ params
 patchelf
 pci
 pda
+parallelized
 pdesc
 perf
 performant
@@ -333,6 +336,7 @@ ppn
 prebuild
 prebuilding
 prebuilt
+predefine
 preload
 prepend
 prepended
@@ -349,6 +353,7 @@ ps
 puuid
 py
 pydaos
+pytest
 ramdisk
 randrw
 ranklist
@@ -365,6 +370,7 @@ recurse
 redistributions
 refactor
 repo
+reproducibility
 returncode
 rf
 rmdir
@@ -441,6 +447,7 @@ testdata
 testFile
 testname
 testrunner
+testsuites
 tgt
 timestamp
 timestamps
@@ -460,12 +467,14 @@ uint
 umount
 umounting
 unicode
+uninterruptible
 unittest
 unlink
 unlinked
 unlinking
 unmangle
 unmount
+unordered
 unwritable
 uri
 url
@@ -482,6 +491,7 @@ uuidstr
 valgrind
 vendored
 ver
+versa
 versioned
 vm
 vos

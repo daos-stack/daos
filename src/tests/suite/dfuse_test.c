@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2023 Intel Corporation.
+ * (C) Copyright 2021-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,14 +27,15 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <dirent.h>
 
-#include "dfuse_ioctl.h"
+#include <dfuse_ioctl.h>
 
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismd";
+static const char *all_tests = "ismdlf";
 
 static void
 print_usage()
@@ -47,6 +48,8 @@ print_usage()
 	print_message("dfuse_test -s|--stream\n");
 	print_message("dfuse_test -m|--metadata\n");
 	print_message("dfuse_test -d|--directory\n");
+	print_message("dfuse_test -l|--lowfd\n");
+	print_message("dfuse_test -f|--mmap\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -146,6 +149,21 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 	assert_int_equal(stbuf.st_size, stbuf0.st_size);
 
+	/* cornercase: fd for a regular file is passed into fstatat(). Path is empty. */
+	rc = fstatat(fd, "", &stbuf0, AT_EMPTY_PATH);
+	assert_return_code(rc, errno);
+	assert_int_equal(stbuf.st_size, stbuf0.st_size);
+
+	/* expected to fail */
+	rc = fstatat(fd, "", &stbuf0, 0);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOENT);
+
+	/* expected to fail */
+	rc = fstatat(fd, "entry", &stbuf0, 0);
+	assert_int_equal(rc, -1);
+	assert_int_equal(errno, ENOTDIR);
+
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
@@ -180,7 +198,6 @@ do_stream(void **state)
 
 	errno = 0;
 	rewind(stream);
-	assert_int_equal(errno, 0);
 
 	offset = ftello(stream);
 	assert_int_equal(offset, 0);
@@ -494,6 +511,117 @@ do_directory(void **state)
 	assert_return_code(rc, errno);
 }
 
+void
+do_mmap(void **state)
+{
+	int   root;
+	int   fd;
+	int   rc;
+	void *addr;
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	/* Always unlink the file but do not check for errors.  If running the test manually the
+	 * file might pre-exist and affect the behavior.
+	 */
+	unlinkat(root, "file", 0);
+
+	fd = openat(root, "file", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+	assert_return_code(root, errno);
+
+	rc = ftruncate(fd, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	addr = mmap(NULL, 1024 * 1024, PROT_WRITE, MAP_PRIVATE, fd, 0);
+	assert_ptr_not_equal(addr, MAP_FAILED);
+
+	printf("Mapped private to %p\n", addr);
+
+	memset(addr, '0', 1024 * 1024);
+
+	rc = munmap(addr, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	addr = mmap(NULL, 1024 * 1024, PROT_READ, MAP_SHARED, fd, 0);
+	assert_ptr_not_equal(addr, MAP_FAILED);
+
+	printf("Mapped shared to %p\n", addr);
+
+	rc = munmap(addr, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
+#define MIN_DAOS_FD 10
+/*
+ * Check whether daos network context uses low fds 0~9.
+ */
+void
+do_lowfd(void **state)
+{
+	int   fd;
+	int   rc;
+	int   i;
+	bool  pil4dfs_loaded = false;
+	char *env_ldpreload;
+	char  fd_path[64];
+	char *path;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (env_ldpreload == NULL)
+		return;
+
+	if (strstr(env_ldpreload, "libpil4dfs.so"))
+		pil4dfs_loaded = true;
+	else
+		/* libioil cannot pass this test since low fds are only temporarily blocked */
+		return;
+
+	/* first time access a dir on DFS mount to trigger daos_init() */
+	fd = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(fd, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	/* open the root dir and print fd */
+	fd = open("/", O_PATH | O_DIRECTORY);
+	assert_return_code(fd, errno);
+	printf("fd = %d\n", fd);
+	rc = close(fd);
+	assert_return_code(rc, errno);
+	if (pil4dfs_loaded)
+		assert_true(fd >= MIN_DAOS_FD);
+
+	/* now check whether daos uses low fds */
+	path = malloc(PATH_MAX);
+	assert_non_null(path);
+	for (i = 0; i < MIN_DAOS_FD; i++) {
+		snprintf(fd_path, sizeof(fd_path) - 1, "/proc/self/fd/%d", i);
+		rc = readlink(fd_path, path, PATH_MAX - 1);
+		/* libioil only temporarily block low fds during daos_init().
+		 * libpil4dfs blocks low fds before daos_init() and does not free
+		 * them until applications end.
+		 */
+		if (!pil4dfs_loaded && rc == -1 && errno == ENOENT)
+			continue;
+		assert_true(rc > 0);
+		path[rc] = 0;
+		assert_true(strstr(path, "socket:") == NULL);
+		assert_true(strstr(path, "anon_inode:") == NULL);
+	}
+	free(path);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -543,7 +671,26 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			};
 			nr_failed += cmocka_run_group_tests(readdir_tests, NULL, NULL);
 			break;
+		case 'l':
+			printf("\n\n=================");
+			printf("dfuse low fd tests");
+			printf("=====================\n");
+			const struct CMUnitTest lowfd_tests[] = {
+			    cmocka_unit_test(do_lowfd),
+			};
+			nr_failed += cmocka_run_group_tests(lowfd_tests, NULL, NULL);
+			break;
 
+		case 'f': {
+			const struct CMUnitTest mmap_tests[] = {
+			    cmocka_unit_test(do_mmap),
+			};
+			printf("\n\n=================");
+			printf("dfuse mmap tests");
+			printf("=====================\n");
+			nr_failed += cmocka_run_group_tests(mmap_tests, NULL, NULL);
+			break;
+		}
 		default:
 			assert_true(0);
 		}
@@ -568,9 +715,11 @@ main(int argc, char **argv)
 					       {"stream", no_argument, NULL, 's'},
 					       {"metadata", no_argument, NULL, 'm'},
 					       {"directory", no_argument, NULL, 'd'},
+					       {"mmap", no_argument, NULL, 'f'},
+					       {"lowfd", no_argument, NULL, 'l'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsd", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlf", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;

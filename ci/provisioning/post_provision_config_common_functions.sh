@@ -9,6 +9,77 @@ set -eux
 : "${STAGE_NAME:=Unknown_Stage}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
 
+# functions common to more than one distro specific provisioning
+url_to_repo() {
+    local url="$1"
+
+    local repo=${url#*://}
+    repo="${repo#/}"
+    repo="${repo//%/}"
+    repo="${repo//\//_}"
+
+    echo "$repo"
+}
+
+add_repo() {
+    local match="$1"
+    local add_repo="$2"
+    local gpg_check="${3:-true}"
+
+    if [ -z "$match" ]; then
+        # we cannot try to add a repo that has no match
+        return
+    fi
+
+    local repo
+    # see if a package we know is in the repo is present
+    if repo=$(dnf -y repoquery --qf "%{repoid}" "$1" 2>/dev/null | grep ..\*); then
+        DNF_REPO_ARGS+=" --enablerepo=$repo"
+    else
+        local repo_url="${REPOSITORY_URL}${add_repo}"
+        local repo_name
+        repo_name=$(url_to_repo "$repo_url")
+        if ! dnf -y repolist | grep "$repo_name"; then
+            dnf -y config-manager --add-repo="${repo_url}" >&2
+            if ! $gpg_check; then
+                disable_gpg_check "$add_repo" >&2
+            fi
+        fi
+        DNF_REPO_ARGS+=" --enablerepo=$repo_name"
+    fi
+}
+
+add_group_repo() {
+    local match="$1"
+
+    add_repo "$match" "$DAOS_STACK_GROUP_REPO"
+    group_repo_post
+}
+
+add_local_repo() {
+    add_repo 'argobots' "$DAOS_STACK_LOCAL_REPO" false
+}
+
+disable_gpg_check() {
+    local url="$1"
+
+    repo="$(url_to_repo "$url")"
+    # bug in EL7 DNF: this needs to be enabled before it can be disabled
+    dnf -y config-manager --save --setopt="$repo".gpgcheck=1
+    dnf -y config-manager --save --setopt="$repo".gpgcheck=0
+    # but even that seems to be not enough, so just brute-force it
+    if [ -d /etc/yum.repos.d ] &&
+       ! grep gpgcheck /etc/yum.repos.d/"$repo".repo; then
+        echo "gpgcheck=0" >> /etc/yum.repos.d/"$repo".repo
+    fi
+}
+
+dump_repos() {
+    for file in "$REPOS_DIR"/*.repo; do
+        echo "---- $file ----"
+        cat "$file"
+    done
+}
 retry_dnf() {
     local monitor_threshold="$1"
     shift
@@ -203,9 +274,6 @@ set_local_repo() {
             dnf -y config-manager \
                 --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
         fi
-        # Disable module filtering for our deps repo
-        deps_repo="daos-stack-deps-${DISTRO_GENERIC}-${VERSION_ID%%.*}-x86_64-stable-local-artifactory"
-        dnf config-manager --save --setopt "$deps_repo.module_hotfixes=true" "$deps_repo"
     fi
 
     dnf repolist
@@ -266,29 +334,15 @@ post_provision_config_nodes() {
 
     if $CONFIG_POWER_ONLY; then
         rm -f "$REPOS_DIR"/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
-        time dnf -y erase fio fuse ior-hpc mpich-autoload               \
+        time dnf -y erase fio fuse ior-hpc mpich-autoload          \
                      ompi argobots cart daos daos-client dpdk      \
                      fuse-libs libisa-l libpmemobj mercury mpich   \
                      pmix protobuf-c spdk libfabric libpmem        \
-                     libpmemblk munge-libs munge slurm             \
+                     munge-libs munge slurm                        \
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
     cat /etc/os-release
-
-    # start with everything fully up-to-date
-    # all subsequent package installs beyond this will install the newest packages
-    # but we need some hacks for images with MOFED already installed
-    cmd=(retry_dnf 600)
-    if grep MOFED_VERSION /etc/do-release; then
-        cmd+=(--setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE")
-    else
-        cmd+=(upgrade)
-    fi
-    if ! "${cmd[@]}" --exclude golang-*.daos.*; then
-        dump_repos
-        return 1
-    fi
 
     if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
         # Remove OPA and install MOFED
@@ -300,7 +354,7 @@ post_provision_config_nodes() {
     local inst_repos=()
     # shellcheck disable=SC2153
     read -ra inst_repos <<< "$INST_REPOS"
-    for repo in "${inst_repos[@]+"${inst_repos[@]}"}"; do
+    for repo in "${inst_repos[@]}"; do
         branch="master"
         build_number="lastSuccessfulBuild"
         if [[ $repo = *@* ]]; then
@@ -316,10 +370,28 @@ post_provision_config_nodes() {
                 branch="${branch%:*}"
             fi
         fi
-        local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
-        dnf -y config-manager --add-repo="${repo_url}"
+        local repo_url="${ARTIFACTS_URL:-${JENKINS_URL}job/}"daos-stack/job/"$repo"/job/"${branch//\//%252F}"/"$build_number"/artifact/artifacts/$DISTRO_NAME/
+        dnf -y config-manager --add-repo="$repo_url"
+        repo="$(url_to_repo "$repo_url")"
+        # PR-repos: should always be able to upgrade modular packages
+        dnf -y config-manager --save --setopt "$repo.module_hotfixes=true" "$repo"
         disable_gpg_check "$repo_url"
     done
+
+    # start with everything fully up-to-date
+    # all subsequent package installs beyond this will install the newest packages
+    # but we need some hacks for images with MOFED already installed
+    cmd=(retry_dnf 600)
+    if grep MOFED_VERSION /etc/do-release; then
+        cmd+=(--setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE")
+    else
+        cmd+=(upgrade)
+    fi
+    if ! "${cmd[@]}"; then
+        dump_repos
+        return 1
+    fi
+
     local inst_rpms=()
     # shellcheck disable=SC2153
     if [ -n "$INST_RPMS" ]; then
@@ -365,7 +437,7 @@ setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-$version
 EOF
 
         printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
-    fi 
+    fi
 
     distro_custom
 

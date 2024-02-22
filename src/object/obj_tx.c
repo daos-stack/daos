@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1091,7 +1091,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	locked = false;
 
 	if (rc != -DER_TX_RESTART) {
-		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt);
+		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt, 0);
 		rc1 = tse_task_reinit_with_delay(task, delay);
 		if (rc1 != 0) {
 			D_ERROR("Failed to reinit task %p: %d, %d\n", task, rc1, rc);
@@ -2305,7 +2305,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 
 	uuid_copy(oci->oci_pool_uuid, tx->tx_pool->dp_pool);
 	oci->oci_map_ver = tx->tx_pm_ver;
-	oci->oci_flags = ORF_CPD_LEADER;
+	oci->oci_flags = ORF_LEADER;
 	if (tx->tx_set_resend && !tx->tx_renew)
 		oci->oci_flags |= ORF_RESEND;
 	tx->tx_renew = 0;
@@ -2634,7 +2634,12 @@ dc_tx_restart(tse_task_t *task)
 			/*
 			 * Reinitialize task with a delay to implement the
 			 * backoff and call dc_tx_restart_end below.
+			 *
+			 * We don't need to get an extra tx reference, because
+			 * the reinitialized task must acquire tx->tx_lock
+			 * first.
 			 */
+			tse_task_set_priv_internal(task, tx);
 			rc = tse_task_reinit_with_delay(task, backoff);
 			if (rc != 0) {
 				/* Skip the backoff. */
@@ -2643,8 +2648,6 @@ dc_tx_restart(tse_task_t *task)
 				goto out_tx_lock;
 			}
 			D_MUTEX_UNLOCK(&tx->tx_lock);
-			/* Pass our tx reference to task. */
-			tse_task_set_priv_internal(task, tx);
 			return 0;
 		}
 
@@ -3528,6 +3531,8 @@ dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc, tse_
 				    fe->nr != 1 ? fe->iods : (void *)&fe->iods[0].iod_name);
 		break;
 	}
+	case DAOS_OBJ_RPC_COLL_QUERY:
+		/* Fall through. */
 	case DAOS_OBJ_RPC_QUERY_KEY: {
 		daos_obj_query_key_t	*qu = dc_task_get_args(task);
 		daos_key_t		*dkey;

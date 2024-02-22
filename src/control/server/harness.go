@@ -15,7 +15,6 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -37,21 +36,15 @@ type Engine interface {
 	newCret(string, error) *ctlpb.NvmeControllerResult
 	tryDrpc(context.Context, drpc.Method) *system.MemberResult
 	requestStart(context.Context)
-	updateInUseBdevs(context.Context, []storage.NvmeController, uint64, uint64) ([]storage.NvmeController, error)
 	isAwaitingFormat() bool
 
 	// These methods should probably be replaced by callbacks.
 	NotifyDrpcReady(*srvpb.NotifyReadyReq)
 	NotifyStorageReady()
-	BioErrorNotify(*srvpb.BioErrorReq)
 
 	// These methods should probably be refactored out into functions that
 	// accept the engine instance as a parameter.
-	GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error)
-	ScanBdevTiers() ([]storage.BdevTierScanResult, error)
-	ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error)
 	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult
-	StorageFormatNVMe() commonpb.NvmeControllerResults
 
 	// This is a more reasonable surface that will be easier to maintain and test.
 	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)
@@ -68,6 +61,8 @@ type Engine interface {
 	OnInstanceExit(...onInstanceExitFn)
 	OnReady(...onReadyFn)
 	GetStorage() *storage.Provider
+	Debugf(format string, args ...interface{})
+	Tracef(format string, args ...interface{})
 }
 
 // EngineHarness is responsible for managing Engine instances.

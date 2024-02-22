@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,9 @@
  */
 extern const char *
 dpdk_cli_override_opts;
+
+#define NVME_PCI_DEV_TYPE_VMD           "vmd"
+#define NVME_DETAIL_BUFLEN              1024
 
 /** Device state flags */
 #define NVME_DEV_FL_PLUGGED	(1 << 0)	/* Device is present in slot */
@@ -48,6 +51,7 @@ dpdk_cli_override_opts;
 #define NVME_CONF_SET_HOTPLUG_RANGE	"hotplug_busid_range"
 #define NVME_CONF_SET_ACCEL_PROPS	"accel_props"
 #define NVME_CONF_SET_SPDK_RPC_SERVER	"spdk_rpc_srv"
+#define NVME_CONF_SET_AUTO_FAULTY       "auto_faulty"
 
 /** Supported acceleration engine settings */
 #define NVME_ACCEL_NONE		"none"
@@ -121,6 +125,31 @@ struct nvme_stats {
 	uint64_t    pll_lock_loss_cnt;	  /* PCIe Refclock PLL unlocj count */
 	uint64_t    nand_bytes_written;	/* NAND bytes written, 1count=32MiB) */
 	uint64_t    host_bytes_written; /* Host bytes written, 1count=32MiB) */
+};
+
+/**
+ * NVMe controller details.
+ */
+struct nvme_ctrlr_t {
+	char                *model;
+	char                *serial;
+	char                *pci_addr;
+	char                *fw_rev;
+	char                *pci_type;
+	char                *vendor_id;
+	int                  socket_id;
+	struct nvme_ns_t    *nss;
+	struct nvme_stats   *stats;
+	struct nvme_ctrlr_t *next;
+};
+
+/**
+ * NVMe namespace details.
+ */
+struct nvme_ns_t {
+	uint32_t          id;
+	uint64_t          size;
+	struct nvme_ns_t *next;
 };
 
 /**

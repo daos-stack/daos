@@ -25,7 +25,6 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 	fi_out.fh = (uint64_t)oh;
 
-#if HAVE_CACHE_READDIR
 	/* If caching is enabled then always set the bit to enable caching as it might get
 	 * populated, however only set the bit to use the cache based on last use.
 	 */
@@ -35,7 +34,6 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 		if (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout))
 			fi_out.keep_cache = 1;
 	}
-#endif
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
@@ -49,8 +47,9 @@ err:
 void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_file_info *fi)
 {
-	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
-	struct dfuse_obj_hdl *oh         = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl     *oh         = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_inode_entry *ie         = NULL;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -69,18 +68,23 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 		dfuse_dcache_set_time(oh->doh_ie);
 	}
 
-	DFUSE_REPLY_ZERO(oh, req);
 	dfuse_dre_drop(dfuse_info, oh);
+
 	if (oh->doh_evict_on_close) {
+		ie = oh->doh_ie;
+		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
+	}
+
+	DFUSE_REPLY_ZERO_OH(oh, req);
+	if (ie) {
 		int rc;
 
-		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, oh->doh_ie->ie_parent,
-						      oh->doh_ie->ie_name,
-						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
+						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 
-		if (rc != 0)
-			DFUSE_TRA_ERROR(oh->doh_ie, "inval_entry() returned: %d (%s)", rc,
-					strerror(-rc));
+		if (rc != 0 && rc != -ENOENT)
+			DHS_ERROR(ie, -rc, "inval_entry() error");
+		dfuse_inode_decref(dfuse_info, ie);
 	}
 	dfuse_oh_free(dfuse_info, oh);
 };

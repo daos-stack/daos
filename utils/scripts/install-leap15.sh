@@ -20,12 +20,12 @@ dnf --nodocs install \
     cmake \
     cunit-devel \
     flex \
-    fuse3-devel \
+    fuse3 \
     gcc \
     gcc-c++ \
     git \
-    go1.18 \
-    go1.18-race \
+    go \
+    go-race \
     graphviz \
     gzip \
     hwloc-devel \
