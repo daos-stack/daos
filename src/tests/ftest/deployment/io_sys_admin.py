@@ -38,8 +38,8 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         :avocado: tags=IoSysAdmin,test_io_sys_admin
         """
         # local param
-        new_test_user = self.params.get("new_user", "/run/container_acl/*")
-        new_test_group = self.params.get("new_group", "/run/container_acl/*")
+        new_test_user = self.params.get("root", "/run/container_acl/*")
+        new_test_group = self.params.get("root", "/run/container_acl/*")
 
         dmg = self.get_dmg_command()
         daos = self.get_daos_command()
