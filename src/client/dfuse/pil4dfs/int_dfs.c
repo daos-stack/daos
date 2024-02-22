@@ -26,8 +26,11 @@
 #include <signal.h>
 #include <inttypes.h>
 #include <sys/ucontext.h>
+#include <sys/user.h>
+#include <linux/binfmts.h>
 
 #include <daos/debug.h>
+#include <gurt/dlog.h>
 #include <gurt/list.h>
 #include <gurt/common.h>
 #include <gurt/hash.h>
@@ -38,9 +41,15 @@
 #include <daos/event.h>
 #include <daos_prop.h>
 #include <daos/common.h>
+#include <daos/container.h>
 #include "dfs_internal.h"
 
 #include "hook.h"
+
+/* useful in strncmp() and strndup() */
+#define STR_AND_SIZE(s)    s, sizeof(s)
+/* useful in strncmp() to check whether a string start with a target string. Not including \0 */
+#define STR_AND_SIZE_M1(s) s, sizeof(s) - 1
 
 /* D_ALLOC and D_FREE can not be used in query_path(). It causes dead lock during daos_init(). */
 #define FREE(ptr)	do {free(ptr); (ptr) = NULL; } while (0)
@@ -107,6 +116,7 @@ struct dfs_mt {
 	_Atomic uint32_t     inited;
 	char                *pool, *cont;
 	char                *fs_root;
+	uuid_t               uuid_cont;
 };
 
 static _Atomic uint64_t        num_read;
@@ -132,6 +142,20 @@ static _Atomic uint32_t        daos_init_cnt;
  * true.
  */
 static bool             report;
+/* always load libpil4dfs related env variables in exec() */
+static bool             enforce_exec_env;
+/* current application is bash or sh */
+static bool             is_bash;
+/* the exe name extract from /proc/self/cmdline */
+static char             exe_path[DFS_MAX_PATH];
+/* the short exe name from exe_path */
+static char             exe_short[DFS_MAX_NAME];
+/* "compatible_mode" is a bool to control whether passing open(), openat(), and opendir() to dfuse
+ * all the time to avoid using fake fd. Env variable "D_IL_COMPATIBLE=1" or "D_IL_COMPATIBLE=true"
+ * will set it true. This can increase the compatibility of libpil4dfs with degraded performance
+ * in open(), openat(), and opendir().
+ */
+static bool             compatible_mode;
 static long int         page_size;
 
 static _Atomic bool     daos_inited;
@@ -154,6 +178,7 @@ struct file_obj {
 	unsigned int     st_ino;
 	int              idx_mmap;
 	off_t            offset;
+	char            *path;
 	char             item_name[DFS_MAX_NAME];
 };
 
@@ -240,7 +265,7 @@ struct statx {
 #endif
 
 /* working dir of current process */
-static char            cur_dir[DFS_MAX_PATH + 1] = "";
+static char            cur_dir[DFS_MAX_PATH] = "";
 static bool            segv_handler_inited;
 /* Old segv handler */
 struct sigaction       old_segv;
@@ -265,6 +290,61 @@ static void
 update_cwd(void);
 static int
 get_eqh(daos_handle_t *eqh);
+static void
+destroy_all_eqs(void);
+
+/* Hash table entry for kernel fd.
+ */
+
+/* The hash table to store kernel_fd - fake_fd in compatible mode */
+struct d_hash_table *fd_hash;
+
+struct ht_fd {
+	d_list_t entry;
+	int      real_fd;
+	int      fake_fd;
+};
+
+static inline struct ht_fd *
+fd_obj(d_list_t *rlink)
+{
+	return container_of(rlink, struct ht_fd, entry);
+}
+
+static bool
+fd_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int ksize)
+{
+	struct ht_fd *fd = fd_obj(rlink);
+
+	return (fd->real_fd == *((int *)key));
+}
+
+static void
+fd_rec_free(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct ht_fd *fd = fd_obj(rlink);
+
+	D_FREE(fd);
+}
+
+static bool
+fd_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
+{
+	return true;
+}
+
+static uint32_t
+fd_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
+{
+	struct ht_fd *fd = fd_obj(rlink);
+
+	return d_hash_string_u32((const char *)(&fd->real_fd), sizeof(int));
+}
+
+static d_hash_table_ops_t fd_hash_ops = {.hop_key_cmp    = fd_key_cmp,
+					 .hop_rec_decref = fd_rec_decref,
+					 .hop_rec_free   = fd_rec_free,
+					 .hop_rec_hash   = fd_rec_hash};
 
 /* Hash table entry for directory handles.  The struct and name will be allocated as a single
  * entity.
@@ -389,7 +469,19 @@ out_release:
 	return rc;
 }
 
-static int (*ld_open)(const char *pathname, int oflags, ...);
+static void
+remove_dir_in_dcache(struct dfs_mt *mt, const char *path)
+{
+	d_list_t       *rlink;
+	int             len;
+
+	len   = strnlen(path, DFS_MAX_PATH);
+	rlink = d_hash_rec_find(mt->dfs_dir_hash, path, len);
+	if (rlink == NULL)
+		return;
+	d_hash_rec_decref(mt->dfs_dir_hash, rlink);
+}
+
 static int (*libc_open)(const char *pathname, int oflags, ...);
 static int (*pthread_open)(const char *pathname, int oflags, ...);
 
@@ -407,6 +499,9 @@ static ssize_t (*libc_write)(int fd, const void *buf, size_t count);
 static ssize_t (*pthread_write)(int fd, const void *buf, size_t count);
 
 static ssize_t (*next_pwrite)(int fd, const void *buf, size_t size, off_t offset);
+
+static ssize_t (*next_readv)(int fd, const struct iovec *iov, int iovcnt);
+static ssize_t (*next_writev)(int fd, const struct iovec *iov, int iovcnt);
 
 static off_t (*libc_lseek)(int fd, off_t offset, int whence);
 static off_t (*pthread_lseek)(int fd, off_t offset, int whence);
@@ -512,15 +607,12 @@ static int (*next_munmap)(void *addr, size_t length);
 static void (*next_exit)(int rc);
 static void (*next__exit)(int rc) __attribute__((__noreturn__));
 
-/* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
-/* static org_dup3 real_dup3=NULL; */
-
-/**
- *static int (*real_execve)(const char *filename, char *const argv[], char *const envp[]);
- * static int (*real_execvp)(const char *filename, char *const argv[]);
- * static int (*real_execv)(const char *filename, char *const argv[]);
- * static pid_t (*real_fork)();
- */
+static pid_t (*next_fork)(void);
+static int (*next_execve)(const char *filename, char *const argv[], char *const envp[]);
+static int (*next_execv)(const char *filename, char *const argv[]);
+static int (*next_execvp)(const char *filename, char *const argv[]);
+static int (*next_execvpe)(const char *filename, char *const argv[], char *const envp[]);
+static int (*next_fexecve)(int fd, char *const argv[], char *const envp[]);
 
 /* start NOT supported by DAOS */
 static int (*next_posix_fadvise)(int fd, off_t offset, off_t len, int advice);
@@ -727,11 +819,11 @@ discover_dfuse_mounts(void)
 			abort();
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
-		if (strncmp(fs_entry->mnt_type, MNT_TYPE_FUSE, sizeof(MNT_TYPE_FUSE)) == 0) {
+		if (strncmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
 			pt_dfs_mt->dfs_dir_hash = NULL;
 			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
+				D_DEBUG(DB_ANY, "mnt_dir[] is too long. Skip this entry.\n");
 				D_GOTO(out, rc = ENAMETOOLONG);
 			}
 			if (access(fs_entry->mnt_dir, R_OK)) {
@@ -751,6 +843,73 @@ discover_dfuse_mounts(void)
 
 out:
 	endmntent(fp);
+	return rc;
+}
+
+static int
+fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
+{
+	int                    cmd, rc;
+	d_iov_t                iov	 = {};
+	char                  *buff_obj = NULL;
+	struct dfuse_hsd_reply hsd_reply;
+	struct dfuse_il_reply  il_reply;
+
+	rc = ioctl(fd, DFUSE_IOCTL_IL, &il_reply);
+	if (rc != 0) {
+		rc = errno;
+		if (rc != ENOTTY)
+			DS_WARN(rc, "ioctl call on %d failed", fd);
+		D_GOTO(err, rc);
+	}
+
+	if (il_reply.fir_version != DFUSE_IOCTL_VERSION) {
+		D_WARN("ioctl version mismatch (fd=%d): expected %d got %d\n", fd,
+		       DFUSE_IOCTL_VERSION, il_reply.fir_version);
+		D_GOTO(err, rc);
+	}
+	if (uuid_compare(dfs_mt->uuid_cont, il_reply.fir_cont) != 0) {
+		D_WARN("inconsistent container uuid" DF_UUID " != " DF_UUID "\n",
+		       DP_UUID(&dfs_mt->uuid_cont), DP_UUID(&il_reply.fir_cont));
+		D_GOTO(err, rc = EINVAL);
+	}
+
+	rc = ioctl(fd, DFUSE_IOCTL_IL_DSIZE, &hsd_reply);
+	if (rc != 0) {
+		rc = errno;
+		/* Known not working for a dir */
+		if (rc != EISDIR)
+			DS_WARN(rc, "ioctl call on %d failed", fd);
+		D_GOTO(err, rc);
+	}
+	/* to query dfs object for files */
+	D_ALLOC(buff_obj, hsd_reply.fsr_dobj_size);
+	if (buff_obj == NULL)
+		return ENOMEM;
+
+	iov.iov_buf = buff_obj;
+	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_DOOH, hsd_reply.fsr_dobj_size);
+	rc  = ioctl(fd, cmd, iov.iov_buf);
+	if (rc != 0) {
+		rc = errno;
+		DS_WARN(rc, "ioctl call on %d failed", fd);
+		D_GOTO(err, rc);
+	}
+
+	iov.iov_buf_len = hsd_reply.fsr_dobj_size;
+	iov.iov_len     = iov.iov_buf_len;
+
+	rc = dfs_obj_global2local(dfs_mt->dfs, 0, iov, obj);
+	if (rc) {
+		DS_WARN(rc, "failed to use dfs object handle");
+		D_GOTO(err, rc);
+	}
+
+	D_FREE(buff_obj);
+	return 0;
+
+err:
+	D_FREE(buff_obj);
 	return rc;
 }
 
@@ -888,6 +1047,13 @@ retrieve_handles_from_fuse(int idx)
 			errno_saved, strerror(errno_saved));
 		goto err;
 	}
+	rc = dc_cont_hdl2uuid(dfs_list[idx].coh, NULL, &dfs_list[idx].uuid_cont);
+	if (rc != 0) {
+		errno_saved = daos_der2errno(rc);
+		D_DEBUG(DB_ANY, "failed to look up container uuid: %d (%s)\n", errno_saved,
+			strerror(errno_saved));
+		goto err;
+	}
 
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
@@ -943,11 +1109,13 @@ child_hdlr(void)
 	daos_eq_lib_reset_after_fork();
 	daos_dti_reset();
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
-	rc     = daos_eq_create(&td_eqh);
-	if (rc)
-		DL_WARN(rc, "daos_eq_create() failed");
-	else
-		main_eqh = td_eqh;
+	if (eq_count_max > 0) {
+		rc     = daos_eq_create(&td_eqh);
+		if (rc)
+			DL_WARN(rc, "daos_eq_create() failed");
+		else
+			main_eqh = td_eqh;
+	}
 	context_reset = true;
 }
 
@@ -991,6 +1159,9 @@ consume_low_fd(void)
 		}
 		low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
 	}
+	/* block fd 255 too. 255 is commonly used by bash. */
+	if (low_fd_count)
+		dup2(low_fd_list[0], 255);
 
 	D_MUTEX_UNLOCK(&lock_reserve_fd);
 	return rc;
@@ -1032,9 +1203,9 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	}
 
 	/* handle special cases. Needed to work with git. */
-	if ((strncmp(szInput, "http://", 7) == 0) ||
-	    (strncmp(szInput, "https://", 8) == 0) ||
-	    (strncmp(szInput, "git://", 6) == 0)) {
+	if ((strncmp(szInput, STR_AND_SIZE_M1("http://")) == 0) ||
+	    (strncmp(szInput, STR_AND_SIZE_M1("https://")) == 0) ||
+	    (strncmp(szInput, STR_AND_SIZE_M1("git://")) == 0)) {
 		*is_target_path = 0;
 		return 0;
 	}
@@ -1052,7 +1223,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 	if (strncmp(szInput, ".", 2) == 0) {
 		/* special case for current work directory */
-		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH + 1);
+		pt_end = stpncpy(full_path_parse, cur_dir, DFS_MAX_PATH);
 		len = (int)(pt_end - full_path_parse);
 		if (len >= DFS_MAX_PATH) {
 			D_DEBUG(DB_ANY, "full_path_parse[] is not large enough: %d (%s)\n",
@@ -1119,8 +1290,8 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 					if (rc)
 						DL_WARN(rc, "daos_eq_create() failed");
 					main_eqh = td_eqh;
-					rc       = pthread_atfork(NULL, NULL, &child_hdlr);
-					D_ASSERT(rc == 0);
+//					rc       = pthread_atfork(NULL, NULL, &child_hdlr);
+//					D_ASSERT(rc == 0);
 				}
 				D_MUTEX_UNLOCK(&lock_eqh);
 			}
@@ -1571,6 +1742,7 @@ free_fd(int idx, bool closing_dup_fd)
 		 *  make sure the code about adding and decreasing the reference to the struct
 		 *  working as expected.
 		 */
+		D_FREE(saved_obj->path);
 		memset(saved_obj, 0, sizeof(struct file_obj));
 		D_FREE(saved_obj);
 		if (rc)
@@ -1661,6 +1833,17 @@ get_fd_redirected(int fd)
 
 	if (fd >= FD_FILE_BASE)
 		return fd;
+	if (compatible_mode) {
+		d_list_t     *rlink;
+		int           fd_kernel = fd;
+		struct ht_fd *fd_ht_obj;
+
+		rlink = d_hash_rec_find(fd_hash, &fd_kernel, sizeof(int));
+		if (rlink != NULL) {
+			fd_ht_obj = fd_obj(rlink);
+			return fd_ht_obj->fake_fd;
+		}
+	}
 
 	D_MUTEX_LOCK(&lock_fd_dup2ed);
 	if (num_fd_dup2ed > 0) {
@@ -1809,19 +1992,20 @@ close_all_duped_fd(void)
 static int
 check_path_with_dirfd(int dirfd, char **full_path_out, const char *rel_path, int *error)
 {
-	int len_str;
+	int len_str, dirfd_directed;
 
 	*error = 0;
 	*full_path_out = NULL;
+	dirfd_directed = get_fd_redirected(dirfd);
 
-	if (dirfd >= FD_DIR_BASE) {
+	if (dirfd_directed >= FD_DIR_BASE) {
 		len_str = asprintf(full_path_out, "%s/%s",
-				   dir_list[dirfd - FD_DIR_BASE]->path, rel_path);
+				   dir_list[dirfd_directed - FD_DIR_BASE]->path, rel_path);
 		if (len_str >= DFS_MAX_PATH)
 			goto out_toolong;
 		else if (len_str < 0)
 			goto out_oom;
-	} else if (dirfd == AT_FDCWD) {
+	} else if (dirfd_directed == AT_FDCWD) {
 		len_str = asprintf(full_path_out, "%s/%s", cur_dir, rel_path);
 		if (len_str >= DFS_MAX_PATH)
 			goto out_toolong;
@@ -1880,14 +2064,14 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	    const char *pathname, int oflags, ...)
 {
 	unsigned int     mode     = 0664;
-	int              two_args = 1, rc, is_target_path, idx_fd, idx_dirfd;
-	dfs_obj_t       *dfs_obj;
+	int              two_args = 1, rc, is_target_path, idx_fd, idx_dirfd, fd_kernel;
+	dfs_obj_t       *dfs_obj  = NULL;
 	dfs_obj_t       *parent;
 	mode_t           mode_query = 0, mode_parent = 0;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char            *parent_dir = NULL;
-	char            *full_path  = NULL;
+	char             *parent_dir = NULL;
+	char             *full_path = NULL;
 
 	if (pathname == NULL) {
 		errno = EFAULT;
@@ -1913,6 +2097,130 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	if (!is_target_path)
 		goto org_func;
+
+	/* Always rely on fuse for open() to avoid a fake fd */
+	if (compatible_mode) {
+		struct ht_fd *fd_ht_obj = NULL;
+		int           fd_fake   = 0;
+
+		if (two_args)
+			fd_kernel = real_open(pathname, oflags);
+		else
+			fd_kernel = real_open(pathname, oflags, mode);
+		/* dfuse fails for some reason */
+		if (fd_kernel < 0)
+			goto out_compatible;
+
+		/* query file object through ioctl() */
+		rc = fetch_dfs_cont_file_obj_with_fd(fd_kernel, dfs_mt, &dfs_obj);
+		if (rc != 0 && rc != EISDIR)
+			goto out_compatible;
+
+		/* Need to create a fake fd and associate with fd_kernel */
+		atomic_fetch_add_relaxed(&num_open, 1);
+
+		/* regular file */
+		if (rc == 0) {
+			rc = find_next_available_fd(NULL, &idx_fd);
+			if (rc)
+				goto out_compatible_release;
+			file_list[idx_fd]->dfs_mt    = dfs_mt;
+			file_list[idx_fd]->file      = dfs_obj;
+			file_list[idx_fd]->parent    = parent;
+			file_list[idx_fd]->st_ino    = FAKE_ST_INO(full_path);
+			file_list[idx_fd]->idx_mmap  = -1;
+			file_list[idx_fd]->open_flag = oflags;
+			file_list[idx_fd]->offset    = 0;
+			if (strncmp(full_path, "/", 2) == 0)
+				D_STRNDUP(file_list[idx_fd]->path, dfs_mt->fs_root, DFS_MAX_PATH);
+			else
+				D_ASPRINTF(file_list[idx_fd]->path, "%s%s", dfs_mt->fs_root, full_path);
+			if (file_list[idx_fd]->path == NULL) {
+				free_fd(idx_fd, false);
+				goto out_compatible;
+			}
+			strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
+			fd_fake = idx_fd + FD_FILE_BASE;
+		}
+
+		/* directory */
+		if (rc == EISDIR) {
+			/* need to get DFS handle directly */
+			if (oflags & O_CREAT) {
+				rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFREG,
+					      oflags, 0, 0, NULL, &dfs_obj);
+				mode_query = S_IFDIR;
+			} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
+				rc = dfs_lookup(dfs_mt->dfs, "/", oflags, &dfs_obj, &mode_query,
+						NULL);
+			} else {
+				rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags,
+						    &dfs_obj, &mode_query, NULL);
+			}
+
+			rc = find_next_available_dirfd(NULL, &idx_dirfd);
+			if (rc)
+				goto out_compatible_release;
+			dir_list[idx_dirfd]->dfs_mt   = dfs_mt;
+			dir_list[idx_dirfd]->fd       = idx_dirfd + FD_DIR_BASE;
+			dir_list[idx_dirfd]->offset   = 0;
+			dir_list[idx_dirfd]->dir      = dfs_obj;
+			dir_list[idx_dirfd]->num_ents = 0;
+			dir_list[idx_dirfd]->st_ino   = FAKE_ST_INO(full_path);
+			memset(&dir_list[idx_dirfd]->anchor, 0, sizeof(daos_anchor_t));
+			dir_list[idx_dirfd]->path = NULL;
+			dir_list[idx_dirfd]->ents = NULL;
+			if (strncmp(full_path, "/", 2) == 0)
+				full_path[0] = 0;
+
+			/* allocate memory for ents[]. */
+			D_ALLOC_ARRAY(dir_list[idx_dirfd]->ents, READ_DIR_BATCH_SIZE);
+			if (dir_list[idx_dirfd]->ents == NULL) {
+				free_dirfd(idx_dirfd);
+				goto out_compatible;
+			}
+			D_ASPRINTF(dir_list[idx_dirfd]->path, "%s%s", dfs_mt->fs_root, full_path);
+			if (dir_list[idx_dirfd]->path == NULL) {
+				free_dirfd(idx_dirfd);
+				goto out_compatible;
+			}
+			if (strnlen(dir_list[idx_dirfd]->path, DFS_MAX_PATH) >= DFS_MAX_PATH) {
+				D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n",
+					ENAMETOOLONG, strerror(ENAMETOOLONG));
+				free_dirfd(idx_dirfd);
+				goto out_compatible;
+			}
+			fd_fake = idx_dirfd + FD_DIR_BASE;
+		}
+/*		
+		if (fd_fake < FD_FILE_BASE) {
+			printf("unexpected.\n");
+		}
+*/
+		assert(fd_fake >= FD_FILE_BASE);
+
+		/* add fd_kernel to hash table */
+		D_ALLOC(fd_ht_obj, sizeof(*fd_ht_obj));
+		if (fd_ht_obj == NULL) {
+			if (fd_fake >= FD_DIR_BASE)
+				free_dirfd(idx_dirfd);
+			else
+				free_fd(idx_fd, false);
+			goto out_compatible;
+		}
+		fd_ht_obj->real_fd = fd_kernel;
+		fd_ht_obj->fake_fd = fd_fake;
+		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry,
+				       true);
+		if (rc != 0) {
+			DL_WARN(rc, "d_hash_rec_insert() failed");
+			if (fd_fake >= FD_DIR_BASE)
+				free_dirfd(idx_dirfd);
+			else
+				free_fd(idx_fd, false);
+		}
+		goto out_compatible;
+	}
 
 	if (oflags & __O_TMPFILE) {
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
@@ -2011,6 +2319,14 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	file_list[idx_fd]->open_flag   = oflags;
 	/* NEED to set at the end of file if O_APPEND!!!!!!!! */
 	file_list[idx_fd]->offset = 0;
+	if (strncmp(full_path, "/", 2) == 0)
+		D_STRNDUP(file_list[idx_fd]->path, dfs_mt->fs_root, DFS_MAX_PATH);
+	else
+		D_ASPRINTF(file_list[idx_fd]->path, "%s%s", dfs_mt->fs_root, full_path);
+	if (file_list[idx_fd]->path == NULL) {
+		free_fd(idx_fd, false);
+		D_GOTO(out_error, rc = ENOMEM);
+	}
 	strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
 
 	FREE(parent_dir);
@@ -2029,38 +2345,23 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 org_func:
 	FREE(parent_dir);
 	if (two_args)
-		return real_open(pathname, oflags);
+		fd_kernel = real_open(pathname, oflags);
 	else
-		return real_open(pathname, oflags, mode);
+		fd_kernel = real_open(pathname, oflags, mode);
+	return fd_kernel;
+
 out_error:
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
-}
 
-/* When the open() in ld.so is called, new_open_ld() will be executed. */
+out_compatible_release:
+	if (dfs_obj)
+		dfs_release(dfs_obj);
 
-static int
-new_open_ld(const char *pathname, int oflags, ...)
-{
-	unsigned int mode;
-	int          two_args = 1, rc;
-
-	if (oflags & O_CREAT) {
-		va_list arg;
-
-		va_start(arg, oflags);
-		mode = va_arg(arg, unsigned int);
-		va_end(arg);
-		two_args = 0;
-	}
-
-	if (two_args)
-		rc = open_common(ld_open, "new_open_ld", pathname, oflags);
-	else
-		rc = open_common(ld_open, "new_open_ld", pathname, oflags, mode);
-
-	return rc;
+out_compatible:
+	FREE(parent_dir);
+	return fd_kernel;
 }
 
 /* When the open() in libc.so is called, new_open_libc() will be executed. */
@@ -2111,6 +2412,30 @@ new_open_pthread(const char *pathname, int oflags, ...)
 	return rc;
 }
 
+/* Search a fd in fd hash table. Remove it in case it is found. Also free the fake fd.
+ * Return true if fd is found. Return false if fd is not found.
+ */
+static bool
+remove_fd_compatible(int real_fd)
+{
+	struct ht_fd *fd_ht_obj;
+	d_list_t     *rlink;
+
+	rlink = d_hash_rec_find(fd_hash, &real_fd, sizeof(int));
+	if (rlink == NULL)
+		return false;
+
+	fd_ht_obj = fd_obj(rlink);
+	/* close fake fd */
+	if (fd_ht_obj->fake_fd >= FD_DIR_BASE)
+		free_dirfd(fd_ht_obj->fake_fd - FD_DIR_BASE);
+	else
+		free_fd(fd_ht_obj->fake_fd - FD_FILE_BASE, false);
+	/* remove fd from hash table */
+	d_hash_rec_decref(fd_hash, rlink);
+	return true;
+}
+
 static int
 new_close_common(int (*next_close)(int fd), int fd)
 {
@@ -2118,6 +2443,10 @@ new_close_common(int (*next_close)(int fd), int fd)
 
 	if (!hook_enabled)
 		return next_close(fd);
+
+	if (compatible_mode && fd < FD_FILE_BASE)
+		if (remove_fd_compatible(fd))
+			return next_close(fd);
 
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed >= FD_DIR_BASE) {
@@ -2133,7 +2462,6 @@ new_close_common(int (*next_close)(int fd), int fd)
 		free_fd(fd - FD_FILE_BASE, false);
 		return 0;
 	}
-
 	return next_close(fd);
 }
 
@@ -2150,7 +2478,7 @@ new_close_pthread(int fd)
 }
 
 static int
-new_close_nocancel(int fd)
+new_close_nocancel_libc(int fd)
 {
 	return new_close_common(libc_close_nocancel, fd);
 }
@@ -2232,12 +2560,18 @@ read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *bu
 	if (!hook_enabled)
 		return next_read(fd, buf, size);
 
+	if (is_bash && fd <= 2 && compatible_mode)
+		/* special cases to handle bash/sh */
+		return next_read(fd, buf, size);
+
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed >= FD_FILE_BASE) {
 		rc = pread_over_dfs(fd_directed - FD_FILE_BASE, buf, size,
 				    file_list[fd_directed - FD_FILE_BASE]->offset);
+
 		if (rc >= 0)
 			file_list[fd_directed - FD_FILE_BASE]->offset += rc;
+
 		return rc;
 	} else {
 		return next_read(fd_directed, buf, size);
@@ -2379,6 +2713,10 @@ write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, 
 	if (!hook_enabled)
 		return next_write(fd, buf, size);
 
+	if (is_bash && fd <= 2 && compatible_mode)
+		/* special cases to handle bash/sh */
+		return next_write(fd, buf, size);
+
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed >= FD_FILE_BASE) {
 		rc = pwrite_over_dfs(fd_directed - FD_FILE_BASE, buf, size,
@@ -2430,6 +2768,223 @@ pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alia
 
 ssize_t
 __pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alias("pwrite")));
+
+static ssize_t
+readv_over_dfs(int fd, const struct iovec *iov, int iovcnt)
+{
+	int           rc, rc2, i, ii;
+	daos_size_t   bytes_read;
+	daos_event_t  ev;
+	daos_handle_t eqh;
+	d_sg_list_t   sgl      = { 0 };
+	ssize_t       size_sum = 0;
+
+	atomic_fetch_add_relaxed(&num_read, 1);
+
+	D_ALLOC_ARRAY(sgl.sg_iovs, iovcnt);
+	if (sgl.sg_iovs == NULL) {
+		errno = ENOMEM;
+		return (-1);
+	}
+	/* need to skip zero size length. ii will be the real value for iovcnt */
+	ii = 0;
+	for (i = 0; i < iovcnt; i++) {
+		if (iov[i].iov_len == 0)
+			continue;
+		d_iov_set(&sgl.sg_iovs[ii], iov[i].iov_base, iov[i].iov_len);
+		size_sum += iov[i].iov_len;
+		ii++;
+	}
+	sgl.sg_nr = ii;
+	if (size_sum == 0) {
+		D_FREE(sgl.sg_iovs);
+		return size_sum;
+	}
+
+	rc = get_eqh(&eqh);
+	if (rc == 0) {
+		bool flag = false;
+
+		rc = daos_event_init(&ev, eqh, NULL);
+		if (rc) {
+			DL_ERROR(rc, "daos_event_init() failed");
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		rc = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			      file_list[fd]->offset, &bytes_read, &ev);
+		if (rc)
+			D_GOTO(err_ev, rc);
+
+		while (1) {
+			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+			if (rc) {
+				DL_ERROR(rc, "daos_event_test() failed");
+				D_GOTO(err_ev, rc = daos_der2errno(rc));
+			}
+			if (flag)
+				break;
+			sched_yield();
+		}
+		rc = ev.ev_error;
+
+		rc2 = daos_event_fini(&ev);
+		if (rc2)
+			DL_ERROR(rc2, "daos_event_fini() failed");
+	} else {
+		rc = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			      file_list[fd]->offset, &bytes_read, NULL);
+	}
+
+	if (rc)
+		D_GOTO(err, rc);
+
+	D_FREE(sgl.sg_iovs);
+	return (ssize_t)bytes_read;
+
+err_ev:
+	rc2 = daos_event_fini(&ev);
+	if (rc2)
+		DL_ERROR(rc2, "daos_event_fini() failed");
+
+err:
+	D_FREE(sgl.sg_iovs);
+	DS_ERROR(rc, "readv_over_dfs failed");
+	errno = rc;
+	return (-1);	
+}
+
+static ssize_t
+writev_over_dfs(int fd, const struct iovec *iov, int iovcnt)
+{
+	int           rc, rc2, i, ii;
+	daos_event_t  ev;
+	daos_handle_t eqh;
+	d_sg_list_t   sgl      = { 0 };
+	ssize_t       size_sum = 0;
+
+	atomic_fetch_add_relaxed(&num_write, 1);
+
+	D_ALLOC_ARRAY(sgl.sg_iovs, iovcnt);
+	if (sgl.sg_iovs == NULL) {
+		errno = ENOMEM;
+		return (-1);
+	}
+	/* need to skip zero size length. ii will be the real value for iovcnt */
+	ii = 0;
+	for (i = 0; i < iovcnt; i++) {
+		if (iov[i].iov_len == 0)
+			continue;
+		d_iov_set(&sgl.sg_iovs[ii], iov[i].iov_base, iov[i].iov_len);
+		size_sum += iov[i].iov_len;
+		ii++;
+	}
+	sgl.sg_nr = ii;
+	if (size_sum == 0) {
+		D_FREE(sgl.sg_iovs);
+		return size_sum;
+	}
+
+	rc = get_eqh(&eqh);
+	if (rc == 0) {
+		bool flag = false;
+
+		rc = daos_event_init(&ev, eqh, NULL);
+		if (rc) {
+			DL_ERROR(rc, "daos_event_init() failed");
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		rc = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			       file_list[fd]->offset, &ev);
+		if (rc)
+			D_GOTO(err_ev, rc);
+
+		while (1) {
+			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+			if (rc) {
+				DL_ERROR(rc, "daos_event_test() failed");
+				D_GOTO(err_ev, rc = daos_der2errno(rc));
+			}
+			if (flag)
+				break;
+			sched_yield();
+		}
+		rc = ev.ev_error;
+
+		rc2 = daos_event_fini(&ev);
+		if (rc2)
+			DL_ERROR(rc2, "daos_event_fini() failed");
+	} else {
+		rc = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			       file_list[fd]->offset, NULL);
+	}
+
+	if (rc)
+		D_GOTO(err, rc);
+
+	D_FREE(sgl.sg_iovs);
+	return size_sum;
+
+err_ev:
+	rc2 = daos_event_fini(&ev);
+	if (rc2)
+		DL_ERROR(rc2, "daos_event_fini() failed");
+
+err:
+	D_FREE(sgl.sg_iovs);
+	DS_ERROR(rc, "writev_over_dfs failed");
+	errno = rc;
+	return (-1);
+}
+
+ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
+{
+	int     fd_directed;
+	ssize_t size_sum;
+
+	if (next_readv == NULL) {
+		next_readv = dlsym(RTLD_NEXT, "readv");
+		D_ASSERT(next_readv != NULL);
+	}
+	if (!hook_enabled)
+		return next_readv(fd, iov, iovcnt);
+
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_readv(fd, iov, iovcnt);
+
+	size_sum = readv_over_dfs(fd_directed - FD_FILE_BASE, iov, iovcnt);
+	if (size_sum < 0)
+		return size_sum;
+	file_list[fd_directed - FD_FILE_BASE]->offset += size_sum;
+
+	return size_sum;
+}
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+{
+	int     fd_directed;
+	ssize_t size_sum;
+
+	if (next_writev == NULL) {
+		next_writev = dlsym(RTLD_NEXT, "writev");
+		D_ASSERT(next_writev != NULL);
+	}
+	if (!hook_enabled)
+		return next_writev(fd, iov, iovcnt);
+
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_writev(fd, iov, iovcnt);
+
+	size_sum = writev_over_dfs(fd_directed - FD_FILE_BASE, iov, iovcnt);
+	if (size_sum < 0)
+		return size_sum;
+	file_list[fd_directed - FD_FILE_BASE]->offset += size_sum;
+
+	return size_sum;
+}
 
 static int
 new_fxstat(int vers, int fd, struct stat *buf)
@@ -2533,9 +3088,11 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &obj, &mode, stat_buf);
 	} else {
-		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDONLY, &obj, &mode,
-				    stat_buf);
+		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDONLY, &obj, &mode, stat_buf);
 	}
+	if ((rc == ENOTSUP || rc == EIO) && compatible_mode)
+		return next_xstat(ver, path, stat_buf);
+
 	stat_buf->st_mode = mode;
 	if (rc)
 		D_GOTO(out_err, rc);
@@ -2552,6 +3109,8 @@ out_org:
 
 out_err:
 	FREE(parent_dir);
+	if ((rc == EIO || rc == EINVAL) && compatible_mode)
+		return next_xstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
 }
@@ -2791,8 +3350,16 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 
 	if (!hook_enabled)
 		return next_lseek(fd, offset, whence);
+
+	if (is_bash && fd <= 2 && compatible_mode)
+		/* special cases to handle bash/sh */
+		return next_lseek(fd, offset, whence);
+
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
+		return next_lseek(fd, offset, whence);
+	/* seekdir() will handle by the following. */
+	if (fd < FD_FILE_BASE && fd_directed >= FD_DIR_BASE && compatible_mode)
 		return next_lseek(fd, offset, whence);
 
 	atomic_fetch_add_relaxed(&num_seek, 1);
@@ -3004,8 +3571,10 @@ opendir(const char *path)
 	mode_t           mode;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             *parent_dir = NULL;
-	char             *full_path  = NULL;
+	char            *parent_dir  = NULL;
+	char            *full_path   = NULL;
+	DIR             *dirp_kernel = NULL;
+	struct ht_fd    *fd_ht_obj   = NULL;
 
 	if (next_opendir == NULL) {
 		next_opendir = dlsym(RTLD_NEXT, "opendir");
@@ -3022,6 +3591,18 @@ opendir(const char *path)
 		FREE(parent_dir);
 		return next_opendir(path);
 	}
+
+	/* Always rely on fuse for opendir() to avoid a fake dir fd */
+	if (compatible_mode) {
+		dirp_kernel = next_opendir(path);
+		if (dirp_kernel == NULL) {
+			rc = errno;
+			FREE(parent_dir);
+			errno = rc;
+			return NULL;
+		}
+	}
+
 	atomic_fetch_add_relaxed(&num_opendir, 1);
 
 	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
@@ -3051,7 +3632,10 @@ opendir(const char *path)
 	dir_list[idx_dirfd]->offset   = 0;
 	dir_list[idx_dirfd]->dir      = dir_obj;
 	dir_list[idx_dirfd]->num_ents = 0;
+	dir_list[idx_dirfd]->st_ino   = FAKE_ST_INO(full_path);
 	memset(&dir_list[idx_dirfd]->anchor, 0, sizeof(daos_anchor_t));
+	dir_list[idx_dirfd]->path = NULL;
+	dir_list[idx_dirfd]->ents = NULL;
 	if (strncmp(full_path, "/", 2) == 0)
 		full_path[0] = 0;
 	/* allocate memory for ents[]. */
@@ -3073,6 +3657,26 @@ opendir(const char *path)
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
+	if (compatible_mode) {
+		/* add fd kernel to hash table */
+		D_ALLOC_PTR(fd_ht_obj);
+		if (fd_ht_obj == NULL) {
+			/* not returning ENOMEM since dirp_kernel is valid */
+			free_dirfd(idx_dirfd);
+			goto out_compatible;
+		}
+		fd_ht_obj->real_fd = dirfd(dirp_kernel);
+		assert(fd_ht_obj->real_fd >= 0);
+		fd_ht_obj->fake_fd = idx_dirfd + FD_DIR_BASE;
+		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry,
+				       true);
+		if (rc != 0) {
+			DL_WARN(rc, "d_hash_rec_insert() failed");
+			free_dirfd(idx_dirfd);
+			D_FREE(fd_ht_obj);
+		}
+		goto out_compatible;
+	}
 	FREE(parent_dir);
 
 	return (DIR *)(dir_list[idx_dirfd]);
@@ -3084,20 +3688,32 @@ out_err_ret:
 	FREE(parent_dir);
 	errno = rc;
 	return NULL;
+
+out_compatible:
+	FREE(parent_dir);
+	return dirp_kernel;
 }
 
 DIR *
 fdopendir(int fd)
 {
+	int fd_directed;
+
 	if (next_fdopendir == NULL) {
 		next_fdopendir = dlsym(RTLD_NEXT, "fdopendir");
 		D_ASSERT(next_fdopendir != NULL);
 	}
-	if (!hook_enabled || fd < FD_DIR_BASE)
+	if (!hook_enabled)
 		return next_fdopendir(fd);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_DIR_BASE)
+		return next_fdopendir(fd_directed);
+	if (fd < FD_FILE_BASE && fd_directed >= FD_DIR_BASE && compatible_mode)
+		return next_fdopendir(fd);
+
 	atomic_fetch_add_relaxed(&num_opendir, 1);
 
-	return (DIR *)(dir_list[fd - FD_DIR_BASE]);
+	return (DIR *)(dir_list[fd_directed - FD_DIR_BASE]);
 }
 
 int
@@ -3227,6 +3843,22 @@ closedir(DIR *dirp)
 	}
 	if (!hook_enabled)
 		return next_closedir(dirp);
+	fd = dirfd(dirp);
+
+	if (compatible_mode && fd < FD_FILE_BASE) {
+		struct ht_fd *fd_ht_obj;
+		d_list_t     *rlink;
+		int           real_fd = fd;
+
+		rlink = d_hash_rec_find(fd_hash, &real_fd, sizeof(int));
+		if (rlink != NULL) {
+			fd_ht_obj = fd_obj(rlink);
+			free_dirfd(fd_ht_obj->fake_fd - FD_DIR_BASE);
+			/* remove fd from hash table */
+			d_hash_rec_decref(fd_hash, rlink);
+			return next_closedir(dirp);
+		}
+	}
 
 	_Pragma("GCC diagnostic push")
 	_Pragma("GCC diagnostic ignored \"-Wnonnull-compare\"")
@@ -3238,9 +3870,8 @@ closedir(DIR *dirp)
 	}
 	_Pragma("GCC diagnostic pop")
 
-	fd = dirfd(dirp);
 	if (fd >= FD_DIR_BASE) {
-		free_dirfd(dirfd(dirp) - FD_DIR_BASE);
+		free_dirfd(fd - FD_DIR_BASE);
 		return 0;
 	} else {
 		return next_closedir(dirp);
@@ -3253,17 +3884,24 @@ new_readdir(DIR *dirp)
 	int               rc        = 0;
 	int               len_str   = 0;
 	struct dir_obj   *mydir     = (struct dir_obj *)dirp;
-	char              *full_path = NULL;
+	char             *full_path = NULL;
+	int               fd_directed;
 
-	if (!hook_enabled || mydir->fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_readdir(dirp);
+	fd_directed = get_fd_redirected(dirfd(dirp));
+	if (fd_directed < FD_FILE_BASE)
 		return next_readdir(dirp);
 
-	if (mydir->fd < FD_DIR_BASE) {
+	if (fd_directed < FD_DIR_BASE) {
 		/* Not suppose to be here */
 		D_DEBUG(DB_ANY, "readdir() failed: %d (%s)\n", EINVAL, strerror(EINVAL));
 		errno = EINVAL;
 		return NULL;
 	}
+	if (compatible_mode)
+		/* dirp is from Linux kernel */
+		mydir = dir_list[fd_directed - FD_DIR_BASE];
 	atomic_fetch_add_relaxed(&num_readdir, 1);
 
 	if (mydir->num_ents)
@@ -3310,70 +3948,379 @@ out_readdir:
 	return &mydir->ents[mydir->num_ents];
 }
 
-/**
- *static char** pre_envp(char *const envp[])
- *{
- *	int	i, num_entry = 0;
- *	char	**new_envp;
- *
- *	if (envp == NULL) {
- *		num_entry = 0;
- *	} else if (envp[0] == NULL) {
- *		num_entry = 0;
- *	} else {
- *		while (envp[num_entry])	{
- *			num_entry++;
- *		}
- *	}
- *
- *	new_envp = malloc(sizeof(char *) * (num_entry + 5));
- *	assert(new_envp != NULL);
- *	for (i = 0; i < num_entry; i++)	{
- *		new_envp[i] = envp[i];
- *	}
- *	for (i = 0; i < 5; i++)	{
- *		new_envp[num_entry + i] = envp_lib[i];
- *	}
- *
- *	return new_envp;
- *}
- *
- *static int
- *new_execve(const char *filename, char *const argv[], char *const envp[])
- *{
- *	printf("DBG> execve(%s)\n", filename);
- *	return real_execve(filename, argv, pre_envp(envp));
- *}
- *
- *static int
- *new_execvp(const char *filename, char *const argv[])
- *{
- *	printf("DBG> execvp(%s)\n", filename);
- *	return real_execve(filename, argv, pre_envp(NULL));
- *}
- *
- *static int
- *new_execv(const char *filename, char *const argv[])
- *{
- *	printf("DBG> execv(%s)\n", filename);
- *	pre_envp(NULL);
- *	return real_execve(filename, argv, pre_envp(NULL));
- *}
- *
- *static pid_t
- *new_fork(void)
- *{
- *	pid_t pid;
- *	pid = real_fork();
- *	if (pid) {
- *		// parent process: do nothing
- *		return pid;
- *	} else {
- *		init_dfs();
- *		return pid;
- *	}
- *}
+extern char **__environ;
+
+/* This is the number of environmental variables that would be forced to set in child process.
+ * "LD_PRELOAD" is a special case and it is not included in the list.
  */
+static char  *env_list[] = {"D_IL_REPORT", "DAOS_MOUNT_POINT", "DAOS_POOL", "DAOS_CONTAINER",
+			    "D_IL_MAX_EQ", "D_LOG_FILE", "D_IL_ENFORCE_EXEC_ENV",  "DD_MASK",
+			    "DD_SUBSYS", "D_LOG_MASK", "D_IL_COMPATIBLE"};
+
+/* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
+ * related env properly set, we intercept execve and its variants to check envp[] and append our
+ * env when needed.
+ * pre_envp() scans provided envp to look for libpil4dfs related envs (env_list[]) and returns a
+ * new envp with missing libpil4dfs related envs appended.
+ * The fd for daos logging may be not valid here, so printf() is used in this function.
+ */
+static char **
+pre_envp(char *const envp[])
+{
+	int    i, j, rc;
+	int    len, len2, len_total;
+	int    num_env_append;
+	char **new_envp;
+	char  *pil4df_path;
+	char  *new_preload_str;
+	int    num_entry       = 0;
+	int    num_entry_found = 0;
+	int    idx_preload     = -1;
+	bool   preload_included                   = false;
+	bool   pil4dfs_in_preload                 = false;
+	bool   env_found[ARRAY_SIZE(env_list)]    = {false};
+	/* the buffer allocated for the env string to append */
+	char  *env_buf_list[ARRAY_SIZE(env_list)] = {NULL};
+	char  *env_value                          = NULL;
+
+	/* Including env_list[] and "LD_PRELOAD" */
+	num_env_append = ARRAY_SIZE(env_list) + 1;
+
+	if (envp == NULL) {
+		num_entry = 0;
+	} else if (envp[0] == NULL) {
+		num_entry = 0;
+	} else {
+		while (envp[num_entry]) {
+			/* scan the env in env_list[] to check whether they exist or not */
+			if (strncmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0) {
+				preload_included = true;
+				idx_preload      = num_entry;
+				num_entry_found++;
+				if (strstr(envp[num_entry], "libpil4dfs.so"))
+					pil4dfs_in_preload = true;
+			}
+			/* The list of env is not too long. We use a simple loop to lookup for
+			 * simplicity. This function is not performance critical.
+			 */
+			for (i = 0; i < ARRAY_SIZE(env_list); i++) {
+				if (!env_found[i]) {
+					if (strncmp(envp[num_entry], STR_AND_SIZE_M1(env_list[i]))
+					    == 0) {
+						env_found[i] = true;
+						num_entry_found++;
+					}
+				}
+			}
+			num_entry++;
+		}
+	}
+
+	/* All required env are found and pil4dfs is in LD_PRELOAD. No need to create a new envp. */
+	if (num_entry_found == num_env_append && pil4dfs_in_preload == true)
+		return (char **)envp;
+
+	/* the new envp holds the existing envs & the envs forced to append plus NULL at the end */
+	new_envp = malloc(sizeof(char *) * (num_entry + num_env_append + 1));
+	if (new_envp == NULL) {
+		printf("Error: failed to allocate memory for new_envp. Use existing envp\n");
+		goto err_out0;
+	}
+
+	/* Copy all existing entries to the new envp[] */
+	for (i = 0; i < num_entry; i++) {
+		new_envp[i] = envp[i];
+	}
+
+	/* LD_PRELOAD is a special case. If LD_PRELOAD is found but libpil4dfs.so is not in
+	 * LD_PRELOAD env, then allocate a buffer for the concatenation of existing LD_PRELOAD
+	 * env and the full path of libpil4dfs.so.
+	 */
+	pil4df_path = query_pil4dfs_path();
+	len2        = strnlen(pil4df_path, PATH_MAX);
+	if (preload_included == true && pil4dfs_in_preload == false) {
+		/* need to replace the existing string */
+		len = strnlen(envp[idx_preload], MAX_ARG_STRLEN);
+		/* 2 extra bytes for ':' and '\0' */
+		len_total = len + len2 + 2;
+		if (len_total > MAX_ARG_STRLEN) {
+			printf("Error: env for LD_PRELOAD is too long.\n");
+			goto err_out1;
+		}
+		rc = asprintf(&new_preload_str, "%s:%s", envp[idx_preload], pil4df_path);
+		if (rc < 0) {
+			printf("Error: failed to allocate memory for LD_PRELOAD env.\n");
+			goto err_out1;
+		}
+		new_envp[idx_preload] = new_preload_str;
+	}
+	/* append LD_PRELOAD env */
+	if (!preload_included) {
+		rc = asprintf(&new_preload_str, "LD_PRELOAD=%s", pil4df_path);
+		if (rc < 0) {
+			printf("Error: failed to allocate memory for LD_PRELOAD env.\n");
+			goto err_out1;
+		}
+		new_envp[i] = new_preload_str;
+		i++;
+	}
+
+	for (j = 0; j < ARRAY_SIZE(env_list); j++) {
+		/* env is not found. Need to be appended if present in current process. */
+		if (!env_found[j]) {
+			rc = d_agetenv_str(&env_value, env_list[j]);
+			if (rc == -DER_NONEXIST) {
+				/* Do nthing if env does not exist*/
+				continue;
+			} else if (rc == -DER_NOMEM) {
+				printf("Error: failed to allocate memory in querying env %s.\n",
+				       env_list[j]);
+				goto err_out2;
+			}
+			/* In case d_agetenv_str() returns -DER_SUCCESS, append the env */
+			rc = asprintf(&env_buf_list[j], "%s=%s", env_list[j], env_value);
+			if (rc < 0) {
+				printf("Error: failed to allocate memory for env %s.\n",
+				       env_list[j]);
+				goto err_out2;
+			}
+			new_envp[i] = env_buf_list[j];
+			i++;
+			/* free the buffer allocated by d_agetenv_str() */
+			free(env_value);
+		}
+	}
+
+	/* append NULL pointer to the end of new_envp */
+	new_envp[i] = NULL;
+
+	return new_envp;
+
+err_out2:
+	/* free the memory allocated for all env buffer */
+	for (j = 0; j < ARRAY_SIZE(env_list); j++) {
+		if (env_buf_list[j])
+			free(env_buf_list[j]);
+	}
+	/* free the buffer returned from d_agetenv_str */
+	if (env_value)
+		free(env_value);
+	free(new_preload_str);
+err_out1:
+	free(new_envp);
+err_out0:
+	return (char **)envp;
+}
+
+/* check whether fd 0, 1, and 2 are located on DFS mount or not. If yes, reopen files and
+ * set offset.
+ */
+static void
+setup_fd_0_1_2(void)
+{
+	int   i, fd, idx, fd_tmp, fd_new, open_flag;
+	off_t offset;
+
+	if (num_fd_dup2ed == 0)
+		return;
+
+	for (i = 0; i < MAX_FD_DUP2ED; i++) {
+		/* only check fd 0, 1, and 2 */
+		if (fd_dup2_list[i].fd_src >= 0 && fd_dup2_list[i].fd_src <= 2) {
+			fd        = fd_dup2_list[i].fd_src;
+			idx       = fd_dup2_list[i].fd_dest - FD_FILE_BASE;
+			offset    = file_list[idx]->offset;
+			open_flag = file_list[idx]->open_flag;
+
+			/* get a real fd from kernel */
+			fd_tmp = libc_open(file_list[idx]->path, open_flag);
+			if (fd_tmp < 0) {
+				printf("Error: open %s failed. %s\n", file_list[idx]->path,
+				       strerror(errno));
+				continue;
+			}
+			/* using dup2() to make sure we get desired fd */
+			fd_new = dup2(fd_tmp, fd);
+			if (fd_new < 0 || fd_new != fd) {
+				printf("Error: dup2 failed. %s\n", strerror(errno));
+				exit(1);
+			}
+			close(fd_tmp);
+			if (libc_lseek(fd, offset, SEEK_SET) == -1) {
+				printf("Error: lseek failed to set offset. %s\n", strerror(errno));
+				exit(1);
+			}
+		}
+	}
+}
+
+/* close all real fds allocated by kernel larger than 2 */
+/*static void
+close_all_kernel_fd(void)
+{
+	int            fd, fd_using;
+	DIR           *dir;
+	struct dirent *entry;
+
+	dir = opendir("/proc/self/fd");
+	if (dir == NULL) {
+		printf("opendir() failed to open /proc/self/fd");
+		exit(1);
+	}
+	fd_using = dirfd(dir);
+	while ((entry = readdir(dir)) != NULL) {
+		if (entry->d_name[0] >= '1' && entry->d_name[0] <= '9') {
+			fd = atoi(entry->d_name);
+			if (fd != 0)
+				continue;
+			if (fd > 2 && fd != fd_using)
+				close(fd);
+		}
+	}
+	closedir(dir);
+}
+*/
+
+static void
+reset_daos_env_before_exec(void)
+{
+	/* bash does fork(), then close opened files before exec(),
+	 * so the fd for log file could be invalid now. */
+	d_log_disable_logging();
+
+	setup_fd_0_1_2();
+
+	if (context_reset) {
+		destroy_all_eqs();
+		daos_eq_lib_fini();
+		daos_inited       = false;
+		daos_debug_inited = false;
+		context_reset     = false;
+	}
+
+//	close_all_kernel_fd();
+}
+
+int
+execve(const char *filename, char *const argv[], char *const envp[])
+{
+	if (next_execve == NULL) {
+		next_execve = dlsym(RTLD_NEXT, "execve");
+		D_ASSERT(next_execve != NULL);
+	}
+	if (!hook_enabled)
+		return next_execve(filename, argv, envp);
+
+	reset_daos_env_before_exec();
+
+	if (!enforce_exec_env)
+		return next_execve(filename, argv, envp);
+
+	return next_execve(filename, argv, pre_envp(envp));
+}
+
+int
+execvpe(const char *filename, char *const argv[], char *const envp[])
+{
+	if (next_execvpe == NULL) {
+		next_execvpe = dlsym(RTLD_NEXT, "execvpe");
+		D_ASSERT(next_execvpe != NULL);
+	}
+	if (!hook_enabled)
+		return next_execvpe(filename, argv, envp);
+
+	reset_daos_env_before_exec();
+
+	if (!enforce_exec_env)
+		return next_execvpe(filename, argv, envp);
+
+	return next_execvpe(filename, argv, pre_envp(envp));
+}
+
+int
+execv(const char *filename, char *const argv[])
+{
+	if (next_execv == NULL) {
+		next_execv = dlsym(RTLD_NEXT, "execv");
+		D_ASSERT(next_execv != NULL);
+	}
+	if (!hook_enabled)
+		return next_execv(filename, argv);
+
+	reset_daos_env_before_exec();
+
+	if (!enforce_exec_env)
+		return next_execv(filename, argv);
+
+	if (next_execve == NULL) {
+		next_execve = dlsym(RTLD_NEXT, "execve");
+		D_ASSERT(next_execve != NULL);
+	}
+	return next_execve(filename, argv, pre_envp(__environ));
+}
+
+int
+execvp(const char *filename, char *const argv[])
+{
+	if (next_execvp == NULL) {
+		next_execvp = dlsym(RTLD_NEXT, "execvp");
+		D_ASSERT(next_execvp != NULL);
+	}
+	if (!hook_enabled)
+		return next_execvp(filename, argv);
+
+	reset_daos_env_before_exec();
+
+	if (!enforce_exec_env)
+		return next_execvp(filename, argv);
+
+	if (next_execvpe == NULL) {
+		next_execvpe = dlsym(RTLD_NEXT, "execvpe");
+		D_ASSERT(next_execvpe != NULL);
+	}
+	return next_execvpe(filename, argv, pre_envp(__environ));
+}
+
+int
+fexecve(int fd, char *const argv[], char *const envp[])
+{
+	if (next_fexecve == NULL) {
+		next_fexecve = dlsym(RTLD_NEXT, "fexecve");
+		D_ASSERT(next_fexecve != NULL);
+	}
+	if (!hook_enabled)
+		return next_fexecve(fd, argv, envp);
+
+	reset_daos_env_before_exec();
+
+	if (!enforce_exec_env)
+		return next_fexecve(fd, argv, envp);
+
+	return next_fexecve(fd, argv, pre_envp(envp));
+}
+
+pid_t
+fork(void)
+{
+	pid_t pid;
+
+	if (next_fork == NULL) {
+		next_fork = dlsym(RTLD_NEXT, "fork");
+		D_ASSERT(next_fork != NULL);
+	}
+	if (!hook_enabled)
+		return next_fork();
+
+	pid = next_fork();
+
+	if (pid) {
+		/* parent process: do nothing */
+		return pid;
+	} else {
+		child_hdlr();
+		return pid;
+	}
+}
 
 int
 mkdir(const char *path, mode_t mode)
@@ -3485,6 +4432,9 @@ rmdir(const char *path)
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc)
 		D_GOTO(out_err, rc);
+
+	/* need to remove this dir in dir cache */
+	remove_dir_in_dcache(dfs_mt, full_path);
 
 	FREE(parent_dir);
 	return 0;
@@ -4170,6 +5120,9 @@ out_org:
 
 out_err:
 	FREE(parent_dir);
+	/* dfs_access returns EIO sometimes. Give another chance. */
+	if (rc == EIO && compatible_mode)
+		return next_access(path, mode);
 	errno = rc;
 	return (-1);
 }
@@ -4248,7 +5201,7 @@ chdir(const char *path)
 		D_GOTO(out, rc);
 	}
 
-	/* assuming the path exists and it is backed by dfuse */
+	// assuming the path exists and it is backed by dfuse 
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
 	if (len_str >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
@@ -4269,7 +5222,7 @@ out_err:
 int
 fchdir(int dirfd)
 {
-	int   rc;
+	int   rc, fd_directed;
 	char *pt_end = NULL;
 
 	if (next_fchdir == NULL) {
@@ -4279,7 +5232,8 @@ fchdir(int dirfd)
 	if (!hook_enabled)
 		return next_fchdir(dirfd);
 
-	if (dirfd < FD_DIR_BASE)
+	fd_directed = get_fd_redirected(dirfd);
+	if (fd_directed < FD_DIR_BASE)
 		return next_fchdir(dirfd);
 
 	/* assume dfuse is running. call chdir() to update cwd. */
@@ -4287,11 +5241,11 @@ fchdir(int dirfd)
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
 		D_ASSERT(next_chdir != NULL);
 	}
-	rc = next_chdir(dir_list[dirfd - FD_DIR_BASE]->path);
+	rc = next_chdir(dir_list[fd_directed - FD_DIR_BASE]->path);
 	if (rc)
 		return rc;
 
-	pt_end = stpncpy(cur_dir, dir_list[dirfd - FD_DIR_BASE]->path, DFS_MAX_PATH - 1);
+	pt_end = stpncpy(cur_dir, dir_list[fd_directed - FD_DIR_BASE]->path, DFS_MAX_PATH - 1);
 	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
 			strerror(ENAMETOOLONG));
@@ -4326,6 +5280,9 @@ new_unlink(const char *path)
 	rc = dfs_remove(dfs_mt->dfs, parent, item_name, false, NULL);
 	if (rc)
 		D_GOTO(out_err, rc);
+
+	/* need to remove this dir in dir cache */
+	remove_dir_in_dcache(dfs_mt, full_path);
 
 	FREE(parent_dir);
 	return 0;
@@ -4418,16 +5375,16 @@ fsync(int fd)
 	}
 	if (!hook_enabled)
 		return next_fsync(fd);
+
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_fsync(fd);
 
-	if (fd_directed >= FD_DIR_BASE) {
-		errno = EINVAL;
-		return (-1);
-	}
+	if (fd < FD_DIR_BASE && compatible_mode)
+		return next_fsync(fd);
 
-	return dfs_sync(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs);
+	errno = ENOTSUP;
+	return (-1);
 }
 
 int
@@ -4813,10 +5770,14 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 	if (rc)
 		D_GOTO(out_err, rc);
 	if (!is_target_path) {
+		if (next_utimes == NULL) {
+			next_utimes = dlsym(RTLD_NEXT, "utimes");
+			D_ASSERT(next_utimes != NULL);
+		}
 		times_us[0].tv_sec  = times[0].tv_sec;
-		times_us[0].tv_usec = times[0].tv_nsec / 100;
+		times_us[0].tv_usec = times[0].tv_nsec / 1000;
 		times_us[1].tv_sec  = times[1].tv_sec;
-		times_us[1].tv_usec = times[1].tv_nsec / 100;
+		times_us[1].tv_usec = times[1].tv_nsec / 1000;
 		FREE(parent_dir);
 		return next_utimes(path, times_us);
 	}
@@ -4968,8 +5929,15 @@ static int
 new_fcntl(int fd, int cmd, ...)
 {
 	int     fd_directed, param, OrgFunc = 1;
-	int     Next_Dirfd, Next_fd, rc;
+	int     next_dirfd, next_fd, rc;
 	va_list arg;
+
+	va_start(arg, cmd);
+	param = va_arg(arg, int);
+	va_end(arg);
+
+	if (fd < FD_FILE_BASE && compatible_mode)
+		return libc_fcntl(fd, cmd, param);
 
 	switch (cmd) {
 	case F_DUPFD:
@@ -4984,10 +5952,6 @@ new_fcntl(int fd, int cmd, ...)
 	case F_NOTIFY:
 	case F_SETPIPE_SZ:
 	case F_ADD_SEALS:
-		va_start(arg, cmd);
-		param = va_arg(arg, int);
-		va_end(arg);
-
 		fd_directed = get_fd_redirected(fd);
 
 		if (!hook_enabled)
@@ -5013,28 +5977,25 @@ new_fcntl(int fd, int cmd, ...)
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
 			if (fd_directed >= FD_DIR_BASE) {
 				rc = find_next_available_dirfd(
-						dir_list[fd_directed - FD_DIR_BASE], &Next_Dirfd);
+					dir_list[fd_directed - FD_DIR_BASE], &next_dirfd);
 				if (rc) {
 					errno = rc;
 					return (-1);
 				}
-				return (Next_Dirfd + FD_DIR_BASE);
+				return (next_dirfd + FD_DIR_BASE);
 			} else if (fd_directed >= FD_FILE_BASE) {
 				rc = find_next_available_fd(
-						file_list[fd_directed - FD_FILE_BASE], &Next_fd);
+					file_list[fd_directed - FD_FILE_BASE], &next_fd);
 				if (rc) {
 					errno = rc;
 					return (-1);
 				}
-				return (Next_fd + FD_FILE_BASE);
+				return (next_fd + FD_FILE_BASE);
 			}
 		} else if ((cmd == F_GETFD) || (cmd == F_SETFD)) {
 			if (OrgFunc == 0)
 				return 0;
 		}
-		/**		else if (cmd == F_GETFL)	{
-		 *		}
-		 */
 		return libc_fcntl(fd, cmd, param);
 	case F_SETLK:
 	case F_SETLKW:
@@ -5044,10 +6005,6 @@ new_fcntl(int fd, int cmd, ...)
 	case F_OFD_GETLK:
 	case F_GETOWN_EX:
 	case F_SETOWN_EX:
-		va_start(arg, cmd);
-		param = va_arg(arg, int);
-		va_end(arg);
-
 		if (!hook_enabled)
 			return libc_fcntl(fd, cmd, param);
 
@@ -5075,9 +6032,6 @@ ioctl(int fd, unsigned long request, ...)
 	}
 	if (!hook_enabled)
 		return next_ioctl(fd, request, param);
-	fd_directed = get_fd_redirected(fd);
-	if (fd_directed < FD_FILE_BASE)
-		return next_ioctl(fd, request, param);
 
 	/* To pass existing test of ioctl() with DFUSE_IOCTL_DFUSE_USER */
 	/* Provided to pass dfuse_test                                  */
@@ -5087,6 +6041,13 @@ ioctl(int fd, unsigned long request, ...)
 		reply->gid = getgid();
 		return 0;
 	}
+
+	if (fd < FD_FILE_BASE && compatible_mode)
+		return next_ioctl(fd, request, param);
+
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_ioctl(fd, request, param);
 
 	errno = ENOTSUP;
 
@@ -5114,7 +6075,8 @@ dup(int oldfd)
 int
 dup2(int oldfd, int newfd)
 {
-	int fd, oldfd_directed, newfd_directed, fd_directed, idx, rc, errno_save;
+	int fd_kernel, oldfd_directed, newfd_directed, fd_directed, next_fd, next_dirfd;
+	int idx, rc, errno_save;
 
 	/* Need more work later. */
 	if (next_dup2 == NULL) {
@@ -5123,6 +6085,63 @@ dup2(int oldfd, int newfd)
 	}
 	if (!hook_enabled)
 		return next_dup2(oldfd, newfd);
+
+	if (compatible_mode) {
+		struct ht_fd *fd_ht_obj = NULL;
+		int           fd_fake   = -1;
+
+		assert(oldfd < FD_FILE_BASE && newfd < FD_FILE_BASE);
+		/* next_dup2(oldfd, newfd) will close newfd, so we need to check whether
+		 * newfd is in fd_hash. Remove it in case existing. */
+		remove_fd_compatible(newfd);
+		fd_kernel = next_dup2(oldfd, newfd);
+		if (fd_kernel < 0)
+			return (-1);
+		fd_directed = get_fd_redirected(oldfd);
+		if (fd_directed < FD_FILE_BASE) {
+			return fd_kernel;
+		} else if (fd_directed < FD_DIR_BASE) {
+			rc = find_next_available_fd(file_list[fd_directed - FD_FILE_BASE],
+						    &next_fd);
+			if (rc)
+				/* still return the fd dup from kernel in compatible mode */
+				return fd_kernel;
+			fd_fake = next_fd + FD_FILE_BASE;
+		} else {
+			rc = find_next_available_dirfd(dir_list[fd_directed - FD_DIR_BASE],
+						       &next_dirfd);
+			if (rc)
+				/* still return the fd dup from kernel in
+				 * compatible mode
+				 */
+				return fd_kernel;
+			fd_fake = next_dirfd + FD_DIR_BASE;
+		}
+		if (fd_fake < 0)
+			return fd_kernel;
+		/* add fd_kernel to hash table */
+		D_ALLOC_PTR(fd_ht_obj);
+		if (fd_ht_obj == NULL) {
+			if (fd_fake >= FD_DIR_BASE)
+				free_dirfd(next_dirfd);
+			else
+				free_fd(next_fd, false);
+			return fd_kernel;
+		}
+		fd_ht_obj->real_fd = fd_kernel;
+		fd_ht_obj->fake_fd = fd_fake;
+		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry,
+				       true);
+		if (rc != 0) {
+			DL_WARN(rc, "d_hash_rec_insert() failed");
+			if (fd_fake >= FD_DIR_BASE)
+				free_dirfd(next_dirfd);
+			else
+				free_fd(next_fd, false);
+			D_FREE(fd_ht_obj);
+		}
+		return fd_kernel;
+	}
 
 	if (oldfd == newfd) {
 		if (oldfd < FD_FILE_BASE)
@@ -5172,16 +6191,16 @@ dup2(int oldfd, int newfd)
 			return (-1);
 		}
 		/* rely on dup2() to get the desired fd */
-		fd = next_dup2(fd_tmp, newfd);
-		if (fd < 0) {
+		fd_kernel = next_dup2(fd_tmp, newfd);
+		if (fd_kernel < 0) {
 			/* failed to allocate an fd from kernel */
 			errno_save = errno;
 			close(fd_tmp);
 			DS_ERROR(errno_save, "failed to get a fd from kernel");
 			errno = errno_save;
 			return (-1);
-		} else if (fd != newfd) {
-			close(fd);
+		} else if (fd_kernel != newfd) {
+			close(fd_kernel);
 			DS_ERROR(EBUSY, "failed to get the desired fd in dup2()");
 			errno = EBUSY;
 			return (-1);
@@ -5189,9 +6208,9 @@ dup2(int oldfd, int newfd)
 		rc = libc_close(fd_tmp);
 		if (rc != 0)
 			return -1;
-		idx = allocate_dup2ed_fd(fd, fd_directed);
+		idx = allocate_dup2ed_fd(fd_kernel, fd_directed);
 		if (idx >= 0)
-			return fd;
+			return fd_kernel;
 		else
 			return idx;
 	}
@@ -5228,6 +6247,10 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 
 	if (!hook_enabled)
 		return next_mmap(addr, length, prot, flags, fd, offset);
+
+	if (fd < FD_FILE_BASE && compatible_mode)
+		return next_mmap(addr, length, prot, flags, fd, offset);
+
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_mmap(addr, length, prot, flags, fd, offset);
@@ -5362,6 +6385,9 @@ posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	}
 	if (!hook_enabled)
 		return next_posix_fadvise(fd, offset, len, advice);
+	if (fd < FD_FILE_BASE && compatible_mode)
+		return next_posix_fadvise(fd, offset, len, advice);
+
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_posix_fadvise(fd, offset, len, advice);
@@ -5369,10 +6395,9 @@ posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	/* Hint to turn off caching. */
 	if (advice == POSIX_FADV_DONTNEED)
 		return 0;
-	/**
-	 *	if (report)
-	 *		D_ERROR("posix_fadvise() is not implemented yet.\n");
-	 */
+	if (report)
+		D_ERROR("posix_fadvise() is not implemented yet.\n");
+
 	errno = ENOTSUP;
 	return -1;
 }
@@ -5392,8 +6417,11 @@ flock(int fd, int operation)
 	}
 	if (!hook_enabled)
 		return next_flock(fd, operation);
+
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
+		return next_flock(fd, operation);
+	if (compatible_mode && fd < FD_FILE_BASE)
 		return next_flock(fd, operation);
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
@@ -5413,6 +6441,8 @@ fallocate(int fd, int mode, off_t offset, off_t len)
 		D_ASSERT(next_fallocate != NULL);
 	}
 	if (!hook_enabled)
+		return next_fallocate(fd, mode, offset, len);
+	if (fd < FD_FILE_BASE && compatible_mode)
 		return next_fallocate(fd, mode, offset, len);
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
@@ -5436,6 +6466,8 @@ posix_fallocate(int fd, off_t offset, off_t len)
 	}
 	if (!hook_enabled)
 		return next_posix_fallocate(fd, offset, len);
+	if (fd < FD_FILE_BASE && compatible_mode)
+		return next_posix_fallocate(fd, offset, len);
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_posix_fallocate(fd, offset, len);
@@ -5458,6 +6490,8 @@ posix_fallocate64(int fd, off64_t offset, off64_t len)
 	}
 	if (!hook_enabled)
 		return next_posix_fallocate64(fd, offset, len);
+	if (fd < FD_FILE_BASE && compatible_mode)
+		return next_posix_fallocate64(fd, offset, len);
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_posix_fallocate64(fd, offset, len);
@@ -5479,6 +6513,8 @@ tcgetattr(int fd, void *termios_p)
 		D_ASSERT(next_tcgetattr != NULL);
 	}
 	if (!hook_enabled)
+		return next_tcgetattr(fd, termios_p);
+	if (fd < FD_FILE_BASE && compatible_mode)
 		return next_tcgetattr(fd, termios_p);
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
@@ -5653,6 +6689,118 @@ register_handler(int sig, struct sigaction *old_handler)
 	}
 }
 
+static void
+extract_exe_path(void)
+{
+        FILE *fIn;
+        char *line;
+	int readsize, len, pos;
+
+	exe_path[0]  = 0;
+	exe_short[0] = 0;
+
+	D_ALLOC(line, DFS_MAX_PATH);
+	if (line == NULL)
+		return;
+        fIn = fopen("/proc/self/cmdline", "r");
+        if (fIn == NULL)        {
+                printf("Fail to open file: /proc/self/cmdline\nQuit\n");
+                goto out;
+        }
+        readsize = fread(line, 1, DFS_MAX_PATH, fIn);
+        fclose(fIn);
+
+        if (readsize <= 0)   {
+                printf("Fail to determine the executable file name.\nQuit\n");
+                goto out;
+        }
+	strncpy(exe_path, line, DFS_MAX_PATH);
+	len = strnlen(exe_path, DFS_MAX_PATH);
+	for (pos = len - 1; pos > 0; pos--) {
+		if (exe_path[pos] == '/') {
+			strncpy(exe_short, exe_path + pos + 1, DFS_MAX_NAME);
+			break;
+		}
+	}
+	if (strncmp(exe_short, "bash", 5) == 0 || strncmp(exe_short, "sh", 3) == 0)
+		is_bash = true;
+
+out:
+	D_FREE(line);
+	return;
+}
+
+static void
+hang_for_debugging(void)
+{
+//        FILE *fIn, *fOut;
+        FILE *fIn;
+        char szPath[3072];
+	int readsize;
+//	int found = 0;
+//        volatile int  flag = 1;
+
+        fIn = fopen("/proc/self/cmdline", "r");
+        if (fIn == NULL)        {
+                printf("Fail to open file: /proc/self/cmdline\nQuit\n");
+                exit(1);
+        }
+
+        readsize = fread(szPath, 1, 3072, fIn);
+        fclose(fIn);
+
+        if (readsize <= 0)   {
+                printf("Fail to determine the executable file name.\nQuit\n");
+                exit(1);
+        }
+/*	
+	fOut = fopen("/dev/shm/dbg.txt", "a+");
+	if (fOut) {
+		char *end = szPath + readsize;
+
+		fseek(fOut, 0, SEEK_END);
+		fprintf(fOut, "DBG> pid = %d init cmd = ", getpid());
+		for (char *p = szPath; p < end;) {
+			if (strstr(p, "src/gurt/dlog.c"))
+				found = 1;
+			fprintf(fOut, " %s", p);
+			while (*p++); // skip until start of next 0-terminated section
+		}
+		fprintf(fOut, "\n");
+		fclose(fOut);
+	}
+*/	
+//	strcpy(exe_path, szPath);
+/*
+	if (found) {
+		FILE *fLog;
+		fLog = fopen("/dev/shm/dbg.txt", "a+");
+		if (fLog) {
+			fseek(fLog, 0, SEEK_END);
+			fprintf(fLog, "DBG> found sh. pid = %d\n", getpid());
+			fclose(fLog);
+		}
+		volatile int  flag = 1;
+		while(flag) {
+			sleep(1);
+		}
+	}
+*/
+//	if (strstr(szPath, "collect2")) {
+/*	if (memcmp(szPath, "sh\0-c\0gcc\0-o\0", 13) == 0) {
+//	if (memcmp(szPath, "make\0install-am\0", 15) == 0) {
+//	if (memcmp(szPath, "/dfs/venv/bin/python3\0/dfs/venv/bin/scons", 41) == 0) {
+//        if (memcmp(szPath, "/tmp/daos_dfuse_test_dfuse_daos_build_wt_il_1/venv/bin/python3\0/tmp/daos_dfuse_test_dfuse_daos_build_wt_il_1/venv/bin/scons", 123)==0) {
+//        if (memcmp(szPath, "git\0clone\0https://github.com/openucx/ucx.git", 44)==0) {
+//                printf("DBG> Found %s. pid = %d\n", szPath, getpid());
+//                fflush(stdout);
+                while (flag) {
+                        sleep(1);
+                }
+        }
+*/
+}
+
 static __attribute__((constructor)) void
 init_myhook(void)
 {
@@ -5660,6 +6808,7 @@ init_myhook(void)
 	char    *env_log;
 	int      rc;
 	uint64_t eq_count_loc = 0;
+	char     buf_max_eq[16];
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -5679,6 +6828,25 @@ init_myhook(void)
 		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
 			report = false;
 		d_freeenv_str(&env_log);
+	}
+	enforce_exec_env = false;
+	rc = d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
+	if (rc == -DER_NONEXIST)
+		d_setenv("D_IL_ENFORCE_EXEC_ENV", "0", 1);
+
+	compatible_mode = false;
+	rc = d_getenv_bool("D_IL_COMPATIBLE", &compatible_mode);
+	if (rc == -DER_NONEXIST)
+		d_setenv("D_IL_COMPATIBLE", "0", 1);
+
+	if (compatible_mode) {
+		rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX |
+					 D_HASH_FT_LRU, 12, NULL, &fd_hash_ops, &fd_hash);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to create fd hash table");
+			return;
+		}
+		D_INFO("pil4dfs compatible mode is ON.\n");
 	}
 
 	/* Find dfuse mounts from /proc/mounts */
@@ -5726,9 +6894,10 @@ init_myhook(void)
 		eq_count_max = (uint16_t)eq_count_loc;
 	} else {
 		eq_count_max = MAX_EQ;
+		snprintf(buf_max_eq, sizeof(buf_max_eq), "%d", MAX_EQ);
+		d_setenv("D_IL_MAX_EQ", buf_max_eq, 1);
 	}
 
-	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
 	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&libc_open));
 	register_a_hook("libpthread", "open64", (void *)new_open_pthread,
 			(long int *)(&pthread_open));
@@ -5736,7 +6905,7 @@ init_myhook(void)
 	register_a_hook("libc", "__close", (void *)new_close_libc, (long int *)(&libc_close));
 	register_a_hook("libpthread", "__close", (void *)new_close_pthread,
 			(long int *)(&pthread_close));
-	register_a_hook("libc", "__close_nocancel", (void *)new_close_nocancel,
+	register_a_hook("libc", "__close_nocancel", (void *)new_close_nocancel_libc,
 			(long int *)(&libc_close_nocancel));
 
 	register_a_hook("libc", "__read", (void *)new_read_libc, (long int *)(&libc_read));
@@ -5762,19 +6931,18 @@ init_myhook(void)
 
 	register_a_hook("libc", "fcntl", (void *)new_fcntl, (long int *)(&libc_fcntl));
 
-	register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&next_mmap));
-	register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
+	if (compatible_mode == false) {
+		register_a_hook("libc", "mmap", (void *)new_mmap, (long int *)(&next_mmap));
+		register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
+	}
 
 	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
 
-	/**	register_a_hook("libc", "execve", (void *)new_execve, (long int *)(&real_execve));
-	 *	register_a_hook("libc", "execvp", (void *)new_execvp, (long int *)(&real_execvp));
-	 *	register_a_hook("libc", "execv", (void *)new_execv, (long int *)(&real_execv));
-	 *	register_a_hook("libc", "fork", (void *)new_fork, (long int *)(&real_fork));
-	 */
-
 	init_fd_dup2_list();
+
+	hang_for_debugging();
+	extract_exe_path();
 
 	install_hook();
 	hook_enabled = 1;
@@ -5868,6 +7036,10 @@ destroy_all_eqs(void)
 static __attribute__((destructor)) void
 finalize_myhook(void)
 {
+	
+	int       rc;
+	d_list_t *rlink;
+
 	if (context_reset) {
 		/* child processes after fork() */
 		destroy_all_eqs();
@@ -5897,6 +7069,21 @@ finalize_myhook(void)
 			uninstall_hook();
 		else
 			free_memory_in_hook();
+	}
+
+	if (compatible_mode) {
+		/* Free record left in fd hash table then destroy it */
+		while (1) {
+			rlink = d_hash_rec_first(fd_hash);
+			if (rlink == NULL)
+				break;
+			d_hash_rec_decref(fd_hash, rlink);
+		}
+
+		rc = d_hash_table_destroy(fd_hash, false);
+		if (rc != 0) {
+			DL_ERROR(rc, "error in d_hash_table_destroy(fd_hash)");
+		}
 	}
 
 	if (daos_debug_inited)

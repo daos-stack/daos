@@ -1234,3 +1234,9 @@ void crt_na_config_fini(bool primary, crt_provider_t provider)
 	D_FREE(na_cfg->noc_auth_key);
 	na_cfg->noc_port = 0;
 }
+
+void
+crt_reset_lock()
+{
+	D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
+}
