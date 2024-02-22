@@ -38,6 +38,8 @@ server_config:
         - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only
       storage: auto
+daos_server:
+  pattern_timeout: 120
 pool:
   svcn: 5
   scm_size: 1G
