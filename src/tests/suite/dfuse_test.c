@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <dirent.h>
 
 #include <dfuse_ioctl.h>
@@ -34,7 +35,7 @@
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdl";
+static const char *all_tests = "ismdlf";
 
 static void
 print_usage()
@@ -48,6 +49,7 @@ print_usage()
 	print_message("dfuse_test -m|--metadata\n");
 	print_message("dfuse_test -d|--directory\n");
 	print_message("dfuse_test -l|--lowfd\n");
+	print_message("dfuse_test -f|--mmap\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -509,6 +511,56 @@ do_directory(void **state)
 	assert_return_code(rc, errno);
 }
 
+void
+do_mmap(void **state)
+{
+	int   root;
+	int   fd;
+	int   rc;
+	void *addr;
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	/* Always unlink the file but do not check for errors.  If running the test manually the
+	 * file might pre-exist and affect the behavior.
+	 */
+	unlinkat(root, "file", 0);
+
+	fd = openat(root, "file", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+	assert_return_code(root, errno);
+
+	rc = ftruncate(fd, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	addr = mmap(NULL, 1024 * 1024, PROT_WRITE, MAP_PRIVATE, fd, 0);
+	assert_ptr_not_equal(addr, MAP_FAILED);
+
+	printf("Mapped private to %p\n", addr);
+
+	memset(addr, '0', 1024 * 1024);
+
+	rc = munmap(addr, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	addr = mmap(NULL, 1024 * 1024, PROT_READ, MAP_SHARED, fd, 0);
+	assert_ptr_not_equal(addr, MAP_FAILED);
+
+	printf("Mapped shared to %p\n", addr);
+
+	rc = munmap(addr, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
 #define MIN_DAOS_FD 10
 /*
  * Check whether daos network context uses low fds 0~9.
@@ -630,6 +682,15 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			printf("=====================\n");
 			nr_failed += cmocka_run_group_tests(lowfd_tests, NULL, NULL);
 			break;
+		case 'f': {
+			const struct CMUnitTest mmap_tests[] = {
+			    cmocka_unit_test(do_mmap),
+			};
+			printf("\n\n=================");
+			printf("dfuse mmap tests");
+			printf("=====================\n");
+			nr_failed += cmocka_run_group_tests(mmap_tests, NULL, NULL);
+			break;
 		}
 		default:
 			assert_true(0);
@@ -655,10 +716,11 @@ main(int argc, char **argv)
 					       {"stream", no_argument, NULL, 's'},
 					       {"metadata", no_argument, NULL, 'm'},
 					       {"directory", no_argument, NULL, 'd'},
+					       {"mmap", no_argument, NULL, 'f'},
 					       {"lowfd", no_argument, NULL, 'l'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdl", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlf", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
