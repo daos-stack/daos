@@ -51,11 +51,14 @@ class SpaceRb(IorTestBase):
         manager = get_job_manager(test=self, job=ior_cmd, subprocess=self.subprocess)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
+        ppn = self.params.get("ppn", '/run/ior/*')
+        manager.assign_processes(ppn=ppn)
         error_msg = None
         exception_detected = False
 
         try:
             manager.run()
+            self.fail(f"IOR {job_num} didn't fail as expected!")
         except CommandFailure as error:
             exception_detected = True
             # Convert it to string to obtain the error message.
