@@ -501,6 +501,7 @@ struct dfuse_cont {
 	double                  dfc_dentry_dir_timeout;
 	double                  dfc_ndentry_timeout;
 	double                  dfc_data_timeout;
+	bool                    dfc_data_otoc;
 	bool                    dfc_direct_io_disable;
 };
 
