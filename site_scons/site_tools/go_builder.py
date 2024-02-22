@@ -95,9 +95,9 @@ def generate(env):
         if len([x for x, y in
                 zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
                 if int(x) < int(y)]) > 0:
-            context.Result(f'{go_version} is too old (min supported: {MIN_GO_VERSION}) ')
+            context.Result(f'{out} is too old (min supported: {MIN_GO_VERSION}) ')
             return 0
-        context.Result(str(go_version))
+        context.Result(str(out))
         return 1
 
     env.d_go_bin = env.get("GO_BIN", env.WhereIs(GO_COMPILER))
