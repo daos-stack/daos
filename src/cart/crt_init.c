@@ -752,7 +752,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		 * interfaces for multi-provider mode for now are delimited with ':'
 		 * to allow multi-interface selection (delimited by ',') in a single provider mode.
 		 *
-		 * For exmaple interface containing "eth0:eth1" will mean a multi-provider mode with
+		 * For example interface containing "eth0:eth1" will mean a multi-provider mode with
 		 * a primary provider on eth0 and secondary on eth1.
 		 * "eth0,eth1" on the other hand will indicate a single provider mode initialized on
 		 * both eth0 and eth1 interfaces.
