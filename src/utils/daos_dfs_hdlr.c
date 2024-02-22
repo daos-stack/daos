@@ -18,11 +18,11 @@
 #include <daos.h>
 #include <daos/common.h>
 #include <daos/debug.h>
-
+#include <daos/dfs_lib_int.h>
 #include <daos_types.h>
 #include <daos_fs.h>
-#include "dfs_internal.h"
 #include <daos_uns.h>
+
 #include "daos_hdlr.h"
 
 int

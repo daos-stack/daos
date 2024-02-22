@@ -46,7 +46,6 @@ def scons():
                                 LIBS=['daos_common'] + libraries)
 
     c_files = ['dfs_unit_test.c', 'dfs_par_test.c', 'dfs_test.c', 'dfs_sys_unit_test.c']
-    newenv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     dfstest = newenv.d_program('dfs_test', c_files + daos_test_tgt,
                                LIBS=['daos_common'] + libraries)
 
