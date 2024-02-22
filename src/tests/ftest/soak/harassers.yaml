@@ -65,7 +65,7 @@ container_snapshot:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
   oclass: RP_2GX
-  control_method: daos
+  control_method: API
   daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
