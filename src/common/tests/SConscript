@@ -36,8 +36,6 @@ def scons():
                         LIBS=['daos_common', 'gurt', 'cmocka'])
     tenv.d_test_program('fault_domain_tests', 'fault_domain_tests.c',
                         LIBS=['daos_common', 'gurt', 'cmocka'])
-    tenv.d_test_program('policy_tests', 'policy_tests.c',
-                        LIBS=['daos_common', 'gurt', 'cmocka'])
     tenv.d_test_program('ad_mem_tests', 'ad_mem_tests.c',
                         LIBS=['daos_common_pmem', 'gurt', 'cmocka'])
     tenv.d_test_program('checksum_timing', 'checksum_timing.c', LIBS=['daos_common', 'gurt'])

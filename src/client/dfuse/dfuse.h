@@ -19,8 +19,7 @@
 
 #include <daos.h>
 #include <daos_fs.h>
-
-#include "dfs_internal.h"
+#include <daos/dfs_lib_int.h>
 
 #include "dfuse_common.h"
 
@@ -311,6 +310,23 @@ struct dfuse_readdir_hdl {
 	 * readers from sharing the handle
 	 */
 	bool                       drh_valid;
+
+	/* Locking:
+	 * There can be multiple readers from the same handle concurrently, to do this use
+	 * read/write locks.
+	 * Initially a read lock is taken and the cache is checked, if anything is present then the
+	 * contents are returned and the lock dropped.
+	 * Then a write lock is taken and the cache is checked, if anything is present then the lock
+	 * is dropped and a read lock is taken, goto above.
+	 * If there is nothing in the cache when the write lock is taken then the cache is extended.
+	 * "plus" calls however require inode references and these may not be held by cache entries,
+	 * therefore track how many cache entries do not hold hash table references and for
+	 * readdir_plus calls where there are cache entries without references then hold a write
+	 * lock from the start.
+	 */
+	pthread_rwlock_t           drh_lock;
+
+	uint32_t                   drh_no_ref_count;
 };
 
 /* Drop a readdir handle from a open directory handle.
@@ -886,9 +902,6 @@ struct dfuse_inode_entry {
 	fuse_ino_t                ie_parent;
 
 	struct dfuse_cont        *ie_dfs;
-
-	/* Lock, used to protect readdir calls */
-	pthread_mutex_t           ie_lock;
 
 	/** Hash table of inodes
 	 * All valid inodes are kept in a hash table, using the hash table locking.

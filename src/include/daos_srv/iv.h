@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +10,11 @@
 #define __DAOS_SRV_IV_H__
 
 #include <abt.h>
+
+#include <gurt/types.h>
+#include <gurt/list.h>
+
+#include <cart/iv.h>
 
 /* DAOS iv cache provide a general interface for daos to use cart IV.
  * Each pool has one iv namespace, which is created when the  pool is

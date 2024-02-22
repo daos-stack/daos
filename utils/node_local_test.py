@@ -18,6 +18,7 @@ import json
 import os
 import pickle  # nosec
 import pprint
+import pwd
 import random
 import re
 import shutil
@@ -1840,7 +1841,7 @@ def destroy_container(conf, pool, container, valgrind=True, log_check=True):
     assert rc.returncode == 0, rc
 
 
-def check_dfs_tool_output(output, oclass, csize):
+def check_file_attr(output, oclass, csize):
     """Verify daos fs tool output"""
     line = output.splitlines()
     dfs_attr = line[0].split()[-1]
@@ -1848,6 +1849,28 @@ def check_dfs_tool_output(output, oclass, csize):
         if dfs_attr != oclass:
             return False
     dfs_attr = line[1].split()[-1]
+    if csize is not None:
+        if dfs_attr != csize:
+            return False
+    return True
+
+
+def check_dir_attr(output, oclass, dir_oclass, file_oclass, csize):
+    """Verify daos fs tool output"""
+    line = output.splitlines()
+    dfs_attr = line[0].split()[-1]
+    if oclass is not None:
+        if dfs_attr != oclass:
+            return False
+    dfs_attr = line[1].split()[-1]
+    if dir_oclass is not None:
+        if dfs_attr != dir_oclass:
+            return False
+    dfs_attr = line[2].split()[-1]
+    if file_oclass is not None:
+        if dfs_attr != file_oclass:
+            return False
+    dfs_attr = line[3].split()[-1]
     if csize is not None:
         if dfs_attr != csize:
             return False
@@ -2068,7 +2091,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(rc)
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S2', '1048576')
+        assert check_dir_attr(output, 'S2', 'S2', 'S4', '1048576')
 
         cmd = ['fs', 'get-attr', '--path', file1]
         print('get-attr of ' + file1)
@@ -2076,7 +2099,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(rc)
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S4', '1048576')
+        assert check_file_attr(output, 'S4', '1048576')
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -3187,6 +3210,56 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
+    def test_cont_chown(self):
+        """Test ownership change of a POSIX container"""
+        # Update container ACLs so current user can mount.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'update-acl',
+                                      self.pool.id(),
+                                      self.container.id(),
+                                      '--entry',
+                                      f'A::{os.getlogin()}@:rwta'])
+        print(rc)
+        assert rc.returncode == 0
+
+        # Assign the container to someone else.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'set-owner',
+                                      self.pool.id(),
+                                      self.container.id(),
+                                      '--user',
+                                      'root@',
+                                      '--group',
+                                      'root@'])
+        print(rc)
+        assert rc.returncode == 0
+
+        # get owner to verify.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'get-acl',
+                                      self.pool.id(),
+                                      self.container.id()],
+                          use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        data = rc.json
+        assert data['status'] == 0, rc
+        assert data['error'] is None, rc
+        assert data['response']['owner_user'] == 'root@'
+        assert data['response']['owner_group'] == 'root@'
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      container=self.container,
+                      caching=False)
+
+        dfuse.start(v_hint='cont_chown_1')
+        assert pwd.getpwnam('root').pw_uid == os.stat(dfuse.dir).st_uid
+        assert pwd.getpwnam('root').pw_gid == os.stat(dfuse.dir).st_gid
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
     @needs_dfuse
     def test_complex_rename(self):
         """Test for rename semantics
@@ -3495,7 +3568,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S1', '1048576')
+        assert check_dir_attr(output, 'S1', 'S1', None, '1048576')
 
         # run same command using pool, container, dfs-path, and dfs-prefix
         cmd = ['fs', 'get-attr', pool, uns_container.id(), '--dfs-path', dir1,
@@ -3505,7 +3578,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S1', '1048576')
+        assert check_dir_attr(output, 'S1', 'S1', None, '1048576')
 
         # run same command using pool, container, dfs-path
         cmd = ['fs', 'get-attr', pool, uns_container.id(), '--dfs-path', '/d1']
@@ -3514,7 +3587,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S1', '1048576')
+        assert check_dir_attr(output, 'S1', 'S1', None, '1048576')
 
         cmd = ['fs', 'get-attr', '--path', file1]
         print('get-attr of d1/f1')
@@ -3523,7 +3596,7 @@ class PosixTests():
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
         # SX is not deterministic, so don't check it here
-        assert check_dfs_tool_output(output, None, '1048576')
+        assert check_file_attr(output, None, '1048576')
 
         # Run a command to change attr of dir1
         cmd = ['fs', 'set-attr', '--path', dir1, '--oclass', 'S2',
@@ -3556,7 +3629,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S2', '16')
+        assert check_dir_attr(output, 'S1', 'S2', 'S2', '16')
 
         cmd = ['fs', 'get-attr', '--path', file2]
         print('get-attr of d1/f2')
@@ -3564,7 +3637,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S1', '16')
+        assert check_file_attr(output, 'S1', '16')
 
     def test_cont_copy(self):
         """Verify that copying into a container works"""
@@ -3582,7 +3655,7 @@ class PosixTests():
                '--src',
                src_dir.name,
                '--dst',
-               f'daos://{self.pool.uuid}/{self.container}']
+               f'daos://{self.pool.id()}/{self.container.id()}']
         rc = run_daos_cmd(self.conf, cmd, use_json=True)
         print(rc)
 
@@ -4084,7 +4157,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, None, '1048576')
+        assert check_file_attr(output, None, '1048576')
         with open(fname1, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'test1':
@@ -4095,7 +4168,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, None, '1048576')
+        assert check_file_attr(output, None, '1048576')
         with open(fname3, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'test3':
