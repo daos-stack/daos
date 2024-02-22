@@ -161,7 +161,7 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
  */
 
 static PyObject *
-cont_open(int ret, char *pool, char *cont, int flags)
+cont_open(int ret, char *pool, char *cont, bool ro)
 {
 	PyObject			*return_list;
 	struct open_handle		*hdl = NULL;
@@ -179,12 +179,12 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	}
 
 	/** Connect to pool */
-	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh, NULL, NULL);
+	rc = daos_pool_connect(pool, NULL, DAOS_PC_RO, &poh, NULL, NULL);
 	if (rc)
 		goto out;
 
 	/** Open container */
-	rc = daos_cont_open(poh, cont, DAOS_COO_RW, &coh, NULL, NULL);
+	rc = daos_cont_open(poh, cont, ro ? DAOS_COO_RO : DAOS_COO_RW, &coh, NULL, NULL);
 	if (rc)
 		goto out;
 
@@ -276,32 +276,32 @@ __shim_handle__cont_open(PyObject *self, PyObject *args)
 {
 	char	*pool;
 	char	*cont;
-	int	 flags;
+	bool     ro;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &pool, &cont, &flags);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssp", &pool, &cont, &ro);
 
-	return cont_open(0, pool, cont, flags);
+	return cont_open(0, pool, cont, ro);
 }
 
 static PyObject *
 __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 {
 	const char		*path;
-	PyObject		*obj;
-	int			 flags;
+	PyObject                *obj;
 	struct duns_attr_t	 attr = {0};
 	int			 rc;
+	bool                     ro;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "si", &path, &flags);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "sp", &path, &ro);
 
 	rc = duns_resolve_path(path, &attr);
 	if (rc)
 		goto out;
 
 out:
-	obj = cont_open(rc, attr.da_pool, attr.da_cont, flags);
+	obj = cont_open(rc, attr.da_pool, attr.da_cont, ro);
 	duns_destroy_attr(&attr);
 	return obj;
 }
@@ -542,7 +542,7 @@ cont_check(int ret, char *pool, char *cont, int flags)
 	}
 
 	/** Connect to pool */
-	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh, NULL, NULL);
+	rc = daos_pool_connect(pool, NULL, DAOS_PC_RO, &poh, NULL, NULL);
 	if (rc)
 		goto out;
 

@@ -69,7 +69,7 @@ class DCont():
         Create new DArray object.
     """
 
-    def __init__(self, pool=None, cont=None, path=None):
+    def __init__(self, pool=None, cont=None, path=None, open_ro=False):
         self._dc = DaosClient()
         self._hdl = None
         if path is None and (pool is None or cont is None):
@@ -78,11 +78,11 @@ class DCont():
         if path is not None:
             self.pool = None
             self.cont = None
-            (ret, hdl) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, 0)
+            (ret, hdl) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, open_ro)
         else:
             self.pool = pool
             self.cont = cont
-            (ret, hdl) = pydaos_shim.cont_open(DAOS_MAGIC, pool, cont, 0)
+            (ret, hdl) = pydaos_shim.cont_open(DAOS_MAGIC, pool, cont, open_ro)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to access container", ret)
         self._hdl = hdl
