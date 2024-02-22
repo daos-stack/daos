@@ -31,10 +31,11 @@ class SpaceRb(IorTestBase):
                    f"Expected = {expected_space_rb}; Actual = {space_rb}")
             self.fail(msg)
 
-    def run_ior_verify_error(self, pool, container, job_num, block_size, transfer_size, errors):
+    def run_ior_verify_error(self, namespace, pool, container, job_num, errors):
         """Run IOR and verify the error message contains the expected message.
 
         Args:
+            namespace (str): Namespace that defines block_size and transfer_size.
             pool (TestPool): Pool to use with IOR.
             container (TestContainer): Container to use with IOR.
             job_num (int): Indicator to be used in the message.
@@ -42,16 +43,11 @@ class SpaceRb(IorTestBase):
             transfer_size (str): Transfer size parameter for the IOR.
             errors (list): List to collect the errors occurred during the test.
         """
-        ior_cmd = IorCommand()
+        ior_cmd = IorCommand(namespace=namespace)
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
         testfile = os.path.join(os.sep, f"test_file_{job_num}")
         ior_cmd.test_file.update(testfile)
-        # Use small transfer size so that data are written to SCM. It's better to hard-code the
-        # values rather than dynamically calculating from the pool size because there's a
-        # requirement about block size must be the multiple of transfer size.
-        ior_cmd.block_size.update(value=block_size)
-        ior_cmd.transfer_size.update(value=transfer_size)
         manager = get_job_manager(test=self, job=ior_cmd, subprocess=self.subprocess)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
@@ -90,8 +86,8 @@ class SpaceRb(IorTestBase):
         # 1. Create pool with space_rb set to 50 and aggregation disabled.
         self.log_step("Create pool with space_rb set to 50 and aggregation disabled.")
         pool_1 = self.get_pool(create=False)
-        pool_1.set_property(prop_name="reclaim", prop_value="disabled")
         pool_1.create()
+        pool_1.set_prop(properties="reclaim:disabled")
         container_1 = self.get_container(pool=pool_1)
 
         # 2. Call dmg pool get-prop and verify that Rebuild space ratio (space_rb) is 50%.
@@ -104,7 +100,7 @@ class SpaceRb(IorTestBase):
         self.log_step("Run IOR to fill 50% of SCM.")
         errors = []
         self.run_ior_verify_error(
-            pool=pool_1, container=container_1, job_num=1, block_size="2400M", transfer_size="2K",
+            namespace="/run/ior_small_transfer/*", pool=pool_1, container=container_1, job_num=1,
             errors=errors)
 
         # 4. Create a new pool with space_rb set to 50 and aggregation enabled this time.
@@ -121,8 +117,7 @@ class SpaceRb(IorTestBase):
         # 6. Run IOR to fill 50% of NVMe.
         self.log_step("Run IOR to fill 50% of NVMe.")
         self.run_ior_verify_error(
-            pool=pool_2, container=container_2, job_num=2, block_size="2400M", transfer_size="2K",
+            namespace="/run/ior_large_transfer/*", pool=pool_2, container=container_2, job_num=2,
             errors=errors)
 
-        self.log.info("##### Errors #####")
         report_errors(test=self, errors=errors)
