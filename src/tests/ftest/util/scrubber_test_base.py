@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -74,7 +74,7 @@ class TestWithScrubber(IorTestBase):
             # Create with properties
             self.add_pool()
         if pool_prop is None:
-            pool_prop = "scrub:timed,scrub-freq:1"
+            pool_prop = "scrub:timed,scrub_freq:1"
         for prop_val in pool_prop.split(","):
             if prop_val is not None:
                 value = prop_val.split(":")
