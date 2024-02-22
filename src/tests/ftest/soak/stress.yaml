@@ -198,7 +198,7 @@ vpic_stress:
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 lammps_stress:
-  job_timeout: 35
+  job_timeout: 45
   nodesperjob:
     - 8
   taskspernode:
