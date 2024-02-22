@@ -365,7 +365,7 @@ failed to initialize daos: Miscellaneous error (-1025)
 
 # Work around to check for daos_agent certification and start daos_agent
 	#check for /etc/daos/certs/daosCA.crt, agent.crt and agent.key
-	$ sudo systemctl enable daos_agent.service
+	$ sudo systemctl stop daos_agent.service
 	$ sudo systemctl start daos_agent.service
 	$ sudo systemctl status daos_agent.service
 ```
@@ -472,6 +472,55 @@ If this happens, the `daos` tool (as well as other I/O or `libdaos` operations) 
 
 To resolve the issue, a privileged user may send a `SIGUSR2` signal to the `daos_agent` process to
 force an immediate cache refresh.
+
+### Ranks are excluded because their provider does not match the system fabric provider
+
+This issue may be encountered after changing the system fabric provider in the `daos_server`
+configuration files, or if the initial configuration files for the servers don't have matching
+fabric providers.
+
+After starting `daos_server`, ranks will be unable to join if their configuration's fabric provider
+does not match that of the system. The system configuration is determined by the management service
+(MS) leader node, which may be arbitrarily chosen from the configured access points.
+
+To diagnose the issue, use `dmg system query`. Using verbose mode (`-v`) for the errored ranks
+will show the detailed errors, as seen below.
+
+```
+$ dmg system query
+Rank  State
+----  -----
+[1,3] Errored
+[0,2] Joined
+
+$ dmg system query -v -r 1,3
+Rank UUID                                 Control Address Fault Domain State   Reason
+---- ----                                 --------------- ------------ -----   ------
+1    1ad01ebe-08f2-4b20-aa39-80faf14bc373 10.7.1.75:10001 /boro-75     Errored DAOS engine 0 exited unexpectedly: rpc error: code = Unknown desc = rank 1 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"
+3    15e53aa7-fc0c-42eb-93de-8b485d96c63e 10.7.1.75:10001 /boro-75     Errored DAOS engine 1 exited unexpectedly: rpc error: code = Unknown desc = rank 3 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"
+```
+
+Alternately, monitoring RAS events will alert you to these failures. Relevant RAS event IDs are:
+
+- `system_fabric_provider_changed`: This informational event will be generated when an MS leader node
+  detects that the provider changed locally.
+- `engine_join_failed`: One of these error events will be generated for each rank that fails to join.
+
+Examples from syslog:
+
+```
+daos_server[3302185]: id: [system_fabric_provider_changed] ts: [2024-02-13T20:08:50.956+00:00] host: [boro-74.boro.hpdd.intel.com] type: [INFO] sev: [NOTICE] msg: [system fabric provider has changed: ofi+tcp -> ofi+tcp;ofi_rxm] pid: [3302185]
+daos_server[3302185]: id: [engine_join_failed] ts: [2024-02-13T20:08:57.607+00:00] host: [10.7.1.75:10001] type: [INFO] sev: [ERROR] msg: [DAOS engine 0 (rank 1) was not allowed to join the system] pid: [3302185] rank: [1] data: [rank 1 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"]
+daos_server[3302185]: id: [engine_join_failed] ts: [2024-02-13T20:08:57.869+00:00] host: [10.7.1.75:10001] type: [INFO] sev: [ERROR] msg: [DAOS engine 1 (rank 3) was not allowed to join the system] pid: [3302185] rank: [3] data: [rank 3 fabric provider "ofi+tcp" does not match system provider "ofi+tcp;ofi_rxm"]
+```
+
+To resolve the issue:
+
+- Determine which `daos_server` hosts need their fabric provider updated by analyzing which ranks were errored.
+- Stop all `daos_server` processes.
+- Update the configuration files with the correct fabric provider.
+- Start all `daos_server` processes.
+- Verify that all ranks were able to re-join via `dmg system query`.
 
 ## Diagnostic and Recovery Tools
 

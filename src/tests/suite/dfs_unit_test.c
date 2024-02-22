@@ -6,7 +6,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "dfs_test.h"
-#include "dfs_internal.h"
+#include <daos/dfs_lib_int.h>
 #include <daos_types.h>
 #include <daos/placement.h>
 #include <pthread.h>

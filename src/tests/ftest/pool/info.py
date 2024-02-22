@@ -25,10 +25,10 @@ class InfoTests(TestWithServers):
         Use Cases:
             Verify pool query.
 
-        :avocado: tags=all,daily_regression,
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,smoke
-        :avocado: tags=info_test,test_pool_info_query
+        :avocado: tags=InfoTests,info_test,test_pool_info_query
         """
         # Get the test params
         permissions = self.params.get("permissions", "/run/test/*")

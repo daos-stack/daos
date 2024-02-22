@@ -10,6 +10,7 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -55,4 +56,12 @@ func NewMockStorageControlService(log logging.Logger, ecs []*engine.Config, sys 
 		storage:         storage.MockProvider(log, 0, topCfg, sys, scm, bdev, nil),
 		getMemInfo:      getMemInfo,
 	}
+}
+
+type mockPublisher struct {
+	published []*events.RASEvent
+}
+
+func (m *mockPublisher) Publish(e *events.RASEvent) {
+	m.published = append(m.published, e)
 }

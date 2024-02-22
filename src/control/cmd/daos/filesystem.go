@@ -39,6 +39,7 @@ type fsCmd struct {
 	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset default creation object class on a directory"`
 	DfuseQuery     fsDfuseQueryCmd     `command:"query" description:"Query dfuse for memory usage"`
 	DfuseEvict     fsDfuseEvictCmd     `command:"evict" description:"Evict object from dfuse"`
+	Scan           fsScanCmd           `command:"scan" description:"Scan POSIX container and report statistics"`
 }
 
 type fsCopyCmd struct {
@@ -110,7 +111,7 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 	cmd.Infof("    Links:       %d", ap.fs_copy_stats.num_links)
 
 	if ap.fs_copy_stats.num_chmod_enotsup > 0 {
-		return errors.New(fmt.Sprintf("Copy completed successfully, but %d files had unsupported mode bits that could not be applied. Run with --ignore-unsupported to suppress this warning.", ap.fs_copy_stats.num_chmod_enotsup))
+		return errors.Errorf("Copy completed successfully, but %d files had unsupported mode bits that could not be applied. Run with --ignore-unsupported to suppress this warning.", ap.fs_copy_stats.num_chmod_enotsup)
 	}
 
 	return nil
@@ -601,5 +602,41 @@ func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
 	cmd.Infof("        Inodes: %d", ap.dfuse_mem.inode_count)
 	cmd.Infof("    Open files: %d", ap.dfuse_mem.fh_count)
 
+	return nil
+}
+
+type fsScanCmd struct {
+	existingContainerCmd
+
+	DirName string `long:"dir-name" short:"n" description:"subdirectory path to scan. Start from container root if not specified."`
+}
+
+func (cmd *fsScanCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	if err := cmd.resolveContainer(ap); err != nil {
+		return err
+	}
+
+	cleanupPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanupPool()
+
+	var dirName *C.char
+	if cmd.DirName != "" {
+		dirName = C.CString(cmd.DirName)
+		defer freeString(dirName)
+	}
+
+	rc := C.dfs_cont_scan(cmd.cPoolHandle, &ap.cont_str[0], 0, dirName)
+	if err := dfsError(rc); err != nil {
+		return errors.Wrapf(err, "failed to scan")
+	}
 	return nil
 }
