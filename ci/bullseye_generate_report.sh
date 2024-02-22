@@ -12,6 +12,12 @@ export PATH="/opt/BullseyeCoverage/bin:$PATH"
 echo "======>"
 pwd
 ls
+NODE=${NODELIST%%,*}
+
+# Copy over the install tree and some of the build tree.
+rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" . \
+  jenkins@"$NODE":/var/tmp/ftest/avocado/job-results/bullseye_coverage_logs/
+
 ls "/var/tmp/ftest/avocado/job-results/bullseye_coverage_logs/"
 ls "$WORKSPACE/"
 echo "<======"
