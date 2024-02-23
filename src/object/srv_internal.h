@@ -69,17 +69,15 @@ struct migrate_pool_tls {
 	/* Max epoch for the migration, used for migrate fetch RPC */
 	uint64_t		mpt_max_eph;
 
-	/* The ULT number generated on the xstream */
-	uint32_t		mpt_generated_ult;
+	/* The ULT number on each target xstream, which actually refer
+	 * back to the item within mpt_obj/dkey_ult_cnts array.
+	 */
+	ATOMIC uint32_t		*mpt_tgt_obj_ult_cnt;
+	ATOMIC uint32_t		*mpt_tgt_dkey_ult_cnt;
 
-	/* The ULT number executed on the xstream */
-	uint32_t		mpt_executed_ult;
-
-	/* The ULT number generated for object on the xstream */
-	uint32_t		mpt_obj_generated_ult;
-
-	/* The ULT number executed on the xstream */
-	uint32_t		mpt_obj_executed_ult;
+	/* ULT count arrary from all targets, obj: enumeration, dkey:fetch/update */
+	ATOMIC uint32_t		*mpt_obj_ult_cnts;
+	ATOMIC uint32_t		*mpt_dkey_ult_cnts;
 
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
