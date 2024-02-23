@@ -59,7 +59,6 @@ class NvmeHealth(ServerFillUp):
         scm_per_pool = int(scm_per_engine / actual_num_pools)
         if self.server_managers[0].manager.job.using_control_metadata:
             scm_per_pool = int(scm_per_pool - rdb_size)
-            self.log.info("-- xxxxxxxxxxxx")
         nvme_per_pool = int(nvme_per_engine / actual_num_pools)
 
         # Create the pools
