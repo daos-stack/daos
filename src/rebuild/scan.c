@@ -1169,6 +1169,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = 0);
 	} else if (rpt != NULL) {
 		rpt_put(rpt);
+		rpt = NULL;
 	}
 
 	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
