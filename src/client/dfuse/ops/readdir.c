@@ -202,11 +202,12 @@ create_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent, st
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		/* Check for UNS entry point, this will allocate a new inode number if successful */
 		rc = check_for_uns_ep(dfuse_info, ie, attr, attr_len);
-		if (rc != 0) {
-			DFUSE_TRA_WARNING(ie, "check_for_uns_ep() returned %d, ignoring", rc);
+		if (rc == 0) {
+			ie->ie_root = true;
+		} else {
+			DHS_WARN(ie, rc, "check_for_uns_ep() failed, ignoring");
 			rc = 0;
 		}
-		ie->ie_root = true;
 	}
 
 	strncpy(ie->ie_name, name, NAME_MAX);

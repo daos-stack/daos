@@ -191,12 +191,18 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 	 */
 
 	rc = dfuse_pool_get_handle(dfuse_info, dattr.da_puuid, &dfp);
-	if (rc != 0)
-		D_GOTO(out_err, rc);
+	if (rc != 0) {
+		if (rc == ENOENT)
+			rc = ENOLINK;
+		goto out_err;
+	}
 
 	rc = dfuse_cont_get_handle(dfuse_info, dfp, dattr.da_cuuid, &dfs);
-	if (rc != 0)
-		D_GOTO(out_dfp, rc);
+	if (rc != 0) {
+		if (rc == ENOENT)
+			rc = ENOLINK;
+		goto out_dfp;
+	}
 
 	/* The inode has a reference to the dfs, so keep that. */
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
@@ -209,8 +215,13 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
+		/* TODO: If this fails then dfs_release() has been called, why is this not
+		 * an error
+		 */
+		if (rc == EINVAL)
+			rc = ENOLINK;
 		DFUSE_TRA_ERROR(dfs, "dfs_lookup() returned: %d (%s)", rc, strerror(rc));
-		D_GOTO(out_dfs, rc);
+		goto out_dfs;
 	}
 
 	ie->ie_stat.st_ino = dfs->dfs_ino;

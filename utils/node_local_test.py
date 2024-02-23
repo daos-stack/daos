@@ -604,7 +604,7 @@ class DaosServer():
             self._stop_agent()
         try:
             if self.running:
-                self.stop(None)
+                self._stop(None)
         except NLTestTimeout:
             print('Ignoring timeout on stop')
         server_file = join(self.agent_dir, '.daos_server.active.yml')
@@ -2994,6 +2994,77 @@ class PosixTests():
         rc = run_daos_cmd(self.conf, cmd)
         assert rc.returncode == 0
         rc = self.dfuse.check_usage(inodes=1, open_files=1, containers=1, pools=1)
+
+    @needs_dfuse_with_opt(caching=False)
+    def test_uns_broken(self):
+        """Test the behavior of a broken UNS link"""
+
+        i_path = join(self.dfuse.dir, "top_dir")
+
+        os.mkdir(i_path)
+
+        cont_path = join(i_path, "sub_cont")
+
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label="uns_broken",
+                                path=cont_path)
+
+        stat_pre = os.stat(cont_path)
+
+        self.dfuse.evict_and_wait([cont_path])
+
+        stat_post = os.stat(cont_path)
+        assert stat_pre.st_ino == stat_post.st_ino
+
+        self.dfuse.evict_and_wait([cont_path])
+
+        container.destroy(valgrind=False, log_check=False)
+
+        try:
+            os.stat(cont_path)
+            assert False
+        except OSError as error:
+            assert error.errno == errno.ENOLINK
+
+        # Now check this readdir works.
+        self.dfuse.evict_and_wait([i_path])
+        files = os.listdir(i_path)
+        print(files)
+        assert files == ["sub_cont"]
+
+        # Now evict again and check stat once readdir has put the inode in memory.
+        self.dfuse.evict_and_wait([i_path])
+        try:
+            os.stat(cont_path)
+            assert False
+        except OSError as error:
+            assert error.errno == errno.ENOLINK
+
+        self.dfuse.evict_and_wait([i_path])
+
+    @needs_dfuse_with_opt(caching=False)
+    def test_uns_broken_ic(self):
+        """Test the behavior of a broken UNS link when the link is in cache"""
+
+        i_path = join(self.dfuse.dir, "top_dir")
+
+        os.mkdir(i_path)
+
+        cont_path = join(i_path, "sub_cont")
+
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label="uns_broken",
+                                path=cont_path)
+
+        os.stat(cont_path)
+
+        container.destroy(valgrind=False, log_check=False)
+
+        try:
+            os.stat(cont_path)
+            assert False
+        except OSError as error:
+            assert error.errno == errno.ENOLINK
+
+        self.dfuse.evict_and_wait([i_path])
 
     @needs_dfuse
     def test_rename_clobber(self):

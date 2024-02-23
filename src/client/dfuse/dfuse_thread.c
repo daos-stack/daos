@@ -134,6 +134,8 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 	while (!fuse_session_exited(dfuse_info->di_session))
 		sem_wait(&dtm->tm_finish);
 
+	DFUSE_TRA_INFO(dtm, "Session has completed, commencing shutdown");
+
 	atomic_store_relaxed(&dtm->tm_exit, true);
 
 	d_list_for_each_entry(dt, &dtm->tm_threads, dt_threads)
