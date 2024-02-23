@@ -204,9 +204,6 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 		goto out_dfp;
 	}
 
-	/* The inode has a reference to the dfs, so keep that. */
-	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
-
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
 		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: %d (%s)", rc, strerror(rc));
@@ -225,6 +222,9 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 		goto out_dfs;
 	}
 
+	/* The inode has a reference to the dfs, so keep that. */
+	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
+
 	ie->ie_stat.st_ino = dfs->dfs_ino;
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
@@ -238,8 +238,8 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 	return rc;
 out_dfs:
 	d_hash_rec_decref(dfp->dfp_cont_table, &dfs->dfs_entry);
-	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_dfp:
+	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_err:
 	duns_destroy_attr(&dattr);
 
