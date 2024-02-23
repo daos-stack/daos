@@ -75,7 +75,7 @@ struct migrate_pool_tls {
 	ATOMIC uint32_t		*mpt_tgt_obj_ult_cnt;
 	ATOMIC uint32_t		*mpt_tgt_dkey_ult_cnt;
 
-	/* ULT count arrary from all targets, obj: enumeration, dkey:fetch/update */
+	/* ULT count array from all targets, obj: enumeration, dkey:fetch/update */
 	ATOMIC uint32_t		*mpt_obj_ult_cnts;
 	ATOMIC uint32_t		*mpt_dkey_ult_cnts;
 
