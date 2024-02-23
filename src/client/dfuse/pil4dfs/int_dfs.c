@@ -147,9 +147,9 @@ static bool             enforce_exec_env;
 /* current application is bash or sh */
 static bool             is_bash;
 /* the exe name extract from /proc/self/cmdline */
-static char             exe_path[DFS_MAX_PATH];
+static char             exe_path[DFS_MAX_PATH + 4];
 /* the short exe name from exe_path */
-static char             exe_short[DFS_MAX_NAME];
+static char             exe_short[DFS_MAX_NAME + 4];
 /* "compatible_mode" is a bool to control whether passing open(), openat(), and opendir() to dfuse
  * all the time to avoid using fake fd. Env variable "D_IL_COMPATIBLE=1" or "D_IL_COMPATIBLE=true"
  * will set it true. This can increase the compatibility of libpil4dfs with degraded performance
@@ -265,7 +265,7 @@ struct statx {
 #endif
 
 /* working dir of current process */
-static char            cur_dir[DFS_MAX_PATH] = "";
+static char            cur_dir[DFS_MAX_PATH + 4] = "";
 static bool            segv_handler_inited;
 /* Old segv handler */
 struct sigaction       old_segv;
@@ -6395,9 +6395,10 @@ posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	/* Hint to turn off caching. */
 	if (advice == POSIX_FADV_DONTNEED)
 		return 0;
+/*
 	if (report)
 		D_ERROR("posix_fadvise() is not implemented yet.\n");
-
+*/
 	errno = ENOTSUP;
 	return -1;
 }

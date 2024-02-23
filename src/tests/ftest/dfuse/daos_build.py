@@ -364,7 +364,4 @@ class DaosBuild(DfuseTestBase):
             if cmd.startswith('scons'):
                 run_remote(self.log, self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
                            timeout=30)
-            if intercept:
-                self.fail('{} over dfuse with il in mode {}.\n'.format(fail_type, cache_mode))
-            else:
-                self.fail('{} over dfuse in mode {}.\n'.format(fail_type, cache_mode))
+            self.fail('{} over dfuse with pil4dfs.\n'.format(fail_type))
