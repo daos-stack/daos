@@ -68,7 +68,7 @@ def add_pools(self, pool_names, ranks=None):
         path = "".join(["/run/", pool_name, "/*"])
         properties = self.params.get('properties', path, None)
         # allow yaml pool property to override the scrub default; whether scrubber is enabled or not
-        if self.enable_scrubber and "scrub" not in properties:
+        if self.enable_scrubber and "scrub" not in str(properties):
             scrubber_properties = "scrub:timed,scrub_freq:120"
             params['properties'] = (",").join(filter(None, [properties, scrubber_properties]))
         else:
