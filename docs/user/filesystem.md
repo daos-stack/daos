@@ -141,7 +141,8 @@ scripts of any resource manager or scheduler in use.
 
 ### Core binding and threads
 
-DFuse will launch one thread per available core by default, although this can be
+DFuse will launch one thread per available core by default, limited to 16 if not
+constrained by a taskset. This can be
 changed by the `--thread-count` option. To change the cores that DFuse runs on
 use kernel level tasksets which will bind DFuse to a subset of cores. This can be
 done via the `tasket` or `numactl` programs or similar. If doing this then DFuse
@@ -150,10 +151,13 @@ operations will block a thread until completed so if restricting DFuse to a smal
 number of cores then overcommiting via the `--thread-count` option may be desirable.
 
 DFuse will use two types of threads: fuse threads to accept and process requests
-and event queue threads.  The `--thread-count` option will dictate the total number of
+and event queue progress threads.  The `--thread-count` option will dictate the total number of
 threads and each eq-thread will reduce this.  Each event queue thread will create a
 daos event queue so consumes additional network resources.  The `--eq-count` option
 will control the event queues and associated threads.
+
+In addition DFuse will always use a single main thread and a invalidation thread to manage dentry
+timeouts.
 
 ### Restrictions
 
@@ -682,6 +686,10 @@ it will be allowed for files, and timeout value will be the duration between a p
 which reduced the open count to zero and the next subsequent call to open.  A value of "otoc" will
 allow the use of the page cache for caching the file whilst open but the cache will only be used
 from open to close and not be saved across opens, this allows the use of MAP\_SHARED on files.
+
+Processes running with a working directory within the dfuse mount do not hold a reference on the
+directory so cache expiry can in this case cause getcwd() to fail.  Should this happen then a
+larger value for "dfuse-dentry-dir-time" should avoid the issue.
 
 dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,
 however if this is enabled then the O\_DIRECT flag will be ignored, and all
