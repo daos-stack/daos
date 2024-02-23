@@ -147,9 +147,9 @@ static bool             enforce_exec_env;
 /* current application is bash or sh */
 static bool             is_bash;
 /* the exe name extract from /proc/self/cmdline */
-static char             exe_path[DFS_MAX_PATH + 4];
+static char             exe_path[DFS_MAX_PATH];
 /* the short exe name from exe_path */
-static char             exe_short[DFS_MAX_NAME + 4];
+static char             exe_short[DFS_MAX_NAME];
 /* "compatible_mode" is a bool to control whether passing open(), openat(), and opendir() to dfuse
  * all the time to avoid using fake fd. Env variable "D_IL_COMPATIBLE=1" or "D_IL_COMPATIBLE=true"
  * will set it true. This can increase the compatibility of libpil4dfs with degraded performance
@@ -265,7 +265,7 @@ struct statx {
 #endif
 
 /* working dir of current process */
-static char            cur_dir[DFS_MAX_PATH + 4] = "";
+static char            cur_dir[DFS_MAX_PATH] = "";
 static bool            segv_handler_inited;
 /* Old segv handler */
 struct sigaction       old_segv;
@@ -5192,8 +5192,8 @@ chdir(const char *path)
 		D_GOTO(out_err, rc = errno);
 
 	if (!is_target_path) {
-		strncpy(cur_dir, full_path, DFS_MAX_PATH);
-		if (cur_dir[DFS_MAX_PATH - 1] != 0) {
+		len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s", full_path);
+		if (len_str >= DFS_MAX_PATH) {
 			D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
 				strerror(ENAMETOOLONG));
 			D_GOTO(out_err, rc = ENAMETOOLONG);
@@ -6695,7 +6695,7 @@ extract_exe_path(void)
 {
         FILE *fIn;
         char *line;
-	int readsize, len, pos;
+	int readsize, len, len2, pos;
 
 	exe_path[0]  = 0;
 	exe_short[0] = 0;
@@ -6705,21 +6705,28 @@ extract_exe_path(void)
 		return;
         fIn = fopen("/proc/self/cmdline", "r");
         if (fIn == NULL)        {
-                printf("Fail to open file: /proc/self/cmdline\nQuit\n");
+                DS_ERROR(errno, "Fail to open file: /proc/self/cmdline");
                 goto out;
         }
         readsize = fread(line, 1, DFS_MAX_PATH, fIn);
         fclose(fIn);
 
         if (readsize <= 0)   {
-                printf("Fail to determine the executable file name.\nQuit\n");
+                D_DEBUG(DB_ANY, "Fail to determine the executable file name.\n");
                 goto out;
         }
-	strncpy(exe_path, line, DFS_MAX_PATH);
-	len = strnlen(exe_path, DFS_MAX_PATH);
+	len = snprintf(exe_path, DFS_MAX_PATH, "%s", line);
+	if (len >= DFS_MAX_PATH) {
+		DS_ERROR(ENAMETOOLONG, "path is too long");
+		goto out;
+	}
 	for (pos = len - 1; pos > 0; pos--) {
 		if (exe_path[pos] == '/') {
-			strncpy(exe_short, exe_path + pos + 1, DFS_MAX_NAME);
+			len2 = snprintf(exe_short, DFS_MAX_NAME, "%s", exe_path + pos + 1);
+			if (len2 >= DFS_MAX_NAME) {
+				DS_ERROR(ENAMETOOLONG, "name is too long");
+				goto out;
+			}
 			break;
 		}
 	}
