@@ -188,6 +188,7 @@ daos_array_write(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 	tse_task_t	*task;
 	int		 rc;
 
+	D_ASSERT(0);
 	rc = dc_task_create(dc_array_write, NULL, ev, &task);
 	if (rc)
 		return rc;
