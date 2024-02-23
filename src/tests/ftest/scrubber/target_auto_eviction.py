@@ -1,12 +1,13 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
+from datetime import timedelta
 
-from scrubber_test_base import TestWithScrubber
 from general_utils import get_journalctl, journalctl_time
+from scrubber_test_base import TestWithScrubber
 
 
 class TestWithScrubberTargetEviction(TestWithScrubber):
@@ -34,23 +35,25 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
         self.dmg_cmd.pool_query(self.pool.identifier)
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
         t_start = journalctl_time()
+        t_end = journalctl_time() + timedelta(seconds=100)
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         # Wait for a minute for the scrubber to take action and evict target
         # after corruption threshold reached.
+        self.log.info("Sleeping for 60 seconds")
         time.sleep(60)
-        t_end = journalctl_time()
         # Check the journalctl for data corrupt message.
         results = get_journalctl(hosts=self.hostlist_servers, since=t_start,
                                  until=t_end, journalctl_type="daos_server")
-        str_to_match = "Corruption found"
+        self.log.info(results)
+        str_to_match = "Data corruption detected"
         occurrence = 0
         for count, _ in enumerate(self.hostlist_servers):
             occurrence = results[count]["data"].count(str_to_match)
-            if occurrence != 0:
-                self.log.info("Data corrupted occurrence %s", occurrence)
-            else:
-                self.log.info("RAS data corrupted messages missing on system logs")
-                self.fail("------Test Failed------")
+        if occurrence > 0:
+            self.log.info("Data corrupted occurrence %s", occurrence)
+        else:
+            self.log.info("RAS data corrupted messages missing on system logs")
+            self.fail("------Test Failed------")
         self.dmg_cmd.pool_query(self.pool.identifier)
         final_metrics = self.scrubber.get_scrub_corrupt_metrics()
         status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
