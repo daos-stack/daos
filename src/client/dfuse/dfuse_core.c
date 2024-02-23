@@ -845,11 +845,11 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		dfc->dfs_ops = &dfuse_dfs_ops;
 		if (dfuse_info->di_read_only) {
 			dfs_flags = O_RDONLY;
-			rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh, &c_info,
-					    NULL);
+			rc        = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh,
+						   &c_info, NULL);
 		} else {
-			rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh, &c_info,
-					    NULL);
+			rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh,
+					    &c_info, NULL);
 			if (rc == -DER_NO_PERM) {
 				dfs_flags = O_RDONLY;
 				rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RO, &dfc->dfs_coh,
