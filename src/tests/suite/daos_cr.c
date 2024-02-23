@@ -175,6 +175,10 @@ cr_debug_set_params_internal(test_arg_t *arg, uint64_t fail_loc, bool nowait)
 	int	rc;
 	int	i = 0;
 
+	/* The system maybe just started, wait for a while for primary group initialization. */
+	if (fail_loc != 0 && !nowait)
+		sleep(5);
+
 	for (i = 0; i < 10; i++) {
 		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, fail_loc, 0, NULL);
 		if (rc == 0 || rc != -DER_TIMEDOUT || nowait)

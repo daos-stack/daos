@@ -9,7 +9,7 @@ timeout: 600
 timeouts:
   test_daos_degraded_mode: 450
   test_daos_management: 110
-  test_daos_cat_recovery: 3000
+  test_daos_cat_recovery: 3100
   test_daos_pool: 180
   test_daos_container: 510
   test_daos_epoch: 125
