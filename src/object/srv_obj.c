@@ -3990,7 +3990,6 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 		oqma.oqma_flags = api_flags;
 		oqma.oqma_opc = opc;
 		oqma.oqma_src_map_ver = map_ver;
-		oqma.oqma_server_merge = 1;
 	}
 
 	for (i = 0, allow_failure_cnt = 0, succeeds = 0; i < count; i++ ) {
@@ -4064,12 +4063,21 @@ again:
 				otqa->otqa_max_epoch = *p_epoch;
 			otqa->otqa_shard = shards[i];
 			otqa->otqa_keys_allocated = 1;
+
+			if (otqa->otqa_need_copy && otqa->otqa_raw_recx &&
+			    daos_oclass_is_ec(&ioc->ioc_oca)) {
+				obj_ec_recx_vos2daos(&ioc->ioc_oca, oqma.oqma_oid, p_dkey,
+						     &otqa->otqa_recx, true,
+						     api_flags & DAOS_GET_MAX ? true : false);
+				otqa->otqa_raw_recx = 0;
+			}
 		} else {
 			oqma.oqma_oid.id_shard = shards[i];
 			oqma.oqma_src_epoch = *p_epoch;
 			oqma.oqma_src_dkey = p_dkey;
 			oqma.oqma_src_akey = p_akey;
 			oqma.oqma_src_recx = p_recx;
+			oqma.oqma_raw_recx = 1;
 			/*
 			 * Merge (L1) the results from different shards on the same VOS target
 			 * into current otqa that stands for the result for current VOS target.
@@ -5798,6 +5806,7 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	otqa = &otqas[tgt_id];
+	otqa->otqa_raw_recx = 1;
 
 	dce.dce_xid = ocqi->ocqi_xid;
 	dce.dce_ver = ocqi->ocqi_map_ver;
@@ -5871,6 +5880,8 @@ out:
 			ocqo->ocqo_dkey = otqa->otqa_dkey_copy;
 			ocqo->ocqo_akey = otqa->otqa_akey_copy;
 		}
+		if (otqa->otqa_raw_recx)
+			ocqo->ocqo_flags |= OCRF_RAW_RECX;
 	}
 
 	rc = crt_reply_send(rpc);

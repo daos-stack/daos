@@ -431,7 +431,7 @@ obj_coll_query_merge_tgts(struct obj_coll_query_in *ocqi, struct daos_oclass_att
 		oqma.oqma_src_akey = &tmp->otqa_akey_copy;
 		oqma.oqma_src_recx = &tmp->otqa_recx;
 		oqma.oqma_src_map_ver = tmp->otqa_version;
-		oqma.oqma_server_merge = 1;
+		oqma.oqma_raw_recx = tmp->otqa_raw_recx;
 		/*
 		 * Merge (L2) the results from other VOS targets on the same engine
 		 * into current otqa that stands for the results for current engine.
@@ -443,6 +443,9 @@ obj_coll_query_merge_tgts(struct obj_coll_query_in *ocqi, struct daos_oclass_att
 
 	D_DEBUG(DB_IO, " sub_requests %d/%d, allow_failure %d, result %d\n",
 		allow_failure_cnt, succeeds, allow_failure, rc);
+
+	if (DAOS_RECX_END(otqa->otqa_recx) > 0)
+		otqa->otqa_raw_recx = 0;
 
 	if (allow_failure_cnt > 0 && rc == 0 && succeeds == 0)
 		rc = allow_failure;
@@ -581,7 +584,7 @@ obj_coll_query_agg_cb(struct dtx_leader_handle *dlh, void *arg)
 		oqma.oqma_src_recx = &ocqo->ocqo_recx;
 		oqma.oqma_flags = ocqi->ocqi_api_flags;
 		oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
-		oqma.oqma_server_merge = 1;
+		oqma.oqma_raw_recx = ocqo->ocqo_flags & OCRF_RAW_RECX ? 1 : 0;
 		/*
 		 * Merge (L3) the results from other engines into current otqa that stands for the
 		 * results for related engines' group, including current engine.
@@ -597,6 +600,9 @@ next:
 	D_DEBUG(DB_IO, DF_DTI" sub_requests %d/%d, allow_failure %d, result %d\n",
 		DP_DTI(&dlh->dlh_handle.dth_xid),
 		allow_failure_cnt, succeeds, allow_failure, rc);
+
+	if (DAOS_RECX_END(otqa->otqa_recx) > 0)
+		otqa->otqa_raw_recx = 0;
 
 	/*
 	 * The agg_cb return value only stands for execution on remote engines.
