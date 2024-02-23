@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -171,7 +171,8 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 int
 dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 {
-	int rc;
+	pthread_t self;
+	int       rc;
 
 	dfuse_info->di_session = dfuse_session_new(args, dfuse_info);
 	if (dfuse_info->di_session == NULL) {
@@ -202,6 +203,9 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 	rc = dfuse_send_to_fg(0);
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
+
+	self = pthread_self();
+	pthread_setname_np(self, "main");
 
 	/* Blocking */
 	if (dfuse_info->di_threaded)
@@ -279,7 +283,7 @@ show_help(char *name)
 	    "	   --path=<path>	Path to load UNS pool/container data\n"
 	    "	   --sys-name=STR	DAOS system name context for servers\n"
 	    "\n"
-	    "	-S --singlethread	Single threaded\n"
+	    "	-S --singlethread	Single threaded (deprecated)\n"
 	    "	-t --thread-count=count	Total number of threads to use\n"
 	    "	-e --eq-count=count	Number of event queues to use\n"
 	    "	-f --foreground		Run in foreground\n"
@@ -332,20 +336,22 @@ show_help(char *name)
 	    "\n"
 	    "Threading and resource usage:\n"
 	    "dfuse has two types of threads: fuse threads which accept and process requests from\n"
-	    "the kernel, and progress threads which complete asynchronous read/write operations.\n"
+	    "the kernel, and progress threads which complete asynchronous read/write and some\n"
+	    "metadata operations.\n"
 	    "Each asynchronous progress thread uses one DAOS event queue to consume additional\n"
 	    "network resources. As all metadata operations are blocking, the level of concurrency\n"
 	    "in dfuse is limited by the number of fuse threads.\n"
-	    "By default, the total thread count is one per available core to allow maximum\n"
-	    "throughput. If hyperthreading is enabled, then one thread per hyperthread core\n"
-	    "is used. This can be modified in two ways: Reducing the number of available\n"
-	    "cores by running dfuse in a cpuset via numactl or similar tools,\n"
+	    "By default, the total thread count is controlled by the number available cores,\n"
+	    "if dfuse is not restricted via a cpuset it will use a maximum of 16 cores, however\n"
+	    "if a cpuset is active it will use the entire cpuset\n"
+	    "If hyperthreading is enabled, then one thread per hyperthread core is used. This can\n"
+	    "be modified in two ways: Reducing the number of available cores by running dfuse in\n"
+	    "a cpuset via numactl or similar tools,\n"
 	    "or by using the --thread-count, --eq-count or --singlethread options:\n"
 	    "* The --thread-count option controls the total number of threads.\n"
 	    "* Increasing the --eq-count option at a fixed --thread-count will reduce the number\n"
 	    "  of fuse threads accordingly. The default value for --eq-count is 1.\n"
-	    "* The --singlethread mode will use one thread for handling fuse requests and a\n"
-	    "  second thread for a single event queue, for a total of two threads.\n"
+	    "dfuse will also always run one main thread and one invalidation thread\n"
 	    "\n"
 	    "If dfuse is running in background mode (the default unless launched via mpirun)\n"
 	    "then it will stay in the foreground until the mount is registered with the\n"
@@ -406,7 +412,6 @@ main(int argc, char **argv)
 	struct dfuse_pool *dfp                                    = NULL;
 	struct dfuse_cont *dfs                                    = NULL;
 	struct duns_attr_t duns_attr                              = {};
-	uuid_t             cont_uuid                              = {};
 	char               pool_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	char               cont_name[DAOS_PROP_LABEL_MAX_LEN + 1] = {};
 	int                c;
@@ -705,17 +710,14 @@ main(int argc, char **argv)
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	/* Connect to a pool. */
-	rc = dfuse_pool_connect(dfuse_info, pool_name, &dfp);
+	/* Connect to a pool */
+	rc = dfuse_pool_connect(dfuse_info, pool_name[0] ? pool_name : NULL, &dfp);
 	if (rc != 0) {
 		printf("Failed to connect to pool: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	if (cont_name[0] && uuid_parse(cont_name, cont_uuid) < 0)
-		rc = dfuse_cont_open_by_label(dfuse_info, dfp, cont_name, &dfs);
-	else
-		rc = dfuse_cont_open(dfuse_info, dfp, &cont_uuid, &dfs);
+	rc = dfuse_cont_open(dfuse_info, dfp, cont_name[0] ? cont_name : NULL, &dfs);
 	if (rc != 0) {
 		printf("Failed to connect to container: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(out_pool, rc = daos_errno2der(rc));
@@ -739,17 +741,19 @@ main(int argc, char **argv)
 	fuse_session_destroy(dfuse_info->di_session);
 	goto out_fini;
 out_cont:
-	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
+	d_hash_rec_decref(dfp->dfp_cont_table, &dfs->dfs_entry);
 out_pool:
+	dfuse_info->di_shutdown = true;
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_daos:
 	ival_thread_stop();
+	ival_fini();
 
 	rc2 = dfuse_fs_fini(dfuse_info);
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 out_fini:
-	if (dfuse_info) {
+	if (dfuse_info && rc == -DER_SUCCESS) {
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_inode_count) == 0);
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_fh_count) == 0);
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_pool_count) == 0);
@@ -760,7 +764,7 @@ out_fini:
 	daos_fini();
 out_debug:
 	D_FREE(dfuse_info);
-	DFUSE_LOG_INFO("Exiting with status %d", rc);
+	DL_INFO(rc, "Exiting with status");
 	daos_debug_fini();
 out:
 	dfuse_send_to_fg(rc);
