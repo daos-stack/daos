@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -205,7 +205,10 @@ create_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent, st
 		if (rc == 0) {
 			ie->ie_root = true;
 		} else {
-			DHS_WARN(ie, rc, "check_for_uns_ep() failed, ignoring");
+			if (rc == ENOLINK)
+				DHS_INFO(ie, rc, "check_for_uns_ep() failed, ignoring");
+			else
+				DHS_WARN(ie, rc, "check_for_uns_ep() failed, ignoring");
 			rc = 0;
 		}
 	}

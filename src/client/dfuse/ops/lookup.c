@@ -212,15 +212,16 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: %d (%s)", rc, strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
+	ie->ie_obj = NULL;
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		/* TODO: If this fails then dfs_release() has been called, why is this not
-		 * an error
-		 */
-		if (rc == EINVAL)
+		if (rc == EINVAL) {
 			rc = ENOLINK;
-		DFUSE_TRA_ERROR(dfs, "dfs_lookup() returned: %d (%s)", rc, strerror(rc));
+			DHS_INFO(dfs, rc, "dfs_lookup() failed");
+		} else {
+			DHS_WARN(dfs, rc, "dfs_lookup() failed");
+		}
 		goto out_dfs;
 	}
 
@@ -237,8 +238,8 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 	return rc;
 out_dfs:
 	d_hash_rec_decref(dfp->dfp_cont_table, &dfs->dfs_entry);
-out_dfp:
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
+out_dfp:
 out_err:
 	duns_destroy_attr(&dattr);
 

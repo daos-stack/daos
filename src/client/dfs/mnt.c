@@ -6,6 +6,8 @@
 
 /** DFS init, fini, mount related operations */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <math.h>
 #include <daos/common.h>
 #include <daos/container.h>
