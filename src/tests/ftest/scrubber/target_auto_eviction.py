@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from general_utils import get_journalctl, journalctl_time
 from scrubber_test_base import TestWithScrubber
@@ -35,7 +35,7 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
         self.dmg_cmd.pool_query(self.pool.identifier)
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
         t_start = journalctl_time()
-        t_end = journalctl_time() + timedelta(seconds=100)
+        t_end = journalctl_time(datetime.now() + timedelta(seconds=60))
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         # Wait for a minute for the scrubber to take action and evict target
         # after corruption threshold reached.
