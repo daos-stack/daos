@@ -50,17 +50,9 @@ def _scan_go_file(node, env, _path):
 
 
 def get_go_version(output):
-    """Convert from a "go version" string to a well-formatted major.minor.point string"""
-    go_version = output.split(' ')[2].replace('go', '')
-    if '-' in go_version:
-        go_version = go_version.split('-')[0]
-    parts = []
-    for part in go_version.split("."):
-        if 'rc' in part:
-            parts.append(part.split("rc", maxsplit=1)[0])
-        else:
-            parts.append(part)
-    return ".".join(parts)
+    # Capture only the number, ignoring optional rc
+    one_part = '([0-9]+)(?:rc[0-9]+)?'
+    return '.'.join(re.findall(fr'(?:go)?{one_part}\.{one_part}\.{one_part}', output)[0])
 
 
 def test_go():
