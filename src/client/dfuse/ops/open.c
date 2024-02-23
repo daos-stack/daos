@@ -72,6 +72,13 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		} else {
 			prefetch = true;
 		}
+	} else if (ie->ie_dfs->dfc_data_otoc) {
+		/* Open to close caching, this allows the use of shared mmap */
+		fi_out.direct_io  = 0;
+		fi_out.keep_cache = 0;
+
+		if (fi->flags & O_DIRECT)
+			fi_out.direct_io = 1;
 	} else {
 		fi_out.direct_io = 1;
 	}
