@@ -4,47 +4,18 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
- * This is an extension of the DAOS File System API
- *
- * src/client/dfs/dfs_internal.h
+ * This is an extension of the DAOS File System API that is used internally in the DAOS library,
+ * mainly in dfuse and the daos fs handler.
  */
-#ifndef __DFS_INTERNAL_H__
-#define __DFS_INTERNAL_H__
+#ifndef __DFS_LIB_INT_H__
+#define __DFS_LIB_INT_H__
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-#include <sys/stat.h>
 #include <daos.h>
 #include <daos_fs.h>
-
-/** enum for hash entry type */
-enum {
-	DFS_H_POOL,
-	DFS_H_CONT,
-};
-
-/** hash entry for open pool/container handles */
-struct dfs_mnt_hdls {
-	d_list_t	entry;
-	char		value[DAOS_PROP_LABEL_MAX_LEN * 2 + 1];
-	daos_handle_t	handle;
-	int		ref;
-	int		type;
-};
-
-struct dfs_mnt_hdls *
-dfs_hdl_lookup(const char *str, int type, const char *pool);
-void
-dfs_hdl_release(struct dfs_mnt_hdls *hdl);
-int
-dfs_hdl_insert(const char *str, int type, const char *pool, daos_handle_t *oh,
-	       struct dfs_mnt_hdls **_hdl);
-int
-dfs_hdl_cont_destroy(const char *pool, const char *cont, bool force);
-bool
-dfs_is_init();
 
 /*
  * Get the DFS superblock D-Key and A-Keys
@@ -58,14 +29,14 @@ dfs_is_init();
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
-		int *dfs_entry_key_size, int *dfs_entry_size);
+dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count, int *dfs_entry_key_size,
+		  int *dfs_entry_size);
 
 /*
  * Releases the memory allocated by the dfs_get_sb_layout() function.
  *
  * \param[in] iods DFS superblock A-keys
-*/
+ */
 void
 dfs_free_sb_layout(daos_iod_t *iods[]);
 
@@ -75,14 +46,14 @@ dfs_free_sb_layout(daos_iod_t *iods[]);
  * otherwise read them from the calling process.
  */
 int
-dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
-	      int flags, daos_oclass_id_t cid, daos_size_t chunk_size,
-	      const char *value, dfs_obj_t **obj, struct stat *stbuf);
+dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, int flags,
+	      daos_oclass_id_t cid, daos_size_t chunk_size, const char *value, dfs_obj_t **obj,
+	      struct stat *stbuf);
 
 int
-dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
-	    dfs_obj_t **obj, mode_t *mode, struct stat *stbuf, int xnr,
-	    char *xnames[], void *xvals[], daos_size_t *xsizes);
+dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_obj_t **obj,
+	    mode_t *mode, struct stat *stbuf, int xnr, char *xnames[], void *xvals[],
+	    daos_size_t *xsizes);
 
 /* moid is moved oid, oid is clobbered file.
  * This isn't yet fully compatible with dfuse because we also want to pass in a flag for if the
@@ -134,4 +105,4 @@ dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev);
 #if defined(__cplusplus)
 }
 #endif
-#endif /* __DFS_INTERNAL_H__ */
+#endif /* __DFS_LIB_INT_H__ */
