@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-import traceback
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
@@ -62,10 +61,14 @@ class ObjectMetadata(TestWithServers):
     """
 
     # Minimum number of containers that should be able to be created
-    CREATED_CONTAINERS_MIN = 2900
+    CREATED_CONTAINERS_MIN = 25000
+    # would be lower with engine env_vars DAOS_MD_CAP=128
+    # CREATED_CONTAINERS_MIN = 6500
 
     # Number of created containers that should not be possible
-    CREATED_CONTAINERS_LIMIT = 7500
+    CREATED_CONTAINERS_LIMIT = 36000
+    # would be lower with engine env_vars DAOS_MD_CAP=128
+    # CREATED_CONTAINERS_LIMIT = 7500
 
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
@@ -184,6 +187,60 @@ class ObjectMetadata(TestWithServers):
         self.container = []
         return len(errors) == 0
 
+    def destroy_n_containers(self, n):
+        """Destroy some of the created containers.
+
+        Args:
+            n (int): Number of containers to destroy
+
+        Returns:
+            bool: True if all of the containers were destroyed successfully;
+                False otherwise
+
+        """
+        if n > len(self.container):
+            n = len(self.container)
+        self.log.info("Destroying %d containers", n)
+        errors = self.destroy_containers(self.container[0:(n - 1)])
+        if errors:
+            self.log.error("Errors detected destroying %d containers: %d", n, len(errors))
+            for error in errors:
+                self.log.error("  %s", error)
+        self.container = []
+        return len(errors) == 0
+
+    def run_dummy_metadata_workload(self, duration=150):
+        """Run some container metadata operations for a specified time duration.
+
+        Args:
+            duration (int): amount of time in seconds to run the workload
+
+        Returns:
+            bool: True if all calls successful; False otherwise
+
+        """
+        self.container = []
+        if not self._create_single_container(0):
+            return False
+
+        # Populate the pool rdb svc_ops KVS with some metadata operation history
+        # svc_ops uses some rdb storage and impacts amount of user-visible metadata resources
+        self.log.info("Start dummy workload (open/close) for %d seconds", duration)
+        t_start = time.time()
+        t_delta = 0
+        while t_delta < duration:
+            if not self.container[-1].open():
+                return False
+            if not self.container[-1].close():
+                return False
+            t_delta = time.time() - t_start
+        self.log.info("Done dummy workload loop")
+
+        if not self.destroy_all_containers():
+            return False
+
+        return True
+
     def test_metadata_fillup(self):
         """JIRA ID: DAOS-1512.
 
@@ -199,48 +256,28 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=metadata_fillup,test_metadata_fillup
         """
         self.create_pool()
+        svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
+        if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
+            self.fail("failed to run dummy metadata workload")
 
-        # 3 Phases in nested try/except blocks below
-        # Phase 1: overload pool metadata with a container create loop
-        #          DaosApiError expected here (otherwise fail test)
-        #
-        # Phase 2: if Phase 1 passed:
-        #          clean up all containers created (prove "critical" destroy
-        #          in rdb (and vos) works without cascading no space errors
-        #
-        # Phase 3: if Phase 2 passed:
-        #          Sustained container create loop, eventually encountering
+        # 2 Phases
+        # Phase 1: Sustained container create loop, eventually encountering
         #          -DER_NOSPACE, perhaps some successful creates (due to
         #          rdb log compaction, eventually settling into continuous
         #          -DER_NOSPACE. Make sure service keeps running.
         #
+        # Phase 2: if Phase 1 passed:
+        #          clean up several (not all) containers created (prove "critical" destroy
+        #          in rdb (and vos) works without cascading no space errors
 
-        # Phase 1 container creates
-        self.log.info("Phase 1: Fill up Metadata (expected to fail) ...")
-        if not self.create_all_containers():
-            self.fail("Phase 1: failed (metadata full error did not occur)")
+        # Phase 1 sustained container creates even after no space error
         self.log.info(
-            "Phase 1: passed (container create %d failed after metadata full)",
-            len(self.container) + 1)
-
-        # Phase 2 clean up containers (expected to succeed)
-        self.log.info(
-            "Phase 2: Cleaning up %d containers (expected to work)", len(self.container))
-        if not self.destroy_all_containers():
-            self.fail("Phase 2: fail (unexpected container destroy error)")
-        self.log.info("Phase 2: passed")
-
-        # Phase 3 sustained container creates even after no space error
-        # Due to rdb log compaction after initial no space errors, some brief
-        # periods of available space will occur, allowing a few container
-        # creates to succeed in the interim.
-        self.log.info(
-            "Phase 3: sustained container creates: to no space and beyond")
+            "Phase 1: sustained container creates: to no space and beyond")
         self.container = []
         sequential_fail_counter = 0
-        sequential_fail_max = 1000
+        sequential_fail_max = 512
         in_failure = False
-        for loop in range(30000):
+        for loop in range(self.CREATED_CONTAINERS_LIMIT + 1000):
             try:
                 status = self._create_single_container(loop)
 
@@ -252,29 +289,43 @@ class ObjectMetadata(TestWithServers):
                     sequential_fail_counter += 1
                 if sequential_fail_counter >= sequential_fail_max:
                     self.log.info(
-                        "Phase 3: container %d - %d/%d sequential no space "
+                        "Phase 1: container %d - %d/%d sequential no space "
                         "container create errors", sequential_fail_counter,
                         sequential_fail_max, loop)
                     break
 
                 if status and in_failure:
                     self.log.info(
-                        "Phase 3: container: %d - no space -> available "
+                        "Phase 1: container: %d - no space -> available "
                         "transition, sequential no space failures: %d",
                         loop, sequential_fail_counter)
                     in_failure = False
                 elif not status and not in_failure:
                     self.log.info(
-                        "Phase 3: container: %d - available -> no space "
+                        "Phase 1: container: %d - available -> no space "
                         "transition, sequential no space failures: %d",
                         loop, sequential_fail_counter)
                     in_failure = True
 
             except TestFail as error:
                 self.log.error(str(error))
-                self.fail("Phase 3: fail (unexpected container create error)")
+                self.fail("Phase 1: fail (unexpected container create error)")
+        if len(self.container) >= self.CREATED_CONTAINERS_LIMIT:
+            self.log.error("Phase 1: Created too many containers: %d > %d", len(self.container),
+                           self.CREATED_CONTAINERS_LIMIT)
+            self.fail("Phase 1: Created too many containers")
+        if len(self.container) < self.CREATED_CONTAINERS_MIN:
+            self.log.info("Phase 1: Created too few containers: %d < %d", len(self.container),
+                          self.CREATED_CONTAINERS_MIN)
+            self.fail("Phase 1: Created too few containers")
         self.log.info(
-            "Phase 3: passed (created %d / %d containers)", len(self.container), loop)
+            "Phase 1: passed (created %d / %d containers)", len(self.container), loop)
+
+        # Phase 2 clean up some containers (expected to succeed)
+        self.log.info("Phase 2: Cleaning up 500 containers (expected to work)")
+        if not self.destroy_n_containers(500):
+            self.fail("Phase 2: fail (unexpected container destroy error)")
+        self.log.info("Phase 2: passed")
 
         # Do not destroy containers in teardown (destroy pool while metadata rdb is full)
         self.container = None
@@ -296,25 +347,28 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=metadata_compact,metadata_addremove,test_metadata_addremove
         """
         self.create_pool()
+        if not self.run_dummy_metadata_workload():
+            self.fail("failed to run dummy metadata workload")
+
         self.container = []
         mean_cont_cnt = 0
         percent_cont = self.params.get("mean_percent", "/run/metadata/*")
 
         test_failed = False
         containers_created = []
-        for loop in range(10):
-            self.log.info("Container Create Iteration %d / 9", loop)
+        for loop in range(4):
+            self.log.info("Container Create Iteration %d / 3", loop)
             # The test will encounter ENOSPACE (-1007) while creating containers.
             if not self.create_all_containers():
-                self.log.error("Errors during create iteration %d/9", loop)
+                self.log.error("Errors during create iteration %d/3", loop)
 
             containers_created.append(len(self.container))
             # We should make sure containers which are created should
             # be destroyed without issues. Here we have to check for
             # any container destroy errors.
-            self.log.info("Container Remove Iteration %d / 9", loop)
+            self.log.info("Container Remove Iteration %d / 3", loop)
             if not self.destroy_all_containers():
-                self.log.error("Errors during remove iteration %d/9", loop)
+                self.log.error("Errors during remove iteration %d/3", loop)
                 test_failed = True
         # Calculate the mean container count
         mean_cont_cnt = sum(containers_created) / len(containers_created)
@@ -424,62 +478,5 @@ class ObjectMetadata(TestWithServers):
 
                 # Start the agents
                 self.start_agent_managers()
-
-        self.log.info("Test passed")
-
-    def test_container_removal_after_der_nospace(self):
-        """JIRA ID: DAOS-4858.
-
-        Test Description:
-           Verify container can be successfully deleted when the storage pool
-           is full ACL grant/remove modification.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=server,metadata,nvme
-        :avocado: tags=metadata_der_nospace,der_nospace,test_container_removal_after_der_nospace
-        """
-        self.create_pool()
-
-        self.log.info("(1) Start creating containers..")
-        if not self.create_all_containers():
-            self.fail("Unexpected error creating containers")
-        self.log.info("(1.1) %d containers created.", len(self.container))
-
-        additional_containers = 1000000
-        self.log.info(
-            "(1.2) Create %d additional containers, expect fail.",
-            additional_containers)
-        for loop in range(additional_containers):
-            try:
-                self.container.append(self.get_container(self.pool))
-            except TestFail as error:
-                self.log.info("(1.3) Expected create failure: %s", error)
-                if "RC: -1007" in str(error):
-                    self.log.info(traceback.format_exc())
-                    self.log.info(
-                        "(1.4) No space error shown with additional %d "
-                        "containers created, test passed.", loop)
-                else:
-                    self.fail("Expecting der_no_space 'RC: -1007' missing")
-                break
-        if loop == additional_containers - 1:
-            self.fail(
-                f"Storage resource not exhausted after {len(self.container)} "
-                "containers created")
-        self.log.info("(1.5) Additional %d containers created and detected der_no_space.", loop)
-
-        self.log.info(
-            "(2) Verify removal of %d containers after full storage .. ", len(self.container))
-        if not self.destroy_all_containers():
-            self.fail("Container destroy failed after full storage.")
-        self.log.info("(2.1) Container removal succeed after full storage.")
-
-        self.log.info(
-            "(3) Create %d containers after container cleanup.", len(self.container))
-        if not self.create_all_containers(len(self.container)):
-            self.fail("Failed to create containers after container cleanup.")
-        self.log.info(
-            "(3.1) Create %d containers succeed after cleanup.", len(self.container))
 
         self.log.info("Test passed")

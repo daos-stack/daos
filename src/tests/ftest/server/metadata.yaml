@@ -2,10 +2,11 @@ hosts:
   test_servers: 4
   test_clients: 1
 timeouts:
-  test_metadata_fillup: 300
-  test_metadata_addremove: 900
+  test_metadata_fillup: 600
+  test_metadata_addremove: 1600
   test_metadata_server_restart: 960
-  test_container_removal_after_der_nospace: 180
+daos_server:
+  pattern_timeout: 80
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -15,41 +16,42 @@ server_config:
       nr_xs_helpers: 4
       first_core: 0
       pinned_numa_node: 0
-      fabric_iface: ib0
+      #fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DAOS_MD_CAP=128
         - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only
       storage:
         0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
+          #class: dcpm
+          #scm_list: ["/dev/pmem0"]
+          class: ram
           scm_mount: /mnt/daos0
     1:
       targets: 8
       nr_xs_helpers: 4
       first_core: 0
       pinned_numa_node: 1
-      fabric_iface: ib1
+      #fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DAOS_MD_CAP=128
         - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only
       storage:
         0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
+          #class: dcpm
+          #scm_list: ["/dev/pmem1"]
+          class: ram
           scm_mount: /mnt/daos1
 pool:
   svcn: 5
   scm_size: 1G
   control_method: dmg
+  properties: svc_ops_enabled:1,svc_ops_entry_age:150
 container:
   control_method: API
   silent: true
