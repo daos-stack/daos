@@ -2224,7 +2224,7 @@ ds_pool_collective_reduce(uuid_t pool_uuid, uint32_t exclude_status, struct dss_
 	else
 		rc = dss_task_collective_reduce(coll_ops, coll_args, flags);
 
-	DL_CDEBUG(rc == 0, DB_MD, DLOG_ERR, rc, DF_UUID " collective", DP_UUID(pool_uuid));
+	D_DEBUG(DB_MD, DF_UUID " collective: "DF_RC"", DP_UUID(pool_uuid), DP_RC(rc));
 
 out:
 	if (coll_args->ca_tgt_bitmap)
