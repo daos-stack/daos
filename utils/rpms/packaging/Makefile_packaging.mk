@@ -364,6 +364,7 @@ chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	LOCAL_REPOS='$(LOCAL_REPOS)'                            \
 	ARTIFACTORY_URL="$(ARTIFACTORY_URL)"                    \
 	DISTRO_VERSION="$(DISTRO_VERSION)"                      \
+	PACKAGE="$(NAME)"                                       \
 	TARGET="$<"                                             \
 	packaging/rpm_chrootbuild
 endif
