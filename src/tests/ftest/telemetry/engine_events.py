@@ -16,6 +16,16 @@ class EngineEvents(TestWithTelemetry):
     :avocado: recursive
     """
 
+    def collect_events_dead_ranks(self, events_dead_ranks, metric_to_data):
+        """
+        """
+        hosts = list(self.hostlist_servers)
+        for host in hosts:
+            metrics = metric_to_data[host]["engine_events_dead_ranks"]["metrics"]
+            for metric in metrics:
+                rank = int(metric["labels"]["rank"])
+                events_dead_ranks[rank] = metric["value"]
+
     def collect_telemetry(self, rank_count):
         """Collect the following engine event values.
 
@@ -35,13 +45,15 @@ class EngineEvents(TestWithTelemetry):
 
         # Omit "engine" from the variable name for brevity. The indices correspond to ranks.
         events_dead_ranks = [None for _ in range(rank_count)]
-        hosts = list(self.hostlist_servers)
-        for host in hosts:
-            metrics = metric_to_data[host]["engine_events_dead_ranks"]["metrics"]
-            for metric in metrics:
-                rank = int(metric["labels"]["rank"])
-                events_dead_ranks[rank] = metric["value"]
+        self.collect_events_dead_ranks(
+            events_dead_ranks=events_dead_ranks, metric_to_data=metric_to_data)
+        # for host in hosts:
+        #     metrics = metric_to_data[host]["engine_events_dead_ranks"]["metrics"]
+        #     for metric in metrics:
+        #         rank = int(metric["labels"]["rank"])
+        #         events_dead_ranks[rank] = metric["value"]
 
+        hosts = list(self.hostlist_servers)
         events_last_event_ts = [None for _ in range(rank_count)]
         for host in hosts:
             metrics = metric_to_data[host]["engine_events_last_event_ts"]["metrics"]
@@ -243,12 +255,14 @@ class EngineEvents(TestWithTelemetry):
 
             # Omit "engine" from the variable name for brevity. The indices correspond to ranks.
             events_dead_ranks = [None for _ in range(rank_count)]
-            hosts = list(self.hostlist_servers)
-            for host in hosts:
-                metrics = metric_to_data[host]["engine_events_dead_ranks"]["metrics"]
-                for metric in metrics:
-                    rank = int(metric["labels"]["rank"])
-                    events_dead_ranks[rank] = metric["value"]
+            self.collect_events_dead_ranks(
+                events_dead_ranks=events_dead_ranks, metric_to_data=metric_to_data)
+            # hosts = list(self.hostlist_servers)
+            # for host in hosts:
+            #     metrics = metric_to_data[host]["engine_events_dead_ranks"]["metrics"]
+            #     for metric in metrics:
+            #         rank = int(metric["labels"]["rank"])
+            #         events_dead_ranks[rank] = metric["value"]
 
             # Among the joined ranks, if at least one of them has 1, we conclude that it's
             # circulated.
