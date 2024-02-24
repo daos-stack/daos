@@ -17,7 +17,12 @@ class EngineEvents(TestWithTelemetry):
     """
 
     def collect_events_dead_ranks(self, events_dead_ranks, metric_to_data):
-        """
+        """Collect engine_events_dead_ranks values from given metric data.
+
+        Args:
+            events_dead_ranks (dict): Dictionary to store the values.
+            metric_to_data (dict): Telemetry output that stores engine_events_dead_ranks for each
+                host.
         """
         hosts = list(self.hostlist_servers)
         for host in hosts:
@@ -47,11 +52,6 @@ class EngineEvents(TestWithTelemetry):
         events_dead_ranks = [None for _ in range(rank_count)]
         self.collect_events_dead_ranks(
             events_dead_ranks=events_dead_ranks, metric_to_data=metric_to_data)
-        # for host in hosts:
-        #     metrics = metric_to_data[host]["engine_events_dead_ranks"]["metrics"]
-        #     for metric in metrics:
-        #         rank = int(metric["labels"]["rank"])
-        #         events_dead_ranks[rank] = metric["value"]
 
         hosts = list(self.hostlist_servers)
         events_last_event_ts = [None for _ in range(rank_count)]
@@ -257,12 +257,6 @@ class EngineEvents(TestWithTelemetry):
             events_dead_ranks = [None for _ in range(rank_count)]
             self.collect_events_dead_ranks(
                 events_dead_ranks=events_dead_ranks, metric_to_data=metric_to_data)
-            # hosts = list(self.hostlist_servers)
-            # for host in hosts:
-            #     metrics = metric_to_data[host]["engine_events_dead_ranks"]["metrics"]
-            #     for metric in metrics:
-            #         rank = int(metric["labels"]["rank"])
-            #         events_dead_ranks[rank] = metric["value"]
 
             # Among the joined ranks, if at least one of them has 1, we conclude that it's
             # circulated.
