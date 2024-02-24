@@ -156,6 +156,49 @@ class EngineEvents(TestWithTelemetry):
                               f"{servicing_at_1[rank]} Pass (Value unchanged)")
             servicing_at_results.append(result)
 
+    def verify_started_at(self, rank_count, restart_rank, started_at_0, started_at_1, errors,
+                          started_at_results):
+        """Verify engine_started_at values.
+
+        Requirements:
+        1. Restarted rank value should increase.
+        2. All after values except for restarted rank should remain the same.
+
+        Args:
+            rank_count (int): Rank count.
+            restart_rank (int): Restarted rank.
+            started_at_0 (dict): engine_started_at values before.
+            started_at_1 (dict): engine_started_at values after.
+            errors (list): Errors.
+            started_at_results (list): Dictionary to store the results, which are printed at the
+                end of the test.
+        """
+        for rank in range(rank_count):
+            result = ""
+            if rank == restart_rank:
+                if started_at_0[rank] >= started_at_1[rank]:
+                    msg = (f"engine_started_at value for restarted rank {rank} "
+                           f"didn't increase! Before = {started_at_0[rank]}; "
+                           f"After = {started_at_1[rank]}")
+                    errors.append(msg)
+                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
+                              f"{started_at_1[rank]} Fail (Value decreased/unchanged)")
+                else:
+                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
+                              f"{started_at_1[rank]} Pass (Value increased)")
+            else:
+                if started_at_0[rank] != started_at_1[rank]:
+                    msg = (f"engine_started_at for rank {rank} changed! "
+                           f"Before = {started_at_0[rank]}; "
+                           f"After = {started_at_1[rank]}")
+                    errors.append(msg)
+                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
+                              f"{started_at_1[rank]} Fail (Value changed)")
+                else:
+                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
+                              f"{started_at_1[rank]} Pass (Value unchanged)")
+            started_at_results.append(result)
+
     def test_engine_events(self):
         """Test engine-related events after an engine is restarted.
 
@@ -313,31 +356,9 @@ class EngineEvents(TestWithTelemetry):
         # engine_started_at requirements:
         # 1. Restarted rank value should increase.
         # 2. All after values except for restarted rank should remain the same.
-        for rank in range(rank_count):
-            result = ""
-            if rank == restart_rank:
-                if started_at_0[rank] >= started_at_1[rank]:
-                    msg = (f"engine_started_at value for restarted rank {rank} "
-                           f"didn't increase! Before = {started_at_0[rank]}; "
-                           f"After = {started_at_1[rank]}")
-                    errors.append(msg)
-                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
-                              f"{started_at_1[rank]} Fail (Value decreased/unchanged)")
-                else:
-                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
-                              f"{started_at_1[rank]} Pass (Value increased)")
-            else:
-                if started_at_0[rank] != started_at_1[rank]:
-                    msg = (f"engine_started_at for rank {rank} changed! "
-                           f"Before = {started_at_0[rank]}; "
-                           f"After = {started_at_1[rank]}")
-                    errors.append(msg)
-                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
-                              f"{started_at_1[rank]} Fail (Value changed)")
-                else:
-                    result = (f"Rank {rank}: {started_at_0[rank]} -> "
-                              f"{started_at_1[rank]} Pass (Value unchanged)")
-            started_at_results.append(result)
+        self.verify_started_at(
+            rank_count=rank_count, restart_rank=restart_rank, started_at_0=started_at_0,
+            started_at_1=started_at_1, errors=errors, started_at_results=started_at_results)
 
         self.log.info("######## Test Summary ########")
         for line in events_dead_ranks_results:
