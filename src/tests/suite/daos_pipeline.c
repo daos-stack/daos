@@ -408,6 +408,7 @@ insert_simple_records(daos_handle_t oh, char *fields[])
 
 	print_message("records:\n");
 	for (i = 0; i < 8; i++) { /** records */
+		uint64_t *intdata;
 		print_message("\tname(dkey)=%s%*c", name[i],
 			      (int)(STRING_MAX_LEN - strlen(name[i])), ' ');
 		/** set dkey for record */
@@ -430,7 +431,7 @@ insert_simple_records(daos_handle_t oh, char *fields[])
 			iods[j].iod_recxs = NULL;
 			iods[j].iod_type  = DAOS_IOD_SINGLE;
 		}
-		uint64_t *intdata = (uint64_t *)data[NR_IODS - 1];
+		intdata = (uint64_t *)data[NR_IODS - 1];
 
 		print_message("%s(akey)=%lu\n", fields[NR_IODS - 1], intdata[i]);
 		/** akeys */
@@ -1905,6 +1906,9 @@ run_dfs_pipeline(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t *pipeline,
 
 	/** calling pipeline run until EOF */
 	while (!daos_anchor_is_eof(&anchor)) {
+		size_t off = 0;
+		char  *dkey_ptr;
+
 		nr_kds = 16; /** trying to read 16 in each iteration */
 		nr_iods = 1;
 
@@ -1914,18 +1918,19 @@ run_dfs_pipeline(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t *pipeline,
 		assert_rc_equal(rc, 0);
 
 		/** processing nr_kds records */
-		size_t off     = 0;
-		char *dkey_ptr = (char *)sgl_keys.sg_iovs->iov_buf;
+		dkey_ptr = (char *)sgl_keys.sg_iovs->iov_buf;
 
 		for (i = 0; i < nr_kds; i++) {
 			char       *dkey     = &dkey_ptr[off];
 			daos_size_t dkeylen  = kds[i].kd_key_len;
+			char       *ptr;
+			mode_t      cur_mode;
 
 			off                 += dkeylen;
 			print_message("\t(dkey)=%.*s, len = %zu\t", (int)dkeylen, dkey, dkeylen);
 
-			char  *ptr      = &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))];
-			mode_t cur_mode = *((mode_t *)ptr);
+			ptr      = &buf_recs[i * (sizeof(mode_t) + sizeof(time_t))];
+			cur_mode = *((mode_t *)ptr);
 
 			if (S_ISDIR(cur_mode)) {
 				print_message("MODE type = S_IFDIR\n");

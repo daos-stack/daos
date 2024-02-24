@@ -713,8 +713,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ZERO(_ie, req)                                                                 \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_ie, "Returning 0");                                               \
 		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		DFUSE_TRA_DEBUG(_ie, "Returning 0");                                               \
 		(_ie) = NULL;                                                                      \
 		__rc  = fuse_reply_err(req, 0);                                                    \
 		if (__rc != 0)                                                                     \
@@ -725,8 +725,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_ZERO_OH(_oh, req)                                                              \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_oh, "Returning 0");                                               \
 		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		DFUSE_TRA_DEBUG(_oh, "Returning 0");                                               \
 		(_oh)->doh_ie = NULL;                                                              \
 		__rc          = fuse_reply_err(req, 0);                                            \
 		if (__rc != 0)                                                                     \
@@ -765,8 +765,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_READLINK(_ie, req, path)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_ie, "Returning target '%s'", path);                               \
 		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		DFUSE_TRA_DEBUG(_ie, "Returning target '%s'", path);                               \
 		(_ie) = NULL;                                                                      \
 		__rc  = fuse_reply_readlink(req, path);                                            \
 		if (__rc != 0)                                                                     \
@@ -803,8 +803,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_WRITE(_oh, req, bytes)                                                         \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_oh, "Returning write(%#zx)", bytes);                              \
 		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		DFUSE_TRA_DEBUG(_oh, "Returning write(%#zx)", bytes);                              \
 		(_oh) = NULL;                                                                      \
 		__rc  = fuse_reply_write(req, bytes);                                              \
 		if (__rc != 0)                                                                     \
@@ -815,8 +815,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_OPEN(_oh, req, _fi)                                                            \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_oh, "Returning open, keep_cache %d", (_fi)->keep_cache);          \
 		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		DFUSE_TRA_DEBUG(_oh, "Returning open, keep_cache %d", (_fi)->keep_cache);          \
 		__rc = fuse_reply_open(req, _fi);                                                  \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
@@ -825,9 +825,9 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_OPEN_DIR(_oh, req, _fi)                                                        \
 	do {                                                                                       \
 		int __rc;                                                                          \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
 		DFUSE_TRA_DEBUG(_oh, "Returning open directory, use_cache %d keep_cache %d",       \
 				(_fi)->cache_readdir, (_fi)->keep_cache);                          \
-		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
 		(_oh) = NULL;                                                                      \
 		__rc  = fuse_reply_open(req, _fi);                                                 \
 		if (__rc != 0)                                                                     \
@@ -879,8 +879,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_STATFS(_ie, req, stat)                                                         \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_ie, "Returning statfs");                                          \
 		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		DFUSE_TRA_DEBUG(_ie, "Returning statfs");                                          \
 		(_ie) = NULL;                                                                      \
 		__rc  = fuse_reply_statfs(req, stat);                                              \
 		if (__rc != 0)                                                                     \
@@ -890,8 +890,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_IOCTL_SIZE(_oh, req, arg, size)                                                \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_oh, "Returning ioctl size %zi", size);                            \
 		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		DFUSE_TRA_DEBUG(_oh, "Returning ioctl size %zi", size);                            \
 		(_oh) = NULL;                                                                      \
 		__rc  = fuse_reply_ioctl(req, 0, arg, size);                                       \
 		if (__rc != 0)                                                                     \

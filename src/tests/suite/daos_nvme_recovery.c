@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -565,7 +565,7 @@ nvme_test_simulate_IO_error(void **state)
 	char		*server_config_file;
 	int		rx_nr; /* number of record extents */
 	int		rank_pos = 0, rank = 1;
-	int		ndisks, rc, i;
+	int              ndisks, rc, i;
 
 	FAULT_INJECTION_REQUIRED();
 

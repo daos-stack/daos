@@ -591,9 +591,10 @@ static void
 evt_csum_count_test(uint32_t expected, struct evt_csum_test_args args)
 {
 	struct evt_csum_test_structures test;
+	daos_size_t                     csum_count;
 
 	evt_csum_test_setup(&test, &args);
-	daos_size_t csum_count = evt_csum_count(&test.tcx, &test.extent);
+	csum_count = evt_csum_count(&test.tcx, &test.extent);
 
 	if (expected != csum_count) {
 		fail_msg("expected (%d) != csum_count (%"PRIu64")\n\tFrom "
@@ -615,10 +616,11 @@ static void
 evt_csum_buf_len_test(uint32_t expected, struct evt_csum_test_args args)
 {
 	struct evt_csum_test_structures test;
+	daos_size_t                     csum_buf_len;
 
 	evt_csum_test_setup(&test, &args);
 
-	daos_size_t csum_buf_len = evt_csum_buf_len(&test.tcx, &test.extent);
+	csum_buf_len = evt_csum_buf_len(&test.tcx, &test.extent);
 
 	if (expected != csum_buf_len) {
 		fail_msg("expected (%d) != csum_buf_len (%"PRIu64")\n\tFrom "
@@ -636,6 +638,10 @@ evt_csum_buf_len_test(uint32_t expected, struct evt_csum_test_args args)
 void
 evt_csum_helper_functions_tests(void **state)
 {
+	const uint32_t val64K  = 1024 * 64;
+	const uint32_t val256K = 1024 * 256;
+	const uint64_t val1G   = 1024 * 1024 * 1024;
+
 	/**
 	 * Testing evt_csum_count
 	 */
@@ -650,10 +656,6 @@ evt_csum_helper_functions_tests(void **state)
 	layout_is_csum_count(3, {.lo = 1, .hi = 9, .inob = 1, .chunksize = 4});
 
 	/** Some larger ... more realistic values */
-	const uint32_t val64K = 1024 * 64;
-	const uint32_t val256K = 1024 * 256;
-	const uint64_t val1G = 1024 * 1024 * 1024;
-
 	layout_is_csum_count(val256K, {.lo = 0, .hi = val1G - 1, .inob = 16,
 		.chunksize = val64K});
 

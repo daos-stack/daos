@@ -1603,6 +1603,7 @@ csum_enum_verify(const struct obj_enum_args *enum_args,
 	int			 rc = 0;
 	d_sg_list_t		 sgl = oeo->oeo_sgl;
 	d_iov_t			 csum_iov = oeo->oeo_csum_iov;
+	struct csum_enum_args    csum_args = {0};
 
 	if (enum_args->eaa_nr == NULL ||
 	    *enum_args->eaa_nr == 0 ||
@@ -1612,8 +1613,6 @@ csum_enum_verify(const struct obj_enum_args *enum_args,
 	csummer = enum_args->eaa_obj->do_co->dc_csummer;
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
 		return 0; /** csums not enabled */
-
-	struct csum_enum_args csum_args = {0};
 
 	csum_args.csummer = daos_csummer_copy(csummer);
 	if (csum_args.csummer == NULL)
@@ -1978,8 +1977,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	struct obj_query_key_in		*okqi = crt_req_get(cb_args->rpc);
 	struct obj_query_key_out	*okqo;
 	struct obj_query_merge_args	 oqma = { 0 };
-	int				 rc = task->dt_result;
-	int				 rc1;
+	int                              rc   = task->dt_result;
 
 	if (rc != 0) {
 		D_ERROR("Regular query failed: "DF_RC"\n", DP_RC(rc));
@@ -1991,6 +1989,8 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 	/* See the similar dc_rw_cb. */
 	if (daos_handle_is_valid(cb_args->th)) {
+		int rc1;
+
 		rc1 = dc_tx_op_end(task, cb_args->th, &cb_args->epoch, rc, okqo->okqo_epoch);
 		if (rc1 != 0) {
 			D_ERROR("Failed to end TX (rc=%d, epoch="DF_U64", opc = %u): "DF_RC"\n",

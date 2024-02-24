@@ -396,16 +396,14 @@ plt_set_domain_status(uint32_t id, int status, uint32_t *ver,
 	rc = pool_map_find_domain(po_map, level, id, &domain);
 	D_ASSERT(rc == 1);
 
-	int i;
-
-	for (i = 0; i < domain->do_child_nr; i++) {
+	for (int i = 0; i < domain->do_child_nr; i++) {
 		plt_set_domain_status(domain->do_children[i].do_comp.co_id,
 				      status, ver,
 				      po_map, pl_debug_msg,
 				      plt_next_level(level));
 	}
 	if (level == PO_COMP_TP_RANK) {
-		for (i = 0; i < domain->do_target_nr; i++) {
+		for (int i = 0; i < domain->do_target_nr; i++) {
 			plt_set_tgt_status(domain->do_targets[i].ta_comp.co_id,
 				status, ver, po_map, pl_debug_msg);
 		}

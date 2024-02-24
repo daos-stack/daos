@@ -352,6 +352,8 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_size_t	i;
 	daos_event_t	ev, *evp;
 	int		rc;
+	daos_size_t      array_size;
+	daos_size_t      expected_size;
 
 	par_barrier(PAR_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
@@ -440,9 +442,6 @@ contig_mem_contig_arr_io_helper(void **state, daos_size_t cell_size)
 
 	par_barrier(PAR_COMM_WORLD);
 
-	daos_size_t array_size;
-	daos_size_t expected_size;
-
 	expected_size = arg->rank_size * (NUM_ELEMS * sizeof(int) / cell_size);
 
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
@@ -509,6 +508,8 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_size_t	len, i;
 	daos_event_t	ev, *evp;
 	int		rc;
+	daos_size_t      expected_size;
+	daos_size_t      array_size = 0;
 
 	par_barrier(PAR_COMM_WORLD);
 
@@ -603,9 +604,6 @@ contig_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 
 	par_barrier(PAR_COMM_WORLD);
 
-	daos_size_t expected_size;
-	daos_size_t array_size = 0;
-
 	expected_size = NUM_ELEMS * arg->rank_size * len;
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
 	assert_rc_equal(rc, 0);
@@ -667,6 +665,8 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	daos_size_t	i, j, len;
 	daos_event_t	ev, *evp;
 	int		rc;
+	daos_size_t      array_size;
+	daos_size_t      expected_size;
 
 	par_barrier(PAR_COMM_WORLD);
 	/** create the array on rank 0 and share the oh. */
@@ -775,9 +775,6 @@ str_mem_str_arr_io_helper(void **state, daos_size_t cell_size)
 	D_FREE(sgl.sg_iovs);
 
 	par_barrier(PAR_COMM_WORLD);
-
-	daos_size_t array_size;
-	daos_size_t expected_size;
 
 	expected_size = NUM_ELEMS * arg->rank_size * len;
 	rc = daos_array_get_size(oh, DAOS_TX_NONE, &array_size, NULL);
@@ -1028,6 +1025,8 @@ truncate_array(void **state)
 	daos_array_stbuf_t	stbuf;
 	uint64_t		prev;
 	int			rc;
+	char                    *time_str;
+	struct timespec          ts;
 
 	par_barrier(PAR_COMM_WORLD);
 	oid = daos_test_oid_gen(arg->coh, OC_SX, typeb, 0, arg->myrank);
@@ -1042,9 +1041,6 @@ truncate_array(void **state)
 	assert_int_equal(stbuf.st_size, 0);
 	prev = stbuf.st_max_epoch;
 	print_message("Size = %zu, EPOCH = %"PRIu64"\n", stbuf.st_size, stbuf.st_max_epoch);
-
-	char *time_str;
-	struct timespec ts;
 
 	d_hlc2timespec(stbuf.st_max_epoch, &ts);
 	time_str = ctime(&ts.tv_sec);

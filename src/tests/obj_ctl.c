@@ -70,6 +70,7 @@ ctl_punch(struct io_credit *cred)
 {
 	daos_key_t *dkey = NULL;
 	daos_key_t *akey = NULL;
+	int         flags;
 	int	    rc;
 
 	if (ctl_abits & CTL_ARG_DKEY) {
@@ -77,8 +78,6 @@ ctl_punch(struct io_credit *cred)
 		if (ctl_abits & CTL_ARG_AKEY)
 			akey = &cred->tc_iod.iod_name;
 	}
-
-	int	flags;
 
 	if (ctl_epoch < 0) {
 		flags = VOS_OF_REPLAY_PC;

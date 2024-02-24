@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -921,6 +921,7 @@ static void
 scrubber_doesnot_get_stuck_in_lazy_mode(void **state)
 {
 	struct sts_context *ctx = *state;
+	pthread_t           scrub_thread_id;
 
 	/* Insert some data */
 	sts_ctx_update(ctx, 1, TEST_IOD_SINGLE, "dkey", "akey0", 1, true);
@@ -940,7 +941,6 @@ scrubber_doesnot_get_stuck_in_lazy_mode(void **state)
 	ctx->tsc_yield_fn = mock_yield_changes_to_be_busy;
 
 	/** Run vos_scrub_pool in a separate thread so can change the mode while it's running */
-	pthread_t scrub_thread_id;
 	if (pthread_create(&scrub_thread_id, NULL, &scrub_wrapper_thread, ctx) != 0)
 		fail();
 

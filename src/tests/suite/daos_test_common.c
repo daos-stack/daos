@@ -1103,10 +1103,11 @@ get_pid_of_process(char *host, char *dpid, char *proc)
 	size_t  len = 0;
 	size_t  read;
 	char    *line = NULL;
+	FILE    *fp1;
 
 	snprintf(command, sizeof(command),
 		 "ssh %s pgrep %s", host, proc);
-	FILE *fp1 = popen(command, "r");
+	fp1 = popen(command, "r");
 
 	print_message("Command= %s\n", command);
 	if (fp1 == NULL)
@@ -1135,6 +1136,7 @@ get_server_config(char *host, char *server_config_file)
 	int	rc;
 	char    daos_proc[16] = "daos_server";
 	bool	conf = true;
+	FILE    *fp;
 
 	D_ALLOC(dpid, 16);
 	rc = get_pid_of_process(host, dpid, daos_proc);
@@ -1142,7 +1144,7 @@ get_server_config(char *host, char *server_config_file)
 
 	snprintf(command, sizeof(command),
 		 "ssh %s ps ux -A | grep %s", host, dpid);
-	FILE *fp = popen(command, "r");
+	fp = popen(command, "r");
 
 	print_message("Command %s", command);
 	if (fp == NULL) {
@@ -1203,11 +1205,12 @@ int verify_server_log_mask(char *host, char *server_config_file,
 	size_t	read;
 	char	*line = NULL;
 	int	rc = 0;
+	FILE    *fp;
 
 	snprintf(command, sizeof(command),
 		 "ssh %s cat %s", host, server_config_file);
 
-	FILE *fp = popen(command, "r");
+	fp = popen(command, "r");
 
 	if (fp == NULL)
 		return -DER_INVAL;
@@ -1237,11 +1240,12 @@ int get_log_file(char *host, char *server_config_file,
 	size_t	len = 0;
 	size_t	read;
 	char	*line = NULL;
+	FILE    *fp;
 
 	snprintf(command, sizeof(command),
 		 "ssh %s cat %s", host, server_config_file);
 
-	FILE *fp = popen(command, "r");
+	fp = popen(command, "r");
 
 	if (fp == NULL)
 		return -DER_INVAL;

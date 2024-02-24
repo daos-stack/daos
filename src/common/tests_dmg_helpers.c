@@ -250,6 +250,11 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	int			stdoutfd = 0;
 	int			rc = 0;
 	const char		*debug_flags = "-d --log-file=/tmp/suite_dmg.log";
+	char                    *jbuf        = NULL;
+	char                    *temp;
+	size_t                   size  = 0;
+	size_t                   total = 0;
+	size_t                   n;
 
 	if (dmg_config_file == NULL)
 		D_ASPRINTF(cmd_base, "dmg -j -i %s %s ", debug_flags, dmg_cmd);
@@ -276,11 +281,6 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		D_ERROR("fdopen failed: %s\n", strerror(errno));
 		D_GOTO(out_close, rc = daos_errno2der(errno));
 	}
-
-	char	*jbuf = NULL, *temp;
-	size_t	size = 0;
-	size_t	total = 0;
-	size_t	n;
 
 	D_DEBUG(DB_TEST, "reading json from stdout\n");
 	while (1) {

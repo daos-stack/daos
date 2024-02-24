@@ -57,9 +57,10 @@ cont_send_oit_bucket(struct oit_scan_args *oa, uint32_t bucket_id)
 	int		   i;
 	int		   rc;
 
+	D_CASSERT(sizeof(oa->oa_epoch) == DAOS_OIT_DEFAULT_VAL_LEN);
+
 	D_ASSERT(bucket->ob_nr <= OID_SEND_MAX);
 	DAOS_OIT_DKEY_SET(&oa->oa_dkey, &bucket_id);
-	D_CASSERT(sizeof(oa->oa_epoch) == DAOS_OIT_DEFAULT_VAL_LEN);
 	d_iov_set(&oa->oa_iov, &oa->oa_epoch, sizeof(oa->oa_epoch));
 
 	for (i = 0; i < bucket->ob_nr; i++) {

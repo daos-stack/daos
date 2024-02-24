@@ -56,6 +56,8 @@ test_cond_helper(test_arg_t *arg, int rf)
 	char		*filename = "cond_testfile";
 	char		*dirname = "cond_testdir";
 	int		rc, op_rc;
+	bool             use_dtx = false;
+	char             newfilename[1024];
 
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
@@ -147,7 +149,6 @@ test_cond_helper(test_arg_t *arg, int rf)
 	par_barrier(PAR_COMM_WORLD);
 
 	/** test atomic rename with DFS DTX mode */
-	bool use_dtx = false;
 
 	d_getenv_bool("DFS_USE_DTX", &use_dtx);
 	if (!use_dtx)
@@ -163,8 +164,6 @@ test_cond_helper(test_arg_t *arg, int rf)
 		assert_int_equal(rc, 0);
 	}
 	par_barrier(PAR_COMM_WORLD);
-
-	char newfilename[1024];
 
 	sprintf(newfilename, "%s_new.%d", filename, arg->myrank);
 	op_rc = dfs_move(dfs, NULL, filename, NULL, newfilename, NULL);
@@ -430,6 +429,8 @@ dfs_test_hole_mgmt(void **state)
 	d_iov_t			iov;
 	struct stat		stbuf;
 	int			i, rc;
+	char                    *wptr;
+	char                    *rptr;
 
 	par_barrier(PAR_COMM_WORLD);
 	D_ALLOC(wbuf, buf_size);
@@ -632,8 +633,8 @@ dfs_test_hole_mgmt(void **state)
 	assert_int_equal(read_size, buf_size * 2 - 64);
 
 	/** should get written data every other block, and 0s in between */
-	char *wptr = wbuf;
-	char *rptr = rbuf[0];
+	wptr = wbuf;
+	rptr = rbuf[0];
 
 	for (i = 0; i < (buf_size * 2) / 64; i++) {
 		if (i == buf_size / 64)

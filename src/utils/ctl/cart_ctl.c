@@ -299,6 +299,18 @@ parse_args(int argc, char **argv)
 	int	opt;
 	int	rc = 0;
 
+	static struct option long_options[] = {
+	    {"group-name", required_argument, 0, 'g'},
+	    {"rank", required_argument, 0, 'r'},
+	    {"attr", required_argument, 0, 'a'},
+	    {"cfg_path", required_argument, 0, 's'},
+	    {"log_mask", required_argument, 0, 'l'},
+	    {"no_sync", optional_argument, 0, 'n'},
+	    {"message", required_argument, 0, 'm'},
+	    {"use_daos_agent_env", no_argument, 0, 'u'},
+	    {0, 0, 0, 0},
+	};
+
 	ctl_gdata.cg_use_daos_agent_env = false;
 
 	if (argc <= 2) {
@@ -332,18 +344,6 @@ parse_args(int argc, char **argv)
 	}
 
 	optind = 2;
-
-	static struct option long_options[] = {
-		{"group-name", required_argument, 0, 'g'},
-		{"rank", required_argument, 0, 'r'},
-		{"attr", required_argument, 0, 'a'},
-		{"cfg_path", required_argument, 0, 's'},
-		{"log_mask", required_argument, 0, 'l'},
-		{"no_sync", optional_argument, 0, 'n'},
-		{"message", required_argument, 0, 'm'},
-		{"use_daos_agent_env", no_argument, 0, 'u'},
-		{0, 0, 0, 0},
-	};
 
 	while (1) {
 		opt = getopt_long(argc, argv, "g:r:a:p:l:m:nu", long_options,

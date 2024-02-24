@@ -134,11 +134,12 @@ reset_fake_algo(void)
 static void
 test_init_and_destroy(void **state)
 {
+	struct daos_csummer *csummer;
+	int                  rc;
+
 	fake_init_called = 0;
 
-	struct daos_csummer *csummer;
-	int rc = daos_csummer_init(&csummer, &fake_algo, 0, 0);
-
+	rc = daos_csummer_init(&csummer, &fake_algo, 0, 0);
 	assert_rc_equal(0, rc);
 	assert_int_equal(1, fake_init_called);
 	assert_int_equal(FAKE_CSUM_TYPE, daos_csummer_get_type(csummer));
@@ -163,13 +164,12 @@ test_update_reset(void **state)
 {
 	struct daos_csummer *csummer;
 	uint32_t csum = 0;
+	size_t               len  = 32;
+	uint8_t              buf[len];
 
 	fake_get_size_result = sizeof(csum);
 	daos_csummer_init(&csummer, &fake_algo, 0, 0);
 	daos_csummer_set_buffer(csummer, (uint8_t *) &csum, sizeof(csum));
-
-	size_t len = 32;
-	uint8_t buf[len];
 
 	memset(buf, 0, len);
 
@@ -412,6 +412,7 @@ test_daos_checksummer_with_multiple_chunks(void **state)
 	daos_iod_t		 iod = {0};
 	struct dcs_iod_csums	*actual;
 	int			 rc = 0;
+	int                      csum_expected_count;
 
 	fake_update_buf = fake_update_buf_copy;
 
@@ -437,7 +438,7 @@ test_daos_checksummer_with_multiple_chunks(void **state)
 				    &actual);
 
 	assert_rc_equal(0, rc);
-	int csum_expected_count = 3; /* 11/4=3 */
+	csum_expected_count = 3; /* 11/4=3 */
 
 	assert_int_equal(fake_get_size_result * csum_expected_count,
 			 actual->ic_data[0].cs_buf_len);
@@ -603,7 +604,31 @@ test_skip_csum_calculations_when_skip_set(void **state)
 static void
 test_csum_info_list_handling(void **state)
 {
-	struct dcs_ci_list list = {0};
+	struct dcs_ci_list   list   = {0};
+	uint16_t             csum1  = 0xABCD;
+	uint32_t             csum2  = 0x4321EFAB;
+	uint64_t             csum3  = 0x1234567890ABCDEF;
+	struct dcs_csum_info info[] = {
+	    {.cs_len       = 2,
+	     .cs_nr        = 1,
+	     .cs_csum      = (uint8_t *)&csum1,
+	     .cs_chunksize = 1024,
+	     .cs_type      = 99,
+	     .cs_buf_len   = 2},
+	    {.cs_len       = 2,
+	     .cs_nr        = 2,
+	     .cs_csum      = (uint8_t *)&csum2,
+	     .cs_chunksize = 1024,
+	     .cs_type      = 99,
+	     .cs_buf_len   = 4},
+	    {.cs_len       = 2,
+	     .cs_nr        = 4,
+	     .cs_csum      = (uint8_t *)&csum3,
+	     .cs_chunksize = 1024,
+	     .cs_type      = 99,
+	     .cs_buf_len   = 8},
+	};
+
 	int i;
 
 	/* set to garbage so can test that all fields are set */
@@ -616,22 +641,6 @@ test_csum_info_list_handling(void **state)
 	dcs_csum_info_list_fini(&list);
 	assert_dcs_csum_info_list_init(list, 2);
 
-	uint16_t csum1 = 0xABCD;
-	uint32_t csum2 = 0x4321EFAB;
-	uint64_t csum3 = 0x1234567890ABCDEF;
-	struct dcs_csum_info info[] = {
-		{
-			.cs_len = 2, .cs_nr = 1, .cs_csum = (uint8_t *) &csum1,
-			.cs_chunksize = 1024, .cs_type = 99, .cs_buf_len = 2
-		}, {
-			.cs_len = 2, .cs_nr = 2, .cs_csum = (uint8_t *) &csum2,
-			.cs_chunksize = 1024, .cs_type = 99, .cs_buf_len = 4
-		}, {
-			.cs_len = 2, .cs_nr = 4, .cs_csum = (uint8_t *) &csum3,
-			.cs_chunksize = 1024, .cs_type = 99, .cs_buf_len = 8
-		},
-	};
-
 	for (i = 0; i < ARRAY_SIZE(info); i++)
 		dcs_csum_info_save(&list, &info[i]);
 
@@ -641,7 +650,6 @@ test_csum_info_list_handling(void **state)
 		/* shouldn't be using the same buffer */
 		assert_int_not_equal(info[i].cs_csum, dcs_csum_info_get(&list, i)->cs_csum);
 	}
-
 
 	/* invalid index returns NULL */
 	assert_null(dcs_csum_info_get(&list, 999));
@@ -1338,12 +1346,14 @@ daos_recx_get_chunk_testcase(char *filename, int line,
 			     uint64_t expected_len,
 			     struct daos_recx_get_chunk_testcase_args args)
 {
+	uint64_t               result_start;
+	uint64_t               result_len;
 	struct daos_csum_range chunk;
 
 	chunk = csum_recx_chunkidx2range(&args.recx, args.rb, args.cs, idx);
 
-	uint64_t result_start = chunk.dcr_lo;
-	uint64_t result_len = chunk.dcr_nr;
+	result_start = chunk.dcr_lo;
+	result_len   = chunk.dcr_nr;
 
 	if (expected_start != result_start)
 		fail_msg("(%s:%d) Expected start %lu but found %lu. ",
@@ -1874,6 +1884,7 @@ csum_performance_measurements_experiment(uint32_t iod_nr, enum DAOS_HASH_TYPE al
 	struct dcs_iod_csums	*iod_csums = NULL;
 	daos_key_t		 key = {0};
 	struct dcs_csum_info	*key_csum;
+	struct daos_csummer     *copy;
 
 	td_init_array_values(&td, iod_nr, 3, 1024, 1024);
 
@@ -1923,7 +1934,6 @@ csum_performance_measurements_experiment(uint32_t iod_nr, enum DAOS_HASH_TYPE al
 	/*
 	 * copy csummer
 	 */
-	struct daos_csummer *copy;
 
 	MEASURE_TIME(copy = daos_csummer_copy(csummer),
 		     noop(),

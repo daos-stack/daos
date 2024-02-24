@@ -69,14 +69,12 @@ crt_lib_init(void)
 	uint64_t	start_rpcid;
 	struct timespec	now;
 
+	/* avoid size mis-matching between client/server side /see crt_proc_uuid_t() */
+
+	D_CASSERT(sizeof(uuid_t) == 16);
+
 	rc = D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
 	D_ASSERT(rc == 0);
-
-	/*
-	 * avoid size mis-matching between client/server side
-	 * /see crt_proc_uuid_t().
-	 */
-	D_CASSERT(sizeof(uuid_t) == 16);
 
 	crt_gdata.cg_refcount = 0;
 	crt_gdata.cg_inited = 0;

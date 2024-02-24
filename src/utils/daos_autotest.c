@@ -229,6 +229,9 @@ init(void)
 static int
 pconnect(void)
 {
+	/** gather domain_nr for poh */
+	struct dc_pool    *pool;
+	struct pl_map_attr attr = {0};
 	int rc;
 
 	/** Connect to pool */
@@ -238,10 +241,6 @@ pconnect(void)
 		step_fail(d_errdesc(rc));
 		return rc;
 	}
-
-	/** gather domain_nr for poh */
-	struct dc_pool		*pool;
-	struct pl_map_attr	attr = {0};
 
 	pool = dc_hdl2pool(poh);
 	D_ASSERT(pool);
@@ -258,6 +257,9 @@ pconnect(void)
 static int
 ccreate(void)
 {
+	daos_prop_t *prop;
+	daos_prop_t *prop2;
+
 	int rc;
 
 	/** Create container */
@@ -272,7 +274,6 @@ ccreate(void)
 	}
 
 	/** Create container with RF=1 */
-	daos_prop_t	*prop;
 
 	prop = daos_prop_alloc(1);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
@@ -290,8 +291,6 @@ ccreate(void)
 	}
 
 	/** Create container with RF=2 */
-	daos_prop_t	*prop2;
-
 	prop2 = daos_prop_alloc(1);
 	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	prop2->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
@@ -1259,12 +1258,12 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 	step_init();
 
 	for (s = steps; s->func != NULL; s++) {
+		int  i;
+		bool found = false;
+
 		if (s->id < resume)
 			continue;
 		step_new(s->id, s->op);
-
-		int	i;
-		bool	found = false;
 
 		if (ap->skip_big) {
 			for (i = 0; i < sizeof(skip_steps) / sizeof(int); i++) {

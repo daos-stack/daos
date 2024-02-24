@@ -216,11 +216,6 @@ static inline crt_opcode_t
 crt_st_compute_opcode(enum crt_st_msg_type send_type,
 		      enum crt_st_msg_type reply_type)
 {
-	D_ASSERT(send_type >= 0 && send_type < 4);
-	D_ASSERT(reply_type >= 0 && reply_type < 4);
-	D_ASSERT(send_type != CRT_SELF_TEST_MSG_TYPE_BULK_PUT);
-	D_ASSERT(reply_type != CRT_SELF_TEST_MSG_TYPE_BULK_GET);
-
 	crt_opcode_t opcodes[4][4] = { { CRT_OPC_SELF_TEST_BOTH_EMPTY,
 					 CRT_OPC_SELF_TEST_SEND_ID_REPLY_IOV,
 					 CRT_OPC_SELF_TEST_BOTH_BULK,
@@ -234,6 +229,11 @@ crt_st_compute_opcode(enum crt_st_msg_type send_type,
 					 CRT_OPC_SELF_TEST_SEND_BULK_REPLY_IOV,
 					 CRT_OPC_SELF_TEST_BOTH_BULK,
 					 -1 } };
+
+	D_ASSERT(send_type >= 0 && send_type < 4);
+	D_ASSERT(reply_type >= 0 && reply_type < 4);
+	D_ASSERT(send_type != CRT_SELF_TEST_MSG_TYPE_BULK_PUT);
+	D_ASSERT(reply_type != CRT_SELF_TEST_MSG_TYPE_BULK_GET);
 
 	return opcodes[send_type][reply_type];
 }

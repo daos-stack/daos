@@ -212,6 +212,7 @@ static void
 sc_m_track_busy(struct scrub_ctx *ctx)
 {
 	struct timespec now;
+	int64_t         diff_ns;
 
 	if (d_time2us(ctx->sc_metrics.scm_busy_start) == 0) {
 		d_gettime(&ctx->sc_metrics.scm_busy_start);
@@ -219,7 +220,7 @@ sc_m_track_busy(struct scrub_ctx *ctx)
 	}
 
 	d_gettime(&now);
-	int64_t diff_ns = d_timediff_ns(&ctx->sc_metrics.scm_busy_start, &now);
+	diff_ns = d_timediff_ns(&ctx->sc_metrics.scm_busy_start, &now);
 
 	sc_m_set_busy_time(ctx, diff_ns);
 }

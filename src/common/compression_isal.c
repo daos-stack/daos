@@ -95,6 +95,8 @@ deflate_init(void **daos_dc_ctx,
 	     uint16_t level,
 	     uint32_t max_buf_size)
 {
+	struct deflate_ctx *ctx;
+
 	int level_size_buf[] = {
 		ISAL_DEF_LVL0_DEFAULT,
 		ISAL_DEF_LVL1_DEFAULT,
@@ -107,8 +109,6 @@ deflate_init(void **daos_dc_ctx,
 		D_ERROR("Invalid isa-l compression level: %d\n", level);
 		return DC_STATUS_INVALID_LEVEL;
 	}
-
-	struct deflate_ctx *ctx;
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL)

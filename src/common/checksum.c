@@ -830,6 +830,7 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 	for (i = 0; i < iods_csums_nr; i++) {
 		daos_iod_t		*iod = &iods[i];
 		struct dcs_iod_csums	*csums = &iods_csums[i];
+		daos_iom_t              *map;
 
 		/** akey */
 		if (!obj->dcs_skip_key_calc) {
@@ -853,7 +854,7 @@ daos_csummer_calc_iods(struct daos_csummer *obj, d_sg_list_t *sgls,
 
 		/** data */
 		singv_lo = (singv_los == NULL) ? NULL : &singv_los[i];
-		daos_iom_t *map = maps == NULL ? NULL : &maps[i];
+		map      = maps == NULL ? NULL : &maps[i];
 
 		rc = is_array_iod(iod) ?
 		     calc_csum_recx(obj, &sgls[i], iod->iod_size,
@@ -1539,8 +1540,7 @@ csum_chunk_count(uint32_t chunk_size, uint64_t lo_idx, uint64_t hi_idx,
 		return 1;
 	chunk = csum_align_boundaries(lo_idx, hi_idx, 0, UINT64_MAX,
 				      rec_size, chunk_size);
-	daos_size_t result = chunk.dcr_nr / (chunk_size / rec_size);
-	return result;
+	return chunk.dcr_nr / (chunk_size / rec_size);
 }
 
 static int
