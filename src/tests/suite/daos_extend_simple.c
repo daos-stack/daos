@@ -623,11 +623,9 @@ extend_small_sub_setup(void **state)
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			EXTEND_SMALL_POOL_SIZE, 3, NULL);
-	if (rc) {
+	if (rc)
 		print_message("It can not create the pool with 3 ranks"
 			      " probably due to not enough ranks %d\n", rc);
-		return 0;
-	}
 
 	return rc;
 }
