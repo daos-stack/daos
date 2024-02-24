@@ -5,7 +5,6 @@
 '''
 import time
 
-from dmg_utils import check_system_query_status
 from general_utils import report_errors
 from telemetry_test_base import TestWithTelemetry
 
@@ -71,52 +70,6 @@ class EngineEvents(TestWithTelemetry):
 
         return (events_dead_ranks, events_last_event_ts, servicing_at, started_at)
 
-    def check_rank_stopped(self, restart_rank, dmg_command):
-        """Check the restart_rank is stopped.
-
-        If it hasn't been stopped, fail the test. This method is created to avoid the pylint error.
-
-        Args:
-            restart_rank (int): Restarted rank.
-            dmg_command (DmgCommand): DmgCommand object.
-        """
-        for count in range(3):
-            time.sleep(5)
-            query_out = dmg_command.system_query()
-            for member in query_out["response"]["members"]:
-                if member["rank"] == restart_rank:
-                    if member["state"] == "stopped" or member["state"] == "excluded":
-                        self.log.info("Rank %d is stopped. count = %d", restart_rank, count)
-                        return
-            self.log.info("Rank %d is not stopped. Check again. count = %d", restart_rank, count)
-        self.fail(f"Rank {restart_rank} didn't stop!")
-
-    def check_rank_restarted(self, restart_rank, dmg_command):
-        """Check the restart_rank is restarted.
-
-        If it hasn't been restarted, fail the test. This method is created to avoid the pylint
-        error.
-
-        Args:
-            restart_rank (int): Restarted rank.
-            dmg_command (DmgCommand): DmgCommand object.
-        """
-        rank_restarted = False
-        for count in range(3):
-            time.sleep(5)
-            query_out = dmg_command.system_query()
-            for member in query_out["response"]["members"]:
-                if member["rank"] == restart_rank:
-                    if member["state"] == "joined":
-                        rank_restarted = True
-                        break
-            if rank_restarted:
-                self.log.info("Rank %d is joined. count = %d", restart_rank, count)
-                break
-            self.log.info("Rank %d is not joined. Check again. count = %d", restart_rank, count)
-        if not rank_restarted:
-            self.fail(f"Rank {restart_rank} didn't restart!")
-
     def verify_events_last_events_ts(self, rank_count, restart_rank, events_last_event_ts_0,
                                      events_last_event_ts_1, errors, events_last_event_ts_results):
         """Verify engine_events_last_events_ts values.
@@ -163,13 +116,15 @@ class EngineEvents(TestWithTelemetry):
     def test_engine_events(self):
         """Test engine-related events after an engine is restarted.
 
-        1. Check that all ranks have started.
-        2. Gather initial data for the required metrics for all the server nodes.
-        3. Stop a rank.
-        4. Verify the desired rank has stopped successfully.
-        5. Restart the stopped rank after several seconds.
+        Steps are described in DAOS-15181.
+
+        1. Gather initial data for the required metrics for all the server nodes.
+        2. Stop a rank.
+        3. Verify the desired rank has stopped successfully.
+        4. Verify that the RPCs circulated.
+        5. Restart the stopped rank.
         6. Verify the desired rank restarted successfully.
-        7. Gather final data for required metrics with the same command as in step 2.
+        7. Gather final data for required metrics with the same command as in step 1.
         8. Compare the before and after values.
 
         :avocado: tags=all,full_regression
@@ -177,38 +132,64 @@ class EngineEvents(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=EngineEvents,test_engine_events
         """
-        # 1. Check that all ranks have started.
-        self.log_step("Check that all ranks have started.")
-        dmg_command = self.get_dmg_command()
-        if not check_system_query_status(data=dmg_command.system_query()):
-            self.fail("Engine failure detected at the beginning of the test!")
-
-        # 2. Gather initial data for the required metrics for all the server nodes.
+        # 1. Gather initial data for the required metrics for all the server nodes.
         self.log_step("Gather initial data for the required metrics for all the server nodes.")
         rank_count = self.server_managers[0].engines
         telemetry_before = self.collect_telemetry(rank_count=rank_count)
 
-        # 3. Stop a rank.
+        # 2. Stop a rank.
         restart_rank = rank_count - 1
         self.log_step(f"Stop rank {restart_rank} and wait for a while for RPCs to circulate")
-        dmg_command.system_stop(ranks=str(restart_rank))
-        # Wait for the RPCs to go around the ranks.
-        time.sleep(40)
+        self.server_managers[0].stop_ranks(ranks=[restart_rank], daos_log=self.d_log)
 
-        # 4. Verify the desired rank has stopped successfully.
+        # 3. Verify the desired rank has stopped successfully.
         self.log_step("Verify the desired rank has stopped successfully.")
-        self.check_rank_stopped(restart_rank=restart_rank, dmg_command=dmg_command)
+        failed_ranks = self.server_managers[0].check_rank_state(
+            ranks=[restart_rank], valid_states=["stopped", "excluded"], max_checks=15)
+        if failed_ranks:
+            self.fail(f"Rank {restart_rank} didn't stop!")
 
-        # 5. Restart the stopped rank after several seconds.
-        self.log_step("Restart the stopped rank after a few seconds.")
-        dmg_command.system_start(ranks=str(restart_rank))
+        # 4. Verify that the RPCs circulated.
+        for count in range(10):
+            time.sleep(5)
+            metric_to_data = self.telemetry.get_metrics(name="engine_events_dead_ranks")
+            self.log.info("metric_to_data = %s", metric_to_data)
+
+            # Omit "engine" from the variable name for brevity. The indices correspond to ranks.
+            events_dead_ranks = [None for _ in range(rank_count)]
+            hosts = list(self.hostlist_servers)
+            for host in hosts:
+                metrics = metric_to_data[host]["engine_events_dead_ranks"]["metrics"]
+                for metric in metrics:
+                    rank = int(metric["labels"]["rank"])
+                    events_dead_ranks[rank] = metric["value"]
+
+            # Among the joined ranks, if at least one of them has 1, we conclude that it's
+            # circulated.
+            circulated = False
+            for rank in range(rank_count - 1):
+                if events_dead_ranks[rank] == 1:
+                    self.log.info("RPCs cirulated.")
+                    circulated = True
+                    break
+
+            if circulated:
+                break
+            self.log.info("RPCs didn't circulate. Check again. %d", count)
+
+        # 5. Restart the stopped rank.
+        self.log_step("Restart the stopped rank.")
+        self.server_managers[0].start_ranks(ranks=[restart_rank], daos_log=self.d_log)
 
         # 6. Verify the desired rank restarted successfully.
         self.log_step("Verify the desired rank restarted successfully.")
-        self.check_rank_restarted(restart_rank=restart_rank, dmg_command=dmg_command)
+        failed_ranks = self.server_managers[0].check_rank_state(
+            ranks=[restart_rank], valid_states=["joined"], max_checks=15)
+        if failed_ranks:
+            self.fail(f"Rank {restart_rank} didn't start!")
 
-        # 7. Gather final data for required metrics with the same command as in step 2.
-        self.log_step("Gather final data for required metrics with the same command as in step 2.")
+        # 7. Gather final data for required metrics with the same command as in step 1.
+        self.log_step("Gather final data for required metrics with the same command as in step 1.")
         telemetry_after = self.collect_telemetry(rank_count=rank_count)
 
         # 8. Compare the before and after values.
