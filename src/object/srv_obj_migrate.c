@@ -36,8 +36,8 @@
  */
 #define MIGRATE_MAX_SIZE	(1 << 28)
 /* Max migrate ULT number on the server */
-#define MIGRATE_MAX_ULT		4096
-
+#define MIGRATE_DEFAULT_MAX_ULT	4096
+#define ENV_MIGRATE_ULT_CNT	"D_MIGRATE_ULT_CNT"
 struct migrate_one {
 	daos_key_t		 mo_dkey;
 	uint64_t		 mo_dkey_hash;
@@ -463,6 +463,7 @@ struct migrate_pool_tls_create_arg {
 	unsigned int generation;
 	uint32_t opc;
 	uint32_t new_layout_ver;
+	uint32_t max_ult_cnt;
 };
 
 int
@@ -488,6 +489,7 @@ migrate_pool_tls_create_one(void *data)
 
 	D_INIT_LIST_HEAD(&pool_tls->mpt_cont_hdl_list);
 	pool_tls->mpt_pool_hdl = DAOS_HDL_INVAL;
+	D_INIT_LIST_HEAD(&pool_tls->mpt_list);
 
 	rc = ABT_eventual_create(0, &pool_tls->mpt_done_eventual);
 	if (rc != ABT_SUCCESS)
@@ -517,7 +519,7 @@ migrate_pool_tls_create_one(void *data)
 		int i;
 
 		pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE;
-		pool_tls->mpt_inflight_max_ult = MIGRATE_MAX_ULT;
+		pool_tls->mpt_inflight_max_ult = arg->max_ult_cnt;
 		D_ALLOC_ARRAY(pool_tls->mpt_obj_ult_cnts, dss_tgt_nr);
 		D_ALLOC_ARRAY(pool_tls->mpt_dkey_ult_cnts, dss_tgt_nr);
 		if (pool_tls->mpt_obj_ult_cnts == NULL || pool_tls->mpt_dkey_ult_cnts == NULL)
@@ -530,8 +532,10 @@ migrate_pool_tls_create_one(void *data)
 		int tgt_id = dss_get_module_info()->dmi_tgt_id;
 
 		pool_tls->mpt_pool = ds_pool_child_lookup(arg->pool_uuid);
+		if (pool_tls->mpt_pool == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
 		pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE / dss_tgt_nr;
-		pool_tls->mpt_inflight_max_ult = MIGRATE_MAX_ULT / dss_tgt_nr;
+		pool_tls->mpt_inflight_max_ult = arg->max_ult_cnt / dss_tgt_nr;
 		pool_tls->mpt_tgt_obj_ult_cnt = &arg->obj_ult_cnts[tgt_id];
 		pool_tls->mpt_tgt_dkey_ult_cnt = &arg->dkey_ult_cnts[tgt_id];
 	}
@@ -566,6 +570,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	daos_prop_t		*prop = NULL;
 	struct daos_prop_entry	*entry;
 	int			rc = 0;
+	uint32_t		max_migrate_ult = MIGRATE_DEFAULT_MAX_ULT;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
@@ -586,6 +591,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 		return rc;
 	}
 
+	d_getenv_uint(ENV_MIGRATE_ULT_CNT, &max_migrate_ult);
 	D_ASSERT(generation != (unsigned int)(-1));
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	uuid_copy(arg.pool_hdl_uuid, pool_hdl_uuid);
@@ -595,7 +601,12 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	arg.max_eph = max_eph;
 	arg.new_layout_ver = new_layout_ver;
 	arg.generation = generation;
-	/* dss_task_collective does not do collective on xstream 0 */
+	arg.max_ult_cnt = max_migrate_ult;
+
+	/*
+	 * dss_task_collective does not do collective on sys xstrem,
+	 * sys xstream need some information to track rebuild status.
+	 */
 	rc = migrate_pool_tls_create_one(&arg);
 	if (rc)
 		D_GOTO(out, rc);
@@ -3763,7 +3774,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	ds_rebuild_running_query(migrate_in->om_pool_uuid, &rebuild_ver, NULL, NULL);
+	ds_rebuild_running_query(migrate_in->om_pool_uuid, -1, &rebuild_ver, NULL, NULL);
 	if (rebuild_ver == 0 || rebuild_ver != migrate_in->om_version) {
 		rc = -DER_SHUTDOWN;
 		DL_ERROR(rc, DF_UUID" rebuild ver %u om version %u",
