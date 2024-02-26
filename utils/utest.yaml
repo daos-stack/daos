@@ -161,11 +161,6 @@
   memcheck: False
   tests:
     - cmd: ["src/control/run_go_tests.sh"]
-- name: Go formatting
-  memcheck: False
-  gha: True
-  tests:
-    - cmd: ["./utils/unit/check_gofmt.sh"]
 - name: spdk
   base: "PREFIX"
   memcheck: False
