@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -398,11 +398,30 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 		defer C.free(unsafe.Pointer(group))
 	}
 
-	rc := C.daos_cont_set_owner(ap.cont, user, group, nil)
+	props, entries, err := allocProps(3)
+	if err != nil {
+		return err
+	}
+	entries[0].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
+	props.dpp_nr++
+	defer func() { C.daos_prop_free(props) }()
+
+	rc := C.daos_cont_query(cmd.cContHandle, nil, props, nil)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err,
-			"failed to set owner for container %s",
-			cmd.ContainerID())
+		return errors.Wrapf(err, "failed to query container %s", cmd.ContainerID())
+	}
+
+	lType := C.get_dpe_val(&entries[0])
+	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
+		if err := dfsError(C.dfs_cont_set_owner(ap.cont, user, group)); err != nil {
+			return errors.Wrapf(err, "%s failed", fsOpString((ap.fs_op)))
+		}
+	} else {
+		rc := C.daos_cont_set_owner(ap.cont, user, group, nil)
+		if err := daosError(rc); err != nil {
+			return errors.Wrapf(err, "failed to set owner for container %s",
+				cmd.ContainerID())
+		}
 	}
 
 	if cmd.JSONOutputEnabled() {
