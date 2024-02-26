@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1264,6 +1264,20 @@ rebuild_sub_rf0_setup(void **state)
 {
 	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 0,
 					DAOS_PROP_CO_REDUN_RF0);
+}
+
+int
+rebuild_sub_3nodes_rf0_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 3,
+					DAOS_PROP_CO_REDUN_RF0);
+}
+
+int
+rebuild_sub_6nodes_rf1_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 6,
+					DAOS_PROP_CO_REDUN_RF1);
 }
 
 int

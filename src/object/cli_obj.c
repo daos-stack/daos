@@ -1658,6 +1658,9 @@ dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inp
 	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
 		if (++(*inprogress_cnt) > 1) {
 			delay = (d_rand() & ((1 << 6) - 1)) + 5;
+			/* Rebuild is being established on the server side, wait a bit longer */
+			if (err == -DER_UPDATE_AGAIN)
+				delay <<= 10;
 			D_DEBUG(DB_IO, "Try to re-sched task %p for %d/%d times with %u us delay\n",
 				task, (int)*inprogress_cnt, (int)*retry_cnt, delay);
 		}
