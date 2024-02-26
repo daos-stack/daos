@@ -169,7 +169,7 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct rebuild_iv *src_iv = src->sg_iovs[0].iov_buf;
 	int rc = 0;
 
-	rpt = rpt_lookup(src_iv->riv_pool_uuid, src_iv->riv_ver,
+	rpt = rpt_lookup(src_iv->riv_pool_uuid, -1, src_iv->riv_ver,
 			 src_iv->riv_rebuild_gen);
 	if (rpt == NULL)
 		return 0;

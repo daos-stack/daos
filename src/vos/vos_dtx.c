@@ -2696,6 +2696,9 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			if (dae_df->dae_flags & DTE_INVALID)
 				continue;
 
+			if(cont->vc_lowest_act_eph == 0 || cont->vc_lowest_act_eph > dae_df->dae_epoch)
+				cont->vc_lowest_act_eph = dae_df->dae_epoch;
+
 			if (daos_is_zero_dti(&dae_df->dae_xid)) {
 				D_WARN("Hit zero active DTX entry.\n");
 				continue;
@@ -2810,18 +2813,21 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 		  "Corrupted committed DTX blob (2) %x\n", dbd->dbd_magic);
 
 	for (i = 0; i < dbd->dbd_count; i++) {
-		if (daos_is_zero_dti(&dbd->dbd_committed_data[i].dce_xid) ||
-		    dbd->dbd_committed_data[i].dce_epoch == 0) {
+		struct vos_dtx_cmt_ent_df *dce_df = &dbd->dbd_committed_data[i];
+
+		if (daos_is_zero_dti(&dce_df->dce_xid) || dce_df->dce_epoch == 0) {
 			D_WARN("Skip invalid committed DTX entry\n");
 			continue;
 		}
+
+		if(cont->vc_highest_cmt_eph == 0 || cont->vc_highest_cmt_eph < dce_df->dce_epoch)
+			cont->vc_highest_cmt_eph = dce_df->dce_epoch;
 
 		D_ALLOC_PTR(dce);
 		if (dce == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		memcpy(&dce->dce_base, &dbd->dbd_committed_data[i],
-		       sizeof(dce->dce_base));
+		memcpy(&dce->dce_base, dce_df, sizeof(dce->dce_base));
 		dce->dce_reindex = 1;
 
 		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));

@@ -88,6 +88,7 @@ rebuild_retry_rebuild(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
+	sleep(15);
 	/* Set no hdl fail_loc on all servers */
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -1455,6 +1456,79 @@ rebuild_kill_more_RF_ranks(void **state)
 	}
 }
 
+static void
+rebuild_delay_and_reintegrate(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	daos_obj_id_t	update_oids[OBJ_NR];
+	int		rc;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "delay_rebuild");
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], ranks_to_kill[0]);
+	}
+
+	rebuild_io(arg, oids, OBJ_NR);
+	arg->no_rebuild = 1;
+	rebuild_single_pool_rank(arg, ranks_to_kill[0], true);
+	arg->no_rebuild = 0;
+	print_message("sleep 30 seconds to wait for the node being updated\n");
+	sleep(30);
+	for (i = 0; i < OBJ_NR; i++)
+		update_oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3GX, 0, 0, arg->myrank);
+	rebuild_io(arg, update_oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
+	rebuild_io_verify(arg, update_oids, OBJ_NR);
+}
+
+static void
+rebuild_delay_and_extend(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[OBJ_NR];
+	daos_obj_id_t	update_oids[OBJ_NR];
+	int		rc;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "delay_rebuild");
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < OBJ_NR; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0, arg->myrank);
+		oids[i] = dts_oid_set_rank(oids[i], 5);
+	}
+
+	rebuild_io(arg, oids, OBJ_NR);
+	arg->no_rebuild = 1;
+	rebuild_single_pool_rank(arg, 5, true);
+	arg->no_rebuild = 0;
+	print_message("sleep 30 seconds to wait for the node being updated\n");
+	sleep(30);
+	for (i = 0; i < OBJ_NR; i++)
+		update_oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3GX, 0, 0, arg->myrank);
+
+	rebuild_io(arg, update_oids, OBJ_NR);
+
+	extend_single_pool_rank(arg, 6);
+	rebuild_io_verify(arg, oids, OBJ_NR);
+	rebuild_io_verify(arg, update_oids, OBJ_NR);
+
+	reintegrate_single_pool_rank(arg, 5, true);
+	rebuild_io_verify(arg, oids, OBJ_NR);
+	rebuild_io_verify(arg, update_oids, OBJ_NR);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: drop rebuild scan reply",
@@ -1540,6 +1614,10 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD32: kill more ranks than RF, then reintegrate",
 	  rebuild_kill_more_RF_ranks, rebuild_sub_setup,
 	 rebuild_sub_teardown},
+	{"REBUILD33: delay rebuild and extend",
+	  rebuild_delay_and_reintegrate, rebuild_sub_setup, rebuild_sub_teardown},
+	{"REBUILD34: delay rebuild and extend",
+	  rebuild_delay_and_extend, rebuild_sub_6nodes_rf1_setup, rebuild_sub_teardown},
 };
 
 /* TODO: Enable aggregation once stable view rebuild is done. */

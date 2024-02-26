@@ -185,6 +185,8 @@ int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
+int ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
+int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 

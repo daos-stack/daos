@@ -739,8 +739,8 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
 	md.omd_ver = *po_ver;
-	rc = pl_obj_find_reint(pl_map, PLT_LAYOUT_VERSION, &md, NULL, *po_ver,
-			       spare_tgt_ranks, shard_ids, spare_max_nr);
+	rc = pl_obj_find_rebuild(pl_map, PLT_LAYOUT_VERSION, &md, NULL, *po_ver,
+			         spare_tgt_ranks, shard_ids, spare_max_nr);
 
 	D_ASSERT(rc >= 0);
 	*spare_cnt = rc;
