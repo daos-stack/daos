@@ -1136,7 +1136,7 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 
 	if (interface) {
 		if (provider == CRT_PROV_OFI_CXI) {
-			D_WARN("Interface '%s' ignored for CXI. Using domain '%s' instead\n",
+			D_INFO("Interface '%s' ignored for CXI. Using domain '%s' instead\n",
 			       interface, domain);
 
 			/* Note: crt_provider_iface_str_get() returns interface name  */
