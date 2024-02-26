@@ -1916,11 +1916,16 @@ class needs_dfuse_with_opt():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True):
+    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True,
+                 ignore_einval=False):
         self.caching = caching
         self.wbcache = wbcache
         self.single_threaded = single_threaded
+        # Should dfuse invalidate entries.  Set to False for long timeout to prevent inode
+        # invalidation from happening during a test.
         self.dfuse_inval = dfuse_inval
+        # Set to true of EINVAL/DER_INVAL errors are expected during a test.
+        self.ignore_einval = ignore_einval
 
     def __call__(self, method):
         """Wrapper function"""
@@ -1954,7 +1959,7 @@ class needs_dfuse_with_opt():
             try:
                 rc = method(obj)
             finally:
-                if obj.dfuse.stop():
+                if obj.dfuse.stop(ignore_einval=self.ignore_einval):
                     obj.fatal_errors = True
             return rc
         return _helper
@@ -3043,10 +3048,12 @@ class PosixTests():
 
         self.dfuse.evict_and_wait([i_path])
 
-    @needs_dfuse_with_opt(caching=False)
+    @needs_dfuse_with_opt(caching=False, ignore_einval=True)
     def test_uns_broken_ic(self):
-        """Test the behavior of a broken UNS link when the link is in cache"""
+        """Test the behavior of a broken UNS link when the link is in cache
 
+        This test will create EINVAL errors from dfuse so silence them in the log checking.
+        """
         i_path = join(self.dfuse.dir, "top_dir")
 
         os.mkdir(i_path)
@@ -4795,6 +4802,7 @@ def log_test(conf,
 
     if ignore_einval:
         lto.skip_suffixes.append(': 22 (Invalid argument)')
+        lto.skip_suffixes.append(" DER_NO_HDL(-1002): 'Invalid handle'")
 
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
