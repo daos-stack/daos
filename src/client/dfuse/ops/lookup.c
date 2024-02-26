@@ -198,9 +198,6 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 	if (rc != 0)
 		D_GOTO(out_dfp, rc);
 
-	/* The inode has a reference to the dfs, so keep that. */
-	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
-
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
 		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: %d (%s)", rc, strerror(rc));
@@ -217,6 +214,9 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 		D_GOTO(out_dfs, rc);
 	}
 
+	/* The inode has a reference to the dfs, so keep that. */
+	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
+
 	ie->ie_stat.st_ino = dfs->dfs_ino;
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
@@ -231,9 +231,7 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 out_dfs:
 	d_hash_rec_decref(dfp->dfp_cont_table, &dfs->dfs_entry);
 out_dfp:
-	/* TODO: This was causing a hash table reference count error, needs fixing on 2.4
-	 * d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
-	 */
+	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_err:
 	duns_destroy_attr(&dattr);
 

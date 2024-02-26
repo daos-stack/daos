@@ -4939,6 +4939,7 @@ def run_evict_test(server):
     dfuse.stop()
     return False
 
+
 def run_evict_test_fd(server):
     """Run dfuse, do some I/O and then evict the container to see what happens.
 
