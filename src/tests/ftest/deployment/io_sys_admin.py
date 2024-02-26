@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -56,8 +56,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
             for cont_idx in range(1, 4):
                 self.add_container_qty(1, self.pool[-1],
                                        namespace="/run/container_{}/".format(cont_idx))
-                daos.container_set_owner(self.pool[-1].identifier, self.container[-1].identifier,
-                                         new_test_user, new_test_group)
+                self.container[-1].set_owner(f"{new_test_user}@", f"{new_test_group}@")
 
             daos.container_list(self.pool[-1].identifier)
             self.destroy_containers(self.container)
