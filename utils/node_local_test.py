@@ -505,7 +505,7 @@ class DaosCont():
         print(rc)
         assert rc.returncode == 0, rc
 
-    def destroy(self, valgrind=True, log_check=True):
+    def destroy(self, valgrind=True, log_check=True, force=False):
         """Destroy the container
 
         Args:
@@ -516,7 +516,7 @@ class DaosCont():
             NLTestFail: If Pool was not provided when object created.
         """
         destroy_container(self.pool.conf, self.pool.id(), self.id(),
-                          valgrind=valgrind, log_check=log_check)
+                          valgrind=valgrind, log_check=log_check, force=force)
 
 
 class DaosServer():
@@ -1815,13 +1815,15 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
     return DaosCont(rc.json['response']['container_uuid'], label, pool=pool)
 
 
-def destroy_container(conf, pool, container, valgrind=True, log_check=True):
+def destroy_container(conf, pool, container, valgrind=True, log_check=True, force=False):
     """Destroy a container"""
     if isinstance(pool, DaosPool):
         pool = pool.id()
     if isinstance(container, DaosCont):
         container = container.id()
     cmd = ['container', 'destroy', pool, container]
+    if force:
+        cmd.append("--force")
     rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True, log_check=log_check)
     print(rc)
     if rc.returncode == 1 and rc.json['status'] == -1012:
@@ -3056,7 +3058,7 @@ class PosixTests():
 
         os.stat(cont_path)
 
-        container.destroy(valgrind=False, log_check=False)
+        container.destroy(valgrind=False, log_check=False, force=True)
 
         try:
             os.stat(cont_path)
