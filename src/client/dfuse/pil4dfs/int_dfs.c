@@ -5383,8 +5383,9 @@ fsync(int fd)
 	if (fd < FD_DIR_BASE && compatible_mode)
 		return next_fsync(fd);
 
-	errno = ENOTSUP;
-	return (-1);
+//	errno = ENOTSUP;
+//	return (-1);
+	return 0;
 }
 
 int
