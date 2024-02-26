@@ -1,12 +1,10 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /** DFS init, fini, mount related operations */
-
-#define D_LOGFAC DD_FAC(dfs)
 
 #include <math.h>
 #include <daos/common.h>
