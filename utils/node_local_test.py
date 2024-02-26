@@ -1916,16 +1916,11 @@ class needs_dfuse_with_opt():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True,
-                 ignore_einval=False):
+    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True):
         self.caching = caching
         self.wbcache = wbcache
         self.single_threaded = single_threaded
-        # Should dfuse invalidate entries.  Set to False for long timeout to prevent inode
-        # invalidation from happening during a test.
         self.dfuse_inval = dfuse_inval
-        # Set to true of EINVAL/DER_INVAL errors are expected during a test.
-        self.ignore_einval = ignore_einval
 
     def __call__(self, method):
         """Wrapper function"""
@@ -1959,7 +1954,7 @@ class needs_dfuse_with_opt():
             try:
                 rc = method(obj)
             finally:
-                if obj.dfuse.stop(ignore_einval=self.ignore_einval):
+                if obj.dfuse.stop():
                     obj.fatal_errors = True
             return rc
         return _helper
@@ -3002,11 +2997,13 @@ class PosixTests():
         assert rc.returncode == 0
         rc = self.dfuse.check_usage(inodes=1, open_files=1, containers=1, pools=1)
 
-    @needs_dfuse_with_opt(caching=False)
     def test_uns_broken(self):
         """Test the behavior of a broken UNS link"""
 
-        i_path = join(self.dfuse.dir, "top_dir")
+        dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
+        dfuse.start('uns-broken')
+
+        i_path = join(dfuse.dir, "top_dir")
 
         os.mkdir(i_path)
 
@@ -3017,12 +3014,12 @@ class PosixTests():
 
         stat_pre = os.stat(cont_path)
 
-        self.dfuse.evict_and_wait([cont_path])
+        dfuse.evict_and_wait([cont_path])
 
         stat_post = os.stat(cont_path)
         assert stat_pre.st_ino == stat_post.st_ino
 
-        self.dfuse.evict_and_wait([cont_path])
+        dfuse.evict_and_wait([cont_path])
 
         container.destroy(valgrind=False, log_check=False)
 
@@ -3033,28 +3030,33 @@ class PosixTests():
             assert error.errno == errno.ENOLINK
 
         # Now check this readdir works.
-        self.dfuse.evict_and_wait([i_path])
+        dfuse.evict_and_wait([i_path])
         files = os.listdir(i_path)
         print(files)
         assert files == ["sub_cont"]
 
         # Now evict again and check stat once readdir has put the inode in memory.
-        self.dfuse.evict_and_wait([i_path])
+        dfuse.evict_and_wait([i_path])
         try:
             os.stat(cont_path)
             assert False
         except OSError as error:
             assert error.errno == errno.ENOLINK
 
-        self.dfuse.evict_and_wait([i_path])
+        dfuse.evict_and_wait([i_path])
 
-    @needs_dfuse_with_opt(caching=False, ignore_einval=True)
+        if dfuse.stop():
+            self.fatal_errors = True
+
     def test_uns_broken_ic(self):
         """Test the behavior of a broken UNS link when the link is in cache
 
         This test will create EINVAL errors from dfuse so silence them in the log checking.
         """
-        i_path = join(self.dfuse.dir, "top_dir")
+        dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
+        dfuse.start('uns-broken-1')
+
+        i_path = join(dfuse.dir, "top_dir")
 
         os.mkdir(i_path)
 
@@ -3073,7 +3075,10 @@ class PosixTests():
         except OSError as error:
             assert error.errno == errno.ENOLINK
 
-        self.dfuse.evict_and_wait([i_path])
+        dfuse.evict_and_wait([i_path])
+        if dfuse.stop(ignore_einval=True):
+            self.fatal_errors = True
+
 
     @needs_dfuse
     def test_rename_clobber(self):
