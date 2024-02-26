@@ -3079,7 +3079,6 @@ class PosixTests():
         if dfuse.stop(ignore_einval=True):
             self.fatal_errors = True
 
-
     @needs_dfuse
     def test_rename_clobber(self):
         """Test that rename clobbers files correctly
