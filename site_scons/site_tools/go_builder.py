@@ -50,7 +50,7 @@ def _scan_go_file(node, env, _path):
 
 
 def get_go_version(output):
-    # Capture only the number, ignoring optional rc
+    """Capture only the number, ignoring optional rc"""
     one_part = '([0-9]+)(?:rc[0-9]+)?'
     return '.'.join(re.findall(fr'(?:go)?{one_part}\.{one_part}\.{one_part}', output)[0])
 
