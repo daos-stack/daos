@@ -6893,11 +6893,10 @@ shard_query_key_task(tse_task_t *task)
 			 * For collective query, the shard was just opened, so there
 			 * must be something wrong. Otherwise, skip a failed target.
 			 */
-			if (args->kqa_dcts != NULL)
-				D_ASSERTF(0, "Something wrong on %u shard\n",
-					  args->kqa_auxi.shard);
-			else
-				rc = 0;
+			D_ASSERTF(args->kqa_dcts == NULL,
+				  "Something wrong on %u shard for collective query\n",
+				  args->kqa_auxi.shard);
+			rc = 0;
 		}
 
 		obj_task_complete(task, rc);
@@ -7077,9 +7076,8 @@ dc_obj_query_key(tse_task_t *api_task)
 		/* Let's always remove the previous shard tasks for retry, since
 		 * the leader status might change.
 		 */
-		tse_task_list_traverse(head, shard_task_remove, NULL);
+		obj_io_set_new_shard_task(obj_auxi);
 		obj_auxi->args_initialized = 0;
-		obj_auxi->new_shard_tasks = 1;
 	}
 
 	D_ASSERT(!obj_auxi->args_initialized);
@@ -7087,7 +7085,6 @@ dc_obj_query_key(tse_task_t *api_task)
 
 	/* Some optimization for get dkey collectively since 2.6 which version is 10. */
 	if (api_args->flags & DAOS_GET_DKEY && grp_nr > 1 && dc_obj_proto_version >= 10) {
-re_scan:
 		rc = obj_coll_oper_args_init(&obj_auxi->cq_args.cqa_coa, obj, false);
 		if (rc != 0)
 			goto out_task;
@@ -7114,18 +7111,13 @@ re_scan:
 				    !is_ec_parity_shard(obj, obj_auxi->dkey_hash, leader))
 					goto non_leader;
 
-				if (coll) {
+				if (coll)
 					rc = obj_coll_prep_one(&obj_auxi->cq_args.cqa_coa, obj,
 							       map_ver, leader);
-					if (unlikely(rc == -DER_AGAIN)) {
-						obj_coll_oper_args_fini(&obj_auxi->cq_args.cqa_coa);
-						goto re_scan;
-					}
-				} else {
+				else
 					rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch,
 									leader, map_ver, obj, &dti,
 									co_hdl, co_uuid, NULL, 0);
-				}
 				if (rc != 0)
 					D_GOTO(out_task, rc);
 
@@ -7150,17 +7142,12 @@ non_leader:
 			if (obj_shard_is_invalid(obj, j, DAOS_OBJ_RPC_QUERY_KEY))
 				continue;
 
-			if (coll) {
+			if (coll)
 				rc = obj_coll_prep_one(&obj_auxi->cq_args.cqa_coa, obj, map_ver, j);
-				if (unlikely(rc == -DER_AGAIN)) {
-					obj_coll_oper_args_fini(&obj_auxi->cq_args.cqa_coa);
-					goto re_scan;
-				}
-			} else {
+			else
 				rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, j,
 								map_ver, obj, &dti, co_hdl, co_uuid,
 								NULL, 0);
-			}
 			if (rc != 0)
 				D_GOTO(out_task, rc);
 
@@ -7226,7 +7213,6 @@ dc_obj_sync(tse_task_t *task)
 	uint32_t			shard_cnt;
 	uint32_t			grp_cnt;
 	int				 rc;
-	int				 i;
 
 	if (srv_io_mode != DIM_DTX_FULL_ENABLED)
 		D_GOTO(out_task, rc = 0);
@@ -7270,8 +7256,13 @@ dc_obj_sync(tse_task_t *task)
 		D_ASSERTF(*args->nr == obj->cob_grp_nr, "Invalid obj sync args %d/%d\n",
 			  *args->nr, obj->cob_grp_nr);
 
-		for (i = 0; i < *args->nr; i++)
-			*args->epochs_p[i] = 0;
+		if (obj_auxi->args_initialized) {
+			/* Remove previous shard tasks, since related leader(s) maybe changed. */
+			obj_io_set_new_shard_task(obj_auxi);
+			obj_auxi->args_initialized = 0;
+		}
+
+		memset(*args->epochs_p, 0, sizeof(daos_epoch_t) * *args->nr);
 	}
 
 	obj_auxi->to_leader = 1;

@@ -1289,6 +1289,19 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 			uint32_t *nr, struct dirent *dirs, daos_obj_id_t *oids, daos_size_t *csizes,
 			uint64_t *nr_scanned);
 
+/**
+ * Scan the DFS namespace and report statistics about file/dir size and namespace structure.
+ *
+ * \param[in]	poh	Open pool handle.
+ * \param[in]	cont	POSIX container label.
+ * \param[in]	flags	Unused flag, added for future use.
+ * \param[in]	name	Optional subdirectory path to scan from.
+ *			Start from container root if not specified.
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
+
 #if defined(__cplusplus)
 }
 #endif /* __cplusplus */

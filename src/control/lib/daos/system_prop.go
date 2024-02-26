@@ -502,7 +502,7 @@ func SystemProperties() SystemPropertyMap {
 			Value:       &CompPropVal{ValueSource: func() string { return build.DefaultSystemName }},
 			Description: "DAOS system name",
 		},
-		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh, poolProps["scrub-thresh"], "0"),
+		SystemPropertyPoolScrubThresh: pph2sp(SystemPropertyPoolScrubThresh, poolProps["scrub_thresh"], "0"),
 		SystemPropertyPoolScrubMode:   pph2sp(SystemPropertyPoolScrubMode, poolProps["scrub"], "off"),
 	}
 }
