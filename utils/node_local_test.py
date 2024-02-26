@@ -3051,7 +3051,7 @@ class PosixTests():
 
         cont_path = join(i_path, "sub_cont")
 
-        container = create_cont(self.conf, self.pool, ctype="POSIX", label="uns_broken",
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label="uns_broken_ic",
                                 path=cont_path)
 
         os.stat(cont_path)
