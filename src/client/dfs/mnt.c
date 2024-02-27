@@ -6,10 +6,13 @@
 
 /** DFS init, fini, mount related operations */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <math.h>
 #include <daos/common.h>
 #include <daos/container.h>
-#include "internal.h"
+
+#include "dfs_internal.h"
 
 /** protect against concurrent dfs_init/fini calls */
 static pthread_mutex_t      module_lock = PTHREAD_MUTEX_INITIALIZER;

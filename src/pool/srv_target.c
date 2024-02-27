@@ -2175,8 +2175,23 @@ pool_child_discard(void *data)
 	D_DEBUG(DB_MD, DF_UUID" discard %u/%u\n", DP_UUID(arg->pool_uuid),
 		myrank, addr.pta_target);
 
+	/**
+	 * When a faulty device is replaced with a new one using the
+	 * “dmg storage replace nvme” command, the reintegration of
+	 * affected pool targets is automatically triggered.
+	 * The following steps outline the device replacement process on the engine side:
+	 *
+	 * 1) Replace the old device with the new device in the SMD.
+	 * 2) Setup all SPDK related stuff for the new device.
+	 * 3) Start ds_pool_child
+	 *
+	 * It is important to note that manual reintegration may be initiated
+	 * before step 3, in which case, the function should return “DER_AGAIN."
+	 */
 	child = ds_pool_child_lookup(arg->pool_uuid);
-	D_ASSERT(child != NULL);
+	if (child == NULL)
+		return -DER_AGAIN;
+
 	param.ip_hdl = child->spc_hdl;
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
