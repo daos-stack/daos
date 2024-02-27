@@ -339,17 +339,17 @@ obj_coll_tgt_query(void *args)
 	int				 rc;
 
 	otqa = &octa->octa_otqas[tgt_id];
-	otqa->in_dkey = &ocqi->ocqi_dkey;
-	otqa->in_akey = &ocqi->ocqi_akey;
-	otqa->out_dkey = &ocqo->ocqo_dkey;
-	otqa->out_akey = &ocqo->ocqo_akey;
+	otqa->otqa_in_dkey = &ocqi->ocqi_dkey;
+	otqa->otqa_in_akey = &ocqi->ocqi_akey;
+	otqa->otqa_out_dkey = &ocqo->ocqo_dkey;
+	otqa->otqa_out_akey = &ocqo->ocqo_akey;
 	if (tgt_id == octa->octa_sponsor_tgt) {
-		otqa->ioc = octa->octa_sponsor_ioc;
-		otqa->dth = octa->octa_sponsor_dth;
+		otqa->otqa_ioc = octa->octa_sponsor_ioc;
+		otqa->otqa_dth = octa->octa_sponsor_dth;
 	}
 
 	if (ocqi->ocqi_tgts.ca_count > 1 || dct->dct_tgt_nr > 1)
-		otqa->need_copy = 1;
+		otqa->otqa_need_copy = 1;
 
 	rc = obj_tgt_query(otqa, ocqi->ocqi_po_uuid, ocqi->ocqi_co_hdl, ocqi->ocqi_co_uuid,
 			   ocqi->ocqi_oid, ocqi->ocqi_epoch, ocqi->ocqi_epoch_first,
@@ -383,20 +383,20 @@ obj_coll_query_merge_tgts(struct obj_coll_query_in *ocqi, struct daos_oclass_att
 	int				 rc = 0;
 	int				 i;
 
-	D_ASSERT(otqa->need_copy);
-	D_ASSERT(otqa->keys_copied);
+	D_ASSERT(otqa->otqa_need_copy);
+	D_ASSERT(otqa->otqa_keys_allocated);
 
-	oqma.oca = oca;
-	oqma.oid = ocqi->ocqi_oid;
-	oqma.in_dkey = &ocqi->ocqi_dkey;
-	oqma.tgt_dkey = &otqa->dkey_copy;
-	oqma.tgt_akey = &otqa->akey_copy;
-	oqma.tgt_recx = &otqa->recx;
-	oqma.tgt_epoch = &otqa->max_epoch;
-	oqma.tgt_map_ver = &otqa->version;
-	oqma.shard = &otqa->shard;
-	oqma.flags = ocqi->ocqi_api_flags;
-	oqma.opc = DAOS_OBJ_RPC_COLL_QUERY;
+	oqma.oqma_oca = oca;
+	oqma.oqma_oid = ocqi->ocqi_oid;
+	oqma.oqma_in_dkey = &ocqi->ocqi_dkey;
+	oqma.oqma_tgt_dkey = &otqa->otqa_dkey_copy;
+	oqma.oqma_tgt_akey = &otqa->otqa_akey_copy;
+	oqma.oqma_tgt_recx = &otqa->otqa_recx;
+	oqma.oqma_tgt_epoch = &otqa->otqa_max_epoch;
+	oqma.oqma_tgt_map_ver = &otqa->otqa_version;
+	oqma.oqma_shard = &otqa->otqa_shard;
+	oqma.oqma_flags = ocqi->ocqi_api_flags;
+	oqma.oqma_opc = DAOS_OBJ_RPC_COLL_QUERY;
 
 	if (size > dss_tgt_nr)
 		size = dss_tgt_nr;
@@ -406,36 +406,37 @@ obj_coll_query_merge_tgts(struct obj_coll_query_in *ocqi, struct daos_oclass_att
 			continue;
 
 		tmp = &otqas[i];
-		if (!tmp->completed)
+		if (!tmp->otqa_completed)
 			continue;
 
-		if (tmp->result == allow_failure) {
-			if (otqa->max_epoch < tmp->max_epoch)
-				otqa->max_epoch = tmp->max_epoch;
+		if (tmp->otqa_result == allow_failure) {
+			if (otqa->otqa_max_epoch < tmp->otqa_max_epoch)
+				otqa->otqa_max_epoch = tmp->otqa_max_epoch;
 			allow_failure_cnt++;
 			continue;
 		}
 
 		/* Stop subsequent merge when hit one unallowed failure. */
-		if (tmp->result != 0)
-			D_GOTO(out, rc = tmp->result);
+		if (tmp->otqa_result != 0)
+			D_GOTO(out, rc = tmp->otqa_result);
 
 		succeeds++;
 
 		if (i == tgt_id)
 			continue;
 
-		oqma.oid.id_shard = tmp->shard;
-		oqma.src_epoch = tmp->max_epoch;
-		oqma.src_dkey = &tmp->dkey_copy;
-		oqma.src_akey = &tmp->akey_copy;
-		oqma.src_recx = &tmp->recx;
-		oqma.src_map_ver = tmp->version;
+		oqma.oqma_oid.id_shard = tmp->otqa_shard;
+		oqma.oqma_src_epoch = tmp->otqa_max_epoch;
+		oqma.oqma_src_dkey = &tmp->otqa_dkey_copy;
+		oqma.oqma_src_akey = &tmp->otqa_akey_copy;
+		oqma.oqma_src_recx = &tmp->otqa_recx;
+		oqma.oqma_src_map_ver = tmp->otqa_version;
+		oqma.oqma_server_merge = 1;
 		/*
 		 * Merge (L2) the results from other VOS targets on the same engine
 		 * into current otqa that stands for the results for current engine.
 		 */
-		rc = daos_obj_merge_query_merge(&oqma);
+		rc = daos_obj_query_merge(&oqma);
 		if (rc != 0)
 			goto out;
 	}
@@ -472,7 +473,8 @@ obj_coll_query_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_c
 		  ocqi->ocqi_oid.id_layout_ver, DP_DTI(&ocqi->ocqi_xid), dss_self_rank());
 
 	otqa = (struct obj_tgt_query_args *)exec_arg->args + tgt_id;
-	if (otqa->completed && otqa->keys_copied && (rc == 0 || rc == dlh->dlh_allow_failure))
+	if (otqa->otqa_completed && otqa->otqa_keys_allocated &&
+	    (rc == 0 || rc == dlh->dlh_allow_failure))
 		rc = obj_coll_query_merge_tgts(ocqi, &exec_arg->ioc->ioc_oca, exec_arg->args,
 					       dlh->dlh_coll_entry->dce_bitmap,
 					       dlh->dlh_coll_entry->dce_bitmap_sz,
@@ -504,25 +506,25 @@ obj_coll_query_agg_cb(struct dtx_leader_handle *dlh, void *arg)
 	D_ASSERTF(allow_failure == -DER_NONEXIST, "Unexpected allow failure %d\n", allow_failure);
 
 	otqa = (struct obj_tgt_query_args *)exec_arg->args + dss_get_module_info()->dmi_tgt_id;
-	D_ASSERT(otqa->need_copy);
+	D_ASSERT(otqa->otqa_need_copy);
 
 	/*
-	 * If keys_copied is not set on current engine, then the query for current engine is either
+	 * If keys_allocated is not set on current engine, then query for current engine is either
 	 * not triggered because of some earlier failure or the query on current engine hit trouble
 	 * and cannot copy the keys. Under such cases, cleanup RPCs instead of merge query resutls.
 	 */
-	if (unlikely(!otqa->keys_copied)) {
+	if (unlikely(!otqa->otqa_keys_allocated)) {
 		cleanup = true;
-		/* otqa->result may be not initialized under such case. */
+		/* otqa->otqa_result may be not initialized under such case. */
 	} else {
-		oqma.oca = &exec_arg->ioc->ioc_oca;
-		oqma.tgt_dkey = &otqa->dkey_copy;
-		oqma.tgt_akey = &otqa->akey_copy;
-		oqma.tgt_recx = &otqa->recx;
-		oqma.tgt_epoch = &otqa->max_epoch;
-		oqma.tgt_map_ver = &otqa->version;
-		oqma.shard = &otqa->shard;
-		oqma.opc = DAOS_OBJ_RPC_COLL_QUERY;
+		oqma.oqma_oca = &exec_arg->ioc->ioc_oca;
+		oqma.oqma_tgt_dkey = &otqa->otqa_dkey_copy;
+		oqma.oqma_tgt_akey = &otqa->otqa_akey_copy;
+		oqma.oqma_tgt_recx = &otqa->otqa_recx;
+		oqma.oqma_tgt_epoch = &otqa->otqa_max_epoch;
+		oqma.oqma_tgt_map_ver = &otqa->otqa_version;
+		oqma.oqma_shard = &otqa->otqa_shard;
+		oqma.oqma_opc = DAOS_OBJ_RPC_COLL_QUERY;
 	}
 
 	for (i = 0, allow_failure_cnt = 0, succeeds = 0; i < dlh->dlh_normal_sub_cnt; i++) {
@@ -541,8 +543,8 @@ obj_coll_query_agg_cb(struct dtx_leader_handle *dlh, void *arg)
 			D_ASSERT(rpc != NULL);
 
 			ocqo = crt_reply_get(rpc);
-			if (otqa->max_epoch < ocqo->ocqo_max_epoch)
-				otqa->max_epoch = ocqo->ocqo_max_epoch;
+			if (otqa->otqa_max_epoch < ocqo->ocqo_max_epoch)
+				otqa->otqa_max_epoch = ocqo->ocqo_max_epoch;
 			allow_failure_cnt++;
 			goto next;
 		}
@@ -570,20 +572,21 @@ obj_coll_query_agg_cb(struct dtx_leader_handle *dlh, void *arg)
 		 * max/min dkey/recx are not from the direct target. The ocqo->ocqo_shard indicates
 		 * the right one.
 		 */
-		oqma.oid = ocqi->ocqi_oid;
-		oqma.oid.id_shard = ocqo->ocqo_shard;
-		oqma.src_epoch = ocqo->ocqo_max_epoch;
-		oqma.in_dkey = &ocqi->ocqi_dkey;
-		oqma.src_dkey = &ocqo->ocqo_dkey;
-		oqma.src_akey = &ocqo->ocqo_akey;
-		oqma.src_recx = &ocqo->ocqo_recx;
-		oqma.flags = ocqi->ocqi_api_flags;
-		oqma.src_map_ver = obj_reply_map_version_get(rpc);
+		oqma.oqma_oid = ocqi->ocqi_oid;
+		oqma.oqma_oid.id_shard = ocqo->ocqo_shard;
+		oqma.oqma_src_epoch = ocqo->ocqo_max_epoch;
+		oqma.oqma_in_dkey = &ocqi->ocqi_dkey;
+		oqma.oqma_src_dkey = &ocqo->ocqo_dkey;
+		oqma.oqma_src_akey = &ocqo->ocqo_akey;
+		oqma.oqma_src_recx = &ocqo->ocqo_recx;
+		oqma.oqma_flags = ocqi->ocqi_api_flags;
+		oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
+		oqma.oqma_server_merge = 1;
 		/*
 		 * Merge (L3) the results from other engines into current otqa that stands for the
 		 * results for related engines' group, including current engine.
 		 */
-		rc = daos_obj_merge_query_merge(&oqma);
+		rc = daos_obj_query_merge(&oqma);
 
 next:
 		if (rpc != NULL)

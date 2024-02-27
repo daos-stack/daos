@@ -25,7 +25,6 @@ dnf --nodocs install \
     file \
     flex \
     fuse3 \
-    fuse3-devel \
     gcc \
     gcc-c++ \
     git \

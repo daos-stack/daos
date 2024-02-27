@@ -18,7 +18,6 @@ import (
 #include <daos/object.h>
 #include <daos/pool_map.h>
 #include <daos/cont_props.h>
-#include <daos_srv/policy.h>
 #include <daos_srv/control.h>
 */
 import "C"
@@ -101,8 +100,8 @@ const (
 	PoolPropertyECPda = C.DAOS_PROP_PO_EC_PDA
 	// PoolPropertyRPPda is performance domain affinity level of replicated object.
 	PoolPropertyRPPda = C.DAOS_PROP_PO_RP_PDA
-	// PoolPropertyPolicy is the tiering policy set for a pool
-	PoolPropertyPolicy = C.DAOS_PROP_PO_POLICY
+	// PoolDataThreshold is the data threshold size for a pool
+	PoolDataThresh = C.DAOS_PROP_PO_DATA_THRESH
 	//PoolPropertyGlobalVersion is aggregation of pool/container/object/keys version.
 	PoolPropertyGlobalVersion = C.DAOS_PROP_PO_GLOBAL_VERSION
 	//PoolPropertyUpgradeStatus is pool upgrade status
@@ -149,6 +148,8 @@ const (
 	PoolSelfHealingAutoExclude = C.DAOS_SELF_HEAL_AUTO_EXCLUDE
 	// PoolSelfHealingAutoRebuild sets the self-healing strategy to auto-rebuild.
 	PoolSelfHealingAutoRebuild = C.DAOS_SELF_HEAL_AUTO_REBUILD
+	// PoolSelfHealingDelayRebuild sets the self-healing strategy to delay-rebuild.
+	PoolSelfHealingDelayRebuild = C.DAOS_SELF_HEAL_DELAY_REBUILD
 )
 
 const (
@@ -235,25 +236,11 @@ func RpPdaIsValid(pda uint64) bool {
 	return bool(C.daos_rp_pda_valid(C.uint32_t(pda)))
 }
 
-// PoolPolicy defines a type to be used to represent DAOS pool policies.
-type PoolPolicy uint32
-
-const (
-	// PoolPolicyIoSize sets the pool's policy to io_size
-	PoolPolicyIoSize PoolPolicy = C.DAOS_MEDIA_POLICY_IO_SIZE
-	// PoolPolicyWriteIntensivity sets the pool's policy to write_intensivity
-	PoolPolicyWriteIntensivity PoolPolicy = C.DAOS_MEDIA_POLICY_WRITE_INTENSIVITY
-)
-
-// PoolPolicyIsValid returns a boolean indicating whether or not the
-// pool tiering policy string is valid.
-func PoolPolicyIsValid(polStr string) bool {
-	var polDesc C.struct_policy_desc_t
-
-	cStr := C.CString(polStr)
-	defer C.free(unsafe.Pointer(cStr))
-
-	return bool(C.daos_policy_try_parse(cStr, &polDesc))
+func DataThreshIsValid(size uint64) bool {
+	if size > math.MaxUint32 {
+		return false
+	}
+	return bool(C.daos_data_thresh_valid(C.uint32_t(size)))
 }
 
 const (
