@@ -18,6 +18,7 @@ import json
 import os
 import pickle  # nosec
 import pprint
+import pwd
 import random
 import re
 import shutil
@@ -581,11 +582,11 @@ class DaosServer():
         self.fuse_procs = []
 
     def __enter__(self):
-        self.start()
+        self._start()
         return self
 
     def __exit__(self, _type, _value, _traceback):
-        rc = self.stop(self.wf)
+        rc = self._stop(self.wf)
         if rc != 0 and self.fatal_errors is not None:
             self.fatal_errors.fail()
         return False
@@ -663,7 +664,7 @@ class DaosServer():
                 return False
         return True
 
-    def start(self):
+    def _start(self):
         """Start a DAOS server"""
         # pylint: disable=consider-using-with
         server_env = get_base_env(clean=True)
@@ -850,7 +851,7 @@ class DaosServer():
         except FileNotFoundError:
             pass
 
-    def stop(self, wf):
+    def _stop(self, wf):
         """Stop a previously started DAOS server"""
         for fuse in self.fuse_procs:
             print('Stopping server with running fuse procs, cleaning up')
@@ -1447,7 +1448,7 @@ class DFuse():
         print('Stopping fuse')
 
         if self.container:
-            self.run_query()
+            self.run_query(use_json=True)
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
@@ -1542,11 +1543,7 @@ class DFuse():
 
         Returns the raw numbers in a dict.
         """
-        cmd = ['filesystem', 'query']
-        if qpath:
-            cmd.append(qpath)
-        else:
-            cmd.append(self.dir)
+        cmd = ['filesystem', 'query', qpath or self.dir]
 
         if ino is not None:
             cmd.extend(['--inode', str(ino)])
@@ -1840,7 +1837,7 @@ def destroy_container(conf, pool, container, valgrind=True, log_check=True):
     assert rc.returncode == 0, rc
 
 
-def check_dfs_tool_output(output, oclass, csize):
+def check_file_attr(output, oclass, csize):
     """Verify daos fs tool output"""
     line = output.splitlines()
     dfs_attr = line[0].split()[-1]
@@ -1848,6 +1845,28 @@ def check_dfs_tool_output(output, oclass, csize):
         if dfs_attr != oclass:
             return False
     dfs_attr = line[1].split()[-1]
+    if csize is not None:
+        if dfs_attr != csize:
+            return False
+    return True
+
+
+def check_dir_attr(output, oclass, dir_oclass, file_oclass, csize):
+    """Verify daos fs tool output"""
+    line = output.splitlines()
+    dfs_attr = line[0].split()[-1]
+    if oclass is not None:
+        if dfs_attr != oclass:
+            return False
+    dfs_attr = line[1].split()[-1]
+    if dir_oclass is not None:
+        if dfs_attr != dir_oclass:
+            return False
+    dfs_attr = line[2].split()[-1]
+    if file_oclass is not None:
+        if dfs_attr != file_oclass:
+            return False
+    dfs_attr = line[3].split()[-1]
     if csize is not None:
         if dfs_attr != csize:
             return False
@@ -2068,7 +2087,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(rc)
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S2', '1048576')
+        assert check_dir_attr(output, 'S2', 'S2', 'S4', '1048576')
 
         cmd = ['fs', 'get-attr', '--path', file1]
         print('get-attr of ' + file1)
@@ -2076,7 +2095,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(rc)
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S4', '1048576')
+        assert check_file_attr(output, 'S4', '1048576')
 
         if dfuse.stop():
             self.fatal_errors = True
@@ -2721,6 +2740,94 @@ class PosixTests():
             for (key, value) in xattr.get_all(fd):
                 print(f'xattr is {key}:{value}')
 
+    @needs_dfuse_with_opt(caching=False)
+    def test_stable_inode(self):
+        """Ensure that container inodes are persistent
+
+        Create a container via dfuse, access it to query the inode, evict the inode and then access
+        it again forcing a re-connect and verify the inode is unchanged.
+        """
+        child_path = join(self.dfuse.dir, 'test_cont')
+
+        new_cont = create_cont(self.conf, self.pool, path=child_path)
+
+        pre = os.stat(child_path)
+
+        self.dfuse.evict_and_wait([child_path])
+
+        post = os.stat(child_path)
+
+        # Close and detach again.
+        self.dfuse.evict_and_wait([child_path])
+        new_cont.destroy()
+
+        print(pre)
+        print(post)
+        assert pre.st_ino == post.st_ino
+
+    def xtest_stable_cont_inode(self):
+        """Ensure that container inodes are persistent
+
+        Create a container outside of dfuse.
+        Start dfuse with no container on command line.
+        Access pool path and read ino
+        Wait for pool path to be evicted
+        Access container path read ino
+        Wait for pool path to be evicted
+        Access container path check ino
+
+        Note: Test passes but is disabled due to run-time.
+        """
+
+        # Magic value for how long to sleep.  This needs to be long enough for entry timeout,
+        # whatever grace period is configured and some additional to let the eviction process
+        # happen.  This makes for a very long test, plus in addition there is no way of telling
+        # if the eviction has actually happened.
+        # A second test pool would be useful here so we could use filesystem query to check the
+        # inode count.
+        sleep_time = 307 + 5 + (60 * 30)
+
+        cont0 = create_cont(self.conf, self.pool, label="stable1", ctype="POSIX")
+        cont1 = create_cont(self.conf, self.pool, label="stable2", ctype="POSIX")
+
+        dfuse = DFuse(self.server, self.conf)
+        dfuse.start()
+
+        root_data = os.stat(dfuse.dir)
+        print(root_data)
+
+        pool_data = os.stat(join(dfuse.dir, self.pool.uuid))
+        print(pool_data)
+
+        time.sleep(sleep_time)
+
+        pool_data_post = os.stat(join(dfuse.dir, self.pool.uuid))
+        print(pool_data_post)
+
+        time.sleep(sleep_time)
+
+        cont_data = os.stat(join(dfuse.dir, self.pool.uuid, cont0.uuid))
+        print(cont_data)
+
+        time.sleep(sleep_time)
+
+        cont_data_post = os.stat(join(dfuse.dir, self.pool.uuid, cont0.uuid))
+        print(cont_data_post)
+
+        cont1_data = os.stat(join(dfuse.dir, self.pool.uuid, cont1.uuid))
+        print(cont1_data)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        cont0.destroy()
+        assert root_data.st_ino == 1
+        assert pool_data.st_ino == 2
+        assert pool_data_post.st_ino == pool_data.st_ino
+        assert cont_data.st_ino == 3
+        assert cont_data_post.st_ino == cont_data.st_ino
+        assert cont1_data.st_ino == 4
+
     @needs_dfuse
     def test_evict(self):
         """Evict a file from dfuse"""
@@ -3187,6 +3294,56 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
+    def test_cont_chown(self):
+        """Test ownership change of a POSIX container"""
+        # Update container ACLs so current user can mount.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'update-acl',
+                                      self.pool.id(),
+                                      self.container.id(),
+                                      '--entry',
+                                      f'A::{os.getlogin()}@:rwta'])
+        print(rc)
+        assert rc.returncode == 0
+
+        # Assign the container to someone else.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'set-owner',
+                                      self.pool.id(),
+                                      self.container.id(),
+                                      '--user',
+                                      'root@',
+                                      '--group',
+                                      'root@'])
+        print(rc)
+        assert rc.returncode == 0
+
+        # get owner to verify.
+        rc = run_daos_cmd(self.conf, ['container',
+                                      'get-acl',
+                                      self.pool.id(),
+                                      self.container.id()],
+                          use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        data = rc.json
+        assert data['status'] == 0, rc
+        assert data['error'] is None, rc
+        assert data['response']['owner_user'] == 'root@'
+        assert data['response']['owner_group'] == 'root@'
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      container=self.container,
+                      caching=False)
+
+        dfuse.start(v_hint='cont_chown_1')
+        assert pwd.getpwnam('root').pw_uid == os.stat(dfuse.dir).st_uid
+        assert pwd.getpwnam('root').pw_gid == os.stat(dfuse.dir).st_gid
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
     @needs_dfuse
     def test_complex_rename(self):
         """Test for rename semantics
@@ -3495,7 +3652,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S1', '1048576')
+        assert check_dir_attr(output, 'S1', 'S1', None, '1048576')
 
         # run same command using pool, container, dfs-path, and dfs-prefix
         cmd = ['fs', 'get-attr', pool, uns_container.id(), '--dfs-path', dir1,
@@ -3505,7 +3662,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S1', '1048576')
+        assert check_dir_attr(output, 'S1', 'S1', None, '1048576')
 
         # run same command using pool, container, dfs-path
         cmd = ['fs', 'get-attr', pool, uns_container.id(), '--dfs-path', '/d1']
@@ -3514,7 +3671,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S1', '1048576')
+        assert check_dir_attr(output, 'S1', 'S1', None, '1048576')
 
         cmd = ['fs', 'get-attr', '--path', file1]
         print('get-attr of d1/f1')
@@ -3523,7 +3680,7 @@ class PosixTests():
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
         # SX is not deterministic, so don't check it here
-        assert check_dfs_tool_output(output, None, '1048576')
+        assert check_file_attr(output, None, '1048576')
 
         # Run a command to change attr of dir1
         cmd = ['fs', 'set-attr', '--path', dir1, '--oclass', 'S2',
@@ -3556,7 +3713,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S2', '16')
+        assert check_dir_attr(output, 'S1', 'S2', 'S2', '16')
 
         cmd = ['fs', 'get-attr', '--path', file2]
         print('get-attr of d1/f2')
@@ -3564,7 +3721,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, 'S1', '16')
+        assert check_file_attr(output, 'S1', '16')
 
     def test_cont_copy(self):
         """Verify that copying into a container works"""
@@ -3582,7 +3739,7 @@ class PosixTests():
                '--src',
                src_dir.name,
                '--dst',
-               f'daos://{self.pool.uuid}/{self.container}']
+               f'daos://{self.pool.id()}/{self.container.id()}']
         rc = run_daos_cmd(self.conf, cmd, use_json=True)
         print(rc)
 
@@ -4084,7 +4241,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, None, '1048576')
+        assert check_file_attr(output, None, '1048576')
         with open(fname1, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'test1':
@@ -4095,7 +4252,7 @@ class PosixTests():
         assert rc.returncode == 0
         print(f'rc is {rc}')
         output = rc.stdout.decode('utf-8')
-        assert check_dfs_tool_output(output, None, '1048576')
+        assert check_file_attr(output, None, '1048576')
         with open(fname3, 'r', encoding='ascii', errors='ignore') as fd:
             data = fd.read()
             if data != 'test3':
@@ -4324,7 +4481,7 @@ def run_posix_tests(server, conf, test=None):
 
         threads = []
 
-        slow_tests = ['test_readdir_25', 'test_uns_basic', 'test_daos_fs_tool']
+        slow_tests = ['test_uns_basic', 'test_daos_fs_tool', 'test_stable_cont_inode']
 
         tests = dir(pto)
         tests.sort(key=lambda x: x not in slow_tests)
@@ -4732,30 +4889,41 @@ def run_in_fg(server, conf, args):
             container = cont.uuid
             break
 
+    # Set to False to run dfuse without a pool.
+    pool_on_cmd_line = True
+
     if not container:
         container = create_cont(conf, pool, label=label, ctype="POSIX")
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
         cont_attrs = {'dfuse-data-cache': False,
-                      'dfuse-attr-time': 60,
-                      'dfuse-dentry-time': 60,
-                      'dfuse-ndentry-time': 60,
+                      'dfuse-attr-time': 67,
+                      'dfuse-dentry-time': 19,
+                      'dfuse-dentry-dir-time': 31,
+                      'dfuse-ndentry-time': 61,
                       'dfuse-direct-io-disable': False}
         container.set_attrs(cont_attrs)
         container = container.uuid
 
+    dargs = {"caching": True,
+             "wbcache": True,
+             "multi_user": args.multi_user}
+
+    if pool_on_cmd_line:
+        dargs['pool'] = pool.uuid
+
     dfuse = DFuse(server,
                   conf,
-                  pool=pool.uuid,
-                  caching=True,
-                  wbcache=False,
-                  multi_user=args.multi_user)
+                  **dargs)
 
     dfuse.log_flush = True
     dfuse.start()
 
-    t_dir = join(dfuse.dir, container)
+    if pool_on_cmd_line:
+        t_dir = join(dfuse.dir, container)
+    else:
+        t_dir = join(dfuse.dir, pool.uuid, container)
 
     print(f'Running at {t_dir}')
     print(f'export PATH={join(conf["PREFIX"], "bin")}:$PATH')
@@ -5583,7 +5751,7 @@ def test_dfuse_start(server, conf, wf):
     """
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool, ctype='POSIX')
+    container = create_cont(conf, pool, ctype='POSIX', label="dfuse_fi_start")
 
     mount_point = join(conf.dfuse_parent_dir, 'fi-mount')
 
@@ -5851,7 +6019,7 @@ def test_fi_list_attr(server, conf, wf):
     """Run daos cont list-attr with fault injection"""
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool)
+    container = create_cont(conf, pool, label="attr_cont")
 
     container.set_attrs({'my-test-attr-1': 'some-value',
                         'my-test-attr-2': 'some-other-value'})
@@ -5874,7 +6042,7 @@ def test_fi_get_prop(server, conf, wf):
     """Run daos cont get-prop with fault injection"""
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool, ctype='POSIX')
+    container = create_cont(conf, pool, ctype='POSIX', label="prop_cont")
 
     cmd = ['daos',
            'container',
@@ -5895,7 +6063,7 @@ def test_fi_get_attr(server, conf, wf):
     """Run daos cont get-attr with fault injection"""
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool)
+    container = create_cont(conf, pool, label="getattr-cont")
 
     attr_name = 'my-test-attr'
 
@@ -5923,7 +6091,7 @@ def test_fi_cont_query(server, conf, wf):
     """Run daos cont query with fault injection"""
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool, ctype='POSIX')
+    container = create_cont(conf, pool, ctype='POSIX', label="cont_query")
 
     cmd = ['daos',
            'container',
@@ -5946,7 +6114,7 @@ def test_fi_cont_check(server, conf, wf):
     """Run daos cont check with fault injection"""
     pool = server.get_test_pool_obj()
 
-    container = create_cont(conf, pool)
+    container = create_cont(conf, pool, label="cont_check")
 
     cmd = ['daos',
            'container',
@@ -5977,7 +6145,7 @@ def test_alloc_fail(server, conf):
 
     # Create at least one container, and record what the output should be when
     # the command works.
-    container = create_cont(conf, pool)
+    container = create_cont(conf, pool, label="listing_container")
 
     rc = test_cmd.launch()
     container.destroy()

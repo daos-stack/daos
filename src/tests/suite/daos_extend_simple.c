@@ -22,7 +22,6 @@
 
 #define KEY_NR		10
 #define OBJ_NR		10
-#define EXTEND_SMALL_POOL_SIZE	(4ULL << 30)
 
 static void
 extend_dkeys(void **state)
@@ -342,7 +341,7 @@ extend_cb_internal(void *arg)
 		/* it should fail with -DER_BUSY */
 		rc = dmg_pool_extend(test_arg->dmg_config, test_arg->pool.pool_uuid,
 				     test_arg->group, &cb_arg->rank, 1);
-		assert_int_not_equal(rc, 0);
+		assert_int_equal(rc, 0);
 	}
 	/* Kill another rank during extend */
 	switch(opc) {
@@ -459,7 +458,9 @@ dfs_extend_internal(void **state, int opc, test_rebuild_cb_t extend_cb, bool kil
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 			      DAOS_REBUILD_TGT_SCAN_HANG | DAOS_FAIL_ALWAYS, 0, NULL);
 
+	arg->no_rebuild=1;
 	extend_single_pool_rank(arg, 3);
+	arg->no_rebuild=0;
 
 	print_message("sleep 30 secs for rank %u exclude or reintegrate.\n", cb_arg.rank);
 	sleep(30);
@@ -592,8 +593,11 @@ dfs_extend_fail_retry(void **state)
 	print_message("first extend will fail then exclude\n");
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 			      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+	arg->no_rebuild = 1;
 	extend_single_pool_rank(arg, 3);
-
+	print_message("sleep 30 seconds for extend to fail and exit\n");
+	sleep(30);
+	arg->no_rebuild = 0;
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 	extend_read_check(dfs_mt, dir);
 
@@ -615,57 +619,40 @@ dfs_extend_fail_retry(void **state)
 	assert_rc_equal(rc, 0);
 }
 
-int
-extend_small_sub_setup(void **state)
-{
-	int rc;
-
-	save_group_state(state);
-	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			EXTEND_SMALL_POOL_SIZE, 3, NULL);
-	if (rc) {
-		print_message("It can not create the pool with 3 ranks"
-			      " probably due to not enough ranks %d\n", rc);
-		return 0;
-	}
-
-	return rc;
-}
-
 /** create a new pool/container for each test */
 static const struct CMUnitTest extend_tests[] = {
 	{"EXTEND1: extend small rec multiple dkeys",
-	 extend_dkeys, extend_small_sub_setup, test_teardown},
+	 extend_dkeys, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND2: extend small rec multiple akeys",
-	 extend_akeys, extend_small_sub_setup, test_teardown},
+	 extend_akeys, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND3: extend small rec multiple indexes",
-	 extend_indexes, extend_small_sub_setup, test_teardown},
+	 extend_indexes, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND4: extend large rec single index",
-	 extend_large_rec, extend_small_sub_setup, test_teardown},
+	 extend_large_rec, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND5: extend multiple objects",
-	 extend_objects, extend_small_sub_setup, test_teardown},
+	 extend_objects, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND6: punch object during extend and kill",
-	 dfs_extend_punch_kill, extend_small_sub_setup, test_teardown},
+	 dfs_extend_punch_kill, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND7: punch object during extend and extend",
-	 dfs_extend_punch_extend, extend_small_sub_setup, test_teardown},
+	 dfs_extend_punch_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND8: stat object during extend and kill",
-	 dfs_extend_stat_kill, extend_small_sub_setup, test_teardown},
+	 dfs_extend_stat_kill, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND9: stat object during extend and extend",
-	 dfs_extend_stat_extend, extend_small_sub_setup, test_teardown},
+	 dfs_extend_stat_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND10: enumerate object during extend and kill",
-	 dfs_extend_enumerate_kill, extend_small_sub_setup, test_teardown},
+	 dfs_extend_enumerate_kill, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND11: enumerate object during extend and extend",
-	 dfs_extend_enumerate_extend, extend_small_sub_setup, test_teardown},
+	 dfs_extend_enumerate_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND12: read object during extend and kill",
-	 dfs_extend_fetch_kill, extend_small_sub_setup, test_teardown},
+	 dfs_extend_fetch_kill, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND13: read object during extend and extend",
-	 dfs_extend_fetch_extend, extend_small_sub_setup, test_teardown},
+	 dfs_extend_fetch_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND14: write object during extend and kill",
-	 dfs_extend_write_kill, extend_small_sub_setup, test_teardown},
+	 dfs_extend_write_kill, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND15: write object during extend and extend",
-	 dfs_extend_write_extend, extend_small_sub_setup, test_teardown},
+	 dfs_extend_write_extend, rebuild_sub_3nodes_rf0_setup, test_teardown},
 	{"EXTEND16: extend fail then retry",
-	 dfs_extend_fail_retry, extend_small_sub_setup, test_teardown},
+	 dfs_extend_fail_retry, rebuild_sub_3nodes_rf0_setup, test_teardown},
 };
 
 int

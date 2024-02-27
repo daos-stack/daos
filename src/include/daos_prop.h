@@ -72,9 +72,9 @@ enum daos_pool_props {
 	 */
 	DAOS_PROP_PO_EC_CELL_SZ,
 	/**
-	 * Media selection policy
+	 * Bdev threshold size
 	 */
-	DAOS_PROP_PO_POLICY,
+	DAOS_PROP_PO_DATA_THRESH,
 	/**
 	 * Pool redundancy factor.
 	 */
@@ -262,6 +262,7 @@ enum {
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
+#define DAOS_SELF_HEAL_DELAY_REBUILD	(1U << 2)
 
 /**
  * DAOS container property types
@@ -635,11 +636,8 @@ daos_label_is_valid(const char *label)
 	return true;
 }
 
-/** max length of the policy string */
-#define DAOS_PROP_POLICYSTR_MAX_LEN	(127)
-
-/* default policy string */
-#define DAOS_PROP_POLICYSTR_DEFAULT	"type=io_size"
+/* default data threshold size of 4KiB */
+#define DAOS_PROP_PO_DATA_THRESH_DEFAULT (1UL << 12)
 
 /**
  * Check if DAOS pool performance domain string is valid, string
