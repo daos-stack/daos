@@ -125,7 +125,7 @@ struct ec_agg_param {
 	struct ec_agg_entry	 ap_agg_entry;	 /* entry used for each OID   */
 	daos_epoch_range_t	 ap_epr;	 /* hi/lo extent threshold    */
 	daos_epoch_t		 ap_filter_eph;	 /* Aggregatable filter epoch */
-	daos_epoch_t		ap_min_unagg_eph; /* minimum unaggregate epoch */
+	daos_epoch_t		 ap_min_unagg_eph; /* minimum unaggregate epoch */
 	daos_handle_t		 ap_cont_handle; /* VOS container handle */
 	int			(*ap_yield_func)(void *arg); /* yield function*/
 	void			*ap_yield_arg;   /* yield argument            */
