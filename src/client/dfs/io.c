@@ -6,11 +6,14 @@
 
 /** DFS read & write ops */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/array.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/object.h>
-#include "internal.h"
+
+#include "dfs_internal.h"
 
 struct dfs_read_params {
 	daos_size_t     *read_size;
