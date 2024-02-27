@@ -128,6 +128,7 @@ struct obj_tgt_query_args {
 	uint32_t		 otqa_version;
 	uint32_t		 otqa_completed:1,
 				 otqa_need_copy:1,
+				 otqa_raw_recx:1,
 				 otqa_keys_allocated:1;
 };
 

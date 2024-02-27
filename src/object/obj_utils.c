@@ -86,67 +86,70 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 		D_FREE(iods);
 }
 
-static void
-obj_query_fix_ec_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
-		      daos_recx_t *recx, bool get_max, bool server_merge, uint32_t *shard)
+void
+obj_ec_recx_vos2daos(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
+		     daos_recx_t *recx, bool get_max)
 {
-	uint64_t	tmp_end;
-	uint32_t	tgt_off;
-	bool		from_data_tgt;
+	daos_recx_t	tmp;
+	uint64_t	end;
 	uint64_t	dkey_hash;
 	uint64_t	stripe_rec_nr;
 	uint64_t	cell_rec_nr;
+	uint32_t	tgt_off;
+	bool		from_data_tgt;
+
+	D_ASSERT(daos_oclass_is_ec(oca));
+	D_ASSERT(!(recx->rx_idx & PARITY_INDICATOR));
 
 	dkey_hash = obj_dkey2hash(oid.id_pub, dkey);
 	tgt_off = obj_ec_shard_off_by_oca(oid.id_layout_ver, dkey_hash, oca, oid.id_shard);
 	from_data_tgt = is_ec_data_shard_by_tgt_off(tgt_off, oca);
 	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
 	cell_rec_nr = obj_ec_cell_rec_nr(oca);
-	D_ASSERT(!(recx->rx_idx & PARITY_INDICATOR));
 
 	/*
 	 * Data ext from data shard needs to be converted to daos ext,
 	 * replica ext from parity shard needs not to convert.
 	 */
-	tmp_end = DAOS_RECX_END(*recx);
-	D_DEBUG(DB_IO, "shard %d/%u get recx " DF_U64 " " DF_U64 "\n", oid.id_shard, tgt_off,
-		recx->rx_idx, recx->rx_nr);
-
-	if (tmp_end > 0 && from_data_tgt) {
+	end = DAOS_RECX_END(*recx);
+	if (end > 0 && from_data_tgt) {
+		tmp = *recx;
 		if (get_max) {
-			recx->rx_idx = max(recx->rx_idx, rounddown(tmp_end - 1, cell_rec_nr));
-			recx->rx_nr  = tmp_end - recx->rx_idx;
+			tmp.rx_idx = max(tmp.rx_idx, rounddown(end - 1, cell_rec_nr));
+			tmp.rx_nr = end - tmp.rx_idx;
 		} else {
-			recx->rx_nr =
-			    min(tmp_end, roundup(recx->rx_idx + 1, cell_rec_nr)) - recx->rx_idx;
+			tmp.rx_nr = min(end, roundup(tmp.rx_idx + 1, cell_rec_nr)) - tmp.rx_idx;
 		}
 
-		if (!server_merge)
-			recx->rx_idx =
-			    obj_ec_idx_vos2daos(recx->rx_idx, stripe_rec_nr, cell_rec_nr, tgt_off);
+		tmp.rx_idx = obj_ec_idx_vos2daos(tmp.rx_idx, stripe_rec_nr, cell_rec_nr, tgt_off);
+
+		D_DEBUG(DB_IO, "Convert Object "DF_UOID" data shard ext: off %u, stripe_rec_nr "
+			DF_U64", cell_rec_nr "DF_U64", ["DF_U64" "DF_U64"]/["DF_U64" "DF_U64"]\n",
+			DP_UOID(oid), tgt_off, stripe_rec_nr, cell_rec_nr,
+			recx->rx_idx, recx->rx_nr, tmp.rx_idx, tmp.rx_nr);
+		*recx = tmp;
 	}
 }
 
 static void
 obj_query_reduce_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
 		      daos_recx_t *src_recx, daos_recx_t *tgt_recx, bool get_max, bool changed,
-		      bool server_merge, uint32_t *shard)
+		      bool raw_recx, uint32_t *shard)
 {
 	daos_recx_t tmp_recx = *src_recx;
 	uint64_t    tmp_end;
 
-	if (!daos_oclass_is_ec(oca))
-		D_GOTO(out, changed = true);
-
-	obj_query_fix_ec_recx(oca, oid, dkey, &tmp_recx, get_max, server_merge, shard);
-
-	tmp_end = DAOS_RECX_END(tmp_recx);
-
-	if ((get_max && DAOS_RECX_END(*tgt_recx) < tmp_end) ||
-	    (!get_max && DAOS_RECX_END(*tgt_recx) > tmp_end))
+	if (daos_oclass_is_ec(oca)) {
+		if (raw_recx)
+			obj_ec_recx_vos2daos(oca, oid, dkey, &tmp_recx, get_max);
+		tmp_end = DAOS_RECX_END(tmp_recx);
+		if ((get_max && DAOS_RECX_END(*tgt_recx) < tmp_end) ||
+		    (!get_max && DAOS_RECX_END(*tgt_recx) > tmp_end))
+			changed = true;
+	} else {
 		changed = true;
+	}
 
-out:
 	if (changed) {
 		*tgt_recx = tmp_recx;
 		if (shard != NULL)
@@ -293,7 +296,7 @@ daos_obj_query_merge(struct obj_query_merge_args *oqma)
 				      (oqma->oqma_flags & DAOS_GET_DKEY) ? oqma->oqma_src_dkey
 									 : oqma->oqma_in_dkey,
 				      oqma->oqma_src_recx, oqma->oqma_tgt_recx, get_max, changed,
-				      oqma->oqma_server_merge, oqma->oqma_shard);
+				      oqma->oqma_raw_recx, oqma->oqma_shard);
 
 set_max_epoch:
 	if (oqma->oqma_tgt_epoch != NULL && *oqma->oqma_tgt_epoch < oqma->oqma_src_epoch)
