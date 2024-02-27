@@ -146,6 +146,48 @@ CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 
 /* clang-format on */
+enum map_update_opc {
+	MAP_EXCLUDE = 0,
+	MAP_DRAIN,
+	MAP_REINT,
+	MAP_EXTEND,
+	MAP_ADD_IN,
+	MAP_EXCLUDE_OUT,
+	MAP_FINISH_REBUILD,
+	MAP_REVERT_REBUILD,
+};
+
+static inline uint32_t
+pool_opc_2map_opc(uint32_t pool_opc)
+{
+	uint32_t opc = 0;
+
+	switch(pool_opc) {
+	case POOL_EXCLUDE:
+		opc = MAP_EXCLUDE;
+		break;
+	case POOL_DRAIN:
+		opc = MAP_DRAIN;
+		break;
+	case POOL_REINT:
+		opc = MAP_REINT;
+		break;
+	case POOL_EXTEND:
+		opc = MAP_EXTEND;
+		break;
+	case POOL_ADD_IN:
+		opc = MAP_ADD_IN;
+		break;
+	case POOL_EXCLUDE_OUT:
+		opc = MAP_EXCLUDE_OUT;
+		break;
+	default:
+		D_ASSERTF(false, "invalid opc: 0x%x\n", pool_opc);
+		break;
+	}
+
+	return opc;
+}
 
 static inline void
 pool_create_in_get_data(crt_rpc_t *rpc, d_rank_list_t **pri_tgt_ranksp, daos_prop_t **pri_propp,

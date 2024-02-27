@@ -1448,7 +1448,7 @@ class DFuse():
         print('Stopping fuse')
 
         if self.container:
-            self.run_query()
+            self.run_query(use_json=True)
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
