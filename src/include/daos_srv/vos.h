@@ -464,6 +464,40 @@ vos_cont_close(daos_handle_t coh);
 int
 vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 
+/**
+ * Update commit epoch of the VOS container.
+ *
+ * \param coh	[IN]	container handle.
+ * \param epoch [IN]	updated epoch.
+ *
+ * \return		0 on success, negative value if failed.
+ */
+int
+vos_cont_update_boundary(daos_handle_t coh, uint64_t epoch);
+
+/**
+ * Upgrade container durable format.
+ *
+ * \param poh	[IN]	pool handle.
+ * \param co_uuid [IN]	container uuid.
+ *
+ * \return		0 on success, negative value if failed.
+ */
+int
+vos_cont_upgrade(daos_handle_t poh, uuid_t co_uuid);
+
+/**
+ * get commit epoch of the VOS container.
+ *
+ * \param coh	[IN]	container handle.
+ * \param epoch [OUT]	epoch gotten.
+ *
+ * \return		0 on success, negative value if failed.
+ */
+int
+vos_cont_get_boundary(daos_handle_t coh, uint64_t *epoch);
+
+
 enum {
 	VOS_AGG_FL_FORCE_SCAN	= (1UL << 0),	/* Scan all obj/dkey/akeys */
 	VOS_AGG_FL_FORCE_MERGE	= (1UL << 1),	/* Merge all coalesce-able EV records */
@@ -1509,4 +1543,14 @@ vos_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr);
 void
 vos_aggregate_exit(daos_handle_t coh);
 
+/**
+ * Check if the oid exist in current vos.
+ * \param[in]	coh	vos handle
+ * \param[in]	oid	oid to be checked.
+ *
+ * \return	true	exist.
+ * 		false	does not exist.
+ */
+bool
+vos_oi_exist(daos_handle_t oh, daos_unit_oid_t oid);
 #endif /* __VOS_API_H */

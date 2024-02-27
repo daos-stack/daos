@@ -90,16 +90,25 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		return -DER_NOSPACE;
 
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
-	uuid_copy(cont_df->cd_id, ukey->uuid);
-
-	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, 0, VOS_OBJ_ORDER,
-				      &pool->vp_uma, &cont_df->cd_obj_root,
-				      DAOS_HDL_INVAL, pool, &hdl);
-	if (rc) {
-		D_ERROR("dbtree create failed\n");
-		D_GOTO(failed, rc);
+	if (args->ca_cont_df != NULL) {
+		/* Copy from existing container, only happened during upgrade.
+		 * see vos_cont_upgrade().
+		 */
+		D_DEBUG(DB_DF, "copying from existing container " DF_UUID "\n",
+			DP_UUID(ukey->uuid));
+		memcpy(cont_df, args->ca_cont_df, sizeof(*cont_df));
+		D_ASSERT(cont_df->cd_obj_root.tr_class != 0);
+	} else {
+		rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, 0, VOS_OBJ_ORDER, &pool->vp_uma,
+					      &cont_df->cd_obj_root, DAOS_HDL_INVAL, pool, &hdl);
+		if (rc) {
+			D_ERROR("dbtree create failed\n");
+			D_GOTO(failed, rc);
+		}
+		dbtree_close(hdl);
 	}
-	dbtree_close(hdl);
+
+	uuid_copy(cont_df->cd_id, ukey->uuid);
 
 	gc_init_cont(&tins->ti_umm, cont_df);
 	args->ca_cont_df = cont_df;
@@ -242,8 +251,6 @@ exit:
 	return rc;
 }
 
-
-
 static int
 cont_lookup(struct d_uuid *key, struct d_uuid *pkey,
 	    struct vos_container **cont, bool is_sysdb) {
@@ -278,7 +285,7 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 {
 
 	struct vos_pool		*vpool = NULL;
-	struct cont_df_args	 args;
+	struct cont_df_args	 args = {0};
 	struct d_uuid		 ukey;
 	d_iov_t			 key, value;
 	int			 rc = 0;
@@ -330,7 +337,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	struct vos_pool			*pool = NULL;
 	struct d_uuid			ukey;
 	struct d_uuid			pkey;
-	struct cont_df_args		args;
+	struct cont_df_args		 args = {0};
 	struct vos_container		*cont = NULL;
 	struct umem_attr		uma;
 
@@ -395,6 +402,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		D_GOTO(exit, rc);
 	}
 
+	D_DEBUG(DB_TRACE, "root is %p\n", &cont->vc_cont_df->cd_obj_root);
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 
@@ -464,6 +472,108 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 exit:
 	if (rc != 0 && cont)
 		cont_free_internal(cont);
+
+	return rc;
+}
+
+int
+vos_cont_get_boundary(daos_handle_t coh, uint64_t *epoch)
+{
+	struct vos_container *cont;
+	struct cont_df_args   args = {0};
+	struct d_uuid	      ukey;
+	int		      rc;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		rc = -DER_NO_HDL;
+		DL_ERROR(rc, "Can not find vos container.");
+		return rc;
+	}
+
+	if (cont->vc_pool->vp_pool_df->pd_version < VOS_POOL_DF_2_6) {
+		D_DEBUG(DB_MD, "skip for lower version container " DF_UUID "/%u\n",
+			DP_UUID(cont->vc_id), cont->vc_pool->vp_pool_df->pd_version);
+		*epoch = 0;
+		return 0;
+	}
+
+	if (cont->vc_lowest_act_eph != 0) {
+		*epoch = cont->vc_lowest_act_eph - 1;
+		D_DEBUG(DB_TRACE, "get from act" DF_X64 " with container " DF_UUID "\n",
+			*epoch, DP_UUID(cont->vc_id));
+		return 0;
+	}
+
+	D_ASSERT(cont->vc_cmt_dtx_indexed == 1);
+	if (cont->vc_highest_cmt_eph != 0) {
+		*epoch = cont->vc_highest_cmt_eph + 1;
+		D_DEBUG(DB_TRACE, "get from cmt" DF_X64 " with container " DF_UUID "\n",
+			*epoch, DP_UUID(cont->vc_id));
+		return 0;
+	}
+
+	uuid_copy(ukey.uuid, cont->vc_id);
+	rc = cont_df_lookup(cont->vc_pool, &ukey, &args);
+	if (rc) {
+		D_DEBUG(DB_TRACE, DF_UUID " container does not exist.\n",
+			DP_UUID(cont->vc_id));
+		return rc;
+	}
+
+	D_DEBUG(DB_TRACE, "commit epoch " DF_X64 " with container " DF_UUID "\n",
+		args.ca_cont_df->cd_commit_epoch, DP_UUID(cont->vc_id));
+	*epoch = args.ca_cont_df->cd_commit_epoch;
+	return 0;
+}
+
+int
+vos_cont_update_boundary(daos_handle_t coh, uint64_t epoch)
+{
+	struct vos_container *cont;
+	struct umem_instance *umm;
+	struct vos_cont_df   *cont_df;
+	int		      rc = 0;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		D_ERROR("Can not find vos container\n");
+		return -DER_NO_HDL;
+	}
+
+	cont_df = cont->vc_cont_df;
+	if (cont->vc_pool->vp_pool_df->pd_version < VOS_POOL_DF_2_6) {
+		D_DEBUG(DB_MD, "skip for lower version container " DF_UUID "/%u\n",
+			DP_UUID(cont->vc_id), cont->vc_pool->vp_pool_df->pd_version);
+		return 0;
+	}
+
+	if (epoch <= cont_df->cd_commit_epoch) {
+		D_DEBUG(DB_MD, DF_UUID " epoch " DF_X64 " < " DF_X64 "\n",
+			DP_UUID(cont->vc_id), epoch, cont_df->cd_commit_epoch);
+		return 0;
+	}
+
+	umm = vos_cont2umm(cont);
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0) {
+		DL_ERROR(rc, "Failed to TX begin.");
+		return rc;
+	}
+
+	rc = umem_tx_add_ptr(umm, &cont_df->cd_commit_epoch, sizeof(cont_df->cd_commit_epoch));
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID " Failed to refresh epoch for commit.", DP_UUID(cont->vc_id));
+		D_GOTO(out_tx, rc);
+	}
+
+	D_DEBUG(DB_MD, DF_UUID " epoch " DF_X64 " -> " DF_X64 "\n",
+		DP_UUID(cont->vc_id), cont_df->cd_commit_epoch, epoch);
+
+	cont_df->cd_commit_epoch = epoch;
+
+out_tx:
+	rc = umem_tx_end(umm, rc);
 
 	return rc;
 }
@@ -619,6 +729,121 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 
 	return 0;
 exit:
+	return rc;
+}
+
+static void
+old_cont_df_2_new_cont_df(struct vos_cont_df *new_df, struct vos_cont_df *old_df)
+{
+	/* XXX might need more complex conversion if the entry is added/deleted
+	 * in the middle of structure.
+	 */
+	memcpy(new_df, old_df, sizeof(*old_df) - sizeof(new_df->cd_commit_epoch));
+}
+
+/* Upgrade vos_container to the 2.6 format */
+int
+vos_cont_upgrade(daos_handle_t poh, uuid_t co_uuid)
+{
+	struct cont_df_args   args = { 0 };
+	struct d_uuid	      pkey;
+	struct d_uuid	      ukey;
+	struct vos_container *cont;
+	struct vos_pool      *pool;
+	struct umem_instance *umm;
+	struct vos_cont_df    cont_df;
+	d_iov_t		      key;
+	d_iov_t		      iov;
+	int		      rc;
+
+	pool = vos_hdl2pool(poh);
+	if (pool == NULL) {
+		D_ERROR("Empty pool handle?\n");
+		return -DER_INVAL;
+	}
+	uuid_copy(pkey.uuid, pool->vp_id);
+	uuid_copy(ukey.uuid, co_uuid);
+
+	/**
+	 * Check if handle exists
+	 * then return the handle immediately
+	 */
+	rc = cont_lookup(&ukey, &pkey, &cont, pool->vp_sysdb);
+	if (rc) {
+		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n", DP_UUID(co_uuid));
+		return 0;
+	}
+
+	if (!DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE)) {
+	       if (cont->vc_pool->vp_pool_df->pd_version >= POOL_DF_VERSION) {
+			D_DEBUG(DB_MD, "skip for lower version container "DF_UUID"/%u\n",
+				DP_UUID(cont->vc_id), cont->vc_pool->vp_pool_df->pd_version);
+			D_GOTO(put, rc = 0);
+	       }
+
+	       if (cont->vc_pool->vp_pool_df->pd_version < VOS_POOL_DF_2_4) {
+			rc = -DER_NO_PERM;
+			DL_ERROR(rc,
+				 "Direct upgrade from pre-2.4 pool not supported:"DF_UUID"/%u",
+				 DP_UUID(cont->vc_id), cont->vc_pool->vp_pool_df->pd_version);
+			D_GOTO(put, rc);
+		}
+	}
+
+	uuid_copy(ukey.uuid, cont->vc_id);
+	rc = cont_df_lookup(cont->vc_pool, &ukey, &args);
+	if (rc) {
+		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
+			DP_UUID(cont->vc_id));
+		D_GOTO(put, rc = 0);
+	}
+
+	old_cont_df_2_new_cont_df(&cont_df, args.ca_cont_df);
+	umm = vos_cont2umm(cont);
+	rc  = umem_tx_begin(umm, NULL);
+	if (rc) {
+		DL_ERROR(rc, "Failed to start transaction.");
+		D_GOTO(put, rc);
+	}
+
+	/* reset the root to empty the tree, since these tree will be moved to another container */
+	memset(&args.ca_cont_df->cd_obj_root, 0, sizeof(args.ca_cont_df->cd_obj_root));
+	rc = umem_tx_add_ptr(umm, &args.ca_cont_df->cd_obj_root,
+			     sizeof(&args.ca_cont_df->cd_obj_root));
+	if (rc != 0)
+		D_GOTO(tx_end, rc);
+
+	/* Delete the old container */
+	d_iov_set(&iov, &ukey, sizeof(struct d_uuid));
+	rc = dbtree_delete(cont->vc_pool->vp_cont_th, BTR_PROBE_EQ, &iov, NULL);
+	if (rc) {
+		DL_ERROR(rc, "Failed to delete the container "DF_UUID,
+			 DP_UUID(cont->vc_id));
+		D_GOTO(tx_end, rc);
+	}
+
+	/* Update the new container */
+	args.ca_cont_df = &cont_df;
+	args.ca_pool    = cont->vc_pool;
+	d_iov_set(&key, &ukey, sizeof(ukey));
+	d_iov_set(&iov, &args, sizeof(args));
+	rc = dbtree_update(cont->vc_pool->vp_cont_th, &key, &iov);
+	if (rc) {
+		DL_ERROR(rc, "Failed to update the container "DF_UUID"\n",
+			 DP_UUID(cont->vc_id));
+		D_GOTO(tx_end, rc);
+	}
+	dbtree_handle_reset_root(cont->vc_btr_hdl, &args.ca_cont_df->cd_obj_root);
+	cont->vc_cont_df = args.ca_cont_df;
+	D_DEBUG(DB_MD, DF_UUID " upgrade to current version %u contdf %p root %p\n",
+		DP_UUID(cont->vc_id), POOL_DF_VERSION, cont->vc_cont_df,
+		&cont->vc_cont_df->cd_obj_root);
+tx_end:
+	rc = umem_tx_end(umm, rc);
+	if (rc)
+		DL_ERROR(rc, "Failed to end transaction.");
+put:
+	cont_decref(cont);
 	return rc;
 }
 
