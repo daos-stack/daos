@@ -8,7 +8,6 @@ timeout: 36000
 server_config:
   name: daos_server
   crt_timeout: 120
-  net_provider: ofi+tcp;ofi_rxm
   engines_per_host: 1
   engines:
     0:
