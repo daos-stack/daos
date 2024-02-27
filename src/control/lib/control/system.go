@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -114,11 +114,11 @@ type SystemJoinReq struct {
 	Rank                 ranklist.Rank
 	URI                  string
 	SecondaryURIs        []string            `json:"secondary_uris"`
-	NumContexts          uint32              `json:"Nctxs"`
+	NumContexts          uint32              `json:"nctxs"`
 	NumSecondaryContexts []uint32            `json:"secondary_nctxs"`
-	FaultDomain          *system.FaultDomain `json:"SrvFaultDomain"`
-	InstanceIdx          uint32              `json:"Idx"`
-	Incarnation          uint64              `json:"Incarnation"`
+	FaultDomain          *system.FaultDomain `json:"srv_fault_domain"`
+	InstanceIdx          uint32              `json:"idx"`
+	Incarnation          uint64              `json:"incarnation"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
