@@ -6,8 +6,11 @@
 
 /** DFS object metadata ops */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/common.h>
-#include "internal.h"
+
+#include "dfs_internal.h"
 
 int
 readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr, struct dirent *dirs,

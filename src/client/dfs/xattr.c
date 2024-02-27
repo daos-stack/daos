@@ -6,11 +6,13 @@
 
 /** DFS extended attributes */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <sys/xattr.h>
 #include <linux/xattr.h>
 #include <daos/common.h>
 
-#include "internal.h"
+#include "dfs_internal.h"
 
 int
 dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, const void *value, daos_size_t size,
