@@ -6,10 +6,12 @@
 
 /** DFS file ops */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/array.h>
 #include <daos/common.h>
 #include <daos/object.h>
-#include "internal.h"
+#include "dfs_internal.h"
 
 int
 dfs_get_file_oh(dfs_obj_t *obj, daos_handle_t *oh)
