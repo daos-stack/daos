@@ -28,6 +28,7 @@ distro_custom() {
     # for Launchable's pip install
     dnf -y install python3-setuptools.noarch
 
+    dnf -y install python3.11
 }
 
 install_mofed() {
