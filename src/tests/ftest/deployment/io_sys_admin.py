@@ -10,6 +10,7 @@ import security_test_base as secTestBase
 from data_mover_test_base import DataMoverTestBase
 from file_count_test_base import FileCountTestBase
 from general_utils import human_to_bytes
+from host_utils import get_local_host
 from test_utils_pool import check_pool_creation
 
 
@@ -44,10 +45,9 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         dmg = self.get_dmg_command()
         daos = self.get_daos_command()
 
-        secTestBase.add_del_user(
-            self.hostlist_clients, "useradd", new_test_user)
-        secTestBase.add_del_user(
-            self.hostlist_clients, "groupadd", new_test_group)
+        all_clients = self.hostlist_clients | get_local_host()
+        secTestBase.add_del_user(all_clients, "useradd", new_test_user)
+        secTestBase.add_del_user(all_clients, "groupadd", new_test_group)
 
         for idx in range(1, 4):
             self.add_pool_qty(1, namespace="/run/pool_{}/".format(idx), create=False)
