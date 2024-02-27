@@ -30,7 +30,6 @@
 #include <fcntl.h>
 
 #include <daos_pool.h>
-#include <daos_srv/policy.h>
 
 static void
 vos_iod2bsgl(struct umem_store *store, struct umem_store_iod *iod, struct bio_sglist *bsgl)
@@ -1332,6 +1331,12 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	if (pool_df->pd_version >= VOS_POOL_DF_2_6)
 		pool->vp_feats |= VOS_POOL_FEAT_2_6;
 
+	if (pool->vp_vea_info == NULL)
+		/** always store on SCM if no bdev */
+		pool->vp_data_thresh = 0;
+	else
+		pool->vp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
@@ -1592,7 +1597,6 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 {
 	struct vos_pool		*pool;
 	int			i;
-	struct policy_desc_t	*p;
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL)
@@ -1604,16 +1608,15 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 	case VOS_PO_CTL_RESET_GC:
 		memset(&pool->vp_gc_stat_global, 0, sizeof(pool->vp_gc_stat_global));
 		break;
-	case VOS_PO_CTL_SET_POLICY:
+	case VOS_PO_CTL_SET_DATA_THRESH:
 		if (param == NULL)
 			return -DER_INVAL;
 
-		p = param;
-		pool->vp_policy_desc.policy = p->policy;
+		if (pool->vp_vea_info == NULL)
+			/** no bdev, discard request */
+			break;
 
-		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
-			pool->vp_policy_desc.params[i] = p->params[i];
-
+		pool->vp_data_thresh = *((uint32_t *)param);
 		break;
 	case VOS_PO_CTL_SET_SPACE_RB:
 		if (param == NULL)

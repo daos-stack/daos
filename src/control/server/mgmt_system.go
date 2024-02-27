@@ -283,6 +283,15 @@ func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Pu
 	}
 
 	if provStr != curProv {
+		numJoined, err := svc.sysdb.MemberCount(system.MemberStateJoined)
+		if err != nil {
+			return errors.Wrapf(err, "getting number of joined members")
+		}
+		if numJoined > 0 {
+			return errors.Errorf("cannot change system provider %q to %q: %d member(s) already joined",
+				curProv, provStr, numJoined)
+		}
+
 		if err := svc.setFabricProviders(provStr); err != nil {
 			return errors.Wrapf(err, "changing fabric provider prop")
 		}
