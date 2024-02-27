@@ -217,6 +217,7 @@ indata
 infiniband
 init
 inode
+inodes
 interoperability
 io
 iod
@@ -353,6 +354,7 @@ ps
 puuid
 py
 pydaos
+pytest
 ramdisk
 randrw
 ranklist

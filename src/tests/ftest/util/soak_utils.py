@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -62,13 +62,23 @@ def add_pools(self, pool_names, ranks=None):
                     /run/<test_params>/poollist/*
         ranks (list, optional):  ranks to include in pool. Defaults to None
     """
+    params = {}
     target_list = ranks if ranks else None
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
+        properties = self.params.get('properties', path, "")
+        # allow yaml pool property to override the scrub default; whether scrubber is enabled or not
+        if self.enable_scrubber and "scrub" not in properties:
+            scrubber_properties = "scrub:timed,scrub_freq:120"
+        params['properties'] = (",").join(filter(None, [properties, scrubber_properties]))
         # Create a pool and add it to the overall list of pools
-        self.pool.append(
-            self.get_pool(
-                namespace=path, connect=False, target_list=target_list, dmg=self.dmg_command))
+        self.pool.append(self.get_pool(
+            namespace=path,
+            connect=False,
+            target_list=target_list,
+            dmg=self.dmg_command,
+            **params))
+
         self.log.info("Valid Pool ID is %s", self.pool[-1].identifier)
 
 

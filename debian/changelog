@@ -1,8 +1,14 @@
-daos (2.5.100-15) unstable; urgency=medium
+daos (2.5.100-16) unstable; urgency=medium
   [ Jan Michalski ]
   * Add dtx_tests to the server-tests package
 
- -- Jan Michalski <jan.michalski@intel.com>  Wed, 24 Jan 2024 09:30:00 +0000
+ -- Jan Michalski <jan.michalski@intel.com>  Tue, 27 Feb 2024 08:34:00 +0000
+
+daos (2.5.100-15) unstable; urgency=medium
+  [ Ryon Jensen ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Ryon Jensen <ryon.jensen@intel.com>  Mon, 12 Feb 2024 11:16:00 -0700
 
 daos (2.5.100-14) unstable; urgency=medium
   [ Brian J. Murrell ]
