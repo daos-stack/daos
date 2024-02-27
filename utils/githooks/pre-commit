@@ -14,6 +14,7 @@ run-parts() {
     shift
 
     for i in $(LC_ALL=C; echo "${dir%/}"/*[^~,]); do
+        # don't run vim .swp files
         [ "${i%.sw?}" != "${i}" ] && continue
         skip_item=0
         for skip in "${skip_list[@]}"; do
