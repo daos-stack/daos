@@ -31,7 +31,7 @@ def find_hooks():
 
 
 def emit_watermark(msg):
-    """Print the Required-githooks value"""
+    """Print the watermark to the commit message"""
     msg.write("Required-githooks: true\n")
     skipped = os.environ.get("DAOS_SKIP", None)
     if skipped:
