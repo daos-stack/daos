@@ -93,7 +93,7 @@ Once all prerequisites installed and the sources are downloaded,
 DAOS can be built via the following command:
 
 ```bash
-$ scons -j 4 --config=force --build-deps=yes install
+$ scons --jobs $(nproc) --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under the `install`
