@@ -43,12 +43,14 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
         time.sleep(60)
         # Check the journalctl for data corrupt message.
         results = get_journalctl(hosts=self.hostlist_servers, since=t_start,
-                                 until=t_end, journalctl_type="daos_server")
+                                 until=t_end, journalctl_type=["daos_server", "DAOS"])
         self.log.info(results)
         str_to_match = "Data corruption detected"
         occurrence = 0
         for count, _ in enumerate(self.hostlist_servers):
             occurrence = results[count]["data"].count(str_to_match)
+            if occurrence > 0:
+                break
         if occurrence > 0:
             self.log.info("Data corrupted occurrence %s", occurrence)
         else:
