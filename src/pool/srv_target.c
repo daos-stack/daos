@@ -441,6 +441,7 @@ pool_put_sync(void *args)
 
 	D_ASSERT(pool != NULL);
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	D_INFO(DF_UUID": sp_entry: put: %u->\n", DP_UUID(pool->sp_uuid), pool->sp_entry.ll_ref);
 	daos_lru_ref_release(pool_cache, &pool->sp_entry);
 }
 
@@ -532,6 +533,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	}
 
 	*link = &pool->sp_entry;
+	D_INFO(DF_UUID": sp_entry: alloc: %u\n", DP_UUID(pool->sp_uuid), pool->sp_entry.ll_ref);
 	return 0;
 
 err_iv_ns:
@@ -590,6 +592,7 @@ pool_free_ref(struct daos_llink *llink)
 	ABT_cond_free(&pool->sp_fetch_hdls_done_cond);
 	ABT_mutex_free(&pool->sp_mutex);
 	ABT_rwlock_free(&pool->sp_lock);
+	D_INFO(DF_UUID": sp_entry: free\n", DP_UUID(pool->sp_uuid));
 	D_FREE(pool);
 }
 
@@ -638,7 +641,7 @@ ds_pool_cache_fini(void)
  * set @pool.
  */
 int
-ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
+ds_pool_lookup_f(const uuid_t uuid, struct ds_pool **pool)
 {
 	struct daos_llink	*llink;
 	int			 rc;
@@ -652,6 +655,8 @@ ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
 		return rc;
 
 	*pool = pool_obj(llink);
+	D_INFO(DF_UUID": sp_entry: get: ->%u\n", DP_UUID((*pool)->sp_uuid),
+	       (*pool)->sp_entry.ll_ref);
 	if ((*pool)->sp_stopping) {
 		D_DEBUG(DB_MD, DF_UUID": is in stopping\n", DP_UUID(uuid));
 		pool_put_sync(*pool);
@@ -663,15 +668,16 @@ ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
 }
 
 void
-ds_pool_get(struct ds_pool *pool)
+ds_pool_get_f(struct ds_pool *pool)
 {
 	D_ASSERT(pool != NULL);
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	daos_lru_ref_add(&pool->sp_entry);
+	D_INFO(DF_UUID": sp_entry: get: ->%u\n", DP_UUID(pool->sp_uuid), pool->sp_entry.ll_ref);
 }
 
 void
-ds_pool_put(struct ds_pool *pool)
+ds_pool_put_f(struct ds_pool *pool)
 {
 	int	rc;
 
@@ -818,12 +824,16 @@ ds_pool_start(uuid_t uuid)
 			       NULL /* create_args */, &llink);
 	if (rc == 0) {
 		pool = pool_obj(llink);
+		D_INFO(DF_UUID": sp_entry: get: ->%u\n", DP_UUID(pool->sp_uuid),
+		       pool->sp_entry.ll_ref);
 		if (pool->sp_stopping) {
 			D_ERROR(DF_UUID": stopping isn't done yet\n",
 				DP_UUID(uuid));
 			rc = -DER_BUSY;
 		}
 		/* Already started; drop our reference. */
+		D_INFO(DF_UUID": sp_entry: put: %u->\n", DP_UUID(pool->sp_uuid),
+		       pool->sp_entry.ll_ref);
 		daos_lru_ref_release(pool_cache, &pool->sp_entry);
 		return rc;
 	} else if (rc != -DER_NONEXIST) {
@@ -844,6 +854,8 @@ ds_pool_start(uuid_t uuid)
 	}
 
 	pool = pool_obj(llink);
+
+	D_INFO(DF_UUID": sp_entry: get: ->%u\n", DP_UUID(pool->sp_uuid), pool->sp_entry.ll_ref);
 
 	rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS,
 			    0, 0, NULL);

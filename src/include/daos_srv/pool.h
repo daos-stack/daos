@@ -101,9 +101,26 @@ struct ds_pool {
 	uint32_t		 sp_reint_mode;
 };
 
-int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
-void ds_pool_put(struct ds_pool *pool);
-void ds_pool_get(struct ds_pool *pool);
+#define ds_pool_lookup(uuid, pool) ({								\
+	int dpli_rc;										\
+												\
+	dpli_rc = ds_pool_lookup_f(uuid, pool);							\
+	if (dpli_rc == 0)									\
+		D_INFO(DF_UUID": ds_pool: get: ->%u\n", DP_UUID((*pool)->sp_uuid),		\
+		       (*pool)->sp_entry.ll_ref);						\
+	dpli_rc;										\
+})
+int ds_pool_lookup_f(const uuid_t uuid, struct ds_pool **pool);
+#define ds_pool_put(pool) do {									\
+	D_INFO(DF_UUID": ds_pool: put: %u->\n", DP_UUID(pool->sp_uuid), pool->sp_entry.ll_ref);	\
+	ds_pool_put_f(pool);									\
+} while (0)
+void ds_pool_put_f(struct ds_pool *pool);
+#define ds_pool_get(pool) do {									\
+	ds_pool_get_f(pool);									\
+	D_INFO(DF_UUID": ds_pool: get: ->%u\n", DP_UUID(pool->sp_uuid), pool->sp_entry.ll_ref);	\
+} while (0)
+void ds_pool_get_f(struct ds_pool *pool);
 
 /*
  * Pool handle object
