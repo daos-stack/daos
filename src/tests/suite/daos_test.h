@@ -344,6 +344,7 @@ int run_daos_rebuild_test(int rank, int size, int *tests, int test_size);
 int run_daos_base_tx_test(int rank, int size, int *tests, int test_size);
 int run_daos_dist_tx_test(int rank, int size, int *tests, int test_size);
 int run_daos_vc_test(int rank, int size, int *tests, int test_size);
+int run_daos_coll_test(int rank, int size, int *tests, int test_size);
 int run_daos_checksum_test(int rank, int size, int *sub_tests,
 			   int sub_tests_size);
 int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,

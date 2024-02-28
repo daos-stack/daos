@@ -63,9 +63,10 @@ struct pl_obj_shard {
 	uint32_t	po_shard;	/* shard identifier */
 	uint32_t	po_target;	/* target id */
 	uint32_t	po_fseq;	/* The latest failure sequence */
-	uint16_t	po_rank;	/* The rank on which the shard exists */
-	uint8_t		po_index;	/* The target index inside the node */
-	uint8_t		po_rebuilding:1, /* rebuilding status */
+	uint32_t	po_index:8,	/* The target index inside the node */
+			po_rank:20,	/* The rank on which the shard exists */
+			po_padding:2,	/* Can be used as new flags or extend po_rank */
+			po_rebuilding:1, /* rebuilding status */
 			po_reintegrating:1; /* reintegrating status */
 };
 

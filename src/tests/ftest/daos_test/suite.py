@@ -141,6 +141,22 @@ class DaosCoreTest(DaosCoreBase):
         """
         self.run_subtest()
 
+    def test_daos_coll(self):
+        """Jira ID: DAOS-15256
+
+        Test Description:
+            Run daos_test -L
+
+        Use cases:
+            Core tests for collective operations
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,provider,md_on_ssd
+        :avocado: tags=daos_test,daos_core_test
+        :avocado: tags=DaosCoreTest,test_daos_coll
+        """
+        self.run_subtest()
+
     def test_daos_io(self):
         """Jira ID: DAOS-1568
 

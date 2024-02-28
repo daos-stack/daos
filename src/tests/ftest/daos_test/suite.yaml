@@ -13,6 +13,7 @@ timeouts:
   test_daos_container: 510
   test_daos_epoch: 125
   test_daos_verify_consistency: 105
+  test_daos_coll: 120
   test_daos_io: 290
   test_daos_ec_io: 450
   test_daos_ec_obj: 700
@@ -90,6 +91,7 @@ daos_tests:
     test_daos_single_rdg_tx: 1
     test_daos_distributed_tx: 1
     test_daos_verify_consistency: 1
+    test_daos_coll: 1
     test_daos_io: 1
     test_daos_ec_io: 1
     test_daos_ec_obj: 1
@@ -119,6 +121,7 @@ daos_tests:
     test_daos_single_rdg_tx: DAOS_Single_RDG_TX
     test_daos_distributed_tx: DAOS_Distributed_TX
     test_daos_verify_consistency: DAOS_Verify_Consistency
+    test_daos_coll: DAOS_Coll
     test_daos_io: DAOS_IO
     test_daos_ec_io: DAOS_IO_EC_4P2G1
     test_daos_ec_obj: DAOS_EC
@@ -148,6 +151,7 @@ daos_tests:
     test_daos_single_rdg_tx: t
     test_daos_distributed_tx: T
     test_daos_verify_consistency: V
+    test_daos_coll: L
     test_daos_io: i
     test_daos_ec_io: i
     test_daos_ec_obj: I

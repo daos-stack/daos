@@ -17,7 +17,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbBIPG"
+#define TESTS "mpcetTVLiADKCoRvSXbOzZUdrNbBIPG"
 
 /**
  * These tests will only be run if explicitly specified. They don't get
@@ -61,6 +61,7 @@ print_usage(int rank)
 	print_message("daos_test -e|--epoch\n");
 	print_message("daos_test -o|--erecov\n");
 	print_message("daos_test -V|--verify\n");
+	print_message("daos_test -L|--coll\n");
 	print_message("daos_test -R|--mdr\n");
 	print_message("daos_test -O|--oid_alloc\n");
 	print_message("daos_test -r|--rebuild\n");
@@ -220,6 +221,12 @@ run_specified_tests(const char *tests, int rank, int size,
 			nr_failed += run_daos_vc_test(rank, size, sub_tests,
 						      sub_tests_size);
 			break;
+		case 'L':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS collective operation..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_coll_test(rank, size, sub_tests, sub_tests_size);
+			break;
 		case 'R':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS MD replication tests..");
@@ -349,6 +356,7 @@ main(int argc, char **argv)
 		{"base_dtx",	no_argument,		NULL,	't'},
 		{"dist_dtx",	no_argument,		NULL,	'T'},
 		{"verify",	no_argument,		NULL,	'V'},
+		{"coll",	no_argument,		NULL,	'L'},
 		{"io",		no_argument,		NULL,	'i'},
 		{"ec_io",	no_argument,		NULL,	'I'},
 		{"checksum",	no_argument,		NULL,	'z'},
@@ -399,7 +407,7 @@ main(int argc, char **argv)
 
 	while ((opt =
 		getopt_long(argc, argv,
-			    "ampcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:GP",
+			    "ampcCdtTVLiIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:GP",
 			     long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

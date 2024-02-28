@@ -346,6 +346,10 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	obj->cob_min_rank = -1;
+	obj->cob_max_rank = 0;
+	obj->cob_rank_nr = 0;
+
 	for (i = 0; i < layout->ol_nr; i++) {
 		struct dc_obj_shard *obj_shard;
 
@@ -358,7 +362,15 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 		obj_shard->do_reintegrating = layout->ol_shards[i].po_reintegrating;
 		obj_shard->do_target_rank = layout->ol_shards[i].po_rank;
 		obj_shard->do_target_idx = layout->ol_shards[i].po_index;
+		if (obj->cob_min_rank > obj_shard->do_target_rank)
+			obj->cob_min_rank = obj_shard->do_target_rank;
+		if (obj->cob_max_rank < obj_shard->do_target_rank)
+			obj->cob_max_rank = obj_shard->do_target_rank;
 	}
+
+	if (unlikely(obj->cob_min_rank == -1))
+		obj->cob_min_rank = 0;
+
 out:
 	if (layout)
 		pl_obj_layout_free(layout);
@@ -1323,19 +1335,6 @@ out:
 	DL_CDEBUG(rc == 0 || rc == -DER_NEED_TX || rc == -DER_TGT_RETRY, DB_TRACE, DLOG_ERR, rc,
 		  DF_OID ", forward", DP_OID(obj->cob_md.omd_id));
 	return rc;
-}
-
-static void
-obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
-	       uint32_t *grp_nr)
-{
-	*start_shard = 0;
-	*shard_nr = obj->cob_shards_nr;
-	*grp_nr = obj->cob_shards_nr / obj_get_grp_size(obj);
-
-	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "
-		  DF_OID": %u/%u\n",
-		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
 }
 
 /* Get pool map version from object handle */
@@ -6715,47 +6714,13 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 	}
 
 	if (opc == DAOS_OBJ_RPC_PUNCH) {
-		obj_ptr2shards(obj, &shard, &shard_cnt, &grp_cnt);
-
-		if (grp_cnt > 1) {
-			/*
-			 * We support object collective punch since release-2.6 (version 10).
-			 * The conditions to trigger object collective punch are:
-			 *
-			 * 1. The shards count reaches the threshold for collective punch (31
-			 *    by default). Collectively punch object will distribute the RPCs
-			 *    load among more engines even if the total RPCs count may be not
-			 *    decreased too much. Or
-			 *
-			 * 2. The shards count is twice (or even more) of the engines count.
-			 *    Means that there are some shards reside on the same engine(s).
-			 *    Collectively punch object will save some RPCs.
-			 *
-			 * If the object has multiple redundancy groups, but cannot match any
-			 * above condition, then we will use internal distributed transaction.
-			 */
-			if (dc_obj_proto_version < 10)
-				D_GOTO(out_task, rc = -DER_NEED_TX);
-
-			if (shard_cnt < 4)
-				D_GOTO(out_task, rc = -DER_NEED_TX);
-
-			if (shard_cnt < obj_coll_punch_thd) {
-				struct dc_pool	*pool = obj->cob_pool;
-
-				D_RWLOCK_RDLOCK(&pool->dp_map_lock);
-				if (shard_cnt < pool_map_node_nr(pool->dp_map) << 1)
-					rc = -DER_NEED_TX;
-				D_RWLOCK_UNLOCK(&pool->dp_map_lock);
-
-				if (rc != 0)
-					goto out_task;
-			}
-
+		if (obj_need_coll(obj, &shard, &shard_cnt, &grp_cnt)) {
 			obj_auxi->opc = DAOS_OBJ_RPC_COLL_PUNCH;
-
 			return dc_obj_coll_punch(task, obj, epoch, map_ver, api_args, obj_auxi);
 		}
+
+		if (grp_cnt > 1)
+			D_GOTO(out_task, rc = -DER_NEED_TX);
 	} else {
 		grp_cnt = 1;
 		obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
@@ -7000,10 +6965,14 @@ dc_obj_query_key(tse_task_t *api_task)
 	uint32_t		grp_size;
 	int			grp_idx;
 	uint32_t		grp_nr;
-	unsigned int		map_ver = 0;
+	uint32_t		shard_cnt;
+	uint32_t		start_shard;
+	uint32_t		map_ver = 0;
 	struct dtx_epoch	epoch;
 	struct dtx_id		dti;
 	int			i = 0;
+	int			j;
+	int			leader;
 	int			rc;
 	bool			coll = false;
 
@@ -7046,10 +7015,11 @@ dc_obj_query_key(tse_task_t *api_task)
 		D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
 	obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	if (api_args->flags & DAOS_GET_DKEY) {
+		if (obj_need_coll(obj, &start_shard, &shard_cnt, &grp_nr))
+			coll = true;
 		grp_idx = 0;
 		/** set data len to 0 before retrieving dkey. */
 		api_args->dkey->iov_len = 0;
-		grp_nr = obj_get_grp_nr(obj);
 	} else {
 		grp_idx = obj_dkey2grpidx(obj, obj_auxi->dkey_hash, map_ver);
 		if (grp_idx < 0)
@@ -7086,27 +7056,19 @@ dc_obj_query_key(tse_task_t *api_task)
 	D_ASSERT(!obj_auxi->args_initialized);
 	D_ASSERT(d_list_empty(head));
 
-	/* Some optimization for get dkey collectively since 2.6 which version is 10. */
-	if (api_args->flags & DAOS_GET_DKEY && grp_nr > 1 && dc_obj_proto_version >= 10) {
+	if (coll) {
 		rc = obj_coll_oper_args_init(&obj_auxi->cq_args.cqa_coa, obj, false);
 		if (rc != 0)
 			goto out_task;
 
 		obj_auxi->opc = DAOS_OBJ_RPC_COLL_QUERY;
-		coll = true;
 	}
 
 	grp_size = daos_oclass_grp_size(&obj->cob_oca);
 
 	for (i = grp_idx; i < grp_idx + grp_nr; i++) {
-		int start_shard;
-		int j;
-		int shard_cnt = 0;
-
 		/* Try leader for current group */
 		if (!obj_is_ec(obj) || !obj_ec_parity_rotate_enabled(obj)) {
-			int leader;
-
 			leader = obj_grp_leader_get(obj, i, (uint64_t)d_rand(),
 						    obj_auxi->cond_modify, map_ver, NULL);
 			if (leader >= 0) {
@@ -7141,7 +7103,7 @@ non_leader:
 		start_shard = i * obj_get_grp_size(obj);
 		D_DEBUG(DB_IO, DF_OID" EC needs to try all shards for group %d.\n",
 			DP_OID(obj->cob_md.omd_id), i);
-		for (j = start_shard; j < start_shard + grp_size; j++) {
+		for (j = start_shard, shard_cnt = 0; j < start_shard + grp_size; j++) {
 			if (obj_shard_is_invalid(obj, j, DAOS_OBJ_RPC_QUERY_KEY))
 				continue;
 
