@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -247,7 +247,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """
         return " ".join(self._get_posix_test_path_list(path_list=path))
 
-    def new_posix_test_path(self, shared=False, create=True, parent=None, mount_dir_size=False):
+    def new_posix_test_path(self, shared=False, create=True, parent=None, mount_dir_size=None):
         """Generate a new, unique posix path.
 
         Args:
