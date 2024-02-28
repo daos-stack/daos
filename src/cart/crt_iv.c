@@ -2553,6 +2553,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		/* uci_bulk_hdl will not be set for invalidate call */
 		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
 			crt_bulk_free(iv_info->uci_bulk_hdl);
+
 		iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
 				   iv_info->uci_user_priv);
 		child_output->rc = output->rc;

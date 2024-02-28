@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,10 +56,9 @@ struct pool_domain *
 jm_obj_shard_pd(struct jm_obj_placement *jmop, uint32_t shard);
 
 void
-get_target(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t layout_ver,
-	   struct pool_target **target, struct pool_domain **dom, uint64_t key,
-	   uint8_t *dom_used, uint8_t *dom_full, uint8_t *dom_cur_grp_used,
-	   uint8_t *dom_cur_grp_real, uint8_t *tgts_used, int shard_num,
-	   uint32_t allow_status, uint32_t allow_version, pool_comp_type_t fdom_lvl,
-	   uint32_t grp_size, uint32_t *spare_left, bool *spare_avail);
+get_target(struct pool_domain *root, uint32_t layout_ver, struct pool_target **target,
+	   struct pool_domain **dom, uint64_t key, uint8_t *dom_used,
+	   uint8_t *dom_full, uint8_t *dom_cur_grp_used, uint8_t *dom_cur_grp_real,
+	   uint8_t *tgts_used, int shard_num, uint32_t allow_version, enum layout_gen_mode gen_mode,
+	   pool_comp_type_t fdom_lvl, uint32_t grp_size, uint32_t *spare_left, bool *spare_avail);
 #endif /* __JUMP_MAP_H__ */

@@ -2338,7 +2338,8 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 }
 
 static int
-obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
+obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
+		      uint32_t rpc_map_ver, uint32_t flags)
 {
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
 		if (child->sc_ec_agg_active) {
@@ -2350,6 +2351,19 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 
 	if (!obj_is_modification_opc(opc))
 		return 0;
+
+	if (child->sc_pool->spc_pool->sp_rebuilding) {
+		uint32_t version;
+
+		ds_rebuild_running_query(child->sc_pool_uuid, RB_OP_REBUILD,
+					 &version, NULL, NULL);
+		if (version != 0 && version < rpc_map_ver) {
+			D_DEBUG(DB_IO, DF_UUID" retry rpc ver %u > rebuilding %u\n",
+				DP_UUID(child->sc_pool_uuid), rpc_map_ver,
+			        version);
+			return -DER_UPDATE_AGAIN;
+		}
+	}
 
 	/* If the incoming I/O is during integration, then it needs to wait the
 	 * vos discard to finish, which otherwise might discard these new inflight
@@ -2399,7 +2413,7 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rc != 0)
 		goto failed;
 
-	rc = obj_inflight_io_check(ioc->ioc_coc, opc, flags);
+	rc = obj_inflight_io_check(ioc->ioc_coc, opc, rpc_map_ver, flags);
 	if (rc != 0)
 		goto failed;
 
@@ -5237,7 +5251,8 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 		goto reply;
 
 
-	rc = obj_inflight_io_check(ioc.ioc_coc, opc_get(rpc->cr_opc), oci->oci_flags);
+	rc = obj_inflight_io_check(ioc.ioc_coc, opc_get(rpc->cr_opc), oci->oci_map_ver,
+				   oci->oci_flags);
 	if (rc != 0)
 		goto reply;
 

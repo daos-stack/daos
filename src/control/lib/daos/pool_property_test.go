@@ -168,6 +168,12 @@ func TestControl_PoolProperties(t *testing.T) {
 			expStr:  "self_heal:rebuild",
 			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"rebuild"}`),
 		},
+		"self_heal-delay_rebuild": {
+			name:    "self_heal",
+			value:   "delay_rebuild",
+			expStr:  "self_heal:delay_rebuild",
+			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"delay_rebuild"}`),
+		},
 		"self_heal-exclude,rebuild": {
 			name:    "self_heal",
 			value:   "exclude,rebuild",
@@ -179,6 +185,12 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:   "rebuild,exclude",
 			expStr:  "self_heal:exclude,rebuild",
 			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude,rebuild"}`),
+		},
+		"self_heal-exclude,delay_rebuild": {
+			name:    "self_heal",
+			value:   "exclude,delay_rebuild",
+			expStr:  "self_heal:exclude,delay_rebuild",
+			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude,delay_rebuild"}`),
 		},
 		"self_heal-invalid": {
 			name:   "self_heal",
