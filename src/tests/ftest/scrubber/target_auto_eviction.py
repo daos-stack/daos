@@ -6,7 +6,7 @@
 import time
 from datetime import datetime, timedelta
 
-from general_utils import get_journalctl, journalctl_time
+from general_utils import get_host_data, get_journalctl_command, journalctl_time
 from scrubber_test_base import TestWithScrubber
 
 
@@ -42,8 +42,10 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
         self.log.info("Sleeping for 60 seconds")
         time.sleep(60)
         # Check the journalctl for data corrupt message.
-        results = get_journalctl(hosts=self.hostlist_servers, since=t_start,
-                                 until=t_end, journalctl_type=["daos_server", "DAOS"])
+        command = get_journalctl_command(since=t_start, until=t_end, system=True,
+                                         units="daos_server")
+        err = "Error gathering system log events"
+        results = get_host_data(hosts=self.hostlist_servers, command=command, errpr=err)
         self.log.info(results)
         str_to_match = "Data corruption detected"
         occurrence = 0
