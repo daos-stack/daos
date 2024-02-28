@@ -5205,8 +5205,8 @@ chdir(const char *path)
 		rc = next_chdir(path);
 		errno_save = errno;
 		if (rc == 0) {
-			strncpy(cur_dir, full_path, DFS_MAX_PATH);
-			if (cur_dir[DFS_MAX_PATH - 1] != 0) {
+			len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s", full_path);
+			if (len_str >= DFS_MAX_PATH) {
 				D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
 					strerror(ENAMETOOLONG));
 				D_GOTO(out_err, rc = ENAMETOOLONG);
