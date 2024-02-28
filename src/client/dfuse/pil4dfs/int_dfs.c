@@ -89,6 +89,7 @@
 
 /* the default min fd that will be used by DAOS */
 #define DAOS_MIN_FD         10
+#define DAOS_DUMMY_FD       1001
 
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
@@ -1152,6 +1153,10 @@ consume_low_fd(void)
 			DS_ERROR(errno, "failed to reserve a low fd");
 			goto err;
 		} else if (low_fd_list[low_fd_count] >= DAOS_MIN_FD) {
+			/* block fd 255 too. 255 is commonly used by bash. */
+			dup2(low_fd_list[0], 255);
+			/* block fd DAOS_DUMMY_FD which will be used later for dup2(). */
+			dup2(low_fd_list[0], DAOS_DUMMY_FD);
 			libc_close(low_fd_list[low_fd_count]);
 			break;
 		} else {
@@ -1159,9 +1164,6 @@ consume_low_fd(void)
 		}
 		low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
 	}
-	/* block fd 255 too. 255 is commonly used by bash. */
-	if (low_fd_count)
-		dup2(low_fd_list[0], 255);
 
 	D_MUTEX_UNLOCK(&lock_reserve_fd);
 	return rc;
@@ -2439,15 +2441,24 @@ remove_fd_compatible(int real_fd)
 static int
 new_close_common(int (*next_close)(int fd), int fd)
 {
-	int fd_directed;
+	int fd_directed, rc;
 
 	if (!hook_enabled)
 		return next_close(fd);
 
-	if (compatible_mode && fd < FD_FILE_BASE)
-		if (remove_fd_compatible(fd))
-			return next_close(fd);
+	if (compatible_mode && fd < FD_FILE_BASE) {
+		remove_fd_compatible(fd);
+		if (fd < DAOS_MIN_FD && daos_inited) {
+			rc = dup2(DAOS_DUMMY_FD, fd);
+			if (rc != -1)
+				return 0;
 
+			return (-1);
+		}
+		return next_close(fd);
+	}
+
+	/* Need to hand fd < DAOS_MIN_FD too!!! */
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed >= FD_DIR_BASE) {
 		/* directory */
@@ -3016,7 +3027,7 @@ new_fxstat(int vers, int fd, struct stat *buf)
 
 	atomic_fetch_add_relaxed(&num_stat, 1);
 
-	return 0;
+	return rc;
 }
 
 int
@@ -3053,7 +3064,7 @@ fstat(int fd, struct stat *buf)
 
 	atomic_fetch_add_relaxed(&num_stat, 1);
 
-	return 0;
+	return rc;
 }
 
 int
@@ -3152,6 +3163,8 @@ out_org:
 
 out_err:
 	FREE(parent_dir);
+	if ((rc == EIO || rc == EINVAL) && compatible_mode)
+		return libc_lxstat(ver, path, stat_buf);
 	errno = rc;
 	return (-1);
 }
@@ -5168,12 +5181,14 @@ out_err:
 int
 chdir(const char *path)
 {
-	int              is_target_path, rc, len_str;
+	int              is_target_path, rc, len_str, errno_save;
 	dfs_obj_t       *parent;
+	struct stat      stat_buf;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char            *parent_dir = NULL;
-	char            *full_path  = NULL;
+	char             *parent_dir = NULL;
+	char             *full_path  = NULL;
+	bool             is_root;
 
 	if (next_chdir == NULL) {
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
@@ -5186,22 +5201,42 @@ chdir(const char *path)
 			&full_path, &dfs_mt);
 	if (rc)
 		D_GOTO(out_err, rc);
-
-	rc = next_chdir(path);
-	if (rc)
-		D_GOTO(out_err, rc = errno);
-
 	if (!is_target_path) {
-		len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s", full_path);
-		if (len_str >= DFS_MAX_PATH) {
-			D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			D_GOTO(out_err, rc = ENAMETOOLONG);
+		rc = next_chdir(path);
+		errno_save = errno;
+		if (rc == 0) {
+			strncpy(cur_dir, full_path, DFS_MAX_PATH);
+			if (cur_dir[DFS_MAX_PATH - 1] != 0) {
+				D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
+					strerror(ENAMETOOLONG));
+				D_GOTO(out_err, rc = ENAMETOOLONG);
+			}
 		}
-		D_GOTO(out, rc);
+		FREE(parent_dir);
+		errno = errno_save;
+		return rc;
 	}
 
-	// assuming the path exists and it is backed by dfuse 
+	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
+		is_root = true;
+		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, &stat_buf);
+	} else {
+		is_root = false;
+		rc = dfs_stat(dfs_mt->dfs, parent, item_name, &stat_buf);
+	}
+	if (rc)
+		D_GOTO(out_err, rc);
+	if (!S_ISDIR(stat_buf.st_mode)) {
+		D_DEBUG(DB_ANY, "%s is not a directory: %d (%s)\n", path, ENOTDIR,
+			strerror(ENOTDIR));
+		D_GOTO(out_err, rc = ENOTDIR);
+	}
+	if (is_root)
+		rc = dfs_access(dfs_mt->dfs, NULL, NULL, X_OK);
+	else
+		rc = dfs_access(dfs_mt->dfs, parent, item_name, X_OK);
+	if (rc)
+		D_GOTO(out_err, rc);
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
 	if (len_str >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
@@ -5209,8 +5244,10 @@ chdir(const char *path)
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
-out:
 	FREE(parent_dir);
+	if (compatible_mode)
+		return next_chdir(cur_dir);
+
 	return 0;
 
 out_err:
@@ -5383,8 +5420,9 @@ fsync(int fd)
 	if (fd < FD_DIR_BASE && compatible_mode)
 		return next_fsync(fd);
 
-//	errno = ENOTSUP;
-//	return (-1);
+	/* errno = ENOTSUP;
+	 * return (-1);
+	 */
 	return 0;
 }
 
@@ -6795,19 +6833,19 @@ hang_for_debugging(void)
 		}
 	}
 */
-//	if (strstr(szPath, "collect2")) {
-/*	if (memcmp(szPath, "sh\0-c\0gcc\0-o\0", 13) == 0) {
+//	if (strstr(szPath, "uname")) {
+//	if (memcmp(szPath, "sh\0-c\0gcc\0-o\0", 13) == 0) {
 //	if (memcmp(szPath, "make\0install-am\0", 15) == 0) {
 //	if (memcmp(szPath, "/dfs/venv/bin/python3\0/dfs/venv/bin/scons", 41) == 0) {
 //        if (memcmp(szPath, "/tmp/daos_dfuse_test_dfuse_daos_build_wt_il_1/venv/bin/python3\0/tmp/daos_dfuse_test_dfuse_daos_build_wt_il_1/venv/bin/scons", 123)==0) {
 //        if (memcmp(szPath, "git\0clone\0https://github.com/openucx/ucx.git", 44)==0) {
 //                printf("DBG> Found %s. pid = %d\n", szPath, getpid());
 //                fflush(stdout);
-                while (flag) {
-                        sleep(1);
-                }
-        }
-*/
+//                while (flag) {
+//                        sleep(1);
+//                }
+//        }
+
 }
 
 static __attribute__((constructor)) void
