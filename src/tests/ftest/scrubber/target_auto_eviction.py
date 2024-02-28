@@ -45,7 +45,8 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
         command = get_journalctl_command(since=t_start, until=t_end, system=True,
                                          units="daos_server")
         err = "Error gathering system log events"
-        results = get_host_data(hosts=self.hostlist_servers, command=command, errpr=err)
+        results = get_host_data(hosts=self.hostlist_servers, command=command, text="journalctl",
+                                error=err)
         self.log.info(results)
         str_to_match = "Data corruption detected"
         occurrence = 0
