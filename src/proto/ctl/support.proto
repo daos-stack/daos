@@ -18,6 +18,11 @@ message CollectLogReq {
   bool JsonOutput = 4;
   int32 LogFunction = 5;
   string LogCmd = 6;
+  string LogStartDate = 7;
+  string LogEndDate = 8;
+  string LogStartTime = 9;
+  string LogEndTime = 10;
+  bool StopOnError = 11;
 }
 
 message CollectLogResp {
