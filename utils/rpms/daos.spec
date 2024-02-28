@@ -65,6 +65,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 BuildRequires: capstone-devel
 %endif
+BuildRequires: patchelf
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
 BuildRequires: libisa-l-devel
@@ -589,6 +590,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+*Wed Feb 28 2024 Lei Huang <lei.huang@intel.com> 2.5.100-15
+- Add patchelf as as a dependency
+
 * Tue Jan 09 2024 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-14
 - Move /etc/ld.so.conf.d/daos.conf to daos-server sub-package
 
