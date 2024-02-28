@@ -60,20 +60,16 @@ class ObjectMetadata(TestWithServers):
     :avocado: recursive
     """
 
-    # Minimum number of containers that should be able to be created
-    CREATED_CONTAINERS_MIN = 25000
-    # would be lower with engine env_vars DAOS_MD_CAP=128
-    # CREATED_CONTAINERS_MIN = 6500
-
-    # Number of created containers that should not be possible
-    CREATED_CONTAINERS_LIMIT = 36000
-    # would be lower with engine env_vars DAOS_MD_CAP=128
-    # CREATED_CONTAINERS_LIMIT = 7500
-
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
         super().__init__(*args, **kwargs)
         self.ior_managers = []
+
+        # Minimum number of containers that should be able to be created
+        self.CREATED_CONTAINERS_MIN = self.params.get("created_cont_min", "/run/metadata/*")
+
+        # Number of created containers that should not be possible
+        self.CREATED_CONTAINERS_LIMIT = self.params.get("created_cont_max", "/run/metadata/*")
 
     def pre_tear_down(self):
         """Tear down steps to optionally run before tearDown().
@@ -187,23 +183,23 @@ class ObjectMetadata(TestWithServers):
         self.container = []
         return len(errors) == 0
 
-    def destroy_n_containers(self, n):
+    def destroy_num_containers(self, num):
         """Destroy some of the created containers.
 
         Args:
-            n (int): Number of containers to destroy
+            num (int): Number of containers to destroy
 
         Returns:
             bool: True if all of the containers were destroyed successfully;
                 False otherwise
 
         """
-        if n > len(self.container):
-            n = len(self.container)
-        self.log.info("Destroying %d containers", n)
-        errors = self.destroy_containers(self.container[0:(n - 1)])
+        if num > len(self.container):
+            num = len(self.container)
+        self.log.info("Destroying %d containers", num)
+        errors = self.destroy_containers(self.container[0:(num - 1)])
         if errors:
-            self.log.error("Errors detected destroying %d containers: %d", n, len(errors))
+            self.log.error("Errors detected destroying %d containers: %d", num, len(errors))
             for error in errors:
                 self.log.error("  %s", error)
         self.container = []
@@ -259,6 +255,8 @@ class ObjectMetadata(TestWithServers):
         svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
         if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
             self.fail("failed to run dummy metadata workload")
+        sequential_fail_max = self.params.get("fillup_seq_fail_max", "/run/metadata/*")
+        num_cont_to_destroy = self.params.get("num_cont_to_destroy", "/run/metadata/*")
 
         # 2 Phases
         # Phase 1: Sustained container create loop, eventually encountering
@@ -275,7 +273,6 @@ class ObjectMetadata(TestWithServers):
             "Phase 1: sustained container creates: to no space and beyond")
         self.container = []
         sequential_fail_counter = 0
-        sequential_fail_max = 512
         in_failure = False
         for loop in range(self.CREATED_CONTAINERS_LIMIT + 1000):
             try:
@@ -322,8 +319,8 @@ class ObjectMetadata(TestWithServers):
             "Phase 1: passed (created %d / %d containers)", len(self.container), loop)
 
         # Phase 2 clean up some containers (expected to succeed)
-        self.log.info("Phase 2: Cleaning up 500 containers (expected to work)")
-        if not self.destroy_n_containers(500):
+        self.log.info("Phase 2: Cleaning up %d containers (expected to work)", num_cont_to_destroy)
+        if not self.destroy_num_containers(num_cont_to_destroy):
             self.fail("Phase 2: fail (unexpected container destroy error)")
         self.log.info("Phase 2: passed")
 
@@ -353,22 +350,23 @@ class ObjectMetadata(TestWithServers):
         self.container = []
         mean_cont_cnt = 0
         percent_cont = self.params.get("mean_percent", "/run/metadata/*")
+        num_loops = self.params.get("num_addremove_loops", "/run/metadata/*")
 
         test_failed = False
         containers_created = []
-        for loop in range(4):
-            self.log.info("Container Create Iteration %d / 3", loop)
+        for loop in range(num_loops):
+            self.log.info("Container Create Iteration %d / %d", loop, num_loops - 1)
             # The test will encounter ENOSPACE (-1007) while creating containers.
             if not self.create_all_containers():
-                self.log.error("Errors during create iteration %d/3", loop)
+                self.log.error("Errors during create iteration %d/%d", loop, num_loops - 1)
 
             containers_created.append(len(self.container))
             # We should make sure containers which are created should
             # be destroyed without issues. Here we have to check for
             # any container destroy errors.
-            self.log.info("Container Remove Iteration %d / 3", loop)
+            self.log.info("Container Remove Iteration %d / %d", loop, num_loops - 1)
             if not self.destroy_all_containers():
-                self.log.error("Errors during remove iteration %d/3", loop)
+                self.log.error("Errors during remove iteration %d/%d", loop, num_loops - 1)
                 test_failed = True
         # Calculate the mean container count
         mean_cont_cnt = sum(containers_created) / len(containers_created)
