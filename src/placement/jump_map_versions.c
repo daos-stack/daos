@@ -211,16 +211,15 @@ __get_target_v1(struct pool_domain *root_pos,
 		struct pool_target **target, struct pool_domain **dom, uint64_t obj_key,
 		uint8_t *dom_used, uint8_t *dom_full, uint8_t *dom_cur_grp_used, uint8_t *tgts_used,
 		int shard_num, uint32_t allow_version, enum layout_gen_mode gen_mode,
-		pool_comp_type_t fdom_lvl, uint32_t grp_size, bool *pd_ignored)
+		pool_comp_type_t fdom_lvl, uint32_t grp_size)
 {
 	int                     range_set;
 	uint8_t                 found_target = 0;
-	struct pool_domain      *root_pos;
+	struct pool_domain	*curr_dom = root_pos;
 	struct pool_domain	*dom_stack[MAX_STACK] = { 0 };
 	int			top = -1;
 
 	obj_key = crc(obj_key, shard_num);
-	root_pos = curr_dom;
 	do {
 		uint32_t        avail_doms;
 
@@ -581,7 +580,7 @@ get_target_v1(struct pool_domain *root, struct pool_target **target,
 	while (found == NULL) {
 		__get_target_v1(root, &found, dom, key, dom_used, dom_full,
 				dom_cur_grp_used, tgts_used, shard_num, allow_version, gen_mode,
-				fdom_lvl, grp_size, &pd_ignored);
+				fdom_lvl, grp_size);
 		if (found == NULL)
 			reset_dom_cur_grp_v1(root, dom_cur_grp_used, dom_cur_grp_real,
 					     dom_full, tgts_used, fdom_lvl, allow_version,

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -961,8 +961,6 @@ reintegrate_inflight_io(void *data)
 
 	}
 	ioreq_fini(&req);
-	sleep(12);
-	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
 				      NULL);
