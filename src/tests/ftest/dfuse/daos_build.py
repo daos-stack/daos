@@ -311,6 +311,7 @@ class DaosBuild(DfuseTestBase):
         remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
         remote_env['COVFILE'] = os.environ['COVFILE']
 
+        remote_env['LD_LIBRARY_PATH'] = '/usr/lib64:$LD_LIBRARY_PATH'
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
         remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
         remote_env['DD_MASK'] = 'all'
