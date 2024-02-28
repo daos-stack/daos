@@ -2091,6 +2091,9 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	if (!hook_enabled)
 		goto org_func;
+	/* special cases. Needed to avoid dead lock. */
+	if (strstr(pathname, "/etc/libfabric.conf"))
+		goto org_func;
 
 	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
