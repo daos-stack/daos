@@ -351,6 +351,9 @@ mv test.cov{,-build}
       %{?scons_args}                  \
       %{?compiler_args}
 
+# set rpath for libpil4dfs.so is needed to pass daos build test
+patchelf --force-rpath --set-rpath /usr/lib64 %{buildroot}/%{_libdir}/libpil4dfs.so
+
 %if ("%{?compiler_args}" == "COMPILER=covc")
 mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
