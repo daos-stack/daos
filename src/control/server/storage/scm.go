@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -93,6 +93,7 @@ type (
 		UID              string
 		PartNumber       string
 		FirmwareRevision string
+		HealthState      string
 	}
 
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
