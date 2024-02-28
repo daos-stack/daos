@@ -7,7 +7,7 @@ import os
 
 # pylint: disable=import-error,no-name-in-module
 from util.collection_utils import archive_files
-from util.run_utils import run_remote
+from util.run_utils import run_remote, run_local
 
 
 class CodeCoverage():
@@ -103,43 +103,23 @@ class CodeCoverage():
         bullseye_dir = os.path.join(job_results_dir, "bullseye_coverage_logs")
         status = archive_files(
             logger, "bullseye coverage log files", self.__hosts, bullseye_path,
-            "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900, result)
-
-        # Merge bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.cov
-        os.makedirs(bullseye_dir, exist_ok=True)
-        for item in os.listdir(job_results_dir):
-            item_full = os.path.join(job_results_dir, item)
-            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
-                host_ext = os.path.splitext(item)
-                if len(host_ext) > 1:
-                    cov_file_bz2 = os.path.join(item_full, *.bz2)
-                    command = "bzip2 -dk cov_file_bz2"
-                    run_local(logger, command, check=True)
-                    cov_file = os.path.join(item_full, *.cov)
-                    command = "mv cov_file bullseye_dir"
-                    run_local(logger, command, check=True)
-
-        logger.debug("...Merging Bullseye cov files %s", bullseye_coverage_files)
-        command = "covmerge -c -f bullseye_coverage_logs/test.cov bullseye_coverage_files"
-        if not run_local(logger, command, check=True):
-            message = "Error covmerge bullseye code coverage files"
+            "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900, result, None, False)
+        if status != 0:
+            message = "Error archiving bullseye code coverage files"
             result.fail_test(logger, "Run", message, None)
             return False
 
-        # Rename bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.host.cov.*
-#        for item in os.listdir(job_results_dir):
-#            item_full = os.path.join(job_results_dir, item)
-#            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
-#                host_ext = os.path.splitext(item)
-#                if len(host_ext) > 1:
-#                    os.makedirs(bullseye_dir, exist_ok=True)
-#                    for name in os.listdir(item_full):
-#                        old_file = os.path.join(item_full, name)
-#                        if os.path.isfile(old_file):
-#                            new_name = name.split(".")
-#                            new_name.insert(1, host_ext[-1][1:])
-#                            new_file_name = ".".join(new_name)
-#                            new_file = os.path.join(bullseye_dir, new_file_name)
-#                            logger.debug("Renaming %s to %s", old_file, new_file)
-#                            os.rename(old_file, new_file)
-        return status == 0
+        # Merge the bullseye_coverage_logs.*/test.cov into one bullseye_coverage_logs/test.cov
+        logger.debug("Merging bullseye code coverage files")
+        os.makedirs(bullseye_dir, exist_ok=True)
+        command = ["covmerge", "--no-banner", "--file"]
+        command.append(os.path.join(bullseye_dir, bullseye_file))
+        command.append(os.path.join(".".join([bullseye_dir, '*']), bullseye_file))
+        try:
+            run_local(logger, " ".join(command), check=True)
+        except RunException:
+            message = "Error merging bullseye code coverage files"
+            result.fail_test(logger, "Run", message, None)
+            return False
+
+        return True

@@ -44,11 +44,6 @@ rsync -v -rlpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ .
 # Copy any log files.  Use rsync filters here to allow us to specify
 # all files we want to copy, as it's much more flexible than using
 # standard wildcards.
-echo "===>unit/test_post_always.sh rsync"
-pwd
-ls
-echo ' NODELIST='"${NODELIST}"
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
       --filter="include daos*.log" --filter="include test.cov" \
       --filter="exclude *" "$test_log_dir/"
-echo "<===rsync done"

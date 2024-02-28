@@ -245,7 +245,7 @@ def cleanup_processes(logger, test, result):
 
 
 def archive_files(logger, summary, hosts, source, pattern, destination, depth, threshold, timeout,
-                  test_result, test=None):
+                  test_result, test=None, compress=True):
     # pylint: disable=too-many-arguments
     """Archive the files from the source to the destination.
 
@@ -261,6 +261,7 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
         timeout (int): number of seconds to wait for the command to complete.
         test_result (TestResult): the test result used to update the status of the test
         test (TestInfo, optional): the test information. Defaults to None.
+        compress (boolean, optional): optionally compress files over 1MB. Defaults to True.
 
     Returns:
         int: status code: 0 = success, 16 = failure
@@ -297,7 +298,8 @@ def archive_files(logger, summary, hosts, source, pattern, destination, depth, t
     return_code |= remove_empty_files(logger, file_hosts, source, pattern, depth, test_result)
 
     # Compress any files larger than 1 MB
-    return_code |= compress_files(logger, file_hosts, source, pattern, depth, test_result)
+    if compress:
+        return_code |= compress_files(logger, file_hosts, source, pattern, depth, test_result)
 
     # Move the test files to the test-results directory on this host
     return_code |= move_files(

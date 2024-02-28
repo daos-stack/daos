@@ -9,31 +9,6 @@ fi
 export COVFILE="$WORKSPACE/test.cov"
 export PATH="/opt/BullseyeCoverage/bin:$PATH"
 
-echo "======>"
-pwd
-ls
-ls "/var/tmp/ftest/avocado/job-results/bullseye_coverage_logs/"
-ls "$WORKSPACE/"
-echo "<======"
-
-#-------------------
-# Decompress any zipped bullseye files, e.g.
-#   $WORKSPACE/Functional */bullseye_coverage_logs/test.*.cov.bz2
-#find "$WORKSPACE" -maxdepth 3 -type f -name 'test.*.cov.bz2' \
-#  -print0 | sudo -n xargs -0 -r0 lbunzip2 -v -k
-
-# Merge all of the bullseye files into one, e.g.
-#   $WORKSPACE/covc_test_logs/test.cov
-#   $WORKSPACE/Functional */bullseye_coverage_logs/test.*.cov
-#echo "Merging the following bullseye files"
-#find "$WORKSPACE" -maxdepth 3 -type f -name 'test*.cov'
-#find "$WORKSPACE" -maxdepth 3 -type f -name 'test*.cov' \
-#  -print0 | sudo -n xargs -0 -r0 covmerge --no-banner --create --file "$COVFILE"
-
-# Remove decompressed bullseye files after merge
-#find "$WORKSPACE" -maxdepth 3 -type f -name 'test.*.cov' -print -delete
-#-------------------
-
 mv "$WORKSPACE/test.cov_1" "$COVFILE"
 if [ -e "$WORKSPACE/test.cov_2" ]; then
   covmerge --no-banner --file "$COVFILE" "$WORKSPACE"/test.cov_*
