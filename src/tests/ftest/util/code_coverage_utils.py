@@ -7,7 +7,7 @@ import os
 
 # pylint: disable=import-error,no-name-in-module
 from util.collection_utils import archive_files
-from util.run_utils import run_remote, run_local, RunException
+from util.run_utils import RunException, run_local, run_remote
 
 
 class CodeCoverage():
