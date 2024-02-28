@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -6449,6 +6449,8 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
+	list.pta_number = in->pti_addr_list.ca_count;
+	list.pta_addrs = in->pti_addr_list.ca_arrays;
 	if (opc_get(rpc->cr_opc) == POOL_REINT &&
 	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
 		rc = pool_discard(rpc->cr_ctx, svc, &list);
