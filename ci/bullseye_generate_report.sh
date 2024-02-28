@@ -12,37 +12,37 @@ export PATH="/opt/BullseyeCoverage/bin:$PATH"
 echo "======>"
 pwd
 ls
-NODE=${NODELIST%%,*}
-
-# Copy over the install tree and some of the build tree.
-rsync -rlpt -z -e "ssh $SSH_KEY_ARGS" . \
-  jenkins@"$NODE":/var/tmp/ftest/avocado/job-results/bullseye_coverage_logs/
-
 ls "/var/tmp/ftest/avocado/job-results/bullseye_coverage_logs/"
 ls "$WORKSPACE/"
 echo "<======"
 
+#-------------------
 # Decompress any zipped bullseye files, e.g.
 #   $WORKSPACE/Functional */bullseye_coverage_logs/test.*.cov.bz2
-find "$WORKSPACE" -maxdepth 3 -type f -name 'test.*.cov.bz2' \
-  -print0 | sudo -n xargs -0 -r0 lbunzip2 -v -k
+#find "$WORKSPACE" -maxdepth 3 -type f -name 'test.*.cov.bz2' \
+#  -print0 | sudo -n xargs -0 -r0 lbunzip2 -v -k
 
 # Merge all of the bullseye files into one, e.g.
 #   $WORKSPACE/covc_test_logs/test.cov
 #   $WORKSPACE/Functional */bullseye_coverage_logs/test.*.cov
-echo "Merging the following bullseye files"
-find "$WORKSPACE" -maxdepth 3 -type f -name 'test*.cov'
-find "$WORKSPACE" -maxdepth 3 -type f -name 'test*.cov' \
-  -print0 | sudo -n xargs -0 -r0 covmerge --no-banner --create --file "$COVFILE"
+#echo "Merging the following bullseye files"
+#find "$WORKSPACE" -maxdepth 3 -type f -name 'test*.cov'
+#find "$WORKSPACE" -maxdepth 3 -type f -name 'test*.cov' \
+#  -print0 | sudo -n xargs -0 -r0 covmerge --no-banner --create --file "$COVFILE"
 
 # Remove decompressed bullseye files after merge
-find "$WORKSPACE" -maxdepth 3 -type f -name 'test.*.cov' -print -delete
+#find "$WORKSPACE" -maxdepth 3 -type f -name 'test.*.cov' -print -delete
+#-------------------
+
+mv "$WORKSPACE/test.cov_1" "$COVFILE"
+if [ -e "$WORKSPACE/test.cov_2" ]; then
+  covmerge --no-banner --file "$COVFILE" "$WORKSPACE"/test.cov_*
+fi
 
 if [ ! -e "$COVFILE" ]; then
   echo "#Coverage file $COVFILE is missing"
 else
   ls -l "$COVFILE"
-  mkdir -p "$WORKSPACE"/test_coverage_report/
 fi
 
 #To Do: symlink bullseye/src

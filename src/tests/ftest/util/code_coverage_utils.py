@@ -105,20 +105,25 @@ class CodeCoverage():
             logger, "bullseye coverage log files", self.__hosts, bullseye_path,
             "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900, result)
 
+        # Merge bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.cov
+        os.makedirs(bullseye_dir, exist_ok=True)
+        bullseye_files = os.path.join(job_results_dir, "*.cov")
+        covmerge -c -f bullseye_coverage_logs/test.cov bullseye_files
+
         # Rename bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.host.cov.*
-        for item in os.listdir(job_results_dir):
-            item_full = os.path.join(job_results_dir, item)
-            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
-                host_ext = os.path.splitext(item)
-                if len(host_ext) > 1:
-                    os.makedirs(bullseye_dir, exist_ok=True)
-                    for name in os.listdir(item_full):
-                        old_file = os.path.join(item_full, name)
-                        if os.path.isfile(old_file):
-                            new_name = name.split(".")
-                            new_name.insert(1, host_ext[-1][1:])
-                            new_file_name = ".".join(new_name)
-                            new_file = os.path.join(bullseye_dir, new_file_name)
-                            logger.debug("Renaming %s to %s", old_file, new_file)
-                            os.rename(old_file, new_file)
+#        for item in os.listdir(job_results_dir):
+#            item_full = os.path.join(job_results_dir, item)
+#            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
+#                host_ext = os.path.splitext(item)
+#                if len(host_ext) > 1:
+#                    os.makedirs(bullseye_dir, exist_ok=True)
+#                    for name in os.listdir(item_full):
+#                        old_file = os.path.join(item_full, name)
+#                        if os.path.isfile(old_file):
+#                            new_name = name.split(".")
+#                            new_name.insert(1, host_ext[-1][1:])
+#                            new_file_name = ".".join(new_name)
+#                            new_file = os.path.join(bullseye_dir, new_file_name)
+#                            logger.debug("Renaming %s to %s", old_file, new_file)
+#                            os.rename(old_file, new_file)
         return status == 0
