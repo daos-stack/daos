@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-from datetime import datetime, timedelta
 
 from general_utils import get_host_data, get_journalctl_command, journalctl_time
 from scrubber_test_base import TestWithScrubber
