@@ -108,9 +108,6 @@ class CodeCoverage():
         # Merge bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.cov
         os.makedirs(bullseye_dir, exist_ok=True)
         for item in os.listdir(job_results_dir):
-        bullseye_coverage_files = os.path.join(job_results_dir)/bullseye_coverage_logs/*.cov
-
-        for item in os.listdir(job_results_dir):
             item_full = os.path.join(job_results_dir, item)
             if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
                 host_ext = os.path.splitext(item)
