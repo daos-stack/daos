@@ -134,8 +134,8 @@ class BoundaryTest(TestWithServers):
             4. Close container.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=container,pool
-        :avocado: tags=container_boundary,pool_boundary,test_container_boundary
+        :avocado: tags=container,pool,boundary_test
+        :avocado: tags=BoundaryTest,test_container_boundary
         """
         num_pools = self.params.get("num_pools", '/run/boundary_test/*')
         num_containers = self.params.get("num_containers", '/run/boundary_test/*')
