@@ -253,7 +253,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=server,metadata
-        :avocado: tags=metadata_fillup,test_metadata_fillup
+        :avocado: tags=ObjectMetadata,test_metadata_fillup
         """
         self.create_pool()
         svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
@@ -344,7 +344,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=server,metadata,nvme
-        :avocado: tags=metadata_compact,metadata_addremove,test_metadata_addremove
+        :avocado: tags=ObjectMetadata,test_metadata_addremove
         """
         self.create_pool()
         if not self.run_dummy_metadata_workload():
@@ -416,8 +416,8 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=server,metadata,nvme
-        :avocado: tags=metadata_ior,test_metadata_server_restart
+        :avocado: tags=server,metadata,nvme,ior
+        :avocado: tags=ObjectMetadata,test_metadata_server_restart
         """
         self.create_pool()
         files_per_thread = 400

@@ -24,6 +24,11 @@ type (
 		JsonOutput   bool
 		LogFunction  int32
 		LogCmd       string
+		LogStartDate string
+		LogEndDate   string
+		LogStartTime string
+		LogEndTime   string
+		StopOnError  bool
 	}
 
 	// CollectLogResp contains the results of a collect-log
@@ -46,6 +51,11 @@ func CollectLog(ctx context.Context, rpcClient UnaryInvoker, req *CollectLogReq)
 			JsonOutput:   req.JsonOutput,
 			LogFunction:  req.LogFunction,
 			LogCmd:       req.LogCmd,
+			LogStartDate: req.LogStartDate,
+			LogEndDate:   req.LogEndDate,
+			LogStartTime: req.LogStartTime,
+			LogEndTime:   req.LogEndTime,
+			StopOnError:  req.StopOnError,
 		})
 	})
 
