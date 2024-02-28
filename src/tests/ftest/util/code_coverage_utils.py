@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -107,8 +107,27 @@ class CodeCoverage():
 
         # Merge bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.cov
         os.makedirs(bullseye_dir, exist_ok=True)
-        bullseye_files = os.path.join(job_results_dir, "*.cov")
-        covmerge -c -f bullseye_coverage_logs/test.cov bullseye_files
+        for item in os.listdir(job_results_dir):
+        bullseye_coverage_files = os.path.join(job_results_dir)/bullseye_coverage_logs/*.cov
+
+        for item in os.listdir(job_results_dir):
+            item_full = os.path.join(job_results_dir, item)
+            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
+                host_ext = os.path.splitext(item)
+                if len(host_ext) > 1:
+                    cov_file_bz2 = os.path.join(item_full, *.bz2)
+                    command = "bzip2 -dk cov_file_bz2"
+                    run_local(logger, command, check=True)
+                    cov_file = os.path.join(item_full, *.cov)
+                    command = "mv cov_file bullseye_dir"
+                    run_local(logger, command, check=True)
+
+        logger.debug("...Merging Bullseye cov files %s", bullseye_coverage_files)
+        command = "covmerge -c -f bullseye_coverage_logs/test.cov bullseye_coverage_files"
+        if not run_local(logger, command, check=True):
+            message = "Error covmerge bullseye code coverage files"
+            result.fail_test(logger, "Run", message, None)
+            return False
 
         # Rename bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.host.cov.*
 #        for item in os.listdir(job_results_dir):
