@@ -7,7 +7,7 @@ export TARGET
 hook=${0##*/}
 rm -f ".${hook}"
 
-IFS=', ' read -r -a skip_list <<< "${DAOS_GITHOOK_SKIP:-none}"
+IFS=', ' read -r -a skip_list <<< "${DAOS_GITHOOK_SKIP:-}"
 
 run-parts() {
     local dir="$1"
@@ -16,15 +16,15 @@ run-parts() {
     for i in $(LC_ALL=C; echo "${dir%/}"/*[^~,]); do
         # don't run vim .swp files
         [ "${i%.sw?}" != "${i}" ] && continue
-        skip_item=0
+        skip_item=false
         for skip in "${skip_list[@]}"; do
             if [[ "${i}" =~ ${skip} ]]; then
-                skip_item=1
+                skip_item=true
                 echo "Skipping ${i}"
                 break
             fi
         done
-        [ $skip_item = 1 ] && continue
+        $skip_item && continue
         $i "$@"
     done
 }
