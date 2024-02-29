@@ -197,7 +197,7 @@ class ObjectMetadata(TestWithServers):
         if num > len(self.container):
             num = len(self.container)
         self.log.info("Destroying %d containers", num)
-        errors = self.destroy_containers(self.container[0:(num - 1)])
+        errors = self.destroy_containers(self.container[0:num])
         if errors:
             self.log.error("Errors detected destroying %d containers: %d", num, len(errors))
             for error in errors:
