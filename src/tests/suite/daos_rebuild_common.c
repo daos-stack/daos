@@ -964,6 +964,8 @@ reintegrate_inflight_io(void *data)
 
 	}
 	ioreq_fini(&req);
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
 				      NULL);
@@ -1267,6 +1269,20 @@ rebuild_sub_rf0_setup(void **state)
 {
 	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 0,
 					DAOS_PROP_CO_REDUN_RF0);
+}
+
+int
+rebuild_sub_3nodes_rf0_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 3,
+					DAOS_PROP_CO_REDUN_RF0);
+}
+
+int
+rebuild_sub_6nodes_rf1_setup(void **state)
+{
+	return rebuild_sub_setup_common(state, REBUILD_SUBTEST_POOL_SIZE, 6,
+					DAOS_PROP_CO_REDUN_RF1);
 }
 
 int

@@ -21,6 +21,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+const rowFieldSep = "\t"
+
 // tabulateRankGroups produces a representation of rank groupings in a tabular form.
 func tabulateRankGroups(out io.Writer, groups system.RankGroups, titles ...string) error {
 	if len(titles) < 2 {
@@ -37,7 +39,8 @@ func tabulateRankGroups(out io.Writer, groups system.RankGroups, titles ...strin
 
 		summary := strings.Split(result, rowFieldSep)
 		if len(summary) != len(columnTitles) {
-			return errors.New("unexpected summary format")
+			return errors.Errorf("unexpected summary format, fields %v values %v",
+				columnTitles, summary)
 		}
 		for i, title := range columnTitles {
 			row[title] = summary[i]
