@@ -16,20 +16,22 @@ class EngineEvents(TestWithTelemetry):
     :avocado: recursive
     """
 
-    def collect_events_dead_ranks(self, events_dead_ranks, metric_to_data):
+    def collect_events_dead_ranks(self, metric_to_data, rank_count):
         """Collect engine_events_dead_ranks values from given metric data.
 
         Args:
-            events_dead_ranks (dict): Dictionary to store the values.
             metric_to_data (dict): Telemetry output that stores engine_events_dead_ranks for each
                 host.
+            rank_count (int): Total number of ranks in the system.
         """
-        hosts = list(self.hostlist_servers)
-        for host in hosts:
+        events_dead_ranks = [None for _ in range(rank_count)]
+        for host in self.hostlist_servers:
             metrics = metric_to_data[host]["engine_events_dead_ranks"]["metrics"]
             for metric in metrics:
                 rank = int(metric["labels"]["rank"])
                 events_dead_ranks[rank] = metric["value"]
+        
+        return events_dead_ranks
 
     def collect_telemetry(self, rank_count):
         """Collect the following engine event values.
@@ -49,9 +51,8 @@ class EngineEvents(TestWithTelemetry):
         self.log.info("metric_to_data = %s", metric_to_data)
 
         # Omit "engine" from the variable name for brevity. The indices correspond to ranks.
-        events_dead_ranks = [None for _ in range(rank_count)]
-        self.collect_events_dead_ranks(
-            events_dead_ranks=events_dead_ranks, metric_to_data=metric_to_data)
+        events_dead_ranks = self.collect_events_dead_ranks(
+            metric_to_data=metric_to_data, rank_count=rank_count)
 
         hosts = list(self.hostlist_servers)
         events_last_event_ts = [None for _ in range(rank_count)]
@@ -254,21 +255,15 @@ class EngineEvents(TestWithTelemetry):
             self.log.info("metric_to_data = %s", metric_to_data)
 
             # Omit "engine" from the variable name for brevity. The indices correspond to ranks.
-            events_dead_ranks = [None for _ in range(rank_count)]
-            self.collect_events_dead_ranks(
-                events_dead_ranks=events_dead_ranks, metric_to_data=metric_to_data)
+            events_dead_ranks = self.collect_events_dead_ranks(
+                metric_to_data=metric_to_data, rank_count=rank_count)
 
             # Among the joined ranks, if at least one of them has 1, we conclude that it's
             # circulated.
-            circulated = False
-            for rank in range(rank_count - 1):
-                if events_dead_ranks[rank] == 1:
-                    self.log.info("RPCs cirulated.")
-                    circulated = True
-                    break
-
-            if circulated:
+            if any(rank == 1 for rank in events_dead_ranks):
+                self.log.info("RPCs cirulated.")
                 break
+
             self.log.info("RPCs didn't circulate. Check again. %d", count)
 
         # 5. Restart the stopped rank.
