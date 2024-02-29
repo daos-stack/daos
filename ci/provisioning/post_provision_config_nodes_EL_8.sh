@@ -16,11 +16,18 @@ group_repo_post() {
 
 distro_custom() {
     # TODO: This code is not exiting on failure.
+    echo 8.8 > /etc/dnf/vars/releasever
 
     # Use a more recent python version for unit testing, this allows us to also test installing
     # pydaos into virtual environments.
     # TODO: el8 should have python3.11 available but our CI does not for some reason.
     dnf -y install python39 python39-devel
+
+    echo 8.8 > /etc/dnf/vars/releasever
+
+    dnf -y install python3.11 python3.11-devel
+
+    dnf -y upgrade
 }
 
 install_mofed() {
