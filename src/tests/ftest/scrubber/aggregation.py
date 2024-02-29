@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,6 +36,8 @@ class TestScrubberEvictWithAggregation(TestWithScrubber, TestWithTelemetry):
         self.pool.set_property("reclaim", "disabled")
         self.add_container(self.pool)
         # Pool and Containers are already created. Just run the IOR.
+        self.run_ior_with_pool(create_cont=False)
+        # Run IOR once again on the same pool and container.
         self.run_ior_with_pool(create_cont=False)
         telemetry_string = "engine_pool_vos_aggregation_obj_scanned"
         initial_agg_metrics = self.telemetry.get_metrics(telemetry_string)
