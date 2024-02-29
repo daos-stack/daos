@@ -66,10 +66,10 @@ class ObjectMetadata(TestWithServers):
         self.ior_managers = []
 
         # Minimum number of containers that should be able to be created
-        self.CREATED_CONTAINERS_MIN = self.params.get("created_cont_min", "/run/metadata/*")
+        self.created_containers_min = self.params.get("created_cont_min", "/run/metadata/*")
 
         # Number of created containers that should not be possible
-        self.CREATED_CONTAINERS_LIMIT = self.params.get("created_cont_max", "/run/metadata/*")
+        self.created_containers_limit = self.params.get("created_cont_max", "/run/metadata/*")
 
     def pre_tear_down(self):
         """Tear down steps to optionally run before tearDown().
@@ -109,8 +109,8 @@ class ObjectMetadata(TestWithServers):
         self.container = []
         self.log.info(
             "Attempting to create up to %d containers",
-            self.CREATED_CONTAINERS_LIMIT)
-        for index in range(self.CREATED_CONTAINERS_LIMIT):
+            self.created_containers_limit)
+        for index in range(self.created_containers_limit):
             # Continue to create containers until there is not enough space
             if not self._create_single_container(index):
                 status = True
@@ -121,15 +121,15 @@ class ObjectMetadata(TestWithServers):
             len(self.container))
 
         # Safety check to avoid test timeout - should hit an exception first
-        if len(self.container) >= self.CREATED_CONTAINERS_LIMIT:
+        if len(self.container) >= self.created_containers_limit:
             self.log.error(
                 "Created too many containers: %d", len(self.container))
 
         # Verify that at least MIN_CREATED_CONTAINERS have been created
-        if status and len(self.container) < self.CREATED_CONTAINERS_MIN:
+        if status and len(self.container) < self.created_containers_min:
             self.log.error(
                 "Only %d containers created; expected %d",
-                len(self.container), self.CREATED_CONTAINERS_MIN)
+                len(self.container), self.created_containers_min)
             status = False
 
         # Verify that the expected number of containers were created
@@ -274,7 +274,7 @@ class ObjectMetadata(TestWithServers):
         self.container = []
         sequential_fail_counter = 0
         in_failure = False
-        for loop in range(self.CREATED_CONTAINERS_LIMIT + 1000):
+        for loop in range(self.created_containers_limit + 1000):
             try:
                 status = self._create_single_container(loop)
 
@@ -307,13 +307,13 @@ class ObjectMetadata(TestWithServers):
             except TestFail as error:
                 self.log.error(str(error))
                 self.fail("Phase 1: fail (unexpected container create error)")
-        if len(self.container) >= self.CREATED_CONTAINERS_LIMIT:
+        if len(self.container) >= self.created_containers_limit:
             self.log.error("Phase 1: Created too many containers: %d > %d", len(self.container),
-                           self.CREATED_CONTAINERS_LIMIT)
+                           self.created_containers_limit)
             self.fail("Phase 1: Created too many containers")
-        if len(self.container) < self.CREATED_CONTAINERS_MIN:
+        if len(self.container) < self.created_containers_min:
             self.log.info("Phase 1: Created too few containers: %d < %d", len(self.container),
-                          self.CREATED_CONTAINERS_MIN)
+                          self.created_containers_min)
             self.fail("Phase 1: Created too few containers")
         self.log.info(
             "Phase 1: passed (created %d / %d containers)", len(self.container), loop)
