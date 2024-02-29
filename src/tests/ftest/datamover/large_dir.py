@@ -96,6 +96,6 @@ class DmvrLargeDir(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,mdtest
-        :avocado: tags=dm_large_dir,dm_large_dir_dcp,test_dm_large_dir_dcp
+        :avocado: tags=DmvrLargeDir,test_dm_large_dir_dcp
         """
         self.run_dm_large_dir("DCP")

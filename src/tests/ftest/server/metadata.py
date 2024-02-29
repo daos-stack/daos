@@ -196,7 +196,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=server,metadata
-        :avocado: tags=metadata_fillup,test_metadata_fillup
+        :avocado: tags=ObjectMetadata,test_metadata_fillup
         """
         self.create_pool()
 
@@ -293,7 +293,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=server,metadata,nvme
-        :avocado: tags=metadata_compact,metadata_addremove,test_metadata_addremove
+        :avocado: tags=ObjectMetadata,test_metadata_addremove
         """
         self.create_pool()
         self.container = []
@@ -362,8 +362,8 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=server,metadata,nvme
-        :avocado: tags=metadata_ior,test_metadata_server_restart
+        :avocado: tags=server,metadata,nvme,ior
+        :avocado: tags=ObjectMetadata,test_metadata_server_restart
         """
         self.create_pool()
         files_per_thread = 400
@@ -437,7 +437,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=server,metadata,nvme
-        :avocado: tags=metadata_der_nospace,der_nospace,test_container_removal_after_der_nospace
+        :avocado: tags=ObjectMetadata,test_container_removal_after_der_nospace
         """
         self.create_pool()
 
