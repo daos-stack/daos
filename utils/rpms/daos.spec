@@ -211,7 +211,6 @@ Requires: %{name}-devel%{?_isa} = %{version}-%{release}
 Requires: protobuf-c-devel
 Requires: fio
 Requires: git
-Requires: gdb
 Requires: dbench
 Requires: lbzip2
 Requires: attr
