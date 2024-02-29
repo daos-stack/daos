@@ -30,7 +30,7 @@ class EngineEvents(TestWithTelemetry):
             for metric in metrics:
                 rank = int(metric["labels"]["rank"])
                 events_dead_ranks[rank] = metric["value"]
-        
+
         return events_dead_ranks
 
     def collect_telemetry(self, rank_count):
