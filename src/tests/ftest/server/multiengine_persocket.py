@@ -212,7 +212,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             (2) ./launch.py test_multiengines_per_socket -ts <servers> -tc <agent>
         :avocado: tags=manual
         :avocado: tags=server
-        :avocado: tags=test_multiengines_per_socket
+        :avocado: tags=MultiEnginesPerSocketTest,test_multiengines_per_socket
         """
         # (1) Scm reset and prepare --scm-ns-per-socket
         step = 1
