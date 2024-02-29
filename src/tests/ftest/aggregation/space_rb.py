@@ -51,7 +51,7 @@ class SpaceRb(IorTestBase):
         manager = get_job_manager(test=self, job=ior_cmd, subprocess=self.subprocess)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
-        ppn = self.params.get("ppn", '/run/ior/*')
+        ppn = self.params.get("ppn", namespace)
         manager.assign_processes(ppn=ppn)
         error_msg = None
         exception_detected = False
