@@ -1124,6 +1124,18 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 			       rpt->rt_rebuild_ver, rpt->rt_leader_term, rsi->rsi_rebuild_ver,
 			       rsi->rsi_leader_term);
 			rpt->rt_abort = 1;
+			if (rpt->rt_leader_rank != rsi->rsi_master_rank) {
+				D_DEBUG(DB_REBUILD, DF_UUID" master rank"
+					" %d -> %d term "DF_U64" -> "DF_U64"\n",
+					DP_UUID(rpt->rt_pool_uuid),
+					rpt->rt_leader_rank, rsi->rsi_master_rank,
+					rpt->rt_leader_term, rsi->rsi_leader_term);
+				/* If this is the old leader, then also stop the rebuild
+				 * tracking ULT.
+				 */
+				rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
+						    -1, rpt->rt_leader_term);
+			}
 		}
 	}
 
