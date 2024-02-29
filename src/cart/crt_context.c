@@ -192,7 +192,7 @@ crt_context_uri_get(crt_context_t crt_ctx, char **uri)
 	struct crt_context	*ctx = NULL;
 
 	if (crt_ctx == NULL || uri == NULL) {
-		D_ERROR("Invalid null parameters\n");
+		D_ERROR("Invalid null parameters (%p) (%p)\n", crt_ctx, uri);
 		return -DER_INVAL;
 	}
 
@@ -251,7 +251,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	ctx->cc_idx = ctx_idx;
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, ctx_idx, primary, iface_idx);
-
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -259,15 +258,12 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		D_GOTO(out, rc);
 	}
 
-	if (crt_is_service()) {
-		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
-				     ctx->cc_self_uri, &uri_len);
-		if (rc != 0) {
-			D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
-			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			crt_context_destroy(ctx, true);
-			D_GOTO(out, rc);
-		}
+	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla, ctx->cc_self_uri, &uri_len);
+	if (rc != 0) {
+		D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		crt_context_destroy(ctx, true);
+		D_GOTO(out, rc);
 	}
 
 	ctx_list = crt_provider_get_ctx_list(primary, provider);
@@ -382,7 +378,6 @@ crt_context_create_on_iface_idx(uint32_t iface_index, crt_context_t *crt_ctx)
 	}
 
 	num_ifaces = crt_num_ifaces_get();
-
 	if (num_ifaces == 0) {
 		D_ERROR("No interfaces specified at startup\n");
 		return -DER_INVAL;
@@ -396,6 +391,47 @@ crt_context_create_on_iface_idx(uint32_t iface_index, crt_context_t *crt_ctx)
 
 	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov, true, iface_index);
 }
+
+int
+crt_iface_name2idx(char *iface_name, int *idx)
+{
+	uint32_t	num_ifaces;
+	int		i;
+	char		*name;
+	int		rc = -DER_INVAL;
+
+	num_ifaces = crt_provider_num_ifaces_get(true, crt_gdata.cg_primary_prov);
+
+	for (i = 0; i < num_ifaces; i++) {
+		name = crt_provider_iface_str_get(true, crt_gdata.cg_primary_prov, i);
+
+		if (strcmp(name, iface_name) == 0) {
+			*idx = i;
+			rc = DER_SUCCESS;
+			break;
+		}
+	}
+
+	return rc;
+}
+
+int
+crt_context_create_on_iface(char *iface_name, crt_context_t *crt_ctx)
+{
+	int idx;
+	int rc;
+
+	rc = crt_iface_name2idx(iface_name, &idx);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DB_ALL, "%s resolved to index=%d\n", iface_name, idx);
+
+	return crt_context_create_on_iface_idx(idx, crt_ctx);
+out:
+	return rc;
+}
+
 
 /* TODO: Add crt_context_create_secondary_on_iface_idx() if needed */
 int
@@ -1632,7 +1668,6 @@ crt_self_uri_get(int tag, char **uri)
 	}
 
 	D_STRNDUP(tmp_uri, tmp_crt_ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN - 1);
-
 	*uri = tmp_uri;
 
 out:

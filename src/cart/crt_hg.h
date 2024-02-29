@@ -170,6 +170,7 @@ void crt_provider_put_ctx_idx(bool primary, crt_provider_t provider, int idx);
 int crt_provider_get_max_ctx_num(bool primary, crt_provider_t provider);
 d_list_t *crt_provider_get_ctx_list(bool primary, crt_provider_t provider);
 void crt_provider_get_ctx_list_and_num(bool primary, crt_provider_t provider, d_list_t **list, int *num);
+char* crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx);
 struct crt_na_config*
 crt_provider_get_na_config(bool primary, crt_provider_t provider);
 
