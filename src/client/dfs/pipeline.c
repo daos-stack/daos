@@ -1,17 +1,19 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /** DFS pipeline operations */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/common.h>
 #include <daos.h>
 #include <daos_fs.h>
 #include <daos_pipeline.h>
 
-#include "internal.h"
+#include "dfs_internal.h"
 
 struct dfs_pipeline {
 	daos_pipeline_t    pipeline;
