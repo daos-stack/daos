@@ -1,7 +1,5 @@
 name: Linting
 
-permissions: read-all
-
 # Always run on Pull Requests as then these checks can be marked as required.
 on:
   push:
