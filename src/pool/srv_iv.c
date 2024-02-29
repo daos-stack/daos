@@ -1336,7 +1336,8 @@ ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid)
 	rc = ds_iv_invalidate(pool->sp_iv_ns, &key, CRT_IV_SHORTCUT_NONE,
 			      CRT_IV_SYNC_NONE, 0, false /* retry */);
 	if (rc)
-		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_SHUTDOWN, DB_MD, DLOG_ERR, "iv invalidate failed " DF_RC "\n",
+			 DP_RC(rc));
 
 	return rc;
 }
