@@ -3335,8 +3335,6 @@ out_readdir:
 	return &mydir->ents[mydir->num_ents];
 }
 
-extern char **__environ;
-
 /* This is the number of environmental variables that would be forced to set in child process.
  * "LD_PRELOAD" is a special case and it is not included in the list.
  */
@@ -3346,13 +3344,14 @@ static char  *env_list[] = {"D_IL_REPORT", "DAOS_MOUNT_POINT", "DAOS_POOL", "DAO
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
- * env when needed.
+ * env when a stripped env list is provided.
  * pre_envp() scans provided envp to look for libpil4dfs related envs (env_list[]) and returns a
- * new envp with missing libpil4dfs related envs appended.
- * The fd for daos logging may be not valid here, so printf() is used in this function.
+ * new envp with missing libpil4dfs related envs appended. Non-zero *error returns errno. 
+ * envp could be NULL, so the return value could be NULL too.
+ * The fd for daos logging may be not valid here, so fprintf() is used in this function.
  */
 static char **
-pre_envp(char *const envp[])
+pre_envp(char *const envp[], int *error)
 {
 	int    i, j, rc;
 	int    len, len2, len_total;
@@ -3363,15 +3362,69 @@ pre_envp(char *const envp[])
 	int    num_entry       = 0;
 	int    num_entry_found = 0;
 	int    idx_preload     = -1;
+	/* whether pil4dfs set in LD_PRELOAD in environ */
+	bool   pil4dfs_set_preload                = false;
 	bool   preload_included                   = false;
+	/* whether pil4dfs in LD_PRELOAD in envp[] */
 	bool   pil4dfs_in_preload                 = false;
+	/* whether env_list entry exists in envp[] */
 	bool   env_found[ARRAY_SIZE(env_list)]    = {false};
+	/* whether env_list entry exists in environ */
+	bool   env_set[ARRAY_SIZE(env_list)]      = {false};
 	/* the buffer allocated for the env string to append */
 	char  *env_buf_list[ARRAY_SIZE(env_list)] = {NULL};
 	char  *env_value                          = NULL;
 
-	/* Including env_list[] and "LD_PRELOAD" */
-	num_env_append = ARRAY_SIZE(env_list) + 1;
+	/* 0 means no error. */
+	*error = 0;
+	/* simply return for environ. append pil4dfs env only for stripped env list. */
+	if (envp == environ)
+		return (char **)envp;
+
+	/* check D_IL_ENFORCE_EXEC_ENV env in case it was updated. */
+	rc = d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
+	if (rc == -DER_NONEXIST || enforce_exec_env == false)
+		return (char **)envp;
+
+	/* the number of env in env_list[] that are set in environ */
+	num_env_append = 0;
+
+	/* check whether "LD_PRELOAD" exists in environ */
+	rc = d_agetenv_str(&env_value, "LD_PRELOAD");
+	if (rc == -DER_NONEXIST) {
+		return (char **)envp;
+	} else if (rc == -DER_NOMEM) {
+		*error = ENOMEM;
+		goto err_out0;
+	}
+	if (strstr(env_value, "libpil4dfs.so")) {
+		pil4dfs_set_preload = true;
+		num_env_append++;
+	}
+	free(env_value);
+	/* libpil4dfs.so is not in LD_PRELOAD, do not append env. */
+	if (!pil4dfs_set_preload)
+		return (char **)envp;
+
+	/* check whether env_list entries exist in environ */
+	for (i = 0; i < ARRAY_SIZE(env_list); i++) {
+		rc = d_agetenv_str(&env_value, env_list[i]);
+		if (rc == -DER_NONEXIST) {
+			/* Do nothing if env does not exist*/
+			continue;
+		} else if (rc == -DER_NOMEM) {
+			*error = ENOMEM;
+			goto err_out0;
+		}
+		/* In case d_agetenv_str() returns -DER_SUCCESS */
+		free(env_value);
+		env_set[i] = true;
+		num_env_append++;
+	}
+
+	/* libpil4dfs is not in LD_PRELOAD, then no need to append env. */
+	if (!pil4dfs_set_preload)
+		return (char **)envp;
 
 	if (envp == NULL) {
 		num_entry = 0;
@@ -3380,7 +3433,8 @@ pre_envp(char *const envp[])
 	} else {
 		while (envp[num_entry]) {
 			/* scan the env in env_list[] to check whether they exist or not */
-			if (strncmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0) {
+			if (strncmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0 &&
+			    preload_included == false) {
 				preload_included = true;
 				idx_preload      = num_entry;
 				num_entry_found++;
@@ -3391,6 +3445,9 @@ pre_envp(char *const envp[])
 			 * simplicity. This function is not performance critical.
 			 */
 			for (i = 0; i < ARRAY_SIZE(env_list); i++) {
+				/* env is not set in environ, then no need to append. */
+				if (!env_set[i])
+					continue;
 				if (!env_found[i]) {
 					if (strncmp(envp[num_entry], STR_AND_SIZE_M1(env_list[i]))
 					    == 0) {
@@ -3410,7 +3467,7 @@ pre_envp(char *const envp[])
 	/* the new envp holds the existing envs & the envs forced to append plus NULL at the end */
 	new_envp = malloc(sizeof(char *) * (num_entry + num_env_append + 1));
 	if (new_envp == NULL) {
-		printf("Error: failed to allocate memory for new_envp. Use existing envp\n");
+		*error = ENOMEM;
 		goto err_out0;
 	}
 
@@ -3431,12 +3488,13 @@ pre_envp(char *const envp[])
 		/* 2 extra bytes for ':' and '\0' */
 		len_total = len + len2 + 2;
 		if (len_total > MAX_ARG_STRLEN) {
-			printf("Error: env for LD_PRELOAD is too long.\n");
+			fprintf(stderr, "Error: env for LD_PRELOAD is too long.\n");
+			*error = E2BIG;
 			goto err_out1;
 		}
 		rc = asprintf(&new_preload_str, "%s:%s", envp[idx_preload], pil4df_path);
 		if (rc < 0) {
-			printf("Error: failed to allocate memory for LD_PRELOAD env.\n");
+			*error = ENOMEM;
 			goto err_out1;
 		}
 		new_envp[idx_preload] = new_preload_str;
@@ -3445,7 +3503,7 @@ pre_envp(char *const envp[])
 	if (!preload_included) {
 		rc = asprintf(&new_preload_str, "LD_PRELOAD=%s", pil4df_path);
 		if (rc < 0) {
-			printf("Error: failed to allocate memory for LD_PRELOAD env.\n");
+			*error = ENOMEM;
 			goto err_out1;
 		}
 		new_envp[i] = new_preload_str;
@@ -3453,22 +3511,23 @@ pre_envp(char *const envp[])
 	}
 
 	for (j = 0; j < ARRAY_SIZE(env_list); j++) {
-		/* env is not found. Need to be appended if present in current process. */
+		/* env is not set in environ. */
+		if (!env_set[i])
+			continue;
+		/* env is not found in envp[]. Need to be appended if present in current process. */
 		if (!env_found[j]) {
 			rc = d_agetenv_str(&env_value, env_list[j]);
 			if (rc == -DER_NONEXIST) {
-				/* Do nthing if env does not exist*/
+				/* Do nothing if env does not exist. Not suppose to be here. */
 				continue;
 			} else if (rc == -DER_NOMEM) {
-				printf("Error: failed to allocate memory in querying env %s.\n",
-				       env_list[j]);
+				*error = ENOMEM;
 				goto err_out2;
 			}
 			/* In case d_agetenv_str() returns -DER_SUCCESS, append the env */
 			rc = asprintf(&env_buf_list[j], "%s=%s", env_list[j], env_value);
 			if (rc < 0) {
-				printf("Error: failed to allocate memory for env %s.\n",
-				       env_list[j]);
+				*error = ENOMEM;
 				goto err_out2;
 			}
 			new_envp[i] = env_buf_list[j];
@@ -3496,7 +3555,7 @@ err_out2:
 err_out1:
 	free(new_envp);
 err_out0:
-	return (char **)envp;
+	return NULL;
 }
 
 static void
@@ -3519,6 +3578,9 @@ reset_daos_env_before_exec(void)
 int
 execve(const char *filename, char *const argv[], char *const envp[])
 {
+	char **new_envp;
+	int    error;
+
 	if (next_execve == NULL) {
 		next_execve = dlsym(RTLD_NEXT, "execve");
 		D_ASSERT(next_execve != NULL);
@@ -3531,12 +3593,20 @@ execve(const char *filename, char *const argv[], char *const envp[])
 	if (!enforce_exec_env)
 		return next_execve(filename, argv, envp);
 
-	return next_execve(filename, argv, pre_envp(envp));
+	new_envp = pre_envp(envp, &error);
+	if (error) {
+		errno = error;
+		return (-1);
+	}
+	return next_execve(filename, argv, new_envp);
 }
 
 int
 execvpe(const char *filename, char *const argv[], char *const envp[])
 {
+	char **new_envp;
+	int    error;
+
 	if (next_execvpe == NULL) {
 		next_execvpe = dlsym(RTLD_NEXT, "execvpe");
 		D_ASSERT(next_execvpe != NULL);
@@ -3549,7 +3619,13 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 	if (!enforce_exec_env)
 		return next_execvpe(filename, argv, envp);
 
-	return next_execvpe(filename, argv, pre_envp(envp));
+	new_envp = pre_envp(envp, &error);
+	if (error) {
+		errno = error;
+		return (-1);
+	}
+
+	return next_execvpe(filename, argv, new_envp);
 }
 
 int
@@ -3564,14 +3640,7 @@ execv(const char *filename, char *const argv[])
 
 	reset_daos_env_before_exec();
 
-	if (!enforce_exec_env)
-		return next_execv(filename, argv);
-
-	if (next_execve == NULL) {
-		next_execve = dlsym(RTLD_NEXT, "execve");
-		D_ASSERT(next_execve != NULL);
-	}
-	return next_execve(filename, argv, pre_envp(__environ));
+	return next_execv(filename, argv);
 }
 
 int
@@ -3586,19 +3655,15 @@ execvp(const char *filename, char *const argv[])
 
 	reset_daos_env_before_exec();
 
-	if (!enforce_exec_env)
-		return next_execvp(filename, argv);
-
-	if (next_execvpe == NULL) {
-		next_execvpe = dlsym(RTLD_NEXT, "execvpe");
-		D_ASSERT(next_execvpe != NULL);
-	}
-	return next_execvpe(filename, argv, pre_envp(__environ));
+	return next_execvp(filename, argv);
 }
 
 int
 fexecve(int fd, char *const argv[], char *const envp[])
 {
+	char **new_envp;
+	int    error;
+
 	if (next_fexecve == NULL) {
 		next_fexecve = dlsym(RTLD_NEXT, "fexecve");
 		D_ASSERT(next_fexecve != NULL);
@@ -3611,7 +3676,12 @@ fexecve(int fd, char *const argv[], char *const envp[])
 	if (!enforce_exec_env)
 		return next_fexecve(fd, argv, envp);
 
-	return next_fexecve(fd, argv, pre_envp(envp));
+	new_envp = pre_envp(envp, &error);
+	if (error) {
+		errno = error;
+		return (-1);
+	}
+	return next_fexecve(fd, argv, new_envp);
 }
 
 int
