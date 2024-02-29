@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -20,6 +20,7 @@ class NvmeHealth(ServerFillUp):
 
     @fail_on(CommandFailure)
     def test_monitor_for_large_pools(self):
+        # pylint: disable=too-many-locals
         """Jira ID: DAOS-4722.
 
         Test Description: Test Health monitor for large number of pools.
@@ -47,8 +48,17 @@ class NvmeHealth(ServerFillUp):
         potential_num_pools = int((nvme_per_engine / (min_nvme_per_target * targets_per_engine)))
         actual_num_pools = min(max_num_pools, potential_num_pools)
 
+        # consider 1GiB RDB memory consume for MD-on-SSD
+        rdb_size = 1073741824
+        if self.server_managers[0].manager.job.using_control_metadata:
+            min_scm_per_pool = 104857600
+            potential_num_pools = int(scm_per_engine / (min_scm_per_pool + rdb_size))
+            actual_num_pools = min(potential_num_pools, actual_num_pools)
+
         # Split available space across the number of pools to be created
         scm_per_pool = int(scm_per_engine / actual_num_pools)
+        if self.server_managers[0].manager.job.using_control_metadata:
+            scm_per_pool = int(scm_per_pool - rdb_size)
         nvme_per_pool = int(nvme_per_engine / actual_num_pools)
 
         # Create the pools

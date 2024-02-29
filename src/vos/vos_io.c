@@ -2427,7 +2427,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
 					      dth->dth_dti_cos_count, 0, NULL, daes, dces);
-		if (err <= 0)
+		if (err < 0)
+			goto abort;
+		if (err == 0)
 			D_FREE(daes);
 	}
 
