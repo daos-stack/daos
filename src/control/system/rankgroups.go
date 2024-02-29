@@ -20,6 +20,8 @@ import (
 // RankGroups maps a set of ranks to string value (group).
 type RankGroups map[string]*ranklist.RankSet
 
+const replaceSep = " "
+
 // Keys returns sorted group names.
 //
 // Sort first by number of ranks in grouping then by alphabetical order of
@@ -100,11 +102,15 @@ func (rgs RankGroups) FromMembers(members Members) error {
 // FromMemberResults initializes groupings of ranks that had a particular result
 // from a requested action, populated from a slice of system member results.
 //
-// Supplied rowFieldsep parameter is used to separate row field elements in
-// the string that is used as the key for the rank groups.
-func (rgs RankGroups) FromMemberResults(results MemberResults, rowFieldSep string) error {
+// Supplied fieldsep parameter is used to separate row field elements in the string that is used
+// as the key for the rank groups.
+func (rgs RankGroups) FromMemberResults(results MemberResults, fieldSep string) error {
 	if rgs == nil || len(rgs) > 0 {
 		return errors.New("expecting non-nil empty rank groups")
+	}
+	// Refuse to use separator pattern if it matches the replacement.
+	if fieldSep == replaceSep {
+		return errors.Errorf("illegal field separator %q", fieldSep)
 	}
 
 	ranksWithResult := make(map[string]*bytes.Buffer)
@@ -119,14 +125,14 @@ func (rgs RankGroups) FromMemberResults(results MemberResults, rowFieldSep strin
 
 		msg := "OK"
 		if r.Errored {
-			msg = r.Msg
+			msg = strings.Replace(r.Msg, fieldSep, replaceSep, -1)
 		}
 		if r.Action == "" {
 			return errors.Errorf(
 				"action field empty for rank %d result", r.Rank)
 		}
 
-		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
+		resStr := fmt.Sprintf("%s%s%s", r.Action, fieldSep, msg)
 		if _, exists := ranksWithResult[resStr]; !exists {
 			ranksWithResult[resStr] = new(bytes.Buffer)
 		}
