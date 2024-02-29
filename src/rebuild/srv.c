@@ -1711,6 +1711,9 @@ ds_rebuild_abort(uuid_t pool_uuid, unsigned int ver, unsigned int gen, uint64_t 
 			    (ver == (unsigned int)(-1) || rpt->rt_rebuild_ver == ver) &&
 			    (gen == (unsigned int)(-1) || rpt->rt_rebuild_gen == gen) &&
 			    (term == (uint64_t)(-1) || rpt->rt_leader_term == term)) {
+				D_INFO(DF_UUID" try abort the rpt %p op %s ver %u gen %u\n",
+				       DP_UUID(rpt->rt_pool_uuid), rpt, RB_OP_STR(rpt->rt_rebuild_op),
+				       rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
 				rpt->rt_abort = 1;
 				aborted = false;
 			}
@@ -2443,6 +2446,11 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 
 	rpt->rt_rebuild_op = rsi->rsi_rebuild_op;
 
+	/* Let's add the rpt to the tracker list before IV fetch, which might yield,
+	 * to make sure the new coming request can find the rpt in the list.
+	 */
+	rpt_get(rpt);
+	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid,
 				      &rpt->rt_coh_uuid);
 	if (rc)
@@ -2482,14 +2490,16 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	rpt->rt_pool = pool; /* pin it */
 	ABT_mutex_unlock(rpt->rt_lock);
 
-	rpt_get(rpt);
-	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
 	*p_rpt = rpt;
 out:
 	if (rc) {
-		if (rpt)
+		if (rpt) {
 			rpt_put(rpt);
-
+			if (!d_list_empty(&rpt->rt_list)) {
+				d_list_del_init(&rpt->rt_list);
+				rpt_put(rpt);
+			}
+		}
 		ds_pool_put(pool);
 	}
 	daos_prop_fini(&prop);
