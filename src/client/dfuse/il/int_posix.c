@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -1756,6 +1757,8 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc == 0) {
+		struct stat buf;
+
 		DFUSE_LOG_DEBUG("mmap(address=%p, length=%zu, prot=%d, flags=%d,"
 				" fd=%d, offset=%zd) "
 				"intercepted, disabling kernel bypass ", address,
@@ -1767,6 +1770,11 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 		entry->fd_status = DFUSE_IO_DIS_MMAP;
 
 		vector_decref(&fd_table, entry);
+
+		/* DAOS-14494: Force the kernel to update the size before mapping. */
+		rc = fstat(fd, &buf);
+		if (rc == -1)
+			return MAP_FAILED;
 	}
 
 	return __real_mmap(address, length, prot, flags, fd, offset);
@@ -1780,7 +1788,10 @@ dfuse_ftruncate(int fd, off_t length)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_ftruncate;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	DFUSE_LOG_DEBUG("ftuncate(fd=%d) intercepted, bypass=%s offset %#lx", fd,
 			bypass_status[entry->fd_status], length);
@@ -1795,7 +1806,7 @@ dfuse_ftruncate(int fd, off_t length)
 	errno = rc;
 	return -1;
 
-do_real_ftruncate:
+do_real_fn:
 	return __real_ftruncate(fd, length);
 }
 
@@ -1807,14 +1818,17 @@ dfuse_fsync(int fd)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_fsync;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	DFUSE_LOG_DEBUG("fsync(fd=%d) intercepted, bypass=%s",
 			fd, bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
-do_real_fsync:
+do_real_fn:
 	return __real_fsync(fd);
 }
 
@@ -1826,14 +1840,17 @@ dfuse_fdatasync(int fd)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_fdatasync;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	DFUSE_LOG_DEBUG("fdatasync(fd=%d) intercepted, bypass=%s",
 			fd, bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
-do_real_fdatasync:
+do_real_fn:
 	return __real_fdatasync(fd);
 }
 
@@ -2909,14 +2926,17 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_fstat;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	/* Turn off this feature if the kernel is doing metadata caching, in this case it's better
 	 * to use the kernel cache and keep it up-to-date than query the severs each time.
 	 */
 	if (!entry->fd_fstat) {
 		vector_decref(&fd_table, entry);
-		goto do_real_fstat;
+		goto do_real_fn;
 	}
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_fstat_count, 1);
@@ -2959,7 +2979,7 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	}
 
 	return 0;
-do_real_fstat:
+do_real_fn:
 	return __real___fxstat(ver, fd, buf);
 }
 
