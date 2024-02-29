@@ -20,6 +20,12 @@ else
   ls -l "$COVFILE"
 fi
 
+echo "===>"
+pwd
+ls
+echo "<---"
 #To Do: symlink bullseye/src
-#  ie: ln -vs ~/daos/src ~/BullseyeCoverage-9.5.13/src
+#  ie: ln -vs ~/daos/src ~/BullseyeCoverage/src
+#To remove test.cov after java -jar
+mkdir -p test_coverage_report
 java -jar bullshtml.jar "$WORKSPACE"/test_coverage_report
