@@ -350,7 +350,7 @@ def run_linter(paths=None):
         _error_handler(non_unique_classes, 'non-unique test classes'),
         _error_handler(non_unique_methods, 'non-unique test methods'),
         _error_handler(test_wo_tags, 'tests without tags'),
-        _error_handler(tests_wo_class_as_tag, 'tests without class as tag', required=False),
+        _error_handler(tests_wo_class_as_tag, 'tests without class as tag'),
         _error_handler(tests_wo_method_as_tag, 'tests without method name as tag'),
         _error_handler(tests_wo_hw_vm_manual, 'tests without HW, VM, or manual tag'),
         _error_handler(tests_w_empty_tag, 'tests with an empty tag'),
