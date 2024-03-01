@@ -965,7 +965,10 @@ again:
 		if (myrank == target->ta_comp.co_rank &&
 		    dss_get_module_info()->dmi_tgt_id == target->ta_comp.co_index) {
 			d_list_del(&dsp->dsp_link);
-			d_list_add_tail(&dsp->dsp_link, &self);
+			if (for_io)
+				d_list_add_tail(&dsp->dsp_link, &self);
+			else
+				dtx_dsp_free(dsp);
 			if (--(*check_count) == 0)
 				break;
 			continue;
@@ -1133,8 +1136,8 @@ next2:
 				if (rc1 != DTX_ST_COMMITTED && rc1 != DTX_ST_ABORTED &&
 				    rc1 != -DER_NONEXIST) {
 					if (!for_io)
-						D_INFO("Hit some long-time DTX "DF_DTI", %d\n",
-						       DP_DTI(&dsp->dsp_xid), rc1);
+						D_WARN("Hit unexpected long-time DTX "
+						       DF_DTI": %d\n", DP_DTI(&dsp->dsp_xid), rc1);
 					else if (rc == 0)
 						rc = -DER_INPROGRESS;
 				}
@@ -1173,7 +1176,7 @@ next2:
 			dck.oid = dsp->dsp_oid;
 			dck.dkey_hash = dsp->dsp_dkey_hash;
 			rc = dtx_commit(cont, &pdte, &dck, 1);
-			if (rc < 0 && rc != -DER_NONEXIST)
+			if (rc < 0 && rc != -DER_NONEXIST && for_io)
 				d_list_add_tail(&dsp->dsp_link, cmt_list);
 			else
 				dtx_dsp_free(dsp);
@@ -1188,7 +1191,7 @@ next2:
 			dtx_dsp_free(dsp);
 			continue;
 		case DSHR_ABORT_FAILED:
-			if (abt_list != NULL)
+			if (for_io)
 				d_list_add_tail(&dsp->dsp_link, abt_list);
 			else
 				dtx_dsp_free(dsp);
