@@ -26,7 +26,7 @@ class NvmeFault(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=nvme
-        :avocado: tags=nvme_fault,test_nvme_fault
+        :avocado: tags=NvmeFault,test_nvme_fault
         """
         pool_capacity = self.params.get('pool_capacity', '/run/faulttests/*')
         no_of_servers = self.params.get('no_of_servers', '/run/faulttests/*')
