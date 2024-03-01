@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -119,17 +120,17 @@ var (
 	errNoPMemDIMMs = errors.New(outNoPMemDIMMs)
 )
 
+// dimmInfoFromXML uses XML output from `ipmctl show -o nvmxml -dimm [-socket X]` to gather PMem
+// DIMM details.
 func (cr *cmdRunner) dimmInfoFromXML(sockID int) (DIMMs, error) {
 	out, err := cr.runSockAwareCmd(sockID, cmdShowDIMMs)
 	if err != nil {
+		if rce, ok := errors.Cause(err).(*system.RunCmdError); ok {
+			if strings.Contains(rce.Stdout, outNoPMemDIMMs) {
+				return DIMMs{}, nil // No DIMMs shouldn't return error.
+			}
+		}
 		return nil, err
-	}
-
-	switch {
-	case strings.Contains(out, outNoCLIPerms):
-		return nil, errors.Errorf("insufficient permissions to run %s", cmdShowDIMMs)
-	case strings.Contains(out, outNoPMemDIMMs):
-		return DIMMs{}, nil
 	}
 
 	var dl DIMMList
@@ -144,10 +145,7 @@ func (cr *cmdRunner) dimmInfoFromXML(sockID int) (DIMMs, error) {
 	return dl.DIMMs, nil
 }
 
-// getModules scans the storage host for PMem modules and returns a slice of them. The function
-// detects which sockets to scan on based on sockID input param and output of `ipmctl show -sockets`
-// call. The nvmxml output from `ipmctl show -dimm -socket X` calls is then used to gather PMem DIMM
-// details.
+// getModules scans the storage host for PMem modules and returns a slice.
 func (cr *cmdRunner) getModules(sockID int) (storage.ScmModules, error) {
 	dimms, err := cr.dimmInfoFromXML(sockID)
 	if err != nil {

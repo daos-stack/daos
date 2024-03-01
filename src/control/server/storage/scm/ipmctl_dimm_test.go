@@ -7,6 +7,8 @@
 package scm
 
 import (
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -107,12 +110,17 @@ Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 03.00.00.04
 			expErr: errors.New("parse show dimm cmd"),
 		},
 		"no permissions": {
-			cmdOutputMap: func() OutputMap {
-				om := genCmdOutputMap()
-				om[cmdShowDIMMs.String()] = outNoCLIPerms
-				return om
+			cmdErrorMap: func() ErrorMap {
+				em := genCmdErrorMap()
+				em[cmdShowDIMMs.String()] = errors.Wrap(&system.RunCmdError{
+					Wrapped: &exec.ExitError{
+						ProcessState: &os.ProcessState{},
+					},
+					Stdout: "Sorry, the " + outNoCLIPerms,
+				}, cmdShowDIMMs.String())
+				return em
 			}(),
-			expErr: errors.New("insufficient permissions"),
+			expErr: errors.Errorf("ipmctl show -o nvmxml -d DimmID,ChannelID,ChannelPos,MemControllerID,SocketID,PhysicalID,Capacity,DimmUID,PartNumber,FWVersion,HealthState -dimm: exit status 0: stdout: Sorry, the %s; stderr: ", outNoCLIPerms),
 		},
 		"ipmctl version command fails": {
 			cmdErrorMap: func() ErrorMap {
@@ -125,16 +133,25 @@ Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 03.00.00.04
 		"show dimms command fails": {
 			cmdErrorMap: func() ErrorMap {
 				em := genCmdErrorMap()
-				em[cmdShowDIMMs.String()] = errors.New("fail show")
+				em[cmdShowDIMMs.String()] = errors.Wrap(&system.RunCmdError{
+					Wrapped: &exec.ExitError{
+						ProcessState: &os.ProcessState{},
+					},
+				}, cmdShowDIMMs.String())
 				return em
 			}(),
-			expErr: errors.New("fail show"),
+			expErr: errors.New("ipmctl show -o nvmxml -d DimmID,ChannelID,ChannelPos,MemControllerID,SocketID,PhysicalID,Capacity,DimmUID,PartNumber,FWVersion,HealthState -dimm: exit status 0: stdout: ; stderr: "),
 		},
 		"no modules": {
-			cmdOutputMap: func() OutputMap {
-				om := genCmdOutputMap()
-				om[cmdShowDIMMs.String()] = outNoPMemDIMMs
-				return om
+			cmdErrorMap: func() ErrorMap {
+				em := genCmdErrorMap()
+				em[cmdShowDIMMs.String()] = errors.Wrap(&system.RunCmdError{
+					Wrapped: &exec.ExitError{
+						ProcessState: &os.ProcessState{},
+					},
+					Stdout: "Initialization failed. " + outNoPMemDIMMs,
+				}, cmdShowDIMMs.String())
+				return em
 			}(),
 			expCalls: CallMap{
 				cmdShowIpmctlVersion.String(): 1,

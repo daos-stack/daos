@@ -137,6 +137,7 @@ func (cr *cmdRunner) runSockAwareCmd(sockID int, cmd pmemCmd) (string, error) {
 				cmdTmp.Args = append(cmdTmp.Args, "-socket", sockArg)
 				break
 			}
+			// Special case for goal cmds as ipmctl is picky about opt order.
 			if arg == "-goal" {
 				// Extend slice by two.
 				cmdTmp.Args = append(cmdTmp.Args, "", "")
@@ -152,36 +153,6 @@ func (cr *cmdRunner) runSockAwareCmd(sockID int, cmd pmemCmd) (string, error) {
 
 	return cr.runCmd(cmdTmp)
 }
-
-//// getModules scans the storage host for PMem modules and returns a slice of them.
-//func (cr *cmdRunner) getModules(sockID int) (storage.ScmModules, error) {
-//	discovery, err := cr.binding.GetModules(cr.log)
-//	if err != nil {
-//		return nil, errors.Wrap(err, "failed to discover pmem modules")
-//	}
-//	cr.log.Debugf("discovered %d pmem modules", len(discovery))
-//
-//	modules := make(storage.ScmModules, 0, len(discovery))
-//	for _, d := range discovery {
-//		if sockID != sockAny && int(d.Socket_id) != sockID {
-//			continue // Skip module not bound to socket specified.
-//		}
-//
-//		modules = append(modules, &storage.ScmModule{
-//			ChannelID:        uint32(d.Channel_id),
-//			ChannelPosition:  uint32(d.Channel_pos),
-//			ControllerID:     uint32(d.Memory_controller_id),
-//			SocketID:         uint32(d.Socket_id),
-//			PhysicalID:       uint32(d.Physical_id),
-//			Capacity:         d.Capacity,
-//			UID:              d.Uid.String(),
-//			PartNumber:       d.Part_number.String(),
-//			FirmwareRevision: d.Fw_revision.String(),
-//		})
-//	}
-//
-//	return modules, nil
-//}
 
 func checkStateHasSock(sockState *storage.ScmSocketState, faultFunc func(uint) *fault.Fault) error {
 	if sockState == nil {
