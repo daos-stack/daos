@@ -847,13 +847,11 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	}
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
-	if (recursive && type != VOS_ITER_OBJ &&
+	if (recursive && type != VOS_ITER_OBJ && iter->it_parent != NULL &&
 	    (param->ip_flags & (VOS_IT_RECX_VISIBLE | VOS_IT_FOR_PURGE | VOS_IT_FOR_DISCARD)) ==
 		0) {
 		/** If scanning the whole tree, we need to revalidate the parent
 		 * chain and possibly jump back to another level to continue */
-		D_ASSERTF(iter->it_parent != NULL,
-			  "Full iteration only supported from object level\n");
 		rc = vos_iter_validate_internal(iter->it_parent);
 		if (rc < 0)
 			D_GOTO(out, rc);
