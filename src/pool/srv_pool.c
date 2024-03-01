@@ -1636,9 +1636,7 @@ check_map:
 
 	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-	} else if (rc != 0) {
+	if ((rc != 0) && (rc != -DER_NONEXIST)) {
 		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		goto out_lock;
@@ -1647,9 +1645,7 @@ check_map:
 
 	d_iov_set(&value, &svc_ops_max, sizeof(svc_ops_max));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_max, &value);
-	if (rc == -DER_NONEXIST) {
-		rc = 0;
-	} else if (rc != 0) {
+	if ((rc != 0) && (rc != -DER_NONEXIST)) {
 		DL_ERROR(rc, DF_UUID ": failed to lookup svc_ops_max", DP_UUID(svc->ps_uuid));
 		goto out_lock;
 	}
