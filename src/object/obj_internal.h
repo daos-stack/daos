@@ -590,6 +590,8 @@ struct obj_pool_metrics {
 	struct d_tm_node_t *opm_update_ec_full;
 	/** Total number of EC partial update operations (type = counter) */
 	struct d_tm_node_t *opm_update_ec_partial;
+	/** Total number of EC agg conflicts with VOS aggregation or discard */
+	struct d_tm_node_t *opm_ec_agg_blocked;
 };
 
 void

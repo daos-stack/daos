@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -339,29 +339,31 @@ D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |
 
 enum {
 	/** The absence of any flags means iterate all unsorted extents */
-	VOS_IT_RECX_ALL		= 0,
+	VOS_IT_RECX_ALL = 0,
 	/** Include visible extents in sorted iteration */
-	VOS_IT_RECX_VISIBLE	= (1 << 0),
+	VOS_IT_RECX_VISIBLE = (1 << 0),
 	/** Include covered extents, implies VOS_IT_RECX_VISIBLE */
-	VOS_IT_RECX_COVERED	= (1 << 1) | VOS_IT_RECX_VISIBLE,
+	VOS_IT_RECX_COVERED = (1 << 1) | VOS_IT_RECX_VISIBLE,
 	/** Include hole extents in sorted iteration
 	 *  Only applicable if VOS_IT_RECX_COVERED is not set
 	 */
-	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
+	VOS_IT_RECX_SKIP_HOLES = (1 << 2),
 	/** When sorted iteration is enabled, iterate in reverse */
-	VOS_IT_RECX_REVERSE	= (1 << 3),
+	VOS_IT_RECX_REVERSE = (1 << 3),
 	/** The iterator is for purge operation */
-	VOS_IT_FOR_PURGE	= (1 << 4),
+	VOS_IT_FOR_PURGE = (1 << 4),
 	/** The iterator is for data migration scan */
-	VOS_IT_FOR_MIGRATION	= (1 << 5),
+	VOS_IT_FOR_MIGRATION = (1 << 5),
 	/** Iterate only show punched records in interval */
-	VOS_IT_PUNCHED		= (1 << 6),
+	VOS_IT_PUNCHED = (1 << 6),
 	/** Cleanup stale DTX entry. */
-	VOS_IT_FOR_DISCARD	= (1 << 7),
+	VOS_IT_FOR_DISCARD = (1 << 7),
 	/** Entry is not committed */
-	VOS_IT_UNCOMMITTED	= (1 << 8),
+	VOS_IT_UNCOMMITTED = (1 << 8),
+	/** The iterator is for an aggregation operation (EC or VOS) */
+	VOS_IT_FOR_AGG = (1 << 9),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 9) - 1,
+	VOS_IT_MASK = (1 << 10) - 1,
 };
 
 typedef struct {

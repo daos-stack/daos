@@ -1136,7 +1136,7 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			ptr += size * iods[i].iod_size;
 			offset = recx->rx_idx;
 			size = recx->rx_nr;
-			parity_eph = ephs[i][j];
+			parity_eph = encode ? ephs[i][j] : mrone->mo_epoch;
 		}
 
 		if (size > 0)
@@ -1198,9 +1198,8 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 
 			update_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
 			update_eph_p = &update_eph;
-			rc = __migrate_fetch_update_parity(mrone, oh, &iod, fetch_eph, &update_eph_p,
-							   mrone->mo_iods_num_from_parity, ds_cont,
-							   true);
+			rc           = __migrate_fetch_update_parity(mrone, oh, &iod, fetch_eph,
+								     &update_eph_p, 1, ds_cont, true);
 			if (rc)
 				return rc;
 		}
@@ -1553,8 +1552,9 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
 
 			update_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
-			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1, fetch_eph, update_eph,
-							 DIOF_EC_RECOV_FROM_PARITY, ds_cont);
+			rc         = __migrate_fetch_update_bulk(
+                            mrone, oh, &iod, 1, fetch_eph, update_eph,
+                            DIOF_EC_RECOV_FROM_PARITY | DIOF_FOR_MIGRATION, ds_cont);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}

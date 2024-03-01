@@ -1438,6 +1438,15 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 
 	D_ASSERT(!write_parity ||
 		 entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf);
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+
+	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_DEBUG(DB_EPC, DF_UOID " abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		return -1;
+	}
 
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
@@ -1445,7 +1454,6 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 		return rc;
 	}
 
-	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
 				       &targets, &failed_tgts_cnt);
 	if (rc) {
@@ -1706,6 +1714,15 @@ agg_process_holes(struct ec_agg_entry *entry)
 	int			 tid, rc = 0;
 	int			*status;
 
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	/* If rebuild started, abort it before sending RPC to save conflict window with rebuild
+	 * (see obj_inflight_io_check()).
+	 */
+	if (agg_param->ap_pool_info.api_pool->sp_rebuilding > 0) {
+		D_DEBUG(DB_EPC, DF_UOID " abort as rebuild started\n", DP_UOID(entry->ae_oid));
+		return -1;
+	}
+
 	D_ALLOC_ARRAY(stripe_ud.asu_recxs,
 		      entry->ae_cur_stripe.as_extent_cnt + 1);
 	if (stripe_ud.asu_recxs == NULL) {
@@ -1723,8 +1740,6 @@ agg_process_holes(struct ec_agg_entry *entry)
 	if (rc)
 		goto out;
 
-	agg_param = container_of(entry, struct ec_agg_param,
-				 ap_agg_entry);
 	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -2583,10 +2598,12 @@ static int
 cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		     uint32_t flags, struct agg_param *agg_param)
 {
+	struct obj_pool_metrics  *opm;
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	vos_iter_param_t	 iter_param = { 0 };
 	struct vos_iter_anchors  anchors = { 0 };
 	int			 rc = 0;
+	int                       blocks       = 0;
 
 	/*
 	 * Avoid calling into vos_aggregate() when aborting aggregation
@@ -2602,6 +2619,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
+	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
 	if (flags & VOS_AGG_FL_FORCE_SCAN) {
 		/** We don't want to use the latest container aggregation epoch for the filter
 		 *  in this case.   We instead use the lower bound of the epoch range.
@@ -2619,15 +2637,11 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		goto update_hae;
 	}
 
-	rc = vos_aggregate_enter(cont->sc_hdl, epr);
-	if (rc)
-		goto update_hae;
-
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
+	iter_param.ip_flags             = VOS_IT_RECX_VISIBLE | VOS_IT_FOR_AGG;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
 	iter_param.ip_filter_cb		= agg_filter;
@@ -2635,9 +2649,9 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
-	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
-	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
-			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, NULL);
+retry:
+	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors, agg_iterate_pre_cb,
+			 agg_iterate_post_cb, ec_agg_param, NULL);
 
 	/* Post_cb may not being executed in some cases */
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);
@@ -2648,17 +2662,28 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		ec_agg_param->ap_agg_entry.ae_obj_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (cont->sc_pool->spc_pool->sp_rebuilding > 0 && !cont->sc_stopping) {
-		/* There is rebuild going on, and we can't proceed EC aggregate boundary,
-		 * Let's wait for 5 seconds for another EC aggregation.
+	if (rc == -DER_BUSY && cont->sc_pool->spc_pool->sp_rebuilding == 0) {
+		/** Hit an object conflict VOS aggregation or discard.   Rather than exiting, let's
+		 * yield and try again.
 		 */
-		D_ASSERT(cont->sc_ec_agg_req != NULL);
-		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
+		opm = cont->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+		d_tm_inc_counter(opm->opm_ec_agg_blocked, 1);
+		blocks++;
+		/** Warn once if it goes over 20 times */
+		D_CDEBUG(blocks == 20, DLOG_WARN, DB_EPC,
+			 "EC agg hit conflict with VOS agg or discard (nr=%d), retrying...\n",
+			 blocks);
+		ec_aggregate_yield(ec_agg_param);
+		goto retry;
 	}
 
-	vos_aggregate_exit(cont->sc_hdl);
-
 update_hae:
+	/* clear the flag before next turn's cont_aggregate_runnable(), to save conflict
+	 * window with rebuild (see obj_inflight_io_check()).
+	 */
+	if (cont->sc_pool->spc_pool->sp_rebuilding > 0)
+		cont->sc_ec_agg_active = 0;
+
 	if (rc == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
 		if (!cont->sc_stopping && cont->sc_ec_query_agg_eph) {

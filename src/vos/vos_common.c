@@ -754,6 +754,19 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* VOS aggregation conflicts with discard */
+	rc = d_tm_add_metric(&vam->vam_agg_blocked, D_TM_COUNTER, "aggregation blocked by discard",
+			     NULL, "%s/%s/agg_blocked/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'agg_blocked' telemetry : " DF_RC "\n", DP_RC(rc));
+
+	/* VOS discard conflicts with aggregation */
+	rc = d_tm_add_metric(&vam->vam_discard_blocked, D_TM_COUNTER,
+			     "discard blocked by aggregation", NULL, "%s/%s/discard_blocked/tgt_%u",
+			     path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'discard_blocked' telemetry : " DF_RC "\n", DP_RC(rc));
+
 	/* VOS aggregation failed */
 	rc = d_tm_add_metric(&vam->vam_fail_count, D_TM_COUNTER, "aggregation failures", NULL,
 			     "%s/%s/fail_count/tgt_%u", path, VOS_AGG_DIR, tgt_id);
