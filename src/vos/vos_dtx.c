@@ -2696,9 +2696,6 @@ vos_dtx_act_reindex(struct vos_container *cont)
 			if (dae_df->dae_flags & DTE_INVALID)
 				continue;
 
-			if(cont->vc_lowest_act_eph == 0 || cont->vc_lowest_act_eph > dae_df->dae_epoch)
-				cont->vc_lowest_act_eph = dae_df->dae_epoch;
-
 			if (daos_is_zero_dti(&dae_df->dae_xid)) {
 				D_WARN("Hit zero active DTX entry.\n");
 				continue;
@@ -2819,9 +2816,6 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 			D_WARN("Skip invalid committed DTX entry\n");
 			continue;
 		}
-
-		if(cont->vc_highest_cmt_eph == 0 || cont->vc_highest_cmt_eph < dce_df->dce_epoch)
-			cont->vc_highest_cmt_eph = dce_df->dce_epoch;
 
 		D_ALLOC_PTR(dce);
 		if (dce == NULL)

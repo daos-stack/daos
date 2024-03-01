@@ -356,13 +356,6 @@ struct vos_container {
 	 */
 	daos_epoch_t		vc_solo_dtx_epoch;
 
-	/* The lowest active epoch and the highest committed epoch will
-	 * be used as the start epoch during incremental reintegration,
-	 * so during reintegration, vos_cont_open and dtx_cont_open will
-	 * update these 2 epochs.
-	 */
-	daos_epoch_t		vc_lowest_act_eph;
-	daos_epoch_t		vc_highest_cmt_eph;
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
