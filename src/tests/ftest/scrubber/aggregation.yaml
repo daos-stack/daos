@@ -39,19 +39,16 @@ pool:
 container:
   type: POSIX
   control_method: daos
-  oclass: RP_2GX
   properties: "cksum:sha512,rd_fac:1"
 ior:
   ior_timeout: 60
-  client_processes:
-    np: 6
   test_file: daos:testFile
   dfs_destroy: false
   flags: "-v -W -w -r -R -k"
   api: DFS
-  transfer_size: 1M
-  block_size: 8G
+  transfer_size: 5M
+  block_size: 250M
   dfs_oclass: RP_2GX
 faults:
   fault_list:
-    - DAOS_CSUM_CORRUPT_DISK
+    - DAOS_DELAYED_CSUM_CORRUPT_DISK

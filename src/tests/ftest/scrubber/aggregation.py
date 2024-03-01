@@ -37,16 +37,18 @@ class TestScrubberEvictWithAggregation(TestWithScrubber, TestWithTelemetry):
         self.add_container(self.pool)
         # Pool and Containers are already created. Just run the IOR.
         self.run_ior_with_pool(create_cont=False)
-        # Run IOR once again on the same pool and container.
-        self.run_ior_with_pool(create_cont=False)
         telemetry_string = "engine_pool_vos_aggregation_obj_scanned"
         initial_agg_metrics = self.telemetry.get_metrics(telemetry_string)
-        # Enable the aggregation on the pool.
-        self.pool.set_property("reclaim", "time")
         # Now enable the scrubber on the pool.
         self.pool.set_prop(properties="scrub:timed,scrub_freq:1,scrub_thresh:3")
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
+        # The disk fault injection is going to be slow.
+        # Reduce transfer size and increase block size for IOR to run for long time.
+        self.ior_cmd.transfer_size.update("1M")
+        self.ior_cmd.block_size.update("20G")
         self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        # Enable the aggregation on the pool.
+        self.pool.set_property("reclaim", "time")
         # We want both aggregation and scrubber tasks
         # to run in parallel during this time.
         start_time = 0
