@@ -3422,10 +3422,6 @@ pre_envp(char *const envp[], int *error)
 		num_env_append++;
 	}
 
-	/* libpil4dfs is not in LD_PRELOAD, then no need to append env. */
-	if (!pil4dfs_set_preload)
-		return (char **)envp;
-
 	if (envp == NULL) {
 		num_entry = 0;
 	} else if (envp[0] == NULL) {
