@@ -389,11 +389,54 @@ out:
 
 }
 
+/*
+ * Since PMEM_PAGESIZE and PMEM_OBJ_POOL_HEAD_SIZE are not exported,
+ * for safety, we will use 64k for now.
+ */
+#define	POOL_OBJ_HEADER_SIZE	65536
+
+static int
+pool_reset_header(const char *path)
+{
+	int	 rc;
+	char	*buf = NULL;
+	FILE	*file;
+	int	 header_size = 65536;
+
+	/* Skip MD-ON-SSD case */
+	if (bio_nvme_configured(SMD_DEV_TYPE_META))
+		return 0;
+
+	file = fopen(path, "r+");
+	if (file == NULL) {
+		D_ERROR("failed to open %s\n", path);
+		return daos_errno2der(errno);
+	}
+
+	D_ALLOC(buf, header_size);
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	rc = fwrite(buf, header_size, 1, file);
+	if (rc < 0)
+		goto out;
+	else if (rc != 1)
+		rc = -DER_IO;
+	else
+		rc = 0;
+out:
+	D_FREE(buf);
+	fclose(file);
+	return rc;
+}
+
 static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
 {
 	struct dss_module_info	*info = dss_get_module_info();
-	char			*path;
+	char			*path = NULL;
 	int			 rc;
 
 	D_ASSERTF(*child->spc_state == POOL_CHILD_NEW, "state:%u", *child->spc_state);
@@ -401,21 +444,27 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 
 	*child->spc_state = POOL_CHILD_STARTING;
 
+	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	if (rc != 0)
+		goto out;
+
 	if (recreate) {
+		/* If vos file already exists and its header is nonzero,
+		 * pmemobj_create() will fail. Therefore, reset the header in this case.
+		 */
+		rc = pool_reset_header(path);
+		if (rc != 0)
+			goto out;
+
 		rc = pool_child_recreate(child);
 		if (rc != 0)
 			goto out;
 	}
 
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
-	if (rc != 0)
-		goto out;
-
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
 	rc = vos_pool_open_metrics(path, child->spc_uuid, VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH,
 				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
 
-	D_FREE(path);
 
 	if (rc) {
 		DL_CDEBUG(rc == -DER_NVME_IO, DB_MGMT, DLOG_ERR, rc,
@@ -459,6 +508,7 @@ out_gc:
 out_close:
 	vos_pool_close(child->spc_hdl);
 out:
+	D_FREE(path);
 	*child->spc_state = POOL_CHILD_NEW;
 	return rc;
 }
