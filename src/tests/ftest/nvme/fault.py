@@ -36,7 +36,6 @@ class NvmeFault(ServerFillUp):
         # Create the Pool with Maximum NVMe size
         self.log_step(f'Creating a pool using {pool_capacity}% of the free NVMe space')
         self.add_pool()
-
         self.result.clear()
 
         # Create the IOR threads
