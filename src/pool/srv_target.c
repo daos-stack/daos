@@ -340,55 +340,6 @@ out_free:
 	return NULL;
 }
 
-static int
-pool_child_recreate(struct ds_pool_child *child)
-{
-	struct dss_module_info	*info = dss_get_module_info();
-	struct smd_pool_info	*pool_info;
-	struct stat		 lstat;
-	char			*path;
-	int			 rc;
-
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
-	if (rc != 0)
-		return rc;
-
-	rc = stat(path, &lstat);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_UUID": Stat VOS pool file failed.", DP_UUID(child->spc_uuid));
-		rc = daos_errno2der(errno);
-		goto out;
-	}
-	if (lstat.st_size == 0) {
-		D_ERROR(DF_UUID": VOS pool file isn't fallocated.", DP_UUID(child->spc_uuid));
-		goto out;
-	}
-
-	rc = smd_pool_get_info(child->spc_uuid, &pool_info);
-	if (rc) {
-		DL_ERROR(rc, DF_UUID": Get pool info failed.", DP_UUID(child->spc_uuid));
-		goto out;
-	}
-
-	rc = vos_pool_kill(child->spc_uuid, 0);
-	if (rc) {
-		DL_ERROR(rc, DF_UUID": Destroy VOS pool failed.", DP_UUID(child->spc_uuid));
-		goto pool_info;
-	}
-
-	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
-			     0, NULL);
-	if (rc)
-		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
-
-pool_info:
-	smd_pool_free_info(pool_info);
-out:
-	D_FREE(path);
-	return rc;
-
-}
-
 /*
  * Since PMEM_PAGESIZE and PMEM_OBJ_POOL_HEAD_SIZE are not exported,
  * for safety, we will use 64k for now.
@@ -433,10 +384,69 @@ out:
 }
 
 static int
+pool_child_recreate(struct ds_pool_child *child)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct smd_pool_info	*pool_info;
+	struct stat		 lstat;
+	char			*path;
+	int			 rc;
+
+	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	if (rc != 0)
+		return rc;
+
+	rc = stat(path, &lstat);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": Stat VOS pool file failed.", DP_UUID(child->spc_uuid));
+		rc = daos_errno2der(errno);
+		goto out;
+	}
+	if (lstat.st_size == 0) {
+		D_ERROR(DF_UUID": VOS pool file isn't fallocated.", DP_UUID(child->spc_uuid));
+		goto out;
+	}
+
+	rc = smd_pool_get_info(child->spc_uuid, &pool_info);
+	if (rc) {
+		DL_ERROR(rc, DF_UUID": Get pool info failed.", DP_UUID(child->spc_uuid));
+		goto out;
+	}
+
+	rc = vos_pool_kill(child->spc_uuid, 0);
+	if (rc) {
+		DL_ERROR(rc, DF_UUID": Destroy VOS pool failed.", DP_UUID(child->spc_uuid));
+		goto pool_info;
+	}
+
+	/* If pool header is nonzero, pmemobj_create() will fail.
+	 * Therefore, reset the header in this case.
+	 */
+	rc = pool_reset_header(path);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": Reset VOS pool header failed.", DP_UUID(child->spc_uuid));
+		goto pool_info;
+	}
+
+	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
+			     0, NULL);
+	if (rc)
+		DL_ERROR(rc, DF_UUID": Create VOS pool failed.", DP_UUID(child->spc_uuid));
+
+pool_info:
+	smd_pool_free_info(pool_info);
+out:
+	D_FREE(path);
+	return rc;
+
+}
+
+
+static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
 {
 	struct dss_module_info	*info = dss_get_module_info();
-	char			*path = NULL;
+	char			*path;
 	int			 rc;
 
 	D_ASSERTF(*child->spc_state == POOL_CHILD_NEW, "state:%u", *child->spc_state);
@@ -444,27 +454,21 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 
 	*child->spc_state = POOL_CHILD_STARTING;
 
-	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
-	if (rc != 0)
-		goto out;
-
 	if (recreate) {
-		/* If vos file already exists and its header is nonzero,
-		 * pmemobj_create() will fail. Therefore, reset the header in this case.
-		 */
-		rc = pool_reset_header(path);
-		if (rc != 0)
-			goto out;
-
 		rc = pool_child_recreate(child);
 		if (rc != 0)
 			goto out;
 	}
 
+	rc = ds_mgmt_tgt_file(child->spc_uuid, VOS_FILE, &info->dmi_tgt_id, &path);
+	if (rc != 0)
+		goto out;
+
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
 	rc = vos_pool_open_metrics(path, child->spc_uuid, VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH,
 				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
 
+	D_FREE(path);
 
 	if (rc) {
 		DL_CDEBUG(rc == -DER_NVME_IO, DB_MGMT, DLOG_ERR, rc,
@@ -494,8 +498,6 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto out_cont;
 
 	*child->spc_state = POOL_CHILD_STARTED;
-	D_FREE(path);
-
 	return 0;
 
 out_cont:
@@ -510,7 +512,6 @@ out_gc:
 out_close:
 	vos_pool_close(child->spc_hdl);
 out:
-	D_FREE(path);
 	*child->spc_state = POOL_CHILD_NEW;
 	return rc;
 }
