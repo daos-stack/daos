@@ -43,6 +43,9 @@ drain_dkeys(void **state)
 	if (!test_runable(arg, 4))
 		return;
 
+	/** Force test timeout */
+	while (true) {}
+
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
 				arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
