@@ -362,7 +362,7 @@ class ObjectMetadata(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=server,metadata,nvme
+        :avocado: tags=server,metadata,nvme,ior
         :avocado: tags=ObjectMetadata,test_metadata_server_restart
         """
         self.create_pool()

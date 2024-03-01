@@ -1,16 +1,19 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /** DFS container operations */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/pool.h>
 #include <daos/container.h>
 #include <daos/object.h>
 #include <daos/common.h>
-#include "internal.h"
+
+#include "dfs_internal.h"
 
 int
 dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *_coh,
@@ -1291,13 +1294,7 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 		D_GOTO(out_prop, rc);
 	}
 
-	rc = daos_cont_set_owner(coh, user, group, NULL);
-	if (rc) {
-		D_ERROR("daos_cont_set_owner() failed, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(out_prop, rc = daos_der2errno(rc));
-	}
-
-	/** Change the owner of the root group */
+	/** retrieve the SB OID */
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	if (entry == NULL) {
 		rc = EINVAL;
@@ -1350,6 +1347,13 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 		i++;
 	}
 
+	/** set the owner ACL */
+	rc = daos_cont_set_owner(coh, user, group, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_set_owner() failed, " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
 	/** set root dkey as the entry name */
 	d_iov_set(&dkey, "/", 1);
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
@@ -1370,6 +1374,7 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 		D_GOTO(out_prop, rc = daos_der2errno(rc));
 	}
 
+	/** update the owner of the root group in the SB entry */
 	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		daos_obj_close(oh, NULL);

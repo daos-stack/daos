@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,6 +36,7 @@ class DfuseCommand(ExecutableCommand):
         self.disable_caching = FormattedParameter("--disable-caching", False)
         self.disable_wb_cache = FormattedParameter("--disable-wb-cache", False)
         self.multi_user = FormattedParameter("--multi-user", False)
+        self.read_only = FormattedParameter("--read-only", False)
 
     def set_dfuse_exports(self, log_file):
         """Set exports to issue before the dfuse command.
