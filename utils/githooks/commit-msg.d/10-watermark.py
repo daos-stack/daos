@@ -30,6 +30,15 @@ def find_hooks():
     return hooks
 
 
+def emit_watermark(msg):
+    """Print the watermark to the commit message"""
+    msg.write("Required-githooks: true\n")
+    skipped = os.environ.get("DAOS_GITHOOK_SKIP", None)
+    if skipped:
+        msg.write(f"Skipped-githooks: {skipped}\n")
+    msg.write("\n")
+
+
 def run_check():
     """Run the checks for the required commit hooks"""
     empty_commit = True
@@ -60,10 +69,10 @@ def run_check():
         for line in msg:
             if not hook_emitted:
                 if line.startswith("Signed-off-by"):
-                    commit_msg.write("Required-githooks: true\n\n")
+                    emit_watermark(commit_msg)
                     hook_emitted = True
                 elif line.startswith("#"):
-                    commit_msg.write("Required-githooks: true\n\n")
+                    emit_watermark(commit_msg)
                     hook_emitted = True
             commit_msg.write(line)
 

@@ -1,16 +1,19 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /** DFS metadata ops that apply for files, dirs, and symlinks */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/common.h>
 #include <daos/container.h>
 #include <daos/event.h>
 #include <daos/object.h>
-#include "internal.h"
+
+#include "dfs_internal.h"
 
 static int
 check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int mask)

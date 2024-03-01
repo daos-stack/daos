@@ -1,16 +1,19 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /** DFS read & write ops */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/array.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/object.h>
-#include "internal.h"
+
+#include "dfs_internal.h"
 
 struct dfs_read_params {
 	daos_size_t     *read_size;
