@@ -18,7 +18,6 @@ import slurm_utils
 from agent_utils import include_local_host
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from dmg_utils import DmgCommand
 from exception_utils import CommandFailure
 from general_utils import journalctl_time
 from host_utils import get_local_host
@@ -94,7 +93,7 @@ class SoakTestBase(TestWithServers):
         self.sharedsoak_dir = self.tmp + "/soak"
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
-        self.dmg_command = DmgCommand(self.bin)
+        self.dmg_command = self.get_dmg_command()
         # Fail if slurm partition is not defined
         # NOTE: Slurm reservation and partition are created before soak runs.
         # CI uses partition=daos_client and no reservation.
@@ -401,7 +400,7 @@ class SoakTestBase(TestWithServers):
         # loop time exists after the first pass; no harassers in the first pass
         if self.harasser_loop_time and self.harassers:
             harasser_interval = self.harasser_loop_time / (
-                len(self.harassers) + 1)
+                len(self.harassers) + 2)
         # If there is nothing to do; exit
         if job_id_list:
             # wait for all the jobs to finish
