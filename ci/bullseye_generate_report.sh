@@ -9,6 +9,11 @@ fi
 export COVFILE="$WORKSPACE/test.cov"
 export PATH="/opt/BullseyeCoverage/bin:$PATH"
 
+echo "===>"
+pwd
+ls -la
+echo "<---"
+
 mv "$WORKSPACE/test.cov_1" "$COVFILE"
 if [ -e "$WORKSPACE/test.cov_2" ]; then
   covmerge --no-banner --file "$COVFILE" "$WORKSPACE"/test.cov_*
@@ -20,10 +25,6 @@ else
   ls -l "$COVFILE"
 fi
 
-echo "===>"
-pwd
-ls
-echo "<---"
 #To Do: symlink bullseye/src
 #  ie: ln -vs ~/daos/src ~/BullseyeCoverage/src
 #To remove test.cov after java -jar
