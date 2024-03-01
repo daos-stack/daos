@@ -2649,7 +2649,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	int			 rc;
 	bool			 run_agg = false;
 
-	D_DEBUG(DB_TRACE, "epr: %lu -> %lu\n", epr->epr_lo, epr->epr_hi);
+	D_ERROR("epr: %lu -> %lu\n", epr->epr_lo, epr->epr_hi);
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo < epr->epr_hi && epr->epr_hi != DAOS_EPOCH_MAX,
 		  "epr_lo:"DF_U64", epr_hi:"DF_U64"\n",
@@ -2729,8 +2729,11 @@ update_hae:
 	 * Update HAE, when aggregating for snapshot deletion, the
 	 * @epr->epr_hi could be smaller than the HAE
 	 */
-	if (cont->vc_cont_df->cd_hae < epr->epr_hi)
+	if (cont->vc_cont_df->cd_hae < epr->epr_hi) {
+		D_ERROR("update HAE from "DF_X64", to "DF_X64"\n",
+			cont->vc_cont_df->cd_hae, epr->epr_hi);
 		cont->vc_cont_df->cd_hae = epr->epr_hi;
+	}
 exit:
 	aggregate_exit(cont, AGG_MODE_AGGREGATE);
 

@@ -5287,7 +5287,7 @@ obj_ec_fetch_shards_get(struct dc_object *obj, daos_obj_fetch_t *args, unsigned 
 		uint32_t		ec_deg_tgt;
 
 		if (isclr(tgt_bitmap, tgt_idx)) {
-			D_DEBUG(DB_IO, "tgt_idx %u clear\n", tgt_idx);
+			D_DEBUG(DB_IO, "tgt_idx %u clear.\n", tgt_idx);
 			continue;
 		}
 
