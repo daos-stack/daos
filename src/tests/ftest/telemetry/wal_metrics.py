@@ -16,32 +16,6 @@ class WalMetrics(TestWithTelemetry):
     :avocado: recursive
     """
 
-    def verify_metrics(self, metrics, ranges):
-        """Collect and verify telemetry metrics data.
-
-        Args:
-            metrics (list): list of metric names to collect and verify
-            ranges (dict): dictionary of min/max lists for each metric to be verified
-        """
-        self.telemetry.collect_data(metrics)
-        self.log_step('Verifying collected metric data')
-        return self.telemetry.verify_data(ranges)
-
-    def get_metrics(self, metrics):
-        """Collect telemetry metrics data.
-
-        Args:
-            metrics (list): list of metric names to collect and verify
-
-        Returns:
-            dict: dictionary of current values to be used as a minimum requirement for comparing
-                these metrics in the future
-        """
-        self.telemetry.collect_data(metrics)
-        self.log_step('Displaying collected metric data')
-        self.telemetry.display_data()
-        return self.telemetry.data
-
     def test_wal_commit_metrics(self):
         """JIRA ID: DAOS-11626.
 
@@ -61,24 +35,39 @@ class WalMetrics(TestWithTelemetry):
         """
         wal_metrics = [item for item in self.telemetry.ENGINE_DMABUFF_METRICS if '_wal_' in item]
 
+        self.log_step(
+            'Collect WAL commit metrics before creating a pool (dmg telemetry metrics query)')
+        self.telemetry.collect_data(wal_metrics)
+        ranges = self.telemetry.data
+        for metric, values in ranges.items():
+            for label in values:
+                # Initially all metrics should be 0
+                values[label] = [0, 0]
+        self.log_step('Verify WAL commit metrics are zero before creating a pool')
+        if not self.telemetry.verify_data(ranges):
+            self.fail('WAL commit metrics not zero before pool create')
+
         self.log_step('Creating a pool (dmg pool create)')
-        pool = add_pool(self)
+        add_pool(self)
 
-        self.log_step('Creating a container (daos container create)')
-        container = self.get_container(pool)
-
-        self.log_step('Verify WAL commit metrics before writing data (dmg telemetry metrics query)')
-        initial_values = self.get_metrics(wal_metrics)
-        for key in list(initial_values):
-            if key.endswith('_stddev') or key.endswith('_mean'):
-                initial_values.pop(key)
-
-        self.log_step('Writing data (ior)')
-        write_data(self, container)
-
-        self.log_step('Verify WAL commit metrics after writing data (dmg telemetry metrics query)')
-        if not self.verify_metrics(wal_metrics, initial_values):
-            self.fail('Unexpected WAL commit metrics after pool creation')
+        self.log_step(
+            'Collect WAL commit metrics after creating a pool (dmg telemetry metrics query)')
+        self.telemetry.collect_data(wal_metrics)
+        for metric in list(ranges):
+            if '_sz' in metric and not metric.endswith('_mean') and not metric.endswith('_stddev'):
+                for label in ranges[metric]:
+                    if self.server_managers[0].manager.job.using_control_metadata:
+                        # The min/max/actual size should be greater than 0 for MD on SSD
+                        ranges[metric][label] = [1]
+            elif '_waiters' not in metric:
+                ranges.pop(metric)
+        if self.server_managers[0].manager.job.using_control_metadata:
+            self.log_step(
+                'Verify WAL commit size metrics are > 0 and waiters are 0 after creating a pool')
+        else:
+            self.log_step('Verify WAL commit metrics are still 0 after creating a pool')
+        if not self.telemetry.verify_data(ranges):
+            self.fail('Unexpected WAL commit metric values after pool create')
 
         self.log_step('Test passed')
 
@@ -97,24 +86,45 @@ class WalMetrics(TestWithTelemetry):
         """
         wal_metrics = self.telemetry.ENGINE_POOL_VOS_REHYDRATION_METRICS
 
+        self.log_step(
+            'Collect WAL replay metrics before creating a pool (dmg telemetry metrics query)')
+        self.telemetry.collect_data(wal_metrics)
+        ranges = self.telemetry.data
+        for metric, values in ranges.items():
+            for label in values:
+                # Initially all metrics should be 0
+                values[label] = [0, 0]
+        self.log_step('Verifying WAL replay metrics are all 0 before creating a pool')
+        if not self.telemetry.verify_data(ranges):
+            self.fail('WAL replay metrics not zero before pool create')
+
         self.log_step('Creating a pool (dmg pool create)')
-        pool = add_pool(self)
+        add_pool(self)
 
+        self.log_step(
+            'Collect WAL replay metrics after creating a pool (dmg telemetry metrics query)')
+        self.telemetry.collect_data(wal_metrics)
+        if self.server_managers[0].manager.job.using_control_metadata:
+            for metric in sorted(ranges):
+                for label in ranges[metric]:
+                    if metric.endswith('_replay_count'):
+                        # Replay count should be 1 after pool create for MD on SSD
+                        ranges[metric][label] = [1, 1]
+                    elif metric.endswith('_replay_entries'):
+                        # Replay entries should be > 0 after pool create for MD on SSD
+                        ranges[metric][label] = [1]
+                    elif metric.endswith('_replay_size'):
+                        # Replay size should be > 0 after pool create for MD on SSD
+                        ranges[metric][label] = [1]
+                    elif metric.endswith('_replay_time'):
+                        # Replay time should be 10,000 - 50,000 after pool create for MD on SSD
+                        ranges[metric][label] = [10000, 50000]
+                    elif metric.endswith('_replay_transactions'):
+                        # Replay transactions should be > 0 after pool create for MD on SSD
+                        ranges[metric][label] = [1]
         self.log_step('Verify WAL reply metrics after pool creation (dmg telemetry metrics query)')
-        initial_values = self.get_metrics(wal_metrics)
-
-        self.log_step('Creating a container (daos container create)')
-        container = self.get_container(pool)
-
-        self.log_step('Writing data (ior)')
-        write_data(self, container)
-
-        self.log_step('Verify WAL reply metrics after writing data (dmg telemetry metrics query)')
-        if not self.verify_metrics(wal_metrics, initial_values):
-            self.fail('Unexpected WAL reply metrics after pool creation')
-
-        # self.stop_engines()
-        # self.restart_engines()
+        if not self.telemetry.verify_data(ranges):
+            self.fail('WAL replay metrics verification failed after pool creation')
 
         self.log_step('Test passed')
 
@@ -136,28 +146,87 @@ class WalMetrics(TestWithTelemetry):
         frequency = 5
         wal_metrics = self.telemetry.ENGINE_POOL_CHECKPOINT_METRICS
 
-        self.log_step('Creating a pool (dmg pool create)')
+        self.log_step(
+            'Collect WAL checkpoint metrics before creating a pool (dmg telemetry metrics query)')
+        self.telemetry.collect_data(wal_metrics)
+        ranges = self.telemetry.data
+        for metric, values in ranges.items():
+            for label in values:
+                # Initially all metrics should be 0
+                values[label] = [0, 0]
+        self.log_step('Verifying WAL check point metrics are all 0 before creating a pool')
+        if not self.telemetry.verify_data(ranges):
+            self.fail('WAL checkpoint metrics not zero before creating a pool w/o check pointing')
+
+        self.log_step('Creating a pool with check pointing disabled (dmg pool create)')
+        add_pool(self, properties='checkpoint:disabled')
+
+        self.log_step(
+            'Collect WAL checkpoint metrics after creating a pool w/o check pointing '
+            '(dmg telemetry metrics query)')
+        self.telemetry.collect_data(wal_metrics)
+        self.log_step(
+            'Verifying WAL checkpoint metrics are all 0 after creating a pool w/o check pointing')
+        if not self.telemetry.verify_data(ranges):
+            self.fail('WAL check point metrics not zero after creating a pool w/o check pointing')
+
+        self.log_step('Creating a pool with timed check pointing (dmg pool create)')
         pool = add_pool(self, properties=f'checkpoint:timed,checkpoint_freq:{frequency}')
-        self.log_step('Creating a container (daos container create)')
+
+        self.log_step(
+            'Collect WAL checkpoint metrics after creating a pool w/ check pointing '
+            '(dmg telemetry metrics query)')
+        self.telemetry.collect_data(wal_metrics)
+        ranges = self.telemetry.data
+        for metric, values in ranges.items():
+            for label in values:
+                uuid = pool.uuid
+                if uuid in label and self.server_managers[0].manager.job.using_control_metadata:
+                    if '_dirty_chunks' in metric:
+                        # Check point dirty chunks should be 0-300 after pool create for MD on SSD
+                        values[label] = [0, 300]
+                    elif '_dirty_pages' in metric:
+                        # Check point dirty pages should be 0-3 after pool create for MD on SSD
+                        values[label] = [0, 3]
+                    elif '_duration' in metric:
+                        # Check point duration should be 0-1,000,000 after pool create for MD on SSD
+                        values[label] = [0, 1000000]
+                    elif '_iovs_copied' in metric:
+                        # Check point iovs copied should be >= 0 after pool create for MD on SSD
+                        values[label] = [0]
+                    elif '_wal_purged' in metric:
+                        # Check point wal purged should be >= 0 after pool create for MD on SSD
+                        values[label] = [0]
+                else:
+                    # All metrics for the pool w/o check pointing or w/o MD on SSD should be 0
+                    values[label] = [0, 0]
+        self.log_step('Verifying WAL check point metrics after creating a pool w/ check pointing')
+        if not self.telemetry.verify_data(ranges):
+            self.fail('WAL replay metrics verification failed after pool w/ check pointing create')
+
+        self.log_step('Creating a container for the pool w/ check pointing (daos container create)')
         container = self.get_container(pool)
         self.log.info('%s check point frequency: %s seconds', container.pool, frequency)
 
-        self.log_step(
-            'Verify WAL checkpoint metrics before pool creation (dmg telemetry metrics query)')
-        initial_values = self.get_metrics(wal_metrics)
-        for key in list(initial_values):
-            if key.endswith('_stddev') or key.endswith('_mean'):
-                initial_values.pop(key)
-
-        self.log_step('Writing data (ior)')
+        self.log_step('Writing data to the pool w/ check pointing (ior)')
         write_data(self, container)
 
         self.log_step(f'Waiting for check pointing to complete (sleep {frequency * 2})')
         time.sleep(frequency * 2)
 
+        self.log_step('Collect WAL checkpoint metrics after check pointing is complete')
+        self.telemetry.collect_data(wal_metrics)
+        if self.server_managers[0].manager.job.using_control_metadata:
+            for metric, values in ranges.items():
+                for label in values:
+                    if pool.uuid in label:
+                        if '_wal_purged' in metric:
+                            # Check point wal purged should be > 0 after check point for MD on SSD
+                            values[label] = [1]
         self.log_step(
-            'Verify WAL checkpoint metrics after pool creation (dmg telemetry metrics query)')
-        if not self.verify_metrics(wal_metrics, initial_values):
-            self.fail('Unexpected WAL reply metric values after pool creation')
+            'Verify WAL checkpoint metrics after check pointing is complete '
+            '(dmg telemetry metrics query)')
+        if not self.telemetry.verify_data(ranges):
+            self.fail('WAL replay metrics verification failed after check pointing completion')
 
         self.log_step('Test passed')
