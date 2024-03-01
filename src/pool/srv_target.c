@@ -494,6 +494,8 @@ pool_child_start(struct ds_pool_child *child, bool recreate)
 		goto out_cont;
 
 	*child->spc_state = POOL_CHILD_STARTED;
+	D_FREE(path);
+
 	return 0;
 
 out_cont:
