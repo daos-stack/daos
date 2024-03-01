@@ -1119,10 +1119,10 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		if (uuid_compare(rpt->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
 		    rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver &&
 		    rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
-			D_INFO(DF_UUID" %s %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
-			       DP_UUID(rpt->rt_pool_uuid), RB_OP_STR(rpt->rt_rebuild_op),
-			       rpt->rt_rebuild_ver, rpt->rt_leader_term, rsi->rsi_rebuild_ver,
-			       rsi->rsi_leader_term);
+			D_INFO(DF_UUID" %p %s %u/"DF_U64"/%u < incoming rebuild %u/"DF_U64"/%u\n",
+			       DP_UUID(rpt->rt_pool_uuid), rpt, RB_OP_STR(rpt->rt_rebuild_op),
+			       rpt->rt_rebuild_ver, rpt->rt_leader_term, rpt->rt_rebuild_gen,
+			       rsi->rsi_rebuild_ver, rsi->rsi_leader_term, rsi->rsi_rebuild_gen);
 			rpt->rt_abort = 1;
 			if (rpt->rt_leader_rank != rsi->rsi_master_rank) {
 				D_DEBUG(DB_REBUILD, DF_UUID" master rank"
