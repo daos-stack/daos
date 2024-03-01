@@ -1123,9 +1123,6 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 	int				idx = 0;
 	int				count = 0;
 
-	if (provider == CRT_PROV_SM)
-		return 0;
-
 	na_cfg = crt_provider_get_na_config(primary, provider);
 
 	/* CXI provider requires domain to be set */
