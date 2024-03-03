@@ -23,6 +23,10 @@ class EngineEvents(TestWithTelemetry):
             metric_to_data (dict): Telemetry output that stores engine_events_dead_ranks for each
                 host.
             rank_count (int): Total number of ranks in the system.
+
+        Returns:
+            list: engine_events_dead_ranks value for each rank.
+
         """
         events_dead_ranks = [None for _ in range(rank_count)]
         for host in self.hostlist_servers:
