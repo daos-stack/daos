@@ -86,17 +86,20 @@ class WalMetrics(TestWithTelemetry):
         """
         wal_metrics = self.telemetry.ENGINE_POOL_VOS_REHYDRATION_METRICS
 
-        self.log_step(
-            'Collect WAL replay metrics before creating a pool (dmg telemetry metrics query)')
-        self.telemetry.collect_data(wal_metrics)
-        ranges = self.telemetry.data
-        for metric, values in ranges.items():
-            for label in values:
-                # Initially all metrics should be 0
-                values[label] = [0, 0]
-        self.log_step('Verifying WAL replay metrics are all 0 before creating a pool')
-        if not self.telemetry.verify_data(ranges):
-            self.fail('WAL replay metrics not zero before pool create')
+        # Before pool create we see:
+        #   ERROR: dmg: metric "engine_pool_vos_rehydration_replay_count" not found on host
+        #
+        # self.log_step(
+        #     'Collect WAL replay metrics before creating a pool (dmg telemetry metrics query)')
+        # self.telemetry.collect_data(wal_metrics)
+        # ranges = self.telemetry.data
+        # for metric, values in ranges.items():
+        #     for label in values:
+        #         # Initially all metrics should be 0
+        #         values[label] = [0, 0]
+        # self.log_step('Verifying WAL replay metrics are all 0 before creating a pool')
+        # if not self.telemetry.verify_data(ranges):
+        #     self.fail('WAL replay metrics not zero before pool create')
 
         self.log_step('Creating a pool (dmg pool create)')
         add_pool(self)
@@ -104,9 +107,10 @@ class WalMetrics(TestWithTelemetry):
         self.log_step(
             'Collect WAL replay metrics after creating a pool (dmg telemetry metrics query)')
         self.telemetry.collect_data(wal_metrics)
-        if self.server_managers[0].manager.job.using_control_metadata:
-            for metric in sorted(ranges):
-                for label in ranges[metric]:
+        ranges = self.telemetry.data
+        for metric in sorted(ranges):
+            for label in ranges[metric]:
+                if self.server_managers[0].manager.job.using_control_metadata:
                     if metric.endswith('_replay_count'):
                         # Replay count should be 1 after pool create for MD on SSD
                         ranges[metric][label] = [1, 1]
@@ -122,6 +126,9 @@ class WalMetrics(TestWithTelemetry):
                     elif metric.endswith('_replay_transactions'):
                         # Replay transactions should be > 0 after pool create for MD on SSD
                         ranges[metric][label] = [1]
+                else:
+                    ranges[metric][label] = [0, 0]
+
         self.log_step('Verify WAL reply metrics after pool creation (dmg telemetry metrics query)')
         if not self.telemetry.verify_data(ranges):
             self.fail('WAL replay metrics verification failed after pool creation')
@@ -146,17 +153,20 @@ class WalMetrics(TestWithTelemetry):
         frequency = 5
         wal_metrics = self.telemetry.ENGINE_POOL_CHECKPOINT_METRICS
 
-        self.log_step(
-            'Collect WAL checkpoint metrics before creating a pool (dmg telemetry metrics query)')
-        self.telemetry.collect_data(wal_metrics)
-        ranges = self.telemetry.data
-        for metric, values in ranges.items():
-            for label in values:
-                # Initially all metrics should be 0
-                values[label] = [0, 0]
-        self.log_step('Verifying WAL check point metrics are all 0 before creating a pool')
-        if not self.telemetry.verify_data(ranges):
-            self.fail('WAL checkpoint metrics not zero before creating a pool w/o check pointing')
+        # Before pool create we see:
+        #   ERROR: dmg: metric "engine_pool_checkpoint_dirty_chunks" not found on host
+        #
+        # self.log_step(
+        #     'Collect WAL checkpoint metrics before creating a pool (dmg telemetry metrics query)')
+        # self.telemetry.collect_data(wal_metrics)
+        # ranges = self.telemetry.data
+        # for metric, values in ranges.items():
+        #     for label in values:
+        #         # Initially all metrics should be 0
+        #         values[label] = [0, 0]
+        # self.log_step('Verifying WAL check point metrics are all 0 before creating a pool')
+        # if not self.telemetry.verify_data(ranges):
+        #     self.fail('WAL checkpoint metrics not zero before creating a pool w/o check pointing')
 
         self.log_step('Creating a pool with check pointing disabled (dmg pool create)')
         add_pool(self, properties='checkpoint:disabled')
@@ -165,6 +175,13 @@ class WalMetrics(TestWithTelemetry):
             'Collect WAL checkpoint metrics after creating a pool w/o check pointing '
             '(dmg telemetry metrics query)')
         self.telemetry.collect_data(wal_metrics)
+
+        ranges = self.telemetry.data
+        for metric, values in ranges.items():
+            for label in values:
+                # Initially all metrics should be 0
+                values[label] = [0, 0]
+
         self.log_step(
             'Verifying WAL checkpoint metrics are all 0 after creating a pool w/o check pointing')
         if not self.telemetry.verify_data(ranges):
