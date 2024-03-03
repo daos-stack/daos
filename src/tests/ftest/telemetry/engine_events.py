@@ -10,8 +10,7 @@ from telemetry_test_base import TestWithTelemetry
 
 
 class EngineEvents(TestWithTelemetry):
-    """
-    Verify engine-related event values in telemetry.
+    """Verify engine-related event values in telemetry.
 
     :avocado: recursive
     """
