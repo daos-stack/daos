@@ -760,8 +760,18 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	vos_iter_sched_sync(iter);
 	D_ASSERT(iter_cb != NULL);
 	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
-	if (vos_iter_sched_check(iter))
+	if (vos_iter_sched_check(iter)) {
 		*acts |= VOS_ITER_CB_YIELD;
+		if (iter->it_parent != NULL &&
+		    (param->ip_flags &
+		     (VOS_IT_RECX_VISIBLE | VOS_IT_FOR_PURGE | VOS_IT_FOR_DISCARD)) == 0) {
+			/** If scanning the whole tree, we need to revalidate the parent
+			 * chain and possibly jump back to another level to continue */
+			rc = vos_iter_validate_internal(iter->it_parent);
+			if (rc > 0)
+				rc = 0;
+		}
+	}
 
 	return rc;
 }
@@ -847,19 +857,6 @@ vos_iterate_internal(vos_iter_param_t *param, vos_iter_type_t type,
 	}
 	read_time = dtx_is_valid_handle(dth) ? dth->dth_epoch : 0 /* unused */;
 probe:
-	if (recursive && type != VOS_ITER_OBJ && iter->it_parent != NULL &&
-	    (param->ip_flags & (VOS_IT_RECX_VISIBLE | VOS_IT_FOR_PURGE | VOS_IT_FOR_DISCARD)) ==
-		0) {
-		/** If scanning the whole tree, we need to revalidate the parent
-		 * chain and possibly jump back to another level to continue */
-		rc = vos_iter_validate_internal(iter->it_parent);
-		if (rc < 0)
-			D_GOTO(out, rc);
-		if (rc > 0 && anchors->ia_probe_level && anchors->ia_probe_level != iter->it_type)
-			D_GOTO(finish, rc = 0); /** The entry doesn't exist anymore at this level */
-		anchors->ia_probe_level = 0;
-		/** Parent tree still exists, so fall through and do the probe */
-	}
 	rc = vos_iter_probe_ex(ih, anchor, probe_flags);
 	if (rc < 0) {
 		if (rc == -DER_NONEXIST || rc == -DER_AGAIN) {
