@@ -168,6 +168,12 @@ func TestControl_PoolProperties(t *testing.T) {
 			expStr:  "self_heal:rebuild",
 			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"rebuild"}`),
 		},
+		"self_heal-delay_rebuild": {
+			name:    "self_heal",
+			value:   "delay_rebuild",
+			expStr:  "self_heal:delay_rebuild",
+			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"delay_rebuild"}`),
+		},
 		"self_heal-exclude,rebuild": {
 			name:    "self_heal",
 			value:   "exclude,rebuild",
@@ -179,6 +185,12 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:   "rebuild,exclude",
 			expStr:  "self_heal:exclude,rebuild",
 			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude,rebuild"}`),
+		},
+		"self_heal-exclude,delay_rebuild": {
+			name:    "self_heal",
+			value:   "exclude,delay_rebuild",
+			expStr:  "self_heal:exclude,delay_rebuild",
+			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude,delay_rebuild"}`),
 		},
 		"self_heal-invalid": {
 			name:   "self_heal",
@@ -207,15 +219,15 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "-1",
 			expErr: errors.New("invalid"),
 		},
-		"policy-valid": {
-			name:    "policy",
-			value:   "type=io_size",
-			expStr:  "policy:type=io_size",
-			expJson: []byte(`{"name":"policy","description":"Tier placement policy","value":"type=io_size"}`),
+		"data_thresh-valid": {
+			name:    "data_thresh",
+			value:   "8KiB",
+			expStr:  "data_thresh:8.0 KiB",
+			expJson: []byte(`{"name":"data_thresh","description":"Data bdev threshold size","value":8192}`),
 		},
-		"policy-invalid": {
-			name:   "policy",
-			value:  "deadd00d",
+		"data_thresh-invalid": {
+			name:   "data_thresh",
+			value:  "-2",
 			expErr: errors.New("invalid"),
 		},
 		"perf_domain-valid": {
@@ -239,6 +251,49 @@ func TestControl_PoolProperties(t *testing.T) {
 			name:   "reintegration",
 			value:  "bad mode",
 			expErr: errors.New(`invalid value "bad mode" for reintegration (valid: data_sync,no_data_sync)`),
+		},
+		"svc_ops_enabled-zero-is-valid": {
+			name:    "svc_ops_enabled",
+			value:   "0",
+			expStr:  "svc_ops_enabled:0",
+			expJson: []byte(`{"name":"svc_ops_enabled","description":"Metadata duplicate operations detection enabled","value":0}`),
+		},
+		"svc_ops_enabled-one-is-valid": {
+			name:    "svc_ops_enabled",
+			value:   "1",
+			expStr:  "svc_ops_enabled:1",
+			expJson: []byte(`{"name":"svc_ops_enabled","description":"Metadata duplicate operations detection enabled","value":1}`),
+		},
+		"svc_ops_enabled-invalid": {
+			name:   "svc_ops_enabled",
+			value:  "-1",
+			expErr: errors.New("invalid"),
+		},
+		"svc_ops_enabled-invalid2": {
+			name:   "svc_ops_enabled",
+			value:  "2",
+			expErr: errors.New("invalid"),
+		},
+		"svc_ops_entry_age-valid": {
+			name:    "svc_ops_entry_age",
+			value:   "175",
+			expStr:  "svc_ops_entry_age:175",
+			expJson: []byte(`{"name":"svc_ops_entry_age","description":"Metadata duplicate operations KVS max entry age, in seconds","value":175}`),
+		},
+		"svc_ops_entry_age-invalid": {
+			name:   "svc_ops_entry_age",
+			value:  "-1",
+			expErr: errors.New("invalid"),
+		},
+		"svc_ops_entry_age-invalid-toolow": {
+			name:   "svc_ops_entry_age",
+			value:  "149",
+			expErr: errors.New("invalid"),
+		},
+		"svc_ops_entry_age-invalid-toohigh": {
+			name:   "svc_ops_entry_age",
+			value:  "601",
+			expErr: errors.New("invalid"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

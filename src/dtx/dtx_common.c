@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1959,9 +1959,7 @@ dtx_comp_cb(void **arg)
 	uint32_t			 i;
 	uint32_t			 j;
 
-	if (dlh->dlh_agg_cb != NULL) {
-		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_allow_failure);
-	} else {
+	if (!dlh->dlh_need_agg) {
 		for (i = dlh->dlh_forward_idx, j = 0; j < dlh->dlh_forward_cnt; i++, j++) {
 			sub = &dlh->dlh_subs[i];
 
@@ -2098,16 +2096,15 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 	dlh->dlh_normal_sub_done = 0;
 	dlh->dlh_drop_cond = 0;
 	dlh->dlh_forward_idx = 0;
+	dlh->dlh_need_agg = 0;
+	dlh->dlh_agg_done = 0;
 
 	if (sub_cnt > DTX_EXEC_STEP_LENGTH) {
 		dlh->dlh_forward_cnt = DTX_EXEC_STEP_LENGTH;
-		dlh->dlh_agg_cb = NULL;
 	} else {
 		dlh->dlh_forward_cnt = sub_cnt;
-		if (likely(dlh->dlh_delay_sub_cnt == 0))
-			dlh->dlh_agg_cb = agg_cb;
-		else
-			dlh->dlh_agg_cb = NULL;
+		if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
+			dlh->dlh_need_agg = 1;
 	}
 
 	if (dlh->dlh_normal_sub_cnt == 0)
@@ -2162,8 +2159,8 @@ exec:
 		dlh->dlh_forward_idx += dlh->dlh_forward_cnt;
 		if (sub_cnt <= DTX_EXEC_STEP_LENGTH) {
 			dlh->dlh_forward_cnt = sub_cnt;
-			if (likely(dlh->dlh_delay_sub_cnt == 0))
-				dlh->dlh_agg_cb = agg_cb;
+			if (likely(dlh->dlh_delay_sub_cnt == 0) && agg_cb != NULL)
+				dlh->dlh_need_agg = 1;
 		}
 
 		D_DEBUG(DB_IO, "More dispatch sub-requests for "DF_DTI", normal %u, "
@@ -2176,17 +2173,26 @@ exec:
 	}
 
 	dlh->dlh_normal_sub_done = 1;
+	dlh->dlh_drop_cond = 1;
+
+	if (agg_cb != NULL) {
+		remote_rc = agg_cb(dlh, func_arg);
+		dlh->dlh_agg_done = 1;
+		if (remote_rc != 0) {
+			if (remote_rc != allow_failure)
+				D_GOTO(out, rc = remote_rc);
+
+			dlh->dlh_drop_cond = 0;
+		}
+	}
 
 	if (likely(dlh->dlh_delay_sub_cnt == 0))
 		goto out;
 
-	dlh->dlh_drop_cond = 1;
-
-	if (agg_cb != 0 && allow_failure != 0) {
-		rc = agg_cb(dlh, allow_failure);
-		if (rc == allow_failure)
-			dlh->dlh_drop_cond = 0;
-	}
+	/* Need more aggregation for delayed sub-requests. */
+	dlh->dlh_agg_done = 0;
+	if (agg_cb != NULL)
+		dlh->dlh_need_agg = 1;
 
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
 
@@ -2200,7 +2206,6 @@ exec:
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
-	dlh->dlh_agg_cb = agg_cb;
 	dlh->dlh_forward_idx = 0;
 	/* The ones without DELAY flag will be skipped when scan the targets array. */
 	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
@@ -2224,6 +2229,15 @@ exec:
 		allow_failure, local_rc, remote_rc);
 
 out:
+	/* The agg_cb may contain cleanup, let's do it even if hit failure at some former step. */
+	if (agg_cb != NULL && !dlh->dlh_agg_done) {
+		remote_rc = agg_cb(dlh, func_arg);
+		dlh->dlh_agg_done = 1;
+		if (remote_rc != 0 && remote_rc != allow_failure &&
+		    (rc == 0 || rc == allow_failure))
+			rc = remote_rc;
+	}
+
 	if (rc == 0 && local_rc == allow_failure &&
 	    (dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt == 0 || remote_rc == allow_failure))
 		rc = allow_failure;
@@ -2335,7 +2349,7 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_
 			D_GOTO(out, rc);
 
 		/* The target that (re-)joined the system after DTX cannot be the leader. */
-		if (rc == 1 && (*p_tgt)->ta_comp.co_ver <= version)
+		if (rc == 1 && (*p_tgt)->ta_comp.co_in_ver <= version)
 			D_GOTO(out, rc = 0);
 	}
 
@@ -2371,7 +2385,7 @@ dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs, daos_unit_oid_
 		D_ASSERT(rc == 1);
 
 		/* The target that (re-)joined the system after DTX cannot be the leader. */
-		if ((*p_tgt)->ta_comp.co_ver <= version)
+		if ((*p_tgt)->ta_comp.co_in_ver <= version)
 			D_GOTO(out, rc = 0);
 	}
 

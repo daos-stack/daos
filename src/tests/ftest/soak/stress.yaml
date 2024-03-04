@@ -92,6 +92,7 @@ soak_stress:
   ignore_soak_errors: false
   enable_intercept_lib: true
   enable_remote_logging: false
+  enable_scrubber: true
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -199,7 +200,7 @@ vpic_stress:
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 lammps_stress:
-  job_timeout: 35
+  job_timeout: 45
   nodesperjob:
     - 8
   taskspernode:
