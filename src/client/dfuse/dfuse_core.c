@@ -749,7 +749,7 @@ out:
  * dentries which represent directories and are therefore referenced much
  * more often during path-walk activities are set to five seconds.
  */
-void
+static void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
 {
 	dfc->dfc_attr_timeout       = 1;
@@ -873,6 +873,8 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		uuid_copy(dfc->dfc_uuid, c_info.ci_uuid);
 
 		if (dfuse_info->di_caching) {
+			double timeout;
+
 			rc = dfuse_cont_get_cache(dfc);
 			if (rc == ENODATA) {
 				DFUSE_TRA_INFO(dfc, "Using default caching values");
@@ -880,6 +882,14 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 			} else if (rc != 0) {
 				D_GOTO(err_umount, rc);
 			}
+
+			timeout = max(dfc->dfc_attr_timeout, dfc->dfc_data_timeout);
+
+			timeout = min(timeout, 10 * 60);
+
+			timeout = max(timeout, dfc->dfc_dentry_timeout);
+
+			dfc->dfc_dentry_inval_time = timeout + 3;
 		}
 
 		rc = ival_add_cont_buckets(dfc);

@@ -783,8 +783,8 @@ class DaosServer():
                      '--runtime_dir', self.agent_dir,
                      '--logfile', self.agent_log.name]
 
-        if not self.conf.args.server_debug and not self.conf.args.client_debug:
-            agent_cmd.append('--debug')
+        #if not self.conf.args.server_debug and not self.conf.args.client_debug:
+        #     agent_cmd.append('--debug')
 
         self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir
@@ -1288,7 +1288,7 @@ class DFuse():
 
     # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True, multi_user=False, ro=False):
+                 caching=True, wbcache=False, multi_user=False, ro=False):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1953,6 +1953,7 @@ class needs_dfuse_with_opt():
             if not self.dfuse_inval:
                 assert self.caching is True
                 cont_attrs = {'dfuse-attr-time': '5m',
+                              'dfuse-data-cache': '5m',
                               'dfuse-dentry-time': '5m',
                               'dfuse-dentry-dir-time': '5m',
                               'dfuse-ndentry-time': '5m'}
@@ -2275,6 +2276,35 @@ class PosixTests():
         assert raw_data1 == data4
         assert len(data5) == 0
         assert raw_data1 == data6
+
+    @needs_dfuse_with_opt(caching=True, wbcache=False, dfuse_inval=False)
+    def test_read_from_cache(self):
+        """Test a basic read.
+
+        Write to a file, then read from it.  With caching on dfuse won't see the read, with caching
+        off dfuse will see one truncated read, then another at EOF which will return zero bytes.
+        """
+        file_name = join(self.dfuse.dir, 'file')
+        with open(file_name, 'w') as fd:
+            fd.write('test')
+
+        with open(file_name, 'r') as fd:
+            data = fd.read(16)  # Pass in a buffer size here or python will only read file size.
+        print(data)
+        assert data == 'test'
+
+        sd = self.dfuse.check_usage()
+        sd_read = sd["statistics"].get("read", 0)
+        print(f'Number of reads {sd_read}')
+
+        with open(file_name, 'r') as fd:
+            data = fd.read(16)  # Pass in a buffer size here or python will only read file size.
+        print(data)
+        assert data == 'test'
+        pd = self.dfuse.check_usage()
+        pd_read = pd["statistics"].get("read", 0)
+        print(f'Number of reads {pd_read}')
+        assert pd_read == sd_read
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""

@@ -44,6 +44,7 @@ dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_PARALLEL_DIROPS);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_POSIX_ACL);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_HANDLE_KILLPRIV);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPIRE_ONLY);
 
 #ifdef FUSE_CAP_CACHE_SYMLINKS
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_CACHE_SYMLINKS);
@@ -95,6 +96,12 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	if (dfuse_info->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+
+#if 1
+	conn->want |= FUSE_CAP_EXPLICIT_INVAL_DATA;
+
+	conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+#endif
 
 #ifdef FUSE_CAP_CACHE_SYMLINKS
 	conn->want |= FUSE_CAP_CACHE_SYMLINKS;

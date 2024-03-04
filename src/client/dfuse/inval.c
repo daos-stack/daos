@@ -344,7 +344,7 @@ ival_update_inode(struct dfuse_inode_entry *inode, double timeout)
 	if (S_ISDIR(inode->ie_stat.st_mode))
 		timeout += INVAL_DIRECTORY_GRACE;
 	else
-		timeout += INVAL_FILE_GRACE;
+		timeout = inode->ie_dfs->dfc_dentry_inval_time;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
 
@@ -443,8 +443,28 @@ ival_bucket_dec_value(double timeout)
 	DFUSE_TRA_ERROR(&ival_data, "Unable to find ref for %.1lf", timeout);
 }
 
+#if 0
+/* How long to keep file inodes in cache before invalidating them
+ */
+static double
+ival_dentry_timeout(struct dfuse_cont *dfc)
+{
+	double timeout;
+
+	timeout = max(dfc->dfc_attr_timeout, dfc->dfc_data_timeout);
+
+	timeout = min(timeout, 10 * 60);
+
+	timeout = max(timeout, dfc->dfc_dentry_timeout);
+
+	return timeout + INVAL_FILE_GRACE;
+}
+#endif
+
 /* Ensure the correct buckets exist for a attached container.  Pools have a zero dentry timeout
- * so skip zero values
+ * so skip zero values.
+ *
+ * TODO: Make the dentry timeout be more than the data cache timeout.
  */
 int
 ival_add_cont_buckets(struct dfuse_cont *dfc)
@@ -457,7 +477,7 @@ ival_add_cont_buckets(struct dfuse_cont *dfc)
 	if (rc != 0)
 		goto out;
 	if (dfc->dfc_dentry_timeout != 0) {
-		rc = ival_bucket_add_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
+		rc = ival_bucket_add_value(dfc->dfc_dentry_inval_time);
 		if (rc != 0)
 			ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
 	}
@@ -473,7 +493,7 @@ ival_dec_cont_buckets(struct dfuse_cont *dfc)
 {
 	D_MUTEX_LOCK(&ival_lock);
 	if (dfc->dfc_dentry_timeout != 0)
-		ival_bucket_dec_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
+		ival_bucket_dec_value(dfc->dfc_dentry_inval_time);
 	ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
 	D_MUTEX_UNLOCK(&ival_lock);
 }

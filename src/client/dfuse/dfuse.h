@@ -524,6 +524,9 @@ struct dfuse_cont {
 	double                  dfc_dentry_dir_timeout;
 	double                  dfc_ndentry_timeout;
 	double                  dfc_data_timeout;
+
+	double                        dfc_dentry_inval_time;
+
 	bool                    dfc_data_otoc;
 	bool                    dfc_direct_io_disable;
 
@@ -538,9 +541,6 @@ struct dfuse_cont {
 
 #define DFUSE_IE_STAT_ADD(_ie, _stat)                                                              \
 	atomic_fetch_add_relaxed(&(_ie)->ie_dfs->dfs_stat_value[(_stat)], 1)
-
-void
-dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 
 /* Connect to a container via a label
  * Called either for labels on the command line or via dfuse_cont_get_handle() if opening via uuid
@@ -838,7 +838,8 @@ dfuse_loop(struct dfuse_info *dfuse_info);
 #define DFUSE_REPLY_CREATE(inode, req, entry, fi)                                                  \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(inode, "Returning create");                                        \
+		DFUSE_TRA_DEBUG(inode, "Returning create keep_cache %d direct %d",                 \
+				(fi)->keep_cache, (fi)->direct_io);                                \
 		ival_update_inode(inode, (entry).entry_timeout);                                   \
 		(inode) = NULL;                                                                    \
 		__rc    = fuse_reply_create(req, &entry, fi);                                      \
