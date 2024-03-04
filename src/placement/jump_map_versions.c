@@ -612,7 +612,7 @@ get_target_v1(struct pool_domain *root, struct pool_domain *curr_pd, struct pool
 {
 	struct pool_target	*found = NULL;
 	bool			 pd_ignored;
-	int			cnt = 0;
+
 	/* For extending case, it needs to get the layout in two cases, with UP/NEW target
 	 * and without UP/NEW targets, then tell the difference, see placement/jump_map.c.
 	 */
@@ -635,8 +635,6 @@ get_target_v1(struct pool_domain *root, struct pool_domain *curr_pd, struct pool
 						     dom_cur_grp_real, dom_full, tgts_used,
 						     fdom_lvl, allow_version, gen_mode);
 		}
-		cnt++;
-		D_ASSERT(cnt < 120);
 	}
 	*target = found;
 }
