@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2023-2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,8 @@
 #define VOF_KEY_INLINE_SZ	(12)
 #define VOF_VAL_INLINE_SZ	(8)
 #define VOF_SIZE_ROUND		(8)
+
+#define VOF_KEY_IDX_NONE	((uint32_t)-1)
 
 enum {
 	VOF_NONE	= 0x0,
@@ -115,44 +117,27 @@ struct vos_obj_flat_df {
 	uint8_t		ofd_payload[0];
 };
 
-struct vof_item;
-
-/** data structure to help binary search */
-struct vof_sorter {
-	/** type (dkey/akey/sing-value/array-ext) */
-	uint16_t		  vs_type;
-	/** number of items */
-	uint16_t		  vs_nr;
-	/** pointer array for binary search */
-	struct vof_item		**vs_items;
-};
-
-/** dkey/akey/value in memory structure */
-struct vof_item {
-	/** durable format in memory address */
-	struct vof_item_df	*vid_df;
-	/** sorter for child binary search */
-	struct vof_sorter	 vid_child_sorter;
-};
-
-/** flattened object in memory structure */
-struct vos_obj_flat {
-	struct vos_obj_flat_df		*vof_df;
-	struct vof_item			*vof_items;
-	struct vof_sorter		 vof_dkey_sorter;
-	uint16_t			 vof_nr;
-};
-
 static inline bool
 vos_obj_flattened(struct vos_obj_df *obj_df)
 {
 	return obj_df->vo_sync == DAOS_EPOCH_MAX;
 }
 
-static inline void
-vos_obj_set_flat(struct vos_obj_df *obj_df)
-{
-	obj_df->vo_sync = DAOS_EPOCH_MAX;
-}
+struct vos_object;
+struct vos_svt_key;
+struct vos_rec_bundle;
+struct evt_filter;
+struct evt_entry_array;
+void vof_init(struct vos_object *obj);
+int vof_fetch_single(struct vos_object *obj, daos_key_t *dkey, daos_key_t *akey,
+		     struct vos_svt_key *key, struct vos_rec_bundle *rbund, uint32_t *dkey_idx,
+		     uint32_t *akey_idx);
+int vof_fetch_array(struct vos_object *obj, daos_key_t *dkey, daos_key_t *akey,
+		    const struct evt_filter *filter, struct evt_entry_array *ent_array,
+		    uint32_t *dkey_idx, uint32_t *akey_idx);
+int vof_dkey_exist(struct vos_object *obj, daos_key_t *dkey, uint32_t *dkey_idx,
+		   daos_epoch_range_t *epr);
+int vof_akey_exist(struct vos_object *obj, daos_key_t *dkey, daos_key_t *akey, uint32_t *dkey_idx,
+		   uint32_t *akey_idx, daos_epoch_range_t *epr);
 
 #endif

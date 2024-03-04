@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -365,6 +365,12 @@ int daos_array_find_le(void *array, unsigned int len, uint64_t key,
 		       daos_sort_ops_t *ops);
 int daos_array_find_ge(void *array, unsigned int len, uint64_t key,
 		       daos_sort_ops_t *ops);
+int daos_array_find_adv(void *array, unsigned int start, unsigned int len, uint64_t key,
+			daos_sort_ops_t *ops);
+int daos_array_find_le_adv(void *array, unsigned int start, unsigned int len, uint64_t key,
+			   daos_sort_ops_t *ops);
+int daos_array_find_ge_adv(void *array, unsigned int start, unsigned int len, uint64_t key,
+			   daos_sort_ops_t *ops);
 
 void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 

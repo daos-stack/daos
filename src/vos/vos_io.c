@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -82,6 +82,9 @@ struct vos_io_context {
 	 * by vos_ioh2recx_list() and shall free it by daos_recx_ep_list_free().
 	 */
 	struct daos_recx_ep_list *ic_recx_lists;
+	/** For flattened object IO - keep dkey/akey index to save search overhead. */
+	uint32_t		  ic_flat_dkey_idx;
+	uint32_t		  ic_flat_akey_idx;
 };
 
 struct dedup_entry {
@@ -819,10 +822,36 @@ save_csum(struct vos_io_context *ioc, struct dcs_csum_info *csum_info,
 	return dcs_csum_info_save(&ioc->ic_csum_list, &ci_duplicate);
 }
 
+static bool
+vof_ignore_nonexist(struct vos_io_context *ioc, daos_iod_t *iod)
+{
+	uint64_t	flags;
+
+	if (ioc->ic_ts_set == NULL)
+		return true;
+
+	if ((ioc->ic_ts_set->ts_flags & VOS_OF_COND_DKEY_FETCH) &&
+	    ioc->ic_flat_dkey_idx == VOF_KEY_IDX_NONE)
+		return false;
+
+	if (iod != NULL && ioc->ic_ts_set->ts_flags & VOS_OF_COND_PER_AKEY) {
+		/** Per akey flags have been specified */
+		flags = iod->iod_flags;
+	} else {
+		flags = ioc->ic_ts_set->ts_flags;
+	}
+	if ((flags & VOS_OF_COND_AKEY_FETCH) &&
+	    (ioc->ic_flat_dkey_idx == VOF_KEY_IDX_NONE ||
+	     ioc->ic_flat_akey_idx == VOF_KEY_IDX_NONE))
+		return false;
+
+	return true;
+}
+
 /** Fetch the single value within the specified epoch range of an key */
 static int
-akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
-		  daos_size_t *rsize, struct vos_io_context *ioc)
+akey_fetch_single(daos_handle_t toh, daos_key_t *dkey, const daos_epoch_range_t *epr,
+		  daos_iod_t *iod, struct vos_io_context *ioc)
 {
 	struct vos_svt_key	 key;
 	struct vos_rec_bundle	 rbund;
@@ -830,8 +859,9 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	d_iov_t			 riov; /* iov to carry record bundle */
 	struct bio_iov		 biov; /* iov to return data buffer */
 	int			 rc;
-	struct dcs_csum_info	csum_info = {0};
+	struct dcs_csum_info	 csum_info = {0};
 	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
+	bool			 ignore_nonexist = true;
 
 	d_iov_set(&kiov, &key, sizeof(key));
 	key.sk_epoch	= ioc->ic_bound;
@@ -842,15 +872,24 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	rbund.rb_biov	= &biov;
 	rbund.rb_csum = &csum_info;
 
-	rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &kiov, &kiov,
-			  &riov);
+	if (vos_obj_flattened(ioc->ic_obj->obj_df)) {
+		rc = vof_fetch_single(ioc->ic_obj, dkey, &iod->iod_name, &key, &rbund,
+				      &ioc->ic_flat_dkey_idx, &ioc->ic_flat_akey_idx);
+		if (rc == -DER_NONEXIST)
+			ignore_nonexist = vof_ignore_nonexist(ioc, iod);
+	} else {
+		rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &kiov, &kiov, &riov);
+	}
 	if (vos_dtx_hit_inprogress(standalone))
 		D_GOTO(out, rc = (rc == 0 ? -DER_INPROGRESS : rc));
 
 	if (rc == -DER_NONEXIST) {
 		rbund.rb_gsize = 0;
 		bio_addr_set_hole(&biov.bi_addr, 1);
-		rc = 0;
+		if (ignore_nonexist)
+			rc = 0;
+		else
+			goto out;
 	} else if (rc != 0) {
 		goto out;
 	} else if (key.sk_epoch < epr->epr_lo) {
@@ -877,7 +916,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	if (rc != 0)
 		goto out;
 
-	*rsize = rbund.rb_gsize;
+	iod->iod_size = rbund.rb_gsize;
 	ioc->ic_io_size += rbund.rb_rsize;
 out:
 	return rc;
@@ -939,9 +978,9 @@ save_recx(struct vos_io_context *ioc, uint64_t rx_idx, uint64_t rx_nr,
 
 /** Fetch an extent from an akey */
 static int
-akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
-		daos_recx_t *recx, daos_epoch_t shadow_ep, daos_size_t *rsize_p,
-		struct vos_io_context *ioc)
+akey_fetch_recx(daos_handle_t toh, daos_key_t *dkey, daos_iod_t *iod,
+		const daos_epoch_range_t *epr, daos_recx_t *recx, daos_epoch_t shadow_ep,
+		daos_size_t *rsize_p, struct vos_io_context *ioc)
 {
 	struct evt_entry	*ent;
 	/* At present, this is not exposed in interface but passing it toggles
@@ -972,7 +1011,14 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		ioc->ic_akey_info.ii_prior_punch.pr_minor_epc;
 	evt_ent_array_init(ioc->ic_ent_array, 0);
 
-	rc = evt_find(toh, &filter, ioc->ic_ent_array);
+	if (vos_obj_flattened(ioc->ic_obj->obj_df)) {
+		rc = vof_fetch_array(ioc->ic_obj, dkey, &iod->iod_name, &filter, ioc->ic_ent_array,
+				     &ioc->ic_flat_dkey_idx, &ioc->ic_flat_akey_idx);
+		if (rc == -DER_NONEXIST && vof_ignore_nonexist(ioc, iod))
+			rc = 0;
+	} else {
+		rc = evt_find(toh, &filter, ioc->ic_ent_array);
+	}
 	if (rc != 0 || vos_dtx_hit_inprogress(standalone))
 		D_GOTO(failed, rc = (rc == 0 ? -DER_INPROGRESS : rc));
 
@@ -1232,7 +1278,7 @@ has_uncertainty(const struct vos_io_context *ioc,
 }
 
 static int
-fetch_value(struct vos_io_context *ioc, daos_iod_t *iod, daos_handle_t toh,
+fetch_value(struct vos_io_context *ioc, daos_key_t *dkey, daos_iod_t *iod, daos_handle_t toh,
 	    const daos_epoch_range_t *epr, bool standalone)
 {
 	struct daos_recx_ep_list *shadow;
@@ -1242,13 +1288,8 @@ fetch_value(struct vos_io_context *ioc, daos_iod_t *iod, daos_handle_t toh,
 	if (ioc->ic_read_ts_only || ioc->ic_check_existence)
 		return rc;
 
-	if (vos_obj_flattened(ioc->ic_obj->obj_df)) {
-		D_ERROR("lxz fetch flattened obj "DF_UOID"\n", DP_UOID(ioc->ic_obj->obj_id));
-		return 0;
-	}
-
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		rc = akey_fetch_single(toh, epr, &iod->iod_size, ioc);
+		rc = akey_fetch_single(toh, dkey, epr, iod, ioc);
 		return rc;
 	}
 
@@ -1273,7 +1314,8 @@ fetch_value(struct vos_io_context *ioc, daos_iod_t *iod, daos_handle_t toh,
 		while (iod_recx.rx_nr > 0) {
 			akey_fetch_recx_get(&iod_recx, shadow, &fetch_recx,
 					    &shadow_ep);
-			rc = akey_fetch_recx(toh, epr, &fetch_recx, shadow_ep, &rsize, ioc);
+			rc = akey_fetch_recx(toh, dkey, iod, epr, &fetch_recx,
+					     shadow_ep, &rsize, ioc);
 
 			if (vos_dtx_continue_detect(rc, standalone))
 				continue;
@@ -1350,9 +1392,6 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 		flags |= SUBTR_EVT;
 	}
 
-	if (vos_obj_flattened(ioc->ic_obj->obj_df))
-		goto fetch_value;
-
 	rc = key_tree_prepare(
 	    ioc->ic_obj, ak_toh, VOS_BTR_AKEY, &iod->iod_name, flags, DAOS_INTENT_DEFAULT, &krec,
 	    (ioc->ic_check_existence || ioc->ic_read_ts_only) ? NULL : &toh, ioc->ic_ts_set);
@@ -1388,7 +1427,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	}
 
 fetch_value:
-	rc = fetch_value(ioc, iod, toh, &val_epr, standalone);
+	rc = fetch_value(ioc, NULL, iod, toh, &val_epr, standalone);
 out:
 	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, is_array);
@@ -1417,8 +1456,38 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	bool			 has_cond;
 	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
 
-	if (vos_obj_flattened(obj->obj_df))
-		goto fetch_flat;
+	if (vos_obj_flattened(obj->obj_df)) {
+		daos_iod_t	*iod;
+
+		ioc->ic_flat_dkey_idx = VOF_KEY_IDX_NONE;
+		if (ioc->ic_check_existence) {
+			D_ASSERT(ioc->ic_ts_set != NULL);
+			D_ASSERTF((ioc->ic_ts_set->ts_flags & VOS_OF_COND_DKEY_FETCH) ||
+				  (ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH),
+				  "bad ts_flags "DF_X64"\n", ioc->ic_ts_set->ts_flags);
+			if (ioc->ic_ts_set->ts_flags & VOS_OF_COND_DKEY_FETCH)
+				return vof_dkey_exist(obj, dkey, &ioc->ic_flat_dkey_idx,
+						      &ioc->ic_epr);
+		}
+		for (i = 0; i < ioc->ic_iod_nr; i++) {
+			iod_set_cursor(ioc, i);
+			iod = &ioc->ic_iods[ioc->ic_sgl_at];
+			ioc->ic_flat_akey_idx = VOF_KEY_IDX_NONE;
+			if (ioc->ic_check_existence &&
+			    (ioc->ic_ts_set->ts_flags & VOS_OF_COND_AKEY_FETCH)) {
+				rc = vof_akey_exist(obj, dkey, &iod->iod_name,
+						    &ioc->ic_flat_dkey_idx, &ioc->ic_flat_akey_idx,
+						    &ioc->ic_epr);
+				if (rc)
+					return rc;
+			} else {
+				rc = fetch_value(ioc, dkey, iod, toh, &ioc->ic_epr, standalone);
+				if (rc)
+					break;
+			}
+		}
+		return rc;
+	}
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
@@ -1477,9 +1546,8 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 fetch_akey:
 	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
 		iod_set_cursor(ioc, 0);
-		rc = fetch_value(ioc, &ioc->ic_iods[0], toh, &ioc->ic_epr, standalone);
+		rc = fetch_value(ioc, dkey, &ioc->ic_iods[0], toh, &ioc->ic_epr, standalone);
 	} else {
-fetch_flat:
 		for (i = 0; i < ioc->ic_iod_nr; i++) {
 			iod_set_cursor(ioc, i);
 			rc = akey_fetch(ioc, toh);

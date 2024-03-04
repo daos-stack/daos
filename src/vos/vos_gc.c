@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -224,16 +224,12 @@ gc_drain_obj(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	}
 
 	if (vos_obj_flattened(obj) && item->it_args == 0) {
-		//D_DEBUG(DB_TRACE, "flattened object "DF_UOID", free vo_flat_addr "DF_X64"\n",
-		D_ERROR("lxz flattened object "DF_UOID", free vo_flat_addr "DF_X64"\n",
+		D_DEBUG(DB_TRACE, "flattened object "DF_UOID", free vo_flat_addr "DF_X64"\n",
 			DP_UOID(obj->vo_id), obj->vo_flat.vo_flat_addr.ba_off);
 		*empty = true;
 		/* obj_df reserved in vof_flat_init() */
 		return umem_free(&pool->vp_umm, obj->vo_flat.vo_flat_addr.ba_off);
 	}
-
-	if (vos_obj_flattened(obj))
-		D_ERROR(DF_UOID" lxz destroy flattened obj tree...\n", DP_UOID(obj->vo_id));
 
 	rc = gc_drain_btr(gc, pool, coh, obj_btr_root, credits, empty);
 	D_DEBUG(DB_TRACE, "object "DF_UOID" drain btr, "DF_RC"\n", DP_UOID(obj->vo_id), DP_RC(rc));

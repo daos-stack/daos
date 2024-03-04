@@ -431,6 +431,8 @@ evt_vis2dbg(int flag)
 	return 'U';
 }
 
+int evt_ent_array_resize(struct evt_entry_array *ent_array, uint32_t new_size);
+
 static inline struct evt_entry *
 evt_ent_array_get(struct evt_entry_array *ent_array, int index)
 {

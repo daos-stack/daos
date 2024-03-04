@@ -48,8 +48,8 @@ struct vos_object {
 	struct vos_obj_df		*obj_df;
 	/** backref to container */
 	struct vos_container		*obj_cont;
-	/** flattened object in memory structure */
-	struct vos_obj_flat		*obj_flat;
+	/** flattened object in memory pointer */
+	struct vos_obj_flat_df		*obj_flat_df;
 	/** nobody should access this object */
 	bool				obj_zombie;
 	/** Object is in discard */
