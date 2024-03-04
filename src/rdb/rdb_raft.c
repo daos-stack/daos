@@ -3187,8 +3187,8 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	}
 	rc = rdb_raft_check_state(db, &state, rc);
 	if (rc != 0 && rc != -DER_NOTLEADER)
-		D_ERROR(DF_DB": failed to process opc %u response: %d\n",
-			DP_DB(db), opc, rc);
+		DL_ERROR(rc, DF_DB ": failed to process opc %u response from rank %u", DP_DB(db),
+			 opc, rank);
 
 out_mutex:
 	ABT_mutex_unlock(db->d_raft_mutex);
