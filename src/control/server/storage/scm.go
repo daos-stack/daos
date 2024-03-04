@@ -164,10 +164,14 @@ func (s ScmFirmwareUpdateStatus) String() string {
 }
 
 func (sm *ScmModule) String() string {
+	health := ""
+	if sm.HealthState != "" {
+		health = fmt.Sprintf(" Health:%s", sm.HealthState)
+	}
 	// capacity given in IEC standard units.
 	return fmt.Sprintf("UID:%s PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", sm.UID, sm.PhysicalID, humanize.IBytes(sm.Capacity),
-		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition)
+		"chan:%d pos:%d)%s", sm.UID, sm.PhysicalID, humanize.IBytes(sm.Capacity),
+		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition, health)
 }
 
 func (sms ScmModules) String() string {
@@ -233,9 +237,13 @@ func (sn ScmNamespace) Usable() uint64 {
 }
 
 func (sn *ScmNamespace) String() string {
+	mountInfo := ""
+	if sn.Mount != nil {
+		mountInfo = fmt.Sprintf(" Mount:%+v", *sn.Mount)
+	}
 	// capacity given in IEC standard units.
-	return fmt.Sprintf("UUID:%s BlockDev:%s Name:%s NUMA:%d Size:%s Mount:%+v",
-		sn.UUID, sn.BlockDevice, sn.Name, sn.NumaNode, humanize.IBytes(sn.Size), sn.Mount)
+	return fmt.Sprintf("UUID:%s BlockDev:%s Name:%s NUMA:%d Size:%s%s",
+		sn.UUID, sn.BlockDevice, sn.Name, sn.NumaNode, humanize.IBytes(sn.Size), mountInfo)
 }
 
 func (sns ScmNamespaces) String() string {

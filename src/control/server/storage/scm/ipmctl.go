@@ -390,13 +390,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		return nil, errors.New("nil scan response")
 	}
 	if len(scanRes.Modules) == 0 {
-		cr.log.Info("Skip SCM prep, no PMem modules.")
-		return &storage.ScmPrepareResponse{
-			Namespaces: storage.ScmNamespaces{},
-			Socket: &storage.ScmSocketState{
-				State: storage.ScmNoModules,
-			},
-		}, nil
+		return nil, errors.New("can not perform scm prep as no pmem in system")
 	}
 
 	// If socket ID set in request, only process PMem attached to that socket.
@@ -455,14 +449,12 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	if scanRes == nil {
 		return nil, errors.New("nil scan response")
 	}
+	if len(scanRes.Modules) == 0 {
+		return nil, errors.New("can not perform scm reset as no pmem in system")
+	}
 	resp := &storage.ScmPrepareResponse{
 		Namespaces: storage.ScmNamespaces{},
 		Socket:     &storage.ScmSocketState{},
-	}
-	if len(scanRes.Modules) == 0 {
-		cr.log.Info("Skip SCM prep as there are no PMem modules.")
-		resp.Socket.State = storage.ScmNoModules
-		return resp, nil
 	}
 
 	// If socket ID set in request, only process PMem attached to that socket.

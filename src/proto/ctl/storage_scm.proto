@@ -25,6 +25,7 @@ message ScmModule {
 	string uid = 7;			// The uid of the module.
 	string partNumber = 8;		// The part number of the module.
 	string firmwareRevision = 9;	// Module's active firmware revision
+	string healthstate = 10;	// Module's health state.
 }
 
 // ScmNamespace represents SCM namespace as pmem device files created on a ScmRegion.
