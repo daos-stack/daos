@@ -58,6 +58,9 @@ RDB_STRING_KEY(ds_cont_prop_, nhandles);
 /* dummy value for container roots, avoid malloc on demand */
 static struct daos_prop_co_roots dummy_roots;
 
+/** default DAOS_PROP_CO_STATUS, all zero (DAOS_PROP_CO_HEALTHY) */
+static struct daos_co_status_srv def_co_status;
+
 /** default properties, should cover all optional container properties */
 struct daos_prop_entry cont_prop_entries_default_v0[CONT_PROP_NUM_V0] = {
 	{
@@ -179,8 +182,8 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_val_ptr	= &dummy_roots, /* overwritten by middlewares */
 	}, {
 		.dpe_type	= DAOS_PROP_CO_STATUS,
-		.dpe_val	= DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
-							  0, 0),
+		.dpe_flags	= DAOS_PROP_ENTRY_VAL_PTR,
+		.dpe_val_ptr	= &def_co_status,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_ALLOCED_OID,
 		.dpe_val	= 0,
