@@ -24,7 +24,7 @@ class TestScrubberEvictWithAggregation(TestWithScrubber, TestWithTelemetry):
         2. Create checksum faults above scrubber threshold
         and see whether SSD auto eviction works as expected.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=scrubber,faults
         :avocado: tags=TestScrubberEvictWithAggregation,test_target_eviction_during_aggregation
