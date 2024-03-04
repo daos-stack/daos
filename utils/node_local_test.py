@@ -783,8 +783,8 @@ class DaosServer():
                      '--runtime_dir', self.agent_dir,
                      '--logfile', self.agent_log.name]
 
-        #if not self.conf.args.server_debug and not self.conf.args.client_debug:
-        #     agent_cmd.append('--debug')
+        if not self.conf.args.server_debug and not self.conf.args.client_debug:
+            agent_cmd.append('--debug')
 
         self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir

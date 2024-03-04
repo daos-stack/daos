@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,7 +44,9 @@ dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_PARALLEL_DIROPS);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_POSIX_ACL);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_HANDLE_KILLPRIV);
+#ifdef FUSE_CAP_EXPIRE_ONLY
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPIRE_ONLY);
+#endif
 
 #ifdef FUSE_CAP_CACHE_SYMLINKS
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_CACHE_SYMLINKS);
