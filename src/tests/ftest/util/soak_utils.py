@@ -318,6 +318,7 @@ def wait_for_pool_rebuild(self, pool, name):
     """
     rebuild_status = False
     self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.identifier, time.ctime())
+    self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
     try:
         # # Wait for rebuild to start
         # pool.wait_for_rebuild_to_start()
@@ -330,6 +331,7 @@ def wait_for_pool_rebuild(self, pool, name):
     except TestFail as error1:
         self.log.error(
             f"<<<FAILED:{name} rebuild failed due to test issue: {error1}", exc_info=error1)
+    self.dmg_command.server_set_logmasks(raise_exception=False)
     return rebuild_status
 
 
@@ -606,7 +608,9 @@ def launch_server_stop_start(self, pools, name, results, args):
         if drain:
             for pool in pools:
                 try:
+                    self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
                     pool.drain(rank)
+                    self.dmg_command.server_set_logmasks(raise_exception=False)
                 except TestFail as error:
                     self.log.error(
                         f"<<<FAILED:dmg pool {pool.identifier} drain failed", exc_info=error)

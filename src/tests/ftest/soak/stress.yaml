@@ -10,6 +10,7 @@ orterun:
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 48 hour test
 timeouts:
+  test_soak_stress_72h: 72H30M
   test_soak_stress_48h: 48H30M
   test_soak_stress_24h: 24H30M
   test_soak_stress_12h: 12H30M
