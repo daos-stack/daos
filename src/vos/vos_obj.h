@@ -21,6 +21,7 @@
 #include "vos_layout.h"
 #include "vos_ilog.h"
 #include "vos_ts.h"
+#include "vos_obj_flat.h"
 
 #define LRU_CACHE_BITS 16
 
@@ -47,6 +48,8 @@ struct vos_object {
 	struct vos_obj_df		*obj_df;
 	/** backref to container */
 	struct vos_container		*obj_cont;
+	/** flattened object in memory structure */
+	struct vos_obj_flat		*obj_flat;
 	/** nobody should access this object */
 	bool				obj_zombie;
 	/** Object is in discard */
@@ -231,5 +234,17 @@ vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, dao
  */
 void
 vos_obj_discard_release(struct daos_lru_cache *occ, struct vos_object *obj);
+
+static inline bool
+vos_obj_is_empty(struct vos_object *obj)
+{
+	return !obj->obj_df || obj->obj_df->vo_tree.tr_class == 0;
+}
+
+static inline bool
+vos_obj_flattened(struct vos_object *obj)
+{
+	return obj->obj_df && obj->obj_df->vo_sync == DAOS_EPOCH_MAX;
+}
 
 #endif

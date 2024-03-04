@@ -355,6 +355,8 @@ typedef struct {
 	int	(*so_cmp_key)(void *array, int i, uint64_t key);
 } daos_sort_ops_t;
 
+int daos_array_sort_adv(void *array, unsigned int start, unsigned int len, bool unique,
+			daos_sort_ops_t *ops);
 int daos_array_sort(void *array, unsigned int len, bool unique,
 		    daos_sort_ops_t *ops);
 int daos_array_find(void *array, unsigned int len, uint64_t key,
