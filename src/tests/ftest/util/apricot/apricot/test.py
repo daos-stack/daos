@@ -139,6 +139,7 @@ class Test(avocadoTest):
         if self._stage_name is None:
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
         self._test_step = 1
+        self._test_step_time = time()
 
         # Avoid concatenating diff output.
         self.maxDiff = None  # pylint: disable=invalid-name
@@ -471,9 +472,12 @@ class Test(avocadoTest):
             header (bool, optional): whether to log a header line before the message. Defaults to
                 False.
         """
+        elapsed = time() - self._test_step_time
+        self._test_step_time = time()
+
         if header:
             self.log.info('-' * 80)
-        self.log.info("==> Step %s: %s", self._test_step, message)
+        self.log.info("==> Step %s: %s [elapsed: %.02fs]", self._test_step, message, elapsed)
         self._test_step += 1
 
     def tearDown(self):
@@ -798,10 +802,12 @@ class TestWithServers(TestWithoutServers):
         # Start the servers
         force_agent_start = False
         if self.setup_start_servers:
+            self.log_step('setUp(): Starting servers')
             force_agent_start = self.start_servers()
 
         # Start the clients (agents)
         if self.setup_start_agents:
+            self.log_step('setUp(): Starting agents')
             self.start_agents(force=force_agent_start)
 
         self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*", False)
@@ -821,6 +827,7 @@ class TestWithServers(TestWithoutServers):
             # test.  Since the storage is reformatted and the pool metadata is
             # erased when the servers are restarted this check is only needed
             # when the servers are left continually running.
+            self.log_step('setUp(): Destroying any existing pools before the test')
             if self.search_and_destroy_pools():
                 self.fail(
                     "Errors detected attempting to ensure all pools had been "
@@ -830,6 +837,7 @@ class TestWithServers(TestWithoutServers):
         get_job_manager(self, class_name_default=None)
 
         # Mark the end of setup
+        self.log_step('setUp(): Setup complete')
         self.log.info("=" * 100)
 
     def write_string_to_logfile(self, message):
