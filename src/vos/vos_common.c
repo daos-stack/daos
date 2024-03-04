@@ -753,6 +753,12 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* VOS aggregation failed */
+	rc = d_tm_add_metric(&vam->vam_fail_count, D_TM_COUNTER, "aggregation failures", NULL,
+			     "%s/%s/fail_count/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'fail_count' telemetry : "DF_RC"\n", DP_RC(rc));
+
 	/* Metrics related to VOS checkpointing */
 	vos_chkpt_metrics_init(&vp_metrics->vp_chkpt_metrics, path, tgt_id);
 
@@ -767,6 +773,21 @@ vos_metrics_alloc(const char *path, int tgt_id)
 			     "%s/%s/nvme_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'nvme_used' telemetry : "DF_RC"\n", DP_RC(rc));
+
+	/* VOS space SCM total metric */
+	rc = d_tm_add_metric(&vsm->vsm_scm_total, D_TM_GAUGE, "SCM space total", "bytes",
+			     "%s/%s/scm_total/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'scm_total' telemetry : " DF_RC "\n", DP_RC(rc));
+
+	/* VOS space NVME total metric */
+	rc = d_tm_add_metric(&vsm->vsm_nvme_total, D_TM_GAUGE, "NVME space total", "bytes",
+			     "%s/%s/nvme_total/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'nvme_total' telemetry : " DF_RC "\n", DP_RC(rc));
+
+	/** garbage collection metrics */
+	vos_gc_metrics_init(&vp_metrics->vp_gc_metrics, path, tgt_id);
 
 	/* Initialize the vos_space_metrics timeout counter */
 	vsm->vsm_last_update_ts = 0;
