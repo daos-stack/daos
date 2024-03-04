@@ -137,7 +137,12 @@ func TestIpmctl_prep(t *testing.T) {
 		},
 		"no modules": {
 			scanResp: &storage.ScmScanResponse{},
-			expErr:   errors.New("no pmem"),
+			expPrepResp: &storage.ScmPrepareResponse{
+				Namespaces: storage.ScmNamespaces{},
+				Socket: &storage.ScmSocketState{
+					State: storage.ScmNoModules,
+				},
+			},
 		},
 		"non-interleaved": {
 			runOut: []string{
@@ -674,7 +679,12 @@ func TestIpmctl_prepReset(t *testing.T) {
 			scanResp: &storage.ScmScanResponse{
 				Modules: storage.ScmModules{},
 			},
-			expErr: errors.New("no pmem"),
+			expPrepResp: &storage.ScmPrepareResponse{
+				Namespaces: storage.ScmNamespaces{},
+				Socket: &storage.ScmSocketState{
+					State: storage.ScmNoModules,
+				},
+			},
 		},
 		"single socket selected; get regions fails; invalid xml": {
 			prepReq: &storage.ScmPrepareRequest{
