@@ -571,7 +571,6 @@ do_lowfd(void **state)
 	int   fd;
 	int   rc;
 	int   i;
-	bool  pil4dfs_loaded = false;
 	char *env_ldpreload;
 	char  fd_path[64];
 	char *path;
@@ -580,9 +579,7 @@ do_lowfd(void **state)
 	if (env_ldpreload == NULL)
 		return;
 
-	if (strstr(env_ldpreload, "libpil4dfs.so"))
-		pil4dfs_loaded = true;
-	else
+	if (strstr(env_ldpreload, "libpil4dfs.so") == NULL)
 		/* libioil cannot pass this test since low fds are only temporarily blocked */
 		return;
 
@@ -599,8 +596,7 @@ do_lowfd(void **state)
 	printf("fd = %d\n", fd);
 	rc = close(fd);
 	assert_return_code(rc, errno);
-	if (pil4dfs_loaded)
-		assert_true(fd >= MIN_DAOS_FD);
+	assert_true(fd >= MIN_DAOS_FD);
 
 	/* now check whether daos uses low fds */
 	path = malloc(PATH_MAX);
@@ -608,12 +604,6 @@ do_lowfd(void **state)
 	for (i = 0; i < MIN_DAOS_FD; i++) {
 		snprintf(fd_path, sizeof(fd_path) - 1, "/proc/self/fd/%d", i);
 		rc = readlink(fd_path, path, PATH_MAX - 1);
-		/* libioil only temporarily block low fds during daos_init().
-		 * libpil4dfs blocks low fds before daos_init() and does not free
-		 * them until applications end.
-		 */
-		if (!pil4dfs_loaded && rc == -1 && errno == ENOENT)
-			continue;
 		assert_true(rc > 0);
 		path[rc] = 0;
 		assert_true(strstr(path, "socket:") == NULL);
