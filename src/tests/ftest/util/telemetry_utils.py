@@ -4,6 +4,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
+import copy
 import re
 from logging import getLogger
 
@@ -1078,7 +1079,7 @@ class MetricData():
                     },
                     ...
         """
-        return self._data.copy()
+        return copy.deepcopy(self._data)
 
     def collect(self, log, names, hosts, dmg):
         """Collect telemetry data for the specified metrics.
