@@ -39,6 +39,7 @@ jobs:
   # ${{ github.event.head_commit.message }} but pull_requests don't.  :-(
   Import-commit-message:
     name: Get commit message
+    if: github.repository == 'daos-stack/daos'
     runs-on: [self-hosted, light]
     # Map a step output to a job output
     outputs:
