@@ -2069,8 +2069,6 @@ pool_stop_all(void *arg)
 	if (rc != 0)
 		D_ERROR("failed to stop all pool svcs: "DF_RC"\n", DP_RC(rc));
 
-	ds_pool_hdl_delete_all();
-
 	rc = ds_mgmt_tgt_pool_iterate(stop_one, NULL /* arg */);
 	if (rc != 0)
 		D_ERROR("failed to stop all pools: "DF_RC"\n", DP_RC(rc));
@@ -6770,8 +6768,11 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 			D_GOTO(out_free, rc = -DER_BUSY);
 		} else {
 			/* Pool evict, or pool destroy with force=true */
-			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
-						  n_hdl_uuids, rpc->cr_ctx);
+			if (DAOS_FAIL_CHECK(DAOS_POOL_EVICT_FAIL))
+				rc = 0; /* unrealistic */
+			else
+				rc = pool_disconnect_hdls(&tx, svc, hdl_uuids, n_hdl_uuids,
+							  rpc->cr_ctx);
 			if (rc != 0) {
 				D_GOTO(out_free, rc);
 			} else {
