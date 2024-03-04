@@ -474,7 +474,9 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
 					     dth->dth_dti_cos_count, 0, NULL, daes, dces);
-		if (rc <= 0)
+		if (rc < 0)
+			goto reset;
+		if (rc == 0)
 			D_FREE(daes);
 	}
 
