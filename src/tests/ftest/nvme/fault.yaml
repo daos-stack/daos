@@ -1,5 +1,5 @@
 hosts:
-  test_servers: 2
+  test_servers: 4
   test_clients: 2
 timeout: 3600
 server_config:

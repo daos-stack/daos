@@ -24,7 +24,7 @@ class NvmeFault(ServerFillUp):
                   remove a single disk from a single server.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,large
         :avocado: tags=nvme
         :avocado: tags=NvmeFault,test_nvme_fault
         """
