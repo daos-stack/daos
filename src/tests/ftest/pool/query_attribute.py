@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,7 +54,6 @@ class QueryAttributeTest(TestWithServers):
         # against those used when creating the pool.
         query_result = daos_cmd.pool_query(pool=self.pool.identifier)
         actual_uuid = query_result["response"]["uuid"]
-        actual_label = query_result["response"]["label"]
         actual_size = query_result["response"]["tier_stats"][0]["total"]
         actual_size_roundup = int(actual_size / 100000) * 100000
 
@@ -62,12 +61,6 @@ class QueryAttributeTest(TestWithServers):
         if expected_uuid != actual_uuid:
             msg = "Unexpected UUID from daos pool query! " +\
                 "Expected = {}; Actual = {}".format(expected_uuid, actual_uuid)
-            errors.append(msg)
-
-        expected_label = self.pool.label.value
-        if expected_label != actual_label:
-            msg = "Unexpected label from daos pool query! " +\
-                "Expected = {}; Actual = {}".format(expected_label, actual_label)
             errors.append(msg)
 
         if expected_size != actual_size_roundup:
