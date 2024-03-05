@@ -194,8 +194,7 @@ class HwmCounter():
         if val < 0:
             return
         self.__val += val
-        if self.__val > self.__hwm:
-            self.__hwm = self.__val
+        self.__hwm = max(self.__hwm, self.__val)
 
     def subtract(self, val):
         """Subtract a value"""
