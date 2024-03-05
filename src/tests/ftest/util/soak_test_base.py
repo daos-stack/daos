@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -566,8 +566,6 @@ class SoakTestBase(TestWithServers):
         self.sudo_cmd = "sudo" if enable_sudo else ""
         self.enable_remote_logging = self.params.get(
             "enable_remote_logging", os.path.join(test_param, "*"), False)
-        self.enable_scrubber = self.params.get(
-            "enable_scrubber", os.path.join(test_param, "*"), False)
         if harassers:
             run_harasser = True
             self.log.info("<< Initial harasser list = %s>>", harassers)
