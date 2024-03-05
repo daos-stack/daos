@@ -28,6 +28,7 @@ class DFuseReadTest(DfuseTestBase):
         """
 
         pool = self.get_pool(connect=False)
+        self.add_container(self.pool)
         container = self.get_container(pool)
 
         self.load_dfuse(self.hostlist_clients, None)
