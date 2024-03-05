@@ -977,6 +977,8 @@ crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx, bool prima
 
 	hg_ctx->chc_hgctx = hg_context;
 
+	hg_ctx->chc_progressed = false;
+
 	/* TODO: need to create separate bulk class and bulk context? */
 	hg_ctx->chc_bulkctx = hg_ctx->chc_hgctx;
 	hg_ctx->chc_bulkcla = hg_ctx->chc_hgcla;
@@ -1534,6 +1536,13 @@ crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 	hg_context_t		*hg_context;
 	unsigned int		hg_timeout;
 	unsigned int		total = 256;
+
+	if (!hg_ctx->chc_progressed) {
+		struct crt_context *ctx = container_of(hg_ctx, struct crt_context, cc_hg_ctx);
+
+		hg_ctx->chc_progressed = true;
+		D_INFO("debug: %d: first progress\n", ctx->cc_idx);
+	}
 
 	hg_context = hg_ctx->chc_hgctx;
 

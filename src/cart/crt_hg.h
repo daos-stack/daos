@@ -127,6 +127,7 @@ struct crt_hg_context {
 	hg_context_t		*chc_bulkctx; /* bulk context */
 	struct crt_hg_pool	 chc_hg_pool; /* HG handle pool */
 	int			 chc_provider; /* provider */
+	bool			 chc_progressed;
 };
 
 /* crt_hg.c */
