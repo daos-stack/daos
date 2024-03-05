@@ -251,7 +251,7 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=list_verbose,list_verbose_basic,test_fields_basic
+        :avocado: tags=ListVerboseTest,test_fields_basic
         """
         self.pool = []
 
@@ -408,7 +408,7 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=list_verbose,list_verbose_imbalance,test_used_imbalance
+        :avocado: tags=ListVerboseTest,test_used_imbalance
         """
         errors = []
         self.log.debug("---------- NVMe test ----------")

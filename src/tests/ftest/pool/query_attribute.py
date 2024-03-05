@@ -41,7 +41,7 @@ class QueryAttributeTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_query,daos_cmd
-        :avocado: tags=pool_query_attr,test_query_attr
+        :avocado: tags=QueryAttributeTest,test_query_attr
         """
         errors = []
         daos_cmd = self.get_daos_command()
