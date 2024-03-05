@@ -11,11 +11,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dustin/go-humanize"
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/dustin/go-humanize"
-	"github.com/pkg/errors"
 )
 
 // <DimmList>
