@@ -15,7 +15,7 @@ class DFuseReadTest(DfuseTestBase):
     :avocado: recursive
     """
 
-    def test_bashfd(self):
+    def test_dfuse_read(self):
         """
 
         Test Description:

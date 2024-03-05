@@ -314,6 +314,7 @@ def run_linter(paths=None):
                 if class_name not in tags:
                     tests_wo_class_as_tag.append(method_name)
                 if method_name not in tags:
+                    print(file_path)
                     tests_wo_method_as_tag.append(method_name)
                 if not set(tags).intersection(set(['vm', 'hw', 'manual'])):
                     tests_wo_hw_vm_manual.append(method_name)
