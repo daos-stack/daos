@@ -77,6 +77,8 @@ class DFuseReadTest(DfuseTestBase):
 
         print(result)
         print(result.output)
+        print(result.output[0].stdout)
+        print(result.output[0].stdout[0])
 
         data = json.loads(result.output[0].stdout)
         print(data)

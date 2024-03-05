@@ -2281,30 +2281,26 @@ class PosixTests():
     def test_read_from_cache(self):
         """Test a basic read.
 
-        Write to a file, then read from it.  With caching on dfuse won't see the read, with caching
-        off dfuse will see one truncated read, then another at EOF which will return zero bytes.
+        Write to a file, then read from it.  With write-through caching on then the read should come
+        from the page cache.  Due to the way this is implement the cache will be truncated down
+        to a pagesize so this test only works for whole pages.
         """
         file_name = join(self.dfuse.dir, 'file')
-        with open(file_name, 'w') as fd:
-            fd.write('test')
 
-        with open(file_name, 'r') as fd:
-            data = fd.read(16)  # Pass in a buffer size here or python will only read file size.
-        print(data)
-        assert data == 'test'
+        subprocess.run(["dd", "if=/dev/zero", f"of={file_name}", 'count=1', 'bs=4k'], check=True)
 
+        subprocess.run(["dd", "of=/dev/zero", f"if={file_name}", 'count=4k', 'bs=1'], check=True)
         sd = self.dfuse.check_usage()
         sd_read = sd["statistics"].get("read", 0)
         print(f'Number of reads {sd_read}')
 
-        with open(file_name, 'r') as fd:
-            data = fd.read(16)  # Pass in a buffer size here or python will only read file size.
-        print(data)
-        assert data == 'test'
+        subprocess.run(["dd", "of=/dev/zero", f"if={file_name}", 'count=1', 'bs=4k'], check=True)
         pd = self.dfuse.check_usage()
         pd_read = pd["statistics"].get("read", 0)
         print(f'Number of reads {pd_read}')
+
         assert pd_read == sd_read
+        assert pd_read == 0
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
