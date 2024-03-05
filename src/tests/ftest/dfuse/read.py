@@ -28,7 +28,6 @@ class DFuseReadTest(DfuseTestBase):
         """
 
         pool = self.get_pool(connect=False)
-        self.add_container(self.pool)
         container = self.get_container(pool)
 
         self.load_dfuse(self.hostlist_clients, None)
@@ -42,7 +41,7 @@ class DFuseReadTest(DfuseTestBase):
         cont_attrs['dfuse-dentry-time'] = '1h'
         cont_attrs['dfuse-ndentry-time'] = '1h'
 
-        self.container.set_attr(attrs=cont_attrs)
+        container.set_attr(attrs=cont_attrs)
 
         self.start_dfuse(self.hostlist_clients, pool, container)
 
