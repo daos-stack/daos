@@ -82,6 +82,7 @@ extern "C" {
 
 void d_srand(long int);
 long int d_rand(void);
+double d_randd(void);
 
 /* Instruct the compiler these are allocation functions that return a pointer, and if possible
  * which function needs to be used to free them.
