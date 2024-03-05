@@ -30,6 +30,8 @@ class DFuseReadTest(DfuseTestBase):
         pool = self.get_pool(connect=False)
         container = self.get_container(pool)
 
+        self.load_dfuse(self.hostlist_clients, None)
+
         self.dfuse.disable_wb_cache.value = True
 
         cont_attrs = {}
