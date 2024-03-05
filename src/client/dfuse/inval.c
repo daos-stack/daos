@@ -443,24 +443,6 @@ ival_bucket_dec_value(double timeout)
 	DFUSE_TRA_ERROR(&ival_data, "Unable to find ref for %.1lf", timeout);
 }
 
-#if 0
-/* How long to keep file inodes in cache before invalidating them
- */
-static double
-ival_dentry_timeout(struct dfuse_cont *dfc)
-{
-	double timeout;
-
-	timeout = max(dfc->dfc_attr_timeout, dfc->dfc_data_timeout);
-
-	timeout = min(timeout, 10 * 60);
-
-	timeout = max(timeout, dfc->dfc_dentry_timeout);
-
-	return timeout + INVAL_FILE_GRACE;
-}
-#endif
-
 /* Ensure the correct buckets exist for a attached container.  Pools have a zero dentry timeout
  * so skip zero values.
  *

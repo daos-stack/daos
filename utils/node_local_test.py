@@ -2283,7 +2283,7 @@ class PosixTests():
 
         Write to a file, then read from it.  With write-through caching on then the read should come
         from the page cache.  Due to the way this is implement the cache will be truncated down
-        to a pagesize so this test only works for whole pages.
+        to a page size so this test only works for whole pages.
         """
         file_name = join(self.dfuse.dir, 'file')
 
