@@ -11,55 +11,46 @@
 #define __THREADED_RPC_H__
 
 #include <cart/api.h>
-#include "common.h"
+#include <gurt/atomic.h>
+#include <gurt/common.h>
+#include <stdio.h>
 
-#define CRT_ISEQ_RPC		/* input fields */		 \
-	((int32_t)		(msg)			CRT_VAR) \
-	((int32_t)		(payload)		CRT_VAR)
+/* input fields */
+#define CRT_ISEQ_RPC ((int32_t)(msg)CRT_VAR)((int32_t)(payload)CRT_VAR)
 
-#define CRT_OSEQ_RPC		/* output fields */		 \
-	((int32_t)		(msg)			CRT_VAR) \
-	((int32_t)		(value)			CRT_VAR)
+/* output fields */
+#define CRT_OSEQ_RPC ((int32_t)(msg)CRT_VAR)((int32_t)(value)CRT_VAR)
 
 CRT_RPC_DECLARE(threaded_rpc, CRT_ISEQ_RPC, CRT_OSEQ_RPC)
 CRT_RPC_DEFINE(threaded_rpc, CRT_ISEQ_RPC, CRT_OSEQ_RPC)
 
-#define FOREACH_MSG_TYPE(ACTION)    \
-	ACTION(MSG_START,  0xf00d)  \
-	ACTION(MSG_TYPE1,  0xdead)  \
-	ACTION(MSG_TYPE2,  0xfeed)  \
-	ACTION(MSG_TYPE3,  0xdeaf)  \
-	ACTION(MSG_STOP,   0xbaad)
+#define FOREACH_MSG_TYPE(ACTION)                                                                   \
+	ACTION(MSG_START, 0xf00d)                                                                  \
+	ACTION(MSG_TYPE1, 0xdead)                                                                  \
+	ACTION(MSG_TYPE2, 0xfeed)                                                                  \
+	ACTION(MSG_TYPE3, 0xdeaf)                                                                  \
+	ACTION(MSG_STOP, 0xbaad)
 
-#define GEN_ENUM(name, value) \
-	name,
+#define GEN_ENUM(name, value)       name,
 
-#define GEN_ENUM_VALUE(name, value) \
-	value,
+#define GEN_ENUM_VALUE(name, value) value,
 
 enum {
-	FOREACH_MSG_TYPE(GEN_ENUM)
-	MSG_COUNT,
+	FOREACH_MSG_TYPE(GEN_ENUM) MSG_COUNT,
 };
 
-static const int msg_values[MSG_COUNT] = {
-	FOREACH_MSG_TYPE(GEN_ENUM_VALUE)
-};
+static const int msg_values[MSG_COUNT] = {FOREACH_MSG_TYPE(GEN_ENUM_VALUE)};
 
-#define GEN_STR(name, value) \
-	#name,
+#define GEN_STR(name, value) #name,
 
-static const char *msg_strings[MSG_COUNT] = {
-	FOREACH_MSG_TYPE(GEN_STR)
-};
+static const char *msg_strings[MSG_COUNT] = {FOREACH_MSG_TYPE(GEN_STR)};
 
-#define MSG_IN_VALUE 0xbeef
-#define MSG_OUT_VALUE 0xbead
+#define MSG_IN_VALUE       0xbeef
+#define MSG_OUT_VALUE      0xbead
 
 #define TEST_THREADED_BASE 0x010000000
-#define TEST_THREADED_VER 0
+#define TEST_THREADED_VER  0
 
-#define RPC_ID CRT_PROTO_OPC(TEST_THREADED_BASE,	\
-				TEST_THREADED_VER, 0)
+#define RPC_ID             CRT_PROTO_OPC(TEST_THREADED_BASE, TEST_THREADED_VER, 0)
 
 #endif /* __THREADED_RPC_H__ */

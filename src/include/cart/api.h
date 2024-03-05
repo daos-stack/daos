@@ -234,6 +234,8 @@ crt_finalize(void);
  */
 int
 crt_progress(crt_context_t crt_ctx, int64_t timeout);
+int
+crt_progress1(crt_context_t crt_ctx, int64_t timeout);
 
 /**
  * Progress RPC execution on a cart context with a callback function.
@@ -257,6 +259,9 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout);
  */
 int
 crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
+		  crt_progress_cond_cb_t cond_cb, void *arg);
+int
+crt_progress_cond1(crt_context_t crt_ctx, int64_t timeout,
 		  crt_progress_cond_cb_t cond_cb, void *arg);
 
 /**

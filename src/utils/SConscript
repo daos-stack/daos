@@ -11,6 +11,9 @@ def scons():
 
     env.d_add_build_rpath()
 
+    # Build crt perf
+    SConscript('crt_perf/SConscript')
+
     # Build self test
     SConscript('self_test/SConscript')
     Default('self_test')

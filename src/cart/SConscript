@@ -75,18 +75,18 @@ def scons():
 
     cart_targets = denv.SharedObject(SRC)
 
-    compiler = env.get('COMPILER').lower()
-    if compiler != 'covc':
-        pp_env = denv.Clone()
-        pp_files = []
-        for src in SRC:
-            # Some day, the preprocess builder should be fixed so it can do multiple commands
-            # in parallel but until then, just submit them one at a time
-            pp_files.extend(pp_env.Preprocess(src))
-        parsed_files = parse_pp(pp_env, pp_files)
-        header = consolidate_pp(pp_env, parsed_files)
+    # compiler = env.get('COMPILER').lower()
+    # if compiler != 'covc':
+    #     pp_env = denv.Clone()
+    #     pp_files = []
+    #     for src in SRC:
+    #         # Some day, the preprocess builder should be fixed so it can do multiple commands
+    #         # in parallel but until then, just submit them one at a time
+    #         pp_files.extend(pp_env.Preprocess(src))
+    #     parsed_files = parse_pp(pp_env, pp_files)
+    #     header = consolidate_pp(pp_env, parsed_files)
 
-        Depends(cart_targets, header)
+    #     Depends(cart_targets, header)
 
     cart_lib = denv.d_library('cart', [cart_targets, swim_targets], SHLIBVERSION=CART_VERSION)
     denv.InstallVersionedLib('$PREFIX/lib64/', cart_lib, SHLIBVERSION=CART_VERSION)

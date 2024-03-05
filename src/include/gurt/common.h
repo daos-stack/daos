@@ -70,12 +70,6 @@ extern "C" {
 /* Check if bit is set in passed val */
 #define D_BIT_IS_SET(val, bit) (((val) & bit) ? 1 : 0)
 
-/**
- * Get the current time using a monotonic timer
- * param[out] ts A timespec structure for the result
- */
-#define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
-
 /* rand and srand macros */
 
 #define D_RAND_MAX 0x7fffffff
@@ -710,12 +704,34 @@ d_errno2der(int err)
 static inline int
 d_gettime(struct timespec *t)
 {
-	int	rc;
+	int rc;
 
-	rc = _gurt_gettime(t);
+	rc = clock_gettime(CLOCK_MONOTONIC, t);
 	if (rc != 0) {
-		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n",
-			rc, errno, strerror(errno));
+		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n", rc, errno,
+			strerror(errno));
+		rc = d_errno2der(errno);
+	}
+
+	return rc;
+}
+
+/**
+ * Return current time using coarse timer in timespec form
+ *
+ * \param[out] t	timespec returned
+ *
+ * \return		0 on success, negative value on error
+ */
+static inline int
+d_gettime_coarse(struct timespec *t)
+{
+	int rc;
+
+	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, t);
+	if (rc != 0) {
+		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n", rc, errno,
+			strerror(errno));
 		rc = d_errno2der(errno);
 	}
 
@@ -741,17 +757,23 @@ d_timediff_ns(const struct timespec *t1, const struct timespec *t2)
 static inline struct timespec
 d_timediff(struct timespec start, struct timespec end)
 {
-	struct timespec		temp;
+	struct timespec temp;
 
-	if ((end.tv_nsec - start.tv_nsec) < 0) {
-		temp.tv_sec = end.tv_sec - start.tv_sec - 1;
-		temp.tv_nsec = NSEC_PER_SEC + end.tv_nsec - start.tv_nsec;
-	} else {
-		temp.tv_sec = end.tv_sec - start.tv_sec;
-		temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+	temp.tv_sec  = end.tv_sec - start.tv_sec;
+	temp.tv_nsec = end.tv_nsec - start.tv_nsec;
+	if (temp.tv_nsec < 0) {
+		temp.tv_sec -= 1;
+		temp.tv_nsec += NSEC_PER_SEC;
 	}
 
 	return temp;
+}
+
+/* Return true if t1 < t2, false otherwise */
+static inline bool
+d_timeless(struct timespec t1, struct timespec t2)
+{
+	return ((t1.tv_sec < t2.tv_sec) || ((t1.tv_sec == t2.tv_sec) && (t1.tv_nsec < t2.tv_nsec)));
 }
 
 /* Calculate remaining time in ns */

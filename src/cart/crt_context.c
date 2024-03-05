@@ -1818,6 +1818,137 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
 	return rc;
 }
 
+int
+crt_progress1(crt_context_t crt_ctx, int64_t timeout)
+{
+	struct crt_context *ctx = crt_ctx;
+	int                 rc;
+
+	/** validate input parameters */
+	if (unlikely(ctx == NULL)) {
+		D_ERROR("invalid parameter (NULL crt_ctx).\n");
+		return -DER_INVAL;
+	}
+
+	/**
+	 * call progress once w/o any timeout before processing timed out
+	 * requests in case any replies are pending in the queue
+	 */
+	rc = crt_hg_progress1(&ctx->cc_hg_ctx, 0);
+	if (unlikely(rc && rc != -DER_TIMEDOUT))
+		D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
+
+	/**
+	 * process timeout and progress callback after this initial call to
+	 * progress
+	 */
+	crt_context_timeout_check(ctx);
+	timeout = crt_exec_progress_cb(ctx, timeout);
+
+	if (timeout != 0 && rc == -DER_TIMEDOUT) {
+		/** call progress once again with the real timeout */
+		rc = crt_hg_progress1(&ctx->cc_hg_ctx, timeout);
+		if (unlikely(rc && rc != -DER_TIMEDOUT))
+			D_ERROR("crt_hg_progress failed, rc: %d.\n", rc);
+	}
+
+	return rc;
+}
+
+int
+crt_progress_cond1(crt_context_t crt_ctx, int64_t timeout, crt_progress_cond_cb_t cond_cb,
+		   void *arg)
+{
+	struct crt_context *ctx = crt_ctx;
+	int64_t             hg_timeout;
+	uint64_t            now;
+	uint64_t            end = 0;
+	int                 rc  = 0;
+
+	/** validate input parameters */
+	if (unlikely(ctx == NULL || cond_cb == NULL)) {
+		D_ERROR("invalid parameter (%p)\n", cond_cb);
+		return -DER_INVAL;
+	}
+
+	/**
+	 * Invoke the callback once first, in case the condition is met before
+	 * calling progress
+	 */
+	rc = cond_cb(arg);
+	if (rc > 0)
+		/** exit as per the callback request */
+		return 0;
+	if (unlikely(rc < 0))
+		/** something wrong happened during the callback execution */
+		return rc;
+
+	ctx = crt_ctx;
+
+	/** Progress with callback and non-null timeout */
+	if (timeout > 0) {
+		now = d_timeus_secdiff(0);
+		end = now + timeout;
+	}
+
+	/**
+	 * Call progress once before processing timeouts in case
+	 * any replies are pending in the queue
+	 */
+	rc = crt_hg_progress1(&ctx->cc_hg_ctx, 0);
+	if (unlikely(rc && rc != -DER_TIMEDOUT)) {
+		D_ERROR("crt_hg_progress failed with %d\n", rc);
+		return rc;
+	}
+
+	/** loop until callback returns non-null value */
+	while ((rc == -DER_TIMEDOUT) && (rc = cond_cb(arg)) == 0) {
+		crt_context_timeout_check(ctx);
+		timeout = crt_exec_progress_cb(ctx, timeout);
+
+		if (timeout < 0) {
+			/**
+			 * For infinite timeout, use a mercury timeout of 1 ms to avoid
+			 * being blocked indefinitely if another thread has called
+			 * crt_hg_progress() behind our back
+			 */
+			hg_timeout = 1000;
+		} else if (timeout == 0) {
+			hg_timeout = 0;
+		} else { /** timeout > 0 */
+			/** similarly, probe more frequently if timeout is large */
+			if (timeout > 1000 * 1000)
+				hg_timeout = 1000 * 1000;
+			else
+				hg_timeout = timeout;
+		}
+
+		rc = crt_hg_progress1(&ctx->cc_hg_ctx, hg_timeout);
+		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
+			D_ERROR("crt_hg_progress failed with %d\n", rc);
+			return rc;
+		}
+
+		/** check for timeout */
+		if (timeout < 0)
+			continue;
+
+		now = d_timeus_secdiff(0);
+		if (timeout == 0 || now >= end) {
+			/** try callback one last time just in case */
+			rc = cond_cb(arg);
+			if (unlikely(rc != 0))
+				break;
+			return -DER_TIMEDOUT;
+		}
+	}
+
+	if (rc > 0)
+		rc = 0;
+
+	return rc;
+}
+
 /**
  * to use this function, the user has to:
  * 1) define a callback function user_cb

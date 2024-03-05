@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -865,7 +865,7 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 
 	init_info.na_init_info.auth_key = prov_data->cpg_na_config.noc_auth_key;
 
-	if (crt_provider_is_block_mode(provider))
+	if (crt_provider_is_block_mode(provider) && !prov_data->cpg_busy_wait)
 		init_info.na_init_info.progress_mode = 0;
 	else
 		init_info.na_init_info.progress_mode = NA_NO_BLOCK;
@@ -1528,6 +1528,79 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	rpc_priv->crp_reply_pending = 0;
 }
 
+static inline unsigned int
+crt_time_to_hg(struct timespec tv)
+{
+	return (unsigned int)(tv.tv_sec * 1000 + ((tv.tv_nsec + 999999) / 1000000));
+}
+
+#define CRT_HG_TRIGGER_MAX (128)
+int
+crt_hg_progress1(struct crt_hg_context *hg_ctx, int64_t timeout_us)
+{
+	unsigned int    trigger_count = 0;
+	struct timespec deadline, now = {.tv_sec = 0, .tv_nsec = 0};
+	hg_context_t   *hg_context = hg_ctx->chc_hgctx;
+	bool            progressed = false;
+	int             rc         = 0;
+
+	if (timeout_us > 0) {
+		d_gettime_coarse(&now);
+		deadline = now;
+		d_timeinc(&deadline, (uint64_t)(timeout_us * 1000));
+	} else
+		deadline = now;
+
+	for (;;) {
+		hg_return_t  hg_ret;
+		unsigned int count = 0, hg_timeout_ms;
+
+		/* Try to trigger from HG queue first */
+		hg_ret = HG_Trigger(hg_context, 0, CRT_HG_TRIGGER_MAX, &count);
+		if (hg_ret != HG_SUCCESS && hg_ret != HG_TIMEOUT) {
+			D_ERROR("HG_Trigger failed, hg_ret: " DF_HG_RC "\n", DP_HG_RC(hg_ret));
+			rc = crt_hgret_2_der(hg_ret);
+			break;
+		}
+
+		trigger_count += count;
+		if (trigger_count > 0 && progressed)
+			break; /* Progressed */
+
+		if (timeout_us != 0) {
+			if (!d_timeless(now, deadline)) {
+				rc = -DER_TIMEDOUT;
+				break;
+			}
+			/* If something was triggered, call progress without blocking */
+			hg_timeout_ms =
+			    (trigger_count > 0) ? 0 : crt_time_to_hg(d_timediff(now, deadline));
+		} else
+			hg_timeout_ms = 0;
+
+		/* Progress RPC execution */
+		hg_ret = HG_Progress(hg_context, hg_timeout_ms);
+		if (hg_ret == HG_SUCCESS)
+			progressed = true;
+		else {
+			/* If progress timed out and something was triggered, succeed */
+			if (hg_ret == HG_TIMEOUT)
+				rc = (trigger_count > 0) ? 0 : -DER_TIMEDOUT;
+			else if (hg_ret != HG_SUCCESS) {
+				D_ERROR("HG_Progress failed, hg_ret: " DF_HG_RC "\n",
+					DP_HG_RC(hg_ret));
+				rc = crt_hgret_2_der(hg_ret);
+			}
+			break;
+		}
+
+		if (timeout_us != 0)
+			d_gettime_coarse(&now);
+	}
+
+	return rc;
+}
+
 int
 crt_hg_progress(struct crt_hg_context *hg_ctx, int64_t timeout)
 {
@@ -1603,9 +1676,24 @@ crt_hg_bulk_create(struct crt_hg_context *hg_ctx, d_sg_list_t *sgl,
 
 	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_bulkcla != NULL);
 	D_ASSERT(sgl != NULL && bulk_hdl != NULL);
-	D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO);
 
-	flags = (bulk_perm == CRT_BULK_RW) ? HG_BULK_READWRITE : HG_BULK_READ_ONLY;
+	switch (bulk_perm) {
+	case CRT_BULK_RW:
+		flags = HG_BULK_READWRITE;
+		break;
+	case CRT_BULK_WO:
+		flags = HG_BULK_WRITE_ONLY;
+		break;
+	case CRT_BULK_RO:
+		flags = HG_BULK_READ_ONLY;
+		break;
+	default:
+		D_ASSERT(bulk_perm == CRT_BULK_RW || bulk_perm == CRT_BULK_RO ||
+			 bulk_perm == CRT_BULK_WO);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Invalid permissions");
+		return rc;
+	}
 
 	if (sgl->sg_nr <= CRT_HG_IOVN_STACK) {
 		buf_sizes = buf_sizes_stack;

@@ -48,25 +48,27 @@ typedef struct crt_init_options {
 	/**
 	 * if cio_sep_override is 0, the two fields following it won't be used.
 	 */
-	uint32_t	cio_sep_override:1,
-			/**
-			 * overrides the value of the environment variable
-			 * CRT_CTX_SHARE_ADDR
-			 */
-			cio_use_sep:1,
-			/** whether or not to inject faults */
-			cio_fault_inject:1,
-			/**
-			 * whether or not to override credits. When set
-			 * overrides CRT_CTX_EP_CREDITS envariable
-			 */
-			cio_use_credits:1,
-			/** whether or not to enable per-context sensors */
-			cio_use_sensors:1,
+	uint32_t         cio_sep_override        : 1;
+	/**
+	 * overrides the value of the environment variable
+	 * CRT_CTX_SHARE_ADDR
+	 */
+	uint32_t         cio_use_sep             : 1;
+	/** whether or not to inject faults */
+	uint32_t         cio_fault_inject        : 1;
+	/**
+	 * whether or not to override credits. When set
+	 * overrides CRT_CTX_EP_CREDITS envariable
+	 */
+	uint32_t         cio_use_credits         : 1;
+	/** whether or not to enable per-context sensors */
+	uint32_t         cio_use_sensors         : 1;
+	/** whether or not to use expected sizes */
+	uint32_t         cio_use_expected_size   : 1;
+	uint32_t         cio_use_unexpected_size : 1;
+	/** force busy wait (testing only, not in production) */
+	uint32_t         cio_busy_wait           : 1;
 
-			/** whether or not to use expected sizes */
-			cio_use_expected_size:1,
-			cio_use_unexpected_size:1;
 	/**
 	 * overrides the value of the environment variable
 	 * CRT_CTX_NUM

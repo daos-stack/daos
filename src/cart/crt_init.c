@@ -250,6 +250,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_max_exp_size = max_expect_size;
 	prov_data->cpg_max_unexp_size = max_unexpect_size;
 	prov_data->cpg_primary = primary;
+	prov_data->cpg_busy_wait      = (opt && opt->cio_busy_wait);
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
 		prov_data->cpg_used_idx[i] = false;

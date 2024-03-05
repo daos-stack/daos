@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       15%{?relval}%{?dist}
+Release:       16%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -521,6 +521,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 %{_bindir}/crt_launch
+%{_bindir}/crt_perf_server
+%{_bindir}/crt_rate
+%{_bindir}/crt_bw*
+%{_bindir}/crt_launch
 # For avocado tests
 %{daoshome}/.build_vars.json
 %{daoshome}/.build_vars.sh
@@ -586,6 +590,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Feb 16 2024 Jerome Soumagne <jerome.soumagne@intel.com> 2.5.100-16
+- Add crt_perf binaries
+
 * Mon Feb 12 2024 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-15
 - Updated isa-l package name to match EPEL
 
