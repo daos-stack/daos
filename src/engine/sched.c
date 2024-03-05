@@ -845,7 +845,7 @@ set_req_limit(struct dss_xstream *dx, struct sched_pool_info *spi,
 
 	D_ASSERT(limit <= tot);
 	if (tot - limit > max_qds[req_type]) {
-		D_CRIT("Too large QD: %u/%u/%u for req:%d\n",
+		D_DEBUG(DB_TRACE, "Very large QD: %u/%u/%u for req:%d\n",
 		       tot, max_qds[req_type], limit, req_type);
 		limit = tot - max_qds[req_type];
 	}
