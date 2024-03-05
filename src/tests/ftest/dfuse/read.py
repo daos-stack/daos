@@ -34,6 +34,10 @@ class DFuseReadTest(DfuseTestBase):
 
         self.dfuse.disable_wb_cache.value = True
 
+        self.dfuse.env["D_LOG_MASK"] = "INFO,DFUSE=DEBUG"
+        self.dfuse.env["DD_MASK"] = "ALL"
+        self.dfuse.env["DD_SUBSYS"] = "ALL"
+
         cont_attrs = {}
 
         cont_attrs['dfuse-data-cache'] = '1h'
