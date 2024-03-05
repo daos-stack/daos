@@ -393,12 +393,11 @@ crt_context_create_on_iface_idx(uint32_t iface_index, crt_context_t *crt_ctx)
 }
 
 int
-crt_iface_name2idx(char *iface_name, int *idx)
+crt_iface_name2idx(const char *iface_name, int *idx)
 {
 	uint32_t	num_ifaces;
 	int		i;
 	char		*name;
-	int		rc = -DER_INVAL;
 
 	num_ifaces = crt_provider_num_ifaces_get(true, crt_gdata.cg_primary_prov);
 
@@ -407,16 +406,15 @@ crt_iface_name2idx(char *iface_name, int *idx)
 
 		if (strcmp(name, iface_name) == 0) {
 			*idx = i;
-			rc = DER_SUCCESS;
-			break;
+			return DER_SUCCESS;
 		}
 	}
 
-	return rc;
+	return -DER_INVAL;
 }
 
 int
-crt_context_create_on_iface(char *iface_name, crt_context_t *crt_ctx)
+crt_context_create_on_iface(const char *iface_name, crt_context_t *crt_ctx)
 {
 	int idx;
 	int rc;

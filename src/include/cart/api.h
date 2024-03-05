@@ -145,7 +145,7 @@ crt_context_create_on_iface_idx(uint32_t iface_index, crt_context_t *crt_ctx);
  * \return                      DER_SUCCESS on success, negative value if error
  */
 int
-crt_iface_name2idx(char *iface_name, int *idx);
+crt_iface_name2idx(const char *iface_name, int *idx);
 
 
 /**
@@ -163,7 +163,7 @@ crt_iface_name2idx(char *iface_name, int *idx);
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_context_create_on_iface(char *iface_name, crt_context_t *crt_ctx);
+crt_context_create_on_iface(const char *iface_name, crt_context_t *crt_ctx);
 
 
 /**
