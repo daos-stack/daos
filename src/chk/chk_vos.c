@@ -99,9 +99,9 @@ chk_bk_update_leader(struct chk_bookmark *cbk)
 	int	rc;
 
 	rc = chk_db_update(CHK_BK_LEADER, strlen(CHK_BK_LEADER), cbk, sizeof(*cbk));
-	if (rc != 0)
-		D_ERROR("Failed to update leader bookmark on rank %u: "DF_RC"\n",
-			dss_self_rank(), DP_RC(rc));
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc,
+		  "Update leader bookmark on rank %u, status %u, phase %u",
+		  dss_self_rank(), cbk->cb_ins_status, cbk->cb_phase);
 
 	return rc;
 }
@@ -138,9 +138,9 @@ chk_bk_update_engine(struct chk_bookmark *cbk)
 	int	rc;
 
 	rc = chk_db_update(CHK_BK_ENGINE, strlen(CHK_BK_ENGINE), cbk, sizeof(*cbk));
-	if (rc != 0)
-		D_ERROR("Failed to update engine bookmark on rank %u: "DF_RC"\n",
-			dss_self_rank(), DP_RC(rc));
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc,
+		  "Update engine bookmark on rank %u, status %u, phase %u",
+		  dss_self_rank(), cbk->cb_ins_status, cbk->cb_phase);
 
 	return rc;
 }
@@ -177,9 +177,9 @@ chk_bk_update_pool(struct chk_bookmark *cbk, char *uuid_str)
 	int	rc;
 
 	rc = chk_db_update(uuid_str, strlen(uuid_str), cbk, sizeof(*cbk));
-	if (rc != 0)
-		D_ERROR("Failed to update pool %s bookmark on rank %u: "DF_RC"\n",
-			uuid_str, dss_self_rank(), DP_RC(rc));
+	DL_CDEBUG(rc == 0, DLOG_INFO, DLOG_ERR, rc,
+		  "Update pool %s bookmark on rank %u, status %u, phase %u",
+		  uuid_str, dss_self_rank(), cbk->cb_ins_status, cbk->cb_phase);
 
 	return rc;
 }

@@ -276,13 +276,20 @@ class PoolListConsolidationTest(RecoveryTestBase):
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        # 3. Remove /mnt/daos/<pool_uuid>/rdb-pool from rank 0 and 2.
-        rank_to_host = self.server_managers[0].ranks
-        host_0 = rank_to_host[0]
-        host_2 = rank_to_host[2]
-        hosts = NodeSet.fromlist([host_0, host_2])
+        # 3. Remove /mnt/daos/<pool_uuid>/rdb-pool from two ranks.
+        rdb_pool_path = f"/mnt/daos0/{self.pool.uuid.lower()}/rdb-pool"
         command = f"sudo rm /mnt/daos0/{self.pool.uuid.lower()}/rdb-pool"
-        pcmd(hosts=hosts, command=command)
+        hosts = list(set(self.server_managers[0].ranks.values()))
+        count = 0
+        for host in hosts:
+            node = NodeSet(host)
+            check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
+            if check_out[0]:
+                pcmd(hosts=node, command=command)
+                self.log.info("rm rdb-pool from %s", str(node))
+                count += 1
+                if count > 1:
+                    break
 
         # 4. Start servers.
         dmg_command.system_start()
@@ -312,10 +319,10 @@ class PoolListConsolidationTest(RecoveryTestBase):
         # should have rdb-pool.
         hosts = list(set(self.server_managers[0].ranks.values()))
         count = 0
-        rdb_pool_path = f"/mnt/daos0/{self.pool.uuid.lower()}/rdb-pool"
         for host in hosts:
             node = NodeSet(host)
-            if check_file_exists(hosts=node, filename=rdb_pool_path):
+            check_out = check_file_exists(hosts=node, filename=rdb_pool_path, sudo=True)
+            if check_out[0]:
                 count += 1
                 self.log.info("rdb-pool found at %s", str(node))
 

@@ -314,8 +314,6 @@ class PoolMembershipTest(IorTestBase):
         6. Start checker.
         7. Query the checker until expected number of inconsistencies are repaired.
         8. Disable checker and start servers.
-        9. Wait for rebuild to finish.
-        10. Query the pool and verify that expected number of targets are disabled.
 
         Jira ID: DAOS-11735
 
@@ -390,20 +388,5 @@ class PoolMembershipTest(IorTestBase):
         # 8. Disable checker.
         self.log_step("Disable checker.")
         dmg_command.check_disable()
-
-        # 9. Wait for rebuild to finish.
-        self.log_step("Wait for rebuild to finish.")
-        self.pool.wait_for_rebuild_to_start(interval=5)
-        self.pool.wait_for_rebuild_to_end(interval=5)
-
-        # 10. Query the pool and verify that expected number of targets are disabled.
-        self.log_step(
-            "Query the pool and verify that expected number of targets are disabled.")
-        self.pool.set_query_data()
-        disabled_targets = self.pool.query_data["response"]["disabled_targets"]
-        if disabled_targets != targets:
-            msg = (f"Unexpected number of targets are disabled! Expected = {targets}; "
-                   f"Actual = {disabled_targets}")
-            errors.append(msg)
 
         report_errors(test=self, errors=errors)

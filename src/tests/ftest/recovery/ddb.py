@@ -47,7 +47,7 @@ class DdbTest(RecoveryTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb_cmd,test_recovery_ddb_ls
+        :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_ls
         """
         # Create a pool and a container.
         self.add_pool()
@@ -218,7 +218,7 @@ class DdbTest(RecoveryTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb_cmd,test_recovery_ddb_rm
+        :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_rm
         """
         # 1. Create a pool and a container. Insert objects, dkeys, and akeys.
         self.add_pool(connect=True)
@@ -365,7 +365,7 @@ class DdbTest(RecoveryTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb_cmd,test_recovery_ddb_load
+        :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_load
         """
         # 1. Create a pool and a container.
         self.add_pool(connect=True)
@@ -463,7 +463,7 @@ class DdbTest(RecoveryTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=recovery
-        :avocado: tags=ddb_cmd,test_recovery_ddb_dump_value
+        :avocado: tags=DdbTest,ddb_cmd,test_recovery_ddb_dump_value
         """
         # 1. Create a pool and a container.
         self.add_pool(connect=True)
