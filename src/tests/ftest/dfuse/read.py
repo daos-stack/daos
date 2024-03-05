@@ -80,5 +80,5 @@ class DFuseReadTest(DfuseTestBase):
         print(result.output[0].stdout)
         print(result.output[0].stdout[0])
 
-        data = json.loads(result.output[0].stdout)
+        data = json.loads("\n".join(result.output[0].stdout))
         print(data)
