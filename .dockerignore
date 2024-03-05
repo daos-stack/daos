@@ -15,6 +15,9 @@
 !utils/setup_daos_server_helper.sh
 !utils/sl/setup_local.sh
 !utils/scripts
+!utils/run_utest.py
+!utils/utest.yaml
+!utils/unit
 !SConstruct
 !VERSION
 !LICENSE

@@ -1,8 +1,13 @@
-daos (2.5.100-16) unstable; urgency=medium
+daos (2.5.100-17) unstable; urgency=medium
   [ Ashley M. Pittman ]
   * Updated pydaos install process
 
- -- Ashley M. Pittman <ashley.m.pittman@intel.com>  Tue, 13 Feb 2024 09:15:00 -0800
+ -- Ashley M. Pittman <ashley.m.pittman@intel.com>  Tue, 05 Mar 2024 09:15:00 -0800
+daos (2.5.100-16) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.11.0-1416.g12dbc15
+
+ -- Li Wei <wei.g.li@intel.com>  Tue, 27 Feb 2024 11:13:00 +0900
 
 daos (2.5.100-15) unstable; urgency=medium
   [ Ryon Jensen ]
