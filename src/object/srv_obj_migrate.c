@@ -405,6 +405,8 @@ struct migrate_pool_tls_create_arg {
 	unsigned int generation;
 	uint32_t opc;
 	uint32_t new_layout_ver;
+	/* for sys sstream */
+	bool	 track_status;
 };
 
 int
@@ -439,6 +441,8 @@ migrate_pool_tls_create_one(void *data)
 	if (pool_tls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	D_INIT_LIST_HEAD(&pool_tls->mpt_list);
+
 	rc = ABT_eventual_create(0, &pool_tls->mpt_done_eventual);
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc = dss_abterr2der(rc));
@@ -463,7 +467,12 @@ migrate_pool_tls_create_one(void *data)
 	pool_tls->mpt_executed_ult = 0;
 	pool_tls->mpt_root_hdl = DAOS_HDL_INVAL;
 	pool_tls->mpt_max_eph = arg->max_eph;
-	pool_tls->mpt_pool = pool_child != NULL ? ds_pool_child_lookup(arg->pool_uuid) : NULL;
+	/* @mpt_pool is never used on system xstream */
+	if (arg->track_status == false && pool_child != NULL) {
+		pool_tls->mpt_pool = ds_pool_child_lookup(arg->pool_uuid);
+		if (pool_tls->mpt_pool == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
+	}
 	pool_tls->mpt_new_layout_ver = arg->new_layout_ver;
 	pool_tls->mpt_opc = arg->opc;
 	pool_tls->mpt_inflight_max_size = MIGRATE_MAX_SIZE;
@@ -530,7 +539,11 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	arg.max_eph = max_eph;
 	arg.new_layout_ver = new_layout_ver;
 	arg.generation = generation;
-	/* dss_task_collective does not do collective on xstream 0 */
+	/*
+	 * dss_task_collective does not do collective on sys xstrem,
+	 * sys xstream need some information to track rebuild status.
+	 */
+	arg.track_status = true;
 	rc = migrate_pool_tls_create_one(&arg);
 	if (rc)
 		D_GOTO(out, rc);
@@ -559,6 +572,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_LIST);
 	D_ASSERT(entry != NULL);
 	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
+	arg.track_status = false;
 	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create migrate tls: "DF_RC"\n",
@@ -3089,7 +3103,6 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 	daos_handle_t		 toh = tls->mpt_migrated_root_hdl;
 	struct migrate_obj_val	 val;
 	d_iov_t			 val_iov;
-	int			 ult_tgt_idx;
 	int			 rc;
 
 	D_ASSERT(daos_handle_is_valid(toh));
@@ -3118,28 +3131,8 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 		       sizeof(*obj_arg->snaps) * cont_arg->snap_cnt);
 	}
 
-	if (cont_arg->pool_tls->mpt_opc == RB_OP_REINT) {
-		/* This ULT will need to destroy objects prior to migration. To
-		 * do this it must be scheduled on the xstream where that data
-		 * is stored.
-		 */
-		ult_tgt_idx = tgt_idx;
-	} else {
-		/* This ULT will not need to destroy data, it will act as a
-		 * client to enumerate the data to migrate, then migrate that
-		 * data on a different ULT that is pinned to the appropriate
-		 * target.
-		 *
-		 * Because no data migration happens here, schedule this
-		 * pseudorandomly to get better performance by leveraging all
-		 * the xstreams.
-		 */
-		ult_tgt_idx = d_rand() % dss_tgt_nr;
-	}
-
-	/* Let's iterate the object on different xstream */
 	rc = dss_ult_create(migrate_obj_ult, obj_arg, DSS_XS_VOS,
-			    ult_tgt_idx, MIGRATE_STACK_SIZE,
+			    tgt_idx, MIGRATE_STACK_SIZE,
 			    NULL);
 	if (rc)
 		goto free;
@@ -3597,7 +3590,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	ds_rebuild_running_query(migrate_in->om_pool_uuid, &rebuild_ver, NULL, &rebuild_gen);
+	ds_rebuild_running_query(migrate_in->om_pool_uuid, -1, &rebuild_ver, NULL, &rebuild_gen);
 	if (rebuild_ver == 0 || rebuild_gen != migrate_in->om_generation) {
 		D_ERROR(DF_UUID" rebuild service has been stopped.\n",
 			DP_UUID(migrate_in->om_pool_uuid));

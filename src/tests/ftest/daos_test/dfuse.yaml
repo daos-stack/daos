@@ -30,10 +30,9 @@ dfuse: !mux
   metadata:
     disable_wb_cache: true
     name: "metadata"
-  nocache:
+  otoc:
     disable_wb_cache: true
-    disable_caching: true
-    name: "nocache"
+    name: "otoc"
   native:
     name: "native"
 intercept: !mux

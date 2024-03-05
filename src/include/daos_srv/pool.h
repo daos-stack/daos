@@ -24,7 +24,6 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
-#include <daos_srv/policy.h>
 #include <daos_srv/rdb.h>
 
 /* Pool service (opaque) */
@@ -46,6 +45,7 @@ struct ds_pool_svc;
 struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;	/* pool UUID */
+	d_list_t		sp_hdls;
 	ABT_rwlock		sp_lock;
 	struct pool_map		*sp_map;
 	uint32_t		sp_map_version;	/* temporary */
@@ -61,7 +61,8 @@ struct ds_pool {
 	uint32_t		sp_global_version;
 	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
-	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
+	/* Size threshold to store data on backend bdev */
+	uint32_t		sp_data_thresh;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
@@ -124,6 +125,7 @@ void ds_pool_get(struct ds_pool *pool);
  */
 struct ds_pool_hdl {
 	d_list_t		sph_entry;
+	d_list_t		sph_pool_entry;
 	uuid_t			sph_uuid;	/* of the pool handle */
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
@@ -265,6 +267,8 @@ int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
+int ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
+int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 

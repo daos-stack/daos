@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -62,13 +62,25 @@ def add_pools(self, pool_names, ranks=None):
                     /run/<test_params>/poollist/*
         ranks (list, optional):  ranks to include in pool. Defaults to None
     """
+    params = {}
     target_list = ranks if ranks else None
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
+        properties = self.params.get('properties', path, None)
+        # allow yaml pool property to override the scrub default; whether scrubber is enabled or not
+        if self.enable_scrubber and "scrub" not in str(properties):
+            scrubber_properties = "scrub:timed,scrub_freq:120"
+            params['properties'] = (",").join(filter(None, [properties, scrubber_properties]))
+        else:
+            params['properties'] = properties
         # Create a pool and add it to the overall list of pools
-        self.pool.append(
-            self.get_pool(
-                namespace=path, connect=False, target_list=target_list, dmg=self.dmg_command))
+        self.pool.append(self.get_pool(
+            namespace=path,
+            connect=False,
+            target_list=target_list,
+            dmg=self.dmg_command,
+            **params))
+
         self.log.info("Valid Pool ID is %s", self.pool[-1].identifier)
 
 
@@ -85,7 +97,7 @@ def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/con
     kwargs = {}
     if file_oclass:
         kwargs['file_oclass'] = file_oclass
-        properties = self.params.get('properties', path, "")
+        properties = self.params.get('properties', path, None)
         redundancy_factor = extract_redundancy_factor(file_oclass)
         rd_fac = f'rd_fac:{str(redundancy_factor)}'
         kwargs['properties'] = (",").join(filter(None, [properties, rd_fac]))
@@ -419,8 +431,7 @@ def launch_vmd_identify_check(self, name, results, args):
 
     for uuid in uuids:
         # Blink led
-        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
-        time.sleep(2)
+        self.dmg_command.storage_led_identify(ids=uuid, timeout=2)
         # check if led is blinking
         result = self.dmg_command.storage_led_check(ids=uuid)
         # determine if leds are blinking as expected
@@ -430,6 +441,9 @@ def launch_vmd_identify_check(self, name, results, args):
                     if device['ctrlr']['led_state'] != "QUICK_BLINK":
                         failing_vmd.append([device['ctrlr']['pci_addr'], value['hosts']])
                         status = False
+    # reset leds to previous state
+    for uuid in uuids:
+        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
 
     params = {"name": name,
               "status": status,

@@ -1,8 +1,6 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers: 1
-timeout: 60
+timeout: 900
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -16,5 +14,7 @@ server_config:
           scm_mount: /mnt/daos
   system_ram_reserved: 1
 pool:
-  control_method: dmg
-  scm_size: 1073741824
+  scm_size: 1G
+container:
+  type: POSIX
+  control_method: daos

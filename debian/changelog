@@ -1,3 +1,15 @@
+daos (2.5.100-16) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.11.0-1416.g12dbc15
+
+ -- Li Wei <wei.g.li@intel.com>  Tue, 27 Feb 2024 11:13:00 +0900
+
+daos (2.5.100-15) unstable; urgency=medium
+  [ Ryon Jensen ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Ryon Jensen <ryon.jensen@intel.com>  Mon, 12 Feb 2024 11:16:00 -0700
+
 daos (2.5.100-14) unstable; urgency=medium
   [ Brian J. Murrell ]
   * NOOP change to keep in parity with RPM version

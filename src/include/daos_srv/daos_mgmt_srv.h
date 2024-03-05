@@ -13,6 +13,8 @@
 #ifndef __MGMT_SRV_H__
 #define __MGMT_SRV_H__
 
+#include <uuid/uuid.h>
+
 /**
  * Common file names used by each layer to store persistent data
  */

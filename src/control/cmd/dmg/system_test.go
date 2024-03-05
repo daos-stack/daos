@@ -501,7 +501,7 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("system start failed: duplicate result"),
+			expErr: errors.New("duplicate result for rank"),
 		},
 		"system start absent hosts": {
 			resp: &mgmtpb.SystemStartResp{
@@ -630,7 +630,7 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 					},
 				},
 			},
-			expErr: errors.New("system stop failed: duplicate result"),
+			expErr: errors.New("duplicate result for rank"),
 		},
 		"system stop absent hosts": {
 			resp: &mgmtpb.SystemStopResp{

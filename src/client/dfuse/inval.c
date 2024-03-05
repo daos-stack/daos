@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -36,6 +36,7 @@
  * appended to the end, and the timeout starts at the front of the list and traverses only as far
  * as it needs to until the front entry is to be kept.
  *
+ *
  * As lookups will not be repeated by the kernel until after timeout has expired allow some leeway
  * before eviction to allow re-validation of in-use datasets without triggering entire tree
  * invalidations through the kernel.  Directories get five seconds, anything else two.  Ideally
@@ -52,7 +53,6 @@
  * Additional changes to consider in the future could include:
  *  Better handing of eviction timeouts, "max(time * 1.1, 10)" would be better than a flat +x/+5
  *  Use arrays rather than lists for the buckets for faster iteration.
- *  Reference counting the timeout buckets.
  *
  * Locking: The ival_lock is contended, it is accessed several places, however none do any more
  * than list management.  As inodes might be removed from one list and re-inserted into another
@@ -72,9 +72,7 @@
  */
 
 /* Grace period before invalidating directories or non-directories.  Needs to be long enough so that
- * entries in the working set are invalidated but short enough to be meaningful.
- * Directories that are used as the cwd for processes can cause problems with being invalidated too
- * early so use a higher value here.
+ * entries in the working set are not invalidated but short enough to be meaningful.
  */
 #define INVAL_DIRECTORY_GRACE (60 * 30)
 #define INVAL_FILE_GRACE      2
@@ -86,9 +84,10 @@ struct dfuse_time_entry {
 	d_list_t inode_list;
 	double   time;
 	d_list_t dte_list;
+	int      ref;
 };
 
-/* Core data structure, maintains a list of struct dfuse_time_entry lists.*/
+/* Core data structure, maintains a list of struct dfuse_time_entry lists */
 struct dfuse_ival {
 	d_list_t             time_entry_list;
 	struct fuse_session *session;
@@ -104,7 +103,6 @@ struct dfuse_ival {
 struct inode_core {
 	char       name[NAME_MAX + 1];
 	fuse_ino_t parent;
-	bool       dir;
 };
 
 /* Number of dentries to invalidate per iteration. This value affects how long the lock is held,
@@ -127,7 +125,7 @@ static struct dfuse_ival ival_data;
 static bool
 ival_loop(int *sleep_time)
 {
-	struct dfuse_time_entry *dte;
+	struct dfuse_time_entry *dte, *dtep;
 	struct inode_core        ic[EVICT_COUNT] = {};
 	int                      idx             = 0;
 	double                   sleep           = (60 * 1) - 1;
@@ -135,16 +133,22 @@ ival_loop(int *sleep_time)
 	D_MUTEX_LOCK(&ival_lock);
 
 	/* Walk the list, oldest first */
-	d_list_for_each_entry(dte, &ival_data.time_entry_list, dte_list) {
+	d_list_for_each_entry_safe(dte, dtep, &ival_data.time_entry_list, dte_list) {
 		struct dfuse_inode_entry *inode, *inodep;
 
-		DFUSE_TRA_DEBUG(dte, "Iterating for timeout %lf", dte->time);
+		DFUSE_TRA_DEBUG(dte, "Iterating for timeout %.1lf ref %d", dte->time, dte->ref);
+
+		if (dte->ref == 0 && d_list_empty(&dte->inode_list)) {
+			d_list_del(&dte->dte_list);
+			D_FREE(dte);
+			continue;
+		}
 
 		d_list_for_each_entry_safe(inode, inodep, &dte->inode_list, ie_evict_entry) {
 			double timeout;
 
 			if (dfuse_dentry_get_valid(inode, dte->time, &timeout)) {
-				DFUSE_TRA_DEBUG(inode, "Keeping left %lf " DF_DE, timeout,
+				DFUSE_TRA_DEBUG(inode, "Keeping left %.1lf " DF_DE, timeout,
 						DP_DE(inode->ie_name));
 				if (timeout < sleep)
 					sleep = timeout;
@@ -157,11 +161,9 @@ ival_loop(int *sleep_time)
 				continue;
 			}
 
-			/* Log the mode here, but possibly just evict dirs anyway */
 			ic[idx].parent = inode->ie_parent;
 			strncpy(ic[idx].name, inode->ie_name, NAME_MAX + 1);
 			ic[idx].name[NAME_MAX] = '\0';
-			ic[idx].dir            = S_ISDIR(inode->ie_stat.st_mode);
 
 			d_list_del_init(&inode->ie_evict_entry);
 
@@ -183,8 +185,8 @@ out:
 	for (int i = 0; i < idx; i++) {
 		int rc;
 
-		DFUSE_TRA_DEBUG(&ival_data, "Evicting entry %#lx " DF_DE " dir:" DF_BOOL,
-				ic[i].parent, DP_DE(ic[i].name), DP_BOOL(ic[i].dir));
+		DFUSE_TRA_DEBUG(&ival_data, "Evicting entry %#lx " DF_DE, ic[i].parent,
+				DP_DE(ic[i].name));
 
 		rc = fuse_lowlevel_notify_inval_entry(ival_data.session, ic[i].parent, ic[i].name,
 						      strnlen(ic[i].name, NAME_MAX));
@@ -194,7 +196,7 @@ out:
 			ival_data.session_dead = true;
 	}
 
-	return true;
+	return (idx == EVICT_COUNT);
 }
 
 /* Main loop for eviction thread.  Spins until ready for exit waking after one second and iterates
@@ -246,6 +248,7 @@ ival_bucket_add(d_list_t *list, double timeout)
 	DFUSE_TRA_UP(dte, &ival_data, "time bucket");
 
 	dte->time = timeout;
+	dte->ref  = 1;
 	D_INIT_LIST_HEAD(&dte->inode_list);
 
 	d_list_add_tail(&dte->dte_list, list);
@@ -303,8 +306,6 @@ out:
 void
 ival_thread_stop()
 {
-	struct dfuse_time_entry *dte, *dtep;
-
 	ival_stop = true;
 	/* Stop and drain evict queues */
 	sem_post(&ival_sem);
@@ -312,6 +313,12 @@ ival_thread_stop()
 	if (ival_thread)
 		pthread_join(ival_thread, NULL);
 	ival_thread = 0;
+}
+
+void
+ival_fini()
+{
+	struct dfuse_time_entry *dte, *dtep;
 
 	/* Walk the list, oldest first */
 	d_list_for_each_entry_safe(dte, dtep, &ival_data.time_entry_list, dte_list) {
@@ -349,13 +356,17 @@ ival_update_inode(struct dfuse_inode_entry *inode, double timeout)
 	 * lower than we're looking for.
 	 */
 	d_list_for_each_entry(dte, &ival_data.time_entry_list, dte_list) {
+		/* If the entry is draining then do not add any new entries to it */
+		if (dte->ref == 0)
+			continue;
+
 		if (dte->time > timeout)
 			continue;
 
 		if (d_list_empty(&dte->inode_list))
 			wake = true;
 
-		DFUSE_TRA_DEBUG(inode, "timeout %lf wake:" DF_BOOL " %#lx " DF_DE, timeout,
+		DFUSE_TRA_DEBUG(inode, "timeout %.1lf wake:" DF_BOOL " %#lx " DF_DE, timeout,
 				DP_BOOL(wake), inode->ie_parent, DP_DE(inode->ie_name));
 
 		d_list_move_tail(&inode->ie_evict_entry, &dte->inode_list);
@@ -380,16 +391,16 @@ ival_bucket_add_value(double timeout)
 {
 	struct dfuse_time_entry *dte;
 	double                   lower = -1;
-	int                      rc    = 0;
+	int                      rc    = -DER_SUCCESS;
 
-	DFUSE_TRA_INFO(&ival_data, "Setting up timeout queue for %lf", timeout);
-
-	D_MUTEX_LOCK(&ival_lock);
+	DFUSE_TRA_DEBUG(&ival_data, "Setting up timeout queue for %.1lf", timeout);
 
 	/* Walk smallest to largest */
 	d_list_for_each_entry_reverse(dte, &ival_data.time_entry_list, dte_list) {
-		if (dte->time == timeout)
-			D_GOTO(out, rc = -DER_SUCCESS);
+		if (dte->time == timeout) {
+			dte->ref += 1;
+			goto out;
+		}
 		if (dte->time < timeout)
 			lower = dte->time;
 		if (dte->time > timeout)
@@ -410,21 +421,61 @@ ival_bucket_add_value(double timeout)
 	}
 
 out:
+	return rc;
+}
+
+static void
+ival_bucket_dec_value(double timeout)
+{
+	struct dfuse_time_entry *dte;
+
+	DFUSE_TRA_DEBUG(&ival_data, "Dropping ref for %.1lf", timeout);
+
+	d_list_for_each_entry(dte, &ival_data.time_entry_list, dte_list) {
+		if (dte->time == timeout) {
+			dte->ref--;
+			DFUSE_TRA_DEBUG(&ival_data, "Dropped ref on %.1lf to %d", timeout,
+					dte->ref);
+			return;
+		}
+	}
+
+	DFUSE_TRA_ERROR(&ival_data, "Unable to find ref for %.1lf", timeout);
+}
+
+/* Ensure the correct buckets exist for a attached container.  Pools have a zero dentry timeout
+ * so skip zero values
+ */
+int
+ival_add_cont_buckets(struct dfuse_cont *dfc)
+{
+	int rc;
+
+	D_MUTEX_LOCK(&ival_lock);
+
+	rc = ival_bucket_add_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
+	if (rc != 0)
+		goto out;
+	if (dfc->dfc_dentry_timeout != 0) {
+		rc = ival_bucket_add_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
+		if (rc != 0)
+			ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
+	}
+
+out:
 	D_MUTEX_UNLOCK(&ival_lock);
 
 	return rc;
 }
 
-/* Ensure the correct buckets exist for a attached container */
-int
-ival_add_cont_buckets(struct dfuse_cont *dfc)
+void
+ival_dec_cont_buckets(struct dfuse_cont *dfc)
 {
-	int rc, rc2;
-
-	rc  = ival_bucket_add_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
-	rc2 = ival_bucket_add_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
-
-	return rc ? rc : rc2;
+	D_MUTEX_LOCK(&ival_lock);
+	if (dfc->dfc_dentry_timeout != 0)
+		ival_bucket_dec_value(dfc->dfc_dentry_timeout + INVAL_FILE_GRACE);
+	ival_bucket_dec_value(dfc->dfc_dentry_dir_timeout + INVAL_DIRECTORY_GRACE);
+	D_MUTEX_UNLOCK(&ival_lock);
 }
 
 /* Called from ie_close() to remove inode from any possible list */
