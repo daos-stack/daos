@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -472,8 +472,9 @@ class Test(avocadoTest):
             header (bool, optional): whether to log a header line before the message. Defaults to
                 False.
         """
-        elapsed = time() - self._test_step_time
-        self._test_step_time = time()
+        now = time()
+        elapsed = now - self._test_step_time
+        self._test_step_time = now
 
         if header:
             self.log.info('-' * 80)

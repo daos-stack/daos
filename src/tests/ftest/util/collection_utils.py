@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -638,7 +638,7 @@ def create_steps_log(logger, job_results_dir, test_result):
         test_result (TestResult): the test result used to update the status of the test
 
     Returns:
-        _type_: _description_
+        int: status code: 8192 = problem creating steps.log; 0 = success
     """
     logger.debug("=" * 80)
     logger.info("Creating steps.log file")
@@ -647,15 +647,15 @@ def create_steps_log(logger, job_results_dir, test_result):
     test_logs_dir = os.path.realpath(test_logs_lnk)
     job_log = os.path.join(test_logs_dir, 'job.log')
     step_log = os.path.join(test_logs_dir, 'steps.log')
-    command = [
-        'grep', '-E', r"'INFO \| (==> Step|INIT|START|\*\*\* TEARDOWN|PASS|FAIL|ERROR)'", job_log,
-        '>', step_log]
+    command = rf"grep -E 'INFO \| (==> Step|INIT|START|\*\*\* TEARDOWN|PASS|FAIL|ERROR)' {job_log}"
     try:
-        run_local(logger, ' '.join(command))
-    except RunException:
+        result = run_local(logger, command)
+        with open(step_log, 'w', encoding="utf-8") as file:
+            file.write(result.stdout)
+    except Exception:   # pylint: disable=broad-except
         message = f"Error creating {step_log}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
-        return 1024
+        return 8192
     return 0
 
 
