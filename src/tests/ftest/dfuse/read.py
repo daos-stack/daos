@@ -51,7 +51,7 @@ class DFuseReadTest(DfuseTestBase):
 
         fuse_root_dir = self.dfuse.mount_dir.value
 
-        cmd = f"dd if=/dev/zero of={fuse_root_dir}/test_file count=10 bs=1"
+        cmd = f"dd if=/dev/zero of={fuse_root_dir}/test_file count=16 bs=1M"
 
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
@@ -62,13 +62,16 @@ class DFuseReadTest(DfuseTestBase):
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
-        cmd = f"dd if={fuse_root_dir}/test_file of=/dev/zero count=10 bs=1"
+        cmd = f"dd if={fuse_root_dir}/test_file of=/dev/zero count=16 bs=1M"
 
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
-        cmd = f"daos filesystem query {fuse_root_dir}"
+        cmd = f"daos filesystem query --json {fuse_root_dir}"
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+
+        print(result)
+        print(result.output)
