@@ -1,3 +1,10 @@
+daos (2.4.2-4) unstable; urgency=medium
+
+  [ Phillip Henderson ]
+  * Third release candidate for 2.4.2
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Mon, 4 Mar 2024 15:13:00 -0500
+
 daos (2.4.2-3) unstable; urgency=medium
 
   [ Phillip Henderson ]

@@ -7017,9 +7017,8 @@ dc_obj_query_key(tse_task_t *api_task)
 		/* Let's always remove the previous shard tasks for retry, since
 		 * the leader status might change.
 		 */
-		tse_task_list_traverse(head, shard_task_remove, NULL);
+		obj_io_set_new_shard_task(obj_auxi);
 		obj_auxi->args_initialized = 0;
-		obj_auxi->new_shard_tasks = 1;
 	}
 
 	D_ASSERT(!obj_auxi->args_initialized);
@@ -7126,7 +7125,6 @@ dc_obj_sync(tse_task_t *task)
 	uint32_t			shard_cnt;
 	uint32_t			grp_cnt;
 	int				 rc;
-	int				 i;
 
 	if (srv_io_mode != DIM_DTX_FULL_ENABLED)
 		D_GOTO(out_task, rc = 0);
@@ -7170,8 +7168,13 @@ dc_obj_sync(tse_task_t *task)
 		D_ASSERTF(*args->nr == obj->cob_grp_nr, "Invalid obj sync args %d/%d\n",
 			  *args->nr, obj->cob_grp_nr);
 
-		for (i = 0; i < *args->nr; i++)
-			*args->epochs_p[i] = 0;
+		if (obj_auxi->args_initialized) {
+			/* Remove previous shard tasks, since related leader(s) maybe changed. */
+			obj_io_set_new_shard_task(obj_auxi);
+			obj_auxi->args_initialized = 0;
+		}
+
+		memset(*args->epochs_p, 0, sizeof(daos_epoch_t) * *args->nr);
 	}
 
 	obj_auxi->to_leader = 1;
