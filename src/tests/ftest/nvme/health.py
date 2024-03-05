@@ -47,18 +47,8 @@ class NvmeHealth(ServerFillUp):
         potential_num_pools = int((nvme_per_engine / (min_nvme_per_target * targets_per_engine)))
         actual_num_pools = min(max_num_pools, potential_num_pools)
 
-        # consider 1GiB RDB memory consume for MD-on-SSD
-        rdb_size = 1073741824
-        control_metadata = self.server_managers[0].get_config_value("control_metadata")
-        if control_metadata is not None:
-            min_scm_per_pool = 104857600
-            potential_num_pools = int(scm_per_engine / (min_scm_per_pool + rbd_size))
-            actual_num_pools = min(potential_num_pools, actual_num_pools)
-
         # Split available space across the number of pools to be created
         scm_per_pool = int(scm_per_engine / actual_num_pools)
-        if control_metadata is not None:
-           scm_per_pool = int(scm_per_pool - rdb_size)
         nvme_per_pool = int(nvme_per_engine / actual_num_pools)
 
         # Create the pools
