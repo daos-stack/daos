@@ -5,6 +5,8 @@
 """
 
 
+import json
+
 from dfuse_test_base import DfuseTestBase
 from run_utils import run_remote
 
@@ -75,3 +77,6 @@ class DFuseReadTest(DfuseTestBase):
 
         print(result)
         print(result.output)
+
+        data = json.loads(result.output[0].stdout)
+        print(data)

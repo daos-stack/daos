@@ -99,9 +99,9 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	if (dfuse_info->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
-#if 1
+#ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
+	/* DAOS-15338 Not not let the kernel evict data on mtime changes */
 	conn->want |= FUSE_CAP_EXPLICIT_INVAL_DATA;
-
 	conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
 #endif
 
