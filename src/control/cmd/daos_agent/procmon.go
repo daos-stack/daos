@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -18,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
 const (
@@ -124,26 +124,24 @@ func (p *procInfo) String() string {
 // monitor and disconnect processes. Once created it is started by passing a
 // context into the startMonitoring call.
 type procMon struct {
-	log          logging.Logger
-	procs        map[int32]*procInfo
-	request      chan *procMonRequest
-	response     chan *procMonResponse
-	ctlInvoker   control.Invoker
-	systemName   string
-	cleanOnStart bool
+	log        logging.Logger
+	procs      map[int32]*procInfo
+	request    chan *procMonRequest
+	response   chan *procMonResponse
+	ctlInvoker control.Invoker
+	systemName string
 }
 
 // NewProcMon creates a new process monitor struct setting initializing the
 // internal process map and the request channel.
-func NewProcMon(logger logging.Logger, ctlInvoker control.Invoker, systemName string, cleanOnStart bool) *procMon {
+func NewProcMon(logger logging.Logger, ctlInvoker control.Invoker, systemName string) *procMon {
 	return &procMon{
-		log:          logger,
-		procs:        make(map[int32]*procInfo),
-		request:      make(chan *procMonRequest),
-		response:     make(chan *procMonResponse),
-		ctlInvoker:   ctlInvoker,
-		systemName:   systemName,
-		cleanOnStart: cleanOnStart,
+		log:        logger,
+		procs:      make(map[int32]*procInfo),
+		request:    make(chan *procMonRequest),
+		response:   make(chan *procMonResponse),
+		ctlInvoker: ctlInvoker,
+		systemName: systemName,
 	}
 }
 
@@ -344,8 +342,8 @@ func (p *procMon) handleRequests(ctx context.Context) {
 
 // startMonitoring is the main driver which starts the process monitor. The
 // passed in context is used to terminate all monitoring in the event of shutdown.
-func (p *procMon) startMonitoring(ctx context.Context) {
-	if p.cleanOnStart {
+func (p *procMon) startMonitoring(ctx context.Context, cleanOnStart bool) {
+	if cleanOnStart {
 		p.cleanupServerHandles(ctx)
 	}
 	go p.handleRequests(ctx)
@@ -354,13 +352,11 @@ func (p *procMon) startMonitoring(ctx context.Context) {
 // cleanupServerHandles can be run to revoke all pool handles associated with a given machine/host.
 // DAOS server will be instructed to cleanup handles associated with the source machine/host.
 func (p *procMon) cleanupServerHandles(ctx context.Context) {
-	hostName, err := os.Hostname()
+	machineName, err := auth.GetMachineName()
 	if err != nil {
 		p.log.Errorf("hostname lookup: %s, cannot cleanup handles", err)
 		return
 	}
-	// Strip the domain off of the Hostname
-	machineName := strings.Split(hostName, ".")[0]
 	if machineName == "" {
 		p.log.Errorf("empty machine name is invalid, cannot cleanup handles", err)
 		return
@@ -383,7 +379,7 @@ func (p *procMon) cleanupServerHandles(ctx context.Context) {
 
 	msg = fmt.Sprintf("Running system cleanup on this %s", msg)
 	if len(resp.Results) == 0 {
-		p.log.Infof("%s: no pool handles revoked", msg)
+		p.log.Debugf("%s: no pool handles revoked", msg)
 		return
 	}
 	msgRvkd := ""

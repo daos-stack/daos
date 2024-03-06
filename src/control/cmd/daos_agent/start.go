@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -94,9 +94,8 @@ func (cmd *startCmd) Execute(_ []string) error {
 	cmd.Debugf("created cache: %s", time.Since(cacheStart))
 
 	procmonStart := time.Now()
-	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName,
-		cmd.cfg.CleanHandlesOnStart)
-	procmon.startMonitoring(ctx)
+	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
+	procmon.startMonitoring(ctx, cmd.cfg.CleanHandlesOnStart)
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 
 	drpcRegStart := time.Now()

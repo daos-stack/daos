@@ -68,10 +68,9 @@
 ## default: false
 #disable_auto_evict: true
 
-## Enable automatic eviction of open pool handles on agent startup. If enabled (disabled by
-## default), the agent will evict all open pool handles associated with the machine/host name
-## on agent start. This aims to garbage collect any handles not evicted after an agent or host
-## crash.
+## If enable, the agent will evict any open pool handles associated with this machine on agent
+## startup. This allows the servers to reclaim resources that may not have been properly cleaned
+## up in the event of an agent or machine crash.
 ## default: false
 #clean_handles_on_start: true
 

@@ -146,6 +146,16 @@ func sysNameToPrincipalName(name string) string {
 	return name + "@"
 }
 
+func GetMachineName() (string, error) {
+	name, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+
+	// Strip the domain off of the Hostname
+	return strings.Split(name, ".")[0], nil
+}
+
 // AuthSysRequestFromCreds takes the domain info credentials gathered
 // during the dRPC request and creates an AuthSys security request to obtain
 // a handle from the management service.
@@ -172,13 +182,10 @@ func AuthSysRequestFromCreds(ext UserExt, creds *security.DomainInfo, signing cr
 			userInfo.Username())
 	}
 
-	name, err := os.Hostname()
+	host, err := GetMachineName()
 	if err != nil {
-		name = "unavailable"
+		host = "unavailable"
 	}
-
-	// Strip the domain off of the Hostname
-	host := strings.Split(name, ".")[0]
 
 	var groupList = []string{}
 
