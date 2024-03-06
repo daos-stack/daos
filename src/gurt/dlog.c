@@ -106,7 +106,7 @@ static const char        *default_fac0name = "CLOG";
 /* whether we should merge log and stderr */
 static bool               merge_stderr;
 
-#define clog_lock()   pthread_mutex_lock(&clogmux)
+#define clog_lock()   (void)pthread_mutex_lock(&clogmux)
 #define clog_unlock() (void)pthread_mutex_unlock(&clogmux)
 
 static int d_log_write(char *buf, int len, bool flush);
