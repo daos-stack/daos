@@ -12,6 +12,7 @@
 #define D_LOGFAC	DD_FAC(container)
 
 #include <daos_srv/daos_engine.h>
+#include <daos/metrics.h>
 #include <daos/rpc.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -138,7 +139,7 @@ struct dss_module_key cont_module_key = {
 	.dmk_fini = dsm_tls_fini,
 };
 
-struct dss_module_metrics cont_metrics = {
+struct daos_module_metrics cont_metrics = {
 	.dmm_tags = DAOS_SYS_TAG,
 	.dmm_init = ds_cont_metrics_alloc,
 	.dmm_fini = ds_cont_metrics_free,
