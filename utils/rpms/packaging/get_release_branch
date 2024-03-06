@@ -2,7 +2,7 @@
 
 # find the base branch of the current branch
 
-set -eux -o pipefail
+set -eu -o pipefail
 IFS=' ' read -r -a add_bases <<< "${1:-}"
 origin=origin
 mapfile -t all_bases < <(echo "master"
