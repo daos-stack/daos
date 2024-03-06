@@ -42,18 +42,18 @@ type (
 
 	// DIMM struct represents a PMem AppDirect region.
 	DIMM struct {
-		XMLName          xml.Name    `xml:"Dimm"`
-		ID               hexShort    `xml:"DimmID"`
-		Capacity         stringSize  `xml:"Capacity"`
-		HealthState      stringPlain `xml:"HealthState"`
-		FirmwareRevision stringPlain `xml:"FWVersion"`
-		PhysicalID       hexShort    `xml"PhysicalID"`
-		UID              stringPlain `xml:"DimmUID"`
-		SocketID         hexShort    `xml:"SocketID"`
-		ControllerID     hexShort    `xml:"MemControllerID"`
-		ChannelID        hexShort    `xml:"ChannelID"`
-		ChannelPosition  uint32      `xml:"ChannelPos"`
-		PartNumber       stringPlain `xml:PartNumber"`
+		XMLName          xml.Name    `xml:"Dimm",json:"-"`
+		ID               hexShort    `xml:"DimmID",json:"dimm_id"`
+		Capacity         stringSize  `xml:"Capacity",json:"capacity"`
+		HealthState      stringPlain `xml:"HealthState",json:"health_state"`
+		FirmwareRevision stringPlain `xml:"FWVersion",json:"fw_version"`
+		PhysicalID       hexShort    `xml:"PhysicalID",json:"physical_id"`
+		UID              stringPlain `xml:"DimmUID",json:"dimm_uid"`
+		SocketID         hexShort    `xml:"SocketID",json:"socket_id"`
+		ControllerID     hexShort    `xml:"MemControllerID",json:"mem_controller_id"`
+		ChannelID        hexShort    `xml:"ChannelID",json:"channel_id"`
+		ChannelPosition  uint32      `xml:"ChannelPos",json:"channel_pos"`
+		PartNumber       stringPlain `xml:"PartNumber",json:"part_number"`
 	}
 )
 
