@@ -551,7 +551,14 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 			finished.Add(ranklist.Rank(rr.Rank))
 		}
 
-		svc.log.Infof("%s: finished: %s; waiting: %s", funcName(req.Method), finished, waiting)
+		msg := fmt.Sprintf("%s: ", funcName(req.Method))
+		if finished.Count() != 0 {
+			msg = fmt.Sprintf(" finished: %q", finished)
+		}
+		if waiting.Count() != 0 {
+			msg = fmt.Sprintf(" waiting: %q", waiting)
+		}
+		svc.log.Infof(msg)
 	})
 
 	// Not strictly necessary but helps with debugging.
