@@ -111,7 +111,7 @@ static bool               merge_stderr;
 
 #ifdef DLOG_MUTEX
 #define clog_lock()   D_MUTEX_LOCK(&mst.clogmux)
-#define clog_unlock() D_MUTEX_UNLOCK(&mst.clogmux)
+#define clog_unlock() (void)D_MUTEX_UNLOCK(&mst.clogmux)
 #else
 #define clog_lock()
 #define clog_unlock()
