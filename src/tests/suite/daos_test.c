@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -315,21 +315,22 @@ run_specified_tests(const char *tests, int rank, int size,
 int
 main(int argc, char **argv)
 {
-	test_arg_t	*arg;
-	char		 tests[64];
-	char		*sub_tests_str = NULL;
-	char		*exclude_str = NULL;
-	int		 sub_tests[1024];
-	int		 sub_tests_idx = 0;
-	int		 ntests = 0;
-	int		 nr_failed = 0;
-	int		 nr_total_failed = 0;
-	int		 opt = 0, index = 0;
-	int		 rank;
-	int		 size;
-	int		 rc;
+	test_arg_t *arg;
+	char        tests[64];
+	char       *sub_tests_str         = NULL;
+	char       *exclude_str           = NULL;
+	char       *cmocka_message_output = NULL;
+	int         sub_tests[1024];
+	int         sub_tests_idx   = 0;
+	int         ntests          = 0;
+	int         nr_failed       = 0;
+	int         nr_total_failed = 0;
+	int         opt = 0, index = 0;
+	int         rank;
+	int         size;
+	int         rc;
 #if CMOCKA_FILTER_SUPPORTED == 1 /** for cmocka filter(requires cmocka 1.1.5) */
-	char		 filter[1024];
+	char filter[1024];
 #endif
 
 	d_register_alt_assert(mock_assert);
@@ -548,6 +549,18 @@ main(int argc, char **argv)
 		}
 		tests[new_idx]='\0';
 	}
+
+	/** if writing XML, force all ranks other than rank 0 to use stdout to avoid conflicts */
+	d_agetenv_str(&cmocka_message_output, "CMOCKA_MESSAGE_OUTPUT");
+	if (rank != 0 && cmocka_message_output && strcasecmp(cmocka_message_output, "xml") == 0) {
+		d_freeenv_str(&cmocka_message_output);
+		rc = d_setenv("CMOCKA_MESSAGE_OUTPUT", "stdout", 1);
+		if (rc) {
+			print_message("d_setenv() failed with %d\n", rc);
+			return -1;
+		}
+	}
+	d_freeenv_str(&cmocka_message_output);
 
 	nr_failed = run_specified_tests(tests, rank, size,
 					sub_tests_idx > 0 ? sub_tests : NULL,
