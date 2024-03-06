@@ -94,7 +94,8 @@ func (cmd *startCmd) Execute(_ []string) error {
 	cmd.Debugf("created cache: %s", time.Since(cacheStart))
 
 	procmonStart := time.Now()
-	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
+	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName,
+		cmd.cfg.CleanHandlesOnStart)
 	procmon.startMonitoring(ctx)
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 

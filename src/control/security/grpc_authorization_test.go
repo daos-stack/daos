@@ -95,7 +95,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/mgmt.MgmtSvc/ListPools":              {ComponentAdmin},
 		"/mgmt.MgmtSvc/ListContainers":         {ComponentAdmin},
 		"/mgmt.MgmtSvc/ContSetOwner":           {ComponentAdmin},
-		"/mgmt.MgmtSvc/SystemCleanup":          {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemCleanup":          {ComponentAdmin, ComponentAgent},
 		"/mgmt.MgmtSvc/PoolUpgrade":            {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemSetAttr":          {ComponentAdmin},
 		"/mgmt.MgmtSvc/SystemGetAttr":          {ComponentAdmin},

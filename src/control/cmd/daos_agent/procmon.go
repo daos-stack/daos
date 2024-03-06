@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -123,24 +124,26 @@ func (p *procInfo) String() string {
 // monitor and disconnect processes. Once created it is started by passing a
 // context into the startMonitoring call.
 type procMon struct {
-	log        logging.Logger
-	procs      map[int32]*procInfo
-	request    chan *procMonRequest
-	response   chan *procMonResponse
-	ctlInvoker control.Invoker
-	systemName string
+	log          logging.Logger
+	procs        map[int32]*procInfo
+	request      chan *procMonRequest
+	response     chan *procMonResponse
+	ctlInvoker   control.Invoker
+	systemName   string
+	cleanOnStart bool
 }
 
 // NewProcMon creates a new process monitor struct setting initializing the
 // internal process map and the request channel.
-func NewProcMon(logger logging.Logger, ctlInvoker control.Invoker, systemName string) *procMon {
+func NewProcMon(logger logging.Logger, ctlInvoker control.Invoker, systemName string, cleanOnStart bool) *procMon {
 	return &procMon{
-		log:        logger,
-		procs:      make(map[int32]*procInfo),
-		request:    make(chan *procMonRequest),
-		response:   make(chan *procMonResponse),
-		ctlInvoker: ctlInvoker,
-		systemName: systemName,
+		log:          logger,
+		procs:        make(map[int32]*procInfo),
+		request:      make(chan *procMonRequest),
+		response:     make(chan *procMonResponse),
+		ctlInvoker:   ctlInvoker,
+		systemName:   systemName,
+		cleanOnStart: cleanOnStart,
 	}
 }
 
@@ -342,5 +345,53 @@ func (p *procMon) handleRequests(ctx context.Context) {
 // startMonitoring is the main driver which starts the process monitor. The
 // passed in context is used to terminate all monitoring in the event of shutdown.
 func (p *procMon) startMonitoring(ctx context.Context) {
+	if p.cleanOnStart {
+		p.cleanupServerHandles(ctx)
+	}
 	go p.handleRequests(ctx)
+}
+
+// cleanupServerHandles can be run to revoke all pool handles associated with a given machine/host.
+// DAOS server will be instructed to cleanup handles associated with the source machine/host.
+func (p *procMon) cleanupServerHandles(ctx context.Context) {
+	hostName, err := os.Hostname()
+	if err != nil {
+		p.log.Errorf("hostname lookup: %s, cannot cleanup handles", err)
+		return
+	}
+	// Strip the domain off of the Hostname
+	machineName := strings.Split(hostName, ".")[0]
+	if machineName == "" {
+		p.log.Errorf("empty machine name is invalid, cannot cleanup handles", err)
+		return
+	}
+
+	req := &control.SystemCleanupReq{Machine: machineName}
+	req.SetSystem(p.systemName)
+
+	msg := fmt.Sprintf("machine %q", machineName)
+	resp, err := control.SystemCleanup(ctx, p.ctlInvoker, req)
+	if err != nil {
+		p.log.Errorf("%s: failed to run system cleanup: %s", msg, err)
+		return
+	}
+	err = resp.Errors()
+	if err != nil {
+		p.log.Errorf("%s: system cleanup ran with error: %s", msg, err)
+		return
+	}
+
+	msg = fmt.Sprintf("Running system cleanup on this %s", msg)
+	if len(resp.Results) == 0 {
+		p.log.Infof("%s: no pool handles revoked", msg)
+		return
+	}
+	msgRvkd := ""
+	for i, r := range resp.Results {
+		msgRvkd = fmt.Sprintf("%s%d handles revoked for pool %q", msgRvkd, r.Count, r.PoolID)
+		if i != len(resp.Results)-1 {
+			msgRvkd += ", "
+		}
+	}
+	p.log.Infof("%s: %s", msg, msgRvkd)
 }
