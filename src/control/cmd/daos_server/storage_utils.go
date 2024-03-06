@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -113,7 +113,7 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 	}
 }
 
-func getAffinitySource(log logging.Logger, cfg *config.Server) (config.EngineAffinityFn, error) {
+func getAffinitySource(ctx context.Context, log logging.Logger, cfg *config.Server) (config.EngineAffinityFn, error) {
 	scanner := hwprov.DefaultFabricScanner(log)
 
 	provs, err := cfg.Fabric.GetProviders()
@@ -121,7 +121,7 @@ func getAffinitySource(log logging.Logger, cfg *config.Server) (config.EngineAff
 		return nil, errors.Wrap(err, "getting configured providers")
 	}
 
-	fiSet, err := scanner.Scan(context.Background(), provs...)
+	fiSet, err := scanner.Scan(ctx, provs...)
 	if err != nil {
 		return nil, errors.Wrap(err, "scan fabric")
 	}
@@ -174,7 +174,7 @@ func getSockFromCfg(log logging.Logger, cfg *config.Server, affSrc config.Engine
 	return nil
 }
 
-func (cmd *scmCmd) init() error {
+func (cmd *scmCmd) init(ctx context.Context) error {
 	if err := common.CheckDupeProcess(); err != nil {
 		return err
 	}
@@ -185,7 +185,7 @@ func (cmd *scmCmd) init() error {
 		cmd.config = nil
 	} else if cmd.SocketID == nil {
 		// Read SocketID from config if not set explicitly in command.
-		affSrc, err := getAffinitySource(cmd.Logger, cmd.config)
+		affSrc, err := getAffinitySource(ctx, cmd.Logger, cmd.config)
 		if err != nil {
 			cmd.Error(err.Error())
 			return nil

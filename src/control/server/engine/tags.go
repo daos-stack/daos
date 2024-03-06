@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -212,7 +212,7 @@ func parseCmdTags(in interface{}, tagFilter string, joiner joinFn, seenRefs refM
 func getSliceStr(val reflect.Value) string {
 	iVal := val.Interface()
 
-	strSlice := make([]string, 0)
+	var strSlice []string
 	switch slice := iVal.(type) {
 	case []int:
 		for _, n := range slice {

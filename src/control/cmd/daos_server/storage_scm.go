@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -113,7 +114,7 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 }
 
 func (cmd *prepareSCMCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
+	if err := cmd.init(context.Background()); err != nil {
 		return err
 	}
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
@@ -183,7 +184,7 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 }
 
 func (cmd *resetSCMCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
+	if err := cmd.init(context.Background()); err != nil {
 		return err
 	}
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
@@ -214,7 +215,7 @@ func (cmd *scanSCMCmd) scanPMem(scanBackend scmScanFn) (*storage.ScmScanResponse
 }
 
 func (cmd *scanSCMCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
+	if err := cmd.init(context.Background()); err != nil {
 		return err
 	}
 
