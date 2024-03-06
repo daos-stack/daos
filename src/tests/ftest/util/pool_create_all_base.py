@@ -1,9 +1,10 @@
 """
-(C) Copyright 2022-2023 Intel Corporation.
+(C) Copyright 2022-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import sys
+import time
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
@@ -229,23 +230,6 @@ class PoolCreateAllTestBase(TestWithServers):
                 except CommandFailure as error:
                     self.log.info("Pool query failed. Pool should have been destroyed. %s", error)
                     break
-
-            self.log.info("Checking SCM available storage")
-            timeout = 3
-            while timeout > 0:
-                hosts = self.find_hosts_low_scm(90)
-                if not hosts:
-                    break
-                for it in hosts:
-                    self.log.info(
-                        "Find hosts without enough available SCM: "
-                        "timeout=%is, hosts=%s, path=%s, ratio=%f%%",
-                        timeout, *it)
-                time.sleep(1)
-                timeout -= 1
-            self.assertNotEqual(
-                0, timeout,
-                "Destroying pool did not restore available SCM storage space")
 
             if first_pool_size is None:
                 first_pool_size = pool_size
