@@ -618,7 +618,7 @@ class TestWithServers(TestWithoutServers):
 
         # Add additional time to the test timeout for reporting running
         # processes while stopping the daos_agent and daos_server.
-        tear_down_timeout = 30
+        tear_down_timeout = 90
         self.timeout += tear_down_timeout
         self.log.info(
             "Increasing timeout by %s seconds for agent/server tear down: %s",
