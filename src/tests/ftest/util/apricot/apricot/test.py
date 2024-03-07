@@ -371,23 +371,20 @@ class Test(avocadoTest):
             self.get_state()
             if self.timeout is None:
                 # self.timeout is not set - this is a problem
-                self.log.error("*** TEARDOWN called with UNKNOWN timeout ***")
+                self.log_step("tearDown(): Called with UNKNOWN timeout")
                 self.log.error("self.timeout undefined - please investigate!")
             elif self.time_elapsed > self.timeout:
                 # Timeout has expired
-                self.log.info(
-                    "*** TEARDOWN called due to TIMEOUT: "
-                    "%s second timeout exceeded ***", str(self.timeout))
+                self.log_step(
+                    f"tearDown(): Called due to exceeding the {str(self.timeout)}s test timeout")
                 self.log.info("test execution has been terminated by avocado")
             else:
                 # Normal operation
-                remaining = str(self.timeout - self.time_elapsed)
-                self.log.info(
-                    "*** TEARDOWN called after test completion: elapsed time: "
-                    "%s seconds ***", str(self.time_elapsed))
-                self.log.info(
-                    "Amount of time left in test timeout: %s seconds",
-                    remaining)
+                remaining = self.timeout - self.time_elapsed
+                timeout_info = (
+                    f"test timeout: {str(self.timeout)}s, elapsed: {self.time_elapsed:.02f}s, "
+                    f"remaining: {remaining:.02f}s")
+                self.log_step(f"tearDown(): Called after test completion ({timeout_info})")
 
         # Disable reporting the timeout upon subsequent inherited calls
         self._timeout_reported = True
@@ -478,7 +475,8 @@ class Test(avocadoTest):
 
         if header:
             self.log.info('-' * 80)
-        self.log.info("==> Step %s: %s [elapsed: %.02fs]", self._test_step, message, elapsed)
+        self.log.info(
+            "==> Step %s: %s [elapsed since last step: %.02fs]", self._test_step, message, elapsed)
         self._test_step += 1
 
     def tearDown(self):
