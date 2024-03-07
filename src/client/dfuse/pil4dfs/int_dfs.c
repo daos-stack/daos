@@ -5961,7 +5961,6 @@ init_myhook(void)
 	char    *env_log;
 	int      rc;
 	uint64_t eq_count_loc = 0;
-	char     buf_max_eq[16];
 
 	umask_old = umask(0);
 	umask(umask_old);
@@ -6030,8 +6029,6 @@ init_myhook(void)
 		eq_count_max = (uint16_t)eq_count_loc;
 	} else {
 		eq_count_max = MAX_EQ;
-		snprintf(buf_max_eq, sizeof(buf_max_eq), "%d", MAX_EQ);
-		d_setenv("D_IL_MAX_EQ", buf_max_eq, 1);
 	}
 
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
