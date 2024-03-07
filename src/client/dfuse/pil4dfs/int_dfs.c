@@ -3460,7 +3460,7 @@ pre_envp(char *const envp[], char ***new_envp)
 		return 0;
 
 	/* the new envp holds the existing envs & the envs forced to append plus NULL at the end */
-	*new_envp = malloc(sizeof(char *) * (num_entry + num_env_append + 1));
+	*new_envp = calloc(num_entry + num_env_append + 1, sizeof(char *));
 	if (*new_envp == NULL) {
 		rc = ENOMEM;
 		goto err_out0;
@@ -3531,9 +3531,6 @@ pre_envp(char *const envp[], char ***new_envp)
 			d_freeenv_str(&env_value);
 		}
 	}
-
-	/* append NULL pointer to the end of new_envp */
-	(*new_envp)[i] = NULL;
 
 	return 0;
 
@@ -5984,13 +5981,9 @@ init_myhook(void)
 		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
 			report = false;
 		d_freeenv_str(&env_log);
-	} else if (rc == -DER_NONEXIST) {
-		d_setenv("D_IL_REPORT", "0", 1);
 	}
 	enforce_exec_env = false;
-	rc = d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
-	if (rc == -DER_NONEXIST)
-		d_setenv("D_IL_ENFORCE_EXEC_ENV", "0", 1);
+	d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
 
 	/* Find dfuse mounts from /proc/mounts */
 	rc = discover_dfuse_mounts();
