@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -93,10 +93,14 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
 		}
 
-		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
-			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
-			// disable output on stdout other than JSON
-			log.ClearLevel(logging.LogLevelInfo)
+		if opts.JSON {
+			if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok {
+				jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
+				// disable output on stdout other than JSON
+				log.ClearLevel(logging.LogLevelInfo)
+			} else {
+				return errors.New("subcommand does not support JSON output")
+			}
 		}
 
 		switch cmd.(type) {
