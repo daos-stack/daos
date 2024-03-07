@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -1091,7 +1091,7 @@ func genEngineConfigs(req ConfGenerateReq, newEngineCfg newEngineCfgFn, nodeSet 
 		cfg.Fabric = engine.FabricConfig{
 			Provider:      iface.Provider,
 			Interface:     iface.Device,
-			InterfacePort: fmt.Sprintf("%d", ifPort),
+			InterfacePort: ifPort,
 		}
 		if err := cfg.SetNUMAAffinity(pnn); err != nil {
 			return nil, errors.Wrapf(err, "setting numa %d affinity on engine config",

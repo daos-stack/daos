@@ -354,7 +354,7 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 				Fabric: engine.FabricConfig{
 					Provider:              "provider",
 					Interface:             "iface",
-					InterfacePort:         "1111",
+					InterfacePort:         1111,
 					NumSecondaryEndpoints: []int{2, 3, 4},
 				},
 			},
@@ -368,7 +368,7 @@ func TestServerConfig_updateServerConfig(t *testing.T) {
 				Fabric: engine.FabricConfig{
 					Provider:              "provider",
 					Interface:             "iface",
-					InterfacePort:         "1111",
+					InterfacePort:         1111,
 					NumSecondaryEndpoints: []int{2, 3, 4},
 				},
 			},
