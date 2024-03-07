@@ -175,7 +175,7 @@ def write_data(test, container, namespace='/run/ior_write/*', **ior_run_params):
     if 'processes' not in ior_run_params:
         ior_run_params['processes'] = test.params.get('processes', namespace, None)
     elif 'ppn' not in ior_run_params:
-        ior_run_params['ppn'] = test.params.get('ppn', namespace, 1)
+        ior_run_params['ppn'] = test.params.get('ppn', namespace, None)
 
     ior.run(test.server_group, container.pool, container, **ior_run_params)
     return ior

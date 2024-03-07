@@ -1160,7 +1160,7 @@ class MetricData():
         return info
 
     def _get_data(self, names, info):
-        """Set the telemetry metric data values.
+        """Get the telemetry metric data values.
 
         Values are stored per metric name with common label information (e.g. rank, target, pool,
         etc.) stored as NodeSets.
