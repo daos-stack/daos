@@ -1,8 +1,14 @@
-daos (2.5.100-16) unstable; urgency=medium
+daos (2.5.100-17) unstable; urgency=medium
   [ Jan Michalski ]
   * Add dtx_tests to the server-tests package
 
- -- Jan Michalski <jan.michalski@intel.com>  Tue, 27 Feb 2024 08:34:00 +0000
+ -- Jan Michalski <jan.michalski@intel.com>  Thu, 07 Mar 2024 14:08:00 +0000
+
+daos (2.5.100-16) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.11.0-1416.g12dbc15
+
+ -- Li Wei <wei.g.li@intel.com>  Tue, 27 Feb 2024 11:13:00 +0900
 
 daos (2.5.100-15) unstable; urgency=medium
   [ Ryon Jensen ]
