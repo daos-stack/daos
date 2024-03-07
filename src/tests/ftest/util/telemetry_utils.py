@@ -668,22 +668,6 @@ class TelemetryUtils():
         self.hosts = NodeSet.fromlist(servers)
         self._data = MetricData()
 
-    @property
-    def data(self):
-        """Get the collected telemetry metric data.
-
-        Returns:
-            dict: dictionary of metric values keyed by the metric name and combination of metric
-                labels and values, e.g.
-                    <metric_name>: {
-                        <label_1:label_1_value,label_2:label_2_value,...>: <value_1>,
-                        <label_1:label_1_value,label_2:label_2_value,...>: <value_2>,
-                        ...
-                    },
-                    ...
-        """
-        return self._data.data
-
     def get_all_server_metrics_names(self, server, with_pools=False):
         """Get all the telemetry metrics names for this server.
 
@@ -754,8 +738,18 @@ class TelemetryUtils():
 
         Args:
             names (list): list of metric names
+
+        Returns:
+            dict: dictionary of metric values keyed by the metric name and combination of metric
+                labels and values, e.g.
+                    <metric_name>: {
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_1>,
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_2>,
+                        ...
+                    },
+                    ...
         """
-        self._data.collect(self.log, names, self.hosts, self.dmg)
+        return self._data.collect(self.log, names, self.hosts, self.dmg)
 
     def display_data(self):
         """Display the telemetry metric values."""
@@ -1065,9 +1059,14 @@ class MetricData():
         self._data = {}
         self._display = {'data': {}, 'labels': set(), 'widths': {}}
 
-    @property
-    def data(self):
-        """Get the collected telemetry metric data.
+    def collect(self, log, names, hosts, dmg):
+        """Collect telemetry data for the specified metrics.
+
+        Args:
+            log (logger): logger for the messages produced by this method
+            names (list): list of metric names
+            hosts (NodeSet): set of servers from which to collect the telemetry metrics
+            dmg (DmgCommand): the DmgCommand object configured to communicate with the servers
 
         Returns:
             dict: dictionary of metric values keyed by the metric name and combination of metric
@@ -1079,19 +1078,9 @@ class MetricData():
                     },
                     ...
         """
-        return copy.deepcopy(self._data)
-
-    def collect(self, log, names, hosts, dmg):
-        """Collect telemetry data for the specified metrics.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-            names (list): list of metric names
-            hosts (NodeSet): set of servers from which to collect the telemetry metrics
-            dmg (DmgCommand): the DmgCommand object configured to communicate with the servers
-        """
         info = self._get_metrics(log, ','.join(names), hosts, dmg)
         self._data = self._get_data(names, info)
+        return copy.deepcopy(self._data)
 
     def display(self, log):
         """Display the telemetry metric values.
