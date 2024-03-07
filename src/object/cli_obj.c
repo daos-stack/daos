@@ -5611,7 +5611,7 @@ dc_obj_fetch_task(tse_task_t *task)
 
 	rc = obj_csum_fetch(obj, args, obj_auxi);
 	if (rc != 0) {
-		D_ERROR("obj_csum_fetch error: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("obj_csum_fetch error "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_task, rc);
 	}
 
