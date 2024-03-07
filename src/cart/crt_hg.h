@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -178,7 +178,6 @@ crt_provider_get_na_config(bool primary, crt_provider_t provider);
 static inline int
 crt_hgret_2_der(int hg_ret)
 {
-	/* Note: DAOS will only consider DER_HG and DER_CANCELED as retryable */
 	switch (hg_ret) {
 	case HG_SUCCESS:
 		return 0;
@@ -196,11 +195,11 @@ crt_hgret_2_der(int hg_ret)
 	case HG_BUSY:
 		return -DER_BUSY;
 	case HG_FAULT:
+	case HG_PROTOCOL_ERROR:
 		return -DER_HG_FATAL;
 	case HG_PERMISSION:
 	case HG_ACCESS:
 		return -DER_NO_PERM;
-	case HG_PROTOCOL_ERROR:
 	default:
 		return -DER_HG;
 	};

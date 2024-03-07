@@ -113,22 +113,23 @@ struct obj_bulk_args {
 };
 
 struct obj_tgt_query_args {
-	struct obj_io_context	*ioc;
-	struct dtx_handle	*dth;
-	daos_key_t		*in_dkey;
-	daos_key_t		*in_akey;
-	daos_key_t		*out_dkey;
-	daos_key_t		*out_akey;
-	daos_key_t		 dkey_copy;
-	daos_key_t		 akey_copy;
-	daos_recx_t		 recx;
-	daos_epoch_t		 max_epoch;
-	int			 result;
-	uint32_t		 shard;
-	uint32_t		 version;
-	uint32_t		 completed:1,
-				 need_copy:1,
-				 keys_copied:1;
+	struct obj_io_context	*otqa_ioc;
+	struct dtx_handle	*otqa_dth;
+	daos_key_t		*otqa_in_dkey;
+	daos_key_t		*otqa_in_akey;
+	daos_key_t		*otqa_out_dkey;
+	daos_key_t		*otqa_out_akey;
+	daos_key_t		 otqa_dkey_copy;
+	daos_key_t		 otqa_akey_copy;
+	daos_recx_t		 otqa_recx;
+	daos_epoch_t		 otqa_max_epoch;
+	int			 otqa_result;
+	uint32_t		 otqa_shard;
+	uint32_t		 otqa_version;
+	uint32_t		 otqa_completed:1,
+				 otqa_need_copy:1,
+				 otqa_raw_recx:1,
+				 otqa_keys_allocated:1;
 };
 
 struct obj_tgt_punch_args {
@@ -578,9 +579,9 @@ obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
 static inline void
 obj_tgt_query_cleanup(struct obj_tgt_query_args *otqa)
 {
-	if (otqa->need_copy) {
-		daos_iov_free(&otqa->dkey_copy);
-		daos_iov_free(&otqa->akey_copy);
+	if (otqa->otqa_need_copy) {
+		daos_iov_free(&otqa->otqa_dkey_copy);
+		daos_iov_free(&otqa->otqa_akey_copy);
 	}
 }
 

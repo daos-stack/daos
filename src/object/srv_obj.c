@@ -2283,7 +2283,8 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 }
 
 static int
-obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
+obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
+		      uint32_t rpc_map_ver, uint32_t flags)
 {
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
 		if (child->sc_ec_agg_active) {
@@ -2295,6 +2296,19 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 
 	if (!obj_is_modification_opc(opc))
 		return 0;
+
+	if (child->sc_pool->spc_pool->sp_rebuilding) {
+		uint32_t version;
+
+		ds_rebuild_running_query(child->sc_pool_uuid, RB_OP_REBUILD,
+					 &version, NULL, NULL);
+		if (version != 0 && version < rpc_map_ver) {
+			D_DEBUG(DB_IO, DF_UUID" retry rpc ver %u > rebuilding %u\n",
+				DP_UUID(child->sc_pool_uuid), rpc_map_ver,
+			        version);
+			return -DER_UPDATE_AGAIN;
+		}
+	}
 
 	/* If the incoming I/O is during integration, then it needs to wait the
 	 * vos discard to finish, which otherwise might discard these new in-flight
@@ -2344,7 +2358,7 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rc != 0)
 		goto failed;
 
-	rc = obj_inflight_io_check(ioc->ioc_coc, opc, flags);
+	rc = obj_inflight_io_check(ioc->ioc_coc, opc, rpc_map_ver, flags);
 	if (rc != 0)
 		goto failed;
 
@@ -3962,14 +3976,13 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 	uint64_t			 stripe_size = 0;
 	daos_epoch_t			 max_epoch = 0;
 	daos_recx_t			 recx = { 0 };
-	int				 allow_failure = -DER_NONEXIST;
 	int				 allow_failure_cnt;
 	int				 succeeds;
 	int				 rc = 0;
 	int				 i;
 
 	if (count > 1)
-		D_ASSERT(otqa->need_copy);
+		D_ASSERT(otqa->otqa_need_copy);
 
 	if (daos_oclass_is_ec(&ioc->ioc_oca) && api_flags & DAOS_GET_RECX) {
 		query_flags |= VOS_GET_RECX_EC;
@@ -3977,48 +3990,48 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 		stripe_size = obj_ec_stripe_rec_nr(&ioc->ioc_oca);
 	}
 
-	if (otqa->need_copy) {
-		oqma.oca = &ioc->ioc_oca;
-		oqma.oid = oid;
-		oqma.in_dkey = otqa->in_dkey;
-		oqma.tgt_dkey = &otqa->dkey_copy;
-		oqma.tgt_akey = &otqa->akey_copy;
-		oqma.tgt_recx = &otqa->recx;
-		oqma.tgt_epoch = &otqa->max_epoch;
-		oqma.tgt_map_ver = &otqa->version;
-		oqma.shard = &otqa->shard;
-		oqma.flags = api_flags;
-		oqma.opc = opc;
-		oqma.src_map_ver = map_ver;
+	if (otqa->otqa_need_copy) {
+		oqma.oqma_oca = &ioc->ioc_oca;
+		oqma.oqma_oid = oid;
+		oqma.oqma_in_dkey = otqa->otqa_in_dkey;
+		oqma.oqma_tgt_dkey = &otqa->otqa_dkey_copy;
+		oqma.oqma_tgt_akey = &otqa->otqa_akey_copy;
+		oqma.oqma_tgt_recx = &otqa->otqa_recx;
+		oqma.oqma_tgt_epoch = &otqa->otqa_max_epoch;
+		oqma.oqma_tgt_map_ver = &otqa->otqa_version;
+		oqma.oqma_shard = &otqa->otqa_shard;
+		oqma.oqma_flags = api_flags;
+		oqma.oqma_opc = opc;
+		oqma.oqma_src_map_ver = map_ver;
 	}
 
 	for (i = 0, allow_failure_cnt = 0, succeeds = 0; i < count; i++ ) {
 		if (api_flags & DAOS_GET_DKEY) {
-			if (otqa->need_copy)
+			if (otqa->otqa_need_copy)
 				p_dkey = &dkey;
 			else
-				p_dkey = otqa->out_dkey;
+				p_dkey = otqa->otqa_out_dkey;
 			d_iov_set(p_dkey, NULL, 0);
 		} else {
-			p_dkey = otqa->in_dkey;
+			p_dkey = otqa->otqa_in_dkey;
 		}
 
 		if (api_flags & DAOS_GET_AKEY) {
-			if (otqa->need_copy)
+			if (otqa->otqa_need_copy)
 				p_akey = &akey;
 			else
-				p_akey = otqa->out_akey;
+				p_akey = otqa->otqa_out_akey;
 			d_iov_set(p_akey, NULL, 0);
 		} else {
-			p_akey = otqa->in_akey;
+			p_akey = otqa->otqa_in_akey;
 		}
 
-		if (otqa->need_copy) {
+		if (otqa->otqa_need_copy) {
 			p_recx = &recx;
 			p_epoch = &max_epoch;
 		} else {
-			p_recx = &otqa->recx;
-			p_epoch = &otqa->max_epoch;
+			p_recx = &otqa->otqa_recx;
+			p_epoch = &otqa->otqa_max_epoch;
 		}
 
 		t_oid.id_shard = shards[i];
@@ -4032,9 +4045,9 @@ again:
 				goto again;
 		}
 
-		if (rc == allow_failure) {
-			if (otqa->need_copy && otqa->max_epoch < *p_epoch)
-				otqa->max_epoch = *p_epoch;
+		if (rc == -DER_NONEXIST) {
+			if (otqa->otqa_need_copy && otqa->otqa_max_epoch < *p_epoch)
+				otqa->otqa_max_epoch = *p_epoch;
 			allow_failure_cnt++;
 			continue;
 		}
@@ -4044,61 +4057,67 @@ again:
 
 		succeeds++;
 
-		if (!otqa->need_copy) {
-			otqa->shard = shards[i];
+		if (!otqa->otqa_need_copy) {
+			otqa->otqa_shard = shards[i];
 			goto out;
 		}
 
 		if (succeeds == 1) {
-			rc = daos_iov_copy(&otqa->dkey_copy, p_dkey);
+			rc = daos_iov_copy(&otqa->otqa_dkey_copy, p_dkey);
 			if (rc != 0)
 				goto out;
 
-			rc = daos_iov_copy(&otqa->akey_copy, p_akey);
+			rc = daos_iov_copy(&otqa->otqa_akey_copy, p_akey);
 			if (rc != 0)
 				goto out;
 
-			otqa->recx = *p_recx;
-			if (otqa->max_epoch < *p_epoch)
-				otqa->max_epoch = *p_epoch;
-			otqa->shard = shards[i];
-			otqa->keys_copied = 1;
+			otqa->otqa_recx = *p_recx;
+			if (otqa->otqa_max_epoch < *p_epoch)
+				otqa->otqa_max_epoch = *p_epoch;
+			otqa->otqa_shard = shards[i];
+			otqa->otqa_keys_allocated = 1;
+
+			if (otqa->otqa_raw_recx && daos_oclass_is_ec(&ioc->ioc_oca)) {
+				obj_ec_recx_vos2daos(&ioc->ioc_oca, t_oid, p_dkey, &otqa->otqa_recx,
+						     api_flags & DAOS_GET_MAX ? true : false);
+				otqa->otqa_raw_recx = 0;
+			}
 		} else {
-			oqma.oid.id_shard = shards[i];
-			oqma.src_epoch = *p_epoch;
-			oqma.src_dkey = p_dkey;
-			oqma.src_akey = p_akey;
-			oqma.src_recx = p_recx;
-			oqma.server_merge = 1;
+			oqma.oqma_oid.id_shard = shards[i];
+			oqma.oqma_src_epoch = *p_epoch;
+			oqma.oqma_src_dkey = p_dkey;
+			oqma.oqma_src_akey = p_akey;
+			oqma.oqma_src_recx = p_recx;
+			oqma.oqma_raw_recx = 1;
 			/*
 			 * Merge (L1) the results from different shards on the same VOS target
 			 * into current otqa that stands for the result for current VOS target.
 			 */
-			rc = daos_obj_merge_query_merge(&oqma);
+			rc = daos_obj_query_merge(&oqma);
 			if (rc != 0)
 				goto out;
 		}
 	}
 
 	if (allow_failure_cnt > 0 && rc == 0 && succeeds == 0)
-		rc = allow_failure;
+		rc = -DER_NONEXIST;
 
 out:
-	if (rc == allow_failure && otqa->need_copy && !otqa->keys_copied) {
+	if (rc == -DER_NONEXIST && otqa->otqa_need_copy && !otqa->otqa_keys_allocated) {
 		/* Allocate key buffer for subsequent merge. */
-		rc = daos_iov_alloc(&otqa->dkey_copy, sizeof(uint64_t), true);
+		rc = daos_iov_alloc(&otqa->otqa_dkey_copy, sizeof(uint64_t), true);
 		if (rc != 0)
 			goto out;
 
-		rc = daos_iov_alloc(&otqa->akey_copy, sizeof(uint64_t), true);
+		rc = daos_iov_alloc(&otqa->otqa_akey_copy, sizeof(uint64_t), true);
 		if (rc != 0)
 			goto out;
 
-		otqa->keys_copied = 1;
+		otqa->otqa_keys_allocated = 1;
 	}
 
-	otqa->result = rc;
-	otqa->completed = 1;
+	otqa->otqa_result = rc;
+	otqa->otqa_completed = 1;
 
 	return rc;
 }
@@ -4111,8 +4130,8 @@ obj_tgt_query(struct obj_tgt_query_args *otqa, uuid_t po_uuid, uuid_t co_hdl, uu
 {
 	struct dtx_epoch	 dtx_epoch = { 0 };
 	struct obj_io_context	 ioc = { 0 };
-	struct obj_io_context	*p_ioc = otqa->ioc;
-	struct dtx_handle	*dth = otqa->dth;
+	struct obj_io_context	*p_ioc = otqa->otqa_ioc;
+	struct dtx_handle	*dth = otqa->otqa_dth;
 	int			 rc = 0;
 
 	if (p_ioc == NULL)
@@ -4139,12 +4158,12 @@ obj_tgt_query(struct obj_tgt_query_args *otqa, uuid_t po_uuid, uuid_t co_hdl, uu
 	rc = obj_local_query(otqa, p_ioc, oid, epoch, api_flags, *map_ver, opc_get(rpc->cr_opc),
 			     count, shards, dth);
 
-	if (dth != otqa->dth)
+	if (dth != otqa->otqa_dth)
 		rc = dtx_end(dth, p_ioc->ioc_coc, rc);
 
 out:
 	*map_ver = p_ioc->ioc_map_ver;
-	if (p_ioc != otqa->ioc)
+	if (p_ioc != otqa->otqa_ioc)
 		obj_ioc_end(p_ioc, rc);
 
 	return rc;
@@ -4164,18 +4183,18 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	if (rc == PE_OK_LOCAL)
 		okqi->okqi_flags &= ~ORF_EPOCH_UNCERTAIN;
 
-	otqa.in_dkey = &okqi->okqi_dkey;
-	otqa.in_akey = &okqi->okqi_akey;
-	otqa.out_dkey = &okqo->okqo_dkey;
-	otqa.out_akey = &okqo->okqo_akey;
+	otqa.otqa_in_dkey = &okqi->okqi_dkey;
+	otqa.otqa_in_akey = &okqi->okqi_akey;
+	otqa.otqa_out_dkey = &okqo->okqo_dkey;
+	otqa.otqa_out_akey = &okqo->okqo_akey;
 
 	rc = obj_tgt_query(&otqa, okqi->okqi_pool_uuid, okqi->okqi_co_hdl, okqi->okqi_co_uuid,
 			   okqi->okqi_oid, okqi->okqi_epoch, okqi->okqi_epoch_first,
 			   okqi->okqi_api_flags, okqi->okqi_flags, &version, rpc, 1,
 			   &okqi->okqi_oid.id_shard, &okqi->okqi_dti);
-	okqo->okqo_max_epoch = otqa.max_epoch;
+	okqo->okqo_max_epoch = otqa.otqa_max_epoch;
 	if (rc == 0)
-		okqo->okqo_recx = otqa.recx;
+		okqo->okqo_recx = otqa.otqa_recx;
 	else
 		DL_CDEBUG(rc != -DER_NONEXIST && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
 			  DLOG_ERR, DB_IO, rc, "Failed to handle reqular query RPC %p on XS %u/%u "
@@ -5374,7 +5393,8 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 		goto reply;
 
 
-	rc = obj_inflight_io_check(ioc.ioc_coc, opc_get(rpc->cr_opc), oci->oci_flags);
+	rc = obj_inflight_io_check(ioc.ioc_coc, opc_get(rpc->cr_opc), oci->oci_map_ver,
+				   oci->oci_flags);
 	if (rc != 0)
 		goto reply;
 
@@ -5797,6 +5817,9 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	if (otqas == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	for (i = 0; i < dss_tgt_nr; i++)
+		otqas[i].otqa_raw_recx = 1;
+
 	otqa = &otqas[tgt_id];
 
 	dce.dce_xid = ocqi->ocqi_xid;
@@ -5808,7 +5831,8 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	if (ocqi->ocqi_tgts.ca_count == 1) {
 		rc = obj_coll_local(rpc, dcts[0].dct_shards, &dce, &version, &ioc, NULL, otqas,
 				    obj_coll_tgt_query);
-		if (otqa->completed && otqa->keys_copied && (rc == 0 || rc == -DER_NONEXIST)) {
+		if (otqa->otqa_completed && otqa->otqa_keys_allocated &&
+		    (rc == 0 || rc == -DER_NONEXIST)) {
 			D_ASSERT(ioc.ioc_began);
 			rc = obj_coll_query_merge_tgts(ocqi, &ioc.ioc_oca, otqas, dce.dce_bitmap,
 						       dce.dce_bitmap_sz, tgt_id, -DER_NONEXIST);
@@ -5863,13 +5887,15 @@ out:
 	if (rc == 0 || rc == -DER_NONEXIST) {
 		D_ASSERT(otqa != NULL);
 
-		ocqo->ocqo_shard = otqa->shard;
-		ocqo->ocqo_recx = otqa->recx;
-		ocqo->ocqo_max_epoch = otqa->max_epoch;
-		if (otqa->keys_copied) {
-			ocqo->ocqo_dkey = otqa->dkey_copy;
-			ocqo->ocqo_akey = otqa->akey_copy;
+		ocqo->ocqo_shard = otqa->otqa_shard;
+		ocqo->ocqo_recx = otqa->otqa_recx;
+		ocqo->ocqo_max_epoch = otqa->otqa_max_epoch;
+		if (otqa->otqa_keys_allocated) {
+			ocqo->ocqo_dkey = otqa->otqa_dkey_copy;
+			ocqo->ocqo_akey = otqa->otqa_akey_copy;
 		}
+		if (otqa->otqa_raw_recx)
+			ocqo->ocqo_flags |= OCRF_RAW_RECX;
 	}
 
 	rc = crt_reply_send(rpc);

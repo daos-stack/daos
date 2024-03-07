@@ -57,6 +57,16 @@ d_rand()
 	return result;
 }
 
+/* Return a random double in [0, 1). */
+double
+d_randd(void)
+{
+	double result;
+
+	drand48_r(&randBuffer, &result);
+	return result;
+}
+
 /* Developer/debug version, poison memory on free.
  * This tries several ways to access the buffer size however none of them are perfect so for now
  * this is no in release builds.
