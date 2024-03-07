@@ -86,11 +86,11 @@ Ranks Action Result
 				if err != nil {
 					t.Fatal(err)
 				}
-				g["zoo\t\tallo"] = rs
+				g["zoo\t\tallow"] = rs
 				return g
 			}(),
 			cTitles: mockColumnTitles,
-			expErr:  errors.New("unexpected summary format, fields [Action Result] values [zoo  allo]"),
+			expErr:  errors.New("unexpected summary format, fields [Action Result] values [zoo  allow]"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
