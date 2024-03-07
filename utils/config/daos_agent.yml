@@ -68,11 +68,11 @@
 ## default: false
 #disable_auto_evict: true
 
-## If enable, the agent will evict any open pool handles associated with this machine on agent
+## If enabled, the agent will evict any open pool handles associated with this machine on agent
 ## startup. This allows the servers to reclaim resources that may not have been properly cleaned
 ## up in the event of an agent or machine crash.
 ## default: false
-#clean_handles_on_start: true
+#enable_evict_on_start: true
 
 ## Disable the agent's internal caches. If set to true, the agent will query the
 ## server access point and local hardware data every time a client requests

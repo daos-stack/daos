@@ -95,7 +95,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	procmonStart := time.Now()
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
-	procmon.startMonitoring(ctx, cmd.cfg.CleanHandlesOnStart)
+	procmon.startMonitoring(ctx, cmd.cfg.EvictOnStart)
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 
 	drpcRegStart := time.Now()
