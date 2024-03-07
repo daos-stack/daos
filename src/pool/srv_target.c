@@ -725,16 +725,6 @@ pool_obj(struct daos_llink *llink)
 	return container_of(llink, struct ds_pool, sp_entry);
 }
 
-static inline void
-pool_put_sync(void *args)
-{
-	struct ds_pool	*pool = args;
-
-	D_ASSERT(pool != NULL);
-	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-	daos_lru_ref_release(pool_cache, &pool->sp_entry);
-}
-
 struct ds_pool_create_arg {
 	uint32_t	pca_map_version;
 };
@@ -865,13 +855,6 @@ pool_free_ref(struct daos_llink *llink)
 	D_DEBUG(DB_MGMT, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
 	D_ASSERT(d_list_empty(&pool->sp_hdls));
-	rc = ds_pool_thread_collective(pool->sp_uuid, 0, pool_child_delete_one,
-				       pool->sp_uuid, 0);
-	if (rc == -DER_CANCELED)
-		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
-	else if (rc != 0)
-		D_ERROR(DF_UUID": failed to delete ES pool caches: "DF_RC"\n",
-			DP_UUID(pool->sp_uuid), DP_RC(rc));
 
 	ds_cont_ec_eph_free(pool);
 
@@ -970,7 +953,7 @@ ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
 
 	if ((*pool)->sp_stopping) {
 		D_DEBUG(DB_MD, DF_UUID": is in stopping\n", DP_UUID(uuid));
-		pool_put_sync(*pool);
+		ds_pool_put(*pool);
 		*pool = NULL;
 		return -DER_SHUTDOWN;
 	}
@@ -989,31 +972,9 @@ ds_pool_get(struct ds_pool *pool)
 void
 ds_pool_put(struct ds_pool *pool)
 {
-	int	rc;
-
-	/*
-	 * Someone has stopped the pool. Current user may be the one that is holding the last
-	 * reference on the pool, then drop such reference will trigger pool_free_ref() as to
-	 * stop related container that may wait current user (ULT) to exit. To avoid deadlock,
-	 * let's use independent ULT to drop the reference asynchronously and make current ULT
-	 * to go ahead.
-	 *
-	 * An example of the deadlock scenarios is something like that:
-	 *
-	 * cont_iv_prop_fetch_ult => ds_pool_put => pool_free_ref [WAIT]=> cont_child_stop =>
-	 * cont_stop_agg [WAIT]=> cont_agg_ult => ds_cont_csummer_init => ds_cont_get_props =>
-	 * cont_iv_prop_fetch [WAIT]=> cont_iv_prop_fetch_ult
-	 */
-	if (unlikely(pool->sp_stopping) && daos_lru_is_last_user(&pool->sp_entry)) {
-		rc = dss_ult_create(pool_put_sync, pool, DSS_XS_SELF, 0, 0, NULL);
-		if (unlikely(rc != 0)) {
-			D_ERROR("Failed to create ULT to async put ref on the pool "DF_UUID"\n",
-				DP_UUID(pool->sp_uuid));
-			pool_put_sync(pool);
-		}
-	} else {
-		pool_put_sync(pool);
-	}
+	D_ASSERT(pool != NULL);
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	daos_lru_ref_release(pool_cache, &pool->sp_entry);
 }
 
 void
@@ -1213,7 +1174,7 @@ ds_pool_start(uuid_t uuid, bool aft_chk)
 failure_ult:
 	pool_fetch_hdls_ult_abort(pool);
 failure_pool:
-	pool_put_sync(pool);
+	ds_pool_put(pool);
 	return rc;
 }
 
@@ -1238,22 +1199,45 @@ pool_tgt_disconnect_all(struct ds_pool *pool)
 	}
 }
 
+static void
+pool_stop_children(struct ds_pool *pool)
+{
+	int rc;
+
+	rc = ds_pool_thread_collective(pool->sp_uuid, 0, pool_child_delete_one, pool->sp_uuid, 0);
+	if (rc == 0)
+		D_INFO(DF_UUID": stopped\n", DP_UUID(pool->sp_uuid));
+	else if (rc == -DER_CANCELED)
+		D_INFO(DF_UUID ": no ESs\n", DP_UUID(pool->sp_uuid));
+	else
+		DL_ERROR(rc, DF_UUID ": failed to delete ES pool caches", DP_UUID(pool->sp_uuid));
+}
+
 /*
  * Stop a pool. Must be called on the system xstream. Release the ds_pool
  * object reference held by ds_pool_start. Only for mgmt and pool modules.
  */
-void
+int
 ds_pool_stop(uuid_t uuid)
 {
 	struct ds_pool *pool;
 
 	ds_pool_failed_remove(uuid);
 
-	ds_pool_lookup(uuid, &pool);
-	if (pool == NULL)
-		return;
-	D_ASSERT(!pool->sp_stopping);
+	ds_pool_lookup_internal(uuid, &pool);
+	if (pool == NULL) {
+		D_INFO(DF_UUID ": not found\n", DP_UUID(uuid));
+		return 0;
+	}
+	if (pool->sp_stopping) {
+		int rc = -DER_BUSY;
+
+		DL_WARN(rc, DF_UUID ": already stopping", DP_UUID(uuid));
+		ds_pool_put(pool);
+		return rc;
+	}
 	pool->sp_stopping = 1;
+	D_INFO(DF_UUID ": stopping\n", DP_UUID(uuid));
 
 	pool_tgt_disconnect_all(pool);
 
@@ -1263,9 +1247,13 @@ ds_pool_stop(uuid_t uuid)
 
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
 	ds_migrate_stop(pool, -1, -1);
+
+	pool_stop_children(pool);
+
 	ds_pool_put(pool); /* held by ds_pool_start */
-	pool_put_sync(pool);
-	D_INFO(DF_UUID": pool stopped\n", DP_UUID(uuid));
+	ds_pool_put(pool);
+	D_INFO(DF_UUID ": stopped\n", DP_UUID(uuid));
+	return 0;
 }
 
 /* ds_pool_hdl ****************************************************************/

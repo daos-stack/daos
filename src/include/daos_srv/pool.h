@@ -278,7 +278,7 @@ int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 bool ds_pool_skip_for_check(struct ds_pool *pool);
 int ds_pool_start_after_check(uuid_t uuid);
 int ds_pool_start(uuid_t uuid, bool aft_chk);
-void ds_pool_stop(uuid_t uuid);
+int ds_pool_stop(uuid_t uuid);
 int ds_pool_extend(uuid_t pool_uuid, int ntargets, const d_rank_list_t *rank_list, int ndomains,
 		   const uint32_t *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
