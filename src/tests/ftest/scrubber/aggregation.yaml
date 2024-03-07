@@ -49,7 +49,7 @@ ior: &ior_base
   dfs_oclass: RP_2GX
 ior_small_block_size:
   <<: *ior_base
-  transfer_size: 50M
+  transfer_size: 5M
   block_size: 250M
 ior_large_block_size:
   <<: *ior_base

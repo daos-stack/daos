@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -22,7 +22,7 @@ FAULTS = {
         'id': '65574',
         'probability_x': '100',
         'probability_y': '100',
-        'interval': '20',
+        'interval': '25',
         'max_faults': '100'},
     'DAOS_CSUM_CORRUPT_DISK': {
         'id': '65574',
