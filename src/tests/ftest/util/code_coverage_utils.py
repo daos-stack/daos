@@ -123,4 +123,3 @@ class CodeCoverage():
             return False
 
         return True
-
