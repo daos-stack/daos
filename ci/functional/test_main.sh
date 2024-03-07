@@ -47,6 +47,7 @@ test_cluster() {
         NODELIST=${tnodes}                              \
         BUILD_URL=\"${BUILD_URL:-Unknown in GHA}\"      \
         STAGE_NAME=\"$STAGE_NAME\"                      \
+        BULLSEYE=\"$BULLSEYE\"                          \
         $(cat ci/functional/test_main_prep_node.sh)"
 }
 
