@@ -77,4 +77,4 @@ class DFuseReadTest(DfuseTestBase):
 
         data = json.loads("\n".join(result.output[0].stdout))
         print(data)
-        assert data["responce"]["statistics"].get("read", 0) == 0
+        assert data["response"]["statistics"].get("read", 0) == 0
