@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2436,7 +2436,7 @@ out:
 }
 
 int
-dfuse_count_query(struct cmd_args_s *ap)
+dfuse_cont_query(struct cmd_args_s *ap)
 {
 	struct dfuse_mem_query query = {};
 	int                    rc    = -DER_SUCCESS;
@@ -2472,6 +2472,7 @@ dfuse_count_query(struct cmd_args_s *ap)
 	ap->dfuse_mem.pool_count      = query.pool_count;
 	ap->dfuse_mem.container_count = query.container_count;
 	ap->dfuse_mem.found           = query.found;
+	ap->dfuse_mem.stat_count      = query.stat_count;
 
 	D_ALLOC_ARRAY(stat, query.stat_count);
 	if (stat == NULL)
@@ -2499,9 +2500,11 @@ dfuse_count_query(struct cmd_args_s *ap)
 			fprintf(ap->outstream, "%16s: %5.1f%% (%ld)\n", stat[i].name,
 				(double)stat[i].value / tstats * 100, stat[i].value);
 
+	ap->dfuse_stat = stat;
 close:
 	close(fd);
-	D_FREE(stat);
+	if (rc != 0)
+		D_FREE(stat);
 	return rc;
 }
 

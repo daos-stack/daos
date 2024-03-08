@@ -353,6 +353,7 @@ struct vos_container {
 	 * * transaction with older epoch must have been committed.
 	 */
 	daos_epoch_t		vc_solo_dtx_epoch;
+
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
