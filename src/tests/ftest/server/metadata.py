@@ -194,8 +194,7 @@ class ObjectMetadata(TestWithServers):
                 False otherwise
 
         """
-        if num > len(self.container):
-            num = len(self.container)
+        num = min(num, len(self.container))
         self.log.info("Destroying %d containers", num)
         errors = self.destroy_containers(self.container[0:num])
         if errors:
