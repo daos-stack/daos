@@ -838,8 +838,7 @@ dfuse_loop(struct dfuse_info *dfuse_info);
 #define DFUSE_REPLY_CREATE(inode, req, entry, fi)                                                  \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(inode, "Returning create keep_cache %d direct %d",                 \
-				(fi)->keep_cache, (fi)->direct_io);                                \
+		DFUSE_TRA_DEBUG(inode, "Returning create");                                        \
 		ival_update_inode(inode, (entry).entry_timeout);                                   \
 		(inode) = NULL;                                                                    \
 		__rc    = fuse_reply_create(req, &entry, fi);                                      \

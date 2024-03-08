@@ -71,6 +71,6 @@ class DFuseReadTest(DfuseTestBase):
         read_calls = data["statistics"].get("read", 0)
         write_calls = data["statistics"].get("write")
 
-        print(f"Test caused {write_calls} write and {read_calls} reads.")
+        print(f"Test caused {write_calls} write and {read_calls} reads calls")
 
         assert read_calls == 0, data

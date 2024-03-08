@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -197,10 +197,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 	if (dfs->dfc_data_timeout != 0 || ie->ie_dfs->dfc_data_otoc) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
-#if 1
-		else
-			fi_out.keep_cache = 1;
-#endif
 	} else {
 		fi_out.direct_io = 1;
 	}

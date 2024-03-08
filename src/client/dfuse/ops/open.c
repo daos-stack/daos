@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -229,7 +229,6 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
 	}
 	if (ie) {
-		DFUSE_TRA_DEBUG(ie, "Evict on close, forgetting dentry");
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
 						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 
