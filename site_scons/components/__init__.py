@@ -1,4 +1,4 @@
-# Copyright 2016-2023 Intel Corporation
+# Copyright 2016-2024 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -298,14 +298,17 @@ def define_components(reqs):
                 libs=['abt'],
                 headers=['abt.h'])
 
+    # meson tries to install to /usr/local by default and ignores --prefix
+    # set by configure. Also, if both --prefix and --destdir are set, meson combines the paths.
+    # Workaround this by configuring with --prefix=/ and installing with --destdir=<path>
     reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
                 retriever=GitRepoRetriever('https://github.com/libfuse/libfuse.git'),
                 commands=[['meson', 'setup', '../fuse'],
-                          ['meson', 'configure', '--prefix=$FUSE_PREFIX', '-Ddisable-mtab=True',
+                          ['meson', 'configure', '--prefix=/', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSE_PREFIX/udev', '-Dutils=False',
-                           '--default-library', 'both'],
+                           '--default-library', 'both', '--backend', 'ninja'],
                           ['ninja', '-v'],
-                          ['ninja', 'install']],
+                          ['meson', 'install', '--destdir', '$FUSE_PREFIX']],
                 headers=['fuse3/fuse.h'],
                 required_progs=['libtoolize', 'ninja'],
                 out_of_src_build=True)

@@ -3,7 +3,7 @@ defusedxml
 distro
 jira
 junit_xml
-meson
+meson>=0.47
 ninja
 pyelftools
 pyxattr
