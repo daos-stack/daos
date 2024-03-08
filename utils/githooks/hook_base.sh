@@ -16,6 +16,8 @@ run-parts() {
     for i in $(LC_ALL=C; echo "${dir%/}"/*[^~,]); do
         # don't run vim .swp files
         [ "${i%.sw?}" != "${i}" ] && continue
+        # for new repo, skip old changeId script
+        [ $(basename "${i}") == "20-user-changeId" ] && continue
         skip_item=false
         for skip in "${skip_list[@]}"; do
             if [[ "${i}" =~ ${skip} ]]; then
