@@ -3400,7 +3400,7 @@ class PosixTests():
                                       self.pool.id(),
                                       self.container.id(),
                                       '--entry',
-                                      f'A::{os.getlogin()}@:rwta'])
+                                      f'A::{getpass.getuser()}@:rwta'])
         print(rc)
         assert rc.returncode == 0
 
