@@ -987,7 +987,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 result = self.dserialize_cmd.run(processes1, self.job_manager, ppn1, env)
                 result = self.ddeserialize_cmd.run(processes2, self.job_manager, ppn2, env)
             elif self.tool == "FS_COPY":
-                result = self.fs_copy_cmd.run()
+                if expected_rc != 0:
+                    with self.daos_cmd.no_exception():
+                        result = self.fs_copy_cmd.run()
+                else:
+                    result = self.fs_copy_cmd.run()
             elif self.tool == "CONT_CLONE":
                 result = self.cont_clone_cmd.run()
             else:
