@@ -38,7 +38,7 @@ message PoolCreateReq {
 // PoolCreateResp returns created pool uuid and ranks.
 message PoolCreateResp {
 	int32 status = 1; // DAOS error code
-	uint32 leader = 2; // Current service leader
+	uint32 svc_ldr = 2; // Current service leader rank
 	repeated uint32 svc_reps = 3; // pool service replica ranks
 	repeated uint32 tgt_ranks = 4; // pool target ranks
 	repeated uint64 tier_bytes = 5; // storage tiers allocated to pool
