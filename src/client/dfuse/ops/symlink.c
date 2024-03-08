@@ -46,6 +46,6 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, struct dfuse_inode_entry *par
 
 	return;
 err:
-	DFUSE_REPLY_ERR_RAW(ie, req, rc);
+	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(ie);
 }
