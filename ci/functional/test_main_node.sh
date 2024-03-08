@@ -10,6 +10,7 @@ export TEST_RPMS=true
 export REMOTE_ACCT=jenkins
 export WITH_VALGRIND="$WITH_VALGRIND"
 export STAGE_NAME="$STAGE_NAME"
+
 if [ -n "$BULLSEYE" ]; then
     pushd "${SL_SRC_DIR}/bullseye"
     set +x

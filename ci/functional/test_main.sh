@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  Copyright 2020-2023 Intel Corporation.
+#  Copyright 2020-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -94,11 +94,17 @@ mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 if "$hardware_ok"; then
     if $TEST_RPMS; then
         # shellcheck disable=SC2029
+        if [ -n "$BULLSEYE" ]; then
+            rm -rf bullseye
+            mkdir -p bullseye
+            tar -C bullseye --strip-components=1 -xf bullseye.tar
+        fi
         ssh -i ci_key -l jenkins "${first_node}"   \
           "TEST_TAG=\"$test_tag\"                  \
            TNODES=\"$tnodes\"                      \
            FTEST_ARG=\"${FTEST_ARG:-}\"            \
            WITH_VALGRIND=\"${WITH_VALGRIND:-}\"    \
+           BULLSEYE=\"$BULLSEYE\"                  \
            STAGE_NAME=\"$STAGE_NAME\"              \
            $(cat ci/functional/test_main_node.sh)"
     else
