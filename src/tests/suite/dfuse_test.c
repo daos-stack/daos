@@ -538,7 +538,7 @@ do_mmap(void **state)
 
 	printf("Mapped private to %p\n", addr);
 
-	memset(addr, '0', 1024 * 1024);
+	memset(addr, 0, 1024 * 1024);
 
 	rc = munmap(addr, 1024 * 1024);
 	assert_return_code(rc, errno);
