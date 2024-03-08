@@ -94,7 +94,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
 
         command = [self.daos_test, '--test-dir', mount_dir, '--io', '--stream', '--mmap']
         if use_dfuse:
-            command.append('--lowfd')
+            command.append('--lowfd --directory')
         if cache_mode != 'writeback':
             command.append('--metadata')
 

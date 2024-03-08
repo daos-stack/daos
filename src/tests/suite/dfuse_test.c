@@ -427,14 +427,28 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 }
 
+static int
+get_dir_num_entry(DIR *dirp)
+{
+	int            num_entry = 0;
+	struct dirent *ent;
+
+	while ((ent = readdir(dirp)) != NULL) {
+		num_entry++;
+	}
+	return num_entry;
+}
+
 /*
  * Check readdir for issues.
  *
  * Create a directory
  * Populate it
+ * Test scandirat
  * Check the file count
  * Rewind the directory handle
  * Re-check the file count.
+ * seekdir, then verify the number of entries left
  *
  * In order for this test to be idempotent and because it takes time to create the files then
  * ignore errors about file exists when creating.
@@ -442,13 +456,14 @@ do_mtime(void **state)
 void
 do_directory(void **state)
 {
-	int            root;
-	int            dfd;
-	int            rc;
-	int            i;
-	DIR           *dirp;
-	struct dirent *ent;
-	long           pos;
+	int             root;
+	int             dfd;
+	int             rc;
+	int             i;
+	DIR            *dirp;
+	struct dirent **namelist;
+	long            pos;
+	char           *env_ldpreload;
 
 	printf("Creating dir and files\n");
 	root = open(test_dir, O_PATH | O_DIRECTORY);
@@ -465,7 +480,10 @@ do_directory(void **state)
 		char fname[17];
 		int  fd;
 
-		rc = snprintf(fname, 17, "file %d", i);
+		if (i < 10)
+			rc = snprintf(fname, 17, "file_0%d", i);
+		else
+			rc = snprintf(fname, 17, "file_%d", i);
 		assert_in_range(rc, 0, 16);
 
 		fd = openat(dfd, fname, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
@@ -474,6 +492,17 @@ do_directory(void **state)
 		assert_return_code(rc, errno);
 	}
 
+	rc = scandirat(dfd, ".", &namelist, NULL, alphasort);
+	assert_int_equal(rc, 100);
+	assert_true(strcmp(namelist[0]->d_name, "file_00") == 0);
+	assert_true(strcmp(namelist[99]->d_name, "file_99") == 0);
+
+	/* free namelist */
+	while (rc--) {
+		free(namelist[rc]);
+	}
+	free(namelist);
+
 	printf("Checking file count\n");
 	dirp = fdopendir(dfd);
 	if (dirp == NULL)
@@ -481,28 +510,46 @@ do_directory(void **state)
 
 	pos = telldir(dirp);
 
-	i     = 0;
 	errno = 0;
-	while ((ent = readdir(dirp)) != NULL) {
-		i++;
-	}
+	rc = get_dir_num_entry(dirp);
 	if (errno != 0)
 		assert_return_code(-1, errno);
-	printf("File count is %d\n", i);
-	assert_int_equal(i, 100);
+	printf("File count is %d\n", rc);
+	assert_int_equal(rc, 100);
 
 	printf("Rewinding and rechecking file count\n");
 	seekdir(dirp, pos);
 
-	i     = 0;
 	errno = 0;
-	while ((ent = readdir(dirp)) != NULL) {
-		i++;
-	}
+	rc = get_dir_num_entry(dirp);
 	if (errno != 0)
 		assert_return_code(-1, errno);
-	printf("File count is %d\n", i);
-	assert_int_equal(i, 100);
+	printf("File count is %d\n", rc);
+	assert_int_equal(rc, 100);
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (env_ldpreload != NULL) {
+		if (strstr(env_ldpreload, "libpil4dfs.so") != NULL) {
+			/* fuse fails in the following test. */
+			for (i = 0; i < 102; i++) {
+				rewinddir(dirp);
+				seekdir(dirp, i);
+				if (i <= 2)
+					assert_int_equal(get_dir_num_entry(dirp), 100);
+				else
+					assert_int_equal(get_dir_num_entry(dirp) + i - 2, 100);
+			}
+			for (i = 0; i < 102; i++) {
+				rewinddir(dirp);
+				readdir(dirp);
+				seekdir(dirp, i);
+				if (i <= 2)
+					assert_int_equal(get_dir_num_entry(dirp), 100);
+				else
+					assert_int_equal(get_dir_num_entry(dirp) + i - 2, 100);
+			}
+		}
+	}
 
 	rc = close(dfd);
 	assert_return_code(rc, errno);
