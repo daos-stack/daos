@@ -38,7 +38,7 @@ dfuse_do_work(void *arg)
 
 	while (!fuse_session_exited(dtm->tm_se)) {
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-		rc = fuse_session_receive_buf_int(dtm->tm_se, &dt->dt_fbuf, chan);
+		rc = fuse_session_receive_buf_chan(dtm->tm_se, &dt->dt_fbuf, chan);
 		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		if (rc == -EINTR)
 			continue;
@@ -53,7 +53,7 @@ dfuse_do_work(void *arg)
 		if (atomic_load_relaxed(&dtm->tm_exit))
 			return NULL;
 
-		fuse_session_process_buf_int(dtm->tm_se, &dt->dt_fbuf, chan);
+		fuse_session_process_buf_chan(dtm->tm_se, &dt->dt_fbuf, chan);
 	}
 
 	fuse_chan_put(chan);
