@@ -75,10 +75,6 @@ class DFuseReadTest(DfuseTestBase):
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
-        print(result)
-        print(result.output)
-        print(result.output[0].stdout)
-        print(result.output[0].stdout[0])
-
         data = json.loads("\n".join(result.output[0].stdout))
         print(data)
+        assert data["responce"]["statistics"].get("read", 0) == 0
