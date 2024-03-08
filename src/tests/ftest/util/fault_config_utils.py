@@ -22,7 +22,7 @@ FAULTS = {
         'id': '65574',
         'probability_x': '100',
         'probability_y': '100',
-        'interval': '25',
+        'interval': '50',
         'max_faults': '100'},
     'DAOS_CSUM_CORRUPT_DISK': {
         'id': '65574',
