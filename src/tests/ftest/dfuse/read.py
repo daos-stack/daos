@@ -4,9 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-
-import json
-
 from dfuse_test_base import DfuseTestBase
 from run_utils import run_remote
 
@@ -42,10 +39,10 @@ class DFuseReadTest(DfuseTestBase):
 
         cont_attrs = {}
 
-        cont_attrs['dfuse-data-cache'] = '1h'
-        cont_attrs['dfuse-attr-time'] = '1h'
-        cont_attrs['dfuse-dentry-time'] = '1h'
-        cont_attrs['dfuse-ndentry-time'] = '1h'
+        cont_attrs["dfuse-data-cache"] = "1h"
+        cont_attrs["dfuse-attr-time"] = "1h"
+        cont_attrs["dfuse-dentry-time"] = "1h"
+        cont_attrs["dfuse-ndentry-time"] = "1h"
 
         container.set_attr(attrs=cont_attrs)
 
@@ -54,12 +51,6 @@ class DFuseReadTest(DfuseTestBase):
         fuse_root_dir = self.dfuse.mount_dir.value
 
         cmd = f"dd if=/dev/zero of={fuse_root_dir}/test_file count=16 bs=1M"
-
-        result = run_remote(self.log, self.hostlist_clients, cmd)
-        if not result.passed:
-            self.fail(f'"{cmd}" failed on {result.failed_hosts}')
-
-        cmd = f"daos filesystem query {fuse_root_dir}"
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
@@ -75,6 +66,11 @@ class DFuseReadTest(DfuseTestBase):
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
-        data = json.loads("\n".join(result.output[0].stdout))
-        print(data)
-        assert data["response"]["statistics"].get("read", 0) == 0
+        data = self.dfuse.get_stats()
+
+        read_calls = data["statistics"].get("read", 0)
+        write_calls = data["statistics"].get("write")
+
+        print(f"Test caused {write_calls} write and {read_calls} reads.")
+
+        assert read_calls == 0, data
