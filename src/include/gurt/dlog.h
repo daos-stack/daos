@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -446,6 +446,16 @@ void d_log_add_cache(int *cache, int nr);
  * Fsync log files.
  */
 void d_log_sync(void);
+
+/**
+ * initialize logging telemetry
+*/
+int d_log_tm_init(void);
+
+/**
+ * finalize logging telemetry
+*/
+void d_log_tm_fini(void);
 
 #if defined(__cplusplus)
 }

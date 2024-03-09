@@ -673,6 +673,10 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		goto exit_debug_init;
 
+	rc = d_log_tm_init();
+	if (rc != 0)
+		goto exit_metrics_init;
+
 	rc = dss_engine_metrics_init();
 	if (rc != 0)
 		D_WARN("Unable to initialize engine metrics, " DF_RC "\n",
@@ -841,6 +845,7 @@ exit_drpc_fini:
 	drpc_fini();
 exit_metrics_init:
 	dss_engine_metrics_fini();
+	d_log_tm_fini();
 	d_tm_fini();
 exit_debug_init:
 	daos_debug_fini();
@@ -901,6 +906,8 @@ server_fini(bool force)
 	D_INFO("drpc_fini() done\n");
 	dss_engine_metrics_fini();
 	D_INFO("dss_engine_metrics_fini() done\n");
+	d_log_tm_fini();
+	D_INFO("d_log_tm_fini() done\n");
 	d_tm_fini();
 	D_INFO("d_tm_fini() done\n");
 	daos_debug_fini();

@@ -35,6 +35,7 @@
 #include <gurt/dlog.h>
 #include <gurt/common.h>
 #include <gurt/list.h>
+#include <gurt/telemetry_producer.h>
 
 /* extra tag bytes to alloc for a pid */
 #define DLOG_TAGPAD 16
@@ -97,6 +98,9 @@ struct cache_entry {
  */
 struct d_log_xstate       d_log_xst;
 
+/* global by-facility error counters */
+static struct d_tm_node_t **dlog_facs_err_ctrs;
+
 static struct d_log_state mst;
 static d_list_t           d_log_caches;
 
@@ -133,6 +137,61 @@ static const char *clog_pristr(int pri)
 		s = 0;
 	}
 	return norm[s];
+}
+
+/**
+ * d_log_tm_init: Initialize logging telemetry.
+ *
+ * \return	zero on success, nonzero on error.
+*/
+int
+d_log_tm_init()
+{
+	int i, rc = 0;
+	struct d_tm_node_t **nctrs;
+
+	clog_lock();
+
+	if (!d_log_xst.dlog_facs)
+		D_GOTO(unlock, -DER_UNINIT);
+
+	if (d_log_xst.fac_cnt == 0)
+		D_GOTO(unlock, 0);
+
+	nctrs = calloc(1, d_log_xst.fac_cnt * sizeof(*nctrs));
+	if (!nctrs)
+		D_GOTO(unlock, -DER_NOMEM);
+
+	for (i = 0 ; i < d_log_xst.fac_cnt; i++) {
+		rc = d_tm_add_metric(&nctrs[i], D_TM_COUNTER,
+				     "Facility error counter", NULL, "errors/%s",
+				     d_log_xst.dlog_facs[i].fac_aname);
+		if (rc != 0)
+			D_GOTO(free_nctrs, rc);
+	}
+	dlog_facs_err_ctrs = nctrs;
+	goto unlock;
+
+free_nctrs:
+	free(nctrs);
+unlock:
+	clog_unlock();
+	return rc;
+}
+
+/**
+ * d_log_tm_fini: Finalize logging telemetry.
+*/
+void
+d_log_tm_fini()
+{
+	clog_lock();
+
+	if (dlog_facs_err_ctrs)
+		/* counters freed by d_tm_fini() */
+		free(dlog_facs_err_ctrs);
+
+	clog_unlock();
 }
 
 /**
@@ -621,6 +680,13 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 		clog_unlock();
 		return;
 	}
+	/* 
+	 * If logging an error or higher, increment the error counter for
+	 * the facility. This can be used by monitoring solutions to detect
+	 * increased error rates.
+	 */
+	if (lvl >= DLOG_ERR && dlog_facs_err_ctrs && dlog_facs_err_ctrs[fac])
+		d_tm_inc_counter(dlog_facs_err_ctrs[fac], 1);
 
 	/*
 	 * ok, first, put the header into b[]
