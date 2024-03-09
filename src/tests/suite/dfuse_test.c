@@ -511,7 +511,7 @@ do_directory(void **state)
 	pos = telldir(dirp);
 
 	errno = 0;
-	rc = get_dir_num_entry(dirp);
+	rc    = get_dir_num_entry(dirp);
 	if (errno != 0)
 		assert_return_code(-1, errno);
 	printf("File count is %d\n", rc);
@@ -521,7 +521,7 @@ do_directory(void **state)
 	seekdir(dirp, pos);
 
 	errno = 0;
-	rc = get_dir_num_entry(dirp);
+	rc    = get_dir_num_entry(dirp);
 	if (errno != 0)
 		assert_return_code(-1, errno);
 	printf("File count is %d\n", rc);

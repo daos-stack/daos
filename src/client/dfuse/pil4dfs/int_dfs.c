@@ -3255,7 +3255,8 @@ closedir(DIR *dirp)
 	}
 }
 
-long telldir(DIR *dirp)
+long
+telldir(DIR *dirp)
 {
 	int fd;
 
@@ -3273,7 +3274,8 @@ long telldir(DIR *dirp)
 	return dir_list[fd - FD_DIR_BASE]->offset;
 }
 
-void rewinddir(DIR *dirp)
+void
+rewinddir(DIR *dirp)
 {
 	int fd, idx;
 
@@ -3299,7 +3301,8 @@ void rewinddir(DIR *dirp)
 /* Offset of the first entry, allow two entries for . and .. */
 #define OFFSET_BASE 2
 
-void seekdir(DIR *dirp, long loc)
+void
+seekdir(DIR *dirp, long loc)
 {
 	int      fd, idx, rc;
 	long     num_entry;
@@ -3344,23 +3347,23 @@ void seekdir(DIR *dirp, long loc)
 	} else if (loc >= dir_list[idx]->offset) {
 		/* in the cached entries */
 		dir_list[idx]->num_ents -= (loc - dir_list[idx]->offset);
-		dir_list[idx]->offset    = loc;
+		dir_list[idx]->offset = loc;
 		return;
 	}
 
 	while (num_entry) {
 		num_to_read = min(READ_DIR_BATCH_SIZE, num_entry);
-		rc = dfs_iterate(dir_list[idx]->dfs_mt->dfs, dir_list[idx]->dir,
-				 &dir_list[idx]->anchor, &num_to_read,
-				 DFS_MAX_NAME * num_to_read, NULL, NULL);
+		rc          = dfs_iterate(dir_list[idx]->dfs_mt->dfs, dir_list[idx]->dir,
+					  &dir_list[idx]->anchor, &num_to_read,
+					  DFS_MAX_NAME * num_to_read, NULL, NULL);
 		if (rc)
 			D_GOTO(out_rewind, rc);
 		if (daos_anchor_is_eof(&dir_list[idx]->anchor))
 			D_GOTO(out_rewind, rc);
 		dir_list[idx]->offset += num_to_read;
 		dir_list[idx]->num_ents = 0;
-		num_entry = loc - dir_list[idx]->offset;
-		num_to_read = READ_DIR_BATCH_SIZE;
+		num_entry               = loc - dir_list[idx]->offset;
+		num_to_read             = READ_DIR_BATCH_SIZE;
 	}
 
 	return;
@@ -3373,12 +3376,12 @@ out_rewind:
 }
 
 int
-scandirat(int dirfd, const char *restrict path,
-	  struct dirent ***restrict namelist,
+scandirat(int dirfd, const char *restrict path, struct dirent ***restrict namelist,
 	  int (*filter)(const struct dirent *),
 	  int (*compar)(const struct dirent **, const struct dirent **))
 {
-	int   error = 0, rc;
+	int   rc;
+	int   error     = 0;
 	char *full_path = NULL;
 
 	if (next_scandirat == NULL) {
