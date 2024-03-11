@@ -54,3 +54,5 @@ src/cart/src/cart/_structures_from_macros_.h
 dnt.*.memcheck
 utils/.daos_server.active.yml
 nlt-errors.json
+src/client/java/
+utils/rpms/mock/

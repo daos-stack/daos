@@ -45,8 +45,8 @@ if (!env.CHANGE_ID &&
      !env.BRANCH_NAME.startsWith('release/') &&
      !env.BRANCH_NAME.startsWith('ci-') &&
      env.BRANCH_NAME != 'master')) {
-   currentBuild.result = 'SUCCESS'
-   return
+    currentBuild.result = 'SUCCESS'
+    return
 }
 
 // The docker agent setup and the provisionNodes step need to know the
@@ -266,10 +266,11 @@ pipeline {
                             name: 'Functional on EL 8',
                             pragma_suffix: '-vm',
                             distro: 'el8',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: vm9_label('EL8'),
                             next_version: next_version,
                             stage_tags: '-hw',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
                             run_if_pr: true,
@@ -280,10 +281,11 @@ pipeline {
                             name: 'Functional on EL 9',
                             pragma_suffix: '-vm',
                             distro: 'el9',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: vm9_label('EL9'),
                             next_version: next_version,
                             stage_tags: '-hw',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
                             run_if_pr: true,
@@ -294,10 +296,11 @@ pipeline {
                             name: 'Functional on Leap 15.5',
                             pragma_suffix: '-vm',
                             distro: 'leap15',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
                             next_version: next_version,
                             stage_tags: '-hw',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
                             run_if_pr: true,
@@ -308,10 +311,11 @@ pipeline {
                             name: 'Functional on Ubuntu 20.04',
                             pragma_suffix: '-vm',
                             distro: 'ubuntu20',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: vm9_label('Ubuntu'),
                             next_version: next_version,
                             stage_tags: '-hw',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
                             run_if_pr: false,
@@ -321,10 +325,11 @@ pipeline {
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: '-hw-medium',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
                             run_if_pr: true,
@@ -334,10 +339,11 @@ pipeline {
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
@@ -347,10 +353,11 @@ pipeline {
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
                             pragma_suffix: '-hw-large',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
                             run_if_pr: true,
@@ -360,10 +367,11 @@ pipeline {
                         'Functional Hardware Large MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Large MD on SSD',
                             pragma_suffix: '-hw-large',
-                            base_branch: env.BaseBranch,
+                            base_branch: params.BaseBranch,
                             label: params.FUNCTIONAL_HARDWARE_LARGE_MD_ON_SSD_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
+                            /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto_md_on_ssd',
                             run_if_pr: true,
