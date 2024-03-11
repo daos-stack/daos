@@ -136,6 +136,22 @@ void rpm_test_post(String stage_name, String node) {
     job_status_update()
 }
 
+/**
+ * Update env.pragmas with default commit pragmas if not set.
+ */
+Map update_default_commit_pragmas() {
+    // Get the default pragmas and update the env.pragmas if not set
+    String default_pragmas_str = sh(script: 'ci/gen_commit_pragmas.py --target origin/' + target_branch,
+                                    returnStdout: true).trim()
+    println("pragmas from gen_commit_pragmas.py:")
+    // default_pragmas_str = 'Test-tag: DfuseMUPerms'
+    println(default_pragmas_str)
+    if (default_pragmas_str) {
+        updatePragmas(default_pragmas_str, false)
+        println(env.pragmas)
+    }
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -329,6 +345,7 @@ pipeline {
                 stage('Get Commit Message') {
                     steps {
                         pragmasToEnv()
+                        update_default_commit_pragmas()
                     }
                 }
                 stage('Determine Release Branch') {
