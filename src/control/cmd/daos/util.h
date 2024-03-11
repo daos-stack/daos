@@ -121,5 +121,9 @@ get_rebuild_state(struct daos_rebuild_status *drs)
 	return drs->rs_state;
 }
 
-
+static inline bool
+mode_is_dir(mode_t mode)
+{
+	return S_ISDIR(mode);
+}
 #endif /* __CMD_DAOS_UTIL_H__ */

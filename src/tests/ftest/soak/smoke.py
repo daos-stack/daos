@@ -25,7 +25,7 @@ class SoakSmoke(SoakTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,24
         :avocado: tags=soak,soak_smoke
-        :avocado: tags=test_soak_smoke
+        :avocado: tags=SoakSmoke,test_soak_smoke
         """
         test_param = "/run/smoke/"
         self.run_soak(test_param)

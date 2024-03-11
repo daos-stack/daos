@@ -720,6 +720,11 @@ struct obj_dtx_mbs {
 	struct dtx_memberships	*odm_mbs;
 };
 
+enum obj_coll_rep_flags {
+	/* The returned recx contains the original mapped VOS index. */
+	OCRF_RAW_RECX	= (1 << 0),
+};
+
 #define DAOS_ISEQ_OBJ_COLL_PUNCH	/* input fields */				\
 	((struct obj_dtx_mbs)		(ocpi_odm)			CRT_VAR)	\
 	((uuid_t)			(ocpi_po_uuid)			CRT_VAR)	\
@@ -773,7 +778,7 @@ CRT_RPC_DECLARE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUN
 	((uint32_t)			(ocqo_map_version)		CRT_VAR)	\
 	/* The id_shard corresponding to ocqo_recx */					\
 	((uint32_t)			(ocqo_shard)			CRT_VAR)	\
-	((uint32_t)			(ocqo_padding)			CRT_VAR)	\
+	((uint32_t)			(ocqo_flags)			CRT_VAR)	\
 	((uint64_t)			(ocqo_epoch)			CRT_VAR)	\
 	((daos_key_t)			(ocqo_dkey)			CRT_VAR)	\
 	((daos_key_t)			(ocqo_akey)			CRT_VAR)	\

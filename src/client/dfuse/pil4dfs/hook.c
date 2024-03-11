@@ -744,6 +744,9 @@ free_memory_in_hook(void)
 {
 	int i;
 
+	for (i = 0; i < num_module; i++)
+		D_FREE(module_list[i].module_name);
+
 	D_FREE(path_ld);
 	D_FREE(path_libc);
 	D_FREE(module_list);
@@ -991,7 +994,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 {
 	void *module;
 	int   idx, idx_mod;
-	char  module_name_local[MAX_LEN_PATH_NAME + 4];
+	char *module_name_local;
 
 	/* make sure module_name[] and func_name[] are not too long. */
 	if (strnlen(module_name, MAX_LEN_PATH_NAME + 1) >= MAX_LEN_PATH_NAME)
@@ -1024,13 +1027,13 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 	}
 
 	if (strncmp(module_name, "ld", 3) == 0)
-		strncpy(module_name_local, path_ld, MAX_LEN_PATH_NAME);
+		module_name_local = path_ld;
 	else if (strncmp(module_name, "libc", 5) == 0)
-		strncpy(module_name_local, path_libc, MAX_LEN_PATH_NAME);
+		module_name_local = path_libc;
 	else if (strncmp(module_name, "libpthread", 11) == 0)
-		strncpy(module_name_local, path_libpthread, MAX_LEN_PATH_NAME);
+		module_name_local = path_libpthread;
 	else
-		strncpy(module_name_local, module_name, MAX_LEN_PATH_NAME);
+		module_name_local = (char *)module_name;
 
 	if (module_name_local[0] == '/') {
 		/* absolute path */
@@ -1054,7 +1057,9 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 	idx_mod = query_registered_module(module_name_local);
 	if (idx_mod == -1) {
 		/* not registered module name. Register it. */
-		strcpy(module_list[num_module].module_name, module_name_local);
+		D_STRNDUP(module_list[num_module].module_name, module_name_local, PATH_MAX);
+		if (module_list[num_module].module_name == NULL)
+			quit_hook_init();
 		module_list[num_module].module_base_addr = lib_base_addr[idx];
 		strcpy(module_list[num_module].func_name_list[module_list[num_module].num_hook],
 		       func_name);
@@ -1109,7 +1114,6 @@ query_all_org_func_addr(void)
 			       module_list[idx_mod].module_name);
 			quit_hook_init();
 		} else {
-			strcpy(module_list[idx_mod].module_name, lib_name_list[idx]);
 			module_list[idx_mod].module_base_addr = lib_base_addr[idx];
 		}
 	}

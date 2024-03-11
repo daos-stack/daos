@@ -315,8 +315,8 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_OWNER_GROUP:
 			bits |= DAOS_PO_QUERY_PROP_OWNER_GROUP;
 			break;
-		case DAOS_PROP_PO_POLICY:
-			bits |= DAOS_PO_QUERY_PROP_POLICY;
+		case DAOS_PROP_PO_DATA_THRESH:
+			bits |= DAOS_PO_QUERY_PROP_DATA_THRESH;
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			bits |= DAOS_PO_QUERY_PROP_GLOBAL_VERSION;
