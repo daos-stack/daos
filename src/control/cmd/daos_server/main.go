@@ -24,9 +24,24 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server"
 )
 
 const defaultConfigFile = "daos_server.yml"
+
+type (
+	ctlSvcCaller interface {
+		setCtlSvc(*server.ControlService)
+	}
+
+	ctlSvcCmd struct {
+		ctlSvc *server.ControlService
+	}
+)
+
+func (cmd *ctlSvcCmd) setCtlSvc(cs *server.ControlService) {
+	cmd.ctlSvc = cs
+}
 
 type execTestFn func() error
 
@@ -83,7 +98,7 @@ func exitWithError(log *logging.LeveledLogger, err error) {
 	os.Exit(1)
 }
 
-func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error {
+func parseOpts(args []string, opts *mainOpts, ctlSvc *server.ControlService, log *logging.LeveledLogger) error {
 	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
@@ -159,6 +174,23 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 				"this command will not use it")
 		}
 
+		// Set the control service to use to handle command execution, use default
+		// implementation if not provided in function call.
+		if ctlSvcCmd, ok := cmd.(ctlSvcCaller); ok {
+			if ctlSvc != nil {
+				ctlSvcCmd.setCtlSvc(ctlSvc)
+			}
+			//			else {
+			//				srvCfg := config.DefaultServer()
+			//				if cfgCmd, ok := cmd.(cfgCmd); ok && cfgCmd.config != nil {
+			//					srvCfg = cfgCmd.config
+			//				}
+			//				cmd.ctlSvc = server.NewControlService(log, nil, srvCfg,
+			//					server.NewStorageControlService(cmd.Logger, srvCfg.Engines), nil,
+			//					nil)
+			//			}
+		}
+
 		if err := cmd.Execute(cmdArgs); err != nil {
 			return err
 		}
@@ -186,7 +218,7 @@ func main() {
 		},
 	}
 
-	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
+	if err := parseOpts(os.Args[1:], &opts, nil, log); err != nil {
 		if errors.Cause(err) == context.Canceled {
 			log.Infof("%s (pid %d) shutting down", build.ControlPlaneName, os.Getpid())
 			os.Exit(0)

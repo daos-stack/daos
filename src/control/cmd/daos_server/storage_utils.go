@@ -73,10 +73,11 @@ type scmSocketCmd struct {
 }
 
 type nvmeCmd struct {
-	cmdutil.LogCmd  `json:"-"`
-	helperLogCmd    `json:"-"`
-	optCfgCmd       `json:"-"`
-	iommuCheckerCmd `json:"-"`
+	cmdutil.LogCmd        `json:"-"`
+	cmdutil.JSONOutputCmd `json:"-"`
+	helperLogCmd          `json:"-"`
+	optCfgCmd             `json:"-"`
+	iommuCheckerCmd       `json:"-"`
 }
 
 func (cmd *nvmeCmd) init() error {
@@ -92,10 +93,11 @@ func (cmd *nvmeCmd) init() error {
 }
 
 type scmCmd struct {
-	cmdutil.LogCmd `json:"-"`
-	helperLogCmd   `json:"-"`
-	optCfgCmd      `json:"-"`
-	scmSocketCmd   `json:"-"`
+	cmdutil.LogCmd        `json:"-"`
+	cmdutil.JSONOutputCmd `json:"-"`
+	helperLogCmd          `json:"-"`
+	optCfgCmd             `json:"-"`
+	scmSocketCmd          `json:"-"`
 }
 
 func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {

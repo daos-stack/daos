@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -46,8 +46,13 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	cmd.Info("Prepare locally-attached PMem...")
 
 	cmd.Info(MsgStoragePrepareWarn)
-	if !cmd.Force && !common.GetConsent(cmd) {
-		return errors.New("consent not given")
+	if !cmd.Force {
+		if cmd.JSONOutputEnabled() {
+			return errors.New("JSON output only supported with force option")
+		}
+		if !common.GetConsent(cmd) {
+			return errors.New("consent not given")
+		}
 	}
 
 	req := storage.ScmPrepareRequest{
@@ -99,6 +104,11 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 		if len(resp.Namespaces) == 0 {
 			return errors.New("failed to find namespaces")
 		}
+
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp.Namespaces, nil)
+		}
+
 		// Namespaces exist so print details.
 		var bld strings.Builder
 		if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {

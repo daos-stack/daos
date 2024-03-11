@@ -570,6 +570,23 @@ func TestDaosServer_scanSCM(t *testing.T) {
 func TestDaosServer_SCM_Commands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
+			"Prepare namespaces; JSON; no force",
+			"scm prepare -j",
+			printCommand(t, &prepareSCMCmd{
+				NrNamespacesPerSocket: 1,
+			}),
+			nil,
+		},
+		{
+			"Prepare namespaces with all opts with JSON",
+			"scm prepare -S 2 -f --socket 0 -j",
+			printCommand(t, &prepareSCMCmd{
+				NrNamespacesPerSocket: 2,
+				Force:                 true,
+			}),
+			nil,
+		},
+		{
 			"Prepare namespaces with all opts",
 			"scm prepare -S 2 -f --socket 0",
 			printCommand(t, &prepareSCMCmd{
