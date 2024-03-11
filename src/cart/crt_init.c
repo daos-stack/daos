@@ -748,30 +748,44 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		}
 
 		/*
-		 * TODO: revisit this.
-		 * interfaces for multi-provider mode for now are delimited with ':'
-		 * to allow multi-interface selection (delimited by ',') in a single provider mode.
+		 * A coma-separated list of arguments for interfaces, domains, ports, keys is interpreted
+		 * differently, depending whether it is on a client or on a server side.
 		 *
-		 * For example interface containing "eth0:eth1" will mean a multi-provider mode with
-		 * a primary provider on eth0 and secondary on eth1.
-		 * "eth0,eth1" on the other hand will indicate a single provider mode initialized on
-		 * both eth0 and eth1 interfaces.
-		 *
-		 * Domain, port and auth_key are handled similarly
+		 * On a client, a coma-separated list means multi-interface selection, while on a server
+		 * it means a multi-provider selection.
 		 */
+		if (crt_is_service()) {
+			rc = __split_arg(interface, ",", &iface0, &iface1);
+			if (rc != 0)
+				D_GOTO(unlock, rc);
+			rc = __split_arg(domain, ",", &domain0, &domain1);
+			if (rc != 0)
+				D_GOTO(unlock, rc);
+			rc = __split_arg(port, ",", &port0, &port1);
+			if (rc != 0)
+				D_GOTO(unlock, rc);
+			rc = __split_arg(auth_key, ",", &auth_key0, &auth_key1);
+			if (rc != 0)
+				D_GOTO(unlock, rc);
+		}
 
-		rc = __split_arg(interface, ":", &iface0, &iface1);
-		if (rc != 0)
-			D_GOTO(unlock, rc);
-		rc = __split_arg(domain, ":", &domain0, &domain1);
-		if (rc != 0)
-			D_GOTO(unlock, rc);
-		rc = __split_arg(port, ":", &port0, &port1);
-		if (rc != 0)
-			D_GOTO(unlock, rc);
-		rc = __split_arg(auth_key, ":", &auth_key0, &auth_key1);
-		if (rc != 0)
-			D_GOTO(unlock, rc);
+		/* Secondary provider is specified */
+		if (secondary_provider != CRT_PROV_UNKNOWN) {
+			/* Multi provider mode only supported on the server side */
+			if (!crt_is_service()) {
+				D_ERROR("Secondary provider only supported on the server side\n");
+				D_GOTO(unlock, rc = -DER_INVAL);
+			}
+
+			/* Secondary provider needs its own interface or domain */
+			if (iface1 == NULL && domain1 == NULL) {
+				D_ERROR("Either a secondary domain or interface must be specified\n");
+				D_GOTO(unlock, rc = -DER_INVAL);
+			}
+
+			/* Note: secondary ports and auth keys are optional */
+		}
+
 
 		/* CXI doesn't use interface value, instead uses domain */
 		if (iface0 == NULL && primary_provider != CRT_PROV_OFI_CXI)
