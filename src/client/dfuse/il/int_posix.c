@@ -1424,10 +1424,13 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	} else if (whence == SEEK_CUR) {
 		new_offset = entry->fd_pos + offset;
 	} else if (whence == SEEK_END) {
-		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling SEEK_END");
-		entry->fd_status = DFUSE_IO_DIS_STREAM;
-		vector_decref(&fd_table, entry);
-		return __real_lseek(fd, offset, whence);
+		struct stat buf;
+
+		rc = dfs_ostat(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &buf);
+		if (rc != 0)
+			goto do_real_lseek;
+
+		new_offset = buf.st_size;
 	} else {
 		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling %d", whence);
 		entry->fd_status = DFUSE_IO_DIS_STREAM;
