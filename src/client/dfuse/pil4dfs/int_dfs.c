@@ -41,6 +41,7 @@
 #include <daos/event.h>
 #include <daos_prop.h>
 #include <daos/common.h>
+#include <daos/container.h>
 #include <daos/dfs_lib_int.h>
 
 #include "hook.h"
