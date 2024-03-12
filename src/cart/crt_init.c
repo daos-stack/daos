@@ -767,6 +767,20 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			rc = __split_arg(auth_key, ",", &auth_key0, &auth_key1);
 			if (rc != 0)
 				D_GOTO(unlock, rc);
+		} else {
+			/*
+			 * Note: If on the client the 'interface' contains a
+			 * coma-separated list then it will be later parsed out
+			 * and processed in crt_na_config_init().
+			 */
+			if (interface)
+				D_STRNDUP(iface0, interface, 255);
+			if (domain)
+				D_STRNDUP(domain0, domain, 255);
+			if (port)
+				D_STRNDUP(port0, port, 255);
+			if (auth_key)
+				D_STRNDUP(auth_key0, auth_key, 255);
 		}
 
 		/* Secondary provider is specified */
@@ -785,7 +799,6 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 			/* Note: secondary ports and auth keys are optional */
 		}
-
 
 		/* CXI doesn't use interface value, instead uses domain */
 		if (iface0 == NULL && primary_provider != CRT_PROV_OFI_CXI)
