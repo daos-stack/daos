@@ -22,6 +22,8 @@ def scons():
     # pylint: disable-next=unused-variable
     daos_epoch_io = denv.SharedObject(['daos_epoch_io.c'])
     # pylint: disable-next=unused-variable
+    daos_test_rebuild = denv.SharedObject(['daos_rebuild_common.c'])
+    # pylint: disable-next=unused-variable
     daos_test_obj = denv.SharedObject(['daos_obj.c'])
 
     c_files = ['daos_debug_set_params.c']
@@ -58,7 +60,8 @@ def scons():
     denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_4')
     denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_5')
     SConscript('io_conf/SConscript',
-               exports=['denv', 'daos_epoch_io', 'daos_test_tgt', 'daos_test_obj'])
+               exports=['denv', 'daos_epoch_io', 'daos_test_tgt', 'daos_test_rebuild',
+                        'daos_test_obj'])
 
 
 if __name__ == "SCons.Script":

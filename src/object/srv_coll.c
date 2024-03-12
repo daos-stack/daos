@@ -348,7 +348,8 @@ obj_coll_tgt_query(void *args)
 		otqa->otqa_dth = octa->octa_sponsor_dth;
 	}
 
-	if (ocqi->ocqi_tgts.ca_count > 1 || dct->dct_tgt_nr > 1)
+	if (ocqi->ocqi_tgts.ca_count > 1 || dct->dct_tgt_nr > 1 ||
+	    octa->octa_shards[tgt_id].dcs_nr > 1)
 		otqa->otqa_need_copy = 1;
 
 	rc = obj_tgt_query(otqa, ocqi->ocqi_po_uuid, ocqi->ocqi_co_hdl, ocqi->ocqi_co_uuid,
