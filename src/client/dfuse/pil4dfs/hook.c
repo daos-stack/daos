@@ -1,6 +1,6 @@
 /**
  * (C) Copyright 2018-2021 Lei Huang.
- * (C) Copyright 2023 Intel Corporation.
+ * (C) Copyright 2023-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -87,13 +87,16 @@ static uint64_t addr_min[MAX_NUM_SEG], addr_max[MAX_NUM_SEG];
 static uint64_t lib_base_addr[MAX_NUM_LIB];
 
 /* List of names of loaded libraries */
-static char     **lib_name_list;
+static char   **lib_name_list;
 
 /* end   to compile list of memory blocks in /proc/pid/maps */
 
-static char     *path_ld;
-static char     *path_libc;
-static char     *path_libpthread;
+static char    *path_ld;
+static char    *path_libc;
+static char    *path_libpthread;
+/* This holds the path of libpil4dfs.so. It is needed when we want to
+ * force child processes append libpil4dfs.so to env LD_PRELOAD. */
+static char     path_libpil4dfs[PATH_MAX];
 
 #define MAX_MAP_SIZE	(512*1024)
 #define MAP_SIZE_LIMIT	(16*1024*1024)
@@ -229,7 +232,7 @@ determine_lib_path(void)
 		}
 	}
 	if (path_offset == 0) {
-		D_ERROR("Fail to determine path_offset in /proc/self/maps!\n");
+		D_ERROR("Fail to determine path_offset in /proc/self/maps.\n");
 		quit_hook_init();
 	}
 
@@ -238,12 +241,12 @@ determine_lib_path(void)
 		/* try a different format */
 		pos = strstr(read_buff_map, "ld-2.");
 	if (pos == NULL) {
-		D_ERROR("Failed to find ld.so!\n");
+		D_ERROR("Failed to find ld.so.\n");
 		goto err;
 	}
 	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
 	if (start == NULL || end == NULL) {
-		D_ERROR("get_path_pos() failed to determine the path for ld.so!\n");
+		D_ERROR("get_path_pos() failed to determine the path for ld.so.\n");
 		goto err;
 	}
 	if ((end - start + 1) >= PATH_MAX) {
@@ -260,12 +263,12 @@ determine_lib_path(void)
 		/* try a different format */
 		pos = strstr(read_buff_map, "libc-2.");
 	if (pos == NULL) {
-		D_ERROR("Failed to find the path of libc.so!\n");
+		D_ERROR("Failed to find the path of libc.so.\n");
 		goto err;
 	}
 	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
 	if (start == NULL || end == NULL) {
-		D_ERROR("get_path_pos() failed to determine the path for libc.so.!\n");
+		D_ERROR("get_path_pos() failed to determine the path for libc.so.\n");
 		goto err;
 	}
 	if ((end - start + 1) >= PATH_MAX) {
@@ -281,7 +284,6 @@ determine_lib_path(void)
 	if (path_libc == NULL)
 		goto err;
 	path_libc[end - start] = 0;
-	D_FREE(read_buff_map);
 
 	pos = strstr(path_libc, "libc-2.");
 	if (pos) {
@@ -308,6 +310,24 @@ determine_lib_path(void)
 	}	
 	D_FREE(lib_dir_str);
 
+	pos = strstr(read_buff_map, "libpil4dfs.so");
+	if (pos == NULL) {
+		D_ERROR("Failed to find the path of libpil4dfs.so.\n");
+		goto err;
+	}
+	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
+	if (start == NULL || end == NULL) {
+		D_ERROR("get_path_pos() failed to determine the path for libpil4dfs.so.\n");
+		goto err;
+	}
+	if ((end - start + 1) >= PATH_MAX) {
+		DS_ERROR(ENAMETOOLONG, "path_libpil4dfs is too long");
+		goto err;
+	}
+	memcpy(path_libpil4dfs, start, pos - start + sizeof("libpil4dfs.so"));
+	path_libpil4dfs[pos - start - 1 + sizeof("libpil4dfs.so")] = 0;
+	D_FREE(read_buff_map);
+
 	return;
 
 err:
@@ -317,6 +337,13 @@ err_1:
 	found_libc = 0;
 	quit_hook_init();
 }
+
+char *
+query_pil4dfs_path(void)
+{
+	return path_libpil4dfs;
+}
+
 
 /*
  * query_func_addr - Determine the addresses and code sizes of functions in func_name_list[].
@@ -772,7 +799,7 @@ install_hook(void)
 	allocate_memory_block_for_patches();
 
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle)) {
-		D_ERROR("cs_open() failed to initialize capstone engine!\n");
+		D_ERROR("cs_open() failed to initialize capstone engine.\n");
 		quit_hook_init();
 	}
 	cs_opt_skipdata skipdata = {

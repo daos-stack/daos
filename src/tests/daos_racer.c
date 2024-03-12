@@ -116,7 +116,7 @@ racer_oid_gen(int random)
 void
 pack_dkey_iod_sgl(char *dkey, d_iov_t *dkey_iov, char akeys[][MAX_KEY_SIZE],
 		  daos_iod_t *iods, daos_recx_t *recxs, d_sg_list_t *sgls,
-		  d_iov_t *iovs, char sgl_bufs[][MAX_REC_SIZE], int iod_nr)
+		  d_iov_t *iovs, char *sgl_bufs[], int iod_nr)
 {
 	int i;
 
@@ -159,7 +159,7 @@ update_or_fetch(bool update)
 	char		akeys[max_akey_per_dkey][MAX_KEY_SIZE];
 	daos_iod_t	iods[max_akey_per_dkey];
 	d_sg_list_t	sgls[max_akey_per_dkey];
-	char		sgl_bufs[max_akey_per_dkey][MAX_REC_SIZE];
+	char		*sgl_bufs[max_akey_per_dkey];
 	daos_recx_t	recxs[max_akey_per_dkey];
 	d_iov_t		sgl_iovs[max_akey_per_dkey];
 	d_iov_t		dkey_iov;
@@ -173,6 +173,14 @@ update_or_fetch(bool update)
 	rc = daos_obj_open(ts_ctx.tsc_coh, ts_oid, DAOS_OO_RW, &oh, NULL);
 	if (rc)
 		return;
+
+	for (i = 0; i < max_akey_per_dkey; i++) {
+		D_ALLOC(sgl_bufs[i], MAX_REC_SIZE);
+		if (sgl_bufs[i] == NULL) {
+			D_ERROR("sgl_buf allocation failed.\n");
+			return;
+		}
+	}
 
 	for (i = 0; i < round; i++) {
 		int iod_nr = random % max_akey_per_dkey;
@@ -218,6 +226,9 @@ update_or_fetch(bool update)
 				       iod_nr, iods, sgls, NULL, NULL);
 		}
 	}
+
+	for (i = 0; i < max_akey_per_dkey; i++)
+		D_FREE(sgl_bufs[i]);
 
 	daos_obj_close(oh, NULL);
 }
