@@ -50,14 +50,15 @@ engines:
     # the first ram class has a combination of the following roles:
     # wal, meta, data
 
-    # MD-on-SSD roles must be assigned explicitly.  To do this, each of the roles
-    # must be assigned to at least one bdev tier and each tier must have one or more
-    # roles assigned.  The wal and meta roles must be assigned to exactly one tier,
-    # while the data role may be assigned to multiple tiers.
-
     # bdev_roles must be specified on each NVMe storage tier to use MD-on-SSD mode
     # and these roles can only be applied when the first storage tier is of class "ram".
     # If the first storage tier is of class "dcpm", no bdev_roles can be specified.
+
+    # MD-on-SSD roles must be assigned explicitly.  To do this, each of the roles
+    # must be assigned to at least one bdev tier and each tier must have one or more
+    # roles assigned.  The role configuration where wal and data are on same tier but
+    # meta is on a dedicated tier is not supported.  data is the only role that can be
+    # assigned to multiple bdev tiers.
 
     storage:
       -
