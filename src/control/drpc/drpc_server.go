@@ -24,7 +24,7 @@ import (
 // we need to restrict the maximum message size so we can preallocate a
 // buffer to put all of the information in. Corresponding C definition is
 // found in include/daos/drpc.h
-const MaxMsgSize = 1 << 17
+const MaxMsgSize = 1 << 20
 
 // DomainSocketServer is the object that listens for incoming dRPC connections,
 // maintains the connections for sessions, and manages the message processing.

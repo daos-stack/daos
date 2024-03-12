@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       16%{?relval}%{?dist}
+Release:       17%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -433,9 +433,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
+%{_bindir}/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
+%{_libdir}/daos_srv/libchk.so
 %{_libdir}/daos_srv/libcont.so
+%{_libdir}/daos_srv/libddb.so
 %{_libdir}/daos_srv/libdtx.so
 %{_libdir}/daos_srv/libmgmt.so
 %{_libdir}/daos_srv/libobj.so
@@ -553,6 +556,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
+%{_bindir}/ddb_tests
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 
@@ -586,6 +590,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Mar 5 2024 Fan Yong <fan.yong@intel.com> 2.5.100-17
+- Catastrophic Recovery
+
 * Tue Feb 27 2024 Li Wei <wei.g.li@intel.com> 2.5.100-16
 - Update raft to 0.11.0-1.416.g12dbc15
 

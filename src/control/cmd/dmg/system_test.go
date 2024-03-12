@@ -32,7 +32,6 @@ func TestDmg_SystemCommands(t *testing.T) {
 
 		return req
 	}
-
 	withHosts := func(req control.UnaryRequest, hosts ...string) control.UnaryRequest {
 		if rs, ok := req.(interface{ SetHosts(*hostlist.HostSet) }); ok {
 			rs.SetHosts(hostlist.MustCreateSet(strings.Join(hosts, ",")))

@@ -286,6 +286,7 @@ func (cmd *systemStartCmd) Execute(_ []string) (errOut error) {
 	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
+
 	req := new(control.SystemStartReq)
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)

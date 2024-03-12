@@ -18,7 +18,7 @@ def scons():
             'daos_perf', 'daos_racer', 'daos_vol',
             'daos_test', 'data', 'fault_domain', 'io', 'ior',
             'mdtest', 'network', 'nvme', 'mpiio',
-            'object', 'osa', 'pool', 'rebuild', 'security',
+            'object', 'osa', 'pool', 'rebuild', 'recovery', 'security',
             'server', 'soak', 'erasurecode',
             'datamover', 'scripts', 'dbench', 'harness',
             'telemetry', 'deployment', 'performance',

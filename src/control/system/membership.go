@@ -102,6 +102,7 @@ type JoinRequest struct {
 	FabricContexts uint32
 	FaultDomain    *FaultDomain
 	Incarnation    uint64
+	CheckMode      bool
 }
 
 // JoinResponse contains information returned from join membership update.
@@ -159,7 +160,11 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		}
 
 		resp.PrevState = curMember.State
-		curMember.State = MemberStateJoined
+		if req.CheckMode {
+			curMember.State = MemberStateCheckerStarted
+		} else {
+			curMember.State = MemberStateJoined
+		}
 		curMember.Info = ""
 		curMember.Addr = req.ControlAddr
 		curMember.FabricURI = req.FabricURI

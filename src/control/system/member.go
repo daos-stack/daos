@@ -47,8 +47,10 @@ const (
 	MemberStateUnresponsive MemberState = 0x0100
 	// MemberStateAdminExcluded indicates that the rank has been administratively excluded.
 	MemberStateAdminExcluded MemberState = 0x0200
+	// MemberStateCheckerStarted indicates that the rank is running in checker mode.
+	MemberStateCheckerStarted MemberState = 0x0400
 	// MemberStateMax is the last entry indicating end of list.
-	MemberStateMax MemberState = 0x0400
+	MemberStateMax MemberState = 0x0800
 
 	// ExcludedMemberFilter defines the state(s) to be used when determining
 	// whether or not a member should be excluded from CaRT group map updates.
@@ -58,6 +60,8 @@ const (
 	AvailableMemberFilter = MemberStateReady | MemberStateJoined
 	// AllMemberFilter will match all valid member states.
 	AllMemberFilter = MemberState(0xFFFF)
+	// NonExcludedMemberFilter matches all members that don't match the ExcludedMemberFilter.
+	NonExcludedMemberFilter = AllMemberFilter ^ ExcludedMemberFilter
 )
 
 func (ms MemberState) String() string {
@@ -82,6 +86,8 @@ func (ms MemberState) String() string {
 		return "Errored"
 	case MemberStateUnresponsive:
 		return "Unresponsive"
+	case MemberStateCheckerStarted:
+		return "CheckerStarted"
 	default:
 		return "Unknown"
 	}
@@ -109,6 +115,8 @@ func MemberStateFromString(in string) MemberState {
 		return MemberStateErrored
 	case "unresponsive":
 		return MemberStateUnresponsive
+	case "checkerstarted":
+		return MemberStateCheckerStarted
 	default:
 		return MemberStateUnknown
 	}
@@ -148,6 +156,10 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
+		},
+		MemberStateCheckerStarted: {
+			MemberStateReady:  true,
+			MemberStateJoined: true,
 		},
 	}[ms][to]
 }

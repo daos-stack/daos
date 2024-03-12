@@ -895,14 +895,16 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
-		rc = cont_start_agg(cont_child);
-		if (rc != 0)
-			goto out;
+		if (!engine_in_check()) {
+			rc = cont_start_agg(cont_child);
+			if (rc != 0)
+				goto out;
 
-		rc = dtx_cont_register(cont_child);
-		if (rc != 0) {
-			cont_stop_agg(cont_child);
-			goto out;
+			rc = dtx_cont_register(cont_child);
+			if (rc != 0) {
+				cont_stop_agg(cont_child);
+				goto out;
+			}
 		}
 
 		d_list_add_tail(&cont_child->sc_link, &pool_child->spc_cont_list);
@@ -948,6 +950,58 @@ ds_cont_child_start_all(struct ds_pool_child *pool_child)
 	rc = vos_iterate(&iter_param, VOS_ITER_COUUID, false, &anchors,
 			 cont_child_start_cb, NULL, (void *)pool_child, NULL);
 	return rc;
+}
+
+static int
+cont_child_chk_post_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		       vos_iter_param_t *iter_param, void *data, unsigned *acts)
+{
+	struct dsm_tls		*tls = dsm_tls_get();
+	struct ds_pool_child	*pool_child = data;
+	struct ds_cont_child	*cont_child = NULL;
+	int			 rc = 0;
+
+	/* The container shard must has been opened. */
+	rc = cont_child_lookup(tls->dt_cont_cache, entry->ie_couuid,
+			       pool_child->spc_uuid, false /* create */, &cont_child);
+	if (rc != 0)
+		goto out;
+
+	if (cont_child->sc_stopping || !cont_child_started(cont_child))
+		D_GOTO(out, rc = -DER_SHUTDOWN);
+
+	rc = cont_start_agg(cont_child);
+	if (rc != 0)
+		goto out;
+
+	rc = dtx_cont_register(cont_child);
+
+out:
+	if (cont_child != NULL) {
+		if (rc != 0)
+			cont_stop_agg(cont_child);
+
+		ds_cont_child_put(cont_child);
+	}
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "[%d]: Post handle container "DF_CONTF" start after DAOS check: "DF_RC"\n",
+		 dss_get_module_info()->dmi_tgt_id,
+		 DP_CONT(pool_child->spc_uuid, entry->ie_couuid), DP_RC(rc));
+
+	return rc;
+}
+
+int
+ds_cont_chk_post(struct ds_pool_child *pool_child)
+{
+	vos_iter_param_t	iter_param = { 0 };
+	struct vos_iter_anchors	anchors = { 0 };
+
+	iter_param.ip_hdl = pool_child->spc_hdl;
+
+	return vos_iterate(&iter_param, VOS_ITER_COUUID, false, &anchors,
+			   cont_child_chk_post_cb, NULL, (void *)pool_child, NULL);
 }
 
 /* ds_cont_hdl ****************************************************************/
@@ -1255,9 +1309,13 @@ out:
 int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
-	struct ds_pool	*pool;
-	struct cont_tgt_destroy_in in;
-	int rc;
+	struct ds_pool			*pool;
+	struct cont_tgt_destroy_in	 in;
+	struct dss_coll_ops		 coll_ops = { 0 };
+	struct dss_coll_args		 coll_args = { 0 };
+	int				*exclude_tgts = NULL;
+	uint32_t			 exclude_tgt_nr = 0;
+	int				 rc;
 
 	rc = ds_pool_lookup(pool_uuid, &pool);
 	if (rc != 0) {
@@ -1272,8 +1330,26 @@ ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 	cont_iv_entry_delete(pool->sp_iv_ns, pool_uuid, cont_uuid);
 	ds_pool_put(pool);
 
-	rc = dss_thread_collective(cont_child_destroy_one, &in, 0);
-	if (rc)
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0)
+		goto out;
+
+	if (exclude_tgt_nr != 0) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
+	}
+
+	coll_ops.co_func = cont_child_destroy_one;
+	coll_args.ca_func_args = &in;
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+
+out:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
+	if (rc != 0)
 		D_ERROR(DF_UUID"/"DF_UUID" container child destroy failed: %d\n",
 			DP_UUID(pool_uuid), DP_UUID(cont_uuid), rc);
 	return rc;
@@ -1289,7 +1365,9 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_MD, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
+	if (!DAOS_FAIL_CHECK(DAOS_CHK_CONT_ORPHAN))
+		rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
+
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
@@ -1881,16 +1959,34 @@ ds_cont_query_stream_free(struct dss_stream_arg_type *c_args)
 void
 ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 {
-	int				rc;
 	struct cont_tgt_query_in	*in  = crt_req_get(rpc);
 	struct cont_tgt_query_out	*out = crt_reply_get(rpc);
 	struct dss_coll_ops		coll_ops;
 	struct dss_coll_args		coll_args = { 0 };
 	struct xstream_cont_query	pack_args;
+	struct ds_pool_hdl		*hdl = NULL;
+	int				*exclude_tgts = NULL;
+	uint32_t			 exclude_tgt_nr = 0;
+	int				 rc = 0;
 
 	out->tqo_hae			= DAOS_EPOCH_MAX;
 
-	/** on all available streams */
+	hdl = ds_pool_hdl_lookup(in->tqi_pool_uuid);
+	if (hdl == NULL)
+		D_GOTO(reply, rc = -DER_NO_HDL);
+
+	rc = ds_pool_get_failed_tgt_idx(hdl->sph_pool->sp_uuid, &exclude_tgts, &exclude_tgt_nr);
+	ds_pool_hdl_put(hdl);
+
+	if (rc != 0)
+		goto reply;
+
+	if (exclude_tgt_nr != 0) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto reply;
+	}
 
 	coll_ops.co_func		= cont_query_one;
 	coll_ops.co_reduce		= ds_cont_query_coll_reduce;
@@ -1906,10 +2002,13 @@ ds_cont_tgt_query_handler(crt_rpc_t *rpc)
 	coll_args.ca_func_args		= &coll_args.ca_stream_args;
 
 	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+	if (rc == 0)
+		out->tqo_hae = MIN(out->tqo_hae, pack_args.xcq_hae);
 
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	out->tqo_hae	= MIN(out->tqo_hae, pack_args.xcq_hae);
-	out->tqo_rc	= (rc == 0 ? 0 : 1);
+reply:
+	out->tqo_rc = rc;
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n", DP_CONT(NULL, NULL), rpc,
 		out->tqo_rc, DP_RC(rc));
@@ -1984,15 +2083,41 @@ int
 ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count)
 {
-	struct cont_snap_args	 args;
+	struct dss_coll_args	coll_args = { 0 };
+	struct dss_coll_ops	coll_ops = { 0 };
+	struct cont_snap_args	args;
+	int			*exclude_tgts = NULL;
+	uint32_t		 exclude_tgt_nr = 0;
+	int			rc;
+
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0)
+		goto out;
+
+	if (exclude_tgt_nr != 0) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
+	}
 
 	uuid_copy(args.pool_uuid, pool_uuid);
 	uuid_copy(args.cont_uuid, cont_uuid);
 	args.snap_count = snap_count;
 	args.snapshots = snapshots;
+
+	coll_ops.co_func = cont_snap_update_one;
+	coll_args.ca_func_args = &args;
+
 	D_DEBUG(DB_EPC, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
-	return dss_task_collective(cont_snap_update_one, &args, 0);
+
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+
+out:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
+	return rc;
 }
 
 void
@@ -2068,9 +2193,25 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	struct cont_tgt_snapshot_notify_in	*in	= crt_req_get(rpc);
 	struct cont_tgt_snapshot_notify_out	*out	= crt_reply_get(rpc);
 	struct cont_snap_args			 args	= { 0 };
+	struct dss_coll_ops			 coll_ops = { 0 };
+	struct dss_coll_args			 coll_args = { 0 };
+	int					*exclude_tgts = NULL;
+	uint32_t				 exclude_tgt_nr = 0;
+	int					 rc;
 
 	D_DEBUG(DB_EPC, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid), rpc);
+
+	rc = ds_pool_get_failed_tgt_idx(in->tsi_pool_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0)
+		goto reply;
+
+	if (exclude_tgt_nr != 0) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto reply;
+	}
 
 	uuid_copy(args.pool_uuid, in->tsi_pool_uuid);
 	uuid_copy(args.cont_uuid, in->tsi_cont_uuid);
@@ -2079,7 +2220,15 @@ ds_cont_tgt_snapshot_notify_handler(crt_rpc_t *rpc)
 	args.snap_opts = in->tsi_opts;
 	args.oit_oid = in->tsi_oit_oid;
 
-	out->tso_rc = dss_thread_collective(cont_snap_notify_one, &args, 0);
+	coll_ops.co_func = cont_snap_notify_one;
+	coll_args.ca_func_args = &args;
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+
+reply:
+	out->tso_rc = rc;
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	if (out->tso_rc != 0)
 		D_ERROR(DF_CONT": Snapshot notify failed: "DF_RC"\n",
 			DP_CONT(in->tsi_pool_uuid, in->tsi_cont_uuid),
@@ -2111,6 +2260,10 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 {
 	struct cont_tgt_epoch_aggregate_in	*in  = crt_req_get(rpc);
 	struct cont_tgt_epoch_aggregate_out	*out = crt_reply_get(rpc);
+	struct dss_coll_args			 coll_args = { 0 };
+	struct dss_coll_ops			 coll_ops = { 0 };
+	int					*exclude_tgts = NULL;
+	uint32_t				 exclude_tgt_nr = 0;
 	int					 rc;
 
 	D_DEBUG(DB_MD, DF_CONT ": handling rpc: %p epr (%p) [#" DF_U64 "]\n",
@@ -2124,7 +2277,23 @@ ds_cont_tgt_epoch_aggregate_handler(crt_rpc_t *rpc)
 	if (out->tao_rc != 0)
 		return;
 
-	rc = dss_task_collective(cont_epoch_aggregate_one, NULL, 0);
+	rc = ds_pool_get_failed_tgt_idx(in->tai_pool_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0)
+		goto out;
+
+	if (exclude_tgt_nr != 0) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
+	}
+
+	coll_ops.co_func = cont_epoch_aggregate_one;
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+
+out:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
 	if (rc != 0)
 		D_ERROR(DF_CONT": Aggregation failed: "DF_RC"\n",
 			DP_CONT(in->tai_pool_uuid, in->tai_cont_uuid),
@@ -2565,23 +2734,45 @@ out:
 int
 ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t	*prop)
 {
-	struct cont_prop_set_arg arg;
-	int			 rc;
+	struct dss_coll_args		coll_args = { 0 };
+	struct dss_coll_ops		coll_ops = { 0 };
+	struct cont_prop_set_arg	arg;
+	int				*exclude_tgts = NULL;
+	uint32_t			 exclude_tgt_nr = 0;
+	int				 rc = 0;
 
 	/* XXX only need update status and obj_version now? */
 	if (daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS) == NULL &&
 	    daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION) == NULL)
 		return 0;
 
+	rc = ds_pool_get_failed_tgt_idx(pool_uuid, &exclude_tgts, &exclude_tgt_nr);
+	if (rc != 0)
+		goto out;
+
+	if (exclude_tgt_nr != 0) {
+		rc = dss_build_coll_bitmap(exclude_tgts, exclude_tgt_nr, &coll_args.ca_tgt_bitmap,
+					   &coll_args.ca_tgt_bitmap_sz);
+		if (rc != 0)
+			goto out;
+	}
+
 	D_DEBUG(DB_MD, DF_CONT" property update.\n", DP_CONT(pool_uuid, cont_uuid));
 	uuid_copy(arg.cpa_cont_uuid, cont_uuid);
 	uuid_copy(arg.cpa_pool_uuid, pool_uuid);
 	arg.cpa_prop = prop;
-	rc = dss_task_collective(cont_child_prop_update, &arg, 0);
-	if (rc)
+
+	coll_ops.co_func = cont_child_prop_update;
+	coll_args.ca_func_args = &arg;
+
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, 0);
+
+out:
+	D_FREE(coll_args.ca_tgt_bitmap);
+	D_FREE(exclude_tgts);
+	if (rc != 0)
 		D_ERROR("collective cont_write_data_turn_off failed, "DF_RC"\n",
 			DP_RC(rc));
-
 	return rc;
 }
 

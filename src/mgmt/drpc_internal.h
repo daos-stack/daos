@@ -104,4 +104,19 @@ ds_mgmt_drpc_cont_set_owner(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 void
 ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
 
+void
+ds_mgmt_drpc_check_start(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_check_stop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_check_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_check_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
+void
+ds_mgmt_drpc_check_act(Drpc__Call *drpc_req, Drpc__Response *drpc_resp);
+
 #endif /* __MGMT_DRPC_INTERNAL_H__ */

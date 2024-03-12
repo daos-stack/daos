@@ -1,20 +1,22 @@
+# pylint: disable=consider-using-f-string
 """Build management server module"""
 
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'libdaos_tgts')
+    Import('env', 'prereqs', 'libdaos_tgts', 'chk_pb')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
 
-    denv.AppendUnique(CPPPATH=[Dir('.').srcnode()])
+    denv.AppendUnique(CPPPATH=[Dir('.').srcnode(), Dir('..').srcnode()])
 
     denv.require('protobufc')
 
     pb_objs = denv.SharedObject(['acl.pb-c.c', 'pool.pb-c.c', 'svc.pb-c.c',
-                                 'smd.pb-c.c', 'cont.pb-c.c', 'server.pb-c.c'])
+                                 'smd.pb-c.c', 'cont.pb-c.c', 'server.pb-c.c',
+                                 'check.pb-c.c']) + chk_pb
     common = denv.SharedObject(['rpc.c']) + pb_objs
 
     # Management client library
@@ -32,7 +34,7 @@ def scons():
                                'srv_pool.c', 'srv_system.c',
                                'srv_target.c', 'srv_query.c',
                                'srv_drpc.c', 'srv_util.c',
-                               'srv_container.c'],
+                               'srv_container.c', 'srv_chk.c'],
                               install_off='../..')
     senv.Install('$PREFIX/lib64/daos_srv', mgmt_srv)
 

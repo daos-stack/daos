@@ -52,7 +52,9 @@ extern struct crt_proto_format rsvc_proto_fmt;
 	((d_iov_t)		(sai_svc_id)		CRT_VAR) \
 	((uuid_t)		(sai_db_uuid)		CRT_VAR) \
 	((uint32_t)		(sai_class)		CRT_VAR) \
+	((uint32_t)		(sai_mode)		CRT_VAR) \
 	((uint32_t)		(sai_flags)		CRT_VAR) \
+	((uint32_t)		(sai_padding)		CRT_VAR) \
 	((uint64_t)		(sai_size)		CRT_VAR) \
 	((uint64_t)		(sai_term)		CRT_VAR) \
 	((d_rank_list_t)	(sai_ranks)		CRT_PTR)
