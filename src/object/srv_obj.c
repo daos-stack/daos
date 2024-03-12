@@ -9,6 +9,9 @@
  * This file contains the server API methods and the RPC handlers that are both
  * related to object.
  */
+
+/* Only for test. */
+
 #define D_LOGFAC	DD_FAC(object)
 
 #include <uuid/uuid.h>
