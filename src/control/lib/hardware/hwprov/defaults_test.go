@@ -14,10 +14,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/cart"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwloc"
-	"github.com/daos-stack/daos/src/control/lib/hardware/libfabric"
 	"github.com/daos-stack/daos/src/control/lib/hardware/sysfs"
-	"github.com/daos-stack/daos/src/control/lib/hardware/ucx"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -67,17 +66,15 @@ func TestHwprov_DefaultFabricInterfaceProviders(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	expResult := []hardware.FabricInterfaceProvider{
-		libfabric.NewProvider(log),
+		cart.NewProvider(log),
 		sysfs.NewProvider(log),
-		ucx.NewProvider(log),
 	}
 
 	result := DefaultFabricInterfaceProviders(log)
 
 	if diff := cmp.Diff(expResult, result,
-		cmpopts.IgnoreUnexported(libfabric.Provider{}),
+		cmpopts.IgnoreUnexported(cart.Provider{}),
 		cmpopts.IgnoreUnexported(sysfs.Provider{}),
-		cmpopts.IgnoreUnexported(ucx.Provider{}),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
@@ -115,7 +112,7 @@ func TestHwprov_DefaultFabricScannerConfig(t *testing.T) {
 		cmpopts.IgnoreUnexported(
 			hardware.TopologyFactory{},
 			hwloc.Provider{},
-			libfabric.Provider{},
+			cart.Provider{},
 			sysfs.Provider{},
 		),
 		test.CmpOptIgnoreFieldAnyType("log"),
@@ -146,7 +143,7 @@ func TestHwprov_DefaultFabricScanner(t *testing.T) {
 		),
 		cmpopts.IgnoreUnexported(
 			hwloc.Provider{},
-			libfabric.Provider{},
+			cart.Provider{},
 			sysfs.Provider{},
 		),
 		test.CmpOptIgnoreFieldAnyType("log"),
