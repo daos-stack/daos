@@ -773,14 +773,29 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			 * coma-separated list then it will be later parsed out
 			 * and processed in crt_na_config_init().
 			 */
-			if (interface)
+			if (interface) {
 				D_STRNDUP(iface0, interface, 255);
-			if (domain)
+				if (!iface0)
+					D_GOTO(unlock, rc = -DER_NOMEM);
+			}
+
+			if (domain) {
 				D_STRNDUP(domain0, domain, 255);
-			if (port)
+				if (!domain0)
+					D_GOTO(unlock, rc = -DER_NOMEM);
+			}
+
+			if (port) {
 				D_STRNDUP(port0, port, 255);
-			if (auth_key)
+				if (!port0)
+					D_GOTO(unlock, rc = -DER_NOMEM);
+			}
+
+			if (auth_key) {
 				D_STRNDUP(auth_key0, auth_key, 255);
+				if (!auth_key0)
+					D_GOTO(unlock, rc = -DER_NOMEM);
+			}
 		}
 
 		/* Secondary provider is specified */
