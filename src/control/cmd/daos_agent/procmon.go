@@ -382,9 +382,9 @@ func (p *procMon) cleanupServerHandles(ctx context.Context) {
 		p.log.Debugf("%s: no pool handles revoked", msg)
 		return
 	}
-	msgRvkd := ""
+	msgRvkd := "Pool handles revoked: "
 	for i, r := range resp.Results {
-		msgRvkd = fmt.Sprintf("%s%d handles revoked for pool %q", msgRvkd, r.Count, r.PoolID)
+		msgRvkd = fmt.Sprintf("%s %s (%d)", msgRvkd, r.PoolID, r.Count)
 		if i != len(resp.Results)-1 {
 			msgRvkd += ", "
 		}
