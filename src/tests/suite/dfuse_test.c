@@ -327,16 +327,16 @@ out:
 void
 do_readv_writev(void **state)
 {
-	int                     fd;
-	int                     rc;
-	int                     root = open(test_dir, O_DIRECTORY);
-	char                   *str0 = "hello ";
-	char                   *str1 = "world\n";
-	struct iovec            iov[2];
-	ssize_t                 bytes_written;
-	ssize_t                 bytes_read;
-	char                    buf_read[16];
-	off_t                   off;
+	int          fd;
+	int          rc;
+	int          root = open(test_dir, O_DIRECTORY);
+	char        *str0 = "hello ";
+	char        *str1 = "world\n";
+	struct iovec iov[2];
+	ssize_t      bytes_written;
+	ssize_t      bytes_read;
+	char         buf_read[16];
+	off_t        off;
 
 	assert_return_code(root, errno);
 
@@ -355,9 +355,9 @@ do_readv_writev(void **state)
 	off = lseek(fd, 0, SEEK_SET);
 	assert_true(off == 0);
 
-	iov[0].iov_base      = buf_read;
-	iov[1].iov_base      = buf_read + strlen(str0);
-	bytes_read           = readv(fd, iov, 2);
+	iov[0].iov_base = buf_read;
+	iov[1].iov_base = buf_read + strlen(str0);
+	bytes_read      = readv(fd, iov, 2);
 	assert_int_equal(bytes_read, 12);
 	assert_true(strncmp(buf_read, "hello world\n", 12) == 0);
 

@@ -2465,7 +2465,7 @@ readv_over_dfs(int fd, const struct iovec *iov, int iovcnt)
 	daos_size_t   bytes_read;
 	daos_event_t  ev;
 	daos_handle_t eqh;
-	d_sg_list_t   sgl      = { 0 };
+	d_sg_list_t   sgl      = {0};
 	ssize_t       size_sum = 0;
 
 	atomic_fetch_add_relaxed(&num_read, 1);
@@ -2540,7 +2540,7 @@ err:
 	D_FREE(sgl.sg_iovs);
 	DS_ERROR(rc, "readv_over_dfs failed");
 	errno = rc;
-	return (-1);	
+	return (-1);
 }
 
 static ssize_t
@@ -2549,7 +2549,7 @@ writev_over_dfs(int fd, const struct iovec *iov, int iovcnt)
 	int           rc, rc2, i, ii;
 	daos_event_t  ev;
 	daos_handle_t eqh;
-	d_sg_list_t   sgl      = { 0 };
+	d_sg_list_t   sgl      = {0};
 	ssize_t       size_sum = 0;
 
 	atomic_fetch_add_relaxed(&num_write, 1);
@@ -2627,7 +2627,8 @@ err:
 	return (-1);
 }
 
-ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
+ssize_t
+readv(int fd, const struct iovec *iov, int iovcnt)
 {
 	int     fd_directed;
 	ssize_t size_sum;
@@ -2651,7 +2652,8 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 	return size_sum;
 }
 
-ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+ssize_t
+writev(int fd, const struct iovec *iov, int iovcnt)
 {
 	int     fd_directed;
 	ssize_t size_sum;
