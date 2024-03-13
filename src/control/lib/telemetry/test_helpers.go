@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -84,12 +84,13 @@ type (
 		path   string
 		desc   string
 		units  string
-		min    float64
-		max    float64
+		min    uint64
+		max    uint64
 		Cur    float64 // value - may be exact or approximate
-		sum    float64
+		sum    uint64
 		mean   float64
 		stddev float64
+		sumsqs float64
 		str    string // string of regex to compare String() against
 		node   *C.struct_d_tm_node_t
 	}
@@ -131,7 +132,7 @@ func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 			if rc != 0 {
 				t.Fatalf("failed to add %s: %s", tm.Name, daos.Status(rc))
 			}
-			for _, val := range []float64{tm.min, tm.max, tm.Cur} {
+			for _, val := range []uint64{tm.min, tm.max, uint64(tm.Cur)} {
 				C.d_tm_set_gauge(tm.node, C.uint64_t(val))
 			}
 		case MetricTypeCounter:
@@ -223,7 +224,8 @@ func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 			sum:    107,
 			mean:   35.666666666666664,
 			stddev: 31.973947728319903,
-			str:    `test_gauge_stats: 42 rpc/s \p{Ps}min: 1, max: 64, avg: 36, stddev: 32, samples: 3\p{Pe}`,
+			sumsqs: 5861,
+			str:    `test_gauge_stats: 42 rpc/s \p{Ps}min: 1, max: 64, avg: 36, sum: 107, stddev: 32, samples: 3\p{Pe}`,
 		},
 		MetricTypeCounter: {
 			Name:  "test_counter",
@@ -239,7 +241,7 @@ func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 			desc:  "some duration",
 			units: "us", // TODO: fix at library level, should be ns
 			Cur:   float64(10 * time.Millisecond),
-			str:   `test_duration: [0-9]+ us \p{Ps}min: [0-9]+, max: [0-9]+, avg: [0-9]+, samples: [0-9]+\p{Pe}`,
+			str:   `test_duration: [0-9]+ us \p{Ps}min: [0-9]+, max: [0-9]+, avg: [0-9]+, sum: [0-9]+, samples: [0-9]+\p{Pe}`,
 		},
 		MetricTypeTimestamp: {
 			Name: "test_timestamp",

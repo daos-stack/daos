@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -430,7 +430,11 @@ func newRankMetric(log logging.Logger, rank uint32, m telemetry.Metric) *rankMet
 	case telemetry.MetricTypeStatsGauge, telemetry.MetricTypeDuration:
 		rm.gvm.add(rm.baseName, desc, rm.labels)
 		for _, ms := range getMetricStats(rm.baseName, rm.metric) {
-			rm.gvm.add(ms.name, ms.desc, rm.labels)
+			if ms.isCounter {
+				rm.cvm.add(ms.name, ms.desc, rm.labels)
+			} else {
+				rm.gvm.add(ms.name, ms.desc, rm.labels)
+			}
 		}
 	case telemetry.MetricTypeCounter:
 		rm.cvm.add(rm.baseName, desc, rm.labels)
@@ -455,9 +459,10 @@ func (c *Collector) isIgnored(name string) bool {
 }
 
 type metricStat struct {
-	name  string
-	desc  string
-	value float64
+	name      string
+	desc      string
+	value     float64
+	isCounter bool
 }
 
 func getMetricStats(baseName string, m telemetry.Metric) (stats []*metricStat) {
@@ -467,30 +472,45 @@ func getMetricStats(baseName string, m telemetry.Metric) (stats []*metricStat) {
 	}
 
 	for name, s := range map[string]struct {
-		fn   func() float64
-		desc string
+		fn        func() float64
+		desc      string
+		isCounter bool
 	}{
 		"min": {
-			fn:   ms.FloatMin,
+			fn:   func() float64 { return float64(ms.Min()) },
 			desc: " (min value)",
 		},
 		"max": {
-			fn:   ms.FloatMax,
+			fn:   func() float64 { return float64(ms.Max()) },
 			desc: " (max value)",
 		},
 		"mean": {
 			fn:   ms.Mean,
 			desc: " (mean)",
 		},
+		"sum": {
+			fn:   func() float64 { return float64(ms.Sum()) },
+			desc: " (sum)",
+		},
 		"stddev": {
 			fn:   ms.StdDev,
 			desc: " (std dev)",
 		},
+		"sumsquares": {
+			fn:   ms.SumSquares,
+			desc: " (sum of squares)",
+		},
+		"samples": {
+			fn:        func() float64 { return float64(ms.SampleSize()) },
+			desc:      " (samples)",
+			isCounter: true,
+		},
 	} {
 		stats = append(stats, &metricStat{
-			name:  baseName + "_" + name,
-			desc:  m.Desc() + s.desc,
-			value: s.fn(),
+			name:      baseName + "_" + name,
+			desc:      m.Desc() + s.desc,
+			value:     s.fn(),
+			isCounter: s.isCounter,
 		})
 	}
 
@@ -584,8 +604,14 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 				break
 			}
 			for _, ms := range getMetricStats(rm.baseName, rm.metric) {
-				if err = rm.gvm.set(ms.name, ms.value, rm.labels); err != nil {
-					break
+				if ms.isCounter {
+					if err = rm.cvm.set(ms.name, ms.value, rm.labels); err != nil {
+						break
+					}
+				} else {
+					if err = rm.gvm.set(ms.name, ms.value, rm.labels); err != nil {
+						break
+					}
 				}
 			}
 		case telemetry.MetricTypeCounter:
