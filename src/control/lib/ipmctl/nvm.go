@@ -16,7 +16,9 @@ type (
 	IpmCtl interface {
 		// Init verifies the version of the library is compatible.
 		Init(logging.Logger) error
-		// GetModules discovers persistent memory modules.
+		// GetModules discovers persistent memory modules. Note that the Linux
+		// implementation has been seen to have intermittent long latency (multiple minutes)
+		// on calls to this API endpoint (27-Feb-2024).
 		GetModules(logging.Logger) ([]DeviceDiscovery, error)
 		// GetRegions discovers persistent memory regions.
 		GetRegions(logging.Logger) ([]PMemRegion, error)
