@@ -99,8 +99,11 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 		"request timeout": {
 			timeout: 1 * time.Nanosecond,
 			req: &testRequest{
-				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+				rpcFn: func(ctx context.Context, _ *grpc.ClientConn) (proto.Message, error) {
 					time.Sleep(1 * time.Microsecond)
+					if ctx.Err() != nil {
+						return nil, ctx.Err()
+					}
 					return defaultMessage, nil
 				},
 			},
@@ -120,7 +123,10 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				}
 			}(),
 			req: &testRequest{
-				rpcFn: func(_ context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+				rpcFn: func(ctx context.Context, _ *grpc.ClientConn) (proto.Message, error) {
+					if ctx.Err() != nil {
+						return nil, ctx.Err()
+					}
 					time.Sleep(10 * time.Second) // shouldn't be allowed to run this long
 					return defaultMessage, nil
 				},
