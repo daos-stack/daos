@@ -136,6 +136,12 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 		return errors.Wrap(common.ConcatErrors([]error{errSCM, errNVMe}, nil),
 			"storage prepare command returned multiple errors")
 	case errSCM != nil:
+		// If SCM-only was not set then no-modules msg should be printed but not result in
+		// non-zero exit code.
+		if !cmd.ScmOnly && errors.Is(errSCM, storage.FaultScmNoPMem) {
+			cmd.Info(errSCM.Error())
+			return nil
+		}
 		return errSCM
 	}
 
