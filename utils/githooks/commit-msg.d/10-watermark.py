@@ -41,6 +41,8 @@ def run_check():
                 sys.exit(0)
             elif line.startswith("Signed-off-by"):
                 continue
+            elif line.startswith("Change-Id"):
+                continue
             elif line.strip() == "":
                 continue
             elif line.startswith("# ------------------------ >8 ------------------------"):
@@ -59,6 +61,9 @@ def run_check():
         hook_emitted = False
         for line in msg:
             if not hook_emitted:
+                if line.startswith("Change-Id"):
+                    emit_watermark(commit_msg)
+                    hook_emitted = True
                 if line.startswith("Signed-off-by"):
                     commit_msg.write("Required-githooks: true\n\n")
                     hook_emitted = True
