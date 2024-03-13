@@ -57,8 +57,7 @@ engines:
     # MD-on-SSD roles must be assigned explicitly.  To do this, each of the roles
     # must be assigned to at least one bdev tier and each tier must have one or more
     # roles assigned.  The role configuration where wal and data are on same tier but
-    # meta is on a dedicated tier is not supported.  data is the only role that can be
-    # assigned to multiple bdev tiers.
+    # meta is on a dedicated tier is not supported.  Maximum number of bdev tiers is 3.
 
     storage:
       -
