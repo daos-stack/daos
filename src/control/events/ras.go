@@ -45,14 +45,16 @@ type RASID uint32
 // RASID constant definitions matching those used when creating events either in
 // the control or data (engine) planes.
 const (
-	RASUnknownEvent         RASID = C.RAS_UNKNOWN_EVENT
-	RASEngineFormatRequired RASID = C.RAS_ENGINE_FORMAT_REQUIRED // notice
-	RASEngineDied           RASID = C.RAS_ENGINE_DIED            // error
-	RASPoolRepsUpdate       RASID = C.RAS_POOL_REPS_UPDATE       // info
-	RASSwimRankAlive        RASID = C.RAS_SWIM_RANK_ALIVE        // info
-	RASSwimRankDead         RASID = C.RAS_SWIM_RANK_DEAD         // info
-	RASSystemStartFailed    RASID = C.RAS_SYSTEM_START_FAILED    // error
-	RASSystemStopFailed     RASID = C.RAS_SYSTEM_STOP_FAILED     // error
+	RASUnknownEvent            RASID = C.RAS_UNKNOWN_EVENT
+	RASEngineFormatRequired    RASID = C.RAS_ENGINE_FORMAT_REQUIRED     // notice
+	RASEngineDied              RASID = C.RAS_ENGINE_DIED                // error
+	RASPoolRepsUpdate          RASID = C.RAS_POOL_REPS_UPDATE           // info
+	RASSwimRankAlive           RASID = C.RAS_SWIM_RANK_ALIVE            // info
+	RASSwimRankDead            RASID = C.RAS_SWIM_RANK_DEAD             // info
+	RASSystemStartFailed       RASID = C.RAS_SYSTEM_START_FAILED        // error
+	RASSystemStopFailed        RASID = C.RAS_SYSTEM_STOP_FAILED         // error
+	RASEngineJoinFailed        RASID = C.RAS_ENGINE_JOIN_FAILED         // error
+	RASSystemFabricProvChanged RASID = C.RAS_SYSTEM_FABRIC_PROV_CHANGED // info
 )
 
 func (id RASID) String() string {

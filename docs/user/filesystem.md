@@ -51,6 +51,7 @@ The following features from POSIX are not supported:
 * Hard links
 * mmap support with MAP\_SHARED will be consistent from single client only and only when data
   caching is enabled. Note that this is supported through DFUSE only (i.e. not through the DFS API).
+  The dfuse-data-cache=otoc container attribute allows this without enabling other caching.
 * Char devices, block devices, sockets and pipes
 * User/group quotas
 * setuid(), setgid() programs, supplementary groups, POSIX ACLs are not supported
@@ -140,7 +141,8 @@ scripts of any resource manager or scheduler in use.
 
 ### Core binding and threads
 
-DFuse will launch one thread per available core by default, although this can be
+DFuse will launch one thread per available core by default, limited to 16 if not
+constrained by a taskset. This can be
 changed by the `--thread-count` option. To change the cores that DFuse runs on
 use kernel level tasksets which will bind DFuse to a subset of cores. This can be
 done via the `tasket` or `numactl` programs or similar. If doing this then DFuse
@@ -149,10 +151,13 @@ operations will block a thread until completed so if restricting DFuse to a smal
 number of cores then overcommiting via the `--thread-count` option may be desirable.
 
 DFuse will use two types of threads: fuse threads to accept and process requests
-and event queue threads.  The `--thread-count` option will dictate the total number of
+and event queue progress threads.  The `--thread-count` option will dictate the total number of
 threads and each eq-thread will reduce this.  Each event queue thread will create a
 daos event queue so consumes additional network resources.  The `--eq-count` option
 will control the event queues and associated threads.
+
+In addition DFuse will always use a single main thread and a invalidation thread to manage dentry
+timeouts.
 
 ### Restrictions
 
@@ -217,6 +222,7 @@ Additionally, there are several optional command-line options:
 | --singlethreaded           | run single threaded              |
 | --thread-count=<count>     | Number of threads to use         |
 | --multi-user               | Run in multi user mode           |
+| --read-only                | Mount in read-only mode          |
 
 The `--pool` and `--container` options can also be passed as the second and third positional
 arguments.
@@ -666,19 +672,25 @@ to be set to 0 or off, except dentry-dir-time which defaults to dentry-time
 | dfuse-dentry-time       | How long directory entries are cached                                  |
 | dfuse-dentry-dir-time   | How long dentries are cached, if the entry is itself a directory       |
 | dfuse-ndentry-time      | How long negative dentries are cached                                  |
-| dfuse-data-cache        | Data caching enabled, duration or ("on"/"true"/"off"/"false")          |
+| dfuse-data-cache        | Data caching enabled, duration or ("on"/"true"/"off"/"false"/"otoc")   |
 | dfuse-direct-io-disable | Force use of page cache for this container ("on"/"true"/"off"/"false") |
 
 For metadata caching attributes specify the duration that the cache should be
 valid for, specified in seconds or with a 's', 'm', 'h' or 'd' suffix for seconds,
 minutes, hours or days.
 
-dfuse-data-cache can be set to a time value or "on", "true", "off" or "false". If set, other values
-will log an error and result in the cache being off.  The O\_DIRECT flag for open files will be
-honored with this option enabled. Files which do not set O\_DIRECT will be cached.  Data caching
-is controlled by dfuse passing a flag to the kernel on open. If data-cache is enabled then it will
-be allowed for files if that file is already open, and timeout value will be the duration between
-a previous close call which reduced the open count to zero and the next subsequent call to open.
+dfuse-data-cache can be set to a time value or "on", "true", "off", "false" or "otoc".  If set,
+other values will log an error and result in the cache being off.  The O\_DIRECT flag for open files
+will be honored with this option enabled. Files which do not set O\_DIRECT will be cached.  Data
+caching is controlled by dfuse passing a flag to the kernel on open. If data-cache is enabled then
+it will be allowed for files, and timeout value will be the duration between a previous close call
+which reduced the open count to zero and the next subsequent call to open.  A value of "otoc" will
+allow the use of the page cache for caching the file whilst open but the cache will only be used
+from open to close and not be saved across opens, this allows the use of MAP\_SHARED on files.
+
+Processes running with a working directory within the dfuse mount do not hold a reference on the
+directory so cache expiry can in this case cause getcwd() to fail.  Should this happen then a
+larger value for "dfuse-dentry-dir-time" should avoid the issue.
 
 dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,
 however if this is enabled then the O\_DIRECT flag will be ignored, and all
@@ -974,6 +986,9 @@ libpil4dfs intercepting summary for ops on DFS:
 [op_sum ]  5003
 ```
 
+### Force pil4dfs related env set in child processes when calling execve and its variants
+Normally child processes inherit environmental variables from parent processes. In rare cases, e.g. scons, envs are striped off when calling execve(). It might be useful to force pil4dfs related env set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 if not set.
+
 ### Limitations of using libpil4dfs
 Stability issues: This is a preview version. Some features are not implemented yet. Many APIs are involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc. 
 
@@ -992,3 +1007,5 @@ No support of creating a process with the executable and shared object files sto
 No support for applications using fork yet
 
 Those unsupported features are still available through dfuse.
+
+DFS (dfs_open / dfs_lookup) does not support O_APPEND currently. We allow O_APPEND flag in open in libpil4dfs to support bash scripts like configure. Currently, we only query file size one time when opening the file, then set file pointer to the end of the file. We DO NOT move file pointer to the end of the file in all following write to avoid expensive stat. Further work is required for rigorous O_APPEND support.

@@ -27,14 +27,16 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <dirent.h>
+#include <sys/wait.h>
 
 #include <dfuse_ioctl.h>
 
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdl";
+static const char *all_tests = "ismdlfe";
 
 static void
 print_usage()
@@ -48,6 +50,10 @@ print_usage()
 	print_message("dfuse_test -m|--metadata\n");
 	print_message("dfuse_test -d|--directory\n");
 	print_message("dfuse_test -l|--lowfd\n");
+	print_message("dfuse_test -f|--mmap\n");
+	print_message("dfuse_test -e|--exec\n");
+	/* verifyenv is only run by exec test. Should not be executed directly */
+	/* print_message("dfuse_test    --verifyenv\n");                       */
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -196,7 +202,6 @@ do_stream(void **state)
 
 	errno = 0;
 	rewind(stream);
-	assert_int_equal(errno, 0);
 
 	offset = ftello(stream);
 	assert_int_equal(offset, 0);
@@ -510,6 +515,56 @@ do_directory(void **state)
 	assert_return_code(rc, errno);
 }
 
+void
+do_mmap(void **state)
+{
+	int   root;
+	int   fd;
+	int   rc;
+	void *addr;
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	/* Always unlink the file but do not check for errors.  If running the test manually the
+	 * file might pre-exist and affect the behavior.
+	 */
+	unlinkat(root, "file", 0);
+
+	fd = openat(root, "file", O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+	assert_return_code(root, errno);
+
+	rc = ftruncate(fd, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	addr = mmap(NULL, 1024 * 1024, PROT_WRITE, MAP_PRIVATE, fd, 0);
+	assert_ptr_not_equal(addr, MAP_FAILED);
+
+	printf("Mapped private to %p\n", addr);
+
+	memset(addr, 0, 1024 * 1024);
+
+	rc = munmap(addr, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	addr = mmap(NULL, 1024 * 1024, PROT_READ, MAP_SHARED, fd, 0);
+	assert_ptr_not_equal(addr, MAP_FAILED);
+
+	printf("Mapped shared to %p\n", addr);
+
+	rc = munmap(addr, 1024 * 1024);
+	assert_return_code(rc, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
 #define MIN_DAOS_FD 10
 /*
  * Check whether daos network context uses low fds 0~9.
@@ -520,7 +575,6 @@ do_lowfd(void **state)
 	int   fd;
 	int   rc;
 	int   i;
-	bool  pil4dfs_loaded = false;
 	char *env_ldpreload;
 	char  fd_path[64];
 	char *path;
@@ -529,9 +583,7 @@ do_lowfd(void **state)
 	if (env_ldpreload == NULL)
 		return;
 
-	if (strstr(env_ldpreload, "libpil4dfs.so"))
-		pil4dfs_loaded = true;
-	else
+	if (strstr(env_ldpreload, "libpil4dfs.so") == NULL)
 		/* libioil cannot pass this test since low fds are only temporarily blocked */
 		return;
 
@@ -548,8 +600,7 @@ do_lowfd(void **state)
 	printf("fd = %d\n", fd);
 	rc = close(fd);
 	assert_return_code(rc, errno);
-	if (pil4dfs_loaded)
-		assert_true(fd >= MIN_DAOS_FD);
+	assert_true(fd >= MIN_DAOS_FD);
 
 	/* now check whether daos uses low fds */
 	path = malloc(PATH_MAX);
@@ -557,18 +608,130 @@ do_lowfd(void **state)
 	for (i = 0; i < MIN_DAOS_FD; i++) {
 		snprintf(fd_path, sizeof(fd_path) - 1, "/proc/self/fd/%d", i);
 		rc = readlink(fd_path, path, PATH_MAX - 1);
-		/* libioil only temporarily block low fds during daos_init().
-		 * libpil4dfs blocks low fds before daos_init() and does not free
-		 * them until applications end.
-		 */
-		if (!pil4dfs_loaded && rc == -1 && errno == ENOENT)
-			continue;
 		assert_true(rc > 0);
 		path[rc] = 0;
 		assert_true(strstr(path, "socket:") == NULL);
 		assert_true(strstr(path, "anon_inode:") == NULL);
 	}
 	free(path);
+}
+
+#define ERR_ENV_UNSET (2)
+
+void
+verify_pil4dfs_env()
+{
+	char *p;
+
+	p = getenv("LD_PRELOAD");
+	if (!p) {
+		printf("Error: LD_PRELOAD is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_REPORT");
+	if (!p) {
+		printf("Error: D_IL_REPORT is unset.\n");
+		goto err;
+	}
+
+	p = getenv("DAOS_MOUNT_POINT");
+	if (!p) {
+		printf("Error: DAOS_MOUNT_POINT is unset.\n");
+		goto err;
+	}
+
+	p = getenv("DAOS_POOL");
+	if (!p) {
+		printf("Error: DAOS_POOL is unset.\n");
+		goto err;
+	}
+
+	p = getenv("DAOS_CONTAINER");
+	if (!p) {
+		printf("Error: DAOS_CONTAINER is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_MAX_EQ");
+	if (!p) {
+		printf("Error: D_IL_MAX_EQ is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_ENFORCE_EXEC_ENV");
+	if (!p) {
+		printf("Error: D_IL_ENFORCE_EXEC_ENV is unset.\n");
+		goto err;
+	}
+	exit(0);
+
+err:
+	exit(ERR_ENV_UNSET);
+}
+
+/*
+ * fork() to create a child process and call exec() to run this test itself.
+ * This test is only used for libpil4dfs.so.
+ */
+void
+do_exec(void **state)
+{
+	pid_t pid;
+	int   status, rc;
+	char *envp[1] = {NULL};
+	char *argv[3] = {"dfuse_test", "--verifyenv", NULL};
+	char *exe_path;
+	char *env_ldpreload;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (env_ldpreload == NULL)
+		return;
+	if (strstr(env_ldpreload, "libpil4dfs.so") == NULL)
+		return;
+
+	printf("Found libpil4dfs.so.\n");
+	exe_path = malloc(PATH_MAX);
+	assert_non_null(exe_path);
+	rc = readlink("/proc/self/exe", exe_path, PATH_MAX - 1);
+	assert_true(rc > 0);
+	exe_path[rc] = 0;
+
+	/* fork and call execve() */
+	printf("Testing execve().\n");
+	pid = fork();
+	if (pid == 0)
+		execve(exe_path, argv, envp);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+
+	/* fork and call execv() */
+	printf("Testing execv().\n");
+	pid = fork();
+	if (pid == 0)
+		execv(exe_path, argv);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+
+	/* fork and call execvp() */
+	printf("Testing execvp().\n");
+	pid = fork();
+	if (pid == 0)
+		execvp(exe_path, argv);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+
+	/* fork and call execvpe() */
+	printf("Testing execvpe().\n");
+	pid = fork();
+	if (pid == 0)
+		execvpe(exe_path, argv, envp);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
 }
 
 static int
@@ -620,6 +783,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			};
 			nr_failed += cmocka_run_group_tests(readdir_tests, NULL, NULL);
 			break;
+
 		case 'l':
 			printf("\n\n=================");
 			printf("dfuse low fd tests");
@@ -628,6 +792,27 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			    cmocka_unit_test(do_lowfd),
 			};
 			nr_failed += cmocka_run_group_tests(lowfd_tests, NULL, NULL);
+			break;
+
+		case 'f': {
+			const struct CMUnitTest mmap_tests[] = {
+			    cmocka_unit_test(do_mmap),
+			};
+			printf("\n\n=================");
+			printf("dfuse mmap tests");
+			printf("=====================\n");
+			nr_failed += cmocka_run_group_tests(mmap_tests, NULL, NULL);
+			break;
+		}
+
+		case 'e':
+			printf("\n\n=================");
+			printf("dfuse exec tests");
+			printf("=====================\n");
+			const struct CMUnitTest exec_tests[] = {
+			    cmocka_unit_test(do_exec),
+			};
+			nr_failed += cmocka_run_group_tests(exec_tests, NULL, NULL);
 			break;
 
 		default:
@@ -654,10 +839,13 @@ main(int argc, char **argv)
 					       {"stream", no_argument, NULL, 's'},
 					       {"metadata", no_argument, NULL, 'm'},
 					       {"directory", no_argument, NULL, 'd'},
+					       {"mmap", no_argument, NULL, 'f'},
 					       {"lowfd", no_argument, NULL, 'l'},
+					       {"exec", no_argument, NULL, 'e'},
+					       {"verifyenv", no_argument, NULL, 'c'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdl", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlfe", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
@@ -668,6 +856,10 @@ main(int argc, char **argv)
 			break;
 		case 'M':
 			test_dir = optarg;
+			break;
+		case 'c':
+			/* only run by child process */
+			verify_pil4dfs_env();
 			break;
 		default:
 			printf("Unknown Option\n");

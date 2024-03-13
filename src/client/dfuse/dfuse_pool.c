@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -49,7 +49,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	if (rc != 0)
 		goto err;
 
-	rc = dfuse_cont_open(dfuse_info, dfp, &cont, &dfc);
+	rc = dfuse_cont_get_handle(dfuse_info, dfp, cont, &dfc);
 	if (rc != 0)
 		goto err;
 
@@ -62,7 +62,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 		DFUSE_TRA_INFO(ie, "Reusing existing pool entry without reconnect");
 
-		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
+		d_hash_rec_decref(dfp->dfp_cont_table, &dfc->dfs_entry);
 		entry.attr          = ie->ie_stat;
 		entry.attr_timeout  = dfc->dfc_attr_timeout;
 		entry.entry_timeout = dfc->dfc_dentry_dir_timeout;
@@ -93,7 +93,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 	rc = daos_pool_query(dfp->dfp_poh, NULL, &pool_info, prop, NULL);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfp, "daos_pool_query() failed: (%d)", rc);
+		DHL_ERROR(dfp, rc, "daos_pool_query() failed");
 		D_GOTO(decref, rc = daos_der2errno(rc));
 	}
 
