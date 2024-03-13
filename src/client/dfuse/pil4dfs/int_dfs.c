@@ -7260,7 +7260,6 @@ init_myhook(void)
 	}
 	enforce_exec_env = false;
 	d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
-<<<<<<< HEAD
 
 	compatible_mode = false;
 	d_getenv_bool("D_IL_COMPATIBLE", &compatible_mode);
@@ -7274,8 +7273,6 @@ init_myhook(void)
 		}
 		D_INFO("pil4dfs compatible mode is ON.\n");
 	}
-=======
->>>>>>> master
 
 	/* Find dfuse mounts from /proc/mounts */
 	rc = discover_dfuse_mounts();
