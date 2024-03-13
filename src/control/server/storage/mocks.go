@@ -173,6 +173,7 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 		UID:              fmt.Sprintf("Device%d", idx),
 		PartNumber:       fmt.Sprintf("PartNumber%d", idx),
 		FirmwareRevision: fmt.Sprintf("FWRev%d", idx),
+		HealthState:      "Healthy",
 	}
 }
 
