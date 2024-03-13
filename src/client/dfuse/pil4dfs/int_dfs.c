@@ -4222,7 +4222,8 @@ static void
 reset_daos_env_before_exec(void)
 {
 	/* bash does fork(), then close opened files before exec(),
-	 * so the fd for log file could be invalid now. */
+	 * so the fd for log file could be invalid now.
+	 */
 	d_log_disable_logging();
 
 	setup_fd_0_1_2();
@@ -6468,10 +6469,10 @@ posix_fadvise(int fd, off_t offset, off_t len, int advice)
 	/* Hint to turn off caching. */
 	if (advice == POSIX_FADV_DONTNEED)
 		return 0;
-/*
-	if (report)
-		D_ERROR("posix_fadvise() is not implemented yet.\n");
-*/
+	/**
+	 *	if (report)
+	 *		D_ERROR("posix_fadvise() is not implemented yet.\n");
+	 */
 	errno = ENOTSUP;
 	return -1;
 }
@@ -6811,77 +6812,6 @@ out:
 	return;
 }
 
-static void
-hang_for_debugging(void)
-{
-//        FILE *fIn, *fOut;
-        FILE *fIn;
-        char szPath[3072];
-	int readsize;
-//	int found = 0;
-//        volatile int  flag = 1;
-
-        fIn = fopen("/proc/self/cmdline", "r");
-        if (fIn == NULL)        {
-                printf("Fail to open file: /proc/self/cmdline\nQuit\n");
-                exit(1);
-        }
-
-        readsize = fread(szPath, 1, 3072, fIn);
-        fclose(fIn);
-
-        if (readsize <= 0)   {
-                printf("Fail to determine the executable file name.\nQuit\n");
-                exit(1);
-        }
-/*	
-	fOut = fopen("/dev/shm/dbg.txt", "a+");
-	if (fOut) {
-		char *end = szPath + readsize;
-
-		fseek(fOut, 0, SEEK_END);
-		fprintf(fOut, "DBG> pid = %d init cmd = ", getpid());
-		for (char *p = szPath; p < end;) {
-			if (strstr(p, "src/gurt/dlog.c"))
-				found = 1;
-			fprintf(fOut, " %s", p);
-			while (*p++); // skip until start of next 0-terminated section
-		}
-		fprintf(fOut, "\n");
-		fclose(fOut);
-	}
-*/	
-//	strcpy(exe_path, szPath);
-/*
-	if (found) {
-		FILE *fLog;
-		fLog = fopen("/dev/shm/dbg.txt", "a+");
-		if (fLog) {
-			fseek(fLog, 0, SEEK_END);
-			fprintf(fLog, "DBG> found sh. pid = %d\n", getpid());
-			fclose(fLog);
-		}
-		volatile int  flag = 1;
-		while(flag) {
-			sleep(1);
-		}
-	}
-*/
-//	if (strstr(szPath, "uname")) {
-//	if (memcmp(szPath, "sh\0-c\0gcc\0-o\0", 13) == 0) {
-//	if (memcmp(szPath, "make\0install-am\0", 15) == 0) {
-//	if (memcmp(szPath, "/dfs/venv/bin/python3\0/dfs/venv/bin/scons", 41) == 0) {
-//        if (memcmp(szPath, "/tmp/daos_dfuse_test_dfuse_daos_build_wt_il_1/venv/bin/python3\0/tmp/daos_dfuse_test_dfuse_daos_build_wt_il_1/venv/bin/scons", 123)==0) {
-//        if (memcmp(szPath, "git\0clone\0https://github.com/openucx/ucx.git", 44)==0) {
-//                printf("DBG> Found %s. pid = %d\n", szPath, getpid());
-//                fflush(stdout);
-//                while (flag) {
-//                        sleep(1);
-//                }
-//        }
-
-}
-
 static __attribute__((constructor)) void
 init_myhook(void)
 {
@@ -7018,7 +6948,6 @@ init_myhook(void)
 
 	init_fd_dup2_list();
 
-	hang_for_debugging();
 	extract_exe_path();
 
 	install_hook();

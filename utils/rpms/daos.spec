@@ -590,16 +590,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-<<<<<<< HEAD
-*Wed Feb 28 2024 Lei Huang <lei.huang@intel.com> 2.5.100-15
+*Wed Mar 13 2024 Lei Huang <lei.huang@intel.com> 2.5.100-17
 - Add patchelf as as a dependency
-=======
+
 * Tue Feb 27 2024 Li Wei <wei.g.li@intel.com> 2.5.100-16
 - Update raft to 0.11.0-1.416.g12dbc15
 
 * Mon Feb 12 2024 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-15
 - Updated isa-l package name to match EPEL
->>>>>>> master
 
 * Tue Jan 09 2024 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-14
 - Move /etc/ld.so.conf.d/daos.conf to daos-server sub-package
