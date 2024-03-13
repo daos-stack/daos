@@ -120,7 +120,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 				Leader: 1,
 			},
 			expResp: &mgmtpb.PoolCreateResp{
-				Leader:    1,
+				SvcLdr:    1,
 				SvcReps:   []uint32{1},
 				TgtRanks:  []uint32{1},
 				TierBytes: []uint64{1, 2},

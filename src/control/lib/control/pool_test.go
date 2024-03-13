@@ -668,7 +668,7 @@ func TestControl_PoolCreate(t *testing.T) {
 				),
 			},
 			expResp: &PoolCreateResp{
-				SvcLdr:   1,
+				Leader:   1,
 				SvcReps:  []uint32{0, 1, 2},
 				TgtRanks: []uint32{0, 1, 2},
 			},
@@ -685,7 +685,7 @@ func TestControl_PoolCreate(t *testing.T) {
 				),
 			},
 			expResp: &PoolCreateResp{
-				SvcLdr:   2,
+				Leader:   2,
 				SvcReps:  []uint32{0, 1, 2},
 				TgtRanks: []uint32{0, 1, 2},
 			},
