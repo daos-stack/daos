@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -93,6 +93,7 @@ type (
 		UID              string
 		PartNumber       string
 		FirmwareRevision string
+		HealthState      string
 	}
 
 	// ScmModules is a type alias for []ScmModule that implements fmt.Stringer.
@@ -163,23 +164,28 @@ func (s ScmFirmwareUpdateStatus) String() string {
 }
 
 func (sm *ScmModule) String() string {
+	health := ""
+	if sm.HealthState != "" {
+		health = fmt.Sprintf(" Health:%s", sm.HealthState)
+	}
 	// capacity given in IEC standard units.
 	return fmt.Sprintf("UID:%s PhysicalID:%d Capacity:%s Location:(socket:%d memctrlr:%d "+
-		"chan:%d pos:%d)", sm.UID, sm.PhysicalID, humanize.IBytes(sm.Capacity),
-		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition)
+		"chan:%d pos:%d)%s", sm.UID, sm.PhysicalID, humanize.IBytes(sm.Capacity),
+		sm.SocketID, sm.ControllerID, sm.ChannelID, sm.ChannelPosition, health)
 }
 
 func (sms ScmModules) String() string {
 	var buf bytes.Buffer
 
 	if len(sms) == 0 {
-		return "\t\tnone\n"
+		return "\tnone\n"
 	}
 
 	sort.Slice(sms, func(i, j int) bool { return sms[i].PhysicalID < sms[j].PhysicalID })
 
+	fmt.Fprintf(&buf, "\n")
 	for _, sm := range sms {
-		fmt.Fprintf(&buf, "\t\t%s\n", sm)
+		fmt.Fprintf(&buf, "\t%s\n", sm)
 	}
 
 	return buf.String()
@@ -228,6 +234,33 @@ func (sn ScmNamespace) Usable() uint64 {
 		return 0
 	}
 	return sn.Mount.UsableBytes
+}
+
+func (sn *ScmNamespace) String() string {
+	mountInfo := ""
+	if sn.Mount != nil {
+		mountInfo = fmt.Sprintf(" Mount:%+v", *sn.Mount)
+	}
+	// capacity given in IEC standard units.
+	return fmt.Sprintf("UUID:%s BlockDev:%s Name:%s NUMA:%d Size:%s%s",
+		sn.UUID, sn.BlockDevice, sn.Name, sn.NumaNode, humanize.IBytes(sn.Size), mountInfo)
+}
+
+func (sns ScmNamespaces) String() string {
+	var buf bytes.Buffer
+
+	if len(sns) == 0 {
+		return "\tnone\n"
+	}
+
+	sort.Slice(sns, func(i, j int) bool { return sns[i].Name < sns[j].Name })
+
+	fmt.Fprintf(&buf, "\n")
+	for _, sn := range sns {
+		fmt.Fprintf(&buf, "\t%s\n", sn)
+	}
+
+	return buf.String()
 }
 
 // Capacity reports total storage capacity (bytes) across all namespaces.

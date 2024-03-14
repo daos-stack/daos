@@ -374,8 +374,8 @@ func (tcs TierConfigs) Validate() error {
 //     scenario allow the use of a single NVMe tier co-locating all three roles, three
 //     separate NVMe tiers with each tier dedicated to exactly one role, or two
 //     separate NVMe tiers where two of the three roles are co-located on one of the
-//     two NVMe tiers. In the latter case, all combinations to co-locate two of the
-//     roles shall be allowed, although not all those combinations may be technically
+//     two NVMe tiers. In the latter case, the only combination of two co-located roles
+//     that is not allowed is Wal+Data. Not all combinations may be technically
 //     desirable in production environments.
 func (tcs TierConfigs) validateBdevRoles() error {
 	scmConfs := tcs.ScmConfigs()
@@ -461,10 +461,11 @@ func (tcs TierConfigs) validateBdevRoles() error {
 // Role assignments will be decided based on the following rule set:
 //   - For 1 bdev tier, all roles will be assigned to that tier.
 //   - For 2 bdev tiers, WAL role will be assigned to the first bdev tier and Meta and Data to
-//     the second bdev tier.
-//   - For 3 or more bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
-//     second bdev tier and Data to all remaining bdev tiers.
-//   - If the scm tier is of class dcpm, the first (and only) bdev tier should have the Data role.
+//     the second bdev tier (Wal+Data is an invalid combination).
+//   - For 3 bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
+//     second bdev tier and Data to the third bdev tier.
+//   - For any more than 3 bdev tiers, an error will be returned.
+//   - If the scm tier is of class dcpm, no roles should be assigned and error should be returned.
 //   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
 func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
 	if len(tcs) == 0 {
@@ -516,12 +517,12 @@ func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
 	case 2:
 		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
 		tcs[2].WithBdevDeviceRoles(BdevRoleMeta | BdevRoleData)
-	default:
+	case 3:
 		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
 		tcs[2].WithBdevDeviceRoles(BdevRoleMeta)
-		for i := 3; i < len(tcs); i++ {
-			tcs[i].WithBdevDeviceRoles(BdevRoleData)
-		}
+		tcs[3].WithBdevDeviceRoles(BdevRoleData)
+	default:
+		return FaultBdevConfigBadNrTiersWithRoles
 	}
 
 	return nil

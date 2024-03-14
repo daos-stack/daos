@@ -52,6 +52,7 @@ type Config struct {
 	DisableCache        bool                      `yaml:"disable_caching,omitempty"`
 	CacheExpiration     refreshMinutes            `yaml:"cache_expiration,omitempty"`
 	DisableAutoEvict    bool                      `yaml:"disable_auto_evict,omitempty"`
+	EvictOnStart        bool                      `yaml:"enable_evict_on_start,omitempty"`
 	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
 	ProviderIdx         uint                      // TODO SRS-31: Enable with multiprovider functionality
