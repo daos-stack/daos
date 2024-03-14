@@ -46,7 +46,7 @@ class Pil4dfsFio(DfuseTestBase):
         cpu_info.scan()
         _, arch = cpu_info.get_architectures()[0]
         if arch.numas != 2:
-            self.fail(f"Client with unsupported quantity of NUMA nodes: wait=2, got={arch.numas}")
+            self.fail(f"Client with unsupported quantity of NUMA nodes: want=2, got={arch.numas}")
         self.fio_numjobs = int(arch.quantity / arch.threads_core)
         cpus = []
         cores_quantity = int(self.fio_numjobs / 2)
@@ -57,26 +57,24 @@ class Pil4dfsFio(DfuseTestBase):
     def create_container(self):
         """Created a DAOS POSIX container"""
         self.log.info("Creating pool")
-        self.assertIsNone(self.pool)
+        self.assertIsNone(self.pool, "Unexpected pool before starting test")
         self.add_pool()
-        self.log.debug("Created pool %s", str(self.pool))
 
         self.log.info("Creating container")
-        self.assertIsNone(self.container)
+        self.assertIsNone(self.container, "Unexpected container before starting test")
         self.add_container(self.pool)
-        self.log.debug("Created container %s", str(self.container))
 
     def destroy_container(self):
         """Destroy DAOS POSIX container previously created"""
-        self.assertIsNotNone(self.container)
-        self.log.debug("Destroying container %s", str(self.container))
-        self.destroy_containers(self.container)
-        self.container = None
+        if self.container is not None:
+            self.log.debug("Destroying container %s", str(self.container))
+            self.destroy_containers(self.container)
+            self.container = None
 
-        self.assertIsNotNone(self.pool)
-        self.log.debug("Destroying pool %s", str(self.pool))
-        self.destroy_pools(self.pool)
-        self.pool = None
+        if self.pool is not None:
+            self.log.debug("Destroying pool %s", str(self.pool))
+            self.destroy_pools(self.pool)
+            self.pool = None
 
     def get_bandwidth(self, fio_result, rw):
         """Returns FIO bandwidth of a given I/O pattern
@@ -135,10 +133,10 @@ class Pil4dfsFio(DfuseTestBase):
             bws[rw] = self.get_bandwidth(result, rw)
             self.log.debug("DFuse bandwidths for %s: %s", rw, bws[rw])
 
-        self.assertIsNotNone(self.dfuse)
-        self.log.debug("Stopping DFuse mount point %s", str(self.dfuse))
-        self.stop_dfuse()
-        self.destroy_container()
+        if self.dfuse is not None:
+            self.log.debug("Stopping DFuse mount point %s", str(self.dfuse))
+            self.stop_dfuse()
+            self.destroy_container()
 
         return bws
 
@@ -194,7 +192,7 @@ class Pil4dfsFio(DfuseTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=pil4dfs,dfuse,dfs,fio,thread,fork
+        :avocado: tags=pil4dfs,dfuse,dfs,fio
         :avocado: tags=Pil4dfsFio,test_pil4dfs_vs_dfs
         """
         bw_deltas = {}
