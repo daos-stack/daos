@@ -198,7 +198,7 @@ function cleanup
 opts=()
 args=()
 for item in "$@" ; do
-	if [[ ${#args} -eq 0 && "$item" != "--" ]] ; then
+	if [[ ${#args[@]} -eq 0 && "$item" != "--" ]] ; then
 		[[ ${item::1} == "-" ]] || fatal "unrecognized option \"$item\""
 		opts+=("$item")
 	else

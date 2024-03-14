@@ -185,7 +185,7 @@ run $CLUSH_EXE $CLUSH_OPTS -w $SERVERS_LIST mountpoint --quiet "$HOME"
 for dir in "$DAOS_INSTALL_DIR" "$DAOS_SOURCE_DIR/build"
 do
 	if [[ -d "$dir" && "$CMD" == install ]]; then
-		[[ "$FORCE_INSTALL" != "true" ]] || fatal "DAOS already installed: use install --force or update."
+		[[ "$FORCE_INSTALL" == "true" ]] || fatal "DAOS already installed: use install --force or update."
 		info "Removing old DAOS install directory $dir"
 		if ! run /bin/rm -fr "$dir" ; then
 			fatal "Old install directory $dir could not be removed"
