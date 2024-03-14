@@ -65,7 +65,14 @@
 ## Note that this implies that stopping or restarting the agent will result
 ## in interruption of DAOS I/O for any local DAOS client processes that have
 ## an open pool handle.
-# disable_auto_evict: true
+## default: false
+#disable_auto_evict: true
+
+## If enabled, the agent will evict any open pool handles associated with this machine on agent
+## startup. This allows the servers to reclaim resources that may not have been properly cleaned
+## up in the event of an agent or machine crash.
+## default: false
+#enable_evict_on_start: true
 
 ## Disable the agent's internal caches. If set to true, the agent will query the
 ## server access point and local hardware data every time a client requests
