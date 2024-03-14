@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,10 +40,10 @@ extern "C" {
  * Get information on protocols that are supported by underlying mercury plugins. If
  * \info_string is NULL, a list of all supported protocols by all plugins will
  * be returned. The returned list must be freed using crt_protocol_info_free().
- * 
+ *
  * \param[in]  info_string     NULL or "<protocol>" or "<plugin+protocol>"
  * \param[out] protocol_info_p linked-list of protocol infos
- * 
+ *
  * \return                     DER_SUCCESS on success, negative value if error
 */
 int
@@ -51,7 +51,7 @@ crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protoc
 
 /**
  * Free protocol_info from crt_protocol_info_get().
- * 
+ *
  * \param[in,out] protocol_info linked-list of protocol infos
 */
 void
@@ -103,6 +103,68 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
  */
 int
 crt_context_create(crt_context_t *crt_ctx);
+
+
+/**
+ * Returns number of interfaces passed to CaRT at initialization time.
+ *
+ * Interfaces are passed via either D_INTERFACE environment variable or
+ * through crt_init_options_t::cio_interface options to crt_init_opt() .
+ *
+ * \return                     Number of interfaces CaRT is initialized with.
+ */
+uint32_t
+crt_num_ifaces_get(void);
+
+
+/**
+ * Create CRT transport context on an interface specified by the index.
+ * Index must be less than total number of interfaces returned by
+ * crt_num_ifaces_get().
+ *
+ * Must be destroyed by crt_context_destroy() before calling crt_finalize().
+ *
+ * Note: This is a client-side only API.
+ *
+ * \param[in]  iface_index     index of the interface.
+ * \param[out] crt_ctx         created CRT transport context
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_context_create_on_iface_idx(uint32_t iface_index, crt_context_t *crt_ctx);
+
+/**
+ * Returns an index corresponding to the interface name passed. Index returned
+ * can then be used to create a context on a specific interface using
+ * crt_context_create_on_iface_idx() API.
+ *
+ * \param[in]  iface_name       Interface name to look up.
+ * \param[out] idx              Returned index
+ *
+ * \return                      DER_SUCCESS on success, negative value if error
+ */
+int
+crt_iface_name2idx(const char *iface_name, int *idx);
+
+
+/**
+ * Create CRT transport context on an interface specified by the name.
+ * Interface name must match one of interfaces with which CaRT was initialized
+ * with via either D_INTERFACE env or crt_init_opt_t::cio_interface.
+ *
+ * Must be destroyed by crt_context_destroy() before calling crt_finalize().
+ *
+ * Note: This is a client-side only API.
+ *
+ * \param[in]  iface_name      name of the interface.
+ * \param[out] crt_ctx         created CRT transport context
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_context_create_on_iface(const char *iface_name, crt_context_t *crt_ctx);
+
 
 /**
  * Set the timeout value for all RPC requests created on the specified context.
