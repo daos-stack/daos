@@ -28,3 +28,9 @@ CVE-2023-43642
 CVE-2023-34453
 ## CVE-2023-34454,MEDIUM,7.5,"snappy-java: Integer overflow in compress leads to DoS","org.xerial.snappy:snappy-java","1.1.8.2","1.1.10.1",https://avd.aquasec.com/nvd/cve-2023-34454
 CVE-2023-34454
+#CVE-2024-25710,HIGH,5.5,"commons-compress: Denial of service caused by an infinite loop for a corrupted DUMP file","org.apache.commons:commons-compress","1.21","1.26.0",https://avd.aquasec.com/nvd/cve-2024-25710
+CVE-2024-25710
+#CVE-2024-26308,HIGH,5.5,"commons-compress: OutOfMemoryError unpacking broken Pack200 file","org.apache.commons:commons-compress","1.21","1.26.0",https://avd.aquasec.com/nvd/cve-2024-26308
+CVE-2024-26308
+#CVE-2024-24786,MEDIUM,,"golang-protobuf: encoding/protojson, internal/encoding/json: infinite loop in protojson.Unmarshal when unmarshaling certain forms of invalid JSON","google.golang.org/protobuf","1.30.0","1.33.0",https://avd.aquasec.com/nvd/cve-2024-24786
+CVE-2024-24786
