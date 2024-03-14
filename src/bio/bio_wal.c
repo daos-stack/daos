@@ -270,27 +270,19 @@ wakeup_reserve_waiters(struct wal_super_info *si, bool wakeup_all)
 	}
 }
 
-static inline struct bio_dma_stats *
-ioc2dma_stats(struct bio_io_context *bic)
-{
-	D_ASSERT(bic && bic->bic_xs_ctxt && bic->bic_xs_ctxt->bxc_dma_buf);
-	return &bic->bic_xs_ctxt->bxc_dma_buf->bdb_stats;
-}
-
 /* Caller must guarantee no yield between bio_wal_reserve() and bio_wal_submit() */
 int
-bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id)
+bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id, struct bio_wal_stats *stats)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
-	struct bio_dma_stats	*stats = ioc2dma_stats(mc->mc_wal);
 	int			 rc = 0;
 
 	if (!si->si_rsrv_waiters && reserve_allowed(si))
 		goto done;
 
 	si->si_rsrv_waiters++;
-	if (stats->bds_wal_waiters)
-		d_tm_inc_gauge(stats->bds_wal_waiters, 1);
+	if (stats)
+		stats->ws_waiters = si->si_rsrv_waiters;
 
 	ABT_mutex_lock(si->si_mutex);
 	ABT_cond_wait(si->si_rsrv_wq, si->si_mutex);
@@ -298,8 +290,6 @@ bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id)
 
 	D_ASSERT(si->si_rsrv_waiters > 0);
 	si->si_rsrv_waiters--;
-	if (stats->bds_wal_waiters)
-		d_tm_dec_gauge(stats->bds_wal_waiters, 1);
 
 	wakeup_reserve_waiters(si, false);
 	/* It could happen when wakeup all on WAL unload */
@@ -732,7 +722,6 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 	struct bio_desc		*biod_tx = wal_tx->td_biod_tx;
 	struct wal_super_info	*si = wal_tx->td_si;
 	struct wal_tx_desc	*next;
-	struct bio_dma_stats	*stats;
 	bool			 try_wakeup = false;
 
 	D_ASSERT(!d_list_empty(&wal_tx->td_link));
@@ -766,10 +755,8 @@ wal_tx_completion(struct wal_tx_desc *wal_tx, bool complete_next)
 	}
 
 	d_list_del_init(&wal_tx->td_link);
-
-	stats = ioc2dma_stats(biod_tx->bd_ctxt);
-	if (stats->bds_wal_qd)
-		d_tm_dec_gauge(stats->bds_wal_qd, 1);
+	D_ASSERT(si->si_pending_tx > 0);
+	si->si_pending_tx--;
 
 	/* The ABT_eventual could be NULL if WAL I/O IOD failed on DMA mapping in bio_iod_prep() */
 	if (biod_tx->bd_dma_done != ABT_EVENTUAL_NULL)
@@ -922,7 +909,8 @@ wait_tx_committed(struct wal_tx_desc *wal_tx)
 }
 
 int
-bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data)
+bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data,
+	       struct bio_wal_stats *stats)
 {
 	struct wal_super_info	*si = &mc->mc_wal_info;
 	struct bio_desc		*biod = NULL;
@@ -935,7 +923,6 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	unsigned int		 tot_blks = si->si_header.wh_tot_blks;
 	unsigned int		 blk_bytes = si->si_header.wh_blk_bytes;
 	uint64_t		 tx_id = tx->utx_id;
-	struct bio_dma_stats	*stats;
 	int			 iov_nr, rc;
 
 	/* Bypass WAL commit, used for performance evaluation only */
@@ -1004,13 +991,12 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	wal_tx.td_blks = blk_desc.bd_blks;
 	/* Track in pending list from now on, since it could yield in bio_iod_prep() */
 	d_list_add_tail(&wal_tx.td_link, &si->si_pending_list);
+	si->si_pending_tx++;
 
-	stats = ioc2dma_stats(mc->mc_wal);
-	if (stats->bds_wal_qd)
-		d_tm_inc_gauge(stats->bds_wal_qd, 1);
-	if (stats->bds_wal_sz)
-		d_tm_set_gauge(stats->bds_wal_sz,
-			       (blk_desc.bd_blks - 1) * blk_bytes + blk_desc.bd_tail_off);
+	if (stats) {
+		stats->ws_size = (blk_desc.bd_blks - 1) * blk_bytes + blk_desc.bd_tail_off;
+		stats->ws_qd = si->si_pending_tx;
+	}
 
 	/* Update next unused ID */
 	si->si_unused_id = wal_next_id(si, si->si_unused_id, blk_desc.bd_blks);
@@ -1934,6 +1920,7 @@ wal_open(struct bio_meta_context *mc)
 
 	D_INIT_LIST_HEAD(&si->si_pending_list);
 	si->si_rsrv_waiters = 0;
+	si->si_pending_tx = 0;
 	si->si_tx_failed = 0;
 
 	si->si_ckp_id = hdr->wh_ckp_id;

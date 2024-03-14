@@ -990,15 +990,22 @@ int bio_mc_close(struct bio_meta_context *mc);
 /* Function to return io context for data/meta/wal blob */
 struct bio_io_context *bio_mc2ioc(struct bio_meta_context *mc, enum smd_dev_type type);
 
+struct bio_wal_stats {
+	uint32_t	ws_size;	/* WAL size for single tx in bytes */
+	uint32_t	ws_qd;		/* WAL tx QD */
+	uint32_t	ws_waiters;	/* Waiters for WAL reclaiming */
+};
+
 /*
  * Reserve WAL log space for current transaction
  *
  * \param[in]	mc		BIO meta context
  * \param[out]	tx_id		Reserved transaction ID
+ * \param[out]	stats		WAL stats (optional)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
+int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id, struct bio_wal_stats *stats);
 
 /*
  * Submit WAL I/O and wait for completion
@@ -1006,10 +1013,12 @@ int bio_wal_reserve(struct bio_meta_context *mc, uint64_t *tx_id);
  * \param[in]	mc		BIO meta context
  * \param[in]	tx		umem_tx pointer
  * \param[in]	biod_data	BIO descriptor for data update (optional)
+ * \param[out]	stats		WAL stats (optional)
  *
  * \return			Zero on success, negative value on error
  */
-int bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data);
+int bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_desc *biod_data,
+		   struct bio_wal_stats *stats);
 
 /*
  * Compare two WAL transaction IDs from same WAL instance
