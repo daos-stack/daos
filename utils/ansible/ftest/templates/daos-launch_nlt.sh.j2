@@ -1,11 +1,10 @@
 #!/bin/bash
 # shellcheck disable=all # Jinja2 template can not be parsed with shellcheck
 
-set -u -o pipefail
+set -o pipefail
 
-VERSION=0.2
-CWD="$(realpath "${0%}")"
-CWD="${CWD%/*}"
+VERSION=0.1
+CWD="$(realpath "$(dirname $0)")"
 
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"
@@ -38,9 +37,6 @@ TRACE_LEVEL_STANDARD=0
 TRACE_LEVEL_VERBOSE=1
 TRACE_LEVEL_DEBUG=2
 TRACE_LEVEL=$TRACE_LEVEL_STANDARD
-
-START_CLEANUP="false"
-END_CLEANUP="false"
 
 function debug
 {
@@ -159,7 +155,7 @@ function cleanup
 opts=()
 args=()
 for item in "$@" ; do
-	if [[ ${#args[@]} -eq 0 && "$item" != "--" ]] ; then
+	if [[ ${#args} -eq 0 && "$item" != "--" ]] ; then
 		[[ ${item::1} == "-" ]] || fatal "unrecognized option \"$item\""
 		opts+=("$item")
 	else
@@ -174,13 +170,13 @@ eval set -- "$OPTIONS"
 while true
 do
 	case "$1" in
-		-s|--start-cleanup) START_CLEANUP="true" ; shift 1;;
-		-e|--end-cleanup) END_CLEANUP="true" ; shift 1;;
+		-s|--start-cleanup) START_CLEANUP=true ; shift 1;;
+		-e|--end-cleanup) END_CLEANUP=true ; shift 1;;
 		-h|--help) usage ; exit 0;;
 		-V|--version) echo "daos-launch.sh version=$VERSION" ; exit 0 ;;
-		-v|--verbose) TRACE_LEVEL="$TRACE_LEVEL_VERBOSE" ; shift 1 ;;
-		-D|--debug) TRACE_LEVEL="$TRACE_LEVEL_DEBUG" ; set -x ; shift 1 ;;
-		-q|--quiet) TRACE_LEVEL="$TRACE_LEVEL_QUIET" ; shift 1 ;;
+		-v|--verbose) TRACE_LEVEL=$TRACE_LEVEL_VERBOSE ; shift 1 ;;
+		-D|--debug) TRACE_LEVEL=$TRACE_LEVEL_DEBUG ; set -x ; shift 1 ;;
+		-q|--quiet) TRACE_LEVEL=$TRACE_LEVEL_QUIET ; shift 1 ;;
 		--) shift ; break ;;
 		*) fatal "unrecognized option" ;;
 	esac
@@ -188,7 +184,7 @@ done
 
 check_cmds $PYTHON_EXE $CLUSH_EXE $MODULE_EXE
 
-if "$START_CLEANUP" ; then
+if [[ -n $START_CLEANUP ]] ; then
 	cleanup
 
 	info "Cleaning NLT logs"
@@ -213,7 +209,7 @@ $PYTHON_EXE launch.py $common_opts "${args[@]}"
 rc=$?
 popd > /dev/null
 
-if "$END_CLEANUP" ; then
+if [[ -n $END_CLEANUP ]] ; then
 	cleanup
 fi
 

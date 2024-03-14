@@ -1,5 +1,4 @@
-# Default variable
+# Install dependencies of a developmene node
 
-daos_ofi_provider_default: ofi+tcp;ofi_rxm
-daos_build_mode_default: DEBUG
-daos_hugepages_nb_default: 4096
+daos_avocado_version_default: 2.4.3
+daos_avocado_framework_version_default: 82.1
