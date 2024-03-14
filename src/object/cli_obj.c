@@ -7086,6 +7086,7 @@ dc_obj_query_key(tse_task_t *api_task)
 	D_ASSERT(!obj_auxi->args_initialized);
 	D_ASSERT(d_list_empty(head));
 
+#if 0
 	/* Some optimization for get dkey collectively since 2.6 which version is 10. */
 	if (api_args->flags & DAOS_GET_DKEY && grp_nr > 1 && dc_obj_proto_version >= 10) {
 		rc = obj_coll_oper_args_init(&obj_auxi->cq_args.cqa_coa, obj, false);
@@ -7095,6 +7096,7 @@ dc_obj_query_key(tse_task_t *api_task)
 		obj_auxi->opc = DAOS_OBJ_RPC_COLL_QUERY;
 		coll = true;
 	}
+#endif
 
 	grp_size = daos_oclass_grp_size(&obj->cob_oca);
 
