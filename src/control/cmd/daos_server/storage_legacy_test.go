@@ -155,6 +155,48 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 				DisableVFIO:   true,
 			},
 		},
+		"no modules; not scm-only": {
+			legacyCmd: &legacyPrepCmd{
+				// SCM params:
+				NrNamespacesPerSocket: 2,
+				Force:                 true,
+				// NVMe params:
+				NrHugepages: 9182,
+			},
+			smbc: &scm.MockBackendConfig{
+				PrepRes: &storage.ScmPrepareResponse{
+					Socket: &storage.ScmSocketState{
+						State: storage.ScmNoModules,
+					},
+					Namespaces: storage.ScmNamespaces{},
+				},
+			},
+			expPrepNVMeCall: &storage.BdevPrepareRequest{
+				HugepageCount: 9182,
+				EnableVMD:     true,
+			},
+			expPrepSCMCall: &storage.ScmPrepareRequest{NrNamespacesPerSocket: 2},
+		},
+		"no modules; scm-only": {
+			legacyCmd: &legacyPrepCmd{
+				// SCM params:
+				ScmOnly:               true,
+				NrNamespacesPerSocket: 2,
+				Force:                 true,
+				// NVMe params:
+				NrHugepages: 9182,
+			},
+			smbc: &scm.MockBackendConfig{
+				PrepRes: &storage.ScmPrepareResponse{
+					Socket: &storage.ScmSocketState{
+						State: storage.ScmNoModules,
+					},
+					Namespaces: storage.ScmNamespaces{},
+				},
+			},
+			expErr:         storage.FaultScmNoPMem,
+			expPrepSCMCall: &storage.ScmPrepareRequest{NrNamespacesPerSocket: 2},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
