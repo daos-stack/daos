@@ -29,12 +29,18 @@ def _gen_stats_metrics(basename):
 
 def _flatten(items):
     """Flatten a mixed list of lists and strings."""
-    for item in items:
-        if isinstance(item, Iterable) and not isinstance(item, (str, bytes)):
-            yield from _flatten(item)
-        else:
-            yield item
+    def _flatten_iter(items):
+        if not isinstance(items, Iterable):
+            yield items
+            return
 
+        for item in items:
+            if isinstance(item, Iterable) and not isinstance(item, (str, bytes)):
+                yield from _flatten_iter(item)
+            else:
+                yield item
+
+    return list(_flatten_iter(items))
 
 class TelemetryUtils():
     # pylint: disable=too-many-nested-blocks
@@ -132,7 +138,7 @@ class TelemetryUtils():
         "engine_pool_block_allocator_frags_large",
         "engine_pool_block_allocator_frags_small",
         "engine_pool_block_allocator_free_blks",
-        "engine_pool_ops_key2anchor"])
+        "engine_pool_ops_key2anchor"]))
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
@@ -155,10 +161,7 @@ class TelemetryUtils():
         "engine_dmabuff_active_reqs",
         "engine_dmabuff_queued_reqs",
         "engine_dmabuff_grab_errs",
-        _gen_stats_metrics("engine_dmabuff_grab_retries"),
-        _gen_stats_metrics("engine_dmabuff_wal_sz"),
-        _gen_stats_metrics("engine_dmabuff_wal_qd"),
-        _gen_stats_metrics("engine_dmabuff_wal_waiters")])
+        _gen_stats_metrics("engine_dmabuff_grab_retries")])
     ENGINE_IO_DTX_COMMITTABLE_METRICS = \
         _gen_stats_metrics("engine_io_dtx_committable")
     ENGINE_IO_DTX_COMMITTED_METRICS = \
