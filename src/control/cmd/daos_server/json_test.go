@@ -1,0 +1,77 @@
+//
+// (C) Copyright 2020-2023 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server"
+	"github.com/google/go-cmp/cmp"
+)
+
+type jsonCmdTest struct {
+	name   string
+	cmd    string
+	cs     *server.ControlService
+	expOut interface{}
+	expErr error
+}
+
+func runJSONCmdTests(t *testing.T, log *logging.LeveledLogger, cmdTests []jsonCmdTest) {
+	t.Helper()
+
+	for _, tc := range cmdTests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Helper()
+
+			// Replace os.Stdout so that we can verify the generated output.
+			var result bytes.Buffer
+			r, w, _ := os.Pipe()
+			done := make(chan struct{})
+			go func() {
+				_, _ = io.Copy(&result, r)
+				close(done)
+			}()
+			stdout := os.Stdout
+			defer func() {
+				os.Stdout = stdout
+			}()
+			os.Stdout = w
+
+			var opts mainOpts
+			test.CmpErr(t, tc.expErr,
+				parseOpts(strings.Split(tc.cmd, " "), &opts, log, tc.cs))
+
+			w.Close()
+			<-done
+
+			// Verify only JSON gets printed.
+			if !json.Valid(result.Bytes()) {
+				t.Fatalf("invalid JSON in response: %s", result.String())
+			}
+
+			var sb strings.Builder
+			if err := cmdutil.OutputJSON(&sb, tc.expOut, tc.expErr); err != nil {
+				if err != tc.expErr {
+					t.Fatalf("OutputJSON: %s", err)
+				}
+			}
+
+			if diff := cmp.Diff(sb.String(), result.String()); diff != "" {
+				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}

@@ -98,7 +98,12 @@ func exitWithError(log *logging.LeveledLogger, err error) {
 	os.Exit(1)
 }
 
-func parseOpts(args []string, opts *mainOpts, ctlSvc *server.ControlService, log *logging.LeveledLogger) error {
+func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger, ctlSvcs ...*server.ControlService) error {
+	var ctlSvc *server.ControlService
+	if len(ctlSvcs) > 0 {
+		ctlSvc = ctlSvcs[0]
+	}
+
 	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
@@ -158,7 +163,8 @@ func parseOpts(args []string, opts *mainOpts, ctlSvc *server.ControlService, log
 			}
 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
-				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
+				return errors.Wrapf(err, "failed to load config from %s",
+					cfgCmd.configPath())
 			}
 			if _, err := os.Stat(opts.ConfigPath); err == nil {
 				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
@@ -174,21 +180,12 @@ func parseOpts(args []string, opts *mainOpts, ctlSvc *server.ControlService, log
 				"this command will not use it")
 		}
 
-		// Set the control service to use to handle command execution, use default
-		// implementation if not provided in function call.
+		// Set the control service to use to handle command execution, default
+		// implementation will be provided if not supplied in call parameters.
 		if ctlSvcCmd, ok := cmd.(ctlSvcCaller); ok {
 			if ctlSvc != nil {
 				ctlSvcCmd.setCtlSvc(ctlSvc)
 			}
-			//			else {
-			//				srvCfg := config.DefaultServer()
-			//				if cfgCmd, ok := cmd.(cfgCmd); ok && cfgCmd.config != nil {
-			//					srvCfg = cfgCmd.config
-			//				}
-			//				cmd.ctlSvc = server.NewControlService(log, nil, srvCfg,
-			//					server.NewStorageControlService(cmd.Logger, srvCfg.Engines), nil,
-			//					nil)
-			//			}
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {
@@ -218,7 +215,7 @@ func main() {
 		},
 	}
 
-	if err := parseOpts(os.Args[1:], &opts, nil, log); err != nil {
+	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {
 			log.Infof("%s (pid %d) shutting down", build.ControlPlaneName, os.Getpid())
 			os.Exit(0)

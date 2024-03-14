@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2023 Intel Corporation.
+// (C) Copyright 2023-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -18,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -95,6 +96,7 @@ func (cmd *nvmeCmd) init() error {
 type scmCmd struct {
 	cmdutil.LogCmd        `json:"-"`
 	cmdutil.JSONOutputCmd `json:"-"`
+	ctlSvcCmd             `json:"-"`
 	helperLogCmd          `json:"-"`
 	optCfgCmd             `json:"-"`
 	scmSocketCmd          `json:"-"`
@@ -167,6 +169,14 @@ func getSockFromCfg(log logging.Logger, cfg *config.Server, affSrc config.Engine
 }
 
 func (cmd *scmCmd) init() error {
+	engCfgs := config.DefaultServer().Engines
+	if cmd.config != nil {
+		engCfgs = cmd.config.Engines
+	}
+	cmd.ctlSvc = &server.ControlService{
+		StorageControlService: *server.NewStorageControlService(cmd.Logger, engCfgs),
+	}
+
 	if err := common.CheckDupeProcess(); err != nil {
 		return err
 	}
