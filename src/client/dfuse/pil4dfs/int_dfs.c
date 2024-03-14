@@ -27,6 +27,13 @@
 #include <inttypes.h>
 #include <sys/ucontext.h>
 #include <sys/user.h>
+
+#ifdef __aarch64__
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 0x1000
+#endif
+#endif
+
 #include <linux/binfmts.h>
 
 #include <daos/debug.h>
