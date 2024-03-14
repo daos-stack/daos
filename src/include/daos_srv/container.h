@@ -21,6 +21,7 @@
 #include <daos_srv/evtree.h>
 #include <daos/container.h>
 #include <daos/cont_props.h>
+#include <gurt/heap.h>
 
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
@@ -110,16 +111,21 @@ struct ds_cont_child {
 	uint64_t		sc_ec_agg_eph_boundary;
 	/* The current EC aggregate epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
-	/* Used by cont_ec_eph_query_ult to query the minimum EC agg epoch from all
+	/* Used by ds_cont_tgt_track_eph_query_ult() to query the minimum EC agg epoch from all
 	 * local VOS.
 	 */
 	uint64_t		*sc_ec_query_agg_eph;
+
 	/**
 	 * Timestamp of last EC update, which is used by aggregation to check
 	 * if it needs to do EC aggregate.
 	 */
 	uint64_t		sc_ec_update_timestamp;
 
+	/**
+	 * Timestamp of last update stable epoch.
+	 */
+	uint64_t		sc_last_stable_timestamp;
 	/* The objects with committable DTXs in DRAM. */
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
@@ -199,6 +205,8 @@ int ds_cont_csummer_init(struct ds_cont_child *cont);
 int ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 		      uuid_t cont_uuid);
 
+void ds_cont_tgt_track_eph_query_ult(void *data);
+
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);
 
@@ -252,11 +260,7 @@ int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
 struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
 
-void ds_cont_tgt_ec_eph_query_ult(void *data);
-int ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
-			  uint64_t **epoch_p);
-int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
-void ds_cont_ec_eph_free(struct ds_pool *pool);
+void ds_cont_track_eph_free(struct ds_pool *pool);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
 

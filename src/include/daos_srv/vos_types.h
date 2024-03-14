@@ -21,6 +21,9 @@
 #define VOS_POOL_DF_2_4 25
 #define VOS_POOL_DF_2_6 26
 
+/** Current durable format version */
+#define POOL_DF_VERSION                         VOS_POOL_DF_2_6
+
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
 	d_list_t		dru_nvme;

@@ -1874,10 +1874,13 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		D_GOTO(out, rc);
 	}
 
-	/* resume pool upgrade if needed */
-	rc = ds_pool_upgrade_if_needed(svc->ps_uuid, NULL, svc, NULL);
-	if (rc != 0)
-		goto out;
+	if (!DAOS_FAIL_CHECK(DAOS_FAIL_POOL_CREATE_VERSION) &&
+	    !DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE)) {
+		/* resume pool upgrade if needed */
+		rc = ds_pool_upgrade_if_needed(svc->ps_uuid, NULL, svc, NULL);
+		if (rc != 0)
+			goto out;
+	}
 
 	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop);
 	if (rc != 0)
@@ -5636,30 +5639,15 @@ out:
 	return rc1;
 }
 
-/* check and upgrade the object layout if needed. */
+/* Schedule durable format check on all targets. */
 static int
-pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
-				 bool *scheduled_layout_upgrade)
+pool_upgrade_schedule(struct pool_svc *svc)
 {
 	daos_epoch_t	upgrade_eph = d_hlc_get();
-	d_iov_t		value;
-	uint32_t	current_layout_ver = 0;
 	int		rc = 0;
 
-	d_iov_set(&value, &current_layout_ver, sizeof(current_layout_ver));
-	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_obj_version, &value);
-	if (rc && rc != -DER_NONEXIST)
-		return rc;
-	else if (rc == -DER_NONEXIST)
-		current_layout_ver = 0;
-
-	if (current_layout_ver < DS_POOL_OBJ_VERSION) {
-		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version,
-					 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
-					 RB_OP_UPGRADE, 0);
-		if (rc == 0)
-			*scheduled_layout_upgrade = true;
-	}
+	rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
+				 DS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE, 0);
 	return rc;
 }
 
@@ -5705,9 +5693,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 	uint32_t			upgrade_status;
 	uint32_t			upgrade_global_ver;
 	int				rc;
-	bool				scheduled_layout_upgrade = false;
 	bool				dmg_upgrade_cmd = false;
-	bool				request_schedule_upgrade = false;
 
 	if (!svc) {
 		rc = pool_svc_lookup_leader(pool_uuid, &svc, po_hint);
@@ -5810,7 +5796,6 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		}
 	}
 out_upgrade:
-	request_schedule_upgrade = true;
 	/**
 	 * Todo: make sure no rebuild/reint/expand are in progress
 	 */
@@ -5818,7 +5803,10 @@ out_upgrade:
 	if (rc)
 		D_GOTO(out_tx, rc);
 
-	rc = pool_check_upgrade_object_layout(&tx, svc, &scheduled_layout_upgrade);
+	if (dmg_upgrade_cmd && DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT))
+		D_GOTO(out_tx, rc = -DER_AGAIN);
+
+	rc = pool_upgrade_schedule(svc);
 	if (rc < 0)
 		D_GOTO(out_tx, rc);
 
@@ -5826,16 +5814,6 @@ out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 
-	if (request_schedule_upgrade && !scheduled_layout_upgrade) {
-		int rc1;
-
-		if (rc == 0 && dmg_upgrade_cmd &&
-		    DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT))
-			D_GOTO(out_put_leader, rc = -DER_AGAIN);
-		rc1 = ds_pool_mark_upgrade_completed_internal(svc, rc);
-		if (rc == 0 && rc1)
-			rc = rc1;
-	}
 out_put_leader:
 	if (dmg_upgrade_cmd) {
 		ds_rsvc_set_hint(&svc->ps_rsvc, po_hint);
@@ -7181,65 +7159,6 @@ out:
 	crt_reply_send(rpc);
 }
 
-static int
-pool_discard(crt_context_t ctx, struct pool_svc *svc, struct pool_target_addr_list *list)
-{
-	struct pool_tgt_discard_in	*ptdi_in;
-	struct pool_tgt_discard_out	*ptdi_out;
-	crt_rpc_t			*rpc;
-	d_rank_list_t			*rank_list = NULL;
-	crt_opcode_t			opc;
-	int				i;
-	int				rc;
-
-	rank_list = d_rank_list_alloc(list->pta_number);
-	if (rank_list == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rank_list->rl_nr = 0;
-	/* remove the duplicate ranks from list, see reintegrate target case */
-	for (i = 0; i < list->pta_number; i++) {
-		if (daos_rank_in_rank_list(rank_list, list->pta_addrs[i].pta_rank))
-			continue;
-
-		rank_list->rl_ranks[rank_list->rl_nr++] = list->pta_addrs[i].pta_rank;
-		D_DEBUG(DB_MD, DF_UUID": discard rank %u\n",
-			DP_UUID(svc->ps_pool->sp_uuid), list->pta_addrs[i].pta_rank);
-	}
-
-	if (rank_list->rl_nr == 0) {
-		D_DEBUG(DB_MD, DF_UUID" discard 0 rank.\n", DP_UUID(svc->ps_pool->sp_uuid));
-		D_GOTO(out, rc = 0);
-	}
-
-	opc = DAOS_RPC_OPCODE(POOL_TGT_DISCARD, DAOS_POOL_MODULE, DAOS_POOL_VERSION);
-	rc = crt_corpc_req_create(ctx, NULL, rank_list, opc, NULL,
-				  NULL, CRT_RPC_FLAG_FILTER_INVERT,
-				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
-	if (rc)
-		D_GOTO(out, rc);
-
-	ptdi_in = crt_req_get(rpc);
-	ptdi_in->ptdi_addrs.ca_arrays = list->pta_addrs;
-	ptdi_in->ptdi_addrs.ca_count = list->pta_number;
-	uuid_copy(ptdi_in->ptdi_uuid, svc->ps_pool->sp_uuid);
-	rc = dss_rpc_send(rpc);
-
-	ptdi_out = crt_reply_get(rpc);
-	D_ASSERT(ptdi_out != NULL);
-	rc = ptdi_out->ptdo_rc;
-	if (rc != 0)
-		D_ERROR(DF_UUID": pool discard failed: rc: %d\n",
-			DP_UUID(svc->ps_pool->sp_uuid), rc);
-
-	crt_req_decref(rpc);
-
-out:
-	if (rank_list)
-		d_rank_list_free(rank_list);
-	return rc;
-}
-
 static void
 ds_pool_update_handler(crt_rpc_t *rpc, int handler_version)
 {
@@ -7262,13 +7181,6 @@ ds_pool_update_handler(crt_rpc_t *rpc, int handler_version)
 				    &out->pto_op.po_hint);
 	if (rc != 0)
 		goto out;
-
-	if (opc_get(rpc->cr_opc) == POOL_REINT &&
-	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
-		rc = pool_discard(rpc->cr_ctx, svc, &list);
-		if (rc)
-			goto out_svc;
-	}
 
 	rc = pool_svc_update_map(svc, pool_opc_2map_opc(opc_get(rpc->cr_opc)),
 				 false /* exclude_rank */, NULL, NULL, 0, &list,

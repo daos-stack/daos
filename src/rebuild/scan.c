@@ -814,6 +814,12 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return 0;
 	}
 
+	if (rpt->rt_rebuild_op == RB_OP_UPGRADE) {
+		rc = vos_cont_upgrade(iter_param->ip_hdl, entry->ie_couuid);
+		if (rc != 0)
+			return rc;
+	}
+
 	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_REBUILD, DF_UUID" already destroyed\n", DP_UUID(arg->co_uuid));
@@ -1013,6 +1019,11 @@ rebuild_scanner(void *data)
 	if (rc < 0)
 		D_GOTO(put, rc);
 	rc = 0; /* rc might be 1 if rebuild is aborted */
+	if (rpt->rt_rebuild_op == RB_OP_UPGRADE) {
+		rc = vos_pool_upgrade(child->spc_hdl, POOL_DF_VERSION);
+		if (rc)
+			D_GOTO(out, rc);
+	}
 put:
 	ds_pool_child_put(child);
 out:

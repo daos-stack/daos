@@ -1527,20 +1527,29 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 
 	pool_df = pool->vp_pool_df;
 
-	if (version == pool_df->pd_version)
-		return 0;
+	if (version < VOS_POOL_DF_2_4) {
+		D_ERROR("2.2 or earlier pool can't be upgraded to 2.6\n");
+		return -DER_NO_PERM;
+	}
 
-	D_DEBUG(DB_MGMT, "Attempting upgrade pool durable format from %d to %d\n",
-		pool_df->pd_version, version);
-	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
-		  "Invalid pool upgrade version %d, current version is %d\n", version,
-		  pool_df->pd_version);
+	if (!DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE)) {
+		if (version == pool_df->pd_version)
+			return 0;
+
+		D_DEBUG(DB_MGMT, "Attempting upgrade pool durable format from %d to %d\n",
+			pool_df->pd_version, version);
+		D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
+			  "Invalid pool upgrade version %d, current version is %d\n", version,
+			  pool_df->pd_version);
+	}
 
 	if (version >= VOS_POOL_DF_2_6 && pool_df->pd_version < VOS_POOL_DF_2_6 &&
-	    pool->vp_vea_info)
-		rc = vea_upgrade(pool->vp_vea_info, &pool->vp_umm, &pool_df->pd_vea_df, version);
-	if (rc)
-		return rc;
+	    pool->vp_vea_info) {
+		rc = vea_upgrade(pool->vp_vea_info, &pool->vp_umm, &pool_df->pd_vea_df,
+				 pool_df->pd_version);
+		if (rc)
+			return rc;
+	}
 
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc != 0)

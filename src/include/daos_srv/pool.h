@@ -65,9 +65,9 @@ struct ds_pool {
 	struct ds_iv_ns		*sp_iv_ns;
 	uint32_t		*sp_states;	/* pool child state array */
 
-	/* structure related to EC aggregate epoch query */
-	d_list_t		sp_ec_ephs_list;
-	struct sched_request	*sp_ec_ephs_req;
+	/* structure related to container epoch query */
+	d_list_t		sp_track_ephs_list;
+	struct sched_request	*sp_track_ephs_req;
 
 	uint32_t		sp_dtx_resync_version;
 	/* Special pool/container handle uuid, which are
@@ -77,8 +77,7 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t sp_stopping : 1, sp_fetch_hdls : 1, sp_disable_rebuild : 1, sp_need_discard : 1,
-	    sp_checkpoint_props_changed : 1;
+	uint32_t sp_stopping : 1, sp_fetch_hdls : 1, sp_checkpoint_props_changed : 1;
 
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
@@ -260,9 +259,9 @@ int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
 int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
-
 int ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
+
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
@@ -368,8 +367,6 @@ int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
-
-extern bool ec_agg_disabled;
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,

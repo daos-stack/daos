@@ -395,7 +395,7 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
-			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
+			err = vos_dtx_commit(cont->sc_hdl, &dre->dre_xid, 1, NULL);
 			if (err == -DER_NONEXIST)
 				err = 0;
 			if (err != 0)

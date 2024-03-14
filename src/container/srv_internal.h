@@ -55,8 +55,6 @@ dsm_tls_get()
 	return tls;
 }
 
-extern bool ec_agg_disabled;
-
 struct ec_eph {
 	d_rank_t	rank;
 	daos_epoch_t	eph;

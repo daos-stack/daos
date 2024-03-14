@@ -557,6 +557,7 @@ int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
 int  dbtree_is_empty(daos_handle_t toh);
 int  dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats);
+void dbtree_handle_reset_root(daos_handle_t hdl, struct btr_root *root);
 
 static inline uint64_t
 dbtree_feats_get(struct btr_root *root)
