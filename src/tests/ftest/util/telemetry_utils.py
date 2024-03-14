@@ -42,6 +42,7 @@ def _flatten(items):
 
     return list(_flatten_iter(items))
 
+
 class TelemetryUtils():
     # pylint: disable=too-many-nested-blocks
     """Defines a object used to verify telemetry information."""
@@ -138,7 +139,7 @@ class TelemetryUtils():
         "engine_pool_block_allocator_frags_large",
         "engine_pool_block_allocator_frags_small",
         "engine_pool_block_allocator_free_blks",
-        "engine_pool_ops_key2anchor"]))
+        "engine_pool_ops_key2anchor"])
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
