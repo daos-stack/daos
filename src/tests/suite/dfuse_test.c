@@ -803,7 +803,6 @@ do_cachingcheck(void **state)
 	int   fd;
 	int   rc;
 	int   pid;
-	int   status;
 	char  dir_name[256];
 	char  file_name[256];
 	char  exe_name[] = "/usr/bin/cat";
