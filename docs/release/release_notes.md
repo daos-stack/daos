@@ -3,7 +3,7 @@
 We are pleased to announce the release of DAOS version 2.4.
 
 
-## DAOS Version 2.4.2 (2024-03-13)
+## DAOS Version 2.4.2 (2024-03-15)
 
 ### Updates in this Release
 
