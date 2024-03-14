@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -455,7 +455,7 @@ class SlurmSetup():
                 raise SlurmSetupException(f'Error restarting {service} on {result.failed_hosts}')
 
     def _active_systemctl(self, nodes, service, debug_log=None, debug_config=None):
-        """Restart the systemctl service.
+        """Check if the systemctl service is active.
 
         Args:
             nodes (NodeSet): nodes on which to get status from the systemctl service
