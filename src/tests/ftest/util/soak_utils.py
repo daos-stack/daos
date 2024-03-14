@@ -1246,10 +1246,6 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             self.log.info(f"<<{job_spec.upper()} cmdlines>>:")
             for cmd in sbatch_cmds:
                 self.log.info("%s", cmd)
-            # unload the mpi_module if not same as self.mpi_module
-            if mpi_module != self.mpi_module:
-                mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
-                mpirun_cmd.get_params(self)
     return commands
 
 
