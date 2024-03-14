@@ -188,7 +188,7 @@ done
 
 check_cmds $PYTHON_EXE $CLUSH_EXE $MODULE_EXE
 
-if [[ "$START_CLEANUP" == "true" ]] ; then
+if "$START_CLEANUP" ; then
 	cleanup
 
 	info "Cleaning NLT logs"
@@ -213,7 +213,7 @@ $PYTHON_EXE launch.py $common_opts "${args[@]}"
 rc=$?
 popd > /dev/null
 
-if [[ "$END_CLEANUP" == "true" ]] ; then
+if "$END_CLEANUP" ; then
 	cleanup
 fi
 
