@@ -97,7 +97,7 @@ func TestIsMounted(t *testing.T) {
 			expErr: errors.New("no such file or directory"),
 		},
 		"neither dir nor device": {
-			target: "/dev/log",
+			target: "/dev/stderr",
 			expErr: errors.New("not a valid mount target"),
 		},
 	} {
@@ -173,7 +173,7 @@ func TestSystemLinux_GetFsType(t *testing.T) {
 			expErr: syscall.ENOENT,
 		},
 		"temp dir": {
-			path: "/run",
+			path: "/dev",
 			expResult: &FsType{
 				Name:   "tmpfs",
 				NoSUID: true,
