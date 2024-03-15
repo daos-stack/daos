@@ -1150,13 +1150,13 @@ consume_low_fd(void)
 		} else if (low_fd_list[low_fd_count] >= DAOS_MIN_FD) {
 			/* block fd 255 too. 255 is commonly used by bash. */
 			rc = dup2(low_fd_list[0], 255);
-			if (rc) {
+			if (rc == -1) {
 				DS_ERROR(errno, "dup2() failed to reserve fd 255");
 				goto err;
 			}
 			/* block fd DAOS_DUMMY_FD which will be used later for dup2(). */
 			rc = dup2(low_fd_list[0], DAOS_DUMMY_FD);
-			if (rc) {
+			if (rc == -1) {
 				DS_ERROR(errno, "dup2() failed to reserve fd DAOS_DUMMY_FD");
 				goto err;
 			}
