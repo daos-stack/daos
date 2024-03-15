@@ -107,8 +107,8 @@ func TestIpmctl_getRegions(t *testing.T) {
 			expErr: errors.New("insufficient permissions"),
 		},
 		"no modules": {
-			cmdOut: outNoPMemModules,
-			expErr: errNoPMemModules,
+			cmdOut: outNoPMemDIMMs,
+			expErr: errNoPMemDIMMs,
 		},
 		"no regions": {
 			cmdOut:    outNoPMemRegions,
