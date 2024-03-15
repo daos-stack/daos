@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,7 +18,6 @@ import slurm_utils
 from agent_utils import include_local_host
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from dmg_utils import DmgCommand
 from exception_utils import CommandFailure
 from general_utils import journalctl_time
 from host_utils import get_local_host
@@ -94,7 +93,7 @@ class SoakTestBase(TestWithServers):
         self.sharedsoak_dir = self.tmp + "/soak"
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
-        self.dmg_command = DmgCommand(self.bin)
+        self.dmg_command = self.get_dmg_command()
         # Fail if slurm partition is not defined
         # NOTE: Slurm reservation and partition are created before soak runs.
         # CI uses partition=daos_client and no reservation.
@@ -338,7 +337,7 @@ class SoakTestBase(TestWithServers):
                     else:
                         raise SoakTestError(
                             "<<FAILED: Job {} is not supported. ".format(job))
-                    jobscript = build_job_script(self, commands, job, npj)
+                    jobscript = build_job_script(self, commands, job, npj, ppn)
                     job_cmdlist.extend(jobscript)
         return job_cmdlist
 

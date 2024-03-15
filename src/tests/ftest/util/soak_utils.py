@@ -306,6 +306,7 @@ def wait_for_pool_rebuild(self, pool, name):
     """
     rebuild_status = False
     self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.identifier, time.ctime())
+    self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
     try:
         # # Wait for rebuild to start
         # pool.wait_for_rebuild_to_start()
@@ -318,6 +319,7 @@ def wait_for_pool_rebuild(self, pool, name):
     except TestFail as error1:
         self.log.error(
             f"<<<FAILED:{name} rebuild failed due to test issue: {error1}", exc_info=error1)
+    self.dmg_command.server_set_logmasks(raise_exception=False)
     return rebuild_status
 
 
@@ -594,7 +596,9 @@ def launch_server_stop_start(self, pools, name, results, args):
         if drain:
             for pool in pools:
                 try:
+                    self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
                     pool.drain(rank)
+                    self.dmg_command.server_set_logmasks(raise_exception=False)
                 except TestFail as error:
                     self.log.error(
                         f"<<<FAILED:dmg pool {pool.identifier} drain failed", exc_info=error)
@@ -838,7 +842,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
-            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module load {self.mpi_module}"]
             # include dfuse cmdlines
             if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -920,7 +924,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             env["D_LOG_FILE"] = get_log_file(daos_log or f"{macsio.command}_daos.log")
             env["D_LOG_FILE_APPEND_PID"] = "1"
             env["DAOS_UNS_PREFIX"] = format_path(macsio.daos_pool, macsio.daos_cont)
-            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module load {self.mpi_module}"]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1010,8 +1014,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
-            sbatch_cmds = [
-                "module purge", f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module load {self.mpi_module}"]
             # include dfuse cmdlines
             if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -1183,7 +1186,6 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
 
     """
     commands = []
-    sbatch_cmds = []
     app_params = os.path.join(os.sep, "run", job_spec, "*")
     app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
     mpi_module = self.params.get("module", app_params, self.mpi_module)
@@ -1194,10 +1196,10 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     oclass_list = self.params.get("oclass", app_params)
     for file_oclass, dir_oclass in oclass_list:
         for api in api_list:
+            sbatch_cmds = [f"module load {mpi_module}"]
             if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 continue
             add_containers(self, pool, file_oclass, dir_oclass)
-            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
             log_name = "{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
             # include dfuse cmdlines
@@ -1205,9 +1207,6 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 dfuse, dfuse_start_cmdlist = start_dfuse(
                     self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                 sbatch_cmds.extend(dfuse_start_cmdlist)
-            # allow apps that use an mpi other than default (self.mpi_module)
-            if mpi_module != self.mpi_module:
-                sbatch_cmds.append(f"module load {mpi_module}")
             mpirun_cmd = Mpirun(app_cmd, False, mpi_module)
             mpirun_cmd.get_params(self)
             env = EnvironmentVariables()
@@ -1230,16 +1229,11 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             sbatch_cmds.append(str(cmdline))
             sbatch_cmds.append("status=$?")
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
-                if mpi_module != self.mpi_module:
-                    sbatch_cmds.extend(["module purge", f"module load {self.mpi_module}"])
                 sbatch_cmds.extend(stop_dfuse(dfuse))
             commands.append([sbatch_cmds, log_name])
             self.log.info(f"<<{job_spec.upper()} cmdlines>>:")
             for cmd in sbatch_cmds:
                 self.log.info("%s", cmd)
-            if mpi_module != self.mpi_module:
-                mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
-                mpirun_cmd.get_params(self)
     return commands
 
 
@@ -1297,7 +1291,7 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
     return commands
 
 
-def build_job_script(self, commands, job, nodesperjob):
+def build_job_script(self, commands, job, nodesperjob, ppn):
     """Create a slurm batch script that will execute a list of cmdlines.
 
     Args:
@@ -1333,7 +1327,8 @@ def build_job_script(self, commands, job, nodesperjob):
             "exclude": str(self.slurm_exclude_nodes),
             "error": str(error),
             "export": "ALL",
-            "exclusive": None
+            "exclusive": None,
+            "ntasks": str(nodesperjob * ppn)
         }
         # include the cluster specific params
         sbatch.update(self.srun_params)
