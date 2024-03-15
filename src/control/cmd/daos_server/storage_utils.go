@@ -76,21 +76,30 @@ type scmSocketCmd struct {
 type nvmeCmd struct {
 	cmdutil.LogCmd        `json:"-"`
 	cmdutil.JSONOutputCmd `json:"-"`
+	ctlSvcCmd             `json:"-"`
 	helperLogCmd          `json:"-"`
 	optCfgCmd             `json:"-"`
 	iommuCheckerCmd       `json:"-"`
 }
 
-func (cmd *nvmeCmd) init() error {
+func (cmd *nvmeCmd) init() (bool, error) {
+	engCfgs := config.DefaultServer().Engines
+	if cmd.config != nil {
+		engCfgs = cmd.config.Engines
+	}
+	cmd.ctlSvc = &server.ControlService{
+		StorageControlService: *server.NewStorageControlService(cmd.Logger, engCfgs),
+	}
+
 	if err := common.CheckDupeProcess(); err != nil {
-		return err
+		return false, err
 	}
 	if err := cmd.setHelperLogFile(); err != nil {
-		return err
+		return false, err
 	}
 	cmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(cmd.Logger).IsIOMMUEnabled)
 
-	return nil
+	return cmd.IsIOMMUEnabled()
 }
 
 type scmCmd struct {

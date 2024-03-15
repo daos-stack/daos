@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -231,9 +231,6 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				Logger: log,
 			}
 			tc.prepCmd.config = tc.cfg
-			tc.prepCmd.setIOMMUChecker(func() (bool, error) {
-				return !tc.iommuDisabled, nil
-			})
 
 			req := storage.BdevPrepareRequest{
 				HugepageCount: tc.prepCmd.NrHugepages,
@@ -243,7 +240,8 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 				DisableVFIO:   tc.prepCmd.DisableVFIO,
 			}
 
-			gotErr := prepareNVMe(req, &tc.prepCmd.nvmeCmd, scs.NvmePrepare)
+			gotErr := prepareNVMe(req, &tc.prepCmd.nvmeCmd, !tc.iommuDisabled,
+				scs.NvmePrepare)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			mbb.RLock()
@@ -504,9 +502,6 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				Logger: log,
 			}
 			tc.resetCmd.config = tc.cfg
-			tc.resetCmd.setIOMMUChecker(func() (bool, error) {
-				return !tc.iommuDisabled, nil
-			})
 
 			req := storage.BdevPrepareRequest{
 				TargetUser:   tc.resetCmd.TargetUser,
@@ -516,7 +511,8 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 				Reset_:       true,
 			}
 
-			gotErr := resetNVMe(req, &tc.resetCmd.nvmeCmd, scs.NvmePrepare)
+			gotErr := resetNVMe(req, &tc.resetCmd.nvmeCmd, !tc.iommuDisabled,
+				scs.NvmePrepare)
 			test.CmpErr(t, tc.expErr, gotErr)
 
 			mbb.RLock()
@@ -739,12 +735,10 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 			}
 			tc.scanCmd.config = tc.cfg
 			tc.scanCmd.IgnoreConfig = tc.ignoreCfg
-			tc.scanCmd.setIOMMUChecker(func() (bool, error) {
-				return !tc.iommuDisabled, nil
-			})
 			tc.scanCmd.SkipPrep = tc.skipPrep
 
-			gotErr := tc.scanCmd.scanNVMe(scs.NvmeScan, scs.NvmePrepare)
+			gotErr := tc.scanCmd.scanNVMe(!tc.iommuDisabled, scs.NvmeScan,
+				scs.NvmePrepare)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -835,5 +829,136 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 			printCommand(t, &scanNVMeCmd{SkipPrep: true}),
 			nil,
 		},
+	})
+}
+
+func mockCSFromNvmeCfg(log logging.Logger, bmbc bdev.MockBackendConfig) *server.ControlService {
+	mbb := bdev.NewMockBackend(&bmbc)
+	mbp := bdev.NewProvider(log, mbb)
+	scs := server.NewMockStorageControlService(log, nil, nil, nil, mbp, nil)
+	return &server.ControlService{StorageControlService: *scs}
+}
+
+// TestDaosServer_NVMe_Commands_JSON verifies that when the JSON-output flag is set only JSON is
+// printed to standard out. Test cases should cover all scm subcommand variations.
+func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
+	// Use a normal logger to verify that we don't mess up JSON output.
+	log := logging.NewCommandLineLogger()
+
+	runJSONCmdTests(t, log, []jsonCmdTest{
+		{
+			"Prepare SSDs; JSON",
+			"nvme prepare -j",
+			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+				PrepareRes: &storage.BdevPrepareResponse{},
+			}),
+			nil,
+			nil,
+		},
+		{
+			"Prepare SSDs; JSON; returns error",
+			"nvme prepare -j",
+			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+				PrepareErr: errors.New("bad prep"),
+			}),
+			nil,
+			errors.New("nvme prepare backend: bad prep"),
+		},
+		{
+			"Reset SSDs; JSON",
+			"nvme reset -j",
+			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+				ResetRes: &storage.BdevPrepareResponse{},
+			}),
+			nil,
+			nil,
+		},
+		{
+			"Reset SSDs; JSON; returns error",
+			"nvme reset -j",
+			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+				ResetErr: errors.New("bad reset"),
+			}),
+			nil,
+			errors.New("nvme reset backend: bad reset"),
+		},
+		{
+			"Scan SSDs; JSON",
+			"nvme scan -j",
+			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						func() *storage.NvmeController {
+							c := storage.MockNvmeController(1)
+							c.Serial = ""
+							return c
+						}(),
+					},
+				},
+			}),
+			storage.NvmeControllers{
+				func() *storage.NvmeController {
+					c := storage.MockNvmeController(1)
+					c.Serial = ""
+					return c
+				}(),
+			},
+			nil,
+		},
+		{
+			"Scan SSDs; JSON; returns error",
+			"nvme scan -j",
+			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+				ScanErr: errors.New("bad scan"),
+			}),
+			nil,
+			errors.New("nvme scan backend: bad scan"),
+		},
+		//		{
+		//			"Scan modules; JSON",
+		//			"scm scan -j",
+		//			mockCSFromScmCfg(log, scm.MockBackendConfig{
+		//				GetModulesRes: storage.ScmModules{
+		//					storage.MockScmModule(),
+		//				},
+		//			}),
+		//			storage.ScmModules{storage.MockScmModule()},
+		//			nil,
+		//		},
+		//		{
+		//			"Scan modules; JSON; returns error",
+		//			"scm scan -j",
+		//			mockCSFromScmCfg(log, scm.MockBackendConfig{
+		//				GetModulesErr: errors.New("bad prep"),
+		//			}),
+		//			nil,
+		//			errors.New("bad prep"),
+		//		},
+		//		{
+		//			"Scan namespaces; JSON",
+		//			"scm scan -j",
+		//			mockCSFromScmCfg(log, scm.MockBackendConfig{
+		//				GetModulesRes: storage.ScmModules{
+		//					storage.MockScmModule(),
+		//				},
+		//				GetNamespacesRes: storage.ScmNamespaces{
+		//					storage.MockScmNamespace(),
+		//				},
+		//			}),
+		//			storage.ScmNamespaces{storage.MockScmNamespace()},
+		//			nil,
+		//		},
+		//		{
+		//			"Scan namespaces; JSON; returns error",
+		//			"scm scan -j",
+		//			mockCSFromScmCfg(log, scm.MockBackendConfig{
+		//				GetModulesRes: storage.ScmModules{
+		//					storage.MockScmModule(),
+		//				},
+		//				GetNamespacesErr: errors.New("bad prep"),
+		//			}),
+		//			nil,
+		//			errors.New("bad prep"),
+		//		},
 	})
 }

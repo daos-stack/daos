@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,6 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -172,18 +171,13 @@ func (cmd *prepareNVMeCmd) WithIgnoreConfig(b bool) *prepareNVMeCmd {
 	return cmd
 }
 
-func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker hardware.IOMMUDetector, req *storage.BdevPrepareRequest) error {
+func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuOn bool, req *storage.BdevPrepareRequest) error {
 	if err := sanitizePCIAddrLists(req); err != nil {
 		return errors.Wrap(err, "sanitizing cli input pci address lists")
 	}
 
 	if err := updateNVMePrepReqFromConfig(log, cfg, req); err != nil {
 		return errors.Wrap(err, "updating request parameters with config file settings")
-	}
-
-	iommuEnabled, err := iommuChecker.IsIOMMUEnabled()
-	if err != nil {
-		return errors.Wrap(err, "verifying iommu capability on host")
 	}
 
 	targetUser, err := getTargetUser(req.TargetUser)
@@ -193,7 +187,7 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 	// Update target user parameter in request.
 	req.TargetUser = targetUser
 
-	if err := validateVFIOSetting(targetUser, req.DisableVFIO, iommuEnabled); err != nil {
+	if err := validateVFIOSetting(targetUser, req.DisableVFIO, iommuOn); err != nil {
 		return err
 	}
 
@@ -202,7 +196,7 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 		log.Info("VMD not enabled because VMD disabled in config file")
 	case req.DisableVFIO:
 		log.Info("VMD not enabled because VFIO disabled in command options")
-	case !iommuEnabled:
+	case !iommuOn:
 		log.Info("VMD not enabled because IOMMU disabled on platform")
 	default:
 		// If none of the cases above match, set enable VMD flag in request.
@@ -212,7 +206,7 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 	return nil
 }
 
-func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, prepareBackend nvmePrepareResetFn) error {
+func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, iommuOn bool, prepareBackend nvmePrepareResetFn) error {
 	cmd.Debug("Prepare locally-attached NVMe storage...")
 
 	cfgParam := cmd.config
@@ -220,7 +214,7 @@ func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, prepareBackend nv
 		cfgParam = nil
 	}
 
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &req); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cfgParam, iommuOn, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
@@ -229,15 +223,18 @@ func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, prepareBackend nv
 	// Prepare NVMe device access.
 	_, err := prepareBackend(req)
 
-	return err
+	return errors.Wrap(err, "nvme prepare backend")
 }
 
-func (cmd *prepareNVMeCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
-		return err
+func (cmd *prepareNVMeCmd) Execute(_ []string) (err error) {
+	iommuOn := true
+	if cmd.ctlSvc == nil {
+		// If specific storage control service is not supplied with command, do init().
+		iommuOn, err = cmd.init()
+		if err != nil {
+			return err
+		}
 	}
-
-	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing prepare drives command: %+v", cmd)
 
@@ -249,7 +246,8 @@ func (cmd *prepareNVMeCmd) Execute(_ []string) error {
 		DisableVFIO:   cmd.DisableVFIO,
 	}
 
-	return prepareNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
+	return prepareNVMe(req, &cmd.nvmeCmd, iommuOn,
+		cmd.ctlSvc.StorageControlService.NvmePrepare)
 }
 
 type resetNVMeCmd struct {
@@ -282,7 +280,7 @@ func (cmd *resetNVMeCmd) WithIgnoreConfig(b bool) *resetNVMeCmd {
 	return cmd
 }
 
-func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend nvmePrepareResetFn) error {
+func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, iommuOn bool, resetBackend nvmePrepareResetFn) error {
 	cmd.Debug("Reset locally-attached NVMe storage...")
 
 	cleanReq := storage.BdevPrepareRequest{
@@ -302,7 +300,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 		cfgParam = nil
 	}
 
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &resetReq); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cfgParam, iommuOn, &resetReq); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
@@ -337,12 +335,15 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 	return nil
 }
 
-func (cmd *resetNVMeCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
-		return err
+func (cmd *resetNVMeCmd) Execute(_ []string) (err error) {
+	iommuOn := true
+	if cmd.ctlSvc == nil {
+		// If specific storage control service is not supplied with command, do init().
+		iommuOn, err = cmd.init()
+		if err != nil {
+			return err
+		}
 	}
-
-	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing reset nvme command: %+v", cmd)
 
@@ -353,7 +354,8 @@ func (cmd *resetNVMeCmd) Execute(_ []string) error {
 		DisableVFIO:  cmd.DisableVFIO,
 	}
 
-	return resetNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
+	return resetNVMe(req, &cmd.nvmeCmd, iommuOn,
+		cmd.ctlSvc.StorageControlService.NvmePrepare)
 }
 
 type scanNVMeCmd struct {
@@ -370,63 +372,77 @@ func (cmd *scanNVMeCmd) getVMDState() bool {
 	return !cmd.DisableVMD && !cfgDisableVMD
 }
 
-func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePrepareResetFn) error {
-	var bld strings.Builder
+func (cmd *scanNVMeCmd) scanNVMe(iommuOn bool, scanBackend nvmeScanFn, prepResetBackend nvmePrepareResetFn) (errOut error) {
 	req := storage.BdevScanRequest{}
 
 	if !cmd.IgnoreConfig && cmd.config != nil {
 		req.DeviceList = nvmeBdevsFromCfg(cmd.config)
 		if req.DeviceList.Len() > 0 {
-			cmd.Debugf("applying devices filter derived from config file: %s", req.DeviceList)
+			cmd.Debugf("applying devices filter derived from config file: %s",
+				req.DeviceList)
 		}
 	}
 
+	reqPrep := storage.BdevPrepareRequest{
+		PCIAllowList: strings.Join(req.DeviceList.Devices(),
+			storage.BdevPciAddrSep),
+	}
+
 	if !cmd.SkipPrep {
-		req := storage.BdevPrepareRequest{
-			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
+		if err := prepareNVMe(reqPrep, &cmd.nvmeCmd, iommuOn, prepResetBackend); err != nil {
+			return errors.Wrap(err, "nvme prep before scan failed, try with "+
+				"--skip-prep after manual nvme prepare")
 		}
-		if err := prepareNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
-			return errors.Wrap(err,
-				"nvme prep before scan failed, try with --skip-prep after manual nvme prepare")
-		}
+		defer func() {
+			if err := resetNVMe(reqPrep, &cmd.nvmeCmd, iommuOn, prepResetBackend); err != nil {
+				err = errors.Wrap(err, "nvme reset after scan failed, "+
+					"try with --skip-prep before manual nvme reset")
+				if errOut == nil {
+					errOut = err
+					return
+				}
+				cmd.Error(err.Error())
+			}
+		}()
 	}
 
 	cmd.Info("Scan locally-attached NVMe storage...")
 
 	resp, err := scanBackend(req)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "nvme scan backend")
 	}
 
-	if err := pretty.PrintNvmeControllers(resp.Controllers, &bld); err != nil {
-		return err
-	}
-
-	cmd.Info(bld.String())
-
-	if !cmd.SkipPrep {
-		req := storage.BdevPrepareRequest{
-			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
+	if cmd.JSONOutputEnabled() {
+		if err := cmd.OutputJSON(resp.Controllers, nil); err != nil {
+			return err
 		}
-		if err := resetNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
-			return errors.Wrap(err,
-				"nvme reset after scan failed, try with --skip-prep before manual nvme reset")
+	} else {
+		var bld strings.Builder
+		if err := pretty.PrintNvmeControllers(resp.Controllers, &bld); err != nil {
+			return err
 		}
+		cmd.Info(bld.String())
 	}
 
 	return nil
 }
 
-func (cmd *scanNVMeCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
-		return err
-	}
-
-	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
-	if cmd.getVMDState() {
-		svc.WithVMDEnabled()
+func (cmd *scanNVMeCmd) Execute(_ []string) (err error) {
+	iommuOn := true
+	if cmd.ctlSvc == nil {
+		// If specific storage control service is not supplied with command, do init().
+		iommuOn, err = cmd.init()
+		if err != nil {
+			return err
+		}
+		if cmd.getVMDState() {
+			cmd.ctlSvc.WithVMDEnabled()
+		}
 	}
 
 	cmd.Debugf("executing scan nvme command: %+v", cmd)
-	return cmd.scanNVMe(svc.NvmeScan, svc.NvmePrepare)
+
+	return cmd.scanNVMe(iommuOn, cmd.ctlSvc.StorageControlService.NvmeScan,
+		cmd.ctlSvc.StorageControlService.NvmePrepare)
 }

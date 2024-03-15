@@ -92,7 +92,6 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 			rdc.LogCmd = cmdutil.LogCmd{Logger: cmd.Logger}
 			// resetNVMeCmd expects positional argument, so set it
 			rdc.Args.PCIAllowList = cmd.PCIAllowList
-			rdc.setIOMMUChecker(cmd.isIOMMUEnabled)
 			req := storage.BdevPrepareRequest{
 				TargetUser:   rdc.TargetUser,
 				PCIAllowList: rdc.Args.PCIAllowList,
@@ -100,7 +99,11 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 				DisableVFIO:  rdc.DisableVFIO,
 				Reset_:       true,
 			}
-			errNVMe = resetNVMe(req, &rdc.nvmeCmd, scs.NvmePrepare)
+			iommuOn, err := cmd.isIOMMUEnabled()
+			if err != nil {
+				return errors.Wrap(err, "checking if iommu is enabled")
+			}
+			errNVMe = resetNVMe(req, &rdc.nvmeCmd, iommuOn, scs.NvmePrepare)
 		}
 	} else {
 		if doSCM {
@@ -119,7 +122,6 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 			pdc.LogCmd = cmdutil.LogCmd{Logger: cmd.Logger}
 			// prepareNVMeCmd expects positional argument, so set it
 			pdc.Args.PCIAllowList = cmd.PCIAllowList
-			pdc.setIOMMUChecker(cmd.isIOMMUEnabled)
 			req := storage.BdevPrepareRequest{
 				HugepageCount: pdc.NrHugepages,
 				TargetUser:    pdc.TargetUser,
@@ -127,7 +129,11 @@ func (cmd *legacyPrepCmd) prep(scs *server.StorageControlService) error {
 				PCIBlockList:  pdc.PCIBlockList,
 				DisableVFIO:   pdc.DisableVFIO,
 			}
-			errNVMe = prepareNVMe(req, &pdc.nvmeCmd, scs.NvmePrepare)
+			iommuOn, err := cmd.isIOMMUEnabled()
+			if err != nil {
+				return errors.Wrap(err, "checking if iommu is enabled")
+			}
+			errNVMe = prepareNVMe(req, &pdc.nvmeCmd, iommuOn, scs.NvmePrepare)
 		}
 	}
 
