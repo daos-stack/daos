@@ -26,13 +26,10 @@
 static bool
 is_stderr_logging_enabled(void)
 {
-	int  rc;
 	bool enabled = false;
 
-	rc = d_getenv_bool(D_LOG_DMG_STDERR_ENV, &enabled);
-	if (rc == 0)
-		return enabled;
-	return false;
+	d_getenv_bool(D_LOG_DMG_STDERR_ENV, &enabled);
+	return enabled;
 }
 
 static void
