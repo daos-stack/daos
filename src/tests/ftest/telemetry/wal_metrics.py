@@ -77,7 +77,7 @@ class WalMetrics(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=WalMetrics,test_wal_reply_metrics
         """
-        wal_metrics = self.telemetry.ENGINE_POOL_VOS_REHYDRATION_METRICS
+        wal_metrics = self.telemetry.ENGINE_POOL_VOS_REPLAY_METRICS
 
         self.log_step('Creating a pool (dmg pool create)')
         add_pool(self)

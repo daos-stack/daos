@@ -146,12 +146,12 @@ class TelemetryUtils():
         "engine_pool_vos_aggregation_obj_scanned",
         "engine_pool_vos_aggregation_obj_skipped",
         "engine_pool_vos_aggregation_uncommitted"]
-    ENGINE_POOL_VOS_REHYDRATION_METRICS = [
-        "engine_pool_vos_rehydration_replay_count",
-        "engine_pool_vos_rehydration_replay_entries",
-        "engine_pool_vos_rehydration_replay_size",
-        "engine_pool_vos_rehydration_replay_time",
-        "engine_pool_vos_rehydration_replay_transactions"]
+    ENGINE_POOL_VOS_REPLAY_METRICS = [
+        "engine_pool_vos_replay_count",
+        "engine_pool_vos_replay_entries",
+        "engine_pool_vos_replay_size",
+        "engine_pool_vos_replay_time",
+        "engine_pool_vos_replay_transactions"]
     ENGINE_POOL_VOS_SPACE_METRICS = [
         "engine_pool_vos_space_nvme_used",
         "engine_pool_vos_space_scm_used"]
@@ -179,7 +179,7 @@ class TelemetryUtils():
         ENGINE_POOL_OPS_METRICS +\
         ENGINE_POOL_SCRUBBER_METRICS +\
         ENGINE_POOL_VOS_AGGREGATION_METRICS +\
-        ENGINE_POOL_VOS_REHYDRATION_METRICS +\
+        ENGINE_POOL_VOS_REPLAY_METRICS +\
         ENGINE_POOL_VOS_SPACE_METRICS + \
         ENGINE_POOL_VOS_WAL_METRICS
     ENGINE_EVENT_METRICS = [
