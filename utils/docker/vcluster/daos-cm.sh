@@ -171,14 +171,13 @@ function start
 	fi
 
 	timeout_counter=10
-	until [[ $timeout_counter -le 0 ]] || docker exec daos-server grep -q -e "DAOS I/O Engine .* started on rank" /tmp/daos_server.log > /dev/null 2>&1 ; do
+	until docker exec daos-server grep -q -e "DAOS I/O Engine .* started on rank" /tmp/daos_server.log > /dev/null 2>&1 ; do
 		info "Waiting DAOS file system to be formatted : timeout=$timeout_counter"
 		sleep 1
-		(( timeout_counter-- ))
+		if ! (( timeout_counter-- )) ; then
+			fatal "DAOS file system could not be formatted"
+		fi
 	done
-	if [[ $timeout_counter -le 0 ]] ; then
-		fatal "DAOS file system could not be formatted"
-	fi
 	info "DAOS file system formatted"
 
 	info "Checking system state"

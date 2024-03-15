@@ -4,21 +4,19 @@
 # 'recipe' for building a base RHEL variant docker image of a DAOS node
 #
 # This Dockerfile accept the following input build arguments:
-# - LINUX_IMAGE_NAME    Base docker image name to use (default "rockylinux/rockylinux")
-# - LINUX_IMAGE_TAG     Tag identifier of the base docker image to use (default "8.9")
+# - LINUX_IMAGE_NAME    Base docker image name to use (mandatory)
+# - LINUX_IMAGE_TAG     Tag identifier of the base docker image to use (mandatory)
 # - BUST_CACHE          Manage docker building cache (default "").  To invalidate the cache,
 #                       a random value such as the date of day shall be given.
-# - DAOS_AUTH           Enable DAOS authentication when set to "yes" (default "yes")
-# - DAOS_REPOS          Space separated list of repos needed to install DAOS (default
-#                       "https://packages.daos.io/v2.4.1/EL8/packages/x86_64/")
-# - DAOS_GPG_KEYS       Space separated list of GPG keys associated with DAOS repos (default
-#                       "https://packages.daos.io/v2.4.1/RPM-GPG-KEY-2023"
-# - DAOS_REPOS_NOAUTH   Space separated list of repos to use without GPG authentication (default "")
-# - DAOS_VERSION        Version of DAOS to use (default "2.4.1-2.el8")
+# - DAOS_AUTH           Enable DAOS authentication when set to "yes" (mandatory)
+# - DAOS_REPOS          Space separated list of repos needed to install DAOS (mandatory)
+# - DAOS_GPG_KEYS       Space separated list of GPG keys associated with DAOS repos mandatory)
+# - DAOS_REPOS_NOAUTH   Space separated list of repos to use without GPG authentication (optional)
+# - DAOS_VERSION        Version of DAOS to use (mandatory)
 
 # Pull base image
-ARG	LINUX_IMAGE_NAME=rockylinux/rockylinux
-ARG	LINUX_IMAGE_TAG="8.9"
+ARG	LINUX_IMAGE_NAME=""
+ARG	LINUX_IMAGE_TAG=""
 FROM	$LINUX_IMAGE_NAME:$LINUX_IMAGE_TAG
 LABEL	maintainer="daos@daos.groups.io"
 
@@ -38,11 +36,17 @@ RUN	dnf clean all &&                                                            
 # XXX NOTE XXX to not update all rpms.  To work properly a random value such as the date of the day
 # XXX NOTE XXX should be given.
 ARG	BUST_CACHE=""
-ARG	DAOS_REPOS="https://packages.daos.io/v2.4.1/EL8/packages/x86_64/"
-ARG	DAOS_GPG_KEYS="https://packages.daos.io/v2.4.1/RPM-GPG-KEY-2023"
-ARG	DAOS_VERSION="2.4.1-2.el8"
+ARG	DAOS_REPOS=""
+ARG	DAOS_GPG_KEYS=""
+ARG	DAOS_VERSION=""
 ARG	DAOS_REPOS_NOAUTH=""
-RUN	if [ -n "$BUST_CACHE" ] ; then                                                             \
+RUN	for it in DAOS_REPOS DAOS_GPG_KEYS DAOS_VERSION ; do                                       \
+		if eval "[[ -z \$$it ]]" ; then                                                    \
+			echo "[ERROR] Docker build argument $it is not defined" ;                  \
+			exit 1 ;                                                                   \
+		fi ;                                                                               \
+	done &&                                                                                    \
+	if [ -n "$BUST_CACHE" ] ; then                                                             \
 		echo "[INFO] Busting cache" &&                                                     \
 		dnf update ;                                                                       \
 	fi &&                                                                                      \
@@ -63,8 +67,14 @@ RUN	if [ -n "$BUST_CACHE" ] ; then                                              
 	dnf clean all
 
 # Generate GPG authentication certificates for using DAOS authentication
-ARG	DAOS_AUTH=yes
-RUN	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
+ARG	DAOS_AUTH=""
+RUN	for it in DAOS_AUTH ; do                                                                   \
+		if eval "[[ -z \$$it ]]" ; then                                                    \
+			echo "[ERROR] Docker build argument $it is not defined" ;                  \
+			exit 1 ;                                                                   \
+		fi ;                                                                               \
+	done &&                                                                                    \
+	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
 		echo "[INFO] Generating authentication certificates" &&                            \
 		if [ ! -d /etc/daos/certs ] ; then                                                 \
 			mkdir -d /etc/daos/certs &&                                                \

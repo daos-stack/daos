@@ -4,23 +4,29 @@
 # 'recipe' for building a base RHEL DAOS client docker image
 #
 # This Dockerfile accept the following input build arguments:
-# - LINUX_DISTRO             Linux distribution identifier (default "el8")
-# - DAOS_DOCKER_IMAGE_NSP    Namespace identifier of the base DAOS docker image (default "daos")
-# - DAOS_DOCKER_IMAGE_TAG    Tag identifier of the DAOS client docker image (default "v2.4.1")
-# - DAOS_VERSION             Version of DAOS to use (default "2.4.1-2.el8")
+# - LINUX_DISTRO             Linux distribution identifier (mandatory)
+# - DAOS_DOCKER_IMAGE_NSP    Namespace identifier of the base DAOS docker image (mandatory)
+# - DAOS_DOCKER_IMAGE_TAG    Tag identifier of the DAOS client docker image (mandatory)
+# - DAOS_VERSION             Version of DAOS to use (mandatory)
 # - DAOS_CLIENT_UNAME        User name of the client (mandatory)
 # - DAOS_CLIENT_GNAME        Group name of the client (mandatory)
 
 # Pull base image
-ARG	LINUX_DISTRO="el8"
-ARG	DAOS_DOCKER_IMAGE_NSP="daos"
-ARG	DAOS_DOCKER_IMAGE_TAG="v2.4.1"
+ARG	LINUX_DISTRO=""
+ARG	DAOS_DOCKER_IMAGE_NSP=""
+ARG	DAOS_DOCKER_IMAGE_TAG=""
 FROM	"$DAOS_DOCKER_IMAGE_NSP/daos-agent-$LINUX_DISTRO:$DAOS_DOCKER_IMAGE_TAG"
 LABEL	maintainer="daos@daos.groups.io"
 
 # Install base DAOS package
-ARG	DAOS_VERSION="2.4.1-2.el8"
-RUN	echo "[INFO] Installing DAOS containerization dependencies" ;                              \
+ARG	DAOS_VERSION=""
+RUN	for it in DAOS_VERSION ; do                                                                \
+		if eval "[[ -z \$$it ]]" ; then                                                    \
+			echo "[ERROR] Docker build argument $it is not defined" ;                  \
+			exit 1 ;                                                                   \
+		fi ;                                                                               \
+	done &&                                                                                    \
+	echo "[INFO] Installing DAOS containerization dependencies" ;                              \
 	dnf install                                                                                \
 		sudo                                                                               \
 		xz &&                                                                              \

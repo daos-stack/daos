@@ -4,39 +4,52 @@
 # 'recipe' for building a RHEL variant docker image of a DAOS client node
 #
 # This Dockerfile accept the following input build arguments:
-# - LINUX_DISTRO                   Linux distribution identifier (default "el8")
-# - DAOS_DOCKER_IMAGE_NSP          Namespace identifier of the base DAOS docker image (default "daos")
-# - DAOS_DOCKER_IMAGE_TAG          Tag identifier of the DAOS base docker image to use (default "rocky8.6")
-# - DAOS_VERSION                   Version of DAOS to use (default "2.4.1-2.el8")
-# - DAOS_AUTH                      Enable DAOS authentication when set to "yes" (default "yes")
+# - LINUX_DISTRO                   Linux distribution identifier (mandatory)
+# - DAOS_DOCKER_IMAGE_NSP          Namespace identifier of the base DAOS docker image (mandatory)
+# - DAOS_DOCKER_IMAGE_TAG          Tag identifier of the DAOS client docker image (mandatory)
+# - DAOS_VERSION                   Version of DAOS to use (mandatory)
+# - DAOS_AUTH                      Enable DAOS authentication when set to "yes" (mandatory)
 # - DAOS_AGENT_IFACE_CFG           Enable manual configuration of the interface to use by the agent
-#                                  (default "yes")
-# - DAOS_AGENT_IFACE_NUMA_NODE     Numa node of the interface to use by the agent (default "0")
-# - DAOS_AGENT_IFACE_NAME          Name of the interface to use by the agent (default "eth0")
-# - DAOS_AGENT_IFACE_DOMAIN_NAME   Domain name of the interface to use by the agent (default "eth0")
+#                                  (mandatory)
+# - DAOS_AGENT_IFACE_NUMA_NODE     Numa node of the interface to use by the agent (mandatory)
+# - DAOS_AGENT_IFACE_NAME          Name of the interface to use by the agent (mandatory)
+# - DAOS_AGENT_IFACE_DOMAIN_NAME   Domain name of the interface to use by the agent (mandatory)
 
 # Pull base image
-ARG	LINUX_DISTRO="el8"
-ARG	DAOS_DOCKER_IMAGE_NSP="daos"
-ARG	DAOS_DOCKER_IMAGE_TAG="v2.4.1"
+ARG	LINUX_DISTRO=""
+ARG	DAOS_DOCKER_IMAGE_NSP=""
+ARG	DAOS_DOCKER_IMAGE_TAG=""
 FROM	"${DAOS_DOCKER_IMAGE_NSP}/daos-base-${LINUX_DISTRO}:$DAOS_DOCKER_IMAGE_TAG"
 LABEL	maintainer="daos@daos.groups.io"
 
 # Install DAOS client package
-ARG	DAOS_VERSION="2.4.1-2.el8"
-RUN	dnf install                                                                                \
+ARG	DAOS_VERSION=""
+RUN	for it in DAOS_VERSION ; do                                                                \
+		if eval "[[ -z \$$it ]]" ; then                                                    \
+			echo "[ERROR] Docker build argument $it is not defined" ;                  \
+			exit 1 ;                                                                   \
+		fi ;                                                                               \
+	done &&                                                                                    \
+	dnf install                                                                                \
 		daos-client-${DAOS_VERSION} &&                                                     \
 	dnf clean all &&                                                                           \
 	systemctl enable daos_agent
 
 # Install certificates
-ARG	DAOS_AUTH=yes
-ARG	DAOS_AGENT_IFACE_CFG="yes"
-ARG	DAOS_AGENT_IFACE_NUMA_NODE="0"
-ARG	DAOS_AGENT_IFACE_NAME="eth0"
-ARG	DAOS_AGENT_IFACE_DOMAIN_NAME="eth0"
+ARG	DAOS_AUTH=""
+ARG	DAOS_AGENT_IFACE_CFG=""
+ARG	DAOS_AGENT_IFACE_NUMA_NODE=""
+ARG	DAOS_AGENT_IFACE_NAME=""
+ARG	DAOS_AGENT_IFACE_DOMAIN_NAME=""
 COPY	daos_agent.yml.in /tmp/daos_agent.yml.in
-RUN	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
+RUN	for it in DAOS_AUTH DAOS_AGENT_IFACE_CFG DAOS_AGENT_IFACE_NUMA_NODE DAOS_AGENT_IFACE_NAME  \
+		  DAOS_AGENT_IFACE_DOMAIN_NAME ; do                                                \
+		if eval "[[ -z \$$it ]]" ; then                                                    \
+			echo "[ERROR] Docker build argument $it is not defined" ;                  \
+			exit 1 ;                                                                   \
+		fi ;                                                                               \
+	done &&                                                                                    \
+	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
 		sed --in-place --regexp-extended                                                   \
 			--expression '/^@DAOS_NOAUTH_BEGIN@$/,/^@DAOS_NOAUTH_END@/d'               \
 			--expression '/(^@DAOS_AUTH_BEGIN@$)|(^@DAOS_AUTH_END@$)/d'                \
