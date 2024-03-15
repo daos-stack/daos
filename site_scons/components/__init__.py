@@ -298,9 +298,11 @@ def define_components(reqs):
                 libs=['abt'],
                 headers=['abt.h'])
 
+    # pylint: disable=wrong-spelling-in-comment
     # meson tries to install to /usr/local by default and ignores --prefix
-    # set by configure. Also, if both "--prefix" and "--destdir" are set, meson combines the paths.
-    # Workaround this by configuring with "--prefix=/" and installing with "--destdir=<path>"
+    # set by configure. Also, if both --prefix and --destdir are set, meson combines the paths.
+    # Workaround this by configuring with --prefix=/ and installing with --destdir=<path>
+    # pylint: enable=wrong-spelling-in-comment
     reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
                 retriever=GitRepoRetriever('https://github.com/libfuse/libfuse.git'),
                 commands=[['meson', 'setup', '../fuse'],
