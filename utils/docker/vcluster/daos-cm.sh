@@ -145,24 +145,22 @@ function start
 
 	info "Waiting for daos-server services to be started"
 	timeout_counter=5
-	until [[ $timeout_counter -le 0 ]] || docker exec daos-server systemctl --quiet is-active daos_server > /dev/null 2>&1 ; do
+	until docker exec daos-server systemctl --quiet is-active daos_server > /dev/null 2>&1 ; do
 		info "daos-server not yet ready: timeout=$timeout_counter"
 		sleep 1
-		(( timeout_counter-- ))
+		if ! (( timeout_counter-- )) ; then
+			fatal "DAOS server could not be started"
+		fi
 	done
-	if [[ $timeout_counter -le 0 ]] ; then
-		fatal "DAOS server could not be started"
-	fi
 
 	timeout_counter=10
-	until [[ $timeout_counter -le 0 ]] || docker exec daos-server grep -q -e "format required" /tmp/daos_server.log > /dev/null 2>&1 ; do
+	until docker exec daos-server grep -q -e "format required" /tmp/daos_server.log > /dev/null 2>&1 ; do
 		info "Waiting DAOS file system for being ready to be formatted : timeout=$timeout_counter"
 		sleep 1
-		(( timeout_counter-- ))
+		if ! (( timeout_counter-- )) ; then
+			fatal "DAOS file system could not be formatted"
+		fi
 	done
-	if [[ $timeout_counter -le 0 ]] ; then
-		fatal "DAOS file system could not be formatted"
-	fi
 	info "DAOS file system ready to be formatted"
 
 	info "Formatting DAOS storage"
