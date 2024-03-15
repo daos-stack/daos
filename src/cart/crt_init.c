@@ -349,7 +349,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	if (server)
 		d_setenv("UCX_IB_FORK_INIT", "n", 1);
 	else
-		d_setenv("IBV_FORK_SAFE", "y", 1);
+		d_setenv("UCX_IB_FORK_INIT", "y", 1);
 
 
 	/* This is a workaround for CART-871 if universe size is not set */
