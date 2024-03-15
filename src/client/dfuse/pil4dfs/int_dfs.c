@@ -90,7 +90,7 @@
 /* the default min fd that will be used by DAOS */
 #define DAOS_MIN_FD         10
 /* a dummy fd that will be used to reserve low fd with dup2(). This is introduced to make sure low
- * fds are reserved as much as possible althought applications (e.g., bash) may directly access
+ * fds are reserved as much as possible although applications (e.g., bash) may directly access
  * low fd. Once a low fd is freed and available, calls dup2(DAOS_DUMMY_FD, fd) to reserve it.
  */
 #define DAOS_DUMMY_FD       1001
@@ -1169,7 +1169,7 @@ consume_low_fd(void)
 	}
 
 	D_MUTEX_UNLOCK(&lock_reserve_fd);
-	return rc;
+	return 0;
 
 err:
 	rc = errno;
