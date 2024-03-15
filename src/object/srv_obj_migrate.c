@@ -591,7 +591,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 		return rc;
 	}
 
-	d_getenv_int(ENV_MIGRATE_ULT_CNT, &max_migrate_ult);
+	d_getenv_uint(ENV_MIGRATE_ULT_CNT, &max_migrate_ult);
 	D_ASSERT(generation != (unsigned int)(-1));
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	uuid_copy(arg.pool_hdl_uuid, pool_hdl_uuid);
@@ -3343,8 +3343,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 
 	/* Let's iterate the object on different xstream */
 	rc = dss_ult_create(migrate_obj_ult, obj_arg, DSS_XS_VOS,
-			    tgt_idx, MIGRATE_STACK_SIZE,
-			    NULL);
+			    tgt_idx, MIGRATE_STACK_SIZE, NULL);
 	if (rc)
 		goto free;
 
@@ -3777,11 +3776,12 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	ds_rebuild_running_query(migrate_in->om_pool_uuid, -1, &rebuild_ver, NULL, &rebuild_gen);
-	if (rebuild_ver == 0 || rebuild_gen != migrate_in->om_generation) {
-		D_ERROR(DF_UUID" rebuild service has been stopped.\n",
-			DP_UUID(migrate_in->om_pool_uuid));
-		D_GOTO(out, rc = -DER_SHUTDOWN);
+	ds_rebuild_running_query(migrate_in->om_pool_uuid, -1, &rebuild_ver, NULL, NULL);
+	if (rebuild_ver == 0 || rebuild_ver != migrate_in->om_version) {
+		rc = -DER_SHUTDOWN;
+		DL_ERROR(rc, DF_UUID" rebuild ver %u om version %u",
+			DP_UUID(migrate_in->om_pool_uuid), rebuild_ver, migrate_in->om_version);
+		D_GOTO(out, rc);
 	}
 
 	rc = ds_migrate_object(pool, po_hdl_uuid, co_hdl_uuid, co_uuid, migrate_in->om_version,

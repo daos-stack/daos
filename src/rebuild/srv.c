@@ -1257,7 +1257,7 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 	/* If this happened due to leader switch, then do not need update
 	 * generation.
 	 */
-	ds_rebuild_running_query(pool->sp_uuid, &version, NULL, &generation);
+	ds_rebuild_running_query(pool->sp_uuid, -1, &version, NULL, &generation);
 	if (version < task->dst_map_ver)
 		generation = ++pool->sp_rebuild_gen;
 
