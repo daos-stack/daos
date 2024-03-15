@@ -185,20 +185,6 @@ dma_metrics_init(struct bio_dma_buffer *bdb, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create grab_retries telemetry: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&stats->bds_wal_sz, D_TM_STATS_GAUGE, "WAL tx size",
-			     "bytes", "dmabuff/wal_sz/tgt_%d", tgt_id);
-	if (rc)
-		D_WARN("Failed to create WAL size telemetry: "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&stats->bds_wal_qd, D_TM_STATS_GAUGE, "WAL tx QD",
-			     "commits", "dmabuff/wal_qd/tgt_%d", tgt_id);
-	if (rc)
-		D_WARN("Failed to create WAL QD telemetry: "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&stats->bds_wal_waiters, D_TM_STATS_GAUGE, "WAL waiters",
-			     "transactions", "dmabuff/wal_waiters/tgt_%d", tgt_id);
-	if (rc)
-		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
 }
 
 struct bio_dma_buffer *
