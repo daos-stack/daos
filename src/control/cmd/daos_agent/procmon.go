@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security/auth"
 )
 
 const (
@@ -341,6 +342,52 @@ func (p *procMon) handleRequests(ctx context.Context) {
 
 // startMonitoring is the main driver which starts the process monitor. The
 // passed in context is used to terminate all monitoring in the event of shutdown.
-func (p *procMon) startMonitoring(ctx context.Context) {
+func (p *procMon) startMonitoring(ctx context.Context, cleanOnStart bool) {
+	if cleanOnStart {
+		p.cleanupServerHandles(ctx)
+	}
 	go p.handleRequests(ctx)
+}
+
+// cleanupServerHandles can be run to revoke all pool handles associated with a given machine/host.
+// DAOS server will be instructed to cleanup handles associated with the source machine/host.
+func (p *procMon) cleanupServerHandles(ctx context.Context) {
+	machineName, err := auth.GetMachineName()
+	if err != nil {
+		p.log.Errorf("hostname lookup: %s, cannot cleanup handles", err)
+		return
+	}
+	if machineName == "" {
+		p.log.Errorf("empty machine name is invalid, cannot cleanup handles", err)
+		return
+	}
+
+	req := &control.SystemCleanupReq{Machine: machineName}
+	req.SetSystem(p.systemName)
+
+	msg := fmt.Sprintf("machine %q", machineName)
+	resp, err := control.SystemCleanup(ctx, p.ctlInvoker, req)
+	if err != nil {
+		p.log.Errorf("%s: failed to run system cleanup: %s", msg, err)
+		return
+	}
+	err = resp.Errors()
+	if err != nil {
+		p.log.Errorf("%s: system cleanup ran with error: %s", msg, err)
+		return
+	}
+
+	msg = fmt.Sprintf("Running system cleanup on this %s", msg)
+	if len(resp.Results) == 0 {
+		p.log.Debugf("%s: no pool handles revoked", msg)
+		return
+	}
+	msgRvkd := "Pool handles revoked: "
+	for i, r := range resp.Results {
+		msgRvkd = fmt.Sprintf("%s %s (%d)", msgRvkd, r.PoolID, r.Count)
+		if i != len(resp.Results)-1 {
+			msgRvkd += ", "
+		}
+	}
+	p.log.Infof("%s: %s", msg, msgRvkd)
 }
