@@ -89,6 +89,10 @@
 
 /* the default min fd that will be used by DAOS */
 #define DAOS_MIN_FD         10
+/* a dummy fd that will be used to reserve low fd with dup2(). This is introduced to make sure low
+ * fds are reserved as much as possible althought applications (e.g., bash) may directly access
+ * low fd. Once a low fd is freed and available, calls dup2(DAOS_DUMMY_FD, fd) to reserve it.
+ */
 #define DAOS_DUMMY_FD       1001
 
 /* the number of low fd reserved */
@@ -117,7 +121,6 @@ struct dfs_mt {
 	_Atomic uint32_t     inited;
 	char                *pool, *cont;
 	char                *fs_root;
-	uuid_t               uuid_cont;
 };
 
 static _Atomic uint64_t        num_read;
@@ -145,16 +148,16 @@ static _Atomic uint32_t        daos_init_cnt;
 static bool             report;
 /* always load libpil4dfs related env variables in exec() */
 static bool             enforce_exec_env;
-/* current application is bash or sh */
+/* current application is bash/sh or not */
 static bool             is_bash;
 /* the exe name extract from /proc/self/cmdline */
 static char             exe_path[DFS_MAX_PATH];
 /* the short exe name from exe_path */
 static char             exe_short[DFS_MAX_NAME];
 /* "compatible_mode" is a bool to control whether passing open(), openat(), and opendir() to dfuse
- * all the time to avoid using fake fd. Env variable "D_IL_COMPATIBLE=1" or "D_IL_COMPATIBLE=true"
- * will set it true. This can increase the compatibility of libpil4dfs with degraded performance
- * in open(), openat(), and opendir().
+ * all the time to avoid using fake fd. Env variable "D_IL_COMPATIBLE=1" will set it true. This
+ * can increase the compatibility of libpil4dfs with degraded performance in open(), openat(),
+ * and opendir().
  */
 static bool             compatible_mode;
 static long int         page_size;
@@ -873,11 +876,6 @@ fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 		       DFUSE_IOCTL_VERSION, il_reply.fir_version);
 		D_GOTO(err, rc);
 	}
-	if (uuid_compare(dfs_mt->uuid_cont, il_reply.fir_cont) != 0) {
-		D_WARN("inconsistent container uuid" DF_UUID " != " DF_UUID "\n",
-		       DP_UUID(&dfs_mt->uuid_cont), DP_UUID(&il_reply.fir_cont));
-		D_GOTO(err, rc = EINVAL);
-	}
 
 	rc = ioctl(fd, DFUSE_IOCTL_IL_DSIZE, &hsd_reply);
 	if (rc != 0) {
@@ -1052,13 +1050,6 @@ retrieve_handles_from_fuse(int idx)
 			errno_saved, strerror(errno_saved));
 		goto err;
 	}
-	rc = dc_cont_hdl2uuid(dfs_list[idx].coh, NULL, &dfs_list[idx].uuid_cont);
-	if (rc != 0) {
-		errno_saved = daos_der2errno(rc);
-		D_DEBUG(DB_ANY, "failed to look up container uuid: %d (%s)\n", errno_saved,
-			strerror(errno_saved));
-		goto err;
-	}
 
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
@@ -1158,9 +1149,17 @@ consume_low_fd(void)
 			goto err;
 		} else if (low_fd_list[low_fd_count] >= DAOS_MIN_FD) {
 			/* block fd 255 too. 255 is commonly used by bash. */
-			dup2(low_fd_list[0], 255);
+			rc = dup2(low_fd_list[0], 255);
+			if (rc) {
+				DS_ERROR(errno, "dup2() failed to reserve fd 255");
+				goto err;
+			}
 			/* block fd DAOS_DUMMY_FD which will be used later for dup2(). */
-			dup2(low_fd_list[0], DAOS_DUMMY_FD);
+			rc = dup2(low_fd_list[0], DAOS_DUMMY_FD);
+			if (rc) {
+				DS_ERROR(errno, "dup2() failed to reserve fd DAOS_DUMMY_FD");
+				goto err;
+			}
 			libc_close(low_fd_list[low_fd_count]);
 			break;
 		} else {
@@ -2093,7 +2092,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	if (!hook_enabled)
 		goto org_func;
-	/* special cases. Needed to avoid dead lock. */
+	/* special cases. Needed to avoid dead lock inside daos_init(). */
 	if (strstr(pathname, "/etc/libfabric.conf"))
 		goto org_func;
 
@@ -2120,8 +2119,10 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 		/* query file object through ioctl() */
 		rc = fetch_dfs_cont_file_obj_with_fd(fd_kernel, dfs_mt, &dfs_obj);
-		if (rc != 0 && rc != EISDIR)
+		if (rc != 0 && rc != EISDIR) {
+			DS_WARN(rc, "fetch_dfs_cont_file_obj_with_fd() failed");
 			goto out_compatible;
+		}
 
 		/* Need to create a fake fd and associate with fd_kernel */
 		atomic_fetch_add_relaxed(&num_open, 1);
@@ -2154,7 +2155,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		if (rc == EISDIR) {
 			/* need to get DFS handle directly */
 			if (oflags & O_CREAT) {
-				rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFREG,
+				rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFDIR,
 					      oflags, 0, 0, NULL, &dfs_obj);
 				mode_query = S_IFDIR;
 			} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
@@ -2192,8 +2193,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				goto out_compatible;
 			}
 			if (strnlen(dir_list[idx_dirfd]->path, DFS_MAX_PATH) >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n",
-					ENAMETOOLONG, strerror(ENAMETOOLONG));
+				DS_WARN(ENAMETOOLONG, "path is longer than DFS_MAX_PATH");
 				free_dirfd(idx_dirfd);
 				goto out_compatible;
 			}
@@ -4179,14 +4179,14 @@ err_out0:
 /* check whether fd 0, 1, and 2 are located on DFS mount or not. If yes, reopen files and
  * set offset.
  */
-static void
+static int
 setup_fd_0_1_2(void)
 {
-	int   i, fd, idx, fd_tmp, fd_new, open_flag;
+	int   i, fd, idx, fd_tmp, fd_new, open_flag, error_save;
 	off_t offset;
 
 	if (num_fd_dup2ed == 0)
-		return;
+		return 0;
 
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		/* only check fd 0, 1, and 2 */
@@ -4199,34 +4199,45 @@ setup_fd_0_1_2(void)
 			/* get a real fd from kernel */
 			fd_tmp = libc_open(file_list[idx]->path, open_flag);
 			if (fd_tmp < 0) {
-				printf("Error: open %s failed. %s\n", file_list[idx]->path,
-				       strerror(errno));
-				continue;
+				fprintf(stderr, "Error: open %s failed. %d (%s)\n",
+					file_list[idx]->path, errno, strerror(errno));
+				return errno;
 			}
 			/* using dup2() to make sure we get desired fd */
 			fd_new = dup2(fd_tmp, fd);
 			if (fd_new < 0 || fd_new != fd) {
-				printf("Error: dup2 failed. %s\n", strerror(errno));
-				exit(1);
+				error_save = errno;
+				fprintf(stderr, "Error: dup2 failed. %d (%s)\n", errno,
+					strerror(errno));
+				libc_close(fd_tmp);
+				return error_save;
 			}
-			close(fd_tmp);
+			libc_close(fd_tmp);
 			if (libc_lseek(fd, offset, SEEK_SET) == -1) {
-				printf("Error: lseek failed to set offset. %s\n", strerror(errno));
-				exit(1);
+				error_save = errno;
+				fprintf(stderr, "Error: lseek failed to set offset. %d (%s)\n",
+					errno, strerror(errno));
+				libc_close(fd);
+				return error_save;
 			}
 		}
 	}
+	return 0;
 }
 
-static void
+static int
 reset_daos_env_before_exec(void)
 {
+	int rc;
+
 	/* bash does fork(), then close opened files before exec(),
 	 * so the fd for log file could be invalid now.
 	 */
 	d_log_disable_logging();
 
-	setup_fd_0_1_2();
+	rc = setup_fd_0_1_2();
+	if (rc)
+		return rc;
 
 	if (context_reset) {
 		destroy_all_eqs();
@@ -4235,6 +4246,7 @@ reset_daos_env_before_exec(void)
 		daos_debug_inited = false;
 		context_reset     = false;
 	}
+	return 0;
 }
 
 int
@@ -4250,7 +4262,11 @@ execve(const char *filename, char *const argv[], char *const envp[])
 	if (!hook_enabled)
 		return next_execve(filename, argv, envp);
 
-	reset_daos_env_before_exec();
+	rc = reset_daos_env_before_exec();
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
 
 	if (!enforce_exec_env)
 		return next_execve(filename, argv, envp);
@@ -4276,7 +4292,11 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 	if (!hook_enabled)
 		return next_execvpe(filename, argv, envp);
 
-	reset_daos_env_before_exec();
+	rc = reset_daos_env_before_exec();
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
 
 	if (!enforce_exec_env)
 		return next_execvpe(filename, argv, envp);
@@ -4293,6 +4313,8 @@ execvpe(const char *filename, char *const argv[], char *const envp[])
 int
 execv(const char *filename, char *const argv[])
 {
+	int    rc;
+
 	if (next_execv == NULL) {
 		next_execv = dlsym(RTLD_NEXT, "execv");
 		D_ASSERT(next_execv != NULL);
@@ -4300,7 +4322,11 @@ execv(const char *filename, char *const argv[])
 	if (!hook_enabled)
 		return next_execv(filename, argv);
 
-	reset_daos_env_before_exec();
+	rc = reset_daos_env_before_exec();
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
 
 	return next_execv(filename, argv);
 }
@@ -4308,6 +4334,8 @@ execv(const char *filename, char *const argv[])
 int
 execvp(const char *filename, char *const argv[])
 {
+	int    rc;
+
 	if (next_execvp == NULL) {
 		next_execvp = dlsym(RTLD_NEXT, "execvp");
 		D_ASSERT(next_execvp != NULL);
@@ -4315,7 +4343,11 @@ execvp(const char *filename, char *const argv[])
 	if (!hook_enabled)
 		return next_execvp(filename, argv);
 
-	reset_daos_env_before_exec();
+	rc = reset_daos_env_before_exec();
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
 
 	return next_execvp(filename, argv);
 }
@@ -4333,7 +4365,11 @@ fexecve(int fd, char *const argv[], char *const envp[])
 	if (!hook_enabled)
 		return next_fexecve(fd, argv, envp);
 
-	reset_daos_env_before_exec();
+	rc = reset_daos_env_before_exec();
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
 
 	if (!enforce_exec_env)
 		return next_fexecve(fd, argv, envp);

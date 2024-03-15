@@ -277,7 +277,7 @@ class DaosBuild(DfuseTestBase):
 
         # Timeout in minutes.  This is per command so up to double this or more as there are two
         # scons commands which can both take a long time.
-        build_time = 180
+        build_time = 600
         build_jobs = 6 * 5
 
         dfuse_namespace = None
@@ -292,7 +292,6 @@ class DaosBuild(DfuseTestBase):
 
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
-        build_time *= 2
         cont_attrs['dfuse-data-cache'] = 'off'
         cont_attrs['dfuse-attr-time'] = '0'
         cont_attrs['dfuse-dentry-time'] = '0'
