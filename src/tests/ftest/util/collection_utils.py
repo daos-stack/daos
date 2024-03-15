@@ -647,7 +647,7 @@ def create_steps_log(logger, job_results_dir, test_result):
     test_logs_dir = os.path.realpath(test_logs_lnk)
     job_log = os.path.join(test_logs_dir, 'job.log')
     step_log = os.path.join(test_logs_dir, 'steps.log')
-    command = rf"grep -E 'INFO \| (==> Step|START|PASS|FAIL|ERROR)' {job_log}"
+    command = rf"grep -E '(INFO |ERROR)\| (==> Step|START|PASS|FAIL|ERROR)' {job_log}"
     try:
         result = run_local(logger, command)
         with open(step_log, 'w', encoding="utf-8") as file:
