@@ -136,7 +136,7 @@ Linux for the x86\_64 architecture.
 DAOS Version 2.4.0 has been primarily validated
 on [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8_6/)
 and [openSUSE Leap 15.4](https://en.opensuse.org/openSUSE:Roadmap).
-DAOS Version 2.4.1 has been primarily validated
+DAOS Version 2.4.1 and 2.4.2 has been primarily validated
 on [Rocky Linux 8.8](https://docs.rockylinux.org/release_notes/8_8/)
 and [openSUSE Leap 15.5](https://en.opensuse.org/openSUSE:Roadmap).
 The following subsections provide details on the Linux distributions
@@ -150,7 +150,7 @@ cluster can run the same or different Linux distributions.
 ### SUSE Linux Enterprise Server 15 and openSUSE Leap 15
 
 DAOS Version 2.4.0 is supported on SLES 15 SP4 and openSUSE Leap 15.4.
-DAOS Version 2.4.1 is supported on SLES 15 SP5 and openSUSE Leap 15.5.
+DAOS Version 2.4.1 and 2.4.2 is supported on SLES 15 SP5 and openSUSE Leap 15.5.
 
 General support for SLES 15 SP3 has ended on 31-Dec-2022.
 General support for SLES 15 SP4 has ended on 31-Dec-2023.
@@ -177,7 +177,7 @@ description on the SUSE support website for information on SLES support phases.
 ### Enterprise Linux 8 (EL8): RHEL 8, Rocky Linux 8, AlmaLinux 8
 
 DAOS Version 2.4.0 is supported on EL 8.6 with Extended Update Support (EUS).
-DAOS Version 2.4.1 is supported on EL 8.8.
+DAOS Version 2.4.1 and 2.4.2 is supported on EL 8.8.
 
 Support for the EL 8.7 release has ended, and DAOS Version 2.4 is not supported on EL 8.7.
 EL 8.9 has not been validated with DAOS 2.4.
@@ -278,7 +278,7 @@ to vendor-specific information for the supported networking hardware.
 With the exception of UCX for InfiniBand networks,
 OFI libfabric is the recommended networking stack for DAOS.
 DAOS Version 2.4.0 ships with version 1.18.1 and
-DAOS Version 2.4.1 ships with version 1.19.0 of
+DAOS Version 2.4.1 and 2.4.2 ships with version 1.19.0 of
 [libfabric](https://ofiwg.github.io/libfabric/)
 (but see below for DAOS on HPE Slingshot).
 It is strongly recommended to use exactly the provided libfabric version
@@ -327,11 +327,11 @@ DAOS Version 2.4 has been validated with UCX Version 1.14.0-1
 and with UCX Version 1.15.0-1 (included in MLNX\_OFED 5.9 and 23.04 and 23.07).
 MLNX\_OFED 23.10 includes UCX 1.16.0-1 and has not been validated with DAOS yet.
 
-* The `ucx+ud_x` provider has been validated and is supported with DAOS Version 2.4.1.
-  It is the recommended fabric provider on large InfiniBand fabrics.
+* The `ucx+ud_x` provider has been validated and is supported with DAOS Version 2.4.1
+  or higher. It is the recommended fabric provider on large InfiniBand fabrics.
 
 * The `ucx+dc_x` provider has been validated and is supported with DAOS Version 2.4.0
-  and 2.4.1. It does not scale as high as `ucx+ud_x` but may provide better performance
+  or higher. It does not scale as high as `ucx+ud_x` but may provide better performance
   in smaller-scale InfiniBand fabrics.
 
 * The `ucx+tcp` provider can be used for evaluation and testing

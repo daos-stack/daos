@@ -38,6 +38,7 @@
 struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;	/* pool UUID */
+	d_list_t		sp_hdls;
 	ABT_rwlock		sp_lock;
 	struct pool_map		*sp_map;
 	uint32_t		sp_map_version;	/* temporary */
@@ -113,6 +114,7 @@ void ds_pool_get(struct ds_pool *pool);
  */
 struct ds_pool_hdl {
 	d_list_t		sph_entry;
+	d_list_t		sph_pool_entry;
 	uuid_t			sph_uuid;	/* of the pool handle */
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
