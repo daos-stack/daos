@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	defaultModule    = mockModule()
+	defaultModule    = mockModule("abcd", 30, 1, 0, 0, 1)
 	defaultNamespace = storage.MockScmNamespace()
 )
 
