@@ -33,7 +33,7 @@ class WalMetrics(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=WalMetrics,test_wal_commit_metrics
         """
-        wal_metrics = [item for item in self.telemetry.ENGINE_DMABUFF_METRICS if '_wal_' in item]
+        wal_metrics = [item for item in self.telemetry.ENGINE_POOL_VOS_WAL_METRICS]
 
         self.log_step(
             'Collect WAL commit metrics before creating a pool (dmg telemetry metrics query)')

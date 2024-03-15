@@ -155,6 +155,22 @@ class TelemetryUtils():
     ENGINE_POOL_VOS_SPACE_METRICS = [
         "engine_pool_vos_space_nvme_used",
         "engine_pool_vos_space_scm_used"]
+    ENGINE_POOL_VOS_WAL_METRICS = [
+        "engine_pool_vos_wal_sz",
+        "engine_pool_vos_wal_sz_max",
+        "engine_pool_vos_wal_sz_mean",
+        "engine_pool_vos_wal_sz_min",
+        "engine_pool_vos_wal_sz_stddev",
+        "engine_pool_vos_wal_qd",
+        "engine_pool_vos_wal_qd_max",
+        "engine_pool_vos_wal_qd_mean",
+        "engine_pool_vos_wal_qd_min",
+        "engine_pool_vos_wal_qd_stddev",
+        "engine_pool_vos_wal_waiters",
+        "engine_pool_vos_wal_waiters_max",
+        "engine_pool_vos_wal_waiters_mean",
+        "engine_pool_vos_wal_waiters_min",
+        "engine_pool_vos_wal_waiters_stddev"]
     ENGINE_POOL_METRICS = ENGINE_POOL_ACTION_METRICS +\
         ENGINE_POOL_BLOCK_ALLOCATOR_METRICS +\
         ENGINE_POOL_CHECKPOINT_METRICS +\
@@ -164,7 +180,8 @@ class TelemetryUtils():
         ENGINE_POOL_SCRUBBER_METRICS +\
         ENGINE_POOL_VOS_AGGREGATION_METRICS +\
         ENGINE_POOL_VOS_REHYDRATION_METRICS +\
-        ENGINE_POOL_VOS_SPACE_METRICS
+        ENGINE_POOL_VOS_SPACE_METRICS + \
+        ENGINE_POOL_VOS_WAL_METRICS
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
@@ -1082,8 +1099,9 @@ class MetricData():
         log.info(format_str, *[name.title() for name in columns])
         log.info(format_str, *['-' * self._display['widths'][name] for name in columns])
         for metric in sorted(self._display['data']):
-            for value, labels in self._display['data'][metric].items():
-                log.info(format_str, metric, *self._label_values(labels), value)
+            for value, labels_list in self._display['data'][metric].items():
+                for labels in labels_list:
+                    log.info(format_str, metric, *self._label_values(labels), value)
 
     def verify(self, log, ranges):
         """Verify the telemetry metric values.
@@ -1199,23 +1217,29 @@ class MetricData():
             all_widths['metric'].append(len(metric))
             for combined_label, value in self._data[metric].items():
                 if value not in self._display['data'][metric]:
-                    self._display['data'][metric][value] = {}
+                    # self._display['data'][metric][value] = {}
+                    self._display['data'][metric][value] = []
                 all_widths['value'].append(len(str(value)))
                 combined_label = self._add_check_label(combined_label, metric, compare, value)
+
+                # For now just list all the labels with this metric value w/o condensing
+                self._display['data'][metric][value].append({})
+
                 for label_entry in combined_label.split(','):
                     label_name, label_value = label_entry.split(':')
                     if label_name != 'check':
                         unique_labels.add(label_name)
                     elif 'Fail' in label_value:
                         status = False
-                    if label_name not in self._display['data'][metric][value]:
-                        self._display['data'][metric][value][label_name] = NodeSet()
-                    self._display['data'][metric][value][label_name].add(label_value)
+                    self._display['data'][metric][value][-1][label_name] = label_value
+                    # if label_name not in self._display['data'][metric][value]:
+                    #     self._display['data'][metric][value][label_name] = NodeSet()
+                    # self._display['data'][metric][value][label_name].add(label_value)
                     if label_name not in all_widths:
                         all_widths[label_name] = []
                     all_widths[label_name].append(len(str(label_name)))
                     all_widths[label_name].append(
-                        len(str(self._display['data'][metric][value][label_name])))
+                        len(str(self._display['data'][metric][value][-1][label_name])))
         self._display['labels'] = sorted(unique_labels)
         self._display['widths'] = {name: max(value) for name, value in all_widths.items()}
         return status
