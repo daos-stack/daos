@@ -2,10 +2,11 @@
 
 # shellcheck disable=SC2034,SC2145,SC2086,SC2068
 
-set -e -o pipefail
+set -u -e -o pipefail
 
 VERSION=0.3
-CWD="$(realpath "$(dirname "$0")")"
+CWD="$(realpath "${0%}")"
+CWD="${CWD%/*}"
 
 DAOS_POOL_SIZE=22G
 
@@ -250,10 +251,10 @@ do
 	esac
 done
 
-[[ $1 ]] || fatal "Command not defined: start, stop or state"
-[[ $1 != "start" || $2 ]] || fatal "Start command: missing IP address"
+[[ ${1:+x} ]] || fatal "Command not defined: start, stop or state"
+[[ "$1" != "start" || ${2:+x} ]] || fatal "Start command: missing IP address"
 CMD="$1"
-DAOS_IFACE_IP="$2"
+[[ ${2:+x} ]] && DAOS_IFACE_IP="$2"
 
 cd "$CWD"
 case "$CMD" in

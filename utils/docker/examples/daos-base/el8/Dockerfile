@@ -1,4 +1,4 @@
-# Copyright 2021-2023 Intel Corporation
+# Copyright 2021-2024 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for building a base RHEL DAOS client docker image
@@ -9,20 +9,20 @@
 # - DAOS_CLIENT_GNAME   Group name of the client (mandatory)
 # - DAOS_CLIENT_GID     Group id of the client (mandatory)
 # - LINUX_IMAGE_NAME    Base docker image name to use (default "rockylinux/rockylinux")
-# - LINUX_IMAGE_TAG     Tag identifier of the base docker image to use (default "8.8")
+# - LINUX_IMAGE_TAG     Tag identifier of the base docker image to use (default "8.9")
 # - BUST_CACHE          Manage docker building cache (default undefined).  To invalidate the
 #                       cache, a random value such as the date of day shall be given.
 # - DAOS_REPOS          Space separated list of repos needed to install DAOS (default
-#                       "https://packages.daos.io/v2.4/EL8/packages/x86_64/")
+#                       "https://packages.daos.io/v2.4.1/EL8/packages/x86_64/")
 # - DAOS_GPG_KEYS       Space separated list of GPG keys associated with DAOS repos (default
-#                       "https://packages.daos.io/v2.4.0/RPM-GPG-KEY-2023")
+#                       "https://packages.daos.io/v2.4.1/RPM-GPG-KEY-2023"
 # - DAOS_REPOS_NOAUTH   Space separated list of repos to use without GPG authentication
 #                       (optional)
 # - DAOS_VERSION        Version of DAOS to use (default "2.4.1-2.el8")
 
 # Pull base image
 ARG	LINUX_IMAGE_NAME="rockylinux/rockylinux"
-ARG	LINUX_IMAGE_TAG="8.8"
+ARG	LINUX_IMAGE_TAG="8.9"
 FROM	"$LINUX_IMAGE_NAME:$LINUX_IMAGE_TAG"
 LABEL	maintainer="daos@daos.groups.io"
 
@@ -42,8 +42,8 @@ RUN	dnf clean all &&                                                            
 # XXX NOTE XXX option and thus to not update all rpms.  To work properly a random value such as the
 # XXX NOTE XXX date of the day should be given.
 ARG	BUST_CACHE=""
-ARG	DAOS_REPOS="https://packages.daos.io/v2.4/EL8/packages/x86_64/"
-ARG	DAOS_GPG_KEYS="https://packages.daos.io/v2.4.0/RPM-GPG-KEY-2023"
+ARG	DAOS_REPOS="https://packages.daos.io/v2.4.1/EL8/packages/x86_64/"
+ARG	DAOS_GPG_KEYS="https://packages.daos.io/v2.4.1/RPM-GPG-KEY-2023"
 ARG	DAOS_REPOS_NOAUTH=""
 ARG	DAOS_VERSION="2.4.1-2.el8"
 RUN	if [ -n "$BUST_CACHE" ] ; then                                                             \
