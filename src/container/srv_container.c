@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,6 +31,7 @@
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_MDTIMES 2
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES 2
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_EX_EVICT 2
+#define DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS 2
 
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
@@ -1214,15 +1215,17 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 	/* Create the oit oids index KVS. */
-	attr.dsa_class = RDB_KVS_GENERIC;
-	attr.dsa_order = 16;
-	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_oit_oids, &attr);
-	if (rc != 0) {
-		D_ERROR(DF_CONT" failed to create container oit oids KVS: "
-			""DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cci_op.ci_uuid), DP_RC(rc));
-		D_GOTO(out_kvs, rc);
+	if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
+		attr.dsa_class = RDB_KVS_GENERIC;
+		attr.dsa_order = 16;
+		rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_oit_oids, &attr);
+		if (rc != 0) {
+			D_ERROR(DF_CONT" failed to create container oit oids KVS: "
+				""DF_RC"\n",
+				DP_CONT(pool_hdl->sph_pool->sp_uuid,
+					in->cci_op.ci_uuid), DP_RC(rc));
+			D_GOTO(out_kvs, rc);
+		}
 	}
 
 out_kvs:
@@ -1514,6 +1517,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct daos_prop_entry	       *lbl_ent;
 	struct d_ownership		owner;
 	struct daos_acl		       *acl;
+	bool				need_destroy_oid_oit_kvs = false;
 
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p force=%u\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid), rpc, in->cdi_force);
@@ -1553,10 +1557,29 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 
 	cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
 
+	if (pool_hdl->sph_global_ver >= DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
+		need_destroy_oid_oit_kvs = true;
+	} else {
+		d_iov_t value;
+
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
+		if (rc && rc != -DER_NONEXIST) {
+			DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
+				 DP_CONT(pool_hdl->sph_pool->sp_uuid, cont->c_uuid));
+			goto out_prop;
+		}
+		/* There was a bug that oit oids might be created already see DAOS-14799 */
+		if (rc == 0)
+			need_destroy_oid_oit_kvs = true;
+	}
+
 	/* Destroy oit oids index KVS. */
-	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_oit_oids);
-	if (rc != 0)
-		goto out_prop;
+	if (need_destroy_oid_oit_kvs) {
+		rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_oit_oids);
+		if (rc != 0)
+			goto out_prop;
+	}
 
 	/* Destroy the handle index KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_handles);
@@ -4560,18 +4583,29 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		goto out;
 	}
 
-	if (from_global_ver < 2) {
+	if (from_global_ver < DAOS_POOL_GLOBAL_VERSION_WITH_OIT_OID_KVS) {
 		struct rdb_kvs_attr	attr;
 
-		/* Create the oit oids index KVS. */
-		attr.dsa_class = RDB_KVS_GENERIC;
-		attr.dsa_order = 16;
-		rc = rdb_tx_create_kvs(ap->tx, &cont->c_prop, &ds_cont_prop_oit_oids, &attr);
-		if (rc != 0) {
-			D_ERROR(DF_CONT" failed to create container oit oids KVS: "
-				""DF_RC"\n",
-				DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+		d_iov_set(&value, NULL, 0);
+		rc = rdb_tx_lookup(ap->tx, &cont->c_prop, &ds_cont_prop_oit_oids, &value);
+		/* There was a bug that oit oids might be created already see DAOS-14799 */
+		if (rc && rc != -DER_NONEXIST) {
+			DL_ERROR(rc, "failed to lookup oit oid kvs pool/cont: " DF_CONTF,
+				 DP_CONT(ap->pool_uuid, cont_uuid));
 			goto out;
+		}
+
+		/* Create the oit oids index KVS. */
+		if (rc == -DER_NONEXIST) {
+			attr.dsa_class = RDB_KVS_GENERIC;
+			attr.dsa_order = 16;
+			rc = rdb_tx_create_kvs(ap->tx, &cont->c_prop, &ds_cont_prop_oit_oids, &attr);
+			if (rc != 0) {
+				D_ERROR(DF_CONT" failed to create container oit oids KVS: "
+					""DF_RC"\n",
+					DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+				goto out;
+			}
 		}
 	}
 
