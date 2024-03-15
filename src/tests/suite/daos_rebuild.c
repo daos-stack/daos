@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -124,9 +124,11 @@ rebuild_retry_for_stale_pool(void **state)
 
 		/* make one shard to return STALE for rebuild fetch */
 		rank = get_rank_by_oid_shard(arg, oids[0], 1);
+		daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_NUM,
+				      5, 0, NULL);
 		daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_LOC,
-				     DAOS_REBUILD_STALE_POOL | DAOS_FAIL_ONCE,
-				     0, NULL);
+				      DAOS_REBUILD_STALE_POOL | DAOS_FAIL_SOME,
+				      0, NULL);
 	}
 
 	par_barrier(PAR_COMM_WORLD);
