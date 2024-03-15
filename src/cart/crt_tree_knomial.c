@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -111,7 +111,7 @@ crt_knomial_get_children_cnt(uint32_t grp_size, uint32_t tree_ratio,
 	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
 		 tree_ratio <= CRT_TREE_MAX_RATIO);
 
-	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
+	tree_self = crt_grprank_2_tree_rank(grp_size, grp_root, grp_self);
 
 	*nchildren = knomial_get_children(NULL, tree_self, grp_size,
 					  tree_ratio);
@@ -133,7 +133,7 @@ crt_knomial_get_children(uint32_t grp_size, uint32_t tree_ratio,
 	D_ASSERT(tree_ratio >= CRT_TREE_MIN_RATIO &&
 		 tree_ratio <= CRT_TREE_MAX_RATIO);
 
-	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
+	tree_self = crt_grprank_2_tree_rank(grp_size, grp_root, grp_self);
 
 	nchildren = knomial_get_children(children, tree_self, grp_size,
 					 tree_ratio);
@@ -158,7 +158,7 @@ crt_knomial_get_parent(uint32_t grp_size, uint32_t tree_ratio,
 	if (grp_self == grp_root)
 		return -DER_INVAL;
 
-	tree_self = crt_grprank_2_teerank(grp_size, grp_root, grp_self);
+	tree_self = crt_grprank_2_tree_rank(grp_size, grp_root, grp_self);
 	D_ASSERT(tree_self != 0);
 
 	tree_parent = knomial_get_parent(tree_self, tree_ratio);
