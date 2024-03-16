@@ -991,7 +991,7 @@ Normally child processes inherit environmental variables from parent processes. 
 
 ### Turn on compatible mode in libpil4dfs
 
-"D_IL_COMPATIBLE=1" turns on compatible mode. Kernel fd allocated by dfuse instead of fake fd will be returned to applications. This mode provides better compatibility with degraded performance in open, openat, and opendir, etc.
+"D_IL_COMPATIBLE=1" turns on compatible mode. Kernel fd allocated by dfuse instead of fake fd will be returned to applications. This mode provides better compatibility with degraded performance in open, openat, and opendir, etc. Please start dfuse with "--disable-caching --disable-wb-cache" to disable caching before using compatible mode.
 
 ### Limitations of using libpil4dfs
 Stability issues: This is a preview version. Some features are not implemented yet. Many APIs are involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc. 

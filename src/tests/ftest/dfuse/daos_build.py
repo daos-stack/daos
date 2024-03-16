@@ -277,7 +277,7 @@ class DaosBuild(DfuseTestBase):
 
         # Timeout in minutes.  This is per command so up to double this or more as there are two
         # scons commands which can both take a long time.
-        build_time = 600
+        build_time = 360
         build_jobs = 6 * 5
 
         dfuse_namespace = None
