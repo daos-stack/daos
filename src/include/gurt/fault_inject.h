@@ -30,7 +30,6 @@ extern "C" {
 
 /** global on/off switch for fault injection */
 extern unsigned int           d_fault_inject;
-extern unsigned int           d_fault_config_file;
 
 /* Location used for inecting memory allocation failures into D_ALLOC uses fault_id 0 */
 extern struct d_fault_attr_t *d_fault_attr_mem;

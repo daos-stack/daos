@@ -29,11 +29,11 @@ daos_fail_check(uint64_t fail_loc)
 {
 	struct d_fault_attr_t	*attr = NULL;
 	int			grp = 0;
+	uint32_t		id;
 
-	if ((daos_fail_loc == 0 ||
-	    (daos_fail_loc & DAOS_FAIL_MASK_LOC) !=
-	     (fail_loc & DAOS_FAIL_MASK_LOC)) &&
-	     !d_fault_inject_is_enabled())
+	if (daos_fail_loc == 0 ||
+	    (daos_fail_loc & DAOS_FAIL_MASK_LOC) != (fail_loc & DAOS_FAIL_MASK_LOC) ||
+	    !d_fault_inject_is_enabled())
 		return 0;
 
 	/**
@@ -41,12 +41,8 @@ daos_fail_check(uint64_t fail_loc)
 	 * current fail_loc finish the job.
 	 */
 	/* Search the attr in inject yml first */
-	if (d_fault_inject_is_enabled()) {
-		uint32_t id = DAOS_FAIL_ID_GET(fail_loc);
-
-		attr = d_fault_attr_lookup(id);
-	}
-
+	id = DAOS_FAIL_ID_GET(fail_loc);
+	attr = d_fault_attr_lookup(id);
 	if (attr == NULL) {
 		grp = DAOS_FAIL_GROUP_GET(fail_loc);
 		attr = d_fault_attr_lookup(grp);

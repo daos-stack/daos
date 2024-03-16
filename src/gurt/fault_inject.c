@@ -20,7 +20,6 @@
  * non-zero turns on fault injection
  */
 unsigned int           d_fault_inject;
-unsigned int           d_fault_config_file;
 struct d_fault_attr_t *d_fault_attr_mem;
 
 #if FAULT_INJECTION
@@ -534,6 +533,9 @@ d_fault_inject_init(void)
 	}
 	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 
+	/* Enable fault inject by default for dev mode */
+	d_fault_inject = 1;
+
 	d_agetenv_str(&config_file, D_FAULT_CONFIG_ENV);
 	if (config_file == NULL || strlen(config_file) == 0) {
 		D_INFO("No config file, fault injection is OFF.\n");
@@ -601,8 +603,6 @@ d_fault_inject_init(void)
 	yaml_parser_delete(&parser);
 	if (rc == DER_SUCCESS) {
 		D_INFO("Config file: %s, fault injection is ON.\n", config_file);
-		d_fault_config_file = 1;
-		d_fault_inject      = 1;
 	} else {
 		D_ERROR("Failed to parse fault config file.\n");
 		D_GOTO(out, rc);
@@ -650,11 +650,6 @@ d_fault_inject_fini()
 int
 d_fault_inject_enable(void)
 {
-	if (!d_fault_config_file) {
-		D_ERROR("No fault config file.\n");
-		return -DER_NOSYS;
-	}
-
 	d_fault_inject = 1;
 	return 0;
 }
