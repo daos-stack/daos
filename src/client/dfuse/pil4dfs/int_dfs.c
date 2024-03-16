@@ -2465,7 +2465,6 @@ new_close_common(int (*next_close)(int fd), int fd)
 		return next_close(fd);
 	}
 
-	/* Need to hand fd < DAOS_MIN_FD too!!! */
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed >= FD_DIR_BASE) {
 		/* directory */
@@ -2869,7 +2868,7 @@ err:
 	D_FREE(sgl.sg_iovs);
 	DS_ERROR(rc, "readv_over_dfs failed");
 	errno = rc;
-	return (-1);	
+	return (-1);
 }
 
 static ssize_t
@@ -2956,7 +2955,8 @@ err:
 	return (-1);
 }
 
-ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
+ssize_t
+readv(int fd, const struct iovec *iov, int iovcnt)
 {
 	int     fd_directed;
 	ssize_t size_sum;
@@ -2980,7 +2980,8 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 	return size_sum;
 }
 
-ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+ssize_t
+writev(int fd, const struct iovec *iov, int iovcnt)
 {
 	int     fd_directed;
 	ssize_t size_sum;
@@ -4238,7 +4239,7 @@ reset_daos_env_before_exec(void)
 	int rc;
 
 	/* bash does fork(), then close opened files before exec(),
-	 * so the fd for log file could be invalid now.
+	 * so the fd for log file probably is invalid now.
 	 */
 	d_log_disable_logging();
 
@@ -5264,8 +5265,8 @@ chdir(const char *path)
 	struct stat      stat_buf;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             *parent_dir = NULL;
-	char             *full_path  = NULL;
+	char            *parent_dir = NULL;
+	char            *full_path  = NULL;
 	bool             is_root;
 
 	if (next_chdir == NULL) {
