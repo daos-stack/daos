@@ -32,6 +32,10 @@ func TestSyslogOutput(t *testing.T) {
 		t.Log("current user does not have permissions to view system log")
 		return
 	}
+	if _, err := syslog.New(syslog.LOG_ALERT, "test"); err != nil {
+		t.Logf("unable to connect to syslog: %s -- not running this test", err)
+		return
+	}
 
 	rand.Seed(time.Now().UnixNano())
 	runes := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")

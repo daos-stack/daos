@@ -13,6 +13,8 @@
  *
  * Threads attempt to destroy their respective contexts, triggering internal
  * lookup cache/uri table destruction.
+ *
+ * Second part of the test checks out multi-interface specific context APIs.
  */
 
 #include <stdlib.h>
@@ -78,25 +80,15 @@ my_crtu_progress_fn(void *data)
 
 		DBG_PRINT("Context creation sanity check passed\n");
 		grp = crt_group_lookup(NULL);
-		if (!grp) {
-			D_ERROR("Failed to lookup group\n");
-			assert(0);
-		}
+		D_ASSERTF(grp != NULL, "Failed to lookup group\n");
 
 		rc = crt_rank_uri_get(grp, 0, 0, &my_uri);
-		if (rc != 0) {
-			D_ERROR("crt_rank_uri_get() failed; rc=%d\n", rc);
-			assert(0);
-		}
+		D_ASSERTF(rc == 0, "crt_rank_uri_get() failed; rc=%d\n", rc);
 
 		/* NOTE: We have to pass valid uri or else group_node_add fails */
 		for (i = 1; i < (NUM_RANKS + 1); i++) {
 			rc = crt_group_primary_rank_add(crt_ctx[0], grp, i, my_uri);
-			if (rc != 0) {
-				D_ERROR("crt_group_primary_rank_add() failed; rc=%d\n",
-					rc);
-				assert(0);
-			}
+			D_ASSERTF(rc == 0, "crt_group_primary_rank_add() failed; rc=%d\n", rc);
 		}
 
 		D_FREE(my_uri);
@@ -115,16 +107,21 @@ int main(int argc, char **argv)
 {
 	pthread_t	progress_thread[NUM_CTX];
 	int		i;
+	char		*env;
+	char		*cur_iface_str;
+	char		*new_iface_str;
+	int		iface_idx = -1;
+	int		num_ifaces;
+	crt_context_t	c1,c2;
+	char		*uri1;
+	char		*uri2;
 	int		rc;
 
 	rc = d_log_init();
 	assert(rc == 0);
 
 	rc = crt_init(0, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
-	if (rc != 0) {
-		D_ERROR("crt_init() failed; rc=%d\n", rc);
-		assert(0);
-	}
+	D_ASSERTF(rc == 0, "crt_init() failed; rc=%d\n", rc);
 
 	rc = pthread_barrier_init(&barrier1, NULL, NUM_CTX);
 	D_ASSERTF(rc == 0, "pthread_barrier_init() failed; rc=%d\n", rc);
@@ -136,15 +133,12 @@ int main(int argc, char **argv)
 	crtu_test_init(0, 20, true, true);
 
 	rc = crt_rank_self_set(0, 1 /* group_version_min */);
-	if (rc != 0) {
-		D_ERROR("crt_rank_self_set(0) failed; rc=%d\n", rc);
-		assert(0);
-	}
+	D_ASSERTF(rc == 0, "crt_rank_self_set(0) failed; rc=%d\n", rc);
 
 	for (i = 0; i < NUM_CTX; i++) {
 		rc = pthread_create(&progress_thread[i], 0,
 				    my_crtu_progress_fn, &crt_ctx[i]);
-		assert(rc == 0);
+		D_ASSERTF(rc == 0, "pthread_create() failed; rc=%d\n", rc);
 	}
 
 	crtu_set_shutdown_delay(0);
@@ -154,13 +148,78 @@ int main(int argc, char **argv)
 		pthread_join(progress_thread[i], NULL);
 
 	rc = crt_finalize();
-	if (rc != 0) {
-		D_ERROR("crt_finalize() failed with rc=%d\n", rc);
-		assert(0);
-	}
+	D_ASSERTF(rc == 0, "crt_finalize() failed with rc=%d\n", rc);
+
+	/* Multi-interface tests */
+	DBG_PRINT("Checking multi-interface setup\n");
+
+	/* Append ',lo' to interface string as 'lo' should be available everywhere */
+	env = getenv("D_INTERFACE");
+	if (env == NULL)
+		env = getenv("OFI_INTERFACE"); /* Support deprecated envar for now */
+	D_ASSERTF(env != NULL, "either D_INTERFACE or OFI_INTERFACE must be set");
+
+	/* Save current interface value */
+	D_ASPRINTF(cur_iface_str, "%s", env);
+	D_ASSERTF(cur_iface_str != NULL, "Failed to allocate string");
+
+	/* Append loopback to the current interface list */
+	D_ASPRINTF(new_iface_str, "%s,lo", cur_iface_str);
+	D_ASSERTF(new_iface_str != NULL, "Failed to allocate string");
+
+	setenv("D_INTERFACE", new_iface_str, 1);
+
+	/* Reinitialize as a client to be able to use multi-interface APIs */
+	rc = crt_init(0, 0);
+	D_ASSERTF(rc == 0, "crt_init() failed; rc=%d\n", rc);
+
+	/* Test multi-interface APIs */
+	num_ifaces = crt_num_ifaces_get();
+	D_ASSERTF(num_ifaces == 2, "crt_num_ifaces_get() returned %d, expected 2\n", num_ifaces);
+	DBG_PRINT("crt_num_ifaces_get() PASSED\n");
+
+	rc = crt_iface_name2idx(cur_iface_str, &iface_idx);
+	D_ASSERTF(rc == 0, "crt_iface_name2idx() failed");
+	D_ASSERTF(iface_idx == 0, "expected 0 got %d for %s", iface_idx, cur_iface_str);
+	DBG_PRINT("crt_iface_name2idx(%s) PASSED\n", cur_iface_str);
+
+	rc = crt_iface_name2idx("lo", &iface_idx);
+	D_ASSERTF(rc == 0, "crt_iface_name2idx() failed");
+	D_ASSERTF(iface_idx == 1, "expected 1 got %d for lo interface index", iface_idx);
+	DBG_PRINT("crt_iface_name2idx(lo) PASSED\n");
+
+	rc = crt_context_create_on_iface(cur_iface_str, &c1);
+	D_ASSERTF(rc == 0, "crt_context_create_on_iface(%s) failed", cur_iface_str);
+	DBG_PRINT("crt_context_create_on_iface(%s) PASSED\n", cur_iface_str);
+
+	rc = crt_context_create_on_iface_idx(1, &c2);
+	D_ASSERTF(rc == 0, "crt_context_create_on_iface_idx(1) failed");
+	DBG_PRINT("crt_context_create_on_iface_idx(1) PASSED\n");
+
+	rc = crt_context_uri_get(c1, &uri1);
+	D_ASSERTF(rc == 0, "crt_context_uri_get(c1) failed");
+	DBG_PRINT("c1(nic=%s) uri=%s\n", cur_iface_str, uri1);
+
+	rc = crt_context_uri_get(c2, &uri2);
+	D_ASSERTF(rc == 0, "crt_context_uri_get(c2) failed");
+	DBG_PRINT("c2(nic=lo) uri=%s\n", uri2);
+
+	D_FREE(cur_iface_str);
+	D_FREE(new_iface_str);
+	D_FREE(uri1);
+	D_FREE(uri2);
+
+	rc = crt_context_destroy(c1, false);
+	D_ASSERTF(rc == 0, "crt_context_destroy(c1) failed");
+
+	rc = crt_context_destroy(c2, false);
+	D_ASSERTF(rc == 0, "crt_context_destroy(c2) failed");
+
+	rc = crt_finalize();
+	D_ASSERTF(rc == 0, "crt_finalize() failed");
+	DBG_PRINT("Multi-interface context tests PASSED\n");
 
 	d_log_fini();
 
 	return 0;
 }
-
