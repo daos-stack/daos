@@ -200,14 +200,14 @@ func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, en
 	rCfg.Running.SetTrue()
 	r := engine.NewTestRunner(rCfg, engineCfg[0])
 
-	srv := NewEngineInstance(log, provider, nil, r)
-	srv.setSuperblock(&Superblock{
+	e := NewEngineInstance(log, provider, nil, r)
+	e.setSuperblock(&Superblock{
 		Rank: ranklist.NewRankPtr(0),
 	})
-	srv.ready.SetTrue()
-	srv.OnReady()
+	e.ready.SetTrue()
+	e.OnReady()
 
-	return srv
+	return e
 }
 
 // mockTCPResolver returns successful resolve results for any input.

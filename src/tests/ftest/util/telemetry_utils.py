@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,6 +34,9 @@ class TelemetryUtils():
         "engine_pool_ops_dkey_punch",
         "engine_pool_ops_dtx_abort",
         "engine_pool_ops_dtx_check",
+        "engine_pool_ops_dtx_coll_abort",
+        "engine_pool_ops_dtx_coll_check",
+        "engine_pool_ops_dtx_coll_commit",
         "engine_pool_ops_dtx_commit",
         "engine_pool_ops_dtx_refresh",
         "engine_pool_ops_ec_agg",
@@ -121,6 +124,7 @@ class TelemetryUtils():
         "engine_sched_relax_time",
         "engine_sched_wait_queue",
         "engine_sched_sleep_queue",
+        "engine_sched_total_reject",
         "engine_sched_cycle_duration",
         "engine_sched_cycle_duration_max",
         "engine_sched_cycle_duration_mean",
@@ -144,22 +148,7 @@ class TelemetryUtils():
         "engine_dmabuff_grab_retries_max",
         "engine_dmabuff_grab_retries_mean",
         "engine_dmabuff_grab_retries_min",
-        "engine_dmabuff_grab_retries_stddev",
-        "engine_dmabuff_wal_sz",
-        "engine_dmabuff_wal_sz_max",
-        "engine_dmabuff_wal_sz_mean",
-        "engine_dmabuff_wal_sz_min",
-        "engine_dmabuff_wal_sz_stddev",
-        "engine_dmabuff_wal_qd",
-        "engine_dmabuff_wal_qd_max",
-        "engine_dmabuff_wal_qd_mean",
-        "engine_dmabuff_wal_qd_min",
-        "engine_dmabuff_wal_qd_stddev",
-        "engine_dmabuff_wal_waiters",
-        "engine_dmabuff_wal_waiters_max",
-        "engine_dmabuff_wal_waiters_mean",
-        "engine_dmabuff_wal_waiters_min",
-        "engine_dmabuff_wal_waiters_stddev"]
+        "engine_dmabuff_grab_retries_stddev"]
     ENGINE_IO_DTX_COMMITTABLE_METRICS = [
         "engine_io_dtx_committable",
         "engine_io_dtx_committable_max",
@@ -352,6 +341,30 @@ class TelemetryUtils():
         "engine_io_ops_migrate_latency_mean",
         "engine_io_ops_migrate_latency_min",
         "engine_io_ops_migrate_latency_stddev"]
+    ENGINE_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS = [
+        "engine_io_ops_obj_coll_punch_active",
+        "engine_io_ops_obj_coll_punch_active_max",
+        "engine_io_ops_obj_coll_punch_active_mean",
+        "engine_io_ops_obj_coll_punch_active_min",
+        "engine_io_ops_obj_coll_punch_active_stddev"]
+    ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS = [
+        "engine_io_ops_obj_coll_punch_latency",
+        "engine_io_ops_obj_coll_punch_latency_max",
+        "engine_io_ops_obj_coll_punch_latency_mean",
+        "engine_io_ops_obj_coll_punch_latency_min",
+        "engine_io_ops_obj_coll_punch_latency_stddev"]
+    ENGINE_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS = [
+        "engine_io_ops_obj_coll_query_active",
+        "engine_io_ops_obj_coll_query_active_max",
+        "engine_io_ops_obj_coll_query_active_mean",
+        "engine_io_ops_obj_coll_query_active_min",
+        "engine_io_ops_obj_coll_query_active_stddev"]
+    ENGINE_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS = [
+        "engine_io_ops_obj_coll_query_latency",
+        "engine_io_ops_obj_coll_query_latency_max",
+        "engine_io_ops_obj_coll_query_latency_mean",
+        "engine_io_ops_obj_coll_query_latency_min",
+        "engine_io_ops_obj_coll_query_latency_stddev"]
     ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = [
         "engine_io_ops_obj_enum_active",
         "engine_io_ops_obj_enum_active_max",
@@ -480,6 +493,10 @@ class TelemetryUtils():
         ENGINE_IO_OPS_KEY2ANCHOR_LATENCY_METRICS +\
         ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS +\
@@ -497,8 +514,14 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
+        "engine_net_glitch",
         "engine_net_failed_addr",
         "engine_net_req_timeout",
+        "engine_net_swim_delay_stddev",
+        "engine_net_swim_delay_max",
+        "engine_net_swim_delay_mean",
+        "engine_net_swim_delay",
+        "engine_net_swim_delay_min",
         "engine_net_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
         "engine_net_uri_lookup_self"]
@@ -562,8 +585,7 @@ class TelemetryUtils():
         "engine_mem_vos_dtx_cmt_ent_48",
         "engine_mem_vos_vos_obj_360",
         "engine_mem_vos_vos_lru_size",
-        "engine_mem_dtx_dtx_leader_handle_336",
-        "engine_mem_dtx_dtx_entry_40"]
+        "engine_mem_dtx_dtx_leader_handle_352"]
     ENGINE_MEM_TOTAL_USAGE_METRICS = [
         "engine_mem_total_mem"]
 

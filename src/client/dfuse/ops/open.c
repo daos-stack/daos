@@ -72,6 +72,13 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		} else {
 			prefetch = true;
 		}
+	} else if (ie->ie_dfs->dfc_data_otoc) {
+		/* Open to close caching, this allows the use of shared mmap */
+		fi_out.direct_io  = 0;
+		fi_out.keep_cache = 0;
+
+		if (fi->flags & O_DIRECT)
+			fi_out.direct_io = 1;
 	} else {
 		fi_out.direct_io = 1;
 	}
@@ -225,7 +232,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
 						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 
-		if (rc != 0)
+		if (rc != 0 && rc != -ENOENT)
 			DHS_ERROR(ie, -rc, "inval_entry() error");
 		dfuse_inode_decref(dfuse_info, ie);
 	}

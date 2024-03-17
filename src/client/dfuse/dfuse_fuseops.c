@@ -9,48 +9,57 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#define SHOW_FLAG(HANDLE, FLAGS, FLAG)                                                             \
+#define SHOW_FLAG(HANDLE, CAP, WANT, FLAG)                                                         \
 	do {                                                                                       \
-		DFUSE_TRA_INFO(HANDLE, "Flag " #FLAG " %s",                                        \
-			       (FLAGS & FLAG) ? "enabled" : "disabled");                           \
-		FLAGS &= ~FLAG;                                                                    \
+		DFUSE_TRA_INFO(HANDLE, "%s %s " #FLAG "",                                          \
+			       (CAP & FLAG) ? "available" : "         ",                           \
+			       (WANT & FLAG) ? "enabled" : "       ");                             \
+		CAP &= ~FLAG;                                                                      \
+		WANT &= ~FLAG;                                                                     \
 	} while (0)
 
 static void
-dfuse_show_flags(void *handle, unsigned int in)
+dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 {
-	SHOW_FLAG(handle, in, FUSE_CAP_ASYNC_READ);
-	SHOW_FLAG(handle, in, FUSE_CAP_POSIX_LOCKS);
-	SHOW_FLAG(handle, in, FUSE_CAP_ATOMIC_O_TRUNC);
-	SHOW_FLAG(handle, in, FUSE_CAP_EXPORT_SUPPORT);
-	SHOW_FLAG(handle, in, FUSE_CAP_DONT_MASK);
-	SHOW_FLAG(handle, in, FUSE_CAP_SPLICE_WRITE);
-	SHOW_FLAG(handle, in, FUSE_CAP_SPLICE_MOVE);
-	SHOW_FLAG(handle, in, FUSE_CAP_SPLICE_READ);
-	SHOW_FLAG(handle, in, FUSE_CAP_FLOCK_LOCKS);
-	SHOW_FLAG(handle, in, FUSE_CAP_IOCTL_DIR);
-	SHOW_FLAG(handle, in, FUSE_CAP_AUTO_INVAL_DATA);
-	SHOW_FLAG(handle, in, FUSE_CAP_READDIRPLUS);
-	SHOW_FLAG(handle, in, FUSE_CAP_READDIRPLUS_AUTO);
-	SHOW_FLAG(handle, in, FUSE_CAP_ASYNC_DIO);
-	SHOW_FLAG(handle, in, FUSE_CAP_WRITEBACK_CACHE);
-	SHOW_FLAG(handle, in, FUSE_CAP_NO_OPEN_SUPPORT);
-	SHOW_FLAG(handle, in, FUSE_CAP_PARALLEL_DIROPS);
-	SHOW_FLAG(handle, in, FUSE_CAP_POSIX_ACL);
-	SHOW_FLAG(handle, in, FUSE_CAP_HANDLE_KILLPRIV);
+	DFUSE_TRA_INFO(handle, "Capability supported by kernel %#x", cap);
+
+	DFUSE_TRA_INFO(handle, "Capability requested %#x", want);
+
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_ASYNC_READ);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_POSIX_LOCKS);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_ATOMIC_O_TRUNC);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPORT_SUPPORT);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_DONT_MASK);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_SPLICE_WRITE);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_SPLICE_MOVE);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_SPLICE_READ);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_FLOCK_LOCKS);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_IOCTL_DIR);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_AUTO_INVAL_DATA);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_READDIRPLUS);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_READDIRPLUS_AUTO);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_ASYNC_DIO);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_WRITEBACK_CACHE);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_NO_OPEN_SUPPORT);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_PARALLEL_DIROPS);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_POSIX_ACL);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_HANDLE_KILLPRIV);
 
 #ifdef FUSE_CAP_CACHE_SYMLINKS
-	SHOW_FLAG(handle, in, FUSE_CAP_CACHE_SYMLINKS);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_CACHE_SYMLINKS);
 #endif
 #ifdef FUSE_CAP_NO_OPENDIR_SUPPORT
-	SHOW_FLAG(handle, in, FUSE_CAP_NO_OPENDIR_SUPPORT);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_NO_OPENDIR_SUPPORT);
 #endif
 #ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
-	SHOW_FLAG(handle, in, FUSE_CAP_EXPLICIT_INVAL_DATA);
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPLICIT_INVAL_DATA);
 #endif
 
-	if (in)
-		DFUSE_TRA_WARNING(handle, "Unknown flags %#x", in);
+	if (cap)
+		DFUSE_TRA_WARNING(handle, "Unknown capability flags %#x", cap);
+
+	if (want)
+		DFUSE_TRA_WARNING(handle, "Unknown requested flags %#x", want);
 }
 
 /* Called on filesystem init.  It has the ability to both observe configuration
@@ -74,13 +83,10 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(dfuse_info, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(dfuse_info, "readahead %#x", conn->max_readahead);
 
+	if (conn->capable & FUSE_CAP_PARALLEL_DIROPS)
+		conn->want |= FUSE_CAP_PARALLEL_DIROPS;
+
 	DFUSE_TRA_INFO(dfuse_info, "kernel readdir cache support compiled in");
-
-	DFUSE_TRA_INFO(dfuse_info, "Capability supported by kernel %#x", conn->capable);
-
-	dfuse_show_flags(dfuse_info, conn->capable);
-
-	DFUSE_TRA_INFO(dfuse_info, "Capability requested %#x", conn->want);
 
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
@@ -90,7 +96,10 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	if (dfuse_info->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
-	dfuse_show_flags(dfuse_info, conn->want);
+#ifdef FUSE_CAP_CACHE_SYMLINKS
+	conn->want |= FUSE_CAP_CACHE_SYMLINKS;
+#endif
+	dfuse_show_flags(dfuse_info, conn->capable, conn->want);
 
 	conn->max_background       = 16;
 	conn->congestion_threshold = 8;
@@ -99,7 +108,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(dfuse_info, "congestion_threshold %d", conn->congestion_threshold);
 }
 
-void
+static void
 df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode,
 	     struct fuse_file_info *fi)
 {
@@ -121,7 +130,7 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
-void
+static void
 df_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, dev_t rdev)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
@@ -142,7 +151,7 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
-void
+static void
 df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
@@ -178,7 +187,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		DFUSE_REPLY_ATTR(inode, req, &inode->ie_stat);
 }
 
-void
+static void
 df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 	      struct fuse_file_info *fi)
 {
@@ -345,7 +354,7 @@ df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 	dfuse_cb_readdir(req, oh, size, offset, true);
 }
 
-void
+static void
 df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *name)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
@@ -366,7 +375,12 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
-void
+/* Do not allow security xattrs to be set or read, see DAOS-14639 */
+#define XATTR_SEC   "security."
+/* Do not allow either system.posix_acl_default or system.posix_acl_access */
+#define XATTR_P_ACL "system.posix_acl"
+
+static void
 df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size,
 	       int flags)
 {
@@ -378,6 +392,12 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *val
 	if (strncmp(name, DFUSE_XATTR_PREFIX, sizeof(DFUSE_XATTR_PREFIX) - 1) == 0) {
 		D_GOTO(err, rc = EPERM);
 	}
+
+	if (strncmp(name, XATTR_SEC, sizeof(XATTR_SEC) - 1) == 0)
+		D_GOTO(err, rc = ENOTSUP);
+
+	if (strncmp(name, XATTR_P_ACL, sizeof(XATTR_P_ACL) - 1) == 0)
+		D_GOTO(err, rc = ENOTSUP);
 
 	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
@@ -393,12 +413,18 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
-void
+static void
 df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *inode;
 	int                       rc;
+
+	if (strncmp(name, XATTR_SEC, sizeof(XATTR_SEC) - 1) == 0)
+		D_GOTO(err, rc = ENODATA);
+
+	if (strncmp(name, XATTR_P_ACL, sizeof(XATTR_P_ACL) - 1) == 0)
+		D_GOTO(err, rc = ENODATA);
 
 	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
@@ -414,7 +440,7 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
-void
+static void
 df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
@@ -443,7 +469,7 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
-void
+static void
 df_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
@@ -516,7 +542,7 @@ err:
 }
 
 /* dfuse ops that are used for accessing dfs mounts */
-struct dfuse_inode_ops dfuse_dfs_ops = {
+const struct dfuse_inode_ops dfuse_dfs_ops = {
     .lookup      = dfuse_cb_lookup,
     .mknod       = dfuse_cb_mknod,
     .opendir     = dfuse_cb_opendir,
@@ -534,54 +560,63 @@ struct dfuse_inode_ops dfuse_dfs_ops = {
     .statfs      = dfuse_cb_statfs,
 };
 
-struct dfuse_inode_ops dfuse_cont_ops = {
+const struct dfuse_inode_ops dfuse_cont_ops = {
     .lookup = dfuse_cont_lookup,
     .statfs = dfuse_cb_statfs,
 };
 
-struct dfuse_inode_ops dfuse_pool_ops = {
+const struct dfuse_inode_ops dfuse_pool_ops = {
     .lookup = dfuse_pool_lookup,
     .statfs = dfuse_cb_statfs,
 };
 
-struct fuse_lowlevel_ops dfuse_ops = {
-    /* Ops that support per-inode indirection */
-    .getattr     = df_ll_getattr,
-    .lookup      = df_ll_lookup,
-    .mkdir       = df_ll_mkdir,
-    .opendir     = df_ll_opendir,
-    .releasedir  = df_ll_releasedir,
-    .unlink      = df_ll_unlink,
-    .rmdir       = df_ll_unlink,
-    .readdir     = df_ll_readdir,
-    .readdirplus = df_ll_readdirplus,
-    .create      = df_ll_create,
-    .mknod       = df_ll_mknod,
-    .rename      = df_ll_rename,
-    .symlink     = df_ll_symlink,
-    .setxattr    = df_ll_setxattr,
-    .getxattr    = df_ll_getxattr,
-    .listxattr   = df_ll_listxattr,
-    .removexattr = df_ll_removexattr,
-    .setattr     = df_ll_setattr,
-    .statfs      = df_ll_statfs,
+#define FOR_CB_FN(ACTION)                                                                          \
+	ACTION(getattr, df_ll_getattr, false)                                                      \
+	ACTION(lookup, df_ll_lookup, false)                                                        \
+	ACTION(mkdir, df_ll_mkdir, true)                                                           \
+	ACTION(opendir, df_ll_opendir, false)                                                      \
+	ACTION(releasedir, df_ll_releasedir, false)                                                \
+	ACTION(unlink, df_ll_unlink, true)                                                         \
+	ACTION(rmdir, df_ll_unlink, true)                                                          \
+	ACTION(readdir, df_ll_readdir, false)                                                      \
+	ACTION(readdirplus, df_ll_readdirplus, false)                                              \
+	ACTION(create, df_ll_create, true)                                                         \
+	ACTION(mknod, df_ll_mknod, true)                                                           \
+	ACTION(rename, df_ll_rename, true)                                                         \
+	ACTION(symlink, df_ll_symlink, true)                                                       \
+	ACTION(setxattr, df_ll_setxattr, true)                                                     \
+	ACTION(getxattr, df_ll_getxattr, false)                                                    \
+	ACTION(listxattr, df_ll_listxattr, false)                                                  \
+	ACTION(removexattr, df_ll_removexattr, true)                                               \
+	ACTION(setattr, df_ll_setattr, true)                                                       \
+	ACTION(statfs, df_ll_statfs, false)                                                        \
+	ACTION(init, dfuse_fuse_init, false)                                                       \
+	ACTION(forget, dfuse_cb_forget, false)                                                     \
+	ACTION(forget_multi, dfuse_cb_forget_multi, false)                                         \
+	ACTION(open, dfuse_cb_open, false)                                                         \
+	ACTION(release, dfuse_cb_release, false)                                                   \
+	ACTION(write_buf, dfuse_cb_write, true)                                                    \
+	ACTION(read, dfuse_cb_read, false)                                                         \
+	ACTION(readlink, dfuse_cb_readlink, false)                                                 \
+	ACTION(ioctl, dfuse_cb_ioctl, false)
 
-    /* Ops that do not need to support per-inode indirection */
-    .init         = dfuse_fuse_init,
-    .forget       = dfuse_cb_forget,
-    .forget_multi = dfuse_cb_forget_multi,
+#define SET_MEMBER(member, fn, ...) ops.member = fn;
 
-    /* Ops that do not support per-inode indirection
-     *
-     * Avoid the extra level of indirection here, as only dfs allows
-     * creation of files, so it should be the only place to see file
-     * operations.
-     *
-     */
-    .open      = dfuse_cb_open,
-    .release   = dfuse_cb_release,
-    .write_buf = dfuse_cb_write,
-    .read      = dfuse_cb_read,
-    .readlink  = dfuse_cb_readlink,
-    .ioctl     = dfuse_cb_ioctl,
-};
+#define SET_MEMBER_RO(member, fn, modifies, ...)                                                   \
+	if (!modifies) {                                                                           \
+		ops.member = fn;                                                                   \
+	};
+
+struct fuse_session *
+dfuse_session_new(struct fuse_args *args, struct dfuse_info *dfuse_info)
+{
+	struct fuse_lowlevel_ops ops = {};
+
+	if (dfuse_info->di_read_only) {
+		FOR_CB_FN(SET_MEMBER_RO)
+	} else {
+		FOR_CB_FN(SET_MEMBER)
+	}
+
+	return fuse_session_new(args, &ops, sizeof(ops), dfuse_info);
+}

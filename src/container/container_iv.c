@@ -195,8 +195,8 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, struct cont_iv_key *key,
 		dst->iv_agg_eph.eph = src->iv_agg_eph.eph;
 		break;
 	default:
-		D_ERROR("bad iv_class_id %d: "DF_RC"\n", entry->iv_class->iv_class_id,
-			DP_RC(-DER_INVAL));
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "bad iv_class_id %d: ", entry->iv_class->iv_class_id);
 		return -DER_INVAL;
 	};
 
@@ -245,6 +245,12 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 		  cont_iv_snap_ent_size(iv_entry->iv_snap.snap_cnt));
 	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = ds_cont_tgt_snapshots_update(entry->ns->iv_pool_uuid,
+					  civ_key->cont_uuid,
+					  snaps, snap_cnt);
 	if (rc)
 		D_GOTO(out, rc);
 out:
@@ -426,6 +432,10 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 	if (rc)
 		D_GOTO(out, rc);
+
+	rc = ds_cont_tgt_prop_update(entry->ns->iv_pool_uuid, civ_key->cont_uuid, prop);
+	if (rc)
+		D_GOTO(out, rc);
 out:
 	if (prop != NULL)
 		daos_prop_free(prop);
@@ -461,7 +471,7 @@ again:
 				rc = cont_iv_snap_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_ERROR("create cont snap iv entry failed "
+				D_DEBUG(DB_MD, "create cont snap iv entry failed "
 					""DF_RC"\n", DP_RC(rc));
 			} else if (class_id == IV_CONT_PROP) {
 				rc = cont_iv_prop_ent_create(entry, key);
@@ -763,8 +773,8 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = entry_size;
 	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL, retry);
 	if (rc)
-		DL_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR, rc, DF_UUID " iv fetch failed",
-			  DP_UUID(key_uuid));
+		D_DEBUG(DB_MGMT, DF_UUID " iv fetch failed: %d",
+			DP_UUID(key_uuid), rc);
 
 	return rc;
 }
@@ -1009,7 +1019,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	arg.eventual = eventual;
 	arg.invalidate_current = invalidate_current;
 	rc = dss_ult_create(cont_iv_capa_refresh_ult, &arg, DSS_XS_SYS,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(out_eventual, rc);
 

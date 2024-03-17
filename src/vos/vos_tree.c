@@ -47,6 +47,9 @@ iov2svt_key(d_iov_t *key_iov)
 static struct vos_rec_bundle *
 iov2rec_bundle(d_iov_t *val_iov)
 {
+	if (val_iov == NULL)
+		return NULL;
+
 	D_ASSERT(val_iov->iov_len == sizeof(struct vos_rec_bundle));
 	return (struct vos_rec_bundle *)val_iov->iov_buf;
 }
@@ -307,8 +310,19 @@ static int
 ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key_iov, d_iov_t *val_iov)
 {
+	char                    *kbuf;
 	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
+
+	/** For embedded value, we sometimes only need to fetch the key,
+	 *  to generate the hash.
+	 */
+	if (rbund == NULL) {
+		D_ASSERT(key_iov != NULL);
+		kbuf = vos_krec2key(krec);
+		d_iov_set(key_iov, kbuf, krec->kr_size);
+		return 0;
+	}
 
 	rbund->rb_krec = krec;
 
@@ -713,31 +727,33 @@ static btr_ops_t singv_btr_ops = {
  * @} vos_singv_btr
  */
 static struct vos_btr_attr vos_btr_attrs[] = {
-	{
-		.ta_class	= VOS_BTR_DKEY,
-		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
-		.ta_name	= "vos_dkey",
-		.ta_ops		= &key_btr_ops,
-	},
-	{
-		.ta_class	= VOS_BTR_AKEY,
-		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
-		.ta_name	= "vos_akey",
-		.ta_ops		= &key_btr_ops,
-	},
-	{
-		.ta_class	= VOS_BTR_SINGV,
-		.ta_order	= VOS_SVT_ORDER,
-		.ta_feats	= BTR_FEAT_DYNAMIC_ROOT,
-		.ta_name	= "singv",
-		.ta_ops		= &singv_btr_ops,
-	},
-	{
-		.ta_class	= VOS_BTR_END,
-		.ta_name	= "null",
-	},
+    {
+	.ta_class = VOS_BTR_DKEY,
+	.ta_order = VOS_KTR_ORDER,
+	.ta_feats =
+	    BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+	.ta_name = "vos_dkey",
+	.ta_ops  = &key_btr_ops,
+    },
+    {
+	.ta_class = VOS_BTR_AKEY,
+	.ta_order = VOS_KTR_ORDER,
+	.ta_feats =
+	    BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+	.ta_name = "vos_akey",
+	.ta_ops  = &key_btr_ops,
+    },
+    {
+	.ta_class = VOS_BTR_SINGV,
+	.ta_order = VOS_SVT_ORDER,
+	.ta_feats = BTR_FEAT_DYNAMIC_ROOT,
+	.ta_name  = "singv",
+	.ta_ops   = &singv_btr_ops,
+    },
+    {
+	.ta_class = VOS_BTR_END,
+	.ta_name  = "null",
+    },
 };
 
 static int
@@ -891,6 +907,13 @@ create:
 		}
 
 		ta = obj_tree_find_attr(tclass, flags);
+
+		/** Single value tree uses major epoch for hash key and minor
+		 * epoch for key so it doesn't play nicely with embedded value
+		 * and even if it did, it would not be more efficient.
+		 */
+		if (ta->ta_class != VOS_BTR_SINGV && (pool->vp_feats & VOS_POOL_FEAT_EMBED_FIRST))
+			tree_feats |= BTR_FEAT_EMBED_FIRST;
 
 		D_DEBUG(DB_TRACE, "Create dbtree %s feats 0x"DF_X64"\n",
 			ta->ta_name, tree_feats);

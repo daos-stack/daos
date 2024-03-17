@@ -2,7 +2,7 @@
 /* groovylint-disable-next-line LineLength */
 /* groovylint-disable DuplicateMapLiteral, DuplicateNumberLiteral */
 /* groovylint-disable DuplicateStringLiteral, NestedBlockDepth, VariableName */
-/* Copyright 2019-2023 Intel Corporation
+/* Copyright 2019-2024 Intel Corporation
  * All rights reserved.
  *
  * This file is part of the DAOS Project. It is subject to the license terms
@@ -126,15 +126,17 @@ String vm9_label(String distro) {
                                                           def_val: params.FUNCTIONAL_VM_LABEL))
 }
 
+void rpm_test_post(String stage_name, String node) {
+    sh label: 'Fetch and stage artifacts',
+       script: 'hostname; ssh -i ci_key jenkins@' + node + ' ls -ltar /tmp; mkdir -p "' +  env.STAGE_NAME + '/" && ' +
+               'scp -i ci_key jenkins@' + node + ':/tmp/{{suite_dmg,daos_{server_helper,{control,agent}}}.log,daos_server.log.*} "' +
+               env.STAGE_NAME + '/"'
+    archiveArtifacts artifacts: env.STAGE_NAME + '/**'
+    job_status_update()
+}
+
 pipeline {
     agent { label 'lightweight' }
-
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'master' ? 'TZ=UTC\n0 0 * * *\n' : '' +
-             /* groovylint-disable-next-line AddEmptyString */
-             env.BRANCH_NAME == 'weekly-testing' ? 'H 0 * * 6' : '')
-    }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
@@ -162,11 +164,11 @@ pipeline {
         string(name: 'TestTag',
                defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
-        string(name: 'TestNvme',
-               defaultValue: '',
-               description: 'The launch.py --nvme argument to use for the Functional test ' +
-                            'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
-                            '0000:81:00.0, etc.)')
+        // string(name: 'TestNvme',
+        //        defaultValue: '',
+        //        description: 'The launch.py --nvme argument to use for the Functional test ' +
+        //                     'stages of this run (i.e. auto, auto_md_on_ssd, auto:-3DNAND, ' +
+        //                     '0000:81:00.0, etc.).  Does not apply to MD on SSD stages.')
         string(name: 'BuildType',
                defaultValue: '',
                description: 'Type of build.  Passed to scons as BUILD_TYPE.  (I.e. dev, release, debug, etc.).  ' +
@@ -201,11 +203,9 @@ pipeline {
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
-        /* pipeline{} is too big for this
         string(name: 'CI_EL9_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 9 CI tests.  I.e. el9, el9.1, etc.')
-        */
         string(name: 'CI_LEAP15_TARGET',
                defaultValue: '',
                description: 'Image to use for OpenSUSE Leap CI tests.  I.e. leap15, leap15.2, etc.')
@@ -215,11 +215,9 @@ pipeline {
         booleanParam(name: 'CI_RPM_el8_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 8')
-        /* pipeline{} is too big for this
         booleanParam(name: 'CI_RPM_el9_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 9')
-        */
         booleanParam(name: 'CI_RPM_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for Leap 15')
@@ -247,11 +245,9 @@ pipeline {
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on EL 8 test stage')
-        /* pipeline{} is too big for this
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on EL 9 test stage')
-        */
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on Leap 15 test stage' +
@@ -269,12 +265,18 @@ pipeline {
         booleanParam(name: 'CI_medium-verbs-provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
+        booleanParam(name: 'CI_medium-verbs-provider-md-on-ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium-ucx-provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Large test stage')
+        booleanParam(name: 'CI_large-md-on-ssd_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional Hardware Large MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
@@ -289,19 +291,16 @@ pipeline {
                description: 'Label to use for NLT tests')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for the Functional Hardware Medium stage')
-        string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL',
-               defaultValue: 'ci_nvme5',
-               description: 'Label to use for the Functional Hardware Medium MD on SSD stage')
+               description: 'Label to use for the Functional Hardware Medium (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL',
                defaultValue: 'ci_nvme5',
-               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider stage')
+               description: 'Label to use for 5 node Functional Hardware Medium Verbs Provider (MD on SSD) stages')
         string(name: 'FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL',
                defaultValue: 'ci_ofed5',
                description: 'Label to use for 5 node Functional Hardware Medium UCX Provider stage')
         string(name: 'FUNCTIONAL_HARDWARE_LARGE_LABEL',
                defaultValue: 'ci_nvme9',
-               description: 'Label to use for 9 node Functional Hardware Large tests')
+               description: 'Label to use for 9 node Functional Hardware Large (MD on SSD) stages')
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
@@ -323,27 +322,21 @@ pipeline {
                 }
             }
         }
-        stage('Get Commit Message') {
-            steps {
-                script {
-                    env.COMMIT_MESSAGE = sh(script: 'git show -s --format=%B',
-                                            returnStdout: true).trim()
-                    Map pragmas = [:]
-                    // can't use eachLine() here: https://issues.jenkins.io/browse/JENKINS-46988/
-                    env.COMMIT_MESSAGE.split('\n').each { line ->
-                        String key, value
-                        try {
-                            (key, value) = line.split(':', 2)
-                            if (key.contains(' ')) {
-                                return
-                            }
-                            pragmas[key.toLowerCase()] = value
-                        /* groovylint-disable-next-line CatchArrayIndexOutOfBoundsException */
-                        } catch (ArrayIndexOutOfBoundsException ignored) {
-                            // ignore and move on to the next line
+        stage('Prepare Environment Variables') {
+            // TODO: Could/should these be moved to the environment block?
+            parallel {
+                stage('Get Commit Message') {
+                    steps {
+                        pragmasToEnv()
+                    }
+                }
+                stage('Determine Release Branch') {
+                    steps {
+                        script {
+                            env.RELEASE_BRANCH = releaseBranch()
+                            echo 'Release branch == ' + env.RELEASE_BRANCH
                         }
                     }
-                    env.pragmas = pragmas
                 }
             }
         }
@@ -401,66 +394,6 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('checkpatch') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'Dockerfile.checkpatch'
-                            dir 'utils/docker'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(add_repos: false)
-                        }
-                    }
-                    steps {
-                        checkPatch user: GITHUB_USER_USR,
-                                   password: GITHUB_USER_PSW,
-                                   ignored_files: 'src/control/vendor/*:' +
-                                                  '*.pb-c.[ch]:' +
-                                                  'src/client/java/daos-java/src/main/java/io/daos/dfs/uns/*:' +
-                                                  'src/client/java/daos-java/src/main/java/io/daos/obj/attr/*:' +
-                                                  /* groovylint-disable-next-line LineLength */
-                                                  'src/client/java/daos-java/src/main/native/include/daos_jni_common.h:' +
-                                                  '*.crt:' +
-                                                  '*.pem:' +
-                                                  '*_test.go:' +
-                                                  'src/cart/_structures_from_macros_.h:' +
-                                                  'src/tests/ftest/*.patch:' +
-                                                  'src/tests/ftest/large_stdout.txt'
-                    }
-                    post {
-                        always {
-                            job_status_update()
-                            /* when JENKINS-39203 is resolved, can probably use stepResult
-                               here and remove the remaining post conditions
-                               stepResult name: env.STAGE_NAME,
-                                          context: 'build/' + env.STAGE_NAME,
-                                          result: ${currentBuild.currentResult}
-                            */
-                        }
-                        /* temporarily moved some stuff into stepResult due to JENKINS-39203
-                        failure {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'ERROR'
-                        }
-                        success {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'SUCCESS'
-                        }
-                        unstable {
-                            githubNotify credentialsId: 'daos-jenkins-commit-status',
-                                         description: env.STAGE_NAME,
-                                         context: 'pre-build/' + env.STAGE_NAME,
-                                         status: 'FAILURE'
-                        } */
-                    }
-                } // stage('checkpatch')
                 stage('Python Bandit check') {
                     when {
                         beforeAgent true
@@ -510,8 +443,11 @@ pipeline {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
                             label 'docker_runner'
+                            args '--group-add mock'     +
+                                 ' --cap-add=SYS_ADMIN' +
+                                 ' -v /scratch:/scratch'
                             additionalBuildArgs dockerBuildArgs()
-                            args '--cap-add=SYS_ADMIN'
+
                         }
                     }
                     steps {
@@ -547,8 +483,10 @@ pipeline {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
                             label 'docker_runner'
+                            args '--group-add mock'     +
+                                 ' --cap-add=SYS_ADMIN' +
+                                 ' -v /scratch:/scratch'
                             additionalBuildArgs dockerBuildArgs()
-                            args '--cap-add=SYS_ADMIN'
                         }
                     }
                     steps {
@@ -574,7 +512,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.4') {
+                stage('Build RPM on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -584,8 +522,10 @@ pipeline {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=37'
-                            args  '--cap-add=SYS_ADMIN'
+                            args '--group-add mock'     +
+                                 ' --cap-add=SYS_ADMIN' +
+                                 ' -v /scratch:/scratch'
+                            additionalBuildArgs dockerBuildArgs()
                         }
                     }
                     steps {
@@ -621,8 +561,8 @@ pipeline {
                             filename 'packaging/Dockerfile.ubuntu.20.04'
                             dir 'utils/rpms'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
                             args '--cap-add=SYS_ADMIN'
+                            additionalBuildArgs dockerBuildArgs()
                         }
                     }
                     steps {
@@ -725,7 +665,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build on Leap 15.4 with Intel-C and TARGET_PREFIX') {
+                stage('Build on Leap 15.5 with Intel-C and TARGET_PREFIX') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -769,7 +709,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Unit Test on EL 8') {
+                stage('Unit Test on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -791,7 +731,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test bdev on EL 8') {
+                stage('Unit Test bdev on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -813,7 +753,7 @@ pipeline {
                         }
                     }
                 }
-                stage('NLT on EL 8') {
+                stage('NLT on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -853,7 +793,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Unit Test Bullseye on EL 8') {
+                stage('Unit Test Bullseye on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -880,8 +820,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit test Bullseye on EL 8')
-                stage('Unit Test with memcheck on EL 8') {
+                } // stage('Unit test Bullseye on EL 8.8')
+                stage('Unit Test with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -905,8 +845,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Unit Test with memcheck on EL 8')
-                stage('Unit Test bdev with memcheck on EL 8') {
+                } // stage('Unit Test with memcheck on EL 8.8')
+                stage('Unit Test bdev with memcheck on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -939,7 +879,7 @@ pipeline {
                 expression { !skipStage() }
             }
             parallel {
-                stage('Functional on EL 8 with Valgrind') {
+                stage('Functional on EL 8.8 with Valgrind') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -960,8 +900,8 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8 with Valgrind')
-                stage('Functional on EL 8') {
+                } // stage('Functional on EL 8.8 with Valgrind')
+                stage('Functional on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -982,7 +922,7 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Functional on EL 8')
+                } // stage('Functional on EL 8.8')
                 stage('Functional on EL 9') {
                     when {
                         beforeAgent true
@@ -1005,7 +945,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 9')
-                stage('Functional on Leap 15.4') {
+                stage('Functional on Leap 15.5') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1026,7 +966,7 @@ pipeline {
                             job_status_update()
                         }
                     } // post
-                } // stage('Functional on Leap 15.4')
+                } // stage('Functional on Leap 15.5')
                 stage('Functional on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -1049,7 +989,7 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Fault injection testing on EL 8') {
+                stage('Fault injection testing on EL 8.8') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -1100,10 +1040,82 @@ pipeline {
                             job_status_update()
                         }
                     }
-                } // stage('Fault inection testing')
+                } // stage('Fault inection testing on EL 8.8')
+                stage('Test RPMs on EL 8.6') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        job_step_update(
+                            testRpm(inst_repos: daosRepos(),
+                                    daos_pkg_version: daosPackagesVersion(next_version))
+                        )
+                    }
+                    post {
+                        always {
+                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
+                        }
+                    }
+                } // stage('Test CentOS 7 RPMs')
+                stage('Test RPMs on Leap 15.4') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        /* neither of these work as FTest strips the first node
+                           out of the pool requiring 2 node clusters at minimum
+                         * additionally for this use-case, can't override
+                           ftest_arg with this :-(
+                        script {
+                            'Test RPMs on Leap 15.4': getFunctionalTestStage(
+                                name: 'Test RPMs on Leap 15.4',
+                                pragma_suffix: '',
+                                label: params.CI_UNIT_VM1_LABEL,
+                                next_version: next_version,
+                                stage_tags: '',
+                                default_tags: 'test_daos_management',
+                                nvme: 'auto',
+                                run_if_pr: true,
+                                run_if_landing: true,
+                                job_status: job_status_internal
+                            )
+                        }
+                           job_step_update(
+                            functionalTest(
+                                test_tag: 'test_daos_management',
+                                ftest_arg: '--yaml_extension single_host',
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                test_function: 'runTestFunctionalV2'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    } */
+                        job_step_update(
+                            testRpm(inst_repos: daosRepos(),
+                                    daos_pkg_version: daosPackagesVersion(next_version))
+                        )
+                    }
+                    post {
+                        always {
+                            rpm_test_post(env.STAGE_NAME, env.NODELIST)
+                        }
+                    }
+                } // stage('Test Leap 15 RPMs')
             } // parallel
         } // stage('Test')
-        stage('Test Storage Prep on EL 8') {
+        stage('Test Storage Prep on EL 8.8') {
             when {
                 beforeAgent true
                 expression { params.CI_STORAGE_PREP_LABEL != '' }
@@ -1146,13 +1158,13 @@ pipeline {
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                             name: 'Functional Hardware Medium MD on SSD',
                             pragma_suffix: '-hw-medium-md-on-ssd',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL,
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
-                            stage_tags: 'hw,medium',
+                            stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
                             nvme: 'auto_md_on_ssd',
-                            run_if_pr: true,
+                            run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
@@ -1169,6 +1181,20 @@ pipeline {
                             run_if_landing: false,
                             job_status: job_status_internal
                         ),
+                        'Functional Hardware Medium Verbs Provider MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Verbs Provider MD on SSD',
+                            pragma_suffix: '-hw-medium-verbs-provider-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,provider',
+                            default_tags: startedByTimer() ?
+                                'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
+                            default_nvme: 'auto_md_on_ssd',
+                            provider: 'ofi+verbs;ofi_rxm',
+                            run_if_pr: false,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
                         'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
                             name: 'Functional Hardware Medium UCX Provider',
                             pragma_suffix: '-hw-medium-ucx-provider',
@@ -1177,7 +1203,7 @@ pipeline {
                             stage_tags: 'hw,medium,provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            provider: 'ucx+dc_x',
+                            provider: cachedCommitPragma('Test-provider-ucx', 'ucx+ud_x'),
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1193,7 +1219,19 @@ pipeline {
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
-                        )
+                        ),
+                        'Functional Hardware Large MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Large MD on SSD',
+                            pragma_suffix: '-hw-large-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,large',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
+                            default_nvme: 'auto_md_on_ssd',
+                            run_if_pr: false,
+                            run_if_landing: false,
+                            job_status: job_status_internal
+                        ),
                     )
                 }
             }

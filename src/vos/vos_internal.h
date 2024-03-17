@@ -20,15 +20,13 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/policy.h>
 #include <daos_srv/vos.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
-D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
+#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
@@ -186,6 +184,7 @@ struct vos_agg_metrics {
 	struct d_tm_node_t	*vam_del_ev;		/* Deleted EV records */
 	struct d_tm_node_t	*vam_merge_recs;	/* Total merged EV records */
 	struct d_tm_node_t	*vam_merge_size;	/* Total merged size */
+	struct d_tm_node_t	*vam_fail_count;	/* Aggregation failed */
 };
 
 struct vos_gc_metrics {
@@ -223,14 +222,19 @@ struct vos_space_metrics {
 	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
 };
 
-/* VOS Pool metrics for vos file rehydration */
-struct vos_rh_metrics {
-	struct d_tm_node_t	*vrh_size;		/* WAL replay size */
-	struct d_tm_node_t	*vrh_time;		/* WAL replay time */
-	struct d_tm_node_t	*vrh_count;		/* Total replay count */
-	struct d_tm_node_t	*vrh_entries;		/* Total replayed entry count */
-	struct d_tm_node_t	*vrh_tx_cnt;		/* Total replayed TX count */
+/* VOS Pool metrics for WAL */
+struct vos_wal_metrics {
+	struct d_tm_node_t      *vwm_wal_sz;		/* WAL size for single tx */
+	struct d_tm_node_t      *vwm_wal_qd;		/* WAL transaction queue depth */
+	struct d_tm_node_t      *vwm_wal_waiters;	/* Waiters for WAL reclaiming */
+	struct d_tm_node_t	*vwm_replay_size;	/* WAL replay size in bytes */
+	struct d_tm_node_t	*vwm_replay_time;	/* WAL replay time in us */
+	struct d_tm_node_t	*vwm_replay_count;	/* Total replay count */
+	struct d_tm_node_t	*vwm_replay_tx;		/* Total replayed TX count */
+	struct d_tm_node_t	*vwm_replay_ent;	/* Total replayed entry count */
 };
+
+void vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int tgt_id);
 
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
@@ -238,7 +242,7 @@ struct vos_pool_metrics {
 	struct vos_gc_metrics    vp_gc_metrics;
 	struct vos_space_metrics vp_space_metrics;
 	struct vos_chkpt_metrics vp_chkpt_metrics;
-	struct vos_rh_metrics	 vp_rh_metrics;
+	struct vos_wal_metrics	 vp_wal_metrics;
 	/* TODO: add more metrics for VOS */
 };
 
@@ -297,10 +301,10 @@ struct vos_pool {
 	void                    *vp_chkpt_arg;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
-	/** Tiering policy */
-	struct policy_desc_t	vp_policy_desc;
+	/** Data threshold size */
+	uint32_t		 vp_data_thresh;
 	/** Space (in percentage) reserved for rebuild */
-	unsigned int		vp_space_rb;
+	unsigned int		 vp_space_rb;
 };
 
 /**
@@ -354,6 +358,7 @@ struct vos_container {
 	 * * transaction with older epoch must have been committed.
 	 */
 	daos_epoch_t		vc_solo_dtx_epoch;
+
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
@@ -405,6 +410,7 @@ struct vos_dtx_act_ent {
 					 dae_maybe_shared:1,
 					 /* Need validation on leader before commit/committable. */
 					 dae_need_validation:1,
+					 dae_need_release:1,
 					 dae_preparing:1,
 					 dae_prepared:1;
 };
@@ -1565,13 +1571,6 @@ void
 vos_report_layout_incompat(const char *type, int version, int min_version,
 			   int max_version, uuid_t *uuid);
 
-#define VOS_NOTIFY_RAS_EVENTF(...)			\
-	do {						\
-		if (ds_notify_ras_eventf == NULL)	\
-			break;				\
-		ds_notify_ras_eventf(__VA_ARGS__);	\
-	} while (0)					\
-
 static inline int
 vos_offload_exec(int (*func)(void *), void *arg)
 {
@@ -1590,12 +1589,6 @@ vos_exec(void (*func)(void *), void *arg)
 	func(arg);
 
 	return 0;
-}
-
-static inline bool
-umoff_is_null(umem_off_t umoff)
-{
-	return umoff == UMOFF_NULL;
 }
 
 /* vos_csum_recalc.c */
@@ -1762,6 +1755,26 @@ vos_flush_wal_header(struct vos_pool *vp)
 	return 0;
 }
 
+/*
+ * Check if the NVMe context of a VOS target is healthy.
+ *
+ * \param[in] coh	VOS container
+ *
+ * \return		0		: VOS target is healthy
+ *			-DER_NVME_IO	: VOS target is faulty
+ */
+static inline int
+vos_tgt_health_check(struct vos_container *cont)
+{
+	D_ASSERT(cont != NULL);
+	D_ASSERT(cont->vc_pool != NULL);
+
+	if (cont->vc_pool->vp_sysdb)
+		return 0;
+
+	return bio_xsctxt_health_check(vos_xsctxt_get());
+}
+
 int
 vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
 			  uint32_t layout_ver);
@@ -1789,6 +1802,21 @@ vos_fake_anchor_create(daos_anchor_t *anchor)
 {
 	memset(&anchor->da_buf[0], 0, sizeof(anchor->da_buf));
 	anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
+}
+
+static inline bool
+vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum vos_io_stream ios)
+{
+	if (pool->vp_vea_info == NULL)
+		return true;
+
+	if (pool->vp_data_thresh == 0)
+		return true;
+
+	if (size < pool->vp_data_thresh)
+		return true;
+
+	return false;
 }
 
 #endif /* __VOS_INTERNAL_H__ */

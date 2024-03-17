@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    paths:
+      - 'utils/cq/requirements.txt'
 
 jobs:
   upgrade-check:
@@ -15,7 +18,7 @@ jobs:
         package: [pylint, yamllint, isort, codespell]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Check ${{ matrix.package }} version

@@ -9,8 +9,15 @@
 #define D_LOGFAC	DD_FAC(rpc)
 
 #include <semaphore.h>
-
+#include <daos_task.h>
 #include "crt_internal.h"
+#include <daos/rpc.h>
+
+#include "../mgmt/rpc.h"
+#include "../pool/rpc.h"
+#include "../container/rpc.h"
+#include "../pipeline/pipeline_rpc.h"
+#include "../object/obj_rpc.h"
 
 #define CRT_CTL_MAX_LOG_MSG_SIZE 256
 
@@ -210,26 +217,114 @@ static struct crt_proto_rpc_format crt_iv_rpcs[] = {
 
 #undef X
 
-#define X(a, b, c, d, e) case a: return #a;
-
 /* Helper function to convert internally registered RPC opc to str */
-char
-*crt_opc_to_str(crt_opcode_t opc)
+void
+crt_opc_decode(crt_opcode_t crt_opc, char **module_name, char **opc_name)
 {
-	if (crt_opc_is_swim(opc))
-		return "SWIM";
+	char         *module = NULL;
+	char         *opc    = NULL;
+	unsigned long base;
+	bool          daos_module = false;
+	bool          cart_module = false;
+	int           mod_id;
+	int           op_id;
 
-	switch (opc) {
-		CRT_INTERNAL_RPCS_LIST
-		CRT_FI_RPCS_LIST
-		CRT_IV_RPCS_LIST
-		CRT_ST_RPCS_LIST
-		CRT_CTL_RPCS_LIST
+	mod_id = opc_get_mod_id(crt_opc);
+	op_id  = opc_get(crt_opc);
+
+	/* CaRT keeps all base codes as unsigned longs */
+	base = crt_opc & CRT_PROTO_BASEOPC_MASK;
+
+	/* First, find if one of internal modules */
+	switch (base) {
+	case CRT_OPC_INTERNAL_BASE:
+	case CRT_OPC_FI_BASE:
+	case CRT_OPC_ST_BASE:
+	case CRT_OPC_CTL_BASE:
+	case CRT_OPC_IV_BASE:
+		module      = "CART";
+		cart_module = true;
+		break;
+	case CRT_OPC_SWIM_BASE:
+		module      = "SWIM";
+		cart_module = true;
+		break;
 	}
-	return "DAOS";
-}
+
+	/* Check if daos module */
+	if (module == NULL) {
+		module = daos_opc_to_module_str(crt_opc);
+
+		if (module)
+			daos_module = true;
+		else
+			module = "CUSTOM";
+	}
+
+/* Redefining X macro allows to reuse existing lists */
+#define X(a, ...)                                                                                  \
+	case a:                                                                                    \
+		opc = #a;                                                                          \
+		break;
+
+	/* Next find the opcode name if available for the module  */
+	if (cart_module) {
+		switch (crt_opc) {
+			CRT_INTERNAL_RPCS_LIST
+			CRT_FI_RPCS_LIST
+			CRT_IV_RPCS_LIST
+			CRT_ST_RPCS_LIST
+			CRT_CTL_RPCS_LIST
+		}
+	}
+
+	/* TODO: Cover all daos modules eventually */
+	if (daos_module) {
+		switch (mod_id) {
+		case DAOS_MGMT_MODULE:
+			switch (op_id) {
+				MGMT_PROTO_CLI_RPC_LIST
+				MGMT_PROTO_SRV_RPC_LIST
+			}
+			break;
+		case DAOS_POOL_MODULE:
+			switch (op_id) {
+				POOL_PROTO_RPC_LIST
+			}
+			break;
+		case DAOS_CONT_MODULE:
+			switch (op_id) {
+				CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8)
+				CONT_PROTO_SRV_RPC_LIST
+			}
+			break;
+		case DAOS_OBJ_MODULE:
+			opc = obj_opc_to_str(op_id);
+			break;
+		case DAOS_PIPELINE_MODULE:
+			switch (op_id) {
+				PIPELINE_PROTO_CLI_RPC_LIST
+			}
+			break;
+
+			/* TODO: RDB module header needs to reorg as it pulls many dependencies
+					case DAOS_RDB_MODULE:
+						switch (op_id) {
+						RDB_PROTO_SRV_RPC_LIST
+						}
+						break;
+			*/
+		}
+	}
 
 #undef X
+
+	if (opc == NULL)
+		opc = "";
+
+	*module_name = module;
+	*opc_name    = opc;
+}
 
 /* CRT RPC related APIs or internal functions */
 int
@@ -562,9 +657,9 @@ int
 crt_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req)
 {
-	int rc = 0;
-	struct crt_grp_priv *grp_priv = NULL;
+	struct crt_grp_priv	*grp_priv = NULL;
 	struct crt_rpc_priv	*rpc_priv;
+	int			rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
 		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
@@ -1628,8 +1723,11 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv
 
 	crt_rpc_inout_buff_init(rpc_priv);
 
-	rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
-				     ctx->cc_timeout_sec);
+	if (srv_flag && rpc_priv->crp_req_hdr.cch_src_timeout != 0)
+		rpc_priv->crp_timeout_sec = rpc_priv->crp_req_hdr.cch_src_timeout;
+	else
+		rpc_priv->crp_timeout_sec = (ctx->cc_timeout_sec == 0 ? crt_gdata.cg_timeout :
+					     ctx->cc_timeout_sec);
 }
 
 void
@@ -1679,10 +1777,9 @@ crt_handle_rpc(void *arg)
 int
 crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_context	*crt_ctx;
-	int			 rc = 0;
-	bool			skip_check = false;
-	d_rank_t		self_rank;
+	struct crt_context *crt_ctx;
+	int                 rc = 0;
+	d_rank_t            self_rank;
 
 	D_ASSERT(rpc_priv != NULL);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
@@ -1693,10 +1790,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_fail_hlc)
 		D_GOTO(out, rc = -DER_HLC_SYNC);
 
-	if (self_rank == CRT_NO_RANK)
-		skip_check = true;
-
-	/* Skip check when CORPC is sent to self */
+	/* Skip check when CORPC is sent to self, for crp_req_hdr is invalid */
 	if (rpc_priv->crp_coll) {
 		d_rank_t pri_root;
 
@@ -1704,27 +1798,21 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 				rpc_priv->crp_corpc_info->co_grp_priv,
 				rpc_priv->crp_corpc_info->co_root);
 
-		if (pri_root == self_rank)
-			skip_check = true;
+		if (self_rank == CRT_NO_RANK || pri_root == self_rank)
+			goto skip_check;
 	}
 
-	if ((self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
-	    (crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag)) {
-		if (!skip_check) {
-			D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
-				"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
-				rpc_priv,
-				rpc_priv->crp_pub.cr_opc,
-				rpc_priv->crp_req_hdr.cch_dst_rank,
-				rpc_priv->crp_req_hdr.cch_dst_tag,
-				self_rank,
-				crt_ctx->cc_idx,
-				rpc_priv->crp_pub.cr_ep.ep_rank,
-				rpc_priv->crp_pub.cr_ep.ep_tag);
+	if ((self_rank != CRT_NO_RANK && self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
+	    crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag) {
+		D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
+			"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
+			rpc_priv, rpc_priv->crp_pub.cr_opc, rpc_priv->crp_req_hdr.cch_dst_rank,
+			rpc_priv->crp_req_hdr.cch_dst_tag, self_rank, crt_ctx->cc_idx,
+			rpc_priv->crp_pub.cr_ep.ep_rank, rpc_priv->crp_pub.cr_ep.ep_tag);
 
-			D_GOTO(out, rc = -DER_BAD_TARGET);
-		}
+		D_GOTO(out, rc = -DER_BAD_TARGET);
 	}
+skip_check:
 
 	/* Set the reply pending bit unless this is a one-way OPCODE */
 	if (!rpc_priv->crp_opc_info->coi_no_reply)
@@ -1876,18 +1964,13 @@ out:
 }
 
 int
-crt_req_src_timeout_get(crt_rpc_t *rpc, uint16_t *timeout)
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint32_t *timeout)
 {
-	struct crt_rpc_priv	*rpc_priv = NULL;
+	struct crt_rpc_priv	*rpc_priv;
 	int			rc = 0;
 
-	if (rpc == NULL) {
-		D_ERROR("NULL rpc passed\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	if (timeout == NULL) {
-		D_ERROR("NULL timeout passed\n");
+	if (rpc == NULL || timeout == NULL) {
+		D_ERROR("NULL pointer passed\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1923,4 +2006,10 @@ crt_trigger_hlc_error_cb(void)
 
 	if (handler)
 		handler(arg);
+}
+
+int
+crt_req_get_proto_ver(crt_rpc_t *req)
+{
+	return (req->cr_opc & CRT_PROTO_VER_MASK) >> 16;
 }

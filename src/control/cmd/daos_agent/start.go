@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -48,13 +48,13 @@ type startCmd struct {
 
 func (cmd *startCmd) Execute(_ []string) error {
 	if err := common.CheckDupeProcess(); err != nil {
-		return err
+		cmd.Notice(err.Error())
 	}
 
 	cmd.Infof("Starting %s (pid %d)", versionString(), os.Getpid())
 	startedAt := time.Now()
 
-	parent, shutdown := context.WithCancel(context.Background())
+	parent, shutdown := context.WithCancel(cmd.MustLogCtx())
 	defer shutdown()
 
 	var shuttingDown atm.Bool
@@ -95,7 +95,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	procmonStart := time.Now()
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
-	procmon.startMonitoring(ctx)
+	procmon.startMonitoring(ctx, cmd.cfg.EvictOnStart)
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 
 	drpcRegStart := time.Now()
@@ -123,8 +123,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	drpcSrvStart := time.Now()
 	err = drpcServer.Start(hwlocCtx)
 	if err != nil {
-		cmd.Errorf("Unable to start socket server on %s: %v", sockPath, err)
-		return err
+		return errors.Wrap(err, "unable to start dRPC server")
 	}
 	cmd.Debugf("dRPC socket server started: %s", time.Since(drpcSrvStart))
 

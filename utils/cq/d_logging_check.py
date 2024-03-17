@@ -33,6 +33,7 @@ class FileLine():
         # Striped text
         self._code = line.strip()
         self.modified = False
+        self.warnings = False
         self.corrected = False
 
     def startswith(self, string):
@@ -88,6 +89,7 @@ class FileLine():
     def warning(self, msg):
         """Show a warning"""
         print(f'{self._fo.fname}:{self._lineno} {msg}')
+        self.warnings = True
         if ARGS.github:
             fn_name = inspect.stack()[1].function
             fn_name = fn_name.replace('_', '-')
@@ -151,6 +153,7 @@ class AllChecks():
         self._output = io.StringIO()
         self.modified = False
         self.corrected = False
+        self.warnings = False
 
     def run_all_checks(self):
         """Run everything
@@ -192,6 +195,8 @@ class AllChecks():
                 self.modified = True
             if line.corrected:
                 self.corrected = True
+            if line.warnings:
+                self.warnings = True
 
     def save(self, fname):
         """Save new file to file"""
@@ -414,7 +419,7 @@ def one_entry(fname):
         checks.save(fname)
         return False
 
-    if checks.modified and not ARGS.fix:
+    if (checks.modified and not ARGS.fix) or checks.warnings:
         return True
     return False
 
@@ -435,7 +440,8 @@ def main():
 
     for fname in ARGS.files:
         if os.path.isfile(fname):
-            one_entry(fname)
+            if one_entry(fname):
+                unfixed_errors = True
         else:
             for root, dirs, files in os.walk(fname):
                 for name in files:
@@ -446,7 +452,7 @@ def main():
                 if root == 'src/control' and 'vendor' in dirs:
                     dirs.remove('vendor')
     if unfixed_errors:
-        print('Required fixes not applied')
+        print('Required fixes or warnings not resolved')
         sys.exit(1)
 
 

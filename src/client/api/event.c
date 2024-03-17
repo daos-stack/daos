@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #define D_LOGFAC	DD_FAC(client)
 
 #include "client_internal.h"
+#include "../cart/crt_internal.h"
 #include <daos/rpc.h>
 
 /** thread-private event */
@@ -97,7 +98,7 @@ daos_eq_lib_init()
 
 	eq_ref = 1;
 
-	d_getenv_int("D_POLL_TIMEOUT", &ev_prog_timeout);
+	d_getenv_uint32_t("D_POLL_TIMEOUT", &ev_prog_timeout);
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
@@ -112,6 +113,8 @@ daos_eq_lib_reset_after_fork(void)
 {
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
+	crt_reset_lock();
+	D_MUTEX_INIT(&daos_eq_lock, NULL);
 	return daos_eq_lib_init();
 }
 
@@ -879,6 +882,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 			return rc;
 		}
 	}
+	tse_sched_progress(&eqx->eqx_sched);
 
 	D_MUTEX_LOCK(&eqx->eqx_lock);
 

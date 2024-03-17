@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,7 +13,7 @@ from avocado import TestFail, fail_on
 from command_utils import BasicParameter
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 from exception_utils import CommandFailure
-from general_utils import DaosTestError, check_pool_files
+from general_utils import DaosTestError, check_file_exists
 from pydaos.raw import DaosApiError, DaosPool, c_uuid_to_str, daos_cref
 from test_utils_base import LabelGenerator, TestDaosApiBase
 
@@ -112,7 +112,7 @@ def get_size_params(pool):
             "nvme_size": pool.nvme_per_rank}
 
 
-def check_pool_creation(test, pools, max_duration, offset=1, durations=None):
+def check_pool_creation(test, pools, max_duration, offset=1, durations=None, minimum=None):
     """Check the duration of each pool creation meets the requirement.
 
     Args:
@@ -122,21 +122,44 @@ def check_pool_creation(test, pools, max_duration, offset=1, durations=None):
         offset (int, optional): pool index offset. Defaults to 1.
         durations (list, optional): list of other pool create durations to include in the check.
             Defaults to None.
+        minimum (int, optional): minimum number of pools that must be created if specified.
+
+    Returns:
+        list: list of created pools.
     """
+    der_nospace_str = "DER_NOSPACE(-1007)"
+
     if durations is None:
         durations = []
-    for index, pool in enumerate(pools):
-        durations.append(time_pool_create(test.log, index + offset, pool))
-
     exceeding_duration = 0
-    for index, duration in enumerate(durations):
-        if duration > max_duration:
-            exceeding_duration += 1
+    for index, pool in enumerate(pools):
+        try:
+            duration = time_pool_create(test.log, index + offset, pool)
+            if duration > max_duration:
+                test.log.debug(
+                    "Creating pool %s took longer than expected: max=%i, got=%f",
+                    pool, max_duration, duration)
+                exceeding_duration += 1
+        except TestFail as error:
+            if minimum is None:
+                raise error
+            if der_nospace_str not in str(error):
+                test.fail(f'"Unexpected error occurred: wait="{der_nospace_str}", got="{error}"')
+            if index < minimum:
+                test.fail(f'Minimum pool quantity ({index}/{minimum}) not reached: {error}')
 
-    if exceeding_duration:
+            test.log.info(
+                "Quantity of pools created lower than expected: wait=%i, min=%i, got=%i",
+                len(pools), minimum, index)
+            pools = pools[:index]
+            break
+
+    if exceeding_duration > 0:
         test.fail(
             "Pool creation took longer than {} seconds on {} pool(s)".format(
                 max_duration, exceeding_duration))
+
+    return pools
 
 
 def time_pool_create(log, number, pool):
@@ -354,7 +377,7 @@ class TestPool(TestDaosApiBase):
             self.pool = TestPool(self.context, DmgCommand(self.bin))
 
         If it wants to use --nsvc option, it needs to set the value to
-        svcn.value. Otherwise, 1 is used. If it wants to use --group, it needs
+        svcn.value. If it wants to use --group, it needs
         to set groupname.value. If it wants to use --user, it needs to set
         username.value. If it wants to add other options, directly set it
         to self.dmg.action_command. Refer dmg_utils.py pool_create method for
@@ -977,18 +1000,20 @@ class TestPool(TestDaosApiBase):
             if key != "self" and val is not None]
         return self._check_info(checks)
 
-    def check_files(self, hosts):
+    def check_files(self, hosts, scm_mount):
         """Check if pool files exist on the specified list of hosts.
 
         Args:
             hosts (NodeSet): hosts on which to check files
+            scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
+                obtained as self.server_managers[0].get_config_value("scm_mount")
 
         Returns:
             bool: True if the files for this pool exist on each host; False
                 otherwise
 
         """
-        return check_pool_files(self.log, hosts, self.uuid.lower())
+        return self.check_pool_files(hosts, self.uuid.lower(), scm_mount)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
@@ -1398,3 +1423,47 @@ class TestPool(TestDaosApiBase):
         self.wait_for_rebuild_to_end(interval=interval)
         duration = time() - start
         self.log.info("%s duration: %.1f sec", operation, duration)
+
+    def check_pool_files(self, hosts, uuid, scm_mount):
+        """Check if pool files exist on the specified list of hosts.
+
+        Args:
+            hosts (NodeSet): list of hosts
+            uuid (str): uuid file name to look for in /mnt/daos.
+            scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
+                obtained as self.server_managers[0].get_config_value("scm_mount")
+
+        Returns:
+            bool: True if the files for this pool exist on each host; False
+                otherwise
+
+        """
+        status = True
+        self.log.info("Checking for pool data on %s", hosts)
+        pool_files = [uuid, "superblock"]
+        for filename in [f"{scm_mount}/{item}" for item in pool_files]:
+            result = check_file_exists(hosts, filename, sudo=True)
+            if not result[0]:
+                self.log.error("%s: %s not found", result[1], filename)
+                status = False
+        return status
+
+    def verify_uuid_directory(self, host, scm_mount):
+        """Check if pool folder exist on server.
+
+        Args:
+            host (NodeSet): Server host name
+            scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
+                obtained as self.server_managers[0].get_config_value("scm_mount")
+
+        Returns:
+            bool: True if pool folder exists, False otherwise
+
+        """
+        pool_dir = f"{scm_mount}/{self.uuid.lower()}"
+        result = check_file_exists(host, pool_dir, directory=True, sudo=True)
+        if result[0]:
+            self.log.info("%s exists on %s", pool_dir, host)
+        else:
+            self.log.info("%s does not exist on %s", pool_dir, host)
+        return result[0]

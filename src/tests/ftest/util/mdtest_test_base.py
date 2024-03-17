@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -67,6 +67,9 @@ class MdtestBase(DfuseTestBase):
         Args:
             out_queue (queue, optional): Pass any exceptions in a queue. Defaults to None.
             display_space (bool, optional): Whether to display the pool space. Defaults to True.
+
+        Returns:
+            object: result of job manager run
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -83,16 +86,19 @@ class MdtestBase(DfuseTestBase):
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
         # Run Mdtest
-        self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
-                        self.processes, display_space=display_space, out_queue=out_queue)
+        out = self.run_mdtest(
+            self.get_mdtest_job_manager_command(self.manager),
+            self.processes, display_space=display_space, out_queue=out_queue)
 
         if self.subprocess:
-            return
+            return out
 
         # reset self.container if dfs_destroy is True or None.
         if self.mdtest_cmd.dfs_destroy is not False:
             self.container = None
         self.stop_dfuse()
+
+        return out
 
     def get_mdtest_job_manager_command(self, mpi_type):
         """Get the MPI job manager command for Mdtest.
@@ -124,11 +130,11 @@ class MdtestBase(DfuseTestBase):
         """
         env = self.mdtest_cmd.get_default_env(str(manager), self.client_log)
         manager.assign_hosts(self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
-        if self.ppn is None:
-            manager.assign_processes(processes)
+        # Pass only processes or ppn to be compatible with previous behavior
+        if self.ppn is not None:
+            manager.assign_processes(ppn=self.ppn)
         else:
-            manager.ppn.update(self.ppn, 'mpirun.ppn')
-            manager.processes.update(None, 'mpirun.np')
+            manager.assign_processes(processes=processes)
 
         manager.assign_environment(env)
 

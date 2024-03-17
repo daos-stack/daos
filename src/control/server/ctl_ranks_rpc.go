@@ -302,7 +302,7 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	// ignore poll results as we gather state immediately after
 	pollFn := func(e Engine) bool { return e.IsReady() }
 	if err := pollInstanceState(ctx, instances, pollFn); err != nil {
-		return nil, errors.Wrap(err, "waiting for engines to start")
+		return nil, errors.Wrap(err, "waiting for engines to be ready to receive drpcs")
 	}
 
 	// instances will update state to "Started" through join or

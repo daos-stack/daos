@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,14 +47,8 @@ vos_report_layout_incompat(const char *type, int version, int min_version,
 		 min_version, max_version);
 	buf[DF_MAX_BUF - 1] = 0; /* Shut up any static analyzers */
 
-	if (ds_notify_ras_event == NULL) {
-		D_CRIT("%s\n", buf);
-		return;
-	}
-
-	ds_notify_ras_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO,
-			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, uuid,
-			    NULL, NULL, NULL, NULL);
+	ras_notify_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO, RAS_SEV_ERROR,
+			 NULL, NULL, NULL, NULL, uuid, NULL, NULL, NULL, NULL);
 }
 
 struct vos_tls *
@@ -300,7 +294,7 @@ cancel:
 			dae->dae_preparing = 0;
 		}
 
-		if (unlikely(dth->dth_need_validation && dth->dth_active)) {
+		if (err == 0 && unlikely(dth->dth_need_validation && dth->dth_active)) {
 			/* Aborted by race during the yield for local TX commit. */
 			rc = vos_dtx_validation(dth);
 			switch (rc) {
@@ -603,7 +597,7 @@ vos_mod_init(void)
 	if (rc)
 		D_ERROR("Failed to initialize incarnation log capability\n");
 
-	d_getenv_int("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
+	d_getenv_uint("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
 	if (vos_agg_nvme_thresh == 0 || vos_agg_nvme_thresh > 256)
 		vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
 	/* Round down to 2^n blocks */
@@ -646,7 +640,6 @@ vos_metrics_free(void *data)
 
 #define VOS_AGG_DIR	"vos_aggregation"
 #define VOS_SPACE_DIR	"vos_space"
-#define VOS_RH_DIR	"vos_rehydration"
 
 static inline char *
 agg_op2str(unsigned int agg_op)
@@ -669,7 +662,6 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	struct vos_pool_metrics		*vp_metrics;
 	struct vos_agg_metrics		*vam;
 	struct vos_space_metrics	*vsm;
-	struct vos_rh_metrics		*brm;
 	char				desc[40];
 	int				i, rc;
 
@@ -687,7 +679,6 @@ vos_metrics_alloc(const char *path, int tgt_id)
 
 	vam = &vp_metrics->vp_agg_metrics;
 	vsm = &vp_metrics->vp_space_metrics;
-	brm = &vp_metrics->vp_rh_metrics;
 
 	/* VOS aggregation EPR scan duration */
 	rc = d_tm_add_metric(&vam->vam_epr_dur, D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME,
@@ -759,6 +750,12 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* VOS aggregation failed */
+	rc = d_tm_add_metric(&vam->vam_fail_count, D_TM_COUNTER, "aggregation failures", NULL,
+			     "%s/%s/fail_count/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create 'fail_count' telemetry");
+
 	/* Metrics related to VOS checkpointing */
 	vos_chkpt_metrics_init(&vp_metrics->vp_chkpt_metrics, path, tgt_id);
 
@@ -792,31 +789,8 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	/* Initialize the vos_space_metrics timeout counter */
 	vsm->vsm_last_update_ts = 0;
 
-	/* Initialize metrics for vos file rehydration */
-	rc = d_tm_add_metric(&brm->vrh_size, D_TM_GAUGE, "WAL replay size", "bytes",
-			     "%s/%s/replay_size/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_size' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_time, D_TM_GAUGE, "WAL replay time", "us",
-			     "%s/%s/replay_time/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_time' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_entries, D_TM_COUNTER, "Number of log entries", NULL,
-			     "%s/%s/replay_entries/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_entries' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_count, D_TM_COUNTER, "Number of WAL replays", NULL,
-			     "%s/%s/replay_count/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_count' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_tx_cnt, D_TM_COUNTER, "Number of replayed transactions",
-			     NULL, "%s/%s/replay_transactions/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_transactions' telemetry : "DF_RC"\n", DP_RC(rc));
+	/* Initialize metrics for WAL */
+	vos_wal_metrics_init(&vp_metrics->vp_wal_metrics, path, tgt_id);
 
 	return vp_metrics;
 }
@@ -987,7 +961,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto failed;
 	}
 
-	evt_mode = getenv("DAOS_EVTREE_MODE");
+	rc = d_agetenv_str(&evt_mode, "DAOS_EVTREE_MODE");
 	if (evt_mode) {
 		if (strcasecmp("soff", evt_mode) == 0) {
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
@@ -996,6 +970,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
 			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
 		}
+		d_freeenv_str(&evt_mode);
 	}
 	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:

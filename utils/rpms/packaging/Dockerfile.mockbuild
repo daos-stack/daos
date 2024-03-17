@@ -1,11 +1,11 @@
 #
-# Copyright 2018-2023 Intel Corporation
+# Copyright 2018-2024 Intel Corporation
 #
 # 'recipe' for Docker to build an RPM
 #
 
 # Pull base image
-ARG FVERSION=38    # this should be changed to 'latest' and some point soon
+ARG FVERSION=latest
 FROM fedora:$FVERSION
 # Needed for later use of FVERSION
 ARG FVERSION
@@ -15,16 +15,19 @@ LABEL maintainer="daos@daos.groups.io"
 ARG REPO_FILE_URL
 RUN if [ -n "$REPO_FILE_URL" ]; then                            \
         cd /etc/yum.repos.d/ &&                                 \
-        curl -f -o daos_ci-fedora-artifactory.repo.tmp          \
+        curl -k -f -o daos_ci-fedora-artifactory.repo.tmp       \
              "$REPO_FILE_URL"daos_ci-fedora-artifactory.repo && \
-        rm -f *.repo &&                                         \
+        for file in *.repo; do                                  \
+            true > $file;                                       \
+        done;                                                   \
         mv daos_ci-fedora-artifactory.repo{.tmp,};              \
     fi
 
 # Install basic tools
 RUN dnf -y install mock make                                        \
                    rpm-build createrepo rpmlint redhat-lsb-core git \
-                   python-srpm-macros rpmdevtools
+                   python-srpm-macros rpmdevtools &&                \
+    dnf -y clean all
 
 # use same UID as host and default value of 1000 if not specified
 ARG UID=1000
@@ -45,30 +48,24 @@ RUN dnf -y upgrade && \
 # https://github.com/rpm-software-management/rpmlint/pull/795 in it
 # But make sure to patch after dnf upgrade so that an upgraded rpmlint
 # RPM doesn't wipe out our patch
-COPY packaging/rpmlint--ignore-unused-rpmlintrc.patch .
-RUN (cd $(python3 -c 'import site; print(site.getsitepackages()[-1])') && \
-     if ! grep -e --ignore-unused-rpmlintrc rpmlint/cli.py; then          \
-         if ! patch -p1; then                                             \
-             exit 1;                                                      \
-         fi;                                                              \
-         rm -f rpmlint/__pycache__/{cli,lint}.*.pyc;                      \
-     fi) < rpmlint--ignore-unused-rpmlintrc.patch;                        \
-    rm -f  rpmlint--ignore-unused-rpmlintrc.patch
-
-# Prime the mock build environment to save time on each build
-# https://rpm-software-management.github.io/mock/#mock-inside-podman-fedora-toolbox-or-docker-container
-# But it's not working yet
-# https://github.com/rpm-software-management/mock/discussions/1095
-# https://github.com/rpm-software-management/mock/issues/1100
-#RUN set -x; \
-#    if [ $FVERSION -gt 37 ]; then                                      \
-#        for chroot in {opensuse-leap-15.4,rocky+epel-{8,9}}-x86_64; do \
-#            ls -l /var/cache/mock/$chroot/root_cache/; \
-#            id; \
-#            su - build -c "id; mock -r \"$chroot\" --shell id";        \
-#            ls -l /var/cache/mock/$chroot/root_cache/; \
-#        done;                                                          \
-#    fi
+# Ditto for the patch to zero and display ccache stats
+# https://github.com/rpm-software-management/mock/pull/1299
+ARG PACKAGINGDIR=packaging
+COPY ${PACKAGINGDIR}/*.patch ./
+RUN (cd $(python3 -c 'import site; print(site.getsitepackages()[-1])') &&                      \
+     if ! grep -e --ignore-unused-rpmlintrc rpmlint/cli.py; then                               \
+         if ! patch -p1 < $OLDPWD/rpmlint--ignore-unused-rpmlintrc.patch; then                 \
+             exit 1;                                                                           \
+         fi;                                                                                   \
+         rm -f rpmlint/__pycache__/{cli,lint}.*.pyc;                                           \
+     fi;                                                                                       \
+     if ! grep _ccachePostBuildHook mockbuild/plugins/ccache.py; then                          \
+         if ! patch -p3 < $OLDPWD/ccache-stats.patch; then                                     \
+             exit 1;                                                                           \
+         fi;                                                                                   \
+         rm -f mockbuild/plugins/__pycache__/ccache.*.pyc;                                     \
+     fi);                                                                                      \
+     rm -f rpmlint--ignore-unused-rpmlintrc.patch ccache-stats.patch
 
 # show the release that was built
 ARG CACHEBUST

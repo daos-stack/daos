@@ -62,8 +62,10 @@ class NvmeFaultReintegrate(TestWithServers):
                 for device in value['storage']['smd_info']['devices']:
                     self.log.debug(
                         'Verifying: dev_state (%s == %s) and led_state (%s == %s)',
-                        device['dev_state'], dev_state, device['led_state'], led_state)
-                    if device['dev_state'] == dev_state and device['led_state'] == led_state:
+                        device['ctrlr']['dev_state'], dev_state, device['ctrlr']['led_state'],
+                        led_state)
+                    if device['ctrlr']['dev_state'] == dev_state and \
+                            device['ctrlr']['led_state'] == led_state:
                         return True
         return False
 

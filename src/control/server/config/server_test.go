@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -35,6 +35,7 @@ const (
 	sConfigUncomment = "daos_server_uncomment.yml"
 	tcpExample       = "../../../../utils/config/examples/daos_server_tcp.yml"
 	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
+	mdOnSSDExample   = "../../../../utils/config/examples/daos_server_mdonssd.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
 )
@@ -141,6 +142,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 		"uncommented default config": {inPath: "uncommentedDefault"},
 		"tcp example config":         {inPath: tcpExample},
 		"verbs example config":       {inPath: verbsExample},
+		"mdonssd example config":     {inPath: mdOnSSDExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
 			inPath: "/foo/bar/baz.yml",
@@ -290,8 +292,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.0.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelProps(storage.AccelEngineSPDK,
-				storage.AccelOptCRCFlag|storage.AccelOptMoveFlag),
+			WithStorageAutoFaultyCriteria(true, 100, 200),
 		engine.MockConfig().
 			WithSystemName("daos_server").
 			WithSocketDir("./.daos/daos_server").
@@ -319,7 +320,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithLogFile("/tmp/daos_engine.1.log").
 			WithLogMask("INFO").
 			WithStorageEnableHotplug(true).
-			WithStorageAccelProps(storage.AccelEngineDML, storage.AccelOptCRCFlag),
+			WithStorageAutoFaultyCriteria(false, 0, 0),
 	}
 	constructed.Path = testFile // just to avoid failing the cmp
 
@@ -330,6 +331,70 @@ func TestServerConfig_Constructed(t *testing.T) {
 
 	if diff := cmp.Diff(defaultCfg, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
+	}
+}
+
+func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	mdOnSSDCfg, err := mockConfigFromFile(t, mdOnSSDExample)
+	if err != nil {
+		t.Fatalf("failed to load %s: %s", mdOnSSDExample, err)
+	}
+
+	constructed := DefaultServer().
+		WithControlMetadata(storage.ControlMetadata{
+			Path: "/var/daos/config",
+		}).
+		WithControlLogFile("/tmp/daos_server.log").
+		WithTelemetryPort(9191).
+		WithFabricProvider("ofi+tcp").
+		WithAccessPoints("example")
+
+	constructed.Engines = []*engine.Config{
+		engine.MockConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("/var/run/daos_server").
+			WithTargetCount(4).
+			WithHelperStreamCount(1).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos").
+					WithStorageClass("ram"),
+				storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:81:00.0").
+					WithBdevDeviceRoles(storage.BdevRoleWAL),
+				storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:82:00.0").
+					WithBdevDeviceRoles(storage.BdevRoleMeta),
+				storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:83:00.0").
+					WithBdevDeviceRoles(storage.BdevRoleData),
+			).
+			WithFabricInterface("ib0").
+			WithFabricInterfacePort(31316).
+			WithFabricProvider("ofi+tcp").
+			WithPinnedNumaNode(0).
+			WithEnvVars("FI_SOCKETS_CONN_TIMEOUT=2000", "FI_SOCKETS_MAX_CONN_RETRY=1").
+			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogMask("INFO"),
+	}
+
+	for i := range constructed.Engines {
+		t.Logf("constructed: %+v", constructed.Engines[i])
+		t.Logf("default: %+v", mdOnSSDCfg.Engines[i])
+	}
+
+	if diff := cmp.Diff(mdOnSSDCfg, constructed, defConfigCmpOpts...); diff != "" {
+		t.Fatalf("(-want, +got): %s", diff)
+	}
+
+	if err := mdOnSSDCfg.Validate(log); err != nil {
+		t.Fatalf("failed to validate %s: %s", mdOnSSDExample, err)
 	}
 }
 
@@ -866,7 +931,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigHugepagesDisabled,
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
 		},
 		"disabled hugepages; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -886,7 +951,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigHugepagesDisabled,
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
 		},
 		"disabled hugepages; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -1617,7 +1682,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 					WithStorageClass("ram").
 					WithScmMountPoint("b"),
 			).
-			WithPinnedNumaNode(0).
+			WithPinnedNumaNode(1).
 			WithTargetCount(8)
 	}
 
@@ -1625,6 +1690,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 		configA *engine.Config
 		configB *engine.Config
 		expErr  error
+		expLog  string
 	}{
 		"successful validation": {
 			configA: configA(),
@@ -1690,15 +1756,15 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(2)),
 				),
 			configB: configB().
 				AppendStorage(
 					storage.NewTierConfig().
 						WithStorageClass(storage.ClassNvme.String()).
-						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
 				),
-			expErr: errors.New("valid PCI addresses"),
+			expErr: errors.New("engine 1 overlaps with entries in engine 0"),
 		},
 		"mismatched scm_class": {
 			configA: configA(),
@@ -1711,6 +1777,21 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 				),
 			expErr: FaultConfigScmDiffClass(1, 0),
 		},
+		"mismatched nr bdev_list": {
+			configA: configA().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(1)),
+				),
+			configB: configB().
+				AppendStorage(
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(3)),
+				),
+			expLog: "engine 1 has 2 but engine 0 has 1",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1722,6 +1803,11 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 
 			gotErr := conf.Validate(log)
 			CmpErr(t, tc.expErr, gotErr)
+
+			if tc.expLog != "" {
+				hasEntry := strings.Contains(buf.String(), tc.expLog)
+				AssertTrue(t, hasEntry, "expected entries not found in log")
+			}
 		})
 	}
 }

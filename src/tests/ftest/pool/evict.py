@@ -22,12 +22,13 @@ class PoolEvictTest(TestWithServers):
         self.start_agents_once = False
         self.start_servers_once = False
 
-    def connected_pool(self, hostlist, targets=None):
+    def connected_pool(self, hostlist, scm_mount, targets=None):
         """Create a pool, check the pool file in /mnt/daos, and connect.
 
         Args:
             hostlist (NodeSet): Hosts where pool is created.
             targets (list): List of server ranks to create the pool. Defaults to None.
+            scm_mount (str): SCM mount point such as "/mnt/daos"
 
         Returns:
             TestPool: Created pool.
@@ -42,7 +43,7 @@ class PoolEvictTest(TestWithServers):
         pool.create()
 
         # Check that the pool was created
-        status = pool.check_files(hostlist)
+        status = pool.check_files(hostlist, scm_mount)
         if not status:
             self.fail("Invalid pool - pool data not detected on servers")
 
@@ -134,24 +135,28 @@ class PoolEvictTest(TestWithServers):
         half_hosts_with = self.get_host_list(ranks=half_ranks_with)
         half_hosts_without = self.get_host_list(ranks=half_ranks_without)
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Step 1 to 4. Create two pools, container, and write data.
         for _ in range(2):
             # Create a pool over all of the hosts, check the pool file, and connect.
-            pools.append(self.connected_pool(hostlist=all_hosts, targets=all_ranks))
+            pools.append(
+                self.connected_pool(
+                    hostlist=all_hosts, targets=all_ranks, scm_mount=scm_mount))
             # Create a container and write data to it.
             containers.append(self.get_container(pool=pools[-1]))
             containers[-1].write_objects()
 
         # Create a pool over the half of the hosts, check the pool file, and connect.
         pools.append(self.connected_pool(
-            hostlist=half_hosts_with, targets=half_ranks_with))
+            hostlist=half_hosts_with, targets=half_ranks_with, scm_mount=scm_mount))
         # Create a container and write data to it.
         containers.append(self.get_container(pool=pools[-1]))
         containers[-1].write_objects()
 
         # Step 5. Verify that the third pool's file doesn't exist on the half of the
         # hosts that this pool wasn't created on.
-        if pools[-1].check_files(half_hosts_without):
+        if pools[-1].check_files(half_hosts_without, scm_mount):
             self.fail("Pool # 2 with UUID {} exists".format(pools[-1].uuid))
         else:
             self.log.info("Pool # 2 with UUID %s does not exist", pools[-1].uuid)
@@ -169,7 +174,7 @@ class PoolEvictTest(TestWithServers):
                 hosts = half_hosts_with
                 failure_expected = True
 
-            if pool.check_files(hosts):
+            if pool.check_files(hosts, scm_mount):
                 self.log.info(
                     "Pool # %d with UUID %s still exists", index, pool.uuid)
             else:

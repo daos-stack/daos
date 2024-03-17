@@ -91,7 +91,7 @@ func getDeviceController(pciAddr string, controllers storage.NvmeControllers) (*
 		}
 	}
 
-	return nil, storage.FaultBdevNotFound(pciAddr)
+	return nil, storage.FaultBdevNotFound(false, pciAddr)
 }
 
 func filterControllersByModelFirmware(controllers storage.NvmeControllers, modelID, fwRev string) storage.NvmeControllers {

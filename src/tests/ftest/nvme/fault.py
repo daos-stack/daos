@@ -34,10 +34,10 @@ class NvmeFault(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=nvme
-        :avocado: tags=nvme_fault,test_nvme_fault
+        :avocado: tags=NvmeFault,test_nvme_fault
         """
         # Create the Pool with Maximum NVMe size
-        self.create_pool_max_size(nvme=True)
+        self.add_pool()
 
         # Start the IOR Command and generate the NVMe fault.
         self.start_ior_load(operation="Auto_Write", percent=self.capacity)

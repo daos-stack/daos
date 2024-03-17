@@ -678,6 +678,9 @@ rdb_oid_class(enum rdb_kvs_class class, rdb_oid_t *oid_class)
 	case RDB_KVS_INTEGER:
 		*oid_class = RDB_OID_CLASS_INTEGER;
 		return 0;
+	case RDB_KVS_LEXICAL:
+		*oid_class = RDB_OID_CLASS_LEXICAL;
+		return 0;
 	default:
 		return -DER_IO;
 	}

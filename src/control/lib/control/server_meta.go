@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -112,22 +112,16 @@ func (sr *SmdResp) addHostQueryResponse(hr *HostResponse, faultyOnly bool) error
 		rank := ranklist.Rank(rResp.Rank)
 
 		for _, pbDev := range rResp.GetDevices() {
-			if faultyOnly && (pbDev.Details.DevState != ctlpb.NvmeDevState_EVICTED) {
+			isEvicted := pbDev.Ctrlr.DevState == ctlpb.NvmeDevState_EVICTED
+			if faultyOnly && !isEvicted {
 				continue
 			}
 
 			sd := new(storage.SmdDevice)
-			if err := convert.Types(pbDev.Details, sd); err != nil {
-				return errors.Wrapf(err, "converting %T to %T", pbDev.Details, sd)
+			if err := convert.Types(pbDev, sd); err != nil {
+				return errors.Wrapf(err, "converting %T to %T", pbDev, sd)
 			}
 			sd.Rank = rank
-
-			if pbDev.Health != nil {
-				sd.Health = new(storage.NvmeHealth)
-				if err := convert.Types(pbDev.Health, sd.Health); err != nil {
-					return errors.Wrapf(err, "converting %T to %T", pbDev.Health, sd.Health)
-				}
-			}
 
 			hs.SmdInfo.Devices = append(hs.SmdInfo.Devices, sd)
 		}
@@ -244,7 +238,7 @@ func (sr *SmdResp) getHostManageRespErr(hr *HostResponse) error {
 			if pbResult.Device != nil {
 				id = pbResult.Device.Uuid
 				if id == "" {
-					id = pbResult.Device.TrAddr
+					id = pbResult.Device.Ctrlr.PciAddr
 				}
 				id += " "
 			}

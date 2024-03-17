@@ -383,3 +383,9 @@
    ...
    fun:mdb_txn_commit
 }
+{
+   go_runtime_syscall_param
+   Memcheck:Param
+   write(buf)
+   fun:runtime/internal/syscall.Syscall6
+}

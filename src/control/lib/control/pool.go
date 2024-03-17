@@ -1361,35 +1361,35 @@ func processSCMSpaceStats(log debugLogger, filterRank filterRankFn, scmNamespace
 
 // Add NVMe free bytes to rankNVMeFreeSpace map.
 func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
-	for _, nvmeController := range nvmeControllers {
-		for _, smdDevice := range nvmeController.SmdDevices {
+	for _, controller := range nvmeControllers {
+		for _, smdDevice := range controller.SmdDevices {
 			if !smdDevice.Roles.IsEmpty() && (smdDevice.Roles.OptionBits&storage.BdevRoleData) == 0 {
 				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not used for storing data",
-					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank)
+					smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
 				continue
 			}
 
-			if smdDevice.NvmeState != storage.NvmeStateNormal {
+			if controller.NvmeState != storage.NvmeStateNormal {
 				return errors.Errorf("SMD device %s (rank %d, ctrlr %s) not usable (device state %q)",
-					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String())
+					smdDevice.UUID, smdDevice.Rank, controller.PciAddr, controller.NvmeState.String())
 				continue
 			}
 
 			if !filterRank(smdDevice.Rank) {
 				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not in ranklist",
-					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank)
+					smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
 				continue
 			}
 
 			if _, exists := rankNVMeFreeSpace[smdDevice.Rank]; !exists {
 				return errors.Errorf("Rank %d without SCM device and at least one SMD device %s (rank %d, ctrlr %s)",
-					smdDevice.Rank, smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr)
+					smdDevice.Rank, smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
 			}
 
 			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.UsableBytes
 
 			log.Debugf("Added SMD device %s (rank %d, ctrlr %s) is usable: device state=%q, smd-size=%d ctrlr-total-free=%d",
-				smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String(),
+				smdDevice.UUID, smdDevice.Rank, controller.PciAddr, controller.NvmeState.String(),
 				smdDevice.UsableBytes, rankNVMeFreeSpace[smdDevice.Rank])
 		}
 	}

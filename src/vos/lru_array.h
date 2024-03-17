@@ -334,11 +334,11 @@ lrua_peek_(struct lru_array *array, const uint32_t *idx, void **entryp)
  *		-DER_BUSY	Entries need to be evicted to free up
  *				entries in the table
  */
-#define lrua_allocx(array, idx, key, entryp)	\
-	lrua_allocx_(array, idx, key, (void **)(entryp))
+#define lrua_allocx(array, idx, key, entryp, stub)	\
+	lrua_allocx_(array, idx, key, (void **)(entryp), (void **)(stub))
 static inline int
 lrua_allocx_(struct lru_array *array, uint32_t *idx, uint64_t key,
-	     void **entryp)
+	     void **entryp, void **stub)
 {
 	struct lru_entry	*new_entry;
 	int			 rc;
@@ -354,6 +354,8 @@ lrua_allocx_(struct lru_array *array, uint32_t *idx, uint64_t key,
 		return rc;
 
 	*entryp = new_entry->le_payload;
+	if (stub != NULL)
+		*stub = new_entry;
 
 	return 0;
 }
@@ -378,7 +380,7 @@ lrua_allocx_(struct lru_array *array, uint32_t *idx, uint64_t key,
 static inline int
 lrua_alloc_(struct lru_array *array, uint32_t *idx, void **entryp)
 {
-	return lrua_allocx_(array, idx, (uint64_t)idx, entryp);
+	return lrua_allocx_(array, idx, (uint64_t)idx, entryp, NULL);
 }
 
 /** Allocate an entry in place.  Used for recreating an old array.
@@ -496,5 +498,13 @@ lrua_array_free(struct lru_array *array);
  */
 void
 lrua_array_aggregate(struct lru_array *array);
+
+static inline void
+lrua_refresh_key(struct lru_entry *entry, uint64_t key)
+{
+	D_ASSERT(entry != NULL);
+
+	entry->le_key = key;
+}
 
 #endif /* __LRU_ARRAY__ */

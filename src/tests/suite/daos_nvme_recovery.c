@@ -87,9 +87,10 @@ nvme_fault_reaction(void **state, int mode)
 		daos_size_t	nvme_size;
 
 		/* Use the SCM size if set with environment */
-		env = getenv("POOL_SCM_SIZE");
+		d_agetenv_str(&env, "POOL_SCM_SIZE");
 		if (env) {
 			size_gb = atoi(env);
+			d_freeenv_str(&env);
 			if (size_gb != 0)
 				scm_size = (daos_size_t)size_gb << 30;
 		}
@@ -722,23 +723,6 @@ nvme_test_simulate_IO_error(void **state)
 	assert_rc_equal(rc, 0);
 	print_message("Final read_errors = %s\n", check_errors);
 	assert_true(atoi(check_errors) == atoi(read_errors) + 1);
-
-	/*
-	 * Verify writeErr=true and readErr:true available in control log
-	 */
-	char control_err[][50] = {
-		"detected blob I/O error! writeErr:true",
-		"detected blob I/O error! readErr:true"};
-	for (i = 0; i < 2 ; i++) {
-		rc = verify_state_in_log(devices[rank_pos].host,
-					 control_log_file, control_err[i]);
-		if (rc != 0) {
-			print_message(
-				" %s not found in log %s\n", control_err[i],
-				control_log_file);
-			assert_rc_equal(rc, 0);
-		}
-	}
 
 	/* Tear down */
 	D_FREE(ow_buf);

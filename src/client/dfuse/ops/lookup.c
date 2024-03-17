@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,7 +7,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#include "daos_uns.h"
+#include <daos_uns.h>
 
 char *duns_xattr_name = DUNS_XATTR_NAME;
 
@@ -194,7 +194,7 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 	if (rc != 0)
 		D_GOTO(out_err, rc);
 
-	rc = dfuse_cont_open(dfuse_info, dfp, &dattr.da_cuuid, &dfs);
+	rc = dfuse_cont_get_handle(dfuse_info, dfp, dattr.da_cuuid, &dfs);
 	if (rc != 0)
 		D_GOTO(out_dfp, rc);
 
@@ -219,13 +219,13 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 
 	ie->ie_dfs = dfs;
 
-	DFUSE_TRA_INFO(dfs, "UNS entry point activated, root %#lx", dfs->dfs_ino);
+	DFUSE_TRA_DEBUG(dfs, "UNS entry point activated, root %#lx", dfs->dfs_ino);
 
 	duns_destroy_attr(&dattr);
 
 	return rc;
 out_dfs:
-	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
+	d_hash_rec_decref(dfp->dfp_cont_table, &dfs->dfs_entry);
 out_dfp:
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 out_err:
@@ -292,12 +292,8 @@ out_release:
 out_free:
 	dfuse_ie_free(dfuse_info, ie);
 out:
-	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
-		struct fuse_entry_param entry = {};
-
-		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
-		DFUSE_REPLY_ENTRY(parent, req, entry);
-	} else {
+	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0)
+		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
+	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	}
 }

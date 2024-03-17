@@ -684,12 +684,12 @@ gc_update_stats(struct vos_pool *pool)
 
 	if (pool->vp_metrics != NULL) {
 		vgm = &pool->vp_metrics->vp_gc_metrics;
-		d_tm_set_gauge(vgm->vgm_cont_del, stat->gs_conts);
-		d_tm_set_gauge(vgm->vgm_obj_del, stat->gs_objs);
-		d_tm_set_gauge(vgm->vgm_dkey_del, stat->gs_dkeys);
-		d_tm_set_gauge(vgm->vgm_akey_del, stat->gs_akeys);
-		d_tm_set_gauge(vgm->vgm_ev_del, stat->gs_recxs);
-		d_tm_set_gauge(vgm->vgm_sv_del, stat->gs_singvs);
+		d_tm_inc_counter(vgm->vgm_cont_del, stat->gs_conts);
+		d_tm_inc_counter(vgm->vgm_obj_del, stat->gs_objs);
+		d_tm_inc_counter(vgm->vgm_dkey_del, stat->gs_dkeys);
+		d_tm_inc_counter(vgm->vgm_akey_del, stat->gs_akeys);
+		d_tm_inc_counter(vgm->vgm_ev_del, stat->gs_recxs);
+		d_tm_inc_counter(vgm->vgm_sv_del, stat->gs_singvs);
 	}
 
 	gstat->gs_conts += stat->gs_conts;
@@ -1286,37 +1286,37 @@ vos_gc_metrics_init(struct vos_gc_metrics *vgm, const char *path, int tgt_id)
 		D_WARN("Failed to create 'duration' telemetry: " DF_RC "\n", DP_RC(rc));
 
 	/* GC container deletion */
-	rc = d_tm_add_metric(&vgm->vgm_cont_del, D_TM_STATS_GAUGE, "GC containers deleted", NULL,
+	rc = d_tm_add_metric(&vgm->vgm_cont_del, D_TM_COUNTER, "GC containers deleted", NULL,
 			     "%s/%s/cont_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'cont_del' telemetry: " DF_RC "\n", DP_RC(rc));
 
 	/* GC object deletion */
-	rc = d_tm_add_metric(&vgm->vgm_obj_del, D_TM_STATS_GAUGE, "GC objects deleted", NULL,
+	rc = d_tm_add_metric(&vgm->vgm_obj_del, D_TM_COUNTER, "GC objects deleted", NULL,
 			     "%s/%s/obj_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'obj_del' telemetry: " DF_RC "\n", DP_RC(rc));
 
 	/* GC dkey deletion */
-	rc = d_tm_add_metric(&vgm->vgm_dkey_del, D_TM_STATS_GAUGE, "GC dkeys deleted", NULL,
+	rc = d_tm_add_metric(&vgm->vgm_dkey_del, D_TM_COUNTER, "GC dkeys deleted", NULL,
 			     "%s/%s/dkey_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'dkey_del' telemetry: " DF_RC "\n", DP_RC(rc));
 
 	/* GC akey deletion */
-	rc = d_tm_add_metric(&vgm->vgm_akey_del, D_TM_STATS_GAUGE, "GC akeys deleted", NULL,
+	rc = d_tm_add_metric(&vgm->vgm_akey_del, D_TM_COUNTER, "GC akeys deleted", NULL,
 			     "%s/%s/akey_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'akey_del' telemetry: " DF_RC "\n", DP_RC(rc));
 
 	/* GC ev deletion */
-	rc = d_tm_add_metric(&vgm->vgm_ev_del, D_TM_STATS_GAUGE, "GC ev deleted", NULL,
+	rc = d_tm_add_metric(&vgm->vgm_ev_del, D_TM_COUNTER, "GC ev deleted", NULL,
 			     "%s/%s/ev_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'ev_del' telemetry: " DF_RC "\n", DP_RC(rc));
 
 	/* GC sv deletion */
-	rc = d_tm_add_metric(&vgm->vgm_sv_del, D_TM_STATS_GAUGE, "GC sv deleted", NULL,
+	rc = d_tm_add_metric(&vgm->vgm_sv_del, D_TM_COUNTER, "GC sv deleted", NULL,
 			     "%s/%s/sv_del/tgt_%u", path, VOS_GC_DIR, tgt_id);
 	if (rc)
 		D_WARN("Failed to create 'sv_del' telemetry: " DF_RC "\n", DP_RC(rc));

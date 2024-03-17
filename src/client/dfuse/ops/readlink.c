@@ -18,6 +18,8 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 
 	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
+	DFUSE_IE_STAT_ADD(inode, DS_READLINK);
+
 	rc = dfs_get_symlink_value(inode->ie_obj, NULL, &size);
 	if (rc)
 		D_GOTO(err, rc);

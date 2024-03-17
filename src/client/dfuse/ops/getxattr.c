@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,7 +7,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#include "daos_uns.h"
+#include <daos_uns.h>
 
 static int
 _dfuse_attr_create(char *type, uuid_t pool, uuid_t cont, char **_value, daos_size_t *_out_size)
@@ -41,8 +41,8 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode, const char *n
 
 	if (inode->ie_root) {
 		if (strncmp(name, DUNS_XATTR_NAME, sizeof(DUNS_XATTR_NAME)) == 0) {
-			rc = _dfuse_attr_create("POSIX", inode->ie_dfs->dfs_dfp->dfp_pool,
-						inode->ie_dfs->dfs_cont, &value, &out_size);
+			rc = _dfuse_attr_create("POSIX", inode->ie_dfs->dfs_dfp->dfp_uuid,
+						inode->ie_dfs->dfc_uuid, &value, &out_size);
 			if (rc != 0)
 				goto err;
 

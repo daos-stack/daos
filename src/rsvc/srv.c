@@ -1389,10 +1389,11 @@ ds_rsvc_get_md_cap(void)
 	char	       *v;
 	int		n;
 
-	v = getenv(DAOS_MD_CAP_ENV); /* in MB */
+	d_agetenv_str(&v, DAOS_MD_CAP_ENV); /* in MB */
 	if (v == NULL)
 		return size_default;
 	n = atoi(v);
+	d_freeenv_str(&v);
 	if ((n << 20) < MINIMUM_DAOS_MD_CAP_SIZE) {
 		D_ERROR("metadata capacity too low; using %zu MB\n",
 			size_default >> 20);

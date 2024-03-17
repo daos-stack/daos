@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,6 +10,11 @@
 #define __DAOS_SRV_IV_H__
 
 #include <abt.h>
+
+#include <gurt/types.h>
+#include <gurt/list.h>
+
+#include <cart/iv.h>
 
 /* DAOS iv cache provide a general interface for daos to use cart IV.
  * Each pool has one iv namespace, which is created when the  pool is
@@ -31,7 +36,8 @@ struct ds_iv_ns {
 	/* pool uuid */
 	uuid_t		iv_pool_uuid;
 
-	ABT_eventual	iv_done_eventual;
+	ABT_mutex	iv_mutex;
+	ABT_cond	iv_done_cond;
 	int		iv_refcount;
 	/**
 	 * iv_fini: the IV namespace will be stopped, usually happens

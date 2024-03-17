@@ -6,6 +6,7 @@ COMMON_SRC = ['dfuse_obj_da.c', 'dfuse_vector.c']
 DFUSE_SRC = ['dfuse_core.c',
              'dfuse_main.c',
              'dfuse_fuseops.c',
+             'inval.c',
              'dfuse_cont.c',
              'dfuse_thread.c',
              'dfuse_pool.c']
@@ -69,8 +70,10 @@ def build_client_libs_shared(env, prereqs):
         pil4dfsenv['CFLAGS'].remove('-fvisibility=hidden')
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../dfs')])
     pil4dfsenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
+    pil4dfsenv.AppendUnique(LIBPATH=[Dir('../../gurt')])
+    pil4dfsenv.AppendUnique(CPPPATH=[Dir('../../gurt').srcnode()])
     pil4dfsenv.AppendUnique(LIBPATH=[Dir('../api')])
-    pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'duns', 'dl'])
+    pil4dfsenv.AppendUnique(LIBS=['pthread', 'daos', 'dfs', 'duns', 'gurt', 'dl'])
     pil4dfsenv.require('capstone')
     pil4dfs_obj = []
     for src in PIL4DFS_SRC:
@@ -172,6 +175,22 @@ def configure_fuse(cenv):
     check.Finish()
 
 
+def find_static_fuse(cenv):
+    """Find and copy static fuse library"""
+
+    fuse_prefix = '/usr'
+    if os.path.exists(cenv.subst('$FUSE_PREFIX')):
+        fuse_prefix = cenv.subst('$FUSE_PREFIX')
+
+    for path in ['lib64', 'lib/x86_64-linux-gnu', 'lib']:
+        fuselib = os.path.join(fuse_prefix, path, "libfuse3.a")
+        if os.path.exists(fuselib):
+            return [File(fuselib)]
+
+    print("Could not find libfuse3.a")
+    return []
+
+
 def scons():
     """Scons function"""
 
@@ -190,7 +209,7 @@ def scons():
     dfuse_env = env.Clone(LIBS=[])
     dfuse_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     dfuse_env.AppendUnique(CFLAGS=['-pthread'])
-    dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])
+    dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid', 'm'])
 
     gcc_env = il_env.Clone(LIBS=[])
     gcc_env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
@@ -207,11 +226,17 @@ def scons():
 
     cenv = dfuse_env.Clone()
     cenv.AppendUnique(LIBPATH=[Dir('../dfs')])
-    cenv.AppendUnique(CPPPATH=[Dir('../dfs').srcnode()])
-
     cenv.AppendUnique(LIBS=['dfs', 'duns'])
 
-    cenv.require('hwloc', 'fuse')
+    cenv.require('hwloc')
+    if cenv.get('STATIC_FUSE'):
+        cenv.require('fuse', headers_only=True)
+        static_fuse = find_static_fuse(cenv)
+        extra_libs = ['dl']
+    else:
+        cenv.require('fuse')
+        static_fuse = []
+        extra_libs = ['dl']
 
     configure_fuse(cenv)
 
@@ -220,8 +245,8 @@ def scons():
         dfuse_obj += cenv.Object(src)
     for src in OPS_SRC:
         dfuse_obj += cenv.Object(os.path.join('ops', f'{src}.c'))
-    cenv.AppendUnique(LIBS=['gurt'])
-    dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj)
+    cenv.AppendUnique(LIBS=['gurt'] + extra_libs)
+    dfuse_bin = cenv.d_program('dfuse/dfuse', common + dfuse_obj + static_fuse)
 
     Default(dfuse_bin)
 

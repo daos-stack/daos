@@ -8,6 +8,7 @@ import time
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
+from command_utils_base import CommandFailure
 from general_utils import bytes_to_human
 
 
@@ -60,10 +61,8 @@ class PoolCreateAllTestBase(TestWithServers):
 
             nvme_bytes = 0
             for nvme_device in host_storage["storage"]["nvme_devices"]:
-                if nvme_device["smd_devices"] is None:
-                    continue
-                for smd_device in nvme_device["smd_devices"]:
-                    if smd_device["dev_state"] == "NORMAL":
+                if nvme_device["dev_state"] == "NORMAL":
+                    for smd_device in (nvme_device["smd_devices"] or []):
                         nvme_bytes += smd_device["usable_bytes"]
             nvme_engine_bytes = min(nvme_engine_bytes, nvme_bytes)
 
@@ -234,6 +233,21 @@ class PoolCreateAllTestBase(TestWithServers):
                 "Pool %d created: scm_size=%d, nvme_size=%d", index, *pool_size)
             self.pool[index].destroy()
 
+            # Creating a pool immediately after destroy intermittently causes an error during the
+            # create. Wait for a few seconds and check that the pool was destroyed.
+            count = 0
+            while True:
+                self.log.info("Wait for a few seconds for the pool to be destroyed...")
+                time.sleep(5)
+                try:
+                    self.dmg.pool_query(pool=self.pool[index].identifier)
+                    self.log.info(
+                        "Pool query worked. Pool hasn't been destroyed. Try again. %d", count)
+                    count += 1
+                except CommandFailure as error:
+                    self.log.info("Pool query failed. Pool should have been destroyed. %s", error)
+                    break
+
             self.log.info("Checking SCM available storage")
             timeout = 3
             while timeout > 0:
@@ -310,11 +324,10 @@ class PoolCreateAllTestBase(TestWithServers):
 
             nvme_bytes = 0
             for nvme_device in host_storage["storage"]["nvme_devices"]:
-                for smd_device in nvme_device["smd_devices"]:
-                    if smd_device["dev_state"] != "NORMAL":
-                        continue
-                    nvme_bytes += smd_device["total_bytes"]
-                    nvme_bytes -= smd_device["avail_bytes"]
+                if nvme_device["dev_state"] == "NORMAL":
+                    for smd_device in (nvme_device["smd_devices"] or []):
+                        nvme_bytes += smd_device["total_bytes"]
+                        nvme_bytes -= smd_device["avail_bytes"]
             if nvme_bytes < nvme_used_bytes[0]:
                 nvme_used_bytes[0] = nvme_bytes
             if nvme_bytes > nvme_used_bytes[1]:

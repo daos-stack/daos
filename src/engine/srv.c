@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -277,6 +277,11 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 
 	if (DAOS_FAIL_CHECK(DAOS_FAIL_LOST_REQ))
 		return 0;
+
+	rc = crt_req_get_timeout(rpc, &attr.sra_timeout);
+	D_ASSERT(rc == 0);
+	/* convert it to msec */
+	attr.sra_timeout *= 1000;
 	/*
 	 * The mod_id for the RPC originated from CART is 0xfe, and 'module'
 	 * will be NULL for this case.
@@ -290,7 +295,20 @@ dss_rpc_hdlr(crt_context_t *ctx, void *hdlr_arg,
 		attr.sra_type = SCHED_REQ_ANONYM;
 	}
 
-	return sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
+	rc = sched_req_enqueue(dx, &attr, real_rpc_hdlr, rpc);
+	if (rc != -DER_OVERLOAD_RETRY)
+		return rc;
+
+	if (module != NULL && module->sm_mod_ops != NULL &&
+	    module->sm_mod_ops->dms_set_req != NULL) {
+		rc = module->sm_mod_ops->dms_set_req(rpc, &attr);
+		if (rc == -DER_OVERLOAD_RETRY)
+			return crt_reply_send(rpc);
+	}
+	/*
+	 * No RPC protocol to return hint, just return timeout.
+	 */
+	return -DER_TIMEDOUT;
 }
 
 static void
@@ -1019,7 +1037,7 @@ dss_xstreams_init(void)
 		D_INFO("ULT mmap()'ed stack allocation is disabled.\n");
 #endif
 
-	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
+	d_getenv_uint("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
 		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
@@ -1030,18 +1048,19 @@ dss_xstreams_init(void)
 		       sched_relax_intvl);
 	}
 
-	env = getenv("DAOS_SCHED_RELAX_MODE");
+	d_agetenv_str(&env, "DAOS_SCHED_RELAX_MODE");
 	if (env) {
 		sched_relax_mode = sched_relax_str2mode(env);
 		if (sched_relax_mode == SCHED_RELAX_MODE_INVALID) {
 			D_WARN("Invalid relax mode [%s]\n", env);
 			sched_relax_mode = SCHED_RELAX_MODE_NET;
 		}
+		d_freeenv_str(&env);
 	}
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
-	d_getenv_int("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+	d_getenv_uint("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
 	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
 
 	/* start the execution streams */

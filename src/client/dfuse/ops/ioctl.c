@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -9,7 +9,7 @@
 
 #include <sys/ioctl.h>
 
-#include "dfuse_ioctl.h"
+#include <dfuse_ioctl.h>
 
 #define MAX_IOCTL_SIZE ((1024 * 16) - 1)
 
@@ -37,8 +37,8 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	il_reply.fir_version = DFUSE_IOCTL_VERSION;
 
-	uuid_copy(il_reply.fir_pool, oh->doh_ie->ie_dfs->dfs_dfp->dfp_pool);
-	uuid_copy(il_reply.fir_cont, oh->doh_ie->ie_dfs->dfs_cont);
+	uuid_copy(il_reply.fir_pool, oh->doh_ie->ie_dfs->dfs_dfp->dfp_uuid);
+	uuid_copy(il_reply.fir_cont, oh->doh_ie->ie_dfs->dfc_uuid);
 
 	if (oh->doh_ie->ie_dfs->dfc_attr_timeout > 0)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;

@@ -40,22 +40,45 @@
 	 (rpc_ver & RPC_VERSION_MASK) << RPC_VERSION_OFFSET |	\
 	 (mod_id & MODID_MASK) << MODID_OFFSET)
 
+#define DAOS_MODULE_LIST                                                                           \
+	X(DAOS_VOS_MODULE, 0)     /** version object store */                                      \
+	X(DAOS_MGMT_MODULE, 1)    /** storage management */                                        \
+	X(DAOS_POOL_MODULE, 2)    /** pool service */                                              \
+	X(DAOS_CONT_MODULE, 3)    /** container service */                                         \
+	X(DAOS_OBJ_MODULE, 4)     /** object service */                                            \
+	X(DAOS_REBUILD_MODULE, 5) /** rebuild **/                                                  \
+	X(DAOS_RSVC_MODULE, 6)    /** replicated service server */                                 \
+	X(DAOS_RDB_MODULE, 7)     /** rdb */                                                       \
+	X(DAOS_RDBT_MODULE, 8)    /** rdb test */                                                  \
+	X(DAOS_SEC_MODULE, 9)     /** security framework */                                        \
+	X(DAOS_DTX_MODULE, 10)    /** DTX */                                                       \
+	X(DAOS_PIPELINE_MODULE, 11)                                                                \
+	X(DAOS_NR_MODULE, 12)  /** number of defined modules */                                    \
+	X(DAOS_MAX_MODULE, 64) /** Size of uint64_t see dmg profile */
+
 enum daos_module_id {
-	DAOS_VOS_MODULE		= 0, /** version object store */
-	DAOS_MGMT_MODULE	= 1, /** storage management */
-	DAOS_POOL_MODULE	= 2, /** pool service */
-	DAOS_CONT_MODULE	= 3, /** container service */
-	DAOS_OBJ_MODULE		= 4, /** object service */
-	DAOS_REBUILD_MODULE	= 5, /** rebuild **/
-	DAOS_RSVC_MODULE	= 6, /** replicated service server */
-	DAOS_RDB_MODULE		= 7, /** rdb */
-	DAOS_RDBT_MODULE	= 8, /** rdb test */
-	DAOS_SEC_MODULE		= 9, /** security framework */
-	DAOS_DTX_MODULE		= 10, /** DTX */
-	DAOS_PIPELINE_MODULE	= 11,
-	DAOS_NR_MODULE		= 12, /** number of defined modules */
-	DAOS_MAX_MODULE		= 64  /** Size of uint64_t see dmg profile */
+#define X(a, b) a = b,
+	DAOS_MODULE_LIST
+#undef X
+
 };
+
+static inline char *
+daos_opc_to_module_str(uint32_t daos_opc)
+{
+#define X(a, ...)                                                                                  \
+	case a:                                                                                    \
+		return #a;
+
+	switch
+		opc_get_mod_id(daos_opc)
+		{
+			DAOS_MODULE_LIST
+		default:
+			return NULL;
+		}
+#undef X
+}
 
 enum daos_rpc_flags {
 	/** flag of reply disabled */
@@ -92,6 +115,31 @@ enum daos_rpc_type {
 	/** Per VOS target request */
 	DAOS_REQ_TGT,
 };
+
+struct daos_req_comm_in {
+	/** Request user ID, reserved for NRS */
+	uint32_t	req_in_uid;
+	/** Request group ID, reserved for NRS */
+	uint32_t	req_in_gid;
+	/** Request project ID, reserved for NRS */
+	uint32_t	req_in_projid;
+	/** Enqueue ID of the request on the server side, for server overloaded retry */
+	uint64_t	req_in_enqueue_id;
+	/** Reserved for future extension */
+	uint64_t	req_in_paddings[4];
+	/** Request client address, reserved for NRS */
+	d_string_t	req_in_addr;
+	/** Job ID of the request, reserved for NRS */
+	d_string_t	req_in_jobid;
+};
+
+struct daos_req_comm_out {
+	/** Enqueue ID of the request returned to client, for server overloaded retry */
+	uint64_t	req_out_enqueue_id;
+	/** Reserved for future extension */
+	uint64_t	req_out_paddings[4];
+};
+
 
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
 #define DAOS_TGT0_OFFSET		(2)
@@ -213,5 +261,16 @@ daos_rpc_from_client(crt_rpc_t *rpc)
 
 int
 daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int *ret_ver);
+
+static inline uint32_t
+daos_rpc_rand_delay(uint32_t max_delay)
+{
+	if (max_delay == 0)
+		return 0;
+	if (max_delay > 5)
+		max_delay -= 5;
+
+	return (d_rand() % max_delay) + 1;
+}
 
 #endif /* __DRPC_API_H__ */

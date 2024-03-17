@@ -21,6 +21,7 @@
  *         Snapshot KVS (INTEGER)
  *         User attribute KVS (GENERIC)
  *         Handle index KVS (GENERIC)
+ *         Snapshot OIT OID KVS (GENERIC)
  *       ... (more container property KVSs)
  *     Container handle KVS (GENERIC)
  *     Service ops KVS (GENERIC) - NB used by both pool and container modules
@@ -42,9 +43,9 @@
  *
  *   extern d_iov_t ds_cont_prop_new_key;	comment_on_value_type
  *
- *   Note 1. The "new_key" name in ds_cont_prop_new_key must not appear (with very few exceptions)
- *   in the root KVS in src/pool/srv_layout.h, that is, there must usually not be a
- *   ds_pool_prop_new_key, because the two root KVSs are the same RDB KVS.
+ *   Note 1. The "new_key" name in ds_cont_prop_new_key must not appear in the root KVS in
+ *   src/pool/srv_layout.h, that is, there must not be a ds_pool_prop_new_key, because the two root
+ *   KVSs are the same RDB KVS.
  *
  *   Note 2. The comment_on_value_type shall focus on the value type only;
  *   usage shall be described above in this comment following existing
@@ -52,9 +53,7 @@
  */
 extern d_iov_t ds_cont_prop_cuuids;		/* container UUIDs KVS */
 extern d_iov_t ds_cont_prop_conts;		/* container KVS */
-extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
-extern d_iov_t ds_cont_prop_svc_ops;            /* service ops KVS - common to pool, container */
-extern d_iov_t ds_cont_prop_svc_ops_enabled;    /* uint32_t - common to pool, container */
+extern d_iov_t ds_cont_prop_cont_handles;       /* container handle KVS */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*
@@ -68,6 +67,27 @@ extern d_iov_t ds_cont_prop_svc_ops_enabled;    /* uint32_t - common to pool, co
  * Container KVS (RDB_KVS_GENERIC)
  *
  * This maps container UUIDs (uuid_t) to container property KVSs.
+ */
+
+/*
+ * Container handle KVS (RDB_KVS_GENERIC)
+ *
+ * A key is a container handle UUID (uuid_t). A value is a container_hdl object.
+ * This KVS stores handles of _all_ containers in the DB.
+ */
+struct container_hdl {
+	uuid_t		ch_pool_hdl;
+	uuid_t		ch_cont;
+	uint64_t	ch_hce;
+	uint64_t	ch_flags;
+	uint64_t	ch_sec_capas;
+};
+
+/*
+ * Service ops KVS (RDB_KVS_GENERIC)
+ *
+ * Each key is a client UUID and HLC timestamp, defined in struct ds_pool_svc_op_key.
+ * Each value represents the result of handling that RPC, defined in struct ds_pool_svc_op_val.
  */
 
 /*
@@ -116,7 +136,7 @@ extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
 extern d_iov_t ds_cont_prop_co_md_times;	/* co_md_times */
 extern d_iov_t ds_cont_prop_cont_obj_version;	/* uint32_t */
 extern d_iov_t ds_cont_prop_nhandles;		/* uint32_t */
-extern d_iov_t ds_cont_prop_oit_oids;		/* snapshot OIT oids KVS */
+extern d_iov_t ds_cont_prop_oit_oids;		/* snapshot OIT OID KVS */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 struct co_md_times {
@@ -147,24 +167,9 @@ struct co_md_times {
  */
 
 /*
- * Container handle KVS (RDB_KVS_GENERIC)
+ * Snapshot OIT OID KVS
  *
- * A key is a container handle UUID (uuid_t). A value is a container_hdl object.
- * This KVS stores handles of _all_ containers in the DB.
- */
-struct container_hdl {
-	uuid_t		ch_pool_hdl;
-	uuid_t		ch_cont;
-	uint64_t	ch_hce;
-	uint64_t	ch_flags;
-	uint64_t	ch_sec_capas;
-};
-
-/*
- * Service ops KVS (RDB_KVS_GENERIC)
- *
- * Each key is a client UUID and HLC timestamp, defined in struct ds_pool_svc_op_key.
- * Each value represents the result of handling that RPC, defined in struct ds_pool_svc_op_val.
+ * A key is an epoch (daos_epoch_t). A value is a DAOS object ID (daos_obj_id_t).
  */
 
 extern daos_prop_t cont_prop_default;

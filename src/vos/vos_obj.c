@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -354,8 +354,10 @@ punch_dkey:
 	vos_ilog_fetch_finish(&info->ki_dkey);
 	vos_ilog_fetch_finish(&info->ki_akey);
 
-	if (daos_handle_is_valid(toh))
+	if (daos_handle_is_valid(toh)) {
+		D_ASSERT(krec != NULL);
 		key_tree_release(toh, (krec->kr_bmap & KREC_BF_EVT) != 0);
+	}
 
 	D_FREE(info);
 
@@ -450,6 +452,12 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_X64"\n",
 		DP_UOID(oid), epr.epr_hi);
 
+	rc = vos_tgt_health_check(cont);
+	if (rc) {
+		DL_ERROR(rc, DF_UOID": Reject punch due to faulty NVMe.", DP_UOID(oid));
+		return rc;
+	}
+
 	if (dtx_is_valid_handle(dth)) {
 		if (akey_nr) {
 			cflags = VOS_TS_WRITE_AKEY;
@@ -493,7 +501,9 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
 					     dth->dth_dti_cos_count, 0, NULL, daes, dces);
-		if (rc <= 0)
+		if (rc < 0)
+			goto reset;
+		if (rc == 0)
 			D_FREE(daes);
 	}
 
@@ -572,6 +582,12 @@ reset:
 	D_FREE(daes);
 	D_FREE(dces);
 	vos_ts_set_free(ts_set);
+
+	if (rc == 0) {
+		rc = vos_tgt_health_check(cont);
+		if (rc)
+			DL_ERROR(rc, "Fail punch due to faulty NVMe.");
+	}
 
 	return rc;
 }

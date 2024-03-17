@@ -85,16 +85,18 @@ typedef struct crt_init_options {
 			/** swim crt index */
 	int		cio_swim_crt_idx;
 
-	/** if set, used as a provider value instead of CRT_PHY_ADDR_STR env */
+	/* see src/cart/README.env for details about the format of the fields below */
+
+	/** if set, used as a provider value instead of D_PROVIDER env */
 	char		*cio_provider;
 
-	/** If set, used as an interface setting instead of OFI_INTERFACE env */
+	/** If set, used as an interface setting instead of D_INTERFACE env  */
 	char		*cio_interface;
 
-	/** If set, used as a domain setting instead of OFI_DOMAIN env */
+	/** If set, used as a domain setting instead of D_DOMAIN env */
 	char		*cio_domain;
 
-	/** If set, used as a port setting instead of OFI_PORT env */
+	/** If set, used as a port setting instead of D_PORT env */
 	char		*cio_port;
 
 	/** If set, used as the authentication key instead of D_PROVIDER_AUTH_KEY env */
@@ -439,6 +441,17 @@ typedef enum {
 	/** Total count of supported operations */
 	CRT_GROUP_MOD_OP_COUNT,
 } crt_group_mod_op_t;
+
+/**
+ * Quotas supported by CaRT.
+ */
+typedef enum {
+	/** Limit of number of inflight rpcs */
+	CRT_QUOTA_RPCS,
+
+	/** Total count of supported quotas */
+	CRT_QUOTA_COUNT,
+} crt_quota_type_t;
 
 /** @}
  */

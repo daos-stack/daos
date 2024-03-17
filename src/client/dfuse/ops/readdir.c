@@ -7,7 +7,7 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
-#include "daos_uns.h"
+#include <daos_uns.h>
 
 /* Initial number of dentries to read when doing readdirplus */
 #define READDIR_PLUS_COUNT 26
@@ -119,6 +119,9 @@ _handle_init(struct dfuse_cont *dfc)
 
 	D_INIT_LIST_HEAD(&hdl->drh_cache_list);
 	atomic_init(&hdl->drh_ref, 1);
+
+	D_RWLOCK_INIT(&hdl->drh_lock, NULL);
+
 	hdl->drh_valid = true;
 	return hdl;
 }
@@ -332,6 +335,7 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 	bool                      to_seek     = false;
 	struct dfuse_readdir_hdl *hdl;
 	size_t                    size = *out_size;
+	bool                      wlock = false;
 
 	rc = ensure_rd_handle(dfuse_info, oh);
 	if (rc != 0)
@@ -349,6 +353,22 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 		}
 		oh->doh_kreaddir_started = true;
 	}
+
+	D_RWLOCK_RDLOCK(&hdl->drh_lock);
+
+	/* If this thread is doing readdir plus and not all entries in the cache have hash table
+	 * references then reading from the cache also needs a write handle.  This reader will
+	 * take hash table references however so with multiple readers here only the first one
+	 * through should need this, even in the case where the cache was populated without refs.
+	 */
+	if (plus && hdl->drh_no_ref_count != 0) {
+		DFUSE_TRA_DEBUG(hdl, "Relocking with write lock");
+		D_RWLOCK_UNLOCK(&hdl->drh_lock);
+		D_RWLOCK_WRLOCK(&hdl->drh_lock);
+		wlock = true;
+	}
+
+restart:
 
 	DFUSE_TRA_DEBUG(oh, "plus %d offset %#lx idx %d idx_offset %#lx", plus, offset,
 			hdl->drh_dre_index, hdl->drh_dre[hdl->drh_dre_index].dre_offset);
@@ -473,6 +493,7 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 					drc->drc_stbuf = entry.attr;
 					d_hash_rec_addref(&dfuse_info->dpi_iet, rlink);
 					drc->drc_rlink = rlink;
+					hdl->drh_no_ref_count--;
 				}
 
 				set_entry_params(&entry, ie);
@@ -512,6 +533,14 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 		}
 	}
 
+	if (hdl->drh_caching && !wlock) {
+		DFUSE_TRA_DEBUG(hdl, "Relocking with write lock");
+		D_RWLOCK_UNLOCK(&hdl->drh_lock);
+		D_RWLOCK_WRLOCK(&hdl->drh_lock);
+		wlock = true;
+		goto restart;
+	}
+
 	if (!to_seek) {
 		if (hdl->drh_dre_last_index == 0) {
 			if (offset != hdl->drh_dre[hdl->drh_dre_index].dre_offset &&
@@ -537,11 +566,16 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 		/* Drop if shared */
 		if (oh->doh_rd->drh_caching) {
 			DFUSE_TRA_DEBUG(oh, "Switching to private handle");
+			D_RWLOCK_UNLOCK(&hdl->drh_lock);
+
 			dfuse_dre_drop(dfuse_info, oh);
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 			hdl        = oh->doh_rd;
 			if (oh->doh_rd == NULL)
 				D_GOTO(out_reset, rc = ENOMEM);
+
+			D_RWLOCK_WRLOCK(&hdl->drh_lock);
+
 			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 		} else {
 			dfuse_readdir_reset(hdl);
@@ -710,6 +744,7 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 				if (drc) {
 					drc->drc_stbuf.st_mode = stbuf.st_mode;
 					drc->drc_stbuf.st_ino  = stbuf.st_ino;
+					hdl->drh_no_ref_count++;
 				}
 			}
 			if (written > size - buff_offset) {
@@ -773,11 +808,15 @@ reply:
 		D_GOTO(out_reset, rc);
 
 	*out_size = buff_offset;
+	D_RWLOCK_UNLOCK(&hdl->drh_lock);
+
 	return 0;
 
 out_reset:
-	if (hdl)
+	if (hdl) {
 		dfuse_readdir_reset(hdl);
+		D_RWLOCK_UNLOCK(&hdl->drh_lock);
+	}
 	D_ASSERT(rc != 0);
 	return rc;
 }
@@ -788,12 +827,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
 	char              *reply_buff = NULL;
 	int                rc         = EIO;
-
-	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readdir_number, 1) == 0,
-		  "Multiple readdir per handle");
-
-	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_ie->ie_readdir_number, 1) == 0,
-		  "Multiple readdir per inode");
 
 	/* Handle the EOD case, the kernel will keep reading until it receives zero replies so
 	 * reply early in this case.
@@ -821,9 +854,6 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	rc = dfuse_do_readdir(dfuse_info, req, oh, reply_buff, &size, offset, plus);
 
 out:
-	atomic_fetch_sub_relaxed(&oh->doh_readdir_number, 1);
-	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_readdir_number, 1);
-
 	if (rc)
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	else

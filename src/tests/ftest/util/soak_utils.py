@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -62,13 +62,25 @@ def add_pools(self, pool_names, ranks=None):
                     /run/<test_params>/poollist/*
         ranks (list, optional):  ranks to include in pool. Defaults to None
     """
+    params = {}
     target_list = ranks if ranks else None
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
+        properties = self.params.get('properties', path, None)
+        # allow yaml pool property to override the scrub default; whether scrubber is enabled or not
+        if self.enable_scrubber and "scrub" not in str(properties):
+            scrubber_properties = "scrub:timed,scrub_freq:120"
+            params['properties'] = (",").join(filter(None, [properties, scrubber_properties]))
+        else:
+            params['properties'] = properties
         # Create a pool and add it to the overall list of pools
-        self.pool.append(
-            self.get_pool(
-                namespace=path, connect=False, target_list=target_list, dmg=self.dmg_command))
+        self.pool.append(self.get_pool(
+            namespace=path,
+            connect=False,
+            target_list=target_list,
+            dmg=self.dmg_command,
+            **params))
+
         self.log.info("Valid Pool ID is %s", self.pool[-1].identifier)
 
 
@@ -85,7 +97,7 @@ def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/con
     kwargs = {}
     if file_oclass:
         kwargs['file_oclass'] = file_oclass
-        properties = self.params.get('properties', path, "")
+        properties = self.params.get('properties', path, None)
         redundancy_factor = extract_redundancy_factor(file_oclass)
         rd_fac = f'rd_fac:{str(redundancy_factor)}'
         kwargs['properties'] = (",").join(filter(None, [properties, rd_fac]))
@@ -306,6 +318,7 @@ def wait_for_pool_rebuild(self, pool, name):
     """
     rebuild_status = False
     self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.identifier, time.ctime())
+    self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
     try:
         # # Wait for rebuild to start
         # pool.wait_for_rebuild_to_start()
@@ -318,6 +331,7 @@ def wait_for_pool_rebuild(self, pool, name):
     except TestFail as error1:
         self.log.error(
             f"<<<FAILED:{name} rebuild failed due to test issue: {error1}", exc_info=error1)
+    self.dmg_command.server_set_logmasks(raise_exception=False)
     return rebuild_status
 
 
@@ -419,17 +433,19 @@ def launch_vmd_identify_check(self, name, results, args):
 
     for uuid in uuids:
         # Blink led
-        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
-        time.sleep(2)
+        self.dmg_command.storage_led_identify(ids=uuid, timeout=2)
         # check if led is blinking
         result = self.dmg_command.storage_led_check(ids=uuid)
         # determine if leds are blinking as expected
         for value in list(result['response']['host_storage_map'].values()):
             if value['storage']['smd_info']['devices']:
                 for device in value['storage']['smd_info']['devices']:
-                    if device['led_state'] != "QUICK_BLINK":
-                        failing_vmd.append([device['tr_addr'], value['hosts']])
+                    if device['ctrlr']['led_state'] != "QUICK_BLINK":
+                        failing_vmd.append([device['ctrlr']['pci_addr'], value['hosts']])
                         status = False
+    # reset leds to previous state
+    for uuid in uuids:
+        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
 
     params = {"name": name,
               "status": status,
@@ -592,7 +608,9 @@ def launch_server_stop_start(self, pools, name, results, args):
         if drain:
             for pool in pools:
                 try:
+                    self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
                     pool.drain(rank)
+                    self.dmg_command.server_set_logmasks(raise_exception=False)
                 except TestFail as error:
                     self.log.error(
                         f"<<<FAILED:dmg pool {pool.identifier} drain failed", exc_info=error)
@@ -836,7 +854,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
-            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module load {self.mpi_module}"]
             # include dfuse cmdlines
             if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -918,7 +936,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             env["D_LOG_FILE"] = get_log_file(daos_log or f"{macsio.command}_daos.log")
             env["D_LOG_FILE_APPEND_PID"] = "1"
             env["DAOS_UNS_PREFIX"] = format_path(macsio.daos_pool, macsio.daos_cont)
-            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module load {self.mpi_module}"]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1008,8 +1026,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
-            sbatch_cmds = [
-                "module purge", f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module load {self.mpi_module}"]
             # include dfuse cmdlines
             if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -1181,7 +1198,6 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
 
     """
     commands = []
-    sbatch_cmds = []
     app_params = os.path.join(os.sep, "run", job_spec, "*")
     app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
     mpi_module = self.params.get("module", app_params, self.mpi_module)
@@ -1192,10 +1208,10 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     oclass_list = self.params.get("oclass", app_params)
     for file_oclass, dir_oclass in oclass_list:
         for api in api_list:
+            sbatch_cmds = [f"module load {mpi_module}"]
             if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 continue
             add_containers(self, pool, file_oclass, dir_oclass)
-            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
             log_name = "{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
             # include dfuse cmdlines
@@ -1203,9 +1219,6 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 dfuse, dfuse_start_cmdlist = start_dfuse(
                     self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                 sbatch_cmds.extend(dfuse_start_cmdlist)
-            # allow apps that use an mpi other than default (self.mpi_module)
-            if mpi_module != self.mpi_module:
-                sbatch_cmds.append(f"module load {mpi_module}")
             mpirun_cmd = Mpirun(app_cmd, False, mpi_module)
             mpirun_cmd.get_params(self)
             env = EnvironmentVariables()
@@ -1228,16 +1241,11 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             sbatch_cmds.append(str(cmdline))
             sbatch_cmds.append("status=$?")
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
-                if mpi_module != self.mpi_module:
-                    sbatch_cmds.extend(["module purge", f"module load {self.mpi_module}"])
                 sbatch_cmds.extend(stop_dfuse(dfuse))
             commands.append([sbatch_cmds, log_name])
             self.log.info(f"<<{job_spec.upper()} cmdlines>>:")
             for cmd in sbatch_cmds:
                 self.log.info("%s", cmd)
-            if mpi_module != self.mpi_module:
-                mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
-                mpirun_cmd.get_params(self)
     return commands
 
 
@@ -1295,7 +1303,7 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
     return commands
 
 
-def build_job_script(self, commands, job, nodesperjob):
+def build_job_script(self, commands, job, nodesperjob, ppn):
     """Create a slurm batch script that will execute a list of cmdlines.
 
     Args:
@@ -1331,7 +1339,8 @@ def build_job_script(self, commands, job, nodesperjob):
             "exclude": str(self.slurm_exclude_nodes),
             "error": str(error),
             "export": "ALL",
-            "exclusive": None
+            "exclusive": None,
+            "ntasks": str(nodesperjob * ppn)
         }
         # include the cluster specific params
         sbatch.update(self.srun_params)

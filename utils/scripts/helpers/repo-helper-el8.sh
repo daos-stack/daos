@@ -101,7 +101,8 @@ for repo in $REPOS; do
 name=$repo:$branch:$build_number\n\
 baseurl=${JENKINS_URL}$daos_base$repo/job/$branch/$build_number$artifacts\n\
 enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/"$repo:$branch:$build_number".repo
+gpgcheck=False\n
+module_hotfixes=true\n" >> /etc/yum.repos.d/"$repo:$branch:$build_number".repo
     cat /etc/yum.repos.d/"$repo:$branch:$build_number".repo
     save_repos+=("$repo:$branch:$build_number")
 done

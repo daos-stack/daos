@@ -16,14 +16,17 @@ test_tag="$TEST_TAG"
 tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
 first_node=${NODELIST%%,*}
 
+hardware_ok=false
+
 cluster_reboot () {
     # shellcheck disable=SC2029,SC2089
     clush -B -S -o '-i ci_key' -l root -w "${tnodes}" reboot || true
 
     # shellcheck disable=SC2029,SC2089
     poll_cmd=( clush -B -S -o "-i ci_key" -l root -w "${tnodes}" )
-    poll_cmd+=( '"cat /etc/os-release"' )
-    reboot_timeout=900 # 15 minutes
+    poll_cmd+=( cat /etc/os-release )
+    # 20 minutes, HPE systems may take more than 15 minutes.
+    reboot_timeout=1200
     retry_wait=10 # seconds
     timeout=$((SECONDS + reboot_timeout))
     while [ "$SECONDS" -lt "$timeout" ]; do
@@ -42,6 +45,8 @@ test_cluster() {
         FIRST_NODE=${first_node}                        \
         TEST_RPMS=${TEST_RPMS}                          \
         NODELIST=${tnodes}                              \
+        BUILD_URL=\"${BUILD_URL:-Unknown in GHA}\"      \
+        STAGE_NAME=\"$STAGE_NAME\"                      \
         $(cat ci/functional/test_main_prep_node.sh)"
 }
 
@@ -50,8 +55,13 @@ clush -B -S -o '-i ci_key' -l root -w "${first_node}" \
 
 if ! test_cluster; then
     # Sometimes a cluster reboot will fix the issue so try it once.
-    cluster_reboot
-    test_cluster
+    if cluster_reboot; then
+        if test_cluster; then
+            hardware_ok=true
+        fi
+    fi
+else
+    hardware_ok=true
 fi
 
 # collect the _results.xml files from test_main_prep_nodes before they
@@ -79,17 +89,20 @@ export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
-if $TEST_RPMS; then
-    # shellcheck disable=SC2029
-    ssh -i ci_key -l jenkins "${first_node}" \
-      "TEST_TAG=\"$test_tag\"                        \
-       TNODES=\"$tnodes\"                            \
-       FTEST_ARG=\"${FTEST_ARG:-}\"                  \
-       WITH_VALGRIND=\"${WITH_VALGRIND:-}\"          \
-       STAGE_NAME=\"$STAGE_NAME\"                    \
-       $(cat ci/functional/test_main_node.sh)"
-else
-    ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
+
+if "$hardware_ok"; then
+    if $TEST_RPMS; then
+        # shellcheck disable=SC2029
+        ssh -i ci_key -l jenkins "${first_node}"   \
+          "TEST_TAG=\"$test_tag\"                  \
+           TNODES=\"$tnodes\"                      \
+           FTEST_ARG=\"${FTEST_ARG:-}\"            \
+           WITH_VALGRIND=\"${WITH_VALGRIND:-}\"    \
+           STAGE_NAME=\"$STAGE_NAME\"              \
+           $(cat ci/functional/test_main_node.sh)"
+    else
+        ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
+    fi
 fi
 
 # Now rename the previously collected hardware test data for Jenkins
@@ -104,3 +117,4 @@ for node in ${tnodes//,/ }; do
         mv "$old_name" "$new_name"
     fi
 done
+"$hardware_ok"

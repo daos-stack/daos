@@ -19,7 +19,7 @@
 #define D_LOGFAC	DD_FAC(iv)
 
 #include "crt_internal.h"
-#include "cart/iv.h"
+#include <cart/iv.h>
 
 #define IV_DBG(key, msg, ...) \
 	D_DEBUG(DB_TRACE, "[key=%p] " msg, (key)->iov_buf, ##__VA_ARGS__)
@@ -1695,10 +1695,6 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	/* The fetch info is contained on current server.  */
 	if (rc == 0) {
-		/* Finish up the completion call back */
-		iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
-				       iv_value, false, 0x0, user_priv);
-
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 			      iv_value, rc, cb_arg);
 
@@ -1710,9 +1706,6 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		return rc;
 	} else if (rc != -DER_IVCB_FORWARD) {
 		/* We got error, call the callback and exit */
-		iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
-				       NULL, false, rc, user_priv);
-
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 			      NULL, rc, cb_arg);
 
@@ -2550,11 +2543,11 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		child_output = crt_reply_get(iv_info->uci_child_rpc);
 
 		/* uci_bulk_hdl will not be set for invalidate call */
-		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL) {
+		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
 			crt_bulk_free(iv_info->uci_bulk_hdl);
-			iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
-					   iv_info->uci_user_priv);
-		}
+
+		iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
+				   iv_info->uci_user_priv);
 		child_output->rc = output->rc;
 
 		if (cb_info->cci_rc != 0)
@@ -3516,8 +3509,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else {
-		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
-			  "ivo_on_update failed");
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER || rc == -DER_BUSY,
+			  DLOG_INFO, DLOG_ERR, rc, "ivo_on_update failed");
 
 		update_comp_cb(ivns, class_id, iv_key, NULL,
 			       iv_value, rc, cb_arg);

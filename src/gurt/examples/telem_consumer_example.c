@@ -7,8 +7,8 @@
  * This file shows an example of using the telemetry API to consume metrics
  */
 
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_consumer.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_consumer.h>
 
 /**
  * An example that shows how metrics are read.

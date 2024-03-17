@@ -488,7 +488,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	}
 
 	if cfg.DisableHugepages {
-		return FaultConfigHugepagesDisabled
+		return FaultConfigHugepagesDisabledWithBdevs
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
@@ -739,7 +739,7 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenValues := make(map[string]int)
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
-	seenIdx := 0
+	seenIdx := -1
 	seenBdevCount := -1
 	seenTargetCount := -1
 	seenHelperStreamCount := -1
@@ -806,8 +806,8 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 			// Log error but don't fail in order to be lenient with unbalanced device
 			// counts in particular cases e.g. using different capacity SSDs or VMDs
 			// with different number of backing devices.
-			err := FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
-			log.Noticef(err.Error())
+			e := FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
+			log.Noticef(e.Error())
 		}
 		if seenTargetCount != -1 && engine.TargetCount != seenTargetCount {
 			return FaultConfigTargetCountMismatch(idx, engine.TargetCount, seenIdx,

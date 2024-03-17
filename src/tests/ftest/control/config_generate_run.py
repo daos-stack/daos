@@ -62,7 +62,7 @@ class ConfigGenerateRun(TestWithServers):
             self.fail(f"Error loading dmg generated config! {error}")
 
         # Stop and restart daos_server. self.start_server_managers() has the
-        # server startup check built into it, so if there's something wrong,
+        # server start-up check built into it, so if there's something wrong,
         # it'll throw an error.
         self.log.info("Stopping servers")
         self.stop_servers()

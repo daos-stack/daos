@@ -571,11 +571,11 @@ class Ior:
                 self.manager.job.test_file.update(
                     os.path.join(os.sep, self.label_generator.get_label("testfile")))
 
-        if ppn is None:
-            self.manager.assign_processes(processes)
+        # Pass only processes or ppn to be compatible with previous behavior
+        if ppn is not None:
+            self.manager.assign_processes(ppn=ppn)
         else:
-            self.manager.ppn.update(ppn, ".".join([self.manager.command, "ppn"]))
-            self.manager.processes.update(None, ".".join([self.manager.command, "np"]))
+            self.manager.assign_processes(processes=processes)
 
         self.manager.assign_environment(self.env)
 

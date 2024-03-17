@@ -235,13 +235,13 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	}
 	// Nr hugepages expected with 18+1 (extra MD-on-SSD sys-xstream) targets * 2 engines * 512
 	// pages-per-target.
-	mdonssdNrHugepages := 19 * 2 * 512
-	mdonssdHugeMemGiB := (humanize.MiByte * 2 * mdonssdNrHugepages) / humanize.GiByte
+	mdOnSSDNrHugepages := 19 * 2 * 512
+	mdOnSSDHugeMemGiB := (humanize.MiByte * 2 * mdOnSSDNrHugepages) / humanize.GiByte
 	// Total mem to meet requirements 39GiB hugeMem, 2GiB per engine rsvd, 6GiB sys rsvd, 4GiB
 	// per engine RAM-disk.
-	mdonssdMemTotalGiB := humanize.GiByte * (mdonssdHugeMemGiB + (2 * engRsvdGiB) + sysRsvdGiB +
+	mdOnSSDMemTotalGiB := humanize.GiByte * (mdOnSSDHugeMemGiB + (2 * engRsvdGiB) + sysRsvdGiB +
 		(2 * ramdiskGiB) + 1 /* add 1GiB buffer */)
-	mdonssdEngineCfgs := []*engine.Config{
+	mdOnSSDEngineCfgs := []*engine.Config{
 		control.MockEngineCfgTmpfs(0, ramdiskGiB,
 			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
 			control.MockBdevTierWithRole(0, storage.BdevRoleMeta|storage.BdevRoleData, 4)).
@@ -541,7 +541,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 				MemInfo: &common.MemInfo{
 					HugepageSizeKiB: 2048,
-					MemTotalKiB:     mdonssdMemTotalGiB / humanize.KiByte,
+					MemTotalKiB:     mdOnSSDMemTotalGiB / humanize.KiByte,
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
@@ -550,8 +550,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(4),
 				},
 			},
-			expCfg: control.MockServerCfg("ofi+psm2", mdonssdEngineCfgs).
-				WithNrHugepages(mdonssdNrHugepages).
+			expCfg: control.MockServerCfg("ofi+psm2", mdOnSSDEngineCfgs).
+				WithNrHugepages(mdOnSSDNrHugepages).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log").
 				WithControlMetadata(controlMetadata),
@@ -573,7 +573,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 				MemInfo: &common.MemInfo{
 					HugepageSizeKiB: 2048,
-					MemTotalKiB:     mdonssdMemTotalGiB / humanize.KiByte,
+					MemTotalKiB:     mdOnSSDMemTotalGiB / humanize.KiByte,
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),

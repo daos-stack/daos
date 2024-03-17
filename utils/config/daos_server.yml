@@ -202,16 +202,12 @@
 #
 ## Number of hugepages to allocate for DMA buffer memory
 #
-## Optional parameter that should only be set if overriding the automatically calculated value is
-## necessary.
-#
-## Specifies the number (not size) of hugepages to allocate for use by NVMe
-## through SPDK. Note that each target requires 1 GiB of hugepage space.
-## In DAOS version 2.2 and newer, nr_hugepages specifies the total across all
-## engines on a host. It needs to represent the total amount of hugepages memory
-## required for all targets across all engines on a host, divided by the system
-## hugepage size. If not set here, it will be automatically calculated based on
-## the number of targets (using the default system hugepage size).
+## Optional parameter that should only be set if overriding the automatically calculated value is #
+## #necessary. Specifies the number (not size) of hugepages to allocate for use by NVMe through
+## #SPDK. For optimum performance each target requires 1 GiB of hugepage space. The provided value
+## should be calculated by dividing the total amount of hugepages memory required for all targets
+## across all engines on a host by the system hugepage size. If not set here, the value will be
+## automatically calculated based on the number of targets (using the default system hugepage size).
 #
 ## Example: (2 engines * (16 targets/engine * 1GiB)) / 2MiB hugepage size = 16834
 #
@@ -219,8 +215,7 @@
 #nr_hugepages: 0
 #
 ## Hugepages are mandatory with NVME SSDs configured and optional without.
-## To disable the use of hugepages when no NVMe SSDs are configured, set
-## disable_hugepages to true.
+## To disable the use of hugepages when no NVMe SSDs are configured, set disable_hugepages to true.
 #
 ## default: false
 #disable_hugepages: false
@@ -448,26 +443,14 @@
 #    - meta
 #    - wal
 #
-#
-#  # Specify accelerator engine setting (experimental).
-#
-#  # Acceleration engine options are:
-#  # - "none" do not use an acceleration engine. (default)
-#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
-#  # - "dml" te set DML as accelerator engine.
-#
-#  # Optional capability settings are:
-#  # - "move" to enable acceleration of MOVE instructions.
-#  # - "crc" to enable acceleration of CRC instructions.
-#
-#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
-#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
-#
-#  acceleration:
-#    engine: spdk
-#    options:
-#    - move
-#    - crc
+#  # Set criteria for automatic detection and eviction of faulty NVMe devices. The
+#  # default criteria parameters are `enable: true`, `max_io_errs: 10` and
+#  # `max_csum_errs: <uint32_max>` (essentially eviction due to checksum errors is
+#  # disabled by default).
+#  bdev_auto_faulty:
+#    enable: true
+#    max_io_errs: 100
+#    max_csum_errs: 200
 #
 #
 #-
@@ -618,22 +601,10 @@
 #    # See about bdev_roles above.
 #    bdev_roles: [wal, meta, data]
 #
+#  # Disable automatic detection and eviction of faulty NVMe devices. The default
+#  # criteria parameters are `enable: true`, `max_io_errs: 10` and
+#  # `max_csum_errs: <uint32_max>` (essentially eviction due to checksum errors is
+#  # disabled by default).
 #
-#  # Specify accelerator engine setting (experimental).
-#
-#  # Acceleration engine options are:
-#  # - "none" do not use an acceleration engine. (default)
-#  # - "spdk" to assigned management of hardware/software acceleration to SPDK.
-#  # - "dml" te set DML as accelerator engine.
-#
-#  # Optional capability settings are:
-#  # - "move" to enable acceleration of MOVE instructions.
-#  # - "crc" to enable acceleration of CRC instructions.
-#
-#  # If acceleration engine setting is "none" (or unset) then optional capabilities are all set to
-#  # false. If set to "spdk" or "dml" then optional capabilities are set to "true" by default.
-#
-#  acceleration:
-#    engine: dml
-#    options:
-#    - crc
+#  bdev_auto_faulty:
+#    enable: false

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 func revString(version string) string {
@@ -41,17 +42,24 @@ func String(name string) string {
 // MarshalJSON returns a JSON string containing a structured representation of
 // the binary build info.
 func MarshalJSON(name string) ([]byte, error) {
+	// Not a fatal error if the build time can't be parsed.
+	buildTime, _ := time.Parse(time.RFC3339, BuildTime)
+
 	return json.Marshal(&struct {
-		Name     string `json:"name"`
-		Version  string `json:"version"`
-		Revision string `json:"revision,omitempty"`
-		Dirty    bool   `json:"dirty,omitempty"`
-		Release  bool   `json:"release,omitempty"`
+		Name      string    `json:"name"`
+		Version   string    `json:"version"`
+		Revision  string    `json:"revision,omitempty"`
+		Dirty     bool      `json:"dirty,omitempty"`
+		Release   bool      `json:"release,omitempty"`
+		BuildHost string    `json:"build_host,omitempty"`
+		BuildTime time.Time `json:"build_time,omitempty"`
 	}{
-		Name:     name,
-		Version:  DaosVersion,
-		Revision: Revision,
-		Dirty:    DirtyBuild,
-		Release:  ReleaseBuild,
+		Name:      name,
+		Version:   DaosVersion,
+		Revision:  Revision,
+		Dirty:     DirtyBuild,
+		Release:   ReleaseBuild,
+		BuildHost: BuildHost,
+		BuildTime: buildTime,
 	})
 }

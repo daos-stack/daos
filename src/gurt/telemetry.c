@@ -16,9 +16,9 @@
 #include <gurt/common.h>
 #include <gurt/list.h>
 #include <sys/shm.h>
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_producer.h"
-#include "gurt/telemetry_consumer.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
+#include <gurt/telemetry_consumer.h>
 
 /** minimal list of shared memory regions with a global ID */
 struct shmem_region_list {

@@ -229,12 +229,16 @@ enum {
 enum {
 	SCHED_REQ_FL_NO_DELAY	= (1 << 0),
 	SCHED_REQ_FL_PERIODIC	= (1 << 1),
+	SCHED_REQ_FL_NO_REJECT	= (1 << 2),
 };
 
 struct sched_req_attr {
 	uuid_t		sra_pool_id;
 	uint32_t	sra_type;
 	uint32_t	sra_flags;
+	uint32_t	sra_timeout;
+	/* Hint for RPC rejection */
+	uint64_t	sra_enqueue_id;
 };
 
 static inline void
@@ -407,6 +411,8 @@ dss_ult_yield(void *arg)
 struct dss_module_ops {
 	/* Get schedule request attributes from RPC */
 	int (*dms_get_req_attr)(crt_rpc_t *rpc, struct sched_req_attr *attr);
+	/* Set schedule request attributes to RPC */
+	int (*dms_set_req)(crt_rpc_t *rpc, struct sched_req_attr *attr);
 };
 
 int srv_profile_stop();
@@ -506,6 +512,8 @@ enum dss_ult_flags {
 	DSS_ULT_FL_PERIODIC	= (1 << 0),
 	/* Use DSS_DEEP_STACK_SZ as the stack size */
 	DSS_ULT_DEEP_STACK	= (1 << 1),
+	/* Use current ULT (instead of creating new one) for the task. */
+	DSS_USE_CURRENT_ULT	= (1 << 2),
 };
 
 int dss_ult_create(void (*func)(void *), void *arg, int xs_type, int tgt_id,
@@ -575,8 +583,14 @@ struct dss_coll_args {
 	/** Arguments for dss_collective func (Mandatory) */
 	void				*ca_func_args;
 	void				*ca_aggregator;
-	int				*ca_exclude_tgts;
-	unsigned int			ca_exclude_tgts_cnt;
+	/* Specify on which targets to execute the task. */
+	uint8_t				*ca_tgt_bitmap;
+	/*
+	 * The size (in byte) of ca_tgt_bitmap. It may be smaller than dss_tgt_nr if only some
+	 * VOS targets are involved. It also may be larger than dss_tgt_nr if dss_tgt_nr is not
+	 * 2 ^ n aligned.
+	 */
+	uint32_t			 ca_tgt_bitmap_sz;
 	/** Stream arguments for all streams */
 	struct dss_coll_stream_args	ca_stream_args;
 };
@@ -598,6 +612,8 @@ dss_thread_collective_reduce(struct dss_coll_ops *ops,
 			     unsigned int flags);
 int dss_task_collective(int (*func)(void *), void *arg, unsigned int flags);
 int dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags);
+int dss_build_coll_bitmap(int *exclude_tgts, uint32_t exclude_cnt, uint8_t **p_bitmap,
+			  uint32_t *bitmap_sz);
 
 /**
  * Loaded module management metholds
@@ -760,7 +776,8 @@ ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_u
 		       uuid_t cont_hdl_uuid, int tgt_id, uint32_t version, unsigned int generation,
 		       uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
 		       daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
-		       uint32_t new_gl_ver, unsigned int migrate_opc);
+		       uint32_t new_gl_ver, unsigned int migrate_opc, uint64_t *enqueue_id,
+		       uint32_t *max_delay);
 int
 ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
 		  uint32_t version, uint32_t generation, uint64_t max_eph, uint32_t opc,
@@ -790,9 +807,6 @@ void dss_init_state_set(enum dss_init_state state);
 
 /** Call module setup from drpc setup call handler. */
 int dss_module_setup_all(void);
-
-/** Notify control-plane of a bio error. */
-int ds_notify_bio_error(int media_err_type, int tgt_id);
 
 int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,

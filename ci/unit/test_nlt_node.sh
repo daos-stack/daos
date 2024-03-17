@@ -21,8 +21,8 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 
 # NLT will mount /mnt/daos itself.
 # TODO: Enable this for DAOS-10905
-# ./utils/node_local_test.py --max-log-size 1500MiB --dfuse-dir /localhome/jenkins/ \
+# ./utils/node_local_test.py --max-log-size ????MiB --dfuse-dir /localhome/jenkins/ \
 #			   --server-valgrind all
 
-./utils/node_local_test.py --max-log-size 1500MiB --dfuse-dir /localhome/jenkins/ \
+./utils/node_local_test.py --max-log-size 1700MiB --dfuse-dir /localhome/jenkins/ \
     --log-usage-save nltir.xml --log-usage-export nltr.json all

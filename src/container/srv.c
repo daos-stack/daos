@@ -76,22 +76,18 @@ static struct crt_corpc_ops ds_cont_tgt_snapshot_notify_co_ops = {
 /* Define for cont_rpcs[] array population below.
  * See CONT_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
-{				\
-	.dr_opc       = a,	\
-	.dr_hdlr      = d,	\
-	.dr_corpc_ops = e,	\
-}
+#define X(a, b, c, d, e)                                                                           \
+	{                                                                                          \
+	    .dr_opc       = a,                                                                     \
+	    .dr_hdlr      = d,                                                                     \
+	    .dr_corpc_ops = e,                                                                     \
+	},
 
 static struct daos_rpc_handler cont_handlers_v8[] = {
-    CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8),
-    CONT_PROTO_SRV_RPC_LIST,
-};
+    CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8) CONT_PROTO_SRV_RPC_LIST};
 
 static struct daos_rpc_handler cont_handlers_v7[] = {
-    CONT_PROTO_CLI_RPC_LIST(7, ds_cont_op_handler_v7),
-    CONT_PROTO_SRV_RPC_LIST,
-};
+    CONT_PROTO_CLI_RPC_LIST(7, ds_cont_op_handler_v7) CONT_PROTO_SRV_RPC_LIST};
 
 #undef X
 

@@ -639,26 +639,6 @@ def check_file_exists(hosts, filename, user=None, directory=False,
     return len(missing_file) == 0, missing_file
 
 
-def check_for_pool(host, uuid):
-    """Check if pool folder exist on server.
-
-    Args:
-        host (NodeSet): Server host name
-        uuid (str): Pool uuid to check if exists
-
-    Returns:
-        bool: True if pool folder exists, False otherwise
-
-    """
-    pool_dir = "/mnt/daos/{}".format(uuid)
-    result = check_file_exists(host, pool_dir, directory=True, sudo=True)
-    if result[0]:
-        print("{} exists on {}".format(pool_dir, host))
-    else:
-        print("{} does not exist on {}".format(pool_dir, host))
-    return result[0]
-
-
 def process_host_list(hoststr):
     """
     Convert a slurm style host string into a list of individual hosts.
@@ -742,30 +722,6 @@ def get_random_bytes(length, exclude=None, encoding="utf-8"):
 
     """
     return get_random_string(length, exclude).encode(encoding)
-
-
-def check_pool_files(log, hosts, uuid):
-    """Check if pool files exist on the specified list of hosts.
-
-    Args:
-        log (logging): logging object used to display messages
-        hosts (NodeSet): list of hosts
-        uuid (str): uuid file name to look for in /mnt/daos.
-
-    Returns:
-        bool: True if the files for this pool exist on each host; False
-            otherwise
-
-    """
-    status = True
-    log.info("Checking for pool data on %s", hosts)
-    pool_files = [uuid, "superblock"]
-    for filename in ["/mnt/daos/{}".format(item) for item in pool_files]:
-        result = check_file_exists(hosts, filename, sudo=True)
-        if not result[0]:
-            log.error("%s: %s not found", result[1], filename)
-            status = False
-    return status
 
 
 def join(joiner, *args):
@@ -939,35 +895,30 @@ def get_remote_file_size(host, file_name):
     return int(result.stdout_text)
 
 
-def error_count(error, hostlist, log_file):
-    """Count the number of specific ERRORs found in the log file.
-
-    This function also returns a count of the other ERRORs from same log file.
+def get_errors_count(hostlist, file_glob):
+    """Count the number of errors found in log files.
 
     Args:
-        error (str): DAOS error to look for in .log file. for example -1007
         hostlist (list): System list to looks for an error.
-        log_file (str): Log file name (server/client log).
+        file_glob (str): Glob pattern of the log file to parse.
 
     Returns:
-        tuple: a tuple of the count of errors matching the specified error type
-            and the count of other errors (int, int)
+        dict: A dictionary of the count of errors.
 
     """
     # Get the Client side Error from client_log file.
-    requested_error_count = 0
-    other_error_count = 0
-    command = 'cat {} | grep \" ERR \"'.format(get_log_file(log_file))
-    results = run_pcmd(hostlist, command, False, None, None)
-    for result in results:
-        for line in result["stdout"]:
-            if 'ERR' in line:
-                if error in line:
-                    requested_error_count += 1
-                else:
-                    other_error_count += 1
+    cmd = "cat {} | sed -n -E -e ".format(get_log_file(file_glob))
+    cmd += r"'/^.+[[:space:]]ERR[[:space:]].+[[:space:]]DER_[^(]+\([^)]+\).+$/"
+    cmd += r"s/^.+[[:space:]]DER_[^(]+\((-[[:digit:]]+)\).+$/\1/p'"
+    results = run_pcmd(hostlist, cmd, False, None, None)
+    errors_count = {}
+    for error_str in sum([result["stdout"] for result in results], []):
+        error = int(error_str)
+        if error not in errors_count:
+            errors_count[error] = 0
+        errors_count[error] += 1
 
-    return requested_error_count, other_error_count
+    return errors_count
 
 
 def get_module_class(name, module):

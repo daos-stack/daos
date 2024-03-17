@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@ package scm
 import (
 	"fmt"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,15 +25,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const (
-	minNrNssPerSocket = 1
-	maxNrNssPerSocket = 4
-
-	sockAny = -1 // Select all socket IDs.
-
-	alignmentBoundaryBytes = humanize.MiByte * 2
-)
-
 type (
 	pmemCmd struct {
 		BinaryName string
@@ -43,69 +35,123 @@ type (
 )
 
 func (pc *pmemCmd) String() string {
-	return fmt.Sprintf("cmd %s, args %v", pc.BinaryName, pc.Args)
+	return fmt.Sprintf("%s %s", pc.BinaryName, strings.Join(pc.Args, " "))
 }
 
-func run(log logging.Logger, cmd pmemCmd) (string, error) {
-	var bytes []byte
-	var err error
+const (
+	minNrNssPerSocket = 1
+	maxNrNssPerSocket = 4
 
-	if cmd.BinaryName == "" || strings.Contains(cmd.BinaryName, " ") {
-		return "", errors.Errorf("invalid binary name %q", cmd.BinaryName)
-	} else if len(cmd.Args) == 0 {
-		bytes, err = exec.Command(cmd.BinaryName).Output()
-	} else {
-		bytes, err = exec.Command(cmd.BinaryName, cmd.Args...).Output()
+	sockAny = -1 // Select all socket IDs.
+
+	alignmentBoundaryBytes = humanize.MiByte * 2
+
+	ipmctlName    = `ipmctl`
+	outNoCLIPerms = `ipmctl command you have attempted to execute requires root privileges`
+)
+
+var (
+	// Cmd structs for ipmctl commandline calls to manage AppDirect/Interleaved memory
+	// allocation goals across PMem modules.
+	cmdShowIpmctlVersion = pmemCmd{
+		BinaryName: ipmctlName,
+		Args:       []string{"version"},
 	}
-	out := string(bytes)
 
-	if err != nil {
-		return "", errors.Wrap(&system.RunCmdError{
-			Wrapped: err,
-			Stdout:  out,
-		}, cmd.String())
+	badIpmctlVers = []semVer{
+		// https://github.com/intel/ipmctl/commit/9e3898cb15fa9eed3ef3e9de4488be1681d53ff4
+		{"02", "00", "00", "3809"},
+		{"02", "00", "00", "3814"},
+		{"02", "00", "00", "3816"},
 	}
-	log.Debugf("%s returned: %q", cmd.String(), out)
-
-	return out, nil
-}
+)
 
 type cmdRunner struct {
-	log       logging.Logger
-	binding   ipmctl.IpmCtl
-	runCmd    runCmdFn
-	lookPath  lookPathFn
-	checkOnce sync.Once
+	log         logging.Logger
+	binding     ipmctl.IpmCtl
+	runInternal runCmdFn
+	lookPath    lookPathFn
+	checkOnce   sync.Once
 }
 
-// getModules scans the storage host for PMem modules and returns a slice of them.
-func (cr *cmdRunner) getModules(sockID int) (storage.ScmModules, error) {
-	discovery, err := cr.binding.GetModules(cr.log)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to discover pmem modules")
-	}
-	cr.log.Debugf("discovered %d pmem modules", len(discovery))
+func (cr *cmdRunner) runCmd(cmd pmemCmd) (string, error) {
+	return cr.runInternal(cr.log, cmd)
+}
 
-	modules := make(storage.ScmModules, 0, len(discovery))
-	for _, d := range discovery {
-		if sockID != sockAny && int(d.Socket_id) != sockID {
-			continue // Skip module not bound to socket specified.
+type semVer []string
+
+func (sv semVer) String() string {
+	return strings.Join(sv, ".")
+}
+
+func validateSemVer(sv semVer, badList []semVer) error {
+	for _, badVer := range badList {
+		if sv.String() == badVer.String() {
+			return FaultIpmctlBadVersion(sv.String())
+		}
+	}
+
+	return nil
+}
+
+// checkIpmctl verifies ipmctl application version is acceptable.
+func (cr *cmdRunner) checkIpmctl(badList []semVer) (errOut error) {
+	cr.checkOnce.Do(func() {
+		cmdOut, err := cr.runCmd(cmdShowIpmctlVersion)
+		if err != nil {
+			errOut = errors.WithMessage(err, "show version cmd")
+			return
 		}
 
-		modules = append(modules, &storage.ScmModule{
-			ChannelID:        uint32(d.Channel_id),
-			ChannelPosition:  uint32(d.Channel_pos),
-			ControllerID:     uint32(d.Memory_controller_id),
-			SocketID:         uint32(d.Socket_id),
-			PhysicalID:       uint32(d.Physical_id),
-			Capacity:         d.Capacity,
-			UID:              d.Uid.String(),
-			PartNumber:       d.Part_number.String(),
-			FirmwareRevision: d.Fw_revision.String(),
-		})
+		re := regexp.MustCompile(`(\d{2}).(\d{2}).(\d{2}).(\d{4})`)
+		matched := re.FindStringSubmatch(cmdOut)
+
+		if matched == nil {
+			errOut = errors.Errorf("could not read ipmctl version (%s)", cmdOut)
+			return
+		}
+
+		ipmctlBinVer := matched[1:]
+		cr.log.Debugf("ipmctl binary semver: %v", ipmctlBinVer)
+
+		errOut = validateSemVer(ipmctlBinVer, badList)
+	})
+
+	return
+}
+
+func (cr *cmdRunner) runSockAwareCmd(sockID int, cmd pmemCmd) (string, error) {
+	if cmd.BinaryName == ipmctlName {
+		if err := cr.checkIpmctl(badIpmctlVers); err != nil {
+			return "", errors.WithMessage(err, "checkIpmctl")
+		}
 	}
 
-	return modules, nil
+	cmdTmp := cmd
+
+	// Insert socket ID arg after -goal flag if present otherwise at end.
+	if sockID != sockAny {
+		sockArg := fmt.Sprintf("%d", sockID)
+		for i, arg := range cmdTmp.Args {
+			if i == len(cmdTmp.Args)-1 {
+				cmdTmp.Args = append(cmdTmp.Args, "-socket", sockArg)
+				break
+			}
+			// Special case for goal cmds as ipmctl is picky about opt order.
+			if arg == "-goal" {
+				// Extend slice by two.
+				cmdTmp.Args = append(cmdTmp.Args, "", "")
+				// Shift along elements after index found to add space.
+				copy(cmdTmp.Args[i+3:], cmdTmp.Args[i+1:])
+				// Insert new element into space between.
+				cmdTmp.Args[i+1] = "-socket"
+				cmdTmp.Args[i+2] = sockArg
+				break
+			}
+		}
+	}
+
+	return cr.runCmd(cmdTmp)
 }
 
 func checkStateHasSock(sockState *storage.ScmSocketState, faultFunc func(uint) *fault.Fault) error {
@@ -229,7 +275,8 @@ func (cr *cmdRunner) processActionableState(req storage.ScmPrepareRequest, state
 		// PMem mode should be changed for all sockets as changing just for a single socket
 		// can be determined as an incorrect configuration on some platforms.
 		cr.log.Info("Creating PMem regions...")
-		if err := cr.createRegions(sockSelector); err != nil {
+		cr.log.Debug("set interleaved appdirect goal to create regions")
+		if _, err := cr.runSockAwareCmd(sockSelector, cmdCreateRegions); err != nil {
 			return nil, errors.Wrap(err, "createRegions")
 		}
 		resp.RebootRequired = true
@@ -343,7 +390,7 @@ func (cr *cmdRunner) prep(req storage.ScmPrepareRequest, scanRes *storage.ScmSca
 		return nil, errors.New("nil scan response")
 	}
 	if len(scanRes.Modules) == 0 {
-		cr.log.Info("Skip SCM prep, no PMem modules.")
+		cr.log.Info("Skip SCM prepare as no PMem in system")
 		return &storage.ScmPrepareResponse{
 			Namespaces: storage.ScmNamespaces{},
 			Socket: &storage.ScmSocketState{
@@ -413,7 +460,7 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 		Socket:     &storage.ScmSocketState{},
 	}
 	if len(scanRes.Modules) == 0 {
-		cr.log.Info("Skip SCM prep as there are no PMem modules.")
+		cr.log.Info("Skip SCM reset as no PMem in system")
 		resp.Socket.State = storage.ScmNoModules
 		return resp, nil
 	}
@@ -468,14 +515,38 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	}
 
 	cr.log.Info("Re-creating PMem regions...")
-
-	if err := cr.createRegions(sockSelector); err != nil {
-		return nil, errors.Wrapf(err, "createRegions")
+	cr.log.Debug("set interleaved appdirect goal to re-create regions")
+	if _, err := cr.runSockAwareCmd(sockSelector, cmdCreateRegions); err != nil {
+		return nil, errors.Wrap(err, "createRegions")
 	}
 
 	cr.log.Info("Finished")
 
 	return resp, nil
+}
+
+func run(log logging.Logger, cmd pmemCmd) (string, error) {
+	var bytes []byte
+	var err error
+
+	if cmd.BinaryName == "" || strings.Contains(cmd.BinaryName, " ") {
+		return "", errors.Errorf("invalid binary name %q", cmd.BinaryName)
+	} else if len(cmd.Args) == 0 {
+		bytes, err = exec.Command(cmd.BinaryName).Output()
+	} else {
+		bytes, err = exec.Command(cmd.BinaryName, cmd.Args...).Output()
+	}
+	out := string(bytes)
+
+	if err != nil {
+		return "", errors.Wrap(&system.RunCmdError{
+			Wrapped: err,
+			Stdout:  out,
+		}, cmd.String())
+	}
+	log.Debugf("%s returned: %q", cmd.String(), out)
+
+	return out, nil
 }
 
 func defaultCmdRunner(log logging.Logger) *cmdRunner {
@@ -489,16 +560,36 @@ func defaultCmdRunner(log logging.Logger) *cmdRunner {
 
 func newCmdRunner(log logging.Logger, lib ipmctl.IpmCtl, runCmd runCmdFn, lookPath lookPathFn) (*cmdRunner, error) {
 	if lib == nil {
-		lib = &ipmctl.NvmMgmt{}
+		// If no libipmctl interface is provided, assume no calls should be expected and
+		// return a mock library interface that returns error on every call.
+		err := errors.New("unexpected ipmctl library call")
+		lib = &mockIpmctl{
+			cfg: mockIpmctlCfg{
+				initErr:           err,
+				delGoalsErr:       err,
+				getRegionsErr:     err,
+				getFWInfoRet:      err,
+				updateFirmwareRet: err,
+			},
+		}
+	} else {
+		if err := lib.Init(log); err != nil {
+			return nil, err
+		}
 	}
-	if err := lib.Init(log); err != nil {
-		return nil, err
+
+	if runCmd == nil {
+		// If no commandline call function is provided, assume no calls should be
+		// expected and create a mock runner that will error if called.
+		runCmd = func(_ logging.Logger, cmd pmemCmd) (string, error) {
+			return "", errors.New("unexpected ipmctl commandline call")
+		}
 	}
 
 	return &cmdRunner{
-		log:      log,
-		binding:  lib,
-		runCmd:   runCmd,
-		lookPath: lookPath,
+		log:         log,
+		binding:     lib,
+		runInternal: runCmd,
+		lookPath:    lookPath,
 	}, nil
 }

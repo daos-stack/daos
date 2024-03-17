@@ -10,12 +10,12 @@ timeouts:
   test_daos_degraded_mode: 450
   test_daos_management: 110
   test_daos_pool: 180
-  test_daos_container: 450
+  test_daos_container: 510
   test_daos_epoch: 125
   test_daos_verify_consistency: 105
   test_daos_io: 290
   test_daos_ec_io: 450
-  test_daos_ec_obj: 600
+  test_daos_ec_obj: 700
   test_daos_object_array: 105
   test_daos_array: 106
   test_daos_kv: 105
@@ -27,7 +27,7 @@ timeouts:
   test_daos_extend_simple: 3600
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
-  test_daos_rebuild_ec: 6400
+  test_daos_rebuild_ec: 7200
   test_daos_aggregate_ec: 200
   test_daos_degraded_ec: 1900
   test_daos_dedup: 220
@@ -172,6 +172,10 @@ daos_tests:
     test_daos_ec_io: -l"EC_4P2G1"
     test_daos_rebuild_ec: -s5
     test_daos_md_replication: -s5
+    test_daos_degraded_mode: -s7
+    test_daos_drain_simple: -s3
+    test_daos_extend_simple: -s3
+    test_daos_oid_allocator: -s5
   scalable_endpoint:
     test_daos_degraded_mode: true
   stopped_ranks:

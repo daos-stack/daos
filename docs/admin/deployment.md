@@ -123,7 +123,7 @@ Application Options:
       --allow-proxy                         Allow proxy configuration via environment
   -o, --config=                             Server config file path
   -b, --debug                               Enable debug output
-  -j, --json                                enable JSON output
+  -j, --json                                Enable JSON output
   -J, --json-logging                        Enable JSON-formatted log output
       --syslog                              Enable logging to syslog
 

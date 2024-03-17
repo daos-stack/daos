@@ -75,7 +75,7 @@ if [ ! -f /etc/fedora-release ]; then
         PT_REPO=crb
     fi
     dnf install epel-release
-    dnf config-manager --enable $PT_REPO
+    dnf config-manager --enable "$PT_REPO"
 fi
 dnf clean all
 
@@ -83,6 +83,10 @@ daos_base="job/daos-stack/job/"
 artifacts="/artifact/artifacts/el$MAJOR_VER/"
 save_repos=()
 for repo in $REPOS; do
+    # don't install daos@ repos since we are building daos
+    if [[ $repo = daos@* ]]; then
+        continue
+    fi
     branch="master"
     build_number="lastSuccessfulBuild"
     if [[ $repo = *@* ]]; then
@@ -97,8 +101,9 @@ for repo in $REPOS; do
 name=$repo:$branch:$build_number\n\
 baseurl=${JENKINS_URL}$daos_base$repo/job/$branch/$build_number$artifacts\n\
 enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo
-    cat /etc/yum.repos.d/$repo:$branch:$build_number.repo
+gpgcheck=False\n
+module_hotfixes=true\n" >> /etc/yum.repos.d/"$repo:$branch:$build_number".repo
+    cat /etc/yum.repos.d/"$repo:$branch:$build_number".repo
     save_repos+=("$repo:$branch:$build_number")
 done
 
