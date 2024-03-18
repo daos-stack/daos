@@ -222,6 +222,7 @@ Additionally, there are several optional command-line options:
 | --singlethreaded           | run single threaded              |
 | --thread-count=<count>     | Number of threads to use         |
 | --multi-user               | Run in multi user mode           |
+| --read-only                | Mount in read-only mode          |
 
 The `--pool` and `--container` options can also be passed as the second and third positional
 arguments.
@@ -985,6 +986,9 @@ libpil4dfs intercepting summary for ops on DFS:
 [op_sum ]  5003
 ```
 
+### Force pil4dfs related env set in child processes when calling execve and its variants
+Normally child processes inherit environmental variables from parent processes. In rare cases, e.g. scons, envs are striped off when calling execve(). It might be useful to force pil4dfs related env set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 if not set.
+
 ### Limitations of using libpil4dfs
 Stability issues: This is a preview version. Some features are not implemented yet. Many APIs are involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc. 
 
@@ -1003,3 +1007,5 @@ No support of creating a process with the executable and shared object files sto
 No support for applications using fork yet
 
 Those unsupported features are still available through dfuse.
+
+DFS (dfs_open / dfs_lookup) does not support O_APPEND currently. We allow O_APPEND flag in open in libpil4dfs to support bash scripts like configure. Currently, we only query file size one time when opening the file, then set file pointer to the end of the file. We DO NOT move file pointer to the end of the file in all following write to avoid expensive stat. Further work is required for rigorous O_APPEND support.

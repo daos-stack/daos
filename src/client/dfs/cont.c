@@ -1,16 +1,19 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /** DFS container operations */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/pool.h>
 #include <daos/container.h>
 #include <daos/object.h>
 #include <daos/common.h>
-#include "internal.h"
+
+#include "dfs_internal.h"
 
 int
 dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *_coh,

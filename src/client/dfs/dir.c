@@ -1,15 +1,17 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /** DFS directory ops */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/common.h>
 #include <daos/object.h>
 
-#include "internal.h"
+#include "dfs_internal.h"
 
 int
 dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, daos_oclass_id_t cid)

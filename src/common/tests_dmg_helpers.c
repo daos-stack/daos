@@ -17,6 +17,24 @@
 #include <daos.h>
 #include <daos_srv/bio.h>
 
+/*
+ * D_LOG_DMG_STDERR_ENV provides the environment variable that can be used to enable test binaries
+ * to log the stderr output from executing dmg. This can be useful for debugging.
+ */
+#define D_LOG_DMG_STDERR_ENV "D_TEST_LOG_DMG_STDERR"
+
+static bool
+is_stderr_logging_enabled(void)
+{
+	int  rc;
+	bool enabled = false;
+
+	rc = d_getenv_bool(D_LOG_DMG_STDERR_ENV, &enabled);
+	if (rc == 0)
+		return enabled;
+	return false;
+}
+
 static void
 cmd_free_args(char **args, int argcount)
 {
@@ -155,13 +173,18 @@ log_stderr_pipe(int fd)
 static int
 run_cmd(const char *command, int *outputfd)
 {
-	int rc = 0;
-	int child_rc = 0;
-	int child_pid;
-	int stdoutfd[2];
-	int stderrfd[2];
+	int  rc       = 0;
+	int  child_rc = 0;
+	int  child_pid;
+	int  stdoutfd[2];
+	int  stderrfd[2];
+	bool log_stderr;
 
 	D_DEBUG(DB_TEST, "dmg cmd: %s\n", command);
+
+	log_stderr = is_stderr_logging_enabled();
+	if (log_stderr)
+		D_DEBUG(DB_TEST, "dmg stderr output will be logged\n");
 
 	/* Create pipes */
 	if (pipe(stdoutfd) == -1) {
@@ -214,12 +237,15 @@ run_cmd(const char *command, int *outputfd)
 		D_ERROR("wait failed: %s\n", strerror(errno));
 		return daos_errno2der(errno);
 	}
-	D_DEBUG(DB_TEST, "dmg command executed successfully\n");
+	D_DEBUG(DB_TEST, "dmg command finished\n");
 
 	if (child_rc != 0) {
 		D_ERROR("child process failed, rc=%d (%s)\n", child_rc, strerror(child_rc));
 		close(stdoutfd[0]);
-		log_stderr_pipe(stderrfd[0]);
+		if (log_stderr)
+			log_stderr_pipe(stderrfd[0]); /* closes the pipe after reading */
+		else
+			close(stderrfd[0]);
 		return daos_errno2der(child_rc);
 	}
 
@@ -316,7 +342,6 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		D_GOTO(out_jbuf, rc = -DER_NOMEM);
 	jbuf = temp;
 	jbuf[total] = '\0';
-	D_DEBUG(DB_TEST, "dmg output=\"%s\"\n", jbuf);
 
 	tok = json_tokener_new_ex(parse_depth);
 	if (tok == NULL)

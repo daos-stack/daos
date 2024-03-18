@@ -637,7 +637,7 @@ co_op_retry(void **state)
 		return;
 
 	print_message("querying pool info... ");
-	memset(&pinfo, 'D', sizeof(info));
+	memset(&pinfo, 'D', sizeof(pinfo));
 	pinfo.pi_bits = DPI_ALL;
 	rc            = daos_pool_query(arg->pool.poh, NULL, &pinfo, NULL, NULL /* ev */);
 	assert_rc_equal(rc, 0);

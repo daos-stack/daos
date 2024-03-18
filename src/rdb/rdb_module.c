@@ -17,6 +17,7 @@
 static int
 rdb_module_init(void)
 {
+	rdb_raft_module_init();
 	return rdb_hash_init();
 }
 
@@ -24,8 +25,10 @@ static int
 rdb_module_fini(void)
 {
 	rdb_hash_fini();
+	rdb_raft_module_fini();
 	return 0;
 }
+
 /* Define for cont_rpcs[] array population below.
  * See RDB_PROTO_*_RPC_LIST macro definition
  */

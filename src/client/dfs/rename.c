@@ -1,14 +1,16 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /** DFS move/rename & exchange operations */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/common.h>
 
-#include "internal.h"
+#include "dfs_internal.h"
 
 static int
 xattr_copy(daos_handle_t src_oh, const char *src_name, daos_handle_t dst_oh, const char *dst_name,

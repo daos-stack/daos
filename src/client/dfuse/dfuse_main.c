@@ -174,10 +174,11 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 	pthread_t self;
 	int       rc;
 
-	dfuse_info->di_session = fuse_session_new(args, &dfuse_ops, sizeof(dfuse_ops), dfuse_info);
+	dfuse_info->di_session = dfuse_session_new(args, dfuse_info);
 	if (dfuse_info->di_session == NULL) {
-		DFUSE_TRA_ERROR(dfuse_info, "Could not create fuse session");
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		DHL_ERROR(dfuse_info, rc, "Could not create fuse session");
+		return rc;
 	}
 
 	/* This is used by the fault injection testing to simulate starting dfuse and test the
@@ -223,10 +224,13 @@ umount:
 
 #define DF_POOL_PREFIX "pool="
 #define DF_CONT_PREFIX "container="
+#define DF_RO          "ro"
+#define DF_MULTI       "multi_user"
 
 /* Extract options for pool and container from fstab style mount options. */
 static void
-parse_mount_option(char *mnt_string, char *pool_name, char *cont_name)
+parse_mount_option(char *mnt_string, struct dfuse_info *dfuse_info, char *pool_name,
+		   char *cont_name)
 {
 	char *tok;
 	char *token;
@@ -234,12 +238,23 @@ parse_mount_option(char *mnt_string, char *pool_name, char *cont_name)
 	while ((token = strtok_r(mnt_string, ",", &tok))) {
 		mnt_string = NULL;
 
+		if (strncmp(token, DF_RO, sizeof(DF_RO) - 1) == 0) {
+			dfuse_info->di_read_only = true;
+			break;
+		}
+		if (strncmp(token, DF_MULTI, sizeof(DF_MULTI) - 1) == 0) {
+			dfuse_info->di_multi_user = true;
+			break;
+		}
 		if (strncmp(token, DF_POOL_PREFIX, sizeof(DF_POOL_PREFIX) - 1) == 0) {
 			strncpy(pool_name, &token[sizeof(DF_POOL_PREFIX) - 1],
 				DAOS_PROP_LABEL_MAX_LEN);
-		} else if (strncmp(token, DF_CONT_PREFIX, sizeof(DF_CONT_PREFIX) - 1) == 0) {
+			break;
+		}
+		if (strncmp(token, DF_CONT_PREFIX, sizeof(DF_CONT_PREFIX) - 1) == 0) {
 			strncpy(cont_name, &token[sizeof(DF_CONT_PREFIX) - 1],
 				DAOS_PROP_LABEL_MAX_LEN);
+			break;
 		}
 	}
 }
@@ -279,6 +294,7 @@ show_help(char *name)
 	    "	-o options		mount style options string\n"
 	    "\n"
 	    "	   --multi-user		Run dfuse in multi user mode\n"
+	    "	   --read-only		Mount dfuse read-only\n"
 	    "\n"
 	    "	-h --help		Show this help\n"
 	    "	-v --version		Show version\n"
@@ -419,6 +435,7 @@ main(int argc, char **argv)
 					     {"enable-wb-cache", no_argument, 0, 'F'},
 					     {"disable-caching", no_argument, 0, 'A'},
 					     {"disable-wb-cache", no_argument, 0, 'B'},
+					     {"read-only", no_argument, 0, 'r'},
 					     {"options", required_argument, 0, 'o'},
 					     {"version", no_argument, 0, 'v'},
 					     {"help", no_argument, 0, 'h'},
@@ -495,8 +512,11 @@ main(int argc, char **argv)
 		case 'f':
 			dfuse_info->di_foreground = true;
 			break;
+		case 'r':
+			dfuse_info->di_read_only = true;
+			break;
 		case 'o':
-			parse_mount_option(optarg, pool_name, cont_name);
+			parse_mount_option(optarg, dfuse_info, pool_name, cont_name);
 			break;
 		case 'h':
 			show_help(argv[0]);

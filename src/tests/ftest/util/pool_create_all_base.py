@@ -8,6 +8,7 @@ import time
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
+from command_utils_base import CommandFailure
 from general_utils import bytes_to_human
 
 
@@ -231,6 +232,21 @@ class PoolCreateAllTestBase(TestWithServers):
             self.log.info(
                 "Pool %d created: scm_size=%d, nvme_size=%d", index, *pool_size)
             self.pool[index].destroy()
+
+            # Creating a pool immediately after destroy intermittently causes an error during the
+            # create. Wait for a few seconds and check that the pool was destroyed.
+            count = 0
+            while True:
+                self.log.info("Wait for a few seconds for the pool to be destroyed...")
+                time.sleep(5)
+                try:
+                    self.dmg.pool_query(pool=self.pool[index].identifier)
+                    self.log.info(
+                        "Pool query worked. Pool hasn't been destroyed. Try again. %d", count)
+                    count += 1
+                except CommandFailure as error:
+                    self.log.info("Pool query failed. Pool should have been destroyed. %s", error)
+                    break
 
             self.log.info("Checking SCM available storage")
             timeout = 3
