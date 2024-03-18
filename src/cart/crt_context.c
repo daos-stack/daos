@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1188,7 +1188,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	d_list_t		*rlink;
 	d_rank_t		 ep_rank;
 	int			 rc = 0;
-	int 			quota_rc = 0;
+	int 			 quota_rc = 0;
 	struct crt_grp_priv	*grp_priv;
 
 	D_ASSERT(crt_ctx != NULL);

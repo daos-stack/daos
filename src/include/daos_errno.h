@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -163,7 +163,7 @@ extern "C" {
 	ACTION(DER_HG_FATAL,		(DER_ERR_GURT_BASE + 45),	\
 	       Fatal transport layer mercury error)			\
 	/** Quota limit reached on the requested resource */		\
-	ACTION(DER_QUOTA_LIMIT, 	(DER_ERR_GURT_BASE + 46),	\
+	ACTION(DER_QUOTA_LIMIT,		(DER_ERR_GURT_BASE + 46),	\
 		Quota limit reached)
 	/** TODO: add more error numbers */
 
