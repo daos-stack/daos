@@ -2881,11 +2881,14 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	int			 rc;
 
 	tls = migrate_pool_tls_lookup(pool->sp_uuid, version, generation);
-	if (tls == NULL) {
+	if (tls == NULL || tls->mpt_fini) {
+		if (tls != NULL)
+		       migrate_pool_tls_put(tls);
 		D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 		return;
 	}
 
+	tls->mpt_fini = 1;
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
 	arg.generation = generation;
@@ -2893,9 +2896,7 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
-	pool->sp_rebuilding--;
 	migrate_pool_tls_put(tls);
-	tls->mpt_fini = 1;
 	/* Wait for xstream 0 migrate ULT(migrate_ult) stop */
 	if (tls->mpt_ult_running) {
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
@@ -2910,6 +2911,7 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	}
 
 	migrate_pool_tls_put(tls);
+	pool->sp_rebuilding--;
 	D_INFO(DF_UUID" migrate stopped\n", DP_UUID(pool->sp_uuid));
 }
 

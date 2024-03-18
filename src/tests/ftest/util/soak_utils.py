@@ -419,8 +419,7 @@ def launch_vmd_identify_check(self, name, results, args):
 
     for uuid in uuids:
         # Blink led
-        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
-        time.sleep(2)
+        self.dmg_command.storage_led_identify(ids=uuid, timeout=2)
         # check if led is blinking
         result = self.dmg_command.storage_led_check(ids=uuid)
         # determine if leds are blinking as expected
@@ -430,6 +429,9 @@ def launch_vmd_identify_check(self, name, results, args):
                     if device['led_state'] != "QUICK_BLINK":
                         failing_vmd.append([device['tr_addr'], value['hosts']])
                         status = False
+    # reset leds to previous state
+    for uuid in uuids:
+        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
 
     params = {"name": name,
               "status": status,

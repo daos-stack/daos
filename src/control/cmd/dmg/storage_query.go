@@ -64,7 +64,7 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 // storageQueryCmd is the struct representing the storage query subcommand
 type storageQueryCmd struct {
 	DeviceHealth devHealthQueryCmd   `command:"device-health" description:"Query the device health"`
-	ListPools    listPoolsQueryCmd   `command:"list-pools" description:"List pools on the server"`
+	ListPools    listPoolsQueryCmd   `command:"list-pools" description:"List pools with NVMe on the server"`
 	ListDevices  listDevicesQueryCmd `command:"list-devices" description:"List storage devices on the server"`
 	Usage        usageQueryCmd       `command:"usage" description:"Show SCM & NVMe storage space utilization per storage server"`
 }

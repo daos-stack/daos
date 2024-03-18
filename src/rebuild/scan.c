@@ -1062,8 +1062,7 @@ out:
 	D_ASSERT(tls != NULL);
 	if (tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
-	D_DEBUG(DB_REBUILD, DF_UUID"scan leader done: "DF_RC"\n",
-		DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
+	D_INFO(DF_UUID"scan leader done: "DF_RC"\n", DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	rpt_put(rpt);
 }
 
@@ -1080,10 +1079,10 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
 
-	D_DEBUG(DB_REBUILD, "%d/"DF_UUID" scan ver %d gen %u leader %u term "DF_U64" op:%s\n",
-		dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
-		rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen, rsi->rsi_master_rank,
-		rsi->rsi_leader_term, RB_OP_STR(rsi->rsi_rebuild_op));
+	D_INFO("%d/"DF_UUID" scan ver %d gen %u leader %u term "DF_U64" op:%s\n",
+	       dss_get_module_info()->dmi_tgt_id, DP_UUID(rsi->rsi_pool_uuid),
+	       rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen, rsi->rsi_master_rank,
+	       rsi->rsi_leader_term, RB_OP_STR(rsi->rsi_rebuild_op));
 
 	/* If PS leader has been changed, and rebuild version is also increased
 	 * due to adding new failure targets for rebuild, let's abort previous

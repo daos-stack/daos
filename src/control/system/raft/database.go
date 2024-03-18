@@ -1068,7 +1068,7 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 	ctx := context.Background()
 	lock, err := db.TakePoolLock(ctx, poolUUID)
 	if err != nil {
-		db.log.Errorf("failed to take lock for pool svc update: %s", err)
+		db.log.Noticef("failed to take lock for pool svc update: %s", err)
 		return
 	}
 	defer lock.Release()

@@ -166,9 +166,9 @@ void ds_pool_upgrade_handler(crt_rpc_t *rpc);
  */
 int ds_pool_cache_init(void);
 void ds_pool_cache_fini(void);
+int ds_pool_lookup_internal(const uuid_t uuid, struct ds_pool **pool);
 int ds_pool_hdl_hash_init(void);
 void ds_pool_hdl_hash_fini(void);
-void ds_pool_hdl_delete_all(void);
 void ds_pool_tgt_disconnect_handler(crt_rpc_t *rpc);
 int ds_pool_tgt_disconnect_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 				      void *priv);

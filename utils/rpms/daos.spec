@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.4.1
-Release:       2%{?relval}%{?dist}
+Version:       2.4.2
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -66,7 +66,7 @@ BuildRequires: capstone-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
-BuildRequires: libisa-l-devel
+BuildRequires: isa-l-devel
 BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
@@ -555,6 +555,18 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Mar 04 2024 Phillip Henderson <phillip.henderson@intel.com> 2.4.2-4
+- Third release candidate for 2.4.2
+
+* Mon Feb 12 2024 Phillip Henderson <phillip.henderson@intel.com> 2.4.2-3
+- Second release candidate for 2.4.2
+
+* Mon Feb 12 2024 Ryon Jensen <ryon.jensen@intel.com> 2.4.2-2
+- Updated isa-l package name to match EPEL
+
+* Thu Feb 08 2024 Phillip Henderson <phillip.henderson@intel.com> 2.4.2-1
+- First release candidate for 2.4.2
+
 * Fri Jan 05 2024 Phillip Henderson <phillip.henderson@intel.com> 2.4.1-2
 - Second release candidate for 2.4.1
 

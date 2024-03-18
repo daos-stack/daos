@@ -3,6 +3,24 @@
 We are pleased to announce the release of DAOS version 2.4.
 
 
+## DAOS Version 2.4.2 (2024-03-15)
+
+### Updates in this Release
+
+The DAOS 2.4.2 release is mainly a bug fix release on top of DAOS 2.4.1.
+
+Note that due to changes in the EL8 EPEL repository, the `isa-l-2.30.0-2`,
+`libisa-l-2.30.0-2`, and `libisa-l-devel-2.30.0-2` RPMs have been removed
+from the DAOS packages repository.
+
+### Bug fixes
+
+The DAOS 2.4.2 release includes fixes for several defects.
+For details, please refer to the Github
+[release/2.4 commit history](https://github.com/daos-stack/daos/commits/release/2.4)
+and the associated [Jira tickets](https://jira.daos.io/) as stated in the commit messages.
+
+
 ## DAOS Version 2.4.1 (2024-01-19)
 
 ### Updates in this Release
@@ -22,12 +40,12 @@ The DAOS 2.4.1 release contains the following updates on top of DAOS 2.4.0:
 * The following prerequisite software packages that are included
   in the DAOS RPM builds have been updated with DAOS 2.4.1:
 
-  - Argobots has been updated to 1.1-3
-  - DPDK has been updated to 21.11.2-2
-  - Libfabric has been updated to 1.19.0-1
-  - Mercury has been updated to 2.3.1-2
-  - Raft has been updated to 0.10.1-2
-  - SPDK has been update to 22.01.2-5
+    - Argobots has been updated to 1.1-3
+    - DPDK has been updated to 21.11.2-2
+    - Libfabric has been updated to 1.19.0-1
+    - Mercury has been updated to 2.3.1-2
+    - Raft has been updated to 0.10.1-2
+    - SPDK has been update to 22.01.2-5
 
 ### Bug fixes
 
@@ -53,21 +71,21 @@ Operating System Support:
 
 * EL8 (RHEL, Rocky Linux, Alma Linux):
 
-  - EL8.6 (EUS)
-  - Validation of EL8.8 is in progress.
+    - EL8.6 (EUS)
+    - Validation of EL8.8 is in progress.
 
 Fabric and Network Provider Support:
 
 * libfabric support for the following fabrics and providers:
 
-  - `ofi+tcp` on all fabrics (without RXM)
-  - `ofi+tcp;ofi_rxm` on all fabrics (with RXM)
-  - `ofi+verbs` on InfiniBand fabrics and RoCE (with RXM)
-  - `ofi+cxi` on Slingshot fabrics (with HPE-provided libfabric)
+    - `ofi+tcp` on all fabrics (without RXM)
+    - `ofi+tcp;ofi_rxm` on all fabrics (with RXM)
+    - `ofi+verbs` on InfiniBand fabrics and RoCE (with RXM)
+    - `ofi+cxi` on Slingshot fabrics (with HPE-provided libfabric)
 
 * [UCX](https://docs.daos.io/v2.4/admin/ucx/) support on InfiniBand fabrics:
 
-  - `ucx+dc_x` on InfiniBand fabrics
+    - `ucx+dc_x` on InfiniBand fabrics
 
 Storage Class Memory Support:
 
@@ -101,12 +119,12 @@ For a complete list of supported hardware and software, refer to the
 * The following prerequisite software packages that are included
   in the DAOS RPM builds have been updated:
 
-  - Argobots has been updated to 1.1-3
-  - DPDK has been updated to 21.11.2-2
-  - Libfabric has been updated to 1.18.1-1
-  - Mercury has been updated to 2.3.1~rc1-1
-  - Raft has been updated to 0.10.1-1.408
-  - SPDK has been update to 22.01.2-4
+    - Argobots has been updated to 1.1-3
+    - DPDK has been updated to 21.11.2-2
+    - Libfabric has been updated to 1.18.1-1
+    - Mercury has been updated to 2.3.1~rc1-1
+    - Raft has been updated to 0.10.1-1.408
+    - SPDK has been update to 22.01.2-4
 
 #### New Network Providers
 
@@ -195,7 +213,7 @@ positional argument instead (without `-l`).
 
 ### Known Issues and limitations
 
-- [DAOS-11317](https://daosio.atlassian.net/browse/DAOS-11317):
+* [DAOS-11317](https://daosio.atlassian.net/browse/DAOS-11317):
   Running the Mellanox-provided `mlnxofedinstall` script to install a new version of MLNX\_OFED,
   while the `mercury-ucx` RPM is already installed, will un-install `mercury-ucx`
   (as well as mercury-ucx-debuginfo if the debuginfo RPMs are installed).
@@ -203,17 +221,17 @@ positional argument instead (without `-l`).
   Workaround: Run `{yum|dnf|zypper} install mercury-ucx [mercury-ucx-debuginfo]`
   after the MLNX\_OFED update and before starting DAOS again.
 
-- No OPA/PSM2 support. For Omni-Path fabrics, please use the `ofi+tcp`provider.
+* No OPA/PSM2 support. For Omni-Path fabrics, please use the `ofi+tcp`provider.
   Please refer to the "Fabric Support" section of the
   [Support Matrix](https://docs.daos.io/v2.4/release/support_matrix/) for details.
   No workaround is available at this point.
 
-- The `daos-client-tests` and `daos-server-tests` RPM packages have `golang`
+* The `daos-client-tests` and `daos-server-tests` RPM packages have `golang`
   prerequisites that are newer than the version provided in EL8.
   To install those RPMs on EL8 systems, it is necessary to run
   `dnf module enable go-toolset:rhel8` to satisfy the golang requirements.
 
-- [DAOS-13129](https://daosio.atlassian.net/browse/DAOS-13129):
+* [DAOS-13129](https://daosio.atlassian.net/browse/DAOS-13129):
   With the "Metadata-on-SSD" technology preview, sporadic checksum errors
   have been observed in 48 hours soak stress testing.
   This issue is still under investigation.

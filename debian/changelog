@@ -1,3 +1,30 @@
+daos (2.4.2-4) unstable; urgency=medium
+
+  [ Phillip Henderson ]
+  * Third release candidate for 2.4.2
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Mon, 4 Mar 2024 15:13:00 -0500
+
+daos (2.4.2-3) unstable; urgency=medium
+
+  [ Phillip Henderson ]
+  * Second release candidate for 2.4.2
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Mon, 12 Feb 2024 17:18:00 -0500
+
+daos (2.4.2-2) unstable; urgency=medium
+  [ Ryon Jensen ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Ryon Jensen <ryon.jensen@intel.com>  Mon, 12 Feb 2024 11:16:00 -0700
+
+daos (2.4.2-1) unstable; urgency=medium
+
+  [ Phillip Henderson ]
+  * First release candidate for 2.4.2
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Thu, 08 Feb 2024 13:23:00 -0500
+
 daos (2.4.1-2) unstable; urgency=medium
 
   [ Phillip Henderson ]
