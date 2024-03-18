@@ -154,7 +154,7 @@ ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	struct ktr_hkey		*kkey = (struct ktr_hkey *)hkey;
 	struct umem_pool        *umm_pool = tins->ti_umm.umm_pool;
-	struct vos_pool		*pool = (struct vos_pool *)tins->ti_priv;
+	struct vos_pool         *pool     = (struct vos_pool *)tins->ti_priv;
 
 	D_ASSERT(key_iov->iov_len < pool->vp_pool_df->pd_scm_sz);
 	hkey_common_gen(key_iov, hkey);
