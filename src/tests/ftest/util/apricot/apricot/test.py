@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -139,6 +139,7 @@ class Test(avocadoTest):
         if self._stage_name is None:
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
         self._test_step = 1
+        self._test_step_time = time()
 
         # Avoid concatenating diff output.
         self.maxDiff = None  # pylint: disable=invalid-name
@@ -376,23 +377,20 @@ class Test(avocadoTest):
             self.get_state()
             if self.timeout is None:
                 # self.timeout is not set - this is a problem
-                self.log.error("*** TEARDOWN called with UNKNOWN timeout ***")
+                self.log_step("tearDown(): Called with UNKNOWN timeout")
                 self.log.error("self.timeout undefined - please investigate!")
             elif self.time_elapsed > self.timeout:
                 # Timeout has expired
-                self.log.info(
-                    "*** TEARDOWN called due to TIMEOUT: "
-                    "%s second timeout exceeded ***", str(self.timeout))
+                self.log_step(
+                    f"tearDown(): Called due to exceeding the {str(self.timeout)}s test timeout")
                 self.log.info("test execution has been terminated by avocado")
             else:
                 # Normal operation
-                remaining = str(self.timeout - self.time_elapsed)
-                self.log.info(
-                    "*** TEARDOWN called after test completion: elapsed time: "
-                    "%s seconds ***", str(self.time_elapsed))
-                self.log.info(
-                    "Amount of time left in test timeout: %s seconds",
-                    remaining)
+                remaining = self.timeout - self.time_elapsed
+                timeout_info = (
+                    f"test timeout: {str(self.timeout)}s, elapsed: {self.time_elapsed:.02f}s, "
+                    f"remaining: {remaining:.02f}s")
+                self.log_step(f"tearDown(): Called after test completion ({timeout_info})")
 
         # Disable reporting the timeout upon subsequent inherited calls
         self._timeout_reported = True
@@ -477,9 +475,14 @@ class Test(avocadoTest):
             header (bool, optional): whether to log a header line before the message. Defaults to
                 False.
         """
+        now = time()
+        elapsed = now - self._test_step_time
+        self._test_step_time = now
+
         if header:
             self.log.info('-' * 80)
-        self.log.info("==> Step %s: %s", self._test_step, message)
+        self.log.info(
+            "==> Step %s: %s [elapsed since last step: %.02fs]", self._test_step, message, elapsed)
         self._test_step += 1
 
     def tearDown(self):
@@ -621,7 +624,7 @@ class TestWithServers(TestWithoutServers):
 
         # Add additional time to the test timeout for reporting running
         # processes while stopping the daos_agent and daos_server.
-        tear_down_timeout = 30
+        tear_down_timeout = 90
         self.timeout += tear_down_timeout
         self.log.info(
             "Increasing timeout by %s seconds for agent/server tear down: %s",
@@ -804,10 +807,12 @@ class TestWithServers(TestWithoutServers):
         # Start the servers
         force_agent_start = False
         if self.setup_start_servers:
+            self.log_step('setUp(): Starting servers')
             force_agent_start = self.start_servers()
 
         # Start the clients (agents)
         if self.setup_start_agents:
+            self.log_step('setUp(): Starting agents')
             self.start_agents(force=force_agent_start)
 
         self.skip_add_log_msg = self.params.get("skip_add_log_msg", "/run/*", False)
@@ -827,6 +832,7 @@ class TestWithServers(TestWithoutServers):
             # test.  Since the storage is reformatted and the pool metadata is
             # erased when the servers are restarted this check is only needed
             # when the servers are left continually running.
+            self.log_step('setUp(): Destroying any existing pools before the test')
             if self.search_and_destroy_pools():
                 self.fail(
                     "Errors detected attempting to ensure all pools had been "
@@ -836,6 +842,7 @@ class TestWithServers(TestWithoutServers):
         get_job_manager(self, class_name_default=None)
 
         # Mark the end of setup
+        self.log_step('setUp(): Setup complete')
         self.log.info("=" * 100)
 
     def write_string_to_logfile(self, message):

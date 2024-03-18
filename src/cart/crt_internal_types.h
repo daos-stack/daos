@@ -33,11 +33,11 @@ struct crt_grp_gdata;
 
 struct crt_na_config {
 	int32_t		 noc_port;
+	int		 noc_iface_total;
 	char		*noc_interface;
 	char		*noc_domain;
 	char		*noc_auth_key;
-	/* IP addr str for the noc_interface */
-	char		 noc_ip_str[INET_ADDRSTRLEN];
+	char		**noc_iface_str; /* Array of interfaces */
 };
 
 struct crt_prov_gdata {

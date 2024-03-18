@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,6 +18,12 @@ from run_utils import get_clush_command
 # 100: Used in dfuse to trigger an exit after initialization is complete
 # 101: Used by daos_init() to disable fault id 0 for duration of daos_init
 FAULTS = {
+    'DAOS_DELAYED_CSUM_CORRUPT_DISK': {
+        'id': '65574',
+        'probability_x': '100',
+        'probability_y': '100',
+        'interval': '50',
+        'max_faults': '100'},
     'DAOS_CSUM_CORRUPT_DISK': {
         'id': '65574',
         'probability_x': '100',
