@@ -1,10 +1,10 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package ucx
+package cart
 
 import (
 	"testing"
@@ -13,14 +13,49 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestUCX_Provider_getProviderSet(t *testing.T) {
+func TestCart_getOSNameFromUCXDevice(t *testing.T) {
+	for name, tc := range map[string]struct {
+		in        string
+		expResult string
+	}{
+		"empty": {},
+		"no port": {
+			in:        "dev0_1",
+			expResult: "dev0_1",
+		},
+		"port": {
+			in:        "dev0_1:1",
+			expResult: "dev0_1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, getOSNameFromUCXDevice(tc.in), "")
+		})
+	}
+}
+
+func TestCart_getProviderSetFromUCXTransport(t *testing.T) {
 	for name, tc := range map[string]struct {
 		in     string
 		expSet *hardware.FabricProviderSet
 	}{
+		"empty": {
+			expSet: hardware.NewFabricProviderSet(),
+		},
+		"custom": {
+			in: "custom",
+			expSet: hardware.NewFabricProviderSet(
+				&hardware.FabricProvider{
+					Name: "ucx+custom",
+				},
+				&hardware.FabricProvider{
+					Name:     "ucx+all",
+					Priority: ucxCatchallPriority,
+				},
+			),
+		},
 		"dc": {
 			in: "dc_mlx5",
 			expSet: hardware.NewFabricProviderSet(
@@ -32,7 +67,7 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 				},
 				&hardware.FabricProvider{
 					Name:     "ucx+all",
-					Priority: catchallPriority,
+					Priority: ucxCatchallPriority,
 				},
 			),
 		},
@@ -41,11 +76,11 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 			expSet: hardware.NewFabricProviderSet(
 				&hardware.FabricProvider{
 					Name:     "ucx+tcp",
-					Priority: tcpPriority,
+					Priority: ucxTCPPriority,
 				},
 				&hardware.FabricProvider{
 					Name:     "ucx+all",
-					Priority: catchallPriority,
+					Priority: ucxCatchallPriority,
 				},
 			),
 		},
@@ -60,7 +95,7 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 				},
 				&hardware.FabricProvider{
 					Name:     "ucx+all",
-					Priority: catchallPriority,
+					Priority: ucxCatchallPriority,
 				},
 			),
 		},
@@ -75,18 +110,13 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 				},
 				&hardware.FabricProvider{
 					Name:     "ucx+all",
-					Priority: catchallPriority,
+					Priority: ucxCatchallPriority,
 				},
 			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			p := NewProvider(log)
-
-			set := p.getProviderSet(tc.in)
+			set := getProviderSetFromUCXTransport(tc.in)
 
 			if diff := cmp.Diff(tc.expSet, set, cmp.AllowUnexported(hardware.FabricProviderSet{})); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
@@ -95,11 +125,15 @@ func TestUCX_Provider_getProviderSet(t *testing.T) {
 	}
 }
 
-func TestUCX_transportToDAOSProvider(t *testing.T) {
+func TestCart_ucxTransportToDAOSProvider(t *testing.T) {
 	for name, tc := range map[string]struct {
 		in  string
 		exp string
 	}{
+		"custom": {
+			in:  "custom",
+			exp: "ucx+custom",
+		},
 		"rc_verbs": {
 			in:  "rc_verbs",
 			exp: "ucx+rc_v",
@@ -138,7 +172,7 @@ func TestUCX_transportToDAOSProvider(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			test.AssertEqual(t, tc.exp, transportToDAOSProvider(tc.in), "")
+			test.AssertEqual(t, tc.exp, ucxTransportToDAOSProvider(tc.in), "")
 		})
 	}
 }
