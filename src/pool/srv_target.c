@@ -710,13 +710,18 @@ pool_fetch_hdls_ult(void *data)
 	struct ds_pool	*pool = data;
 	int		rc = 0;
 
+	D_INFO(DF_UUID": begin: fetch_hdls=%u stopping=%u\n", DP_UUID(pool->sp_uuid),
+	       pool->sp_fetch_hdls, pool->sp_stopping);
+
 	/* sp_map == NULL means the IV ns is not setup yet, i.e.
 	 * the pool leader does not broadcast the pool map to the
 	 * current node yet, see pool_iv_pre_sync().
 	 */
 	ABT_mutex_lock(pool->sp_mutex);
-	if (pool->sp_map == NULL)
+	if (pool->sp_map == NULL) {
+		D_INFO(DF_UUID": waiting for map\n", DP_UUID(pool->sp_uuid));
 		ABT_cond_wait(pool->sp_fetch_hdls_cond, pool->sp_mutex);
+	}
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	if (pool->sp_stopping) {
@@ -724,6 +729,7 @@ pool_fetch_hdls_ult(void *data)
 			DP_UUID(pool->sp_uuid));
 		D_GOTO(out, rc);
 	}
+	D_INFO(DF_UUID": fetching handles\n", DP_UUID(pool->sp_uuid));
 	rc = ds_pool_iv_conn_hdl_fetch(pool);
 	if (rc) {
 		D_ERROR("iv conn fetch %d\n", rc);
@@ -731,11 +737,13 @@ pool_fetch_hdls_ult(void *data)
 	}
 
 out:
+	D_INFO(DF_UUID": signaling done\n", DP_UUID(pool->sp_uuid));
 	ABT_mutex_lock(pool->sp_mutex);
 	ABT_cond_signal(pool->sp_fetch_hdls_done_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
 
 	pool->sp_fetch_hdls = 0;
+	D_INFO(DF_UUID": end\n", DP_UUID(pool->sp_uuid));
 }
 
 static void
@@ -785,6 +793,9 @@ ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 static void
 pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 {
+	D_INFO(DF_UUID": begin: fetch_hdls=%u stopping=%u\n", DP_UUID(pool->sp_uuid),
+	       pool->sp_fetch_hdls, pool->sp_stopping);
+
 	if (!pool->sp_fetch_hdls) {
 		D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
 		return;
@@ -793,8 +804,10 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
 	ABT_mutex_lock(pool->sp_mutex);
 	ABT_cond_signal(pool->sp_fetch_hdls_cond);
 	ABT_mutex_unlock(pool->sp_mutex);
+	D_INFO(DF_UUID": signaled\n", DP_UUID(pool->sp_uuid));
 
 	ABT_mutex_lock(pool->sp_mutex);
+	D_INFO(DF_UUID": waiting for ULT\n", DP_UUID(pool->sp_uuid));
 	ABT_cond_wait(pool->sp_fetch_hdls_done_cond, pool->sp_mutex);
 	ABT_mutex_unlock(pool->sp_mutex);
 	D_INFO(DF_UUID": fetch hdls ULT aborted\n", DP_UUID(pool->sp_uuid));
@@ -960,7 +973,7 @@ ds_pool_stop(uuid_t uuid)
 	ds_migrate_stop(pool, -1, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
 	pool_put_sync(pool);
-	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
+	D_INFO(DF_UUID": pool stopped\n", DP_UUID(uuid));
 }
 
 /* ds_pool_hdl ****************************************************************/
@@ -1615,13 +1628,19 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+struct update_vos_prop_arg {
+	struct ds_pool *uvp_pool;
+	bool            uvp_checkpoint_props_changed;
+};
+
 static int
 update_vos_prop_on_targets(void *in)
 {
-	struct ds_pool			*pool = (struct ds_pool *)in;
-	struct ds_pool_child		*child = NULL;
-	struct policy_desc_t		policy_desc = {0};
-	int                              ret         = 0;
+	struct update_vos_prop_arg *arg         = in;
+	struct ds_pool             *pool        = arg->uvp_pool;
+	struct ds_pool_child       *child       = NULL;
+	struct policy_desc_t        policy_desc = {0};
+	int                         ret         = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
@@ -1642,8 +1661,7 @@ update_vos_prop_on_targets(void *in)
 	else if (pool->sp_global_version == 1)
 		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
 
-	if (pool->sp_checkpoint_props_changed) {
-		pool->sp_checkpoint_props_changed = 0;
+	if (arg->uvp_checkpoint_props_changed) {
 		if (child->spc_chkpt_req != NULL)
 			sched_req_wakeup(child->spc_chkpt_req);
 	}
@@ -1657,7 +1675,8 @@ out:
 int
 ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 {
-	int ret;
+	struct update_vos_prop_arg arg;
+	int                        ret;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
@@ -1687,23 +1706,25 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
 	pool->sp_reint_mode = iv_prop->pip_reint_mode;
 
-	pool->sp_checkpoint_props_changed = 0;
+	arg.uvp_pool                     = pool;
+	arg.uvp_checkpoint_props_changed = false;
+
 	if (pool->sp_checkpoint_mode != iv_prop->pip_checkpoint_mode) {
-		pool->sp_checkpoint_mode          = iv_prop->pip_checkpoint_mode;
-		pool->sp_checkpoint_props_changed = 1;
+		pool->sp_checkpoint_mode         = iv_prop->pip_checkpoint_mode;
+		arg.uvp_checkpoint_props_changed = 1;
 	}
 
 	if (pool->sp_checkpoint_freq != iv_prop->pip_checkpoint_freq) {
-		pool->sp_checkpoint_freq          = iv_prop->pip_checkpoint_freq;
-		pool->sp_checkpoint_props_changed = 1;
+		pool->sp_checkpoint_freq         = iv_prop->pip_checkpoint_freq;
+		arg.uvp_checkpoint_props_changed = 1;
 	}
 
 	if (pool->sp_checkpoint_thresh != iv_prop->pip_checkpoint_thresh) {
-		pool->sp_checkpoint_thresh        = iv_prop->pip_checkpoint_thresh;
-		pool->sp_checkpoint_props_changed = 1;
+		pool->sp_checkpoint_thresh       = iv_prop->pip_checkpoint_thresh;
+		arg.uvp_checkpoint_props_changed = 1;
 	}
 
-	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
+	ret = dss_thread_collective(update_vos_prop_on_targets, &arg, 0);
 
 	return ret;
 }
