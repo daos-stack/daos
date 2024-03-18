@@ -187,29 +187,12 @@ out:
 }
 
 int
-crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, bool primary);
-
-int
-crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider, bool primary)
-{
-	int	provider_idx = -1;
-
-	provider_idx = crt_str_to_provider(provider);
-	if (provider_idx == -1) {
-		D_ERROR("Invalid requested provider '%s'\n", provider);
-		return -DER_INVAL;
-	}
-
-	return crt_context_provider_create(crt_ctx, provider_idx, primary);
-}
-
-int
 crt_context_uri_get(crt_context_t crt_ctx, char **uri)
 {
 	struct crt_context	*ctx = NULL;
 
 	if (crt_ctx == NULL || uri == NULL) {
-		D_ERROR("Invalid null parameters\n");
+		D_ERROR("Invalid null parameters (%p) (%p)\n", crt_ctx, uri);
 		return -DER_INVAL;
 	}
 
@@ -221,8 +204,9 @@ crt_context_uri_get(crt_context_t crt_ctx, char **uri)
 	return DER_SUCCESS;
 }
 
-int
-crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, bool primary)
+static int
+crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, bool primary,
+			    int iface_idx)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
@@ -266,8 +250,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 	ctx->cc_primary = primary;
 	ctx->cc_idx = ctx_idx;
 
-	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, ctx_idx, primary);
-
+	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, ctx_idx, primary, iface_idx);
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -275,15 +258,12 @@ crt_context_provider_create(crt_context_t *crt_ctx, crt_provider_t provider, boo
 		D_GOTO(out, rc);
 	}
 
-	if (crt_is_service()) {
-		rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
-				     ctx->cc_self_uri, &uri_len);
-		if (rc != 0) {
-			D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
-			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			crt_context_destroy(ctx, true);
-			D_GOTO(out, rc);
-		}
+	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla, ctx->cc_self_uri, &uri_len);
+	if (rc != 0) {
+		D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		crt_context_destroy(ctx, true);
+		D_GOTO(out, rc);
 	}
 
 	ctx_list = crt_provider_get_ctx_list(primary, provider);
@@ -370,9 +350,7 @@ out:
 bool
 crt_context_is_primary(crt_context_t crt_ctx)
 {
-	struct crt_context *ctx;
-
-	ctx = crt_ctx;
+	struct crt_context *ctx = crt_ctx;
 
 	return ctx->cc_primary;
 }
@@ -380,9 +358,80 @@ crt_context_is_primary(crt_context_t crt_ctx)
 int
 crt_context_create(crt_context_t *crt_ctx)
 {
-	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov, true);
+	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov, true, 0);
 }
 
+uint32_t
+crt_num_ifaces_get(void)
+{
+	return crt_provider_num_ifaces_get(true, crt_gdata.cg_primary_prov);
+}
+
+int
+crt_context_create_on_iface_idx(uint32_t iface_index, crt_context_t *crt_ctx)
+{
+	uint32_t num_ifaces;
+
+	if (crt_is_service()) {
+		D_ERROR("API not available on servers\n");
+		return -DER_NOSYS;
+	}
+
+	num_ifaces = crt_num_ifaces_get();
+	if (num_ifaces == 0) {
+		D_ERROR("No interfaces specified at startup\n");
+		return -DER_INVAL;
+	}
+
+	if (iface_index >= num_ifaces) {
+		D_ERROR("interface index %d outside of range [0-%d]\n",
+			iface_index, num_ifaces - 1);
+		return -DER_INVAL;
+	}
+
+	return crt_context_provider_create(crt_ctx, crt_gdata.cg_primary_prov, true, iface_index);
+}
+
+int
+crt_iface_name2idx(const char *iface_name, int *idx)
+{
+	uint32_t	num_ifaces;
+	int		i;
+	char		*name;
+
+	num_ifaces = crt_provider_num_ifaces_get(true, crt_gdata.cg_primary_prov);
+
+	for (i = 0; i < num_ifaces; i++) {
+		name = crt_provider_iface_str_get(true, crt_gdata.cg_primary_prov, i);
+
+		if (strcmp(name, iface_name) == 0) {
+			*idx = i;
+			return DER_SUCCESS;
+		}
+	}
+
+	return -DER_INVAL;
+}
+
+int
+crt_context_create_on_iface(const char *iface_name, crt_context_t *crt_ctx)
+{
+	int idx;
+	int rc;
+
+	rc = crt_iface_name2idx(iface_name, &idx);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	D_DEBUG(DB_ALL, "%s resolved to index=%d\n", iface_name, idx);
+
+	return crt_context_create_on_iface_idx(idx, crt_ctx);
+out:
+	return rc;
+}
+
+
+/* TODO: Add crt_context_create_secondary_on_iface_idx() if needed */
 int
 crt_context_create_secondary(crt_context_t *crt_ctx, int idx)
 {
@@ -400,7 +449,7 @@ crt_context_create_secondary(crt_context_t *crt_ctx, int idx)
 		return -DER_INVAL;
 	}
 
-	return crt_context_provider_create(crt_ctx, sec_prov, false);
+	return crt_context_provider_create(crt_ctx, sec_prov, false, 0 /* interface index */);
 }
 
 int
@@ -1617,7 +1666,6 @@ crt_self_uri_get(int tag, char **uri)
 	}
 
 	D_STRNDUP(tmp_uri, tmp_crt_ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN - 1);
-
 	*uri = tmp_uri;
 
 out:
@@ -1637,7 +1685,7 @@ crt_context_num(int *ctx_num)
 }
 
 bool
-crt_context_empty(int provider, int locked)
+crt_context_empty(crt_provider_t provider, int locked)
 {
 	bool rc = false;
 
