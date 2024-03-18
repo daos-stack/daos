@@ -3990,9 +3990,12 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 		stripe_size = obj_ec_stripe_rec_nr(&ioc->ioc_oca);
 	}
 
+	otqa->otqa_shard = shards[0];
+
 	if (otqa->otqa_need_copy) {
 		oqma.oqma_oca = &ioc->ioc_oca;
 		oqma.oqma_oid = oid;
+		oqma.oqma_oid.id_shard = shards[0];
 		oqma.oqma_in_dkey = otqa->otqa_in_dkey;
 		oqma.oqma_tgt_dkey = &otqa->otqa_dkey_copy;
 		oqma.oqma_tgt_akey = &otqa->otqa_akey_copy;
@@ -4003,6 +4006,7 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 		oqma.oqma_flags = api_flags;
 		oqma.oqma_opc = opc;
 		oqma.oqma_src_map_ver = map_ver;
+		oqma.oqma_level = 1;
 	}
 
 	for (i = 0, allow_failure_cnt = 0, succeeds = 0; i < count; i++ ) {
@@ -4079,7 +4083,7 @@ again:
 
 			if (otqa->otqa_raw_recx && daos_oclass_is_ec(&ioc->ioc_oca)) {
 				obj_ec_recx_vos2daos(&ioc->ioc_oca, t_oid, p_dkey, &otqa->otqa_recx,
-						     api_flags & DAOS_GET_MAX ? true : false);
+						     api_flags & DAOS_GET_MAX ? true : false, true);
 				otqa->otqa_raw_recx = 0;
 			}
 		} else {
