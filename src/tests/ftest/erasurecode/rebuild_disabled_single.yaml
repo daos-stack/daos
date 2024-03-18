@@ -35,8 +35,7 @@ pool:
   pool_query_timeout: 30
 container:
   type: POSIX
-  control_method: API
-  properties: rf:1
+  control_method: daos 
   single_data_set:
     # [object_qty, record_qty, dkey, akey, data_size]
     - [1, 1, 1, 1, 4194304]
