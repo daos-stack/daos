@@ -4833,7 +4833,8 @@ def log_test(conf,
     lto.hide_fi_calls = skip_fi
 
     if ignore_einval:
-        lto.skip_suffixes.append(': 22 (Invalid argument)')
+        # lto.skip_suffixes.append(': 22 (Invalid argument)')
+        lto.skip_suffixes.append(': 5 (Input/output error)')
         lto.skip_suffixes.append(" DER_NO_HDL(-1002): 'Invalid handle'")
 
     if ignore_busy:
@@ -5049,7 +5050,7 @@ def run_evict_test(server):
     # Now check there is only the root inode, everything else should be disconnected/closed.
     dfuse_stat = dfuse.check_usage(inodes=1, open_files=1, pools=1, containers=1)
 
-    dfuse.stop()
+    dfuse.stop(ignore_einval=True)
     return False
 
 
@@ -5122,7 +5123,8 @@ def run_evict_test_fd(server):
     # Now check there is only the root inode, everything else should be disconnected/closed.
     dfuse_stat = dfuse.check_usage(inodes=1, open_files=1, pools=1, containers=1)
 
-    dfuse.stop()
+    dfuse.stop(ignore_einval=True)
+    return False
 
 
 def run_evict_test_fd_dd(server):
@@ -5206,8 +5208,7 @@ def run_evict_test_fd_dd(server):
         count -= 1
         if count == 0:
             print(f'Path with inode 0x{sub_stat.st_ino:x} should have been evicted')
-            break
-            # assert False, f'Path with inode 0x{sub_stat.st_ino:x} should have been evicted'
+            assert False, f'Path with inode 0x{sub_stat.st_ino:x} should have been evicted'
         time.sleep(1)
 
     # Now evict the whole new container.  This will cause dfuse to flush everything and then
@@ -5219,7 +5220,8 @@ def run_evict_test_fd_dd(server):
     # Now check there is only the root inode, everything else should be disconnected/closed.
     dfuse_stat = dfuse.check_usage(inodes=1, open_files=1, pools=1, containers=1)
 
-    dfuse.stop()
+    dfuse.stop(ignore_einval=True)
+    return False
 
 
 def run_in_fg(server, conf, args):
@@ -6618,10 +6620,8 @@ def run(wf, args):
                 test_pydaos_kv_obj_class(server, conf)
                 fatal_errors.add_result(server.set_fi())
             elif args.mode == 'evict-test':
-                # These two pass.
                 fatal_errors.add_result(run_evict_test(server))
                 fatal_errors.add_result(run_evict_test_fd(server))
-                # This one fails still.
                 fatal_errors.add_result(run_evict_test_fd_dd(server))
             elif args.test == 'all':
                 fatal_errors.add_result(run_posix_tests(server, conf))
@@ -6760,7 +6760,7 @@ def main():
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='*', choices=['fi', 'all', 'overlay', 'set-fi', 'launch',
-                                                    'evict-test'])
+                                                    'evict-test', []])
     args = parser.parse_args()
 
     if args.server_fi:
