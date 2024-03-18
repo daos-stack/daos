@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Node local test (NLT).
 
+(C) Copyright 2020-2024 Intel Corporation.
+
+SPDX-License-Identifier: BSD-2-Clause-Patent
+
 Test script for running DAOS on a single node over tmpfs and running initial
 smoke/unit tests.
 
@@ -5683,8 +5687,7 @@ class AllocFailTest():
                     fid += 1
                     start_this_iteration -= 1
 
-                    if len(active) > max_count:
-                        max_count = len(active)
+                    max_count = max(max_count, len(active))
 
             # Now complete as many as have finished.
             for ret in active:

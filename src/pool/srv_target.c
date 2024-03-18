@@ -340,6 +340,49 @@ out_free:
 	return NULL;
 }
 
+/*
+ * Since PMEM_PAGESIZE and PMEM_OBJ_POOL_HEAD_SIZE are not exported,
+ * for safety, we will use 64k for now.
+ */
+#define	POOL_OBJ_HEADER_SIZE	65536
+
+static int
+pool_reset_header(const char *path)
+{
+	int	 rc;
+	char	*buf = NULL;
+	FILE	*file;
+	int	 header_size = 65536;
+
+	/* Skip MD-ON-SSD case */
+	if (bio_nvme_configured(SMD_DEV_TYPE_META))
+		return 0;
+
+	file = fopen(path, "r+");
+	if (file == NULL) {
+		D_ERROR("failed to open %s\n", path);
+		return daos_errno2der(errno);
+	}
+
+	D_ALLOC(buf, header_size);
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	rc = fwrite(buf, header_size, 1, file);
+	if (rc < 0)
+		goto out;
+	else if (rc != 1)
+		rc = -DER_IO;
+	else
+		rc = 0;
+out:
+	D_FREE(buf);
+	fclose(file);
+	return rc;
+}
+
 static int
 pool_child_recreate(struct ds_pool_child *child)
 {
@@ -376,6 +419,15 @@ pool_child_recreate(struct ds_pool_child *child)
 		goto pool_info;
 	}
 
+	/* If pool header is nonzero, pmemobj_create() will fail.
+	 * Therefore, reset the header in this case.
+	 */
+	rc = pool_reset_header(path);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": Reset VOS pool header failed.", DP_UUID(child->spc_uuid));
+		goto pool_info;
+	}
+
 	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
 			     0, NULL);
 	if (rc)
@@ -388,6 +440,7 @@ out:
 	return rc;
 
 }
+
 
 static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
@@ -1086,7 +1139,7 @@ ds_pool_start(uuid_t uuid)
 	pool = pool_obj(llink);
 
 	rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create fetch ult: %d\n",
 			DP_UUID(uuid), rc);

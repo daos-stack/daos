@@ -115,7 +115,7 @@ class DaosServerYamlParameters(YamlParameters):
 
         self.provider = BasicParameter(None, default_provider)
         self.crt_ctx_share_addr = BasicParameter(None)
-        self.crt_timeout = BasicParameter(None, 10)
+        self.crt_timeout = BasicParameter(None)
         self.disable_srx = BasicParameter(None)
         self.fabric_auth_key = BasicParameter(None)
         self.core_dump_filter = BasicParameter(None)
