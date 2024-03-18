@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -120,7 +120,6 @@ class DmgCommand(DmgCommandBase):
         #           ],
         #           "Providers": [
         #             "ofi+verbs;ofi_rxm",
-        #             "ofi+tcp",
         #             "ofi+verbs",
         #             "ofi+tcp",
         #             "ofi+sockets"

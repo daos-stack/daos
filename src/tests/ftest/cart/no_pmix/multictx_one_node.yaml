@@ -14,6 +14,8 @@ env_CRT_PHY_ADDR_STR: !mux
     CRT_PHY_ADDR_STR: "sm"
   ofi_tcp:
     CRT_PHY_ADDR_STR: "ofi+tcp"
+  ofi_tcp_rxm:
+    CRT_PHY_ADDR_STR: "ofi+tcp;ofi_rxm"
 tests: !mux
   no_pmix_multi_ctx:
     name: no_pmix_multi_ctx
