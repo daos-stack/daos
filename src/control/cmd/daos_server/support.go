@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/support"
@@ -25,14 +26,31 @@ type collectLogCmd struct {
 	cfgCmd
 	cmdutil.LogCmd
 	support.CollectLogSubCmd
+	support.LogTypeSubCmd
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
-	var LogCollection = map[int32][]string{
-		support.CopyServerConfigEnum:     {""},
-		support.CollectSystemCmdEnum:     support.SystemCmd,
-		support.CollectServerLogEnum:     support.ServerLog,
-		support.CollectDaosServerCmdEnum: support.DaosServerCmd,
+	var LogCollection = map[int32][]string{}
+	err := cmd.DateTimeValidate()
+	if err != nil {
+		return err
+	}
+
+	// Only collect the specific logs Admin,Control or Engine.
+	// This will ignore the system information collection.
+	if cmd.LogType != "" {
+		LogCollection[support.CollectServerLogEnum], err = cmd.LogTypeValidate()
+		if err != nil {
+			return err
+		}
+	} else {
+		LogCollection[support.CopyServerConfigEnum] = []string{""}
+		LogCollection[support.CollectSystemCmdEnum] = support.SystemCmd
+		LogCollection[support.CollectDaosServerCmdEnum] = support.DaosServerCmd
+		LogCollection[support.CollectServerLogEnum], err = cmd.LogTypeValidate()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Default 4 steps of log/conf collection.
@@ -52,7 +70,8 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = filepath.Join(os.TempDir(), "daos_support_server_logs")
+		folderName := fmt.Sprintf("daos_support_server_logs_%s", time.Now().Format(time.RFC3339))
+		cmd.TargetFolder = filepath.Join(os.TempDir(), folderName)
 	}
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
 
@@ -61,6 +80,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.Config = cmd.configPath()
 	params.TargetFolder = cmd.TargetFolder
 	params.ExtraLogsDir = cmd.ExtraLogsDir
+	params.LogStartDate = cmd.LogStartDate
+	params.LogEndDate = cmd.LogEndDate
+	params.LogStartTime = cmd.LogStartTime
+	params.LogEndTime = cmd.LogEndTime
 	for logFunc, logCmdSet := range LogCollection {
 		for _, logCmd := range logCmdSet {
 			cmd.Debugf("Log Function Enum = %d -- Log Collect Cmd = %s ", logFunc, logCmd)
@@ -70,7 +93,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
 				fmt.Println(err)
-				if cmd.Stop {
+				if cmd.StopOnError {
 					return err
 				}
 			}

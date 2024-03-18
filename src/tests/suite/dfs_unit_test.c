@@ -1,12 +1,12 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "dfs_test.h"
-#include "dfs_internal.h"
+#include <daos/dfs_lib_int.h>
 #include <daos_types.h>
 #include <daos/placement.h>
 #include <pthread.h>
@@ -1415,15 +1415,45 @@ dfs_test_chown(void **state)
 	char		*filename_file2 = "open_stat2";
 	mode_t		create_mode = S_IWUSR | S_IRUSR;
 	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
+	struct timespec  ctime_orig, mtime_orig;
+	mode_t           orig_mode;
 	int		rc;
 
 	if (arg->myrank != 0)
 		return;
 
-	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &dir, NULL, &stbuf);
+	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &dir, &orig_mode, &stbuf);
 	assert_int_equal(rc, 0);
 	assert_int_equal(stbuf.st_uid, geteuid());
 	assert_int_equal(stbuf.st_gid, getegid());
+	mtime_orig.tv_sec  = stbuf.st_mtim.tv_sec;
+	mtime_orig.tv_nsec = stbuf.st_mtim.tv_nsec;
+	ctime_orig.tv_sec  = stbuf.st_ctim.tv_sec;
+	ctime_orig.tv_nsec = stbuf.st_ctim.tv_nsec;
+
+	/** chown of root and see if visible */
+	print_message("Running chown tests on root object...\n");
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_uid          = 3;
+	stbuf.st_gid          = 4;
+	stbuf.st_mtim.tv_sec  = mtime_orig.tv_sec + 10;
+	stbuf.st_mtim.tv_nsec = mtime_orig.tv_nsec;
+	stbuf.st_mode         = orig_mode | S_IROTH | S_IWOTH | S_IXOTH;
+	rc                    = dfs_osetattr(dfs_mt, dir, &stbuf,
+					     DFS_SET_ATTR_UID | DFS_SET_ATTR_GID | DFS_SET_ATTR_MTIME |
+						 DFS_SET_ATTR_MODE);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_lookup(dfs_mt, "/", O_RDWR, &dir, NULL, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_mode, orig_mode | S_IROTH | S_IWOTH | S_IXOTH);
+	assert_int_equal(stbuf.st_uid, 3);
+	assert_int_equal(stbuf.st_gid, 4);
+	assert_true(check_ts(ctime_orig, stbuf.st_ctim));
+	assert_int_equal(mtime_orig.tv_sec + 10, stbuf.st_mtim.tv_sec);
 	rc = dfs_release(dir);
 	assert_int_equal(rc, 0);
 
@@ -1495,6 +1525,11 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	struct timespec		prev_ts, first_ts;
 	daos_size_t		size;
 	dfs_obj_t		*tmp_obj;
+	struct tm                tm = {0};
+	time_t                   ts;
+	char                    *p;
+	struct tm               *timeptr;
+	char                     time_str[64];
 	int			rc;
 
 	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
@@ -1582,8 +1617,34 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	prev_ts.tv_sec = stbuf.st_mtim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_mtim.tv_nsec;
 
-	/** set size on file with dfs_osetattr and stat at same time */
 	if (S_ISREG(mode)) {
+		/** set mtime and size at the same time; mtime should be what we set */
+		memset(&stbuf, 0, sizeof(stbuf));
+		stbuf.st_size = 1000;
+		p             = strptime("2023-12-31", "%Y-%m-%d", &tm);
+		assert_non_null(p);
+		ts                    = mktime(&tm);
+		stbuf.st_mtim.tv_sec  = ts;
+		stbuf.st_mtim.tv_nsec = 0;
+		rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_SIZE | DFS_SET_ATTR_MTIME);
+		assert_int_equal(rc, 0);
+		assert_int_equal(stbuf.st_size, 1000);
+		/** check the mtime was updated with the setattr */
+		assert_int_equal(ts, stbuf.st_mtim.tv_sec);
+		timeptr = localtime(&stbuf.st_mtim.tv_sec);
+		strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
+		print_message("mtime = %s\n", time_str);
+		assert_true(strncmp("2023", time_str, 4) == 0);
+
+		memset(&stbuf, 0, sizeof(stbuf));
+		rc = dfs_ostat(dfs_mt, obj, &stbuf);
+		assert_int_equal(rc, 0);
+		assert_int_equal(stbuf.st_size, 1000);
+		timeptr = localtime(&stbuf.st_mtim.tv_sec);
+		strftime(time_str, sizeof(time_str), "%Y-%m-%d", timeptr);
+		assert_int_equal(ts, stbuf.st_mtim.tv_sec);
+		assert_true(strncmp("2023", time_str, 4) == 0);
+
 		memset(&stbuf, 0, sizeof(stbuf));
 		stbuf.st_size = 1024;
 		rc = dfs_osetattr(dfs_mt, obj, &stbuf, DFS_SET_ATTR_SIZE);
@@ -1592,12 +1653,6 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 		/** check the mtime was updated with the setattr */
 		assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	}
-
-	struct tm	tm = {0};
-	time_t		ts;
-	char		*p;
-	struct tm       *timeptr;
-	char		time_str[64];
 
 	/** set the mtime to 2020 */
 	p = strptime("2020-12-31", "%Y-%m-%d", &tm);
@@ -2503,7 +2558,7 @@ dfs_test_checker(void **state)
 	test_arg_t		*arg = *state;
 	dfs_t			*dfs;
 	int			nr = 100, i;
-	dfs_obj_t		*root, *lf;
+	dfs_obj_t               *root, *lf, *sym;
 	daos_obj_id_t		root_oid;
 	daos_handle_t		root_oh;
 	daos_handle_t		coh;
@@ -2573,6 +2628,12 @@ dfs_test_checker(void **state)
 		rc = dfs_release(dir);
 		assert_int_equal(rc, 0);
 	}
+
+	/** create a symlink with a non-existent target in the container */
+	rc = dfs_open(dfs, NULL, "SL1", S_IFLNK | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT | O_EXCL, 0,
+		      0, "/usr/local", &sym);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(sym);
 
 	rc = dfs_disconnect(dfs);
 	assert_int_equal(rc, 0);
@@ -3053,6 +3114,78 @@ dfs_test_fix_chunk_size(void **state)
 	D_FREE(buf);
 }
 
+static void
+dfs_test_oflags(void **state)
+{
+	test_arg_t		*arg = *state;
+	dfs_obj_t		*obj;
+	char			*filename_file1 = "file1";
+	char			*path_file1 = "/file1";
+	mode_t			create_mode = S_IWUSR | S_IRUSR;
+	mode_t			mode;
+	int			create_flags = O_RDWR | O_CREAT | O_EXCL;
+	int			rc;
+	struct stat		stbuf;
+
+	if (arg->myrank != 0)
+		return;
+
+	/** Testing O_APPEND & O_TRUNC in dfs_open/dfs_lookup_rel */
+
+	/** remove /file1 if existing */
+	dfs_remove(dfs_mt, NULL, filename_file1, 0, NULL);
+
+	/** Create /file1 with O_APPEND, should fail */
+	rc = dfs_open(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
+		      create_flags | O_APPEND, 0, 0, NULL, &obj);
+	assert_int_equal(rc, ENOTSUP);
+
+	/** Create /file1 with O_APPEND using dfs_lookup, should fail */
+	rc = dfs_lookup(dfs_mt, path_file1, create_flags | O_APPEND, &obj, &mode, NULL);
+	assert_int_equal(rc, ENOTSUP);
+
+	/** Create /file1 and write 5 bytes */
+	rc = dfs_test_file_gen(filename_file1, 0, OC_S1, 5);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 with O_TRUNC, size should be zero */
+	rc = dfs_open(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
+		      O_RDWR | O_TRUNC, 0, 0, NULL, &obj);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify file size after truncating */
+	rc = dfs_lookup(dfs_mt, path_file1, O_RDONLY, &obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, filename_file1, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 and write 5 bytes */
+	rc = dfs_test_file_gen(filename_file1, 0, OC_S1, 5);
+	assert_int_equal(rc, 0);
+
+	/** Create /file1 with O_TRUNC, size should be zero */
+	rc = dfs_lookup(dfs_mt, path_file1, O_RDWR | O_TRUNC, &obj, &mode, NULL);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	/** verify file size after truncating */
+	rc = dfs_lookup(dfs_mt, path_file1, O_RDONLY, &obj, &mode, &stbuf);
+	assert_int_equal(rc, 0);
+	assert_int_equal(stbuf.st_size, 0);
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, filename_file1, 0, NULL);
+	assert_int_equal(rc, 0);
+}
+
 #define NUM_ENTRIES	1024
 #define NR_ENUM		64
 
@@ -3231,6 +3364,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST27: dfs pipeline find",
 	  dfs_test_pipeline_find, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST28: dfs open/lookup flags",
+	  dfs_test_oflags, async_disable, test_case_teardown},
 };
 
 static int
@@ -3301,7 +3436,7 @@ run_dfs_unit_test(int rank, int size)
 	par_barrier(PAR_COMM_WORLD);
 
 	/** run tests again with DTX */
-	setenv("DFS_USE_DTX", "1", 1);
+	d_setenv("DFS_USE_DTX", "1", 1);
 
 	par_barrier(PAR_COMM_WORLD);
 	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,

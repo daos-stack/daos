@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from ior_test_base import IorTestBase
 from fio_test_base import FioBase
+from ior_test_base import IorTestBase
 
 
 class EcodFaultInjection(IorTestBase, FioBase):

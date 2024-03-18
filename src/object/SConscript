@@ -9,7 +9,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    denv.require('argobots', 'protobufc')
+    denv.require('protobufc')
 
     # Common object code
     common_tgts = denv.SharedObject(['obj_class.c', 'obj_rpc.c', 'obj_task.c',
@@ -17,7 +17,7 @@ def scons():
                                      'obj_enum.c', 'obj_class_def.c', "obj_layout.c"])
 
     # Object client library
-    dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c',
+    dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c', 'cli_coll.c',
                                      'cli_mod.c', 'cli_ec.c', 'cli_csum.c',
                                      'obj_verify.c'])
     libdaos_tgts.extend(dc_obj_tgts + common_tgts)
@@ -27,11 +27,12 @@ def scons():
 
     # generate server module
     senv = denv.Clone()
+    senv.require('isal', 'argobots')
     senv.require('pmdk', headers_only=True)
 
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     srv = senv.d_library('obj',
-                         common_tgts + ['srv_obj.c', 'srv_mod.c',
+                         common_tgts + ['srv_obj.c', 'srv_coll.c', 'srv_mod.c',
                                         'srv_obj_remote.c', 'srv_ec.c',
                                         'srv_obj_migrate.c', 'srv_enum.c',
                                         'srv_cli.c', 'srv_ec_aggregate.c',

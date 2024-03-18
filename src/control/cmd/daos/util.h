@@ -25,12 +25,12 @@
 #include <daos/debug.h>
 #include <gurt/common.h>
 
-#include "daos_types.h"
-#include "daos_api.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
-#include "daos_mgmt.h"
-#include "dfuse_ioctl.h"
+#include <daos_types.h>
+#include <daos_api.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
+#include <daos_mgmt.h>
+#include <dfuse_ioctl.h>
 
 #include "daos_hdlr.h"
 
@@ -121,5 +121,9 @@ get_rebuild_state(struct daos_rebuild_status *drs)
 	return drs->rs_state;
 }
 
-
+static inline bool
+mode_is_dir(mode_t mode)
+{
+	return S_ISDIR(mode);
+}
 #endif /* __CMD_DAOS_UTIL_H__ */

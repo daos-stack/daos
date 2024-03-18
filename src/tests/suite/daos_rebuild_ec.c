@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1253,6 +1253,149 @@ rebuild_ec_multiple_failure_tgts(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+rebuild_ec_parity_overwrite_fail_parity_internal(void **state, int *kill_shards, int nr,
+						 bool aggregation)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		*data;
+	char		*verify_data;
+	daos_recx_t	recx;
+	d_rank_t	data_ranks[4];
+	d_rank_t	parity_rank;
+	uint64_t	dkey_hash;
+	int		shard_idx;
+	int		stripe_size = 4 * CELL_SIZE;
+	int		i;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	if (svc_nreplicas < 5)
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	data = (char *)malloc(stripe_size);
+	verify_data = (char *)malloc(stripe_size);
+	make_buffer(data, 'a', stripe_size);
+
+	recx.rx_idx = 0;	/* full stripe */
+	recx.rx_nr = stripe_size;
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	if (aggregation)
+		trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+					       0, DAOS_FORCE_EC_AGG);
+	make_buffer(data, 'b', 1000);
+	memcpy(verify_data, data, stripe_size);
+	recx.rx_idx = 0;
+	recx.rx_nr = 1000;
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, 1000, &req);
+
+	dkey_hash = d_hash_murmur64((const unsigned char *)"d_key", strlen("d_key"), 5731);
+
+	/* fail parity epoch */
+	shard_idx = (dkey_hash % 6 + 5) % 6;
+	parity_rank = get_rank_by_oid_shard(arg, oid, shard_idx);
+	rebuild_single_pool_rank(arg, parity_rank, true);
+
+	print_message("sleep 60 seconds for aggregation\n");
+	sleep(60);
+
+	/* fail data shard */
+	for (i = 0; i < nr; i++) {
+		shard_idx = (dkey_hash % 6 + kill_shards[i]) % 6;
+		data_ranks[i] = get_rank_by_oid_shard(arg, oid, shard_idx);
+	}
+
+	rebuild_pools_ranks(&arg, 1, data_ranks, nr, true);
+	recx.rx_idx = 0;	/* full stripe */
+	recx.rx_nr = stripe_size;
+	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	assert_memory_equal(data, verify_data, stripe_size);
+
+	reintegrate_pools_ranks(&arg, 1, data_ranks, nr, true);
+	reintegrate_pools_ranks(&arg, 1, &parity_rank, 1, true);
+
+	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	assert_memory_equal(data, verify_data, stripe_size);
+
+
+	ioreq_fini(&req);
+	free(data);
+	free(verify_data);
+}
+
+static void
+rebuild_ec_overwrite_fail_parity_data(void **state)
+{
+	int kill_shards[2];
+
+	kill_shards[0] = 0;
+	kill_shards[1] = 1;
+	rebuild_ec_parity_overwrite_fail_parity_internal(state, kill_shards, 2, false);
+}
+
+static void
+rebuild_ec_overwrite_fail_parity_data_with_parity(void **state)
+{
+	int kill_shards[2];
+
+	kill_shards[0] = 1;
+	kill_shards[1] = 2;
+	rebuild_ec_parity_overwrite_fail_parity_internal(state, kill_shards, 2, true);
+}
+
+static void
+rebuild_ec_combined_ops(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	int		rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "self_heal", "delay_rebuild");
+	assert_int_equal(rc, 0);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	write_ec_full(&req, arg->index, 0);
+	ioreq_fini(&req);
+
+	arg->no_rebuild = 1;
+	rebuild_single_pool_rank(arg, 5, true);
+	print_message("sleep 30 seconds for rebuild to be scheduled/delay \n");
+	sleep(30);
+	extend_single_pool_rank(arg, 6);
+	print_message("sleep 5 seconds for extend be scheduled/combined \n");
+	sleep(5);
+
+	arg->no_rebuild = 0;
+	if (arg->myrank == 0)
+		test_rebuild_wait(&arg, 1);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	verify_ec_full(&req, arg->index, 0);
+	ioreq_fini(&req);
+
+	reintegrate_single_pool_rank(arg, 5, true);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	verify_ec_full(&req, arg->index, 0);
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -1384,6 +1527,15 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD45: multiple shards fail tgts",
 	 rebuild_ec_multiple_failure_tgts, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD46: fail parity shard and data shards after overwrite",
+	 rebuild_ec_overwrite_fail_parity_data, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD47: fail parity shard and data shards after overwrite with aggregation",
+	 rebuild_ec_overwrite_fail_parity_data_with_parity, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD48: combine multiple rebuild operation for EC",
+	 rebuild_ec_combined_ops, rebuild_ec_6nodes_setup,
 	 test_teardown},
 };
 

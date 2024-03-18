@@ -8,12 +8,10 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -41,6 +39,10 @@ func Test_Dmg_PoolTierRatioFlag(t *testing.T) {
 	}{
 		"empty": {
 			expErr: errors.New("no tier ratio specified"),
+		},
+		"invalid": {
+			input:  "ABCD",
+			expErr: errors.New("invalid tier ratio \"ABCD\""),
 		},
 		"less than 100%": {
 			input:  "10,80",
@@ -226,7 +228,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with missing size",
 			"pool create label",
 			"",
-			errors.New("must be supplied"),
+			errors.New("must be set"),
 		},
 		{
 			"Create pool with missing label",
@@ -275,6 +277,12 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create label --size %s --nranks 16 --ranks 1,2,3", testSizeStr),
 			"",
 			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (auto with meta-blob)",
+			fmt.Sprintf("pool create label --size %s --meta-size 32G", testSizeStr),
+			"",
+			errors.New("can only be set"),
 		},
 		{
 			"Create pool with too-large tier-ratio (auto)",
@@ -355,7 +363,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (-n without -s)",
 			fmt.Sprintf("pool create label --nvme-size %s", testSizeStr),
 			"",
-			errors.New("must be supplied"),
+			errors.New("must be set"),
 		},
 		{
 			"Create pool with minimal arguments",
@@ -373,6 +381,30 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Create pool with manual meta blob size",
+			fmt.Sprintf("pool create label --scm-size %s --meta-size 1024G",
+				testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+					MetaBytes: humanize.GByte * 1024,
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual meta blob size smaller than scm",
+			"pool create label --scm-size 1026G --meta-size 1024G",
+			"",
+			errors.New("can not be smaller than"),
 		},
 		{
 			"Create pool with manual ranks",
@@ -474,12 +506,12 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with scrubbing",
-			fmt.Sprintf("pool create label --scm-size %s --properties=scrub:timed,scrub-freq:1", testSizeStr),
+			fmt.Sprintf("pool create label --scm-size %s --properties=scrub:timed,scrub_freq:1", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					Properties: []*daos.PoolProperty{
 						propWithVal("scrub", "timed"),
-						propWithVal("scrub-freq", "1"),
+						propWithVal("scrub_freq", "1"),
 						propWithVal("label", "label"),
 					},
 					User:      eUsr.Username + "@",
@@ -1136,535 +1168,6 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 
 			gotErr := PoolListCmd.Execute(nil)
 			test.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
-type MockRequestsRecorderInvoker struct {
-	control.MockInvoker
-	Requests []control.UnaryRequest
-}
-
-func (invoker *MockRequestsRecorderInvoker) InvokeUnaryRPC(context context.Context, request control.UnaryRequest) (*control.UnaryResponse, error) {
-	invoker.Requests = append(invoker.Requests, request)
-	return invoker.MockInvoker.InvokeUnaryRPC(context, request)
-}
-
-func TestDmg_PoolCreateAllCmd(t *testing.T) {
-	type ExpectedOutput struct {
-		PoolConfig control.MockPoolRespConfig
-		WarningMsg string
-		Error      error
-	}
-
-	for name, tc := range map[string]struct {
-		StorageRatio     string
-		HostsConfigArray []control.MockHostStorageConfig
-		TgtRanks         string
-		ExpectedOutput   ExpectedOutput
-	}{
-		"single server": {
-			StorageRatio: "100%",
-			HostsConfigArray: []control.MockHostStorageConfig{
-				{
-					HostName: "foo",
-					ScmConfig: []control.MockScmConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(100) * uint64(humanize.GByte),
-								AvailBytes:  uint64(100) * uint64(humanize.GByte),
-								UsableBytes: uint64(100) * uint64(humanize.GByte),
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []control.MockNvmeConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.TByte),
-								UsableBytes: uint64(1) * uint64(humanize.TByte),
-							},
-							Rank: 0,
-						},
-					},
-				},
-			},
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: control.MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0",
-					ScmBytes:  uint64(100) * uint64(humanize.GByte),
-					NvmeBytes: uint64(1) * uint64(humanize.TByte),
-				},
-			},
-		},
-		"single server 30%": {
-			StorageRatio: "30%",
-			HostsConfigArray: []control.MockHostStorageConfig{
-				{
-					HostName: "foo",
-					ScmConfig: []control.MockScmConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(100) * uint64(humanize.GByte),
-								AvailBytes:  uint64(100) * uint64(humanize.GByte),
-								UsableBytes: uint64(100) * uint64(humanize.GByte),
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []control.MockNvmeConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.TByte),
-								UsableBytes: uint64(1) * uint64(humanize.TByte),
-							},
-							Rank: 0,
-						},
-					},
-				},
-			},
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: control.MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0",
-					ScmBytes:  uint64(30) * uint64(humanize.GByte),
-					NvmeBytes: uint64(300) * uint64(humanize.GByte),
-				},
-			},
-		},
-		"double server": {
-			StorageRatio: "100%",
-			HostsConfigArray: []control.MockHostStorageConfig{
-				{
-					HostName: "foo",
-					ScmConfig: []control.MockScmConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(100) * uint64(humanize.GByte),
-								AvailBytes:  uint64(100) * uint64(humanize.GByte),
-								UsableBytes: uint64(100) * uint64(humanize.GByte),
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []control.MockNvmeConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.TByte),
-								UsableBytes: uint64(1) * uint64(humanize.TByte),
-							},
-							Rank: 0,
-						},
-					},
-				},
-				{
-					HostName: "bar",
-					ScmConfig: []control.MockScmConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.TByte),
-								UsableBytes: uint64(1) * uint64(humanize.TByte),
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(100) * uint64(humanize.GByte),
-								AvailBytes:  uint64(100) * uint64(humanize.GByte),
-								UsableBytes: uint64(100) * uint64(humanize.GByte),
-							},
-							Rank: 2,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(50) * uint64(humanize.GByte),
-								UsableBytes: uint64(50) * uint64(humanize.GByte),
-							},
-							Rank: 3,
-						},
-					},
-					NvmeConfig: []control.MockNvmeConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.TByte),
-								UsableBytes: uint64(1) * uint64(humanize.TByte),
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(400) * uint64(humanize.GByte),
-								UsableBytes: uint64(400) * uint64(humanize.GByte),
-							},
-							Rank: 2,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(300) * uint64(humanize.GByte),
-								UsableBytes: uint64(300) * uint64(humanize.GByte),
-							},
-							Rank: 2,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(3) * uint64(humanize.TByte),
-								AvailBytes:  uint64(2) * uint64(humanize.TByte),
-								UsableBytes: uint64(2) * uint64(humanize.TByte),
-							},
-							Rank: 3,
-						},
-					},
-				},
-			},
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: control.MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0,1,2,3",
-					ScmBytes:  uint64(50) * uint64(humanize.GByte),
-					NvmeBytes: uint64(700) * uint64(humanize.GByte),
-				},
-			},
-		},
-		"double server;rank filter": {
-			StorageRatio: "100%",
-			HostsConfigArray: []control.MockHostStorageConfig{
-				{
-					HostName: "foo",
-					ScmConfig: []control.MockScmConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(100) * uint64(humanize.GByte),
-								AvailBytes:  uint64(100) * uint64(humanize.GByte),
-								UsableBytes: uint64(100) * uint64(humanize.GByte),
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []control.MockNvmeConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.TByte),
-								UsableBytes: uint64(1) * uint64(humanize.TByte),
-							},
-							Rank: 0,
-						},
-					},
-				},
-				{
-					HostName: "bar",
-					ScmConfig: []control.MockScmConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.TByte),
-								UsableBytes: uint64(1) * uint64(humanize.TByte),
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(100) * uint64(humanize.GByte),
-								AvailBytes:  uint64(100) * uint64(humanize.GByte),
-								UsableBytes: uint64(100) * uint64(humanize.GByte),
-							},
-							Rank: 2,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(50) * uint64(humanize.GByte),
-								UsableBytes: uint64(50) * uint64(humanize.GByte),
-							},
-							Rank: 3,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.GByte),
-								UsableBytes: uint64(1) * uint64(humanize.GByte),
-							},
-							Rank: 4,
-						},
-					},
-					NvmeConfig: []control.MockNvmeConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.TByte),
-								UsableBytes: uint64(1) * uint64(humanize.TByte),
-							},
-							Rank: 1,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(400) * uint64(humanize.GByte),
-								UsableBytes: uint64(400) * uint64(humanize.GByte),
-							},
-							Rank: 2,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(300) * uint64(humanize.GByte),
-								UsableBytes: uint64(300) * uint64(humanize.GByte),
-							},
-							Rank: 2,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(3) * uint64(humanize.TByte),
-								AvailBytes:  uint64(2) * uint64(humanize.TByte),
-								UsableBytes: uint64(2) * uint64(humanize.TByte),
-							},
-							Rank: 3,
-						},
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(3) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.GByte),
-								UsableBytes: uint64(1) * uint64(humanize.GByte),
-							},
-							Rank: 4,
-						},
-					},
-				},
-			},
-			TgtRanks: "0,1,2,3",
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: control.MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0,1,2,3",
-					ScmBytes:  uint64(50) * uint64(humanize.GByte),
-					NvmeBytes: uint64(700) * uint64(humanize.GByte),
-				},
-			},
-		},
-		"No NVME": {
-			StorageRatio: "100%",
-			HostsConfigArray: []control.MockHostStorageConfig{
-				{
-					HostName: "foo",
-					ScmConfig: []control.MockScmConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(100) * uint64(humanize.GByte),
-								AvailBytes:  uint64(100) * uint64(humanize.GByte),
-								UsableBytes: uint64(100) * uint64(humanize.GByte),
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []control.MockNvmeConfig{},
-				},
-			},
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: control.MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0",
-					ScmBytes:  uint64(100) * uint64(humanize.GByte),
-					NvmeBytes: uint64(0),
-				},
-				WarningMsg: "Creating DAOS pool without NVME storage",
-			},
-		},
-		"SCM:NVME ratio": {
-			StorageRatio: "  100   %  ",
-			HostsConfigArray: []control.MockHostStorageConfig{
-				{
-					HostName: "foo",
-					ScmConfig: []control.MockScmConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(100) * uint64(humanize.GByte),
-								AvailBytes:  uint64(100) * uint64(humanize.GByte),
-								UsableBytes: uint64(100) * uint64(humanize.GByte),
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []control.MockNvmeConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(100) * uint64(humanize.TByte),
-								AvailBytes:  uint64(100) * uint64(humanize.TByte),
-								UsableBytes: uint64(100) * uint64(humanize.TByte),
-							},
-							Rank: 0,
-						},
-					},
-				},
-			},
-			ExpectedOutput: ExpectedOutput{
-				PoolConfig: control.MockPoolRespConfig{
-					HostName:  "foo",
-					Ranks:     "0",
-					ScmBytes:  uint64(100) * uint64(humanize.GByte),
-					NvmeBytes: uint64(100) * uint64(humanize.TByte),
-				},
-				WarningMsg: "SCM:NVMe ratio is less than",
-			},
-		},
-		"single server error 1%": {
-			StorageRatio: "1%",
-			HostsConfigArray: []control.MockHostStorageConfig{
-				{
-					HostName: "foo",
-					ScmConfig: []control.MockScmConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(100) * uint64(humanize.GByte),
-								AvailBytes:  uint64(1),
-								UsableBytes: uint64(1),
-							},
-							Rank: 0,
-						},
-					},
-					NvmeConfig: []control.MockNvmeConfig{
-						{
-							MockStorageConfig: control.MockStorageConfig{
-								TotalBytes:  uint64(1) * uint64(humanize.TByte),
-								AvailBytes:  uint64(1) * uint64(humanize.TByte),
-								UsableBytes: uint64(1) * uint64(humanize.TByte),
-							},
-							Rank: 0,
-						},
-					},
-				},
-			},
-			ExpectedOutput: ExpectedOutput{
-				Error: errors.New("Not enough SCM storage available with ratio 1%"),
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			mockInvokerConfig := &control.MockInvokerConfig{
-				UnaryResponseSet: []*control.UnaryResponse{
-					{
-						Responses: []*control.HostResponse{
-							{
-								Addr:    "foo",
-								Message: &mgmtpb.SystemQueryResp{},
-							},
-						},
-					},
-				},
-			}
-
-			unaryResponse := new(control.UnaryResponse)
-			for _, hostStorageConfig := range tc.HostsConfigArray {
-				storageScanResp := control.MockStorageScanResp(t,
-					hostStorageConfig.ScmConfig,
-					hostStorageConfig.NvmeConfig)
-				hostResponse := &control.HostResponse{
-					Addr:    hostStorageConfig.HostName,
-					Message: storageScanResp,
-				}
-				unaryResponse.Responses = append(unaryResponse.Responses, hostResponse)
-			}
-			mockInvokerConfig.UnaryResponseSet = append(mockInvokerConfig.UnaryResponseSet, unaryResponse)
-
-			if tc.ExpectedOutput.PoolConfig.Ranks != "" {
-				poolCreateResp := control.MockPoolCreateResp(t, &tc.ExpectedOutput.PoolConfig)
-				hostResponse := &control.HostResponse{
-					Addr:    tc.ExpectedOutput.PoolConfig.HostName,
-					Message: poolCreateResp,
-				}
-				unaryResponse = new(control.UnaryResponse)
-				unaryResponse.Responses = append(unaryResponse.Responses, hostResponse)
-				mockInvokerConfig.UnaryResponseSet = append(mockInvokerConfig.UnaryResponseSet, unaryResponse)
-			}
-
-			mockInvoker := &MockRequestsRecorderInvoker{
-				MockInvoker: *control.NewMockInvoker(log, mockInvokerConfig),
-				Requests:    []control.UnaryRequest{},
-			}
-
-			poolCreateCmd := new(PoolCreateCmd)
-			poolCreateCmd.setInvoker(mockInvoker)
-			poolCreateCmd.SetLog(log)
-			if tc.StorageRatio != "" {
-				if err := poolCreateCmd.Size.UnmarshalFlag(tc.StorageRatio); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if tc.TgtRanks != "" {
-				if err := poolCreateCmd.RankList.UnmarshalFlag(tc.TgtRanks); err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			err := poolCreateCmd.Execute(nil)
-
-			if tc.ExpectedOutput.Error != nil {
-				test.AssertTrue(t, err != nil, "Expected an error")
-				testExpectedError(t, tc.ExpectedOutput.Error, err)
-			} else {
-				test.AssertTrue(t, err == nil, fmt.Sprintf("Expected no error: err=%q\n", err))
-				test.AssertEqual(t, len(mockInvoker.Requests), 3, "Invalid number of request sent")
-				test.AssertTrue(t,
-					reflect.TypeOf(mockInvoker.Requests[0]) == reflect.TypeOf(&control.SystemQueryReq{}),
-					"Invalid request type: wanted="+reflect.TypeOf(&control.SystemQueryReq{}).String()+
-						" got="+reflect.TypeOf(mockInvoker.Requests[0]).String())
-				test.AssertTrue(t,
-					reflect.TypeOf(mockInvoker.Requests[1]) == reflect.TypeOf(&control.StorageScanReq{}),
-					"Invalid request type: wanted="+reflect.TypeOf(&control.StorageScanReq{}).String()+
-						" got="+reflect.TypeOf(mockInvoker.Requests[1]).String())
-				test.AssertTrue(t,
-					reflect.TypeOf(mockInvoker.Requests[2]) == reflect.TypeOf(&control.PoolCreateReq{}),
-					"Invalid request type: wanted="+reflect.TypeOf(&control.PoolCreateReq{}).String()+
-						" got="+reflect.TypeOf(mockInvoker.Requests[2]).String())
-				poolCreateRequest := mockInvoker.Requests[2].(*control.PoolCreateReq)
-				test.AssertEqual(t,
-					poolCreateRequest.TierBytes[0],
-					tc.ExpectedOutput.PoolConfig.ScmBytes,
-					"Invalid size of allocated SCM")
-				test.AssertEqual(t,
-					poolCreateRequest.TierBytes[1],
-					tc.ExpectedOutput.PoolConfig.NvmeBytes,
-					"Invalid size of allocated NVME")
-				test.AssertEqual(t,
-					poolCreateRequest.TotalBytes,
-					uint64(0),
-					"Invalid size of TotalBytes attribute: disabled with manual allocation")
-				if tc.TgtRanks != "" {
-					test.AssertEqual(t,
-						ranklist.RankList(poolCreateRequest.Ranks).String(),
-						tc.ExpectedOutput.PoolConfig.Ranks,
-						"Invalid list of Ranks")
-				} else {
-					test.AssertEqual(t,
-						ranklist.RankList(poolCreateRequest.Ranks).String(),
-						"",
-						"Invalid list of Ranks")
-				}
-				test.AssertTrue(t,
-					poolCreateRequest.TierRatio == nil,
-					"Invalid size of TierRatio attribute: disabled with manual allocation")
-				msg := fmt.Sprintf("Creating DAOS pool with %s of all storage",
-					strings.ReplaceAll(tc.StorageRatio, " ", ""))
-				test.AssertTrue(t,
-					strings.Contains(buf.String(), msg),
-					fmt.Sprintf("missing success message: %q", msg))
-				if tc.ExpectedOutput.WarningMsg != "" {
-					test.AssertTrue(t,
-						strings.Contains(buf.String(), tc.ExpectedOutput.WarningMsg),
-						"missing warning message: "+tc.ExpectedOutput.WarningMsg)
-				}
-			}
 		})
 	}
 }

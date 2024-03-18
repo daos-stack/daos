@@ -1182,12 +1182,11 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 }
 
 /**
- * Validates an input group id string. Checks both length and for presence of
- * invalid characters.
+ * Validates an input group id string. Checks both length and for presence of invalid characters.
  *
- * \param grpid [IN]		unique group ID.
+ * \param[in] grpid	unique group ID.
  *
- * \return			zero if grpid is valid, -DER_INVAL otherwise
+ * \return		zero if grpid is valid, -DER_INVAL otherwise
  */
 int
 crt_validate_grpid(const crt_group_id_t grpid) {
@@ -2405,10 +2404,11 @@ grp_regen_linear_list(struct crt_grp_priv *grp_priv)
 	/* If group size changed - reallocate the list */
 	if (!linear_list->rl_ranks ||
 	    linear_list->rl_nr != grp_priv->gp_size) {
-		linear_list = d_rank_list_realloc(linear_list,
-						  grp_priv->gp_size);
-		if (linear_list == NULL)
-			return -DER_NOMEM;
+		int rc;
+
+		rc = d_rank_list_resize(linear_list, grp_priv->gp_size);
+		if (rc != 0)
+			return rc;
 	}
 
 	index = 0;
@@ -2461,9 +2461,9 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t inc
 		first = membs->rl_nr;
 		new_amount = first + RANK_LIST_REALLOC_SIZE;
 
-		membs = d_rank_list_realloc(membs, new_amount);
-		if (membs == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+		rc = d_rank_list_resize(membs, new_amount);
+		if (rc != 0)
+			D_GOTO(out, rc);
 
 		for (i = first; i < first + RANK_LIST_REALLOC_SIZE; i++) {
 			membs->rl_ranks[i] = CRT_NO_RANK;
@@ -2610,6 +2610,7 @@ crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 		}
 	}
 
+	d_log_rank_setup(rank);
 unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 out:

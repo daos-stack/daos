@@ -1,12 +1,12 @@
 """Build DAOS"""
-import os
-import sys
-import subprocess  # nosec
-import time
 import errno
+import os
+import subprocess  # nosec
+import sys
+import time
+
 import SCons.Warnings
-from prereq_tools import PreReqComponent
-# pylint: disable=reimported
+from prereq_tools import PreReqComponent  # pylint: disable=reimported
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -177,8 +177,8 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         # pylint: disable=consider-using-f-string
         try:
             # pylint: disable=import-outside-toplevel
-            import pygit2
             import github
+            import pygit2
             import yaml
         except ImportError:
             print("You need yaml, pygit2 and pygithub python modules to create releases")
@@ -317,8 +317,8 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         try:
             remote.push(['refs/heads/{}'.format(branch)],
                         callbacks=MyCallbacks())
-        except pygit2.GitError as excpt:
-            print("Error pushing branch: {}".format(excpt))
+        except pygit2.GitError as err:
+            print("Error pushing branch: {}".format(err))
             Exit(1)
 
         print("Creating the PR...")
@@ -363,7 +363,7 @@ MINIMAL_ENV = ('HOME', 'TERM', 'SSH_AUTH_SOCK', 'http_proxy', 'https_proxy', 'PK
 
 # Environment variables that are also kept when LD_PRELOAD is set.
 PRELOAD_ENV = ('LD_PRELOAD', 'D_LOG_FILE', 'DAOS_AGENT_DRPC_DIR', 'D_LOG_MASK', 'DD_MASK',
-               'DD_SUBSYS')
+               'DD_SUBSYS', 'D_IL_MAX_EQ')
 
 
 def scons():

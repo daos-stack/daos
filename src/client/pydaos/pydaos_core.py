@@ -11,10 +11,7 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 import enum
 
 # pylint: disable-next=relative-beyond-top-level
-from . import pydaos_shim
-from . import DAOS_MAGIC
-from . import PyDError
-from . import DaosClient
+from . import DAOS_MAGIC, DaosClient, PyDError, pydaos_shim
 
 # Import Object class as an enumeration
 ObjClassID = enum.Enum(

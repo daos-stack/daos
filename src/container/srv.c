@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,22 +76,18 @@ static struct crt_corpc_ops ds_cont_tgt_snapshot_notify_co_ops = {
 /* Define for cont_rpcs[] array population below.
  * See CONT_PROTO_*_RPC_LIST macro definition
  */
-#define X(a, b, c, d, e)	\
-{				\
-	.dr_opc       = a,	\
-	.dr_hdlr      = d,	\
-	.dr_corpc_ops = e,	\
-}
+#define X(a, b, c, d, e)                                                                           \
+	{                                                                                          \
+	    .dr_opc       = a,                                                                     \
+	    .dr_hdlr      = d,                                                                     \
+	    .dr_corpc_ops = e,                                                                     \
+	},
+
+static struct daos_rpc_handler cont_handlers_v8[] = {
+    CONT_PROTO_CLI_RPC_LIST(8, ds_cont_op_handler_v8) CONT_PROTO_SRV_RPC_LIST};
 
 static struct daos_rpc_handler cont_handlers_v7[] = {
-	CONT_PROTO_CLI_RPC_LIST(7, ds_cont_op_handler_v7),
-	CONT_PROTO_SRV_RPC_LIST,
-};
-
-static struct daos_rpc_handler cont_handlers_v6[] = {
-	CONT_PROTO_CLI_RPC_LIST(6, ds_cont_op_handler_v6),
-	CONT_PROTO_SRV_RPC_LIST,
-};
+    CONT_PROTO_CLI_RPC_LIST(7, ds_cont_op_handler_v7) CONT_PROTO_SRV_RPC_LIST};
 
 #undef X
 
@@ -149,16 +145,16 @@ struct dss_module_metrics cont_metrics = {
 	.dmm_nr_metrics = ds_cont_metrics_count,
 };
 
-struct dss_module cont_module =  {
-	.sm_name	= "cont",
-	.sm_mod_id	= DAOS_CONT_MODULE,
-	.sm_ver		= DAOS_CONT_VERSION,
-	.sm_proto_count	= 2,
-	.sm_init	= init,
-	.sm_fini	= fini,
-	.sm_proto_fmt	= {&cont_proto_fmt_v6, &cont_proto_fmt_v7},
-	.sm_cli_count	= {CONT_PROTO_CLI_COUNT, CONT_PROTO_CLI_COUNT},
-	.sm_handlers	= {cont_handlers_v6, cont_handlers_v7},
-	.sm_key		= &cont_module_key,
-	.sm_metrics	= &cont_metrics,
+struct dss_module cont_module = {
+    .sm_name        = "cont",
+    .sm_mod_id      = DAOS_CONT_MODULE,
+    .sm_ver         = DAOS_CONT_VERSION,
+    .sm_proto_count = 2,
+    .sm_init        = init,
+    .sm_fini        = fini,
+    .sm_proto_fmt   = {&cont_proto_fmt_v7, &cont_proto_fmt_v8},
+    .sm_cli_count   = {CONT_PROTO_CLI_COUNT, CONT_PROTO_CLI_COUNT},
+    .sm_handlers    = {cont_handlers_v7, cont_handlers_v8},
+    .sm_key         = &cont_module_key,
+    .sm_metrics     = &cont_metrics,
 };

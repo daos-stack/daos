@@ -116,6 +116,12 @@ enum daos_io_mode {
 #define DAOS_OBJ_REPL_MAX	MAX_NUM_GROUPS
 #define DAOS_OBJ_RESIL_MAX	MAX_NUM_GROUPS
 
+static inline bool
+daos_data_thresh_valid(uint32_t size)
+{
+	return true;
+}
+
 /**
  * 192-bit object ID, it can identify a unique bottom level object.
  * (a shard of upper level object).
@@ -205,6 +211,84 @@ struct daos_shard_tgt {
 	uint8_t			st_ec_tgt;
 	uint8_t			st_flags;	/* see daos_tgt_flags */
 };
+
+struct daos_coll_shard {
+	uint16_t		 dcs_nr;
+	uint16_t		 dcs_cap;
+	uint32_t		 dcs_inline;
+	/* The shards (ID) in the buffer locate on the same VOS target. */
+	uint32_t		*dcs_buf;
+
+	/*
+	 * Index (in layout) of the first shard corresponding to "dcs_buf[0]" on this target,
+	 * do not pack on-wire.
+	 */
+	uint32_t		 dcs_idx;
+};
+
+struct daos_coll_target {
+	uint32_t		 dct_rank;
+	/*
+	 * The size (in byte) of dct_bitmap. It (s << 3) may be smaller than dss_tgt_nr if only
+	 * some VOS targets are involved. It also maybe larger than dss_tgt_nr if dss_tgt_nr is
+	 * not 2 ^ n aligned.
+	 */
+	uint8_t			 dct_bitmap_sz;
+	/* The max shard in dct_shards, it may be smaller than the sparse array length. */
+	uint8_t			 dct_max_shard;
+	/*
+	 * How many valid object shards reside on the engine. If the real count exceeds the
+	 * max capacity of sizeof(uint8_t) can hold, just set as the max. That is no matter.
+	 */
+	uint8_t			 dct_tgt_nr;
+	/*
+	 * The capacity for the dct_tgt_ids array.
+	 * For non-modification case, it is always zero to avoid sending dct_tgt_ids on wire.
+	 */
+	uint8_t			 dct_tgt_cap;
+	/* Bitmap for the VOS targets (on the rank) that are involved in the operation. */
+	uint8_t			*dct_bitmap;
+	/* Sparse array for object shards' identifiers, sorted with VOS targets index. */
+	struct daos_coll_shard	*dct_shards;
+	/*
+	 * It stores the identifiers of shards on the engine, in spite of on which VOS target,
+	 * only for modification case.
+	 */
+	uint32_t		*dct_tgt_ids;
+};
+
+static inline void
+daos_coll_shard_cleanup(struct daos_coll_shard *shards, uint32_t count)
+{
+	struct daos_coll_shard	*shard;
+	int			 i;
+
+	if (shards != NULL) {
+		for (i = 0; i < count; i++) {
+			shard = &shards[i];
+			if (shard->dcs_buf != &shard->dcs_inline)
+				D_FREE(shard->dcs_buf);
+		}
+		D_FREE(shards);
+	}
+}
+
+static inline void
+daos_coll_target_cleanup(struct daos_coll_target *dcts, uint32_t count)
+{
+	struct daos_coll_target	*dct;
+	int			 i;
+
+	if (dcts != NULL) {
+		for (i = 0; i < count; i++) {
+			dct = &dcts[i];
+			daos_coll_shard_cleanup(dct->dct_shards, dct->dct_max_shard + 1);
+			D_FREE(dct->dct_bitmap);
+			D_FREE(dct->dct_tgt_ids);
+		}
+		D_FREE(dcts);
+	}
+}
 
 static inline bool
 daos_oid_is_null(daos_obj_id_t oid)

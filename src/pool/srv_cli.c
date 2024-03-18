@@ -199,9 +199,11 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 
 	struct rsvc_client	client;
 	struct d_backoff_seq	backoff_seq;
+	uuid_t                  no_uuid;
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
+	uuid_clear(no_uuid);
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0) {
 		D_ERROR(DF_PRE": initialize replicated service client: "DF_RC"\n",
@@ -225,6 +227,7 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 		uint32_t		rpc_timeout;
 		uint64_t		t;
 		struct pool_op_out     *out;
+		uint64_t                req_time = 0;
 		uint32_t		backoff = d_backoff_seq_next(&backoff_seq);
 
 		ep.ep_grp = NULL;
@@ -235,9 +238,10 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 			break;
 		}
 
-		rc = pool_req_create(info->dmi_ctx, &ep, cbs->pscc_op, &rpc);
+		rc = pool_req_create(info->dmi_ctx, &ep, cbs->pscc_op, uuid, no_uuid, &req_time,
+				     &rpc);
 		if (rc != 0) {
-			D_ERROR(DF_PRE": create RPC: "DF_RC"\n", DP_PRE(uuid, cbs), DP_RC(rc));
+			DL_ERROR(rc, DF_PRE ": create RPC", DP_PRE(uuid, cbs));
 			break;
 		}
 
@@ -329,6 +333,7 @@ struct pool_query_arg {
 	daos_pool_info_t       *pqa_info;
 	uint32_t	       *pqa_layout_ver;
 	uint32_t	       *pqa_upgrade_layout_ver;
+	crt_bulk_t              pqa_bulk;
 	struct pool_buf	       *pqa_map_buf;
 	uint32_t		pqa_map_size;
 };
@@ -336,17 +341,23 @@ struct pool_query_arg {
 static int
 pool_query_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
-	struct pool_query_arg	 *arg = varg;
-	struct dss_module_info	 *info = dss_get_module_info();
-	struct pool_query_v5_in	 *in;
+	struct pool_query_arg  *arg  = varg;
+	struct dss_module_info *info = dss_get_module_info();
+	struct pool_query_in   *in;
+	uint64_t                query_bits;
+	int                     rc;
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->pqi_op.pi_uuid, pool_uuid);
 	uuid_clear(in->pqi_op.pi_hdl);
-	in->pqi_query_bits = pool_query_bits(arg->pqa_info, NULL);
+	query_bits = pool_query_bits(arg->pqa_info, NULL);
 
-	return map_bulk_create(info->dmi_ctx, &in->pqi_map_bulk, &arg->pqa_map_buf,
-			       arg->pqa_map_size);
+	rc = map_bulk_create(info->dmi_ctx, &arg->pqa_bulk, &arg->pqa_map_buf, arg->pqa_map_size);
+	if (rc != 0)
+		return rc;
+	pool_query_in_set_data(rpc, arg->pqa_bulk, query_bits);
+
+	return rc;
 }
 
 static int
@@ -397,7 +408,7 @@ static int
 pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
 	struct pool_query_arg	       *arg = varg;
-	struct pool_query_v5_out       *out = crt_reply_get(rpc);
+	struct pool_query_out          *out = crt_reply_get(rpc);
 	int				rc = out->pqo_op.po_rc;
 
 	if (rc == -DER_TRUNC) {
@@ -432,10 +443,9 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 static void
 pool_query_fini(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
-	struct pool_query_arg	       *arg = varg;
-	struct pool_query_v5_in	       *in = crt_req_get(rpc);
+	struct pool_query_arg *arg = varg;
 
-	map_bulk_destroy(in->pqi_map_bulk, arg->pqa_map_buf);
+	map_bulk_destroy(arg->pqa_bulk, arg->pqa_map_buf);
 	arg->pqa_map_buf = NULL;
 }
 

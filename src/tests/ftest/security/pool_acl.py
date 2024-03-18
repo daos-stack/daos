@@ -3,12 +3,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import grp
 import os
 import pwd
-import grp
 
-import security_test_base as secTestBase
 from pool_security_test_base import PoolSecurityTestBase
+from security_test_base import acl_entry
 
 PERMISSIONS = ["", "r", "w", "rw"]
 
@@ -53,11 +53,9 @@ class SecurityPoolACLTest(PoolSecurityTestBase):
 
         user_types = ["owner", "user", "ownergroup", "group", "everyone"]
         default_acl_entries = ["A::OWNER@:",
-                               secTestBase.acl_entry("user", current_user, "",
-                                                     PERMISSIONS),
+                               acl_entry("user", current_user, "", PERMISSIONS),
                                "A:G:GROUP@:",
-                               secTestBase.acl_entry("group", current_group, "",
-                                                     PERMISSIONS),
+                               acl_entry("group", current_group, "", PERMISSIONS),
                                "A::EVERYONE@:"]
         test_acl_entries = ["", "", "", "", ""]
 

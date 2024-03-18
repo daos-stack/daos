@@ -19,12 +19,13 @@
 # SOFTWARE.
 """Wrapper for Modules so we can load an MPI before builds or tests"""
 
-import os
-import sys
 import errno
-import subprocess  # nosec
+import os
 import shutil
+import subprocess  # nosec
+import sys
 from subprocess import PIPE, Popen  # nosec
+
 import distro
 
 

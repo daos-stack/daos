@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,6 +61,7 @@ rdb_raft_rc(int raft_rc)
 	case RAFT_ERR_NOMEM:			return -DER_NOMEM;
 	case RAFT_ERR_SNAPSHOT_ALREADY_LOADED:	return -DER_ALREADY;
 	case RAFT_ERR_INVALID_CFG_CHANGE:	return -DER_INVAL;
+	case RAFT_ERR_MIGHT_VIOLATE_LEASE:	return -DER_NO_PERM;
 	default:				return -DER_MISC;
 	}
 }
@@ -1093,18 +1094,10 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 		goto out_replicas;
 	}
 
-	if (entry->type == RAFT_LOGTYPE_ADD_NODE) {
+	if (entry->type == RAFT_LOGTYPE_ADD_NODE)
 		rc = d_rank_list_append(replicas, rank);
-	} else if (entry->type == RAFT_LOGTYPE_REMOVE_NODE) {
-		/* never expect 1->0 in practice, right? But protect against double-free. */
-		bool replicas_freed = (replicas->rl_nr == 1);
-
+	else if (entry->type == RAFT_LOGTYPE_REMOVE_NODE)
 		rc = d_rank_list_del(replicas, rank);
-		if (replicas_freed) {
-			D_ASSERT(rc == -DER_NOMEM);
-			replicas = NULL;
-		}
-	}
 	if (rc != 0)
 		goto out_replicas;
 
@@ -1164,7 +1157,9 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 			goto err;
 		}
 	} else {
-		D_ASSERTF(0, "Unknown entry type %d\n", entry->type);
+		D_ERROR(DF_DB": unknown entry "DF_U64" type: %d\n", DP_DB(db), index, entry->type);
+		rc = -DER_IO;
+		goto err;
 	}
 
 	/*
@@ -1387,18 +1382,33 @@ rdb_raft_cb_notify_membership_event(raft_server_t *raft, void *udata, raft_node_
 }
 
 static void
-rdb_raft_cb_debug(raft_server_t *raft, raft_node_t *node, void *arg,
-		  const char *buf)
+rdb_raft_cb_log(raft_server_t *raft, raft_node_t *node, void *arg, raft_loglevel_e level,
+		const char *buf)
 {
 	struct rdb *db = raft_get_udata(raft);
+	d_rank_t    rank;
 
-	if (node != NULL) {
-		struct rdb_raft_node *rdb_node = raft_node_get_udata(node);
+	if (node == NULL)
+		rank = CRT_NO_RANK;
+	else
+		rank = ((struct rdb_raft_node *)raft_node_get_udata(node))->dn_rank;
 
-		D_DEBUG(DB_TRACE, DF_DB": %s: rank=%u\n", DP_DB(db), buf,
-			rdb_node->dn_rank);
-	} else {
-		D_DEBUG(DB_TRACE, DF_DB": %s\n", DP_DB(db), buf);
+	switch (level) {
+	case RAFT_LOG_ERROR:
+		D_ERROR(DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
+		break;
+	case RAFT_LOG_INFO:
+		/*
+		 * Demote to D_DEBUG, because we don't have a mechanism yet to
+		 * eventually stop replicas that have been excluded from the
+		 * pool. Every 1--2 election timeouts, these replicas will log a
+		 * few election messages, which might attract complaints if done
+		 * with D_INFO.
+		 */
+		D_DEBUG(DB_MD, DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
+		break;
+	default:
+		D_DEBUG(DB_IO, DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
 	}
 }
 
@@ -1411,6 +1421,12 @@ rdb_raft_cb_get_time(raft_server_t *raft, void *user_data)
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	D_ASSERTF(rc == 0, "clock_gettime: %d\n", errno);
 	return now.tv_sec * 1000 + now.tv_nsec / (1000 * 1000);
+}
+
+static double
+rdb_raft_cb_get_rand(raft_server_t *raft, void *user_data)
+{
+	return d_randd();
 }
 
 /*
@@ -1434,8 +1450,9 @@ static raft_cbs_t rdb_raft_cbs = {
 	.log_pop			= rdb_raft_cb_log_pop,
 	.log_get_node_id		= rdb_raft_cb_log_get_node_id,
 	.notify_membership_event	= rdb_raft_cb_notify_membership_event,
-	.log				= rdb_raft_cb_debug,
-	.get_time			= rdb_raft_cb_get_time
+	.log				= rdb_raft_cb_log,
+	.get_time			= rdb_raft_cb_get_time,
+	.get_rand			= rdb_raft_cb_get_rand
 };
 
 static int
@@ -2427,7 +2444,7 @@ rdb_raft_get_election_timeout(void)
 	unsigned int	default_value = 7000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2442,7 +2459,7 @@ rdb_raft_get_request_timeout(void)
 	unsigned int	default_value = 3000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2457,7 +2474,7 @@ rdb_raft_get_lease_maintenance_grace(void)
 	unsigned int	default_value = 7000;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0 || value > INT_MAX) {
 		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
 		value = default_value;
@@ -2472,7 +2489,7 @@ rdb_raft_get_compact_thres(void)
 	unsigned int	default_value = 256;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0) {
 		D_WARN("%s not in (0, %u] (defaulting to %u)\n", name, UINT_MAX, default_value);
 		value = default_value;
@@ -2487,7 +2504,7 @@ rdb_raft_get_ae_max_entries(void)
 	unsigned int	default_value = 32;
 	unsigned int	value = default_value;
 
-	d_getenv_int(name, &value);
+	d_getenv_uint(name, &value);
 	if (value == 0) {
 		D_WARN("%s not in (0, %u] (defaulting to %u)\n", name, UINT_MAX, default_value);
 		value = default_value;
@@ -2862,7 +2879,7 @@ rdb_raft_campaign(struct rdb *db)
 	node = raft_get_my_node(db->d_raft);
 	if (node == NULL || !raft_node_is_voting(node)) {
 		D_DEBUG(DB_MD, DF_DB": must be voting node\n", DP_DB(db));
-		rc = -DER_INVAL;
+		rc = -DER_NO_PERM;
 		goto out_mutex;
 	}
 
@@ -2954,6 +2971,8 @@ rdb_raft_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 		ranks->rl_ranks[i] = rdb_node->dn_rank;
 	}
 	ranks->rl_nr = i;
+
+	d_rank_list_sort(ranks);
 
 	*ranksp = ranks;
 	rc = 0;
@@ -3201,8 +3220,8 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	}
 	rc = rdb_raft_check_state(db, &state, rc);
 	if (rc != 0 && rc != -DER_NOTLEADER)
-		D_ERROR(DF_DB": failed to process opc %u response: %d\n",
-			DP_DB(db), opc, rc);
+		DL_ERROR(rc, DF_DB ": failed to process opc %u response from rank %u", DP_DB(db),
+			 opc, rank);
 
 out_mutex:
 	ABT_mutex_unlock(db->d_raft_mutex);
@@ -3257,4 +3276,15 @@ rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc)
 	default:
 		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);
 	}
+}
+
+void
+rdb_raft_module_init(void)
+{
+	raft_set_log_level(RAFT_LOG_DEBUG);
+}
+
+void
+rdb_raft_module_fini(void)
+{
 }

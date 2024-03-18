@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,56 +31,57 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 9
+#define DAOS_OBJ_VERSION 10
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
 
-#define OBJ_PROTO_CLI_RPC_LIST						\
+#define OBJ_PROTO_CLI_RPC_LIST(ver)					\
 	X(DAOS_OBJ_RPC_UPDATE,						\
-		0, &CQF_obj_rw,						\
+		0, ver == 9 ? &CQF_obj_rw : &CQF_obj_rw_v10,		\
 		ds_obj_rw_handler, NULL, "update")			\
 	X(DAOS_OBJ_RPC_FETCH,						\
-		0, &CQF_obj_rw,						\
+		0, ver == 9 ? &CQF_obj_rw : &CQF_obj_rw_v10,		\
 		ds_obj_rw_handler, NULL, "fetch")			\
 	X(DAOS_OBJ_DKEY_RPC_ENUMERATE,					\
-		0, &CQF_obj_key_enum,					\
+		0, ver == 9 ? &CQF_obj_key_enum : &CQF_obj_key_enum_v10,\
 		ds_obj_enum_handler, NULL, "dkey_enum")			\
 	X(DAOS_OBJ_AKEY_RPC_ENUMERATE,					\
-		0, &CQF_obj_key_enum,					\
+		0, ver == 9 ? &CQF_obj_key_enum : &CQF_obj_key_enum_v10,\
 		ds_obj_enum_handler, NULL, "akey_enum")			\
 	X(DAOS_OBJ_RECX_RPC_ENUMERATE,					\
-		0, &CQF_obj_key_enum,					\
+		0, ver == 9 ? &CQF_obj_key_enum : &CQF_obj_key_enum_v10,\
 		ds_obj_enum_handler, NULL, "recx_enum")			\
 	X(DAOS_OBJ_RPC_ENUMERATE,					\
-		0, &CQF_obj_key_enum,					\
+		0, ver == 9 ? &CQF_obj_key_enum : &CQF_obj_key_enum_v10,\
 		ds_obj_enum_handler, NULL, "obj_enum")			\
 	X(DAOS_OBJ_RPC_PUNCH,						\
-		0, &CQF_obj_punch,					\
+		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
 		ds_obj_punch_handler, NULL, "obj_punch")		\
 	X(DAOS_OBJ_RPC_PUNCH_DKEYS,					\
-		0, &CQF_obj_punch,					\
+		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
 		ds_obj_punch_handler, NULL, "dkey_punch")		\
 	X(DAOS_OBJ_RPC_PUNCH_AKEYS,					\
-		0, &CQF_obj_punch,					\
+		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
 		ds_obj_punch_handler, NULL, "akey_punch")		\
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
-		0, &CQF_obj_query_key,					\
+		0, ver == 9 ? &CQF_obj_query_key :			\
+					&CQF_obj_query_key_v10,		\
 		ds_obj_query_key_handler, NULL, "key_query")		\
 	X(DAOS_OBJ_RPC_SYNC,						\
-		0, &CQF_obj_sync,					\
+		0, ver == 9 ? &CQF_obj_sync : &CQF_obj_sync_v10,	\
 		ds_obj_sync_handler, NULL, "obj_sync")			\
 	X(DAOS_OBJ_RPC_TGT_UPDATE,					\
-		0, &CQF_obj_rw,						\
+		0, ver == 9 ? &CQF_obj_rw : &CQF_obj_rw_v10,		\
 		ds_obj_tgt_update_handler, NULL, "tgt_update")		\
 	X(DAOS_OBJ_RPC_TGT_PUNCH,					\
-		0, &CQF_obj_punch,					\
+		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
 		ds_obj_tgt_punch_handler, NULL, "tgt_punch")		\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_DKEYS,					\
-		0, &CQF_obj_punch,					\
+		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
 		ds_obj_tgt_punch_handler, NULL, "tgt_dkey_punch")	\
 	X(DAOS_OBJ_RPC_TGT_PUNCH_AKEYS,					\
-		0, &CQF_obj_punch,					\
+		0, ver == 9 ? &CQF_obj_punch : &CQF_obj_punch_v10,	\
 		ds_obj_tgt_punch_handler, NULL, "tgt_akey_punch")	\
 	X(DAOS_OBJ_RPC_MIGRATE,						\
 		0, &CQF_obj_migrate,					\
@@ -95,20 +96,27 @@
 		0, &CQF_obj_cpd,					\
 		ds_obj_cpd_handler, NULL, "compound")			\
 	X(DAOS_OBJ_RPC_KEY2ANCHOR,					\
-		0, &CQF_obj_key2anchor,					\
-		ds_obj_key2anchor_handler, NULL, "key2anchor")
+		0, ver == 9 ? &CQF_obj_key2anchor :			\
+				&CQF_obj_key2anchor_v10,		\
+		ds_obj_key2anchor_handler, NULL, "key2anchor")		\
+	X(DAOS_OBJ_RPC_COLL_PUNCH,					\
+		0, &CQF_obj_coll_punch, ds_obj_coll_punch_handler,	\
+		NULL, "obj_coll_punch")					\
+	X(DAOS_OBJ_RPC_COLL_QUERY,					\
+		0, &CQF_obj_coll_query, ds_obj_coll_query_handler,	\
+		NULL, "obj_coll_query")
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e, f) a,
 enum obj_rpc_opc {
-	OBJ_PROTO_CLI_RPC_LIST
+	OBJ_PROTO_CLI_RPC_LIST(10)
 	OBJ_PROTO_CLI_COUNT,
 	OBJ_PROTO_CLI_LAST = OBJ_PROTO_CLI_COUNT - 1,
 };
 #undef X
 
-extern struct crt_proto_format obj_proto_fmt_0;
-extern struct crt_proto_format obj_proto_fmt_1;
+extern struct crt_proto_format obj_proto_fmt_v9;
+extern struct crt_proto_format obj_proto_fmt_v10;
 extern int dc_obj_proto_version;
 
 /* Helper function to convert opc to name */
@@ -117,7 +125,7 @@ obj_opc_to_str(crt_opcode_t opc)
 {
 	switch (opc) {
 #define X(a, b, c, d, e, f) case a: return f;
-		OBJ_PROTO_CLI_RPC_LIST
+		OBJ_PROTO_CLI_RPC_LIST(10)
 #undef X
 	}
 	return "unknown";
@@ -147,8 +155,8 @@ enum obj_rpc_flags {
 	 * oei_epr.epr_hi is epoch.
 	 */
 	ORF_ENUM_WITHOUT_EPR	= (1 << 8),
-	/* CPD RPC leader */
-	ORF_CPD_LEADER		= (1 << 9),
+	/* RPC leader */
+	ORF_LEADER		= (1 << 9),
 	/* Bulk data transfer for CPD RPC. */
 	ORF_CPD_BULK		= (1 << 10),
 	/* Contain EC split req, only used on CPD leader locally. Obsolete - DAOS-10348. */
@@ -221,6 +229,16 @@ enum obj_rpc_flags {
 
 CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 
+#define DAOS_ISEQ_OBJ_RW_V10	/* input fields */		 \
+	DAOS_ISEQ_OBJ_RW					 \
+	((struct daos_req_comm_in)	(orw_comm_in)	CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_RW_V10	/* output fields */		 \
+	DAOS_OSEQ_OBJ_RW					 \
+	((struct daos_req_comm_out)	(orw_comm_out)	CRT_VAR)
+
+CRT_RPC_DECLARE(obj_rw_v10,	DAOS_ISEQ_OBJ_RW_V10, DAOS_OSEQ_OBJ_RW_V10)
+
 /* object Enumerate in/out */
 #define DAOS_ISEQ_OBJ_KEY_ENUM	/* input fields */		 \
 	((struct dtx_id)	(oei_dti)		CRT_RAW) \
@@ -260,6 +278,16 @@ CRT_RPC_DECLARE(obj_rw,		DAOS_ISEQ_OBJ_RW, DAOS_OSEQ_OBJ_RW)
 
 CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 
+#define DAOS_ISEQ_OBJ_KEY_ENUM_V10 /* input fields */		 \
+	DAOS_ISEQ_OBJ_KEY_ENUM					 \
+	((struct daos_req_comm_in)	(oei_comm_in)	CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_KEY_ENUM_V10 /* output fields */		 \
+	DAOS_OSEQ_OBJ_KEY_ENUM					 \
+	((struct daos_req_comm_out)	(oeo_comm_out)	CRT_VAR)
+
+CRT_RPC_DECLARE(obj_key_enum_v10, DAOS_ISEQ_OBJ_KEY_ENUM_V10, DAOS_OSEQ_OBJ_KEY_ENUM_V10)
+
 #define DAOS_ISEQ_OBJ_PUNCH	/* input fields */		 \
 	((struct dtx_id)	(opi_dti)		CRT_RAW) \
 	((uuid_t)		(opi_pool_uuid)		CRT_VAR) \
@@ -281,6 +309,16 @@ CRT_RPC_DECLARE(obj_key_enum, DAOS_ISEQ_OBJ_KEY_ENUM, DAOS_OSEQ_OBJ_KEY_ENUM)
 	((uint32_t)		(opo_map_version)	CRT_VAR)
 
 CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
+
+#define DAOS_ISEQ_OBJ_PUNCH_V10 /* input fields */		 \
+	DAOS_ISEQ_OBJ_PUNCH					 \
+	((struct daos_req_comm_in)	(opi_comm_in)	CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_PUNCH_V10 /* output fields */		 \
+	DAOS_OSEQ_OBJ_PUNCH					 \
+	((struct daos_req_comm_out)	(opo_comm_out)	CRT_VAR)
+
+CRT_RPC_DECLARE(obj_punch_v10, DAOS_ISEQ_OBJ_PUNCH_V10, DAOS_OSEQ_OBJ_PUNCH_V10)
 
 #define DAOS_ISEQ_OBJ_QUERY_KEY	/* input fields */		 \
 	((struct dtx_id)	(okqi_dti)		CRT_RAW) \
@@ -316,6 +354,16 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 
 CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 
+#define DAOS_ISEQ_OBJ_QUERY_KEY_V10	/* input fields */	\
+	DAOS_ISEQ_OBJ_QUERY_KEY					\
+	((struct daos_req_comm_in)	(okqi_comm_in)	CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_QUERY_KEY_V10	/* output fields */	\
+	DAOS_OSEQ_OBJ_QUERY_KEY					\
+	((struct daos_req_comm_out)	(okqo_comm_out)	CRT_VAR)
+
+CRT_RPC_DECLARE(obj_query_key_v10, DAOS_ISEQ_OBJ_QUERY_KEY_V10, DAOS_OSEQ_OBJ_QUERY_KEY_V10)
+
 #define DAOS_ISEQ_OBJ_SYNC /* input fields */			 \
 	((uuid_t)		(osi_co_hdl)		CRT_VAR) \
 	((uuid_t)		(osi_pool_uuid)		CRT_VAR) \
@@ -332,6 +380,16 @@ CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 
 CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 
+#define DAOS_ISEQ_OBJ_SYNC_V10 /* input fields */		\
+	DAOS_ISEQ_OBJ_SYNC					\
+	((struct daos_req_comm_in)	(osi_comm_in)	CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_SYNC_V10 /* output fields */		\
+	DAOS_OSEQ_OBJ_SYNC					\
+	((struct daos_req_comm_out)	(oso_comm_out)	CRT_VAR)
+
+CRT_RPC_DECLARE(obj_sync_v10, DAOS_ISEQ_OBJ_SYNC_V10, DAOS_OSEQ_OBJ_SYNC_V10)
+
 #define DAOS_ISEQ_OBJ_MIGRATE	/* input fields */			\
 	((uuid_t)		(om_pool_uuid)		CRT_VAR)	\
 	((uuid_t)		(om_cont_uuid)		CRT_VAR)	\
@@ -346,10 +404,14 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((uint32_t)		(om_shards)		CRT_ARRAY)	\
 	((uint32_t)		(om_new_layout_ver)	CRT_VAR)	\
 	((uint32_t)		(om_opc)		CRT_VAR)	\
-	((uint32_t)		(om_generation)		CRT_VAR)
+	((uint32_t)		(om_generation)		CRT_VAR)	\
+	((uint32_t)		(om_padding)		CRT_VAR)	\
+	((struct daos_req_comm_in) (om_comm_in)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_MIGRATE	/* output fields */		 \
-	((int32_t)		(om_status)		CRT_VAR)
+	((int32_t)		(om_status)		CRT_VAR) \
+	((uint32_t)		(om_padding)		CRT_VAR) \
+	((struct daos_req_comm_out) (om_comm_out)	CRT_VAR)
 
 CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 
@@ -365,12 +427,14 @@ CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 	((daos_epoch_range_t)	(ea_epoch_range)	CRT_VAR)	\
 	((uint64_t)		(ea_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
-	((uint32_t)		(ea_map_ver)		CRT_VAR)
-
+	((uint32_t)		(ea_map_ver)		CRT_VAR)	\
+	((uint32_t)		(ea_padding)		CRT_VAR)	\
+	((struct daos_req_comm_in) (ea_comm_in)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_EC_AGG	/* output fields */		 \
 	((int32_t)		(ea_status)		CRT_VAR) \
-	((uint32_t)		(ea_map_ver)		CRT_VAR)
+	((uint32_t)		(ea_map_ver)		CRT_VAR) \
+	((struct daos_req_comm_out) (ea_comm_out)	CRT_VAR)
 
 CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 
@@ -386,11 +450,14 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 	((daos_epoch_range_t)	(er_epoch_range)	CRT_VAR)	\
 	((uint64_t)		(er_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(er_bulk)		CRT_VAR)	\
-	((uint32_t)		(er_map_ver)		CRT_VAR)
+	((uint32_t)		(er_map_ver)		CRT_VAR)	\
+	((uint32_t)		(er_padding)		CRT_VAR)	\
+	((struct daos_req_comm_in) (er_comm_in)		CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_EC_REP	/* output fields */		 \
 	((int32_t)		(er_status)		CRT_VAR) \
-	((uint32_t)		(er_map_ver)		CRT_VAR)
+	((uint32_t)		(er_map_ver)		CRT_VAR) \
+	((struct daos_req_comm_out) (er_comm_out)	CRT_VAR)
 
 CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 
@@ -414,6 +481,16 @@ CRT_RPC_DECLARE(obj_ec_rep, DAOS_ISEQ_OBJ_EC_REP, DAOS_OSEQ_OBJ_EC_REP)
 	((daos_anchor_t)	(oko_anchor)		CRT_RAW)
 
 CRT_RPC_DECLARE(obj_key2anchor, DAOS_ISEQ_OBJ_KEY2ANCHOR, DAOS_OSEQ_OBJ_KEY2ANCHOR)
+
+#define DAOS_ISEQ_OBJ_KEY2ANCHOR_V10	/* input fields */	 \
+	DAOS_ISEQ_OBJ_KEY2ANCHOR				 \
+	((struct daos_req_comm_in)	(oki_comm_in)	CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_KEY2ANCHOR_V10	/* output fields */	 \
+	DAOS_OSEQ_OBJ_KEY2ANCHOR				 \
+	((struct daos_req_comm_out)	(oko_comm_out)	CRT_VAR)
+
+CRT_RPC_DECLARE(obj_key2anchor_v10, DAOS_ISEQ_OBJ_KEY2ANCHOR_V10, DAOS_OSEQ_OBJ_KEY2ANCHOR_V10)
 
 void daos_dc_obj2id(void *ptr, daos_unit_oid_t *id);
 
@@ -636,6 +713,83 @@ struct daos_cpd_sg {
 
 CRT_RPC_DECLARE(obj_cpd, DAOS_ISEQ_OBJ_CPD, DAOS_OSEQ_OBJ_CPD)
 
+struct obj_dtx_mbs {
+	struct dtx_id		 odm_xid;
+	uint32_t		 odm_mbs_max_sz;
+	uint32_t		 odm_padding;
+	struct dtx_memberships	*odm_mbs;
+};
+
+enum obj_coll_rep_flags {
+	/* The returned recx contains the original mapped VOS index. */
+	OCRF_RAW_RECX	= (1 << 0),
+};
+
+#define DAOS_ISEQ_OBJ_COLL_PUNCH	/* input fields */				\
+	((struct obj_dtx_mbs)		(ocpi_odm)			CRT_VAR)	\
+	((uuid_t)			(ocpi_po_uuid)			CRT_VAR)	\
+	((uuid_t)			(ocpi_co_hdl)			CRT_VAR)	\
+	((uuid_t)			(ocpi_co_uuid)			CRT_VAR)	\
+	((daos_unit_oid_t)		(ocpi_oid)			CRT_RAW)	\
+	((uint64_t)			(ocpi_epoch)			CRT_VAR)	\
+	((uint64_t)			(ocpi_api_flags)		CRT_VAR)	\
+	((uint32_t)			(ocpi_map_ver)			CRT_VAR)	\
+	((uint32_t)			(ocpi_flags)			CRT_VAR)	\
+	((uint32_t)			(ocpi_bulk_tgt_sz)		CRT_VAR)	\
+	((uint32_t)			(ocpi_bulk_tgt_nr)		CRT_VAR)	\
+	((crt_bulk_t)			(ocpi_tgt_bulk)			CRT_VAR)	\
+	((uint32_t)			(ocpi_max_tgt_sz)		CRT_VAR)	\
+	((uint16_t)			(ocpi_disp_width)		CRT_VAR)	\
+	((uint16_t)			(ocpi_disp_depth)		CRT_VAR)	\
+	((struct daos_coll_target)	(ocpi_tgts)			CRT_ARRAY)	\
+	((struct daos_req_comm_in)	(ocpi_comm_in)			CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_COLL_PUNCH	/* output fields */				\
+	((int32_t)			(ocpo_ret)			CRT_VAR)	\
+	((uint32_t)			(ocpo_map_version)		CRT_VAR)	\
+	((struct daos_req_comm_out)	(ocpo_comm_out)			CRT_VAR)
+
+CRT_RPC_DECLARE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUNCH)
+
+#define ocpi_xid	ocpi_odm.odm_xid
+#define ocpi_mbs	ocpi_odm.odm_mbs
+
+#define DAOS_ISEQ_OBJ_COLL_QUERY	/* input fields */				\
+	((struct dtx_id)		(ocqi_xid)			CRT_VAR)	\
+	((uuid_t)			(ocqi_po_uuid)			CRT_VAR)	\
+	((uuid_t)			(ocqi_co_hdl)			CRT_VAR)	\
+	((uuid_t)			(ocqi_co_uuid)			CRT_VAR)	\
+	((daos_unit_oid_t)		(ocqi_oid)			CRT_RAW)	\
+	((uint64_t)			(ocqi_epoch)			CRT_VAR)	\
+	((uint64_t)			(ocqi_epoch_first)		CRT_VAR)	\
+	((uint64_t)			(ocqi_api_flags)		CRT_VAR)	\
+	((uint32_t)			(ocqi_map_ver)			CRT_VAR)	\
+	((uint32_t)			(ocqi_flags)			CRT_VAR)	\
+	((daos_key_t)			(ocqi_dkey)			CRT_VAR)	\
+	((daos_key_t)			(ocqi_akey)			CRT_VAR)	\
+	((uint32_t)			(ocqi_max_tgt_sz)		CRT_VAR)	\
+	((uint16_t)			(ocqi_disp_width)		CRT_VAR)	\
+	((uint16_t)			(ocqi_disp_depth)		CRT_VAR)	\
+	((struct daos_coll_target)	(ocqi_tgts)			CRT_ARRAY)	\
+	((struct daos_req_comm_in)	(ocqi_comm_in)			CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_COLL_QUERY	/* output fields */				\
+	((int32_t)			(ocqo_ret)			CRT_VAR)	\
+	((uint32_t)			(ocqo_map_version)		CRT_VAR)	\
+	/* The id_shard corresponding to ocqo_recx */					\
+	((uint32_t)			(ocqo_shard)			CRT_VAR)	\
+	((uint32_t)			(ocqo_flags)			CRT_VAR)	\
+	((uint64_t)			(ocqo_epoch)			CRT_VAR)	\
+	((daos_key_t)			(ocqo_dkey)			CRT_VAR)	\
+	((daos_key_t)			(ocqo_akey)			CRT_VAR)	\
+	/* recx for visible extent */							\
+	((daos_recx_t)			(ocqo_recx)			CRT_VAR)	\
+	/* epoch for max write */							\
+	((uint64_t)			(ocqo_max_epoch)		CRT_VAR)	\
+	((struct daos_req_comm_out)	(ocqo_comm_out)			CRT_VAR)
+
+CRT_RPC_DECLARE(obj_coll_query, DAOS_ISEQ_OBJ_COLL_QUERY, DAOS_OSEQ_OBJ_COLL_QUERY)
+
 static inline int
 obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	       crt_rpc_t **req)
@@ -659,6 +813,8 @@ uint32_t obj_reply_map_version_get(crt_rpc_t *rpc);
 
 int crt_proc_struct_daos_cpd_sub_req(crt_proc_t proc, crt_proc_op_t proc_op,
 				     struct daos_cpd_sub_req *dcsr, bool with_oid);
+int crt_proc_struct_daos_coll_target(crt_proc_t proc, crt_proc_op_t proc_op,
+				     struct daos_coll_target *dct);
 
 static inline bool
 obj_is_modification_opc(uint32_t opc)
@@ -668,7 +824,7 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
-		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS || opc == DAOS_OBJ_RPC_COLL_PUNCH;
 }
 
 #define DAOS_OBJ_UPDATE_MODE_MASK	(DAOS_OO_RW | DAOS_OO_EXCL |	\
@@ -678,6 +834,15 @@ static inline bool
 obj_is_fetch_opc(uint32_t opc)
 {
 	return opc == DAOS_OBJ_RPC_FETCH;
+}
+
+static inline bool
+obj_is_enum_opc(uint32_t opc)
+{
+	return (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_AKEY_RPC_ENUMERATE ||
+		opc == DAOS_OBJ_RECX_RPC_ENUMERATE);
 }
 
 static inline bool
@@ -700,29 +865,4 @@ obj_rpc_is_fetch(crt_rpc_t *rpc)
 	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_FETCH;
 }
 
-static inline bool
-obj_rpc_is_punch(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_DKEYS ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_PUNCH_AKEYS ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
-	       opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
-}
-
-static inline bool
-obj_rpc_is_migrate(crt_rpc_t *rpc)
-{
-	return opc_get(rpc->cr_opc) == DAOS_OBJ_RPC_MIGRATE;
-}
-
-static inline bool
-obj_is_enum_opc(uint32_t opc)
-{
-	return (opc == DAOS_OBJ_DKEY_RPC_ENUMERATE ||
-		opc == DAOS_OBJ_RPC_ENUMERATE ||
-		opc == DAOS_OBJ_AKEY_RPC_ENUMERATE ||
-		opc == DAOS_OBJ_RECX_RPC_ENUMERATE);
-}
 #endif /* __DAOS_OBJ_RPC_H__ */

@@ -1,18 +1,18 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import time
 import os
-from ClusterShell.NodeSet import NodeSet
+import time
 
-from command_utils_base import FormattedParameter, BasicParameter
-from exception_utils import CommandFailure
+from ClusterShell.NodeSet import NodeSet
 from command_utils import ExecutableCommand
+from command_utils_base import BasicParameter, FormattedParameter
+from exception_utils import CommandFailure
 from general_utils import check_file_exists, get_log_file
-from run_utils import run_remote, command_as_user
+from run_utils import command_as_user, run_remote
 
 
 class DfuseCommand(ExecutableCommand):
@@ -36,6 +36,7 @@ class DfuseCommand(ExecutableCommand):
         self.disable_caching = FormattedParameter("--disable-caching", False)
         self.disable_wb_cache = FormattedParameter("--disable-wb-cache", False)
         self.multi_user = FormattedParameter("--multi-user", False)
+        self.read_only = FormattedParameter("--read-only", False)
 
     def set_dfuse_exports(self, log_file):
         """Set exports to issue before the dfuse command.
@@ -71,9 +72,6 @@ class Dfuse(DfuseCommand):
 
         # result of last call to _update_mount_state()
         self._mount_state = {}
-
-        # which fusermount command to use for unmount
-        self._fusermount_cmd = ""
 
         # used by stop() to know cleanup is needed
         self.__need_cleanup = False
@@ -151,7 +149,7 @@ class Dfuse(DfuseCommand):
 
         """
         return ' '.join(filter(None, [
-            self._fusermount_cmd,
+            'fusermount3',
             '-u',
             '-z' if force else None,
             self.mount_dir.value
@@ -252,16 +250,6 @@ class Dfuse(DfuseCommand):
 
         if 'COVFILE' not in self.env:
             self.env['COVFILE'] = '/tmp/test.cov'
-
-        # Determine which fusermount command to use before mounting
-        if not self._fusermount_cmd:
-            self.log.info('Check which fusermount command to use')
-            for fusermount in ('fusermount3', 'fusermount'):
-                if run_remote(self.log, self.hosts, f'{fusermount} --version').passed:
-                    self._fusermount_cmd = fusermount
-                    break
-            if not self._fusermount_cmd:
-                raise CommandFailure(f'Failed to get fusermount command on: {self.hosts}')
 
         # mark the instance as needing cleanup before starting setup
         self.__need_cleanup = True
@@ -436,7 +424,7 @@ def start_dfuse(test, dfuse, pool=None, container=None, **params):
     if pool:
         params['pool'] = pool.identifier
     if container:
-        params['cont'] = container.uuid
+        params['cont'] = container.identifier
     if params:
         dfuse.update_params(**params)
 
@@ -481,7 +469,7 @@ class VerifyPermsCommand(ExecutableCommand):
             namespace (str): command namespace. Defaults to /run/verify_perms/*
 
         """
-        path = os.path.realpath(os.path.dirname(__file__))
+        path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
         super().__init__(namespace, "verify_perms.py", path)
 
         # verify_perms.py options

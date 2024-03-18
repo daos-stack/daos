@@ -4,12 +4,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import threading
+import os
 import subprocess  # nosec
+import threading
 import time
 from getpass import getuser
-import os
-
 
 from exception_utils import CommandFailure
 from fio_test_base import FioBase

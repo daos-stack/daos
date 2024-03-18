@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from command_utils_base import ObjectWithParameters, BasicParameter
+from command_utils_base import BasicParameter, ObjectWithParameters
 from daos_utils import DaosCommand
 
 
@@ -191,7 +191,7 @@ class RebuildTestBase(TestWithServers):
 
         # Refresh local pool and container
         self.pool.check_pool_info()
-        self.container.check_container_info()
+        self.container.query()
 
         # Verify the excluded rank is no longer used with the objects
         self.verify_rank_has_no_objects()

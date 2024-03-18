@@ -1,14 +1,14 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "dfuse_common.h"
 #include "dfuse.h"
-#include "daos_fs.h"
-#include "daos_api.h"
-#include "daos_security.h"
+#include <daos_fs.h>
+#include <daos_api.h>
+#include <daos_security.h>
 
 /* Lookup a pool */
 void
@@ -38,10 +38,8 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	 * lookups.
 	 */
 	if (uuid_parse(name, pool) < 0) {
-		struct fuse_entry_param entry = {.entry_timeout = 60};
-
 		DFUSE_TRA_DEBUG(parent, "Invalid pool uuid");
-		DFUSE_REPLY_ENTRY(parent, req, entry);
+		DFUSE_REPLY_NO_ENTRY(parent, req, 60);
 		return;
 	}
 
@@ -51,7 +49,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	if (rc != 0)
 		goto err;
 
-	rc = dfuse_cont_open(dfuse_info, dfp, &cont, &dfc);
+	rc = dfuse_cont_get_handle(dfuse_info, dfp, cont, &dfc);
 	if (rc != 0)
 		goto err;
 
@@ -64,7 +62,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 		DFUSE_TRA_INFO(ie, "Reusing existing pool entry without reconnect");
 
-		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
+		d_hash_rec_decref(dfp->dfp_cont_table, &dfc->dfs_entry);
 		entry.attr          = ie->ie_stat;
 		entry.attr_timeout  = dfc->dfc_attr_timeout;
 		entry.entry_timeout = dfc->dfc_dentry_dir_timeout;
@@ -95,7 +93,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 	rc = daos_pool_query(dfp->dfp_poh, NULL, &pool_info, prop, NULL);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfp, "daos_pool_query() failed: (%d)", rc);
+		DHL_ERROR(dfp, rc, "daos_pool_query() failed");
 		D_GOTO(decref, rc = daos_der2errno(rc));
 	}
 
@@ -134,12 +132,8 @@ decref:
 	dfuse_ie_free(dfuse_info, ie);
 	daos_prop_free(prop);
 err:
-	if (rc == ENOENT) {
-		struct fuse_entry_param entry = {0};
-
-		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
-		DFUSE_REPLY_ENTRY(parent, req, entry);
-	} else {
+	if (rc == ENOENT)
+		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
+	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	}
 }

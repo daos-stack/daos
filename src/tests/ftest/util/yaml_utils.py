@@ -3,14 +3,14 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from collections import OrderedDict
 import os
 import re
+from collections import OrderedDict
+
 import yaml
-
 from ClusterShell.NodeSet import NodeSet
-
-from data_utils import list_unique, list_flatten, dict_extract_values
+# pylint: disable=import-error,no-name-in-module
+from util.data_utils import dict_extract_values, list_flatten, list_unique
 
 
 class YamlException(BaseException):

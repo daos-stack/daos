@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,6 +18,9 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+#include <daos_types.h>
+#include <daos_obj.h>
 
 /** Conditional Op: Insert key if it doesn't exist, fail otherwise */
 #define DAOS_COND_KEY_INSERT	DAOS_COND_DKEY_INSERT

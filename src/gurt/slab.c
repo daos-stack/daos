@@ -9,7 +9,7 @@
 #include <gurt/debug.h>
 #include <gurt/common.h>
 
-#include "gurt/slab.h"
+#include <gurt/slab.h>
 
 static void
 debug_dump(struct d_slab_type *type)
@@ -367,7 +367,7 @@ d_slab_release(struct d_slab_type *type, void *ptr)
 /* Re-stock an object type.
  *
  * This is a function called off the critical path to pre-alloc and recycle
- * objects to be ready for re-use.  In an ideal world this function does
+ * objects to be ready for reuse.  In an ideal world this function does
  * all the heavy lifting and acquire/release are very cheap.
  *
  * Ideally this function should be called once for every acquire(), after the

@@ -7,7 +7,6 @@
 
 #include <daos_types.h>
 #include "vos_internal.h"
-#include "vos_policy.h"
 
 #define POOL_SCM_SYS(pool)	((pool)->vp_space_sys[DAOS_MEDIA_SCM])
 #define POOL_NVME_SYS(pool)	((pool)->vp_space_sys[DAOS_MEDIA_NVME])
@@ -17,64 +16,72 @@
 /* Minimal seconds interval for updating VOS space metrics */
 #define VOS_SPACE_METRICS_INTV	1
 
-/* Extra space being reserved to deal with fragmentation issues */
-static inline daos_size_t
-get_frag_overhead(daos_size_t tot_size, int media, bool small_pool)
+/*
+ * Extra space being reserved to deal with fragmentation issues
+ *
+ * DAOS-5813: Don't reserve NVMe, if NVMe allocation failed due to fragmentations, only data
+ * coalescing in aggregation will be affected, punch and GC won't be affected.
+ */
+static inline void
+frag_reserve_space(uuid_t uuid, daos_size_t *rsrvd, daos_size_t scm_tot)
 {
-	daos_size_t	min_sz = (2ULL << 30);	/* 2GB */
-	daos_size_t	max_sz = (10ULL << 30);	/* 10GB */
-	daos_size_t	ovhd = (tot_size * 5) / 100;
+	const daos_size_t min_sz = (2ULL << 30);  /* 2GB */
+	const daos_size_t max_sz = (10ULL << 30); /* 10GB */
+	daos_size_t       ovhd_sz;
 
-	/*
-	 * Don't reserve NVMe, if NVMe allocation failed due to fragmentations,
-	 * only data coalescing in aggregation will be affected, punch and GC
-	 * won't be affected.
-	 */
-	if (media == DAOS_MEDIA_NVME)
-		return 0;
-
-	/* If caller specified the pool is small, do not enforce a range */
-	if (!small_pool) {
-		if (ovhd < min_sz)
-			ovhd = min_sz;
-		else if (ovhd > max_sz)
-			ovhd = max_sz;
+	ovhd_sz = (scm_tot * 5) / 100;
+	if (scm_tot < 2 * (ovhd_sz + rsrvd[DAOS_MEDIA_SCM])) {
+		D_INFO("Disable SCM fragmentation space reserving for tiny pool:" DF_UUID " "
+		       "2*sys[" DF_U64 "] >= tot[" DF_U64 "]\n",
+		       DP_UUID(uuid), 2 * (ovhd_sz + rsrvd[DAOS_MEDIA_SCM]), scm_tot);
+		return;
 	}
 
-	return ovhd;
+	if (ovhd_sz > max_sz) {
+		ovhd_sz = max_sz;
+	}
+
+	if (ovhd_sz < min_sz && scm_tot >= 2 * (min_sz + rsrvd[DAOS_MEDIA_SCM])) {
+		ovhd_sz = min_sz;
+	}
+
+	rsrvd[DAOS_MEDIA_SCM] += ovhd_sz;
 }
 
 void
 vos_space_sys_init(struct vos_pool *pool)
 {
-	daos_size_t	scm_tot = pool->vp_pool_df->pd_scm_sz;
-	daos_size_t	nvme_tot = pool->vp_pool_df->pd_nvme_sz;
-
-	POOL_SCM_SYS(pool) =
-		get_frag_overhead(scm_tot, DAOS_MEDIA_SCM, pool->vp_small);
-	POOL_NVME_SYS(pool) =
-		get_frag_overhead(nvme_tot, DAOS_MEDIA_NVME, pool->vp_small);
+	const daos_size_t scm_tot  = pool->vp_pool_df->pd_scm_sz;
+	const daos_size_t nvme_tot = pool->vp_pool_df->pd_nvme_sz;
 
 	gc_reserve_space(&pool->vp_space_sys[0]);
 	agg_reserve_space(&pool->vp_space_sys[0]);
 
-	/* NVMe isn't configured */
 	if (nvme_tot == 0)
 		POOL_NVME_SYS(pool) = 0;
 
-	if ((POOL_SCM_SYS(pool) * 2) > scm_tot) {
-		D_WARN("Disable SCM space reserving for tiny pool:"DF_UUID" "
-		       "sys["DF_U64"] > tot["DF_U64"]\n",
-		       DP_UUID(pool->vp_id), POOL_SCM_SYS(pool), scm_tot);
+	if (scm_tot <= 2 * POOL_SCM_SYS(pool)) {
+		D_INFO("Disable SCM space reserving for tiny pool:" DF_UUID " "
+		       "2*sys[" DF_U64 "] >= tot[" DF_U64 "]\n",
+		       DP_UUID(pool->vp_id), 2 * POOL_SCM_SYS(pool), scm_tot);
 		POOL_SCM_SYS(pool) = 0;
+		goto exit;
 	}
 
-	if ((POOL_NVME_SYS(pool) * 2) > nvme_tot) {
-		D_WARN("Disable NVMe space reserving for tiny Pool:"DF_UUID" "
-		       "sys["DF_U64"] > tot["DF_U64"]\n",
-		       DP_UUID(pool->vp_id), POOL_NVME_SYS(pool), nvme_tot);
-		POOL_NVME_SYS(pool) = 0;
+	if (pool->vp_small) {
+		D_INFO("No SCM fragmentation space reserved for small pool:" DF_UUID,
+		       DP_UUID(pool->vp_id));
+		goto exit;
 	}
+
+	frag_reserve_space(pool->vp_id, &pool->vp_space_sys[0], scm_tot);
+
+exit:
+	D_INFO("Reserved SCM space for pool:" DF_UUID ", sys:" DF_U64 ", tot:" DF_U64 "\n",
+	       DP_UUID(pool->vp_id), POOL_SCM_SYS(pool), scm_tot);
+
+	D_INFO("Reserved NVMe space for pool:" DF_UUID ", sys:" DF_U64 ", tot:" DF_U64 "\n",
+	       DP_UUID(pool->vp_id), POOL_NVME_SYS(pool), nvme_tot);
 }
 
 int
@@ -205,7 +212,6 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 	struct dcs_csum_info	*csums, *recx_csum;
 	daos_iod_t		*iod;
 	daos_recx_t		*recx;
-	uint16_t		 media;
 	daos_size_t		 size, scm, nvme = 0 /* in blk */;
 	int			 i, j;
 
@@ -227,11 +233,10 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 		/* Single value */
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			size = iod->iod_size;
-			media = vos_policy_media_select(pool, iod->iod_type,
-							size, VOS_IOS_GENERIC);
 
 			/* Single value record */
-			if (media == DAOS_MEDIA_SCM) {
+			if (vos_io_scm(pool, iod->iod_type, size, VOS_IOS_GENERIC)) {
+				/** store data on DAOS_MEDIA_SCM */
 				scm += vos_recx2irec_size(size, csums);
 			} else {
 				scm += vos_recx2irec_size(0, csums);
@@ -249,11 +254,10 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 			recx_csum = recx_csum_at(csums, j, iod);
 
 			size = recx->rx_nr * iod->iod_size;
-			media = vos_policy_media_select(pool, iod->iod_type,
-							size, VOS_IOS_GENERIC);
 
 			/* Extent */
-			if (media == DAOS_MEDIA_SCM)
+			if (vos_io_scm(pool, iod->iod_type, size, VOS_IOS_GENERIC))
+				/** store data on DAOS_MEDIA_SCM */
 				scm += size;
 			else if (size != 0)
 				nvme += vos_byte2blkcnt(size);
@@ -384,6 +388,12 @@ vos_space_update_metrics(struct vos_pool *pool)
 	vpm = pool->vp_metrics;
 	if (!vpm)
 		return;
+
+	if (vpm->vp_space_metrics.vsm_last_update_ts == 0) {
+		/* Set the constant values */
+		d_tm_set_gauge(vpm->vp_space_metrics.vsm_scm_total, pool->vp_pool_df->pd_scm_sz);
+		d_tm_set_gauge(vpm->vp_space_metrics.vsm_nvme_total, pool->vp_pool_df->pd_nvme_sz);
+	}
 
 	now = daos_gettime_coarse();
 	if (now < vpm->vp_space_metrics.vsm_last_update_ts + VOS_SPACE_METRICS_INTV) {

@@ -31,7 +31,7 @@ class UUIDCornerCase(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool,uuid,label
-        :avocado: tags=uuid_corner_case,create_label_destroy_uuid,test_create_label_destroy_uuid
+        :avocado: tags=UUIDCornerCase,test_create_label_destroy_uuid
         """
         # Create with a label - Default.
         self.add_pool(connect=False)

@@ -45,6 +45,8 @@ struct pf_param {
 		struct {
 			/* visible iteration */
 			bool	visible;
+			/* recursive iteration */
+			bool    recurse;
 		} pa_iter;
 		/* private parameter for update, fetch and verify */
 		struct {

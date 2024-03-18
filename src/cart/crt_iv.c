@@ -19,7 +19,7 @@
 #define D_LOGFAC	DD_FAC(iv)
 
 #include "crt_internal.h"
-#include "cart/iv.h"
+#include <cart/iv.h>
 
 #define IV_DBG(key, msg, ...) \
 	D_DEBUG(DB_TRACE, "[key=%p] " msg, (key)->iov_buf, ##__VA_ARGS__)
@@ -134,6 +134,14 @@ struct crt_ivns_internal {
 	/* user private data associated with ns */
 	void				*cii_user_priv;
 };
+
+void
+crt_iv_init(crt_init_options_t *ops)
+{
+	if (ops != NULL && ops->cio_max_unexpected_size > 1024)
+		crt_gdata.cg_iv_inline_limit = ops->cio_max_expected_size - 1024;
+	D_INFO("max inline buf size is %u\n", crt_gdata.cg_iv_inline_limit);
+}
 
 static void
 handle_response_cb(const struct crt_cb_info *cb_info);
@@ -381,14 +389,13 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 
 	if (rpc) {
 		/* If there is child to respond to - bulk transfer to it */
-		if (output_rc == 0) {
+		if (output_rc == 0 && iv_info->ifc_child_bulk != CRT_BULK_NULL) {
 			/* Note: function will increment ref count on 'rpc' */
 			rc = crt_ivf_bulk_transfer(iv_info->ifc_ivns_internal,
 						   iv_info->ifc_class_id,
 						   iv_key, iv_value,
 						   iv_info->ifc_child_bulk,
-						   rpc,
-						   iv_info->ifc_user_priv);
+						   rpc, iv_info->ifc_user_priv);
 			if (rc != 0)
 				D_ERROR("Bulk transfer failed for key=%p\n",
 					iv_key);
@@ -399,7 +406,7 @@ crt_ivf_finalize(struct iv_fetch_cb_info *iv_info, crt_iv_key_t *iv_key,
 
 			output = crt_reply_get(rpc);
 			output->ifo_rc = output_rc;
-
+			output->ifo_sgl = *iv_value;
 			/* Reply can fail */
 			crt_reply_send(rpc);
 		}
@@ -434,7 +441,6 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 	struct iv_fetch_cb_info		*iv_info;
 	struct crt_iv_fetch_out		*output;
 	int				 rc = 0;
-	bool				 put_needed = false;
 
 	iv_ops = crt_iv_ops_get(ivns_internal, class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -450,7 +456,8 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 					&kip_entry->kip_pending_fetch_list,
 					 struct pending_fetch,
 					 pf_link))) {
-		d_sg_list_t tmp_iv_value = {0};
+		d_sg_list_t	tmp_iv_value = {0};
+		bool		put_needed = false;
 
 		iv_info = pending_fetch->pf_cb_info;
 
@@ -489,8 +496,6 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 						CRT_IV_PERM_READ,
 						&tmp_iv_value,
 						&iv_info->ifc_user_priv);
-
-			put_needed = false;
 			if (rc == 0) {
 				put_needed = true;
 				rc = iv_ops->ivo_on_fetch(ivns_internal,
@@ -501,13 +506,26 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 
 			if (rc == 0) {
 				/* Function will do IVNS_ADDREF if needed */
-				rc = crt_ivf_bulk_transfer(ivns_internal,
-							class_id,
-							&iv_info->ifc_iv_key,
-							&tmp_iv_value,
-							iv_info->ifc_child_bulk,
-							iv_info->ifc_child_rpc,
-							iv_info->ifc_user_priv);
+				if (iv_info->ifc_child_bulk != CRT_BULK_NULL) {
+					rc = crt_ivf_bulk_transfer(ivns_internal, class_id,
+								   &iv_info->ifc_iv_key,
+								   &tmp_iv_value,
+								   iv_info->ifc_child_bulk,
+								   iv_info->ifc_child_rpc,
+								   iv_info->ifc_user_priv);
+				 	/* bulk transfer callback will put if succeed */
+					if (rc == 0)
+						put_needed = false;
+				} else {
+					/* inline reply */
+					output = crt_reply_get(iv_info->ifc_child_rpc);
+					output->ifo_rc = 0;
+					output->ifo_sgl = tmp_iv_value;
+					rc = crt_reply_send(iv_info->ifc_child_rpc);
+					if (rc != 0)
+						D_ERROR("crt_reply_send(): "DF_RC"\n",
+							DP_RC(rc));
+				}
 			} else {
 				D_ERROR("Failed to process pending request\n");
 
@@ -517,7 +535,7 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 				crt_reply_send(iv_info->ifc_child_rpc);
 			}
 
-			if (rc != 0 && put_needed)
+			if (put_needed)
 				iv_ops->ivo_on_put(ivns_internal, &tmp_iv_value,
 						   iv_info->ifc_user_priv);
 
@@ -547,12 +565,8 @@ crt_ivf_pending_reqs_process(struct crt_ivns_internal *ivns_internal,
 						0, CRT_IV_PERM_READ,
 						&tmp_iv_value,
 						&iv_info->ifc_user_priv);
-
-			put_needed = false;
-
 			if (rc == 0) {
 				put_needed = true;
-
 				rc = iv_ops->ivo_on_fetch(ivns_internal,
 						&iv_info->ifc_iv_key,
 						0x0,
@@ -968,8 +982,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	crt_bulk_opid_t			 opid;
 	crt_bulk_t			 bulk_hdl;
 	struct crt_iv_fetch_out		*output;
-	int				 size;
-	int				 i;
+	size_t				 size;
 	int				 rc2;
 	int				 rc = 0;
 
@@ -987,10 +1000,7 @@ crt_ivf_bulk_transfer(struct crt_ivns_internal *ivns_internal,
 	}
 
 	/* Calculate total size of all iovs in sg list */
-	size = 0;
-	for (i = 0; i < iv_value->sg_nr; i++)
-		size += iv_value->sg_iovs[i].iov_buf_len;
-
+	size = d_sgl_buf_size(iv_value);
 	/* crt_req_decref done in crt_ivf_bulk_transfer_done_cb */
 	RPC_PUB_ADDREF(rpc);
 
@@ -1050,6 +1060,7 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 	struct crt_iv_ops		*iv_ops;
 	struct crt_ivns_internal	*ivns;
 	struct ivf_key_in_progress	*kip_entry;
+	d_sg_list_t			*iv_value = NULL;
 	uint32_t			class_id;
 	int				rc;
 
@@ -1066,11 +1077,17 @@ handle_ivfetch_response(const struct crt_cb_info *cb_info)
 
 	IV_DBG(&input->ifi_key, "response received, rc = %d\n", rc);
 
+	if (rc == 0) {
+		/* Inline IV fetch */
+		if (iv_info->ifc_bulk_hdl == NULL)
+			d_sgl_buf_copy(&iv_info->ifc_iv_value, &output->ifo_sgl);
+
+		iv_value = &iv_info->ifc_iv_value;
+	}
+
 	/* In case of a failure, call on_refresh with NULL iv_value */
-	iv_ops->ivo_on_refresh(ivns, &input->ifi_key,
-				0, /* TODO: iv_ver */
-				rc == 0 ? &iv_info->ifc_iv_value : NULL,
-				false, rc, iv_info->ifc_user_priv);
+	iv_ops->ivo_on_refresh(ivns, &input->ifi_key, 0, /* TODO: iv_ver */
+			       iv_value, false, rc, iv_info->ifc_user_priv);
 
 	if (iv_info->ifc_bulk_hdl)
 		crt_bulk_free(iv_info->ifc_bulk_hdl);
@@ -1168,11 +1185,14 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	D_MUTEX_UNLOCK(&entry->kip_lock);
 	D_MUTEX_UNLOCK(&ivns_internal->cii_lock);
 
-	rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value, CRT_BULK_RW,
-			     &local_bulk);
-	if (rc != 0) {
-		D_ERROR("crt_bulk_create(): "DF_RC"\n", DP_RC(rc));
-		D_GOTO(exit, rc);
+	if (d_sgl_buf_size(iv_value) > crt_gdata.cg_iv_inline_limit) {
+		IV_DBG(iv_key, "bulk transfer with size %zu\n", d_sgl_buf_size(iv_value));
+		rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value, CRT_BULK_RW,
+				     &local_bulk);
+		if (rc != 0) {
+			D_ERROR("crt_bulk_create(): "DF_RC"\n", DP_RC(rc));
+			D_GOTO(exit, rc);
+		}
 	}
 
 	/* Note: destination node is using global rank already */
@@ -1189,9 +1209,10 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	input = crt_req_get(rpc);
 	D_ASSERT(input != NULL);
 
-	input->ifi_value_bulk = local_bulk;
-
-	cb_info->ifc_bulk_hdl = local_bulk;
+	if (local_bulk != CRT_BULK_NULL) {
+		input->ifi_value_bulk = local_bulk;
+		cb_info->ifc_bulk_hdl = local_bulk;
+	}
 
 	d_iov_set(&input->ifi_key, iv_key->iov_buf, iv_key->iov_buf_len);
 	input->ifi_class_id = cb_info->ifc_class_id;
@@ -1307,12 +1328,11 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	d_sg_list_t			 iv_value = {0};
 	bool				 put_needed = false;
 	void				*user_priv = NULL;
-	crt_rpc_t			*rpc_req;
+	crt_rpc_t			*rpc_req = arg;
 	uint32_t			 grp_ver_entry;
 	uint32_t			 grp_ver_current;
 	int				 rc = 0;
 
-	rpc_req = arg;
 	input = crt_req_get(rpc_req);
 	output = crt_reply_get(rpc_req);
 
@@ -1323,7 +1343,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	ivns_internal = crt_ivns_internal_lookup(&ivns_id);
 	if (ivns_internal == NULL) {
 		D_ERROR("Failed to lookup ivns internal!\n");
-		D_GOTO(send_error, rc = -DER_NONEXIST);
+		D_GOTO(reply_direct, rc = -DER_NONEXIST);
 	}
 
 	/* This function is called with ivns_internal ref count held. Since
@@ -1346,13 +1366,13 @@ crt_hdlr_iv_fetch_aux(void *arg)
 			"Group (%s) version mismatch. Local: %d Remote :%d\n",
 			ivns_id.ii_group_name, grp_ver_entry,
 			input->ifi_grp_ver);
-		D_GOTO(send_error, rc = -DER_GRPVER);
+		D_GOTO(reply_direct, rc = -DER_GRPVER);
 	}
 
 	iv_ops = crt_iv_ops_get(ivns_internal, input->ifi_class_id);
 	if (iv_ops == NULL) {
 		D_ERROR("Returned iv_ops were NULL\n");
-		D_GOTO(send_error, rc = -DER_INVAL);
+		D_GOTO(reply_direct, rc = -DER_INVAL);
 	}
 
 	IV_DBG(&input->ifi_key, "fetch handler entered\n");
@@ -1360,23 +1380,28 @@ crt_hdlr_iv_fetch_aux(void *arg)
 				0, CRT_IV_PERM_READ, &iv_value, &user_priv);
 	if (rc != 0) {
 		D_ERROR("ivo_on_get(): "DF_RC"\n", DP_RC(rc));
-		D_GOTO(send_error, rc);
+		D_GOTO(reply_direct, rc);
 	}
 
 	put_needed = true;
-
 	rc = iv_ops->ivo_on_fetch(ivns_internal, &input->ifi_key, 0,
 				  0x0, &iv_value, user_priv);
 	if (rc == 0) {
 		/* Note: This increments ref count on 'rpc_req' and ivns */
-		rc = crt_ivf_bulk_transfer(ivns_internal,
-					   input->ifi_class_id,
-					   &input->ifi_key,
-					   &iv_value, input->ifi_value_bulk,
-					   rpc_req, user_priv);
-		if (rc != 0) {
-			D_ERROR("bulk transfer failed; "DF_RC"\n", DP_RC(rc));
-			D_GOTO(send_error, rc);
+		if (input->ifi_value_bulk != CRT_BULK_NULL) {
+			rc = crt_ivf_bulk_transfer(ivns_internal,
+						   input->ifi_class_id,
+						   &input->ifi_key,
+						   &iv_value, input->ifi_value_bulk,
+						   rpc_req, user_priv);
+			if (rc != 0) {
+				DL_ERROR(rc, "bulk transfer failed");
+				D_GOTO(reply_direct, rc);
+			}
+			put_needed = false;
+		} else {
+			output->ifo_sgl = iv_value;
+			D_GOTO(reply_direct, rc);
 		}
 	} else if (rc == -DER_IVCB_FORWARD) {
 		/* Forward the request to the parent */
@@ -1386,7 +1411,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 		if (ivns_internal->cii_grp_priv->gp_self ==
 							input->ifi_root_node) {
 			D_ERROR("Forward requested for root node\n");
-			D_GOTO(send_error, rc = -DER_INVAL);
+			D_GOTO(reply_direct, rc = -DER_INVAL);
 		}
 
 		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
@@ -1399,7 +1424,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 					&user_priv);
 		if (rc != 0) {
 			D_ERROR("ivo_on_get(): "DF_RC"\n", DP_RC(rc));
-			D_GOTO(send_error, rc);
+			D_GOTO(reply_direct, rc);
 		}
 
 		put_needed = true;
@@ -1413,7 +1438,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "crt_iv_parent_get() returned %d\n",
 				rc);
-			D_GOTO(send_error, rc = -DER_OOG);
+			D_GOTO(reply_direct, rc = -DER_OOG);
 		}
 
 		/* Check here for change in group */
@@ -1422,12 +1447,12 @@ crt_hdlr_iv_fetch_aux(void *arg)
 				"On Entry: %d:: Changed To :%d\n",
 				ivns_id.ii_group_name,
 				grp_ver_entry, grp_ver_current);
-			D_GOTO(send_error, rc = -DER_GRPVER);
+			D_GOTO(reply_direct, rc = -DER_GRPVER);
 		}
 
 		D_ALLOC_PTR(cb_info);
 		if (cb_info == NULL)
-			D_GOTO(send_error, rc = -DER_NOMEM);
+			D_GOTO(reply_direct, rc = -DER_NOMEM);
 
 		cb_info->ifc_child_rpc = rpc_req;
 		cb_info->ifc_child_bulk = input->ifi_value_bulk;
@@ -1455,11 +1480,11 @@ crt_hdlr_iv_fetch_aux(void *arg)
 
 			IVNS_DECREF(cb_info->ifc_ivns_internal);
 			D_FREE(cb_info);
-			D_GOTO(send_error, rc);
+			D_GOTO(reply_direct, rc);
 		}
 	} else {
 		D_ERROR("ERROR happened: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(send_error, rc);
+		D_GOTO(reply_direct, rc);
 	}
 
 	/* addref in crt_hdlr_iv_fetch */
@@ -1470,16 +1495,14 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	IVNS_DECREF(ivns_internal);
 	return;
 
-send_error:
-	if (put_needed && iv_ops)
-		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+reply_direct:
 	output->ifo_rc = rc;
 	rc = crt_reply_send(rpc_req);
-	if (rc != DER_SUCCESS) {
+	if (rc != DER_SUCCESS)
 		D_ERROR("crt_reply_send(opc: %#x): "DF_RC"\n",
 			rpc_req->cr_opc, DP_RC(rc));
-	}
-
+	if (put_needed && iv_ops)
+		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 	/* ADDREF done in lookup above */
 	if (ivns_internal)
 		IVNS_DECREF(ivns_internal);
@@ -1672,10 +1695,6 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 
 	/* The fetch info is contained on current server.  */
 	if (rc == 0) {
-		/* Finish up the completion call back */
-		iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
-				       iv_value, false, 0x0, user_priv);
-
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 			      iv_value, rc, cb_arg);
 
@@ -1687,9 +1706,6 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 		return rc;
 	} else if (rc != -DER_IVCB_FORWARD) {
 		/* We got error, call the callback and exit */
-		iv_ops->ivo_on_refresh(ivns_internal, iv_key, 0,
-				       NULL, false, rc, user_priv);
-
 		fetch_comp_cb(ivns_internal, class_id, iv_key, NULL,
 			      NULL, rc, cb_arg);
 
@@ -1787,7 +1803,6 @@ crt_hdlr_iv_sync_aux(void *arg)
 	struct crt_iv_ops		*iv_ops = NULL;
 	struct crt_ivns_id		ivns_id;
 	crt_iv_sync_t			*sync_type;
-	d_sg_list_t			iv_value = {0};
 	bool				 need_put = false;
 	void				*user_priv = NULL;
 	crt_rpc_t			*rpc_req;
@@ -1838,7 +1853,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 	D_ASSERT(iv_ops != NULL);
 
 	/* If bulk is not set, we issue invalidate call */
-	if (rpc_req->cr_co_bulk_hdl == CRT_BULK_NULL) {
+	if (rpc_req->cr_co_bulk_hdl == CRT_BULK_NULL && input->ivs_sync_sgl.sg_nr == 0) {
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
 					0, NULL, true, 0x0, NULL);
 		D_GOTO(exit, rc);
@@ -1849,10 +1864,10 @@ crt_hdlr_iv_sync_aux(void *arg)
 	case CRT_IV_SYNC_EVENT_UPDATE:
 	{
 		d_sg_list_t	tmp_iv;
-		d_iov_t		*tmp_iovs;
+		d_iov_t		tmp_iovs;
 
 		rc = iv_ops->ivo_on_get(ivns_internal, &input->ivs_key,
-					0, CRT_IV_PERM_READ, &iv_value,
+					0, CRT_IV_PERM_READ | CRT_IV_NO_ALLOC, &tmp_iv,
 					&user_priv);
 		if (rc != 0) {
 			D_ERROR("ivo_on_get(): "DF_RC"\n", DP_RC(rc));
@@ -1861,31 +1876,26 @@ crt_hdlr_iv_sync_aux(void *arg)
 
 		need_put = true;
 
-		D_ALLOC_ARRAY(tmp_iovs, iv_value.sg_nr);
-		if (tmp_iovs == NULL) {
-			D_GOTO(exit, rc = -DER_NOMEM);
-		}
-
-		tmp_iv.sg_nr = iv_value.sg_nr;
-		tmp_iv.sg_iovs = tmp_iovs;
-
-		/* Populate tmp_iv.sg_iovs[0] to [sg_nr] */
-		rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
-		if (rc != 0) {
-			D_FREE(tmp_iovs);
-			D_ERROR("crt_bulk_access(): "DF_RC"\n", DP_RC(rc));
-			D_GOTO(exit, rc);
+		if (rpc_req->cr_co_bulk_hdl != CRT_BULK_NULL) {
+			tmp_iv.sg_iovs = &tmp_iovs;
+			/* Populate tmp_iv.sg_iovs[0] to [sg_nr] */
+			rc = crt_bulk_access(rpc_req->cr_co_bulk_hdl, &tmp_iv);
+			if (rc != 0) {
+				D_ERROR("crt_bulk_access(): "DF_RC"\n", DP_RC(rc));
+				D_GOTO(exit, rc);
+			}
+		} else if (input->ivs_sync_sgl.sg_nr > 0) {
+			tmp_iv = input->ivs_sync_sgl;
 		}
 
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivs_key,
 					    0, &tmp_iv, false, 0, user_priv);
-		D_FREE(tmp_iovs);
 		if (rc != 0) {
 			D_ERROR("ivo_on_refresh(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(exit, rc);
 		}
 
-		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+		iv_ops->ivo_on_put(ivns_internal, NULL, user_priv);
 		need_put = false;
 
 		break;
@@ -1909,7 +1919,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 
 exit:
 	if (need_put && iv_ops)
-		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+		iv_ops->ivo_on_put(ivns_internal, NULL, user_priv);
 
 	output->rc = rc;
 	crt_reply_send(rpc_req);
@@ -2057,6 +2067,8 @@ call_pre_sync_cb(struct crt_ivns_internal *ivns_internal,
 			D_ERROR("crt_bulk_access(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(exit, rc);
 		}
+	} else if (input->ivs_sync_sgl.sg_nr > 0) {
+		tmp_iv = input->ivs_sync_sgl;
 	}
 
 	D_DEBUG(DB_TRACE, "Executing ivo_pre_sync\n");
@@ -2249,8 +2261,9 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	}
 
 	local_bulk = CRT_BULK_NULL;
-	if (iv_value != NULL) {
-		D_DEBUG(DB_TRACE, "Create Bulk\n");
+	if (iv_value != NULL && d_sgl_buf_size(iv_value) > crt_gdata.cg_iv_inline_limit) {
+		IV_DBG(iv_key, "bulk transfer with size %zu\n",
+		       d_sgl_buf_size(iv_value));
 		rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value,
 				     CRT_BULK_RO, &local_bulk);
 		if (rc != 0) {
@@ -2275,9 +2288,8 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	D_ASSERT(input != NULL);
 
 	D_ALLOC_PTR(iv_sync_cb);
-	if (iv_sync_cb == NULL) {
+	if (iv_sync_cb == NULL)
 		D_GOTO(exit, rc = -DER_NOMEM);
-	}
 
 	iv_sync_cb->isc_sync_type = *sync_type;
 	input->ivs_ivns_id = ivns_internal->cii_gns.gn_ivns_id.ii_nsid;
@@ -2288,6 +2300,10 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	d_iov_set(&input->ivs_key, iv_key->iov_buf, iv_key->iov_buf_len);
 	d_iov_set(&input->ivs_sync_type, &iv_sync_cb->isc_sync_type,
 		  sizeof(crt_iv_sync_t));
+
+	/* Set inline IV buffer if needed */
+	if (iv_value != NULL && local_bulk == CRT_BULK_NULL)
+		input->ivs_sync_sgl = *iv_value;
 
 	input->ivs_class_id = class_id;
 
@@ -2401,7 +2417,8 @@ finalize_transfer_back(struct update_cb_info *cb_info, int rc)
 	crt_reply_send(cb_info->uci_child_rpc);
 
 	/* ADDREF done in crt_hdlr_iv_update */
-	crt_bulk_free(cb_info->uci_bulk_hdl);
+	if (cb_info->uci_bulk_hdl != CRT_BULK_NULL)
+		crt_bulk_free(cb_info->uci_bulk_hdl);
 
 	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
 	D_ASSERT(iv_ops != NULL);
@@ -2426,27 +2443,22 @@ bulk_update_transfer_back_done(const struct crt_bulk_cb_info *info)
 }
 
 /* Helper function to transfer iv_value back to child */
-static
-int transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
-			   bool do_refresh, int update_rc)
+static int
+transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
+		       int update_rc)
 {
 	struct crt_bulk_desc		bulk_desc = {0};
 	struct crt_iv_update_in		*child_input;
+	struct crt_iv_update_out	*child_output;
 	struct crt_ivns_internal	*ivns;
 	struct crt_iv_ops		*iv_ops;
-	int				size = 0;
-	int				i;
+	size_t				size = 0;
 	int				rc = 0;
 
 	ivns = cb_info->uci_ivns_internal;
 
 	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
 	D_ASSERT(iv_ops != NULL);
-
-	if (do_refresh)
-		iv_ops->ivo_on_refresh(ivns, key, 0,
-				&cb_info->uci_iv_value,
-				false, update_rc, cb_info->uci_user_priv);
 
 	/* No more children -- we are the originator; call update_cb */
 	if (cb_info->uci_child_rpc == NULL) {
@@ -2466,13 +2478,18 @@ int transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
 		return 0;
 	}
 
-	/* Perform bulk transfer back to the child */
 	child_input = crt_req_get(cb_info->uci_child_rpc);
+	if (child_input->ivu_iv_value_bulk == CRT_BULK_NULL) {
+		child_output = crt_reply_get(cb_info->uci_child_rpc);
+		D_ASSERT(update_rc != 0 || child_output->ivo_iv_sgl.sg_nr > 0);
+		finalize_transfer_back(cb_info, update_rc);
+		return 0;
+	}
+
+	/* Perform bulk transfer back to the child */
 
 	/* Calculate size of iv value */
-	for (i = 0; i < cb_info->uci_iv_value.sg_nr; i++)
-		size += cb_info->uci_iv_value.sg_iovs[i].iov_buf_len;
-
+	size = d_sgl_buf_size(&cb_info->uci_iv_value);
 	bulk_desc.bd_rpc = cb_info->uci_child_rpc;
 	bulk_desc.bd_bulk_op = CRT_BULK_PUT;
 	bulk_desc.bd_remote_hdl = child_input->ivu_iv_value_bulk;
@@ -2502,26 +2519,35 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	struct crt_iv_ops	 *iv_ops;
 	int			 rc;
 
+	iv_ops = crt_iv_ops_get(iv_info->uci_ivns_internal, iv_info->uci_class_id);
+	D_ASSERT(iv_ops != NULL);
+
 	/* For bi-directional updates, transfer data back to child */
 	if (iv_info->uci_sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
-		transfer_back_to_child(&input->ivu_key, iv_info, true,
-				       cb_info->cci_rc ?: output->rc);
+		if (iv_info->uci_bulk_hdl == CRT_BULK_NULL)
+			d_sgl_buf_copy(&iv_info->uci_iv_value, &output->ivo_iv_sgl);
+		iv_ops->ivo_on_refresh(iv_info->uci_ivns_internal, &input->ivu_key, 0,
+				       &iv_info->uci_iv_value, false, cb_info->cci_rc ?: output->rc,
+				       iv_info->uci_user_priv);
+
+		if (input->ivu_iv_value_bulk == CRT_BULK_NULL &&
+		    iv_info->uci_child_rpc != NULL) {
+			child_output = crt_reply_get(iv_info->uci_child_rpc);
+			child_output->ivo_iv_sgl = iv_info->uci_iv_value;
+		}
+		transfer_back_to_child(&input->ivu_key, iv_info, cb_info->cci_rc ?: output->rc);
 		D_GOTO(exit, 0);
 	}
-
-	iv_ops = crt_iv_ops_get(iv_info->uci_ivns_internal,
-				iv_info->uci_class_id);
-	D_ASSERT(iv_ops != NULL);
 
 	if (iv_info->uci_child_rpc) {
 		child_output = crt_reply_get(iv_info->uci_child_rpc);
 
 		/* uci_bulk_hdl will not be set for invalidate call */
-		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL) {
+		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
 			crt_bulk_free(iv_info->uci_bulk_hdl);
-			iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
-					   iv_info->uci_user_priv);
-		}
+
+		iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
+				   iv_info->uci_user_priv);
 		child_output->rc = output->rc;
 
 		if (cb_info->cci_rc != 0)
@@ -2536,7 +2562,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	} else {
 		d_sg_list_t *tmp_iv_value;
 
-		if (iv_info->uci_bulk_hdl == CRT_BULK_NULL)
+		if (iv_info->uci_iv_value.sg_nr == 0)
 			tmp_iv_value = NULL;
 		else
 			tmp_iv_value = &iv_info->uci_iv_value;
@@ -2604,9 +2630,14 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 
 	/* Update with NULL value is invalidate call */
 	if (iv_value) {
-		rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value,
-				     CRT_BULK_RW, &local_bulk);
-
+		if (d_sgl_buf_size(iv_value) > crt_gdata.cg_iv_inline_limit) {
+			IV_DBG(iv_key, "bulk transfer with size %zu\n",
+			       d_sgl_buf_size(iv_value));
+			rc = crt_bulk_create(ivns_internal->cii_ctx, iv_value,
+					     CRT_BULK_RW, &local_bulk);
+		} else {
+			input->ivu_iv_sgl = *iv_value;
+		}
 		if (rc != 0) {
 			D_ERROR("crt_bulk_create(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(exit, rc);
@@ -2857,9 +2888,8 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 	} else if (update_rc == 0) {
 		/* If sync was bi-directional - transfer value back */
 		if (sync_type->ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
-			rc = transfer_back_to_child(&input->ivu_key,
-						    update_cb_info,
-						    false, update_rc);
+			rc = transfer_back_to_child(&input->ivu_key, update_cb_info,
+						    update_rc);
 			if (rc == 0)
 				rc = update_rc;
 
@@ -2993,6 +3023,120 @@ send_error:
 	return rc;
 }
 
+static void
+crt_iv_update_inline_hdlr(crt_rpc_t *rpc, struct crt_ivns_internal *ivns_internal)
+{
+	struct crt_iv_ops		*iv_ops;
+	struct crt_iv_update_in		*input;
+	struct crt_iv_update_out	*output;
+	d_sg_list_t			iv_value = {0};
+	struct update_cb_info		*update_cb_info = NULL;
+	int				rc = 0;
+	d_rank_t			next_rank;
+	crt_iv_sync_t			*sync_type;
+	void				*user_priv;
+	uint32_t			grp_ver;
+
+	input = crt_req_get(rpc);
+	output = crt_reply_get(rpc);
+
+	D_ASSERT(input != NULL);
+	D_ASSERT(output != NULL);
+
+	iv_ops = crt_iv_ops_get(ivns_internal, input->ivu_class_id);
+	D_ASSERT(iv_ops != NULL);
+
+	rc = iv_ops->ivo_on_get(ivns_internal, &input->ivu_key, 0,
+				CRT_IV_PERM_WRITE, &iv_value, &user_priv);
+	if (rc != 0) {
+		D_ERROR("ivo_on_get(): "DF_RC"\n", DP_RC(rc));
+		D_GOTO(send_error, rc);
+	}
+
+	d_sgl_buf_copy(&iv_value, &input->ivu_iv_sgl);
+
+	rc = iv_ops->ivo_on_update(ivns_internal, &input->ivu_key, 0, false,
+				   &iv_value, user_priv);
+
+	sync_type = input->ivu_sync_type.iov_buf;
+
+	if (rc == -DER_IVCB_FORWARD ||
+	    (rc == 0 && sync_type->ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL)) {
+
+		D_ALLOC_PTR(update_cb_info);
+		if (update_cb_info == NULL)
+			D_GOTO(put_error, rc = -DER_NOMEM);
+
+		update_cb_info->uci_child_rpc = rpc;
+
+		update_cb_info->uci_ivns_internal = ivns_internal;
+		IVNS_ADDREF(ivns_internal);
+
+		update_cb_info->uci_class_id = input->ivu_class_id;
+		update_cb_info->uci_caller_rank = input->ivu_caller_node;
+		update_cb_info->uci_sync_type = *sync_type;
+		update_cb_info->uci_user_priv = user_priv;
+		update_cb_info->uci_iv_value = iv_value;
+		if (rc == -DER_IVCB_FORWARD) {
+			/*
+			 * Forward request to the parent
+			 * Get group version to associate with next_rank.
+			 * Pass it down to crt_ivu_rpc_issue
+			 */
+			D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+			grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+
+			rc = crt_iv_parent_get(ivns_internal, input->ivu_root_node, &next_rank);
+			D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
+
+			if (rc != 0) {
+				D_DEBUG(DB_TRACE, "crt_iv_parent_get() returned %d\n", rc);
+				D_GOTO(decref_error, rc = -DER_OOG);
+			}
+
+			rc = crt_ivu_rpc_issue(next_rank, &input->ivu_key,
+					       &iv_value, sync_type,
+					       input->ivu_root_node, grp_ver,
+					       update_cb_info);
+			if (rc != 0) {
+				D_ERROR("crt_ivu_rpc_issue(): "DF_RC"\n", DP_RC(rc));
+				D_GOTO(decref_error, rc);
+			}
+			RPC_PUB_ADDREF(update_cb_info->uci_child_rpc);
+		} else {
+			int rc1;
+
+			/* If sync was bi-directional - transfer value back */
+			output->ivo_iv_sgl = iv_value;
+			RPC_PUB_ADDREF(update_cb_info->uci_child_rpc);
+			rc1 = transfer_back_to_child(&input->ivu_key, update_cb_info, rc);
+			if (rc == 0)
+				rc = rc1;
+
+			D_GOTO(exit, rc);
+		}
+	} else if (rc == 0) {
+		output->rc = rc;
+		crt_reply_send(rpc);
+		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+	} else {
+		D_GOTO(put_error, rc);
+	}
+exit:
+	return;
+
+decref_error:
+	IVNS_DECREF(ivns_internal);
+put_error:
+	iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+
+send_error:
+	output->rc = rc;
+	crt_reply_send(rpc);
+	if (update_cb_info)
+		D_FREE(update_cb_info);
+}
+
 /* IV UPDATE RPC handler */
 void
 crt_hdlr_iv_update(crt_rpc_t *rpc_req)
@@ -3009,9 +3153,8 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	crt_iv_sync_t			*sync_type;
 	d_rank_t			next_rank;
 	struct update_cb_info		*update_cb_info;
-	int				size;
+	size_t				size;
 	void				*user_priv;
-	int				i;
 	uint32_t			grp_ver_entry;
 	uint32_t			grp_ver_current;
 	bool				put_needed = false;
@@ -3053,7 +3196,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 		D_GOTO(send_error, rc = -DER_INVAL);
 	}
 
-	if (input->ivu_iv_value_bulk == CRT_BULK_NULL) {
+	if (input->ivu_iv_value_bulk == CRT_BULK_NULL && input->ivu_iv_sgl.sg_nr == 0) {
 		rc = iv_ops->ivo_on_refresh(ivns_internal, &input->ivu_key,
 					    0, NULL, true, 0, NULL);
 		if (rc == -DER_IVCB_FORWARD) {
@@ -3131,6 +3274,11 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 		D_GOTO(exit, rc = 0);
 	}
 
+	if (input->ivu_iv_value_bulk == CRT_BULK_NULL) {
+		crt_iv_update_inline_hdlr(rpc_req, ivns_internal);
+		D_GOTO(exit, rc);
+	}
+
 	rc = iv_ops->ivo_on_get(ivns_internal, &input->ivu_key, 0,
 				CRT_IV_PERM_WRITE, &iv_value, &user_priv);
 	if (rc != 0) {
@@ -3139,10 +3287,7 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	}
 	put_needed = true;
 
-	size = 0;
-	for (i = 0; i < iv_value.sg_nr; i++)
-		size += iv_value.sg_iovs[i].iov_buf_len;
-
+	size = d_sgl_buf_size(&iv_value);
 	rc = crt_bulk_create(rpc_req->cr_ctx, &iv_value, CRT_BULK_RW,
 			     &local_bulk_handle);
 	if (rc != 0) {
@@ -3194,7 +3339,7 @@ send_error:
 	crt_reply_send(rpc_req);
 
 	if (put_needed)
-		iv_ops->ivo_on_put(ivns_internal, &iv_value, &user_priv);
+		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 
 	/* ADDREF done in lookup above */
 	if (ivns_internal)
@@ -3364,8 +3509,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else {
-		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
-			  "ivo_on_update failed");
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER || rc == -DER_BUSY,
+			  DLOG_INFO, DLOG_ERR, rc, "ivo_on_update failed");
 
 		update_comp_cb(ivns, class_id, iv_key, NULL,
 			       iv_value, rc, cb_arg);

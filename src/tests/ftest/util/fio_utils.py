@@ -4,11 +4,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from ClusterShell.NodeSet import NodeSet
-
-from run_utils import run_remote
-from command_utils_base import BasicParameter, FormattedParameter, CommandWithParameters
-from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
+from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
+from exception_utils import CommandFailure
+from run_utils import run_remote
 
 
 class FioCommand(ExecutableCommand):

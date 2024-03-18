@@ -189,14 +189,18 @@ func FaultBdevConfigBadNrRoles(role string, gotNr, wantNr int) *fault.Fault {
 			role, wantNr))
 }
 
-// FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
-// match expected PCI addresses.
-func FaultBdevNotFound(bdevs ...string) *fault.Fault {
+// FaultBdevNotFound creates a Fault for the case where no NVMe storage devices match expected PCI
+// addresses. VMD addresses are expected to have backing devices.
+func FaultBdevNotFound(vmdEnabled bool, bdevs ...string) *fault.Fault {
+	msg := fmt.Sprintf("NVMe SSD%s", common.Pluralise("", len(bdevs)))
+	if vmdEnabled {
+		msg = "backing devices for VMDs"
+	}
+
 	return storageFault(
 		code.BdevNotFound,
-		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
-		fmt.Sprintf("check SSD%s %v that are specified in server config exist",
-			common.Pluralise("", len(bdevs)), bdevs),
+		fmt.Sprintf("%s %v not found", msg, bdevs),
+		fmt.Sprintf("check %s %v that are specified in server config exist", msg, bdevs),
 	)
 }
 

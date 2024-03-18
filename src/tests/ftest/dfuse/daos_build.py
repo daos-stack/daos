@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -26,7 +26,7 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse,daos_cmd
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wb
@@ -58,9 +58,9 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=daosio,dfuse,il,dfs
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
         self.run_build_test("writethrough", True, run_on_vms=True)
@@ -106,7 +106,7 @@ class DaosBuild(DfuseTestBase):
             Mount dfuse
             Checkout and build DAOS sources.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_nocache
@@ -135,9 +135,11 @@ class DaosBuild(DfuseTestBase):
 
         # Note that run_on_vms does not tell ftest where to run, this should be set according to
         # the test tags so the test can run with appropriate settings.
+        remote_env = {}
         if run_on_vms:
             dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
             build_jobs = 6 * 2
+            remote_env['D_IL_MAX_EQ'] = '0'
 
         intercept_jobs = build_jobs
         if intercept:
@@ -146,27 +148,27 @@ class DaosBuild(DfuseTestBase):
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
         if cache_mode == 'writeback':
-            cont_attrs['dfuse-data-cache'] = '1d'
+            cont_attrs['dfuse-data-cache'] = '1m'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'writethrough':
             if intercept:
                 build_time *= 6
-            cont_attrs['dfuse-data-cache'] = '1d'
+            cont_attrs['dfuse-data-cache'] = '1m'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
-            cont_attrs['dfuse-data-cache'] = '1d'
+            cont_attrs['dfuse-data-cache'] = '1m'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'data':
             build_time *= 2
-            cont_attrs['dfuse-data-cache'] = '1d'
+            cont_attrs['dfuse-data-cache'] = '1m'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
@@ -189,7 +191,6 @@ class DaosBuild(DfuseTestBase):
         mount_dir = self.dfuse.mount_dir.value
         build_dir = os.path.join(mount_dir, 'daos')
 
-        remote_env = {}
         remote_env['PATH'] = '{}:$PATH'.format(os.path.join(mount_dir, 'venv', 'bin'))
         remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
         remote_env['COVFILE'] = os.environ['COVFILE']
@@ -215,7 +216,9 @@ class DaosBuild(DfuseTestBase):
                 'daos filesystem query {}'.format(mount_dir),
                 'daos filesystem evict {}'.format(build_dir),
                 'daos filesystem query {}'.format(mount_dir),
-                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
+                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs),
+                'scons -C {} --jobs {} install'.format(build_dir, intercept_jobs),
+                'daos filesystem query {}'.format(mount_dir)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.

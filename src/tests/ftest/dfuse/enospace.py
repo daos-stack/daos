@@ -4,8 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import os
 import errno
+import os
 
 from dfuse_test_base import DfuseTestBase
 

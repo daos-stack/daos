@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -37,6 +37,14 @@ dtx_tls_init(int tags, int xs_id, int tgt_id)
 			     "entries", "io/dtx/committable/tgt_%u", tgt_id);
 	if (rc != DER_SUCCESS)
 		D_WARN("Failed to create DTX committable metric: " DF_RC"\n",
+		       DP_RC(rc));
+
+	rc = d_tm_add_metric(&tls->dt_dtx_leader_total, D_TM_GAUGE,
+			     "total number of leader dtx in cache", "entry",
+			     "mem/dtx/dtx_leader_handle_%u/tgt_%u",
+			     sizeof(struct dtx_leader_handle), tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX leader metric: " DF_RC"\n",
 		       DP_RC(rc));
 
 	return tls;
@@ -105,7 +113,6 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 			D_WARN("Failed to create DTX RPC cnt metric for %s: "
 			       DF_RC"\n", dtx_opc_to_str(opc), DP_RC(rc));
 	}
-
 	return metrics;
 }
 
@@ -232,7 +239,7 @@ dtx_handler(crt_rpc_t *rpc)
 			rc1 = start_dtx_reindex_ult(cont);
 			if (rc1 != 0)
 				D_ERROR(DF_UUID": Failed to trigger DTX reindex: "DF_RC"\n",
-					DP_UUID(cont->sc_uuid), DP_RC(rc));
+					DP_UUID(cont->sc_uuid), DP_RC(rc1));
 		}
 
 		break;
@@ -326,9 +333,14 @@ out:
 			if (mbs[i] == NULL)
 				continue;
 
+			/* For collective DTX, it will be committed soon. */
+			if (mbs[i]->dm_flags & DMF_COLL_TARGET) {
+				D_FREE(mbs[i]);
+				continue;
+			}
+
 			daos_dti_copy(&dtes[j].dte_xid,
-				      (struct dtx_id *)
-				      din->di_dtx_array.ca_arrays + i);
+				      (struct dtx_id *)din->di_dtx_array.ca_arrays + i);
 			dtes[j].dte_ver = vers[i];
 			dtes[j].dte_refs = 1;
 			dtes[j].dte_mbs = mbs[i];
@@ -338,19 +350,19 @@ out:
 			j++;
 		}
 
-		D_ASSERT(j == rc1);
+		if (j > 0) {
+			/*
+			 * Commit the DTX after replied the original refresh request to
+			 * avoid further query the same DTX.
+			 */
+			rc = dtx_commit(cont, pdte, dcks, j);
+			if (rc < 0)
+				D_WARN("Failed to commit DTX "DF_DTI", count %d: "
+				       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j, DP_RC(rc));
 
-		/* Commit the DTX after replied the original refresh request to
-		 * avoid further query the same DTX.
-		 */
-		rc = dtx_commit(cont, pdte, dcks, j);
-		if (rc < 0)
-			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
-			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
-			       DP_RC(rc));
-
-		for (i = 0; i < j; i++)
-			D_FREE(pdte[i]->dte_mbs);
+			for (i = 0; i < j; i++)
+				D_FREE(pdte[i]->dte_mbs);
+		}
 	}
 
 	D_FREE(dout->do_sub_rets.ca_arrays);
@@ -360,13 +372,147 @@ out:
 		ds_cont_child_put(cont);
 }
 
+static void
+dtx_coll_handler(crt_rpc_t *rpc)
+{
+	struct dtx_coll_in		*dci = crt_req_get(rpc);
+	struct dtx_coll_out		*dco = crt_reply_get(rpc);
+	struct dtx_coll_prep_args	 dcpa = { 0 };
+	d_rank_t			 myrank = dss_self_rank();
+	uint32_t			 bitmap_sz = 0;
+	uint32_t			 opc = opc_get(rpc->cr_opc);
+	uint8_t				*hints = dci->dci_hints.ca_arrays;
+	uint8_t				*bitmap = NULL;
+	int				*results = NULL;
+	bool				 force_check = false;
+	int				 len;
+	int				 rc;
+	int				 i;
+
+	D_ASSERT(hints != NULL);
+	D_ASSERT(dci->dci_hints.ca_count > myrank);
+
+	D_DEBUG(DB_TRACE, "Handling collective DTX PRC %u on rank %d for "DF_DTI" with hint %d\n",
+		opc, myrank, DP_DTI(&dci->dci_xid), (int)hints[myrank]);
+
+	dcpa.dcpa_rpc = rpc;
+	rc = ABT_future_create(1, NULL, &dcpa.dcpa_future);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("ABT_future_create failed: rc = %d\n", rc);
+		D_GOTO(out, rc = dss_abterr2der(rc));
+	}
+
+	rc = dss_ult_create(dtx_coll_prep_ult, &dcpa, DSS_XS_VOS, hints[myrank], 0, NULL);
+	if (rc != 0) {
+		ABT_future_free(&dcpa.dcpa_future);
+		D_ERROR("Failed to create ult on XS %u: "DF_RC"\n", hints[myrank], DP_RC(rc));
+		goto out;
+	}
+
+	rc = ABT_future_wait(dcpa.dcpa_future);
+	D_ASSERT(rc == ABT_SUCCESS);
+
+	ABT_future_free(&dcpa.dcpa_future);
+
+	switch (dcpa.dcpa_result) {
+	case 0:
+		D_ASSERT(dcpa.dcpa_dce != NULL);
+
+		if (unlikely(dcpa.dcpa_dce->dce_bitmap == NULL))
+			/*
+			 * For DTX check, if all local shards are either migrated or
+			 * not suitable for check, then assume that they are prepared.
+			 * For other cases, DTX commit or abort, the bitmap should not
+			 * be empty, so there must be some data corruption if empty.
+			 */
+			D_GOTO(out, rc = (opc == DTX_COLL_CHECK) ? DTX_ST_PREPARED : -DER_IO);
+
+		bitmap = dcpa.dcpa_dce->dce_bitmap;
+		bitmap_sz = dcpa.dcpa_dce->dce_bitmap_sz;
+		break;
+	case 1:
+		/* The DTX has been committed, then depends on the RPC type. */
+		if (opc == DTX_COLL_ABORT) {
+			D_ERROR("NOT allow to abort committed DTX "DF_DTI"\n",
+				DP_DTI(&dci->dci_xid));
+			D_GOTO(out, rc = -DER_NO_PERM);
+		}
+
+		if (opc == DTX_COLL_CHECK)
+			D_GOTO(out, rc = DTX_ST_COMMITTED);
+
+		D_ASSERT(opc == DTX_COLL_COMMIT);
+		/*
+		 * We do not know whether the DTX on the other VOS targets has been committed
+		 * or not, let's continue the commit on the other local VOS targets by force.
+		 */
+		break;
+	case -DER_INPROGRESS:
+		/* Fall through. */
+	case -DER_NONEXIST:
+		/* The shard on the hint VOS target may not exist, then depends on the RPC type. */
+		if (opc == DTX_COLL_CHECK)
+			force_check = true;
+		/*
+		 * It is unknown whether the DTX on the other VOS targets has been committed/aborted
+		 * or not, let's continue related operation on the other local VOS targets by force.
+		 */
+		break;
+	default:
+		D_ASSERTF(dcpa.dcpa_result < 0, "Unexpected result when load MBS for DTX "
+			  DF_DTI": "DF_RC"\n", DP_DTI(&dci->dci_xid), DP_RC(dcpa.dcpa_result));
+		D_GOTO(out, rc = dcpa.dcpa_result);
+	}
+
+	len = dtx_coll_local_exec(dci->dci_po_uuid, dci->dci_co_uuid, &dci->dci_xid, dci->dci_epoch,
+				  opc, bitmap_sz, bitmap, &results);
+	if (len < 0)
+		D_GOTO(out, rc = len);
+
+	if (opc == DTX_COLL_CHECK) {
+		for (i = 0; i < len; i++) {
+			if (bitmap == NULL || isset(bitmap, i))
+				dtx_merge_check_result(&rc, results[i]);
+		}
+
+		/*
+		 * For force check case, if no shard has been committed, we cannot trust the result
+		 * of -DER_NONEXIST, instead, returning -DER_INPROGRESS to make the leader to retry.
+		 */
+		if (force_check && rc == -DER_NONEXIST)
+			D_GOTO(out, rc = -DER_INPROGRESS);
+	} else {
+		for (i = 0; i < len; i++) {
+			if (bitmap == NULL || isset(bitmap, i)) {
+				if (results[i] >= 0)
+					dco->dco_misc += results[i];
+				else if (results[i] != -DER_NONEXIST && rc == 0)
+					rc = results[i];
+			}
+		}
+	}
+
+out:
+	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE,
+		 "Handled collective DTX PRC %u on rank %u for "DF_DTI": "DF_RC"\n",
+		 opc, myrank, DP_DTI(&dci->dci_xid), DP_RC(rc));
+
+	dco->dco_status = rc;
+	rc = crt_reply_send(rpc);
+	if (rc < 0)
+		D_ERROR("Failed to send collective RPC %p reply: "DF_RC"\n", rpc, DP_RC(rc));
+
+	dtx_coll_entry_put(dcpa.dcpa_dce);
+	D_FREE(results);
+}
+
 static int
 dtx_init(void)
 {
 	int	rc;
 
 	dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
-	d_getenv_int("DAOS_DTX_AGG_THD_CNT", &dtx_agg_thd_cnt_up);
+	d_getenv_uint32_t("DAOS_DTX_AGG_THD_CNT", &dtx_agg_thd_cnt_up);
 	if (dtx_agg_thd_cnt_up < DTX_AGG_THD_CNT_MIN || dtx_agg_thd_cnt_up > DTX_AGG_THD_CNT_MAX) {
 		D_WARN("Invalid DTX aggregation count threshold %u, the valid range is [%u, %u], "
 		       "use the default value %u\n", dtx_agg_thd_cnt_up, DTX_AGG_THD_CNT_MIN,
@@ -378,7 +524,7 @@ dtx_init(void)
 	D_INFO("Set DTX aggregation count threshold as %u (entries)\n", dtx_agg_thd_cnt_up);
 
 	dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
-	d_getenv_int("DAOS_DTX_AGG_THD_AGE", &dtx_agg_thd_age_up);
+	d_getenv_uint32_t("DAOS_DTX_AGG_THD_AGE", &dtx_agg_thd_age_up);
 	if (dtx_agg_thd_age_up < DTX_AGG_THD_AGE_MIN || dtx_agg_thd_age_up > DTX_AGG_THD_AGE_MAX) {
 		D_WARN("Invalid DTX aggregation age threshold %u, the valid range is [%u, %u], "
 		       "use the default value %u\n", dtx_agg_thd_age_up, DTX_AGG_THD_AGE_MIN,
@@ -390,7 +536,7 @@ dtx_init(void)
 	D_INFO("Set DTX aggregation time threshold as %u (seconds)\n", dtx_agg_thd_age_up);
 
 	dtx_batched_ult_max = DTX_BATCHED_ULT_DEF;
-	d_getenv_int("DAOS_DTX_BATCHED_ULT_MAX", &dtx_batched_ult_max);
+	d_getenv_uint32_t("DAOS_DTX_BATCHED_ULT_MAX", &dtx_batched_ult_max);
 	D_INFO("Set the max count of DTX batched commit ULTs as %d\n", dtx_batched_ult_max);
 
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,

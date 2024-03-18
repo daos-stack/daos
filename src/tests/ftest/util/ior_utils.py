@@ -8,11 +8,11 @@ import re
 from enum import IntEnum
 
 from avocado.utils.process import CmdResult
-from command_utils_base import FormattedParameter, BasicParameter
-from exception_utils import CommandFailure
 from command_utils import SubProcessCommand
-from general_utils import get_log_file
+from command_utils_base import BasicParameter, FormattedParameter
 from duns_utils import format_path
+from exception_utils import CommandFailure
+from general_utils import get_log_file
 
 
 def get_ior(test, manager, hosts, path, slots, namespace="/run/ior/*", ior_params=None):
@@ -571,11 +571,11 @@ class Ior:
                 self.manager.job.test_file.update(
                     os.path.join(os.sep, self.label_generator.get_label("testfile")))
 
-        if ppn is None:
-            self.manager.assign_processes(processes)
+        # Pass only processes or ppn to be compatible with previous behavior
+        if ppn is not None:
+            self.manager.assign_processes(ppn=ppn)
         else:
-            self.manager.ppn.update(ppn, ".".join([self.manager.command, "ppn"]))
-            self.manager.processes.update(None, ".".join([self.manager.command, "np"]))
+            self.manager.assign_processes(processes=processes)
 
         self.manager.assign_environment(self.env)
 

@@ -30,7 +30,6 @@
 #include <fcntl.h>
 
 #include <daos_pool.h>
-#include <daos_srv/policy.h>
 
 static void
 vos_iod2bsgl(struct umem_store *store, struct umem_store_iod *iod, struct bio_sglist *bsgl)
@@ -280,14 +279,85 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 {
 	struct bio_desc	*biod = (struct bio_desc *)fh.cookie;
 
-	return bio_iod_post(biod, err);
+	D_ASSERT(err == 0);
+	err = bio_iod_post(biod, err);
+	bio_iod_free(biod);
+	if (err) {
+		DL_ERROR(err, "Checkpointing flush failed.");
+		/* See the comment in vos_wal_commit() */
+		if (err != -DER_NVME_IO) {
+			D_ERROR("Checkpointing flush hit fatal error, kill engine...\n");
+			err = kill(getpid(), SIGKILL);
+			if (err != 0)
+				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
+		}
+		err = 0;
+	}
+
+	return err;
+}
+
+#define VOS_WAL_DIR	"vos_wal"
+
+void
+vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int tgt_id)
+{
+	int	rc;
+
+	/* Initialize metrics for WAL stats */
+	rc = d_tm_add_metric(&vw_metrics->vwm_wal_sz, D_TM_STATS_GAUGE, "WAL tx size",
+			     "bytes", "%s/%s/wal_sz/tgt_%d", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL size telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_wal_qd, D_TM_STATS_GAUGE, "WAL tx QD",
+			     "commits", "%s/%s/wal_qd/tgt_%d", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL QD telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_wal_waiters, D_TM_STATS_GAUGE, "WAL waiters",
+			     "transactions", "%s/%s/wal_waiters/tgt_%d", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
+
+	/* Initialize metrics for WAL replay */
+	rc = d_tm_add_metric(&vw_metrics->vwm_replay_count, D_TM_COUNTER, "Number of WAL replays",
+			     NULL, "%s/%s/replay_count/tgt_%u", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_count' telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_replay_size, D_TM_GAUGE, "WAL replay size", "bytes",
+			     "%s/%s/replay_size/tgt_%u", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_size' telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_replay_time, D_TM_GAUGE, "WAL replay time", "us",
+			     "%s/%s/replay_time/tgt_%u", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_time' telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_replay_tx, D_TM_COUNTER,
+			     "Number of replayed transactions", NULL,
+			     "%s/%s/replay_transactions/tgt_%u", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_transactions' telemetry: "DF_RC"\n", DP_RC(rc));
+
+
+	rc = d_tm_add_metric(&vw_metrics->vwm_replay_ent, D_TM_COUNTER,
+			     "Number of replayed log entries", NULL,
+			     "%s/%s/replay_entries/tgt_%u", path, VOS_WAL_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'replay_entries' telemetry: "DF_RC"\n", DP_RC(rc));
 }
 
 static inline int
 vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 {
-	struct bio_wal_info wal_info;
-	struct vos_pool    *pool;
+	struct bio_wal_info	wal_info;
+	struct vos_pool		*pool;
+	struct bio_wal_stats	ws = { 0 };
+	struct vos_wal_metrics	*vwm;
+	int			rc;
 
 	pool = store->vos_priv;
 
@@ -304,18 +374,50 @@ vos_wal_reserve(struct umem_store *store, uint64_t *tx_id)
 
 reserve:
 	D_ASSERT(store && store->stor_priv != NULL);
-	return bio_wal_reserve(store->stor_priv, tx_id);
+	vwm = (struct vos_wal_metrics *)store->stor_stats;
+	rc = bio_wal_reserve(store->stor_priv, tx_id, (vwm != NULL) ? &ws : NULL);
+	if (rc == 0 && vwm != NULL)
+		d_tm_set_gauge(vwm->vwm_wal_waiters, ws.ws_waiters);
+
+	return rc;
 }
 
 static inline int
 vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_iod)
 {
-	struct bio_wal_info wal_info;
-	struct vos_pool    *pool;
-	int                 rc;
+	struct bio_wal_info	wal_info;
+	struct vos_pool		*pool;
+	struct bio_wal_stats	ws = { 0 };
+	struct vos_wal_metrics	*vwm;
+	int			rc;
 
 	D_ASSERT(store && store->stor_priv != NULL);
-	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod);
+	vwm = (struct vos_wal_metrics *)store->stor_stats;
+	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod, (vwm != NULL) ? &ws : NULL);
+	if (rc) {
+		DL_ERROR(rc, "WAL commit failed.");
+		/*
+		 * WAL commit could fail due to faulty NVMe or other fatal errors like ENOMEM
+		 * or software bug.
+		 *
+		 * On NVMe I/O error, the NVMe device should have been marked as faulty (in
+		 * the BIO module), and a series actions will be automatically triggered to
+		 * take DOWN all impacted pool targets. We just suppress the error here since
+		 * the caller (DAV) can't cope with commit error.
+		 *
+		 * On other fatal error, the best we can do is killing the engine...
+		 */
+		if (rc != -DER_NVME_IO) {
+			D_ERROR("WAL commit hit fatal error, kill engine...\n");
+			rc = kill(getpid(), SIGKILL);
+			if (rc != 0)
+				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
+		}
+		rc = 0;
+	} else if (vwm != NULL) {
+		d_tm_set_gauge(vwm->vwm_wal_sz, ws.ws_size);
+		d_tm_set_gauge(vwm->vwm_wal_qd, ws.ws_qd);
+	}
 
 	pool = store->vos_priv;
 	if (unlikely(pool == NULL))
@@ -347,13 +449,13 @@ vos_wal_replay(struct umem_store *store,
 
 	/* VOS file rehydration metrics */
 	if (store->stor_stats != NULL && rc >= 0) {
-		struct vos_rh_metrics *vrm = (struct vos_rh_metrics *)store->stor_stats;
+		struct vos_wal_metrics *vwm = (struct vos_wal_metrics *)store->stor_stats;
 
-		d_tm_set_gauge(vrm->vrh_size, wrs.wrs_sz);
-		d_tm_set_gauge(vrm->vrh_time, wrs.wrs_tm);
-		d_tm_inc_counter(vrm->vrh_entries, wrs.wrs_entries);
-		d_tm_inc_counter(vrm->vrh_tx_cnt, wrs.wrs_tx_cnt);
-		d_tm_inc_counter(vrm->vrh_count, 1);
+		d_tm_inc_counter(vwm->vwm_replay_count, 1);
+		d_tm_set_gauge(vwm->vwm_replay_size, wrs.wrs_sz);
+		d_tm_set_gauge(vwm->vwm_replay_time, wrs.wrs_tm);
+		d_tm_inc_counter(vwm->vwm_replay_tx, wrs.wrs_tx_cnt);
+		d_tm_inc_counter(vwm->vwm_replay_ent, wrs.wrs_entries);
 	}
 	return rc;
 }
@@ -681,7 +783,7 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	if (metrics != NULL) {
 		struct vos_pool_metrics	*vpm = (struct vos_pool_metrics *)metrics;
 
-		store.stor_stats = &vpm->vp_rh_metrics;
+		store.stor_stats = &vpm->vp_wal_metrics;
 	}
 
 umem_open:
@@ -1092,11 +1194,9 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 		pool->vp_dying = 1;
 		vos_pool_decref(pool); /* -1 for lookup */
 
-		D_WARN(DF_UUID": Open reference exists, pool destroy is deferred\n",
-		       DP_UUID(uuid));
-		VOS_NOTIFY_RAS_EVENTF(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
-				      NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
-				      "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
+		ras_notify_eventf(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
+				  NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
+				  "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
@@ -1298,6 +1398,12 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	if (pool_df->pd_version >= VOS_POOL_DF_2_6)
 		pool->vp_feats |= VOS_POOL_FEAT_2_6;
 
+	if (pool->vp_vea_info == NULL)
+		/** always store on SCM if no bdev */
+		pool->vp_data_thresh = 0;
+	else
+		pool->vp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
@@ -1351,6 +1457,12 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 			*poh = vos_pool2hdl(pool);
 			return 0;
 		}
+	}
+
+	rc = bio_xsctxt_health_check(vos_xsctxt_get());
+	if (rc) {
+		DL_WARN(rc, DF_UUID": Skip pool open due to faulty NVMe.", DP_UUID(uuid));
+		return rc;
 	}
 
 	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, metrics, &ph);
@@ -1423,6 +1535,12 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
 		  "Invalid pool upgrade version %d, current version is %d\n", version,
 		  pool_df->pd_version);
+
+	if (version >= VOS_POOL_DF_2_6 && pool_df->pd_version < VOS_POOL_DF_2_6 &&
+	    pool->vp_vea_info)
+		rc = vea_upgrade(pool->vp_vea_info, &pool->vp_umm, &pool_df->pd_vea_df, version);
+	if (rc)
+		return rc;
 
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc != 0)
@@ -1498,7 +1616,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 
 	D_ASSERT(pinfo != NULL);
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
-	pinfo->pif_gc_stat = pool->vp_gc_stat;
+	pinfo->pif_gc_stat = pool->vp_gc_stat_global;
 
 	rc = vos_space_query(pool, &pinfo->pif_space, true);
 	if (rc)
@@ -1546,7 +1664,6 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 {
 	struct vos_pool		*pool;
 	int			i;
-	struct policy_desc_t	*p;
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL)
@@ -1556,18 +1673,17 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 	default:
 		return -DER_NOSYS;
 	case VOS_PO_CTL_RESET_GC:
-		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
+		memset(&pool->vp_gc_stat_global, 0, sizeof(pool->vp_gc_stat_global));
 		break;
-	case VOS_PO_CTL_SET_POLICY:
+	case VOS_PO_CTL_SET_DATA_THRESH:
 		if (param == NULL)
 			return -DER_INVAL;
 
-		p = param;
-		pool->vp_policy_desc.policy = p->policy;
+		if (pool->vp_vea_info == NULL)
+			/** no bdev, discard request */
+			break;
 
-		for (i = 0; i < DAOS_MEDIA_POLICY_PARAMS_MAX; i++)
-			pool->vp_policy_desc.params[i] = p->params[i];
-
+		pool->vp_data_thresh = *((uint32_t *)param);
 		break;
 	case VOS_PO_CTL_SET_SPACE_RB:
 		if (param == NULL)

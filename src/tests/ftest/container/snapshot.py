@@ -5,10 +5,9 @@
 """
 import traceback
 
-from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError, c_uuid_to_str
-
 from apricot import TestWithServers
 from general_utils import get_random_bytes
+from pydaos.raw import DaosApiError, DaosContainer, DaosSnapshot, c_uuid_to_str
 
 
 # pylint: disable=broad-except

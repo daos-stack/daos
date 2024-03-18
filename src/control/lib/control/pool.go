@@ -29,7 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -151,37 +150,6 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// request, filling in any missing fields with reasonable defaults.
-func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
-	if in.userExt == nil {
-		in.userExt = &auth.External{}
-	}
-	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(in.userExt, in.User, in.UserGroup)
-	if err != nil {
-		return
-	}
-
-	if len(in.TierBytes) > 0 {
-		if in.TotalBytes > 0 {
-			return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
-		}
-		if in.TotalBytes == 0 && in.TierBytes[0] == 0 {
-			return nil, errors.New("can't create pool with 0 SCM")
-		}
-	} else if in.TotalBytes == 0 {
-		return nil, errors.New("can't create pool with size of 0")
-	}
-
-	out = new(mgmtpb.PoolCreateReq)
-	if err = convert.Types(in, out); err != nil {
-		return
-	}
-
-	out.Uuid = uuid.New().String()
-	return
-}
-
 type (
 	// poolRequest is an embeddable struct containing methods common
 	// to all pool requests.
@@ -248,6 +216,7 @@ type (
 		// manual params
 		Ranks     []ranklist.Rank
 		TierBytes []uint64
+		MetaBytes uint64 `json:"meta_blob_size"`
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -260,15 +229,101 @@ type (
 	}
 )
 
+type maxPoolSizeGetter func() (uint64, uint64, error)
+
+func poolCreateReqChkSizes(log debugLogger, getMaxPoolSz maxPoolSizeGetter, req *PoolCreateReq) error {
+	hasTotBytes := req.TotalBytes > 0
+	hasTierBytes := len(req.TierBytes) == 2
+	hasNoTierBytes := len(req.TierBytes) == 0
+	hasTierRatio := len(req.TierRatio) == 2
+	hasNoTierRatio := len(req.TierRatio) == 0
+
+	switch {
+	case hasTierBytes && hasNoTierRatio && !hasTotBytes:
+		if req.TierBytes[0] == 0 {
+			return errors.New("can't create pool with 0 SCM")
+		}
+		// Storage sizes have been written to TierBytes in request (manual-size).
+		log.Debugf("manual-size pool create mode: %+v", req)
+
+	case hasNoTierBytes && hasTierRatio && hasTotBytes:
+		if req.TierRatio[0] == 0 {
+			return errors.New("can't create pool with 0.0 SCM ratio")
+		}
+		// Storage tier ratios and total pool size given, distribution of space across
+		// ranks to be calculated on the server side (auto-total-size).
+		log.Debugf("auto-total-size pool create mode: %+v", req)
+
+	case hasNoTierBytes && hasTierRatio && !hasTotBytes:
+		if req.TierRatio[0] == 0 {
+			return errors.New("can't create pool with 0.0 SCM ratio")
+		}
+		availRatio := req.TierRatio[0]
+		if req.TierRatio[1] != availRatio {
+			return errors.New("different tier ratios with no total size is not supported")
+		}
+		req.TierRatio = nil
+		// Storage tier ratios specified without a total size, use specified fraction of
+		// available space (auto-percentage-size).
+		scmBytes, nvmeBytes, err := getMaxPoolSz()
+		if err != nil {
+			return err
+		}
+		req.TierBytes = []uint64{
+			uint64(float64(scmBytes) * availRatio),
+			uint64(float64(nvmeBytes) * availRatio),
+		}
+		if req.TierBytes[0] == 0 {
+			return errors.Errorf("Not enough SCM storage available with ratio %d%%: "+
+				"SCM storage capacity or ratio should be increased",
+				int(availRatio*100))
+		}
+		log.Debugf("auto-percentage-size pool create mode: %+v", req)
+
+	default:
+		return errors.Errorf("unexpected parameters in pool create request: %+v", req)
+	}
+
+	return nil
+}
+
+func poolCreateGenPBReq(ctx context.Context, rpcClient UnaryInvoker, in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
+	if in.userExt == nil {
+		in.userExt = &auth.External{}
+	}
+	// ensure pool ownership is set up correctly
+	in.User, in.UserGroup, err = formatNameGroup(in.userExt, in.User, in.UserGroup)
+	if err != nil {
+		return
+	}
+
+	getMaxPoolSz := func() (uint64, uint64, error) {
+		return getMaxPoolSize(ctx, rpcClient, ranklist.RankList(in.Ranks))
+	}
+
+	if err = poolCreateReqChkSizes(rpcClient, getMaxPoolSz, in); err != nil {
+		return
+	}
+
+	out = new(mgmtpb.PoolCreateReq)
+	if err = convert.Types(in, out); err != nil {
+		return
+	}
+
+	out.Uuid = uuid.New().String()
+	return
+}
+
 // PoolCreate performs a pool create operation on a DAOS Management Server instance.
 // Default values for missing request parameters (e.g. owner/group) are generated when
 // appropriate.
 func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq) (*PoolCreateResp, error) {
-	pbReq, err := genPoolCreateRequest(req)
+	pbReq, err := poolCreateGenPBReq(ctx, rpcClient, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate PoolCreate request")
 	}
 	pbReq.Sys = req.getSystem(rpcClient)
+
 	// TODO: Set this timeout based on the SCM size, when we have a
 	// better understanding of the relationship.
 	req.SetTimeout(PoolCreateTimeout)
@@ -625,7 +680,7 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	return pqr, err
 }
 
-// Update the pool state
+// UpdateState update the pool state.
 func (pqr *PoolQueryResp) UpdateState() error {
 	// Update the state as Ready if DAOS return code is 0.
 	if pqr.Status == 0 {
@@ -1095,7 +1150,7 @@ func (p *Pool) setUsage(pqr *PoolQueryResp) {
 		spread := tu.Max - tu.Min
 		imbalance := float64(spread) / (float64(tu.Total) / float64(pqr.ActiveTargets))
 
-		tn := "NVME"
+		tn := "NVMe"
 		if idx == 0 {
 			tn = "SCM"
 		}
@@ -1270,7 +1325,7 @@ func newFilterRankFunc(ranks ranklist.RankList) filterRankFn {
 }
 
 // Add namespace ranks to rankNVMeFreeSpace map and return minimum free available SCM namespace bytes.
-func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamespaces storage.ScmNamespaces, rankNVMeFreeSpace rankFreeSpaceMap) (uint64, error) {
+func processSCMSpaceStats(log debugLogger, filterRank filterRankFn, scmNamespaces storage.ScmNamespaces, rankNVMeFreeSpace rankFreeSpaceMap) (uint64, error) {
 	scmBytes := uint64(math.MaxUint64)
 
 	for _, scmNamespace := range scmNamespaces {
@@ -1305,36 +1360,36 @@ func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamesp
 }
 
 // Add NVMe free bytes to rankNVMeFreeSpace map.
-func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
-	for _, nvmeController := range nvmeControllers {
-		for _, smdDevice := range nvmeController.SmdDevices {
+func processNVMeSpaceStats(log debugLogger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
+	for _, controller := range nvmeControllers {
+		for _, smdDevice := range controller.SmdDevices {
 			if !smdDevice.Roles.IsEmpty() && (smdDevice.Roles.OptionBits&storage.BdevRoleData) == 0 {
 				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not used for storing data",
-					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank)
+					smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
 				continue
 			}
 
-			if smdDevice.NvmeState != storage.NvmeStateNormal {
-				log.Noticef("SMD device %s (rank %d, ctrlr %s) not usable (device state %q)",
-					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String())
+			if controller.NvmeState != storage.NvmeStateNormal {
+				return errors.Errorf("SMD device %s (rank %d, ctrlr %s) not usable (device state %q)",
+					smdDevice.UUID, smdDevice.Rank, controller.PciAddr, controller.NvmeState.String())
 				continue
 			}
 
 			if !filterRank(smdDevice.Rank) {
 				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not in ranklist",
-					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank)
+					smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
 				continue
 			}
 
 			if _, exists := rankNVMeFreeSpace[smdDevice.Rank]; !exists {
 				return errors.Errorf("Rank %d without SCM device and at least one SMD device %s (rank %d, ctrlr %s)",
-					smdDevice.Rank, smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr)
+					smdDevice.Rank, smdDevice.UUID, smdDevice.Rank, controller.PciAddr)
 			}
 
 			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.UsableBytes
 
 			log.Debugf("Added SMD device %s (rank %d, ctrlr %s) is usable: device state=%q, smd-size=%d ctrlr-total-free=%d",
-				smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String(),
+				smdDevice.UUID, smdDevice.Rank, controller.PciAddr, controller.NvmeState.String(),
 				smdDevice.UsableBytes, rankNVMeFreeSpace[smdDevice.Rank])
 		}
 	}
@@ -1343,7 +1398,7 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 }
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
-func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
+func getMaxPoolSize(ctx context.Context, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
 	// Verify that the DAOS system is ready before attempting to query storage.
 	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{}); err != nil {
 		return 0, 0, err
@@ -1370,7 +1425,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 				resp.HostStorage[key].HostSet.String())
 		}
 
-		sb, err := processSCMSpaceStats(log, filterRank, hostStorage.ScmNamespaces, rankNVMeFreeSpace)
+		sb, err := processSCMSpaceStats(rpcClient, filterRank, hostStorage.ScmNamespaces, rankNVMeFreeSpace)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -1379,7 +1434,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 			scmBytes = sb
 		}
 
-		if err := processNVMeSpaceStats(log, filterRank, hostStorage.NvmeDevices, rankNVMeFreeSpace); err != nil {
+		if err := processNVMeSpaceStats(rpcClient, filterRank, hostStorage.NvmeDevices, rankNVMeFreeSpace); err != nil {
 			return 0, 0, err
 		}
 	}

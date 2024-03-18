@@ -5,10 +5,11 @@
 """
 
 import os
+
 from avocado import fail_on
-from exception_utils import MPILoadError
 from dfuse_test_base import DfuseTestBase
 from env_modules import load_mpi
+from exception_utils import MPILoadError
 from general_utils import DaosTestError, run_command
 
 

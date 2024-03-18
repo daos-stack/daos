@@ -3,8 +3,9 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
+from concurrent.futures import as_completed
 from logging import getLogger
 
 from avocado.utils.process import CmdResult

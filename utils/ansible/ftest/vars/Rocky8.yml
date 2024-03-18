@@ -8,12 +8,13 @@ daos_base_deps:
     - bash
     - gdb
     - glibc
+    - jq
+    - lbzip2
+    - mercury
     - platform-python
     - python36
-    - tree
     - systemd
-    - lbzip2
-    - jq
+    - tree
 
 daos_dev_deps:
   rpms:

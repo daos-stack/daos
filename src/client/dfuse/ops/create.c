@@ -108,8 +108,11 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 	struct fuse_file_info     fi_out     = {0};
 	struct dfuse_cont        *dfs        = parent->ie_dfs;
 	int                       rc;
+	int                       flags;
 
 	DFUSE_TRA_DEBUG(parent, "Parent:%#lx " DF_DE, parent->ie_stat.st_ino, DP_DE(name));
+
+	atomic_store_relaxed(&parent->ie_linear_read, false);
 
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
 	 * defined to 0 so IOF defines LARGEFILE to the value that O_LARGEFILE
@@ -159,6 +162,14 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 	dfuse_ie_init(dfuse_info, ie);
 	dfuse_open_handle_init(dfuse_info, oh, ie);
 
+	LOG_FLAGS(ie, fi->flags);
+	LOG_MODES(ie, mode);
+
+	flags = fi->flags;
+
+	if (flags & O_APPEND)
+		flags &= ~O_APPEND;
+
 	oh->doh_linear_read = false;
 
 	if (!dfuse_info->di_multi_user) {
@@ -169,8 +180,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 
 	DFUSE_TRA_DEBUG(ie, "file " DF_DE " flags 0%o mode 0%o", DP_DE(name), fi->flags, mode);
 
-	rc = dfs_open_stat(dfs->dfs_ns, parent->ie_obj, name, mode, fi->flags, 0, 0, NULL,
-			   &oh->doh_obj, &ie->ie_stat);
+	rc = dfs_open_stat(dfs->dfs_ns, parent->ie_obj, name, mode, flags, 0, 0, NULL, &oh->doh_obj,
+			   &ie->ie_stat);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -183,10 +194,9 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 
 	oh->doh_writeable = true;
 
-	if (dfs->dfc_data_timeout != 0) {
+	if (dfs->dfc_data_timeout != 0 || ie->ie_dfs->dfc_data_otoc) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
-
 	} else {
 		fi_out.direct_io = 1;
 	}
@@ -202,9 +212,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_truncated = false;
-
-	LOG_FLAGS(ie, fi->flags);
-	LOG_MODES(ie, mode);
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 

@@ -3,12 +3,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithoutServers
-from data_utils import list_unique, list_flatten, list_stats, \
-    dict_extract_values, dict_subtract
-from run_utils import run_remote, ResultData
+from ClusterShell.NodeSet import NodeSet
+from data_utils import dict_extract_values, dict_subtract, list_flatten, list_stats, list_unique
+from run_utils import ResultData, run_remote
 
 
 class HarnessUnitTest(TestWithoutServers):

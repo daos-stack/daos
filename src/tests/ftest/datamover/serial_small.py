@@ -3,10 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from pydaos.raw import DaosApiError
 import avocado
-
 from data_mover_test_base import DataMoverTestBase
+from pydaos.raw import DaosApiError
 
 
 class DmvrSerialSmall(DataMoverTestBase):

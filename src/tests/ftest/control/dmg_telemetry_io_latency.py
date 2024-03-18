@@ -4,11 +4,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+from general_utils import report_errors
 from ior_test_base import IorTestBase
+from oclass_utils import extract_redundancy_factor
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
-from oclass_utils import extract_redundancy_factor
-from general_utils import report_errors
 
 
 def convert_to_number(size):

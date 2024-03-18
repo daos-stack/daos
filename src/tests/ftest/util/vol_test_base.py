@@ -4,10 +4,10 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from dfuse_test_base import DfuseTestBase
-from command_utils_base import EnvironmentVariables
-from exception_utils import CommandFailure
 from command_utils import ExecutableCommand
+from command_utils_base import EnvironmentVariables
+from dfuse_test_base import DfuseTestBase
+from exception_utils import CommandFailure
 
 
 class VolTestBase(DfuseTestBase):

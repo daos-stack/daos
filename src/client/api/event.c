@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,7 +97,7 @@ daos_eq_lib_init()
 
 	eq_ref = 1;
 
-	d_getenv_int("D_POLL_TIMEOUT", &ev_prog_timeout);
+	d_getenv_uint32_t("D_POLL_TIMEOUT", &ev_prog_timeout);
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
@@ -105,6 +105,14 @@ unlock:
 crt:
 	crt_finalize();
 	D_GOTO(unlock, rc);
+}
+
+int
+daos_eq_lib_reset_after_fork(void)
+{
+	eq_ref            = 0;
+	ev_thpriv_is_init = false;
+	return daos_eq_lib_init();
 }
 
 int
@@ -484,8 +492,13 @@ daos_event_complete(struct daos_event *ev, int rc)
 	}
 
 	if (evx->evx_status == DAOS_EVS_READY || evx->evx_status == DAOS_EVS_COMPLETED ||
-	    evx->evx_status == DAOS_EVS_ABORTED)
+	    evx->evx_status == DAOS_EVS_ABORTED) {
+		if (evx->is_errno)
+			ev->ev_error = daos_der2errno(rc);
+		else
+			ev->ev_error = rc;
 		goto out;
+	}
 
 	D_ASSERT(evx->evx_status == DAOS_EVS_RUNNING);
 
@@ -830,7 +843,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 
 	eqx = daos_eq_lookup(eqh);
 	if (eqx == NULL) {
-		D_ERROR("eqh nonexist.\n");
+		D_ERROR("daos_eq_lookup() failed: "DF_RC"\n", DP_RC(-DER_NONEXIST));
 		return -DER_NONEXIST;
 	}
 
@@ -862,11 +875,11 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	if (eqx->eqx_ctx != NULL) {
 		rc = crt_context_flush(eqx->eqx_ctx, 0);
 		if (rc != 0) {
-			D_ERROR("failed to flush client context: "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("failed to flush client context: "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 	}
+	tse_sched_progress(&eqx->eqx_sched);
 
 	D_MUTEX_LOCK(&eqx->eqx_lock);
 

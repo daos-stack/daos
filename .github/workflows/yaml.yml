@@ -11,6 +11,7 @@ on:
     paths:
       - '**/*.yaml'
       - '**/*.yml'
+      - utils/cq/requirements.txt
 
 jobs:
   yaml-lint:
@@ -18,12 +19,14 @@ jobs:
     name: Yamllint check
     steps:
       - name: Check out source repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3'
+      - name: Install extra python packages
+        run: pip install --requirement utils/cq/requirements.txt
       - name: Run check
         run: yamllint --format github .

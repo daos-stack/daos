@@ -4,10 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-
+from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables, FormattedParameter
 from exception_utils import CommandFailure
-from command_utils import ExecutableCommand
 from host_utils import get_local_host
 from job_manager_utils import get_job_manager
 
@@ -90,8 +89,8 @@ class CartSelfTest(TestWithServers):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=network,smoke
-        :avocado: tags=unittest,cartselftest,test_self_test
+        :avocado: tags=network,smoke,cart
+        :avocado: tags=CartSelfTest,unittest,test_self_test
         """
         # Setup the orterun command
         orterun = get_job_manager(self, "Orterun", self.SelfTest(self.bin), mpi_type="openmpi")

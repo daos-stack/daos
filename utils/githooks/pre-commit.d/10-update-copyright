@@ -43,8 +43,6 @@ os=$(uname -s)
 
 . utils/githooks/git-version.sh
 
-. utils/githooks/find_base.sh
-
 if [ -z "$files" ]; then
     if [ "$TARGET" = "HEAD" ]; then
         echo "  Checking against HEAD"

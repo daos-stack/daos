@@ -5,9 +5,8 @@
 '''
 import ctypes
 
-from pydaos.raw import daos_cref, DaosApiError, conversion, DaosContPropEnum
-
 from apricot import TestWithServers
+from pydaos.raw import DaosApiError, DaosContPropEnum, conversion, daos_cref
 from test_utils_container import TestContainer
 
 
@@ -36,7 +35,7 @@ class QueryPropertiesTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container
-        :avocado: tags=query_properties,test_query_properties
+        :avocado: tags=QueryPropertiesTest,test_query_properties
         """
         errors = []
 

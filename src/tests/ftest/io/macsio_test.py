@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from general_utils import list_to_str
 from dfuse_test_base import DfuseTestBase
+from general_utils import list_to_str
 from macsio_test_base import MacsioTestBase
 
 

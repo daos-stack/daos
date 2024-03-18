@@ -1,0 +1,49 @@
+name: 'Provision Cluster'
+description: 'Provision Cluster'
+inputs:
+  condition:
+    description: Condition this should run on
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Request and Provision a Cluster
+      if: ${{ inputs.condition }}
+      shell: bash
+      run: |
+          . ci/gha_functions.sh
+          STAGE_NAME='${{ env.STAGE_NAME }}'
+          REQID='${{ github.event.pull_request.number }}-${{ github.run_number }}'
+          CP_PRIORITY=${{ env.CP_PRIORITY }}
+          if ! JENKINS_URL='${{ env.JENKINS_URL }}'                   \
+               LABEL='${{ env.LABEL }}'                               \
+               PRIORITY=${CP_PRIORITY:-3}                             \
+               provision_cluster "$STAGE_NAME" "${{ github.run_id }}" \
+                                 "${{ runner.name }}"                 \
+                                 "$REQID-${STAGE_NAME// /_}"; then
+               echo "Failed to provision cluster"
+               exit 1
+          fi
+    - name: Wait for nodes to be ready
+      if: ${{ inputs.condition }}
+      shell: bash
+      run: . ci/gha_functions.sh;
+           set -eux;
+           wait_nodes_ready
+    - name: Post-provision cluster
+      if: ${{ inputs.condition }}
+      shell: bash
+      run: |
+        . ci/gha_functions.sh
+        inst_repos="${{ env.CP_PR_REPOS }} ${{ github.event.inputs.pr-repos }}"
+        if [[ $inst_repos != *daos@* ]]; then
+            inst_repos+=" daos@PR-${{ github.event.pull_request.number }}"
+            inst_repos+=":${{ github.run_number }}"
+        fi
+        ARTIFACTS_URL=$ARTIFACTS_URL                                      \
+        INST_REPOS="$(eval echo "$inst_repos")"                           \
+        DISTRO=$PROVISION_DISTRO ci/provisioning/post_provision_config.sh

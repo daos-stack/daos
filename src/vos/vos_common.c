@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,14 +47,8 @@ vos_report_layout_incompat(const char *type, int version, int min_version,
 		 min_version, max_version);
 	buf[DF_MAX_BUF - 1] = 0; /* Shut up any static analyzers */
 
-	if (ds_notify_ras_event == NULL) {
-		D_CRIT("%s\n", buf);
-		return;
-	}
-
-	ds_notify_ras_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO,
-			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, uuid,
-			    NULL, NULL, NULL, NULL);
+	ras_notify_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO, RAS_SEV_ERROR,
+			 NULL, NULL, NULL, NULL, uuid, NULL, NULL, NULL, NULL);
 }
 
 struct vos_tls *
@@ -300,7 +294,7 @@ cancel:
 			dae->dae_preparing = 0;
 		}
 
-		if (unlikely(dth->dth_need_validation && dth->dth_active)) {
+		if (err == 0 && unlikely(dth->dth_need_validation && dth->dth_active)) {
 			/* Aborted by race during the yield for local TX commit. */
 			rc = vos_dtx_validation(dth);
 			switch (rc) {
@@ -408,7 +402,7 @@ vos_tls_fini(int tags, void *data)
 
 	umem_fini_txd(&tls->vtl_txd);
 	if (tls->vtl_ts_table)
-		vos_ts_table_free(&tls->vtl_ts_table);
+		vos_ts_table_free(&tls->vtl_ts_table, tls);
 	D_FREE(tls);
 }
 
@@ -419,7 +413,28 @@ vos_standalone_tls_fini(void)
 		vos_tls_fini(DAOS_TGT_TAG, self_mode.self_tls);
 		self_mode.self_tls = NULL;
 	}
+}
 
+void
+vos_lru_alloc_track(void *arg, daos_size_t size)
+{
+	struct vos_tls *tls = arg;
+
+	if (tls == NULL || tls->vtl_lru_alloc_size == NULL)
+		return;
+
+	d_tm_inc_gauge(tls->vtl_lru_alloc_size, size);
+}
+
+void
+vos_lru_free_track(void *arg, daos_size_t size)
+{
+	struct vos_tls *tls = arg;
+
+	if (tls == NULL || tls->vtl_lru_alloc_size == NULL)
+		return;
+
+	d_tm_dec_gauge(tls->vtl_lru_alloc_size, size);
 }
 
 static void *
@@ -464,16 +479,12 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 	}
 
 	if (tags & DAOS_TGT_TAG) {
-		rc = vos_ts_table_alloc(&tls->vtl_ts_table);
+		rc = vos_ts_table_alloc(&tls->vtl_ts_table, tls);
 		if (rc) {
 			D_ERROR("Error in creating timestamp table: %d\n", rc);
 			goto failed;
 		}
 	}
-
-	if (tgt_id < 0)
-		/** skip sensor setup on standalone vos & sys xstream */
-		return tls;
 
 	rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
 			     "Number of committed entries kept around for reply"
@@ -482,6 +493,37 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
 		       DP_RC(rc));
+	if (tgt_id >= 0) {
+		rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
+				     "Number of committed entries kept around for reply"
+				     " reconstruction", "entries",
+				     "io/dtx/committed/tgt_%u", tgt_id);
+		if (rc)
+			D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
+			       DP_RC(rc));
+
+		rc = d_tm_add_metric(&tls->vtl_dtx_cmt_ent_cnt, D_TM_GAUGE,
+				     "Number of committed entries", "entry",
+				     "mem/vos/dtx_cmt_ent_%u/tgt_%u",
+				     sizeof(struct vos_dtx_cmt_ent), tgt_id);
+		if (rc)
+			D_WARN("Failed to create committed cnt: "DF_RC"\n",
+			       DP_RC(rc));
+
+		rc = d_tm_add_metric(&tls->vtl_obj_cnt, D_TM_GAUGE,
+				     "Number of cached vos object", "entry",
+				     "mem/vos/vos_obj_%u/tgt_%u",
+				     sizeof(struct vos_object), tgt_id);
+		if (rc)
+			D_WARN("Failed to create vos obj cnt: "DF_RC"\n", DP_RC(rc));
+
+	}
+
+	rc = d_tm_add_metric(&tls->vtl_lru_alloc_size, D_TM_GAUGE,
+			     "Active DTX table LRU size", "byte",
+			     "mem/vos/vos_lru_size/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create LRU alloc size: "DF_RC"\n", DP_RC(rc));
 
 	return tls;
 failed:
@@ -555,7 +597,7 @@ vos_mod_init(void)
 	if (rc)
 		D_ERROR("Failed to initialize incarnation log capability\n");
 
-	d_getenv_int("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
+	d_getenv_uint("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
 	if (vos_agg_nvme_thresh == 0 || vos_agg_nvme_thresh > 256)
 		vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
 	/* Round down to 2^n blocks */
@@ -598,7 +640,6 @@ vos_metrics_free(void *data)
 
 #define VOS_AGG_DIR	"vos_aggregation"
 #define VOS_SPACE_DIR	"vos_space"
-#define VOS_RH_DIR	"vos_rehydration"
 
 static inline char *
 agg_op2str(unsigned int agg_op)
@@ -621,7 +662,6 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	struct vos_pool_metrics		*vp_metrics;
 	struct vos_agg_metrics		*vam;
 	struct vos_space_metrics	*vsm;
-	struct vos_rh_metrics		*brm;
 	char				desc[40];
 	int				i, rc;
 
@@ -639,7 +679,6 @@ vos_metrics_alloc(const char *path, int tgt_id)
 
 	vam = &vp_metrics->vp_agg_metrics;
 	vsm = &vp_metrics->vp_space_metrics;
-	brm = &vp_metrics->vp_rh_metrics;
 
 	/* VOS aggregation EPR scan duration */
 	rc = d_tm_add_metric(&vam->vam_epr_dur, D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME,
@@ -711,6 +750,12 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* VOS aggregation failed */
+	rc = d_tm_add_metric(&vam->vam_fail_count, D_TM_COUNTER, "aggregation failures", NULL,
+			     "%s/%s/fail_count/tgt_%u", path, VOS_AGG_DIR, tgt_id);
+	if (rc)
+		DL_WARN(rc, "Failed to create 'fail_count' telemetry");
+
 	/* Metrics related to VOS checkpointing */
 	vos_chkpt_metrics_init(&vp_metrics->vp_chkpt_metrics, path, tgt_id);
 
@@ -726,34 +771,26 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create 'nvme_used' telemetry : "DF_RC"\n", DP_RC(rc));
 
+	/* VOS space SCM total metric */
+	rc = d_tm_add_metric(&vsm->vsm_scm_total, D_TM_GAUGE, "SCM space total", "bytes",
+			     "%s/%s/scm_total/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'scm_total' telemetry : " DF_RC "\n", DP_RC(rc));
+
+	/* VOS space NVME total metric */
+	rc = d_tm_add_metric(&vsm->vsm_nvme_total, D_TM_GAUGE, "NVME space total", "bytes",
+			     "%s/%s/nvme_total/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
+	if (rc)
+		D_WARN("Failed to create 'nvme_total' telemetry : " DF_RC "\n", DP_RC(rc));
+
+	/** garbage collection metrics */
+	vos_gc_metrics_init(&vp_metrics->vp_gc_metrics, path, tgt_id);
+
 	/* Initialize the vos_space_metrics timeout counter */
 	vsm->vsm_last_update_ts = 0;
 
-	/* Initialize metrics for vos file rehydration */
-	rc = d_tm_add_metric(&brm->vrh_size, D_TM_GAUGE, "WAL replay size", "bytes",
-			     "%s/%s/replay_size/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_size' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_time, D_TM_GAUGE, "WAL replay time", "us",
-			     "%s/%s/replay_time/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_time' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_entries, D_TM_COUNTER, "Number of log entries", NULL,
-			     "%s/%s/replay_entries/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_entries' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_count, D_TM_COUNTER, "Number of WAL replays", NULL,
-			     "%s/%s/replay_count/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_count' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_tx_cnt, D_TM_COUNTER, "Number of replayed transactions",
-			     NULL, "%s/%s/replay_transactions/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_transactions' telemetry : "DF_RC"\n", DP_RC(rc));
+	/* Initialize metrics for WAL */
+	vos_wal_metrics_init(&vp_metrics->vp_wal_metrics, path, tgt_id);
 
 	return vp_metrics;
 }
@@ -924,7 +961,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 		goto failed;
 	}
 
-	evt_mode = getenv("DAOS_EVTREE_MODE");
+	rc = d_agetenv_str(&evt_mode, "DAOS_EVTREE_MODE");
 	if (evt_mode) {
 		if (strcasecmp("soff", evt_mode) == 0) {
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
@@ -933,6 +970,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 			vos_evt_feats &= ~EVT_FEATS_SUPPORTED;
 			vos_evt_feats |= EVT_FEAT_SORT_DIST_EVEN;
 		}
+		d_freeenv_str(&evt_mode);
 	}
 	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:

@@ -4,9 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from performance_test_base import PerformanceTestBase
 from data_mover_test_base import DataMoverTestBase
 from exception_utils import CommandFailure
+from performance_test_base import PerformanceTestBase
 
 
 class BasicCheckout(PerformanceTestBase):

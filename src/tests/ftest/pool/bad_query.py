@@ -5,9 +5,8 @@
 '''
 import traceback
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 
 
 class BadQueryTest(TestWithServers):
@@ -29,7 +28,7 @@ class BadQueryTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool
-        :avocado: tags=bad_query,test_query
+        :avocado: tags=BadQueryTest,test_query
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the

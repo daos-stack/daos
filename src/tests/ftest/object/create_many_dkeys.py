@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import sys
 import ctypes
+import sys
+
 import avocado
-
-from pydaos.raw import DaosContainer, IORequest, DaosApiError
-
 from apricot import TestWithServers
 from general_utils import create_string_buffer
+from pydaos.raw import DaosApiError, DaosContainer, IORequest
 
 
 class CreateManyDkeys(TestWithServers):
@@ -90,7 +89,7 @@ class CreateManyDkeys(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=many_dkeys,test_many_dkeys
+        :avocado: tags=CreateManyDkeys,test_many_dkeys
         """
         self.prepare_pool()
         no_of_dkeys = self.params.get("number_of_dkeys", '/run/dkeys/')

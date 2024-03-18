@@ -16,6 +16,8 @@
 #include <daos/btree.h>
 #include <daos/dtx.h>
 
+#define BTR_EXT_FEAT_MASK (BTR_FEAT_MASK ^ BTR_FEAT_EMBEDDED)
+
 /**
  * Tree node types.
  * NB: a node can be both root and leaf.
@@ -83,6 +85,25 @@ struct btr_iterator {
 	unsigned int			 it_collisions;
 };
 
+enum {
+	/** Entry is not embedded */
+	BTR_EMBEDDED_NONE = 0,
+	/** Hash key is present */
+	BTR_EMBEDDED_HASH = (1 << 14),
+	/** Record is embedded, may or may not be probed */
+	BTR_EMBEDDED_SET = (1 << 15),
+	/** Embedded entry EQ probed entry */
+	BTR_EMBEDDED_EQ = BTR_EMBEDDED_SET | (0),
+	/** Embedded entry LT probed entry */
+	BTR_EMBEDDED_LT = BTR_EMBEDDED_SET | (1),
+	/** Embedded entry GT probed entry */
+	BTR_EMBEDDED_GT = BTR_EMBEDDED_SET | (2),
+};
+
+D_CASSERT(BTR_CMP_EQ == (BTR_EMBEDDED_EQ ^ BTR_EMBEDDED_SET));
+D_CASSERT(BTR_CMP_LT == (BTR_EMBEDDED_LT ^ BTR_EMBEDDED_SET));
+D_CASSERT(BTR_CMP_GT == (BTR_EMBEDDED_GT ^ BTR_EMBEDDED_SET));
+
 /**
  * Trace for tree search.
  */
@@ -91,6 +112,11 @@ struct btr_trace {
 	umem_off_t			tr_node;
 	/** child/record index within this node */
 	unsigned int			tr_at;
+};
+
+struct btr_trace_info {
+	struct btr_trace *ti_trace;
+	uint32_t          ti_embedded_info;
 };
 
 /** backtrace depth */
@@ -105,6 +131,10 @@ struct btr_context {
 	struct btr_instance		 tc_tins;
 	/** embedded iterator */
 	struct btr_iterator		 tc_itr;
+	/** embedded fake record for the purpose of handling embedded value */
+	struct btr_record                tc_record;
+	/** This provides space for the hkey for the fake record */
+	struct ktr_hkey                  tc_hkey;
 	/** cached configured tree order */
 	uint16_t			 tc_order;
 	/** cached tree depth, avoid loading from slow memory */
@@ -128,7 +158,7 @@ struct btr_context {
 	/** cached feature bits, avoid loading from slow memory */
 	uint64_t			 tc_feats;
 	/** trace for the tree root */
-	struct btr_trace		*tc_trace;
+	struct btr_trace_info            tc_trace;
 	/** trace buffer */
 	struct btr_trace		 tc_traces[BTR_TRACE_MAX];
 };
@@ -163,6 +193,40 @@ static bool
 btr_has_tx(struct btr_context *tcx)
 {
 	return umem_has_tx(btr_umm(tcx));
+}
+
+/** The tree has support for the embedded value feature */
+static inline bool
+btr_supports_embedded_value(struct btr_context *tcx)
+{
+	return (tcx->tc_feats & BTR_FEAT_EMBED_FIRST) != 0;
+}
+
+/** Returns true if we should insert an embedded value */
+static bool
+btr_use_embedded_value(struct btr_context *tcx)
+{
+	return (btr_supports_embedded_value(tcx) && tcx->tc_depth == 0);
+}
+
+/** Returns true if the tree currently has an embedded value */
+static bool
+btr_has_embedded_value(struct btr_context *tcx)
+{
+	return (tcx->tc_feats & BTR_FEAT_EMBEDDED);
+}
+
+static inline int
+btr_embedded_cmp(struct btr_context *tcx)
+{
+	D_ASSERT(tcx->tc_trace.ti_embedded_info != BTR_EMBEDDED_NONE);
+	return tcx->tc_trace.ti_embedded_info & ~(BTR_EMBEDDED_HASH | BTR_EMBEDDED_SET);
+}
+
+static inline void
+btr_embedded_hash_set(struct btr_context *tcx)
+{
+	tcx->tc_trace.ti_embedded_info |= BTR_EMBEDDED_HASH;
 }
 
 #define BTR_IS_DIRECT_KEY(feats) ((feats) & BTR_FEAT_DIRECT_KEY)
@@ -244,7 +308,8 @@ static void
 btr_context_set_depth(struct btr_context *tcx, unsigned int depth)
 {
 	tcx->tc_depth = depth;
-	tcx->tc_trace = &tcx->tc_traces[BTR_TRACE_MAX - depth];
+	tcx->tc_trace.ti_trace         = &tcx->tc_traces[BTR_TRACE_MAX - depth];
+	tcx->tc_trace.ti_embedded_info = BTR_EMBEDDED_NONE;
 }
 
 static inline btr_ops_t *
@@ -336,19 +401,20 @@ btr_context_clone(struct btr_context *tcx, struct btr_context **tcx_p)
  * for the new root if \a level is -1.
  */
 static void
-btr_trace_set(struct btr_context *tcx, int level,
-	      umem_off_t nd_off, int at)
+btr_trace_set(struct btr_context *tcx, int level, umem_off_t nd_off, int at, uint32_t embedded)
 {
 	D_ASSERT(at >= 0 && at < tcx->tc_order);
 	D_ASSERT(tcx->tc_depth > 0);
 	D_ASSERT(level >= 0 && level < tcx->tc_depth);
-	D_ASSERT(&tcx->tc_trace[level] < &tcx->tc_traces[BTR_TRACE_MAX]);
+	D_ASSERT(&tcx->tc_trace.ti_trace[level] < &tcx->tc_traces[BTR_TRACE_MAX]);
 
-	D_DEBUG(DB_TRACE, "trace[%d] "DF_X64"/%d\n", level, nd_off, at);
+	D_DEBUG(DB_TRACE, "trace[%d] " DF_X64 "/%d %s\n", level, nd_off, at,
+		(embedded & BTR_EMBEDDED_SET) ? "embedded" : "");
 
 	D_ASSERT(nd_off != UMOFF_NULL);
-	tcx->tc_trace[level].tr_node = nd_off;
-	tcx->tc_trace[level].tr_at = at;
+	tcx->tc_trace.ti_trace[level].tr_node = nd_off;
+	tcx->tc_trace.ti_trace[level].tr_at   = at;
+	tcx->tc_trace.ti_embedded_info        = embedded;
 }
 
 /** fetch the record of the specified trace level */
@@ -360,24 +426,33 @@ btr_trace2rec(struct btr_context *tcx, int level)
 	D_ASSERT(tcx->tc_depth > 0);
 	D_ASSERT(tcx->tc_depth > level);
 
-	trace = &tcx->tc_trace[level];
+	trace = &tcx->tc_trace.ti_trace[level];
 	D_ASSERT(!UMOFF_IS_NULL(trace->tr_node));
+
+	if (tcx->tc_trace.ti_embedded_info) {
+		D_ASSERT(level == 0);
+		tcx->tc_record.rec_off = trace->tr_node;
+		return &tcx->tc_record;
+	}
 
 	return btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
 }
 
-#define									\
-btr_trace_debug(tcx, trace, format, ...)				\
-do {									\
-	umem_off_t	__off = (trace)->tr_node;			\
-	int		__level = (int)((trace) - (tcx)->tc_trace);	\
-									\
-	D_DEBUG(DB_TRACE,						\
-		"node="DF_X64" (l=%d k=%d at=%d): " format,		\
-		__off, __level,						\
-		((struct btr_node *)btr_off2ptr((tcx), __off))->tn_keyn,\
-		(trace)->tr_at,	## __VA_ARGS__);			\
-} while (0)
+#define btr_trace_debug(tcx, trace, format, ...)                                                   \
+	do {                                                                                       \
+		umem_off_t __off = (trace)->tr_node;                                               \
+		int        __level;                                                                \
+                                                                                                   \
+		if ((tcx)->tc_trace.ti_embedded_info) {                                            \
+			D_DEBUG(DB_TRACE, "Embedded record rec=" DF_X64 " (info=%d\n)", __off,     \
+				(tcx)->tc_trace.ti_embedded_info);                                 \
+			break;                                                                     \
+		}                                                                                  \
+		__level = (int)((trace) - (tcx)->tc_trace.ti_trace);                               \
+		D_DEBUG(DB_TRACE, "node=" DF_X64 " (l=%d k=%d at=%d): " format, __off, __level,    \
+			((struct btr_node *)btr_off2ptr((tcx), __off))->tn_keyn, (trace)->tr_at,   \
+			##__VA_ARGS__);                                                            \
+	} while (0)
 
 void
 hkey_common_gen(d_iov_t *key_iov, void *hkey)
@@ -847,10 +922,18 @@ btr_root_init(struct btr_context *tcx, struct btr_root *root, bool in_place)
 	root->tr_class		= tcx->tc_class;
 	root->tr_feats		= tcx->tc_feats;
 	root->tr_order		= tcx->tc_order;
-	if (tcx->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
-		root->tr_node_size	= 1;
-	else
+	if (tcx->tc_feats & BTR_FEAT_DYNAMIC_ROOT) {
+		/** If the first entry will be embedded, we'll need to insert 2
+		 *  entries, so set the initial size accordingly.  At present,
+		 *  we always go from 1 to 3.
+		 */
+		if (tcx->tc_feats & BTR_FEAT_EMBED_FIRST)
+			root->tr_node_size = MIN(3, tcx->tc_order);
+		else
+			root->tr_node_size = 1;
+	} else {
 		root->tr_node_size	= tcx->tc_order;
+	}
 	root->tr_node		= BTR_NODE_NULL;
 
 	return 0;
@@ -887,22 +970,59 @@ btr_root_tx_add(struct btr_context *tcx)
 	return rc;
 }
 
+static int
+btr_embedded_create_hash(struct btr_context *tcx, bool force)
+{
+	struct btr_record *rec = &tcx->tc_record;
+	int                rc;
+	d_iov_t            old_key = {0};
+
+	if (!btr_has_embedded_value(tcx))
+		return 0;
+
+	if (force || (tcx->tc_trace.ti_embedded_info & BTR_EMBEDDED_HASH) == 0) {
+		rc = btr_rec_fetch(tcx, rec, &old_key, NULL);
+		if (rc != 0) {
+			D_ERROR("Failed to get key from embedded record: " DF_RC "\n", DP_RC(rc));
+			return rc;
+		}
+		D_ASSERT(rec != NULL);
+		btr_hkey_gen(tcx, &old_key, &rec->rec_hkey[0]);
+		btr_embedded_hash_set(tcx);
+	}
+
+	return 0;
+}
+
 /**
  * Create btr_node for the empty root, insert the first \a rec into it.
  */
 int
-btr_root_start(struct btr_context *tcx, struct btr_record *rec)
+btr_root_start(struct btr_context *tcx, struct btr_record *rec, d_iov_t *key, bool embed)
 {
 	struct btr_root		*root;
 	struct btr_record	*rec_dst;
+	struct btr_record       *existing_rec;
+	int                      cmp;
 	struct btr_node		*nd;
 	umem_off_t		 nd_off;
 	int			 rc;
+	int                      key_nr           = 1;
+	int                      insertion_off    = 0;
+	uint32_t                 embedded_setting = BTR_EMBEDDED_NONE;
 
 	root = tcx->tc_tins.ti_root;
 
-	D_ASSERT(UMOFF_IS_NULL(root->tr_node));
-	D_ASSERT(root->tr_depth == 0);
+	if (!btr_has_embedded_value(tcx)) {
+		D_ASSERT(UMOFF_IS_NULL(root->tr_node));
+		D_ASSERT(root->tr_depth == 0);
+	}
+
+	if (embed) {
+		embedded_setting = BTR_EMBEDDED_SET;
+		nd_off           = rec->rec_off;
+		goto set_root;
+	}
 
 	rc = btr_node_alloc(tcx, &nd_off);
 	if (rc != 0) {
@@ -913,11 +1033,52 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec)
 	/* root is also leaf, records are stored in root */
 	btr_node_set(tcx, nd_off, BTR_NODE_ROOT | BTR_NODE_LEAF);
 	nd = btr_off2ptr(tcx, nd_off);
-	nd->tn_keyn = 1;
 
-	rec_dst = btr_node_rec_at(tcx, nd_off, 0);
+	/** If we have an embedded entry, we need to insert 2 entries here */
+	if (btr_has_embedded_value(tcx)) {
+		existing_rec          = &tcx->tc_record;
+		existing_rec->rec_off = tcx->tc_tins.ti_root->tr_node;
+		cmp                   = btr_embedded_cmp(tcx);
+		/** If it's a direct key, we already know the comparison result. Otherwise, we
+		 *  must calculate the compare the hashed values.
+		 */
+		if (!btr_is_direct_key(tcx)) {
+			btr_hkey_gen(tcx, key, &rec->rec_hkey[0]);
+
+			rc = btr_embedded_create_hash(tcx, false);
+			if (rc != 0)
+				return rc;
+
+			cmp = btr_hkey_cmp(tcx, existing_rec, &rec->rec_hkey[0]);
+		} else {
+			memset(&tcx->tc_hkey, 0, sizeof(tcx->tc_hkey));
+		}
+
+		D_ASSERTF(cmp != BTR_CMP_EQ, "Hash collision is not supported\n");
+
+		/** Just insert the lesser key first and then set rec to greater
+		 * key and let it insert there.
+		 */
+		key_nr        = 2;
+		insertion_off = 1;
+
+		rec_dst = btr_node_rec_at(tcx, nd_off, 0);
+		if (cmp == BTR_CMP_LT) {
+			/** This means the new key should go second */
+			btr_rec_copy(tcx, rec_dst, existing_rec, 1);
+		} else {
+			/** This means the old key should go second */
+			btr_rec_copy(tcx, rec_dst, rec, 1);
+			rec = existing_rec;
+		}
+	}
+
+	nd->tn_keyn = key_nr;
+
+	rec_dst = btr_node_rec_at(tcx, nd_off, insertion_off);
 	btr_rec_copy(tcx, rec_dst, rec, 1);
 
+set_root:
 	if (btr_has_tx(tcx)) {
 		rc = btr_root_tx_add(tcx);
 		if (rc != 0) {
@@ -929,19 +1090,25 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec)
 
 	root->tr_node = nd_off;
 	root->tr_depth = 1;
+	if (embed) {
+		root->tr_feats |= BTR_FEAT_EMBEDDED;
+		tcx->tc_feats = root->tr_feats;
+	} else if (btr_has_embedded_value(tcx)) {
+		root->tr_feats ^= BTR_FEAT_EMBEDDED;
+		tcx->tc_feats = root->tr_feats;
+	}
 	btr_context_set_depth(tcx, root->tr_depth);
 
-	btr_trace_set(tcx, 0, nd_off, 0);
+	btr_trace_set(tcx, 0, nd_off, 0, embedded_setting);
 	return 0;
 }
 
 /**
  * Add a new root to the tree, then insert \a rec to the new root.
  *
- * \param tcx	[IN]	Tree operation context.
- * \param off_left [IN]
- *			the original root, it is left child for the new root.
- * \param rec	[IN]	The record to be inserted to the new root.
+ * \param[in] tcx	Tree operation context.
+ * \param[in] off_left	The original root, it is left child for the new root.
+ * \param[in] rec	The record to be inserted to the new root.
  */
 int
 btr_root_grow(struct btr_context *tcx, umem_off_t off_left,
@@ -977,7 +1144,7 @@ btr_root_grow(struct btr_context *tcx, umem_off_t off_left,
 	nd->tn_child	= off_left;
 	nd->tn_keyn	= 1;
 
-	at = !btr_node_is_equal(tcx, off_left, tcx->tc_trace->tr_node);
+	at = !btr_node_is_equal(tcx, off_left, tcx->tc_trace.ti_trace->tr_node);
 
 	/* replace the root offset, increase tree level */
 	if (btr_has_tx(tcx)) {
@@ -993,7 +1160,7 @@ btr_root_grow(struct btr_context *tcx, umem_off_t off_left,
 	root->tr_depth++;
 
 	btr_context_set_depth(tcx, root->tr_depth);
-	btr_trace_set(tcx, 0, nd_off, at);
+	btr_trace_set(tcx, 0, nd_off, at, BTR_EMBEDDED_NONE);
 	return 0;
 }
 
@@ -1004,27 +1171,14 @@ struct btr_check_alb {
 };
 
 static int
-btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
+btr_check_record_availability(struct btr_context *tcx, struct btr_record *rec, uint32_t intent)
 {
-	struct btr_record	*rec;
-	int			 rc;
+	int rc;
 
-	if (btr_ops(tcx)->to_check_availability == NULL)
+	if (likely(btr_ops(tcx)->to_check_availability == NULL))
 		return PROBE_RC_OK;
 
-	if (UMOFF_IS_NULL(alb->nd_off)) { /* compare the leaf trace */
-		struct btr_trace *trace = &tcx->tc_traces[BTR_TRACE_MAX - 1];
-
-		alb->nd_off = trace->tr_node;
-		alb->at = trace->tr_at;
-	}
-
-	if (!btr_node_is_leaf(tcx, alb->nd_off))
-		return PROBE_RC_OK;
-
-	rec = btr_node_rec_at(tcx, alb->nd_off, alb->at);
-	rc = btr_ops(tcx)->to_check_availability(&tcx->tc_tins, rec,
-						 alb->intent);
+	rc = btr_ops(tcx)->to_check_availability(&tcx->tc_tins, rec, intent);
 	if (rc == -DER_INPROGRESS) /* Uncertain */
 		return PROBE_RC_INPROGRESS;
 
@@ -1055,8 +1209,32 @@ btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
 	case ALB_UNAVAILABLE:
 	default:
 		/* Unavailable */
-		return PROBE_RC_UNAVAILABLE;
+		break;
 	}
+
+	return PROBE_RC_UNAVAILABLE;
+}
+
+static int
+btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
+{
+	struct btr_record *rec;
+
+	if (likely(btr_ops(tcx)->to_check_availability == NULL))
+		return PROBE_RC_OK;
+
+	if (UMOFF_IS_NULL(alb->nd_off)) { /* compare the leaf trace */
+		struct btr_trace *trace = &tcx->tc_traces[BTR_TRACE_MAX - 1];
+
+		alb->nd_off = trace->tr_node;
+		alb->at     = trace->tr_at;
+	}
+
+	if (!btr_node_is_leaf(tcx, alb->nd_off))
+		return PROBE_RC_OK;
+
+	rec = btr_node_rec_at(tcx, alb->nd_off, alb->at);
+	return btr_check_record_availability(tcx, rec, alb->intent);
 }
 
 static int
@@ -1129,7 +1307,7 @@ btr_split_at(struct btr_context *tcx, int level,
 	     umem_off_t off_left,
 	     umem_off_t off_right)
 {
-	struct btr_trace *trace = &tcx->tc_trace[level];
+	struct btr_trace *trace = &tcx->tc_trace.ti_trace[level];
 	int		  order = tcx->tc_order;
 	int		  split_at;
 	bool		  left;
@@ -1143,9 +1321,9 @@ btr_split_at(struct btr_context *tcx, int level,
 	btr_trace_debug(tcx, trace, "split_at %d, insert to the %s node\n",
 			split_at, left ? "left" : "right");
 	if (left)
-		btr_trace_set(tcx, level, off_left, trace->tr_at);
+		btr_trace_set(tcx, level, off_left, trace->tr_at, BTR_EMBEDDED_NONE);
 	else
-		btr_trace_set(tcx, level, off_right, trace->tr_at - split_at);
+		btr_trace_set(tcx, level, off_right, trace->tr_at - split_at, BTR_EMBEDDED_NONE);
 
 	return split_at;
 }
@@ -1170,8 +1348,8 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	bool			 leaf;
 	bool			 right;
 
-	D_ASSERT(trace >= tcx->tc_trace);
-	level = trace - tcx->tc_trace;
+	D_ASSERT(trace >= tcx->tc_trace.ti_trace);
+	level    = trace - tcx->tc_trace.ti_trace;
 	off_left = trace->tr_node;
 
 	rc = btr_node_alloc(tcx, &off_right);
@@ -1407,6 +1585,84 @@ btr_probe_valid(dbtree_probe_opc_t opc)
 		opc == BTR_PROBE_GE || opc == BTR_PROBE_LE);
 }
 
+static enum btr_probe_rc
+btr_probe_embedded(struct btr_context *tcx, dbtree_probe_opc_t probe_opc, uint32_t intent,
+		   d_iov_t *key, char hkey[DAOS_HKEY_MAX])
+{
+	struct btr_record *rec = &tcx->tc_record;
+	int                rc;
+	int                rc2;
+	int                cmp       = BTR_CMP_EQ; /** for FIRST/LAST probe, this doesn't matter */
+	int                hash_flag = 0;
+
+	D_ASSERTF(!btr_is_int_key(tcx), "Embedded root is incompatible with integer keys\n");
+
+	/** Use the fake record since only the user allocated part is stored
+	 *  in the tree root.
+	 */
+	rec->rec_off = tcx->tc_tins.ti_root->tr_node;
+
+	rc = PROBE_RC_OK;
+	if (probe_opc & BTR_PROBE_SPEC) {
+		if (key != NULL) {
+			/** Simple case */
+			cmp = btr_key_cmp(tcx, rec, key);
+		} else {
+			/** Restoring from anchor.  For direct key, the decoded
+			 * key will have been passed in. Otherwise, only the
+			 * hash key is passed in so we need to compute the hash
+			 * key for the embedded record
+			 */
+			rc2 = btr_embedded_create_hash(tcx, true);
+			if (rc2 != 0) {
+				D_ERROR("Could not create hash key from anchor: " DF_RC "\n",
+					DP_RC(rc2));
+				D_GOTO(out, rc = PROBE_RC_ERR);
+			}
+			cmp       = btr_hkey_cmp(tcx, rec, &hkey[0]);
+			hash_flag = BTR_EMBEDDED_HASH;
+		}
+
+		D_ASSERTF(cmp != BTR_CMP_ERR,
+			  "BTR_CMP_ERR is not supported with BTR_FEAT_EMBED_FIRST");
+		switch (probe_opc) {
+		default:
+			D_ASSERT(0);
+		case BTR_PROBE_GE:
+			if (cmp == BTR_CMP_EQ)
+				break;
+			/** fall through */
+		case BTR_PROBE_GT:
+			if (cmp != BTR_CMP_GT)
+				rc = PROBE_RC_NONE;
+			break;
+		case BTR_PROBE_LE:
+			if (cmp == BTR_CMP_EQ) {
+				rc = PROBE_RC_NONE;
+				break;
+			}
+			/** fall through */
+		case BTR_PROBE_LT:
+			if (cmp != BTR_CMP_LT)
+				rc = PROBE_RC_NONE;
+			break;
+		case BTR_PROBE_EQ:
+			if (cmp != BTR_CMP_EQ)
+				rc = PROBE_RC_NONE;
+			break;
+		}
+	} /** For BTR_PROBE_{FIRST,LAST} */
+
+	/** Static asserts are in place to ensure this works */
+	btr_trace_set(tcx, 0, rec->rec_off, 0, hash_flag | BTR_EMBEDDED_SET | cmp);
+out:
+	tcx->tc_probe_rc = rc;
+	if (rc == PROBE_RC_ERR)
+		D_ERROR("Failed to probe: rc = %d\n", tcx->tc_probe_rc);
+
+	return rc;
+}
+
 /**
  * Try to find \a key within a btree, it will store the searching path in
  * tcx::tc_traces.
@@ -1447,6 +1703,11 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		D_DEBUG(DB_TRACE, "Empty tree\n");
 		rc = PROBE_RC_NONE;
 		goto out;
+	}
+
+	if (btr_has_embedded_value(tcx)) {
+		rc = btr_probe_embedded(tcx, probe_opc, intent, key, hkey);
+		return rc;
 	}
 
 	nd_off = tcx->tc_tins.ti_root->tr_node;
@@ -1500,8 +1761,8 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 		 * in the right child, otherwise it is in the left child.
 		 */
 		at += !(cmp & BTR_CMP_GT);
-		btr_trace_set(tcx, level, nd_off, at);
-		btr_trace_debug(tcx, &tcx->tc_trace[level], "probe child\n");
+		btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
+		btr_trace_debug(tcx, &tcx->tc_trace.ti_trace[level], "probe child\n");
 
 		/* Search the next level. */
 		nd_off = btr_node_child_at(tcx, nd_off, at);
@@ -1513,7 +1774,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	D_ASSERT(level == tcx->tc_depth - 1);
 	D_ASSERT(!UMOFF_IS_NULL(nd_off));
 
-	btr_trace_set(tcx, level, nd_off, at);
+	btr_trace_set(tcx, level, nd_off, at, BTR_EMBEDDED_NONE);
 
 	if (cmp == BTR_CMP_EQ && key && btr_has_collision(tcx)) {
 		cmp = btr_cmp(tcx, nd_off, at, NULL, key);
@@ -1534,8 +1795,8 @@ again:
 		D_ASSERT(0);
 	case BTR_PROBE_FIRST:
 		do {
-			alb.nd_off = tcx->tc_trace[level].tr_node;
-			alb.at = tcx->tc_trace[level].tr_at;
+			alb.nd_off = tcx->tc_trace.ti_trace[level].tr_node;
+			alb.at     = tcx->tc_trace.ti_trace[level].tr_at;
 			rc = btr_check_availability(tcx, &alb);
 		} while (rc == PROBE_RC_UNAVAILABLE && btr_probe_next(tcx));
 
@@ -1545,8 +1806,8 @@ again:
 
 	case BTR_PROBE_LAST:
 		do {
-			alb.nd_off = tcx->tc_trace[level].tr_node;
-			alb.at = tcx->tc_trace[level].tr_at;
+			alb.nd_off = tcx->tc_trace.ti_trace[level].tr_node;
+			alb.at     = tcx->tc_trace.ti_trace[level].tr_at;
 			rc = btr_check_availability(tcx, &alb);
 		} while (rc == PROBE_RC_UNAVAILABLE && btr_probe_prev(tcx));
 
@@ -1568,8 +1829,8 @@ again:
 			 * probed one, this if for the follow-on insert if
 			 * applicable.
 			 */
-			btr_trace_set(tcx, level, nd_off,
-				      at + !(cmp & BTR_CMP_GT));
+			btr_trace_set(tcx, level, nd_off, at + !(cmp & BTR_CMP_GT),
+				      BTR_EMBEDDED_NONE);
 		}
 
 		rc = PROBE_RC_NONE;
@@ -1619,7 +1880,7 @@ again:
 			break;
 		}
 
-		btr_trace_set(tcx, level, nd_off, saved);
+		btr_trace_set(tcx, level, nd_off, saved, BTR_EMBEDDED_NONE);
 		rc = PROBE_RC_NONE;
 		goto out;
 
@@ -1663,12 +1924,12 @@ again:
 	D_ASSERT(cmp != BTR_CMP_EQ);
 	/* GT/GE/LT/LE */
 	rc = PROBE_RC_OK;
- out:
+out:
 	tcx->tc_probe_rc = rc;
 	if (rc == PROBE_RC_ERR)
 		D_ERROR("Failed to probe: rc = %d\n", tcx->tc_probe_rc);
 	else if (level >= 0)
-		btr_trace_debug(tcx, &tcx->tc_trace[level], "\n");
+		btr_trace_debug(tcx, &tcx->tc_trace.ti_trace[level], "\n");
 
 	return rc;
 }
@@ -1693,9 +1954,13 @@ btr_probe_next(struct btr_context *tcx)
 	if (btr_root_empty(tcx)) /* empty tree */
 		return false;
 
-	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	trace = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];
 
 	btr_trace_debug(tcx, trace, "Probe the next\n");
+
+	if (btr_has_embedded_value(tcx)) /* For embedded value, there is no next entry */
+		return false;
+
 	while (1) {
 		bool leaf;
 
@@ -1709,7 +1974,7 @@ btr_probe_next(struct btr_context *tcx)
 		 */
 		if (btr_node_is_root(tcx, nd_off) &&
 		    trace->tr_at >= nd->tn_keyn - leaf) {
-			D_ASSERT(trace == tcx->tc_trace);
+			D_ASSERT(trace == tcx->tc_trace.ti_trace);
 			D_DEBUG(DB_TRACE, "End\n");
 			return false; /* done */
 		}
@@ -1725,7 +1990,7 @@ btr_probe_next(struct btr_context *tcx)
 		break;
 	}
 
-	while (trace < &tcx->tc_trace[tcx->tc_depth - 1]) {
+	while (trace < &tcx->tc_trace.ti_trace[tcx->tc_depth - 1]) {
 		umem_off_t tmp;
 
 		tmp = btr_node_child_at(tcx, trace->tr_node, trace->tr_at);
@@ -1749,16 +2014,20 @@ btr_probe_prev(struct btr_context *tcx)
 	if (btr_root_empty(tcx)) /* empty tree */
 		return false;
 
-	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	trace = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];
 
 	btr_trace_debug(tcx, trace, "Probe the prev\n");
+
+	if (btr_has_embedded_value(tcx)) /* For embedded value, there is no prev entry */
+		return false;
+
 	while (1) {
 		nd_off = trace->tr_node;
 
 		nd = btr_off2ptr(tcx, nd_off);
 
 		if (btr_node_is_root(tcx, nd_off) && trace->tr_at == 0) {
-			D_ASSERT(trace == tcx->tc_trace);
+			D_ASSERT(trace == tcx->tc_trace.ti_trace);
 			D_DEBUG(DB_TRACE, "End\n");
 			return false; /* done */
 		}
@@ -1778,7 +2047,7 @@ btr_probe_prev(struct btr_context *tcx)
 		break;
 	}
 
-	while (trace < &tcx->tc_trace[tcx->tc_depth - 1]) {
+	while (trace < &tcx->tc_trace.ti_trace[tcx->tc_depth - 1]) {
 		umem_off_t	tmp;
 		bool			leaf;
 
@@ -1809,15 +2078,12 @@ btr_probe_prev(struct btr_context *tcx)
  * \a val_out is/are NULL, then addresses of key or/and value of the current
  * record will be returned.
  *
- * \param toh	[IN]		Tree open handle.
- * \param opc	[IN]		Probe opcode, see dbtree_probe_opc_t for the
- *				details.
- * \param intent [IN]		The operation intent.
- * \param key	[IN]		Key to search
- * \param key_out [OUT]		Return the actual matched key if \a opc is
- *				not BTR_PROBE_EQ.
- * \param val_out [OUT]		Returned value address, or sink buffer to
- *				store returned value.
+ * \param[in] toh	Tree open handle.
+ * \param[in] opc	Probe opcode, see dbtree_probe_opc_t for the details.
+ * \param[in] intent	The operation intent.
+ * \param[in] key	Key to search
+ * \param[out] key_out	Return the actual matched key if \a opc is not BTR_PROBE_EQ.
+ * \param[out] val_out	Returned value address, or sink buffer to store returned value.
  *
  * \return		0	found
  *			-ve	error code
@@ -1864,10 +2130,9 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 /**
  * Fetch on current trace position.
  *
- * \param toh     [IN]		Tree open handle.
- * \param key_out [OUT]		Return the key
- * \param val_out [OUT]		Returned value address, or sink buffer to
- *				store returned value.
+ * \param[in] toh	Tree open handle.
+ * \param[out] key_out	Return the key
+ * \param[out] val_out	Returned value address, or sink buffer to store returned value.
  *
  * \return		0	Key exists on current pos
  *			-ve	Error code
@@ -1893,7 +2158,7 @@ dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out)
 		return rc;
 
 	D_ASSERT(tcx->tc_depth > 0);
-	trace = &tcx->tc_trace[tcx->tc_depth - 1];
+	trace = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];
 
 	nd = btr_off2ptr(tcx, trace->tr_node);
 	D_ASSERT(trace->tr_at <= nd->tn_keyn);
@@ -1907,12 +2172,11 @@ dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out)
 /**
  * Fetch sibling of current trace position.
  *
- * \param toh     [IN]		Tree open handle.
- * \param key_out [OUT]		Return the key
- * \param val_out [OUT]		Returned value address, or sink buffer to
- *				store returned value.
- * \param next    [IN]		Fetch next or prev sibling
- * \param move    [IN]		Move trace position or not
+ * \param[in] toh	Tree open handle.
+ * \param[out] key_out	Return the key
+ * \param[out] val_out	Returned value address, or sink buffer to store returned value.
+ * \param[in] next	Fetch next or prev sibling
+ * \param[in] move	Move trace position or not
  *
  * \return		0	Key exists in current pos
  *			-ve	Error code
@@ -1937,7 +2201,7 @@ fetch_sibling(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool next, 
 
 	/* Save original trace */
 	if (!move) {
-		orig_trace = tcx->tc_trace;
+		orig_trace = tcx->tc_trace.ti_trace;
 		memcpy(&orig_traces[0], &tcx->tc_traces[0],
 		       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
 	}
@@ -1953,7 +2217,7 @@ fetch_sibling(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool next, 
 out:
 	/* Restore original trace */
 	if (!move) {
-		tcx->tc_trace = orig_trace;
+		tcx->tc_trace.ti_trace = orig_trace;
 		memcpy(&tcx->tc_traces[0], &orig_traces[0],
 		       sizeof(tcx->tc_traces[0]) * BTR_TRACE_MAX);
 	}
@@ -1979,10 +2243,9 @@ dbtree_fetch_next(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool mo
  * value into the buffer, otherwise it only returns address of value of the
  * current record.
  *
- * \param toh		[IN]	Tree open handle.
- * \param key		[IN]	Key to search.
- * \param val		[OUT]	Returned value address, or sink buffer to
- *				store returned value.
+ * \param[in] toh	Tree open handle.
+ * \param[in] key	Key to search.
+ * \param[out] val	Returned value address, or sink buffer to store returned value.
  *
  * \return		0	found
  *			-ve	error code
@@ -2008,7 +2271,7 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 
 	rc = btr_rec_update(tcx, rec, key, val, val_out);
 	if (rc == -DER_NO_PERM) { /* cannot make inplace change */
-		struct btr_trace *trace = &tcx->tc_trace[tcx->tc_depth - 1];
+		struct btr_trace *trace = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];
 
 		if (btr_has_tx(tcx)) {
 			rc = btr_node_tx_add(tcx, trace->tr_node);
@@ -2042,9 +2305,12 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 	char		   str[BTR_PRINT_BUF];
 	union btr_rec_buf  rec_buf = {0};
 	int		   rc;
+	bool               embed = btr_use_embedded_value(tcx);
 
 	rec = &rec_buf.rb_rec;
-	btr_hkey_gen(tcx, key, &rec->rec_hkey[0]);
+
+	if (!embed)
+		btr_hkey_gen(tcx, key, &rec->rec_hkey[0]);
 
 	rc = btr_rec_alloc(tcx, key, val, rec, val_out);
 	if (rc != 0) {
@@ -2056,11 +2322,11 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 	if (D_LOG_ENABLED(DB_TRACE))
 		rec_str = btr_rec_string(tcx, rec, true, str, BTR_PRINT_BUF);
 
-	if (tcx->tc_depth != 0) {
+	if (tcx->tc_depth != 0 && !btr_has_embedded_value(tcx)) {
 		struct btr_trace *trace;
 
 		/* trace for the leaf */
-		trace = &tcx->tc_trace[tcx->tc_depth - 1];
+		trace = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];
 		btr_trace_debug(tcx, trace, "try to insert\n");
 
 		rc = btr_node_insert_rec(tcx, trace, rec);
@@ -2072,10 +2338,11 @@ btr_insert(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 		}
 
 	} else {
-		/* empty tree */
-		D_DEBUG(DB_TRACE, "Add record %s to an empty tree\n", rec_str);
+		/* Tree is either empty or only has an embedded value */
+		D_DEBUG(DB_TRACE, "Add record %s to %s\n", rec_str,
+			btr_has_embedded_value(tcx) ? "tree with embedded value" : "empty tree");
 
-		rc = btr_root_start(tcx, rec);
+		rc = btr_root_start(tcx, rec, key, embed);
 		if (rc != 0) {
 			D_DEBUG(DB_TRACE, "Failed to start the tree: "DF_RC"\n",
 				DP_RC(rc));
@@ -2161,10 +2428,9 @@ btr_tx_end(struct btr_context *tcx, int rc)
 /**
  * Update value of the provided key.
  *
- * \param toh		[IN]	Tree open handle.
- * \param key		[IN]	Key to search.
- * \param val		[IN]	New value for the key, it will punch the
- *				original value if \val is NULL.
+ * \param[in] toh	Tree open handle.
+ * \param[in] key	Key to search.
+ * \param[in] val	New value for the key, it will punch the original value if \val is NULL.
  *
  * \return		0	success
  *			-ve	error code
@@ -2195,9 +2461,9 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 /**
  * Set the tree feats.
  *
- * \param root[in]	Tree root
- * \param umm[in]	umem instance
- * \param feats[in]	feats to set
+ * \param[in] root	Tree root
+ * \param[in] umm	umem instance
+ * \param[in] feats	feats to set
  *
  * \return 0 on success
  */
@@ -2242,13 +2508,11 @@ dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feat
  * Update the value of the provided key, or insert it as a new key if
  * there is no match.
  *
- * \param toh		[IN]	Tree open handle.
- * \param opc		[IN]	Probe opcode, see dbtree_probe_opc_t for the
- *				details.
- * \param key		[IN]	Key to search.
- * \param val		[IN]	New value for the key, it will punch the
- *				original value if \val is NULL.
- * \param val_out	[OUT]	Return value address
+ * \param[in] toh	Tree open handle.
+ * \param[in] opc	Probe opcode, see dbtree_probe_opc_t for the details.
+ * \param[in] key	Key to search.
+ * \param[in] val	New value for the key, it will punch the original value if \val is NULL.
+ * \param[out] val_out	Return value address
  *
  * \return		0	success
  *			-ve	error code
@@ -2274,6 +2538,43 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	rc = btr_upsert(tcx, opc, intent, key, val, val_out);
 
 	return btr_tx_end(tcx, rc);
+}
+
+/** When pairing down from 2 entries in the root to 2 we can remove
+ * the node and restore the embedded entry.  This function will modify
+ * the root and set flags accordingly.
+ */
+static int
+btr_node_del_embed(struct btr_context *tcx, struct btr_trace *trace, struct btr_root *root,
+		   void *args)
+{
+	struct btr_record *rec;
+	struct btr_node   *nd;
+	int                rc;
+
+	nd = btr_off2ptr(tcx, trace->tr_node);
+	D_ASSERT(nd->tn_keyn > 0 && nd->tn_keyn > trace->tr_at);
+
+	/** Delete the record */
+	rec = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
+	rc  = btr_rec_free(tcx, rec, args);
+	if (rc != 0)
+		return rc;
+
+	/** Now handle the embedding */
+	D_ASSERT(trace->tr_at <= 1);
+	rec = btr_node_rec_at(tcx, trace->tr_node, 1 - trace->tr_at);
+
+	if (btr_has_tx(tcx)) {
+		rc = btr_root_tx_add(tcx);
+		if (rc != 0)
+			return rc;
+	}
+
+	root->tr_node = rec->rec_off;
+	root->tr_feats |= BTR_FEAT_EMBEDDED;
+	tcx->tc_feats = root->tr_feats;
+	return btr_node_free(tcx, trace->tr_node);
 }
 
 /**
@@ -2329,13 +2630,11 @@ btr_node_del_leaf_only(struct btr_context *tcx, struct btr_trace *trace,
  * NB: this function only grab one record from the sibling node, although we
  * might want to grab multiple records in the future.
  *
- * \param tcx		[IN]	Tree operation context.
- * \param par_tr	[IN]	Probe trace of the current node in the parent
- *				node.
- * \param cur_tr	[IN]	Probe trace of the record being deleted in the
- *				current node.
- * \param sib_off	[IN]	umem offset of the sibling node.
- * \param sib_on_right	[IN]	The sibling node is on the right/left side of
+ * \param[in] tcx		Tree operation context.
+ * \param[in] par_tr		Probe trace of the current node in the parent node.
+ * \param[in] cur_tr		Probe trace of the record being deleted in the current node.
+ * \param[in] sib_off		umem offset of the sibling node.
+ * \param[in] sib_on_right	The sibling node is on the right/left side of
  *				the current node:
  *				TRUE	= right
  *				FALSE	= left
@@ -2812,13 +3111,10 @@ btr_node_del_child(struct btr_context *tcx,
  * node, if the deletion generates a new empty node (the current node or its
  * sibling node), then the deletion needs to bubble up.
  *
- * \param par_tr	[IN/OUT]
- *				Probe trace of the current node in the parent
- *				node. If the deletion generates a new empty
- *				node, this new empty node will be stored in
+ * \param[in,out] par_tr	Probe trace of the current node in the parent node. If the deletion
+ * 				generates a new empty node, this new empty node will be stored in
  *				@par_tr as well.
- * \param cur_tr	[IN]	Probe trace of the record being deleted in the
- *				current node
+ * \param[in] cur_tr		Probe trace of the record being deleted in the current node
  */
 static int
 btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
@@ -2926,6 +3222,7 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 	struct btr_node		*node;
 	struct btr_root		*root;
 	int			 rc = 0;
+	int                      threshold = 1;
 
 	root = tcx->tc_tins.ti_root;
 	node = btr_off2ptr(tcx, trace->tr_node);
@@ -2933,12 +3230,21 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 	D_DEBUG(DB_TRACE, "Delete record/child from tree root, depth=%d\n",
 		root->tr_depth);
 
-	if (btr_node_is_leaf(tcx, trace->tr_node)) {
-		D_DEBUG(DB_TRACE, "Delete leaf from the root, key_nr=%d.\n",
-			node->tn_keyn);
+	if (btr_has_embedded_value(tcx) || btr_node_is_leaf(tcx, trace->tr_node)) {
+		if (D_LOG_ENABLED(DB_TRACE)) {
+			if (btr_has_embedded_value(tcx)) {
+				D_DEBUG(DB_TRACE, "Delete embedded record from the root\n");
+			} else {
+				D_DEBUG(DB_TRACE, "Delete leaf from the root, key_nr=%d.\n",
+					node->tn_keyn);
+			}
+		}
+
+		if (btr_supports_embedded_value(tcx))
+			threshold = 2;
 
 		/* the root is also a leaf node */
-		if (node->tn_keyn > 1) {
+		if (node->tn_keyn > threshold) {
 			/* have more than one record, simply remove the record
 			 * to be deleted.
 			 */
@@ -2949,8 +3255,9 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			}
 
 			rc = btr_node_del_leaf_only(tcx, trace, true, args);
+		} else if (node->tn_keyn == 2) {
+			rc = btr_node_del_embed(tcx, trace, root, args);
 		} else {
-
 			rc = btr_node_destroy(tcx, trace->tr_node, args, NULL);
 			if (rc != 0)
 				return rc;
@@ -2963,6 +3270,10 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 
 			root->tr_depth	= 0;
 			root->tr_node	= BTR_NODE_NULL;
+			if (btr_has_embedded_value(tcx)) {
+				root->tr_feats ^= BTR_FEAT_EMBEDDED;
+				tcx->tc_feats = root->tr_feats;
+			}
 
 			btr_context_set_depth(tcx, 0);
 			D_DEBUG(DB_TRACE, "Tree is empty now.\n");
@@ -3017,8 +3328,8 @@ btr_delete(struct btr_context *tcx, void *args)
 	struct btr_trace	*cur_tr;
 	int			 rc = 0;
 
-	for (cur_tr = &tcx->tc_trace[tcx->tc_depth - 1];; cur_tr = par_tr) {
-		if (cur_tr == tcx->tc_trace) { /* root */
+	for (cur_tr = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];; cur_tr = par_tr) {
+		if (cur_tr == tcx->tc_trace.ti_trace) { /* root */
 			rc = btr_root_del_rec(tcx, cur_tr, args);
 			break;
 		}
@@ -3052,11 +3363,9 @@ btr_tx_delete(struct btr_context *tcx, void *args)
 /**
  * Delete the @key and the corresponding value from the btree.
  *
- * \param toh		[IN]	Tree open handle.
- * \param key		[IN]	The key to be deleted.
- * \param args		[IN/OUT]
- *				Optional: buffer to provide
- *				args to handle special cases(if any)
+ * \param[in] toh	Tree open handle.
+ * \param[in] key	The key to be deleted.
+ * \param[in,out] args Optional: buffer to provide args to handle special cases(if any)
  */
 int
 dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
@@ -3189,9 +3498,9 @@ btr_tree_count(struct btr_context *tcx, struct btr_root *root)
 /**
  * Query attributes and/or gather nodes and records statistics of btree.
  *
- * \param toh	[IN]	The tree open handle.
- * \param attr	[OUT]	Optional, returned tree attributes.
- * \param stat	[OUT]	Optional, returned nodes and records statistics.
+ * \param[in] toh	The tree open handle.
+ * \param[out] attr	Optional, returned tree attributes.
+ * \param[out] stat	Optional, returned nodes and records statistics.
  */
 int
 dbtree_query(daos_handle_t toh, struct btr_attr *attr, struct btr_stat *stat)
@@ -3266,12 +3575,12 @@ btr_tx_tree_alloc(struct btr_context *tcx)
 /**
  * Create an empty tree.
  *
- * \param tree_class	[IN]	Class ID of the tree.
- * \param tree_feats	[IN]	Feature bits of the tree.
- * \param tree_order	[IN]	Btree order, value >= 3.
- * \param uma		[IN]	Memory class attributes.
- * \param root_offp	[OUT]	Returned root umem offset.
- * \param toh		[OUT]	Returned tree open handle.
+ * \param[in] tree_classq	Class ID of the tree.
+ * \param[in] tree_feats	Feature bits of the tree.
+ * \param[in] tree_order	Btree order, value >= 3.
+ * \param[in] uma		Memory class attributes.
+ * \param[out] root_offp	Returned root umem offset.
+ * \param[out] toh		Returned tree open handle.
  */
 int
 dbtree_create(unsigned int tree_class, uint64_t tree_feats,
@@ -3379,9 +3688,9 @@ dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 /**
  * Open a btree.
  *
- * \param root_off	[IN]	umem offset of the tree root.
- * \param uma		[IN]	Memory class attributes.
- * \param toh		[OUT]	Returned tree open handle.
+ * \param[in] root_off	umem offset of the tree root.
+ * \param[in] uma	Memory class attributes.
+ * \param[out] toh	Returned tree open handle.
  */
 int
 dbtree_open(umem_off_t root_off, struct umem_attr *uma,
@@ -3402,11 +3711,11 @@ dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 /**
  * Open a btree from the root address.
  *
- * \param root		[IN]	Address of the tree root.
- * \param uma		[IN]	Memory class attributes.
- * \param coh		[IN]	The container open handle.
- * \param priv		[IN]	Private data for tree opener
- * \param toh		[OUT]	Returned tree open handle.
+ * \param[in] root	Address of the tree root.
+ * \param[in] uma	Memory class attributes.
+ * \param[in] coh	The container open handle.
+ * \param[in] priv	Private data for tree opener
+ * \param[out] toh	Returned tree open handle.
  */
 int
 dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
@@ -3432,9 +3741,9 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 /**
  * Open a btree from the root address.
  *
- * \param root		[IN]	Address of the tree root.
- * \param uma		[IN]	Memory class attributes.
- * \param toh		[OUT]	Returned tree open handle.
+ * \param[in] root	Address of the tree root.
+ * \param[in] uma	Memory class attributes.
+ * \param[out] toh	Returned tree open handle.
  */
 int
 dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
@@ -3446,7 +3755,7 @@ dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 /**
  * Close an opened tree.
  *
- * \param toh	[IN]	Tree open handle.
+ * \param[in] toh	Tree open handle.
  */
 int
 dbtree_close(daos_handle_t toh)
@@ -3467,10 +3776,24 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		 void *args, bool *empty_rc)
 {
 	struct btr_node *nd	= btr_off2ptr(tcx, nd_off);
+	struct btr_record *rec;
 	bool		 leaf	= btr_node_is_leaf(tcx, nd_off);
 	bool		 empty	= true;
 	int		 rc;
 	int		 i;
+
+	if (btr_has_embedded_value(tcx)) {
+		btr_trace_set(tcx, 0, tcx->tc_tins.ti_root->tr_node, 0, BTR_EMBEDDED_SET);
+		rec = btr_trace2rec(tcx, 0);
+		rc  = btr_rec_free(tcx, rec, args);
+		if (rc != 0)
+			return rc;
+		if (tcx->tc_creds_on) {
+			D_ASSERT(tcx->tc_creds > 0);
+			tcx->tc_creds--;
+		}
+		goto out;
+	}
 
 	/* NB: don't need to call TX_ADD_RANGE(nd_off, ...) because I never
 	 * change it so nothing to undo on transaction failure, I may destroy
@@ -3481,8 +3804,6 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 
 	if (leaf) {
 		for (i = nd->tn_keyn - 1; i >= 0; i--) {
-			struct btr_record *rec;
-
 			rec = btr_node_rec_at(tcx, nd_off, i);
 			rc = btr_rec_free(tcx, rec, args);
 			if (rc != 0)
@@ -3539,6 +3860,7 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		nd->tn_keyn = i;
 	}
 
+out:
 	if (empty_rc)
 		*empty_rc = empty;
 
@@ -3585,8 +3907,8 @@ btr_tx_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
  * Destroy a btree.
  * The tree open handle is invalid after the destroy.
  *
- * \param toh	[IN]	Tree open handle.
- * \param args	[IN]	user parameter for btr_ops_t::to_rec_free
+ * \param[in] toh	Tree open handle.
+ * \param[in] args	user parameter for btr_ops_t::to_rec_free
  */
 int
 dbtree_destroy(daos_handle_t toh, void *args)
@@ -3613,10 +3935,10 @@ dbtree_destroy(daos_handle_t toh, void *args)
  * It returns if all input credits are consumed, or the tree is empty, in
  * the later case, it also destroys the btree.
  *
- * \param toh		[IN]	 Tree open handle.
- * \param credits	[IN/OUT] Input and returned drain credits
- * \param args		[IN]	 user parameter for btr_ops_t::to_rec_free
- * \param destroy	[OUT]	 Tree is empty and destroyed
+ * \param[in] toh		Tree open handle.
+ * \param[in,out] credits	Input and returned drain credits
+ * \param[in] args		user parameter for btr_ops_t::to_rec_free
+ * \param[out] destroy		Tree is empty and destroyed
  */
 int
 dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed)
@@ -3655,8 +3977,8 @@ failed:
 /**
  * Initialize iterator.
  *
- * \param toh		[IN]	Tree open handle
- * \param options	[IN]	Options for the iterator.
+ * \param[in] toh		Tree open handle
+ * \param[out] options		Options for the iterator.
  *				BTR_ITER_EMBEDDED:
  *				if this bit is set, then this function will
  *				return the iterator embedded in the tree open
@@ -3664,7 +3986,7 @@ failed:
  *				but state of iterator could be overwritten
  *				by any other tree operation.
  *
- * \param ih		[OUT]	Returned iterator handle.
+ * \param[out] ih		Returned iterator handle.
  */
 int
 dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
@@ -3734,12 +4056,12 @@ dbtree_iter_finish(daos_handle_t ih)
  * This function must be called after dbtree_iter_prepare, it can be called
  * for arbitrary times for the same iterator.
  *
- * \param ih	[IN]	The iterator handle.
- * \param opc	[IN]	Probe opcode, see dbtree_probe_opc_t for the details.
- * \param intent [IN]	The operation intent.
- * \param key	[IN]	The key to probe, it will be ignored if opc is
+ * \param[in] ih	The iterator handle.
+ * \param[in] opc	Probe opcode, see dbtree_probe_opc_t for the details.
+ * \param[in] intent	The operation intent.
+ * \param[in] key	The key to probe, it will be ignored if opc is
  *			BTR_PROBE_FIRST or BTR_PROBE_LAST.
- * \param anchor [IN]	the anchor point to probe, it will be ignored if
+ * \param[in] anchor	the anchor point to probe, it will be ignored if
  *			\a key is provided.
  * \note		If opc is not BTR_PROBE_FIRST or BTR_PROBE_LAST,
  *			key or anchor is required.
@@ -3874,12 +4196,12 @@ dbtree_iter_prev(daos_handle_t ih)
  * address in \a key or/and \a val is/are NULL, then this function only
  * returns addresses of key or/and value of the current record.
  *
- * \param ih	[IN]	Iterator open handle.
- * \param key	[OUT]	Sink buffer for the returned key, the key address is
+ * \param[in] ih	Iterator open handle.
+ * \param[out] key	Sink buffer for the returned key, the key address is
  *			returned if buffer address is NULL.
- * \param val	[OUT]	Sink buffer for the returned value, the value address
+ * \param[out] val	Sink buffer for the returned value, the value address
  *			is returned if buffer address is NULL.
- * \param anchor [OUT]	Returned iteration anchor.
+ * \param[out] anchor	Returned iteration anchor.
  */
 int
 dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
@@ -3913,6 +4235,9 @@ dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
 		anchor->da_type = DAOS_ANCHOR_TYPE_KEY;
 
 	} else {
+		rc = btr_embedded_create_hash(tcx, false);
+		if (rc != 0)
+			return rc;
 		btr_hkey_copy(tcx, (char *)&anchor->da_buf[0],
 			      &rec->rec_hkey[0]);
 		anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
@@ -3966,9 +4291,8 @@ dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor)
  * will reset iterator before return, it means that caller should call
  * dbtree_iter_probe() again to reinitialize the iterator.
  *
- * \param ih		[IN]	Iterator open handle.
- * \param value_out	[OUT]	Optional, buffer to preserve value while
- *				deleting btree node.
+ * \param[in] ih		Iterator open handle.
+ * \param[out] value_out	Optional, buffer to preserve value while deleting btree node.
  */
 int
 dbtree_iter_delete(daos_handle_t ih, void *args)
@@ -4020,11 +4344,11 @@ dbtree_iter_empty(daos_handle_t ih)
  * true). \a cb will be called with \a arg for each record. See also
  * dbtree_iterate_cb_t.
  *
- * \param toh		[IN]	Tree open handle
- * \param intent	[IN]	The operation intent
- * \param backward	[IN]	If true, iterate from last to first
- * \param cb		[IN]	Callback function (see dbtree_iterate_cb_t)
- * \param arg		[IN]	Callback argument
+ * \param[in] toh	Tree open handle
+ * \param[in] intent	The operation intent
+ * \param[in] backward	If true, iterate from last to first
+ * \param[in] cb	Callback function (see dbtree_iterate_cb_t)
+ * \param[in] arg	Callback argument
  */
 int
 dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
@@ -4168,8 +4492,21 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 	if (tc->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)
 		*tree_feats |= BTR_FEAT_SKIP_LEAF_REBAL;
 
-	/** Only check btree managed bits */
-	if ((*tree_feats & tc->tc_feats) != (*tree_feats & BTR_FEAT_MASK)) {
+	if ((*tree_feats & (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) ==
+	    (BTR_FEAT_UINT_KEY | BTR_FEAT_EMBED_FIRST)) {
+		/** The key is normally stored in value but with integer
+		 * keys, it's stored in the btr_record. While we would
+		 * save an indirection if we added 8 bytes to the value
+		 * allocation, we would have 8 unrecoverable bytes stored
+		 * with that value.  It would also add some complication
+		 * to the key retrieval logic.  For now, integer keys are
+		 * not supported for this optimization.
+		 */
+		*tree_feats ^= BTR_FEAT_EMBED_FIRST;
+	}
+
+	/** Only check btree managed bits that can be set in tr_class */
+	if ((*tree_feats & tc->tc_feats) != (*tree_feats & BTR_EXT_FEAT_MASK)) {
 		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
 			*tree_feats, tc->tc_feats);
 		return -DER_PROTO;
@@ -4182,9 +4519,9 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 /**
  * Register a new tree class.
  *
- * \param tree_class	[IN]	ID for this class
- * \param tree_feats	[IN]	Feature bits, e.g. hash type
- * \param ops		[IN]	Customized function table
+ * \param[in] tree_class	ID for this class
+ * \param[in] tree_feats	Feature bits, e.g. hash type
+ * \param[in] ops		Customized function table
  */
 int
 dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
@@ -4215,6 +4552,11 @@ dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,
 	D_ASSERT(ops->to_rec_fetch != NULL);
 	D_ASSERT(ops->to_rec_alloc != NULL);
 	D_ASSERT(ops->to_rec_free != NULL);
+
+	if (tree_feats & BTR_FEAT_EMBED_FIRST) {
+		D_ASSERT(ops->to_check_availability == NULL);
+		D_ASSERT(ops->to_key_cmp != NULL);
+	}
 
 	btr_class_registered[tree_class].tc_ops = ops;
 	btr_class_registered[tree_class].tc_feats = tree_feats;

@@ -12,7 +12,7 @@ def scons():
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
 
-    tenv.require('argobots')
+    tenv.require('isal', 'argobots')
 
     # Add runtime paths for daos libraries
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])

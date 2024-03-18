@@ -3,13 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import random
 import threading
+import time
 
-from write_host_file import write_host_file
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
+from write_host_file import write_host_file
 
 
 class OSAOnlineDrain(OSAUtils):
@@ -28,8 +28,7 @@ class OSAOnlineDrain(OSAUtils):
             "ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.dmg_command.exit_status_exception = True
         self.pool = None
 

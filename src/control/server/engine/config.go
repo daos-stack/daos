@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -540,6 +540,14 @@ func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits
 func (c *Config) WithStorageSpdkRpcSrvProps(enable bool, sockAddr string) *Config {
 	c.Storage.SpdkRpcSrvProps.Enable = enable
 	c.Storage.SpdkRpcSrvProps.SockAddr = sockAddr
+	return c
+}
+
+// WithStorageAutoFaultyCriteria specifies NVMe auto-faulty settings in the I/O Engine.
+func (c *Config) WithStorageAutoFaultyCriteria(enable bool, maxIoErrs, maxCsumErrs uint32) *Config {
+	c.Storage.AutoFaultyProps.Enable = enable
+	c.Storage.AutoFaultyProps.MaxIoErrs = maxIoErrs
+	c.Storage.AutoFaultyProps.MaxCsumErrs = maxCsumErrs
 	return c
 }
 

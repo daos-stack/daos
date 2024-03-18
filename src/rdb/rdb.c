@@ -50,8 +50,9 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	struct rdb     *db;
 	int		rc;
 
-	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas: caller_term="DF_X64"\n",
-		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term);
+	D_DEBUG(DB_MD,
+		DF_UUID ": creating db %s with %u replicas: caller_term=" DF_X64 " size=" DF_U64,
+		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term, size);
 
 	/*
 	 * Create and open a VOS pool. RDB pools specify VOS_POF_SMALL for
@@ -683,7 +684,7 @@ rdb_resign(struct rdb *db, uint64_t term)
  *
  * \param[in]	db	database
  *
- * \retval -DER_INVAL	not a voting replica
+ * \retval -DER_NO_PERM	not a voting replica or might violate a lease
  */
 int
 rdb_campaign(struct rdb *db)
@@ -768,6 +769,24 @@ int
 rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 {
 	return rdb_raft_get_ranks(db, ranksp);
+}
+
+int
+rdb_get_size(struct rdb *db, uint64_t *sizep)
+{
+	int                   rc;
+	struct vos_pool_space vps;
+
+	rc = vos_pool_query_space(db->d_uuid, &vps);
+	if (rc != 0) {
+		D_ERROR(DF_DB ": failed to query vos pool space: " DF_RC "\n", DP_DB(db),
+			DP_RC(rc));
+		return rc;
+	}
+
+	*sizep = SCM_TOTAL(&vps);
+
+	return rc;
 }
 
 /** Implementation of the RDB pool checkpoint ULT. The ULT
@@ -1004,4 +1023,21 @@ rdb_chkptd_start(struct rdb *db)
 error:
 	rdb_chkptd_stop(db);
 	return rc;
+}
+
+/**
+ * Upgrade the durable format of the VOS pool underlying \a db to
+ * \a df_version.
+ *
+ * Exposing "VOS pool" makes this API function hacky, and probably indicates
+ * that the upgrade model is not quite right.
+ *
+ * \param[in]	db		database
+ * \param[in]	df_version	VOS durable format version (e.g.,
+ *				VOS_POOL_DF_2_6)
+ */
+int
+rdb_upgrade_vos_pool(struct rdb *db, uint32_t df_version)
+{
+	return vos_pool_upgrade(db->d_pool, df_version);
 }

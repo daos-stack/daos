@@ -132,18 +132,14 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			logCmd.SetLog(log)
 		}
 
-		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
-			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
-			// disable output on stdout other than JSON
-			log.ClearLevel(logging.LogLevelInfo)
-		}
-
 		if opts.Debug {
 			log.SetLevel(logging.LogLevelTrace)
 		}
 
-		if opts.JSONLogs {
-			log.WithJSONOutput()
+		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
+			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
+			// disable output on stdout other than JSON
+			log.ClearLevel(logging.LogLevelInfo)
 		}
 
 		switch cmd.(type) {
@@ -164,67 +160,13 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			}
 		}
 
-		cfg := DefaultConfig()
-		if cfgPath != "" {
-			var err error
-			if cfg, err = LoadConfig(cfgPath); err != nil {
-				return errors.WithMessage(err, "failed to load agent configuration")
-			}
-
-			// Command line debug option overrides log level in config file
-			if !opts.Debug {
-				log.WithLogLevel(logging.LogLevel(cfg.LogLevel))
-			}
-			log.Debugf("agent config loaded from %s", cfgPath)
+		cfg, err := processConfig(log, cmd, opts, cfgPath)
+		if err != nil {
+			return err
 		}
 
 		if suppCmd, ok := cmd.(supportAgentConfig); ok {
 			suppCmd.setSupportConf(cfgPath)
-		}
-
-		if opts.RuntimeDir != "" {
-			log.Debugf("Overriding socket path from config file with %s", opts.RuntimeDir)
-			cfg.RuntimeDir = opts.RuntimeDir
-		}
-
-		if opts.LogFile != "" {
-			log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
-			cfg.LogFile = opts.LogFile
-		}
-
-		if opts.Insecure {
-			log.Debugf("Overriding AllowInsecure from config file with %t", opts.Insecure)
-			cfg.TransportConfig.AllowInsecure = true
-		}
-
-		if cfg.LogFile != "" {
-			f, err := common.AppendFile(cfg.LogFile)
-			if err != nil {
-				log.Errorf("Failure creating log file: %s", err)
-				return err
-			}
-			defer f.Close()
-
-			// Create an additional set of loggers which append everything
-			// to the specified file.
-			log.WithErrorLogger(logging.NewErrorLogger("agent", f)).
-				WithNoticeLogger(logging.NewNoticeLogger("agent", f)).
-				WithInfoLogger(logging.NewInfoLogger("agent", f)).
-				WithDebugLogger(logging.NewDebugLogger(f)).
-				WithTraceLogger(logging.NewTraceLogger(f))
-		}
-
-		if err := cfg.TransportConfig.PreLoadCertData(); err != nil {
-			return errors.Wrap(err, "Unable to load Certificate Data")
-		}
-
-		var err error
-		if cfg.AccessPoints, err = common.ParseHostList(cfg.AccessPoints, cfg.ControlPort); err != nil {
-			return errors.Wrap(err, "Failed to parse config access_points")
-		}
-
-		if cfgCmd, ok := cmd.(configSetter); ok {
-			cfgCmd.setConfig(cfg)
 		}
 
 		if ctlCmd, ok := cmd.(ctlInvoker); ok {
@@ -251,12 +193,82 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 	return err
 }
 
+func processConfig(log logging.Logger, cmd flags.Commander, opts *cliOptions, cfgPath string) (*Config, error) {
+	cfg := DefaultConfig()
+	if cfgPath != "" {
+		var err error
+		if cfg, err = LoadConfig(cfgPath); err != nil {
+			return nil, errors.Wrap(err, "failed to load agent configuration")
+		}
+	}
+
+	if opts.LogFile != "" {
+		log.Debugf("Overriding LogFile path from config file with %s", opts.LogFile)
+		cfg.LogFile = opts.LogFile
+	}
+
+	if opts.Debug {
+		cfg.LogLevel = common.ControlLogLevelTrace
+	}
+
+	if err := configureLogging(log, cmd, cfg, opts); err != nil {
+		return nil, err
+	}
+
+	if opts.RuntimeDir != "" {
+		log.Debugf("Overriding socket path from config file with %s", opts.RuntimeDir)
+		cfg.RuntimeDir = opts.RuntimeDir
+	}
+
+	if opts.Insecure {
+		log.Debugf("Overriding AllowInsecure from config file with %t", opts.Insecure)
+		cfg.TransportConfig.AllowInsecure = true
+	}
+
+	if err := cfg.TransportConfig.PreLoadCertData(); err != nil {
+		return nil, errors.Wrap(err, "Unable to load Certificate Data")
+	}
+
+	var err error
+	if cfg.AccessPoints, err = common.ParseHostList(cfg.AccessPoints, cfg.ControlPort); err != nil {
+		return nil, errors.Wrap(err, "Failed to parse config access_points")
+	}
+
+	if cfgCmd, ok := cmd.(configSetter); ok {
+		cfgCmd.setConfig(cfg)
+	}
+
+	if cfgPath != "" {
+		log.Infof("loaded agent config from path: %s", cfgPath)
+	}
+
+	return cfg, nil
+}
+
+func configureLogging(log logging.Logger, cmd flags.Commander, cfg *Config, opts *cliOptions) error {
+	if logCmd, ok := cmd.(cmdutil.LogSetter); ok {
+		logCmd.SetLog(log)
+
+		logCfg := cmdutil.LogConfig{
+			LogFile:  cfg.LogFile,
+			LogLevel: cfg.LogLevel,
+			JSON:     opts.JSONLogs,
+		}
+		if err := cmdutil.ConfigureLogger(log, logCfg); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func main() {
 	var opts cliOptions
 	log := logging.NewCommandLineLogger()
 
 	ctlInvoker := control.NewClient(
 		control.WithClientLogger(log),
+		control.WithClientComponent(build.ComponentAgent),
 	)
 
 	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {

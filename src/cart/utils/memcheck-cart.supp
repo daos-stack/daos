@@ -445,6 +445,24 @@
    fun:indexbytebody
 }
 {
+   go-cond-racecall
+   Memcheck:Cond
+   ...
+   fun:racecall
+}
+{
+   go-value8-write_racecall
+   Memcheck:Value8
+   fun:__tsan_write
+   fun:racecall
+}
+{
+   go-value8-racecall
+   Memcheck:Value8
+   fun:_ZN6__tsan9ShadowSetEPNS_9RawShadowES1_S0_
+   fun:racecall
+}
+{
    FI leak 8
    Memcheck:Leak
    match-leak-kinds: reachable
@@ -505,4 +523,34 @@
    write(buf)
    fun:syscall.Syscall.abi0
 }
-
+{
+   DAOS-14680-1
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:_cgo_0edd79296193_Cfunc__Cmalloc
+   fun:runtime.asmcgocall.abi0
+   ...
+   fun:racecall
+}
+{
+   DAOS-14680-2
+   Memcheck:Value8
+   fun:memeqbody
+}
+{
+   DAOS-14680-3
+   Memcheck:Cond
+   fun:aeshashbody
+}
+{
+   DAOS-14680-4
+   Memcheck:Value8
+   fun:aeshashbody
+}
+{
+   DAOS-15159
+   Memcheck:Param
+   write(buf)
+   fun:runtime/internal/syscall.Syscall6
+}

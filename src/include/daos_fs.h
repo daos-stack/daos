@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,7 +21,14 @@ extern "C" {
 #endif
 
 #include <dirent.h>
+#include <inttypes.h>
 #include <sys/stat.h>
+
+#include <daos_types.h>
+#include <daos_obj.h>
+#include <daos_obj_class.h>
+#include <daos_array.h>
+#include <daos_cont.h>
 
 /** Maximum Name length */
 #define DFS_MAX_NAME		NAME_MAX
@@ -98,6 +105,10 @@ typedef struct {
 	daos_oclass_id_t	doi_oclass_id;
 	/** chunk size */
 	daos_size_t		doi_chunk_size;
+	/** In case of dir, return default object class for dirs created in that dir */
+	daos_oclass_id_t        doi_dir_oclass_id;
+	/** In case of dir, return default object class for files created in that dir */
+	daos_oclass_id_t        doi_file_oclass_id;
 } dfs_obj_info_t;
 
 /**
@@ -1166,6 +1177,130 @@ enum {
  */
 int
 dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
+
+/**
+ * Update a POSIX's container's owner user and/or owner group. This is the same as calling
+ * daos_cont_set_owner() but will also update the owner of the root directory in the container.
+ *
+ * \param[in]	coh	Open container handle
+ * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	group	New owner group (NULL if not updating)
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group);
+
+/*
+ * The Pipeline DFS API (everything under this comment) is under heavy development and should not be
+ * used in production. The API is subject to change.
+ */
+
+/** DFS pipeline object */
+typedef struct dfs_pipeline dfs_pipeline_t;
+
+enum {
+	DFS_FILTER_NAME		= (1 << 1),
+	DFS_FILTER_NEWER	= (1 << 2),
+	DFS_FILTER_INCLUDE_DIRS	= (1 << 3),
+};
+
+/** Predicate conditions for filter */
+typedef struct {
+	/** name condition for entry - regex */
+	char	dp_name[DFS_MAX_NAME];
+	/** timestamp for newer condition */
+	time_t	dp_newer;
+	/** size of files - not supported for now */
+	size_t	dp_size;
+} dfs_predicate_t;
+
+/**
+ * Same as dfs_get_size() but using the OID of the file instead of the open handle. Note that the
+ * chunk_size of the file is also required to be passed if the file was created with a different
+ * chunk size than the default (passing other than 0 to dfs_open). Otherwise, 0 should be passed to
+ * chunk size.
+ *
+ * \param[in]	dfs		Pointer to the mounted file system.
+ * \param[in]	oid		Object ID of the file.
+ * \param[in]	chunk_size	Chunk size of the file (pass 0 if it was created with default).
+ * \param[out]	size		Returned size of the file.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_get_size_by_oid(dfs_t *dfs, daos_obj_id_t oid, daos_size_t chunk_size, daos_size_t *size);
+
+/**
+ * Create a pipeline object to be used during readdir with filter. Should be destroyed with
+ * dfs_pipeline_destroy().
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	pred	Predicate condition values (name/regex, newer timestamp, etc.).
+ * \param[in]	flags	Pipeline flags (conditions to apply).
+ * \param[out]	dpipe	Pipeline object created.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pipeline_create(dfs_t *dfs, dfs_predicate_t pred, uint64_t flags, dfs_pipeline_t **dpipe);
+
+/**
+ * Destroy pipeline object.
+ *
+ * \param[in]	dpipe	Pipeline object.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_pipeline_destroy(dfs_pipeline_t *dpipe);
+
+/**
+ * Same as dfs_readdir() but this additionally applies a filter created with dfs_pipeline_create()
+ * on the entries that are enumerated. This function also optionally returns the object ID of each
+ * dirent if requested through a pre-allocated OID input array.
+ *
+ * \param[in]	dfs	Pointer to the mounted file system.
+ * \param[in]	obj	Opened directory object.
+ * \param[in]	dpipe	DFS pipeline filter.
+ * \param[in,out]
+ *		anchor	Hash anchor for the next call, it should be set to
+ *			zeroes for the first call, it should not be changed
+ *			by caller between calls.
+ * \param[in,out]
+ *		nr	[in]: number of dirents allocated in \a dirs.
+ *			[out]: number of returned dirents.
+ * \param[in,out]
+ *		dirs	[in] preallocated array of dirents.
+ *			[out]: dirents returned with d_name filled only.
+ * \param[in,out]
+ *		oids	[in] Optional preallocated array of object IDs.
+ *			[out]: Object ID associated with each dirent that was read.
+ * \param[in,out]
+ *		csizes	[in] Optional preallocated array of sizes.
+ *			[out]: chunk size associated with each dirent that was read.
+ * \param[out]	nr_scanned
+ *			Total number of entries scanned by readdir before returning.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_anchor_t *anchor,
+			uint32_t *nr, struct dirent *dirs, daos_obj_id_t *oids, daos_size_t *csizes,
+			uint64_t *nr_scanned);
+
+/**
+ * Scan the DFS namespace and report statistics about file/dir size and namespace structure.
+ *
+ * \param[in]	poh	Open pool handle.
+ * \param[in]	cont	POSIX container label.
+ * \param[in]	flags	Unused flag, added for future use.
+ * \param[in]	name	Optional subdirectory path to scan from.
+ *			Start from container root if not specified.
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
 #if defined(__cplusplus)
 }

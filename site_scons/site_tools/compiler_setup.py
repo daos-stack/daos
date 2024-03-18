@@ -1,8 +1,6 @@
 """Common DAOS library for setting up the compiler"""
 
-from SCons.Script import GetOption, Exit
-from SCons.Script import Configure
-
+from SCons.Script import Configure, Exit, GetOption
 
 DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-sign-compare',

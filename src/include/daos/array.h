@@ -10,6 +10,9 @@
 #ifndef __DAOS_ARRAYX_H__
 #define  __DAOS_ARRAYX_H__
 
+#include <daos_types.h>
+#include <daos/tse.h>
+
 /* task functions for array operations */
 int dc_array_create(tse_task_t *task);
 int dc_array_open(tse_task_t *task);

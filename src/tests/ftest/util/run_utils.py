@@ -3,10 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from socket import gethostname
-import subprocess   # nosec
 import shlex
+import subprocess  # nosec
 import time
+from socket import gethostname
+
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -404,7 +405,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     task.set_info("ssh_options", "-oForwardAgent=yes")
     if verbose:
         if timeout is None:
-            log.debug("Running on %s without a timeout: %s", hosts, timeout, command)
+            log.debug("Running on %s without a timeout: %s", hosts, command)
         else:
             log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
     task.run(command=command, nodes=hosts, timeout=timeout)

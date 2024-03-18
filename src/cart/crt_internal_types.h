@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,11 +33,11 @@ struct crt_grp_gdata;
 
 struct crt_na_config {
 	int32_t		 noc_port;
+	int		 noc_iface_total;
 	char		*noc_interface;
 	char		*noc_domain;
 	char		*noc_auth_key;
-	/* IP addr str for the noc_interface */
-	char		 noc_ip_str[INET_ADDRSTRLEN];
+	char		**noc_iface_str; /* Array of interfaces */
 };
 
 struct crt_prov_gdata {
@@ -88,8 +88,12 @@ struct crt_gdata {
 	/** Provider specific data */
 	struct crt_prov_gdata	cg_prov_gdata_primary;
 
-	/** */
+	/** Placeholder for secondary provider data */
 	struct crt_prov_gdata	*cg_prov_gdata_secondary;
+
+	/** Hints to mercury for request post init (ignored for clients) */
+	uint32_t                 cg_post_init;
+	uint32_t                 cg_post_incr;
 
 	/** global timeout value (second) for all RPCs */
 	uint32_t		cg_timeout;
@@ -100,11 +104,13 @@ struct crt_gdata {
 	/** credits limitation for #in-flight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
 
+	uint32_t		cg_iv_inline_limit;
 	/** the global opcode map */
 	struct crt_opc_map	*cg_opc_map;
 	/** HG level global data */
 	struct crt_hg_gdata	*cg_hg;
 
+	/** Points to default group */
 	struct crt_grp_gdata	*cg_grp;
 
 	/** refcount to protect crt_init/crt_finalize */
@@ -140,6 +146,8 @@ struct crt_gdata {
 	struct d_tm_node_t	*cg_uri_other;
 	/** Number of cores on a system */
 	long			 cg_num_cores;
+	/** Inflight rpc quota limit */
+	uint32_t		cg_rpc_quota;
 };
 
 extern struct crt_gdata		crt_gdata;
@@ -184,6 +192,14 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 #define CRT_DEFAULT_CREDITS_PER_EP_CTX	(32)
 #define CRT_MAX_CREDITS_PER_EP_CTX	(256)
 
+struct crt_quotas {
+	int			limit[CRT_QUOTA_COUNT];
+	ATOMIC uint32_t		current[CRT_QUOTA_COUNT];
+	bool			enabled[CRT_QUOTA_COUNT];
+	pthread_mutex_t		mutex;
+	d_list_t		rpc_waitq;
+};
+
 /* crt_context */
 struct crt_context {
 	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
@@ -219,9 +235,16 @@ struct crt_context {
 	struct d_tm_node_t	*cc_timedout_uri;
 	/** Total number of failed address resolution, of type counter */
 	struct d_tm_node_t	*cc_failed_addr;
+	/** Counter for number of network glitches */
+	struct d_tm_node_t      *cc_net_glitches;
+	/** Stats gauge of reported SWIM delays */
+	struct d_tm_node_t      *cc_swim_delay;
 
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
+
+	/** Stores quotas */
+	struct crt_quotas	cc_quotas;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */
@@ -259,6 +282,7 @@ struct crt_ep_inflight {
 /* max member RPC count allowed in one protocol  */
 #define CRT_PROTO_MAX_COUNT	(0xFFFFUL)
 #define CRT_PROTO_BASEOPC_MASK	(0xFF000000UL)
+#define CRT_PROTO_BASEOPC_SHIFT         24
 #define CRT_PROTO_VER_MASK	(0x00FF0000UL)
 #define CRT_PROTO_COUNT_MASK	(0x0000FFFFUL)
 

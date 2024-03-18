@@ -30,7 +30,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 
 	if (ev->de_len == 0) {
 		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested (EOF)", ev->de_req_position,
-				ev->de_req_position + ev->de_iov.iov_buf_len - 1);
+				ev->de_req_position + ev->de_req_len - 1);
 
 		DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 		D_GOTO(release, 0);
@@ -51,6 +51,55 @@ release:
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
 }
 
+static bool
+dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
+{
+	size_t reply_len;
+
+	if (oh->doh_readahead->dra_rc) {
+		DFUSE_REPLY_ERR_RAW(oh, req, oh->doh_readahead->dra_rc);
+		return true;
+	}
+
+	if (!oh->doh_linear_read || oh->doh_readahead->dra_ev == NULL) {
+		DFUSE_TRA_DEBUG(oh, "Readahead disabled");
+		return false;
+	}
+
+	if (oh->doh_linear_read_pos != position) {
+		DFUSE_TRA_DEBUG(oh, "disabling readahead");
+		daos_event_fini(&oh->doh_readahead->dra_ev->de_ev);
+		d_slab_release(oh->doh_readahead->dra_ev->de_eqt->de_read_slab,
+			       oh->doh_readahead->dra_ev);
+		oh->doh_readahead->dra_ev = NULL;
+		return false;
+	}
+
+	oh->doh_linear_read_pos = position + len;
+	if (position + len >= oh->doh_readahead->dra_ev->de_readahead_len) {
+		oh->doh_linear_read_eof = true;
+	}
+
+	/* At this point there is a buffer of known length that contains the data, and a read
+	 * request.
+	 * If the attempted read is bigger than the data then it will be truncated.
+	 * It the attempted read is smaller than the buffer it will be met in full.
+	 */
+
+	if (position + len < oh->doh_readahead->dra_ev->de_readahead_len) {
+		reply_len = len;
+		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read", position, position + reply_len - 1);
+	} else {
+		/* The read will be truncated */
+		reply_len = oh->doh_readahead->dra_ev->de_readahead_len - position;
+		DFUSE_TRA_DEBUG(oh, "%#zx-%#zx read %#zx-%#zx not read (truncated)", position,
+				position + reply_len - 1, position + reply_len, position + len - 1);
+	}
+
+	DFUSE_REPLY_BUFQ(oh, req, oh->doh_readahead->dra_ev->de_iov.iov_buf + position, reply_len);
+	return true;
+}
+
 void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct fuse_file_info *fi)
 {
@@ -62,16 +111,42 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	struct dfuse_event   *ev;
 	uint64_t              eqt_idx;
 
+	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READ);
+
 	if (oh->doh_linear_read_eof && position == oh->doh_linear_read_pos) {
 		DFUSE_TRA_DEBUG(oh, "Returning EOF early without round trip %#zx", position);
 		oh->doh_linear_read_eof = false;
 		oh->doh_linear_read     = false;
+
+		if (oh->doh_readahead) {
+			D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
+			ev = oh->doh_readahead->dra_ev;
+
+			oh->doh_readahead->dra_ev = NULL;
+			D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
+
+			if (ev) {
+				daos_event_fini(&ev->de_ev);
+				d_slab_release(ev->de_eqt->de_read_slab, ev);
+			}
+		}
 		DFUSE_REPLY_BUFQ(oh, req, NULL, 0);
 		return;
 	}
 
-	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
+	if (oh->doh_readahead) {
+		bool replied;
 
+		D_MUTEX_LOCK(&oh->doh_readahead->dra_lock);
+		replied = dfuse_readahead_reply(req, len, position, oh);
+		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
+
+		if (replied) {
+			return;
+		}
+	}
+
+	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
 	eqt = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
 
 	ev = d_slab_acquire(eqt->de_read_slab);
@@ -130,4 +205,80 @@ err:
 		daos_event_fini(&ev->de_ev);
 		d_slab_release(eqt->de_read_slab, ev);
 	}
+}
+
+static void
+dfuse_cb_pre_read_complete(struct dfuse_event *ev)
+{
+	struct dfuse_obj_hdl *oh = ev->de_oh;
+
+	oh->doh_readahead->dra_rc = ev->de_ev.ev_error;
+
+	if (ev->de_ev.ev_error != 0) {
+		oh->doh_readahead->dra_rc = ev->de_ev.ev_error;
+		daos_event_fini(&ev->de_ev);
+		d_slab_release(ev->de_eqt->de_read_slab, ev);
+		oh->doh_readahead->dra_ev = NULL;
+	}
+
+	/* If the length is not as expected then the file has been modified since the last stat so
+	 * discard this cache and use regular reads.  Note that this will only detect files which
+	 * have shrunk in size, not grown.
+	 */
+	if (ev->de_len != ev->de_readahead_len) {
+		daos_event_fini(&ev->de_ev);
+		d_slab_release(ev->de_eqt->de_read_slab, ev);
+		oh->doh_readahead->dra_ev = NULL;
+	}
+
+	D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
+}
+
+void
+dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
+{
+	struct dfuse_eq    *eqt;
+	int                 rc;
+	struct dfuse_event *ev;
+	uint64_t            eqt_idx;
+	size_t              len = oh->doh_ie->ie_stat.st_size;
+
+	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
+	eqt     = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
+
+	ev = d_slab_acquire(eqt->de_read_slab);
+	if (ev == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	ev->de_iov.iov_len   = len;
+	ev->de_req           = 0;
+	ev->de_sgl.sg_nr     = 1;
+	ev->de_oh            = oh;
+	ev->de_readahead_len = len;
+	ev->de_req_position  = 0;
+
+	ev->de_complete_cb        = dfuse_cb_pre_read_complete;
+	oh->doh_readahead->dra_ev = ev;
+
+	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, 0, &ev->de_len, &ev->de_ev);
+	if (rc != 0) {
+		D_GOTO(err, rc);
+		return;
+	}
+
+	/* Send a message to the async thread to wake it up and poll for events */
+	sem_post(&eqt->de_sem);
+
+	/* Now ensure there are more descriptors for the next request */
+	d_slab_restock(eqt->de_read_slab);
+
+	return;
+err:
+	oh->doh_readahead->dra_rc = rc;
+	if (ev) {
+		daos_event_fini(&ev->de_ev);
+		d_slab_release(eqt->de_read_slab, ev);
+		oh->doh_readahead->dra_ev = NULL;
+	}
+	D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
 }

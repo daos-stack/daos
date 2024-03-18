@@ -6,9 +6,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import socket
 import time
 
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
 
 
 class ManagementServiceFailover(TestWithServers):

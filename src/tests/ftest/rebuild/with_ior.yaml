@@ -29,8 +29,7 @@ server_config:
 
 pool:
   scm_size: 6G
-  svcn: 3
-  control_method: dmg
+  properties: rd_fac:1
   pool_query_timeout: 30
 
 container:

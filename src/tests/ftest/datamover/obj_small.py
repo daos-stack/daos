@@ -3,10 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from pydaos.raw import DaosApiError
 import avocado
-
 from data_mover_test_base import DataMoverTestBase
+from pydaos.raw import DaosApiError
 
 
 class DmvrObjSmallTest(DataMoverTestBase):
@@ -116,7 +115,7 @@ class DmvrObjSmallTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
-        :avocado: tags=dm_obj_small,dm_obj_small_dcp,test_dm_obj_small_dcp
+        :avocado: tags=DmvrObjSmallTest,test_dm_obj_small_dcp
         """
         self.run_dm_obj_small("DCP")
 
@@ -128,6 +127,6 @@ class DmvrObjSmallTest(DataMoverTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=datamover,daos_cont_clone,daos_cmd
-        :avocado: tags=dm_obj_small,dm_obj_small_cont_clone,test_dm_obj_small_cont_clone
+        :avocado: tags=DmvrObjSmallTest,test_dm_obj_small_cont_clone
         """
         self.run_dm_obj_small("CONT_CLONE")

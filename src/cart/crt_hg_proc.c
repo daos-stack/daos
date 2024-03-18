@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,7 +56,7 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 	int		rc = 0;
 
 	if (unlikely(proc == NULL)) {
-		D_ERROR("Proc is not initilalized.\n");
+		D_ERROR("Proc is not initialized.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -251,6 +251,47 @@ crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 	}
 
 out:
+	return rc;
+}
+
+int
+crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *p)
+{
+	int		i;
+	int		rc;
+
+	if (FREEING(proc_op)) {
+		/* NB: don't need free in crt_proc_d_iov_t() */
+		D_FREE(p->sg_iovs);
+		return 0;
+	}
+
+	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &p->sg_nr_out);
+	if (unlikely(rc))
+		return rc;
+
+	if (p->sg_nr == 0)
+		return 0;
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_ARRAY(p->sg_iovs, p->sg_nr);
+		if (p->sg_iovs == NULL)
+			return -DER_NOMEM;
+	}
+
+	for (i = 0; i < p->sg_nr; i++) {
+		rc = crt_proc_d_iov_t(proc, proc_op, &p->sg_iovs[i]);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
+				D_FREE(p->sg_iovs);
+			return rc;
+		}
+	}
+
 	return rc;
 }
 

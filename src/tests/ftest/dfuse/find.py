@@ -4,12 +4,12 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import sys
-import string
 import random
-from ClusterShell.NodeSet import NodeSet
+import string
+import sys
 
 import general_utils
+from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
@@ -37,7 +37,7 @@ class DfuseFind(DfuseTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
-        :avocado: tags=dfuse_find,test_dfuse_find
+        :avocado: tags=DfuseFind,test_dfuse_find
         """
         self._test_findcmd()
 
@@ -54,7 +54,7 @@ class DfuseFind(DfuseTestBase):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
-        :avocado: tags=dfuse_find,test_dfuse_find_perf
+        :avocado: tags=DfuseFind,test_dfuse_find_perf
         """
         # Number of repetitions each test will run.
         samples = self.params.get("samples", '/run/perf/*')

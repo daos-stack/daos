@@ -6,65 +6,34 @@
 #
 
 # Pull base image
-ARG BASE_DISTRO=almalinux:9
-FROM $BASE_DISTRO
+ARG POINT_RELEASE=
+ARG BASE_DISTRO=almalinux:9$POINT_RELEASE
+FROM $BASE_DISTRO as basic
 LABEL maintainer="daos@daos.groups.io"
+# Needed for later use of BASE_DISTRO
+ARG BASE_DISTRO
 
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
 
-# Use local repo server if present
 ARG REPO_FILE_URL
-RUN set -e;                                                      \
-    if [ -n "$REPO_FILE_URL" ]; then                             \
-        cd /etc/yum.repos.d/ &&                                  \
-        curl -k -f -o daos_ci-el9-artifactory.repo.tmp           \
-             "$REPO_FILE_URL"daos_ci-el9-artifactory.repo &&     \
-        for file in *.repo; do                                   \
-            true > $file;                                        \
-        done;                                                    \
-        mv daos_ci-el9-artifactory.repo{.tmp,};                  \
-    fi;                                                          \
-    dnf --assumeyes --disablerepo \*epel\* install dnf-plugins-core;     \
-    dnf config-manager --save --setopt=assumeyes=True;           \
-    dnf config-manager --save --setopt=install_weak_deps=False;  \
-    dnf --disablerepo \*epel\* install epel-release;             \
-    dnf install epel-release;                                    \
-    if [ -n "$REPO_FILE_URL" ]; then                             \
-        PT_REPO=daos_ci-rocky8-crb-artifactory;                  \
-    else                                                         \
-        PT_REPO=crb;                                             \
-    fi;                                                          \
-    dnf -y config-manager --enable $PT_REPO;                     \
-    dnf -y clean all
-
 ARG JENKINS_URL
 ARG REPOS
-RUN for repo in $REPOS; do                                                \
-        branch="master";                                                  \
-        build_number="lastSuccessfulBuild";                               \
-        if [[ $repo = *@* ]]; then                                        \
-            branch="${repo#*@}";                                          \
-            repo="${repo%@*}";                                            \
-            if [[ $branch = *:* ]]; then                                  \
-                build_number="${branch#*:}";                              \
-                branch="${branch%:*}";                                    \
-            fi;                                                           \
-        fi;                                                               \
-        echo -e "[$repo:$branch:$build_number]\n\
-name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/el9/\n\
-enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
-        cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
-    done
-
-# Install OS updates and package.  Include basic tools and daos dependencies
+# script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el9.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh && dnf upgrade && /tmp/install.sh && dnf clean all && \
-    rm -f /tmp/install.sh
+# script to setup local repo if available
+COPY ./utils/scripts/helpers/repo-helper-el9.sh /tmp/repo-helper.sh
 
-ARG UID=1000
+RUN chmod +x /tmp/repo-helper.sh /tmp/install.sh && \
+    /tmp/repo-helper.sh &&                          \
+    rm -f /tmp/repo-helper.sh
+
+FROM basic
+# Install OS updates and package.  Include basic tools and daos dependencies
+RUN dnf upgrade &&        \
+    /tmp/install.sh &&    \
+    dnf clean all &&      \
+    rm -f /tmp/install.sh
 
 # Add DAOS users
 ARG UID=1000
@@ -80,16 +49,6 @@ RUN echo "daos_agent:daos_agent" | chpasswd
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/daos/pre /home/daos/daos &&   \
     chown -R daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server /home/daos &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
-
-ARG QUICKBUILD=false
-ARG QUICKBUILD_DEPS
-
-RUN if $QUICKBUILD; then                                          \
-        echo "Installing: $QUICKBUILD_DEPS";                      \
-        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' | \
-          xargs -0 dnf install;                                   \
-        dnf clean all;                                            \
-    fi
 
 USER daos_server:daos_server
 
@@ -123,9 +82,9 @@ ARG DAOS_TARGET_TYPE=release
 # src hasn't changed then this won't do anything, but if it has then we want to
 # ensure that latest dependencies are used.
 USER root:root
-RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                       \
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || {                                               \
         dnf upgrade --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-        dnf clean all;                                                         \
+        dnf clean all;                                                                 \
     }
 USER daos_server:daos_server
 

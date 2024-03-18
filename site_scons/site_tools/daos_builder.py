@@ -1,13 +1,9 @@
 """Common DAOS build functions"""
 import os
 
-from SCons.Subst import Literal
-from SCons.Script import Dir
-from SCons.Script import GetOption
-from SCons.Script import WhereIs
-from SCons.Script import Depends
-from SCons.Script import Exit
 from env_modules import load_mpi
+from SCons.Script import Depends, Dir, Exit, GetOption, WhereIs
+from SCons.Subst import Literal
 
 libraries = {}
 missing = set()

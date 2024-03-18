@@ -191,8 +191,12 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, struct cont_iv_key *key,
 				cip_acl.dal_ace[src->iv_prop.cip_acl.dal_len]);
 		memcpy(&dst->iv_prop, &src->iv_prop, size);
 		break;
+	case IV_CONT_AGG_EPOCH_BOUNDRY:
+		dst->iv_agg_eph.eph = src->iv_agg_eph.eph;
+		break;
 	default:
-		D_ERROR("bad iv_class_id %d.\n", entry->iv_class->iv_class_id);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "bad iv_class_id %d: ", entry->iv_class->iv_class_id);
 		return -DER_INVAL;
 	};
 
@@ -241,6 +245,12 @@ cont_iv_snap_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 		  cont_iv_snap_ent_size(iv_entry->iv_snap.snap_cnt));
 	d_iov_set(&key_iov, &civ_key->cont_uuid, sizeof(civ_key->cont_uuid));
 	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
+	if (rc)
+		D_GOTO(out, rc);
+
+	rc = ds_cont_tgt_snapshots_update(entry->ns->iv_pool_uuid,
+					  civ_key->cont_uuid,
+					  snaps, snap_cnt);
 	if (rc)
 		D_GOTO(out, rc);
 out:
@@ -380,6 +390,7 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			break;
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
 			iv_prop->cip_scrubbing_disabled = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_SCRUB_DIS;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -421,6 +432,10 @@ cont_iv_prop_ent_create(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	rc = dbtree_update(root_hdl, &key_iov, &val_iov);
 	if (rc)
 		D_GOTO(out, rc);
+
+	rc = ds_cont_tgt_prop_update(entry->ns->iv_pool_uuid, civ_key->cont_uuid, prop);
+	if (rc)
+		D_GOTO(out, rc);
 out:
 	if (prop != NULL)
 		daos_prop_free(prop);
@@ -456,7 +471,7 @@ again:
 				rc = cont_iv_snap_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_ERROR("create cont snap iv entry failed "
+				D_DEBUG(DB_MD, "create cont snap iv entry failed "
 					""DF_RC"\n", DP_RC(rc));
 			} else if (class_id == IV_CONT_PROP) {
 				rc = cont_iv_prop_ent_create(entry, key);
@@ -758,8 +773,8 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = entry_size;
 	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL, retry);
 	if (rc)
-		DL_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR, rc, DF_UUID " iv fetch failed",
-			  DP_UUID(key_uuid));
+		D_DEBUG(DB_MGMT, DF_UUID " iv fetch failed: %d",
+			DP_UUID(key_uuid), rc);
 
 	return rc;
 }
@@ -1004,7 +1019,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	arg.eventual = eventual;
 	arg.invalidate_current = invalidate_current;
 	rc = dss_ult_create(cont_iv_capa_refresh_ult, &arg, DSS_XS_SYS,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc)
 		D_GOTO(out_eventual, rc);
 
@@ -1069,6 +1084,33 @@ cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
 	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph,
 						  0, CRT_IV_SYNC_LAZY,
 						  IV_CONT_AGG_EPOCH_BOUNDRY);
+}
+
+int
+ds_cont_fetch_ec_agg_boundary(void *ns, uuid_t cont_uuid)
+{
+
+	struct cont_iv_entry	iv_entry = { 0 };
+	int			rc;
+
+	/* Only happens on xstream 0 */
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	uuid_copy(iv_entry.cont_uuid, cont_uuid);
+	rc = crt_group_rank(NULL, &iv_entry.iv_agg_eph.rank);
+	if (rc) {
+		D_ERROR(DF_UUID" crt_group_rank failed "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
+		return rc;
+	}
+
+	rc = cont_iv_fetch(ns, IV_CONT_AGG_EPOCH_BOUNDRY, cont_uuid, &iv_entry,
+			   sizeof(struct cont_iv_entry), sizeof(struct cont_iv_entry),
+			   true);
+	if (rc)
+		D_ERROR(DF_UUID" cont_iv_fetch failed "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
+	return rc;
+
 }
 
 int

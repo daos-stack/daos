@@ -5,15 +5,16 @@ set -eux
 dir="$1/$STAGE_NAME/"
 if ! mkdir -p "$dir"; then
     echo "Failed to create \"$dir\":"
-    while [ -n "$dir" ]; do
-        ls -ld "$dir" || true
-        dir=${dir%/*}
-        if [ -f "$dir" ]; then
-            cat "$dir"
+    _dir="$dir"
+    while [ -n "$_dir" ]; do
+        ls -ld "$_dir" || true
+        _dir=${_dir%/*}
+        if [ -f "$_dir" ]; then
+            cat "$_dir"
         fi
     done
     if [ -f "$1" ]; then
-        mv "$1"{,.$SECONDS}
+        mv "$1"{,."$(date +%s)"}
         if ! mkdir -p "$dir"; then
             echo "Failed to create \"$dir\""
             exit 1

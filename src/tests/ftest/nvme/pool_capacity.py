@@ -3,16 +3,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
-import threading
-from itertools import product
 import queue
+import threading
+import time
+from itertools import product
 
 from apricot import TestWithServers
-from write_host_file import write_host_file
+from exception_utils import CommandFailure
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
-from exception_utils import CommandFailure
+from write_host_file import write_host_file
 
 
 class NvmePoolCapacity(TestWithServers):
@@ -32,7 +32,7 @@ class NvmePoolCapacity(TestWithServers):
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.ior_dfs_oclass = self.params.get("obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.out_queue = queue.Queue()
 
     def ior_thread(self, pool, oclass, api, test, flags, results):

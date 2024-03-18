@@ -1,15 +1,14 @@
 '''
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from os.path import join
 
 import avocado
-from pydaos.raw import DaosApiError
-
 from data_mover_test_base import DataMoverTestBase
 from duns_utils import format_path
+from pydaos.raw import DaosApiError
 
 
 class DmvrDstCreate(DataMoverTestBase):
@@ -82,6 +81,18 @@ class DmvrDstCreate(DataMoverTestBase):
             dst_path=format_path(pool1, 'cont3_label'))
         cont3_label = self.parse_create_cont_label(result.stdout_text)
         cont3 = self.get_cont(pool1, cont3_label)
+        cont3.type.update(cont1.type.value, "type")
+        self.verify_cont(cont3, api, check_props, src_props)
+
+        special_label = 'cont:.-_'
+        result = self.run_datamover(
+            self.test_id + " cont1 to cont:.-_ (same pool) (new cont label with special chars)",
+            src_path=format_path(pool1, cont1),
+            dst_path=format_path(pool1, special_label))
+        cont3_label = self.parse_create_cont_label(result.stdout_text)
+        cont3 = self.get_cont(pool1, cont3_label)
+        if cont3.label.value != special_label:
+            self.fail(f'Expected dst cont label "{special_label}" but got "{cont3.label.value}"')
         cont3.type.update(cont1.type.value, "type")
         self.verify_cont(cont3, api, check_props, src_props)
 
@@ -241,7 +252,6 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
-        :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_dfs
         :avocado: tags=DmvrDstCreate,test_dm_dst_create_dcp_posix_dfs
         """
         self.run_dm_dst_create("DCP", "POSIX", "DFS", True)
@@ -257,7 +267,6 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
-        :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_daos
         :avocado: tags=DmvrDstCreate,test_dm_dst_create_dcp_posix_daos
         """
         self.run_dm_dst_create("DCP", "POSIX", "DAOS", True)
@@ -273,7 +282,6 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp
-        :avocado: tags=dm_dst_create,dm_dst_create_dcp_unknown_daos
         :avocado: tags=DmvrDstCreate,test_dm_dst_create_dcp_unknown_daos
         """
         self.run_dm_dst_create("DCP", None, "DAOS", True)
@@ -289,7 +297,6 @@ class DmvrDstCreate(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,daos_fs_copy,dfs,ior,daos_cmd
-        :avocado: tags=dm_dst_create,dm_dst_create_fs_copy_posix_dfs
         :avocado: tags=DmvrDstCreate,test_dm_dst_create_fs_copy_posix_dfs
         """
         self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)

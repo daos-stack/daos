@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -237,6 +237,27 @@ setbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 		setbit(bitmap, index);
 }
 
+static inline void
+setbits64(uint64_t *bmap, int at, int bits)
+{
+	setbit_range((uint8_t *)bmap, at, at + bits - 1);
+}
+
+static inline void
+clrbits64(uint64_t *bmap, int at, int bits)
+{
+	clrbit_range((uint8_t *)bmap, at, at + bits - 1);
+}
+
+#define setbit64(bm, at)	setbit(((uint8_t *)bm), at)
+#define clrbit64(bm, at)	clrbit(((uint8_t *)bm), at)
+#define isset64(bm, at)		isset(((uint8_t *)bm), at)
+
+int
+daos_find_bits(uint64_t *used, uint64_t *reserved, int bmap_sz, int bits_min, int *bits);
+int
+daos_count_free_bits(uint64_t *used, int bmap_sz);
+
 static inline unsigned int
 daos_power2_nbits(unsigned int val)
 {
@@ -445,7 +466,7 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
  * @param[in]		sgl		sgl to be read from
  * @param[in]		check_buf	if true process on the sgl buf len
 					instead of iov_len
- * @param[in/out]	idx		index into the sgl to start reading from
+ * @param[in,out]	idx		index into the sgl to start reading from
  * @param[in]		buf_len_req	number of bytes requested
  * @param[out]		p_buf		resulting pointer to buffer
  * @param[out]		p_buf_len	length of buffer
@@ -810,6 +831,8 @@ enum {
 #define DAOS_DTX_RESYNC_DELAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4a)
 #define DAOS_DTX_FAIL_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4b)
 
+#define DAOS_OBJ_SYNC_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4c)
+
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
 #define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
@@ -828,15 +851,18 @@ enum {
 #define DAOS_POOL_FAIL_MAP_REFRESH	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x69)
 #define DAOS_CONT_G2L_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6a)
 #define DAOS_POOL_CREATE_FAIL_STEP_UP	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6b)
+#define DAOS_MD_OP_PASS_NOREPLY           (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6c)
+#define DAOS_MD_OP_FAIL_NOREPLY           (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6d)
+#define DAOS_MD_OP_PASS_NOREPLY_NEWLDR    (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6e)
+#define DAOS_MD_OP_FAIL_NOREPLY_NEWLDR    (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6f)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
 #define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
 #define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
 #define DAOS_POOL_UPGRADE_CONT_ABORT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x73)
-
 #define DAOS_POOL_FAIL_MAP_REFRESH_SERIOUSLY \
-					(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x73)
+					(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x74)
 
 #define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
 #define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
@@ -860,6 +886,13 @@ enum {
 #define DAOS_FAIL_POOL_CREATE_VERSION	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9d)
 #define DAOS_FORCE_OBJ_UPGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9e)
 #define DAOS_OBJ_FAIL_NVME_IO		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9f)
+
+#define DAOS_POOL_EVICT_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa0)
+
+/* WAL && checkpoint failure inject */
+#define DAOS_WAL_NO_REPLAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x100)
+#define DAOS_WAL_FAIL_REPLAY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x101)
+#define DAOS_MEM_FAIL_CHECKPOINT	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x102)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -984,6 +1017,9 @@ int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
 daos_recx_t *daos_recx_alloc(uint32_t nr);
 void daos_recx_free(daos_recx_t *recx);
+
+void
+daos_get_client_uuid(uuid_t *uuidp);
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)

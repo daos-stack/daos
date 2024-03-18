@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,6 +41,7 @@ struct obj_io_context;
 extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern unsigned int	srv_io_mode;
+extern unsigned int	obj_coll_punch_thd;
 
 /* Whether check redundancy group validation when DTX resync. */
 extern bool	tx_verify_rdg;
@@ -215,6 +216,32 @@ typedef int (*shard_io_cb_t)(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			     struct daos_shard_tgt *fw_shard_tgts,
 			     uint32_t fw_cnt, tse_task_t *task);
 
+struct obj_coll_disp_cursor {
+	/*
+	 * The length of daos_coll_target array. The obj_coll_disp_cursor may be inside some
+	 * {obj,shard}_auxi_xxx structure, has some size limitation. So the daos_coll_target
+	 * array is not contained inside the obj_coll_disp_cursor.
+	 */
+	uint32_t	tgt_nr;
+	/*
+	 * The "grp" is not object redundancy group, instead, it is the set of some engine(s).
+	 * If there is only one engine in the group, then send RPC to such engine. Otherwise,
+	 * choose a relay engine from such group and send RPC to such relay engine that will
+	 * help to forward the RPC to other engines in such group.
+	 */
+	uint16_t	grp_nr;
+	/* The count of engine groups that the RPC will be dispatched to. */
+	uint16_t	pending_grps;
+	/* Current position in the daos_coll_target array. */
+	uint32_t	cur_pos;
+	/* How many engines in the group corresponding to cur_pos. As the process going, the
+	 * count of engines in current group may be smaller than the engines in former group
+	 * unless fixed_step is set.
+	 */
+	uint16_t	cur_step;
+	uint16_t	fixed_step:1;
+};
+
 /* shard update/punch auxiliary args, must be the first field of
  * shard_rw_args and shard_punch_args.
  */
@@ -232,6 +259,8 @@ struct shard_auxi_args {
 	/* only for EC, the start shard of the EC stripe */
 	uint32_t		 start_shard;
 	uint32_t		 flags;
+	/* for retried RPC */
+	uint64_t		 enqueue_id;
 };
 
 struct shard_rw_args {
@@ -246,12 +275,30 @@ struct shard_rw_args {
 	struct obj_reasb_req	*reasb_req;
 };
 
+struct coll_oper_args {
+	struct shard_auxi_args	 coa_auxi;
+	int			 coa_dct_nr;
+	uint32_t		 coa_dct_cap;
+	uint32_t		 coa_max_dct_sz;
+	uint8_t			 coa_max_shard_nr;
+	uint8_t			 coa_max_bitmap_sz;
+	uint8_t			 coa_for_modify:1;
+	uint8_t			 coa_target_nr;
+	/*
+	 * The target ID for the top four healthy shards.
+	 * Please check comment for DTX_COLL_INLINE_TARGETS.
+	 */
+	uint32_t		 coa_targets[DTX_COLL_INLINE_TARGETS];
+	struct daos_coll_target	*coa_dcts;
+};
+
 struct shard_punch_args {
-	struct shard_auxi_args	 pa_auxi;
-	uuid_t			 pa_coh_uuid;
-	uuid_t			 pa_cont_uuid;
-	struct dtx_id		 pa_dti;
-	uint32_t		 pa_opc;
+	union {
+		struct shard_auxi_args	pa_auxi;
+		struct coll_oper_args	pa_coa;
+	};
+	struct dtx_id			pa_dti;
+	uint32_t			pa_opc;
 };
 
 struct shard_sub_anchor {
@@ -358,6 +405,14 @@ struct obj_auxi_tgt_list {
 	uint32_t	tl_nr;
 };
 
+struct coll_query_args {
+	union {
+		struct shard_auxi_args	cqa_auxi;
+		struct coll_oper_args	cqa_coa;
+	};
+	struct obj_coll_disp_cursor	cqa_cur;
+};
+
 /* Auxiliary args for object I/O */
 struct obj_auxi_args {
 	tse_task_t			*obj_task;
@@ -367,6 +422,8 @@ struct obj_auxi_args {
 	int				 result;
 	uint32_t			 map_ver_req;
 	uint32_t			 map_ver_reply;
+	/* max delay seconds for retry */
+	uint32_t			 max_delay;
 	/* flags for the obj IO task.
 	 * ec_wait_recov -- obj fetch wait another EC recovery task,
 	 * ec_in_recov -- a EC recovery task
@@ -421,6 +478,7 @@ struct obj_auxi_args {
 		struct shard_list_args		l_args;
 		struct shard_k2a_args		k_args;
 		struct shard_sync_args		s_args;
+		struct coll_query_args		cq_args;
 	};
 };
 
@@ -568,6 +626,13 @@ int dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		       void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		       uint32_t fw_cnt, tse_task_t *task);
 
+int dc_obj_shard_coll_punch(struct dc_obj_shard *shard, struct shard_punch_args *args,
+			    struct dtx_memberships *mbs, uint32_t mbs_max_size, crt_bulk_t *bulks,
+			    uint32_t bulk_sz, struct daos_coll_target *tgts, uint32_t tgt_nr,
+			    uint32_t max_tgt_size, struct dtx_epoch *epoch, uint64_t api_flags,
+			    uint32_t rpc_flags, uint32_t map_ver, uint32_t *rep_ver,
+			    tse_task_t *task);
+
 int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
@@ -580,8 +645,16 @@ int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, 
 			   uint32_t req_map_ver, struct dc_object *obj,
 			   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
 			   daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
-			   struct dtx_id *dti, uint32_t *map_ver,
-			   daos_handle_t th, tse_task_t *task);
+			   struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th,
+			   tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
+
+int dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
+			    uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
+			    daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
+			    const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
+			    uint32_t *map_ver, struct daos_coll_target *tgts, uint32_t tgt_nr,
+			    uint32_t max_tgt_size, uint32_t disp_width, daos_handle_t th,
+			    tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
@@ -609,6 +682,11 @@ int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 			unsigned int map_ver, tse_task_t **taskp);
 bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
+
+int queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
+			       struct dtx_epoch *epoch, int shard, unsigned int map_ver,
+			       struct dc_object *obj, struct dtx_id *dti, uuid_t coh_uuid,
+			       uuid_t cont_uuid, struct daos_coll_target *dcts, uint32_t dct_nr);
 
 int obj_grp_leader_get(struct dc_object *obj, int grp_idx, uint64_t dkey_hash,
 		       bool has_condition, unsigned int map_ver, uint8_t *bit_map);
@@ -651,7 +729,7 @@ obj_retry_error(int err)
 	       err == -DER_GRPVER || err == -DER_EXCLUDED || err == -DER_CSUM ||
 	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN || err == -DER_NEED_TX ||
 	       err == -DER_NOTLEADER || err == -DER_UPDATE_AGAIN || err == -DER_NVME_IO ||
-	       err == -DER_CHKPT_BUSY || daos_crt_network_error(err);
+	       err == -DER_CHKPT_BUSY || err == -DER_OVERLOAD_RETRY || daos_crt_network_error(err);
 }
 
 static inline daos_handle_t
@@ -718,7 +796,7 @@ void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
 uint32_t dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt,
-			    uint16_t *inprogress_cnt);
+			    uint16_t *inprogress_cnt, uint32_t timeout_secs);
 
 /* handles, pointers for handling I/O */
 struct obj_io_context {
@@ -842,9 +920,59 @@ daos_recx_ep_list_ep_valid(struct daos_recx_ep_list *list)
 	return (list->re_ep_valid == 1);
 }
 
-int  obj_class_init(void);
+int obj_class_init(void);
 void obj_class_fini(void);
-int  obj_utils_init(void);
+
+/*
+ * Consider efficiency, we will not make one leader (or relay) engine to forward
+ * too many collective requests to other engines. But it also needs to guarantee
+ * that the payload size for each dispatch group is small enough to be packed in
+ * RPC body to avoid transferring via RDAM.
+ *
+ * On the other hand, parent engine may need to children's feedback before reply
+ * parent's upper level engine. So making parent engine to forward more requests
+ * than each child engine does is more efficient because current collective task
+ * on parent engine is scheduled earlier than on child engine. Otherwise, parent
+ * engine may wait more time.
+ */
+#define COLL_DISP_WIDTH_DEF	20
+#define COLL_DISP_WIDTH_MIN	8
+#define COLL_DISP_WIDTH_DIF	4
+
+struct obj_query_merge_args {
+	struct daos_oclass_attr	*oqma_oca;
+	daos_unit_oid_t		 oqma_oid;
+	daos_epoch_t		 oqma_src_epoch;
+	daos_key_t		*oqma_in_dkey;
+	daos_key_t		*oqma_src_dkey;
+	daos_key_t		*oqma_tgt_dkey; /* output */
+	daos_key_t		*oqma_src_akey;
+	daos_key_t		*oqma_tgt_akey; /* output */
+	daos_recx_t		*oqma_src_recx;
+	daos_recx_t		*oqma_tgt_recx; /* output */
+	daos_epoch_t		*oqma_tgt_epoch; /* output */
+	uint32_t		*oqma_tgt_map_ver; /* output */
+	uint32_t		*oqma_shard; /* output */
+	uint32_t		*oqma_max_delay; /* output */
+	uint64_t		*oqma_queue_id; /* output */
+	crt_rpc_t		*oqma_rpc;
+	uint64_t		 oqma_flags;
+	uint32_t		 oqma_opc;
+	uint32_t		 oqma_src_map_ver;
+	int			 oqma_ret;
+	uint32_t		 oqma_raw_recx:1;
+};
+
+/* obj_utils.c */
+void obj_ec_recx_vos2daos(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
+			  daos_recx_t *recx, bool get_max);
+int daos_obj_query_merge(struct obj_query_merge_args *oqma);
+void obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
+			uint32_t start, uint32_t max_width, struct obj_coll_disp_cursor *ocdc);
+void obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *tgts,
+			crt_endpoint_t *tgt_ep);
+void obj_coll_disp_move(struct obj_coll_disp_cursor *ocdc);
+int obj_utils_init(void);
 void obj_utils_fini(void);
 
 /* obj_tx.c */
@@ -854,6 +982,28 @@ dc_tx_check_pmv(daos_handle_t th);
 int
 dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 			uint32_t *pmv);
+
+/* cli_coll.c */
+int
+obj_coll_oper_args_init(struct coll_oper_args *coa, struct dc_object *obj, bool for_modify);
+
+void
+obj_coll_oper_args_fini(struct coll_oper_args *coa);
+
+int
+obj_coll_oper_args_collapse(struct coll_oper_args *coa, uint32_t *size);
+
+int
+obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
+		  uint32_t map_ver, uint32_t idx);
+
+int
+dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
+		  uint32_t map_ver, daos_obj_punch_t *args, struct obj_auxi_args *auxi);
+
+int
+queue_coll_query_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi, struct dc_object *obj,
+		      struct dtx_id *xid, struct dtx_epoch *epoch, uint32_t map_ver);
 
 /** See dc_tx_get_epoch. */
 enum dc_tx_get_epoch_rc {

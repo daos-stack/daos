@@ -2,10 +2,9 @@ hosts:
   test_servers: 4
   test_clients: 1
 timeouts:
-  test_metadata_fillup: 300
-  test_metadata_addremove: 900
+  test_metadata_fillup: 600
+  test_metadata_addremove: 1600
   test_metadata_server_restart: 960
-  test_container_removal_after_der_nospace: 180
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -20,7 +19,7 @@ server_config:
       log_file: daos_server0.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DAOS_MD_CAP=128
+        - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only
       storage:
         0:
@@ -37,7 +36,7 @@ server_config:
       log_file: daos_server1.log
       log_mask: DEBUG,MEM=ERR
       env_vars:
-        - DAOS_MD_CAP=128
+        - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only
       storage:
         0:
@@ -47,8 +46,8 @@ server_config:
 pool:
   svcn: 5
   scm_size: 1G
-  nvme_size: 8G
   control_method: dmg
+  properties: svc_ops_enabled:1,svc_ops_entry_age:150
 container:
   control_method: API
   silent: true
@@ -61,3 +60,8 @@ ior:
   dfs_oclass: "SX"
 metadata:
   mean_percent: 1
+  num_addremove_loops: 4
+  created_cont_min: 25000
+  created_cont_max: 36000
+  num_cont_to_destroy: 500
+  fillup_seq_fail_max: 512

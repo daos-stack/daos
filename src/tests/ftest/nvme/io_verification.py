@@ -4,10 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import avocado
-
-from pydaos.raw import DaosApiError
-from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
+from ior_test_base import IorTestBase
+from pydaos.raw import DaosApiError
 
 
 class NvmeIoVerification(IorTestBase):

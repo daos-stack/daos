@@ -5,27 +5,26 @@
 """
 # pylint: disable=too-many-lines
 
-from collections import defaultdict
-from getpass import getuser
 import os
+import random
 import re
 import time
-import random
+from collections import defaultdict
+from getpass import getuser
 
 from avocado import fail_on
-
 from ClusterShell.NodeSet import NodeSet
-from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
+from command_utils_base import BasicParameter, CommonConfig
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import pcmd, get_log_file, list_to_str, get_display_size, run_pcmd
-from general_utils import get_default_config_file
+from general_utils import (get_default_config_file, get_display_size, get_log_file, list_to_str,
+                           pcmd, run_pcmd)
 from host_utils import get_local_host
-from server_utils_base import ServerFailed, DaosServerCommand, DaosServerInformation
+from run_utils import run_remote, stop_processes
+from server_utils_base import DaosServerCommand, DaosServerInformation, ServerFailed
 from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
 from user_utils import get_chown_command
-from run_utils import run_remote, stop_processes
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -331,7 +330,7 @@ class DaosServerManager(SubprocessManager):
         self.log.debug("Checking for the existence of the %s mount point", mount)
         command = "test -d {}".format(mount)
         result = run_remote(self.log, hosts, command, verbose)
-        if result.passed:
+        if result.passed_hosts:
             mounted_hosts = result.passed_hosts
 
             # Remove the superblocks
@@ -346,7 +345,7 @@ class DaosServerManager(SubprocessManager):
                 # Remove the shared memory segment associated with this io server
                 self.log.debug("Removing the shared memory segment")
                 command = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
-                run_remote(self.log, self._hosts, command, verbose)
+                run_remote(self.log, mounted_hosts, command, verbose)
 
             # Dismount the scm mount point
             self.log.debug("Dismount the %s mount point", mount)
@@ -466,13 +465,21 @@ class DaosServerManager(SubprocessManager):
 
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
-        cmd.sudo = False
+        cmd.run_user = "daos_server"
         cmd.debug.value = False
         cmd.config.value = get_default_config_file("server")
         self.log.info("Support collect-log on servers: %s", str(cmd))
         cmd.set_command(("support", "collect-log"), **kwargs)
         return run_remote(
             self.log, self._hosts, cmd.with_exports, timeout=self.collect_log_timeout.value)
+
+    def display_memory_info(self):
+        """Display server hosts memory info."""
+        self.log.debug("#" * 80)
+        self.log.debug("<SERVER> Collection debug memory info")
+        run_remote(self.log, self._hosts, "free -m")
+        run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 6")
+        self.log.debug("#" * 80)
 
     def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format.
@@ -666,11 +673,14 @@ class DaosServerManager(SubprocessManager):
         self.prepare()
 
         # Start the servers and wait for them to be ready for storage format
+        self.display_memory_info()
         self.detect_format_ready()
 
         # Collect storage and network information from the servers.
+        self.display_memory_info()
         self.information.collect_storage_information()
         self.information.collect_network_information()
+        self.display_memory_info()
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
@@ -1032,7 +1042,7 @@ class DaosServerManager(SubprocessManager):
         Use the specified data to generate and distribute the server configuration to the hosts.
 
         Also use this data to replace the engine storage configuration so that the storage options
-        defined in the specified data are configured correctly as part of the server startup.
+        defined in the specified data are configured correctly as part of the server start-up.
 
         Args:
             generated_yaml (YAMLObject): New server config data.

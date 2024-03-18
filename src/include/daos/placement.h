@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -63,7 +63,9 @@ struct pl_obj_shard {
 	uint32_t	po_shard;	/* shard identifier */
 	uint32_t	po_target;	/* target id */
 	uint32_t	po_fseq;	/* The latest failure sequence */
-	uint32_t	po_rebuilding:1, /* rebuilding status */
+	uint16_t	po_rank;	/* The rank on which the shard exists */
+	uint8_t		po_index;	/* The target index inside the node */
+	uint8_t		po_rebuilding:1, /* rebuilding status */
 			po_reintegrating:1; /* reintegrating status */
 };
 
@@ -133,24 +135,6 @@ int pl_obj_place(struct pl_map *map, uint16_t gl_layout_ver, struct daos_obj_md 
 
 int pl_obj_find_rebuild(struct pl_map *map, uint32_t gl_layout_ver,
 			struct daos_obj_md *md,
-			struct daos_obj_shard_md *shard_md,
-			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size);
-
-int pl_obj_find_drain(struct pl_map *map, uint32_t gl_layout_ver,
-		      struct daos_obj_md *md,
-		      struct daos_obj_shard_md *shard_md,
-		      uint32_t rebuild_ver, uint32_t *tgt_rank,
-		      uint32_t *shard_id, unsigned int array_size);
-
-int pl_obj_find_reint(struct pl_map *map, uint32_t gl_layout_ver,
-			struct daos_obj_md *md,
-			struct daos_obj_shard_md *shard_md,
-			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size);
-
-int pl_obj_find_addition(struct pl_map *map, uint32_t gl_layout_ver,
-			 struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
 			uint32_t *shard_id, unsigned int array_size);

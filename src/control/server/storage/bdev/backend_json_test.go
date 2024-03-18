@@ -83,6 +83,9 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 		accelOptMask       storage.AccelOptionBits
 		rpcSrvEnable       bool
 		rpcSrvSockAddr     string
+		autoFaultyEnable   bool
+		autoFaultyIO       uint32
+		autoFaultyCsum     uint32
 		expExtraSubsystems []*SpdkSubsystem
 		expBdevCfgs        []*SpdkSubsystemConfig
 		expDaosCfgs        []*DaosConfig
@@ -185,14 +188,17 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				}...),
 			vosEnv: "AIO",
 		},
-		"multiple controllers; accel & rpc server settings": {
-			class:          storage.ClassNvme,
-			devList:        []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
-			accelEngine:    storage.AccelEngineSPDK,
-			accelOptMask:   storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
-			rpcSrvEnable:   true,
-			rpcSrvSockAddr: "/tmp/spdk.sock",
-			expBdevCfgs:    multiCtrlrConfs(),
+		"multiple controllers; accel, rpc server & auto faulty settings": {
+			class:            storage.ClassNvme,
+			devList:          []string{test.MockPCIAddr(1), test.MockPCIAddr(2)},
+			accelEngine:      storage.AccelEngineSPDK,
+			accelOptMask:     storage.AccelOptCRCFlag | storage.AccelOptMoveFlag,
+			rpcSrvEnable:     true,
+			rpcSrvSockAddr:   "/tmp/spdk.sock",
+			autoFaultyEnable: true,
+			autoFaultyIO:     100,
+			autoFaultyCsum:   200,
+			expBdevCfgs:      multiCtrlrConfs(),
 			expDaosCfgs: []*DaosConfig{
 				{
 					Method: storage.ConfSetAccelProps,
@@ -206,6 +212,14 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 					Params: SpdkRpcServerParams{
 						Enable:   true,
 						SockAddr: "/tmp/spdk.sock",
+					},
+				},
+				{
+					Method: storage.ConfSetAutoFaultyProps,
+					Params: AutoFaultyParams{
+						Enable:      true,
+						MaxIoErrs:   100,
+						MaxCsumErrs: 200,
 					},
 				},
 			},
@@ -251,7 +265,9 @@ func TestBackend_newSpdkConfig(t *testing.T) {
 				WithTargetCount(8).
 				WithPinnedNumaNode(0).
 				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask).
-				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr)
+				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr).
+				WithStorageAutoFaultyCriteria(tc.autoFaultyEnable, tc.autoFaultyIO,
+					tc.autoFaultyCsum)
 
 			if tc.devRoles != 0 {
 				engineConfig.Storage.ControlMetadata = storage.ControlMetadata{

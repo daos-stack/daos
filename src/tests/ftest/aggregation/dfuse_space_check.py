@@ -4,8 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import time
 import os
+import time
+
 from ior_test_base import IorTestBase
 
 

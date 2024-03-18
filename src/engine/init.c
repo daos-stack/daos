@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -432,14 +432,15 @@ dss_init_state_set(enum dss_init_state state)
 static int
 abt_max_num_xstreams(void)
 {
-	char   *env;
+	unsigned num_xstreams = 0;
 
-	env = getenv("ABT_MAX_NUM_XSTREAMS");
-	if (env == NULL)
-		env = getenv("ABT_ENV_MAX_NUM_XSTREAMS");
-	if (env != NULL)
-		return atoi(env);
-	return 0;
+	if (d_isenv_def("ABT_MAX_NUM_XSTREAMS"))
+		d_getenv_uint("ABT_MAX_NUM_XSTREAMS", &num_xstreams);
+	else
+		d_getenv_uint("ABT_ENV_MAX_NUM_XSTREAMS", &num_xstreams);
+	D_ASSERT(num_xstreams <= INT_MAX);
+
+	return num_xstreams;
 }
 
 static int
@@ -454,7 +455,7 @@ set_abt_max_num_xstreams(int n)
 	if (value == NULL)
 		return -DER_NOMEM;
 	D_INFO("Setting %s to %s\n", name, value);
-	rc = setenv(name, value, 1 /* overwrite */);
+	rc = d_setenv(name, value, 1 /* overwrite */);
 	D_FREE(value);
 	if (rc != 0)
 		return daos_errno2der(errno);
@@ -678,7 +679,6 @@ server_init(int argc, char *argv[])
 		       DP_RC(rc));
 
 	metrics = &dss_engine_metrics;
-
 	/** Report timestamp when engine was started */
 	d_tm_record_timestamp(metrics->started_time);
 
@@ -1071,109 +1071,6 @@ parse(int argc, char **argv)
 	return 0;
 }
 
-struct sigaction old_handlers[_NSIG];
-
-static int
-daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
-{
-	struct sigaction	act = {0};
-	int			rc;
-
-	if ((signo < 0) || (signo >= _NSIG)) {
-		D_ERROR("invalid signo %d to register\n", signo);
-		return -DER_INVAL;
-	}
-
-	act.sa_flags = SA_SIGINFO;
-	act.sa_sigaction = handler;
-
-	/* register new and save old handler */
-	rc = sigaction(signo, &act, &old_handlers[signo]);
-	if (rc != 0) {
-		D_ERROR("sigaction() failure registering new and reading "
-			"old %d signal handler\n", signo);
-		return rc;
-	}
-	return 0;
-}
-
-#define PRINT_ERROR(...)                                                                           \
-	do {                                                                                       \
-		fprintf(stderr, __VA_ARGS__);                                                      \
-		D_ERROR(__VA_ARGS__);                                                              \
-	} while (0)
-
-/** This should be safe on Linux since tls is allocated on thread creation */
-#define MAX_BT_ENTRIES 256
-static __thread void *bt[MAX_BT_ENTRIES];
-
-static void
-print_backtrace(int signo, siginfo_t *info, void *p)
-{
-	int   bt_size, rc;
-
-	PRINT_ERROR("*** Process %d received signal %d ***\n", getpid(), signo);
-
-	if (info != NULL) {
-		PRINT_ERROR("Associated errno: %s (%d)\n", strerror(info->si_errno),
-			    info->si_errno);
-
-		/* XXX we could get more signal/fault specific details from
-		 * info->si_code decode
-		 */
-
-		switch (signo) {
-		case SIGILL:
-		case SIGFPE:
-			PRINT_ERROR("Failing at address: %p\n", info->si_addr);
-			break;
-		case SIGSEGV:
-		case SIGBUS:
-			PRINT_ERROR("Failing for address: %p\n", info->si_addr);
-			break;
-		}
-	} else {
-		PRINT_ERROR("siginfo is NULL, additional information unavailable\n");
-	}
-
-	/* since we mainly handle fatal signals here, flush the log to not
-	 * risk losing any debug traces
-	 */
-	d_log_sync();
-
-	bt_size = backtrace(bt, MAX_BT_ENTRIES);
-	if (bt_size == MAX_BT_ENTRIES)
-		fprintf(stderr, "backtrace may have been truncated\n");
-	if (bt_size > 1) /* start at 1 to ignore this frame */
-		backtrace_symbols_fd(&bt[1], bt_size - 1, fileno(stderr));
-	else
-		fprintf(stderr, "No useful backtrace available");
-
-	/* re-register old handler */
-	rc = sigaction(signo, &old_handlers[signo], NULL);
-	if (rc != 0) {
-		D_ERROR("sigaction() failure registering new and reading old "
-			"%d signal handler\n", signo);
-		/* XXX it is weird, we may end-up in a loop handling same
-		 * signal with this handler if we return
-		 */
-		exit(EXIT_FAILURE);
-	}
-
-	/* XXX we may choose to forget about old handler and simply register
-	 * signal again as SIG_DFL and raise it for corefile creation
-	 */
-	if (old_handlers[signo].sa_sigaction != NULL ||
-	    old_handlers[signo].sa_handler != SIG_IGN) {
-		/* XXX will old handler get accurate siginfo_t/ucontext_t ?
-		 * we may prefer to call it with the same params we got ?
-		 */
-		raise(signo);
-	}
-
-	memset(&old_handlers[signo], 0, sizeof(struct sigaction));
-}
-
 int
 main(int argc, char **argv)
 {
@@ -1202,12 +1099,8 @@ main(int argc, char **argv)
 	}
 
 	/* register our own handler for faults and abort()/assert() */
-	/* errors are harmless */
-	daos_register_sighand(SIGILL, print_backtrace);
-	daos_register_sighand(SIGFPE, print_backtrace);
-	daos_register_sighand(SIGBUS, print_backtrace);
-	daos_register_sighand(SIGSEGV, print_backtrace);
-	daos_register_sighand(SIGABRT, print_backtrace);
+	d_signal_stack_enable(true);
+	d_signal_register();
 
 	/** server initialization */
 	rc = server_init(argc, argv);

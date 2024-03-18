@@ -3,11 +3,11 @@
 """Helper module to choose build/cache keys to use for GitHub actions"""
 
 import os
-import sys
-from os.path import join
 import random
 import string
 import subprocess  # nosec
+import sys
+from os.path import join
 
 BUILD_FILES = ['site_scons/prereq_tools',
                'site_scons/components',

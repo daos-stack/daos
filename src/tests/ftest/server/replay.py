@@ -7,7 +7,6 @@ import random
 import time
 
 from apricot import TestWithServers
-
 from dfuse_utils import get_dfuse, start_dfuse, stop_dfuse
 from general_utils import join
 from ior_utils import get_ior
@@ -123,7 +122,7 @@ class ReplayTests(TestWithServers):
             6) Verify the previously written data matches with an ior read
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_restart
         """
@@ -156,7 +155,7 @@ class ReplayTests(TestWithServers):
             9) Verify more data can be written
 
         :avocado: tags=all,pr
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_posix
         """
@@ -207,7 +206,7 @@ class ReplayTests(TestWithServers):
             13) Verify no snapshots exist (daos container list-snaps)
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_snapshots
         """
@@ -260,7 +259,7 @@ class ReplayTests(TestWithServers):
             6) Verify each modified pool and container attribute is still set
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_attributes
         """
@@ -279,7 +278,7 @@ class ReplayTests(TestWithServers):
             # Settable pool attributes
             {'checkpoint_freq': list(range(1, 10)),
              'checkpoint_thresh': list(range(25, 75)),
-             'scrub-freq': list(range(604200, 605200))},
+             'scrub_freq': list(range(604200, 605200))},
             # Settable container attributes
             {'label': [join('_', 'RenamedContainer', str(num)) for num in range(10, 20)]},
         ]
@@ -345,7 +344,7 @@ class ReplayTests(TestWithServers):
             6) Verify the previously written data matches with an ior read
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_no_check_pointing
         """
@@ -389,7 +388,7 @@ class ReplayTests(TestWithServers):
             7) Verify the previously written data matches with an ior read
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_check_pointing
         """

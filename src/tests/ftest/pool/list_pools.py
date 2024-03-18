@@ -3,9 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
 
 
@@ -77,7 +76,7 @@ class ListPoolsTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool
-        :avocado: tags=list_pools,test_list_pools
+        :avocado: tags=ListPoolsTest,test_list_pools
         """
         ranks = list(range(len(self.hostlist_servers)))
 

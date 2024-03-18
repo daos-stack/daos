@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 %define sysctl_script_name 10-daos_server.conf
 
-%global mercury_version 2.2.0-6%{?dist}
+%global mercury_version 2.3.1-1%{?dist}
 %global libfabric_version 1.15.1-1
 %global __python %{__python3}
 
@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.5.100
-Release:       9%{?relval}%{?dist}
+Version:       2.5.101
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -49,7 +49,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 1.12.1~rc1
+BuildRequires: libpmemobj-devel >= 2.0.0
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -67,13 +67,13 @@ BuildRequires: capstone-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
-BuildRequires: libisa-l-devel
+BuildRequires: isa-l-devel
 BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.10.1-2.409.gc354cd7%{?dist}
+BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -145,11 +145,11 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
+Requires: libpmemobj1 >= 2.0.0-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
+Requires: libpmemobj >= 2.0.0-1%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
@@ -364,7 +364,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,util/verify_perms}.py,%{_bindir}/daos_storage_estimator.py,%{_datarootdir}/daos/control/setup_spdk.sh}
+sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py,%{_datarootdir}/daos/control/setup_spdk.sh}
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
@@ -383,6 +383,7 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 %preun server
 %systemd_preun %{server_svc_name}
 
+# all of these macros are empty on EL so keep rpmlint happy
 %if (0%{?suse_version} > 0)
 %postun server
 %{?run_ldconfig}
@@ -408,7 +409,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files
 %defattr(-, root, root, -)
 %doc README.md
-%{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %attr(0755,root,root) %{conf_dir}/certs
 %config(noreplace) %{conf_dir}/memcheck-cart.supp
 %dir %{conf_dir}
@@ -433,6 +433,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
+%{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
@@ -585,6 +586,37 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Mar 15 2024 Phillip Henderson <phillip.henderson@intel.com> 2.5.101-1
+- Bump version to 2.5.101
+
+* Tue Feb 27 2024 Li Wei <wei.g.li@intel.com> 2.5.100-16
+- Update raft to 0.11.0-1.416.g12dbc15
+
+* Mon Feb 12 2024 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-15
+- Updated isa-l package name to match EPEL
+
+* Tue Jan 09 2024 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-14
+- Move /etc/ld.so.conf.d/daos.conf to daos-server sub-package
+
+* Wed Dec 06 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-13
+- Update for EL 8.8 and Leap 15.5
+- Update raft to 0.10.1-2.411.gefa15f4
+
+* Fri Nov 17 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.5.100-12
+- Update to PMDK 2.0.0
+  * Remove libpmemblk from dependencies.
+  * Start using BUILD_EXAMPLES=n and BUILD_BENCHMARKS=n instead of patches.
+  * Stop using BUILD_RPMEM=n (removed) and NDCTL_DISABLE=y (invalid).
+  * Point https://github.com/pmem/pmdk as the main PMDK reference source.
+  NOTE: PMDK upgrade to 2.0.0 does not affect any API call used by DAOS.
+        libpmemobj (and libpmem) API stays unchanged.
+
+* Wed Nov 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.5.100-11
+- Bump mercury min version to 2.3.1
+
+* Fri Nov 03 2023 Phillip Henderson <phillip.henderson@intel.com> 2.5.100-10
+- Move verify_perms.py location
+
 * Wed Aug 23 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-9
 - Update fuse3 requirement to R: /usr/bin/fusermount3 by path
   rather than by package name, for portability and future-proofing

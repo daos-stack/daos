@@ -102,7 +102,7 @@ enum vos_gc_type {
 #define VOS_POOL_FEAT_2_4                       (VOS_POOL_FEAT_CHK | VOS_POOL_FEAT_DYN_ROOT)
 
 /** 2.6 features */
-#define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_EMB_VALUE)
+#define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_FLAT_DKEY | VOS_POOL_FEAT_EMBED_FIRST)
 
 /**
  * Durable format for VOS pool
@@ -288,11 +288,13 @@ D_CASSERT(offsetof(struct vos_cont_df, cd_dtx_committed_tail) ==
 /** btree (d/a-key) record bit flags */
 enum vos_krec_bf {
 	/* Array value (evtree) */
-	KREC_BF_EVT			= (1 << 0),
+	KREC_BF_EVT = (1 << 0),
 	/* Single Value or Key (btree) */
-	KREC_BF_BTR			= (1 << 1),
-	/* it's a dkey, otherwise is akey */
-	KREC_BF_DKEY			= (1 << 2),
+	KREC_BF_BTR = (1 << 1),
+	/* it's a dkey, otherwise is akey or single value if KREC_BF_NO_AKEY is set */
+	KREC_BF_DKEY = (1 << 2),
+	/* Value is stored in DKEY */
+	KREC_BF_NO_AKEY = (1 << 3),
 };
 
 /**

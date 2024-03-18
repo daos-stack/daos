@@ -6,14 +6,13 @@
 import os
 from random import choice
 
-from ClusterShell.NodeSet import NodeSet
 from apricot import TestWithServers
-
+from ClusterShell.NodeSet import NodeSet
+from dfuse_utils import get_dfuse, start_dfuse
 from general_utils import get_avocado_config_value
 from run_utils import run_remote
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 from user_utils import get_chown_command
-from dfuse_utils import get_dfuse, start_dfuse
 
 
 class HarnessAdvancedTest(TestWithServers):

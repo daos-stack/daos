@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -355,77 +355,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	return nil
 }
 
-// scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
-func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
-	defer srv.logDuration(track("time to scan bdev storage"))
-
-	if srv.cfg.DisableHugepages {
-		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
-		return &storage.BdevScanResponse{}, nil
-	}
-
-	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList: getBdevCfgsFromSrvCfg(srv.cfg).Bdevs(),
-	})
-	if err != nil {
-		err = errors.Wrap(err, "NVMe Scan Failed")
-		srv.log.Errorf("%s", err)
-		return nil, err
-	}
-
-	return nvmeScanResp, nil
-}
-
-func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, lastEngineIdx, lastBdevCount *int) error {
-	badInput := ""
-	switch {
-	case engine == nil:
-		badInput = "engine"
-	case scanResp == nil:
-		badInput = "scanResp"
-	case lastEngineIdx == nil:
-		badInput = "lastEngineIdx"
-	case lastBdevCount == nil:
-		badInput = "lastBdevCount"
-	}
-	if badInput != "" {
-		return errors.New("nil input param: " + badInput)
-	}
-
-	if err := engine.storage.SetBdevCache(*scanResp); err != nil {
-		return errors.Wrap(err, "setting engine storage bdev cache")
-	}
-
-	// After engine's bdev cache has been set, the cache will only contain details of bdevs
-	// identified in the relevant engine config and device addresses will have been verified
-	// against NVMe scan results. As any VMD endpoint addresses will have been replaced with
-	// backing device addresses, device counts will reflect the number of physical (as opposed
-	// to logical) bdevs and engine bdev counts can be accurately compared.
-
-	eIdx := engine.Index()
-	bdevCache := engine.storage.GetBdevCache()
-	newNrBdevs := len(bdevCache.Controllers)
-
-	// Update last recorded counters if this is the first update or if the number of bdevs is
-	// unchanged. If bdev count differs between engines, return fault.
-	switch {
-	case *lastEngineIdx < 0:
-		if *lastBdevCount >= 0 {
-			return errors.New("expecting both lastEngineIdx and lastBdevCount to be unset")
-		}
-		*lastEngineIdx = int(eIdx)
-		*lastBdevCount = newNrBdevs
-	case *lastBdevCount < 0:
-		return errors.New("expecting both lastEngineIdx and lastBdevCount to be set")
-	case newNrBdevs == *lastBdevCount:
-		*lastEngineIdx = int(eIdx)
-	default:
-		return config.FaultConfigBdevCountMismatch(int(eIdx), newNrBdevs, *lastEngineIdx, *lastBdevCount)
-	}
-
-	return nil
-}
-
 func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error {
 	if cfg.HelperLogFile != "" {
 		if err := setenv(pbin.DaosPrivHelperLogFileEnvVar, cfg.HelperLogFile); err != nil {
@@ -594,9 +523,11 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	engine.OnStorageReady(func(_ context.Context) error {
 		srv.log.Debugf("engine %d: storage ready", engine.Index())
 
-		// Attempt to remove unused hugepages, log error only.
-		if err := cleanEngineHugepages(srv); err != nil {
-			srv.log.Errorf(err.Error())
+		if !srv.cfg.DisableHugepages {
+			// Attempt to remove unused hugepages, log error only.
+			if err := cleanEngineHugepages(srv); err != nil {
+				srv.log.Errorf(err.Error())
+			}
 		}
 
 		// Retrieve up-to-date meminfo to check resource availability.
@@ -733,7 +664,7 @@ func getGrpcOpts(log logging.Logger, cfgTransport *security.TransportConfig, ldr
 		unaryLoggingInterceptor(log, ldrChk), // must be first in order to properly log errors
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
-		unaryVersionInterceptor,
+		unaryVersionInterceptor(log),
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,

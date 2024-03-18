@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,25 +35,32 @@
  *   * Don't arbitrarily reorder entries
  *   * Do limit lines to 99 columns, wrapping as necessary
  */
-#define RAS_EVENT_LIST									\
-	X(RAS_UNKNOWN_EVENT,		"unknown_ras_event")				\
-	X(RAS_ENGINE_FORMAT_REQUIRED,	"engine_format_required")			\
-	X(RAS_ENGINE_DIED,		"engine_died")					\
-	X(RAS_ENGINE_ASSERTED,		"engine_asserted")				\
-	X(RAS_ENGINE_CLOCK_DRIFT,	"engine_clock_drift")				\
-	X(RAS_POOL_CORRUPTION_DETECTED,	"corruption_detected")				\
-	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")				\
-	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")			\
-	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")				\
-	X(RAS_POOL_REPS_UPDATE,		"pool_replicas_updated")			\
-	X(RAS_POOL_DF_INCOMPAT,		"pool_durable_format_incompatible")		\
-	X(RAS_POOL_DEFER_DESTROY,	"pool_destroy_deferred")			\
-	X(RAS_CONT_DF_INCOMPAT,		"container_durable_format_incompatible")	\
-	X(RAS_RDB_DF_INCOMPAT,		"rdb_durable_format_incompatible")		\
-	X(RAS_SWIM_RANK_ALIVE,		"swim_rank_alive")				\
-	X(RAS_SWIM_RANK_DEAD,		"swim_rank_dead")				\
-	X(RAS_SYSTEM_START_FAILED,	"system_start_failed")				\
-	X(RAS_SYSTEM_STOP_FAILED,	"system_stop_failed")
+#define RAS_EVENT_LIST                                                                             \
+	X(RAS_UNKNOWN_EVENT, "unknown_ras_event")                                                  \
+	X(RAS_ENGINE_FORMAT_REQUIRED, "engine_format_required")                                    \
+	X(RAS_ENGINE_DIED, "engine_died")                                                          \
+	X(RAS_ENGINE_ASSERTED, "engine_asserted")                                                  \
+	X(RAS_ENGINE_CLOCK_DRIFT, "engine_clock_drift")                                            \
+	X(RAS_POOL_CORRUPTION_DETECTED, "corruption_detected")                                     \
+	X(RAS_POOL_REBUILD_START, "pool_rebuild_started")                                          \
+	X(RAS_POOL_REBUILD_END, "pool_rebuild_finished")                                           \
+	X(RAS_POOL_REBUILD_FAILED, "pool_rebuild_failed")                                          \
+	X(RAS_POOL_REPS_UPDATE, "pool_replicas_updated")                                           \
+	X(RAS_POOL_DF_INCOMPAT, "pool_durable_format_incompatible")                                \
+	X(RAS_POOL_DEFER_DESTROY, "pool_destroy_deferred")                                         \
+	X(RAS_CONT_DF_INCOMPAT, "container_durable_format_incompatible")                           \
+	X(RAS_RDB_DF_INCOMPAT, "rdb_durable_format_incompatible")                                  \
+	X(RAS_SWIM_RANK_ALIVE, "swim_rank_alive")                                                  \
+	X(RAS_SWIM_RANK_DEAD, "swim_rank_dead")                                                    \
+	X(RAS_SYSTEM_START_FAILED, "system_start_failed")                                          \
+	X(RAS_SYSTEM_STOP_FAILED, "system_stop_failed")                                            \
+	X(RAS_DEVICE_SET_FAULTY, "device_set_faulty")                                              \
+	X(RAS_DEVICE_MEDIA_ERROR, "device_media_error")                                            \
+	X(RAS_DEVICE_UNPLUGGED, "device_unplugged")                                                \
+	X(RAS_DEVICE_PLUGGED, "device_plugged")                                                    \
+	X(RAS_DEVICE_REPLACE, "device_replace")                                                    \
+	X(RAS_SYSTEM_FABRIC_PROV_CHANGED, "system_fabric_provider_changed")                        \
+	X(RAS_ENGINE_JOIN_FAILED, "engine_join_failed")
 
 /** Define RAS event enum */
 typedef enum {
@@ -148,6 +155,58 @@ ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 		     d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
 		     uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data,
 		     const char *fmt, ...);
+/*
+ * Wrapper of ds_notify_ras_event.
+ */
+static inline void
+ras_notify_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
+		 d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
+		 uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data)
+{
+	if (ds_notify_ras_event != NULL) {
+		ds_notify_ras_event(id, msg, type, sev, hwid, rank, inc, jobid,
+				    pool, cont, objid, ctlop, data);
+	} else {
+		switch (sev) {
+		case RAS_SEV_ERROR:
+			D_ERROR("%s\n", msg);
+			break;
+		case RAS_SEV_NOTICE:
+			D_INFO("%s\n", msg);
+			break;
+		case RAS_SEV_WARNING:
+			D_WARN("%s\n", msg);
+			break;
+		default:
+			D_ERROR("%s\n", msg);
+			break;
+		}
+	}
+}
+
+/*
+ * Wrapper of ds_notify_ras_eventf.
+ */
+static inline void
+ras_notify_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
+		  d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
+		  uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data,
+		  const char *fmt, ...)
+{
+	char	buf[DAOS_RAS_STR_FIELD_SIZE];
+	va_list	ap;
+	int	rc;
+
+	va_start(ap, fmt);
+	rc = vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	if (rc >= sizeof(buf))
+		/* The message is too long. End it with '$'. */
+		buf[sizeof(buf) - 2] = '$';
+
+	ras_notify_event(id, buf, type, sev, hwid, rank, inc, jobid,
+			 pool, cont, objid, ctlop, data);
+}
 
 /**
  * Notify control plane of an update to a pool's service replicas and wait for

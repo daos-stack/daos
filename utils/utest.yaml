@@ -1,4 +1,4 @@
-#  (C) Copyright 2023 Intel Corporation.
+#  (C) Copyright 2023-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 - name: common
@@ -24,16 +24,20 @@
   tests:
     - cmd: ["src/common/tests/btree.sh", "perf"]
     - cmd: ["src/common/tests/btree.sh", "perf", "direct"]
+    - cmd: ["src/common/tests/btree.sh", "perf", "direct", "emb"]
     - cmd: ["src/common/tests/btree.sh", "perf", "ukey"]
     - cmd: ["src/common/tests/btree.sh", "dyn", "perf"]
     - cmd: ["src/common/tests/btree.sh", "dyn", "perf", "ukey"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "perf", "emb"]
 - name: btree
   tests:
     - cmd: ["src/common/tests/btree.sh"]
     - cmd: ["src/common/tests/btree.sh", "direct"]
+    - cmd: ["src/common/tests/btree.sh", "direct", "emb"]
     - cmd: ["src/common/tests/btree.sh", "ukey"]
     - cmd: ["src/common/tests/btree.sh", "dyn", "ukey"]
     - cmd: ["src/common/tests/btree.sh", "dyn"]
+    - cmd: ["src/common/tests/btree.sh", "dyn", "emb"]
 - name: drpc
   base: "BUILD_DIR"
   tests:
@@ -77,6 +81,10 @@
 - name: VOS
   base: "PREFIX"
   tests:
+    - cmd: ["bin/vos_perf", "-i", "-d", "15", "-o", "5", "-f", "-a", "1", "-A", "-n", "5", "-R",
+            '"U;p F;p I;s;p, I;p; A;p"']
+    - cmd: ["bin/vos_perf", "-i", "-d", "15", "-o", "5", "-f", "-a", "1", "-n", "5", "-R",
+            '"U;p F;p I;s;p, I;p; A;p"']
     - cmd: ["bin/vos_perf", "-R", '"U;p F;p V"', "-o", "5", "-d", "5", "-a", "5", "-n", "10"]
     - cmd: ["bin/vos_perf", "-R", '"U;p F;p V"', "-o", "5", "-d", "5", "-a", "5", "-n", "10",
             "-A", "-D", "/mnt/..MOUNT"]
@@ -164,3 +172,9 @@
   required_src: ["src/ddb/tests/SConscript"]
   tests:
     - cmd: ["bin/ddb_tests"]
+- name: Source metadata testing
+  gha: True
+  memcheck: False
+  tests:
+    - cmd: ["src/tests/ftest/tags.py", "unit"]
+    - cmd: ["utils/unit/include_test.py"]

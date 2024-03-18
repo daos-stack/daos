@@ -3,23 +3,22 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import time
+import glob
+import logging
 import os
+import re
 import shlex
 import subprocess  # nosec
-import logging
-import re
-import glob
-
-from ClusterShell.NodeSet import NodeSet
+import time
 
 import cart_logparse
 import cart_logtest
 from apricot import TestWithoutServers
-from run_utils import stop_processes
+from ClusterShell.NodeSet import NodeSet
 from host_utils import get_local_host
-from write_host_file import write_host_file
 from job_manager_utils import Orterun
+from run_utils import stop_processes
+from write_host_file import write_host_file
 
 
 class CartTest(TestWithoutServers):
@@ -230,7 +229,7 @@ class CartTest(TestWithoutServers):
         output_filename_path = os.path.join(log_path, log_dir, log_filename).replace(";", "_")
         env = " --output-filename {!s}".format(output_filename_path)
         env += " -x D_LOG_FILE={!s}".format(log_file)
-        env += " -x D_LOG_FILE_APPEND_PID=1"
+        env += " -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_FILE_APPEND_RANK=1 "
 
         env += yaml_envs
 

@@ -5,11 +5,11 @@
 """
 import ctypes
 import time
-import avocado
 
-from pydaos.raw import (DaosContainer, IORequest, DaosObj, DaosApiError)
+import avocado
 from apricot import TestWithServers
 from general_utils import create_string_buffer
+from pydaos.raw import DaosApiError, DaosContainer, DaosObj, IORequest
 
 
 class ObjectDataValidation(TestWithServers):

@@ -1,4 +1,4 @@
-# Requirements which are not versioned.
+# Packages required to build/test DAOS.
 defusedxml
 distro
 jira
@@ -8,6 +8,6 @@ ninja
 pyelftools
 pyxattr
 pyyaml
-scons        # Works around a bug in scons on EL 8.
+scons
 tabulate
 wheel

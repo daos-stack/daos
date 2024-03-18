@@ -67,3 +67,9 @@
     src: daos-launch.sh.j2
     mode: '0755'
     dest: "{{ daos_runtime_dir }}/daos-launch.sh"
+
+- name: Install DAOS NLT launch helper script
+  template:
+    src: daos-launch_nlt.sh.j2
+    mode: '0755'
+    dest: "{{ daos_runtime_dir }}/daos-launch_nlt.sh"

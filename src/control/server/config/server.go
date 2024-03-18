@@ -78,6 +78,9 @@ type Server struct {
 
 	// Legacy config file parameters stored in a separate struct.
 	Legacy ServerLegacy `yaml:",inline"`
+
+	// Behavior flags
+	AutoFormat bool `yaml:"-"`
 }
 
 // WithCoreDumpFilter sets the core dump filter written to /proc/self/coredump_filter.
@@ -406,21 +409,23 @@ func (cfg *Server) SaveActiveConfig(log logging.Logger) {
 	log.Debugf("active config saved to %s (read-only)", activeConfig)
 }
 
-func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
+// GetAccessPointPort returns port number suffixed to AP address after its validation or 0 if no
+// port number specified. Error returned if validation fails.
+func GetAccessPointPort(log logging.Logger, addr string) (int, error) {
 	if !common.HasPort(addr) {
-		return fmt.Sprintf("%s:%d", addr, portDefault), nil
+		return 0, nil
 	}
 
-	host, port, err := net.SplitHostPort(addr)
+	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		log.Errorf("invalid access point %q: %s", addr, err)
-		return "", FaultConfigBadAccessPoints
+		return 0, FaultConfigBadAccessPoints
 	}
 
 	portNum, err := strconv.Atoi(port)
 	if err != nil {
 		log.Errorf("invalid access point port: %s", err)
-		return "", FaultConfigBadControlPort
+		return 0, FaultConfigBadControlPort
 	}
 	if portNum <= 0 {
 		m := "zero"
@@ -428,13 +433,27 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 			m = "negative"
 		}
 		log.Errorf("access point port cannot be %s", m)
-		return "", FaultConfigBadControlPort
+		return 0, FaultConfigBadControlPort
 	}
 
-	// warn if access point port differs from config control port
+	return portNum, nil
+}
+
+// getAccessPointAddrWithPort appends default port number to address if custom port is not
+// specified, otherwise custom specified port is validated.
+func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int) (string, error) {
+	portNum, err := GetAccessPointPort(log, addr)
+	if err != nil {
+		return "", err
+	}
+	if portNum == 0 {
+		return fmt.Sprintf("%s:%d", addr, portDefault), nil
+	}
+
+	// Warn if access point port differs from config control port.
 	if portDefault != portNum {
-		log.Debugf("access point (%s) port (%s) differs from default port (%d)",
-			host, port, portDefault)
+		log.Debugf("access point %q port differs from default port %q",
+			addr, portDefault)
 	}
 
 	return addr, nil
@@ -469,7 +488,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	}
 
 	if cfg.DisableHugepages {
-		return FaultConfigHugepagesDisabled
+		return FaultConfigHugepagesDisabledWithBdevs
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
@@ -720,7 +739,7 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenValues := make(map[string]int)
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
-	seenIdx := 0
+	seenIdx := -1
 	seenBdevCount := -1
 	seenTargetCount := -1
 	seenHelperStreamCount := -1
@@ -787,8 +806,8 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 			// Log error but don't fail in order to be lenient with unbalanced device
 			// counts in particular cases e.g. using different capacity SSDs or VMDs
 			// with different number of backing devices.
-			err := FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
-			log.Noticef(err.Error())
+			e := FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
+			log.Noticef(e.Error())
 		}
 		if seenTargetCount != -1 && engine.TargetCount != seenTargetCount {
 			return FaultConfigTargetCountMismatch(idx, engine.TargetCount, seenIdx,

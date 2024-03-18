@@ -6,12 +6,11 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import os
 
 from ClusterShell.NodeSet import NodeSet
-
 from dfuse_test_base import DfuseTestBase
-from ior_utils import IorCommand
 from exception_utils import CommandFailure
+from general_utils import get_random_string, pcmd
+from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
-from general_utils import pcmd, get_random_string
 
 
 class IorTestBase(DfuseTestBase):
@@ -226,11 +225,11 @@ class IorTestBase(DfuseTestBase):
             manager.working_dir.value = self.dfuse.mount_dir.value
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
-        if self.ppn is None:
-            manager.assign_processes(processes)
+        # Pass only processes or ppn to be compatible with previous behavior
+        if self.ppn is not None:
+            manager.assign_processes(ppn=self.ppn)
         else:
-            manager.ppn.update(self.ppn, 'mpirun.ppn')
-            manager.processes.update(None, 'mpirun.np')
+            manager.assign_processes(processes=processes)
 
         manager.assign_environment(env)
 

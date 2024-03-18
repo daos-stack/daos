@@ -4,11 +4,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from collections import defaultdict
-import yaml
 
+import yaml
 from apricot import TestWithServers
-from exception_utils import CommandFailure
 from dmg_utils import DmgCommand
+from exception_utils import CommandFailure
 
 
 class ConfigGenerateOutput(TestWithServers):

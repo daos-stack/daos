@@ -155,6 +155,7 @@ struct rebuild_global_pool_tracker {
 
 	uint32_t	rgt_refcount;
 
+	uint32_t	rgt_opc;
 	unsigned int	rgt_abort:1,
 			rgt_init_scan:1;
 };
@@ -334,15 +335,12 @@ rebuild_tgt_status_check_ult(void *arg);
 int
 rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt);
 
-int
-rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt);
-
 bool
 rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
 		enum pool_comp_state states);
 
 bool
-is_current_tgt_unavail(struct rebuild_tgt_pool_tracker *rpt);
+is_rebuild_scanning_tgt(struct rebuild_tgt_pool_tracker *rpt);
 
 typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
 				       uuid_t co_uuid, daos_unit_oid_t oid,
@@ -363,7 +361,7 @@ int
 rebuilt_btr_destroy(daos_handle_t btr_hdl);
 
 struct rebuild_tgt_pool_tracker *
-rpt_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen);
+rpt_lookup(uuid_t pool_uuid, uint32_t opc, unsigned int ver, unsigned int gen);
 
 void
 rgt_get(struct rebuild_global_pool_tracker *rgt);

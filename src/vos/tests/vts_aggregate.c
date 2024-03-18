@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,7 +45,10 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	assert_true(!(arg->ta_flags & TF_ZERO_COPY));
 
 	arg->oid = oid;
-	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	if (daos_is_array(oid.id_pub))
+		d_iov_set(&dkey_iov, dkey, sizeof(uint64_t));
+	else
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	rc = d_sgl_init(&sgl, 1);
@@ -100,7 +103,10 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	assert_true(!(arg->ta_flags & TF_ZERO_COPY));
 
 	arg->oid = oid;
-	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	if (daos_is_array(oid.id_pub))
+		d_iov_set(&dkey_iov, dkey, sizeof(uint64_t));
+	else
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	rc = d_sgl_init(&sgl, 1);
@@ -503,7 +509,7 @@ multi_view(struct io_test_args *arg, daos_unit_oid_t oids[],
 #define AT_OBJ_KEY_NR		3
 
 static void
-aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
+aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample, bool flat)
 
 {
 	daos_unit_oid_t		 oid, oids[AT_OBJ_KEY_NR];
@@ -516,15 +522,27 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	daos_size_t		 view_len;
 	daos_recx_t		 recx, *recx_p;
 	int			 oid_idx, dkey_idx, akey_idx;
-	int			 i, ds_nr, ds_idx, rc;
+	int                      i, ds_nr, ds_idx, rc, otype = 0, nr_akeys = AT_OBJ_KEY_NR;
 
 	epr_u = &ds_sample->td_upd_epr;
 	epr_a = &ds_sample->td_agg_epr;
 
 	for (i = 0; i < AT_OBJ_KEY_NR; i++) {
-		oids[i] = dts_unit_oid_gen(0, 0);
+		if (flat) {
+			if (nr_akeys == AT_OBJ_KEY_NR) {
+				nr_akeys    = 1;
+				akeys[0][0] = '0';
+				akeys[0][1] = 0;
+				if (ds_sample->td_type == DAOS_IOD_SINGLE)
+					otype = DAOS_OT_KV_HASHED;
+				else
+					otype = DAOS_OT_ARRAY_BYTE;
+			}
+		} else {
+			dts_key_gen(akeys[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
+		}
+		oids[i] = dts_unit_oid_gen(otype, 0);
 		dts_key_gen(dkeys[i], UPDATE_DKEY_SIZE, UPDATE_DKEY);
-		dts_key_gen(akeys[i], UPDATE_AKEY_SIZE, UPDATE_AKEY);
 	}
 
 	assert_true(ds_sample->td_type == DAOS_IOD_SINGLE ||
@@ -554,7 +572,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	for (epoch = epr_u->epr_lo; epoch <= epr_u->epr_hi; epoch++) {
 		oid_idx = rand() % AT_OBJ_KEY_NR;
 		dkey_idx = rand() % AT_OBJ_KEY_NR;
-		akey_idx = rand() % AT_OBJ_KEY_NR;
+		akey_idx = rand() % nr_akeys;
 
 		oid = oids[oid_idx];
 		dkey = dkeys[dkey_idx];
@@ -799,7 +817,31 @@ discard_6(void **state)
 	ds.td_agg_epr.epr_hi = DAOS_EPOCH_MAX;
 	ds.td_discard = true;
 
-	aggregate_multi(arg, &ds);
+	aggregate_multi(arg, &ds, false);
+
+	cleanup();
+}
+
+/*
+ * Same test but with flat dkey
+ */
+static void
+discard_18(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct agg_tst_dataset ds  = {0};
+
+	ds.td_type           = DAOS_IOD_SINGLE;
+	ds.td_iod_size       = 0; /* random iod_size */
+	ds.td_recx_nr        = 0;
+	ds.td_expected_recs  = 0;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 1000;
+	ds.td_agg_epr.epr_lo = 850;
+	ds.td_agg_epr.epr_hi = DAOS_EPOCH_MAX;
+	ds.td_discard        = true;
+
+	aggregate_multi(arg, &ds, true);
 
 	cleanup();
 }
@@ -1011,7 +1053,36 @@ discard_12(void **state)
 	ds.td_agg_epr.epr_hi = DAOS_EPOCH_MAX;
 	ds.td_discard = true;
 
-	aggregate_multi(arg, &ds);
+	aggregate_multi(arg, &ds, false);
+
+	cleanup();
+}
+
+/*
+ * Same test but with flat dkey
+ */
+static void
+discard_19(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct agg_tst_dataset ds  = {0};
+	daos_recx_t            recx_tot;
+
+	recx_tot.rx_idx = 0;
+	recx_tot.rx_nr  = 30;
+
+	ds.td_type           = DAOS_IOD_ARRAY;
+	ds.td_iod_size       = 0; /* random iod_size */
+	ds.td_expected_recs  = 0;
+	ds.td_recx_nr        = 1;
+	ds.td_recx           = &recx_tot;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 1000;
+	ds.td_agg_epr.epr_lo = 750;
+	ds.td_agg_epr.epr_hi = DAOS_EPOCH_MAX;
+	ds.td_discard        = true;
+
+	aggregate_multi(arg, &ds, true);
 
 	cleanup();
 }
@@ -1459,7 +1530,30 @@ aggregate_4(void **state)
 	ds.td_agg_epr.epr_hi = 999;
 	ds.td_discard = false;
 
-	aggregate_multi(arg, &ds);
+	aggregate_multi(arg, &ds, false);
+	cleanup();
+}
+
+/*
+ * Same test but with flat dkey
+ */
+static void
+aggregate_36(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct agg_tst_dataset ds  = {0};
+
+	ds.td_type           = DAOS_IOD_SINGLE;
+	ds.td_iod_size       = 0; /* random iod_size */
+	ds.td_recx_nr        = 0;
+	ds.td_expected_recs  = 1;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 1000;
+	ds.td_agg_epr.epr_lo = 850;
+	ds.td_agg_epr.epr_hi = 999;
+	ds.td_discard        = false;
+
+	aggregate_multi(arg, &ds, true);
 	cleanup();
 }
 
@@ -1816,7 +1910,35 @@ aggregate_13(void **state)
 	ds.td_agg_epr.epr_hi = 1000;
 	ds.td_discard = false;
 
-	aggregate_multi(arg, &ds);
+	aggregate_multi(arg, &ds, false);
+	cleanup();
+}
+
+/*
+ * Same test but with flat dkey
+ */
+static void
+aggregate_37(void **state)
+{
+	struct io_test_args   *arg = *state;
+	struct agg_tst_dataset ds  = {0};
+	daos_recx_t            recx_tot;
+
+	recx_tot.rx_idx = 0;
+	recx_tot.rx_nr  = 20;
+
+	ds.td_type           = DAOS_IOD_ARRAY;
+	ds.td_iod_size       = 1024;
+	ds.td_expected_recs  = -1;
+	ds.td_recx_nr        = 1;
+	ds.td_recx           = &recx_tot;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 1000;
+	ds.td_agg_epr.epr_lo = 750;
+	ds.td_agg_epr.epr_hi = 1000;
+	ds.td_discard        = false;
+
+	aggregate_multi(arg, &ds, true);
 	cleanup();
 }
 
@@ -1840,13 +1962,14 @@ print_space_info(vos_pool_info_t *pi, char *desc)
 	VERBOSE_MSG("  NVMe allocator statistics:\n");
 	VERBOSE_MSG("    free_p: "DF_U64", \tfree_t: "DF_U64", "
 		    "\tfrags_large: "DF_U64", \tfrags_small: "DF_U64", "
-		    "\tfrags_aging: "DF_U64"\n",
+		    "\tfrags_aging: "DF_U64" \tfrags_bitmap: "DF_U64"\n",
 		    stat->vs_free_persistent, stat->vs_free_transient,
 		    stat->vs_frags_large, stat->vs_frags_small,
-		    stat->vs_frags_aging);
+		    stat->vs_frags_aging, stat->vs_frags_bitmap);
 	VERBOSE_MSG("    resrv_hit: "DF_U64", \tresrv_large: "DF_U64", "
-		    "\tresrv_small: "DF_U64"\n", stat->vs_resrv_hint,
-		    stat->vs_resrv_large, stat->vs_resrv_small);
+		    "\tresrv_small: "DF_U64", \tresrv_bitmap: "DF_U64"\n",
+		    stat->vs_resrv_hint, stat->vs_resrv_large,
+		    stat->vs_resrv_small, stat->vs_resrv_bitmap);
 }
 
 static int
@@ -2868,113 +2991,75 @@ agg_tst_teardown(void **state)
 }
 
 static const struct CMUnitTest discard_tests[] = {
-	{ "VOS451: Discard SV with specified epoch",
-	  discard_1, NULL, agg_tst_teardown },
-	{ "VOS452: Discard SV with confined epr",
-	  discard_2, NULL, agg_tst_teardown },
-	{ "VOS453: Discard SV with epr [0, DAOS_EPOCH_MAX]",
-	  discard_3, NULL, agg_tst_teardown },
-	{ "VOS454: Discard SV with punch records",
-	  discard_4, NULL, agg_tst_teardown },
-	{ "VOS455: Discard SV with random punch, random yield",
-	  discard_5, NULL, agg_tst_teardown },
-	{ "VOS456: Discard SV, multiple objects, keys",
-	  discard_6, NULL, agg_tst_teardown },
-	{ "VOS457: Discard EV with specified epoch",
-	  discard_7, NULL, agg_tst_teardown },
-	{ "VOS458: Discard EV with confined epr",
-	  discard_8, NULL, agg_tst_teardown },
-	{ "VOS459: Discard EV with epr [0, DAOS_EPOCH_MAX]",
-	  discard_9, NULL, agg_tst_teardown },
-	{ "VOS460: Discard EV with punch records",
-	  discard_10, NULL, agg_tst_teardown },
-	{ "VOS461: Discard EV with random punch, random yield",
-	  discard_11, NULL, agg_tst_teardown },
-	{ "VOS462: Discard EV, multiple objects, keys",
-	  discard_12, NULL, agg_tst_teardown },
-	{ "VOS463: Discard won't run into infinite loop",
-	  discard_13, NULL, agg_tst_teardown },
-	{ "VOS464: Discard object/key punches sv",
-	  discard_14, NULL, agg_tst_teardown },
-	{ "VOS465: Discard object/key punches array",
-	  discard_15, NULL, agg_tst_teardown },
-	{ "VOS466: Object specific discard (empty obj)",
-	  discard_16, NULL, agg_tst_teardown },
-	{ "VOS467: Object specific discard (non-empty obj)",
-	  discard_17, NULL, agg_tst_teardown },
+    {"VOS451: Discard SV with specified epoch", discard_1, NULL, agg_tst_teardown},
+    {"VOS452: Discard SV with confined epr", discard_2, NULL, agg_tst_teardown},
+    {"VOS453: Discard SV with epr [0, DAOS_EPOCH_MAX]", discard_3, NULL, agg_tst_teardown},
+    {"VOS454: Discard SV with punch records", discard_4, NULL, agg_tst_teardown},
+    {"VOS455: Discard SV with random punch, random yield", discard_5, NULL, agg_tst_teardown},
+    {"VOS456: Discard SV, multiple objects, keys", discard_6, NULL, agg_tst_teardown},
+    {"VOS457: Discard EV with specified epoch", discard_7, NULL, agg_tst_teardown},
+    {"VOS458: Discard EV with confined epr", discard_8, NULL, agg_tst_teardown},
+    {"VOS459: Discard EV with epr [0, DAOS_EPOCH_MAX]", discard_9, NULL, agg_tst_teardown},
+    {"VOS460: Discard EV with punch records", discard_10, NULL, agg_tst_teardown},
+    {"VOS461: Discard EV with random punch, random yield", discard_11, NULL, agg_tst_teardown},
+    {"VOS462: Discard EV, multiple objects, keys", discard_12, NULL, agg_tst_teardown},
+    {"VOS463: Discard won't run into infinite loop", discard_13, NULL, agg_tst_teardown},
+    {"VOS464: Discard object/key punches sv", discard_14, NULL, agg_tst_teardown},
+    {"VOS465: Discard object/key punches array", discard_15, NULL, agg_tst_teardown},
+    {"VOS466: Object specific discard (empty obj)", discard_16, NULL, agg_tst_teardown},
+    {"VOS467: Object specific discard (non-empty obj)", discard_17, NULL, agg_tst_teardown},
+    {"VOS468: Discard SV, multiple objects, flat dkeys", discard_18, NULL, agg_tst_teardown},
+    {"VOS469: Discard EV, multiple objects, flat dkeys", discard_19, NULL, agg_tst_teardown},
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
-	{ "VOS401: Aggregate SV with confined epr",
-	  aggregate_1, NULL, agg_tst_teardown },
-	{ "VOS402: Aggregate SV with punch records",
-	  aggregate_2, NULL, agg_tst_teardown },
-	{ "VOS403: Aggregate SV with random punch, random yield",
-	  aggregate_3, NULL, agg_tst_teardown },
-	{ "VOS404: Aggregate SV, multiple objects, keys",
-	  aggregate_4, NULL, agg_tst_teardown },
-	{ "VOS405: Aggregate EV, single record",
-	  aggregate_5, NULL, agg_tst_teardown },
-	{ "VOS406: Aggregate EV, disjoint records",
-	  aggregate_6, NULL, agg_tst_teardown },
-	{ "VOS407: Aggregate EV, adjacent records",
-	  aggregate_7, NULL, agg_tst_teardown },
-	{ "VOS408: Aggregate EV, overlapped records",
-	  aggregate_8, NULL, agg_tst_teardown },
-	{ "VOS409: Aggregate EV, fully covered records",
-	  aggregate_9, NULL, agg_tst_teardown },
-	{ "VOS410: Aggregate EV, records spanning window end",
-	  aggregate_10, NULL, agg_tst_teardown },
-	{ "VOS411: Aggregate EV with random punch, random yield",
-	  aggregate_11, NULL, agg_tst_teardown },
-	{ "VOS412: Aggregate EV with random punch, small flush threshold",
-	  aggregate_12, NULL, agg_tst_teardown },
-	{ "VOS413: Aggregate EV, multiple objects, keys",
-	  aggregate_13, NULL, agg_tst_teardown },
-	{ "VOS414: Update and Aggregate EV repeatedly",
-	  aggregate_14, NULL, agg_tst_teardown },
-	{ "VOS415: Aggregate many object/key punches sv",
-	  aggregate_15, NULL, agg_tst_teardown },
-	{ "VOS416: Aggregate many object/key punches array",
-	  aggregate_16, NULL, agg_tst_teardown },
-	{ "VOS417: Aggregate EV, disjoint records, csum",
-	  aggregate_17, NULL, agg_tst_teardown },
-	{ "VOS418: Aggregate EV, fully covered records, csum",
-	  aggregate_18, NULL, agg_tst_teardown },
-	{ "VOS419: Aggregate EV, records spanning window end, csum",
-	  aggregate_19, NULL, agg_tst_teardown },
-	{ "VOS420: Aggregate EV with random punch, random yield, csum",
-	  aggregate_20, NULL, agg_tst_teardown },
-	{ "VOS421: Aggregate EV with random punch, small flush threshold, csum",
-	  aggregate_21, NULL, agg_tst_teardown },
-	{ "VOS422: Conditional fetch before and after aggregation is same",
-	  aggregate_22, NULL, agg_tst_teardown },
-	{ "VOS423: Aggregate deleted records spanning window end",
-	  aggregate_23, NULL, agg_tst_teardown },
-	{ "VOS424: Aggregate extents not fully covered by delete record",
-	  aggregate_24, NULL, agg_tst_teardown },
-	{ "VOS425: Aggregate delete of end of merge window",
-	  aggregate_25, NULL, agg_tst_teardown },
-	{ "VOS426: Consecutive removed extents",
-	  aggregate_26, NULL, agg_tst_teardown },
-	{ "VOS427: Consecutive removed extents, no logical extents",
-	  aggregate_27, NULL, agg_tst_teardown },
-	{ "VOS428: Logical extent followed by consecutive removed extents",
-	  aggregate_28, NULL, agg_tst_teardown },
-	{ "VOS429: Logical extent followed by disjoint removed extents",
-	  aggregate_29, NULL, agg_tst_teardown },
-	{ "VOS430: Removal stress test",
-	  aggregate_30, NULL, agg_tst_teardown },
-	{ "VOS431: Removal spans windows, flush with no physical records",
-	  aggregate_31, NULL, agg_tst_teardown },
-	{ "VOS432: Overlapping removals",
-	  aggregate_32, NULL, agg_tst_teardown },
-	{ "VOS433: Many small removals",
-	  aggregate_33, NULL, agg_tst_teardown },
-	{ "VOS434: Selectively merging NVMe records",
-	  aggregate_34, NULL, agg_tst_teardown },
-	{ "VOS435: Test aggregation timestamp functions",
-	  aggregate_35, NULL, NULL },
+    {"VOS401: Aggregate SV with confined epr", aggregate_1, NULL, agg_tst_teardown},
+    {"VOS402: Aggregate SV with punch records", aggregate_2, NULL, agg_tst_teardown},
+    {"VOS403: Aggregate SV with random punch, random yield", aggregate_3, NULL, agg_tst_teardown},
+    {"VOS404: Aggregate SV, multiple objects, keys", aggregate_4, NULL, agg_tst_teardown},
+    {"VOS405: Aggregate EV, single record", aggregate_5, NULL, agg_tst_teardown},
+    {"VOS406: Aggregate EV, disjoint records", aggregate_6, NULL, agg_tst_teardown},
+    {"VOS407: Aggregate EV, adjacent records", aggregate_7, NULL, agg_tst_teardown},
+    {"VOS408: Aggregate EV, overlapped records", aggregate_8, NULL, agg_tst_teardown},
+    {"VOS409: Aggregate EV, fully covered records", aggregate_9, NULL, agg_tst_teardown},
+    {"VOS410: Aggregate EV, records spanning window end", aggregate_10, NULL, agg_tst_teardown},
+    {"VOS411: Aggregate EV with random punch, random yield", aggregate_11, NULL, agg_tst_teardown},
+    {"VOS412: Aggregate EV with random punch, small flush threshold", aggregate_12, NULL,
+     agg_tst_teardown},
+    {"VOS413: Aggregate EV, multiple objects, keys", aggregate_13, NULL, agg_tst_teardown},
+    {"VOS414: Update and Aggregate EV repeatedly", aggregate_14, NULL, agg_tst_teardown},
+    {"VOS415: Aggregate many object/key punches sv", aggregate_15, NULL, agg_tst_teardown},
+    {"VOS416: Aggregate many object/key punches array", aggregate_16, NULL, agg_tst_teardown},
+    {"VOS417: Aggregate EV, disjoint records, csum", aggregate_17, NULL, agg_tst_teardown},
+    {"VOS418: Aggregate EV, fully covered records, csum", aggregate_18, NULL, agg_tst_teardown},
+    {"VOS419: Aggregate EV, records spanning window end, csum", aggregate_19, NULL,
+     agg_tst_teardown},
+    {"VOS420: Aggregate EV with random punch, random yield, csum", aggregate_20, NULL,
+     agg_tst_teardown},
+    {"VOS421: Aggregate EV with random punch, small flush threshold, csum", aggregate_21, NULL,
+     agg_tst_teardown},
+    {"VOS422: Conditional fetch before and after aggregation is same", aggregate_22, NULL,
+     agg_tst_teardown},
+    {"VOS423: Aggregate deleted records spanning window end", aggregate_23, NULL, agg_tst_teardown},
+    {"VOS424: Aggregate extents not fully covered by delete record", aggregate_24, NULL,
+     agg_tst_teardown},
+    {"VOS425: Aggregate delete of end of merge window", aggregate_25, NULL, agg_tst_teardown},
+    {"VOS426: Consecutive removed extents", aggregate_26, NULL, agg_tst_teardown},
+    {"VOS427: Consecutive removed extents, no logical extents", aggregate_27, NULL,
+     agg_tst_teardown},
+    {"VOS428: Logical extent followed by consecutive removed extents", aggregate_28, NULL,
+     agg_tst_teardown},
+    {"VOS429: Logical extent followed by disjoint removed extents", aggregate_29, NULL,
+     agg_tst_teardown},
+    {"VOS430: Removal stress test", aggregate_30, NULL, agg_tst_teardown},
+    {"VOS431: Removal spans windows, flush with no physical records", aggregate_31, NULL,
+     agg_tst_teardown},
+    {"VOS432: Overlapping removals", aggregate_32, NULL, agg_tst_teardown},
+    {"VOS433: Many small removals", aggregate_33, NULL, agg_tst_teardown},
+    {"VOS434: Selectively merging NVMe records", aggregate_34, NULL, agg_tst_teardown},
+    {"VOS435: Test aggregation timestamp functions", aggregate_35, NULL, NULL},
+    {"VOS436: Aggregate SV, multiple objects, flat dkeys", aggregate_36, NULL, agg_tst_teardown},
+    {"VOS437: Aggregate EV, multiple objects, flat dkeys", aggregate_37, NULL, agg_tst_teardown},
 };
 
 int

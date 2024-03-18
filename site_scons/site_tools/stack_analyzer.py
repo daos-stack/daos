@@ -5,9 +5,10 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 
 Analyze stack usage output
 """
-import os
 import argparse
 import atexit
+import os
+
 from SCons.Script import Exit
 
 

@@ -4,8 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from sys import version_info
-from command_utils_base import FormattedParameter
+
 from command_utils import ExecutableCommand
+from command_utils_base import FormattedParameter
 
 
 class LLNLCommand(ExecutableCommand):
