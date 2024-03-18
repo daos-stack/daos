@@ -536,6 +536,13 @@ d_log_sync(void)
 	clog_unlock();
 }
 
+void
+d_log_disable_logging(void)
+{
+	mst.log_fd     = -1;
+	mst.log_old_fd = -1;
+}
+
 /**
  * d_vlog: core log function, front-ended by d_log
  * we vsnprintf the message into a holding buffer to format it.  then we
