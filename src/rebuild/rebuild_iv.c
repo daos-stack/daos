@@ -173,10 +173,8 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rpt == NULL)
 		return 0;
 
-	if (rpt->rt_leader_term != src_iv->riv_leader_term) {
-		rpt_put(rpt);
-		return 0;
-	}
+	if (rpt->rt_leader_term != src_iv->riv_leader_term)
+		goto out;
 
 	uuid_copy(dst_iv->riv_pool_uuid, src_iv->riv_pool_uuid);
 	dst_iv->riv_master_rank = src_iv->riv_master_rank;
@@ -211,10 +209,10 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			ABT_mutex_unlock(rpt->rt_lock);
 		}
 		rpt->rt_global_dtx_resync_version = dst_iv->riv_global_dtx_resyc_version;
-
-		rpt_put(rpt);
 	}
 
+out:
+	rpt_put(rpt);
 	return rc;
 }
 
