@@ -109,9 +109,6 @@ struct bio_dma_stats {
 	struct d_tm_node_t	*bds_queued_iods;
 	struct d_tm_node_t	*bds_grab_errs;
 	struct d_tm_node_t	*bds_grab_retries;
-	struct d_tm_node_t	*bds_wal_sz;
-	struct d_tm_node_t	*bds_wal_qd;
-	struct d_tm_node_t	*bds_wal_waiters;
 };
 
 /*

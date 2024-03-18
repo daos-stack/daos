@@ -206,8 +206,10 @@ traddr_to_vmd(char *dst, const char *src)
 
 	strncat(vmd_addr, "0000:", SPDK_NVMF_TRADDR_MAX_LEN);
 	len = strnlen(vmd_addr, SPDK_NVMF_TRADDR_MAX_LEN + 1);
-	if ((len == 0) || (len == SPDK_NVMF_TRADDR_MAX_LEN + 1))
+	if ((len == 0) || (len == SPDK_NVMF_TRADDR_MAX_LEN + 1)) {
+		D_FREE(vmd_addr);
 		return -DER_INVAL;
+	}
 	vmd_addr_left_len = SPDK_NVMF_TRADDR_MAX_LEN - len;
 
 	D_STRNDUP(traddr_tmp, src, SPDK_NVMF_TRADDR_MAX_LEN);

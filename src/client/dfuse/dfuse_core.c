@@ -1603,6 +1603,7 @@ static int
 dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 {
 	struct dfuse_info *dfuse_info = handle;
+	struct dfuse_cont_core *dfcc, *dfccn;
 	struct dfuse_pool *dfp;
 	int                rc;
 
@@ -1624,6 +1625,11 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 	}
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_pool_count, 1);
+
+	d_list_for_each_entry_safe(dfcc, dfccn, &dfp->dfp_historic, dfcc_entry) {
+		d_list_del(&dfcc->dfcc_entry);
+		D_FREE(dfcc);
+	}
 
 	d_list_del(&dfp->dfp_entry);
 	D_FREE(dfp);
