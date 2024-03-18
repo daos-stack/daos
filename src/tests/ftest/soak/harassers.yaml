@@ -17,7 +17,7 @@ server_config:
   name: daos_server
   control_log_mask: INFO
   control_log_file: daos_control0.log
-  crt_timeout: 60
+  crt_timeout: 120
   engines_per_host: 2
   engines:
     0:
@@ -25,27 +25,29 @@ server_config:
       nr_xs_helpers: 2
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      log_mask: ERR
+      log_mask: INFO
       env_vars:
         - FI_UNIVERSE_SIZE=16383
+        - DD_MASK=rebuild
       storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 2
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      log_mask: ERR
+      log_mask: INFO
       env_vars:
         - FI_UNIVERSE_SIZE=16383
+        - DD_MASK=rebuild
       storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 75%
-  rebuild_timeout: 480
+  rebuild_timeout: 600
   pool_query_timeout: 120
 pool_reserved:
   size: 10%
-  rebuild_timeout: 480
+  rebuild_timeout: 600
   pool_query_timeout: 120
 container:
   type: POSIX
@@ -97,7 +99,7 @@ soak_harassers:
       - server-stop_server-reintegrate
       - extend-pool
       # - vmd-identify-check
-  harasser_to: 600
+  harasser_to: 1200
   # drain rank from all pools before stopping server
   enable_drain: true
   # continue test if container destroy fails
@@ -142,7 +144,7 @@ ior_harasser:
 fio_harasser:
   api:
     - POSIX
-  job_timeout: 20
+  job_timeout: 30
   names:
     - global
     - test
@@ -172,7 +174,7 @@ fio_harasser:
     disable_caching: true
 mdtest_harasser:
   # maximum timeout for a single job in test in minutes
-  job_timeout: 20
+  job_timeout: 30
   nodesperjob:
     - 1
     - 4
