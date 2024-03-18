@@ -132,6 +132,7 @@ int main(int argc, char *argv[])
 				D_ERROR("invalid obj class %s\n", optarg);
 				return -1;
 			}
+			break;
 		case 'o':
 			fail_domain_node = true;
 			D_PRINT("run test as node failure domain");

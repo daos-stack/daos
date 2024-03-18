@@ -2177,6 +2177,19 @@ func TestMgmtSvc_updateFabricProviders(t *testing.T) {
 			provs:  []string{"verbs"},
 			expErr: &system.ErrNotLeader{},
 		},
+		"member already joined": {
+			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				ms := mgmtSystemTestSetup(t, l,
+					system.Members{mockMember(t, 1, 1, "joined")},
+					[]*control.HostResponse{})
+				if err := ms.setFabricProviders("tcp"); err != nil {
+					t.Fatal(err)
+				}
+				return ms
+			},
+			provs:  []string{"verbs"},
+			expErr: errors.New("already joined"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -2184,7 +2197,12 @@ func TestMgmtSvc_updateFabricProviders(t *testing.T) {
 
 			if tc.getSvc == nil {
 				tc.getSvc = func(t *testing.T, l logging.Logger) *mgmtSvc {
-					ms := mgmtSystemTestSetup(t, l, system.Members{}, []*control.HostResponse{})
+					ms := mgmtSystemTestSetup(t, l,
+						system.Members{
+							mockMember(t, 1, 1, "stopped"),
+							mockMember(t, 2, 2, "stopped"),
+						},
+						[]*control.HostResponse{})
 					if err := ms.setFabricProviders(tc.oldProv); err != nil {
 						t.Fatal(err)
 					}

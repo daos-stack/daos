@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Node local test (NLT).
 
+(C) Copyright 2020-2024 Intel Corporation.
+
+SPDX-License-Identifier: BSD-2-Clause-Patent
+
 Test script for running DAOS on a single node over tmpfs and running initial
 smoke/unit tests.
 
@@ -1282,8 +1286,9 @@ class DFuse():
 
     instance_num = 0
 
+    # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True, multi_user=False):
+                 caching=True, wbcache=True, multi_user=False, ro=False):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1307,6 +1312,7 @@ class DFuse():
         self.log_flush = False
         self.log_mask = None
         self.log_file = None
+        self._ro = ro
 
         self.valgrind = None
         if not os.path.exists(self.dir):
@@ -1381,6 +1387,9 @@ class DFuse():
             if not self.wbcache:
                 cmd.append('--disable-wb-cache')
 
+        if self._ro:
+            cmd.append('--read-only')
+
         if self.uns_path:
             cmd.extend(['--path', self.uns_path])
 
@@ -1448,7 +1457,7 @@ class DFuse():
         print('Stopping fuse')
 
         if self.container:
-            self.run_query()
+            self.run_query(use_json=True)
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
@@ -1914,16 +1923,20 @@ class needs_dfuse_with_opt():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True):
+    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True,
+                 ro=False):
         self.caching = caching
         self.wbcache = wbcache
         self.single_threaded = single_threaded
         self.dfuse_inval = dfuse_inval
+        self.ro = ro
 
     def __call__(self, method):
         """Wrapper function"""
         @functools.wraps(method)
         def _helper(obj):
+
+            args = {"container": obj.container}
 
             caching = self.caching
             if caching is None:
@@ -1943,11 +1956,14 @@ class needs_dfuse_with_opt():
                               'dfuse-ndentry-time': '5m'}
                 obj.container.set_attrs(cont_attrs)
 
+            if self.ro:
+                args["ro"] = True
+
             obj.dfuse = DFuse(obj.server,
                               obj.conf,
                               caching=caching,
                               wbcache=self.wbcache,
-                              container=obj.container)
+                              **args)
             obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
             try:
                 rc = method(obj)
@@ -4332,6 +4348,18 @@ class PosixTests():
         self.server.run_daos_client_cmd_pil4dfs(['cp', '/usr/bin/mkdir', file6])
         self.server.run_daos_client_cmd_pil4dfs(['file', file6])
 
+    @needs_dfuse_with_opt(caching=False, ro=True)
+    def test_mount_ro(self):
+        """Check that mounting read-only does not allow write access"""
+        test_file = join(self.dfuse.dir, 'test_file')
+        try:
+            with open(test_file, 'w'):
+                assert False
+        except OSError as error:
+            if error.errno == errno.EROFS:
+                return
+            raise
+
 
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""
@@ -5659,8 +5687,7 @@ class AllocFailTest():
                     fid += 1
                     start_this_iteration -= 1
 
-                    if len(active) > max_count:
-                        max_count = len(active)
+                    max_count = max(max_count, len(active))
 
             # Now complete as many as have finished.
             for ret in active:

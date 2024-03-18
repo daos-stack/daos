@@ -15,7 +15,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -159,16 +158,8 @@ func TestNdctl_getNamespaces(t *testing.T) {
 
 			commands = nil // reset to initial values between tests
 
-			mockBinding := newMockIpmctl(&mockIpmctlCfg{
-				getModulesErr: nil,
-				modules:       []ipmctl.DeviceDiscovery{mockDiscovery()},
-			})
-			cr, err := newCmdRunner(log, mockBinding, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, nil, mockRun, mockLookPath)
 			if err != nil {
-				t.Fatal(err)
-			}
-
-			if _, err := cr.getModules(sockAny); err != nil {
 				t.Fatal(err)
 			}
 

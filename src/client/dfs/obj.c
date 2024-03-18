@@ -1,16 +1,19 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /** DFS metadata ops that apply for files, dirs, and symlinks */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/common.h>
 #include <daos/container.h>
 #include <daos/event.h>
 #include <daos/object.h>
-#include "internal.h"
+
+#include "dfs_internal.h"
 
 static int
 check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int mask)
@@ -822,19 +825,18 @@ ostatx_cb(tse_task_t *task, void *data)
 	if (rc != 0) {
 		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
 			 "Failed to stat file: " DF_RC "\n", DP_RC(rc));
-		/** convert the task result to errno since it takes prescedence over the cb error */
-		task->dt_result = daos_der2errno(rc);
+		task->dt_result = rc;
 		D_GOTO(out, rc = task->dt_result);
 	}
 
 	if (args->obj->oid.hi != op_args->entry.oid.hi ||
 	    args->obj->oid.lo != op_args->entry.oid.lo)
-		D_GOTO(out, rc = ENOENT);
+		D_GOTO(out, rc = -DER_ENOENT);
 
 	rc = update_stbuf_times(op_args->entry, op_args->array_stbuf.st_max_epoch, args->stbuf,
 				NULL);
 	if (rc)
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = daos_errno2der(rc));
 
 	if (S_ISREG(args->obj->mode)) {
 		args->stbuf->st_size   = op_args->array_stbuf.st_size;
@@ -861,7 +863,7 @@ out:
 	D_FREE(op_args);
 	rc2 = daos_obj_close(args->parent_oh, NULL);
 	if (rc == 0)
-		rc = daos_der2errno(rc2);
+		rc = rc2;
 	return rc;
 }
 
@@ -881,7 +883,7 @@ statx_task(tse_task_t *task)
 	D_ALLOC_PTR(op_args);
 	if (op_args == NULL) {
 		daos_obj_close(args->parent_oh, NULL);
-		return ENOMEM;
+		return -DER_NOMEM;
 	}
 
 	/** Create task to fetch entry. */
@@ -984,7 +986,7 @@ statx_task(tse_task_t *task)
 	tse_task_schedule(fetch_task, true);
 	if (need_stat)
 		tse_task_schedule(stat_task, true);
-	return daos_der2errno(rc);
+	return rc;
 err3_out:
 	if (need_stat)
 		tse_task_complete(stat_task, rc);
@@ -993,7 +995,7 @@ err2_out:
 err1_out:
 	D_FREE(op_args);
 	daos_obj_close(args->parent_oh, NULL);
-	return daos_der2errno(rc);
+	return rc;
 }
 
 int
@@ -1008,6 +1010,8 @@ dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
 		return EINVAL;
 	if (obj == NULL)
 		return EINVAL;
+	if (ev == NULL)
+		return dfs_ostat(dfs, obj, stbuf);
 
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
 	if (rc)
@@ -1016,8 +1020,10 @@ dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
 	rc = dc_task_create(statx_task, NULL, ev, &task);
 	if (rc) {
 		daos_obj_close(oh, NULL);
-		return rc;
+		return daos_der2errno(rc);
 	}
+	D_ASSERT(ev);
+	daos_event_errno_rc(ev);
 
 	args            = dc_task_get_args(task);
 	args->dfs       = dfs;
@@ -1025,12 +1031,9 @@ dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
 	args->parent_oh = oh;
 	args->stbuf     = stbuf;
 
+	/** The parent oh is closed in the body function of the task even if an error occurred. */
 	rc = dc_task_schedule(task, true);
-	if (rc) {
-		daos_obj_close(oh, NULL);
-		return rc;
-	}
-	return 0;
+	return daos_der2errno(rc);
 }
 
 int

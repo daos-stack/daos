@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -384,8 +384,8 @@ jtc_scan(struct jm_test_ctx *ctx)
 {
 	struct daos_obj_md md = {.omd_id = ctx->oid, .omd_ver = ctx->ver};
 
-	rr_find(ctx->pl_map, &md, ctx->ver, &ctx->reint, pl_obj_find_reint);
-	rr_find(ctx->pl_map, &md, ctx->ver, &ctx->new, pl_obj_find_addition);
+	rr_find(ctx->pl_map, &md, ctx->ver, &ctx->reint, pl_obj_find_rebuild);
+	rr_find(ctx->pl_map, &md, ctx->ver, &ctx->new, pl_obj_find_rebuild);
 	rr_find(ctx->pl_map, &md, ctx->ver, &ctx->rebuild, pl_obj_find_rebuild);
 
 	if (ctx->enable_print_layout) {
@@ -436,7 +436,7 @@ jtc_set_status_on_target(struct jm_test_ctx *ctx, const int status,
 	tgts.pti_ids = &tgt_id;
 	tgts.pti_number = 1;
 
-	int rc = ds_pool_map_tgts_update(ctx->po_map, &tgts, status,
+	int rc = ds_pool_map_tgts_update(ctx->po_map, &tgts, pool_opc_2map_opc(status),
 					 false, &ctx->ver, ctx->enable_print_debug_msgs);
 
 	/* Make sure pool map changed */
@@ -1506,7 +1506,7 @@ one_server_is_added(void **state)
 	 * but should have at least 1
 	 */
 	is_true(ctx.new.out_nr > 0);
-	assert_int_equal(0, ctx.rebuild.out_nr);
+	assert_int_equal(1, ctx.rebuild.out_nr);
 	assert_int_equal(1, ctx.reint.out_nr);
 
 	assert_int_equal(ctx.new.out_nr, jtc_get_layout_rebuild_count(&ctx));
@@ -1590,12 +1590,20 @@ placement_handles_multiple_states(void **state)
 	 * Compute find_reint() using the correct version of rebuild which
 	 * would have launched when reintegration started
 	 *
-	 * find_reint() should find two shards to move at this version, one for
-	 * reint(UP), one for rebuild(DOWN).
+	 * find_reint() should find only single shard to be reintegrate, since
+	 * it use the version after reint.
 	 */
 	ctx.ver = ver_after_reint;
 	jtc_scan(&ctx);
+	assert_int_equal(ctx.reint.out_nr, 1);
+
+	ctx.ver = ver_after_fail;
+	jtc_scan(&ctx);
 	assert_int_equal(ctx.reint.out_nr, 2);
+
+	ctx.ver = ver_after_drain;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.reint.out_nr, 3);
 
 	/* Complete the reintegration */
 	ctx.ver = ver_after_drain; /* Restore the version first */
@@ -1607,7 +1615,7 @@ placement_handles_multiple_states(void **state)
 	 */
 	ctx.ver = ver_after_fail;
 	jtc_scan(&ctx);
-	assert_int_equal(ctx.rebuild.out_nr, 2);
+	assert_int_equal(ctx.rebuild.out_nr, 1);
 
 	/* Complete the rebuild */
 	ctx.ver = ver_after_reint_complete; /* Restore the version first */

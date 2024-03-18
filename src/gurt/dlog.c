@@ -106,8 +106,8 @@ static const char        *default_fac0name = "CLOG";
 /* whether we should merge log and stderr */
 static bool               merge_stderr;
 
-#define clog_lock()   pthread_mutex_lock(&clogmux)
-#define clog_unlock() pthread_mutex_unlock(&clogmux)
+#define clog_lock()   (void)pthread_mutex_lock(&clogmux)
+#define clog_unlock() (void)pthread_mutex_unlock(&clogmux)
 
 static int d_log_write(char *buf, int len, bool flush);
 static const char *clog_pristr(int);
@@ -534,6 +534,13 @@ d_log_sync(void)
 		mst.log_old_fd = -1; /* nobody is going to write it again */
 	}
 	clog_unlock();
+}
+
+void
+d_log_disable_logging(void)
+{
+	mst.log_fd     = -1;
+	mst.log_old_fd = -1;
 }
 
 /**

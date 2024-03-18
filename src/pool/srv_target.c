@@ -340,6 +340,49 @@ out_free:
 	return NULL;
 }
 
+/*
+ * Since PMEM_PAGESIZE and PMEM_OBJ_POOL_HEAD_SIZE are not exported,
+ * for safety, we will use 64k for now.
+ */
+#define	POOL_OBJ_HEADER_SIZE	65536
+
+static int
+pool_reset_header(const char *path)
+{
+	int	 rc;
+	char	*buf = NULL;
+	FILE	*file;
+	int	 header_size = 65536;
+
+	/* Skip MD-ON-SSD case */
+	if (bio_nvme_configured(SMD_DEV_TYPE_META))
+		return 0;
+
+	file = fopen(path, "r+");
+	if (file == NULL) {
+		D_ERROR("failed to open %s\n", path);
+		return daos_errno2der(errno);
+	}
+
+	D_ALLOC(buf, header_size);
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	rc = fwrite(buf, header_size, 1, file);
+	if (rc < 0)
+		goto out;
+	else if (rc != 1)
+		rc = -DER_IO;
+	else
+		rc = 0;
+out:
+	D_FREE(buf);
+	fclose(file);
+	return rc;
+}
+
 static int
 pool_child_recreate(struct ds_pool_child *child)
 {
@@ -376,6 +419,15 @@ pool_child_recreate(struct ds_pool_child *child)
 		goto pool_info;
 	}
 
+	/* If pool header is nonzero, pmemobj_create() will fail.
+	 * Therefore, reset the header in this case.
+	 */
+	rc = pool_reset_header(path);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": Reset VOS pool header failed.", DP_UUID(child->spc_uuid));
+		goto pool_info;
+	}
+
 	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
 			     0, NULL);
 	if (rc)
@@ -388,6 +440,7 @@ out:
 	return rc;
 
 }
+
 
 static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
@@ -1112,15 +1165,25 @@ failure_pool:
 	return rc;
 }
 
+static void ds_pool_hdl_get(struct ds_pool_hdl *hdl);
 static void pool_tgt_disconnect(struct ds_pool_hdl *hdl);
 
 static void
 pool_tgt_disconnect_all(struct ds_pool *pool)
 {
-	struct ds_pool_hdl *hdl;
+	while (!d_list_empty(&pool->sp_hdls)) {
+		struct ds_pool_hdl *hdl;
 
-	while ((hdl = d_list_pop_entry(&pool->sp_hdls, struct ds_pool_hdl, sph_pool_entry)) != NULL)
+		/*
+		 * The handle will not be freed before we get our reference,
+		 * because ds_pool_tgt_connect, ds_pool_tgt_disconnect, and us
+		 * all run on the same xstream.
+		 */
+		hdl = d_list_entry(pool->sp_hdls.next, struct ds_pool_hdl, sph_pool_entry);
+		ds_pool_hdl_get(hdl);
 		pool_tgt_disconnect(hdl);
+		ds_pool_hdl_put(hdl);
+	}
 }
 
 /*
@@ -1274,6 +1337,12 @@ ds_pool_hdl_lookup(const uuid_t uuid)
 		return NULL;
 
 	return pool_hdl_obj(rlink);
+}
+
+static void
+ds_pool_hdl_get(struct ds_pool_hdl *hdl)
+{
+	d_hash_rec_addref(pool_hdl_hash, &hdl->sph_entry);
 }
 
 void
@@ -1475,6 +1544,8 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	d_iov_t			cred_iov;
 	int			rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	hdl = ds_pool_hdl_lookup(pic->pic_hdl);
 	if (hdl != NULL) {
 		if (hdl->sph_sec_capas == pic->pic_capas) {
@@ -1544,11 +1615,12 @@ out:
 static void
 pool_tgt_disconnect(struct ds_pool_hdl *hdl)
 {
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	D_DEBUG(DB_MD, DF_UUID ": hdl=" DF_UUID "\n", DP_UUID(hdl->sph_pool->sp_uuid),
 		DP_UUID(hdl->sph_uuid));
-	ds_pool_iv_conn_hdl_invalidate(hdl->sph_pool, hdl->sph_uuid);
 	pool_hdl_delete(hdl);
 	d_list_del_init(&hdl->sph_pool_entry);
+	ds_pool_iv_conn_hdl_invalidate(hdl->sph_pool, hdl->sph_uuid);
 }
 
 void
@@ -2175,8 +2247,23 @@ pool_child_discard(void *data)
 	D_DEBUG(DB_MD, DF_UUID" discard %u/%u\n", DP_UUID(arg->pool_uuid),
 		myrank, addr.pta_target);
 
+	/**
+	 * When a faulty device is replaced with a new one using the
+	 * “dmg storage replace nvme” command, the reintegration of
+	 * affected pool targets is automatically triggered.
+	 * The following steps outline the device replacement process on the engine side:
+	 *
+	 * 1) Replace the old device with the new device in the SMD.
+	 * 2) Setup all SPDK related stuff for the new device.
+	 * 3) Start ds_pool_child
+	 *
+	 * It is important to note that manual reintegration may be initiated
+	 * before step 3, in which case, the function should return “DER_AGAIN."
+	 */
 	child = ds_pool_child_lookup(arg->pool_uuid);
-	D_ASSERT(child != NULL);
+	if (child == NULL)
+		return -DER_AGAIN;
+
 	param.ip_hdl = child->spc_hdl;
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,

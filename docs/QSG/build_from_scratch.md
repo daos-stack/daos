@@ -49,7 +49,7 @@ For RHEL8-compatible distributions (e.g. Rocky Linux 8 or AlmaLinux 8), please
 run the following command from the DAOS tree as root or via sudo:
 
 ```bash
-$ ./utils/scripts/install-el8.sh
+$ sudo ./utils/scripts/install-el8.sh
 ```
 
 ### openSUSE
@@ -57,7 +57,7 @@ $ ./utils/scripts/install-el8.sh
 For openSUSE, the following command should be executed as root or via sudo:
 
 ```bash
-$ ./utils/scripts/install-leap15.sh
+$ sudo ./utils/scripts/install-leap15.sh
 ```
 
 ### Ubuntu
@@ -65,7 +65,7 @@ $ ./utils/scripts/install-leap15.sh
 As for Ubuntu, please run the following script as the root user or via sudo:
 
 ```bash
-$ ./utils/scripts/install-ubuntu.sh
+$ sudo ./utils/scripts/install-ubuntu.sh
 ```
 
 ### Python Packages
@@ -83,6 +83,7 @@ PATH.
  ```bash
  $ python3 -m venv venv
  $ source venv/bin/activate
+ $ python3 -m pip --no-cache-dir install --upgrade pip
  $ python3 -m pip install -r requirements.txt
  ```
 
@@ -92,7 +93,7 @@ Once all prerequisites installed and the sources are downloaded,
 DAOS can be built via the following command:
 
 ```bash
-$ scons --config=force --build-deps=yes install
+$ scons --jobs $(nproc) --config=force --build-deps=yes install
 ```
 
 By default, DAOS and its dependencies are installed under the `install`

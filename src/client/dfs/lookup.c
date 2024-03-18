@@ -1,15 +1,17 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /** DFS lookup ops */
 
+#define D_LOGFAC DD_FAC(dfs)
+
 #include <daos/common.h>
 #include <daos/object.h>
 
-#include "internal.h"
+#include "dfs_internal.h"
 
 int
 lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags, dfs_obj_t **_obj,
