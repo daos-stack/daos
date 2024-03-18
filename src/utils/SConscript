@@ -6,6 +6,10 @@ def scons():
 
     Import('env', 'prereqs')
 
+    if prereqs.server_requested():
+        # Build daos_metrics
+        SConscript('daos_metrics/SConscript')
+
     if not prereqs.client_requested():
         return
 
@@ -21,10 +25,6 @@ def scons():
 
         # Build crt_launch
         SConscript('crt_launch/SConscript')
-
-    if prereqs.server_requested():
-        # Build daos_metrics
-        SConscript('daos_metrics/SConscript')
 
     # Build cart_ctl
     SConscript('ctl/SConscript')
