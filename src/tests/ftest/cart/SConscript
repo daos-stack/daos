@@ -9,7 +9,7 @@ import os
 
 SIMPLE_TEST_SRC = ['threaded_client.c', 'dual_iface_server.c',
                    'no_pmix_multi_ctx.c', 'threaded_server.c',
-                   'test_corpc_prefwd.c', 'simple_ctx.c',
+                   'test_corpc_prefwd.c',
                    'test_corpc_exclusive.c',
                    'test_proto_server.c', 'test_proto_client.c',
                    'test_multisend_server.c', 'test_multisend_client.c',

@@ -739,9 +739,6 @@ out:
 	return rc;
 }
 
-
-#include <sys/time.h>
-
 int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
