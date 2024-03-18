@@ -65,11 +65,12 @@ obj_coll_oper_args_fini(struct coll_oper_args *coa)
 }
 
 int
-obj_coll_oper_args_collapse(struct coll_oper_args *coa, uint32_t *size)
+obj_coll_oper_args_collapse(struct dc_object *obj, struct coll_oper_args *coa, uint32_t *size)
 {
 	struct daos_coll_target	*dct;
 	struct daos_coll_shard	*dcs;
 	uint32_t		 dct_size;
+	uint32_t		 total = 0;
 	int			 rc = 0;
 	int			 i;
 	int			 j;
@@ -85,6 +86,7 @@ obj_coll_oper_args_collapse(struct coll_oper_args *coa, uint32_t *size)
 				dcs = &dct->dct_shards[j];
 				if (dcs->dcs_nr > 1)
 					dct_size += sizeof(dcs->dcs_buf[0]) * dcs->dcs_nr;
+				total += dcs->dcs_nr;
 			}
 
 			if (coa->coa_for_modify)
@@ -99,6 +101,13 @@ obj_coll_oper_args_collapse(struct coll_oper_args *coa, uint32_t *size)
 			coa->coa_dct_nr++;
 			*size += dct_size;
 		}
+	}
+
+	if (!coa->coa_for_modify && obj_is_ec(obj)) {
+		i = obj_ec_data_tgt_nr(&obj->cob_oca);
+		j = obj->cob_shards_nr / obj_get_grp_size(obj);
+		D_ASSERTF(total == i * j, "Unexpected stat shard count %u vs %d * %d\n",
+			  total, i, j);
 	}
 
 	if (unlikely(coa->coa_dct_nr == 0))
@@ -237,6 +246,12 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 	} else {
 		/* "dct_tgt_cap" is zero, then will not send dct_tgt_ids to server. */
 		dct->dct_tgt_nr++;
+		if (dcs->dcs_nr > 1)
+			D_ERROR("AAAAA: Object "DF_OID" shard %u and %u reside on the same "
+				"target %u/%u, ranks %u, targets %u, grps %u, local shareds %u\n",
+				DP_OID(obj->cob_md.omd_id), dcs->dcs_buf[0],
+				dcs->dcs_buf[dcs->dcs_nr - 1], dct->dct_rank, shard->do_target_idx,
+				coa->coa_dct_cap, obj->cob_shards_nr, obj->cob_grp_nr, dcs->dcs_nr);
 	}
 
 out:
@@ -415,7 +430,7 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 			goto out;
 	}
 
-	rc = obj_coll_oper_args_collapse(coa, &tgt_size);
+	rc = obj_coll_oper_args_collapse(obj, coa, &tgt_size);
 	if (rc != 0)
 		goto out;
 
@@ -558,7 +573,7 @@ queue_coll_query_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi, stru
 	int				 rc = 0;
 	int				 i;
 
-	rc = obj_coll_oper_args_collapse(coa, &tmp);
+	rc = obj_coll_oper_args_collapse(obj, coa, &tmp);
 	if (rc != 0)
 		goto out;
 

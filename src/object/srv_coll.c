@@ -357,11 +357,12 @@ obj_coll_tgt_query(void *args)
 			   octa->octa_shards[tgt_id].dcs_nr, octa->octa_shards[tgt_id].dcs_buf,
 			   &ocqi->ocqi_xid);
 
-	DL_CDEBUG(rc == 0 || rc == -DER_NONEXIST || rc == -DER_INPROGRESS || rc == -DER_TX_RESTART,
-		  DB_IO, DLOG_ERR, rc, "Collective query obj shard "DF_OID".%u.%u with "
-		  DF_DTI" on tgt %u", DP_OID(ocqi->ocqi_oid.id_pub),
-		  octa->octa_shards[tgt_id].dcs_buf[0], ocqi->ocqi_oid.id_layout_ver,
-		  DP_DTI(&ocqi->ocqi_xid), tgt_id);
+	if (octa->octa_shards[tgt_id].dcs_nr > 1)
+		D_ERROR("AAAAA: Collective query obj shard "DF_OID".%u.%u with "
+			DF_DTI" on tgt %u, local_tgt_cnt %u, rc %d\n",
+			DP_OID(ocqi->ocqi_oid.id_pub), octa->octa_shards[tgt_id].dcs_buf[0],
+			ocqi->ocqi_oid.id_layout_ver, DP_DTI(&ocqi->ocqi_xid), tgt_id,
+			octa->octa_shards[tgt_id].dcs_nr, rc);
 
 	if (octa->octa_versions != NULL)
 		octa->octa_versions[tgt_id] = version;
@@ -398,6 +399,7 @@ obj_coll_query_merge_tgts(struct obj_coll_query_in *ocqi, struct daos_oclass_att
 	oqma.oqma_shard = &otqa->otqa_shard;
 	oqma.oqma_flags = ocqi->ocqi_api_flags;
 	oqma.oqma_opc = DAOS_OBJ_RPC_COLL_QUERY;
+	oqma.oqma_level = 2;
 
 	if (size > dss_tgt_nr)
 		size = dss_tgt_nr;
@@ -533,6 +535,7 @@ obj_coll_query_agg_cb(struct dtx_leader_handle *dlh, void *arg)
 		oqma.oqma_tgt_map_ver = &otqa->otqa_version;
 		oqma.oqma_shard = &otqa->otqa_shard;
 		oqma.oqma_opc = DAOS_OBJ_RPC_COLL_QUERY;
+		oqma.oqma_level = 3;
 	}
 
 	for (i = 0, allow_failure_cnt = 0, succeeds = 0; i < dlh->dlh_normal_sub_cnt; i++) {

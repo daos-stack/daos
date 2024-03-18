@@ -88,7 +88,7 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 
 void
 obj_ec_recx_vos2daos(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
-		     daos_recx_t *recx, bool get_max)
+		     daos_recx_t *recx, bool get_max, bool coll)
 {
 	daos_recx_t	tmp;
 	uint64_t	end;
@@ -123,10 +123,11 @@ obj_ec_recx_vos2daos(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key
 
 		tmp.rx_idx = obj_ec_idx_vos2daos(tmp.rx_idx, stripe_rec_nr, cell_rec_nr, tgt_off);
 
-		D_DEBUG(DB_IO, "Convert Object "DF_UOID" data shard ext: off %u, stripe_rec_nr "
-			DF_U64", cell_rec_nr "DF_U64", ["DF_U64" "DF_U64"]/["DF_U64" "DF_U64"]\n",
-			DP_UOID(oid), tgt_off, stripe_rec_nr, cell_rec_nr,
-			recx->rx_idx, recx->rx_nr, tmp.rx_idx, tmp.rx_nr);
+		if (coll)
+			D_ERROR("Convert object "DF_UOID" data shard ext: off %u, stripe_rec_nr "
+				DF_U64", cell_rec_nr "DF_U64", ["DF_U64" "DF_U64"]/["DF_U64" "
+				DF_U64"]\n", DP_UOID(oid), tgt_off, stripe_rec_nr, cell_rec_nr,
+				recx->rx_idx, recx->rx_nr, tmp.rx_idx, tmp.rx_nr);
 		*recx = tmp;
 	}
 }
@@ -134,23 +135,32 @@ obj_ec_recx_vos2daos(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key
 static void
 obj_query_reduce_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
 		      daos_recx_t *src_recx, daos_recx_t *tgt_recx, bool get_max, bool changed,
-		      bool raw_recx, uint32_t *shard)
+		      bool raw_recx, uint32_t *shard, uint32_t level, bool coll)
 {
 	daos_recx_t tmp_recx = *src_recx;
 	uint64_t    tmp_end;
+	int	    at = changed ? 0 : 1;
 
 	if (daos_oclass_is_ec(oca)) {
 		if (raw_recx)
-			obj_ec_recx_vos2daos(oca, oid, dkey, &tmp_recx, get_max);
+			obj_ec_recx_vos2daos(oca, oid, dkey, &tmp_recx, get_max, coll);
 		tmp_end = DAOS_RECX_END(tmp_recx);
 		if ((get_max && DAOS_RECX_END(*tgt_recx) < tmp_end) ||
-		    (!get_max && DAOS_RECX_END(*tgt_recx) > tmp_end))
+		    (!get_max && DAOS_RECX_END(*tgt_recx) > tmp_end)) {
 			changed = true;
+			at = 2;
+		}
 	} else {
 		changed = true;
+		at = 3;
 	}
 
 	if (changed) {
+		if (coll)
+			D_ERROR("Reduce Object "DF_UOID" ext size from ["DF_U64" "DF_U64"] to ["
+				DF_U64" "DF_U64"] against shard %u, level %u, at %d\n",
+				DP_UOID(oid), tgt_recx->rx_idx, tgt_recx->rx_nr, tmp_recx.rx_idx,
+				tmp_recx.rx_nr, oid.id_shard, level, at);
 		*tgt_recx = tmp_recx;
 		if (shard != NULL)
 			*shard = oid.id_shard;
@@ -296,7 +306,8 @@ daos_obj_query_merge(struct obj_query_merge_args *oqma)
 				      (oqma->oqma_flags & DAOS_GET_DKEY) ? oqma->oqma_src_dkey
 									 : oqma->oqma_in_dkey,
 				      oqma->oqma_src_recx, oqma->oqma_tgt_recx, get_max, changed,
-				      oqma->oqma_raw_recx, oqma->oqma_shard);
+				      oqma->oqma_raw_recx, oqma->oqma_shard, oqma->oqma_level,
+				      oqma->oqma_opc == DAOS_OBJ_RPC_COLL_QUERY ? true : false);
 
 set_max_epoch:
 	if (oqma->oqma_tgt_epoch != NULL && *oqma->oqma_tgt_epoch < oqma->oqma_src_epoch)
