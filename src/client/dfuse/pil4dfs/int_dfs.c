@@ -37,7 +37,6 @@
 #include <linux/binfmts.h>
 
 #include <daos/debug.h>
-#include <gurt/dlog.h>
 #include <gurt/list.h>
 #include <gurt/common.h>
 #include <gurt/hash.h>
@@ -48,7 +47,6 @@
 #include <daos/event.h>
 #include <daos_prop.h>
 #include <daos/common.h>
-#include <daos/container.h>
 #include <daos/dfs_lib_int.h>
 
 #include "hook.h"
@@ -1113,7 +1111,7 @@ child_hdlr(void)
 	daos_dti_reset();
 	td_eqh = main_eqh = DAOS_HDL_INVAL;
 	if (eq_count_max > 0) {
-		rc     = daos_eq_create(&td_eqh);
+		rc = daos_eq_create(&td_eqh);
 		if (rc)
 			DL_WARN(rc, "daos_eq_create() failed");
 		else
@@ -1155,13 +1153,13 @@ consume_low_fd(void)
 			DS_ERROR(errno, "failed to reserve a low fd");
 			goto err;
 		} else if (low_fd_list[low_fd_count] >= DAOS_MIN_FD) {
-			/* block fd 255 too. 255 is commonly used by bash. */
+			/* reserve fd 255 too. 255 is commonly used by bash. */
 			rc = dup2(low_fd_list[0], 255);
 			if (rc == -1) {
 				DS_ERROR(errno, "dup2() failed to reserve fd 255");
 				goto err;
 			}
-			/* block fd DAOS_DUMMY_FD which will be used later for dup2(). */
+			/* reserve fd DAOS_DUMMY_FD which will be used later by dup2(). */
 			rc = dup2(low_fd_list[0], DAOS_DUMMY_FD);
 			if (rc == -1) {
 				DS_ERROR(errno, "dup2() failed to reserve fd DAOS_DUMMY_FD");
@@ -2793,7 +2791,7 @@ readv_over_dfs(int fd, const struct iovec *iov, int iovcnt)
 	daos_size_t   bytes_read;
 	daos_event_t  ev;
 	daos_handle_t eqh;
-	d_sg_list_t   sgl      = { 0 };
+	d_sg_list_t   sgl      = {0};
 	ssize_t       size_sum = 0;
 
 	atomic_fetch_add_relaxed(&num_read, 1);
@@ -2877,7 +2875,7 @@ writev_over_dfs(int fd, const struct iovec *iov, int iovcnt)
 	int           rc, rc2, i, ii;
 	daos_event_t  ev;
 	daos_handle_t eqh;
-	d_sg_list_t   sgl      = { 0 };
+	d_sg_list_t   sgl      = {0};
 	ssize_t       size_sum = 0;
 
 	atomic_fetch_add_relaxed(&num_write, 1);
@@ -3107,7 +3105,8 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc = dfs_lookup(dfs_mt->dfs, "/", O_RDONLY, &obj, &mode, stat_buf);
 	} else {
-		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDONLY, &obj, &mode, stat_buf);
+		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDONLY, &obj, &mode,
+				    stat_buf);
 	}
 	if ((rc == ENOTSUP || rc == EIO) && compatible_mode)
 		return next_xstat(ver, path, stat_buf);
@@ -5260,14 +5259,12 @@ out_err:
 int
 chdir(const char *path)
 {
-	int              is_target_path, rc, len_str, errno_save;
+	int              is_target_path, rc, len_str;
 	dfs_obj_t       *parent;
-	struct stat      stat_buf;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
 	char            *parent_dir = NULL;
 	char            *full_path  = NULL;
-	bool             is_root;
 
 	if (next_chdir == NULL) {
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
@@ -5280,42 +5277,22 @@ chdir(const char *path)
 			&full_path, &dfs_mt);
 	if (rc)
 		D_GOTO(out_err, rc);
+
+	rc = next_chdir(path);
+	if (rc)
+		D_GOTO(out_err, rc = errno);
+
 	if (!is_target_path) {
-		rc = next_chdir(path);
-		errno_save = errno;
-		if (rc == 0) {
-			len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s", full_path);
-			if (len_str >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
-					strerror(ENAMETOOLONG));
-				D_GOTO(out_err, rc = ENAMETOOLONG);
-			}
+		strncpy(cur_dir, full_path, DFS_MAX_PATH);
+		if (cur_dir[DFS_MAX_PATH - 1] != 0) {
+			D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
+				strerror(ENAMETOOLONG));
+			D_GOTO(out_err, rc = ENAMETOOLONG);
 		}
-		FREE(parent_dir);
-		errno = errno_save;
-		return rc;
+		D_GOTO(out, rc);
 	}
 
-	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
-		is_root = true;
-		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, &stat_buf);
-	} else {
-		is_root = false;
-		rc = dfs_stat(dfs_mt->dfs, parent, item_name, &stat_buf);
-	}
-	if (rc)
-		D_GOTO(out_err, rc);
-	if (!S_ISDIR(stat_buf.st_mode)) {
-		D_DEBUG(DB_ANY, "%s is not a directory: %d (%s)\n", path, ENOTDIR,
-			strerror(ENOTDIR));
-		D_GOTO(out_err, rc = ENOTDIR);
-	}
-	if (is_root)
-		rc = dfs_access(dfs_mt->dfs, NULL, NULL, X_OK);
-	else
-		rc = dfs_access(dfs_mt->dfs, parent, item_name, X_OK);
-	if (rc)
-		D_GOTO(out_err, rc);
+	/* assuming the path exists and it is backed by dfuse */
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
 	if (len_str >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "path is too long: %d (%s)\n", ENAMETOOLONG,
@@ -5323,10 +5300,8 @@ chdir(const char *path)
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
+out:
 	FREE(parent_dir);
-	if (compatible_mode)
-		return next_chdir(cur_dir);
-
 	return 0;
 
 out_err:
@@ -6364,9 +6339,6 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 	void            *addr_ret;
 
 	if (!hook_enabled)
-		return next_mmap(addr, length, prot, flags, fd, offset);
-
-	if (fd < FD_FILE_BASE && compatible_mode)
 		return next_mmap(addr, length, prot, flags, fd, offset);
 
 	fd_directed = get_fd_redirected(fd);

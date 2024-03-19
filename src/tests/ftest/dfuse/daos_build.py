@@ -261,13 +261,13 @@ class DaosBuild(DfuseTestBase):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=vm
         :avocado: tags=daosio,dfuse,pil4dfs
         :avocado: tags=DaosBuild,test_dfuse_daos_build_pil4dfs
         """
         self.run_build_pil4dfs_test()
 
-    def run_build_pil4dfs_test(self, run_on_vms=False):
+    def run_build_pil4dfs_test(self):
         """Run an actual test from above."""
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
@@ -277,18 +277,16 @@ class DaosBuild(DfuseTestBase):
 
         # Timeout in minutes.  This is per command so up to double this or more as there are two
         # scons commands which can both take a long time.
-        build_time = 360
-        build_jobs = 6 * 5
+        build_time = 600
 
         dfuse_namespace = None
 
         # Note that run_on_vms does not tell ftest where to run, this should be set according to
         # the test tags so the test can run with appropriate settings.
         remote_env = {}
-        if run_on_vms:
-            dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
-            build_jobs = 6 * 2
-            remote_env['D_IL_MAX_EQ'] = '0'
+        dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
+        build_jobs = 6 * 2
+        remote_env['D_IL_MAX_EQ'] = '0'
 
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
@@ -310,7 +308,6 @@ class DaosBuild(DfuseTestBase):
         remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
         remote_env['COVFILE'] = os.environ['COVFILE']
 
-        remote_env['LD_LIBRARY_PATH'] = '/usr/lib64:$LD_LIBRARY_PATH'
         remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
         remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
         remote_env['DD_MASK'] = 'all'
@@ -328,7 +325,6 @@ class DaosBuild(DfuseTestBase):
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
-                'python3 -m pip install ninja==1.8.2',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
                 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
                 'daos filesystem query {}'.format(mount_dir),
