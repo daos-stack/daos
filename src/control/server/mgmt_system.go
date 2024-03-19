@@ -1009,7 +1009,7 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 			errmsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
 		}
 
-		svc.log.Debugf("Response from pool evict in cleanup: %+v", res)
+		svc.log.Debugf("Response from pool evict in cleanup: '%+v' (req: '%+v')", res, evictReq)
 		resp.Results = append(resp.Results, &mgmtpb.SystemCleanupResp_CleanupResult{
 			Status: res.Status,
 			Msg:    errmsg,

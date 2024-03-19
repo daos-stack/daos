@@ -27,6 +27,13 @@
 #include <inttypes.h>
 #include <sys/ucontext.h>
 #include <sys/user.h>
+
+#ifdef __aarch64__
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 0x1000
+#endif
+#endif
+
 #include <linux/binfmts.h>
 
 #include <daos/debug.h>
@@ -419,6 +426,9 @@ static ssize_t (*libc_write)(int fd, const void *buf, size_t count);
 static ssize_t (*pthread_write)(int fd, const void *buf, size_t count);
 
 static ssize_t (*next_pwrite)(int fd, const void *buf, size_t size, off_t offset);
+
+static ssize_t (*next_readv)(int fd, const struct iovec *iov, int iovcnt);
+static ssize_t (*next_writev)(int fd, const struct iovec *iov, int iovcnt);
 
 static off_t (*libc_lseek)(int fd, off_t offset, int whence);
 static off_t (*pthread_lseek)(int fd, off_t offset, int whence);
@@ -2454,6 +2464,225 @@ pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alia
 
 ssize_t
 __pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alias("pwrite")));
+
+static ssize_t
+readv_over_dfs(int fd, const struct iovec *iov, int iovcnt)
+{
+	int           rc, rc2, i, ii;
+	daos_size_t   bytes_read;
+	daos_event_t  ev;
+	daos_handle_t eqh;
+	d_sg_list_t   sgl      = {0};
+	ssize_t       size_sum = 0;
+
+	atomic_fetch_add_relaxed(&num_read, 1);
+
+	D_ALLOC_ARRAY(sgl.sg_iovs, iovcnt);
+	if (sgl.sg_iovs == NULL) {
+		errno = ENOMEM;
+		return (-1);
+	}
+	/* need to skip zero size length. ii will be the real value for iovcnt */
+	ii = 0;
+	for (i = 0; i < iovcnt; i++) {
+		if (iov[i].iov_len == 0)
+			continue;
+		d_iov_set(&sgl.sg_iovs[ii], iov[i].iov_base, iov[i].iov_len);
+		size_sum += iov[i].iov_len;
+		ii++;
+	}
+	sgl.sg_nr = ii;
+	if (size_sum == 0) {
+		D_FREE(sgl.sg_iovs);
+		return size_sum;
+	}
+
+	rc = get_eqh(&eqh);
+	if (rc == 0) {
+		bool flag = false;
+
+		rc = daos_event_init(&ev, eqh, NULL);
+		if (rc) {
+			DL_ERROR(rc, "daos_event_init() failed");
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		rc = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			      file_list[fd]->offset, &bytes_read, &ev);
+		if (rc)
+			D_GOTO(err_ev, rc);
+
+		while (1) {
+			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+			if (rc) {
+				DL_ERROR(rc, "daos_event_test() failed");
+				D_GOTO(err_ev, rc = daos_der2errno(rc));
+			}
+			if (flag)
+				break;
+			sched_yield();
+		}
+		rc = ev.ev_error;
+
+		rc2 = daos_event_fini(&ev);
+		if (rc2)
+			DL_ERROR(rc2, "daos_event_fini() failed");
+	} else {
+		rc = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			      file_list[fd]->offset, &bytes_read, NULL);
+	}
+
+	if (rc)
+		D_GOTO(err, rc);
+
+	D_FREE(sgl.sg_iovs);
+	return (ssize_t)bytes_read;
+
+err_ev:
+	rc2 = daos_event_fini(&ev);
+	if (rc2)
+		DL_ERROR(rc2, "daos_event_fini() failed");
+
+err:
+	D_FREE(sgl.sg_iovs);
+	DS_ERROR(rc, "readv_over_dfs failed");
+	errno = rc;
+	return (-1);
+}
+
+static ssize_t
+writev_over_dfs(int fd, const struct iovec *iov, int iovcnt)
+{
+	int           rc, rc2, i, ii;
+	daos_event_t  ev;
+	daos_handle_t eqh;
+	d_sg_list_t   sgl      = {0};
+	ssize_t       size_sum = 0;
+
+	atomic_fetch_add_relaxed(&num_write, 1);
+
+	D_ALLOC_ARRAY(sgl.sg_iovs, iovcnt);
+	if (sgl.sg_iovs == NULL) {
+		errno = ENOMEM;
+		return (-1);
+	}
+	/* need to skip zero size length. ii will be the real value for iovcnt */
+	ii = 0;
+	for (i = 0; i < iovcnt; i++) {
+		if (iov[i].iov_len == 0)
+			continue;
+		d_iov_set(&sgl.sg_iovs[ii], iov[i].iov_base, iov[i].iov_len);
+		size_sum += iov[i].iov_len;
+		ii++;
+	}
+	sgl.sg_nr = ii;
+	if (size_sum == 0) {
+		D_FREE(sgl.sg_iovs);
+		return size_sum;
+	}
+
+	rc = get_eqh(&eqh);
+	if (rc == 0) {
+		bool flag = false;
+
+		rc = daos_event_init(&ev, eqh, NULL);
+		if (rc) {
+			DL_ERROR(rc, "daos_event_init() failed");
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		rc = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			       file_list[fd]->offset, &ev);
+		if (rc)
+			D_GOTO(err_ev, rc);
+
+		while (1) {
+			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+			if (rc) {
+				DL_ERROR(rc, "daos_event_test() failed");
+				D_GOTO(err_ev, rc = daos_der2errno(rc));
+			}
+			if (flag)
+				break;
+			sched_yield();
+		}
+		rc = ev.ev_error;
+
+		rc2 = daos_event_fini(&ev);
+		if (rc2)
+			DL_ERROR(rc2, "daos_event_fini() failed");
+	} else {
+		rc = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			       file_list[fd]->offset, NULL);
+	}
+
+	if (rc)
+		D_GOTO(err, rc);
+
+	D_FREE(sgl.sg_iovs);
+	return size_sum;
+
+err_ev:
+	rc2 = daos_event_fini(&ev);
+	if (rc2)
+		DL_ERROR(rc2, "daos_event_fini() failed");
+
+err:
+	D_FREE(sgl.sg_iovs);
+	DS_ERROR(rc, "writev_over_dfs failed");
+	errno = rc;
+	return (-1);
+}
+
+ssize_t
+readv(int fd, const struct iovec *iov, int iovcnt)
+{
+	int     fd_directed;
+	ssize_t size_sum;
+
+	if (next_readv == NULL) {
+		next_readv = dlsym(RTLD_NEXT, "readv");
+		D_ASSERT(next_readv != NULL);
+	}
+	if (!hook_enabled)
+		return next_readv(fd, iov, iovcnt);
+
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_readv(fd, iov, iovcnt);
+
+	size_sum = readv_over_dfs(fd_directed - FD_FILE_BASE, iov, iovcnt);
+	if (size_sum < 0)
+		return size_sum;
+	file_list[fd_directed - FD_FILE_BASE]->offset += size_sum;
+
+	return size_sum;
+}
+
+ssize_t
+writev(int fd, const struct iovec *iov, int iovcnt)
+{
+	int     fd_directed;
+	ssize_t size_sum;
+
+	if (next_writev == NULL) {
+		next_writev = dlsym(RTLD_NEXT, "writev");
+		D_ASSERT(next_writev != NULL);
+	}
+	if (!hook_enabled)
+		return next_writev(fd, iov, iovcnt);
+
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_writev(fd, iov, iovcnt);
+
+	size_sum = writev_over_dfs(fd_directed - FD_FILE_BASE, iov, iovcnt);
+	if (size_sum < 0)
+		return size_sum;
+	file_list[fd_directed - FD_FILE_BASE]->offset += size_sum;
+
+	return size_sum;
+}
 
 static int
 new_fxstat(int vers, int fd, struct stat *buf)

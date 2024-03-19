@@ -855,7 +855,7 @@ type CleanupResult struct {
 	Status int32  `json:"status"`  // Status returned from this specific evict call
 	Msg    string `json:"msg"`     // Error message if Status is not Success
 	PoolID string `json:"pool_id"` // Unique identifier
-	Count  uint32 `json:"count"`   // Number of pools reclaimed
+	Count  uint32 `json:"count"`   // Number of pool handles evicted
 }
 
 // SystemCleanupResp contains the request response.
