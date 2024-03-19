@@ -73,6 +73,9 @@ struct  _Mgmt__GroupUpdateReq__Engine
 {
   ProtobufCMessage base;
   uint32_t rank;
+  /*
+   * primary URI is the only one group update is concerned with
+   */
   char *uri;
   uint64_t incarnation;
 };
@@ -119,7 +122,7 @@ struct  _Mgmt__JoinReq
    */
   uint32_t rank;
   /*
-   * Server CaRT base URI (i.e., for context 0).
+   * Server CaRT primary provider URI (i.e., for context 0).
    */
   char *uri;
   /*
@@ -143,13 +146,23 @@ struct  _Mgmt__JoinReq
    */
   uint64_t incarnation;
   /*
+   * URIs for any secondary providers
+   */
+  size_t n_secondary_uris;
+  char **secondary_uris;
+  /*
+   * CaRT context count for each secondary provider
+   */
+  size_t n_secondary_nctxs;
+  uint32_t *secondary_nctxs;
+  /*
    * rank started in check mode
    */
   protobuf_c_boolean check_mode;
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0,NULL, 0,NULL, 0 }
 
 
 struct  _Mgmt__JoinResp
@@ -227,10 +240,18 @@ struct  _Mgmt__GetAttachInfoReq
    * Return Rank URIs for all ranks.
    */
   protobuf_c_boolean all_ranks;
+  /*
+   * Preferred fabric interface.
+   */
+  char *interface;
+  /*
+   * Preferred fabric domain.
+   */
+  char *domain;
 };
 #define MGMT__GET_ATTACH_INFO_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__ClientNetHint
@@ -272,10 +293,14 @@ struct  _Mgmt__ClientNetHint
    */
   size_t n_env_vars;
   char **env_vars;
+  /*
+   * Provider index - anything > 0 is a secondary provider
+   */
+  uint32_t provider_idx;
 };
 #define MGMT__CLIENT_NET_HINT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__client_net_hint__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0,NULL, 0 }
 
 
 struct  _Mgmt__GetAttachInfoResp__RankUri
@@ -283,10 +308,12 @@ struct  _Mgmt__GetAttachInfoResp__RankUri
   ProtobufCMessage base;
   uint32_t rank;
   char *uri;
+  uint32_t provider_idx;
+  uint32_t num_ctxs;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__RANK_URI__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__rank_uri__descriptor) \
-    , 0, (char *)protobuf_c_empty_string }
+    , 0, (char *)protobuf_c_empty_string, 0, 0 }
 
 
 struct  _Mgmt__GetAttachInfoResp
@@ -297,7 +324,7 @@ struct  _Mgmt__GetAttachInfoResp
    */
   int32_t status;
   /*
-   * Rank URIs
+   * Rank URIs for the primary provider
    */
   size_t n_rank_uris;
   Mgmt__GetAttachInfoResp__RankUri **rank_uris;
@@ -310,6 +337,9 @@ struct  _Mgmt__GetAttachInfoResp
    */
   size_t n_ms_ranks;
   uint32_t *ms_ranks;
+  /*
+   * Primary provider hint
+   */
   Mgmt__ClientNetHint *client_net_hint;
   /*
    * Version of the system database.
@@ -319,10 +349,20 @@ struct  _Mgmt__GetAttachInfoResp
    * Name of the DAOS system
    */
   char *sys;
+  /*
+   * Rank URIs for additional providers
+   */
+  size_t n_secondary_rank_uris;
+  Mgmt__GetAttachInfoResp__RankUri **secondary_rank_uris;
+  /*
+   * Hints for additional providers
+   */
+  size_t n_secondary_client_net_hints;
+  Mgmt__ClientNetHint **secondary_client_net_hints;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
-    , 0, 0,NULL, 0,NULL, NULL, 0, (char *)protobuf_c_empty_string }
+    , 0, 0,NULL, 0,NULL, NULL, 0, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
 
 
 struct  _Mgmt__PrepShutdownReq

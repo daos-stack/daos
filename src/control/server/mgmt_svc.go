@@ -75,7 +75,7 @@ type mgmtSvc struct {
 	rpcClient         control.UnaryInvoker
 	events            *events.PubSub
 	systemProps       daos.SystemPropertyMap
-	clientNetworkHint *mgmtpb.ClientNetHint
+	clientNetworkHint []*mgmtpb.ClientNetHint
 	batchInterval     time.Duration
 	batchReqs         batchReqChan
 	serialReqs        batchReqChan
@@ -92,7 +92,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *raft.Database, c cont
 		rpcClient:         c,
 		events:            p,
 		systemProps:       daos.SystemProperties(),
-		clientNetworkHint: new(mgmtpb.ClientNetHint),
+		clientNetworkHint: []*mgmtpb.ClientNetHint{new(mgmtpb.ClientNetHint)},
 		batchInterval:     batchLoopInterval,
 		batchReqs:         make(batchReqChan),
 		serialReqs:        make(batchReqChan),

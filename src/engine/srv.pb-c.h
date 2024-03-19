@@ -41,11 +41,11 @@ struct  _Srv__NotifyReadyReq
 {
   ProtobufCMessage base;
   /*
-   * CaRT URI
+   * Primary CaRT URI
    */
   char *uri;
   /*
-   * Number of CaRT contexts
+   * Number of primary CaRT contexts
    */
   uint32_t nctxs;
   /*
@@ -65,13 +65,23 @@ struct  _Srv__NotifyReadyReq
    */
   uint64_t incarnation;
   /*
+   * secondary CaRT URIs
+   */
+  size_t n_secondaryuris;
+  char **secondaryuris;
+  /*
+   * number of CaRT contexts for each secondary provider
+   */
+  size_t n_secondarynctxs;
+  uint32_t *secondarynctxs;
+  /*
    * True if engine started in checker mode
    */
   protobuf_c_boolean check_mode;
 };
 #define SRV__NOTIFY_READY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&srv__notify_ready_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0 }
+    , (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0,NULL, 0,NULL, 0 }
 
 
 struct  _Srv__GetPoolSvcReq

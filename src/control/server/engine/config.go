@@ -18,10 +18,16 @@ import (
 )
 
 const (
-	maxHelperStreamCount = 2
-	envLogMasks          = "D_LOG_MASK"
-	envLogDbgStreams     = "DD_MASK"
-	envLogSubsystems     = "DD_SUBSYS"
+	maxHelperStreamCount         = 2
+	numPrimaryProviders          = 1
+	defaultNumSecondaryEndpoints = 1
+
+	// MultiProviderSeparator delineates between providers in a multi-provider config.
+	MultiProviderSeparator = ","
+
+	envLogMasks      = "D_LOG_MASK"
+	envLogDbgStreams = "DD_MASK"
+	envLogSubsystems = "DD_SUBSYS"
 )
 
 // FabricConfig encapsulates networking fabric configuration.
@@ -33,8 +39,93 @@ type FabricConfig struct {
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
-	DisableSRX      bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
-	AuthKey         string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
+	// NumSecondaryEndpoints configures the number of cart endpoints per secondary provider.
+	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
+	DisableSRX            bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
+	AuthKey               string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
+}
+
+// GetPrimaryProvider parses the primary provider from the Provider string.
+func (fc *FabricConfig) GetPrimaryProvider() (string, error) {
+	providers, err := fc.GetProviders()
+	if err != nil {
+		return "", err
+	}
+
+	return providers[0], nil
+}
+
+// GetProviders parses the Provider string to one or more providers.
+func (fc *FabricConfig) GetProviders() ([]string, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	providers := splitMultiProviderStr(fc.Provider)
+	if len(providers) == 0 {
+		return nil, errors.New("provider not set")
+	}
+
+	return providers, nil
+}
+
+func splitMultiProviderStr(str string) []string {
+	strs := strings.Split(str, MultiProviderSeparator)
+	result := make([]string, 0)
+	for _, s := range strs {
+		trimmed := strings.TrimSpace(s)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+
+	return result
+}
+
+// GetNumProviders gets the number of fabric providers configured.
+func (fc *FabricConfig) GetNumProviders() int {
+	providers, err := fc.GetProviders()
+	if err != nil {
+		return 0
+	}
+	return len(providers)
+}
+
+// GetPrimaryInterface parses the primary fabric interface from the Interface string.
+func (fc *FabricConfig) GetPrimaryInterface() (string, error) {
+	interfaces, err := fc.GetInterfaces()
+	if err != nil {
+		return "", err
+	}
+
+	return interfaces[0], nil
+}
+
+// GetInterfaces parses the Interface string into one or more interfaces.
+func (fc *FabricConfig) GetInterfaces() ([]string, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	interfaces := splitMultiProviderStr(fc.Interface)
+	if len(interfaces) == 0 {
+		return nil, errors.New("fabric_iface not set")
+	}
+
+	return interfaces, nil
+}
+
+// GetInterfacePorts parses the InterfacePort string to one or more ports.
+func (fc *FabricConfig) GetInterfacePorts() ([]int, error) {
+	if fc == nil {
+		return nil, errors.New("FabricConfig is nil")
+	}
+
+	if fc.InterfacePort == 0 {
+		return nil, errors.New("fabric_iface_port not set")
+	}
+
+	return []int{fc.InterfacePort}, nil
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -64,22 +155,63 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.AuthKey == "" {
 		fc.AuthKey = other.AuthKey
 	}
+	if len(fc.NumSecondaryEndpoints) == 0 {
+		fc.setNumSecondaryEndpoints(other.NumSecondaryEndpoints)
+	}
+}
+
+func (fc *FabricConfig) setNumSecondaryEndpoints(other []int) {
+	if len(other) == 0 {
+		// Set defaults
+		numSecProv := fc.GetNumProviders() - numPrimaryProviders
+		for i := 0; i < numSecProv; i++ {
+			other = append(other, defaultNumSecondaryEndpoints)
+		}
+	}
+	fc.NumSecondaryEndpoints = other
 }
 
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
-	switch {
-	case fc.Provider == "":
+	numProv := fc.GetNumProviders()
+	if numProv == 0 {
 		return errors.New("provider not set")
-	case fc.Interface == "":
-		return errors.New("fabric_iface not set")
-	case fc.InterfacePort == 0:
-		return errors.New("fabric_iface_port not set")
-	case fc.InterfacePort < 0:
-		return errors.New("fabric_iface_port cannot be negative")
-	default:
-		return nil
 	}
+
+	interfaces, err := fc.GetInterfaces()
+	if err != nil {
+		return err
+	}
+
+	ports, err := fc.GetInterfacePorts()
+	if err != nil {
+		return err
+	}
+
+	for _, p := range ports {
+		if p < 0 {
+			return errors.New("fabric_iface_port cannot be negative")
+		}
+	}
+
+	if len(interfaces) != numProv { // TODO SRS-31: check num ports when multiprovider fully enabled: || len(ports) != numProv {
+		return errors.Errorf("provider, fabric_iface and fabric_iface_port must include the same number of items delimited by %q", MultiProviderSeparator)
+	}
+
+	numSecProv := numProv - numPrimaryProviders
+	if numSecProv > 0 {
+		if len(fc.NumSecondaryEndpoints) != 0 && len(fc.NumSecondaryEndpoints) != numSecProv {
+			return errors.New("secondary_provider_endpoints must have one value for each secondary provider")
+		}
+
+		for _, nrCtx := range fc.NumSecondaryEndpoints {
+			if nrCtx < 1 {
+				return errors.Errorf("all values in secondary_provider_endpoints must be > 0")
+			}
+		}
+	}
+
+	return nil
 }
 
 // GetAuthKeyEnv returns the environment variable string for the auth key.
@@ -467,6 +599,12 @@ func (c *Config) WithCrtCtxShareAddr(addr uint32) *Config {
 // WithCrtTimeout defines the CRT_TIMEOUT for this instance
 func (c *Config) WithCrtTimeout(timeout uint32) *Config {
 	c.Fabric.CrtTimeout = timeout
+	return c
+}
+
+// WithNumSecondaryEndpoints sets the number of network endpoints for each secondary provider.
+func (c *Config) WithNumSecondaryEndpoints(nr []int) *Config {
+	c.Fabric.NumSecondaryEndpoints = nr
 	return c
 }
 
