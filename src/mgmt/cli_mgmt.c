@@ -193,9 +193,8 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 		"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
 		"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u, "
 		"FI_OFI_RXM_USE_SRX: %d, CRT_SECONDARY_PROVIDER: %d\n",
-		info->provider, info->interface, info->domain,
-		info->crt_ctx_share_addr, info->crt_timeout,
-		info->srv_srx_set, info->provider_idx);
+		info->provider, info->interface, info->domain, info->crt_ctx_share_addr,
+		info->crt_timeout, info->srv_srx_set, info->provider_idx);
 
 	return 0;
 }
@@ -239,14 +238,11 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	size_t			 reqb_size;
 	Drpc__Call		*dreq;
 	Drpc__Response		*dresp;
-	char			*ofi_interface = NULL;
-	char			*ofi_domain = NULL;
+	char                    *ofi_interface = NULL;
+	char                    *ofi_domain    = NULL;
 	int			 rc;
 
-	D_DEBUG(DB_MGMT, "getting attach info for %s\n", name);
-
 	/* Connect to daos_agent. */
-	D_ASSERT(dc_agent_sockpath != NULL);
 	rc = drpc_connect(dc_agent_sockpath, &ctx);
 	if (rc != -DER_SUCCESS) {
 		D_ERROR("failed to connect to %s " DF_RC "\n",
@@ -266,7 +262,7 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	req.sys = (char *)name;
 	req.all_ranks = all_ranks;
 	req.interface = ofi_interface;
-	req.domain = ofi_domain;
+	req.domain    = ofi_domain;
 	reqb_size = mgmt__get_attach_info_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {
@@ -468,7 +464,7 @@ int dc_mgmt_net_cfg(const char *name)
 	char                    *crt_ctx_share_addr = NULL;
 	char                    *cli_srx_set        = NULL;
 	char                    *crt_timeout        = NULL;
-	char			 buf[SYS_INFO_BUF_SIZE];
+	char                     buf[SYS_INFO_BUF_SIZE];
 	struct dc_mgmt_sys_info  info;
 	Mgmt__GetAttachInfoResp *resp;
 

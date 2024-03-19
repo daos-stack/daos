@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -95,7 +95,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	procmonStart := time.Now()
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
-	procmon.startMonitoring(ctx)
+	procmon.startMonitoring(ctx, cmd.cfg.EvictOnStart)
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 
 	drpcRegStart := time.Now()

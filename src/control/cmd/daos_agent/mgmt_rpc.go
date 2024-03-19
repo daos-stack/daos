@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -258,12 +258,12 @@ func (mod *mgmtModule) selectAttachInfo(ctx context.Context, srvResp *mgmtpb.Get
 	// We can try to be smart about choosing a provider if the client requested a specific interface
 	for _, hint := range srvResp.SecondaryClientNetHints {
 		if reqProviders.Has(hint.Provider) {
-			mod.log.Debugf("found secondary provider supported by requested interface: %q (idx %d)", hint.Provider, hint.ProviderIdx)
+			mod.log.Tracef("found secondary provider supported by requested interface: %q (idx %d)", hint.Provider, hint.ProviderIdx)
 			return mod.selectSecondaryAttachInfo(srvResp, uint(hint.ProviderIdx))
 		}
 	}
 
-	mod.log.Errorf("no supported provider for requested interface %q domain %q, using primary by default")
+	mod.log.Errorf("no supported provider for requested interface %q domain %q, using primary by default", iface, domain)
 	return srvResp, nil
 }
 
@@ -286,7 +286,7 @@ func (mod *mgmtModule) getIfaceProviders(ctx context.Context, iface, domain stri
 		providers.Add(fis.Providers()...)
 	}
 
-	mod.log.Debugf("requested interface %q (domain: %q) supports providers: %s", iface, domain, strings.Join(providers.ToSlice(), ", "))
+	mod.log.Tracef("requested interface %q (domain: %q) supports providers: %q", iface, domain, strings.Join(providers.ToSlice(), ", "))
 	return providers
 }
 

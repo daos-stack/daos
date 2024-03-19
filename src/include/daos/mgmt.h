@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,7 +40,7 @@ struct dc_mgmt_sys_info {
 	int32_t		srv_srx_set;
 	d_rank_list_t  *ms_ranks;
 	char		system_name[DAOS_SYS_INFO_STRING_MAX + 1];
-	uint32_t	provider_idx; /* Provider index (if more than one available) */
+	uint32_t        provider_idx; /* Provider index (if more than one available) */
 };
 
 /** Client system handle */

@@ -364,6 +364,11 @@ func (cfg *Server) Load() error {
 		return errors.Errorf("invalid system name: %q", cfg.SystemName)
 	}
 
+	// TODO multiprovider: Remove when multiprovider is enabled
+	if cfg.Fabric.GetNumProviders() > 1 {
+		return errors.Errorf("fabric provider string %q includes more than one provider", cfg.Fabric.Provider)
+	}
+
 	// Update server config based on legacy parameters.
 	if err := updateFromLegacyParams(cfg); err != nil {
 		return errors.Wrap(err, "updating config from legacy parameters")

@@ -18,7 +18,6 @@
 #include <daos.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
-#include "vos_policy.h"
 #include <daos/mem.h>
 
 /** I/O context */
@@ -2285,8 +2284,10 @@ akey_update_begin(struct vos_io_context *ioc)
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		media = vos_policy_media_select(vos_cont2pool(ioc->ic_cont),
-					 iod->iod_type, size, VOS_IOS_GENERIC);
+		if (vos_io_scm(vos_cont2pool(ioc->ic_cont), iod->iod_type, size, VOS_IOS_GENERIC))
+			media = DAOS_MEDIA_SCM;
+		else
+			media = DAOS_MEDIA_NVME;
 
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			rc = vos_reserve_single(ioc, media, size);
@@ -2426,7 +2427,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
 					      dth->dth_dti_cos_count, 0, NULL, daes, dces);
-		if (err <= 0)
+		if (err < 0)
+			goto abort;
+		if (err == 0)
 			D_FREE(daes);
 	}
 

@@ -212,14 +212,12 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	}
 	r = ranklist.Rank(resp.Rank)
 
-	// TODO: Check to see if ready.Uri != superblock.URI, which might
-	// need to trigger some kind of update?
-
-	if !superblock.ValidRank {
+	if !superblock.ValidRank || ready.Uri != superblock.URI {
+		ei.log.Noticef("updating rank %d URI to %s", resp.Rank, ready.Uri)
 		superblock.Rank = new(ranklist.Rank)
 		*superblock.Rank = r
 		superblock.ValidRank = true
-		superblock.URI = ready.GetUri()
+		superblock.URI = ready.Uri
 		ei.setSuperblock(superblock)
 		if err := ei.WriteSuperblock(); err != nil {
 			return ranklist.NilRank, resp.LocalJoin, 0, err

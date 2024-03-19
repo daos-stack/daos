@@ -37,7 +37,7 @@ var (
 	}
 )
 
-const debugLogFlags = log.Lmicroseconds | log.Lshortfile
+const debugLogFlags = log.Ldate | log.Lmicroseconds | log.Lshortfile
 
 // DefaultTraceLogger implements the TraceLogger interface by
 // wrapping the DefaultDebugLogger implementation.

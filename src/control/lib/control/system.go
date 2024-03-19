@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -114,11 +114,11 @@ type SystemJoinReq struct {
 	Rank                 ranklist.Rank
 	URI                  string
 	SecondaryURIs        []string            `json:"secondary_uris"`
-	NumContexts          uint32              `json:"Nctxs"`
+	NumContexts          uint32              `json:"nctxs"`
 	NumSecondaryContexts []uint32            `json:"secondary_nctxs"`
-	FaultDomain          *system.FaultDomain `json:"SrvFaultDomain"`
-	InstanceIdx          uint32              `json:"Idx"`
-	Incarnation          uint64              `json:"Incarnation"`
+	FaultDomain          *system.FaultDomain `json:"srv_fault_domain"`
+	InstanceIdx          uint32              `json:"idx"`
+	Incarnation          uint64              `json:"incarnation"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
@@ -858,7 +858,7 @@ type CleanupResult struct {
 	Status int32  `json:"status"`  // Status returned from this specific evict call
 	Msg    string `json:"msg"`     // Error message if Status is not Success
 	PoolID string `json:"pool_id"` // Unique identifier
-	Count  uint32 `json:"count"`   // Number of pools reclaimed
+	Count  uint32 `json:"count"`   // Number of pool handles evicted
 }
 
 // SystemCleanupResp contains the request response.

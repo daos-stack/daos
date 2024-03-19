@@ -8,11 +8,21 @@ package main
 
 /*
 #include "util.h"
+
+static void
+free_daos_alloc(void *ptr)
+{
+        // Use the macro to free memory allocated
+        // by DAOS macros in order to keep NLT happy.
+        D_FREE(ptr);
+}
 */
 import "C"
 
 import (
 	"fmt"
+	"strings"
+	"unsafe"
 
 	"github.com/pkg/errors"
 )
@@ -39,6 +49,7 @@ type fsCmd struct {
 	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset default creation object class on a directory"`
 	DfuseQuery     fsDfuseQueryCmd     `command:"query" description:"Query dfuse for memory usage"`
 	DfuseEvict     fsDfuseEvictCmd     `command:"evict" description:"Evict object from dfuse"`
+	Scan           fsScanCmd           `command:"scan" description:"Scan POSIX container and report statistics"`
 }
 
 type fsCopyCmd struct {
@@ -501,23 +512,38 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 		ap.dfuse_mem.ino = C.ulong(cmd.Ino)
 	}
 
-	rc := C.dfuse_count_query(ap)
+	rc := C.dfuse_cont_query(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
 	}
 
+	defer C.free_daos_alloc(unsafe.Pointer(ap.dfuse_stat))
+
 	if cmd.JSONOutputEnabled() {
+
+		ds_map := make(map[string]uint64)
+
+		ds_slice := unsafe.Slice(ap.dfuse_stat, ap.dfuse_mem.stat_count)
+
+		for _, v := range ds_slice {
+			if v.value != 0 {
+				ds_map[strings.ToLower(C.GoString(&v.name[0]))] = uint64(v.value)
+			}
+		}
+
 		if cmd.Ino == 0 {
 			jsonAttrs := &struct {
-				NumInodes      uint64 `json:"inodes"`
-				NumFileHandles uint64 `json:"open_files"`
-				NumPools       uint64 `json:"pools"`
-				NumContainers  uint64 `json:"containers"`
+				NumInodes      uint64            `json:"inodes"`
+				NumFileHandles uint64            `json:"open_files"`
+				NumPools       uint64            `json:"pools"`
+				NumContainers  uint64            `json:"containers"`
+				Data           map[string]uint64 `json:"statistics"`
 			}{
 				NumInodes:      uint64(ap.dfuse_mem.inode_count),
 				NumFileHandles: uint64(ap.dfuse_mem.fh_count),
 				NumPools:       uint64(ap.dfuse_mem.pool_count),
 				NumContainers:  uint64(ap.dfuse_mem.container_count),
+				Data:           ds_map,
 			}
 			return cmd.OutputJSON(jsonAttrs, nil)
 		} else {
@@ -601,5 +627,41 @@ func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
 	cmd.Infof("        Inodes: %d", ap.dfuse_mem.inode_count)
 	cmd.Infof("    Open files: %d", ap.dfuse_mem.fh_count)
 
+	return nil
+}
+
+type fsScanCmd struct {
+	existingContainerCmd
+
+	DirName string `long:"dir-name" short:"n" description:"subdirectory path to scan. Start from container root if not specified."`
+}
+
+func (cmd *fsScanCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	if err := cmd.resolveContainer(ap); err != nil {
+		return err
+	}
+
+	cleanupPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
+	if err != nil {
+		return err
+	}
+	defer cleanupPool()
+
+	var dirName *C.char
+	if cmd.DirName != "" {
+		dirName = C.CString(cmd.DirName)
+		defer freeString(dirName)
+	}
+
+	rc := C.dfs_cont_scan(cmd.cPoolHandle, &ap.cont_str[0], 0, dirName)
+	if err := dfsError(rc); err != nil {
+		return errors.Wrapf(err, "failed to scan")
+	}
 	return nil
 }

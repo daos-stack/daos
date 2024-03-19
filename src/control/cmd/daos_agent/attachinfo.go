@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -56,7 +56,7 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		providerIdx = *cmd.ProviderIdx
 	}
 
-	ranks, err := getServiceRanksForProviderIdx(resp, int(providerIdx))
+	ranks, err := getServiceRanksForProviderIdx(resp, providerIdx)
 	if err != nil {
 		return err
 	}
@@ -98,13 +98,13 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 	return ew.Err
 }
 
-func getServiceRanksForProviderIdx(inResp *control.GetAttachInfoResp, idx int) ([]*control.PrimaryServiceRank, error) {
+func getServiceRanksForProviderIdx(inResp *control.GetAttachInfoResp, idx uint) ([]*control.PrimaryServiceRank, error) {
 	if idx == 0 {
 		// Primary provider
 		return inResp.ServiceRanks, nil
 	}
 
-	secIdx := idx - 1
+	secIdx := int(idx) - 1
 	if secIdx < 0 || secIdx >= len(inResp.AlternateClientNetHints) {
 		return nil, errors.Errorf("provider index must be in range 0 <= idx <= %d", len(inResp.AlternateClientNetHints))
 	}

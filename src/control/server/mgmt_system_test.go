@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -572,6 +572,10 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 	}
 	mi := control.NewMockInvoker(l, &mic)
 	svc.rpcClient = mi
+
+	if err := svc.setFabricProviders("tcp"); err != nil {
+		t.Fatal(err)
+	}
 
 	return svc
 }
@@ -1926,6 +1930,8 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 func TestServer_MgmtSvc_Join(t *testing.T) {
 	curMember := mockMember(t, 0, 0, "excluded")
 	newMember := mockMember(t, 1, 1, "joined")
+	newProviderMember := mockMember(t, 1, 1, "joined")
+	newProviderMember.PrimaryFabricURI = fmt.Sprintf("verbs://%s", test.MockHostAddr(1))
 
 	for name, tc := range map[string]struct {
 		req      *mgmtpb.JoinReq
@@ -1971,13 +1977,14 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
 				Incarnation: curMember.Incarnation + 1,
+				Uri:         curMember.PrimaryFabricURI,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
 						Rank:        curMember.Rank.Uint32(),
-						Uri:         curMember.PrimaryFabricURI,
+						Uri:         curMember.PrimaryFabricURI, // update URI
 						Incarnation: curMember.Incarnation + 1,
 					},
 				},
@@ -1994,13 +2001,14 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				Rank:        uint32(ranklist.NilRank),
 				Uuid:        curMember.UUID.String(),
 				Incarnation: curMember.Incarnation + 1,
+				Uri:         curMember.PrimaryFabricURI,
 			},
 			expGuReq: &mgmtpb.GroupUpdateReq{
 				MapVersion: 3,
 				Engines: []*mgmtpb.GroupUpdateReq_Engine{
 					{
 						Rank:        curMember.Rank.Uint32(),
-						Uri:         curMember.PrimaryFabricURI,
+						Uri:         curMember.PrimaryFabricURI, // update URI
 						Incarnation: curMember.Incarnation + 1,
 					},
 				},
@@ -2011,6 +2019,25 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				State:      mgmtpb.JoinResp_IN,
 				MapVersion: 2,
 			},
+		},
+		"provider doesn't match": {
+			req: &mgmtpb.JoinReq{
+				Rank:        curMember.Rank.Uint32(),
+				Uuid:        curMember.UUID.String(),
+				Uri:         newProviderMember.PrimaryFabricURI,
+				Incarnation: curMember.Incarnation + 1,
+			},
+			expGuReq: &mgmtpb.GroupUpdateReq{
+				MapVersion: 3,
+				Engines: []*mgmtpb.GroupUpdateReq_Engine{
+					{
+						Rank:        curMember.Rank.Uint32(),
+						Uri:         newProviderMember.PrimaryFabricURI, // update URI
+						Incarnation: curMember.Incarnation + 1,
+					},
+				},
+			},
+			expErr: errors.New("does not match"),
 		},
 		"new host (non local)": {
 			req: &mgmtpb.JoinReq{
@@ -2139,6 +2166,208 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expGuReq, gotGuReq, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected GroupUpdate request (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_updateFabricProviders(t *testing.T) {
+	for name, tc := range map[string]struct {
+		getSvc       func(*testing.T, logging.Logger) *mgmtSvc
+		oldProv      string
+		provs        []string
+		expErr       error
+		expProv      string
+		expNumEvents int
+	}{
+		"no change": {
+			oldProv: "tcp",
+			provs:   []string{"tcp"},
+			expProv: "tcp",
+		},
+		"successful change": {
+			oldProv:      "tcp",
+			provs:        []string{"verbs"},
+			expProv:      "verbs",
+			expNumEvents: 1,
+		},
+		"fails getting prop": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, false)
+				// not a replica
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+				})
+
+				return svc
+			},
+			provs:  []string{"verbs"},
+			expErr: &system.ErrNotReplica{},
+		},
+		"change fails setting prop": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, true)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+					Replicas:   []*net.TCPAddr{common.LocalhostCtrlAddr()},
+				})
+				if err := svc.setFabricProviders("tcp"); err != nil {
+					t.Fatal(err)
+				}
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			oldProv: "tcp",
+			provs:   []string{"verbs"},
+			expErr:  &system.ErrNotLeader{},
+		},
+		"first time": {
+			provs:   []string{"verbs"},
+			expProv: "verbs",
+		},
+		"first time fails setting prop": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, true)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+					Replicas:   []*net.TCPAddr{common.LocalhostCtrlAddr()},
+				})
+				if err := svc.sysdb.ResignLeadership(errors.New("test")); err != nil {
+					t.Fatal(err)
+				}
+
+				return svc
+			},
+			provs:  []string{"verbs"},
+			expErr: &system.ErrNotLeader{},
+		},
+		"member already joined": {
+			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				ms := mgmtSystemTestSetup(t, l,
+					system.Members{mockMember(t, 1, 1, "joined")},
+					[]*control.HostResponse{})
+				if err := ms.setFabricProviders("tcp"); err != nil {
+					t.Fatal(err)
+				}
+				return ms
+			},
+			provs:  []string{"verbs"},
+			expErr: errors.New("already joined"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.getSvc == nil {
+				tc.getSvc = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					ms := mgmtSystemTestSetup(t, l,
+						system.Members{
+							mockMember(t, 1, 1, "stopped"),
+							mockMember(t, 2, 2, "stopped"),
+						},
+						[]*control.HostResponse{})
+					if err := ms.setFabricProviders(tc.oldProv); err != nil {
+						t.Fatal(err)
+					}
+					return ms
+				}
+			}
+
+			svc := tc.getSvc(t, log)
+			mockPub := &mockPublisher{}
+
+			err := svc.updateFabricProviders(tc.provs, mockPub)
+
+			test.CmpErr(t, tc.expErr, err)
+
+			t.Logf("published events:\n%+v", mockPub.published)
+			test.AssertEqual(t, tc.expNumEvents, len(mockPub.published), "unexpected number of events published")
+
+			if tc.expNumEvents > 0 {
+				gotEvent := mockPub.published[0]
+				test.AssertEqual(t, events.RASSystemFabricProvChanged, gotEvent.ID, "")
+				test.AssertEqual(t, events.RASSeverityNotice, gotEvent.Severity, "")
+			}
+		})
+	}
+}
+
+func TestMgmtSvc_checkReqFabricProvider(t *testing.T) {
+	sysProv := "tcp"
+	for name, tc := range map[string]struct {
+		getSvc       func(*testing.T, logging.Logger) *mgmtSvc
+		joinProv     string
+		joinURI      string
+		expErr       error
+		expNumEvents int
+	}{
+		"bad URI": {
+			joinURI: "bad format",
+			expErr:  errors.New("unable to parse fabric provider"),
+		},
+		"failed getting system provider": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, false)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+				})
+
+				return svc
+			},
+			joinURI: "tcp://10.10.10.10",
+			expErr:  &system.ErrNotReplica{},
+		},
+		"success": {
+			joinURI: "tcp://10.10.10.10",
+		},
+		"does not match": {
+			joinProv:     "verbs",
+			joinURI:      "verbs://10.10.10.10",
+			expErr:       errors.New("does not match"),
+			expNumEvents: 1,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.getSvc == nil {
+				tc.getSvc = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					ms := mgmtSystemTestSetup(t, l, system.Members{}, []*control.HostResponse{})
+					if err := ms.setFabricProviders(sysProv); err != nil {
+						t.Fatal(err)
+					}
+					return ms
+				}
+			}
+			svc := tc.getSvc(t, log)
+			mockPub := &mockPublisher{}
+
+			req := &mgmtpb.JoinReq{
+				Uri:  tc.joinURI,
+				Rank: 12,
+			}
+			addr := &net.TCPAddr{
+				IP:   net.IPv4(1, 2, 3, 4),
+				Port: 5678,
+			}
+			err := svc.checkReqFabricProvider(req, addr, mockPub)
+
+			test.CmpErr(t, tc.expErr, err)
+
+			t.Logf("published events:\n%+v", mockPub.published)
+			test.AssertEqual(t, tc.expNumEvents, len(mockPub.published), "unexpected number of events published")
+
+			if tc.expNumEvents > 0 {
+				gotEvent := mockPub.published[0]
+				test.AssertEqual(t, events.RASEngineJoinFailed, gotEvent.ID, "")
+				test.AssertEqual(t, events.RASSeverityError, gotEvent.Severity, "")
+				test.AssertEqual(t, req.Rank, gotEvent.Rank, "")
+				test.AssertEqual(t, addr.String(), gotEvent.Hostname, "")
 			}
 		})
 	}

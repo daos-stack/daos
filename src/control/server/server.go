@@ -440,6 +440,11 @@ func (srv *server) registerEvents() {
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
 			srv.log.Infof("MS leader running on %s", srv.hostname)
+
+			if err := srv.mgmtSvc.updateFabricProviders([]string{srv.cfg.Fabric.Provider}, srv.pubSub); err != nil {
+				srv.log.Errorf(err.Error())
+			}
+
 			srv.mgmtSvc.startLeaderLoops(ctx)
 			registerLeaderSubscriptions(srv)
 			srv.log.Debugf("requesting immediate GroupUpdate after leader change")
@@ -545,16 +550,6 @@ func waitFabricReady(ctx context.Context, log logging.Logger, cfg *config.Server
 
 	return nil
 }
-
-// func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
-// 	return func(l logging.Logger, e *engine.Config) (uint, error) {
-// 		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
-// 		if err != nil {
-// 			return 0, err
-// 		}
-// 		return fi.NUMANode, nil
-// 	}
-// }
 
 func lookupIF(name string) (netInterface, error) {
 	iface, err := net.InterfaceByName(name)

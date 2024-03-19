@@ -442,18 +442,18 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	var allRanks, toTest []Rank
-	allRanks, err = m.db.MemberRanks()
-	if err != nil {
-		return
-	}
-	toTest, err = ParseRanks(ranks)
+	allRanks, err := m.db.MemberRanks()
 	if err != nil {
 		return
 	}
 
 	if ranks == "" {
 		return RankSetFromRanks(allRanks), RankSetFromRanks(nil), nil
+	}
+
+	toTest, err := ParseRanks(ranks)
+	if err != nil {
+		return
 	}
 
 	missing := CheckRankMembership(allRanks, toTest)

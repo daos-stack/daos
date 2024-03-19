@@ -26,6 +26,15 @@
 #include <signal.h>
 #include <inttypes.h>
 #include <sys/ucontext.h>
+#include <sys/user.h>
+
+#ifdef __aarch64__
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 0x1000
+#endif
+#endif
+
+#include <linux/binfmts.h>
 
 #include <daos/debug.h>
 #include <gurt/list.h>
@@ -38,9 +47,14 @@
 #include <daos/event.h>
 #include <daos_prop.h>
 #include <daos/common.h>
-#include "dfs_internal.h"
+#include <daos/dfs_lib_int.h>
 
 #include "hook.h"
+
+/* useful in strncmp() and strndup() */
+#define STR_AND_SIZE(s)    s, sizeof(s)
+/* useful in strncmp() to check whether a string start with a target string. Not including \0 */
+#define STR_AND_SIZE_M1(s) s, sizeof(s) - 1
 
 /* D_ALLOC and D_FREE can not be used in query_path(). It causes dead lock during daos_init(). */
 #define FREE(ptr)	do {free(ptr); (ptr) = NULL; } while (0)
@@ -132,6 +146,8 @@ static _Atomic uint32_t        daos_init_cnt;
  * true.
  */
 static bool             report;
+/* always load libpil4dfs related env variables in exec() */
+static bool             enforce_exec_env;
 static long int         page_size;
 
 static _Atomic bool     daos_inited;
@@ -154,6 +170,7 @@ struct file_obj {
 	unsigned int     st_ino;
 	int              idx_mmap;
 	off_t            offset;
+	char            *path;
 	char             item_name[DFS_MAX_NAME];
 };
 
@@ -265,6 +282,8 @@ static void
 update_cwd(void);
 static int
 get_eqh(daos_handle_t *eqh);
+static void
+destroy_all_eqs(void);
 
 /* Hash table entry for directory handles.  The struct and name will be allocated as a single
  * entity.
@@ -408,6 +427,9 @@ static ssize_t (*pthread_write)(int fd, const void *buf, size_t count);
 
 static ssize_t (*next_pwrite)(int fd, const void *buf, size_t size, off_t offset);
 
+static ssize_t (*next_readv)(int fd, const struct iovec *iov, int iovcnt);
+static ssize_t (*next_writev)(int fd, const struct iovec *iov, int iovcnt);
+
 static off_t (*libc_lseek)(int fd, off_t offset, int whence);
 static off_t (*pthread_lseek)(int fd, off_t offset, int whence);
 
@@ -515,10 +537,13 @@ static void (*next__exit)(int rc) __attribute__((__noreturn__));
 /* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
 /* static org_dup3 real_dup3=NULL; */
 
+static int (*next_execve)(const char *filename, char *const argv[], char *const envp[]);
+static int (*next_execv)(const char *filename, char *const argv[]);
+static int (*next_execvp)(const char *filename, char *const argv[]);
+static int (*next_execvpe)(const char *filename, char *const argv[], char *const envp[]);
+static int (*next_fexecve)(int fd, char *const argv[], char *const envp[]);
+
 /**
- *static int (*real_execve)(const char *filename, char *const argv[], char *const envp[]);
- * static int (*real_execvp)(const char *filename, char *const argv[]);
- * static int (*real_execv)(const char *filename, char *const argv[]);
  * static pid_t (*real_fork)();
  */
 
@@ -727,11 +752,11 @@ discover_dfuse_mounts(void)
 			abort();
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
-		if (strncmp(fs_entry->mnt_type, MNT_TYPE_FUSE, sizeof(MNT_TYPE_FUSE)) == 0) {
+		if (strncmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
 			pt_dfs_mt->dfs_dir_hash = NULL;
 			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
-				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
+				D_DEBUG(DB_ANY, "mnt_dir[] is too long. Skip this entry.\n");
 				D_GOTO(out, rc = ENAMETOOLONG);
 			}
 			if (access(fs_entry->mnt_dir, R_OK)) {
@@ -1032,9 +1057,9 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	}
 
 	/* handle special cases. Needed to work with git. */
-	if ((strncmp(szInput, "http://", 7) == 0) ||
-	    (strncmp(szInput, "https://", 8) == 0) ||
-	    (strncmp(szInput, "git://", 6) == 0)) {
+	if ((strncmp(szInput, STR_AND_SIZE_M1("http://")) == 0) ||
+	    (strncmp(szInput, STR_AND_SIZE_M1("https://")) == 0) ||
+	    (strncmp(szInput, STR_AND_SIZE_M1("git://")) == 0)) {
 		*is_target_path = 0;
 		return 0;
 	}
@@ -1571,6 +1596,7 @@ free_fd(int idx, bool closing_dup_fd)
 		 *  make sure the code about adding and decreasing the reference to the struct
 		 *  working as expected.
 		 */
+		D_FREE(saved_obj->path);
 		memset(saved_obj, 0, sizeof(struct file_obj));
 		D_FREE(saved_obj);
 		if (rc)
@@ -2011,6 +2037,14 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	file_list[idx_fd]->open_flag   = oflags;
 	/* NEED to set at the end of file if O_APPEND!!!!!!!! */
 	file_list[idx_fd]->offset = 0;
+	if (strncmp(full_path, "/", 2) == 0)
+		D_STRNDUP(file_list[idx_fd]->path, dfs_mt->fs_root, DFS_MAX_PATH);
+	else
+		D_ASPRINTF(file_list[idx_fd]->path, "%s%s", dfs_mt->fs_root, full_path);
+	if (file_list[idx_fd]->path == NULL) {
+		free_fd(idx_fd, false);
+		D_GOTO(out_error, rc = ENOMEM);
+	}
 	strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
 
 	FREE(parent_dir);
@@ -2431,6 +2465,225 @@ pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alia
 ssize_t
 __pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((alias("pwrite")));
 
+static ssize_t
+readv_over_dfs(int fd, const struct iovec *iov, int iovcnt)
+{
+	int           rc, rc2, i, ii;
+	daos_size_t   bytes_read;
+	daos_event_t  ev;
+	daos_handle_t eqh;
+	d_sg_list_t   sgl      = {0};
+	ssize_t       size_sum = 0;
+
+	atomic_fetch_add_relaxed(&num_read, 1);
+
+	D_ALLOC_ARRAY(sgl.sg_iovs, iovcnt);
+	if (sgl.sg_iovs == NULL) {
+		errno = ENOMEM;
+		return (-1);
+	}
+	/* need to skip zero size length. ii will be the real value for iovcnt */
+	ii = 0;
+	for (i = 0; i < iovcnt; i++) {
+		if (iov[i].iov_len == 0)
+			continue;
+		d_iov_set(&sgl.sg_iovs[ii], iov[i].iov_base, iov[i].iov_len);
+		size_sum += iov[i].iov_len;
+		ii++;
+	}
+	sgl.sg_nr = ii;
+	if (size_sum == 0) {
+		D_FREE(sgl.sg_iovs);
+		return size_sum;
+	}
+
+	rc = get_eqh(&eqh);
+	if (rc == 0) {
+		bool flag = false;
+
+		rc = daos_event_init(&ev, eqh, NULL);
+		if (rc) {
+			DL_ERROR(rc, "daos_event_init() failed");
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		rc = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			      file_list[fd]->offset, &bytes_read, &ev);
+		if (rc)
+			D_GOTO(err_ev, rc);
+
+		while (1) {
+			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+			if (rc) {
+				DL_ERROR(rc, "daos_event_test() failed");
+				D_GOTO(err_ev, rc = daos_der2errno(rc));
+			}
+			if (flag)
+				break;
+			sched_yield();
+		}
+		rc = ev.ev_error;
+
+		rc2 = daos_event_fini(&ev);
+		if (rc2)
+			DL_ERROR(rc2, "daos_event_fini() failed");
+	} else {
+		rc = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			      file_list[fd]->offset, &bytes_read, NULL);
+	}
+
+	if (rc)
+		D_GOTO(err, rc);
+
+	D_FREE(sgl.sg_iovs);
+	return (ssize_t)bytes_read;
+
+err_ev:
+	rc2 = daos_event_fini(&ev);
+	if (rc2)
+		DL_ERROR(rc2, "daos_event_fini() failed");
+
+err:
+	D_FREE(sgl.sg_iovs);
+	DS_ERROR(rc, "readv_over_dfs failed");
+	errno = rc;
+	return (-1);
+}
+
+static ssize_t
+writev_over_dfs(int fd, const struct iovec *iov, int iovcnt)
+{
+	int           rc, rc2, i, ii;
+	daos_event_t  ev;
+	daos_handle_t eqh;
+	d_sg_list_t   sgl      = {0};
+	ssize_t       size_sum = 0;
+
+	atomic_fetch_add_relaxed(&num_write, 1);
+
+	D_ALLOC_ARRAY(sgl.sg_iovs, iovcnt);
+	if (sgl.sg_iovs == NULL) {
+		errno = ENOMEM;
+		return (-1);
+	}
+	/* need to skip zero size length. ii will be the real value for iovcnt */
+	ii = 0;
+	for (i = 0; i < iovcnt; i++) {
+		if (iov[i].iov_len == 0)
+			continue;
+		d_iov_set(&sgl.sg_iovs[ii], iov[i].iov_base, iov[i].iov_len);
+		size_sum += iov[i].iov_len;
+		ii++;
+	}
+	sgl.sg_nr = ii;
+	if (size_sum == 0) {
+		D_FREE(sgl.sg_iovs);
+		return size_sum;
+	}
+
+	rc = get_eqh(&eqh);
+	if (rc == 0) {
+		bool flag = false;
+
+		rc = daos_event_init(&ev, eqh, NULL);
+		if (rc) {
+			DL_ERROR(rc, "daos_event_init() failed");
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		rc = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			       file_list[fd]->offset, &ev);
+		if (rc)
+			D_GOTO(err_ev, rc);
+
+		while (1) {
+			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+			if (rc) {
+				DL_ERROR(rc, "daos_event_test() failed");
+				D_GOTO(err_ev, rc = daos_der2errno(rc));
+			}
+			if (flag)
+				break;
+			sched_yield();
+		}
+		rc = ev.ev_error;
+
+		rc2 = daos_event_fini(&ev);
+		if (rc2)
+			DL_ERROR(rc2, "daos_event_fini() failed");
+	} else {
+		rc = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
+			       file_list[fd]->offset, NULL);
+	}
+
+	if (rc)
+		D_GOTO(err, rc);
+
+	D_FREE(sgl.sg_iovs);
+	return size_sum;
+
+err_ev:
+	rc2 = daos_event_fini(&ev);
+	if (rc2)
+		DL_ERROR(rc2, "daos_event_fini() failed");
+
+err:
+	D_FREE(sgl.sg_iovs);
+	DS_ERROR(rc, "writev_over_dfs failed");
+	errno = rc;
+	return (-1);
+}
+
+ssize_t
+readv(int fd, const struct iovec *iov, int iovcnt)
+{
+	int     fd_directed;
+	ssize_t size_sum;
+
+	if (next_readv == NULL) {
+		next_readv = dlsym(RTLD_NEXT, "readv");
+		D_ASSERT(next_readv != NULL);
+	}
+	if (!hook_enabled)
+		return next_readv(fd, iov, iovcnt);
+
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_readv(fd, iov, iovcnt);
+
+	size_sum = readv_over_dfs(fd_directed - FD_FILE_BASE, iov, iovcnt);
+	if (size_sum < 0)
+		return size_sum;
+	file_list[fd_directed - FD_FILE_BASE]->offset += size_sum;
+
+	return size_sum;
+}
+
+ssize_t
+writev(int fd, const struct iovec *iov, int iovcnt)
+{
+	int     fd_directed;
+	ssize_t size_sum;
+
+	if (next_writev == NULL) {
+		next_writev = dlsym(RTLD_NEXT, "writev");
+		D_ASSERT(next_writev != NULL);
+	}
+	if (!hook_enabled)
+		return next_writev(fd, iov, iovcnt);
+
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_writev(fd, iov, iovcnt);
+
+	size_sum = writev_over_dfs(fd_directed - FD_FILE_BASE, iov, iovcnt);
+	if (size_sum < 0)
+		return size_sum;
+	file_list[fd_directed - FD_FILE_BASE]->offset += size_sum;
+
+	return size_sum;
+}
+
 static int
 new_fxstat(int vers, int fd, struct stat *buf)
 {
@@ -2791,6 +3044,7 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 
 	if (!hook_enabled)
 		return next_lseek(fd, offset, whence);
+
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed < FD_FILE_BASE)
 		return next_lseek(fd, offset, whence);
@@ -3310,70 +3564,346 @@ out_readdir:
 	return &mydir->ents[mydir->num_ents];
 }
 
-/**
- *static char** pre_envp(char *const envp[])
- *{
- *	int	i, num_entry = 0;
- *	char	**new_envp;
- *
- *	if (envp == NULL) {
- *		num_entry = 0;
- *	} else if (envp[0] == NULL) {
- *		num_entry = 0;
- *	} else {
- *		while (envp[num_entry])	{
- *			num_entry++;
- *		}
- *	}
- *
- *	new_envp = malloc(sizeof(char *) * (num_entry + 5));
- *	assert(new_envp != NULL);
- *	for (i = 0; i < num_entry; i++)	{
- *		new_envp[i] = envp[i];
- *	}
- *	for (i = 0; i < 5; i++)	{
- *		new_envp[num_entry + i] = envp_lib[i];
- *	}
- *
- *	return new_envp;
- *}
- *
- *static int
- *new_execve(const char *filename, char *const argv[], char *const envp[])
- *{
- *	printf("DBG> execve(%s)\n", filename);
- *	return real_execve(filename, argv, pre_envp(envp));
- *}
- *
- *static int
- *new_execvp(const char *filename, char *const argv[])
- *{
- *	printf("DBG> execvp(%s)\n", filename);
- *	return real_execve(filename, argv, pre_envp(NULL));
- *}
- *
- *static int
- *new_execv(const char *filename, char *const argv[])
- *{
- *	printf("DBG> execv(%s)\n", filename);
- *	pre_envp(NULL);
- *	return real_execve(filename, argv, pre_envp(NULL));
- *}
- *
- *static pid_t
- *new_fork(void)
- *{
- *	pid_t pid;
- *	pid = real_fork();
- *	if (pid) {
- *		// parent process: do nothing
- *		return pid;
- *	} else {
- *		init_dfs();
- *		return pid;
- *	}
- *}
+/* This is the number of environmental variables that would be forced to set in child process.
+ * "LD_PRELOAD" is a special case and it is not included in the list.
  */
+static char  *env_list[] = {"D_IL_REPORT", "DAOS_MOUNT_POINT", "DAOS_POOL", "DAOS_CONTAINER",
+			    "D_IL_MAX_EQ", "D_LOG_FILE", "D_IL_ENFORCE_EXEC_ENV",  "DD_MASK",
+			    "DD_SUBSYS", "D_LOG_MASK"};
+
+/* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
+ * related env properly set, we intercept execve and its variants to check envp[] and append our
+ * env when a stripped env list is provided.
+ * pre_envp() scans provided envp to look for libpil4dfs related envs (env_list[]) and sets a new
+ * envp with missing libpil4dfs related envs appended. Non-zero return value carries error code.
+ * envp could be NULL, so *new_envp could be NULL too.
+ * The fd for daos logging may be not valid here, so fprintf() is used in this function.
+ */
+static int
+pre_envp(char *const envp[], char ***new_envp)
+{
+	int    i, j, rc = 0;
+	int    len, len2, len_total;
+	int    num_env_append;
+	char  *pil4df_path;
+	char  *new_preload_str;
+	int    num_entry       = 0;
+	int    num_entry_found = 0;
+	int    idx_preload     = -1;
+	/* whether pil4dfs set in LD_PRELOAD in environ */
+	bool   pil4dfs_set_preload                = false;
+	bool   preload_included                   = false;
+	/* whether pil4dfs in LD_PRELOAD in envp[] */
+	bool   pil4dfs_in_preload                 = false;
+	/* whether env_list entry exists in envp[] */
+	bool   env_found[ARRAY_SIZE(env_list)]    = {false};
+	/* whether env_list entry exists in environ */
+	bool   env_set[ARRAY_SIZE(env_list)]      = {false};
+	/* the buffer allocated for the env string to append */
+	char  *env_buf_list[ARRAY_SIZE(env_list)] = {NULL};
+	char  *env_value                          = NULL;
+
+	*new_envp = (char**)envp;
+
+	/* simply return for environ. append pil4dfs env only for stripped env list. */
+	if (envp == environ)
+		return 0;
+
+	/* check D_IL_ENFORCE_EXEC_ENV env in case it was updated. */
+	rc = d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
+	if (rc == -DER_NONEXIST || enforce_exec_env == false)
+		return 0;
+
+	/* the number of env in env_list[] that are set in environ */
+	num_env_append = 0;
+
+	/* check whether "LD_PRELOAD" exists in environ */
+	rc = d_agetenv_str(&env_value, "LD_PRELOAD");
+	if (rc == -DER_NONEXIST) {
+		return 0;
+	} else if (rc == -DER_NOMEM) {
+		rc = ENOMEM;
+		goto err_out0;
+	}
+	if (strstr(env_value, "libpil4dfs.so")) {
+		pil4dfs_set_preload = true;
+		num_env_append++;
+	}
+	d_freeenv_str(&env_value);
+	/* libpil4dfs.so is not in LD_PRELOAD, do not append env. */
+	if (!pil4dfs_set_preload)
+		return 0;
+
+	/* check whether env_list entries exist in environ */
+	for (i = 0; i < ARRAY_SIZE(env_list); i++) {
+		rc = d_agetenv_str(&env_value, env_list[i]);
+		if (rc == -DER_NONEXIST) {
+			/* Do nothing if env does not exist*/
+			continue;
+		} else if (rc == -DER_NOMEM) {
+			rc = ENOMEM;
+			goto err_out0;
+		}
+		/* In case d_agetenv_str() returns -DER_SUCCESS */
+		d_freeenv_str(&env_value);
+		env_set[i] = true;
+		num_env_append++;
+	}
+
+	if (envp == NULL) {
+		num_entry = 0;
+	} else if (envp[0] == NULL) {
+		num_entry = 0;
+	} else {
+		while (envp[num_entry]) {
+			/* scan the env in env_list[] to check whether they exist or not */
+			if (strncmp(envp[num_entry], STR_AND_SIZE_M1("LD_PRELOAD")) == 0 &&
+			    preload_included == false) {
+				preload_included = true;
+				idx_preload      = num_entry;
+				num_entry_found++;
+				if (strstr(envp[num_entry], "libpil4dfs.so"))
+					pil4dfs_in_preload = true;
+			}
+			/* The list of env is not too long. We use a simple loop to lookup for
+			 * simplicity. This function is not performance critical.
+			 */
+			for (i = 0; i < ARRAY_SIZE(env_list); i++) {
+				/* env is not set in environ, then no need to append. */
+				if (!env_set[i])
+					continue;
+				if (!env_found[i]) {
+					if (strncmp(envp[num_entry], STR_AND_SIZE_M1(env_list[i]))
+					    == 0) {
+						env_found[i] = true;
+						num_entry_found++;
+					}
+				}
+			}
+			num_entry++;
+		}
+	}
+
+	/* All required env are found and pil4dfs is in LD_PRELOAD. No need to create a new envp. */
+	if (num_entry_found == num_env_append && pil4dfs_in_preload == true)
+		return 0;
+
+	/* the new envp holds the existing envs & the envs forced to append plus NULL at the end */
+	*new_envp = calloc(num_entry + num_env_append + 1, sizeof(char *));
+	if (*new_envp == NULL) {
+		rc = ENOMEM;
+		goto err_out0;
+	}
+
+	/* Copy all existing entries to the new envp[] */
+	for (i = 0; i < num_entry; i++) {
+		(*new_envp)[i] = envp[i];
+	}
+
+	/* LD_PRELOAD is a special case. If LD_PRELOAD is found but libpil4dfs.so is not in
+	 * LD_PRELOAD env, then allocate a buffer for the concatenation of existing LD_PRELOAD
+	 * env and the full path of libpil4dfs.so.
+	 */
+	pil4df_path = query_pil4dfs_path();
+	len2        = strnlen(pil4df_path, PATH_MAX);
+	if (preload_included == true && pil4dfs_in_preload == false) {
+		/* need to replace the existing string */
+		len = strnlen(envp[idx_preload], MAX_ARG_STRLEN);
+		/* 2 extra bytes for ':' and '\0' */
+		len_total = len + len2 + 2;
+		if (len_total > MAX_ARG_STRLEN) {
+			fprintf(stderr, "Error: env for LD_PRELOAD is too long.\n");
+			rc = E2BIG;
+			goto err_out1;
+		}
+		rc = asprintf(&new_preload_str, "%s:%s", envp[idx_preload], pil4df_path);
+		if (rc < 0) {
+			rc = ENOMEM;
+			goto err_out1;
+		}
+		(*new_envp)[idx_preload] = new_preload_str;
+	}
+	/* append LD_PRELOAD env */
+	if (!preload_included) {
+		rc = asprintf(&new_preload_str, "LD_PRELOAD=%s", pil4df_path);
+		if (rc < 0) {
+			rc = ENOMEM;
+			goto err_out1;
+		}
+		(*new_envp)[i] = new_preload_str;
+		i++;
+	}
+
+	for (j = 0; j < ARRAY_SIZE(env_list); j++) {
+		/* env is not set in environ. */
+		if (!env_set[i])
+			continue;
+		/* env is not found in envp[]. Need to be appended if present in current process. */
+		if (!env_found[j]) {
+			rc = d_agetenv_str(&env_value, env_list[j]);
+			if (rc == -DER_NONEXIST) {
+				/* Do nothing if env does not exist. Not suppose to be here. */
+				continue;
+			} else if (rc == -DER_NOMEM) {
+				rc = ENOMEM;
+				goto err_out2;
+			}
+			/* In case d_agetenv_str() returns -DER_SUCCESS, append the env */
+			rc = asprintf(&env_buf_list[j], "%s=%s", env_list[j], env_value);
+			if (rc < 0) {
+				rc = ENOMEM;
+				goto err_out2;
+			}
+			(*new_envp)[i] = env_buf_list[j];
+			i++;
+			/* free the buffer allocated by d_agetenv_str() */
+			d_freeenv_str(&env_value);
+		}
+	}
+
+	return 0;
+
+err_out2:
+	/* free the memory allocated for all env buffer */
+	for (j = 0; j < ARRAY_SIZE(env_list); j++) {
+		if (env_buf_list[j])
+			free(env_buf_list[j]);
+	}
+	/* free the buffer returned from d_agetenv_str */
+	if (env_value)
+		d_freeenv_str(&env_value);
+	free(new_preload_str);
+err_out1:
+	free(*new_envp);
+err_out0:
+	return rc;
+}
+
+static void
+reset_daos_env_before_exec(void)
+{
+	/* bash does fork(), then close opened files before exec(),
+	 * so the fd for log file probably is invalid now.
+	 */
+	d_log_disable_logging();
+
+	if (context_reset) {
+		destroy_all_eqs();
+		daos_eq_lib_fini();
+		daos_inited       = false;
+		daos_debug_inited = false;
+		context_reset     = false;
+	}
+}
+
+int
+execve(const char *filename, char *const argv[], char *const envp[])
+{
+	char **new_envp;
+	int    rc;
+
+	if (next_execve == NULL) {
+		next_execve = dlsym(RTLD_NEXT, "execve");
+		D_ASSERT(next_execve != NULL);
+	}
+	if (!hook_enabled)
+		return next_execve(filename, argv, envp);
+
+	reset_daos_env_before_exec();
+
+	if (!enforce_exec_env)
+		return next_execve(filename, argv, envp);
+
+	rc = pre_envp(envp, &new_envp);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+	return next_execve(filename, argv, new_envp);
+}
+
+int
+execvpe(const char *filename, char *const argv[], char *const envp[])
+{
+	char **new_envp;
+	int    rc;
+
+	if (next_execvpe == NULL) {
+		next_execvpe = dlsym(RTLD_NEXT, "execvpe");
+		D_ASSERT(next_execvpe != NULL);
+	}
+	if (!hook_enabled)
+		return next_execvpe(filename, argv, envp);
+
+	reset_daos_env_before_exec();
+
+	if (!enforce_exec_env)
+		return next_execvpe(filename, argv, envp);
+
+	rc = pre_envp(envp, &new_envp);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+
+	return next_execvpe(filename, argv, new_envp);
+}
+
+int
+execv(const char *filename, char *const argv[])
+{
+	if (next_execv == NULL) {
+		next_execv = dlsym(RTLD_NEXT, "execv");
+		D_ASSERT(next_execv != NULL);
+	}
+	if (!hook_enabled)
+		return next_execv(filename, argv);
+
+	reset_daos_env_before_exec();
+
+	return next_execv(filename, argv);
+}
+
+int
+execvp(const char *filename, char *const argv[])
+{
+	if (next_execvp == NULL) {
+		next_execvp = dlsym(RTLD_NEXT, "execvp");
+		D_ASSERT(next_execvp != NULL);
+	}
+	if (!hook_enabled)
+		return next_execvp(filename, argv);
+
+	reset_daos_env_before_exec();
+
+	return next_execvp(filename, argv);
+}
+
+int
+fexecve(int fd, char *const argv[], char *const envp[])
+{
+	char **new_envp;
+	int    rc;
+
+	if (next_fexecve == NULL) {
+		next_fexecve = dlsym(RTLD_NEXT, "fexecve");
+		D_ASSERT(next_fexecve != NULL);
+	}
+	if (!hook_enabled)
+		return next_fexecve(fd, argv, envp);
+
+	reset_daos_env_before_exec();
+
+	if (!enforce_exec_env)
+		return next_fexecve(fd, argv, envp);
+
+	rc = pre_envp(envp, &new_envp);
+	if (rc) {
+		errno = rc;
+		return (-1);
+	}
+	return next_fexecve(fd, argv, new_envp);
+}
 
 int
 mkdir(const char *path, mode_t mode)
@@ -5673,13 +6203,15 @@ init_myhook(void)
 	else
 		daos_debug_inited = true;
 
-	d_agetenv_str(&env_log, "D_IL_REPORT");
+	rc = d_agetenv_str(&env_log, "D_IL_REPORT");
 	if (env_log) {
 		report = true;
 		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
 			report = false;
 		d_freeenv_str(&env_log);
 	}
+	enforce_exec_env = false;
+	d_getenv_bool("D_IL_ENFORCE_EXEC_ENV", &enforce_exec_env);
 
 	/* Find dfuse mounts from /proc/mounts */
 	rc = discover_dfuse_mounts();
@@ -5767,12 +6299,6 @@ init_myhook(void)
 
 	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
 	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
-
-	/**	register_a_hook("libc", "execve", (void *)new_execve, (long int *)(&real_execve));
-	 *	register_a_hook("libc", "execvp", (void *)new_execvp, (long int *)(&real_execvp));
-	 *	register_a_hook("libc", "execv", (void *)new_execv, (long int *)(&real_execv));
-	 *	register_a_hook("libc", "fork", (void *)new_fork, (long int *)(&real_fork));
-	 */
 
 	init_fd_dup2_list();
 

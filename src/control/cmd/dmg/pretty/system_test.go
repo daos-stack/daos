@@ -8,6 +8,7 @@ package pretty
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	. "github.com/daos-stack/daos/src/control/system"
 )
@@ -27,13 +29,13 @@ func mockRankGroups(t *testing.T) RankGroups {
 	if err != nil {
 		t.Fatal(err)
 	}
-	groups["foo/OK"] = rs1
+	groups[fmt.Sprintf("foo%sOK", rowFieldSep)] = rs1
 
 	rs2, err := CreateRankSet("10,20-299")
 	if err != nil {
 		t.Fatal(err)
 	}
-	groups["bar/BAD"] = rs2
+	groups[fmt.Sprintf("bar%sBAD", rowFieldSep)] = rs2
 
 	return groups
 }
@@ -45,7 +47,7 @@ func TestPretty_tabulateRankGroups(t *testing.T) {
 		groups      RankGroups
 		cTitles     []string
 		expPrintStr string
-		expErrMsg   string
+		expErr      error
 	}{
 		"formatted results": {
 			groups:  mockRankGroups(t),
@@ -59,21 +61,46 @@ Ranks       Action Result
 `,
 		},
 		"column number mismatch": {
-			groups:    mockRankGroups(t),
-			cTitles:   []string{"Ranks", "SCM", "NVME", "???"},
-			expErrMsg: "unexpected summary format",
+			groups:  mockRankGroups(t),
+			cTitles: []string{"Ranks", "SCM", "NVME", "???"},
+			expErr:  errors.New("unexpected summary format, fields [SCM NVME ???] values [bar BAD]"),
 		},
 		"too few columns": {
-			groups:    mockRankGroups(t),
-			cTitles:   []string{"Ranks"},
-			expErrMsg: "insufficient number of column titles",
+			groups:  mockRankGroups(t),
+			cTitles: []string{"Ranks"},
+			expErr:  errors.New("insufficient number"),
+		},
+		"empty rank groups": {
+			groups:  make(RankGroups),
+			cTitles: mockColumnTitles,
+			expPrintStr: `
+Ranks Action Result 
+----- ------ ------ 
+
+`,
+		},
+		"double tab char in result message": {
+			groups: func() RankGroups {
+				g := mockRankGroups(t)
+				rs, err := CreateRankSet("300-399")
+				if err != nil {
+					t.Fatal(err)
+				}
+				g["zoo\t\tallow"] = rs
+				return g
+			}(),
+			cTitles: mockColumnTitles,
+			expErr:  errors.New("unexpected summary format, fields [Action Result] values [zoo  allow]"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
 
 			gotErr := tabulateRankGroups(&bld, tc.groups, tc.cTitles...)
-			test.ExpectError(t, gotErr, tc.expErrMsg, name)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
@@ -368,7 +395,7 @@ func TestPretty_PrintSystemStartResp(t *testing.T) {
 	failedResults := MemberResults{
 		NewMemberResult(1, nil, MemberStateReady, "start"),
 		NewMemberResult(2, errors.New("fail"), MemberStateReady, "start"),
-		NewMemberResult(0, errors.New("failed"), MemberStateStopped, "start"),
+		NewMemberResult(0, errors.New("failed\t\tnow"), MemberStateStopped, "start"),
 		NewMemberResult(3, nil, MemberStateStopped, "start"),
 	}
 
@@ -410,11 +437,11 @@ Rank  Operation Result
 				Results: failedResults,
 			},
 			expPrintStr: `
-Rank  Operation Result 
-----  --------- ------ 
-[1,3] start     OK     
-2     start     fail   
-0     start     failed 
+Rank  Operation Result      
+----  --------- ------      
+[1,3] start     OK          
+2     start     fail        
+0     start     failed  now 
 
 `,
 		},
@@ -452,6 +479,58 @@ Unknown 3 hosts: foo[7-9]
 	}
 }
 
+func TestPretty_printSystemResults(t *testing.T) {
+	for name, tc := range map[string]struct {
+		results     MemberResults
+		expPrintStr string
+		expErr      error
+	}{
+		"first-time success": {
+			results: MemberResults{
+				MockMemberResult(3, "stop", nil, MemberStateExcluded),
+				MockMemberResult(4, "stop", errors.New("failure 2"),
+					MemberStateExcluded),
+			},
+			expPrintStr: `
+Rank Operation Result    
+---- --------- ------    
+3    stop      OK        
+4    stop      failure 2 
+
+`,
+		},
+		"first-time fail": {
+			results: MemberResults{
+				MockMemberResult(3, "stop", nil, MemberStateExcluded),
+				MockMemberResult(4, "stop", errors.New("failure"),
+					MemberStateExcluded),
+			},
+			expPrintStr: `
+Rank Operation Result  
+---- --------- ------  
+3    stop      OK      
+4    stop      failure 
+
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld, bldErr strings.Builder
+
+			gotErr := printSystemResults(&bld, &bldErr, tc.results, new(hostlist.HostSet),
+				new(ranklist.RankSet))
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected results table (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestPretty_PrintSystemStopResp(t *testing.T) {
 	successResults := MemberResults{
 		NewMemberResult(1, nil, MemberStateReady, "stop"),
@@ -461,10 +540,11 @@ func TestPretty_PrintSystemStopResp(t *testing.T) {
 	}
 	failedResults := MemberResults{
 		NewMemberResult(1, nil, MemberStateReady, "stop"),
-		NewMemberResult(2, errors.New("fail"), MemberStateReady, "stop"),
+		NewMemberResult(2, errors.New("fail,\t\t/"), MemberStateReady, "stop"),
 		NewMemberResult(0, errors.New("failed"), MemberStateStopped, "stop"),
 		NewMemberResult(3, nil, MemberStateStopped, "stop"),
 	}
+	noResults := MemberResults{}
 
 	for name, tc := range map[string]struct {
 		resp        *control.SystemStopResp
@@ -499,16 +579,24 @@ Rank  Operation Result
 
 `,
 		},
+		"response with no results": {
+			resp: &control.SystemStopResp{
+				Results: noResults,
+			},
+			expPrintStr: `
+No results returned
+`,
+		},
 		"response with failures": {
 			resp: &control.SystemStopResp{
 				Results: failedResults,
 			},
 			expPrintStr: `
-Rank  Operation Result 
-----  --------- ------ 
-[1,3] stop      OK     
-2     stop      fail   
-0     stop      failed 
+Rank  Operation Result   
+----  --------- ------   
+[1,3] stop      OK       
+2     stop      fail,  / 
+0     stop      failed   
 
 `,
 		},

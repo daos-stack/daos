@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2024 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -134,7 +134,7 @@ int crt_hg_get_protocol_info(const char *info_string, struct na_protocol_info **
 void crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info);
 int crt_hg_init(void);
 int crt_hg_fini(void);
-int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx, bool primary);
+int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, crt_provider_t provider, int ctx_idx, bool primary, int iface_idx);
 int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
 int crt_hg_req_create(struct crt_hg_context *hg_ctx,
 		      struct crt_rpc_priv *rpc_priv);
@@ -158,25 +158,26 @@ int crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc);
 int crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data);
 int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);
 
-bool crt_provider_is_contig_ep(int provider);
-bool crt_provider_is_port_based(int provider);
-char *crt_provider_name_get(int provider);
-bool crt_provider_is_sep(bool primary, int provider);
-void crt_provider_set_sep(bool primary, int provider, bool enable);
-int crt_provider_get_cur_ctx_num(bool primary, int provider);
-int crt_provider_get_ctx_idx(bool primary, int provider);
-void crt_provider_put_ctx_idx(bool primary, int provider, int idx);
-int crt_provider_get_max_ctx_num(bool primary, int provider);
-d_list_t *crt_provider_get_ctx_list(bool primary, int provider);
-void crt_provider_get_ctx_list_and_num(bool primary, int provider, d_list_t **list, int *num);
+bool crt_provider_is_contig_ep(crt_provider_t provider);
+bool crt_provider_is_port_based(crt_provider_t provider);
+char *crt_provider_name_get(crt_provider_t provider);
+uint32_t crt_provider_num_ifaces_get(bool primary, crt_provider_t provider);
+bool crt_provider_is_sep(bool primary, crt_provider_t provider);
+void crt_provider_set_sep(bool primary, crt_provider_t provider, bool enable);
+int crt_provider_get_cur_ctx_num(bool primary, crt_provider_t provider);
+int crt_provider_get_ctx_idx(bool primary, crt_provider_t provider);
+void crt_provider_put_ctx_idx(bool primary, crt_provider_t provider, int idx);
+int crt_provider_get_max_ctx_num(bool primary, crt_provider_t provider);
+d_list_t *crt_provider_get_ctx_list(bool primary, crt_provider_t provider);
+void crt_provider_get_ctx_list_and_num(bool primary, crt_provider_t provider, d_list_t **list, int *num);
+char* crt_provider_iface_str_get(bool primary, crt_provider_t provider, int iface_idx);
 struct crt_na_config*
-crt_provider_get_na_config(bool primary, int provider);
+crt_provider_get_na_config(bool primary, crt_provider_t provider);
 
 
 static inline int
 crt_hgret_2_der(int hg_ret)
 {
-	/* Note: DAOS will only consider DER_HG and DER_CANCELED as retryable */
 	switch (hg_ret) {
 	case HG_SUCCESS:
 		return 0;
@@ -194,11 +195,11 @@ crt_hgret_2_der(int hg_ret)
 	case HG_BUSY:
 		return -DER_BUSY;
 	case HG_FAULT:
+	case HG_PROTOCOL_ERROR:
 		return -DER_HG_FATAL;
 	case HG_PERMISSION:
 	case HG_ACCESS:
 		return -DER_NO_PERM;
-	case HG_PROTOCOL_ERROR:
 	default:
 		return -DER_HG;
 	};

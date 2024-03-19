@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -38,6 +38,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
+
+const fabricProviderProp = "fabric_providers"
 
 // GetAttachInfo handles a request to retrieve a map of ranks to fabric URIs, in addition
 // to client network autoconfiguration hints.
@@ -173,6 +175,10 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		return nil, errors.Wrapf(err, "invalid server fault domain %q", req.SrvFaultDomain)
 	}
 
+	if err := svc.checkReqFabricProvider(req, peerAddr, svc.events); err != nil {
+		return nil, err
+	}
+
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
 		Rank:                    ranklist.Rank(req.Rank),
 		UUID:                    uuid,
@@ -220,6 +226,86 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 	}
 
 	return resp, nil
+}
+
+func (svc *mgmtSvc) checkReqFabricProvider(req *mgmtpb.JoinReq, peerAddr *net.TCPAddr, publisher events.Publisher) error {
+	joinProv, err := getProviderFromURI(req.Uri)
+	if err != nil {
+		return err
+	}
+
+	sysProv, err := svc.getFabricProvider()
+	if err != nil {
+		return errors.Wrapf(err, "fetching system fabric provider")
+	}
+
+	if joinProv != sysProv {
+		msg := fmt.Sprintf("rank %d fabric provider %q does not match system provider %q",
+			req.Rank, joinProv, sysProv)
+
+		publisher.Publish(events.NewEngineJoinFailedEvent(peerAddr.String(), req.Idx, req.Rank, msg))
+		return errors.New(msg)
+	}
+
+	return nil
+}
+
+func getProviderFromURI(uri string) (string, error) {
+	uriParts := strings.Split(uri, "://")
+	if len(uriParts) < 2 {
+		return "", fmt.Errorf("unable to parse fabric provider from URI %q", uri)
+	}
+	return uriParts[0], nil
+}
+
+func (svc *mgmtSvc) getFabricProvider() (string, error) {
+	return system.GetMgmtProperty(svc.sysdb, fabricProviderProp)
+}
+
+func (svc *mgmtSvc) setFabricProviders(val string) error {
+	return system.SetMgmtProperty(svc.sysdb, fabricProviderProp, val)
+}
+
+func (svc *mgmtSvc) updateFabricProviders(provList []string, publisher events.Publisher) error {
+	provStr := strings.Join(provList, ",")
+
+	curProv, err := svc.getFabricProvider()
+	if system.IsErrSystemAttrNotFound(err) {
+		svc.log.Debugf("setting system fabric providers (%s) for the first time", provStr)
+
+		if err := svc.setFabricProviders(provStr); err != nil {
+			return errors.Wrapf(err, "setting fabric provider for the first time")
+		}
+		return nil
+	}
+	if err != nil {
+		return errors.Wrapf(err, "fetching current mgmt property %q", fabricProviderProp)
+	}
+
+	if provStr != curProv {
+		numJoined, err := svc.sysdb.MemberCount(system.MemberStateJoined)
+		if err != nil {
+			return errors.Wrapf(err, "getting number of joined members")
+		}
+		if numJoined > 0 {
+			return errors.Errorf("cannot change system provider %q to %q: %d member(s) already joined",
+				curProv, provStr, numJoined)
+		}
+
+		if err := svc.setFabricProviders(provStr); err != nil {
+			return errors.Wrapf(err, "changing fabric provider prop")
+		}
+		publisher.Publish(newFabricProvChangedEvent(curProv, provStr))
+		return nil
+	}
+
+	svc.log.Tracef("system fabric provider value has not changed (%s)", provStr)
+	return nil
+}
+
+func newFabricProvChangedEvent(old, new string) *events.RASEvent {
+	return events.NewGenericEvent(events.RASSystemFabricProvChanged, events.RASSeverityNotice,
+		fmt.Sprintf("system fabric provider has changed: %s -> %s", old, new), "")
 }
 
 // reqGroupUpdate requests a group update.
@@ -465,7 +551,14 @@ func (svc *mgmtSvc) rpcFanout(ctx context.Context, req *fanoutRequest, resp *fan
 			finished.Add(ranklist.Rank(rr.Rank))
 		}
 
-		svc.log.Infof("%s: finished: %s; waiting: %s", funcName(req.Method), finished, waiting)
+		msg := fmt.Sprintf("%s: ", funcName(req.Method))
+		if finished.Count() != 0 {
+			msg = fmt.Sprintf(" finished: %q", finished)
+		}
+		if waiting.Count() != 0 {
+			msg = fmt.Sprintf(" waiting: %q", waiting)
+		}
+		svc.log.Infof(msg)
 	})
 
 	// Not strictly necessary but helps with debugging.
@@ -950,7 +1043,7 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 			errmsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
 		}
 
-		svc.log.Debugf("Response from pool evict in cleanup: %+v", res)
+		svc.log.Debugf("Response from pool evict in cleanup: '%+v' (req: '%+v')", res, evictReq)
 		resp.Results = append(resp.Results, &mgmtpb.SystemCleanupResp_CleanupResult{
 			Status: res.Status,
 			Msg:    errmsg,

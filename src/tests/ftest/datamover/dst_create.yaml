@@ -15,8 +15,7 @@ server_config:
           scm_mount: /mnt/daos
   system_ram_reserved: 1
 pool:
-  scm_size: 1G
-  control_method: dmg
+  size: 1G
 container:
   control_method: daos
   properties: compression:lz4

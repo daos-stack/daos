@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -882,38 +882,57 @@ func TestServer_getNetDevClass(t *testing.T) {
 		expNetDevCls []hardware.NetDevClass
 		expErr       error
 	}{
-		"successful validation with matching Infiniband": {
+		"provider doesn't match": {
 			configA: configA().
+				WithFabricProvider("wrong").
 				WithFabricInterface("ib1"),
 			configB: configB().
+				WithFabricProvider("wrong").
+				WithFabricInterface("ib0"),
+			expErr: errors.New("not supported on network device"),
+		},
+		"successful validation with matching Infiniband": {
+			configA: configA().
+				WithFabricProvider("ofi+verbs;ofi_rxm").
+				WithFabricInterface("ib1"),
+			configB: configB().
+				WithFabricProvider("ofi+verbs;ofi_rxm").
 				WithFabricInterface("ib0"),
 			expNetDevCls: []hardware.NetDevClass{hardware.Infiniband},
 		},
 		"successful validation with matching Ethernet": {
 			configA: configA().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("eth0"),
 			configB: configB().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("eth1"),
 			expNetDevCls: []hardware.NetDevClass{hardware.Ether},
 		},
 		"multi interface": {
 			configA: configA().
+				WithFabricProvider("ofi+tcp,ofi+verbs;ofi_rxm").
 				WithFabricInterface(strings.Join([]string{"eth0", "ib0"}, engine.MultiProviderSeparator)),
 			configB: configB().
+				WithFabricProvider("ofi+tcp,ofi+verbs;ofi_rxm").
 				WithFabricInterface(strings.Join([]string{"eth1", "ib1"}, engine.MultiProviderSeparator)),
 			expNetDevCls: []hardware.NetDevClass{hardware.Ether, hardware.Infiniband},
 		},
 		"mismatching net dev class with primary server as ib0 / Infiniband": {
 			configA: configA().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("ib0"),
 			configB: configB().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("eth0"),
 			expErr: config.FaultConfigInvalidNetDevClass(1, hardware.Infiniband, hardware.Ether, "eth0"),
 		},
 		"mismatching net dev class with primary server as eth0 / Ethernet": {
 			configA: configA().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("eth0"),
 			configB: configB().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("ib0"),
 			expErr: config.FaultConfigInvalidNetDevClass(1, hardware.Ether, hardware.Infiniband, "ib0"),
 		},

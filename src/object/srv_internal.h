@@ -40,8 +40,11 @@ struct migrate_pool_tls {
 	 * should provide the pool/handle uuid
 	 */
 	uuid_t			mpt_poh_uuid;
-	uuid_t			mpt_coh_uuid;
 	daos_handle_t		mpt_pool_hdl;
+
+	/* container handle list for the migrate pool */
+	uuid_t			mpt_coh_uuid;
+	d_list_t		mpt_cont_hdl_list;
 
 	/* Container/objects to be migrated will be attached to the tree */
 	daos_handle_t		mpt_root_hdl;
@@ -66,17 +69,15 @@ struct migrate_pool_tls {
 	/* Max epoch for the migration, used for migrate fetch RPC */
 	uint64_t		mpt_max_eph;
 
-	/* The ULT number generated on the xstream */
-	uint64_t		mpt_generated_ult;
+	/* The ULT number on each target xstream, which actually refer
+	 * back to the item within mpt_obj/dkey_ult_cnts array.
+	 */
+	ATOMIC uint32_t		*mpt_tgt_obj_ult_cnt;
+	ATOMIC uint32_t		*mpt_tgt_dkey_ult_cnt;
 
-	/* The ULT number executed on the xstream */
-	uint64_t		mpt_executed_ult;
-
-	/* The ULT number generated for object on the xstream */
-	uint64_t		mpt_obj_generated_ult;
-
-	/* The ULT number executed on the xstream */
-	uint64_t		mpt_obj_executed_ult;
+	/* ULT count array from all targets, obj: enumeration, dkey:fetch/update */
+	ATOMIC uint32_t		*mpt_obj_ult_cnts;
+	ATOMIC uint32_t		*mpt_dkey_ult_cnts;
 
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
@@ -88,7 +89,7 @@ struct migrate_pool_tls {
 	uint64_t		mpt_inflight_max_size;
 	ABT_cond		mpt_inflight_cond;
 	ABT_mutex		mpt_inflight_mutex;
-	int			mpt_inflight_max_ult;
+	uint32_t		mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
 
 	ABT_cond		mpt_init_cond;
@@ -104,6 +105,12 @@ struct migrate_pool_tls {
 				mpt_fini:1;
 };
 
+struct migrate_cont_hdl {
+	uuid_t		mch_uuid;
+	daos_handle_t	mch_hdl;
+	d_list_t	mch_list;
+};
+
 struct obj_bulk_args {
 	ABT_eventual	eventual;
 	uint64_t	bulk_size;
@@ -114,22 +121,23 @@ struct obj_bulk_args {
 };
 
 struct obj_tgt_query_args {
-	struct obj_io_context	*ioc;
-	struct dtx_handle	*dth;
-	daos_key_t		*in_dkey;
-	daos_key_t		*in_akey;
-	daos_key_t		*out_dkey;
-	daos_key_t		*out_akey;
-	daos_key_t		 dkey_copy;
-	daos_key_t		 akey_copy;
-	daos_recx_t		 recx;
-	daos_epoch_t		 max_epoch;
-	int			 result;
-	uint32_t		 shard;
-	uint32_t		 version;
-	uint32_t		 completed:1,
-				 need_copy:1,
-				 keys_copied:1;
+	struct obj_io_context	*otqa_ioc;
+	struct dtx_handle	*otqa_dth;
+	daos_key_t		*otqa_in_dkey;
+	daos_key_t		*otqa_in_akey;
+	daos_key_t		*otqa_out_dkey;
+	daos_key_t		*otqa_out_akey;
+	daos_key_t		 otqa_dkey_copy;
+	daos_key_t		 otqa_akey_copy;
+	daos_recx_t		 otqa_recx;
+	daos_epoch_t		 otqa_max_epoch;
+	int			 otqa_result;
+	uint32_t		 otqa_shard;
+	uint32_t		 otqa_version;
+	uint32_t		 otqa_completed:1,
+				 otqa_need_copy:1,
+				 otqa_raw_recx:1,
+				 otqa_keys_allocated:1;
 };
 
 struct obj_tgt_punch_args {
@@ -579,9 +587,9 @@ obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
 static inline void
 obj_tgt_query_cleanup(struct obj_tgt_query_args *otqa)
 {
-	if (otqa->need_copy) {
-		daos_iov_free(&otqa->dkey_copy);
-		daos_iov_free(&otqa->akey_copy);
+	if (otqa->otqa_need_copy) {
+		daos_iov_free(&otqa->otqa_dkey_copy);
+		daos_iov_free(&otqa->otqa_akey_copy);
 	}
 }
 

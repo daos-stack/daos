@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +52,7 @@ type Config struct {
 	DisableCache        bool                      `yaml:"disable_caching,omitempty"`
 	CacheExpiration     refreshMinutes            `yaml:"cache_expiration,omitempty"`
 	DisableAutoEvict    bool                      `yaml:"disable_auto_evict,omitempty"`
+	EvictOnStart        bool                      `yaml:"enable_evict_on_start,omitempty"`
 	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
 	ProviderIdx         uint                      `yaml:"provider_idx"`

@@ -29,7 +29,7 @@ Build-Depends: debhelper (>= 10),
                libboost-dev,
                libspdk-dev (>= 22.01.2),
                libipmctl-dev,
-               libraft-dev (= 0.10.1-1411.gefa15f4),
+               libraft-dev (= 0.11.0-1416.g12dbc15),
                python3-tabulate,
                liblz4-dev,
                libcapstone-dev

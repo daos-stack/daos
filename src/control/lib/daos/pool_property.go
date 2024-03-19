@@ -56,18 +56,25 @@ func PoolProperties() PoolPropertyMap {
 						return "exclude"
 					case PoolSelfHealingAutoRebuild:
 						return "rebuild"
+					case PoolSelfHealingDelayRebuild:
+						return "delay_rebuild"
 					case PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild:
 						return "exclude,rebuild"
+					case PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild:
+						return "exclude,delay_rebuild"
 					default:
 						return "unknown"
 					}
 				},
 			},
 			values: map[string]uint64{
-				"exclude":         PoolSelfHealingAutoExclude,
-				"rebuild":         PoolSelfHealingAutoRebuild,
-				"exclude,rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
-				"rebuild,exclude": PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				"exclude":               PoolSelfHealingAutoExclude,
+				"rebuild":               PoolSelfHealingAutoRebuild,
+				"delay_rebuild":         PoolSelfHealingDelayRebuild,
+				"exclude,rebuild":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				"rebuild,exclude":       PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				"delay_rebuild,exclude": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
+				"exclude,delay_rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingDelayRebuild,
 			},
 		},
 		"space_rb": {
@@ -248,17 +255,26 @@ func PoolProperties() PoolPropertyMap {
 				valueMarshaler: numericMarshaler,
 			},
 		},
-		"policy": {
+		"data_thresh": {
 			Property: PoolProperty{
-				Number:      PoolPropertyPolicy,
-				Description: "Tier placement policy",
+				Number:      PoolDataThresh,
+				Description: "Data bdev threshold size",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					if !PoolPolicyIsValid(s) {
-						return nil, errors.Errorf("invalid policy string %q", s)
+					b, err := humanize.ParseBytes(s)
+					if err != nil || !DataThreshIsValid(b) {
+						return nil, errors.Errorf("invalid data threshold size %q", s)
 					}
-					return &PoolPropertyValue{s}, nil
 
+					return &PoolPropertyValue{b}, nil
 				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return humanize.IBytes(n)
+				},
+				valueMarshaler: numericMarshaler,
 			},
 		},
 		"global_version": {
@@ -306,7 +322,7 @@ func PoolProperties() PoolPropertyMap {
 				"timed": PoolScrubModeTimed,
 			},
 		},
-		"scrub-freq": {
+		"scrub_freq": {
 			Property: PoolProperty{
 				Number:      PoolPropertyScrubFreq,
 				Description: "Checksum scrubbing frequency",
@@ -328,7 +344,7 @@ func PoolProperties() PoolPropertyMap {
 				valueMarshaler: numericMarshaler,
 			},
 		},
-		"scrub-thresh": {
+		"scrub_thresh": {
 			Property: PoolProperty{
 				Number:      PoolPropertyScrubThresh,
 				Description: "Checksum scrubbing threshold",
@@ -407,7 +423,7 @@ func PoolProperties() PoolPropertyMap {
 		"checkpoint": {
 			Property: PoolProperty{
 				Number:      PoolPropertyCheckpointMode,
-				Description: "WAL Checkpointing behavior",
+				Description: "WAL checkpointing behavior",
 			},
 			values: map[string]uint64{
 				"disabled": PoolCheckpointDisabled,
@@ -418,7 +434,7 @@ func PoolProperties() PoolPropertyMap {
 		"checkpoint_freq": {
 			Property: PoolProperty{
 				Number:      PoolPropertyCheckpointFreq,
-				Description: "WAL Checkpointing frequency, in seconds",
+				Description: "WAL checkpointing frequency, in seconds",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Checkpointing Frequency value %s", s)
 					rsPct, err := strconv.ParseUint(s, 10, 64)
@@ -440,7 +456,7 @@ func PoolProperties() PoolPropertyMap {
 		"checkpoint_thresh": {
 			Property: PoolProperty{
 				Number:      PoolPropertyCheckpointThresh,
-				Description: "Usage of WAL before checkpoint is triggered, as a percentage",
+				Description: "WAL checkpoint threshold, in percentage",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Checkpointing threshold value %s", s)
 					rsPct, err := strconv.ParseUint(s, 10, 32)

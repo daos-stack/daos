@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,13 +12,16 @@
 #ifndef __DD_POOL_H__
 #define __DD_POOL_H__
 
+#include <daos_types.h>
+#include <daos_prop.h>
+#include <daos_pool.h>
+#include <daos_task.h>
+#include <daos/tse.h>
+
 #include <daos/common.h>
 #include <gurt/hash.h>
 #include <daos/pool_map.h>
 #include <daos/rsvc.h>
-#include <daos/tse.h>
-#include <daos_types.h>
-#include <daos_pool.h>
 
 /** pool query request bits */
 #define DAOS_PO_QUERY_SPACE			(1ULL << 0)
@@ -37,7 +40,7 @@
 #define DAOS_PO_QUERY_PROP_REDUN_FAC		(1ULL << (PROP_BIT_START + 9))
 #define DAOS_PO_QUERY_PROP_EC_PDA		(1ULL << (PROP_BIT_START + 10))
 #define DAOS_PO_QUERY_PROP_RP_PDA		(1ULL << (PROP_BIT_START + 11))
-#define DAOS_PO_QUERY_PROP_POLICY		(1ULL << (PROP_BIT_START + 12))
+#define DAOS_PO_QUERY_PROP_DATA_THRESH		(1ULL << (PROP_BIT_START + 12))
 #define DAOS_PO_QUERY_PROP_GLOBAL_VERSION	(1ULL << (PROP_BIT_START + 13))
 #define DAOS_PO_QUERY_PROP_UPGRADE_STATUS	(1ULL << (PROP_BIT_START + 14))
 #define DAOS_PO_QUERY_PROP_SCRUB_MODE		(1ULL << (PROP_BIT_START + 15))
@@ -59,7 +62,7 @@
 	 DAOS_PO_QUERY_PROP_RECLAIM | DAOS_PO_QUERY_PROP_ACL | DAOS_PO_QUERY_PROP_OWNER |          \
 	 DAOS_PO_QUERY_PROP_OWNER_GROUP | DAOS_PO_QUERY_PROP_SVC_LIST |                            \
 	 DAOS_PO_QUERY_PROP_EC_CELL_SZ | DAOS_PO_QUERY_PROP_EC_PDA | DAOS_PO_QUERY_PROP_RP_PDA |   \
-	 DAOS_PO_QUERY_PROP_REDUN_FAC | DAOS_PO_QUERY_PROP_POLICY |                                \
+	 DAOS_PO_QUERY_PROP_REDUN_FAC | DAOS_PO_QUERY_PROP_DATA_THRESH |                           \
 	 DAOS_PO_QUERY_PROP_GLOBAL_VERSION | DAOS_PO_QUERY_PROP_UPGRADE_STATUS |                   \
 	 DAOS_PO_QUERY_PROP_SCRUB_MODE | DAOS_PO_QUERY_PROP_SCRUB_FREQ |                           \
 	 DAOS_PO_QUERY_PROP_SCRUB_THRESH | DAOS_PO_QUERY_PROP_SVC_REDUN_FAC |                      \
