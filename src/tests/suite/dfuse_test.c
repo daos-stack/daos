@@ -463,7 +463,7 @@ do_directory(void **state)
 	DIR            *dirp;
 	struct dirent **namelist;
 	long            pos;
-	char           *env_ldpreload;
+	int             entry_count = 100;
 
 	printf("Creating dir and files\n");
 	root = open(test_dir, O_PATH | O_DIRECTORY);
@@ -476,7 +476,7 @@ do_directory(void **state)
 	dfd = openat(root, "wide_dir", O_RDONLY | O_DIRECTORY);
 	assert_return_code(dfd, errno);
 
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < entry_count; i++) {
 		char fname[17];
 		int  fd;
 
@@ -493,9 +493,13 @@ do_directory(void **state)
 	}
 
 	rc = scandirat(dfd, ".", &namelist, NULL, alphasort);
-	assert_int_equal(rc, 100);
-	assert_true(strcmp(namelist[0]->d_name, "file_00") == 0);
-	assert_true(strcmp(namelist[99]->d_name, "file_99") == 0);
+	if (strcmp(namelist[0]->d_name, ".") == 0) {
+		entry_count += 2;
+	} else {
+		assert_true(strcmp(namelist[0]->d_name, "file_00") == 0);
+	}
+	assert_int_equal(rc, entry_count);
+	assert_true(strcmp(namelist[rc - 1]->d_name, "file_99") == 0);
 
 	/* free namelist */
 	while (rc--) {
@@ -515,7 +519,7 @@ do_directory(void **state)
 	if (errno != 0)
 		assert_return_code(-1, errno);
 	printf("File count is %d\n", rc);
-	assert_int_equal(rc, 100);
+	assert_int_equal(rc, entry_count);
 
 	printf("Rewinding and rechecking file count\n");
 	seekdir(dirp, pos);
@@ -525,30 +529,31 @@ do_directory(void **state)
 	if (errno != 0)
 		assert_return_code(-1, errno);
 	printf("File count is %d\n", rc);
-	assert_int_equal(rc, 100);
+	assert_int_equal(rc, entry_count);
 
-	env_ldpreload = getenv("LD_PRELOAD");
-	if (env_ldpreload != NULL) {
-		if (strstr(env_ldpreload, "libpil4dfs.so") != NULL) {
-			/* fuse fails in the following test. */
-			for (i = 0; i < 102; i++) {
-				rewinddir(dirp);
-				seekdir(dirp, i);
-				if (i <= 2)
-					assert_int_equal(get_dir_num_entry(dirp), 100);
-				else
-					assert_int_equal(get_dir_num_entry(dirp) + i - 2, 100);
-			}
-			for (i = 0; i < 102; i++) {
-				rewinddir(dirp);
-				readdir(dirp);
-				seekdir(dirp, i);
-				if (i <= 2)
-					assert_int_equal(get_dir_num_entry(dirp), 100);
-				else
-					assert_int_equal(get_dir_num_entry(dirp) + i - 2, 100);
-			}
-		}
+	long           positions[entry_count];
+	struct dirent *ent;
+	i = 0;
+	rewinddir(dirp);
+	positions[i] = telldir(dirp);
+	i++;
+
+	while ((ent = readdir(dirp)) != NULL) {
+		positions[i] = telldir(dirp);
+		assert_true(i <= entry_count);
+		i++;
+	}
+
+	for (i = 0; i < entry_count; i++) {
+		rewinddir(dirp);
+		seekdir(dirp, positions[i]);
+		assert_int_equal(get_dir_num_entry(dirp), entry_count - i);
+	}
+	for (i = 0; i < entry_count; i++) {
+		rewinddir(dirp);
+		readdir(dirp);
+		seekdir(dirp, positions[i]);
+		assert_int_equal(get_dir_num_entry(dirp), entry_count - i);
 	}
 
 	rc = close(dfd);
