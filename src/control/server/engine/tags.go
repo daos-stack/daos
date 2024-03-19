@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,6 +23,7 @@ const (
 	nonZero    = "nonzero"    // only set if non-zero value
 	invertBool = "invertBool" // invert the value before setting
 	intBool    = "intBool"    // convert the bool to an int
+	sliceCount = "count"      // use the length of a slice rather than its contents
 )
 
 type (
@@ -155,7 +156,14 @@ func parseCmdTags(in interface{}, tagFilter string, joiner joinFn, seenRefs refM
 				if fVal.Len() == 0 && opts.hasOpt(nonZero) {
 					continue
 				}
-				strVal := strconv.Itoa(fVal.Len())
+
+				var strVal string
+				if opts.hasOpt(sliceCount) {
+					strVal = fmt.Sprintf("%d", fVal.Len())
+				} else {
+					strVal = getSliceStr(fVal)
+				}
+
 				out = append(out, joiner(tag, strVal)...)
 			case reflect.Uintptr, reflect.Ptr:
 				if fVal.IsNil() {
@@ -199,4 +207,20 @@ func parseCmdTags(in interface{}, tagFilter string, joiner joinFn, seenRefs refM
 	}
 
 	return
+}
+
+func getSliceStr(val reflect.Value) string {
+	iVal := val.Interface()
+
+	var strSlice []string
+	switch slice := iVal.(type) {
+	case []int:
+		for _, n := range slice {
+			strSlice = append(strSlice, fmt.Sprintf("%d", n))
+		}
+	default:
+		return strconv.Itoa(val.Len())
+	}
+
+	return strings.Join(strSlice, ",")
 }

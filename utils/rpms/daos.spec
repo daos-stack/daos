@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.5.100
-Release:       15%{?relval}%{?dist}
+Version:       2.5.101
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -73,7 +73,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.10.1-2.411.gefa15f4%{?dist}
+BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -586,6 +586,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Mar 15 2024 Phillip Henderson <phillip.henderson@intel.com> 2.5.101-1
+- Bump version to 2.5.101
+
+* Tue Feb 27 2024 Li Wei <wei.g.li@intel.com> 2.5.100-16
+- Update raft to 0.11.0-1.416.g12dbc15
+
 * Mon Feb 12 2024 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-15
 - Updated isa-l package name to match EPEL
 

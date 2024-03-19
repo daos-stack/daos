@@ -7556,8 +7556,11 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 			D_GOTO(out_free, rc = -DER_BUSY);
 		} else {
 			/* Pool evict, or pool destroy with force=true */
-			rc = pool_disconnect_hdls(&tx, svc, hdl_uuids,
-						  n_hdl_uuids, rpc->cr_ctx);
+			if (DAOS_FAIL_CHECK(DAOS_POOL_EVICT_FAIL))
+				rc = 0; /* unrealistic */
+			else
+				rc = pool_disconnect_hdls(&tx, svc, hdl_uuids, n_hdl_uuids,
+							  rpc->cr_ctx);
 			if (rc != 0) {
 				goto out_free;
 			} else {
