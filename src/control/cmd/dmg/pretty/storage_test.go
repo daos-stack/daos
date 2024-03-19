@@ -503,9 +503,9 @@ host1
 -----
 HugePage Size: 2048 KB
 
-SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity 
----------- ------ ------------ ------- ------------ -------- 
-1          1      1            1       1            954 MiB  
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
 
   No NVMe devices found
 
@@ -588,9 +588,9 @@ host1
 -----
 HugePage Size: 2048 KB
 
-SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity 
----------- ------ ------------ ------- ------------ -------- 
-1          1      1            1       1            954 MiB  
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
@@ -646,9 +646,9 @@ host[1-2]
 ---------
 HugePage Size: 2048 KB
 
-SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity 
----------- ------ ------------ ------- ------------ -------- 
-1          1      1            1       1            954 MiB  
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 
@@ -677,9 +677,9 @@ host1
 -----
 HugePage Size: 2048 KB
 
-SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity 
----------- ------ ------------ ------- ------------ -------- 
-1          1      1            1       1            954 MiB  
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
 
   No NVMe devices found
 
@@ -709,9 +709,9 @@ host[0-1023]
 ------------
 HugePage Size: 2048 KB
 
-SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity 
----------- ------ ------------ ------- ------------ -------- 
-1          1      1            1       1            954 MiB  
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
 
 NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
 --------     -----   ----------- ------ -------- ------- ---- 

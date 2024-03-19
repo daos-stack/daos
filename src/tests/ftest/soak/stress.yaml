@@ -10,6 +10,7 @@ orterun:
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 48 hour test
 timeouts:
+  test_soak_stress_72h: 72H30M
   test_soak_stress_48h: 48H30M
   test_soak_stress_24h: 24H30M
   test_soak_stress_12h: 12H30M
@@ -76,6 +77,7 @@ soak_stress:
   name: soak_stress
   # stress test timeout in hours
   test_timeout:
+    test_soak_stress_72h: 72
     test_soak_stress_48h: 48
     test_soak_stress_24h: 24
     test_soak_stress_12h: 12
@@ -199,7 +201,7 @@ vpic_stress:
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 lammps_stress:
-  job_timeout: 35
+  job_timeout: 45
   nodesperjob:
     - 8
   taskspernode:

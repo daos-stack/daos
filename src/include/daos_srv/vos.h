@@ -1213,8 +1213,8 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
-	/** Set pool tiering policy */
-	VOS_PO_CTL_SET_POLICY,
+	/** Set pool data threshold size to store data on bdev */
+	VOS_PO_CTL_SET_DATA_THRESH,
 	/** Set space reserve ratio for rebuild */
 	VOS_PO_CTL_SET_SPACE_RB,
 };

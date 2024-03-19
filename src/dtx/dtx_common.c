@@ -2195,10 +2195,12 @@ exec:
 	if (agg_cb != NULL) {
 		remote_rc = agg_cb(dlh, func_arg);
 		dlh->dlh_agg_done = 1;
-		if (remote_rc == allow_failure)
+		if (remote_rc != 0) {
+			if (remote_rc != allow_failure)
+				D_GOTO(out, rc = remote_rc);
+
 			dlh->dlh_drop_cond = 0;
-		else if (remote_rc != 0)
-			D_GOTO(out, rc = remote_rc);
+		}
 	}
 
 	if (likely(dlh->dlh_delay_sub_cnt == 0))
