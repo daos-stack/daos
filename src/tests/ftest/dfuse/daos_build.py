@@ -285,7 +285,7 @@ class DaosBuild(DfuseTestBase):
         # the test tags so the test can run with appropriate settings.
         remote_env = {}
         dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
-        build_jobs = 6 * 2
+        build_jobs = 8
         remote_env['D_IL_MAX_EQ'] = '0'
 
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
