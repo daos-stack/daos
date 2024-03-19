@@ -3353,9 +3353,10 @@ seekdir(DIR *dirp, long loc)
 
 	while (num_entry) {
 		num_to_read = min(READ_DIR_BATCH_SIZE, num_entry);
-		rc          = dfs_iterate(dir_list[idx]->dfs_mt->dfs, dir_list[idx]->dir,
-					  &dir_list[idx]->anchor, &num_to_read,
-					  DFS_MAX_NAME * num_to_read, NULL, NULL);
+
+		rc = dfs_iterate(dir_list[idx]->dfs_mt->dfs, dir_list[idx]->dir,
+				 &dir_list[idx]->anchor, &num_to_read, DFS_MAX_NAME * num_to_read,
+				 NULL, NULL);
 		if (rc)
 			D_GOTO(out_rewind, rc);
 		if (daos_anchor_is_eof(&dir_list[idx]->anchor))
