@@ -1601,7 +1601,7 @@ ds_pool_iv_svc_fetch(struct ds_pool *pool, d_rank_list_t **svc_p)
 	} else {
 		/* create a ULT and schedule it on xstream-0 */
 		rc = dss_ult_execute(cont_pool_svc_ult, &ia, NULL, NULL,
-				     DSS_XS_SYS, 0, 0);
+				     DSS_XS_SYS, DSS_ULT_DEEP_STACK, 0);
 		if (rc)
 			D_GOTO(failed, rc);
 	}

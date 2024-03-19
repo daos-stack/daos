@@ -1120,21 +1120,31 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	 */
 	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 		if (uuid_compare(rpt->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
-		    ((rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) ||
-		    (rpt->rt_rebuild_op == rsi->rsi_rebuild_op &&
-		     rpt->rt_rebuild_ver == rsi->rsi_rebuild_ver &&
-		     rpt->rt_rebuild_gen < rsi->rsi_rebuild_gen))) {
+		    rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver &&
+		    rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
 			D_INFO(DF_UUID" %p %s %u/"DF_U64"/%u < incoming rebuild %u/"DF_U64"/%u\n",
 			       DP_UUID(rpt->rt_pool_uuid), rpt, RB_OP_STR(rpt->rt_rebuild_op),
 			       rpt->rt_rebuild_ver, rpt->rt_leader_term, rpt->rt_rebuild_gen,
 			       rsi->rsi_rebuild_ver, rsi->rsi_leader_term, rsi->rsi_rebuild_gen);
 			rpt->rt_abort = 1;
+			if (rpt->rt_leader_rank != rsi->rsi_master_rank) {
+				D_DEBUG(DB_REBUILD, DF_UUID" master rank"
+					" %d -> %d term "DF_U64" -> "DF_U64"\n",
+					DP_UUID(rpt->rt_pool_uuid),
+					rpt->rt_leader_rank, rsi->rsi_master_rank,
+					rpt->rt_leader_term, rsi->rsi_leader_term);
+				/* If this is the old leader, then also stop the rebuild
+				 * tracking ULT.
+				 */
+				rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
+						    -1, rpt->rt_leader_term);
+			}
 		}
 	}
 
 	/* check if the rebuild with different leader is already started */
-	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
-	if (rpt != NULL) {
+	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1);
+	if (rpt != NULL && rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
 		if (rpt->rt_global_done) {
 			D_WARN("the previous rebuild "DF_UUID"/%d/"DF_U64"/%p is not cleanup yet\n",
 			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver,
@@ -1170,12 +1180,15 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 			/* If this is the old leader, then also stop the rebuild tracking ULT. */
 			rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
-					    rsi->rsi_rebuild_gen, rpt->rt_leader_term);
+					    -1, rpt->rt_leader_term);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;
 
 		D_GOTO(out, rc = 0);
+	} else if (rpt != NULL) {
+		rpt_put(rpt);
+		rpt = NULL;
 	}
 
 	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
