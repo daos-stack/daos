@@ -29,13 +29,15 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <dirent.h>
+#include <sys/wait.h>
+#include <sys/uio.h>
 
 #include <dfuse_ioctl.h>
 
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismdlf";
+static const char *all_tests = "ismdlfe";
 
 static void
 print_usage()
@@ -50,6 +52,9 @@ print_usage()
 	print_message("dfuse_test -d|--directory\n");
 	print_message("dfuse_test -l|--lowfd\n");
 	print_message("dfuse_test -f|--mmap\n");
+	print_message("dfuse_test -e|--exec\n");
+	/* verifyenv is only run by exec test. Should not be executed directly */
+	/* print_message("dfuse_test    --verifyenv\n");                       */
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
@@ -313,6 +318,53 @@ out:
 	assert_return_code(rc, errno);
 
 	rc = unlinkat(root, "ioctl_file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
+void
+do_readv_writev(void **state)
+{
+	int          fd;
+	int          rc;
+	int          root = open(test_dir, O_DIRECTORY);
+	char        *str0 = "hello ";
+	char        *str1 = "world\n";
+	struct iovec iov[2];
+	ssize_t      bytes_written;
+	ssize_t      bytes_read;
+	char         buf_read[16];
+	off_t        off;
+
+	assert_return_code(root, errno);
+
+	/* readv/writev testing */
+	fd = openat(root, "readv_writev_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	iov[0].iov_base = str0;
+	iov[0].iov_len  = strlen(str0);
+	iov[1].iov_base = str1;
+	iov[1].iov_len  = strlen(str1);
+
+	bytes_written = writev(fd, iov, 2);
+	assert_int_equal(bytes_written, 12);
+
+	off = lseek(fd, 0, SEEK_SET);
+	assert_true(off == 0);
+
+	iov[0].iov_base = buf_read;
+	iov[1].iov_base = buf_read + strlen(str0);
+	bytes_read      = readv(fd, iov, 2);
+	assert_int_equal(bytes_read, 12);
+	assert_true(strncmp(buf_read, "hello world\n", 12) == 0);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "readv_writev_file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
@@ -587,7 +639,7 @@ do_mmap(void **state)
 
 	printf("Mapped private to %p\n", addr);
 
-	memset(addr, '0', 1024 * 1024);
+	memset(addr, 0, 1024 * 1024);
 
 	rc = munmap(addr, 1024 * 1024);
 	assert_return_code(rc, errno);
@@ -661,6 +713,124 @@ do_lowfd(void **state)
 	free(path);
 }
 
+#define ERR_ENV_UNSET (2)
+
+void
+verify_pil4dfs_env()
+{
+	char *p;
+
+	p = getenv("LD_PRELOAD");
+	if (!p) {
+		printf("Error: LD_PRELOAD is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_REPORT");
+	if (!p) {
+		printf("Error: D_IL_REPORT is unset.\n");
+		goto err;
+	}
+
+	p = getenv("DAOS_MOUNT_POINT");
+	if (!p) {
+		printf("Error: DAOS_MOUNT_POINT is unset.\n");
+		goto err;
+	}
+
+	p = getenv("DAOS_POOL");
+	if (!p) {
+		printf("Error: DAOS_POOL is unset.\n");
+		goto err;
+	}
+
+	p = getenv("DAOS_CONTAINER");
+	if (!p) {
+		printf("Error: DAOS_CONTAINER is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_MAX_EQ");
+	if (!p) {
+		printf("Error: D_IL_MAX_EQ is unset.\n");
+		goto err;
+	}
+
+	p = getenv("D_IL_ENFORCE_EXEC_ENV");
+	if (!p) {
+		printf("Error: D_IL_ENFORCE_EXEC_ENV is unset.\n");
+		goto err;
+	}
+	exit(0);
+
+err:
+	exit(ERR_ENV_UNSET);
+}
+
+/*
+ * fork() to create a child process and call exec() to run this test itself.
+ * This test is only used for libpil4dfs.so.
+ */
+void
+do_exec(void **state)
+{
+	pid_t pid;
+	int   status, rc;
+	char *envp[1] = {NULL};
+	char *argv[3] = {"dfuse_test", "--verifyenv", NULL};
+	char *exe_path;
+	char *env_ldpreload;
+
+	env_ldpreload = getenv("LD_PRELOAD");
+	if (env_ldpreload == NULL)
+		return;
+	if (strstr(env_ldpreload, "libpil4dfs.so") == NULL)
+		return;
+
+	printf("Found libpil4dfs.so.\n");
+	exe_path = malloc(PATH_MAX);
+	assert_non_null(exe_path);
+	rc = readlink("/proc/self/exe", exe_path, PATH_MAX - 1);
+	assert_true(rc > 0);
+	exe_path[rc] = 0;
+
+	/* fork and call execve() */
+	printf("Testing execve().\n");
+	pid = fork();
+	if (pid == 0)
+		execve(exe_path, argv, envp);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+
+	/* fork and call execv() */
+	printf("Testing execv().\n");
+	pid = fork();
+	if (pid == 0)
+		execv(exe_path, argv);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+
+	/* fork and call execvp() */
+	printf("Testing execvp().\n");
+	pid = fork();
+	if (pid == 0)
+		execvp(exe_path, argv);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+
+	/* fork and call execvpe() */
+	printf("Testing execvpe().\n");
+	pid = fork();
+	if (pid == 0)
+		execvpe(exe_path, argv, envp);
+	waitpid(pid, &status, 0);
+	if (WIFEXITED(status))
+		assert_int_equal(WEXITSTATUS(status), 0);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -678,6 +848,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			const struct CMUnitTest io_tests[] = {
 			    cmocka_unit_test(do_openat),
 			    cmocka_unit_test(do_ioctl),
+			    cmocka_unit_test(do_readv_writev),
 			};
 			nr_failed += cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;
@@ -710,6 +881,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			};
 			nr_failed += cmocka_run_group_tests(readdir_tests, NULL, NULL);
 			break;
+
 		case 'l':
 			printf("\n\n=================");
 			printf("dfuse low fd tests");
@@ -730,6 +902,17 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(mmap_tests, NULL, NULL);
 			break;
 		}
+
+		case 'e':
+			printf("\n\n=================");
+			printf("dfuse exec tests");
+			printf("=====================\n");
+			const struct CMUnitTest exec_tests[] = {
+			    cmocka_unit_test(do_exec),
+			};
+			nr_failed += cmocka_run_group_tests(exec_tests, NULL, NULL);
+			break;
+
 		default:
 			assert_true(0);
 		}
@@ -756,9 +939,11 @@ main(int argc, char **argv)
 					       {"directory", no_argument, NULL, 'd'},
 					       {"mmap", no_argument, NULL, 'f'},
 					       {"lowfd", no_argument, NULL, 'l'},
+					       {"exec", no_argument, NULL, 'e'},
+					       {"verifyenv", no_argument, NULL, 'c'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsdlf", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdlfe", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
@@ -769,6 +954,10 @@ main(int argc, char **argv)
 			break;
 		case 'M':
 			test_dir = optarg;
+			break;
+		case 'c':
+			/* only run by child process */
+			verify_pil4dfs_env();
 			break;
 		default:
 			printf("Unknown Option\n");

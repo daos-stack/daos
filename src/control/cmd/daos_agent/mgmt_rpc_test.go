@@ -30,6 +30,16 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+func hostResps(resps ...*mgmtpb.GetAttachInfoResp) []*control.HostResponse {
+	result := []*control.HostResponse{}
+	for _, r := range resps {
+		result = append(result, &control.HostResponse{
+			Message: r,
+		})
+	}
+	return result
+}
+
 func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 	testSys := "test_sys"
 	testResp := &control.GetAttachInfoResp{
@@ -276,7 +286,10 @@ func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 
-			_, err := mod.getAttachInfo(test.Context(t), 0, sysName)
+			_, err := mod.getAttachInfo(test.Context(t), 0,
+				&mgmtpb.GetAttachInfoReq{
+					Sys: sysName,
+				})
 			if err != nil {
 				panic(errors.Wrapf(err, "thread %d", n))
 			}

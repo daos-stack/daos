@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -146,6 +146,16 @@ func sysNameToPrincipalName(name string) string {
 	return name + "@"
 }
 
+// GetMachineName returns the "short" hostname by stripping the domain from the FQDN.
+func GetMachineName() (string, error) {
+	name, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+
+	return strings.Split(name, ".")[0], nil
+}
+
 // AuthSysRequestFromCreds takes the domain info credentials gathered
 // during the dRPC request and creates an AuthSys security request to obtain
 // a handle from the management service.
@@ -172,13 +182,10 @@ func AuthSysRequestFromCreds(ext UserExt, creds *security.DomainInfo, signing cr
 			userInfo.Username())
 	}
 
-	name, err := os.Hostname()
+	host, err := GetMachineName()
 	if err != nil {
-		name = "unavailable"
+		host = "unavailable"
 	}
-
-	// Strip the domain off of the Hostname
-	host := strings.Split(name, ".")[0]
 
 	var groupList = []string{}
 
