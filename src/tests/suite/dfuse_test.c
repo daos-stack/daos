@@ -480,10 +480,7 @@ do_directory(void **state)
 		char fname[17];
 		int  fd;
 
-		if (i < 10)
-			rc = snprintf(fname, 17, "file_0%d", i);
-		else
-			rc = snprintf(fname, 17, "file_%d", i);
+		rc = snprintf(fname, 17, "file_%02d", i);
 		assert_in_range(rc, 0, 16);
 
 		fd = openat(dfd, fname, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
