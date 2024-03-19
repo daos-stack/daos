@@ -3592,7 +3592,7 @@ seekdir(DIR *dirp, long loc)
 		dir_list[idx]->offset   = OFFSET_BASE;
 		dir_list[idx]->num_ents = 0;
 		memset(&dir_list[idx]->anchor, 0, sizeof(daos_anchor_t));
-		num_entry = loc - dir_list[idx]->offset;
+		num_entry = loc - OFFSET_BASE;
 	} else if (loc >= (dir_list[idx]->offset + dir_list[idx]->num_ents)) {
 		/* need to read more entries from current offset */
 		dir_list[idx]->offset   = dir_list[idx]->offset + dir_list[idx]->num_ents;
