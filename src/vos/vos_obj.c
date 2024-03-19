@@ -354,8 +354,10 @@ punch_dkey:
 	vos_ilog_fetch_finish(&info->ki_dkey);
 	vos_ilog_fetch_finish(&info->ki_akey);
 
-	if (daos_handle_is_valid(toh))
+	if (daos_handle_is_valid(toh)) {
+		D_ASSERT(krec != NULL);
 		key_tree_release(toh, (krec->kr_bmap & KREC_BF_EVT) != 0);
+	}
 
 	D_FREE(info);
 

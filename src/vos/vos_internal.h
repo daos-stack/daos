@@ -222,14 +222,19 @@ struct vos_space_metrics {
 	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
 };
 
-/* VOS Pool metrics for vos file rehydration */
-struct vos_rh_metrics {
-	struct d_tm_node_t	*vrh_size;		/* WAL replay size */
-	struct d_tm_node_t	*vrh_time;		/* WAL replay time */
-	struct d_tm_node_t	*vrh_count;		/* Total replay count */
-	struct d_tm_node_t	*vrh_entries;		/* Total replayed entry count */
-	struct d_tm_node_t	*vrh_tx_cnt;		/* Total replayed TX count */
+/* VOS Pool metrics for WAL */
+struct vos_wal_metrics {
+	struct d_tm_node_t      *vwm_wal_sz;		/* WAL size for single tx */
+	struct d_tm_node_t      *vwm_wal_qd;		/* WAL transaction queue depth */
+	struct d_tm_node_t      *vwm_wal_waiters;	/* Waiters for WAL reclaiming */
+	struct d_tm_node_t	*vwm_replay_size;	/* WAL replay size in bytes */
+	struct d_tm_node_t	*vwm_replay_time;	/* WAL replay time in us */
+	struct d_tm_node_t	*vwm_replay_count;	/* Total replay count */
+	struct d_tm_node_t	*vwm_replay_tx;		/* Total replayed TX count */
+	struct d_tm_node_t	*vwm_replay_ent;	/* Total replayed entry count */
 };
+
+void vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int tgt_id);
 
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
@@ -237,7 +242,7 @@ struct vos_pool_metrics {
 	struct vos_gc_metrics    vp_gc_metrics;
 	struct vos_space_metrics vp_space_metrics;
 	struct vos_chkpt_metrics vp_chkpt_metrics;
-	struct vos_rh_metrics	 vp_rh_metrics;
+	struct vos_wal_metrics	 vp_wal_metrics;
 	/* TODO: add more metrics for VOS */
 };
 

@@ -711,7 +711,6 @@ vos_metrics_free(void *data)
 
 #define VOS_AGG_DIR	"vos_aggregation"
 #define VOS_SPACE_DIR	"vos_space"
-#define VOS_RH_DIR	"vos_rehydration"
 
 static inline char *
 agg_op2str(unsigned int agg_op)
@@ -734,7 +733,6 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	struct vos_pool_metrics		*vp_metrics;
 	struct vos_agg_metrics		*vam;
 	struct vos_space_metrics	*vsm;
-	struct vos_rh_metrics		*brm;
 	char				desc[40];
 	int				i, rc;
 
@@ -752,7 +750,6 @@ vos_metrics_alloc(const char *path, int tgt_id)
 
 	vam = &vp_metrics->vp_agg_metrics;
 	vsm = &vp_metrics->vp_space_metrics;
-	brm = &vp_metrics->vp_rh_metrics;
 
 	/* VOS aggregation EPR scan duration */
 	rc = d_tm_add_metric(&vam->vam_epr_dur, D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME,
@@ -863,31 +860,8 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	/* Initialize the vos_space_metrics timeout counter */
 	vsm->vsm_last_update_ts = 0;
 
-	/* Initialize metrics for vos file rehydration */
-	rc = d_tm_add_metric(&brm->vrh_size, D_TM_GAUGE, "WAL replay size", "bytes",
-			     "%s/%s/replay_size/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_size' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_time, D_TM_GAUGE, "WAL replay time", "us",
-			     "%s/%s/replay_time/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_time' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_entries, D_TM_COUNTER, "Number of log entries", NULL,
-			     "%s/%s/replay_entries/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_entries' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_count, D_TM_COUNTER, "Number of WAL replays", NULL,
-			     "%s/%s/replay_count/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_count' telemetry : "DF_RC"\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&brm->vrh_tx_cnt, D_TM_COUNTER, "Number of replayed transactions",
-			     NULL, "%s/%s/replay_transactions/tgt_%u", path, VOS_RH_DIR, tgt_id);
-	if (rc)
-		D_WARN("Failed to create 'replay_transactions' telemetry : "DF_RC"\n", DP_RC(rc));
+	/* Initialize metrics for WAL */
+	vos_wal_metrics_init(&vp_metrics->vp_wal_metrics, path, tgt_id);
 
 	return vp_metrics;
 }

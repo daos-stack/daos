@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.5.100
-Release:       17%{?relval}%{?dist}
+Version:       2.5.101
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -587,8 +587,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thu Mar 07 2024 Jan Michalski <jan.michalski@intel.com> 2.5.100-17
+* Mon Mar 18 2024 Jan Michalski <jan.michalski@intel.com> 2.5.101-2
 - Add dtx_tests to the server-tests package
+
+* Fri Mar 15 2024 Phillip Henderson <phillip.henderson@intel.com> 2.5.101-1
+- Bump version to 2.5.101
 
 * Tue Feb 27 2024 Li Wei <wei.g.li@intel.com> 2.5.100-16
 - Update raft to 0.11.0-1.416.g12dbc15
