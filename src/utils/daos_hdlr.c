@@ -2604,7 +2604,7 @@ out:
 	ap->dfuse_mem.container_count = query.container_count;
 
 close:
-	if (fd > 0)
+	if (fd >= 0)
 		close(fd);
 	return rc;
 }

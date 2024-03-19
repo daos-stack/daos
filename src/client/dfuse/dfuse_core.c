@@ -964,7 +964,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 err_umount:
 	dfs_umount(dfc->dfs_ns);
 err_close:
-	daos_cont_close(dfc->dfs_coh, NULL);
+	(void)daos_cont_close(dfc->dfs_coh, NULL);
 err_free:
 	D_FREE(dfc);
 err:
