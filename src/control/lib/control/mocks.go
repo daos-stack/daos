@@ -231,7 +231,7 @@ func mockHostErrorsMap(t *testing.T, hostErrors ...*MockHostError) HostErrorsMap
 		}
 		hem[he.Error] = &HostErrorSet{
 			HostError: errors.New(he.Error),
-			HostSet:   mockHostSet(t, he.Hosts),
+			HostSet:   MockHostSet(t, he.Hosts),
 		}
 	}
 
@@ -249,7 +249,7 @@ func MockHostErrorsResp(t *testing.T, hostErrors ...*MockHostError) HostErrorsRe
 	}
 }
 
-func mockHostSet(t *testing.T, hosts string) *hostlist.HostSet {
+func MockHostSet(t *testing.T, hosts string) *hostlist.HostSet {
 	hs, err := hostlist.CreateSet(hosts)
 	if err != nil {
 		t.Fatal(err)
@@ -260,7 +260,7 @@ func mockHostSet(t *testing.T, hosts string) *hostlist.HostSet {
 func mockHostStorageSet(t *testing.T, hosts string, pbResp *ctlpb.StorageScanResp) *HostStorageSet {
 	hss := &HostStorageSet{
 		HostStorage: &HostStorage{},
-		HostSet:     mockHostSet(t, hosts),
+		HostSet:     MockHostSet(t, hosts),
 	}
 
 	if err := convert.Types(pbResp.GetNvme().GetCtrlrs(), &hss.HostStorage.NvmeDevices); err != nil {
@@ -817,4 +817,28 @@ func MockServerCfg(provider string, ecs []*engine.Config) *config.Server {
 		WithFabricProvider(provider).
 		WithDisableVMD(false).
 		WithEngines(ecs...)
+}
+
+type MockFabricScan struct {
+	Hosts  string
+	Fabric *HostFabric
+}
+
+func MockHostFabricMap(t *testing.T, scans ...*MockFabricScan) HostFabricMap {
+	hfm := make(HostFabricMap)
+
+	for _, scan := range scans {
+		hfs := &HostFabricSet{
+			HostFabric: scan.Fabric,
+			HostSet:    MockHostSet(t, scan.Hosts),
+		}
+
+		hk, err := hfs.HostFabric.HashKey()
+		if err != nil {
+			t.Fatal(err)
+		}
+		hfm[hk] = hfs
+	}
+
+	return hfm
 }
