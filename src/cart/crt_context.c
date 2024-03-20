@@ -778,8 +778,8 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	hg_rc = HG_Context_unpost(ctx->cc_hg_ctx.chc_hgctx);
 	if (hg_rc != 0) {
-		D_ERROR("HG_Context_unpost() failed (ctx=%d); hg_rc: " DF_HG_RC "\n",
-			ctx_idx, DP_HG_RC(hg_rc));
+		if (!force)
+			D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (crt_gdata.cg_swim_inited && crt_gdata.cg_swim_ctx_idx == ctx_idx)
