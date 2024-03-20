@@ -99,7 +99,7 @@ pipeline {
                defaultValue: getPriority(),
                description: 'Priority of this build.  DO NOT USE WITHOUT PERMISSION.')
         string(name: 'TestTag',
-               defaultValue: 'full_regression',
+               defaultValue: '',
                description: 'Test-tag to use for this run (i.e. pr, daily_regression, full_regression, etc.)')
         // The TestNvme and TestRepeat parameter definitions are purposely excluded. The functional
         // test stage launch.py --nvme argument is hard-coded in each stage definition to avoid the
@@ -269,7 +269,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: vm9_label('EL8'),
                             next_version: next_version,
-                            stage_tags: '-hw',
+                            stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
@@ -284,7 +284,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: vm9_label('EL9'),
                             next_version: next_version,
-                            stage_tags: '-hw',
+                            stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
@@ -299,7 +299,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: vm9_label('Leap15'),
                             next_version: next_version,
-                            stage_tags: '-hw',
+                            stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
@@ -314,7 +314,7 @@ pipeline {
                             base_branch: params.BaseBranch,
                             label: vm9_label('Ubuntu'),
                             next_version: next_version,
-                            stage_tags: '-hw',
+                            stage_tags: 'vm',
                             /* groovylint-disable-next-line UnnecessaryGetter */
                             default_tags: isPr() ? 'always_passes' : 'full_regression',
                             nvme: 'auto',
