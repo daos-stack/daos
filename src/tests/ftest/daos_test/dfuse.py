@@ -104,6 +104,11 @@ class DaosCoreTestDfuse(DfuseTestBase):
                    '--io', '--stream', '--mmap', '--exec', '--directory']
         if use_dfuse:
             command.append('--lowfd')
+        else:
+            # make DAOS_MOUNT_POINT different from mount_dir so it tests a non-DAOS filesystem
+            dummy_dir = '/tmp/dummy'
+            create_directory(self.hostlist_clients, dummy_dir)
+            daos_test_env['DAOS_MOUNT_POINT'] = dummy_dir
         if cache_mode != 'writeback':
             command.append('--metadata')
 
