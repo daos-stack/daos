@@ -2044,7 +2044,7 @@ ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
 	uuid_copy(args->pool_uuid, pool_uuid);
 	uuid_copy(args->cont_uuid, cont_uuid);
 	rc = dss_ult_create(cont_snapshots_refresh_ult, args, DSS_XS_SYS,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0)
 		D_FREE(args);
 	return rc;

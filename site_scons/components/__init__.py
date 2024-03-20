@@ -300,14 +300,12 @@ def define_components(reqs):
 
     reqs.define('fuse', libs=['fuse3'], defines=['FUSE_USE_VERSION=35'],
                 retriever=GitRepoRetriever('https://github.com/libfuse/libfuse.git'),
-                commands=[['meson', 'setup', '../fuse'],
-                          ['meson', 'configure', '--prefix=$FUSE_PREFIX', '-Ddisable-mtab=True',
+                commands=[['meson', 'setup', '--prefix=$FUSE_PREFIX', '-Ddisable-mtab=True',
                            '-Dudevrulesdir=$FUSE_PREFIX/udev', '-Dutils=False',
-                           '--default-library', 'both'],
-                          ['ninja', '-v'],
+                           '--default-library', 'both', '../fuse'],
                           ['ninja', 'install']],
                 headers=['fuse3/fuse.h'],
-                required_progs=['libtoolize', 'ninja'],
+                required_progs=['libtoolize', 'ninja', 'meson'],
                 out_of_src_build=True)
 
     # Tell SPDK which CPU to optimize for, by default this is native which works well unless you
