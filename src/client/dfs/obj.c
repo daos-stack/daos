@@ -1144,12 +1144,6 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		oh = parent->oh;
 	}
 
-	/** sticky bit, set-user-id and set-group-id, are not supported */
-	if (mode & S_ISVTX || mode & S_ISGID || mode & S_ISUID) {
-		D_ERROR("setuid, setgid, & sticky bit are not supported.\n");
-		return ENOTSUP;
-	}
-
 	/* Check if parent has the entry */
 	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry, 0, NULL,
 			 NULL, NULL);
@@ -1399,13 +1393,6 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	if (flags & DFS_SET_ATTR_MODE) {
 		if ((stbuf->st_mode & S_IFMT) != (obj->mode & S_IFMT))
 			return EINVAL;
-		/** sticky bit, set-user-id and set-group-id not supported */
-		if (stbuf->st_mode & S_ISVTX || stbuf->st_mode & S_ISGID ||
-		    stbuf->st_mode & S_ISUID) {
-			D_DEBUG(DB_TRACE, "setuid, setgid, & sticky bit are not"
-					  " supported.\n");
-			return EINVAL;
-		}
 	}
 
 	/** Open parent object and fetch entry of obj from it */

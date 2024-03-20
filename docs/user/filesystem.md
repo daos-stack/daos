@@ -54,16 +54,19 @@ The following features from POSIX are not supported:
   The dfuse-data-cache=otoc container attribute allows this without enabling other caching.
 * Char devices, block devices, sockets and pipes
 * User/group quotas
-* setuid(), setgid() programs, supplementary groups, POSIX ACLs are not supported
-  within the DFS namespace.
 * [access/change/modify] time not updated appropriately, potentially on close only.
 * Flock (maybe at dfuse local node level only)
 * Block size in stat buf is not accurate (no account for holes, extended attributes)
 * Various parameters reported via statfs like number of blocks, files,
   free/available space
-* POSIX permissions inside an encapsulated namespace
-  * Still enforced at the DAOS pool/container level
-  * Effectively means that all files belong to the same "project"
+* O\_APPEND is not supported
+* POSIX permissions, setuid/gid programs, sticky bit, POSIX ACLs, supplementary groups are not
+  supported inside an encapsulated namespace
+    * Still enforced at the DAOS pool/container level via DAOS ACL
+    * Effectively means that all files belong to the same "project"
+    * libdfs still allows permission, set-user/group-id and sticky bits to be stored on setattr
+      operation to allow high-level frameworks like fuse/dfuse to support those features and do
+      proper permission checks and enforcement.
 
 !!! note
     DFS directories do not include the `.` (current directory) and `..` (parent directory)
