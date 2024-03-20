@@ -42,8 +42,8 @@ container:
 objectclass:
   dfs_oclass_list:
     #- [EC_Object_Class, Minimum number of servers]
-    - ["OC_EC_2P1G1", 4]
-    - ["OC_EC_2P2G1", 4]
-    - ["OC_EC_4P1G1", 6]
-    - ["OC_EC_4P2G1", 6]
-    - ["OC_EC_8P2G1", 10]
+    - ["EC_2P1G1", 4]
+    - ["EC_2P2G1", 4]
+    - ["EC_4P1G1", 6]
+    - ["EC_4P2G1", 6]
+    - ["EC_8P2G1", 10]
