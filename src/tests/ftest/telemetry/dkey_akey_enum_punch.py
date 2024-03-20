@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -232,13 +232,19 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
 
         # Obtain and verify the io metrics 1 to 4. ###
         # engine_pool_ops_dkey_enum
-        pool_dkey_enum = self.telemetry.ENGINE_POOL_OPS_METRICS[3]
-        # engine_pool_ops_akey_enum
-        pool_akey_enum = self.telemetry.ENGINE_POOL_OPS_METRICS[0]
-        # engine_pool_ops_dkey_punch
-        pool_dkey_punch = self.telemetry.ENGINE_POOL_OPS_METRICS[4]
-        # engine_pool_ops_akey_punch
-        pool_akey_punch = self.telemetry.ENGINE_POOL_OPS_METRICS[1]
+        pool_akey_enum = None
+        pool_dkey_enum = None
+        pool_akey_punch = None
+        pool_dkey_punch = None
+        for item in self.telemetry.ENGINE_POOL_OPS_METRICS:
+            if item.endswith("_akey_enum"):
+                pool_akey_enum = item
+            elif item.endswith("_dkey_enum"):
+                pool_dkey_enum = item
+            elif item.endswith("_akey_punch"):
+                pool_akey_punch = item
+            elif item.endswith("_dkey_punch"):
+                pool_dkey_punch = item
         specific_metrics = [
             pool_dkey_enum, pool_akey_enum,
             pool_dkey_punch, pool_akey_punch,
@@ -358,8 +364,13 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         self.telemetry.dmg.verbose = False
 
         # Obtain and verify the pool metrics 1 and 2 ###
-        pool_tgt_dkey_punch = self.telemetry.ENGINE_POOL_OPS_METRICS[23]
-        pool_tgt_akey_punch = self.telemetry.ENGINE_POOL_OPS_METRICS[22]
+        pool_tgt_dkey_punch = None
+        pool_tgt_akey_punch = None
+        for item in self.telemetry.ENGINE_POOL_OPS_METRICS:
+            if item.endswith("_tgt_akey_punch"):
+                pool_tgt_akey_punch = item
+            elif item.endswith("_tgt_dkey_punch"):
+                pool_tgt_dkey_punch = item
         specific_metrics = [pool_tgt_dkey_punch, pool_tgt_akey_punch]
         pool_out = self.telemetry.get_pool_metrics(
             specific_metrics=specific_metrics)

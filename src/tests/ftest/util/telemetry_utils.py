@@ -87,7 +87,7 @@ class TelemetryUtils():
         "engine_pool_ops_ec_rep",
         "engine_pool_ops_fetch",
         "engine_pool_ops_key_query",
-        "engine_pool_ops_key2anchor"
+        "engine_pool_ops_key2anchor",
         "engine_pool_ops_migrate",
         "engine_pool_ops_obj_enum",
         "engine_pool_ops_obj_punch",
