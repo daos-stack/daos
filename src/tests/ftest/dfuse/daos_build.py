@@ -261,7 +261,7 @@ class DaosBuild(DfuseTestBase):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse,pil4dfs
         :avocado: tags=DaosBuild,test_dfuse_daos_build_pil4dfs
         """
@@ -277,15 +277,14 @@ class DaosBuild(DfuseTestBase):
 
         # Timeout in minutes.  This is per command so up to double this or more as there are two
         # scons commands which can both take a long time.
-        build_time = 600
+        build_time = 480
 
         dfuse_namespace = None
 
         # Note that run_on_vms does not tell ftest where to run, this should be set according to
         # the test tags so the test can run with appropriate settings.
         remote_env = {}
-        dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
-        build_jobs = 8
+        build_jobs = 6 * 5
         remote_env['D_IL_MAX_EQ'] = '0'
 
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
