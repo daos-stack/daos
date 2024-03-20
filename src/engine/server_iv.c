@@ -1135,7 +1135,7 @@ iv_op_async(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 	ds_iv_ns_get(ns);
 	ult_arg->ns = ns;
 	ult_arg->opc = opc;
-	rc = dss_ult_create(iv_op_ult, ult_arg, DSS_XS_SYS, 0, 0, NULL);
+	rc = dss_ult_create(iv_op_ult, ult_arg, DSS_XS_SYS, 0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
 		ds_iv_ns_put(ult_arg->ns);
 		d_sgl_fini(&ult_arg->iv_value, true);
