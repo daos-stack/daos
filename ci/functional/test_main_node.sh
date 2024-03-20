@@ -12,7 +12,7 @@ export WITH_VALGRIND="$WITH_VALGRIND"
 export STAGE_NAME="$STAGE_NAME"
 
 if [ -n "$BULLSEYE" ]; then
-    pushd "${SL_SRC_DIR}/bullseye"
+    pushd bullseye
     set +x
     echo + sudo ./install --quiet --key "**********" --prefix /opt/BullseyeCoverage
     sudo ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage
