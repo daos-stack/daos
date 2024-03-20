@@ -914,51 +914,5 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 			nil,
 			errors.New("nvme scan backend: bad scan"),
 		},
-		//		{
-		//			"Scan modules; JSON",
-		//			"scm scan -j",
-		//			mockCSFromScmCfg(log, scm.MockBackendConfig{
-		//				GetModulesRes: storage.ScmModules{
-		//					storage.MockScmModule(),
-		//				},
-		//			}),
-		//			storage.ScmModules{storage.MockScmModule()},
-		//			nil,
-		//		},
-		//		{
-		//			"Scan modules; JSON; returns error",
-		//			"scm scan -j",
-		//			mockCSFromScmCfg(log, scm.MockBackendConfig{
-		//				GetModulesErr: errors.New("bad prep"),
-		//			}),
-		//			nil,
-		//			errors.New("bad prep"),
-		//		},
-		//		{
-		//			"Scan namespaces; JSON",
-		//			"scm scan -j",
-		//			mockCSFromScmCfg(log, scm.MockBackendConfig{
-		//				GetModulesRes: storage.ScmModules{
-		//					storage.MockScmModule(),
-		//				},
-		//				GetNamespacesRes: storage.ScmNamespaces{
-		//					storage.MockScmNamespace(),
-		//				},
-		//			}),
-		//			storage.ScmNamespaces{storage.MockScmNamespace()},
-		//			nil,
-		//		},
-		//		{
-		//			"Scan namespaces; JSON; returns error",
-		//			"scm scan -j",
-		//			mockCSFromScmCfg(log, scm.MockBackendConfig{
-		//				GetModulesRes: storage.ScmModules{
-		//					storage.MockScmModule(),
-		//				},
-		//				GetNamespacesErr: errors.New("bad prep"),
-		//			}),
-		//			nil,
-		//			errors.New("bad prep"),
-		//		},
 	})
 }

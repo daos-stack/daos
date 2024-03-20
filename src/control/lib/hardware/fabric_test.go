@@ -1440,7 +1440,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				},
 			},
 			providers: []string{"ofi+tcp"},
-			expErr:    errors.New("no fabric interfaces found with providers: ofi+tcp"),
+			expErr:    errors.New("no fabric interfaces found with provider \"ofi+tcp\""),
 		},
 		"already initialized": {
 			config: GetMockFabricScannerConfig(),
