@@ -29,6 +29,8 @@ import (
 
 const defaultConfigFile = "daos_server.yml"
 
+var errJSONOutputNotSupported = errors.New("this subcommand does not support JSON output")
+
 type (
 	ctlSvcCaller interface {
 		setCtlSvc(*server.ControlService)
@@ -119,7 +121,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger, ctlSvc
 				// disable output on stdout other than JSON
 				log.ClearLevel(logging.LogLevelInfo)
 			} else {
-				return errors.New("subcommand does not support JSON output")
+				return errJSONOutputNotSupported
 			}
 		}
 

@@ -10,12 +10,13 @@ import (
 	"context"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
-	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
 const allProviders = "all"
@@ -28,6 +29,8 @@ type networkCmd struct {
 // that match the given fabric provider.
 type networkScanCmd struct {
 	optCfgCmd
+	ctlSvcCmd
+	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)"`
 }
@@ -69,8 +72,10 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProv
 	return hf
 }
 
-func GetLocalFabricIfaces(ctx context.Context, fs *hardware.FabricScanner, filterProvider string) (*control.HostFabric, error) {
-	results, err := fs.Scan(ctx, filterProvider)
+type fabricScanFn func(context.Context, ...string) (*hardware.FabricInterfaceSet, error)
+
+func GetLocalFabricIfaces(ctx context.Context, scan fabricScanFn, filterProvider string) (*control.HostFabric, error) {
+	results, err := scan(ctx, filterProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -78,13 +83,22 @@ func GetLocalFabricIfaces(ctx context.Context, fs *hardware.FabricScanner, filte
 	return fabricInterfaceSetToHostFabric(results, filterProvider), nil
 }
 
+func localHostFabricMap(hf *control.HostFabric) (control.HostFabricMap, error) {
+	hfm := make(control.HostFabricMap)
+
+	return hfm, hfm.Add("localhost", hf)
+}
+
 func (cmd *networkScanCmd) Execute(_ []string) error {
-	if err := common.CheckDupeProcess(); err != nil {
-		return err
+	if cmd.ctlSvc == nil {
+		// If specific storage control service is not supplied with command, perform init
+		// checks.
+		if err := common.CheckDupeProcess(); err != nil {
+			return err
+		}
 	}
 
 	ctx := cmd.MustLogCtx()
-	fs := hwprov.DefaultFabricScanner(cmd.Logger)
 
 	var prov string
 	switch {
@@ -96,14 +110,19 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 		prov = cmd.config.Fabric.Provider
 	}
 
-	hf, err := GetLocalFabricIfaces(ctx, fs, prov)
+	hf, err := GetLocalFabricIfaces(ctx, cmd.ctlSvc.FabricScan, prov)
+	if err != nil {
+		return errors.Wrap(err, "get local fabric interfaces")
+	}
+	cmd.Debugf("discovered fabric interfaces: %+v", hf.Interfaces)
+
+	hfm, err := localHostFabricMap(hf)
 	if err != nil {
 		return err
 	}
-	cmd.Debugf("discovered fabric interfaces: %+v", hf.Interfaces)
-	hfm := make(control.HostFabricMap)
-	if err := hfm.Add("localhost", hf); err != nil {
-		return err
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(hfm, nil)
 	}
 
 	var bld strings.Builder

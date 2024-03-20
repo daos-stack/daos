@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -40,7 +40,7 @@ type configGenCmd struct {
 type getFabricFn func(context.Context, logging.Logger, string) (*control.HostFabric, error)
 
 func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*control.HostFabric, error) {
-	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log), provider)
+	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log).Scan, provider)
 	if err != nil {
 		return nil, errors.Wrapf(err, "fetching local fabric interfaces")
 	}
