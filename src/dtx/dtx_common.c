@@ -1606,6 +1606,7 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 		if (unlikely(total > stat.dtx_committable_count)) {
 			D_WARN("Some DTX in CoS cannot be committed: %lu/%lu\n",
 			       (unsigned long)total, (unsigned long)stat.dtx_committable_count);
+			dtx_free_committable(dtes, dcks, dce, cnt);
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
