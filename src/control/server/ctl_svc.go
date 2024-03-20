@@ -30,6 +30,10 @@ type ControlService struct {
 func NewControlService(log logging.Logger, h *EngineHarness,
 	cfg *config.Server, e *events.PubSub, f *hardware.FabricScanner) *ControlService {
 
+	if cfg == nil {
+		cfg = config.DefaultServer()
+	}
+
 	scs := NewStorageControlService(log, cfg.Engines)
 
 	return &ControlService{
