@@ -191,7 +191,7 @@ class RebuildTestBase(TestWithServers):
 
         # Refresh local pool and container
         self.pool.check_pool_info()
-        self.container.check_container_info()
+        self.container.query()
 
         # Verify the excluded rank is no longer used with the objects
         self.verify_rank_has_no_objects()

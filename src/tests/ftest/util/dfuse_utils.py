@@ -72,9 +72,6 @@ class Dfuse(DfuseCommand):
         # result of last call to _update_mount_state()
         self._mount_state = {}
 
-        # which fusermount command to use for unmount
-        self._fusermount_cmd = ""
-
         # used by stop() to know cleanup is needed
         self.__need_cleanup = False
 
@@ -151,7 +148,7 @@ class Dfuse(DfuseCommand):
 
         """
         return ' '.join(filter(None, [
-            self._fusermount_cmd,
+            'fusermount3',
             '-u',
             '-z' if force else None,
             self.mount_dir.value
@@ -252,16 +249,6 @@ class Dfuse(DfuseCommand):
 
         if 'COVFILE' not in self.env:
             self.env['COVFILE'] = '/tmp/test.cov'
-
-        # Determine which fusermount command to use before mounting
-        if not self._fusermount_cmd:
-            self.log.info('Check which fusermount command to use')
-            for fusermount in ('fusermount3', 'fusermount'):
-                if run_remote(self.log, self.hosts, f'{fusermount} --version').passed:
-                    self._fusermount_cmd = fusermount
-                    break
-            if not self._fusermount_cmd:
-                raise CommandFailure(f'Failed to get fusermount command on: {self.hosts}')
 
         # mark the instance as needing cleanup before starting setup
         self.__need_cleanup = True
