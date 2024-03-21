@@ -791,6 +791,13 @@ dcache_find_insert_dact(dfs_dcache_t *dcache, char *path, size_t path_len, dcach
 	if (rec_tmp == NULL)
 		D_GOTO(error, rc = -DER_NOMEM);
 
+	/* NOTE Path walk will needs to be done in pil4dfs.  Indeed, dfs supports one container but
+	 * all other middlewares layered on top if it will detect UNS links on directories and open
+	 * a new container as necessary. To do that the path walk needs to happen at the higher
+	 * level, check the xattr on lookup and open new pools/containers as required.  More details
+	 * could be found at
+	 * https://github.com/daos-stack/daos/blob/master/docs/user/filesystem.md#unified-namespace-uns
+	 */
 	rc = dfs_lookup(dcache->dd_dfs, path, O_RDWR, &obj, &mode, NULL);
 	if (rc != 0)
 		D_GOTO(error, rc = daos_errno2der(rc));
