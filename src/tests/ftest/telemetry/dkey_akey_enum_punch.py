@@ -247,6 +247,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             specific_metrics=specific_metrics)
 
         # Verify dkey_enum total is 100.
+        self.log_step("Verify dkey_enum total is at least 100")
         dkey_enum_total = self.sum_values(metric_out=pool_out[pool_dkey_enum])
         if dkey_enum_total != 100:
             msg = "dkey enum total is not 100! Actual = {}".format(
@@ -254,6 +255,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             self.errors.append(msg)
 
         # Verify akey_enum total is 200.
+        self.log_step("Verify akey_enum total is at least 100")
         akey_enum_total = self.sum_values(metric_out=pool_out[pool_akey_enum])
         if akey_enum_total != 200:
             msg = "akey enum total is not 200! Actual = {}".format(
@@ -261,6 +263,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             self.errors.append(msg)
 
         # Verify dkey_punch total is 200.
+        self.log_step("Verify dkey_punch total is at least 200")
         dkey_punch_total = self.sum_values(metric_out=pool_out[pool_dkey_punch])
         if dkey_punch_total != 200:
             msg = "dkey punch total is not 200! Actual = {}".format(
@@ -268,6 +271,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
             self.errors.append(msg)
 
         # Verify akey_punch total is 200.
+        self.log_step("Verify akey_punch total is at least 200")
         akey_punch_total = self.sum_values(metric_out=pool_out[pool_akey_punch])
         if akey_punch_total != 200:
             msg = "akey punch total is not 200! Actual = {}".format(
