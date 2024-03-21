@@ -141,8 +141,6 @@ class DaosBuild(DfuseTestBase):
             build_jobs = 6 * 2
             remote_env['D_IL_MAX_EQ'] = '0'
 
-        intercept_jobs = build_jobs
-
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
         if cache_mode == 'writeback':
