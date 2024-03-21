@@ -34,16 +34,10 @@
 #define DF_DK          "dk[%zi]"
 #define DP_DK(_dk)     strnlen((_dk), DCACHE_KEY_MAX)
 
-#define DF_PATH        "path[%zi]"
-#define DP_PATH(_path) strnlen((_path), PATH_MAX)
-
 #else
 
 #define DF_DK          "dk'%s'"
 #define DP_DK(_dk)     (_dk)
-
-#define DF_PATH        "path'%s'"
-#define DP_PATH(_path) (_path)
 
 #endif
 
