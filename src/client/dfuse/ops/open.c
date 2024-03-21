@@ -66,9 +66,11 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		 * This should mean that pre-read is only used on the first read, and on files
 		 * which pre-existed in the container.
 		 */
-		/* TODO: This cache_get_valid_call is wrong for cases where timeout is -1 */
+
+		DFUSE_TRA_INFO(ie, "sec %ld", ie->ie_dcache_last_update.tv_sec);
 		if (atomic_load_relaxed(&ie->ie_open_count) > 0 ||
-		    dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout)) {
+		    ((ie->ie_dcache_last_update.tv_sec != 0) &&
+		     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
 			fi_out.keep_cache = 1;
 		} else {
 			prefetch = true;
