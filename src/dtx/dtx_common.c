@@ -804,11 +804,6 @@ dtx_epoch_bound(struct dtx_epoch *epoch)
 	return limit;
 }
 
-/** VOS reserves highest two minor epoch values for internal use so we must
- *  limit the number of dtx sub modifications to avoid conflict.
- */
-#define DTX_SUB_MOD_MAX	(((uint16_t)-1) - 2)
-
 static void
 dtx_shares_init(struct dtx_handle *dth)
 {
@@ -881,11 +876,13 @@ dtx_handle_reinit(struct dtx_handle *dth)
  * Init local dth handle.
  */
 static int
-dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
-		bool leader, uint16_t sub_modification_cnt, uint32_t pm_ver,
-		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos, int dti_cos_cnt,
-		uint32_t flags, struct dtx_memberships *mbs, struct dtx_handle *dth)
+dtx_handle_init(struct dtx_id *dti, daos_handle_t xoh, struct dtx_epoch *epoch, bool leader,
+		uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+		struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
+		struct dtx_memberships *mbs, struct dtx_handle *dth)
 {
+	int rc;
+
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
 			"%u > %u\n", sub_modification_cnt, DTX_SUB_MOD_MAX);
@@ -895,10 +892,15 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 
 	dtx_shares_init(dth);
 
-	dth->dth_xid = *dti;
-	dth->dth_coh = coh;
+	if (flags & DTX_LOCAL) {
+		dth->dth_xid.dti_hlc = 1;
+		dth->dth_poh         = xoh;
+	} else {
+		dth->dth_xid        = *dti;
+		dth->dth_leader_oid = *leader_oid;
+		dth->dth_coh        = xoh;
+	}
 
-	dth->dth_leader_oid = *leader_oid;
 	dth->dth_ver = pm_ver;
 	dth->dth_refs = 1;
 	dth->dth_mbs = mbs;
@@ -918,6 +920,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
+	dth->dth_local              = (flags & DTX_LOCAL) ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -938,23 +941,38 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 
 	dth->dth_dkey_hash = 0;
 
-	if (daos_is_zero_dti(dti))
-		return 0;
+	if (!(flags & DTX_LOCAL)) {
+		if (daos_is_zero_dti(dti))
+			return 0;
 
-	if (!dtx_epoch_chosen(epoch)) {
-		D_ERROR("initializing DTX "DF_DTI" with invalid epoch: value="
-			DF_U64" first="DF_U64" flags=%x\n",
-			DP_DTI(dti), epoch->oe_value, epoch->oe_first,
-			epoch->oe_flags);
-		return -DER_INVAL;
+		if (!dtx_epoch_chosen(epoch)) {
+			D_ERROR("initializing DTX " DF_DTI " with invalid epoch: value=" DF_U64
+				" first=" DF_U64 " flags=%x\n",
+				DP_DTI(dti), epoch->oe_value, epoch->oe_first, epoch->oe_flags);
+			return -DER_INVAL;
+		}
+		dth->dth_epoch       = epoch->oe_value;
+		dth->dth_epoch_bound = dtx_epoch_bound(epoch);
 	}
-	dth->dth_epoch = epoch->oe_value;
-	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
 
-	if (dth->dth_modification_cnt == 0)
-		return 0;
+	rc = vos_dtx_rsrvd_init(dth);
+	if (rc != 0) {
+		D_ERROR("Failed to allocate space for scm reservations: rc=" DF_RC "\n", DP_RC(rc));
+		return rc;
+	}
 
-	return vos_dtx_rsrvd_init(dth);
+	if (flags & DTX_LOCAL) {
+		rc = vos_dtx_local_begin(dth, xoh);
+		if (rc) {
+			goto error;
+		}
+	}
+
+	return 0;
+
+error:
+	vos_dtx_rsrvd_fini(dth);
+	return rc;
 }
 
 static int
@@ -1471,7 +1489,7 @@ out:
 /**
  * Prepare the DTX handle in DRAM.
  *
- * \param coh		[IN]	Container handle.
+ * \param xoh		[IN]	Container handle or pool handle.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param sub_modification_cnt
@@ -1487,11 +1505,10 @@ out:
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_begin(daos_handle_t coh, struct dtx_id *dti,
-	  struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
-	  uint32_t pm_ver, daos_unit_oid_t *leader_oid,
-	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags,
-	  struct dtx_memberships *mbs, struct dtx_handle **p_dth)
+dtx_begin(daos_handle_t xoh, struct dtx_id *dti, struct dtx_epoch *epoch,
+	  uint16_t sub_modification_cnt, uint32_t pm_ver, daos_unit_oid_t *leader_oid,
+	  struct dtx_id *dti_cos, int dti_cos_cnt, uint32_t flags, struct dtx_memberships *mbs,
+	  struct dtx_handle **p_dth)
 {
 	struct dtx_handle	*dth;
 	int			 rc;
@@ -1500,15 +1517,21 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	if (dth == NULL)
 		return -DER_NOMEM;
 
-	rc = dtx_handle_init(dti, coh, epoch, false, sub_modification_cnt, pm_ver,
-			     leader_oid, dti_cos, dti_cos_cnt, flags, mbs, dth);
-	if (rc == 0 && sub_modification_cnt > 0)
+	rc = dtx_handle_init(dti, xoh, epoch, false, sub_modification_cnt, pm_ver, leader_oid,
+			     dti_cos, dti_cos_cnt, flags, mbs, dth);
+	if (rc == 0 && sub_modification_cnt > 0 && !(flags & DTX_LOCAL))
 		rc = vos_dtx_attach(dth, false, false);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
-		"epoch "DF_X64", dti_cos_cnt %d, flags %x: "DF_RC"\n",
-		DP_DTI(dti), sub_modification_cnt,
-		dth->dth_ver, epoch->oe_value, dti_cos_cnt, flags, DP_RC(rc));
+	if (flags & DTX_LOCAL) {
+		D_DEBUG(DB_IO, "Start local DTX sub modification %d, ver %u, flags %x: " DF_RC "\n",
+			sub_modification_cnt, dth->dth_ver, flags, DP_RC(rc));
+	} else {
+		D_DEBUG(DB_IO,
+			"Start DTX " DF_DTI " sub modification %d, ver %u, epoch " DF_X64
+			", dti_cos_cnt %d, flags %x: " DF_RC "\n",
+			DP_DTI(dti), sub_modification_cnt, dth->dth_ver, epoch->oe_value,
+			dti_cos_cnt, flags, DP_RC(rc));
+	}
 
 	if (rc != 0)
 		D_FREE(dth);
@@ -1528,7 +1551,9 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 	if (daos_is_zero_dti(&dth->dth_xid))
 		goto out;
 
-	if (result < 0) {
+	if (dth->dth_local) {
+		result = vos_dtx_local_end(dth, result);
+	} else if (result < 0) {
 		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 			int	rc;
 
@@ -1555,10 +1580,14 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		vos_dtx_cleanup(dth, true);
 	}
 
-	D_DEBUG(DB_IO,
-		"Stop the DTX "DF_DTI" ver %u, dkey %lu: "DF_RC"\n",
-		DP_DTI(&dth->dth_xid), dth->dth_ver,
-		(unsigned long)dth->dth_dkey_hash, DP_RC(result));
+	if (!dth->dth_local) {
+		D_DEBUG(DB_IO, "Stop the DTX " DF_DTI " ver %u, dkey %lu: " DF_RC "\n",
+			DP_DTI(&dth->dth_xid), dth->dth_ver, (unsigned long)dth->dth_dkey_hash,
+			DP_RC(result));
+	} else {
+		D_DEBUG(DB_IO, "Stop the local transaction ver %u: " DF_RC "\n", dth->dth_ver,
+			DP_RC(result));
+	}
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
@@ -1606,6 +1635,7 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 		if (unlikely(total > stat.dtx_committable_count)) {
 			D_WARN("Some DTX in CoS cannot be committed: %lu/%lu\n",
 			       (unsigned long)total, (unsigned long)stat.dtx_committable_count);
+			dtx_free_committable(dtes, dcks, dce, cnt);
 			D_GOTO(out, rc = -DER_MISC);
 		}
 

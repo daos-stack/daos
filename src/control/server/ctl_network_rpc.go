@@ -18,12 +18,16 @@ import (
 
 // NetworkScan retrieves details of network interfaces on remote hosts.
 func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScanReq) (*ctlpb.NetworkScanResp, error) {
-	provider := c.srvCfg.Fabric.Provider
+	providers, err := c.srvCfg.Fabric.GetProviders()
+	if err != nil {
+		return nil, err
+	}
+
 	switch {
 	case strings.EqualFold(req.GetProvider(), "all"):
-		provider = ""
+		providers = []string{}
 	case req.GetProvider() != "":
-		provider = req.GetProvider()
+		providers = []string{req.GetProvider()}
 	}
 
 	topo, err := hwprov.DefaultTopologyProvider(c.log).GetTopology(ctx)
@@ -35,12 +39,12 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 		return nil, err
 	}
 
-	result, err := c.fabric.Scan(ctx, provider)
+	result, err := c.fabric.Scan(ctx, providers...)
 	if err != nil {
 		return nil, err
 	}
 
-	resp := c.fabricInterfaceSetToNetworkScanResp(result, provider)
+	resp := c.fabricInterfaceSetToNetworkScanResp(result)
 
 	resp.Numacount = int32(topo.NumNUMANodes())
 	resp.Corespernuma = int32(topo.NumCoresPerNUMA())
@@ -48,7 +52,7 @@ func (c *ControlService) NetworkScan(ctx context.Context, req *ctlpb.NetworkScan
 	return resp, nil
 }
 
-func (c *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.FabricInterfaceSet, provider string) *ctlpb.NetworkScanResp {
+func (c *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.FabricInterfaceSet) *ctlpb.NetworkScanResp {
 	resp := new(ctlpb.NetworkScanResp)
 	resp.Interfaces = make([]*ctlpb.FabricInterface, 0, fis.NumNetDevices())
 	for _, name := range fis.Names() {
@@ -64,15 +68,13 @@ func (c *ControlService) fabricInterfaceSetToNetworkScanResp(fis *hardware.Fabri
 
 		for _, hwFI := range fi.NetInterfaces.ToSlice() {
 			for _, prov := range fi.Providers.ToSlice() {
-				if provider == "" || provider == prov.Name {
-					resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
-						Provider:    prov.Name,
-						Device:      hwFI,
-						Numanode:    uint32(fi.NUMANode),
-						Netdevclass: uint32(fi.DeviceClass),
-						Priority:    uint32(prov.Priority),
-					})
-				}
+				resp.Interfaces = append(resp.Interfaces, &ctlpb.FabricInterface{
+					Provider:    prov.Name,
+					Device:      hwFI,
+					Numanode:    uint32(fi.NUMANode),
+					Netdevclass: uint32(fi.DeviceClass),
+					Priority:    uint32(prov.Priority),
+				})
 			}
 		}
 	}
