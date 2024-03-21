@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -224,6 +224,32 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin);
  */
 int
 vos_dtx_cache_reset(daos_handle_t coh, bool force);
+
+/**
+ * Initialize local transaction.
+ *
+ * Note: This entry point is not meant to be used directly. Please use dtx_begin instead.
+ *
+ * \param dth	[IN]	Local DTX handle.
+ * \param poh	[IN]	Pool handle.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh);
+
+/**
+ * Finalize local transaction if no error happened in the meantime.
+ *
+ * Note: This entry point is not meant to be used directly. Please use dtx_end instead.
+ *
+ * \param dth		[IN]	Local DTX handle.
+ * \param result	[IN]	The current result of the transaction.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_local_end(struct dtx_handle *dth, int result);
 
 /**
  * Initialize the environment for a VOS instance
