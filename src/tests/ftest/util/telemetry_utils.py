@@ -139,9 +139,9 @@ class TelemetryUtils():
         "engine_pool_vos_space_nvme_used",
         "engine_pool_vos_space_scm_used"]
     ENGINE_POOL_VOS_WAL_METRICS = [
-        *_gen_stats_metrics("engine_pool_vos_wal_sz"),
-        *_gen_stats_metrics("engine_pool_vos_wal_qd"),
-        *_gen_stats_metrics("engine_pool_vos_wal_waiters")]
+        *_gen_stats_metrics("engine_pool_vos_wal_wal_sz"),
+        *_gen_stats_metrics("engine_pool_vos_wal_wal_qd"),
+        *_gen_stats_metrics("engine_pool_vos_wal_wal_waiters")]
     ENGINE_POOL_VOS_WAL_REPLAY_METRICS = [
         "engine_pool_vos_wal_replay_count",
         "engine_pool_vos_wal_replay_entries",
