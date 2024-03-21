@@ -72,9 +72,9 @@ class CartSelfTest(TestWithServers):
         # Setup additional environment variables for the server orterun command
         self.cart_env["CRT_CTX_SHARE_ADDR"] = str(share_addr)
         self.cart_env["CRT_CTX_NUM"] = "8"
-        self.cart_env["CRT_PHY_ADDR_STR"] = \
+        self.cart_env["D_PROVIDER"] = \
             self.server_managers[0].get_config_value("provider")
-        self.cart_env["OFI_INTERFACE"] = \
+        self.cart_env["D_INTERFACE"] = \
             self.server_managers[0].get_config_value("fabric_iface")
         self.cart_env["DAOS_AGENT_DRPC_DIR"] = "/var/run/daos_agent/"
 

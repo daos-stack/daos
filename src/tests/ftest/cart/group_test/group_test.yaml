@@ -5,10 +5,10 @@ ENV:
   default:
     # !filter-only : /run/tests/no_pmix_launcher
     - D_LOG_MASK: "WARN,RPC=DEBUG,HG=DEBUG"
-    - OFI_INTERFACE: "eth0"
-env_CRT_PHY_ADDR_STR: !mux
+    - D_INTERFACE: "eth0"
+env_D_PROVIDER: !mux
   ofi_tcp:
-    CRT_PHY_ADDR_STR: "ofi+tcp;ofi_rxm"
+    D_PROVIDER: "ofi+tcp;ofi_rxm"
 hosts: !mux
   hosts_1:
     config: one_node

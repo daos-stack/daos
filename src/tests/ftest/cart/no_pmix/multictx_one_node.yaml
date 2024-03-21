@@ -6,14 +6,14 @@ ENV:
     # !filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
     # !filter-only : /run/tests/rpc_error
     - D_LOG_MASK: "WARN"
-    - OFI_INTERFACE: "eth0"
+    - D_INTERFACE: "eth0"
     - CRT_CTX_NUM: "8"
     - CRT_CTX_SHARE_ADDR: "0"
-env_CRT_PHY_ADDR_STR: !mux
+env_D_PROVIDER: !mux
   sm:
-    CRT_PHY_ADDR_STR: "sm"
+    D_PROVIDER: "sm"
   ofi_tcp:
-    CRT_PHY_ADDR_STR: "ofi+tcp;ofi_rxm"
+    D_PROVIDER: "ofi+tcp;ofi_rxm"
 tests: !mux
   no_pmix_multi_ctx:
     name: no_pmix_multi_ctx

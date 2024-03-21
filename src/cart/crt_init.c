@@ -601,6 +601,12 @@ crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 	crt_hg_free_protocol_info((struct na_protocol_info *)protocol_info);
 }
 
+static inline void
+warn_deprecated(const char *old_env, const char *new_env)
+{
+	D_WARN("Usage of %s is deprecated. Set %s instead\n", old_env, new_env);
+}
+
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
@@ -700,8 +706,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			provider = opt->cio_provider;
 		else {
 			d_agetenv_str(&provider_env, "D_PROVIDER");
-			if (provider_env == NULL)
+			if (provider_env == NULL) {
 				d_agetenv_str(&provider_env, CRT_PHY_ADDR_ENV);
+				if (provider_env != NULL)
+					warn_deprecated(CRT_PHY_ADDR_ENV, "D_PROVIDER");
+			}
 			provider = provider_env;
 		}
 
@@ -711,6 +720,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			d_agetenv_str(&interface_env, "D_INTERFACE");
 			if (interface_env == NULL) {
 				d_agetenv_str(&interface_env, "OFI_INTERFACE");
+				if (interface_env != NULL)
+					warn_deprecated("OFI_INTERFACE", "D_INTERFACE");
 			}
 			interface = interface_env;
 		}
@@ -719,8 +730,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			domain = opt->cio_domain;
 		else {
 			d_agetenv_str(&domain_env, "D_DOMAIN");
-			if (domain_env == NULL)
+			if (domain_env == NULL) {
 				d_agetenv_str(&domain_env, "OFI_DOMAIN");
+				if (domain_env != NULL)
+					warn_deprecated("OFI_DOMAIN", "D_DOMAIN");
+			}
 			domain = domain_env;
 		}
 
@@ -728,8 +742,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			port = opt->cio_port;
 		else {
 			d_agetenv_str(&port_env, "D_PORT");
-			if (port_env == NULL)
+			if (port_env == NULL) {
 				d_agetenv_str(&port_env, "OFI_PORT");
+				if (port_env != NULL)
+					warn_deprecated("OFI_DOMAIN", "D_DOMAIN");
+			}
 			port = port_env;
 		}
 

@@ -6,11 +6,11 @@ ENV:
     # !filter-only : /run/envs_CRT_CTX_SHARE_ADDR/sep
     # !filter-only : /run/tests/corpc_prefwd
     - D_LOG_MASK: "WARN,RPC=DEBUG,HG=DEBUG"
-    - OFI_INTERFACE: "eth0"
+    - D_INTERFACE: "eth0"
     - test_servers_CRT_CTX_NUM: "16"
-env_CRT_PHY_ADDR_STR: !mux
+env_D_PROVIDER: !mux
   ofi_tcp:
-    CRT_PHY_ADDR_STR: "ofi+tcp;ofi_rxm"
+    D_PROVIDER: "ofi+tcp;ofi_rxm"
 env_CRT_CTX_SHARE_ADDR: !mux
   no_sep:
     env: no_sep

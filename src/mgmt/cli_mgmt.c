@@ -255,11 +255,11 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 		D_GOTO(out, rc);
 	}
 
-	if (d_agetenv_str(&ofi_interface, "OFI_INTERFACE") == 0)
-		D_INFO("Using client provided OFI_INTERFACE: %s\n", ofi_interface);
+	if (d_agetenv_str(&ofi_interface, "D_INTERFACE") == 0)
+		D_INFO("Using client provided D_INTERFACE: %s\n", ofi_interface);
 
-	if (d_agetenv_str(&ofi_domain, "OFI_DOMAIN") == 0)
-		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+	if (d_agetenv_str(&ofi_domain, "D_DOMAIN") == 0)
+		D_INFO("Using client provided D_DOMAIN: %s\n", ofi_domain);
 
 	/* Prepare the GetAttachInfo request. */
 	req.sys = (char *)name;
@@ -463,7 +463,7 @@ _split_env(char *env, char **name, char **value)
 int dc_mgmt_net_cfg(const char *name)
 {
 	int                      rc;
-	char                    *crt_phy_addr_str;
+	char                    *provider;
 	char                    *crt_ctx_share_addr = NULL;
 	char                    *cli_srx_set        = NULL;
 	char                    *crt_timeout        = NULL;
@@ -504,8 +504,8 @@ int dc_mgmt_net_cfg(const char *name)
 	g_num_serv_ranks = resp->n_rank_uris;
 	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
 	/* These two are always set */
-	crt_phy_addr_str = info.provider;
-	rc               = d_setenv("CRT_PHY_ADDR_STR", crt_phy_addr_str, 1);
+	provider = info.provider;
+	rc               = d_setenv("D_PROVIDER", provider, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
@@ -556,11 +556,12 @@ int dc_mgmt_net_cfg(const char *name)
 	}
 
 	/* client-provided iface/domain were already taken into account by agent */
-	rc = d_setenv("OFI_INTERFACE", info.interface, 1);
+	/* TODO: These should be set in crt_init_options_t instead of env */
+	rc = d_setenv("D_INTERFACE", info.interface, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
-	rc = d_setenv("OFI_DOMAIN", info.domain, 1);
+	rc = d_setenv("D_DOMAIN", info.domain, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
@@ -572,9 +573,9 @@ int dc_mgmt_net_cfg(const char *name)
 	D_INFO("Network interface: %s, Domain: %s\n", info.interface, info.domain);
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
-		"\tCRT_PHY_ADDR_STR: %s, CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s, "
+		"\tD_PROVIDER: %s, CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s, "
 		"CRT_SECONDARY_PROVIDER: %s\n",
-		crt_phy_addr_str, crt_ctx_share_addr, crt_timeout, buf);
+		provider, crt_ctx_share_addr, crt_timeout, buf);
 
 cleanup:
 	d_freeenv_str(&crt_timeout);
