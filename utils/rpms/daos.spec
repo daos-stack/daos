@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.101
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -65,6 +65,7 @@ BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 BuildRequires: capstone-devel
 %endif
+BuildRequires: patchelf
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
 BuildRequires: isa-l-devel
@@ -351,6 +352,10 @@ mv test.cov{,-build}
       %{?scons_args}                  \
       %{?compiler_args}
 
+# set rpath for libpil4dfs.so is needed to pass daos build test
+patchelf --force-rpath --set-rpath %{_libdir} %{buildroot}/%{_libdir}/libpil4dfs.so
+patchelf --force-rpath --set-rpath %{_libdir} %{buildroot}/%{_libdir}/libioil.so
+
 %if ("%{?compiler_args}" == "COMPILER=covc")
 mv test.cov-build %{buildroot}/%{daoshome}/TESTING/ftest/test.cov
 %endif
@@ -586,8 +591,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Mar 21 2024 Lei Huang <lei.huang@intel.com> 2.5.101-2
+- Add patchelf as as a dependency
+
 * Fri Mar 15 2024 Phillip Henderson <phillip.henderson@intel.com> 2.5.101-1
 - Bump version to 2.5.101
+
 
 * Tue Feb 27 2024 Li Wei <wei.g.li@intel.com> 2.5.100-16
 - Update raft to 0.11.0-1.416.g12dbc15

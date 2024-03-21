@@ -63,7 +63,23 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=daosio,dfuse,il,dfs
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
-        self.run_build_test("writethrough", True, run_on_vms=True)
+        self.run_build_test("writethrough", il_lib='libioil.so', run_on_vms=True)
+
+    def test_dfuse_daos_build_wt_pil4dfs(self):
+        """This test builds DAOS on a dfuse filesystem.
+
+        Use cases:
+            Create Pool
+            Create Posix container
+            Mount dfuse
+            Checkout and build DAOS sources.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=daosio,dfuse,il,dfs
+        :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_pil4dfs
+        """
+        self.run_build_test("nocache", il_lib='libpil4dfs.so')
 
     def test_dfuse_daos_build_metadata(self):
         """This test builds DAOS on a dfuse filesystem.
@@ -113,7 +129,7 @@ class DaosBuild(DfuseTestBase):
         """
         self.run_build_test("nocache")
 
-    def run_build_test(self, cache_mode, intercept=False, run_on_vms=False):
+    def run_build_test(self, cache_mode, il_lib=None, run_on_vms=False):
         """Run an actual test from above."""
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
@@ -126,6 +142,11 @@ class DaosBuild(DfuseTestBase):
         # Timeout in minutes.  This is per command so up to double this or more as there are two
         # scons commands which can both take a long time.
         build_time = 60
+
+        if il_lib is not None:
+            if il_lib == 'libpil4dfs.so':
+                # daos build takes ~4 hours in CI with tcp provider. 4~8 hours with verbs provider.
+                build_time *= 2
 
         dfuse_namespace = None
 
@@ -141,10 +162,6 @@ class DaosBuild(DfuseTestBase):
             build_jobs = 6 * 2
             remote_env['D_IL_MAX_EQ'] = '0'
 
-        intercept_jobs = build_jobs
-        if intercept:
-            intercept_jobs = 1
-
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
         if cache_mode == 'writeback':
@@ -153,7 +170,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'writethrough':
-            if intercept:
+            if il_lib is not None:
                 build_time *= 6
             cont_attrs['dfuse-data-cache'] = '1m'
             cont_attrs['dfuse-attr-time'] = cache_time
@@ -195,12 +212,16 @@ class DaosBuild(DfuseTestBase):
         remote_env['VIRTUAL_ENV'] = os.path.join(mount_dir, 'venv')
         remote_env['COVFILE'] = os.environ['COVFILE']
 
-        if intercept:
-            remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+        if il_lib is not None:
+            remote_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
             remote_env['D_LOG_FILE'] = '/var/tmp/daos_testing/daos-il.log'
             remote_env['DD_MASK'] = 'all'
             remote_env['DD_SUBSYS'] = 'all'
             remote_env['D_LOG_MASK'] = 'WARN,IL=WARN'
+            if il_lib == 'libpil4dfs.so':
+                remote_env['D_IL_ENFORCE_EXEC_ENV'] = '1'
+                remote_env['D_IL_COMPATIBLE'] = '1'
+                remote_env['D_IL_MAX_EQ'] = '0'
 
         envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
@@ -216,8 +237,8 @@ class DaosBuild(DfuseTestBase):
                 'daos filesystem query {}'.format(mount_dir),
                 'daos filesystem evict {}'.format(build_dir),
                 'daos filesystem query {}'.format(mount_dir),
-                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs),
-                'scons -C {} --jobs {} install'.format(build_dir, intercept_jobs),
+                'scons -C {} --jobs {}'.format(build_dir, build_jobs),
+                'scons -C {} --jobs {} install'.format(build_dir, build_jobs),
                 'daos filesystem query {}'.format(mount_dir)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)
@@ -246,7 +267,7 @@ class DaosBuild(DfuseTestBase):
             if cmd.startswith('scons'):
                 run_remote(self.log, self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
                            timeout=30)
-            if intercept:
+            if il_lib is not None:
                 self.fail('{} over dfuse with il in mode {}.\n'.format(fail_type, cache_mode))
             else:
                 self.fail('{} over dfuse in mode {}.\n'.format(fail_type, cache_mode))
