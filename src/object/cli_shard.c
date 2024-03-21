@@ -2347,6 +2347,11 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc = ret);
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_SYNC_RETRY)) {
+		D_ERROR("Expect to retry OBJ_SYNC RPC\n");
+		D_GOTO(out, rc = -DER_TIMEDOUT);
+	}
+
 	oso = crt_reply_get(rpc);
 	rc = oso->oso_ret;
 	if (rc == -DER_NONEXIST)

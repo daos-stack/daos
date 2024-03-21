@@ -2223,6 +2223,11 @@ agg_reset_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 	if (oca)
 		agg_entry->ae_oca	= *oca;
 
+	if (agg_entry->ae_obj_layout) {
+		pl_obj_layout_free(agg_entry->ae_obj_layout);
+		agg_entry->ae_obj_layout = NULL;
+	}
+
 	if (daos_handle_is_valid(agg_entry->ae_obj_hdl)) {
 		dsc_obj_close(agg_entry->ae_obj_hdl);
 		agg_entry->ae_obj_hdl = DAOS_HDL_INVAL;
@@ -2605,6 +2610,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	/* Post_cb may not being executed in some cases */
 	agg_clear_extents(&ec_agg_param->ap_agg_entry);
+	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
 	if (daos_handle_is_valid(ec_agg_param->ap_agg_entry.ae_obj_hdl)) {
 		dsc_obj_close(ec_agg_param->ap_agg_entry.ae_obj_hdl);
