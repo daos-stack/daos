@@ -54,7 +54,7 @@ class TestWithScrubberBasic(TestWithScrubber):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=scrubber
-        :avocado: tags=test_scrubber_disabled_during_pool_creation
+        :avocado: tags=TestWithScrubberBasic,test_scrubber_disabled_during_pool_creation
 
         """
         self.run_scrubber_basic(None, None)
@@ -71,7 +71,7 @@ class TestWithScrubberBasic(TestWithScrubber):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=scrubber
-        :avocado: tags=test_scrubber_enabled_during_pool_creation
+        :avocado: tags=TestWithScrubberBasic,test_scrubber_enabled_during_pool_creation
 
         """
         pool_prop = self.params.get("properties", '/run/pool/*')

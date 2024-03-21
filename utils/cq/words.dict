@@ -349,6 +349,7 @@ ps
 puuid
 py
 pydaos
+pytest
 ramdisk
 randrw
 ranklist
