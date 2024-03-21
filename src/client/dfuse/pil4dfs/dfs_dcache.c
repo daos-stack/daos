@@ -37,7 +37,7 @@
 #else
 
 #define DF_DK          "dk'%s'"
-#define DP_DK(_dk)     (_dk)
+#define DP_DK(_dk)     daos_dk2str(_dk)
 
 #endif
 
@@ -110,6 +110,37 @@ struct dcache_rec {
 	char             dr_key[];
 };
 
+static inline char *
+daos_dk2str(const char *dk)
+{
+	int         i, j;
+	const char *it;
+	const char *sep = "-:";
+
+	if (dk == NULL)
+		return "<NULL>";
+
+	it = dk;
+	for (i = 0; i < 2; i++) {
+		for (j = 0; j < 16; j++) {
+			if (it[j] < '0' || it[j] > 'f')
+				return "<invalid dentry key>";
+		}
+		it += 16;
+		if (it[0] != sep[i])
+			return "<invalid dentry key>";
+		it++;
+	}
+
+	for (i = 0; i < NAME_MAX; i++) {
+		if (it[i] == '\0')
+			return (char *)dk;
+		if (!isprint(it[i]) || it[i] == '\'')
+			return "<not printable>";
+	}
+	return "<dentry key too long>";
+}
+
 static inline int64_t
 time_cmp(struct timespec *t0, struct timespec *t1)
 {
@@ -161,7 +192,7 @@ gc_add_rec(dfs_dcache_t *dcache, dcache_rec_t *rec)
 
 	d_list_add_tail(&rec->dr_entry_gc, &dcache->dd_head_gc);
 	++dcache->dd_count_gc;
-	D_DEBUG(DB_TRACE, "add record '%s' to GC: count_gc=%" PRIu64 "\n", rec->dr_key,
+	D_DEBUG(DB_TRACE, "add record " DF_DK " to GC: count_gc=%" PRIu64 "\n", DP_DK(rec->dr_key),
 		dcache->dd_count_gc);
 
 unlock:
@@ -196,8 +227,8 @@ gc_del_rec(dfs_dcache_t *dcache, dcache_rec_t *rec)
 	d_list_del(&rec->dr_entry_gc);
 	--dcache->dd_count_gc;
 	rec->dr_deleted_gc = true;
-	D_DEBUG(DB_TRACE, "remove deleted record '%s' from GC: count_gc=%" PRIu64 "\n", rec->dr_key,
-		dcache->dd_count_gc);
+	D_DEBUG(DB_TRACE, "remove deleted record " DF_DK " from GC: count_gc=%" PRIu64 "\n",
+		DP_DK(rec->dr_key), dcache->dd_count_gc);
 
 unlock:
 	rc = D_MUTEX_UNLOCK(&dcache->dd_mutex_gc);
@@ -254,8 +285,8 @@ gc_reclaim(dfs_dcache_t *dcache)
 		rc = D_MUTEX_UNLOCK(&dcache->dd_mutex_gc);
 		D_ASSERT(rc == 0);
 
-		D_DEBUG(DB_TRACE, "remove expired record '%s' from GC: expire=" DF_TS "\n",
-			rec->dr_key, DP_TS(rec->dr_expire_gc));
+		D_DEBUG(DB_TRACE, "remove expired record " DF_DK " from GC: expire=" DF_TS "\n",
+			DP_DK(rec->dr_key), DP_TS(rec->dr_expire_gc));
 
 		if (!atomic_flag_test_and_set(&rec->dr_deleted))
 			d_hash_rec_delete_at(&dcache->dd_dir_hash, &rec->dr_entry);
