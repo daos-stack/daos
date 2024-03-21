@@ -70,12 +70,18 @@ class TelemetryUtils():
     ENGINE_POOL_ENTRIES_METRICS = [
         "engine_pool_entries_dtx_batched_degree",
         "engine_pool_entries_dtx_batched_total"]
+    ENGINE_POOL_OPS_AKEY_ENUM_METRICS = "engine_pool_ops_akey_enum"
+    ENGINE_POOL_OPS_DKEY_ENUM_METRICS = "engine_pool_ops_dkey_enum"
+    ENGINE_POOL_OPS_AKEY_PUNCH_METRICS = "engine_pool_ops_akey_punch"
+    ENGINE_POOL_OPS_DKEY_PUNCH_METRICS = "engine_pool_ops_dkey_punch"
+    ENGINE_POOL_OPS_TGT_AKEY_PUNCH_METRICS = "engine_pool_ops_tgt_akey_punch"
+    ENGINE_POOL_OPS_TGT_DKEY_PUNCH_METRICS = "engine_pool_ops_tgt_dkey_punch"
     ENGINE_POOL_OPS_METRICS = [
-        "engine_pool_ops_akey_enum",
-        "engine_pool_ops_akey_punch",
+        ENGINE_POOL_OPS_AKEY_ENUM_METRICS,
+        ENGINE_POOL_OPS_DKEY_ENUM_METRICS,
+        ENGINE_POOL_OPS_AKEY_PUNCH_METRICS,
+        ENGINE_POOL_OPS_DKEY_PUNCH_METRICS,
         "engine_pool_ops_compound",
-        "engine_pool_ops_dkey_enum",
-        "engine_pool_ops_dkey_punch",
         "engine_pool_ops_dtx_abort",
         "engine_pool_ops_dtx_check",
         "engine_pool_ops_dtx_coll_abort",
@@ -93,8 +99,8 @@ class TelemetryUtils():
         "engine_pool_ops_obj_punch",
         "engine_pool_ops_obj_sync",
         "engine_pool_ops_recx_enum",
-        "engine_pool_ops_tgt_akey_punch",
-        "engine_pool_ops_tgt_dkey_punch",
+        ENGINE_POOL_OPS_TGT_AKEY_PUNCH_METRICS,
+        ENGINE_POOL_OPS_TGT_DKEY_PUNCH_METRICS,
         "engine_pool_ops_tgt_punch",
         "engine_pool_ops_tgt_update",
         "engine_pool_ops_update",
