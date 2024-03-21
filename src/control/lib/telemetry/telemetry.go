@@ -141,6 +141,34 @@ const (
 	handleKey telemetryKey = "handle"
 )
 
+func (mt MetricType) String() string {
+	strFmt := func(name string) string {
+		numStr := strconv.Itoa(int(mt))
+		return name + " (" + numStr + ")"
+	}
+
+	switch mt {
+	case MetricTypeDirectory:
+		return strFmt("directory")
+	case MetricTypeCounter:
+		return strFmt("counter")
+	case MetricTypeTimestamp:
+		return strFmt("timestamp")
+	case MetricTypeSnapshot:
+		return strFmt("snapshot")
+	case MetricTypeDuration:
+		return strFmt("duration")
+	case MetricTypeGauge:
+		return strFmt("gauge")
+	case MetricTypeStatsGauge:
+		return strFmt("gauge (stats)")
+	case MetricTypeLink:
+		return strFmt("link")
+	default:
+		return strFmt("unknown")
+	}
+}
+
 func (h *handle) isValid() bool {
 	return h != nil && h.ctx != nil && h.root != nil
 }

@@ -120,7 +120,7 @@ type metricStat struct {
 func getMetricStats(baseName string, m telemetry.Metric) (stats []*metricStat) {
 	ms, ok := m.(telemetry.StatsMetric)
 	if !ok {
-		return
+		return []*metricStat{}
 	}
 
 	for name, s := range map[string]struct {
