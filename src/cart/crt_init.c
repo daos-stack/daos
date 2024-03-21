@@ -349,6 +349,8 @@ static int data_init(int server, crt_init_options_t *opt)
 	if (server)
 		d_setenv("UCX_IB_FORK_INIT", "n", 1);
 
+//	d_setenv("UCX_DC_MLX5_NUM_DCI", "16", 1);
+//	d_setenv("UCX_RC_MAX_NUM_EPS", "1024", 1);
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_uint("FI_UNIVERSE_SIZE", &fi_univ_size);
 	if (fi_univ_size == 0) {
