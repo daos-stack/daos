@@ -39,6 +39,9 @@ class Pil4dfsDcacheCmd(ExecutableCommand):
         self.env['DD_SUBSYS'] = 'il'
         self.env['DD_MASK'] = 'trace'
         self.env['D_IL_REPORT'] = '1'
+        self.env['D_IL_DCACHE_REC_TIMEOUT'] = '1'
+        self.env['D_IL_DCACHE_GC_PERIOD'] = '2'
+        self.env['D_IL_DCACHE_GC_RECLAIM_MAX'] = '2'
 
         if timeout is not None:
             self.env["D_IL_DCACHE_REC_TIMEOUT"] = timeout
@@ -101,6 +104,9 @@ class Pil4dfsDcache(DfuseTestBase):
                 "dcache_del": 0,
                 "dcache_hit": 5,
                 "dcache_miss": 3,
+                "dcache_gc_add": 0,
+                "dcache_gc_del": 0,
+                "dcache_gc_rec": 0,
                 "no_dcache_new": 0,
                 "no_dcache_del": 0,
                 "op_name": "mkdir",
@@ -113,6 +119,9 @@ class Pil4dfsDcache(DfuseTestBase):
                 "dcache_del": 2,
                 "dcache_hit": 8,
                 "dcache_miss": 0,
+                "dcache_gc_add": 0,
+                "dcache_gc_del": 0,
+                "dcache_gc_rec": 0,
                 "no_dcache_new": 0,
                 "no_dcache_del": 0,
                 "op_name": "unlink",
@@ -125,6 +134,9 @@ class Pil4dfsDcache(DfuseTestBase):
                 "dcache_del": 2,
                 "dcache_hit": 8,
                 "dcache_miss": 0,
+                "dcache_gc_add": 0,
+                "dcache_gc_del": 0,
+                "dcache_gc_rec": 0,
                 "no_dcache_new": 0,
                 "no_dcache_del": 0,
                 "op_name": "rmdir",
@@ -137,10 +149,27 @@ class Pil4dfsDcache(DfuseTestBase):
                 "dcache_del": 1,
                 "dcache_hit": 15,
                 "dcache_miss": 2,
+                "dcache_gc_add": 0,
+                "dcache_gc_del": 0,
+                "dcache_gc_rec": 0,
                 "no_dcache_new": 0,
                 "no_dcache_del": 0,
                 "op_name": "rename",
                 "op_count": 2
+            },
+            {
+                "test_name": "test_garbage_collector",
+                "test_id": 4,
+                "dcache_add": 8,
+                "dcache_del": 7,
+                "dcache_hit": 22,
+                "dcache_miss": 8,
+                "dcache_gc_add": 7,
+                "dcache_gc_del": 4,
+                "dcache_gc_rec": 3,
+                "no_dcache_new": 0,
+                "no_dcache_del": 0,
+                "op_name": None,
             }
         ],
         "test_pil4dfs_dcache_disabled": [
@@ -151,6 +180,9 @@ class Pil4dfsDcache(DfuseTestBase):
                 "dcache_del": 0,
                 "dcache_hit": 0,
                 "dcache_miss": 0,
+                "dcache_gc_add": 0,
+                "dcache_gc_del": 0,
+                "dcache_gc_rec": 0,
                 "no_dcache_new": 4,
                 "no_dcache_del": 4,
                 "op_name": "mkdir",
@@ -163,6 +195,9 @@ class Pil4dfsDcache(DfuseTestBase):
                 "dcache_del": 0,
                 "dcache_hit": 0,
                 "dcache_miss": 0,
+                "dcache_gc_add": 0,
+                "dcache_gc_del": 0,
+                "dcache_gc_rec": 0,
                 "no_dcache_new": 4,
                 "no_dcache_del": 4,
                 "op_name": "unlink",
@@ -175,6 +210,9 @@ class Pil4dfsDcache(DfuseTestBase):
                 "dcache_del": 0,
                 "dcache_hit": 0,
                 "dcache_miss": 0,
+                "dcache_gc_add": 0,
+                "dcache_gc_del": 0,
+                "dcache_gc_rec": 0,
                 "no_dcache_new": 4,
                 "no_dcache_del": 4,
                 "op_name": "rmdir",
@@ -187,10 +225,27 @@ class Pil4dfsDcache(DfuseTestBase):
                 "dcache_del": 0,
                 "dcache_hit": 0,
                 "dcache_miss": 0,
+                "dcache_gc_add": 0,
+                "dcache_gc_del": 0,
+                "dcache_gc_rec": 0,
                 "no_dcache_new": 5,
                 "no_dcache_del": 5,
                 "op_name": "rename",
                 "op_count": 2
+            },
+            {
+                "test_name": "test_garbage_collector",
+                "test_id": 4,
+                "dcache_add": 0,
+                "dcache_del": 0,
+                "dcache_hit": 0,
+                "dcache_miss": 0,
+                "dcache_gc_add": 0,
+                "dcache_gc_del": 0,
+                "dcache_gc_rec": 0,
+                "no_dcache_new": 12,
+                "no_dcache_del": 12,
+                "op_name": None,
             }
         ],
     }
@@ -198,10 +253,13 @@ class Pil4dfsDcache(DfuseTestBase):
     __dcache_re__ = {
         "dcache_add": re.compile(r'^.+ il +DBUG .+ dcache_add\(\) .+$'),
         "dcache_del": re.compile(r'^.+ il +DBUG .+ dcache_rec_free\(\) .+$'),
-        "dcache_hit": re.compile(r'^.+ il +DBUG .+ dcache hit:.+$'),
-        "dcache_miss": re.compile(r'^.+ il +DBUG .+ dcache miss:.+$'),
+        "dcache_hit": re.compile(r'^.+ il +DBUG .+ lookup_insert_dir\(\) dcache hit:.+$'),
+        "dcache_miss": re.compile(r'^.+ il +DBUG .+ lookup_insert_dir\(\) dcache miss:.+$'),
         "no_dcache_new": re.compile(r'^.+ il +DBUG .+ dcache_find_insert_dact\(\).+$'),
-        "no_dcache_del": re.compile(r'^.+ il +DBUG .+ drec_del_at_dact\(\) .+$')
+        "no_dcache_del": re.compile(r'^.+ il +DBUG .+ drec_del_at_dact\(\) .+$'),
+        "dcache_gc_add": re.compile(r'^.+ il +DBUG .+ dcache_gc_add_rec\(\) .+$'),
+        "dcache_gc_del": re.compile(r'^.+ il +DBUG .+ dcache_gc_del_rec\(\) .+$'),
+        "dcache_gc_rec": re.compile(r'^.+ il +DBUG .+ dcache_gc_reclaim\(\) remove expired .+$')
     }
 
     __start_test_re__ = re.compile(r'^-- START of test_.+ --$')
@@ -235,7 +293,9 @@ class Pil4dfsDcache(DfuseTestBase):
             lines (list): list of the test command stdout lines
         """
         dcache_count = {key: 0 for key in Pil4dfsDcache.__dcache_re__}
-        op_re = re.compile(r'^\[' + test_case['op_name'] + r'\s*\]\s+(\d+)$')
+        op_re = None
+        if test_case['op_name'] is not None:
+            op_re = re.compile(r'^\[' + test_case['op_name'] + r'\s*\]\s+(\d+)$')
         state = 'init'
         for line in lines:
             if state == 'init':
@@ -248,13 +308,23 @@ class Pil4dfsDcache(DfuseTestBase):
                         dcache_count[dcache_name] += 1
                 if Pil4dfsDcache.__end_test_re__.match(line):
                     for key in Pil4dfsDcache.__dcache_re__:
-                        self.assertEqual(test_case[key], dcache_count[key])
+                        self.assertEqual(
+                            test_case[key],
+                            dcache_count[key],
+                            f"Unexpected value of dir-cache counter {key}: "
+                            f"want={test_case[key]}, got={dcache_count[key]}")
+                    if op_re is None:
+                        return
                     state = 'check_op'
 
             elif state == 'check_op':
                 match = op_re.match(line)
                 if match:
-                    self.assertEqual(test_case['op_count'], int(match.group(1)))
+                    self.assertEqual(
+                        test_case['op_count'],
+                        int(match.group(1)),
+                        f"Unexpected number of operation {test_case['op_name']}:"
+                        f"want={test_case['op_count']}, got={match.group(1)}")
                     return
 
         self.fail(f"Test failed: state={state}\n")
