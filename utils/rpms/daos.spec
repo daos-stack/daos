@@ -583,7 +583,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* The Mar 21 2024 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.5.101-3
+* Thu Mar 21 2024 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.5.101-3
 - Update pydaos install process
 - Add a dependency from daos-client-tests to daos-devel
 
