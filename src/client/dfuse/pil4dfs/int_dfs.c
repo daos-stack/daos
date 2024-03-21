@@ -51,6 +51,9 @@
 
 #include "hook.h"
 
+/* Workaround for build with some compilers. To be after all includes. */
+#undef strncmp
+
 /* useful in strncmp() and strndup() */
 #define STR_AND_SIZE(s)    s, sizeof(s)
 /* useful in strncmp() to check whether a string start with a target string. Not including \0 */
