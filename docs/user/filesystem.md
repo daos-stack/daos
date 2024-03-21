@@ -1029,18 +1029,18 @@ set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 
 
 ### Directory caching
 
-To improve performance, directory are cached in an hash table.  The size of this hash table could be
-changed, thanks to the following environment variable:
+To improve performance, directories are cached in a hash table.  The size of this hash table could
+be changed, thanks to the following environment variable:
 * `D_IL_DCACHE_SIZE_BITS`: power 2 number of buckets of the hash table (default value of 16).
 
 A garbage collector is periodically triggered to remove the stalled entries from the hash table.
 The behavior of this garbage collector can be configured thanks to the following environment
 variables:
-* `D_IL_DCACHE_REC_TIMEOUT`: define the life time in seconds of an entry of the hash table (default
+* `D_IL_DCACHE_REC_TIMEOUT`: define the lifetime in seconds of an entry of the hash table (default
   value of 60).
 * `D_IL_DCACHE_GC_RECLAIM_MAX`: define the maximal number of entries which can be reclaimed per
   garbgage collection iteration (default value of 1000).
-* `D_IL_DCACHE_GC_PERIOD`: define the trigeering time period in seconds of the garbage collector
+* `D_IL_DCACHE_GC_PERIOD`: define the triggering time period in seconds of the garbage collector
   (default value of 120).
 
 !!! note
