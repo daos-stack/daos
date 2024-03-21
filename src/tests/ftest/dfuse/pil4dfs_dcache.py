@@ -386,8 +386,7 @@ class Pil4dfsDcache(DfuseTestBase):
         env['D_IL_DCACHE_GC_PERIOD'] = '2'
         env['D_IL_DCACHE_GC_RECLAIM_MAX'] = '2'
 
-        for key, value in kwargs.items():
-            env[key] = value
+        env.update(kwargs)
 
     def _check_result(self, test_case, lines):
         """Check consistency of the test output.
