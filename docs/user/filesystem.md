@@ -1051,7 +1051,7 @@ variables:
     * The directory cache can be deactivated with setting a value of 0 to the
       `D_IL_DCACHE_REC_TIMEOUT` environment variable.
     * The garbage collector can be deactivated with setting a value of 0 to the
-      `D_IL_DCACHE_GC_RECLAIM_MAX` environment variable.
+      `D_IL_DCACHE_GC_PERIOD` environment variable.
 
 ### Limitations of libpil4dfs
 
