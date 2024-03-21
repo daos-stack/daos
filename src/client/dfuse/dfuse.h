@@ -90,7 +90,7 @@ struct dfuse_eq {
 #define DFUSE_MAX_READ (1024 * 1024)
 
 /* Size of pre-read requests */
-#define DFUSE_MAX_PRE_READ (1024 * 1024 * 2)
+#define DFUSE_MAX_PRE_READ (1024 * 1024 * 4)
 
 /* Launch fuse, and do not return until complete */
 int

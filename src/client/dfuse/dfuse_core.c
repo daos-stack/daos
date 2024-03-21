@@ -1248,6 +1248,7 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_open_count, 0);
 	atomic_init(&ie->ie_open_write_count, 0);
 	atomic_init(&ie->ie_il_count, 0);
+	atomic_init(&ie->ie_linear_read, true);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
 	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
 }
@@ -1487,9 +1488,16 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 		if (rc != -DER_SUCCESS)
 			D_GOTO(err_threads, rc);
 
-		rc = d_slab_register(&dfuse_info->di_slab, &write_slab, eqt, &eqt->de_write_slab);
-		if (rc != -DER_SUCCESS)
-			D_GOTO(err_threads, rc);
+		d_slab_restock(eqt->de_read_slab);
+		d_slab_restock(eqt->de_pre_read_slab);
+
+		if (!dfuse_info->di_read_only) {
+			rc = d_slab_register(&dfuse_info->di_slab, &write_slab, eqt,
+					     &eqt->de_write_slab);
+			if (rc != -DER_SUCCESS)
+				D_GOTO(err_threads, rc);
+			d_slab_restock(eqt->de_write_slab);
+		}
 
 		rc = pthread_create(&eqt->de_thread, NULL, dfuse_progress_thread, eqt);
 		if (rc != 0)
