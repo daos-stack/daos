@@ -1401,7 +1401,7 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 			return EINVAL;
 
 		/** sticky bit is not supported */
-		if (mode & S_ISVTX) {
+		if (stbuf->st_mode & S_ISVTX) {
 			D_DEBUG(DB_TRACE, "sticky bit is not supported.\n");
 			return ENOTSUP;
 		}
