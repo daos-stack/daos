@@ -1144,6 +1144,12 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 		oh = parent->oh;
 	}
 
+	/** sticky bit is not supported */
+	if (mode & S_ISVTX) {
+		D_ERROR("sticky bit is not supported.\n");
+		return ENOTSUP;
+	}
+
 	/* Check if parent has the entry */
 	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry, 0, NULL,
 			 NULL, NULL);
@@ -1393,6 +1399,12 @@ dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 	if (flags & DFS_SET_ATTR_MODE) {
 		if ((stbuf->st_mode & S_IFMT) != (obj->mode & S_IFMT))
 			return EINVAL;
+
+		/** sticky bit is not supported */
+		if (mode & S_ISVTX) {
+			D_DEBUG(DB_TRACE, "sticky bit is not supported.\n");
+			return ENOTSUP;
+		}
 	}
 
 	/** Open parent object and fetch entry of obj from it */

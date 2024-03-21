@@ -60,13 +60,13 @@ The following features from POSIX are not supported:
 * Various parameters reported via statfs like number of blocks, files,
   free/available space
 * O\_APPEND is not supported
-* POSIX permissions, setuid/gid programs, sticky bit, POSIX ACLs, supplementary groups are not
-  supported inside an encapsulated namespace
+* POSIX permissions, sticky bit, POSIX ACLs, supplementary groups are not supported inside an
+  encapsulated namespace
     * Still enforced at the DAOS pool/container level via DAOS ACL
     * Effectively means that all files belong to the same "project"
-    * libdfs still allows permission, set-user/group-id and sticky bits to be stored on setattr
-      operation to allow high-level frameworks like fuse/dfuse to support those features and do
-      proper permission checks and enforcement.
+* While set\_uid/gid bits are stored by libdfs on setattr and returned on getattr, it is up to
+  the caller (e.g. fuse in the case of dfuse) to implement support for setuid/gid binaries since
+  libdfs does not provide any interface to execute binaries.
 
 !!! note
     DFS directories do not include the `.` (current directory) and `..` (parent directory)

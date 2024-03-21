@@ -1001,10 +1001,9 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
  * Set stat attributes for a file and fetch new values.  If the object is a
  * symlink the link itself is modified.  See dfs_stat() for which entries
  * are filled.
- * Since libdfs does not perform any POSIX permission enforcement, it just
- * stores stbuf::st_mode as is to allow higher-level frameworks to do their
- * permission checks. Similarly, set-user/group-id and sticky bits are stored
- * by dfs, but not honored by libdfs itself.
+ * While the set-user/group-id bits in stbuf::st_mode are stored libdfs, it
+ * up to the caller to implement support for the associated functionality
+ * since libdfs does not provide any way to execute binaries.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object (File, dir or syml) to modify.
