@@ -88,7 +88,7 @@ struct dfuse_eq {
 
 /* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected
  * This is the maximum size expected from the kernel, increasing this without changing kernel
- * behaviour will have no effect.
+ * behavior will have no effect.
  */
 #define DFUSE_MAX_READ (1024 * 1024)
 
