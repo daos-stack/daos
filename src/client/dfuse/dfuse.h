@@ -980,6 +980,12 @@ struct dfuse_inode_entry {
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
 
+	/* Data cache metdata, list known size/mtime for file, if these have been updated then
+	 * the data cache should be dropped.
+	 */
+	size_t                    ie_cache_size;
+	struct timespec           ie_cache_time;
+
 	/** Last file closed in this directory was read linearly.  Directories only.
 	 *
 	 * Set on close() of a file in the directory to the value of linear_read from the fh.

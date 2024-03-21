@@ -138,6 +138,8 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct dfuse_inode_entry *ie         = NULL;
 	int                       rc;
 	uint32_t                  il_calls;
+	bool                      update_data_cache = false;
+	int                       oc;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -180,7 +182,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 			if (il_calls == 0) {
 				DFUSE_TRA_DEBUG(oh, "Evicting metadata cache, setting data cache");
 				dfuse_mcache_evict(oh->doh_ie);
-				dfuse_dcache_set_time(oh->doh_ie);
+				update_data_cache = true;
 			} else {
 				DFUSE_TRA_DEBUG(oh, "Evicting cache");
 				dfuse_cache_evict(oh->doh_ie);
@@ -191,7 +193,8 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		if (oh->doh_caching) {
 			if (il_calls == 0) {
 				DFUSE_TRA_DEBUG(oh, "Saving data cache");
-				dfuse_dcache_set_time(oh->doh_ie);
+				update_data_cache = true;
+
 			} else {
 				DFUSE_TRA_DEBUG(oh, "Evicting cache");
 				dfuse_cache_evict(oh->doh_ie);
@@ -199,14 +202,20 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 	}
 	DFUSE_TRA_DEBUG(oh, "il_calls %d, caching %d,", il_calls, oh->doh_caching);
-	if (il_calls != 0) {
+	if (il_calls != 0)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
-	}
-	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
+	oc = atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
 	if (oh->doh_evict_on_close) {
 		ie = oh->doh_ie;
 		atomic_fetch_add_relaxed(&ie->ie_ref, 1);
+	}
+
+	if (update_data_cache) {
+		dfuse_dcache_set_time(oh->doh_ie);
+		if (oc == 1) {
+			/* Fire off a ostatx call to fetch the new mtime */
+		}
 	}
 
 	rc = dfs_release(oh->doh_obj);
