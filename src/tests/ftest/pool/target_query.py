@@ -50,7 +50,7 @@ class PoolTargetQueryTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=pool
-        :avocado: tags=pool_target_query,test_pool_target_query
+        :avocado: tags=PoolTargetQueryTest,test_pool_target_query
         """
         self.update_ior_cmd_with_pool()
         # Check the initial size of all targets

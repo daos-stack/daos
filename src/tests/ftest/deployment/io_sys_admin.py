@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,6 +10,7 @@ import security_test_base as secTestBase
 from data_mover_test_base import DataMoverTestBase
 from file_count_test_base import FileCountTestBase
 from general_utils import human_to_bytes
+from host_utils import get_local_host
 from test_utils_pool import check_pool_creation
 
 
@@ -44,10 +45,9 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         dmg = self.get_dmg_command()
         daos = self.get_daos_command()
 
-        secTestBase.add_del_user(
-            self.hostlist_clients, "useradd", new_test_user)
-        secTestBase.add_del_user(
-            self.hostlist_clients, "groupadd", new_test_group)
+        all_clients = self.hostlist_clients | get_local_host()
+        secTestBase.add_del_user(all_clients, "useradd", new_test_user)
+        secTestBase.add_del_user(all_clients, "groupadd", new_test_group)
 
         for idx in range(1, 4):
             self.add_pool_qty(1, namespace="/run/pool_{}/".format(idx), create=False)
@@ -56,8 +56,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
             for cont_idx in range(1, 4):
                 self.add_container_qty(1, self.pool[-1],
                                        namespace="/run/container_{}/".format(cont_idx))
-                daos.container_set_owner(self.pool[-1].identifier, self.container[-1].identifier,
-                                         new_test_user, new_test_group)
+                self.container[-1].set_owner(f"{new_test_user}@", f"{new_test_group}@")
 
             daos.container_list(self.pool[-1].identifier)
             self.destroy_containers(self.container)

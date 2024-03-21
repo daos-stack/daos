@@ -132,12 +132,15 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 	if (rc != 0 || (shard->do_rebuilding && !coa->coa_for_modify))
 		goto out;
 
-	/*
-	 * More ranks joined after obj_coll_oper_args_init().
-	 * The object layout may be changed, need to re-scan.
-	 */
-	if (unlikely(shard->do_target_rank >= coa->coa_dct_cap))
-		D_GOTO(out, rc = -DER_AGAIN);
+	/* The ranks for the pool may be not continuous, let's extend the coa_dcts array. */
+	if (unlikely(shard->do_target_rank >= coa->coa_dct_cap)) {
+		D_REALLOC_ARRAY(dct, coa->coa_dcts, coa->coa_dct_cap, shard->do_target_rank + 4);
+		if (dct == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		coa->coa_dcts = dct;
+		coa->coa_dct_cap = shard->do_target_rank + 4;
+	}
 
 	dct = &coa->coa_dcts[shard->do_target_rank];
 	dct->dct_rank = shard->do_target_rank;
@@ -402,21 +405,14 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	int				 rc;
 	int				 i;
 
-re_scan:
 	rc = obj_coll_oper_args_init(coa, obj, true);
 	if (rc != 0)
 		goto out;
 
 	for (i = 0; i < obj->cob_shards_nr; i++) {
 		rc = obj_coll_prep_one(coa, obj, map_ver, i);
-		if (rc != 0) {
-			if (unlikely(rc == -DER_AGAIN)) {
-				obj_coll_oper_args_fini(coa);
-				goto re_scan;
-			}
-
+		if (rc != 0)
 			goto out;
-		}
 	}
 
 	rc = obj_coll_oper_args_collapse(coa, &tgt_size);

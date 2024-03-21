@@ -6,10 +6,25 @@ access_points: ['example']  # management service leader (bootstrap)
 provider: ofi+tcp
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
-transport_config:
-  allow_insecure: true
 control_metadata:
   path: /var/daos/config # Location to store control-plane metadata in MD-on-SSD mode.
+
+## Transport Credentials Specifying certificates to secure communications
+##
+#transport_config:
+#  # Specify to bypass loading certificates and use insecure communications channels.
+#  # allow_insecure: true is not suitable for production environments and should only
+#  # be used for experimental purposes.
+#  allow_insecure: false
+#  # Location where daos_server will look for Client certificates
+#  client_cert_dir: .daos/clients
+#  client_cert_dir: /etc/daos/certs/clients
+#  # Custom CA Root certificate for generated certs
+#  ca_cert: /etc/daos/certs/daosCA.crt
+#  # Server certificate for use in TLS handshakes
+#  cert: /etc/daos/certs/server.crt
+#  # Key portion of Server Certificate
+#  key: /etc/daos/certs/server.key
 
 telemetry_port: 9191
 
@@ -18,9 +33,10 @@ engines:
     pinned_numa_node: 0
     targets: 4              # number of I/O service threads per-engine
     nr_xs_helpers: 1        # count of I/O offload threads per engine
-    fabric_iface: eth0
+    fabric_iface: ib0
     fabric_iface_port: 31316
     log_file: /tmp/daos_engine.0.log
+    log_mask: INFO
 
     env_vars:
       - FI_SOCKETS_MAX_CONN_RETRY=1
@@ -34,21 +50,20 @@ engines:
     # the first ram class has a combination of the following roles:
     # wal, meta, data
 
-    # The DAOS server assigns the roles to the bdev tiers specified in the
-    # storage description.  If these default assignments are not suitable,
-    # the roles can be assigned explicitly.  To do this, each of the roles
-    # must be assigned to a bdev tier.  Each tier must have one or more roles
-    # assigned.  The wal and meta roles must be assigned to exactly one tier,
-    # while the data role may be assigned to multiple tiers.
+    # bdev_roles must be specified on each NVMe storage tier to use MD-on-SSD mode
+    # and these roles can only be applied when the first storage tier is of class "ram".
+    # If the first storage tier is of class "dcpm", no bdev_roles can be specified.
+
+    # MD-on-SSD roles must be assigned explicitly.  To do this, each of the roles
+    # must be assigned to at least one bdev tier and each tier must have one or more
+    # roles assigned.  The role configuration where wal and data are on same tier but
+    # meta is on a dedicated tier is not supported.  Maximum number of bdev tiers is 3.
+
     storage:
       -
-        # MD on SSD roles only apply when class: ram is specified.  For dcpm,
-        # only one bdev tier is supported and and it will have the data role.
         class: ram
-        scm_size: 50       # assuming 3% metadata, 50GB RAM for 1.6TB NVMe data
         scm_mount: /mnt/daos
       -
-        # Omit all bdev_roles to use the default assignments.
         class: nvme
         bdev_list: ["0000:81:00.0"]
         bdev_roles: [wal]
@@ -70,3 +85,6 @@ engines:
         #   class: nvme
         #   bdev_list: ["0000:82:00.0"]
         #   bdev_roles: [meta,data]
+
+        # To use emulated NVMe, use `class: file` instead of `class: nvme`, see
+        # utils/config/daos_server.yml for details on AIO file class.

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -166,6 +166,7 @@ struct cmd_args_s {
 
 	/* DFuse related */
 	struct dfuse_mem_query   dfuse_mem; /* --memquery */
+	struct dfuse_stat       *dfuse_stat;
 };
 
 int pool_autotest_hdlr(struct cmd_args_s *ap);
@@ -221,6 +222,6 @@ dfuse_evict(struct cmd_args_s *ap);
 
 /* Dfuse operations, mostly handled through ioctls */
 int
-dfuse_count_query(struct cmd_args_s *ap);
+dfuse_cont_query(struct cmd_args_s *ap);
 
 #endif /* __DAOS_HDLR_H__ */

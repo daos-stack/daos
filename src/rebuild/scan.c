@@ -377,17 +377,14 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid,
 		 * reclaim is not being scheduled in the previous failure reintegration,
 		 * so let's ignore duplicate shards(DER_EXIST) in this case.
 		 */
-		if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_EXTEND)
-			D_DEBUG(DB_REBUILD, DF_UUID" found duplicate "DF_UOID" %d\n",
-				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
-		else
-			/* Since it is harmless, let's skip duplicate obj for other cases. */
-			D_WARN(DF_UUID" found duplicate "DF_UOID" %d\n",
-			       DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
+		D_DEBUG(DB_REBUILD, DF_UUID" found duplicate "DF_UOID" %d\n",
+			DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
 		rc = 0;
+	} else {
+		D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "
+			DF_RC"\n", DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch,
+			punched_epoch, DP_RC(rc));
 	}
-	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "DF_RC"\n",
-		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch, punched_epoch, DP_RC(rc));
 
 	return rc;
 }
@@ -441,27 +438,8 @@ find_rebuild_shards(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_
 	int	rc = 0;
 
 retry:
-	switch (rebuild_op) {
-	case RB_OP_EXCLUDE:
-		rc = pl_obj_find_rebuild(map, gl_layout_ver, md, NULL, rebuild_ver,
-					 *tgts, *shards, max_shards_size);
-		break;
-	case RB_OP_DRAIN:
-		rc = pl_obj_find_drain(map, gl_layout_ver, md, NULL, rebuild_ver,
-				       *tgts, *shards, max_shards_size);
-		break;
-	case RB_OP_REINT:
-		rc = pl_obj_find_reint(map, gl_layout_ver, md, NULL, rebuild_ver,
-				       *tgts, *shards, max_shards_size);
-		break;
-	case RB_OP_EXTEND:
-		rc = pl_obj_find_addition(map, gl_layout_ver, md, NULL, rebuild_ver,
-					  *tgts, *shards, max_shards_size);
-		break;
-	default:
-		D_ASSERT(0);
-	}
-
+	rc = pl_obj_find_rebuild(map, gl_layout_ver, md, NULL, rebuild_ver,
+				 *tgts, *shards, max_shards_size);
 	if (rc == -DER_REC2BIG) {
 		/*
 		 * The last attempt failed because there was not enough
@@ -730,10 +708,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	tgts = tgt_array;
 	shards = shard_array;
 	switch (rpt->rt_rebuild_op) {
-	case RB_OP_EXCLUDE:
-	case RB_OP_DRAIN:
-	case RB_OP_REINT:
-	case RB_OP_EXTEND:
+	case RB_OP_REBUILD:
 		rc = find_rebuild_shards(map, arg->co_props.dcp_obj_version, &md,
 					 rpt->rt_tgts_num, rpt->rt_rebuild_op,
 					 rpt->rt_rebuild_ver, myrank,
@@ -940,6 +915,38 @@ close:
 	return rc;
 }
 
+bool
+is_rebuild_scanning_tgt(struct rebuild_tgt_pool_tracker *rpt)
+{
+	struct pool_target	*tgt;
+	unsigned int		idx = dss_get_module_info()->dmi_tgt_id;
+	d_rank_t		rank;
+	int			rc;
+
+	D_ASSERT(rpt != NULL);
+	D_ASSERT(rpt->rt_pool != NULL);
+	D_ASSERT(rpt->rt_pool->sp_map != NULL);
+
+	crt_group_rank(NULL, &rank);
+	rc = pool_map_find_target_by_rank_idx(rpt->rt_pool->sp_map, rank,
+					      idx, &tgt);
+	D_ASSERT(rc == 1);
+	switch(tgt->ta_comp.co_status) {
+		case PO_COMP_ST_DOWNOUT:
+		case PO_COMP_ST_DOWN:
+		case PO_COMP_ST_UP:
+		case PO_COMP_ST_NEW:
+			return false;
+		case PO_COMP_ST_UPIN:
+		case PO_COMP_ST_DRAIN:
+			return true;
+		default:
+			break;
+	}
+
+	return false;
+}
+
 int
 rebuild_scanner(void *data)
 {
@@ -957,10 +964,7 @@ rebuild_scanner(void *data)
 				      rpt->rt_rebuild_gen);
 	D_ASSERT(tls != NULL);
 
-	if (rebuild_status_match(rpt, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN |
-				      PO_COMP_ST_NEW) ||
-	    (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
-	     rpt->rt_rebuild_op == RB_OP_DRAIN)) {
+	if (!is_rebuild_scanning_tgt(rpt)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" skip scan\n", DP_UUID(rpt->rt_pool_uuid));
 		D_GOTO(out, rc = 0);
 	}
@@ -1004,13 +1008,13 @@ rebuild_scanner(void *data)
 	arg.rpt = rpt;
 	arg.yield_freq = SCAN_YIELD_FREQ;
 	arg.obj_yield_cnt = SCAN_OBJ_YIELD_CNT;
-	if (!rebuild_status_match(rpt, PO_COMP_ST_UP)) {
-		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-				 rebuild_container_scan_cb, NULL, &arg, NULL);
-	}
-
+	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+			 rebuild_container_scan_cb, NULL, &arg, NULL);
+	if (rc < 0)
+		D_GOTO(put, rc);
+	rc = 0; /* rc might be 1 if rebuild is aborted */
+put:
 	ds_pool_child_put(child);
-
 out:
 	tls->rebuild_pool_scan_done = 1;
 	if (ult_send != ABT_THREAD_NULL)
@@ -1113,21 +1117,31 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	 */
 	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 		if (uuid_compare(rpt->rt_pool_uuid, rsi->rsi_pool_uuid) == 0 &&
-		    ((rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver) ||
-		    (rpt->rt_rebuild_op == rsi->rsi_rebuild_op &&
-		     rpt->rt_rebuild_ver == rsi->rsi_rebuild_ver &&
-		     rpt->rt_rebuild_gen < rsi->rsi_rebuild_gen))) {
-			D_INFO(DF_UUID" %s %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
-			       DP_UUID(rpt->rt_pool_uuid), RB_OP_STR(rpt->rt_rebuild_op),
-			       rpt->rt_rebuild_ver, rpt->rt_leader_term, rsi->rsi_rebuild_ver,
-			       rsi->rsi_leader_term);
+		    rpt->rt_rebuild_ver < rsi->rsi_rebuild_ver &&
+		    rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
+			D_INFO(DF_UUID" %p %s %u/"DF_U64"/%u < incoming rebuild %u/"DF_U64"/%u\n",
+			       DP_UUID(rpt->rt_pool_uuid), rpt, RB_OP_STR(rpt->rt_rebuild_op),
+			       rpt->rt_rebuild_ver, rpt->rt_leader_term, rpt->rt_rebuild_gen,
+			       rsi->rsi_rebuild_ver, rsi->rsi_leader_term, rsi->rsi_rebuild_gen);
 			rpt->rt_abort = 1;
+			if (rpt->rt_leader_rank != rsi->rsi_master_rank) {
+				D_DEBUG(DB_REBUILD, DF_UUID" master rank"
+					" %d -> %d term "DF_U64" -> "DF_U64"\n",
+					DP_UUID(rpt->rt_pool_uuid),
+					rpt->rt_leader_rank, rsi->rsi_master_rank,
+					rpt->rt_leader_term, rsi->rsi_leader_term);
+				/* If this is the old leader, then also stop the rebuild
+				 * tracking ULT.
+				 */
+				rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
+						    -1, rpt->rt_leader_term);
+			}
 		}
 	}
 
 	/* check if the rebuild with different leader is already started */
-	rpt = rpt_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver, rsi->rsi_rebuild_gen);
-	if (rpt != NULL) {
+	rpt = rpt_lookup(rsi->rsi_pool_uuid, -1, rsi->rsi_rebuild_ver, -1);
+	if (rpt != NULL && rpt->rt_rebuild_op == rsi->rsi_rebuild_op) {
 		if (rpt->rt_global_done) {
 			D_WARN("the previous rebuild "DF_UUID"/%d/"DF_U64"/%p is not cleanup yet\n",
 			       DP_UUID(rsi->rsi_pool_uuid), rsi->rsi_rebuild_ver,
@@ -1163,12 +1177,15 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 
 			/* If this is the old leader, then also stop the rebuild tracking ULT. */
 			rebuild_leader_stop(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,
-					    rsi->rsi_rebuild_gen, rpt->rt_leader_term);
+					    -1, rpt->rt_leader_term);
 		}
 
 		rpt->rt_leader_term = rsi->rsi_leader_term;
 
 		D_GOTO(out, rc = 0);
+	} else if (rpt != NULL) {
+		rpt_put(rpt);
+		rpt = NULL;
 	}
 
 	tls = rebuild_pool_tls_lookup(rsi->rsi_pool_uuid, rsi->rsi_rebuild_ver,

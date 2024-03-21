@@ -1568,6 +1568,10 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_dtx, rc = -DER_NOMEM);
 
 		ddra->pool = ds_pool_child_lookup(hdl->sch_cont->sc_pool->spc_uuid);
+		if (ddra->pool == NULL) {
+			D_FREE(ddra);
+			D_GOTO(err_dtx, rc = -DER_NO_HDL);
+		}
 		uuid_copy(ddra->co_uuid, cont_uuid);
 		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
 				    0, 0, NULL);
@@ -2027,7 +2031,7 @@ ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid)
 	uuid_copy(args->pool_uuid, pool_uuid);
 	uuid_copy(args->cont_uuid, cont_uuid);
 	rc = dss_ult_create(cont_snapshots_refresh_ult, args, DSS_XS_SYS,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0)
 		D_FREE(args);
 	return rc;

@@ -8,11 +8,21 @@ package main
 
 /*
 #include "util.h"
+
+static void
+free_daos_alloc(void *ptr)
+{
+        // Use the macro to free memory allocated
+        // by DAOS macros in order to keep NLT happy.
+        D_FREE(ptr);
+}
 */
 import "C"
 
 import (
 	"fmt"
+	"strings"
+	"unsafe"
 
 	"github.com/pkg/errors"
 )
@@ -502,23 +512,38 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 		ap.dfuse_mem.ino = C.ulong(cmd.Ino)
 	}
 
-	rc := C.dfuse_count_query(ap)
+	rc := C.dfuse_cont_query(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
 	}
 
+	defer C.free_daos_alloc(unsafe.Pointer(ap.dfuse_stat))
+
 	if cmd.JSONOutputEnabled() {
+
+		ds_map := make(map[string]uint64)
+
+		ds_slice := unsafe.Slice(ap.dfuse_stat, ap.dfuse_mem.stat_count)
+
+		for _, v := range ds_slice {
+			if v.value != 0 {
+				ds_map[strings.ToLower(C.GoString(&v.name[0]))] = uint64(v.value)
+			}
+		}
+
 		if cmd.Ino == 0 {
 			jsonAttrs := &struct {
-				NumInodes      uint64 `json:"inodes"`
-				NumFileHandles uint64 `json:"open_files"`
-				NumPools       uint64 `json:"pools"`
-				NumContainers  uint64 `json:"containers"`
+				NumInodes      uint64            `json:"inodes"`
+				NumFileHandles uint64            `json:"open_files"`
+				NumPools       uint64            `json:"pools"`
+				NumContainers  uint64            `json:"containers"`
+				Data           map[string]uint64 `json:"statistics"`
 			}{
 				NumInodes:      uint64(ap.dfuse_mem.inode_count),
 				NumFileHandles: uint64(ap.dfuse_mem.fh_count),
 				NumPools:       uint64(ap.dfuse_mem.pool_count),
 				NumContainers:  uint64(ap.dfuse_mem.container_count),
+				Data:           ds_map,
 			}
 			return cmd.OutputJSON(jsonAttrs, nil)
 		} else {

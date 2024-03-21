@@ -1999,28 +1999,29 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		}
 	}
 
-	oqma.oca = &cb_args->obj->cob_oca;
-	oqma.oid = okqi->okqi_oid;
-	oqma.src_epoch = okqo->okqo_max_epoch;
-	oqma.in_dkey = &okqi->okqi_dkey;
-	oqma.src_dkey = &okqo->okqo_dkey;
-	oqma.tgt_dkey = cb_args->dkey;
-	oqma.src_akey = &okqo->okqo_akey;
-	oqma.tgt_akey = cb_args->akey;
-	oqma.src_recx = &okqo->okqo_recx;
-	oqma.tgt_recx = cb_args->recx;
-	oqma.tgt_epoch = cb_args->max_epoch;
-	oqma.tgt_map_ver = cb_args->map_ver;
-	oqma.max_delay = cb_args->max_delay;
-	oqma.queue_id = cb_args->queue_id;
-	oqma.rpc = cb_args->rpc;
-	oqma.flags = okqi->okqi_api_flags;
-	oqma.opc = DAOS_OBJ_RPC_QUERY_KEY;
-	oqma.src_map_ver = obj_reply_map_version_get(rpc);
-	oqma.ret = rc;
+	oqma.oqma_oca = &cb_args->obj->cob_oca;
+	oqma.oqma_oid = okqi->okqi_oid;
+	oqma.oqma_src_epoch = okqo->okqo_max_epoch;
+	oqma.oqma_in_dkey = &okqi->okqi_dkey;
+	oqma.oqma_src_dkey = &okqo->okqo_dkey;
+	oqma.oqma_tgt_dkey = cb_args->dkey;
+	oqma.oqma_src_akey = &okqo->okqo_akey;
+	oqma.oqma_tgt_akey = cb_args->akey;
+	oqma.oqma_src_recx = &okqo->okqo_recx;
+	oqma.oqma_tgt_recx = cb_args->recx;
+	oqma.oqma_tgt_epoch = cb_args->max_epoch;
+	oqma.oqma_tgt_map_ver = cb_args->map_ver;
+	oqma.oqma_max_delay = cb_args->max_delay;
+	oqma.oqma_queue_id = cb_args->queue_id;
+	oqma.oqma_rpc = cb_args->rpc;
+	oqma.oqma_flags = okqi->okqi_api_flags;
+	oqma.oqma_opc = DAOS_OBJ_RPC_QUERY_KEY;
+	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
+	oqma.oqma_ret = rc;
+	oqma.oqma_raw_recx = 1;
 
 	D_SPIN_LOCK(&cb_args->obj->cob_spin);
-	rc = daos_obj_merge_query_merge(&oqma);
+	rc = daos_obj_query_merge(&oqma);
 	D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 
 out:
@@ -2136,38 +2137,39 @@ obj_shard_coll_query_cb(tse_task_t *task, void *data)
 		}
 	}
 
-	oqma.oca = &cb_args->obj->cob_oca;
-	oqma.oid = ocqi->ocqi_oid;
-	oqma.src_epoch = ocqo->ocqo_max_epoch;
-	oqma.in_dkey = &ocqi->ocqi_dkey;
-	oqma.src_dkey = &ocqo->ocqo_dkey;
-	oqma.tgt_dkey = cb_args->dkey;
-	oqma.src_akey = &ocqo->ocqo_akey;
-	oqma.tgt_akey = cb_args->akey;
-	oqma.src_recx = &ocqo->ocqo_recx;
-	oqma.tgt_recx = cb_args->recx;
-	oqma.tgt_epoch = cb_args->max_epoch;
-	oqma.tgt_map_ver = cb_args->map_ver;
-	oqma.max_delay = cb_args->max_delay;
-	oqma.queue_id = cb_args->queue_id;
-	oqma.rpc = cb_args->rpc;
-	oqma.flags = ocqi->ocqi_api_flags;
-	oqma.opc = DAOS_OBJ_RPC_COLL_QUERY;
-	oqma.src_map_ver = obj_reply_map_version_get(rpc);
-	oqma.ret = rc;
+	oqma.oqma_oca = &cb_args->obj->cob_oca;
+	oqma.oqma_oid = ocqi->ocqi_oid;
+	oqma.oqma_src_epoch = ocqo->ocqo_max_epoch;
+	oqma.oqma_in_dkey = &ocqi->ocqi_dkey;
+	oqma.oqma_src_dkey = &ocqo->ocqo_dkey;
+	oqma.oqma_tgt_dkey = cb_args->dkey;
+	oqma.oqma_src_akey = &ocqo->ocqo_akey;
+	oqma.oqma_tgt_akey = cb_args->akey;
+	oqma.oqma_src_recx = &ocqo->ocqo_recx;
+	oqma.oqma_tgt_recx = cb_args->recx;
+	oqma.oqma_tgt_epoch = cb_args->max_epoch;
+	oqma.oqma_tgt_map_ver = cb_args->map_ver;
+	oqma.oqma_max_delay = cb_args->max_delay;
+	oqma.oqma_queue_id = cb_args->queue_id;
+	oqma.oqma_rpc = cb_args->rpc;
+	oqma.oqma_flags = ocqi->ocqi_api_flags;
+	oqma.oqma_opc = DAOS_OBJ_RPC_COLL_QUERY;
+	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
+	oqma.oqma_ret = rc;
+	oqma.oqma_raw_recx = ocqo->ocqo_flags & OCRF_RAW_RECX ? 1 : 0;
 
 	/*
 	 * The RPC reply may be aggregated results from multiple VOS targets, as to related max/min
 	 * dkey/recx are not from the direct target. The ocqo->ocqo_shard indicates the right one.
 	 */
-	oqma.oid.id_shard = ocqo->ocqo_shard;
+	oqma.oqma_oid.id_shard = ocqo->ocqo_shard;
 
 	/*
 	 * Merge (L4) the results from engine that may be single shard or aggregated results from
 	 * multuple shards from single or multiple engines.
 	 */
 	D_SPIN_LOCK(&cb_args->obj->cob_spin);
-	rc = daos_obj_merge_query_merge(&oqma);
+	rc = daos_obj_query_merge(&oqma);
 	D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 
 out:
@@ -2293,6 +2295,11 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 	if (ret != 0) {
 		D_ERROR("OBJ_SYNC RPC failed: rc = %d\n", ret);
 		D_GOTO(out, rc = ret);
+	}
+
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_SYNC_RETRY)) {
+		D_ERROR("Expect to retry OBJ_SYNC RPC\n");
+		D_GOTO(out, rc = -DER_TIMEDOUT);
 	}
 
 	oso = crt_reply_get(rpc);
