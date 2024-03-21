@@ -340,6 +340,49 @@ out_free:
 	return NULL;
 }
 
+/*
+ * Since PMEM_PAGESIZE and PMEM_OBJ_POOL_HEAD_SIZE are not exported,
+ * for safety, we will use 64k for now.
+ */
+#define	POOL_OBJ_HEADER_SIZE	65536
+
+static int
+pool_reset_header(const char *path)
+{
+	int	 rc;
+	char	*buf = NULL;
+	FILE	*file;
+	int	 header_size = 65536;
+
+	/* Skip MD-ON-SSD case */
+	if (bio_nvme_configured(SMD_DEV_TYPE_META))
+		return 0;
+
+	file = fopen(path, "r+");
+	if (file == NULL) {
+		D_ERROR("failed to open %s\n", path);
+		return daos_errno2der(errno);
+	}
+
+	D_ALLOC(buf, header_size);
+	if (buf == NULL) {
+		rc = -DER_NOMEM;
+		goto out;
+	}
+
+	rc = fwrite(buf, header_size, 1, file);
+	if (rc < 0)
+		goto out;
+	else if (rc != 1)
+		rc = -DER_IO;
+	else
+		rc = 0;
+out:
+	D_FREE(buf);
+	fclose(file);
+	return rc;
+}
+
 static int
 pool_child_recreate(struct ds_pool_child *child)
 {
@@ -376,6 +419,15 @@ pool_child_recreate(struct ds_pool_child *child)
 		goto pool_info;
 	}
 
+	/* If pool header is nonzero, pmemobj_create() will fail.
+	 * Therefore, reset the header in this case.
+	 */
+	rc = pool_reset_header(path);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": Reset VOS pool header failed.", DP_UUID(child->spc_uuid));
+		goto pool_info;
+	}
+
 	rc = vos_pool_create(path, child->spc_uuid, 0, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
 			     0, NULL);
 	if (rc)
@@ -388,6 +440,7 @@ out:
 	return rc;
 
 }
+
 
 static int
 pool_child_start(struct ds_pool_child *child, bool recreate)
@@ -699,10 +752,10 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 
 	D_INIT_LIST_HEAD(&pool->sp_ec_ephs_list);
 	uuid_copy(pool->sp_uuid, key);
+	D_INIT_LIST_HEAD(&pool->sp_hdls);
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
-	pool->sp_policy_desc.policy =
-			DAOS_MEDIA_POLICY_IO_SIZE; /* default tiering policy */
+	pool->sp_data_thresh = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
 
 	/** set up ds_pool metrics */
 	rc = ds_pool_metrics_start(pool);
@@ -775,6 +828,8 @@ pool_free_ref(struct daos_llink *llink)
 
 	D_DEBUG(DB_MGMT, DF_UUID": freeing\n", DP_UUID(pool->sp_uuid));
 
+	D_ASSERT(d_list_empty(&pool->sp_hdls));
+
 	rc = dss_thread_collective(pool_child_delete_one, pool->sp_uuid, 0);
 	if (rc == -DER_CANCELED)
 		D_DEBUG(DB_MD, DF_UUID": no ESs\n", DP_UUID(pool->sp_uuid));
@@ -845,13 +900,8 @@ ds_pool_cache_fini(void)
 	daos_lru_cache_destroy(pool_cache);
 }
 
-/**
- * If the pool can not be found due to non-existence or it is being stopped, then
- * @pool will be set to NULL and return proper failure code, otherwise return 0 and
- * set @pool.
- */
 int
-ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
+ds_pool_lookup_internal(const uuid_t uuid, struct ds_pool **pool)
 {
 	struct daos_llink	*llink;
 	int			 rc;
@@ -865,6 +915,23 @@ ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
 		return rc;
 
 	*pool = pool_obj(llink);
+	return 0;
+}
+
+/**
+ * If the pool can not be found due to non-existence or it is being stopped, then
+ * @pool will be set to NULL and return proper failure code, otherwise return 0 and
+ * set @pool.
+ */
+int
+ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool)
+{
+	int rc;
+
+	rc = ds_pool_lookup_internal(uuid, pool);
+	if (rc != 0)
+		return rc;
+
 	if ((*pool)->sp_stopping) {
 		D_DEBUG(DB_MD, DF_UUID": is in stopping\n", DP_UUID(uuid));
 		pool_put_sync(*pool);
@@ -941,7 +1008,7 @@ pool_fetch_hdls_ult(void *data)
 	D_INFO(DF_UUID": fetching handles\n", DP_UUID(pool->sp_uuid));
 	rc = ds_pool_iv_conn_hdl_fetch(pool);
 	if (rc) {
-		D_ERROR("iv conn fetch %d\n", rc);
+		D_INFO(DF_UUID" iv conn fetch %d\n", DP_UUID(pool->sp_uuid), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1072,7 +1139,7 @@ ds_pool_start(uuid_t uuid)
 	pool = pool_obj(llink);
 
 	rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS,
-			    0, 0, NULL);
+			    0, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create fetch ult: %d\n",
 			DP_UUID(uuid), rc);
@@ -1098,6 +1165,27 @@ failure_pool:
 	return rc;
 }
 
+static void ds_pool_hdl_get(struct ds_pool_hdl *hdl);
+static void pool_tgt_disconnect(struct ds_pool_hdl *hdl);
+
+static void
+pool_tgt_disconnect_all(struct ds_pool *pool)
+{
+	while (!d_list_empty(&pool->sp_hdls)) {
+		struct ds_pool_hdl *hdl;
+
+		/*
+		 * The handle will not be freed before we get our reference,
+		 * because ds_pool_tgt_connect, ds_pool_tgt_disconnect, and us
+		 * all run on the same xstream.
+		 */
+		hdl = d_list_entry(pool->sp_hdls.next, struct ds_pool_hdl, sph_pool_entry);
+		ds_pool_hdl_get(hdl);
+		pool_tgt_disconnect(hdl);
+		ds_pool_hdl_put(hdl);
+	}
+}
+
 /*
  * Stop a pool. Must be called on the system xstream. Release the ds_pool
  * object reference held by ds_pool_start. Only for mgmt and pool modules.
@@ -1114,6 +1202,8 @@ ds_pool_stop(uuid_t uuid)
 		return;
 	D_ASSERT(!pool->sp_stopping);
 	pool->sp_stopping = 1;
+
+	pool_tgt_disconnect_all(pool);
 
 	ds_iv_ns_stop(pool->sp_iv_ns);
 	ds_pool_tgt_ec_eph_query_abort(pool);
@@ -1187,6 +1277,7 @@ pool_hdl_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	D_DEBUG(DB_MD, DF_UUID": freeing "DF_UUID"\n",
 		DP_UUID(hdl->sph_pool->sp_uuid), DP_UUID(hdl->sph_uuid));
 	D_ASSERT(d_hash_rec_unlinked(&hdl->sph_entry));
+	D_ASSERT(d_list_empty(&hdl->sph_pool_entry));
 	D_ASSERTF(hdl->sph_ref == 0, "%d\n", hdl->sph_ref);
 	daos_iov_free(&hdl->sph_cred);
 	ds_pool_put(hdl->sph_pool);
@@ -1213,43 +1304,6 @@ void
 ds_pool_hdl_hash_fini(void)
 {
 	d_hash_table_destroy(pool_hdl_hash, true /* force */);
-}
-
-static int
-pool_hdl_delete_all_cb(d_list_t *link, void *arg)
-{
-	uuid_copy(arg, pool_hdl_obj(link)->sph_uuid);
-	return 1;
-}
-
-void
-ds_pool_hdl_delete_all(void)
-{
-	D_DEBUG(DB_MD, "deleting all pool handles\n");
-	D_ASSERT(dss_srv_shutting_down());
-
-	/*
-	 * The d_hash_table_traverse locking makes it impossible to delete or
-	 * even addref in the callback. Hence we traverse and delete one by one.
-	 */
-	for (;;) {
-		uuid_t	arg;
-		int	rc;
-
-		uuid_clear(arg);
-
-		rc = d_hash_table_traverse(pool_hdl_hash, pool_hdl_delete_all_cb, arg);
-		D_ASSERTF(rc == 0 || rc == 1, DF_RC"\n", DP_RC(rc));
-
-		if (uuid_is_null(arg))
-			break;
-
-		/*
-		 * Ignore the return code because it's OK for the handle to
-		 * have been deleted by someone else.
-		 */
-		d_hash_rec_delete(pool_hdl_hash, arg, sizeof(uuid_t));
-	}
 }
 
 static int
@@ -1283,6 +1337,12 @@ ds_pool_hdl_lookup(const uuid_t uuid)
 		return NULL;
 
 	return pool_hdl_obj(rlink);
+}
+
+static void
+ds_pool_hdl_get(struct ds_pool_hdl *hdl)
+{
+	d_hash_rec_addref(pool_hdl_hash, &hdl->sph_entry);
 }
 
 void
@@ -1484,6 +1544,8 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	d_iov_t			cred_iov;
 	int			rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	hdl = ds_pool_hdl_lookup(pic->pic_hdl);
 	if (hdl != NULL) {
 		if (hdl->sph_sec_capas == pic->pic_capas) {
@@ -1524,8 +1586,18 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 		D_GOTO(out, rc);
 	}
 
+	if (pool->sp_stopping) {
+		daos_iov_free(&hdl->sph_cred);
+		ds_pool_put(pool);
+		rc = -DER_SHUTDOWN;
+		goto out;
+	}
+
+	d_list_add(&hdl->sph_pool_entry, &hdl->sph_pool->sp_hdls);
+
 	rc = pool_hdl_add(hdl);
 	if (rc != 0) {
+		d_list_del_init(&hdl->sph_pool_entry);
 		daos_iov_free(&hdl->sph_cred);
 		ds_pool_put(pool);
 		D_GOTO(out, rc);
@@ -1540,6 +1612,17 @@ out:
 	return rc;
 }
 
+static void
+pool_tgt_disconnect(struct ds_pool_hdl *hdl)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	D_DEBUG(DB_MD, DF_UUID ": hdl=" DF_UUID "\n", DP_UUID(hdl->sph_pool->sp_uuid),
+		DP_UUID(hdl->sph_uuid));
+	pool_hdl_delete(hdl);
+	d_list_del_init(&hdl->sph_pool_entry);
+	ds_pool_iv_conn_hdl_invalidate(hdl->sph_pool, hdl->sph_uuid);
+}
+
 void
 ds_pool_tgt_disconnect(uuid_t uuid)
 {
@@ -1552,9 +1635,8 @@ ds_pool_tgt_disconnect(uuid_t uuid)
 		return;
 	}
 
-	ds_pool_iv_conn_hdl_invalidate(hdl->sph_pool, uuid);
+	pool_tgt_disconnect(hdl);
 
-	pool_hdl_delete(hdl);
 	ds_pool_hdl_put(hdl);
 }
 
@@ -1807,21 +1889,25 @@ ds_pool_tgt_query_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
 	return 0;
 }
 
+struct update_vos_prop_arg {
+	struct ds_pool *uvp_pool;
+	bool            uvp_checkpoint_props_changed;
+};
+
 static int
 update_vos_prop_on_targets(void *in)
 {
-	struct ds_pool       *pool        = (struct ds_pool *)in;
-	struct ds_pool_child *child       = NULL;
-	struct policy_desc_t  policy_desc = {0};
-	uint32_t              df_version;
-	int                   ret = 0;
+	struct update_vos_prop_arg *arg   = in;
+	struct ds_pool             *pool  = arg->uvp_pool;
+	struct ds_pool_child       *child = NULL;
+	uint32_t                    df_version;
+	int                         ret = 0;
 
 	child = ds_pool_child_lookup(pool->sp_uuid);
 	if (child == NULL)
 		return -DER_NONEXIST;	/* no child created yet? */
 
-	policy_desc = pool->sp_policy_desc;
-	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_POLICY, &policy_desc);
+	ret = vos_pool_ctl(child->spc_hdl, VOS_PO_CTL_SET_DATA_THRESH, &pool->sp_data_thresh);
 	if (ret)
 		goto out;
 
@@ -1841,8 +1927,7 @@ update_vos_prop_on_targets(void *in)
 		DP_UUID(pool->sp_uuid), df_version);
 	ret = vos_pool_upgrade(child->spc_hdl, df_version);
 
-	if (pool->sp_checkpoint_props_changed) {
-		pool->sp_checkpoint_props_changed = 0;
+	if (arg->uvp_checkpoint_props_changed) {
 		if (child->spc_chkpt_req != NULL)
 			sched_req_wakeup(child->spc_chkpt_req);
 	}
@@ -1856,7 +1941,8 @@ out:
 int
 ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 {
-	int ret;
+	struct update_vos_prop_arg arg;
+	int                        ret;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
@@ -1867,6 +1953,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
 	pool->sp_perf_domain = iv_prop->pip_perf_domain;
 	pool->sp_space_rb = iv_prop->pip_space_rb;
+	pool->sp_data_thresh = iv_prop->pip_data_thresh;
 
 	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_DATA_SYNC &&
 	    iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
@@ -1874,12 +1961,6 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	else
 		pool->sp_disable_rebuild = 1;
 
-	if (!daos_policy_try_parse(iv_prop->pip_policy_str,
-				   &pool->sp_policy_desc)) {
-		D_ERROR("Failed to parse policy string: %s\n",
-			iv_prop->pip_policy_str);
-		return -DER_MISMATCH;
-	}
 	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
 		iv_prop->pip_scrub_mode);
 	pool->sp_scrub_mode = iv_prop->pip_scrub_mode;
@@ -1887,23 +1968,25 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
 	pool->sp_reint_mode = iv_prop->pip_reint_mode;
 
-	pool->sp_checkpoint_props_changed = 0;
+	arg.uvp_pool                     = pool;
+	arg.uvp_checkpoint_props_changed = false;
+
 	if (pool->sp_checkpoint_mode != iv_prop->pip_checkpoint_mode) {
-		pool->sp_checkpoint_mode          = iv_prop->pip_checkpoint_mode;
-		pool->sp_checkpoint_props_changed = 1;
+		pool->sp_checkpoint_mode         = iv_prop->pip_checkpoint_mode;
+		arg.uvp_checkpoint_props_changed = 1;
 	}
 
 	if (pool->sp_checkpoint_freq != iv_prop->pip_checkpoint_freq) {
-		pool->sp_checkpoint_freq          = iv_prop->pip_checkpoint_freq;
-		pool->sp_checkpoint_props_changed = 1;
+		pool->sp_checkpoint_freq         = iv_prop->pip_checkpoint_freq;
+		arg.uvp_checkpoint_props_changed = 1;
 	}
 
 	if (pool->sp_checkpoint_thresh != iv_prop->pip_checkpoint_thresh) {
-		pool->sp_checkpoint_thresh        = iv_prop->pip_checkpoint_thresh;
-		pool->sp_checkpoint_props_changed = 1;
+		pool->sp_checkpoint_thresh       = iv_prop->pip_checkpoint_thresh;
+		arg.uvp_checkpoint_props_changed = 1;
 	}
 
-	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
+	ret = dss_thread_collective(update_vos_prop_on_targets, &arg, 0);
 	if (ret != 0)
 		return ret;
 
@@ -2172,8 +2255,23 @@ pool_child_discard(void *data)
 	D_DEBUG(DB_MD, DF_UUID" discard %u/%u\n", DP_UUID(arg->pool_uuid),
 		myrank, addr.pta_target);
 
+	/**
+	 * When a faulty device is replaced with a new one using the
+	 * “dmg storage replace nvme” command, the reintegration of
+	 * affected pool targets is automatically triggered.
+	 * The following steps outline the device replacement process on the engine side:
+	 *
+	 * 1) Replace the old device with the new device in the SMD.
+	 * 2) Setup all SPDK related stuff for the new device.
+	 * 3) Start ds_pool_child
+	 *
+	 * It is important to note that manual reintegration may be initiated
+	 * before step 3, in which case, the function should return “DER_AGAIN."
+	 */
 	child = ds_pool_child_lookup(arg->pool_uuid);
-	D_ASSERT(child != NULL);
+	if (child == NULL)
+		return -DER_AGAIN;
+
 	param.ip_hdl = child->spc_hdl;
 
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,

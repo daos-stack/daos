@@ -59,7 +59,7 @@
 #define MAX_TRAMPOLINE_LEN     ((MAX_INSN_LEN) + (JMP_INSTRCTION_LEN))
 
 struct module_patch_info_t {
-	char			module_name[MAX_LEN_PATH_NAME];
+	char			*module_name;
 	unsigned long int	module_base_addr;
 	char			func_name_list[MAX_PATCH][MAX_LEN_FUNC_NAME];
 	int			is_patch_disabled[MAX_PATCH];

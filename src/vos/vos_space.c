@@ -7,7 +7,6 @@
 
 #include <daos_types.h>
 #include "vos_internal.h"
-#include "vos_policy.h"
 
 #define POOL_SCM_SYS(pool)	((pool)->vp_space_sys[DAOS_MEDIA_SCM])
 #define POOL_NVME_SYS(pool)	((pool)->vp_space_sys[DAOS_MEDIA_NVME])
@@ -213,7 +212,6 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 	struct dcs_csum_info	*csums, *recx_csum;
 	daos_iod_t		*iod;
 	daos_recx_t		*recx;
-	uint16_t		 media;
 	daos_size_t		 size, scm, nvme = 0 /* in blk */;
 	int			 i, j;
 
@@ -235,11 +233,10 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 		/* Single value */
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			size = iod->iod_size;
-			media = vos_policy_media_select(pool, iod->iod_type,
-							size, VOS_IOS_GENERIC);
 
 			/* Single value record */
-			if (media == DAOS_MEDIA_SCM) {
+			if (vos_io_scm(pool, iod->iod_type, size, VOS_IOS_GENERIC)) {
+				/** store data on DAOS_MEDIA_SCM */
 				scm += vos_recx2irec_size(size, csums);
 			} else {
 				scm += vos_recx2irec_size(0, csums);
@@ -257,11 +254,10 @@ estimate_space(struct vos_pool *pool, daos_key_t *dkey, unsigned int iod_nr,
 			recx_csum = recx_csum_at(csums, j, iod);
 
 			size = recx->rx_nr * iod->iod_size;
-			media = vos_policy_media_select(pool, iod->iod_type,
-							size, VOS_IOS_GENERIC);
 
 			/* Extent */
-			if (media == DAOS_MEDIA_SCM)
+			if (vos_io_scm(pool, iod->iod_type, size, VOS_IOS_GENERIC))
+				/** store data on DAOS_MEDIA_SCM */
 				scm += size;
 			else if (size != 0)
 				nvme += vos_byte2blkcnt(size);

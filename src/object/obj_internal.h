@@ -940,31 +940,33 @@ void obj_class_fini(void);
 #define COLL_DISP_WIDTH_DIF	4
 
 struct obj_query_merge_args {
-	struct daos_oclass_attr	*oca;
-	daos_unit_oid_t		 oid;
-	daos_epoch_t		 src_epoch;
-	daos_key_t		*in_dkey;
-	daos_key_t		*src_dkey;
-	daos_key_t		*tgt_dkey; /* output */
-	daos_key_t		*src_akey;
-	daos_key_t		*tgt_akey; /* output */
-	daos_recx_t		*src_recx;
-	daos_recx_t		*tgt_recx; /* output */
-	daos_epoch_t		*tgt_epoch; /* output */
-	uint32_t		*tgt_map_ver; /* output */
-	uint32_t		*shard; /* output */
-	uint32_t		*max_delay; /* output */
-	uint64_t		*queue_id; /* output */
-	crt_rpc_t		*rpc;
-	uint64_t		 flags;
-	uint32_t		 opc;
-	uint32_t		 src_map_ver;
-	int			 ret;
-	uint32_t		 server_merge:1;
+	struct daos_oclass_attr	*oqma_oca;
+	daos_unit_oid_t		 oqma_oid;
+	daos_epoch_t		 oqma_src_epoch;
+	daos_key_t		*oqma_in_dkey;
+	daos_key_t		*oqma_src_dkey;
+	daos_key_t		*oqma_tgt_dkey; /* output */
+	daos_key_t		*oqma_src_akey;
+	daos_key_t		*oqma_tgt_akey; /* output */
+	daos_recx_t		*oqma_src_recx;
+	daos_recx_t		*oqma_tgt_recx; /* output */
+	daos_epoch_t		*oqma_tgt_epoch; /* output */
+	uint32_t		*oqma_tgt_map_ver; /* output */
+	uint32_t		*oqma_shard; /* output */
+	uint32_t		*oqma_max_delay; /* output */
+	uint64_t		*oqma_queue_id; /* output */
+	crt_rpc_t		*oqma_rpc;
+	uint64_t		 oqma_flags;
+	uint32_t		 oqma_opc;
+	uint32_t		 oqma_src_map_ver;
+	int			 oqma_ret;
+	uint32_t		 oqma_raw_recx:1;
 };
 
 /* obj_utils.c */
-int daos_obj_merge_query_merge(struct obj_query_merge_args *args);
+void obj_ec_recx_vos2daos(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
+			  daos_recx_t *recx, bool get_max);
+int daos_obj_query_merge(struct obj_query_merge_args *oqma);
 void obj_coll_disp_init(uint32_t tgt_nr, uint32_t max_tgt_size, uint32_t inline_size,
 			uint32_t start, uint32_t max_width, struct obj_coll_disp_cursor *ocdc);
 void obj_coll_disp_dest(struct obj_coll_disp_cursor *ocdc, struct daos_coll_target *tgts,

@@ -1606,6 +1606,7 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 		if (unlikely(total > stat.dtx_committable_count)) {
 			D_WARN("Some DTX in CoS cannot be committed: %lu/%lu\n",
 			       (unsigned long)total, (unsigned long)stat.dtx_committable_count);
+			dtx_free_committable(dtes, dcks, dce, cnt);
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
@@ -2178,10 +2179,12 @@ exec:
 	if (agg_cb != NULL) {
 		remote_rc = agg_cb(dlh, func_arg);
 		dlh->dlh_agg_done = 1;
-		if (remote_rc == allow_failure)
+		if (remote_rc != 0) {
+			if (remote_rc != allow_failure)
+				D_GOTO(out, rc = remote_rc);
+
 			dlh->dlh_drop_cond = 0;
-		else if (remote_rc != 0)
-			D_GOTO(out, rc = remote_rc);
+		}
 	}
 
 	if (likely(dlh->dlh_delay_sub_cnt == 0))
