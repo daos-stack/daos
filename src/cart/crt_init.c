@@ -745,7 +745,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			if (port_env == NULL) {
 				d_agetenv_str(&port_env, "OFI_PORT");
 				if (port_env != NULL)
-					warn_deprecated("OFI_DOMAIN", "D_DOMAIN");
+					warn_deprecated("OFI_PORT", "D_PORT");
 			}
 			port = port_env;
 		}
