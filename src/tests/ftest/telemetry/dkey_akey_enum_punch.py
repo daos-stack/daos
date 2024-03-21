@@ -357,7 +357,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
 
         self.telemetry.dmg.verbose = False
 
-        # Obtain and verify the pool metrics 1 and 2 ###
+        # Obtain and verify the pool target punch metrics
         pool_tgt_dkey_punch = self.telemetry.ENGINE_POOL_OPS_TGT_DKEY_PUNCH_METRICS
         pool_tgt_akey_punch = self.telemetry.ENGINE_POOL_OPS_TGT_AKEY_PUNCH_METRICS
         specific_metrics = [pool_tgt_dkey_punch, pool_tgt_akey_punch]
