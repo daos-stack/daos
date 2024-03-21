@@ -50,6 +50,7 @@
 #include <daos/dfs_lib_int.h>
 
 #include "hook.h"
+#undef strncmp
 
 /* useful in strncmp() and strndup() */
 #define STR_AND_SIZE(s)    s, sizeof(s)
