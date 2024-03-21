@@ -509,7 +509,7 @@ class DaosCont():
         print(rc)
         assert rc.returncode == 0, rc
 
-    def destroy(self, valgrind=True, log_check=True):
+    def destroy(self, valgrind=True, log_check=True, force=False):
         """Destroy the container
 
         Args:
@@ -520,7 +520,7 @@ class DaosCont():
             NLTestFail: If Pool was not provided when object created.
         """
         destroy_container(self.pool.conf, self.pool.id(), self.id(),
-                          valgrind=valgrind, log_check=log_check)
+                          valgrind=valgrind, log_check=log_check, force=force)
 
 
 class DaosServer():
@@ -608,7 +608,7 @@ class DaosServer():
             self._stop_agent()
         try:
             if self.running:
-                self.stop(None)
+                self._stop(None)
         except NLTestTimeout:
             print('Ignoring timeout on stop')
         server_file = join(self.agent_dir, '.daos_server.active.yml')
@@ -1824,13 +1824,15 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
     return DaosCont(rc.json['response']['container_uuid'], label, pool=pool)
 
 
-def destroy_container(conf, pool, container, valgrind=True, log_check=True):
+def destroy_container(conf, pool, container, valgrind=True, log_check=True, force=False):
     """Destroy a container"""
     if isinstance(pool, DaosPool):
         pool = pool.id()
     if isinstance(container, DaosCont):
         container = container.id()
     cmd = ['container', 'destroy', pool, container]
+    if force:
+        cmd.append("--force")
     rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True, log_check=log_check)
     print(rc)
     if rc.returncode == 1 and rc.json['status'] == -1012:
@@ -3010,6 +3012,88 @@ class PosixTests():
         rc = run_daos_cmd(self.conf, cmd)
         assert rc.returncode == 0
         rc = self.dfuse.check_usage(inodes=1, open_files=1, containers=1, pools=1)
+
+    def test_uns_broken(self):
+        """Test the behavior of a broken UNS link"""
+
+        dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
+        dfuse.start('uns-broken')
+
+        i_path = join(dfuse.dir, "top_dir")
+
+        os.mkdir(i_path)
+
+        cont_path = join(i_path, "sub_cont")
+
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label="uns_broken",
+                                path=cont_path)
+
+        stat_pre = os.stat(cont_path)
+
+        dfuse.evict_and_wait([cont_path])
+
+        stat_post = os.stat(cont_path)
+        assert stat_pre.st_ino == stat_post.st_ino
+
+        dfuse.evict_and_wait([cont_path])
+
+        container.destroy(valgrind=False, log_check=False)
+
+        try:
+            os.stat(cont_path)
+            assert False
+        except OSError as error:
+            assert error.errno == errno.ENOLINK
+
+        # Now check this readdir works.
+        dfuse.evict_and_wait([i_path])
+        files = os.listdir(i_path)
+        print(files)
+        assert files == ["sub_cont"]
+
+        # Now evict again and check stat once readdir has put the inode in memory.
+        dfuse.evict_and_wait([i_path])
+        try:
+            os.stat(cont_path)
+            assert False
+        except OSError as error:
+            assert error.errno == errno.ENOLINK
+
+        dfuse.evict_and_wait([i_path])
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    def test_uns_broken_ic(self):
+        """Test the behavior of a broken UNS link when the link is in cache
+
+        This test will create EINVAL errors from dfuse so silence them in the log checking.
+        """
+        dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
+        dfuse.start('uns-broken-1')
+
+        i_path = join(dfuse.dir, "top_dir")
+
+        os.mkdir(i_path)
+
+        cont_path = join(i_path, "sub_cont")
+
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label="uns_broken_ic",
+                                path=cont_path)
+
+        os.stat(cont_path)
+
+        container.destroy(valgrind=False, log_check=False, force=True)
+
+        try:
+            os.stat(cont_path)
+            assert False
+        except OSError as error:
+            assert error.errno == errno.ENOLINK
+
+        dfuse.evict_and_wait([i_path])
+        if dfuse.stop(ignore_einval=True):
+            self.fatal_errors = True
 
     @needs_dfuse
     def test_rename_clobber(self):
@@ -4750,6 +4834,7 @@ def log_test(conf,
 
     if ignore_einval:
         lto.skip_suffixes.append(': 22 (Invalid argument)')
+        lto.skip_suffixes.append(" DER_NO_HDL(-1002): 'Invalid handle'")
 
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")

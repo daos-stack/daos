@@ -9,6 +9,23 @@ from logging import getLogger
 from ClusterShell.NodeSet import NodeSet
 
 
+def _gen_stats_metrics(basename):
+    """Return a list of stats metrics for a given basename."""
+    metrics = [
+        "max",
+        "mean",
+        "min",
+        "samples",
+        "stddev",
+        "sum",
+        "sumsquares",
+    ]
+
+    base = [basename]
+    base.extend([basename + "_" + metric for metric in metrics])
+    return base
+
+
 class TelemetryUtils():
     # pylint: disable=too-many-nested-blocks
     """Defines a object used to verify telemetry information."""
@@ -72,11 +89,7 @@ class TelemetryUtils():
         "engine_pool_scrubber_csums_total",
         "engine_pool_scrubber_next_csum_scrub",
         "engine_pool_scrubber_next_tree_scrub",
-        "engine_pool_scrubber_prev_duration",
-        "engine_pool_scrubber_prev_duration_max",
-        "engine_pool_scrubber_prev_duration_mean",
-        "engine_pool_scrubber_prev_duration_min",
-        "engine_pool_scrubber_prev_duration_stddev",
+        *_gen_stats_metrics("engine_pool_scrubber_prev_duration"),
         "engine_pool_scrubber_scrubber_started",
         "engine_pool_scrubber_scrubs_completed",
         "engine_pool_started_at",
@@ -89,11 +102,7 @@ class TelemetryUtils():
         "engine_pool_vos_aggregation_dkey_deleted",
         "engine_pool_vos_aggregation_dkey_scanned",
         "engine_pool_vos_aggregation_dkey_skipped",
-        "engine_pool_vos_aggregation_epr_duration",
-        "engine_pool_vos_aggregation_epr_duration_max",
-        "engine_pool_vos_aggregation_epr_duration_mean",
-        "engine_pool_vos_aggregation_epr_duration_min",
-        "engine_pool_vos_aggregation_epr_duration_stddev",
+        *_gen_stats_metrics("engine_pool_vos_aggregation_epr_duration"),
         "engine_pool_vos_aggregation_merged_recs",
         "engine_pool_vos_aggregation_merged_size",
         "engine_pool_vos_aggregation_obj_deleted",
@@ -125,16 +134,8 @@ class TelemetryUtils():
         "engine_sched_wait_queue",
         "engine_sched_sleep_queue",
         "engine_sched_total_reject",
-        "engine_sched_cycle_duration",
-        "engine_sched_cycle_duration_max",
-        "engine_sched_cycle_duration_mean",
-        "engine_sched_cycle_duration_min",
-        "engine_sched_cycle_duration_stddev",
-        "engine_sched_cycle_size",
-        "engine_sched_cycle_size_max",
-        "engine_sched_cycle_size_mean",
-        "engine_sched_cycle_size_min",
-        "engine_sched_cycle_size_stddev"]
+        *_gen_stats_metrics("engine_sched_cycle_duration"),
+        *_gen_stats_metrics("engine_sched_cycle_size")]
     ENGINE_DMABUFF_METRICS = [
         "engine_dmabuff_total_chunks",
         "engine_dmabuff_used_chunks_io",
@@ -144,323 +145,111 @@ class TelemetryUtils():
         "engine_dmabuff_active_reqs",
         "engine_dmabuff_queued_reqs",
         "engine_dmabuff_grab_errs",
-        "engine_dmabuff_grab_retries",
-        "engine_dmabuff_grab_retries_max",
-        "engine_dmabuff_grab_retries_mean",
-        "engine_dmabuff_grab_retries_min",
-        "engine_dmabuff_grab_retries_stddev"]
-    ENGINE_IO_DTX_COMMITTABLE_METRICS = [
-        "engine_io_dtx_committable",
-        "engine_io_dtx_committable_max",
-        "engine_io_dtx_committable_mean",
-        "engine_io_dtx_committable_min",
-        "engine_io_dtx_committable_stddev"]
-    ENGINE_IO_DTX_COMMITTED_METRICS = [
-        "engine_io_dtx_committed",
-        "engine_io_dtx_committed_max",
-        "engine_io_dtx_committed_mean",
-        "engine_io_dtx_committed_min",
-        "engine_io_dtx_committed_stddev"]
-    ENGINE_IO_LATENCY_FETCH_METRICS = [
-        "engine_io_latency_fetch",
-        "engine_io_latency_fetch_max",
-        "engine_io_latency_fetch_mean",
-        "engine_io_latency_fetch_min",
-        "engine_io_latency_fetch_stddev"]
-    ENGINE_IO_LATENCY_BULK_FETCH_METRICS = [
-        "engine_io_latency_bulk_fetch",
-        "engine_io_latency_bulk_fetch_max",
-        "engine_io_latency_bulk_fetch_mean",
-        "engine_io_latency_bulk_fetch_min",
-        "engine_io_latency_bulk_fetch_stddev"]
-    ENGINE_IO_LATENCY_VOS_FETCH_METRICS = [
-        "engine_io_latency_vos_fetch",
-        "engine_io_latency_vos_fetch_max",
-        "engine_io_latency_vos_fetch_mean",
-        "engine_io_latency_vos_fetch_min",
-        "engine_io_latency_vos_fetch_stddev"]
-    ENGINE_IO_LATENCY_BIO_FETCH_METRICS = [
-        "engine_io_latency_bio_fetch",
-        "engine_io_latency_bio_fetch_max",
-        "engine_io_latency_bio_fetch_mean",
-        "engine_io_latency_bio_fetch_min",
-        "engine_io_latency_bio_fetch_stddev"]
-    ENGINE_IO_LATENCY_UPDATE_METRICS = [
-        "engine_io_latency_update",
-        "engine_io_latency_update_max",
-        "engine_io_latency_update_mean",
-        "engine_io_latency_update_min",
-        "engine_io_latency_update_stddev"]
-    ENGINE_IO_LATENCY_TGT_UPDATE_METRICS = [
-        "engine_io_latency_tgt_update",
-        "engine_io_latency_tgt_update_max",
-        "engine_io_latency_tgt_update_mean",
-        "engine_io_latency_tgt_update_min",
-        "engine_io_latency_tgt_update_stddev"]
-    ENGINE_IO_LATENCY_BULK_UPDATE_METRICS = [
-        "engine_io_latency_bulk_update",
-        "engine_io_latency_bulk_update_max",
-        "engine_io_latency_bulk_update_mean",
-        "engine_io_latency_bulk_update_min",
-        "engine_io_latency_bulk_update_stddev"]
-    ENGINE_IO_LATENCY_VOS_UPDATE_METRICS = [
-        "engine_io_latency_vos_update",
-        "engine_io_latency_vos_update_max",
-        "engine_io_latency_vos_update_mean",
-        "engine_io_latency_vos_update_min",
-        "engine_io_latency_vos_update_stddev"]
-    ENGINE_IO_LATENCY_BIO_UPDATE_METRICS = [
-        "engine_io_latency_bio_update",
-        "engine_io_latency_bio_update_max",
-        "engine_io_latency_bio_update_mean",
-        "engine_io_latency_bio_update_min",
-        "engine_io_latency_bio_update_stddev"]
-    ENGINE_IO_OPS_AKEY_ENUM_METRICS = [
-        "engine_io_ops_akey_enum_active",
-        "engine_io_ops_akey_enum_active_max",
-        "engine_io_ops_akey_enum_active_mean",
-        "engine_io_ops_akey_enum_active_min",
-        "engine_io_ops_akey_enum_active_stddev"]
-    ENGINE_IO_OPS_AKEY_ENUM_LATENCY_METRICS = [
-        "engine_io_ops_akey_enum_latency",
-        "engine_io_ops_akey_enum_latency_max",
-        "engine_io_ops_akey_enum_latency_mean",
-        "engine_io_ops_akey_enum_latency_min",
-        "engine_io_ops_akey_enum_latency_stddev"]
-    ENGINE_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_akey_punch_active",
-        "engine_io_ops_akey_punch_active_max",
-        "engine_io_ops_akey_punch_active_mean",
-        "engine_io_ops_akey_punch_active_min",
-        "engine_io_ops_akey_punch_active_stddev"]
-    ENGINE_IO_OPS_AKEY_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_akey_punch_latency",
-        "engine_io_ops_akey_punch_latency_max",
-        "engine_io_ops_akey_punch_latency_mean",
-        "engine_io_ops_akey_punch_latency_min",
-        "engine_io_ops_akey_punch_latency_stddev"]
-    ENGINE_IO_OPS_COMPOUND_ACTIVE_METRICS = [
-        "engine_io_ops_compound_active",
-        "engine_io_ops_compound_active_max",
-        "engine_io_ops_compound_active_mean",
-        "engine_io_ops_compound_active_min",
-        "engine_io_ops_compound_active_stddev"]
-    ENGINE_IO_OPS_COMPOUND_LATENCY_METRICS = [
-        "engine_io_ops_compound_latency",
-        "engine_io_ops_compound_latency_max",
-        "engine_io_ops_compound_latency_mean",
-        "engine_io_ops_compound_latency_min",
-        "engine_io_ops_compound_latency_stddev"]
-    ENGINE_IO_OPS_DKEY_ENUM_ACTIVE_METRICS = [
-        "engine_io_ops_dkey_enum_active",
-        "engine_io_ops_dkey_enum_active_max",
-        "engine_io_ops_dkey_enum_active_mean",
-        "engine_io_ops_dkey_enum_active_min",
-        "engine_io_ops_dkey_enum_active_stddev"]
-    ENGINE_IO_OPS_DKEY_ENUM_LATENCY_METRICS = [
-        "engine_io_ops_dkey_enum_latency",
-        "engine_io_ops_dkey_enum_latency_max",
-        "engine_io_ops_dkey_enum_latency_mean",
-        "engine_io_ops_dkey_enum_latency_min",
-        "engine_io_ops_dkey_enum_latency_stddev"]
-    ENGINE_IO_OPS_DKEY_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_dkey_punch_active",
-        "engine_io_ops_dkey_punch_active_max",
-        "engine_io_ops_dkey_punch_active_mean",
-        "engine_io_ops_dkey_punch_active_min",
-        "engine_io_ops_dkey_punch_active_stddev"]
-    ENGINE_IO_OPS_DKEY_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_dkey_punch_latency",
-        "engine_io_ops_dkey_punch_latency_max",
-        "engine_io_ops_dkey_punch_latency_mean",
-        "engine_io_ops_dkey_punch_latency_min",
-        "engine_io_ops_dkey_punch_latency_stddev"]
-    ENGINE_IO_OPS_EC_AGG_ACTIVE_METRICS = [
-        "engine_io_ops_ec_agg_active",
-        "engine_io_ops_ec_agg_active_max",
-        "engine_io_ops_ec_agg_active_mean",
-        "engine_io_ops_ec_agg_active_min",
-        "engine_io_ops_ec_agg_active_stddev"]
-    ENGINE_IO_OPS_EC_AGG_LATENCY_METRICS = [
-        "engine_io_ops_ec_agg_latency",
-        "engine_io_ops_ec_agg_latency_max",
-        "engine_io_ops_ec_agg_latency_mean",
-        "engine_io_ops_ec_agg_latency_min",
-        "engine_io_ops_ec_agg_latency_stddev"]
-    ENGINE_IO_OPS_EC_REP_ACTIVE_METRICS = [
-        "engine_io_ops_ec_rep_active",
-        "engine_io_ops_ec_rep_active_max",
-        "engine_io_ops_ec_rep_active_mean",
-        "engine_io_ops_ec_rep_active_min",
-        "engine_io_ops_ec_rep_active_stddev"]
-    ENGINE_IO_OPS_EC_REP_LATENCY_METRICS = [
-        "engine_io_ops_ec_rep_latency",
-        "engine_io_ops_ec_rep_latency_max",
-        "engine_io_ops_ec_rep_latency_mean",
-        "engine_io_ops_ec_rep_latency_min",
-        "engine_io_ops_ec_rep_latency_stddev"]
-    ENGINE_IO_OPS_FETCH_ACTIVE_METRICS = [
-        "engine_io_ops_fetch_active",
-        "engine_io_ops_fetch_active_max",
-        "engine_io_ops_fetch_active_mean",
-        "engine_io_ops_fetch_active_min",
-        "engine_io_ops_fetch_active_stddev"]
-    ENGINE_IO_OPS_KEY_QUERY_ACTIVE_METRICS = [
-        "engine_io_ops_key_query_active",
-        "engine_io_ops_key_query_active_max",
-        "engine_io_ops_key_query_active_mean",
-        "engine_io_ops_key_query_active_min",
-        "engine_io_ops_key_query_active_stddev"]
-    ENGINE_IO_OPS_KEY_QUERY_LATENCY_METRICS = [
-        "engine_io_ops_key_query_latency",
-        "engine_io_ops_key_query_latency_max",
-        "engine_io_ops_key_query_latency_mean",
-        "engine_io_ops_key_query_latency_min",
-        "engine_io_ops_key_query_latency_stddev"]
-    ENGINE_IO_OPS_KEY2ANCHOR_ACTIVE_METRICS = [
-        "engine_io_ops_key2anchor_active",
-        "engine_io_ops_key2anchor_active_max",
-        "engine_io_ops_key2anchor_active_mean",
-        "engine_io_ops_key2anchor_active_min",
-        "engine_io_ops_key2anchor_active_stddev"]
-    ENGINE_IO_OPS_KEY2ANCHOR_LATENCY_METRICS = [
-        "engine_io_ops_key2anchor_latency",
-        "engine_io_ops_key2anchor_latency_max",
-        "engine_io_ops_key2anchor_latency_mean",
-        "engine_io_ops_key2anchor_latency_min",
-        "engine_io_ops_key2anchor_latency_stddev"]
-    ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS = [
-        "engine_io_ops_migrate_active",
-        "engine_io_ops_migrate_active_max",
-        "engine_io_ops_migrate_active_mean",
-        "engine_io_ops_migrate_active_min",
-        "engine_io_ops_migrate_active_stddev"]
-    ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS = [
-        "engine_io_ops_migrate_latency",
-        "engine_io_ops_migrate_latency_max",
-        "engine_io_ops_migrate_latency_mean",
-        "engine_io_ops_migrate_latency_min",
-        "engine_io_ops_migrate_latency_stddev"]
-    ENGINE_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_obj_coll_punch_active",
-        "engine_io_ops_obj_coll_punch_active_max",
-        "engine_io_ops_obj_coll_punch_active_mean",
-        "engine_io_ops_obj_coll_punch_active_min",
-        "engine_io_ops_obj_coll_punch_active_stddev"]
-    ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_obj_coll_punch_latency",
-        "engine_io_ops_obj_coll_punch_latency_max",
-        "engine_io_ops_obj_coll_punch_latency_mean",
-        "engine_io_ops_obj_coll_punch_latency_min",
-        "engine_io_ops_obj_coll_punch_latency_stddev"]
-    ENGINE_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS = [
-        "engine_io_ops_obj_coll_query_active",
-        "engine_io_ops_obj_coll_query_active_max",
-        "engine_io_ops_obj_coll_query_active_mean",
-        "engine_io_ops_obj_coll_query_active_min",
-        "engine_io_ops_obj_coll_query_active_stddev"]
-    ENGINE_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS = [
-        "engine_io_ops_obj_coll_query_latency",
-        "engine_io_ops_obj_coll_query_latency_max",
-        "engine_io_ops_obj_coll_query_latency_mean",
-        "engine_io_ops_obj_coll_query_latency_min",
-        "engine_io_ops_obj_coll_query_latency_stddev"]
-    ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = [
-        "engine_io_ops_obj_enum_active",
-        "engine_io_ops_obj_enum_active_max",
-        "engine_io_ops_obj_enum_active_mean",
-        "engine_io_ops_obj_enum_active_min",
-        "engine_io_ops_obj_enum_active_stddev"]
-    ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS = [
-        "engine_io_ops_obj_enum_latency",
-        "engine_io_ops_obj_enum_latency_max",
-        "engine_io_ops_obj_enum_latency_mean",
-        "engine_io_ops_obj_enum_latency_min",
-        "engine_io_ops_obj_enum_latency_stddev"]
-    ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_obj_punch_active",
-        "engine_io_ops_obj_punch_active_max",
-        "engine_io_ops_obj_punch_active_mean",
-        "engine_io_ops_obj_punch_active_min",
-        "engine_io_ops_obj_punch_active_stddev"]
-    ENGINE_IO_OPS_OBJ_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_obj_punch_latency",
-        "engine_io_ops_obj_punch_latency_max",
-        "engine_io_ops_obj_punch_latency_mean",
-        "engine_io_ops_obj_punch_latency_min",
-        "engine_io_ops_obj_punch_latency_stddev"]
-    ENGINE_IO_OPS_OBJ_SYNC_ACTIVE_METRICS = [
-        "engine_io_ops_obj_sync_active",
-        "engine_io_ops_obj_sync_active_max",
-        "engine_io_ops_obj_sync_active_mean",
-        "engine_io_ops_obj_sync_active_min",
-        "engine_io_ops_obj_sync_active_stddev"]
-    ENGINE_IO_OPS_OBJ_SYNC_LATENCY_METRICS = [
-        "engine_io_ops_obj_sync_latency",
-        "engine_io_ops_obj_sync_latency_max",
-        "engine_io_ops_obj_sync_latency_mean",
-        "engine_io_ops_obj_sync_latency_min",
-        "engine_io_ops_obj_sync_latency_stddev"]
-    ENGINE_IO_OPS_RECX_ENUM_ACTIVE_METRICS = [
-        "engine_io_ops_recx_enum_active",
-        "engine_io_ops_recx_enum_active_max",
-        "engine_io_ops_recx_enum_active_mean",
-        "engine_io_ops_recx_enum_active_min",
-        "engine_io_ops_recx_enum_active_stddev"]
-    ENGINE_IO_OPS_RECX_ENUM_LATENCY_METRICS = [
-        "engine_io_ops_recx_enum_latency",
-        "engine_io_ops_recx_enum_latency_max",
-        "engine_io_ops_recx_enum_latency_mean",
-        "engine_io_ops_recx_enum_latency_min",
-        "engine_io_ops_recx_enum_latency_stddev"]
-    ENGINE_IO_OPS_TGT_AKEY_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_tgt_akey_punch_active",
-        "engine_io_ops_tgt_akey_punch_active_max",
-        "engine_io_ops_tgt_akey_punch_active_mean",
-        "engine_io_ops_tgt_akey_punch_active_min",
-        "engine_io_ops_tgt_akey_punch_active_stddev"]
-    ENGINE_IO_OPS_TGT_AKEY_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_tgt_akey_punch_latency",
-        "engine_io_ops_tgt_akey_punch_latency_max",
-        "engine_io_ops_tgt_akey_punch_latency_mean",
-        "engine_io_ops_tgt_akey_punch_latency_min",
-        "engine_io_ops_tgt_akey_punch_latency_stddev"]
-    ENGINE_IO_OPS_TGT_DKEY_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_tgt_dkey_punch_active",
-        "engine_io_ops_tgt_dkey_punch_active_max",
-        "engine_io_ops_tgt_dkey_punch_active_mean",
-        "engine_io_ops_tgt_dkey_punch_active_min",
-        "engine_io_ops_tgt_dkey_punch_active_stddev"]
-    ENGINE_IO_OPS_TGT_DKEY_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_tgt_dkey_punch_latency",
-        "engine_io_ops_tgt_dkey_punch_latency_max",
-        "engine_io_ops_tgt_dkey_punch_latency_mean",
-        "engine_io_ops_tgt_dkey_punch_latency_min",
-        "engine_io_ops_tgt_dkey_punch_latency_stddev"]
-    ENGINE_IO_OPS_TGT_PUNCH_ACTIVE_METRICS = [
-        "engine_io_ops_tgt_punch_active",
-        "engine_io_ops_tgt_punch_active_max",
-        "engine_io_ops_tgt_punch_active_mean",
-        "engine_io_ops_tgt_punch_active_min",
-        "engine_io_ops_tgt_punch_active_stddev"]
-    ENGINE_IO_OPS_TGT_PUNCH_LATENCY_METRICS = [
-        "engine_io_ops_tgt_punch_latency",
-        "engine_io_ops_tgt_punch_latency_max",
-        "engine_io_ops_tgt_punch_latency_mean",
-        "engine_io_ops_tgt_punch_latency_min",
-        "engine_io_ops_tgt_punch_latency_stddev"]
-    ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS = [
-        "engine_io_ops_tgt_update_active",
-        "engine_io_ops_tgt_update_active_max",
-        "engine_io_ops_tgt_update_active_mean",
-        "engine_io_ops_tgt_update_active_min",
-        "engine_io_ops_tgt_update_active_stddev"]
-    ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS = [
-        "engine_io_ops_update_active",
-        "engine_io_ops_update_active_max",
-        "engine_io_ops_update_active_mean",
-        "engine_io_ops_update_active_min",
-        "engine_io_ops_update_active_stddev"]
+        *_gen_stats_metrics("engine_dmabuff_grab_retries")]
+    ENGINE_IO_DTX_COMMITTABLE_METRICS = \
+        _gen_stats_metrics("engine_io_dtx_committable")
+    ENGINE_IO_DTX_COMMITTED_METRICS = \
+        _gen_stats_metrics("engine_io_dtx_committed")
+    ENGINE_IO_LATENCY_FETCH_METRICS = \
+        _gen_stats_metrics("engine_io_latency_fetch")
+    ENGINE_IO_LATENCY_BULK_FETCH_METRICS = \
+        _gen_stats_metrics("engine_io_latency_bulk_fetch")
+    ENGINE_IO_LATENCY_VOS_FETCH_METRICS = \
+        _gen_stats_metrics("engine_io_latency_vos_fetch")
+    ENGINE_IO_LATENCY_BIO_FETCH_METRICS = \
+        _gen_stats_metrics("engine_io_latency_bio_fetch")
+    ENGINE_IO_LATENCY_UPDATE_METRICS = \
+        _gen_stats_metrics("engine_io_latency_update")
+    ENGINE_IO_LATENCY_TGT_UPDATE_METRICS = \
+        _gen_stats_metrics("engine_io_latency_tgt_update")
+    ENGINE_IO_LATENCY_BULK_UPDATE_METRICS = \
+        _gen_stats_metrics("engine_io_latency_bulk_update")
+    ENGINE_IO_LATENCY_VOS_UPDATE_METRICS = \
+        _gen_stats_metrics("engine_io_latency_vos_update")
+    ENGINE_IO_LATENCY_BIO_UPDATE_METRICS = \
+        _gen_stats_metrics("engine_io_latency_bio_update")
+    ENGINE_IO_OPS_AKEY_ENUM_METRICS = \
+        _gen_stats_metrics("engine_io_ops_akey_enum_active")
+    ENGINE_IO_OPS_AKEY_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_akey_enum_latency")
+    ENGINE_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_akey_punch_active")
+    ENGINE_IO_OPS_AKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_akey_punch_latency")
+    ENGINE_IO_OPS_COMPOUND_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_compound_active")
+    ENGINE_IO_OPS_COMPOUND_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_compound_latency")
+    ENGINE_IO_OPS_DKEY_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_dkey_enum_active")
+    ENGINE_IO_OPS_DKEY_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_dkey_enum_latency")
+    ENGINE_IO_OPS_DKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_dkey_punch_active")
+    ENGINE_IO_OPS_DKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_dkey_punch_latency")
+    ENGINE_IO_OPS_EC_AGG_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_ec_agg_active")
+    ENGINE_IO_OPS_EC_AGG_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_ec_agg_latency")
+    ENGINE_IO_OPS_EC_REP_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_ec_rep_active")
+    ENGINE_IO_OPS_EC_REP_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_ec_rep_latency")
+    ENGINE_IO_OPS_FETCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_fetch_active")
+    ENGINE_IO_OPS_KEY_QUERY_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_key_query_active")
+    ENGINE_IO_OPS_KEY_QUERY_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_key_query_latency")
+    ENGINE_IO_OPS_KEY2ANCHOR_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_key2anchor_active")
+    ENGINE_IO_OPS_KEY2ANCHOR_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_key2anchor_latency")
+    ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_migrate_active")
+    ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_migrate_latency")
+    ENGINE_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_coll_punch_active")
+    ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_coll_punch_latency")
+    ENGINE_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_coll_query_active")
+    ENGINE_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_coll_query_latency")
+    ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_enum_active")
+    ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_enum_latency")
+    ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_punch_active")
+    ENGINE_IO_OPS_OBJ_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_punch_latency")
+    ENGINE_IO_OPS_OBJ_SYNC_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_sync_active")
+    ENGINE_IO_OPS_OBJ_SYNC_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_obj_sync_latency")
+    ENGINE_IO_OPS_RECX_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_recx_enum_active")
+    ENGINE_IO_OPS_RECX_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_recx_enum_latency")
+    ENGINE_IO_OPS_TGT_AKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_akey_punch_active")
+    ENGINE_IO_OPS_TGT_AKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_akey_punch_latency")
+    ENGINE_IO_OPS_TGT_DKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_dkey_punch_active")
+    ENGINE_IO_OPS_TGT_DKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_dkey_punch_latency")
+    ENGINE_IO_OPS_TGT_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_punch_active")
+    ENGINE_IO_OPS_TGT_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_punch_latency")
+    ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_tgt_update_active")
+    ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("engine_io_ops_update_active")
     ENGINE_IO_METRICS = ENGINE_IO_DTX_COMMITTABLE_METRICS +\
         ENGINE_IO_DTX_COMMITTED_METRICS +\
         ENGINE_IO_LATENCY_FETCH_METRICS +\
@@ -517,11 +306,7 @@ class TelemetryUtils():
         "engine_net_glitch",
         "engine_net_failed_addr",
         "engine_net_req_timeout",
-        "engine_net_swim_delay_stddev",
-        "engine_net_swim_delay_max",
-        "engine_net_swim_delay_mean",
-        "engine_net_swim_delay",
-        "engine_net_swim_delay_min",
+        *_gen_stats_metrics("engine_net_swim_delay"),
         "engine_net_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
         "engine_net_uri_lookup_self"]

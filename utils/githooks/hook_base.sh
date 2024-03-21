@@ -31,4 +31,8 @@ run-parts() {
 
 run-parts utils/githooks/"${hook}".d "$@" 1>&2
 
-touch ".${hook}"
+# Create temp file for the commit-msg watermark to indicate this hook was ran.
+# But not for the commit-msg itself.
+if [ "${hook}" != "commit-msg" ]; then
+    touch ".${hook}"
+fi

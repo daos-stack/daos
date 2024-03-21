@@ -101,12 +101,13 @@ func (cmd *startCmd) Execute(_ []string) error {
 	drpcRegStart := time.Now()
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
 	mgmtMod := &mgmtModule{
-		log:        cmd.Logger,
-		sys:        cmd.cfg.SystemName,
-		ctlInvoker: cmd.ctlInvoker,
-		cache:      cache,
-		numaGetter: hwprov.DefaultProcessNUMAProvider(cmd.Logger),
-		monitor:    procmon,
+		log:         cmd.Logger,
+		sys:         cmd.cfg.SystemName,
+		ctlInvoker:  cmd.ctlInvoker,
+		cache:       cache,
+		numaGetter:  hwprov.DefaultProcessNUMAProvider(cmd.Logger),
+		monitor:     procmon,
+		providerIdx: cmd.cfg.ProviderIdx,
 	}
 	drpcServer.RegisterRPCModule(mgmtMod)
 	cmd.Debugf("registered dRPC modules: %s", time.Since(drpcRegStart))

@@ -22,7 +22,6 @@ import (
 func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T) {
 	for name, tc := range map[string]struct {
 		fis       *hardware.FabricInterfaceSet
-		provider  string
 		expResult *ctlpb.NetworkScanResp
 	}{
 		"empty": {
@@ -156,7 +155,7 @@ func TestServer_ControlService_fabricInterfaceSetToNetworkScanResp(t *testing.T)
 
 			cs := mockControlService(t, log, config.DefaultServer(), nil, nil, nil)
 
-			result := cs.fabricInterfaceSetToNetworkScanResp(tc.fis, tc.provider)
+			result := cs.fabricInterfaceSetToNetworkScanResp(tc.fis)
 
 			if diff := cmp.Diff(tc.expResult, result, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)

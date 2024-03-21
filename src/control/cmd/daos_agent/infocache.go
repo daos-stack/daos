@@ -276,7 +276,6 @@ func (c *InfoCache) EnableStaticFabricCache(ctx context.Context, nf *NUMAFabric)
 	if c == nil {
 		return
 	}
-
 	item := &cachedFabricInfo{
 		cacheItem: cacheItem{
 			lastCached: time.Now(),
@@ -366,16 +365,23 @@ func (c *InfoCache) getAttachInfoRemote(ctx context.Context, sys string) (*contr
 
 // GetFabricDevice returns an appropriate fabric device from the cache based on the requested parameters,
 // and refreshes the cache if necessary.
-func (c *InfoCache) GetFabricDevice(ctx context.Context, numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
+func (c *InfoCache) GetFabricDevice(ctx context.Context, params *FabricIfaceParams) (*FabricInterface, error) {
 	if c == nil {
 		return nil, errors.New("InfoCache is nil")
 	}
-	nf, err := c.getNUMAFabric(ctx, netDevClass, provider)
+	nf, err := c.getNUMAFabric(ctx, params.DevClass, params.Provider)
 	if err != nil {
 		return nil, err
 	}
 
-	return nf.GetDevice(numaNode, netDevClass, provider)
+	if params.Interface != "" {
+		fi, err := nf.FindDevice(params)
+		if err != nil {
+			return nil, err
+		}
+		return fi[0], nil
+	}
+	return nf.GetDevice(params)
 }
 
 func (c *InfoCache) getNUMAFabric(ctx context.Context, netDevClass hardware.NetDevClass, providers ...string) (*NUMAFabric, error) {

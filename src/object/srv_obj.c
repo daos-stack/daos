@@ -3976,7 +3976,6 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 	uint64_t			 stripe_size = 0;
 	daos_epoch_t			 max_epoch = 0;
 	daos_recx_t			 recx = { 0 };
-	int				 allow_failure_cnt;
 	int				 succeeds;
 	int				 rc = 0;
 	int				 i;
@@ -4005,7 +4004,7 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 		oqma.oqma_src_map_ver = map_ver;
 	}
 
-	for (i = 0, allow_failure_cnt = 0, succeeds = 0; i < count; i++ ) {
+	for (i = 0, succeeds = 0; i < count; i++ ) {
 		if (api_flags & DAOS_GET_DKEY) {
 			if (otqa->otqa_need_copy)
 				p_dkey = &dkey;
@@ -4048,7 +4047,6 @@ again:
 		if (rc == -DER_NONEXIST) {
 			if (otqa->otqa_need_copy && otqa->otqa_max_epoch < *p_epoch)
 				otqa->otqa_max_epoch = *p_epoch;
-			allow_failure_cnt++;
 			continue;
 		}
 
@@ -4099,8 +4097,8 @@ again:
 		}
 	}
 
-	if (allow_failure_cnt > 0 && rc == 0 && succeeds == 0)
-		rc = -DER_NONEXIST;
+	if (rc == -DER_NONEXIST && succeeds > 0)
+		rc = 0;
 
 out:
 	if (rc == -DER_NONEXIST && otqa->otqa_need_copy && !otqa->otqa_keys_allocated) {
@@ -5653,7 +5651,6 @@ again1:
 			/* TODO: Also recovery the epoch uncertainty. */
 			break;
 		case -DER_NONEXIST:
-			rc = 0;
 			break;
 		default:
 			D_GOTO(out, rc);

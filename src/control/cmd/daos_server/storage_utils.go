@@ -113,7 +113,12 @@ type scmCmd struct {
 
 func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 	return func(l logging.Logger, e *engine.Config) (uint, error) {
-		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, e.Fabric.Provider)
+		prov, err := e.Fabric.GetPrimaryProvider()
+		if err != nil {
+			return 0, errors.Wrap(err, "getting primary provider")
+		}
+
+		fi, err := fis.GetInterfaceOnNetDevice(e.Fabric.Interface, prov)
 		if err != nil {
 			return 0, err
 		}
@@ -121,10 +126,15 @@ func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
 	}
 }
 
-func getAffinitySource(log logging.Logger, cfg *config.Server) (config.EngineAffinityFn, error) {
+func getAffinitySource(ctx context.Context, log logging.Logger, cfg *config.Server) (config.EngineAffinityFn, error) {
 	scanner := hwprov.DefaultFabricScanner(log)
 
-	fiSet, err := scanner.Scan(context.Background(), cfg.Fabric.Provider)
+	provs, err := cfg.Fabric.GetProviders()
+	if err != nil {
+		return nil, errors.Wrap(err, "getting configured providers")
+	}
+
+	fiSet, err := scanner.Scan(ctx, provs...)
 	if err != nil {
 		return nil, errors.Wrap(err, "scan fabric")
 	}
@@ -177,7 +187,7 @@ func getSockFromCfg(log logging.Logger, cfg *config.Server, affSrc config.Engine
 	return nil
 }
 
-func (cmd *scmCmd) init() error {
+func (cmd *scmCmd) init(ctx context.Context) error {
 	engCfgs := config.DefaultServer().Engines
 	if cmd.config != nil {
 		engCfgs = cmd.config.Engines
@@ -192,11 +202,12 @@ func (cmd *scmCmd) init() error {
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
+
 	if cmd.IgnoreConfig {
 		cmd.config = nil
 	} else if cmd.SocketID == nil {
 		// Read SocketID from config if not set explicitly in command.
-		affSrc, err := getAffinitySource(cmd.Logger, cmd.config)
+		affSrc, err := getAffinitySource(ctx, cmd.Logger, cmd.config)
 		if err != nil {
 			cmd.Error(err.Error())
 			return nil

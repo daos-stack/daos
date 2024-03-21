@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -107,7 +107,11 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 			prov = cmd.FabricProvider
 		}
 	case cmd.config.Fabric.Provider != "":
-		prov = cmd.config.Fabric.Provider
+		priProv, err := cmd.config.Fabric.GetPrimaryProvider()
+		if err != nil {
+			return errors.Wrapf(err, "unable to get fabric provider from config")
+		}
+		prov = priProv
 	}
 
 	hf, err := GetLocalFabricIfaces(ctx, cmd.ctlSvc.FabricScan, prov)

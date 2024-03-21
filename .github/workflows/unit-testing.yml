@@ -3,6 +3,8 @@ name: Unit testing
 on:
   pull_request:
 
+permissions: {}
+
 jobs:
   Run_in_docker:
     if: github.repository == 'daos-stack/daos'

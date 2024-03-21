@@ -30,6 +30,7 @@
 #include <sys/mman.h>
 #include <dirent.h>
 #include <sys/wait.h>
+#include <sys/uio.h>
 
 #include <dfuse_ioctl.h>
 
@@ -317,6 +318,53 @@ out:
 	assert_return_code(rc, errno);
 
 	rc = unlinkat(root, "ioctl_file", 0);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
+void
+do_readv_writev(void **state)
+{
+	int          fd;
+	int          rc;
+	int          root = open(test_dir, O_DIRECTORY);
+	char        *str0 = "hello ";
+	char        *str1 = "world\n";
+	struct iovec iov[2];
+	ssize_t      bytes_written;
+	ssize_t      bytes_read;
+	char         buf_read[16];
+	off_t        off;
+
+	assert_return_code(root, errno);
+
+	/* readv/writev testing */
+	fd = openat(root, "readv_writev_file", O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+	assert_return_code(fd, errno);
+
+	iov[0].iov_base = str0;
+	iov[0].iov_len  = strlen(str0);
+	iov[1].iov_base = str1;
+	iov[1].iov_len  = strlen(str1);
+
+	bytes_written = writev(fd, iov, 2);
+	assert_int_equal(bytes_written, 12);
+
+	off = lseek(fd, 0, SEEK_SET);
+	assert_true(off == 0);
+
+	iov[0].iov_base = buf_read;
+	iov[1].iov_base = buf_read + strlen(str0);
+	bytes_read      = readv(fd, iov, 2);
+	assert_int_equal(bytes_read, 12);
+	assert_true(strncmp(buf_read, "hello world\n", 12) == 0);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlinkat(root, "readv_writev_file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
@@ -751,6 +799,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			const struct CMUnitTest io_tests[] = {
 			    cmocka_unit_test(do_openat),
 			    cmocka_unit_test(do_ioctl),
+			    cmocka_unit_test(do_readv_writev),
 			};
 			nr_failed += cmocka_run_group_tests(io_tests, NULL, NULL);
 			break;

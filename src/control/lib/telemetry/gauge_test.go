@@ -130,11 +130,12 @@ func TestTelemetry_GetStatsGauge(t *testing.T) {
 				test.AssertEqual(t, result.Value(), uint64(tc.expResult.Cur), "bad value")
 				test.AssertEqual(t, result.FloatValue(), tc.expResult.Cur, "bad float value")
 
-				test.AssertEqual(t, tc.expResult.min, result.FloatMin(), "FloatMin() failed")
-				test.AssertEqual(t, tc.expResult.max, result.FloatMax(), "FloatMax() failed")
-				test.AssertEqual(t, tc.expResult.sum, result.FloatSum(), "FloatSum() failed")
+				test.AssertEqual(t, tc.expResult.min, result.Min(), "Min() failed")
+				test.AssertEqual(t, tc.expResult.max, result.Max(), "Max() failed")
+				test.AssertEqual(t, tc.expResult.sum, result.Sum(), "Sum() failed")
 				test.AssertEqual(t, tc.expResult.mean, result.Mean(), "Mean() failed")
 				test.AssertEqual(t, tc.expResult.stddev, result.StdDev(), "StdDev() failed")
+				test.AssertEqual(t, tc.expResult.sumsqs, result.SumSquares(), "SumSquares() failed")
 				test.AssertEqual(t, uint64(3), result.SampleSize(), "SampleSize() failed")
 			} else if result != nil {
 				t.Fatalf("expected nil result, got %+v", result)

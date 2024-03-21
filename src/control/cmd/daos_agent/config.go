@@ -55,6 +55,7 @@ type Config struct {
 	EvictOnStart        bool                      `yaml:"enable_evict_on_start,omitempty"`
 	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
 	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
+	ProviderIdx         uint                      // TODO SRS-31: Enable with multiprovider functionality
 }
 
 // NUMAFabricConfig defines a list of fabric interfaces that belong to a NUMA

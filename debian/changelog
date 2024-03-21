@@ -1,3 +1,9 @@
+daos (2.5.101-1) unstable; urgency=medium
+  [ Phillip Henderson ]
+  * Bump version to 2.5.101
+
+ -- Phillip Henderson <phillip.henderson@intel.com>  Fri, 15 Mar 2024 02:10:00 -0500
+
 daos (2.5.100-16) unstable; urgency=medium
   [ Li Wei ]
   * Update raft to 0.11.0-1416.g12dbc15

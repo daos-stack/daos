@@ -68,11 +68,12 @@ type (
 
 	StatsMetric interface {
 		Metric
-		FloatMin() float64
-		FloatMax() float64
-		FloatSum() float64
+		Min() uint64
+		Max() uint64
+		Sum() uint64
 		Mean() float64
 		StdDev() float64
+		SumSquares() float64
 		SampleSize() uint64
 	}
 )
@@ -243,16 +244,16 @@ func (mb *metricBase) String() string {
 	return strings.TrimSpace(string(buf[:bytes.Index(buf, []byte{0})]))
 }
 
-func (sm *statsMetric) FloatMin() float64 {
-	return float64(sm.stats.dtm_min)
+func (sm *statsMetric) Min() uint64 {
+	return uint64(sm.stats.dtm_min)
 }
 
-func (sm *statsMetric) FloatMax() float64 {
-	return float64(sm.stats.dtm_max)
+func (sm *statsMetric) Max() uint64 {
+	return uint64(sm.stats.dtm_max)
 }
 
-func (sm *statsMetric) FloatSum() float64 {
-	return float64(sm.stats.dtm_sum)
+func (sm *statsMetric) Sum() uint64 {
+	return uint64(sm.stats.dtm_sum)
 }
 
 func (sm *statsMetric) Mean() float64 {
@@ -261,6 +262,10 @@ func (sm *statsMetric) Mean() float64 {
 
 func (sm *statsMetric) StdDev() float64 {
 	return float64(sm.stats.std_dev)
+}
+
+func (sm *statsMetric) SumSquares() float64 {
+	return float64(sm.stats.sum_of_squares)
 }
 
 func (sm *statsMetric) SampleSize() uint64 {
