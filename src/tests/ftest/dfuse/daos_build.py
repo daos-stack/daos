@@ -206,7 +206,6 @@ class DaosBuild(DfuseTestBase):
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
-                'git -C {} checkout and/ld_path_in_build'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
                 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
