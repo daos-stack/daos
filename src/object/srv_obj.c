@@ -3976,8 +3976,6 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 	uint64_t			 stripe_size = 0;
 	daos_epoch_t			 max_epoch = 0;
 	daos_recx_t			 recx = { 0 };
-	int				 allow_failure = -DER_NONEXIST;
-	int				 allow_failure_cnt;
 	int				 succeeds;
 	int				 rc = 0;
 	int				 i;
@@ -4004,10 +4002,9 @@ obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, dao
 		oqma.oqma_flags = api_flags;
 		oqma.oqma_opc = opc;
 		oqma.oqma_src_map_ver = map_ver;
-		oqma.oqma_server_merge = 1;
 	}
 
-	for (i = 0, allow_failure_cnt = 0, succeeds = 0; i < count; i++ ) {
+	for (i = 0, succeeds = 0; i < count; i++ ) {
 		if (api_flags & DAOS_GET_DKEY) {
 			if (otqa->otqa_need_copy)
 				p_dkey = &dkey;
@@ -4047,10 +4044,9 @@ again:
 				goto again;
 		}
 
-		if (rc == allow_failure) {
+		if (rc == -DER_NONEXIST) {
 			if (otqa->otqa_need_copy && otqa->otqa_max_epoch < *p_epoch)
 				otqa->otqa_max_epoch = *p_epoch;
-			allow_failure_cnt++;
 			continue;
 		}
 
@@ -4078,12 +4074,19 @@ again:
 				otqa->otqa_max_epoch = *p_epoch;
 			otqa->otqa_shard = shards[i];
 			otqa->otqa_keys_allocated = 1;
+
+			if (otqa->otqa_raw_recx && daos_oclass_is_ec(&ioc->ioc_oca)) {
+				obj_ec_recx_vos2daos(&ioc->ioc_oca, t_oid, p_dkey, &otqa->otqa_recx,
+						     api_flags & DAOS_GET_MAX ? true : false);
+				otqa->otqa_raw_recx = 0;
+			}
 		} else {
 			oqma.oqma_oid.id_shard = shards[i];
 			oqma.oqma_src_epoch = *p_epoch;
 			oqma.oqma_src_dkey = p_dkey;
 			oqma.oqma_src_akey = p_akey;
 			oqma.oqma_src_recx = p_recx;
+			oqma.oqma_raw_recx = 1;
 			/*
 			 * Merge (L1) the results from different shards on the same VOS target
 			 * into current otqa that stands for the result for current VOS target.
@@ -4094,11 +4097,11 @@ again:
 		}
 	}
 
-	if (allow_failure_cnt > 0 && rc == 0 && succeeds == 0)
-		rc = allow_failure;
+	if (rc == -DER_NONEXIST && succeeds > 0)
+		rc = 0;
 
 out:
-	if (rc == allow_failure && otqa->otqa_need_copy && !otqa->otqa_keys_allocated) {
+	if (rc == -DER_NONEXIST && otqa->otqa_need_copy && !otqa->otqa_keys_allocated) {
 		/* Allocate key buffer for subsequent merge. */
 		rc = daos_iov_alloc(&otqa->otqa_dkey_copy, sizeof(uint64_t), true);
 		if (rc != 0)
@@ -5648,7 +5651,6 @@ again1:
 			/* TODO: Also recovery the epoch uncertainty. */
 			break;
 		case -DER_NONEXIST:
-			rc = 0;
 			break;
 		default:
 			D_GOTO(out, rc);
@@ -5812,6 +5814,9 @@ ds_obj_coll_query_handler(crt_rpc_t *rpc)
 	if (otqas == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	for (i = 0; i < dss_tgt_nr; i++)
+		otqas[i].otqa_raw_recx = 1;
+
 	otqa = &otqas[tgt_id];
 
 	dce.dce_xid = ocqi->ocqi_xid;
@@ -5886,6 +5891,8 @@ out:
 			ocqo->ocqo_dkey = otqa->otqa_dkey_copy;
 			ocqo->ocqo_akey = otqa->otqa_akey_copy;
 		}
+		if (otqa->otqa_raw_recx)
+			ocqo->ocqo_flags |= OCRF_RAW_RECX;
 	}
 
 	rc = crt_reply_send(rpc);

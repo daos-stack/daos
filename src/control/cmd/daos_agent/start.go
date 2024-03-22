@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -95,18 +95,19 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	procmonStart := time.Now()
 	procmon := NewProcMon(cmd.Logger, cmd.ctlInvoker, cmd.cfg.SystemName)
-	procmon.startMonitoring(ctx)
+	procmon.startMonitoring(ctx, cmd.cfg.EvictOnStart)
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 
 	drpcRegStart := time.Now()
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.Logger, cmd.cfg.TransportConfig))
 	mgmtMod := &mgmtModule{
-		log:        cmd.Logger,
-		sys:        cmd.cfg.SystemName,
-		ctlInvoker: cmd.ctlInvoker,
-		cache:      cache,
-		numaGetter: hwprov.DefaultProcessNUMAProvider(cmd.Logger),
-		monitor:    procmon,
+		log:         cmd.Logger,
+		sys:         cmd.cfg.SystemName,
+		ctlInvoker:  cmd.ctlInvoker,
+		cache:       cache,
+		numaGetter:  hwprov.DefaultProcessNUMAProvider(cmd.Logger),
+		monitor:     procmon,
+		providerIdx: cmd.cfg.ProviderIdx,
 	}
 	drpcServer.RegisterRPCModule(mgmtMod)
 	cmd.Debugf("registered dRPC modules: %s", time.Since(drpcRegStart))

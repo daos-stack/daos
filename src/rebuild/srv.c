@@ -404,7 +404,8 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	/* let's check scanning status on every thread*/
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_thread_collective(dss_rebuild_check_one, &arg, 0);
+	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, dss_rebuild_check_one, &arg, 0);
 	if (rc) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out, rc);
@@ -1254,6 +1255,8 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
 	uint64_t	leader_term;
+	uint32_t	version;
+	uint32_t	generation;
 	int		rc;
 
 	rc = ds_pool_svc_term_get(pool->sp_uuid, &leader_term);
@@ -1263,7 +1266,14 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 		return rc;
 	}
 
-	rc = rebuild_prepare(pool, task->dst_map_ver, ++pool->sp_rebuild_gen,
+	/* If this happened due to leader switch, then do not need update
+	 * generation.
+	 */
+	ds_rebuild_running_query(pool->sp_uuid, -1, &version, NULL, &generation);
+	if (version < task->dst_map_ver)
+		generation = ++pool->sp_rebuild_gen;
+
+	rc = rebuild_prepare(pool, task->dst_map_ver, generation,
 			     leader_term, task->dst_reclaim_eph, &task->dst_tgts,
 			     task->dst_rebuild_op, p_rgt);
 	if (rc <= 0)

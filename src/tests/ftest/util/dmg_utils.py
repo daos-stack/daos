@@ -120,7 +120,6 @@ class DmgCommand(DmgCommandBase):
         #           ],
         #           "Providers": [
         #             "ofi+verbs;ofi_rxm",
-        #             "ofi+tcp;ofi_rxm",
         #             "ofi+verbs",
         #             "ofi+tcp",
         #             "ofi+sockets"
@@ -1198,7 +1197,7 @@ class DmgCommand(DmgCommandBase):
             net_class (str): Network class preferred. Defaults to None.
                 i.e. "ethernet"|"infiniband"
             net_provider (str): Network provider preferred. Defaults to None.
-                i.e. "ofi+tcp;ofi_rxm" etc.
+                i.e. "ofi+tcp" etc.
             use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
             control_metadata_path (str): External directory provided to store control

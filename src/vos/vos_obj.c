@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -354,8 +354,10 @@ punch_dkey:
 	vos_ilog_fetch_finish(&info->ki_dkey);
 	vos_ilog_fetch_finish(&info->ki_akey);
 
-	if (daos_handle_is_valid(toh))
+	if (daos_handle_is_valid(toh)) {
+		D_ASSERT(krec != NULL);
 		key_tree_release(toh, (krec->kr_bmap & KREC_BF_EVT) != 0);
+	}
 
 	D_FREE(info);
 
@@ -439,7 +441,10 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		return -DER_INVAL;
 	}
 
-	if (dtx_is_valid_handle(dth)) {
+	if (dth && dth->dth_local)
+		++dth->dth_op_seq;
+
+	if (dtx_is_real_handle(dth)) {
 		epr.epr_hi = dth->dth_epoch;
 		bound = MAX(dth->dth_epoch_bound, dth->dth_epoch);
 	} else {
@@ -562,8 +567,13 @@ reset:
 		vos_ts_set_update(ts_set, epr.epr_hi);
 	}
 
-	if (rc == 0)
+	if (rc == 0) {
 		vos_ts_set_wupdate(ts_set, epr.epr_hi);
+
+		if (dtx_is_valid_handle(dth) && dth->dth_local) {
+			rc = vos_insert_oid(dth, cont, &oid);
+		}
+	}
 
 	rc = vos_tx_end(cont, dth, NULL, NULL, true, NULL, rc);
 	if (dtx_is_valid_handle(dth)) {
