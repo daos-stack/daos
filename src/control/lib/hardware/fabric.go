@@ -975,7 +975,7 @@ func (s *FabricScanner) Scan(ctx context.Context, providers ...string) (*FabricI
 
 	if result.NumFabricInterfaces() == 0 {
 		if len(providers) == 0 {
-			return nil, errors.New("no fabric interfaces found")
+			return nil, errors.New("no fabric interfaces could be found")
 		}
 		return nil, fmt.Errorf("no fabric interfaces found with %s %s",
 			common.Pluralise("provider", len(providers)),

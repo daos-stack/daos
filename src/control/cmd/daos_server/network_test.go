@@ -95,7 +95,7 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 				},
 			}, nil),
 			nil,
-			errors.New("get local fabric interfaces: no fabric interfaces found"),
+			errors.New("get local fabric interfaces: no fabric interfaces could be found"),
 		},
 		{
 			"Scan network; JSON; interface found",

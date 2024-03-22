@@ -652,7 +652,7 @@ func mockUUID(idx ...int32) string {
 	return fmt.Sprintf("%08d-%04d-%04d-%04d-%012d", idx, idx, idx, idx, idx)
 }
 
-// MockStorageScanResp builds a storage scan response from config array stucts for SCM and NVMe.
+// MockStorageScanResp builds a storage scan response from config array structs for SCM and NVMe.
 func MockStorageScanResp(t *testing.T,
 	mockScmConfigArray []MockScmConfig,
 	mockNvmeConfigArray []MockNvmeConfig) *ctlpb.StorageScanResp {
