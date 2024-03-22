@@ -33,7 +33,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
         :avocado: tags=pool,rebuild,ior
-        :avocado: tags=pooldestroywithio,test_pool_destroy_with_io
+        :avocado: tags=RbldPoolDestroyWithIO,test_pool_destroy_with_io
         """
         # set params
         targets = self.server_managers[0].get_config_value("targets")
