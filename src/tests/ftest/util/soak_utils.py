@@ -1205,8 +1205,10 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     apps_dir = os.environ["DAOS_TEST_APP_DIR"]
     # Update DAOS_TEST_APP_DIR if used in the cmdline param in yaml
     # ${DAOS_TEST_APP_SRC}                  =>  apps built with el8 and mpi/mpich (default)
+    # pylint: disable-next=wrong-spelling-in-comment,fixme
     # ${DAOS_TEST_APP_SRC}/intelmpi         =>  apps built with el8 and intelmpi
     # ${DAOS_TEST_APP_SRC}/suse             =>  apps built with suse and gnu-mpich
+    # pylint: disable-next=wrong-spelling-in-comment,fixme
     # ${DAOS_TEST_APP_SRC}/suse/intelmpi    =>  apps built with suse and intelmpi
     if "suse" in detect().name.lower():
         os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "suse")
