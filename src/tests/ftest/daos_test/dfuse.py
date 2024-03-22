@@ -91,6 +91,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
             daos_test_env['DD_MASK'] = 'all'
             daos_test_env['DD_SUBSYS'] = 'all'
             daos_test_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+
             if il_lib == 'libpil4dfs.so':
                 daos_test_env['DAOS_MOUNT_POINT'] = mount_dir
                 daos_test_env['DAOS_POOL'] = self.pool.identifier
@@ -99,9 +100,15 @@ class DaosCoreTestDfuse(DfuseTestBase):
                 daos_test_env['D_IL_MAX_EQ'] = '2'
                 daos_test_env['D_IL_ENFORCE_EXEC_ENV'] = '1'
 
-        command = [self.daos_test, '--test-dir', mount_dir, '--io', '--stream', '--mmap', '--exec']
+        command = [self.daos_test, '--test-dir', mount_dir,
+                   '--io', '--stream', '--mmap', '--exec', '--directory']
         if use_dfuse:
             command.append('--lowfd')
+        else:
+            # make DAOS_MOUNT_POINT different from mount_dir so it tests a non-DAOS filesystem
+            dummy_dir = '/tmp/dummy'
+            create_directory(self.hostlist_clients, dummy_dir)
+            daos_test_env['DAOS_MOUNT_POINT'] = dummy_dir
         if cache_mode != 'writeback':
             command.append('--metadata')
 

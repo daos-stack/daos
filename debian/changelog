@@ -1,3 +1,9 @@
+daos (2.5.101-2) unstable; urgency=medium
+  [ Jan Michalski ]
+  * Add dtx_tests to the server-tests package
+
+ -- Jan Michalski <jan.michalski@intel.com>  Mon, 18 Mar 2024 21:30:00 +0000
+
 daos (2.5.101-1) unstable; urgency=medium
   [ Phillip Henderson ]
   * Bump version to 2.5.101

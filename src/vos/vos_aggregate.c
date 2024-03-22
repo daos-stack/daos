@@ -1422,7 +1422,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsign
 		return rc;
 
 	/* Publish SCM reservations */
-	rc = vos_publish_scm(obj->obj_cont, io->ic_rsrvd_scm, true);
+	rc = vos_publish_scm(vos_obj2umm(obj), io->ic_rsrvd_scm, true);
 	if (rc) {
 		D_ERROR("Publish SCM extents error: "DF_RC"\n", DP_RC(rc));
 		goto abort;
@@ -1571,7 +1571,7 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 
 	D_AGG_ASSERT(mw, obj != NULL);
 	if (rc) {
-		vos_publish_scm(obj->obj_cont, io->ic_rsrvd_scm, false);
+		vos_publish_scm(vos_obj2umm(obj), io->ic_rsrvd_scm, false);
 
 		if (!d_list_empty(&io->ic_nvme_exts))
 			vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts,

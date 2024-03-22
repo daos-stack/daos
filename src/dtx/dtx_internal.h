@@ -24,6 +24,11 @@
  */
 #define DAOS_DTX_VERSION	4
 
+/** VOS reserves highest two minor epoch values for internal use so we must
+ *  limit the number of dtx sub modifications to avoid conflict.
+ */
+#define DTX_SUB_MOD_MAX         (((uint16_t)-1) - 2)
+
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
