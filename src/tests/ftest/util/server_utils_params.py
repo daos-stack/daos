@@ -459,11 +459,7 @@ class EngineYamlParameters(YamlParameters):
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines", str(index), "*"]
         self._base_namespace = base_namespace
         self._index = index
-<<<<<<< HEAD
-        self._provider = provider or os.environ.get("D_PROVIDER", "ofi+tcp;ofi_rxm")
-=======
-        self._provider = provider or os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
->>>>>>> master
+        self._provider = provider or os.environ.get("D_PROVIDER", "ofi+tcp")
         self._max_storage_tiers = max_storage_tiers
         super().__init__(os.path.join(*namespace))
 
