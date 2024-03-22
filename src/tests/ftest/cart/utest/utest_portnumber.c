@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -193,19 +193,11 @@ static void
 test_port_tcp(void **state)
 {
 	d_setenv("D_INTERFACE", "lo", 1);
-	d_setenv("D_PROVIDER", "ofi+tcp;ofi_rxm", 1);
+	d_setenv("D_PROVIDER", "ofi+tcp", 1);
 	run_test_fork(state);
 }
 
 #ifndef MY_TESTS_NOT_INCLUDED
-static void
-test_port_sockets(void **state)
-{
-	d_setenv("D_INTERFACE", "eth0", 1);
-	d_setenv("D_PROVIDER", "ofi+tcp", 1);
-	run_test_fork(state);
-};
-
 static void
 test_port_verb(void **state)
 {
@@ -289,10 +281,9 @@ fini_tests(void **state)
 int main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(test_port_tcp),
+	    cmocka_unit_test(test_port_tcp),
 #ifndef MY_TESTS_NOT_INCLUDED
-		cmocka_unit_test(test_port_sockets),
-		cmocka_unit_test(test_port_verb),
+	    cmocka_unit_test(test_port_verb),
 #endif
 	};
 

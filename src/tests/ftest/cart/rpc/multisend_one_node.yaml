@@ -17,7 +17,7 @@ env_CRT_CTX_SHARE_ADDR: !mux
     CRT_CTX_SHARE_ADDR: "0"
 env_D_PROVIDER: !mux
   ofi_tcp:
-    D_PROVIDER: "ofi+tcp;ofi_rxm"
+    D_PROVIDER: "ofi+tcp"
 hosts: !mux
   hosts_1:
     config: one_node

@@ -12,7 +12,7 @@ ENV:
     - CRT_TEST_CONT: "1"
 env_D_PROVIDER: !mux
   ofi_tcp:
-    D_PROVIDER: "ofi+tcp;ofi_rxm"
+    D_PROVIDER: "ofi+tcp"
 env_CRT_CTX_SHARE_ADDR: !mux
   no_sep:
     env: no_sep

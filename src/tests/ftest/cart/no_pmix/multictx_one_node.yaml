@@ -13,6 +13,8 @@ env_D_PROVIDER: !mux
   sm:
     D_PROVIDER: "sm"
   ofi_tcp:
+    D_PROVIDER: "ofi+tcp"
+  ofi_tcp_rxm:
     D_PROVIDER: "ofi+tcp;ofi_rxm"
 tests: !mux
   no_pmix_multi_ctx:
