@@ -19,6 +19,7 @@ ObjClassID = enum.Enum(
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
 
+
 class InvalidModeError(ValueError):
     """Raised by DCont() when open_mode is not valid"""
 
@@ -84,7 +85,7 @@ class DCont():
         if open_mode == 'RO':
             open_ro = True
         elif open_mode != 'RW':
-            raise InvalidModeError('open mode is neither "RO" or "RW"')
+            raise InvalidModeError('open_mode is neither "RO" or "RW"')
         if path is not None:
             self.pool = None
             self.cont = None
