@@ -287,7 +287,7 @@ func TestControl_PoolProperties(t *testing.T) {
 		},
 		"svc_ops_entry_age-invalid-toolow": {
 			name:   "svc_ops_entry_age",
-			value:  "149",
+			value:  "59",
 			expErr: errors.New("invalid"),
 		},
 		"svc_ops_entry_age-invalid-toohigh": {
