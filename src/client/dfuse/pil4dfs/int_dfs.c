@@ -42,7 +42,6 @@
 #include <daos/debug.h>
 #include <gurt/list.h>
 #include <gurt/common.h>
-#include <gurt/hash.h>
 #include <daos.h>
 #include <daos_fs.h>
 #include <daos_uns.h>
@@ -53,6 +52,7 @@
 #include <daos/dfs_lib_int.h>
 
 #include "hook.h"
+#include "dfs_dcache.h"
 
 /* useful in strncmp() and strndup() */
 #define STR_AND_SIZE(s)    s, sizeof(s)
@@ -103,13 +103,6 @@ static uint16_t               low_fd_count;
 /* the list of low fd reserved */
 static int                    low_fd_list[DAOS_MIN_FD];
 
-/* default dir cache time-out in seconds*/
-#define DCACHE_TIMEOUT 10
-static int64_t dcache_timeout;
-
-/* Size of the key prefix */
-#define DCACHE_KEY_PREF_SIZE 35
-
 /* In case of fork(), only the parent process could destroy daos env. */
 static bool                   context_reset;
 static __thread daos_handle_t td_eqh;
@@ -120,35 +113,16 @@ static uint16_t               eq_count_max;
 static uint16_t               eq_count;
 static uint16_t               eq_idx;
 
-/* Hash table entry for directory handles.  The struct and name will be allocated as a single
- * entity.
- */
-struct dcache_rec {
-	d_list_t         dr_entry;
-	dfs_obj_t       *dr_obj;
-	struct timespec  dr_expire;
-	_Atomic uint32_t dr_ref;
-	_Atomic bool     dr_deleted;
-	char             dr_key_child_prefix[DCACHE_KEY_PREF_SIZE];
-	size_t           dr_key_len;
-	char             dr_key[];
-};
-
-struct dfs_dcache {
-	char                 dd_key_root_prefix[DCACHE_KEY_PREF_SIZE];
-	struct d_hash_table *dd_dir_hash;
-};
-
 /* structure allocated for dfs container */
 struct dfs_mt {
-	dfs_t            *dfs;
-	daos_handle_t     poh;
-	daos_handle_t     coh;
-	struct dfs_dcache dcache;
-	int               len_fs_root;
-	_Atomic uint32_t  inited;
-	char             *pool, *cont;
-	char             *fs_root;
+	dfs_t           *dfs;
+	daos_handle_t    poh;
+	daos_handle_t    coh;
+	dfs_dcache_t    *dcache;
+	int              len_fs_root;
+	_Atomic uint32_t inited;
+	char            *pool, *cont;
+	char            *fs_root;
 };
 
 static _Atomic uint64_t        num_read;
@@ -313,360 +287,6 @@ get_eqh(daos_handle_t *eqh);
 static void
 destroy_all_eqs(void);
 
-static inline struct dcache_rec *
-dlist2drec(d_list_t *rlink)
-{
-	return container_of(rlink, struct dcache_rec, dr_entry);
-}
-
-static bool
-dcache_key_cmp(struct d_hash_table *htable, d_list_t *rlink, const void *key, unsigned int key_len)
-{
-	struct dcache_rec *rec;
-
-	rec = dlist2drec(rlink);
-	if (rec->dr_key_len != key_len)
-		return false;
-	D_ASSERT(rec->dr_key[key_len] == '\0');
-	D_ASSERT(((char *)key)[key_len] == '\0');
-
-	return strncmp(rec->dr_key, (const char *)key, key_len) == 0;
-}
-
-static void
-dcache_rec_free(struct d_hash_table *htable, d_list_t *rlink)
-{
-	int                rc;
-	struct dcache_rec *rec;
-
-	rec = dlist2drec(rlink);
-	D_DEBUG(DB_TRACE, "delete record '%s' (ref=%u)", rec->dr_key, rec->dr_ref);
-	rc = dfs_release(rec->dr_obj);
-	if (rc == ENOMEM)
-		rc = dfs_release(rec->dr_obj);
-	if (rc)
-		DS_ERROR(rc, "dfs_release() failed");
-	D_FREE(rec);
-}
-
-static void
-dcache_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
-{
-	struct dcache_rec *rec;
-	uint32_t           oldref;
-
-	rec    = dlist2drec(rlink);
-	oldref = atomic_fetch_add(&rec->dr_ref, 1);
-	D_DEBUG(DB_TRACE, "increment ref counter of record '%s' from %u to %u", rec->dr_key, oldref,
-		oldref + 1);
-}
-
-static bool
-dcache_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
-{
-	struct dcache_rec *rec;
-	uint32_t           oldref;
-
-	rec    = dlist2drec(rlink);
-	oldref = atomic_fetch_sub(&rec->dr_ref, 1);
-	D_DEBUG(DB_TRACE, "decrement ref counter of record '%s' from %u to %u", rec->dr_key, oldref,
-		oldref - 1);
-	D_ASSERT(oldref >= 1);
-	return oldref == 1;
-}
-
-static uint32_t
-dcache_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
-{
-	struct dcache_rec *rec;
-
-	rec = dlist2drec(rlink);
-	return d_hash_string_u32(rec->dr_key, rec->dr_key_len);
-}
-
-static d_hash_table_ops_t dcache_hash_ops = {
-    .hop_key_cmp    = dcache_key_cmp,
-    .hop_rec_addref = dcache_rec_addref,
-    .hop_rec_decref = dcache_rec_decref,
-    .hop_rec_free   = dcache_rec_free,
-    .hop_rec_hash   = dcache_rec_hash,
-};
-
-static inline int64_t
-time_cmp(struct timespec *t0, struct timespec *t1)
-{
-	if (t0->tv_sec != t1->tv_sec)
-		return t0->tv_sec - t1->tv_sec;
-	return t0->tv_nsec - t1->tv_nsec;
-}
-
-static int
-dcache_init(struct dfs_mt *mt)
-{
-	dfs_obj_t    *obj = NULL;
-	daos_obj_id_t obj_id;
-	mode_t        mode;
-	int           rc;
-
-	rc = dfs_lookup(mt->dfs, "/", O_RDONLY, &obj, &mode, NULL);
-	if (rc != 0)
-		D_GOTO(out, rc = daos_der2errno(rc));
-	rc = dfs_obj2id(obj, &obj_id);
-	D_ASSERT(rc == 0);
-	rc = snprintf(&mt->dcache.dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE,
-		      "%016" PRIx64 "-%016" PRIx64 ":", obj_id.hi, obj_id.lo);
-	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
-
-	rc = d_hash_table_create(D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL, &dcache_hash_ops,
-				 &mt->dcache.dd_dir_hash);
-
-out:
-	dfs_release(obj);
-	return rc;
-}
-
-static inline struct dcache_rec *
-dcache_get(struct dfs_mt *mt, const char *key, size_t key_len)
-{
-	d_list_t *rlink;
-
-	D_ASSERT(mt != NULL);
-	D_ASSERT(key != NULL);
-	D_ASSERT(key_len > 0);
-
-	rlink = d_hash_rec_find(mt->dcache.dd_dir_hash, key, key_len);
-	if (rlink == NULL)
-		return NULL;
-	return dlist2drec(rlink);
-}
-
-static int
-dcache_add(struct dcache_rec **rec, struct dfs_mt *mt, const char *path, const char *key,
-	   size_t key_len)
-{
-	struct dcache_rec *rec_tmp = NULL;
-	dfs_obj_t         *obj     = NULL;
-	daos_obj_id_t      obj_id;
-	mode_t             mode;
-	struct timespec    now;
-	d_list_t          *rlink;
-	int                rc;
-
-	D_ALLOC(rec_tmp, sizeof(*rec_tmp) + key_len + 1);
-	if (rec_tmp == NULL)
-		D_GOTO(error, rc = -DER_NOMEM);
-
-	atomic_init(&rec_tmp->dr_ref, 1);
-	atomic_init(&rec_tmp->dr_deleted, false);
-
-	rc = dfs_lookup(mt->dfs, path, O_RDWR, &obj, &mode, NULL);
-	if (rc != 0)
-		D_GOTO(error, rc = d_errno2der(rc));
-	if (!S_ISDIR(mode))
-		D_GOTO(error, rc = -DER_NOTDIR);
-	rec_tmp->dr_obj = obj;
-
-	rc = dfs_obj2id(obj, &obj_id);
-	D_ASSERT(rc == 0);
-	rc = snprintf(&rec_tmp->dr_key_child_prefix[0], DCACHE_KEY_PREF_SIZE,
-		      "%016" PRIx64 "-%016" PRIx64 ":", obj_id.hi, obj_id.lo);
-	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
-
-	rec_tmp->dr_key_len = key_len;
-	memcpy(rec_tmp->dr_key, key, key_len + 1);
-
-	rc = clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
-	if (rc != 0)
-		D_GOTO(error, rc = d_errno2der(errno));
-	rec_tmp->dr_expire.tv_sec  = now.tv_sec + dcache_timeout;
-	rec_tmp->dr_expire.tv_nsec = now.tv_nsec;
-
-	rlink = d_hash_rec_find_insert(mt->dcache.dd_dir_hash, rec_tmp->dr_key, key_len,
-				       &rec_tmp->dr_entry);
-	if (rlink == &rec_tmp->dr_entry) {
-		D_DEBUG(DB_TRACE, "add record '%s' with ref counter %u", rec_tmp->dr_key,
-			rec_tmp->dr_ref);
-	} else {
-		dcache_rec_free(mt->dcache.dd_dir_hash, &rec_tmp->dr_entry);
-		rec_tmp = dlist2drec(rlink);
-	}
-	*rec = rec_tmp;
-
-	return -DER_SUCCESS;
-
-error:
-	dfs_release(obj);
-	D_FREE(rec_tmp);
-	return rc;
-}
-
-inline static dfs_obj_t *
-drec2obj(struct dcache_rec *rec)
-{
-	return (rec == NULL) ? NULL : rec->dr_obj;
-}
-
-static inline void
-drec_incref(struct dfs_mt *mt, struct dcache_rec *rec)
-{
-	if (rec == NULL)
-		return;
-	D_ASSERT(mt != NULL);
-
-	d_hash_rec_addref(mt->dcache.dd_dir_hash, &rec->dr_entry);
-}
-
-static inline void
-drec_decref(struct dfs_mt *mt, struct dcache_rec *rec)
-{
-	if (rec == NULL)
-		return;
-	D_ASSERT(mt != NULL);
-
-	d_hash_rec_decref(mt->dcache.dd_dir_hash, &rec->dr_entry);
-}
-
-static inline void
-drec_del_at(struct dfs_mt *mt, struct dcache_rec *rec)
-{
-	if (rec == NULL)
-		return;
-	D_ASSERT(mt != NULL);
-
-	d_hash_rec_decref(mt->dcache.dd_dir_hash, &rec->dr_entry);
-	if (!atomic_flag_test_and_set(&rec->dr_deleted))
-		d_hash_rec_delete_at(mt->dcache.dd_dir_hash, &rec->dr_entry);
-}
-
-static int
-drec_del(struct dfs_mt *mt, char *path, struct dcache_rec *parent)
-{
-	const size_t       key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
-	size_t             path_len;
-	char              *bname = NULL;
-	size_t             bname_len;
-	char              *key = NULL;
-	size_t             key_len;
-	d_list_t          *rlink;
-	struct dcache_rec *rec;
-	int                rc;
-
-	D_ASSERT(mt != NULL);
-	D_ASSERT(path != NULL && path[0] == '/' && path[1] != '\0');
-	D_ASSERT(parent != NULL);
-
-	path_len = strnlen(path, PATH_MAX);
-	D_ASSERT(path_len < PATH_MAX);
-	bname = path + path_len - 1;
-	while (bname > path && *bname != '/')
-		--bname;
-	++bname;
-	bname_len = (path_len + path) - bname;
-
-	key_len = key_prefix_len + bname_len;
-	D_ALLOC(key, key_len + 1);
-	if (key == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	memcpy(key, parent->dr_key_child_prefix, key_prefix_len);
-	memcpy(key + key_prefix_len, bname, bname_len);
-	key[key_len] = '\0';
-
-	rlink = d_hash_rec_find(mt->dcache.dd_dir_hash, key, key_len);
-	if (rlink == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
-
-	rec = dlist2drec(rlink);
-	drec_del_at(mt, rec);
-	rc = -DER_SUCCESS;
-
-out:
-	D_FREE(key);
-	return rc;
-}
-
-/*
- * Look up a path in hash table to get the dfs_obj for a dir. If not found in hash table, call to
- * dfs_lookup() to open the object on DAOS. If the object is corresponding is a dir, insert the
- * object into hash table. Since many DFS APIs need parent dir DFS object as parameter, we use a
- * hash table to cache parent objects for efficiency.
- *
- * path_len should be length of the string path, not including null terminating ('\0').
- */
-static int
-lookup_insert_dir(struct dcache_rec **rec, struct dfs_mt *mt, char *path, size_t path_len)
-{
-	const size_t       key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
-	struct dcache_rec *rec_tmp;
-	char              *key;
-	char              *key_prefix;
-	char              *token;
-	size_t             token_len;
-	int                rc;
-
-	D_ASSERT(rec != NULL);
-	D_ASSERT(mt != NULL);
-	D_ASSERT(path != NULL);
-	D_ASSERT(path_len > 0);
-
-	D_ALLOC(key, key_prefix_len + path_len + 1);
-	if (key == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rc         = -DER_SUCCESS;
-	token      = path;
-	token_len  = 0;
-	key_prefix = mt->dcache.dd_key_root_prefix;
-	for (;;) {
-		size_t key_len;
-
-		memcpy(key, key_prefix, key_prefix_len);
-		memcpy(key + key_prefix_len, token, token_len);
-		key_len      = key_prefix_len + token_len;
-		key[key_len] = '\0';
-
-		rec_tmp = dcache_get(mt, key, key_len);
-		D_DEBUG(DB_TRACE, "dcache %s: path='%s', key='%s'\n",
-			(rec_tmp == NULL) ? "miss" : "hit", path, key);
-		if (rec_tmp == NULL) {
-			char   tmp;
-			size_t subpath_len;
-
-			tmp         = '\0';
-			subpath_len = (token + token_len) - path;
-			if (subpath_len == 0) {
-				subpath_len = 1;
-				tmp         = path[1];
-				path[1]     = '\0';
-			} else if (path[subpath_len] == '/') {
-				tmp               = '/';
-				path[subpath_len] = '\0';
-			}
-			rc = dcache_add(&rec_tmp, mt, path, key, key_len);
-			if (tmp != '\0')
-				path[subpath_len] = tmp;
-			if (rc != -DER_SUCCESS)
-				D_GOTO(out, rc);
-		}
-		D_ASSERT(rec_tmp != NULL);
-
-		// NOTE skip '/' character
-		token += token_len + 1;
-		token_len = 0;
-		while (token + token_len < path + path_len && token[token_len] != '/')
-			++token_len;
-		if (token_len == 0)
-			break;
-
-		key_prefix = &rec_tmp->dr_key_child_prefix[0];
-		drec_decref(mt, rec_tmp);
-	}
-	*rec = rec_tmp;
-
-out:
-	D_FREE(key);
-
-	return rc;
-}
 
 static int (*ld_open)(const char *pathname, int oflags, ...);
 static int (*libc_open)(const char *pathname, int oflags, ...);
@@ -975,7 +595,7 @@ discover_daos_mount_with_env(void)
 	if (dfs_list[num_dfs].cont == NULL)
 		D_GOTO(free_pool, rc = ENOMEM);
 
-	dfs_list[num_dfs].dcache.dd_dir_hash = NULL;
+	dfs_list[num_dfs].dcache = NULL;
 	dfs_list[num_dfs].len_fs_root  = (int)len_fs_root;
 	atomic_init(&dfs_list[num_dfs].inited, 0);
 	num_dfs++;
@@ -1021,8 +641,8 @@ discover_dfuse_mounts(void)
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
 		if (strncmp(fs_entry->mnt_type, STR_AND_SIZE(MNT_TYPE_FUSE)) == 0) {
-			pt_dfs_mt->dcache.dd_dir_hash = NULL;
-			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
+			pt_dfs_mt->dcache      = NULL;
+			pt_dfs_mt->len_fs_root = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
 				D_DEBUG(DB_ANY, "mnt_dir[] is too long. Skip this entry.\n");
 				D_GOTO(out, rc = ENAMETOOLONG);
@@ -1183,7 +803,7 @@ retrieve_handles_from_fuse(int idx)
 		goto err;
 	}
 
-	rc = dcache_init(&dfs_list[idx]);
+	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
 		D_DEBUG(DB_ANY,
@@ -1497,7 +1117,8 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 				strncpy(*parent_dir, parent_path, parent_dir_len);
 			}
 			/* look up the dfs object from hash table for the parent dir */
-			rc = lookup_insert_dir(parent, *dfs_mt, *parent_dir, parent_dir_len);
+			rc = dcache_find_insert(parent, (*dfs_mt)->dcache, *parent_dir,
+						parent_dir_len);
 			/* parent dir does not exist or something wrong */
 			if (rc)
 				D_GOTO(out_err, rc = daos_der2errno(rc));
@@ -1514,14 +1135,14 @@ out_normal:
 
 out_err:
 	FREE(full_path_parse);
-	drec_del_at(*dfs_mt, *parent);
+	drec_del_at((*dfs_mt)->dcache, *parent);
 	*parent = NULL;
 	FREE(*parent_dir);
 	return rc;
 
 out_oom:
 	FREE(full_path_parse);
-	drec_del_at(*dfs_mt, *parent);
+	drec_del_at((*dfs_mt)->dcache, *parent);
 	*parent = NULL;
 	FREE(*parent_dir);
 	return ENOMEM;
@@ -2191,8 +1812,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	int                two_args = 1, rc, is_target_path, idx_fd, idx_dirfd;
 	dfs_obj_t         *dfs_obj;
 	mode_t             mode_query = 0, mode_parent = 0;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -2244,7 +1865,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				D_GOTO(out_error, rc);
 			dfs_release(parent_obj);
 		} else {
-			rc = dfs_get_mode(parent->dr_obj, &mode_parent);
+			rc = dfs_get_mode(drec2obj(parent), &mode_parent);
 			if (rc)
 				D_GOTO(out_error, rc);
 		}
@@ -2302,7 +1923,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			D_GOTO(out_error, rc = ENAMETOOLONG);
 		}
 
-		drec_decref(dfs_mt, parent);
+		drec_decref(dfs_mt->dcache, parent);
 		FREE(parent_dir);
 
 		return (idx_dirfd + FD_DIR_BASE);
@@ -2332,12 +1953,12 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	file_list[idx_fd]->parent = NULL;
 	if (parent != NULL) {
-		rc = dfs_dup(dfs_mt->dfs, parent->dr_obj, O_RDWR, &file_list[idx_fd]->parent);
+		rc = dfs_dup(dfs_mt->dfs, drec2obj(parent), O_RDWR, &file_list[idx_fd]->parent);
 		if (rc != 0)
 			D_GOTO(out_error, rc);
 	}
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 
 	if (oflags & O_APPEND) {
@@ -2352,14 +1973,16 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	return (idx_fd + FD_FILE_BASE);
 
 org_func:
-	drec_decref(dfs_mt, parent);
+	if (dfs_mt != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	if (two_args)
 		return real_open(pathname, oflags);
 	else
 		return real_open(pathname, oflags, mode);
 out_error:
-	drec_decref(dfs_mt, parent);
+	if (dfs_mt != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -3058,9 +2681,9 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int                is_target_path, rc;
 	dfs_obj_t         *obj;
-	struct dfs_mt     *dfs_mt;
 	mode_t             mode;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -3088,18 +2711,20 @@ new_xstat(int ver, const char *path, struct stat *stat_buf)
 
 	stat_buf->st_ino = FAKE_ST_INO(full_path);
 	dfs_release(obj);
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_xstat(ver, path, stat_buf);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -3109,8 +2734,8 @@ static int
 new_lxstat(int ver, const char *path, struct stat *stat_buf)
 {
 	int                is_target_path, rc;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -3133,17 +2758,19 @@ new_lxstat(int ver, const char *path, struct stat *stat_buf)
 	if (rc)
 		goto out_err;
 	stat_buf->st_ino = FAKE_ST_INO(full_path);
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return libc_lxstat(ver, path, stat_buf);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -3395,8 +3022,8 @@ statfs(const char *pathname, struct statfs *sfs)
 {
 	daos_pool_info_t   info = {.pi_bits = DPI_SPACE};
 	int                rc, is_target_path;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -3429,17 +3056,19 @@ statfs(const char *pathname, struct statfs *sfs)
 	sfs->f_ffree  = -1;
 	sfs->f_bavail = sfs->f_bfree;
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_statfs(pathname, sfs);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -3499,8 +3128,8 @@ statvfs(const char *pathname, struct statvfs *svfs)
 {
 	daos_pool_info_t   info = {.pi_bits = DPI_SPACE};
 	int                rc, is_target_path;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -3535,17 +3164,19 @@ statvfs(const char *pathname, struct statvfs *svfs)
 	svfs->f_ffree  = -1;
 	svfs->f_bavail = svfs->f_bfree;
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_statvfs(pathname, svfs);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -3561,8 +3192,8 @@ opendir(const char *path)
 	int                is_target_path, idx_dirfd, rc;
 	dfs_obj_t         *dir_obj;
 	mode_t             mode;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -3579,7 +3210,8 @@ opendir(const char *path)
 	if (rc)
 		D_GOTO(out_err_ret, rc);
 	if (!is_target_path) {
-		drec_decref(dfs_mt, parent);
+		if (parent != NULL)
+			drec_decref(dfs_mt->dcache, parent);
 		FREE(parent_dir);
 		return next_opendir(path);
 	}
@@ -3634,7 +3266,7 @@ opendir(const char *path)
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 
 	return (DIR *)(dir_list[idx_dirfd]);
@@ -3643,7 +3275,8 @@ out_err:
 	dfs_release(dir_obj);
 
 out_err_ret:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return NULL;
@@ -4382,8 +4015,8 @@ int
 mkdir(const char *path, mode_t mode)
 {
 	int                is_target_path, rc;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -4410,17 +4043,19 @@ mkdir(const char *path, mode_t mode)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_mkdir(path, mode);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -4467,8 +4102,8 @@ int
 rmdir(const char *path)
 {
 	int                is_target_path, rc;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -4493,22 +4128,24 @@ rmdir(const char *path)
 		D_GOTO(out_err, rc);
 
 	if (parent != NULL) {
-		rc = drec_del(dfs_mt, full_path, parent);
+		rc = drec_del(dfs_mt->dcache, full_path, parent);
 		if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
 			DL_ERROR(rc, "DAOS directory cache cleanup failed");
 	}
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_rmdir(path);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -4519,8 +4156,8 @@ symlink(const char *symvalue, const char *path)
 {
 	int                is_target_path, rc;
 	dfs_obj_t         *obj;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -4548,17 +4185,19 @@ symlink(const char *symvalue, const char *path)
 		goto out_err;
 	atomic_fetch_add_relaxed(&num_link, 1);
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_symlink(symvalue, path);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -4606,9 +4245,9 @@ readlink(const char *path, char *buf, size_t size)
 {
 	int                is_target_path, rc, rc2;
 	dfs_obj_t         *obj;
-	struct dfs_mt     *dfs_mt;
 	daos_size_t        str_len = size;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -4638,13 +4277,14 @@ readlink(const char *path, char *buf, size_t size)
 	rc = dfs_release(obj);
 	if (rc)
 		goto out_err;
+	drec_decref(dfs_mt->dcache, parent);
 	/* The NULL at the end should not be included in the length */
-	drec_decref(dfs_mt, parent);
 	FREE(parent_dir);
 	return (str_len - 1);
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_readlink(path, buf, size);
 
@@ -4654,7 +4294,8 @@ out_release:
 		DS_ERROR(rc2, "dfs_release() failed");
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -4743,28 +4384,32 @@ rename(const char *old_name, const char *new_name)
 		D_GOTO(out_err, rc);
 
 	if (parent_old != NULL) {
-		rc = drec_del(dfs_mt1, full_path_old, parent_old);
+		rc = drec_del(dfs_mt1->dcache, full_path_old, parent_old);
 		if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
 			DL_ERROR(rc, "DAOS directory cache cleanup failed");
 	}
 
-	drec_decref(dfs_mt1, parent_old);
+	drec_decref(dfs_mt1->dcache, parent_old);
 	FREE(parent_dir_old);
-	drec_decref(dfs_mt2, parent_new);
+	drec_decref(dfs_mt2->dcache, parent_new);
 	FREE(parent_dir_new);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt1, parent_old);
+	if (parent_old != NULL)
+		drec_decref(dfs_mt1->dcache, parent_old);
 	FREE(parent_dir_old);
-	drec_decref(dfs_mt2, parent_new);
+	if (parent_new != NULL)
+		drec_decref(dfs_mt2->dcache, parent_new);
 	FREE(parent_dir_new);
 	return next_rename(old_name, new_name);
 
 out_err:
-	drec_decref(dfs_mt1, parent_old);
+	if (parent_old != NULL)
+		drec_decref(dfs_mt1->dcache, parent_old);
 	FREE(parent_dir_old);
-	drec_decref(dfs_mt2, parent_new);
+	if (parent_new != NULL)
+		drec_decref(dfs_mt2->dcache, parent_new);
 	FREE(parent_dir_new);
 	errno = rc;
 	return (-1);
@@ -4832,8 +4477,8 @@ int
 access(const char *path, int mode)
 {
 	int                rc, is_target_path;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -4859,17 +4504,19 @@ access(const char *path, int mode)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_access(path, mode);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -4917,8 +4564,8 @@ int
 chdir(const char *path)
 {
 	int                is_target_path, rc, len_str;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -4958,12 +4605,14 @@ chdir(const char *path)
 	}
 
 out:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -5008,8 +4657,8 @@ static int
 new_unlink(const char *path)
 {
 	int                is_target_path, rc;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -5031,22 +4680,24 @@ new_unlink(const char *path)
 		D_GOTO(out_err, rc);
 
 	if (parent != NULL) {
-		rc = drec_del(dfs_mt, full_path, parent);
+		rc = drec_del(dfs_mt->dcache, full_path, parent);
 		if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
 			DL_ERROR(rc, "DAOS directory cache cleanup failed");
 	}
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return libc_unlink(path);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -5056,9 +4707,9 @@ int
 unlinkat(int dirfd, const char *path, int flags)
 {
 	int                is_target_path, rc, error = 0;
-	struct dfs_mt     *dfs_mt;
 	int                idx_dfs;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt          = NULL;
 	char              *full_path       = NULL;
 	struct dcache_rec *parent          = NULL;
 	char              *parent_dir      = NULL;
@@ -5086,12 +4737,12 @@ unlinkat(int dirfd, const char *path, int flags)
 			D_GOTO(out_err_abs, rc);
 
 		if (parent != NULL) {
-			rc = drec_del(dfs_mt, full_path_dummy, parent);
+			rc = drec_del(dfs_mt->dcache, full_path_dummy, parent);
 			if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
 				DL_ERROR(rc, "DAOS directory cache cleanup failed");
 		}
 
-		drec_decref(dfs_mt, parent);
+		drec_decref(dfs_mt->dcache, parent);
 		FREE(parent_dir);
 		return 0;
 	}
@@ -5113,12 +4764,14 @@ unlinkat(int dirfd, const char *path, int flags)
 	return rc;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_unlinkat(dirfd, path, flags);
 
 out_err_abs:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -5189,8 +4842,8 @@ truncate(const char *path, off_t length)
 	int                is_target_path, rc, rc2;
 	dfs_obj_t         *file_obj;
 	mode_t             mode;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -5225,17 +4878,19 @@ truncate(const char *path, off_t length)
 	if (rc2)
 		D_GOTO(out_err, rc = rc2);
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_truncate(path, length);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -5245,8 +4900,8 @@ static int
 chmod_with_flag(const char *path, mode_t mode, int flag)
 {
 	int                rc, is_target_path;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -5276,17 +4931,19 @@ chmod_with_flag(const char *path, mode_t mode, int flag)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_chmod(path, mode);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -5386,8 +5043,8 @@ utime(const char *path, const struct utimbuf *times)
 	mode_t             mode;
 	struct stat        stbuf;
 	struct timespec    times_loc;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -5439,17 +5096,19 @@ utime(const char *path, const struct utimbuf *times)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_utime(path, times);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -5463,8 +5122,8 @@ utimes(const char *path, const struct timeval times[2])
 	mode_t             mode;
 	struct stat        stbuf;
 	struct timespec    times_loc;
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -5517,17 +5176,19 @@ utimes(const char *path, const struct timeval times[2])
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_org:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return next_utimes(path, times);
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -5542,8 +5203,8 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 	struct stat        stbuf;
 	struct timespec    times_loc;
 	struct timeval     times_us[2];
-	struct dfs_mt     *dfs_mt;
 	char               item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt     = NULL;
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
@@ -5557,7 +5218,7 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 		times_us[0].tv_usec = times[0].tv_nsec / 100;
 		times_us[1].tv_sec  = times[1].tv_sec;
 		times_us[1].tv_usec = times[1].tv_nsec / 100;
-		drec_decref(dfs_mt, parent);
+		drec_decref(dfs_mt->dcache, parent);
 		FREE(parent_dir);
 		return next_utimes(path, times_us);
 	}
@@ -5597,12 +5258,13 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 	if (rc)
 		D_GOTO(out_err, rc);
 
-	drec_decref(dfs_mt, parent);
+	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	return 0;
 
 out_err:
-	drec_decref(dfs_mt, parent);
+	if (parent != NULL)
+		drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
@@ -6474,12 +6136,6 @@ init_myhook(void)
 		eq_count_max = MAX_EQ;
 	}
 
-	dcache_timeout = DCACHE_TIMEOUT;
-	rc             = d_getenv_uint64_t("D_IL_DCACHE_TIMEOUT", (uint64_t *)&dcache_timeout);
-	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		D_WARN("'D_IL_DCACHE_TIMEOUT' env variable could not be used: " DF_RC "\n",
-		       DP_RC(rc));
-
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
 	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&libc_open));
 	register_a_hook("libpthread", "open64", (void *)new_open_pthread,
@@ -6678,9 +6334,9 @@ init_dfs(int idx)
 		D_GOTO(out_err_mt, rc);
 	}
 
-	rc = dcache_init(&dfs_list[idx]);
+	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs);
 	if (rc != 0) {
-		DL_ERROR(rc, "failed to create hash table");
+		DL_ERROR(rc, "failed to create DFS directory cache");
 		D_GOTO(out_err_ht, rc = daos_der2errno(rc));
 	}
 
@@ -6708,29 +6364,22 @@ static void
 finalize_dfs(void)
 {
 	int       rc, i;
-	d_list_t *rlink = NULL;
 
 	/* Disable interception */
 	hook_enabled = 0;
 
 	for (i = 0; i < num_dfs; i++) {
-		if (dfs_list[i].dcache.dd_dir_hash == NULL) {
+		if (atomic_load_relaxed(&(dfs_list[i].inited)) == 0) {
+			D_ASSERT(dfs_list[i].dcache == NULL);
 			D_FREE(dfs_list[i].fs_root);
 			D_FREE(dfs_list[i].pool);
 			D_FREE(dfs_list[i].cont);
 			continue;
 		}
 
-		while (1) {
-			rlink = d_hash_rec_first(dfs_list[i].dcache.dd_dir_hash);
-			if (rlink == NULL)
-				break;
-			d_hash_rec_delete_at(dfs_list[i].dcache.dd_dir_hash, rlink);
-		}
-
-		rc = d_hash_table_destroy(dfs_list[i].dcache.dd_dir_hash, false);
+		rc = dcache_destroy(dfs_list[i].dcache);
 		if (rc != 0) {
-			DL_ERROR(rc, "error in d_hash_table_destroy(%s)", dfs_list[i].fs_root);
+			DL_ERROR(rc, "error in dcache_destroy(%s)", dfs_list[i].fs_root);
 			continue;
 		}
 		rc = dfs_umount(dfs_list[i].dfs);
