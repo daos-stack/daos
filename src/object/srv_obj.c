@@ -3443,16 +3443,20 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 
 static int
 obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
-		struct obj_io_context *ioc, struct dtx_handle *dth)
+		struct obj_io_context *ioc, struct dtx_handle *dth, bool drop_cond)
 {
 	struct ds_cont_child	*cont = ioc->ioc_coc;
 	uint64_t		 sched_seq;
+	uint64_t		 flags = opi->opi_api_flags;
 	int			 rc = 0;
 
 	if (daos_is_zero_dti(&opi->opi_dti)) {
 		D_DEBUG(DB_TRACE, "disable dtx\n");
 		dth = NULL;
 	}
+
+	if (drop_cond)
+		flags &= ~DAOS_COND_PUNCH;
 
 again:
 	rc = dtx_sub_init(dth, &opi->opi_oid, opi->opi_dkey_hash);
@@ -3481,8 +3485,7 @@ again:
 
 		dkey = &((daos_key_t *)opi->opi_dkeys.ca_arrays)[0];
 		rc = vos_obj_punch(cont->sc_hdl, opi->opi_oid,
-				   opi->opi_epoch, opi->opi_map_ver,
-				   opi->opi_api_flags,
+				   opi->opi_epoch, opi->opi_map_ver, flags,
 				   dkey, opi->opi_akeys.ca_count,
 				   opi->opi_akeys.ca_arrays, dth);
 		break;
@@ -3621,7 +3624,7 @@ exec:
 	/* There may be multiple shards reside on the same VOS target. */
 	for (i = 0; i < count; i++) {
 		opi->opi_oid.id_shard = shards[i];
-		rc = obj_local_punch(opi, otpa->opc, p_ioc, dth);
+		rc = obj_local_punch(opi, otpa->opc, p_ioc, dth, false);
 		if (rc != 0) {
 			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
 				  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
@@ -3711,8 +3714,12 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *arg)
 		DP_DTI(&dlh->dlh_handle.dth_xid),
 		allow_failure_cnt, succeeds, allow_failure, result);
 
-	if (allow_failure_cnt > 0 && result == 0 && succeeds == 0)
-		result = allow_failure;
+	if (allow_failure_cnt > 0) {
+		D_ASSERT(dlh->dlh_cond_reexec == 0);
+
+		if (result == 0 && succeeds == 0)
+			result = allow_failure;
+	}
 
 	return result;
 }
@@ -3734,7 +3741,8 @@ obj_tgt_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_co
 		if (dlh->dlh_handle.dth_prepared)
 			goto comp;
 
-		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc, &dlh->dlh_handle);
+		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc, &dlh->dlh_handle,
+				     dlh->dlh_drop_cond == 1 ? true : false);
 		if (rc != 0)
 			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
 				  (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
@@ -3909,6 +3917,15 @@ again2:
 
 	if (max_ver < dlh->dlh_rmt_ver)
 		max_ver = dlh->dlh_rmt_ver;
+
+	if (rc == 0 && (dlh->dlh_allow_failure_hit_lol == 1 ||
+			dlh->dlh_allow_failure_hit_rmt == 1)) {
+		D_ASSERT(opi->opi_api_flags & DAOS_COND_PUNCH);
+
+		dlh->dlh_cond_reexec = 1;
+		rc = dtx_leader_exec_ops(dlh, obj_tgt_punch_disp, obj_punch_agg_cb, -DER_NONEXIST,
+					 &exec_arg);
+	}
 
 	/* Stop the distribute transaction */
 	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
@@ -4971,8 +4988,7 @@ static int
 ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 			      struct daos_cpd_sub_req *dcsrs,
 			      struct daos_shard_tgt *tgts,
-			      int tgt_cnt, int req_cnt, struct obj_io_context *ioc,
-			      uint32_t *flags)
+			      int tgt_cnt, int req_cnt, struct obj_io_context *ioc)
 {
 	int			 rc = 0;
 	int			 i;
@@ -5094,7 +5110,7 @@ again:
 		D_GOTO(out, rc = -DER_TX_RESTART);
 
 	rc = ds_obj_dtx_leader_prep_handle(dcsh, dcsrs, tgts, tgt_cnt,
-					   req_cnt, dca->dca_ioc, &flags);
+					   req_cnt, dca->dca_ioc);
 	if (rc != 0)
 		goto out;
 

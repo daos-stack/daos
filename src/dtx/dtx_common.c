@@ -2023,16 +2023,21 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 
 	if ((dlh->dlh_normal_sub_done == 0 && !(tgt->st_flags & DTF_DELAY_FORWARD)) ||
 	    (dlh->dlh_normal_sub_done == 1 && tgt->st_flags & DTF_DELAY_FORWARD)) {
-		D_ASSERTF(sub->dss_comp == 0,
-			  "Repeat sub completion for idx %d (%d:%d), flags %x: %d\n",
-			  idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
+		/* For conditionally re-execute case. */
+		if (unlikely(sub->dss_comp == 1))
+			goto set;
+
 		sub->dss_comp = 1;
 		sub->dss_result = rc;
+
+		if (rc != 0 && rc == dlh->dlh_allow_failure)
+			dlh->dlh_allow_failure_hit_rmt = 1;
 
 		D_DEBUG(DB_TRACE, "execute from idx %d (%d:%d), flags %x: rc %d\n",
 			idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
 	}
 
+set:
 	rc = ABT_future_set(dlh->dlh_future, dlh);
 	D_ASSERTF(rc == ABT_SUCCESS,
 		  "ABT_future_set failed for idx %d (%d:%d), flags %x: %d\n",
@@ -2069,10 +2074,21 @@ dtx_leader_exec_ops_chore(struct dss_chore *chore, bool is_reentrance)
 		sub = &dlh->dlh_subs[dtx_chore->i];
 		tgt = &sub->dss_tgt;
 
-		if (dlh->dlh_normal_sub_done == 0) {
+		if (unlikely(sub->dss_comp == 1)) {
+			D_ASSERT(dlh->dlh_allow_failure != 0);
+
+			if (dlh->dlh_allow_failure != sub->dss_result) {
+				dtx_sub_comp_cb(dlh, dtx_chore->i, sub->dss_result);
+				continue;
+			}
+
+			/* For conditionally re-execute case. */
 			sub->dss_result = 0;
 			sub->dss_comp = 0;
+			goto send;
+		}
 
+		if (dlh->dlh_normal_sub_done == 0) {
 			if (unlikely(tgt->st_flags & DTF_DELAY_FORWARD)) {
 				dtx_sub_comp_cb(dlh, dtx_chore->i, 0);
 				continue;
@@ -2080,9 +2096,6 @@ dtx_leader_exec_ops_chore(struct dss_chore *chore, bool is_reentrance)
 		} else {
 			if (!(tgt->st_flags & DTF_DELAY_FORWARD))
 				continue;
-
-			sub->dss_result = 0;
-			sub->dss_comp = 0;
 		}
 
 		if (tgt->st_rank == DAOS_TGT_IGNORE ||
@@ -2093,6 +2106,7 @@ dtx_leader_exec_ops_chore(struct dss_chore *chore, bool is_reentrance)
 			continue;
 		}
 
+send:
 		rc = dtx_chore->func(dlh, dtx_chore->func_arg, dtx_chore->i, dtx_sub_comp_cb);
 		if (rc != 0) {
 			if (sub->dss_comp == 0)
@@ -2136,7 +2150,7 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 		    dtx_agg_cb_t agg_cb, int allow_failure, void *func_arg)
 {
 	struct dtx_chore	dtx_chore;
-	int			sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
+	int			sub_cnt;
 	int			rc = 0;
 	int			local_rc = 0;
 	int			remote_rc = 0;
@@ -2147,11 +2161,24 @@ dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
 
 	dlh->dlh_result = 0;
 	dlh->dlh_allow_failure = allow_failure;
+
+	if (dlh->dlh_cond_reexec) {
+		dlh->dlh_drop_cond = 1;
+		if (dlh->dlh_allow_failure_hit_rmt == 0) {
+			sub_cnt = 0;
+			goto exec;
+		}
+	} else {
+		dlh->dlh_drop_cond = 0;
+		dlh->dlh_allow_failure_hit_lol = 0;
+	}
+
+	dlh->dlh_allow_failure_hit_rmt = 0;
 	dlh->dlh_normal_sub_done = 0;
-	dlh->dlh_drop_cond = 0;
 	dlh->dlh_forward_idx = 0;
 	dlh->dlh_need_agg = 0;
 	dlh->dlh_agg_done = 0;
+	sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 
 	if (sub_cnt > DTX_EXEC_STEP_LENGTH) {
 		dlh->dlh_forward_cnt = DTX_EXEC_STEP_LENGTH;
@@ -2188,15 +2215,23 @@ again:
 
 exec:
 	/* Execute the local operation only for once. */
-	if (dlh->dlh_forward_idx == 0)
+	if ((dlh->dlh_cond_reexec == 0 && dlh->dlh_forward_idx == 0) ||
+	    (dlh->dlh_cond_reexec == 1 && dlh->dlh_allow_failure_hit_lol == 1)) {
 		local_rc = func(dlh, func_arg, -1, NULL);
+		if (local_rc != allow_failure)
+			dlh->dlh_allow_failure_hit_lol = 0;
+	}
 
 	/* Even the local request failure, we still need to wait for remote sub request. */
-	if (dlh->dlh_normal_sub_cnt > 0)
+	if (dlh->dlh_future != ABT_FUTURE_NULL && dlh->dlh_normal_sub_cnt > 0)
 		remote_rc = dtx_leader_wait(dlh);
 
-	if (local_rc != 0 && local_rc != allow_failure)
-		D_GOTO(out, rc = local_rc);
+	if (local_rc != 0) {
+		if (local_rc != allow_failure)
+			D_GOTO(out, rc = local_rc);
+
+		dlh->dlh_allow_failure_hit_lol = 1;
+	}
 
 	if (remote_rc != 0 && remote_rc != allow_failure)
 		D_GOTO(out, rc = remote_rc);
@@ -2220,21 +2255,19 @@ exec:
 	}
 
 	dlh->dlh_normal_sub_done = 1;
-	dlh->dlh_drop_cond = 1;
 
-	if (agg_cb != NULL) {
+	if (agg_cb != NULL && dlh->dlh_agg_done == 0) {
 		remote_rc = agg_cb(dlh, func_arg);
 		dlh->dlh_agg_done = 1;
-		if (remote_rc != 0) {
-			if (remote_rc != allow_failure)
-				D_GOTO(out, rc = remote_rc);
-
-			dlh->dlh_drop_cond = 0;
-		}
+		if (remote_rc != 0 && remote_rc != allow_failure)
+			D_GOTO(out, rc = remote_rc);
 	}
 
-	if (likely(dlh->dlh_delay_sub_cnt == 0))
+	if (likely(dlh->dlh_delay_sub_cnt == 0 || dlh->dlh_cond_reexec))
 		goto out;
+
+	if (allow_failure == 0 || local_rc != allow_failure || remote_rc != allow_failure)
+		dlh->dlh_drop_cond = 1;
 
 	/* Need more aggregation for delayed sub-requests. */
 	dlh->dlh_agg_done = 0;

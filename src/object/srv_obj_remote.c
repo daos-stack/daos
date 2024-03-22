@@ -137,7 +137,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	orw->orw_oid.id_shard = shard_tgt->st_shard_id;
 	orw->orw_flags |= ORF_BULK_BIND | obj_exec_arg->flags;
-	if (shard_tgt->st_flags & DTF_DELAY_FORWARD && dlh->dlh_drop_cond)
+	if (dlh->dlh_drop_cond)
 		orw->orw_api_flags &= ~DAOS_COND_MASK;
 	orw->orw_dti_cos.ca_count = dth->dth_dti_cos_count;
 	orw->orw_dti_cos.ca_arrays = dth->dth_dti_cos;
@@ -248,7 +248,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	opi->opi_oid.id_shard = shard_tgt->st_shard_id;
 	opi->opi_flags |= obj_exec_arg->flags;
-	if (shard_tgt->st_flags & DTF_DELAY_FORWARD && dlh->dlh_drop_cond)
+	if (dlh->dlh_drop_cond)
 		opi->opi_api_flags &= ~DAOS_COND_PUNCH;
 	opi->opi_dti_cos.ca_count = dth->dth_dti_cos_count;
 	opi->opi_dti_cos.ca_arrays = dth->dth_dti_cos;
