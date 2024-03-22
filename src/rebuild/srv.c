@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -459,11 +459,11 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	ABT_mutex_unlock(rpt->rt_lock);
 
-	D_DEBUG(DB_REBUILD, "pool "DF_UUID" scanning %d/%d rebuilding=%s, "
+	D_INFO("pool "DF_UUID" scanning %d/%d dms.dm_migrating %d rebuilding=%s, "
 		"obj_count="DF_U64", tobe_obj="DF_U64" rec_count="DF_U64
 		" size= "DF_U64"\n",
 		DP_UUID(rpt->rt_pool_uuid), status->scanning,
-		status->status, status->rebuilding ? "yes" : "no",
+		status->status, dms.dm_migrating, status->rebuilding ? "yes" : "no",
 		status->obj_count, status->tobe_obj_count, status->rec_count,
 		status->size);
 out:

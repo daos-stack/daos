@@ -3801,9 +3801,9 @@ migrate_check_one(void *data)
 	arg->total_ult_cnt += atomic_load(tls->mpt_tgt_obj_ult_cnt) +
 			      atomic_load(tls->mpt_tgt_dkey_ult_cnt);
 	ABT_mutex_unlock(arg->status_lock);
-	D_DEBUG(DB_REBUILD, "status %d/%d/ ult %u/%u  rec/obj/size "
+	D_INFO("status %d/%d/ ult %u/%u/%u  rec/obj/size "
 		DF_U64"/"DF_U64"/"DF_U64"\n", tls->mpt_status,
-		arg->dms.dm_status, atomic_load(tls->mpt_tgt_obj_ult_cnt),
+		arg->dms.dm_status, arg->total_ult_cnt, atomic_load(tls->mpt_tgt_obj_ult_cnt),
 		atomic_load(tls->mpt_tgt_dkey_ult_cnt), tls->mpt_rec_count,
 		tls->mpt_obj_count, tls->mpt_size);
 
@@ -3838,6 +3838,9 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 		arg.dms.dm_migrating = 1;
 	else
 		arg.dms.dm_migrating = 0;
+
+	D_INFO("pool "DF_UUID" arg.total_ult_cnt %d, mpt_ult_running %d, dm_migrating %d\n",
+	       DP_UUID(pool_uuid), arg.total_ult_cnt, tls->mpt_ult_running, arg.dms.dm_migrating);
 
 	if (dms != NULL)
 		*dms = arg.dms;
