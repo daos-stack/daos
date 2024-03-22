@@ -178,6 +178,7 @@ int
 dcache_destroy(dfs_dcache_t *dcache)
 {
 	d_list_t *rlink = NULL;
+	int       rc;
 
 	while ((rlink = d_hash_rec_first(&dcache->dd_dir_hash)) != NULL) {
 		bool deleted;
@@ -186,7 +187,16 @@ dcache_destroy(dfs_dcache_t *dcache)
 		D_ASSERT(deleted);
 	}
 
-	return d_hash_table_destroy_inplace(&dcache->dd_dir_hash, false);
+	rc = d_hash_table_destroy_inplace(&dcache->dd_dir_hash, false);
+	if (rc != 0) {
+		DL_ERROR(rc, "d_hash_table_destroy_inplace() failed");
+		D_GOTO(out, rc);
+	}
+
+	D_FREE(dcache);
+
+out:
+	return rc;
 }
 
 static inline dcache_rec_t *
