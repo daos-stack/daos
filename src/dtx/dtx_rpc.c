@@ -363,6 +363,8 @@ dtx_req_wait(struct dtx_req_args *dra)
 }
 
 struct dtx_common_args {
+	struct dss_chore	  dca_chore;
+	ABT_eventual		  dca_chore_eventual;
 	struct dtx_req_args	  dca_dra;
 	d_list_t		  dca_head;
 	struct btr_root		  dca_tree_root;
@@ -373,57 +375,76 @@ struct dtx_common_args {
 	d_rank_t		  dca_rank;
 	uint32_t		  dca_tgtid;
 	struct ds_cont_child	 *dca_cont;
-	ABT_thread		  dca_helper;
 	struct dtx_id		  dca_dti_inline;
 	struct dtx_id		 *dca_dtis;
 	struct dtx_entry	**dca_dtes;
+
+	/* Chore-internal state variables */
+	struct dtx_req_rec	 *dca_drr;
+	int			  dca_i;
 };
 
+/* If is_reentrance, this function ignores len. */
 static int
-dtx_req_list_send(struct dtx_common_args *dca, daos_epoch_t epoch, int len)
+dtx_req_list_send(struct dtx_common_args *dca, daos_epoch_t epoch, int len, bool is_reentrance)
 {
 	struct dtx_req_args	*dra = &dca->dca_dra;
-	struct dtx_req_rec	*drr;
 	int			 rc;
-	int			 i = 0;
 
-	dra->dra_length = len;
+	if (!is_reentrance) {
+		dra->dra_length = len;
 
-	rc = ABT_future_create(len, dtx_req_list_cb, &dra->dra_future);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT_future_create failed for opc %x, len = %d: "
-			"rc = %d.\n", dra->dra_opc, len, rc);
-		return dss_abterr2der(rc);
+		rc = ABT_future_create(len, dtx_req_list_cb, &dra->dra_future);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("ABT_future_create failed for opc %x, len = %d: "
+				"rc = %d.\n", dra->dra_opc, len, rc);
+			return dss_abterr2der(rc);
+		}
+
+		D_DEBUG(DB_TRACE, "%p: DTX req for opc %x, future %p (%d) start.\n",
+			&dca->dca_chore, dra->dra_opc, dra->dra_future, len);
 	}
 
-	D_DEBUG(DB_TRACE, "DTX req for opc %x, future %p start.\n", dra->dra_opc, dra->dra_future);
+	/*
+	 * Begin or continue an iteration over dca_head. When beginning the
+	 * iteration, dca->dca_drr does not point to a real entry, and is only
+	 * safe for d_list_for_each_entry_continue.
+	 */
+	if (!is_reentrance) {
+		dca->dca_drr = d_list_entry(&dca->dca_head, struct dtx_req_rec, drr_link);
+		dca->dca_i = 0;
+	}
+	/* DO NOT add any line here! See the comment on dca->dca_drr above. */
+	d_list_for_each_entry_continue(dca->dca_drr, &dca->dca_head, drr_link)
+	{
+		D_DEBUG(DB_TRACE, "chore=%p: drr=%p i=%d\n", &dca->dca_chore, dca->dca_drr,
+			dca->dca_i);
 
-	d_list_for_each_entry(drr, &dca->dca_head, drr_link) {
-		drr->drr_parent = dra;
-		drr->drr_result = 0;
+		dca->dca_drr->drr_parent = dra;
+		dca->dca_drr->drr_result = 0;
 
-		if (unlikely(dra->dra_opc == DTX_COMMIT && i == 0 &&
+		if (unlikely(dra->dra_opc == DTX_COMMIT && dca->dca_i == 0 &&
 			     DAOS_FAIL_CHECK(DAOS_DTX_FAIL_COMMIT)))
-			rc = dtx_req_send(drr, 1);
+			rc = dtx_req_send(dca->dca_drr, 1);
 		else
-			rc = dtx_req_send(drr, epoch);
+			rc = dtx_req_send(dca->dca_drr, epoch);
 		if (rc != 0) {
 			/* If the first sub-RPC failed, then break, otherwise
 			 * other remote replicas may have already received the
 			 * RPC and executed it, so have to go ahead.
 			 */
-			if (i == 0) {
+			if (dca->dca_i == 0) {
 				ABT_future_free(&dra->dra_future);
 				return rc;
 			}
 		}
 
 		/* Yield to avoid holding CPU for too long time. */
-		if (++i % DTX_RPC_YIELD_THD == 0)
-			ABT_thread_yield();
+		if (++(dca->dca_i) % DTX_RPC_YIELD_THD == 0)
+			return DSS_CHORE_YIELD;
 	}
 
-	return 0;
+	return DSS_CHORE_DONE;
 }
 
 static int
@@ -599,16 +620,22 @@ out:
 	return rc > 0 ? 0 : rc;
 }
 
-static int
-dtx_rpc_internal(struct dtx_common_args *dca)
+static enum dss_chore_status
+dtx_rpc_helper(struct dss_chore *chore, bool is_reentrance)
 {
+	struct dtx_common_args	*dca = container_of(chore, struct dtx_common_args, dca_chore);
 	struct ds_pool		*pool = dca->dca_cont->sc_pool->spc_pool;
 	struct umem_attr	 uma = { 0 };
 	int			 length = 0;
 	int			 rc;
 	int			 i;
 
-	if (dca->dca_dra.dra_opc != DTX_REFRESH) {
+	if (is_reentrance) {
+		D_DEBUG(DB_TRACE, "%p: skip to send\n", &dca->dca_chore);
+		goto send;
+	}
+
+	if (dca->dca_dtes != NULL) {
 		D_ASSERT(dca->dca_dtis != NULL);
 
 		if (dca->dca_count > 1) {
@@ -616,7 +643,7 @@ dtx_rpc_internal(struct dtx_common_args *dca)
 			rc = dbtree_create_inplace(DBTREE_CLASS_DTX_CF, 0, DTX_CF_BTREE_ORDER,
 						   &uma, &dca->dca_tree_root, &dca->dca_tree_hdl);
 			if (rc != 0)
-				return rc;
+				goto done;
 		}
 
 		ABT_rwlock_rdlock(pool->sp_lock);
@@ -626,7 +653,7 @@ dtx_rpc_internal(struct dtx_common_args *dca)
 					      dca->dca_rank, dca->dca_tgtid);
 			if (rc < 0) {
 				ABT_rwlock_unlock(pool->sp_lock);
-				return rc;
+				goto done;
 			}
 
 			daos_dti_copy(&dca->dca_dtis[i], &dca->dca_dtes[i]->dte_xid);
@@ -636,30 +663,33 @@ dtx_rpc_internal(struct dtx_common_args *dca)
 		/* For DTX_CHECK, if no other available target(s), then current target is the
 		 * unique valid one (and also 'prepared'), then related DTX can be committed.
 		 */
-		if (d_list_empty(&dca->dca_head))
-			return dca->dca_dra.dra_opc == DTX_CHECK ? DTX_ST_PREPARED : 0;
+		if (d_list_empty(&dca->dca_head)) {
+			rc = (dca->dca_dra.dra_opc == DTX_CHECK ? DTX_ST_PREPARED : 0);
+			goto done;
+		}
 	} else {
 		length = dca->dca_count;
 	}
 
 	D_ASSERT(length > 0);
 
-	return dtx_req_list_send(dca, dca->dca_epoch, length);
-}
+send:
+	rc = dtx_req_list_send(dca, dca->dca_epoch, length, is_reentrance);
+	if (rc == DSS_CHORE_YIELD)
+		return DSS_CHORE_YIELD;
+	if (rc == DSS_CHORE_DONE)
+		rc = 0;
 
-static void
-dtx_rpc_helper(void *arg)
-{
-	struct dtx_common_args	*dca = arg;
-	int			 rc;
-
-	rc = dtx_rpc_internal(dca);
-
+done:
 	if (rc != 0)
 		dca->dca_dra.dra_result = rc;
-
-	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE,
-		 "DTX helper ULT for %u exit: %d\n", dca->dca_dra.dra_opc, rc);
+	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE, "%p: DTX RPC chore for %u done: %d\n", chore,
+		 dca->dca_dra.dra_opc, rc);
+	if (dca->dca_chore_eventual != ABT_EVENTUAL_NULL) {
+		rc = ABT_eventual_set(dca->dca_chore_eventual, NULL, 0);
+		D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_set: %d\n", rc);
+	}
+	return DSS_CHORE_DONE;
 }
 
 static int
@@ -672,6 +702,7 @@ dtx_rpc_prep(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **
 
 	memset(dca, 0, sizeof(*dca));
 
+	dca->dca_chore_eventual = ABT_EVENTUAL_NULL;
 	D_INIT_LIST_HEAD(&dca->dca_head);
 	dca->dca_tree_hdl = DAOS_HDL_INVAL;
 	dca->dca_epoch = epoch;
@@ -679,7 +710,6 @@ dtx_rpc_prep(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **
 	crt_group_rank(NULL, &dca->dca_rank);
 	dca->dca_tgtid = dss_get_module_info()->dmi_tgt_id;
 	dca->dca_cont = cont;
-	dca->dca_helper = ABT_THREAD_NULL;
 	dca->dca_dtes = dtes;
 
 	dra = &dca->dca_dra;
@@ -705,11 +735,18 @@ dtx_rpc_prep(struct ds_cont_child *cont,d_list_t *dti_list,  struct dtx_entry **
 	}
 
 	/* Use helper ULT to handle DTX RPC if there are enough helper XS. */
-	if (dss_has_enough_helper())
-		rc = dss_ult_create(dtx_rpc_helper, dca, DSS_XS_IOFW, dca->dca_tgtid,
-				    DSS_DEEP_STACK_SZ, &dca->dca_helper);
-	else
-		rc = dtx_rpc_internal(dca);
+	if (dss_has_enough_helper()) {
+		rc = ABT_eventual_create(0, &dca->dca_chore_eventual);
+		if (rc != ABT_SUCCESS) {
+			D_ERROR("failed to create eventual: %d\n", rc);
+			rc = dss_abterr2der(rc);
+			goto out;
+		}
+		rc = dss_chore_delegate(&dca->dca_chore, dtx_rpc_helper);
+	} else {
+		dss_chore_diy(&dca->dca_chore, dtx_rpc_helper);
+		rc = dca->dca_dra.dra_result;
+	}
 
 out:
 	return rc;
@@ -721,8 +758,12 @@ dtx_rpc_post(struct dtx_common_args *dca, int ret, bool keep_head)
 	struct dtx_req_rec	*drr;
 	int			 rc;
 
-	if (dca->dca_helper != ABT_THREAD_NULL)
-		ABT_thread_free(&dca->dca_helper);
+	if (dca->dca_chore_eventual != ABT_EVENTUAL_NULL) {
+		rc = ABT_eventual_wait(dca->dca_chore_eventual, NULL);
+		D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_wait: %d\n", rc);
+		rc = ABT_eventual_free(&dca->dca_chore_eventual);
+		D_ASSERTF(rc == ABT_SUCCESS, "ABT_eventual_free: %d\n", rc);
+	}
 
 	rc = dtx_req_wait(&dca->dca_dra);
 
