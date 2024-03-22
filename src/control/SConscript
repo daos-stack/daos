@@ -91,7 +91,7 @@ def install_go_bin(env, name, libs=None, install_man=False):
         gen_bin = join('$BUILD_DIR/src/control', name)
         build_path = join('$BUILD_DIR/src/control', f'{name}.8')
         menv = env.Clone()
-        menv.d_enable_ld_path()
+        menv.d_enable_ld_path(["cart", "gurt", "client/api", "common", "client/dfs", "utils"])
         menv.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
         menv.Install('$PREFIX/share/man/man8', build_path)
 
