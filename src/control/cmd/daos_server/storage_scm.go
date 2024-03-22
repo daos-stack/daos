@@ -126,11 +126,8 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 }
 
 func (cmd *prepareSCMCmd) Execute(_ []string) error {
-	if cmd.ctlSvc == nil {
-		// If specific storage control service is not supplied with command, do init().
-		if err := cmd.init(cmd.MustLogCtx()); err != nil {
-			return err
-		}
+	if err := cmd.init(cmd.MustLogCtx()); err != nil {
+		return err
 	}
 
 	cmd.Debugf("executing remove namespaces command: %+v", cmd)
@@ -203,11 +200,8 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 }
 
 func (cmd *resetSCMCmd) Execute(_ []string) error {
-	if cmd.ctlSvc == nil {
-		// If specific storage control service is not supplied with command, do init().
-		if err := cmd.init(cmd.MustLogCtx()); err != nil {
-			return err
-		}
+	if err := cmd.init(cmd.MustLogCtx()); err != nil {
+		return err
 	}
 
 	cmd.Debugf("executing remove namespaces command: %+v", cmd)
@@ -236,11 +230,8 @@ func (cmd *scanSCMCmd) scanPMem(scanBackend scmScanFn) (*storage.ScmScanResponse
 }
 
 func (cmd *scanSCMCmd) Execute(_ []string) error {
-	if cmd.ctlSvc == nil {
-		// If specific storage control service is not supplied with command, do init().
-		if err := cmd.init(cmd.MustLogCtx()); err != nil {
-			return err
-		}
+	if err := cmd.init(cmd.MustLogCtx()); err != nil {
+		return err
 	}
 
 	cmd.Debugf("executing scan scm command: %+v", cmd)

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -249,6 +249,7 @@ func MockHostErrorsResp(t *testing.T, hostErrors ...*MockHostError) HostErrorsRe
 	}
 }
 
+// MockHostSet builds a HostSet from a list of strings.
 func MockHostSet(t *testing.T, hosts string) *hostlist.HostSet {
 	hs, err := hostlist.CreateSet(hosts)
 	if err != nil {
@@ -651,6 +652,7 @@ func mockUUID(idx ...int32) string {
 	return fmt.Sprintf("%08d-%04d-%04d-%04d-%012d", idx, idx, idx, idx, idx)
 }
 
+// MockStorageScanResp builds a storage scan response from config array stucts for SCM and NVMe.
 func MockStorageScanResp(t *testing.T,
 	mockScmConfigArray []MockScmConfig,
 	mockNvmeConfigArray []MockNvmeConfig) *ctlpb.StorageScanResp {
@@ -724,6 +726,7 @@ func mockRanks(rankSet string) (ranks []uint32) {
 	return
 }
 
+// MockPoolRespConfig is used to create a pool response with MockPoolCreateResp.
 type MockPoolRespConfig struct {
 	HostName  string
 	Ranks     string
@@ -731,6 +734,7 @@ type MockPoolRespConfig struct {
 	NvmeBytes uint64
 }
 
+// MockPoolCreateResp creates a PoolCreateResp using supplied MockPoolRespConfig.
 func MockPoolCreateResp(t *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCreateResp {
 	poolCreateResp := &PoolCreateResp{
 		UUID:      mockUUID(),
@@ -747,6 +751,7 @@ func MockPoolCreateResp(t *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCr
 	return poolCreateRespMsg
 }
 
+// MockBdevTier creates a bdev TierConfig using supplied NUMA and PCI addresses.
 func MockBdevTier(numaID int, pciAddrIDs ...int) *storage.TierConfig {
 	return storage.NewTierConfig().
 		WithNumaNodeIndex(uint(numaID)).
@@ -765,6 +770,7 @@ func mockEngineCfg(numaID int, tcs ...*storage.TierConfig) *engine.Config {
 		WithStorageNumaNodeIndex(uint(numaID))
 }
 
+// MockEngineCfg creates an engine config using supplied NUMA and PCI addresses.
 func MockEngineCfg(numaID int, pciAddrIDs ...int) *engine.Config {
 	tcs := storage.TierConfigs{
 		storage.NewTierConfig().
@@ -780,6 +786,8 @@ func MockEngineCfg(numaID int, pciAddrIDs ...int) *engine.Config {
 	return mockEngineCfg(numaID, tcs...)
 }
 
+// MockBdevTierWithRole creates a bdev TierConfig with specific roles using supplied NUMA, roles
+// and PCI addresses.
 func MockBdevTierWithRole(numaID, role int, pciAddrIDs ...int) *storage.TierConfig {
 	return MockBdevTier(numaID, pciAddrIDs...).WithBdevDeviceRoles(role)
 }
@@ -801,6 +809,8 @@ func MockEngineCfgTmpfs(numaID, ramdiskSize int, bdevTiers ...*storage.TierConfi
 	return mockEngineCfg(numaID, tcs...)
 }
 
+// MockServerCfg generates a server config from provided provider string and slice of engine
+// configs.
 func MockServerCfg(provider string, ecs []*engine.Config) *config.Server {
 	for idx, ec := range ecs {
 		if ec.Storage.ConfigOutputPath == "" {
@@ -819,11 +829,13 @@ func MockServerCfg(provider string, ecs []*engine.Config) *config.Server {
 		WithEngines(ecs...)
 }
 
+// MockFabricScan is used to generate HostFabricMap from mock scan results.
 type MockFabricScan struct {
 	Hosts  string
 	Fabric *HostFabric
 }
 
+// MockHostFabricMap generates a HostFabricMap from MockFabricScan structs.
 func MockHostFabricMap(t *testing.T, scans ...*MockFabricScan) HostFabricMap {
 	hfm := make(HostFabricMap)
 

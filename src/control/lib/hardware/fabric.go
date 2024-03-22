@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -977,7 +977,7 @@ func (s *FabricScanner) Scan(ctx context.Context, providers ...string) (*FabricI
 		if len(providers) == 0 {
 			return nil, errors.New("no fabric interfaces found")
 		}
-		return nil, fmt.Errorf("no fabric interfaces found with %s %q",
+		return nil, fmt.Errorf("no fabric interfaces found with %s %s",
 			common.Pluralise("provider", len(providers)),
 			strings.Join(providers, ", "))
 	}

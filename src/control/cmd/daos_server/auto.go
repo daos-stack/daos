@@ -60,8 +60,8 @@ type getStorageFn func(context.Context, logging.Logger, bool) (*control.HostStor
 
 func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*control.HostStorage, error) {
 	var nc *nvmeCmd
-	var iommuOn bool
 	var err error
+
 	svc := server.NewStorageControlService(log, config.DefaultServer().Engines).
 		WithVMDEnabled() // use vmd if present
 
@@ -69,13 +69,12 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		nc = &nvmeCmd{}
 		nc.Logger = log
 		nc.IgnoreConfig = true // Prepare and then reset all NVMe devices.
-		iommuOn, err = nc.init()
-		if err != nil {
+		if err = nc.init(); err != nil {
 			return nil, errors.Wrap(err, "could not init nvme cmd")
 		}
 
 		req := storage.BdevPrepareRequest{}
-		if err := prepareNVMe(req, nc, iommuOn, svc.NvmePrepare); err != nil {
+		if err := prepareNVMe(req, nc, svc.NvmePrepare); err != nil {
 			return nil, errors.Wrap(err, "nvme prep before fetching local storage "+
 				"failed, try cmd again with --skip-prep after performing a manual "+
 				"nvme prepare")
@@ -93,7 +92,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		//                 bindings.
 
 		req := storage.BdevPrepareRequest{Reset_: true}
-		if err := resetNVMe(req, nc, iommuOn, svc.NvmePrepare); err != nil {
+		if err := resetNVMe(req, nc, svc.NvmePrepare); err != nil {
 			err = errors.Wrap(err, "nvme reset after fetching local storage failed, "+
 				"try cmd again with --skip-prep after performing a manual nvme "+
 				"reset")

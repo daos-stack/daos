@@ -82,7 +82,15 @@ type nvmeCmd struct {
 	iommuCheckerCmd       `json:"-"`
 }
 
-func (cmd *nvmeCmd) init() (bool, error) {
+func (cmd *nvmeCmd) init() error {
+	if cmd.ctlSvc != nil {
+		// Allow parseOpts() unit tests to skip contents of init().
+		cmd.setIOMMUChecker(func() (bool, error) {
+			return true, nil
+		})
+		return nil
+	}
+
 	engCfgs := config.DefaultServer().Engines
 	if cmd.config != nil {
 		engCfgs = cmd.config.Engines
@@ -92,14 +100,14 @@ func (cmd *nvmeCmd) init() (bool, error) {
 	}
 
 	if err := common.CheckDupeProcess(); err != nil {
-		return false, err
+		return err
 	}
 	if err := cmd.setHelperLogFile(); err != nil {
-		return false, err
+		return err
 	}
 	cmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(cmd.Logger).IsIOMMUEnabled)
 
-	return cmd.IsIOMMUEnabled()
+	return nil
 }
 
 type scmCmd struct {
@@ -188,6 +196,11 @@ func getSockFromCfg(log logging.Logger, cfg *config.Server, affSrc config.Engine
 }
 
 func (cmd *scmCmd) init(ctx context.Context) error {
+	if cmd.ctlSvc != nil {
+		// Allow parseOpts() unit tests to skip contents of init().
+		return nil
+	}
+
 	engCfgs := config.DefaultServer().Engines
 	if cmd.config != nil {
 		engCfgs = cmd.config.Engines
