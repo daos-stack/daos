@@ -4,7 +4,7 @@ name: daos_server
 access_points: ['daos-server']
 port: 10001
 
-provider: ofi+tcp;ofi_rxm
+provider: ofi+tcp
 socket_dir: /var/run/daos_server
 nr_hugepages: @DAOS_HUGEPAGES_NBR@
 

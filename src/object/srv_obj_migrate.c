@@ -3147,7 +3147,9 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
 	arg.generation = generation;
-	rc = dss_thread_collective(migrate_fini_one_ult, &arg, 0);
+
+	rc = ds_pool_thread_collective(pool->sp_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, migrate_fini_one_ult, &arg, 0);
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
@@ -3852,7 +3854,8 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc);
 
-	rc = dss_thread_collective(migrate_check_one, &arg, 0);
+	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, migrate_check_one, &arg, 0);
 	if (rc)
 		D_GOTO(out, rc);
 
