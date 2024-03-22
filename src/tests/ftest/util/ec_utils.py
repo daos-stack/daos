@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -319,7 +319,7 @@ class ErasureCodeSingle(TestWithServers):
                     self.ec_container_create(oclass[0])
                     self.single_type_param_update(self.container[-1], sizes)
                     # Write the data
-                    self.container[-1].write_objects(obj_class=oclass[2])
+                    self.container[-1].write_objects(obj_class=oclass[0])
                     if results is not None:
                         results.put("PASS")
                 except (CommandFailure, DaosApiError, DaosTestError):

@@ -41,7 +41,7 @@ container:
     - [1, 1, 1, 1, 4194304]
 objectclass:
   dfs_oclass_list:
-    #- [EC_Object_Class, Minimum number of servers, EC_Object_Class for write_single_type_dataset]
+    #- [EC_Object_Class, Minimum number of servers]
     - ["OC_EC_2P1G1", 4]
     - ["OC_EC_2P2G1", 4]
     - ["OC_EC_4P1G1", 6]
