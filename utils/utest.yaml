@@ -163,3 +163,7 @@
   required_src: ["src/ddb/tests/SConscript"]
   tests:
     - cmd: ["bin/ddb_tests"]
+- name: ftest
+  memcheck: False
+  tests:
+    - cmd: ["src/tests/ftest/tags.py", "unit"]

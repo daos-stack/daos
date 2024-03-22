@@ -11,5 +11,5 @@ pyenchant
 flake8<6.0.0
 isort==5.12
 pylint==3.0.2
-yamllint==1.32.0
+yamllint==1.35.1
 codespell==2.2.6

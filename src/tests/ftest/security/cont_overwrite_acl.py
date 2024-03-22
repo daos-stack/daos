@@ -107,7 +107,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container overwrite command performs as
             expected with valid ACL file provided.
 
-        :avocado: tags=all,daily_regression,
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=security,container,container_acl,daos_cmd
         :avocado: tags=OverwriteContainerACLTest,test_overwrite_valid_acl_file
@@ -132,7 +132,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container overwrite command fails with
             no permission -1001 when user doesn't have the right permissions.
 
-        :avocado: tags=all,daily_regression,
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=security,container,container_acl,daos_cmd
         :avocado: tags=OverwriteContainerACLTest,test_cont_overwrite_acl_no_perm
