@@ -280,6 +280,7 @@ struct bio_dev_health {
 	void		       *bdh_intel_smart_buf; /*Intel SMART attributes*/
 	uint64_t		bdh_stat_age;
 	unsigned int		bdh_inflights;
+	unsigned int		bdh_stopping:1;
 	uint16_t		bdh_vendor_id; /* PCI vendor ID */
 
 	/**
