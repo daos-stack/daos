@@ -100,6 +100,8 @@
 
 /* Default power2(bits) size of dir-cache */
 #define DCACHE_SIZE_BITS    16
+/* Default dir cache time-out in seconds */
+#define DCACHE_REC_TIMEOUT  60
 
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
@@ -118,6 +120,7 @@ static uint16_t               eq_idx;
 
 /* Configuration of the Garbage Collector */
 static uint32_t               dcache_size_bits;
+static uint32_t               dcache_rec_timeout;
 
 /* structure allocated for dfs container */
 struct dfs_mt {
@@ -808,7 +811,8 @@ retrieve_handles_from_fuse(int idx)
 		goto err;
 	}
 
-	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs, dcache_size_bits);
+	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs, dcache_size_bits,
+			   dcache_rec_timeout);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
 		D_DEBUG(DB_ANY,
@@ -6147,6 +6151,12 @@ init_myhook(void)
 		D_WARN("'D_IL_DCACHE_SIZE_BITS' env variable could not be used: " DF_RC "\n",
 		       DP_RC(rc));
 
+	dcache_rec_timeout = DCACHE_REC_TIMEOUT;
+	rc                 = d_getenv_uint32_t("D_IL_DCACHE_REC_TIMEOUT", &dcache_rec_timeout);
+	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
+		D_WARN("'D_IL_DCACHE_REC_TIMEOUT' env variable could not be used: " DF_RC "\n",
+		       DP_RC(rc));
+
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
 	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&libc_open));
 	register_a_hook("libpthread", "open64", (void *)new_open_pthread,
@@ -6345,7 +6355,8 @@ init_dfs(int idx)
 		D_GOTO(out_err_mt, rc);
 	}
 
-	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs, dcache_size_bits);
+	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs, dcache_size_bits,
+			   dcache_rec_timeout);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to create DFS directory cache");
 		D_GOTO(out_err_ht, rc = daos_der2errno(rc));

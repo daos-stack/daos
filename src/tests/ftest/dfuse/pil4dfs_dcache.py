@@ -17,13 +17,15 @@ from run_utils import run_remote
 class Pil4dfsDcacheCmd(ExecutableCommand):
     """Defines an object representing a pil4dfs_dcache unit test command."""
 
-    def __init__(self, host, path, mnt):
+    def __init__(self, host, path, mnt, timeout=None):
         """Create a Pil4dfsDcacheUtestCmd object.
 
         Args:
             host (str): Hostname on which to remotely run the command
             path (str): path of the DAOS install directory
-            mnt (strr): path of the Dfuse mount point
+            mnt (str): path of the Dfuse mount point
+            timeout (int, optional): dir-cache timeout in seconds.
+                Default is None.
         """
         test_dir = os.path.join(path, "lib", "daos", "TESTING", "tests")
         super().__init__("/run/pil4dfs_dcache/*", "pil4dfs_dcache", test_dir)
@@ -37,6 +39,9 @@ class Pil4dfsDcacheCmd(ExecutableCommand):
         self.env['DD_SUBSYS'] = 'il'
         self.env['DD_MASK'] = 'trace'
         self.env['D_IL_REPORT'] = '1'
+
+        if timeout is not None:
+            self.env["D_IL_DCACHE_REC_TIMEOUT"] = timeout
 
         self.test_id = BasicParameter(None)
 
@@ -87,54 +92,116 @@ class Pil4dfsDcache(DfuseTestBase):
     :avocado: recursive
     """
 
-    __tests_suite__ = [
-        {
-            "test_name": "test_mkdirat",
-            "test_id": 0,
-            "dcache_add": 3,
-            "dcache_del": 0,
-            "dcache_hit": 5,
-            "dcache_miss": 3,
-            "op_name": "mkdir",
-            "op_count": 4
-        },
-        {
-            "test_name": "test_unlinkat",
-            "test_id": 1,
-            "dcache_add": 0,
-            "dcache_del": 2,
-            "dcache_hit": 8,
-            "dcache_miss": 0,
-            "op_name": "unlink",
-            "op_count": 4
-        },
-        {
-            "test_name": "test_rmdir",
-            "test_id": 2,
-            "dcache_add": 0,
-            "dcache_del": 2,
-            "dcache_hit": 8,
-            "dcache_miss": 0,
-            "op_name": "rmdir",
-            "op_count": 4
-        },
-        {
-            "test_name": "test_rename",
-            "test_id": 3,
-            "dcache_add": 2,
-            "dcache_del": 1,
-            "dcache_hit": 15,
-            "dcache_miss": 2,
-            "op_name": "rename",
-            "op_count": 2
-        }
-    ]
+    __tests_suite__ = {
+        "test_pil4dfs_dcache_enabled": [
+            {
+                "test_name": "test_mkdirat",
+                "test_id": 0,
+                "dcache_add": 3,
+                "dcache_del": 0,
+                "dcache_hit": 5,
+                "dcache_miss": 3,
+                "no_dcache_new": 0,
+                "no_dcache_del": 0,
+                "op_name": "mkdir",
+                "op_count": 4
+            },
+            {
+                "test_name": "test_unlinkat",
+                "test_id": 1,
+                "dcache_add": 0,
+                "dcache_del": 2,
+                "dcache_hit": 8,
+                "dcache_miss": 0,
+                "no_dcache_new": 0,
+                "no_dcache_del": 0,
+                "op_name": "unlink",
+                "op_count": 4
+            },
+            {
+                "test_name": "test_rmdir",
+                "test_id": 2,
+                "dcache_add": 0,
+                "dcache_del": 2,
+                "dcache_hit": 8,
+                "dcache_miss": 0,
+                "no_dcache_new": 0,
+                "no_dcache_del": 0,
+                "op_name": "rmdir",
+                "op_count": 4
+            },
+            {
+                "test_name": "test_rename",
+                "test_id": 3,
+                "dcache_add": 2,
+                "dcache_del": 1,
+                "dcache_hit": 15,
+                "dcache_miss": 2,
+                "no_dcache_new": 0,
+                "no_dcache_del": 0,
+                "op_name": "rename",
+                "op_count": 2
+            }
+        ],
+        "test_pil4dfs_dcache_disabled": [
+            {
+                "test_name": "test_mkdirat",
+                "test_id": 0,
+                "dcache_add": 0,
+                "dcache_del": 0,
+                "dcache_hit": 0,
+                "dcache_miss": 0,
+                "no_dcache_new": 4,
+                "no_dcache_del": 4,
+                "op_name": "mkdir",
+                "op_count": 4
+            },
+            {
+                "test_name": "test_unlinkat",
+                "test_id": 1,
+                "dcache_add": 0,
+                "dcache_del": 0,
+                "dcache_hit": 0,
+                "dcache_miss": 0,
+                "no_dcache_new": 4,
+                "no_dcache_del": 4,
+                "op_name": "unlink",
+                "op_count": 4
+            },
+            {
+                "test_name": "test_rmdir",
+                "test_id": 2,
+                "dcache_add": 0,
+                "dcache_del": 0,
+                "dcache_hit": 0,
+                "dcache_miss": 0,
+                "no_dcache_new": 4,
+                "no_dcache_del": 4,
+                "op_name": "rmdir",
+                "op_count": 4
+            },
+            {
+                "test_name": "test_rename",
+                "test_id": 3,
+                "dcache_add": 0,
+                "dcache_del": 0,
+                "dcache_hit": 0,
+                "dcache_miss": 0,
+                "no_dcache_new": 5,
+                "no_dcache_del": 5,
+                "op_name": "rename",
+                "op_count": 2
+            }
+        ],
+    }
 
     __dcache_re__ = {
         "dcache_add": re.compile(r'^.+ il +DBUG .+ dcache_add\(\) .+$'),
         "dcache_del": re.compile(r'^.+ il +DBUG .+ dcache_rec_free\(\) .+$'),
         "dcache_hit": re.compile(r'^.+ il +DBUG .+ dcache hit:.+$'),
-        "dcache_miss": re.compile(r'^.+ il +DBUG .+ dcache miss:.+$')
+        "dcache_miss": re.compile(r'^.+ il +DBUG .+ dcache miss:.+$'),
+        "no_dcache_new": re.compile(r'^.+ il +DBUG .+ dcache_find_insert_dact\(\).+$'),
+        "no_dcache_del": re.compile(r'^.+ il +DBUG .+ drec_del_at_dact\(\) .+$')
     }
 
     __start_test_re__ = re.compile(r'^-- START of test_.+ --$')
@@ -147,6 +214,18 @@ class Pil4dfsDcache(DfuseTestBase):
 
         # Start the servers and agents
         super().setUp()
+
+        self.log.info("Creating DAOS pool")
+        self.add_pool()
+        self.log.debug("Created DAOS pool %s", str(self.pool))
+
+        self.log.info("Creating DAOS container")
+        self.add_container(self.pool)
+        self.log.debug("Created DAOS container %s", str(self.container))
+
+        self.log.info("Mounting DFuse mount point")
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.log.debug("Mounted DFuse mount point %s", self.dfuse.mount_dir.value)
 
     def check_result(self, test_case, lines):
         """Check consistency of the test output.
@@ -180,37 +259,52 @@ class Pil4dfsDcache(DfuseTestBase):
 
         self.fail(f"Test failed: state={state}\n")
 
-    def test_pil4dfs_dcache(self):
+    def test_pil4dfs_dcache_enabled(self):
         """Jira ID: DAOS-14348.
 
         Test Description:
             Mount a DFuse mount point
-            Run unit tests of test_pil4dfs_dcache
+            Run unit tests of test_pil4dfs_dcache with dir-cache enabled
             Check the output of the command
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=pil4dfs,dcache,dfuse
-        :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache
+        :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_enabled
         """
-        self.log.info("Creating DAOS pool")
-        self.add_pool()
-        self.log.debug("Created DAOS pool %s", str(self.pool))
-
-        self.log.info("Creating DAOS container")
-        self.add_container(self.pool)
-        self.log.debug("Created DAOS container %s", str(self.container))
-
-        self.log.info("Mounting DFuse mount point")
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
-        self.log.debug("Mounted DFuse mount point %s", self.dfuse.mount_dir.value)
 
         self.log.info("Running pil4dfs_dcache command")
         host = self.hostlist_clients[0]
         mnt = self.dfuse.mount_dir.value
         cmd = Pil4dfsDcacheCmd(host, self.prefix, mnt)
 
-        for test_case in Pil4dfsDcache.__tests_suite__:
+        for test_case in Pil4dfsDcache.__tests_suite__["test_pil4dfs_dcache_enabled"]:
+            cmd.update_params(test_id=test_case["test_id"])
+            result = cmd.run(raise_exception=True)
+            self.check_result(test_case, result.all_stdout[host].split('\n'))
+
+        self.log_step("Test passed")
+
+    def test_pil4dfs_dcache_disabled(self):
+        """Jira ID: DAOS-14348.
+
+        Test Description:
+            Mount a DFuse mount point
+            Run unit tests of test_pil4dfs_dcache with dir-cache disabled
+            Check the output of the command
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=pil4dfs,dcache,dfuse
+        :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_disabled
+        """
+
+        self.log.info("Running pil4dfs_dcache command")
+        host = self.hostlist_clients[0]
+        mnt = self.dfuse.mount_dir.value
+        cmd = Pil4dfsDcacheCmd(host, self.prefix, mnt, 0)
+
+        for test_case in Pil4dfsDcache.__tests_suite__["test_pil4dfs_dcache_disabled"]:
             cmd.update_params(test_id=test_case["test_id"])
             result = cmd.run(raise_exception=True)
             self.check_result(test_case, result.all_stdout[host].split('\n'))
