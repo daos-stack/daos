@@ -535,7 +535,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 		return ENOMEM;
 
 	/* Max size of ioctl is 16k */
-	if (hs_reply->fsr_pool_size >= (16 * 1024)) {
+	if (hs_reply->fsr_pool_size >= (16)) {
 		char fname[NAME_LEN];
 
 		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
