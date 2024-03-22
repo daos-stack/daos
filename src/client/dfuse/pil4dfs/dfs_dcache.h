@@ -23,11 +23,12 @@ typedef struct dcache_rec dcache_rec_t;
  *
  * \param[out] dcache	The newly create dir-cache
  * \param[in] dfs	The DAOS File System to cache
+ * \param[in] bits	power2(bits) is the size of cache
  *
  * \return		0 on success, negative value on error
  */
 int
-dcache_create(dfs_dcache_t **dcache, dfs_t *dfs);
+dcache_create(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits);
 
 /**
  * Destroy a dfs dir-cache.

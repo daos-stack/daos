@@ -98,6 +98,9 @@
 /* the default min fd that will be used by DAOS */
 #define DAOS_MIN_FD         10
 
+/* Default power2(bits) size of dir-cache */
+#define DCACHE_SIZE_BITS    16
+
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
 /* the list of low fd reserved */
@@ -112,6 +115,9 @@ static daos_handle_t          eq_list[MAX_EQ];
 static uint16_t               eq_count_max;
 static uint16_t               eq_count;
 static uint16_t               eq_idx;
+
+/* Configuration of the Garbage Collector */
+static uint32_t               dcache_size_bits;
 
 /* structure allocated for dfs container */
 struct dfs_mt {
@@ -802,7 +808,7 @@ retrieve_handles_from_fuse(int idx)
 		goto err;
 	}
 
-	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs);
+	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs, dcache_size_bits);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
 		D_DEBUG(DB_ANY,
@@ -6135,6 +6141,12 @@ init_myhook(void)
 		eq_count_max = MAX_EQ;
 	}
 
+	dcache_size_bits = DCACHE_SIZE_BITS;
+	rc               = d_getenv_uint32_t("D_IL_DCACHE_SIZE_BITS", &dcache_size_bits);
+	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
+		D_WARN("'D_IL_DCACHE_SIZE_BITS' env variable could not be used: " DF_RC "\n",
+		       DP_RC(rc));
+
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
 	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&libc_open));
 	register_a_hook("libpthread", "open64", (void *)new_open_pthread,
@@ -6333,7 +6345,7 @@ init_dfs(int idx)
 		D_GOTO(out_err_mt, rc);
 	}
 
-	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs);
+	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs, dcache_size_bits);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to create DFS directory cache");
 		D_GOTO(out_err_ht, rc = daos_der2errno(rc));

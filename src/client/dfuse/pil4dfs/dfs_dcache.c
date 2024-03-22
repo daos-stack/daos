@@ -133,7 +133,7 @@ static d_hash_table_ops_t dcache_hash_ops = {
 };
 
 int
-dcache_create(dfs_dcache_t **dcache, dfs_t *dfs)
+dcache_create(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits)
 {
 	dfs_dcache_t *dcache_tmp = NULL;
 	dfs_obj_t    *obj        = NULL;
@@ -159,8 +159,8 @@ dcache_create(dfs_dcache_t **dcache, dfs_t *dfs)
 		      "%016" PRIx64 "-%016" PRIx64 ":", obj_id.hi, obj_id.lo);
 	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL, &dcache_hash_ops,
-					 &dcache_tmp->dd_dir_hash);
+	rc = d_hash_table_create_inplace(D_HASH_FT_MUTEX | D_HASH_FT_LRU, bits, NULL,
+					 &dcache_hash_ops, &dcache_tmp->dd_dir_hash);
 	if (rc != 0)
 		D_GOTO(error, rc);
 
