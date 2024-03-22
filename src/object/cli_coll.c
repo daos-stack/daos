@@ -20,30 +20,188 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+static int
+coll_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
+	       struct btr_record *rec, d_iov_t *val_out)
+{
+	struct daos_coll_target	*dct;
+	struct coll_oper_args	*coa = val_iov->iov_buf;
+	int			 rc = 0;
+
+	D_ALLOC_PTR(dct);
+	if (dct == NULL) {
+		rc = -DER_NOMEM;
+	} else {
+		rec->rec_off = umem_ptr2off(&tins->ti_umm, dct);
+		d_iov_set(val_out, dct, sizeof(*dct));
+		coa->coa_dct_cap++;
+	}
+
+	return rc;
+}
+
+static int
+coll_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
+{
+	struct daos_coll_target	*dct;
+
+	dct = (struct daos_coll_target *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	rec->rec_off = UMOFF_NULL;
+
+	daos_coll_shard_cleanup(dct->dct_shards, dct->dct_max_shard + 1);
+	D_FREE(dct->dct_bitmap);
+	D_FREE(dct->dct_tgt_ids);
+	D_FREE(dct);
+
+	return 0;
+}
+
+static int
+coll_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
+	       d_iov_t *key_iov, d_iov_t *val_iov)
+{
+	struct daos_coll_target	*dct;
+
+	dct = (struct daos_coll_target *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	d_iov_set(val_iov, dct, sizeof(*dct));
+
+	return 0;
+}
+
+static int
+coll_rec_update(struct btr_instance *tins, struct btr_record *rec,
+		d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
+{
+	struct daos_coll_target	*dct;
+
+	dct = (struct daos_coll_target *)umem_off2ptr(&tins->ti_umm, rec->rec_off);
+	d_iov_set(val_out, dct, sizeof(*dct));
+
+	return 0;
+}
+
+btr_ops_t dbtree_coll_ops = {
+	.to_rec_alloc	= coll_rec_alloc,
+	.to_rec_free	= coll_rec_free,
+	.to_rec_fetch	= coll_rec_fetch,
+	.to_rec_update	= coll_rec_update,
+};
+
+bool
+obj_need_coll(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+	      uint32_t *grp_nr)
+{
+	bool	coll = false;
+
+	obj_ptr2shards(obj, start_shard, shard_nr, grp_nr);
+
+	/*
+	 * We support object collective operation since release-2.6 (version 10).
+	 * The conditions to trigger object collective operation are:
+	 *
+	 * 1. The shards count exceeds the threshold for collective operation
+	 *    (20 by default). Collectively operation will distribute the RPC
+	 *    load among more engines even if the total RPCs count may be not
+	 *    decreased too much. Or
+	 *
+	 * 2. The shards count is twice (or even more) of the engines count.
+	 *    Means that there are some shards reside on the same engine(s).
+	 *    Collectively operation will save some RPCs.
+	 */
+
+	if (dc_obj_proto_version < 10 || obj_coll_thd == 0)
+		return false;
+
+	if (*shard_nr > obj_coll_thd)
+		 return true;
+
+	if (*shard_nr <= 4)
+		return false;
+
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	if (*shard_nr >= (obj->cob_max_rank - obj->cob_min_rank + 1) * 2)
+		coll = true;
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
+	return coll;
+}
+
 int
 obj_coll_oper_args_init(struct coll_oper_args *coa, struct dc_object *obj, bool for_modify)
 {
-	struct dc_pool	*pool = obj->cob_pool;
-	uint32_t	 node_nr;
-	int		 rc = 0;
+	struct dc_pool		*pool = obj->cob_pool;
+	struct umem_attr	 uma = { 0 };
+	uint32_t		 obj_ranks = 0;
+	uint32_t		 pool_ranks;
+	int			 rc = 0;
 
 	D_ASSERT(pool != NULL);
 	D_ASSERT(coa->coa_dcts == NULL);
 
 	D_RWLOCK_RDLOCK(&pool->dp_map_lock);
-	node_nr = pool_map_node_nr(pool->dp_map);
+	pool_ranks = pool_map_node_nr(pool->dp_map);
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 
-	D_ALLOC_ARRAY(coa->coa_dcts, node_nr);
-	if (coa->coa_dcts == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
+	/* The pool map may be refreshed after last collective operation on the object. */
+	if (unlikely(obj->cob_rank_nr > pool_ranks)) {
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		D_GOTO(out, rc = -DER_STALE);
+	}
 
-	/*
-	 * Set coa_dct_nr as -1 to indicate that the coa_dcts array may be sparse until
-	 * obj_coll_oper_args_collapse(). That is useful for obj_coll_oper_args_fini().
-	 */
-	coa->coa_dct_nr = -1;
-	coa->coa_dct_cap = node_nr;
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_COLL_SPARSE)) {
+		coa->coa_sparse = 1;
+	} else if (obj->cob_rank_nr > 0) {
+		obj_ranks = obj->cob_rank_nr;
+		if (obj_ranks * 100 / pool_ranks >= 35)
+			coa->coa_sparse = 0;
+		else
+			coa->coa_sparse = 1;
+	} else {
+		/*
+		 * The obj_ranks is estimated, the ranks in the range [cob_min_rank, cob_max_rank]
+		 * may be not continuous, the real obj_ranks maybe smaller than the estimated one.
+		 * It is no matter if the real ranks count is much smaller than the estimated one,
+		 * that only affects current collecitve operation efficiency. The ranks count will
+		 * be known after current collective operation.
+		 */
+		obj_ranks = obj->cob_max_rank - obj->cob_min_rank + 1;
+		if (obj_ranks * 100 / pool_ranks >= 45)
+			coa->coa_sparse = 0;
+		else
+			coa->coa_sparse = 1;
+	}
+	D_RWLOCK_UNLOCK(&obj->cob_lock);
+
+	if (coa->coa_sparse) {
+		D_ALLOC_PTR(coa->coa_tree);
+		if (coa->coa_tree == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		uma.uma_id = UMEM_CLASS_VMEM;
+		rc = dbtree_create_inplace(DBTREE_CLASS_COLL, 0, COLL_BTREE_ORDER, &uma,
+					   &coa->coa_tree->cst_tree_root,
+					   &coa->coa_tree->cst_tree_hdl);
+		if (rc != 0) {
+			D_FREE(coa->coa_tree);
+			goto out;
+		}
+
+		coa->coa_dct_nr = 0;
+		coa->coa_dct_cap = 0;
+	} else {
+		D_ALLOC_ARRAY(coa->coa_dcts, obj_ranks);
+		if (coa->coa_dcts == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		/*
+		 * Set coa_dct_nr as -1 to indicate that the coa_dcts array may be sparse until
+		 * obj_coll_oper_args_collapse(). That is useful for obj_coll_oper_args_fini().
+		 */
+		coa->coa_dct_nr = -1;
+		coa->coa_dct_cap = obj_ranks;
+	}
+
 	coa->coa_max_dct_sz = 0;
 	coa->coa_max_shard_nr = 0;
 	coa->coa_max_bitmap_sz = 0;
@@ -57,20 +215,74 @@ out:
 void
 obj_coll_oper_args_fini(struct coll_oper_args *coa)
 {
-	daos_coll_target_cleanup(coa->coa_dcts,
-				 coa->coa_dct_nr < 0 ? coa->coa_dct_cap : coa->coa_dct_nr);
-	coa->coa_dcts = NULL;
+	if (coa->coa_sparse) {
+		if (coa->coa_tree != NULL) {
+			if (daos_handle_is_valid(coa->coa_tree->cst_tree_hdl))
+				dbtree_destroy(coa->coa_tree->cst_tree_hdl, NULL);
+			D_FREE(coa->coa_tree);
+		}
+	} else {
+		daos_coll_target_cleanup(coa->coa_dcts,
+					 coa->coa_dct_nr < 0 ? coa->coa_dct_cap : coa->coa_dct_nr);
+		coa->coa_dcts = NULL;
+	}
 	coa->coa_dct_cap = 0;
 	coa->coa_dct_nr = 0;
 }
 
-int
-obj_coll_oper_args_collapse(struct coll_oper_args *coa, uint32_t *size)
+static int
+obj_coll_tree_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
+{
+	struct coll_oper_args	*coa = arg;
+	struct daos_coll_target	*dct = val->iov_buf;
+
+	D_ASSERTF(coa->coa_dct_nr < coa->coa_dct_cap,
+		  "Too short pre-allcoated dct_array: %u vs %u\n",
+		  coa->coa_dct_nr, coa->coa_dct_cap);
+
+	memcpy(&coa->coa_dcts[coa->coa_dct_nr++], dct, sizeof(*dct));
+
+	/* The following members have been migrated into coa->coa_dcts. */
+	dct->dct_bitmap = NULL;
+	dct->dct_shards = NULL;
+	dct->dct_tgt_ids = NULL;
+
+	return 0;
+}
+
+static int
+obj_coll_collapse_tree(struct coll_oper_args *coa, uint32_t *size)
+{
+	struct coll_sparse_targets	*tree = coa->coa_tree;
+	int				 rc = 0;
+
+	if (unlikely(coa->coa_dct_cap == 0))
+		D_GOTO(out, rc = 1);
+
+	D_ALLOC_ARRAY(coa->coa_dcts, coa->coa_dct_cap);
+	if (coa->coa_dcts == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	coa->coa_sparse = 0;
+	rc = dbtree_iterate(tree->cst_tree_hdl, DAOS_INTENT_DEFAULT, false, obj_coll_tree_cb, coa);
+	if (rc == 0)
+		D_ASSERTF(coa->coa_dct_nr == coa->coa_dct_cap,
+			  "Something is wrong when prepare coll target array: %u vs %u\n",
+			  coa->coa_dct_nr, coa->coa_dct_cap);
+
+out:
+	dbtree_destroy(tree->cst_tree_hdl, NULL);
+	D_FREE(tree);
+
+	return rc;
+}
+
+static int
+obj_coll_collapse_array(struct coll_oper_args *coa, uint32_t *size)
 {
 	struct daos_coll_target	*dct;
 	struct daos_coll_shard	*dcs;
 	uint32_t		 dct_size;
-	int			 rc = 0;
 	int			 i;
 	int			 j;
 
@@ -101,13 +313,30 @@ obj_coll_oper_args_collapse(struct coll_oper_args *coa, uint32_t *size)
 		}
 	}
 
-	if (unlikely(coa->coa_dct_nr == 0))
-		/* If all shards are NONEXIST, then need not to send RPC(s). */
-		rc = 1;
-	else if (coa->coa_dct_cap > coa->coa_dct_nr)
-		/* Reset the other dct slots to avoid double free during cleanup. */
+	/* Reset the other dct slots to avoid double free during cleanup. */
+	if (coa->coa_dct_cap > coa->coa_dct_nr && coa->coa_dct_nr > 0)
 		memset(&coa->coa_dcts[coa->coa_dct_nr], 0,
 		       sizeof(*dct) * (coa->coa_dct_cap - coa->coa_dct_nr));
+
+	return 0;
+}
+
+static int
+obj_coll_oper_args_collapse(struct coll_oper_args *coa, struct dc_object *obj, uint32_t *size)
+{
+	int	rc;
+
+	if (coa->coa_sparse)
+		rc = obj_coll_collapse_tree(coa, size);
+	else
+		rc = obj_coll_collapse_array(coa, size);
+
+	if (rc >= 0) {
+		obj->cob_rank_nr = coa->coa_dct_nr;
+		/* If all shards are NONEXIST, then need not to send RPC(s). */
+		if (unlikely(coa->coa_dct_nr == 0))
+			rc = 1;
+	}
 
 	return rc;
 }
@@ -119,6 +348,10 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 	struct dc_obj_shard	*shard = NULL;
 	struct daos_coll_target	*dct;
 	struct daos_coll_shard	*dcs;
+	d_iov_t			 kiov;
+	d_iov_t			 riov;
+	d_iov_t			 viov;
+	uint64_t		 key;
 	uint32_t		*tmp;
 	uint8_t			*new_bm;
 	int			 size;
@@ -132,17 +365,30 @@ obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,
 	if (rc != 0 || (shard->do_rebuilding && !coa->coa_for_modify))
 		goto out;
 
-	/* The ranks for the pool may be not continuous, let's extend the coa_dcts array. */
-	if (unlikely(shard->do_target_rank >= coa->coa_dct_cap)) {
-		D_REALLOC_ARRAY(dct, coa->coa_dcts, coa->coa_dct_cap, shard->do_target_rank + 4);
-		if (dct == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+	D_RWLOCK_RDLOCK(&obj->cob_lock);
 
-		coa->coa_dcts = dct;
-		coa->coa_dct_cap = shard->do_target_rank + 4;
+	D_ASSERTF(shard->do_target_rank <= obj->cob_max_rank,
+		  "Unexpected shard with rank %u > %u\n", shard->do_target_rank, obj->cob_max_rank);
+	D_ASSERTF(shard->do_target_rank >= obj->cob_min_rank,
+		  "Unexpected shard with rank %u < %u\n", shard->do_target_rank, obj->cob_min_rank);
+
+	if (coa->coa_sparse) {
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
+		key = shard->do_target_rank;
+		d_iov_set(&kiov, &key, sizeof(key));
+		d_iov_set(&riov, coa, sizeof(*coa));
+		d_iov_set(&viov, NULL, 0);
+		rc = dbtree_upsert(coa->coa_tree->cst_tree_hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE,
+				   &kiov, &riov, &viov);
+		if (rc != 0)
+			goto out;
+
+		dct = viov.iov_buf;
+	} else {
+		dct = &coa->coa_dcts[shard->do_target_rank - obj->cob_min_rank];
+		D_RWLOCK_UNLOCK(&obj->cob_lock);
 	}
 
-	dct = &coa->coa_dcts[shard->do_target_rank];
 	dct->dct_rank = shard->do_target_rank;
 
 	if (shard->do_target_idx >= dct->dct_bitmap_sz << 3) {
@@ -385,6 +631,21 @@ out:
 	return rc;
 }
 
+static int
+dc_coll_sort_cmp(const void *m1, const void *m2)
+{
+	const struct daos_coll_target	*dct1 = m1;
+	const struct daos_coll_target	*dct2 = m2;
+
+	if (dct1->dct_rank > dct2->dct_rank)
+		return 1;
+
+	if (dct1->dct_rank < dct2->dct_rank)
+		return -1;
+
+	return 0;
+}
+
 int
 dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 		  uint32_t map_ver, daos_obj_punch_t *args, struct obj_auxi_args *auxi)
@@ -400,7 +661,7 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	uint32_t			 mbs_max_size;
 	uint32_t			 inline_size;
 	uint32_t			 flags = ORF_LEADER;
-	uint32_t			 leader;
+	uint32_t			 leader = -1;
 	uint32_t			 len;
 	int				 rc;
 	int				 i;
@@ -415,11 +676,9 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 			goto out;
 	}
 
-	rc = obj_coll_oper_args_collapse(coa, &tgt_size);
+	rc = obj_coll_oper_args_collapse(coa, obj, &tgt_size);
 	if (rc != 0)
 		goto out;
-
-	leader = coa->coa_dct_nr;
 
 	if (auxi->io_retry) {
 		if (unlikely(spa->pa_auxi.shard >= obj->cob_shards_nr))
@@ -429,7 +688,11 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 		rc = obj_shard_open(obj, spa->pa_auxi.shard, map_ver, &shard);
 		if (rc == 0) {
 			if (!shard->do_rebuilding && !shard->do_reintegrating) {
-				leader = shard->do_target_rank;
+				tmp_tgt.dct_rank = shard->do_target_rank;
+				dct = bsearch(&tmp_tgt, coa->coa_dcts, coa->coa_dct_nr,
+					      sizeof(tmp_tgt), &dc_coll_sort_cmp);
+				D_ASSERT(dct != NULL);
+
 				goto gen_mbs;
 			}
 
@@ -443,7 +706,7 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	}
 
 new_leader:
-	if (leader == coa->coa_dct_nr)
+	if (leader == -1)
 		/* Randomly select a rank as the leader. */
 		leader = d_rand() % coa->coa_dct_nr;
 	else
@@ -468,10 +731,10 @@ new_leader:
 	goto new_leader;
 
 gen_mbs:
-	if (leader != 0) {
+	if (dct != &coa->coa_dcts[0]) {
 		memcpy(&tmp_tgt, &coa->coa_dcts[0], sizeof(tmp_tgt));
-		memcpy(&coa->coa_dcts[0], &coa->coa_dcts[leader], sizeof(tmp_tgt));
-		memcpy(&coa->coa_dcts[leader], &tmp_tgt, sizeof(tmp_tgt));
+		memcpy(&coa->coa_dcts[0], dct, sizeof(tmp_tgt));
+		memcpy(dct, &tmp_tgt, sizeof(tmp_tgt));
 	}
 
 	rc = dc_obj_coll_punch_mbs(coa, obj, shard->do_target_id, &mbs);
@@ -558,7 +821,7 @@ queue_coll_query_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi, stru
 	int				 rc = 0;
 	int				 i;
 
-	rc = obj_coll_oper_args_collapse(coa, &tmp);
+	rc = obj_coll_oper_args_collapse(coa, obj, &tmp);
 	if (rc != 0)
 		goto out;
 
