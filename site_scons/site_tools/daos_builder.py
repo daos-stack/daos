@@ -67,7 +67,17 @@ def _add_build_rpath(env, pathin="."):
     # We actually run installed binaries from the build area to generate
     # man pages.  In such cases, we need LD_LIBRARY_PATH set to pick up
     # the dependencies
-    env.AppendENVPath("LD_LIBRARY_PATH", path)
+    env.AppendENVPath("D_LD_PATH", path)
+
+
+def _enable_ld_path(env):
+    """Add a build directory to rpath"""
+    # We actually run installed binaries from the build area to generate
+    # man pages.  In such cases, we need LD_LIBRARY_PATH set to pick up
+    # the dependencies
+    # env.AppendENVPath("LD_LIBRARY_PATH", path)
+    print(env["ENV"]["D_LD_PATH"])
+    env["ENV"]["LD_LIBRARY_PATH"] = env["ENV"]["D_LD_PATH"]
 
 
 def _known_deps(env, **kwargs):
@@ -246,6 +256,7 @@ def _configure_mpi(self):
 def generate(env):
     """Add daos specific methods to environment"""
     env.AddMethod(_add_build_rpath, 'd_add_build_rpath')
+    env.AddMethod(_enable_ld_path, 'd_enable_ld_path')
     env.AddMethod(_configure_mpi, 'd_configure_mpi')
     env.AddMethod(_run_command, 'd_run_command')
     env.AddMethod(_add_rpaths, 'd_add_rpaths')
