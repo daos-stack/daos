@@ -287,7 +287,6 @@ get_eqh(daos_handle_t *eqh);
 static void
 destroy_all_eqs(void);
 
-
 static int (*ld_open)(const char *pathname, int oflags, ...);
 static int (*libc_open)(const char *pathname, int oflags, ...);
 static int (*pthread_open)(const char *pathname, int oflags, ...);
