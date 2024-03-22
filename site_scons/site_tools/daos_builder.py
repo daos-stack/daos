@@ -67,7 +67,7 @@ def _add_build_rpath(env, pathin="."):
 
 
 def _enable_ld_path(env, part_list):
-    """Add a build directory to LD_LIBRARY_PATY"""
+    """Add a build directory to LD_LIBRARY_PATH"""
     # We actually run installed binaries from the build area to generate
     # man pages.  In such cases, we need LD_LIBRARY_PATH set to pick up
     # the dependencies
