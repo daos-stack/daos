@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC     DD_FAC(il)
+#define D_LOGFAC DD_FAC(il)
 
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -160,7 +160,7 @@ dcache_create(dfs_dcache_t **dcache, dfs_t *dfs)
 	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL, &dcache_hash_ops,
-				 	 &dcache_tmp->dd_dir_hash);
+					 &dcache_tmp->dd_dir_hash);
 	if (rc != 0)
 		D_GOTO(error, rc);
 

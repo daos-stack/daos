@@ -595,7 +595,7 @@ discover_daos_mount_with_env(void)
 	if (dfs_list[num_dfs].cont == NULL)
 		D_GOTO(free_pool, rc = ENOMEM);
 
-	dfs_list[num_dfs].dcache = NULL;
+	dfs_list[num_dfs].dcache       = NULL;
 	dfs_list[num_dfs].len_fs_root  = (int)len_fs_root;
 	atomic_init(&dfs_list[num_dfs].inited, 0);
 	num_dfs++;
@@ -6363,7 +6363,8 @@ out_err_cont_open:
 static void
 finalize_dfs(void)
 {
-	int       rc, i;
+	int i;
+	int rc;
 
 	/* Disable interception */
 	hook_enabled = 0;
