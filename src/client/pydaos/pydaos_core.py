@@ -1,4 +1,4 @@
-# (C) Copyright 2019-2023 Intel Corporation.
+# (C) Copyright 2019-2024 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
@@ -18,6 +18,9 @@ ObjClassID = enum.Enum(
     "Enumeration of the DAOS object classes (OC).",
     {key: value for key, value in list(pydaos_shim.__dict__.items())
      if key.startswith("OC_")})
+
+class InvalidModeError(ValueError):
+    """Raised by DCont() when open_mode is not valid"""
 
 
 def _get_object_id(cid):
@@ -55,6 +58,8 @@ class DCont():
         Container label or UUID string
     path : string
         Path for container representation in unified namespace
+    open_mode : string (optional)
+        Open mode for container.  Set to 'RO' for read-only access.
 
     Methods
     -------
@@ -69,12 +74,17 @@ class DCont():
         Create new DArray object.
     """
 
-    def __init__(self, pool=None, cont=None, path=None, open_ro=False):
+    def __init__(self, pool=None, cont=None, path=None, open_mode='RW'):
         self._dc = DaosClient()
         self._hdl = None
         if path is None and (pool is None or cont is None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
+        open_ro = False
+        if open_mode == 'RO':
+            open_ro = True
+        elif open_mode != 'RW':
+            raise InvalidModeError('open mode is neither "RO" or "RW"')
         if path is not None:
             self.pool = None
             self.cont = None
