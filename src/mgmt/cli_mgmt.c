@@ -221,6 +221,34 @@ dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
 	return put_attach_info(info, resp);
 }
 
+static int
+get_env_deprecated(char **val, const char *new_env, const char *old_env)
+{
+	char *new = NULL;
+	char *old = NULL;
+	int   rc_new;
+	int   rc_old;
+
+	rc_new = d_agetenv_str(&new, new_env);
+	rc_old = d_agetenv_str(&old, old_env);
+
+	if (rc_new == 0) {
+		if (rc_old == 0)
+			D_WARN("Both %s and %s are set! Deprecated %s (%s) will be ignored\n",
+			       new_env, old_env, old_env, old);
+		*val = new;
+		return 0;
+	}
+
+	if (rc_old == 0) {
+		D_INFO("%s is deprecated, upgrade your environment to use %s instead\n", old_env,
+		       new_env);
+		*val = old;
+		return 0;
+	}
+
+	return rc_new;
+}
 /*
  * Get the attach info (i.e., rank URIs) for name. To avoid duplicating the
  * rank URIs, we return the GetAttachInfo response directly. Callers are
@@ -238,8 +266,8 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	size_t			 reqb_size;
 	Drpc__Call		*dreq;
 	Drpc__Response		*dresp;
-	char                    *ofi_interface = NULL;
-	char                    *ofi_domain    = NULL;
+	char                    *interface = NULL;
+	char                    *domain    = NULL;
 	int			 rc;
 
 	D_DEBUG(DB_MGMT, "getting attach info for %s\n", name);
@@ -255,17 +283,17 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 		D_GOTO(out, rc);
 	}
 
-	if (d_agetenv_str(&ofi_interface, "D_INTERFACE") == 0)
-		D_INFO("Using client provided D_INTERFACE: %s\n", ofi_interface);
+	if (get_env_deprecated(&interface, "D_INTERFACE", "OFI_INTERFACE") == 0)
+		D_INFO("Using environment-provided interface: %s\n", interface);
 
-	if (d_agetenv_str(&ofi_domain, "D_DOMAIN") == 0)
-		D_INFO("Using client provided D_DOMAIN: %s\n", ofi_domain);
+	if (get_env_deprecated(&domain, "D_DOMAIN", "OFI_DOMAIN") == 0)
+		D_INFO("Using environment-provided domain: %s\n", domain);
 
 	/* Prepare the GetAttachInfo request. */
 	req.sys = (char *)name;
 	req.all_ranks = all_ranks;
-	req.interface = ofi_interface;
-	req.domain    = ofi_domain;
+	req.interface = interface;
+	req.domain    = domain;
 	reqb_size = mgmt__get_attach_info_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {
@@ -324,8 +352,8 @@ out_dreq:
 	/* This also frees reqb via dreq->body.data. */
 	drpc_call_free(dreq);
 out_ctx:
-	d_freeenv_str(&ofi_interface);
-	d_freeenv_str(&ofi_domain);
+	d_freeenv_str(&interface);
+	d_freeenv_str(&domain);
 	drpc_close(ctx);
 out:
 	return rc;
