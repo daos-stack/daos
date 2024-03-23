@@ -1348,8 +1348,8 @@ dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group)
 		i++;
 	}
 
-	/** set the owner ACL */
-	rc = daos_cont_set_owner(coh, user, group, NULL);
+	/** set the owner ACL - already checked user/group are real above */
+	rc = daos_cont_set_owner_no_check(coh, user, group, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_set_owner() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_prop, rc = daos_der2errno(rc));

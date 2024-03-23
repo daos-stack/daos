@@ -360,8 +360,9 @@ func (cmd *containerGetACLCmd) Execute(args []string) error {
 type containerSetOwnerCmd struct {
 	existingContainerCmd
 
-	User  string `long:"user" short:"u" description:"user who will own the container"`
-	Group string `long:"group" short:"g" description:"group who will own the container"`
+	User    string `long:"user" short:"u" description:"user who will own the container"`
+	Group   string `long:"group" short:"g" description:"group who will own the container"`
+	NoCheck bool   `long:"no-check" description:"for non-POSIX containers, don't check whether the user/group exists on the local system"`
 }
 
 func (cmd *containerSetOwnerCmd) Execute(args []string) error {
@@ -413,11 +414,20 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 
 	lType := C.get_dpe_val(&entries[0])
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
+		if cmd.NoCheck {
+			return errors.New("--no-check is not compatible with POSIX containers")
+		}
+
 		if err := dfsError(C.dfs_cont_set_owner(ap.cont, user, group)); err != nil {
 			return errors.Wrapf(err, "%s failed", fsOpString((ap.fs_op)))
 		}
 	} else {
-		rc := C.daos_cont_set_owner(ap.cont, user, group, nil)
+		var rc C.int
+		if cmd.NoCheck {
+			rc = C.daos_cont_set_owner_no_check(ap.cont, user, group, nil)
+		} else {
+			rc = C.daos_cont_set_owner(ap.cont, user, group, nil)
+		}
 		if err := daosError(rc); err != nil {
 			return errors.Wrapf(err, "failed to set owner for container %s",
 				cmd.ContainerID())
