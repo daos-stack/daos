@@ -139,9 +139,9 @@ typedef bool (*ds_iv_key_cmp_t)(void *key1, void *key2);
 /**
  * Init class entry.
  *
- * \param iv_key [IN]	iv_key of the class to be init.
- * \param data [IN]	data to help allocate class entry.
- * \param entry [IN/OUT] class entry to be initialized.
+ * \param[in] iv_key	iv_key of the class to be init.
+ * \param[in] data	data to help allocate class entry.
+ * \param[in,out] entry	class entry to be initialized.
  *
  * \return		0 if succeeds, error code otherwise.
  */

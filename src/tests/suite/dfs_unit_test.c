@@ -3166,7 +3166,7 @@ run_dfs_unit_test(int rank, int size)
 	par_barrier(PAR_COMM_WORLD);
 
 	/** run tests again with DTX */
-	setenv("DFS_USE_DTX", "1", 1);
+	d_setenv("DFS_USE_DTX", "1", 1);
 
 	par_barrier(PAR_COMM_WORLD);
 	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,

@@ -1078,7 +1078,7 @@ daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch);
  * feature is not supported yet.
  *
  * \param[in]	oh	Open object handle.
- * \param[in/out]
+ * \param[in,out]
  *		nr	[in]: Number of anchors requested and allocated in
  *			\a anchors. Pass 0 for DAOS to recommend split num.
  *			[out]: Number of anchors recommended if 0 is passed in.

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1019,7 +1019,7 @@ dss_xstreams_init(void)
 		D_INFO("ULT mmap()'ed stack allocation is disabled.\n");
 #endif
 
-	d_getenv_int("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
+	d_getenv_uint("DAOS_SCHED_RELAX_INTVL", &sched_relax_intvl);
 	if (sched_relax_intvl == 0 ||
 	    sched_relax_intvl > SCHED_RELAX_INTVL_MAX) {
 		D_WARN("Invalid relax interval %u, set to default %u msecs.\n",
@@ -1030,18 +1030,19 @@ dss_xstreams_init(void)
 		       sched_relax_intvl);
 	}
 
-	env = getenv("DAOS_SCHED_RELAX_MODE");
+	d_agetenv_str(&env, "DAOS_SCHED_RELAX_MODE");
 	if (env) {
 		sched_relax_mode = sched_relax_str2mode(env);
 		if (sched_relax_mode == SCHED_RELAX_MODE_INVALID) {
 			D_WARN("Invalid relax mode [%s]\n", env);
 			sched_relax_mode = SCHED_RELAX_MODE_NET;
 		}
+		d_freeenv_str(&env);
 	}
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
-	d_getenv_int("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+	d_getenv_uint("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
 	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
 
 	/* start the execution streams */
@@ -1196,12 +1197,12 @@ dss_acc_offload(struct dss_acc_task *at_args)
 	return rc;
 }
 
-/*
+/**
  * Set parameters on the server.
  *
- * param key_id [IN]		key id
- * param value [IN]		the value of the key.
- * param value_extra [IN]	the extra value of the key.
+ * \param[in] key_id		key id
+ * \param[in] value		the value of the key.
+ * \param[in] value_extra	the extra value of the key.
  *
  * return	0 if setting succeeds.
  *              negative errno if fails.

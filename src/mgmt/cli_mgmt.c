@@ -443,6 +443,62 @@ _split_env(char *env, char **name, char **value)
 	return 0;
 }
 
+static void
+print_mgmt_net_env()
+{
+	static const char *var_names[] = {"CRT_PHY_ADDR_STR", "CRT_CTX_SHARE_ADDR", "CRT_TIMEOUT"};
+	int                idx;
+	char              *env;
+	char              *msg;
+	int                rc;
+
+	rc = d_agetenv_str(&env, "OFI_INTERFACE");
+	D_ASSERTF(env != NULL, "Can not retrieve environment varirable OFI_INTERFACE: " DF_RC "\n",
+		  DP_RC(rc));
+	D_ASPRINTF(msg, "Network Interface: %s", env);
+	d_freeenv_str(&env);
+	if (msg == NULL) {
+		D_INFO("Error allocating CaRT initialization message");
+		return;
+	}
+	d_agetenv_str(&env, "OFI_DOMAIN");
+	if (env == NULL)
+		D_INFO("%s, Domain: NA", msg);
+	else
+		D_INFO("%s, Domain: %s", msg, env);
+	d_freeenv_str(&env);
+	D_FREE(msg);
+
+	rc = d_agetenv_str(&env, var_names[0]);
+	D_ASSERTF(env != NULL, "Can not retrieve environment varirable %s: " DF_RC "\n",
+		  var_names[0], DP_RC(rc));
+	D_ASPRINTF(msg, "CaRT initialization with:\n\t%s=%s", var_names[0], env);
+	d_freeenv_str(&env);
+	if (msg == NULL) {
+		D_INFO("Error allocating CaRT initialization message");
+		return;
+	}
+
+	for (idx = 1; idx < sizeof(var_names) / sizeof(char *); ++idx) {
+		char *tmp = msg;
+
+		rc = d_agetenv_str(&env, var_names[idx]);
+		D_ASSERTF(env != NULL, "Can not retrieve environment varirable %s: " DF_RC "\n",
+			  var_names[idx], DP_RC(rc));
+
+		D_ASPRINTF(msg, "%s, %s=%s", tmp, var_names[idx], env);
+		d_freeenv_str(&env);
+		D_FREE(tmp);
+		if (msg == NULL) {
+			D_INFO("Error allocating CaRT initialization message");
+			return;
+		}
+	}
+
+	D_DEBUG(DB_MGMT, "%s", msg);
+	D_FREE(msg);
+}
+
 /*
  * Get the CaRT network configuration for this client node
  * via the get_attach_info() dRPC.
@@ -481,7 +537,7 @@ int dc_mgmt_net_cfg(const char *name)
 				continue;
 			}
 
-			rc = setenv(v_name, v_value, 0);
+			rc = d_setenv(v_name, v_value, 0);
 			if (rc != 0)
 				D_GOTO(cleanup, rc = d_errno2der(errno));
 			D_DEBUG(DB_MGMT, "set server-supplied client env: %s", env);
@@ -492,51 +548,55 @@ int dc_mgmt_net_cfg(const char *name)
 	g_num_serv_ranks = resp->n_rank_uris;
 	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
 	/* These two are always set */
-	rc = setenv("CRT_PHY_ADDR_STR", info.provider, 1);
+	rc = d_setenv("CRT_PHY_ADDR_STR", info.provider, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	sprintf(buf, "%d", info.crt_ctx_share_addr);
-	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
+	rc = d_setenv("CRT_CTX_SHARE_ADDR", buf, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* If the server has set this, the client must use the same value. */
 	if (info.srv_srx_set != -1) {
 		sprintf(buf, "%d", info.srv_srx_set);
-		rc = setenv("FI_OFI_RXM_USE_SRX", buf, 1);
+		rc = d_setenv("FI_OFI_RXM_USE_SRX", buf, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 		D_INFO("Using server's value for FI_OFI_RXM_USE_SRX: %s\n",
 		       buf);
 	} else {
 		/* Client may not set it if the server hasn't. */
-		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
+		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
 				"but server is unset!\n", cli_srx_set);
+			d_freeenv_str(&cli_srx_set);
 			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 	}
 
 	/* Allow client env overrides for these three */
-	crt_timeout = getenv("CRT_TIMEOUT");
+	d_agetenv_str(&crt_timeout, "CRT_TIMEOUT");
 	if (!crt_timeout) {
 		sprintf(buf, "%d", info.crt_timeout);
-		rc = setenv("CRT_TIMEOUT", buf, 1);
+		rc = d_setenv("CRT_TIMEOUT", buf, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
 		D_INFO("Using client provided CRT_TIMEOUT: %s\n",
 			crt_timeout);
+		d_freeenv_str(&crt_timeout);
 	}
 
-	ofi_interface = getenv("OFI_INTERFACE");
-	ofi_domain = getenv("OFI_DOMAIN");
+	d_agetenv_str(&ofi_interface, "OFI_INTERFACE");
+	d_agetenv_str(&ofi_domain, "OFI_DOMAIN");
 	if (!ofi_interface) {
-		rc = setenv("OFI_INTERFACE", info.interface, 1);
-		if (rc != 0)
+		rc = d_setenv("OFI_INTERFACE", info.interface, 1);
+		if (rc != 0) {
+			d_freeenv_str(&ofi_domain);
 			D_GOTO(cleanup, rc = d_errno2der(errno));
+		}
 
 		/*
 		 * If we use the agent as the source, client env shouldn't be allowed to override
@@ -546,9 +606,11 @@ int dc_mgmt_net_cfg(const char *name)
 			D_WARN("Ignoring OFI_DOMAIN '%s' because OFI_INTERFACE is not set; using "
 			       "automatic configuration instead\n", ofi_domain);
 
-		rc = setenv("OFI_DOMAIN", info.domain, 1);
-		if (rc != 0)
+		rc = d_setenv("OFI_DOMAIN", info.domain, 1);
+		if (rc != 0) {
+			d_freeenv_str(&ofi_domain);
 			D_GOTO(cleanup, rc = d_errno2der(errno));
+		}
 	} else {
 		D_INFO("Using client provided OFI_INTERFACE: %s\n", ofi_interface);
 
@@ -556,15 +618,10 @@ int dc_mgmt_net_cfg(const char *name)
 		if (ofi_domain)
 			D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
+	d_freeenv_str(&ofi_domain);
+	d_freeenv_str(&ofi_interface);
 
-	D_INFO("Network interface: %s, Domain: %s\n", getenv("OFI_INTERFACE"),
-	       getenv("OFI_DOMAIN"));
-	D_DEBUG(DB_MGMT,
-		"CaRT initialization with:\n"
-		"\tCRT_PHY_ADDR_STR: %s, "
-		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
-		getenv("CRT_PHY_ADDR_STR"),
-		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
+	print_mgmt_net_env();
 
 cleanup:
 	put_attach_info(&info, resp);
@@ -586,14 +643,16 @@ int dc_mgmt_net_cfg_check(const char *name)
 
 	/* Client may not set it if the server hasn't. */
 	if (info.srv_srx_set == -1) {
-		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
+		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
 				"but server is unset!\n", cli_srx_set);
+			d_freeenv_str(&cli_srx_set);
 			rc = -DER_INVAL;
 			goto out;
 		}
 	}
+	rc = 0;
 
 out:
 	put_attach_info(&info, resp);

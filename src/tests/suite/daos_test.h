@@ -150,7 +150,8 @@ typedef struct {
 	uint32_t		overlap:1,
 				not_check_result:1,
 				idx_no_jump:1,
-				no_rebuild:1;
+				no_rebuild:1,
+				delay_rebuild:1;
 	int			expect_result;
 	daos_size_t		size;
 	int			nr;
@@ -465,6 +466,8 @@ int rebuild_sub_teardown(void **state);
 int rebuild_small_sub_setup(void **state);
 int rebuild_small_sub_rf1_setup(void **state);
 int rebuild_small_sub_rf0_setup(void **state);
+int rebuild_sub_3nodes_rf0_setup(void **state);
+int rebuild_sub_6nodes_rf1_setup(void **state);
 int rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint32_t rf);
 
 int get_server_config(char *host, char *server_config_file);
@@ -690,5 +693,9 @@ out:
 	D_FREE(fullpath);
 	return rc;
 }
+
+void test_set_engine_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc);
+void test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value);
+void test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num);
 
 #endif

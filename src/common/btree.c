@@ -938,10 +938,9 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec)
 /**
  * Add a new root to the tree, then insert \a rec to the new root.
  *
- * \param tcx	[IN]	Tree operation context.
- * \param off_left [IN]
- *			the original root, it is left child for the new root.
- * \param rec	[IN]	The record to be inserted to the new root.
+ * \param[in] tcx	Tree operation context.
+ * \param[in] off_left	The original root, it is left child for the new root.
+ * \param[in] rec	The record to be inserted to the new root.
  */
 int
 btr_root_grow(struct btr_context *tcx, umem_off_t off_left,
@@ -1810,15 +1809,12 @@ btr_probe_prev(struct btr_context *tcx)
  * \a val_out is/are NULL, then addresses of key or/and value of the current
  * record will be returned.
  *
- * \param toh	[IN]		Tree open handle.
- * \param opc	[IN]		Probe opcode, see dbtree_probe_opc_t for the
- *				details.
- * \param intent [IN]		The operation intent.
- * \param key	[IN]		Key to search
- * \param key_out [OUT]		Return the actual matched key if \a opc is
- *				not BTR_PROBE_EQ.
- * \param val_out [OUT]		Returned value address, or sink buffer to
- *				store returned value.
+ * \param[in] toh	Tree open handle.
+ * \param[in] opc	Probe opcode, see dbtree_probe_opc_t for the details.
+ * \param[in] intent	The operation intent.
+ * \param[in] key	Key to search
+ * \param[out] key_out	Return the actual matched key if \a opc is not BTR_PROBE_EQ.
+ * \param[out] val_out	Returned value address, or sink buffer to store returned value.
  *
  * \return		0	found
  *			-ve	error code
@@ -1865,10 +1861,9 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 /**
  * Fetch on current trace position.
  *
- * \param toh     [IN]		Tree open handle.
- * \param key_out [OUT]		Return the key
- * \param val_out [OUT]		Returned value address, or sink buffer to
- *				store returned value.
+ * \param[in] toh	Tree open handle.
+ * \param[out] key_out	Return the key
+ * \param[out] val_out	Returned value address, or sink buffer to store returned value.
  *
  * \return		0	Key exists on current pos
  *			-ve	Error code
@@ -1908,12 +1903,11 @@ dbtree_fetch_cur(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out)
 /**
  * Fetch sibling of current trace position.
  *
- * \param toh     [IN]		Tree open handle.
- * \param key_out [OUT]		Return the key
- * \param val_out [OUT]		Returned value address, or sink buffer to
- *				store returned value.
- * \param next    [IN]		Fetch next or prev sibling
- * \param move    [IN]		Move trace position or not
+ * \param[in] toh	Tree open handle.
+ * \param[out] key_out	Return the key
+ * \param[out] val_out	Returned value address, or sink buffer to store returned value.
+ * \param[in] next	Fetch next or prev sibling
+ * \param[in] move	Move trace position or not
  *
  * \return		0	Key exists in current pos
  *			-ve	Error code
@@ -1980,10 +1974,9 @@ dbtree_fetch_next(daos_handle_t toh, d_iov_t *key_out, d_iov_t *val_out, bool mo
  * value into the buffer, otherwise it only returns address of value of the
  * current record.
  *
- * \param toh		[IN]	Tree open handle.
- * \param key		[IN]	Key to search.
- * \param val		[OUT]	Returned value address, or sink buffer to
- *				store returned value.
+ * \param[in] toh	Tree open handle.
+ * \param[in] key	Key to search.
+ * \param[out] val	Returned value address, or sink buffer to store returned value.
  *
  * \return		0	found
  *			-ve	error code
@@ -2162,10 +2155,9 @@ btr_tx_end(struct btr_context *tcx, int rc)
 /**
  * Update value of the provided key.
  *
- * \param toh		[IN]	Tree open handle.
- * \param key		[IN]	Key to search.
- * \param val		[IN]	New value for the key, it will punch the
- *				original value if \val is NULL.
+ * \param[in] toh	Tree open handle.
+ * \param[in] key	Key to search.
+ * \param[in] val	New value for the key, it will punch the original value if \val is NULL.
  *
  * \return		0	success
  *			-ve	error code
@@ -2196,9 +2188,9 @@ dbtree_update(daos_handle_t toh, d_iov_t *key, d_iov_t *val)
 /**
  * Set the tree feats.
  *
- * \param root[in]	Tree root
- * \param umm[in]	umem instance
- * \param feats[in]	feats to set
+ * \param[in] root	Tree root
+ * \param[in] umm	umem instance
+ * \param[in] feats	feats to set
  *
  * \return 0 on success
  */
@@ -2243,13 +2235,11 @@ dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feat
  * Update the value of the provided key, or insert it as a new key if
  * there is no match.
  *
- * \param toh		[IN]	Tree open handle.
- * \param opc		[IN]	Probe opcode, see dbtree_probe_opc_t for the
- *				details.
- * \param key		[IN]	Key to search.
- * \param val		[IN]	New value for the key, it will punch the
- *				original value if \val is NULL.
- * \param val_out	[OUT]	Return value address
+ * \param[in] toh	Tree open handle.
+ * \param[in] opc	Probe opcode, see dbtree_probe_opc_t for the details.
+ * \param[in] key	Key to search.
+ * \param[in] val	New value for the key, it will punch the original value if \val is NULL.
+ * \param[out] val_out	Return value address
  *
  * \return		0	success
  *			-ve	error code
@@ -2330,13 +2320,11 @@ btr_node_del_leaf_only(struct btr_context *tcx, struct btr_trace *trace,
  * NB: this function only grab one record from the sibling node, although we
  * might want to grab multiple records in the future.
  *
- * \param tcx		[IN]	Tree operation context.
- * \param par_tr	[IN]	Probe trace of the current node in the parent
- *				node.
- * \param cur_tr	[IN]	Probe trace of the record being deleted in the
- *				current node.
- * \param sib_off	[IN]	umem offset of the sibling node.
- * \param sib_on_right	[IN]	The sibling node is on the right/left side of
+ * \param[in] tcx		Tree operation context.
+ * \param[in] par_tr		Probe trace of the current node in the parent node.
+ * \param[in] cur_tr		Probe trace of the record being deleted in the current node.
+ * \param[in] sib_off		umem offset of the sibling node.
+ * \param[in] sib_on_right	The sibling node is on the right/left side of
  *				the current node:
  *				TRUE	= right
  *				FALSE	= left
@@ -2813,13 +2801,10 @@ btr_node_del_child(struct btr_context *tcx,
  * node, if the deletion generates a new empty node (the current node or its
  * sibling node), then the deletion needs to bubble up.
  *
- * \param par_tr	[IN/OUT]
- *				Probe trace of the current node in the parent
- *				node. If the deletion generates a new empty
- *				node, this new empty node will be stored in
+ * \param[in,out] par_tr	Probe trace of the current node in the parent node. If the deletion
+ * 				generates a new empty node, this new empty node will be stored in
  *				@par_tr as well.
- * \param cur_tr	[IN]	Probe trace of the record being deleted in the
- *				current node
+ * \param[in] cur_tr		Probe trace of the record being deleted in the current node
  */
 static int
 btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
@@ -3053,11 +3038,9 @@ btr_tx_delete(struct btr_context *tcx, void *args)
 /**
  * Delete the @key and the corresponding value from the btree.
  *
- * \param toh		[IN]	Tree open handle.
- * \param key		[IN]	The key to be deleted.
- * \param args		[IN/OUT]
- *				Optional: buffer to provide
- *				args to handle special cases(if any)
+ * \param[in] toh	Tree open handle.
+ * \param[in] key	The key to be deleted.
+ * \param[in,out] args Optional: buffer to provide args to handle special cases(if any)
  */
 int
 dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
@@ -3190,9 +3173,9 @@ btr_tree_count(struct btr_context *tcx, struct btr_root *root)
 /**
  * Query attributes and/or gather nodes and records statistics of btree.
  *
- * \param toh	[IN]	The tree open handle.
- * \param attr	[OUT]	Optional, returned tree attributes.
- * \param stat	[OUT]	Optional, returned nodes and records statistics.
+ * \param[in] toh	The tree open handle.
+ * \param[out] attr	Optional, returned tree attributes.
+ * \param[out] stat	Optional, returned nodes and records statistics.
  */
 int
 dbtree_query(daos_handle_t toh, struct btr_attr *attr, struct btr_stat *stat)
@@ -3267,12 +3250,12 @@ btr_tx_tree_alloc(struct btr_context *tcx)
 /**
  * Create an empty tree.
  *
- * \param tree_class	[IN]	Class ID of the tree.
- * \param tree_feats	[IN]	Feature bits of the tree.
- * \param tree_order	[IN]	Btree order, value >= 3.
- * \param uma		[IN]	Memory class attributes.
- * \param root_offp	[OUT]	Returned root umem offset.
- * \param toh		[OUT]	Returned tree open handle.
+ * \param[in] tree_classq	Class ID of the tree.
+ * \param[in] tree_feats	Feature bits of the tree.
+ * \param[in] tree_order	Btree order, value >= 3.
+ * \param[in] uma		Memory class attributes.
+ * \param[out] root_offp	Returned root umem offset.
+ * \param[out] toh		Returned tree open handle.
  */
 int
 dbtree_create(unsigned int tree_class, uint64_t tree_feats,
@@ -3380,9 +3363,9 @@ dbtree_create_inplace_ex(unsigned int tree_class, uint64_t tree_feats,
 /**
  * Open a btree.
  *
- * \param root_off	[IN]	umem offset of the tree root.
- * \param uma		[IN]	Memory class attributes.
- * \param toh		[OUT]	Returned tree open handle.
+ * \param[in] root_off	umem offset of the tree root.
+ * \param[in] uma	Memory class attributes.
+ * \param[out] toh	Returned tree open handle.
  */
 int
 dbtree_open(umem_off_t root_off, struct umem_attr *uma,
@@ -3403,11 +3386,11 @@ dbtree_open(umem_off_t root_off, struct umem_attr *uma,
 /**
  * Open a btree from the root address.
  *
- * \param root		[IN]	Address of the tree root.
- * \param uma		[IN]	Memory class attributes.
- * \param coh		[IN]	The container open handle.
- * \param priv		[IN]	Private data for tree opener
- * \param toh		[OUT]	Returned tree open handle.
+ * \param[in] root	Address of the tree root.
+ * \param[in] uma	Memory class attributes.
+ * \param[in] coh	The container open handle.
+ * \param[in] priv	Private data for tree opener
+ * \param[out] toh	Returned tree open handle.
  */
 int
 dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
@@ -3433,9 +3416,9 @@ dbtree_open_inplace_ex(struct btr_root *root, struct umem_attr *uma,
 /**
  * Open a btree from the root address.
  *
- * \param root		[IN]	Address of the tree root.
- * \param uma		[IN]	Memory class attributes.
- * \param toh		[OUT]	Returned tree open handle.
+ * \param[in] root	Address of the tree root.
+ * \param[in] uma	Memory class attributes.
+ * \param[out] toh	Returned tree open handle.
  */
 int
 dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
@@ -3447,7 +3430,7 @@ dbtree_open_inplace(struct btr_root *root, struct umem_attr *uma,
 /**
  * Close an opened tree.
  *
- * \param toh	[IN]	Tree open handle.
+ * \param[in] toh	Tree open handle.
  */
 int
 dbtree_close(daos_handle_t toh)
@@ -3586,8 +3569,8 @@ btr_tx_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
  * Destroy a btree.
  * The tree open handle is invalid after the destroy.
  *
- * \param toh	[IN]	Tree open handle.
- * \param args	[IN]	user parameter for btr_ops_t::to_rec_free
+ * \param[in] toh	Tree open handle.
+ * \param[in] args	user parameter for btr_ops_t::to_rec_free
  */
 int
 dbtree_destroy(daos_handle_t toh, void *args)
@@ -3614,10 +3597,10 @@ dbtree_destroy(daos_handle_t toh, void *args)
  * It returns if all input credits are consumed, or the tree is empty, in
  * the later case, it also destroys the btree.
  *
- * \param toh		[IN]	 Tree open handle.
- * \param credits	[IN/OUT] Input and returned drain credits
- * \param args		[IN]	 user parameter for btr_ops_t::to_rec_free
- * \param destroy	[OUT]	 Tree is empty and destroyed
+ * \param[in] toh		Tree open handle.
+ * \param[in,out] credits	Input and returned drain credits
+ * \param[in] args		user parameter for btr_ops_t::to_rec_free
+ * \param[out] destroy		Tree is empty and destroyed
  */
 int
 dbtree_drain(daos_handle_t toh, int *credits, void *args, bool *destroyed)
@@ -3656,8 +3639,8 @@ failed:
 /**
  * Initialize iterator.
  *
- * \param toh		[IN]	Tree open handle
- * \param options	[IN]	Options for the iterator.
+ * \param[in] toh		Tree open handle
+ * \param[out] options		Options for the iterator.
  *				BTR_ITER_EMBEDDED:
  *				if this bit is set, then this function will
  *				return the iterator embedded in the tree open
@@ -3665,7 +3648,7 @@ failed:
  *				but state of iterator could be overwritten
  *				by any other tree operation.
  *
- * \param ih		[OUT]	Returned iterator handle.
+ * \param[out] ih		Returned iterator handle.
  */
 int
 dbtree_iter_prepare(daos_handle_t toh, unsigned int options, daos_handle_t *ih)
@@ -3735,12 +3718,12 @@ dbtree_iter_finish(daos_handle_t ih)
  * This function must be called after dbtree_iter_prepare, it can be called
  * for arbitrary times for the same iterator.
  *
- * \param ih	[IN]	The iterator handle.
- * \param opc	[IN]	Probe opcode, see dbtree_probe_opc_t for the details.
- * \param intent [IN]	The operation intent.
- * \param key	[IN]	The key to probe, it will be ignored if opc is
+ * \param[in] ih	The iterator handle.
+ * \param[in] opc	Probe opcode, see dbtree_probe_opc_t for the details.
+ * \param[in] intent	The operation intent.
+ * \param[in] key	The key to probe, it will be ignored if opc is
  *			BTR_PROBE_FIRST or BTR_PROBE_LAST.
- * \param anchor [IN]	the anchor point to probe, it will be ignored if
+ * \param[in] anchor	the anchor point to probe, it will be ignored if
  *			\a key is provided.
  * \note		If opc is not BTR_PROBE_FIRST or BTR_PROBE_LAST,
  *			key or anchor is required.
@@ -3875,12 +3858,12 @@ dbtree_iter_prev(daos_handle_t ih)
  * address in \a key or/and \a val is/are NULL, then this function only
  * returns addresses of key or/and value of the current record.
  *
- * \param ih	[IN]	Iterator open handle.
- * \param key	[OUT]	Sink buffer for the returned key, the key address is
+ * \param[in] ih	Iterator open handle.
+ * \param[out] key	Sink buffer for the returned key, the key address is
  *			returned if buffer address is NULL.
- * \param val	[OUT]	Sink buffer for the returned value, the value address
+ * \param[out] val	Sink buffer for the returned value, the value address
  *			is returned if buffer address is NULL.
- * \param anchor [OUT]	Returned iteration anchor.
+ * \param[out] anchor	Returned iteration anchor.
  */
 int
 dbtree_iter_fetch(daos_handle_t ih, d_iov_t *key,
@@ -3967,9 +3950,8 @@ dbtree_key2anchor(daos_handle_t toh, d_iov_t *key, daos_anchor_t *anchor)
  * will reset iterator before return, it means that caller should call
  * dbtree_iter_probe() again to reinitialize the iterator.
  *
- * \param ih		[IN]	Iterator open handle.
- * \param value_out	[OUT]	Optional, buffer to preserve value while
- *				deleting btree node.
+ * \param[in] ih		Iterator open handle.
+ * \param[out] value_out	Optional, buffer to preserve value while deleting btree node.
  */
 int
 dbtree_iter_delete(daos_handle_t ih, void *args)
@@ -4021,11 +4003,11 @@ dbtree_iter_empty(daos_handle_t ih)
  * true). \a cb will be called with \a arg for each record. See also
  * dbtree_iterate_cb_t.
  *
- * \param toh		[IN]	Tree open handle
- * \param intent	[IN]	The operation intent
- * \param backward	[IN]	If true, iterate from last to first
- * \param cb		[IN]	Callback function (see dbtree_iterate_cb_t)
- * \param arg		[IN]	Callback argument
+ * \param[in] toh	Tree open handle
+ * \param[in] intent	The operation intent
+ * \param[in] backward	If true, iterate from last to first
+ * \param[in] cb	Callback function (see dbtree_iterate_cb_t)
+ * \param[in] arg	Callback argument
  */
 int
 dbtree_iterate(daos_handle_t toh, uint32_t intent, bool backward,
@@ -4183,9 +4165,9 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 /**
  * Register a new tree class.
  *
- * \param tree_class	[IN]	ID for this class
- * \param tree_feats	[IN]	Feature bits, e.g. hash type
- * \param ops		[IN]	Customized function table
+ * \param[in] tree_class	ID for this class
+ * \param[in] tree_feats	Feature bits, e.g. hash type
+ * \param[in] ops		Customized function table
  */
 int
 dbtree_class_register(unsigned int tree_class, uint64_t tree_feats,

@@ -5222,7 +5222,7 @@ out:
 	if (rc == 0) {
 		if (opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY)
 			ds_cont_update_snap_iv(svc, in->ci_uuid);
-		else if (opc == CONT_PROP_SET)
+		else if (opc == CONT_PROP_SET || opc == CONT_ACL_UPDATE || opc == CONT_ACL_DELETE)
 			ds_cont_prop_iv_update(svc, in->ci_uuid);
 	}
 

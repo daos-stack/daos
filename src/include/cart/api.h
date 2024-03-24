@@ -2249,6 +2249,30 @@ crt_quiet_error(int err)
 	return err == -DER_GRPVER;
 }
 
+/**
+ * Change the quota limit.
+ *
+ * \param[in] crt_ctx          CaRT context
+ * \param[in] quota            Quota type
+ * \param[in] val              Value
+ *
+ * \return                     DER_SUCCESS on success, negative value on
+ *                             failure.
+ */
+int crt_context_quota_limit_set(crt_context_t crt_ctx, crt_quota_type_t quota, int value);
+
+/**
+ * Query the quota limit.
+ *
+ * \param[in] crt_ctx          CaRT context
+ * \param[in] quota            Quota type
+ * \param[out] val             Returned value
+ *
+ * \return                     DER_SUCCESS on success, negative value on
+ *                             failure.
+ */
+int crt_context_quota_limit_get(crt_context_t crt_ctx, crt_quota_type_t quota, int *value);
+
 /** @}
  */
 

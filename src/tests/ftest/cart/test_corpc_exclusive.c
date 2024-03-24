@@ -103,8 +103,9 @@ int main(void)
 	membs.rl_nr = 3;
 	membs.rl_ranks = memb_ranks;
 
-	env_self_rank = getenv("CRT_L_RANK");
+	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -128,7 +129,7 @@ int main(void)
 		assert(0);
 	}
 
-	grp_cfg_file = getenv("CRT_L_GRP_CFG");
+	d_agetenv_str(&grp_cfg_file, "CRT_L_GRP_CFG");
 
 	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
@@ -146,6 +147,7 @@ int main(void)
 	/* load group info from a config file and delete file upon return */
 	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
 				       true);
+	d_freeenv_str(&grp_cfg_file);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);

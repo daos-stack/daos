@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -61,7 +61,7 @@ umempobj_settings_init(bool md_on_ssd)
 		return rc;
 	}
 
-	d_getenv_int("DAOS_MD_ON_SSD_MODE", &md_mode);
+	d_getenv_uint("DAOS_MD_ON_SSD_MODE", &md_mode);
 
 	switch (md_mode) {
 	case DAOS_MD_BMEM:

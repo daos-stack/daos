@@ -1180,12 +1180,11 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 }
 
 /**
- * Validates an input group id string. Checks both length and for presence of
- * invalid characters.
+ * Validates an input group id string. Checks both length and for presence of invalid characters.
  *
- * \param grpid [IN]		unique group ID.
+ * \param[in] grpid	unique group ID.
  *
- * \return			zero if grpid is valid, -DER_INVAL otherwise
+ * \return		zero if grpid is valid, -DER_INVAL otherwise
  */
 int
 crt_validate_grpid(const crt_group_id_t grpid) {

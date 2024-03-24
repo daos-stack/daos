@@ -250,7 +250,7 @@ d_add_log_facility(const char *aname, const char *lname)
 /**
  * Add a new log facility.
  *
- * \param[out fac	facility number to be returned
+ * \param[out] fac	facility number to be returned
  * \param[in] aname	abbr. name for the facility, for example DSR.
  * \param[in] lname	long name for the facility, for example DSR.
  *
@@ -285,7 +285,7 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname);
  * may want to replace assert() with cmocka's mock_assert() so that you can
  * test if a function throws an assertion with cmocka's expect_assert_failure().
  *
- * \param[in] *alt_assert	Function pointer to the alternative assert
+ * \param[in] alt_assert	Function pointer to the alternative assert
  *
  * \return			0 on success, -DER_INVAL on error
  */
@@ -301,6 +301,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		fflush(stdout);						\
 	} while (0)
 
+/* Assert cond is true */
 #define D_ASSERT(e)							\
 	do {								\
 		if (likely(e))						\
@@ -312,6 +313,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		assert(0);						\
 	} while (0)
 
+/* Assert cond is true with message to report on failure */
 #define D_ASSERTF(cond, fmt, ...)						\
 	do {									\
 		if (likely(cond))						\

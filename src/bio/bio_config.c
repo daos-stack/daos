@@ -639,9 +639,9 @@ check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool
  * Set allowed bdev PCI addresses in provided SPDK environment options based on attach bdev RPCs
  * in the JSON config file.
  *
- * \param[IN]	nvme_conf	JSON config file path
- * \param[OUT]	opts		SPDK environment options
- * \param[OUT]	roles		global nvme bdev roles
+ * \param[in]	nvme_conf	JSON config file path
+ * \param[out]	opts		SPDK environment options
+ * \param[out]	roles		global nvme bdev roles
  *
  * \returns	 Zero on success, negative on failure (DER)
  */
@@ -833,7 +833,7 @@ hotplug_filter_fn(const struct spdk_pci_addr *addr)
 /**
  * Set hotplug bus-ID ranges in SPDK filter based on values read from JSON config file.
  *
- * \param[IN]	nvme_conf	JSON config file path
+ * \param[in]	nvme_conf	JSON config file path
  *
  * \returns	 Zero on success, negative on failure (DER)
  */
@@ -854,7 +854,7 @@ bio_set_hotplug_filter(const char *nvme_conf)
 /**
  * Read optional acceleration properties from JSON config file.
  *
- * \param[IN]	nvme_conf	JSON config file path
+ * \param[in]	nvme_conf	JSON config file path
  *
  * \returns	 Zero on success, negative on failure (DER)
  */
@@ -894,9 +894,9 @@ out:
 /**
  * Set output parameters based on JSON config settings for option SPDK JSON-RPC server.
  *
- * \param[IN]	nvme_conf	JSON config file path
- * \param[OUT]	enable		Flag to enable the RPC server
- * \param[OUT]	sock_addr	Path in which to create socket file
+ * \param[in]	nvme_conf	JSON config file path
+ * \param[out]	enable		Flag to enable the RPC server
+ * \param[out]	sock_addr	Path in which to create socket file
  *
  * \returns	 Zero on success, negative on failure (DER)
  */

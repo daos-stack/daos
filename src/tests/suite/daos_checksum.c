@@ -2885,7 +2885,7 @@ run_daos_checksum_test(int rank, int size, int *sub_tests, int sub_tests_size)
 	}
 
 	if (sub_tests_size == 0) {
-		if (getenv("DAOS_CSUM_TEST_ALL_TYPE")) {
+		if (d_isenv_def("DAOS_CSUM_TEST_ALL_TYPE")) {
 			for (i = DAOS_PROP_CO_CSUM_OFF + 1;
 			     i <= DAOS_PROP_CO_CSUM_ADLER32; i++) {
 				dts_csum_prop_type = i;

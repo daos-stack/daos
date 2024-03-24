@@ -190,6 +190,50 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 	((uint64_t)		(pci_query_bits)	CRT_VAR) \
 	((crt_bulk_t)		(pci_map_bulk)		CRT_VAR)
 
+/* clang-format on */
+enum map_update_opc {
+	MAP_EXCLUDE = 0,
+	MAP_DRAIN,
+	MAP_REINT,
+	MAP_EXTEND,
+	MAP_ADD_IN,
+	MAP_EXCLUDE_OUT,
+	MAP_FINISH_REBUILD,
+	MAP_REVERT_REBUILD,
+};
+
+static inline uint32_t
+pool_opc_2map_opc(uint32_t pool_opc)
+{
+	uint32_t opc = 0;
+
+	switch(pool_opc) {
+	case POOL_EXCLUDE:
+		opc = MAP_EXCLUDE;
+		break;
+	case POOL_DRAIN:
+		opc = MAP_DRAIN;
+		break;
+	case POOL_REINT:
+		opc = MAP_REINT;
+		break;
+	case POOL_EXTEND:
+		opc = MAP_EXTEND;
+		break;
+	case POOL_ADD_IN:
+		opc = MAP_ADD_IN;
+		break;
+	case POOL_EXCLUDE_OUT:
+		opc = MAP_EXCLUDE_OUT;
+		break;
+	default:
+		D_ASSERTF(false, "invalid opc: 0x%x\n", pool_opc);
+		break;
+	}
+
+	return opc;
+}
+
 #define DAOS_OSEQ_POOL_CONNECT	/* output fields */		 \
 	((struct pool_op_out)	(pco_op)		CRT_VAR) \
 	((struct daos_pool_space) (pco_space)		CRT_RAW) \

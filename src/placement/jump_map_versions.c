@@ -1,6 +1,6 @@
 /**
  *
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -13,25 +13,34 @@
 #include <daos/pool_map.h>
 #include <isa-l.h>
 
+/* NB: this function is to check if the component should be
+ * included in jump hash layout generation process, so those
+ * targets, which are in NEW status or being added afterwards
+ * should be excluded.
+ */
 static bool
-is_new_added_dom(struct pool_component *comp)
+is_excluded_comp(struct pool_component *comp, uint32_t allow_version,
+		 enum layout_gen_mode gen_mode)
 {
-	return (comp->co_status == PO_COMP_ST_UP && comp->co_fseq <= 1) ||
-		comp->co_status == PO_COMP_ST_NEW;
-}
-
-static bool
-is_excluded_comp(struct pool_component *comp, bool exclude_new)
-{
-	/* All other non new added targets/ranks should not be excluded */
-	if (is_new_added_dom(comp) && exclude_new)
+	if (comp->co_status == PO_COMP_ST_NEW)
 		return true;
+
+	if (comp->co_status == PO_COMP_ST_UP && comp->co_fseq <= 1) { /* new added target */
+		/* if the target is added after the rebuild, then ignore it */
+		if (comp->co_in_ver > allow_version)
+			return true;
+
+		/* Only counted in for post rebuild */
+		if (gen_mode != POST_REBUILD)
+			return true;
+	}
 
 	return false;
 }
 
 static inline uint32_t
-get_num_domains(struct pool_domain *curr_dom, bool exclude_new, pool_comp_type_t fdom_lvl)
+get_num_domains(struct pool_domain *curr_dom, uint32_t allow_version,
+		enum layout_gen_mode gen_mode, pool_comp_type_t fdom_lvl)
 {
 	struct pool_domain *next_dom;
 	struct pool_target *next_target;
@@ -46,14 +55,16 @@ get_num_domains(struct pool_domain *curr_dom, bool exclude_new, pool_comp_type_t
 	if (curr_dom->do_children == NULL || curr_dom->do_comp.co_type == fdom_lvl) {
 		next_target = &curr_dom->do_targets[num_dom - 1];
 
-		while (num_dom - 1 > 0 && is_excluded_comp(&next_target->ta_comp, exclude_new)) {
+		while (num_dom - 1 > 0 && is_excluded_comp(&next_target->ta_comp, allow_version,
+							   gen_mode)) {
 			num_dom--;
 			next_target = &curr_dom->do_targets[num_dom - 1];
 		}
 	} else {
 		next_dom = &curr_dom->do_children[num_dom - 1];
 
-		while (num_dom - 1 > 0 && is_excluded_comp(&next_dom->do_comp, exclude_new)) {
+		while (num_dom - 1 > 0 && is_excluded_comp(&next_dom->do_comp, allow_version,
+							   gen_mode)) {
 			num_dom--;
 			next_dom = &curr_dom->do_children[num_dom - 1];
 		}
@@ -63,13 +74,13 @@ get_num_domains(struct pool_domain *curr_dom, bool exclude_new, pool_comp_type_t
 }
 
 static bool
-tgt_isset_range(struct pool_target *tgts, uint8_t *tgts_used,
-		uint32_t start_tgt, uint32_t end_tgt, bool exclude_new)
+tgt_isset_range(struct pool_target *tgts, uint8_t *tgts_used, uint32_t start_tgt,
+		uint32_t end_tgt, uint32_t allow_version, enum layout_gen_mode gen_mode)
 {
 	uint32_t index;
 
 	for (index = start_tgt; index <= end_tgt; ++index) {
-		if (is_excluded_comp(&tgts[index].ta_comp, exclude_new))
+		if (is_excluded_comp(&tgts[index].ta_comp, allow_version, gen_mode))
 			continue;
 		if (isclr(tgts_used, index))
 			return false;
@@ -79,13 +90,13 @@ tgt_isset_range(struct pool_target *tgts, uint8_t *tgts_used,
 }
 
 static bool
-dom_isset_range(struct pool_domain *doms, uint8_t *doms_bits,
-		uint32_t start_dom, uint32_t end_dom, bool exclude_new)
+dom_isset_range(struct pool_domain *doms, uint8_t *doms_bits, uint32_t start_dom,
+		uint32_t end_dom, uint32_t allow_version, enum layout_gen_mode gen_mode)
 {
 	uint32_t index;
 
 	for (index = start_dom; index <= end_dom; ++index) {
-		if (is_excluded_comp(&doms[index].do_comp, exclude_new))
+		if (is_excluded_comp(&doms[index].do_comp, allow_version, gen_mode))
 			continue;
 		if (isclr(doms_bits, index))
 			return false;
@@ -96,12 +107,13 @@ dom_isset_range(struct pool_domain *doms, uint8_t *doms_bits,
 
 static bool
 dom_isset_2ranges(struct pool_domain *doms, uint8_t *doms_bits1, uint8_t *doms_bits2,
-		  uint32_t start_dom, uint32_t end_dom, bool exclude_new)
+		  uint32_t start_dom, uint32_t end_dom, uint32_t allow_version,
+		  enum layout_gen_mode gen_mode)
 {
 	uint32_t index;
 
 	for (index = start_dom; index <= end_dom; ++index) {
-		if (is_excluded_comp(&doms[index].do_comp, exclude_new))
+		if (is_excluded_comp(&doms[index].do_comp, allow_version, gen_mode))
 			continue;
 
 		if (isclr(doms_bits1, index) && isclr(doms_bits2, index))
@@ -112,26 +124,27 @@ dom_isset_2ranges(struct pool_domain *doms, uint8_t *doms_bits1, uint8_t *doms_b
 }
 
 static bool
-is_dom_full(struct pool_domain *dom, struct pool_domain *root,
-	    uint8_t *dom_full, bool exclude_new)
+is_dom_full(struct pool_domain *dom, struct pool_domain *root, uint8_t *dom_full,
+	    uint32_t allow_version, enum layout_gen_mode gen_mode)
 {
 	uint32_t start_dom = dom->do_children - root;
 	uint32_t end_dom = start_dom + (dom->do_child_nr - 1);
 
-	if (dom_isset_range(root, dom_full, start_dom, end_dom, exclude_new))
+	if (dom_isset_range(root, dom_full, start_dom, end_dom, allow_version, gen_mode))
 		return true;
 
 	return false;
 }
 
 struct pool_target *
-_get_target(struct pool_domain *doms, uint32_t tgt_idx, bool exclude_new)
+_get_target(struct pool_domain *doms, uint32_t tgt_idx, uint32_t allow_version,
+	    enum layout_gen_mode gen_mode)
 {
 	uint32_t idx = 0;
 	uint32_t i;
 
 	for (i = 0; i < doms->do_target_nr; i++) {
-		if (!is_excluded_comp(&doms->do_targets[i].ta_comp, exclude_new)) {
+		if (!is_excluded_comp(&doms->do_targets[i].ta_comp, allow_version, gen_mode)) {
 			if (idx == tgt_idx)
 				return &doms->do_targets[idx];
 			idx++;
@@ -141,13 +154,14 @@ _get_target(struct pool_domain *doms, uint32_t tgt_idx, bool exclude_new)
 }
 
 struct pool_domain *
-_get_dom(struct pool_domain *doms, uint32_t dom_idx, bool exclude_new)
+_get_dom(struct pool_domain *doms, uint32_t dom_idx, uint32_t allow_version,
+	 enum layout_gen_mode gen_mode)
 {
 	uint32_t idx = 0;
 	uint32_t i;
 
 	for (i = 0; i < doms->do_child_nr; i++) {
-		if (!is_excluded_comp(&doms->do_children[i].do_comp, exclude_new)) {
+		if (!is_excluded_comp(&doms->do_children[i].do_comp, allow_version, gen_mode)) {
 			if (idx == dom_idx)
 				return &doms->do_children[idx];
 			idx++;
@@ -187,29 +201,30 @@ _get_dom(struct pool_domain *doms, uint32_t dom_idx, bool exclude_new)
  *                              selecting a target to determine if repeated
  *                              targets are allowed in the case that there
  *                              are more shards than targets
- * \param[in]	exclude_new	exclude new target/rank during mapping.
+ * \param[in]	allow_version	allowed pool map version to generate the layout.
+ * \param[in]	gen_mode	layout generation mode(PRE_REBUILD, CURRENT, POST_REBUILD).
  * \param[in]   fdom_lvl	failure domain of the current pool map
  */
 #define MAX_STACK	5
 static void
-__get_target_v1(struct pool_domain *curr_dom, struct pool_target **target,
-		struct pool_domain **dom, uint64_t obj_key, uint8_t *dom_used,
-		uint8_t *dom_full, uint8_t *dom_cur_grp_used, uint8_t *tgts_used,
-		int shard_num, bool exclude_new, pool_comp_type_t fdom_lvl)
+__get_target_v1(struct pool_domain *root_pos,
+		struct pool_target **target, struct pool_domain **dom, uint64_t obj_key,
+		uint8_t *dom_used, uint8_t *dom_full, uint8_t *dom_cur_grp_used, uint8_t *tgts_used,
+		int shard_num, uint32_t allow_version, enum layout_gen_mode gen_mode,
+		pool_comp_type_t fdom_lvl, uint32_t grp_size)
 {
 	int                     range_set;
 	uint8_t                 found_target = 0;
-	struct pool_domain      *root_pos;
+	struct pool_domain	*curr_dom = root_pos;
 	struct pool_domain	*dom_stack[MAX_STACK] = { 0 };
 	int			top = -1;
 
 	obj_key = crc(obj_key, shard_num);
-	root_pos = curr_dom;
 	do {
 		uint32_t        avail_doms;
 
 		/* Retrieve number of nodes in this domain */
-		avail_doms = get_num_domains(curr_dom, exclude_new, fdom_lvl);
+		avail_doms = get_num_domains(curr_dom, allow_version, gen_mode, fdom_lvl);
 
 		/* If choosing target (lowest fault domain level) */
 		if (curr_dom->do_comp.co_type == fdom_lvl) {
@@ -223,7 +238,7 @@ __get_target_v1(struct pool_domain *curr_dom, struct pool_target **target,
 			end_tgt = start_tgt + (curr_dom->do_target_nr - 1);
 
 			range_set = tgt_isset_range(root_pos->do_targets, tgts_used,
-						    start_tgt, end_tgt, exclude_new);
+						    start_tgt, end_tgt, allow_version, gen_mode);
 			if (range_set) {
 				/* Used up all targets in this domain */
 				D_ASSERT(top != -1);
@@ -242,7 +257,8 @@ __get_target_v1(struct pool_domain *curr_dom, struct pool_target **target,
 			do {
 				selected_tgt = selected_tgt % avail_doms;
 				/* Retrieve actual target using index */
-				*target = _get_target(curr_dom, selected_tgt, exclude_new);
+				*target = _get_target(curr_dom, selected_tgt, allow_version,
+						      gen_mode);
 				/* Get target id to check if target used */
 				tgt_idx = *target - root_pos->do_targets;
 				selected_tgt++;
@@ -252,14 +268,14 @@ __get_target_v1(struct pool_domain *curr_dom, struct pool_target **target,
 			D_ASSERTF(isclr(dom_full, (uint32_t)(curr_dom - root_pos)),
 				  "selected_tgt %u\n", (uint32_t)(curr_dom - root_pos));
 			range_set = tgt_isset_range(root_pos->do_targets, tgts_used,
-						    start_tgt, end_tgt, exclude_new);
+						    start_tgt, end_tgt, allow_version, gen_mode);
 			if (range_set) {
 				/* Used up all targets in this domain */
 				setbit(dom_full, curr_dom - root_pos);
 				/* Check and set if all of its parent are full */
 				while(top != -1) {
 					if (is_dom_full(dom_stack[top], root_pos, dom_full,
-							exclude_new)) {
+							allow_version, gen_mode)) {
 						uint32_t off = dom_stack[top] - root_pos;
 
 						D_DEBUG(DB_PL, "dom %u used up\n", off);
@@ -281,10 +297,12 @@ __get_target_v1(struct pool_domain *curr_dom, struct pool_target **target,
 			start_dom = (curr_dom->do_children) - root_pos;
 			end_dom = start_dom + (curr_dom->do_child_nr - 1);
 
+			D_DEBUG(DB_TRACE, "start_dom %u end_dom %u\n", start_dom, end_dom);
 			/* Check if all targets under the domain range has been
 			 * used up (occupied), go back to its parent if it does.
 			 */
-			range_set = is_dom_full(curr_dom, root_pos, dom_full, exclude_new);
+			range_set = is_dom_full(curr_dom, root_pos, dom_full, allow_version,
+						gen_mode);
 			if (range_set) {
 				if (top == -1) {
 					/* shard nr > target nr, no extra target for the shard */
@@ -301,7 +319,7 @@ __get_target_v1(struct pool_domain *curr_dom, struct pool_target **target,
 
 			/* Check if all children has been used for the current group or full */
 			range_set = dom_isset_2ranges(root_pos, dom_full, dom_cur_grp_used,
-						      start_dom, end_dom, exclude_new);
+						      start_dom, end_dom, allow_version, gen_mode);
 			if (range_set) {
 				if (top == -1) {
 					*target = NULL;
@@ -316,7 +334,7 @@ __get_target_v1(struct pool_domain *curr_dom, struct pool_target **target,
 			 * object.
 			 */
 			range_set = dom_isset_2ranges(root_pos, dom_used, dom_cur_grp_used,
-						      start_dom, end_dom, exclude_new);
+						      start_dom, end_dom, allow_version, gen_mode);
 			if (range_set) {
 				int idx;
 
@@ -336,8 +354,9 @@ __get_target_v1(struct pool_domain *curr_dom, struct pool_target **target,
 
 				selected_dom = d_hash_jump(key, avail_doms);
 				key = crc(key, fail_num++);
-				_dom = _get_dom(curr_dom, selected_dom, exclude_new);
-				selected_dom = _dom - curr_dom->do_children;
+				_dom = _get_dom(curr_dom, selected_dom, allow_version, gen_mode);
+				if (_dom != NULL)
+					selected_dom = _dom - curr_dom->do_children;
 			} while (isset(dom_used, start_dom + selected_dom) ||
 				 isset(dom_cur_grp_used, start_dom + selected_dom));
 
@@ -358,7 +377,7 @@ __get_target_v1(struct pool_domain *curr_dom, struct pool_target **target,
 /* Only reset all used dom/tgts bits if all domain has been used. */
 static void
 dom_reset_bit(struct pool_domain *dom, uint8_t *dom_bits, struct pool_domain *root,
-	      bool exclude_new, uint32_t fdom_lvl)
+	      uint32_t allow_version, enum layout_gen_mode gen_mode, uint32_t fdom_lvl)
 {
 	struct pool_domain	*tree;
 	uint32_t		dom_nr;
@@ -373,7 +392,7 @@ dom_reset_bit(struct pool_domain *dom, uint8_t *dom_bits, struct pool_domain *ro
 
 		if (tree->do_children) {
 			if (!dom_isset_range(root, dom_bits, start_dom,
-					     end_dom, exclude_new))
+					     end_dom, allow_version, gen_mode))
 				return;
 			for (i = 0; i < dom_nr; i++) {
 				clrbit(dom_bits, start_dom + i);
@@ -388,11 +407,12 @@ dom_reset_bit(struct pool_domain *dom, uint8_t *dom_bits, struct pool_domain *ro
 
 static void
 dom_reset_full(struct pool_domain *dom, uint8_t *dom_bits, uint8_t *tgts_used,
-	       struct pool_domain *root, bool exclude_new, uint32_t fdom_lvl)
+	       struct pool_domain *root, uint32_t allow_version, enum layout_gen_mode gen_mode,
+	       uint32_t fdom_lvl)
 {
 	int i;
 
-	dom_reset_bit(dom, dom_bits, root, exclude_new, fdom_lvl);
+	dom_reset_bit(dom, dom_bits, root, allow_version, gen_mode, fdom_lvl);
 
 	/* check and reset all used tgts bits under the domain */
 	for (i = 0; i < dom->do_target_nr; i++) {
@@ -404,24 +424,14 @@ dom_reset_full(struct pool_domain *dom, uint8_t *dom_bits, uint8_t *tgts_used,
 }
 
 static bool
-dom_tgts_are_avaible(struct pool_domain *dom, uint32_t allow_status, uint32_t allow_version)
-{
-	int i;
+dom_tgts_are_avaible(struct pool_domain *dom, uint32_t allow_version, enum layout_gen_mode gen_mode)
+{ int i;
 
 	for (i = 0; i < dom->do_target_nr; i++) {
 		struct pool_target *tgt;
-		uint32_t status;
 
 		tgt = &dom->do_targets[i];
-		status = tgt->ta_comp.co_status;
-		if (tgt->ta_comp.co_status == PO_COMP_ST_DOWN) {
-			if (tgt->ta_comp.co_fseq > allow_version)
-				status = PO_COMP_ST_UPIN;
-		} else if (tgt->ta_comp.co_status == PO_COMP_ST_UP) {
-			if (tgt->ta_comp.co_in_ver > allow_version)
-				status = PO_COMP_ST_DOWNOUT;
-		}
-		if (status & allow_status)
+		if (is_comp_avaible(&tgt->ta_comp, allow_version, gen_mode))
 			return true;
 	}
 	return false;
@@ -429,16 +439,17 @@ dom_tgts_are_avaible(struct pool_domain *dom, uint32_t allow_status, uint32_t al
 
 /* Reset dom/targets tracking bits for remapping the layout */
 static void
-reset_dom_cur_grp_v1(struct pool_domain *root, uint8_t *dom_cur_grp_used,
-		     uint8_t *dom_cur_grp_real, uint8_t *dom_full, uint8_t *tgts_used,
-		     bool exclude_new, uint32_t allow_status, uint32_t allow_version,
-		     uint32_t fdom_lvl)
+reset_dom_cur_grp_v1(struct pool_domain *root,
+		     uint8_t *dom_cur_grp_used, uint8_t *dom_cur_grp_real, uint8_t *dom_full,
+		     uint8_t *tgts_used, uint32_t fdom_lvl, uint32_t allow_version,
+		     enum layout_gen_mode gen_mode)
 {
 	struct pool_domain	*tree;
 	uint32_t		dom_nr;
 
 	tree = root;
-	dom_nr = tree[0].do_children - tree;
+	dom_nr = 1;
+	D_DEBUG(DB_PL, "bitmap resetting... curr_pd at root gen %u\n", gen_mode);
 	/* Walk through the failure domain to reset full, current_group and tgts used bits */
 	for (; tree != NULL && tree->do_comp.co_type >= fdom_lvl; tree = tree[0].do_children) {
 		uint32_t start_dom = tree - root;
@@ -466,7 +477,7 @@ reset_dom_cur_grp_v1(struct pool_domain *root, uint8_t *dom_cur_grp_used,
 
 		/* There are still domain available, so no need reset any bits. */
 		if (!dom_isset_2ranges(root, dom_full, dom_cur_grp_used,
-				       start_dom, end_dom, exclude_new))
+				       start_dom, end_dom, allow_version, gen_mode))
 			break;
 
 		/* If there are domains, which are not used by this group,
@@ -474,7 +485,7 @@ reset_dom_cur_grp_v1(struct pool_domain *root, uint8_t *dom_cur_grp_used,
 		 * from the same object in the same target.
 		 */
 		if (!dom_isset_range(root, dom_cur_grp_used, start_dom, end_dom,
-				     exclude_new)) {
+				     allow_version, gen_mode)) {
 			for (i = 0; i < dom_nr; i++) {
 				uint32_t		dom_off = start_dom + i;
 				struct pool_domain	*dom = &root[dom_off];
@@ -482,7 +493,7 @@ reset_dom_cur_grp_v1(struct pool_domain *root, uint8_t *dom_cur_grp_used,
 				if (!isset(dom_cur_grp_used, dom_off) &&
 				    isset(dom_full, dom_off))
 					dom_reset_full(dom, dom_full, tgts_used, root,
-						       exclude_new, fdom_lvl);
+						       allow_version, gen_mode, fdom_lvl);
 			}
 			break;
 		}
@@ -500,9 +511,9 @@ reset_dom_cur_grp_v1(struct pool_domain *root, uint8_t *dom_cur_grp_used,
 				start_tgt = dom->do_targets - root->do_targets;
 				end_tgt = start_tgt + dom->do_target_nr - 1;
 				if (!tgt_isset_range(root->do_targets, tgts_used,
-						     start_tgt, end_tgt, exclude_new)) {
+						     start_tgt, end_tgt, allow_version, gen_mode)) {
 					dom_reset_bit(dom, dom_cur_grp_used, root,
-						      exclude_new, fdom_lvl);
+						      allow_version, gen_mode, fdom_lvl);
 					reset = true;
 				}
 			}
@@ -518,11 +529,11 @@ reset_dom_cur_grp_v1(struct pool_domain *root, uint8_t *dom_cur_grp_used,
 			struct pool_domain *dom = &root[start_dom + i];
 
 			if (!isset(dom_cur_grp_real, start_dom + i) &&
-			    dom_tgts_are_avaible(dom, allow_status, allow_version)) {
+			    dom_tgts_are_avaible(dom, allow_version, gen_mode)) {
 				dom_reset_full(dom, dom_full, tgts_used, root,
-					       exclude_new, fdom_lvl);
+					       allow_version, gen_mode, fdom_lvl);
 				dom_reset_bit(dom, dom_cur_grp_used, root,
-					      exclude_new, fdom_lvl);
+					      allow_version, gen_mode, fdom_lvl);
 				reset = true;
 			}
 		}
@@ -533,7 +544,7 @@ reset_dom_cur_grp_v1(struct pool_domain *root, uint8_t *dom_cur_grp_used,
 		/* Finally reset cur_group_used, which  multiple shards
 		 * from the same group be in the same domain.
 		 */
-		if (dom_isset_range(root, dom_full, start_dom, end_dom, exclude_new))
+		if (dom_isset_range(root, dom_full, start_dom, end_dom, allow_version, gen_mode))
 			reset_full = true;
 
 		for (i = 0; i < dom_nr; i++) {
@@ -541,9 +552,10 @@ reset_dom_cur_grp_v1(struct pool_domain *root, uint8_t *dom_cur_grp_used,
 
 			if (reset_full)
 				dom_reset_full(dom, dom_full, tgts_used, root,
-					       exclude_new, fdom_lvl);
+					       allow_version, gen_mode, fdom_lvl);
 
-			dom_reset_bit(dom, dom_cur_grp_used, root, exclude_new, fdom_lvl);
+			dom_reset_bit(dom, dom_cur_grp_used, root, allow_version, gen_mode,
+				      fdom_lvl);
 		}
 		break;
 	}
@@ -553,11 +565,10 @@ static void
 get_target_v1(struct pool_domain *root, struct pool_target **target,
 	      struct pool_domain **dom, uint64_t key, uint8_t *dom_used, uint8_t *dom_full,
 	      uint8_t *dom_cur_grp_used, uint8_t *dom_cur_grp_real, uint8_t *tgts_used,
-	      int shard_num, uint32_t allow_status, uint32_t allow_version,
-	      pool_comp_type_t fdom_lvl)
+	      int shard_num, uint32_t allow_version, enum layout_gen_mode gen_mode,
+	      pool_comp_type_t fdom_lvl, uint32_t grp_size)
 {
 	struct pool_target	*found = NULL;
-	bool			exclude_new = true;
 
 	/* For extending case, it needs to get the layout in two cases, with UP/NEW target
 	 * and without UP/NEW targets, then tell the difference, see placement/jump_map.c.
@@ -566,16 +577,14 @@ get_target_v1(struct pool_domain *root, struct pool_target **target,
 	 * the target is mapped according to the failure sequence strictly. And other target
 	 * status check is done in get_object_layout().
 	 */
-	if (allow_status & PO_COMP_ST_UP)
-		exclude_new = false;
-
 	while (found == NULL) {
-		__get_target_v1(root, &found, dom, key, dom_used, dom_full, dom_cur_grp_used,
-				tgts_used, shard_num, exclude_new, fdom_lvl);
+		__get_target_v1(root, &found, dom, key, dom_used, dom_full,
+				dom_cur_grp_used, tgts_used, shard_num, allow_version, gen_mode,
+				fdom_lvl, grp_size);
 		if (found == NULL)
-			reset_dom_cur_grp_v1(root, dom_cur_grp_used, dom_cur_grp_real, dom_full,
-					     tgts_used, exclude_new, allow_status, allow_version,
-					     fdom_lvl);
+			reset_dom_cur_grp_v1(root, dom_cur_grp_used, dom_cur_grp_real,
+					     dom_full, tgts_used, fdom_lvl, allow_version,
+					     gen_mode);
 	}
 	*target = found;
 }
@@ -632,7 +641,8 @@ static void
 get_target_v0(struct pool_domain *curr_dom, struct pool_target **target,
 	      uint64_t obj_key, uint8_t *dom_used, uint8_t *dom_occupied,
 	      uint8_t *dom_cur_grp_used, uint8_t *tgts_used,
-	      int shard_num, uint32_t allow_status, pool_comp_type_t fdom_lvl)
+	      int shard_num, uint32_t allow_version, enum layout_gen_mode gen_mode,
+	      pool_comp_type_t fdom_lvl)
 {
 	int                     range_set;
 	uint8_t                 found_target = 0;
@@ -650,8 +660,7 @@ retry:
 		uint32_t        num_doms;
 
 		/* Retrieve number of nodes in this domain */
-		num_doms = get_num_domains(curr_dom, allow_status & PO_COMP_ST_UP,
-					   fdom_lvl);
+		num_doms = get_num_domains(curr_dom, allow_version, gen_mode, fdom_lvl);
 
 		/* If choosing target (lowest fault domain level) */
 		if (curr_dom->do_children == NULL || curr_dom->do_comp.co_type == fdom_lvl) {
@@ -813,11 +822,11 @@ retry:
 }
 
 void
-get_target(struct pool_domain *root, uint32_t layout_ver, struct pool_target **target,
-	   struct pool_domain **dom, uint64_t key, uint8_t *dom_used, uint8_t *dom_full,
-	   uint8_t *dom_cur_grp_used, uint8_t *dom_cur_grp_real,
-	   uint8_t *tgts_used, int shard_num, uint32_t allow_status, uint32_t allow_version,
-	   pool_comp_type_t fdom_lvl, uint32_t *spare_left, bool *spare_avail)
+get_target(struct pool_domain *root, uint32_t layout_ver,
+	   struct pool_target **target, struct pool_domain **dom, uint64_t key, uint8_t *dom_used,
+	   uint8_t *dom_full, uint8_t *dom_cur_grp_used, uint8_t *dom_cur_grp_real,
+	   uint8_t *tgts_used, int shard_num, uint32_t allow_version, enum layout_gen_mode gen_mode,
+	   pool_comp_type_t fdom_lvl, uint32_t grp_size, uint32_t *spare_left, bool *spare_avail)
 {
 	switch(layout_ver) {
 	case 0:
@@ -833,7 +842,7 @@ get_target(struct pool_domain *root, uint32_t layout_ver, struct pool_target **t
 		}
 
 		get_target_v0(root, target, key, dom_used, dom_full, dom_cur_grp_used,
-			      tgts_used, shard_num, allow_status, fdom_lvl);
+			      tgts_used, shard_num, allow_version, gen_mode, fdom_lvl);
 		if (spare_avail && spare_left) {
 			if ( --(*spare_left) > 0)
 				*spare_avail = true;
@@ -848,8 +857,8 @@ get_target(struct pool_domain *root, uint32_t layout_ver, struct pool_target **t
 		 * same target, i.e. it will never check the spare target here.
 		 */
 		get_target_v1(root, target, dom, key, dom_used, dom_full, dom_cur_grp_used,
-			      dom_cur_grp_real, tgts_used, shard_num, allow_status, allow_version,
-			      fdom_lvl);
+			      dom_cur_grp_real, tgts_used, shard_num, allow_version, gen_mode,
+			      fdom_lvl, grp_size);
 		if (spare_avail)
 			*spare_avail = true;
 		break;

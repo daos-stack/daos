@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -477,10 +477,10 @@ out:
 	return rc;
 }
 
-static struct migrate_pool_tls*
+static int
 migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsigned int generation,
 			       uuid_t pool_hdl_uuid, uuid_t co_hdl_uuid, uint64_t max_eph,
-			       uint32_t new_layout_ver, uint32_t opc)
+			       uint32_t new_layout_ver, uint32_t opc, struct migrate_pool_tls **p_tls)
 {
 	struct migrate_pool_tls *tls = NULL;
 	struct migrate_pool_tls_create_arg arg = { 0 };
@@ -495,8 +495,16 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 			ABT_mutex_lock(tls->mpt_init_mutex);
 			ABT_cond_wait(tls->mpt_init_cond, tls->mpt_init_mutex);
 			ABT_mutex_unlock(tls->mpt_init_mutex);
+			if (tls->mpt_init_failed) {
+				migrate_pool_tls_put(tls);
+				rc = -DER_NOMEM;
+			}
 		}
-		return tls;
+
+		if (rc == 0)
+			*p_tls = tls;
+
+		return rc;
 	}
 
 	D_ASSERT(generation != (unsigned int)(-1));
@@ -547,16 +555,27 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 out:
 	if (tls != NULL && tls->mpt_init_tls) {
 		tls->mpt_init_tls = 0;
+		/* Set init failed, so the waiting lookup(above) can be notified */
+		if (rc != 0)
+			tls->mpt_init_failed = 1;
 		ABT_mutex_lock(tls->mpt_init_mutex);
 		ABT_cond_broadcast(tls->mpt_init_cond);
 		ABT_mutex_unlock(tls->mpt_init_mutex);
 	}
 	D_DEBUG(DB_TRACE, "create tls "DF_UUID": "DF_RC"\n",
 		DP_UUID(pool->sp_uuid), DP_RC(rc));
+
+	if (rc != 0) {
+		if (tls != NULL)
+			migrate_pool_tls_put(tls);
+	} else {
+		*p_tls = tls;
+	}
+
 	if (prop != NULL)
 		daos_prop_free(prop);
 
-	return tls;
+	return rc;
 }
 
 static void
@@ -627,7 +646,7 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(mrone->mo_pool_uuid));
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = -DER_SHUTDOWN);
 	}
 
 	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
@@ -977,7 +996,12 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 
 		offset = iods[i].iod_recxs[0].rx_idx;
 		size = iods[i].iod_recxs[0].rx_nr;
-		parity_eph = ephs[i][0];
+		/* Use stable epoch for partial parity update to make sure
+		 * these partial updates are not below stable epoch boundary,
+		 * otherwise both EC and VOS aggregation might operate on
+		 * the same recxs.
+		 */
+		parity_eph = encode ? ephs[i][0] : mrone->mo_epoch;
 		tmp_iod = iods[i];
 		ptr = iov[i].iov_buf;
 		for (j = 1; j < iods[i].iod_nr; j++) {
@@ -1040,10 +1064,10 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			/* If the epoch is higher than EC aggregate boundary, then
 			 * it should use stable epoch to fetch the data, since
 			 * the data could be aggregated independently on parity
-			 * and data shard, so using stable epoch could make sure
-			 * the consistency view during rebuild. And also EC aggregation
-			 * should already aggregate the parity, so there should not
-			 * be any partial update on the parity as well.
+			 * and data shard, so it should select the minimum epoch
+			 * between stable epoch and boundary epoch as the recovery
+			 * epoch to make sure parity data rebuilt will not be interfered
+			 * by the newer update.
 			 *
 			 * Otherwise there might be partial update on this rebuilding
 			 * shard, so let's use the epoch from the parity shard to fetch
@@ -1054,7 +1078,7 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 			 */
 			if (ds_cont->sc_ec_agg_eph_boundary >
 			    mrone->mo_iods_update_ephs_from_parity[i][j])
-				fetch_eph = mrone->mo_epoch;
+				fetch_eph = min(ds_cont->sc_ec_agg_eph_boundary, mrone->mo_epoch);
 			else
 				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
 
@@ -3053,7 +3077,6 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 	daos_handle_t		 toh = tls->mpt_migrated_root_hdl;
 	struct migrate_obj_val	 val;
 	d_iov_t			 val_iov;
-	int			 ult_tgt_idx;
 	int			 rc;
 
 	D_ASSERT(daos_handle_is_valid(toh));
@@ -3082,28 +3105,8 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 		       sizeof(*obj_arg->snaps) * cont_arg->snap_cnt);
 	}
 
-	if (cont_arg->pool_tls->mpt_opc == RB_OP_REINT) {
-		/* This ULT will need to destroy objects prior to migration. To
-		 * do this it must be scheduled on the xstream where that data
-		 * is stored.
-		 */
-		ult_tgt_idx = tgt_idx;
-	} else {
-		/* This ULT will not need to destroy data, it will act as a
-		 * client to enumerate the data to migrate, then migrate that
-		 * data on a different ULT that is pinned to the appropriate
-		 * target.
-		 *
-		 * Because no data migration happens here, schedule this
-		 * pseudorandomly to get better performance by leveraging all
-		 * the xstreams.
-		 */
-		ult_tgt_idx = d_rand() % dss_tgt_nr;
-	}
-
-	/* Let's iterate the object on different xstream */
 	rc = dss_ult_create(migrate_obj_ult, obj_arg, DSS_XS_VOS,
-			    ult_tgt_idx, MIGRATE_STACK_SIZE,
+			    tgt_idx, MIGRATE_STACK_SIZE,
 			    NULL);
 	if (rc)
 		goto free;
@@ -3442,15 +3445,15 @@ ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_
 		  unsigned int *shards, uint32_t count, unsigned int tgt_idx,
 		  uint32_t new_layout_ver)
 {
-	struct migrate_pool_tls	*tls;
+	struct migrate_pool_tls	*tls = NULL;
 	int			i;
 	int			rc;
 
 	/* Check if the pool tls exists */
-	tls = migrate_pool_tls_lookup_create(pool, version, generation, po_hdl, co_hdl, max_eph,
-					     new_layout_ver, opc);
-	if (tls == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	rc = migrate_pool_tls_lookup_create(pool, version, generation, po_hdl, co_hdl, max_eph,
+					    new_layout_ver, opc, &tls);
+	if (rc != 0)
+		D_GOTO(out, rc);
 	if (tls->mpt_fini)
 		D_GOTO(out, rc = -DER_SHUTDOWN);
 
@@ -3561,7 +3564,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	ds_rebuild_running_query(migrate_in->om_pool_uuid, &rebuild_ver, NULL, &rebuild_gen);
+	ds_rebuild_running_query(migrate_in->om_pool_uuid, -1, &rebuild_ver, NULL, &rebuild_gen);
 	if (rebuild_ver == 0 || rebuild_gen != migrate_in->om_generation) {
 		D_ERROR(DF_UUID" rebuild service has been stopped.\n",
 			DP_UUID(migrate_in->om_pool_uuid));
