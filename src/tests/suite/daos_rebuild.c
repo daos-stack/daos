@@ -1406,6 +1406,7 @@ rebuild_kill_more_RF_ranks(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oids[OBJ_NR];
+	char		buffer[5] = { 0 };
 	struct ioreq	req;
 	d_rank_t	ranks[4] = {7, 6, 5, 4};
 	int		i;
@@ -1434,8 +1435,7 @@ rebuild_kill_more_RF_ranks(void **state)
 		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 		arg->expect_result = -DER_RF;
 		D_DEBUG(DB_TRACE, "lookup single %d\n", i);
-		lookup_single("dkey", "akey", 0, "data", strlen("data") + 1,
-			      DAOS_TX_NONE, &req);
+		lookup_single("dkey", "akey", 0, buffer, 5, DAOS_TX_NONE, &req);
 		ioreq_fini(&req);
 	}
 
@@ -1447,9 +1447,67 @@ rebuild_kill_more_RF_ranks(void **state)
 	for (i = 0; i < OBJ_NR; i++) {
 		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3GX, 0, 0, arg->myrank);
 		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
-		lookup_single("dkey", "akey", 0, "data", strlen("data") + 1,
-			      DAOS_TX_NONE, &req);
+		lookup_single("dkey", "akey", 0, buffer, 5, DAOS_TX_NONE, &req);
 		ioreq_fini(&req);
+	}
+}
+
+int
+rebuild_fail_cb(void *arg)
+{
+	test_arg_t	*test_arg = arg;
+
+	daos_debug_set_params(test_arg->group, 2, DMG_KEY_FAIL_LOC,
+			      DAOS_REBUILD_OBJ_FAIL | DAOS_FAIL_ALWAYS, 0, NULL);
+	daos_debug_set_params(test_arg->group, 2, DMG_KEY_FAIL_VALUE,
+			      20, 0, NULL);
+
+	print_message("fail migration during rebuild for 120 seconds.\n");
+	sleep(120);
+	daos_debug_set_params(test_arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+
+	daos_debug_set_params(test_arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+
+	return 0;
+}
+
+static void
+rebuild_fail_retry(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oids[1000];
+	char data[257] = { 0 };
+	char verify_data[257] = { 0 };
+	struct ioreq	req;
+	int		i;
+	int		rc;
+
+	if (!test_runable(arg, 6)) {
+		print_message("need at least 5 svcs, -s5\n");
+		return;
+	}
+
+	memset(data, 'a', 256);
+	memset(verify_data, 'a', 256);
+	for (i = 0; i < 1000; i++) {
+		oids[i] = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		insert_single("d_key", "a_key", 0, data, 256, DAOS_TX_NONE, &req);
+		ioreq_fini(&req);
+	}
+
+	arg->rebuild_cb = rebuild_fail_cb;
+	rebuild_single_pool_rank(arg, 4, true);
+	for (i = 0; i < 1000; i++) {
+		memset(data, 0, 256);
+		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+		lookup_single("d_key", "a_key", 0, data, 256, DAOS_TX_NONE, &req);
+		assert_memory_equal(data, verify_data, 256);
+		ioreq_fini(&req);
+
+		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
 	}
 }
 
@@ -1538,6 +1596,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD32: kill more ranks than RF, then reintegrate",
 	  rebuild_kill_more_RF_ranks, rebuild_sub_setup,
 	 rebuild_sub_teardown},
+	{"REBUILD33: rebuild failure retry",
+	  rebuild_fail_retry, rebuild_sub_setup, rebuild_sub_teardown},
 };
 
 /* TODO: Enable aggregation once stable view rebuild is done. */

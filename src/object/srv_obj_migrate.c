@@ -3562,9 +3562,20 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	}
 
 	ds_rebuild_running_query(migrate_in->om_pool_uuid, &rebuild_ver, NULL, &rebuild_gen);
-	if (rebuild_ver == 0 || rebuild_gen != migrate_in->om_generation) {
-		D_ERROR(DF_UUID" rebuild service has been stopped.\n",
-			DP_UUID(migrate_in->om_pool_uuid));
+	if (rebuild_gen < migrate_in->om_generation || rebuild_ver < migrate_in->om_version) {
+		/* Either can not find the current rebuild status or there are previous rebuild
+		 * did not finish yet.
+		 */
+		D_INFO(DF_UUID" rebuild %u/%u wait for previous %u/%u\n",
+		       DP_UUID(migrate_in->om_pool_uuid), migrate_in->om_version,
+		       migrate_in->om_generation, rebuild_ver, rebuild_gen);
+		D_GOTO(out, rc = -DER_AGAIN);
+	}
+
+	if (rebuild_gen > migrate_in->om_generation || rebuild_ver > migrate_in->om_version) {
+		/* Advanced rebuild has been progressed, shutdown the current one */
+		D_ERROR(DF_UUID" rebuild service %u/%u has been stopped.\n",
+			DP_UUID(migrate_in->om_pool_uuid), rebuild_ver, rebuild_gen);
 		D_GOTO(out, rc = -DER_SHUTDOWN);
 	}
 

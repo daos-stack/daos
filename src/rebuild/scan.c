@@ -119,7 +119,7 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 					    arg->count, rpt->rt_new_layout_ver, rpt->rt_rebuild_op);
 		/* If it does not need retry */
 		if (rc == 0 || (rc != -DER_TIMEDOUT && rc != -DER_GRPVER &&
-		    rc != -DER_AGAIN && !daos_crt_network_error(rc)))
+		    rc != -DER_AGAIN && !daos_crt_network_error(rc)) || rpt->rt_abort)
 			break;
 
 		/* otherwise let's retry */
@@ -1035,6 +1035,34 @@ rebuild_scan_leader(void *data)
 		}
 	}
 
+	/* Check if any previous rebuild still not cleanup yet */
+	while (1) {
+		bool previous_aborted = true;
+		struct rebuild_tgt_pool_tracker *tmp;
+
+		d_list_for_each_entry(tmp, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
+			if (uuid_compare(tmp->rt_pool_uuid, rpt->rt_pool_uuid) == 0 &&
+			    ((tmp->rt_rebuild_ver < rpt->rt_rebuild_ver) ||
+			    (tmp->rt_rebuild_op == rpt->rt_rebuild_op &&
+			     tmp->rt_rebuild_ver == rpt->rt_rebuild_ver &&
+			     tmp->rt_rebuild_gen < rpt->rt_rebuild_gen))) {
+				/* see rebuild_tgt_scan_handler(), all previous
+				 * rebuild should be set to abort.
+				 */
+				D_INFO(DF_UUID" wait for previous %s %u/%u/"DF_U64" \n",
+				       DP_UUID(tmp->rt_pool_uuid), RB_OP_STR(tmp->rt_rebuild_op),
+				       tmp->rt_rebuild_ver, tmp->rt_rebuild_gen, tmp->rt_leader_term);
+				previous_aborted = false;
+			}
+		}
+
+		if (!previous_aborted) {
+			dss_sleep(2000);
+			continue;
+		}
+		break;
+	}
+
 	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
 		DP_UUID(rpt->rt_pool_uuid));
 
@@ -1074,7 +1102,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 	struct rebuild_scan_out		*ro;
 	struct rebuild_pool_tls		*tls = NULL;
 	struct rebuild_tgt_pool_tracker	*rpt = NULL;
-	int				 rc;
+	int				 rc = 0;
 
 	rsi = crt_req_get(rpc);
 	D_ASSERT(rsi != NULL);
@@ -1094,10 +1122,11 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		    (rpt->rt_rebuild_op == rsi->rsi_rebuild_op &&
 		     rpt->rt_rebuild_ver == rsi->rsi_rebuild_ver &&
 		     rpt->rt_rebuild_gen < rsi->rsi_rebuild_gen))) {
-			D_INFO(DF_UUID" %s %u/"DF_U64" < incoming rebuild %u/"DF_U64"\n",
+			D_INFO(DF_UUID" %s %u/%u/"DF_U64" < incoming %s %u/%u/"DF_U64"\n",
 			       DP_UUID(rpt->rt_pool_uuid), RB_OP_STR(rpt->rt_rebuild_op),
-			       rpt->rt_rebuild_ver, rpt->rt_leader_term, rsi->rsi_rebuild_ver,
-			       rsi->rsi_leader_term);
+			       rpt->rt_rebuild_ver, rpt->rt_rebuild_gen, rpt->rt_leader_term,
+			       RB_OP_STR(rsi->rsi_rebuild_op), rsi->rsi_rebuild_ver,
+			       rsi->rsi_rebuild_gen, rsi->rsi_leader_term);
 			rpt->rt_abort = 1;
 		}
 	}
