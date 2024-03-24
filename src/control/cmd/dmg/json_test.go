@@ -67,7 +67,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
 			case "version", "telemetry config", "telemetry run", "config generate",
-				"manpage", "system set-prop", "support collect-log":
+				"manpage", "system set-prop", "support collect-log", "check repair":
 				return
 			case "storage nvme-rebind":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",
@@ -109,6 +109,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 				return // These commands query via http directly
 			case "system cleanup":
 				testArgs = append(testArgs, "hostname")
+			case "check set-policy":
+				testArgs = append(testArgs, "POOL_BAD_LABEL:IGNORE")
 			case "system set-attr":
 				testArgs = append(testArgs, "foo:bar")
 			case "system del-attr":

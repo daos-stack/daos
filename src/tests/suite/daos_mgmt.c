@@ -162,22 +162,6 @@ setup_manypools(void **state)
 	return setup_pools(state, npools);
 }
 
-/* zero out uuids, free svc rank lists in pool info returned by DAOS API */
-static void
-clean_pool_info(daos_size_t npools, daos_mgmt_pool_info_t *pools) {
-	int	i;
-
-	if (pools) {
-		for (i = 0; i < npools; i++) {
-			uuid_clear(pools[i].mgpi_uuid);
-			if (pools[i].mgpi_svc) {
-				d_rank_list_free(pools[i].mgpi_svc);
-				pools[i].mgpi_svc = NULL;
-			}
-		}
-	}
-}
-
 /* Search for pool information in pools created in setup (mgmt_lp_args)
  * Match pool UUID and service replica ranks.
  * Return matching index or -1 if no match.

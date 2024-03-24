@@ -18,13 +18,6 @@
 #define VEA_BLK_SZ	(4 * 1024)	/* 4K */
 #define VEA_TREE_ODR	20
 
-/* Common free extent structure for both SCM & in-memory index */
-struct vea_free_extent {
-	uint64_t	vfe_blk_off;	/* Block offset of the extent */
-	uint32_t	vfe_blk_cnt;	/* Total blocks of the extent */
-	uint32_t	vfe_age;	/* Monotonic timestamp */
-};
-
 /* Min bitmap allocation class */
 #define VEA_MIN_BITMAP_CLASS	1
 /* Max bitmap allocation class */

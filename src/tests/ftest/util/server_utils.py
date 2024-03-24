@@ -1021,6 +1021,71 @@ class DaosServerManager(SubprocessManager):
         # set stopped servers state to make teardown happy
         self.update_expected_states(None, ["stopped", "excluded", "errored"])
 
+    @fail_on(CommandFailure)
+    def system_exclude(self, ranks, copy=False, rank_hosts=None):
+        """Exclude the specific server ranks.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to exclude
+            copy (bool, optional): Copy dmg command. Defaults to False.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue excluding the server
+                ranks.
+
+        """
+        msg = "Excluding DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+
+        # Exclude desired ranks using dmg.
+        if copy:
+            self.dmg.copy().system_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+        else:
+            self.dmg.system_exclude(ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+
+        # Update the expected status of the excluded ranks
+        self.update_expected_states(ranks, "adminexcluded")
+
+        # Verify current state is adminexcluded.
+        self.check_rank_state(ranks=ranks, valid_states=["adminexcluded"])
+
+    @fail_on(CommandFailure)
+    def system_clear_exclude(self, ranks, copy=False, rank_hosts=None):
+        """Clear the exclusion of the specific server ranks.
+
+        Args:
+            ranks (list): a list of daos server ranks (int) to clear the exclusion
+            copy (bool, optional): Copy dmg command. Defaults to False.
+            rank_hosts (str): hostlist representing hosts whose managed ranks are to be
+                operated on.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an issue clearing the exclusion
+                of the server ranks.
+
+        """
+        msg = "Clear the exclusion for DAOS ranks {} from server group {}".format(
+            ranks, self.get_config_value("name"))
+        self.log.info(msg)
+
+        # Clear the exclusion for desired ranks using dmg.
+        if copy:
+            self.dmg.copy().system_clear_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+        else:
+            self.dmg.system_clear_exclude(
+                ranks=list_to_str(value=ranks), rank_hosts=rank_hosts)
+
+        # Update the expected status of the excluded ranks
+        self.update_expected_states(ranks, "excluded")
+
+        # Verify current state is excluded.
+        self.check_rank_state(ranks=ranks, valid_states=["excluded"])
+
     def get_host(self, rank):
         """Get the host name that matches the specified rank.
 

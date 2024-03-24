@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -75,10 +75,10 @@ struct ds_rsvc_class {
 	void (*sc_drain)(struct ds_rsvc *svc);
 
 	/**
-	 * Distribute the system/pool map in the system/pool. This callback is
-	 * optional.
+	 * Distribute the system/pool map in the system/pool and return its
+	 * version. This callback is optional.
 	 */
-	int (*sc_map_dist)(struct ds_rsvc *svc);
+	int (*sc_map_dist)(struct ds_rsvc *svc, uint32_t *version);
 };
 
 void ds_rsvc_class_register(enum ds_rsvc_class_id id,
@@ -113,7 +113,9 @@ struct ds_rsvc {
 	ABT_cond		s_state_cv;
 	int			s_leader_ref;	/* on leader state */
 	ABT_cond		s_leader_ref_cv;
-	bool			s_map_dist;	/* has a map dist request? */
+	bool			s_map_dist;	/* has a queued map dist request? */
+	bool			s_map_dist_inp;	/* has a in-progress map dist request? */
+	uint32_t		s_map_dist_ver;	/* highest map version distributed */
 	ABT_cond		s_map_dist_cv;
 	ABT_thread		s_map_distd;
 	bool			s_map_distd_stop;
@@ -123,15 +125,22 @@ int ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id,
 		       uuid_t db_uuid);
 int ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id);
 
+/** Mode of starting a replicated service */
+enum ds_rsvc_start_mode {
+	DS_RSVC_START,	/**< simply start the service */
+	DS_RSVC_CREATE,	/**< create and start the service */
+	DS_RSVC_DICTATE	/**< DANGEROUSLY reset and start the service (see rdb_dictate) */
+};
+
 int ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t caller_term,
-		  bool create, size_t size, d_rank_list_t *replicas, void *arg);
+		  enum ds_rsvc_start_mode mode, size_t size, d_rank_list_t *replicas, void *arg);
 int ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, uint64_t caller_term, bool destroy);
 int ds_rsvc_stop_all(enum ds_rsvc_class_id class);
 int ds_rsvc_stop_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 			struct rsvc_hint *hint);
 int ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
-		       const d_rank_list_t *ranks, uint64_t caller_term, bool create,
-		       bool bootstrap, size_t size);
+		       const d_rank_list_t *ranks, uint64_t caller_term,
+		       enum ds_rsvc_start_mode mode, bool bootstrap, size_t size);
 int ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id, const d_rank_list_t *ranks,
 		      d_rank_list_t *excluded, uint64_t caller_term, bool destroy);
 enum ds_rsvc_state ds_rsvc_get_state(struct ds_rsvc *svc);
@@ -167,5 +176,7 @@ int ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 size_t ds_rsvc_get_md_cap(void);
 
 void ds_rsvc_request_map_dist(struct ds_rsvc *svc);
+void ds_rsvc_query_map_dist(struct ds_rsvc *svc, uint32_t *version, bool *idle);
+void ds_rsvc_wait_map_dist(struct ds_rsvc *svc);
 
 #endif /* DAOS_SRV_RSVC_H */

@@ -214,3 +214,11 @@ const (
 	ControlMetadataUnknown Code = iota + 1000
 	ControlMetadataBadFilesystem
 )
+
+// System Checker codes
+const (
+	SystemCheckerUnknown Code = iota + 1100
+	SystemCheckerInvalidMemberStates
+	SystemCheckerNotEnabled
+	SystemCheckerEnabled
+)
