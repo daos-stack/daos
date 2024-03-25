@@ -35,8 +35,8 @@
  * the moment, will adjust it later if needed.
  */
 #define MIGRATE_DEFAULT_MAX_SIZE	(1 << 28)
-#define ENV_MIGRATE_TGT_SIZE		"D_MIGRATE_TGT_MEM_SIZE"
-#define ENV_MIGRATE_SYS_SIZE		"D_MIGRATE_SYS_MEM_SIZE"
+#define ENV_MIGRATE_TGT_MEM_SIZE	"D_MIGRATE_TGT_MEM_SIZE"
+#define ENV_MIGRATE_SYS_MEM_SIZE	"D_MIGRATE_SYS_MEM_SIZE"
 
 /* Max migrate ULT number on the engine */
 #define MIGRATE_DEFAULT_MAX_ULT	4096
