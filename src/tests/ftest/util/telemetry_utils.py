@@ -4,7 +4,6 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import re
-from collections.abc import Iterable
 from logging import getLogger
 
 from ClusterShell.NodeSet import NodeSet
@@ -27,22 +26,6 @@ def _gen_stats_metrics(basename):
     return base
 
 
-def _flatten(items):
-    """Flatten a mixed list of lists and strings."""
-    def _flatten_iter(items):
-        if not isinstance(items, Iterable):
-            yield items
-            return
-
-        for item in items:
-            if isinstance(item, Iterable) and not isinstance(item, (str, bytes)):
-                yield from _flatten_iter(item)
-            else:
-                yield item
-
-    return list(_flatten_iter(items))
-
-
 class TelemetryUtils():
     # pylint: disable=too-many-nested-blocks
     """Defines a object used to verify telemetry information."""
@@ -58,7 +41,7 @@ class TelemetryUtils():
         "engine_pool_ops_cont_create",
         "engine_pool_ops_cont_destroy",
         "engine_pool_ops_cont_query"]
-    ENGINE_POOL_METRICS = _flatten([
+    ENGINE_POOL_METRICS = [
         "engine_pool_entries_dtx_batched_degree",
         "engine_pool_entries_dtx_batched_total",
         "engine_pool_ops_akey_enum",
@@ -106,7 +89,7 @@ class TelemetryUtils():
         "engine_pool_scrubber_csums_total",
         "engine_pool_scrubber_next_csum_scrub",
         "engine_pool_scrubber_next_tree_scrub",
-        _gen_stats_metrics("engine_pool_scrubber_prev_duration"),
+        *_gen_stats_metrics("engine_pool_scrubber_prev_duration"),
         "engine_pool_scrubber_scrubber_started",
         "engine_pool_scrubber_scrubs_completed",
         "engine_pool_started_at",
@@ -119,7 +102,7 @@ class TelemetryUtils():
         "engine_pool_vos_aggregation_dkey_deleted",
         "engine_pool_vos_aggregation_dkey_scanned",
         "engine_pool_vos_aggregation_dkey_skipped",
-        _gen_stats_metrics("engine_pool_vos_aggregation_epr_duration"),
+        *_gen_stats_metrics("engine_pool_vos_aggregation_epr_duration"),
         "engine_pool_vos_aggregation_merged_recs",
         "engine_pool_vos_aggregation_merged_size",
         "engine_pool_vos_aggregation_obj_deleted",
@@ -139,21 +122,21 @@ class TelemetryUtils():
         "engine_pool_block_allocator_frags_large",
         "engine_pool_block_allocator_frags_small",
         "engine_pool_block_allocator_free_blks",
-        "engine_pool_ops_key2anchor"])
+        "engine_pool_ops_key2anchor"]
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
         "engine_servicing_at",
         "engine_started_at"]
-    ENGINE_SCHED_METRICS = _flatten([
+    ENGINE_SCHED_METRICS = [
         "engine_sched_total_time",
         "engine_sched_relax_time",
         "engine_sched_wait_queue",
         "engine_sched_sleep_queue",
         "engine_sched_total_reject",
-        _gen_stats_metrics("engine_sched_cycle_duration"),
-        _gen_stats_metrics("engine_sched_cycle_size")])
-    ENGINE_DMABUFF_METRICS = _flatten([
+        *_gen_stats_metrics("engine_sched_cycle_duration"),
+        *_gen_stats_metrics("engine_sched_cycle_size")]
+    ENGINE_DMABUFF_METRICS = [
         "engine_dmabuff_total_chunks",
         "engine_dmabuff_used_chunks_io",
         "engine_dmabuff_used_chunks_local",
@@ -162,7 +145,7 @@ class TelemetryUtils():
         "engine_dmabuff_active_reqs",
         "engine_dmabuff_queued_reqs",
         "engine_dmabuff_grab_errs",
-        _gen_stats_metrics("engine_dmabuff_grab_retries")])
+        *_gen_stats_metrics("engine_dmabuff_grab_retries")]
     ENGINE_IO_DTX_COMMITTABLE_METRICS = \
         _gen_stats_metrics("engine_io_dtx_committable")
     ENGINE_IO_DTX_COMMITTED_METRICS = \
@@ -319,14 +302,14 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_PUNCH_LATENCY_METRICS +\
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
-    ENGINE_NET_METRICS = _flatten([
+    ENGINE_NET_METRICS = [
         "engine_net_glitch",
         "engine_net_failed_addr",
         "engine_net_req_timeout",
-        _gen_stats_metrics("engine_net_swim_delay"),
+        *_gen_stats_metrics("engine_net_swim_delay"),
         "engine_net_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
-        "engine_net_uri_lookup_self"])
+        "engine_net_uri_lookup_self"]
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     ENGINE_NVME_HEALTH_METRICS = [
@@ -387,7 +370,7 @@ class TelemetryUtils():
         "engine_mem_vos_dtx_cmt_ent_48",
         "engine_mem_vos_vos_obj_360",
         "engine_mem_vos_vos_lru_size",
-        "engine_mem_dtx_dtx_leader_handle_352"]
+        "engine_mem_dtx_dtx_leader_handle_360"]
     ENGINE_MEM_TOTAL_USAGE_METRICS = [
         "engine_mem_total_mem"]
 
