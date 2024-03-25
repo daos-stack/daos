@@ -141,6 +141,17 @@ class Pil4dfsDcache(DfuseTestBase):
                 "no_dcache_del": 0,
                 "op_name": "rename",
                 "op_count": 2
+            },
+            {
+                "test_name": "test_open_close",
+                "test_id": 4,
+                "dcache_add": 2,
+                "dcache_del": 0,
+                "dcache_hit": 1,
+                "dcache_miss": 2,
+                "no_dcache_new": 0,
+                "no_dcache_del": 0,
+                "op_name": None
             }
         ],
         "test_pil4dfs_dcache_disabled": [
@@ -191,6 +202,17 @@ class Pil4dfsDcache(DfuseTestBase):
                 "no_dcache_del": 5,
                 "op_name": "rename",
                 "op_count": 2
+            },
+            {
+                "test_name": "test_open_close",
+                "test_id": 4,
+                "dcache_add": 0,
+                "dcache_del": 0,
+                "dcache_hit": 0,
+                "dcache_miss": 0,
+                "no_dcache_new": 2,
+                "no_dcache_del": 2,
+                "op_name": None
             }
         ],
     }
@@ -235,7 +257,9 @@ class Pil4dfsDcache(DfuseTestBase):
             lines (list): list of the test command stdout lines
         """
         dcache_count = {key: 0 for key in Pil4dfsDcache.__dcache_re__}
-        op_re = re.compile(r'^\[' + test_case['op_name'] + r'\s*\]\s+(\d+)$')
+        op_re = None
+        if test_case['op_name'] is not None:
+            op_re = re.compile(r'^\[' + test_case['op_name'] + r'\s*\]\s+(\d+)$')
         state = 'init'
         for line in lines:
             if state == 'init':
@@ -249,6 +273,8 @@ class Pil4dfsDcache(DfuseTestBase):
                 if Pil4dfsDcache.__end_test_re__.match(line):
                     for key in Pil4dfsDcache.__dcache_re__:
                         self.assertEqual(test_case[key], dcache_count[key])
+                    if op_re is None:
+                        return
                     state = 'check_op'
 
             elif state == 'check_op':

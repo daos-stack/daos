@@ -53,19 +53,19 @@ create_dir_tree(int fd)
 	int rc;
 
 	printf("\ncreating directory '/a'\n");
-	rc = mkdirat(fd, "a", 0755);
+	rc = mkdirat(fd, "a", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 	assert_return_code(rc, errno);
 
 	printf("\ncreating directory '/a/bb'\n");
-	rc = mkdirat(fd, "a/bb", 0755);
+	rc = mkdirat(fd, "a/bb", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 	assert_return_code(rc, errno);
 
 	printf("\ncreating directory '/a/ccc'\n");
-	rc = mkdirat(fd, "a/ccc", 0755);
+	rc = mkdirat(fd, "a/ccc", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 	assert_return_code(rc, errno);
 
 	printf("\ncreating directory '/a/bb/d'\n");
-	rc = mkdirat(fd, "a/bb/d", 0755);
+	rc = mkdirat(fd, "a/bb/d", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 	assert_return_code(rc, errno);
 }
 
@@ -260,6 +260,38 @@ test_rename(void **state)
 	printf("\n-- END of test_rename --\n");
 }
 
+static void
+test_open_close(void **state)
+{
+	int fd;
+	int bar_fd;
+	int rc;
+
+	(void)state; /* unused */
+
+	printf("\n-- INIT of test_open_close --\n");
+
+	printf("Opening path '%s'\n", mnt_path);
+	fd = open(mnt_path, O_DIRECTORY, O_RDWR);
+	assert_return_code(fd, errno);
+
+	printf("\n-- START of test_open_close --\n");
+
+	printf("\ncreating directory '/foo'\n");
+	rc = mkdirat(fd, "foo",  S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+	assert_return_code(rc, errno);
+
+	printf("\ncreating empty file '/foo/bar'\n");
+	bar_fd = openat(fd, "foo/bar", O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU | S_IRGRP | S_IROTH);
+	assert_return_code(bar_fd, errno);
+
+	printf("\nclosing empty file '/foo/bar'\n");
+	rc = close(bar_fd);
+	assert_return_code(rc, errno);
+
+	printf("\n-- END of test_open_close --\n");
+}
+
 int
 main(int argc, char *argv[])
 {
@@ -269,6 +301,7 @@ main(int argc, char *argv[])
 	    cmocka_unit_test(test_unlinkat),
 	    cmocka_unit_test(test_rmdir),
 	    cmocka_unit_test(test_rename),
+	    cmocka_unit_test(test_open_close)
 	};
 	struct CMUnitTest test[1];
 

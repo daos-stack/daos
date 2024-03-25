@@ -173,16 +173,16 @@ query_dfs_mount(const char *dfs_mount);
 
 /* structure allocated for a FD for a file */
 struct file_obj {
-	struct dfs_mt   *dfs_mt;
-	dfs_obj_t       *file;
-	dfs_obj_t       *parent;
-	int              open_flag;
-	int              ref_count;
-	unsigned int     st_ino;
-	int              idx_mmap;
-	off_t            offset;
-	char            *path;
-	char             item_name[DFS_MAX_NAME];
+	struct dfs_mt     *dfs_mt;
+	dfs_obj_t         *file;
+	struct dcache_rec *parent;
+	int                open_flag;
+	int                ref_count;
+	unsigned int       st_ino;
+	int                idx_mmap;
+	off_t              offset;
+	char              *path;
+	char               item_name[DFS_MAX_NAME];
 };
 
 /* structure allocated for a FD for a dir */
@@ -1469,6 +1469,8 @@ free_fd(int idx, bool closing_dup_fd)
 		return;
 	}
 
+	/* Decrement the refcounter get in open_common() */
+	drec_decref(file_list[idx]->dfs_mt->dcache, file_list[idx]->parent);
 	if (closing_dup_fd)
 		dup_ref_count[idx]--;
 	file_list[idx]->ref_count--;
@@ -1497,9 +1499,6 @@ free_fd(int idx, bool closing_dup_fd)
 
 	if (saved_obj) {
 		rc = dfs_release(saved_obj->file);
-		if (rc)
-			DS_ERROR(rc, "dfs_release() failed");
-		rc = dfs_release(saved_obj->parent);
 		if (rc)
 			DS_ERROR(rc, "dfs_release() failed");
 		/** This memset() is not necessary. It is left here intended. In case of duplicated
@@ -1826,6 +1825,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	struct dcache_rec *parent     = NULL;
 	char              *parent_dir = NULL;
 	char              *full_path  = NULL;
+	dfs_obj_t         *parent_dfs;
 
 	if (pathname == NULL) {
 		errno = EFAULT;
@@ -1848,6 +1848,9 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			&full_path, &dfs_mt);
 	if (rc == ENOENT)
 		D_GOTO(out_error, rc = ENOENT);
+	parent_dfs = NULL;
+	if (parent != NULL)
+		parent_dfs = drec2obj(parent);
 
 	if (!is_target_path)
 		goto org_func;
@@ -1856,7 +1859,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
 			rc = dfs_access(dfs_mt->dfs, NULL, NULL, X_OK | W_OK);
 		else
-			rc = dfs_access(dfs_mt->dfs, drec2obj(parent), item_name, X_OK | W_OK);
+			rc = dfs_access(dfs_mt->dfs, parent_dfs, item_name, X_OK | W_OK);
 		if (rc) {
 			if (rc == 1)
 				rc = 13;
@@ -1874,7 +1877,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				D_GOTO(out_error, rc);
 			dfs_release(parent_obj);
 		} else {
-			rc = dfs_get_mode(drec2obj(parent), &mode_parent);
+			rc = dfs_get_mode(parent_dfs, &mode_parent);
 			if (rc)
 				D_GOTO(out_error, rc);
 		}
@@ -1883,14 +1886,14 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	}
 	/* file/dir should be handled by DFS */
 	if (oflags & O_CREAT) {
-		rc         = dfs_open(dfs_mt->dfs, drec2obj(parent), item_name, mode | S_IFREG,
+		rc         = dfs_open(dfs_mt->dfs, parent_dfs, item_name, mode | S_IFREG,
 				      oflags & (~O_APPEND), 0, 0, NULL, &dfs_obj);
 		mode_query = S_IFREG;
 	} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc =
 		    dfs_lookup(dfs_mt->dfs, "/", oflags & (~O_APPEND), &dfs_obj, &mode_query, NULL);
 	} else {
-		rc = dfs_lookup_rel(dfs_mt->dfs, drec2obj(parent), item_name, oflags & (~O_APPEND),
+		rc = dfs_lookup_rel(dfs_mt->dfs, parent_dfs, item_name, oflags & (~O_APPEND),
 				    &dfs_obj, &mode_query, NULL);
 	}
 
@@ -1945,6 +1948,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	file_list[idx_fd]->dfs_mt      = dfs_mt;
 	file_list[idx_fd]->file        = dfs_obj;
+	/* Note drec_decref() will be called in free_fd() */
+	file_list[idx_fd]->parent      = parent;
 	file_list[idx_fd]->st_ino      = FAKE_ST_INO(full_path);
 	file_list[idx_fd]->idx_mmap    = -1;
 	file_list[idx_fd]->open_flag   = oflags;
@@ -1960,14 +1965,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	}
 	strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
 
-	file_list[idx_fd]->parent = NULL;
-	if (parent != NULL) {
-		rc = dfs_dup(dfs_mt->dfs, drec2obj(parent), O_RDWR, &file_list[idx_fd]->parent);
-		if (rc != 0)
-			D_GOTO(out_error, rc);
-	}
-
-	drec_decref(dfs_mt->dcache, parent);
 	FREE(parent_dir);
 
 	if (oflags & O_APPEND) {
@@ -4996,7 +4993,7 @@ fchmod(int fd, mode_t mode)
 
 	rc =
 	    dfs_chmod(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
-		      file_list[fd_directed - FD_FILE_BASE]->parent,
+		      drec2obj(file_list[fd_directed - FD_FILE_BASE]->parent),
 		      file_list[fd_directed - FD_FILE_BASE]->item_name, mode);
 	if (rc) {
 		errno = rc;
@@ -6214,8 +6211,6 @@ print_summary(void)
 
 	if (!report)
 		return;
-
-	/* TODO DAOS-14348 Add cache hit statistic */
 
 	read_loc    = atomic_load_relaxed(&num_read);
 	write_loc   = atomic_load_relaxed(&num_write);

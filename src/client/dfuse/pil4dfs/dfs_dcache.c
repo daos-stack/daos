@@ -99,7 +99,7 @@ dcache_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	dcache_rec_t *rec;
 
 	rec = dlist2drec(rlink);
-	D_DEBUG(DB_TRACE, "delete record '%s' (ref=%u)", rec->dr_key, rec->dr_ref);
+	D_DEBUG(DB_TRACE, "delete record '%s' (ref=%u)", rec->dr_key, atomic_load(&rec->dr_ref));
 	rc = dfs_release(rec->dr_obj);
 	if (rc == ENOMEM)
 		rc = dfs_release(rec->dr_obj);
@@ -219,6 +219,7 @@ dcache_destroy_act(dfs_dcache_t *dcache)
 	while ((rlink = d_hash_rec_first(&dcache->dd_dir_hash)) != NULL) {
 		bool deleted;
 
+		D_ASSERT(atomic_load(&dlist2drec(rlink)->dr_ref) == 1);
 		deleted = d_hash_rec_delete_at(&dcache->dd_dir_hash, rlink);
 		D_ASSERT(deleted);
 	}
