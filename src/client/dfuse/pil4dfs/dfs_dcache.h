@@ -49,7 +49,7 @@ dcache_destroy(dfs_dcache_t *dcache);
  *
  * \param[out] rec	The matched dir-cache record.
  * \param[in] dcache	The dir-cache being lookup or inserted
- * \param[in] path	File path of the directory ot lookup or insert
+ * \param[in] path	File path of the directory to lookup or insert
  * \param[in] path_len	Length of the file path, not including null terminating ('\0').
  *
  * \return		0 on success, negative value on error
