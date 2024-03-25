@@ -32,7 +32,7 @@ class WalMetrics(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=WalMetrics,test_wal_commit_metrics
         """
-        wal_metrics = [item for item in self.telemetry.ENGINE_POOL_VOS_WAL_METRICS]
+        wal_metrics = list(self.telemetry.ENGINE_POOL_VOS_WAL_METRICS)
 
         self.log_step('Creating a pool (dmg pool create)')
         add_pool(self)
@@ -77,7 +77,7 @@ class WalMetrics(TestWithTelemetry):
         :avocado: tags=telemetry
         :avocado: tags=WalMetrics,test_wal_reply_metrics
         """
-        wal_metrics = [item for item in self.telemetry.ENGINE_POOL_VOS_WAL_REPLAY_METRICS]
+        wal_metrics = list(self.telemetry.ENGINE_POOL_VOS_WAL_REPLAY_METRICS)
 
         self.log_step('Creating a pool (dmg pool create)')
         add_pool(self)
@@ -123,12 +123,12 @@ class WalMetrics(TestWithTelemetry):
         checkpoint), the checkpoint would be no-op and metrics won’t updated.
 
         Test steps:
-        1) Create a pool w/o checkpointing
+        1) Create a pool w/o check pointing
         2) Verify WAL checkpoint metrics are zero after pool creation
-        3) Create a second pool w/ checkpointing enabled
+        3) Create a second pool w/ check pointing enabled
         4) Verify WAL checkpoint metrics are zero for both pools after pool creation
         5) Write some data to a container in the second pool
-        6) Wait enough time for checkpointing to have occurred
+        6) Wait enough time for check pointing to have occurred
         7) Verify WAL checkpoint purged metrics are non-zero for the second pool (for MD on SSD)
 
         :avocado: tags=all,daily_regression
@@ -137,7 +137,7 @@ class WalMetrics(TestWithTelemetry):
         :avocado: tags=WalMetrics,test_wal_checkpoint_metrics
         """
         frequency = 5
-        wal_metrics = self.telemetry.ENGINE_POOL_CHECKPOINT_METRICS
+        wal_metrics = list(self.telemetry.ENGINE_POOL_CHECKPOINT_METRICS)
 
         self.log_step('Creating a pool with check pointing disabled (dmg pool create)')
         add_pool(self, properties='checkpoint:disabled')
