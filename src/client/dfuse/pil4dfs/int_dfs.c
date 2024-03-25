@@ -4991,10 +4991,9 @@ fchmod(int fd, mode_t mode)
 		return (-1);
 	}
 
-	rc =
-	    dfs_chmod(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
-		      drec2obj(file_list[fd_directed - FD_FILE_BASE]->parent),
-		      file_list[fd_directed - FD_FILE_BASE]->item_name, mode);
+	rc = dfs_chmod(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+		       drec2obj(file_list[fd_directed - FD_FILE_BASE]->parent),
+		       file_list[fd_directed - FD_FILE_BASE]->item_name, mode);
 	if (rc) {
 		errno = rc;
 		return (-1);

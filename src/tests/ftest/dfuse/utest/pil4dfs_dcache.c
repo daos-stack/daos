@@ -278,7 +278,7 @@ test_open_close(void **state)
 	printf("\n-- START of test_open_close --\n");
 
 	printf("\ncreating directory '/foo'\n");
-	rc = mkdirat(fd, "foo",  S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+	rc = mkdirat(fd, "foo", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 	assert_return_code(rc, errno);
 
 	printf("\ncreating empty file '/foo/bar'\n");
@@ -296,13 +296,11 @@ int
 main(int argc, char *argv[])
 {
 	size_t            test_id;
-	struct CMUnitTest tests[] = {
-	    cmocka_unit_test(test_mkdirat),
-	    cmocka_unit_test(test_unlinkat),
-	    cmocka_unit_test(test_rmdir),
-	    cmocka_unit_test(test_rename),
-	    cmocka_unit_test(test_open_close)
-	};
+	struct CMUnitTest tests[] = {cmocka_unit_test(test_mkdirat),
+				     cmocka_unit_test(test_unlinkat),
+				     cmocka_unit_test(test_rmdir),
+				     cmocka_unit_test(test_rename),
+				     cmocka_unit_test(test_open_close)};
 	struct CMUnitTest test[1];
 
 	d_register_alt_assert(mock_assert);
