@@ -54,16 +54,19 @@ caching is enabled. Note that this is supported through DFUSE only (i.e. not thr
 The dfuse-data-cache=otoc container attribute allows this without enabling other caching.
 * Char devices, block devices, sockets and pipes
 * User/group quotas
-* setuid(), setgid() programs, supplementary groups, POSIX ACLs are not supported
-within the DFS namespace.
 * [access/change/modify] time not updated appropriately, potentially on close only.
 * Flock (maybe at dfuse local node level only)
 * Block size in stat buf is not accurate (no account for holes, extended attributes)
 * Various parameters reported via statfs like number of blocks, files,
-free/available space
-* POSIX permissions inside an encapsulated namespace
-* Still enforced at the DAOS pool/container level
-* Effectively means that all files belong to the same "project"
+  free/available space
+* O\_APPEND is not supported
+* POSIX permissions, sticky bit, POSIX ACLs, supplementary groups are not supported inside an
+  encapsulated namespace
+    * Still enforced at the DAOS pool/container level via DAOS ACL
+    * Effectively means that all files belong to the same "project"
+* While set\_uid/gid bits are stored by libdfs on setattr and returned on getattr, it is up to
+  the caller (e.g. fuse in the case of dfuse) to implement support for setuid/gid binaries since
+  libdfs does not provide any interface to execute binaries.
 
 !!! note
 DFS directories do not include the `.` (current directory) and `..` (parent directory)
