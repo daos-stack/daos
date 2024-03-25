@@ -307,7 +307,8 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t *r
 	/* TODO: Need to make pool service aware of new rank UUIDs */
 
 	ntargets = unique_add_ranks->rl_nr;
-	rc = ds_pool_extend(pool_uuid, ntargets, unique_add_ranks, domains_nr, domains, svc_ranks);
+	rc = dsc_pool_svc_extend(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), ntargets,
+				 unique_add_ranks, domains_nr, domains);
 out:
 	d_rank_list_free(unique_add_ranks);
 	return rc;
@@ -364,7 +365,8 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		}
 	}
 
-	rc = ds_pool_target_update_state(pool_uuid, svc_ranks, target_addrs, state);
+	rc = dsc_pool_svc_update_target_state(pool_uuid, svc_ranks, mgmt_ps_call_deadline(),
+					      target_addrs, state);
 
 	return rc;
 }
@@ -526,7 +528,7 @@ ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_ACL;
 	prop->dpp_entries[0].dpe_val_ptr = daos_acl_dup(acl);
 
-	rc = ds_pool_svc_set_prop(pool_uuid, svc_ranks, prop);
+	rc = dsc_pool_svc_set_prop(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), prop);
 	if (rc != 0)
 		goto out_prop;
 
@@ -605,7 +607,7 @@ ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	D_DEBUG(DB_MGMT, "Setting properties for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
-	rc = ds_pool_svc_set_prop(pool_uuid, svc_ranks, prop);
+	rc = dsc_pool_svc_set_prop(pool_uuid, svc_ranks, mgmt_ps_call_deadline(), prop);
 
 out:
 	return rc;
