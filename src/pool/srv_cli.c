@@ -176,7 +176,7 @@ struct dsc_pool_svc_call_cbs {
  * to this template for calling PS operations.
  *
  * The PS is designated by uuid and ranks, the operation by cbs and arg, and
- * the deadline of the whole call by deadline.
+ * the deadline in milliseconds of the whole call by deadline.
  *
  * The implementation is simple, if not overly so. A few ideas for future
  * consideration:
@@ -715,4 +715,242 @@ dsc_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
 
 	D_DEBUG(DB_MGMT, DF_UUID ": Getting prop\n", DP_UUID(pool_uuid));
 	return dsc_pool_svc_call(pool_uuid, ranks, &pool_get_prop_cbs, &arg, deadline);
+}
+
+struct pool_set_prop_arg {
+	daos_prop_t *pspa_prop;
+};
+
+static int
+pool_set_prop_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_set_prop_arg *arg = varg;
+
+	pool_prop_set_in_set_data(rpc, arg->pspa_prop);
+	return 0;
+}
+
+static int
+pool_set_prop_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_prop_set_out *out = crt_reply_get(rpc);
+	int                       rc  = out->pso_op.po_rc;
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": failed to set prop for pool", DP_UUID(pool_uuid));
+	return rc;
+}
+
+static struct dsc_pool_svc_call_cbs pool_set_prop_cbs = {
+	.pscc_op	= POOL_PROP_GET,
+	.pscc_init	= pool_set_prop_init,
+	.pscc_consume	= pool_set_prop_consume,
+	.pscc_fini	= NULL
+};
+
+/**
+ * Set the requested pool properties.
+ *
+ * \param[in]	pool_uuid	UUID of the pool
+ * \param[in]	ranks		Pool service replicas
+ * \param[in]	deadline	Unix time deadline in milliseconds
+ * \param[in]	prop		Pool prop
+ *
+ * \return	0		Success
+ */
+int
+dsc_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline, daos_prop_t *prop)
+{
+	struct pool_set_prop_arg arg ={
+		.pspa_prop	= prop
+	};
+
+	D_DEBUG(DB_MGMT, DF_UUID ": Setting pool prop\n", DP_UUID(pool_uuid));
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_PERF_DOMAIN)) {
+		D_ERROR("Can't set perf_domain on existing pool.\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC)) {
+		D_ERROR("Can't set set redundancy factor on existing pool.\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_EC_PDA)) {
+		D_ERROR("Can't set EC performance domain affinity on existing pool\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_RP_PDA)) {
+		D_ERROR("Can't set RP performance domain affinity on existing pool\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_GLOBAL_VERSION)) {
+		D_ERROR("Can't set pool global version if pool is created.\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_UPGRADE_STATUS)) {
+		D_ERROR("Can't set pool upgrade status if pool is created.\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENABLED)) {
+		D_ERROR("Can't set pool svc_ops_enabled on existing pool.\n");
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENTRY_AGE)) {
+		D_ERROR("Can't set pool svc_ops_entry_age on existing pool.\n");
+		return -DER_NO_PERM;
+	}
+
+	/* Disallow to begin with; will support in the future. */
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_REDUN_FAC)) {
+		D_ERROR(DF_UUID ": cannot set pool service redundancy factor on existing pool\n",
+			DP_UUID(pool_uuid));
+		return -DER_NO_PERM;
+	}
+
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_OBJ_VERSION)) {
+		D_ERROR("Can't set pool obj version if pool is created.\n");
+		return -DER_NO_PERM;
+	}
+
+	return dsc_pool_svc_call(pool_uuid, ranks, &pool_set_prop_cbs, &arg, deadline);
+}
+
+struct pool_extend_arg {
+	int                  pea_ntargets;
+	const d_rank_list_t *pea_rank_list;
+	int                  pea_ndomains;
+	const uint32_t      *pea_domains;
+};
+
+static int
+pool_extend_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_extend_arg *arg = varg;
+	struct pool_extend_in  *in  = crt_req_get(rpc);
+
+	in->pei_ntgts             = arg->pea_ntargets;
+	in->pei_ndomains          = arg->pea_ndomains;
+	in->pei_tgt_ranks         = (d_rank_list_t *)arg->pea_rank_list;
+	in->pei_domains.ca_count  = arg->pea_ndomains;
+	in->pei_domains.ca_arrays = (uint32_t *)arg->pea_domains;
+	return 0;
+}
+
+static int
+pool_extend_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_extend_out *out = crt_reply_get(rpc);
+	int                     rc  = out->peo_op.po_rc;
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": Failed to set targets to UP state for reintegration",
+			 DP_UUID(pool_uuid));
+	return rc;
+}
+
+static struct dsc_pool_svc_call_cbs pool_extend_cbs = {
+	.pscc_op	= POOL_EXTEND,
+	.pscc_init	= pool_extend_init,
+	.pscc_consume	= pool_extend_consume,
+	.pscc_fini	= NULL
+};
+
+int
+dsc_pool_svc_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uint64_t deadline, int ntargets,
+		    const d_rank_list_t *rank_list, int ndomains, const uint32_t *domains)
+{
+	struct pool_extend_arg arg = {
+		.pea_ntargets	= ntargets,
+		.pea_rank_list	= rank_list,
+		.pea_ndomains	= ndomains,
+		.pea_domains	= domains
+	};
+
+	return dsc_pool_svc_call(pool_uuid, svc_ranks, &pool_extend_cbs, &arg, deadline);
+}
+
+struct pool_update_target_state_arg {
+	struct pool_target_addr_list *puta_target_addrs;
+	pool_comp_state_t             puta_state;
+};
+
+static int
+pool_update_target_state_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_update_target_state_arg *arg = varg;
+
+	pool_tgt_update_in_set_data(rpc, arg->puta_target_addrs->pta_addrs,
+				    (size_t)arg->puta_target_addrs->pta_number);
+	return 0;
+}
+
+static int
+pool_update_target_state_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
+{
+	struct pool_update_target_state_arg *arg = varg;
+	struct pool_tgt_update_out          *out = crt_reply_get(rpc);
+	int                                  rc  = out->pto_op.po_rc;
+
+	if (rc != 0)
+		DL_ERROR(rc, DF_UUID ": Failed to set targets to %s state", DP_UUID(pool_uuid),
+			 arg->puta_state == PO_COMP_ST_DOWN ? "DOWN"
+			 : arg->puta_state == PO_COMP_ST_UP ? "UP"
+							    : "UNKNOWN");
+	return rc;
+}
+
+static struct dsc_pool_svc_call_cbs pool_exclude_cbs = {
+	.pscc_op	= POOL_EXCLUDE,
+	.pscc_init	= pool_update_target_state_init,
+	.pscc_consume	= pool_update_target_state_consume,
+	.pscc_fini	= NULL
+};
+
+static struct dsc_pool_svc_call_cbs pool_reint_cbs = {
+	.pscc_op	= POOL_REINT,
+	.pscc_init	= pool_update_target_state_init,
+	.pscc_consume	= pool_update_target_state_consume,
+	.pscc_fini	= NULL
+};
+
+static struct dsc_pool_svc_call_cbs pool_drain_cbs = {
+	.pscc_op	= POOL_DRAIN,
+	.pscc_init	= pool_update_target_state_init,
+	.pscc_consume	= pool_update_target_state_consume,
+	.pscc_fini	= NULL
+};
+
+int
+dsc_pool_svc_update_target_state(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+				 struct pool_target_addr_list *target_addrs,
+				 pool_comp_state_t             state)
+{
+	struct pool_update_target_state_arg arg = {
+		.puta_target_addrs	= target_addrs,
+		.puta_state		= state
+	};
+	struct dsc_pool_svc_call_cbs       *cbs;
+
+	switch (state) {
+	case PO_COMP_ST_DOWN:
+		cbs = &pool_exclude_cbs;
+		break;
+	case PO_COMP_ST_UP:
+		cbs = &pool_reint_cbs;
+		break;
+	case PO_COMP_ST_DRAIN:
+		cbs = &pool_drain_cbs;
+		break;
+	default:
+		return -DER_INVAL;
+	}
+
+	return dsc_pool_svc_call(pool_uuid, ranks, cbs, &arg, deadline);
 }
