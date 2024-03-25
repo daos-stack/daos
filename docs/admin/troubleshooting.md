@@ -522,14 +522,50 @@ To resolve the issue:
 - Start all `daos_server` processes.
 - Verify that all ranks were able to re-join via `dmg system query`.
 
+### Running out of Memory during Rebuild
+
+Several environment variables can be set in the env_vars section of the yaml file of the DAOS server
+to control how much memory will be used by the migration service to transfer data while handling
+a rebuild, reintegrate, drain or rebalancing operation.
+
+The D\_MIGRATE\_TGT\_ULT\_CNT and D\_MIGRATE\_SYS\_ULT\_CNT environment variables control how many
+user level threads (i.e. ULT) will be created at most in the engine while processing one of the
+operation listed above. D\_MIGRATE\_TGT\_ULT\_CNT is for the total number of ULTs across the target
+xstreams while D\_MIGRATE\_SYS\_ULT\_CNT is for the system xstream in charge of object scanning.
+Each ULT will consume a stack size of 128KiB. To sum up, the following formula defines how much
+memory will be allocaged at most for all the ULTs in an engine to manage data migration:
+
+```
+(D_MIGRATE_TGT_ULT_CNT + D_MIGRATE_SYS_ULT_CNT) x 128KiB
+```
+
+The default value for both environment variables is 4096. This gives us a 1GB of memory.
+
+Moreover, the D\_MIGRATE\_TGT\_MEM\_SIZE and D\_MIGRATE\_SYS\_MEM\_SIZE environment variables
+defines how much maximum total memory in bytes will be allocated by all those migrate ULTs to
+buffer the data. Similarly to the previous variables, different value can be set for the target
+and system xstreams.
+
+The following formula summarizes how much memory might be allocated as most during the migration
+operation:
+
+```
+(D_MIGRATE_TGT_ULT_CNT + D_MIGRATE_SYS_ULT_CNT) x 128KiB + D_MIGRATE_TGT_MEM_SIZE + D_MIGRATE_SYS_MEM_SIZE
+```
+
+With a default of 256MiB for both D\_MIGRATE\_TGT\_MEM\_SIZE and D\_MIGRATE\_SYS\_MEM\_SIZE, this
+gives us an overall upper bound of 1.5GiB of memory allocated during rebuild.
+
 ## Diagnostic and Recovery Tools
 
-!!! WARNING : Please be careful and use this tool under supervision of DAOS support team.
+!!! warning
+    Please be careful and use this tool under supervision of DAOS support team.
 
 In case of PMEM device restored to healthy state, the ext4 filesystem
 created on each PMEM devices may need to verified and repaired if needed.
 
-!!! Make sure that PMEM is not in use and not mounted while doing check or repair.
+!!! note
+    Make sure that PMEM is not in use and not mounted while doing check or repair.
 
 #### Use dmg command to stop the daos engines.
 

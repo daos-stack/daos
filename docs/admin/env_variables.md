@@ -27,7 +27,7 @@ The description of each variable follows the following format:
 |STRING |String                                                  |
 
 
-## Server environment variables
+## Engine-specific Variables
 
 Environment variables in this section only apply to the server side.
 
@@ -35,8 +35,8 @@ Environment variables in this section only apply to the server side.
 |----------------------|-----------|
 |RDB\_ELECTION\_TIMEOUT|Raft election timeout used by RDBs in milliseconds. INTEGER. Default to 7000 ms.|
 |RDB\_REQUEST\_TIMEOUT |Raft request timeout used by RDBs in milliseconds. INTEGER. Default to 3000 ms.|
-|RDB_LEASE_MAINTENANCE_GRACE|Raft grace period of leadership lease maintenance used by RDBs in milliseconds. INTEGER. Default to 7000 ms. If a Raft leader is unable to maintain leadership leases from a majority for more than RDB_ELECTION_TIMEOUT + RDB_LEASE_MAINTENANCE_GRACE, it steps down voluntarily.|
-|RDB_USE_LEASES|Whether RDBs shall use Raft leadership leases, instead of RPCs, to verify leadership. BOOL. Default to true. Rafts track leadership leases regardless; this environment variable essentially controls whether RDBs use Raft leadership leases to improve RDB TX performance.|
+|RDB\_LEASE\_MAINTENANCE_GRACE|Raft grace period of leadership lease maintenance used by RDBs in milliseconds. INTEGER. Default to 7000 ms. If a Raft leader is unable to maintain leadership leases from a majority for more than RDB_ELECTION_TIMEOUT + RDB_LEASE_MAINTENANCE_GRACE, it steps down voluntarily.|
+|RDB\_USE\_LEASES|Whether RDBs shall use Raft leadership leases, instead of RPCs, to verify leadership. BOOL. Default to true. Rafts track leadership leases regardless; this environment variable essentially controls whether RDBs use Raft leadership leases to improve RDB TX performance.|
 |RDB\_COMPACT\_THRESHOLD|Raft log compaction threshold in applied entries. INTEGER. Default to 256 entries.|
 |RDB\_AE\_MAX\_ENTRIES |Maximum number of entries in a Raft AppendEntries request. INTEGER. Default to 32.|
 |RDB\_AE\_MAX\_SIZE    |Maximum total size in bytes of all entries in a Raft AppendEntries request. INTEGER. Default to 1 MB.|
@@ -52,8 +52,12 @@ Environment variables in this section only apply to the server side.
 |DAOS\_DTX\_AGG\_THD\_AGE|DTX aggregation age threshold in seconds. The valid range is [210, 1830]. The default value is 630.|
 |DAOS\_DTX\_RPC\_HELPER\_THD|DTX RPC helper threshold. The valid range is [18, unlimited). The default value is 513.|
 |DAOS\_DTX\_BATCHED\_ULT\_MAX|The max count of DTX batched commit ULTs. The valid range is [0, unlimited). 0 means to commit DTX synchronously. The default value is 32.|
+|D\_MIGRATE\_TGT\_ULT\_CNT|The max number of data migration ULTs created on all target xstreams of an engine during rebuild, reintegration and rebalancing. The default value is set to 4096.|
+|D\_MIGRATE\_SYS\_ULT\_CNT|The max number of data migration ULTs created on the system xstream of an engine during rebuild, reintegration and rebalancing. The default value is set to 4096.|
+|D\_MIGRATE\_TGT\_MEM\_SIZE|The max amount of memory in bytes allocated by all migrate ULTs running on the target xstreams of an engine and used to transfer data when handing a rebuild, reintegration or rebalancing operation. The default value is 256M.|
+|D\_MIGRATE\_SYS\_MEM\_SIZE|The max amount of memory in bytes allocated by all migrate ULTs running on the system xstream of an engine while processing a rebuild, reintegration or rebalancing operation. The default value is 256M.|
 
-## Server and Client environment variables
+## Networking-specific Variables
 
 Environment variables in this section apply to both the server side and the client side.
 
@@ -63,7 +67,7 @@ Environment variables in this section apply to both the server side and the clie
 |FI\_UNIVERSE\_SIZE    |Sets expected universe size in OFI layer to be more than expected number of clients. INTEGER. Auto-defaults to 2048.|
 
 
-## Client environment variables
+## Client-specific Variables
 
 Environment variables in this section only apply to the client side.
 
