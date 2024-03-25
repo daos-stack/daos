@@ -550,7 +550,7 @@ func run(log logging.Logger, cmd pmemCmd) (string, error) {
 }
 
 func defaultCmdRunner(log logging.Logger) *cmdRunner {
-	cr, err := newCmdRunner(log, &ipmctl.NvmMgmt{}, run, exec.LookPath)
+	cr, err := newCmdRunner(log, nil, run, exec.LookPath)
 	if err != nil {
 		panic(err)
 	}
@@ -558,25 +558,25 @@ func defaultCmdRunner(log logging.Logger) *cmdRunner {
 	return cr
 }
 
-func newCmdRunner(log logging.Logger, lib ipmctl.IpmCtl, runCmd runCmdFn, lookPath lookPathFn) (*cmdRunner, error) {
-	if lib == nil {
-		// If no libipmctl interface is provided, assume no calls should be expected and
-		// return a mock library interface that returns error on every call.
-		err := errors.New("unexpected ipmctl library call")
-		lib = &mockIpmctl{
-			cfg: mockIpmctlCfg{
-				initErr:           err,
-				delGoalsErr:       err,
-				getRegionsErr:     err,
-				getFWInfoRet:      err,
-				updateFirmwareRet: err,
-			},
-		}
-	} else {
-		if err := lib.Init(log); err != nil {
-			return nil, err
-		}
-	}
+func newCmdRunner(log logging.Logger, _ ipmctl.IpmCtl, runCmd runCmdFn, lookPath lookPathFn) (*cmdRunner, error) {
+	//	if lib == nil {
+	// If no libipmctl interface is provided, assume no calls should be expected and
+	// return a mock library interface that returns error on every call.
+	//	err := errors.New("unexpected ipmctl library call")
+	//	lib := &mockIpmctl{
+	//		cfg: mockIpmctlCfg{
+	//			initErr:           err,
+	//			delGoalsErr:       err,
+	//			getRegionsErr:     err,
+	//			getFWInfoRet:      err,
+	//			updateFirmwareRet: err,
+	//		},
+	//	}
+	//	} else {
+	//		if err := lib.Init(log); err != nil {
+	//			return nil, err
+	//		}
+	//	}
 
 	if runCmd == nil {
 		// If no commandline call function is provided, assume no calls should be
@@ -588,7 +588,7 @@ func newCmdRunner(log logging.Logger, lib ipmctl.IpmCtl, runCmd runCmdFn, lookPa
 
 	return &cmdRunner{
 		log:         log,
-		binding:     lib,
+		binding:     nil,
 		runInternal: runCmd,
 		lookPath:    lookPath,
 	}, nil

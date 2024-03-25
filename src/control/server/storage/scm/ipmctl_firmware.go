@@ -43,7 +43,13 @@ func (cr *cmdRunner) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareIn
 	if err != nil {
 		return nil, errors.New("invalid SCM module UID")
 	}
-	info, err := cr.binding.GetFirmwareInfo(uid)
+
+	lib := &ipmctl.NvmMgmt{}
+	if err := lib.Init(cr.log); err != nil {
+		return nil, err
+	}
+
+	info, err := lib.GetFirmwareInfo(uid)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to get firmware info for device %q", deviceUID)
 	}
@@ -69,10 +75,17 @@ func (cr *cmdRunner) UpdateFirmware(deviceUID string, firmwarePath string) error
 	if err != nil {
 		return errors.New("invalid SCM module UID")
 	}
+
+	lib := &ipmctl.NvmMgmt{}
+	if err := lib.Init(cr.log); err != nil {
+		return err
+	}
+
 	// Force option permits minor version downgrade.
-	err = cr.binding.UpdateFirmware(uid, firmwarePath, true)
+	err = lib.UpdateFirmware(uid, firmwarePath, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to update firmware for device %q", deviceUID)
 	}
+
 	return nil
 }
