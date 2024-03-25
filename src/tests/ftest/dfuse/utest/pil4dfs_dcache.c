@@ -297,8 +297,7 @@ main(int argc, char *argv[])
 {
 	size_t            test_id;
 	struct CMUnitTest tests[] = {cmocka_unit_test(test_mkdirat),
-				     cmocka_unit_test(test_unlinkat),
-				     cmocka_unit_test(test_rmdir),
+				     cmocka_unit_test(test_unlinkat), cmocka_unit_test(test_rmdir),
 				     cmocka_unit_test(test_rename),
 				     cmocka_unit_test(test_open_close)};
 	struct CMUnitTest test[1];
