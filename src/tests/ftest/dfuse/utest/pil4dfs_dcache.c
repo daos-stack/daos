@@ -315,7 +315,8 @@ test_dup(void **state)
 	assert_return_code(rc, errno);
 
 	printf("\ncreating empty file '/test_dup/foo'\n");
-	foo_fd = openat(fd, "test_dup/foo", O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU | S_IRGRP | S_IROTH);
+	foo_fd =
+	    openat(fd, "test_dup/foo", O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU | S_IRGRP | S_IROTH);
 	assert_return_code(foo_fd, errno);
 
 	printf("\nduplicating file descriptor of file 'foo'\n");
@@ -338,9 +339,9 @@ main(int argc, char *argv[])
 {
 	size_t            test_id;
 	struct CMUnitTest tests[] = {
-		cmocka_unit_test(test_mkdirat),    cmocka_unit_test(test_unlinkat),
-		cmocka_unit_test(test_rmdir),      cmocka_unit_test(test_rename),
-		cmocka_unit_test(test_open_close), cmocka_unit_test(test_dup)};
+	    cmocka_unit_test(test_mkdirat),    cmocka_unit_test(test_unlinkat),
+	    cmocka_unit_test(test_rmdir),      cmocka_unit_test(test_rename),
+	    cmocka_unit_test(test_open_close), cmocka_unit_test(test_dup)};
 	struct CMUnitTest test[1];
 
 	d_register_alt_assert(mock_assert);
