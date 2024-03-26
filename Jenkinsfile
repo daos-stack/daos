@@ -175,7 +175,7 @@ pipeline {
 
     triggers {
         /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'release/2.4' ? 'TZ=America/Toronto\n0 12 * * *\n' : '')
+        cron(env.BRANCH_NAME == 'release/2.4' ? 'TZ=America/Toronto\n0 12 * * 6\n' : '')
     }
 
     environment {
