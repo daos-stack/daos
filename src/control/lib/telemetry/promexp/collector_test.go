@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -461,14 +461,20 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 				"engine_stats_gauge2_min",
 				"engine_stats_gauge2_max",
 				"engine_stats_gauge2_mean",
+				"engine_stats_gauge2_sum",
 				"engine_stats_gauge2_stddev",
+				"engine_stats_gauge2_sumsquares",
+				"engine_stats_gauge2_samples",
 				"engine_timer_stamp",
 				"engine_timer_snapshot",
 				"engine_timer_duration",
 				"engine_timer_duration_min",
 				"engine_timer_duration_max",
 				"engine_timer_duration_mean",
+				"engine_timer_duration_sum",
 				"engine_timer_duration_stddev",
+				"engine_timer_duration_sumsquares",
+				"engine_timer_duration_samples",
 			},
 		},
 		"ignore some metrics": {
