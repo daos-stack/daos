@@ -522,39 +522,45 @@ To resolve the issue:
 - Start all `daos_server` processes.
 - Verify that all ranks were able to re-join via `dmg system query`.
 
-### Running out of Memory during Rebuild
+### Rebuild is Slow or Running out of Memory
 
 Several environment variables can be set in the env_vars section of the yaml file of the DAOS server
 to control how much memory will be used by the migration service to transfer data while handling
-a rebuild, reintegrate, drain or rebalancing operation.
+a rebuild, reintegrate, drain or rebalancing operation of a pool.
 
-The D\_MIGRATE\_TGT\_ULT\_CNT and D\_MIGRATE\_SYS\_ULT\_CNT environment variables control how many
-user level threads (i.e. ULT) will be created at most in the engine while processing one of the
-operation listed above. D\_MIGRATE\_TGT\_ULT\_CNT is for the total number of ULTs across the target
-xstreams while D\_MIGRATE\_SYS\_ULT\_CNT is for the system xstream in charge of object scanning.
+The D\_MIGRATE\_ULT\_CNT environment variable controls how many user level threads (i.e. ULT) are
+created at most in the engine while processing one of the operation listed above.
 Each ULT will consume a stack size of 128KiB. To sum up, the following formula defines how much
-memory will be allocaged at most for all the ULTs in an engine to manage data migration:
+memory will be allocated at most for all the ULTs in an engine to manage data migration:
 
 ```
-(D_MIGRATE_TGT_ULT_CNT + D_MIGRATE_SYS_ULT_CNT) x 128KiB
+D_MIGRATE_ULT_CNT x 128KiB
 ```
 
-The default value for both environment variables is 4096. This gives us a 1GB of memory.
+The default value for D\_MIGRATE\_ULT\_CNT is 4096. This gives us 0.5GiB of memory used at most
+for the ULT stacks.
 
-Moreover, the D\_MIGRATE\_TGT\_MEM\_SIZE and D\_MIGRATE\_SYS\_MEM\_SIZE environment variables
-defines how much maximum total memory in bytes will be allocated by all those migrate ULTs to
-buffer the data. Similarly to the previous variables, different value can be set for the target
-and system xstreams.
+Moreover, the D\_MIGRATE\_MEM\_SIZE environment variable defines the maximum total memory in bytes
+allocated by all those migrate ULTs to buffer the data.
 
-The following formula summarizes how much memory might be allocated as most during the migration
+The following formula summarizes how much memory might be allocated at most during a migration
 operation:
 
 ```
-(D_MIGRATE_TGT_ULT_CNT + D_MIGRATE_SYS_ULT_CNT) x 128KiB + D_MIGRATE_TGT_MEM_SIZE + D_MIGRATE_SYS_MEM_SIZE
+D_MIGRATE_ULT_CNT x 128KiB + D_MIGRATE_MEM_SIZE
 ```
 
-With a default of 256MiB for both D\_MIGRATE\_TGT\_MEM\_SIZE and D\_MIGRATE\_SYS\_MEM\_SIZE, this
-gives us an overall upper bound of 1.5GiB of memory allocated during rebuild.
+With a default of 256MiB for both D\_MIGRATE\_MEM\_SIZE, this gives us an overall upper bound
+of 0.75GiB of memory allocated during rebuild.
+
+!!! note
+    Those values should be adjusted on the targeted system to be large enough for rebuild to complete
+    promptly and not to run out of memory which is fatal for the engine.
+
+!!! warning
+    Please note that those variables are per-pool. Systems with multiple pools might have up to
+    one migration operation in flight for each pool. The number of pools should thus be taken into
+    account when sizing the amount of memory required for the DAOS storage nodes.
 
 ## Diagnostic and Recovery Tools
 

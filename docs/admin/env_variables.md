@@ -52,10 +52,8 @@ Environment variables in this section only apply to the server side.
 |DAOS\_DTX\_AGG\_THD\_AGE|DTX aggregation age threshold in seconds. The valid range is [210, 1830]. The default value is 630.|
 |DAOS\_DTX\_RPC\_HELPER\_THD|DTX RPC helper threshold. The valid range is [18, unlimited). The default value is 513.|
 |DAOS\_DTX\_BATCHED\_ULT\_MAX|The max count of DTX batched commit ULTs. The valid range is [0, unlimited). 0 means to commit DTX synchronously. The default value is 32.|
-|D\_MIGRATE\_TGT\_ULT\_CNT|The max number of data migration ULTs created on all target xstreams of an engine during rebuild, reintegration and rebalancing. The default value is set to 4096.|
-|D\_MIGRATE\_SYS\_ULT\_CNT|The max number of data migration ULTs created on the system xstream of an engine during rebuild, reintegration and rebalancing. The default value is set to 4096.|
-|D\_MIGRATE\_TGT\_MEM\_SIZE|The max amount of memory in bytes allocated by all migrate ULTs running on the target xstreams of an engine and used to transfer data when handing a rebuild, reintegration or rebalancing operation. The default value is 256M.|
-|D\_MIGRATE\_SYS\_MEM\_SIZE|The max amount of memory in bytes allocated by all migrate ULTs running on the system xstream of an engine while processing a rebuild, reintegration or rebalancing operation. The default value is 256M.|
+|D\_MIGRATE\_ULT\_CNT|The max number of data migration ULTs created per-pool across all target xstreams of an engine during rebuild, reintegration and rebalancing. The default value is set to 4096.|
+|D\_MIGRATE\_MEM\_SIZE|The max amount of memory in bytes allocated per-pool by all migrate ULTs of an engine used to transfer data when handing a rebuild, reintegration or rebalancing operation. The default value is 256M.|
 
 ## Networking-specific Variables
 

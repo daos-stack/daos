@@ -35,13 +35,11 @@
  * the moment, will adjust it later if needed.
  */
 #define MIGRATE_DEFAULT_MAX_SIZE	(1 << 28)
-#define ENV_MIGRATE_TGT_MEM_SIZE	"D_MIGRATE_TGT_MEM_SIZE"
-#define ENV_MIGRATE_SYS_MEM_SIZE	"D_MIGRATE_SYS_MEM_SIZE"
+#define ENV_MIGRATE_MEM_SIZE		"D_MIGRATE_MEM_SIZE"
 
 /* Max migrate ULT number on the engine */
 #define MIGRATE_DEFAULT_MAX_ULT	4096
-#define ENV_MIGRATE_TGT_ULT_CNT	"D_MIGRATE_TGT_ULT_CNT"
-#define ENV_MIGRATE_SYS_ULT_CNT	"D_MIGRATE_SYS_ULT_CNT"
+#define ENV_MIGRATE_ULT_CNT	"D_MIGRATE_ULT_CNT"
 
 struct migrate_one {
 	daos_key_t		 mo_dkey;
@@ -468,10 +466,8 @@ struct migrate_pool_tls_create_arg {
 	unsigned int generation;
 	uint32_t opc;
 	uint32_t new_layout_ver;
-	uint32_t max_tgt_ult_cnt;
-	uint32_t max_sys_ult_cnt;
-	uint64_t max_tgt_mem_size;
-	uint64_t max_sys_mem_size;
+	uint32_t max_ult_cnt;
+	uint64_t max_mem_size;
 };
 
 int
@@ -526,8 +522,8 @@ migrate_pool_tls_create_one(void *data)
 	if (dss_get_module_info()->dmi_xs_id == 0) {
 		int i;
 
-		pool_tls->mpt_inflight_max_size = arg->max_sys_mem_size;
-		pool_tls->mpt_inflight_max_ult = arg->max_sys_ult_cnt;
+		pool_tls->mpt_inflight_max_size = arg->max_mem_size;
+		pool_tls->mpt_inflight_max_ult = arg->max_ult_cnt;
 		D_ALLOC_ARRAY(pool_tls->mpt_obj_ult_cnts, dss_tgt_nr);
 		D_ALLOC_ARRAY(pool_tls->mpt_dkey_ult_cnts, dss_tgt_nr);
 		if (pool_tls->mpt_obj_ult_cnts == NULL || pool_tls->mpt_dkey_ult_cnts == NULL)
@@ -542,8 +538,8 @@ migrate_pool_tls_create_one(void *data)
 		pool_tls->mpt_pool = ds_pool_child_lookup(arg->pool_uuid);
 		if (pool_tls->mpt_pool == NULL)
 			D_GOTO(out, rc = -DER_NO_HDL);
-		pool_tls->mpt_inflight_max_size = arg->max_tgt_mem_size / dss_tgt_nr;
-		pool_tls->mpt_inflight_max_ult = arg->max_tgt_ult_cnt / dss_tgt_nr;
+		pool_tls->mpt_inflight_max_size = arg->max_mem_size / dss_tgt_nr;
+		pool_tls->mpt_inflight_max_ult = arg->max_ult_cnt / dss_tgt_nr;
 		pool_tls->mpt_tgt_obj_ult_cnt = &arg->obj_ult_cnts[tgt_id];
 		pool_tls->mpt_tgt_dkey_ult_cnt = &arg->dkey_ult_cnts[tgt_id];
 	}
@@ -599,14 +595,10 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	}
 	D_ASSERT(generation != (unsigned int)(-1));
 
-	arg.max_tgt_ult_cnt = MIGRATE_DEFAULT_MAX_ULT;
-	d_getenv_uint(ENV_MIGRATE_TGT_ULT_CNT, &arg.max_tgt_ult_cnt);
-	arg.max_sys_ult_cnt = MIGRATE_DEFAULT_MAX_ULT;
-	d_getenv_uint(ENV_MIGRATE_SYS_ULT_CNT, &arg.max_sys_ult_cnt);
-	arg.max_tgt_mem_size = MIGRATE_DEFAULT_MAX_SIZE;
-	d_getenv_uint64(ENV_MIGRATE_TGT_MEM_SIZE, &arg.max_tgt_mem_size);
-	arg.max_sys_mem_size = MIGRATE_DEFAULT_MAX_SIZE;
-	d_getenv_uint64(ENV_MIGRATE_SYS_MEM_SIZE, &arg.max_sys_mem_size);
+	arg.max_ult_cnt = MIGRATE_DEFAULT_MAX_ULT;
+	d_getenv_uint(ENV_MIGRATE_ULT_CNT, &arg.max_ult_cnt);
+	arg.max_mem_size = MIGRATE_DEFAULT_MAX_SIZE;
+	d_getenv_uint64_t(ENV_MIGRATE_MEM_SIZE, &arg.max_mem_size);
 
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	uuid_copy(arg.pool_hdl_uuid, pool_hdl_uuid);
