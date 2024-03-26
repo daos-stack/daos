@@ -14,7 +14,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
@@ -30,10 +29,7 @@ type networkCmd struct {
 // networkScanCmd is the struct representing the command to scan the machine for network interface devices
 // that match the given fabric provider.
 type networkScanCmd struct {
-	optCfgCmd
-	ctlSvcCmd
-	cmdutil.JSONOutputCmd
-	cmdutil.LogCmd
+	baseScanCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)"`
 }
 

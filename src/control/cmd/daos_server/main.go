@@ -39,6 +39,13 @@ type (
 	ctlSvcCmd struct {
 		ctlSvc *server.ControlService
 	}
+
+	baseScanCmd struct {
+		cmdutil.JSONOutputCmd `json:"-"`
+		cmdutil.LogCmd        `json:"-"`
+		ctlSvcCmd             `json:"-"`
+		optCfgCmd             `json:"-"`
+	}
 )
 
 func (cmd *ctlSvcCmd) setCtlSvc(cs *server.ControlService) {

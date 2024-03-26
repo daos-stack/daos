@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -74,12 +73,9 @@ type scmSocketCmd struct {
 }
 
 type nvmeCmd struct {
-	cmdutil.LogCmd        `json:"-"`
-	cmdutil.JSONOutputCmd `json:"-"`
-	ctlSvcCmd             `json:"-"`
-	helperLogCmd          `json:"-"`
-	optCfgCmd             `json:"-"`
-	iommuCheckerCmd       `json:"-"`
+	baseScanCmd     `json:"-"`
+	helperLogCmd    `json:"-"`
+	iommuCheckerCmd `json:"-"`
 }
 
 func (cmd *nvmeCmd) init() error {
@@ -111,12 +107,9 @@ func (cmd *nvmeCmd) init() error {
 }
 
 type scmCmd struct {
-	cmdutil.LogCmd        `json:"-"`
-	cmdutil.JSONOutputCmd `json:"-"`
-	ctlSvcCmd             `json:"-"`
-	helperLogCmd          `json:"-"`
-	optCfgCmd             `json:"-"`
-	scmSocketCmd          `json:"-"`
+	baseScanCmd  `json:"-"`
+	helperLogCmd `json:"-"`
+	scmSocketCmd `json:"-"`
 }
 
 func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
