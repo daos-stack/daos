@@ -458,6 +458,97 @@ def launch_vmd_identify_check(self, name, results, args):
     self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
+def launch_reboot(self, pools, name, results, args):
+    """Execute server unexpected reboot.
+
+    Args:
+        self (obj): soak obj
+        pools (TestPool): list of TestPool obj
+        name (str): name of dmg subcommand
+        results (queue): multiprocessing queue
+        args (queue): multiprocessing queue
+    """
+    status = False
+    params = {}
+    ranks = None
+    if name == "REBOOT":
+        reboot_host = self.random.choice(self.hostlist_servers)
+        ranklist = self.server_managers[0].get_host_ranks(self.selected_host)
+        ranks = ",".join(str(rank) for rank in ranklist)
+        # init the status dictionary
+        params = {"name": name,
+                  "status": status,
+                  "vars": {"host": reboot_host, "ranks": ranklist}}
+        self.log.info(
+            "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
+        # reboot host
+        result = run_remote(self.log, reboot_host, "sudo reboot", timeout=300)
+        if result.passed:
+            status = True
+        else:
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to reboot")
+            status = False
+
+        if status:
+            rebuild_status = True
+            for pool in pools:
+                rebuild_status &= wait_for_pool_rebuild(self, pool, name)
+            status = rebuild_status
+
+    elif name == "REBOOT_REINTEGRATE" and self.harasser_results["REBOOT"]:
+
+        reboot_host = self.harasser_args["REBOOT"]["host"]
+        ranklist = self.harasser_args["REBOOT"]["ranks"]
+        ranks = ",".join(str(rank) for rank in ranklist)
+        self.log.info("<<<PASS %s: %s started on host %s at %s>>>\n", self.loop, name, reboot_host,
+                      time.ctime())
+        try:
+            self.dmg_command.system_start(ranks=ranks)
+            status = True
+        except TestFail as error:
+            self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
+            status = False
+        for pool in pools:
+            self.dmg_command.pool_query(pool.identifier)
+
+        # Wait ~ 30 sec before issuing the reintegrate
+        time.sleep(30)
+        # reintegrate ranks
+        reintegrate_status = True
+        for pool in pools:
+            for rank in ranklist:
+                try:
+                    pool.reintegrate(rank)
+                    status = True
+                except TestFail as error:
+                    self.log.error(
+                        f"<<<FAILED:dmg pool {pool.identifier} reintegrate failed on rank {rank}",
+                        exc_info=error)
+                    status = False
+                reintegrate_status &= status
+                if reintegrate_status:
+                    reintegrate_status &= wait_for_pool_rebuild(
+                        self, pool, name)
+                    status = reintegrate_status
+                else:
+                    status = False
+    else:
+        self.log.error("<<<PASS %s: %s failed due to REBOOT failure >>>", self.loop, name)
+        status = False
+
+    params = {"name": name,
+              "status": status,
+              "vars": {"host": reboot_host, "ranks": ranklist}}
+    if not status:
+        self.log.error("<<< %s failed - check logs for failure data>>>", name)
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
+    self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+
+
 def launch_extend(self, pool, name, results, args):
     """Execute dmg extend ranks.
 
@@ -474,14 +565,13 @@ def launch_extend(self, pool, name, results, args):
 
     if self.selected_host:
         ranklist = self.server_managers[0].get_host_ranks(self.selected_host)
-
+        ranks = ",".join(str(rank) for rank in ranklist)
         # init the status dictionary
         params = {"name": name,
                   "status": status,
                   "vars": {"host": self.selected_host, "ranks": ranks}}
         self.log.info(
             "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
-        ranks = ",".join(str(rank) for rank in ranklist)
         try:
             pool.extend(ranks)
             status = True
@@ -705,10 +795,10 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
 
     Args:
         self (obj): soak obj
-        pool (obj):             TestPool obj
+        pool (obj): TestPool obj
 
-    Returns dfuse(obj):         Dfuse obj
-            cmd(list):          list of dfuse commands to add to job script
+    Returns dfuse(obj): Dfuse obj
+            cmd(list): list of dfuse commands to add to job script
     """
     # Get Dfuse params
     dfuse = Dfuse(self.hostlist_clients, self.tmp)

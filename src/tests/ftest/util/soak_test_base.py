@@ -26,7 +26,7 @@ from soak_utils import (SoakTestError, add_pools, build_job_script, cleanup_dfus
                         create_app_cmdline, create_dm_cmdline, create_fio_cmdline,
                         create_ior_cmdline, create_macsio_cmdline, create_mdtest_cmdline,
                         create_racer_cmdline, ddhhmmss_format, get_daos_server_logs, get_harassers,
-                        get_journalctl, launch_exclude_reintegrate, launch_extend,
+                        get_journalctl, launch_exclude_reintegrate, launch_extend, launch_reboot,
                         launch_server_stop_start, launch_snapshot, launch_vmd_identify_check,
                         reserved_file_copy, run_event_check, run_metrics_check, run_monitor_check)
 
@@ -248,6 +248,16 @@ class SoakTestBase(TestWithServers):
         elif harasser == "vmd-identify-check":
             method = launch_vmd_identify_check
             name = "VMD_LED_CHECK"
+            params = (self, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "reboot":
+            method = launch_reboot
+            name = "REBOOT"
+            params = (self, name, results, args)
+            job = multiprocessing.Process(target=method, args=params, name=name)
+        elif harasser == "reboot-reintegrate":
+            method = launch_reboot
+            name = "REBOOT_REINTEGRATE"
             params = (self, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         else:
