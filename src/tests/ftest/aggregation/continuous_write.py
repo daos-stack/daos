@@ -14,7 +14,7 @@ from job_manager_utils import get_job_manager
 
 
 class ContinuousWrite(IorTestBase):
-    """Verify that aggregation works while new snapshots are continuously being created.
+    """Verify that aggregation works while new snapshots continuously fill up the NVMe space.
 
     :avocado: recursive
     """
@@ -34,7 +34,7 @@ class ContinuousWrite(IorTestBase):
         ior_cmd = IorCommand(namespace=namespace)
         ior_cmd.get_params(self)
         ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
-        testfile = os.path.join(os.sep, f"test_file_1")
+        testfile = os.path.join(os.sep, "test_file_1")
         ior_cmd.test_file.update(testfile)
         manager = get_job_manager(test=self, job=ior_cmd, subprocess=self.subprocess)
         manager.assign_hosts(
@@ -44,10 +44,10 @@ class ContinuousWrite(IorTestBase):
 
         for count in range(60):
             # In this test, use "##" in the log message because a thread is used and the logs are
-            # written in unpredicatble manner. Using "##" makes it easier to find the debug logs
+            # written in unpredictable manner. Using "##" makes it easier to find the debug logs
             # without using search.
-            self.log.info(f"## Run IOR. Count = {count}. Aggregation detected = "
-                          f"{self.aggregation_detected}")
+            msg = f"## Run IOR. Count = {count}. Aggregation detected = {self.aggregation_detected}"
+            self.log.info(msg)
             try:
                 manager.run()
             except CommandFailure as error:
@@ -78,9 +78,12 @@ class ContinuousWrite(IorTestBase):
     def test_continuous_write(self):
         """Test that free space increase (aggregation) occurs while IOR is continuously running.
 
+        Aggregation should occur when the NVMe space becomes low. Test that aggregation occurs when
+        NVMe space becomes low due to many snapshots.
+
         Testing aggregation properly isn't straightforward, especially using automation because the
         algorithm is unclear and unpredictable. In this test, we focus on the occurrence of
-        aggregation while IOR write is coninuously running at certain rate. I.e., We don't test the
+        aggregation while IOR write is continuously running at certain rate. I.e., We don't test the
         amount of space reclaimed or different block sizes that fill up the NVMe at different rates.
 
         Jira ID: DAOS-14204
@@ -117,10 +120,10 @@ class ContinuousWrite(IorTestBase):
         nvme_free_prev = self.get_nvme_free(pool=pool)
 
         for count in range(20):
-            self.log.info(f"## Query NVMe Free space. Count = {count}")
+            self.log.info("## Query NVMe Free space. Count = %d", count)
             nvme_free = self.get_nvme_free(pool=pool)
-            self.log.info(
-                f"## NVMe Free Before = {nvme_free_prev:,} Byte; Now = {nvme_free:,} Byte")
+            msg = f"## NVMe Free Before = {nvme_free_prev:,} Byte; Now = {nvme_free:,} Byte"
+            self.log.info(msg)
             if nvme_free > nvme_free_prev:
                 # Free space increase (aggregation) detected.
                 self.aggregation_detected = True
