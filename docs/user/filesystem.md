@@ -46,23 +46,41 @@ The DFS API closely represents the POSIX API. The API includes operations to:
 
 ### POSIX Compliance
 
-The following features from POSIX are not supported:
+POSIX support in DAOS comes with the following limitations:
 
-* Hard links
-* mmap support with MAP\_SHARED will be consistent from single client only. Note
-  that this is supported through DFUSE only (i.e. not through the DFS API).
-* Char devices, block devices, sockets and pipes
-* User/group quotas
-* setuid(), setgid() programs, supplementary groups, POSIX ACLs are not supported
-  within the DFS namespace.
-* [access/change/modify] time not updated appropriately, potentially on close only.
-* Flock (maybe at dfuse local node level only)
-* Block size in stat buf is not accurate (no account for holes, extended attributes)
-* Various parameters reported via statfs like number of blocks, files,
-  free/available space
-* POSIX permissions inside an encapsulated namespace
-  * Still enforced at the DAOS pool/container level
-  * Effectively means that all files belong to the same "project"
+* Hard links are currently not supported.
+* Flock operations are not supported (maybe at dfuse local node level only).
+* mmap support with MAP\_SHARED will be consistent from single client only and only when data
+  caching is enabled. Note that this is supported through DFUSE only (i.e. not through the DFS API).
+  The dfuse-data-cache=otoc container attribute allows this without enabling other caching.
+* Char devices, block devices, sockets and pipes are not supported.
+* User/group quotas are not supported.
+* Access time (atime) is always the greater between the change and modify time.
+* Block size in stat buf is not accurate (no account for holes, extended attributes).
+* Various parameters reported via statfs like number of blocks, files, free/available space are not
+  accurate.
+* O\_APPEND mode for files is not supported. When O\_APPEND is used on file open with dfuse, the
+  file open will not return an unsupported error and will be consistent only on the local node
+  (dfuse instance) where this operation was executed. This means if O\_APPEND is used over dfuse
+  with multiple dfuse instances, the appends to the file are not consistent and may corrupt the
+  file.
+* The sticky bit, POSIX ACLs, and supplementary groups are not supported.
+* While set\_uid/gid bits are stored by libdfs on setattr and returned on getattr, it is up to
+  the caller (e.g. fuse in the case of dfuse) to implement support for setuid/gid binaries since
+  libdfs does not provide any interface to execute binaries.
+* POSIX permissions are only stored and enforced at the DFS level and provided for convenience
+  purposes. Security of access to the DFS container should be properly set at the DAOS pool and/or
+  container level using DAOS ACLs. This means that a user should not rely on those POSIX permissions
+  for securing access to their data since it can be bypassed by the DAOS lower level API if the user
+  has ACL access to the container.
+* Open-unlink semantics: This occurs when a client obtains an open handle on an object (file or
+  directory), and accesses that object (reads/writes data or create other files), while another
+  client removes that object that the other client has opened from under it. In DAOS, we don't track
+  object open handles as that would be very expensive, and so in such conflicting cases, the worst
+  case scenario is the lost/leaked space that is written to those orphan objects that have been
+  unlinked from the namespace. DAOS implements a file system checker that can be used to either
+  relink those orphaned objects back in a lost+found directory or remove them from the container to
+  reclaim the space.
 
 !!! note
     DFS directories do not include the `.` (current directory) and `..` (parent directory)
@@ -90,15 +108,7 @@ accessed in balanced mode only. If the container was created with relaxed mode,
 it can be accessed in relaxed or balanced mode. In either mode, there is a
 consistency semantic issue that is not properly handled:
 
-* Open-unlink semantics: This occurs when a client obtains an open handle on an
-  object (file or directory), and accesses that object (reads/writes data or
-  create other files), while another client removes that object that the other
-  client has opened from under it. In DAOS, we don't track object open handles
-  as that would be very expensive, and so in such conflicting cases, the worst
-  case scenario is the lost/leaked space that is written to those orphan objects
-  that have been unlinked from the namespace.
-
-Other consistency issues are handled differently between the two consistency mode:
+Other consistency issues are handled differently between the two consistency modes:
 
 * Same Operation Executed Concurrently (Supported in both Relaxed and Balanced
   Mode): For example, clients try to create or remove the same file
