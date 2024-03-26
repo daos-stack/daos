@@ -73,6 +73,14 @@ POSIX support in DAOS comes with the following limitations:
   container level using DAOS ACLs. This means that a user should not rely on those POSIX permissions
   for securing access to their data since it can be bypassed by the DAOS lower level API if the user
   has ACL access to the container.
+* Open-unlink semantics: This occurs when a client obtains an open handle on an object (file or
+  directory), and accesses that object (reads/writes data or create other files), while another
+  client removes that object that the other client has opened from under it. In DAOS, we don't track
+  object open handles as that would be very expensive, and so in such conflicting cases, the worst
+  case scenario is the lost/leaked space that is written to those orphan objects that have been
+  unlinked from the namespace. DAOS implements a file system checker that can be used to either
+  relink those orphaned objects back in a lost+found directory or remove them from the container to
+  reclaim the space.
 
 !!! note
     DFS directories do not include the `.` (current directory) and `..` (parent directory)
@@ -99,15 +107,6 @@ On container access, if the container is created with balanced mode, it can be
 accessed in balanced mode only. If the container was created with relaxed mode,
 it can be accessed in relaxed or balanced mode. In either mode, there is a
 consistency semantic issue that is not properly handled:
-
-* Open-unlink semantics: This occurs when a client obtains an open handle on an object (file or
-  directory), and accesses that object (reads/writes data or create other files), while another
-  client removes that object that the other client has opened from under it. In DAOS, we don't track
-  object open handles as that would be very expensive, and so in such conflicting cases, the worst
-  case scenario is the lost/leaked space that is written to those orphan objects that have been
-  unlinked from the namespace. DAOS implements a file system checker that can be used to either
-  relink those orphaned objects back in a lost+found directory or remove them from the container to
-  reclaim the space.
 
 Other consistency issues are handled differently between the two consistency modes:
 
