@@ -64,10 +64,15 @@ def _add_build_rpath(env, pathin="."):
     path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
     env.AppendENVPath('CGO_LDFLAGS', f'-Wl,-rpath-link={path}', sep=' ')
+
+
+def _enable_ld_path(env, part_list):
+    """Add a build directory to LD_LIBRARY_PATH"""
     # We actually run installed binaries from the build area to generate
     # man pages.  In such cases, we need LD_LIBRARY_PATH set to pick up
     # the dependencies
-    env.AppendENVPath("LD_LIBRARY_PATH", path)
+    for part in part_list:
+        env.AppendENVPath("LD_LIBRARY_PATH", os.path.join(env["BUILD_DIR"], "src", part))
 
 
 def _known_deps(env, **kwargs):
@@ -246,6 +251,7 @@ def _configure_mpi(self):
 def generate(env):
     """Add daos specific methods to environment"""
     env.AddMethod(_add_build_rpath, 'd_add_build_rpath')
+    env.AddMethod(_enable_ld_path, 'd_enable_ld_path')
     env.AddMethod(_configure_mpi, 'd_configure_mpi')
     env.AddMethod(_run_command, 'd_run_command')
     env.AddMethod(_add_rpaths, 'd_add_rpaths')

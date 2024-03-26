@@ -90,8 +90,11 @@ def install_go_bin(env, name, libs=None, install_man=False):
     if install_man:
         gen_bin = join('$BUILD_DIR/src/control', name)
         build_path = join('$BUILD_DIR/src/control', f'{name}.8')
-        env.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
-        env.Install('$PREFIX/share/man/man8', build_path)
+        menv = env.Clone()
+        # This runs code from the build area so needs LD_LIBRARY_PATH set.
+        menv.d_enable_ld_path(["cart", "gurt", "client/api", "common", "client/dfs", "utils"])
+        menv.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
+        menv.Install('$PREFIX/share/man/man8', build_path)
 
 
 def scons():

@@ -2205,15 +2205,20 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		if (chkpt_data == NULL)
 			continue;
 
-		D_ASSERT(store->stor_ops->so_wal_id_cmp(store, committed_tx,
-							chkpt_data->cd_max_tx) >= 0);
+		/* WAL commit failed due to faulty SSD */
+		if (store->stor_ops->so_wal_id_cmp(store, committed_tx,
+						   chkpt_data->cd_max_tx) < 0) {
+			D_ASSERT(store->store_faulty);
+			D_ERROR("WAL commit failed. "DF_X64" < "DF_X64"\n", committed_tx,
+				chkpt_data->cd_max_tx);
+			rc = -DER_NVME_IO;
+		}
 
 		/** Since the flush API only allows one at a time, let's just do one at a time
 		 *  before copying another page.  We can revisit this later if the API allows
 		 *  to pass more than one fh.
 		 */
-		rc         = store->stor_ops->so_flush_post(chkpt_data->cd_fh, 0);
-		D_ASSERT(rc == 0);
+		rc = store->stor_ops->so_flush_post(chkpt_data->cd_fh, rc);
 		for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
 			pinfo = chkpt_data->cd_pages[i];
 			if (pinfo->pi_last_inflight != pinfo->pi_last_checkpoint)
@@ -2228,8 +2233,8 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		iovs_used      += chkpt_data->cd_sg_list.sg_nr_out;
 		d_list_add(&chkpt_data->cd_link, &free_list);
 
-		if (DAOS_FAIL_CHECK(DAOS_MEM_FAIL_CHECKPOINT) &&
-		    pages_scanned >= nr_copying_pgs / 2) {
+		if (rc != 0 || (DAOS_FAIL_CHECK(DAOS_MEM_FAIL_CHECKPOINT) &&
+		    pages_scanned >= nr_copying_pgs / 2)) {
 			d_list_move(&cache->ca_pgs_copying, &cache->ca_pgs_dirty);
 			rc = -DER_AGAIN;
 			break;

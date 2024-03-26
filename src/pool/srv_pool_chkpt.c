@@ -79,6 +79,9 @@ wait_cb(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx)
 		goto done;
 	}
 
+	if (store->store_faulty)
+		goto done;
+
 	ctx->cc_wait_id = chkpt_tx;
 	wait_fn(ctx);
 done:
@@ -107,7 +110,8 @@ update_cb(void *arg, uint64_t id, uint32_t used_blocks, uint32_t total_blocks)
 	if (!ctx->cc_waiting)
 		return;
 
-	if (store->stor_ops->so_wal_id_cmp(store, id, ctx->cc_wait_id) >= 0) {
+	if (store->store_faulty ||
+	    store->stor_ops->so_wal_id_cmp(store, id, ctx->cc_wait_id) >= 0) {
 		wake_fn(ctx);
 		ctx->cc_waiting = 0;
 	}
