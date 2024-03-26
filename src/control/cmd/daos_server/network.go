@@ -17,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 )
 
 const allProviders = "all"
@@ -96,6 +97,8 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 		if err := common.CheckDupeProcess(); err != nil {
 			return err
 		}
+		cmd.ctlSvc = server.NewControlService(cmd.Logger, nil, cmd.config, nil,
+			hwprov.DefaultFabricScanner(cmd.Logger))
 	}
 
 	ctx := cmd.MustLogCtx()
