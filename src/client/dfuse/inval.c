@@ -445,8 +445,6 @@ ival_bucket_dec_value(double timeout)
 
 /* Ensure the correct buckets exist for a attached container.  Pools have a zero dentry timeout
  * so skip zero values.
- *
- * TODO: Make the dentry timeout be more than the data cache timeout.
  */
 int
 ival_add_cont_buckets(struct dfuse_cont *dfc)

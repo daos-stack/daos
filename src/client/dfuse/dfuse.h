@@ -401,6 +401,7 @@ struct dfuse_event {
 	union {
 		size_t de_req_len;
 		size_t de_readahead_len;
+		struct dfuse_info *de_di;
 	};
 	void (*de_complete_cb)(struct dfuse_event *ev);
 	struct stat de_attr;
@@ -447,6 +448,7 @@ struct dfuse_pool {
 	ACTION(CREATE)                                                                             \
 	ACTION(MKNOD)                                                                              \
 	ACTION(FGETATTR)                                                                           \
+	ACTION(PRE_GETATTR)                                                                        \
 	ACTION(GETATTR)                                                                            \
 	ACTION(FSETATTR)                                                                           \
 	ACTION(SETATTR)                                                                            \
@@ -980,11 +982,36 @@ struct dfuse_inode_entry {
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
 
-	/* Data cache metdata, list known size/mtime for file, if these have been updated then
+	/* Data cache metadata, list known size/mtime for file, if these have been updated then
 	 * the data cache should be dropped.
+	 *
+	 * When the last fd on a file is closed and all writes are completed then dfuse will launch
+	 * a stat to get the update size/mtime for the inode.  Future opens should block on this
+	 * stat in order to know if the file has been updated.
+	 *
+	 * Access is controlled via atomics and semaphore, when a decision to make the stat is taken
+	 * then active in increased, and the sem is posted.
+	 *
+	 * Future accesses of the inode should check active, if the value is 0 then there is nothing
+	 * to do.
+	 * If active is positive then it should increate active, wait on the semaphore, decrease
+	 * active and then post the semaphore if active != 0;
+	 *
+	 * After active is 0, (or the semaphore has been waited on) then the new stat structure is
+	 * valid.
+	 *
+	 * The release() code to initialize stat is atomic as it's only triggered by the last
+	 * release on a inode.  It could race with open() where the inode is known in advance
+	 * or create() where it is not.  Open will flush the stat before setting keep_cache.
 	 */
-	size_t                    ie_cache_size;
-	struct timespec           ie_cache_time;
+	struct {
+		struct stat     stat;
+		bool            valid;
+		ATOMIC uint32_t active;
+		struct timespec last_update;
+
+		sem_t           sem;
+	} ie_dc;
 
 	/** Last file closed in this directory was read linearly.  Directories only.
 	 *
@@ -996,6 +1023,9 @@ struct dfuse_inode_entry {
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
 };
+
+void
+dfuse_ie_cs_flush(struct dfuse_inode_entry *ie);
 
 /* Lookup an inode and take a ref on it. */
 static inline struct dfuse_inode_entry *
@@ -1096,6 +1126,11 @@ dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *tim
 /* Check the dentry cache setting against a given timeout, and return time left */
 bool
 dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+void
+dfuse_dc_cache_set_time(struct dfuse_inode_entry *ie);
+bool
+dfuse_dc_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
 
 /* inval.c */
 

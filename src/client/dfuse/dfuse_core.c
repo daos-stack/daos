@@ -883,6 +883,12 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 				D_GOTO(err_umount, rc);
 			}
 
+			/* Set the timeout for invalidate.  This is the duration after which inodes
+			 * will be evicted from the kernel.  Data timeout is considered here as
+			 * well as attrs are used to decide if keeping the data in cache is
+			 * correct.  Data timeout can be set to True/-1 so cap this duration at
+			 * ten minutes or nothing would ever get evicted.
+			 */
 			timeout = max(dfc->dfc_attr_timeout, dfc->dfc_data_timeout);
 
 			timeout = min(timeout, 10 * 60);
@@ -1038,6 +1044,51 @@ dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *tim
 
 	left.tv_sec  = now.tv_sec - ie->ie_mcache_last_update.tv_sec;
 	left.tv_nsec = now.tv_nsec - ie->ie_mcache_last_update.tv_nsec;
+	if (left.tv_nsec < 0) {
+		left.tv_sec--;
+		left.tv_nsec += 1000000000;
+	}
+	time_left = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
+	if (time_left > 0) {
+		use = true;
+
+		DFUSE_TRA_DEBUG(ie, "Allowing cache use, time remaining: %.1lf", time_left);
+
+		if (timeout)
+			*timeout = time_left;
+	}
+
+	return use;
+}
+
+/* Set a timer to mark cache entry as valid */
+void
+dfuse_dc_cache_set_time(struct dfuse_inode_entry *ie)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+	ie->ie_dc.last_update = now;
+}
+
+bool
+dfuse_dc_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout)
+{
+	bool            use = false;
+	struct timespec now;
+	struct timespec left;
+	double          time_left;
+
+	D_ASSERT(max_age != -1);
+	D_ASSERT(max_age >= 0);
+
+	if (ie->ie_mcache_last_update.tv_sec == 0)
+		return false;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+
+	left.tv_sec  = now.tv_sec - ie->ie_dc.last_update.tv_sec;
+	left.tv_nsec = now.tv_nsec - ie->ie_dc.last_update.tv_nsec;
 	if (left.tv_nsec < 0) {
 		left.tv_sec--;
 		left.tv_nsec += 1000000000;
@@ -1258,6 +1309,7 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_open_count, 0);
 	atomic_init(&ie->ie_open_write_count, 0);
 	atomic_init(&ie->ie_il_count, 0);
+	sem_init(&ie->ie_dc.sem, 0, 0);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
 	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
 }

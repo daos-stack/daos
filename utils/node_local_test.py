@@ -2284,6 +2284,16 @@ class PosixTests():
         Write to a file, then read from it.  With write-through caching on then the read should come
         from the page cache.  Due to the way this is implement the cache will be truncated down
         to a page size so this test only works for whole pages.
+
+        The I/O that dfuse should see are:
+        create
+        write
+        release
+        stat
+        open
+        release
+        open
+        release
         """
         file_name = join(self.dfuse.dir, 'file')
 
@@ -5036,7 +5046,7 @@ def run_in_fg(server, conf, args):
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
-        cont_attrs = {'dfuse-data-cache': False,
+        cont_attrs = {'dfuse-data-cache': 120,
                       'dfuse-attr-time': 67,
                       'dfuse-dentry-time': 19,
                       'dfuse-dentry-dir-time': 31,
@@ -5046,7 +5056,7 @@ def run_in_fg(server, conf, args):
         container = container.uuid
 
     dargs = {"caching": True,
-             "wbcache": True,
+             "wbcache": False,
              "multi_user": args.multi_user}
 
     if pool_on_cmd_line:
