@@ -280,6 +280,10 @@ class ErasureCodeSingle(TestWithServers):
             oclass (str): object class for creating the container.
         """
         self.container.append(self.get_container(self.pool, create=False, oclass=oclass))
+        if self.container[-1].control_method.value == \
+            self.container[-1].USE_DAOS and self.container[-1].oclass.value:
+            self.container[-1].oclass.update(self.container[-1].oclass.value.replace("OC_", ""),
+                                             "container.oclass")
 
         # Get the Parity count for setting the container RF property.
         ec_object = get_data_parity_number(self.log, oclass)
