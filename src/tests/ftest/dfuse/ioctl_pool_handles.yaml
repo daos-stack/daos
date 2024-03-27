@@ -1,0 +1,39 @@
+hosts:
+  test_servers: 2
+  test_clients: 1
+
+timeout: 180
+
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      nr_xs_helpers: 1
+      pinned_numa_node: 0
+      storage: auto
+      targets: 16
+    1:
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      nr_xs_helpers: 1
+      pinned_numa_node: 1
+      storage: auto
+      targets: 16
+
+pool:
+  size: 10GB
+
+container:
+  type: POSIX
+
+ior:
+  np: 16
+  flags: "-v -w -W -r -R -k"
+  api: POSIX
+  transfer_size: '1M'
+  block_size: '256M'
