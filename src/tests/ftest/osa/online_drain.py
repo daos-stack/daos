@@ -46,16 +46,14 @@ class OSAOnlineDrain(OSAUtils):
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
         test_seq = self.ior_test_sequence[0]
-        drain_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude target : random two targets  (target idx : 0-7)
-        exc = random.randint(0, 6)  # nosec
-        target_list.append(exc)
-        target_list.append(exc + 1)
+        targets = self.server_managers[0].get_config_value("targets")
+        target_list = random.sample(list(range(0, targets)), 2)  # nosec
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         # Drain one of the ranks (or server)
-        rank = random.randint(1, drain_servers)  # nosec
+        rank = random.choice(list(self.server_managers[0].ranks.keys())[1:])
 
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)

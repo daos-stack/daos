@@ -59,8 +59,8 @@ class NvmePoolExclude(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude rank :  ranks other than rank 0.
-        exclude_servers = len(self.hostlist_servers) * 2
-        rank_list = list(range(1, exclude_servers))
+        rank_list = list(self.server_managers[0].ranks.keys())
+        rank_list.remove(0)
 
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
