@@ -8,8 +8,8 @@
 #include <getopt.h>
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <fuse3/fuse.h>
-#include <fuse3/fuse_lowlevel.h>
+#include <fused/fuse.h>
+#include <fused/fuse_lowlevel.h>
 #include <string.h>
 
 #include <sys/types.h>

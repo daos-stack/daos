@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.101
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -51,9 +51,9 @@ BuildRequires: boost-devel
 %endif
 BuildRequires: libpmemobj-devel >= 2.0.0
 %if (0%{?rhel} >= 8)
-BuildRequires: fuse3-devel >= 3
+BuildRequires: fused-devel >= 1
 %else
-BuildRequires: fuse3-devel >= 3.4.2
+BuildRequires: fused-devel >= 1
 %endif
 %if (0%{?suse_version} >= 1500)
 BuildRequires: go-race
@@ -175,7 +175,7 @@ Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
-Requires: libfuse3-3 >= 3.4.2
+Requires: fused >= 1
 %endif
 Requires: /usr/bin/fusermount3
 %{?systemd_requires}
@@ -225,11 +225,7 @@ Requires: libcapstone-devel
 Requires: Lmod
 Requires: capstone-devel
 %endif
-%if (0%{?rhel} >= 8)
-Requires: fuse3-devel >= 3
-%else
-Requires: fuse3-devel >= 3.4.2
-%endif
+Requires: fused >= 1
 
 %description client-tests
 This is the package needed to run the DAOS test suite (client tests)
@@ -587,6 +583,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Mar 27 2024 Jeff Olivier <jeffolivier@google.com> 2.5.101-3
+- Switch libfuse3 to libfused
+
 * Mon Mar 18 2024 Jan Michalski <jan.michalski@intel.com> 2.5.101-2
 - Add dtx_tests to the server-tests package
 

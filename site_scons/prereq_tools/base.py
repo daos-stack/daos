@@ -444,7 +444,6 @@ class PreReqComponent():
         opts.Add(('MPI_PKG', 'Specifies name of pkg-config to load for MPI', None))
         opts.Add(BoolVariable('FIRMWARE_MGMT', 'Build in device firmware management.', False))
         opts.Add(BoolVariable('STACK_MMAP', 'Allocate ABT ULTs stacks with mmap()', False))
-        opts.Add(BoolVariable('STATIC_FUSE', "Build with static libfuse library", False))
         opts.Add(EnumVariable('BUILD_TYPE', "Set the build type", 'release',
                               ['dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
@@ -521,7 +520,7 @@ class PreReqComponent():
         # argobots is not really needed by client but it's difficult to separate
         common_reqs = ['ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid', 'crypto', 'protobufc',
                        'lz4', 'isal', 'isal_crypto']
-        client_reqs = ['fuse', 'json-c', 'capstone']
+        client_reqs = ['fused', 'json-c', 'capstone']
         server_reqs = ['argobots', 'pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
 

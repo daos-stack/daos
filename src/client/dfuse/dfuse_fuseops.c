@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#include <fuse3/fuse_lowlevel.h>
+#include <fused/fuse_lowlevel.h>
 
 #include "dfuse_common.h"
 #include "dfuse.h"
