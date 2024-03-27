@@ -4,48 +4,14 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse
-from ior_utils import run_ior
-from telemetry_test_base import TestWithTelemetry
+from ior_utils import write_data
+from telemetry_utils import TelemetryUtils
 
 
-class IoctlPoolHandles(TestWithTelemetry):
+class IoctlPoolHandles(TestWithServers):
     """Verifies multi-user dfuse mounting"""
-
-    def verify_metrics(self, previous, current, expect_increase):
-        """Verify previous and current metric data matches or the current data values are greater.
-
-        Args:
-            previous (dict): previous metric data to compare
-            current (dict): current metric data to compare
-            expect_increase (bool): if True current values should be greater or equal than the
-                previous values; otherwise they should be equal.
-
-        Returns:
-            bool: True if the previous and current metric data sets match as expected
-        """
-        status = bool(previous)
-        for host, data in previous.items():
-            for name, info in data.items():
-                try:
-                    if expect_increase:
-                        if info['metrics']['value'] < current[host][name]['metrics']['value']:
-                            status |= False
-                            self.log.error(
-                                "%s on %s previous value (%s) < current value (%s)",
-                                name, host, info['metrics']['value'],
-                                current[host][name]['metrics']['value'])
-                    else:
-                        if info['metrics']['value'] != current[host][name]['metrics']['value']:
-                            status |= False
-                            self.log.error(
-                                "%s on %s previous value (%s) != current value (%s)",
-                                name, host, info['metrics']['value'],
-                                current[host][name]['metrics']['value'])
-                except KeyError as error:
-                    status |= False
-                    self.log.error('Invalid inputs for verify_metrics(): %s', str(error))
-        return status
 
     def test_ioctl_pool_handles(self):
         """JIRA ID: DAOS-8403.
@@ -78,7 +44,7 @@ class IoctlPoolHandles(TestWithTelemetry):
         :avocado: tags=dfuse,
         :avocado: tags=IoctlPoolHandles,test_ioctl_pool_handles
         """
-        processes = self.params.get("np", '/run/ior/*')
+        telemetry = TelemetryUtils(self.get_dmg_command(), self.server_managers[0].hosts)
         metrics = ['engine_pool_ops_cont_open', 'engine_pool_ops_pool_connect']
 
         self.log_step('Creating a 10GB pool')
@@ -92,19 +58,29 @@ class IoctlPoolHandles(TestWithTelemetry):
         start_dfuse(self, dfuse, pool, container)
 
         self.log_step('Collecting container metrics before running ior')
-        initial = self.telemetry.get_metrics(metrics)
+        initial = telemetry.collect_data(metrics)
+        telemetry.display_data()
+        for metric in list(initial):
+            for label in initial[metric]:
+                value = initial[metric][label]
+                initial[metric][label] = [value, value]
 
         self.log_step('Run ior with intercept library')
-        run_ior(
-            self, self.job_manager, 'ior.log', self.hostlist_clients, self.workdir, None,
-            self.server_group, pool, container, processes, None, '/usr/lib64/libioil.so', None,
-            dfuse, True, False, '/run/ior/*', {'env': {'D_IL_REPORT': 2}})
+        ior_params = {'intercept': '/usr/lib64/libioil.so', 'il_report': 2}
+        write_data(self, container, **ior_params)
 
         self.log_step('Collecting pool/container metrics after running ior')
-        compare = self.telemetry.get_metrics(metrics)
+        after_ior = telemetry.collect_data(metrics)
+        for metric in list(after_ior):
+            for label in after_ior[metric]:
+                value = initial[metric][label]
+                if value > 0:
+                    value += 1
+                after_ior[metric][label] = [value]
 
         self.log_step('Verifying pool/container handle ops have not increased after running ior')
-        self.verify_metrics(initial, compare, False)
+        if not telemetry.verify_data(initial):
+            self.fail('Pool/container handle ops increased after running ior')
 
         self.log_step('Unmount dfuse')
         dfuse.unmount()
@@ -113,9 +89,10 @@ class IoctlPoolHandles(TestWithTelemetry):
         dfuse.run()
 
         self.log_step('Collecting pool/container metrics after remounting dfuse')
-        compare = self.telemetry.get_metrics(metrics)
+        telemetry.collect_data(metrics)
 
         self.log_step('Verifying pool/container handle ops have increased after remounting dfuse')
-        self.verify_metrics(initial, compare, True)
+        if not telemetry.verify_data(after_ior):
+            self.fail('Pool/container handle ops did not increase after remounting dfuse')
 
         self.log.info('Test passed')

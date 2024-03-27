@@ -26,9 +26,9 @@ container:
   control_method: daos
   type: POSIX
 
-ior:
-  np: 16
-  flags: "-v -w -W -r -R -k"
+ior_write:
   api: POSIX
-  transfer_size: '1M'
   block_size: '256M'
+  flags: "-v -w -W -r -R -k"
+  processes: 16
+  transfer_size: '1M'
