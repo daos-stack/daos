@@ -281,8 +281,8 @@ int ds_pool_svc_stop(uuid_t pool_uuid);
 int ds_pool_svc_rf_to_nreplicas(int svc_rf);
 int ds_pool_svc_rf_from_nreplicas(int nreplicas);
 
-int ds_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
-			 daos_prop_t *prop);
+int dsc_pool_svc_get_prop(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+			  daos_prop_t *prop);
 int ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks,
 			 daos_prop_t *prop);
 int ds_pool_svc_update_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
@@ -294,8 +294,8 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 int dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
 		       d_rank_list_t **ranks, daos_pool_info_t *pool_info,
 		       uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
-int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
-			     uint32_t tgt_idx, daos_target_info_t *ti);
+int dsc_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
+			      d_rank_t rank, uint32_t tgt_idx, daos_target_info_t *ti);
 
 int ds_pool_prop_fetch(struct ds_pool *pool, unsigned int bit,
 		       daos_prop_t **prop_out);
@@ -358,10 +358,9 @@ int ds_pool_svc_list_cont(uuid_t uuid, d_rank_list_t *ranks,
 			  struct daos_pool_cont_info **containers,
 			  uint64_t *ncontainers);
 
-int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
-			    uuid_t *handles, size_t n_handles,
-			    uint32_t destroy, uint32_t force,
-			    char *machine, uint32_t *count);
+int dsc_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks, uint64_t deadline,
+			     uuid_t *handles, size_t n_handles, uint32_t destroy, uint32_t force,
+			     char *machine, uint32_t *count);
 
 int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);

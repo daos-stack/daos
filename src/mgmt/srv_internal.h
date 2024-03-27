@@ -29,6 +29,18 @@
 #include "rpc.h"
 #include "srv_layout.h"
 
+/*
+ * Use a fixed timeout that matches what the control plane uses for the
+ * moment.
+ *
+ * TODO: Pass the deadline from dmg (or daos_server).
+ */
+static inline uint64_t
+mgmt_ps_call_deadline(void)
+{
+	return daos_getmtime_coarse() + 5 * 60 * 1000;
+}
+
 /** srv.c */
 void ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc);
 void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
