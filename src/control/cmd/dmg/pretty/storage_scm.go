@@ -43,7 +43,7 @@ func printScmMountPoints(mountpoints storage.ScmMountPoints, out io.Writer, opts
 	return nil
 }
 
-// PrintScmModules displays PMM details in a verbose table.
+// PrintScmModules displays PMem module details in a verbose table.
 //
 // TODO: un-export function when not needed in cmd/daos_server/storage.go
 func PrintScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintConfigOption) error {
@@ -60,9 +60,13 @@ func PrintScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintCon
 	channelTitle := "Channel ID"
 	slotTitle := "Channel Slot"
 	capacityTitle := "Capacity"
+	uidTitle := "UID"
+	partNumTitle := "Part Number"
+	healthTitle := "Health"
 
 	formatter := txtfmt.NewTableFormatter(
 		physicalIdTitle, socketTitle, memCtrlrTitle, channelTitle, slotTitle, capacityTitle,
+		uidTitle, partNumTitle, healthTitle,
 	)
 	formatter.InitWriter(out)
 	var table []txtfmt.TableRow
@@ -76,6 +80,9 @@ func PrintScmModules(modules storage.ScmModules, out io.Writer, opts ...PrintCon
 		row[channelTitle] = fmt.Sprint(m.ChannelID)
 		row[slotTitle] = fmt.Sprint(m.ChannelPosition)
 		row[capacityTitle] = humanize.IBytes(m.Capacity)
+		row[uidTitle] = m.UID
+		row[partNumTitle] = m.PartNumber
+		row[healthTitle] = m.HealthState
 
 		table = append(table, row)
 	}

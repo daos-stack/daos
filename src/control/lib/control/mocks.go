@@ -176,7 +176,6 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 				}
 			}
 
-			mi.log.Debug("sending mock response")
 			responses <- hr
 		}
 		close(responses)

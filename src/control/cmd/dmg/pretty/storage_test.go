@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -501,9 +501,9 @@ Errors:
 host1
 -----
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
+SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity UID     Part Number Health 
+------------- --------- --------------- ---------- ------------ -------- ---     ----------- ------ 
+1             1         1               1          1            954 MiB  Device1 PartNumber1        
 
 	No NVMe devices found
 
@@ -583,9 +583,9 @@ HugePage Size: 2048 KB
 host1
 -----
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
+SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity UID     Part Number Health 
+------------- --------- --------------- ---------- ------------ -------- ---     ----------- ------ 
+1             1         1               1          1            954 MiB  Device1 PartNumber1        
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
@@ -639,9 +639,9 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[1-2]
 ---------
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
+SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity UID     Part Number Health 
+------------- --------- --------------- ---------- ------------ -------- ---     ----------- ------ 
+1             1         1               1          1            954 MiB  Device1 PartNumber1        
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
@@ -669,9 +669,9 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host1
 -----
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
+SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity UID     Part Number Health 
+------------- --------- --------------- ---------- ------------ -------- ---     ----------- ------ 
+1             1         1               1          1            954 MiB  Device1 PartNumber1        
 
 	No NVMe devices found
 
@@ -699,9 +699,9 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[0-1023]
 ------------
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
+SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity UID     Part Number Health 
+------------- --------- --------------- ---------- ------------ -------- ---     ----------- ------ 
+1             1         1               1          1            954 MiB  Device1 PartNumber1        
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
