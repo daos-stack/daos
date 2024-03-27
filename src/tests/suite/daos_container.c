@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2399,15 +2399,12 @@ co_rf_simple(void **state)
 	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_HEALTHY);
 
 	if (arg->myrank == 0) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS,
-				      0, NULL);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-				      arg->group, 5, -1);
-		assert_success(rc);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-				      arg->group, 4, -1);
-		assert_success(rc);
+		unsigned int ranks[2];
+
+		ranks[0] = 5;
+		ranks[1] = 4;
+		arg->no_rebuild = 1;
+		rebuild_pools_ranks(&arg, 1, ranks, 2, false);
 	}
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
@@ -2421,6 +2418,9 @@ co_rf_simple(void **state)
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
 
+	/* Hang the rebuild */
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS, 0, NULL);
 	/* IO testing */
 	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
@@ -2445,8 +2445,8 @@ co_rf_simple(void **state)
 	assert_rc_equal(rc, 0);
 
 	if (arg->myrank == 0) {
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-				      arg->group, 3, -1);
+		arg->no_rebuild = 1;
+		rebuild_single_pool_rank(arg, 3, false);
 		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
@@ -2468,18 +2468,17 @@ co_rf_simple(void **state)
 	assert_rc_equal(rc, -DER_RF);
 
 	if (arg->myrank == 0) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		unsigned int ranks[3];
+
+		arg->no_rebuild = 0;
+		print_message("sleep 10 seconds for rebuild resume and wait\n");
+		sleep(10);
 		test_rebuild_wait(&arg, 1);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  3, -1);
-		assert_success(rc);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  4, -1);
-		assert_success(rc);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  5, -1);
-		assert_success(rc);
-		test_rebuild_wait(&arg, 1);
+		ranks[0] = 3;
+		ranks[1] = 4;
+		ranks[2] = 5;
+
+		reintegrate_pools_ranks(&arg, 1, ranks, 3, false);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
@@ -2685,7 +2684,7 @@ nrank_per_node_get(struct pool_map *poolmap)
 }
 
 static int
-ranks_on_same_node(struct pool_map *poolmap, int src_rank, int *ranks)
+ranks_on_same_node(struct pool_map *poolmap, int src_rank, d_rank_t *ranks)
 {
 	struct pool_domain	*node_doms;
 	struct pool_domain	*rank_doms;
@@ -2745,7 +2744,7 @@ co_redun_lvl(void **state)
 	daos_iod_t		 iod;
 	daos_recx_t		 recx;
 	int			 nrank_per_node, ndom;
-	int			 ranks[3];
+	d_rank_t		 ranks[3];
 	int			 i, rc;
 
 	if (!test_runable(arg0, 8))
@@ -2831,15 +2830,10 @@ co_redun_lvl(void **state)
 	 * should not cause RF broken.
 	 */
 	if (arg->myrank == 0) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS, 0, NULL);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-				      ranks[0], -1);
-		assert_success(rc);
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-				      ranks[1], -1);
-		assert_success(rc);
+		arg->no_rebuild = 1;
+		rebuild_pools_ranks(&arg, 1, ranks, 2, false);
 	}
+
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
@@ -2875,6 +2869,8 @@ co_redun_lvl(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 	}
 
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_REBUILD_TGT_REBUILD_HANG | DAOS_FAIL_ALWAYS, 0, NULL);
 	print_message("obj update should success before RF broken\n");
 	io_oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
@@ -2885,17 +2881,15 @@ co_redun_lvl(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* exclude one more rank on another NODE dom */
-	if (arg->myrank == 0) {
-		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
-				      arg->group, ranks[2], -1);
-		assert_success(rc);
-	}
+	if (arg->myrank == 0)
+		rebuild_single_pool_rank(arg, ranks[2], false);
 
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 	daos_prop_val_2_co_status(entry->dpe_val, &stat);
+
 	assert_int_equal(stat.dcs_status, DAOS_PROP_CO_UNCLEAN);
 	rc = daos_cont_open(arg->pool.poh, arg->co_str, arg->cont_open_flags, &coh, NULL, NULL);
 	assert_rc_equal(rc, -DER_RF);
@@ -2907,19 +2901,13 @@ co_redun_lvl(void **state)
 	assert_rc_equal(rc, -DER_RF);
 
 	if (arg->myrank == 0) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		arg->no_rebuild = 0;
+		print_message("sleep 10 seconds for rebuild resume and wait\n");
+		sleep(10);
 		test_rebuild_wait(&arg, 1);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  ranks[2], -1);
-		assert_success(rc);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  ranks[1], -1);
-		assert_success(rc);
-		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-					  ranks[0], -1);
-		assert_success(rc);
-		test_rebuild_wait(&arg, 1);
+		reintegrate_pools_ranks(&arg, 1, ranks, 3, false);
 	}
+
 	par_barrier(PAR_COMM_WORLD);
 
 	print_message("obj update should still fail with DER_RF after re-integrate\n");
