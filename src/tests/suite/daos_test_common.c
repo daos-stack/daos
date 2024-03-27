@@ -492,8 +492,10 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 			return rc;
 		}
 
+		print_message("waiting for rebuild, ver %u, sec %u, err %d, state %d,"
+			      "fail_rank %d\n", rstat->rs_version, rstat->rs_seconds,
+			      rstat->rs_errno, rstat->rs_state, rstat->rs_fail_rank);
 		if (rstat->rs_state == DRS_IN_PROGRESS) {
-			print_message("waiting for rebuild\n");
 			sleep(1);
 			continue;
 		}
