@@ -154,7 +154,7 @@ class ServerFillUp(IorTestBase):
 
         self.nvme_local_cont.create()
 
-    def start_ior_thread(self, create_cont, operation, log_file=None):
+    def start_ior_thread(self, create_cont, operation, repetitions=1, log_file=None):
         """Start IOR write/read threads and wait until all threads are finished.
 
         Args:
@@ -163,6 +163,7 @@ class ServerFillUp(IorTestBase):
                 Write/WriteRead: It will Write or Write/Read base on IOR parameter in yaml file.
                 Auto_Write/Auto_Read: It will calculate the IOR block size based on requested
                                         storage % to be fill.
+            repetitions (int): Repetition for IOR test. Default to 1.
             log_file (str, optional): log file. Defaults to None.
         """
         # IOR flag can Write/Read based on test yaml
@@ -177,6 +178,12 @@ class ServerFillUp(IorTestBase):
         if 'Auto_Read' in operation or operation == "Read":
             create_cont = False
             self.ior_local_cmd.flags.value = self.ior_read_flags
+        if 'Perf' in operation:
+            self.ior_local_cmd.block_size.update(
+                int(self.ior_local_cmd.block_size.value) * 10, 'ior.block_size')
+        # from * 30 to avoid wr no space
+        # To set IOR repetitions
+        self.ior_local_cmd.repetitions.update(repetitions, 'ior.repetitions')
 
         self.ior_local_cmd.set_daos_params(self.server_group, self.pool, None)
         self.ior_local_cmd.test_file.update('/testfile')
@@ -335,7 +342,7 @@ class ServerFillUp(IorTestBase):
         self.pool.exclude(rank, str(target))
 
     def start_ior_load(self, storage='NVMe', operation="WriteRead", percent=1, create_cont=True,
-                       log_file=None):
+                       repetitions=1, log_file=None):
         """Fill up the server either SCM or NVMe.
 
         Fill up based on percent amount given using IOR.
@@ -345,6 +352,7 @@ class ServerFillUp(IorTestBase):
             operation (string): Write/Read operation
             percent (int): % of storage to be filled
             create_cont (bool): To create the new container for IOR
+            repetitions (int): Repetition for IOR command. Default to 1.
             log_file (str, optional): log file. Defaults to None.
         """
         kill_rank_job = []
@@ -356,9 +364,10 @@ class ServerFillUp(IorTestBase):
         self.scm_fill = 'SCM' in storage
 
         # Create the IOR threads
-        job = threading.Thread(
-            target=self.start_ior_thread,
-            kwargs={"create_cont": create_cont, "operation": operation, "log_file": log_file})
+        job = threading.Thread(target=self.start_ior_thread, kwargs={"create_cont": create_cont,
+                                                                     "operation": operation,
+                                                                     "repetitions": repetitions,
+                                                                     "log_file": log_file})
         # Launch the IOR thread
         job.start()
 
