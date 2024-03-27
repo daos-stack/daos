@@ -550,7 +550,7 @@ operation:
 D_MIGRATE_ULT_CNT x 128KiB + D_MIGRATE_MEM_SIZE
 ```
 
-With a default of 256MiB for both D\_MIGRATE\_MEM\_SIZE, this gives us an overall upper bound
+With a default of 256MiB for D\_MIGRATE\_MEM\_SIZE, this gives us an overall upper bound
 of 0.75GiB of memory allocated during rebuild.
 
 !!! note
