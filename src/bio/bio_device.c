@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,6 +44,7 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	D_ASSERT(bbs->bb_state == BIO_BS_STATE_OUT);
 	D_ASSERT(owner_thread(bbs) != NULL);
 
+	d_bdev->bb_trigger_reint = 1;
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
 	/**

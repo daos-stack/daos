@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -109,14 +109,16 @@ type SystemJoinReq struct {
 	unaryRequest
 	msRequest
 	retryableRequest
-	ControlAddr *net.TCPAddr
-	UUID        string
-	Rank        ranklist.Rank
-	URI         string
-	NumContexts uint32              `json:"Nctxs"`
-	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
-	InstanceIdx uint32              `json:"Idx"`
-	Incarnation uint64              `json:"Incarnation"`
+	ControlAddr          *net.TCPAddr
+	UUID                 string
+	Rank                 ranklist.Rank
+	URI                  string
+	SecondaryURIs        []string            `json:"secondary_uris"`
+	NumContexts          uint32              `json:"nctxs"`
+	NumSecondaryContexts []uint32            `json:"secondary_nctxs"`
+	FaultDomain          *system.FaultDomain `json:"srv_fault_domain"`
+	InstanceIdx          uint32              `json:"idx"`
+	Incarnation          uint64              `json:"incarnation"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
@@ -207,7 +209,8 @@ func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
 // SystemQueryResp contains the request response.
 type SystemQueryResp struct {
 	sysResponse
-	Members system.Members `json:"members"`
+	Members   system.Members `json:"members"`
+	Providers []string       `json:"providers"`
 }
 
 // UnmarshalJSON unpacks JSON message into SystemQueryResp struct.
@@ -855,7 +858,7 @@ type CleanupResult struct {
 	Status int32  `json:"status"`  // Status returned from this specific evict call
 	Msg    string `json:"msg"`     // Error message if Status is not Success
 	PoolID string `json:"pool_id"` // Unique identifier
-	Count  uint32 `json:"count"`   // Number of pools reclaimed
+	Count  uint32 `json:"count"`   // Number of pool handles evicted
 }
 
 // SystemCleanupResp contains the request response.

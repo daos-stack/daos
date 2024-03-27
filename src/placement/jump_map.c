@@ -198,7 +198,6 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 		if (reint_tgt != original_target ||
 		    (for_reint && original->ol_shards[index].po_rebuilding) ||
 		    (temp_tgt->ta_comp.co_flags & PO_COMPF_DOWN2UP &&
-		     reint_tgt == original_target &&
 		     temp_tgt->ta_comp.co_status == PO_COMP_ST_UP)) {
 			pool_map_find_target(jmap->jmp_map.pl_poolmap,
 					     reint_tgt, &temp_tgt);

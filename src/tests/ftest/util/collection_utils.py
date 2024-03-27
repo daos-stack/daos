@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -627,6 +627,38 @@ def process_core_files(logger, test_job_results, test, test_result):
     return 0
 
 
+def create_steps_log(logger, job_results_dir, test_result):
+    """Create a steps.log file from the job.log file.
+
+    The steps.log file contains high level test steps.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        job_results_dir (str): path to the avocado job results
+        test_result (TestResult): the test result used to update the status of the test
+
+    Returns:
+        int: status code: 8192 = problem creating steps.log; 0 = success
+    """
+    logger.debug("=" * 80)
+    logger.info("Creating steps.log file")
+
+    test_logs_lnk = os.path.join(job_results_dir, "latest")
+    test_logs_dir = os.path.realpath(test_logs_lnk)
+    job_log = os.path.join(test_logs_dir, 'job.log')
+    step_log = os.path.join(test_logs_dir, 'steps.log')
+    command = rf"grep -E '(INFO |ERROR)\| (==> Step|START|PASS|FAIL|ERROR)' {job_log}"
+    try:
+        result = run_local(logger, command)
+        with open(step_log, 'w', encoding="utf-8") as file:
+            file.write(result.stdout)
+    except Exception:   # pylint: disable=broad-except
+        message = f"Error creating {step_log}"
+        test_result.fail_test(logger, "Process", message, sys.exc_info())
+        return 8192
+    return 0
+
+
 def rename_avocado_test_dir(logger, test, job_results_dir, test_result, jenkins_xml, total_repeats):
     """Append the test name to its avocado job-results directory name.
 
@@ -1011,6 +1043,9 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
                 logger, summary, data["hosts"].copy(), data["source"], data["pattern"],
                 data["destination"], data["depth"], threshold, data["timeout"],
                 test_result, test)
+
+    # Generate a steps.log file
+    return_code |= create_steps_log(logger, job_results_dir, test_result)
 
     # Optionally rename the test results directory for this test
     if rename:
