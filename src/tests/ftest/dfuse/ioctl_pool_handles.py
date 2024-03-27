@@ -41,7 +41,7 @@ class IoctlPoolHandles(TestWithServers):
 
         :avocado: tags=all,manual
         :avocado: tags=vm
-        :avocado: tags=dfuse,
+        :avocado: tags=dfuse
         :avocado: tags=IoctlPoolHandles,test_ioctl_pool_handles
         """
         telemetry = TelemetryUtils(self.get_dmg_command(), self.server_managers[0].hosts)
