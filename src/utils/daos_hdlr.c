@@ -1756,6 +1756,9 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 			strncpy(path, dattr.da_rel_path, path_len);
 	} else if (rc == ENOMEM) {
 		D_GOTO(out, rc);
+	} else if (strncmp(path, "daos://", 7) == 0) {
+		/* Error, since we expect a DAOS path */
+		D_GOTO(out, rc);
 	} else {
 		/* If basename does not exist yet then duns_resolve_path will fail even if
 		 * dirname is a UNS path
@@ -1789,9 +1792,6 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 			snprintf(*cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 		} else if (rc == ENOMEM) {
 			/* TODO: Take this path of rc != ENOENT? */
-			D_GOTO(out, rc);
-		} else if (strncmp(path, "daos://", 7) == 0) {
-			/* Error, since we expect a DAOS path */
 			D_GOTO(out, rc);
 		} else {
 			/* not a DAOS path, set type to POSIX,
