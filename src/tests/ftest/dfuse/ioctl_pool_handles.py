@@ -39,7 +39,14 @@ class IoctlPoolHandles(TestWithServers):
             run and pass, it should not be run in normal CI, but in a PR that includes the
             modification.
 
-        :avocado: tags=all,manual
+        Note: This test should be run in non-landing PR that includes the same change implemented in
+            https://github.com/daos-stack/daos/pull/9941 along with the following commit pragmas:
+                Skip-nlt: true
+                Skip-unit-tests: true
+                Skip-fault-injection-test: true
+                Test-tag: test_ioctl_pool_handles test_always_passes
+
+        :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=dfuse
         :avocado: tags=IoctlPoolHandles,test_ioctl_pool_handles
