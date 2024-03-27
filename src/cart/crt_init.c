@@ -337,16 +337,15 @@ static int data_init(int server, crt_init_options_t *opt)
 
 	d_getenv_uint("D_QUOTA_RPCS", &crt_gdata.cg_rpc_quota);
 
-	/* Must be set on the server when using UCX, will not affect OFI */
+	/* Must be set on the server when using UCX
+         * also on client to allow daos_test/suite system out of dmg to succeed,
+         * will not affect OFI */
 	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);
-	if (server) {
-		D_INFO("UCX_IB_FORK_INIT was set to %c, setting to n\n", ucx_ib_fork_init);
-		d_setenv("UCX_IB_FORK_INIT", "n", 1);
-	} else if (ucx_ib_fork_init) {
-		D_INFO("UCX_IB_FORK_INIT was set to %c on client\n", ucx_ib_fork_init);
+	if (ucx_ib_fork_init) {
+		D_INFO("UCX_IB_FORK_INIT was set to %c\n", ucx_ib_fork_init);
 	} else {
-		D_INFO("UCX_IB_FORK_INIT is being set to %c on client\n", ucx_ib_fork_init);
-		d_setenv("UCX_IB_FORK_INIT", "yes", 1);
+		D_INFO("UCX_IB_FORK_INIT is being set to no\n", ucx_ib_fork_init);
+		d_setenv("UCX_IB_FORK_INIT", "no", 1);
 	}
 
 	/* This is a workaround for CART-871 if universe size is not set */
