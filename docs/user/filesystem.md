@@ -989,7 +989,7 @@ $
 ```
 
 !!! warning
-    The operation mode without dfuse has a lot of limitation and is not recommended for
+    The operation mode without dfuse has a lot of limitations and is not recommended for
     production use.
 
 ### Print an interception summary
