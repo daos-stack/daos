@@ -71,7 +71,7 @@ class IoctlPoolHandles(TestWithTelemetry):
         after_ior = self.telemetry.collect_data(metrics)
         for metric in list(after_ior):
             for label in after_ior[metric]:
-                value = initial[metric][label]
+                value = after_ior[metric][label]
                 if value > 0:
                     value += 1
                 after_ior[metric][label] = [value]
