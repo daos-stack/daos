@@ -341,12 +341,10 @@ static int data_init(int server, crt_init_options_t *opt)
          * also on client to allow daos_test/suite system out of dmg to succeed,
          * will not affect OFI */
 	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);
-	if (ucx_ib_fork_init) {
-		D_INFO("UCX_IB_FORK_INIT was set to %c\n", ucx_ib_fork_init);
-	} else {
-		D_INFO("UCX_IB_FORK_INIT is being set to no\n", ucx_ib_fork_init);
+	if (ucx_ib_fork_init)
+		D_INFO("UCX_IB_FORK_INIT was set to %c in the environment\n", ucx_ib_fork_init);
+	else
 		d_setenv("UCX_IB_FORK_INIT", "no", 1);
-	}
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_uint("FI_UNIVERSE_SIZE", &fi_univ_size);
