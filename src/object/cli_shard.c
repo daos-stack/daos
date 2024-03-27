@@ -2018,6 +2018,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	oqma.oqma_opc = DAOS_OBJ_RPC_QUERY_KEY;
 	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
 	oqma.oqma_ret = rc;
+	oqma.oqma_level = 0;
 	oqma.oqma_raw_recx = 1;
 
 	D_SPIN_LOCK(&cb_args->obj->cob_spin);
@@ -2157,6 +2158,7 @@ obj_shard_coll_query_cb(tse_task_t *task, void *data)
 	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
 	oqma.oqma_ret = rc;
 	oqma.oqma_raw_recx = ocqo->ocqo_flags & OCRF_RAW_RECX ? 1 : 0;
+	oqma.oqma_level = 4;
 
 	/*
 	 * The RPC reply may be aggregated results from multiple VOS targets, as to related max/min
