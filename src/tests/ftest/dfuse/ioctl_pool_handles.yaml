@@ -23,6 +23,7 @@ pool:
   size: 10GB
 
 container:
+  control_method: daos
   type: POSIX
 
 ior:
