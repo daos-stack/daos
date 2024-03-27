@@ -10,6 +10,7 @@ import shutil
 from apricot import TestWithServers
 from avocado import fail_on
 from cmocka_utils import CmockaUtils
+from command_utils_base import EnvironmentVariables
 from exception_utils import CommandFailure
 from general_utils import get_log_file
 from job_manager_utils import get_job_manager
@@ -128,6 +129,8 @@ class DaosCoreBase(TestWithServers):
         daos_test_env["COVFILE"] = "/tmp/test.cov"
         daos_test_env["POOL_SCM_SIZE"] = str(scm_size)
         daos_test_env["POOL_NVME_SIZE"] = str(nvme_size)
+        daos_test_env.update(
+            EnvironmentVariables.from_list(self.params.get("env_vars", "/run/client/*")))
         daos_test_cmd = cmocka_utils.get_cmocka_command(
             " ".join([self.daos_test, "-n", dmg_config_file, "".join(["-", subtest]), str(args)]))
         job = get_job_manager(self, "Orterun", daos_test_cmd, mpi_type="openmpi")
