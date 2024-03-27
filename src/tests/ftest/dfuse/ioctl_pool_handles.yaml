@@ -9,6 +9,8 @@ server_config:
   engines_per_host: 2
   engines:
     0:
+      env_vars:
+        - DAOS_TARGET_OVERSUBSCRIBE=1
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
@@ -17,6 +19,8 @@ server_config:
       storage: auto
       targets: 16
     1:
+      env_vars:
+        - DAOS_TARGET_OVERSUBSCRIBE=1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
