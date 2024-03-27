@@ -113,7 +113,7 @@ ior_smoke:
     - '64M'
   repetitions: 1
   transfer_size:
-    - '4k'
+    - '32k'
     - '128k'
     - '1m'
   segment_count: 1
@@ -145,6 +145,7 @@ fio_smoke:
   numjobs: 1
   soak:
     blocksize:
+      - '4K'
       - '1M'
     size:
       - '1G'
@@ -272,7 +273,7 @@ datamover_smoke:
     transfer_size:
       - 1M
     block_size:
-      - 1M
+      - 4G
     test_file: "daos:/testFile"
     dfs_destroy: false
   ior_read:
@@ -283,7 +284,7 @@ datamover_smoke:
     transfer_size:
       - 1M
     block_size:
-      - 1M
+      - 4G
     test_file: "daos:/testFile"
     dfs_destroy: false
 hdf5_vol:

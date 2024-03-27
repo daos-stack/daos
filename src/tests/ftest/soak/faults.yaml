@@ -113,7 +113,7 @@ ior_faults:
     - '64M'
   repetitions: 1
   transfer_size:
-    - '4k'
+    - '32k'
     - '128k'
     - '1m'
   segment_count: 1
