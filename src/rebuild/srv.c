@@ -2024,8 +2024,13 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states,
 			RB_OP_STR(rebuild_op), DP_RC(rc));
 		return rc;
 	}
+	if (tgts_cnt == 0)
+		return 0;
 
-	return regenerate_task_internal(pool, tgts, tgts_cnt, rebuild_op);
+	rc = regenerate_task_internal(pool, tgts, tgts_cnt, rebuild_op);
+	D_FREE(tgts);
+
+	return rc;
 }
 
 
