@@ -139,6 +139,8 @@ def scons():
         dbenv.AppendENVPath("CGO_LDFLAGS", dblibs, sep=" ")
         install_go_bin(dbenv, 'daos', libs=['daos_cmd_hdlrs', 'dfs', 'duns', 'daos'],
                        install_man=True)
+        install_go_bin(dbenv, 'dstress', libs=['dfs', 'duns', 'daos'],
+                       install_man=False)
 
     if not prereqs.server_requested():
         return
