@@ -64,7 +64,6 @@ struct vos_tls {
 	};
 	struct d_tm_node_t		 *vtl_committed;
 	struct d_tm_node_t		 *vtl_obj_cnt;
-	struct d_tm_node_t		 *vtl_dtx_cmt_ent_cnt;
 	struct d_tm_node_t		 *vtl_lru_alloc_size;
 };
 
