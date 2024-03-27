@@ -4724,6 +4724,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 */
 		obj_auxi->io_retry = 1;
 		if (obj_auxi->no_retry ||
+		    (obj_auxi->for_migrate && !obj_retriable_migrate(task->dt_result)) ||
 		    (obj_auxi->spec_shard && (task->dt_result == -DER_INPROGRESS ||
 		     task->dt_result == -DER_TX_BUSY || task->dt_result == -DER_EXCLUDED ||
 		     task->dt_result == -DER_CSUM)))
@@ -5548,7 +5549,7 @@ dc_obj_fetch_task(tse_task_t *task)
 	}
 	if (args->extra_flags & DIOF_FOR_MIGRATION) {
 		obj_auxi->flags |= ORF_FOR_MIGRATION;
-		obj_auxi->no_retry = 1;
+		obj_auxi->for_migrate = 1;
 	}
 	if (args->extra_flags & DIOF_FOR_EC_AGG)
 		obj_auxi->flags |= ORF_FOR_EC_AGG;
