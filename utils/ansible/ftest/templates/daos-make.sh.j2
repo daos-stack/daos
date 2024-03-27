@@ -434,7 +434,7 @@ if [[ ${VOL_DAOS_PATH:+x} ]] ; then
 fi
 
 if [[ ${MPI_FILE_UTILS_PATH:+x} ]] ; then
-	nfo "Building and installing MPI File Utils from source tree $MPI_FILE_UTILS_PATH to $DAOS_INSTALL_DIR"
+	info "Building and installing MPI File Utils from source tree $MPI_FILE_UTILS_PATH to $DAOS_INSTALL_DIR"
 
 	if [[ ! -f "$MPI_FILE_UTILS_PATH/mpifileutils.spec" ]] ; then
 		fatal "Invalid MPI File Utils directory: path=$MPI_FILE_UTILS_PATH"

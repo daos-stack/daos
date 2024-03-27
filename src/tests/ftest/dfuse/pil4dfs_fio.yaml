@@ -55,21 +55,24 @@ fio:
     group_reporting: 1
     cpus_allowed_policy: split
     numa_mem_policy: bind:all
+    percentile_list: '99.0:99.9:99.99:99.999:99.9999:100'
+    disable_slat: 1
+    disable_clat: 1
   job:
     params: !mux
-      small_fork:
+      256B_fork:
         thread: 0
         blocksize: '256B'
         size: '32K'
-      small_pthread:
+      256B_pthread:
         thread: 1
         blocksize: '256B'
         size: '32K'
-      big_fork:
+      1M_fork:
         thread: 0
         blocksize: '1M'
         size: '64M'
-      big_pthread:
+      1M_pthread:
         thread: 1
         blocksize: '1M'
         size: '64M'
