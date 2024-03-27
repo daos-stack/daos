@@ -48,6 +48,8 @@ int rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep);
 int rsvc_client_complete_rpc(struct rsvc_client *client,
 			     const crt_endpoint_t *ep, int rc_crt, int rc_svc,
 			     const struct rsvc_hint *hint);
+typedef bool (*rsvc_client_subtract_cb)(d_rank_t rank, void *arg);
+void rsvc_client_subtract(struct rsvc_client *client, rsvc_client_subtract_cb cb, void *arg);
 size_t rsvc_client_encode(const struct rsvc_client *client, void *buf);
 ssize_t rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client);
 
