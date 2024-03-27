@@ -971,7 +971,7 @@ $ LD_PRELOAD=/usr/lib64/libpil4dfs.so mdtest -a POSIX -z 0 -F -C -i 1 -n 1667 -e
 
 ### Using libpil4dfs without dfuse
 
-When no dfuse mountpoint is specified, several enviroment variables must be set to
+When no dfuse mountpoint is specified, several environment variables must be set to
 tell libpil4dfs what POSIX container to mount where in the namespace:
 
 * `D_IL_POOL` must be set to the pool label where the container to be mounted resides
