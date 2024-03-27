@@ -732,21 +732,21 @@ verify_pil4dfs_env()
 		goto err;
 	}
 
-	p = getenv("DAOS_MOUNT_POINT");
+	p = getenv("D_IL_MOUNT_POINT");
 	if (!p) {
-		printf("Error: DAOS_MOUNT_POINT is unset.\n");
+		printf("Error: D_IL_MOUNT_POINT is unset.\n");
 		goto err;
 	}
 
-	p = getenv("DAOS_POOL");
+	p = getenv("D_IL_POOL");
 	if (!p) {
-		printf("Error: DAOS_POOL is unset.\n");
+		printf("Error: D_IL_POOL is unset.\n");
 		goto err;
 	}
 
-	p = getenv("DAOS_CONTAINER");
+	p = getenv("D_IL_CONTAINER");
 	if (!p) {
-		printf("Error: DAOS_CONTAINER is unset.\n");
+		printf("Error: D_IL_CONTAINER is unset.\n");
 		goto err;
 	}
 

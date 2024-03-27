@@ -1105,9 +1105,9 @@ class DaosServer():
             # pylint: disable-next=consider-using-with
             tmp_dir = tempfile.TemporaryDirectory(prefix='pil4dfs_mount')
             cwd = tmp_dir.name
-            cmd_env['DAOS_MOUNT_POINT'] = cwd
-            cmd_env['DAOS_POOL'] = container.pool.id()
-            cmd_env['DAOS_CONTAINER'] = container.id()
+            cmd_env['D_IL_MOUNT_POINT'] = cwd
+            cmd_env['D_IL_POOL'] = container.pool.id()
+            cmd_env['D_IL_CONTAINER'] = container.id()
         else:
             cwd = None
 
