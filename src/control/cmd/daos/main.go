@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"runtime/debug"
+	"time"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -169,6 +170,9 @@ or query/manage an object inside a container.`
 }
 
 func main() {
+	fmt.Fprintf(os.Stderr, "debug: %s: main: begin\n", time.Now())
+	defer func() { fmt.Fprintf(os.Stderr, "debug: %s: main: end\n", time.Now()) }()
+
 	var opts cliOptions
 	log := logging.NewCommandLineLogger()
 

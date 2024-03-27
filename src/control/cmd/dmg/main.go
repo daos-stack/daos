@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	flags "github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -297,6 +298,9 @@ and access control settings, along with system wide operations.`
 }
 
 func main() {
+	fmt.Fprintf(os.Stderr, "debug: %s: main: begin\n", time.Now())
+	defer func() { fmt.Fprintf(os.Stderr, "debug: %s: main: end\n", time.Now()) }()
+
 	var opts cliOptions
 	log := logging.NewCommandLineLogger()
 

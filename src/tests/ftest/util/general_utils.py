@@ -10,7 +10,9 @@ import math
 import os
 import random
 import re
+import shlex
 import string
+import subprocess
 import time
 from datetime import datetime
 from getpass import getuser
@@ -257,7 +259,17 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         log.info("Command environment vars:\n  %s", env)
     try:
         # Block until the command is complete or times out
-        return process.run(**kwargs)
+        debug_t = time.clock_gettime(time.CLOCK_MONOTONIC)
+        debug_cp = subprocess.run(shlex.split("true"))
+        debug_d = time.clock_gettime(time.CLOCK_MONOTONIC) - debug_t
+        log.info(f"debug subprocess.run took {debug_d} s")
+        t = time.clock_gettime(time.CLOCK_MONOTONIC)
+        cp = subprocess.run(shlex.split(command), stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, timeout=timeout, env=env)
+        d = time.clock_gettime(time.CLOCK_MONOTONIC) - t
+        log.info(f"subprocess.run took {d} s")
+        return process.CmdResult(command=command, stdout=cp.stdout,
+                                 stderr=cp.stderr, exit_status=cp.returncode)
 
     except (TypeError, FileNotFoundError) as error:
         # Can occur if using env with a non-string dictionary values
@@ -281,6 +293,9 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     if msg is not None:
         log.info(msg)
         raise DaosTestError(msg)
+
+    if verbose:
+        log.info("Command done")
 
     return None
 
