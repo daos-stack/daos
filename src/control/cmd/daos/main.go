@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -63,7 +64,7 @@ func exitWithError(log logging.Logger, err error) {
 	os.Exit(1)
 }
 
-func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) error {
+func parseOpts(ctx context.Context, args []string, opts *cliOptions, log *logging.LeveledLogger) error {
 	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.Default)
 	p.Name = "daos"
@@ -105,7 +106,7 @@ or query/manage an object inside a container.`
 		}
 
 		if daosCmd, ok := cmd.(daosCaller); ok {
-			fini, err := daosCmd.initDAOS()
+			fini, err := daosCmd.initDAOS(ctx)
 			if err != nil {
 				return err
 			}
@@ -172,7 +173,8 @@ func main() {
 	var opts cliOptions
 	log := logging.NewCommandLineLogger()
 
-	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
+	ctx := context.Background()
+	if err := parseOpts(ctx, os.Args[1:], &opts, log); err != nil {
 		if fe, ok := errors.Cause(err).(*flags.Error); ok && fe.Type == flags.ErrHelp {
 			log.Info(fe.Error())
 			os.Exit(0)
