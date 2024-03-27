@@ -68,7 +68,6 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 	if !skipPrep {
 		nc = &nvmeCmd{}
 		nc.Logger = log
-		nc.IgnoreConfig = true // Prepare and then reset all NVMe devices.
 		if err = nc.init(); err != nil {
 			return nil, errors.Wrap(err, "could not init nvme cmd")
 		}

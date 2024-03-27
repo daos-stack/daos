@@ -214,12 +214,7 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, prepareBackend nvmePrepareResetFn) error {
 	cmd.Debug("Prepare locally-attached NVMe storage...")
 
-	cfgParam := cmd.config
-	if cmd.IgnoreConfig {
-		cfgParam = nil
-	}
-
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &req); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
@@ -295,12 +290,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 		cmd.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
 	}
 
-	cfgParam := cmd.config
-	if cmd.IgnoreConfig {
-		cfgParam = nil
-	}
-
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &resetReq); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cmd.config, cmd, &resetReq); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
@@ -361,7 +351,7 @@ type scanNVMeCmd struct {
 
 func (cmd *scanNVMeCmd) getVMDState() bool {
 	cfgDisableVMD := false
-	if !cmd.IgnoreConfig && cmd.config != nil && cmd.config.DisableVMD != nil {
+	if cmd.config != nil && cmd.config.DisableVMD != nil {
 		cfgDisableVMD = *cmd.config.DisableVMD
 	}
 	return !cmd.DisableVMD && !cfgDisableVMD
@@ -370,7 +360,7 @@ func (cmd *scanNVMeCmd) getVMDState() bool {
 func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePrepareResetFn) (errOut error) {
 	req := storage.BdevScanRequest{}
 
-	if !cmd.IgnoreConfig && cmd.config != nil {
+	if cmd.config != nil {
 		req.DeviceList = nvmeBdevsFromCfg(cmd.config)
 		if req.DeviceList.Len() > 0 {
 			cmd.Debugf("applying devices filter derived from config file: %s",

@@ -7,8 +7,9 @@
 package main
 
 import (
-	"github.com/daos-stack/daos/src/control/server/config"
 	"os"
+
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 type cfgLoader interface {
@@ -37,6 +38,11 @@ func (c *cfgCmd) configPath() string {
 }
 
 func (c *cfgCmd) loadConfig(cfgPath string) error {
+	if c.IgnoreConfig {
+		c.config = nil
+		return nil
+	}
+
 	// Don't load a new config if there's already
 	// one present. If the caller really wants to
 	// reload, it can do that explicitly.
@@ -53,9 +59,13 @@ func (c *cfgCmd) loadConfig(cfgPath string) error {
 }
 
 func (c *optCfgCmd) loadConfig(cfgPath string) error {
-	err := c.cfgCmd.loadConfig(cfgPath)
-	if os.IsNotExist(err) {
+	if c.IgnoreConfig {
+		c.config = nil
 		return nil
 	}
-	return err
+
+	if err := c.cfgCmd.loadConfig(cfgPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }

@@ -209,9 +209,7 @@ func (cmd *scmCmd) init(ctx context.Context) error {
 		return err
 	}
 
-	if cmd.IgnoreConfig {
-		cmd.config = nil
-	} else if cmd.SocketID == nil {
+	if cmd.config != nil && cmd.SocketID == nil {
 		// Read SocketID from config if not set explicitly in command.
 		affSrc, err := getAffinitySource(ctx, cmd.Logger, cmd.config)
 		if err != nil {
