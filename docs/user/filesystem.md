@@ -988,6 +988,10 @@ $ LD_PRELOAD=/usr/lib64/libpil4dfs.so D_IL_POOL=tank D_IL_CONTAINER=mycont D_IL_
 $
 ```
 
+!!! warning
+    The operation mode without dfuse has a lot of limitation and is not recommended for
+    production use.
+
 ### Print an interception summary
 
 If the `D_IL_REPORT` environment variable is set then the interception library will
