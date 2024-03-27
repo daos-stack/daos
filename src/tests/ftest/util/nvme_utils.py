@@ -7,7 +7,6 @@ import re
 import threading
 import time
 
-from avocado import fail_on
 from avocado.core.exceptions import TestFail
 from dmg_utils import get_dmg_response, get_storage_query_device_uuids
 from exception_utils import CommandFailure
@@ -39,7 +38,7 @@ def get_device_ids(dmg, servers):
     return device_ids
 
 
-def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
+def set_device_faulty(test, dmg, server, uuid, pool=None, has_sys_xs=False, **kwargs):
     """Set the device faulty and optionally wait for rebuild to complete.
 
     Args:
@@ -49,6 +48,7 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
         uuid (str): the device UUID
         pool (TestPool, optional): pool used to wait for rebuild to start/complete if specified.
             Defaults to None.
+        has_sys_xs (bool, optional): the device's has_sys_xs property value. Defaults to False.
         kwargs (dict, optional): named arguments to pass to the DmgCommand.storage_set_faulty.
 
     Returns:
@@ -60,7 +60,13 @@ def set_device_faulty(test, dmg, server, uuid, pool=None, **kwargs):
     try:
         response = get_dmg_response(dmg.storage_set_faulty, **kwargs)
     except CommandFailure as error:
-        test.fail(str(error))
+        if not has_sys_xs:
+            test.fail(str(error))
+
+    # Update the expected status of the any stopped/excluded ranks
+    if has_sys_xs:
+        ranks = [test.server_managers[-1].ranks[server]]
+        test.server_managers[-1].update_expected_states(ranks, ["stopped", "excluded"])
 
     # Add a tearDown method to reset the faulty device
     test.register_cleanup(reset_fault_device, dmg=dmg, server=server, uuid=uuid)
@@ -254,34 +260,6 @@ class ServerFillUp(IorTestBase):
             self.ior_local_cmd.transfer_size.value))
 
         return block_size
-
-    @fail_on(CommandFailure)
-    def set_device_faulty_loop(self, dmg, servers, drives):
-        """Set devices to Faulty one by one and wait for rebuild to complete.
-
-        Args:
-            dmg (DmgCommand): dmg command to use to set devices faulty
-            servers (int): number of servers from which to remove a number of drives
-            drives (int): number of drives to remove from each server
-
-        Returns:
-            list: a list of hosts with SysXS devices on which servers are expected to be stopped
-        """
-        servers_stopped = set()
-
-        # Get the device ids from all servers and try to eject the disks
-        device_ids = get_device_ids(dmg, self.hostlist_servers)
-
-        # 1 Server, 1 Drive = Remove single drive from single server
-        for num in range(0, servers):
-            server = self.hostlist_servers[num]
-            uuid_list = sorted(device_ids[server].keys())
-            for disk_id in range(0, drives):
-                uuid = uuid_list[disk_id]
-                set_device_faulty(self, dmg, server, uuid, self.pool)
-                if device_ids[server][uuid]['has_sys_xs']:
-                    servers_stopped.add(server)
-        return list(servers_stopped)
 
     def get_max_storage_sizes(self, percentage=96):
         """Get the maximum pool sizes for the current server configuration.
