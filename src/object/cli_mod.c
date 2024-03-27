@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,7 +25,9 @@ int		dc_obj_proto_version;
 int
 dc_obj_init(void)
 {
+#if 0
 	uint32_t		ver_array[2] = {DAOS_OBJ_VERSION - 1, DAOS_OBJ_VERSION};
+#endif
 	int			rc;
 
 	rc = obj_utils_init();
@@ -35,9 +37,14 @@ dc_obj_init(void)
 	rc = obj_class_init();
 	if (rc)
 		D_GOTO(out_utils, rc);
-
+#if 0
 	dc_obj_proto_version = 0;
-	rc = daos_rpc_proto_query(obj_proto_fmt_0.cpf_base, ver_array, 2, &dc_obj_proto_version);
+	rc = daos_rpc_proto_query(obj_proto_fmt_0.cpf_base, ver_array, 2,
+				  &dc_obj_proto_version);
+#else
+	dc_obj_proto_version = DAOS_OBJ_VERSION;
+	rc = 0;
+#endif
 	if (rc)
 		D_GOTO(out_class, rc);
 
