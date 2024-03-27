@@ -839,7 +839,6 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			DP_UUID(entry->ie_couuid), DP_RC(rc));
 		D_GOTO(close, rc);
 	}
-	cont_child->sc_rebuilding = 1;
 
 	rc = ds_cont_fetch_snaps(rpt->rt_pool->sp_iv_ns, entry->ie_couuid, NULL,
 				 &snapshot_cnt);
@@ -902,11 +901,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 close:
 	vos_cont_close(coh);
 
-	if (cont_child != NULL) {
-		cont_child->sc_rebuilding = 0;
-		ABT_cond_broadcast(cont_child->sc_rebuild_cond);
+	if (cont_child != NULL)
 		ds_cont_child_put(cont_child);
-	}
 
 	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid),

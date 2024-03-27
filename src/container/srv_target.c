@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -628,7 +628,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		rc = dss_abterr2der(rc);
 		goto out_resync_cond;
 	}
-	rc = ABT_cond_create(&cont->sc_rebuild_cond);
+	rc = ABT_cond_create(&cont->sc_fini_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
 		goto out_scrub_cond;
@@ -664,7 +664,7 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 out_pool:
 	ds_pool_child_put(cont->sc_pool);
 out_rebuild_cond:
-	ABT_cond_free(&cont->sc_rebuild_cond);
+	ABT_cond_free(&cont->sc_fini_cond);
 out_scrub_cond:
 	ABT_cond_free(&cont->sc_scrub_cond);
 out_resync_cond:
@@ -694,7 +694,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_cond_free(&cont->sc_scrub_cond);
-	ABT_cond_free(&cont->sc_rebuild_cond);
+	ABT_cond_free(&cont->sc_fini_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
 }
@@ -752,7 +752,14 @@ ds_cont_child_cache_destroy(struct daos_lru_cache *cache)
 static void
 cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
 {
+	bool		 wake_cond = false;
+
+	if (cont->sc_stopping == true && daos_lru_ref_count(&cont->sc_list) == 3)
+		wake_cond = true;
+
 	daos_lru_ref_release(cache, &cont->sc_list);
+	if (wake_cond)
+		ABT_cond_broadcast(cont->sc_fini_cond);
 }
 
 /*
@@ -1192,6 +1199,11 @@ cont_child_destroy_one(void *vin)
 
 		cont_child_stop(cont);
 
+		/*
+		 * This might be racy, as dtx_resync() might yield after
+		 * ds_cont_child_lookup(), but before @sc_dtx_resyncing set,
+		 * we use @sc_fini_cond to guarantee all users exit properly.
+		 */
 		ABT_mutex_lock(cont->sc_mutex);
 		if (cont->sc_dtx_resyncing)
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
@@ -1209,10 +1221,13 @@ cont_child_destroy_one(void *vin)
 		}
 		ABT_mutex_unlock(cont->sc_mutex);
 
-		/* Make sure rebuild has stopped */
+		/**
+		 * After @sc_stopping is 1, all cont lookup will fail, so we wait
+		 * existed ds_cont users exit, it might come from rebuild, dtx.
+		 */
 		ABT_mutex_lock(cont->sc_mutex);
-		if (cont->sc_rebuilding)
-			ABT_cond_wait(cont->sc_rebuild_cond, cont->sc_mutex);
+		if (!daos_lru_is_last_user(&cont->sc_list))
+			ABT_cond_wait(cont->sc_fini_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
 
 		retry_cnt++;
