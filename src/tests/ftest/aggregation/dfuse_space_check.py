@@ -65,10 +65,10 @@ class DfuseSpaceCheck(IorTestBase):
 
         """
         file_count = 0
-        while self.get_nvme_free_space(False) >= self.block_size:
+        while self.get_nvme_free_space(True) >= self.block_size:
             file_path = os.path.join(self.dfuse.mount_dir.value, "file{}.txt".format(file_count))
             write_dd_cmd = "dd if=/dev/zero of={} bs={} count=1".format(file_path, self.block_size)
-            if 0 in self.execute_cmd(write_dd_cmd, fail_on_err=True, display_output=False):
+            if 0 in self.execute_cmd(write_dd_cmd, fail_on_err=True, display_output=True):
                 file_count += 1
 
         return file_count
