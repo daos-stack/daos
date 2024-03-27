@@ -62,9 +62,8 @@ dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 		DFUSE_TRA_WARNING(handle, "Unknown requested flags %#x", want);
 }
 
-/* Called on filesystem init.  It has the ability to both observe configuration
- * options, but also to modify them.  As we do not use the FUSE command line
- * parsing this is where we apply tunables.
+/* Called on filesystem init.  It has the ability to both observe configuration options, but also to
+ * modify them.  As we do not use the FUSE command line parsing this is where we apply tunables.
  */
 static void
 dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
@@ -76,8 +75,8 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(dfuse_info, "Proto %d %d", conn->proto_major, conn->proto_minor);
 
 	/* These are requests dfuse makes to the kernel, but are then capped by the kernel itself,
-	 * for max_read zero means "as large as possible" which is what we want, but then dfuse
-	 * does not know how large to pre-allocate any buffers.
+	 * for max_read zero means "as large as possible" which is what we want, but then dfuse does
+	 * not know how large to pre-allocate any buffers.
 	 */
 	DFUSE_TRA_INFO(dfuse_info, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(dfuse_info, "max write %#x", conn->max_write);
@@ -91,16 +90,12 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 
-	conn->time_gran = 1;
-
-	if (dfuse_info->di_wb_cache)
-		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
-
 #ifdef FUSE_CAP_CACHE_SYMLINKS
 	conn->want |= FUSE_CAP_CACHE_SYMLINKS;
 #endif
 	dfuse_show_flags(dfuse_info, conn->capable, conn->want);
 
+	conn->time_gran            = 1;
 	conn->max_background       = 16;
 	conn->congestion_threshold = 8;
 
@@ -170,6 +165,8 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		DFUSE_IE_STAT_ADD(inode, DS_GETATTR);
 	}
 
+	DFUSE_IE_WFLUSH(inode);
+
 	if (inode->ie_dfs->dfc_attr_timeout &&
 	    (atomic_load_relaxed(&inode->ie_open_write_count) == 0) &&
 	    (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
@@ -208,6 +205,8 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 		inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 		DFUSE_IE_STAT_ADD(inode, DS_SETATTR);
 	}
+
+	DFUSE_IE_WFLUSH(inode);
 
 	if (inode->ie_dfs->dfs_ops->setattr)
 		inode->ie_dfs->dfs_ops->setattr(req, inode, attr, to_set);
@@ -541,6 +540,34 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
+static void
+dfuse_cb_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+{
+	struct dfuse_obj_hdl     *oh;
+	struct dfuse_inode_entry *inode;
+
+	D_ASSERT(fi != NULL);
+	oh    = (struct dfuse_obj_hdl *)fi->fh;
+	inode = oh->doh_ie;
+
+	DFUSE_IE_WFLUSH(inode);
+	DFUSE_REPLY_ZERO(inode, req);
+}
+
+static void
+dfuse_cb_fdatasync(fuse_req_t req, fuse_ino_t ino, int datasync, struct fuse_file_info *fi)
+{
+	struct dfuse_obj_hdl     *oh;
+	struct dfuse_inode_entry *inode;
+
+	D_ASSERT(fi != NULL);
+	oh    = (struct dfuse_obj_hdl *)fi->fh;
+	inode = oh->doh_ie;
+
+	DFUSE_IE_WFLUSH(inode);
+	DFUSE_REPLY_ZERO(inode, req);
+}
+
 /* dfuse ops that are used for accessing dfs mounts */
 const struct dfuse_inode_ops dfuse_dfs_ops = {
     .lookup      = dfuse_cb_lookup,
@@ -598,7 +625,9 @@ const struct dfuse_inode_ops dfuse_pool_ops = {
 	ACTION(write_buf, dfuse_cb_write, true)                                                    \
 	ACTION(read, dfuse_cb_read, false)                                                         \
 	ACTION(readlink, dfuse_cb_readlink, false)                                                 \
-	ACTION(ioctl, dfuse_cb_ioctl, false)
+	ACTION(ioctl, dfuse_cb_ioctl, false)                                                       \
+	ACTION(flush, dfuse_cb_flush, true)                                                        \
+	ACTION(fsync, dfuse_cb_fdatasync, true)
 
 #define SET_MEMBER(member, fn, ...) ops.member = fn;
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,10 +10,14 @@
 static void
 dfuse_cb_write_complete(struct dfuse_event *ev)
 {
-	if (ev->de_ev.ev_error == 0)
-		DFUSE_REPLY_WRITE(ev->de_oh, ev->de_req, ev->de_len);
-	else
-		DFUSE_REPLY_ERR_RAW(ev->de_oh, ev->de_req, ev->de_ev.ev_error);
+	if (ev->de_req) {
+		if (ev->de_ev.ev_error == 0)
+			DFUSE_REPLY_WRITE(ev->de_oh, ev->de_req, ev->de_len);
+		else
+			DFUSE_REPLY_ERR_RAW(ev->de_oh, ev->de_req, ev->de_ev.ev_error);
+	} else {
+		D_RWLOCK_UNLOCK(&ev->de_oh->doh_ie->ie_wlock);
+	}
 	daos_event_fini(&ev->de_ev);
 	d_slab_release(ev->de_eqt->de_write_slab, ev);
 }
@@ -22,15 +26,15 @@ void
 dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t position,
 	       struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl  *oh         = (struct dfuse_obj_hdl *)fi->fh;
-	struct dfuse_info     *dfuse_info = fuse_req_userdata(req);
-	const struct fuse_ctx *fc         = fuse_req_ctx(req);
-	size_t                 len        = fuse_buf_size(bufv);
-	struct fuse_bufvec     ibuf       = FUSE_BUFVEC_INIT(len);
-	struct dfuse_eq       *eqt;
-	int                    rc;
-	struct dfuse_event    *ev;
-	uint64_t               eqt_idx;
+	struct dfuse_obj_hdl *oh         = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
+	size_t                len        = fuse_buf_size(bufv);
+	struct fuse_bufvec    ibuf       = FUSE_BUFVEC_INIT(len);
+	struct dfuse_eq      *eqt;
+	int                   rc;
+	struct dfuse_event   *ev;
+	uint64_t              eqt_idx;
+	bool                  wb_cache = false;
 
 	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_WRITE);
 
@@ -40,8 +44,13 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 
 	eqt = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
 
-	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x pid=%d", position, position + len - 1,
-			bufv->buf[0].flags, fc->pid);
+	if (oh->doh_ie->ie_dfs->dfc_wb_cache) {
+		D_RWLOCK_RDLOCK(&oh->doh_ie->ie_wlock);
+		wb_cache = true;
+	}
+
+	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested flags %#x", position, position + len - 1,
+			bufv->buf[0].flags);
 
 	/* Evict the metadata cache here so the lookup doesn't return stale size/time info */
 	if (atomic_fetch_add_relaxed(&oh->doh_write_count, 1) == 0) {
@@ -66,7 +75,10 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 
 	ev->de_oh          = oh;
 	ev->de_iov.iov_len = len;
-	ev->de_req         = req;
+	if (wb_cache)
+		ev->de_req = 0;
+	else
+		ev->de_req = req;
 	ev->de_len         = len;
 	ev->de_complete_cb = dfuse_cb_write_complete;
 
@@ -93,6 +105,9 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	if (rc != 0)
 		D_GOTO(err, rc);
 
+	if (wb_cache)
+		DFUSE_REPLY_WRITE(oh, req, len);
+
 	/* Send a message to the async thread to wake it up and poll for events */
 	sem_post(&eqt->de_sem);
 
@@ -102,6 +117,8 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	return;
 
 err:
+	if (wb_cache)
+		D_RWLOCK_UNLOCK(&ev->de_oh->doh_ie->ie_wlock);
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	if (ev) {
 		daos_event_fini(&ev->de_ev);
