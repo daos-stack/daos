@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  Copyright 2020-2023 Intel Corporation.
+#  Copyright 2020-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -99,6 +99,7 @@ if "$hardware_ok"; then
            FTEST_ARG=\"${FTEST_ARG:-}\"            \
            WITH_VALGRIND=\"${WITH_VALGRIND:-}\"    \
            STAGE_NAME=\"$STAGE_NAME\"              \
+           COVFN_DISABLED=\"$COVFN_DISABLED\"      \
            $(cat ci/functional/test_main_node.sh)"
     else
         ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"

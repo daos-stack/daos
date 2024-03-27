@@ -15,10 +15,10 @@ ARG BASE_DISTRO
 
 # Intermittent cache-bust.  Used to reduce load on the actual CB1 later.
 ARG CB0
-
 ARG REPO_FILE_URL
 ARG JENKINS_URL
 ARG REPOS
+
 # script to install OS updates basic tools and daos dependencies
 COPY ./utils/scripts/install-el8.sh /tmp/install.sh
 # script to setup local repo if available
@@ -52,6 +52,9 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent /home/
 
 ARG JENKINS_URL
 ARG BULLSEYE
+RUN if [ "x$BULLSEYE" != "x" ]; then                                               \
+      echo "=====>Debug 11.. JENKINS_URL=${JENKINS_URL}";                             \
+    fi
 RUN if [ "x$BULLSEYE" != "x" ]; then                                               \
       dnf install xz && dnf clean all &&                                           \
       curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
