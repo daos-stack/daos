@@ -29,6 +29,6 @@ container:
 ior_write:
   api: POSIX
   block_size: '256M'
-  flags: "-v -w -W -r -R -k"
+  flags: '-v -w -W -r -R -k'
   processes: 16
   transfer_size: '1M'
