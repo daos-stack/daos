@@ -31,6 +31,11 @@ enum {
 	CRT_REQ_TRACK_IN_WAITQ,
 };
 
+int
+crt_context_get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
+int
+	      crt_context_put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota);
+
 int crt_context_req_track(struct crt_rpc_priv *rpc_priv);
 bool crt_context_empty(int provider, int locked);
 void crt_context_req_untrack(struct crt_rpc_priv *rpc_priv);
