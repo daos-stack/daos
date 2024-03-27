@@ -29,14 +29,14 @@ class VolTestBase(DfuseTestBase):
         client_processes = self.params.get("client_processes")
 
         # create pool, container and dfuse mount
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
 
         # VOL needs to run from a file system that supports xattr.
         #  Currently nfs does not have this attribute so it was recommended
         #  to create a dfuse dir and run vol tests from there.
         # create dfuse container
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.start_dfuse(self.hostlist_clients, pool, container)
 
         # Assign the test to run
         job_manager.job = ExecutableCommand(
@@ -44,8 +44,8 @@ class VolTestBase(DfuseTestBase):
             check_results=["FAILED", "stderr"])
 
         env = EnvironmentVariables()
-        env["DAOS_POOL"] = "{}".format(self.pool.uuid)
-        env["DAOS_CONT"] = "{}".format(self.container.uuid)
+        env["DAOS_POOL"] = pool.identifier
+        env["DAOS_CONT"] = container.identifier
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
         job_manager.assign_hosts(self.hostlist_clients)

@@ -368,7 +368,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         """
         # Query the container for existence and to get the uuid from a label
-        query_response = self.daos_cmd.container_query(pool=pool.uuid, cont=cont)['response']
+        query_response = self.daos_cmd.container_query(pool=pool.identifier, cont=cont)['response']
         cont_uuid = query_response['container_uuid']
 
         cont_label = query_response.get('container_label')
@@ -422,8 +422,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of DaosObj created.
 
         """
-        self.log.info("Creating dataset in %s/%s",
-                      str(cont.pool.uuid), str(cont.uuid))
+        self.log.info("Creating dataset in %s/%s", str(cont.pool), str(cont))
 
         cont.open()
 
@@ -493,8 +492,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             akey_extents (list): varying number of akey extents to iterate.
 
         """
-        self.log.info("Verifying dataset in %s/%s",
-                      str(cont.pool.uuid), str(cont.uuid))
+        self.log.info("Verifying dataset in %s/%s", str(cont.pool), str(cont))
 
         cont.open()
 

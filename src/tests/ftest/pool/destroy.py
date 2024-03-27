@@ -98,7 +98,6 @@ class DestroyTests(TestWithServers):
         self.log.info("Create a pool")
         self.add_pool(create=False)
         self.pool.create()
-        self.log.info("Pool UUID is %s", self.pool.uuid)
 
         # Check that the pool was created.
         self.assertTrue(
@@ -472,7 +471,7 @@ class DestroyTests(TestWithServers):
         self.log.info("Check if files still exist")
         self.assertTrue(
             self.pool.check_files(hostlist_servers, scm_mount),
-            "Pool UUID {} should not be removed when connected".format(self.pool.uuid))
+            "{} should not be removed when connected".format(str(self.pool)))
 
         self.assertTrue(
             exception_detected, "No exception when deleting a connected pool")
@@ -562,7 +561,7 @@ class DestroyTests(TestWithServers):
         self.log.info("Check if files still exist")
         self.assertTrue(
             self.pool.check_files(hostlist_servers, scm_mount),
-            "Pool UUID {} should not be removed when containers exist".format(self.pool.uuid))
+            "{} should not be removed when containers exist".format(str(self.pool)))
 
         self.assertTrue(
             exception_detected, "No exception when deleting a pool with containers")

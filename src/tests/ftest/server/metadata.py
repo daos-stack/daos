@@ -89,7 +89,7 @@ class ObjectMetadata(TestWithServers):
     def create_pool(self):
         """Create a pool and display the svc ranks."""
         self.add_pool()
-        self.log.info("Created pool %s: svc ranks:", self.pool.uuid)
+        self.log.info("Created %s: svc ranks:", str(self.pool))
         for index, rank in enumerate(self.pool.svc_ranks):
             self.log.info("[%d]: %d", index, rank)
 

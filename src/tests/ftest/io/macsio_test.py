@@ -33,20 +33,21 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
 
         # Create a pool
-        self.add_pool()
-        self.pool.display_pool_daos_space()
+        pool = self.get_pool()
+        pool.display_pool_daos_space()
 
         # Create a container
-        self.add_container(self.pool)
+        container = self.get_container(pool)
 
         # Run macsio
         self.log.info("Running MACSio")
         status = self.macsio.check_results(
             self.run_macsio(
-                self.pool.uuid, list_to_str(self.pool.svc_ranks), processes, self.container.uuid),
+                pool, list_to_str(pool.svc_ranks), processes, container),
             self.hostlist_clients)
-        if status:
-            self.log.info("Test passed")
+        if not status:
+            self.fail("MACSio failed")
+        self.log.info("Test passed")
 
     def test_macsio_daos_vol(self):
         """JIRA ID: DAOS-4983.
@@ -68,14 +69,14 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         processes = self.params.get("processes", "/run/macsio/*", len(self.hostlist_clients))
 
         # Create a pool
-        self.add_pool()
-        self.pool.display_pool_daos_space()
+        pool = self.get_pool()
+        pool.display_pool_daos_space()
 
         # Create a container
-        self.add_container(self.pool)
+        container = self.get_container(pool)
 
         # Create dfuse mount point
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.start_dfuse(self.hostlist_clients, pool, container)
 
         # VOL needs to run from a file system that supports xattr.  Currently
         # nfs does not have this attribute so it was recommended to create and
@@ -86,8 +87,9 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         self.log.info("Running MACSio with DAOS VOL connector")
         status = self.macsio.check_results(
             self.run_macsio(
-                self.pool.uuid, list_to_str(self.pool.svc_ranks), processes, self.container.uuid,
+                pool, list_to_str(pool.svc_ranks), processes, container,
                 plugin_path),
             self.hostlist_clients)
-        if status:
-            self.log.info("Test passed")
+        if not status:
+            self.fail("MACSio failed")
+        self.log.info("Test passed")

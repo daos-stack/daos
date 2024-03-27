@@ -71,9 +71,9 @@ class RbldPoolDestroyWithIO(IorTestBase):
         self.pool.wait_for_rebuild_to_start(interval=1)
 
         rebuild_state = self.pool.get_rebuild_state(True)
-        self.log.info("Pool %s rebuild status:%s", self.pool.uuid, rebuild_state)
+        self.log.info("%s rebuild status:%s", str(self.pool), rebuild_state)
 
-        self.log.info("Destroy pool %s while rebuild is %s", self.pool.uuid, rebuild_state)
+        self.log.info("Destroy %s while rebuild is %s", str(self.pool), rebuild_state)
         self.pool.destroy()
         self.container = None
 
