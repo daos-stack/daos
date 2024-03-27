@@ -64,7 +64,7 @@ class IoctlPoolHandles(TestWithTelemetry):
                 initial[metric][label] = [value, value]
 
         self.log_step('Run ior with intercept library')
-        ior_params = {'intercept': '/usr/lib64/libioil.so', 'il_report': 2}
+        ior_params = {'dfuse': dfuse, 'intercept': '/usr/lib64/libioil.so', 'il_report': 2}
         write_data(self, container, **ior_params)
 
         self.log_step('Collecting pool/container metrics after running ior')
