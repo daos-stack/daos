@@ -285,6 +285,7 @@ $(SRPM): $(SPEC) $(SOURCES)
 	    chmod 755 bz-1955184_find-requires;  \
 	fi
 	rpmbuild -bs $(COMMON_RPM_ARGS) $(RPM_BUILD_OPTIONS) $(SPEC)
+	rpm -qRp $(SRPM)
 
 srpm: $(SRPM)
 
@@ -477,6 +478,9 @@ show_release:
 
 show_rpms:
 	@echo '$(RPMS)'
+
+show_srpm:
+	@echo '$(SRPM)'
 
 show_source:
 	@echo '$(SOURCE)'
