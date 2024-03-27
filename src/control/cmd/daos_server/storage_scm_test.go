@@ -644,6 +644,12 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 	// Use a normal logger to verify that we don't mess up JSON output.
 	log := logging.NewCommandLineLogger()
 
+	mockDeps := func(smbc scm.MockBackendConfig) *commandDependencies {
+		return &commandDependencies{
+			ctlSvc: mockCSFromScmCfg(log, smbc),
+		}
+	}
+
 	runJSONCmdTests(t, log, []jsonCmdTest{
 		{
 			"Prepare namespaces; JSON; no force",
@@ -655,7 +661,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 		{
 			"Prepare namespaces; JSON; with force",
 			"scm prepare -j -f",
-			mockCSFromScmCfg(log, scm.MockBackendConfig{
+			mockDeps(scm.MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
 					Socket: &storage.ScmSocketState{
 						State: storage.ScmNoFreeCap,
@@ -671,7 +677,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 		{
 			"Prepare namespaces; JSON; with force; returns error",
 			"scm prepare -j -f",
-			mockCSFromScmCfg(log, scm.MockBackendConfig{
+			mockDeps(scm.MockBackendConfig{
 				PrepErr: errors.New("bad prep"),
 			}),
 			nil,
@@ -687,7 +693,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 		{
 			"Reset namespaces; JSON; with force",
 			"scm reset -j -f",
-			mockCSFromScmCfg(log, scm.MockBackendConfig{
+			mockDeps(scm.MockBackendConfig{
 				PrepResetRes: &storage.ScmPrepareResponse{
 					RebootRequired: true,
 					Socket: &storage.ScmSocketState{
@@ -701,7 +707,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 		{
 			"Reset namespaces; JSON; with force; returns error",
 			"scm reset -j -f",
-			mockCSFromScmCfg(log, scm.MockBackendConfig{
+			mockDeps(scm.MockBackendConfig{
 				PrepResetErr: errors.New("bad prep"),
 			}),
 			nil,
@@ -710,7 +716,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 		{
 			"Scan modules; JSON",
 			"scm scan -j",
-			mockCSFromScmCfg(log, scm.MockBackendConfig{
+			mockDeps(scm.MockBackendConfig{
 				GetModulesRes: storage.ScmModules{
 					storage.MockScmModule(),
 				},
@@ -721,7 +727,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 		{
 			"Scan modules; JSON; returns error",
 			"scm scan -j",
-			mockCSFromScmCfg(log, scm.MockBackendConfig{
+			mockDeps(scm.MockBackendConfig{
 				GetModulesErr: errors.New("bad prep"),
 			}),
 			nil,
@@ -730,7 +736,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 		{
 			"Scan namespaces; JSON",
 			"scm scan -j",
-			mockCSFromScmCfg(log, scm.MockBackendConfig{
+			mockDeps(scm.MockBackendConfig{
 				GetModulesRes: storage.ScmModules{
 					storage.MockScmModule(),
 				},
@@ -744,7 +750,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 		{
 			"Scan namespaces; JSON; returns error",
 			"scm scan -j",
-			mockCSFromScmCfg(log, scm.MockBackendConfig{
+			mockDeps(scm.MockBackendConfig{
 				GetModulesRes: storage.ScmModules{
 					storage.MockScmModule(),
 				},

@@ -81,6 +81,11 @@ type mainOpts struct {
 	preExecTests []execTestFn
 }
 
+// Dependencies can be injected to parseOpts flow through commandDependencies.
+type commandDependencies struct {
+	ctlSvc *server.ControlService
+}
+
 type versionCmd struct {
 	cmdutil.JSONOutputCmd
 }
@@ -107,10 +112,15 @@ func exitWithError(log *logging.LeveledLogger, err error) {
 	os.Exit(1)
 }
 
-func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger, ctlSvcs ...*server.ControlService) error {
-	var ctlSvc *server.ControlService
-	if len(ctlSvcs) > 0 {
-		ctlSvc = ctlSvcs[0]
+// Command dependencies can be injected using the variadic deps parameter when unit testing.
+func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger, cmdDeps ...*commandDependencies) error {
+	if len(cmdDeps) > 1 {
+		return errors.Errorf("expected at most one commandDependencies reference, got %d",
+			len(cmdDeps))
+	}
+	deps := new(commandDependencies)
+	if len(cmdDeps) == 1 && cmdDeps[0] != nil {
+		deps = cmdDeps[0]
 	}
 
 	var wroteJSON atm.Bool
@@ -189,11 +199,12 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger, ctlSvc
 				"this command will not use it")
 		}
 
-		// Set the control service to use to handle command execution, default
-		// implementation will be provided if not supplied in call parameters.
+		// Set the ControlService to use to handle command execution when unit testing.
+		// Production workflow will not inject ControlService here and instead specify one
+		// later in the command handling logic.
 		if ctlSvcCmd, ok := cmd.(ctlSvcCaller); ok {
-			if ctlSvc != nil {
-				ctlSvcCmd.setCtlSvc(ctlSvc)
+			if deps.ctlSvc != nil {
+				ctlSvcCmd.setCtlSvc(deps.ctlSvc)
 			}
 		}
 

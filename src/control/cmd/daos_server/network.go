@@ -89,8 +89,7 @@ func localHostFabricMap(hf *control.HostFabric) (control.HostFabricMap, error) {
 
 func (cmd *networkScanCmd) Execute(_ []string) error {
 	if cmd.ctlSvc == nil {
-		// If specific storage control service is not supplied with command, perform init
-		// checks.
+		// Allow parseOpts() unit tests to skip some setup.
 		if err := common.CheckDupeProcess(); err != nil {
 			return err
 		}

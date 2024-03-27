@@ -73,17 +73,15 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 				Name: "ofi+verbs",
 			}),
 	}
-	runJSONCmdTests(t, log, []jsonCmdTest{
-		{
-			"Scan network; JSON; nothing found",
-			"network scan -j",
-			mockCSFromFabricCfg(t, log, &hardware.FabricScannerConfig{
+	mockDeps := func(fis *hardware.FabricInterfaceSet) *commandDependencies {
+		return &commandDependencies{
+			ctlSvc: mockCSFromFabricCfg(t, log, &hardware.FabricScannerConfig{
 				TopologyProvider: &hardware.MockTopologyProvider{
 					GetTopoReturn: testTopo,
 				},
 				FabricInterfaceProviders: []hardware.FabricInterfaceProvider{
 					&hardware.MockFabricInterfaceProvider{
-						GetFabricReturn: hardware.NewFabricInterfaceSet(),
+						GetFabricReturn: fis,
 					},
 				},
 				NetDevClassProvider: &hardware.MockNetDevClassProvider{
@@ -94,29 +92,21 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 					},
 				},
 			}, nil),
+		}
+	}
+
+	runJSONCmdTests(t, log, []jsonCmdTest{
+		{
+			"Scan network; JSON; nothing found",
+			"network scan -j",
+			mockDeps(hardware.NewFabricInterfaceSet()),
 			nil,
 			errors.New("get local fabric interfaces: no fabric interfaces could be found"),
 		},
 		{
 			"Scan network; JSON; interface found",
 			"network scan -j",
-			mockCSFromFabricCfg(t, log, &hardware.FabricScannerConfig{
-				TopologyProvider: &hardware.MockTopologyProvider{
-					GetTopoReturn: testTopo,
-				},
-				FabricInterfaceProviders: []hardware.FabricInterfaceProvider{
-					&hardware.MockFabricInterfaceProvider{
-						GetFabricReturn: hardware.NewFabricInterfaceSet(if1),
-					},
-				},
-				NetDevClassProvider: &hardware.MockNetDevClassProvider{
-					GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
-						{
-							NDC: hardware.Infiniband,
-						},
-					},
-				},
-			}, nil),
+			mockDeps(hardware.NewFabricInterfaceSet(if1)),
 			mustLocalHostFabricMap(t, &control.HostFabric{
 				Interfaces: []*control.HostFabricInterface{
 					{
@@ -132,26 +122,10 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 		{
 			"Scan network; JSON; nothing matching provider found",
 			"network scan -j -p ofi+tcp",
-			mockCSFromFabricCfg(t, log, &hardware.FabricScannerConfig{
-				TopologyProvider: &hardware.MockTopologyProvider{
-					GetTopoReturn: testTopo,
-				},
-				FabricInterfaceProviders: []hardware.FabricInterfaceProvider{
-					&hardware.MockFabricInterfaceProvider{
-						GetFabricReturn: hardware.NewFabricInterfaceSet(if1),
-					},
-				},
-				NetDevClassProvider: &hardware.MockNetDevClassProvider{
-					GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
-						{
-							NDC: hardware.Infiniband,
-						},
-					},
-				},
-			}, nil),
+			mockDeps(hardware.NewFabricInterfaceSet(if1)),
 			mustLocalHostFabricMap(t, &control.HostFabric{}),
 			nil,
 		},
-		// TODO: Test --ignore-config flag
+		// TODO DAOS-14529: Test --ignore-config flag
 	})
 }

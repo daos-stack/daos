@@ -851,11 +851,17 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 	// Use a normal logger to verify that we don't mess up JSON output.
 	log := logging.NewCommandLineLogger()
 
+	mockDeps := func(bmbc bdev.MockBackendConfig) *commandDependencies {
+		return &commandDependencies{
+			ctlSvc: mockCSFromNvmeCfg(log, bmbc),
+		}
+	}
+
 	runJSONCmdTests(t, log, []jsonCmdTest{
 		{
 			"Prepare SSDs; JSON",
 			"nvme prepare -j",
-			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+			mockDeps(bdev.MockBackendConfig{
 				PrepareRes: &storage.BdevPrepareResponse{},
 			}),
 			nil,
@@ -864,7 +870,7 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 		{
 			"Prepare SSDs; JSON; returns error",
 			"nvme prepare -j",
-			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+			mockDeps(bdev.MockBackendConfig{
 				PrepareErr: errors.New("bad prep"),
 			}),
 			nil,
@@ -873,8 +879,8 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 		{
 			"Reset SSDs; JSON",
 			"nvme reset -j",
-			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
-				ResetRes: &storage.BdevPrepareResponse{},
+			mockDeps(bdev.MockBackendConfig{
+				PrepareRes: &storage.BdevPrepareResponse{},
 			}),
 			nil,
 			nil,
@@ -882,7 +888,7 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 		{
 			"Reset SSDs; JSON; returns error",
 			"nvme reset -j",
-			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+			mockDeps(bdev.MockBackendConfig{
 				ResetErr: errors.New("bad reset"),
 			}),
 			nil,
@@ -891,7 +897,7 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 		{
 			"Scan SSDs; JSON",
 			"nvme scan -j",
-			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+			mockDeps(bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{
 						func() *storage.NvmeController {
@@ -914,7 +920,7 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 		{
 			"Scan SSDs; JSON; returns error",
 			"nvme scan -j",
-			mockCSFromNvmeCfg(log, bdev.MockBackendConfig{
+			mockDeps(bdev.MockBackendConfig{
 				ScanErr: errors.New("bad scan"),
 			}),
 			nil,

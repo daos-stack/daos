@@ -19,13 +19,12 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server"
 )
 
 type jsonCmdTest struct {
 	name   string
 	cmd    string
-	cs     *server.ControlService
+	deps   *commandDependencies
 	expOut interface{}
 	expErr error
 }
@@ -53,7 +52,7 @@ func runJSONCmdTests(t *testing.T, log *logging.LeveledLogger, cmdTests []jsonCm
 
 			var opts mainOpts
 			test.CmpErr(t, tc.expErr,
-				parseOpts(strings.Split(tc.cmd, " "), &opts, log, tc.cs))
+				parseOpts(strings.Split(tc.cmd, " "), &opts, log, tc.deps))
 
 			w.Close()
 			<-done
