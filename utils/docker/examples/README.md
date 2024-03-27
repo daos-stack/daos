@@ -15,7 +15,7 @@ The platform was tested and validated with the following dependencies:
 - [Docker CE](https://docs.docker.com/engine/install/centos/) latest
   [RPMs](https://download.docker.com/linux/centos/docker-ce.repo)
 - [DAOS 2.4](https://docs.daos.io/v2.4/) official [RPMS](https://packages.daos.io/v2.4/)
-- [rockylinux/rockylinux:8.8](https://hub.docker.com/r/rockylinux/rockylinux/) official docker
+- [rockylinux/rockylinux:8.9](https://hub.docker.com/r/rockylinux/rockylinux/) official docker
   images.
 
 
@@ -34,18 +34,18 @@ properly build a docker image:
 The following environment variables allow to customize the Docker image to build:
 - `LINUX_DISTRO`: Linux distribution identifier (default "el8")
 - `DAOS_DOCKER_IMAGE_NSP`: Namespace identifier of the base DAOS docker image (default "daos")
-- `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the base DAOS docker image (default "v2.4.0")
+- `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the base DAOS docker image (default "v2.4.1")
 - `BUST_CACHE`: Manage docker building cache (default "").  To invalidate the cache, a random value
    such as the date of day shall be given.
 - `LINUX_IMAGE_NAME`: Base docker image name to use (default "rockylinux/rockylinux")
-- `LINUX_IMAGE_TAG`: Tag identifier of the base docker image to use (default "8.8")
+- `LINUX_IMAGE_TAG`: Tag identifier of the base docker image to use (default "8.9")
 - `DAOS_REPOS`: Space separated list of repos needed to install DAOS (default
-  "https://packages.daos.io/v2.4/EL8/packages/x86\_64/")
+  "https://packages.daos.io/v2.4.1/EL8/packages/x86\_64/")
 - `DAOS_GPG_KEYS`: Space separated list of GPG keys associated with DAOS repos (default
-   "https://packages.daos.io/v2.4.0/RPM-GPG-KEY-2023")
+   "https://packages.daos.io/v2.4.1/RPM-GPG-KEY-2023")
 - `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentication
    (default "")
-- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el8")
+- `DAOS_VERSION`: Version of DAOS to use (default "2.4.1-2.el8")
 
 When the environment file has been properly filled, run the following command to build the base DAOS
 docker image.

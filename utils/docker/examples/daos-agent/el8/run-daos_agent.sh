@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # set -x
-set -e -o pipefail
+set -u -e -o pipefail
 
 if [[ "$(id -u)" != "0" ]] ; then
 	echo "[ERROR] run-daos_agent can only be run as root"

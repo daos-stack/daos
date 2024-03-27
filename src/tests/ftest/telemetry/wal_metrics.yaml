@@ -2,18 +2,16 @@ hosts:
   test_servers: 2
   test_clients: 2
 
-timeout: 200
+timeout: 180
 
 server_config:
-  name: daos_server
   engines_per_host: 1
   engines:
     0:
       storage: auto
 
 pool:
-  # size: 50%
-  size: 50G
+  size: 20G
 
 container:
   control_method: daos
