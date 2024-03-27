@@ -227,49 +227,50 @@ typedef enum {
 
 enum {
 	/** Conditional Op: Punch key if it exists, fail otherwise */
-	VOS_OF_COND_PUNCH		= DAOS_COND_PUNCH,
+	VOS_OF_COND_PUNCH = DAOS_COND_PUNCH,
 	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
-	VOS_OF_COND_DKEY_INSERT		= DAOS_COND_DKEY_INSERT,
+	VOS_OF_COND_DKEY_INSERT = DAOS_COND_DKEY_INSERT,
 	/** Conditional Op: Update dkey if it exists, fail otherwise */
-	VOS_OF_COND_DKEY_UPDATE		= DAOS_COND_DKEY_UPDATE,
+	VOS_OF_COND_DKEY_UPDATE = DAOS_COND_DKEY_UPDATE,
 	/** Conditional Op: Fetch dkey if it exists, fail otherwise */
-	VOS_OF_COND_DKEY_FETCH		= DAOS_COND_DKEY_FETCH,
+	VOS_OF_COND_DKEY_FETCH = DAOS_COND_DKEY_FETCH,
 	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */
-	VOS_OF_COND_AKEY_INSERT		= DAOS_COND_AKEY_INSERT,
+	VOS_OF_COND_AKEY_INSERT = DAOS_COND_AKEY_INSERT,
 	/** Conditional Op: Update akey if it exists, fail otherwise */
-	VOS_OF_COND_AKEY_UPDATE		= DAOS_COND_AKEY_UPDATE,
+	VOS_OF_COND_AKEY_UPDATE = DAOS_COND_AKEY_UPDATE,
 	/** Conditional Op: Fetch akey if it exists, fail otherwise */
-	VOS_OF_COND_AKEY_FETCH		= DAOS_COND_AKEY_FETCH,
+	VOS_OF_COND_AKEY_FETCH = DAOS_COND_AKEY_FETCH,
 	/** Indicates akey conditions are specified in iod_flags */
-	VOS_OF_COND_PER_AKEY		= DAOS_COND_PER_AKEY,
+	VOS_OF_COND_PER_AKEY = DAOS_COND_PER_AKEY,
 	/* critical update - skip checks on SCM system/held space */
-	VOS_OF_CRIT			= (1 << 8),
+	VOS_OF_CRIT = (1 << 8),
 	/** Instead of update or punch of extents, remove all extents
 	 * under the specified range. Intended for internal use only.
 	 */
-	VOS_OF_REMOVE			= (1 << 9),
+	VOS_OF_REMOVE = (1 << 9),
 	/* only query iod_size */
-	VOS_OF_FETCH_SIZE_ONLY		= (1 << 10),
+	VOS_OF_FETCH_SIZE_ONLY = (1 << 10),
 	/* query recx list */
-	VOS_OF_FETCH_RECX_LIST		= (1 << 11),
+	VOS_OF_FETCH_RECX_LIST = (1 << 11),
 	/* only set read TS */
-	VOS_OF_FETCH_SET_TS_ONLY	= (1 << 12),
+	VOS_OF_FETCH_SET_TS_ONLY = (1 << 12),
 	/* check the target (obj/dkey/akey) existence */
-	VOS_OF_FETCH_CHECK_EXISTENCE	= (1 << 13),
+	VOS_OF_FETCH_CHECK_EXISTENCE = (1 << 13),
 	/** Set when propagating a punch that results in empty subtree */
-	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
-	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC		= (1 << 15),
+	VOS_OF_PUNCH_PROPAGATE = (1 << 14),
+	/** Unused flag */
+	VOS_OF_UNUSED = (1 << 15),
 	/** Dedup update mode */
-	VOS_OF_DEDUP			= (1 << 16),
+	VOS_OF_DEDUP = (1 << 16),
 	/** Dedup update with memcmp verify mode */
-	VOS_OF_DEDUP_VERIFY		= (1 << 17),
+	VOS_OF_DEDUP_VERIFY = (1 << 17),
 	/** Ignore fetch only used by shadow fetch to ignore the evt fetch */
-	VOS_OF_SKIP_FETCH		= (1 << 18),
+	VOS_OF_SKIP_FETCH = (1 << 18),
 	/** Operation on EC object (currently only applies to update) */
-	VOS_OF_EC			= (1 << 19),
+	VOS_OF_EC = (1 << 19),
 	/** Update from rebuild */
-	VOS_OF_REBUILD			= (1 << 20),
+	VOS_OF_REBUILD = (1 << 20),
+	/** If adding a flag, use VOS_OF_UNUSED first */
 };
 
 enum {
@@ -305,7 +306,7 @@ enum {
 #define VOS_COND_UPDATE_OP_MASK					\
 	(VOS_OF_COND_DKEY_UPDATE | VOS_OF_COND_AKEY_UPDATE)
 
-D_CASSERT((VOS_OF_REPLAY_PC & DAOS_COND_MASK) == 0);
+D_CASSERT((VOS_OF_REBUILD & DAOS_COND_MASK) == 0);
 D_CASSERT((VOS_OF_PUNCH_PROPAGATE & DAOS_COND_MASK) == 0);
 
 /** vos definitions that match daos_obj_key_query flags */

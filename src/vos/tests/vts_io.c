@@ -896,9 +896,8 @@ exit:
 }
 
 static inline int
-hold_objects(struct vos_object **objs, struct daos_lru_cache *occ,
-	     daos_handle_t *coh, daos_unit_oid_t *oid, int start, int end,
-	     bool no_create, int exp_rc)
+hold_objects(struct vos_object **objs, struct vos_obj_cache *occ, daos_handle_t *coh,
+	     daos_unit_oid_t *oid, int start, int end, bool no_create, int exp_rc)
 {
 	int			i = 0, rc = 0;
 	daos_epoch_range_t	epr = {0, 1};
@@ -949,7 +948,7 @@ io_obj_cache_test(void **state)
 {
 	struct io_test_args	*arg = *state;
 	struct vos_test_ctx	*ctx = &arg->ctx;
-	struct daos_lru_cache	*occ = NULL;
+	struct vos_obj_cache    *occ = NULL;
 	struct vos_object	*objs[20];
 	struct umem_instance	*ummg;
 	struct umem_instance	*umml;
@@ -959,7 +958,7 @@ io_obj_cache_test(void **state)
 	char			*po_name;
 	uuid_t			 pool_uuid;
 	daos_handle_t		 l_poh, l_coh;
-	struct daos_lru_cache   *old_cache;
+	struct vos_obj_cache    *old_cache;
 	int			 i, rc;
 	struct vos_tls          *tls;
 

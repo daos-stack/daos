@@ -1146,9 +1146,8 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 		vos_ilog_ts_mark(ts_set, ilog);
 	}
 
-	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, bound, parent,
-			    info, ts_set, true,
-			    (flags & VOS_OF_REPLAY_PC) != 0);
+	rc = vos_ilog_punch(obj->obj_cont, ilog, &epr, bound, parent, info, ts_set, true,
+			    (flags & VOS_OF_REBUILD) != 0);
 
 	if (rc != 0)
 		goto done;

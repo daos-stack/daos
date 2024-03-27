@@ -81,7 +81,7 @@ ctl_punch(struct io_credit *cred)
 	int	flags;
 
 	if (ctl_epoch < 0) {
-		flags = VOS_OF_REPLAY_PC;
+		flags = VOS_OF_REBUILD;
 		ctl_epoch *= -1;
 	} else {
 		flags = 0;

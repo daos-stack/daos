@@ -1904,8 +1904,8 @@ minor_epoch_punch_rebuild(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** Now the "replay" punch */
-	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch + 1, 0,
-			   VOS_OF_REPLAY_PC, &dkey, 1, &akey, NULL);
+	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch + 1, 0, VOS_OF_REBUILD, &dkey, 1, &akey,
+			   NULL);
 	assert_rc_equal(rc, 0);
 
 	/** Now write the update at the same major epoch that is after the
