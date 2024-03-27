@@ -3,6 +3,8 @@ name: Build
 on:
   pull_request:
 
+permissions: {}
+
 concurrency:
   group: ci2-${{ github.head_ref }}
   cancel-in-progress: true
