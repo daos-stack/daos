@@ -256,7 +256,7 @@ enum {
 #define DAOS_PROP_PO_CHECKPOINT_THRESH_MIN     10        /* 10 % WAL capacity */
 #define DAOS_PROP_PO_SVC_OPS_ENABLED_DEFAULT   1         /* true: enabled by default */
 #define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT 300       /* 300 seconds */
-#define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN     150       /* 150 seconds */
+#define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN     60        /* 60 seconds */
 #define DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MAX     600       /* 600 seconds */
 
 /** self healing strategy bits */
