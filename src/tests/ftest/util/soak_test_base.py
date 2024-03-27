@@ -213,7 +213,7 @@ class SoakTestBase(TestWithServers):
         if harasser == "snapshot":
             method = launch_snapshot
             name = "SNAPSHOT"
-            params = (self, self.pool[0], name)
+            params = (self, self.pool[1], name)
             job = threading.Thread(target=method, args=params, name=name)
         elif harasser == "exclude":
             method = launch_exclude_reintegrate
@@ -260,12 +260,12 @@ class SoakTestBase(TestWithServers):
         job.join(timeout)
         if job.is_alive():
             self.log.error("<< ERROR: harasser %s is alive, failed to join>>", job.name)
-            if name not in ["REBUILD", "SNAPSHOT"]:
+            if name not in ["SNAPSHOT"]:
                 job.terminate()
                 status_msg = "<<FAILED: {} has been terminated.".format(name)
             raise SoakTestError(
                 "<<FAILED: Soak failed while running {} . ".format(name))
-        if name not in ["REBUILD", "SNAPSHOT"]:
+        if name not in ["SNAPSHOT"]:
             self.harasser_results = results.get()
             self.harasser_args = args.get()
         # Check if the completed job passed
