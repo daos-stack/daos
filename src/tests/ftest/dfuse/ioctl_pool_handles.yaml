@@ -6,28 +6,18 @@ timeout: 180
 
 server_config:
   name: daos_server
-  engines_per_host: 2
+  engines_per_host: 1
   engines:
     0:
       env_vars:
         - DAOS_TARGET_OVERSUBSCRIBE=1
-      fabric_iface: ib0
-      fabric_iface_port: 31317
-      log_file: daos_server0.log
-      nr_xs_helpers: 1
-      pinned_numa_node: 0
-      storage: auto
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
       targets: 16
-    1:
-      env_vars:
-        - DAOS_TARGET_OVERSUBSCRIBE=1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
-      log_file: daos_server1.log
-      nr_xs_helpers: 1
-      pinned_numa_node: 1
-      storage: auto
-      targets: 16
+  system_ram_reserved: 1
 
 pool:
   size: 10GB

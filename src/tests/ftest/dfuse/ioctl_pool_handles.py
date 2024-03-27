@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -73,8 +73,8 @@ class IoctlPoolHandles(TestWithTelemetry):
             run and pass, it should not be run in normal CI, but in a PR that includes the
             modification.
 
-        :avocado: tags=all
-        :avocado: tags=hw,medium
+        :avocado: tags=all,manual
+        :avocado: tags=vm
         :avocado: tags=dfuse,
         :avocado: tags=IoctlPoolHandles,test_ioctl_pool_handles
         """
