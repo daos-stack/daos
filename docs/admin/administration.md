@@ -63,38 +63,108 @@ severity, message, description, and cause.
 
 ## System Logging
 
-Engine logging is initially configured by setting the `log_file` and `log_mask`
+Engine logging is configured on `daos_server` start-up by setting the `log_file` and `log_mask`
 parameters in the server config file.
-The 'DD_MASK' and 'DD_SUBSYS' environment variables can also be defined within the "env\_vars"
-list parameter of the engine section of the server config file to tune log output.
+
+The `DD_MASK` and `DD_SUBSYS` environment variables can be defined within the `env_vars` list
+parameter of the engine section of the server config file to tune log output.
 
 Engine log levels can be changed dynamically (at runtime) by setting log masks for a set of
 facilities to a given level.
 Settings will be applied to all running DAOS I/O Engines present in the configured dmg hostlist
-using the command `dmg server set-logmasks [-m <masks>]`.
-The command accepts named arguments for masks ('D_LOG_MASK'), streams ('DD_MASK') and subsystems
-('DD_SUBSYS).
-If no args are passed, then the log masks for each running engine will be reset to the values of
-engine "log\_mask" parameter and "env\_vars" 'DD_MASK' and 'DD_SUBSYS' assignments in the server
-config file (as set at the time of daos\_server startup).
-If a single arg is passed, then this will be used as the log masks setting.
+using the `dmg server set-logmasks` command.
+The command accepts named arguments for masks `[-m|--masks]` (equivalent to `D_LOG_MASK`),
+streams `[-d|--streams]` (equivalent to `DD_MASK`) and subsystems `[-s|--subsystems]` (equivalent
+to `DD_SUBSYS`):
+
+Usage help:
+```
+dmg server set-logmasks --help
+Usage:
+  dmg [OPTIONS] server set-logmasks [set-logmasks-OPTIONS]
+
+Application Options:
+      --allow-proxy     Allow proxy configuration via environment
+  -i, --insecure        Have dmg attempt to connect without certificates
+  -d, --debug           Enable debug output
+      --log-file=       Log command output to the specified file
+  -j, --json            Enable JSON output
+  -J, --json-logging    Enable JSON-formatted log output
+  -o, --config-path=    Client config file path
+
+Help Options:
+  -h, --help            Show this help message
+
+[set-logmasks command options]
+      -l, --host-list=  A comma separated list of addresses <ipv4addr/hostname>
+                        to connect to
+      -m, --masks=      Set log masks for a set of facilities to a given level.
+                        The input string should look like
+                        PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the syntax is
+                        identical to what is expected by 'D_LOG_MASK'
+                        environment variable. If the 'PREFIX=' part is omitted,
+                        then the level applies to all defined facilities (e.g.
+                        a value of 'WARN' sets everything to WARN). If unset
+                        then reset engine log masks to use the 'log_mask' value
+                        set in the server config file (for each engine) at the
+                        time of DAOS system format. Supported levels are FATAL,
+                        CRIT, ERR, WARN, NOTE, INFO, DEBUG
+      -d, --streams=    Employ finer grained control over debug streams. Mask
+                        bits are set as the first argument passed in
+                        D_DEBUG(mask, ...) and this input string (DD_MASK) can
+                        be set to enable different debug streams. The expected
+                        syntax is a comma separated list of stream identifiers
+                        and accepted DAOS Debug Streams are
+                        md,pl,mgmt,epc,df,rebuild,daos_default and Common Debug
+                        Streams (GURT) are any,trace,mem,net,io. If not set,
+                        streams will be read from server config file and if set
+                        to an empty string then all debug streams will be
+                        enabled
+      -s, --subsystems= This input string is equivalent to the use of the
+                        DD_SUBSYS environment variable and can be set to enable
+                        logging for specific subsystems or facilities. The
+                        expected syntax is a comma separated list of facility
+                        identifiers. Accepted DAOS facilities are
+                        common,tree,vos,client,server,rdb,pool,container,object-
+                        ,placement,rebuild,tier,mgmt,bio,tests, Common
+                        facilities (GURT) are MISC,MEM and CaRT facilities
+                        RPC,BULK,CORPC,GRP,LM,HG,ST,IV If not set, subsystems
+                        to enable will be read from server config file and if
+                        set to an empty string then logging all subsystems will
+                        be enabled
+```
+
+If an arg is not passed, then that logging parameter for each engine process is reset to the
+values set in the server config file that was used when starting `daos_server`.
+- `--masks` will be reset to the value of the engine config `log_mask` parameter.
+- `--streams` will be reset to the `env_vars` `DD_MASK` environment variable value or to an empty
+string if not set.
+- `--subsystems` will be reset to the `env_vars` `DD_SUBSYS` environment variable value or to an
+empty string if not set.
 
 Example usage:
 ```
-dmg server set-logmasks -m ERR,mgmt=DEBUG
+dmg server set-logmasks -m DEBUG,MEM=ERR -d mgmt,md -s server,mgmt,bio,common
 ```
 
-The masks input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the syntax is
-identical to what is expected by the 'D_LOG_MASK' environment variable.
-If the 'PREFIX=' part is omitted, then the level applies to all defined facilities (e.g., a value
-of 'WARN' sets everything to WARN).
+This example would be a runtime equivalent to setting the following in the server config file:
+```
+...
+engines:
+- log_mask: DEBUG,MEM=ERR
+  env_vars:
+  - DD_SUBSYS=server,mgmt,bio,common
+  - DD_MASK=mgmt,md
+...
+```
 
-Supported priority levels for engine logging are FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG.
+If the above server config file was used to start an engine process, running `dmg server
+set-logmasks` without parameters would reset logging to config values and would be equivalent to the
+example given above.
 
-For usage of streams ('DD_MASK') and subsystems ('DD_SUBSYS') parameters, logging is described in
-detail in the
-[`Debugging System`](https://docs.daos.io/v2.4/admin/troubleshooting/#debugging-system)
-section.
+For more information on the usage of masks (`D_LOG_MASK`), streams (`DD_MASK`) and subsystems
+(`DD_SUBSYS`) parameters refer to the
+[`Debugging System`](https://docs.daos.io/v2.4/admin/troubleshooting/#debugging-system) section.
 
 ## System Monitoring
 
