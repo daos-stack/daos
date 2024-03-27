@@ -479,6 +479,7 @@ dss_srv_handler(void *arg)
 	bool				 track_mem = false;
 	bool				 signal_caller = true;
 	unsigned int			 xs_type;
+	bool				 with_chore_queue;
 
 	rc = dss_xstream_set_affinity(dx);
 	if (rc)
@@ -508,6 +509,7 @@ dss_srv_handler(void *arg)
 	(void)pthread_setname_np(pthread_self(), dx->dx_name);
 
 	xs_type = xs_id2type(dx->dx_xs_id);
+	with_chore_queue = (xs_type == DSS_XS_IOFW || xs_type == DSS_XS_OFFLOAD);
 	if (xs_type == DSS_XS_SEC) {
 		rc = crt_context_create_secondary(&dmi->dmi_ctx, 0);
 		if (rc != 0) {
@@ -628,6 +630,16 @@ dss_srv_handler(void *arg)
 		}
 	}
 
+	if (with_chore_queue) {
+		rc = dss_chore_queue_start(dx);
+		if (rc != 0) {
+			DL_ERROR(rc, "failed to start chore queue");
+			ABT_future_set(dx->dx_shutdown, dx);
+			wait_all_exited(dx, dmi);
+			goto nvme_fini;
+		}
+	}
+
 	dmi->dmi_xstream = dx;
 	ABT_mutex_lock(xstream_data.xd_mutex);
 	/* initialized everything for the ULT, notify the creator */
@@ -673,6 +685,9 @@ dss_srv_handler(void *arg)
 
 	if (has_crt_context(dx))
 		dx->dx_progress_started = false;
+
+	if (with_chore_queue)
+		dss_chore_queue_stop(dx);
 
 	wait_all_exited(dx, dmi);
 	if (dmi->dmi_dp) {
@@ -878,6 +893,12 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 		D_GOTO(out_dx, rc);
 	}
 
+	rc = dss_chore_queue_init(dx);
+	if (rc != 0) {
+		DL_ERROR(rc, "initialize chore queue fails");
+		goto out_sched;
+	}
+
 	dss_mem_stats_init(&dx->dx_mem_stats, xs_id);
 
 	/** start XS, ABT rank 0 is reserved for the primary xstream */
@@ -885,7 +906,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 					  &dx->dx_xstream);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create xstream fails %d\n", rc);
-		D_GOTO(out_sched, rc = dss_abterr2der(rc));
+		D_GOTO(out_chore_queue, rc = dss_abterr2der(rc));
 	}
 
 	rc = ABT_thread_attr_create(&attr);
@@ -934,6 +955,8 @@ out_xstream:
 		ABT_thread_attr_free(&attr);
 	ABT_xstream_join(dx->dx_xstream);
 	ABT_xstream_free(&dx->dx_xstream);
+out_chore_queue:
+	dss_chore_queue_fini(dx);
 out_sched:
 	dss_sched_fini(dx);
 out_dx:
@@ -993,6 +1016,7 @@ dss_xstreams_fini(bool force)
 		dx = xstream_data.xd_xs_ptrs[i];
 		if (dx == NULL)
 			continue;
+		dss_chore_queue_fini(dx);
 		dss_sched_fini(dx);
 		dss_xstream_free(dx);
 		xstream_data.xd_xs_ptrs[i] = NULL;

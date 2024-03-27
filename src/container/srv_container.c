@@ -1815,8 +1815,9 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.min_eph = eph;
 
-	rc = dss_task_collective(cont_refresh_vos_agg_eph_one, &arg,
-				 DSS_ULT_FL_PERIODIC);
+	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				     PO_COMP_ST_DOWNOUT, cont_refresh_vos_agg_eph_one,
+				     &arg, DSS_ULT_FL_PERIODIC);
 	return rc;
 }
 
