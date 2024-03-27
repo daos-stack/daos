@@ -45,6 +45,11 @@ the version output, it will fail.  Try running
 3. flake8
 4. yamllint
 5. gofmt
+6. isort
+
+The default python version on `rocky 8.8` is `python 3.6` and the latest `isort` available for that
+release has known performance issues resulting in long run-times for pre-commit hooks, if using a
+virtual environment for installing python packages we recommend a newer python version.
 
 There is a daos wrapper around pylint at `utils/cq/daos_pylint.py` which will perform standard
 pylint checks whilst managing scons and PYTHONPATH setup changes automatically.  Installing
