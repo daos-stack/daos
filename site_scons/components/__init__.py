@@ -342,6 +342,7 @@ def define_components(reqs):
                            '--without-isal',
                            '--without-vtune',
                            '--with-shared',
+                           '--with-uring',
                            f'--target-arch={spdk_arch}'],
                           ['make', f'CONFIG_ARCH={spdk_arch}'],
                           ['make', 'install'],

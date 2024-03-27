@@ -44,6 +44,7 @@ dnf --nodocs install \
     libtool \
     libunwind-devel \
     libuuid-devel \
+    liburing-devel \
     libyaml-devel \
     lua-lmod \
     make \
