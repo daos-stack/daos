@@ -7,27 +7,24 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 )
-
-func mockCSFromFabricCfg(t *testing.T, log logging.Logger, config *hardware.FabricScannerConfig, cacheTopology *hardware.Topology) *server.ControlService {
-	t.Helper()
-
-	scanner, err := hardware.NewFabricScanner(log, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return server.NewControlService(log, nil, nil, nil, scanner)
-}
 
 func mustLocalHostFabricMap(t *testing.T, hf *control.HostFabric) control.HostFabricMap {
 	hfm, err := localHostFabricMap(hf)
@@ -38,13 +35,66 @@ func mustLocalHostFabricMap(t *testing.T, hf *control.HostFabric) control.HostFa
 	return hfm
 }
 
-// TestDaosServer_Network_Commands_JSON verifies that when the JSON-output flag is set only JSON is
-// printed to standard out. Test cases should cover all network subcommand variations.
-func TestDaosServer_Network_Commands_JSON(t *testing.T) {
-	// Use a normal logger to verify that we don't mess up JSON output.
-	log := logging.NewCommandLineLogger()
+type jsonCmdTest2 struct {
+	name         string
+	cmd          string
+	applyMocks   func()
+	cleanupMocks func()
+	expOut       interface{}
+	expErr       error
+}
 
-	testTopo := &hardware.Topology{
+func runJSONCmdTests2(t *testing.T, log *logging.LeveledLogger, cmdTests []jsonCmdTest2) {
+	t.Helper()
+
+	for _, tc := range cmdTests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Helper()
+
+			// Replace os.Stdout so that we can verify the generated output.
+			var result bytes.Buffer
+			r, w, _ := os.Pipe()
+			done := make(chan struct{})
+			go func() {
+				_, _ = io.Copy(&result, r)
+				close(done)
+			}()
+			stdout := os.Stdout
+			defer func() {
+				os.Stdout = stdout
+			}()
+			os.Stdout = w
+
+			tc.applyMocks()
+			defer tc.cleanupMocks()
+
+			var opts mainOpts
+			test.CmpErr(t, tc.expErr, parseOpts(strings.Split(tc.cmd, " "), &opts, log))
+
+			w.Close()
+			<-done
+
+			// Verify only JSON gets printed.
+			if !json.Valid(result.Bytes()) {
+				t.Fatalf("invalid JSON in response: %s", result.String())
+			}
+
+			var sb strings.Builder
+			if err := cmdutil.OutputJSON(&sb, tc.expOut, tc.expErr); err != nil {
+				if err != tc.expErr {
+					t.Fatalf("OutputJSON: %s", err)
+				}
+			}
+
+			if diff := cmp.Diff(sb.String(), result.String()); diff != "" {
+				t.Fatalf("unexpected stdout (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+var (
+	testTopo = &hardware.Topology{
 		NUMANodes: hardware.NodeMap{
 			0: hardware.MockNUMANode(0, 6).WithDevices([]*hardware.PCIDevice{
 				&hardware.PCIDevice{
@@ -65,7 +115,7 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 			}),
 		},
 	}
-	if1 := &hardware.FabricInterface{
+	if1 = &hardware.FabricInterface{
 		Name:          "test01",
 		NetInterfaces: common.NewStringSet("os_test1"),
 		Providers: hardware.NewFabricProviderSet(
@@ -73,40 +123,82 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 				Name: "ofi+verbs",
 			}),
 	}
-	mockDeps := func(fis *hardware.FabricInterfaceSet) *commandDependencies {
-		return &commandDependencies{
-			ctlSvc: mockCSFromFabricCfg(t, log, &hardware.FabricScannerConfig{
-				TopologyProvider: &hardware.MockTopologyProvider{
-					GetTopoReturn: testTopo,
+)
+
+func scanCfgFromFIS(fis *hardware.FabricInterfaceSet) *hardware.FabricScannerConfig {
+	return &hardware.FabricScannerConfig{
+		TopologyProvider: &hardware.MockTopologyProvider{
+			GetTopoReturn: testTopo,
+		},
+		FabricInterfaceProviders: []hardware.FabricInterfaceProvider{
+			&hardware.MockFabricInterfaceProvider{
+				GetFabricReturn: fis,
+			},
+		},
+		NetDevClassProvider: &hardware.MockNetDevClassProvider{
+			GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
+				{
+					NDC: hardware.Infiniband,
 				},
-				FabricInterfaceProviders: []hardware.FabricInterfaceProvider{
-					&hardware.MockFabricInterfaceProvider{
-						GetFabricReturn: fis,
-					},
-				},
-				NetDevClassProvider: &hardware.MockNetDevClassProvider{
-					GetNetDevClassReturn: []hardware.MockGetNetDevClassResult{
-						{
-							NDC: hardware.Infiniband,
-						},
-					},
-				},
-			}, nil),
+			},
+		},
+	}
+}
+
+// Generate apply and respective cleanup functions to mock behavior.
+
+func genApplyMockFn(t *testing.T, log logging.Logger, fis *hardware.FabricInterfaceSet, srvCfg *config.Server) func() {
+	return func() {
+		netCmdInit = func() error {
+			return nil
+		}
+
+		scanner, err := hardware.NewFabricScanner(log, scanCfgFromFIS(fis))
+		if err != nil {
+			t.Fatal(err)
+		}
+		getFabricScanner = func(log logging.Logger) fabricScanFn {
+
+			return scanner.Scan
+		}
+
+		getConfig = func(_ cfgCmd) *config.Server {
+			return srvCfg
 		}
 	}
+}
 
-	runJSONCmdTests(t, log, []jsonCmdTest{
+func genCleanupMockFn(t *testing.T) func() {
+	oldNetCmdInit := netCmdInit
+	oldGetFabricScanner := getFabricScanner
+	oldGetConfig := getConfig
+	return func() {
+		netCmdInit = oldNetCmdInit
+		getFabricScanner = oldGetFabricScanner
+		getConfig = oldGetConfig
+	}
+}
+
+// TestDaosServer_Network_Commands_JSON verifies that when the JSON-output flag is set only JSON is
+// printed to standard out. Test cases should cover all network subcommand variations.
+func TestDaosServer_Network_Commands_JSON(t *testing.T) {
+	// Use a normal logger to verify that we don't mess up JSON output.
+	log := logging.NewCommandLineLogger()
+
+	runJSONCmdTests2(t, log, []jsonCmdTest2{
 		{
 			"Scan network; JSON; nothing found",
 			"network scan -j",
-			mockDeps(hardware.NewFabricInterfaceSet()),
+			genApplyMockFn(t, log, hardware.NewFabricInterfaceSet(), nil),
+			genCleanupMockFn(t),
 			nil,
 			errors.New("get local fabric interfaces: no fabric interfaces could be found"),
 		},
 		{
 			"Scan network; JSON; interface found",
 			"network scan -j",
-			mockDeps(hardware.NewFabricInterfaceSet(if1)),
+			genApplyMockFn(t, log, hardware.NewFabricInterfaceSet(if1), nil),
+			genCleanupMockFn(t),
 			mustLocalHostFabricMap(t, &control.HostFabric{
 				Interfaces: []*control.HostFabricInterface{
 					{
@@ -122,7 +214,8 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 		{
 			"Scan network; JSON; nothing matching provider found",
 			"network scan -j -p ofi+tcp",
-			mockDeps(hardware.NewFabricInterfaceSet(if1)),
+			genApplyMockFn(t, log, hardware.NewFabricInterfaceSet(if1), nil),
+			genCleanupMockFn(t),
 			mustLocalHostFabricMap(t, &control.HostFabric{}),
 			nil,
 		},
