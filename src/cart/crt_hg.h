@@ -236,4 +236,11 @@ int
 crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb, void *arg,
 		     crt_bulk_opid_t *opid, bool bind);
 
+
+void RPT_INIT(void);
+void RPT_DUMP(struct crt_rpc_priv *rpc_priv);
+void RPT_ALLOC(struct crt_rpc_priv *rpc_priv, bool forward, int size, int opc);
+void RPT_ADDREF(struct crt_rpc_priv *rpc_priv, int count, const char *file, int line);
+void RPT_DECREF(struct crt_rpc_priv *rpc_priv, int count, const char *file, int line);
+void RPT_FREE(struct crt_rpc_priv *rpc_priv);
 #endif /* __CRT_MERCURY_H__ */
