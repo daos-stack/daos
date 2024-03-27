@@ -9,6 +9,7 @@ package engine
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -32,14 +33,13 @@ const (
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
-	Provider        string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
-	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
-	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
-	NumaNodeIndex   uint   `yaml:"-"`
-	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
-	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
-	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
-	// NumSecondaryEndpoints configures the number of cart endpoints per secondary provider.
+	Provider              string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
+	Interface             string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
+	InterfacePort         string `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT"`
+	NumaNodeIndex         uint   `yaml:"-"`
+	BypassHealthChk       *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
+	CrtCtxShareAddr       uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
+	CrtTimeout            uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
 	DisableSRX            bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
 	AuthKey               string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
@@ -121,11 +121,20 @@ func (fc *FabricConfig) GetInterfacePorts() ([]int, error) {
 		return nil, errors.New("FabricConfig is nil")
 	}
 
-	if fc.InterfacePort == 0 {
+	portStrs := splitMultiProviderStr(fc.InterfacePort)
+	if len(portStrs) == 0 {
 		return nil, errors.New("fabric_iface_port not set")
 	}
 
-	return []int{fc.InterfacePort}, nil
+	ports := make([]int, 0)
+	for _, str := range portStrs {
+		intPort, err := strconv.Atoi(str)
+		if err != nil {
+			return nil, err
+		}
+		ports = append(ports, intPort)
+	}
+	return ports, nil
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -140,7 +149,7 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.Interface == "" {
 		fc.Interface = other.Interface
 	}
-	if fc.InterfacePort == 0 {
+	if fc.InterfacePort == "" {
 		fc.InterfacePort = other.InterfacePort
 	}
 	if fc.CrtCtxShareAddr == 0 {
@@ -194,7 +203,7 @@ func (fc *FabricConfig) Validate() error {
 		}
 	}
 
-	if len(interfaces) != numProv { // TODO SRS-31: check num ports when multiprovider fully enabled: || len(ports) != numProv {
+	if len(interfaces) != numProv || len(ports) != numProv {
 		return errors.Errorf("provider, fabric_iface and fabric_iface_port must include the same number of items delimited by %q", MultiProviderSeparator)
 	}
 
@@ -561,7 +570,7 @@ func (c *Config) WithFabricInterface(iface string) *Config {
 
 // WithFabricInterfacePort sets the numeric interface port to be used by this instance.
 func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
-	c.Fabric.InterfacePort = ifacePort
+	c.Fabric.InterfacePort = fmt.Sprintf("%d", ifacePort)
 	return c
 }
 

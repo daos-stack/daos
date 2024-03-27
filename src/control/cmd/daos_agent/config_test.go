@@ -68,6 +68,7 @@ fabric_ifaces:
   -
      iface: ib3
      domain: mlx5_3
+provider_idx: 1
 `)
 
 	badLogMaskCfg := test.CreateTestFile(t, dir, `
@@ -165,6 +166,7 @@ transport_config:
 						},
 					},
 				},
+				ProviderIdx: 1,
 			},
 		},
 	} {

@@ -301,7 +301,6 @@ dss_topo_init()
 {
 	int		depth;
 	int		numa_node_nr;
-	int		num_cores_visited;
 	char		*cpuset;
 	int		k;
 	hwloc_obj_t	corenode;
@@ -317,9 +316,14 @@ dss_topo_init()
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
 	dss_tgt_nr = nr_threads;
 
-	/* if no NUMA node was specified, or NUMA data unavailable */
-	/* fall back to the legacy core allocation algorithm */
-	if (dss_numa_node == -1 || numa_node_nr <= 0) {
+	/*
+	 * Use legacy core allocation algorithm when:
+	 *
+	 * - No NUMA node was specified, or;
+	 * - NUMA data unavailable, or;
+	 * - Oversubscribe is specified (which isn't supported in NUMA mode);
+	 */
+	if (dss_numa_node == -1 || numa_node_nr <= 0 || tgt_oversub) {
 		D_PRINT("Using legacy core allocation algorithm\n");
 		if (dss_core_offset >= dss_core_nr) {
 			D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
@@ -351,7 +355,6 @@ dss_topo_init()
 	}
 
 	dss_num_cores_numa_node = 0;
-	num_cores_visited = 0;
 
 	for (k = 0; k < dss_core_nr; k++) {
 		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
@@ -359,11 +362,8 @@ dss_topo_init()
 			continue;
 		if (hwloc_bitmap_isincluded(corenode->cpuset,
 					    numa_obj->cpuset) != 0) {
-			if (num_cores_visited++ >= dss_core_offset) {
-				hwloc_bitmap_set(core_allocation_bitmap, k);
-				hwloc_bitmap_asprintf(&cpuset,
-						      corenode->cpuset);
-			}
+			hwloc_bitmap_set(core_allocation_bitmap, k);
+			hwloc_bitmap_asprintf(&cpuset, corenode->cpuset);
 			dss_num_cores_numa_node++;
 		}
 	}
@@ -984,6 +984,7 @@ parse(int argc, char **argv)
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
 		{ "storage_tiers",	required_argument,	NULL,	'T' },
+		{ "nr_sec_ctx",		required_argument,	NULL,	'S' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -991,7 +992,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:S:",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -1059,6 +1060,9 @@ parse(int argc, char **argv)
 				printf("Requires 1 to 4 tiers\n");
 				rc = -DER_INVAL;
 			}
+			break;
+		case 'S':
+			rc = arg_strtoul(optarg, &dss_sec_xs_nr, "\"-S\"");
 			break;
 		default:
 			usage(argv[0], stderr);

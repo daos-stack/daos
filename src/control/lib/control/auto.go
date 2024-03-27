@@ -1091,7 +1091,7 @@ func genEngineConfigs(req ConfGenerateReq, newEngineCfg newEngineCfgFn, nodeSet 
 		cfg.Fabric = engine.FabricConfig{
 			Provider:      iface.Provider,
 			Interface:     iface.Device,
-			InterfacePort: ifPort,
+			InterfacePort: fmt.Sprintf("%d", ifPort),
 		}
 		if err := cfg.SetNUMAAffinity(pnn); err != nil {
 			return nil, errors.Wrapf(err, "setting numa %d affinity on engine config",

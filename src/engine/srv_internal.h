@@ -102,8 +102,7 @@ struct dss_xstream {
 	/* Cart progress timeout in micro-seconds */
 	unsigned int		dx_timeout;
 	bool			dx_main_xs;	/* true for main XS */
-	bool			dx_comm;	/* true with cart context */
-	bool			dx_iofw;	/* true for DSS_XS_IOFW XS */
+	bool			dx_comm;	/* true with primary cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 	struct mem_stats	dx_mem_stats;	/* memory usages stats on this xstream */
 #ifdef ULT_MMAP_STACK
@@ -151,6 +150,8 @@ extern int		dss_num_cores_numa_node;
 extern unsigned int	dss_tgt_offload_xs_nr;
 /** number of system XS */
 extern unsigned int	dss_sys_xs_nr;
+/** Number of secondary cart context XS */
+extern unsigned int	dss_sec_xs_nr;
 /** Flag of helper XS as a pool */
 extern bool		dss_helper_pool;
 
@@ -335,7 +336,7 @@ void ds_iv_fini(void);
 
 /** Total number of XS */
 #define DSS_XS_NR_TOTAL						\
-	(dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)
+	(dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr + dss_sec_xs_nr)
 /** Total number of cart contexts created */
 #define DSS_CTX_NR_TOTAL					\
 	(DAOS_TGT0_OFFSET + dss_tgt_nr +			\
