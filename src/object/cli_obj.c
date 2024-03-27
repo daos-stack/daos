@@ -6824,6 +6824,12 @@ dc_obj_punch_task(tse_task_t *task)
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
+	if (unlikely(args->flags & DAOS_COND_MASK)) {
+		D_INFO("Ignore condition flags " DF_X64 " that is not applicable for object\n",
+		       args->flags);
+		args->flags &= ~DAOS_COND_MASK;
+	}
+
 	return obj_punch_common(task, DAOS_OBJ_RPC_PUNCH, args);
 }
 
