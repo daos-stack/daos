@@ -30,8 +30,7 @@ the following steps are needed:
      the UCX plugin that is required for enabling UCX support.
      This RPM **must** be used in
      InfiniBand environments when the intention is to use
-     UCX. It **may** also be used in InfiniBand environments
-     if the intention is to use libfabric.
+     UCX.
      Attempts to install this RPM in non-Infiniband environments
      will fail, because it has a dependency on UCX packages.
 
