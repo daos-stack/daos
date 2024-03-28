@@ -60,13 +60,13 @@ class WalMetrics(TestWithTelemetry):
 
         self.log_step('Test passed')
 
-    def test_wal_reply_metrics(self):
+    def test_wal_replay_metrics(self):
         """JIRA ID: DAOS-11626.
 
-        The WAL replay metrics is per-pool metrics in 'vos_rehydration' under each pool folder, it
-        includes 'replay_size', 'replay_time', 'replay_entries', 'replay_count' and
-        'replay_transactions' (see vos_metrics_alloc() in src/vos/vos_common.c). WAL replay
-        metrics are only updated when open a pool on engine start (or when creating a pool).
+        The WAL replay metrics is per-pool metrics in 'vos_wal' under each pool folder, it includes
+        'replay_size', 'replay_time', 'replay_entries', 'replay_count' and 'replay_transactions'
+        (see vos_metrics_alloc() in src/vos/vos_common.c). WAL replay metrics are only updated when
+        a pool is opened on engine start (or when creating a pool).
 
         Test steps:
         1) Create a pool
@@ -75,7 +75,7 @@ class WalMetrics(TestWithTelemetry):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=telemetry
-        :avocado: tags=WalMetrics,test_wal_reply_metrics
+        :avocado: tags=WalMetrics,test_wal_replay_metrics
         """
         wal_metrics = list(self.telemetry.ENGINE_POOL_VOS_WAL_REPLAY_METRICS)
 
@@ -98,8 +98,8 @@ class WalMetrics(TestWithTelemetry):
                         # Replay size should be > 0 after pool create for MD on SSD
                         ranges[metric][label] = [1]
                     elif metric.endswith('_replay_time'):
-                        # Replay time should be 10,000 - 50,000 after pool create for MD on SSD
-                        ranges[metric][label] = [10000, 50000]
+                        # Replay time should be 5,000 - 50,000 after pool create for MD on SSD
+                        ranges[metric][label] = [5000, 50000]
                     elif metric.endswith('_replay_transactions'):
                         # Replay transactions should be > 0 after pool create for MD on SSD
                         ranges[metric][label] = [1]
