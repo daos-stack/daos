@@ -30,7 +30,8 @@ server_config:
         - D_LOG_STDERR_IN_LOG=1
       storage: auto
 pool:
-  size: 200G
+  tier_ratio: 50
+  size: 400G
 container:
   type: POSIX
   control_method: daos
