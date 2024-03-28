@@ -591,7 +591,7 @@ class Ior:
         return '.'.join(['_'.join(parts), 'log'])
 
     def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
-            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True):
+            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True, il_report=1):
         # pylint: disable=too-many-arguments
         """Run ior.
 
@@ -612,6 +612,8 @@ class Ior:
                 is found. Default is False.
             unique_log (bool, optional): whether or not to update the log file with a new unique log
                 file name. Defaults to True.
+            il_report (int, optional): D_IL_REPORT value to use when 'intercept' is specified and a
+                value does not already exist in the environment. Defaults to 1.
 
         Raises:
             CommandFailure: if there is an error running the ior command
@@ -630,7 +632,7 @@ class Ior:
             if "D_LOG_MASK" not in self.env:
                 self.env["D_LOG_MASK"] = "INFO"
             if "D_IL_REPORT" not in self.env:
-                self.env["D_IL_REPORT"] = "1"
+                self.env["D_IL_REPORT"] = str(il_report)
 
         if plugin_path:
             self.env["HDF5_VOL_CONNECTOR"] = "daos"
