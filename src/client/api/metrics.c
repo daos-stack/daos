@@ -20,8 +20,8 @@
 #include <gurt/telemetry_producer.h>
 
 #define INIT_JOB_NUM 1024
-bool daos_client_metric            = false;
-bool daos_client_metric_retain     = false;
+bool daos_client_metric        = false;
+bool daos_client_metric_retain = false;
 
 #define MAX_IDS_SIZE(num) (num * D_TM_METRIC_SIZE)
 /* The client side metrics structure looks like

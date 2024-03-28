@@ -17,11 +17,11 @@
 #include <daos_types.h>
 #include <gurt/telemetry_common.h>
 
-#define DC_TM_JOB_ROOT_ID              256
+#define DC_TM_JOB_ROOT_ID             256
 /* For now TLS is only enabled if metrics are enabled */
-#define DAOS_CLIENT_METRICS_DUMP_PATH  "D_CLIENT_METRICS_DUMP_PATH"
-#define DAOS_CLIENT_METRICS_ENABLE     "D_CLIENT_METRICS_ENABLE"
-#define DAOS_CLIENT_METRICS_RETAIN     "D_CLIENT_METRICS_RETAIN"
+#define DAOS_CLIENT_METRICS_DUMP_PATH "D_CLIENT_METRICS_DUMP_PATH"
+#define DAOS_CLIENT_METRICS_ENABLE    "D_CLIENT_METRICS_ENABLE"
+#define DAOS_CLIENT_METRICS_RETAIN    "D_CLIENT_METRICS_RETAIN"
 extern bool daos_client_metric;
 extern bool daos_client_metric_retain;
 
