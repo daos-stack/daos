@@ -253,12 +253,12 @@ class SoakTestBase(TestWithServers):
         elif harasser == "reboot":
             method = launch_reboot
             name = "REBOOT"
-            params = (self, name, results, args)
+            params = (self, pool, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         elif harasser == "reboot-reintegrate":
             method = launch_reboot
             name = "REBOOT_REINTEGRATE"
-            params = (self, name, results, args)
+            params = (self, pool, name, results, args)
             job = multiprocessing.Process(target=method, args=params, name=name)
         else:
             raise SoakTestError(f"<<FAILED: Harasser {harasser} is not supported. ")

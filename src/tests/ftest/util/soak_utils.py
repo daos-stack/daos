@@ -496,7 +496,6 @@ def launch_reboot(self, pools, name, results, args):
             status = rebuild_status
 
     elif name == "REBOOT_REINTEGRATE" and self.harasser_results["REBOOT"]:
-
         reboot_host = self.harasser_args["REBOOT"]["host"]
         ranklist = self.harasser_args["REBOOT"]["ranks"]
         ranks = ",".join(str(rank) for rank in ranklist)
