@@ -26,10 +26,8 @@ jobs:
         if: always()
         uses: thollander/actions-comment-pull-request@v2
         with:
-          comment_includes: 'Bug-tracker data'
-          message: |
-            Bug-tracker data:
-            ${{ steps.jira-data.outputs.message }}
+          comment_tag: 'jira_query_message'
+          message: ${{ steps.jira-data.outputs.message }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Set labels
         if: ${{ always() && steps.jira-data.outputs.label != '' }}

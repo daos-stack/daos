@@ -1479,7 +1479,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct vos_dtx_act_ent	*dae;
 	int			 rc = 0;
 
-	if (!dtx_is_valid_handle(dth)) {
+	if (!dtx_is_real_handle(dth)) {
 		dtx_set_committed(tx_id);
 		return 0;
 	}
@@ -2863,8 +2863,9 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 		  "Corrupted committed DTX blob (2) %x\n", dbd->dbd_magic);
 
 	for (i = 0; i < dbd->dbd_count; i++) {
-		if (daos_is_zero_dti(&dbd->dbd_committed_data[i].dce_xid) ||
-		    dbd->dbd_committed_data[i].dce_epoch == 0) {
+		struct vos_dtx_cmt_ent_df *dce_df = &dbd->dbd_committed_data[i];
+
+		if (daos_is_zero_dti(&dce_df->dce_xid) || dce_df->dce_epoch == 0) {
 			D_WARN("Skip invalid committed DTX entry\n");
 			continue;
 		}
@@ -2873,8 +2874,7 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 		if (dce == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		memcpy(&dce->dce_base, &dbd->dbd_committed_data[i],
-		       sizeof(dce->dce_base));
+		memcpy(&dce->dce_base, dce_df, sizeof(dce->dce_base));
 		dce->dce_reindex = 1;
 
 		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));
@@ -2918,8 +2918,8 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 	d_iov_t			 riov;
 	int			 rc;
 
-	if (!dtx_is_valid_handle(dth) ||
-	    (!dth->dth_active && dth->dth_ent == NULL))
+	if (!dtx_is_valid_handle(dth) || (!dth->dth_active && dth->dth_ent == NULL) ||
+	    dth->dth_local)
 		return;
 
 	dth->dth_active = 0;
@@ -2979,6 +2979,8 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 
 	if (!dtx_is_valid_handle(dth) || unlikely(dth->dth_already))
 		return;
+
+	D_ASSERT(!dth->dth_local);
 
 	dae = dth->dth_ent;
 	if (dae == NULL) {
@@ -3284,4 +3286,59 @@ vos_dtx_renew_epoch(struct dtx_handle *dth)
 
 	if (dth->dth_local_stub != NULL)
 		lrua_refresh_key(dth->dth_local_stub, dth->dth_epoch);
+}
+
+int
+vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh)
+{
+	struct vos_pool      *pool;
+	struct umem_instance *umm;
+	int                   rc;
+
+	if (dth == NULL || !dth->dth_local) {
+		return 0;
+	}
+
+	/**
+	 * RDB is intended as the main user of local transactions. RDB is known
+	 * to engage over 32 OIDs per transaction. Hence, the initial value is
+	 * hoped to accommodate all of them.
+	 */
+	dth->dth_local_oid_cap = (1 << 6);
+	dth->dth_local_oid_cnt = 0;
+	D_ALLOC_ARRAY(dth->dth_local_oid_array, dth->dth_local_oid_cap);
+	if (dth->dth_local_oid_array == NULL)
+		return -DER_NOMEM;
+
+	pool = vos_hdl2pool(poh);
+	umm  = vos_pool2umm(pool);
+
+	rc = vos_tx_begin(dth, umm, pool->vp_sysdb);
+	if (rc != 0) {
+		D_ERROR("Failed to start transaction: rc=" DF_RC "\n", DP_RC(rc));
+		goto error;
+	}
+
+	return 0;
+
+error:
+	D_FREE(dth->dth_local_oid_array);
+	return rc;
+}
+
+int
+vos_dtx_local_end(struct dtx_handle *dth, int result)
+{
+	dth->dth_local_complete = 1;
+	result                  = vos_tx_end(NULL, dth, NULL, NULL, true, NULL, result);
+
+	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
+		vos_cont_decref(dth->dth_local_oid_array[i].dor_cont);
+	}
+
+	dth->dth_local_oid_cnt = 0;
+	D_FREE(dth->dth_local_oid_array);
+	dth->dth_local_oid_cap = 0;
+
+	return result;
 }

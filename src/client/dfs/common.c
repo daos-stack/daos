@@ -10,7 +10,7 @@
 #include <daos/container.h>
 #include <daos/object.h>
 
-#include "internal.h"
+#include "dfs_internal.h"
 
 static int
 decode_one_hint(char *hint, uint32_t rf, daos_oclass_hints_t *obj_hint, enum daos_otype_t *type)

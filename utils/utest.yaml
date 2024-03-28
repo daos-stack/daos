@@ -1,9 +1,6 @@
 #  (C) Copyright 2023-2024 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
-- name: include checks
-  tests:
-    - cmd: ["utils/include_test.py"]
 - name: common
   base: "BUILD_DIR"
   tests:
@@ -55,6 +52,10 @@
   tests:
     - cmd: ["src/gurt/tests/test_gurt"]
     - cmd: ["src/gurt/tests/test_gurt_telem_producer"]
+- name: DTX
+  base: "PREFIX"
+  tests:
+    - cmd: ["bin/dtx_tests"]
 - name: placement
   base: "PREFIX"
   tests:
@@ -175,7 +176,9 @@
   required_src: ["src/ddb/tests/SConscript"]
   tests:
     - cmd: ["bin/ddb_tests"]
-- name: ftest
+- name: Source metadata testing
+  gha: True
   memcheck: False
   tests:
     - cmd: ["src/tests/ftest/tags.py", "unit"]
+    - cmd: ["utils/unit/include_test.py"]

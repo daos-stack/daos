@@ -1728,6 +1728,9 @@ dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inp
 	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
 		if (++(*inprogress_cnt) > 1) {
 			delay = (d_rand() & ((1 << 6) - 1)) + 5;
+			/* Rebuild is being established on the server side, wait a bit longer */
+			if (err == -DER_UPDATE_AGAIN)
+				delay <<= 10;
 			D_DEBUG(DB_IO, "Try to re-sched task %p for %d/%d times with %u us delay\n",
 				task, (int)*inprogress_cnt, (int)*retry_cnt, delay);
 		}
@@ -7085,7 +7088,6 @@ dc_obj_query_key(tse_task_t *api_task)
 
 	/* Some optimization for get dkey collectively since 2.6 which version is 10. */
 	if (api_args->flags & DAOS_GET_DKEY && grp_nr > 1 && dc_obj_proto_version >= 10) {
-re_scan:
 		rc = obj_coll_oper_args_init(&obj_auxi->cq_args.cqa_coa, obj, false);
 		if (rc != 0)
 			goto out_task;
@@ -7112,18 +7114,13 @@ re_scan:
 				    !is_ec_parity_shard(obj, obj_auxi->dkey_hash, leader))
 					goto non_leader;
 
-				if (coll) {
+				if (coll)
 					rc = obj_coll_prep_one(&obj_auxi->cq_args.cqa_coa, obj,
 							       map_ver, leader);
-					if (unlikely(rc == -DER_AGAIN)) {
-						obj_coll_oper_args_fini(&obj_auxi->cq_args.cqa_coa);
-						goto re_scan;
-					}
-				} else {
+				else
 					rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch,
 									leader, map_ver, obj, &dti,
 									co_hdl, co_uuid, NULL, 0);
-				}
 				if (rc != 0)
 					D_GOTO(out_task, rc);
 
@@ -7148,17 +7145,12 @@ non_leader:
 			if (obj_shard_is_invalid(obj, j, DAOS_OBJ_RPC_QUERY_KEY))
 				continue;
 
-			if (coll) {
+			if (coll)
 				rc = obj_coll_prep_one(&obj_auxi->cq_args.cqa_coa, obj, map_ver, j);
-				if (unlikely(rc == -DER_AGAIN)) {
-					obj_coll_oper_args_fini(&obj_auxi->cq_args.cqa_coa);
-					goto re_scan;
-				}
-			} else {
+			else
 				rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, j,
 								map_ver, obj, &dti, co_hdl, co_uuid,
 								NULL, 0);
-			}
 			if (rc != 0)
 				D_GOTO(out_task, rc);
 

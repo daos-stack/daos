@@ -30,6 +30,11 @@ type collectLogCmd struct {
 }
 
 func (cmd *collectLogCmd) Execute(_ []string) error {
+	err := cmd.DateTimeValidate()
+	if err != nil {
+		return err
+	}
+
 	var LogCollection = map[int32][]string{
 		support.CopyAgentConfigEnum:  {""},
 		support.CollectAgentLogEnum:  {""},
@@ -66,6 +71,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.TargetFolder = cmd.TargetFolder
 	params.ExtraLogsDir = cmd.ExtraLogsDir
 	params.Config = cmd.getSupportConf()
+	params.LogStartDate = cmd.LogStartDate
+	params.LogEndDate = cmd.LogEndDate
+	params.LogStartTime = cmd.LogStartTime
+	params.LogEndTime = cmd.LogEndTime
 	for logFunc, logCmdSet := range LogCollection {
 		for _, logCmd := range logCmdSet {
 			cmd.Debugf("Log Function Enum = %d -- Log Collect Cmd = %s ", logFunc, logCmd)
@@ -75,7 +84,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
 				fmt.Println(err)
-				if cmd.Stop {
+				if cmd.StopOnError {
 					return err
 				}
 			}

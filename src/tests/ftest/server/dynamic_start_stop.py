@@ -78,7 +78,7 @@ class DynamicStartStop(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=server
-        :avocado: tags=dynamic_start_stop,test_dynamic_server_addition
+        :avocado: tags=DynamicStartStop,test_dynamic_server_addition
         """
         self.add_pool()
 
