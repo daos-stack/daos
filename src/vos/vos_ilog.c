@@ -495,8 +495,6 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 		return 0;
 	}
 
-	/** If we get here, we need to check if the entry exists */
-	D_ASSERT(ts_set->ts_flags & VOS_OF_COND_PUNCH);
 	/** For now, if the state isn't settled, just retry with later
 	 *  timestamp.   The state should get settled quickly when there
 	 *  is conditional update and sharing.
