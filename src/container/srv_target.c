@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -590,6 +590,104 @@ cont_start_agg(struct ds_cont_child *cont)
 	return 0;
 }
 
+static void
+cont_flatten_ult(void *arg)
+{
+	struct ds_cont_child	*cont = arg;
+	struct sched_request	*req = cont->sc_flat_req;
+	uint64_t		*snapshots = NULL;
+	daos_epoch_t		 flat_epoch = cont->sc_flat_epoch;
+	daos_epoch_t		 hae;
+	uint64_t		 msecs = 5000;
+	int			 rc;
+
+	if (flat_epoch == 0) {
+		D_DEBUG(DB_EPC, "exit due to zero sc_flat_epoch\n");
+		return;
+	}
+
+	D_DEBUG(DB_EPC, "container "DF_UUID", wait hae goes beyond flat_epoch\n",
+		DP_UUID(cont->sc_uuid));
+	hae = get_hae(cont, true);
+	while (!dss_ult_exiting(req) && hae < flat_epoch) {
+		D_DEBUG(DB_EPC, "container "DF_UUID", hae "DF_X64", flat_epoch "DF_X64"\n",
+			DP_UUID(cont->sc_uuid), hae, flat_epoch);
+		sched_req_sleep(req, msecs);
+		hae = get_hae(cont, true);
+	}
+
+	/* since aggregation finished, the snapshots list should be valid */
+	D_ASSERTF(cont->sc_aggregation_max > 0, "container "DF_UUID" bad sc_aggregation_max\n",
+		  DP_UUID(cont->sc_uuid));
+
+	if (dss_ult_exiting(req)) {
+		D_DEBUG(DB_EPC, "container "DF_UUID", flatten exit\n", DP_UUID(cont->sc_uuid));
+		return;
+	}
+
+	D_DEBUG(DB_EPC, "container "DF_UUID", stopping aggregation service\n",
+		DP_UUID(cont->sc_uuid));
+	cont_stop_agg(cont);
+
+	/* TODO: abort and resume the flatten when needed */
+
+	if (cont->sc_snapshots_nr > 0 && cont->sc_snapshots != NULL) {
+		D_ALLOC_ARRAY(snapshots, cont->sc_snapshots_nr);
+		if (snapshots == NULL) {
+			D_ERROR("container "DF_UUID", snapshots allocation failed\n",
+				DP_UUID(cont->sc_uuid));
+			return;
+		}
+		memcpy(snapshots, cont->sc_snapshots, sizeof(*snapshots) * cont->sc_snapshots_nr);
+	}
+
+	D_DEBUG(DB_EPC, "container "DF_UUID", start flattening ...\n", DP_UUID(cont->sc_uuid));
+	rc = vos_flatten(cont->sc_hdl, flat_epoch, snapshots, cont->sc_snapshots_nr, NULL, NULL);
+	if (rc)
+		D_ERROR("container "DF_UUID", flatten failed, "DF_RC"\n",
+			DP_UUID(cont->sc_uuid), DP_RC(rc));
+
+	D_DEBUG(DB_EPC, "container "DF_UUID", exit flattening, "DF_RC"\n",
+		DP_UUID(cont->sc_uuid), DP_RC(rc));
+	if (snapshots)
+		D_FREE(snapshots);
+}
+
+static int
+cont_start_flat(struct ds_cont_child *cont)
+{
+	struct dss_module_info	*dmi = dss_get_module_info();
+	struct sched_req_attr	 attr;
+
+	sched_req_attr_init(&attr, SCHED_REQ_GC, &cont->sc_pool->spc_uuid);
+
+	D_ASSERT(cont->sc_flat_req == NULL);
+	cont->sc_flat_req = sched_create_ult(&attr, cont_flatten_ult, cont, DSS_DEEP_STACK_SZ);
+	if (cont->sc_flat_req == NULL) {
+		D_ERROR(DF_CONT"[%d]: Failed to create flatten ULT.\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id);
+		return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
+static void
+cont_wait_flat(struct ds_cont_child *cont, bool abort)
+{
+	if (cont->sc_flat_req != NULL) {
+		D_DEBUG(DB_EPC, DF_CONT"[%d]: Waiting flatten ULT to finish\n",
+			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+			dss_get_module_info()->dmi_tgt_id);
+
+		D_ASSERT(cont->sc_ec_agg_req == NULL);
+		D_ASSERT(cont->sc_agg_req == NULL);
+		sched_req_wait(cont->sc_flat_req, abort);
+		sched_req_put(cont->sc_flat_req);
+		cont->sc_flat_req = NULL;
+	}
+}
+
 /* ds_cont_child *******************************************************/
 
 static inline struct ds_cont_child *
@@ -828,6 +926,7 @@ cont_child_stop(struct ds_cont_child *cont_child)
 
 		/* cont_stop_agg() may yield */
 		cont_stop_agg(cont_child);
+		cont_wait_flat(cont_child, true);
 		ds_cont_child_put(cont_child);
 	}
 }
@@ -2537,20 +2636,33 @@ cont_child_prop_update(void *data)
 
 	iv_entry = daos_prop_entry_get(arg->cpa_prop, DAOS_PROP_CO_STATUS);
 	if (iv_entry != NULL) {
-		struct daos_co_status co_stat = { 0 };
+		struct daos_co_status_srv *co_stat;
 
-		daos_prop_val_2_co_status(iv_entry->dpe_val, &co_stat);
-		if (co_stat.dcs_pm_ver < child->sc_status_pm_ver)
+		co_stat = iv_entry->dpe_val_ptr;
+		if (co_stat->dcs_epoch > child->sc_flat_epoch ||
+		    (co_stat->dcs_epoch == 0 && child->sc_flat_epoch != 0)) {
+			child->sc_flat_epoch = co_stat->dcs_epoch;
+			D_DEBUG(DB_MD, DF_CONT" child->sc_flat_epoch set as "DF_X64"\n",
+				DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
+				child->sc_flat_epoch);
+			rc = cont_start_flat(child);
+			if (rc) {
+				D_ERROR(DF_CONT" failed to start flatten service, "DF_RC"\n",
+					DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid), DP_RC(rc));
+				goto out;
+			}
+		}
+		if (co_stat->dcs_pm_ver < child->sc_status_pm_ver)
 			goto out;
 		if (dss_get_module_info()->dmi_tgt_id == 0)
 			D_DEBUG(DB_MD, DF_CONT" statu_pm_ver %d -> %d status %u\n",
 				DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
-				child->sc_status_pm_ver, co_stat.dcs_pm_ver,
-				co_stat.dcs_status);
-		child->sc_status_pm_ver = co_stat.dcs_pm_ver;
-		if (co_stat.dcs_status == DAOS_PROP_CO_UNCLEAN)
+				child->sc_status_pm_ver, co_stat->dcs_pm_ver,
+				co_stat->dcs_status);
+		child->sc_status_pm_ver = co_stat->dcs_pm_ver;
+		if (co_stat->dcs_status == DAOS_PROP_CO_UNCLEAN)
 			child->sc_rw_disabled = 1;
-		else if (co_stat.dcs_status == DAOS_PROP_CO_HEALTHY)
+		else if (co_stat->dcs_status == DAOS_PROP_CO_HEALTHY)
 			child->sc_rw_disabled = 0;
 	}
 

@@ -24,6 +24,10 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
+/** Ensure struct vos_obj_df::vo_addr does not exceed vo_tree's size */
+struct vos_obj_df vod_dummy;
+D_CASSERT(sizeof(vod_dummy.vo_flat) <= sizeof(vod_dummy.vo_tree));
+
 static inline bool
 is_fake_iter(struct vos_obj_iter *oiter)
 {
@@ -538,8 +542,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 			}
 
 			if (rc == 0)
-				rc = vos_mark_agg(cont, &obj->obj_df->vo_tree,
-						  &cont->vc_cont_df->cd_obj_root, epoch);
+				rc = vos_mark_agg(cont, obj, epoch);
 
 			vos_obj_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
 					obj, rc != 0);

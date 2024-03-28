@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -202,16 +202,54 @@ gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 }
 
 /**
- * drain all keys stored in an object, it returns when the key tree is empty,
- * or all credits are consumed (releasing a key consumes one credit)
+ * Drain all keys stored in an object, it returns when the key tree is empty,
+ * or all credits are consumed (releasing a key consumes one credit).
+ * In object flattening, by calling vos_obj_destroy_tree() it inserted a GC_OBJ item
+ * to destroy the tree but keep the obj_df, the b-tree root pointer passed by item->it_args.
  */
 static int
 gc_drain_obj(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	     struct vos_gc_item *item, int *credits, bool *empty)
 {
-	struct vos_obj_df *obj = umem_off2ptr(&pool->vp_umm, item->it_addr);
+	struct vos_obj_df	*obj = umem_off2ptr(&pool->vp_umm, item->it_addr);
+	struct btr_root		*obj_btr_root;
+	bool			 flat_destroy_tree = false;
+	int			 rc;
 
-	return gc_drain_btr(gc, pool, coh, &obj->vo_tree, credits, empty);
+	if (vos_obj_flattened(obj) && item->it_args != 0) {
+		flat_destroy_tree = true;
+		obj_btr_root = umem_off2ptr(&pool->vp_umm, item->it_args);
+	} else {
+		obj_btr_root = &obj->vo_tree;
+	}
+
+	if (vos_obj_flattened(obj) && item->it_args == 0) {
+		D_DEBUG(DB_TRACE, "flattened object "DF_UOID", free vo_flat_addr "DF_X64"\n",
+			DP_UOID(obj->vo_id), obj->vo_flat.vo_flat_addr.ba_off);
+		*empty = true;
+		/* obj_df reserved in vof_flat_init() */
+		return umem_free(&pool->vp_umm, obj->vo_flat.vo_flat_addr.ba_off);
+	}
+
+	rc = gc_drain_btr(gc, pool, coh, obj_btr_root, credits, empty);
+	D_DEBUG(DB_TRACE, "object "DF_UOID" drain btr, "DF_RC"\n", DP_UOID(obj->vo_id), DP_RC(rc));
+	if (rc == 0 && flat_destroy_tree)
+		/* free the btr_root allocated in vos_obj_destroy_tree */
+		rc = umem_free(&pool->vp_umm, item->it_args);
+
+	return rc;
+}
+
+static int
+gc_free_obj(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct vos_gc_item *item)
+{
+	int		   rc = 0;
+
+	/* non-zero it_args only used for vos_obj_destroy_tree() in that case keeps obj_df */
+	if (item->it_args == 0)
+		rc = umem_free(&pool->vp_umm, item->it_addr);
+
+	return rc;
 }
 
 static int
@@ -335,7 +373,7 @@ static struct vos_gc gc_table[] = {
 	.gc_type        = GC_OBJ,
 	.gc_drain_creds = 8,
 	.gc_drain       = gc_drain_obj,
-	.gc_free        = NULL,
+	.gc_free        = gc_free_obj,
     },
     {
 	.gc_name        = "container",

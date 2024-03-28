@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,6 +80,10 @@ struct ds_cont_child {
 
 	/* Tracks the schedule request for EC aggregation ULT */
 	struct sched_request	*sc_ec_agg_req;
+
+	/* Tracks the schedule request for container flatten ULT */
+	struct sched_request	*sc_flat_req;
+
 	/*
 	 * Snapshot delete HLC (0 means no change), which is used
 	 * to compare with the aggregation HLC, so it knows whether the
@@ -128,6 +132,8 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_cos_list;
 	/* The global list for committable collective DTXs. */
 	d_list_t		 sc_dtx_coll_list;
+	/* Flatten epoch (the epoch when user flattens the container) */
+	daos_epoch_t		 sc_flat_epoch;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */

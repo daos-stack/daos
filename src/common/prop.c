@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,6 +66,9 @@ daos_prop_has_str(struct daos_prop_entry *entry)
 bool
 daos_prop_has_ptr(struct daos_prop_entry *entry)
 {
+	if (entry->dpe_flags & DAOS_PROP_ENTRY_VAL_PTR)
+		return true;
+
 	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_SVC_LIST:
 	case DAOS_PROP_PO_ACL:
@@ -268,7 +271,6 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		return false;
 	}
 	for (i = 0; i < prop->dpp_nr; i++) {
-		struct daos_co_status co_status;
 		int                   rc;
 
 		type = prop->dpp_entries[i].dpe_type;
@@ -522,16 +524,6 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
-		case DAOS_PROP_CO_STATUS:
-			val = prop->dpp_entries[i].dpe_val;
-			daos_prop_val_2_co_status(val, &co_status);
-			if (co_status.dcs_status != DAOS_PROP_CO_HEALTHY &&
-			    co_status.dcs_status != DAOS_PROP_CO_UNCLEAN) {
-				D_ERROR("invalid container status %d\n",
-					co_status.dcs_status);
-				return false;
-			}
-			break;
 		case DAOS_PROP_PO_CHECKPOINT_MODE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val > DAOS_CHECKPOINT_LAZY) {
@@ -548,6 +540,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_RP_PDA:
 		case DAOS_PROP_CO_GLOBAL_VERSION:
 		case DAOS_PROP_CO_OBJ_VERSION:
+		case DAOS_PROP_CO_STATUS:
 			break;
 		default:
 			D_ERROR("invalid dpe_type %d.\n", type);
@@ -561,10 +554,11 @@ int
 daos_prop_entry_copy(struct daos_prop_entry *entry,
 		     struct daos_prop_entry *entry_dup)
 {
-	struct daos_acl		*acl_ptr;
-	const d_rank_list_t	*svc_list;
-	d_rank_list_t		*dst_list;
-	int			rc;
+	struct daos_acl			*acl_ptr;
+	const d_rank_list_t		*svc_list;
+	d_rank_list_t			*dst_list;
+	struct daos_co_status_srv	*co_status;
+	int				rc;
 
 	D_ASSERT(entry != NULL);
 	D_ASSERT(entry_dup != NULL);
@@ -592,6 +586,17 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 		if (entry_dup->dpe_val_ptr == NULL) {
 			return -DER_NOMEM;
 		}
+		break;
+	case DAOS_PROP_CO_STATUS:
+		if (entry_dup->dpe_flags & DAOS_PROP_ENTRY_VAL_PTR) {
+			D_ALLOC_PTR(co_status);
+			if (co_status == NULL)
+				return -DER_NOMEM;
+			memcpy(co_status, entry->dpe_val_ptr, sizeof(*co_status));
+			entry_dup->dpe_val_ptr = co_status;
+		} else {
+			entry_dup->dpe_val = entry->dpe_val;
+		};
 		break;
 	case DAOS_PROP_PO_OWNER:
 	case DAOS_PROP_CO_OWNER:
@@ -793,6 +798,7 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	bool			 group_alloc = false;
 	bool			 svc_list_alloc = false;
 	bool			 roots_alloc    = false;
+	bool			 co_status_alloc = false;
 	struct daos_acl		*acl;
 	d_rank_list_t		*dst_list;
 	uint32_t		 type;
@@ -879,6 +885,16 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 				D_GOTO(out, rc);
 
 			roots_alloc = true;
+		} else if (type == DAOS_PROP_CO_STATUS &&
+			   (entry_req->dpe_flags & DAOS_PROP_ENTRY_VAL_PTR)) {
+			struct daos_co_status_srv	*co_status;
+
+			D_ALLOC_PTR(co_status);
+			if (co_status == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			memcpy(co_status, entry_reply->dpe_val_ptr, sizeof(*co_status));
+			entry_req->dpe_val_ptr = co_status;
+			co_status_alloc = true;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -909,6 +925,9 @@ out:
 		}
 		if (roots_alloc)
 			free_ptr_prop_entry(prop_req, DAOS_PROP_CO_ROOTS);
+
+		if (co_status_alloc)
+			free_ptr_prop_entry(prop_req, DAOS_PROP_CO_STATUS);
 
 		if (entries_alloc)
 			D_FREE(prop_req->dpp_entries);

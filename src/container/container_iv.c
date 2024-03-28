@@ -384,8 +384,8 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			bits |= DAOS_CO_QUERY_PROP_ROOTS;
 			break;
 		case DAOS_PROP_CO_STATUS:
-			daos_prop_val_2_co_status(prop_entry->dpe_val,
-						  &iv_prop->cip_co_status);
+			memcpy(&iv_prop->cip_co_status, prop_entry->dpe_val_ptr,
+			       sizeof(iv_prop->cip_co_status));
 			bits |= DAOS_CO_QUERY_PROP_CO_STATUS;
 			break;
 		case DAOS_PROP_CO_SCRUBBER_DISABLED:
@@ -489,10 +489,10 @@ again:
 				rc1 = ds_cont_hdl_rdb_lookup(entry->ns->iv_pool_uuid,
 							     civ_key->cont_uuid, &chdl);
 				if (rc1 == 0) {
-					struct cont_iv_entry	iv_entry = { 0 };
-					daos_prop_t		*prop = NULL;
-					struct daos_prop_entry	*prop_entry;
-					struct daos_co_status	stat = { 0 };
+					struct cont_iv_entry		 iv_entry = { 0 };
+					daos_prop_t			*prop = NULL;
+					struct daos_prop_entry		*prop_entry;
+					struct daos_co_status_srv	*stat;
 
 					if (uuid_is_null(chdl.ch_cont)) {
 						/* Skip for container server handler */
@@ -512,8 +512,9 @@ again:
 					prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
 					D_ASSERT(prop_entry != NULL);
 
-					daos_prop_val_2_co_status(prop_entry->dpe_val, &stat);
-					iv_entry.iv_capa.status_pm_ver = stat.dcs_pm_ver;
+					D_ASSERT(prop_entry->dpe_flags & DAOS_PROP_ENTRY_VAL_PTR);
+					stat = prop_entry->dpe_val_ptr;
+					iv_entry.iv_capa.status_pm_ver = stat->dcs_pm_ver;
 					daos_prop_free(prop);
 					/* Only happens on xstream 0 */
 					D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
@@ -1375,9 +1376,13 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 	}
 	if (bits & DAOS_CO_QUERY_PROP_CO_STATUS) {
 		prop_entry = &prop->dpp_entries[i++];
-		prop_entry->dpe_val = daos_prop_co_status_2_val(
-					&iv_prop->cip_co_status);
+		D_ALLOC(prop_entry->dpe_val_ptr, sizeof(iv_prop->cip_co_status));
+		if (prop_entry->dpe_val_ptr == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		memcpy(prop_entry->dpe_val_ptr, &iv_prop->cip_co_status,
+		       sizeof(iv_prop->cip_co_status));
 		prop_entry->dpe_type = DAOS_PROP_CO_STATUS;
+		prop_entry->dpe_flags |= DAOS_PROP_ENTRY_VAL_PTR;
 	}
 	if (bits & DAOS_CO_QUERY_PROP_SCRUB_DIS) {
 		prop_entry = &prop->dpp_entries[i++];

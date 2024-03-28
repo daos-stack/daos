@@ -963,12 +963,6 @@ vos_irec2data(struct vos_irec_df *irec)
 }
 
 static inline bool
-vos_obj_is_empty(struct vos_object *obj)
-{
-	return !obj->obj_df || obj->obj_df->vo_tree.tr_class == 0;
-}
-
-static inline bool
 vos_subtree_is_empty(daos_handle_t toh)
 {
 	return dbtree_is_empty(toh) == 1;
@@ -1663,15 +1657,13 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 /** Mark that the object and container need aggregation.
  *
  * \param[in] cont	VOS container
- * \param[in] dkey_root	Root of dkey tree (marked for object)
- * \param[in] obj_root	Root of object tree (marked for container)
+ * \param[in] obj	VOS object
  * \param[in] epoch	Epoch of aggregatable update
  *
  * \return 0 on success, error otherwise
  */
 int
-vos_mark_agg(struct vos_container *cont, struct btr_root *dkey_root, struct btr_root *obj_root,
-	     daos_epoch_t epoch);
+vos_mark_agg(struct vos_container *cont, struct vos_object *obj, daos_epoch_t epoch);
 
 /** Mark that the key needs aggregation.
  *

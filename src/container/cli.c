@@ -1594,8 +1594,12 @@ dc_cont_set_prop(tse_task_t *task)
 
 	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
 	if (entry != NULL) {
+		D_ASSERT((entry->dpe_flags & DAOS_PROP_ENTRY_VAL_PTR) == 0);
 		daos_prop_val_2_co_status(entry->dpe_val, &co_stat);
-		if (co_stat.dcs_status != DAOS_PROP_CO_HEALTHY) {
+		D_ASSERT((co_stat.dcs_flags & DAOS_PROP_CSF_HEALTHY) ||
+			 (co_stat.dcs_flags & DAOS_PROP_CSF_READONLY));
+		if ((co_stat.dcs_flags & DAOS_PROP_CSF_HEALTHY) &&
+		    co_stat.dcs_status != DAOS_PROP_CO_HEALTHY) {
 			rc = -DER_INVAL;
 			D_ERROR("To set DAOS_PROP_CO_STATUS property can-only "
 				"set dcs_status as DAOS_PROP_CO_HEALTHY to "
@@ -1603,7 +1607,15 @@ dc_cont_set_prop(tse_task_t *task)
 			goto err_cont;
 		}
 		co_stat.dcs_pm_ver = dc_pool_get_version(pool);
-		entry->dpe_val = daos_prop_co_status_2_val( &co_stat);
+		if ((co_stat.dcs_flags & DAOS_PROP_CSF_READONLY) &&
+		    co_stat.dcs_status != DAOS_PROP_CO_READONLY) {
+			rc = -DER_INVAL;
+			D_ERROR("To set DAOS_PROP_CO_STATUS property can-only "
+				"set dcs_status as DAOS_PROP_CO_READONLY" DF_RC"\n", DP_RC(rc));
+			goto err_cont;
+		}
+
+		entry->dpe_val = daos_prop_co_status_2_val(&co_stat);
 	}
 
 	if (tpriv == NULL) {

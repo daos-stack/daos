@@ -147,7 +147,8 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (del_arg != NULL && del_arg->only_delete_entry) {
 		memset(&obj->vo_ilog, 0, sizeof(obj->vo_ilog));
 		memset(&obj->vo_tree, 0, sizeof(obj->vo_tree));
-	} else {
+	} else if (!vos_obj_flattened(obj)) {
+		/* for flattened object, ilog destroyed in vos_obj_destroy_tree() */
 		vos_ilog_desc_cbs_init(&cbs, tins->ti_coh);
 		rc = ilog_destroy(umm, &cbs, &obj->vo_ilog);
 		if (rc != 0) {

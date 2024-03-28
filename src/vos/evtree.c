@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -313,9 +313,8 @@ evt_ent_array_fini_(struct evt_entry_array *ent_array, int embedded)
 /** When we go over the embedded limit, set a minimum allocation */
 #define EVT_MIN_ALLOC 4096
 
-static bool
-ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
-		 uint32_t new_size)
+int
+evt_ent_array_resize(struct evt_entry_array *ent_array, uint32_t new_size)
 {
 	struct evt_list_entry	*ents;
 
@@ -332,6 +331,7 @@ ent_array_resize(struct evt_context *tcx, struct evt_entry_array *ent_array,
 
 	return 0;
 }
+
 static inline struct evt_list_entry *
 evt_array_entry2le(struct evt_entry *ent)
 {
@@ -388,7 +388,7 @@ ent_array_alloc(struct evt_context *tcx, struct evt_entry_array *ent_array,
 		if (size > ent_array->ea_max)
 			size = ent_array->ea_max;
 
-		rc = ent_array_resize(tcx, ent_array, size);
+		rc = evt_ent_array_resize(ent_array, size);
 		if (rc != 0)
 			return rc;
 

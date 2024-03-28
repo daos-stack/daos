@@ -57,7 +57,10 @@ struct vos_gc_bag_df {
 	struct vos_gc_item {
 		/* address of the item to be freed */
 		umem_off_t		it_addr;
-		/** Reserved, argument for GC_VEA/BIO (e.g. size of extent) */
+		/**
+		 * Reserved, argument for GC_VEA/BIO (e.g. size of extent), or object b-tree root
+		 * node's pointer for GC_OBJ (see vos_obj_destroy_tree).
+		 */
 		uint64_t		it_args;
 	}			bag_items[0];
 };
@@ -365,7 +368,7 @@ struct vos_irec_df {
  */
 struct vos_obj_df {
 	daos_unit_oid_t			vo_id;
-	/** The latest sync epoch */
+	/** The latest sync epoch, is DAOS_EPOCH_MAX for flattened object */
 	daos_epoch_t			vo_sync;
 	/** Offset of known existing dkey */
 	umem_off_t			vo_known_dkey;
@@ -373,8 +376,16 @@ struct vos_obj_df {
 	daos_epoch_t			vo_max_write;
 	/** Incarnation log for the object */
 	struct ilog_df			vo_ilog;
-	/** VOS dkey btree root */
-	struct btr_root			vo_tree;
+	union {
+		/** VOS dkey btree root for hierarchical object */
+		struct btr_root		vo_tree;
+		struct {
+			/** external address for flattened object */
+			bio_addr_t	vo_flat_addr;
+			/** length of the flattened object */
+			uint32_t	vo_flat_len;
+		}			vo_flat;
+	};
 };
 
 #endif
