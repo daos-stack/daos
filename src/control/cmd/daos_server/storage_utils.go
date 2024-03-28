@@ -13,11 +13,11 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -73,13 +73,28 @@ type scmSocketCmd struct {
 }
 
 type nvmeCmd struct {
-	cmdutil.LogCmd  `json:"-"`
+	baseScanCmd     `json:"-"`
 	helperLogCmd    `json:"-"`
-	optCfgCmd       `json:"-"`
 	iommuCheckerCmd `json:"-"`
 }
 
 func (cmd *nvmeCmd) init() error {
+	if cmd.ctlSvc != nil {
+		// Allow parseOpts() unit tests to skip contents of init().
+		cmd.setIOMMUChecker(func() (bool, error) {
+			return true, nil
+		})
+		return nil
+	}
+
+	engCfgs := config.DefaultServer().Engines
+	if cmd.config != nil {
+		engCfgs = cmd.config.Engines
+	}
+	cmd.ctlSvc = &server.ControlService{
+		StorageControlService: *server.NewStorageControlService(cmd.Logger, engCfgs),
+	}
+
 	if err := common.CheckDupeProcess(); err != nil {
 		return err
 	}
@@ -92,10 +107,9 @@ func (cmd *nvmeCmd) init() error {
 }
 
 type scmCmd struct {
-	cmdutil.LogCmd `json:"-"`
-	helperLogCmd   `json:"-"`
-	optCfgCmd      `json:"-"`
-	scmSocketCmd   `json:"-"`
+	baseScanCmd  `json:"-"`
+	helperLogCmd `json:"-"`
+	scmSocketCmd `json:"-"`
 }
 
 func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
@@ -175,12 +189,26 @@ func getSockFromCfg(log logging.Logger, cfg *config.Server, affSrc config.Engine
 }
 
 func (cmd *scmCmd) init(ctx context.Context) error {
+	if cmd.ctlSvc != nil {
+		// Allow parseOpts() unit tests to skip contents of init().
+		return nil
+	}
+
+	engCfgs := config.DefaultServer().Engines
+	if cmd.config != nil {
+		engCfgs = cmd.config.Engines
+	}
+	cmd.ctlSvc = &server.ControlService{
+		StorageControlService: *server.NewStorageControlService(cmd.Logger, engCfgs),
+	}
+
 	if err := common.CheckDupeProcess(); err != nil {
 		return err
 	}
 	if err := cmd.setHelperLogFile(); err != nil {
 		return err
 	}
+
 	if cmd.IgnoreConfig {
 		cmd.config = nil
 	} else if cmd.SocketID == nil {

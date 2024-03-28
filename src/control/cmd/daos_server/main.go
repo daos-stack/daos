@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,9 +24,33 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/server"
 )
 
 const defaultConfigFile = "daos_server.yml"
+
+var errJSONOutputNotSupported = errors.New("this subcommand does not support JSON output")
+
+type (
+	ctlSvcCaller interface {
+		setCtlSvc(*server.ControlService)
+	}
+
+	ctlSvcCmd struct {
+		ctlSvc *server.ControlService
+	}
+
+	baseScanCmd struct {
+		cmdutil.JSONOutputCmd `json:"-"`
+		cmdutil.LogCmd        `json:"-"`
+		ctlSvcCmd             `json:"-"`
+		optCfgCmd             `json:"-"`
+	}
+)
+
+func (cmd *ctlSvcCmd) setCtlSvc(cs *server.ControlService) {
+	cmd.ctlSvc = cs
+}
 
 type execTestFn func() error
 
@@ -57,6 +81,11 @@ type mainOpts struct {
 	preExecTests []execTestFn
 }
 
+// Dependencies can be injected to parseOpts flow through commandDependencies.
+type commandDependencies struct {
+	ctlSvc *server.ControlService
+}
+
 type versionCmd struct {
 	cmdutil.JSONOutputCmd
 }
@@ -83,7 +112,17 @@ func exitWithError(log *logging.LeveledLogger, err error) {
 	os.Exit(1)
 }
 
-func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error {
+// Command dependencies can be injected using the variadic deps parameter when unit testing.
+func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger, cmdDeps ...*commandDependencies) error {
+	if len(cmdDeps) > 1 {
+		return errors.Errorf("expected at most one commandDependencies reference, got %d",
+			len(cmdDeps))
+	}
+	deps := new(commandDependencies)
+	if len(cmdDeps) == 1 && cmdDeps[0] != nil {
+		deps = cmdDeps[0]
+	}
+
 	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
@@ -93,10 +132,14 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
 		}
 
-		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
-			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
-			// disable output on stdout other than JSON
-			log.ClearLevel(logging.LogLevelInfo)
+		if opts.JSON {
+			if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok {
+				jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
+				// disable output on stdout other than JSON
+				log.ClearLevel(logging.LogLevelInfo)
+			} else {
+				return errJSONOutputNotSupported
+			}
 		}
 
 		switch cmd.(type) {
@@ -139,7 +182,8 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			}
 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
-				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
+				return errors.Wrapf(err, "failed to load config from %s",
+					cfgCmd.configPath())
 			}
 			if _, err := os.Stat(opts.ConfigPath); err == nil {
 				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
@@ -153,6 +197,15 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		} else if opts.ConfigPath != "" {
 			return errors.Errorf("DAOS Server config filepath has been supplied but " +
 				"this command will not use it")
+		}
+
+		// Set the ControlService to use to handle command execution when unit testing.
+		// Production workflow will not inject ControlService here and instead specify one
+		// later in the command handling logic.
+		if ctlSvcCmd, ok := cmd.(ctlSvcCaller); ok {
+			if deps.ctlSvc != nil {
+				ctlSvcCmd.setCtlSvc(deps.ctlSvc)
+			}
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

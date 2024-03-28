@@ -419,7 +419,7 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 			return nil, errors.Wrap(err, "retrieving engine rank")
 		}
 
-		msg := fmt.Sprintf("CtlSvc.SmdManage dispatch, rank %d: %%s req:%%+v\n", rank)
+		msg := fmt.Sprintf("CtlSvc.SmdManage dispatch, rank %d", rank)
 
 		// Extract request from oneof field and execute dRPC.
 		switch req.Op.(type) {
@@ -428,7 +428,7 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 				return nil, errors.New("replace request expects only one device ID")
 			}
 			dReq := req.GetReplace()
-			svc.log.Debugf(msg, "dev-replace", dReq)
+			svc.log.Debugf("%s dev-replace: req %+v", msg, dReq)
 			devRes, err := replaceDevRetryBusy(ctx, svc.log, engine, dReq)
 			if err != nil {
 				return nil, errors.Wrap(err, msg)
@@ -440,7 +440,7 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 				return nil, errors.New("set-faulty request expects only one device ID")
 			}
 			dReq := req.GetFaulty()
-			svc.log.Debugf(msg, "set-faulty", dReq)
+			svc.log.Debugf("%s set-faulty: req %+v", msg, dReq)
 			devRes, err := sendManageReq(ctx, engine, drpc.MethodSetFaultyState, dReq)
 			if err != nil {
 				return nil, errors.Wrap(err, msg)
@@ -461,7 +461,7 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 						dev.uuid)
 				}
 				dReq.Ids = dev.trAddr
-				svc.log.Debugf(msg, "led-manage", dReq)
+				svc.log.Debugf("%s led-manage: req %+v", msg, dReq)
 				devRes, err := sendManageReq(ctx, engine, drpc.MethodLedManage, dReq)
 				if err != nil {
 					return nil, errors.Wrap(err, msg)

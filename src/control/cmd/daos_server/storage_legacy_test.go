@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -295,4 +295,27 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			msb.RUnlock()
 		})
 	}
+}
+
+// TestDaosServer_Legacy_Commands_JSON verifies that the JSON-output flag is disabled for legacy
+// command syntax.
+func TestDaosServer_Legacy_Commands_JSON(t *testing.T) {
+	log := logging.NewCommandLineLogger()
+
+	runJSONCmdTests(t, log, []jsonCmdTest{
+		{
+			"Prepare storage; JSON",
+			"storage prepare -j",
+			nil,
+			nil,
+			errJSONOutputNotSupported,
+		},
+		{
+			"Scan storage; JSON",
+			"storage scan -j",
+			nil,
+			nil,
+			errJSONOutputNotSupported,
+		},
+	})
 }

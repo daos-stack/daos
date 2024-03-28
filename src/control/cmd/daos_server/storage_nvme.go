@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,6 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -229,15 +228,13 @@ func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, prepareBackend nv
 	// Prepare NVMe device access.
 	_, err := prepareBackend(req)
 
-	return err
+	return errors.Wrap(err, "nvme prepare backend")
 }
 
-func (cmd *prepareNVMeCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
+func (cmd *prepareNVMeCmd) Execute(_ []string) (err error) {
+	if err = cmd.init(); err != nil {
 		return err
 	}
-
-	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing prepare drives command: %+v", cmd)
 
@@ -249,7 +246,8 @@ func (cmd *prepareNVMeCmd) Execute(_ []string) error {
 		DisableVFIO:   cmd.DisableVFIO,
 	}
 
-	return prepareNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
+	return prepareNVMe(req, &cmd.nvmeCmd,
+		cmd.ctlSvc.StorageControlService.NvmePrepare)
 }
 
 type resetNVMeCmd struct {
@@ -337,12 +335,10 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend n
 	return nil
 }
 
-func (cmd *resetNVMeCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
+func (cmd *resetNVMeCmd) Execute(_ []string) (err error) {
+	if err = cmd.init(); err != nil {
 		return err
 	}
-
-	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing reset nvme command: %+v", cmd)
 
@@ -353,7 +349,8 @@ func (cmd *resetNVMeCmd) Execute(_ []string) error {
 		DisableVFIO:  cmd.DisableVFIO,
 	}
 
-	return resetNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
+	return resetNVMe(req, &cmd.nvmeCmd,
+		cmd.ctlSvc.StorageControlService.NvmePrepare)
 }
 
 type scanNVMeCmd struct {
@@ -370,63 +367,72 @@ func (cmd *scanNVMeCmd) getVMDState() bool {
 	return !cmd.DisableVMD && !cfgDisableVMD
 }
 
-func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePrepareResetFn) error {
-	var bld strings.Builder
+func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePrepareResetFn) (errOut error) {
 	req := storage.BdevScanRequest{}
 
 	if !cmd.IgnoreConfig && cmd.config != nil {
 		req.DeviceList = nvmeBdevsFromCfg(cmd.config)
 		if req.DeviceList.Len() > 0 {
-			cmd.Debugf("applying devices filter derived from config file: %s", req.DeviceList)
+			cmd.Debugf("applying devices filter derived from config file: %s",
+				req.DeviceList)
 		}
 	}
 
+	reqPrep := storage.BdevPrepareRequest{
+		PCIAllowList: strings.Join(req.DeviceList.Devices(),
+			storage.BdevPciAddrSep),
+	}
+
 	if !cmd.SkipPrep {
-		req := storage.BdevPrepareRequest{
-			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
+		if err := prepareNVMe(reqPrep, &cmd.nvmeCmd, prepResetBackend); err != nil {
+			return errors.Wrap(err, "nvme prep before scan failed, try with "+
+				"--skip-prep after manual nvme prepare")
 		}
-		if err := prepareNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
-			return errors.Wrap(err,
-				"nvme prep before scan failed, try with --skip-prep after manual nvme prepare")
-		}
+		defer func() {
+			if err := resetNVMe(reqPrep, &cmd.nvmeCmd, prepResetBackend); err != nil {
+				err = errors.Wrap(err, "nvme reset after scan failed, "+
+					"try with --skip-prep before manual nvme reset")
+				if errOut == nil {
+					errOut = err
+					return
+				}
+				cmd.Error(err.Error())
+			}
+		}()
 	}
 
 	cmd.Info("Scan locally-attached NVMe storage...")
 
 	resp, err := scanBackend(req)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "nvme scan backend")
 	}
 
-	if err := pretty.PrintNvmeControllers(resp.Controllers, &bld); err != nil {
-		return err
-	}
-
-	cmd.Info(bld.String())
-
-	if !cmd.SkipPrep {
-		req := storage.BdevPrepareRequest{
-			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
+	if cmd.JSONOutputEnabled() {
+		if err := cmd.OutputJSON(resp.Controllers, nil); err != nil {
+			return err
 		}
-		if err := resetNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
-			return errors.Wrap(err,
-				"nvme reset after scan failed, try with --skip-prep before manual nvme reset")
+	} else {
+		var bld strings.Builder
+		if err := pretty.PrintNvmeControllers(resp.Controllers, &bld); err != nil {
+			return err
 		}
+		cmd.Info(bld.String())
 	}
 
 	return nil
 }
 
-func (cmd *scanNVMeCmd) Execute(_ []string) error {
-	if err := cmd.init(); err != nil {
+func (cmd *scanNVMeCmd) Execute(_ []string) (err error) {
+	if err = cmd.init(); err != nil {
 		return err
 	}
-
-	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 	if cmd.getVMDState() {
-		svc.WithVMDEnabled()
+		cmd.ctlSvc.WithVMDEnabled()
 	}
 
 	cmd.Debugf("executing scan nvme command: %+v", cmd)
-	return cmd.scanNVMe(svc.NvmeScan, svc.NvmePrepare)
+
+	return cmd.scanNVMe(cmd.ctlSvc.StorageControlService.NvmeScan,
+		cmd.ctlSvc.StorageControlService.NvmePrepare)
 }

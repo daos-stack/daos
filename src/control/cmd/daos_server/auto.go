@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -40,7 +40,7 @@ type configGenCmd struct {
 type getFabricFn func(context.Context, logging.Logger, string) (*control.HostFabric, error)
 
 func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*control.HostFabric, error) {
-	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log), provider)
+	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log).Scan, provider)
 	if err != nil {
 		return nil, errors.Wrapf(err, "fetching local fabric interfaces")
 	}
@@ -59,29 +59,29 @@ func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*
 type getStorageFn func(context.Context, logging.Logger, bool) (*control.HostStorage, error)
 
 func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*control.HostStorage, error) {
+	var nc *nvmeCmd
+	var err error
+
 	svc := server.NewStorageControlService(log, config.DefaultServer().Engines).
 		WithVMDEnabled() // use vmd if present
 
-	var nc *nvmeCmd
 	if !skipPrep {
 		nc = &nvmeCmd{}
 		nc.Logger = log
-		nc.IgnoreConfig = true
-		if err := nc.init(); err != nil {
+		nc.IgnoreConfig = true // Prepare and then reset all NVMe devices.
+		if err = nc.init(); err != nil {
 			return nil, errors.Wrap(err, "could not init nvme cmd")
 		}
 
 		req := storage.BdevPrepareRequest{}
 		if err := prepareNVMe(req, nc, svc.NvmePrepare); err != nil {
-			return nil, errors.Wrap(err, "nvme prep before fetching local storage failed, "+
-				"try cmd again with --skip-prep after performing a manual nvme prepare")
+			return nil, errors.Wrap(err, "nvme prep before fetching local storage "+
+				"failed, try cmd again with --skip-prep after performing a manual "+
+				"nvme prepare")
 		}
 	}
 
-	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
-	if err != nil {
-		return nil, errors.Wrapf(err, "nvme scan")
-	}
+	nvmeResp, errNvmeScan := svc.NvmeScan(storage.BdevScanRequest{})
 
 	if !skipPrep {
 		// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
@@ -93,9 +93,18 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 
 		req := storage.BdevPrepareRequest{Reset_: true}
 		if err := resetNVMe(req, nc, svc.NvmePrepare); err != nil {
-			return nil, errors.Wrap(err, "nvme reset after fetching local storage failed, "+
-				"try cmd again with --skip-prep after performing a manual nvme reset")
+			err = errors.Wrap(err, "nvme reset after fetching local storage failed, "+
+				"try cmd again with --skip-prep after performing a manual nvme "+
+				"reset")
+			if errNvmeScan == nil {
+				return nil, err
+			}
+			log.Error(err.Error())
 		}
+	}
+
+	if errNvmeScan != nil {
+		return nil, errors.Wrapf(errNvmeScan, "nvme scan")
 	}
 
 	scmResp, err := svc.ScmScan(storage.ScmScanRequest{})

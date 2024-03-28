@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -570,6 +570,23 @@ func TestDaosServer_scanSCM(t *testing.T) {
 func TestDaosServer_SCM_Commands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
 		{
+			"Prepare namespaces; JSON; no force",
+			"scm prepare -j",
+			printCommand(t, &prepareSCMCmd{
+				NrNamespacesPerSocket: 1,
+			}),
+			nil,
+		},
+		{
+			"Prepare namespaces with all opts with JSON",
+			"scm prepare -S 2 -f --socket 0 -j",
+			printCommand(t, &prepareSCMCmd{
+				NrNamespacesPerSocket: 2,
+				Force:                 true,
+			}),
+			nil,
+		},
+		{
 			"Prepare namespaces with all opts",
 			"scm prepare -S 2 -f --socket 0",
 			printCommand(t, &prepareSCMCmd{
@@ -609,6 +626,138 @@ func TestDaosServer_SCM_Commands(t *testing.T) {
 			"scm scan --socket 1",
 			printCommand(t, &scanSCMCmd{}),
 			nil,
+		},
+	})
+}
+
+func mockCSFromScmCfg(log logging.Logger, smbc scm.MockBackendConfig) *server.ControlService {
+	mbp := bdev.NewProvider(log, nil)
+	msb := scm.NewMockBackend(&smbc)
+	msp := scm.NewProvider(log, msb, nil, nil)
+	scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
+	return &server.ControlService{StorageControlService: *scs}
+}
+
+// TestDaosServer_SCM_Commands_JSON verifies that when the JSON-output flag is set only JSON is
+// printed to standard out. Test cases should cover all scm subcommand variations.
+func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
+	// Use a normal logger to verify that we don't mess up JSON output.
+	log := logging.NewCommandLineLogger()
+
+	mockDeps := func(smbc scm.MockBackendConfig) *commandDependencies {
+		return &commandDependencies{
+			ctlSvc: mockCSFromScmCfg(log, smbc),
+		}
+	}
+
+	runJSONCmdTests(t, log, []jsonCmdTest{
+		{
+			"Prepare namespaces; JSON; no force",
+			"scm prepare -j",
+			nil,
+			nil,
+			errNoForceWithJSON,
+		},
+		{
+			"Prepare namespaces; JSON; with force",
+			"scm prepare -j -f",
+			mockDeps(scm.MockBackendConfig{
+				PrepRes: &storage.ScmPrepareResponse{
+					Socket: &storage.ScmSocketState{
+						State: storage.ScmNoFreeCap,
+					},
+					Namespaces: storage.ScmNamespaces{
+						storage.MockScmNamespace(),
+					},
+				},
+			}),
+			storage.ScmNamespaces{storage.MockScmNamespace()},
+			nil,
+		},
+		{
+			"Prepare namespaces; JSON; with force; returns error",
+			"scm prepare -j -f",
+			mockDeps(scm.MockBackendConfig{
+				PrepErr: errors.New("bad prep"),
+			}),
+			nil,
+			errors.New("bad prep"),
+		},
+		{
+			"Reset namespaces; JSON; no force",
+			"scm reset -j",
+			nil,
+			nil,
+			errNoForceWithJSON,
+		},
+		{
+			"Reset namespaces; JSON; with force",
+			"scm reset -j -f",
+			mockDeps(scm.MockBackendConfig{
+				PrepResetRes: &storage.ScmPrepareResponse{
+					RebootRequired: true,
+					Socket: &storage.ScmSocketState{
+						State: storage.ScmFreeCap,
+					},
+				},
+			}),
+			nil,
+			nil,
+		},
+		{
+			"Reset namespaces; JSON; with force; returns error",
+			"scm reset -j -f",
+			mockDeps(scm.MockBackendConfig{
+				PrepResetErr: errors.New("bad prep"),
+			}),
+			nil,
+			errors.New("bad prep"),
+		},
+		{
+			"Scan modules; JSON",
+			"scm scan -j",
+			mockDeps(scm.MockBackendConfig{
+				GetModulesRes: storage.ScmModules{
+					storage.MockScmModule(),
+				},
+			}),
+			storage.ScmModules{storage.MockScmModule()},
+			nil,
+		},
+		{
+			"Scan modules; JSON; returns error",
+			"scm scan -j",
+			mockDeps(scm.MockBackendConfig{
+				GetModulesErr: errors.New("bad prep"),
+			}),
+			nil,
+			errors.New("bad prep"),
+		},
+		{
+			"Scan namespaces; JSON",
+			"scm scan -j",
+			mockDeps(scm.MockBackendConfig{
+				GetModulesRes: storage.ScmModules{
+					storage.MockScmModule(),
+				},
+				GetNamespacesRes: storage.ScmNamespaces{
+					storage.MockScmNamespace(),
+				},
+			}),
+			storage.ScmNamespaces{storage.MockScmNamespace()},
+			nil,
+		},
+		{
+			"Scan namespaces; JSON; returns error",
+			"scm scan -j",
+			mockDeps(scm.MockBackendConfig{
+				GetModulesRes: storage.ScmModules{
+					storage.MockScmModule(),
+				},
+				GetNamespacesErr: errors.New("bad prep"),
+			}),
+			nil,
+			errors.New("bad prep"),
 		},
 	})
 }

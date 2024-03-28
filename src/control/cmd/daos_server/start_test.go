@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -412,4 +412,20 @@ func TestStartLoggingConfiguration(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestDaosServer_Start_Commands_JSON verifies that the JSON-output flag is disabled fora the start
+// command.
+func TestDaosServer_Start_Commands_JSON(t *testing.T) {
+	log := logging.NewCommandLineLogger()
+
+	runJSONCmdTests(t, log, []jsonCmdTest{
+		{
+			"Start; JSON",
+			"start -j",
+			nil,
+			nil,
+			errJSONOutputNotSupported,
+		},
+	})
 }

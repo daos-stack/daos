@@ -13,8 +13,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/server"
-	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -22,6 +20,11 @@ const MsgStoragePrepareWarn = "Memory allocation goals for PMem will be changed 
 	"modified, this may be a destructive operation. Please ensure namespaces are unmounted " +
 	"and locally attached PMem modules are not in use. Please be patient as it may take " +
 	"several minutes and subsequent reboot maybe required.\n"
+
+var (
+	errNoForceWithJSON = errors.New("JSON output only supported with force option")
+	errNoConsent       = errors.New("consent not given")
+)
 
 type scmPrepareResetFn func(storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error)
 type scmScanFn func(storage.ScmScanRequest) (*storage.ScmScanResponse, error)
@@ -46,8 +49,13 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	cmd.Info("Prepare locally-attached PMem...")
 
 	cmd.Info(MsgStoragePrepareWarn)
-	if !cmd.Force && !common.GetConsent(cmd) {
-		return errors.New("consent not given")
+	if !cmd.Force {
+		if cmd.JSONOutputEnabled() {
+			return errNoForceWithJSON
+		}
+		if !common.GetConsent(cmd) {
+			return errNoConsent
+		}
 	}
 
 	req := storage.ScmPrepareRequest{
@@ -99,6 +107,11 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 		if len(resp.Namespaces) == 0 {
 			return errors.New("failed to find namespaces")
 		}
+
+		if cmd.JSONOutputEnabled() {
+			return cmd.OutputJSON(resp.Namespaces, nil)
+		}
+
 		// Namespaces exist so print details.
 		var bld strings.Builder
 		if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
@@ -116,10 +129,9 @@ func (cmd *prepareSCMCmd) Execute(_ []string) error {
 	if err := cmd.init(cmd.MustLogCtx()); err != nil {
 		return err
 	}
-	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
-	cmd.Debugf("executing prepare scm command: %+v", cmd)
-	return cmd.preparePMem(scs.ScmPrepare)
+	cmd.Debugf("executing remove namespaces command: %+v", cmd)
+	return cmd.preparePMem(cmd.ctlSvc.StorageControlService.ScmPrepare)
 }
 
 type resetSCMCmd struct {
@@ -131,8 +143,13 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	cmd.Info("Reset locally-attached PMem...")
 
 	cmd.Info(MsgStoragePrepareWarn)
-	if !cmd.Force && !common.GetConsent(cmd) {
-		return errors.New("consent not given")
+	if !cmd.Force {
+		if cmd.JSONOutputEnabled() {
+			return errNoForceWithJSON
+		}
+		if !common.GetConsent(cmd) {
+			return errNoConsent
+		}
 	}
 
 	req := storage.ScmPrepareRequest{
@@ -186,10 +203,9 @@ func (cmd *resetSCMCmd) Execute(_ []string) error {
 	if err := cmd.init(cmd.MustLogCtx()); err != nil {
 		return err
 	}
-	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing remove namespaces command: %+v", cmd)
-	return cmd.resetPMem(scs.ScmPrepare)
+	return cmd.resetPMem(cmd.ctlSvc.StorageControlService.ScmPrepare)
 }
 
 type scanSCMCmd struct {
@@ -218,12 +234,19 @@ func (cmd *scanSCMCmd) Execute(_ []string) error {
 		return err
 	}
 
-	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
-
 	cmd.Debugf("executing scan scm command: %+v", cmd)
-	resp, err := cmd.scanPMem(svc.ScmScan)
+
+	resp, err := cmd.scanPMem(cmd.ctlSvc.StorageControlService.ScmScan)
 	if err != nil {
 		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		if len(resp.Namespaces) > 0 {
+			return cmd.OutputJSON(resp.Namespaces, nil)
+		} else {
+			return cmd.OutputJSON(resp.Modules, nil)
+		}
 	}
 
 	var bld strings.Builder

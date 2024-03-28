@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -834,6 +834,97 @@ func TestDaosServer_NVMe_Commands(t *testing.T) {
 			"nvme scan --skip-prep",
 			printCommand(t, &scanNVMeCmd{SkipPrep: true}),
 			nil,
+		},
+	})
+}
+
+func mockCSFromNvmeCfg(log logging.Logger, bmbc bdev.MockBackendConfig) *server.ControlService {
+	mbb := bdev.NewMockBackend(&bmbc)
+	mbp := bdev.NewProvider(log, mbb)
+	scs := server.NewMockStorageControlService(log, nil, nil, nil, mbp, nil)
+	return &server.ControlService{StorageControlService: *scs}
+}
+
+// TestDaosServer_NVMe_Commands_JSON verifies that when the JSON-output flag is set only JSON is
+// printed to standard out. Test cases should cover all scm subcommand variations.
+func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
+	// Use a normal logger to verify that we don't mess up JSON output.
+	log := logging.NewCommandLineLogger()
+
+	mockDeps := func(bmbc bdev.MockBackendConfig) *commandDependencies {
+		return &commandDependencies{
+			ctlSvc: mockCSFromNvmeCfg(log, bmbc),
+		}
+	}
+
+	runJSONCmdTests(t, log, []jsonCmdTest{
+		{
+			"Prepare SSDs; JSON",
+			"nvme prepare -j",
+			mockDeps(bdev.MockBackendConfig{
+				PrepareRes: &storage.BdevPrepareResponse{},
+			}),
+			nil,
+			nil,
+		},
+		{
+			"Prepare SSDs; JSON; returns error",
+			"nvme prepare -j",
+			mockDeps(bdev.MockBackendConfig{
+				PrepareErr: errors.New("bad prep"),
+			}),
+			nil,
+			errors.New("nvme prepare backend: bad prep"),
+		},
+		{
+			"Reset SSDs; JSON",
+			"nvme reset -j",
+			mockDeps(bdev.MockBackendConfig{
+				PrepareRes: &storage.BdevPrepareResponse{},
+			}),
+			nil,
+			nil,
+		},
+		{
+			"Reset SSDs; JSON; returns error",
+			"nvme reset -j",
+			mockDeps(bdev.MockBackendConfig{
+				ResetErr: errors.New("bad reset"),
+			}),
+			nil,
+			errors.New("nvme reset backend: bad reset"),
+		},
+		{
+			"Scan SSDs; JSON",
+			"nvme scan -j",
+			mockDeps(bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						func() *storage.NvmeController {
+							c := storage.MockNvmeController(1)
+							c.Serial = ""
+							return c
+						}(),
+					},
+				},
+			}),
+			storage.NvmeControllers{
+				func() *storage.NvmeController {
+					c := storage.MockNvmeController(1)
+					c.Serial = ""
+					return c
+				}(),
+			},
+			nil,
+		},
+		{
+			"Scan SSDs; JSON; returns error",
+			"nvme scan -j",
+			mockDeps(bdev.MockBackendConfig{
+				ScanErr: errors.New("bad scan"),
+			}),
+			nil,
+			errors.New("nvme scan backend: bad scan"),
 		},
 	})
 }
