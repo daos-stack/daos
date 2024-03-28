@@ -1,0 +1,8 @@
+vpic_smoke:
+  module: mpi/latest
+lammps_smoke:
+  module: mpi/latest
+vpic_stress:
+  module: mpi/latest
+lammps_stress:
+  module: mpi/latest

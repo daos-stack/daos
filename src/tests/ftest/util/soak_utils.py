@@ -14,6 +14,7 @@ from itertools import product
 
 import slurm_utils
 from avocado.core.exceptions import TestFail
+from avocado.utils.distro import detect
 from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
@@ -1199,9 +1200,22 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     """
     commands = []
     app_params = os.path.join(os.sep, "run", job_spec, "*")
-    app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
     mpi_module = self.params.get("module", app_params, self.mpi_module)
     api_list = self.params.get("api", app_params, default=["DFS"])
+    apps_dir = os.environ["DAOS_TEST_APP_DIR"]
+    # Update DAOS_TEST_APP_DIR if used in the cmdline param in yaml
+    # ${DAOS_TEST_APP_SRC}                  =>  apps built with el8 and mpi/mpich (default)
+    # pylint: disable-next=wrong-spelling-in-comment,fixme
+    # ${DAOS_TEST_APP_SRC}/intelmpi         =>  apps built with el8 and intelmpi
+    # ${DAOS_TEST_APP_SRC}/suse             =>  apps built with suse and gnu-mpich
+    # pylint: disable-next=wrong-spelling-in-comment,fixme
+    # ${DAOS_TEST_APP_SRC}/suse/intelmpi    =>  apps built with suse and intelmpi
+    if "suse" in detect().name.lower():
+        os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "suse")
+    if "mpi/latest" in mpi_module:
+        os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "intelmpi")
+        os.environ["I_MPI_OFI_LIBRARY_INTERNAL"] = "0"
+    app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
     if app_cmd is None:
         self.log.info(f"<<{job_spec} command line not specified in yaml; job will not be run>>")
         return commands
@@ -1246,6 +1260,10 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             self.log.info(f"<<{job_spec.upper()} cmdlines>>:")
             for cmd in sbatch_cmds:
                 self.log.info("%s", cmd)
+    if mpi_module != self.mpi_module:
+        mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
+        mpirun_cmd.get_params(self)
+    os.environ["DAOS_TEST_APP_DIR"] = apps_dir
     return commands
 
 
