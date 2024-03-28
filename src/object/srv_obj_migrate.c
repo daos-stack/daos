@@ -33,18 +33,18 @@
 /* Max in-flight data size per xstream */
 /* Set the total in-flight size to be 25% of MAX DMA size for
  * the moment, will adjust it later if needed.
- * Value cannot be smaller than 1MiB.
+ * Value cannot be smaller than 32MiB.
  */
 #define MIGRATE_DEFAULT_MAX_SIZE	(1 << 28)
-#define MIGRATE_MIN_MAX_SIZE		(1 << 20)
+#define MIGRATE_MIN_MAX_SIZE		(1 << 25)
 #define ENV_MIGRATE_MEM_SIZE		"D_MIGRATE_MEM_SIZE"
 
 /*
  * Max migrate ULT number on the engine
- * Value cannot be smaller than 32.
+ * Value cannot be smaller than 512.
  */
 #define MIGRATE_DEFAULT_MAX_ULT	4096
-#define MIGRATE_MIN_MAX_ULT	32
+#define MIGRATE_MIN_MAX_ULT	512
 #define ENV_MIGRATE_ULT_CNT	"D_MIGRATE_ULT_CNT"
 
 struct migrate_one {
@@ -603,11 +603,15 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 
 	arg.max_ult_cnt = MIGRATE_DEFAULT_MAX_ULT;
 	d_getenv_uint(ENV_MIGRATE_ULT_CNT, &arg.max_ult_cnt);
-	if (arg.max_ult_cnt < MIGRATE_MIN_MAX_SIZE)
-		arg.max_ult_cnt = MIGRATE_MIN_MAX_SIZE;
+	if (arg.max_ult_cnt < MIGRATE_MIN_MAX_ULT) {
+		D_INFO("migrate max ult too small, bump to minimal value\n");
+		arg.max_ult_cnt = MIGRATE_MIN_MAX_ULT;
+	}
 	arg.max_mem_size = MIGRATE_DEFAULT_MAX_SIZE;
-	if (arg.max_mem_size < MIGRATE_MIN_MAX_ULT)
-		arg.max_mem_size = MIGRATE_MIN_MAX_ULT;
+	if (arg.max_mem_size < MIGRATE_MIN_MAX_SIZE) {
+		D_INFO("migrate max mem size too small, bump to minimal value\n");
+		arg.max_mem_size = MIGRATE_MIN_MAX_SIZE;
+	}
 	d_getenv_uint64_t(ENV_MIGRATE_MEM_SIZE, &arg.max_mem_size);
 
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
