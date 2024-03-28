@@ -207,13 +207,38 @@ rebuild_get_global_dtx_resync_ver(struct rebuild_global_pool_tracker *rgt)
 	return min;
 }
 
+static void
+rpt_insert(struct rebuild_tgt_pool_tracker *rpt)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
+	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
+	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
+}
+
+static void
+rpt_delete(struct rebuild_tgt_pool_tracker *rpt)
+{
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	ABT_rwlock_wrlock(rebuild_gst.rg_ttl_rwlock);
+	d_list_del_init(&rpt->rt_list);
+	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
+}
+
 struct rebuild_tgt_pool_tracker *
 rpt_lookup(uuid_t pool_uuid, uint32_t opc, unsigned int ver, unsigned int gen)
 {
 	struct rebuild_tgt_pool_tracker	*rpt;
 	struct rebuild_tgt_pool_tracker	*found = NULL;
+	bool				 locked = false;
 
-	/* Only stream 0 will access the list */
+	/* System XS or VOS target XS (obj_inflight_io_check() -> ds_rebuild_running_query())
+	 * possibly access the list, need to hold rdlock only for VOS XS.
+	 */
+	if (dss_get_module_info()->dmi_xs_id != 0) {
+		ABT_rwlock_rdlock(rebuild_gst.rg_ttl_rwlock);
+		locked = true;
+	}
 	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 		if (uuid_compare(rpt->rt_pool_uuid, pool_uuid) == 0 &&
 		    rpt->rt_finishing == 0 &&
@@ -225,6 +250,8 @@ rpt_lookup(uuid_t pool_uuid, uint32_t opc, unsigned int ver, unsigned int gen)
 			break;
 		}
 	}
+	if (locked)
+		ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
 
 	return found;
 }
@@ -1041,24 +1068,18 @@ rpt_get(struct rebuild_tgt_pool_tracker	*rpt)
 void
 rpt_put(struct rebuild_tgt_pool_tracker	*rpt)
 {
+	bool	zombie;
+
 	ABT_mutex_lock(rpt->rt_lock);
 	rpt->rt_refcount--;
 	D_ASSERT(rpt->rt_refcount >= 0);
 	D_DEBUG(DB_REBUILD, "rpt %p ref %d\n", rpt, rpt->rt_refcount);
 	if (rpt->rt_refcount == 1 && rpt->rt_finishing)
 		ABT_cond_signal(rpt->rt_fini_cond);
+	zombie = (rpt->rt_refcount == 0);
 	ABT_mutex_unlock(rpt->rt_lock);
-	if (rpt->rt_refcount == 0) {
-		/* If rebuild tracker ULT is started successfully, then
-		 * the rpt will be destroyed in rebuild_tgt_fini().
-		 * Otherwise the rpt might be destroyed if the tracking
-		 * ULT is not started. Since it will happen in system
-		 * XS, no need lock here.
-		 */
-		D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
-		d_list_del_init(&rpt->rt_list);
+	if (zombie)
 		rpt_destroy(rpt);
-	}
 }
 
 static void
@@ -1719,7 +1740,6 @@ void
 ds_rebuild_abort(uuid_t pool_uuid, unsigned int ver, unsigned int gen, uint64_t term)
 {
 	struct rebuild_tgt_pool_tracker *rpt;
-	struct rebuild_tgt_pool_tracker	*tmp;
 
 	rebuild_leader_stop(pool_uuid, ver, gen, term);
 
@@ -1727,7 +1747,7 @@ ds_rebuild_abort(uuid_t pool_uuid, unsigned int ver, unsigned int gen, uint64_t 
 	while(1) {
 		bool aborted = true;
 
-		d_list_for_each_entry_safe(rpt, tmp, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
+		d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
 			if (uuid_compare(rpt->rt_pool_uuid, pool_uuid) == 0 &&
 			    (ver == (unsigned int)(-1) || rpt->rt_rebuild_ver == ver) &&
 			    (gen == (unsigned int)(-1) || rpt->rt_rebuild_gen == gen) &&
@@ -2160,6 +2180,7 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	/* No one should access rpt after rebuild_fini_one. */
 	D_INFO("Finalized rebuild for "DF_UUID", map_ver=%u.\n",
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
+	rpt_delete(rpt);
 	rpt_put(rpt);
 }
 
@@ -2465,7 +2486,7 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	 * to make sure the new coming request can find the rpt in the list.
 	 */
 	rpt_get(rpt);
-	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
+	rpt_insert(rpt);
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid,
 				      &rpt->rt_coh_uuid);
 	if (rc)
@@ -2510,7 +2531,7 @@ out:
 	if (rc) {
 		if (rpt) {
 			if (!d_list_empty(&rpt->rt_list)) {
-				d_list_del_init(&rpt->rt_list);
+				rpt_delete(rpt);
 				rpt_put(rpt);
 			}
 			rpt_put(rpt);
@@ -2560,6 +2581,10 @@ init(void)
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_queue_list);
 	D_INIT_LIST_HEAD(&rebuild_gst.rg_running_list);
 
+	rc = ABT_rwlock_create(&rebuild_gst.rg_ttl_rwlock);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
+
 	rc = ABT_mutex_create(&rebuild_gst.rg_lock);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
@@ -2577,6 +2602,7 @@ fini(void)
 		ABT_cond_free(&rebuild_gst.rg_stop_cond);
 
 	ABT_mutex_free(&rebuild_gst.rg_lock);
+	ABT_rwlock_free(&rebuild_gst.rg_ttl_rwlock);
 
 	rebuild_iv_fini();
 	return 0;
