@@ -161,6 +161,7 @@ type (
 		Index               uint32
 		Started             atm.Bool
 		Ready               atm.Bool
+		CheckerMode         atm.Bool
 		LocalState          system.MemberState
 		RemoveSuperblockErr error
 		SetupRankErr        error
@@ -186,6 +187,10 @@ func NewMockInstance(cfg *MockInstanceConfig) *MockInstance {
 
 func DefaultMockInstance() *MockInstance {
 	return NewMockInstance(nil)
+}
+
+func (mi *MockInstance) SetCheckerMode(enabled bool) {
+	mi.cfg.CheckerMode.Store(enabled)
 }
 
 func (mi *MockInstance) CallDrpc(_ context.Context, _ drpc.Method, _ proto.Message) (*drpc.Response, error) {

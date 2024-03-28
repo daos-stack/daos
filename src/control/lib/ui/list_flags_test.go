@@ -169,7 +169,7 @@ func TestUI_MemberStateSetFlag(t *testing.T) {
 			},
 		},
 		"full list": {
-			arg: "Joined,Excluded,Stopped,Stopping,Ready,Starting,AwaitFormat,AdminExcluded,Errored,Unresponsive",
+			arg: "Joined,Excluded,Stopped,Stopping,Ready,Starting,AwaitFormat,AdminExcluded,Errored,Unresponsive,CheckerStarted",
 			expFlag: &ui.MemberStateSetFlag{
 				States: system.MemberState(int(system.MemberStateMax) - 1),
 			},
@@ -205,7 +205,7 @@ func TestUI_MemberStateSetFlag_Complete(t *testing.T) {
 	}{
 		"empty string; suggest all": {
 			expComplStrs: []string{
-				"AdminExcluded", "AwaitFormat", "Errored", "Excluded",
+				"AdminExcluded", "AwaitFormat", "CheckerStarted", "Errored", "Excluded",
 				"Joined", "Ready", "Starting", "Stopped", "Stopping",
 				"Unresponsive",
 			},
@@ -226,6 +226,7 @@ func TestUI_MemberStateSetFlag_Complete(t *testing.T) {
 			arg: "Starting,",
 			expComplStrs: []string{
 				"Starting,AdminExcluded", "Starting,AwaitFormat",
+				"Starting,CheckerStarted",
 				"Starting,Errored", "Starting,Excluded", "Starting,Joined",
 				"Starting,Ready", "Starting,Stopped", "Starting,Stopping",
 				"Starting,Unresponsive",

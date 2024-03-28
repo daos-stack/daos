@@ -34,6 +34,7 @@ type cliOptions struct {
 	System     systemCmd      `command:"system" alias:"sys" description:"DAOS system operations"`
 	Version    versionCmd     `command:"version" description:"Print daos version"`
 	ManPage    cmdutil.ManCmd `command:"manpage" hidden:"true"`
+	faultsCmdRoot
 }
 
 type versionCmd struct {

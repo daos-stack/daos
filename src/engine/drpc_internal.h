@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -123,6 +123,6 @@ int drpc_init(void);
 /** Finalize the dRPC client. */
 void drpc_fini(void);
 
-int drpc_notify_ready(void);
+int drpc_notify_ready(bool check_mode);
 
 #endif /* __DAOS_DRPC_INTERNAL_H__ */

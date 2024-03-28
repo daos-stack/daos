@@ -97,7 +97,7 @@ int
 ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 		     enum daos_module_id module, crt_opcode_t opcode,
 		     uint32_t version, crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
-		     d_rank_list_t *excluded_list)
+		     d_rank_list_t *excluded_list, void *priv)
 {
 	d_rank_list_t	excluded;
 	crt_opcode_t		opc;
@@ -124,7 +124,7 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	opc = DAOS_RPC_OPCODE(opcode, module, version);
 	rc = crt_corpc_req_create(ctx, pool->sp_group,
 			  excluded.rl_nr == 0 ? NULL : &excluded,
-			  opc, bulk_hdl/* co_bulk_hdl */, NULL /* priv */,
+			  opc, bulk_hdl/* co_bulk_hdl */, priv,
 			  0 /* flags */, crt_tree_topo(CRT_TREE_KNOMIAL, 32),
 			  rpc);
 
