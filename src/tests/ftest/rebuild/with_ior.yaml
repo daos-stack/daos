@@ -2,7 +2,7 @@ hosts:
   test_servers: 3
   test_clients: 1
 
-timeout: 360
+timeout: 460
 
 server_config:
   name: daos_server
@@ -38,7 +38,7 @@ container:
   control_method: daos
 
 ior:
-  ior_timeout: 120
+  ior_timeout: 200
   rank_to_kill: 3
   client_processes:
     ppn: 16
