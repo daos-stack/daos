@@ -533,6 +533,14 @@ static int (*next_closedir)(DIR *dirp);
 
 static struct dirent *(*next_readdir)(DIR *dirp);
 
+static long (*next_telldir)(DIR *dirp);
+static void (*next_seekdir)(DIR *dirp, long loc);
+static void (*next_rewinddir)(DIR *dirp);
+static int (*next_scandirat)(int dirfd, const char *restrict path,
+			     struct dirent ***restrict namelist,
+			     int (*filter)(const struct dirent *),
+			     int (*compar)(const struct dirent **, const struct dirent **));
+
 static int (*next_mkdir)(const char *path, mode_t mode);
 
 static int (*next_mkdirat)(int dirfd, const char *pathname, mode_t mode);
@@ -3898,6 +3906,167 @@ closedir(DIR *dirp)
 	}
 }
 
+long
+telldir(DIR *dirp)
+{
+	int fd;
+
+	if (next_telldir == NULL) {
+		next_telldir = dlsym(RTLD_NEXT, "telldir");
+		D_ASSERT(next_telldir != NULL);
+	}
+	if (!hook_enabled)
+		return next_telldir(dirp);
+
+	fd = dirfd(dirp);
+	if (fd < FD_DIR_BASE)
+		return next_telldir(dirp);
+
+	return dir_list[fd - FD_DIR_BASE]->offset;
+}
+
+void
+rewinddir(DIR *dirp)
+{
+	int fd, idx;
+
+	if (next_rewinddir == NULL) {
+		next_rewinddir = dlsym(RTLD_NEXT, "rewinddir");
+		D_ASSERT(next_rewinddir != NULL);
+	}
+	if (!hook_enabled)
+		return next_rewinddir(dirp);
+
+	fd = dirfd(dirp);
+	if (fd < FD_DIR_BASE)
+		return next_rewinddir(dirp);
+
+	idx                     = fd - FD_DIR_BASE;
+	dir_list[idx]->offset   = 0;
+	dir_list[idx]->num_ents = 0;
+	memset(&dir_list[idx]->anchor, 0, sizeof(daos_anchor_t));
+
+	return;
+}
+
+/* Offset of the first entry, allow two entries for . and .. */
+#define OFFSET_BASE 2
+
+void
+seekdir(DIR *dirp, long loc)
+{
+	int      fd, idx, rc;
+	long     num_entry;
+	uint32_t num_to_read;
+
+	if (next_seekdir == NULL) {
+		next_seekdir = dlsym(RTLD_NEXT, "seekdir");
+		D_ASSERT(next_seekdir != NULL);
+	}
+	if (!hook_enabled)
+		return next_seekdir(dirp, loc);
+
+	fd = dirfd(dirp);
+	if (fd < FD_DIR_BASE)
+		return next_seekdir(dirp, loc);
+
+	idx = fd - FD_DIR_BASE;
+
+	/* need to compare loc with current offset & the number of cached entries */
+	if (loc <= OFFSET_BASE) {
+		dir_list[idx]->offset   = loc;
+		dir_list[idx]->num_ents = 0;
+		memset(&dir_list[idx]->anchor, 0, sizeof(daos_anchor_t));
+		return;
+	}
+	if (dir_list[idx]->offset <= OFFSET_BASE) {
+		/* no buffered entry */
+		dir_list[idx]->offset   = OFFSET_BASE;
+		dir_list[idx]->num_ents = 0;
+		num_entry               = loc - OFFSET_BASE;
+	} else if (loc < dir_list[idx]->offset) {
+		/* rewind and read entries from the beginning */
+		dir_list[idx]->offset   = OFFSET_BASE;
+		dir_list[idx]->num_ents = 0;
+		memset(&dir_list[idx]->anchor, 0, sizeof(daos_anchor_t));
+		num_entry = loc - OFFSET_BASE;
+	} else if (loc >= (dir_list[idx]->offset + dir_list[idx]->num_ents)) {
+		/* need to read more entries from current offset */
+		dir_list[idx]->offset   = dir_list[idx]->offset + dir_list[idx]->num_ents;
+		dir_list[idx]->num_ents = 0;
+		num_entry               = loc - dir_list[idx]->offset;
+	} else if (loc >= dir_list[idx]->offset) {
+		/* in the cached entries */
+		dir_list[idx]->num_ents -= (loc - dir_list[idx]->offset);
+		dir_list[idx]->offset = loc;
+		return;
+	}
+
+	while (num_entry) {
+		num_to_read = min(READ_DIR_BATCH_SIZE, num_entry);
+
+		rc = dfs_iterate(dir_list[idx]->dfs_mt->dfs, dir_list[idx]->dir,
+				 &dir_list[idx]->anchor, &num_to_read, DFS_MAX_NAME * num_to_read,
+				 NULL, NULL);
+		if (rc)
+			D_GOTO(out_rewind, rc);
+		if (daos_anchor_is_eof(&dir_list[idx]->anchor))
+			D_GOTO(out_rewind, rc);
+		dir_list[idx]->offset += num_to_read;
+		dir_list[idx]->num_ents = 0;
+		num_entry               = loc - dir_list[idx]->offset;
+		num_to_read             = READ_DIR_BATCH_SIZE;
+	}
+
+	return;
+
+out_rewind:
+	dir_list[idx]->offset   = 0;
+	dir_list[idx]->num_ents = 0;
+	memset(&dir_list[idx]->anchor, 0, sizeof(daos_anchor_t));
+	return;
+}
+
+int
+scandirat(int dirfd, const char *restrict path, struct dirent ***restrict namelist,
+	  int (*filter)(const struct dirent *),
+	  int (*compar)(const struct dirent **, const struct dirent **))
+{
+	int   rc;
+	int   error     = 0;
+	char *full_path = NULL;
+
+	if (next_scandirat == NULL) {
+		next_scandirat = dlsym(RTLD_NEXT, "scandirat");
+		D_ASSERT(next_scandirat != NULL);
+	}
+	if (!hook_enabled)
+		return next_scandirat(dirfd, path, namelist, filter, compar);
+
+	if (dirfd < FD_DIR_BASE)
+		return next_scandirat(dirfd, path, namelist, filter, compar);
+
+	if (path[0] == '/')
+		return scandir(path, namelist, filter, compar);
+
+	check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
+
+	rc = scandir(full_path, namelist, filter, compar);
+
+	error = errno;
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
+}
+
 static struct dirent *
 new_readdir(DIR *dirp)
 {
@@ -3945,7 +4114,10 @@ out_null_readdir:
 	return NULL;
 out_readdir:
 	mydir->num_ents--;
-	mydir->offset++;
+	if (mydir->offset <= OFFSET_BASE)
+		mydir->offset = OFFSET_BASE + 1;
+	else
+		mydir->offset++;
 	len_str = asprintf(&full_path, "%s/%s",
 			   dir_list[mydir->fd - FD_DIR_BASE]->path +
 			   dir_list[mydir->fd - FD_DIR_BASE]->dfs_mt->len_fs_root,
