@@ -599,7 +599,6 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	struct dtx_handle	*dth = NULL;
 	struct umem_rsrvd_act	*rsrvd_scm;
 	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
-	int			 i;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -632,10 +631,10 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	/** There can't be more cancellations than updates in this
 	 *  modification so just use the current one
 	 */
-	D_ASSERT(dth->dth_op_seq > 0);
-	D_ASSERT(dth->dth_op_seq <= dth->dth_deferred_cnt);
-	i = dth->dth_op_seq - 1;
-	rsrvd_scm = dth->dth_deferred[i];
+	D_ASSERTF(dth->dth_deferred_used_cnt < dth->dth_deferred_cnt, "%u < %u\n",
+		  dth->dth_deferred_used_cnt, dth->dth_deferred_cnt);
+	rsrvd_scm = dth->dth_deferred[dth->dth_deferred_used_cnt];
+	dth->dth_deferred_used_cnt++;
 	D_ASSERT(rsrvd_scm != NULL);
 
 	umem_defer_free(&tins->ti_umm, rec->rec_off, rsrvd_scm);

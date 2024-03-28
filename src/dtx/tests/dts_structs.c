@@ -81,6 +81,7 @@ struct_dtx_handle(void **state)
 	SET_FIELD(dummy, dth_deferred_cnt);
 	SET_FIELD(dummy, dth_modification_cnt);
 	SET_FIELD(dummy, dth_op_seq);
+	SET_FIELD(dummy, dth_deferred_used_cnt);
 	SET_FIELD(dummy, padding2);
 	SET_FIELD(dummy, dth_oid_cnt);
 	SET_FIELD(dummy, dth_oid_cap);
