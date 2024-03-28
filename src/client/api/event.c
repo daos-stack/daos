@@ -14,7 +14,6 @@
 #define D_LOGFAC	DD_FAC(client)
 
 #include "client_internal.h"
-#include "../cart/crt_internal.h"
 #include <daos/rpc.h>
 
 /** thread-private event */
@@ -113,8 +112,6 @@ daos_eq_lib_reset_after_fork(void)
 {
 	eq_ref            = 0;
 	ev_thpriv_is_init = false;
-	crt_reset_lock();
-	D_MUTEX_INIT(&daos_eq_lock, NULL);
 	return daos_eq_lib_init();
 }
 

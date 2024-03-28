@@ -1293,9 +1293,3 @@ void crt_na_config_fini(bool primary, crt_provider_t provider)
 	na_cfg->noc_port = 0;
 	na_cfg->noc_iface_total = 0;
 }
-
-void
-crt_reset_lock()
-{
-	D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
-}

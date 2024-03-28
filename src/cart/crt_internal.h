@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,7 +97,4 @@ crt_hdlr_ctl_get_pid(crt_rpc_t *rpc_req);
 
 void
 crt_iv_init(crt_init_options_t *ops);
-
-void
-crt_reset_lock();
 #endif /* __CRT_INTERNAL_H__ */
