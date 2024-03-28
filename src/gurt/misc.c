@@ -570,18 +570,29 @@ d_rank_list_find(d_rank_list_t *rank_list, d_rank_t rank, int *idx)
 }
 
 /**
+ * Delete the rank at \a idx of \a list. This function is introduced for callers
+ * who do not want to handle artificial errors and do not need to resize the
+ * list->rl_ranks allocation.
+ */
+void
+d_rank_list_del_at(d_rank_list_t *list, int idx)
+{
+	D_ASSERT(list != NULL);
+	D_ASSERTF(0 <= idx && idx < list->rl_nr, "idx=%d rl_nr=%u\n", idx, list->rl_nr);
+	memmove(&list->rl_ranks[idx], &list->rl_ranks[idx + 1],
+		(list->rl_nr - idx - 1) * sizeof(list->rl_ranks[0]));
+	list->rl_nr--;
+}
+
+/**
  * delete the first occurrence of rank, shrink the array storage size in
  * rank_list, and reduce the size of rank_list by 1.
  */
 int
 d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 {
-	uint32_t	 new_num;
-	uint32_t	 num_bytes;
-	void		*dest;
-	void		*src;
-	int		 idx;
-	int		 rc = 0;
+	int idx;
+	int rc = 0;
 
 	if (rank_list == NULL) {
 		D_ERROR("rank_list cannot be NULL\n");
@@ -589,15 +600,10 @@ d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 	}
 	if (!d_rank_list_find(rank_list, rank, &idx)) {
 		D_DEBUG(DB_TRACE, "Rank %d not in the rank list.\n", rank);
-		D_GOTO(out, 0);
+		D_GOTO(out, rc = 0);
 	}
-	new_num = rank_list->rl_nr - 1;
-	src = &rank_list->rl_ranks[idx + 1];
-	dest = &rank_list->rl_ranks[idx];
-	D_ASSERT(idx <= new_num);
-	num_bytes = (new_num - idx) * sizeof(d_rank_t);
-	memmove(dest, src, num_bytes);
-	rc = d_rank_list_resize(rank_list, new_num);
+	d_rank_list_del_at(rank_list, idx);
+	rc = d_rank_list_resize(rank_list, rank_list->rl_nr);
 	if (rc != 0) {
 		D_ERROR("d_rank_list_resize() failed.\n");
 		D_GOTO(out, rc);

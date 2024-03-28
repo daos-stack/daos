@@ -261,6 +261,39 @@ choose:
 	return rc;
 }
 
+struct subtract_rsvc_rank_arg {
+	struct pool_domain *srra_nodes;
+	int                 srra_nodes_len;
+};
+
+static bool
+subtract_rsvc_rank(d_rank_t rank, void *varg)
+{
+	struct subtract_rsvc_rank_arg *arg = varg;
+	int                            i;
+
+	for (i = 0; i < arg->srra_nodes_len; i++)
+		if (arg->srra_nodes[i].do_comp.co_rank == rank &&
+		    arg->srra_nodes[i].do_comp.co_status & DC_POOL_SVC_MAP_STATES)
+			return false;
+	return true;
+}
+
+/* The pool->dp_map_lock must have been held for write. */
+static void
+update_rsvc_client(struct dc_pool *pool)
+{
+	struct subtract_rsvc_rank_arg arg;
+
+	arg.srra_nodes_len = pool_map_find_nodes(pool->dp_map, PO_COMP_ID_ALL, &arg.srra_nodes);
+	/* There must be at least one rank. */
+	D_ASSERTF(arg.srra_nodes_len > 0, "%d > 0\n", arg.srra_nodes_len);
+
+	D_MUTEX_LOCK(&pool->dp_client_lock);
+	rsvc_client_subtract(&pool->dp_client, subtract_rsvc_rank, &arg);
+	D_MUTEX_UNLOCK(&pool->dp_client_lock);
+}
+
 /* Assume dp_map_lock is locked before calling this function */
 int
 dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
@@ -297,6 +330,7 @@ dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
 	pool->dp_map = map;
 	if (pool->dp_map_version_known < map_version)
 		pool->dp_map_version_known = map_version;
+	update_rsvc_client(pool);
 	D_INFO(DF_UUID ": updated pool map: version=%u->%u\n", DP_UUID(pool->dp_pool),
 	       map_version_before, map_version);
 out:
