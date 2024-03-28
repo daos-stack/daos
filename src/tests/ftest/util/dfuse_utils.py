@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import json
 import os
 import time
 
@@ -379,6 +380,20 @@ class Dfuse(DfuseCommand):
 
         # Only assume clean if nothing above failed
         self.__need_cleanup = False
+
+    def get_stats(self):
+        """Return the I/O stats for the filesystem"""
+
+        cmd = f"daos filesystem query --json {self.mount_dir.value}"
+        result = run_remote(self.log, self.hosts, cmd)
+        if not result.passed:
+            raise CommandFailure(f'"{cmd}" failed on {result.failed_hosts}')
+
+        data = json.loads("\n".join(result.output[0].stdout))
+        print(data)
+        assert data["status"] == 0
+        assert data["error"] is None
+        return data["response"]
 
 
 def get_dfuse(test, hosts, namespace=None):

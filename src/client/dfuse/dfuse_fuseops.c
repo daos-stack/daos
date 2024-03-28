@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,6 +44,9 @@ dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_PARALLEL_DIROPS);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_POSIX_ACL);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_HANDLE_KILLPRIV);
+#ifdef FUSE_CAP_EXPIRE_ONLY
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPIRE_ONLY);
+#endif
 
 #ifdef FUSE_CAP_CACHE_SYMLINKS
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_CACHE_SYMLINKS);
@@ -95,6 +98,12 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	if (dfuse_info->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+
+#ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
+	/* DAOS-15338 Do not let the kernel evict data on mtime changes */
+	conn->want |= FUSE_CAP_EXPLICIT_INVAL_DATA;
+	conn->want &= ~FUSE_CAP_AUTO_INVAL_DATA;
+#endif
 
 #ifdef FUSE_CAP_CACHE_SYMLINKS
 	conn->want |= FUSE_CAP_CACHE_SYMLINKS;
@@ -168,6 +177,17 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	} else {
 		inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 		DFUSE_IE_STAT_ADD(inode, DS_GETATTR);
+	}
+
+	if (inode->ie_dfs->dfc_attr_timeout) {
+		double timeout;
+		dfuse_ie_cs_flush(inode);
+
+		if (dfuse_dc_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
+			DFUSE_IE_STAT_ADD(inode, DS_PRE_GETATTR);
+			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
+			return;
+		}
 	}
 
 	if (inode->ie_dfs->dfc_attr_timeout &&

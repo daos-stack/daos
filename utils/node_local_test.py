@@ -1288,7 +1288,7 @@ class DFuse():
 
     # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True, multi_user=False, ro=False):
+                 caching=True, wbcache=False, multi_user=False, ro=False):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1953,6 +1953,7 @@ class needs_dfuse_with_opt():
             if not self.dfuse_inval:
                 assert self.caching is True
                 cont_attrs = {'dfuse-attr-time': '5m',
+                              'dfuse-data-cache': '5m',
                               'dfuse-dentry-time': '5m',
                               'dfuse-dentry-dir-time': '5m',
                               'dfuse-ndentry-time': '5m'}
@@ -2275,6 +2276,41 @@ class PosixTests():
         assert raw_data1 == data4
         assert len(data5) == 0
         assert raw_data1 == data6
+
+    @needs_dfuse_with_opt(caching=True, wbcache=False, dfuse_inval=False)
+    def test_read_from_cache(self):
+        """Test a basic read.
+
+        Write to a file, then read from it.  With write-through caching on then the read should come
+        from the page cache.  Due to the way this is implement the cache will be truncated down
+        to a page size so this test only works for whole pages.
+
+        The I/O that dfuse should see are:
+        create
+        write
+        release
+        stat
+        open
+        release
+        open
+        release
+        """
+        file_name = join(self.dfuse.dir, 'file')
+
+        subprocess.run(["dd", "if=/dev/zero", f"of={file_name}", 'count=1', 'bs=4k'], check=True)
+
+        subprocess.run(["dd", "of=/dev/zero", f"if={file_name}", 'count=4k', 'bs=1'], check=True)
+        sd = self.dfuse.check_usage()
+        sd_read = sd["statistics"].get("read", 0)
+        print(f'Number of reads {sd_read}')
+
+        subprocess.run(["dd", "of=/dev/zero", f"if={file_name}", 'count=1', 'bs=4k'], check=True)
+        pd = self.dfuse.check_usage()
+        pd_read = pd["statistics"].get("read", 0)
+        print(f'Number of reads {pd_read}')
+
+        assert pd_read == sd_read
+        assert pd_read == 0
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
@@ -5010,7 +5046,7 @@ def run_in_fg(server, conf, args):
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
-        cont_attrs = {'dfuse-data-cache': False,
+        cont_attrs = {'dfuse-data-cache': 120,
                       'dfuse-attr-time': 67,
                       'dfuse-dentry-time': 19,
                       'dfuse-dentry-dir-time': 31,
@@ -5020,7 +5056,7 @@ def run_in_fg(server, conf, args):
         container = container.uuid
 
     dargs = {"caching": True,
-             "wbcache": True,
+             "wbcache": False,
              "multi_user": args.multi_user}
 
     if pool_on_cmd_line:
