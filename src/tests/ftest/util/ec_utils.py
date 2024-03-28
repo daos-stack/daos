@@ -110,8 +110,7 @@ class ErasureCodeIor(ServerFillUp):
     def ec_container_create(self, oclass):
         """Create the container for EC object."""
         # Get container params
-        self.ec_container = self.get_container(
-            self.pool, create=False, daos_command=self.get_daos_command(), oclass=oclass)
+        self.ec_container = self.get_container(self.pool, create=False, oclass=oclass)
 
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
@@ -479,21 +478,6 @@ class ErasureCodeFio(FioBase):
         # Create Pool
         self.add_pool()
         self.out_queue = queue.Queue()
-
-    def stop_job_managers(self):
-        """Cleanup dfuse in case of test failure."""
-        error_list = []
-        dfuse_cleanup_cmd = ["pkill dfuse --signal KILL",
-                             "fusermount3 -uz {}".format(self.dfuse.mount_dir.value)]
-
-        for cmd in dfuse_cleanup_cmd:
-            results = run_pcmd(self.hostlist_clients, cmd)
-            for result in results:
-                if result["exit_status"] != 0:
-                    error_list.append("Errors detected during cleanup cmd %s on node %s",
-                                      cmd, str(result["hosts"]))
-                    error_list.extend(super().stop_job_managers())
-        return error_list
 
     def write_single_fio_dataset(self, results):
         """Run Fio Benchmark.

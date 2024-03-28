@@ -347,10 +347,7 @@ def launch_snapshot(self, pool, name):
         "<<<PASS %s: %s started at %s>>>", self.loop, name, time.ctime())
     status = True
     # Create container
-    container = TestContainer(pool)
-    container.namespace = "/run/container_reserved/*"
-    container.get_params(self)
-    container.create()
+    container = self.get_container(pool, "/run/container_reserved/*")
     container.open()
     obj_cls = self.params.get(
         "object_class", '/run/container_reserved/*')

@@ -7,7 +7,6 @@ import ctypes
 
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, DaosContPropEnum, conversion, daos_cref
-from test_utils_container import TestContainer
 
 
 class QueryPropertiesTest(TestWithServers):
@@ -40,8 +39,7 @@ class QueryPropertiesTest(TestWithServers):
         errors = []
 
         self.add_pool()
-        self.container = TestContainer(pool=self.pool)
-        self.container.get_params(self)
+        self.add_container(self.pool)
 
         # Prepare DaosContProperties. Update some items from default. These are
         # properties that determine the values, not the actual values. The actual values

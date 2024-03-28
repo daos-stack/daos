@@ -35,7 +35,7 @@ from pydaos.raw import DaosApiError, DaosContext, DaosLog
 from run_utils import command_as_user, run_remote, stop_processes
 from server_utils import DaosServerManager
 from slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
-from test_utils_container import TestContainer
+from test_utils_container import CONT_NAMESPACE, add_container
 from test_utils_pool import POOL_NAMESPACE, LabelGenerator, add_pool
 from write_host_file import write_host_file
 
@@ -1408,10 +1408,8 @@ class TestWithServers(TestWithoutServers):
         # Stop any test jobs that may still be running
         self._teardown_errors.extend(self.stop_job_managers())
 
-        # Destroy any containers first
-        self._teardown_errors.extend(self.destroy_containers(self.container))
-
-        # Destroy any pools next - eventually this call will encompass all teardown steps
+        # Destroy any containers and pools next
+        # Eventually this call will encompass all teardown steps
         self._teardown_errors.extend(self._cleanup())
 
         # Stop the agents
@@ -1756,10 +1754,11 @@ class TestWithServers(TestWithoutServers):
                 True.
             dmg (DmgCommand, optional): dmg command used to create the pool. Defaults to None, which
                 calls test.get_dmg_command().
+            params (dict): name/value of attributes for which to call update(value, name).
+                See TestPool for available attributes.
 
         Returns:
             TestPool: the created test pool object.
-
         """
         return add_pool(self, namespace, create, connect, dmg, **params)
 
@@ -1808,56 +1807,38 @@ class TestWithServers(TestWithoutServers):
         for _ in range(quantity):
             self.pool.append(self.get_pool(namespace, create, connect, dmg))
 
-    @fail_on(AttributeError)
-    def get_container(self, pool, namespace=None, create=True, daos_command=None, **kwargs):
+    def get_container(self, pool, namespace=CONT_NAMESPACE, create=True, daos=None, **params):
         """Create a TestContainer object.
 
         Args:
             pool (TestPool): pool in which to create the container.
-            namespace (str, optional): namespace for TestContainer parameters in
-                the test yaml file. Defaults to None.
+            namespace (str, optional): namespace for TestContainer parameters in the test yaml file.
+                Defaults to CONT_NAMESPACE.
             create (bool, optional): should the container be created. Defaults to True.
-            daos_command (DaosCommand, optional): daos command object.
-                Defaults to self.get_daos_command()
-            kwargs (dict): name/value of attributes for which to call update(value, name).
+            daos (DaosCommand, optional): daos command object. Defaults to self.get_daos_command()
+            params (dict): name/value of attributes for which to call update(value, name).
                 See TestContainer for available attributes.
 
         Returns:
             TestContainer: the created container.
-
-        Raises:
-            AttributeError: if an attribute does not exist or does not have an update() method.
-
         """
-        # Create a container with params from the config
-        container = TestContainer(
-            pool, daos_command=(daos_command or self.get_daos_command()),
-            label_generator=self.label_generator)
-        if namespace is not None:
-            container.namespace = namespace
-        container.get_params(self)
+        return add_container(self, pool, namespace, create, daos, **params)
 
-        # Set passed params
-        container.update_params(**kwargs)
-
-        if create:
-            container.create()
-
-        return container
-
-    def add_container(self, pool, namespace=None, create=True):
+    def add_container(self, pool, namespace=CONT_NAMESPACE, create=True, daos=None, **params):
         """Add a container to the test case.
 
         This method defines the common test container creation sequence.
 
         Args:
             pool (TestPool): pool in which to create the container.
-            namespace (str, optional): namespace for TestContainer parameters in
-                the test yaml file. Defaults to None.
-            create (bool, optional): should the container be created. Defaults
-                to True.
+            namespace (str, optional): namespace for TestContainer parameters in the test yaml file.
+                Defaults to CONT_NAMESPACE.
+            create (bool, optional): should the container be created. Defaults to True.
+            daos (DaosCommand, optional): daos command object. Defaults to self.get_daos_command()
+            params (dict): name/value of attributes for which to call update(value, name).
+                See TestContainer for available attributes.
         """
-        self.container = self.get_container(pool=pool, namespace=namespace, create=create)
+        self.container = self.get_container(pool, namespace, create, daos, **params)
 
     def add_container_qty(self, quantity, pool, namespace=None, create=True):
         """Add multiple containers to the test case.
