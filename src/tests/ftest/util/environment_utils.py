@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,7 +18,7 @@ class TestEnvironmentException(Exception):
     """Exception for launch.py execution."""
 
 
-def get_build_environment(logger, build_vars_file):
+def _get_build_environment(logger, build_vars_file):
     """Obtain DAOS build environment variables from the .build_vars.json file.
 
     Args:
@@ -29,19 +29,22 @@ def get_build_environment(logger, build_vars_file):
         TestEnvironmentException: if there is an error obtaining the DAOS build environment
 
     Returns:
-        dict: a dictionary of DAOS build environment variable names and values
-
+        str: The prefix of the DAOS install.
+        None: If the file is not present.
     """
     logger.debug("Obtaining DAOS build environment from %s", build_vars_file)
     try:
         with open(build_vars_file, encoding="utf-8") as vars_file:
-            return json.load(vars_file)
+            return json.load(vars_file)["PREFIX"]
+
+    except FileNotFoundError:
+        return None
 
     except Exception as error:      # pylint: disable=broad-except
         raise TestEnvironmentException("Error obtaining build environment:", str(error)) from error
 
 
-def update_path(logger, build_vars_file):
+def _update_path(logger, build_vars_file):
     """Update the PATH environment variable for functional testing.
 
     Args:
@@ -51,17 +54,29 @@ def update_path(logger, build_vars_file):
     Raises:
         TestEnvironmentException: if there is an error obtaining the DAOS build environment
     """
-    base_dir = get_build_environment(logger, build_vars_file)["PREFIX"]
-    bin_dir = os.path.join(base_dir, "bin")
-    sbin_dir = os.path.join(base_dir, "sbin")
+    base_dir = _get_build_environment(logger, build_vars_file)
+
+    path = os.environ.get("PATH")
+
+    parts = path.split(":")
+
+    # If a custom prefix is used for the daos installation then prepend that to the path so that
+    # any binaries provided are picked up from there, else do not modify the path.
+    if base_dir:
+        bin_dir = os.path.join(base_dir, "bin")
+        sbin_dir = os.path.join(base_dir, "sbin")
+
+        parts.insert(0, bin_dir)
+        parts.insert(0, sbin_dir)
 
     # /usr/sbin is not setup on non-root user for CI nodes.
     # SCM formatting tool mkfs.ext4 is located under /usr/sbin directory.
     usr_sbin = os.path.join(os.sep, "usr", "sbin")
-    path = os.environ.get("PATH")
 
-    # Update PATH
-    os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
+    if usr_sbin not in parts:
+        parts.append(usr_sbin)
+
+    os.environ["PATH"] = ":".join(parts)
 
 
 def set_python_environment(logger):
@@ -79,10 +94,8 @@ def set_python_environment(logger):
     ]
 
     # Include the cart directory paths when running from sources
-    for cart_dir in os.listdir(os.path.abspath("cart")):
-        cart_path = os.path.join(os.path.abspath("cart"), cart_dir)
-        if os.path.isdir(cart_path):
-            required_python_paths.append(cart_path)
+    cart_utils_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cart", "util")
+    required_python_paths.append(cart_utils_dir)
 
     required_python_paths.extend(site.getsitepackages())
 
@@ -541,7 +554,7 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         # Update the PATH environment variable
         build_vars_file = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", ".build_vars.json")
-        update_path(logger, build_vars_file)
+        _update_path(logger, build_vars_file)
 
         # Get the default fabric interface and provider
         test_env.set_defaults(logger, servers, clients, provider, insecure_mode)

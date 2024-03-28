@@ -24,7 +24,9 @@
 !ftest.sh
 !site_scons
 !.clang-format
-!requirements.txt
+!requirements-build.txt
+!requirements-utest.txt
+!requirements-ftest.txt
 
 # Now disallow extra files which may be present but are not required.
 # Include the rdb repo as well.

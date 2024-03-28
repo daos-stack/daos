@@ -101,17 +101,29 @@ sudo chmod 0755 /tmp/daos_sockets
 sudo chown "$me:$me" /tmp/daos_sockets
 
 FTEST=/usr/lib/daos/TESTING/ftest
-sudo PYTHONPATH="$FTEST/util"                               \
-     $FTEST/config_file_gen.py -n "$HOSTNAME"               \
-                               -a /etc/daos/daos_agent.yml  \
-                               -s /etc/daos/daos_server.yml
+
+python3 -m venv venv
+# shellcheck disable=SC1091
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r $FTEST/requirements-ftest.txt
+
+sudo PYTHONPATH="$FTEST/util"                        \
+     "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py -n "$HOSTNAME" \
+        -a /etc/daos/daos_agent.yml -s /etc/daos/daos_server.yml
 sudo bash -c 'echo "system_ram_reserved: 4" >> /etc/daos/daos_server.yml'
 sudo PYTHONPATH="$FTEST/util"                        \
-     $FTEST/config_file_gen.py -n "$HOSTNAME"        \
-                               -d /etc/daos/daos_control.yml
+     "${VIRTUAL_ENV}"/bin/python $FTEST/config_file_gen.py \
+     -n "$HOSTNAME" -d /etc/daos/daos_control.yml
 cat /etc/daos/daos_server.yml
 cat /etc/daos/daos_agent.yml
 cat /etc/daos/daos_control.yml
+
+# python3.6 does not like deactivate with -u set, later versions are OK with it however.
+set +u
+deactivate
+set -u
+
 if ! module load "$OPENMPI"; then
     echo "Unable to load OpenMPI module: $OPENMPI"
     module avail
