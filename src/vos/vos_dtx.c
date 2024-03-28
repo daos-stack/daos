@@ -1667,12 +1667,9 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	D_ASSERT(cont != NULL);
 	D_ASSERT(dae->dae_aborting == 0);
 	D_ASSERT(dae->dae_aborted == 0);
+	D_ASSERT(dth->dth_prepared == 0);
 
 	if (!dth->dth_active) {
-		/* For resend case, do nothing. */
-		if (likely(dth->dth_prepared))
-			return 0;
-
 		/*
 		 * Even if the transaction modifies nothing locally, we still need to store
 		 * it persistently. Otherwise, the subsequent DTX resync may not find it as
@@ -1685,6 +1682,8 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 
 		if (rc != 0)
 			return rc;
+
+		dae->dae_prepared = 1;
 	}
 
 	if (dth->dth_solo) {
@@ -2682,6 +2681,9 @@ vos_dtx_mark_committable(struct dtx_handle *dth)
 	struct vos_dtx_act_ent	*dae = dth->dth_ent;
 
 	if (dae != NULL) {
+		D_ASSERTF(dae->dae_prepared, "DTX "DF_DTI" is not prepared before committable\n",
+			  DP_DTI(&DAE_XID(dae)));
+
 		dae->dae_committable = 1;
 		DAE_FLAGS(dae) &= ~(DTE_CORRUPTED | DTE_ORPHAN);
 	}

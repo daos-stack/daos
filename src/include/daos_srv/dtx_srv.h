@@ -221,6 +221,12 @@ struct dtx_leader_handle {
 	uint32_t			dlh_normal_sub_done:1,
 					dlh_need_agg:1,
 					dlh_agg_done:1,
+					/* Hit allowed failure on remote target(s). */
+					dlh_allow_failure_hit_rmt:1,
+					/* Hit allowed failure on local target. */
+					dlh_allow_failure_hit_lol:1,
+					/* Only re-execute on the targets hit allow_failure. */
+					dlh_cond_reexec:1,
 					/* For collective DTX. */
 					dlh_coll:1,
 					/* Only forward RPC, but neither commit nor abort DTX. */
