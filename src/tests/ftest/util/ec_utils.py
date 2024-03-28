@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,7 @@ from apricot import TestWithServers
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
 from fio_test_base import FioBase
-from general_utils import DaosTestError, run_pcmd
+from general_utils import DaosTestError
 from mdtest_test_base import MdtestBase
 from nvme_utils import ServerFillUp
 from pydaos.raw import DaosApiError

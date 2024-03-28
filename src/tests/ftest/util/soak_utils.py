@@ -30,7 +30,6 @@ from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
 from run_utils import run_remote
-from test_utils_container import TestContainer
 
 H_LOCK = threading.Lock()
 
