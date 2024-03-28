@@ -189,9 +189,9 @@ class CartTest(TestWithoutServers):
         """Get the basic env setting in yaml."""
         env_ccsa = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = self.params.get("name", "/run/tests/*/")
-        provider_str = self.params.get("CRT_PHY_ADDR_STR", "/run/env_CRT_PHY_ADDR_STR/*/")
+        provider_str = self.params.get("D_PROVIDER", "/run/env_D_PROVIDER/*/")
 
-        os.environ["CRT_PHY_ADDR_STR"] = provider_str
+        os.environ["D_PROVIDER"] = provider_str
 
         if env_ccsa is not None:
             log_dir = "{}-{}".format(test_name, env_ccsa)
@@ -210,9 +210,9 @@ class CartTest(TestWithoutServers):
                                 + provider_str + "_cart.log").replace(";", "_")
 
         # Parse out envs of interest from the yaml file
-        envars_to_parse = ["D_LOG_MASK", "CRT_PHY_ADDR_STR", "D_PROVIDER", "D_INTERFACE",
-                           "D_DOMAIN", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CTX_SHARE_ADDR",
-                           "D_PORT", "OFI_PORT", "HG_LOG_LEVEL", "HG_LOG_SUBSYS"]
+        envars_to_parse = ["D_LOG_MASK", "D_PROVIDER", "D_INTERFACE",
+                           "D_DOMAIN", "CRT_CTX_SHARE_ADDR",
+                           "D_PORT", "HG_LOG_LEVEL", "HG_LOG_SUBSYS"]
         yaml_envs = ""
 
         for env_name in envars_to_parse:

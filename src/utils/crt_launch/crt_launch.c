@@ -7,7 +7,7 @@
  * MPI-based and cart-based crt_launch application that facilitates launching
  * cart-based clients and servers when no pmix is used.
  *
- * Usage is mpirun -x OFI_INTERFACE=eth0 -H <hosts> crt_launch <app to run>
+ * Usage is mpirun -x D_INTERFACE=eth0 -H <hosts> crt_launch <app to run>
  *
  * crt_launch will prepare environment for app and exec provided <app to run>
  * The environment consists of envariables:
