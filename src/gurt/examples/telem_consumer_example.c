@@ -147,6 +147,13 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 	d_tm_list_free(head);
 }
 
+static void
+iter_print(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, char *path, int format,
+	   int opt_fields, void *arg)
+{
+	d_tm_print_node(ctx, node, level, path, format, opt_fields, (FILE *)arg);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -177,8 +184,8 @@ main(int argc, char **argv)
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 	show_meta = true;
-	d_tm_iterate(ctx, root, 0, filter, NULL, D_TM_STANDARD,
-		     D_TM_INCLUDE_METADATA, D_TM_ITER_READ, stdout);
+	d_tm_iterate(ctx, root, 0, filter, NULL, D_TM_STANDARD, D_TM_INCLUDE_METADATA, iter_print,
+		     stdout);
 
 	sprintf(dirname, "manually added");
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |

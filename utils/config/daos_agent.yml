@@ -26,6 +26,20 @@
 # default: 10001
 #port: 10001
 
+## Enable HTTP endpoint for remote telemetry collection.
+# Note that enabling the endpoint automatically enables
+# client telemetry collection.
+#
+## default endpoint state: disabled
+## default endpoint port: 9192
+#telemetry_port: 9192
+
+## Retain client telemetry for a period of time after the client
+# process exits.
+#
+## default 0 (do not retain telemetry after client exit)
+#telemetry_retain: 1m
+
 ## Transport Credentials Specifying certificates to secure communications
 #
 #transport_config:

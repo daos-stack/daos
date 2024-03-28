@@ -244,6 +244,8 @@ const (
 	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
 	// MethodLedManage defines a method to manage a VMD device LED state
 	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
+	// MethodSetupClientTelemetry defines a method to setup client telemetry
+	MethodSetupClientTelemetry MgmtMethod = C.DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM
 )
 
 type srvMethod int32

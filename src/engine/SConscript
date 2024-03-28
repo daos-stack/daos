@@ -29,7 +29,7 @@ def scons():
                'drpc_handler.c', 'drpc_listener.c',
                'drpc_progress.c', 'init.c', 'module.c',
                'srv_cli.c', 'profile.c', 'rpc.c',
-               'server_iv.c', 'srv.c', 'srv.pb-c.c', 'tls.c',
+               'server_iv.c', 'srv.c', 'srv.pb-c.c',
                'sched.c', 'ult.c', 'event.pb-c.c',
                'srv_metrics.c'] + libdaos_tgts
 

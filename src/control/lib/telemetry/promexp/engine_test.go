@@ -3,11 +3,6 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//go:build linux && (amd64 || arm64)
-// +build linux
-// +build amd64 arm64
-
-//
 
 package promexp
 
@@ -62,7 +57,10 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 
 			test.CmpErr(t, tc.expErr, err)
 
-			if diff := cmp.Diff(tc.expResult, result, cmpopts.IgnoreUnexported(EngineSource{})); diff != "" {
+			cmpOpts := cmp.Options{
+				cmpopts.IgnoreUnexported(MetricSource{}),
+			}
+			if diff := cmp.Diff(tc.expResult, result, cmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s", diff)
 			}
 
@@ -155,31 +153,20 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		es         *EngineSource
-		resultChan chan *rankMetric
+		resultChan chan *sourceMetric
 		expMetrics telemetry.TestMetricsMap
 	}{
-		"nil source": {
-			resultChan: make(chan *rankMetric),
-		},
 		"nil channel": {
 			es: validSrc,
 		},
-		"bad source": {
-			es: &EngineSource{
-				ctx:   test.Context(t),
-				Rank:  123,
-				Index: testIdx + 1,
-			},
-			resultChan: make(chan *rankMetric),
-		},
 		"success": {
 			es:         validSrc,
-			resultChan: make(chan *rankMetric),
+			resultChan: make(chan *sourceMetric),
 			expMetrics: realMetrics,
 		},
 		"disabled": {
 			es:         disabledSrc,
-			resultChan: make(chan *rankMetric),
+			resultChan: make(chan *sourceMetric),
 			expMetrics: telemetry.TestMetricsMap{},
 		},
 	} {
@@ -189,7 +176,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 
 			go tc.es.Collect(log, tc.resultChan)
 
-			gotMetrics := []*rankMetric{}
+			gotMetrics := []*sourceMetric{}
 			for {
 				done := false
 				select {
@@ -206,7 +193,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 
 			test.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "wrong number of metrics returned")
 			for _, got := range gotMetrics {
-				test.AssertEqual(t, testRank, got.rank, "wrong rank")
+				test.AssertEqual(t, fmt.Sprintf("%d", testRank), got.labels["rank"], "wrong rank")
 				expM, ok := tc.expMetrics[got.metric.Type()]
 				if !ok {
 					t.Fatalf("metric type %d not expected", got.metric.Type())
@@ -220,7 +207,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 	}
 }
 
-func TestPromExp_NewCollector(t *testing.T) {
+func TestPromExp_NewEngineCollector(t *testing.T) {
 	testSrc := []*EngineSource{
 		{
 			Rank: 1,
@@ -234,20 +221,24 @@ func TestPromExp_NewCollector(t *testing.T) {
 		sources   []*EngineSource
 		opts      *CollectorOpts
 		expErr    error
-		expResult *Collector
+		expResult *EngineCollector
 	}{
 		"no sources": {
-			expResult: &Collector{
-				summary: &prometheus.SummaryVec{
-					MetricVec: &prometheus.MetricVec{},
+			expResult: &EngineCollector{
+				metricsCollector: metricsCollector{
+					summary: &prometheus.SummaryVec{
+						MetricVec: &prometheus.MetricVec{},
+					},
 				},
 			},
 		},
 		"defaults": {
 			sources: testSrc,
-			expResult: &Collector{
-				summary: &prometheus.SummaryVec{
-					MetricVec: &prometheus.MetricVec{},
+			expResult: &EngineCollector{
+				metricsCollector: metricsCollector{
+					summary: &prometheus.SummaryVec{
+						MetricVec: &prometheus.MetricVec{},
+					},
 				},
 				sources: testSrc,
 			},
@@ -255,15 +246,17 @@ func TestPromExp_NewCollector(t *testing.T) {
 		"opts with ignores": {
 			sources: testSrc,
 			opts:    &CollectorOpts{Ignores: []string{"one", "two"}},
-			expResult: &Collector{
-				summary: &prometheus.SummaryVec{
-					MetricVec: &prometheus.MetricVec{},
+			expResult: &EngineCollector{
+				metricsCollector: metricsCollector{
+					summary: &prometheus.SummaryVec{
+						MetricVec: &prometheus.MetricVec{},
+					},
+					ignoredMetrics: []*regexp.Regexp{
+						regexp.MustCompile("one"),
+						regexp.MustCompile("two"),
+					},
 				},
 				sources: testSrc,
-				ignoredMetrics: []*regexp.Regexp{
-					regexp.MustCompile("one"),
-					regexp.MustCompile("two"),
-				},
 			},
 		},
 		"bad regexp in ignores": {
@@ -276,21 +269,23 @@ func TestPromExp_NewCollector(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			result, err := NewCollector(log, tc.opts, tc.sources...)
+			result, err := NewEngineCollector(log, tc.opts, tc.sources...)
 
 			test.CmpErr(t, tc.expErr, err)
 
 			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(EngineSource{}),
+				cmpopts.IgnoreUnexported(MetricSource{}),
 				cmpopts.IgnoreUnexported(prometheus.SummaryVec{}),
 				cmpopts.IgnoreUnexported(prometheus.MetricVec{}),
 				cmpopts.IgnoreUnexported(regexp.Regexp{}),
-				cmp.AllowUnexported(Collector{}),
+				cmp.AllowUnexported(EngineCollector{}),
+				cmp.AllowUnexported(metricsCollector{}),
 				cmp.FilterPath(func(p cmp.Path) bool {
 					// Ignore a few specific fields
 					return (strings.HasSuffix(p.String(), "log") ||
 						strings.HasSuffix(p.String(), "sourceMutex") ||
-						strings.HasSuffix(p.String(), "cleanupSource"))
+						strings.HasSuffix(p.String(), "cleanupSource") ||
+						strings.HasSuffix(p.String(), "collectFn"))
 				}, cmp.Ignore()),
 			}
 			if diff := cmp.Diff(tc.expResult, result, cmpOpts...); diff != "" {
@@ -338,7 +333,7 @@ func TestPromExp_Collector_Prune(t *testing.T) {
 	}
 	defer cleanup()
 
-	defaultCollector, err := NewCollector(log, nil, engSrc)
+	defaultCollector, err := NewEngineCollector(log, nil, engSrc)
 	if err != nil {
 		t.Fatalf("failed to create collector: %s", err.Error())
 	}
@@ -357,12 +352,12 @@ func TestPromExp_Collector_Prune(t *testing.T) {
 			}
 		}
 
-		engSrc.rmSchema.mu.Lock()
-		for m := range engSrc.rmSchema.rankMetrics {
-			_, name := extractLabels(m)
+		engSrc.smSchema.mu.Lock()
+		for m := range engSrc.smSchema.sourceMetrics {
+			_, name := extractEngineLabels(log, m)
 			names = append(names, name)
 		}
-		engSrc.rmSchema.mu.Unlock()
+		engSrc.smSchema.mu.Unlock()
 
 		sort.Strings(names)
 		return
@@ -373,7 +368,7 @@ func TestPromExp_Collector_Prune(t *testing.T) {
 		for _, m := range maps {
 			for t, m := range m {
 				if t != telemetry.MetricTypeDirectory && t != telemetry.MetricTypeLink {
-					_, name := extractLabels(m.FullPath())
+					_, name := extractEngineLabels(log, m.FullPath())
 					unique[name] = struct{}{}
 				}
 			}
@@ -422,7 +417,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 	}
 	defer cleanup()
 
-	defaultCollector, err := NewCollector(log, nil, engSrc)
+	defaultCollector, err := NewEngineCollector(log, nil, engSrc)
 	if err != nil {
 		t.Fatalf("failed to create collector: %s", err.Error())
 	}
@@ -433,7 +428,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 		"engine_stats_gauge2",
 		"engine_timer_duration",
 	}
-	ignoreCollector, err := NewCollector(log, &CollectorOpts{
+	ignoreCollector, err := NewEngineCollector(log, &CollectorOpts{
 		Ignores: ignores,
 	}, engSrc)
 	if err != nil {
@@ -441,13 +436,10 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		collector      *Collector
+		collector      *EngineCollector
 		resultChan     chan prometheus.Metric
 		expMetricNames []string
 	}{
-		"nil collector": {
-			resultChan: make(chan prometheus.Metric),
-		},
 		"nil channel": {
 			collector: defaultCollector,
 		},
@@ -518,7 +510,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 	}
 }
 
-func TestPromExp_extractLabels(t *testing.T) {
+func TestPromExp_extractEngineLabels(t *testing.T) {
 	for name, tc := range map[string]struct {
 		input     string
 		expName   string
@@ -632,7 +624,10 @@ func TestPromExp_extractLabels(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			labels, name := extractLabels(tc.input)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			labels, name := extractEngineLabels(log, tc.input)
 
 			test.AssertEqual(t, name, tc.expName, "")
 			if diff := cmp.Diff(labels, tc.expLabels); diff != "" {
@@ -692,7 +687,7 @@ func TestPromExp_Collector_AddSource(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			collector, err := NewCollector(log, nil, tc.startSrc...)
+			collector, err := NewEngineCollector(log, nil, tc.startSrc...)
 			if err != nil {
 				t.Fatalf("failed to set up collector: %s", err)
 			}
@@ -795,7 +790,7 @@ func TestPromExp_Collector_RemoveSource(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			collector, err := NewCollector(log, nil, tc.startSrc...)
+			collector, err := NewEngineCollector(log, nil, tc.startSrc...)
 			if err != nil {
 				t.Fatalf("failed to set up collector: %s", err)
 			}
@@ -805,7 +800,10 @@ func TestPromExp_Collector_RemoveSource(t *testing.T) {
 
 			collector.RemoveSource(tc.idx)
 
-			if diff := cmp.Diff(tc.expSrc, collector.sources, cmpopts.IgnoreUnexported(EngineSource{})); diff != "" {
+			cmpOpts := cmp.Options{
+				cmpopts.IgnoreUnexported(MetricSource{}),
+			}
+			if diff := cmp.Diff(tc.expSrc, collector.sources, cmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s", diff)
 			}
 

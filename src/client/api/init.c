@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,7 @@
 #include <daos/btree_class.h>
 #include <daos/placement.h>
 #include <daos/job.h>
+#include <daos/metrics.h>
 #if BUILD_PIPELINE
 #include <daos/pipeline.h>
 #endif
@@ -242,6 +243,13 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
+	rc = dc_tm_init();
+	if (rc) {
+		/* should not be fatal */
+		DL_WARN(rc, "failed to initialize client telemetry");
+		rc = 0;
+	}
+
 #if BUILD_PIPELINE
 	/** set up pipeline */
 	rc = dc_pipeline_init();
@@ -253,6 +261,7 @@ daos_init(void)
 
 #if BUILD_PIPELINE
 out_obj:
+	dc_tm_fini();
 	dc_obj_fini();
 #endif
 out_co:
@@ -309,6 +318,7 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+	daos_metrics_fini();
 #if BUILD_PIPELINE
 	dc_pipeline_fini();
 #endif
@@ -322,6 +332,7 @@ daos_fini(void)
 		D_ERROR("failed to disconnect some resources may leak, "
 			DF_RC"\n", DP_RC(rc));
 
+	dc_tm_fini();
 	dc_agent_fini();
 	dc_job_fini();
 

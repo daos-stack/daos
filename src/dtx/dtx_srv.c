@@ -9,6 +9,7 @@
 #define D_LOGFAC	DD_FAC(dtx)
 
 #include <daos/rpc.h>
+#include <daos/metrics.h>
 #include <daos/btree_class.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/container.h>
@@ -128,11 +129,11 @@ dtx_metrics_count(void)
 	return (sizeof(struct dtx_pool_metrics) / sizeof(struct d_tm_node_t *));
 }
 
-struct dss_module_metrics dtx_metrics = {
-	.dmm_tags = DAOS_TGT_TAG,
-	.dmm_init = dtx_metrics_alloc,
-	.dmm_fini = dtx_metrics_free,
-	.dmm_nr_metrics = dtx_metrics_count,
+struct daos_module_metrics dtx_metrics = {
+    .dmm_tags       = DAOS_TGT_TAG,
+    .dmm_init       = dtx_metrics_alloc,
+    .dmm_fini       = dtx_metrics_free,
+    .dmm_nr_metrics = dtx_metrics_count,
 };
 
 static void
