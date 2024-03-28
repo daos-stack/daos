@@ -2681,10 +2681,14 @@ vos_dtx_mark_committable(struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent	*dae = dth->dth_ent;
 
-	if (dae != NULL) {
-		dae->dae_committable = 1;
-		DAE_FLAGS(dae) &= ~(DTE_CORRUPTED | DTE_ORPHAN);
-	}
+	D_ASSERT(dae != NULL);
+
+	D_ASSERTF(dae->dae_prepared == 1,
+		  "DTX " DF_DTI " should be prepared locally before committable\n",
+		  DP_DTI(&dth->dth_xid));
+
+	dae->dae_committable = 1;
+	DAE_FLAGS(dae) &= ~(DTE_CORRUPTED | DTE_ORPHAN);
 }
 
 int
@@ -3133,6 +3137,9 @@ void
 vos_dtx_detach(struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent	*dae = dth->dth_ent;
+
+	D_ASSERTF(dth->dth_local_tx_started == 0,
+		  "DTX " DF_DTI " should end locally before detach\n", DP_DTI(&dth->dth_xid));
 
 	if (dae != NULL) {
 		D_ASSERT(dae->dae_dth == dth);
