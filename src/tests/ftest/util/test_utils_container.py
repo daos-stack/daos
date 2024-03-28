@@ -596,6 +596,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 self, self.record_qty.value, self.akey_size.value,
                 self.dkey_size.value, self.data_size.value, rank, obj_class,
                 self.data_array_size.value)
+        # Mark the pool as disconnected after API opperations
+        self.pool.connected = False
 
     def read_objects(self, txn=None):
         """Read the objects from the container and verify they match.
