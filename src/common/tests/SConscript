@@ -78,6 +78,11 @@ def scons():
                             ['drpc_tests.c', '../drpc.c', '../drpc.pb-c.c', mock_test_utils],
                             LIBS=['protobuf-c', 'daos_common', 'gurt', 'cmocka'])
 
+    Depends('rsvc_tests', common_mock_ld_script)
+    unit_env.d_test_program('rsvc_tests',
+                            ['rsvc_tests.c', '../rsvc.c', mock_test_utils],
+                            LIBS=['daos_common', 'gurt', 'cmocka'])
+
 
 if __name__ == "SCons.Script":
     scons()
