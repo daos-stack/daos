@@ -24,13 +24,17 @@ typedef struct dcache_rec dcache_rec_t;
  * \param[out] dcache		The newly created dir-cache
  * \param[in] dfs		The DAOS File System to cache
  * \param[in] bits		Power2(bits) is the size of cache
- * \param[in] rec_timeout	Timeout in seconds of a dir-cache entry.  When this value is equal
+ * \param[in] rec_timeout	Timeout in seconds of a dir-cache record.  When this value is equal
  *				to zero, the dir-cache is deactivated.
- *
+ * \param[in] gc_period		Time period in seconds of the garbage collection.  When this value
+ *				is equal to zero, the garbage collector is deactivated.
+ * \param[in] gc_reclaim_max	Maximal number of dir-cache record to reclaim per garbage collector
+ *				trigger
  * \return			0 on success, negative value on error
  */
 int
-dcache_create(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits, uint32_t rec_timeout);
+dcache_create(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits, uint32_t rec_timeout,
+	      uint32_t gc_period, uint32_t gc_reclaim_max);
 
 /**
  * Destroy a dfs dir-cache.

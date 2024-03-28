@@ -99,9 +99,13 @@
 #define DAOS_MIN_FD         10
 
 /* Default power2(bits) size of dir-cache */
-#define DCACHE_SIZE_BITS    16
+#define DCACHE_SIZE_BITS      16
 /* Default dir cache time-out in seconds */
-#define DCACHE_REC_TIMEOUT  60
+#define DCACHE_REC_TIMEOUT    60
+/* Default maximal number of dir cash entries to reclaim */
+#define DCACHE_GC_RECLAIM_MAX 1000
+/* Default dir cache garbage collector time-out in seconds */
+#define DCACHE_GC_PERIOD      120
 
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
@@ -121,6 +125,8 @@ static uint16_t               eq_idx;
 /* Configuration of the Garbage Collector */
 static uint32_t               dcache_size_bits;
 static uint32_t               dcache_rec_timeout;
+static uint32_t               dcache_gc_reclaim_max;
+static uint32_t               dcache_gc_period;
 
 /* structure allocated for dfs container */
 struct dfs_mt {
@@ -812,7 +818,7 @@ retrieve_handles_from_fuse(int idx)
 	}
 
 	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs, dcache_size_bits,
-			   dcache_rec_timeout);
+			   dcache_rec_timeout, dcache_gc_period, dcache_gc_reclaim_max);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
 		D_DEBUG(DB_ANY,
@@ -6148,14 +6154,26 @@ init_myhook(void)
 	dcache_size_bits = DCACHE_SIZE_BITS;
 	rc               = d_getenv_uint32_t("D_IL_DCACHE_SIZE_BITS", &dcache_size_bits);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		D_WARN("'D_IL_DCACHE_SIZE_BITS' env variable could not be used: " DF_RC "\n",
-		       DP_RC(rc));
+		DS_WARN(rc, "'D_IL_DCACHE_SIZE_BITS' env variable could not be used");
 
 	dcache_rec_timeout = DCACHE_REC_TIMEOUT;
 	rc                 = d_getenv_uint32_t("D_IL_DCACHE_REC_TIMEOUT", &dcache_rec_timeout);
 	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
-		D_WARN("'D_IL_DCACHE_REC_TIMEOUT' env variable could not be used: " DF_RC "\n",
-		       DP_RC(rc));
+		DS_WARN(rc, "'D_IL_DCACHE_REC_TIMEOUT' env variable could not be used");
+
+	dcache_gc_period = DCACHE_GC_PERIOD;
+	rc               = d_getenv_uint32_t("D_IL_DCACHE_GC_PERIOD", &dcache_gc_period);
+	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
+		DS_WARN(rc, "'D_IL_DCACHE_GC_PERIOD' env variable could not be used");
+
+	dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
+	rc = d_getenv_uint32_t("D_IL_DCACHE_GC_RECLAIM_MAX", &dcache_gc_reclaim_max);
+	if (rc != -DER_SUCCESS && rc != -DER_NONEXIST)
+		DS_WARN(rc, "'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used");
+	if (dcache_gc_reclaim_max <= 0) {
+		D_WARN("'D_IL_DCACHE_GC_RECLAIM_MAX' env variable could not be used: value <= 0.");
+		dcache_gc_reclaim_max = DCACHE_GC_RECLAIM_MAX;
+	}
 
 	register_a_hook("ld", "open64", (void *)new_open_ld, (long int *)(&ld_open));
 	register_a_hook("libc", "open64", (void *)new_open_libc, (long int *)(&libc_open));
@@ -6356,7 +6374,7 @@ init_dfs(int idx)
 	}
 
 	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs, dcache_size_bits,
-			   dcache_rec_timeout);
+			   dcache_rec_timeout, dcache_gc_period, dcache_gc_reclaim_max);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to create DFS directory cache");
 		D_GOTO(out_err_ht, rc = daos_der2errno(rc));
