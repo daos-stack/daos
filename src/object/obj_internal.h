@@ -41,7 +41,8 @@ struct obj_io_context;
 extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern unsigned int	srv_io_mode;
-extern unsigned int	obj_coll_punch_thd;
+extern unsigned int	obj_coll_thd;
+extern btr_ops_t	dbtree_coll_ops;
 
 /* Whether check redundancy group validation when DTX resync. */
 extern bool	tx_verify_rdg;
@@ -103,6 +104,12 @@ struct dc_object {
 	unsigned int		 cob_shards_nr;
 	unsigned int		 cob_grp_size;
 	unsigned int		 cob_grp_nr;
+	/* The max rank# on which some object shard exists. */
+	uint32_t		 cob_min_rank;
+	/* The min rank# on which some object shard exists. */
+	uint32_t		 cob_max_rank;
+	/* How many ranks on which some object shard resides. */
+	uint32_t		 cob_rank_nr;
 	/**
 	 * The array for the latest time (in second) of
 	 * being asked to fetch from leader.
@@ -275,6 +282,11 @@ struct shard_rw_args {
 	struct obj_reasb_req	*reasb_req;
 };
 
+struct coll_sparse_targets {
+	struct btr_root		 cst_tree_root;
+	daos_handle_t		 cst_tree_hdl;
+};
+
 struct coll_oper_args {
 	struct shard_auxi_args	 coa_auxi;
 	int			 coa_dct_nr;
@@ -282,14 +294,18 @@ struct coll_oper_args {
 	uint32_t		 coa_max_dct_sz;
 	uint8_t			 coa_max_shard_nr;
 	uint8_t			 coa_max_bitmap_sz;
-	uint8_t			 coa_for_modify:1;
+	uint8_t			 coa_for_modify:1,
+				 coa_sparse:1;
 	uint8_t			 coa_target_nr;
 	/*
 	 * The target ID for the top four healthy shards.
 	 * Please check comment for DTX_COLL_INLINE_TARGETS.
 	 */
 	uint32_t		 coa_targets[DTX_COLL_INLINE_TARGETS];
-	struct daos_coll_target	*coa_dcts;
+	union {
+		struct daos_coll_target		*coa_dcts;
+		struct coll_sparse_targets	*coa_tree;
+	};
 };
 
 struct shard_punch_args {
@@ -816,6 +832,18 @@ struct obj_io_context {
 				 ioc_fetch_snap:1;
 };
 
+static inline void
+obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+	       uint32_t *grp_nr)
+{
+	*start_shard = 0;
+	*shard_nr = obj->cob_shards_nr;
+	*grp_nr = obj->cob_shards_nr / obj_get_grp_size(obj);
+
+	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "DF_OID": %u/%u\n",
+		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
+}
+
 static inline uint64_t
 obj_dkey2hash(daos_obj_id_t oid, daos_key_t *dkey)
 {
@@ -939,6 +967,9 @@ void obj_class_fini(void);
 #define COLL_DISP_WIDTH_MIN	8
 #define COLL_DISP_WIDTH_DIF	4
 
+#define OBJ_COLL_THD_MIN	COLL_DISP_WIDTH_DEF
+#define COLL_BTREE_ORDER	COLL_DISP_WIDTH_DEF
+
 struct obj_query_merge_args {
 	struct daos_oclass_attr	*oqma_oca;
 	daos_unit_oid_t		 oqma_oid;
@@ -984,14 +1015,15 @@ dc_tx_hdl2epoch_and_pmv(daos_handle_t th, struct dtx_epoch *epoch,
 			uint32_t *pmv);
 
 /* cli_coll.c */
+bool
+obj_need_coll(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
+	      uint32_t *grp_nr);
+
 int
 obj_coll_oper_args_init(struct coll_oper_args *coa, struct dc_object *obj, bool for_modify);
 
 void
 obj_coll_oper_args_fini(struct coll_oper_args *coa);
-
-int
-obj_coll_oper_args_collapse(struct coll_oper_args *coa, uint32_t *size);
 
 int
 obj_coll_prep_one(struct coll_oper_args *coa, struct dc_object *obj,

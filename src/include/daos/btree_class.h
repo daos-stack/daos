@@ -103,6 +103,12 @@ extern btr_ops_t dbtree_recx_ops;
  *  Each key is uint64_t integer, values have fixed size for a given key.  Keys ordered numerically.
  */
 #define DBTREE_CLASS_IFV     (DBTREE_DSM_BEGIN + 8)
+
+/**
+ * Used for recording object targets with sparse ranks for collective operation. The key is rank#.
+ */
+#define DBTREE_CLASS_COLL	(DBTREE_DSM_BEGIN + 9)
+
 extern btr_ops_t dbtree_ifv_ops;
 
 #endif /* __DAOS_SRV_BTREE_CLASS_H__ */
