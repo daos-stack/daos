@@ -100,6 +100,17 @@ class DaosCoreTestDfuse(DfuseTestBase):
                 daos_test_env['D_IL_MAX_EQ'] = '2'
                 daos_test_env['D_IL_ENFORCE_EXEC_ENV'] = '1'
 
+        command = [
+            self.daos_test,
+            '--test-dir',
+            mount_dir,
+            '--io',
+            '--stream',
+            '--mmap',
+            '--exec',
+            '--directory',
+            '--cache'
+        ]
         command = [self.daos_test, '--test-dir', mount_dir,
                    '--io', '--stream', '--mmap', '--exec', '--directory']
         if use_dfuse:

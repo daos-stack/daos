@@ -996,7 +996,24 @@ libpil4dfs intercepting summary for ops on DFS:
 ```
 
 ### Force pil4dfs related env set in child processes when calling execve and its variants
-Normally child processes inherit environmental variables from parent processes. In rare cases, e.g. scons, envs are striped off when calling execve(). It might be useful to force pil4dfs related env set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 if not set.
+
+Normally child processes inherit environmental variables from parent processes.
+In rare cases, e.g. scons, envs are striped off when calling execve().
+It might be useful to force pil4dfs related env set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1".
+This flag is 0 if not set.
+
+### Change dir cache timeout with env
+
+Directory caching is employed for better performance.
+The default timeout is 60 seconds.
+User can change it if necessary.
+The unit is second and an integer should be provided.
+```
+$ export D_IL_DCACHE_TIMEOUT=5
+```
+
+!!! note
+    The directory cache can be deactivated with setting a timeout of 0 second.
 
 ### Limitations of using libpil4dfs
 Stability issues: This is a preview version. Some features are not implemented yet. Many APIs are involved in libpil4dfs. There may be bugs, uncovered/not intercepted functions, etc. 

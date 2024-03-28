@@ -37,6 +37,9 @@ def scons():
     # util
     SConscript('util/SConscript')
 
+    # dfuse
+    SConscript('dfuse/utest/SConscript')
+
 
 if __name__ == "SCons.Script":
     scons()
