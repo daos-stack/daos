@@ -1137,7 +1137,7 @@ decref:
 }
 
 int
-dc_mgmt_tm_setup(const char *sys, const char *jobid, key_t shm_key, uid_t *owner_uid)
+dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *owner_uid)
 {
 	struct drpc_alloc          alloc = PROTO_ALLOCATOR_INIT(alloc);
 	struct drpc               *ctx;
@@ -1167,8 +1167,7 @@ dc_mgmt_tm_setup(const char *sys, const char *jobid, key_t shm_key, uid_t *owner
 	reqb_size = mgmt__client_telemetry_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);
 	if (reqb == NULL) {
-		rc = -DER_NOMEM;
-		goto out_ctx;
+		D_GOTO(out_ctx, rc = -DER_NOMEM);
 	}
 	mgmt__client_telemetry_req__pack(&req, reqb);
 

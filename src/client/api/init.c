@@ -228,6 +228,13 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_pl, rc);
 
+	/** set up client telemetry */
+	rc = dc_tm_init();
+	if (rc != 0) {
+		/* should not be fatal */
+		DL_WARN(rc, "failed to initialize client telemetry");
+	}
+
 	/** set up pool */
 	rc = dc_pool_init();
 	if (rc != 0)
@@ -243,13 +250,6 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
-	rc = dc_tm_init();
-	if (rc) {
-		/* should not be fatal */
-		DL_WARN(rc, "failed to initialize client telemetry");
-		rc = 0;
-	}
-
 #if BUILD_PIPELINE
 	/** set up pipeline */
 	rc = dc_pipeline_init();
@@ -261,7 +261,6 @@ daos_init(void)
 
 #if BUILD_PIPELINE
 out_obj:
-	dc_tm_fini();
 	dc_obj_fini();
 #endif
 out_co:
@@ -269,6 +268,7 @@ out_co:
 out_pool:
 	dc_pool_fini();
 out_mgmt:
+	dc_tm_fini();
 	dc_mgmt_fini();
 out_pl:
 	pl_fini();
@@ -318,6 +318,7 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+	/** clean up all registered per-module metrics */
 	daos_metrics_fini();
 #if BUILD_PIPELINE
 	dc_pipeline_fini();

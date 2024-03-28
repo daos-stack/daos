@@ -73,11 +73,10 @@ const (
 	MetricTypeDirectory  MetricType = C.D_TM_DIRECTORY
 	MetricTypeLink       MetricType = C.D_TM_LINK
 
-	ClientJobRootID           = C.DC_TM_JOB_ROOT_ID
-	ClientJobMax              = 1024
-	ClientMetricsEnabledEnv   = C.DAOS_CLIENT_METRICS_ENABLE
-	ClientMetricsRetainEnv    = C.DAOS_CLIENT_METRICS_RETAIN
-	ClientMetricsAgentMgmtEnv = C.DAOS_CLIENT_METRICS_AGENT_MGMT
+	ClientJobRootID         = C.DC_TM_JOB_ROOT_ID
+	ClientJobMax            = 1024
+	ClientMetricsEnabledEnv = C.DAOS_CLIENT_METRICS_ENABLE
+	ClientMetricsRetainEnv  = C.DAOS_CLIENT_METRICS_RETAIN
 
 	BadUintVal  = ^uint64(0)
 	BadFloatVal = float64(BadUintVal)

@@ -310,13 +310,13 @@ func (c *InfoCache) getAttachInfo(ctx context.Context, rpcClient control.UnaryIn
 	if err != nil {
 		return nil, err
 	}
-	c.adjustAttachInfo(resp)
+	c.addTelemetrySettings(resp)
 	return resp, nil
 }
 
-// adjustAttachInfo performs any necessary adjustments to the attach info
+// addTelemetrySettings modifies the response by adding telemetry settings
 // before returning it.
-func (c *InfoCache) adjustAttachInfo(resp *control.GetAttachInfoResp) {
+func (c *InfoCache) addTelemetrySettings(resp *control.GetAttachInfoResp) {
 	if c == nil || resp == nil {
 		return
 	}
@@ -324,7 +324,6 @@ func (c *InfoCache) adjustAttachInfo(resp *control.GetAttachInfoResp) {
 	if c.clientTelemetryEnabled.IsTrue() {
 		resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,
 			fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
-			fmt.Sprintf("%s=1", telemetry.ClientMetricsAgentMgmtEnv),
 		)
 		if c.clientTelemetryRetain.IsTrue() {
 			resp.ClientNetHint.EnvVars = append(resp.ClientNetHint.EnvVars,

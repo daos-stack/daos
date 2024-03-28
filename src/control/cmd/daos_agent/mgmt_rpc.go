@@ -342,13 +342,25 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, params *FabricIfa
 }
 
 func (mod *mgmtModule) handleSetupClientTelemetry(ctx context.Context, reqb []byte, cred *unix.Ucred) ([]byte, error) {
+	if len(reqb) == 0 {
+		return nil, errors.New("empty request")
+	}
+
 	pbReq := new(mgmtpb.ClientTelemetryReq)
 	if err := proto.Unmarshal(reqb, pbReq); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
 	}
+	if pbReq.Jobid == "" {
+		return nil, errors.New("empty jobid")
+	}
+	if pbReq.ShmKey == 0 {
+		return nil, errors.New("unset shm key")
+	}
+	if cred == nil {
+		return nil, errors.New("nil user credentials")
+	}
 
-	err := telemetry.SetupClientRoot(ctx, pbReq.Jobid, int(cred.Pid), int(pbReq.ShmKey))
-	if err != nil {
+	if err := telemetry.SetupClientRoot(ctx, pbReq.Jobid, int(cred.Pid), int(pbReq.ShmKey)); err != nil {
 		return nil, err
 	}
 	resp := &mgmtpb.ClientTelemetryResp{AgentUid: int32(unix.Getuid())}

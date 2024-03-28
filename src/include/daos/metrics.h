@@ -22,10 +22,8 @@
 #define DAOS_CLIENT_METRICS_DUMP_PATH  "D_CLIENT_METRICS_DUMP_PATH"
 #define DAOS_CLIENT_METRICS_ENABLE     "D_CLIENT_METRICS_ENABLE"
 #define DAOS_CLIENT_METRICS_RETAIN     "D_CLIENT_METRICS_RETAIN"
-#define DAOS_CLIENT_METRICS_AGENT_MGMT "D_CLIENT_METRICS_AGENT_MGMT"
 extern bool daos_client_metric;
 extern bool daos_client_metric_retain;
-extern bool daos_client_metric_agent_mgmt;
 
 struct daos_module_metrics {
 	/* Indicate where the keys should be instantiated */
@@ -58,7 +56,7 @@ struct daos_module_metrics {
 	(NODE_BYTES + sizeof(struct d_tm_stats_t) + sizeof(struct d_tm_histogram_t) + BUCKET_BYTES)
 
 int
-daos_register_metrics(enum daos_module_tag tag, uint32_t id, struct daos_module_metrics *metrics);
+daos_metrics_init(enum daos_module_tag tag, uint32_t id, struct daos_module_metrics *metrics);
 void
 daos_metrics_fini(void);
 int

@@ -29,6 +29,8 @@ type (
 		addFn         func(logging.Logger, telemetry.Metric) *sourceMetric
 	}
 
+	// MetricSource encapsulates the logic and data for collecting telemetry
+	// from a DAOS metrics source.
 	MetricSource struct {
 		ctx      context.Context
 		tmMutex  sync.RWMutex // To protect telemetry collection
@@ -46,6 +48,7 @@ func newSourceMetricSchema(addFn func(logging.Logger, telemetry.Metric) *sourceM
 	}
 }
 
+// Prune removes any metrics that have not been seen since the last call to Prune.
 func (s *sourceMetricSchema) Prune() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -80,6 +83,7 @@ func defaultCollectorOpts() *CollectorOpts {
 	return &CollectorOpts{}
 }
 
+// sourceMetric defines a wrapper for the wrapped telemetry.Metric instance.
 type sourceMetric struct {
 	metric   telemetry.Metric
 	baseName string
@@ -88,6 +92,7 @@ type sourceMetric struct {
 	cvm      cvMap
 }
 
+// collect sends the metrics vectors in the sourceMetric struct to the provided channel.
 func (bm *sourceMetric) collect(ch chan<- prometheus.Metric) {
 	for _, gv := range bm.gvm {
 		gv.Collect(ch)
@@ -97,6 +102,7 @@ func (bm *sourceMetric) collect(ch chan<- prometheus.Metric) {
 	}
 }
 
+// resetVecs resets all the metrics vectors in the sourceMetric struct.
 func (bm *sourceMetric) resetVecs() {
 	for _, gv := range bm.gvm {
 		gv.Reset()
@@ -106,6 +112,7 @@ func (bm *sourceMetric) resetVecs() {
 	}
 }
 
+// newSourceMetric initializes a new sourceMetric struct.
 func newSourceMetric(log logging.Logger, m telemetry.Metric, baseName string, labels labelMap) *sourceMetric {
 	sm := &sourceMetric{
 		metric:   m,
@@ -154,6 +161,8 @@ func (s *MetricSource) Disable() {
 	s.enabled.SetFalse()
 }
 
+// Collect invokes telemetry.CollectMetrics() for the metrics context
+// managed by this source. The collected metrics are sent to the provided channel.
 func (s *MetricSource) Collect(log logging.Logger, ch chan<- *sourceMetric) {
 	if s == nil {
 		log.Error("nil source")
@@ -185,6 +194,7 @@ func (s *MetricSource) Collect(log logging.Logger, ch chan<- *sourceMetric) {
 	s.smSchema.Prune()
 }
 
+// PruneSegments prunes unused telemetry segments.
 func (s *MetricSource) PruneSegments(log logging.Logger, maxSegAge time.Duration) {
 	if s == nil {
 		log.Error("nil source")

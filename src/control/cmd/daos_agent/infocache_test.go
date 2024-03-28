@@ -725,7 +725,6 @@ func TestAgent_InfoCache_GetAttachInfo(t *testing.T) {
 	telemEnabledResp := copyGetAttachInfoResp(ctlResp)
 	telemEnabledResp.ClientNetHint.EnvVars = append(telemEnabledResp.ClientNetHint.EnvVars,
 		fmt.Sprintf("%s=1", telemetry.ClientMetricsEnabledEnv),
-		fmt.Sprintf("%s=1", telemetry.ClientMetricsAgentMgmtEnv),
 	)
 	telemRetainedResp := copyGetAttachInfoResp(telemEnabledResp)
 	telemRetainedResp.ClientNetHint.EnvVars = append(telemRetainedResp.ClientNetHint.EnvVars,

@@ -17,6 +17,7 @@
 #include <gurt/list.h>
 #include <sys/shm.h>
 #include <sys/types.h>
+#include <daos/common.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 #include <gurt/telemetry_consumer.h>
@@ -176,13 +177,49 @@ d_tm_get_name(struct d_tm_context *ctx, struct d_tm_node_t *node)
 static int
 d_tm_lock_shmem(void)
 {
-	return D_MUTEX_LOCK(&tm_shmem.add_lock);
+	struct d_tm_context *ctx = tm_shmem.ctx;
+	int                  rc;
+
+	if (tm_shmem.multiple_writer_lock) {
+		rc = D_MUTEX_LOCK(&ctx->shmem_root->sh_multiple_writer_lock);
+		if (unlikely(rc != 0)) {
+			DL_ERROR(rc, "failed to take multiple writer lock");
+			return rc;
+		}
+	}
+
+	rc = D_MUTEX_LOCK(&tm_shmem.add_lock);
+	if (unlikely(rc != 0)) {
+		DL_ERROR(rc, "failed to take shared memory lock");
+		if (tm_shmem.multiple_writer_lock)
+			D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
+		return rc;
+	}
+
+	return 0;
 }
 
 static int
 d_tm_unlock_shmem(void)
 {
-	return D_MUTEX_UNLOCK(&tm_shmem.add_lock);
+	struct d_tm_context *ctx = tm_shmem.ctx;
+	int                  rc;
+
+	rc = D_MUTEX_UNLOCK(&tm_shmem.add_lock);
+	if (unlikely(rc != 0)) {
+		DL_ERROR(rc, "failed to release shared memory lock");
+		return rc;
+	}
+
+	if (tm_shmem.multiple_writer_lock) {
+		rc = D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
+		if (unlikely(rc != 0)) {
+			DL_ERROR(rc, "failed to release multiple writer lock");
+			return rc;
+		}
+	}
+
+	return 0;
 }
 
 /*
@@ -2567,15 +2604,15 @@ shm_stat_key(key_t key, struct shmid_ds *shminfo, int *shmid_ptr)
 
 	rc = shmget(key, 0, 0);
 	if (rc < 0) {
-		D_ERROR("failed to get shmid for key 0x%x\n", key);
-		return rc;
+		D_ERROR("shmget(0x%x) failed: %s (%d)\n", key, strerror(errno), errno);
+		return daos_errno2der(errno);
 	}
 	shmid = rc;
 
 	rc = shmctl(shmid, IPC_STAT, shminfo);
-	if (rc != 0) {
-		D_ERROR("shmctl(%d, IPC_STAT) failed: %d\n", shmid, rc);
-		return rc;
+	if (rc < 0) {
+		D_ERROR("shmctl(%d, IPC_STAT) failed: %s (%d)\n", shmid, strerror(errno), errno);
+		return daos_errno2der(errno);
 	}
 
 	if (shmid_ptr != NULL)
@@ -2604,13 +2641,10 @@ sync_attached_segment_uid(char *path, key_t child_key)
 		return -DER_INVAL;
 	}
 
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_LOCK(&ctx->shmem_root->sh_multiple_writer_lock);
-
 	rc = d_tm_lock_shmem();
 	if (unlikely(rc != 0)) {
 		D_ERROR("failed to get producer mutex\n");
-		D_GOTO(out_ephemeral_unlock, rc);
+		D_GOTO(out_unlock, rc);
 	}
 
 	link_node = d_tm_find_metric(ctx, path);
@@ -2620,16 +2654,16 @@ sync_attached_segment_uid(char *path, key_t child_key)
 	}
 
 	rc = shm_stat_key(link_node->dtn_shmem_key, &shminfo, NULL);
-	if (rc < 0) {
-		D_ERROR("failed to stat parent segment\n");
-		D_GOTO(out_unlock, rc = -DER_MISC);
+	if (unlikely(rc != 0)) {
+		DL_ERROR(rc, "failed to stat parent segment");
+		goto out_unlock;
 	}
 	o_uid = shminfo.shm_perm.uid;
 
 	rc = shm_stat_key(child_key, &shminfo, &child_shmid);
-	if (rc < 0) {
-		D_ERROR("failed to stat child segment\n");
-		D_GOTO(out_unlock, rc = -DER_MISC);
+	if (unlikely(rc != 0)) {
+		DL_ERROR(rc, "failed to stat child segment");
+		goto out_unlock;
 	}
 
 	if (o_uid == shminfo.shm_perm.uid)
@@ -2638,15 +2672,11 @@ sync_attached_segment_uid(char *path, key_t child_key)
 	shminfo.shm_perm.uid = o_uid;
 	rc                   = shmctl(child_shmid, IPC_SET, &shminfo);
 	if (rc != 0) {
-		D_ERROR("failed to set child segment ownership: %d", rc);
-		rc = -DER_MISC;
+		DL_ERROR(rc, "failed to set child segment ownership");
 	}
 
 out_unlock:
 	d_tm_unlock_shmem();
-out_ephemeral_unlock:
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 
 	return rc;
 }
@@ -2666,13 +2696,10 @@ attach_path_segment(key_t key, char *path)
 		D_GOTO(fail, rc = -DER_INVAL);
 	}
 
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_LOCK(&ctx->shmem_root->sh_multiple_writer_lock);
-
 	rc = d_tm_lock_shmem();
 	if (unlikely(rc != 0)) {
 		D_ERROR("failed to get producer mutex\n");
-		D_GOTO(fail_ephemeral_unlock, rc);
+		D_GOTO(fail, rc);
 	}
 
 	link_node = d_tm_find_metric(ctx, path);
@@ -2682,14 +2709,14 @@ attach_path_segment(key_t key, char *path)
 
 	/* Add a link to the new region */
 	rc = add_metric(ctx, &link_node, D_TM_LINK, NULL, NULL, path);
-	if (rc != 0) {
+	if (unlikely(rc != 0)) {
 		D_ERROR("can't set up the link node, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(fail_tracking, rc);
+		D_GOTO(fail_unlock, rc);
 	}
 
 	/* track attached regions within the parent shmem */
 	parent_shmem = get_shmem_for_key(ctx, link_node->dtn_shmem_key);
-	if (parent_shmem == NULL) {
+	if (unlikely(parent_shmem == NULL)) {
 		D_ERROR("failed to get parent shmem pointer\n");
 		D_GOTO(fail_link, rc = -DER_NO_SHMEM);
 	}
@@ -2699,7 +2726,7 @@ attach_path_segment(key_t key, char *path)
 	link_metric->dtm_data.value = key;
 
 	rc = get_free_region_entry(parent_shmem, &region_entry);
-	if (rc != 0)
+	if (unlikely(rc != 0))
 		D_GOTO(fail_link, rc);
 	region_entry->rl_key       = key;
 	region_entry->rl_link_node = link_node;
@@ -2707,18 +2734,12 @@ attach_path_segment(key_t key, char *path)
 	d_tm_unlock_shmem();
 	if (tm_shmem.multiple_writer_lock)
 		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
-	return 0;
 
+	return 0;
 fail_link:
 	invalidate_link_node(parent_shmem, link_node);
-fail_tracking:
-	close_shmem_for_key(ctx, key, true);
-	goto fail_unlock; /* shmem will be closed/destroyed already */
 fail_unlock:
 	d_tm_unlock_shmem();
-fail_ephemeral_unlock:
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 fail:
 	return rc;
 }
@@ -2758,11 +2779,11 @@ d_tm_attach_path_segment(key_t key, const char *fmt, ...)
 	va_start(args, fmt);
 	rc = parse_path_fmt(path, sizeof(path), fmt, args);
 	va_end(args);
-	if (rc != 0)
+	if (unlikely(rc != 0))
 		D_GOTO(fail, rc);
 
 	rc = attach_path_segment(key, path);
-	if (rc != 0)
+	if (unlikely(rc != 0))
 		D_GOTO(fail, rc);
 
 	return 0;
@@ -2825,52 +2846,44 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 	if (rc != 0)
 		D_GOTO(fail, rc);
 
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_LOCK(&ctx->shmem_root->sh_multiple_writer_lock);
-
 	rc = d_tm_lock_shmem();
 	if (unlikely(rc != 0)) {
 		D_ERROR("failed to get producer mutex\n");
-		D_GOTO(fail_ephemeral_unlock, rc);
+		D_GOTO(fail_unlock, rc);
 	}
 
 	key = get_unique_shmem_key(path, tm_shmem.id);
 	rc = create_shmem(get_last_token(path), key, size_bytes, &new_shmid,
 			  &new_shmem);
-	if (rc != 0)
+	if (unlikely(rc != 0))
 		D_GOTO(fail_unlock, rc);
 	new_node = new_shmem->sh_root;
 
 	/* track at the process level */
 	rc = track_open_shmem(ctx, new_shmem, new_shmid, key);
-	if (rc != 0)
+	if (unlikely(rc != 0))
 		D_GOTO(fail_shmem, rc);
 
 	d_tm_unlock_shmem();
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 
 	rc = attach_path_segment(key, path);
-	if (rc != 0)
+	if (unlikely(rc != 0))
 		D_GOTO(fail_attach, rc);
 
 	rc = sync_attached_segment_uid(path, key);
-	if (rc != 0)
+	if (unlikely(rc != 0))
 		D_GOTO(fail_sync, rc);
 
 	if (node != NULL)
 		*node = new_node;
 
 	return 0;
-
 fail_sync:
 	d_tm_del_ephemeral_dir(path);
 	goto fail_unlock; /* shmem will be closed/destroyed already */
 fail_attach:
 	/* dropped locks before calling attach; have to reacquire */
 	d_tm_lock_shmem();
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_LOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 
 	close_shmem_for_key(ctx, key, true);
 	goto fail_unlock; /* shmem will be closed/destroyed already */
@@ -2879,9 +2892,6 @@ fail_shmem:
 	destroy_shmem(new_shmid);
 fail_unlock:
 	d_tm_unlock_shmem();
-fail_ephemeral_unlock:
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 fail:
 	if (rc != -DER_EXIST)
 		DL_ERROR(rc, "Failed to add ephemeral dir [%s]", path);
@@ -2978,13 +2988,10 @@ try_del_ephemeral_dir(char *path, bool force)
 	struct d_tm_node_t  *link;
 	int                  rc = 0;
 
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_LOCK(&ctx->shmem_root->sh_multiple_writer_lock);
-
 	rc = d_tm_lock_shmem();
 	if (unlikely(rc != 0)) {
 		D_ERROR("failed to get producer mutex\n");
-		D_GOTO(ephemeral_unlock, rc);
+		D_GOTO(unlock, rc);
 	}
 
 	link = get_node(ctx, path);
@@ -2995,10 +3002,6 @@ try_del_ephemeral_dir(char *path, bool force)
 
 unlock:
 	d_tm_unlock_shmem();
-
-ephemeral_unlock:
-	if (tm_shmem.multiple_writer_lock)
-		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 
 	return rc;
 }

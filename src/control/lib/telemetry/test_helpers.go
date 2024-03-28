@@ -60,6 +60,7 @@ var nextIDMutex sync.Mutex
 const (
 	telemetryIDBase = 100
 	PromexpIDBase   = 200
+	AgentIDBase     = 300
 )
 
 // NextTestID gets the next available ID for a shmem segment. This helps avoid

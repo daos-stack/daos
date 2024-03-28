@@ -19,53 +19,53 @@ import (
 	"github.com/pkg/errors"
 )
 
-type shmStWrp struct {
+type shmidStat struct {
 	id C.int
 	ds C.struct_shmid_ds
 }
 
 // Size returns the size of segment in bytes.
-func (s *shmStWrp) Size() int {
+func (s *shmidStat) Size() int {
 	return int(s.ds.shm_segsz)
 }
 
 // Atime returns the time of last shmat(2).
-func (s *shmStWrp) Atime() time.Time {
+func (s *shmidStat) Atime() time.Time {
 	return time.Unix(int64(s.ds.shm_atime), 0)
 }
 
 // Dtime returns the time of last shmdt(2).
-func (s *shmStWrp) Dtime() time.Time {
+func (s *shmidStat) Dtime() time.Time {
 	return time.Unix(int64(s.ds.shm_dtime), 0)
 }
 
 // Ctime returns the time of last shmctl(2) or creation time.
-func (s *shmStWrp) Ctime() time.Time {
+func (s *shmidStat) Ctime() time.Time {
 	return time.Unix(int64(s.ds.shm_ctime), 0)
 }
 
 // Cpid returns the creator pid.
-func (s *shmStWrp) Cpid() int {
+func (s *shmidStat) Cpid() int {
 	return int(s.ds.shm_cpid)
 }
 
 // Lpid returns the last shmat(2)/shmdt(2) pid.
-func (s *shmStWrp) Lpid() int {
+func (s *shmidStat) Lpid() int {
 	return int(s.ds.shm_lpid)
 }
 
 // Nattach returns the number of attached processes.
-func (s *shmStWrp) Nattach() int {
+func (s *shmidStat) Nattach() int {
 	return int(s.ds.shm_nattch)
 }
 
 // C returns the C struct.
-func (s *shmStWrp) C() *C.struct_shmid_ds {
+func (s *shmidStat) C() *C.struct_shmid_ds {
 	return &s.ds
 }
 
-func shmStat(id C.int) (*shmStWrp, error) {
-	st := shmStWrp{
+func shmStat(id C.int) (*shmidStat, error) {
+	st := shmidStat{
 		id: id,
 	}
 	rc, err := C.shmctl(id, C.IPC_STAT, &st.ds)
@@ -76,7 +76,7 @@ func shmStat(id C.int) (*shmStWrp, error) {
 	return &st, nil
 }
 
-func shmStatKey(key C.key_t) (*shmStWrp, error) {
+func shmStatKey(key C.key_t) (*shmidStat, error) {
 	id, err := C.shmget(key, 0, 0)
 	if err != nil {
 		return nil, errors.Wrapf(err, "shmget(%d, 0, 0)", key)

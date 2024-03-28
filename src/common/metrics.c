@@ -21,7 +21,7 @@ D_LIST_HEAD(metrics_mod_list);
 pthread_mutex_t metrics_mod_list_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int
-daos_register_metrics(enum daos_module_tag tag, uint32_t id, struct daos_module_metrics *metrics)
+daos_metrics_init(enum daos_module_tag tag, uint32_t id, struct daos_module_metrics *metrics)
 {
 	struct metrics_list *ml;
 

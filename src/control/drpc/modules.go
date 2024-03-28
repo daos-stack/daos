@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -157,6 +157,7 @@ func (m MgmtMethod) String() string {
 		MethodPoolGetProp:          "PoolGetProp",
 		MethodPoolUpgrade:          "PoolUpgrade",
 		MethodLedManage:            "LedManage",
+		MethodSetupClientTelemetry: "SetupClientTelemetry",
 	}[m]; ok {
 		return s
 	}

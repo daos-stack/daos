@@ -10,6 +10,7 @@
 package promexp
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 
@@ -25,6 +26,7 @@ func (lm labelMap) keys() (keys []string) {
 	for label := range lm {
 		keys = append(keys, label)
 	}
+	sort.Strings(keys)
 
 	return
 }

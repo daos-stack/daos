@@ -77,7 +77,7 @@ func extractClientLabels(log logging.Logger, in string) (labels labelMap, name s
 	}
 
 	var engLabels labelMap
-	engLabels, name = extractEngineLabels(log, strings.Join(comps[compsIdx:], string(telemetry.PathSep)))
+	engLabels, name = extractLabels(log, strings.Join(comps[compsIdx:], string(telemetry.PathSep)))
 	for k, v := range engLabels {
 		labels[k] = v
 	}

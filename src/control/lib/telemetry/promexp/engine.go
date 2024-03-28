@@ -106,7 +106,7 @@ func NewEngineCollector(log logging.Logger, opts *CollectorOpts, sources ...*Eng
 	return c, nil
 }
 
-// extractEngineLabels takes a "/"-separated DAOS metric name in order to
+// extractLabels takes a "/"-separated DAOS metric name in order to
 // create a normalized Prometheus name and label map.
 //
 // NB: Prometheus metric names should follow best practices as
@@ -120,7 +120,7 @@ func NewEngineCollector(log logging.Logger, opts *CollectorOpts, sources ...*Eng
 //
 // Good: pool_started_at {pool="00000000-1111-2222-3333-4444444444"}
 // Bad: pool_00000000_1111_2222_3333_4444444444_started_at
-func extractEngineLabels(log logging.Logger, in string) (labels labelMap, name string) {
+func extractLabels(log logging.Logger, in string) (labels labelMap, name string) {
 	log.Tracef("in: %q", in)
 
 	labels = make(labelMap)
@@ -209,7 +209,7 @@ func extractEngineLabels(log logging.Logger, in string) (labels labelMap, name s
 }
 
 func newRankMetric(log logging.Logger, rank uint32, m telemetry.Metric) *sourceMetric {
-	labels, name := extractEngineLabels(log, m.FullPath())
+	labels, name := extractLabels(log, m.FullPath())
 	baseName := "engine_" + name
 	labels["rank"] = fmt.Sprintf("%d", rank)
 

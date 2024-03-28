@@ -354,7 +354,7 @@ func TestPromExp_Collector_Prune(t *testing.T) {
 
 		engSrc.smSchema.mu.Lock()
 		for m := range engSrc.smSchema.sourceMetrics {
-			_, name := extractEngineLabels(log, m)
+			_, name := extractLabels(log, m)
 			names = append(names, name)
 		}
 		engSrc.smSchema.mu.Unlock()
@@ -368,7 +368,7 @@ func TestPromExp_Collector_Prune(t *testing.T) {
 		for _, m := range maps {
 			for t, m := range m {
 				if t != telemetry.MetricTypeDirectory && t != telemetry.MetricTypeLink {
-					_, name := extractEngineLabels(log, m.FullPath())
+					_, name := extractLabels(log, m.FullPath())
 					unique[name] = struct{}{}
 				}
 			}
@@ -627,7 +627,7 @@ func TestPromExp_extractEngineLabels(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			labels, name := extractEngineLabels(log, tc.input)
+			labels, name := extractLabels(log, tc.input)
 
 			test.AssertEqual(t, name, tc.expName, "")
 			if diff := cmp.Diff(labels, tc.expLabels); diff != "" {
