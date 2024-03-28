@@ -10,7 +10,7 @@ from telemetry_test_base import TestWithTelemetry
 
 
 class IoctlPoolHandles(TestWithTelemetry):
-    """Verifies multi-user dfuse mounting"""
+    """Verifies interception library is using the same pool/container handles as dfuse."""
 
     def test_ioctl_pool_handles(self):
         """JIRA ID: DAOS-8403.
@@ -19,8 +19,6 @@ class IoctlPoolHandles(TestWithTelemetry):
             Verify that the interception library is using the same pool/container handles as dfuse.
 
             Steps:
-                0.) Manually impose this patch on top of the daos release under test:
-                    https://github.com/daos-stack/daos/pull/9941
                 1.) Start 4 Server ranks with 16 targets each. Start agent on one of the nodes.
                 2.) Create Pool and posix type container.
                 3.) Mount dfuse.
@@ -34,11 +32,10 @@ class IoctlPoolHandles(TestWithTelemetry):
                 9.) Check pool/cont handle count telemetry metrics again. The values should have
                     increased over the initial values.
 
-        Note: As this test currently requires a modification to src/client/dfuse/il/int_posix.c to
-            run and pass, it should not be run in normal CI, but in a PR that includes the
-            modification.
+        Note: As this test previously required a modification to src/client/dfuse/il/int_posix.c
+            (https://github.com/daos-stack/daos/pull/9941) to run and pass, but now passes w/o it.
 
-        :avocado: tags=all,manual
+        :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=dfuse
         :avocado: tags=IoctlPoolHandles,test_ioctl_pool_handles
