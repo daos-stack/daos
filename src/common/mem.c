@@ -3130,14 +3130,20 @@ evict:
 }
 
 static inline bool
-need_reserve(struct umem_cache *cache, uint32_t page_nr)
+need_reserve(struct umem_cache *cache, uint32_t extra_pgs)
 {
-	/* No need to reserve when non-evictable zone has grown to maixmum size */
+	uint32_t	page_nr;
+
+	/* Few free pages are always reserved for potential non-evictable zone grow */
 	D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] <= cache->ca_max_ne_pages);
-	if (cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] == cache->ca_max_ne_pages)
+	page_nr = cache->ca_max_ne_pages - cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE];
+	if (page_nr > UMEM_CACHE_RSRVD_PAGES)
+		page_nr = UMEM_CACHE_RSRVD_PAGES;
+	page_nr += extra_pgs;
+
+	if (page_nr == 0)
 		return false;
 
-	/* One free page is always reserved for potential non-evictable zone grow */
 	return cache->ca_pgs_stats[UMEM_PG_STATS_FREE] < page_nr ? true : false;
 }
 
@@ -3147,7 +3153,7 @@ need_evict(struct umem_cache *cache)
 	if (d_list_empty(&cache->ca_pgs_free))
 		return true;
 
-	return need_reserve(cache, UMEM_CACHE_RSRVD_PAGES + 1);
+	return need_reserve(cache, 1);
 }
 
 static int
@@ -3369,16 +3375,10 @@ umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int ra
 	if (rc)
 		return rc;
 
-	if (d_list_empty(&cache->ca_pgs_free)) {
-		D_ERROR("No free pages for (%u) pages mapping.\n", page_nr);
-		rc = -DER_BUSY;
-		goto out;
-	}
-
 	rc = cache_map_pages(cache, out_pages, page_nr);
 	if (rc)
 		DL_ERROR(rc, "Map page failed.\n");
-out:
+
 	if (out_pages != &in_pages[0])
 		D_FREE(out_pages);
 
@@ -3487,7 +3487,7 @@ umem_cache_reserve(struct umem_store *store)
 		return rc;
 
 	/* MUST ensure the FIFO order */
-	if (!need_reserve(cache, UMEM_CACHE_RSRVD_PAGES) && !cache->ca_reserve_waiters)
+	if (!need_reserve(cache, 0) && !cache->ca_reserve_waiters)
 		return rc;
 
 	D_ASSERT(cache->ca_reserve_wq != NULL);
@@ -3497,7 +3497,7 @@ umem_cache_reserve(struct umem_store *store)
 		store->stor_ops->so_waitqueue_wait(cache->ca_reserve_wq, false);
 	}
 
-	while (need_reserve(cache, UMEM_CACHE_RSRVD_PAGES)) {
+	while (need_reserve(cache, 0)) {
 		rc = cache_evict_page(cache, false);
 		if (rc && rc != -DER_AGAIN && rc != -DER_BUSY) {
 			DL_ERROR(rc, "Evict page failed.\n");
