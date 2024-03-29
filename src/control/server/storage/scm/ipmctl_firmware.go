@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,13 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+// Function pointer to enable mocking during unit tests.
+var getLibipmctl = libipmctlGet
+
+func libipmctlGet() ipmctl.IpmCtl {
+	return &ipmctl.NvmMgmt{}
+}
 
 func scmFirmwareUpdateStatusFromIpmctl(ipmctlStatus uint32) storage.ScmFirmwareUpdateStatus {
 	switch ipmctlStatus {
@@ -44,7 +51,7 @@ func (cr *cmdRunner) GetFirmwareStatus(deviceUID string) (*storage.ScmFirmwareIn
 		return nil, errors.New("invalid SCM module UID")
 	}
 
-	lib := &ipmctl.NvmMgmt{}
+	lib := getLibipmctl()
 	if err := lib.Init(cr.log); err != nil {
 		return nil, err
 	}
@@ -76,7 +83,7 @@ func (cr *cmdRunner) UpdateFirmware(deviceUID string, firmwarePath string) error
 		return errors.New("invalid SCM module UID")
 	}
 
-	lib := &ipmctl.NvmMgmt{}
+	lib := getLibipmctl()
 	if err := lib.Init(cr.log); err != nil {
 		return err
 	}
