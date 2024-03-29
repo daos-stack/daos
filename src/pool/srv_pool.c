@@ -2479,8 +2479,15 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	if (bits & DAOS_PO_QUERY_PROP_DATA_THRESH) {
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_data_thresh, &value);
-		if (rc != 0)
+		if (rc == -DER_NONEXIST && global_ver < 3) { /* needs to be upgraded */
+			rc = 0;
+			val = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+		} else if (rc != 0) {
+			D_ERROR(DF_UUID ": DAOS_PO_QUERY_PROP_DATA_THRESH missing from the pool\n",
+				DP_UUID(svc->ps_uuid));
 			D_GOTO(out_prop, rc);
+		}
 		D_ASSERT(idx < nr);
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_DATA_THRESH;
 		prop->dpp_entries[idx].dpe_val = val;
