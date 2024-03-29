@@ -3149,6 +3149,7 @@ vos_dtx_rsrvd_init(struct dtx_handle *dth)
 {
 	dth->dth_rsrvd_cnt = 0;
 	dth->dth_deferred_cnt = 0;
+	dth->dth_deferred_used_cnt = 0;
 	D_INIT_LIST_HEAD(&dth->dth_deferred_nvme);
 
 	if (dth->dth_modification_cnt <= 1) {
