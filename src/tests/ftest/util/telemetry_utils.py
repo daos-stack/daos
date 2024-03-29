@@ -890,9 +890,10 @@ class MetricData():
         log.info(format_str, *['-' * self._display['widths'][name] for name in columns])
         for metric in sorted(self._display['data']):
             for value, labels in self._display['data'][metric].items():
-                log.info(
-                    format_str, metric, *self._label_values(labels), value,
-                    *self._label_values(labels, ['check']))
+                for label in labels:
+                    log.info(
+                        format_str, metric, *self._label_values(label), value,
+                        *self._label_values(label, ['check']))
         return status
 
     def _get_metrics(self, log, names, hosts, dmg):
