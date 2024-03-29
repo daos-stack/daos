@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Node local test (NLT).
 
+(C) Copyright 2020-2024 Intel Corporation.
+
+SPDX-License-Identifier: BSD-2-Clause-Patent
+
 Test script for running DAOS on a single node over tmpfs and running initial
 smoke/unit tests.
 
@@ -505,7 +509,7 @@ class DaosCont():
         print(rc)
         assert rc.returncode == 0, rc
 
-    def destroy(self, valgrind=True, log_check=True):
+    def destroy(self, valgrind=True, log_check=True, force=False):
         """Destroy the container
 
         Args:
@@ -516,7 +520,7 @@ class DaosCont():
             NLTestFail: If Pool was not provided when object created.
         """
         destroy_container(self.pool.conf, self.pool.id(), self.id(),
-                          valgrind=valgrind, log_check=log_check)
+                          valgrind=valgrind, log_check=log_check, force=force)
 
 
 class DaosServer():
@@ -604,7 +608,7 @@ class DaosServer():
             self._stop_agent()
         try:
             if self.running:
-                self.stop(None)
+                self._stop(None)
         except NLTestTimeout:
             print('Ignoring timeout on stop')
         server_file = join(self.agent_dir, '.daos_server.active.yml')
@@ -1282,8 +1286,9 @@ class DFuse():
 
     instance_num = 0
 
+    # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=True, multi_user=False):
+                 caching=True, wbcache=True, multi_user=False, ro=False):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1307,6 +1312,7 @@ class DFuse():
         self.log_flush = False
         self.log_mask = None
         self.log_file = None
+        self._ro = ro
 
         self.valgrind = None
         if not os.path.exists(self.dir):
@@ -1381,6 +1387,9 @@ class DFuse():
             if not self.wbcache:
                 cmd.append('--disable-wb-cache')
 
+        if self._ro:
+            cmd.append('--read-only')
+
         if self.uns_path:
             cmd.extend(['--path', self.uns_path])
 
@@ -1448,7 +1457,7 @@ class DFuse():
         print('Stopping fuse')
 
         if self.container:
-            self.run_query()
+            self.run_query(use_json=True)
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
@@ -1815,13 +1824,15 @@ def create_cont(conf, pool=None, ctype=None, label=None, path=None, oclass=None,
     return DaosCont(rc.json['response']['container_uuid'], label, pool=pool)
 
 
-def destroy_container(conf, pool, container, valgrind=True, log_check=True):
+def destroy_container(conf, pool, container, valgrind=True, log_check=True, force=False):
     """Destroy a container"""
     if isinstance(pool, DaosPool):
         pool = pool.id()
     if isinstance(container, DaosCont):
         container = container.id()
     cmd = ['container', 'destroy', pool, container]
+    if force:
+        cmd.append("--force")
     rc = run_daos_cmd(conf, cmd, valgrind=valgrind, use_json=True, log_check=log_check)
     print(rc)
     if rc.returncode == 1 and rc.json['status'] == -1012:
@@ -1914,16 +1925,20 @@ class needs_dfuse_with_opt():
 
     # pylint: disable=too-few-public-methods
 
-    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True):
+    def __init__(self, caching=None, wbcache=True, single_threaded=False, dfuse_inval=True,
+                 ro=False):
         self.caching = caching
         self.wbcache = wbcache
         self.single_threaded = single_threaded
         self.dfuse_inval = dfuse_inval
+        self.ro = ro
 
     def __call__(self, method):
         """Wrapper function"""
         @functools.wraps(method)
         def _helper(obj):
+
+            args = {"container": obj.container}
 
             caching = self.caching
             if caching is None:
@@ -1943,11 +1958,14 @@ class needs_dfuse_with_opt():
                               'dfuse-ndentry-time': '5m'}
                 obj.container.set_attrs(cont_attrs)
 
+            if self.ro:
+                args["ro"] = True
+
             obj.dfuse = DFuse(obj.server,
                               obj.conf,
                               caching=caching,
                               wbcache=self.wbcache,
-                              container=obj.container)
+                              **args)
             obj.dfuse.start(v_hint=method.__name__, single_threaded=self.single_threaded)
             try:
                 rc = method(obj)
@@ -2994,6 +3012,88 @@ class PosixTests():
         rc = run_daos_cmd(self.conf, cmd)
         assert rc.returncode == 0
         rc = self.dfuse.check_usage(inodes=1, open_files=1, containers=1, pools=1)
+
+    def test_uns_broken(self):
+        """Test the behavior of a broken UNS link"""
+
+        dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
+        dfuse.start('uns-broken')
+
+        i_path = join(dfuse.dir, "top_dir")
+
+        os.mkdir(i_path)
+
+        cont_path = join(i_path, "sub_cont")
+
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label="uns_broken",
+                                path=cont_path)
+
+        stat_pre = os.stat(cont_path)
+
+        dfuse.evict_and_wait([cont_path])
+
+        stat_post = os.stat(cont_path)
+        assert stat_pre.st_ino == stat_post.st_ino
+
+        dfuse.evict_and_wait([cont_path])
+
+        container.destroy(valgrind=False, log_check=False)
+
+        try:
+            os.stat(cont_path)
+            assert False
+        except OSError as error:
+            assert error.errno == errno.ENOLINK
+
+        # Now check this readdir works.
+        dfuse.evict_and_wait([i_path])
+        files = os.listdir(i_path)
+        print(files)
+        assert files == ["sub_cont"]
+
+        # Now evict again and check stat once readdir has put the inode in memory.
+        dfuse.evict_and_wait([i_path])
+        try:
+            os.stat(cont_path)
+            assert False
+        except OSError as error:
+            assert error.errno == errno.ENOLINK
+
+        dfuse.evict_and_wait([i_path])
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    def test_uns_broken_ic(self):
+        """Test the behavior of a broken UNS link when the link is in cache
+
+        This test will create EINVAL errors from dfuse so silence them in the log checking.
+        """
+        dfuse = DFuse(self.server, self.conf, container=self.container, caching=False)
+        dfuse.start('uns-broken-1')
+
+        i_path = join(dfuse.dir, "top_dir")
+
+        os.mkdir(i_path)
+
+        cont_path = join(i_path, "sub_cont")
+
+        container = create_cont(self.conf, self.pool, ctype="POSIX", label="uns_broken_ic",
+                                path=cont_path)
+
+        os.stat(cont_path)
+
+        container.destroy(valgrind=False, log_check=False, force=True)
+
+        try:
+            os.stat(cont_path)
+            assert False
+        except OSError as error:
+            assert error.errno == errno.ENOLINK
+
+        dfuse.evict_and_wait([i_path])
+        if dfuse.stop(ignore_einval=True):
+            self.fatal_errors = True
 
     @needs_dfuse
     def test_rename_clobber(self):
@@ -4332,6 +4432,18 @@ class PosixTests():
         self.server.run_daos_client_cmd_pil4dfs(['cp', '/usr/bin/mkdir', file6])
         self.server.run_daos_client_cmd_pil4dfs(['file', file6])
 
+    @needs_dfuse_with_opt(caching=False, ro=True)
+    def test_mount_ro(self):
+        """Check that mounting read-only does not allow write access"""
+        test_file = join(self.dfuse.dir, 'test_file')
+        try:
+            with open(test_file, 'w'):
+                assert False
+        except OSError as error:
+            if error.errno == errno.EROFS:
+                return
+            raise
+
 
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""
@@ -4722,6 +4834,7 @@ def log_test(conf,
 
     if ignore_einval:
         lto.skip_suffixes.append(': 22 (Invalid argument)')
+        lto.skip_suffixes.append(" DER_NO_HDL(-1002): 'Invalid handle'")
 
     if ignore_busy:
         lto.skip_suffixes.append(" DER_BUSY(-1012): 'Device or resource busy'")
@@ -5659,8 +5772,7 @@ class AllocFailTest():
                     fid += 1
                     start_this_iteration -= 1
 
-                    if len(active) > max_count:
-                        max_count = len(active)
+                    max_count = max(max_count, len(active))
 
             # Now complete as many as have finished.
             for ret in active:

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -404,7 +404,8 @@ rebuild_tgt_query(struct rebuild_tgt_pool_tracker *rpt,
 
 	/* let's check scanning status on every thread*/
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_thread_collective(dss_rebuild_check_one, &arg, 0);
+	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, dss_rebuild_check_one, &arg, 0);
 	if (rc) {
 		ABT_mutex_unlock(rpt->rt_lock);
 		D_GOTO(out, rc);
@@ -1047,6 +1048,17 @@ rpt_put(struct rebuild_tgt_pool_tracker	*rpt)
 	if (rpt->rt_refcount == 1 && rpt->rt_finishing)
 		ABT_cond_signal(rpt->rt_fini_cond);
 	ABT_mutex_unlock(rpt->rt_lock);
+	if (rpt->rt_refcount == 0) {
+		/* If rebuild tracker ULT is started successfully, then
+		 * the rpt will be destroyed in rebuild_tgt_fini().
+		 * Otherwise the rpt might be destroyed if the tracking
+		 * ULT is not started. Since it will happen in system
+		 * XS, no need lock here.
+		 */
+		D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+		d_list_del_init(&rpt->rt_list);
+		rpt_destroy(rpt);
+	}
 }
 
 static void
@@ -1243,6 +1255,8 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 		     struct rebuild_global_pool_tracker **p_rgt)
 {
 	uint64_t	leader_term;
+	uint32_t	version;
+	uint32_t	generation;
 	int		rc;
 
 	rc = ds_pool_svc_term_get(pool->sp_uuid, &leader_term);
@@ -1252,7 +1266,14 @@ rebuild_leader_start(struct ds_pool *pool, struct rebuild_task *task,
 		return rc;
 	}
 
-	rc = rebuild_prepare(pool, task->dst_map_ver, ++pool->sp_rebuild_gen,
+	/* If this happened due to leader switch, then do not need update
+	 * generation.
+	 */
+	ds_rebuild_running_query(pool->sp_uuid, -1, &version, NULL, &generation);
+	if (version < task->dst_map_ver)
+		generation = ++pool->sp_rebuild_gen;
+
+	rc = rebuild_prepare(pool, task->dst_map_ver, generation,
 			     leader_term, task->dst_reclaim_eph, &task->dst_tgts,
 			     task->dst_rebuild_op, p_rgt);
 	if (rc <= 0)
@@ -1711,6 +1732,9 @@ ds_rebuild_abort(uuid_t pool_uuid, unsigned int ver, unsigned int gen, uint64_t 
 			    (ver == (unsigned int)(-1) || rpt->rt_rebuild_ver == ver) &&
 			    (gen == (unsigned int)(-1) || rpt->rt_rebuild_gen == gen) &&
 			    (term == (uint64_t)(-1) || rpt->rt_leader_term == term)) {
+				D_INFO(DF_UUID" try abort the rpt %p op %s ver %u gen %u\n",
+				       DP_UUID(rpt->rt_pool_uuid), rpt, RB_OP_STR(rpt->rt_rebuild_op),
+				       rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
 				rpt->rt_abort = 1;
 				aborted = false;
 			}
@@ -2133,16 +2157,10 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 		       DP_UUID(rpt->rt_pool_uuid), DP_RC(rc));
 	/* destroy the migrate_tls of 0-xstream */
 	ds_migrate_stop(rpt->rt_pool, rpt->rt_rebuild_ver, rpt->rt_rebuild_gen);
-	d_list_del_init(&rpt->rt_list);
-	rpt_put(rpt);
-	/* No one should access rpt after rebuild_fini_one.
-	 */
-	D_ASSERT(rpt->rt_refcount == 0);
-
+	/* No one should access rpt after rebuild_fini_one. */
 	D_INFO("Finalized rebuild for "DF_UUID", map_ver=%u.\n",
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
-
-	rpt_destroy(rpt);
+	rpt_put(rpt);
 }
 
 void
@@ -2443,6 +2461,11 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 
 	rpt->rt_rebuild_op = rsi->rsi_rebuild_op;
 
+	/* Let's add the rpt to the tracker list before IV fetch, which might yield,
+	 * to make sure the new coming request can find the rpt in the list.
+	 */
+	rpt_get(rpt);
+	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
 	rc = ds_pool_iv_srv_hdl_fetch(pool, &rpt->rt_poh_uuid,
 				      &rpt->rt_coh_uuid);
 	if (rc)
@@ -2482,14 +2505,16 @@ rebuild_tgt_prepare(crt_rpc_t *rpc, struct rebuild_tgt_pool_tracker **p_rpt)
 	rpt->rt_pool = pool; /* pin it */
 	ABT_mutex_unlock(rpt->rt_lock);
 
-	rpt_get(rpt);
-	d_list_add(&rpt->rt_list, &rebuild_gst.rg_tgt_tracker_list);
 	*p_rpt = rpt;
 out:
 	if (rc) {
-		if (rpt)
+		if (rpt) {
+			if (!d_list_empty(&rpt->rt_list)) {
+				d_list_del_init(&rpt->rt_list);
+				rpt_put(rpt);
+			}
 			rpt_put(rpt);
-
+		}
 		ds_pool_put(pool);
 	}
 	daos_prop_fini(&prop);

@@ -2627,6 +2627,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 			return rc;
 	}
 
+	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
 	if (flags & VOS_AGG_FL_FORCE_SCAN) {
 		/** We don't want to use the latest container aggregation epoch for the filter
 		 *  in this case.   We instead use the lower bound of the epoch range.
@@ -2660,7 +2661,6 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	agg_reset_entry(&ec_agg_param->ap_agg_entry, NULL, NULL);
 
-	ec_agg_param->ap_min_unagg_eph = DAOS_EPOCH_MAX;
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
 			 agg_iterate_pre_cb, agg_iterate_post_cb, ec_agg_param, NULL);
 

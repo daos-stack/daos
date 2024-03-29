@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -205,7 +205,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=telemetry
-        :avocado: tags=dkey_akey_enum_punch,test_dkey_akey_enum_punch
+        :avocado: tags=DkeyAkeyEnumPunch,test_dkey_akey_enum_punch
         """
         self.add_pool()
 
@@ -232,13 +232,13 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
 
         # Obtain and verify the io metrics 1 to 4. ###
         # engine_pool_ops_dkey_enum
-        pool_dkey_enum = self.telemetry.ENGINE_POOL_METRICS[5]
+        pool_dkey_enum = self.telemetry.ENGINE_POOL_OPS_DKEY_ENUM_METRICS
         # engine_pool_ops_akey_enum
-        pool_akey_enum = self.telemetry.ENGINE_POOL_METRICS[2]
+        pool_akey_enum = self.telemetry.ENGINE_POOL_OPS_AKEY_ENUM_METRICS
         # engine_pool_ops_dkey_punch
-        pool_dkey_punch = self.telemetry.ENGINE_POOL_METRICS[6]
+        pool_dkey_punch = self.telemetry.ENGINE_POOL_OPS_DKEY_PUNCH_METRICS
         # engine_pool_ops_akey_punch
-        pool_akey_punch = self.telemetry.ENGINE_POOL_METRICS[3]
+        pool_akey_punch = self.telemetry.ENGINE_POOL_OPS_AKEY_PUNCH_METRICS
         specific_metrics = [
             pool_dkey_enum, pool_akey_enum,
             pool_dkey_punch, pool_akey_punch,
@@ -338,7 +338,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=telemetry
-        :avocado: tags=pool_tgt_dkey_akey_punch,test_pool_tgt_dkey_akey_punch
+        :avocado: tags=DkeyAkeyEnumPunch,test_pool_tgt_dkey_akey_punch
         """
         self.add_pool()
 
@@ -357,9 +357,9 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
 
         self.telemetry.dmg.verbose = False
 
-        # Obtain and verify the pool metrics 24 and 23 ###
-        pool_tgt_dkey_punch = self.telemetry.ENGINE_POOL_METRICS[24]
-        pool_tgt_akey_punch = self.telemetry.ENGINE_POOL_METRICS[23]
+        # Obtain and verify the pool target punch metrics
+        pool_tgt_dkey_punch = self.telemetry.ENGINE_POOL_OPS_TGT_DKEY_PUNCH_METRICS
+        pool_tgt_akey_punch = self.telemetry.ENGINE_POOL_OPS_TGT_AKEY_PUNCH_METRICS
         specific_metrics = [pool_tgt_dkey_punch, pool_tgt_akey_punch]
         pool_out = self.telemetry.get_pool_metrics(
             specific_metrics=specific_metrics)
@@ -424,7 +424,7 @@ class DkeyAkeyEnumPunch(TestWithTelemetry):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=telemetry
-        :avocado: tags=tgt_dkey_akey_punch,test_tgt_dkey_akey_punch
+        :avocado: tags=DkeyAkeyEnumPunch,test_tgt_dkey_akey_punch
         """
         self.add_pool()
 

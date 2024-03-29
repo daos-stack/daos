@@ -21,8 +21,7 @@ container:
   dfs_oclass: SX
 
 ior: &ior_base
-  client_processes:
-    ppn: 4
+  ppn: 4
   api: DFS
   transfer_size: 512K
   block_size: 1G

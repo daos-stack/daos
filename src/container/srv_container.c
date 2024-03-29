@@ -1756,19 +1756,19 @@ retry:
 
 	if (i == ec_agg->ea_servers_num) {
 		if (!retried) {
-			D_DEBUG(DB_MD, "rank %u eph "DF_U64" retry for"
+			D_DEBUG(DB_MD, "rank %u eph "DF_X64" retry for"
 				DF_CONT"\n", rank, eph,
 				DP_CONT(pool_uuid, cont_uuid));
 			retried = true;
 			ec_agg->ea_deleted = 1;
 			goto retry;
 		} else {
-			D_WARN("rank %u eph "DF_U64" does not exist for "
+			D_WARN("rank %u eph "DF_X64" does not exist for "
 			       DF_CONT"\n", rank, eph,
 			       DP_CONT(pool_uuid, cont_uuid));
 		}
 	} else {
-		D_DEBUG(DB_MD, DF_CONT" update eph rank %u eph "DF_U64"\n",
+		D_DEBUG(DB_MD, DF_CONT" update eph rank %u eph "DF_X64"\n",
 			DP_CONT(pool_uuid, cont_uuid), rank, eph);
 	}
 
@@ -1817,8 +1817,9 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.min_eph = eph;
 
-	rc = dss_task_collective(cont_refresh_vos_agg_eph_one, &arg,
-				 DSS_ULT_FL_PERIODIC);
+	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				     PO_COMP_ST_DOWNOUT, cont_refresh_vos_agg_eph_one,
+				     &arg, DSS_ULT_FL_PERIODIC);
 	return rc;
 }
 
@@ -1887,7 +1888,7 @@ cont_agg_eph_leader_ult(void *arg)
 			 * server might cause the minimum epoch is less than
 			 * ea_current_eph.
 			 */
-			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "DF_U64"\n",
+			D_DEBUG(DB_MD, DF_CONT" minimum "DF_U64" current "DF_X64"\n",
 				DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid),
 				min_eph, ec_agg->ea_current_eph);
 

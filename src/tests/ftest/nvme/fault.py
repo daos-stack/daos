@@ -34,7 +34,7 @@ class NvmeFault(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=nvme
-        :avocado: tags=nvme_fault,test_nvme_fault
+        :avocado: tags=NvmeFault,test_nvme_fault
         """
         # Create the Pool with Maximum NVMe size
         self.add_pool()
