@@ -216,7 +216,7 @@ rpt_insert(struct rebuild_tgt_pool_tracker *rpt)
 	ABT_rwlock_unlock(rebuild_gst.rg_ttl_rwlock);
 }
 
-static void
+void
 rpt_delete(struct rebuild_tgt_pool_tracker *rpt)
 {
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
@@ -1065,10 +1065,20 @@ rpt_get(struct rebuild_tgt_pool_tracker	*rpt)
 	ABT_mutex_unlock(rpt->rt_lock);
 }
 
+static int
+rpt_put_destroy(void *data)
+{
+	struct rebuild_tgt_pool_tracker	*rpt = data;
+
+	rpt_destroy(rpt);
+	return 0;
+}
+
 void
-rpt_put(struct rebuild_tgt_pool_tracker	*rpt)
+rpt_put(struct rebuild_tgt_pool_tracker *rpt)
 {
 	bool	zombie;
+	int	rc;
 
 	ABT_mutex_lock(rpt->rt_lock);
 	rpt->rt_refcount--;
@@ -1078,8 +1088,22 @@ rpt_put(struct rebuild_tgt_pool_tracker	*rpt)
 		ABT_cond_signal(rpt->rt_fini_cond);
 	zombie = (rpt->rt_refcount == 0);
 	ABT_mutex_unlock(rpt->rt_lock);
-	if (zombie)
+	if (!zombie)
+		return;
+
+	if (dss_get_module_info()->dmi_xs_id == 0) {
 		rpt_destroy(rpt);
+	} else {
+		/* Possibly triggered by VOS target XS by obj_inflight_io_check() ->
+		 * ds_rebuild_running_query(), but rpt_destroy() -> ds_pool_put() can only
+		 * be called in system XS.
+		 * If dss_ult_execute failed that due to fatal system error (no memory
+		 * or ABT failure), throw an ERR log.
+		 */
+		rc = dss_ult_execute(rpt_put_destroy, rpt, NULL, NULL, DSS_XS_SYS, 0, 0);
+		if (rc)
+			DL_ERROR(rc, "failed to destroy rpt %p", rpt);
+	}
 }
 
 static void

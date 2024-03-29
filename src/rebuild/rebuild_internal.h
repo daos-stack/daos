@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -312,6 +312,7 @@ rebuild_tls_get()
 
 void rpt_get(struct rebuild_tgt_pool_tracker *rpt);
 void rpt_put(struct rebuild_tgt_pool_tracker *rpt);
+void rpt_delete(struct rebuild_tgt_pool_tracker *rpt);
 
 struct rebuild_pool_tls *
 rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen);
