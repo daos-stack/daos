@@ -67,7 +67,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 	if (arg->myrank == 0) {
 		char		*env;
 		int		 size_gb;
-		daos_size_t	 nvme_size;
+		daos_size_t	 nvme_size = 0;
 		d_rank_list_t	 *rank_list = NULL;
 
 		d_agetenv_str(&env, "POOL_SCM_SIZE");
