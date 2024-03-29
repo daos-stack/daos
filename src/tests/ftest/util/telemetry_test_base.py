@@ -274,7 +274,7 @@ class TestWithClientTelemetry(TestWithTelemetry):
         """Set up each test case."""
         super().setUp()
         self.telemetry = ClientTelemetryUtils(
-            self.get_dmg_command(), self.server_managers[0].hosts, self.agent_managers[0].hosts)
+            self.get_dmg_command(), self.server_managers[0].hosts, self.hostlist_clients)
 
     def verify_client_telemetry_list(self, with_pools=False):
         """Verify the  dmg telemetry metrics list command output."""
@@ -287,7 +287,7 @@ class TestWithClientTelemetry(TestWithTelemetry):
 
         # Verify the lists are detected for each agent
         errors = self.compare_lists(
-            list(result), self.agent_managers[0].hosts, 0, "",
+            list(result), self.hostlist_clients, 0, "",
             "telemetry metrics list hosts")
         for host, host_result in result.items():
             errors.extend(
