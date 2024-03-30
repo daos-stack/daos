@@ -24,9 +24,9 @@ const (
 
 // crtFabricDevice is a single fabric device discovered by CART.
 type crtFabricDevice struct {
-	Class    string
-	Protocol string
-	Device   string
+	Class    string `json:"class"`
+	Protocol string `json:"protocol"`
+	Device   string `json:"device"`
 }
 
 // isUCX indicates whether this is a UCX device.
