@@ -696,7 +696,7 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, struct 
 		entry->oclass                         = parent->d.oclass;
 
 		/** since it's a single conditional op, we don't need a DTX */
-		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, dir->name, len,
+		rc = insert_entry(dfs->layout_v, parent->oh, dfs->th, dir->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc == EEXIST && !oexcl) {
 			/** just try fetching entry to open the file */
@@ -715,7 +715,7 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, struct 
 	}
 
 	/* Check if parent has the dirname entry */
-	rc = fetch_entry(dfs->layout_v, parent_oh, DAOS_TX_NONE, dir->name, len, false, &exists,
+	rc = fetch_entry(dfs->layout_v, parent_oh, dfs->th, dir->name, len, false, &exists,
 			 entry, 0, NULL, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", dir->name, rc);

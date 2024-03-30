@@ -363,8 +363,6 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	recx.rx_idx   = OID_IDX;
-	recx.rx_nr    = sizeof(daos_obj_id_t);
-	iod.iod_nr    = 1;
 	iod.iod_recxs = &recx;
 	iod.iod_type  = DAOS_IOD_ARRAY;
 	iod.iod_size  = 1;
@@ -820,7 +818,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 				if (rc)
 					D_GOTO(out_oit, rc = daos_der2errno(rc));
 
-				rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
+				rc = daos_obj_punch(oh, dfs->th, 0, NULL);
 				if (rc) {
 					daos_obj_close(oh, NULL);
 					D_GOTO(out_oit, rc = daos_der2errno(rc));
@@ -923,7 +921,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 
 			len = sprintf(oid_name, "%" PRIu64 ".%" PRIu64 "", oids[i].hi, oids[i].lo);
 			D_ASSERT(len <= DFS_MAX_NAME);
-			rc = insert_entry(dfs->layout_v, now_dir->oh, DAOS_TX_NONE, oid_name, len,
+			rc = insert_entry(dfs->layout_v, now_dir->oh, dfs->th, oid_name, len,
 					  DAOS_COND_DKEY_INSERT, &entry);
 			if (rc) {
 				D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
@@ -1173,7 +1171,7 @@ dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
 	if (rc)
 		return rc;
 
-	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
+	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, name, len, true, &exists, &entry,
 			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
@@ -1212,7 +1210,7 @@ dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs   = &sg_iov;
-	rc = daos_obj_update(parent->oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl,
+	rc = daos_obj_update(parent->oh, dfs->th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl,
 			     NULL);
 	if (rc) {
 		D_ERROR("Failed to update object type " DF_RC "\n", DP_RC(rc));
@@ -1237,14 +1235,14 @@ dfs_get_size_by_oid(dfs_t *dfs, daos_obj_id_t oid, daos_size_t chunk_size, daos_
 		return EINVAL;
 
 	rc =
-	    daos_array_open_with_attr(dfs->coh, oid, DAOS_TX_NONE, DAOS_OO_RO, 1,
+	    daos_array_open_with_attr(dfs->coh, oid, dfs->th, DAOS_OO_RO, 1,
 				      chunk_size ? chunk_size : dfs->attr.da_chunk_size, &oh, NULL);
 	if (rc != 0) {
 		D_ERROR("daos_array_open() failed: " DF_RC "\n", DP_RC(rc));
 		return daos_der2errno(rc);
 	}
 
-	rc = daos_array_get_size(oh, DAOS_TX_NONE, size, NULL);
+	rc = daos_array_get_size(oh, dfs->th, size, NULL);
 	if (rc) {
 		daos_array_close(oh, NULL);
 		D_ERROR("daos_array_get_size() failed: " DF_RC "\n", DP_RC(rc));

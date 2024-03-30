@@ -17,7 +17,7 @@ int
 dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode, daos_oclass_id_t cid)
 {
 	dfs_obj_t        new_dir;
-	daos_handle_t    th    = DAOS_TX_NONE;
+	daos_handle_t    th    = dfs->th;
 	struct dfs_entry entry = {0};
 	size_t           len;
 	struct timespec  now;
@@ -137,7 +137,7 @@ int
 dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid)
 {
 	struct dfs_entry entry = {0};
-	daos_handle_t    th    = DAOS_TX_NONE;
+	daos_handle_t    th    = dfs->th;
 	bool             exists;
 	size_t           len;
 	int              rc;
@@ -273,7 +273,7 @@ dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs   = &sg_iov;
 
-	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
+	rc = daos_obj_update(oh, dfs->th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to update object class: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
@@ -313,7 +313,7 @@ dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor)
 }
 
 int
-dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
+dfs_dir_anchor_set(dfs_t *dfs, dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
 {
 	daos_key_t dkey;
 	size_t     len;
@@ -326,6 +326,6 @@ dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
 		return rc;
 
 	d_iov_set(&dkey, (void *)name, len);
-	rc = daos_obj_key2anchor(obj->oh, DAOS_TX_NONE, &dkey, NULL, anchor, NULL);
+	rc = daos_obj_key2anchor(obj->oh, dfs->th, &dkey, NULL, anchor, NULL);
 	return daos_der2errno(rc);
 }
