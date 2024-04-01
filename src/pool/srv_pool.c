@@ -2480,7 +2480,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_data_thresh, &value);
 		if (rc == -DER_NONEXIST && global_ver < 3) { /* needs to be upgraded */
-			rc = 0;
+			rc  = 0;
 			val = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
@@ -5535,7 +5535,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		D_GOTO(out_free, rc);
 	} else if (rc == -DER_NONEXIST) {
 		val32 = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT;
-		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_svc_ops_age, &value);
+		rc    = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_svc_ops_age, &value);
 		if (rc != 0) {
 			DL_ERROR(rc, "failed to write upgrade svc_ops_age");
 			D_GOTO(out_free, rc);
