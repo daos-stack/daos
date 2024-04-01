@@ -279,7 +279,6 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 {
 	struct bio_desc	*biod = (struct bio_desc *)fh.cookie;
 
-	D_ASSERT(err == 0);
 	err = bio_iod_post(biod, err);
 	bio_iod_free(biod);
 	if (err) {
@@ -291,7 +290,6 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 			if (err != 0)
 				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
 		}
-		err = 0;
 	}
 
 	return err;
@@ -413,7 +411,7 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 			if (rc != 0)
 				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
 		}
-		rc = 0;
+		store->store_faulty = true;
 	} else if (vwm != NULL) {
 		d_tm_set_gauge(vwm->vwm_wal_sz, ws.ws_size);
 		d_tm_set_gauge(vwm->vwm_wal_qd, ws.ws_qd);
@@ -421,7 +419,7 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 
 	pool = store->vos_priv;
 	if (unlikely(pool == NULL))
-		return rc; /** In case there is any race for checkpoint init. */
+		return 0; /** In case there is any race for checkpoint init. */
 
 	/** Update checkpoint state after commit in case there is an active checkpoint waiting
 	 *  for this commit to finish.
@@ -431,7 +429,7 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
 			   wal_info.wi_tot_blks);
 
-	return rc;
+	return 0;
 }
 
 static inline int

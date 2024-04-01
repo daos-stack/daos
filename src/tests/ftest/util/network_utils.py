@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,12 +17,12 @@ SUPPORTED_PROVIDERS = (
     "ofi+verbs;ofi_rxm",
     "ucx+dc_x",
     "ucx+ud_x",
+    "ofi+tcp",
     "ofi+tcp;ofi_rxm",
     "ofi+opx"
 )
 PROVIDER_ALIAS = {
-    "ofi+verbs": "ofi+verbs;ofi_rxm",
-    "ofi+tcp": "ofi+tcp;ofi_rxm"
+    "ofi+verbs": "ofi+verbs;ofi_rxm"
 }
 
 
