@@ -27,8 +27,7 @@ container:
 ior:
   flags: -w
   api: DFS
-  client_processes: 1
+  ppn: 1
   oclass: SX
-  dir_oclass: SX
   block_size: 30M
   transfer_size: 128K
