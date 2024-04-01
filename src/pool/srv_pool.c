@@ -5533,7 +5533,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops_age, &value);
 	if (rc && rc != -DER_NONEXIST) {
 		D_GOTO(out_free, rc);
-	} else if (rc == -DER_NONEXIST || val32 != DAOS_POOL_GLOBAL_VERSION) {
+	} else if (rc == -DER_NONEXIST) {
 		val32 = DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_DEFAULT;
 		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_svc_ops_age, &value);
 		if (rc != 0) {
