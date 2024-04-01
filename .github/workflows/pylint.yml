@@ -5,6 +5,8 @@ name: Pylint
 on:
   pull_request:
 
+permissions: {}
+
 jobs:
   pylint:
     name: Pylint check
