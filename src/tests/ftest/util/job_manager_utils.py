@@ -7,7 +7,7 @@ import os
 import re
 import time
 # pylint: disable=too-many-lines
-from distutils.spawn import find_executable  # pylint: disable=deprecated-module
+from shutil import which
 
 from ClusterShell.NodeSet import NodeSet
 from command_utils import ExecutableCommand, SystemctlCommand
@@ -286,7 +286,7 @@ class Orterun(JobManager):
         if not load_mpi(mpi_type):
             raise MPILoadError(mpi_type)
 
-        path = os.path.dirname(find_executable("orterun"))
+        path = os.path.dirname(which("orterun"))
         super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
 
         # Default mca values to avoid queue pair errors
@@ -406,7 +406,7 @@ class Mpirun(JobManager):
         if not load_mpi(mpi_type):
             raise MPILoadError(mpi_type)
 
-        path = os.path.dirname(find_executable("mpirun"))
+        path = os.path.dirname(which("mpirun"))
         super().__init__("/run/mpirun/*", "mpirun", job, path, subprocess)
 
         mca_default = None
@@ -610,7 +610,6 @@ class Systemctl(JobManager):
         Args:
             job (SubProcessCommand): command object to manage.
         """
-        # path = os.path.dirname(find_executable("systemctl"))
         super().__init__("/run/systemctl/*", "systemd", job)
         self.job = job
         self._systemctl = SystemctlCommand()
