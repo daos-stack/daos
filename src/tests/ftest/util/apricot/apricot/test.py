@@ -1730,16 +1730,6 @@ class TestWithServers(TestWithoutServers):
         daos_command.get_params(self)
         return daos_command
 
-    def prepare_pool(self):
-        """Prepare the self.pool TestPool object.
-
-        Create a TestPool object, read the pool parameters from the yaml, create
-        the pool, and connect to the pool.
-
-        This sequence is common for a lot of the container tests.
-        """
-        self.add_pool()
-
     def get_pool(self, namespace=POOL_NAMESPACE, create=True, connect=True, dmg=None, **params):
         """Get a test pool object.
 

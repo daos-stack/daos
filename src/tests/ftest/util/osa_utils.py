@@ -164,59 +164,6 @@ class OSAUtils(MdtestBase, IorTestBase):
             self.print_and_assert_on_rebuild_failure(output)
             finish_time = time.time()
 
-    @fail_on(DaosApiError)
-    def write_single_object(self):
-        """Write some data to the existing pool."""
-        self.pool.connect(2)
-        csum = self.params.get("enable_checksum", '/run/container/*')
-        self.container = DaosContainer(self.context)
-        input_param = self.container.cont_input_values
-        input_param.enable_chksum = csum
-        self.container.create(poh=self.pool.pool.handle, con_prop=input_param)
-        self.container.open()
-        self.obj = DaosObj(self.context, self.container)
-        self.obj.create(objcls=1)
-        self.obj.open()
-        self.ioreq = IORequest(self.context, self.container, self.obj, objtype=4)
-        self.log.info("Writing the Single Dataset")
-        for dkey in range(self.no_of_dkeys):
-            for akey in range(self.no_of_akeys):
-                indata = str(akey)[0] * self.record_length
-                d_key_value = "dkey {0}".format(dkey)
-                c_dkey = create_string_buffer(d_key_value)
-                a_key_value = "akey {0}".format(akey)
-                c_akey = create_string_buffer(a_key_value)
-                c_value = create_string_buffer(indata)
-                c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
-                self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
-        self.obj.close()
-        self.container.close()
-
-    @fail_on(DaosApiError)
-    def verify_single_object(self):
-        """Verify the container data on the existing pool."""
-        self.pool.connect(2)
-        self.container.open()
-        self.obj.open()
-        self.log.info("Single Dataset Verification -- Started")
-        for dkey in range(self.no_of_dkeys):
-            for akey in range(self.no_of_akeys):
-                indata = str(akey)[0] * self.record_length
-                c_dkey = create_string_buffer("dkey {0}".format(dkey))
-                c_akey = create_string_buffer("akey {0}".format(akey))
-                val = self.ioreq.single_fetch(c_dkey, c_akey, len(indata) + 1)
-                if indata != (repr(val.value)[1:-1]):
-                    self.d_log.error("ERROR:Data mismatch for "
-                                     "dkey = {0}, "
-                                     "akey = {1}".format(
-                                         "dkey {0}".format(dkey),
-                                         "akey {0}".format(akey)))
-                    self.fail("ERROR: Data mismatch for dkey = {0}, akey={1}"
-                              .format("dkey {0}".format(dkey),
-                                      "akey {0}".format(akey)))
-        self.obj.close()
-        self.container.close()
-
     def prepare_cont_ior_write_read(self, oclass, flags):
         """Prepare the containers for IOR write and read invocations.
 
