@@ -1,3 +1,7 @@
+daos (2.5.101-3) unstable; urgency=medium
+  [ Lei Huang ]
+  * Add libaio as a dependent package
+
 daos (2.5.101-2) unstable; urgency=medium
   [ Jan Michalski ]
   * Add dtx_tests to the server-tests package

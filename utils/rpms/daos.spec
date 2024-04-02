@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.101
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -588,6 +588,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Apr 02 2024 Lei Huang <lei.huang@intel.com> 2.5.101-3
+- Add libaio as a dependent package
+
 * Mon Mar 18 2024 Jan Michalski <jan.michalski@intel.com> 2.5.101-2
 - Add dtx_tests to the server-tests package
 
