@@ -40,6 +40,7 @@
 
 #define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED    1
 #define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3
+#define DAOS_POOL_GLOBAL_VERSION_WITH_DATA_THRESH 3
 
 #define PS_OPS_PER_SEC                            4096
 
@@ -2479,13 +2480,14 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	if (bits & DAOS_PO_QUERY_PROP_DATA_THRESH) {
 		d_iov_set(&value, &val, sizeof(val));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_data_thresh, &value);
-		if (rc == -DER_NONEXIST && global_ver < 3) { /* needs to be upgraded */
+		if (rc == -DER_NONEXIST && global_ver < DAOS_POOL_GLOBAL_VERSION_WITH_DATA_THRESH) {
+			/* needs to be upgraded */
 			rc  = 0;
 			val = DAOS_PROP_PO_DATA_THRESH_DEFAULT;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
-			D_ERROR(DF_UUID ": DAOS_PO_QUERY_PROP_DATA_THRESH missing from the pool\n",
-				DP_UUID(svc->ps_uuid));
+			DL_ERROR(rc, DF_UUID ": DAOS_PO_QUERY_PROP_DATA_THRESH lookup failed",
+				 DP_UUID(svc->ps_uuid));
 			D_GOTO(out_prop, rc);
 		}
 		D_ASSERT(idx < nr);
