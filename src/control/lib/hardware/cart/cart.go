@@ -9,9 +9,11 @@ package cart
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -101,6 +103,17 @@ func (p *Provider) getFabricInterfaces(provider string, ch chan *fabricResult) {
 
 	devices, err := p.getProtocolInfo(p.log, provider)
 	if err != nil {
+		// TODO DAOS-15588: Remove this special handling for verbs once the
+		// underlying Mercury bug is fixed.
+		// Currently requesting verbs on a system without Infiniband results in
+		// a Mercury error.
+		if errors.Is(err, daos.MercuryFatalError) && strings.HasSuffix(provider, "verbs") {
+			ch <- &fabricResult{
+				fiSet: hardware.NewFabricInterfaceSet(),
+			}
+			return
+		}
+
 		provMsg := ""
 		if provider != "" {
 			provMsg = fmt.Sprintf(" for provider %q", provider)

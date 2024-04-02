@@ -59,7 +59,9 @@ func TestCart_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 
 			test.CmpErr(t, tc.expErr, err)
 
-			t.Logf("Results:\n%+v", result)
+			if err == nil {
+				t.Logf("Results:\n%+v", result)
+			}
 		})
 	}
 }
