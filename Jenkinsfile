@@ -38,10 +38,11 @@ if (!env.CHANGE_ID &&
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'provider-ucx-2.4-testing' ? 'TZ=UTC\n0 2 * * 6' : '')
-    }
+    // Timed builds disabled on 2-Apr-2024
+    // triggers {
+    //     /* groovylint-disable-next-line AddEmptyString */
+    //     cron(env.BRANCH_NAME == 'provider-ucx-2.4-testing' ? 'TZ=UTC\n0 2 * * 6' : '')
+    // }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
