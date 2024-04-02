@@ -2237,11 +2237,13 @@ cache_pop_free_page(struct umem_cache *cache)
 #define UMEM_CACHE_BMAP_SZ_MAX    (1 << (UMEM_CACHE_PAGE_SHIFT_MAX - \
 					UMEM_CACHE_CHUNK_SZ_SHIFT - UMEM_CHUNK_IDX_SHIFT))
 #define UMEM_CACHE_RSRVD_PAGES	4
+#define UMEM_CACHE_MIN_EVICTABLE_PAGES	2
 
 int
 umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
 		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
-		 bool (*is_evictable_fn)(uint32_t pg_id))
+		 bool (*is_evictable_fn)(uint32_t pg_id),
+		 int (*pageload_fn)(void *arg, uint32_t pg_id))
 {
 	struct umem_cache	*cache;
 	struct umem_page_info	*pinfo;
@@ -2273,7 +2275,7 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 		mem_pgs = md_pgs;
 		max_ne_pgs = md_pgs;
 	} else {
-		D_ASSERT(mem_pgs > (max_ne_pgs + UMEM_CACHE_RSRVD_PAGES));
+		D_ASSERT(mem_pgs >= (max_ne_pgs + UMEM_CACHE_MIN_EVICTABLE_PAGES));
 	}
 
 	bmap_sz = (1 << (page_shift - UMEM_CACHE_CHUNK_SZ_SHIFT - UMEM_CHUNK_IDX_SHIFT));
@@ -2298,6 +2300,7 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	cache->ca_page_mask	= page_sz - 1;
 	cache->ca_bmap_sz	= bmap_sz;
 	cache->ca_evictable_fn	= is_evictable_fn;
+	cache->ca_pageload_fn	= pageload_fn;
 
 	D_INIT_LIST_HEAD(&cache->ca_pgs_free);
 	D_INIT_LIST_HEAD(&cache->ca_pgs_dirty);
@@ -2983,6 +2986,13 @@ cache_load_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 		DL_ERROR(rc, "Read MD blob failed.\n");
 		page_wakeup_io(cache, pinfo);
 		return rc;
+	} else if (cache->ca_pageload_fn) {
+		rc = cache->ca_pageload_fn(cache, pinfo->pi_pg_id);
+		if (rc) {
+			DL_ERROR(rc, "Pageload callback failed.");
+			page_wakeup_io(cache, pinfo);
+			return rc;
+		}
 	}
 
 	pinfo->pi_loaded = 1;

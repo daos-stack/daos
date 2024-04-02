@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -955,6 +955,8 @@ struct umem_cache {
 	uint64_t		 ca_commit_id;
 	/** Callback to tell if a page is evictable */
 	bool			(*ca_evictable_fn)(uint32_t pg_id);
+	/** Callback being called on page loaded */
+	int			(*ca_pageload_fn)(void *arg, uint32_t pg_id);
 	/** Page stats */
 	uint32_t		 ca_pgs_stats[UMEM_PG_STATS_MAX];
 	/** How many waiters waiting on free page reserve */
@@ -987,13 +989,15 @@ struct umem_cache_chkpt_stats {
  * \param[in]	base_off	Offset of the umem cache base
  * \param[in]	base		Start address of the page cache
  * \param[in]	is_evictable_fn	Callback function to check if page is evictable
+ * \param[in]	pageload_fn	Callback called on page being loaded
  *
  * \return 0 on success
  */
 int
 umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
 		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
-		 bool (*is_evictable_fn)(uint32_t pg_id));
+		 bool (*is_evictable_fn)(uint32_t pg_id),
+		 int (*pageload_fn)(void *arg, uint32_t pg_id));
 
 /** Free global cache for umem store.
  *

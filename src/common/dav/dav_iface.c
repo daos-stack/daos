@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -95,7 +95,8 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 		D_ERROR("meta context not defined. WAL commit disabled for %s\n", path);
 	} else {
 		num_pages = (sz + UMEM_CACHE_PAGE_SZ - 1) >> UMEM_CACHE_PAGE_SZ_SHIFT;
-		rc = umem_cache_alloc(store, UMEM_CACHE_PAGE_SZ, num_pages, 0, 0, 0, base, NULL);
+		rc = umem_cache_alloc(store, UMEM_CACHE_PAGE_SZ, num_pages, 0, 0, 0, base,
+				      NULL, NULL);
 		if (rc != 0) {
 			D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
 			err = rc;
