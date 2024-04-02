@@ -91,15 +91,15 @@ class ContinuesAfterStop(IorTestBase):
         self.log_step(msg)
         scanning_found = False
         for count in range(120):
-            self.log.info(f"Look for 'Rebuild [scanning]'. Count = {count}")
+            self.log.info("Look for 'Rebuild [scanning]'. Count = %d", count)
             journalctl_out = get_journalctl(
                 hosts=self.hostlist_servers, since=ior_start_time, until=None,
                 journalctl_type="daos_server")
-            for rank in range(len(journalctl_out)):
-                data = journalctl_out[rank]["data"]
+            for _, journalctl in enumerate(journalctl_out):
+                data = journalctl["data"]
                 for line in data.splitlines():
                     if "Rebuild [scanning]" in line:
-                        self.log.debug(f"'Rebuild [scanning]' found: {line}")
+                        self.log.info("'Rebuild [scanning]' found: %s", line)
                         scanning_found = True
                         break
                 if scanning_found:
