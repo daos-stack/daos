@@ -173,10 +173,11 @@ void rpm_test_post(String stage_name, String node) {
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        /* groovylint-disable-next-line AddEmptyString */
-        cron(env.BRANCH_NAME == 'release/2.4' ? 'TZ=America/Toronto\n0 12 * * 6\n' : '')
-    }
+    // Timed builds disabled on 2-Apr-2024
+    // triggers {
+    //     /* groovylint-disable-next-line AddEmptyString */
+    //     cron(env.BRANCH_NAME == 'release/2.4' ? 'TZ=America/Toronto\n0 12 * * 6\n' : '')
+    // }
 
     environment {
         BULLSEYE = credentials('bullseye_license_key')
