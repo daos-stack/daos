@@ -1,0 +1,31 @@
+#!/bin/sh
+
+# Checks the Jenkinsfile for syntax errors
+#
+# Will only check if Jenkinsfile is modified
+#
+
+set -ue
+
+echo "Jenkinsfile:"
+
+if ! git diff --cached --stat 2>/dev/null | grep -q Jenkinsfile; then
+    echo "  No changes, skipping checking"
+    exit 0
+fi
+
+echo "  Checking Jenkinsfile"
+
+HOST="${HOST:-build.hpdd.intel.com}"
+CURL_VERBOSE=${CURL_VERBOSE:-""}
+CURL_PROXY="${CURL_PROXY:+-x }${CURL_PROXY:-}"
+CURL_OPTS="$CURL_PROXY $CURL_VERBOSE -s"
+if ! output=$(curl $CURL_OPTS -s -X POST -F "jenkinsfile=<${1:-Jenkinsfile}" https://$HOST//pipeline-model-converter/validate); then
+    echo "Failed to check Jenkinsfile"
+    exit 1
+fi
+
+if echo "$output" | grep -q "Errors encountered validating"; then
+    echo "$output"
+    exit 1
+fi

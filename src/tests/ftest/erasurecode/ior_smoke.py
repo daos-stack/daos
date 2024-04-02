@@ -26,7 +26,7 @@ class EcodIor(IorTestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_smoke,ior
-        :avocado: tags=ec_ior,test_ec
+        :avocado: tags=EcodIor,test_ec
         """
         obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
 

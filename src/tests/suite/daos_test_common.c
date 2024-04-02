@@ -67,12 +67,13 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 	if (arg->myrank == 0) {
 		char		*env;
 		int		 size_gb;
-		daos_size_t	 nvme_size;
+		daos_size_t	 nvme_size = 0;
 		d_rank_list_t	 *rank_list = NULL;
 
-		env = getenv("POOL_SCM_SIZE");
+		d_agetenv_str(&env, "POOL_SCM_SIZE");
 		if (env) {
 			size_gb = atoi(env);
+			d_freeenv_str(&env);
 			if (size_gb != 0)
 				outpool->pool_size =
 					(daos_size_t)size_gb << 30;
@@ -85,9 +86,10 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		 * Set env POOL_NVME_SIZE to overwrite the default NVMe size.
 		 */
 		nvme_size = outpool->pool_size * 4;
-		env = getenv("POOL_NVME_SIZE");
+		d_agetenv_str(&env, "POOL_NVME_SIZE");
 		if (env) {
 			size_gb = atoi(env);
+			d_freeenv_str(&env);
 			nvme_size = (daos_size_t)size_gb << 30;
 		}
 
@@ -966,8 +968,8 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 		rank = arg->srv_nnodes - disable_nodes - 1;
 
 	arg->srv_disabled_ntgts += tgts_per_node;
-	if (d_rank_in_rank_list(svc, rank))
-		svc->rl_nr--;
+	rc = d_rank_list_del(svc, rank);
+	assert_rc_equal(rc, 0);
 	print_message("\tKilling rank %d (total of %d with %d already "
 		      "disabled, svc->rl_nr %d)!\n", rank, arg->srv_ntgts,
 		       arg->srv_disabled_ntgts - 1, svc->rl_nr);

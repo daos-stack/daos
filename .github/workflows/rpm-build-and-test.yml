@@ -5,10 +5,10 @@ env:
   #       build is done on the lowest version and test on the highest with a "sanity test"
   #       stage done on all versions in the list ecept the highest
   EL8_BUILD_VERSION: 8.6
-  EL8_VERSION: 8
+  EL8_VERSION: 8.8
   EL9_BUILD_VERSION: 9
   EL9_VERSION: 9
-  LEAP15_VERSION: 15.4
+  LEAP15_VERSION: 15.5
 
 on:
   workflow_dispatch:
@@ -39,6 +39,7 @@ jobs:
   # ${{ github.event.head_commit.message }} but pull_requests don't.  :-(
   Import-commit-message:
     name: Get commit message
+    if: github.repository == 'daos-stack/daos'
     runs-on: [self-hosted, light]
     # Map a step output to a job output
     outputs:
@@ -46,10 +47,8 @@ jobs:
       dequoted_message: ${{ steps.dequoted_commit_message.outputs.text }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          submodules: false
-          fetch-depth: 1
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import Commit Message
         id: commit_message
@@ -62,6 +61,9 @@ jobs:
              echo "text<<EOF" >> $GITHUB_OUTPUT;
              git show -s --format=%B | escape_single_quotes >> $GITHUB_OUTPUT;
              echo "EOF" >> $GITHUB_OUTPUT;
+      - name: Identify Commit Pragmas
+        run: . ci/gha_functions.sh;
+             echo '${{steps.dequoted_commit_message.outputs.text }}' | get_commit_pragmas
 
   Import-commit-pragmas:
     name: Make commit pragma variables
@@ -229,10 +231,8 @@ jobs:
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
             echo "FVERSION=$FVERSION" >> $GITHUB_ENV
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          submodules: true
-          fetch-depth: 500
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Build RPM Docker image
         id: build-rpm-docker-image
@@ -275,7 +275,7 @@ jobs:
              cat mock_result/build.log
       - name: Save RPM build logs
         continue-on-error: true
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.STAGE_NAME }} logs
           path: |
@@ -299,7 +299,7 @@ jobs:
         run: rm -f ${REPO_PATH}lastSuccessfulBuild;
              exit 1
       - name: Publish RPMs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
           path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
@@ -315,35 +315,49 @@ jobs:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Calculate Functional Testing Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
+             . ci/gha_functions.sh
+             set -eu
+             # it might seem tempting to factor in the result of the build for this
+             # distro here and not include a failed build in the test matrix but
+             # the problem with that is that if/when the user asks GHA to rebuild
+             # all failed jobs and a previously failed RPM job is successful, the
+             # test matrix won't include testing it since it was calculated and was
+             # successful on the previous run without the failed build stage in it
              l=()
              trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT' EXIT
              if ${CP_SKIP_FUNC_TEST:-false}; then
                  exit 0
              fi
-             # it might seem tempting to factor in the result of the build for this
-             # distro here and not include a failed build in the test matrix
-             # the problem with that is that if/when the user asks GHA to rebuild
-             # all failed jobs and a previously failed RPM job is successful, the
-             # test matrix won't include testing it since it was calculated and was
-             # successful on the previous run without the failed build stage in it
-             if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
-                ! ${CP_SKIP_FUNC_TEST_EL8:-false}; then
-                 # it would definitely be nicer to get these into the environment
-                 # as unquoted strings so that we didn't have to double quote here
-                 l+=('"el8"')
+             if ! cd src/tests/ftest; then
+                 echo "src/tests/ftest doesn't exist."
+                 echo "Could not determine if tests exist for this stage, assuming they do."
+                 exit 0
              fi
-             if ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
-                ! ${CP_SKIP_FUNC_TEST_EL9:-false}; then
-                 l+=('"el9"')
-             fi
-             if ${{ github.event_name == 'push' }} ||
-                (${{ github.event_name == 'pull_request' }} &&
-                ! ${CP_SKIP_BUILD_LEAP15_RPM:-false} &&
-                ! ${CP_SKIP_FUNC_TEST_LEAP15:-true}); then
-                 l+=('"leap15"')
+
+             if ./launch.py --list "$(get_test_tags "-hw")"; then
+                 if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
+                    ! ${CP_SKIP_FUNC_TEST_EL8:-false}; then
+                     # it would definitely be nicer to get these into the environment
+                     # as unquoted strings so that we didn't have to double quote here
+                     l+=('"el8"')
+                 fi
+                 if ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
+                    ! ${CP_SKIP_FUNC_TEST_EL9:-false}; then
+                     l+=('"el9"')
+                 fi
+                 if ${{ github.event_name == 'push' }} ||
+                    (${{ github.event_name == 'pull_request' }} &&
+                    ! ${CP_SKIP_BUILD_LEAP15_RPM:-false} &&
+                    ! ${CP_SKIP_FUNC_TEST_LEAP15:-true}); then
+                     l+=('"leap15"')
+                 fi
              fi
 
   Functional:
@@ -400,6 +414,7 @@ jobs:
             env
             STAGE_TAGS="-hw"
             FTEST_ARG=""
+            INST_RPMS="daos-client daos-tests daos-server daos-serialize daos-tests-internal"
             case "${{ matrix.distro }}" in
                 'el8')
                     CHROOT_NAME="rocky+epel-8-x86_64"
@@ -456,10 +471,9 @@ jobs:
             echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
                  $GITHUB_ENV
             echo "LABEL=$LABEL" >> $GITHUB_ENV
-            echo -n "INST_RPMS=daos-client daos-tests daos-server daos-serialize" >> $GITHUB_ENV
-            echo -n " daos-tests-internal" >> $GITHUB_ENV
+            echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 500
@@ -509,14 +523,14 @@ jobs:
       - name: Publish artifacts
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.STAGE_NAME }} artifacts
           path: ${{ env.STAGE_NAME }}/**
       - name: Upload test results
         if: (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
@@ -532,34 +546,48 @@ jobs:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Calculate Functional Testing Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
+             . ci/gha_functions.sh
              set -eu
+             # it might seem tempting to factor in the result of the build for this
+             # distro here and not include a failed build in the test matrix but
+             # the problem with that is that if/when the user asks GHA to rebuild
+             # all faiiled jobs and a previously failed RPM job is successful, the
+             # test matrix won't include testing it since it was calculated and was
+             # successful on the previous run without the failed build stage in it
              l=()
              trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT' EXIT
              if ${CP_SKIP_FUNC_HW_TEST:-false}; then
                  exit 0
              fi
-             # it might seem tempting to factor in the result of the build for this
-             # distro here and not include a failed build in the test matrix
-             # the problem with that is that if/when the user asks GHA to rebuild
-             # all faiiled jobs and a previously failed RPM job is successful, the
-             # test matrix won't include testing it since it was calculated and was
-             # successful on the previous run without the failed build stage in it
-             if ! "${CP_SKIP_FUNC_HW_TEST_LARGE:-false}"; then
+             if ! cd src/tests/ftest; then
+                 echo "src/tests/ftest doesn't exist."
+                 echo "Could not determine if tests exist for this stage, assuming they do."
+                 exit 0
+             fi
+             if ! "${CP_SKIP_FUNC_HW_TEST_LARGE:-false}" &&
+                ./launch.py --list "$(get_test_tags "hw,large,-provider")"; then
                  # it would definitely be nicer to get these into the environment
                  # as unquoted strings so that we didn't have to double quote here
                  l+=('"Large"')
              fi
-             if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM:-false}; then
+             if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM:-false} &&
+                ./launch.py --list "$(get_test_tags "hw,medium,-provider")"; then
                  l+=('"Medium"')
              fi
-             if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM_VERBS_PROVIDER:-false}; then
+             if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM_VERBS_PROVIDER:-false} &&
+                ./launch.py --list "$(get_test_tags "hw,medium,provider")"; then
                  l+=('"Medium Verbs Provider"')
              fi
              if ${{ github.event_name == 'push' }} &&
-                ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM_UCX_PROVIDER:-false}; then
+                ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM_UCX_PROVIDER:-false} &&
+                ./launch.py --list "$(get_test_tags "hw,medium,provider")"; then
                  l+=('"Medium UCX Provider"')
              fi
 
@@ -581,7 +609,7 @@ jobs:
       (needs.Build-RPM.result == 'success' ||
        needs.Build-RPM.result == 'skipped') &&
       (needs.Functional.result == 'success' ||
-      needs.Functional.result == 'skipped')
+       needs.Functional.result == 'skipped')
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
@@ -614,6 +642,7 @@ jobs:
         run: |
             STAGE_TAGS="hw"
             FTEST_ARG="--nvme=auto:-3DNAND"
+            INST_RPMS="daos-client daos-tests daos-server daos-serialize daos-tests-internal"
             CHROOT_NAME="rocky+epel-8-x86_64"
             DISTRO_NAME="EL"
             DISTRO_NAME_UPPER="EL"
@@ -634,8 +663,19 @@ jobs:
                 STAGE_TAGS+=",large"
                 SIZE="LARGE"
             fi
-            if [[ "${{ matrix.stage }}" = *\ Prvider ]]; then
+            if [[ "${{ matrix.stage }}" = *\ Provider ]]; then
                 STAGE_TAGS+=",provider"
+                if [[ "${{ matrix.stage }}" = *\ Verbs\ * ]]; then
+                  FTEST_ARG+=' --provider ofi+verbs'
+                elif [[ "${{ matrix.stage }}" = *\ UCX\ * ]]; then
+                  FTEST_ARG+=' --provider ucx+dc_x'
+                  INST_RPMS+=' mercury-ucx'
+                elif [[ "${{ matrix.stage }}" = *\ TCP\ * ]]; then
+                  FTEST_ARG+=' --provider ofi+tcp'
+                else
+                    echo "Unknown provider in ${{ matrix.stage }}"
+                    exit 1
+                fi
             else
                 STAGE_TAGS+=",-provider"
             fi
@@ -652,11 +692,10 @@ jobs:
             echo "${PROV_DISTRO_VERSION_MAJOR:-$DISTRO_VERSION_MAJOR}_LOCAL_REPO=not_used" >> \
                  $GITHUB_ENV
             echo "LABEL=$LABEL" >> $GITHUB_ENV
-            echo -n "INST_RPMS=daos-client daos-tests daos-server daos-serialize" >> $GITHUB_ENV
-            echo " daos-tests-internal" >> $GITHUB_ENV
+            echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
             echo "SIZE=$SIZE" >> $GITHUB_ENV
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 500
@@ -706,14 +745,14 @@ jobs:
       - name: Publish artifacts
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.STAGE_NAME }} artifacts
           path: ${{ env.STAGE_NAME }}/**
       - name: Upload test results
         if: (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml

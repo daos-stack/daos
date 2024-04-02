@@ -1,7 +1,9 @@
 """Build DAOS Control Plane"""
 # pylint: disable=too-many-locals
 import os
+import socket
 from binascii import b2a_hex
+from datetime import datetime, timezone
 from os import urandom
 from os.path import join
 
@@ -43,13 +45,21 @@ def gen_build_id():
     return '0x' + buildid.decode()
 
 
-def go_ldflags():
+def go_ldflags(benv):
     "Create the ldflags option for the Go build."
 
+    build_host = ''
+    if not is_release_build(benv):
+        build_host = socket.getfqdn()
+    build_time = datetime.now(timezone.utc).astimezone().isoformat()
     Import('daos_version', 'conf_dir')
     path = 'github.com/daos-stack/daos/src/control/build'
     return ' '.join([f'-X {path}.DaosVersion={daos_version}',
                      f'-X {path}.ConfigDir={conf_dir}',
+                     f'-X {path}.BuildHost={build_host}',
+                     # NB: dynamic values should be enclosed in $(...$)
+                     # to avoid unnecessary rebuilds
+                     f'-X $({path}.BuildTime={build_time}$)',
                      f'-B $({gen_build_id()}$)'])
 
 
@@ -72,7 +82,7 @@ def install_go_bin(env, name, libs=None, install_man=False):
 
     target = env.d_run_command(name, sources, libs,
                                f'cd {gosrc}; {env.d_go_bin} build -mod vendor '
-                               + f'-ldflags "{go_ldflags()}" '
+                               + f'-ldflags "{go_ldflags(env)}" '
                                + f'{get_build_flags(env)} '
                                + f'{get_build_tags(env)} '
                                + f'-o {build_bin} {install_src}')
@@ -80,8 +90,11 @@ def install_go_bin(env, name, libs=None, install_man=False):
     if install_man:
         gen_bin = join('$BUILD_DIR/src/control', name)
         build_path = join('$BUILD_DIR/src/control', f'{name}.8')
-        env.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
-        env.Install('$PREFIX/share/man/man8', build_path)
+        menv = env.Clone()
+        # This runs code from the build area so needs LD_LIBRARY_PATH set.
+        menv.d_enable_ld_path(["cart", "gurt", "client/api", "common", "client/dfs", "utils"])
+        menv.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
+        menv.Install('$PREFIX/share/man/man8', build_path)
 
 
 def scons():

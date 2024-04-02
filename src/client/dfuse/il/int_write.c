@@ -5,27 +5,23 @@
  */
 
 #define D_LOGFAC DD_FAC(il)
+
+#include <daos.h>
+#include <daos_array.h>
+
 #include "dfuse_common.h"
 #include "intercept.h"
-#include "daos.h"
-#include "daos_array.h"
 
 #include "ioil.h"
 
-ssize_t
-ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode)
+static ssize_t
+ioil_do_writesgl(d_sg_list_t *sgl, size_t len, off_t position, struct fd_entry *entry, int *errcode)
 {
-	d_iov_t		iov = {};
-	d_sg_list_t	sgl = {};
 	daos_event_t	ev;
 	daos_handle_t	eqh;
 	int		rc;
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "%#zx-%#zx", position, position + len - 1);
-
-	sgl.sg_nr = 1;
-	d_iov_set(&iov, (void *)buff, len);
-	sgl.sg_iovs = &iov;
 
 	rc = ioil_get_eqh(&eqh);
 	if (rc == 0) {
@@ -38,7 +34,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
-		rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position, &ev);
+		rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, sgl, position, &ev);
 		if (rc)
 			D_GOTO(out, rc);
 
@@ -55,7 +51,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 		}
 		rc = ev.ev_error;
 	} else {
-		rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position, NULL);
+		rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, sgl, position, NULL);
 	}
 out:
 	if (rc) {
@@ -67,26 +63,49 @@ out:
 }
 
 ssize_t
+ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode)
+{
+	d_iov_t     iov = {};
+	d_sg_list_t sgl = {};
+
+	sgl.sg_nr = 1;
+	d_iov_set(&iov, (void *)buff, len);
+	sgl.sg_iovs = &iov;
+
+	return ioil_do_writesgl(&sgl, len, position, entry, errcode);
+}
+
+ssize_t
 ioil_do_pwritev(const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
 		int *errcode)
 {
-	ssize_t bytes_written;
-	ssize_t total_write = 0;
-	int     i;
+	d_iov_t    *diov;
+	d_sg_list_t sgl         = {};
+	size_t      total_write = 0;
+	int         i;
+	int         rc;
+	int         new_count;
 
-	for (i = 0; i < count; i++) {
-		bytes_written =
-		    ioil_do_writex(iov[i].iov_base, iov[i].iov_len, position, entry, errcode);
-
-		if (bytes_written == -1)
-			return (ssize_t)-1;
-
-		if (bytes_written == 0)
-			return total_write;
-
-		position += bytes_written;
-		total_write += bytes_written;
+	D_ALLOC_ARRAY(diov, count);
+	if (diov == NULL) {
+		*errcode = ENOMEM;
+		return -1;
 	}
 
-	return total_write;
+	for (i = 0, new_count = 0; i < count; i++) {
+		/** See DAOS-15089. This is a workaround */
+		if (iov[i].iov_len == 0)
+			continue;
+		d_iov_set(&diov[new_count++], iov[i].iov_base, iov[i].iov_len);
+		total_write += iov[i].iov_len;
+	}
+
+	sgl.sg_nr   = new_count;
+	sgl.sg_iovs = diov;
+
+	rc = ioil_do_writesgl(&sgl, total_write, position, entry, errcode);
+
+	D_FREE(diov);
+
+	return rc;
 }

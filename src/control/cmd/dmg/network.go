@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -32,7 +31,7 @@ type networkScanCmd struct {
 }
 
 func (cmd *networkScanCmd) Execute(_ []string) error {
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	req := &control.NetworkScanReq{
 		Provider: cmd.FabricProvider,
 	}

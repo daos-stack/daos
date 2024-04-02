@@ -85,8 +85,7 @@ struct cont_svc {
 	rdb_path_t		cs_root;	/* root KVS */
 	rdb_path_t		cs_uuids;	/* container UUIDs KVS */
 	rdb_path_t		cs_conts;	/* container KVS */
-	rdb_path_t		cs_hdls;	/* container handle KVS */
-	rdb_path_t              cs_ops;         /* metadata ops KVS */
+	rdb_path_t              cs_hdls;        /* container handle KVS */
 	struct ds_pool	       *cs_pool;
 
 	/* Manage the EC aggregation epoch */
@@ -213,7 +212,9 @@ int ds_cont_leader_update_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 /* srv_epoch.c */
 int
 ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		    struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
+		    struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver,
+		    struct ds_pool_svc_op_val *op_val);
+
 int
 ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 			struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver);
@@ -264,7 +265,7 @@ int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
-int ds_cont_tgt_close(uuid_t cont_hdl_uuid);
+int ds_cont_tgt_close(uuid_t pool_uuid, uuid_t cont_hdl_uuid);
 int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				daos_epoch_t eph);
 int ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t *prop);

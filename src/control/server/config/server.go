@@ -159,6 +159,16 @@ func (cfg *Server) WithCrtTimeout(timeout uint32) *Server {
 	return cfg
 }
 
+// WithNumSecondaryEndpoints sets the number of network endpoints for each engine's secondary
+// provider.
+func (cfg *Server) WithNumSecondaryEndpoints(nr []int) *Server {
+	cfg.Fabric.NumSecondaryEndpoints = nr
+	for _, engine := range cfg.Engines {
+		engine.Fabric.Update(cfg.Fabric)
+	}
+	return cfg
+}
+
 // WithControlMetadata sets the control plane metadata.
 func (cfg *Server) WithControlMetadata(md storage.ControlMetadata) *Server {
 	cfg.Metadata = md
@@ -354,6 +364,11 @@ func (cfg *Server) Load() error {
 		return errors.Errorf("invalid system name: %q", cfg.SystemName)
 	}
 
+	// TODO multiprovider: Remove when multiprovider is enabled
+	if cfg.Fabric.GetNumProviders() > 1 {
+		return errors.Errorf("fabric provider string %q includes more than one provider", cfg.Fabric.Provider)
+	}
+
 	// Update server config based on legacy parameters.
 	if err := updateFromLegacyParams(cfg); err != nil {
 		return errors.Wrap(err, "updating config from legacy parameters")
@@ -488,7 +503,7 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 	}
 
 	if cfg.DisableHugepages {
-		return FaultConfigHugepagesDisabled
+		return FaultConfigHugepagesDisabledWithBdevs
 	}
 
 	// Calculate minimum number of hugepages for all configured engines.
@@ -739,7 +754,7 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenValues := make(map[string]int)
 	seenScmSet := make(map[string]int)
 	seenBdevSet := make(map[string]int)
-	seenIdx := 0
+	seenIdx := -1
 	seenBdevCount := -1
 	seenTargetCount := -1
 	seenHelperStreamCount := -1
@@ -747,7 +762,7 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenScmClsIdx := -1
 
 	for idx, engine := range cfg.Engines {
-		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
+		fabricConfig := fmt.Sprintf("fabric:%q-%q-%q",
 			engine.Fabric.Provider,
 			engine.Fabric.Interface,
 			engine.Fabric.InterfacePort)
@@ -806,8 +821,8 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 			// Log error but don't fail in order to be lenient with unbalanced device
 			// counts in particular cases e.g. using different capacity SSDs or VMDs
 			// with different number of backing devices.
-			err := FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
-			log.Noticef(err.Error())
+			e := FaultConfigBdevCountMismatch(idx, bdevCount, seenIdx, seenBdevCount)
+			log.Noticef(e.Error())
 		}
 		if seenTargetCount != -1 && engine.TargetCount != seenTargetCount {
 			return FaultConfigTargetCountMismatch(idx, engine.TargetCount, seenIdx,

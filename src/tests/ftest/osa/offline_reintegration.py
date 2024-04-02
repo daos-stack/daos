@@ -30,8 +30,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.ior_test_repetitions = self.params.get("pool_test_repetitions", '/run/pool_capacity/*')
         self.loop_test_cnt = 1
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.dmg_command.exit_status_exception = True
 
     def run_offline_reintegration_test(self, num_pool, data=False, server_boot=False, oclass=None,

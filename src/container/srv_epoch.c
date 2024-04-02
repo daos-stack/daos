@@ -288,7 +288,8 @@ out:
 
 int
 ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
-		    struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver)
+		    struct container_hdl *hdl, crt_rpc_t *rpc, int cont_proto_ver,
+		    struct ds_pool_svc_op_val *op_val)
 {
 	struct cont_epoch_op_in	       *in = crt_req_get(rpc);
 	struct cont_epoch_op_out       *out = crt_reply_get(rpc);
@@ -310,8 +311,10 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont
 	cont_epoch_op_in_get_data(rpc, CONT_SNAP_CREATE, cont_proto_ver, &snap_eph, &opts);
 
 	rc = snap_create_bcast(tx, cont, in->cei_op.ci_hdl, opts, rpc->cr_ctx, &snap_eph);
-	if (rc == 0)
+	if (rc == 0) {
 		out->ceo_epoch = snap_eph;
+		*(daos_epoch_t *)op_val->ov_resvd = snap_eph;
+	}
 out:
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p " DF_RC "\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc, DP_RC(rc));

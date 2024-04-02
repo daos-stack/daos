@@ -7,11 +7,11 @@ import os
 import re
 import time
 # pylint: disable=too-many-lines
-from distutils.spawn import find_executable  # pylint: disable=deprecated-module
+from shutil import which
 
 from ClusterShell.NodeSet import NodeSet
 from command_utils import ExecutableCommand, SystemctlCommand
-from command_utils_base import EnvironmentVariables, FormattedParameter
+from command_utils_base import BasicParameter, EnvironmentVariables, FormattedParameter
 from env_modules import load_mpi
 from exception_utils import CommandFailure, MPILoadError
 from general_utils import (get_job_manager_class, get_journalctl_command, journalctl_time, pcmd,
@@ -162,12 +162,12 @@ class JobManager(ExecutableCommand):
         """
 
     def assign_processes(self, processes):
-        """Assign the number of processes per node.
+        """Assign the number of processes.
 
         Set the appropriate command line parameter with the specified value.
 
         Args:
-            processes (int): number of processes per node
+            processes (int): number of processes
         """
 
     def assign_environment(self, env_vars, append=False):
@@ -286,7 +286,7 @@ class Orterun(JobManager):
         if not load_mpi(mpi_type):
             raise MPILoadError(mpi_type)
 
-        path = os.path.dirname(find_executable("orterun"))
+        path = os.path.dirname(which("orterun"))
         super().__init__("/run/orterun/*", "orterun", job, path, subprocess)
 
         # Default mca values to avoid queue pair errors
@@ -336,10 +336,10 @@ class Orterun(JobManager):
         self.hostfile.value = write_host_file(**kwargs)
 
     def assign_processes(self, processes):
-        """Assign the number of processes per node (-np).
+        """Assign the number of processes (-np).
 
         Args:
-            processes (int): number of processes per node
+            processes (int): number of processes
         """
         self.processes.value = processes
 
@@ -406,7 +406,7 @@ class Mpirun(JobManager):
         if not load_mpi(mpi_type):
             raise MPILoadError(mpi_type)
 
-        path = os.path.dirname(find_executable("mpirun"))
+        path = os.path.dirname(which("mpirun"))
         super().__init__("/run/mpirun/*", "mpirun", job, path, subprocess)
 
         mca_default = None
@@ -432,8 +432,7 @@ class Mpirun(JobManager):
         self.mca = FormattedParameter("--mca {}", mca_default)
         self.working_dir = FormattedParameter("-wdir {}", None)
         self.tmpdir_base = FormattedParameter("--mca orte_tmpdir_base {}", None)
-        self.bind_to = FormattedParameter("--bind-to {}", None)
-        self.map_by = FormattedParameter("--map-by {}", None)
+        self.args = BasicParameter(None, None)
         self.mpi_type = mpi_type
 
     def assign_hosts(self, hosts, path=None, slots=None, hostfile=True):
@@ -455,13 +454,18 @@ class Mpirun(JobManager):
             kwargs["path"] = path
         self.hostfile.value = write_host_file(**kwargs)
 
-    def assign_processes(self, processes):
-        """Assign the number of processes per node (-np).
+    def assign_processes(self, processes=None, ppn=None):
+        """Assign the number of processes (-np) and processes per node (-ppn).
 
         Args:
-            processes (int): number of processes per node
+            processes (int, optional): number of processes. Defaults to None.
+                if not specified, auto-calculated from ppn.
+            ppn (int, optional): number of processes per node. Defaults to None.
         """
+        if ppn is not None and processes is None:
+            processes = ppn * len(self._hosts)
         self.processes.update(processes, "mpirun.np")
+        self.ppn.update(ppn, "mpirun.ppn")
 
     def assign_environment(self, env_vars, append=False):
         """Assign or add environment variables to the command.
@@ -606,7 +610,6 @@ class Systemctl(JobManager):
         Args:
             job (SubProcessCommand): command object to manage.
         """
-        # path = os.path.dirname(find_executable("systemctl"))
         super().__init__("/run/systemctl/*", "systemd", job)
         self.job = job
         self._systemctl = SystemctlCommand()

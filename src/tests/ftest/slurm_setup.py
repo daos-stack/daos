@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -114,6 +114,10 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem starting munge
         """
+        # Get munge status on all nodes
+        self.log.info("Check munge status")
+        if self._active_systemctl(self.all_nodes, 'munge'):
+            return
         self.log.info("Starting munge")
 
         # Create munge key only if it does not exist.
@@ -325,9 +329,9 @@ class SlurmSetup():
                 match[0]: match[1]
                 for match in re.findall(r"(Socket|Core|Thread).*:\s+(\d+)", "\n".join(data.stdout))
                 if len(match) > 1}
-
+            nodelist = ','.join(sorted(data.hosts))
             if "Socket" in info and "Core" in info and "Thread" in info:
-                echo_command = (f'echo \"Nodename={data.hosts} Sockets={info["Socket"]} '
+                echo_command = (f'echo \"Nodename={nodelist} Sockets={info["Socket"]} '
                                 f'CoresPerSocket={info["Core"]} ThreadsPerCore={info["Thread"]}\"')
                 mod_result = self._append_config_file(echo_command)
                 if mod_result.failed_hosts:
@@ -346,8 +350,8 @@ class SlurmSetup():
         """
         self.log.debug('Updating slurm config partition information on %s', self.all_nodes)
         echo_command = (
-            f'echo \"PartitionName={partition} Nodes={self.nodes} Default=YES MaxTime=INFINITE '
-            'State=UP\"')
+            f'echo \"PartitionName={partition} Nodes={",".join(sorted(self.nodes))} '
+            'Default=YES MaxTime=INFINITE State=UP\"')
         mod_result = self._append_config_file(echo_command)
         if mod_result.failed_hosts:
             raise SlurmSetupException(
@@ -449,6 +453,28 @@ class SlurmSetup():
             if not result.passed:
                 self._display_debug(result.failed_hosts, debug_log, debug_config)
                 raise SlurmSetupException(f'Error restarting {service} on {result.failed_hosts}')
+
+    def _active_systemctl(self, nodes, service, debug_log=None, debug_config=None):
+        """Check if the systemctl service is active.
+
+        Args:
+            nodes (NodeSet): nodes on which to get status from the systemctl service
+            service (str): systemctl service to get status
+            debug_log (str, optional): log file to display if there is a problem with status
+            debug_config (str, optional): config file to display if there is a problem with status
+
+        Raises:
+            SlurmSetupException: if there is a problem with the systemctl service
+
+        Returns:
+            boolean: True if systemctl is-active {service} returns "active"
+        """
+        command = command_as_user(f'systemctl is-active {service}', self.root)
+        result = run_remote(self.log, nodes, command)
+        if not result.passed:
+            self._display_debug(result.failed_hosts, debug_log, debug_config)
+            self.log.debug(f'{service} service not active on {result.failed_hosts}')
+        return result.homogeneous and "/n".join(result.output[0].stdout) == "active"
 
     def _display_debug(self, nodes, debug_log=None, debug_config=None):
         """Display debug information.
@@ -561,7 +587,7 @@ def main():
         logger.error(str(error))
         sys.exit(1)
 
-    # Slurm Startup
+    # Slurm Start-up
     try:
         slurm_setup.start_slurm(args.user, args.debug)
     except SlurmSetupException as error:

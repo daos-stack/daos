@@ -35,71 +35,54 @@
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
 #define CONT_PROTO_CLI_RPC_LIST(ver, hdlr)                                                         \
-	X(CONT_CREATE, 0, ver >= 8 ? &CQF_cont_create_v8 : &CQF_cont_create, hdlr, NULL),          \
-	    X(CONT_DESTROY, 0, ver >= 8 ? &CQF_cont_destroy_v8 : &CQF_cont_destroy, hdlr, NULL),   \
-	    X(CONT_OPEN, 0, ver >= 8 ? &CQF_cont_open_v8 : &CQF_cont_open, hdlr, NULL),            \
-	    X(CONT_CLOSE, 0, ver >= 8 ? &CQF_cont_close_v8 : &CQF_cont_close, hdlr, NULL),         \
-	    X(CONT_QUERY, 0, ver >= 8 ? &CQF_cont_query_v8 : &CQF_cont_query, hdlr, NULL),         \
-	    X(CONT_OID_ALLOC, 0, &CQF_cont_oid_alloc, ds_cont_oid_alloc_handler, NULL),            \
-	    X(CONT_ATTR_LIST, 0, ver >= 8 ? &CQF_cont_attr_list_v8 : &CQF_cont_attr_list, hdlr,    \
-	      NULL),                                                                               \
-	    X(CONT_ATTR_GET, 0, ver >= 8 ? &CQF_cont_attr_get_v8 : &CQF_cont_attr_get, hdlr,       \
-	      NULL),                                                                               \
-	    X(CONT_ATTR_SET, 0, ver >= 8 ? &CQF_cont_attr_set_v8 : &CQF_cont_attr_set, hdlr,       \
-	      NULL),                                                                               \
-	    X(CONT_ATTR_DEL, 0, ver >= 8 ? &CQF_cont_attr_del_v8 : &CQF_cont_attr_del, hdlr,       \
-	      NULL),                                                                               \
-	    X(CONT_EPOCH_AGGREGATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op,      \
-	      hdlr, NULL),                                                                         \
-	    X(CONT_SNAP_LIST, 0, ver >= 8 ? &CQF_cont_snap_list_v8 : &CQF_cont_snap_list, hdlr,    \
-	      NULL),                                                                               \
-	    X(CONT_SNAP_CREATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr,    \
-	      NULL),                                                                               \
-	    X(CONT_SNAP_DESTROY, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr,   \
-	      NULL),                                                                               \
-	    X(CONT_PROP_SET, 0, ver >= 8 ? &CQF_cont_prop_set_v8 : &CQF_cont_prop_set, hdlr,       \
-	      NULL),                                                                               \
-	    X(CONT_ACL_UPDATE, 0, ver >= 8 ? &CQF_cont_acl_update_v8 : &CQF_cont_acl_update, hdlr, \
-	      NULL),                                                                               \
-	    X(CONT_ACL_DELETE, 0, ver >= 8 ? &CQF_cont_acl_delete_v8 : &CQF_cont_acl_delete, hdlr, \
-	      NULL),                                                                               \
-	    X(CONT_OPEN_BYLABEL, 0, ver >= 8 ? &CQF_cont_open_bylabel_v8 : &CQF_cont_open_bylabel, \
-	      hdlr, NULL),                                                                         \
-	    X(CONT_DESTROY_BYLABEL, 0,                                                             \
-	      ver >= 8 ? &CQF_cont_destroy_bylabel_v8 : &CQF_cont_destroy_bylabel, hdlr, NULL),    \
-	    X(CONT_SNAP_OIT_OID_GET, 0,                                                            \
-	      ver >= 8 ? &CQF_cont_snap_oit_oid_get_v8 : &CQF_cont_snap_oit_oid_get, hdlr, NULL),  \
-	    X(CONT_SNAP_OIT_CREATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op,      \
-	      hdlr, NULL),                                                                         \
-	    X(CONT_SNAP_OIT_DESTROY, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op,     \
-	      hdlr, NULL)
+	X(CONT_CREATE, 0, ver >= 8 ? &CQF_cont_create_v8 : &CQF_cont_create, hdlr, NULL)           \
+	X(CONT_DESTROY, 0, ver >= 8 ? &CQF_cont_destroy_v8 : &CQF_cont_destroy, hdlr, NULL)        \
+	X(CONT_OPEN, 0, ver >= 8 ? &CQF_cont_open_v8 : &CQF_cont_open, hdlr, NULL)                 \
+	X(CONT_CLOSE, 0, ver >= 8 ? &CQF_cont_close_v8 : &CQF_cont_close, hdlr, NULL)              \
+	X(CONT_QUERY, 0, ver >= 8 ? &CQF_cont_query_v8 : &CQF_cont_query, hdlr, NULL)              \
+	X(CONT_OID_ALLOC, 0, &CQF_cont_oid_alloc, ds_cont_oid_alloc_handler, NULL)                 \
+	X(CONT_ATTR_LIST, 0, ver >= 8 ? &CQF_cont_attr_list_v8 : &CQF_cont_attr_list, hdlr, NULL)  \
+	X(CONT_ATTR_GET, 0, ver >= 8 ? &CQF_cont_attr_get_v8 : &CQF_cont_attr_get, hdlr, NULL)     \
+	X(CONT_ATTR_SET, 0, ver >= 8 ? &CQF_cont_attr_set_v8 : &CQF_cont_attr_set, hdlr, NULL)     \
+	X(CONT_ATTR_DEL, 0, ver >= 8 ? &CQF_cont_attr_del_v8 : &CQF_cont_attr_del, hdlr, NULL)     \
+	X(CONT_EPOCH_AGGREGATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr,    \
+	  NULL)                                                                                    \
+	X(CONT_SNAP_LIST, 0, ver >= 8 ? &CQF_cont_snap_list_v8 : &CQF_cont_snap_list, hdlr, NULL)  \
+	X(CONT_SNAP_CREATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr, NULL)  \
+	X(CONT_SNAP_DESTROY, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr, NULL) \
+	X(CONT_PROP_SET, 0, ver >= 8 ? &CQF_cont_prop_set_v8 : &CQF_cont_prop_set, hdlr, NULL)     \
+	X(CONT_ACL_UPDATE, 0, ver >= 8 ? &CQF_cont_acl_update_v8 : &CQF_cont_acl_update, hdlr,     \
+	  NULL)                                                                                    \
+	X(CONT_ACL_DELETE, 0, ver >= 8 ? &CQF_cont_acl_delete_v8 : &CQF_cont_acl_delete, hdlr,     \
+	  NULL)                                                                                    \
+	X(CONT_OPEN_BYLABEL, 0, ver >= 8 ? &CQF_cont_open_bylabel_v8 : &CQF_cont_open_bylabel,     \
+	  hdlr, NULL)                                                                              \
+	X(CONT_DESTROY_BYLABEL, 0,                                                                 \
+	  ver >= 8 ? &CQF_cont_destroy_bylabel_v8 : &CQF_cont_destroy_bylabel, hdlr, NULL)         \
+	X(CONT_SNAP_OIT_OID_GET, 0,                                                                \
+	  ver >= 8 ? &CQF_cont_snap_oit_oid_get_v8 : &CQF_cont_snap_oit_oid_get, hdlr, NULL)       \
+	X(CONT_SNAP_OIT_CREATE, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr,    \
+	  NULL)                                                                                    \
+	X(CONT_SNAP_OIT_DESTROY, 0, ver >= 8 ? &CQF_cont_epoch_op_v8 : &CQF_cont_epoch_op, hdlr,   \
+	  NULL)
 
-#define CONT_PROTO_SRV_RPC_LIST						\
-	X(CONT_TGT_DESTROY,						\
-		0, &CQF_cont_tgt_destroy,				\
-		ds_cont_tgt_destroy_handler,				\
-		&ds_cont_tgt_destroy_co_ops),				\
-	X(CONT_TGT_QUERY,						\
-		0, &CQF_cont_tgt_query,					\
-		ds_cont_tgt_query_handler,				\
-		&ds_cont_tgt_query_co_ops),				\
-	X(CONT_TGT_EPOCH_AGGREGATE,					\
-		0, &CQF_cont_tgt_epoch_aggregate,			\
-		ds_cont_tgt_epoch_aggregate_handler,			\
-		&ds_cont_tgt_epoch_aggregate_co_ops),			\
-	X(CONT_TGT_SNAPSHOT_NOTIFY,					\
-		0, &CQF_cont_tgt_snapshot_notify,			\
-		ds_cont_tgt_snapshot_notify_handler,			\
-		&ds_cont_tgt_snapshot_notify_co_ops)
+#define CONT_PROTO_SRV_RPC_LIST                                                                    \
+	X(CONT_TGT_DESTROY, 0, &CQF_cont_tgt_destroy, ds_cont_tgt_destroy_handler,                 \
+	  &ds_cont_tgt_destroy_co_ops)                                                             \
+	X(CONT_TGT_QUERY, 0, &CQF_cont_tgt_query, ds_cont_tgt_query_handler,                       \
+	  &ds_cont_tgt_query_co_ops)                                                               \
+	X(CONT_TGT_EPOCH_AGGREGATE, 0, &CQF_cont_tgt_epoch_aggregate,                              \
+	  ds_cont_tgt_epoch_aggregate_handler, &ds_cont_tgt_epoch_aggregate_co_ops)                \
+	X(CONT_TGT_SNAPSHOT_NOTIFY, 0, &CQF_cont_tgt_snapshot_notify,                              \
+	  ds_cont_tgt_snapshot_notify_handler, &ds_cont_tgt_snapshot_notify_co_ops)
 
 /* Define for RPC enum population below */
-#define X(a, b, c, d, e) a
+#define X(a, ...) a,
 
 enum cont_operation {
-	CONT_PROTO_CLI_RPC_LIST(DAOS_CONT_VERSION, ds_cont_op_handler_v8),
-	CONT_PROTO_CLI_COUNT,
+	CONT_PROTO_CLI_RPC_LIST(DAOS_CONT_VERSION, ds_cont_op_handler_v8) CONT_PROTO_CLI_COUNT,
 	CONT_PROTO_CLI_LAST = CONT_PROTO_CLI_COUNT - 1,
-	CONT_PROTO_SRV_RPC_LIST,
+	CONT_PROTO_SRV_RPC_LIST
 };
 
 #undef X
@@ -107,6 +90,8 @@ enum cont_operation {
 extern struct crt_proto_format cont_proto_fmt_v8;
 extern struct crt_proto_format cont_proto_fmt_v7;
 extern int dc_cont_proto_version;
+
+/* clang-format off */
 
 #define DAOS_ISEQ_CONT_OP	/* input fields */		 \
 				/* pool handle UUID */		 \
@@ -116,11 +101,15 @@ extern int dc_cont_proto_version;
 				/* container handle UUID */	 \
 	((uuid_t)		(ci_hdl)		CRT_VAR)
 
-#define DAOS_ISEQ_CONT_OP_V8           /* input fields */                                          \
-				       /* pool handle UUID */                                      \
-	((uuid_t)(ci_pool_hdl)CRT_VAR) /* container UUID */                                        \
-	    ((uuid_t)(ci_uuid)CRT_VAR) /* container handle UUID */                                 \
-	    ((uuid_t)(ci_hdl)CRT_VAR)((uuid_t)(ci_cli_id)CRT_VAR)((uint64_t)(ci_time)CRT_VAR)
+#define DAOS_ISEQ_CONT_OP_V8	/* input fields */		 \
+				/* pool handle UUID */		 \
+	((uuid_t)		(ci_pool_hdl)		CRT_VAR) \
+				/* container UUID */		 \
+	((uuid_t)		(ci_uuid)		CRT_VAR) \
+				/* container handle UUID */	 \
+	((uuid_t)		(ci_hdl)		CRT_VAR) \
+	((uuid_t)		(ci_cli_id)		CRT_VAR) \
+	((uint64_t)		(ci_time)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_OP	/* output fields */		 \
 				/* operation return code */	 \
@@ -133,20 +122,23 @@ extern int dc_cont_proto_version;
 CRT_RPC_DECLARE(cont_op, DAOS_ISEQ_CONT_OP, DAOS_OSEQ_CONT_OP)
 CRT_RPC_DECLARE(cont_op_v8, DAOS_ISEQ_CONT_OP_V8, DAOS_OSEQ_CONT_OP)
 
-#define DAOS_ISEQ_CONT_CREATE	/* input fields */		 \
-				/* .ci_hdl unused */		 \
-	((struct cont_op_in)	(cci_op)		CRT_VAR) \
-	((daos_prop_t)		(cci_prop)		CRT_PTR)
+#define DAOS_ISEQ_CONT_CREATE		/* input fields */		 \
+					/* .ci_hdl unused */		 \
+	((struct cont_op_in)		(cci_op)		CRT_VAR) \
+	((daos_prop_t)			(cci_prop)		CRT_PTR)
 
-#define DAOS_ISEQ_CONT_CREATE_V8 /* input fields */                                                \
-				 /* .ci_hdl unused */                                              \
-	((struct cont_op_v8_in)(cci_op)CRT_VAR)((daos_prop_t)(cci_prop)CRT_PTR)
+#define DAOS_ISEQ_CONT_CREATE_V8	/* input fields */		 \
+					/* .ci_hdl unused */		 \
+	((struct cont_op_v8_in)		(cci_op)		CRT_VAR) \
+	((daos_prop_t)			(cci_prop)		CRT_PTR)
 
-#define DAOS_OSEQ_CONT_CREATE	/* output fields */		 \
-	((struct cont_op_out)	(cco_op)		CRT_VAR)
+#define DAOS_OSEQ_CONT_CREATE		/* output fields */		 \
+	((struct cont_op_out)		(cco_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_create, DAOS_ISEQ_CONT_CREATE, DAOS_OSEQ_CONT_CREATE)
 CRT_RPC_DECLARE(cont_create_v8, DAOS_ISEQ_CONT_CREATE_V8, DAOS_OSEQ_CONT_CREATE)
+
+/* clang-format on */
 
 static inline void
 cont_create_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -171,19 +163,21 @@ cont_create_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, da
 		((struct cont_create_in *)in)->cci_prop = cci_prop;
 }
 
-#define DAOS_ISEQ_CONT_DESTROY	/* input fields */		 \
-				/* .ci_hdl unused */		 \
-	((struct cont_op_in)	(cdi_op)		CRT_VAR) \
-				/* evict all handles */		 \
-	((uint32_t)		(cdi_force)		CRT_VAR)
+/* clang-format off */
+#define DAOS_ISEQ_CONT_DESTROY		/* input fields */		 \
+					/* .ci_hdl unused */		 \
+	((struct cont_op_in)		(cdi_op)		CRT_VAR) \
+					/* evict all handles */		 \
+	((uint32_t)			(cdi_force)		CRT_VAR)
 
-#define DAOS_ISEQ_CONT_DESTROY_V8               /* input fields */                                 \
-						/* .ci_hdl unused */                               \
-	((struct cont_op_v8_in)(cdi_op)CRT_VAR) /* evict all handles */                            \
-	    ((uint32_t)(cdi_force)CRT_VAR)
+#define DAOS_ISEQ_CONT_DESTROY_V8	/* input fields */		 \
+					/* .ci_hdl unused */		 \
+	((struct cont_op_v8_in)		(cdi_op)		CRT_VAR) \
+					/* evict all handles */		 \
+	((uint32_t)			(cdi_force)		CRT_VAR)
 
-#define DAOS_OSEQ_CONT_DESTROY	/* output fields */		 \
-	((struct cont_op_out)	(cdo_op)		CRT_VAR)
+#define DAOS_OSEQ_CONT_DESTROY		/* output fields */		 \
+	((struct cont_op_out)		(cdo_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 CRT_RPC_DECLARE(cont_destroy_v8, DAOS_ISEQ_CONT_DESTROY_V8, DAOS_OSEQ_CONT_DESTROY)
@@ -192,19 +186,21 @@ CRT_RPC_DECLARE(cont_destroy_v8, DAOS_ISEQ_CONT_DESTROY_V8, DAOS_OSEQ_CONT_DESTR
  * Must begin with what DAOS_ISEQ_CONT_DESTROY has, for reusing cont_destroy_in
  * in the common code. cdi_op.ci_uuid is ignored.
  */
-#define DAOS_ISEQ_CONT_DESTROY_BYLABEL	/* input fields */	 \
-	DAOS_ISEQ_CONT_DESTROY					 \
-	((uint32_t)		(cdli_pad32)		CRT_VAR) \
-	((d_const_string_t)	(cdli_label)		CRT_VAR)
+#define DAOS_ISEQ_CONT_DESTROY_BYLABEL		/* input fields */	 \
+	DAOS_ISEQ_CONT_DESTROY						 \
+	((uint32_t)				(cdli_pad32)	CRT_VAR) \
+	((d_const_string_t)			(cdli_label)	CRT_VAR)
 
-#define DAOS_ISEQ_CONT_DESTROY_BYLABEL_V8 /* input fields */                                       \
-	DAOS_ISEQ_CONT_DESTROY_V8((uint32_t)(cdli_pad32)CRT_VAR)                                   \
-	((d_const_string_t)(cdli_label)CRT_VAR)
+#define DAOS_ISEQ_CONT_DESTROY_BYLABEL_V8	/* input fields */	 \
+	DAOS_ISEQ_CONT_DESTROY_V8					 \
+	((uint32_t)				(cdli_pad32)	CRT_VAR) \
+	((d_const_string_t)			(cdli_label)	CRT_VAR)
 
 /* Container destroy bylabel output same as destroy by uuid. */
-CRT_RPC_DECLARE(cont_destroy_bylabel, DAOS_ISEQ_CONT_DESTROY_BYLABEL,
-		DAOS_OSEQ_CONT_DESTROY)
+CRT_RPC_DECLARE(cont_destroy_bylabel, DAOS_ISEQ_CONT_DESTROY_BYLABEL, DAOS_OSEQ_CONT_DESTROY)
 CRT_RPC_DECLARE(cont_destroy_bylabel_v8, DAOS_ISEQ_CONT_DESTROY_BYLABEL_V8, DAOS_OSEQ_CONT_DESTROY)
+
+/* clang-format on */
 
 static inline void
 cont_destroy_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint32_t *cdi_forcep,
@@ -256,21 +252,27 @@ cont_destroy_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, u
 	}
 }
 
+/* clang-format off */
+
 #define DAOS_ISEQ_CONT_OPEN	/* input fields */		 \
 	((struct cont_op_in)	(coi_op)		CRT_VAR) \
 	((uint64_t)		(coi_flags)		CRT_VAR) \
 	((uint64_t)		(coi_sec_capas)		CRT_VAR) \
 	((uint64_t)		(coi_prop_bits)		CRT_VAR)
 
-#define DAOS_ISEQ_CONT_OPEN_V8 /* input fields */                                                  \
-	((struct cont_op_v8_in)(coi_op)CRT_VAR)((uint64_t)(coi_flags)CRT_VAR)(                     \
-	    (uint64_t)(coi_prop_bits)CRT_VAR)
+#define DAOS_ISEQ_CONT_OPEN_V8	/* input fields */		 \
+	((struct cont_op_v8_in)	(coi_op)		CRT_VAR) \
+	((uint64_t)		(coi_flags)		CRT_VAR) \
+	((uint64_t)		(coi_prop_bits)		CRT_VAR)
 
-#define DAOS_OSEQ_CONT_OPEN /* common fields */                                                    \
-	((struct cont_op_out)(coo_op)CRT_VAR)((daos_prop_t)(coo_prop)CRT_PTR)(                     \
-	    (daos_epoch_t)(coo_lsnapshot)CRT_VAR)((uint32_t)(coo_snap_count)CRT_VAR)(              \
-	    (uint32_t)(coo_nhandles)CRT_VAR)((uint64_t)(coo_md_otime)CRT_VAR)(                     \
-	    (uint64_t)(coo_md_mtime)CRT_VAR)
+#define DAOS_OSEQ_CONT_OPEN	/* common fields */		 \
+	((struct cont_op_out)	(coo_op)		CRT_VAR) \
+	((daos_prop_t)		(coo_prop)		CRT_PTR) \
+	((daos_epoch_t)		(coo_lsnapshot)		CRT_VAR) \
+	((uint32_t)		(coo_snap_count)	CRT_VAR) \
+	((uint32_t)		(coo_nhandles)		CRT_VAR) \
+	((uint64_t)		(coo_md_otime)		CRT_VAR) \
+	((uint64_t)		(coo_md_mtime)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_open_v8, DAOS_ISEQ_CONT_OPEN_V8, DAOS_OSEQ_CONT_OPEN)
 CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
@@ -279,22 +281,29 @@ CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
  * Must begin with what DAOS_ISEQ_CONT_OPEN has, for reusing cont_open_in
  * in the common code. coi_op.ci_uuid is ignored.
  */
-#define DAOS_ISEQ_CONT_OPEN_BYLABEL	/* input fields */	 \
-	DAOS_ISEQ_CONT_OPEN					 \
-	((d_const_string_t)	(coli_label)		CRT_VAR)
+#define DAOS_ISEQ_CONT_OPEN_BYLABEL	/* input fields */		 \
+	DAOS_ISEQ_CONT_OPEN				 		 \
+	((d_const_string_t)		(coli_label)		CRT_VAR)
 
-#define DAOS_ISEQ_CONT_OPEN_BYLABEL_V8 /* input fields */                                          \
-	DAOS_ISEQ_CONT_OPEN_V8((d_const_string_t)(coli_label)CRT_VAR)
+#define DAOS_ISEQ_CONT_OPEN_BYLABEL_V8	/* input fields */		 \
+	DAOS_ISEQ_CONT_OPEN_V8						 \
+	((d_const_string_t)		(coli_label)		CRT_VAR)
 
 /* Container open bylabel output */
-#define DAOS_OSEQ_CONT_OPEN_BYLABEL /* output fields */                                            \
-	((struct cont_op_out)(coo_op)CRT_VAR)((daos_prop_t)(coo_prop)CRT_PTR)(                     \
-	    (daos_epoch_t)(coo_lsnapshot)CRT_VAR)((uint32_t)(coo_snap_count)CRT_VAR)(              \
-	    (uint32_t)(coo_nhandles)CRT_VAR)((uuid_t)(colo_uuid)CRT_VAR)(                          \
-	    (uint64_t)(coo_md_otime)CRT_VAR)((uint64_t)(coo_md_mtime)CRT_VAR)
+#define DAOS_OSEQ_CONT_OPEN_BYLABEL	/* output fields */		 \
+	((struct cont_op_out)		(coo_op)		CRT_VAR) \
+	((daos_prop_t)			(coo_prop)		CRT_PTR) \
+	((daos_epoch_t)			(coo_lsnapshot)		CRT_VAR) \
+	((uint32_t)			(coo_snap_count)	CRT_VAR) \
+	((uint32_t)			(coo_nhandles)		CRT_VAR) \
+	((uuid_t)			(colo_uuid)		CRT_VAR) \
+	((uint64_t)			(coo_md_otime)		CRT_VAR) \
+	((uint64_t)			(coo_md_mtime)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_open_bylabel, DAOS_ISEQ_CONT_OPEN_BYLABEL, DAOS_OSEQ_CONT_OPEN_BYLABEL)
 CRT_RPC_DECLARE(cont_open_bylabel_v8, DAOS_ISEQ_CONT_OPEN_BYLABEL_V8, DAOS_OSEQ_CONT_OPEN_BYLABEL)
+
+/* clang-format on */
 
 static inline void
 cont_open_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t *coi_flagsp,
@@ -373,16 +382,21 @@ cont_op_in_get_label(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, const
 	}
 }
 
+/* clang-format off */
+
 #define DAOS_ISEQ_CONT_CLOSE	/* input fields */		 \
 	((struct cont_op_in)	(cci_op)		CRT_VAR)
 
-#define DAOS_ISEQ_CONT_CLOSE_V8 /* input fields */ ((struct cont_op_v8_in)(cci_op)CRT_VAR)
+#define DAOS_ISEQ_CONT_CLOSE_V8	/* input fields */		 \
+	((struct cont_op_v8_in)	(cci_op)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_CLOSE	/* output fields */		 \
 	((struct cont_op_out)	(cco_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 CRT_RPC_DECLARE(cont_close_v8, DAOS_ISEQ_CONT_CLOSE_V8, DAOS_OSEQ_CONT_CLOSE)
+
+/* clang-format on */
 
 /** container query request bits */
 #define DAOS_CO_QUERY_PROP_LABEL		(1ULL << 0)
@@ -419,21 +433,29 @@ CRT_RPC_DECLARE(cont_close_v8, DAOS_ISEQ_CONT_CLOSE_V8, DAOS_OSEQ_CONT_CLOSE)
 /** container query target bit, to satisfy querying of daos_cont_info_t */
 #define DAOS_CO_QUERY_TGT		(1ULL << 31)
 
+/* clang-format off */
+
 #define DAOS_ISEQ_CONT_QUERY	/* input fields */		 \
 	((struct cont_op_in)	(cqi_op)		CRT_VAR) \
 	((uint64_t)		(cqi_bits)		CRT_VAR)
 
-#define DAOS_ISEQ_CONT_QUERY_V8 /* input fields */                                                 \
-	((struct cont_op_v8_in)(cqi_op)CRT_VAR)((uint64_t)(cqi_bits)CRT_VAR)
+#define DAOS_ISEQ_CONT_QUERY_V8	/* input fields */		 \
+	((struct cont_op_v8_in)	(cqi_op)		CRT_VAR) \
+	((uint64_t)		(cqi_bits)		CRT_VAR)
 
-#define DAOS_OSEQ_CONT_QUERY /* common fields */                                                   \
-	((struct cont_op_out)(cqo_op)CRT_VAR)((daos_prop_t)(cqo_prop)CRT_PTR)(                     \
-	    (daos_epoch_t)(cqo_lsnapshot)CRT_VAR)((uint32_t)(cqo_snap_count)CRT_VAR)(              \
-	    (uint32_t)(cqo_nhandles)CRT_VAR)((uint64_t)(cqo_md_otime)CRT_VAR)(                     \
-	    (uint64_t)(cqo_md_mtime)CRT_VAR)
+#define DAOS_OSEQ_CONT_QUERY	/* common fields */		 \
+	((struct cont_op_out)	(cqo_op)		CRT_VAR) \
+	((daos_prop_t)		(cqo_prop)		CRT_PTR) \
+	((daos_epoch_t)		(cqo_lsnapshot)		CRT_VAR) \
+	((uint32_t)		(cqo_snap_count)	CRT_VAR) \
+	((uint32_t)		(cqo_nhandles)		CRT_VAR) \
+	((uint64_t)		(cqo_md_otime)		CRT_VAR) \
+	((uint64_t)		(cqo_md_mtime)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
 CRT_RPC_DECLARE(cont_query_v8, DAOS_ISEQ_CONT_QUERY_V8, DAOS_OSEQ_CONT_QUERY)
+
+/* clang-format on */
 
 static inline void
 cont_query_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t *cqi_bitsp)
@@ -459,6 +481,8 @@ cont_query_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uin
 
 /** Add more items to query when needed */
 
+/* clang-format off */
+
 #define DAOS_ISEQ_CONT_OID_ALLOC /* input fields */		 \
 	((struct cont_op_in)	(coai_op)		CRT_VAR) \
 	((daos_size_t)		(num_oids)		CRT_VAR)
@@ -469,19 +493,22 @@ cont_query_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uin
 
 CRT_RPC_DECLARE(cont_oid_alloc, DAOS_ISEQ_CONT_OID_ALLOC, DAOS_OSEQ_CONT_OID_ALLOC)
 
-#define DAOS_ISEQ_CONT_ATTR_LIST /* input fields */		 \
-	((struct cont_op_in)	(cali_op)		CRT_VAR) \
-	((crt_bulk_t)		(cali_bulk)		CRT_VAR)
+#define DAOS_ISEQ_CONT_ATTR_LIST 	/* input fields */		 \
+	((struct cont_op_in)		(cali_op)		CRT_VAR) \
+	((crt_bulk_t)			(cali_bulk)		CRT_VAR)
 
-#define DAOS_ISEQ_CONT_ATTR_LIST_V8 /* input fields */                                             \
-	((struct cont_op_v8_in)(cali_op)CRT_VAR)((crt_bulk_t)(cali_bulk)CRT_VAR)
+#define DAOS_ISEQ_CONT_ATTR_LIST_V8	/* input fields */		 \
+	((struct cont_op_v8_in)		(cali_op)		CRT_VAR) \
+	((crt_bulk_t)			(cali_bulk)		CRT_VAR)
 
-#define DAOS_OSEQ_CONT_ATTR_LIST /* output fields */		 \
-	((struct cont_op_out)	(calo_op)		CRT_VAR) \
-	((uint64_t)		(calo_size)		CRT_VAR)
+#define DAOS_OSEQ_CONT_ATTR_LIST	/* output fields */		 \
+	((struct cont_op_out)		(calo_op)		CRT_VAR) \
+	((uint64_t)			(calo_size)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_attr_list, DAOS_ISEQ_CONT_ATTR_LIST, DAOS_OSEQ_CONT_ATTR_LIST)
 CRT_RPC_DECLARE(cont_attr_list_v8, DAOS_ISEQ_CONT_ATTR_LIST_V8, DAOS_OSEQ_CONT_ATTR_LIST)
+
+/* clang-format on */
 
 static inline void
 cont_attr_list_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -507,21 +534,27 @@ cont_attr_list_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
 		((struct cont_attr_list_in *)in)->cali_bulk = cali_bulk;
 }
 
-#define DAOS_ISEQ_CONT_ATTR_GET	/* input fields */		 \
-	((struct cont_op_in)	(cagi_op)		CRT_VAR) \
-	((uint64_t)		(cagi_count)		CRT_VAR) \
-	((uint64_t)		(cagi_key_length)	CRT_VAR) \
-	((crt_bulk_t)		(cagi_bulk)		CRT_VAR)
+/* clang-format off */
 
-#define DAOS_ISEQ_CONT_ATTR_GET_V8 /* input fields */                                              \
-	((struct cont_op_v8_in)(cagi_op)CRT_VAR)((uint64_t)(cagi_count)CRT_VAR)(                   \
-	    (uint64_t)(cagi_key_length)CRT_VAR)((crt_bulk_t)(cagi_bulk)CRT_VAR)
+#define DAOS_ISEQ_CONT_ATTR_GET		/* input fields */		 \
+	((struct cont_op_in)		(cagi_op)		CRT_VAR) \
+	((uint64_t)			(cagi_count)		CRT_VAR) \
+	((uint64_t)			(cagi_key_length)	CRT_VAR) \
+	((crt_bulk_t)			(cagi_bulk)		CRT_VAR)
 
-#define DAOS_OSEQ_CONT_ATTR_GET	/* output fields */		 \
-	((struct cont_op_out)	(cago_op)		CRT_VAR)
+#define DAOS_ISEQ_CONT_ATTR_GET_V8	/* input fields */                                              \
+	((struct cont_op_v8_in)		(cagi_op)		CRT_VAR) \
+	((uint64_t)			(cagi_count)		CRT_VAR) \
+	((uint64_t)			(cagi_key_length)	CRT_VAR) \
+	((crt_bulk_t)			(cagi_bulk)		CRT_VAR)
+
+#define DAOS_OSEQ_CONT_ATTR_GET		/* output fields */		 \
+	((struct cont_op_out)		(cago_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_attr_get, DAOS_ISEQ_CONT_ATTR_GET, DAOS_OSEQ_CONT_ATTR_GET)
 CRT_RPC_DECLARE(cont_attr_get_v8, DAOS_ISEQ_CONT_ATTR_GET_V8, DAOS_OSEQ_CONT_ATTR_GET)
+
+/* clang-format on */
 
 static inline void
 cont_attr_get_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -557,20 +590,25 @@ cont_attr_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, 
 	}
 }
 
-#define DAOS_ISEQ_CONT_ATTR_SET	/* input fields */		 \
-	((struct cont_op_in)	(casi_op)		CRT_VAR) \
-	((uint64_t)		(casi_count)		CRT_VAR) \
-	((crt_bulk_t)		(casi_bulk)		CRT_VAR)
+/* clang-format off */
 
-#define DAOS_ISEQ_CONT_ATTR_SET_V8 /* input fields */                                              \
-	((struct cont_op_v8_in)(casi_op)CRT_VAR)((uint64_t)(casi_count)CRT_VAR)(                   \
-	    (crt_bulk_t)(casi_bulk)CRT_VAR)
+#define DAOS_ISEQ_CONT_ATTR_SET		/* input fields */		 \
+	((struct cont_op_in)		(casi_op)		CRT_VAR) \
+	((uint64_t)			(casi_count)		CRT_VAR) \
+	((crt_bulk_t)			(casi_bulk)		CRT_VAR)
 
-#define DAOS_OSEQ_CONT_ATTR_SET	/* output fields */		 \
-	((struct cont_op_out)	(caso_op)		CRT_VAR)
+#define DAOS_ISEQ_CONT_ATTR_SET_V8	/* input fields */		 \
+	((struct cont_op_v8_in)		(casi_op)		CRT_VAR) \
+	((uint64_t)			(casi_count)		CRT_VAR) \
+	((crt_bulk_t)			(casi_bulk)		CRT_VAR)
+
+#define DAOS_OSEQ_CONT_ATTR_SET		/* output fields */		 \
+	((struct cont_op_out)		(caso_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_attr_set, DAOS_ISEQ_CONT_ATTR_SET, DAOS_OSEQ_CONT_ATTR_SET)
 CRT_RPC_DECLARE(cont_attr_set_v8, DAOS_ISEQ_CONT_ATTR_SET_V8, DAOS_OSEQ_CONT_ATTR_SET)
+
+/* clang-format on */
 
 static inline void
 cont_attr_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -602,20 +640,25 @@ cont_attr_set_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, 
 	}
 }
 
-#define DAOS_ISEQ_CONT_ATTR_DEL	/* input fields */		 \
-	((struct cont_op_in)	(cadi_op)		CRT_VAR) \
-	((uint64_t)		(cadi_count)		CRT_VAR) \
-	((crt_bulk_t)		(cadi_bulk)		CRT_VAR)
+/* clang-format off */
 
-#define DAOS_ISEQ_CONT_ATTR_DEL_V8 /* input fields */                                              \
-	((struct cont_op_v8_in)(cadi_op)CRT_VAR)((uint64_t)(cadi_count)CRT_VAR)(                   \
-	    (crt_bulk_t)(cadi_bulk)CRT_VAR)
+#define DAOS_ISEQ_CONT_ATTR_DEL		/* input fields */		 \
+	((struct cont_op_in)		(cadi_op)		CRT_VAR) \
+	((uint64_t)			(cadi_count)		CRT_VAR) \
+	((crt_bulk_t)			(cadi_bulk)		CRT_VAR)
 
-#define DAOS_OSEQ_CONT_ATTR_DEL	/* output fields */		 \
-	((struct cont_op_out)	(cado_op)		CRT_VAR)
+#define DAOS_ISEQ_CONT_ATTR_DEL_V8	/* input fields */		 \
+	((struct cont_op_v8_in)		(cadi_op)		CRT_VAR) \
+	((uint64_t)			(cadi_count)		CRT_VAR) \
+	((crt_bulk_t)			(cadi_bulk)		CRT_VAR)
+
+#define DAOS_OSEQ_CONT_ATTR_DEL		/* output fields */		 \
+	((struct cont_op_out)		(cado_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_attr_del, DAOS_ISEQ_CONT_ATTR_DEL, DAOS_OSEQ_CONT_ATTR_DEL)
 CRT_RPC_DECLARE(cont_attr_del_v8, DAOS_ISEQ_CONT_ATTR_DEL_V8, DAOS_OSEQ_CONT_ATTR_DEL)
+
+/* clang-format on */
 
 static inline void
 cont_attr_del_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -647,21 +690,26 @@ cont_attr_del_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, 
 	}
 }
 
-#define DAOS_ISEQ_CONT_EPOCH_OP	/* input fields */		 \
-	((struct cont_op_in)	(cei_op)		CRT_VAR) \
-	((daos_epoch_t)		(cei_epoch)		CRT_VAR) \
-	((uint64_t)		(cei_opts)		CRT_VAR)
+/* clang-format off */
 
-#define DAOS_ISEQ_CONT_EPOCH_OP_V8 /* input fields */                                              \
-	((struct cont_op_v8_in)(cei_op)CRT_VAR)((daos_epoch_t)(cei_epoch)CRT_VAR)(                 \
-	    (uint64_t)(cei_opts)CRT_VAR)
+#define DAOS_ISEQ_CONT_EPOCH_OP		/* input fields */		 \
+	((struct cont_op_in)		(cei_op)		CRT_VAR) \
+	((daos_epoch_t)			(cei_epoch)		CRT_VAR) \
+	((uint64_t)			(cei_opts)		CRT_VAR)
 
-#define DAOS_OSEQ_CONT_EPOCH_OP	/* output fields */		 \
-	((struct cont_op_out)	(ceo_op)		CRT_VAR) \
-	((daos_epoch_t)		(ceo_epoch)		CRT_VAR)
+#define DAOS_ISEQ_CONT_EPOCH_OP_V8	/* input fields */		 \
+	((struct cont_op_v8_in)		(cei_op)		CRT_VAR) \
+	((daos_epoch_t)			(cei_epoch)		CRT_VAR) \
+	((uint64_t)			(cei_opts)		CRT_VAR)
+
+#define DAOS_OSEQ_CONT_EPOCH_OP		/* output fields */		 \
+	((struct cont_op_out)		(ceo_op)		CRT_VAR) \
+	((daos_epoch_t)			(ceo_epoch)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_epoch_op, DAOS_ISEQ_CONT_EPOCH_OP, DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DECLARE(cont_epoch_op_v8, DAOS_ISEQ_CONT_EPOCH_OP_V8, DAOS_OSEQ_CONT_EPOCH_OP)
+
+/* clang-format on */
 
 static inline void
 cont_epoch_op_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -693,19 +741,24 @@ cont_epoch_op_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
 	}
 }
 
-#define DAOS_ISEQ_CONT_SNAP_LIST /* input fields */		 \
-	((struct cont_op_in)	(sli_op)		CRT_VAR) \
-	((crt_bulk_t)		(sli_bulk)		CRT_VAR)
+/* clang-format off */
 
-#define DAOS_ISEQ_CONT_SNAP_LIST_V8 /* input fields */                                             \
-	((struct cont_op_v8_in)(sli_op)CRT_VAR)((crt_bulk_t)(sli_bulk)CRT_VAR)
+#define DAOS_ISEQ_CONT_SNAP_LIST	/* input fields */		 \
+	((struct cont_op_in)		(sli_op)		CRT_VAR) \
+	((crt_bulk_t)			(sli_bulk)		CRT_VAR)
 
-#define DAOS_OSEQ_CONT_SNAP_LIST /* output fields */		 \
-	((struct cont_op_out)	(slo_op)		CRT_VAR) \
-	((uint32_t)		(slo_count)		CRT_VAR)
+#define DAOS_ISEQ_CONT_SNAP_LIST_V8	/* input fields */		 \
+	((struct cont_op_v8_in)		(sli_op)		CRT_VAR) \
+	((crt_bulk_t)			(sli_bulk)		CRT_VAR)
+
+#define DAOS_OSEQ_CONT_SNAP_LIST	/* output fields */		 \
+	((struct cont_op_out)		(slo_op)		CRT_VAR) \
+	((uint32_t)			(slo_count)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_snap_list, DAOS_ISEQ_CONT_SNAP_LIST, DAOS_OSEQ_CONT_SNAP_LIST)
 CRT_RPC_DECLARE(cont_snap_list_v8, DAOS_ISEQ_CONT_SNAP_LIST_V8, DAOS_OSEQ_CONT_SNAP_LIST)
+
+/* clang-format on */
 
 static inline void
 cont_snap_list_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -731,6 +784,8 @@ cont_snap_list_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
 		((struct cont_snap_list_in *)in)->sli_bulk = sli_bulk;
 }
 
+/* clang-format off */
+
 CRT_RPC_DECLARE(cont_snap_create, DAOS_ISEQ_CONT_EPOCH_OP, DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DECLARE(cont_snap_create_v8, DAOS_ISEQ_CONT_EPOCH_OP_V8, DAOS_OSEQ_CONT_EPOCH_OP)
 
@@ -743,21 +798,24 @@ CRT_RPC_DECLARE(cont_snap_oit_create_v8, DAOS_ISEQ_CONT_EPOCH_OP_V8, DAOS_OSEQ_C
 CRT_RPC_DECLARE(cont_snap_oit_destroy, DAOS_ISEQ_CONT_EPOCH_OP, DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DECLARE(cont_snap_oit_destroy_v8, DAOS_ISEQ_CONT_EPOCH_OP_V8, DAOS_OSEQ_CONT_EPOCH_OP)
 
-#define DAOS_ISEQ_CONT_SNAP_OIT_OID_GET /* input fields */	 \
-	((struct cont_op_in)	(ogi_op)		CRT_VAR) \
-	((daos_epoch_t)		(ogi_epoch)		CRT_VAR)
+#define DAOS_ISEQ_CONT_SNAP_OIT_OID_GET		/* input fields */		 \
+	((struct cont_op_in)			(ogi_op)		CRT_VAR) \
+	((daos_epoch_t)				(ogi_epoch)		CRT_VAR)
 
-#define DAOS_ISEQ_CONT_SNAP_OIT_OID_GET_V8 /* input fields */                                      \
-	((struct cont_op_v8_in)(ogi_op)CRT_VAR)((daos_epoch_t)(ogi_epoch)CRT_VAR)
+#define DAOS_ISEQ_CONT_SNAP_OIT_OID_GET_V8	/* input fields */		 \
+	((struct cont_op_v8_in)			(ogi_op)		CRT_VAR) \
+	((daos_epoch_t)				(ogi_epoch)		CRT_VAR)
 
-#define DAOS_OSEQ_CONT_SNAP_OIT_OID_GET /* output fields */	 \
-	((struct cont_op_out)	(ogo_op)		CRT_VAR) \
-	((daos_obj_id_t)	(ogo_oid)		CRT_VAR)
+#define DAOS_OSEQ_CONT_SNAP_OIT_OID_GET 	/* output fields */		 \
+	((struct cont_op_out)			(ogo_op)		CRT_VAR) \
+	((daos_obj_id_t)			(ogo_oid)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_snap_oit_oid_get, DAOS_ISEQ_CONT_SNAP_OIT_OID_GET,
 		DAOS_OSEQ_CONT_SNAP_OIT_OID_GET)
 CRT_RPC_DECLARE(cont_snap_oit_oid_get_v8, DAOS_ISEQ_CONT_SNAP_OIT_OID_GET_V8,
 		DAOS_OSEQ_CONT_SNAP_OIT_OID_GET)
+
+/* clang-format on */
 
 static inline void
 cont_snap_oit_oid_get_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -783,6 +841,8 @@ cont_snap_oit_oid_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_pro
 		((struct cont_snap_oit_oid_get_in *)in)->ogi_epoch = ogi_epoch;
 }
 
+/* clang-format off */
+
 #define DAOS_ISEQ_TGT_DESTROY	/* input fields */		 \
 	((uuid_t)		(tdi_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(tdi_uuid)		CRT_VAR)
@@ -793,6 +853,8 @@ cont_snap_oit_oid_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_pro
 
 CRT_RPC_DECLARE(cont_tgt_destroy, DAOS_ISEQ_TGT_DESTROY, DAOS_OSEQ_TGT_DESTROY)
 
+/* clang-format on */
+
 struct cont_tgt_close_rec {
 	uuid_t		tcr_hdl;
 	daos_epoch_t	tcr_hce;
@@ -801,6 +863,8 @@ struct cont_tgt_close_rec {
 /* TODO: more tgt query information ; and decide if tqo_hae is needed at all
  * (e.g., CONT_QUERY cqo_hae has been removed).
  */
+
+/* clang-format off */
 #define DAOS_ISEQ_TGT_QUERY	/* input fields */		 \
 	((uuid_t)		(tqi_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(tqi_cont_uuid)		CRT_VAR)
@@ -839,20 +903,23 @@ CRT_RPC_DECLARE(cont_tgt_epoch_aggregate, DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE,
 CRT_RPC_DECLARE(cont_tgt_snapshot_notify, DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY,
 		DAOS_OSEQ_CONT_TGT_SNAPSHOT_NOTIFY)
 
-#define DAOS_ISEQ_CONT_PROP_SET	/* input fields */		 \
-	((struct cont_op_in)	(cpsi_op)		CRT_VAR) \
-	((daos_prop_t)		(cpsi_prop)		CRT_PTR) \
-	((uuid_t)		(cpsi_pool_uuid)	CRT_VAR)
+#define DAOS_ISEQ_CONT_PROP_SET		/* input fields */		 \
+	((struct cont_op_in)		(cpsi_op)		CRT_VAR) \
+	((daos_prop_t)			(cpsi_prop)		CRT_PTR) \
+	((uuid_t)			(cpsi_pool_uuid)	CRT_VAR)
 
-#define DAOS_ISEQ_CONT_PROP_SET_V8 /* input fields */                                              \
-	((struct cont_op_v8_in)(cpsi_op)CRT_VAR)((daos_prop_t)(cpsi_prop)CRT_PTR)(                 \
-	    (uuid_t)(cpsi_pool_uuid)CRT_VAR)
+#define DAOS_ISEQ_CONT_PROP_SET_V8	/* input fields */		 \
+	((struct cont_op_v8_in)		(cpsi_op)		CRT_VAR) \
+	((daos_prop_t)			(cpsi_prop)		CRT_PTR) \
+	((uuid_t)			(cpsi_pool_uuid)	CRT_VAR)
 
-#define DAOS_OSEQ_CONT_PROP_SET	/* output fields */		 \
-	((struct cont_op_out)	(cpso_op)		CRT_VAR)
+#define DAOS_OSEQ_CONT_PROP_SET		/* output fields */		 \
+	((struct cont_op_out)		(cpso_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_prop_set, DAOS_ISEQ_CONT_PROP_SET, DAOS_OSEQ_CONT_PROP_SET)
 CRT_RPC_DECLARE(cont_prop_set_v8, DAOS_ISEQ_CONT_PROP_SET_V8, DAOS_OSEQ_CONT_PROP_SET)
+
+/* clang-format on */
 
 static inline void
 cont_prop_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -889,18 +956,23 @@ cont_prop_set_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
 	}
 }
 
-#define DAOS_ISEQ_CONT_ACL_UPDATE	/* input fields */	 \
-	((struct cont_op_in)	(caui_op)		CRT_VAR) \
-	((struct daos_acl)	(caui_acl)		CRT_PTR)
+/* clang-format off */
 
-#define DAOS_ISEQ_CONT_ACL_UPDATE_V8 /* input fields */                                            \
-	((struct cont_op_v8_in)(caui_op)CRT_VAR)((struct daos_acl)(caui_acl)CRT_PTR)
+#define DAOS_ISEQ_CONT_ACL_UPDATE	/* input fields */		 \
+	((struct cont_op_in)		(caui_op)		CRT_VAR) \
+	((struct daos_acl)		(caui_acl)		CRT_PTR)
 
-#define DAOS_OSEQ_CONT_ACL_UPDATE	/* output fields */	 \
-	((struct cont_op_out)	(cauo_op)		CRT_VAR)
+#define DAOS_ISEQ_CONT_ACL_UPDATE_V8 	/* input fields */		 \
+	((struct cont_op_v8_in)		(caui_op)		CRT_VAR) \
+	((struct daos_acl)		(caui_acl)		CRT_PTR)
+
+#define DAOS_OSEQ_CONT_ACL_UPDATE	/* output fields */		 \
+	((struct cont_op_out)		(cauo_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_acl_update, DAOS_ISEQ_CONT_ACL_UPDATE, DAOS_OSEQ_CONT_ACL_UPDATE)
 CRT_RPC_DECLARE(cont_acl_update_v8, DAOS_ISEQ_CONT_ACL_UPDATE_V8, DAOS_OSEQ_CONT_ACL_UPDATE)
+
+/* clang-format on */
 
 static inline void
 cont_acl_update_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -926,20 +998,25 @@ cont_acl_update_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver
 		((struct cont_acl_update_in *)in)->caui_acl = caui_acl;
 }
 
-#define DAOS_ISEQ_CONT_ACL_DELETE	/* input fields */	 \
-	((struct cont_op_in)	(cadi_op)		CRT_VAR) \
-	((d_string_t)		(cadi_principal_name)	CRT_VAR) \
-	((uint8_t)		(cadi_principal_type)	CRT_VAR)
+/* clang-format off */
 
-#define DAOS_ISEQ_CONT_ACL_DELETE_V8 /* input fields */                                            \
-	((struct cont_op_v8_in)(cadi_op)CRT_VAR)((d_string_t)(cadi_principal_name)CRT_VAR)(        \
-	    (uint8_t)(cadi_principal_type)CRT_VAR)
+#define DAOS_ISEQ_CONT_ACL_DELETE	/* input fields */		 \
+	((struct cont_op_in)		(cadi_op)		CRT_VAR) \
+	((d_string_t)			(cadi_principal_name)	CRT_VAR) \
+	((uint8_t)			(cadi_principal_type)	CRT_VAR)
 
-#define DAOS_OSEQ_CONT_ACL_DELETE	/* output fields */	 \
-	((struct cont_op_out)	(cado_op)		CRT_VAR)
+#define DAOS_ISEQ_CONT_ACL_DELETE_V8	/* input fields */		 \
+	((struct cont_op_v8_in)		(cadi_op)		CRT_VAR) \
+	((d_string_t)			(cadi_principal_name)	CRT_VAR) \
+	((uint8_t)			(cadi_principal_type)	CRT_VAR)
+
+#define DAOS_OSEQ_CONT_ACL_DELETE	/* output fields */		 \
+	((struct cont_op_out)		(cado_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_acl_delete, DAOS_ISEQ_CONT_ACL_DELETE, DAOS_OSEQ_CONT_ACL_DELETE)
 CRT_RPC_DECLARE(cont_acl_delete_v8, DAOS_ISEQ_CONT_ACL_DELETE_V8, DAOS_OSEQ_CONT_ACL_DELETE)
+
+/* clang-format on */
 
 static inline void
 cont_acl_delete_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,

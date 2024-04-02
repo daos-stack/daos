@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,11 +53,10 @@ vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
 	*same = false;
 
 	if (dtx_is_committed(tx_id, vos_hdl2cont(coh), epoch)) {
-		/** If it's committed and the current update is not
-		 * transactional, treat it as the same transaction and let the
-		 * minor epoch handle any conflicts.
-		 */
-		if (!dtx_is_valid_handle(dth))
+		/** If it's committed and the current update is not part of a distributed
+		 * transaction (meaning it is not transactional or part of a local transaction),
+		 * treat it as the same transaction and let the minor epoch handle any conflicts. */
+		if (!dtx_is_real_handle(dth))
 			*same = true;
 	} else if (tx_id == dtx) {
 		*same = true;
@@ -428,14 +427,14 @@ update:
 	}
 
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, dth == NULL, &loh);
 	if (rc != 0) {
 		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
-	rc = ilog_update(loh, &max_epr, epr->epr_hi, dtx_is_valid_handle(dth) ?
-			 dth->dth_op_seq : VOS_SUB_OP_MAX, false);
+	rc = ilog_update(loh, &max_epr, epr->epr_hi,
+			 (dtx_is_valid_handle(dth) ? dth->dth_op_seq : VOS_SUB_OP_MAX), false);
 
 	ilog_close(loh);
 
@@ -525,7 +524,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 
 punch_log:
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
-	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
+	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, dth == NULL, &loh);
 	if (rc != 0) {
 		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
 		return rc;

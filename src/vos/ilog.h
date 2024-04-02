@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -88,14 +88,15 @@ ilog_create(struct umem_instance *umm, struct ilog_df *root);
  *
  *  \param	umm[IN]		The umem instance
  *  \param	root[IN]	A pointer to the allocated root
- *  \param	cbs[in]		Incarnation log transaction log callbacks
+ *  \param	cbs[IN]		Incarnation log transaction log callbacks
+ *  \param	fixed_epoch[IN]	It is for operation with fixed epoch or not
  *  \param	loh[OUT]	Returned open log handle
  *
  *  \return 0 on success, error code on failure
  */
 int
 ilog_open(struct umem_instance *umm, struct ilog_df *root,
-	  const struct ilog_desc_cbs *cbs, daos_handle_t *loh);
+	  const struct ilog_desc_cbs *cbs, bool fixed_epoch, daos_handle_t *loh);
 
 /** Close an open incarnation log handle
  *

@@ -21,7 +21,6 @@ apt-get install \
     clang-format \
     cmake \
     curl \
-    fuse3 \
     git \
     golang-go \
     kmod \

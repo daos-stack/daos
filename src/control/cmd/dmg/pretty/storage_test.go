@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -472,11 +472,12 @@ Errors:
 host1
 -----
 HugePage Size: 2048 KB
-	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+  No SCM modules found
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -501,11 +502,12 @@ Errors:
 host1
 -----
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
 
-	No NVMe devices found
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
+
+  No NVMe devices found
 
 `,
 		},
@@ -535,9 +537,10 @@ Errors:
 host[1-2]
 ---------
 HugePage Size: 2048 KB
-	No SCM modules found
 
-	No NVMe devices found
+  No SCM modules found
+
+  No NVMe devices found
 
 `,
 		},
@@ -561,9 +564,10 @@ HugePage Size: 2048 KB
 host[1-2]
 ---------
 HugePage Size: 2048 KB
-	No SCM modules found
 
-	No NVMe devices found
+  No SCM modules found
+
+  No NVMe devices found
 
 `,
 		},
@@ -583,13 +587,14 @@ HugePage Size: 2048 KB
 host1
 -----
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -609,13 +614,14 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host1
 -----
 HugePage Size: 2048 KB
-SCM Namespace Socket ID Capacity 
-------------- --------- -------- 
-pmem0         0         1.0 TB   
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+SCM Namespace Socket Capacity 
+------------- ------ -------- 
+pmem0         0      1.0 TB   
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -639,13 +645,14 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[1-2]
 ---------
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -669,21 +676,23 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host1
 -----
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
 
-	No NVMe devices found
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
+
+  No NVMe devices found
 
 -----
 host2
 -----
 HugePage Size: 2048 KB
-	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+  No SCM modules found
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -699,13 +708,14 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[0-1023]
 ------------
 HugePage Size: 2048 KB
-SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity 
-------------- --------- --------------- ---------- ------------ -------- 
-1             1         1               1          1            954 MiB  
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+SCM Module Socket Memory Ctrlr Channel Channel Slot Capacity UID     Part Number Health  
+---------- ------ ------------ ------- ------------ -------- ---     ----------- ------  
+1          1      1            1       1            954 MiB  Device1 PartNumber1 Healthy 
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -737,11 +747,12 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host-[0001-0004]
 ----------------
 HugePage Size: 2048 KB
-	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+  No SCM modules found
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -773,11 +784,12 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host-j-[0001-0004]
 ------------------
 HugePage Size: 2048 KB
-	No SCM modules found
 
-NVMe PCI     Model   FW Revision Socket ID Capacity 
---------     -----   ----------- --------- -------- 
-0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
+  No SCM modules found
+
+NVMe PCI     Model   FW Revision Socket Capacity Role(s) Rank 
+--------     -----   ----------- ------ -------- ------- ---- 
+0000:01:00.0 model-1 fwRev-1     1      2.0 TB   NA      0    
 
 `,
 		},
@@ -809,29 +821,31 @@ NVMe PCI     Model   FW Revision Socket ID Capacity
 host[1,3]
 ---------
 HugePage Size: 2048 KB
-SCM Namespace Socket ID Capacity 
-------------- --------- -------- 
-pmem0         0         1.0 TB   
-pmem1         1         2.0 TB   
 
-NVMe PCI     Model FW Revision Socket ID Capacity 
---------     ----- ----------- --------- -------- 
-0000:01:00.0                   1         2.0 TB   
-0000:04:00.0                   0         2.0 TB   
+SCM Namespace Socket Capacity 
+------------- ------ -------- 
+pmem0         0      1.0 TB   
+pmem1         1      2.0 TB   
+
+NVMe PCI     Model FW Revision Socket Capacity Role(s)       Rank 
+--------     ----- ----------- ------ -------- -------       ---- 
+0000:01:00.0                   1      2.0 TB   data,meta,wal 0    
+0000:04:00.0                   0      2.0 TB   data,meta,wal 0    
 
 ---------
 host[2,4]
 ---------
 HugePage Size: 2048 KB
-SCM Namespace Socket ID Capacity 
-------------- --------- -------- 
-pmem0         0         1.0 TB   
-pmem1         1         2.0 TB   
 
-NVMe PCI     Model FW Revision Socket ID Capacity 
---------     ----- ----------- --------- -------- 
-0000:01:00.0                   1         2.1 TB   
-0000:04:00.0                   0         2.1 TB   
+SCM Namespace Socket Capacity 
+------------- ------ -------- 
+pmem0         0      1.0 TB   
+pmem1         1      2.0 TB   
+
+NVMe PCI     Model FW Revision Socket Capacity Role(s)       Rank 
+--------     ----- ----------- ------ -------- -------       ---- 
+0000:01:00.0                   1      2.1 TB   data,meta,wal 0    
+0000:04:00.0                   0      2.1 TB   data,meta,wal 0    
 
 `,
 		},
@@ -1060,6 +1074,41 @@ Format Summary:
   host1 2           2            
 `,
 		},
+		"1 SCM, NVMe skipped": {
+			resp: &control.StorageFormatResp{
+				HostErrorsResp: control.HostErrorsResp{
+					HostErrors: make(control.HostErrorsMap),
+				},
+				HostStorage: func() control.HostStorageMap {
+					hsm := make(control.HostStorageMap)
+					hs := &control.HostStorage{
+						ScmMountPoints: []*storage.ScmMountPoint{
+							{
+								Info: "success",
+								Path: "/mnt/0",
+							},
+						},
+						NvmeDevices: []*storage.NvmeController{
+							{
+								Info:    "skipping",
+								PciAddr: storage.NilBdevAddress,
+							},
+						},
+					}
+					if err := hsm.Add("host1", hs); err != nil {
+						t.Fatal(err)
+					}
+					return hsm
+				}(),
+			},
+			expPrintStr: `
+
+Format Summary:
+  Hosts SCM Devices NVMe Devices 
+  ----- ----------- ------------ 
+  host1 1           0            
+`,
+		},
 		"2 Hosts, 2 SCM, 2 NVMe; first SCM fails": {
 			resp: control.MockFormatResp(t, control.MockFormatConf{
 				Hosts:       2,
@@ -1151,9 +1200,9 @@ SCM Mount Format Result
 --------- ------------- 
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+2        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1178,9 +1227,9 @@ SCM Mount Format Result
 /mnt/1    CTL_SUCCESS   
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-1        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+1        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1200,10 +1249,10 @@ SCM Mount Format Result
 /mnt/1    CTL_SUCCESS   
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-1        CTL_SUCCESS   
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+1        CTL_SUCCESS   NA      
+2        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1227,9 +1276,9 @@ SCM Mount Format Result
 --------- ------------- 
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+2        CTL_SUCCESS   NA      
 
 `,
 		},
@@ -1249,10 +1298,74 @@ SCM Mount Format Result
 /mnt/1    CTL_SUCCESS   
 /mnt/2    CTL_SUCCESS   
 
-NVMe PCI Format Result 
--------- ------------- 
-1        CTL_SUCCESS   
-2        CTL_SUCCESS   
+NVMe PCI Format Result Role(s) 
+-------- ------------- ------- 
+1        CTL_SUCCESS   NA      
+2        CTL_SUCCESS   NA      
+
+`,
+		},
+		"2 Hosts, 2 SCM, 2 NVMe; MD-on-SSD roles": {
+			resp: control.MockFormatResp(t, control.MockFormatConf{
+				Hosts:        2,
+				ScmPerHost:   2,
+				NvmePerHost:  2,
+				NvmeRoleBits: int(storage.BdevRoleAll),
+			}),
+			expPrintStr: `
+
+---------
+host[1-2]
+---------
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/1    CTL_SUCCESS   
+/mnt/2    CTL_SUCCESS   
+
+NVMe PCI Format Result Role(s)       
+-------- ------------- -------       
+1        CTL_SUCCESS   data,meta,wal 
+2        CTL_SUCCESS   data,meta,wal 
+
+`,
+		},
+		"1 SCM, NVMe skipped": {
+			resp: &control.StorageFormatResp{
+				HostErrorsResp: control.HostErrorsResp{
+					HostErrors: make(control.HostErrorsMap),
+				},
+				HostStorage: func() control.HostStorageMap {
+					hsm := make(control.HostStorageMap)
+					hs := &control.HostStorage{
+						ScmMountPoints: []*storage.ScmMountPoint{
+							{
+								Info: "CTL_SUCCESS",
+								Path: "/mnt/0",
+							},
+						},
+						NvmeDevices: []*storage.NvmeController{
+							{
+								Info:    "skipping",
+								PciAddr: storage.NilBdevAddress,
+							},
+						},
+					}
+					if err := hsm.Add("host1", hs); err != nil {
+						t.Fatal(err)
+					}
+					return hsm
+				}(),
+			},
+			expPrintStr: `
+
+-----
+host1
+-----
+SCM Mount Format Result 
+--------- ------------- 
+/mnt/0    CTL_SUCCESS   
+
+  No NVMe devices were formatted
 
 `,
 		},
@@ -1275,6 +1388,25 @@ NVMe PCI Format Result
 
 func TestPretty_PrintSmdInfoMap(t *testing.T) {
 	mockController := storage.MockNvmeController(1)
+	newCtrlr := storage.NvmeController{
+		PciAddr:   "0000:8a:00.0",
+		NvmeState: storage.NvmeStateNew,
+		LedState:  storage.LedStateNormal,
+	}
+	identCtrlr := storage.NvmeController{
+		PciAddr:   "0000:db:00.0",
+		NvmeState: storage.NvmeStateNormal,
+		LedState:  storage.LedStateIdentify,
+	}
+	faultCtrlr := storage.NvmeController{
+		PciAddr:   "0000:8b:00.0",
+		NvmeState: storage.NvmeStateFaulty,
+		LedState:  storage.LedStateFaulty,
+	}
+	unknoCtrlr := storage.NvmeController{
+		PciAddr:  "0000:da:00.0",
+		LedState: storage.LedStateUnknown,
+	}
 
 	for name, tc := range map[string]struct {
 		noDevs      bool
@@ -1374,7 +1506,7 @@ host1
 -----
 host1
 -----
-  No pools found
+  No pools with NVMe found
 `,
 		},
 		"list-devices": {
@@ -1387,40 +1519,31 @@ host1
 							Devices: []*storage.SmdDevice{
 								{
 									UUID:      test.MockUUID(0),
-									TrAddr:    "0000:8a:00.0",
 									TargetIDs: []int32{0, 1, 2},
-									Rank:      0,
-									NvmeState: storage.NvmeStateNew,
-									LedState:  storage.LedStateNormal,
 									HasSysXS:  true,
 									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
+									Ctrlr:     newCtrlr,
 								},
 								{
 									UUID:      test.MockUUID(1),
-									TrAddr:    "0000:8b:00.0",
 									TargetIDs: []int32{3, 4, 5},
-									Rank:      0,
-									NvmeState: storage.NvmeStateFaulty,
-									LedState:  storage.LedStateFaulty,
 									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
+									Ctrlr:     faultCtrlr,
 								},
 								{
 									UUID:      test.MockUUID(2),
-									TrAddr:    "0000:da:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
-									LedState:  storage.LedStateUnknown,
 									HasSysXS:  true,
 									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
+									Ctrlr:     unknoCtrlr,
 								},
 								{
 									UUID:      test.MockUUID(3),
-									TrAddr:    "0000:db:00.0",
 									TargetIDs: []int32{3, 4, 5},
 									Rank:      1,
-									NvmeState: storage.NvmeStateNormal,
-									LedState:  storage.LedStateIdentify,
 									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
+									Ctrlr:     identCtrlr,
 								},
 							},
 						},
@@ -1432,13 +1555,13 @@ host1
 host1
 -----
   Devices
-    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
+    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0 NSID:0]
       Roles:wal SysXS Targets:[0 1 2] Rank:0 State:NEW LED:OFF
-    UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
+    UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0 NSID:0]
       Roles:data,meta Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
-    UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
+    UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0 NSID:0]
       Roles:wal SysXS Targets:[0 1 2] Rank:1 State:UNKNOWN LED:NA
-    UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
+    UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0 NSID:0]
       Roles:data,meta Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
 `,
 		},
@@ -1468,13 +1591,12 @@ host1
 						SmdInfo: &control.SmdInfo{
 							Devices: []*storage.SmdDevice{
 								{
-									UUID:      test.MockUUID(0),
-									TargetIDs: []int32{0, 1, 2},
-									Rank:      0,
-									NvmeState: storage.NvmeStateNormal,
-									LedState:  storage.LedStateNormal,
-									Health:    mockController.HealthStats,
-									Roles:     storage.BdevRoles{storage.BdevRoleAll},
+									UUID:             test.MockUUID(0),
+									TargetIDs:        []int32{0, 1, 2},
+									Rank:             0,
+									Ctrlr:            *mockController,
+									CtrlrNamespaceID: 1,
+									Roles:            storage.BdevRoles{storage.BdevRoleAll},
 								},
 							},
 						},
@@ -1486,7 +1608,7 @@ host1
 host1
 -----
   Devices
-    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:]
+    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:01:00.0 NSID:1]
       Roles:data,meta,wal Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
       Health Stats:
         Temperature:%dK(%.02fC)
@@ -1558,9 +1680,8 @@ host1
 						SmdInfo: &control.SmdInfo{
 							Devices: []*storage.SmdDevice{
 								{
-									UUID:     "842c739b-86b5-462f-a7ba-b4a91b674f3d",
-									TrAddr:   "0000:8a:00.0",
-									LedState: storage.LedStateIdentify,
+									UUID:  "842c739b-86b5-462f-a7ba-b4a91b674f3d",
+									Ctrlr: identCtrlr,
 								},
 							},
 						},
@@ -1572,10 +1693,10 @@ host1
 host1
 -----
   Devices
-    TrAddr:0000:8a:00.0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
+    TrAddr:0000:db:00.0 NSID:0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
 `,
 		},
-		"identify led; transport address specified": {
+		"identify led; no uuid specified": {
 			noPools: true,
 			opts:    []PrintConfigOption{PrintOnlyLEDInfo()},
 			hsm: mockHostStorageMap(t,
@@ -1585,8 +1706,8 @@ host1
 						SmdInfo: &control.SmdInfo{
 							Devices: []*storage.SmdDevice{
 								{
-									TrAddr:   "0000:8a:00.0",
-									LedState: storage.LedStateIdentify,
+									Ctrlr:            identCtrlr,
+									CtrlrNamespaceID: 1,
 								},
 							},
 						},
@@ -1598,7 +1719,7 @@ host1
 host1
 -----
   Devices
-    TrAddr:0000:8a:00.0 LED:QUICK_BLINK
+    TrAddr:0000:db:00.0 NSID:1 LED:QUICK_BLINK
 `,
 		},
 	} {

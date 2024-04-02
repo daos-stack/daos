@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -103,12 +103,16 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
  *
  * \param coh		[IN]	Container open handle.
  * \param dti		[IN]	Pointer to the DTX identifier.
+ * \param oid		[OUT]	Pointer to the ID for the DTX leader object shard.
  * \param mbs		[OUT]	Pointer to the DTX participants information.
  *
- * \return		Zero on success, negative value if error.
+ * \return		Zero on success.
+ *			Positive if DTX has been committed.
+ *			Negative value if error.
  */
 int
-vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships **mbs);
+vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, daos_unit_oid_t *oid,
+		 struct dtx_memberships **mbs);
 
 /**
  * Commit the specified DTXs.
@@ -220,6 +224,32 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin);
  */
 int
 vos_dtx_cache_reset(daos_handle_t coh, bool force);
+
+/**
+ * Initialize local transaction.
+ *
+ * Note: This entry point is not meant to be used directly. Please use dtx_begin instead.
+ *
+ * \param dth	[IN]	Local DTX handle.
+ * \param poh	[IN]	Pool handle.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh);
+
+/**
+ * Finalize local transaction if no error happened in the meantime.
+ *
+ * Note: This entry point is not meant to be used directly. Please use dtx_end instead.
+ *
+ * \param dth		[IN]	Local DTX handle.
+ * \param result	[IN]	The current result of the transaction.
+ *
+ * \return	Zero on success, negative value if error.
+ */
+int
+vos_dtx_local_end(struct dtx_handle *dth, int result);
 
 /**
  * Initialize the environment for a VOS instance
@@ -835,6 +865,14 @@ void
 vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth);
 
 /**
+ * Renew the epoch for the DTX entry.
+ *
+ * \param dth	[IN]	Pointer to the DTX handle.
+ */
+void
+vos_dtx_renew_epoch(struct dtx_handle *dth);
+
+/**
  * Get the recx/epoch list.
  *
  * \param ioh	[IN]	The I/O handle.
@@ -1201,8 +1239,8 @@ vos_pool_get_scm_cutoff(void);
 enum vos_pool_opc {
 	/** Reset pool GC statistics */
 	VOS_PO_CTL_RESET_GC,
-	/** Set pool tiering policy */
-	VOS_PO_CTL_SET_POLICY,
+	/** Set pool data threshold size to store data on bdev */
+	VOS_PO_CTL_SET_DATA_THRESH,
 	/** Set space reserve ratio for rebuild */
 	VOS_PO_CTL_SET_SPACE_RB,
 };

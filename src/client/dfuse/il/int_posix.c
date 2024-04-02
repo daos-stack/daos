@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -21,12 +22,14 @@
 #include <sys/ioctl.h>
 #include <string.h>
 
-#include <daos/event.h>
-#include "dfuse_log.h"
 #include <gurt/list.h>
 #include <gurt/atomic.h>
+
+#include <daos/event.h>
+#include <dfuse_ioctl.h>
+
+#include "dfuse_log.h"
 #include "intercept.h"
-#include "dfuse_ioctl.h"
 #include "dfuse_vector.h"
 #include "dfuse_common.h"
 
@@ -1423,10 +1426,14 @@ dfuse_lseek(int fd, off_t offset, int whence)
 	} else if (whence == SEEK_CUR) {
 		new_offset = entry->fd_pos + offset;
 	} else if (whence == SEEK_END) {
-		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling SEEK_END");
-		entry->fd_status = DFUSE_IO_DIS_STREAM;
-		vector_decref(&fd_table, entry);
-		return __real_lseek(fd, offset, whence);
+		/**
+		 * use dfs_get_size() instead of dfs_ostat() to avoid fetching extra inode
+		 * attributes
+		 */
+		rc = dfs_get_size(entry->fd_cont->ioc_dfs, entry->fd_dfsoh,
+				  (daos_size_t *)&new_offset);
+		if (rc != 0)
+			goto do_real_lseek;
 	} else {
 		DFUSE_TRA_INFO(entry->fd_dfsoh, "Unsupported function, disabling %d", whence);
 		entry->fd_status = DFUSE_IO_DIS_STREAM;
@@ -1756,6 +1763,8 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc == 0) {
+		struct stat buf;
+
 		DFUSE_LOG_DEBUG("mmap(address=%p, length=%zu, prot=%d, flags=%d,"
 				" fd=%d, offset=%zd) "
 				"intercepted, disabling kernel bypass ", address,
@@ -1767,6 +1776,11 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 		entry->fd_status = DFUSE_IO_DIS_MMAP;
 
 		vector_decref(&fd_table, entry);
+
+		/* DAOS-14494: Force the kernel to update the size before mapping. */
+		rc = fstat(fd, &buf);
+		if (rc == -1)
+			return MAP_FAILED;
 	}
 
 	return __real_mmap(address, length, prot, flags, fd, offset);
@@ -1780,7 +1794,10 @@ dfuse_ftruncate(int fd, off_t length)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_ftruncate;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	DFUSE_LOG_DEBUG("ftuncate(fd=%d) intercepted, bypass=%s offset %#lx", fd,
 			bypass_status[entry->fd_status], length);
@@ -1795,7 +1812,7 @@ dfuse_ftruncate(int fd, off_t length)
 	errno = rc;
 	return -1;
 
-do_real_ftruncate:
+do_real_fn:
 	return __real_ftruncate(fd, length);
 }
 
@@ -1807,14 +1824,17 @@ dfuse_fsync(int fd)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_fsync;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	DFUSE_LOG_DEBUG("fsync(fd=%d) intercepted, bypass=%s",
 			fd, bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
-do_real_fsync:
+do_real_fn:
 	return __real_fsync(fd);
 }
 
@@ -1826,14 +1846,17 @@ dfuse_fdatasync(int fd)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_fdatasync;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	DFUSE_LOG_DEBUG("fdatasync(fd=%d) intercepted, bypass=%s",
 			fd, bypass_status[entry->fd_status]);
 
 	vector_decref(&fd_table, entry);
 
-do_real_fdatasync:
+do_real_fn:
 	return __real_fdatasync(fd);
 }
 
@@ -2180,7 +2203,7 @@ dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 		if (nread != nmemb)
 			entry->fd_eof = true;
 	} else if (bytes_read < 0) {
-		entry->fd_err = bytes_read;
+		entry->fd_err = errcode;
 	} else {
 		entry->fd_eof = true;
 	}
@@ -2239,7 +2262,7 @@ dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 		nwrite        = bytes_written / size;
 		entry->fd_pos = oldpos + (nwrite * size);
 	} else if (bytes_written < 0) {
-		entry->fd_err = bytes_written;
+		entry->fd_err = errcode;
 	}
 
 	vector_decref(&fd_table, entry);
@@ -2909,14 +2932,17 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
-		goto do_real_fstat;
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
 
 	/* Turn off this feature if the kernel is doing metadata caching, in this case it's better
 	 * to use the kernel cache and keep it up-to-date than query the severs each time.
 	 */
 	if (!entry->fd_fstat) {
 		vector_decref(&fd_table, entry);
-		goto do_real_fstat;
+		goto do_real_fn;
 	}
 
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_fstat_count, 1);
@@ -2959,7 +2985,7 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	}
 
 	return 0;
-do_real_fstat:
+do_real_fn:
 	return __real___fxstat(ver, fd, buf);
 }
 

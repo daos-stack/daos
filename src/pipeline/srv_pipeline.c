@@ -13,7 +13,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/bio.h>
-#include "daos_api.h"
+#include <daos_api.h>
 #include "pipeline_rpc.h"
 #include "pipeline_internal.h"
 

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -120,7 +120,6 @@ class DmgCommand(DmgCommandBase):
         #           ],
         #           "Providers": [
         #             "ofi+verbs;ofi_rxm",
-        #             "ofi+tcp;ofi_rxm",
         #             "ofi+verbs",
         #             "ofi+tcp",
         #             "ofi+sockets"
@@ -406,6 +405,8 @@ class DmgCommand(DmgCommandBase):
         #               "serial": "CVFT534200AY400BGN",
         #               "pci_addr": "0000:05:00.0",
         #               "fw_rev": "8DV10131",
+        #               "vendor_id": "0x8086",
+        #               "pci_type": "",
         #               "socket_id": 0,
         #               "health_stats": null,
         #               "namespaces": [
@@ -416,7 +417,7 @@ class DmgCommand(DmgCommandBase):
         #               ],
         #               "smd_devices": [
         #                 {
-        #                   "dev_state": "NORMAL",
+        #                   "role_bits": 0,
         #                   "uuid": "259608d1-c469-4684-9986-9f7708b20ca3",
         #                   "tgt_ids": [ 0, 1, 2, 3, 4, 5, 6, 7 ],
         #                   "rank": 0,
@@ -428,12 +429,28 @@ class DmgCommand(DmgCommandBase):
         #                   "meta_wal_size": 0,
         #                   "rdb_size": 134217728,
         #                   "rdb_wal_size": 268435456,
-        #                   "health": null,
-        #                   "tr_addr": "0000:05:00.0",
-        #                   "roles": "data",
-        #                   "has_sys_xs": false
+        #                   "roles": "NA",
+        #                   "has_sys_xs": false,
+        #                   "ctrlr": {
+        #                     "info": "",
+        #                     "model": "",
+        #                     "serial": "",
+        #                     "pci_addr": "",
+        #                     "fw_rev": "",
+        #                     "vendor_id": "",
+        #                     "pci_type": "",
+        #                     "socket_id": 0,
+        #                     "health_stats": null,
+        #                     "namespaces": null,
+        #                     "smd_devices": null,
+        #                     "dev_state": "UNKNOWN",
+        #                     "led_state": "OFF"
+        #                   },
+        #                   "ctrlr_namespace_id": 1
         #                 }
         #               ]
+        #               "dev_state": "NORMAL",
+        #               "led_state": "NA",
         #             }
         #           ],
         #           "scm_modules": null,
@@ -1180,7 +1197,7 @@ class DmgCommand(DmgCommandBase):
             net_class (str): Network class preferred. Defaults to None.
                 i.e. "ethernet"|"infiniband"
             net_provider (str): Network provider preferred. Defaults to None.
-                i.e. "ofi+tcp;ofi_rxm" etc.
+                i.e. "ofi+tcp" etc.
             use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
             control_metadata_path (str): External directory provided to store control
@@ -1473,16 +1490,21 @@ def get_storage_query_device_uuids(dmg, **kwargs):
         CommandFailure: if there is an error running the dmg command or parsing the json output
 
     Returns:
-        dict: a dictionary of host keys and list of device uuid values
+        dict: a dictionary of host keys and dictionary of device uuid values, e.g.
+            <host_1>: {
+                <uuid_1>: {'has_sys_xs': true, 'roles': 'data,meta,wal'},
+                ...
+            },
+            ...
     """
     uuids = {}
     smd_info = get_dmg_smd_info(dmg.storage_query_list_devices, 'devices', **kwargs)
     for host, devices in smd_info.items():
         if host not in uuids:
-            uuids[host] = []
+            uuids[host] = {}
         for device in devices:
             try:
-                uuids[host].append(device['uuid'])
+                uuids[host][device['uuid']] = {key: device[key] for key in ('has_sys_xs', 'roles')}
             except KeyError as error:
                 raise CommandFailure(
                     "Error parsing dmg.storage_query_list_devices({}) json output".format(

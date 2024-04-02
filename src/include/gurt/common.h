@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,6 +35,14 @@
 #else
 #define D_ON_VALGRIND 0
 #define VALGRIND_MAKE_MEM_DEFINED(addr, len) do {\
+	(void)(addr);\
+	(void)(len);\
+} while (0)
+#define VALGRIND_DISABLE_ADDR_ERROR_REPORTING_IN_RANGE(addr, len) do {\
+	(void)(addr);\
+	(void)(len);\
+} while (0)
+#define VALGRIND_ENABLE_ADDR_ERROR_REPORTING_IN_RANGE(addr, len) do {\
 	(void)(addr);\
 	(void)(len);\
 } while (0)
@@ -74,7 +82,7 @@ extern "C" {
 
 void d_srand(long int);
 long int d_rand(void);
-long int d_randn(long int n);
+double d_randd(void);
 
 /* Instruct the compiler these are allocation functions that return a pointer, and if possible
  * which function needs to be used to free them.
@@ -566,12 +574,40 @@ d_sgl_buf_copy(d_sg_list_t *dst_sgl, d_sg_list_t *src_sgl)
 	}
 }
 
-void d_getenv_bool(const char *env, bool *bool_val);
-void d_getenv_char(const char *env, char *char_val);
-void d_getenv_int(const char *env, unsigned int *int_val);
-int d_getenv_uint64_t(const char *env, uint64_t *val);
-int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
-void d_free_string(struct d_string_buffer_t *buf);
+bool
+d_isenv_def(char *name);
+int
+d_getenv_str(char *str_val, size_t str_size, const char *name);
+int
+d_agetenv_str(char **str_val, const char *name);
+void
+d_freeenv_str(char **str_val);
+int
+d_getenv_bool(const char *name, bool *bool_val);
+int
+d_getenv_char(const char *name, char *char_val);
+int
+d_getenv_int(const char *name, unsigned int *uint_val)
+    __attribute__((deprecated("use d_getenv_uint")));
+int
+d_getenv_uint(const char *name, unsigned int *uint_val);
+int
+d_getenv_uint32_t(const char *name, uint32_t *uint32_val);
+int
+d_getenv_uint64_t(const char *name, uint64_t *uint64_val);
+int
+d_putenv(char *name);
+int
+d_setenv(const char *name, const char *value, int overwrite);
+int
+d_unsetenv(const char *name);
+int
+d_clearenv(void);
+
+int
+d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
+void
+d_free_string(struct d_string_buffer_t *buf);
 
 typedef void (*d_alloc_track_cb_t)(void *arg, size_t size);
 

@@ -6,6 +6,10 @@ def scons():
 
     Import('env', 'prereqs')
 
+    if prereqs.server_requested():
+        # Build daos_metrics
+        SConscript('daos_metrics/SConscript')
+
     if not prereqs.client_requested():
         return
 
@@ -22,15 +26,11 @@ def scons():
         # Build crt_launch
         SConscript('crt_launch/SConscript')
 
-        # Build daos_metrics
-        SConscript('daos_metrics/SConscript')
-
     # Build cart_ctl
     SConscript('ctl/SConscript')
 
     denv = env.Clone()
     denv.AppendUnique(LIBPATH=[Dir('../client/dfs')])
-    denv.AppendUnique(CPPPATH=[Dir('../client/dfs').srcnode()])
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart', 'dl']
 
     daos_hdlrs_src = ['daos_hdlr.c', 'daos_autotest.c', 'daos_dfs_hdlr.c']

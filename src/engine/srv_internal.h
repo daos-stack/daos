@@ -9,6 +9,7 @@
 #include <daos_srv/daos_engine.h>
 #include <daos/stack_mmap.h>
 #include <gurt/telemetry_common.h>
+#include <gurt/heap.h>
 
 /**
  * Argobots ULT pools for different tasks, NET_POLL & NVME_POLL
@@ -32,6 +33,7 @@ struct sched_stats {
 	struct d_tm_node_t	*ss_sq_len;		/* Sleep queue length */
 	struct d_tm_node_t	*ss_cycle_duration;	/* Cycle duration (ms) */
 	struct d_tm_node_t	*ss_cycle_size;		/* Total ULTs in a cycle */
+	struct d_tm_node_t	*ss_total_reject;	/* Total Rejected requests */
 	uint64_t		 ss_busy_ts;		/* Last busy timestamp (ms) */
 	uint64_t		 ss_watchdog_ts;	/* Last watchdog print ts (ms) */
 	void			*ss_last_unit;		/* Last executed unit */
@@ -41,6 +43,7 @@ struct sched_info {
 	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
 	uint64_t		 si_cur_seq;	/* Current schedule sequence */
 	uint64_t		 si_ult_start;	/* Start time of last executed unit */
+	uint64_t		 si_cur_id;	/* Current sequence ID for incoming RPC */
 	void			*si_ult_func;	/* Function addr of last executed unit */
 	struct sched_stats	 si_stats;	/* Sched stats */
 	d_list_t		 si_idle_list;	/* All unused requests */
@@ -48,9 +51,15 @@ struct sched_info {
 	d_list_t		 si_fifo_list;	/* All IO requests in FIFO */
 	d_list_t		 si_purge_list;	/* Stale sched_pool_info */
 	struct d_hash_table	*si_pool_hash;	/* All sched_pool_info */
-	uint32_t		 si_req_cnt;	/* Total inuse request count */
+	struct d_binheap	 si_heap;	/* All retried RPC */
+	/* Total inuse request count */
+	uint32_t		 si_total_req_cnt;
+	/* Request count for each type of inuse request */
+	uint32_t		 si_req_cnt[SCHED_REQ_MAX];
 	int			 si_sleep_cnt;	/* Sleeping request count */
 	int			 si_wait_cnt;	/* Long wait request count */
+	/* Number of kicked requests for each type in current cycle */
+	uint32_t		 si_kicked_req_cnt[SCHED_REQ_MAX];
 	unsigned int		 si_stop:1;
 };
 
@@ -58,6 +67,15 @@ struct mem_stats {
 	struct d_tm_node_t	*ms_total_usage;	/* Total memory usage (bytes) */
 	struct d_tm_node_t	*ms_mallinfo;		/* memory allocate information */
 	uint64_t		ms_current;
+};
+
+/* See dss_chore. */
+struct dss_chore_queue {
+	d_list_t   chq_list;
+	bool       chq_stop;
+	ABT_mutex  chq_mutex;
+	ABT_cond   chq_cond;
+	ABT_thread chq_ult;
 };
 
 /** Per-xstream configuration data */
@@ -85,6 +103,7 @@ struct dss_xstream {
 	unsigned int		dx_timeout;
 	bool			dx_main_xs;	/* true for main XS */
 	bool			dx_comm;	/* true with cart context */
+	bool			dx_iofw;	/* true for DSS_XS_IOFW XS */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 	struct mem_stats	dx_mem_stats;	/* memory usages stats on this xstream */
 #ifdef ULT_MMAP_STACK
@@ -93,6 +112,7 @@ struct dss_xstream {
 #endif
 	bool			dx_progress_started;	/* Network poll started */
 	int                     dx_tag;                 /** tag for xstream */
+	struct dss_chore_queue	dx_chore_queue;
 };
 
 /** Engine module's metrics */
@@ -366,5 +386,10 @@ dss_xstream_has_nvme(struct dss_xstream *dx)
 
 	return false;
 }
+
+int dss_chore_queue_init(struct dss_xstream *dx);
+int dss_chore_queue_start(struct dss_xstream *dx);
+void dss_chore_queue_stop(struct dss_xstream *dx);
+void dss_chore_queue_fini(struct dss_xstream *dx);
 
 #endif /* __DAOS_SRV_INTERNAL__ */

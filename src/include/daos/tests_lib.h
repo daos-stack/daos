@@ -249,6 +249,44 @@ int dmg_pool_destroy(const char *dmg_config_file,
 		     const uuid_t uuid, const char *grp, int force);
 
 /**
+ * Evict any open handles on a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for handles eviction
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ */
+int
+dmg_pool_evict(const char *dmg_config_file, const uuid_t uuid, const char *grp);
+
+/**
+ * Update/add an access control entry to a pool's access control list.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for handles eviction
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param ace		[IN]	Access Control Entry (ACE) string in the form:
+ *				TYPE:FLAGS:PRINCIPAL:PERMISSIONS
+ */
+int
+dmg_pool_update_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+		    const char *ace);
+
+/**
+ * Delete an access control entry from a pool's access control list.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for handles eviction
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param principal	[IN]	Principal whose entry should be removed
+ */
+int
+    dmg_pool_delete_ace(const char *dmg_config_file, const uuid_t uuid, const char *grp,
+			const char *principal);
+
+/**
  * Exclude an entire rank or a target on that rank from a pool.
  *
  * \param dmg_config_file

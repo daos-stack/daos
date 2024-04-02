@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -842,183 +842,6 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 	}
 }
 
-// TestServer_scanBdevStorage validates that an error is returned in the case that a SSD is not
-// found and doesn't return an error if SPDK fails to init.
-func TestServer_scanBdevStorage(t *testing.T) {
-	for name, tc := range map[string]struct {
-		disableHugepages bool
-		bmbc             *bdev.MockBackendConfig
-		expErr           error
-	}{
-		"spdk fails init": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanErr: errors.New("spdk failed"),
-			},
-			expErr: errors.New("spdk failed"),
-		},
-		"bdev in config not found by spdk": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanErr: storage.FaultBdevNotFound(test.MockPCIAddr()),
-			},
-			expErr: storage.FaultBdevNotFound(test.MockPCIAddr()),
-		},
-		"successful scan": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.MockNvmeControllers(1),
-				},
-			},
-		},
-		"hugepages disabled": {
-			disableHugepages: true,
-			bmbc: &bdev.MockBackendConfig{
-				ScanErr: errors.New("spdk failed"),
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
-
-			cfg := config.DefaultServer().WithFabricProvider("ofi+verbs").
-				WithDisableHugepages(tc.disableHugepages)
-
-			if err := cfg.Validate(log); err != nil {
-				t.Fatal(err)
-			}
-
-			srv, err := newServer(log, cfg, &system.FaultDomain{})
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			mbb := bdev.NewMockBackend(tc.bmbc)
-			mbp := bdev.NewProvider(log, mbb)
-			sp := sysprov.NewMockSysProvider(log, nil)
-
-			srv.ctlSvc = &ControlService{
-				StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
-					sp,
-					scm.NewProvider(log, scm.NewMockBackend(nil), sp, nil),
-					mbp, nil),
-				srvCfg: cfg,
-			}
-
-			_, gotErr := scanBdevStorage(srv)
-			test.CmpErr(t, tc.expErr, gotErr)
-		})
-	}
-}
-
-func TestServer_setEngineBdevs(t *testing.T) {
-	for name, tc := range map[string]struct {
-		cfg              engine.Config
-		engineIdx        uint32
-		scanResp         *storage.BdevScanResponse
-		lastEngineIdx    int
-		lastBdevCount    int
-		expErr           error
-		expLastEngineIdx int
-		expLastBdevCount int
-	}{
-		"nil input": {
-			expErr: errors.New("nil input param: scanResp"),
-		},
-		"empty cache": {
-			scanResp:      &storage.BdevScanResponse{},
-			lastEngineIdx: -1,
-			lastBdevCount: -1,
-		},
-		"index unset; bdev count set": {
-			scanResp:      &storage.BdevScanResponse{},
-			lastEngineIdx: -1,
-			lastBdevCount: 0,
-			expErr:        errors.New("to be unset"),
-		},
-		"index set; bdev count unset": {
-			scanResp:      &storage.BdevScanResponse{},
-			lastEngineIdx: 0,
-			lastBdevCount: -1,
-			expErr:        errors.New("to be set"),
-		},
-		"empty cache; counts match": {
-			engineIdx:        1,
-			scanResp:         &storage.BdevScanResponse{},
-			lastEngineIdx:    0,
-			lastBdevCount:    0,
-			expLastEngineIdx: 1,
-		},
-		"empty cache; count mismatch": {
-			engineIdx:     1,
-			scanResp:      &storage.BdevScanResponse{},
-			lastEngineIdx: 0,
-			lastBdevCount: 1,
-			expErr:        errors.New("engine 1 has 0 but engine 0 has 1"),
-		},
-		"populated cache; cache miss": {
-			engineIdx:     1,
-			scanResp:      &storage.BdevScanResponse{Controllers: storage.MockNvmeControllers(1)},
-			lastEngineIdx: 0,
-			lastBdevCount: 1,
-			expErr:        errors.New("engine 1 has 0 but engine 0 has 1"),
-		},
-		"populated cache; cache hit": {
-			cfg: *engine.MockConfig().
-				WithStorage(
-					storage.NewTierConfig().
-						WithStorageClass("nvme").
-						WithBdevDeviceList("0000:00:00.0"),
-				),
-			engineIdx:        1,
-			scanResp:         &storage.BdevScanResponse{Controllers: storage.MockNvmeControllers(1)},
-			lastEngineIdx:    0,
-			lastBdevCount:    1,
-			expLastEngineIdx: 1,
-			expLastBdevCount: 1,
-		},
-		"populated cache; multiple vmd backing devices": {
-			cfg: *engine.MockConfig().
-				WithStorage(
-					storage.NewTierConfig().
-						WithStorageClass("nvme").
-						WithBdevDeviceList("0000:05:05.5", "0000:5d:05.5"),
-				),
-			engineIdx: 1,
-			scanResp: &storage.BdevScanResponse{
-				Controllers: storage.NvmeControllers{
-					&storage.NvmeController{PciAddr: "5d0505:01:00.0"},
-					&storage.NvmeController{PciAddr: "5d0505:03:00.0"},
-					&storage.NvmeController{PciAddr: "050505:01:00.0"},
-					&storage.NvmeController{PciAddr: "050505:02:00.0"},
-				},
-			},
-			lastEngineIdx:    0,
-			lastBdevCount:    4,
-			expLastEngineIdx: 1,
-			expLastBdevCount: 4,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(name)
-			defer test.ShowBufferOnFailure(t, buf)
-
-			engine := NewEngineInstance(log,
-				storage.DefaultProvider(log, int(tc.engineIdx), &tc.cfg.Storage),
-				nil, engine.NewRunner(log, &tc.cfg))
-			engine.setIndex(tc.engineIdx)
-
-			gotErr := setEngineBdevs(engine, tc.scanResp, &tc.lastEngineIdx, &tc.lastBdevCount)
-			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			test.AssertEqual(t, tc.expLastEngineIdx, tc.lastEngineIdx, "unexpected last engine index")
-			test.AssertEqual(t, tc.expLastBdevCount, tc.lastBdevCount, "unexpected last bdev count")
-		})
-	}
-}
-
 func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
 	providers := []*hardware.FabricProvider{}
 	for _, p := range prov {
@@ -1056,34 +879,60 @@ func TestServer_getNetDevClass(t *testing.T) {
 	for name, tc := range map[string]struct {
 		configA      *engine.Config
 		configB      *engine.Config
-		expNetDevCls hardware.NetDevClass
+		expNetDevCls []hardware.NetDevClass
 		expErr       error
 	}{
-		"successful validation with matching Infiniband": {
+		"provider doesn't match": {
 			configA: configA().
+				WithFabricProvider("wrong").
 				WithFabricInterface("ib1"),
 			configB: configB().
+				WithFabricProvider("wrong").
 				WithFabricInterface("ib0"),
-			expNetDevCls: hardware.Infiniband,
+			expErr: errors.New("not supported on network device"),
+		},
+		"successful validation with matching Infiniband": {
+			configA: configA().
+				WithFabricProvider("ofi+verbs;ofi_rxm").
+				WithFabricInterface("ib1"),
+			configB: configB().
+				WithFabricProvider("ofi+verbs;ofi_rxm").
+				WithFabricInterface("ib0"),
+			expNetDevCls: []hardware.NetDevClass{hardware.Infiniband},
 		},
 		"successful validation with matching Ethernet": {
 			configA: configA().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("eth0"),
 			configB: configB().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("eth1"),
-			expNetDevCls: hardware.Ether,
+			expNetDevCls: []hardware.NetDevClass{hardware.Ether},
+		},
+		"multi interface": {
+			configA: configA().
+				WithFabricProvider("ofi+tcp,ofi+verbs;ofi_rxm").
+				WithFabricInterface(strings.Join([]string{"eth0", "ib0"}, engine.MultiProviderSeparator)),
+			configB: configB().
+				WithFabricProvider("ofi+tcp,ofi+verbs;ofi_rxm").
+				WithFabricInterface(strings.Join([]string{"eth1", "ib1"}, engine.MultiProviderSeparator)),
+			expNetDevCls: []hardware.NetDevClass{hardware.Ether, hardware.Infiniband},
 		},
 		"mismatching net dev class with primary server as ib0 / Infiniband": {
 			configA: configA().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("ib0"),
 			configB: configB().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("eth0"),
 			expErr: config.FaultConfigInvalidNetDevClass(1, hardware.Infiniband, hardware.Ether, "eth0"),
 		},
 		"mismatching net dev class with primary server as eth0 / Ethernet": {
 			configA: configA().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("eth0"),
 			configB: configB().
+				WithFabricProvider("ofi+tcp").
 				WithFabricInterface("ib0"),
 			expErr: config.FaultConfigInvalidNetDevClass(1, hardware.Ether, hardware.Infiniband, "ib0"),
 		},

@@ -1,8 +1,0 @@
-#!/bin/bash
-
-set -x
-
-# Correct any formatting of go code.
-find src/control/ -name '*.go' -and -not -path '*vendor*' -exec gofmt -w -e -s {} +
-
-exit 0

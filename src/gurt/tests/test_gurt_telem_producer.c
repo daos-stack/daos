@@ -15,9 +15,9 @@
 #include <sys/shm.h>
 #include <daos/tests_lib.h>
 #include "wrap_cmocka.h"
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_producer.h"
-#include "gurt/telemetry_consumer.h"
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
+#include <gurt/telemetry_consumer.h>
 
 #define STATS_EPSILON	(0.00001)
 #define TEST_IDX	(99)

@@ -52,51 +52,6 @@ void   srv__notify_ready_req__free_unpacked
   assert(message->base.descriptor == &srv__notify_ready_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   srv__bio_error_req__init
-                     (Srv__BioErrorReq         *message)
-{
-  static const Srv__BioErrorReq init_value = SRV__BIO_ERROR_REQ__INIT;
-  *message = init_value;
-}
-size_t srv__bio_error_req__get_packed_size
-                     (const Srv__BioErrorReq *message)
-{
-  assert(message->base.descriptor == &srv__bio_error_req__descriptor);
-  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
-}
-size_t srv__bio_error_req__pack
-                     (const Srv__BioErrorReq *message,
-                      uint8_t       *out)
-{
-  assert(message->base.descriptor == &srv__bio_error_req__descriptor);
-  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
-}
-size_t srv__bio_error_req__pack_to_buffer
-                     (const Srv__BioErrorReq *message,
-                      ProtobufCBuffer *buffer)
-{
-  assert(message->base.descriptor == &srv__bio_error_req__descriptor);
-  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
-}
-Srv__BioErrorReq *
-       srv__bio_error_req__unpack
-                     (ProtobufCAllocator  *allocator,
-                      size_t               len,
-                      const uint8_t       *data)
-{
-  return (Srv__BioErrorReq *)
-     protobuf_c_message_unpack (&srv__bio_error_req__descriptor,
-                                allocator, len, data);
-}
-void   srv__bio_error_req__free_unpacked
-                     (Srv__BioErrorReq *message,
-                      ProtobufCAllocator *allocator)
-{
-  if(!message)
-    return;
-  assert(message->base.descriptor == &srv__bio_error_req__descriptor);
-  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
-}
 void   srv__get_pool_svc_req__init
                      (Srv__GetPoolSvcReq         *message)
 {
@@ -277,7 +232,7 @@ void   srv__pool_find_by_label_resp__free_unpacked
   assert(message->base.descriptor == &srv__pool_find_by_label_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[6] =
+static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[8] =
 {
   {
     "uri",
@@ -351,6 +306,30 @@ static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[6
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "secondaryUris",
+    7,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Srv__NotifyReadyReq, n_secondaryuris),
+    offsetof(Srv__NotifyReadyReq, secondaryuris),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "secondaryNctxs",
+    8,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT32,
+    offsetof(Srv__NotifyReadyReq, n_secondarynctxs),
+    offsetof(Srv__NotifyReadyReq, secondarynctxs),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned srv__notify_ready_req__field_indices_by_name[] = {
   2,   /* field[2] = drpcListenerSock */
@@ -358,12 +337,14 @@ static const unsigned srv__notify_ready_req__field_indices_by_name[] = {
   3,   /* field[3] = instanceIdx */
   1,   /* field[1] = nctxs */
   4,   /* field[4] = ntgts */
+  7,   /* field[7] = secondaryNctxs */
+  6,   /* field[6] = secondaryUris */
   0,   /* field[0] = uri */
 };
 static const ProtobufCIntRange srv__notify_ready_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 6 }
+  { 0, 8 }
 };
 const ProtobufCMessageDescriptor srv__notify_ready_req__descriptor =
 {
@@ -373,127 +354,11 @@ const ProtobufCMessageDescriptor srv__notify_ready_req__descriptor =
   "Srv__NotifyReadyReq",
   "srv",
   sizeof(Srv__NotifyReadyReq),
-  6,
+  8,
   srv__notify_ready_req__field_descriptors,
   srv__notify_ready_req__field_indices_by_name,
   1,  srv__notify_ready_req__number_ranges,
   (ProtobufCMessageInit) srv__notify_ready_req__init,
-  NULL,NULL,NULL    /* reserved[123] */
-};
-static const ProtobufCFieldDescriptor srv__bio_error_req__field_descriptors[7] =
-{
-  {
-    "unmapErr",
-    1,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Srv__BioErrorReq, unmaperr),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "readErr",
-    2,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Srv__BioErrorReq, readerr),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "writeErr",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Srv__BioErrorReq, writeerr),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "tgtId",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
-    0,   /* quantifier_offset */
-    offsetof(Srv__BioErrorReq, tgtid),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "instanceIdx",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Srv__BioErrorReq, instanceidx),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "drpcListenerSock",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Srv__BioErrorReq, drpclistenersock),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "uri",
-    7,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Srv__BioErrorReq, uri),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-};
-static const unsigned srv__bio_error_req__field_indices_by_name[] = {
-  5,   /* field[5] = drpcListenerSock */
-  4,   /* field[4] = instanceIdx */
-  1,   /* field[1] = readErr */
-  3,   /* field[3] = tgtId */
-  0,   /* field[0] = unmapErr */
-  6,   /* field[6] = uri */
-  2,   /* field[2] = writeErr */
-};
-static const ProtobufCIntRange srv__bio_error_req__number_ranges[1 + 1] =
-{
-  { 1, 0 },
-  { 0, 7 }
-};
-const ProtobufCMessageDescriptor srv__bio_error_req__descriptor =
-{
-  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "srv.BioErrorReq",
-  "BioErrorReq",
-  "Srv__BioErrorReq",
-  "srv",
-  sizeof(Srv__BioErrorReq),
-  7,
-  srv__bio_error_req__field_descriptors,
-  srv__bio_error_req__field_indices_by_name,
-  1,  srv__bio_error_req__number_ranges,
-  (ProtobufCMessageInit) srv__bio_error_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
 static const ProtobufCFieldDescriptor srv__get_pool_svc_req__field_descriptors[1] =

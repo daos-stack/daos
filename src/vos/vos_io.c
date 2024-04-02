@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,7 +18,6 @@
 #include <daos.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
-#include "vos_policy.h"
 #include <daos/mem.h>
 
 /** I/O context */
@@ -70,7 +69,7 @@ struct vos_io_context {
 	unsigned int              ic_update : 1, ic_size_fetch : 1, ic_save_recx : 1,
 	    ic_dedup        : 1, /** candidate for dedup */
 	    ic_dedup_verify : 1, ic_read_ts_only : 1, ic_check_existence : 1, ic_remove : 1,
-	    ic_skip_fetch : 1, ic_agg_needed : 1, ic_skip_akey_support : 1,
+	    ic_skip_fetch : 1, ic_agg_needed : 1, ic_skip_akey_support : 1, ic_rebuild : 1,
 	    ic_ec : 1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
@@ -662,8 +661,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_io_size = 0;
 	ioc->ic_iod_nr = iod_nr;
 	ioc->ic_iods = iods;
-	ioc->ic_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
-	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound : epoch;
+	ioc->ic_epr.epr_hi = dtx_is_real_handle(dth) ? dth->dth_epoch : epoch;
+	bound              = dtx_is_real_handle(dth) ? dth->dth_epoch_bound : epoch;
 	ioc->ic_bound = MAX(bound, ioc->ic_epr.epr_hi);
 	ioc->ic_epr.epr_lo = 0;
 	ioc->ic_oid = oid;
@@ -684,6 +683,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		ioc->ic_read_ts_only = 1;
 	ioc->ic_remove = ((vos_flags & VOS_OF_REMOVE) != 0);
 	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
+	ioc->ic_rebuild    = ((vos_flags & VOS_OF_REBUILD) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->ic_iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
@@ -1503,9 +1503,17 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err)
 
 	/* NB: it's OK to use the stale ioc->ic_obj for fetch_end */
 	D_ASSERT(!ioc->ic_update);
+
+	if (err == 0) {
+		err = vos_tgt_health_check(ioc->ic_cont);
+		if (err)
+			DL_ERROR(err, "Fail fetch due to faulty NVMe.");
+	}
+
 	if (size != NULL && err == 0)
 		*size = ioc->ic_io_size;
 	vos_ioc_destroy(ioc, false);
+
 	return err;
 }
 
@@ -1537,6 +1545,12 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_X64"\n",
 		DP_UOID(oid), iod_nr, epoch);
 
+	rc = vos_tgt_health_check(vos_hdl2cont(coh));
+	if (rc) {
+		DL_ERROR(rc, DF_UOID": Reject fetch due to faulty NVMe.", DP_UOID(oid));
+		return rc;
+	}
+
 	rc = vos_ioc_create(coh, oid, true, epoch, iod_nr, iods,
 			    NULL, vos_flags, shadows, 0, dth, &ioc);
 	if (rc != 0)
@@ -1554,28 +1568,24 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		       &rc, false)) {
 		if (rc == 0) {
 			if (ioc->ic_read_ts_only)
-				goto set_ioc;
+				goto out;
+
 			if (ioc->ic_obj != NULL &&
 			    has_uncertainty(ioc, &ioc->ic_obj->obj_ilog_info))
 				goto fetch_dkey;
 			for (i = 0; i < iod_nr; i++)
 				iod_empty_sgl(ioc, i);
-			goto set_ioc;
 		}
 		goto out;
 	}
 fetch_dkey:
 	if (dkey == NULL || dkey->iov_len == 0) {
-		if (ioc->ic_read_ts_only)
-			goto set_ioc;
-		D_GOTO(out, rc = -DER_INVAL);
+		if (!ioc->ic_read_ts_only)
+			rc = -DER_INVAL;
+	} else {
+		rc = dkey_fetch(ioc, dkey);
 	}
 
-	rc = dkey_fetch(ioc, dkey);
-	if (rc != 0)
-		goto out;
-set_ioc:
-	*ioh = vos_ioc2ioh(ioc);
 out:
 	vos_dth_set(NULL, ioc->ic_cont->vc_pool->vp_sysdb);
 
@@ -1594,9 +1604,13 @@ out:
 	if (rc != 0) {
 		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
 		ioc->ic_recx_lists = NULL;
-		return vos_fetch_end(vos_ioc2ioh(ioc), NULL, rc);
+		rc = vos_fetch_end(vos_ioc2ioh(ioc), NULL, rc);
+		*ioh = DAOS_HDL_INVAL;
+	} else {
+		*ioh = vos_ioc2ioh(ioc);
 	}
-	return 0;
+
+	return rc;
 }
 
 static umem_off_t
@@ -2270,8 +2284,10 @@ akey_update_begin(struct vos_io_context *ioc)
 		size = (iod->iod_type == DAOS_IOD_SINGLE) ? iod->iod_size :
 				iod->iod_recxs[i].rx_nr * iod->iod_size;
 
-		media = vos_policy_media_select(vos_cont2pool(ioc->ic_cont),
-					 iod->iod_type, size, VOS_IOS_GENERIC);
+		if (vos_io_scm(vos_cont2pool(ioc->ic_cont), iod->iod_type, size, VOS_IOS_GENERIC))
+			media = DAOS_MEDIA_SCM;
+		else
+			media = DAOS_MEDIA_NVME;
 
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			rc = vos_reserve_single(ioc, media, size);
@@ -2306,15 +2322,14 @@ dkey_update_begin(struct vos_io_context *ioc)
 }
 
 int
-vos_publish_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
-		bool publish)
+vos_publish_scm(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_scm, bool publish)
 {
 	int	rc = 0;
 
 	if (publish)
-		rc = umem_tx_publish(vos_cont2umm(cont), rsrvd_scm);
+		rc = umem_tx_publish(umm, rsrvd_scm);
 	else
-		umem_cancel(vos_cont2umm(cont), rsrvd_scm);
+		umem_cancel(umm, rsrvd_scm);
 
 	return rc;
 }
@@ -2371,6 +2386,32 @@ update_cancel(struct vos_io_context *ioc)
 }
 
 int
+vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid)
+{
+	struct dtx_local_oid_record *oid_array = NULL;
+	struct dtx_local_oid_record *record    = NULL;
+
+	/** The array has to grow to accommodate the next record. */
+	if (dth->dth_local_oid_cnt == dth->dth_local_oid_cap) {
+		D_REALLOC_ARRAY(oid_array, dth->dth_local_oid_array, dth->dth_local_oid_cap,
+				dth->dth_local_oid_cap << 1);
+		if (oid_array == NULL)
+			return -DER_NOMEM;
+
+		dth->dth_local_oid_array = oid_array;
+		dth->dth_local_oid_cap <<= 1;
+	}
+
+	record           = &dth->dth_local_oid_array[dth->dth_local_oid_cnt];
+	record->dor_cont = cont;
+	vos_cont_addref(cont);
+	record->dor_oid = *oid;
+	dth->dth_local_oid_cnt++;
+
+	return 0;
+}
+
+int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth)
 {
@@ -2379,6 +2420,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	bool			 tx_started = false;
+	uint16_t                  minor_epc;
 
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
@@ -2398,8 +2440,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	tx_started = true;
 
 	/* Commit the CoS DTXs via the IO PMDK transaction. */
-	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 &&
-	    !dth->dth_cos_done) {
+	if (dtx_is_valid_handle(dth) && dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
+		D_ASSERT(!dth->dth_local);
+
 		D_ALLOC_ARRAY(daes, dth->dth_dti_cos_count);
 		if (daes == NULL)
 			D_GOTO(abort, err = -DER_NOMEM);
@@ -2410,7 +2453,9 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
 					      dth->dth_dti_cos_count, 0, NULL, daes, dces);
-		if (err <= 0)
+		if (err < 0)
+			goto abort;
+		if (err == 0)
 			D_FREE(daes);
 	}
 
@@ -2421,9 +2466,13 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (err != 0)
 		goto abort;
 
+	if (dtx_is_valid_handle(dth))
+		minor_epc = dth->dth_op_seq;
+	else
+		minor_epc = ioc->ic_rebuild ? EVT_REBUILD_MINOR_MIN : VOS_SUB_OP_MAX;
+
 	/* Update tree index */
-	err = dkey_update(ioc, pm_ver, dkey, dtx_is_valid_handle(dth) ?
-			  dth->dth_op_seq : VOS_SUB_OP_MAX);
+	err = dkey_update(ioc, pm_ver, dkey, minor_epc);
 	if (err) {
 		VOS_TX_LOG_FAIL(err, "Failed to update tree index: "DF_RC"\n",
 				DP_RC(err));
@@ -2436,6 +2485,10 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	if (vos_ts_set_check_conflict(ioc->ic_ts_set, ioc->ic_epr.epr_hi)) {
 		err = -DER_TX_RESTART;
 		goto abort;
+	}
+
+	if (dtx_is_valid_handle(dth) && dth->dth_local) {
+		err = vos_insert_oid(dth, ioc->ic_cont, &ioc->ic_oid);
 	}
 
 abort:
@@ -2488,6 +2541,12 @@ abort:
 
 	vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);
 
+	if (err == 0) {
+		err = vos_tgt_health_check(ioc->ic_cont);
+		if (err)
+			DL_ERROR(err, "Fail update due to faulty NVMe.");
+	}
+
 	if (size != NULL && err == 0)
 		*size = ioc->ic_io_size;
 	D_FREE(daes);
@@ -2520,11 +2579,21 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
 		return -DER_IO;
 
-	if (dtx_is_valid_handle(dth))
+	if (dtx_is_real_handle(dth))
 		epoch = dth->dth_epoch;
 
-	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "
-		DF_X64", flags="DF_X64"\n", DP_UOID(oid), iod_nr, epoch, flags);
+	if (dth && dth->dth_local)
+		++dth->dth_op_seq;
+
+	D_DEBUG(DB_TRACE,
+		"Prepare IOC for " DF_UOID ", iod_nr %d, epc " DF_X64 ", flags=" DF_X64 "\n",
+		DP_UOID(oid), iod_nr, (dtx_is_real_handle(dth) ? dth->dth_epoch : epoch), flags);
+
+	rc = vos_tgt_health_check(vos_hdl2cont(coh));
+	if (rc) {
+		DL_ERROR(rc, DF_UOID": Reject update due to faulty NVMe.", DP_UOID(oid));
+		return rc;
+	}
 
 	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
 			    flags, NULL, dedup_th, dth, &ioc);

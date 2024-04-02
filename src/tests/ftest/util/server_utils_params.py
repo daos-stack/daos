@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -107,7 +107,7 @@ class DaosServerYamlParameters(YamlParameters):
         #       is set for the running process. If group look up fails or user
         #       is not member, use uid return from user lookup.
         #
-        default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
+        default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
 
         # All log files should be placed in the same directory on each host to
         # enable easy log file archiving by launch.py
@@ -115,7 +115,7 @@ class DaosServerYamlParameters(YamlParameters):
 
         self.provider = BasicParameter(None, default_provider)
         self.crt_ctx_share_addr = BasicParameter(None)
-        self.crt_timeout = BasicParameter(None, 10)
+        self.crt_timeout = BasicParameter(None)
         self.disable_srx = BasicParameter(None)
         self.fabric_auth_key = BasicParameter(None)
         self.core_dump_filter = BasicParameter(None)
@@ -436,6 +436,7 @@ class EngineYamlParameters(YamlParameters):
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
             "COVFILE=/tmp/test.cov"],
+        "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],
         "ofi+verbs": [
             "FI_OFI_RXM_USE_SRX=1"],
@@ -458,7 +459,7 @@ class EngineYamlParameters(YamlParameters):
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines", str(index), "*"]
         self._base_namespace = base_namespace
         self._index = index
-        self._provider = provider or os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp;ofi_rxm")
+        self._provider = provider or os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
         self._max_storage_tiers = max_storage_tiers
         super().__init__(os.path.join(*namespace))
 

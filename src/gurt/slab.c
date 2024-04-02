@@ -9,7 +9,7 @@
 #include <gurt/debug.h>
 #include <gurt/common.h>
 
-#include "gurt/slab.h"
+#include <gurt/slab.h>
 
 static void
 debug_dump(struct d_slab_type *type)

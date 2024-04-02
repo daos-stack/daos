@@ -35,7 +35,7 @@ class NvmeFragmentation(TestWithServers):
         self.ior_transfer_size = self.params.get("transfer_block_size", '/run/ior/iorflags/*')
         self.ior_dfs_oclass = self.params.get("obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir)
         self.pool = None
         self.out_queue = queue.Queue()
 

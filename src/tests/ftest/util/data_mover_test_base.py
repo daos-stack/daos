@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,6 +18,7 @@ from general_utils import create_string_buffer, get_log_file
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from pydaos.raw import DaosContainer, DaosObj, IORequest, str_to_c_uuid
+from run_utils import run_remote
 from test_utils_container import TestContainer
 
 
@@ -246,7 +247,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """
         return " ".join(self._get_posix_test_path_list(path_list=path))
 
-    def new_posix_test_path(self, shared=False, create=True, parent=None, mount_dir=False):
+    def new_posix_test_path(self, shared=False, create=True, parent=None, mount_dir_size=None):
         """Generate a new, unique posix path.
 
         Args:
@@ -254,9 +255,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 Defaults to False.
             create (bool): Whether to create the directory.
                 Defaults to True.
-            mount_dir (bool): Whether or not posix directory will be manually mounted in tmpfs.
             parent (str, optional): The parent directory to create the
                 path in. Defaults to self.posix_root, which defaults to self.tmp.
+            mount_dir_size (str, optional): if specified, directory will be mounted in tmpfs
+                with the given size.
 
         Returns:
             str: the posix path.
@@ -276,14 +278,17 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         if create:
             # Create the directory
-            cmd = "mkdir -p '{}'".format(path)
-            self.execute_cmd(cmd)
+            cmd = f"mkdir -p '{path}'"
+            if not run_remote(self.log, self.hostlist_clients, cmd).passed:
+                self.fail(f"Failed to mkdir {path}")
 
         # mount small tmpfs filesystem on posix path, using size required sudo
         # add mount_dir to mounted list for use when umounting
-        if mount_dir:
+        if mount_dir_size:
+            cmd = f"sudo mount -t tmpfs none '{path}' -o size={mount_dir_size}"
+            if not run_remote(self.log, self.hostlist_clients, cmd).passed:
+                self.fail(f"Failed to mount directory {path}")
             self.mounted_posix_test_paths.append(path)
-            self.execute_cmd("sudo mount -t tmpfs none '{}' -o size=128M".format(path))
 
         return path
 

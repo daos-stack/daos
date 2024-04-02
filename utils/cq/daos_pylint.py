@@ -425,9 +425,10 @@ sys.path.append('site_scons')"""
                 if word_is_allowed(word, code):
                     continue
 
-            # Inserting code can cause wrong-module-order.
-            if scons and msg.msg_id == 'C0411' and 'from SCons.Script import' in msg.msg:
-                continue
+            # Inserting code can cause wrong-import-order.
+            if scons and msg.msg_id == 'C0411':
+                if 'from SCons.Script import' in msg.msg or 'SCons.Script.*' in msg.msg:
+                    continue
 
             failed = True
 
@@ -546,10 +547,6 @@ def main():
     if args.version:
         print(full_version)
         sys.exit(0)
-
-    if args.diff:
-        print('This option is no longer used')
-        sys.exit(1)
 
     rc_tmp = None
 

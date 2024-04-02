@@ -1,0 +1,51 @@
+hosts:
+  test_servers: 2
+  test_clients: 2
+timeout: 360
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  crt_timeout: 60
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=csum,mgmt,md,rebuild
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=csum,mgmt,md,rebuild
+      storage: auto
+pool:
+  size: 50%
+  svcn: 4
+  pool_query_timeout: 30
+  properties: "scrub:timed,scrub_freq:1"
+container:
+  type: POSIX
+  control_method: daos
+  oclass: RP_2G1
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+mdtest:
+  client_processes:
+    ppn: 4
+  dfs_oclass: RP_2G1
+  dfs_dir_oclass: RP_2GX
+  test_dir: "/"
+  manager: "MPICH"
+  num_of_files_dirs: 100
+  read_bytes: 4096
+  write_bytes: 4096
+  api: DFS
+  depth: 100

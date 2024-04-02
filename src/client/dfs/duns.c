@@ -26,11 +26,11 @@
 #endif
 #include <daos/common.h>
 #include <daos/object.h>
-#include "dfuse_ioctl.h"
-#include "daos_types.h"
-#include "daos.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
+#include <dfuse_ioctl.h>
+#include <daos_types.h>
+#include <daos.h>
+#include <daos_fs.h>
+#include <daos_uns.h>
 
 #ifndef FUSE_SUPER_MAGIC
 #define FUSE_SUPER_MAGIC	0x65735546
@@ -278,7 +278,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 
 #define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
 /** 127 corresponds to DAOS_PROP_LABEL_MAX_LEN. */
-#define LABEL_REGEX "([a-zA-Z0-9._:]{1,127})"
+#define LABEL_REGEX "([a-zA-Z0-9._:-]{1,127})"
 #define DAOS_FORMAT "^daos://("UUID_REGEX"|"LABEL_REGEX")/("UUID_REGEX"|"LABEL_REGEX")(/.*)?$"
 #define DAOS_FORMAT_NO_PREFIX "^[/]+("UUID_REGEX")/("UUID_REGEX")(/.*)?$"
 #define DAOS_FORMAT_NO_CONT "^daos://("UUID_REGEX"|"LABEL_REGEX")[/]?$"
@@ -1331,14 +1331,6 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 		return rc;
 	}
 
-	/** Destroy the container */
-	rc = daos_cont_destroy(poh, dattr.da_cont, 1, NULL);
-	if (rc) {
-		D_ERROR("Failed to destroy container (%d)\n", rc);
-		/** recreate the link ? */
-		return daos_der2errno(rc);
-	}
-
 	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 #ifdef LUSTRE_INCLUDE
 		if (dattr.da_on_lustre)
@@ -1367,6 +1359,14 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 				dattr.da_on_lustre ? "Lustre " : " ", path, strerror(errno));
 			return err;
 		}
+	}
+
+	/** Destroy the container */
+	rc = daos_cont_destroy(poh, dattr.da_cont, 1, NULL);
+	if (rc) {
+		D_ERROR("Failed to destroy container (%d)\n", rc);
+		/** recreate the link ? */
+		return daos_der2errno(rc);
 	}
 
 	return 0;

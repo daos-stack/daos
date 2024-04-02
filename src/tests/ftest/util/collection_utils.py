@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,6 +9,7 @@ import os
 import re
 import sys
 from collections import OrderedDict
+from difflib import unified_diff
 
 from ClusterShell.NodeSet import NodeSet
 from process_core_files import CoreFileException, CoreFileProcessing
@@ -420,7 +421,7 @@ def cart_log_test(logger, hosts, source, pattern, depth, test_result):
     logger.debug("-" * 80)
     logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
     other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
-             f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
+             f"'{cart_logtest} --ftest-mode %'"]
     result = run_remote(logger, hosts, find_command(source, pattern, depth, other), timeout=4800)
     if not result.passed:
         message = (f"Error running {cart_logtest} on the {source_files} files on "
@@ -623,6 +624,38 @@ def process_core_files(logger, test_job_results, test, test_result):
         test_result.fail_test(logger, "Process", message)
         return 256
 
+    return 0
+
+
+def create_steps_log(logger, job_results_dir, test_result):
+    """Create a steps.log file from the job.log file.
+
+    The steps.log file contains high level test steps.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        job_results_dir (str): path to the avocado job results
+        test_result (TestResult): the test result used to update the status of the test
+
+    Returns:
+        int: status code: 8192 = problem creating steps.log; 0 = success
+    """
+    logger.debug("=" * 80)
+    logger.info("Creating steps.log file")
+
+    test_logs_lnk = os.path.join(job_results_dir, "latest")
+    test_logs_dir = os.path.realpath(test_logs_lnk)
+    job_log = os.path.join(test_logs_dir, 'job.log')
+    step_log = os.path.join(test_logs_dir, 'steps.log')
+    command = rf"grep -E '(INFO |ERROR)\| (==> Step|START|PASS|FAIL|ERROR)' {job_log}"
+    try:
+        result = run_local(logger, command)
+        with open(step_log, 'w', encoding="utf-8") as file:
+            file.write(result.stdout)
+    except Exception:   # pylint: disable=broad-except
+        message = f"Error creating {step_log}"
+        test_result.fail_test(logger, "Process", message, sys.exc_info())
+        return 8192
     return 0
 
 
@@ -870,12 +903,6 @@ def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
         str: the updated xml_data; None if an error was detected
     """
     logger.debug("Replacing '%s' with '%s' in %s", pattern, replacement, xml_file)
-
-    logger.debug("  Contents of %s before replacement", xml_file)
-    for line in xml_data.splitlines():
-        logger.debug("    %s", line)
-    logger.debug("")
-
     try:
         with open(xml_file, "w", encoding="utf-8") as xml_buffer:
             xml_buffer.write(re.sub(pattern, replacement, xml_data))
@@ -886,8 +913,9 @@ def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
 
     new_xml_data = get_xml_data(logger, xml_file, test_result)
     if new_xml_data is not None:
-        logger.debug("  Contents of %s after replacement", xml_file)
-        for line in new_xml_data.splitlines():
+        logger.debug("  Diff of %s after replacement", xml_file)
+        for line in unified_diff(xml_data.splitlines(), new_xml_data.splitlines(),
+                                 fromfile=xml_file, tofile=xml_file, n=0, lineterm=""):
             logger.debug("    %s", line)
         logger.debug("")
 
@@ -1015,6 +1043,9 @@ def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, a
                 logger, summary, data["hosts"].copy(), data["source"], data["pattern"],
                 data["destination"], data["depth"], threshold, data["timeout"],
                 test_result, test)
+
+    # Generate a steps.log file
+    return_code |= create_steps_log(logger, job_results_dir, test_result)
 
     # Optionally rename the test results directory for this test
     if rename:

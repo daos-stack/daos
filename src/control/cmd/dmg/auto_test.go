@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -38,6 +38,7 @@ func runConfGenCmdTests(t *testing.T, cmdTests []cmdTest) {
 
 	for _, st := range cmdTests {
 		t.Run(st.name, func(t *testing.T) {
+			t.Helper()
 			cgReqCalls = nil // Clear before running test case.
 
 			runCmdTest(t, st.cmd, "", st.expectedErr) // Invoker calls not checked.

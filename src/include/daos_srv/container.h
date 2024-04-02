@@ -38,7 +38,7 @@ int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t 
 int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
 		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
 int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
-int ds_cont_tgt_close(uuid_t hdl_uuid);
+int ds_cont_tgt_close(uuid_t pool_uuid, uuid_t hdl_uuid);
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
 		     uint32_t status_pm_ver);
@@ -63,6 +63,7 @@ struct ds_cont_child {
 	ABT_mutex		 sc_mutex;
 	ABT_cond		 sc_dtx_resync_cond;
 	ABT_cond		 sc_scrub_cond;
+	ABT_cond		 sc_rebuild_cond;
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
@@ -71,7 +72,8 @@ struct ds_cont_child {
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
 				 sc_ec_agg_active:1,
-				 sc_scrubbing:1;
+				 sc_scrubbing:1,
+				 sc_rebuilding:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;
@@ -97,7 +99,8 @@ struct ds_cont_child {
 	uint32_t		 sc_snapshots_nr;
 	uint32_t		 sc_open;
 
-	uint64_t		 sc_dtx_committable_count;
+	uint32_t		 sc_dtx_committable_count;
+	uint32_t		 sc_dtx_committable_coll_count;
 
 	/* The global minimum EC aggregation epoch, which will be upper
 	 * limit for VOS aggregation, i.e. EC object VOS aggregation can
@@ -121,8 +124,10 @@ struct ds_cont_child {
 	daos_handle_t		 sc_dtx_cos_hdl;
 	/* The DTX COS-btree. */
 	struct btr_root		 sc_dtx_cos_btr;
-	/* The global list for committable DTXs. */
+	/* The global list for committable non-collective DTXs. */
 	d_list_t		 sc_dtx_cos_list;
+	/* The global list for committable collective DTXs. */
+	d_list_t		 sc_dtx_coll_list;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
@@ -185,7 +190,8 @@ void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
-
+void
+ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child);
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
  */

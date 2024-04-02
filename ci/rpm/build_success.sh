@@ -7,7 +7,7 @@ set -uex
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ci_envs="$mydir/../parse_ci_envs.sh"
 if [ -e "${ci_envs}" ]; then
-  # shellcheck source=../parse_ci_envs.sh
+  # shellcheck source=parse_ci_envs.sh
   source "${ci_envs}"
 fi
 

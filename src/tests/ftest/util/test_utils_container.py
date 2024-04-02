@@ -13,7 +13,7 @@ from avocado import fail_on
 from command_utils_base import BasicParameter
 from exception_utils import CommandFailure
 from general_utils import DaosTestError, get_random_bytes
-from pydaos.raw import DaosApiError, DaosContainer, DaosInputParams, c_uuid_to_str, str_to_c_uuid
+from pydaos.raw import DaosApiError, DaosContainer, DaosInputParams, str_to_c_uuid
 from test_utils_base import TestDaosApiBase
 
 
@@ -278,7 +278,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         self.container = None
         self.uuid = None
-        self.info = None
         self.opened = False
         self.written_data = []
         self.epoch = None
@@ -369,7 +368,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         if self.control_method.value == self.USE_API:
             # pydaos.raw doesn't support create with a label
-            self.log.info("Ignoring label for container created with API")
+            if not self.silent.value:
+                self.log.info("Ignoring label for container created with API")
             self.label.update(None)
 
             # Create a container with the API method
@@ -499,7 +499,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         """
         if self.container and not self.opened:
-            self.log.info("Opening container %s", str(self))
+            if not self.silent.value:
+                self.log.info("Opening container %s", str(self))
             self.pool.connect()
             kwargs = {}
             kwargs["poh"] = pool_handle
@@ -519,7 +520,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         """
         if self.container and self.opened:
-            self.log.info("Closing container %s", str(self))
+            if not self.silent.value:
+                self.log.info("Closing container %s", str(self))
             self._call_method(self.container.close, {})
             self.opened = False
             return True
@@ -565,60 +567,9 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
             self.container = None
             self.uuid = None
-            self.info = None
             self.written_data = []
 
         return status
-
-    @fail_on(DaosApiError)
-    def get_info(self, coh=None):
-        """Query the container for information.
-
-        Sets the self.info attribute.
-
-        Args:
-            coh (str, optional): container handle override. Defaults to None.
-
-        """
-        if self.container:
-            self.open()
-            self.log.info("Querying container %s", str(self))
-            self._call_method(self.container.query, {"coh": coh})
-            self.info = self.container.info
-
-    def check_container_info(self, ci_uuid=None, ci_nsnapshots=None, ci_nhandles=None):
-        # pylint: disable=unused-argument
-        """Check the container info attributes.
-
-        Note:
-            Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisons besides the
-            default '=='.
-
-        Args:
-            ci_uuid (str, optional): container uuid. Defaults to None.
-            ci_nsnapshots (int, optional): number of snapshots.
-                Defaults to None.
-
-        Note:
-            Arguments may also be provided as a string with a number preceded
-            by '<', '<=', '>', or '>=' for other comparisons besides the
-            default '=='.
-
-        Returns:
-            bool: True if at least one expected value is specified and all the
-                specified values match; False otherwise
-
-        """
-        self.get_info()
-        checks = [
-            (key,
-             c_uuid_to_str(getattr(self.info, key))
-             if key == "ci_uuid" else getattr(self.info, key),
-             val)
-            for key, val in list(locals().items())
-            if key != "self" and val is not None]
-        return self._check_info(checks)
 
     def write_objects(self, rank=None, obj_class=None):
         """Write objects to the container.
@@ -1035,6 +986,24 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         """
         return self.daos.container_query(
             pool=self.pool.identifier, cont=self.identifier, *args, **kwargs)
+
+    def verify_query(self, expected_response):
+        """Verify daos container query returns expected response values.
+
+        Args:
+            expected_response (dict): expected response values
+
+        Returns:
+            bool: whether response values from daos container query match expected values
+
+        """
+        response = self.query()['response']
+        for expected_key, expected_val in expected_response.items():
+            if expected_key not in response:
+                return False
+            if response[expected_key] != expected_val:
+                return False
+        return True
 
     def set_attr(self, *args, **kwargs):
         """Call daos container set-attr.

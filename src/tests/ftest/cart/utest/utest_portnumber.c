@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -41,7 +41,8 @@
 
 #include <cmocka.h>
 #include <cart/api.h>
-#include "gurt/debug.h"
+#include <gurt/debug.h>
+#include <gurt/common.h>
 
 #define CHILD1_INIT_ERR			10
 #define CHILD1_CONTEXT_DESTROY_ERR	11
@@ -191,26 +192,18 @@ child2_error:
 static void
 test_port_tcp(void **state)
 {
-	setenv("OFI_INTERFACE", "lo", 1);
-	setenv("CRT_PHY_ADDR_STR", "ofi+tcp;ofi_rxm", 1);
+	d_setenv("OFI_INTERFACE", "lo", 1);
+	d_setenv("CRT_PHY_ADDR_STR", "ofi+tcp", 1);
 	run_test_fork(state);
 }
 
 #ifndef MY_TESTS_NOT_INCLUDED
 static void
-test_port_sockets(void **state)
-{
-	setenv("OFI_INTERFACE", "eth0", 1);
-	setenv("CRT_PHY_ADDR_STR", "ofi+tcp", 1);
-	run_test_fork(state);
-};
-
-static void
 test_port_verb(void **state)
 {
-	setenv("OFI_INTERFACE", "eth0", 1);
-	setenv("OFI_DOMAIN", "Must define here", 1);
-	setenv("CRT_PHY_ADDR_STR", "ofi+verbs;ofi_rxm", 1);
+	d_setenv("OFI_INTERFACE", "eth0", 1);
+	d_setenv("OFI_DOMAIN", "Must define here", 1);
+	d_setenv("CRT_PHY_ADDR_STR", "ofi+verbs;ofi_rxm", 1);
 	run_test_fork(state);
 };
 #endif
@@ -288,17 +281,16 @@ fini_tests(void **state)
 int main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
-		cmocka_unit_test(test_port_tcp),
+	    cmocka_unit_test(test_port_tcp),
 #ifndef MY_TESTS_NOT_INCLUDED
-		cmocka_unit_test(test_port_sockets),
-		cmocka_unit_test(test_port_verb),
+	    cmocka_unit_test(test_port_verb),
 #endif
 	};
 
-	setenv("FI_UNIVERSE_SIZE", "2048", 1);
-	setenv("FI_OFI_RXM_USE_SRX", "1", 1);
-	setenv("D_LOG_MASK", "CRIT", 1);
-	setenv("OFI_PORT", "34571", 1);
+	d_setenv("FI_UNIVERSE_SIZE", "2048", 1);
+	d_setenv("FI_OFI_RXM_USE_SRX", "1", 1);
+	d_setenv("D_LOG_MASK", "CRIT", 1);
+	d_setenv("OFI_PORT", "34571", 1);
 
 	d_register_alt_assert(mock_assert);
 

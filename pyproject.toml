@@ -1,5 +1,11 @@
 [tool.isort]
 supported_extensions = ["py"]
-skip = [".git/", "src/rdb/raft", "build", "install", "venv", "src/control/vendor/"]
+skip = [".git/", "src/rdb/raft", "build", "install", "venv", "src/control/vendor/", "_topdir"]
 line_length = 99
 skip_gitignore = true
+
+[tool.codespell]
+skip = './src/control/vendor,./src/control/go.sum,./.git,./src/rdb/raft,./build,./install,./venv,./src/control/vendor/'
+quiet-level = 3
+ignore-words = 'ci/codespell.ignores'
+builtin = 'clear,rare,informal,names,en-GB_to_en-US'

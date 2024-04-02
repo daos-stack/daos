@@ -12,6 +12,8 @@
 #ifndef __DAOS_SRV_POOL_H__
 #define __DAOS_SRV_POOL_H__
 
+#include <endian.h>
+
 #include <abt.h>
 #include <daos/common.h>
 #include <daos/lru.h>
@@ -22,7 +24,6 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
-#include <daos_srv/policy.h>
 
 /**
  * Each individual object layout format, like oid layout, dkey to group,
@@ -30,6 +31,8 @@
  */
 #define DS_POOL_OBJ_VERSION		1
 
+/* age of an entry in svc_ops KVS before it may be evicted */
+#define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
 /*
  * Pool object
  *
@@ -38,6 +41,7 @@
 struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;	/* pool UUID */
+	d_list_t		sp_hdls;
 	ABT_rwlock		sp_lock;
 	struct pool_map		*sp_map;
 	uint32_t		sp_map_version;	/* temporary */
@@ -53,11 +57,13 @@ struct ds_pool {
 	uint32_t		sp_global_version;
 	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
-	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
+	/* Size threshold to store data on backend bdev */
+	uint32_t		sp_data_thresh;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
 	struct ds_iv_ns		*sp_iv_ns;
+	uint32_t		*sp_states;	/* pool child state array */
 
 	/* structure related to EC aggregate epoch query */
 	d_list_t		sp_ec_ephs_list;
@@ -71,8 +77,7 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t sp_stopping : 1, sp_fetch_hdls : 1, sp_disable_rebuild : 1, sp_need_discard : 1,
-	    sp_checkpoint_props_changed : 1;
+	uint32_t sp_stopping : 1, sp_fetch_hdls : 1, sp_disable_rebuild : 1, sp_need_discard : 1;
 
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
@@ -115,6 +120,7 @@ void ds_pool_get(struct ds_pool *pool);
  */
 struct ds_pool_hdl {
 	d_list_t		sph_entry;
+	d_list_t		sph_pool_entry;
 	uuid_t			sph_uuid;	/* of the pool handle */
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
@@ -127,6 +133,13 @@ struct ds_pool_hdl {
 
 struct ds_pool_hdl *ds_pool_hdl_lookup(const uuid_t uuid);
 void ds_pool_hdl_put(struct ds_pool_hdl *hdl);
+
+enum pool_child_state {
+	POOL_CHILD_NEW	= 0,
+	POOL_CHILD_STARTING,
+	POOL_CHILD_STARTED,
+	POOL_CHILD_STOPPING,
+};
 
 /*
  * Per-thread pool object
@@ -160,8 +173,9 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint64_t	spc_discard_done:1;
+	uint32_t	spc_discard_done:1;
 	uint32_t	spc_reint_mode;
+	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a
@@ -182,9 +196,58 @@ struct ds_pool_svc_op_val {
 	char ov_resvd[60];
 };
 
+/* encode metadata RPC operation key: HLC time first, in network order, for keys sorted by time.
+ * allocates the byte-stream, caller must free with D_FREE().
+ */
+static inline int
+ds_pool_svc_op_key_encode(struct ds_pool_svc_op_key *in, d_iov_t *enc_out)
+{
+	struct ds_pool_svc_op_key *out;
+
+	/* encoding is simple for this type, just another struct ds_pool_svc_op_key */
+	D_ALLOC_PTR(out);
+	if (out == NULL)
+		return -DER_NOMEM;
+
+	out->ok_client_time = htobe64(in->ok_client_time);
+	uuid_copy(out->ok_client_id, in->ok_client_id);
+	d_iov_set(enc_out, (void *)out, sizeof(*out));
+
+	return 0;
+}
+
+static inline int
+ds_pool_svc_op_key_decode(d_iov_t *enc_in, struct ds_pool_svc_op_key *out)
+{
+	struct ds_pool_svc_op_key *in = enc_in->iov_buf;
+
+	if (enc_in->iov_len < sizeof(struct ds_pool_svc_op_key))
+		return -DER_INVAL;
+
+	out->ok_client_time = be64toh(in->ok_client_time);
+	uuid_copy(out->ok_client_id, in->ok_client_id);
+
+	return 0;
+}
+
+struct rdb_tx;
+int
+ds_pool_svc_ops_lookup(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t *cli_uuidp,
+		       uint64_t cli_time, bool *is_dup, struct ds_pool_svc_op_val *valp);
+int
+ds_pool_svc_ops_save(struct rdb_tx *tx, void *pool_svc, uuid_t pool_uuid, uuid_t *cli_uuidp,
+		     uint64_t cli_time, bool dup_op, int rc_in, struct ds_pool_svc_op_val *op_valp);
+
+/* Find ds_pool_child in cache, hold one reference */
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
-struct ds_pool_child *ds_pool_child_get(struct ds_pool_child *child);
+/* Put the reference held by ds_pool_child_lookup() */
 void ds_pool_child_put(struct ds_pool_child *child);
+/* Start ds_pool child */
+int ds_pool_child_start(uuid_t pool_uuid, bool recreate);
+/* Stop ds_pool_child */
+int ds_pool_child_stop(uuid_t pool_uuid);
+/* Query pool child state */
+uint32_t ds_pool_child_state(uuid_t pool_uuid, uint32_t tgt_id);
 
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 enum daos_module_id module, crt_opcode_t opcode,
@@ -197,6 +260,8 @@ int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
+int ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
+int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
@@ -315,6 +380,21 @@ int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
 int
 ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
 
+struct dss_coll_args;
+struct dss_coll_ops;
+
+int
+ds_pool_thread_collective_reduce(uuid_t pool_uuid, uint32_t ex_status, struct dss_coll_ops *coll_ops,
+				 struct dss_coll_args *coll_args, uint32_t flags);
+int
+ds_pool_task_collective_reduce(uuid_t pool_uuid, uint32_t ex_status, struct dss_coll_ops *coll_ops,
+			       struct dss_coll_args *coll_args, uint32_t flags);
+int
+ds_pool_thread_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(void *),
+			  void *arg, uint32_t flags);
+int
+ds_pool_task_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(void *),
+			void *arg, uint32_t flags);
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking
  * pool map device status.
@@ -348,8 +428,7 @@ ds_pool_get_version(struct ds_pool *pool)
 int
 ds_start_chkpt_ult(struct ds_pool_child *child);
 void
-ds_stop_chkpt_ult(struct ds_pool_child *child);
-struct rdb_tx;
+    ds_stop_chkpt_ult(struct ds_pool_child *child);
 int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 			    d_iov_t *cred);
 

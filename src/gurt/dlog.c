@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -106,8 +106,8 @@ static const char        *default_fac0name = "CLOG";
 /* whether we should merge log and stderr */
 static bool               merge_stderr;
 
-#define clog_lock()   pthread_mutex_lock(&clogmux)
-#define clog_unlock() pthread_mutex_unlock(&clogmux)
+#define clog_lock()   (void)pthread_mutex_lock(&clogmux)
+#define clog_unlock() (void)pthread_mutex_unlock(&clogmux)
 
 static int d_log_write(char *buf, int len, bool flush);
 static const char *clog_pristr(int);
@@ -536,6 +536,13 @@ d_log_sync(void)
 	clog_unlock();
 }
 
+void
+d_log_disable_logging(void)
+{
+	mst.log_fd     = -1;
+	mst.log_old_fd = -1;
+}
+
 /**
  * d_vlog: core log function, front-ended by d_log
  * we vsnprintf the message into a holding buffer to format it.  then we
@@ -841,26 +848,29 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.flush_pri = DLOG_WARN;
 	mst.log_id_cb = log_id_cb;
 
-	env = getenv(D_LOG_FLUSH_ENV);
+	d_agetenv_str(&env, D_LOG_FLUSH_ENV);
 	if (env) {
 		pri = d_log_str2pri(env, strlen(env) + 1);
 
 		if (pri != -1)
 			mst.flush_pri = pri;
+		d_freeenv_str(&env);
 	}
 
-	env = getenv(D_LOG_TRUNCATE_ENV);
+	d_agetenv_str(&env, D_LOG_TRUNCATE_ENV);
 	if (env != NULL && atoi(env) > 0)
 		truncate = 1;
+	d_freeenv_str(&env);
 
-	env = getenv(D_LOG_SIZE_ENV);
+	d_agetenv_str(&env, D_LOG_SIZE_ENV);
 	if (env != NULL) {
 		log_size = d_getenv_size(env);
 		if (log_size < LOG_SIZE_MIN)
 			log_size = LOG_SIZE_MIN;
+		d_freeenv_str(&env);
 	}
 
-	env = getenv(D_LOG_FILE_APPEND_PID_ENV);
+	d_agetenv_str(&env, D_LOG_FILE_APPEND_PID_ENV);
 	if (logfile != NULL && env != NULL) {
 		if (strcmp(env, "0") != 0) {
 			rc = asprintf(&buffer, "%s.%d", logfile, getpid());
@@ -872,10 +882,12 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 					    "continuing.\n");
 		}
 	}
+	d_freeenv_str(&env);
 
-	env = getenv(D_LOG_FILE_APPEND_RANK_ENV);
+	d_agetenv_str(&env, D_LOG_FILE_APPEND_RANK_ENV);
 	if (env && strcmp(env, "0") != 0)
 		mst.append_rank = true;
+	d_freeenv_str(&env);
 
 	/* quick sanity check (mst.tag is non-null if already open) */
 	if (d_log_xst.tag || !tag ||
@@ -910,9 +922,10 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		int         log_flags = O_RDWR | O_CREAT;
 		struct stat st;
 
-		env = getenv(D_LOG_STDERR_IN_LOG_ENV);
+		d_agetenv_str(&env, D_LOG_STDERR_IN_LOG_ENV);
 		if (env != NULL && atoi(env) > 0)
 			merge_stderr = true;
+		d_freeenv_str(&env);
 
 		if (!truncate)
 			log_flags |= O_APPEND;
@@ -1074,24 +1087,35 @@ bool d_logfac_is_enabled(const char *fac_name)
 {
 	char *ddsubsys_env;
 	char *ddsubsys_fac;
-	int len = strlen(fac_name);
+	int   len = strlen(fac_name);
+	bool  rc;
 
 	/* read env DD_SUBSYS to enable corresponding facilities */
-	ddsubsys_env = getenv(DD_FAC_ENV);
+	d_agetenv_str(&ddsubsys_env, DD_FAC_ENV);
 	if (ddsubsys_env == NULL)
 		return true; /* enable all facilities by default */
 
-	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0)
-		return true; /* enable all facilities with DD_SUBSYS=all */
+	if (strncasecmp(ddsubsys_env, DD_FAC_ALL, strlen(DD_FAC_ALL)) == 0) {
+		rc = true; /* enable all facilities with DD_SUBSYS=all */
+		goto out;
+	}
 
 	ddsubsys_fac = strcasestr(ddsubsys_env, fac_name);
-	if (ddsubsys_fac == NULL)
-		return false;
+	if (ddsubsys_fac == NULL) {
+		rc = false;
+		goto out;
+	}
 
-	if (ddsubsys_fac[len] != '\0' && ddsubsys_fac[len] != ',')
-		return false;
+	if (ddsubsys_fac[len] != '\0' && ddsubsys_fac[len] != ',') {
+		rc = false;
+		goto out;
+	}
 
-	return true;
+	rc = true;
+
+out:
+	d_freeenv_str(&ddsubsys_env);
+	return rc;
 }
 
 /*

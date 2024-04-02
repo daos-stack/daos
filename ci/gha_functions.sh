@@ -58,7 +58,7 @@ get_test_tags() {
     local test_tags=()
     local tags
     # Test-tag: has higher priority
-    if [ -n "$CP_TEST_TAG" ]; then
+    if [ -n "${CP_TEST_TAG:-}" ]; then
         tags="$CP_TEST_TAG"
     else
         tags="pr"
@@ -77,7 +77,7 @@ get_test_tags() {
 
 
 get_commit_pragmas() {
-    sed -ne '/^[^ ]*: */s/\([^:]*\): *\(.*\)/\1 \2/p' | while read -r a b; do
+    sed -Ene 's/^([-[:alnum:]]+): *([-\._ [:alnum:]]+)$/\1 \2/p' | while read -r a b; do
         echo -n "${a//-/_}" | tr '[:lower:]' '[:upper:]'
         # escape special characters in the value
         echo "=$b" | sed -e 's/\([<> ]\)/\\\1/g'
@@ -240,7 +240,7 @@ Stage Name: $stage_name\" > /root/job_info
 
 
 # This is run under the unit test framework at https://github.com/pgrange/bash_unit/
-# I.e. ../bash_unit/bash_unit ci/gha_functions.sh ci/gha_functions.sh
+# I.e. ../bash_unit/bash_unit ci/gha_functions.sh
 test_test_tag_and_features() {
     # Simple Test-tag: test
     assert_equals "$(CP_TEST_TAG="always_passes always_fails" get_test_tags "-hw")" "always_passes,-hw always_fails,-hw"
@@ -257,7 +257,12 @@ test_test_tag_and_features() {
 test_get_commit_pragmas() {
     local msg='Escape spaces also
 
+'"'"'Will-not-be-a-pragma: false'"'"' should not be considered a commit
+pragma, but:
+Should-not-be-a-pragma: bar will be because it was not quoted.
+
 Skip-func-test-leap15: false
+RPM-test-version: 2.5.100-13.10036.g65926e32
 Skip-PR-comments: true
 Test-tag: always_passes always_fails
 EL8-VM9-label: all_vm9
@@ -270,7 +275,9 @@ Required-githooks: true
 
 Signed-off-by: Brian J. Murrell <brian.murrell@intel.com>
 '
-    assert_equals "$(echo "$msg" | get_commit_pragmas)" 'SKIP_FUNC_TEST_LEAP15=false
+    assert_equals "$(echo "$msg" | get_commit_pragmas)" 'SHOULD_NOT_BE_A_PRAGMA=bar\ will\ be\ because\ it\ was\ not\ quoted.
+SKIP_FUNC_TEST_LEAP15=false
+RPM_TEST_VERSION=2.5.100-13.10036.g65926e32
 SKIP_PR_COMMENTS=true
 TEST_TAG=always_passes\ always_fails
 EL8_VM9_LABEL=all_vm9
@@ -278,13 +285,11 @@ EL9_VM9_LABEL=all_vm9
 LEAP15_VM9_LABEL=all_vm9
 HW_MEDIUM_LABEL=new_icx5
 HW_LARGE_LABEL=new_icx9
-REQUIRED_GITHOOKS=true
-SIGNED_OFF_BY=Brian\ J.\ Murrell\ \<brian.murrell@intel.com\>'
+REQUIRED_GITHOOKS=true'
 
 }
 
 test_jenkins_curl() {
     JENKINS_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}"
-    assert_equals "$(QUIET=true VERBOSE=false jenkins_curl -X POST "${JENKINS_URL}api/xml" 3>&1 >/dev/null | grep '^X-Content-Type-Options:')" "X-Content-Type-Options: nosniff
-"
+    assert_equals "$(QUIET=true VERBOSE=false jenkins_curl -X POST "${JENKINS_URL}api/xml" 3>&1 >/dev/null | tr -d '\r' | grep '^X-Content-Type-Options:')" "X-Content-Type-Options: nosniff"
 }

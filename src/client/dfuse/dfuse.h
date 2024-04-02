@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,10 +17,9 @@
 #include <gurt/atomic.h>
 #include <gurt/slab.h>
 
-#include "daos.h"
-#include "daos_fs.h"
-
-#include "dfs_internal.h"
+#include <daos.h>
+#include <daos_fs.h>
+#include <daos/dfs_lib_int.h>
 
 #include "dfuse_common.h"
 
@@ -28,18 +27,21 @@ struct dfuse_info {
 	struct fuse_session *di_session;
 	char                *di_group;
 	char                *di_mountpoint;
-	uint32_t             di_thread_count;
+	int32_t              di_thread_count;
 	uint32_t             di_eq_count;
 	bool                 di_threaded;
 	bool                 di_foreground;
 	bool                 di_caching;
 	bool                 di_multi_user;
 	bool                 di_wb_cache;
+	bool                 di_read_only;
 
 	/* Per process spinlock
 	 * This is used to lock readdir against closedir where they share a readdir handle,
 	 * so this could be per inode however that's lots of additional memory and the locking
 	 * is only needed for minimal list management so isn't locked often or for long.
+	 *
+	 * Also used for the historic lists for disconnected containers on pool handles.
 	 */
 	pthread_spinlock_t   di_lock;
 
@@ -50,6 +52,9 @@ struct dfuse_info {
 	struct d_hash_table  dpi_iet;
 	/** Hash table of open pools */
 	struct d_hash_table  di_pool_table;
+
+	d_list_t             di_pool_historic;
+
 	/** Next available inode number */
 	ATOMIC uint64_t      di_ino_next;
 	bool                 di_shutdown;
@@ -146,9 +151,6 @@ struct dfuse_obj_hdl {
 	struct dfuse_readdir_hdl *doh_rd;
 
 	ATOMIC uint32_t           doh_il_calls;
-
-	/** Number of active readdir operations */
-	ATOMIC uint32_t           doh_readdir_number;
 
 	ATOMIC uint64_t           doh_write_count;
 
@@ -314,6 +316,23 @@ struct dfuse_readdir_hdl {
 	 * readers from sharing the handle
 	 */
 	bool                       drh_valid;
+
+	/* Locking:
+	 * There can be multiple readers from the same handle concurrently, to do this use
+	 * read/write locks.
+	 * Initially a read lock is taken and the cache is checked, if anything is present then the
+	 * contents are returned and the lock dropped.
+	 * Then a write lock is taken and the cache is checked, if anything is present then the lock
+	 * is dropped and a read lock is taken, goto above.
+	 * If there is nothing in the cache when the write lock is taken then the cache is extended.
+	 * "plus" calls however require inode references and these may not be held by cache entries,
+	 * therefore track how many cache entries do not hold hash table references and for
+	 * readdir_plus calls where there are cache entries without references then hold a write
+	 * lock from the start.
+	 */
+	pthread_rwlock_t           drh_lock;
+
+	uint32_t                   drh_no_ref_count;
 };
 
 /* Drop a readdir handle from a open directory handle.
@@ -387,30 +406,38 @@ struct dfuse_event {
 	struct stat de_attr;
 };
 
-extern struct dfuse_inode_ops dfuse_dfs_ops;
-extern struct dfuse_inode_ops dfuse_cont_ops;
-extern struct dfuse_inode_ops dfuse_pool_ops;
+extern const struct dfuse_inode_ops dfuse_dfs_ops;
+extern const struct dfuse_inode_ops dfuse_cont_ops;
+extern const struct dfuse_inode_ops dfuse_pool_ops;
+
+struct fuse_session *
+dfuse_session_new(struct fuse_args *args, struct dfuse_info *dfuse_info);
 
 /** Pool information
  *
- * This represents a pool that DFUSE is accessing.  All pools contain
- * a hash table of open containers.
+ * This represents a pool that DFUSE is accessing.  All pools contain a hash table of open
+ * containers.  After a pool is disconnected this struct may be kept on a historic list forever
+ * in order to remember the inode numbers allocated, as this struct is smaller the "core" method
+ * used for containers is not used here.
  *
  * uuid may be NULL for root inode where there is no pool.
- *
  */
 struct dfuse_pool {
 	/** UUID of the pool */
-	uuid_t              dfp_pool;
+	uuid_t               dfp_uuid;
 	/** Pool handle */
-	daos_handle_t       dfp_poh;
+	daos_handle_t        dfp_poh;
 	/** Hash table entry in dpi_pool_table */
-	d_list_t            dfp_entry;
-	/** Hash table reference count */
-	ATOMIC uint32_t     dfp_ref;
+	d_list_t             dfp_entry;
 
 	/** Hash table of open containers in pool */
-	struct d_hash_table dfp_cont_table;
+	struct d_hash_table *dfp_cont_table;
+
+	/** List of no longer accessed containers */
+	d_list_t             dfp_historic;
+
+	/** Hash table reference count */
+	ATOMIC uint32_t      dfp_ref;
 };
 
 /* Statistics that dfuse keeps per container.  Logged at umount and can be queried through
@@ -428,6 +455,7 @@ struct dfuse_pool {
 	ACTION(UNLINK)                                                                             \
 	ACTION(READDIR)                                                                            \
 	ACTION(SYMLINK)                                                                            \
+	ACTION(READLINK)                                                                           \
 	ACTION(OPENDIR)                                                                            \
 	ACTION(SETXATTR)                                                                           \
 	ACTION(GETXATTR)                                                                           \
@@ -448,16 +476,33 @@ enum dfuse_stat_id {
 
 /** Container information
  *
- * This represents a container that DFUSE is accessing.  All containers will have a valid dfs
- * handle.
+ * This represents something that dfuse is present to the user, either a container or the root of
+ * a pool, in which case uuid is NULL and coh is not set.
+ *
+ * Initially a struct dfuse_cont is allocated and used, however once complete then there may be a
+ * need to keep the ino around for reuse, in which case the struct is re-allocated to just keep
+ * the dfuse_cont_core element.
  *
  * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's members.
- *
- * uuid may be NULL for pool inodes.
  */
+struct dfuse_cont_core {
+	/** Hash table entry in dfp_cont_table */
+	d_list_t      dfcc_entry;
+
+	/** UUID of the container */
+	uuid_t        dfcc_uuid;
+
+	/** Container handle */
+	daos_handle_t dfcc_coh;
+
+	/** Inode number of the root of this container */
+	ino_t         dfcc_ino;
+};
+
 struct dfuse_cont {
+	struct dfuse_cont_core  core;
 	/** Fuse handlers to use for this container */
-	struct dfuse_inode_ops *dfs_ops;
+	const struct dfuse_inode_ops *dfs_ops;
 
 	/** Pointer to parent pool, where a reference is held */
 	struct dfuse_pool      *dfs_dfp;
@@ -465,19 +510,11 @@ struct dfuse_cont {
 	/** dfs mount handle */
 	dfs_t                  *dfs_ns;
 
-	/** UUID of the container */
-	uuid_t                  dfs_cont;
-
 	/** Container handle */
 	daos_handle_t           dfs_coh;
 
-	/** Hash table entry entry in dfp_cont_table */
-	d_list_t                dfs_entry;
 	/** Hash table reference count */
 	ATOMIC uint32_t         dfs_ref;
-
-	/** Inode number of the root of this container */
-	ino_t                   dfs_ino;
 
 	ATOMIC uint64_t         dfs_stat_value[DS_LIMIT];
 
@@ -487,8 +524,17 @@ struct dfuse_cont {
 	double                  dfc_dentry_dir_timeout;
 	double                  dfc_ndentry_timeout;
 	double                  dfc_data_timeout;
+	bool                    dfc_data_otoc;
 	bool                    dfc_direct_io_disable;
+
+	/* Set to true if the inode was allocated to this structure, so should be kept on close*/
+	bool                    dfc_save_ino;
 };
+
+#define dfs_entry core.dfcc_entry
+#define dfc_uuid  core.dfcc_uuid
+#define dfs_ino   core.dfcc_ino
+#define dfs_coh   core.dfcc_coh
 
 #define DFUSE_IE_STAT_ADD(_ie, _stat)                                                              \
 	atomic_fetch_add_relaxed(&(_ie)->ie_dfs->dfs_stat_value[(_stat)], 1)
@@ -496,13 +542,21 @@ struct dfuse_cont {
 void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
 
+/* Connect to a container via a label
+ * Called either for labels on the command line or via dfuse_cont_get_handle() if opening via uuid
+ *
+ * Returns a system error code.
+ */
 int
-dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
-			 struct dfuse_cont **_dfs);
-
-int
-dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *cont,
+dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const char *label,
 		struct dfuse_cont **_dfs);
+
+/* Returns a connection for a container uuid, connecting as required.
+ * Takes a ref on the container and returns a system error code.
+ */
+int
+dfuse_cont_get_handle(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t cont,
+		      struct dfuse_cont **_dfc);
 
 /* Connect to a pool via either a label or uuid.
  *
@@ -554,9 +608,6 @@ dfuse_fs_fini(struct dfuse_info *dfuse_info);
 
 extern int
 dfuse_loop(struct dfuse_info *dfuse_info);
-
-extern
-struct fuse_lowlevel_ops dfuse_ops;
 
 /* Helper macros for open() and creat() to log file access modes */
 #define LOG_MODE(HANDLE, FLAGS, MODE) do {			\
@@ -619,184 +670,233 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_UNSUPPORTED_OPEN_FLAGS (DFUSE_UNSUPPORTED_CREATE_FLAGS | \
 					O_CREAT | O_EXCL)
 
+/* Macros to check type in other macros.  Check for IE, OH, IE or OH or and Dfuse Type */
+
+#define IS_IE(N) _Generic((N), struct dfuse_inode_entry *: 1, default: 0)
+#define IS_OH(N) _Generic((N), struct dfuse_obj_hdl *: 1, default: 0)
+#define IS_IEOH(N)                                                                                 \
+	_Generic((N), struct dfuse_inode_entry *: 1, struct dfuse_obj_hdl *: 1, default: 0)
+
+#define IS_DFT(N)                                                                                  \
+	_Generic((N),                                                                              \
+	    struct dfuse_inode_entry *: 1,                                                         \
+	    struct dfuse_obj_hdl *: 1,                                                             \
+	    struct dfuse_info *: 1,                                                                \
+	    default: 0)
+
+/* Macros to reply to fuse requests.
+ * As fuse holds a reference on inode or open handle for the duration of a request then after the
+ * reply to the kernel then no reference is held any more and therefore without dfuse taking an
+ * additional reference it is not safe to access the object the request was for.  Therefore these
+ * macros take a inode or open file handle pointer and set it to NULL before replying to the kernel.
+ */
+
 #define DFUSE_REPLY_ERR_RAW(desc, req, status)                                                     \
 	do {                                                                                       \
 		int __err = status;                                                                \
 		int __rc;                                                                          \
+		_Static_assert(IS_DFT(desc), "Param is not correct");                              \
 		if (__err == 0) {                                                                  \
-			DFUSE_TRA_ERROR(desc, "Invalid call to fuse_reply_err: 0");                \
 			__err = EIO;                                                               \
+			DHS_ERROR(desc, __err, "Invalid call to fuse_reply_err: 0");               \
 		}                                                                                  \
 		if (__err == EIO || __err == EINVAL)                                               \
-			DFUSE_TRA_WARNING(desc, "Returning: %d (%s)", __err, strerror(__err));     \
+			DHS_WARN(desc, __err, "Returning");                                        \
 		else                                                                               \
 			DFUSE_TRA_DEBUG(desc, "Returning: %d (%s)", __err, strerror(__err));       \
+		if (IS_IEOH(desc))                                                                 \
+			(desc) = NULL;                                                             \
 		__rc = fuse_reply_err(req, __err);                                                 \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_err() returned: %d (%s)", __rc,          \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
 	} while (0)
 
-#define DFUSE_REPLY_ZERO(desc, req)                                                                \
+#define DFUSE_REPLY_ZERO(_ie, req)                                                                 \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning 0");                                              \
-		__rc = fuse_reply_err(req, 0);                                                     \
+		DFUSE_TRA_DEBUG(_ie, "Returning 0");                                               \
+		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		(_ie) = NULL;                                                                      \
+		__rc  = fuse_reply_err(req, 0);                                                    \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_err() returned: %d: (%s)", __rc,         \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
 	} while (0)
 
+/* This zeros _oh->doh_ie rather than _oh directly */
+#define DFUSE_REPLY_ZERO_OH(_oh, req)                                                              \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(_oh, "Returning 0");                                               \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		(_oh)->doh_ie = NULL;                                                              \
+		__rc          = fuse_reply_err(req, 0);                                            \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
+	} while (0)
+
+/* This caller can use &ie->ie_stat as attr so do not set ie to NULL until after the reply call. */
 #define DFUSE_REPLY_ATTR(ie, req, attr)                                                            \
 	do {                                                                                       \
 		int    __rc;                                                                       \
 		double timeout = 0;                                                                \
-		if (atomic_load_relaxed(&(ie)->ie_open_count) == 0) {                              \
+		if (atomic_load_relaxed(&(ie)->ie_il_count) == 0) {                                \
 			timeout = (ie)->ie_dfs->dfc_attr_timeout;                                  \
 			dfuse_mcache_set_time(ie);                                                 \
 		}                                                                                  \
-		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %.1lf",   \
 				(attr)->st_ino, (attr)->st_mode, (attr)->st_size, timeout);        \
 		__rc = fuse_reply_attr(req, attr, timeout);                                        \
+		(ie) = NULL;                                                                       \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(ie, "fuse_reply_attr() returned: %d (%s)", __rc,           \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_attr() error");                                \
 	} while (0)
 
 #define DFUSE_REPLY_ATTR_FORCE(ie, req, timeout)                                                   \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
+		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %.1lf",   \
 				(ie)->ie_stat.st_ino, (ie)->ie_stat.st_mode,                       \
 				(ie)->ie_stat.st_size, timeout);                                   \
 		__rc = fuse_reply_attr(req, &ie->ie_stat, timeout);                                \
+		(ie) = NULL;                                                                       \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(ie, "fuse_reply_attr() returned: %d (%s)", __rc,           \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_attr() error");                                \
 	} while (0)
 
-#define DFUSE_REPLY_READLINK(ie, req, path)                                                        \
+#define DFUSE_REPLY_READLINK(_ie, req, path)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(ie, "Returning target '%s'", path);                                \
-		__rc = fuse_reply_readlink(req, path);                                             \
+		DFUSE_TRA_DEBUG(_ie, "Returning target '%s'", path);                               \
+		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		(_ie) = NULL;                                                                      \
+		__rc  = fuse_reply_readlink(req, path);                                            \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(ie, "fuse_reply_readlink() returned: %d (%s)", __rc,       \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_readlink() error");                            \
+	} while (0)
+
+/* Do not set desc to NULL until after the reply */
+#define DFUSE_REPLY_BUFQ(desc, req, buf, size)                                                     \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		_Static_assert(IS_IEOH(desc), "Param is not correct");                             \
+		__rc   = fuse_reply_buf(req, buf, size);                                           \
+		(desc) = NULL;                                                                     \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_buf() error");                                 \
 	} while (0)
 
 #define DFUSE_REPLY_BUF(desc, req, buf, size)                                                      \
 	do {                                                                                       \
-		int __rc;                                                                          \
 		DFUSE_TRA_DEBUG(desc, "Returning buffer(%p %#zx)", buf, size);                     \
-		__rc = fuse_reply_buf(req, buf, size);                                             \
-		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_buf() returned: %d (%s)", __rc,          \
-					strerror(-__rc));                                          \
+		DFUSE_REPLY_BUFQ(desc, req, buf, size);                                            \
 	} while (0)
 
-#define DFUSE_REPLY_BUFQ(desc, req, buf, size)                                                     \
+#define DFUSE_REPLY_XATTR(_ie, req, size)                                                          \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		__rc = fuse_reply_buf(req, buf, size);                                             \
+		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		(_ie) = NULL;                                                                      \
+		__rc  = fuse_reply_xattr(req, size);                                               \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_buf() returned: %d (%s)", __rc,          \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_xattr() error");                               \
 	} while (0)
 
-#define DFUSE_REPLY_WRITE(desc, req, bytes)                                                        \
+#define DFUSE_REPLY_WRITE(_oh, req, bytes)                                                         \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning write(%#zx)", bytes);                             \
-		__rc = fuse_reply_write(req, bytes);                                               \
+		DFUSE_TRA_DEBUG(_oh, "Returning write(%#zx)", bytes);                              \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		(_oh) = NULL;                                                                      \
+		__rc  = fuse_reply_write(req, bytes);                                              \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_write() returned: %d (%s)", __rc,        \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_write() error");                               \
 	} while (0)
 
-#define DFUSE_REPLY_OPEN(oh, req, _fi)                                                             \
+/* See open.c for why _oh is not set to NULL here */
+#define DFUSE_REPLY_OPEN(_oh, req, _fi)                                                            \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(oh, "Returning open, keep_cache %d", (_fi)->keep_cache);           \
+		DFUSE_TRA_DEBUG(_oh, "Returning open, keep_cache %d", (_fi)->keep_cache);          \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
 		__rc = fuse_reply_open(req, _fi);                                                  \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(oh, "fuse_reply_open() returned: %d (%s)", __rc,           \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
 	} while (0)
 
-#if HAVE_CACHE_READDIR
-
-#define DFUSE_REPLY_OPEN_DIR(oh, req, _fi)                                                         \
+#define DFUSE_REPLY_OPEN_DIR(_oh, req, _fi)                                                        \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(oh, "Returning open directory, use_cache %d keep_cache %d",        \
+		DFUSE_TRA_DEBUG(_oh, "Returning open directory, use_cache %d keep_cache %d",       \
 				(_fi)->cache_readdir, (_fi)->keep_cache);                          \
-		__rc = fuse_reply_open(req, _fi);                                                  \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		(_oh) = NULL;                                                                      \
+		__rc  = fuse_reply_open(req, _fi);                                                 \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(oh, "fuse_reply_open() returned: %d (%s)", __rc,           \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
 	} while (0)
 
-#else
-
-#define DFUSE_REPLY_OPEN_DIR(oh, req, _fi)                                                         \
+#define DFUSE_REPLY_CREATE(inode, req, entry, fi)                                                  \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(oh, "Returning open directory");                                   \
-		__rc = fuse_reply_open(req, _fi);                                                  \
+		DFUSE_TRA_DEBUG(inode, "Returning create");                                        \
+		ival_update_inode(inode, (entry).entry_timeout);                                   \
+		(inode) = NULL;                                                                    \
+		__rc    = fuse_reply_create(req, &entry, fi);                                      \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(oh, "fuse_reply_open returned: %d (%s)", __rc,             \
-					strerror(-__rc));                                          \
-	} while (0)
-
-#endif
-
-#define DFUSE_REPLY_CREATE(desc, req, entry, fi)                                                   \
-	do {                                                                                       \
-		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning create");                                         \
-		__rc = fuse_reply_create(req, &entry, fi);                                         \
-		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_create() returned: %d (%s)", __rc,       \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_create() error");                              \
 	} while (0)
 
 #define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %#zx",            \
-				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size);  \
 		if ((entry).attr_timeout > 0) {                                                    \
 			(inode)->ie_stat = (entry).attr;                                           \
 			dfuse_mcache_set_time(inode);                                              \
 		}                                                                                  \
-		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi timeout %lf", \
+		ival_update_inode(inode, (entry).entry_timeout);                                   \
+		DFUSE_TRA_DEBUG(inode,                                                             \
+				"Returning entry inode %#lx mode %#o size %#zx et %.1lf at %.1lf", \
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size,   \
-				(entry).attr_timeout);                                             \
-		__rc = fuse_reply_entry(req, &entry);                                              \
+				(entry).entry_timeout, (entry).attr_timeout);                      \
+		(inode) = NULL;                                                                    \
+		__rc    = fuse_reply_entry(req, &entry);                                           \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(inode, "fuse_reply_entry() returned: %d (%s)", __rc,       \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_entry() error");                               \
 	} while (0)
 
-#define DFUSE_REPLY_STATFS(desc, req, stat)                                                        \
+#define DFUSE_REPLY_NO_ENTRY(parent, req, timeout)                                                 \
 	do {                                                                                       \
-		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning statfs");                                         \
-		__rc = fuse_reply_statfs(req, stat);                                               \
+		int                     __rc;                                                      \
+		struct fuse_entry_param _entry = {};                                               \
+		_entry.entry_timeout           = timeout;                                          \
+		DFUSE_TRA_DEBUG(parent, "Returning negative entry parent %#lx et %.1lf",           \
+				(parent)->ie_stat.st_ino, _entry.entry_timeout);                   \
+		(parent) = NULL;                                                                   \
+		__rc     = fuse_reply_entry(req, &_entry);                                         \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_statfs() returned: %d (%s)", __rc,       \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_entry() error");                               \
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL_SIZE(desc, req, arg, size)                                               \
+#define DFUSE_REPLY_STATFS(_ie, req, stat)                                                         \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning ioctl size %zi", size);                           \
-		__rc = fuse_reply_ioctl(req, 0, arg, size);                                        \
+		DFUSE_TRA_DEBUG(_ie, "Returning statfs");                                          \
+		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		(_ie) = NULL;                                                                      \
+		__rc  = fuse_reply_statfs(req, stat);                                              \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_ioctl() returned: %d (%s)", __rc,        \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_statfs() error");                              \
+	} while (0)
+
+#define DFUSE_REPLY_IOCTL_SIZE(_oh, req, arg, size)                                                \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(_oh, "Returning ioctl size %zi", size);                            \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		(_oh) = NULL;                                                                      \
+		__rc  = fuse_reply_ioctl(req, 0, arg, size);                                       \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_ioctl() error");                               \
 	} while (0)
 
 #define DFUSE_REPLY_IOCTL(desc, req, arg) DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
@@ -847,6 +947,9 @@ struct dfuse_inode_entry {
 	/* Time of last kernel cache metadata update */
 	struct timespec           ie_mcache_last_update;
 
+	/* Time of last kernel cache dentry update */
+	struct timespec           ie_dentry_last_update;
+
 	/* Time of last kernel cache data update, also used for kernel readdir caching. */
 	struct timespec           ie_dcache_last_update;
 
@@ -868,9 +971,6 @@ struct dfuse_inode_entry {
 	/* Readdir handle, if present.  May be shared */
 	struct dfuse_readdir_hdl *ie_rd_hdl;
 
-	/** Number of active readdir operations */
-	ATOMIC uint32_t           ie_readdir_number;
-
 	/** file was truncated from 0 to a certain size */
 	bool                      ie_truncated;
 
@@ -886,8 +986,12 @@ struct dfuse_inode_entry {
 	 * Checked on open of a file to determine if pre-caching is used.
 	 */
 	ATOMIC bool               ie_linear_read;
+
+	/* Entry on the evict list */
+	d_list_t                  ie_evict_entry;
 };
 
+/* Lookup an inode and take a ref on it. */
 static inline struct dfuse_inode_entry *
 dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)
 {
@@ -900,11 +1004,46 @@ dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)
 	return container_of(rlink, struct dfuse_inode_entry, ie_htl);
 }
 
+/* Look an inode but do not take a ref on it.
+ * This is for synchronous fuse operations where the kernel holds a reference for the duration
+ * of the operation.
+ */
+static inline struct dfuse_inode_entry *__attribute__((returns_nonnull))
+dfuse_inode_lookup_nf(struct dfuse_info *dfuse_info, fuse_ino_t ino)
+{
+	struct dfuse_inode_entry *ie;
+	d_list_t                 *rlink;
+
+	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
+	D_ASSERTF(rlink != NULL, "Unable to find hash table entry for %#lx", ino);
+
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
+
+	return ie;
+}
+
+/* Drop a reference on an inode.  This may result in ie being freed so needs to go through the hash
+ * table, but optimistically check using atomics first.
+ */
 static inline void
 dfuse_inode_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {
+	uint32_t oldref;
+
+	oldref = atomic_load_relaxed(&ie->ie_ref);
+
+	if (oldref > 1) {
+		uint32_t newref = oldref - 1;
+
+		if (atomic_compare_exchange(&ie->ie_ref, oldref, newref))
+			return;
+	}
+
 	d_hash_rec_decref(&dfuse_info->dpi_iet, &ie->ie_htl);
 }
+
+/* Drop a reference on an inode. */
 
 extern char *duns_xattr_name;
 
@@ -947,6 +1086,36 @@ dfuse_mcache_evict(struct dfuse_inode_entry *ie);
 /* Check the metadata cache setting against a given timeout, and return time left */
 bool
 dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+/* Check the dentry cache setting against a given timeout, and return time left */
+bool
+dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+/* inval.c */
+
+int
+ival_add_cont_buckets(struct dfuse_cont *dfc);
+
+void
+ival_dec_cont_buckets(struct dfuse_cont *dfc);
+
+void
+ival_drop_inode(struct dfuse_inode_entry *inode);
+
+int
+ival_update_inode(struct dfuse_inode_entry *inode, double timeout);
+
+int
+ival_init(struct dfuse_info *dfuse_info);
+
+int
+ival_thread_start(struct dfuse_info *dfuse_info);
+
+void
+ival_thread_stop();
+
+void
+ival_fini();
 
 /* Data caching functions */
 

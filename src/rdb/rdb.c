@@ -684,7 +684,7 @@ rdb_resign(struct rdb *db, uint64_t term)
  *
  * \param[in]	db	database
  *
- * \retval -DER_INVAL	not a voting replica
+ * \retval -DER_NO_PERM	not a voting replica or might violate a lease
  */
 int
 rdb_campaign(struct rdb *db)
@@ -810,6 +810,9 @@ rdb_chkpt_wait(void *arg, uint64_t wait_id, uint64_t *commit_id)
 	if (store->stor_ops->so_wal_id_cmp(store, dcr->dcr_commit_id, wait_id) >= 0)
 		goto out;
 
+	if (store->store_faulty)
+		goto out;
+
 	D_DEBUG(DB_MD, DF_DB ": wait for commit >= " DF_X64 "\n", DP_DB(db), wait_id);
 	ABT_mutex_lock(db->d_chkpt_mutex);
 	dcr->dcr_waiting = 1;
@@ -859,7 +862,8 @@ rdb_chkpt_update(void *arg, uint64_t commit_id, uint32_t used_blocks, uint32_t t
 	}
 
 	/** Checkpoint ULT is waiting for a commit, check if we can wake it up */
-	if (store->stor_ops->so_wal_id_cmp(store, commit_id, dcr->dcr_wait_id) >= 0) {
+	if (store->store_faulty ||
+	    store->stor_ops->so_wal_id_cmp(store, commit_id, dcr->dcr_wait_id) >= 0) {
 		dcr->dcr_waiting = 0;
 		D_DEBUG(DB_MD,
 			DF_DB ": update commit = " DF_X64 ", waking checkpoint waiting for " DF_X64
@@ -1023,4 +1027,21 @@ rdb_chkptd_start(struct rdb *db)
 error:
 	rdb_chkptd_stop(db);
 	return rc;
+}
+
+/**
+ * Upgrade the durable format of the VOS pool underlying \a db to
+ * \a df_version.
+ *
+ * Exposing "VOS pool" makes this API function hacky, and probably indicates
+ * that the upgrade model is not quite right.
+ *
+ * \param[in]	db		database
+ * \param[in]	df_version	VOS durable format version (e.g.,
+ *				VOS_POOL_DF_2_6)
+ */
+int
+rdb_upgrade_vos_pool(struct rdb *db, uint32_t df_version)
+{
+	return vos_pool_upgrade(db->d_pool, df_version);
 }

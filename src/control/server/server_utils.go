@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -196,34 +196,81 @@ func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.Fa
 	// Mercury will now support the new OFI_DOMAIN environment variable so
 	// that we can specify the correct device for each.
 	if !cfg.HasEnvVar("OFI_DOMAIN") {
-		fi, err := fis.GetInterfaceOnNetDevice(cfg.Fabric.Interface, cfg.Fabric.Provider)
+		interfaces, err := cfg.Fabric.GetInterfaces()
 		if err != nil {
-			return errors.Wrapf(err, "unable to determine device domain for %s", cfg.Fabric.Interface)
+			return err
 		}
-		log.Debugf("setting OFI_DOMAIN=%s for %s", fi.Name, cfg.Fabric.Interface)
-		envVar := "OFI_DOMAIN=" + fi.Name
+
+		providers, err := cfg.Fabric.GetProviders()
+		if err != nil {
+			return err
+		}
+
+		if len(providers) != len(interfaces) {
+			return errors.New("number of providers not equal to number of interfaces")
+		}
+
+		domains := []string{}
+
+		for i, p := range providers {
+			fi, err := fis.GetInterfaceOnNetDevice(interfaces[i], p)
+			if err != nil {
+				return errors.Wrapf(err, "unable to determine device domain for %s", interfaces[i])
+			}
+			domains = append(domains, fi.Name)
+		}
+
+		domain := strings.Join(domains, engine.MultiProviderSeparator)
+		log.Debugf("setting OFI_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
+		envVar := "OFI_DOMAIN=" + domain
 		cfg.WithEnvVars(envVar)
 	}
 
 	return nil
 }
 
-func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) (hardware.NetDevClass, error) {
-	var netDevClass hardware.NetDevClass
+func getFabricNetDevClass(cfg *config.Server, fis *hardware.FabricInterfaceSet) ([]hardware.NetDevClass, error) {
+	netDevClass := []hardware.NetDevClass{}
 	for index, engine := range cfg.Engines {
-		fi, err := fis.GetInterfaceOnNetDevice(engine.Fabric.Interface, engine.Fabric.Provider)
+		cfgIfaces, err := engine.Fabric.GetInterfaces()
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 
-		ndc := fi.DeviceClass
-		if index == 0 {
-			netDevClass = ndc
-			continue
+		provs, err := engine.Fabric.GetProviders()
+		if err != nil {
+			return nil, err
 		}
-		if ndc != netDevClass {
-			return 0, config.FaultConfigInvalidNetDevClass(index, netDevClass,
-				ndc, engine.Fabric.Interface)
+
+		if len(provs) == 1 {
+			for i := range cfgIfaces {
+				if i == 0 {
+					continue
+				}
+				provs = append(provs, provs[0])
+			}
+		}
+
+		if len(cfgIfaces) != len(provs) {
+			return nil, fmt.Errorf("number of ifaces (%d) and providers (%d) not equal",
+				len(cfgIfaces), len(provs))
+		}
+
+		for i, cfgIface := range cfgIfaces {
+			fi, err := fis.GetInterfaceOnNetDevice(cfgIface, provs[i])
+			if err != nil {
+				return nil, err
+			}
+
+			ndc := fi.DeviceClass
+			if index == 0 {
+				netDevClass = append(netDevClass, ndc)
+				continue
+			}
+			if ndc != netDevClass[i] {
+				return nil, config.FaultConfigInvalidNetDevClass(index, netDevClass[i],
+					ndc, engine.Fabric.Interface)
+			}
 		}
 	}
 	return netDevClass, nil
@@ -350,77 +397,6 @@ func prepBdevStorage(srv *server, iommuEnabled bool) error {
 	//       facilitate cancellation.
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
 		srv.log.Errorf("automatic NVMe prepare failed: %s", err)
-	}
-
-	return nil
-}
-
-// scanBdevStorage performs discovery and validates existence of configured NVMe SSDs.
-func scanBdevStorage(srv *server) (*storage.BdevScanResponse, error) {
-	defer srv.logDuration(track("time to scan bdev storage"))
-
-	if srv.cfg.DisableHugepages {
-		srv.log.Debugf("skip nvme scan as hugepages have been disabled in config")
-		return &storage.BdevScanResponse{}, nil
-	}
-
-	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{
-		DeviceList: getBdevCfgsFromSrvCfg(srv.cfg).Bdevs(),
-	})
-	if err != nil {
-		err = errors.Wrap(err, "NVMe Scan Failed")
-		srv.log.Errorf("%s", err)
-		return nil, err
-	}
-
-	return nvmeScanResp, nil
-}
-
-func setEngineBdevs(engine *EngineInstance, scanResp *storage.BdevScanResponse, lastEngineIdx, lastBdevCount *int) error {
-	badInput := ""
-	switch {
-	case engine == nil:
-		badInput = "engine"
-	case scanResp == nil:
-		badInput = "scanResp"
-	case lastEngineIdx == nil:
-		badInput = "lastEngineIdx"
-	case lastBdevCount == nil:
-		badInput = "lastBdevCount"
-	}
-	if badInput != "" {
-		return errors.New("nil input param: " + badInput)
-	}
-
-	if err := engine.storage.SetBdevCache(*scanResp); err != nil {
-		return errors.Wrap(err, "setting engine storage bdev cache")
-	}
-
-	// After engine's bdev cache has been set, the cache will only contain details of bdevs
-	// identified in the relevant engine config and device addresses will have been verified
-	// against NVMe scan results. As any VMD endpoint addresses will have been replaced with
-	// backing device addresses, device counts will reflect the number of physical (as opposed
-	// to logical) bdevs and engine bdev counts can be accurately compared.
-
-	eIdx := engine.Index()
-	bdevCache := engine.storage.GetBdevCache()
-	newNrBdevs := len(bdevCache.Controllers)
-
-	// Update last recorded counters if this is the first update or if the number of bdevs is
-	// unchanged. If bdev count differs between engines, return fault.
-	switch {
-	case *lastEngineIdx < 0:
-		if *lastBdevCount >= 0 {
-			return errors.New("expecting both lastEngineIdx and lastBdevCount to be unset")
-		}
-		*lastEngineIdx = int(eIdx)
-		*lastBdevCount = newNrBdevs
-	case *lastBdevCount < 0:
-		return errors.New("expecting both lastEngineIdx and lastBdevCount to be set")
-	case newNrBdevs == *lastBdevCount:
-		*lastEngineIdx = int(eIdx)
-	default:
-		return config.FaultConfigBdevCountMismatch(int(eIdx), newNrBdevs, *lastEngineIdx, *lastBdevCount)
 	}
 
 	return nil
@@ -594,9 +570,11 @@ func registerEngineEventCallbacks(srv *server, engine *EngineInstance, allStarte
 	engine.OnStorageReady(func(_ context.Context) error {
 		srv.log.Debugf("engine %d: storage ready", engine.Index())
 
-		// Attempt to remove unused hugepages, log error only.
-		if err := cleanEngineHugepages(srv); err != nil {
-			srv.log.Errorf(err.Error())
+		if !srv.cfg.DisableHugepages {
+			// Attempt to remove unused hugepages, log error only.
+			if err := cleanEngineHugepages(srv); err != nil {
+				srv.log.Errorf(err.Error())
+			}
 		}
 
 		// Retrieve up-to-date meminfo to check resource availability.

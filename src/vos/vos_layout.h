@@ -102,7 +102,7 @@ enum vos_gc_type {
 #define VOS_POOL_FEAT_2_4                       (VOS_POOL_FEAT_CHK | VOS_POOL_FEAT_DYN_ROOT)
 
 /** 2.6 features */
-#define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_EMB_VALUE | VOS_POOL_FEAT_FLAT_DKEY)
+#define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_FLAT_DKEY | VOS_POOL_FEAT_EMBED_FIRST)
 
 /**
  * Durable format for VOS pool
