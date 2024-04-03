@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -47,6 +47,7 @@ class BasicSnapshot(TestWithServers):
         # Set up the pool and container.
         pool = add_pool(self)
         container = add_container(self, pool)
+        container.open()
 
         # create an object and write some data into it
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
@@ -74,7 +75,7 @@ class BasicSnapshot(TestWithServers):
             while more_transactions:
                 size = self.random.randint(1, 250) + 1
                 new_data = get_random_bytes(size)
-                new_obj = self.container.write_an_obj(
+                new_obj = container.container.write_an_obj(
                     new_data, size, dkey, akey, obj_cls=obj_cls)
                 new_obj.close()
                 more_transactions -= 1
@@ -117,3 +118,5 @@ class BasicSnapshot(TestWithServers):
             self.log.info("Snapshot successfully destroyed")
         except DaosApiError as error:
             self.fail(str(error))
+
+        self.log.info('Test passed')

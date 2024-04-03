@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -19,25 +19,41 @@ class ObjOpenBadParam(TestWithServers):
     :avocado: recursive
     """
 
-    def initialize_container(self):
-        """Initialize a pool and container with data.
-
-        Raises:
-            DaosTestError: if there was an error writing the object
+    def create_container(self):
+        """Initialize a pool and container.
 
         Returns:
-            TestContainer: the container initialized with data
+            TestContainer: the created container
         """
         self.log_step('Creating a pool')
         pool = add_pool(self)
 
         self.log_step('Creating a container')
-        container = add_container(self, pool)
+        return add_container(self, pool)
+
+    def populate_container(self, container):
+        """Populate a container with data.
+
+        Args:
+            container (TestContainer): the container to populate with data
+
+        Returns:
+            DaosObj: the object containing the data
+        """
+        data = b"a string that I want to stuff into an object"
+        data_size = len(data) + 1
+        dkey = b"this is the dkey"
+        akey = b"this is the akey"
 
         self.log_step('Populating the container with data')
-        container.write_objects(obj_class=2)
-
-        return container
+        container.open()
+        obj = container.container.write_an_obj(data, data_size, dkey, akey, obj_cls=1)
+        read = container.container.read_an_obj(data_size, dkey, akey, obj)
+        if data not in read.value:
+            self.log.info("data: %s", data)
+            self.log.info("read: %s", read.value)
+            self.fail("Error reading back container data, test failed during the initial setup")
+        return obj
 
     def verify_object_open(self, obj, case, code):
         """Attempt to open an object with a bad object handle.
@@ -66,14 +82,14 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_bad_obj_handle
         """
-        container = self.initialize_container()
-        saved_handle = container.written_data[0].obj.obj_handle
-        container.written_data[0].obj.obj_handle = 8675309
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_handle = obj.obj_handle
         try:
-            self.verify_object_open(
-                container.written_data[0].obj, 'with a garbage object handle', '-1002')
+            obj.obj_handle = 8675309
+            self.verify_object_open(obj, 'with a garbage object handle', '-1002')
         finally:
-            container.written_data[0].obj.obj_handle = saved_handle
+            obj.obj_handle = saved_handle
         self.log.info('Test passed')
 
     def test_invalid_container_handle(self):
@@ -87,12 +103,12 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_invalid_container_handle
         """
-        container = self.initialize_container()
+        container = self.create_container()
+        obj = self.populate_container(container)
         saved_coh = container.container.coh
-        container.container.coh = 8675309
         try:
-            self.verify_object_open(
-                container.written_data[0].obj, 'with a garbage container handle', '-1002')
+            container.container.coh = 8675309
+            self.verify_object_open(obj, 'with a garbage container handle', '-1002')
         finally:
             container.container.coh = saved_coh
         self.log.info('Test passed')
@@ -108,13 +124,10 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_closed_container_handle
         """
-        container = self.initialize_container()
+        container = self.create_container()
+        obj = self.populate_container(container)
         container.close()
-        try:
-            self.verify_object_open(
-                container.written_data[0].obj, 'with a closed container handle', '-1002')
-        finally:
-            container.open()
+        self.verify_object_open(obj, 'with a closed container handle', '-1002')
         self.log.info('Test passed')
 
     def test_pool_handle_as_obj_handle(self):
@@ -129,15 +142,14 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_pool_handle_as_obj_handle
         """
-        container = self.initialize_container()
-        saved_handle = container.written_data[0].obj.obj_handle
-        container.written_data[0].obj.obj_handle = container.pool.pool.handle
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_handle = obj.obj_handle
         try:
-            self.verify_object_open(
-                container.written_data[0].obj, 'with a object handle matching the pool handle',
-                '-1002')
+            obj.obj_handle = container.pool.pool.handle
+            self.verify_object_open(obj, 'with a object handle matching the pool handle', '-1002')
         finally:
-            container.written_data[0].obj.obj_handle = saved_handle
+            obj.obj_handle = saved_handle
         self.log.info('Test passed')
 
     def test_null_ranklist(self):
@@ -151,14 +163,14 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_null_ranklist
         """
-        container = self.initialize_container()
-        saved_rank_list = container.written_data[0].obj.tgt_rank_list
-        container.written_data[0].obj.tgt_rank_list = None
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_rank_list = obj.tgt_rank_list
         try:
-            self.verify_object_open(
-                container.written_data[0].obj, 'with a null object rank list', '-1003')
+            obj.tgt_rank_list = None
+            self.verify_object_open(obj, 'with a null object rank list', '-1003')
         finally:
-            container.written_data[0].obj.tgt_rank_list = saved_rank_list
+            obj.tgt_rank_list = saved_rank_list
         self.log.info('Test passed')
 
     def test_null_oid(self):
@@ -172,14 +184,14 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_null_oid
         """
-        container = self.initialize_container()
-        saved_oid = container.written_data[0].obj.c_oid
-        container.written_data[0].obj.c_oid = DaosObjId(0, 0)
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_oid = obj.c_oid
         try:
-            self.verify_object_open(
-                container.written_data[0].obj, 'with a null object id', '-1003')
+            obj.c_oid = DaosObjId(0, 0)
+            self.verify_object_open(obj, 'with a null object id', '-1003')
         finally:
-            container.written_data[0].obj.c_oid = saved_oid
+            obj.c_oid = saved_oid
         self.log.info('Test passed')
 
     def test_null_tgts(self):
@@ -193,14 +205,14 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_null_tgts
         """
-        container = self.initialize_container()
-        saved_ctgts = container.written_data[0].obj.c_tgts
-        container.written_data[0].obj.c_tgts = 0
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_ctgts = obj.c_tgts
         try:
-            self.verify_object_open(
-                container.written_data[0].obj, 'in a container with null tgt', '-1003')
+            obj.c_tgts = 0
+            self.verify_object_open(obj, 'in a container with null tgt', '-1003')
         finally:
-            container.written_data[0].obj.c_tgts = saved_ctgts
+            obj.c_tgts = saved_ctgts
         self.log.info('Test passed')
 
     def test_null_attrs(self):
@@ -214,13 +226,12 @@ class ObjOpenBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjOpenBadParam,test_null_attrs
         """
-        container = self.initialize_container()
-        saved_attr = container.written_data[0].obj.attr
-        container.written_data[0].obj.attr = 0
+        container = self.create_container()
+        obj = self.populate_container(container)
+        saved_attr = obj.attr
         try:
-            self.verify_object_open(
-                container.written_data[0].obj, 'in a container with null object attributes',
-                '-1003')
+            obj.attr = 0
+            self.verify_object_open(obj, 'in a container with null object attributes', '-1003')
         finally:
-            container.written_data[0].obj.attr = saved_attr
+            obj.attr = saved_attr
         self.log.info('Test passed')

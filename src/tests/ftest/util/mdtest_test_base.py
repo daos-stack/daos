@@ -95,7 +95,7 @@ class MdtestBase(DfuseTestBase):
 
         # reset self.container if dfs_destroy is True or None.
         if self.mdtest_cmd.dfs_destroy is not False:
-            self.container = None
+            self.container.skip_cleanup()
         self.stop_dfuse()
 
         return out

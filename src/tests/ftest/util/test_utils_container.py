@@ -446,6 +446,17 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         if self.label.value and self.label_generator:
             self.label.update(self.label_generator.get_label(self.label.value))
 
+    def skip_cleanup(self):
+        """Prevent container from being removed during cleanup.
+
+        Useful for corner case tests where the container no longer exists due to a pool destroy.
+        """
+        self.container = None
+        self.uuid = None
+        self.opened = False
+        self.written_data = []
+        self.epoch = None
+
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
     def create(self, con_in=None):
@@ -463,7 +474,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         if not self.silent.value:
             self.log.info(
                 "Creating a container with pool handle %s",
-                self.pool.pool.handle.value)
+                self.pool.pool.handle.value if hasattr(self.pool.pool.handle, 'value') else
+                self.pool.pool.handle)
         self.container = DaosContainer(self.pool.context)
         result = None
 
@@ -716,7 +728,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 self, self.record_qty.value, self.akey_size.value,
                 self.dkey_size.value, self.data_size.value, rank, obj_class,
                 self.data_array_size.value)
-        self.close()
 
     def read_objects(self, txn=None, test_hints=None):
         """Read the objects from the container and verify they match.
@@ -739,7 +750,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         for data in self.written_data:
             data.debug = self.debug.value
             status &= data.read_object(self, txn, test_hints)
-        self.close()
         return status
 
     def execute_io(self, duration, rank=None, obj_class=None):

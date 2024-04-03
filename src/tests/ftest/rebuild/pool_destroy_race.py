@@ -75,7 +75,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
 
         self.log.info("Destroy pool %s while rebuild is %s", self.pool.uuid, rebuild_state)
         self.pool.destroy()
-        self.container = None
+        self.container.skip_cleanup()
 
         # re-create the pool of full size to verify the space was reclaimed,
         # after re-starting the server on excluded rank

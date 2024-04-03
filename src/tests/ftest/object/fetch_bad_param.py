@@ -1,12 +1,12 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import traceback
 
 from apricot import TestWithServers
-from general_utils import DaosTestError
+from pydaos.raw import DaosApiError
 from test_utils_container import add_container
 from test_utils_pool import add_pool
 
@@ -18,25 +18,36 @@ class ObjFetchBadParam(TestWithServers):
     :avocado: recursive
     """
 
-    def initialize_container(self):
-        """Initialize a pool and container with data.
-
-        Raises:
-            DaosTestError: if there was an error writing the object
+    def create_container(self):
+        """Initialize a pool and container.
 
         Returns:
-            TestContainer: the container initialized with data
+            TestContainer: the created container
         """
         self.log_step('Creating a pool')
         pool = add_pool(self)
 
         self.log_step('Creating a container')
-        container = add_container(self, pool)
+        return add_container(self, pool)
 
+    def populate_container(self, container, data, data_size, dkey, akey):
+        """Populate a container with data.
+
+        Args:
+            container (TestContainer): the container to populate with data
+
+        Returns:
+            DaosObj: the object containing the data
+        """
         self.log_step('Populating the container with data')
-        container.write_objects(obj_class=2)
-
-        return container
+        container.open()
+        obj = container.container.write_an_obj(data, data_size, dkey, akey, None, None, 2)
+        read = container.container.read_an_obj(data_size, dkey, akey, obj)
+        if data not in read.value:
+            self.log.info("data: %s", data)
+            self.log.info("read: %s", read.value)
+            self.fail("Error reading back container data, test failed during the initial setup")
+        return obj
 
     def test_obj_fetch_bad_handle(self):
         """JIRA ID: DAOS-1377
@@ -48,25 +59,29 @@ class ObjFetchBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjFetchBadParam,test_obj_fetch_bad_handle
         """
-        container = self.initialize_container()
+        data = b"a string that I want to stuff into an object"
+        data_size = len(data) + 1
+        dkey = b"this is the dkey"
+        akey = b"this is the akey"
 
-        # trash the handle and read again
-        self.log_step('Attempt to read the data with a bad object handle, expecting -1002')
-        saved_handle = container.written_data[0].obj.obj_handle
-        container.written_data[-1].obj.obj_handle = 99999
+        container = self.create_container()
+        obj = self.populate_container(container, data, data_size, dkey, akey)
+        saved_oh = obj.obj_handle
         try:
-            container.read_objects()
-            self.fail("Test was expected to return a -1002 with a bad object handle but it has not")
-        except DaosTestError as error:
+            # trash the handle and read again
+            obj.obj_handle = 99999
+
+            # expecting this to fail with -1002
+            container.container.read_an_obj(data_size, dkey, akey, obj)
+            self.fail("Test was expected to return a -1002 but it has not.\n")
+
+        except DaosApiError as error:
             if '-1002' not in str(error):
                 self.log.info(error)
                 self.log.info(traceback.format_exc())
-                self.fail(
-                    "Test was expected to return a -1002 with a bad object handle but it has not")
+                self.fail("Test was expected to get -1002 but it has not.\n")
         finally:
-            container.written_data[0].obj = saved_handle
-
-        self.log.info('Test passed')
+            container.container.oh = saved_oh
 
     def test_null_ptrs(self):
         """JIRA ID: DAOS-1377
@@ -78,40 +93,41 @@ class ObjFetchBadParam(TestWithServers):
         :avocado: tags=object
         :avocado: tags=ObjFetchBadParam,test_null_ptrs
         """
-        container = self.initialize_container()
+        data = b"a string that I want to stuff into an object"
+        data_size = len(data) + 1
+        dkey = b"this is the dkey"
+        akey = b"this is the akey"
 
-        self.log_step('Attempt to read the data with a bad dkey, expecting -1003')
-        saved_dkey = container.written_data[0].records[0]["dkey"]
-        container.written_data[0].records[0]["dkey"] = None
+        container = self.create_container()
+        obj = self.populate_container(container, data, data_size, dkey, akey)
         try:
-            container.read_objects()
-            self.fail("Test was expected to get -1003 with a bad dkey but it has not.\n")
-        except DaosTestError as error:
+            # now try it with a bad dkey, expecting this to fail with -1003
+            container.container.read_an_obj(data_size, None, akey, obj)
+            self.fail("Test was expected to return a -1003 but it has not.\n")
+
+        except DaosApiError as error:
             if '-1003' not in str(error):
                 self.log.info(error)
                 self.log.info(traceback.format_exc())
-                self.fail("Test was expected to get -1003 with a bad dkey but it has not.\n")
-        finally:
-            container.written_data[0].records[0]["dkey"] = saved_dkey
+                self.fail("Test was expected to get -1003 but it has not.\n")
 
-        # now try it with a null SGL (iod_size is not set)
-        self.log_step('Attempt to read the data with a null SGL')
         try:
-            container.read_objects(test_hints=['sglnull'])
-        except DaosTestError as error:
+            # now try it with a null SGL (iod_size is not set)
+            test_hints = ['sglnull']
+            container.container.read_an_obj(data_size, dkey, akey, obj, test_hints)
+        except DaosApiError as error:
             self.log.info(error)
             self.log.info(traceback.format_exc())
-            self.fail("Test was expected to pass with a null SGL but it failed.\n")
+            self.fail("Test was expected to pass but failed !\n")
 
-        # now try it with a null iod, expecting this to fail with -1003
-        self.log_step('Attempt to read the data with a null iod, expecting -1003')
         try:
-            container.read_objects(test_hints=['iodnull'])
-            self.fail("Test was expected to get -1003 with a null iod but it has not.\n")
-        except DaosTestError as error:
+            # now try it with a null iod, expecting this to fail with -1003
+            test_hints = ['iodnull']
+            container.container.read_an_obj(data_size, dkey, akey, obj, test_hints)
+            self.fail("Test was expected to return a -1003 but it has not.")
+
+        except DaosApiError as error:
             if '-1003' not in str(error):
                 self.log.info(error)
                 self.log.info(traceback.format_exc())
-                self.fail("Test was expected to get -1003 with a null iod but it has not.\n")
-
-        self.log.info('Test passed')
+                self.fail("Test was expected to get -1003 but it has not.")

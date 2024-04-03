@@ -3,11 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import traceback
-
 from apricot import TestWithServers
 from general_utils import get_random_bytes
-from pydaos.raw import DaosApiError, DaosContainer, DaosSnapshot, c_uuid_to_str
+from pydaos.raw import DaosApiError, DaosSnapshot, c_uuid_to_str
+from test_utils_container import add_container
+from test_utils_pool import add_pool
 
 
 # pylint: disable=broad-except
@@ -29,37 +29,21 @@ class Snapshot(TestWithServers):
     :avocado: recursive
     """
 
-    def setUp(self):
+    def create_container(self):
+        """Create a pool and container.
+
+        Returns:
+            TestContainer: a new container object
         """
-        set up method
-        """
-        super().setUp()
-        self.log.info("==In setUp, self.context= %s", self.context)
-
-        # initialize a python pool object then create the underlying
-        # daos storage and connect to it
-        self.prepare_pool()
-
-        try:
-            # create a container
-            self.container = DaosContainer(self.context)
-            self.container.create(self.pool.pool.handle)
-
-        except DaosApiError as error:
-            self.log.info("Error detected in DAOS pool container setup: %s", str(error))
-            self.log.info(traceback.format_exc())
-            self.fail("##Test failed on setUp, before snapshot taken")
-
-        # now open it
-        self.container.open()
-
-        # do a query and compare the UUID returned from create with
-        # that returned by query
-        self.container.query()
-
-        if self.container.get_uuid_str() != c_uuid_to_str(
-                self.container.info.ci_uuid):
-            self.fail("##Container UUID did not match the one in info.")
+        self.log_step('Creating pool and container')
+        self.log.info("self.context= %s", self.context)
+        pool = add_pool(self)
+        container = add_container(self, pool)
+        container.open()
+        container.container.query()
+        if container.container.get_uuid_str() != c_uuid_to_str(container.container.info.ci_uuid):
+            self.fail("Container UUID does not match the one in info.")
+        return container
 
     def display_snapshot(self, snapshot):
         """
@@ -145,15 +129,15 @@ class Snapshot(TestWithServers):
 
         # DAOS-1322 Create a new container, verify snapshot state as expected
         #           for a brand new container.
+        container = self.create_container()
+        self.log_step('Take a snapshot of the newly created container.')
         try:
-            self.log.info(
-                "==(0)Take a snapshot of the newly created container.")
             snapshot = DaosSnapshot(self.context)
-            snapshot.create(self.container.coh)
+            snapshot.create(container.container.coh)
             self.display_snapshot(snapshot)
         except Exception as error:
-            self.fail("##(0)Error on a snapshot on a new container"
-                      " {}".format(str(error)))
+            self.log.error(str(error))
+            self.fail("Error taking a snapshot of the new container")
 
         # (1)Create an object, write some data into it, and take a snapshot
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
@@ -161,21 +145,16 @@ class Snapshot(TestWithServers):
         dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
         akey = akey.encode("utf-8")
         dkey = dkey.encode("utf-8")
-        data_size = self.params.get("test_datasize",
-                                    '/run/snapshot/*', default=150)
+        data_size = self.params.get("test_datasize", '/run/snapshot/*', default=150)
         thedata = b"--->>>Happy Daos Snapshot-Create Negative Testing " + \
                   b"<<<---" + get_random_bytes(self.random.randint(1, data_size))
         try:
-            obj = self.container.write_an_obj(thedata,
-                                              len(thedata) + 1,
-                                              dkey,
-                                              akey,
-                                              obj_cls=obj_cls)
+            obj = container.container.write_an_obj(
+                thedata, len(thedata) + 1, dkey, akey, obj_cls=obj_cls)
+            obj.close()
         except DaosApiError as error:
-            self.fail(
-                "##(1)Test failed during the initial object write:"
-                " {}".format(str(error)))
-        obj.close()
+            self.fail("Test failed during the initial object write: {}".format(str(error)))
+
         # Take a snapshot of the container
         snapshot = self.take_snapshot(self.container)
         self.log.info("==(1)snapshot.epoch= %s", snapshot.epoch)
@@ -316,7 +295,7 @@ class Snapshot(TestWithServers):
         :avocado: tags=container,smoke,snap,snapshot
         :avocado: tags=Snapshot,test_snapshots
         """
-
+        container = self.create_container()
         test_data = []
         ss_number = 0
         obj_cls = self.params.get("obj_class", '/run/object_class/*')
@@ -324,10 +303,8 @@ class Snapshot(TestWithServers):
         dkey = self.params.get("dkey", '/run/snapshot/*', default="dkey")
         akey = akey.encode("utf-8")
         dkey = dkey.encode("utf-8")
-        data_size = self.params.get("test_datasize",
-                                    '/run/snapshot/*', default=150)
-        snapshot_loop = self.params.get("num_of_snapshot",
-                                        '/run/snapshot/*', default=3)
+        data_size = self.params.get("test_datasize", '/run/snapshot/*', default=150)
+        snapshot_loop = self.params.get("num_of_snapshot", '/run/snapshot/*', default=3)
         #
         # Test loop for creat, modify and snapshot object in the DAOS container.
         #
@@ -339,11 +316,8 @@ class Snapshot(TestWithServers):
                 b"<<<---" + get_random_bytes(self.random.randint(1, data_size))
             datasize = len(thedata) + 1
             try:
-                obj = self.container.write_an_obj(thedata,
-                                                  datasize,
-                                                  dkey,
-                                                  akey,
-                                                  obj_cls=obj_cls)
+                obj = container.container.write_an_obj(
+                    thedata, datasize, dkey, akey, obj_cls=obj_cls)
                 obj.close()
             except DaosApiError as error:
                 self.fail("##(1)Test failed during the initial object "

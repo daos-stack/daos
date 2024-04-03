@@ -20,11 +20,3 @@ server_config:
 pool:
   scm_size: 1073741824
   control_method: dmg
-
-container:
-  object_qty: 1
-  record_qty: 1
-  akey_size: 16
-  dkey_size: 16
-  data_size: 45
-  data_array_size: 0

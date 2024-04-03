@@ -4,7 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers
-from daos_utils import DaosCommand
+from test_utils_container import add_container
+from test_utils_pool import add_pool
 
 
 class ListContainerTest(TestWithServers):
@@ -21,11 +22,6 @@ class ListContainerTest(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a ListContainerTest object."""
-        super().__init__(*args, **kwargs)
-        self.daos_cmd = None
-
     def create_list(self, count, pool, expected_uuids_labels):
         """Create container and call daos pool list-cont to list and verify.
 
@@ -37,14 +33,14 @@ class ListContainerTest(TestWithServers):
         """
         # Create containers and store the container UUIDs and labels
         for _ in range(count):
-            container = self.get_container(pool, create=False)
+            container = add_container(self, pool, create=False)
             result = container.create()
             expected_uuids_labels.append(
                 (result["response"]["container_uuid"], result["response"]["container_label"]))
         expected_uuids_labels.sort()
 
         # Call container list and collect the UUIDs.
-        data = self.daos_cmd.container_list(pool=pool.identifier)
+        data = self.get_daos_command().container_list(pool=pool.identifier)
         actual_uuids_labels = []
         for uuid_label in data["response"]:
             actual_uuids_labels.append((uuid_label["uuid"], uuid_label["label"]))
@@ -69,27 +65,26 @@ class ListContainerTest(TestWithServers):
         :avocado: tags=ListContainerTest,test_list_containers
         """
         expected_uuids_labels1 = []
-        self.pool = []
-        self.pool.append(self.get_pool(connect=False))
-        self.daos_cmd = DaosCommand(self.bin)
+        pool = []
+        pool.append(add_pool(self, connect=False))
 
         # 1. Create 1 container and list.
-        self.create_list(1, self.pool[0], expected_uuids_labels1)
+        self.create_list(1, pool[0], expected_uuids_labels1)
 
         # 2. Create 1 more container and list; 2 total.
-        self.create_list(1, self.pool[0], expected_uuids_labels1)
+        self.create_list(1, pool[0], expected_uuids_labels1)
 
         # 3. Create 98 more containers and list; 100 total.
-        self.create_list(98, self.pool[0], expected_uuids_labels1)
+        self.create_list(98, pool[0], expected_uuids_labels1)
 
         # 4. Create 2 additional pools and create 10 containers in each pool.
-        self.pool.append(self.get_pool(connect=False))
-        self.pool.append(self.get_pool(connect=False))
+        pool.append(add_pool(self, connect=False))
+        pool.append(add_pool(self, connect=False))
 
         # Create 10 containers in pool 2 and verify.
         expected_uuids_labels2 = []
-        self.create_list(10, self.pool[1], expected_uuids_labels2)
+        self.create_list(10, pool[1], expected_uuids_labels2)
 
         # Create 10 containers in pool 3 and verify.
         expected_uuids_labels3 = []
-        self.create_list(10, self.pool[2], expected_uuids_labels3)
+        self.create_list(10, pool[2], expected_uuids_labels3)

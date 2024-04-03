@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,6 +34,7 @@ class ObjectDataValidation(TestWithServers):
             DaosObj: a new DaosObj object
         """
         self.log_step('Creating a DaosObj')
+        container.open()
         obj = DaosObj(self.context, container.container)
         obj.create(objcls=1)
         return obj
