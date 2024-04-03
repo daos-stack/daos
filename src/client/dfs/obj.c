@@ -924,7 +924,7 @@ statx_task(tse_task_t *task)
 
 	fetch_arg        = daos_task_get_args(fetch_task);
 	fetch_arg->oh    = args->parent_oh;
-	fetch_arg->th    = dfs->th;
+	fetch_arg->th    = args->dfs->th;
 	fetch_arg->flags = DAOS_COND_DKEY_FETCH;
 	fetch_arg->dkey  = &op_args->dkey;
 	fetch_arg->nr    = 1;
@@ -943,7 +943,7 @@ statx_task(tse_task_t *task)
 		/** set array_stat parameters */
 		stat_arg        = daos_task_get_args(stat_task);
 		stat_arg->oh    = args->obj->oh;
-		stat_arg->th    = dfs->th;
+		stat_arg->th    = args->dfs->th;
 		stat_arg->stbuf = &op_args->array_stbuf;
 		need_stat       = true;
 	} else if (S_ISDIR(args->obj->mode)) {
