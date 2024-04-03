@@ -442,7 +442,7 @@ func SetupClientRoot(ctx context.Context, jobid string, pid, shm_key int) error 
 	cPidPath := C.CString(pidPath)
 	defer C.free(unsafe.Pointer(cPidPath))
 	if rc := C.attach_segment_path(C.key_t(shm_key), cPidPath); rc != 0 {
-		return daos.Status(rc)
+		return errors.Wrapf(daos.Status(rc), "failed to attach client segment 0x%x at %q", shm_key, pidPath)
 	}
 
 	log.Tracef("attached client segment @ %q (key: 0x%x)", pidPath, shm_key)

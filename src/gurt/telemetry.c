@@ -627,6 +627,8 @@ alloc_node(struct d_tm_shmem_hdr *shmem, struct d_tm_node_t **newnode,
 
 	*newnode = node;
 out:
+	if (rc != 0)
+		DL_ERROR(rc, "failed to alloc node for %s\n", name);
 	return rc;
 }
 
@@ -2641,33 +2643,27 @@ sync_attached_segment_uid(char *path, key_t child_key)
 		return -DER_INVAL;
 	}
 
-	rc = d_tm_lock_shmem();
-	if (unlikely(rc != 0)) {
-		D_ERROR("failed to get producer mutex\n");
-		D_GOTO(out_unlock, rc);
-	}
-
 	link_node = d_tm_find_metric(ctx, path);
 	if (link_node == NULL) {
 		D_ERROR("nonexistent metric: %s", path);
-		D_GOTO(out_unlock, rc = -DER_NONEXIST);
+		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	rc = shm_stat_key(link_node->dtn_shmem_key, &shminfo, NULL);
 	if (unlikely(rc != 0)) {
 		DL_ERROR(rc, "failed to stat parent segment");
-		goto out_unlock;
+		goto out;
 	}
 	o_uid = shminfo.shm_perm.uid;
 
 	rc = shm_stat_key(child_key, &shminfo, &child_shmid);
 	if (unlikely(rc != 0)) {
 		DL_ERROR(rc, "failed to stat child segment");
-		goto out_unlock;
+		goto out;
 	}
 
 	if (o_uid == shminfo.shm_perm.uid)
-		D_GOTO(out_unlock, rc = 0);
+		D_GOTO(out, rc = 0);
 
 	shminfo.shm_perm.uid = o_uid;
 	rc                   = shmctl(child_shmid, IPC_SET, &shminfo);
@@ -2675,9 +2671,7 @@ sync_attached_segment_uid(char *path, key_t child_key)
 		DL_ERROR(rc, "failed to set child segment ownership");
 	}
 
-out_unlock:
-	d_tm_unlock_shmem();
-
+out:
 	return rc;
 }
 
@@ -2696,22 +2690,11 @@ attach_path_segment(key_t key, char *path)
 		D_GOTO(fail, rc = -DER_INVAL);
 	}
 
-	rc = d_tm_lock_shmem();
-	if (unlikely(rc != 0)) {
-		D_ERROR("failed to get producer mutex\n");
-		D_GOTO(fail, rc);
-	}
-
-	link_node = d_tm_find_metric(ctx, path);
-	if (link_node != NULL) {
-		D_GOTO(fail_unlock, rc = -DER_EXIST);
-	}
-
 	/* Add a link to the new region */
 	rc = add_metric(ctx, &link_node, D_TM_LINK, NULL, NULL, path);
 	if (unlikely(rc != 0)) {
 		D_ERROR("can't set up the link node, " DF_RC "\n", DP_RC(rc));
-		D_GOTO(fail_unlock, rc);
+		D_GOTO(fail, rc);
 	}
 
 	/* track attached regions within the parent shmem */
@@ -2731,15 +2714,12 @@ attach_path_segment(key_t key, char *path)
 	region_entry->rl_key       = key;
 	region_entry->rl_link_node = link_node;
 
-	d_tm_unlock_shmem();
 	if (tm_shmem.multiple_writer_lock)
 		D_MUTEX_UNLOCK(&ctx->shmem_root->sh_multiple_writer_lock);
 
 	return 0;
 fail_link:
 	invalidate_link_node(parent_shmem, link_node);
-fail_unlock:
-	d_tm_unlock_shmem();
 fail:
 	return rc;
 }
@@ -2759,9 +2739,11 @@ fail:
 int
 d_tm_attach_path_segment(key_t key, const char *fmt, ...)
 {
-	va_list args;
-	char    path[D_TM_MAX_NAME_LEN] = {0};
-	int     rc;
+	struct d_tm_node_t  *link_node;
+	struct d_tm_context *ctx = tm_shmem.ctx;
+	va_list              args;
+	char                 path[D_TM_MAX_NAME_LEN] = {0};
+	int                  rc;
 
 	if (!is_initialized())
 		D_GOTO(fail, rc = -DER_UNINIT);
@@ -2782,11 +2764,24 @@ d_tm_attach_path_segment(key_t key, const char *fmt, ...)
 	if (unlikely(rc != 0))
 		D_GOTO(fail, rc);
 
-	rc = attach_path_segment(key, path);
-	if (unlikely(rc != 0))
+	rc = d_tm_lock_shmem();
+	if (rc != 0)
 		D_GOTO(fail, rc);
 
+	link_node = d_tm_find_metric(ctx, path);
+	if (link_node != NULL) {
+		D_INFO("metric [%s] already exists\n", path);
+		D_GOTO(fail_unlock, rc = -DER_EXIST);
+	}
+
+	rc = attach_path_segment(key, path);
+	if (unlikely(rc != 0))
+		D_GOTO(fail_unlock, rc);
+
+	d_tm_unlock_shmem();
 	return 0;
+fail_unlock:
+	d_tm_unlock_shmem();
 fail:
 	if (rc != -DER_EXIST)
 		DL_ERROR(rc, "Failed to add path segment [%s] for key %d", path, key);
@@ -2852,39 +2847,49 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		D_GOTO(fail_unlock, rc);
 	}
 
+	new_node = d_tm_find_metric(ctx, path);
+	if (new_node != NULL) {
+		D_INFO("metric [%s] already exists\n", path);
+		D_GOTO(fail_unlock, rc = -DER_EXIST);
+	}
+
 	key = get_unique_shmem_key(path, tm_shmem.id);
 	rc = create_shmem(get_last_token(path), key, size_bytes, &new_shmid,
 			  &new_shmem);
-	if (unlikely(rc != 0))
+	if (unlikely(rc != 0)) {
+		DL_ERROR(rc, "failed to create shmem for %s\n", path);
 		D_GOTO(fail_unlock, rc);
+	}
 	new_node = new_shmem->sh_root;
 
 	/* track at the process level */
 	rc = track_open_shmem(ctx, new_shmem, new_shmid, key);
-	if (unlikely(rc != 0))
+	if (unlikely(rc != 0)) {
+		DL_ERROR(rc, "failed to track shmem for %s\n", path);
 		D_GOTO(fail_shmem, rc);
-
-	d_tm_unlock_shmem();
+	}
 
 	rc = attach_path_segment(key, path);
-	if (unlikely(rc != 0))
+	if (unlikely(rc != 0)) {
+		DL_ERROR(rc, "failed to attach 0x%x at %s\n", key, path);
 		D_GOTO(fail_attach, rc);
+	}
 
 	rc = sync_attached_segment_uid(path, key);
-	if (unlikely(rc != 0))
+	if (unlikely(rc != 0)) {
+		DL_ERROR(rc, "failed to sync %s permissions\n", path);
 		D_GOTO(fail_sync, rc);
+	}
 
 	if (node != NULL)
 		*node = new_node;
 
+	d_tm_unlock_shmem();
 	return 0;
 fail_sync:
 	d_tm_del_ephemeral_dir(path);
 	goto fail_unlock; /* shmem will be closed/destroyed already */
 fail_attach:
-	/* dropped locks before calling attach; have to reacquire */
-	d_tm_lock_shmem();
-
 	close_shmem_for_key(ctx, key, true);
 	goto fail_unlock; /* shmem will be closed/destroyed already */
 fail_shmem:
