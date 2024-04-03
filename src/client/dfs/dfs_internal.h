@@ -108,6 +108,8 @@ typedef uint16_t dfs_layout_ver_t;
 
 /** object struct that is instantiated for a DFS open object */
 struct dfs_obj {
+	/** DFS mount point of object */
+	dfs_t        *dfs;
 	/** DAOS object ID */
 	daos_obj_id_t oid;
 	/** DAOS object open handle */
