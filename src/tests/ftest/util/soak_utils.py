@@ -21,8 +21,9 @@ from dfuse_utils import Dfuse
 from dmg_utils import get_storage_query_device_info
 from duns_utils import format_path
 from fio_utils import FioCommand
-from general_utils import (DaosTestError, get_host_data, get_log_file, get_random_bytes,
-                           get_random_string, list_to_str, pcmd, run_command, run_pcmd)
+from general_utils import (check_ping, check_ssh, DaosTestError, get_host_data, get_log_file,
+                           get_random_bytes, get_random_string, list_to_str, pcmd, run_command,
+                           run_pcmd, wait_for_result)
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
@@ -473,7 +474,7 @@ def launch_reboot(self, pools, name, results, args):
     ranks = None
     if name == "REBOOT":
         reboot_host = self.random.choice(self.hostlist_servers)
-        ranklist = self.server_managers[0].get_host_ranks(self.selected_host)
+        ranklist = self.server_managers[0].get_host_ranks(reboot_host)
         ranks = ",".join(str(rank) for rank in ranklist)
         # init the status dictionary
         params = {"name": name,
@@ -481,11 +482,16 @@ def launch_reboot(self, pools, name, results, args):
                   "vars": {"host": reboot_host, "ranks": ranklist}}
         self.log.info(
             "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
-        # reboot host
-        result = run_remote(self.log, reboot_host, "sudo reboot", timeout=300)
+        # reboot host in 1 min
+        result = run_remote(self.log, reboot_host, "sudo shutdown -r +1")
         if result.passed:
             status = True
         else:
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to issue reboot")
+            status = False
+
+        if not wait_for_result(self.log, check_ping, 90, 5, True, host=reboot_host,
+                               expected_ping=False, cmd_timeout=60, verbose=True):
             self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to reboot")
             status = False
 
@@ -501,36 +507,53 @@ def launch_reboot(self, pools, name, results, args):
         ranks = ",".join(str(rank) for rank in ranklist)
         self.log.info("<<<PASS %s: %s started on host %s at %s>>>\n", self.loop, name, reboot_host,
                       time.ctime())
-        try:
-            self.dmg_command.system_start(ranks=ranks)
-            status = True
-        except TestFail as error:
-            self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
-            status = False
-        for pool in pools:
-            self.dmg_command.pool_query(pool.identifier)
 
-        # Wait ~ 30 sec before issuing the reintegrate
-        time.sleep(30)
-        # reintegrate ranks
-        reintegrate_status = True
-        for pool in pools:
-            for rank in ranklist:
-                try:
-                    pool.reintegrate(rank)
-                    status = True
-                except TestFail as error:
-                    self.log.error(
-                        f"<<<FAILED:dmg pool {pool.identifier} reintegrate failed on rank {rank}",
-                        exc_info=error)
-                    status = False
-                reintegrate_status &= status
-                if reintegrate_status:
-                    reintegrate_status &= wait_for_pool_rebuild(
-                        self, pool, name)
-                    status = reintegrate_status
-                else:
-                    status = False
+        self.dmg_command.system_query()
+        # wait for node to complete rebooting
+        if not wait_for_result(self.log, check_ping, 60, 5, True, host=reboot_host,
+                               expected_ping=True, cmd_timeout=60, verbose=True):
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to reboot")
+            status = False
+        if not wait_for_result(self.log, check_ssh, 120, 2, True, hosts=reboot_host,
+                               cmd_timeout=30, verbose=True):
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to reboot")
+            status = False
+        # issue a restart
+        self.log.info("<<<PASS %s: Issue systemctl restart daos_server on %s at %s>>>\n",
+                      self.loop, name, reboot_host, time.ctime())
+        cmd_results = run_remote(self.log, reboot_host, "sudo systemctl restart daos_server")
+        if cmd_results.passed:
+            time.sleep(30)
+            try:
+                self.dmg_command.system_start(ranks=ranks)
+                status = True
+            except TestFail as error:
+                self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
+                status = False
+            for pool in pools:
+                self.dmg_command.pool_query(pool.identifier)
+        if status:
+            # Wait ~ 30 sec before issuing the reintegrate
+            time.sleep(30)
+            # reintegrate ranks
+            reintegrate_status = True
+            for pool in pools:
+                for rank in ranklist:
+                    try:
+                        pool.reintegrate(rank)
+                        status = True
+                    except TestFail as error:
+                        self.log.error(
+                            f"<<<FAILED: dmg pool {pool.identifier} reintegrate failed on rank"
+                            "{rank}", exc_info=error)
+                        status = False
+                    reintegrate_status &= status
+                    if reintegrate_status:
+                        reintegrate_status &= wait_for_pool_rebuild(
+                            self, pool, name)
+                        status = reintegrate_status
+                    else:
+                        status = False
     else:
         self.log.error("<<<PASS %s: %s failed due to REBOOT failure >>>", self.loop, name)
         status = False
@@ -540,6 +563,7 @@ def launch_reboot(self, pools, name, results, args):
               "vars": {"host": reboot_host, "ranks": ranklist}}
     if not status:
         self.log.error("<<< %s failed - check logs for failure data>>>", name)
+    self.dmg_command.system_query()
     self.harasser_job_done(params)
     results.put(self.harasser_results)
     args.put(self.harasser_args)
@@ -585,6 +609,7 @@ def launch_extend(self, pool, name, results, args):
               "vars": {"host": self.selected_host, "ranks": ranks}}
     if not status:
         self.log.error("<<< %s failed - check logs for failure data>>>", name)
+    self.dmg_command.system_query()
     self.harasser_job_done(params)
     results.put(self.harasser_results)
     args.put(self.harasser_args)
