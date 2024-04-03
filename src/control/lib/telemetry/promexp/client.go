@@ -24,6 +24,12 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+const (
+	// defaultCleanupInterval is the default interval for pruning unused
+	// shared memory segments.
+	defaultCleanupInterval = 1 * time.Minute
+)
+
 type (
 	// ClientCollector is a metrics collector for DAOS client metrics.
 	ClientCollector struct {
@@ -120,22 +126,25 @@ func NewClientCollector(ctx context.Context, log logging.Logger, source *ClientS
 		opts = defaultCollectorOpts()
 	}
 
-	if opts.RetainDuration != 0 {
-		log.Debugf("pruning client metrics every %s", opts.RetainDuration)
-
-		go func() {
-			pruneTicker := time.NewTicker(opts.RetainDuration)
-			defer pruneTicker.Stop()
-
-			for {
-				select {
-				case <-ctx.Done():
-				case <-pruneTicker.C:
-					source.PruneSegments(log, opts.RetainDuration)
-				}
-			}
-		}()
+	if opts.RetainDuration == 0 {
+		// Clients will clean up after themselves, but we still need to
+		// periodically remove the top-level jobid segments.
+		opts.RetainDuration = defaultCleanupInterval
 	}
+
+	log.Debugf("pruning unused client metric segments every %s", opts.RetainDuration)
+	go func() {
+		pruneTicker := time.NewTicker(opts.RetainDuration)
+		defer pruneTicker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+			case <-pruneTicker.C:
+				source.PruneSegments(log, opts.RetainDuration)
+			}
+		}
+	}()
 
 	c := &ClientCollector{
 		metricsCollector: metricsCollector{

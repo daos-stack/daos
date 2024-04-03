@@ -114,8 +114,6 @@ dc_tm_init(void)
 	d_getenv_bool(DAOS_CLIENT_METRICS_RETAIN, &daos_client_metric_retain);
 	if (daos_client_metric_retain)
 		metrics_tag |= D_TM_RETAIN_SHMEM;
-	else
-		metrics_tag |= D_TM_RETAIN_SHMEM_IF_NON_EMPTY;
 
 	snprintf(root_name, sizeof(root_name), "%d", pid);
 	rc = init_managed_root(root_name, pid, metrics_tag);
@@ -192,9 +190,7 @@ close:
 void
 dc_tm_fini()
 {
-	pid_t pid = getpid();
 	char *dump_path;
-	int   rc;
 
 	if (!daos_client_metric)
 		return;
@@ -208,16 +204,5 @@ dc_tm_fini()
 	dc_tls_fini();
 	dc_tls_key_delete();
 
-	if (!daos_client_metric_retain) {
-		rc = d_tm_del_ephemeral_dir("%s/%d", dc_jobid, pid);
-		if (rc != 0)
-			DL_ERROR(rc, "delete tm directory %s/%d.", dc_jobid, pid);
-
-		rc = d_tm_try_del_ephemeral_dir("%s", dc_jobid);
-		if (rc != 0)
-			DL_ERROR(rc, "delete tm directory %s/%d.", dc_jobid, pid);
-	}
-
-	D_INFO("delete pid %s/%u\n", dc_jobid, pid);
 	d_tm_fini();
 }
