@@ -639,7 +639,7 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	arg.dkey_ult_cnts = tls->mpt_dkey_ult_cnts;
 	rc = ds_pool_task_collective(pool->sp_uuid,
 				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-				     migrate_pool_tls_create_one, &arg, false);
+				     migrate_pool_tls_create_one, &arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create migrate tls: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));

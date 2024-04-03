@@ -2574,8 +2574,16 @@ ds_cont_tgt_prop_update(uuid_t pool_uuid, uuid_t cont_uuid, daos_prop_t	*prop)
 	uuid_copy(arg.cpa_cont_uuid, cont_uuid);
 	uuid_copy(arg.cpa_pool_uuid, pool_uuid);
 	arg.cpa_prop = prop;
+	/*
+	 * Before initiating the rebuild scan, the iv snap fetch function
+	 * will be invoked. This action may prompt a collective call to up targets
+	 * whose containers have not yet been created. Therefore, we should skip
+	 * the up targets in this scenario. The target property will be updated
+	 * upon initiating container aggregation.
+	 */
 	rc = ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				     PO_COMP_ST_DOWNOUT, cont_child_prop_update, &arg, 0);
+				     PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
+				     cont_child_prop_update, &arg, 0);
 	if (rc)
 		D_ERROR("collective cont_write_data_turn_off failed, "DF_RC"\n",
 			DP_RC(rc));
