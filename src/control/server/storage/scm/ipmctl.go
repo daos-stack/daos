@@ -19,7 +19,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -68,7 +67,6 @@ var (
 
 type cmdRunner struct {
 	log         logging.Logger
-	binding     ipmctl.IpmCtl
 	runInternal runCmdFn
 	lookPath    lookPathFn
 	checkOnce   sync.Once
@@ -550,7 +548,7 @@ func run(log logging.Logger, cmd pmemCmd) (string, error) {
 }
 
 func defaultCmdRunner(log logging.Logger) *cmdRunner {
-	cr, err := newCmdRunner(log, &ipmctl.NvmMgmt{}, run, exec.LookPath)
+	cr, err := newCmdRunner(log, run, exec.LookPath)
 	if err != nil {
 		panic(err)
 	}
@@ -558,26 +556,7 @@ func defaultCmdRunner(log logging.Logger) *cmdRunner {
 	return cr
 }
 
-func newCmdRunner(log logging.Logger, lib ipmctl.IpmCtl, runCmd runCmdFn, lookPath lookPathFn) (*cmdRunner, error) {
-	if lib == nil {
-		// If no libipmctl interface is provided, assume no calls should be expected and
-		// return a mock library interface that returns error on every call.
-		err := errors.New("unexpected ipmctl library call")
-		lib = &mockIpmctl{
-			cfg: mockIpmctlCfg{
-				initErr:           err,
-				delGoalsErr:       err,
-				getRegionsErr:     err,
-				getFWInfoRet:      err,
-				updateFirmwareRet: err,
-			},
-		}
-	} else {
-		if err := lib.Init(log); err != nil {
-			return nil, err
-		}
-	}
-
+func newCmdRunner(log logging.Logger, runCmd runCmdFn, lookPath lookPathFn) (*cmdRunner, error) {
 	if runCmd == nil {
 		// If no commandline call function is provided, assume no calls should be
 		// expected and create a mock runner that will error if called.
@@ -588,7 +567,6 @@ func newCmdRunner(log logging.Logger, lib ipmctl.IpmCtl, runCmd runCmdFn, lookPa
 
 	return &cmdRunner{
 		log:         log,
-		binding:     lib,
 		runInternal: runCmd,
 		lookPath:    lookPath,
 	}, nil
