@@ -295,6 +295,12 @@ print_usage_msg(const char *msg)
 static int
 parse_args(int argc, char **argv)
 {
+        char   *token;
+        char   *endptr;
+        char   *saveptr;
+        char   *arg_str;
+        char   *tokens[8];
+        int 	token_cnt, i = 0;
 	int	option_index = 0;
 	int	opt;
 	int	rc = 0;
@@ -344,6 +350,16 @@ parse_args(int argc, char **argv)
 		{"use_daos_agent_env", no_argument, 0, 'u'},
 		{0, 0, 0, 0},
 	};
+
+        tokens[i] = strtok_r(arg_str, ",", &saveptr);
+        do {
+                printf("before: i: %d: %s-%s\n", i, tokens[i], saveptr);
+                tokens[++i- strtok_r(NULL, ",", &saveptr);
+                printf("after: i: %d: %s-%s\n", i, tokens[i], saveptr);
+        } while(tokens[i] != NULL);
+
+        for (j =0; j < i; j++)
+                printf("token %d: %s\n", j, tokens[j]);
 
 	while (1) {
 		opt = getopt_long(argc, argv, "g:r:a:p:l:m:nu", long_options,
