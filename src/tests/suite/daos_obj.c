@@ -5192,7 +5192,7 @@ io_52(void **state)
 }
 
 static void
-obj_coll_query(test_arg_t *arg, daos_oclass_id_t oclass)
+obj_coll_query(test_arg_t *arg, daos_oclass_id_t oclass, bool sparse)
 {
 	daos_obj_id_t	oid;
 	daos_handle_t	oh;
@@ -5245,6 +5245,13 @@ obj_coll_query(test_arg_t *arg, daos_oclass_id_t oclass)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
 
+	if (sparse) {
+		par_barrier(PAR_COMM_WORLD);
+		daos_fail_num_set(2);
+		daos_fail_loc_set(DAOS_OBJ_COLL_SPARSE | DAOS_FAIL_SOME);
+		par_barrier(PAR_COMM_WORLD);
+	}
+
 	flags = DAOS_GET_DKEY | DAOS_GET_AKEY | DAOS_GET_RECX | DAOS_GET_MAX;
 	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx, NULL);
 	assert_rc_equal(rc, 0);
@@ -5268,6 +5275,13 @@ obj_coll_query(test_arg_t *arg, daos_oclass_id_t oclass)
 
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
+
+	if (sparse) {
+		par_barrier(PAR_COMM_WORLD);
+		daos_fail_loc_set(0);
+		daos_fail_num_set(0);
+		par_barrier(PAR_COMM_WORLD);
+	}
 }
 
 static void
@@ -5280,7 +5294,7 @@ io_53(void **state)
 	if (!test_runable(arg, 2))
 		return;
 
-	obj_coll_query(arg, OC_SX);
+	obj_coll_query(arg, OC_SX, false);
 }
 
 static void
@@ -5293,7 +5307,7 @@ io_54(void **state)
 	if (!test_runable(arg, 3))
 		return;
 
-	obj_coll_query(arg, OC_EC_2P1G2);
+	obj_coll_query(arg, OC_EC_2P1G2, false);
 }
 
 static void
@@ -5306,7 +5320,35 @@ io_55(void **state)
 	if (!test_runable(arg, 5))
 		return;
 
-	obj_coll_query(arg, OC_EC_4P1GX);
+	obj_coll_query(arg, OC_EC_4P1GX, false);
+}
+
+static void
+io_56(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective object query with sparse ranks\n");
+
+	if (!test_runable(arg, 3))
+		return;
+
+	obj_coll_query(arg, OC_RP_3GX, true);
+}
+
+static void
+io_57(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective object query with rank_0 excluded\n");
+
+	if (!test_runable(arg, 4))
+		return;
+
+	rebuild_single_pool_rank(arg, 0, false);
+	obj_coll_query(arg, OC_EC_2P1GX, false);
+	reintegrate_single_pool_rank(arg, 0, false);
 }
 
 static const struct CMUnitTest io_tests[] = {
@@ -5419,6 +5461,10 @@ static const struct CMUnitTest io_tests[] = {
 	  io_54, async_disable, test_case_teardown},
 	{ "IO55: collective object query - OC_EC_4P1GX",
 	  io_55, async_disable, test_case_teardown},
+	{ "IO56: collective object query with sparse ranks",
+	  io_56, async_disable, test_case_teardown},
+	{ "IO57: collective object query with rank_0 excluded",
+	  io_57, rebuild_sub_rf1_setup, test_teardown},
 };
 
 int

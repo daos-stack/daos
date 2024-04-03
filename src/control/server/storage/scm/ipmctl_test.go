@@ -615,7 +615,7 @@ func TestIpmctl_prep(t *testing.T) {
 				return "", nil
 			}
 
-			cr, err := newCmdRunner(log, nil, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, mockRun, mockLookPath)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -837,7 +837,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 				return "", nil
 			}
 
-			cr, err := newCmdRunner(log, nil, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, mockRun, mockLookPath)
 			if err != nil {
 				t.Fatal(err)
 			}
