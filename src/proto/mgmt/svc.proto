@@ -77,9 +77,9 @@ message GetAttachInfoReq {
 }
 
 message ClientNetHint {
-	string provider = 1;		// CaRT OFI provider
-	string interface = 2;		// CaRT OFI_INTERFACE
-	string domain = 3;		// CaRT OFI_DOMAIN for given OFI_INTERFACE
+	string provider = 1;		// CaRT provider
+	string interface = 2;		// CaRT D_INTERFACE
+	string domain = 3;		// CaRT D_DOMAIN for given D_INTERFACE
 	uint32 crt_ctx_share_addr = 4;	// CaRT CRT_CTX_SHARE_ADDR
 	uint32 crt_timeout = 5;		// CaRT CRT_TIMEOUT
 	uint32 net_dev_class = 6;	// ARP protocol hardware identifier of the

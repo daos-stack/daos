@@ -212,7 +212,7 @@ Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 03.00.00.04
 				return out, err
 			}
 
-			cr, err := newCmdRunner(log, nil, mockRun, nil)
+			cr, err := newCmdRunner(log, mockRun, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

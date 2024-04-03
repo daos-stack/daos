@@ -21,9 +21,7 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
-#define OBJ_COLL_PUNCH_THD_MIN	31
-
-unsigned int	obj_coll_punch_thd;
+unsigned int	obj_coll_thd;
 unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
 int		dc_obj_proto_version;
 
@@ -183,15 +181,24 @@ dc_obj_init(void)
 		D_GOTO(out_class, rc);
 	}
 
-	obj_coll_punch_thd = OBJ_COLL_PUNCH_THD_MIN;
-	d_getenv_uint("DAOS_OBJ_COLL_PUNCH_THD", &obj_coll_punch_thd);
-	if (obj_coll_punch_thd < OBJ_COLL_PUNCH_THD_MIN) {
-		D_WARN("Invalid collective punch threshold %u, it cannot be smaller than %u, "
-		       "use the default value %u\n", obj_coll_punch_thd,
-		       OBJ_COLL_PUNCH_THD_MIN, OBJ_COLL_PUNCH_THD_MIN);
-		obj_coll_punch_thd = OBJ_COLL_PUNCH_THD_MIN;
+	rc = dbtree_class_register(DBTREE_CLASS_COLL, BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+				   &dbtree_coll_ops);
+	if (rc != 0)
+		goto out_class;
+
+	obj_coll_thd = OBJ_COLL_THD_MIN;
+	d_getenv_uint("DAOS_OBJ_COLL_THD", &obj_coll_thd);
+	if (obj_coll_thd == 0) {
+		D_INFO("Disable collective operation.\n");
+	} else {
+		if (obj_coll_thd < OBJ_COLL_THD_MIN) {
+			D_WARN("Invalid collective operation threshold %u, either larger than %u, "
+			       "or zero for disabling collective operation. Use default value %u\n",
+			       obj_coll_thd, OBJ_COLL_THD_MIN - 1, OBJ_COLL_THD_MIN);
+			obj_coll_thd = OBJ_COLL_THD_MIN;
+		}
+		D_INFO("Set object collective operation threshold as %u\n", obj_coll_thd);
 	}
-	D_INFO("Set object collective punch threshold as %u\n", obj_coll_punch_thd);
 
 	tx_verify_rdg = false;
 	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);
