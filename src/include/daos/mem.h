@@ -904,6 +904,8 @@ struct umem_action {
 #define UMEM_CACHE_CHUNK_SZ       (1 << UMEM_CACHE_CHUNK_SZ_SHIFT)
 #define UMEM_CACHE_CHUNK_SZ_MASK  (UMEM_CACHE_CHUNK_SZ - 1)
 
+#define UMEM_CACHE_MIN_EVICTABLE_PAGES	2
+
 struct umem_page_info;
 /* MD page */
 struct umem_page {
@@ -954,7 +956,7 @@ struct umem_cache {
 	/** Highest committed transaction ID */
 	uint64_t		 ca_commit_id;
 	/** Callback to tell if a page is evictable */
-	bool			(*ca_evictable_fn)(uint32_t pg_id);
+	bool			(*ca_evictable_fn)(void *arg, uint32_t pg_id);
 	/** Callback being called on page loaded */
 	int			(*ca_pageload_fn)(void *arg, uint32_t pg_id);
 	/** Page stats */
@@ -996,7 +998,7 @@ struct umem_cache_chkpt_stats {
 int
 umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
 		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
-		 bool (*is_evictable_fn)(uint32_t pg_id),
+		 bool (*is_evictable_fn)(void *arg, uint32_t pg_id),
 		 int (*pageload_fn)(void *arg, uint32_t pg_id));
 
 /** Free global cache for umem store.

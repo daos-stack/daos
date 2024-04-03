@@ -2237,12 +2237,11 @@ cache_pop_free_page(struct umem_cache *cache)
 #define UMEM_CACHE_BMAP_SZ_MAX    (1 << (UMEM_CACHE_PAGE_SHIFT_MAX - \
 					UMEM_CACHE_CHUNK_SZ_SHIFT - UMEM_CHUNK_IDX_SHIFT))
 #define UMEM_CACHE_RSRVD_PAGES	4
-#define UMEM_CACHE_MIN_EVICTABLE_PAGES	2
 
 int
 umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
 		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
-		 bool (*is_evictable_fn)(uint32_t pg_id),
+		 bool (*is_evictable_fn)(void *arg, uint32_t pg_id),
 		 int (*pageload_fn)(void *arg, uint32_t pg_id))
 {
 	struct umem_cache	*cache;
@@ -2372,7 +2371,7 @@ error:
 static inline bool
 is_id_evictable(struct umem_cache *cache, uint32_t pg_id)
 {
-	return cache->ca_evictable_fn && cache->ca_evictable_fn(pg_id);
+	return cache->ca_evictable_fn && cache->ca_evictable_fn(cache, pg_id);
 }
 
 static inline void

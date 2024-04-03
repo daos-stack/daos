@@ -608,7 +608,7 @@ static struct umem_store_ops p2_ops = {
 #define PAGE_NUM_MAX_NE	5
 
 static bool
-is_evictable_fn(uint32_t page_id)
+is_evictable_fn(void *arg, uint32_t page_id)
 {
 	return page_id >= PAGE_NUM_MAX_NE;
 }
