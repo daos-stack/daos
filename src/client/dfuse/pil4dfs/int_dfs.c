@@ -135,14 +135,14 @@ struct aio_ev {
 struct aio_ctx {
 	/* the real io_context_t used in libaio */
 	io_context_t          ctx;
-	/* the depth of contex set by io_setup */
+	/* the depth of context set by io_setup */
 	int                   depth;
 	int                   first_eq;
 	bool                  inited;
 	bool                  on_dfs;
 	_Atomic uint64_t      num_op_submitted;
 	_Atomic uint64_t      num_op_done;
-	/* DFS is involved or not for current contex */
+	/* DFS is involved or not for current context */
 	pthread_mutex_t       lock;
 	/* The list of finished ev. ev is removed from the list by io_getevents(). */
 	struct aio_ev       **ev_done_list;
