@@ -122,9 +122,9 @@ struct aio_eq {
 };
 
 /* list of EQs dedicated for aio contexts. */
-static struct aio_eq          aio_eq_list[MAX_EQ];
+static struct aio_eq aio_eq_list[MAX_EQ];
 /* the accumulated iodepth for aio context. */
-static long int               depth_sum_accu;
+static long int      depth_sum_accu;
 
 struct aio_ev {
 	daos_event_t    ev;
@@ -134,21 +134,21 @@ struct aio_ev {
 
 struct aio_ctx {
 	/* the real io_context_t used in libaio */
-	io_context_t          ctx;
+	io_context_t     ctx;
 	/* the depth of context set by io_setup */
-	int                   depth;
-	int                   first_eq;
-	bool                  inited;
-	bool                  on_dfs;
-	_Atomic uint64_t      num_op_submitted;
-	_Atomic uint64_t      num_op_done;
+	int              depth;
+	int              first_eq;
+	bool             inited;
+	bool             on_dfs;
+	_Atomic uint64_t num_op_submitted;
+	_Atomic uint64_t num_op_done;
 	/* DFS is involved or not for current context */
-	pthread_mutex_t       lock;
+	pthread_mutex_t  lock;
 	/* The list of finished ev. ev is removed from the list by io_getevents(). */
-	struct aio_ev       **ev_done_list;
-	int                   ev_done_h;
-	int                   ev_done_t;
-	int                   ev_queue_len;
+	struct aio_ev  **ev_done_list;
+	int              ev_done_h;
+	int              ev_done_t;
+	int              ev_queue_len;
 };
 
 typedef struct aio_ctx aio_ctx_t;
@@ -6445,17 +6445,17 @@ io_setup(int maxevents, io_context_t *ctxp)
 		io_destroy(*ctxp);
 		return -ENOMEM;
 	}
-	aio_ctx_obj->ctx              = *ctxp;
-	aio_ctx_obj->depth            = maxevents;
+	aio_ctx_obj->ctx   = *ctxp;
+	aio_ctx_obj->depth = maxevents;
 	atomic_store_relaxed(&aio_ctx_obj->num_op_submitted, 0);
 	atomic_store_relaxed(&aio_ctx_obj->num_op_done, 0);
-	aio_ctx_obj->inited           = false;
-	aio_ctx_obj->on_dfs           = false;
-	aio_ctx_obj->ev_done_list     = NULL;
-	aio_ctx_obj->ev_done_h        = 0;
-	aio_ctx_obj->ev_done_t        = 0;
-	aio_ctx_obj->ev_queue_len     = 0;
-	*ctxp                         = (io_context_t)aio_ctx_obj;
+	aio_ctx_obj->inited       = false;
+	aio_ctx_obj->on_dfs       = false;
+	aio_ctx_obj->ev_done_list = NULL;
+	aio_ctx_obj->ev_done_h    = 0;
+	aio_ctx_obj->ev_done_t    = 0;
+	aio_ctx_obj->ev_queue_len = 0;
+	*ctxp                     = (io_context_t)aio_ctx_obj;
 
 	rc = D_MUTEX_INIT(&aio_ctx_obj->lock, NULL);
 	if (rc) {
@@ -6496,13 +6496,13 @@ create_ev_eq_for_aio(aio_ctx_t *aio_ctx)
 	int num_aio_eq_free, num_aio_eq_create;
 
 	D_MUTEX_LOCK(&lock_aio);
-	num_aio_eq_free = (int)eq_count_max - (int)eq_count - (int)aio_eq_count;
+	num_aio_eq_free   = (int)eq_count_max - (int)eq_count - (int)aio_eq_count;
 	num_aio_eq_create = min(aio_ctx->depth, num_aio_eq_free);
 	if (num_aio_eq_create > 0) {
 		/* allocate EQs for aio context*/
 		for (i = 0; i < num_aio_eq_create; i++) {
 			idx = aio_eq_count;
-			rc = daos_eq_create(&aio_eq_list[idx + i].eq);
+			rc  = daos_eq_create(&aio_eq_list[idx + i].eq);
 			if (rc)
 				goto free_eq;
 			D_MUTEX_INIT(&aio_eq_list[idx + i].lock, NULL);
@@ -6528,11 +6528,11 @@ create_ev_eq_for_aio(aio_ctx_t *aio_ctx)
 			return ENOMEM;
 		}
 		/* empty queue */
-		aio_ctx->ev_done_h    = 0;
-		aio_ctx->ev_done_t    = 0;
+		aio_ctx->ev_done_h       = 0;
+		aio_ctx->ev_done_t       = 0;
 		aio_ctx->ev_done_list[0] = NULL;
-		aio_ctx->ev_queue_len = 0;
-		aio_ctx->inited = true;
+		aio_ctx->ev_queue_len    = 0;
+		aio_ctx->inited          = true;
 	}
 	aio_ctx->on_dfs = true;
 	D_MUTEX_UNLOCK(&aio_ctx->lock);
@@ -6550,17 +6550,17 @@ free_eq:
 int
 io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 {
-	aio_ctx_t         *aio_ctx_obj = (aio_ctx_t *)ctx;
-	io_context_t       ctx_real    = aio_ctx_obj->ctx;
-	daos_size_t        read_size   = 0;
-	d_iov_t            iov         = {};
-	d_sg_list_t        sgl         = {};
-	struct aio_ev     *ctx_ev;
-	int                i, n_op_dfs, fd, io_depth;
-	int                idx_aio_eq;
-	int                rc;
-	short              op;
-	long int           aio_eq_count_local;
+	aio_ctx_t     *aio_ctx_obj = (aio_ctx_t *)ctx;
+	io_context_t   ctx_real    = aio_ctx_obj->ctx;
+	daos_size_t    read_size   = 0;
+	d_iov_t        iov         = {};
+	d_sg_list_t    sgl         = {};
+	struct aio_ev *ctx_ev;
+	int            i, n_op_dfs, fd, io_depth;
+	int            idx_aio_eq;
+	int            rc;
+	short          op;
+	long int       aio_eq_count_local;
 
 	if (next_io_submit == NULL) {
 		next_io_submit = dlsym(RTLD_NEXT, "io_submit");
@@ -6619,7 +6619,7 @@ io_submit(io_context_t ctx, long nr, struct iocb *ios[])
 		sgl.sg_iovs   = &iov;
 		ctx_ev->piocb = ios[i];
 		/* EQs are shared by contexts. Need to save ctx when polling EQs. */
-		ctx_ev->ctx   = aio_ctx_obj;
+		ctx_ev->ctx = aio_ctx_obj;
 		if (op == IO_CMD_PREAD) {
 			rc = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl,
 				      ios[i]->u.c.offset, &read_size, &ctx_ev->ev);
@@ -6711,10 +6711,10 @@ ev_dequeue_batch(struct aio_ctx *ctx, long min_nr, long nr, struct io_event *eve
 static void
 aio_poll_eqs(struct aio_ctx *ctx, long min_nr, long nr, struct io_event *events, int *num_ev)
 {
-	int                   i, j;
-	int                   rc;
-	struct daos_event    *eps[AIO_EQ_DEPTH + 1] = {0};
-	struct aio_ev        *p_aio_ev;
+	int                i, j;
+	int                rc;
+	struct daos_event *eps[AIO_EQ_DEPTH + 1] = {0};
+	struct aio_ev     *p_aio_ev;
 
 	ev_dequeue_batch(ctx, min_nr, nr, events, num_ev);
 	if (*num_ev >= min_nr)
@@ -6760,8 +6760,8 @@ aio_poll_eqs(struct aio_ctx *ctx, long min_nr, long nr, struct io_event *events,
 }
 
 static int
-io_getevents_sys(io_context_t ctx, long min_nr, long max_nr,
-		 struct io_event *events, struct timespec *timeout)
+io_getevents_sys(io_context_t ctx, long min_nr, long max_nr, struct io_event *events,
+		 struct timespec *timeout)
 {
 	return syscall(__NR_io_getevents, ctx, min_nr, max_nr, events, timeout);
 }
@@ -6803,7 +6803,7 @@ io_getevents(io_context_t ctx, long min_nr, long nr, struct io_event *events,
 			return op_done;
 		if (timeout) {
 			clock_gettime(CLOCK_REALTIME, &times_1);
-			dt.tv_sec  = times_1.tv_sec  - times_0.tv_sec;
+			dt.tv_sec  = times_1.tv_sec - times_0.tv_sec;
 			dt.tv_nsec = times_1.tv_nsec - times_0.tv_nsec;
 			if (dt.tv_nsec < 0) {
 				dt.tv_sec--;
