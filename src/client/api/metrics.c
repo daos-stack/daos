@@ -101,6 +101,9 @@ dc_tm_init(void)
 	int                 rc;
 
 	d_getenv_bool(DAOS_CLIENT_METRICS_ENABLE, &daos_client_metric);
+	if (!daos_client_metric && d_isenv_def(DAOS_CLIENT_METRICS_DUMP_PATH))
+		daos_client_metric = true;
+
 	if (!daos_client_metric)
 		return 0;
 
@@ -191,16 +194,21 @@ void
 dc_tm_fini()
 {
 	char *dump_path;
+	int   rc;
 
 	if (!daos_client_metric)
 		return;
 
-	dump_path = getenv(DAOS_CLIENT_METRICS_DUMP_PATH);
+	rc = d_agetenv_str(&dump_path, DAOS_CLIENT_METRICS_DUMP_PATH);
+	if (rc != 0)
+		D_GOTO(out, rc);
 	if (dump_path != NULL) {
 		D_INFO("dump path is %s\n", dump_path);
 		dump_tm_file(dump_path);
 	}
+	d_freeenv_str(&dump_path);
 
+out:
 	dc_tls_fini();
 	dc_tls_key_delete();
 
