@@ -34,6 +34,13 @@
 ## default endpoint port: 9192
 #telemetry_port: 9192
 
+## Enable client telemetry for all DAOS clients.
+# If false, clients will need to optionally enable telemetry by setting
+# the D_CLIENT_METRICS_ENABLE environment variable to true.
+#
+## default: false
+#telemetry_enabled: true
+
 ## Retain client telemetry for a period of time after the client
 # process exits.
 #

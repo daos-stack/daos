@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -66,6 +66,7 @@ class DaosAgentYamlParameters(YamlParameters):
         self.control_log_mask = BasicParameter(None, "debug")
         self.exclude_fabric_ifaces = BasicParameter(None)
         self.telemetry_port = BasicParameter(None)
+        self.telemetry_enabled = BasicParameter(None)
         self.telemetry_retain = BasicParameter(None)
 
     def update_log_file(self, name):

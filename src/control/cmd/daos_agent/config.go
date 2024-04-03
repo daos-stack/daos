@@ -57,11 +57,12 @@ type Config struct {
 	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
 	ProviderIdx         uint                      // TODO SRS-31: Enable with multiprovider functionality
 	TelemetryPort       int                       `yaml:"telemetry_port,omitempty"`
+	TelemetryEnabled    bool                      `yaml:"telemetry_enabled,omitempty"`
 	TelemetryRetain     time.Duration             `yaml:"telemetry_retain,omitempty"`
 }
 
-// TelemetryEnabled returns true if client telemetry collection/export is enabled.
-func (c *Config) TelemetryEnabled() bool {
+// TelemetryExportEnabled returns true if client telemetry export is enabled.
+func (c *Config) TelemetryExportEnabled() bool {
 	return c.TelemetryPort > 0
 }
 
@@ -99,6 +100,10 @@ func LoadConfig(cfgPath string) (*Config, error) {
 
 	if cfg.TelemetryRetain > 0 && cfg.TelemetryPort == 0 {
 		return nil, errors.New("telemetry_retain requires telemetry_port")
+	}
+
+	if cfg.TelemetryEnabled && cfg.TelemetryPort == 0 {
+		return nil, errors.New("telemetry_enabled requires telemetry_port")
 	}
 
 	return cfg, nil

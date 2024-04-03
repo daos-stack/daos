@@ -1216,7 +1216,7 @@ dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *ow
 	}
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
 		D_ERROR("Client telemetry setup request unsuccessful: %d\n", dresp->status);
-		rc = -DER_MISC;
+		rc = -DER_UNINIT;
 		goto out_dresp;
 	}
 
@@ -1225,7 +1225,7 @@ dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *ow
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	if (resp == NULL) {
 		D_ERROR("failed to unpack SetupClientTelemetry response\n");
-		rc = -DER_MISC;
+		rc = -DER_NOMEM;
 		goto out_dresp;
 	}
 	if (resp->status != 0) {

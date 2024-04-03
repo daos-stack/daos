@@ -49,7 +49,7 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 		devStateGetter:  hwprov.DefaultNetDevStateProvider(log),
 	}
 
-	ic.clientTelemetryEnabled.Store(cfg.TelemetryEnabled())
+	ic.clientTelemetryEnabled.Store(cfg.TelemetryEnabled)
 	ic.clientTelemetryRetain.Store(cfg.TelemetryRetain > 0)
 
 	if cfg.DisableCache {

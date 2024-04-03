@@ -100,7 +100,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 	cmd.Debugf("started process monitor: %s", time.Since(procmonStart))
 
 	var clientMetricSource *promexp.ClientSource
-	if cmd.cfg.TelemetryEnabled() {
+	if cmd.cfg.TelemetryExportEnabled() {
 		if clientMetricSource, err = promexp.NewClientSource(ctx); err != nil {
 			return errors.Wrap(err, "unable to create client metrics source")
 		}

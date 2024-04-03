@@ -20,6 +20,7 @@ server_config:
 agent_config:
   telemetry_port: 9191
   telemetry_retain: 30s
+  telemetry_enabled: true
 
 pool:
   scm_size: 2G
