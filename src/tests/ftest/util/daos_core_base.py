@@ -83,7 +83,9 @@ class DaosCoreBase(TestWithServers):
                     env_dict = {
                         item.split("=")[0]: item.split("=")[1]
                         for item in env_vars}
-                    env_dict["CRT_CTX_SHARE_ADDR"] = "1"
+
+                    self.log.error("Scalable endpoint mode not implemented");
+
                     env_dict["COVFILE"] = "/tmp/test.cov"
                     env_dict["D_LOG_FILE_APPEND_PID"] = "1"
                     env_dict["D_LOG_FILE_APPEND_RANK"] = "1"

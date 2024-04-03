@@ -542,9 +542,8 @@ int dc_mgmt_net_cfg(const char *name)
 		crt_ctx_share_addr = NULL;
 		D_GOTO(cleanup, rc = -DER_NOMEM);
 	}
-	rc = d_setenv("CRT_CTX_SHARE_ADDR", crt_ctx_share_addr, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
+
+	/* TODO: In future if SEP is supported, enable SEP based on crt_ctx_share_addr */
 
 	/* If the server has set this, the client must use the same value. */
 	if (info.srv_srx_set != -1) {

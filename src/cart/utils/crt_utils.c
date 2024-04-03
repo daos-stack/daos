@@ -415,7 +415,6 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 {
 	int                      rc;
 	char                    *provider;
-	char                    *crt_ctx_share_addr = NULL;
 	char                    *cli_srx_set        = NULL;
 	char                    *crt_timeout        = NULL;
 	char                    *d_interface;
@@ -443,15 +442,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
-	rc = asprintf(&crt_ctx_share_addr, "%d", crt_net_cfg_info.crt_ctx_share_addr);
-	if (rc < 0) {
-		crt_ctx_share_addr = NULL;
-		D_GOTO(cleanup, rc = -DER_NOMEM);
-	}
-	D_INFO("setenv CRT_CTX_SHARE_ADDR=%s\n", crt_ctx_share_addr);
-	rc = d_setenv("CRT_CTX_SHARE_ADDR", crt_ctx_share_addr, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
+	/* TODO: In future set SEP mode based on crt_ctx_share_addr value */
 
 	/* If the server has set this, the client must use the same value. */
 	if (crt_net_cfg_info.srv_srx_set != -1) {
@@ -519,16 +510,14 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	}
 
 	D_INFO("CaRT env setup with:\n"
-	       "\tD_INTERFACE=%s, D_DOMAIN: %s, D_PROVIDER: %s, "
-	       "CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
-	       d_interface, d_domain, provider, crt_ctx_share_addr, crt_timeout);
+	       "\tD_INTERFACE=%s, D_DOMAIN: %s, D_PROVIDER: %s, CRT_TIMEOUT: %s\n",
+	       d_interface, d_domain, provider, crt_timeout);
 
 cleanup:
 	d_freeenv_str(&d_domain_env);
 	d_freeenv_str(&d_interface_env);
 	d_freeenv_str(&crt_timeout);
 	d_freeenv_str(&cli_srx_set);
-	d_freeenv_str(&crt_ctx_share_addr);
 	dc_put_attach_info(&crt_net_cfg_info, crt_net_cfg_resp);
 
 	return rc;

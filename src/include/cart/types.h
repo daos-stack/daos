@@ -45,14 +45,9 @@ typedef struct crt_init_options {
 	 * evnironment variable.
 	 */
 	int		cio_crt_timeout;
-	/**
-	 * if cio_sep_override is 0, the two fields following it won't be used.
-	 */
+	/** if cio_sep_override is 0 the cio_use_sep won't be used */
 	uint32_t	cio_sep_override:1,
-			/**
-			 * overrides the value of the environment variable
-			 * CRT_CTX_SHARE_ADDR
-			 */
+			/** whether or not to use SEP. not supported currently */
 			cio_use_sep:1,
 			/** whether or not to inject faults */
 			cio_fault_inject:1,
@@ -67,10 +62,7 @@ typedef struct crt_init_options {
 			/** whether or not to use expected sizes */
 			cio_use_expected_size:1,
 			cio_use_unexpected_size:1;
-	/**
-	 * overrides the value of the environment variable
-	 * CRT_CTX_NUM
-	 */
+	/** overrides the value of the environment variable CRT_CTX_NUM */
 	int		cio_ctx_max_num;
 
 	/** Used with cio_use_credits to set credit limit */

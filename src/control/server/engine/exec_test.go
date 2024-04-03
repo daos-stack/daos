@@ -182,7 +182,6 @@ func TestRunnerNormalExit(t *testing.T) {
 	var gotArgs string
 	env := []string{
 		"FI_OFI_RXM_USE_SRX=1",
-		"CRT_CTX_SHARE_ADDR=1",
 		"CRT_TIMEOUT=30",
 		"D_INTERFACE=qib0",
 		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",

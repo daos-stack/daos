@@ -556,7 +556,6 @@ def set_test_environment(logger, test_env=None, servers=None, clients=None, prov
         os.environ["D_LOG_FILE"] = os.path.join(test_env.log_dir, "daos.log")
         os.environ["D_LOG_FILE_APPEND_PID"] = "1"
         os.environ["D_LOG_FILE_APPEND_RANK"] = "1"
-        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
 
     # Python paths required for functional testing
     set_python_environment(logger)

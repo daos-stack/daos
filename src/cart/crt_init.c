@@ -235,6 +235,9 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 		}
 	}
 
+	if (set_sep)
+		D_WARN("Scalable endpoint mode not supported. Unset CRT_CTX_SHARE_ADDR\n");
+
 	if (opt && opt->cio_use_expected_size)
 		max_expect_size = opt->cio_max_expected_size;
 

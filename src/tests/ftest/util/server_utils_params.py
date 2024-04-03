@@ -466,7 +466,6 @@ class EngineYamlParameters(YamlParameters):
         # Use environment variables to get default parameters
         default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
         default_port = int(os.environ.get("D_PORT", 31416))
-        default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
 
         # All log files should be placed in the same directory on each host
         # to enable easy log file archiving by launch.py
@@ -481,9 +480,6 @@ class EngineYamlParameters(YamlParameters):
         #   log_mask:               map to D_LOG_MASK env
         #   log_file:               map to D_LOG_FILE env
         #   env_vars:               influences DAOS I/O Engine behavior
-        #       Add to enable scalable endpoint:
-        #           - CRT_CTX_SHARE_ADDR=1
-        #           - CRT_CTX_NUM=8
         self.targets = BasicParameter(None, 8)
         self.first_core = BasicParameter(None, 0)
         self.nr_xs_helpers = BasicParameter(None, 4)
