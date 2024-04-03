@@ -2053,7 +2053,7 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 	assert_true(total_entries == 200);
 
 	/** set anchor at the saved entry and restart iteration */
-	rc = dfs_dir_anchor_set(dfs_mt, dir, anchor_name, &anchor);
+	rc = dfs_dir_anchor_set(dir, anchor_name, &anchor);
 	assert_int_equal(rc, 0);
 	total_entries = 0;
 	print_message("restart readdir with anchor set at: %s\n", anchor_name);
@@ -2072,7 +2072,7 @@ dfs_test_readdir_internal(void **state, daos_oclass_id_t obj_class)
 	assert_true(total_entries == 150);
 
 	/** set anchor at the saved entry */
-	rc = dfs_dir_anchor_set(dfs_mt, dir, anchor_name, &anchor);
+	rc = dfs_dir_anchor_set(dir, anchor_name, &anchor);
 	assert_int_equal(rc, 0);
 	total_entries = 0;
 

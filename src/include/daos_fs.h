@@ -716,7 +716,6 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * Set the readdir/iterate anchor to start from a specific entry name in a directory object. When
  * using the anchor in a readdir call, the iteration will start from the position of that entry.
  *
- * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened directory object.
  * \param[in]	name	Entry name of a file/dir in the open directory where anchor should be set.
  * \param[out]	anchor	Hash anchor returned for the position of the entry name in \a obj.
@@ -724,7 +723,7 @@ dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * \return		0 on success, errno code on failure.
  */
 int
-dfs_dir_anchor_set(dfs_t *dfs, dfs_obj_t *obj, const char name[], daos_anchor_t *anchor);
+dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor);
 
 /**
  * Provide a function for large directories to split an anchor to be able to

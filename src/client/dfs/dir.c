@@ -313,7 +313,7 @@ dfs_obj_anchor_set(dfs_obj_t *obj, uint32_t index, daos_anchor_t *anchor)
 }
 
 int
-dfs_dir_anchor_set(dfs_t *dfs, dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
+dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
 {
 	daos_key_t dkey;
 	size_t     len;
@@ -326,6 +326,6 @@ dfs_dir_anchor_set(dfs_t *dfs, dfs_obj_t *obj, const char name[], daos_anchor_t 
 		return rc;
 
 	d_iov_set(&dkey, (void *)name, len);
-	rc = daos_obj_key2anchor(obj->oh, dfs->th, &dkey, NULL, anchor, NULL);
+	rc = daos_obj_key2anchor(obj->dfs->th, dfs->th, &dkey, NULL, anchor, NULL);
 	return daos_der2errno(rc);
 }

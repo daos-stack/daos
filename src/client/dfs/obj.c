@@ -170,7 +170,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		oid_cp(&entry->oid, file->oid);
 
 		/** Open the array object for the file */
-		rc = daos_array_open_with_attr(dfs->coh, file->oid, DAOS_TX_NONE, DAOS_OO_RW, 1,
+		rc = daos_array_open_with_attr(dfs->coh, file->oid, dfs->th, DAOS_OO_RW, 1,
 					       chunk_size, &file->oh, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_open_with_attr() failed " DF_RC "\n", DP_RC(rc));
@@ -186,7 +186,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
 		entry->chunk_size                     = chunk_size;
 
-		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len,
+		rc = insert_entry(dfs->layout_v, parent->oh, dfs->th, file->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc == EEXIST && !oexcl) {
 			int rc2;
@@ -212,7 +212,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 	}
 
 	/* Check if parent has the filename entry */
-	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len, false, &exists,
+	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, file->name, len, false, &exists,
 			 entry, 0, NULL, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", file->name, rc);
@@ -235,7 +235,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 
 	/** Open the byte array */
 	file->mode = entry->mode;
-	rc         = daos_array_open_with_attr(dfs->coh, entry->oid, DAOS_TX_NONE, daos_mode, 1,
+	rc         = daos_array_open_with_attr(dfs->coh, entry->oid, dfs->th, daos_mode, 1,
 					       entry->chunk_size, &file->oh, NULL);
 	if (rc != 0) {
 		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n", DP_RC(rc));
@@ -243,7 +243,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 	}
 
 	if (flags & O_TRUNC) {
-		rc = daos_array_set_size(file->oh, DAOS_TX_NONE, 0, NULL);
+		rc = daos_array_set_size(file->oh, dfs->th, 0, NULL);
 		if (rc) {
 			D_ERROR("Failed to truncate file " DF_RC "\n", DP_RC(rc));
 			daos_array_close(file->oh, NULL);
@@ -252,7 +252,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 		if (size)
 			*size = 0;
 	} else if (size) {
-		rc = daos_array_get_size(file->oh, DAOS_TX_NONE, size, NULL);
+		rc = daos_array_get_size(file->oh, dfs->th, size, NULL);
 		if (rc != 0) {
 			D_ERROR("daos_array_get_size() failed (%d)\n", rc);
 			daos_array_close(file->oh, NULL);
@@ -311,7 +311,7 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, con
 		entry->value     = sym->value;
 		entry->value_len = value_len;
 
-		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, sym->name, len,
+		rc = insert_entry(dfs->layout_v, parent->oh, dfs->th, sym->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc == EEXIST) {
 			D_FREE(sym->value);
@@ -674,7 +674,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	obj->flags              = flags ? flags : obj_glob->flags;
 
 	daos_mode = get_daos_obj_mode(obj->flags);
-	rc        = daos_array_open_with_attr(dfs->coh, obj->oid, DAOS_TX_NONE, daos_mode, 1,
+	rc        = daos_array_open_with_attr(dfs->coh, obj->oid, dfs->th, daos_mode, 1,
 					      obj_glob->chunk_size, &obj->oh, NULL);
 	if (rc) {
 		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n", DP_RC(rc));
@@ -772,7 +772,7 @@ dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 		oh = parent->oh;
 	}
 
-	return entry_stat(dfs, DAOS_TX_NONE, oh, name, len, NULL, true, stbuf, NULL);
+	return entry_stat(dfs, dfs->th, oh, name, len, NULL, true, stbuf, NULL);
 }
 
 int
@@ -792,7 +792,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 		return daos_der2errno(rc);
 
 	rc =
-	    entry_stat(dfs, DAOS_TX_NONE, oh, obj->name, strlen(obj->name), obj, true, stbuf, NULL);
+	    entry_stat(dfs, dfs->th, oh, obj->name, strlen(obj->name), obj, true, stbuf, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -924,7 +924,7 @@ statx_task(tse_task_t *task)
 
 	fetch_arg        = daos_task_get_args(fetch_task);
 	fetch_arg->oh    = args->parent_oh;
-	fetch_arg->th    = DAOS_TX_NONE;
+	fetch_arg->th    = dfs->th;
 	fetch_arg->flags = DAOS_COND_DKEY_FETCH;
 	fetch_arg->dkey  = &op_args->dkey;
 	fetch_arg->nr    = 1;
@@ -943,7 +943,7 @@ statx_task(tse_task_t *task)
 		/** set array_stat parameters */
 		stat_arg        = daos_task_get_args(stat_task);
 		stat_arg->oh    = args->obj->oh;
-		stat_arg->th    = DAOS_TX_NONE;
+		stat_arg->th    = dfs->th;
 		stat_arg->stbuf = &op_args->array_stbuf;
 		need_stat       = true;
 	} else if (S_ISDIR(args->obj->mode)) {
@@ -958,7 +958,7 @@ statx_task(tse_task_t *task)
 		/** set obj_query parameters */
 		stat_arg            = daos_task_get_args(stat_task);
 		stat_arg->oh        = args->obj->oh;
-		stat_arg->th        = DAOS_TX_NONE;
+		stat_arg->th        = dfs->th;
 		stat_arg->max_epoch = &op_args->array_stbuf.st_max_epoch;
 		stat_arg->flags     = 0;
 		stat_arg->dkey      = NULL;
@@ -1073,7 +1073,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 	}
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry, 0, NULL,
+	rc = fetch_entry(dfs->layout_v, oh, dfs->th, name, len, true, &exists, &entry, 0, NULL,
 			 NULL, NULL);
 	if (rc)
 		return rc;
@@ -1109,7 +1109,7 @@ int
 dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 {
 	daos_handle_t    oh;
-	daos_handle_t    th = DAOS_TX_NONE;
+	daos_handle_t    th = dfs->th;
 	bool             exists;
 	struct dfs_entry entry = {0};
 	d_sg_list_t      sgl;
@@ -1154,7 +1154,7 @@ dfs_chmod(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode)
 	}
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry, 0, NULL,
+	rc = fetch_entry(dfs->layout_v, oh, dfs->th, name, len, true, &exists, &entry, 0, NULL,
 			 NULL, NULL);
 	if (rc)
 		return rc;
@@ -1240,7 +1240,7 @@ int
 dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid, int flags)
 {
 	daos_handle_t    oh;
-	daos_handle_t    th = DAOS_TX_NONE;
+	daos_handle_t    th = dfs->th;
 	bool             exists;
 	struct dfs_entry entry = {0};
 	daos_key_t       dkey;
@@ -1279,7 +1279,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 	}
 
 	/* Check if parent has the entry */
-	rc = fetch_entry(dfs->layout_v, oh, DAOS_TX_NONE, name, len, true, &exists, &entry, 0, NULL,
+	rc = fetch_entry(dfs->layout_v, oh, dfs->th, name, len, true, &exists, &entry, 0, NULL,
 			 NULL, NULL);
 	if (rc)
 		return rc;
@@ -1374,7 +1374,7 @@ out:
 int
 dfs_osetattr(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, int flags)
 {
-	daos_handle_t      th = DAOS_TX_NONE;
+	daos_handle_t      th = dfs->th;
 	daos_key_t         dkey;
 	daos_handle_t      oh;
 	d_sg_list_t        sgl;
@@ -1610,11 +1610,11 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 
 	/** simple truncate */
 	if (len == DFS_MAX_FSIZE) {
-		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, offset, NULL);
+		rc = daos_array_set_size(obj->oh, dfs->th, offset, NULL);
 		return daos_der2errno(rc);
 	}
 
-	rc = daos_array_get_size(obj->oh, DAOS_TX_NONE, &size, NULL);
+	rc = daos_array_get_size(obj->oh, dfs->th, &size, NULL);
 	if (rc)
 		return daos_der2errno(rc);
 
@@ -1629,7 +1629,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 
 	/** if fsize is between the range to punch, just truncate to offset */
 	if (offset < size && size <= hi) {
-		rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, offset, NULL);
+		rc = daos_array_set_size(obj->oh, dfs->th, offset, NULL);
 		return daos_der2errno(rc);
 	}
 
@@ -1641,7 +1641,7 @@ dfs_punch(dfs_t *dfs, dfs_obj_t *obj, daos_off_t offset, daos_size_t len)
 	rg.rg_idx   = offset;
 	iod.arr_rgs = &rg;
 
-	rc = daos_array_punch(obj->oh, DAOS_TX_NONE, &iod, NULL);
+	rc = daos_array_punch(obj->oh, dfs->th, &iod, NULL);
 	if (rc) {
 		D_ERROR("daos_array_punch() failed (%d)\n", rc);
 		return daos_der2errno(rc);
