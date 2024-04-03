@@ -103,8 +103,8 @@ round-robin selection algorithm to choose the responses within the same NUMA
 node.
 
 The Get Attach Info payload contains the network configuration parameters which
-include the OFI_INTERFACE, OFI_DOMAIN, CRT_TIMEOUT, provider, and
-CRT_CTX_SHARE_ADDR.  The OFI_INTERFACE, OFI_DOMAIN and CRT_TIMEOUT may be
+include the D_INTERFACE, D_DOMAIN, CRT_TIMEOUT, provider, and
+CRT_CTX_SHARE_ADDR.  The D_INTERFACE, D_DOMAIN and CRT_TIMEOUT may be
 overridden by setting any of these environment variables in the client
 environment prior to launch.  The daos client library will initialize CaRT with
 the values provided by the Get Attach Info request unless overridden.
