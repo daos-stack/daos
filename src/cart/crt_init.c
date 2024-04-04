@@ -215,7 +215,6 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
-	if (opt && opt->cio_sep_override)
 	/* Assume for now this option is only available for a primary provider */
 	if (primary) {
 		if (opt && opt->cio_sep_override) {
