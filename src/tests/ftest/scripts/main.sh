@@ -51,11 +51,11 @@ cp -a "$PREFIX"/lib/daos/python pydaos
 pip install ./pydaos
 rm -rf pydaos
 
-# Disable CRT_PHY_ADDR_STR to allow launch.py to set it
-unset CRT_PHY_ADDR_STR
+# Disable D_PROVIDER to allow launch.py to set it
+unset D_PROVIDER
 
-# Disable OFI_INTERFACE to allow launch.py to pick the fastest interface
-unset OFI_INTERFACE
+# Disable D_INTERFACE to allow launch.py to pick the fastest interface
+unset D_INTERFACE
 
 # At Oct2018 Longmond F2F it was decided that per-server logs are preferred
 # But now we need to collect them!  Avoid using 'client_daos.log' due to

@@ -1105,9 +1105,9 @@ class DaosServer():
             # pylint: disable-next=consider-using-with
             tmp_dir = tempfile.TemporaryDirectory(prefix='pil4dfs_mount')
             cwd = tmp_dir.name
-            cmd_env['DAOS_MOUNT_POINT'] = cwd
-            cmd_env['DAOS_POOL'] = container.pool.id()
-            cmd_env['DAOS_CONTAINER'] = container.id()
+            cmd_env['D_IL_MOUNT_POINT'] = cwd
+            cmd_env['D_IL_POOL'] = container.pool.id()
+            cmd_env['D_IL_CONTAINER'] = container.id()
         else:
             cwd = None
 
@@ -1156,8 +1156,8 @@ class DaosServer():
         """Run the client code to set server params"""
         cmd_env = get_base_env()
 
-        cmd_env['OFI_INTERFACE'] = self.network_interface
-        cmd_env['CRT_PHY_ADDR_STR'] = self.network_provider
+        cmd_env['D_INTERFACE'] = self.network_interface
+        cmd_env['D_PROVIDER'] = self.network_provider
         valgrind_hdl = ValgrindHelper(self.conf)
 
         if self.conf.args.memcheck == 'no':
