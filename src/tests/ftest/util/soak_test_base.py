@@ -140,8 +140,7 @@ class SoakTestBase(TestWithServers):
                 run_local(self.log, cmd, timeout=120)
             except RunException as error:
                 # Exception was raised due to a non-zero exit status
-                errors.append("Failed to cancel jobs {}: {}".format(
-                    self.failed_job_id_list, error))
+                errors.append(f"Failed to cancel jobs {self.failed_job_id_list}: {error}")
         if self.all_failed_jobs:
             errors.append("SOAK FAILED: The following jobs failed {} ".format(
                 " ,".join(str(j_id) for j_id in self.all_failed_jobs)))
