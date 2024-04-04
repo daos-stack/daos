@@ -660,26 +660,25 @@ func TestConfig_FabricValidation(t *testing.T) {
 
 func TestConfig_ToCmdVals(t *testing.T) {
 	var (
-		mountPoint      = "/mnt/test"
-		provider        = "test+foo"
-		interfaceName   = "ib0"
-		modules         = "foo,bar,baz"
-		systemName      = "test-system"
-		socketDir       = "/var/run/foo"
-		logMask         = "LOG_MASK_VALUE"
-		logFile         = "/path/to/log"
-		cfgPath         = "/path/to/nvme.conf"
-		interfacePort   = 20
-		targetCount     = 4
-		helperCount     = 1
-		serviceCore     = 8
-		index           = 2
-		pinnedNumaNode  = uint(1)
-		bypass          = true
-		crtCtxShareAddr = uint32(1)
-		crtTimeout      = uint32(30)
-		memSize         = 8192
-		hugepageSz      = 2
+		mountPoint     = "/mnt/test"
+		provider       = "test+foo"
+		interfaceName  = "ib0"
+		modules        = "foo,bar,baz"
+		systemName     = "test-system"
+		socketDir      = "/var/run/foo"
+		logMask        = "LOG_MASK_VALUE"
+		logFile        = "/path/to/log"
+		cfgPath        = "/path/to/nvme.conf"
+		interfacePort  = 20
+		targetCount    = 4
+		helperCount    = 1
+		serviceCore    = 8
+		index          = 2
+		pinnedNumaNode = uint(1)
+		bypass         = true
+		crtTimeout     = uint32(30)
+		memSize        = 8192
+		hugepageSz     = 2
 	)
 	cfg := MockConfig().
 		WithStorage(
@@ -700,7 +699,6 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		WithLogFile(logFile).
 		WithLogMask(logMask).
 		WithSystemName(systemName).
-		WithCrtCtxShareAddr(crtCtxShareAddr).
 		WithCrtTimeout(crtTimeout).
 		WithMemSize(memSize).
 		WithHugepageSize(hugepageSz).
@@ -1027,7 +1025,6 @@ func TestFabricConfig_Update(t *testing.T) {
 				Provider:              "provider",
 				Interface:             "iface",
 				InterfacePort:         9999,
-				CrtCtxShareAddr:       2,
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1036,7 +1033,6 @@ func TestFabricConfig_Update(t *testing.T) {
 				Provider:              "provider",
 				Interface:             "iface",
 				InterfacePort:         9999,
-				CrtCtxShareAddr:       2,
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1047,7 +1043,6 @@ func TestFabricConfig_Update(t *testing.T) {
 				Provider:              "provider",
 				Interface:             "iface",
 				InterfacePort:         9999,
-				CrtCtxShareAddr:       2,
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1057,7 +1052,6 @@ func TestFabricConfig_Update(t *testing.T) {
 				Provider:              "provider",
 				Interface:             "iface",
 				InterfacePort:         9999,
-				CrtCtxShareAddr:       2,
 				CrtTimeout:            60,
 				DisableSRX:            true,
 				NumSecondaryEndpoints: []int{1},
@@ -1065,24 +1059,21 @@ func TestFabricConfig_Update(t *testing.T) {
 		},
 		"update mixed": {
 			fc: &FabricConfig{
-				CrtCtxShareAddr: 2,
-				CrtTimeout:      60,
+				CrtTimeout: 60,
 			},
 			new: FabricConfig{
-				Provider:        "provider",
-				Interface:       "iface",
-				InterfacePort:   9999,
-				CrtCtxShareAddr: 15,
-				CrtTimeout:      120,
-				DisableSRX:      true,
+				Provider:      "provider",
+				Interface:     "iface",
+				InterfacePort: 9999,
+				CrtTimeout:    120,
+				DisableSRX:    true,
 			},
 			expResult: &FabricConfig{
-				Provider:        "provider",
-				Interface:       "iface",
-				InterfacePort:   9999,
-				CrtCtxShareAddr: 2,
-				CrtTimeout:      60,
-				DisableSRX:      true,
+				Provider:      "provider",
+				Interface:     "iface",
+				InterfacePort: 9999,
+				CrtTimeout:    60,
+				DisableSRX:    true,
 			},
 		},
 		"default secondary ctx": {

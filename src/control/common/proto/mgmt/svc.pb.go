@@ -630,12 +630,11 @@ type ClientNetHint struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Provider        string `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`                                           // CaRT provider
-	Interface       string `protobuf:"bytes,2,opt,name=interface,proto3" json:"interface,omitempty"`                                         // CaRT D_INTERFACE
-	Domain          string `protobuf:"bytes,3,opt,name=domain,proto3" json:"domain,omitempty"`                                               // CaRT D_DOMAIN for given D_INTERFACE
-	CrtCtxShareAddr uint32 `protobuf:"varint,4,opt,name=crt_ctx_share_addr,json=crtCtxShareAddr,proto3" json:"crt_ctx_share_addr,omitempty"` // CaRT CRT_CTX_SHARE_ADDR
-	CrtTimeout      uint32 `protobuf:"varint,5,opt,name=crt_timeout,json=crtTimeout,proto3" json:"crt_timeout,omitempty"`                    // CaRT CRT_TIMEOUT
-	NetDevClass     uint32 `protobuf:"varint,6,opt,name=net_dev_class,json=netDevClass,proto3" json:"net_dev_class,omitempty"`               // ARP protocol hardware identifier of the
+	Provider    string `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`                             // CaRT provider
+	Interface   string `protobuf:"bytes,2,opt,name=interface,proto3" json:"interface,omitempty"`                           // CaRT D_INTERFACE
+	Domain      string `protobuf:"bytes,3,opt,name=domain,proto3" json:"domain,omitempty"`                                 // CaRT D_DOMAIN for given D_INTERFACE
+	CrtTimeout  uint32 `protobuf:"varint,5,opt,name=crt_timeout,json=crtTimeout,proto3" json:"crt_timeout,omitempty"`      // CaRT CRT_TIMEOUT
+	NetDevClass uint32 `protobuf:"varint,6,opt,name=net_dev_class,json=netDevClass,proto3" json:"net_dev_class,omitempty"` // ARP protocol hardware identifier of the
 	// I/O Engine network interface
 	SrvSrxSet   int32    `protobuf:"varint,7,opt,name=srv_srx_set,json=srvSrxSet,proto3" json:"srv_srx_set,omitempty"`     // Server SRX setting (-1, 0, 1; -1 == unset)
 	EnvVars     []string `protobuf:"bytes,8,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty"`              // Client-side environment variables to set
@@ -693,13 +692,6 @@ func (x *ClientNetHint) GetDomain() string {
 		return x.Domain
 	}
 	return ""
-}
-
-func (x *ClientNetHint) GetCrtCtxShareAddr() uint32 {
-	if x != nil {
-		return x.CrtCtxShareAddr
-	}
-	return 0
 }
 
 func (x *ClientNetHint) GetCrtTimeout() uint32 {

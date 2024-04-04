@@ -262,10 +262,6 @@ struct  _Mgmt__ClientNetHint
    */
   char *domain;
   /*
-   * CaRT CRT_CTX_SHARE_ADDR
-   */
-  uint32_t crt_ctx_share_addr;
-  /*
    * CaRT CRT_TIMEOUT
    */
   uint32_t crt_timeout;
@@ -292,7 +288,7 @@ struct  _Mgmt__ClientNetHint
 };
 #define MGMT__CLIENT_NET_HINT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__client_net_hint__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0,NULL, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0,NULL, 0 }
 
 
 struct  _Mgmt__GetAttachInfoResp__RankUri

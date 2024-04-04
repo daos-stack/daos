@@ -1370,18 +1370,6 @@ static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[9
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "crt_ctx_share_addr",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__ClientNetHint, crt_ctx_share_addr),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "crt_timeout",
     5,
     PROTOBUF_C_LABEL_NONE,
@@ -1443,7 +1431,6 @@ static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[9
   },
 };
 static const unsigned mgmt__client_net_hint__field_indices_by_name[] = {
-  3,   /* field[3] = crt_ctx_share_addr */
   4,   /* field[4] = crt_timeout */
   2,   /* field[2] = domain */
   7,   /* field[7] = env_vars */

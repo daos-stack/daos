@@ -215,6 +215,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
+	if (opt && opt->cio_sep_override)
 	/* Assume for now this option is only available for a primary provider */
 	if (primary) {
 		if (opt && opt->cio_sep_override) {
@@ -235,8 +236,10 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 		}
 	}
 
-	if (set_sep)
+	if (set_sep) {
 		D_WARN("Scalable endpoint mode not supported. Unset CRT_CTX_SHARE_ADDR\n");
+		return -DER_NOSYS;
+	}
 
 	if (opt && opt->cio_use_expected_size)
 		max_expect_size = opt->cio_max_expected_size;

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -158,7 +158,6 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
 		WithPinnedNumaNode(1).
 		WithBypassHealthChk(&bypass).
-		WithCrtCtxShareAddr(1).
 		WithCrtTimeout(30).
 		WithStorage(
 			storage.NewTierConfig().

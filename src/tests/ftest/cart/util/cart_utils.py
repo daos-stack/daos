@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -192,7 +192,7 @@ class CartTest(TestWithoutServers):
 
         os.environ["D_PROVIDER"] = provider_str
 
-        log_dir = "{}".format(test_name)
+        log_dir = str(test_name)
 
         # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
         # (It can't be '.' or cwd(), it must be some place writable.)
@@ -274,8 +274,9 @@ class CartTest(TestWithoutServers):
 
         # Write memcheck result file(s) to $HOME or DAOS_TEST_SHARED_DIR.
         daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR', os.getenv('HOME'))
-        memcheck_xml = r"{}/valgrind.%q\{{PMIX_ID\}}_{}.memcheck".format(daos_test_shared_dir,
-                                                                            test_name)
+        memcheck_xml = r"{}/valgrind.%q\{{PMIX_ID\}}_{}.memcheck".format(
+            daos_test_shared_dir,
+            test_name)
         tst_cmd = ""
         tst_cont = None
 
