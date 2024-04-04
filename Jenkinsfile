@@ -1016,7 +1016,8 @@ pipeline {
                     post {
                         always {
                             discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos'
+                                                      scm: 'daos-stack/daos',
+                                                      requiredResult: 'UNSTABLE'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
