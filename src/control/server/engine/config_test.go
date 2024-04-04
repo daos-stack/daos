@@ -992,7 +992,6 @@ func TestConfig_EnvVarConflict(t *testing.T) {
 			wantEnv := []string{
 				"D_LOG_MASK=" + tc.expEnvMask,
 				"CRT_TIMEOUT=0",
-				"CRT_CTX_SHARE_ADDR=0",
 				"FI_OFI_RXM_USE_SRX=1",
 			}
 
