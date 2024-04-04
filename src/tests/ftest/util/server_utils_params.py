@@ -114,7 +114,6 @@ class DaosServerYamlParameters(YamlParameters):
         log_dir = os.environ.get("DAOS_TEST_LOG_DIR", os.path.join(os.sep, "tmp"))
 
         self.provider = BasicParameter(None, default_provider)
-        self.crt_ctx_share_addr = BasicParameter(None)
         self.crt_timeout = BasicParameter(None)
         self.disable_srx = BasicParameter(None)
         self.fabric_auth_key = BasicParameter(None)
