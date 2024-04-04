@@ -1935,6 +1935,12 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		mode = mode & mode_not_umask;
 		va_end(arg);
 		two_args = 0;
+		/* clear the bits for types */
+		mode &= ~S_IFMT;
+		if (oflags & O_DIRECTORY)
+			mode |= S_IFDIR;
+		else
+			mode |= S_IFREG;
 	}
 
 	if (!hook_enabled)
