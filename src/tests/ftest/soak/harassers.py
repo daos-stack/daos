@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,7 +30,7 @@ class SoakHarassers(SoakTestBase):
         test_param = "/run/soak_harassers/"
         self.run_soak(test_param)
 
-    def test_soak_online_harassers(self):
+    def test_soak_online_harassers_12h(self):
         """Run all soak tests with harassers.
 
         Test ID: DAOS-2511
@@ -64,7 +64,7 @@ class SoakHarassers(SoakTestBase):
         test_param = "/run/soak_harassers/"
         self.run_soak(test_param)
 
-    def test_soak_online_harassers(self):
+    def test_soak_online_harassers_24h(self):
         """Run all soak tests with harassers.
 
         Test ID: DAOS-2511

@@ -21,7 +21,7 @@ from dfuse_utils import Dfuse
 from dmg_utils import get_storage_query_device_info
 from duns_utils import format_path
 from fio_utils import FioCommand
-from general_utils import (check_ping, check_ssh, DaosTestError, get_host_data, get_log_file,
+from general_utils import (DaosTestError, check_ping, check_ssh, get_host_data, get_log_file,
                            get_random_bytes, get_random_string, list_to_str, pcmd, run_command,
                            run_pcmd, wait_for_result)
 from ior_utils import IorCommand
