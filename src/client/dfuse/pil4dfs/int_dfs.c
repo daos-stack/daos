@@ -1935,12 +1935,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		mode = mode & mode_not_umask;
 		va_end(arg);
 		two_args = 0;
-		/* clear the bits for types */
-		mode &= ~S_IFMT;
-		if (oflags & O_DIRECTORY)
-			mode |= S_IFDIR;
-		else
-			mode |= S_IFREG;
 	}
 
 	if (!hook_enabled)
@@ -1985,8 +1979,9 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	}
 	/* file/dir should be handled by DFS */
 	if (oflags & O_CREAT) {
-		rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFREG, oflags & (~O_APPEND),
-			      0, 0, NULL, &dfs_obj);
+		/* clear the bits for types first */
+		rc = dfs_open(dfs_mt->dfs, parent, item_name, (mode & (~S_IFMT)) | S_IFREG,
+			      oflags & (~O_APPEND), 0, 0, NULL, &dfs_obj);
 		mode_query = S_IFREG;
 	} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc =
