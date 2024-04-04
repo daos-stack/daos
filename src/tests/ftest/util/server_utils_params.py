@@ -503,9 +503,6 @@ class EngineYamlParameters(YamlParameters):
                 default_env_vars.extend(self.REQUIRED_ENV_VARS[name])
         self.env_vars = BasicParameter(None, default_env_vars)
 
-        # global CRT_CTX_SHARE_ADDR shared with client
-        self.crt_ctx_share_addr = BasicParameter(None, default_share_addr)
-
         # the storage configuration for this engine
         self.storage = StorageYamlParameters(self.namespace, max_storage_tiers)
 
