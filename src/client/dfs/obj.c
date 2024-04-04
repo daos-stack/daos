@@ -958,7 +958,7 @@ statx_task(tse_task_t *task)
 		/** set obj_query parameters */
 		stat_arg            = daos_task_get_args(stat_task);
 		stat_arg->oh        = args->obj->oh;
-		stat_arg->th        = dfs->th;
+		stat_arg->th        = args->dfs->th;
 		stat_arg->max_epoch = &op_args->array_stbuf.st_max_epoch;
 		stat_arg->flags     = 0;
 		stat_arg->dkey      = NULL;
