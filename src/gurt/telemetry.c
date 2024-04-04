@@ -628,7 +628,7 @@ alloc_node(struct d_tm_shmem_hdr *shmem, struct d_tm_node_t **newnode,
 	*newnode = node;
 out:
 	if (rc != 0)
-		DL_ERROR(rc, "failed to alloc node for %s\n", name);
+		DL_ERROR(rc, "failed to alloc node for %s", name);
 	return rc;
 }
 
@@ -2857,7 +2857,7 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 	rc = create_shmem(get_last_token(path), key, size_bytes, &new_shmid,
 			  &new_shmem);
 	if (unlikely(rc != 0)) {
-		DL_ERROR(rc, "failed to create shmem for %s\n", path);
+		DL_ERROR(rc, "failed to create shmem for %s", path);
 		D_GOTO(fail_unlock, rc);
 	}
 	new_node = new_shmem->sh_root;
@@ -2865,19 +2865,19 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 	/* track at the process level */
 	rc = track_open_shmem(ctx, new_shmem, new_shmid, key);
 	if (unlikely(rc != 0)) {
-		DL_ERROR(rc, "failed to track shmem for %s\n", path);
+		DL_ERROR(rc, "failed to track shmem for %s", path);
 		D_GOTO(fail_shmem, rc);
 	}
 
 	rc = attach_path_segment(key, path);
 	if (unlikely(rc != 0)) {
-		DL_ERROR(rc, "failed to attach 0x%x at %s\n", key, path);
+		DL_ERROR(rc, "failed to attach 0x%x at %s", key, path);
 		D_GOTO(fail_attach, rc);
 	}
 
 	rc = sync_attached_segment_uid(path, key);
 	if (unlikely(rc != 0)) {
-		DL_ERROR(rc, "failed to sync %s permissions\n", path);
+		DL_ERROR(rc, "failed to sync %s permissions", path);
 		D_GOTO(fail_sync, rc);
 	}
 
