@@ -169,7 +169,7 @@ class SoakTestBase(TestWithServers):
         try:
             get_daos_server_logs(self)
         except SoakTestError as error:
-            errors.append("<<FAILED: Failed to gather server logs {}>>".format(error))
+            errors.append(f"<<FAILED: Failed to gather server logs {error}>>")
         # Gather journalctl logs
         hosts = list(set(self.hostlist_servers))
         since = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.start_time))
@@ -272,9 +272,8 @@ class SoakTestBase(TestWithServers):
             self.log.error("<< ERROR: harasser %s is alive, failed to join>>", job.name)
             if name not in ["REBUILD", "SNAPSHOT"]:
                 job.terminate()
-                status_msg = "<<FAILED: {} has been terminated.".format(name)
-            raise SoakTestError(
-                "<<FAILED: Soak failed while running {} . ".format(name))
+                status_msg = f"<<FAILED: {name} has been terminated."
+            raise SoakTestError(f"<<FAILED: Soak failed while running {name}")
         if name not in ["REBUILD", "SNAPSHOT"]:
             self.harasser_results = results.get()
             self.harasser_args = args.get()
@@ -282,8 +281,7 @@ class SoakTestBase(TestWithServers):
         self.log.info("Harasser results: %s", self.harasser_results)
         self.log.info("Harasser args: %s", self.harasser_args)
         if not self.harasser_results[name.upper()]:
-            status_msg = "<< HARASSER {} FAILED in pass {} at {}>> ".format(
-                name, self.loop, time.ctime())
+            status_msg = f"<< HARASSER {name} FAILED in pass {self.loop} at {time.ctime()}>>"
             self.log.error(status_msg)
         return status_msg
 
@@ -346,8 +344,7 @@ class SoakTestBase(TestWithServers):
                     elif "datamover" in job:
                         commands = create_dm_cmdline(self, job, pool, ppn, npj)
                     else:
-                        raise SoakTestError(
-                            "<<FAILED: Job {} is not supported. ".format(job))
+                        raise SoakTestError(f"<<FAILED: Job {job} is not supported. ")
                     jobscript = build_job_script(self, commands, job, npj, ppn)
                     job_cmdlist.extend(jobscript)
         return job_cmdlist
@@ -386,9 +383,9 @@ class SoakTestBase(TestWithServers):
                 job_id_list.append(int(job_id))
             else:
                 # one of the jobs failed to queue; exit on first fail for now.
-                err_msg = "Slurm failed to submit job for {}".format(script)
+                err_msg = f"Slurm failed to submit job for {script}"
                 job_id_list = []
-                raise SoakTestError("<<FAILED:  Soak {}: {}>>".format(self.test_name, err_msg))
+                raise SoakTestError(f"<<FAILED:  Soak {self.test_name}: {err_msg}>>")
         return job_id_list
 
     def job_completion(self, job_id_list):
@@ -424,7 +421,7 @@ class SoakTestBase(TestWithServers):
                         time.ctime())
                     for job in job_id_list:
                         if not slurm_utils.cancel_jobs(self.log, self.control, int(job)).passed:
-                            self.fail("Error canceling Job {}".format(job))
+                            self.fail(f"Error canceling Job {job}")
                 # monitor events every 15 min
                 if datetime.now() > check_time:
                     run_monitor_check(self)
