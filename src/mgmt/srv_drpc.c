@@ -400,7 +400,7 @@ static int pool_create_fill_resp(Mgmt__PoolCreateResp *resp, uuid_t uuid, d_rank
 		D_GOTO(out, rc);
 	}
 
-	resp->leader = pool_info.pi_leader;
+	resp->svc_ldr = pool_info.pi_leader;
 
 	rc = rank_list_to_uint32_array(enabled_ranks, &resp->tgt_ranks, &resp->n_tgt_ranks);
 	if (rc != 0) {

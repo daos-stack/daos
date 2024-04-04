@@ -783,7 +783,6 @@ pipeline {
                                          valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          name: 'NLT server leaks',
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
@@ -1021,7 +1020,6 @@ pipeline {
                                                       scm: 'daos-stack/daos'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
                                                         [threshold: 1, type: 'TOTAL_HIGH'],

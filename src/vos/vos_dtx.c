@@ -305,8 +305,11 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 
 	D_ASSERT(dae_old != dae_new);
 
-	if (unlikely(dae_old->dae_aborting))
+	if (unlikely(dae_old->dae_aborting)) {
+		D_ERROR("Hit former in-aborting DTX entry %p "DF_DTI"\n",
+			dae_old, DP_DTI(&DAE_XID(dae_old)));
 		return -DER_INPROGRESS;
+	}
 
 	if (unlikely(!dae_old->dae_aborted)) {
 		/*
@@ -970,7 +973,10 @@ vos_dtx_alloc(struct umem_instance *umm, struct vos_dtx_blob_df *dbd, struct dtx
 	if (rc != 0) {
 		/* The array is full, need to commit some transactions first */
 		if (rc == -DER_BUSY)
-			return -DER_INPROGRESS;
+			rc = -DER_INPROGRESS;
+
+		D_ERROR("Failed to allocate active DTX entry for "DF_DTI"\n",
+			DP_DTI(&dth->dth_xid));
 		return rc;
 	}
 
@@ -2204,10 +2210,14 @@ vos_dtx_post_handle(struct vos_container *cont,
 
 			daes[i]->dae_prepared = 0;
 			if (abort) {
+				D_ASSERT(daes[i]->dae_committing == 0);
+
 				daes[i]->dae_aborted = 1;
 				daes[i]->dae_aborting = 0;
 				dtx_act_ent_cleanup(cont, daes[i], NULL, true);
 			} else {
+				D_ASSERT(daes[i]->dae_aborting == 0);
+
 				daes[i]->dae_committed = 1;
 				daes[i]->dae_committing = 0;
 				dtx_act_ent_cleanup(cont, daes[i], NULL, false);
@@ -2308,6 +2318,8 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 out:
 	if (rc == 0 || force)
 		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
+	else if (rc != 0)
+		dae->dae_aborting = 0;
 
 	return rc;
 }
