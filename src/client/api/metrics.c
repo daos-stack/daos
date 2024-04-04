@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/utsname.h>
 #include <sys/shm.h>
 #include <daos/common.h>
@@ -101,7 +102,7 @@ dc_tm_init(void)
 	int                 rc;
 
 	d_getenv_bool(DAOS_CLIENT_METRICS_ENABLE, &daos_client_metric);
-	if (!daos_client_metric && d_isenv_def(DAOS_CLIENT_METRICS_DUMP_PATH))
+	if (!daos_client_metric && d_isenv_def(DAOS_CLIENT_METRICS_DUMP_DIR))
 		daos_client_metric = true;
 
 	if (!daos_client_metric)
@@ -150,18 +151,49 @@ iter_dump(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, char *p
 }
 
 static int
-dump_tm_file(const char *dump_path)
+dump_tm_file(const char *dump_dir)
 {
 	struct d_tm_context *ctx;
 	struct d_tm_node_t  *root;
 	char                 dirname[D_TM_MAX_NAME_LEN] = {0};
+	char                 file_path[1024]            = {0};
+	pid_t                pid                        = getpid();
 	uint32_t             filter;
 	FILE                *dump_file;
 	int                  rc = 0;
 
-	dump_file = fopen(dump_path, "w+");
+	rc = mkdir(dump_dir, 0770);
+	if (rc < 0) {
+		if (errno != EEXIST) {
+			rc = d_errno2der(errno);
+			DL_ERROR(rc, "mkdir(%s) failed", dump_dir);
+			return rc;
+		}
+
+		struct stat stbuf = {0};
+		rc                = stat(dump_dir, &stbuf);
+		if (rc < 0) {
+			rc = d_errno2der(errno);
+			DL_ERROR(rc, "stat(%s) failed", dump_dir);
+			return rc;
+		}
+
+		if ((stbuf.st_mode & S_IFMT) != S_IFDIR) {
+			D_ERROR("%s exists and is not a directory\n", dump_dir);
+			return -DER_INVAL;
+		}
+	}
+
+	rc = snprintf(file_path, sizeof(file_path), "%s/%s-%d.csv", dump_dir, dc_jobid, pid);
+	if (rc > sizeof(file_path)) {
+		D_ERROR("unable to create dump file from %s\n", dump_dir);
+		return -DER_INVAL;
+	}
+	rc        = 0;
+	dump_file = fopen(file_path, "w+");
 	if (dump_file == NULL) {
-		D_INFO("cannot open %s", dump_path);
+		rc = d_errno2der(errno);
+		DL_ERROR(rc, "cannot open %s", file_path);
 		return -DER_INVAL;
 	}
 
@@ -172,15 +204,15 @@ dump_tm_file(const char *dump_path)
 	if (ctx == NULL)
 		D_GOTO(close, rc = -DER_NOMEM);
 
-	snprintf(dirname, sizeof(dirname), "%s/%u", dc_jobid, getpid());
+	snprintf(dirname, sizeof(dirname), "%s/%u", dc_jobid, pid);
 	root = d_tm_find_metric(ctx, dirname);
 	if (root == NULL) {
-		printf("No metrics found at: '%s'\n", dirname);
+		D_INFO("No metrics found at: '%s'\n", dirname);
 		D_GOTO(close_ctx, rc = -DER_NONEXIST);
 	}
 
+	D_INFO("dumping telemetry to %s\n", file_path);
 	d_tm_print_field_descriptors(0, dump_file);
-
 	d_tm_iterate(ctx, root, 0, filter, NULL, D_TM_CSV, 0, iter_dump, dump_file);
 
 close_ctx:
@@ -193,20 +225,21 @@ close:
 void
 dc_tm_fini()
 {
-	char *dump_path;
+	char *dump_dir;
 	int   rc;
 
 	if (!daos_client_metric)
 		return;
 
-	rc = d_agetenv_str(&dump_path, DAOS_CLIENT_METRICS_DUMP_PATH);
+	rc = d_agetenv_str(&dump_dir, DAOS_CLIENT_METRICS_DUMP_DIR);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	if (dump_path != NULL) {
-		D_INFO("dump path is %s\n", dump_path);
-		dump_tm_file(dump_path);
+	if (dump_dir != NULL) {
+		rc = dump_tm_file(dump_dir);
+		if (rc != 0)
+			DL_ERROR(rc, "telemetry dump failed");
 	}
-	d_freeenv_str(&dump_path);
+	d_freeenv_str(&dump_dir);
 
 out:
 	dc_tls_fini();
