@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.101
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -583,7 +583,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Thu Mar 21 2024 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.5.101-3
+* Thu Apr 04 2024 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.5.101-3
 - Update pydaos install process
 - Add a dependency from daos-client-tests to daos-devel
 
