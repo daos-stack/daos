@@ -90,8 +90,8 @@ class ContinuousWrite(IorTestBase):
 
         1. Create a pool and a container.
         2. Write a several MB file and repeatedly overwrite it with a thread.
-        3. Monitor the NVMe Free space with dmg pool query and verify that the free space goes up at
-        certain point.
+        3. Monitor the NVMe Free space with dmg pool query and verify that the free space goes up
+        at certain point.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
