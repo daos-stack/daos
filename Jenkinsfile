@@ -1017,7 +1017,7 @@ pipeline {
                         always {
                             discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
                                                       scm: 'daos-stack/daos',
-                                                      requiredResult: 'UNSTABLE'
+                                                      requiredResult: hudson.model.Result.UNSTABLE
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
                                          ignoreQualityGate: true,
