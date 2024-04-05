@@ -195,7 +195,7 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 	char *saveptr;
 	bool  prob_y = false;
 	char *tokens[FI_ATTR_MAX_TOKENS];
-	int   token_cnt = 0;
+	int   idx, token_cnt = 0;
 
 	D_ASSERTF(arg_str != NULL, "arg_str is NULL.\n");
 	D_ASSERTF(fi_attr_in != NULL, "fi_attr_in is NULL.\n");
@@ -224,9 +224,10 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 			goto error_out;
 		prob_y = true;
 	}
-	fi_attr_in->fa_err_code = strtoull(tokens[prob_y ? 4 : 3], NULL, 10);
-	fi_attr_in->fa_interval = strtoull(tokens[prob_y ? 5 : 4], NULL, 10);
-	fi_attr_in->fa_argument = tokens[prob_y ? 6 : 5];
+	idx = prob_y ? 4 : 3; 
+	fi_attr_in->fa_err_code = strtoull(tokens[idx], NULL, 10);
+	fi_attr_in->fa_interval = strtoull(tokens[idx+1], NULL, 10);
+	fi_attr_in->fa_argument = tokens[idx+2];
 	return;
 
 error_out:
