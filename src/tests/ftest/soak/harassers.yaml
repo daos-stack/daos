@@ -55,7 +55,7 @@ container:
   daos_timeout: 30
 container_reserved:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   file_oclass: SX
   dir_oclass: SX
   control_method: daos
