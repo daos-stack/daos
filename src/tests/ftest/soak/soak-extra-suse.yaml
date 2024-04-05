@@ -1,0 +1,3 @@
+hdf5_vol:
+  plugin_path: /usr/lib64/mpi/gcc/mpich/lib
+mpi_module: "gnu-mpich"
