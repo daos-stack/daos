@@ -54,7 +54,7 @@ class Pil4dfsFio(DfuseTestBase):
             cpus += arch.get_numa_cpus(numa_idx)[:cores_quantity]
         self.fio_cpus_allowed = str(NodeSet(str(cpus)))[1:-1]
 
-    def create_container(self):
+    def _create_container(self):
         """Created a DAOS POSIX container"""
         self.log.info("Creating pool")
         self.assertIsNone(self.pool, "Unexpected pool before starting test")
@@ -64,7 +64,7 @@ class Pil4dfsFio(DfuseTestBase):
         self.assertIsNone(self.container, "Unexpected container before starting test")
         self.add_container(self.pool)
 
-    def destroy_container(self):
+    def _destroy_container(self):
         """Destroy DAOS POSIX container previously created"""
         if self.container is not None:
             self.log.debug("Destroying container %s", str(self.container))
@@ -76,7 +76,7 @@ class Pil4dfsFio(DfuseTestBase):
             self.destroy_pools(self.pool)
             self.pool = None
 
-    def get_bandwidth(self, fio_result, rw):
+    def _get_bandwidth(self, fio_result, rw):
         """Returns FIO bandwidth of a given I/O pattern
 
         Args:
@@ -94,14 +94,14 @@ class Pil4dfsFio(DfuseTestBase):
         fio_json = json.loads(fio_stdout)
         return fio_json["jobs"][0][rw]['bw_bytes']
 
-    def run_fio_dfuse(self):
+    def _run_fio_dfuse(self):
         """Run and return the result of running FIO over a DFuse mount point.
 
         Returns:
             dict: Read and Write bandwidths of the FIO command.
 
         """
-        self.create_container()
+        self._create_container()
         self.log.info("Mounting DFuse mount point")
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
         self.log.debug("Mounted DFuse mount point %s", str(self.dfuse))
@@ -130,24 +130,24 @@ class Pil4dfsFio(DfuseTestBase):
             self.log.debug(
                 "FIO command: LD_PRELOAD=%s %s", self.fio_cmd.env['LD_PRELOAD'], str(self.fio_cmd))
             result = self.fio_cmd.run()
-            bws[rw] = self.get_bandwidth(result, rw)
+            bws[rw] = self._get_bandwidth(result, rw)
             self.log.debug("DFuse bandwidths for %s: %s", rw, bws[rw])
 
         if self.dfuse is not None:
             self.log.debug("Stopping DFuse mount point %s", str(self.dfuse))
             self.stop_dfuse()
-            self.destroy_container()
+            self._destroy_container()
 
         return bws
 
-    def run_fio_dfs(self):
+    def _run_fio_dfs(self):
         """Run and return the result of running FIO with DFS ioengine.
 
         Returns:
             dict: Read and Write bandwidths of the FIO command.
 
         """
-        self.create_container()
+        self._create_container()
 
         self.fio_cmd = FioCommand()
         self.fio_cmd.get_params(self)
@@ -175,10 +175,10 @@ class Pil4dfsFio(DfuseTestBase):
             self.log.info("Running FIO command: rw=%s, %s", rw, params)
             self.log.debug("FIO command: %s", str(self.fio_cmd))
             result = self.fio_cmd.run()
-            bws[rw] = self.get_bandwidth(result, rw)
+            bws[rw] = self._get_bandwidth(result, rw)
             self.log.debug("DFS bandwidths for %s: %s", rw, bws[rw])
 
-        self.destroy_container()
+        self._destroy_container()
 
         return bws
 
@@ -201,10 +201,10 @@ class Pil4dfsFio(DfuseTestBase):
                 name.lower(), "/run/test_pil4dfs_vs_dfs/bw_deltas/*", 0)
 
         self.log_step("Running FIO with DFuse")
-        dfuse_bws = self.run_fio_dfuse()
+        dfuse_bws = self._run_fio_dfuse()
 
         self.log_step("Running FIO with DFS")
-        dfs_bws = self.run_fio_dfs()
+        dfs_bws = self._run_fio_dfs()
 
         self.log_step("Comparing FIO bandwidths of DFuse and DFS")
         for rw in Pil4dfsFio._FIO_RW_NAMES:
