@@ -211,7 +211,6 @@ Requires: %{name}-devel%{?_isa} = %{version}-%{release}
 Requires: protobuf-c-devel
 Requires: fio
 Requires: git
-Requires: gdb
 Requires: dbench
 Requires: lbzip2
 Requires: attr
@@ -257,6 +256,7 @@ Requires: hdf5-vol-daos-mpich-tests
 Requires: MACSio-mpich
 Requires: simul-mpich
 Requires: romio-tests
+Requires: python3-mpi4py-tests
 
 %description client-tests-mpich
 This is the package needed to run the DAOS client test suite mpich tools

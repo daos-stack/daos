@@ -27,7 +27,6 @@ daos (2.5.100-15) unstable; urgency=medium
   * NOOP change to keep in parity with RPM version
 
  -- Ryon Jensen <ryon.jensen@intel.com>  Mon, 12 Feb 2024 11:16:00 -0700
->>>>>>> master
 
 daos (2.5.100-14) unstable; urgency=medium
   [ Brian J. Murrell ]
