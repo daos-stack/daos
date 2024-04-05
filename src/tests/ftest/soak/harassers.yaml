@@ -10,9 +10,9 @@ orterun:
 # This timeout must be longer than the test_timeout param (+15minutes)
 timeouts:
   test_soak_online_harassers_24h: 24H30M
-  test_soak_online_stress_12h: 12H30M
+  test_soak_online_harassers_12h: 12H30M
   test_soak_offline_harassers_24h: 24H30M
-  test_soak_offline_stress_12h: 12H30M
+  test_soak_offline_harassers_12h: 12H30M
 setup:
   start_servers: true
   start_agents: true
@@ -82,9 +82,9 @@ soak_harassers:
   single_test_pool: false
   test_timeout:
     test_soak_online_harassers_24h: 24
-    test_soak_online_stress_12h: 12
+    test_soak_online_harassers_12h: 12
     test_soak_offline_harassers_24h: 24
-    test_soak_offline_stress_12h: 12
+    test_soak_offline_harassers_12h: 12
   # maximum timeout for a single job in test in minutes
   joblist:
     - ior_harasser

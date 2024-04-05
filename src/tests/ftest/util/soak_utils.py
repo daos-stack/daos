@@ -473,7 +473,7 @@ def launch_reboot(self, pools, name, results, args):
     # Harasser is run in two parts REBOOT and then REBOOT_REINTEGRATE
     # REBOOT test steps
     # shutdown random node
-    # wait for node to to reboot
+    # wait for node to reboot
     # If node rebooted ok wait for rebuild on both pool to complete
     # Update multiprocessing queue with results and args
     # REBOOT_REINTEGRATE test steps
