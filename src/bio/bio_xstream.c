@@ -708,7 +708,8 @@ teardown_bio_bdev(void *arg)
 		D_ASSERT(rc == 0);
 		break;
 	case BIO_BS_STATE_OUT:
-		bio_release_bdev(d_bdev);
+		D_ASSERT(init_thread() != NULL);
+		spdk_thread_send_msg(init_thread(), bio_release_bdev, bbs->bb_dev);
 		/* fallthrough */
 	case BIO_BS_STATE_FAULTY:
 	case BIO_BS_STATE_TEARDOWN:

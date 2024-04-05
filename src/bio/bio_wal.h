@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,6 +97,7 @@ struct wal_super_info {
 	ABT_cond		si_rsrv_wq;	/* FIFO waitqueue for WAL ID reserving */
 	ABT_mutex		si_mutex;	/* For si_rsrv_wq */
 	unsigned int		si_rsrv_waiters;/* Number of waiters in reserve waitqueue */
+	unsigned int		si_pending_tx;	/* Number of pending transactions */
 	unsigned int		si_tx_failed:1;	/* Indicating some transaction failed */
 };
 

@@ -125,7 +125,8 @@ def summarize_run(logger, mode, status):
         512: "ERROR: Failed to stop daos_server.service after one or more tests!",
         1024: "ERROR: Failed to rename logs and results after one or more tests!",
         2048: "ERROR: Core stack trace files detected!",
-        4096: "ERROR: Unexpected processes or mounts found running!"
+        4096: "ERROR: Unexpected processes or mounts found running!",
+        8192: "ERROR: Failed to create steps.log!"
     }
     for bit_code, error_message in bit_error_map.items():
         if status & bit_code == bit_code:

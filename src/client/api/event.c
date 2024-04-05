@@ -879,6 +879,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 			return rc;
 		}
 	}
+	tse_sched_progress(&eqx->eqx_sched);
 
 	D_MUTEX_LOCK(&eqx->eqx_lock);
 

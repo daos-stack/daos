@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -27,7 +27,8 @@ class LlnlMpi4py(MpiioTests):
             str: python site-packages path to the test repository
         """
         test_repo = self.params.get(name, '/run/test_repo/')
-        for packages in site.getsitepackages():
+        # DAOS-15602: Always check the python3-6 install for test sources.
+        for packages in site.getsitepackages() + ["/usr/lib64/python3.6/site-packages"]:
             test_path = os.path.join(packages, test_repo)
             if os.path.exists(test_path):
                 return test_path

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -152,7 +152,6 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	sent_rpc = true;
 out:
 	if (!sent_rpc) {
-		sub->dss_result = rc;
 		comp_cb(dlh, idx, rc);
 		if (remote_arg) {
 			crt_req_decref(parent_req);
@@ -268,7 +267,6 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 
 out:
 	if (!sent_rpc) {
-		sub->dss_result = rc;
 		comp_cb(dlh, idx, rc);
 		if (remote_arg) {
 			crt_req_decref(parent_req);
@@ -569,7 +567,120 @@ ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
 
 out:
 	if (!sent_rpc) {
-		sub->dss_result = rc;
+		comp_cb(dlh, idx, rc);
+		if (remote_arg != NULL) {
+			crt_req_decref(parent_req);
+			D_FREE(remote_arg);
+		}
+	}
+	return rc;
+}
+
+static void
+shard_coll_query_req_cb(const struct crt_cb_info *cb_info)
+{
+	struct obj_remote_cb_arg	*arg = cb_info->cci_arg;
+	crt_rpc_t			*req = cb_info->cci_rpc;
+	crt_rpc_t			*parent_req = arg->parent_req;
+	struct obj_coll_query_out	*ocqo = crt_reply_get(req);
+	struct obj_coll_query_in	*ocqi = crt_req_get(req);
+	struct dtx_leader_handle	*dlh = arg->dlh;
+	struct dtx_sub_status		*sub;
+	int				 rc = cb_info->cci_rc;
+	int				 rc1;
+
+	if (ocqi->ocqi_map_ver < ocqo->ocqo_map_version) {
+		D_DEBUG(DB_IO, DF_UOID": map_ver stale (%d < %d).\n",
+			DP_UOID(ocqi->ocqi_oid), ocqi->ocqi_map_ver, ocqo->ocqo_map_version);
+		rc1 = -DER_STALE;
+	} else {
+		rc1 = ocqo->ocqo_ret;
+	}
+
+	if (rc >= 0)
+		rc = rc1;
+
+	sub = &dlh->dlh_subs[arg->idx];
+	/* Hold reference on child RPC until the result is aggregated. */
+	crt_req_addref(req);
+	sub->dss_data = req;
+	arg->comp_cb(dlh, arg->idx, rc);
+	crt_req_decref(parent_req);
+	D_FREE(arg);
+}
+
+int
+ds_obj_coll_query_remote(struct dtx_leader_handle *dlh, void *data, int idx,
+			 dtx_sub_comp_cb_t comp_cb)
+{
+	struct ds_obj_exec_arg		*exec_arg = data;
+	struct obj_coll_disp_cursor	*cursor = &exec_arg->coll_cur;
+	struct obj_remote_cb_arg	*remote_arg = NULL;
+	struct dtx_sub_status		*sub;
+	crt_endpoint_t			 tgt_ep = { 0 };
+	crt_rpc_t			*parent_req = exec_arg->rpc;
+	crt_rpc_t			*req = NULL;
+	struct obj_coll_query_in	*ocqi_parent = crt_req_get(parent_req);
+	struct obj_coll_query_in	*ocqi;
+	int				 tag;
+	int				 rc = 0;
+	bool				 sent_rpc = false;
+
+	D_ASSERT(idx < dlh->dlh_normal_sub_cnt);
+
+	sub = &dlh->dlh_subs[idx];
+
+	D_ALLOC_PTR(remote_arg);
+	if (remote_arg == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	obj_coll_disp_dest(cursor, exec_arg->coll_tgts, &tgt_ep);
+	tag = tgt_ep.ep_tag;
+
+	remote_arg->dlh = dlh;
+	remote_arg->comp_cb = comp_cb;
+	remote_arg->idx = idx;
+	crt_req_addref(parent_req);
+	remote_arg->parent_req = parent_req;
+
+	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, DAOS_OBJ_RPC_COLL_QUERY, &req);
+	if (rc != 0) {
+		D_ERROR("Failed to create RPC to forward collective query: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	ocqi = crt_req_get(req);
+	*ocqi = *ocqi_parent;
+
+	ocqi->ocqi_oid.id_shard = exec_arg->coll_tgts[cursor->cur_pos].dct_shards[tag].dcs_buf[0];
+	ocqi->ocqi_flags |= exec_arg->flags;
+	if (cursor->grp_nr < COLL_DISP_WIDTH_MIN) {
+		ocqi->ocqi_disp_width = cursor->grp_nr;
+	} else {
+		ocqi->ocqi_disp_width = cursor->grp_nr - COLL_DISP_WIDTH_DIF;
+		if (ocqi->ocqi_disp_width < COLL_DISP_WIDTH_MIN)
+			ocqi->ocqi_disp_width = COLL_DISP_WIDTH_MIN;
+	}
+	ocqi->ocqi_disp_depth++;
+	ocqi->ocqi_tgts.ca_count = cursor->cur_step;
+	ocqi->ocqi_tgts.ca_arrays = &exec_arg->coll_tgts[cursor->cur_pos];
+
+	D_DEBUG(DB_IO, DF_UOID" forward collective query to rank:%d tag:%d, flags %x.\n",
+		DP_UOID(ocqi->ocqi_oid), tgt_ep.ep_rank, tgt_ep.ep_tag, ocqi->ocqi_flags);
+
+	obj_coll_disp_move(cursor);
+
+	rc = crt_req_send(req, shard_coll_query_req_cb, remote_arg);
+	if (rc != 0) {
+		D_ASSERT(sub->dss_comp == 1);
+		D_ERROR("Failed to forward collective query to rank:%d tag:%d: "DF_RC"\n",
+			tgt_ep.ep_rank, tgt_ep.ep_tag, DP_RC(rc));
+	}
+
+	sent_rpc = true;
+
+out:
+	if (!sent_rpc) {
 		comp_cb(dlh, idx, rc);
 		if (remote_arg != NULL) {
 			crt_req_decref(parent_req);

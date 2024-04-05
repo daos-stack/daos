@@ -24,7 +24,6 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
-#include <daos_srv/policy.h>
 
 /**
  * Each individual object layout format, like oid layout, dkey to group,
@@ -42,6 +41,7 @@
 struct ds_pool {
 	struct daos_llink	sp_entry;
 	uuid_t			sp_uuid;	/* pool UUID */
+	d_list_t		sp_hdls;
 	ABT_rwlock		sp_lock;
 	struct pool_map		*sp_map;
 	uint32_t		sp_map_version;	/* temporary */
@@ -57,7 +57,8 @@ struct ds_pool {
 	uint32_t		sp_global_version;
 	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
-	struct policy_desc_t	sp_policy_desc;	/* tiering policy descriptor */
+	/* Size threshold to store data on backend bdev */
+	uint32_t		sp_data_thresh;
 	ABT_mutex		sp_mutex;
 	ABT_cond		sp_fetch_hdls_cond;
 	ABT_cond		sp_fetch_hdls_done_cond;
@@ -76,8 +77,7 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t sp_stopping : 1, sp_fetch_hdls : 1, sp_disable_rebuild : 1, sp_need_discard : 1,
-	    sp_checkpoint_props_changed : 1;
+	uint32_t sp_stopping : 1, sp_fetch_hdls : 1, sp_disable_rebuild : 1, sp_need_discard : 1;
 
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
@@ -120,6 +120,7 @@ void ds_pool_get(struct ds_pool *pool);
  */
 struct ds_pool_hdl {
 	d_list_t		sph_entry;
+	d_list_t		sph_pool_entry;
 	uuid_t			sph_uuid;	/* of the pool handle */
 	uint64_t		sph_flags;	/* user-provided flags */
 	uint64_t		sph_sec_capas;	/* access capabilities */
@@ -259,6 +260,8 @@ int ds_pool_tgt_exclude_out(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_exclude(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_add_in(uuid_t pool_uuid, struct pool_target_id_list *list);
 
+int ds_pool_tgt_revert_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
+int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *list);
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
@@ -377,6 +380,21 @@ int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
 int
 ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
 
+struct dss_coll_args;
+struct dss_coll_ops;
+
+int
+ds_pool_thread_collective_reduce(uuid_t pool_uuid, uint32_t ex_status, struct dss_coll_ops *coll_ops,
+				 struct dss_coll_args *coll_args, uint32_t flags);
+int
+ds_pool_task_collective_reduce(uuid_t pool_uuid, uint32_t ex_status, struct dss_coll_ops *coll_ops,
+			       struct dss_coll_args *coll_args, uint32_t flags);
+int
+ds_pool_thread_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(void *),
+			  void *arg, uint32_t flags);
+int
+ds_pool_task_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(void *),
+			void *arg, uint32_t flags);
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking
  * pool map device status.

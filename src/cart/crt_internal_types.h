@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,11 +33,11 @@ struct crt_grp_gdata;
 
 struct crt_na_config {
 	int32_t		 noc_port;
+	int		 noc_iface_total;
 	char		*noc_interface;
 	char		*noc_domain;
 	char		*noc_auth_key;
-	/* IP addr str for the noc_interface */
-	char		 noc_ip_str[INET_ADDRSTRLEN];
+	char		**noc_iface_str; /* Array of interfaces */
 };
 
 struct crt_prov_gdata {
@@ -235,6 +235,10 @@ struct crt_context {
 	struct d_tm_node_t	*cc_timedout_uri;
 	/** Total number of failed address resolution, of type counter */
 	struct d_tm_node_t	*cc_failed_addr;
+	/** Counter for number of network glitches */
+	struct d_tm_node_t      *cc_net_glitches;
+	/** Stats gauge of reported SWIM delays */
+	struct d_tm_node_t      *cc_swim_delay;
 
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];

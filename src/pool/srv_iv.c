@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -179,10 +179,8 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_RP_PDA:
 			iv_prop->pip_rp_pda = prop_entry->dpe_val;
 			break;
-		case DAOS_PROP_PO_POLICY:
-			D_ASSERT(strlen(prop_entry->dpe_str) <=
-				 DAOS_PROP_POLICYSTR_MAX_LEN);
-			strcpy(iv_prop->pip_policy_str, prop_entry->dpe_str);
+		case DAOS_PROP_PO_DATA_THRESH:
+			iv_prop->pip_data_thresh = prop_entry->dpe_val;
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			iv_prop->pip_global_version = prop_entry->dpe_val;
@@ -330,14 +328,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_RP_PDA:
 			prop_entry->dpe_val = iv_prop->pip_rp_pda;
 			break;
-		case DAOS_PROP_PO_POLICY:
-			D_ASSERT(strnlen(iv_prop->pip_policy_str,
-					DAOS_PROP_POLICYSTR_MAX_LEN) <=
-				 DAOS_PROP_POLICYSTR_MAX_LEN);
-			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_policy_str,
-				  DAOS_PROP_POLICYSTR_MAX_LEN);
-			if (prop_entry->dpe_str == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
+		case DAOS_PROP_PO_DATA_THRESH:
+			prop_entry->dpe_val = iv_prop->pip_data_thresh;
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 			prop_entry->dpe_val = iv_prop->pip_global_version;
@@ -801,6 +793,18 @@ pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct pool_iv_entry	*iv_entry = entry->iv_value.sg_iovs[0].iov_buf;
 	int			rc;
 
+	if (dss_self_rank() == entry->ns->iv_master_rank) {
+		/* The PS leader might still in initialization phase, the IV entry may
+		 * not be fully initialized yet.
+		 */
+		if (!entry->iv_valid) {
+			D_INFO(DF_UUID" master %u is still stepping up: %d.\n",
+			       DP_UUID(entry->ns->iv_pool_uuid), entry->ns->iv_master_rank,
+			       -DER_NOTLEADER);
+			return -DER_NOTLEADER;
+		}
+	}
+
 	rc = pool_iv_ent_copy(key, dst_sgl, iv_entry, false);
 
 	return rc;
@@ -815,7 +819,7 @@ ds_pool_iv_refresh_hdl(struct ds_pool *pool, struct pool_iv_hdl *pih)
 		if (uuid_compare(pool->sp_srv_cont_hdl,
 				 pih->pih_cont_hdl) == 0)
 			return 0;
-		ds_cont_tgt_close(pool->sp_srv_cont_hdl);
+		ds_cont_tgt_close(pool->sp_uuid, pool->sp_srv_cont_hdl);
 		D_DEBUG(DB_MD, "delete hdl "DF_UUID"n", DP_UUID(pool->sp_srv_cont_hdl));
 		uuid_clear(pool->sp_srv_cont_hdl);
 		uuid_clear(pool->sp_srv_pool_hdl);
@@ -952,7 +956,8 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 					rc = 0;
 				return rc;
 			}
-			ds_cont_tgt_close(iv_entry->piv_hdl.pih_cont_hdl);
+			ds_cont_tgt_close(entry->ns->iv_pool_uuid,
+					  iv_entry->piv_hdl.pih_cont_hdl);
 			uuid_clear(pool->sp_srv_cont_hdl);
 			uuid_clear(pool->sp_srv_pool_hdl);
 			uuid_clear(iv_entry->piv_hdl.pih_cont_hdl);
@@ -980,7 +985,10 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct ds_pool		*pool = 0;
 	int			rc;
 
-	rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
+	if (src == NULL)
+		rc = ds_pool_lookup_internal(entry->ns->iv_pool_uuid, &pool);
+	else
+		rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
 	if (rc) {
 		D_WARN("No pool "DF_UUID": %d\n", DP_UUID(entry->ns->iv_pool_uuid), rc);
 		if (rc == -DER_NONEXIST)
@@ -1317,7 +1325,7 @@ retry:
 	pool_key->pik_entry_size = iv_entry_size;
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
+		D_INFO(DF_UUID" iv fetch failed "DF_RC"\n", DP_UUID(pool->sp_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1350,7 +1358,7 @@ ds_pool_iv_conn_hdl_invalidate(struct ds_pool *pool, uuid_t hdl_uuid)
 	rc = ds_iv_invalidate(pool->sp_iv_ns, &key, CRT_IV_SHORTCUT_NONE,
 			      CRT_IV_SYNC_NONE, 0, false /* retry */);
 	if (rc)
-		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_SHUTDOWN, DB_MD, DLOG_ERR, rc, "iv invalidate failed");
 
 	return rc;
 }
@@ -1593,7 +1601,7 @@ ds_pool_iv_svc_fetch(struct ds_pool *pool, d_rank_list_t **svc_p)
 	} else {
 		/* create a ULT and schedule it on xstream-0 */
 		rc = dss_ult_execute(cont_pool_svc_ult, &ia, NULL, NULL,
-				     DSS_XS_SYS, 0, 0);
+				     DSS_XS_SYS, DSS_ULT_DEEP_STACK, 0);
 		if (rc)
 			D_GOTO(failed, rc);
 	}

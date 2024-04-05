@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# (C) Copyright 2018-2023 Intel Corporation
+# (C) Copyright 2018-2024 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -194,8 +194,7 @@ class HwmCounter():
         if val < 0:
             return
         self.__val += val
-        if self.__val > self.__hwm:
-            self.__hwm = self.__val
+        self.__hwm = max(self.__hwm, self.__val)
 
     def subtract(self, val):
         """Subtract a value"""
@@ -506,6 +505,12 @@ class LogTest():
                         # If a pointer is freed then automatically remove the descriptor
                         if pointer in active_desc:
                             del active_desc[pointer]
+                    elif line.is_realloc():
+                        # If a pointer is reallocated then update any descriptor for it.
+                        (new_pointer, old_pointer) = line.realloc_pointers()
+                        if new_pointer != old_pointer and old_pointer in active_desc:
+                            active_desc[new_pointer] = active_desc[old_pointer]
+                            del active_desc[old_pointer]
 
         if not self.ftest_mode:
             mem_r.active_desc = active_desc

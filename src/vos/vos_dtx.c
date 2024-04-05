@@ -305,8 +305,11 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 
 	D_ASSERT(dae_old != dae_new);
 
-	if (unlikely(dae_old->dae_aborting))
+	if (unlikely(dae_old->dae_aborting)) {
+		D_ERROR("Hit former in-aborting DTX entry %p "DF_DTI"\n",
+			dae_old, DP_DTI(&DAE_XID(dae_old)));
 		return -DER_INPROGRESS;
+	}
 
 	if (unlikely(!dae_old->dae_aborted)) {
 		/*
@@ -970,7 +973,10 @@ vos_dtx_alloc(struct umem_instance *umm, struct vos_dtx_blob_df *dbd, struct dtx
 	if (rc != 0) {
 		/* The array is full, need to commit some transactions first */
 		if (rc == -DER_BUSY)
-			return -DER_INPROGRESS;
+			rc = -DER_INPROGRESS;
+
+		D_ERROR("Failed to allocate active DTX entry for "DF_DTI"\n",
+			DP_DTI(&dth->dth_xid));
 		return rc;
 	}
 
@@ -1479,7 +1485,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	struct vos_dtx_act_ent	*dae;
 	int			 rc = 0;
 
-	if (!dtx_is_valid_handle(dth)) {
+	if (!dtx_is_real_handle(dth)) {
 		dtx_set_committed(tx_id);
 		return 0;
 	}
@@ -2204,10 +2210,14 @@ vos_dtx_post_handle(struct vos_container *cont,
 
 			daes[i]->dae_prepared = 0;
 			if (abort) {
+				D_ASSERT(daes[i]->dae_committing == 0);
+
 				daes[i]->dae_aborted = 1;
 				daes[i]->dae_aborting = 0;
 				dtx_act_ent_cleanup(cont, daes[i], NULL, true);
 			} else {
+				D_ASSERT(daes[i]->dae_aborting == 0);
+
 				daes[i]->dae_committed = 1;
 				daes[i]->dae_committing = 0;
 				dtx_act_ent_cleanup(cont, daes[i], NULL, false);
@@ -2308,6 +2318,8 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 out:
 	if (rc == 0 || force)
 		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
+	else if (rc != 0)
+		dae->dae_aborting = 0;
 
 	return rc;
 }
@@ -2863,8 +2875,9 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 		  "Corrupted committed DTX blob (2) %x\n", dbd->dbd_magic);
 
 	for (i = 0; i < dbd->dbd_count; i++) {
-		if (daos_is_zero_dti(&dbd->dbd_committed_data[i].dce_xid) ||
-		    dbd->dbd_committed_data[i].dce_epoch == 0) {
+		struct vos_dtx_cmt_ent_df *dce_df = &dbd->dbd_committed_data[i];
+
+		if (daos_is_zero_dti(&dce_df->dce_xid) || dce_df->dce_epoch == 0) {
 			D_WARN("Skip invalid committed DTX entry\n");
 			continue;
 		}
@@ -2873,8 +2886,7 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 		if (dce == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 
-		memcpy(&dce->dce_base, &dbd->dbd_committed_data[i],
-		       sizeof(dce->dce_base));
+		memcpy(&dce->dce_base, dce_df, sizeof(dce->dce_base));
 		dce->dce_reindex = 1;
 
 		d_iov_set(&kiov, &DCE_XID(dce), sizeof(DCE_XID(dce)));
@@ -2918,8 +2930,8 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 	d_iov_t			 riov;
 	int			 rc;
 
-	if (!dtx_is_valid_handle(dth) ||
-	    (!dth->dth_active && dth->dth_ent == NULL))
+	if (!dtx_is_valid_handle(dth) || (!dth->dth_active && dth->dth_ent == NULL) ||
+	    dth->dth_local)
 		return;
 
 	dth->dth_active = 0;
@@ -2979,6 +2991,8 @@ vos_dtx_cleanup(struct dtx_handle *dth, bool unpin)
 
 	if (!dtx_is_valid_handle(dth) || unlikely(dth->dth_already))
 		return;
+
+	D_ASSERT(!dth->dth_local);
 
 	dae = dth->dth_ent;
 	if (dae == NULL) {
@@ -3147,6 +3161,7 @@ vos_dtx_rsrvd_init(struct dtx_handle *dth)
 {
 	dth->dth_rsrvd_cnt = 0;
 	dth->dth_deferred_cnt = 0;
+	dth->dth_deferred_used_cnt = 0;
 	D_INIT_LIST_HEAD(&dth->dth_deferred_nvme);
 
 	if (dth->dth_modification_cnt <= 1) {
@@ -3284,4 +3299,59 @@ vos_dtx_renew_epoch(struct dtx_handle *dth)
 
 	if (dth->dth_local_stub != NULL)
 		lrua_refresh_key(dth->dth_local_stub, dth->dth_epoch);
+}
+
+int
+vos_dtx_local_begin(struct dtx_handle *dth, daos_handle_t poh)
+{
+	struct vos_pool      *pool;
+	struct umem_instance *umm;
+	int                   rc;
+
+	if (dth == NULL || !dth->dth_local) {
+		return 0;
+	}
+
+	/**
+	 * RDB is intended as the main user of local transactions. RDB is known
+	 * to engage over 32 OIDs per transaction. Hence, the initial value is
+	 * hoped to accommodate all of them.
+	 */
+	dth->dth_local_oid_cap = (1 << 6);
+	dth->dth_local_oid_cnt = 0;
+	D_ALLOC_ARRAY(dth->dth_local_oid_array, dth->dth_local_oid_cap);
+	if (dth->dth_local_oid_array == NULL)
+		return -DER_NOMEM;
+
+	pool = vos_hdl2pool(poh);
+	umm  = vos_pool2umm(pool);
+
+	rc = vos_tx_begin(dth, umm, pool->vp_sysdb);
+	if (rc != 0) {
+		D_ERROR("Failed to start transaction: rc=" DF_RC "\n", DP_RC(rc));
+		goto error;
+	}
+
+	return 0;
+
+error:
+	D_FREE(dth->dth_local_oid_array);
+	return rc;
+}
+
+int
+vos_dtx_local_end(struct dtx_handle *dth, int result)
+{
+	dth->dth_local_complete = 1;
+	result                  = vos_tx_end(NULL, dth, NULL, NULL, true, NULL, result);
+
+	for (int i = 0; i < dth->dth_local_oid_cnt; ++i) {
+		vos_cont_decref(dth->dth_local_oid_array[i].dor_cont);
+	}
+
+	dth->dth_local_oid_cnt = 0;
+	D_FREE(dth->dth_local_oid_array);
+	dth->dth_local_oid_cap = 0;
+
+	return result;
 }

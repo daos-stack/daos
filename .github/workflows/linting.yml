@@ -21,7 +21,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3'
       - uses: isort/isort-action@master
         with:
           requirementsFiles: "requirements.txt"
@@ -58,3 +60,12 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Check DAOS logging macro use.
         run: ./utils/cq/d_logging_check.py --github src
+
+  ftest-tags:
+    name: Ftest tag check
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Check DAOS ftest tags.
+        run: \[ ! -x src/tests/ftest/tags.py \] || ./src/tests/ftest/tags.py lint

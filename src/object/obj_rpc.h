@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,7 +101,10 @@
 		ds_obj_key2anchor_handler, NULL, "key2anchor")		\
 	X(DAOS_OBJ_RPC_COLL_PUNCH,					\
 		0, &CQF_obj_coll_punch, ds_obj_coll_punch_handler,	\
-		NULL, "obj_coll_punch")
+		NULL, "obj_coll_punch")					\
+	X(DAOS_OBJ_RPC_COLL_QUERY,					\
+		0, &CQF_obj_coll_query, ds_obj_coll_query_handler,	\
+		NULL, "obj_coll_query")
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e, f) a,
@@ -717,6 +720,11 @@ struct obj_dtx_mbs {
 	struct dtx_memberships	*odm_mbs;
 };
 
+enum obj_coll_rep_flags {
+	/* The returned recx contains the original mapped VOS index. */
+	OCRF_RAW_RECX	= (1 << 0),
+};
+
 #define DAOS_ISEQ_OBJ_COLL_PUNCH	/* input fields */				\
 	((struct obj_dtx_mbs)		(ocpi_odm)			CRT_VAR)	\
 	((uuid_t)			(ocpi_po_uuid)			CRT_VAR)	\
@@ -745,6 +753,42 @@ CRT_RPC_DECLARE(obj_coll_punch, DAOS_ISEQ_OBJ_COLL_PUNCH, DAOS_OSEQ_OBJ_COLL_PUN
 
 #define ocpi_xid	ocpi_odm.odm_xid
 #define ocpi_mbs	ocpi_odm.odm_mbs
+
+#define DAOS_ISEQ_OBJ_COLL_QUERY	/* input fields */				\
+	((struct dtx_id)		(ocqi_xid)			CRT_VAR)	\
+	((uuid_t)			(ocqi_po_uuid)			CRT_VAR)	\
+	((uuid_t)			(ocqi_co_hdl)			CRT_VAR)	\
+	((uuid_t)			(ocqi_co_uuid)			CRT_VAR)	\
+	((daos_unit_oid_t)		(ocqi_oid)			CRT_RAW)	\
+	((uint64_t)			(ocqi_epoch)			CRT_VAR)	\
+	((uint64_t)			(ocqi_epoch_first)		CRT_VAR)	\
+	((uint64_t)			(ocqi_api_flags)		CRT_VAR)	\
+	((uint32_t)			(ocqi_map_ver)			CRT_VAR)	\
+	((uint32_t)			(ocqi_flags)			CRT_VAR)	\
+	((daos_key_t)			(ocqi_dkey)			CRT_VAR)	\
+	((daos_key_t)			(ocqi_akey)			CRT_VAR)	\
+	((uint32_t)			(ocqi_max_tgt_sz)		CRT_VAR)	\
+	((uint16_t)			(ocqi_disp_width)		CRT_VAR)	\
+	((uint16_t)			(ocqi_disp_depth)		CRT_VAR)	\
+	((struct daos_coll_target)	(ocqi_tgts)			CRT_ARRAY)	\
+	((struct daos_req_comm_in)	(ocqi_comm_in)			CRT_VAR)
+
+#define DAOS_OSEQ_OBJ_COLL_QUERY	/* output fields */				\
+	((int32_t)			(ocqo_ret)			CRT_VAR)	\
+	((uint32_t)			(ocqo_map_version)		CRT_VAR)	\
+	/* The id_shard corresponding to ocqo_recx */					\
+	((uint32_t)			(ocqo_shard)			CRT_VAR)	\
+	((uint32_t)			(ocqo_flags)			CRT_VAR)	\
+	((uint64_t)			(ocqo_epoch)			CRT_VAR)	\
+	((daos_key_t)			(ocqo_dkey)			CRT_VAR)	\
+	((daos_key_t)			(ocqo_akey)			CRT_VAR)	\
+	/* recx for visible extent */							\
+	((daos_recx_t)			(ocqo_recx)			CRT_VAR)	\
+	/* epoch for max write */							\
+	((uint64_t)			(ocqo_max_epoch)		CRT_VAR)	\
+	((struct daos_req_comm_out)	(ocqo_comm_out)			CRT_VAR)
+
+CRT_RPC_DECLARE(obj_coll_query, DAOS_ISEQ_OBJ_COLL_QUERY, DAOS_OSEQ_OBJ_COLL_QUERY)
 
 static inline int
 obj_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

@@ -392,7 +392,7 @@ init_reconf_map(struct pool_map *map, d_rank_list_t *replicas, d_rank_t self,
 
 	/* Shuffle rmap.rcm_domains for randomness in replica placement. */
 	for (i = 0; i < rmap.rcm_domains_len; i++) {
-		int j = i + d_randn(rmap.rcm_domains_len - i);
+		int j = i + d_rand() % (rmap.rcm_domains_len - i);
 
 		D_ASSERTF(i <= j && j < rmap.rcm_domains_len, "i=%d j=%d len=%d\n", i, j,
 			  rmap.rcm_domains_len);
@@ -441,7 +441,7 @@ find_vacancy_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas)
 		if ((engine->do_comp.co_status & POOL_SVC_MAP_STATES) &&
 		    !d_rank_list_find(replicas, engine->do_comp.co_rank, NULL /* idx */)) {
 			/* Pick this vacant engine with a probability of 1/n. */
-			if (d_randn(n) == 0)
+			if (d_rand() % n == 0)
 				return engine->do_comp.co_rank;
 			n--;
 		}
@@ -478,7 +478,7 @@ find_replica_in_domain(struct reconf_domain *rdomain, d_rank_list_t *replicas, d
 		if ((engine->do_comp.co_status & POOL_SVC_MAP_STATES) &&
 		    engine->do_comp.co_rank != self &&
 		    d_rank_list_find(replicas, engine->do_comp.co_rank, NULL /* idx */)) {
-			if (d_randn(n) == 0)
+			if (d_rand() % n == 0)
 				return engine->do_comp.co_rank;
 			n--;
 		}

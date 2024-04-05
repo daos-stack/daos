@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2023 Intel Corporation.
+(C) Copyright 2018-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -13,6 +13,7 @@ from command_utils_base import BasicParameter, FormattedParameter
 from duns_utils import format_path
 from exception_utils import CommandFailure
 from general_utils import get_log_file
+from job_manager_utils import get_job_manager
 
 
 def get_ior(test, manager, hosts, path, slots, namespace="/run/ior/*", ior_params=None):
@@ -137,6 +138,83 @@ def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots,
     finally:
         manager.verbose = saved_verbose
         thread_queue.put(thread_result)
+
+
+def write_data(test, container, namespace='/run/ior_write/*', **ior_run_params):
+    """Write data to the container/dfuse using ior.
+
+    Simple method for test classes to use to write data with ior. While not required, this is setup
+    by default to pull in ior parameters from the test yaml using a format similar to:
+
+        ior: &ior_base
+          api: DFS
+          transfer_size: 512K
+          block_size: 1G
+          ppn: 2
+
+        ior_write:
+          <<: *ior_base
+          flags: "-k -v -w -W -G 1"
+
+        ior_read:
+          <<: *ior_base
+          flags: "-v -r -R -G 1"
+
+    Args:
+        test (Test): avocado Test object
+        container (TestContainer): the container to populate
+        namespace (str, optional): path to ior yaml parameters. Defaults to '/run/ior_write/*'.
+        ior_run_params (dict): optional params for the Ior.run() command, like ppn, dfuse, etc.
+
+    Returns:
+        Ior: the Ior object used to populate the container
+    """
+    job_manager = get_job_manager(test, subprocess=False, timeout=60)
+    ior = get_ior(test, job_manager, test.hostlist_clients, test.workdir, None, namespace)
+
+    if 'processes' not in ior_run_params:
+        ior_run_params['processes'] = test.params.get('processes', namespace, None)
+    elif 'ppn' not in ior_run_params:
+        ior_run_params['ppn'] = test.params.get('ppn', namespace, None)
+
+    ior.run(test.server_group, container.pool, container, **ior_run_params)
+    return ior
+
+
+def read_data(test, ior, container, namespace='/run/ior_read/*', **ior_run_params):
+    """Verify the data used to populate the container.
+
+    Simple method for test classes to use to read data with ior designed to be used with the Ior
+    object returned by the write_data() method. While not required, this is setup by default to pull
+    in ior parameters from the test yaml using a format similar to:
+
+        ior: &ior_base
+          api: DFS
+          transfer_size: 512K
+          block_size: 1G
+          ppn: 2
+
+        ior_write:
+          <<: *ior_base
+          flags: "-k -v -w -W -G 1"
+
+        ior_read:
+          <<: *ior_base
+          flags: "-v -r -R -G 1"
+
+    Args:
+        test (Test): avocado Test object
+        ior (Ior): the ior command used to populate the container
+        container (TestContainer): the container to verify
+        namespace (str, optional): path to ior yaml parameters. Defaults to '/run/ior_read/*'.
+        ior_run_params (dict): optional params for the Ior.run() command, like ppn, dfuse, etc.
+    """
+    if 'processes' not in ior_run_params:
+        ior_run_params['processes'] = test.params.get('processes', namespace, None)
+    elif 'ppn' not in ior_run_params:
+        ior_run_params['ppn'] = test.params.get('ppn', namespace, 1)
+    ior.update('flags', test.params.get('flags', namespace))
+    ior.run(test.server_group, container.pool, container, **ior_run_params)
 
 
 class IorCommand(SubProcessCommand):
@@ -513,7 +591,7 @@ class Ior:
         return '.'.join(['_'.join(parts), 'log'])
 
     def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
-            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True):
+            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True, il_report=1):
         # pylint: disable=too-many-arguments
         """Run ior.
 
@@ -534,6 +612,8 @@ class Ior:
                 is found. Default is False.
             unique_log (bool, optional): whether or not to update the log file with a new unique log
                 file name. Defaults to True.
+            il_report (int, optional): D_IL_REPORT value to use when 'intercept' is specified and a
+                value does not already exist in the environment. Defaults to 1.
 
         Raises:
             CommandFailure: if there is an error running the ior command
@@ -552,7 +632,7 @@ class Ior:
             if "D_LOG_MASK" not in self.env:
                 self.env["D_LOG_MASK"] = "INFO"
             if "D_IL_REPORT" not in self.env:
-                self.env["D_IL_REPORT"] = "1"
+                self.env["D_IL_REPORT"] = str(il_report)
 
         if plugin_path:
             self.env["HDF5_VOL_CONNECTOR"] = "daos"

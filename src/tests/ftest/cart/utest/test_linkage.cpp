@@ -63,8 +63,8 @@ test_crt_api_linkage(void **state)
 
 	(void)state;
 
-	setenv("OFI_INTERFACE", "lo", 1);
-	setenv("CRT_PHY_ADDR_STR", "ofi+tcp", 1);
+	setenv("D_INTERFACE", "lo", 1);
+	setenv("D_PROVIDER", "ofi+tcp", 1);
 
 	rc = crt_init(bogus_client_group, 0x0);
 	assert_int_equal(rc, 0);

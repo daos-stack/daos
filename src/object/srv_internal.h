@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -40,8 +40,11 @@ struct migrate_pool_tls {
 	 * should provide the pool/handle uuid
 	 */
 	uuid_t			mpt_poh_uuid;
-	uuid_t			mpt_coh_uuid;
 	daos_handle_t		mpt_pool_hdl;
+
+	/* container handle list for the migrate pool */
+	uuid_t			mpt_coh_uuid;
+	d_list_t		mpt_cont_hdl_list;
 
 	/* Container/objects to be migrated will be attached to the tree */
 	daos_handle_t		mpt_root_hdl;
@@ -66,17 +69,15 @@ struct migrate_pool_tls {
 	/* Max epoch for the migration, used for migrate fetch RPC */
 	uint64_t		mpt_max_eph;
 
-	/* The ULT number generated on the xstream */
-	uint64_t		mpt_generated_ult;
+	/* The ULT number on each target xstream, which actually refer
+	 * back to the item within mpt_obj/dkey_ult_cnts array.
+	 */
+	ATOMIC uint32_t		*mpt_tgt_obj_ult_cnt;
+	ATOMIC uint32_t		*mpt_tgt_dkey_ult_cnt;
 
-	/* The ULT number executed on the xstream */
-	uint64_t		mpt_executed_ult;
-
-	/* The ULT number generated for object on the xstream */
-	uint64_t		mpt_obj_generated_ult;
-
-	/* The ULT number executed on the xstream */
-	uint64_t		mpt_obj_executed_ult;
+	/* ULT count array from all targets, obj: enumeration, dkey:fetch/update */
+	ATOMIC uint32_t		*mpt_obj_ult_cnts;
+	ATOMIC uint32_t		*mpt_dkey_ult_cnts;
 
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
@@ -88,7 +89,7 @@ struct migrate_pool_tls {
 	uint64_t		mpt_inflight_max_size;
 	ABT_cond		mpt_inflight_cond;
 	ABT_mutex		mpt_inflight_mutex;
-	int			mpt_inflight_max_ult;
+	uint32_t		mpt_inflight_max_ult;
 	uint32_t		mpt_opc;
 
 	ABT_cond		mpt_init_cond;
@@ -102,6 +103,50 @@ struct migrate_pool_tls {
 				mpt_init_tls:1,
 				mpt_init_failed:1,
 				mpt_fini:1;
+};
+
+struct migrate_cont_hdl {
+	uuid_t		mch_uuid;
+	daos_handle_t	mch_hdl;
+	d_list_t	mch_list;
+};
+
+struct obj_bulk_args {
+	ABT_eventual	eventual;
+	uint64_t	bulk_size;
+	int		bulks_inflight;
+	int		result;
+	bool		inited;
+};
+
+struct obj_tgt_query_args {
+	struct obj_io_context	*otqa_ioc;
+	struct dtx_handle	*otqa_dth;
+	daos_key_t		*otqa_in_dkey;
+	daos_key_t		*otqa_in_akey;
+	daos_key_t		*otqa_out_dkey;
+	daos_key_t		*otqa_out_akey;
+	daos_key_t		 otqa_dkey_copy;
+	daos_key_t		 otqa_akey_copy;
+	daos_recx_t		 otqa_recx;
+	daos_epoch_t		 otqa_max_epoch;
+	int			 otqa_result;
+	uint32_t		 otqa_shard;
+	uint32_t		 otqa_version;
+	uint32_t		 otqa_completed:1,
+				 otqa_need_copy:1,
+				 otqa_raw_recx:1,
+				 otqa_keys_allocated:1;
+};
+
+struct obj_tgt_punch_args {
+	uint32_t		 opc;
+	struct obj_io_context	*sponsor_ioc;
+	struct dtx_handle	*sponsor_dth;
+	struct obj_punch_in	*opi;
+	struct dtx_memberships	*mbs;
+	uint32_t		*ver;
+	void			*data;
 };
 
 void
@@ -258,6 +303,9 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dth, void *arg, int idx,
 int
 ds_obj_coll_punch_remote(struct dtx_leader_handle *dth, void *arg, int idx,
 			 dtx_sub_comp_cb_t comp_cb);
+int
+ds_obj_coll_query_remote(struct dtx_leader_handle *dlh, void *data, int idx,
+			 dtx_sub_comp_cb_t comp_cb);
 
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
@@ -267,6 +315,7 @@ void ds_obj_key2anchor_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
 void ds_obj_query_key_handler(crt_rpc_t *rpc);
+void ds_obj_coll_query_handler(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
 void ds_obj_migrate_handler(crt_rpc_t *rpc);
 void ds_obj_ec_agg_handler(crt_rpc_t *rpc);
@@ -274,6 +323,16 @@ void ds_obj_ec_rep_handler(crt_rpc_t *rpc);
 void ds_obj_cpd_handler(crt_rpc_t *rpc);
 void ds_obj_coll_punch_handler(crt_rpc_t *rpc);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
+
+int obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind,
+		      crt_bulk_t *remote_bulks, uint64_t *remote_offs, uint8_t *skips,
+		      daos_handle_t ioh, d_sg_list_t **sgls, int sgl_nr,
+		      struct obj_bulk_args *p_arg, struct ds_cont_hdl *coh);
+int obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count);
+int obj_tgt_query(struct obj_tgt_query_args *otqa, uuid_t po_uuid, uuid_t co_hdl, uuid_t co_uuid,
+		  daos_unit_oid_t oid, daos_epoch_t epoch, daos_epoch_t epoch_first,
+		  uint64_t api_flags, uint32_t rpc_flags, uint32_t *map_ver, crt_rpc_t *rpc,
+		  uint32_t count, uint32_t *shards, struct dtx_id *xid);
 
 struct daos_cpd_args {
 	struct obj_io_context	*dca_ioc;
@@ -523,6 +582,43 @@ obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
 {
 	return rc == -DER_INPROGRESS && dth->dth_share_tbd_count > 0;
 }
+
+static inline void
+obj_tgt_query_cleanup(struct obj_tgt_query_args *otqa)
+{
+	if (otqa->otqa_need_copy) {
+		daos_iov_free(&otqa->otqa_dkey_copy);
+		daos_iov_free(&otqa->otqa_akey_copy);
+	}
+}
+
+/* srv_coll.c */
+typedef int (*obj_coll_func_t)(void *args);
+
+int
+obj_coll_local(crt_rpc_t *rpc, struct daos_coll_shard *shards, struct dtx_coll_entry *dce,
+	       uint32_t *version, struct obj_io_context *ioc, struct dtx_handle *dth, void *args,
+	       obj_coll_func_t func);
+int
+obj_coll_tgt_punch(void *args);
+int
+obj_coll_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_comp_cb_t comp_cb);
+int
+obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
+		    struct daos_coll_target **p_dcts, uint32_t *dct_nr);
+int
+obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dcts, uint32_t dct_nr,
+		    struct dtx_coll_entry **p_dce);
+int
+obj_coll_tgt_query(void *args);
+int
+obj_coll_query_merge_tgts(struct obj_coll_query_in *ocqi, struct daos_oclass_attr *oca,
+			  struct obj_tgt_query_args *otqas, uint8_t *bitmap, uint32_t bitmap_sz,
+			  uint32_t tgt_id, int allow_failure);
+int
+obj_coll_query_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_comp_cb_t comp_cb);
+int
+obj_coll_query_agg_cb(struct dtx_leader_handle *dlh, void *arg);
 
 /* obj_enum.c */
 int
