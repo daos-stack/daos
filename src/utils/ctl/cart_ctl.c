@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -187,12 +187,15 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 	*num_ranks = num_ranks_l;
 }
 
+#define FI_ATTR_MAX_TOKENS 7
+
 static void
 ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 {
-	char *token;
-	char *endptr;
-	char *saveptr;
+	char* saveptr;
+	bool  prob_y = false;
+	char* tokens[FI_ATTR_MAX_TOKENS];
+	int   token_cnt = 0;
 
 	D_ASSERTF(arg_str != NULL, "arg_str is NULL.\n");
 	D_ASSERTF(fi_attr_in != NULL, "fi_attr_in is NULL.\n");
@@ -202,51 +205,34 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 
 	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
 
-	token = strtok_r(arg_str, ",", &saveptr);
-	if (token == NULL)
-		D_GOTO(error_out, 0);
+	tokens[token_cnt] = strtok_r(arg_str, ",", &saveptr);
+	do {
+		tokens[++token_cnt] = strtok_r(NULL, ",", &saveptr);
+	} while(tokens[token_cnt] != NULL && token_cnt < FI_ATTR_MAX_TOKENS);
 
-	fi_attr_in->fa_fault_id = strtoull(token, &endptr, 10);
+	if (token_cnt < FI_ATTR_MAX_TOKENS -1 || token_cnt > FI_ATTR_MAX_TOKENS)
+		goto error_out;
 
-	/* get max_faults */
-	token = strtok_r(NULL, ",", &saveptr);
-	if (token == NULL)
-		D_GOTO(error_out, 0);
-
-	fi_attr_in->fa_max_faults = strtoull(token, &endptr, 10);
-
-	token = strtok_r(NULL, ",", &saveptr);
-	if (token == NULL)
-		D_GOTO(error_out, 0);
-
-	fi_attr_in->fa_probability_x = strtoull(token, &endptr, 10);
-
-	/* Workaround for DAOS-13900, make probability be a percentage */
-	if (fi_attr_in->fa_probability_x != 0)
+	fi_attr_in->fa_fault_id = strtoull(tokens[0], NULL, 10);
+	fi_attr_in->fa_max_faults = strtoull(tokens[1], NULL, 10);
+	fi_attr_in->fa_probability_x = strtoull(tokens[2], NULL, 10);
+	if (token_cnt == FI_ATTR_MAX_TOKENS -1)
 		fi_attr_in->fa_probability_y = 1000;
-
-	token = strtok_r(NULL, ",", &saveptr);
-	if (token == NULL)
-		D_GOTO(error_out, 0);
-
-	fi_attr_in->fa_err_code = strtoull(token, &endptr, 10);
-
-	token = strtok_r(NULL, ",", &saveptr);
-	if (token == NULL)
-		D_GOTO(error_out, 0);
-
-	fi_attr_in->fa_interval = strtoull(token, &endptr, 10);
-
-	token = strtok_r(NULL, ",", &saveptr);
-	if (token == NULL)
-		return;
-
-	fi_attr_in->fa_argument = token;
-	return;
+	else {
+		fi_attr_in->fa_probability_y = strtoull(tokens[3], NULL, 10);
+		if (fi_attr_in->fa_probability_y == 0)
+			goto error_out;
+		prob_y = true;
+	}
+	fi_attr_in->fa_err_code = strtoull(tokens[prob_y ? 4 : 3], NULL, 10);
+	fi_attr_in->fa_interval = strtoull(tokens[prob_y ? 5 : 4], NULL, 10);
+	fi_attr_in->fa_argument = tokens[prob_y ? 6 : 5];
+return;
 
 error_out:
-	error_exit("Error: --attr has wrong number of arguments, should "
-		   "be \t--attr fault_id,max_faults,probability,err_code\n");
+	error_exit("Error: --attr has wrong number/value of arguments,"
+		   " should be \t --attr fault_id,max_faults,probability_x,"
+		   "[probability_y](!=0),err_code,argument\n");
 	return;
 }
 
@@ -295,12 +281,6 @@ print_usage_msg(const char *msg)
 static int
 parse_args(int argc, char **argv)
 {
-        char   *token;
-        char   *endptr;
-        char   *saveptr;
-        char   *arg_str;
-        char   *tokens[8];
-        int 	token_cnt, i = 0;
 	int	option_index = 0;
 	int	opt;
 	int	rc = 0;
@@ -350,16 +330,6 @@ parse_args(int argc, char **argv)
 		{"use_daos_agent_env", no_argument, 0, 'u'},
 		{0, 0, 0, 0},
 	};
-
-        tokens[i] = strtok_r(arg_str, ",", &saveptr);
-        do {
-                printf("before: i: %d: %s-%s\n", i, tokens[i], saveptr);
-                tokens[++i- strtok_r(NULL, ",", &saveptr);
-                printf("after: i: %d: %s-%s\n", i, tokens[i], saveptr);
-        } while(tokens[i] != NULL);
-
-        for (j =0; j < i; j++)
-                printf("token %d: %s\n", j, tokens[j]);
 
 	while (1) {
 		opt = getopt_long(argc, argv, "g:r:a:p:l:m:nu", long_options,
