@@ -210,12 +210,12 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 		tokens[++token_cnt] = strtok_r(NULL, ",", &saveptr);
 	} while (tokens[token_cnt] != NULL && token_cnt < FI_ATTR_MAX_TOKENS);
 
-	if (token_cnt < FI_ATTR_MAX_TOKENS -1 || token_cnt > FI_ATTR_MAX_TOKENS)
+	if (token_cnt < FI_ATTR_MAX_TOKENS - 1 || token_cnt > FI_ATTR_MAX_TOKENS)
 		goto error_out;
 
-	fi_attr_in->fa_fault_id		= strtoull(tokens[0], NULL, 10);
-	fi_attr_in->fa_max_faults	= strtoull(tokens[1], NULL, 10);
-	fi_attr_in->fa_probability_x	= strtoull(tokens[2], NULL, 10);
+	fi_attr_in->fa_fault_id      = strtoull(tokens[0], NULL, 10);
+	fi_attr_in->fa_max_faults    = strtoull(tokens[1], NULL, 10);
+	fi_attr_in->fa_probability_x = strtoull(tokens[2], NULL, 10);
 	if (token_cnt == FI_ATTR_MAX_TOKENS - 1)
 		fi_attr_in->fa_probability_y = 1000;
 	else {
