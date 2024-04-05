@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2023 Intel Corporation.
+ * (C) Copyright 2015-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -832,6 +832,7 @@ enum {
 #define DAOS_DTX_FAIL_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4b)
 
 #define DAOS_OBJ_SYNC_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4c)
+#define DAOS_OBJ_COLL_SPARSE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x4d)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)

@@ -36,6 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const fabricProviderProp = "fabric_providers"
@@ -50,7 +51,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	if svc.clientNetworkHint == nil {
+	if len(svc.clientNetworkHint) == 0 {
 		return nil, errors.New("clientNetworkHint is missing")
 	}
 
@@ -60,25 +61,47 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	}
 
 	resp := new(mgmtpb.GetAttachInfoResp)
-	if req.GetAllRanks() {
-		for rank, entry := range groupMap.RankEntries {
-			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
-				Rank: rank.Uint32(),
-				Uri:  entry.URI,
-			})
-		}
-	} else {
+	rankURIs := groupMap.RankEntries
+	if !req.GetAllRanks() {
+		rankURIs = make(map[ranklist.Rank]raft.RankEntry)
+
 		// If the request does not indicate that all ranks should be returned,
 		// it may be from an older client, in which case we should just return
 		// the MS ranks.
 		for _, rank := range groupMap.MSRanks {
-			resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
-				Rank: rank.Uint32(),
-				Uri:  groupMap.RankEntries[rank].URI,
-			})
+			rankURIs[rank] = groupMap.RankEntries[rank]
 		}
 	}
-	resp.ClientNetHint = svc.clientNetworkHint
+
+	for rank, entry := range rankURIs {
+		if len(svc.clientNetworkHint) < len(entry.SecondaryURIs)+1 {
+			return nil, errors.Errorf("not enough client network hints (%d) for rank %d URIs (%d)",
+				len(svc.clientNetworkHint), rank, len(entry.SecondaryURIs)+1)
+		}
+
+		resp.RankUris = append(resp.RankUris, &mgmtpb.GetAttachInfoResp_RankUri{
+			Rank:    rank.Uint32(),
+			Uri:     entry.PrimaryURI,
+			NumCtxs: entry.NumPrimaryCtxs,
+		})
+
+		for i, uri := range entry.SecondaryURIs {
+			rankURI := &mgmtpb.GetAttachInfoResp_RankUri{
+				Rank:        rank.Uint32(),
+				Uri:         uri,
+				ProviderIdx: uint32(i + 1),
+				NumCtxs:     entry.NumSecondaryCtxs[i],
+			}
+
+			resp.SecondaryRankUris = append(resp.SecondaryRankUris, rankURI)
+		}
+	}
+
+	resp.ClientNetHint = svc.clientNetworkHint[0]
+	if len(svc.clientNetworkHint) > 1 {
+		resp.SecondaryClientNetHints = svc.clientNetworkHint[1:]
+	}
+
 	resp.MsRanks = ranklist.RanksToUint32(groupMap.MSRanks)
 
 	v, err := svc.sysdb.DataVersion()
@@ -157,13 +180,15 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 	}
 
 	joinResponse, err := svc.membership.Join(&system.JoinRequest{
-		Rank:           ranklist.Rank(req.Rank),
-		UUID:           uuid,
-		ControlAddr:    peerAddr,
-		FabricURI:      req.Uri,
-		FabricContexts: req.Nctxs,
-		FaultDomain:    fd,
-		Incarnation:    req.Incarnation,
+		Rank:                    ranklist.Rank(req.Rank),
+		UUID:                    uuid,
+		ControlAddr:             peerAddr,
+		PrimaryFabricURI:        req.Uri,
+		SecondaryFabricURIs:     req.SecondaryUris,
+		FabricContexts:          req.Nctxs,
+		SecondaryFabricContexts: req.SecondaryNctxs,
+		FaultDomain:             fd,
+		Incarnation:             req.Incarnation,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to join system")
@@ -171,11 +196,11 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 
 	member := joinResponse.Member
 	if joinResponse.Created {
-		svc.log.Debugf("new system member: rank %d, addr %s, uri %s",
-			member.Rank, peerAddr, member.FabricURI)
+		svc.log.Debugf("new system member: rank %d, addr %s, primary uri %s, secondary uris %s",
+			member.Rank, peerAddr, member.PrimaryFabricURI, member.SecondaryFabricURIs)
 	} else {
-		svc.log.Debugf("updated system member: rank %d, uri %s, %s->%s",
-			member.Rank, member.FabricURI, joinResponse.PrevState, member.State)
+		svc.log.Debugf("updated system member: rank %d, primary uri %s, secondary uris %s, %s->%s",
+			member.Rank, member.PrimaryFabricURI, member.SecondaryFabricURIs, joinResponse.PrevState, member.State)
 	}
 
 	resp := &mgmtpb.JoinResp{
@@ -323,7 +348,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	for rank, entry := range gm.RankEntries {
 		req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
 			Rank:        rank.Uint32(),
-			Uri:         entry.URI,
+			Uri:         entry.PrimaryURI,
 			Incarnation: entry.Incarnation,
 		})
 		rankSet.Add(rank)
@@ -599,12 +624,21 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return resp, nil
 	}
 
+	if req.StateMask == 0 {
+		req.StateMask = uint32(system.AllMemberFilter)
+	}
+
 	members, err := svc.membership.Members(hitRanks, system.MemberState(req.StateMask))
 	if err != nil {
 		return nil, errors.Wrap(err, "get membership")
 	}
+
 	if err := convert.Types(members, &resp.Members); err != nil {
 		return nil, err
+	}
+
+	for _, hint := range svc.clientNetworkHint {
+		resp.Providers = append(resp.Providers, hint.Provider)
 	}
 
 	v, err := svc.sysdb.DataVersion()
@@ -1009,7 +1043,7 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 			errmsg = fmt.Sprintf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
 		}
 
-		svc.log.Debugf("Response from pool evict in cleanup: %+v", res)
+		svc.log.Debugf("Response from pool evict in cleanup: '%+v' (req: '%+v')", res, evictReq)
 		resp.Results = append(resp.Results, &mgmtpb.SystemCleanupResp_CleanupResult{
 			Status: res.Status,
 			Msg:    errmsg,
