@@ -1065,7 +1065,9 @@ rebuild_scan_leader(void *data)
 	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
 		DP_UUID(rpt->rt_pool_uuid));
 
-	rc = dss_thread_collective(rebuild_scanner, rpt, DSS_ULT_DEEP_STACK);
+	rc = ds_pool_thread_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, rebuild_scanner, rpt,
+				       DSS_ULT_DEEP_STACK);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -1073,7 +1075,8 @@ rebuild_scan_leader(void *data)
 		DP_UUID(rpt->rt_pool_uuid));
 
 	ABT_mutex_lock(rpt->rt_lock);
-	rc = dss_task_collective(rebuild_scan_done, rpt, 0);
+	rc = ds_pool_task_collective(rpt->rt_pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				     PO_COMP_ST_DOWNOUT, rebuild_scan_done, rpt, 0);
 	ABT_mutex_unlock(rpt->rt_lock);
 	if (rc) {
 		D_ERROR(DF_UUID" send rebuild object list failed:%d\n",
@@ -1225,8 +1228,11 @@ out:
 	if (tls && tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
 
-	if (rpt)
+	if (rpt) {
+		if (rc)
+			rpt_delete(rpt);
 		rpt_put(rpt);
+	}
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
 	ro->rso_stable_epoch = d_hlc_get();
