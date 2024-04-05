@@ -118,7 +118,7 @@ ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req)
 	struct mgmt_get_bs_state_in	*bs_in;
 	struct mgmt_get_bs_state_out	*bs_out;
 	uuid_t				 bs_uuid;
-	int				 bs_state;
+	int				 bs_state = -1;
 	int				 rc;
 
 
@@ -130,6 +130,8 @@ ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req)
 	uuid_copy(bs_uuid, bs_in->bs_uuid);
 
 	rc = ds_mgmt_get_bs_state(bs_uuid, &bs_state);
+	if (rc)
+		DL_ERROR(rc, "Failed to get blobstore:"DF_UUID" state", DP_UUID(bs_uuid));
 
 	uuid_copy(bs_out->bs_uuid, bs_uuid);
 	bs_out->bs_state = bs_state;
