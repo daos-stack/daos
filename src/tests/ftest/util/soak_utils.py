@@ -538,22 +538,21 @@ def launch_reboot(self, pools, name, results, args):
                           self.loop, name, reboot_host, time.ctime())
             cmd_results = run_remote(self.log, reboot_host, "sudo systemctl restart daos_server")
             if cmd_results.passed:
-                # wait server to be started
-                self.dmg_command.system_start(ranks=ranks)
-                check_started_ranks = self.server_managers[0].check_rank_state(
-                    ranklist, ["joined"], 5)
-                if check_started_ranks:
-                    self.log.error(f"ranks {check_started_ranks} failed to restart")
-                    status = False
-                if status:
-                    try:
-                        self.dmg_command.system_start(ranks=ranks)
-                    except CommandFailure as error:
-                        self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
-                        status = False
-                    for pool in pools:
-                        self.dmg_command.pool_query(pool.identifier)
                 self.dmg_command.system_query()
+                for pool in pools:
+                    self.dmg_command.pool_query(pool.identifier)
+                # wait server to be started
+                try:
+                    self.dmg_command.system_start(ranks=ranks)
+                except CommandFailure as error:
+                    self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
+                    status = False
+                for pool in pools:
+                    self.dmg_command.pool_query(pool.identifier)
+                self.dmg_command.system_query()
+            else:
+                self.log.error("<<<FAILED:systemctl start daos_server failed")
+                status = False
         if status:
             # reintegrate ranks
             reintegrate_status = True
