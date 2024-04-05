@@ -1,14 +1,8 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-
-/* Those are gone from python3, replaced with new functions */
-#define PyInt_FromLong		PyLong_FromLong
-#define PyString_FromString	PyUnicode_FromString
-#define PyString_FromStringAndSize PyUnicode_FromStringAndSize
-#define PyString_AsString	PyBytes_AsString
 
 #include <Python.h>
 
@@ -90,8 +84,8 @@ do {									\
 	}								\
 } while (0)
 
-static daos_handle_t	glob_eq;
-static int		use_glob_eq;
+static daos_handle_t glob_eq;
+static bool          use_glob_eq;
 
 /**
  * Implementations of baseline shim functions
@@ -101,24 +95,22 @@ static PyObject *
 __shim_handle__daos_init(PyObject *self, PyObject *args)
 {
 	int rc;
-	int ret;
-	char *override;
 
 	rc = daos_init();
 	if ((rc == 0) && (use_glob_eq == 0)) {
-		d_agetenv_str(&override, "PYDAOS_GLOB_EQ");
-		if ((override == NULL) || strcmp(override, "0")) {
-			use_glob_eq = 1;
+		d_getenv_bool("PYDAOS_GLOB_EQ", &use_glob_eq);
+		if (use_glob_eq) {
+			int ret;
+
 			ret = daos_eq_create(&glob_eq);
 			if (ret) {
-				D_ERROR("Failed to create global eq, "DF_RC"\n", DP_RC(ret));
-				use_glob_eq = 0;
+				DL_ERROR(ret, "Failed to create global eq");
+				use_glob_eq = false;
 			}
 		}
-		d_freeenv_str(&override);
 	}
 
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 }
 
 static PyObject *
@@ -130,12 +122,12 @@ __shim_handle__daos_fini(PyObject *self, PyObject *args)
 		rc =  daos_eq_destroy(glob_eq, DAOS_EQ_DESTROY_FORCE);
 		if (rc)
 			D_ERROR("Failed to destroy global eq, "DF_RC"\n", DP_RC(rc));
-		use_glob_eq = 0;
+		use_glob_eq = false;
 	}
 
 	rc = daos_fini();
 
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 }
 
 static PyObject *
@@ -153,7 +145,7 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
 		return Py_None;
 	}
 
-	return PyString_FromString(str);
+	return PyUnicode_FromString(str);
 }
 
 /**
@@ -265,7 +257,7 @@ out:
 
 	/* Populate return list */
 	return_list = PyList_New(2);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
+	PyList_SetItem(return_list, 0, PyLong_FromLong(rc));
 	PyList_SetItem(return_list, 1, PyLong_FromVoidPtr(hdl));
 
 	return return_list;
@@ -343,10 +335,10 @@ __shim_handle__cont_get(PyObject *self, PyObject *args)
 out:
 	/* Populate return list */
 	return_list = PyList_New(4);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
+	PyList_SetItem(return_list, 0, PyLong_FromLong(rc));
 	PyList_SetItem(return_list, 1, PyLong_FromLong(oid.hi));
 	PyList_SetItem(return_list, 2, PyLong_FromLong(oid.lo));
-	PyList_SetItem(return_list, 3, PyInt_FromLong(otype));
+	PyList_SetItem(return_list, 3, PyLong_FromLong(otype));
 
 	return return_list;
 }
@@ -408,7 +400,7 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 out:
 	/* Populate return list */
 	return_list = PyList_New(3);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
+	PyList_SetItem(return_list, 0, PyLong_FromLong(rc));
 	PyList_SetItem(return_list, 1, PyLong_FromLong(oid.hi));
 	PyList_SetItem(return_list, 2, PyLong_FromLong(oid.lo));
 
@@ -442,7 +434,7 @@ __shim_handle__cont_close(PyObject *self, PyObject *args)
 	if (rc == 0)
 		D_FREE(hdl);
 
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 }
 
 #define ITER_NR		96
@@ -684,7 +676,7 @@ out:
 			rc = rc2;
 	}
 
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 }
 
 static PyObject *
@@ -872,7 +864,7 @@ __shim_handle__kv_open(PyObject *self, PyObject *args)
 
 	/* Populate return list */
 	return_list = PyList_New(2);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
+	PyList_SetItem(return_list, 0, PyLong_FromLong(rc));
 	PyList_SetItem(return_list, 1, PyLong_FromLong(oh.cookie));
 
 	return return_list;
@@ -890,7 +882,7 @@ __shim_handle__kv_close(PyObject *self, PyObject *args)
 	/** Close object */
 	rc = daos_kv_close(oh, NULL);
 
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 }
 
 /**
@@ -960,7 +952,7 @@ __shim_handle__kv_get(PyObject *self, PyObject *args)
 	if (!use_glob_eq) {
 		rc = daos_eq_create(&eq);
 		if (rc)
-			return PyInt_FromLong(rc);
+			return PyLong_FromLong(rc);
 	} else {
 		eq = glob_eq;
 	}
@@ -1045,7 +1037,7 @@ rewait:
 		if (PyUnicode_Check(key)) {
 			op->key = (char *)PyUnicode_AsUTF8(key);
 		} else {
-			op->key = PyString_AsString(key);
+			op->key = PyBytes_AsString(key);
 		}
 		if (!op->key)
 			D_GOTO(err, rc = 0);
@@ -1116,7 +1108,7 @@ out:
 	}
 
 	/* Populate return list */
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 
 err:
 	if (!use_glob_eq)
@@ -1148,7 +1140,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 	if (!use_glob_eq) {
 		rc = daos_eq_create(&eq);
 		if (rc)
-			return PyInt_FromLong(rc);
+			return PyLong_FromLong(rc);
 	} else {
 		eq = glob_eq;
 	}
@@ -1207,7 +1199,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 		if (PyUnicode_Check(key)) {
 			key_str = (char *)PyUnicode_AsUTF8(key);
 		} else {
-			key_str = PyString_AsString(key);
+			key_str = PyBytes_AsString(key);
 		}
 		if (!key_str)
 			D_GOTO(err, rc = 0);
@@ -1239,7 +1231,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 			rc = ret;
 	}
 
-	return PyInt_FromLong(rc);
+	return PyLong_FromLong(rc);
 err:
 	if (!use_glob_eq)
 		daos_eq_destroy(eq, 0);
@@ -1359,8 +1351,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	for (ptr = enum_buf, i = 0; i < nr; i++) {
 		Py_ssize_t len = kds[i].kd_key_len;
 
-		rc = PyList_Append(entries,
-				   PyString_FromStringAndSize(ptr, len));
+		rc = PyList_Append(entries, PyUnicode_FromStringAndSize(ptr, len));
 		if (rc  < 0) {
 			rc = -DER_IO;
 			break;
@@ -1394,9 +1385,9 @@ out:
 
 	/* Populate return list */
 	return_list = PyList_New(4);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
-	PyList_SetItem(return_list, 1, PyInt_FromLong(nr_req));
-	PyList_SetItem(return_list, 2, PyInt_FromLong(size));
+	PyList_SetItem(return_list, 0, PyLong_FromLong(rc));
+	PyList_SetItem(return_list, 1, PyLong_FromLong(nr_req));
+	PyList_SetItem(return_list, 2, PyLong_FromLong(size));
 	if (rc || daos_anchor_is_eof(anchor)) {
 		if (anchor_cap != NULL)
 			Py_DECREF(anchor_cap);
