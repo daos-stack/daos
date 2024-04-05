@@ -59,16 +59,16 @@ class DaosAgentYamlParameters(YamlParameters):
         #       an interface for client applications.
         #   - cache_expiration: <int>, Time in minutes to expire agent's cache that will
         #       be refreshed the next time hardware data or engine rank connection information
-        #       is requested. Default value 0 means the cache never expires.
+        #       is requested. A value of 0 means the cache never expires.
         #   - disable_caching: <bool>, Whether to disable the agent's internal caches. If true,
         #       the agent will query the server access point and local hardware data every time
-        #       a client requests rank connection information. Default is false.
+        #       a client requests rank connection information.
         self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
         self.log_file = LogParameter(log_dir, None, "daos_agent.log")
         self.control_log_mask = BasicParameter(None, "debug")
         self.exclude_fabric_ifaces = BasicParameter(None)
-        self.cache_expiration = BasicParameter(None, 0)
-        self.disable_caching = BasicParameter(None, False)
+        self.cache_expiration = BasicParameter(None)
+        self.disable_caching = BasicParameter(None)
 
     def update_log_file(self, name):
         """Update the log file name for the daos agent.
