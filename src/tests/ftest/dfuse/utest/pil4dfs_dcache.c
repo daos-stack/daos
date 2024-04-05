@@ -292,14 +292,55 @@ test_open_close(void **state)
 	printf("\n-- END of test_open_close --\n");
 }
 
+static void
+test_dup(void **state)
+{
+	int fd;
+	int foo_fd;
+	int dup_fd;
+	int rc;
+
+	(void)state; /* unused */
+
+	printf("\n-- INIT of test_dup --\n");
+
+	printf("Opening path '%s'\n", mnt_path);
+	fd = open(mnt_path, O_DIRECTORY, O_RDWR);
+	assert_return_code(fd, errno);
+
+	printf("\n-- START of test_dup --\n");
+
+	printf("\ncreating directory '/test_dup'\n");
+	rc = mkdirat(fd, "test_dup", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+	assert_return_code(rc, errno);
+
+	printf("\ncreating empty file '/test_dup/foo'\n");
+	foo_fd = openat(fd, "test_dup/foo", O_WRONLY | O_CREAT | O_TRUNC, S_IRWXU | S_IRGRP | S_IROTH);
+	assert_return_code(foo_fd, errno);
+
+	printf("\nduplicating file descriptor of file 'foo'\n");
+	dup_fd = dup(foo_fd);
+	assert_return_code(dup_fd, errno);
+
+	printf("\nclosing duplicated file descriptor 'foo'\n");
+	rc = close(dup_fd);
+	assert_return_code(rc, errno);
+
+	printf("\nclosing empty file '/foo/foo'\n");
+	rc = close(foo_fd);
+	assert_return_code(rc, errno);
+
+	printf("\n-- END of test_dup --\n");
+}
+
 int
 main(int argc, char *argv[])
 {
 	size_t            test_id;
-	struct CMUnitTest tests[] = {cmocka_unit_test(test_mkdirat),
-				     cmocka_unit_test(test_unlinkat), cmocka_unit_test(test_rmdir),
-				     cmocka_unit_test(test_rename),
-				     cmocka_unit_test(test_open_close)};
+	struct CMUnitTest tests[] = {
+		cmocka_unit_test(test_mkdirat),    cmocka_unit_test(test_unlinkat),
+		cmocka_unit_test(test_rmdir),      cmocka_unit_test(test_rename),
+		cmocka_unit_test(test_open_close), cmocka_unit_test(test_dup)};
 	struct CMUnitTest test[1];
 
 	d_register_alt_assert(mock_assert);

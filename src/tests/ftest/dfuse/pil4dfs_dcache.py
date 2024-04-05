@@ -152,6 +152,17 @@ class Pil4dfsDcache(DfuseTestBase):
                 "no_dcache_new": 0,
                 "no_dcache_del": 0,
                 "op_name": None
+            },
+            {
+                "test_name": "test_dup",
+                "test_id": 5,
+                "dcache_add": 2,
+                "dcache_del": 0,
+                "dcache_hit": 1,
+                "dcache_miss": 2,
+                "no_dcache_new": 0,
+                "no_dcache_del": 0,
+                "op_name": None
             }
         ],
         "test_pil4dfs_dcache_disabled": [
@@ -206,6 +217,17 @@ class Pil4dfsDcache(DfuseTestBase):
             {
                 "test_name": "test_open_close",
                 "test_id": 4,
+                "dcache_add": 0,
+                "dcache_del": 0,
+                "dcache_hit": 0,
+                "dcache_miss": 0,
+                "no_dcache_new": 2,
+                "no_dcache_del": 2,
+                "op_name": None
+            },
+            {
+                "test_name": "test_dup",
+                "test_id": 5,
                 "dcache_add": 0,
                 "dcache_del": 0,
                 "dcache_hit": 0,
