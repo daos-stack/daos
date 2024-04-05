@@ -111,8 +111,6 @@ class DaosCoreTestDfuse(DfuseTestBase):
             '--directory',
             '--cache'
         ]
-        command = [self.daos_test, '--test-dir', mount_dir,
-                   '--io', '--stream', '--mmap', '--exec', '--directory']
         if use_dfuse:
             command.append('--lowfd')
         else:
