@@ -1469,8 +1469,6 @@ free_fd(int idx, bool closing_dup_fd)
 		return;
 	}
 
-	/* Decrement the refcounter get in open_common() */
-	drec_decref(file_list[idx]->dfs_mt->dcache, file_list[idx]->parent);
 	if (closing_dup_fd)
 		dup_ref_count[idx]--;
 	file_list[idx]->ref_count--;
@@ -1498,6 +1496,8 @@ free_fd(int idx, bool closing_dup_fd)
 	D_MUTEX_UNLOCK(&lock_fd);
 
 	if (saved_obj) {
+		/* Decrement the refcounter get in open_common() */
+		drec_decref(saved_obj->dfs_mt->dcache, saved_obj->parent);
 		rc = dfs_release(saved_obj->file);
 		if (rc)
 			DS_ERROR(rc, "dfs_release() failed");
