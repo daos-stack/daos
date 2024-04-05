@@ -60,7 +60,6 @@ print_usage()
 }
 
 char *test_dir;
-
 void
 do_openat(void **state)
 {
@@ -176,6 +175,35 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 
 	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
+extern int open__(const char *pathname, int flags, ...);
+void
+do_open(void **state)
+{
+	int         fd;
+	int         rc;
+	int         len;
+	char        path[512];
+
+	len = snprintf(path, sizeof(path) - 1, "%s/open_file", test_dir);
+	assert_true(len < (sizeof(path) - 1));
+
+	/* Test O_CREAT with open but without mode. __open() is called to workaround
+	 * "-D_FORTIFY_SOURCE=3". Normally mode is required when O_CREAT is in flag.
+	 * libc seems supporting it although the permission could be undefined.
+	 */
+	_Pragma("GCC diagnostic push")
+	_Pragma("GCC diagnostic ignored \"-Wimplicit-function-declaration\"")
+	fd = __open(path, O_RDWR | O_CREAT | O_EXCL);
+	_Pragma("GCC diagnostic pop")
+	assert_return_code(fd, errno);
+
+	rc = close(fd);
+ 	assert_return_code(rc, errno);
+
+	rc = unlink(path);
 	assert_return_code(rc, errno);
 }
 
@@ -847,6 +875,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			printf("=====================\n");
 			const struct CMUnitTest io_tests[] = {
 			    cmocka_unit_test(do_openat),
+			    cmocka_unit_test(do_open),
 			    cmocka_unit_test(do_ioctl),
 			    cmocka_unit_test(do_readv_writev),
 			};
