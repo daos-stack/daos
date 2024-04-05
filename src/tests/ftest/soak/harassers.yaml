@@ -56,8 +56,8 @@ container:
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
-  file_oclass: EC_2P1GX
-  dir_oclass: RP_2GX
+  file_oclass: SX
+  dir_oclass: SX
   control_method: daos
   daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
@@ -134,7 +134,7 @@ ior_harasser:
     - '64M'
   repetitions: 1
   transfer_size:
-    - '4k'
+    - '32k'
     - '1m'
   segment_count: 1
   dfs_oclass:
@@ -162,6 +162,7 @@ fio_harasser:
     numjobs: 1
   soak:
     blocksize:
+      - '4K'
       - '1M'
     size:
       - '1G'
