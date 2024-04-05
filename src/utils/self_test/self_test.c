@@ -1246,10 +1246,10 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "  --use-daos-agent-env\n"
 	       "      Short version: -u\n"
 	       "      This option sets the following env vars through a running daos_agent.\n"
-	       "         - D_INTERFACE\n"
-	       "         - D_PROVIDER\n"
+	       "         - OFI_INTERFACE\n"
+	       "         - CRT_PHY_ADDR_STR\n"
 	       "         - CRT_CTX_SHARE_ADDR\n"
-	       "         - D_DOMAIN\n"
+	       "         - OFI_DOMAIN\n"
 	       "         - CRT_TIMEOUT\n",
 	       prog_name, UINT32_MAX,
 	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
@@ -1830,15 +1830,15 @@ int main(int argc, char *argv[])
 		char *attach_path;
 		char *attach_path_env = NULL;
 
-		if (!d_isenv_def("D_PROVIDER")) {
-			printf("Error: provider (D_PROVIDER) is not set\n");
-			printf("Example: export D_PROVIDER='ofi+tcp'\n");
+		if (!d_isenv_def("CRT_PHY_ADDR_STR")) {
+			printf("Error: provider (CRT_PHY_ADDR_STR) is not set\n");
+			printf("Example: export CRT_PHY_ADDR_STR='ofi+tcp'\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 
-		if (!d_isenv_def("D_INTERFACE")) {
-			printf("Error: interface (D_INTERFACE) is not set\n");
-			printf("Example: export D_INTERFACE=eth0\n");
+		if (!d_isenv_def("OFI_INTERFACE")) {
+			printf("Error: interface (OFI_INTERFACE) is not set\n");
+			printf("Example: export OFI_INTERFACE=eth0\n");
 			D_GOTO(cleanup, ret = -DER_INVAL);
 		}
 

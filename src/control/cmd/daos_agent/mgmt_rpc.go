@@ -211,7 +211,7 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, req *mgm
 	resp.ClientNetHint.Domain = iface
 	if domain != "" {
 		resp.ClientNetHint.Domain = domain
-		mod.log.Tracef("D_DOMAIN for %s has been detected as: %s",
+		mod.log.Tracef("OFI_DOMAIN for %s has been detected as: %s",
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
 	}
 

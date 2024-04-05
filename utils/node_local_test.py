@@ -1156,8 +1156,8 @@ class DaosServer():
         """Run the client code to set server params"""
         cmd_env = get_base_env()
 
-        cmd_env['D_INTERFACE'] = self.network_interface
-        cmd_env['D_PROVIDER'] = self.network_provider
+        cmd_env['OFI_INTERFACE'] = self.network_interface
+        cmd_env['CRT_PHY_ADDR_STR'] = self.network_provider
         valgrind_hdl = ValgrindHelper(self.conf)
 
         if self.conf.args.memcheck == 'no':

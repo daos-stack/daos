@@ -193,9 +193,9 @@ func createListener(ctlAddr *net.TCPAddr, listen netListenFn) (net.Listener, err
 func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.FabricInterfaceSet) error {
 	// In the case of some providers, mercury uses the interface name
 	// such as ib0, while OFI uses the device name such as hfi1_0 CaRT and
-	// Mercury will now support the new D_DOMAIN environment variable so
+	// Mercury will now support the new OFI_DOMAIN environment variable so
 	// that we can specify the correct device for each.
-	if !cfg.HasEnvVar("D_DOMAIN") {
+	if !cfg.HasEnvVar("OFI_DOMAIN") {
 		interfaces, err := cfg.Fabric.GetInterfaces()
 		if err != nil {
 			return err
@@ -221,8 +221,8 @@ func updateFabricEnvars(log logging.Logger, cfg *engine.Config, fis *hardware.Fa
 		}
 
 		domain := strings.Join(domains, engine.MultiProviderSeparator)
-		log.Debugf("setting D_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
-		envVar := "D_DOMAIN=" + domain
+		log.Debugf("setting OFI_DOMAIN=%s for %s", domain, cfg.Fabric.Interface)
+		envVar := "OFI_DOMAIN=" + domain
 		cfg.WithEnvVars(envVar)
 	}
 

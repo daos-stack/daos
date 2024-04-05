@@ -254,11 +254,11 @@ struct  _Mgmt__ClientNetHint
    */
   char *provider;
   /*
-   * CaRT D_INTERFACE
+   * CaRT OFI_INTERFACE
    */
   char *interface;
   /*
-   * CaRT D_DOMAIN for given D_INTERFACE
+   * CaRT OFI_DOMAIN for given OFI_INTERFACE
    */
   char *domain;
   /*
