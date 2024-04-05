@@ -60,9 +60,9 @@ def add_command_line_options():
     AddOption('--build-deps',
               dest='build_deps',
               type='choice',
-              choices=['yes', 'no', 'only', 'build-only'],
+              choices=['fetch', 'yes', 'no', 'only', 'build-only'],
               default='no',
-              help="Automatically download and build sources.  (yes|no|only|build-only) [no]")
+              help="Automatically download and build sources.  (fetch|yes|no|only|build-only) [no]")
 
     # We want to be able to check what dependencies are needed without
     # doing a build, similar to --dry-run.  We can not use --dry-run
@@ -372,6 +372,8 @@ def scons():
     check_for_release_target()
 
     deps_env = Environment()
+    # Ensure 'install-sandbox' option is defined early
+    deps_env.Tool('install')
 
     add_command_line_options()
 

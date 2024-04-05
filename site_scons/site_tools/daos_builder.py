@@ -19,6 +19,15 @@ class DaosLiteral(Literal):
         return hash(self.lstr)
 
 
+def _remove_sandbox(old_path):
+    """Remove the sandbox path from the rpath"""
+
+    if not GetOption('install_sandbox'):
+        return old_path
+
+    return old_path.replace(GetOption('install_sandbox'), '')
+
+
 def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
     """Add relative rpath entries"""
     if GetOption('no_rpath'):
@@ -32,14 +41,18 @@ def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
         path = r'\$$ORIGIN'
         env.AppendUnique(RPATH=[DaosLiteral(path)])
     for rpath in rpaths:
-        if rpath.startswith('/usr'):
+        if rpath.startswith('/usr') and 'prereq' not in rpath:
             env.AppendUnique(RPATH=[rpath])
             continue
+        newpath = os.path.join(prefix, rpath)
         if install_off is None:
-            env.AppendUnique(RPATH=[os.path.join(prefix, rpath)])
+            env.AppendUnique(RPATH=[newpath])
+            if rpath != newpath:
+                env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={rpath}'])
             continue
-        relpath = os.path.relpath(rpath, prefix)
-        if relpath != rpath:
+        newpath = _remove_sandbox(newpath)
+        relpath = os.path.relpath(newpath, prefix)
+        if relpath != newpath:
             if set_cgo_ld:
                 env.AppendENVPath("CGO_LDFLAGS", f'-Wl,-rpath=$ORIGIN/{install_off}/{relpath}',
                                   sep=" ")
@@ -52,8 +65,11 @@ def _add_rpaths(env, install_off, set_cgo_ld, is_bin):
             # NB: Also use full path so intermediate linking works
             env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
         else:
+            newpath = _remove_sandbox(path)
             # NB: Also use full path so intermediate linking works
-            env.AppendUnique(RPATH=[path])
+            env.AppendUnique(RPATH=[newpath])
+            if path != newpath:
+                env.AppendUnique(LINKFLAGS=[f'-Wl,-rpath-link={path}'])
 
     if set_cgo_ld:
         env.AppendENVPath("CGO_LDFLAGS", env.subst("$_LIBDIRFLAGS $_RPATH"), sep=" ")
