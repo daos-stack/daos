@@ -132,7 +132,8 @@ struct dtx_handle {
 	/** Modification sequence in the distributed transaction. */
 	uint16_t			 dth_op_seq;
 
-	uint32_t                         padding2;
+	uint16_t			 dth_deferred_used_cnt;
+	uint16_t                         padding2;
 
 	union {
 		struct {
