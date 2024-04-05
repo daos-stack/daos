@@ -192,9 +192,9 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 static void
 ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 {
-	char* saveptr;
+	char *saveptr;
 	bool  prob_y = false;
-	char* tokens[FI_ATTR_MAX_TOKENS];
+	char *tokens[FI_ATTR_MAX_TOKENS];
 	int   token_cnt = 0;
 
 	D_ASSERTF(arg_str != NULL, "arg_str is NULL.\n");
