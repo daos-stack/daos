@@ -1228,8 +1228,11 @@ out:
 	if (tls && tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
 
-	if (rpt)
+	if (rpt) {
+		if (rc)
+			rpt_delete(rpt);
 		rpt_put(rpt);
+	}
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
 	ro->rso_stable_epoch = d_hlc_get();
