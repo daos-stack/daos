@@ -1326,6 +1326,21 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
 	}
 
+	/*
+	 * Even if the transaction modifies nothing locally, we still need to store
+	 * it persistently. Otherwise, the subsequent DTX resync may not find it as
+	 * to regard it as failed transaction and abort it.
+	 */
+	if (result == 0 && !dth->dth_active && !dth->dth_prepared &&
+	    (dth->dth_dist || dth->dth_modification_cnt > 0)) {
+		result = vos_dtx_attach(dth, true, dth->dth_ent != NULL ? true : false);
+		if (unlikely(result < 0)) {
+			D_ERROR(DF_UUID": Fail to persistently store DTX "DF_DTI": "DF_RC"\n",
+				DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(result));
+			goto abort;
+		}
+	}
+
 	if (dth->dth_prepared || dtx_batched_ult_max == 0) {
 		dth->dth_sync = 1;
 		goto sync;
@@ -1445,17 +1460,14 @@ out:
 		result = 0;
 
 	if (!daos_is_zero_dti(&dth->dth_xid)) {
-		if (result < 0) {
-			/* 1. Drop partial modification for distributed transaction.
-			 * 2. Remove the pinned DTX entry.
-			 */
-			if (!aborted)
-				vos_dtx_cleanup(dth, true);
+		/* Drop partial modification and remove the pinned DTX entry. */
+		if (result < 0 && result != -DER_AGAIN && !aborted && !dth->dth_solo &&
+		    dth->dth_modification_cnt > 0)
+			vos_dtx_cleanup(dth, true);
 
-			/* For solo DTX, just let client retry for DER_AGAIN case. */
-			if (result == -DER_AGAIN && dth->dth_solo)
-				result = -DER_INPROGRESS;
-		}
+		/* For solo DTX, just let client retry for DER_AGAIN case. */
+		if (result == -DER_AGAIN && dth->dth_solo)
+			result = -DER_INPROGRESS;
 
 		vos_dtx_rsrvd_fini(dth);
 		vos_dtx_detach(dth);
@@ -1553,7 +1565,20 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 
 	if (dth->dth_local) {
 		result = vos_dtx_local_end(dth, result);
-	} else if (result < 0) {
+		D_DEBUG(DB_IO, "Stop the local transaction ver %u: " DF_RC "\n", dth->dth_ver,
+			DP_RC(result));
+		goto fini;
+	}
+
+	/*
+	 * Even if the transaction modifies nothing locally, we still need to store
+	 * it persistently. Otherwise, the subsequent DTX resync may not find it as
+	 * to regard it as failed transaction and abort it.
+	 */
+	if (result == 0 && !dth->dth_active && (dth->dth_dist || dth->dth_modification_cnt > 0))
+		result = vos_dtx_attach(dth, true, dth->dth_ent != NULL ? true : false);
+
+	if (result < 0) {
 		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 			int	rc;
 
@@ -1574,21 +1599,16 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 				dth->dth_cos_done = 1;
 		}
 
-		/* 1. Drop partial modification for distributed transaction.
-		 * 2. Remove the pinned DTX entry.
-		 */
-		vos_dtx_cleanup(dth, true);
-	}
+		/* Drop partial modification and remove the pinned DTX entry. */
+		if (dth->dth_modification_cnt > 0)
+			vos_dtx_cleanup(dth, true);
 
-	if (!dth->dth_local) {
 		D_DEBUG(DB_IO, "Stop the DTX " DF_DTI " ver %u, dkey %lu: " DF_RC "\n",
 			DP_DTI(&dth->dth_xid), dth->dth_ver, (unsigned long)dth->dth_dkey_hash,
 			DP_RC(result));
-	} else {
-		D_DEBUG(DB_IO, "Stop the local transaction ver %u: " DF_RC "\n", dth->dth_ver,
-			DP_RC(result));
 	}
 
+fini:
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
 	vos_dtx_rsrvd_fini(dth);
