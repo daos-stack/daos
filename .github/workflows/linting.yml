@@ -26,7 +26,7 @@ jobs:
           python-version: '3'
       - uses: isort/isort-action@master
         with:
-          requirementsFiles: "requirements.txt utils/cq/requirements.txt"
+          requirementsFiles: "requirements.txt"
       - name: Run on SConstruct file.
         run: isort --check-only SConstruct
       - name: Run on build files.
