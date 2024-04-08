@@ -200,7 +200,7 @@ class Pil4dfsDcache(DfuseTestBase):
         """Update the Pil4dfsDcacheCmd command environment.
 
         Args:
-            env (dict): dictionnary of the command environment variables
+            env (dict): dictionary of the command environment variables
             mnt (str): path of the Dfuse mount point
             timeout (int, optional): dir-cache timeout in seconds.
                 Default is None.
