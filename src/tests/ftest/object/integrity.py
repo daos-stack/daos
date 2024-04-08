@@ -102,7 +102,7 @@ class ObjectDataValidation(TestWithServers):
         expected_error = "RC: -1002"
         dkey = 0
         akey = 0
-        indata = ("{0}".format(str(akey)[0]) * record_length[record_index])
+        indata = "{0}".format(str(akey)[0]) * record_length[record_index]
         c_dkey = create_string_buffer("dkey {0}".format(dkey))
         c_akey = create_string_buffer("akey {0}".format(akey))
         c_value = create_string_buffer(indata)
@@ -198,7 +198,7 @@ class ObjectDataValidation(TestWithServers):
         record_index = 0
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) * record_length[record_index])
+                indata = "{0}".format(str(akey)[0]) * record_length[record_index]
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
                 c_akey = create_string_buffer("akey {0}".format(akey))
                 c_value = create_string_buffer(indata)
@@ -261,7 +261,7 @@ class ObjectDataValidation(TestWithServers):
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
                 c_values = []
-                value = ("{0}".format(str(akey)[0]) * record_length[record_index])
+                value = "{0}".format(str(akey)[0]) * record_length[record_index]
                 for item in range(array_size):
                     c_values.append((create_string_buffer(value), len(value) + 1))
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
@@ -281,7 +281,7 @@ class ObjectDataValidation(TestWithServers):
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
                 indata = []
-                value = ("{0}".format(str(akey)[0]) * record_length[record_index])
+                value = "{0}".format(str(akey)[0]) * record_length[record_index]
                 for item in range(array_size):
                     indata.append(value)
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
