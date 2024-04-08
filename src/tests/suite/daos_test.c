@@ -17,7 +17,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbBIPG"
+#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbBIPGF"
 
 /**
  * These tests will only be run if explicitly specified. They don't get
@@ -53,6 +53,7 @@ print_usage(int rank)
 	print_message("daos_test -T|--dist_dtx\n");
 	print_message("daos_test -i|--io\n");
 	print_message("daos_test -I|--ec_io\n");
+	print_message("daos_test -F|--flat_io\n");
 	print_message("daos_test -x|--epoch_io\n");
 	print_message("daos_test -A|--obj_array\n");
 	print_message("daos_test -D|--array\n");
@@ -154,6 +155,13 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_ec_io_test(rank, size, sub_tests,
 						      sub_tests_size);
+			break;
+		case 'F':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS FLAT IO test..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_flat_io_test(rank, size, sub_tests,
+							   sub_tests_size);
 			break;
 		case 'z':
 			daos_test_print(rank, "\n\n=================");
@@ -352,6 +360,7 @@ main(int argc, char **argv)
 		{"verify",	no_argument,		NULL,	'V'},
 		{"io",		no_argument,		NULL,	'i'},
 		{"ec_io",	no_argument,		NULL,	'I'},
+		{"flat_io",	no_argument,		NULL,	'F'},
 		{"checksum",	no_argument,		NULL,	'z'},
 		{"agg_ec",	no_argument,		NULL,	'Z'},
 		{"dedup",	no_argument,		NULL,	'U'},
@@ -400,7 +409,7 @@ main(int argc, char **argv)
 
 	while ((opt =
 		getopt_long(argc, argv,
-			    "ampcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:GP",
+			    "ampcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:GPF",
 			     long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

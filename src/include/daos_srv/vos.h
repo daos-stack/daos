@@ -514,6 +514,22 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags);
 
 /**
+ * Flattens the container - iterates all objects, flattens small objects.
+ *
+ * \param coh	[IN]		Container open handle
+ * \param epoch [IN]		Flatten epoch
+ * \param snapshots [IN]	Snapshot epoch list
+ * \param snapshots_nr [IN]	Snapshot number
+ * \param yield_func [IN]	Pointer to customized yield function
+ * \param yield_arg  [IN]	Argument of yield function
+ *
+ * \return			Zero on success, negative value if error
+ */
+int
+vos_flatten(daos_handle_t coh, daos_epoch_t epoch, uint64_t *snapshots, uint32_t snapshots_nr,
+	    int (*yield_func)(void *arg), void *yield_arg);
+
+/**
  * Discards changes in all epochs with the epoch range \a epr
  *
  * If a single epoch needs to be discarded then \a epr::epr_lo

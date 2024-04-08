@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1181,7 +1181,7 @@ obj_tree_init(struct vos_object *obj)
 	struct vos_btr_attr *ta	= &vos_btr_attrs[0];
 	int		     rc;
 
-	if (daos_handle_is_valid(obj->obj_toh))
+	if (daos_handle_is_valid(obj->obj_toh) || vos_obj_flattened(obj->obj_df))
 		return 0;
 
 	D_ASSERT(obj->obj_df);

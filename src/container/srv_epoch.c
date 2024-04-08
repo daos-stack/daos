@@ -63,8 +63,8 @@ snap_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 }
 
 /* Read snapshot epochs from rdb (TODO: add names) */
-static int
-read_snap_list(struct rdb_tx *tx, struct cont *cont, daos_epoch_t **buf, int *count)
+int
+ds_cont_read_snap_list(struct rdb_tx *tx, struct cont *cont, daos_epoch_t **buf, int *count)
 {
 	struct snap_list_iter_args iter_args;
 	int rc;
@@ -570,7 +570,7 @@ xfer_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *con
 		bulk_size = 0;
 		snap_count = 0;
 	}
-	rc = read_snap_list(tx, cont, &snapshots, &snap_count);
+	rc = ds_cont_read_snap_list(tx, cont, &snapshots, &snap_count);
 	if (rc != 0)
 		goto out;
 
@@ -694,7 +694,7 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	rc = read_snap_list(&tx, cont, snapshots, snap_count);
+	rc = ds_cont_read_snap_list(&tx, cont, snapshots, snap_count);
 	cont_put(cont);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
@@ -740,7 +740,7 @@ ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid)
 		goto out_lock;
 	}
 
-	rc = read_snap_list(&tx, cont, &snapshots, &snap_count);
+	rc = ds_cont_read_snap_list(&tx, cont, &snapshots, &snap_count);
 	cont_put(cont);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": Failed to read snap list: %d\n",

@@ -1997,6 +1997,23 @@ out:
 	return rc;
 }
 
+static bool
+obj_modify_after_flatten(struct ds_cont_hdl *coh, daos_epoch_t epoch)
+{
+	daos_epoch_t	flat_epoch;
+
+	if (!coh->sch_cont) /* server rebuild container handle */
+		return false;
+
+	flat_epoch = coh->sch_cont->sc_flat_epoch;
+	if (flat_epoch != 0 && epoch >= flat_epoch) {
+		D_DEBUG(DB_IO, "cont hdl "DF_UUID" epoch "DF_X64" exceed flat epoch "DF_X64"\n",
+			DP_UUID(coh->sch_uuid), epoch, flat_epoch);
+		return true;
+	}
+	return false;
+}
+
 static int
 obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 {
@@ -2851,6 +2868,9 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 		D_GOTO(out, rc);
 	}
+
+	if (obj_modify_after_flatten(ioc.ioc_coh, orw->orw_epoch))
+		D_GOTO(out, rc = -DER_NO_PERM);
 
 	tgts = orw->orw_shard_tgts.ca_arrays;
 	tgt_cnt = orw->orw_shard_tgts.ca_count;
@@ -3805,6 +3825,9 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 			   &opi->opi_flags);
 	if (rc == PE_OK_LOCAL)
 		opi->opi_flags &= ~ORF_EPOCH_UNCERTAIN;
+
+	if (obj_modify_after_flatten(ioc.ioc_coh, opi->opi_epoch))
+		D_GOTO(out, rc = -DER_NO_PERM);
 
 	version = opi->opi_map_ver;
 	max_ver = opi->opi_map_ver;
@@ -4881,6 +4904,8 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		rc = obj_capa_check(ioc->ioc_coh, true, false);
 		if (rc != 0)
 			goto out;
+		if (obj_modify_after_flatten(ioc->ioc_coh, dcsh->dcsh_epoch.oe_value))
+			D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
 	switch (rc1) {
@@ -4951,6 +4976,9 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 				rc = obj_capa_check(ioc->ioc_coh, true, false);
 				if (rc != 0)
 					goto comp;
+				if (obj_modify_after_flatten(ioc->ioc_coh,
+							     dlh->dlh_handle.dth_epoch))
+					D_GOTO(comp, rc = -DER_NO_PERM);
 			}
 
 			dcsh = ds_obj_cpd_get_head(dca->dca_rpc, dca->dca_idx);

@@ -41,7 +41,7 @@ def scons():
                     daos_obj_array.c daos_obj.c daos_oid_alloc.c daos_pool.c
                     daos_rebuild.c daos_rebuild_common.c daos_rebuild_ec.c
                     daos_rebuild_simple.c daos_test.c daos_verify_consistency.c
-                    daos_aggregate_ec.c daos_degrade_ec.c
+                    daos_aggregate_ec.c daos_degrade_ec.c daos_obj_flat.c
                     daos_extend_simple.c daos_obj_ec.c daos_upgrade.c daos_pipeline.c""")
 
     daostest = newenv.d_program('daos_test', c_files + daos_test_tgt,

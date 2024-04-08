@@ -1245,7 +1245,7 @@ dm_check_cont_status(struct cmd_args_s *ap, daos_handle_t coh, bool *status_heal
 
 	entry = &prop->dpp_entries[0];
 	daos_prop_val_2_co_status(entry->dpe_val, &stat);
-	if (stat.dcs_status == DAOS_PROP_CO_HEALTHY) {
+	if ((stat.dcs_status & DAOS_PROP_CO_UNCLEAN) == 0) {
 		*status_healthy = true;
 	} else {
 		*status_healthy = false;

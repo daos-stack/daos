@@ -388,7 +388,8 @@ var propHdlrs = propHdlrMap{
 			return vh(e, v)
 		},
 		valHdlrMap{
-			"healthy": setDpeVal(C.daos_prop_co_status_val(C.DAOS_PROP_CO_HEALTHY, 0, 0)),
+			"healthy":  setDpeVal(C.daos_prop_co_status_val(C.DAOS_PROP_CO_HEALTHY, C.DAOS_PROP_CSF_HEALTHY, 0)),
+			"readonly": setDpeVal(C.daos_prop_co_status_val(C.DAOS_PROP_CO_READONLY, C.DAOS_PROP_CSF_READONLY, 0)),
 		},
 		func(e *C.struct_daos_prop_entry, name string) string {
 			if e == nil {
@@ -403,6 +404,10 @@ var propHdlrs = propHdlrMap{
 				return "HEALTHY"
 			case C.DAOS_PROP_CO_UNCLEAN:
 				return "UNCLEAN"
+			case C.DAOS_PROP_CO_HEALTHY | C.DAOS_PROP_CO_READONLY:
+				return "HEALTHY;READONLY(flattening)"
+			case C.DAOS_PROP_CO_UNCLEAN | C.DAOS_PROP_CO_READONLY:
+				return "UNCLEAN;READONLY(flattening)"
 			default:
 				return propInvalidValue(e, name)
 			}

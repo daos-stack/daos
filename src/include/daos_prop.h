@@ -490,26 +490,46 @@ enum {
 /** container status flag */
 enum {
 	/* in healthy status, data protection work as expected */
-	DAOS_PROP_CO_HEALTHY,
+	DAOS_PROP_CO_HEALTHY	= 0x0,
 	/* in unclean status, data protection possibly cannot work.
 	 * typical scenario - cascading failed targets exceed the container
 	 * redundancy factor, that possibly cause lost data cannot be detected
 	 * or rebuilt.
 	 */
-	DAOS_PROP_CO_UNCLEAN,
+	DAOS_PROP_CO_UNCLEAN	= 0x1,
+	/* in read-only status, for WORM (Write-Once-Read-Many) container user can set this status
+	 * to indicate the container become immutable and DAOS backend service can flatten all
+	 * objects in the container.
+	 */
+	DAOS_PROP_CO_READONLY	= 0x2,
 };
 
-/** clear the UNCLEAN status */
-#define DAOS_PROP_CO_CLEAR	(0x1)
+/**
+ * Container status internal flag, used for client API to indicate setting which status.
+ */
+#define DAOS_PROP_CSF_HEALTHY	(0x1)	/* set HEALTHY/UNCLEAN status */
+#define DAOS_PROP_CSF_READONLY	(0x2)	/* set READONLY status */
 
 /** daos container status */
 struct daos_co_status {
-	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
+	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN/DAOS_PROP_CO_READONLY status flags */
 	uint16_t	dcs_status;
-	/** flags for DAOS internal usage, DAOS_PROP_CO_CLEAR */
+	/** flags for DAOS internal usage, DAOS_PROP_CSF_XXX */
 	uint16_t	dcs_flags;
 	/** pool map version when setting the dcs_status */
 	uint32_t	dcs_pm_ver;
+};
+
+/** daos container status server-side structure, "struct daos_co_status" plus an epoch */
+struct daos_co_status_srv {
+	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN/DAOS_PROP_CO_READONLY status flags */
+	uint16_t	dcs_status;
+	/** flags for DAOS internal usage, DAOS_PROP_CSF_XXX */
+	uint16_t	dcs_flags;
+	/** pool map version when setting the dcs_status */
+	uint32_t	dcs_pm_ver;
+	/** epoch, now only used for DAOS_PROP_CO_READONLY as the flatten epoch */
+	uint64_t	dcs_epoch;
 };
 
 #define DAOS_PROP_CO_STATUS_VAL(status, flag, pm_ver)			\
@@ -534,7 +554,15 @@ daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
 }
 
 enum {
+	/** entry not set */
 	DAOS_PROP_ENTRY_NOT_SET = (1 << 0),
+	/**
+	 * with value pointer, now only one usage - for DAOS_PROP_CO_STATUS prop the client-side
+	 * is a 64 bits value to keep compatibility between client and server, at server-side it is
+	 * a pointer to "struct daos_co_status_srv" start from 2.6, so with this flag to
+	 * differentiate it.
+	 */
+	DAOS_PROP_ENTRY_VAL_PTR = (1 << 1),
 };
 
 /** daos property entry */

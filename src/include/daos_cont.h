@@ -18,6 +18,8 @@
 #define daos_cont_destroy daos_cont_destroy2
 /** Please ignore (code for back-compatibility) */
 #define daos_cont_create daos_cont_create2
+/** Please ignore (code for back-compatibility) */
+#define daos_cont_status_clear daos_cont_set_healthy
 
 #if defined(__cplusplus)
 extern "C" {
@@ -343,9 +345,9 @@ int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
 
 /**
- * Clear container status, to clear container's DAOS_PROP_CO_STATUS property
- * from DAOS_PROP_CO_UNCLEAN status to DAOS_PROP_CO_HEALTHY (with same purpose
- * with "daos cont set-prop --properties=status:healthy --pool= --cont= ".
+ * Set container DAOS_PROP_CO_HEALTHY status (clear container's DAOS_PROP_CO_STATUS property
+ * from DAOS_PROP_CO_UNCLEAN status to DAOS_PROP_CO_HEALTHY, with same purpose
+ * as "daos cont set-prop --properties=status:healthy --pool= --cont= ").
  *
  * \param[in]	coh	Container handle
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -358,7 +360,27 @@ daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
  *			-DER_NO_HDL	Invalid container handle
  */
 int
-daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev);
+daos_cont_set_healthy(daos_handle_t coh, daos_event_t *ev);
+
+/**
+ * Set container DAOS_PROP_CO_READONLY status for WORM (Write-Once-Read-Many) container
+ * (with same purpose as "daos cont set-prop --properties=status:ro --pool= --cont= ")
+ * to indicate the container become immutable and DAOS backend service can flatten all
+ * objects in the container.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NO_PERM    Permission denied
+ */
+int
+daos_cont_set_ro(daos_handle_t coh, daos_event_t *ev);
 
 /**
  * Overwrites the container ACL with a new one.
