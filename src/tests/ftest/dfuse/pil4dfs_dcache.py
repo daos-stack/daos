@@ -7,83 +7,9 @@
 import os
 import re
 
-from command_utils import ExecutableCommand
-from command_utils_base import BasicParameter
+from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
-from exception_utils import CommandFailure
-from run_utils import run_remote
-
-
-class Pil4dfsDcacheCmd(ExecutableCommand):
-    """Defines an object representing a pil4dfs_dcache unit test command."""
-
-    def __init__(self, host, path, mnt, timeout=None):
-        """Create a Pil4dfsDcacheUtestCmd object.
-
-        Args:
-            host (str): Hostname on which to remotely run the command
-            path (str): path of the DAOS install directory
-            mnt (str): path of the Dfuse mount point
-            timeout (int, optional): dir-cache timeout in seconds.
-                Default is None.
-        """
-        test_dir = os.path.join(path, "lib", "daos", "TESTING", "tests")
-        super().__init__("/run/pil4dfs_dcache/*", "pil4dfs_dcache", test_dir)
-
-        self._host = host
-
-        lib_dir = os.path.join(path, 'lib64', 'libpil4dfs.so')
-        self.env['LD_PRELOAD'] = lib_dir
-        self.env['D_DFUSE_MNT'] = mnt
-        self.env['D_LOG_MASK'] = 'DEBUG'
-        self.env['DD_SUBSYS'] = 'il'
-        self.env['DD_MASK'] = 'trace'
-        self.env['D_IL_REPORT'] = '1'
-
-        if timeout is not None:
-            self.env["D_IL_DCACHE_REC_TIMEOUT"] = timeout
-
-        self.test_id = BasicParameter(None)
-
-    @property
-    def host(self):
-        """Get the host on which to remotely run the command via run().
-
-        Returns:
-            NodeSet: remote host on which the command will run
-
-        """
-        return self._host
-
-    def _run_process(self, raise_exception=None):
-        """Run the command remotely as a foreground process.
-
-        Args:
-            raise_exception (bool, optional): whether or not to raise an exception if the command
-                fails. This overrides the self.exit_status_exception setting if defined.
-                Defaults to None.
-
-        Raises:
-            CommandFailure: if there is an error running the command
-
-        Returns:
-            RemoteCommandResult: a grouping of the command results from the same host with the
-                same return status
-
-        """
-        if raise_exception is None:
-            raise_exception = self.exit_status_exception
-
-        # Run pil4dfs_dcache remotely
-        result = run_remote(self.log, self._host, self.with_exports, timeout=None)
-        if raise_exception and not result.passed:
-            stdout = result.all_stdout[self.host].replace(r'\n', os.linesep)
-            stderr = result.all_stderr[self.host].replace(r'\n', os.linesep)
-            raise CommandFailure(
-                f"Error running pil4dfs_dcache_utest on: {result.failed_hosts}\n"
-                f"-- STDERR START --\n{stderr}\n-- STDERR END --\n"
-                f"-- STDOUT START --\n{stdout}\n-- STDOUT END --\n")
-        return result
+from dfuse_utils import Pil4dfsDcacheCmd
 
 
 class Pil4dfsDcache(DfuseTestBase):
@@ -259,17 +185,36 @@ class Pil4dfsDcache(DfuseTestBase):
         # Start the servers and agents
         super().setUp()
 
+    def mount_dfuse(self):
+        """Mount a DFuse mount point."""
         self.log.info("Creating DAOS pool")
         self.add_pool()
-        self.log.debug("Created DAOS pool %s", str(self.pool))
 
         self.log.info("Creating DAOS container")
         self.add_container(self.pool)
-        self.log.debug("Created DAOS container %s", str(self.container))
 
         self.log.info("Mounting DFuse mount point")
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
-        self.log.debug("Mounted DFuse mount point %s", self.dfuse.mount_dir.value)
+
+    def update_cmd_env(self, env, mnt, timeout=None):
+        """Update the Pil4dfsDcacheCmd command environment.
+
+        Args:
+            env (dict): dictionnary of the command environment variables
+            mnt (str): path of the Dfuse mount point
+            timeout (int, optional): dir-cache timeout in seconds.
+                Default is None.
+        """
+        lib_dir = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+        env['LD_PRELOAD'] = lib_dir
+        env['D_DFUSE_MNT'] = mnt
+        env['D_LOG_MASK'] = 'DEBUG'
+        env['DD_SUBSYS'] = 'il'
+        env['DD_MASK'] = 'trace'
+        env['D_IL_REPORT'] = '1'
+
+        if timeout is not None:
+            env["D_IL_DCACHE_REC_TIMEOUT"] = timeout
 
     def check_result(self, test_case, lines):
         """Check consistency of the test output.
@@ -294,7 +239,11 @@ class Pil4dfsDcache(DfuseTestBase):
                         dcache_count[dcache_name] += 1
                 if Pil4dfsDcache.__end_test_re__.match(line):
                     for key in Pil4dfsDcache.__dcache_re__:
-                        self.assertEqual(test_case[key], dcache_count[key])
+                        self.assertEqual(
+                            test_case[key],
+                            dcache_count[key],
+                            f"Unexpected value of dir-cache counter {key}: "
+                            f"want={test_case[key]}, got={dcache_count[key]}")
                     if op_re is None:
                         return
                     state = 'check_op'
@@ -302,7 +251,11 @@ class Pil4dfsDcache(DfuseTestBase):
             elif state == 'check_op':
                 match = op_re.match(line)
                 if match:
-                    self.assertEqual(test_case['op_count'], int(match.group(1)))
+                    self.assertEqual(
+                        test_case['op_count'],
+                        int(match.group(1)),
+                        f"Unexpected number of operation {test_case['op_name']}: "
+                        f"want={test_case['op_count']}, got={match.group(1)}")
                     return
 
         self.fail(f"Test failed: state={state}\n")
@@ -320,16 +273,24 @@ class Pil4dfsDcache(DfuseTestBase):
         :avocado: tags=pil4dfs,dcache,dfuse
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_enabled
         """
+        self.log_step("Mount a DFuse mount point")
+        self.mount_dfuse()
 
         self.log.info("Running pil4dfs_dcache command")
-        host = self.hostlist_clients[0]
+        hostname = self.hostlist_clients[0]
+        host = NodeSet(hostname)
         mnt = self.dfuse.mount_dir.value
-        cmd = Pil4dfsDcacheCmd(host, self.prefix, mnt)
+        cmd = Pil4dfsDcacheCmd(host, self.prefix)
+        self.update_cmd_env(cmd.env, mnt)
 
         for test_case in Pil4dfsDcache.__tests_suite__["test_pil4dfs_dcache_enabled"]:
+            test_name = test_case['test_name']
+            self.log_step(f"Run command: dcache=on, test_name={test_name}")
             cmd.update_params(test_id=test_case["test_id"])
             result = cmd.run(raise_exception=True)
-            self.check_result(test_case, result.all_stdout[host].split('\n'))
+
+            self.log_step(f"Check output command: dcache=on, test_name={test_name}")
+            self.check_result(test_case, result.all_stdout[hostname].split('\n'))
 
         self.log_step("Test passed")
 
@@ -346,15 +307,23 @@ class Pil4dfsDcache(DfuseTestBase):
         :avocado: tags=pil4dfs,dcache,dfuse
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_disabled
         """
+        self.log_step("Mount a DFuse mount point")
+        self.mount_dfuse()
 
         self.log.info("Running pil4dfs_dcache command")
-        host = self.hostlist_clients[0]
+        hostname = self.hostlist_clients[0]
+        host = NodeSet(hostname)
         mnt = self.dfuse.mount_dir.value
-        cmd = Pil4dfsDcacheCmd(host, self.prefix, mnt, 0)
+        cmd = Pil4dfsDcacheCmd(host, self.prefix)
+        self.update_cmd_env(cmd.env, mnt, 0)
 
         for test_case in Pil4dfsDcache.__tests_suite__["test_pil4dfs_dcache_disabled"]:
+            test_name = test_case['test_name']
+            self.log_step(f"Run command: dcache=off, test_name={test_name}")
             cmd.update_params(test_id=test_case["test_id"])
             result = cmd.run(raise_exception=True)
-            self.check_result(test_case, result.all_stdout[host].split('\n'))
+
+            self.log_step(f"Check output command: dcache=off, test_name={test_name}")
+            self.check_result(test_case, result.all_stdout[hostname].split('\n'))
 
         self.log_step("Test passed")
