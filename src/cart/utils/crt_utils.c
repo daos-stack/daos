@@ -414,14 +414,14 @@ int
 crtu_dc_mgmt_net_cfg_setenv(const char *name)
 {
 	int                      rc;
-	char                    *provider;
+	char                    *crt_phy_addr_str;
 	char                    *crt_ctx_share_addr = NULL;
 	char                    *cli_srx_set        = NULL;
 	char                    *crt_timeout        = NULL;
-	char                    *d_interface;
-	char                    *d_interface_env = NULL;
-	char                    *d_domain;
-	char                    *d_domain_env   = NULL;
+	char                    *ofi_interface;
+	char                    *ofi_interface_env = NULL;
+	char                    *ofi_domain;
+	char                    *ofi_domain_env   = NULL;
 	struct dc_mgmt_sys_info  crt_net_cfg_info = {0};
 	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
 
@@ -437,9 +437,9 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	}
 
 	/* These two are always set */
-	provider = crt_net_cfg_info.provider;
-	D_INFO("setenv D_PROVIDER=%s\n", provider);
-	rc = d_setenv("D_PROVIDER", provider, 1);
+	crt_phy_addr_str = crt_net_cfg_info.provider;
+	D_INFO("setenv CRT_PHY_ADDR_STR=%s\n", crt_phy_addr_str);
+	rc = d_setenv("CRT_PHY_ADDR_STR", crt_phy_addr_str, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
@@ -492,40 +492,40 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
 	}
 
-	d_agetenv_str(&d_interface_env, "D_INTERFACE");
-	if (!d_interface_env) {
-		d_interface = crt_net_cfg_info.interface;
-		D_INFO("Setting D_INTERFACE=%s\n", d_interface);
-		rc = d_setenv("D_INTERFACE", d_interface, 1);
+	d_agetenv_str(&ofi_interface_env, "OFI_INTERFACE");
+	if (!ofi_interface_env) {
+		ofi_interface = crt_net_cfg_info.interface;
+		D_INFO("Setting OFI_INTERFACE=%s\n", ofi_interface);
+		rc = d_setenv("OFI_INTERFACE", ofi_interface, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		d_interface = d_interface_env;
+		ofi_interface = ofi_interface_env;
 		D_DEBUG(DB_MGMT,
-			"Using client provided D_INTERFACE: %s\n",
-			d_interface);
+			"Using client provided OFI_INTERFACE: %s\n",
+			ofi_interface);
 	}
 
-	d_agetenv_str(&d_domain_env, "D_DOMAIN");
-	if (!d_domain_env) {
-		d_domain = crt_net_cfg_info.domain;
-		D_INFO("Setting D_DOMAIN=%s\n", d_domain);
-		rc = d_setenv("D_DOMAIN", d_domain, 1);
+	d_agetenv_str(&ofi_domain_env, "OFI_DOMAIN");
+	if (!ofi_domain_env) {
+		ofi_domain = crt_net_cfg_info.domain;
+		D_INFO("Setting OFI_DOMAIN=%s\n", ofi_domain);
+		rc = d_setenv("OFI_DOMAIN", ofi_domain, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		d_domain = d_domain_env;
-		D_DEBUG(DB_MGMT, "Using client provided D_DOMAIN: %s\n", d_domain);
+		ofi_domain = ofi_domain_env;
+		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
 
 	D_INFO("CaRT env setup with:\n"
-	       "\tD_INTERFACE=%s, D_DOMAIN: %s, D_PROVIDER: %s, "
+	       "\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
 	       "CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
-	       d_interface, d_domain, provider, crt_ctx_share_addr, crt_timeout);
+	       ofi_interface, ofi_domain, crt_phy_addr_str, crt_ctx_share_addr, crt_timeout);
 
 cleanup:
-	d_freeenv_str(&d_domain_env);
-	d_freeenv_str(&d_interface_env);
+	d_freeenv_str(&ofi_domain_env);
+	d_freeenv_str(&ofi_interface_env);
 	d_freeenv_str(&crt_timeout);
 	d_freeenv_str(&cli_srx_set);
 	d_freeenv_str(&crt_ctx_share_addr);

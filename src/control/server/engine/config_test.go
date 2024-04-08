@@ -725,9 +725,9 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"-H", strconv.Itoa(hugepageSz),
 	}
 	wantEnv := []string{
-		"D_INTERFACE=" + interfaceName,
-		"D_PORT=" + strconv.Itoa(interfacePort),
-		"D_PROVIDER=" + provider,
+		"OFI_INTERFACE=" + interfaceName,
+		"OFI_PORT=" + strconv.Itoa(interfacePort),
+		"CRT_PHY_ADDR_STR=" + provider,
 		"D_LOG_FILE=" + logFile,
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),

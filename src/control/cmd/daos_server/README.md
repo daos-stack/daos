@@ -49,7 +49,7 @@ running DAOS servers in the [server config file](/utils/config/daos_server.yml).
 NOTES:
 * some environment variables can only be supplied to `daos_engine` instances
 through the server config file:
-	* `D_PROVIDER`, `D_INTERFACE`, `D_PORT`, `D_LOG_MASK`,
+	* `CRT_PHY_ADDR_STR`, `OFI_INTERFACE`, `OFI_PORT`, `D_LOG_MASK`,
 `D_LOG_FILE`
 * while it is very highly recommended to use the server config file as a means
 to supply parameters, environment variables not applied through the config file

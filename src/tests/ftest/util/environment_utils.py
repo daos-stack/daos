@@ -138,7 +138,7 @@ class TestEnvironment():
         'shared_dir': 'DAOS_TEST_SHARED_DIR',
         'user_dir': 'DAOS_TEST_USER_DIR',
         'interface': 'DAOS_TEST_FABRIC_IFACE',
-        'provider': 'D_PROVIDER',
+        'provider': 'CRT_PHY_ADDR_STR',
         'insecure_mode': 'DAOS_TEST_INSECURE_MODE',
         'bullseye_src': 'DAOS_TEST_BULLSEYE_SRC',
         'bullseye_file': 'COVFILE',
@@ -362,10 +362,10 @@ class TestEnvironment():
         Returns:
             str: the default interface; can be None
         """
-        interface = os.environ.get("D_INTERFACE")
+        interface = os.environ.get("OFI_INTERFACE")
         if interface is None and hosts:
             # Find all the /sys/class/net interfaces on the launch node (excluding lo)
-            logger.debug("Detecting network devices - D_INTERFACE not set")
+            logger.debug("Detecting network devices - OFI_INTERFACE not set")
             try:
                 interface = get_fastest_interface(logger, hosts)
             except NetworkException as error:

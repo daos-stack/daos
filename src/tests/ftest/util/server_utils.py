@@ -62,9 +62,9 @@ class DaosServerManager(SubprocessManager):
 
     # Mapping of environment variable names to daos_server config param names
     ENVIRONMENT_VARIABLE_MAPPING = {
-        "D_PROVIDER": "provider",
-        "D_INTERFACE": "fabric_iface",
-        "D_PORT": "fabric_iface_port",
+        "CRT_PHY_ADDR_STR": "provider",
+        "OFI_INTERFACE": "fabric_iface",
+        "OFI_PORT": "fabric_iface_port",
     }
 
     # Defined in telemetry_common.h

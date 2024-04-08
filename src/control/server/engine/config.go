@@ -32,9 +32,9 @@ const (
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
-	Provider        string `yaml:"provider,omitempty" cmdEnv:"D_PROVIDER"`
-	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"D_INTERFACE"`
-	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"D_PORT,nonzero"`
+	Provider        string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
+	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
+	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
 	NumaNodeIndex   uint   `yaml:"-"`
 	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`

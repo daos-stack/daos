@@ -155,7 +155,9 @@ int main(int argc, char **argv)
 
 	/* Append ',lo' to interface string as 'lo' should be available everywhere */
 	env = getenv("D_INTERFACE");
-	D_ASSERTF(env != NULL, "D_INTERFACE must be set");
+	if (env == NULL)
+		env = getenv("OFI_INTERFACE"); /* Support deprecated envar for now */
+	D_ASSERTF(env != NULL, "either D_INTERFACE or OFI_INTERFACE must be set");
 
 	/* Save current interface value */
 	D_ASPRINTF(cur_iface_str, "%s", env);
