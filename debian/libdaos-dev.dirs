@@ -2,3 +2,4 @@ usr/lib64
 usr/include
 usr/include/cart
 usr/include/gurt
+usr/lib/daos/python
