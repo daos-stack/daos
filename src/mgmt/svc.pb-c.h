@@ -250,15 +250,15 @@ struct  _Mgmt__ClientNetHint
 {
   ProtobufCMessage base;
   /*
-   * CaRT OFI provider
+   * CaRT provider
    */
   char *provider;
   /*
-   * CaRT OFI_INTERFACE
+   * CaRT D_INTERFACE
    */
   char *interface;
   /*
-   * CaRT OFI_DOMAIN for given OFI_INTERFACE
+   * CaRT D_DOMAIN for given D_INTERFACE
    */
   char *domain;
   /*

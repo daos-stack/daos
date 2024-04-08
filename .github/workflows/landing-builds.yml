@@ -14,7 +14,8 @@ on:
       - 'utils/scripts/helpers/*'
       - utils/ci
       - ci
-      - requirements.txt
+      - requirements-build.txt
+      - requirements-utest.txt
 
 jobs:
 

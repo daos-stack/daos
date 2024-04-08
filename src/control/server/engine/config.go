@@ -33,13 +33,14 @@ const (
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
-	Provider              string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
-	Interface             string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
-	InterfacePort         string `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT"`
-	NumaNodeIndex         uint   `yaml:"-"`
-	BypassHealthChk       *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
-	CrtCtxShareAddr       uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
-	CrtTimeout            uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
+	Provider        string `yaml:"provider,omitempty" cmdEnv:"D_PROVIDER"`
+	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"D_INTERFACE"`
+	InterfacePort   string `yaml:"fabric_iface_port,omitempty" cmdEnv:"D_PORT"`
+	NumaNodeIndex   uint   `yaml:"-"`
+	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
+	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
+	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
+	// NumSecondaryEndpoints configures the number of cart endpoints per secondary provider.
 	NumSecondaryEndpoints []int  `yaml:"secondary_provider_endpoints,omitempty" cmdLongFlag:"--nr_sec_ctx,nonzero" cmdShortFlag:"-S,nonzero"`
 	DisableSRX            bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
 	AuthKey               string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
