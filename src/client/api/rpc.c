@@ -142,8 +142,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	struct dc_mgmt_sys	*sys;
 	struct rpc_proto	*rproto = NULL;
 	crt_context_t		 ctx = daos_get_crt_ctx();
-	int			 rc;
-	int			 num_ranks;
+	int                      rc;
 	int			 i;
 
 	rc = dc_mgmt_sys_attach(NULL, &sys);
@@ -162,12 +161,14 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 		D_GOTO(out_free, rc);
 	}
 
-	num_ranks = dc_mgmt_net_get_num_srv_ranks();
-	rproto->ep.ep_rank = d_rand() % num_ranks;
+	rc = rsvc_client_choose(&rproto->cli, &rproto->ep);
+	if (rc) {
+		D_ERROR("rsvc_client_choose() failed: " DF_RC "\n", DP_RC(rc));
+		D_GOTO(out_free, rc);
+	}
 	rproto->ver_array = ver_array;
 	rproto->array_size = count;
-	rproto->ep.ep_grp = sys->sy_group;
-	rproto->ep.ep_tag = 0;
+	rproto->ep.ep_grp  = sys->sy_group;
 	rproto->base_opc = base_opc;
 
 	rc = crt_proto_query_with_ctx(&rproto->ep, base_opc,
