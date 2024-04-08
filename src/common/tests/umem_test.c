@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -430,7 +430,7 @@ test_page_cache(void **state)
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, 3, 0, 0, 0,
-			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
@@ -495,7 +495,7 @@ test_many_pages(void **state)
 	umem_cache_free(&arg->ta_store);
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0, 0,
-			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
@@ -539,7 +539,7 @@ test_many_writes(void **state)
 	umem_cache_free(&arg->ta_store);
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0, 0,
-			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
@@ -608,9 +608,15 @@ static struct umem_store_ops p2_ops = {
 #define PAGE_NUM_MAX_NE	5
 
 static bool
-is_evictable_fn(uint32_t page_id)
+is_evictable_fn(void *arg, uint32_t page_id)
 {
 	return page_id >= PAGE_NUM_MAX_NE;
+}
+
+static int
+pageload_fn(void *arg, uint32_t page_id)
+{
+	return 0;
 }
 
 static void
@@ -627,7 +633,8 @@ test_p2_basic(void **state)
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
-			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn);
+			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ),
+			      is_evictable_fn, pageload_fn);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
@@ -694,7 +701,8 @@ test_p2_evict(void **state)
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
-			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn);
+			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ),
+			      is_evictable_fn, pageload_fn);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
