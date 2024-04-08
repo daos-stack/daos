@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.101
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -208,9 +208,7 @@ packages
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
-Requires: python3-distro
-Requires: python3-tabulate
-Requires: python3-defusedxml
+Requires: %{name}-devel%{?_isa} = %{version}-%{release}
 Requires: protobuf-c-devel
 Requires: fio
 Requires: git
@@ -365,7 +363,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py,%{_datarootdir}/daos/control/setup_spdk.sh}
+sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py}
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
@@ -522,9 +520,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 %{_bindir}/crt_launch
-# For avocado tests
-%{daoshome}/.build_vars.json
-%{daoshome}/.build_vars.sh
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
@@ -565,6 +560,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libgurt.so
 %{_libdir}/libcart.so
 %{_libdir}/*.a
+%{daoshome}/python
 
 %files firmware
 %doc README.md
@@ -588,8 +584,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Tue Apr 02 2024 Lei Huang <lei.huang@intel.com> 2.5.101-3
+* Mon Apr 08 2024 Lei Huang <lei.huang@intel.com> 2.5.101-4
 - Add libaio as a dependent package
+
+* Thu Apr 04 2024 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.5.101-3
+- Update pydaos install process
+- Add a dependency from daos-client-tests to daos-devel
 
 * Mon Mar 18 2024 Jan Michalski <jan.michalski@intel.com> 2.5.101-2
 - Add dtx_tests to the server-tests package
