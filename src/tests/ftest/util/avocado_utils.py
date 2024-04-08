@@ -1,13 +1,9 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import re
-
-# pylint: disable=import-error,no-name-in-module
-from util.run_utils import RunException, run_local
 
 
 class AvocadoException(Exception):
@@ -114,113 +110,55 @@ class AvocadoInfo():
                 raise AvocadoException(
                     f"Error writing avocado config file {sysinfo_commands_file}") from error
 
-    def set_version(self, logger):
-        """Set the avocado major and minor versions.
-
-        Args:
-            logger (Logger): logger for the messages produced by this method
-
-        Raises:
-            AvocadoException: if there is an error running 'avocado -v'
-        """
-        try:
-            # pylint: disable=import-outside-toplevel
-            from avocado.core.version import MAJOR, MINOR
-            self.major = int(MAJOR)
-            self.minor = int(MINOR)
-
-        except ModuleNotFoundError:
-            # Once lightweight runs are using python3-avocado, this can be removed
-            try:
-                result = run_local(logger, "avocado -v", check=True)
-            except RunException as error:
-                message = "Error obtaining avocado version after failed avocado.core.version import"
-                raise AvocadoException(message) from error
-            try:
-                version = re.findall(r"(\d+)\.(\d+)", result.stdout)[0]
-                self.major = int(version[0])
-                self.minor = int(version[1])
-            except IndexError as error:
-                raise AvocadoException("Error extracting avocado version from command") from error
+    def set_version(self):
+        """Set the avocado major and minor versions"""
+        # pylint: disable=import-outside-toplevel
+        from avocado.core.version import MAJOR, MINOR
+        self.major = int(MAJOR)
+        self.minor = int(MINOR)
 
     @staticmethod
-    def get_setting(logger, section, key, default=None):
+    def get_setting(section, key, default=None):
         """Get the value for the specified avocado setting.
 
         Args:
-            logger (Logger): logger for the messages produced by this method
             section (str): avocado setting section name
             key (str): avocado setting key name
             default (object): default value to use if setting is undefined
 
-        Raises:
-            RunException: if there is an error getting the setting from the avocado command
-
         Returns:
             object: value for the avocado setting or None if not defined
         """
+        # pylint: disable=import-outside-toplevel
+        from avocado.core.settings import settings
+        config = settings.as_dict()
         try:
-            # pylint: disable=import-outside-toplevel
-            from avocado.core.settings import SettingsError, settings
-            try:
-                # Newer versions of avocado use this approach
-                config = settings.as_dict()
-                return config.get(".".join([section, key]))
+            return config.get(".".join([section, key]))
+        except KeyError:
+            # Setting not found
+            return default
 
-            except AttributeError:
-                # Older version of avocado, like 69LTS, use a different method
-                # pylint: disable=no-member
-                try:
-                    return settings.get_value(section, key)
-                except SettingsError:
-                    # Setting not found
-                    pass
-
-            except KeyError:
-                # Setting not found
-                pass
-
-        except ModuleNotFoundError:
-            # Once lightweight runs are using python3-avocado, this can be removed
-            result = run_local(logger, "avocado config", check=True)
-            try:
-                return re.findall(rf"{section}\.{key}\s+(.*)", result.stdout)[0]
-            except IndexError:
-                # Setting not found
-                pass
-
-        return default
-
-    def get_logs_dir(self, logger):
+    def get_logs_dir(self):
         """Get the avocado directory in which the test results are stored.
-
-        Args:
-            logger (Logger): logger for the messages produced by this method
 
         Returns:
             str: the directory used by avocado to log test results
         """
         default_base_dir = os.path.join("~", "avocado", "job-results")
         return os.path.expanduser(
-            self.get_setting(logger, "datadir.paths", "logs_dir", default_base_dir))
+            self.get_setting("datadir.paths", "logs_dir", default_base_dir))
 
-    def get_directory(self, logger, directory, create=True):
+    def get_directory(self, directory):
         """Get the avocado test directory for the test.
 
         Args:
-            logger (Logger): logger for the messages produced by this method
             directory (str): name of the sub directory to add to the logs directory
-            create (bool, optional): whether or not to create the directory if it doesn't exist.
-                Defaults to True.
 
         Returns:
             str: the directory used by avocado to log test results
         """
-        logs_dir = self.get_logs_dir(logger)
-        test_dir = os.path.join(logs_dir, directory)
-        if create:
-            os.makedirs(test_dir, exist_ok=True)
-        return test_dir
+        logs_dir = self.get_logs_dir()
+        return os.path.join(logs_dir, directory)
 
     def get_list_command(self):
         """Get the avocado list command for this version of avocado.
@@ -230,9 +168,7 @@ class AvocadoInfo():
         """
         if self.major >= 83:
             return ["avocado", "list"]
-        if self.major >= 82:
-            return ["avocado", "--paginator=off", "list"]
-        return ["avocado", "list", "--paginator=off"]
+        return ["avocado", "--paginator=off", "list"]
 
     def get_list_regex(self):
         """Get the regular expression used to get the test file from the avocado list command.
@@ -257,20 +193,15 @@ class AvocadoInfo():
             list: avocado run command
         """
         command = ["avocado"]
-        if not sparse and self.major >= 82:
+        if not sparse:
             command.append("--show=test")
         command.append("run")
-        if self.major >= 82:
-            command.append("--ignore-missing-references")
-        else:
-            command.extend(["--ignore-missing-references", "on"])
+        command.append("--ignore-missing-references")
         if self.major >= 83:
             command.append("--disable-tap-job-result")
         else:
             command.extend(["--html-job-result", "on"])
             command.extend(["--tap-job-result", "off"])
-        if not sparse and self.major < 82:
-            command.append("--show-job-log")
         if tag_filters:
             command.extend(tag_filters)
         if failfast:
