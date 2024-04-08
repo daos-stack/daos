@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -107,8 +107,7 @@ class DfuseSpaceCheck(IorTestBase):
         self.create_cont()
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
         # DEBUG: Query pool info
-        self.dmg_command = self.get_dmg_command()
-        self.dmg_command.pool_query(self.pool.identifier)
+        self.pool.query()
 
         # get nvme space before write
         self.initial_space = self.get_nvme_free_space()
@@ -122,8 +121,7 @@ class DfuseSpaceCheck(IorTestBase):
         self.execute_cmd(write_dd_cmd, False)
 
         # DEBUG: Query pool info
-        self.dmg_command = self.get_dmg_command()
-        self.dmg_command.pool_query(self.pool.identifier)
+        self.pool.query()
 
         # Remove the file
         self.execute_cmd('rm -rf {}'.format(large_file))
@@ -132,23 +130,20 @@ class DfuseSpaceCheck(IorTestBase):
         self.wait_for_aggregation()
 
         # DEBUG: Query pool info
-        self.dmg_command = self.get_dmg_command()
-        self.dmg_command.pool_query(self.pool.identifier)
+        self.pool.query()
 
         # Disable aggregation
         self.log.info("Disabling aggregation")
         self.pool.set_property("reclaim", "disabled")
 
         # DEBUG: Query pool info
-        self.dmg_command = self.get_dmg_command()
-        self.dmg_command.pool_query(self.pool.identifier)
+        self.pool.query()
 
         # Write small files until we run out of space
         file_count1 = self.write_multiple_files()
 
         # DEBUG: Query pool info
-        self.dmg_command = self.get_dmg_command()
-        self.dmg_command.pool_query(self.pool.identifier)
+        self.pool.query()
 
         # Enable aggregation
         self.log.info("Enabling aggregation")
@@ -161,8 +156,7 @@ class DfuseSpaceCheck(IorTestBase):
         self.wait_for_aggregation()
 
         # DEBUG: Query pool info
-        self.dmg_command = self.get_dmg_command()
-        self.dmg_command.pool_query(self.pool.identifier)
+        self.pool.query()
 
         # Disable aggregation
         self.log.info("Disabling aggregation")
@@ -172,8 +166,7 @@ class DfuseSpaceCheck(IorTestBase):
         file_count2 = self.write_multiple_files()
 
         # DEBUG: Query pool info
-        self.dmg_command = self.get_dmg_command()
-        self.dmg_command.pool_query(self.pool.identifier)
+        self.pool.query()
 
         self.log.info('file_count1 = %s', file_count1)
         self.log.info('file_count2 = %s', file_count2)
@@ -182,6 +175,5 @@ class DfuseSpaceCheck(IorTestBase):
             'Space was not returned. Expected to write the same number of files')
 
         # DEBUG: Query pool info
-        self.dmg_command = self.get_dmg_command()
-        self.dmg_command.pool_query(self.pool.identifier)
+        self.pool.query()
 
