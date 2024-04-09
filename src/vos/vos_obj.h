@@ -49,8 +49,10 @@ struct vos_object {
 	struct vos_container		*obj_cont;
 	/** nobody should access this object */
 	bool				obj_zombie;
-	/** Object is in discard */
-	bool				obj_discard;
+	/** Object is held for discard */
+	uint32_t                         obj_discard : 1,
+	    /** Object is held for aggregation */
+	    obj_aggregate                            : 1;
 };
 
 enum {

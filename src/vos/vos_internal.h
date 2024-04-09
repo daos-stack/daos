@@ -28,40 +28,40 @@
 
 #define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
 
-#define VOS_TX_LOG_FAIL(rc, ...)			\
-	do {						\
-		bool	__is_err = true;		\
-							\
-		if (rc >= 0)				\
-			break;				\
-		switch (rc) {				\
-		case -DER_TX_RESTART:			\
-		case -DER_INPROGRESS:			\
-		case -DER_EXIST:			\
-		case -DER_NONEXIST:			\
-			__is_err = false;		\
-			break;				\
-		}					\
-		D_CDEBUG(__is_err, DLOG_ERR, DB_IO,	\
-			 __VA_ARGS__);			\
+#define VOS_TX_LOG_FAIL(rc, ...)                                                                   \
+	do {                                                                                       \
+		bool __is_err = true;                                                              \
+                                                                                                   \
+		if (rc >= 0)                                                                       \
+			break;                                                                     \
+		switch (rc) {                                                                      \
+		case -DER_TX_RESTART:                                                              \
+		case -DER_INPROGRESS:                                                              \
+		case -DER_UPDATE_AGAIN:                                                            \
+		case -DER_EXIST:                                                                   \
+		case -DER_NONEXIST:                                                                \
+			__is_err = false;                                                          \
+			break;                                                                     \
+		}                                                                                  \
+		D_CDEBUG(__is_err, DLOG_ERR, DB_IO, __VA_ARGS__);                                  \
 	} while (0)
 
-#define VOS_TX_TRACE_FAIL(rc, ...)			\
-	do {						\
-		bool	__is_err = true;		\
-							\
-		if (rc >= 0)				\
-			break;				\
-		switch (rc) {				\
-		case -DER_TX_RESTART:			\
-		case -DER_INPROGRESS:			\
-		case -DER_EXIST:			\
-		case -DER_NONEXIST:			\
-			__is_err = false;		\
-			break;				\
-		}					\
-		D_CDEBUG(__is_err, DLOG_ERR, DB_TRACE,	\
-			 __VA_ARGS__);			\
+#define VOS_TX_TRACE_FAIL(rc, ...)                                                                 \
+	do {                                                                                       \
+		bool __is_err = true;                                                              \
+                                                                                                   \
+		if (rc >= 0)                                                                       \
+			break;                                                                     \
+		switch (rc) {                                                                      \
+		case -DER_TX_RESTART:                                                              \
+		case -DER_INPROGRESS:                                                              \
+		case -DER_UPDATE_AGAIN:                                                            \
+		case -DER_EXIST:                                                                   \
+		case -DER_NONEXIST:                                                                \
+			__is_err = false;                                                          \
+			break;                                                                     \
+		}                                                                                  \
+		D_CDEBUG(__is_err, DLOG_ERR, DB_TRACE, __VA_ARGS__);                               \
 	} while (0)
 
 #define VOS_CONT_ORDER		20	/* Order of container tree */

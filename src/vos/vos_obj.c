@@ -1747,6 +1747,9 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		D_GOTO(failed, rc);
 	}
 
+	if (oiter->it_iter.it_for_purge)
+		oiter->it_obj->obj_aggregate = 1;
+
 	oiter->it_punched = oiter->it_obj->obj_ilog_info.ii_prior_punch;
 
 	rc = obj_tree_init(oiter->it_obj);
@@ -1902,6 +1905,9 @@ dkey_nested_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 		return rc;
 	}
 
+	if (oiter->it_iter.it_for_purge)
+		oiter->it_obj->obj_aggregate = 1;
+
 	rc = obj_tree_init(oiter->it_obj);
 
 	if (rc != 0)
@@ -1916,6 +1922,8 @@ dkey_nested_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 
 	return 0;
 failed:
+	if (oiter->it_iter.it_for_purge)
+		oiter->it_obj->obj_aggregate = 0;
 	vos_obj_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb), oiter->it_obj, false);
 
 	return rc;
@@ -2213,9 +2221,12 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	 */
 	object = oiter->it_obj;
 	if (oiter->it_flags != VOS_IT_KEY_TREE && object != NULL &&
-	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent))
+	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent)) {
+		if (oiter->it_iter.it_for_purge)
+			object->obj_aggregate = 0;
 		vos_obj_release(vos_obj_cache_current(object->obj_cont->vc_pool->vp_sysdb),
 				object, false);
+	}
 
 	vos_ilog_fetch_finish(&oiter->it_ilog_info);
 	D_FREE(oiter);

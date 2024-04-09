@@ -237,8 +237,9 @@ vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, dao
 		return rc;
 
 	D_ASSERTF(!obj->obj_discard, "vos_obj_hold should return an error if already in discard\n");
+	D_ASSERTF(!obj->obj_aggregate, "vos_obj_hold should return an error if in aggregation\n");
 
-	obj->obj_discard = true;
+	obj->obj_discard = 1;
 	*objp = obj;
 
 	return 0;
@@ -247,7 +248,7 @@ vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, dao
 void
 vos_obj_discard_release(struct daos_lru_cache *occ, struct vos_object *obj)
 {
-	obj->obj_discard = false;
+	obj->obj_discard = 0;
 
 	vos_obj_release(occ, obj, false);
 }
@@ -294,6 +295,22 @@ cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
 	*objp = obj_new;
 
 	return 0;
+}
+
+static bool
+vos_obj_op_conflict(struct vos_object *obj, bool obj_discard, uint32_t intent, bool create)
+{
+	if (obj->obj_discard) {
+		/** Mutually exclusive with create, discard and aggregation */
+		if (create || intent == DAOS_INTENT_PURGE || obj_discard)
+			return true;
+	} else if (obj->obj_aggregate) {
+		/** Mutually exclusive with discard */
+		if (obj_discard)
+			return true;
+	}
+
+	return false;
 }
 
 int
@@ -406,7 +423,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
-	if (obj->obj_discard && (create || (flags & VOS_OBJ_DISCARD) != 0)) {
+	if (vos_obj_op_conflict(obj, (flags & VOS_OBJ_DISCARD) != 0, intent, create)) {
 		/** Cleanup before assert so unit test that triggers doesn't corrupt the state */
 		vos_obj_release(occ, obj, false);
 		/* Update request will retry with this error */
