@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -16,7 +16,6 @@ from datetime import datetime
 from getpass import getuser
 from importlib import import_module
 from logging import getLogger
-from socket import gethostname
 
 from avocado.core.settings import settings
 from avocado.core.version import MAJOR
@@ -24,7 +23,6 @@ from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 from run_utils import RunException, get_clush_command, run_local, run_remote
-from user_utils import get_chown_command, get_primary_group
 
 
 class DaosTestError(Exception):

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -611,29 +611,31 @@ class LocalTask():
             if self._timeout:
                 yield self._hosts
 
-    def iter_buffers(self, host):
+    def iter_buffers(self, match_keys=None):
         """Iterate over stdout.
 
         Args:
-            host (str): not used
+            match_keys (list, optional): filter to apply to stdout. Defaults to None.
 
         Yields:
             tuple: stdout, hosts
         """
         for host in self._hosts:
-            yield self._stdout, [host]
+            if not match_keys or host in match_keys:
+                yield self._stdout, [host]
 
-    def iter_errors(self, host):
+    def iter_errors(self, match_keys=None):
         """Iterate over stderr.
 
         Args:
-            host (str): not used
+            match_keys (list, optional): filter to apply to stderr. Defaults to None.
 
         Yields:
             tuple: stderr, hosts
         """
         for host in self._hosts:
-            yield self._stderr, [host]
+            if not match_keys or host in match_keys:
+                yield self._stderr, [host]
 
 
 def run_local2(log, command, verbose=True, timeout=None):
