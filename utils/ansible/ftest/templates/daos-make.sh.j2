@@ -286,7 +286,7 @@ if [[ ${MPICH_PATH:+x} ]] ; then
 		fatal "Invalid MPICH directory: path=$MPICH_PATH"
 	fi
 
-	if [[ "$CMD" == install ]] && "$FORCE_INSTALL" ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old MPICH install"
 		if ! run rm -fr "$MPICH_PATH/build" "$MPICH_PATH/configure" ; then
 			fatal "Old install of MPICH could not be removed"
@@ -383,7 +383,7 @@ if [[ ${HDF5_PATH:+x} ]] ; then
 		fatal "Invalid HDF5 directory: path=$HDF5_PATH"
 	fi
 
-	if [[ "$CMD" == install ]] && "$FORCE_INSTALL" ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old HDF5 install"
 		if ! run rm -fr "$HDF5_PATH/build" "$HDF5_PATH/configure" ; then
 			fatal "Old install of HDF5 could not be removed"
@@ -426,7 +426,7 @@ if [[ ${VOL_DAOS_PATH:+x} ]] ; then
 		fatal "Invalid DAOS HDF5 Volume directory: path=$VOL_DAOS_PATH"
 	fi
 
-	if [[ "$CMD" == install ]] && "$FORCE_INSTALL" ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old DAOS HDF5 Volume install"
 		if ! run rm -fr "$VOL_DAOS_PATH/build" ; then
 			fatal "Old install of HDF5 could not be removed"
@@ -472,7 +472,7 @@ if [[ ${MPI_FILE_UTILS_PATH:+x} ]] ; then
 		fatal "Invalid MPI File Utils directory: path=$MPI_FILE_UTILS_PATH"
 	fi
 
-	if [[ "$CMD" == install ]] && "$FORCE_INSTALL" ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old MPI File Utils install"
 		if ! run rm -fr "$MPI_FILE_UTILS_PATH/deps" "$MPI_FILE_UTILS_PATH/build" "$MPI_FILE_UTILS_PATH/configure" ; then
 			fatal "Old install of MPI File Utils could not be removed"
@@ -543,7 +543,7 @@ if [[ ${IOR_PATH:+x} ]] ; then
 		fatal "Invalid IOR directory: path=$IOR_PATH"
 	fi
 
-	if [[ "$CMD" == install ]] && "$FORCE_INSTALL" ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old IOR install"
 		if ! run rm -fr "$IOR_PATH/build" "$IOR_PATH/configure" ; then
 			fatal "Old install of IOR could not be removed"
@@ -583,7 +583,7 @@ if [[ ${FIO_PATH:+x} ]] ; then
 		fatal "Invalid FIO: path=$FIO_PATH"
 	fi
 
-	if [[ "$CMD" == install ]] && "$FORCE_INSTALL" ; then
+	if "$FORCE_INSTALL" ; then
 		info "Removing old FIO install"
 		if ! run rm -fr "$FIO_PATH/build" ; then
 			fatal "Old install of FIO could not be removed"
