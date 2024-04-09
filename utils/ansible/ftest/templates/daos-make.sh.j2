@@ -226,8 +226,7 @@ if [[ ! -f "$DAOS_VENV_DIR/bin/activate" ]] ; then
 	deactivate
 fi
 
-cd "$DAOS_SOURCE_DIR"
-SCONS_OPTS="-j $JOBS_NB --implicit-deps-changed"
+SCONS_OPTS="--directory="$DAOS_SOURCE_DIR" --jobs=$JOBS_NB --implicit-deps-changed"
 case $CMD in
 	install) SCONS_OPTS="$SCONS_OPTS --build-deps=yes --config=force" ;;
 	update) SCONS_OPTS="$SCONS_OPTS --build-deps=no" ;;
