@@ -76,8 +76,6 @@ The inventory should also contain a set of mandatory and optional variables.
 - **daos\_hugepages\_nb**: optional variable (default value: 4096) only used by the nodes of the
   *daos\_servers* group.  This variable defines the number of hugepages to be allocated by the linux
   kernel.
-- **daos\_build\_mode**: optional variable (default value: DEBUG) only used by the nodes of the
-  *daos\_dev* group.  This variable defines in which mode DAOS shall be compiled.
 
 Different file format (e.g. YAML, INI, etc.) and file tree structure are supported to define an
 ansible inventory.  The following simple ansible inventory describe for example in one YAML file
@@ -92,7 +90,6 @@ all:
       vars:
         daos_source_dir: /home/foo/work/daos
         daos_ofi_interface: eth0
-        daos_build_mode: DEBUG
       hosts:
         wolf-666:
     daos_servers:

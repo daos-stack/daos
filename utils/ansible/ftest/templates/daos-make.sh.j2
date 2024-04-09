@@ -14,7 +14,7 @@ SERVERS_LIST="{{ groups["daos_servers"] | join(',') }}"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 CLIENTS_LIST="{{ groups["daos_clients"] | join(',') }}"
 {% endif %}
-BUILD_TYPE="{{ daos_build_mode | default(daos_build_mode_default) }}"
+DAOS_BUILD_TYPE=debug
 
 SCONS_EXE=scons
 SSH_EXE=ssh
@@ -149,7 +149,7 @@ function run
 	fi
 }
 
-OPTIONS=$(getopt -o "j:fhVvDq" --long "mpich:,hdf5:,vol-daos:,mpifileutils:,ior:,fio:,jobs:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
+build-mode=$(getopt -o "j:b:fhVvDq" --long "mpich:,hdf5:,vol-daos:,mpifileutils:,ior:,fio:,jobs:,build-type:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
 eval set -- "$OPTIONS"
 while true
 do
@@ -160,6 +160,7 @@ do
 		--mpifileutils) MPI_FILE_UTILS_PATH="$2" ; shift 2 ;;
 		--ior) IOR_PATH="$2" ; shift 2 ;;
 		--fio) FIO_PATH="$2" ; shift 2 ;;
+		-b|--build-type) DAOS_BUILD_TYPE="$2" ; shift 2 ;;
 		-j|--jobs) JOBS_NB="$2" ; shift 2 ;;
 		-f|--force) FORCE_INSTALL="true" ; shift 1;;
 		-h|--help) usage ; exit 0;;
@@ -230,7 +231,7 @@ esac
 
 info "Building and installing DAOS from source tree $PWD to $DAOS_INSTALL_DIR"
 source "$DAOS_INSTALL_DIR/bin/activate"
-if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
+if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
 	fatal "DAOS could not be properly build and/or installed"
 fi
 deactivate

@@ -24,10 +24,6 @@
 #         # script.
 #         #  default: None
 #         daos_ofi_interface: eth0
-#         #
-#         # Optional variable defining in which mode DAOS binaries have to be compiled.
-#         #  default: DEBUG
-#         daos_build_mode: DEBUG
 #       hosts:
 #         wolf-666:
 #     daos_servers:
