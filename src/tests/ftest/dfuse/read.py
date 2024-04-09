@@ -48,14 +48,22 @@ class DFuseReadTest(DfuseTestBase):
 
         fuse_root_dir = self.dfuse.mount_dir.value
 
-        # Create the file.
-        cmd = f"dd if=/dev/zero of={fuse_root_dir}/test_file count=2 bs=1M"
+        # make a directory to run the test from.  Pre-read is based on previous access to a
+        # directory so this needs to be evicted after the write and before the test so the
+        # directory appears "new"
+        cmd = f"mkdir {fuse_root_dir}/td"
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
-        # Instruct dfuse to forget the file.
-        cmd = f"daos fs evict {fuse_root_dir}/test_file"
+        # Create the file.
+        cmd = f"dd if=/dev/zero of={fuse_root_dir}/td/test_file count=2 bs=1M"
+        result = run_remote(self.log, self.hostlist_clients, cmd)
+        if not result.passed:
+            self.fail(f'"{cmd}" failed on {result.failed_hosts}')
+
+        # Instruct dfuse to forget the directory and therefore file.
+        cmd = f"daos fs evict {fuse_root_dir}/td"
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
@@ -74,7 +82,7 @@ class DFuseReadTest(DfuseTestBase):
         assert data["statistics"].get("pre_read", 0) == 0, data
 
         # Now read the file, and check it's read.
-        cmd = f"dd if={fuse_root_dir}/test_file of=/dev/zero count=2 bs=1M"
+        cmd = f"dd if={fuse_root_dir}/td/test_file of=/dev/zero count=2 bs=1M"
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
@@ -84,4 +92,4 @@ class DFuseReadTest(DfuseTestBase):
 
         assert data["statistics"].get("read", 0) == 0, data
         assert data["statistics"].get("pre_read", 0) > 0, data
-        assert data["inodes"] == 2, data
+        assert data["inodes"] == 3, data
