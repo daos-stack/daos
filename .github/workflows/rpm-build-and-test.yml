@@ -531,7 +531,8 @@ jobs:
       - name: Upload test results
         if: (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v4
+        # Don't bump this to v4 due to https://github.com/dorny/test-reporter/issues/343
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
@@ -760,7 +761,8 @@ jobs:
       - name: Upload test results
         if: (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v4
+        # Don't bump this to v4 due to https://github.com/dorny/test-reporter/issues/343
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
