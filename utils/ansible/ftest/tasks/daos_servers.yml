@@ -84,4 +84,4 @@
     owner: root
     group: root
     mode: 0755
-  loop: "[''] + {{ range(0, 4, 1) | list }}"
+  loop: "{{ range(0, 4, 1) | list + [''] }}"
