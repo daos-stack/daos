@@ -215,9 +215,7 @@ run $PYTHON_EXE utils/node_local_test.py "${args[@]}"
 {% endif %}
 rc=$?
 popd > /dev/null
-set +u
 deactivate
-set -u
 
 if "$END_CLEANUP" ; then
 	cleanup

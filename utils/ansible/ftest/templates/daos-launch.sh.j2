@@ -255,9 +255,7 @@ run env OFI_INTERFACE=$OFI_INTERFACE $PYTHON_EXE launch.py $common_opts "${args[
 run $PYTHON_EXE launch.py $common_opts "${args[@]}"
 {% endif %}
 rc=$?
-set +u
 deactivate
-set -u
 
 if "$END_CLEANUP" ; then
 	cleanup

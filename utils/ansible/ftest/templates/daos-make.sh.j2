@@ -214,9 +214,7 @@ if [[ ! -f "$DAOS_INSTALL_DIR/bin/activate" ]] ; then
 	source "$DAOS_INSTALL_DIR/bin/activate"
 	run $PIP_EXE install --upgrade pip
 	run $PIP_EXE install -r "$DAOS_SOURCE_DIR/requirements.txt"
-	set +u
 	deactivate
-	set -u
 	info "Customize venv for DAOS install"
 	run rm -fv "$DAOS_INSTALL_DIR/lib64"
 	run mkdir -pv "$DAOS_INSTALL_DIR/lib64"
@@ -235,9 +233,7 @@ source "$DAOS_INSTALL_DIR/bin/activate"
 if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
 	fatal "DAOS could not be properly build and/or installed"
 fi
-set +u
 deactivate
-set -u
 
 info "Finalizing install of ftest setup scripts"
 for file_path in "$DAOS_SOURCE_DIR"/.build_vars*
