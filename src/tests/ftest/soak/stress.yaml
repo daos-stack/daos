@@ -296,7 +296,6 @@ datamover_stress:
     - 4
     - 8
   taskspernode:
-    - 16
     - 32
   oclass:
     - ["SX","SX"]
