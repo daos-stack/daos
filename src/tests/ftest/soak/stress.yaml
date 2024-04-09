@@ -125,7 +125,7 @@ ior_stress:
   repetitions: 5
   transfer_size:
     - '1m'
-    - '4k'
+    - '32k'
   dfs_oclass:
     - ["SX","SX"]
     - ["EC_2P1GX", "RP_2GX"]
@@ -160,7 +160,7 @@ fio_stress:
     numjobs: 1
   soak:
     blocksize:
-      - '64K'
+      - '4K'
       - '1M'
     size:
       - '500M'
@@ -316,7 +316,7 @@ datamover_stress:
     transfer_size:
       - 1M
     block_size:
-      - 1M
+      - 4G
     test_file: "daos:/testFile"
     dfs_destroy: false
   ior_read:
@@ -327,7 +327,7 @@ datamover_stress:
     transfer_size:
       - 1M
     block_size:
-      - 1M
+      - 4G
     test_file: "daos:/testFile"
     dfs_destroy: false
 hdf5_vol:

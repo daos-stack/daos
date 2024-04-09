@@ -54,7 +54,7 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 				return preTxt + tc.verOut, nil
 			}
 
-			cr, err := newCmdRunner(log, nil, mockRun, nil)
+			cr, err := newCmdRunner(log, mockRun, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -146,7 +146,7 @@ func TestIpmctl_getRegions(t *testing.T) {
 				return tc.cmdOut, tc.cmdErr
 			}
 
-			cr, err := newCmdRunner(log, nil, mockRun, nil)
+			cr, err := newCmdRunner(log, mockRun, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -300,7 +300,7 @@ func TestIpmctl_getPMemState(t *testing.T) {
 				return out, err
 			}
 
-			cr, err := newCmdRunner(log, nil, mockRun, nil)
+			cr, err := newCmdRunner(log, mockRun, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
