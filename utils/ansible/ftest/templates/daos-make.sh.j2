@@ -6,7 +6,6 @@ set -u -o pipefail
 VERSION=0.4
 CWD="$(realpath "${0%}")"
 CWD="${CWD%/*}"
-declare -A VALID_CMDS=([install]=true [update]=true)
 
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
 DAOS_VENV_DIR="{{ daos_runtime_dir }}/virtualenvs"
@@ -15,7 +14,6 @@ SERVERS_LIST="{{ groups["daos_servers"] | join(',') }}"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
 CLIENTS_LIST="{{ groups["daos_clients"] | join(',') }}"
 {% endif %}
-DAOS_BUILD_TYPE=debug
 
 SCONS_EXE=scons
 SSH_EXE=ssh
@@ -58,8 +56,10 @@ TRACE_LEVEL_VERBOSE=1
 TRACE_LEVEL_DEBUG=2
 TRACE_LEVEL=$TRACE_LEVEL_STANDARD
 
+DAOS_BUILD_DEPS=false
+DAOS_BUILD_TYPE=debug
 JOBS_NB=1
-FORCE_INSTALL="false"
+FORCE_INSTALL=false
 
 function debug
 {
@@ -115,7 +115,7 @@ function check_cmds
 function usage
 {
 	cat <<- EOF
-		usage: daos-make.sh [OPTIONS] CMD
+		usage: daos-make.sh [OPTIONS]
 
 		Build and install DAOS for running avocado functional tests
 
@@ -126,17 +126,15 @@ function usage
 		       --mpifileutils <path>    Path of mpi file utils source tree
 		       --ior <path>             Path of ior file utils source tree
 		       --fio <path>             Path of fio file utils source tree
+		   -b, --build-type <type>      DAOS build type: debug, release or dev
+		   -d, --deps                   Build DAOS dependencies
 		   -j, --jobs <job>             Allow N jobs at once; one job with no arg
-		   -f, --force                  Overwrite the current install of DAOS
+		   -f, --force                  Overwrite the current install of DAOS and deps
 		   -h, --help                   Show this help message and exit
 		   -V, --version                Show version number
 		   -q, --quiet                  Quiet mode
 		   -v, --verbose                Verbose mode
 		   -D, --debug                  Debug mode
-
-		Commands:
-		   install                      Build and install DAOS
-		   update                       Update current install of DAOS
 	EOF
 }
 
@@ -150,7 +148,7 @@ function run
 	fi
 }
 
-OPTIONS=$(getopt -o "j:b:fhVvDq" --long "mpich:,hdf5:,vol-daos:,mpifileutils:,ior:,fio:,jobs:,build-type:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
+OPTIONS=$(getopt -o "b:dj:fhVvDq" --long "mpich:,hdf5:,vol-daos:,mpifileutils:,ior:,fio:,build-type:,deps,jobs:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
 eval set -- "$OPTIONS"
 while true
 do
@@ -162,8 +160,9 @@ do
 		--ior) IOR_PATH="$2" ; shift 2 ;;
 		--fio) FIO_PATH="$2" ; shift 2 ;;
 		-b|--build-type) DAOS_BUILD_TYPE="$2" ; shift 2 ;;
+		-d|--deps) DAOS_BUILD_DEPS=true ; shift 1 ;;
 		-j|--jobs) JOBS_NB="$2" ; shift 2 ;;
-		-f|--force) FORCE_INSTALL="true" ; shift 1;;
+		-f|--force) FORCE_INSTALL=true ; shift 1;;
 		-h|--help) usage ; exit 0;;
 		-V|--version) echo "daos-make.sh version=$VERSION" ; exit 0 ;;
 		-v|--verbose) TRACE_LEVEL=$TRACE_LEVEL_VERBOSE ; shift 1 ;;
@@ -173,10 +172,6 @@ do
 		*) fatal "unrecognized command line option: $1" ;;
 	esac
 done
-
-[[ ${1:+x} ]] || fatal "Command not defined: use install or update"
-CMD="$1"
-${VALID_CMDS[$CMD]} || fatal "Invalid command \"$CMD\": use install or update"
 
 check_cmds $SSH_EXE $WGET_EXE $CLUSH_EXE $NODESET_EXE $MODULE_EXE $MAKE_EXE $CMAKE_EXE
 
@@ -192,16 +187,15 @@ do
 	run $SSH_EXE root@$host mountpoint --quiet "$HOME" || fatal "Home directory '$home' not mounted on $host"
 done
 
-for dir in "$DAOS_INSTALL_DIR" "$DAOS_VENV_DIR" "$DAOS_SOURCE_DIR/build"
-do
-	if [[ -d "$dir" && "$CMD" == install ]]; then
-		"$FORCE_INSTALL" || fatal "DAOS already installed: use install --force or update."
+if "$FORCE_INSTALL" ; then
+	for dir in "$DAOS_INSTALL_DIR" "$DAOS_VENV_DIR" "$DAOS_SOURCE_DIR/build"
+	do
 		info "Removing old DAOS directory $dir"
 		if ! run /bin/rm -fr "$dir" ; then
 			fatal "Old install directory $dir could not be removed"
 		fi
-	fi
-done
+	done
+fi
 
 if [[ ! -d "$DAOS_INSTALL_DIR" ]] ; then
 	info "Creating DAOS install directory $DAOS_INSTALL_DIR"
@@ -218,27 +212,33 @@ if [[ ! -d "$DAOS_VENV_DIR" ]] ; then
 fi
 
 if [[ ! -f "$DAOS_VENV_DIR/bin/activate" ]] ; then
-	info "Installing avocado"
+	info "Creating DAOS python virtualenv $DAOS_VENV_DIR"
 	run $PYTHON_EXE -m venv "$DAOS_VENV_DIR"
-	source "$DAOS_VENV_DIR/bin/activate"
-	run $PIP_EXE install --upgrade pip
-	run $PIP_EXE install -r "$DAOS_SOURCE_DIR/requirements.txt"
-	deactivate
 fi
+info "Installing DAOS python virtualenv $DAOS_VENV_DIR"
+source "$DAOS_VENV_DIR/bin/activate"
+run $PIP_EXE install --upgrade pip
+run $PIP_EXE install -r "$DAOS_SOURCE_DIR/requirements.txt"
 
 SCONS_OPTS="--directory="$DAOS_SOURCE_DIR" --jobs=$JOBS_NB"
-case $CMD in
-	install) SCONS_OPTS="$SCONS_OPTS --build-deps=yes" ;;
-	update) SCONS_OPTS="$SCONS_OPTS --build-deps=no" ;;
-	*) fatal "Unexpected case" ;;
-esac
 
-info "Building and installing DAOS from source tree $PWD to $DAOS_INSTALL_DIR"
+if "$DAOS_BUILD_DEPS" ; then
+	info "Building DAOS dependencies from source tree $DAOS_SOURCE_DIR"
+	if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS --build-deps=only ; then
+		fatal "DAOS dependencies could not be properly build"
+	fi
+fi
+
+info "Building DAOS from source tree $DAOS_SOURCE_DIR"
+if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS --build-deps=no ; then
+	fatal "DAOS could not be properly build"
+fi
+
+info "Installing DAOS to $DAOS_INSTALL_DIR"
 source "$DAOS_VENV_DIR/bin/activate"
 if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
-	fatal "DAOS could not be properly build and/or installed"
+	fatal "DAOS could not be properly installed"
 fi
-deactivate
 
 info "Finalizing install of ftest setup scripts"
 for file_path in "$DAOS_SOURCE_DIR"/.build_vars*
@@ -600,6 +600,8 @@ if [[ ${FIO_PATH:+x} ]] ; then
 
 	popd > /dev/null
 fi
+
+deactivate
 
 info "Updating dynamic linker configuration"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}

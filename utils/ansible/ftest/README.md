@@ -155,30 +155,10 @@ defined in the inventory. Usage of these two scripts will be detailed in the fol
 ## Installing DAOS Binaries
 
 Building and installing binaries could be done thanks to the generated bash script `daos-make.sh`.
-This last script supports several options and the two sub-commands `install` and `update`.
+This last script supports several options alllowing such as building dependencies or not.
 
 More details on the supported options could be found with running the command with the `--help`
 option.
-
-The `install` sub-command should be used to install/reinstall from scratch all the DAOS binaries and
-their dependencies such as the *spdk* or the *mercury* libraries. For example, the *foo* user could
-use the following command line to install or reinstall the DAOS binaries and its dependencides into
-the `/home/foo/daos/install` directory.
-
-```bash
-/home/foo/daos/daos-make.sh -v -j 32 -f install
-```
-
-When the previous *install* step has been done and the DAOS source code tests have been updated, the
-DAOS binaries could be build and reinstalled thanks to the `update` sub-command.  This last one
-should be far quicker than a full reinstall.
-
-```bash
-/home/foo/daos/daos-make.sh -v -j 32 update
-```
-
-> :bulb: The option `-j 32` (i.e. one per core) seems to be a good compromise between compilation
-> reliability and speed.
 
 ## Launching Functional Tests
 
@@ -191,7 +171,6 @@ with running the command with the `--help` option.
 
 After successfully installing the DAOS binaries and dependencies, the user *foo* could run all the
 test(s) with the tag `hello_world` thanks to the following command line.
-
 
 ```bash
 /home/foo/daos/daos-launch.sh -v -- --nvme=auto  hello_world
