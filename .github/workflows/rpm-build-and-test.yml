@@ -768,6 +768,7 @@ jobs:
   phoenix-actions-report:
     name: Phoenix-Actions report
     runs-on: ubuntu-latest
+    needs: [Functional]
     steps:
       - name: Phoenix-Actions report
         uses: phoenix-actions/test-reporting@v14
