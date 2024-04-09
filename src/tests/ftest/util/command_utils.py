@@ -19,8 +19,8 @@ from ClusterShell.NodeSet import NodeSet
 from command_utils_base import (BasicParameter, CommandWithParameters, EnvironmentVariables,
                                 LogParameter, ObjectWithParameters)
 from exception_utils import CommandFailure
-from general_utils import (DaosTestError, change_file_owner, check_file_exists, create_directory,
-                           distribute_files, get_file_listing, get_job_manager_class,
+from file_utils import change_file_owner, check_file_exists, create_directory, distribute_files
+from general_utils import (DaosTestError, get_file_listing, get_job_manager_class,
                            get_subprocess_stdout, run_command, run_pcmd)
 from run_utils import command_as_user
 from user_utils import get_primary_group
@@ -1082,7 +1082,7 @@ class YamlCommand(SubProcessCommand):
                 try:
                     create_directory(nodes, directory, sudo=True)
                     change_file_owner(nodes, directory, user, get_primary_group(user), sudo=True)
-                except DaosTestError as error:
+                except CommandFailure as error:
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "
                         "user {} on {}:\n{}".format(

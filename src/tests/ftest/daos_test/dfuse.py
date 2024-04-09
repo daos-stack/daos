@@ -9,7 +9,8 @@ from collections import OrderedDict
 
 from cmocka_utils import CmockaUtils
 from dfuse_test_base import DfuseTestBase
-from general_utils import create_directory, get_log_file
+from file_utils import create_directory
+from general_utils import get_log_file
 from job_manager_utils import get_job_manager
 
 

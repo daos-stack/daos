@@ -536,3 +536,137 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
     if processes_running:
         log.debug("Processes still running on %s that match: %s", processes_running, pattern_match)
     return processes_detected, processes_running
+
+
+class LocalTask():
+    """Mock ClusterShell.Task for use with RemoteCommandResult."""
+
+    def __init__(self, host):
+        """Initialize a LocalTask object.
+
+        Args:
+            host (str): local host running the command
+        """
+        self._hosts = [host]
+        self._stdout = None
+        self._stderr = None
+        self._rc = 0
+        self._timeout = False
+
+    def run(self, command, timeout=None):
+        """Run the command locally.
+
+        Args:
+            command (str): command to run.
+            timeout (int, optional): number of seconds to wait for the command to complete.
+                Defaults to None.
+        """
+        kwargs = {
+            "encoding": "utf-8",
+            "shell": False,
+            "check": False,
+            "timeout": timeout,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+        }
+        try:
+            # pylint: disable=subprocess-run-check
+            result = subprocess.run(shlex.split(command), **kwargs)     # nosec
+            self._stdout = result.stdout
+            self._stderr = result.stderr
+            self._rc = result.returncode
+
+        except subprocess.TimeoutExpired as error:
+            # Raised if command times out
+            self._stdout = error.output
+            self._stderr = error.stderr
+            self._timeout = True
+
+        except KeyboardInterrupt as error:
+            # User Ctrl-C
+            self._stdout = f"Command '{command}' interrupted by user\n" + str(error)
+            self._rc = 1
+
+        except Exception as error:      # pylint: disable=broad-except
+            # Catch all
+            self._stdout = f"Command '{command}' encountered unknown error\n" + str(error)
+            self._rc = 1
+
+    def iter_retcodes(self):
+        """Iterate over return codes.
+
+        Yields:
+            tuple: return code, hosts
+        """
+        for host in self._hosts:
+            yield self._rc, [host]
+
+    def iter_keys_timeout(self):
+        """Iterate over timed out keys.
+
+        Yields:
+            str: timed out hosts
+        """
+        for _ in self._hosts:
+            if self._timeout:
+                yield self._hosts
+
+    def iter_buffers(self, host):
+        """Iterate over stdout.
+
+        Args:
+            host (str): not used
+
+        Yields:
+            tuple: stdout, hosts
+        """
+        for host in self._hosts:
+            yield self._stdout, [host]
+
+    def iter_errors(self, host):
+        """Iterate over stderr.
+
+        Args:
+            host (str): not used
+
+        Yields:
+            tuple: stderr, hosts
+        """
+        for host in self._hosts:
+            yield self._stderr, [host]
+
+
+def run_local2(log, command, verbose=True, timeout=None):
+    """Run the command locally.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        command (str): command from which to obtain the output
+        capture_output(bool, optional): whether or not to include the command output in the
+            subprocess.CompletedProcess.stdout returned by this method. Defaults to True.
+        verbose (bool, optional): if set log the output of the command (capture_output must also be
+            set). Defaults to True.
+        timeout (int, optional): number of seconds to wait for the command to complete.
+            Defaults to None.
+
+    Returns:
+        RemoteCommandResult: a grouping of the command results from the same hosts with the same
+            return status
+    """
+    local_host = gethostname().split(".")[0]
+    task = LocalTask(local_host)
+    if verbose:
+        if timeout is None:
+            log.debug("Running on %s without a timeout: %s", local_host, command)
+        else:
+            log.debug("Running on %s with a %s second timeout: %s", local_host, timeout, command)
+    task.run(command=command, timeout=timeout)
+    results = RemoteCommandResult(command, task)
+    if verbose:
+        results.log_output(log)
+    else:
+        # Always log any failed commands
+        for data in results.output:
+            if not data.passed:
+                log_result_data(log, data)
+    return results
