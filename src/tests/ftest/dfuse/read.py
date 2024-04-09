@@ -82,7 +82,7 @@ class DFuseReadTest(DfuseTestBase):
         assert data["statistics"].get("pre_read", 0) == 0, data
 
         # Now read the file, and check it's read.
-        cmd = f"dd if={fuse_root_dir}/td/test_file of=/dev/zero count=2 bs=1M"
+        cmd = f"dd if={fuse_root_dir}/td/test_file of=/dev/zero count=16 bs=128k"
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
