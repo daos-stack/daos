@@ -192,6 +192,7 @@ jobs:
       DISTRO_NAME:
       DISTRO_VERSION:
       CP_LEAP15_VERSION:
+      FVERSION:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -403,6 +404,8 @@ jobs:
       STAGE_NAME:
       QUEUE_URL:
       LABEL:
+      STAGE_TAGS:
+      FTEST_ARG:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -637,6 +640,9 @@ jobs:
       STAGE_NAME:
       QUEUE_URL:
       LABEL:
+      FTEST_ARG:
+      SIZE:
+      STAGE_TAGS:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
