@@ -16,7 +16,7 @@ CLIENTS_LIST="{{ groups["daos_clients"] | join(',') }}"
 {% endif %}
 BUILD_TYPE="{{ daos_build_mode | default(daos_build_mode_default) }}"
 
-SCONS_EXE=scons-3
+SCONS_EXE=scons
 SSH_EXE=ssh
 CLUSH_EXE=clush
 NODESET_EXE=nodeset
@@ -176,7 +176,7 @@ done
 CMD="$1"
 ${VALID_CMDS[$CMD]} || fatal "Invalid command \"$CMD\": use install or update"
 
-check_cmds $SSH_EXE $CLUSH_EXE $NODESET_EXE
+check_cmds $SSH_EXE $WGET_EXE $CLUSH_EXE $NODESET_EXE $MODULE_EXE $MAKE_EXE $CMAKE_EXE
 
 set -e
 
@@ -201,13 +201,25 @@ do
 	fi
 done
 
-check_cmds $SCONS_EXE $MODULE_EXE $CLUSH_EXE $WGET_EXE $MAKE_EXE $CMAKE_EXE
-
 if [[ ! -d "$DAOS_INSTALL_DIR" ]] ; then
 	info "Creating DAOS install directory $DAOS_INSTALL_DIR"
 	if ! run mkdir -p "$DAOS_INSTALL_DIR" ; then
 		fatal "DAOS install directory $DAOS_INSTALL_DIR could not be created"
 	fi
+fi
+
+if [[ ! -f "$DAOS_INSTALL_DIR/bin/activate" ]] ; then
+	info "Installing avocado"
+	run $PYTHON_EXE -m venv "$DAOS_INSTALL_DIR"
+	source "$DAOS_INSTALL_DIR/bin/activate"
+	run $PIP_EXE install --upgrade pip
+	run $PIP_EXE install -r "$DAOS_SOURCE_DIR/requirements.txt"
+	set +u
+	deactivate
+	set -u
+	info "Customize venv for DAOS install"
+	run rm -fv "$DAOS_INSTALL_DIR/lib64"
+	run mkdir -pv "$DAOS_INSTALL_DIR/lib64"
 fi
 
 cd "$DAOS_SOURCE_DIR"
@@ -219,12 +231,21 @@ case $CMD in
 esac
 
 info "Building and installing DAOS from source tree $PWD to $DAOS_INSTALL_DIR"
+source "$DAOS_INSTALL_DIR/bin/activate"
 if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
 	fatal "DAOS could not be properly build and/or installed"
 fi
+set +u
+deactivate
+set -u
 
 info "Finalizing install of ftest setup scripts"
-run ln -vfs "$DAOS_SOURCE_DIR/.build_vars.sh" "$DAOS_SOURCE_DIR/utils/sl/.build_vars-Linux.sh"
+for file_path in "$DAOS_SOURCE_DIR"/.build_vars*
+do
+	file_name=$(basename $file_path)
+	rm -fv "$DAOS_INSTALL_DIR/lib/daos/$file_name"
+	run cp -av "$file_path" "$DAOS_INSTALL_DIR/lib/daos/$file_name"
+done
 
 info "Finalizing spdk install"
 for item in $(find "$DAOS_INSTALL_DIR/share/daos" -type f)
@@ -255,20 +276,6 @@ run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST -w $CLIENTS_LIST ldconfig
 run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST rm -f /etc/ld.so.cache
 run $CLUSH_EXE $CLUSH_OPTS -l root -w $SERVERS_LIST ldconfig
 {% endif %}
-
-if [[ ! -f "$DAOS_INSTALL_DIR/bin/activate" ]] ; then
-	info "Installing avocado"
-	run $PYTHON_EXE -m venv "$DAOS_INSTALL_DIR"
-	source "$DAOS_INSTALL_DIR/bin/activate"
-	run $PIP_EXE install --upgrade pip
-	run $PIP_EXE install -r "$DAOS_SOURCE_DIR/requirements.txt"
-	set +u
-	deactivate
-	set -u
-	for file in "$DAOS_SOURCE_DIR"/.build_vars* ; do
-		ln -fs $file "$DAOS_INSTALL_DIR/lib/daos"
-	done
-fi
 
 if [[ ${MPICH_PATH:+x} ]] ; then
 	info "Building and installing MPICH from source tree $MPICH_PATH to $DAOS_INSTALL_DIR"
@@ -381,7 +388,7 @@ if [[ ${HDF5_PATH:+x} ]] ; then
 		fi
 	fi
 
-	$MODULE_EXE load mpi/mpich-x86_64
+	run $MODULE_EXE load mpi/mpich-x86_64
 
 	if [[ ! -f "$HDF5_PATH/configure" ]] ; then
 		pushd "$HDF5_PATH" > /dev/null
@@ -424,7 +431,7 @@ if [[ ${VOL_DAOS_PATH:+x} ]] ; then
 		fi
 	fi
 
-	$MODULE_EXE load mpi/mpich-x86_64
+	run $MODULE_EXE load mpi/mpich-x86_64
 
 	run mkdir -p "$VOL_DAOS_PATH/build"
 	pushd "$VOL_DAOS_PATH/build" > /dev/null
@@ -470,7 +477,7 @@ if [[ ${MPI_FILE_UTILS_PATH:+x} ]] ; then
 		fi
 	fi
 
-	$MODULE_EXE load mpi/mpich-x86_64
+	run $MODULE_EXE load mpi/mpich-x86_64
 
 	run mkdir -p "$MPI_FILE_UTILS_PATH/deps" "$MPI_FILE_UTILS_PATH/build"
 
@@ -541,7 +548,7 @@ if [[ ${IOR_PATH:+x} ]] ; then
 		fi
 	fi
 
-	$MODULE_EXE load mpi/mpich-x86_64
+	run $MODULE_EXE load mpi/mpich-x86_64
 
 	if [[ ! -f "$IOR_PATH/configure" ]] ; then
 		pushd "$IOR_PATH" > /dev/null
