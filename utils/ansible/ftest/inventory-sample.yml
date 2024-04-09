@@ -1,6 +1,6 @@
 # Sample inventory of a DAOS functional platform running on the wolf cluster
 #
-# Detailled information on the content of this ansible inventory file is available in the README.md
+# Detailed information on the content of this ansible inventory file is available in the README.md
 # file of the directory containing this first file.
 
 all:
