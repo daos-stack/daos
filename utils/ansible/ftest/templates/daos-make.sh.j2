@@ -224,19 +224,20 @@ SCONS_OPTS="--directory="$DAOS_SOURCE_DIR" --jobs=$JOBS_NB"
 
 if "$DAOS_BUILD_DEPS" ; then
 	info "Building DAOS dependencies from source tree $DAOS_SOURCE_DIR"
-	if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS --build-deps=only ; then
+	if ! run "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS --build-deps=only ; then
 		fatal "DAOS dependencies could not be properly build"
 	fi
 fi
 
 info "Building DAOS from source tree $DAOS_SOURCE_DIR"
-if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS --build-deps=no ; then
+# NOTE Dependencies will not be build as 'no' is default value of the --build-deps option
+if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" $SCONS_OPTS ; then
 	fatal "DAOS could not be properly build"
 fi
 
 info "Installing DAOS to $DAOS_INSTALL_DIR"
 source "$DAOS_VENV_DIR/bin/activate"
-if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
+if ! run "$SCONS_EXE" install $SCONS_OPTS ; then
 	fatal "DAOS could not be properly installed"
 fi
 
