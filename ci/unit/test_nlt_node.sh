@@ -24,5 +24,18 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 # ./utils/node_local_test.py --max-log-size ????MiB --dfuse-dir /localhome/jenkins/ \
 #			   --server-valgrind all
 
+# Use the latest version that CI has available.
+python3.11 -m venv venv
+# shellcheck disable=SC1091
+source venv/bin/activate
+touch venv/pip.conf
+pip config set global.progress_bar off
+pip config set global.no_color true
+
+pip install --upgrade pip
+pip install --requirement requirements-utest.txt
+
+pip install /opt/daos/lib/daos/python/
+
 ./utils/node_local_test.py --max-log-size 1700MiB --dfuse-dir /localhome/jenkins/ \
     --log-usage-save nltir.xml --log-usage-export nltr.json all
