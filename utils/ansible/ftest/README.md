@@ -67,15 +67,17 @@ The inventory should also contain a set of mandatory and optional variables.
   sub-cluster.
 - **daos\_source\_dir**: mandatory variable only used by the node of the *daos\_dev* group defining
   the path of the directory containing the DAOS source code.
+- **daos\_ofi\_provider**: optional variable (default value: ofi+tcp;ofi_rxm) defining the network
+  provider to be used by the DAOS engines.  It also defines which network rpms driver to install
+  (e.g. ib mellanox driver).
 - **daos\_ofi\_interface**: optional variable only used by the node of the daos\_dev group defining
   the network interface to use.  When this variable is not defined, the network interface is
   arbitrarily selected by DAOS.
 - **daos\_hugepages\_nb**: optional variable (default value: 4096) only used by the nodes of the
-  *daos\_servers* group defining the number of hugepages to be allocated by the linux kernel.
-- **daos\_avocado\_version**: optional variable (default value: "2.4.3") only used by the node of
-  the *daos\_dev* group defining the version of *avocado* to install.
-- **daos\_avocado\_framework\_version**: optional variable (default value: "82.1") only used by the
-  node of the *daos\_dev* group defining the version of *avocado\_framework* to install.
+  *daos\_servers* group.  This variable defines the number of hugepages to be allocated by the linux
+  kernel.
+- **daos\_build\_mode**: optional variable (default value: DEBUG) only used by the nodes of the
+  *daos\_dev* group.  This variable defines in which mode DAOS shall be compiled.
 
 Different file format (e.g. YAML, INI, etc.) and file tree structure are supported to define an
 ansible inventory.  The following simple ansible inventory describe for example in one YAML file
@@ -90,6 +92,7 @@ all:
       vars:
         daos_source_dir: /home/foo/work/daos
         daos_ofi_interface: eth0
+        daos_build_mode: DEBUG
       hosts:
         wolf-666:
     daos_servers:

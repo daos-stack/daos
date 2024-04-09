@@ -6,11 +6,14 @@ daos_openmpi_module_path: /usr/share/modulefiles/mpi/openmpi-x86_64
 daos_base_deps:
   rpms:
     - bash
+    - capstone
     - gdb
     - glibc
     - jq
     - lbzip2
-    - mercury
+    - numactl
+    - numactl-libs
+    - numatop
     - platform-python
     - python36
     - systemd
@@ -18,27 +21,45 @@ daos_base_deps:
 
 daos_dev_deps:
   rpms:
+    - argobots-devel
+    - capstone-devel
+    - bzip2-devel
+    - clustershell
     - cmake
     - createrepo
+    - daos-raft-devel
     - dnf-plugins-core
+    - fuse3-devel
+    - gcc-c++
+    - gcc-gfortran
+    - golang
     - libaec-devel
+    - libattr-devel
+    - libcmocka-devel
+    - libevent-devel
+    - libyaml-devel
     - meson
+    - ninja-build
+    - openssl-devel
+    - python3.11
+    - python3.11-devel
     - python3-clustershell
+    - python3-defusedxml
+    - python3-distro
+    - python3-jira
+    - python3-junit_xml
+    - python3-pip
+    - python3-pyelftools
+    - python3-scons
+    - python3-tabulate
+    - python3-wheel
+    - python3-pyxattr
+    - python3-pyyaml
     - rpmdevtools
     - rpm-build
+    - spdk-devel
+    - valgrind-devel
     - wget
-    - libattr-devel
-    - bzip2-devel
-  pips:
-    - "avocado=={{ daos_avocado_version | default(daos_avocado_version_default) }}"
-    - "avocado-framework=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-glib=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-golang=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-loader-yaml=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-result-html=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-result-upload=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - "avocado-framework-plugin-varianter-yaml-to-mux=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
-    - pyelftools
 
 daos_client_deps:
   rpms:
@@ -48,6 +69,7 @@ daos_client_deps:
     - libaec
     - libuuid
     - lz4-libs
+    - numactl-devel
     - systemd
     - util-linux
 
@@ -56,11 +78,13 @@ daos_server_deps:
     - compat-hwloc1
     - dpdk
     - ipmctl
-    - libfabric
     - libipmctl
     - libpmemobj
     - libuuid
     - lz4-libs
     - ndctl
-    - numactl-libs
     - spdk-tools
+
+mlnx_deps:
+  rpms:
+    - mlnx-ofed-all
