@@ -47,6 +47,41 @@ is_nvme_enabled(test_arg_t *arg)
 	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
 }
 
+static bool
+is_md_on_ssd(char *host)
+{
+	char	*server_config_file, *line = NULL;
+	char	 command[256];
+	FILE	*fp;
+	size_t	 read, len = 0;
+	int	 rc;
+	bool	 md_on_ssd = false;
+
+	D_ALLOC(server_config_file, DAOS_SERVER_CONF_LENGTH);
+	assert_non_null(server_config_file);
+	rc = get_server_config(host, server_config_file);
+	assert_rc_equal(rc, 0);
+	print_message("server_config_file = %s\n", server_config_file);
+
+	snprintf(command, sizeof(command), "ssh %s cat %s", host, server_config_file);
+	fp = popen(command, "r");
+	assert_non_null(fp);
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+		if (strstr(line, "bdev_roles:") != NULL) {
+			md_on_ssd = true;
+			break;
+		}
+	}
+
+	if (line)
+		free(line);
+	pclose(fp);
+	D_FREE(server_config_file);
+
+	return md_on_ssd;
+}
+
 /* return the faulty device index */
 static int
 pick_faulty_device(device_list *devices, int num_dev, int faulty_rank)
@@ -64,8 +99,8 @@ pick_faulty_device(device_list *devices, int num_dev, int faulty_rank)
 			      devices[i].state, devices[i].host);
 		for (j = 0; j < devices[i].n_tgtidx; j++) {
 			print_message("%d,", devices[i].tgtidx[j]);
-			/* XXX Use hardcoded sys target ID since it's defined in server header */
-			if (devices[i].tgtidx[j] == 1024)
+			/* XXX Target 0 and sys xstream share same SSD in md-on-ssd mode */
+			if (devices[i].tgtidx[j] == 0 && is_md_on_ssd(devices[i].host))
 				is_sys_dev = true;
 		}
 		print_message("\n");
