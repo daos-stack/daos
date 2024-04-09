@@ -5,6 +5,7 @@ set -u -e -o pipefail
 
 if [[ $(id -u) -ne 0 ]] ; then
 	echo "[ERROR] Could only be used by root"
+	exit 1
 fi
 
 sed -i -E -e "/DefaultLimitNOFILE/s/.*/DefaultLimitNOFILE=infinity:infinity/" /etc/systemd/system.conf
