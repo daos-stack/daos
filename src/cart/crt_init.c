@@ -185,7 +185,6 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	       bool primary, crt_init_options_t *opt)
 
 {
-	bool		share_addr = false;
 	bool		set_sep = false;
 	uint32_t	ctx_num = 0;
 	uint32_t	max_expect_size = 0;
@@ -198,13 +197,20 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	if (rc != 0)
 		return rc;
 
-	/* Set max number of contexts. Defaults to the number of cores */
-	ctx_num = 0;
-	d_getenv_uint("CRT_CTX_NUM", &ctx_num);
-	if (opt)
-		max_num_ctx = ctx_num ? ctx_num : max(crt_gdata.cg_num_cores, opt->cio_ctx_max_num);
-	else
-		max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+	if (crt_is_service()) {
+		ctx_num = CRT_SRV_CONTEXT_NUM;
+		max_num_ctx = CRT_SRV_CONTEXT_NUM;
+	} else {
+		/* Only limit the number of contexts for clients */
+		d_getenv_uint("CRT_CTX_NUM", &ctx_num);
+
+		/* Default setting to the number of cores */
+		if (opt)
+			max_num_ctx = ctx_num ? ctx_num :
+				      max(crt_gdata.cg_num_cores, opt->cio_ctx_max_num);
+		else
+			max_num_ctx = ctx_num ? ctx_num : crt_gdata.cg_num_cores;
+	}
 
 	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM;
@@ -214,26 +220,6 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 		max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
-
-	/* Assume for now this option is only available for a primary provider */
-	if (primary) {
-		if (opt && opt->cio_sep_override) {
-			if (opt->cio_use_sep) {
-				set_sep = true;
-				max_num_ctx = opt->cio_ctx_max_num;
-			}
-		} else {
-			share_addr = false;
-
-			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
-			if (share_addr) {
-				set_sep = true;
-				ctx_num = 0;
-				d_getenv_uint("CRT_CTX_NUM", &ctx_num);
-				max_num_ctx = ctx_num;
-			}
-		}
-	}
 
 	if (opt && opt->cio_use_expected_size)
 		max_expect_size = opt->cio_max_expected_size;
