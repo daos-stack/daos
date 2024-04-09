@@ -380,6 +380,21 @@ int ds_pool_tgt_discard(uuid_t pool_uuid, uint64_t epoch);
 int
 ds_pool_mark_upgrade_completed(uuid_t pool_uuid, int ret);
 
+struct dss_coll_args;
+struct dss_coll_ops;
+
+int
+ds_pool_thread_collective_reduce(uuid_t pool_uuid, uint32_t ex_status, struct dss_coll_ops *coll_ops,
+				 struct dss_coll_args *coll_args, uint32_t flags);
+int
+ds_pool_task_collective_reduce(uuid_t pool_uuid, uint32_t ex_status, struct dss_coll_ops *coll_ops,
+			       struct dss_coll_args *coll_args, uint32_t flags);
+int
+ds_pool_thread_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(void *),
+			  void *arg, uint32_t flags);
+int
+ds_pool_task_collective(uuid_t pool_uuid, uint32_t ex_status, int (*coll_func)(void *),
+			void *arg, uint32_t flags);
 /**
  * Verify if pool status satisfy Redundancy Factor requirement, by checking
  * pool map device status.

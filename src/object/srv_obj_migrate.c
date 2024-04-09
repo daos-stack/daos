@@ -2013,11 +2013,11 @@ migrate_one_ult(void *arg)
 	D_DEBUG(DB_REBUILD, "mrone %p inflight_size "DF_U64" max "DF_U64"\n",
 		mrone, tls->mpt_inflight_size, tls->mpt_inflight_max_size);
 
-	while (tls->mpt_inflight_size + data_size >=
-	       tls->mpt_inflight_max_size && tls->mpt_inflight_max_size != 0
-	       && !tls->mpt_fini) {
-		D_DEBUG(DB_REBUILD, "mrone %p wait "DF_U64"/"DF_U64"\n", mrone,
-			tls->mpt_inflight_size, tls->mpt_inflight_max_size);
+	while (tls->mpt_inflight_size + data_size >= tls->mpt_inflight_max_size &&
+	       tls->mpt_inflight_max_size != 0 && tls->mpt_inflight_size != 0 &&
+	       !tls->mpt_fini) {
+		D_DEBUG(DB_REBUILD, "mrone %p wait "DF_U64"/"DF_U64"/"DF_U64"\n", mrone,
+			tls->mpt_inflight_size, tls->mpt_inflight_max_size, data_size);
 		ABT_mutex_lock(tls->mpt_inflight_mutex);
 		ABT_cond_wait(tls->mpt_inflight_cond, tls->mpt_inflight_mutex);
 		ABT_mutex_unlock(tls->mpt_inflight_mutex);
@@ -3147,7 +3147,9 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	uuid_copy(arg.pool_uuid, pool->sp_uuid);
 	arg.version = version;
 	arg.generation = generation;
-	rc = dss_thread_collective(migrate_fini_one_ult, &arg, 0);
+
+	rc = ds_pool_thread_collective(pool->sp_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, migrate_fini_one_ult, &arg, 0);
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
@@ -3852,7 +3854,8 @@ ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, unsigned int generation,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(out, rc);
 
-	rc = dss_thread_collective(migrate_check_one, &arg, 0);
+	rc = ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT, migrate_check_one, &arg, 0);
 	if (rc)
 		D_GOTO(out, rc);
 
