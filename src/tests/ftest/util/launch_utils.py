@@ -679,7 +679,6 @@ class TestRunner():
         certs_dir = os.path.join(test_env.log_dir, "daosCA")
         certgen_dir = os.path.abspath(
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
-#            os.path.join("..", "..", "..", "install", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
             run_local(logger, f"/usr/bin/rm -rf {certs_dir}")
