@@ -9,6 +9,7 @@ CWD="${CWD%/*}"
 declare -A VALID_CMDS=([install]=true [update]=true)
 
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
+DAOS_VENV_DIR="{{ daos_runtime_dir }}/virtualenvs"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"
 SERVERS_LIST="{{ groups["daos_servers"] | join(',') }}"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
@@ -149,7 +150,7 @@ function run
 	fi
 }
 
-build-mode=$(getopt -o "j:b:fhVvDq" --long "mpich:,hdf5:,vol-daos:,mpifileutils:,ior:,fio:,jobs:,build-type:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
+OPTIONS=$(getopt -o "j:b:fhVvDq" --long "mpich:,hdf5:,vol-daos:,mpifileutils:,ior:,fio:,jobs:,build-type:,force,help,version,verbose,debug,quiet" -- "$@") || exit 1
 eval set -- "$OPTIONS"
 while true
 do
@@ -191,7 +192,7 @@ do
 	run $SSH_EXE root@$host mountpoint --quiet "$HOME" || fatal "Home directory '$home' not mounted on $host"
 done
 
-for dir in "$DAOS_INSTALL_DIR" "$DAOS_SOURCE_DIR/build"
+for dir in "$DAOS_INSTALL_DIR" "$DAOS_VENV_DIR" "$DAOS_SOURCE_DIR/build"
 do
 	if [[ -d "$dir" && "$CMD" == install ]]; then
 		"$FORCE_INSTALL" || fatal "DAOS already installed: use install --force or update."
@@ -209,16 +210,20 @@ if [[ ! -d "$DAOS_INSTALL_DIR" ]] ; then
 	fi
 fi
 
-if [[ ! -f "$DAOS_INSTALL_DIR/bin/activate" ]] ; then
+if [[ ! -d "$DAOS_VENV_DIR" ]] ; then
+	info "Creating DAOS python virtualenv directory $DAOS_VENV_DIR"
+	if ! run mkdir -p "$DAOS_VENV_DIR" ; then
+		fatal "DAOS python virtualenv directory $DAOS_VENV_DIR could not be created"
+	fi
+fi
+
+if [[ ! -f "$DAOS_VENV_DIR/bin/activate" ]] ; then
 	info "Installing avocado"
-	run $PYTHON_EXE -m venv "$DAOS_INSTALL_DIR"
-	source "$DAOS_INSTALL_DIR/bin/activate"
+	run $PYTHON_EXE -m venv "$DAOS_VENV_DIR"
+	source "$DAOS_VENV_DIR/bin/activate"
 	run $PIP_EXE install --upgrade pip
 	run $PIP_EXE install -r "$DAOS_SOURCE_DIR/requirements.txt"
 	deactivate
-	info "Customize venv for DAOS install"
-	run rm -fv "$DAOS_INSTALL_DIR/lib64"
-	run mkdir -pv "$DAOS_INSTALL_DIR/lib64"
 fi
 
 cd "$DAOS_SOURCE_DIR"
@@ -230,7 +235,7 @@ case $CMD in
 esac
 
 info "Building and installing DAOS from source tree $PWD to $DAOS_INSTALL_DIR"
-source "$DAOS_INSTALL_DIR/bin/activate"
+source "$DAOS_VENV_DIR/bin/activate"
 if ! run env MPI_PKG=any "$SCONS_EXE" BUILD_TYPE="$DAOS_BUILD_TYPE" PREFIX="$DAOS_INSTALL_DIR" install $SCONS_OPTS ; then
 	fatal "DAOS could not be properly build and/or installed"
 fi

@@ -8,6 +8,7 @@ CWD="$(realpath "${0%}")"
 CWD="${CWD%/*}"
 
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
+DAOS_VENV_DIR="{{ daos_runtime_dir }}/virtualenvs"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"
 {% if daos_ofi_interface is defined %}
 OFI_INTERFACE="{{ daos_ofi_interface }}"
@@ -231,10 +232,17 @@ if "$START_CLEANUP" ; then
 	cleanup
 fi
 
-info "Setting simulation environment"
-export PYTHONPATH="$DAOS_INSTALL_DIR/lib64/python3.6/site-packages:$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
+info "Setting python simulation environment"
+source "$DAOS_VENV_DIR/bin/activate"
+if [[ ${PYTHONPATH:+x} ]] ; then
+	export PYTHONPATH="$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util:$PYTHONPATH"
+else
+	export PYTHONPATH="$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
+fi
 cd "$DAOS_SOURCE_DIR/utils/sl"
 source setup_local.sh
+
+info "Setting MPI simulation environment"
 if run $MODULE_EXE is-avail mpi/mpich-x86_64 ; then
 	run $MODULE_EXE load mpi/mpich-x86_64
 fi
@@ -248,7 +256,6 @@ common_opts="-ar --provider={{ daos_ofi_provider | default(daos_ofi_provider_def
 {% endif %}
 
 info "Starting functional test simulation"
-source "$DAOS_INSTALL_DIR/bin/activate"
 {% if daos_ofi_interface is defined %}
 run env OFI_INTERFACE=$OFI_INTERFACE $PYTHON_EXE launch.py $common_opts "${args[@]}"
 {% else %}

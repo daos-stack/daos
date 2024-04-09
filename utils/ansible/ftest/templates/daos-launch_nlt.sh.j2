@@ -8,6 +8,7 @@ CWD="$(realpath "${0%}")"
 CWD="${CWD%/*}"
 
 DAOS_INSTALL_DIR="{{ daos_runtime_dir }}/install"
+DAOS_VENV_DIR="{{ daos_runtime_dir }}/virtualenvs"
 DAOS_SOURCE_DIR="{{ daos_source_dir }}"
 {% if daos_ofi_interface is defined %}
 OFI_INTERFACE="{{ daos_ofi_interface }}"
@@ -195,18 +196,26 @@ if "$START_CLEANUP" ; then
 	run /bin/rm -f "$DAOS_SOURCE_DIR"/dnt.* "$DAOS_SOURCE_DIR"/nlt-* "$DAOS_SOURCE_DIR"/vgcore.*
 fi
 
-info "Setting simulation environment"
-export PYTHONPATH="$DAOS_INSTALL_DIR/lib64/python3.6/site-packages:$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
+info "Setting python simulation environment"
+source "$DAOS_VENV_DIR/bin/activate"
+if [[ ${PYTHONPATH:+x} ]] ; then
+	export PYTHONPATH="$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util:$PYTHONPATH"
+else
+	export PYTHONPATH="$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
+fi
 cd "$DAOS_SOURCE_DIR/utils/sl"
 source setup_local.sh
-run sudo -E "$DAOS_SOURCE_DIR/utils/setup_daos_server_helper.sh"
-run chmod -x "$DAOS_INSTALL_DIR/bin/daos_server_helper"
+
+info "Setting MPI simulation environment"
 if run $MODULE_EXE is-avail mpi/mpich-x86_64 ; then
 	run $MODULE_EXE load mpi/mpich-x86_64
 fi
 
+info "Fixing daos_server_helper"
+run sudo -E "$DAOS_SOURCE_DIR/utils/setup_daos_server_helper.sh"
+run chmod -x "$DAOS_INSTALL_DIR/bin/daos_server_helper"
+
 info "Starting NLT tests"
-source "$DAOS_INSTALL_DIR/bin/activate"
 pushd "$DAOS_SOURCE_DIR" > /dev/null
 {% if daos_ofi_interface is defined %}
 run env OFI_INTERFACE=$OFI_INTERFACE $PYTHON_EXE utils/node_local_test.py "${args[@]}"
