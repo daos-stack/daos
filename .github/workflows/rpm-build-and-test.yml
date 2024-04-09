@@ -764,3 +764,16 @@ jobs:
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
+
+  phoenix-actions-report:
+    name: Phoenix-Actions report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Phoenix-Actions report
+        uses: phoenix-actions/test-reporting@v14
+        id: test-report
+        with:
+          artifact: /(Functional on .*) test-results/
+          name: '$1 Test Results (phoenix-actions)'
+          path: '**/results.xml'
+          reporter: java-junit
