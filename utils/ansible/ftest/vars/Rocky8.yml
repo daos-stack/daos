@@ -38,8 +38,6 @@ daos_dev_deps:
     - libcmocka-devel
     - libevent-devel
     - libyaml-devel
-    - meson
-    - ninja-build
     - openssl-devel
     - python3.11
     - python3.11-devel
