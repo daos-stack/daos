@@ -3,6 +3,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import time
+
 from dfuse_test_base import DfuseTestBase
 from run_utils import run_remote
 
@@ -58,9 +60,18 @@ class DFuseReadTest(DfuseTestBase):
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
+        # Allow the eviction to happen.  It should be nearly instant and much quicker than launching
+        # commands via ssh but there's no harm in adding this.
+        time.sleep(1)
+
         # Sample the stats, later on we'll check this.
         data = self.dfuse.get_stats()
         print(data)
+
+        # Check that the inode has been evicted, and there's been no reads so far.
+        assert data["inodes"] == 1, data
+        assert data["statistics"].get("read", 0) == 0, data
+        assert data["statistics"].get("pre_read", 0) == 0, data
 
         # Now read the file, and check it's read.
         cmd = f"dd if={fuse_root_dir}/test_file of=/dev/zero count=2 bs=1M"
@@ -72,6 +83,6 @@ class DFuseReadTest(DfuseTestBase):
         print(data)
 
         read_calls = data["statistics"].get("read", 0)
-        write_calls = data["statistics"].get("write", 0)
 
-        print(f"Test caused {write_calls} write and {read_calls} reads calls")
+        assert read_calls > 1, data
+        assert data["inodes"] == 2, data
