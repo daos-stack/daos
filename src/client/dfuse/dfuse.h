@@ -624,7 +624,14 @@ dfuse_loop(struct dfuse_info *dfuse_info);
  * On a 64 bit system O_LARGEFILE is assumed so always set but defined to zero
  * so set LARGEFILE here for debugging
  */
+#if defined(__x86_64__) || defined(__i386__)
 #define LARGEFILE 0100000
+#endif
+
+#if defined(__aarch64__) || defined(__arm__)
+#define LARGEFILE 0400000
+#endif
+
 #define FMODE_EXEC 0x20
 #define LOG_FLAGS(HANDLE, INPUT) do {					\
 		int _flag = (INPUT);					\
