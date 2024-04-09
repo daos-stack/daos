@@ -241,6 +241,8 @@ if ! run "$SCONS_EXE" install $SCONS_OPTS ; then
 	fatal "DAOS could not be properly installed"
 fi
 
+deactivate
+
 info "Finalizing install of ftest setup scripts"
 for file_path in "$DAOS_SOURCE_DIR"/.build_vars*
 do
@@ -600,9 +602,27 @@ if [[ ${FIO_PATH:+x} ]] ; then
 	run env CFLAGS="-g -O0" make -j $(nproc) install
 
 	popd > /dev/null
-fi
 
-deactivate
+	pushd "$FIO_PATH/doc" > /dev/null
+
+	FIO_VENV_DIR="$FIO_PATH/build/virtualenvs"
+	if [[ ! -f "$FIO_VENV_DIR/bin/activate" ]] ; then
+		info "Creating FIO python virtualenv $FIO_VENV_DIR"
+		run $PYTHON_EXE -m venv "$FIO_VENV_DIR"
+	fi
+
+	info "Installing FIO python virtualenv $FIO_VENV_DIR"
+	source "$FIO_VENV_DIR/bin/activate"
+	run $PIP_EXE install --upgrade pip
+	run $PIP_EXE install sphinx
+
+	run make man
+	run install -v output/man/fio.1 $DAOS_INSTALL_DIR/man/man1/fio.1
+
+	deactivate
+
+	popd
+fi
 
 info "Updating dynamic linker configuration"
 {% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
