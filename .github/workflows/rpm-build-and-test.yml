@@ -600,7 +600,7 @@ jobs:
       checks: write
       pull-requests: write
     timeout-minutes: 7200
-    needs: [Import-commit-message, Build-RPM, Calc-functional-hardware-matrix,
+    needs: [Build-RPM, Import-commit-message, Calc-functional-hardware-matrix,
             Import-commit-pragmas, Functional]
     strategy:
       matrix:
@@ -767,8 +767,10 @@ jobs:
 
   phoenix-actions-report:
     name: Phoenix-Actions report
-    runs-on: ubuntu-latest
-    needs: [Functional]
+    runs-on: [self-hosted, wolf]
+    needs: [Functional, Import-commit-pragmas]
+    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+        ((!cancelled()) || success() || failure())
     steps:
       - name: Phoenix-Actions report
         uses: phoenix-actions/test-reporting@v14
