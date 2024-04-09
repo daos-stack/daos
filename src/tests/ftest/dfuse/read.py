@@ -74,7 +74,6 @@ class DFuseReadTest(DfuseTestBase):
 
         # Sample the stats, later on we'll check this.
         data = self.dfuse.get_stats()
-        print(data)
 
         # Check that the inode has been evicted, and there's been no reads so far.
         assert data["inodes"] == 1, data
@@ -88,8 +87,10 @@ class DFuseReadTest(DfuseTestBase):
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
 
         data = self.dfuse.get_stats()
-        print(data)
 
-        assert data["statistics"].get("read", 0) == 0, data
+        # pre_read requests are a subset of reads so for this test we should verify that they are
+        # equal, and non-zero.
         assert data["statistics"].get("pre_read", 0) > 0, data
+        assert data["statistics"].get("pre_read") == data["statistics"].get("read", 0), data
+
         assert data["inodes"] == 3, data
