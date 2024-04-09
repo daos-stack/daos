@@ -48,6 +48,7 @@
 #include <daos_prop.h>
 #include <daos/common.h>
 #include <daos/dfs_lib_int.h>
+#include <../common/dav/util.h>
 
 #include "hook.h"
 
@@ -167,6 +168,10 @@ static char             exe_short[DFS_MAX_NAME];
 static bool             compatible_mode;
 static long int         page_size;
 
+#define DAOS_INIT_NOT_RUNNING 0
+#define DAOS_INIT_RUNNING     1
+
+static long int         daos_initing;
 static _Atomic bool     daos_inited;
 static bool             daos_debug_inited;
 static int              num_dfs;
@@ -868,7 +873,7 @@ out:
 }
 
 static int
-fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
+fetch_dfs_obj_handle(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 {
 	int                    cmd, rc;
 	d_iov_t                iov	 = {};
@@ -1287,6 +1292,15 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 		if (atomic_load_relaxed(&daos_inited) == false) {
 			/* daos_init() is expensive to call. We call it only when necessary. */
 
+			/* Check whether daos_init() is running. If yes, pass to the original
+			 * libc functions. Avoid possible daos_init reentrancy/nested call.
+			 */
+			if (!util_bool_compare_and_swap64(&daos_initing, DAOS_INIT_NOT_RUNNING,
+			    DAOS_INIT_RUNNING)) {
+				*is_target_path = 0;
+				goto out_normal;
+			}
+
 			rc = consume_low_fd();
 			if (rc) {
 				DS_ERROR(rc, "consume_low_fd() failed");
@@ -1314,6 +1328,8 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 			atomic_store_relaxed(&daos_inited, true);
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
+			assert(util_bool_compare_and_swap64(&daos_initing, DAOS_INIT_RUNNING,
+			       DAOS_INIT_NOT_RUNNING));
 		}
 
 		/* dfs info can be set up after daos has been initialized. */
@@ -2105,9 +2121,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	if (!hook_enabled)
 		goto org_func;
-	/* special cases. Needed to avoid dead lock inside daos_init(). */
-	if (strstr(pathname, "/etc/libfabric.conf"))
-		goto org_func;
 
 	rc = query_path(pathname, &is_target_path, &parent, item_name, &parent_dir,
 			&full_path, &dfs_mt);
@@ -2131,9 +2144,9 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			goto out_compatible;
 
 		/* query file object through ioctl() */
-		rc = fetch_dfs_cont_file_obj_with_fd(fd_kernel, dfs_mt, &dfs_obj);
+		rc = fetch_dfs_obj_handle(fd_kernel, dfs_mt, &dfs_obj);
 		if (rc != 0 && rc != EISDIR) {
-			DS_WARN(rc, "fetch_dfs_cont_file_obj_with_fd() failed");
+			DS_WARN(rc, "fetch_dfs_obj_handle() failed");
 			goto out_compatible;
 		}
 
