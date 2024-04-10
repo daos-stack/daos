@@ -777,4 +777,6 @@ struct dss_chore {
 int dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func);
 void dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func);
 
+bool engine_in_check(void);
+
 #endif /* __DSS_API_H__ */
