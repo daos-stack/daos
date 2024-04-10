@@ -541,16 +541,18 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
 class LocalTask():
     """Mock ClusterShell.Task to all subprocess.run() to return a RemoteCommandResult."""
 
-    def __init__(self, host):
-        """Initialize a LocalTask object.
-
-        Args:
-            host (str): local host running the command
-        """
-        self._host = host
+    def __init__(self):
+        """Initialize a LocalTask object."""
+        self._host = gethostname().split(".")[0]
         self._command_output = {}
         self._return_codes = {}
         self._timeout_hosts = set()
+
+    def _reset(self):
+        """Reset the command results."""
+        self._command_output = {}
+        self._return_codes = {}
+        self._timeout_hosts.clear()
 
     def run(self, command, timeout=None):
         """Run the command locally.
@@ -560,9 +562,7 @@ class LocalTask():
             timeout (int, optional): number of seconds to wait for the command to complete.
                 Defaults to None.
         """
-        self._command_output = {}
-        self._return_codes = {}
-        self._timeout_hosts.clear()
+        self._reset()
         kwargs = {
             "encoding": "utf-8",
             "shell": False,
@@ -624,8 +624,7 @@ class LocalTask():
         Yields:
             str: timed out hosts
         """
-        for hosts in self._timeout_hosts:
-            yield hosts
+        yield from self._timeout_hosts
 
     def iter_buffers(self, match_keys=None):
         """Iterate over stdout.
@@ -654,8 +653,8 @@ class LocalTask():
                 yield output, [host]
 
 
-def run_local2(log, command, verbose=True, timeout=None):
-    """Run the command locally.
+def run_command(log, command, verbose=True, timeout=None):
+    """Run the command on the local host.
 
     Args:
         log (logger): logger for the messages produced by this method
@@ -671,13 +670,12 @@ def run_local2(log, command, verbose=True, timeout=None):
         RemoteCommandResult: a grouping of the command results from the same hosts with the same
             return status
     """
-    local_host = gethostname().split(".")[0]
-    task = LocalTask(local_host)
+    task = LocalTask()
     if verbose:
         if timeout is None:
-            log.debug("Running on %s without a timeout: %s", local_host, command)
+            log.debug("Running locally without a timeout: %s", command)
         else:
-            log.debug("Running on %s with a %s second timeout: %s", local_host, timeout, command)
+            log.debug("Running locally with a %s second timeout: %s", timeout, command)
     task.run(command=command, timeout=timeout)
     results = RemoteCommandResult(command, task)
     if verbose:

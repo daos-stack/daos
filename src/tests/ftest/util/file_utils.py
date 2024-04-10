@@ -9,7 +9,7 @@ from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
-from run_utils import command_as_user, get_clush_command, run_local2, run_remote
+from run_utils import command_as_user, get_clush_command, run_command, run_remote
 from user_utils import get_chown_command, get_primary_group
 
 
@@ -196,7 +196,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60, verbose
                 command = get_clush_command(
                     hosts, args="-S -v", command="cp {} {}".format(source, destination),
                     command_sudo=True)
-                result = run_local2(log, command, verbose, timeout)
+                result = run_command(log, command, verbose, timeout)
                 if not result.passed:
                     _debug_no_space(result, destination)
         else:
@@ -230,7 +230,7 @@ def remote_file_copy(log, hosts, source, destination, verbose=True, timeout=60):
             return status
     """
     command = f"clush -w {str(hosts)} -B -S -p -v --copy f'{source}' --dest '{destination}'"
-    return run_local2(log, command, verbose, timeout)
+    return run_command(log, command, verbose, timeout)
 
 
 def reverse_remote_file_copy(log, hosts, source, destination, timeout=60):
@@ -248,4 +248,4 @@ def reverse_remote_file_copy(log, hosts, source, destination, timeout=60):
             return status
     """
     command = f"clush -w {str(hosts)} -B -S -p -v --rcopy f'{source}' --dest '{destination}'"
-    return run_local2(log, command, True, timeout)
+    return run_command(log, command, True, timeout)
