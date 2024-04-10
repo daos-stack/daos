@@ -440,6 +440,17 @@ typedef enum {
 	CRT_GROUP_MOD_OP_COUNT,
 } crt_group_mod_op_t;
 
+/**
+ * Quotas supported by CaRT.
+ */
+typedef enum {
+	/** Limit of number of inflight rpcs */
+	CRT_QUOTA_RPCS,
+
+	/** Total count of supported quotas */
+	CRT_QUOTA_COUNT,
+} crt_quota_type_t;
+
 /** @}
  */
 #endif /* __CRT_TYPES_H__ */
