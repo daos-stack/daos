@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -1074,20 +1074,20 @@ class YamlCommand(SubProcessCommand):
             directory = self.get_user_file()
             self.log.info(
                 "Verifying %s socket directory: %s", self.command, directory)
-            status, nodes = check_file_exists(hosts, directory, user)
-            if not status:
+            result = check_file_exists(hosts, directory, user)
+            if not result.passed:
                 self.log.info(
                     "%s: creating socket directory %s for user %s on %s",
-                    self.command, directory, user, nodes)
+                    self.command, directory, user, result.failed_hosts)
                 try:
-                    create_directory(nodes, directory, sudo=True)
-                    change_file_owner(nodes, directory, user, get_primary_group(user), sudo=True)
+                    create_directory(result.failed_hosts, directory, sudo=True)
+                    change_file_owner(
+                        result.failed_hosts, directory, user, get_primary_group(user), sudo=True)
                 except CommandFailure as error:
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "
                         "user {} on {}:\n{}".format(
-                            self.command, directory, user, nodes,
-                            error)) from error
+                            self.command, directory, user, result.failed_hosts, error)) from error
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.
