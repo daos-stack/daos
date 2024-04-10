@@ -2096,3 +2096,9 @@ out:
 	if (rc != 0 && arg != NULL)
 		tgt_discard_arg_free(arg);
 }
+
+void
+ds_pool_tgt_warmup_handler(crt_rpc_t *rpc)
+{
+	crt_reply_send(rpc);
+}
