@@ -22,9 +22,6 @@ then
     rm -rf venv
 fi
 
-# Install python 3.12 for running avocado in the virtual environment
-dnf -y install python3.12 python3.12-devel
-
 python3.12 -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
