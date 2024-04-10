@@ -231,7 +231,11 @@ func (c *Client) dialOptions() ([]grpc.DialOption, error) {
 // one set. If the request does not define a specific deadline, then the
 // default timeout is used.
 func setDeadlineIfUnset(parent context.Context, req UnaryRequest) (context.Context, context.CancelFunc) {
-	if _, hasDeadline := parent.Deadline(); hasDeadline {
+	if deadline, hasDeadline := parent.Deadline(); hasDeadline {
+		// Set the request timeout based on the context deadline.
+		// NB: This is mostly just used for debug logging.
+		req.SetTimeout(time.Until(deadline))
+
 		return parent, func() {}
 	}
 

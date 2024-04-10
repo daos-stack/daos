@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 func TestFlags_EpochFlag(t *testing.T) {
@@ -316,7 +317,7 @@ func TestFlags_ObjClassFlag(t *testing.T) {
 		},
 		"invalid": {
 			arg:    "snausages",
-			expErr: errors.New("unknown object class"),
+			expErr: daos.InvalidInput,
 		},
 		"valid": {
 			arg: "S2",
@@ -362,7 +363,7 @@ func TestFlags_ConsModeFlag(t *testing.T) {
 		},
 		"invalid": {
 			arg:    "snausages",
-			expErr: errors.New("unknown consistency mode"),
+			expErr: errors.New("unknown DFS consistency mode"),
 		},
 		"relaxed": {
 			arg: "relaxed",
@@ -410,7 +411,7 @@ func TestFlags_ContTypeFlag(t *testing.T) {
 		},
 		"invalid": {
 			arg:    "snausages",
-			expErr: errors.New("unknown container type"),
+			expErr: errors.New("unknown container layout"),
 		},
 		"valid": {
 			arg: "pOsIx",

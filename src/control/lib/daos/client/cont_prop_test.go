@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
-package main
+package client
 
 import (
 	"strconv"
@@ -17,7 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
-func TestProperty_EcCellSize(t *testing.T) {
+func TestContainerProperty_EcCellSize(t *testing.T) {
 	for name, tc := range map[string]struct {
 		SizeStr    string
 		EntryBytes uint64
@@ -49,7 +49,7 @@ func TestProperty_EcCellSize(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			propEntry := newTestPropEntry()
-			err := propHdlrs[daos.PropEntryECCellSize].nameHdlr(nil,
+			err := ContainerProperties[daos.PropEntryECCellSize].nameHdlr(nil,
 				propEntry,
 				tc.SizeStr)
 			if err != nil {
@@ -64,7 +64,7 @@ func TestProperty_EcCellSize(t *testing.T) {
 				tc.EntryBytes,
 				"Invalid EC Cell size")
 
-			sizeStr := propHdlrs[daos.PropEntryECCellSize].toString(propEntry,
+			sizeStr := ContainerProperties[daos.PropEntryECCellSize].toString(propEntry,
 				daos.PropEntryECCellSize)
 			test.AssertEqual(t,
 				humanize.IBytes(tc.EntryBytes),
@@ -74,7 +74,7 @@ func TestProperty_EcCellSize(t *testing.T) {
 	}
 }
 
-func TestProperty_EcCellSize_Errors(t *testing.T) {
+func TestContainerProperty_EcCellSize_Errors(t *testing.T) {
 	for name, tc := range map[string]struct {
 		SizeStr     string
 		ExpectError error
@@ -90,7 +90,7 @@ func TestProperty_EcCellSize_Errors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			propEntry := newTestPropEntry()
-			err := propHdlrs[daos.PropEntryECCellSize].nameHdlr(nil,
+			err := ContainerProperties[daos.PropEntryECCellSize].nameHdlr(nil,
 				propEntry,
 				tc.SizeStr)
 			test.CmpErr(t, tc.ExpectError, err)
@@ -98,7 +98,7 @@ func TestProperty_EcCellSize_Errors(t *testing.T) {
 	}
 
 	t.Run("Invalid Entry error message: nil entry", func(t *testing.T) {
-		sizeStr := propHdlrs[daos.PropEntryECCellSize].toString(nil,
+		sizeStr := ContainerProperties[daos.PropEntryECCellSize].toString(nil,
 			daos.PropEntryECCellSize)
 		test.AssertEqual(t,
 			"property \""+daos.PropEntryECCellSize+"\" not found",
@@ -108,7 +108,7 @@ func TestProperty_EcCellSize_Errors(t *testing.T) {
 
 	t.Run("Invalid Entry error message: invalid size", func(t *testing.T) {
 		propEntry := newTestPropEntry()
-		sizeStr := propHdlrs[daos.PropEntryECCellSize].toString(propEntry,
+		sizeStr := ContainerProperties[daos.PropEntryECCellSize].toString(propEntry,
 			daos.PropEntryECCellSize)
 		test.AssertEqual(t,
 			"invalid size 0",

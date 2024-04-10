@@ -1,15 +1,7 @@
-//
-// (C) Copyright 2021-2023 Intel Corporation.
-//
-// SPDX-License-Identifier: BSD-2-Clause-Patent
-//
-
 package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"os"
 	"path"
 	"runtime/debug"
@@ -17,42 +9,31 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-type cliOptions struct {
-	Debug      bool           `long:"debug" description:"enable debug output"`
-	Verbose    bool           `long:"verbose" description:"enable verbose output (when applicable)"`
-	JSON       bool           `long:"json" short:"j" description:"enable JSON output"`
-	Container  containerCmd   `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
-	Pool       poolCmd        `command:"pool" description:"perform tasks related to DAOS pools"`
-	Filesystem fsCmd          `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
-	Object     objectCmd      `command:"object" alias:"obj" description:"DAOS object operations"`
-	System     systemCmd      `command:"system" alias:"sys" description:"DAOS system operations"`
-	Version    versionCmd     `command:"version" description:"print daos version"`
-	ManPage    cmdutil.ManCmd `command:"manpage" hidden:"true"`
-}
-
-type versionCmd struct {
+type daosCmd struct {
+	daosCtx context.Context
+	cmdutil.LogCmd
+	cmdutil.NoArgsCmd
 	cmdutil.JSONOutputCmd
 }
 
-func (cmd *versionCmd) Execute(_ []string) error {
-	if cmd.JSONOutputEnabled() {
-		buf, err := build.MarshalJSON(build.CLIUtilName)
-		if err != nil {
-			return err
-		}
-		return cmd.OutputJSON(json.RawMessage(buf), nil)
-	}
+func (cmd *daosCmd) setCtx(ctx context.Context) {
+	cmd.daosCtx = ctx
+}
 
-	fmt.Printf("%s, libdaos v%s\n", build.String(build.CLIUtilName), apiVersion())
-	os.Exit(0)
-	return nil
+type cliOptions struct {
+	Quiet         bool             `long:"quiet" short:"q" description:"Only display output at ERROR or higher"`
+	Debug         bool             `long:"debug" description:"enable debug output"`
+	Verbose       bool             `long:"verbose" description:"enable verbose output (when applicable)"`
+	JSON          bool             `long:"json" short:"j" description:"enable JSON output"`
+	ManPage       cmdutil.ManCmd   `command:"manpage" hidden:"true"`
+	ConnectStress connectStressCmd `command:"connect" description:"connection stress tests"`
 }
 
 func exitWithError(log logging.Logger, err error) {
@@ -64,15 +45,22 @@ func exitWithError(log logging.Logger, err error) {
 	os.Exit(1)
 }
 
-func parseOpts(ctx context.Context, args []string, opts *cliOptions, log *logging.LeveledLogger) error {
+func initDaosDebug() (func(), error) {
+	if err := daosAPI.DebugInit(); err != nil {
+		return nil, err
+	}
+
+	return func() {
+		daosAPI.DebugFini()
+	}, nil
+}
+
+func parseOpts(parent context.Context, args []string, opts *cliOptions, log *logging.LeveledLogger) error {
 	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.Default)
-	p.Name = "daos"
-	p.ShortDescription = "Command to manage DAOS pool/container/object"
-	p.LongDescription = `daos is a tool that can be used to manage/query pool content,
-create/query/manage/destroy a container inside a pool, copy data
-between a POSIX container and a POSIX filesystem, clone a DAOS container,
-or query/manage an object inside a container.`
+	p.Name = "dstress"
+	p.ShortDescription = "Command to stress test DAOS"
+	p.LongDescription = `the dstress tool can be used to stress test DAOS`
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
 		if cmd == nil {
@@ -84,6 +72,14 @@ or query/manage an object inside a container.`
 			return cmd.Execute(args)
 		}
 
+		if opts.Debug && opts.Quiet {
+			return errors.New("--debug and --quiet are incompatible")
+		}
+
+		if opts.Quiet {
+			log.SetLevel(logging.LogLevelError)
+		}
+
 		if opts.Debug {
 			log.SetLevel(logging.LogLevelTrace)
 			if os.Getenv("D_LOG_MASK") == "" {
@@ -93,6 +89,7 @@ or query/manage an object inside a container.`
 				os.Setenv("DD_MASK", "mgmt")
 			}
 			log.Debug("debug output enabled")
+			daosAPI.SetDebugLog(log)
 		}
 
 		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
@@ -105,12 +102,13 @@ or query/manage an object inside a container.`
 			logCmd.SetLog(log)
 		}
 
-		if daosCmd, ok := cmd.(daosCaller); ok {
-			fini, err := daosCmd.initDAOS(ctx)
+		if daosCmd, ok := cmd.(interface{ setCtx(context.Context) }); ok {
+			ctx, err := daosAPI.Init(parent)
 			if err != nil {
 				return err
 			}
-			defer fini()
+			daosCmd.setCtx(ctx)
+			//defer daosAPI.Fini(ctx)
 		}
 
 		if argsCmd, ok := cmd.(cmdutil.ArgsHandler); ok {
@@ -119,18 +117,9 @@ or query/manage an object inside a container.`
 			}
 		}
 
-		// fixup args for commands that can use --path and
-		// positional arguments
-		if contPathCmd, ok := cmd.(interface {
-			parseContPathArgs([]string) ([]string, error)
-		}); ok {
-			var err error
-			args, err = contPathCmd.parseContPathArgs(args)
-			if err != nil {
-				return err
-			}
+		if opts.Quiet {
+			args = append(args, "quiet")
 		}
-
 		if err := cmd.Execute(args); err != nil {
 			return err
 		}

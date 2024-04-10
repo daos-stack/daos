@@ -101,8 +101,6 @@ const (
 	BadTarget Status = -C.DER_BAD_TARGET
 	// GroupVersionMismatch indicates that group versions didn't match
 	GroupVersionMismatch Status = -C.DER_GRPVER
-	// NoService indicates the pool service is not up and didn't process the pool request
-	NoService Status = -C.DER_NO_SERVICE
 )
 
 const (
@@ -148,10 +146,19 @@ const (
 	NotReplica Status = -C.DER_NOTREPLICA
 	// ChecksumError indicates a checksum error
 	ChecksumError Status = -C.DER_CSUM
+	// AgentCommErr indicates a failure to communicate with the local agent.
+	AgentCommErr Status = -C.DER_AGENT_COMM
 	// ControlIncompatible indicates that one or more control plane components are incompatible
 	ControlIncompatible Status = -C.DER_CONTROL_INCOMPAT
+	// NoService indicates the pool service is not up and didn't process the pool request
+	NoService Status = -C.DER_NO_SERVICE
 	// NoCert indicates that one or more configured certificates could not be accessed.
 	NoCert Status = -C.DER_NO_CERT
 	// BadCert indicates that an invalid certificate was detected.
 	BadCert Status = -C.DER_BAD_CERT
+)
+
+const (
+	// Unknown indicates that the error was unknown.
+	Unknown Status = -C.DER_UNKNOWN
 )

@@ -20,6 +20,8 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -74,6 +76,14 @@ func goBool2int(in bool) (out C.int) {
 		out = 1
 	}
 	return
+}
+
+func conn2HdlPtr(conn interface{ Pointer() unsafe.Pointer }) *C.daos_handle_t {
+	if conn == nil {
+		return nil
+	}
+
+	return (*C.daos_handle_t)(conn.Pointer())
 }
 
 func copyUUID(dst *C.uuid_t, src uuid.UUID) error {
@@ -242,71 +252,67 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 }
 
 type daosCaller interface {
-	initDAOS() (func(), error)
+	initDAOS(context.Context) (func(), error)
 }
 
 type daosCmd struct {
+	daosCtx context.Context
 	cmdutil.NoArgsCmd
 	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
 }
 
-func (dc *daosCmd) initDAOS() (func(), error) {
-	if rc := C.daos_init(); rc != 0 {
-		// Do some inspection of the RC to display an informative error to the user
-		// e.g. "No DAOS Agent detected"...
-		return nil, errors.Wrap(daosError(rc), "daos_init() failed")
+func (dc *daosCmd) initDAOS(parent context.Context) (func(), error) {
+	ctx, err := daosAPI.Init(parent)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to initialize DAOS Client API")
 	}
+	dc.daosCtx = ctx
+	daosAPI.SetDebugLog(dc.Logger)
 
 	return func() {
-		if rc := C.daos_fini(); rc != 0 {
-			dc.Errorf("daos_fini() failed: %s", daosError(rc))
+		if err := daosAPI.Fini(ctx); err != nil {
+			dc.Errorf("failed to finalize DAOS Client API: %s", err)
 		}
 	}, nil
 }
 
 func initDaosDebug() (func(), error) {
-	if rc := C.daos_debug_init(nil); rc != 0 {
-		return nil, errors.Wrap(daosError(rc), "daos_debug_init() failed")
+	if err := daosAPI.DebugInit(); err != nil {
+		return nil, err
 	}
 
 	return func() {
-		C.daos_debug_fini()
+		daosAPI.DebugFini()
 	}, nil
 }
 
-func resolveDunsPath(path string, ap *C.struct_cmd_args_s) error {
-	if path == "" {
-		return errors.New("empty path")
-	}
-	if ap == nil {
-		return errors.New("nil ap")
-	}
+func printAttributes(out io.Writer, header string, attrs ...*daos.Attribute) {
+	fmt.Fprintf(out, "%s\n", header)
 
-	ap.path = C.CString(path)
-	defer freeString(ap.path)
-
-	rc := C.resolve_duns_path(ap)
-	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err, "failed to resolve path %s", path)
+	if len(attrs) == 0 {
+		fmt.Fprintln(out, "  No attributes found.")
+		return
 	}
 
-	return nil
-}
+	nameTitle := "Name"
+	valueTitle := "Value"
+	titles := []string{nameTitle}
 
-// _writeDunsPath is a test helper for creating a DUNS EA on a path.
-func _writeDunsPath(path, ct string, poolUUID uuid.UUID, contUUID uuid.UUID) error {
-	attrStr := fmt.Sprintf(C.DUNS_XATTR_FMT, ct, poolUUID.String(), contUUID.String())
-
-	cPath := C.CString(path)
-	defer freeString(cPath)
-	cAttrStr := C.CString(attrStr)
-	defer freeString(cAttrStr)
-	cAttrName := C.CString(C.DUNS_XATTR_NAME)
-	defer freeString(cAttrName)
-	if err := dfsError(C.lsetxattr(cPath, cAttrName, unsafe.Pointer(cAttrStr), C.size_t(len(attrStr)+1), 0)); err != nil {
-		return errors.Wrapf(err, "failed to set xattr on %s", path)
+	table := []txtfmt.TableRow{}
+	for _, attr := range attrs {
+		row := txtfmt.TableRow{}
+		row[nameTitle] = attr.Name
+		if len(attr.Value) != 0 {
+			row[valueTitle] = string(attr.Value)
+			if len(titles) == 1 {
+				titles = append(titles, valueTitle)
+			}
+		}
+		table = append(table, row)
 	}
 
-	return nil
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
 }

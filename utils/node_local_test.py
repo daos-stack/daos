@@ -751,6 +751,9 @@ class DaosServer():
                 'access_points': scyaml['access_points'],
                 'control_log_mask': 'NOTICE',  # INFO logs every client process connection
             }
+            if not self.conf.args.server_debug:
+                agent_data['control_log_mask'] = 'DEBUG'
+
             json.dump(agent_data, fd)
 
         agent_bin = join(self.conf['PREFIX'], 'bin', 'daos_agent')
@@ -760,9 +763,6 @@ class DaosServer():
                      '--insecure',
                      '--runtime_dir', self.agent_dir,
                      '--logfile', self.agent_log.name]
-
-        if not self.conf.args.server_debug:
-            agent_cmd.append('--debug')
 
         self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir

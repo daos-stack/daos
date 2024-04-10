@@ -613,7 +613,7 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	}
 
 	var bld strings.Builder
-	if err := pretty.PrintPoolQueryResponse(resp, &bld); err != nil {
+	if err := pretty.PrintPoolInfo(&resp.PoolInfo, &bld); err != nil {
 		return err
 	}
 	cmd.Info(bld.String())

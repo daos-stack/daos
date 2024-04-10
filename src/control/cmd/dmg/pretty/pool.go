@@ -21,40 +21,40 @@ import (
 
 func getTierNameText(tierIdx int) string {
 	switch tierIdx {
-	case int(control.StorageMediaTypeScm):
+	case int(daos.StorageMediaTypeScm):
 		return fmt.Sprintf("- Storage tier %d (SCM):", tierIdx)
-	case int(control.StorageMediaTypeNvme):
+	case int(daos.StorageMediaTypeNvme):
 		return fmt.Sprintf("- Storage tier %d (NVMe):", tierIdx)
 	default:
 		return fmt.Sprintf("- Storage tier %d (unknown):", tierIdx)
 	}
 }
 
-// PrintPoolQueryResponse generates a human-readable representation of the supplied
-// PoolQueryResp struct and writes it to the supplied io.Writer.
-func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...PrintConfigOption) error {
-	if pqr == nil {
-		return errors.Errorf("nil %T", pqr)
+// PrintPoolInfo generates a human-readable representation of the supplied
+// PoolInfo struct and writes it to the supplied io.Writer.
+func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer, opts ...PrintConfigOption) error {
+	if pi == nil {
+		return errors.Errorf("nil %T", pi)
 	}
 	w := txtfmt.NewErrWriter(out)
 
 	// Maintain output compatibility with the `daos pool query` output.
 	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
-		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
-	if pqr.PoolLayoutVer != pqr.UpgradeLayoutVer {
+		pi.UUID, pi.TotalTargets, pi.DisabledTargets, pi.Leader, pi.Version)
+	if pi.PoolLayoutVer != pi.UpgradeLayoutVer {
 		fmt.Fprintf(w, "Pool layout out of date (%d < %d) -- see `dmg pool upgrade` for details.\n",
-			pqr.PoolLayoutVer, pqr.UpgradeLayoutVer)
+			pi.PoolLayoutVer, pi.UpgradeLayoutVer)
 	}
 	fmt.Fprintln(w, "Pool space info:")
-	if pqr.EnabledRanks != nil {
-		fmt.Fprintf(w, "- Enabled targets: %s\n", pqr.EnabledRanks)
+	if pi.EnabledRanks != nil {
+		fmt.Fprintf(w, "- Enabled targets: %s\n", pi.EnabledRanks)
 	}
-	if pqr.DisabledRanks != nil {
-		fmt.Fprintf(w, "- Disabled targets: %s\n", pqr.DisabledRanks)
+	if pi.DisabledRanks != nil {
+		fmt.Fprintf(w, "- Disabled targets: %s\n", pi.DisabledRanks)
 	}
-	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pqr.ActiveTargets)
-	if pqr.TierStats != nil {
-		for tierIdx, tierStats := range pqr.TierStats {
+	fmt.Fprintf(w, "- Target(VOS) count:%d\n", pi.ActiveTargets)
+	if pi.TierStats != nil {
+		for tierIdx, tierStats := range pi.TierStats {
 			fmt.Fprintln(w, getTierNameText(tierIdx))
 			fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierStats.Total))
 			fmt.Fprintf(w, "  Free: %s, min:%s, max:%s, mean:%s\n",
@@ -62,12 +62,12 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 				humanize.Bytes(tierStats.Max), humanize.Bytes(tierStats.Mean))
 		}
 	}
-	if pqr.Rebuild != nil {
-		if pqr.Rebuild.Status == 0 {
+	if pi.Rebuild != nil {
+		if pi.Rebuild.Status == 0 {
 			fmt.Fprintf(w, "Rebuild %s, %d objs, %d recs\n",
-				pqr.Rebuild.State, pqr.Rebuild.Objects, pqr.Rebuild.Records)
+				pi.Rebuild.State, pi.Rebuild.Objects, pi.Rebuild.Records)
 		} else {
-			fmt.Fprintf(w, "Rebuild failed, rc=%d, status=%d\n", pqr.Status, pqr.Rebuild.Status)
+			fmt.Fprintf(w, "Rebuild failed, status=%d\n", pi.Rebuild.Status)
 		}
 	}
 

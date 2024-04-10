@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -24,42 +25,40 @@ import (
 func TestPretty_PrintPoolQueryResp(t *testing.T) {
 	backtickStr := "`" + "dmg pool upgrade" + "`"
 	for name, tc := range map[string]struct {
-		pqr         *control.PoolQueryResp
+		pi          *daos.PoolInfo
 		expPrintStr string
 	}{
 		"empty response": {
-			pqr: &control.PoolQueryResp{},
-			expPrintStr: `
-Pool , ntarget=0, disabled=0, leader=0, version=0
+			pi: &daos.PoolInfo{},
+			expPrintStr: fmt.Sprintf(`
+Pool %s, ntarget=0, disabled=0, leader=0, version=0
 Pool space info:
 - Target(VOS) count:0
-`,
+`, test.MockUUID(0)),
 		},
 		"normal response": {
-			pqr: &control.PoolQueryResp{
-				UUID: test.MockUUID(),
-				PoolInfo: control.PoolInfo{
-					TotalTargets:     2,
-					DisabledTargets:  1,
-					ActiveTargets:    1,
-					Leader:           42,
-					Version:          100,
-					PoolLayoutVer:    1,
-					UpgradeLayoutVer: 2,
-					Rebuild: &control.PoolRebuildStatus{
-						State:   control.PoolRebuildStateBusy,
-						Objects: 42,
-						Records: 21,
+			pi: &daos.PoolInfo{
+				UUID:             test.MockPoolUUID(),
+				TotalTargets:     2,
+				DisabledTargets:  1,
+				ActiveTargets:    1,
+				Leader:           42,
+				Version:          100,
+				PoolLayoutVer:    1,
+				UpgradeLayoutVer: 2,
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateBusy,
+					Objects: 42,
+					Records: 21,
+				},
+				TierStats: []*daos.StorageUsageStats{
+					{
+						Total: 2,
+						Free:  1,
 					},
-					TierStats: []*control.StorageUsageStats{
-						{
-							Total: 2,
-							Free:  1,
-						},
-						{
-							Total: 2,
-							Free:  1,
-						},
+					{
+						Total: 2,
+						Free:  1,
 					},
 				},
 			},
@@ -78,31 +77,29 @@ Rebuild busy, 42 objs, 21 recs
 `, test.MockUUID()),
 		},
 		"normal response; enabled ranks": {
-			pqr: &control.PoolQueryResp{
-				UUID: test.MockUUID(),
-				PoolInfo: control.PoolInfo{
-					TotalTargets:     2,
-					DisabledTargets:  1,
-					ActiveTargets:    1,
-					Leader:           42,
-					Version:          100,
-					PoolLayoutVer:    1,
-					UpgradeLayoutVer: 2,
-					EnabledRanks:     ranklist.MustCreateRankSet("[0,1,2]"),
-					Rebuild: &control.PoolRebuildStatus{
-						State:   control.PoolRebuildStateBusy,
-						Objects: 42,
-						Records: 21,
+			pi: &daos.PoolInfo{
+				UUID:             test.MockPoolUUID(),
+				TotalTargets:     2,
+				DisabledTargets:  1,
+				ActiveTargets:    1,
+				Leader:           42,
+				Version:          100,
+				PoolLayoutVer:    1,
+				UpgradeLayoutVer: 2,
+				EnabledRanks:     ranklist.MustCreateRankSet("[0,1,2]"),
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateBusy,
+					Objects: 42,
+					Records: 21,
+				},
+				TierStats: []*daos.StorageUsageStats{
+					{
+						Total: 2,
+						Free:  1,
 					},
-					TierStats: []*control.StorageUsageStats{
-						{
-							Total: 2,
-							Free:  1,
-						},
-						{
-							Total: 2,
-							Free:  1,
-						},
+					{
+						Total: 2,
+						Free:  1,
 					},
 				},
 			},
@@ -122,31 +119,29 @@ Rebuild busy, 42 objs, 21 recs
 `, test.MockUUID()),
 		},
 		"normal response; disabled ranks": {
-			pqr: &control.PoolQueryResp{
-				UUID: test.MockUUID(),
-				PoolInfo: control.PoolInfo{
-					TotalTargets:     2,
-					DisabledTargets:  1,
-					ActiveTargets:    1,
-					Leader:           42,
-					Version:          100,
-					PoolLayoutVer:    1,
-					UpgradeLayoutVer: 2,
-					DisabledRanks:    ranklist.MustCreateRankSet("[0,1,3]"),
-					Rebuild: &control.PoolRebuildStatus{
-						State:   control.PoolRebuildStateBusy,
-						Objects: 42,
-						Records: 21,
+			pi: &daos.PoolInfo{
+				UUID:             test.MockPoolUUID(),
+				TotalTargets:     2,
+				DisabledTargets:  1,
+				ActiveTargets:    1,
+				Leader:           42,
+				Version:          100,
+				PoolLayoutVer:    1,
+				UpgradeLayoutVer: 2,
+				DisabledRanks:    ranklist.MustCreateRankSet("[0,1,3]"),
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   daos.PoolRebuildStateBusy,
+					Objects: 42,
+					Records: 21,
+				},
+				TierStats: []*daos.StorageUsageStats{
+					{
+						Total: 2,
+						Free:  1,
 					},
-					TierStats: []*control.StorageUsageStats{
-						{
-							Total: 2,
-							Free:  1,
-						},
-						{
-							Total: 2,
-							Free:  1,
-						},
+					{
+						Total: 2,
+						Free:  1,
 					},
 				},
 			},
@@ -166,31 +161,29 @@ Rebuild busy, 42 objs, 21 recs
 `, test.MockUUID()),
 		},
 		"unknown/invalid rebuild state response": {
-			pqr: &control.PoolQueryResp{
-				UUID: test.MockUUID(),
-				PoolInfo: control.PoolInfo{
-					TotalTargets:     2,
-					DisabledTargets:  1,
-					ActiveTargets:    1,
-					Leader:           42,
-					Version:          100,
-					PoolLayoutVer:    1,
-					UpgradeLayoutVer: 2,
-					DisabledRanks:    ranklist.MustCreateRankSet("[0,1,3]"),
-					Rebuild: &control.PoolRebuildStatus{
-						State:   42,
-						Objects: 42,
-						Records: 21,
+			pi: &daos.PoolInfo{
+				UUID:             test.MockPoolUUID(),
+				TotalTargets:     2,
+				DisabledTargets:  1,
+				ActiveTargets:    1,
+				Leader:           42,
+				Version:          100,
+				PoolLayoutVer:    1,
+				UpgradeLayoutVer: 2,
+				DisabledRanks:    ranklist.MustCreateRankSet("[0,1,3]"),
+				Rebuild: &daos.PoolRebuildStatus{
+					State:   42,
+					Objects: 42,
+					Records: 21,
+				},
+				TierStats: []*daos.StorageUsageStats{
+					{
+						Total: 2,
+						Free:  1,
 					},
-					TierStats: []*control.StorageUsageStats{
-						{
-							Total: 2,
-							Free:  1,
-						},
-						{
-							Total: 2,
-							Free:  1,
-						},
+					{
+						Total: 2,
+						Free:  1,
 					},
 				},
 			},
@@ -210,31 +203,29 @@ Rebuild unknown, 42 objs, 21 recs
 `, test.MockUUID()),
 		},
 		"rebuild failed": {
-			pqr: &control.PoolQueryResp{
-				UUID: test.MockUUID(),
-				PoolInfo: control.PoolInfo{
-					TotalTargets:     2,
-					DisabledTargets:  1,
-					ActiveTargets:    1,
-					Leader:           42,
-					Version:          100,
-					PoolLayoutVer:    1,
-					UpgradeLayoutVer: 2,
-					Rebuild: &control.PoolRebuildStatus{
-						Status:  2,
-						State:   control.PoolRebuildStateBusy,
-						Objects: 42,
-						Records: 21,
+			pi: &daos.PoolInfo{
+				UUID:             test.MockPoolUUID(),
+				TotalTargets:     2,
+				DisabledTargets:  1,
+				ActiveTargets:    1,
+				Leader:           42,
+				Version:          100,
+				PoolLayoutVer:    1,
+				UpgradeLayoutVer: 2,
+				Rebuild: &daos.PoolRebuildStatus{
+					Status:  2,
+					State:   daos.PoolRebuildStateBusy,
+					Objects: 42,
+					Records: 21,
+				},
+				TierStats: []*daos.StorageUsageStats{
+					{
+						Total: 2,
+						Free:  1,
 					},
-					TierStats: []*control.StorageUsageStats{
-						{
-							Total: 2,
-							Free:  1,
-						},
-						{
-							Total: 2,
-							Free:  1,
-						},
+					{
+						Total: 2,
+						Free:  1,
 					},
 				},
 			},
@@ -249,13 +240,13 @@ Pool space info:
 - Storage tier 1 (NVMe):
   Total size: 2 B
   Free: 1 B, min:0 B, max:0 B, mean:0 B
-Rebuild failed, rc=0, status=2
+Rebuild failed, status=2
 `, test.MockUUID()),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
-			if err := PrintPoolQueryResponse(tc.pqr, &bld); err != nil {
+			if err := PrintPoolInfo(tc.pi, &bld); err != nil {
 				t.Fatal(err)
 			}
 
@@ -284,11 +275,11 @@ func TestPretty_PrintPoolQueryTargetResp(t *testing.T) {
 		"valid: single target (unknown, down_out)": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
-						State: control.PoolTargetStateDownOut,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateDownOut,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -314,11 +305,11 @@ Target: type unknown, state down_out
 		"valid: single target (unknown, down)": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
-						State: control.PoolTargetStateDown,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateDown,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -344,11 +335,11 @@ Target: type unknown, state down
 		"valid: single target (unknown, up)": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
-						State: control.PoolTargetStateUp,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateUp,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -374,11 +365,11 @@ Target: type unknown, state up
 		"valid: single target (unknown, up_in)": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -404,11 +395,11 @@ Target: type unknown, state up_in
 		"valid: single target (unknown, new)": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
-						State: control.PoolTargetStateNew,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateNew,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -434,11 +425,11 @@ Target: type unknown, state new
 		"valid: single target (unknown, drain)": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
-						State: control.PoolTargetStateDrain,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateDrain,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -464,11 +455,11 @@ Target: type unknown, state drain
 		"valid: multiple target (mixed statuses exclude 2 targets in progress)": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
-						State: control.PoolTargetStateDown,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateDown,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -481,8 +472,8 @@ Target: type unknown, state drain
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -495,8 +486,8 @@ Target: type unknown, state drain
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateDownOut,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateDownOut,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -509,8 +500,8 @@ Target: type unknown, state drain
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -557,11 +548,11 @@ Target: type unknown, state up_in
 		"invalid target state": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
 						State: 42,
-						Space: []*control.StorageTargetUsage{
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -574,8 +565,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -588,8 +579,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateDownOut,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateDownOut,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -602,8 +593,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -650,11 +641,11 @@ Target: type unknown, state up_in
 		"invalid target type": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  42,
-						State: control.PoolTargetStateDown,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateDown,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -667,8 +658,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -681,8 +672,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateDownOut,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateDownOut,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -695,8 +686,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -743,11 +734,11 @@ Target: type unknown, state up_in
 		"three tiers; third tier unknown StorageMediaType": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
-						State: control.PoolTargetStateDown,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateDown,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -764,8 +755,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -782,8 +773,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateDownOut,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateDownOut,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -800,8 +791,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*control.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageTargetUsage{
 							{
 								Total: 6000000000,
 								Free:  5000000000,

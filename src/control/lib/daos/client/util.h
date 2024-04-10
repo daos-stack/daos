@@ -1,40 +1,12 @@
-/**
- * (C) Copyright 2021-2022 Intel Corporation.
- *
- * SPDX-License-Identifier: BSD-2-Clause-Patent
- */
+#ifndef __DAOS_CLIENT_UTIL_H__
+#define __DAOS_CLIENT_UTIL_H__
 
-#ifndef __CMD_DAOS_UTIL_H__
-#define __CMD_DAOS_UTIL_H__
-
-#define D_LOGFAC	DD_FAC(client)
+//#define D_LOGFAC	DD_FAC(client)
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/ioctl.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/xattr.h>
-#include <fcntl.h>
-#include <daos.h>
 #include <daos/common.h>
-#include <daos/debug.h>
-#include <gurt/common.h>
-
-#include "daos_types.h"
-#include "daos_api.h"
-#include "daos_fs.h"
-#include "daos_uns.h"
-#include "daos_mgmt.h"
-#include "dfuse_ioctl.h"
-
-#include "daos_hdlr.h"
-
-int resolve_duns_pool(struct cmd_args_s *ap);
 
 /* cgo is unable to work directly with preprocessor macros
  * so we have to provide these glue helpers.
@@ -43,6 +15,12 @@ static inline uint64_t
 daos_prop_co_status_val(uint32_t status, uint32_t flag, uint32_t ver)
 {
 	return DAOS_PROP_CO_STATUS_VAL(status, flag, ver);
+}
+
+static void
+daos_free(void *ptr)
+{
+	D_FREE(ptr);
 }
 
 /* cgo is unable to work directly with unions, so we have
@@ -111,14 +89,13 @@ set_dpe_val_ptr(struct daos_prop_entry *dpe, void *val_ptr)
 	dpe->dpe_val_ptr = val_ptr;
 }
 
-static inline uint32_t
+/*static inline uint32_t
 get_rebuild_state(struct daos_rebuild_status *drs)
 {
 	if (drs == NULL)
 		return 0;
 
 	return drs->rs_state;
-}
+}*/
 
-
-#endif /* __CMD_DAOS_UTIL_H__ */
+#endif /* __DAOS_CLIENT_UTIL_H__ */
