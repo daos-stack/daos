@@ -767,7 +767,7 @@ jobs:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
 
-  dorny-actions-report-v1-9-0:
+  dorny-actions-report-el8:
     name: Dornys report
     runs-on: [self-hosted, wolf]
     needs: [Functional, Import-commit-pragmas]
@@ -778,12 +778,12 @@ jobs:
         uses: dorny/test-reporter@v1.9.0
         id: test-report
         with:
-          artifact: /(Functional on .*) test-results/
-          name: '$1 Test Results (dorny-1.8.0)'
+          artifact: Functional on EL 8.8 test-results
+          name: 'Functional on EL 8.8 Test Results (dorny)'
           path: '**/results.xml'
           reporter: java-junit
 
-  dorny-actions-report-v1-8-0:
+  dorny-actions-report-el9:
     name: Dornys report
     runs-on: [self-hosted, wolf]
     needs: [Functional, Import-commit-pragmas]
@@ -791,59 +791,11 @@ jobs:
         ((!cancelled()) || success() || failure())
     steps:
       - name: Dorny report
-        uses: dorny/test-reporter@v1.8.0
+        uses: dorny/test-reporter@v1.9.0
         id: test-report
         with:
-          artifact: /(Functional on .*) test-results/
-          name: '$1 Test Results (dorny-1.8.0)'
-          path: '**/results.xml'
-          reporter: java-junit
-
-  dorny-actions-report-v1-6-0:
-    name: Dornys report
-    runs-on: [self-hosted, wolf]
-    needs: [Functional, Import-commit-pragmas]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-        ((!cancelled()) || success() || failure())
-    steps:
-      - name: Dorny report
-        uses: dorny/test-reporter@v1.6.0
-        id: test-report
-        with:
-          artifact: /(Functional on .*) test-results/
-          name: '$1 Test Results (dorny-1.6.0)'
-          path: '**/results.xml'
-          reporter: java-junit
-
-  dorny-actions-report-v1-5-0:
-    name: Dornys report
-    runs-on: [self-hosted, wolf]
-    needs: [Functional, Import-commit-pragmas]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-        ((!cancelled()) || success() || failure())
-    steps:
-      - name: Dorny report
-        uses: dorny/test-reporter@v1.5.0
-        id: test-report
-        with:
-          artifact: /(Functional on .*) test-results/
-          name: '$1 Test Results (dorny-1.5.0)'
-          path: '**/results.xml'
-          reporter: java-junit
-
-  dorny-actions-report-v1-7-0:
-    name: Dornys report
-    runs-on: [self-hosted, wolf]
-    needs: [Functional, Import-commit-pragmas]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
-        ((!cancelled()) || success() || failure())
-    steps:
-      - name: Dorny report
-        uses: dorny/test-reporter@v1.7.0
-        id: test-report
-        with:
-          artifact: /(Functional on .*) test-results/
-          name: '$1 Test Results (dorny-1.7.0)'
+          artifact: Functional on EL 9 test-results
+          name: 'Functional on EL 9 Test Results (dorny)'
           path: '**/results.xml'
           reporter: java-junit
 
