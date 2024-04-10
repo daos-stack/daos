@@ -14,6 +14,8 @@ permissions: {}
 jobs:
   example_comment_pr:
     runs-on: ubuntu-22.04
+    permissions:
+      pull-requests: write
     name: Report Jira data to PR comment
     steps:
       - name: Checkout
