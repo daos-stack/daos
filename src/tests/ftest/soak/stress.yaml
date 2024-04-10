@@ -292,8 +292,6 @@ macsio_stress:
 datamover_stress:
   job_timeout: 10
   nodesperjob:
-    - 1
-    - 4
     - 8
   taskspernode:
     - 32
