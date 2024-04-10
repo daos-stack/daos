@@ -86,7 +86,8 @@ func (e *External) LookupUserID(uid uint32) (User, error) {
 // LookupGroupId is a wrapper for user.LookupGroupId.
 func (e *External) LookupGroupID(gid uint32) (*user.Group, error) {
 	gidStr := strconv.FormatUint(uint64(gid), 10)
-	return user.LookupGroupId(gidStr)
+	return &user.Group{Gid: gidStr, Name: gidStr}, nil
+	//return user.LookupGroupId(gidStr)
 }
 
 // Current is a wrapper for user.Current.
