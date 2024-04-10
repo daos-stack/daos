@@ -263,7 +263,7 @@ pipeline {
         booleanParam(name: 'CI_medium-md-on-ssd_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
-        booleanParam(name: 'CI_medium-verbs-provider_TEST',
+        booleanParam(name: 'CI_medium_verbs_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_medium-verbs-provider-md-on-ssd_TEST',
