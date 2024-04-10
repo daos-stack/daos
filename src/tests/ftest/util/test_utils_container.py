@@ -583,19 +583,22 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         """
         self.open()
-        self.log.info(
-            "Writing %s object(s), with %s record(s) of %s bytes(s) each, in "
-            "container %s%s%s",
-            self.object_qty.value, self.record_qty.value, self.data_size.value,
-            str(self), " on rank {}".format(rank) if rank is not None else "",
-            " with object class {}".format(obj_class)
-            if obj_class is not None else "")
-        for _ in range(self.object_qty.value):
-            self.written_data.append(TestContainerData(self.debug.value))
-            self.written_data[-1].write_object(
-                self, self.record_qty.value, self.akey_size.value,
-                self.dkey_size.value, self.data_size.value, rank, obj_class,
-                self.data_array_size.value)
+        try:
+            self.log.info(
+                "Writing %s object(s), with %s record(s) of %s bytes(s) each, in "
+                "container %s%s%s",
+                self.object_qty.value, self.record_qty.value, self.data_size.value,
+                str(self), " on rank {}".format(rank) if rank is not None else "",
+                " with object class {}".format(obj_class)
+                if obj_class is not None else "")
+            for _ in range(self.object_qty.value):
+                self.written_data.append(TestContainerData(self.debug.value))
+                self.written_data[-1].write_object(
+                    self, self.record_qty.value, self.akey_size.value,
+                    self.dkey_size.value, self.data_size.value, rank, obj_class,
+                    self.data_array_size.value)
+        finally:
+            self.close()
 
     def read_objects(self, txn=None):
         """Read the objects from the container and verify they match.
@@ -610,13 +613,16 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         """
         self.open()
-        self.log.info(
-            "Reading %s object(s) in container %s",
-            len(self.written_data), str(self))
-        status = len(self.written_data) > 0
-        for data in self.written_data:
-            data.debug = self.debug.value
-            status &= data.read_object(self, txn)
+        try:
+            self.log.info(
+                "Reading %s object(s) in container %s",
+                len(self.written_data), str(self))
+            status = len(self.written_data) > 0
+            for data in self.written_data:
+                data.debug = self.debug.value
+                status &= data.read_object(self, txn)
+        finally:
+            self.close()
         return status
 
     def execute_io(self, duration, rank=None, obj_class=None):
@@ -638,15 +644,17 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.log.info(
             "Writing and reading objects in container %s for %s seconds",
             str(self), duration)
-
-        total_bytes_written = 0
-        finish_time = time() + duration
-        while time() < finish_time:
-            self.written_data.append(TestContainerData(self.debug.value))
-            self.written_data[-1].write_object(
-                self, 1, self.akey_size.value, self.dkey_size.value,
-                self.data_size.value, rank, obj_class)
-            total_bytes_written += self.data_size.value
+        try:
+            total_bytes_written = 0
+            finish_time = time() + duration
+            while time() < finish_time:
+                self.written_data.append(TestContainerData(self.debug.value))
+                self.written_data[-1].write_object(
+                    self, 1, self.akey_size.value, self.dkey_size.value,
+                    self.data_size.value, rank, obj_class)
+                total_bytes_written += self.data_size.value
+        finally:
+            self.close()
         return total_bytes_written
 
     def get_target_rank_lists(self, message=""):
@@ -667,17 +675,20 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         """
         self.open()
         target_rank_lists = []
-        for data in self.written_data:
-            try:
-                data.obj.get_layout()
-                # Convert the list of longs into a list of integers
-                target_rank_lists.append(
-                    [int(rank) for rank in data.obj.tgt_rank_list])
-            except DaosApiError as error:
-                raise DaosTestError(
-                    "Error obtaining target rank list for object {} in "
-                    "container {}: {}".format(
-                        data.obj, str(self), error)) from error
+        try:
+            for data in self.written_data:
+                try:
+                    data.obj.get_layout()
+                    # Convert the list of longs into a list of integers
+                    target_rank_lists.append(
+                        [int(rank) for rank in data.obj.tgt_rank_list])
+                except DaosApiError as error:
+                    raise DaosTestError(
+                        "Error obtaining target rank list for object {} in "
+                        "container {}: {}".format(
+                            data.obj, str(self), error)) from error
+        finally:
+            self.close()
         if message is not None:
             self.log.info("Target rank lists%s:", message)
             for ranks in target_rank_lists:
@@ -714,44 +725,47 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             int: number of successfully punched objects
 
         """
-        self.open()
         self.log.info(
             "Punching %s objects from container %s with %s written objects",
             len(indices), str(self), len(self.written_data))
         count = 0
         if self.written_data:
-            for index in indices:
-                # Find the object to punch at the specified index
-                txn = 0
-                try:
-                    obj = self.written_data[index].obj
-                except IndexError as error:
-                    raise DaosTestError(
-                        "Invalid index {} for written data".format(
-                            index)) from error
+            self.open()
+            try:
+                for index in indices:
+                    # Find the object to punch at the specified index
+                    txn = 0
+                    try:
+                        obj = self.written_data[index].obj
+                    except IndexError as error:
+                        raise DaosTestError(
+                            "Invalid index {} for written data".format(
+                                index)) from error
 
-                # Close the object
-                self.log.info(
-                    "Closing object %s (index: %s, txn: %s) in container %s",
-                    obj, index, txn, str(self))
-                try:
-                    self._call_method(obj.close, {})
-                except DaosApiError:
-                    continue
+                    # Close the object
+                    self.log.info(
+                        "Closing object %s (index: %s, txn: %s) in container %s",
+                        obj, index, txn, str(self))
+                    try:
+                        self._call_method(obj.close, {})
+                    except DaosApiError:
+                        continue
 
-                # Punch the object
-                self.log.info(
-                    "Punching object %s (index: %s, txn: %s) from container %s",
-                    obj, index, txn, str(self))
-                try:
-                    self._call_method(obj.punch, {"txn": txn})
-                    count += 1
-                except DaosApiError:
-                    continue
+                    # Punch the object
+                    self.log.info(
+                        "Punching object %s (index: %s, txn: %s) from container %s",
+                        obj, index, txn, str(self))
+                    try:
+                        self._call_method(obj.punch, {"txn": txn})
+                        count += 1
+                    except DaosApiError:
+                        continue
 
-                # Mark the object's records as punched
-                for record in self.written_data[index].records:
-                    record["punched"] = True
+                    # Mark the object's records as punched
+                    for record in self.written_data[index].records:
+                        record["punched"] = True
+            finally:
+                self.close()
 
         # Return the number of punched objects
         return count
@@ -779,45 +793,48 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             "written objects",
             len(indices), str(self), len(self.written_data))
         count = 0
-        for data in self.written_data:
-            # Close the object
-            self.log.info(
-                "Closing object %s in container %s",
-                data.obj, str(self))
-            try:
-                self._call_method(data.obj.close, {})
-            except DaosApiError:
-                continue
-
-            # Find the record to punch at the specified index
-            for index in indices:
-                try:
-                    rec = data.records[index]
-                except IndexError as error:
-                    raise DaosTestError(
-                        "Invalid record index {} for object {}".format(
-                            index, data.obj)) from error
-
-                # Punch the record
+        try:
+            for data in self.written_data:
+                # Close the object
                 self.log.info(
-                    "Punching record %s (index: %s, akey: %s, dkey: %s) from "
-                    "object %s in container %s",
-                    rec, index, rec["akey"], rec["dkey"], data.obj, str(self))
-                kwargs = {"txn": 0}
+                    "Closing object %s in container %s",
+                    data.obj, str(self))
                 try:
-                    if punch_dkey:
-                        kwargs["dkeys"] = [rec["dkey"]]
-                        self._call_method(data.obj.punch_dkeys, kwargs)
-                    else:
-                        kwargs["dkey"] = rec["dkey"]
-                        kwargs["akeys"] = [rec["akey"]]
-                        self._call_method(data.obj.punch_akeys, kwargs)
-                    count += 1
+                    self._call_method(data.obj.close, {})
                 except DaosApiError:
                     continue
 
-                # Mark the record as punched
-                rec["punched"] = True
+                # Find the record to punch at the specified index
+                for index in indices:
+                    try:
+                        rec = data.records[index]
+                    except IndexError as error:
+                        raise DaosTestError(
+                            "Invalid record index {} for object {}".format(
+                                index, data.obj)) from error
+
+                    # Punch the record
+                    self.log.info(
+                        "Punching record %s (index: %s, akey: %s, dkey: %s) from "
+                        "object %s in container %s",
+                        rec, index, rec["akey"], rec["dkey"], data.obj, str(self))
+                    kwargs = {"txn": 0}
+                    try:
+                        if punch_dkey:
+                            kwargs["dkeys"] = [rec["dkey"]]
+                            self._call_method(data.obj.punch_dkeys, kwargs)
+                        else:
+                            kwargs["dkey"] = rec["dkey"]
+                            kwargs["akeys"] = [rec["akey"]]
+                            self._call_method(data.obj.punch_akeys, kwargs)
+                        count += 1
+                    except DaosApiError:
+                        continue
+
+                    # Mark the record as punched
+                    rec["punched"] = True
+        finally:
+            self.close()
 
         # Return the number of punched objects
         return count
