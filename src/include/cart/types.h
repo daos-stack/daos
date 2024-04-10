@@ -184,7 +184,9 @@ typedef void *crt_bulk_array_t; /**< abstract bulk array handle */
 /** RPC flags enumeration */
 enum crt_rpc_flags {
 	/** send CORPC to filter_ranks only */
-	CRT_RPC_FLAG_FILTER_INVERT	= (1U << 1)
+	CRT_RPC_FLAG_FILTER_INVERT	= (1U << 1),
+	/** Do not invoke RPC handler on local node when fail to forward corpc to children. */
+	CRT_RPC_FLAG_CO_FAILOUT		= (1U << 2),
 };
 
 struct crt_rpc;

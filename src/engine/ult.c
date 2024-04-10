@@ -658,3 +658,223 @@ dss_main_exec(void (*func)(void *), void *arg)
 
 	return dss_ult_create(func, arg, DSS_XS_SELF, info->dmi_tgt_id, 0, NULL);
 }
+
+static void
+dss_chore_diy_internal(struct dss_chore *chore)
+{
+reenter:
+	D_DEBUG(DB_TRACE, "%p: status=%d\n", chore, chore->cho_status);
+	chore->cho_status = chore->cho_func(chore, chore->cho_status == DSS_CHORE_YIELD);
+	D_ASSERT(chore->cho_status != DSS_CHORE_NEW);
+	if (chore->cho_status == DSS_CHORE_YIELD) {
+		ABT_thread_yield();
+		goto reenter;
+	}
+}
+
+static void
+dss_chore_ult(void *arg)
+{
+	struct dss_chore *chore = arg;
+
+	dss_chore_diy_internal(chore);
+}
+
+/**
+ * Add \a chore for \a func to the chore queue of some other xstream.
+ *
+ * \param[in]	chore	address of the embedded chore object
+ * \param[in]	func	function to be executed via \a chore
+ *
+ * \retval	-DER_CANCEL	chore queue stopping
+ */
+int
+dss_chore_delegate(struct dss_chore *chore, dss_chore_func_t func)
+{
+	struct dss_module_info *info = dss_get_module_info();
+	int                     xs_id;
+	struct dss_xstream     *dx;
+	struct dss_chore_queue *queue;
+
+	chore->cho_status = DSS_CHORE_NEW;
+	chore->cho_func   = func;
+
+	/*
+	 * The dss_chore_queue_ult approach may get insufficient scheduling on
+	 * a "main" xstream when the chore queue is long. So we fall back to
+	 * the one-ULT-per-chore approach if there's no helper xstream.
+	 */
+	if (dss_tgt_offload_xs_nr == 0) {
+		D_INIT_LIST_HEAD(&chore->cho_link);
+		return dss_ult_create(dss_chore_ult, chore, DSS_XS_IOFW, info->dmi_tgt_id,
+				      0 /* stack_size */, NULL /* ult */);
+	}
+
+	/* Find the chore queue. */
+	xs_id = sched_ult2xs(DSS_XS_IOFW, info->dmi_tgt_id);
+	D_ASSERT(xs_id != -DER_INVAL);
+	dx = dss_get_xstream(xs_id);
+	D_ASSERT(dx != NULL);
+	queue = &dx->dx_chore_queue;
+	D_ASSERT(queue != NULL);
+
+	ABT_mutex_lock(queue->chq_mutex);
+	if (queue->chq_stop) {
+		ABT_mutex_unlock(queue->chq_mutex);
+		return -DER_CANCELED;
+	}
+	d_list_add_tail(&chore->cho_link, &queue->chq_list);
+	ABT_cond_broadcast(queue->chq_cond);
+	ABT_mutex_unlock(queue->chq_mutex);
+
+	D_DEBUG(DB_TRACE, "%p: tgt_id=%d -> xs_id=%d dx.tgt_id=%d\n", chore, info->dmi_tgt_id,
+		xs_id, dx->dx_tgt_id);
+	return 0;
+}
+
+/**
+ * Do \a chore for \a func synchronously in the current ULT.
+ *
+ * \param[in]	chore	embedded chore object
+ * \param[in]	func	function to be executed via \a chore
+ */
+void
+dss_chore_diy(struct dss_chore *chore, dss_chore_func_t func)
+{
+	D_INIT_LIST_HEAD(&chore->cho_link);
+	chore->cho_status = DSS_CHORE_NEW;
+	chore->cho_func   = func;
+
+	dss_chore_diy_internal(chore);
+}
+
+static void
+dss_chore_queue_ult(void *arg)
+{
+	struct dss_chore_queue *queue = arg;
+	d_list_t                list  = D_LIST_HEAD_INIT(list);
+
+	D_ASSERT(queue != NULL);
+	D_DEBUG(DB_TRACE, "begin\n");
+
+	for (;;) {
+		d_list_t          list_tmp = D_LIST_HEAD_INIT(list_tmp);
+		struct dss_chore *chore;
+		struct dss_chore *chore_tmp;
+		bool              stop = false;
+
+		/*
+		 * The scheduling order shall be
+		 *
+		 *   [queue->chq_list] [list],
+		 *
+		 * where list contains chores that have returned
+		 * DSS_CHORE_YIELD in the previous iteration.
+		 */
+		ABT_mutex_lock(queue->chq_mutex);
+		for (;;) {
+			if (!d_list_empty(&queue->chq_list)) {
+				d_list_splice_init(&queue->chq_list, &list);
+				break;
+			}
+			if (!d_list_empty(&list))
+				break;
+			if (queue->chq_stop) {
+				stop = true;
+				break;
+			}
+			sched_cond_wait_for_business(queue->chq_cond, queue->chq_mutex);
+		}
+		ABT_mutex_unlock(queue->chq_mutex);
+
+		if (stop)
+			break;
+
+		d_list_for_each_entry_safe(chore, chore_tmp, &list, cho_link) {
+			enum dss_chore_status status;
+
+			/*
+			 * CAUTION: When cho_func returns DSS_CHORE_DONE, chore
+			 * may have been freed already!
+			 */
+			d_list_del_init(&chore->cho_link);
+			D_DEBUG(DB_TRACE, "%p: before: status=%d\n", chore, chore->cho_status);
+			status = chore->cho_func(chore, chore->cho_status == DSS_CHORE_YIELD);
+			D_DEBUG(DB_TRACE, "%p: after: status=%d\n", chore, status);
+			if (status == DSS_CHORE_YIELD) {
+				chore->cho_status = status;
+				d_list_add_tail(&chore->cho_link, &list_tmp);
+			} else {
+				D_ASSERTF(status == DSS_CHORE_DONE, "status=%d\n", status);
+			}
+			ABT_thread_yield();
+		}
+
+		d_list_splice_init(&list_tmp, &list);
+	}
+
+	D_DEBUG(DB_TRACE, "end\n");
+}
+
+int
+dss_chore_queue_init(struct dss_xstream *dx)
+{
+	struct dss_chore_queue *queue = &dx->dx_chore_queue;
+	int                     rc;
+
+	D_INIT_LIST_HEAD(&queue->chq_list);
+	queue->chq_stop = false;
+
+	rc = ABT_mutex_create(&queue->chq_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create chore queue mutex: %d\n", rc);
+		return dss_abterr2der(rc);
+	}
+
+	rc = ABT_cond_create(&queue->chq_cond);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("failed to create chore queue condition variable: %d\n", rc);
+		ABT_mutex_free(&queue->chq_mutex);
+		return dss_abterr2der(rc);
+	}
+
+	return 0;
+}
+
+int
+dss_chore_queue_start(struct dss_xstream *dx)
+{
+	struct dss_chore_queue *queue = &dx->dx_chore_queue;
+	int                     rc;
+
+	rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_GENERIC],
+				    dss_chore_queue_ult, queue, ABT_THREAD_ATTR_NULL,
+				    &queue->chq_ult);
+	if (rc != 0) {
+		D_ERROR("failed to create chore queue ULT: %d\n", rc);
+		return dss_abterr2der(rc);
+	}
+
+	return 0;
+}
+
+void
+dss_chore_queue_stop(struct dss_xstream *dx)
+{
+	struct dss_chore_queue *queue = &dx->dx_chore_queue;
+
+	ABT_mutex_lock(queue->chq_mutex);
+	queue->chq_stop = true;
+	ABT_cond_broadcast(queue->chq_cond);
+	ABT_mutex_unlock(queue->chq_mutex);
+	ABT_thread_free(&queue->chq_ult);
+}
+
+void
+dss_chore_queue_fini(struct dss_xstream *dx)
+{
+	struct dss_chore_queue *queue = &dx->dx_chore_queue;
+
+	ABT_cond_free(&queue->chq_cond);
+	ABT_mutex_free(&queue->chq_mutex);
+}
