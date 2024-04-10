@@ -539,7 +539,7 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
 
 
 class LocalTask():
-    """Mock ClusterShell.Task for use with RemoteCommandResult."""
+    """Mock ClusterShell.Task to all subprocess.run() to return a RemoteCommandResult."""
 
     def __init__(self, host):
         """Initialize a LocalTask object.
@@ -547,11 +547,10 @@ class LocalTask():
         Args:
             host (str): local host running the command
         """
-        self._hosts = [host]
-        self._stdout = None
-        self._stderr = None
-        self._rc = 0
-        self._timeout = False
+        self._host = host
+        self._command_output = {}
+        self._return_codes = {}
+        self._timeout_hosts = set()
 
     def run(self, command, timeout=None):
         """Run the command locally.
@@ -561,6 +560,9 @@ class LocalTask():
             timeout (int, optional): number of seconds to wait for the command to complete.
                 Defaults to None.
         """
+        self._command_output = {}
+        self._return_codes = {}
+        self._timeout_hosts.clear()
         kwargs = {
             "encoding": "utf-8",
             "shell": False,
@@ -572,25 +574,40 @@ class LocalTask():
         try:
             # pylint: disable=subprocess-run-check
             result = subprocess.run(shlex.split(command), **kwargs)     # nosec
-            self._stdout = result.stdout
-            self._stderr = result.stderr
-            self._rc = result.returncode
+            self._add_command_output('stdout', result.stdout)
+            self._add_command_output('stderr', result.stderr)
+            self._return_codes[result.returncode] = [self._host]
 
-        except subprocess.TimeoutExpired as error:
+        except subprocess.TimeoutExpired:
             # Raised if command times out
-            self._stdout = error.output
-            self._stderr = error.stderr
-            self._timeout = True
+            self._add_command_output('stdout', result.stdout)
+            self._add_command_output('stderr', result.stderr)
+            self._timeout_hosts.add([self._host])
 
         except KeyboardInterrupt as error:
             # User Ctrl-C
-            self._stdout = f"Command '{command}' interrupted by user\n" + str(error)
-            self._rc = 1
+            stdout = f"Command '{command}' interrupted by user\n" + str(error)
+            self._add_command_output('stdout', stdout)
+            self._add_command_output('stderr', None)
+            self._return_codes[1] = [self._host]
 
         except Exception as error:      # pylint: disable=broad-except
             # Catch all
-            self._stdout = f"Command '{command}' encountered unknown error\n" + str(error)
-            self._rc = 1
+            stdout = f"Command '{command}' encountered unknown error\n" + str(error)
+            self._add_command_output('stdout', str(error))
+            self._add_command_output('stderr', None)
+            self._return_codes[1] = [self._host]
+
+    def _add_command_output(self, output_type, output):
+        """Add the specified command output.
+
+        Args:
+            output_type (str): 'stdout' or 'stderr'
+            output (str): command output
+        """
+        self._command_output[output_type] = {}
+        if output:
+            self._command_output[output_type][self._host] = output
 
     def iter_retcodes(self):
         """Iterate over return codes.
@@ -598,8 +615,8 @@ class LocalTask():
         Yields:
             tuple: return code, hosts
         """
-        for host in self._hosts:
-            yield self._rc, [host]
+        for rc, hosts in self._return_codes.items():
+            yield rc, hosts
 
     def iter_keys_timeout(self):
         """Iterate over timed out keys.
@@ -607,9 +624,8 @@ class LocalTask():
         Yields:
             str: timed out hosts
         """
-        for _ in self._hosts:
-            if self._timeout:
-                yield self._hosts
+        for hosts in self._timeout_hosts:
+            yield hosts
 
     def iter_buffers(self, match_keys=None):
         """Iterate over stdout.
@@ -620,9 +636,9 @@ class LocalTask():
         Yields:
             tuple: stdout, hosts
         """
-        for host in self._hosts:
-            if not match_keys or host in match_keys:
-                yield self._stdout, [host]
+        for host, output in self._command_output['stdout'].items():
+            if host in match_keys:
+                yield output, [host]
 
     def iter_errors(self, match_keys=None):
         """Iterate over stderr.
@@ -633,9 +649,9 @@ class LocalTask():
         Yields:
             tuple: stderr, hosts
         """
-        for host in self._hosts:
+        for host, output in self._command_output['stderr'].items():
             if not match_keys or host in match_keys:
-                yield self._stderr, [host]
+                yield output, [host]
 
 
 def run_local2(log, command, verbose=True, timeout=None):
