@@ -93,4 +93,4 @@ class RbldPoolDestroyWithIO(TestWithServers):
         self.log_step('Creating a second pool of the same size as the first')
         pool = add_pool(self)
         self.log_step('Verify the space was reclaimed')
-        self.pool.query()
+        pool.query()

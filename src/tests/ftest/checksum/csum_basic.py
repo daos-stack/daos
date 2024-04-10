@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -56,7 +56,7 @@ class CsumContainerValidation(TestWithServers):
         record_index = 0
         for dkey in range(no_of_dkeys):
             for akey in range(no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) * record_length[record_index])
+                indata = "{0}".format(str(akey)[0]) * record_length[record_index]
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
                 c_akey = create_string_buffer("akey {0}".format(akey))
                 c_value = create_string_buffer(indata)

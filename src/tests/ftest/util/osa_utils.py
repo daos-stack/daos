@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import ctypes
 import queue
 import re
 import threading
@@ -11,10 +10,9 @@ import time
 
 from avocado import fail_on
 from exception_utils import CommandFailure
-from general_utils import create_string_buffer, run_command
+from general_utils import run_command
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from pydaos.raw import DaosApiError, DaosContainer, DaosObj, IORequest
 
 
 class OSAUtils(MdtestBase, IorTestBase):
