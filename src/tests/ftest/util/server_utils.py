@@ -477,7 +477,7 @@ class DaosServerManager(SubprocessManager):
         """Display server hosts memory info."""
         self.log.debug("#" * 80)
         self.log.debug("<SERVER> Collection debug memory info")
-        run_remote(self.log, self._hosts, "free -m")
+        run_remote(self.log, self._hosts, "free -m && df -h --type=tmpfs")
         run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 6")
         self.log.debug("#" * 80)
 
@@ -719,6 +719,9 @@ class DaosServerManager(SubprocessManager):
 
             # Make sure the mount directory belongs to non-root user
             self.set_scm_mount_ownership()
+
+        # Collective memory usage after stop.
+        self.display_memory_info()
 
         # Report any errors after all stop actions have been attempted
         if messages:
