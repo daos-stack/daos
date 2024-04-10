@@ -32,11 +32,17 @@ int
 dc_cont_init(void)
 {
 	int		rc;
+
+#if 0
 	uint32_t	ver_array[2] = {DAOS_CONT_VERSION - 1, DAOS_CONT_VERSION};
 
 	dc_cont_proto_version = 0;
 	rc = daos_rpc_proto_query(cont_proto_fmt_v6.cpf_base, ver_array,
 				  2, &dc_cont_proto_version);
+#else
+	dc_cont_proto_version = DAOS_CONT_VERSION;
+	rc = 0;
+#endif
 	if (rc)
 		return rc;
 

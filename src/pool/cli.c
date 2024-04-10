@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -38,11 +38,18 @@ int	dc_pool_proto_version;
 int
 dc_pool_init(void)
 {
+#if 0
 	uint32_t		ver_array[2] = {DAOS_POOL_VERSION - 1, DAOS_POOL_VERSION};
+#endif
 	int			rc;
-
+#if 0
 	dc_pool_proto_version = 0;
-	rc = daos_rpc_proto_query(pool_proto_fmt_v4.cpf_base, ver_array, 2, &dc_pool_proto_version);
+	rc = daos_rpc_proto_query(pool_proto_fmt_v4.cpf_base, ver_array, 2,
+				  &dc_pool_proto_version);
+#else
+	dc_pool_proto_version = DAOS_POOL_VERSION;
+	rc = 0;
+#endif
 	if (rc)
 		return rc;
 
