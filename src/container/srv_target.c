@@ -840,6 +840,18 @@ ds_cont_child_stop_all(struct ds_pool_child *pool_child)
 	}
 }
 
+void
+ds_cont_child_reset_ec_agg_eph_all(struct ds_pool_child *pool_child)
+{
+	struct ds_cont_child	*cont_child;
+
+	D_DEBUG(DB_MD, DF_UUID"[%d]: reset all containers EC aggregate epoch.\n",
+		DP_UUID(pool_child->spc_uuid), dss_get_module_info()->dmi_tgt_id);
+
+	d_list_for_each_entry(cont_child, &pool_child->spc_cont_list, sc_link)
+		cont_child->sc_ec_agg_eph = cont_child->sc_ec_agg_eph_boundary;
+}
+
 static int
 cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 		 bool *started, struct ds_cont_child **cont_out)
