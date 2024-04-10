@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -787,6 +787,18 @@ pool_iv_ent_fetch(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	struct pool_iv_entry	*iv_entry = entry->iv_value.sg_iovs[0].iov_buf;
 	int			rc;
 
+	if (dss_self_rank() == entry->ns->iv_master_rank) {
+		/* The PS leader might still in initialization phase, the IV entry may
+		 * not be fully initialized yet.
+		 */
+		if (!entry->iv_valid) {
+			D_INFO(DF_UUID" master %u is still stepping up: %d.\n",
+			       DP_UUID(entry->ns->iv_pool_uuid), entry->ns->iv_master_rank,
+			       -DER_NOTLEADER);
+			return -DER_NOTLEADER;
+		}
+	}
+
 	rc = pool_iv_ent_copy(key, dst_sgl, iv_entry, false);
 
 	return rc;
@@ -1303,7 +1315,7 @@ retry:
 	pool_key->pik_entry_size = iv_entry_size;
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
+		D_INFO(DF_UUID" iv fetch failed "DF_RC"\n", DP_UUID(pool->sp_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
