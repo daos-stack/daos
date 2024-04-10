@@ -147,23 +147,23 @@ static void test_rpc_cb(const struct crt_cb_info *cb_info);
 
 /********************* Global data *********************/
 /* Data structure with all information about an ongoing test from this client */
-static struct st_g_data *g_data;
+static __thread struct st_g_data *g_data;
 /*
  * Lock used to protect the g_data pointer
  *
  * Locking g_data_lock is only necessary in start() and status() (when free'ing)
  * The rest of the functions that use it are only reachable when g_data is valid
  */
-static pthread_mutex_t g_data_lock;
+static __thread pthread_mutex_t g_data_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void crt_self_test_client_init(void)
 {
-	D_MUTEX_INIT(&g_data_lock, NULL);
+	/* D_MUTEX_INIT(&g_data_lock, NULL); */
 }
 
 void crt_self_test_client_fini(void)
 {
-	D_MUTEX_DESTROY(&g_data_lock);
+	/* D_MUTEX_DESTROY(&g_data_lock); */
 }
 
 static void
