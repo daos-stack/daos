@@ -32,76 +32,35 @@
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define POOL_PROTO_CLI_RPC_LIST(ver)					\
-	X(POOL_CREATE,							\
-		0, &CQF_pool_create,					\
-		ds_pool_create_handler, NULL),				\
-	X(POOL_CONNECT,							\
-	  0, ver == 4 ? &CQF_pool_connect_v4 : &CQF_pool_connect_v5,	\
-	  ver == 4 ? ds_pool_connect_handler_v4 :			\
-	  ds_pool_connect_handler_v5, NULL),				\
-	X(POOL_DISCONNECT,						\
-		0, &CQF_pool_disconnect,				\
-		ds_pool_disconnect_handler, NULL),			\
-	X(POOL_QUERY,							\
-	  0, ver == 4 ? &CQF_pool_query_v4 : &CQF_pool_query_v5,	\
-	  ver == 4 ? ds_pool_query_handler_v4 :				\
-			ds_pool_query_handler_v5,			\
-	  NULL),							\
-	X(POOL_QUERY_INFO,						\
-		0, &CQF_pool_query_info,				\
-		ds_pool_query_info_handler, NULL),			\
-	X(POOL_EXCLUDE,							\
-		0, &CQF_pool_exclude,					\
-		ds_pool_update_handler, NULL),				\
-	X(POOL_DRAIN,							\
-		0, &CQF_pool_drain,					\
-		ds_pool_update_handler, NULL),				\
-	X(POOL_EXTEND,							\
-		0, &CQF_pool_extend,					\
-		ds_pool_extend_handler, NULL),				\
-	X(POOL_EVICT,							\
-		0, &CQF_pool_evict,					\
-		ds_pool_evict_handler, NULL),				\
-	X(POOL_REINT,							\
-		0, &CQF_pool_add,					\
-		ds_pool_update_handler, NULL),				\
-	X(POOL_ADD_IN,							\
-		0, &CQF_pool_add_in,					\
-		ds_pool_update_handler, NULL),				\
-	X(POOL_EXCLUDE_OUT,						\
-		0, &CQF_pool_exclude_out,				\
-		ds_pool_update_handler, NULL),				\
-	X(POOL_SVC_STOP,						\
-		0, &CQF_pool_svc_stop,					\
-		ds_pool_svc_stop_handler, NULL),			\
-	X(POOL_ATTR_LIST,						\
-		0, &CQF_pool_attr_list,					\
-		ds_pool_attr_list_handler, NULL),			\
-	X(POOL_ATTR_GET,						\
-		0, &CQF_pool_attr_get,					\
-		ds_pool_attr_get_handler, NULL),			\
-	X(POOL_ATTR_SET,						\
-		0, &CQF_pool_attr_set,					\
-		ds_pool_attr_set_handler, NULL),			\
-	X(POOL_ATTR_DEL,						\
-		0, &CQF_pool_attr_del,					\
-		ds_pool_attr_del_handler, NULL),			\
-	X(POOL_REPLICAS_ADD,						\
-		0, &CQF_pool_replicas_add,				\
-		ds_pool_replicas_update_handler, NULL),			\
-	X(POOL_REPLICAS_REMOVE,						\
-		0, &CQF_pool_replicas_remove,				\
-		ds_pool_replicas_update_handler, NULL),			\
-	X(POOL_LIST_CONT,						\
-		0, &CQF_pool_list_cont,					\
-		ds_pool_list_cont_handler, NULL),			\
-	X(POOL_TGT_QUERY_MAP,						\
-		0, &CQF_pool_tgt_query_map,				\
-		ds_pool_tgt_query_map_handler, NULL),			\
-	X(POOL_FILTER_CONT,						\
-		0, &CQF_pool_filter_cont,				\
-		ds_pool_filter_cont_handler, NULL)
+#define POOL_PROTO_CLI_RPC_LIST(ver)                                                               \
+	X(POOL_CREATE, 0, &CQF_pool_create, ds_pool_create_handler, NULL),                         \
+	    X(POOL_CONNECT, 0, ver == 4 ? &CQF_pool_connect_v4 : &CQF_pool_connect_v5,             \
+	      ver == 4 ? ds_pool_connect_handler_v4 : ds_pool_connect_handler_v5, NULL),           \
+	    X(POOL_DISCONNECT, 0, &CQF_pool_disconnect, ds_pool_disconnect_handler, NULL),         \
+	    X(POOL_QUERY, 0, ver == 4 ? &CQF_pool_query_v4 : &CQF_pool_query_v5,                   \
+	      ver == 4 ? ds_pool_query_handler_v4 : ds_pool_query_handler_v5, NULL),               \
+	    X(POOL_QUERY_INFO, 0, &CQF_pool_query_info, ds_pool_query_info_handler, NULL),         \
+	    X(POOL_EXCLUDE, 0, &CQF_pool_exclude, ds_pool_update_handler, NULL),                   \
+	    X(POOL_DRAIN, 0, &CQF_pool_drain, ds_pool_update_handler, NULL),                       \
+	    X(POOL_EXTEND, 0, &CQF_pool_extend, ds_pool_extend_handler, NULL),                     \
+	    X(POOL_EVICT, 0, &CQF_pool_evict, ds_pool_evict_handler, NULL),                        \
+	    X(POOL_REINT, 0, &CQF_pool_add, ds_pool_update_handler, NULL),                         \
+	    X(POOL_ADD_IN, 0, &CQF_pool_add_in, ds_pool_update_handler, NULL),                     \
+	    X(POOL_EXCLUDE_OUT, 0, &CQF_pool_exclude_out, ds_pool_update_handler, NULL),           \
+	    X(POOL_SVC_STOP, 0, &CQF_pool_svc_stop, ds_pool_svc_stop_handler, NULL),               \
+	    X(POOL_ATTR_LIST, 0, &CQF_pool_attr_list, ds_pool_attr_list_handler, NULL),            \
+	    X(POOL_ATTR_GET, 0, &CQF_pool_attr_get, ds_pool_attr_get_handler, NULL),               \
+	    X(POOL_ATTR_SET, 0, &CQF_pool_attr_set, ds_pool_attr_set_handler, NULL),               \
+	    X(POOL_ATTR_DEL, 0, &CQF_pool_attr_del, ds_pool_attr_del_handler, NULL),               \
+	    X(POOL_REPLICAS_ADD, 0, &CQF_pool_replicas_add, ds_pool_replicas_update_handler,       \
+	      NULL),                                                                               \
+	    X(POOL_REPLICAS_REMOVE, 0, &CQF_pool_replicas_remove, ds_pool_replicas_update_handler, \
+	      NULL),                                                                               \
+	    X(POOL_LIST_CONT, 0, &CQF_pool_list_cont, ds_pool_list_cont_handler, NULL),            \
+	    X(POOL_TGT_QUERY_MAP, 0, &CQF_pool_tgt_query_map, ds_pool_tgt_query_map_handler,       \
+	      NULL),                                                                               \
+	    X(POOL_FILTER_CONT, 0, &CQF_pool_filter_cont, ds_pool_filter_cont_handler, NULL),      \
+	    X(POOL_TGT_WARMUP, 0, &CQF_pool_tgt_warmup, ds_pool_tgt_warmup_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
 	X(POOL_TGT_DISCONNECT,						\
@@ -499,6 +458,12 @@ CRT_RPC_DECLARE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
 
 CRT_RPC_DECLARE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD,
 		DAOS_OSEQ_POOL_TGT_DISCARD)
+
+#define DAOS_ISEQ_POOL_TGT_WARMUP	/* input fields */	 \
+	((crt_bulk_t)		(tw_bulk)		CRT_VAR)
+#define DAOS_OSEQ_POOL_TGT_WARMUP
+
+CRT_RPC_DECLARE(pool_tgt_warmup, DAOS_ISEQ_POOL_TGT_WARMUP, DAOS_OSEQ_POOL_TGT_WARMUP)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
