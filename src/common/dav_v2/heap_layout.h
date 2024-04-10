@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2023, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation */
 
 /*
  * heap_layout.h -- internal definitions for heap layout
@@ -10,20 +10,21 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <daos/mem.h>
 
 #define HEAP_MAJOR 1
 #define HEAP_MINOR 0
 
-#define MAX_CHUNK (UINT16_MAX - 7) /* has to be multiple of 8 */
+#define MAX_CHUNK             63
 #define CHUNK_BASE_ALIGNMENT 1024
-#define CHUNKSIZE ((size_t)1024 * 256)	/* 256 kilobytes */
+#define CHUNKSIZE             ((size_t)1024 * 260) /* 260 kilobytes */
 #define MAX_MEMORY_BLOCK_SIZE (MAX_CHUNK * CHUNKSIZE)
 #define HEAP_SIGNATURE_LEN 16
 #define HEAP_SIGNATURE "MEMORY_HEAP_HDR\0"
 #define ZONE_HEADER_MAGIC 0xC3F0A2D2
 #define ZONE_MIN_SIZE (sizeof(struct zone) + sizeof(struct chunk))
 #define ZONE_MAX_SIZE (sizeof(struct zone) + sizeof(struct chunk) * MAX_CHUNK)
-#define HEAP_MIN_SIZE (sizeof(struct heap_layout) + ZONE_MIN_SIZE)
+#define HEAP_MIN_SIZE (sizeof(struct heap_header) + ZONE_MIN_SIZE)
 
 /* Base bitmap values, relevant for both normal and flexible bitmaps */
 #define RUN_BITS_PER_VALUE 64U
@@ -56,9 +57,6 @@
 #define RUN_DEFAULT_SIZE_BYTES(size_idx)\
 (RUN_DEFAULT_SIZE + (((size_idx) - 1) * CHUNKSIZE))
 
-#define CHUNK_MASK ((CHUNKSIZE) - 1)
-#define CHUNK_ALIGN_UP(value) ((((value) + CHUNK_MASK) & ~CHUNK_MASK))
-
 enum chunk_flags {
 	CHUNK_FLAG_COMPACT_HEADER	=	0x0001,
 	CHUNK_FLAG_HEADER_NONE		=	0x0002,
@@ -84,6 +82,9 @@ enum chunk_type {
 	MAX_CHUNK_TYPE
 };
 
+/* zone header flags */
+#define ZONE_EVICTABLE_MB 0x0001
+
 struct chunk {
 	uint8_t data[CHUNKSIZE];
 };
@@ -107,29 +108,36 @@ struct chunk_header {
 struct zone_header {
 	uint32_t magic;
 	uint32_t size_idx;
-	uint8_t reserved[56];
+	uint32_t flags;
+	uint32_t spare_1;
+	uint64_t reserved[2];
+	uint64_t sp_usage;
+	uint8_t  spare[3552];
 };
 
 struct zone {
-	struct zone_header header;
+	struct zone_header  header;
 	struct chunk_header chunk_headers[MAX_CHUNK];
-	struct chunk chunks[];
+	struct chunk        chunks[];
 };
 
 struct heap_header {
-	char signature[HEAP_SIGNATURE_LEN];
+	char     signature[HEAP_SIGNATURE_LEN];
 	uint64_t major;
 	uint64_t minor;
-	uint64_t unused; /* might be garbage */
+	uint64_t heap_size;
+	uint64_t cache_size;
+	uint64_t heap_hdr_size;
 	uint64_t chunksize;
 	uint64_t chunks_per_zone;
-	uint8_t reserved[960];
+	uint8_t  reserved[4016];
 	uint64_t checksum;
 };
 
-struct heap_layout {
+struct heap_layout_info {
 	struct heap_header header;
-	struct zone zone0;	/* first element of zones array */
+	struct zone       *zone0; /* Address of the zone0 in umem_cache */
+	struct umem_store *store;
 };
 
 #define ALLOC_HDR_SIZE_SHIFT (48ULL)
@@ -171,28 +179,54 @@ static const enum chunk_flags header_type_to_flag[MAX_HEADER_TYPES] = {
 };
 
 static inline struct zone *
-ZID_TO_ZONE(struct heap_layout *layout, size_t zone_id)
+ZID_TO_ZONE(struct heap_layout_info *layout_info, size_t zone_id)
 {
-	return (struct zone *)
-		((uintptr_t)&layout->zone0 + ZONE_MAX_SIZE * zone_id);
+	uint64_t zoff = sizeof(struct heap_header) + ZONE_MAX_SIZE * zone_id;
+
+	return umem_cache_off2ptr(layout_info->store, zoff);
 }
 
 static inline struct chunk_header *
-GET_CHUNK_HDR(struct heap_layout *layout, size_t zone_id, unsigned chunk_id)
+GET_CHUNK_HDR(struct heap_layout_info *layout_info, size_t zone_id, unsigned chunk_id)
 {
-	return &ZID_TO_ZONE(layout, zone_id)->chunk_headers[chunk_id];
+	return &ZID_TO_ZONE(layout_info, zone_id)->chunk_headers[chunk_id];
 }
 
 static inline struct chunk *
-GET_CHUNK(struct heap_layout *layout, size_t zone_id, unsigned chunk_id)
+GET_CHUNK(struct heap_layout_info *layout_info, size_t zone_id, unsigned chunk_id)
 {
-	return &ZID_TO_ZONE(layout, zone_id)->chunks[chunk_id];
+	return &ZID_TO_ZONE(layout_info, zone_id)->chunks[chunk_id];
 }
 
 static inline struct chunk_run *
-GET_CHUNK_RUN(struct heap_layout *layout, size_t zone_id, unsigned chunk_id)
+GET_CHUNK_RUN(struct heap_layout_info *layout_info, size_t zone_id, unsigned chunk_id)
 {
-	return (struct chunk_run *)GET_CHUNK(layout, zone_id, chunk_id);
+	return (struct chunk_run *)GET_CHUNK(layout_info, zone_id, chunk_id);
+}
+
+static inline uint64_t
+GET_ZONE_OFFSET(uint32_t zid)
+{
+	return sizeof(struct heap_header) + ZONE_MAX_SIZE * zid;
+}
+
+static inline bool
+IS_ZONE_HDR_OFFSET(uint64_t off)
+{
+	return (((off - sizeof(struct heap_header)) % ZONE_MAX_SIZE) == 0);
+}
+
+static inline bool
+IS_ZONE_HDR_USAGE_OFFSET(uint64_t off)
+{
+	return (((off - sizeof(struct heap_header)) % ZONE_MAX_SIZE) ==
+		offsetof(struct zone_header, sp_usage));
+}
+
+static inline uint32_t
+OFFSET_TO_ZID(uint64_t off)
+{
+	return (off - sizeof(struct heap_header)) / ZONE_MAX_SIZE;
 }
 
 #endif /* __DAOS_COMMON_HEAP_LAYOUT_H */

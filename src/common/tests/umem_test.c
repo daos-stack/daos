@@ -430,7 +430,7 @@ test_page_cache(void **state)
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, 3, 0, 0, 0,
-			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL);
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
@@ -495,7 +495,7 @@ test_many_pages(void **state)
 	umem_cache_free(&arg->ta_store);
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0, 0,
-			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL);
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
@@ -539,7 +539,7 @@ test_many_writes(void **state)
 	umem_cache_free(&arg->ta_store);
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0, 0,
-			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL);
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
@@ -614,7 +614,7 @@ is_evictable_fn(void *arg, uint32_t page_id)
 }
 
 static int
-pageload_fn(void *arg, uint32_t page_id)
+pagevnt_fn(int event_type, void *arg, uint32_t page_id)
 {
 	return 0;
 }
@@ -633,8 +633,8 @@ test_p2_basic(void **state)
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
-			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ),
-			      is_evictable_fn, pageload_fn);
+			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn,
+			      pagevnt_fn, NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
@@ -701,8 +701,8 @@ test_p2_evict(void **state)
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
-			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ),
-			      is_evictable_fn, pageload_fn);
+			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn,
+			      pagevnt_fn, NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;

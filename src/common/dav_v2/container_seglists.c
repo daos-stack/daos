@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2023, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation */
 
 /*
  * container_seglists.c -- implementation of segregated lists block container
@@ -35,7 +35,7 @@ container_seglists_insert_block(struct block_container *bc,
 	const struct memory_block *m)
 {
 	ASSERT(m->chunk_id < MAX_CHUNK);
-	ASSERT(m->zone_id < UINT16_MAX);
+	ASSERT(m->zone_id < UINT32_MAX);
 	ASSERTne(m->size_idx, 0);
 
 	struct block_container_seglists *c =

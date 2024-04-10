@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2016-2023, Intel Corporation */
+/* Copyright 2016-2024, Intel Corporation */
 
 /*
  * recycler.c -- implementation of run recycler
@@ -46,9 +46,9 @@ recycler_element_cmp(const void *lhs, const void *rhs)
 }
 
 struct recycler {
-	struct ravl *runs;
+	struct ravl        *runs;
 	struct palloc_heap *heap;
-	struct zoneset     *zset;
+	struct mbrt        *mb;
 
 	/*
 	 * How many unaccounted units there *might* be inside of the memory
@@ -72,7 +72,7 @@ struct recycler {
  * recycler_new -- creates new recycler instance
  */
 struct recycler *
-recycler_new(struct palloc_heap *heap, size_t nallocs, struct zoneset *zset)
+recycler_new(struct palloc_heap *heap, size_t nallocs, struct mbrt *mb)
 {
 	struct recycler *r;
 
@@ -87,7 +87,7 @@ recycler_new(struct palloc_heap *heap, size_t nallocs, struct zoneset *zset)
 
 	r->heap = heap;
 	r->nallocs = nallocs;
-	r->zset              = zset;
+	r->mb                = mb;
 	r->unaccounted_total = 0;
 	memset(&r->unaccounted_units, 0, sizeof(r->unaccounted_units));
 
@@ -314,10 +314,10 @@ recycler_inc_unaccounted(struct recycler *r, const struct memory_block *m)
 }
 
 /*
- * Return the zoneset associated with the recycler.
+ * Return the Memory Bucket runtime associated with the recycler.
  */
-struct zoneset *
-recycler_get_zoneset(struct recycler *r)
+struct mbrt *
+recycler_get_mbrt(struct recycler *r)
 {
-	return r->zset;
+	return r->mb;
 }

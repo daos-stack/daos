@@ -39,18 +39,6 @@ struct umem_tx_stage_item {
 static int daos_md_backend = DAOS_MD_PMEM;
 #define UMM_SLABS_CNT 16
 
-uint32_t
-umem_get_mb_evictable(struct umem_instance *umm, int flags)
-{
-	dav_obj_t *pop;
-
-	if (umm->umm_pool->up_store.store_type == DAOS_MD_BMEM) {
-		pop = (dav_obj_t *)umm->umm_pool->up_priv;
-		return dav_get_zone_evictable_v2(pop, flags);
-	}
-	return 0;
-}
-
 /** Initializes global settings for the pmem objects.
  *
  *  \param	md_on_ssd[IN]	Boolean indicating if MD-on-SSD is enabled.
@@ -544,7 +532,7 @@ umempobj_get_rootptr(struct umem_pool *ph_p, size_t size)
 		return (char *)dav_get_base_ptr((dav_obj_t *)ph_p->up_priv) + off;
 	case DAOS_MD_BMEM_V2:
 		off = dav_root_v2((dav_obj_t *)ph_p->up_priv, size);
-		return (char *)dav_get_base_ptr((dav_obj_t *)ph_p->up_priv) + off;
+		return (char *)umem_cache_off2ptr(&ph_p->up_store, off);
 	case DAOS_MD_ADMEM:
 		bh.bh_blob = (struct ad_blob *)ph_p->up_priv;
 		return ad_root(bh, size);
@@ -1540,31 +1528,56 @@ bmem_atomic_free_v2(struct umem_instance *umm, umem_off_t umoff)
 static void
 bmem_atomic_flush_v2(struct umem_instance *umm, void *addr, size_t len)
 {
-	/* REVISIT: We need to update the WAL with this info
-	 * dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
-	 * dav_flush(pop, addr, len);
-	 */
+	/* NOP */
 }
 
-static umem_ops_t	bmem_v2_ops = {
-	.mo_tx_free		= bmem_tx_free_v2,
-	.mo_tx_alloc		= bmem_tx_alloc_v2,
-	.mo_tx_add		= bmem_tx_add_v2,
-	.mo_tx_xadd		= bmem_tx_xadd_v2,
-	.mo_tx_add_ptr		= bmem_tx_add_ptr_v2,
-	.mo_tx_abort		= bmem_tx_abort_v2,
-	.mo_tx_begin		= bmem_tx_begin_v2,
-	.mo_tx_commit		= bmem_tx_commit_v2,
-	.mo_tx_stage		= bmem_tx_stage_v2,
-	.mo_reserve		= bmem_reserve_v2,
-	.mo_defer_free		= bmem_defer_free_v2,
-	.mo_cancel		= bmem_cancel_v2,
-	.mo_tx_publish		= bmem_tx_publish_v2,
-	.mo_atomic_copy		= bmem_atomic_copy_v2,
-	.mo_atomic_alloc	= bmem_atomic_alloc_v2,
-	.mo_atomic_free		= bmem_atomic_free_v2,
-	.mo_atomic_flush	= bmem_atomic_flush_v2,
-	.mo_tx_add_callback	= umem_tx_add_cb,
+static uint32_t
+bmem_allot_mb_evictable_v2(struct umem_instance *umm, int flags)
+{
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+
+	return dav_allot_mb_evictable_v2(pop, flags);
+}
+
+static uint32_t
+bmem_get_mb_from_offset_v2(struct umem_instance *umm, umem_off_t umoff)
+{
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+	uint64_t   off = umem_off2offset(umoff);
+
+	return dav_off2mb_v2(pop, off);
+}
+
+static umem_off_t
+bmem_get_mb_base_offset_v2(struct umem_instance *umm, uint32_t mb_id)
+{
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+
+	return dav_mb2baseoff_v2(pop, mb_id);
+}
+
+static umem_ops_t bmem_v2_ops = {
+	.mo_tx_free            = bmem_tx_free_v2,
+	.mo_tx_alloc           = bmem_tx_alloc_v2,
+	.mo_tx_add             = bmem_tx_add_v2,
+	.mo_tx_xadd            = bmem_tx_xadd_v2,
+	.mo_tx_add_ptr         = bmem_tx_add_ptr_v2,
+	.mo_tx_abort           = bmem_tx_abort_v2,
+	.mo_tx_begin           = bmem_tx_begin_v2,
+	.mo_tx_commit          = bmem_tx_commit_v2,
+	.mo_tx_stage           = bmem_tx_stage_v2,
+	.mo_reserve            = bmem_reserve_v2,
+	.mo_defer_free         = bmem_defer_free_v2,
+	.mo_cancel             = bmem_cancel_v2,
+	.mo_tx_publish         = bmem_tx_publish_v2,
+	.mo_atomic_copy        = bmem_atomic_copy_v2,
+	.mo_atomic_alloc       = bmem_atomic_alloc_v2,
+	.mo_atomic_free        = bmem_atomic_free_v2,
+	.mo_atomic_flush       = bmem_atomic_flush_v2,
+	.mo_allot_evictable_mb = bmem_allot_mb_evictable_v2,
+	.mo_get_mb_from_offset = bmem_get_mb_from_offset_v2,
+	.mo_get_mb_base_offset = bmem_get_mb_base_offset_v2,
+	.mo_tx_add_callback    = umem_tx_add_cb,
 };
 
 int
@@ -2070,7 +2083,7 @@ cache_off2page(struct umem_cache *cache, umem_off_t offset)
 
 /* Convert memory pointer to memory page */
 static inline struct umem_page_info *
-cache_ptr2pinfo(struct umem_cache *cache, void *ptr)
+cache_ptr2pinfo(struct umem_cache *cache, const void *ptr)
 {
 	struct umem_page_info	*pinfo;
 	uint32_t idx;
@@ -2093,6 +2106,15 @@ cache_off2pg_off(struct umem_cache *cache, umem_off_t offset)
 	return (offset - cache->ca_base_off) & cache->ca_page_mask;
 }
 
+bool
+umem_cache_offisloaded(struct umem_store *store, umem_off_t offset)
+{
+	struct umem_cache *cache = store->cache;
+	struct umem_page  *page  = cache_off2page(cache, offset);
+
+	return (page->pg_info != NULL);
+}
+
 /* Convert MD-blob offset to memory pointer */
 void *
 umem_cache_off2ptr(struct umem_store *store, umem_off_t offset)
@@ -2107,7 +2129,7 @@ umem_cache_off2ptr(struct umem_store *store, umem_off_t offset)
 
 /* Convert memory pointer to MD-blob offset */
 umem_off_t
-umem_cache_ptr2off(struct umem_store *store, void *ptr)
+umem_cache_ptr2off(struct umem_store *store, const void *ptr)
 {
 	struct umem_cache	*cache = store->cache;
 	struct umem_page_info	*pinfo = cache_ptr2pinfo(cache, ptr);
@@ -2119,6 +2141,20 @@ umem_cache_ptr2off(struct umem_store *store, void *ptr)
 	offset += (ptr - cache->ca_base) & cache->ca_page_mask;
 
 	return offset;
+}
+bool
+umem_cache_ptrisvalid(struct umem_store *store, void *ptr)
+{
+	struct umem_cache *cache = store->cache;
+	uint32_t           idx;
+
+	if (ptr < cache->ca_base)
+		return false;
+	idx = (ptr - cache->ca_base) >> cache->ca_page_shift;
+	if (idx >= cache->ca_mem_pages)
+		return false;
+
+	return true;
 }
 
 static int
@@ -2213,7 +2249,7 @@ umem_cache_free(struct umem_store *store)
 static inline unsigned int
 cache_mode(struct umem_cache *cache)
 {
-	return (cache->ca_md_pages == cache->ca_mem_pages) ? 1 : 2;
+	return (cache->ca_max_ne_pages == cache->ca_mem_pages) ? 1 : 2;
 }
 
 static inline struct umem_page_info *
@@ -2242,7 +2278,7 @@ int
 umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
 		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
 		 bool (*is_evictable_fn)(void *arg, uint32_t pg_id),
-		 int (*pageload_fn)(void *arg, uint32_t pg_id))
+		 int (*evtcb_fn)(int evt_type, void *arg, uint32_t pg_id), void *fn_arg)
 {
 	struct umem_cache	*cache;
 	struct umem_page_info	*pinfo;
@@ -2299,7 +2335,8 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	cache->ca_page_mask	= page_sz - 1;
 	cache->ca_bmap_sz	= bmap_sz;
 	cache->ca_evictable_fn	= is_evictable_fn;
-	cache->ca_pageload_fn	= pageload_fn;
+	cache->ca_evtcb_fn      = evtcb_fn;
+	cache->ca_fn_arg        = fn_arg;
 
 	D_INIT_LIST_HEAD(&cache->ca_pgs_free);
 	D_INIT_LIST_HEAD(&cache->ca_pgs_dirty);
@@ -2371,7 +2408,7 @@ error:
 static inline bool
 is_id_evictable(struct umem_cache *cache, uint32_t pg_id)
 {
-	return cache->ca_evictable_fn && cache->ca_evictable_fn(cache, pg_id);
+	return cache->ca_evictable_fn && cache->ca_evictable_fn(cache->ca_fn_arg, pg_id);
 }
 
 static inline void
@@ -2979,14 +3016,19 @@ cache_load_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	D_ASSERT(offset < store->stor_size);
 	len = min(cache->ca_page_sz, store->stor_size - offset);
 	pinfo->pi_io = 1;
+
+	if (DAOS_ON_VALGRIND)
+		VALGRIND_DISABLE_ADDR_ERROR_REPORTING_IN_RANGE((char *)pinfo->pi_addr, len);
 	rc = store->stor_ops->so_load(store, (char *)pinfo->pi_addr, offset, len);
+	if (DAOS_ON_VALGRIND)
+		VALGRIND_ENABLE_ADDR_ERROR_REPORTING_IN_RANGE((char *)pinfo->pi_addr, len);
 	pinfo->pi_io = 0;
 	if (rc) {
 		DL_ERROR(rc, "Read MD blob failed.\n");
 		page_wakeup_io(cache, pinfo);
 		return rc;
-	} else if (cache->ca_pageload_fn) {
-		rc = cache->ca_pageload_fn(cache, pinfo->pi_pg_id);
+	} else if (cache->ca_evtcb_fn) {
+		rc = cache->ca_evtcb_fn(UMEM_CACHE_EVENT_PGLOAD, cache->ca_fn_arg, pinfo->pi_pg_id);
 		if (rc) {
 			DL_ERROR(rc, "Pageload callback failed.");
 			page_wakeup_io(cache, pinfo);
@@ -3132,6 +3174,12 @@ evict:
 			return -DER_AGAIN;
 	}
 
+	if (cache->ca_evtcb_fn) {
+		rc =
+		    cache->ca_evtcb_fn(UMEM_CACHE_EVENT_PGEVICT, cache->ca_fn_arg, pinfo->pi_pg_id);
+		if (rc)
+			DL_ERROR(rc, "Page evict callback failed.");
+	}
 	d_list_del_init(&pinfo->pi_lru_link);
 	cache_unmap_page(cache, pinfo);
 

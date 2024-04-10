@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2016-2023, Intel Corporation */
+/* Copyright 2016-2024, Intel Corporation */
 
 /*
  * memblock.c -- implementation of memory block
@@ -1127,7 +1127,7 @@ static void
 huge_vg_init(const struct memory_block *m, int objects,
 	object_callback cb, void *arg)
 {
-	struct zone *z = ZID_TO_ZONE(m->heap->layout, m->zone_id);
+	struct zone         *z     = ZID_TO_ZONE(&m->heap->layout_info, m->zone_id);
 	struct chunk_header *hdr = heap_get_chunk_hdr(m->heap, m);
 	struct chunk *chunk = heap_get_chunk(m->heap, m);
 
@@ -1158,7 +1158,7 @@ static void
 run_vg_init(const struct memory_block *m, int objects,
 	object_callback cb, void *arg)
 {
-	struct zone *z = ZID_TO_ZONE(m->heap->layout, m->zone_id);
+	struct zone         *z   = ZID_TO_ZONE(&m->heap->layout_info, m->zone_id);
 	struct chunk_header *hdr = heap_get_chunk_hdr(m->heap, m);
 	struct chunk_run *run = heap_get_chunk_run(m->heap, m);
 
@@ -1427,7 +1427,7 @@ memblock_run_init(struct palloc_heap *heap,
 	m.size_idx = size_idx;
 	m.heap = heap;
 
-	struct zone *z = ZID_TO_ZONE(heap->layout, zone_id);
+	struct zone      *z       = ZID_TO_ZONE(&heap->layout_info, zone_id);
 	struct chunk_run *run = heap_get_chunk_run(heap, &m);
 	size_t runsize = SIZEOF_RUN(run, size_idx);
 
@@ -1540,7 +1540,7 @@ memblock_from_offset_opt(struct palloc_heap *heap, uint64_t off, int size)
 
 	m.heap = heap;
 
-	off -= HEAP_PTR_TO_OFF(heap, &heap->layout->zone0);
+	off -= HEAP_PTR_TO_OFF(heap, heap->layout_info.zone0);
 	m.zone_id = (uint32_t)(off / ZONE_MAX_SIZE);
 
 	off -= (ZONE_MAX_SIZE * m.zone_id) + sizeof(struct zone);

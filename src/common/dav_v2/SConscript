@@ -2,8 +2,9 @@
 
 
 SRC = ['alloc_class.c', 'bucket.c', 'container_ravl.c', 'container_seglists.c', 'critnib.c',
-       'dav_clogs.c', 'dav_iface.c', 'heap.c', 'memblock.c', 'memops.c', 'palloc.c', 'ravl.c',
-       'ravl_interval.c', 'recycler.c', 'stats.c', 'tx.c', 'ulog.c', 'util.c', 'wal_tx.c']
+       'dav_clogs.c', 'dav_iface.c', 'heap.c', 'memblock.c', 'memops.c', 'meta_io.c',
+       'palloc.c', 'ravl.c', 'ravl_interval.c', 'recycler.c', 'stats.c', 'tx.c', 'ulog.c',
+       'util.c', 'wal_tx.c']
 
 
 def scons():

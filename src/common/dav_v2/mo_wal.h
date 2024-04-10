@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2016-2023, Intel Corporation */
+/* Copyright 2016-2024, Intel Corporation */
 
 #ifndef __DAOS_COMMON_MO_WAL_H
 #define __DAOS_COMMON_MO_WAL_H 1
@@ -26,6 +26,8 @@ typedef void *(*memset_fn)(void *base, void *dest, int c, size_t len,
 typedef int (*remote_read_fn)(void *ctx, uintptr_t base, void *dest, void *addr,
 		size_t length);
 
+struct umem_store;
+
 struct mo_ops {
 	/* for 'master' replica: with or without data replication */
 	persist_fn persist;	/* persist function */
@@ -35,13 +37,7 @@ struct mo_ops {
 	memmove_fn memmove; /* persistent memmove function */
 	memset_fn memset; /* persistent memset function */
 	void *base;
-
-	struct remote_ops {
-		remote_read_fn read;
-
-		void *ctx;
-		uintptr_t base;
-	} remote;
+	struct umem_store *umem_store;
 };
 
 static force_inline void

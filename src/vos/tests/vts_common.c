@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -89,9 +89,9 @@ exit:
 }
 
 int
-vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
+vts_ctx_init_ex(struct vos_test_ctx *tcx, size_t psize, size_t meta_size)
 {
-	int	 rc;
+	int rc;
 
 	memset(tcx, 0, sizeof(*tcx));
 	oid_cnt = 0;
@@ -107,7 +107,7 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
 	uuid_generate_time_safe(tcx->tc_co_uuid);
 
 	/* specify @psize as both NVMe size and SCM size */
-	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, 0, 0,
+	rc = vos_pool_create(tcx->tc_po_name, tcx->tc_po_uuid, psize, psize, meta_size, 0,
 			     &tcx->tc_po_hdl);
 	if (rc) {
 		print_error("vpool create %s failed with error : %d\n",
@@ -137,6 +137,12 @@ vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
  failed:
 	vts_ctx_fini(tcx);
 	return rc;
+}
+
+int
+vts_ctx_init(struct vos_test_ctx *tcx, size_t psize)
+{
+	return vts_ctx_init_ex(tcx, psize, 0);
 }
 
 void

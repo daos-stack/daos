@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2023, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation */
 
 /*
  * ulog.c -- unified log implementation
@@ -269,9 +269,8 @@ ulog_entry_val_create(struct ulog *ulog, size_t offset, uint64_t *dest,
 	 * a previous, clobbered, log from being incorrectly applied.
 	 */
 	data.zeroes.offset = 0;
-	data.v.base.offset = p_ops->base ? (uint64_t)(dest) -
-		(uint64_t)((dav_obj_t *)p_ops->base)->do_base :
-		(uint64_t)dest;
+	data.v.base.offset =
+	    p_ops->base ? umem_cache_ptr2off(p_ops->umem_store, dest) : (uint64_t)dest;
 	data.v.base.offset |= ULOG_OPERATION(type);
 	data.v.value = value;
 
@@ -321,7 +320,7 @@ ulog_entry_buf_create(struct ulog *ulog, size_t offset, uint64_t gen_num,
 	struct ulog_entry_buf *b = alloca(CACHELINE_SIZE);
 
 	ASSERT(p_ops->base != NULL);
-	b->base.offset = (uint64_t)dest - (uint64_t)((dav_obj_t *)p_ops->base)->do_base;
+	b->base.offset = umem_cache_ptr2off(p_ops->umem_store, dest);
 	b->base.offset |= ULOG_OPERATION(type);
 	b->size = size;
 	b->checksum = 0;
@@ -394,20 +393,17 @@ void
 ulog_entry_apply(const struct ulog_entry_base *e, int persist,
 		 const struct mo_ops *p_ops)
 {
-	ulog_operation_type t = ulog_entry_type(e);
-	uint64_t offset = ulog_entry_offset(e);
-
-	size_t dst_size = sizeof(uint64_t);
-	uint64_t *dst = p_ops->base ?
-		(uint64_t *)((uintptr_t)((dav_obj_t *)p_ops->base)->do_base + offset) :
-		(uint64_t *)offset;
-
+	ulog_operation_type    t = ulog_entry_type(e);
+	uint64_t               offset   = ulog_entry_offset(e);
+	size_t                 dst_size = sizeof(uint64_t);
 	struct ulog_entry_val *ev;
 	struct ulog_entry_buf *eb;
+	uint16_t               nbits;
+	uint32_t               pos;
+	uint64_t               bmask;
+	uint64_t              *dst;
 
-	uint16_t nbits;
-	uint32_t pos;
-	uint64_t bmask;
+	dst = p_ops->base ? umem_cache_off2ptr(p_ops->umem_store, offset) : (uint64_t *)offset;
 
 	SUPPRESS_UNUSED(persist);
 

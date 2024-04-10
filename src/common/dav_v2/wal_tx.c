@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022-2023 Intel Corporation.
+ * (C) Copyright 2022-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,15 +8,14 @@
 #include "dav_internal.h"
 #include "wal_tx.h"
 #include "util.h"
+#include "heap.h"
 
 struct umem_wal_tx_ops dav_wal_tx_ops;
 
 static inline uint64_t
 mdblob_addr2offset(struct dav_obj *hdl, void *addr)
 {
-	D_ASSERT(((uintptr_t)addr >= (uintptr_t)hdl->do_base) &&
-		 ((uintptr_t)addr <= ((uintptr_t)hdl->do_base + hdl->do_size)));
-	return (uintptr_t)addr - (uintptr_t)hdl->do_base;
+	return umem_cache_ptr2off(hdl->do_store, addr);
 }
 
 #define AD_TX_ACT_ADD(tx, wa)							\
@@ -427,6 +426,52 @@ struct umem_wal_tx_ops dav_wal_tx_ops = {
 	.wtx_act_next = wal_tx_act_next,
 };
 
+/*
+ * For Phase 2, WAL replay should additionally ensure the following:
+ * 1. Evictable MBs are loaded as needed.
+ * 2. Newly created MBs are detected and MBR, zone exhausted count are
+ *    updated accordingly.
+ * 3. Updates to space usage of evictable MBs are reflected in MBRT.
+ */
+static inline void *
+dav_wal_replay_heap_off2ptr(struct umem_store *store, struct palloc_heap *heap, uint64_t off)
+{
+	uint32_t                z_id = OFFSET_TO_ZID(off);
+	struct umem_cache_range rg   = {0};
+	int                     rc;
+
+	rg.cr_off  = GET_ZONE_OFFSET(z_id);
+	rg.cr_size = ((store->stor_size - rg.cr_off) > ZONE_MAX_SIZE)
+			 ? ZONE_MAX_SIZE
+			 : (store->stor_size - rg.cr_off);
+	rc         = umem_cache_load(store, &rg, 1, 0);
+	D_ASSERT(rc == 0);
+	heap_update_zones_exhausted(heap, z_id);
+	return umem_cache_off2ptr(store, off);
+}
+
+static inline void
+track_zone_hdr_update(struct palloc_heap *heap, uint64_t off, void *src, daos_size_t size)
+{
+	struct zone_header *hdr  = (struct zone_header *)src;
+	uint32_t            z_id = OFFSET_TO_ZID(off);
+	struct mbrt        *mb;
+
+	if (IS_ZONE_HDR_OFFSET(off)) {
+		/*zone_headers are atomically updated */
+		D_ASSERT(size == sizeof(struct zone_header));
+		D_ASSERT(hdr->magic == ZONE_HEADER_MAGIC);
+		if (!(hdr->flags & ZONE_EVICTABLE_MB))
+			heap_mbrt_setmb_nonevictable(heap, z_id);
+		else if (!heap_mbrt_ismb_initialized(heap, z_id)) {
+			mb = heap_mbrt_setup_mb(heap, z_id);
+			D_ASSERT(mb != NULL);
+			heap_mbrt_setmb_evictable(heap, mb);
+		}
+	} else if ((IS_ZONE_HDR_USAGE_OFFSET(off)) && (heap_mbrt_ismb_evictable(heap, z_id)))
+		heap_mbrt_setmb_usage(heap, z_id, hdr->sp_usage);
+}
+
 int
 dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 {
@@ -437,7 +482,6 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 	int pos, num, val;
 	int rc = 0;
 	dav_obj_t         *dav_hdl = arg;
-	void              *base    = dav_hdl->do_base;
 	struct umem_store *store   = dav_hdl->do_store;
 
 	switch (act->ac_opc) {
@@ -447,10 +491,11 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			tx_id,
 			act->ac_copy.addr / PAGESIZE, act->ac_copy.addr % PAGESIZE,
 			act->ac_copy.size);
-		off = act->ac_copy.addr;
-		dst = base + off;
+		off  = act->ac_copy.addr;
 		src = (void *)&act->ac_copy.payload;
 		size = act->ac_copy.size;
+		track_zone_hdr_update(dav_hdl->do_heap, off, src, size);
+		dst = dav_wal_replay_heap_off2ptr(store, dav_hdl->do_heap, off);
 		memcpy(dst, src, size);
 		break;
 	case UMEM_ACT_ASSIGN:
@@ -460,7 +505,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			act->ac_assign.addr / PAGESIZE, act->ac_assign.addr % PAGESIZE,
 			act->ac_assign.size);
 		off = act->ac_assign.addr;
-		dst = base + off;
+		dst  = dav_wal_replay_heap_off2ptr(store, dav_hdl->do_heap, off);
 		size = act->ac_assign.size;
 		ASSERT_rt(size == 1 || size == 2 || size == 4);
 		src = &act->ac_assign.val;
@@ -473,7 +518,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			act->ac_set.addr / PAGESIZE, act->ac_set.addr % PAGESIZE,
 			act->ac_set.size, act->ac_set.val);
 		off = act->ac_set.addr;
-		dst = base + off;
+		dst  = dav_wal_replay_heap_off2ptr(store, dav_hdl->do_heap, off);
 		size = act->ac_set.size;
 		val = act->ac_set.val;
 		memset(dst, val, size);
@@ -487,7 +532,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 			act->ac_op_bits.pos, act->ac_op_bits.num);
 		off = act->ac_op_bits.addr;
 		size = sizeof(uint64_t);
-		p = (uint64_t *)(base + off);
+		p    = (uint64_t *)dav_wal_replay_heap_off2ptr(store, dav_hdl->do_heap, off);
 		num = act->ac_op_bits.num;
 		pos = act->ac_op_bits.pos;
 		ASSERT_rt((pos >= 0) && (pos + num) <= 64);

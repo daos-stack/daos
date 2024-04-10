@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2023, Intel Corporation */
+/* Copyright 2015-2024, Intel Corporation */
 
 /*
  * dav_flags.h -- Interfaces exported by DAOS internal Allocator for VOS (DAV)
@@ -288,15 +288,39 @@ int
 dav_get_heap_stats_v2(dav_obj_t *pop, struct dav_heap_stats *st);
 
 /**
- * Get an evictable zone with sufficient free space within.
+ * Allot an evictable memory bucket for tasks like new object creation
  *
  * \param[in]           pop             pool handle
  * \param[in]           flags           zone selection criteria.
  *
- * \return id >= 0. Zero indicates non-evictable zone and will be
- *      returned if no evictable zone can be chosen.
+ * \return id > 0, mbid of evictable memory bucket.
+ *         id = 0, no evictable memory bucket is available
+ *                 use non-evictable memory bucket.
  */
 uint32_t
-dav_get_zone_evictable_v2(dav_obj_t *pop, int flags);
+dav_allot_mb_evictable_v2(dav_obj_t *pop, int flags);
 
+/**
+ * Get the memory bucket id associated with the offset.
+ *
+ * \param[in]           pop             pool handle
+ * \param[in]           offset          offset in the pool.
+ *
+ * \return id > 0, mbid of evictable memory bucket
+ *         id = 0, non-evictable memory bucket
+ */
+uint32_t
+dav_off2mb_v2(dav_obj_t *pop, uint64_t offset);
+
+/**
+ * Get the base offset associated with the memory bucket.
+ *
+ * \param[in]           pop             pool handle
+ * \param[in]           mb_id           offset in the pool.
+ *
+ * \return off > 0, evictable memory bucket
+ *         off = 0, non-evictable memory bucket
+ */
+uint32_t
+dav_mb2baseoff_v2(dav_obj_t *pop, uint32_t mb_id);
 #endif /* __DAOS_COMMON_DAV_V2_H */
