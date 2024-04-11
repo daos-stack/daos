@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -59,9 +59,9 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_il_count, 1);
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
-	DFUSE_TRA_DEBUG(oh, "Kernel cache flags invalid %d started %d finished %d drop " DF_BOOL,
+	DFUSE_TRA_DEBUG(oh, "Kernel cache flags invalid %d started %d finished %d",
 			oh->doh_kreaddir_invalid, oh->doh_kreaddir_started,
-			oh->doh_kreaddir_finished, DP_BOOL(oh->doh_evict_on_close));
+			oh->doh_kreaddir_finished);
 
 	if ((!oh->doh_kreaddir_invalid) && oh->doh_kreaddir_finished) {
 		DFUSE_TRA_DEBUG(oh, "Directory handle may have populated cache, saving");
@@ -78,8 +78,6 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 	DFUSE_REPLY_ZERO_OH(oh, req);
 	if (ie) {
 		int rc;
-
-		D_INFO("Calling inval_entry %#lx " DF_DE, ie->ie_parent, DP_DE(ie->ie_name));
 
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent,
 						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));

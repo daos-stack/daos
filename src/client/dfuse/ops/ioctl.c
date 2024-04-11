@@ -315,9 +315,6 @@ handle_cont_qe_ioctl_helper(struct dfuse_obj_hdl *oh, fuse_req_t req,
 			dfuse_inode_decref(dfuse_info, ie);
 		}
 		D_RWLOCK_UNLOCK(&dfuse_info->di_forget_lock);
-
-		DFUSE_TRA_DEBUG(oh->doh_ie, "Query of %#lx returning " DF_BOOL, in_query->ino,
-				DP_BOOL(query.found));
 	}
 
 	query.inode_count     = atomic_load_relaxed(&dfuse_info->di_inode_count);
