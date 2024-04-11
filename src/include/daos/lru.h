@@ -167,4 +167,13 @@ daos_lru_is_last_user(struct daos_llink *llink)
 	return llink->ll_ref <= 2;
 }
 
+/**
+ * Return true after current caller released the reference.
+ */
+static inline bool
+daos_lru_left_last_user(struct daos_llink *llink)
+{
+	return (llink->ll_ref - 1) <= 2;
+}
+
 #endif

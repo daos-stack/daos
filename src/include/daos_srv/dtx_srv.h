@@ -329,6 +329,8 @@ int dtx_cont_register(struct ds_cont_child *cont);
 
 void dtx_cont_deregister(struct ds_cont_child *cont);
 
+void stop_dtx_reindex_ult(struct ds_cont_child *cont, bool wait);
+
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);
 

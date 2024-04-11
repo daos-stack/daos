@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -752,6 +752,9 @@ ds_cont_child_cache_destroy(struct daos_lru_cache *cache)
 static void
 cont_child_put(struct daos_lru_cache *cache, struct ds_cont_child *cont)
 {
+	if (unlikely(cont->sc_dtx_reindex && daos_lru_left_last_user(&cont->sc_list)))
+		stop_dtx_reindex_ult(cont, false);
+
 	daos_lru_ref_release(cache, &cont->sc_list);
 }
 
@@ -1251,9 +1254,7 @@ cont_child_destroy_one(void *vin)
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
 
-		/* Give chance to DTX reindex ULT for exit. */
-		while (unlikely(cont->sc_dtx_reindex))
-			ABT_thread_yield();
+		stop_dtx_reindex_ult(cont, true);
 
 		/* Make sure checksum scrubbing has stopped */
 		ABT_mutex_lock(cont->sc_mutex);

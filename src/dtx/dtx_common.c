@@ -1682,6 +1682,7 @@ dtx_reindex_ult(void *arg)
 		 DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont), rc);
 
 	cont->sc_dtx_reindex = 0;
+	cont->sc_dtx_reindex_abort = 0;
 	ds_cont_child_put(cont);
 }
 
@@ -1713,7 +1714,7 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 }
 
 void
-stop_dtx_reindex_ult(struct ds_cont_child *cont)
+stop_dtx_reindex_ult(struct ds_cont_child *cont, bool wait)
 {
 	/* DTX reindex has been done or not has not been started. */
 	if (!cont->sc_dtx_reindex)
@@ -1729,10 +1730,10 @@ stop_dtx_reindex_ult(struct ds_cont_child *cont)
 
 	cont->sc_dtx_reindex_abort = 1;
 
-	while (cont->sc_dtx_reindex)
-		ABT_thread_yield();
-
-	cont->sc_dtx_reindex_abort = 0;
+	if (wait) {
+		while (cont->sc_dtx_reindex)
+			ABT_thread_yield();
+	}
 }
 
 int
@@ -1900,7 +1901,7 @@ dtx_cont_close(struct ds_cont_child *cont)
 
 		d_list_for_each_entry(dbca, &dbpa->dbpa_cont_list, dbca_pool_link) {
 			if (dbca->dbca_cont == cont) {
-				stop_dtx_reindex_ult(cont);
+				stop_dtx_reindex_ult(cont, true);
 				d_list_del(&dbca->dbca_sys_link);
 				d_list_add_tail(&dbca->dbca_sys_link,
 						&dmi->dmi_dtx_batched_cont_close_list);
