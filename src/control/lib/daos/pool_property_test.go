@@ -280,6 +280,18 @@ func TestControl_PoolProperties(t *testing.T) {
 			expStr:  "svc_ops_entry_age:175",
 			expJson: []byte(`{"name":"svc_ops_entry_age","description":"Metadata duplicate operations KVS max entry age, in seconds","value":175}`),
 		},
+		"svc_ops_entry_age-valid-minval": {
+			name:    "svc_ops_entry_age",
+			value:   "60",
+			expStr:  "svc_ops_entry_age:60",
+			expJson: []byte(`{"name":"svc_ops_entry_age","description":"Metadata duplicate operations KVS max entry age, in seconds","value":60}`),
+		},
+		"svc_ops_entry_age-valid-maxval": {
+			name:    "svc_ops_entry_age",
+			value:   "600",
+			expStr:  "svc_ops_entry_age:600",
+			expJson: []byte(`{"name":"svc_ops_entry_age","description":"Metadata duplicate operations KVS max entry age, in seconds","value":600}`),
+		},
 		"svc_ops_entry_age-invalid": {
 			name:   "svc_ops_entry_age",
 			value:  "-1",
