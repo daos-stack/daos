@@ -2654,14 +2654,14 @@ rdb_raft_dictate(struct rdb *db)
 	 */
 	replicas.rl_ranks = &self;
 	replicas.rl_nr = 1;
-	rc = rdb_raft_store_replicas(db->d_lc, index, &replicas);
+	rc = rdb_raft_store_replicas(db->d_lc, index, &replicas, NULL /* vtx */);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to reset membership: "DF_RC"\n", DP_DB(db), DP_RC(rc));
 		return rc;
 	}
 	keys[0] = rdb_lc_entry_header;
 	keys[1] = rdb_lc_entry_data;
-	rc = rdb_lc_punch(db->d_lc, index, RDB_LC_ATTRS, 2 /* n */, keys);
+	rc = rdb_lc_punch(db->d_lc, index, RDB_LC_ATTRS, 2 /* n */, keys, NULL /* vtx */);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to punch entry: "DF_RC"\n", DP_DB(db), DP_RC(rc));
 		return rc;
@@ -2676,7 +2676,7 @@ rdb_raft_dictate(struct rdb *db)
 	lc_record.dlr_base_term = term;
 	lc_record.dlr_tail = index + 1;
 	d_iov_set(&value, &lc_record, sizeof(lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &value);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &value, NULL /* vtx */);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update LC record: "DF_RC"\n", DP_DB(db), DP_RC(rc));
 		return rc;
