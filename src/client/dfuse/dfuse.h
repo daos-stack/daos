@@ -739,7 +739,7 @@ dfuse_loop(struct dfuse_info *dfuse_info);
 		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
 		(_oh)->doh_ie = NULL;                                                              \
 		__rc          = fuse_reply_err(req, 0);                                            \
-		if (__rc != 0)                                                                     \
+		if ((__rc != 0) && (__rc != -ENOENT))                                              \
 			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
 	} while (0)
 
