@@ -1016,7 +1016,7 @@ class YamlCommand(SubProcessCommand):
                             hosts, src_file, dst_file, mkdir=False,
                             verbose=False, raise_exception=False, sudo=True,
                             owner=self.certificate_owner)
-                        if result.exit_status != 0:
+                        if not result.passed:
                             self.log.info(
                                 "    WARNING: %s copy failed on %s:\n%s",
                                 dst_file, hosts, result)
@@ -1049,14 +1049,11 @@ class YamlCommand(SubProcessCommand):
                 self.log.info(
                     "Copying %s yaml configuration file to %s on %s",
                     self.temporary_file, self.yaml.filename, hosts)
-                try:
-                    distribute_files(
-                        hosts, self.temporary_file, self.yaml.filename,
-                        verbose=False, sudo=True)
-                except DaosTestError as error:
+                result = distribute_files(
+                    hosts, self.temporary_file, self.yaml.filename, verbose=False, sudo=True)
+                if not result.passed:
                     raise CommandFailure(
-                        "ERROR: Copying yaml configuration file to {}: "
-                        "{}".format(hosts, error)) from error
+                        f"ERROR: Copying yaml configuration file to {result.failed_hosts}")
 
     def verify_socket_directory(self, user, hosts):
         """Verify the domain socket directory is present and owned by this user.
@@ -1079,15 +1076,17 @@ class YamlCommand(SubProcessCommand):
                 self.log.info(
                     "%s: creating socket directory %s for user %s on %s",
                     self.command, directory, user, result.failed_hosts)
-                try:
-                    create_directory(result.failed_hosts, directory, sudo=True)
-                    change_file_owner(
-                        result.failed_hosts, directory, user, get_primary_group(user), sudo=True)
-                except CommandFailure as error:
+                mkdir_result = create_directory(result.failed_hosts, directory, sudo=True)
+                if not mkdir_result.passed:
                     raise CommandFailure(
-                        "{}: error setting up missing socket directory {} for "
-                        "user {} on {}:\n{}".format(
-                            self.command, directory, user, result.failed_hosts, error)) from error
+                        f"{self.command}: creating socket directory {directory} for user {user} on "
+                        f"{mkdir_result.failed_hosts}")
+                chown_result = change_file_owner(
+                    mkdir_result.failed_hosts, directory, user, get_primary_group(user), sudo=True)
+                if not chown_result.passed:
+                    raise CommandFailure(
+                        f"{self.command}: changing socket directory {directory} ownership for user "
+                        f"{user} on {chown_result.failed_hosts}")
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.

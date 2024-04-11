@@ -8,7 +8,6 @@ from logging import getLogger
 from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
-from exception_utils import CommandFailure
 from run_utils import command_as_user, get_clush_command, run_command, run_remote
 from user_utils import get_chown_command, get_primary_group
 
@@ -53,7 +52,7 @@ def _debug_no_space(result, directory):
             log.debug('############################')
 
 
-def create_directory(hosts, directory, timeout=15, verbose=True, raise_exception=True, sudo=False):
+def create_directory(hosts, directory, timeout=15, verbose=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
     Args:
@@ -62,12 +61,7 @@ def create_directory(hosts, directory, timeout=15, verbose=True, raise_exception
         timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and stdout/stderr.
             Defaults to True.
-        raise_exception (bool, optional): whether to raise an exception if the command returns a
-            non-zero exit status. Defaults to True.
         sudo (bool, optional): whether to run the command via sudo. Defaults to False.
-
-    Raises:
-        CommandFailure: if there is an error running the command and an exception was requested
 
     Returns:
         RemoteCommandResult: a grouping of the command results from the same hosts with the same
@@ -77,14 +71,10 @@ def create_directory(hosts, directory, timeout=15, verbose=True, raise_exception
     result = _get_result(hosts, mkdir_command, timeout, verbose, sudo)
     if not result.passed:
         _debug_no_space(result, directory)
-        if raise_exception:
-            raise CommandFailure(
-                f"Error creating directory '{directory}' on {str(result.failed_hosts)}")
     return result
 
 
-def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
-                      raise_exception=True, sudo=False):
+def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True, sudo=False):
     """Create the specified directory on the specified hosts.
 
     Args:
@@ -94,23 +84,14 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
         group (str): new group owner of the file
         timeout (int, optional): command timeout. Defaults to 15 seconds.
         verbose (bool, optional): whether to log the command run and its output. Defaults to True.
-        raise_exception (bool, optional): whether to raise an exception if the command returns a
-            non-zero exit status. Defaults to True.
         sudo (bool, optional): whether to run the command via sudo. Defaults to False.
-
-    Raises:
-        CommandFailure: if there is an error running the command and an exception was requested
 
     Returns:
         RemoteCommandResult: a grouping of the command results from the same hosts with the same
             return status
     """
     chown_command = get_chown_command(owner, group, file=filename)
-    result = _get_result(hosts, chown_command, timeout, verbose, sudo)
-    if not result.passed and raise_exception:
-        raise CommandFailure(
-            f"Error changing file owner of '{filename}' on {str(result.failed_hosts)}.")
-    return result
+    return _get_result(hosts, chown_command, timeout, verbose, sudo)
 
 
 def check_file_exists(hosts, filename, user=None, directory=False, sudo=False, timeout=15):
@@ -142,8 +123,8 @@ def check_file_exists(hosts, filename, user=None, directory=False, sudo=False, t
     return _get_result(hosts, command, timeout, True, sudo)
 
 
-def distribute_files(hosts, source, destination, mkdir=True, timeout=60, verbose=True,
-                     raise_exception=True, sudo=False, owner=None):
+def distribute_files(hosts, source, destination, mkdir=True, timeout=60, verbose=True, sudo=False,
+                     owner=None):
     """Copy the source to the destination on each of the specified hosts.
 
     Optionally (by default) ensure the destination directory exists on each of
@@ -159,15 +140,10 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60, verbose
         timeout (int, optional): command timeout. Defaults to 60 seconds.
         verbose (bool, optional): whether to log the command run and
             stdout/stderr. Defaults to True.
-        raise_exception (bool, optional): whether to raise an exception if the
-            command returns a non-zero exit status. Defaults to True.
         sudo (bool, optional): whether to run the command via sudo. Defaults to
             False.
         owner (str, optional): if specified the owner to assign as the owner of
             the copied file. Defaults to None.
-
-    Raises:
-        CommandFailure: if there is an error running the command and an exception was requested
 
     Returns:
         RemoteCommandResult: a grouping of the command results from the same hosts with the same
@@ -175,8 +151,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60, verbose
     """
     result = None
     if mkdir:
-        result = create_directory(
-            hosts, os.path.dirname(destination), verbose=verbose, raise_exception=raise_exception)
+        result = create_directory(hosts, os.path.dirname(destination), verbose=verbose)
     if result is None or result.passed:
         if sudo:
             # In order to copy a protected file to a remote host in CI the source will first be
@@ -187,9 +162,8 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60, verbose
                 # copy to fail, so remove the file first
                 _get_result(other_hosts, f'rm -f {source}', timeout, verbose, True)
                 result = distribute_files(
-                    other_hosts, source, source, mkdir=True,
-                    timeout=timeout, verbose=verbose,
-                    raise_exception=raise_exception, sudo=False, owner=None)
+                    other_hosts, source, source, mkdir=True, timeout=timeout, verbose=verbose,
+                    sudo=False, owner=None)
             if result is None or result.passed:
                 # Then a local sudo copy will be executed on the remote node to copy the source
                 # to the destination
@@ -212,7 +186,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60, verbose
         if owner is not None and result.passed:
             change_file_owner(
                 hosts, destination, owner, get_primary_group(owner), timeout=timeout,
-                verbose=verbose, raise_exception=raise_exception, sudo=sudo)
+                verbose=verbose, sudo=sudo)
     return result
 
 

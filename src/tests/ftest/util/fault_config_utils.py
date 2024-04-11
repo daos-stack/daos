@@ -303,7 +303,10 @@ class FaultInjection():
         """
         if self._fault_list:
             self._hosts = hosts
-            distribute_files(self._hosts, self.fault_file, self.fault_file)
+            result = distribute_files(self._hosts, self.fault_file, self.fault_file)
+            if not result.passed:
+                raise FaultInjectionFailed(
+                    f"Error copying {self.fault_file} to {result.failed_hosts}")
 
     def stop(self):
         """Remove the fault injection file created during testing.
