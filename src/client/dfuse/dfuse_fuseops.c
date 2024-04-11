@@ -44,9 +44,6 @@ dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_PARALLEL_DIROPS);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_POSIX_ACL);
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_HANDLE_KILLPRIV);
-#ifdef FUSE_CAP_EXPIRE_ONLY
-	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPIRE_ONLY);
-#endif
 
 #ifdef FUSE_CAP_CACHE_SYMLINKS
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_CACHE_SYMLINKS);
@@ -56,6 +53,12 @@ dfuse_show_flags(void *handle, unsigned int cap, unsigned int want)
 #endif
 #ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
 	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPLICIT_INVAL_DATA);
+#endif
+#ifdef FUSE_CAP_EXPIRE_ONLY
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_EXPIRE_ONLY);
+#endif
+#ifdef FUSE_CAP_SETXATTR_EXT
+	SHOW_FLAG(handle, cap, want, FUSE_CAP_SETXATTR_EXT);
 #endif
 
 	if (cap)
@@ -179,6 +182,9 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		DFUSE_IE_STAT_ADD(inode, DS_GETATTR);
 	}
 
+	/* Check for stat-after-write/close.  On close a stat is performed so the first getattr
+	 * call can use the result of that.
+	 */
 	if (inode->ie_dfs->dfc_attr_timeout) {
 		double timeout;
 		dfuse_ie_cs_flush(inode);

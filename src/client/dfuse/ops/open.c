@@ -67,8 +67,6 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	/* There are no failure points between here and the kernel reply */
 
-	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
-
 	if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		oh->doh_writeable = true;
 
@@ -100,6 +98,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	} else {
 		fi_out.direct_io = 1;
 	}
+
+	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
 	if (ie->ie_dfs->dfc_direct_io_disable)
 		fi_out.direct_io = 0;
@@ -290,11 +290,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_write_count, 1);
 	} else {
 		if (oh->doh_caching) {
-			if (il_calls == 0) {
-				DFUSE_TRA_DEBUG(oh, "Saving data cache");
-				update_data_cache = true;
-
-			} else {
+			if (il_calls > 0) {
 				DFUSE_TRA_DEBUG(oh, "Evicting cache");
 				dfuse_cache_evict(oh->doh_ie);
 			}

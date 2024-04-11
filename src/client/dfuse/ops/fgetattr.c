@@ -10,14 +10,28 @@
 static void
 dfuse_cb_getattr_cb(struct dfuse_event *ev)
 {
+	struct dfuse_inode_entry *ie = ev->de_ie;
+
 	if (ev->de_ev.ev_error != 0) {
-		DFUSE_REPLY_ERR_RAW(ev->de_ie, ev->de_req, ev->de_ev.ev_error);
+		DFUSE_REPLY_ERR_RAW(ie, ev->de_req, ev->de_ev.ev_error);
 		D_GOTO(release, 0);
 	}
 
-	ev->de_attr.st_ino = ev->de_ie->ie_stat.st_ino;
+	ev->de_attr.st_ino = ie->ie_stat.st_ino;
 
-	ev->de_ie->ie_stat = ev->de_attr;
+	ie->ie_stat = ev->de_attr;
+
+	if ((ie->ie_dfs->dfc_data_timeout != 0) &&
+	    (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
+		/* This tries to match the code in fuse_change_attributes in fs/fuse/inode.c,
+		 * if the mtime or the size has changed then drop the data cache.
+		 */
+		if ((ie->ie_stat.st_size != ie->ie_dc.stat.st_size) ||
+		    (d_timediff_ns(&ie->ie_stat.st_mtim, &ie->ie_dc.stat.st_mtim) != 0)) {
+			DFUSE_TRA_INFO(ie, "Invalidating data cache");
+			dfuse_dcache_evict(ie);
+		}
+	}
 
 	DFUSE_REPLY_ATTR(ev->de_ie, ev->de_req, &ev->de_attr);
 release:

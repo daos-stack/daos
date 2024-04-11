@@ -1082,7 +1082,7 @@ dfuse_dc_cache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *t
 	D_ASSERT(max_age != -1);
 	D_ASSERT(max_age >= 0);
 
-	if (ie->ie_mcache_last_update.tv_sec == 0)
+	if (ie->ie_dc.last_update.tv_sec == 0)
 		return false;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
