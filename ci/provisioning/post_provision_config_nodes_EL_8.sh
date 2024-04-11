@@ -21,7 +21,6 @@ distro_custom() {
     # pydaos into virtual environments.
     dnf -y install python39 python39-devel
     dnf -y install python3.11 python3.11-devel
-    dnf -y install python3.12 python3.12-devel
 }
 
 install_mofed() {
