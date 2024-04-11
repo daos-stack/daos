@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC     DD_FAC(il)
+#define D_LOGFAC DD_FAC(il)
 
 #include <libaio.h>
 #include <time.h>

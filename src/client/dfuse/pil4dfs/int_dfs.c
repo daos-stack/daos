@@ -59,7 +59,6 @@
 /* D_ALLOC and D_FREE can not be used in query_path(). It causes dead lock during daos_init(). */
 #define FREE(ptr)	do {free(ptr); (ptr) = NULL; } while (0)
 
-
 /* The max number of mount points for DAOS mounted simultaneously */
 #define MAX_DAOS_MT         (8)
 
