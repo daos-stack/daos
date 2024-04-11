@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2021 Intel Corporation.
+ * (C) Copyright 2019-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -155,7 +155,7 @@ dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
 
 /* Notify daos_server that we are ready (e.g., to receive dRPC requests). */
 int
-drpc_notify_ready(void)
+drpc_notify_ready(bool check_mode)
 {
 	Srv__NotifyReadyReq	req = SRV__NOTIFY_READY_REQ__INIT;
 	uint8_t		       *reqb;
@@ -177,6 +177,7 @@ drpc_notify_ready(void)
 	req.drpclistenersock = drpc_listener_socket_path;
 	req.instanceidx = dss_instance_idx;
 	req.ntgts = dss_tgt_nr;
+	req.check_mode = check_mode;
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);

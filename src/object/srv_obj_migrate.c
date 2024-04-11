@@ -472,7 +472,8 @@ migrate_pool_tls_create_one(void *data)
 	struct migrate_pool_tls_create_arg *arg = data;
 	struct obj_tls			   *tls = obj_tls_get();
 	struct migrate_pool_tls		   *pool_tls;
-	int rc;
+	struct ds_pool_child		   *pool_child = NULL;
+	int				    rc = 0;
 
 	pool_tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (pool_tls != NULL) {
@@ -481,6 +482,16 @@ migrate_pool_tls_create_one(void *data)
 		 */
 		migrate_pool_tls_put(pool_tls);
 		return 0;
+	}
+
+	pool_child = ds_pool_child_lookup(arg->pool_uuid);
+	if (pool_child == NULL) {
+		D_ASSERTF(dss_get_module_info()->dmi_xs_id == 0,
+			  "Cannot find the pool "DF_UUIDF"\n", DP_UUID(arg->pool_uuid));
+	} else if (unlikely(pool_child->spc_no_storage)) {
+		D_DEBUG(DB_REBUILD, DF_UUID" "DF_UUID" lost pool shard, ver %d, skip.\n",
+			DP_UUID(arg->pool_uuid), DP_UUID(arg->pool_hdl_uuid), arg->version);
+		D_GOTO(out, rc = 0);
 	}
 
 	D_ALLOC_PTR(pool_tls);
@@ -556,6 +567,9 @@ migrate_pool_tls_create_one(void *data)
 out:
 	if (rc && pool_tls)
 		migrate_pool_tls_destroy(pool_tls);
+
+	if (pool_child != NULL)
+		ds_pool_child_put(pool_child);
 
 	return rc;
 }
