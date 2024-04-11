@@ -533,11 +533,13 @@ class TestRunner():
         hosts.add(self.local_host)
         logger.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
         commands = [
+            f"df {test_env.log_dir}",
             f"sudo -n rm -fr {test_env.log_dir}",
             f"mkdir -p {test_env.log_dir}",
             f"chmod a+wrx {test_env.log_dir}",
             f"ls -al {test_env.log_dir}",
-            f"mkdir -p {test_env.user_dir}"
+            f"mkdir -p {test_env.user_dir}",
+            f"df {test_env.log_dir}",
         ]
         # Predefine the sub directories used to collect the files process()/_archive_files()
         for directory in TEST_RESULTS_DIRS:
