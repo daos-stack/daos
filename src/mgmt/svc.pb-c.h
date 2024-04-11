@@ -43,7 +43,11 @@ typedef enum _Mgmt__JoinResp__State {
   /*
    * Server excluded from the system.
    */
-  MGMT__JOIN_RESP__STATE__OUT = 1
+  MGMT__JOIN_RESP__STATE__OUT = 1,
+  /*
+   * Server should start in checker mode.
+   */
+  MGMT__JOIN_RESP__STATE__CHECK = 2
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__JOIN_RESP__STATE)
 } Mgmt__JoinResp__State;
 
@@ -151,10 +155,14 @@ struct  _Mgmt__JoinReq
    */
   size_t n_secondary_nctxs;
   uint32_t *secondary_nctxs;
+  /*
+   * rank started in check mode
+   */
+  protobuf_c_boolean check_mode;
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0,NULL, 0,NULL, 0 }
 
 
 struct  _Mgmt__JoinResp
@@ -254,11 +262,11 @@ struct  _Mgmt__ClientNetHint
    */
   char *provider;
   /*
-   * CaRT OFI_INTERFACE
+   * CaRT D_INTERFACE
    */
   char *interface;
   /*
-   * CaRT OFI_DOMAIN for given OFI_INTERFACE
+   * CaRT D_DOMAIN for given D_INTERFACE
    */
   char *domain;
   /*

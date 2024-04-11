@@ -207,7 +207,7 @@ class DaosBuild(DfuseTestBase):
                 'git -C {} submodule init'.format(build_dir),
                 'git -C {} submodule update'.format(build_dir),
                 'python3 -m pip install pip --upgrade',
-                'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
+                'python3 -m pip install -r {}/requirements-build.txt'.format(build_dir),
                 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
                 'daos filesystem query {}'.format(mount_dir),
                 'daos filesystem evict {}'.format(build_dir),
