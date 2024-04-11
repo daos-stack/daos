@@ -531,10 +531,10 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path, m
 	/* Unset any unsupported mode bits. We track these errors so they can
 	 * be surfaced to the user at the end of the copy operation.
 	 */
-	if (!ignore_unsup && mode & (S_ISVTX | S_ISGID | S_ISUID)) {
+	if (!ignore_unsup && mode & S_ISVTX) {
 		(*num_chmod_enotsup)++;
 	}
-	mode &= ~(S_ISVTX | S_ISGID | S_ISUID);
+	mode &= ~S_ISVTX;
 
 	if (file_dfs->type == POSIX) {
 		rc = chmod(path, mode);
