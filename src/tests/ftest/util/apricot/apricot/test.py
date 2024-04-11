@@ -17,6 +17,7 @@ from agent_utils import DaosAgentManager, include_local_host
 from avocado import Test as avocadoTest
 from avocado import TestFail, fail_on, skip
 from avocado.core import exceptions
+from avocado.core.teststatus import STATUSES_NOT_OK
 from cart_ctl_utils import CartCtl
 from ClusterShell.NodeSet import NodeSet
 from command_utils_base import EnvironmentVariables
@@ -1382,27 +1383,11 @@ class TestWithServers(TestWithoutServers):
             # dump engines ULT stacks upon test timeout
             self.dump_engines_stacks("Test has timed-out")
 
-    def fail(self, message=None):
-        """Dump engines ULT stacks upon test failure."""
-        self.dump_engines_stacks("Test has failed")
-        self.fail(message)
-
-    def error(self, message=None):
-        # pylint: disable=arguments-renamed
-        """Dump engines ULT stacks upon test error."""
-        self.dump_engines_stacks("Test has errored")
-        self.error(message)
-
     def tearDown(self):
         """Tear down after each test case."""
 
         # dump engines ULT stacks upon test failure
-        # check of Avocado test status during teardown is presently useless
-        # and about same behavior has been implemented by adding both fail()
-        # error() method above, to overload the methods of Avocado base Test
-        # class (see DAOS-1452/DAOS-9941 and Avocado issue #5217 with
-        # associated PR-5224)
-        if self.status is not None and self.status != 'PASS' and self.status != 'SKIP':
+        if self.status is not None and self.status in STATUSES_NOT_OK:
             self.dump_engines_stacks("Test status is {}".format(self.status))
 
         # Report whether or not the timeout has expired
