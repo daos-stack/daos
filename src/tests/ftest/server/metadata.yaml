@@ -43,15 +43,24 @@ server_config:
           class: dcpm
           scm_list: ["/dev/pmem1"]
           scm_mount: /mnt/daos1
-pool:
+pool: &pool_common
   svcn: 5
   scm_size: 1G
   control_method: dmg
-  properties: !mux
-    svc_enable_150:
-      svc_ops_enabled:1,svc_ops_entry_age:150
-    svc_disable:
-      svc_ops_enabled:0
+test_1_pool:
+  << *pool_common
+  pool_prop: !mux
+    svc_ops_disable:
+      properties: svc_ops_enabled:0
+    svc_ops_150:
+      properties: svc_ops_enabled:1,svc_ops_entry_age:150
+#    svc_ops_300:
+#      properties: svc_ops_enabled:1,svc_ops_entry_age:300
+#    svc_ops_600:
+#      properties: svc_ops_enabled:1,svc_ops_entry_age:600
+test_2_pool:
+  << *pool_common
+  properties: svc_ops_enabled:1,svc_ops_entry_age:150
 container:
   control_method: API
   silent: true
