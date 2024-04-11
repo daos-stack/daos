@@ -582,7 +582,7 @@ class LocalTask():
             # Raised if command times out
             self._add_command_output('stdout', result.stdout)
             self._add_command_output('stderr', result.stderr)
-            self._timeout_hosts.add([self._host])
+            self._timeout_hosts.add(self._host)
 
         except KeyboardInterrupt as error:
             # User Ctrl-C
@@ -636,7 +636,7 @@ class LocalTask():
             tuple: stdout, hosts
         """
         for host, output in self._command_output['stdout'].items():
-            if host in match_keys:
+            if not match_keys or host in match_keys:
                 yield output, [host]
 
     def iter_errors(self, match_keys=None):
