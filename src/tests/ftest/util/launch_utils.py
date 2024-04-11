@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -533,7 +533,6 @@ class TestRunner():
         hosts.add(self.local_host)
         logger.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
         commands = [
-            f"df {test_env.log_dir}",
             f"sudo -n rm -fr {test_env.log_dir}",
             f"mkdir -p {test_env.log_dir}",
             f"chmod a+wrx {test_env.log_dir}",

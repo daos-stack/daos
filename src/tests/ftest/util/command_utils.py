@@ -1006,15 +1006,13 @@ class YamlCommand(SubProcessCommand):
                 data = yaml.get_certificate_data(
                     yaml.get_attribute_names(LogParameter))
                 for name in data:
-                    create_directory(
-                        hosts, name, verbose=False, raise_exception=False)
+                    create_directory(hosts, name, verbose=False)
                     for file_name in data[name]:
                         src_file = os.path.join(source, file_name)
                         dst_file = os.path.join(name, file_name)
                         self.log.debug("  %s -> %s", src_file, dst_file)
                         result = distribute_files(
-                            hosts, src_file, dst_file, mkdir=False,
-                            verbose=False, raise_exception=False, sudo=True,
+                            hosts, src_file, dst_file, mkdir=False, verbose=False, sudo=True,
                             owner=self.certificate_owner)
                         if not result.passed:
                             self.log.info(
