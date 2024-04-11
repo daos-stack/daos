@@ -2351,7 +2351,6 @@ class PosixTests():
         if dfuse0.stop():
             self.fatal_errors = True
 
-
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
         dfuse0 = DFuse(self.server,
