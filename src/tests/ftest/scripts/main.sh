@@ -22,7 +22,7 @@ then
     rm -rf venv
 fi
 
-latest_python = $(find /usr/bin -name 'python*' -type f -executable | grep -E '[0-9]$' | sort -r | head -1)
+latest_python=$(find /usr/bin -name 'python*' -type f -executable | grep -E '[0-9]$' | sort -r | head -1)
 ${latest_python} -m venv venv
 # shellcheck disable=SC1091
 source venv/bin/activate
