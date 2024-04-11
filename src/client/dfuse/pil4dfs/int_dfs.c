@@ -144,7 +144,7 @@ struct d_aio_ctx {
 	_Atomic uint64_t  num_op_submitted;
 	_Atomic uint64_t  num_op_done;
 	pthread_mutex_t   lock;
-	/* The array of finished ev. ev is removed from the arrary by io_getevents(). */
+	/* The array of finished ev. ev is removed from the array by io_getevents(). */
 	struct d_aio_ev **ev_done_array;
 	int               ev_done_h;
 	int               ev_done_t;
