@@ -119,7 +119,7 @@ class PosixSimul(DfuseTestBase):
 
         self.log.info("Running simul on %s", mpi_type)
         try:
-            result = run_command(cmd, output_check="combined", raise_exception=raise_exception)
+            result = run_command(cmd, raise_exception=raise_exception)
         finally:
             self.stop_dfuse()
 
