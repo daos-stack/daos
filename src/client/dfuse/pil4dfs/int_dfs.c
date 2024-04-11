@@ -124,7 +124,7 @@ struct d_aio_eq {
 /* list of EQs dedicated for aio contexts. */
 static struct d_aio_eq aio_eq_list[MAX_EQ];
 /* the accumulated iodepth for aio context. */
-static long int      depth_sum_accu;
+static long int        depth_sum_accu;
 
 struct d_aio_ev {
 	daos_event_t      ev;
@@ -144,7 +144,7 @@ struct d_aio_ctx {
 	_Atomic uint64_t  num_op_submitted;
 	_Atomic uint64_t  num_op_done;
 	pthread_mutex_t   lock;
-	/* The arrary of finished ev. ev is removed from the arrary by io_getevents(). */
+	/* The array of finished ev. ev is removed from the arrary by io_getevents(). */
 	struct d_aio_ev **ev_done_array;
 	int               ev_done_h;
 	int               ev_done_t;
@@ -6708,6 +6708,7 @@ ev_dequeue_batch(struct d_aio_ctx *ctx, long min_nr, long nr, struct io_event *e
 
 		events[*num_ev].obj = ev->piocb;
 		events[*num_ev].res = ev->piocb->u.c.nbytes;
+
 		rc = daos_event_fini(&ev->ev);
 		if (rc)
 			DL_ERROR(rc, "daos_event_fini() failed");
@@ -6753,6 +6754,7 @@ aio_poll_eqs(struct d_aio_ctx *ctx, long min_nr, long nr, struct io_event *event
 					D_MUTEX_LOCK(&ctx->lock);
 					events[*num_ev].obj = p_aio_ev->piocb;
 					events[*num_ev].res = p_aio_ev->piocb->u.c.nbytes;
+
 					rc2 = daos_event_fini(&p_aio_ev->ev);
 					if (rc2)
 						DL_ERROR(rc, "daos_event_fini() failed");
