@@ -1288,7 +1288,7 @@ class DFuse():
 
     # pylint: disable-next=too-many-arguments
     def __init__(self, daos, conf, pool=None, container=None, mount_path=None, uns_path=None,
-                 caching=True, wbcache=False, multi_user=False, ro=False):
+                 caching=True, wbcache=True, multi_user=False, ro=False):
         if mount_path:
             self.dir = mount_path
         else:
@@ -1950,7 +1950,6 @@ class needs_dfuse_with_opt():
             if not self.dfuse_inval:
                 assert self.caching is True
                 cont_attrs = {'dfuse-attr-time': '5m',
-                              'dfuse-data-cache': '5m',
                               'dfuse-dentry-time': '5m',
                               'dfuse-dentry-dir-time': '5m',
                               'dfuse-ndentry-time': '5m'}
@@ -5085,7 +5084,7 @@ def run_in_fg(server, conf, args):
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
-        cont_attrs = {'dfuse-data-cache': 120,
+        cont_attrs = {'dfuse-data-cache': False,
                       'dfuse-attr-time': 67,
                       'dfuse-dentry-time': 19,
                       'dfuse-dentry-dir-time': 31,
@@ -5095,7 +5094,7 @@ def run_in_fg(server, conf, args):
         container = container.uuid
 
     dargs = {"caching": True,
-             "wbcache": False,
+             "wbcache": True,
              "multi_user": args.multi_user}
 
     if pool_on_cmd_line:
