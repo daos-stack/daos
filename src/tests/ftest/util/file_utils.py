@@ -42,7 +42,7 @@ def _debug_no_space(result, directory):
     log = getLogger()
     if not result.passed:
         debug_hosts = NodeSet()
-        for hosts, stdout in result.all_stdout():
+        for hosts, stdout in result.all_stdout.items():
             if 'no space' in stdout.lower():
                 debug_hosts.add(hosts)
         if debug_hosts:
