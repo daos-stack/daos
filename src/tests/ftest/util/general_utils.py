@@ -194,8 +194,7 @@ def bytes_to_human(size, digits=2, binary=True):
     return "".join([str(round(value[0], digits)), value[1]])
 
 
-def run_command(command, timeout=60, verbose=True, raise_exception=True,
-                output_check="both", env=None):
+def run_command(command, timeout=60, verbose=True, raise_exception=True, env=None):
     """Run the command on the local host.
 
     This method uses the avocado.utils.process.run() method to run the specified
@@ -212,15 +211,6 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
             stdout/stderr. Defaults to True.
         raise_exception (bool, optional): whether to raise an exception if the
             command returns a non-zero exit status. Defaults to True.
-        output_check (str, optional): whether to record the output from the
-            command (from stdout and stderr) in the test output record files.
-            Valid values:
-                "stdout"    - standard output *only*
-                "stderr"    - standard error *only*
-                "both"      - both standard output and error in separate files
-                "combined"  - standard output and error in a single file
-                "none"      - disable all recording
-            Defaults to "both".
         env (dict, optional): dictionary of environment variable names and
             values to set when running the command. Defaults to None.
 
@@ -249,7 +239,6 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
         "timeout": timeout,
         "verbose": verbose,
         "ignore_status": not raise_exception,
-        "allow_output_check": output_check,
         "shell": False,
         "env": env,
     }

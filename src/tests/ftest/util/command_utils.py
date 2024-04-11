@@ -230,7 +230,7 @@ class ExecutableCommand(CommandWithParameters):
 
             self.result = run_command(
                 command, self.timeout, self.verbose, raise_exception,
-                self.output_check, env=self.env)
+                env=self.env)
 
         except DaosTestError as error:
             # Command failed or possibly timed out
@@ -284,7 +284,6 @@ class ExecutableCommand(CommandWithParameters):
             kwargs = {
                 "cmd": str(self),
                 "verbose": self.verbose,
-                "allow_output_check": "combined",
                 "shell": False,
                 "env": self.env,
                 "sudo": self.sudo,
