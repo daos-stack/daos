@@ -150,6 +150,21 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_LED_MANAGE:
 		ds_mgmt_drpc_dev_manage_led(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_CHK_START:
+		ds_mgmt_drpc_check_start(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_STOP:
+		ds_mgmt_drpc_check_stop(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_QUERY:
+		ds_mgmt_drpc_check_query(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_PROP:
+		ds_mgmt_drpc_check_prop(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_CHK_ACT:
+		ds_mgmt_drpc_check_act(drpc_req, drpc_resp);
+		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
 		D_ERROR("Unknown method\n");
