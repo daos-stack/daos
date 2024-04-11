@@ -1328,8 +1328,12 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 
 			atomic_store_relaxed(&daos_inited, true);
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
-			assert(util_bool_compare_and_swap64(&daos_initing, DAOS_INIT_RUNNING,
-			       DAOS_INIT_NOT_RUNNING));
+
+			bool rc_cmp_swap;
+
+			rc_cmp_swap = util_bool_compare_and_swap64(&daos_initing, DAOS_INIT_RUNNING,
+				DAOS_INIT_NOT_RUNNING);
+			assert(rc_cmp_swap);
 		}
 
 		/* dfs info can be set up after daos has been initialized. */

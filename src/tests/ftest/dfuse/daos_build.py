@@ -76,7 +76,7 @@ class DaosBuild(DfuseTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=daosio,dfuse,il,dfs
+        :avocado: tags=daosio,dfuse,il,dfs,pil4dfs
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_pil4dfs
         """
         self.run_build_test("nocache", il_lib='libpil4dfs.so')
