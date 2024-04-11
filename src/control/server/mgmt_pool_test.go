@@ -34,7 +34,7 @@ import (
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
-func getPoolLockCtx(t *testing.T, parent context.Context, sysdb *raft.Database, poolUUID uuid.UUID) (*raft.PoolLock, context.Context) {
+func getPoolLockCtx(t *testing.T, parent context.Context, sysdb poolDatabase, poolUUID uuid.UUID) (*raft.PoolLock, context.Context) {
 	t.Helper()
 
 	if parent == nil {
@@ -120,7 +120,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 				Leader: 1,
 			},
 			expResp: &mgmtpb.PoolCreateResp{
-				Leader:    1,
+				SvcLdr:    1,
 				SvcReps:   []uint32{1},
 				TgtRanks:  []uint32{1},
 				TierBytes: []uint64{1, 2},

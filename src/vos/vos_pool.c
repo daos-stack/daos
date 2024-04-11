@@ -1447,7 +1447,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 				vos_pool_decref(pool);
 				return -DER_BUSY;
 			}
-			if ((flags & VOS_POF_EXCL) || pool->vp_excl) {
+			if (!(flags & VOS_POF_FOR_CHECK_QUERY) &&
+			    ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
 				vos_pool_decref(pool);
 				return -DER_BUSY;
 			}
@@ -1615,6 +1616,13 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	D_ASSERT(pinfo != NULL);
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
 	pinfo->pif_gc_stat = pool->vp_gc_stat_global;
+
+	/*
+	 * NOTE: The chk_pool_info::cpi_statistics contains the inconsistency statistics during
+	 *	 phase range [CSP_DTX_RESYNC, CSP_AGGREGATION] for the pool shard on the target.
+	 *	 Related information will be filled in subsequent CR project milestone.
+	 */
+	memset(&pinfo->pif_chk, 0, sizeof(pinfo->pif_chk));
 
 	rc = vos_space_query(pool, &pinfo->pif_space, true);
 	if (rc)
