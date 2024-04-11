@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.101
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -432,9 +432,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
+%{_bindir}/ddb
 %{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
+%{_libdir}/daos_srv/libchk.so
 %{_libdir}/daos_srv/libcont.so
+%{_libdir}/daos_srv/libddb.so
 %{_libdir}/daos_srv/libdtx.so
 %{_libdir}/daos_srv/libmgmt.so
 %{_libdir}/daos_srv/libobj.so
@@ -550,6 +553,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
+%{_bindir}/ddb_tests
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 
@@ -584,8 +588,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Mon Apr 08 2024 Lei Huang <lei.huang@intel.com> 2.5.101-4
+* Mon Apr 08 2024 Lei Huang <lei.huang@intel.com> 2.5.101-5
 - Add libaio as a dependent package
+
+* Fri Apr 05 2024 Fan Yong <fan.yong@intel.com> 2.5.101-4
+- Catastrophic Recovery
 
 * Thu Apr 04 2024 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.5.101-3
 - Update pydaos install process
