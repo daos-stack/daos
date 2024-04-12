@@ -89,8 +89,8 @@ class ContinuesAfterStop(IorTestBase):
         msg = ("4. Look for the start of the rebuild (Rebuild [scanning]) in journalctl with "
                "daos_server identifier.")
         self.log_step(msg)
-        def _search_scanning():
 
+        def _search_scanning():
             """Search 'Rebuild [scanning]' from journalctl output using wait_for_result().
             """
             self.log.info("Search 'Rebuild [scanning]'. Count = %d", self.search_count)
