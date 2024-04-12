@@ -24,6 +24,25 @@
 
 /** Size of the hash key prefix */
 #define DCACHE_KEY_PREF_SIZE 35
+#define DCACHE_KEY_MAX       (DCACHE_KEY_PREF_SIZE - 1 + PATH_MAX)
+
+#ifdef DAOS_BUILD_RELEASE
+
+#define DF_DK          "dk[%zi]"
+#define DP_DK(_dk)     strnlen((_dk), DCACHE_KEY_MAX)
+
+#define DF_PATH        "path[%zi]"
+#define DP_PATH(_path) strnlen((_path), PATH_MAX)
+
+#else
+
+#define DF_DK          "dk'%s'"
+#define DP_DK(_dk)     (_dk)
+
+#define DF_PATH        "path'%s'"
+#define DP_PATH(_path) (_path)
+
+#endif
 
 typedef int (*destroy_fn_t)(dfs_dcache_t *);
 typedef int (*find_insert_fn_t)(dcache_rec_t **, dfs_dcache_t *, char *, size_t);
@@ -99,7 +118,8 @@ dcache_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	dcache_rec_t *rec;
 
 	rec = dlist2drec(rlink);
-	D_DEBUG(DB_TRACE, "delete record '%s' (ref=%u)", rec->dr_key, atomic_load(&rec->dr_ref));
+	D_DEBUG(DB_TRACE, "delete record " DF_DK " (ref=%u)", DP_DK(rec->dr_key),
+		atomic_load(&rec->dr_ref));
 	rc = dfs_release(rec->dr_obj);
 	if (rc)
 		DS_ERROR(rc, "dfs_release() failed");
@@ -114,8 +134,8 @@ dcache_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 
 	rec    = dlist2drec(rlink);
 	oldref = atomic_fetch_add(&rec->dr_ref, 1);
-	D_DEBUG(DB_TRACE, "increment ref counter of record '%s' from %u to %u", rec->dr_key, oldref,
-		oldref + 1);
+	D_DEBUG(DB_TRACE, "increment ref counter of record " DF_DK " from %u to %u",
+		DP_DK(rec->dr_key), oldref, oldref + 1);
 }
 
 static bool
@@ -126,8 +146,8 @@ dcache_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 
 	rec    = dlist2drec(rlink);
 	oldref = atomic_fetch_sub(&rec->dr_ref, 1);
-	D_DEBUG(DB_TRACE, "decrement ref counter of record '%s' from %u to %u", rec->dr_key, oldref,
-		oldref - 1);
+	D_DEBUG(DB_TRACE, "decrement ref counter of record " DF_DK " from %u to %u",
+		DP_DK(rec->dr_key), oldref, oldref - 1);
 	D_ASSERT(oldref >= 1);
 	return oldref == 1;
 }
@@ -286,8 +306,8 @@ dcache_add(dcache_rec_t **rec, dfs_dcache_t *dcache, const char *path, const cha
 	rlink = d_hash_rec_find_insert(&dcache->dd_dir_hash, rec_tmp->dr_key, key_len,
 				       &rec_tmp->dr_entry);
 	if (rlink == &rec_tmp->dr_entry) {
-		D_DEBUG(DB_TRACE, "add record '%s' with ref counter %u", rec_tmp->dr_key,
-			rec_tmp->dr_ref);
+		D_DEBUG(DB_TRACE, "add record " DF_DK " with ref counter %u",
+			DP_DK(rec_tmp->dr_key), rec_tmp->dr_ref);
 	} else {
 		dcache_rec_free(&dcache->dd_dir_hash, &rec_tmp->dr_entry);
 		rec_tmp = dlist2drec(rlink);
@@ -333,8 +353,8 @@ dcache_find_insert_act(dcache_rec_t **rec, dfs_dcache_t *dcache, char *path, siz
 		key[key_len] = '\0';
 
 		rec_tmp = dcache_get(dcache, key, key_len);
-		D_DEBUG(DB_TRACE, "dcache %s: path='%s', key='%s'\n",
-			(rec_tmp == NULL) ? "miss" : "hit", path, key);
+		D_DEBUG(DB_TRACE, "dcache %s: path=" DF_PATH ", key=" DF_DK "\n",
+			(rec_tmp == NULL) ? "miss" : "hit", DP_PATH(path), DP_DK(key));
 		if (rec_tmp == NULL) {
 			char   tmp;
 			size_t subpath_len;
@@ -511,7 +531,7 @@ dcache_find_insert_dact(dcache_rec_t **rec, dfs_dcache_t *dcache, char *path, si
 		D_GOTO(error, rc = -DER_NOTDIR);
 	rec_tmp->dr_obj = obj;
 
-	D_DEBUG(DB_TRACE, "create record %p: path='%s'", rec_tmp, path);
+	D_DEBUG(DB_TRACE, "create record %p: path=" DF_PATH, rec_tmp, DP_PATH(path));
 	*rec = rec_tmp;
 	D_GOTO(out, rc = -DER_SUCCESS);
 
