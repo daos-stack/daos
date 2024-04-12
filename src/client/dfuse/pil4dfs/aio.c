@@ -27,7 +27,7 @@ extern pthread_mutex_t   lock_aio_eq_g;
 extern uint16_t          eq_count_max;
 extern uint16_t          eq_count;
 extern bool              hook_enabled;
-extern struct file_obj **file_list;
+extern struct file_obj  *file_list[MAX_OPENED_FILE];
 
 struct d_aio_eq {
 	daos_handle_t    eq;

@@ -10,6 +10,12 @@
 #ifndef PIL4DFS_INT_H
 #define PIL4DFS_INT_H
 
+#define MAX_MMAP_BLOCK      (64)
+#define MAX_OPENED_FILE     (2048)
+#define MAX_OPENED_FILE_M1  ((MAX_OPENED_FILE)-1)
+#define MAX_OPENED_DIR      (512)
+#define MAX_OPENED_DIR_M1   ((MAX_OPENED_DIR)-1)
+
 #define MAX_EQ          64
 
 /* Use very large synthetic FD to distinguish regular FD from Kernel */

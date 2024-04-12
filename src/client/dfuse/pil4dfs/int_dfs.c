@@ -65,13 +65,6 @@
 #define READ_DIR_BATCH_SIZE (96)
 #define MAX_FD_DUP2ED       (16)
 
-#define MAX_MMAP_BLOCK      (64)
-
-#define MAX_OPENED_FILE     (2048)
-#define MAX_OPENED_FILE_M1  ((MAX_OPENED_FILE)-1)
-#define MAX_OPENED_DIR      (512)
-#define MAX_OPENED_DIR_M1   ((MAX_OPENED_DIR)-1)
-
 /* The buffer size used for reading/writing in rename() */
 #define FILE_BUFFER_SIZE    (64 * 1024 * 1024)
 
