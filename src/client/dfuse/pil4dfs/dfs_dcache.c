@@ -477,7 +477,7 @@ static void
 drec_del_at_dact(dfs_dcache_t *dcache, dcache_rec_t *rec);
 
 static int
-dcache_create_dact(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t **dcache)
+dcache_create_dact(dfs_t *dfs, dfs_dcache_t **dcache)
 {
 	dfs_dcache_t *dcache_tmp;
 	int           rc;
@@ -564,7 +564,7 @@ dcache_create(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t **dc
 	D_ASSERT(dfs != NULL);
 
 	if (rec_timeout == 0) {
-		return dcache_create_dact(dfs, bits, rec_timeout, dcache);
+		return dcache_create_dact(dfs, dcache);
 	}
 
 	return dcache_create_act(dfs, bits, rec_timeout, dcache);
