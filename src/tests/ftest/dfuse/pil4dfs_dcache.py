@@ -165,7 +165,7 @@ class Pil4dfsDcache(DfuseTestBase):
         ],
     }
 
-    __dcache_re__ = {
+    _dcache_re = {
         "dcache_add": re.compile(r'^.+ il +DBUG .+ dcache_add\(\) .+$'),
         "dcache_del": re.compile(r'^.+ il +DBUG .+ dcache_rec_free\(\) .+$'),
         "dcache_hit": re.compile(r'^.+ il +DBUG .+ dcache hit:.+$'),
@@ -185,7 +185,7 @@ class Pil4dfsDcache(DfuseTestBase):
         # Start the servers and agents
         super().setUp()
 
-    def mount_dfuse(self):
+    def _mount_dfuse(self):
         """Mount a DFuse mount point."""
         self.log.info("Creating DAOS pool")
         self.add_pool()
@@ -196,7 +196,7 @@ class Pil4dfsDcache(DfuseTestBase):
         self.log.info("Mounting DFuse mount point")
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
-    def update_cmd_env(self, env, mnt, timeout=None):
+    def _update_cmd_env(self, env, mnt, timeout=None):
         """Update the Pil4dfsDcacheCmd command environment.
 
         Args:
@@ -216,14 +216,14 @@ class Pil4dfsDcache(DfuseTestBase):
         if timeout is not None:
             env["D_IL_DCACHE_REC_TIMEOUT"] = timeout
 
-    def check_result(self, test_case, lines):
+    def _check_result(self, test_case, lines):
         """Check consistency of the test output.
 
         Args:
             test_case (dict): dictionary of the expected output result
             lines (list): list of the test command stdout lines
         """
-        dcache_count = {key: 0 for key in Pil4dfsDcache.__dcache_re__}
+        dcache_count = {key: 0 for key in Pil4dfsDcache._dcache_re}
         op_re = None
         if test_case['op_name'] is not None:
             op_re = re.compile(r'^\[' + test_case['op_name'] + r'\s*\]\s+(\d+)$')
@@ -234,11 +234,11 @@ class Pil4dfsDcache(DfuseTestBase):
                     state = 'check_dcache'
 
             elif state == 'check_dcache':
-                for dcache_name, dcache_re in Pil4dfsDcache.__dcache_re__.items():
+                for dcache_name, dcache_re in Pil4dfsDcache._dcache_re.items():
                     if dcache_re.match(line):
                         dcache_count[dcache_name] += 1
                 if Pil4dfsDcache.__end_test_re__.match(line):
-                    for key in Pil4dfsDcache.__dcache_re__:
+                    for key in Pil4dfsDcache._dcache_re:
                         self.assertEqual(
                             test_case[key],
                             dcache_count[key],
@@ -274,14 +274,14 @@ class Pil4dfsDcache(DfuseTestBase):
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_enabled
         """
         self.log_step("Mount a DFuse mount point")
-        self.mount_dfuse()
+        self._mount_dfuse()
 
         self.log.info("Running pil4dfs_dcache command")
         hostname = self.hostlist_clients[0]
         host = NodeSet(hostname)
         mnt = self.dfuse.mount_dir.value
         cmd = Pil4dfsDcacheCmd(host, self.prefix)
-        self.update_cmd_env(cmd.env, mnt)
+        self._update_cmd_env(cmd.env, mnt)
 
         for test_case in Pil4dfsDcache._tests_suite["test_pil4dfs_dcache_enabled"]:
             test_name = test_case['test_name']
@@ -290,7 +290,7 @@ class Pil4dfsDcache(DfuseTestBase):
             result = cmd.run(raise_exception=True)
 
             self.log_step(f"Check output command: dcache=on, test_name={test_name}")
-            self.check_result(test_case, result.all_stdout[hostname].split('\n'))
+            self._check_result(test_case, result.all_stdout[hostname].split('\n'))
 
         self.log_step("Test passed")
 
@@ -308,14 +308,14 @@ class Pil4dfsDcache(DfuseTestBase):
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_disabled
         """
         self.log_step("Mount a DFuse mount point")
-        self.mount_dfuse()
+        self._mount_dfuse()
 
         self.log.info("Running pil4dfs_dcache command")
         hostname = self.hostlist_clients[0]
         host = NodeSet(hostname)
         mnt = self.dfuse.mount_dir.value
         cmd = Pil4dfsDcacheCmd(host, self.prefix)
-        self.update_cmd_env(cmd.env, mnt, 0)
+        self._update_cmd_env(cmd.env, mnt, 0)
 
         for test_case in Pil4dfsDcache._tests_suite["test_pil4dfs_dcache_disabled"]:
             test_name = test_case['test_name']
@@ -324,6 +324,6 @@ class Pil4dfsDcache(DfuseTestBase):
             result = cmd.run(raise_exception=True)
 
             self.log_step(f"Check output command: dcache=off, test_name={test_name}")
-            self.check_result(test_case, result.all_stdout[hostname].split('\n'))
+            self._check_result(test_case, result.all_stdout[hostname].split('\n'))
 
         self.log_step("Test passed")
