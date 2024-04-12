@@ -18,7 +18,7 @@ class Pil4dfsDcache(DfuseTestBase):
     :avocado: recursive
     """
 
-    __tests_suite__ = {
+    _tests_suite = {
         "test_pil4dfs_dcache_enabled": [
             {
                 "test_name": "test_mkdirat",
@@ -283,7 +283,7 @@ class Pil4dfsDcache(DfuseTestBase):
         cmd = Pil4dfsDcacheCmd(host, self.prefix)
         self.update_cmd_env(cmd.env, mnt)
 
-        for test_case in Pil4dfsDcache.__tests_suite__["test_pil4dfs_dcache_enabled"]:
+        for test_case in Pil4dfsDcache._tests_suite["test_pil4dfs_dcache_enabled"]:
             test_name = test_case['test_name']
             self.log_step(f"Run command: dcache=on, test_name={test_name}")
             cmd.update_params(test_id=test_case["test_id"])
@@ -317,7 +317,7 @@ class Pil4dfsDcache(DfuseTestBase):
         cmd = Pil4dfsDcacheCmd(host, self.prefix)
         self.update_cmd_env(cmd.env, mnt, 0)
 
-        for test_case in Pil4dfsDcache.__tests_suite__["test_pil4dfs_dcache_disabled"]:
+        for test_case in Pil4dfsDcache._tests_suite["test_pil4dfs_dcache_disabled"]:
             test_name = test_case['test_name']
             self.log_step(f"Run command: dcache=off, test_name={test_name}")
             cmd.update_params(test_id=test_case["test_id"])
