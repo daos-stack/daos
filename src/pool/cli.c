@@ -273,9 +273,8 @@ subtract_rsvc_rank(d_rank_t rank, void *varg)
 	int                            i;
 
 	for (i = 0; i < arg->srra_nodes_len; i++)
-		if (arg->srra_nodes[i].do_comp.co_rank == rank &&
-		    arg->srra_nodes[i].do_comp.co_status & DC_POOL_SVC_MAP_STATES)
-			return false;
+		if (arg->srra_nodes[i].do_comp.co_rank == rank)
+			return !(arg->srra_nodes[i].do_comp.co_status & DC_POOL_SVC_MAP_STATES);
 	return true;
 }
 
