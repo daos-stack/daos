@@ -21,16 +21,16 @@ typedef struct dcache_rec dcache_rec_t;
 /**
  * Create a dfs new dir-cache.
  *
- * \param[out] dcache		The newly created dir-cache
  * \param[in] dfs		The DAOS File System to cache
  * \param[in] bits		Power2(bits) is the size of cache
  * \param[in] rec_timeout	Timeout in seconds of a dir-cache entry.  When this value is equal
  *				to zero, the dir-cache is deactivated.
+ * \param[out] dcache		The newly created dir-cache
  *
  * \return			0 on success, negative value on error
  */
 int
-dcache_create(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits, uint32_t rec_timeout);
+dcache_create(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t **dcache);
 
 /**
  * Destroy a dfs dir-cache.
@@ -47,15 +47,15 @@ dcache_destroy(dfs_dcache_t *dcache);
  * dfs_lookup() to open the object on DAOS. If the corresponding object is a dir, insert the
  * object into the dir-cache.
  *
- * \param[out] rec	The matched dir-cache record.
  * \param[in] dcache	The dir-cache being lookup or inserted
  * \param[in] path	File path of the directory to lookup or insert
  * \param[in] path_len	Length of the file path, not including null terminating ('\0').
+ * \param[out] rec	The matched dir-cache record.
  *
  * \return		0 on success, negative value on error
  */
 int
-dcache_find_insert(dcache_rec_t **rec, dfs_dcache_t *dcache, char *path, size_t path_len);
+dcache_find_insert(dfs_dcache_t *dcache, char *path, size_t path_len, dcache_rec_t **rec);
 
 /**
  * Convert a dir-cache record to a dfs object

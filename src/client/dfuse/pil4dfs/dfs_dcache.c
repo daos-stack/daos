@@ -45,7 +45,7 @@
 #endif
 
 typedef int (*destroy_fn_t)(dfs_dcache_t *);
-typedef int (*find_insert_fn_t)(dcache_rec_t **, dfs_dcache_t *, char *, size_t);
+typedef int (*find_insert_fn_t)(dfs_dcache_t *, char *, size_t, dcache_rec_t **);
 typedef void (*drec_incref_fn_t)(dfs_dcache_t *, dcache_rec_t *);
 typedef void (*drec_decref_fn_t)(dfs_dcache_t *, dcache_rec_t *);
 typedef void (*drec_del_at_fn_t)(dfs_dcache_t *, dcache_rec_t *);
@@ -172,7 +172,7 @@ static d_hash_table_ops_t dcache_hash_ops = {
 static int
 dcache_destroy_act(dfs_dcache_t *dcache);
 static int
-dcache_find_insert_act(dcache_rec_t **rec, dfs_dcache_t *dcache, char *path, size_t path_len);
+dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, dcache_rec_t **rec);
 static void
 drec_incref_act(dfs_dcache_t *dcache, dcache_rec_t *rec);
 static void
@@ -183,7 +183,7 @@ static int
 drec_del_act(dfs_dcache_t *dcache, char *path, dcache_rec_t *parent);
 
 static int
-dcache_create_act(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits, uint32_t rec_timeout)
+dcache_create_act(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t **dcache)
 {
 	dfs_dcache_t *dcache_tmp = NULL;
 	dfs_obj_t    *obj;
@@ -272,8 +272,8 @@ dcache_get(dfs_dcache_t *dcache, const char *key, size_t key_len)
 }
 
 static inline int
-dcache_add(dcache_rec_t **rec, dfs_dcache_t *dcache, const char *path, const char *key,
-	   size_t key_len)
+dcache_add(dfs_dcache_t *dcache, const char *path, const char *key, size_t key_len,
+	   dcache_rec_t **rec)
 {
 	dcache_rec_t *rec_tmp = NULL;
 	dfs_obj_t    *obj     = NULL;
@@ -326,7 +326,7 @@ out:
 }
 
 static int
-dcache_find_insert_act(dcache_rec_t **rec, dfs_dcache_t *dcache, char *path, size_t path_len)
+dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, dcache_rec_t **rec)
 {
 	const size_t  key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
 	dcache_rec_t *rec_tmp;
@@ -371,7 +371,7 @@ dcache_find_insert_act(dcache_rec_t **rec, dfs_dcache_t *dcache, char *path, siz
 				tmp               = '/';
 				path[subpath_len] = '\0';
 			}
-			rc = dcache_add(&rec_tmp, dcache, path, key, key_len);
+			rc = dcache_add(dcache, path, key, key_len, &rec_tmp);
 			if (tmp != '\0')
 				path[subpath_len] = tmp;
 			if (rc != -DER_SUCCESS)
@@ -472,12 +472,12 @@ out:
 static int
 dcache_destroy_dact(dfs_dcache_t *dcache);
 static int
-dcache_find_insert_dact(dcache_rec_t **rec, dfs_dcache_t *dcache, char *path, size_t path_len);
+dcache_find_insert_dact(dfs_dcache_t *dcache, char *path, size_t path_len, dcache_rec_t **rec);
 static void
 drec_del_at_dact(dfs_dcache_t *dcache, dcache_rec_t *rec);
 
 static int
-dcache_create_dact(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits, uint32_t rec_timeout)
+dcache_create_dact(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t **dcache)
 {
 	dfs_dcache_t *dcache_tmp = NULL;
 	int           rc;
@@ -513,7 +513,7 @@ dcache_destroy_dact(dfs_dcache_t *dcache)
 }
 
 static int
-dcache_find_insert_dact(dcache_rec_t **rec, dfs_dcache_t *dcache, char *path, size_t path_len)
+dcache_find_insert_dact(dfs_dcache_t *dcache, char *path, size_t path_len, dcache_rec_t **rec)
 {
 	dcache_rec_t *rec_tmp = NULL;
 	dfs_obj_t    *obj     = NULL;
@@ -558,16 +558,16 @@ drec_del_at_dact(dfs_dcache_t *dcache, dcache_rec_t *rec)
 }
 
 int
-dcache_create(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits, uint32_t rec_timeout)
+dcache_create(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t **dcache)
 {
 	D_ASSERT(dcache != NULL);
 	D_ASSERT(dfs != NULL);
 
 	if (rec_timeout == 0) {
-		return dcache_create_dact(dcache, dfs, bits, rec_timeout);
+		return dcache_create_dact(dfs, bits, rec_timeout, dcache);
 	}
 
-	return dcache_create_act(dcache, dfs, bits, rec_timeout);
+	return dcache_create_act(dfs, bits, rec_timeout, dcache);
 }
 int
 dcache_destroy(dfs_dcache_t *dcache)
@@ -579,14 +579,14 @@ dcache_destroy(dfs_dcache_t *dcache)
 }
 
 int
-dcache_find_insert(dcache_rec_t **rec, dfs_dcache_t *dcache, char *path, size_t path_len)
+dcache_find_insert(dfs_dcache_t *dcache, char *path, size_t path_len, dcache_rec_t **rec)
 {
 	D_ASSERT(rec != NULL);
 	D_ASSERT(dcache != NULL);
 	D_ASSERT(path != NULL);
 	D_ASSERT(dcache->find_insert_fn != NULL);
 
-	return dcache->find_insert_fn(rec, dcache, path, path_len);
+	return dcache->find_insert_fn(dcache, path, path_len, rec);
 }
 
 void

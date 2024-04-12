@@ -811,8 +811,8 @@ retrieve_handles_from_fuse(int idx)
 		goto err;
 	}
 
-	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs, dcache_size_bits,
-			   dcache_rec_timeout);
+	rc = dcache_create(dfs_list[idx].dfs, dcache_size_bits, dcache_rec_timeout,
+			   &dfs_list[idx].dcache);
 	if (rc != 0) {
 		errno_saved = daos_der2errno(rc);
 		D_DEBUG(DB_ANY,
@@ -1126,8 +1126,8 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 				strncpy(*parent_dir, parent_path, parent_dir_len);
 			}
 			/* look up the dfs object from hash table for the parent dir */
-			rc = dcache_find_insert(parent, (*dfs_mt)->dcache, *parent_dir,
-						parent_dir_len);
+			rc = dcache_find_insert((*dfs_mt)->dcache, *parent_dir, parent_dir_len,
+						parent);
 			/* parent dir does not exist or something wrong */
 			if (rc)
 				D_GOTO(out_err, rc = daos_der2errno(rc));
@@ -6355,8 +6355,8 @@ init_dfs(int idx)
 		D_GOTO(out_err_mt, rc);
 	}
 
-	rc = dcache_create(&dfs_list[idx].dcache, dfs_list[idx].dfs, dcache_size_bits,
-			   dcache_rec_timeout);
+	rc = dcache_create(dfs_list[idx].dfs, dcache_size_bits, dcache_rec_timeout,
+			   &dfs_list[idx].dcache);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to create DFS directory cache");
 		D_GOTO(out_err_ht, rc = daos_der2errno(rc));
