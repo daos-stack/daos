@@ -186,7 +186,7 @@ static int
 dcache_create_act(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits, uint32_t rec_timeout)
 {
 	dfs_dcache_t *dcache_tmp = NULL;
-	dfs_obj_t    *obj        = NULL;
+	dfs_obj_t    *obj;
 	daos_obj_id_t obj_id;
 	mode_t        mode;
 	int           rc;
@@ -199,12 +199,15 @@ dcache_create_act(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits, uint32_t rec
 
 	rc = dfs_lookup(dfs, "/", O_RDONLY, &obj, &mode, NULL);
 	if (rc != 0)
-		D_GOTO(error, rc = daos_der2errno(rc));
+		D_GOTO(error, rc = daos_errno2der(rc));
 	rc = dfs_obj2id(obj, &obj_id);
 	D_ASSERT(rc == 0);
 	rc = snprintf(&dcache_tmp->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE,
 		      "%016" PRIx64 "-%016" PRIx64 ":", obj_id.hi, obj_id.lo);
 	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
+	rc = dfs_release(obj);
+	if (rc != 0)
+		D_GOTO(error, rc = daos_errno2der(rc));
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_MUTEX | D_HASH_FT_LRU, bits, NULL,
 					 &dcache_hash_ops, &dcache_tmp->dd_dir_hash);
@@ -224,7 +227,6 @@ dcache_create_act(dfs_dcache_t **dcache, dfs_t *dfs, uint32_t bits, uint32_t rec
 error:
 	D_FREE(dcache_tmp);
 out:
-	dfs_release(obj);
 	return rc;
 }
 
@@ -289,7 +291,7 @@ dcache_add(dcache_rec_t **rec, dfs_dcache_t *dcache, const char *path, const cha
 
 	rc = dfs_lookup(dcache->dd_dfs, path, O_RDWR, &obj, &mode, NULL);
 	if (rc != 0)
-		D_GOTO(error, rc = d_errno2der(rc));
+		D_GOTO(error, rc = daos_errno2der(rc));
 	if (!S_ISDIR(mode))
 		D_GOTO(error, rc = -DER_NOTDIR);
 	rec_tmp->dr_obj = obj;
@@ -526,7 +528,7 @@ dcache_find_insert_dact(dcache_rec_t **rec, dfs_dcache_t *dcache, char *path, si
 
 	rc = dfs_lookup(dcache->dd_dfs, path, O_RDWR, &obj, &mode, NULL);
 	if (rc != 0)
-		D_GOTO(error, rc = d_errno2der(rc));
+		D_GOTO(error, rc = daos_errno2der(rc));
 	if (!S_ISDIR(mode))
 		D_GOTO(error, rc = -DER_NOTDIR);
 	rec_tmp->dr_obj = obj;
