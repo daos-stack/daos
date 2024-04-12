@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -86,9 +86,14 @@ class ObjectMetadata(TestWithServers):
             self.log.debug("no pre-teardown steps defined")
         return error_list
 
-    def create_pool(self):
-        """Create a pool and display the svc ranks."""
-        self.add_pool()
+    def create_pool(self, namespace=""):
+        """Create a pool and display the svc ranks.
+        
+        Args:
+            namespace: Test variant for add pool. Defaults to empty.
+        
+        """
+        self.add_pool(namespace=namespace)
         self.log.info("Created pool %s: svc ranks:", self.pool.uuid)
         for index, rank in enumerate(self.pool.svc_ranks):
             self.log.info("[%d]: %d", index, rank)
