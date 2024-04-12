@@ -43,6 +43,7 @@ message JoinReq {
 	uint64 incarnation = 9; 	// rank incarnation
 	repeated string secondary_uris = 10; // URIs for any secondary providers
 	repeated uint32 secondary_nctxs = 11; // CaRT context count for each secondary provider
+	bool check_mode = 12; 		// rank started in check mode
 }
 
 message JoinResp {
@@ -51,6 +52,7 @@ message JoinResp {
 	enum State {
 		IN = 0;		// Server in the system.
 		OUT = 1;	// Server excluded from the system.
+		CHECK = 2;	// Server should start in checker mode.
 	}
 	State state = 3;	// Server state in the system map.
 	string faultDomain = 4; // Fault domain for the instance

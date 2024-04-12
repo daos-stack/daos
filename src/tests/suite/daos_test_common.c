@@ -641,6 +641,7 @@ free:
 		d_rank_list_free(arg->pool.svc);
 	if (arg->pool.alive_svc)
 		d_rank_list_free(arg->pool.alive_svc);
+	D_FREE(arg->pool.label);
 	D_FREE(arg);
 	*state = NULL;
 	return 0;

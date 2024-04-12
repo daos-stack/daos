@@ -162,7 +162,7 @@ iv_key_unpack(struct ds_iv_key *key_iv, crt_iv_key_t *key_iov)
 	return rc;
 }
 
-static void
+void
 ds_iv_ns_get(struct ds_iv_ns *ns)
 {
 	ns->iv_refcount++;
@@ -865,11 +865,20 @@ ds_iv_ns_leader_stop(struct ds_iv_ns *ns)
 }
 
 void
-ds_iv_ns_stop(struct ds_iv_ns *ns)
+ds_iv_ns_cleanup(struct ds_iv_ns *ns)
 {
 	struct ds_iv_entry *entry;
 	struct ds_iv_entry *tmp;
 
+	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
+		d_list_del(&entry->iv_link);
+		iv_entry_free(entry);
+	}
+}
+
+void
+ds_iv_ns_stop(struct ds_iv_ns *ns)
+{
 	ns->iv_stop = 1;
 	ds_iv_ns_put(ns);
 	ABT_mutex_lock(ns->iv_mutex); /* only for ABT_cond_wait; unnecessary otherwise */
@@ -884,10 +893,7 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 	ABT_mutex_unlock(ns->iv_mutex);
 	D_DEBUG(DB_MGMT, DF_UUID " ns stopped\n", DP_UUID(ns->iv_pool_uuid));
 
-	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
-		d_list_del(&entry->iv_link);
-		iv_entry_free(entry);
-	}
+	ds_iv_ns_cleanup(ns);
 
 	D_INFO(DF_UUID" ns stopped\n", DP_UUID(ns->iv_pool_uuid));
 }
@@ -1062,6 +1068,16 @@ retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER || rc == -DER_BUSY)) {
+		if (rc == -DER_GRPVER && engine_in_check()) {
+			/*
+			 * Under check mode, the pool shard on peer rank/target does
+			 * not exist, then it will reply "-DER_GRPVER" that is normal
+			 * for check. Return the errno to the caller instead of retry.
+			 */
+			D_WARN("IV for DAOS check hit unmatched GRP version %d\n", rc);
+			return rc;
+		}
+
 		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
 		    sync && (sync->ivs_mode == CRT_IV_SYNC_LAZY ||
 			     sync->ivs_mode == CRT_IV_SYNC_EAGER)) {
