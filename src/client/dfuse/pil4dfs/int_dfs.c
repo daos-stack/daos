@@ -1120,7 +1120,7 @@ query_path(const char *szInput, int *is_target_path, struct dcache_rec **parent,
 
 				full_path_parse[pos] = '\0';
 				parent_path          = full_path_parse + (*dfs_mt)->len_fs_root;
-				/* path_dir_len is length of the string, without termination */
+				/* parent_dir_len is length of the string, without termination */
 				parent_dir_len = pos - (*dfs_mt)->len_fs_root;
 				/* Need to look up the parent directory */
 				strncpy(*parent_dir, parent_path, parent_dir_len);
