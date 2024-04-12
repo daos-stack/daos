@@ -835,10 +835,8 @@ class DmgCommand(DmgCommandBase):
         #             "svc_reps": [
         #             0
         #             ],
-        #             "targets_total": 8,
-        #             "targets_disabled": 0,
-        #             "query_error_msg": "",
-        #             "query_status_msg": "",
+        #             "total_targets": 8,
+        #             "disabled_targets": 0,
         #             "usage": [
         #             {
         #                 "tier_name": "SCM",

@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
@@ -370,7 +371,7 @@ func convertPoolTargetInfo(ptinfo *C.daos_target_info_t) (*control.PoolQueryTarg
 	pqti := new(control.PoolQueryTargetInfo)
 	pqti.Type = control.PoolQueryTargetType(ptinfo.ta_type)
 	pqti.State = control.PoolQueryTargetState(ptinfo.ta_state)
-	pqti.Space = []*control.StorageTargetUsage{
+	pqti.Space = []*daos.StorageTargetUsage{
 		{
 			Total:     uint64(ptinfo.ta_space.s_total[C.DAOS_MEDIA_SCM]),
 			Free:      uint64(ptinfo.ta_space.s_free[C.DAOS_MEDIA_SCM]),

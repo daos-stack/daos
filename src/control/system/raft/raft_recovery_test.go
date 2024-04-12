@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,6 +26,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
@@ -123,7 +124,7 @@ func Test_Raft_RegenerateFixtures(t *testing.T) {
 		ps := &PoolService{
 			PoolUUID:  uuid.New(),
 			PoolLabel: fmt.Sprintf("pool%04d", i),
-			State:     PoolServiceStateReady,
+			State:     system.PoolServiceStateReady,
 			Replicas:  <-replicas,
 			Storage: &PoolServiceStorage{
 				CreationRankStr:    fmt.Sprintf("[0-%d]", maxRanks),

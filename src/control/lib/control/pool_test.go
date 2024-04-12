@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
@@ -721,6 +722,8 @@ func TestControl_PoolCreate(t *testing.T) {
 }
 
 func TestControl_UpdateState(t *testing.T) {
+	poolUUID := test.MockPoolUUID()
+
 	for name, tc := range map[string]struct {
 		pqr      *PoolQueryResp
 		expState string
@@ -728,47 +731,47 @@ func TestControl_UpdateState(t *testing.T) {
 		"Pool state as Ready": {
 			pqr: &PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:            poolUUID,
 					TotalTargets:    1,
 					DisabledTargets: 0,
 				},
 			},
-			expState: system.PoolServiceStateReady.String(),
+			expState: daos.PoolServiceStateReady.String(),
 		},
 		"Pool state as Degraded": {
 			pqr: &PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				State:  system.PoolServiceStateReady,
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:            poolUUID,
 					TotalTargets:    1,
 					DisabledTargets: 4,
+					State:           daos.PoolServiceStateReady,
 				},
 			},
-			expState: system.PoolServiceStateDegraded.String(),
+			expState: daos.PoolServiceStateDegraded.String(),
 		},
 		"Pool state as Unknown": {
 			pqr: &PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				State:  system.PoolServiceStateReady,
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:         poolUUID,
 					TotalTargets: 0,
+					State:        daos.PoolServiceStateReady,
 				},
 			},
-			expState: system.PoolServiceStateUnknown.String(),
+			expState: daos.PoolServiceStateUnknown.String(),
 		},
 		"Pool state as Default": {
 			pqr: &PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				State:  system.PoolServiceStateUnknown,
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:         poolUUID,
 					TotalTargets: 1,
+					State:        daos.PoolServiceStateUnknown,
 				},
 			},
-			expState: system.PoolServiceStateReady.String(),
+			expState: daos.PoolServiceStateReady.String(),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -781,7 +784,9 @@ func TestControl_UpdateState(t *testing.T) {
 	}
 }
 
-func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
+func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
+	poolUUID := test.MockPoolUUID()
+
 	for name, tc := range map[string]struct {
 		pqr *PoolQueryResp
 		exp string
@@ -792,9 +797,9 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 		"null rankset": {
 			pqr: &PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				State:  system.PoolServiceStateReady,
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					State:            daos.PoolServiceStateReady,
+					UUID:             poolUUID,
 					TotalTargets:     1,
 					ActiveTargets:    2,
 					TotalEngines:     3,
@@ -805,14 +810,14 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"state":"Ready","uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				State:  system.PoolServiceStateReady,
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					State:            daos.PoolServiceStateReady,
+					UUID:             poolUUID,
 					TotalTargets:     1,
 					ActiveTargets:    2,
 					TotalEngines:     3,
@@ -825,7 +830,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"state":"Ready","uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -841,18 +846,20 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 	}
 }
 
-func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
+func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
+	poolUUID := test.MockPoolUUID()
+
 	for name, tc := range map[string]struct {
 		data    string
 		expResp PoolQueryResp
 		expErr  error
 	}{
 		"null rankset": {
-			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expResp: PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             poolUUID,
 					TotalTargets:     1,
 					ActiveTargets:    2,
 					TotalEngines:     3,
@@ -865,11 +872,11 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 			},
 		},
 		"valid rankset": {
-			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expResp: PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             poolUUID,
 					TotalTargets:     1,
 					ActiveTargets:    2,
 					TotalEngines:     3,
@@ -888,7 +895,7 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 			expErr: errors.New("invalid character"),
 		},
 		"invalid rankset": {
-			data:   `{"enabled_ranks":"a cow goes quack","disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			data:   `{"enabled_ranks":"a cow goes quack","disabled_ranks":null,"status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expErr: errors.New("unexpected alphabetic character(s)"),
 		},
 	} {
@@ -908,6 +915,8 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 }
 
 func TestControl_PoolQuery(t *testing.T) {
+	poolUUID := test.MockPoolUUID()
+
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *PoolQueryReq
@@ -930,7 +939,7 @@ func TestControl_PoolQuery(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
-						Uuid:             test.MockUUID(),
+						Uuid:             poolUUID.String(),
 						TotalTargets:     42,
 						ActiveTargets:    16,
 						DisabledTargets:  17,
@@ -949,7 +958,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeScm),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeScm),
 							},
 							{
 								Total:     123456,
@@ -957,34 +966,34 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeNvme),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeNvme),
 							},
 						},
 					},
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID:  test.MockUUID(),
-				State: system.PoolServiceStateDegraded,
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             poolUUID,
 					TotalTargets:     42,
 					ActiveTargets:    16,
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					Rebuild: &PoolRebuildStatus{
-						State:   PoolRebuildStateBusy,
+					State:            daos.PoolServiceStateDegraded,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
 						Records: 2,
 					},
-					TierStats: []*StorageUsageStats{
+					TierStats: []*daos.StorageUsageStats{
 						{
 							Total:     123456,
 							Free:      0,
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeScm,
+							MediaType: daos.StorageMediaTypeScm,
 						},
 						{
 							Total:     123456,
@@ -992,7 +1001,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeNvme,
+							MediaType: daos.StorageMediaTypeNvme,
 						},
 					},
 				},
@@ -1002,7 +1011,7 @@ func TestControl_PoolQuery(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
-						Uuid:             test.MockUUID(),
+						Uuid:             poolUUID.String(),
 						TotalTargets:     42,
 						ActiveTargets:    16,
 						DisabledTargets:  17,
@@ -1021,7 +1030,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeScm),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeScm),
 							},
 							{
 								Total:     123456,
@@ -1029,7 +1038,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeNvme),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeNvme),
 							},
 						},
 						EnabledRanks: "[0,1,2,3,5]",
@@ -1037,27 +1046,27 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID:  test.MockUUID(),
-				State: system.PoolServiceStateDegraded,
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             poolUUID,
 					TotalTargets:     42,
 					ActiveTargets:    16,
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					Rebuild: &PoolRebuildStatus{
-						State:   PoolRebuildStateBusy,
+					State:            daos.PoolServiceStateDegraded,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
 						Records: 2,
 					},
-					TierStats: []*StorageUsageStats{
+					TierStats: []*daos.StorageUsageStats{
 						{
 							Total:     123456,
 							Free:      0,
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeScm,
+							MediaType: daos.StorageMediaTypeScm,
 						},
 						{
 							Total:     123456,
@@ -1065,7 +1074,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeNvme,
+							MediaType: daos.StorageMediaTypeNvme,
 						},
 					},
 					EnabledRanks: ranklist.MustCreateRankSet("[0-3,5]"),
@@ -1076,7 +1085,7 @@ func TestControl_PoolQuery(t *testing.T) {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolQueryResp{
-						Uuid:             test.MockUUID(),
+						Uuid:             poolUUID.String(),
 						TotalTargets:     42,
 						ActiveTargets:    16,
 						DisabledTargets:  17,
@@ -1095,7 +1104,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeScm),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeScm),
 							},
 							{
 								Total:     123456,
@@ -1103,7 +1112,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeNvme),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeNvme),
 							},
 						},
 						DisabledRanks: "[]",
@@ -1111,27 +1120,27 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID:  test.MockUUID(),
-				State: system.PoolServiceStateDegraded,
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             poolUUID,
 					TotalTargets:     42,
 					ActiveTargets:    16,
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					Rebuild: &PoolRebuildStatus{
-						State:   PoolRebuildStateBusy,
+					State:            daos.PoolServiceStateDegraded,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
 						Records: 2,
 					},
-					TierStats: []*StorageUsageStats{
+					TierStats: []*daos.StorageUsageStats{
 						{
 							Total:     123456,
 							Free:      0,
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeScm,
+							MediaType: daos.StorageMediaTypeScm,
 						},
 						{
 							Total:     123456,
@@ -1139,7 +1148,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeNvme,
+							MediaType: daos.StorageMediaTypeNvme,
 						},
 					},
 					DisabledRanks: &ranklist.RankSet{},
@@ -1661,107 +1670,24 @@ func TestControl_PoolGetPropResp_MarshalJSON(t *testing.T) {
 	}
 }
 
-func TestControl_Pool_setUsage(t *testing.T) {
-	for name, tc := range map[string]struct {
-		status        int32
-		scmStats      *StorageUsageStats
-		nvmeStats     *StorageUsageStats
-		totalTargets  uint32
-		activeTargets uint32
-		expPool       *Pool
-		expErr        error
-	}{
-		"successful query": {
-			scmStats: &StorageUsageStats{
-				Total: humanize.GByte * 30,
-				Free:  humanize.GByte * 15,
-				Min:   humanize.GByte * 1.6,
-				Max:   humanize.GByte * 2,
-			},
-			nvmeStats: &StorageUsageStats{
-				Total: humanize.GByte * 500,
-				Free:  humanize.GByte * 250,
-				Min:   humanize.GByte * 29.5,
-				Max:   humanize.GByte * 36,
-			},
-			totalTargets:  8,
-			activeTargets: 8,
-			expPool: &Pool{
-				Usage: []*PoolTierUsage{
-					{
-						TierName:  "SCM",
-						Size:      humanize.GByte * 30,
-						Free:      humanize.GByte * 15,
-						Imbalance: 10,
-					},
-					{
-						TierName:  "NVMe",
-						Size:      humanize.GByte * 500,
-						Free:      humanize.GByte * 250,
-						Imbalance: 10,
-					},
-				},
-			},
-		},
-		"disabled targets": {
-			scmStats: &StorageUsageStats{
-				Total: humanize.GByte * 30,
-				Free:  humanize.GByte * 15,
-				Min:   humanize.GByte * 1.6,
-				Max:   humanize.GByte * 2,
-			},
-			nvmeStats: &StorageUsageStats{
-				Total: humanize.GByte * 500,
-				Free:  humanize.GByte * 250,
-				Min:   humanize.GByte * 29.5,
-				Max:   humanize.GByte * 36,
-			},
-			totalTargets:  8,
-			activeTargets: 4,
-			expPool: &Pool{
-				Usage: []*PoolTierUsage{
-					{
-						TierName:  "SCM",
-						Size:      humanize.GByte * 30,
-						Free:      humanize.GByte * 15,
-						Imbalance: 5,
-					},
-					{
-						TierName:  "NVMe",
-						Size:      humanize.GByte * 500,
-						Free:      humanize.GByte * 250,
-						Imbalance: 5,
-					},
-				},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			resp := &PoolQueryResp{Status: tc.status}
-			resp.TierStats = append(resp.TierStats, tc.scmStats, tc.nvmeStats)
-			resp.TotalTargets = tc.totalTargets
-			resp.ActiveTargets = tc.activeTargets
-			resp.DisabledTargets = tc.activeTargets
-
-			pool := new(Pool)
-			pool.setUsage(resp)
-
-			if diff := cmp.Diff(tc.expPool, pool); diff != "" {
-				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
 func TestControl_ListPools(t *testing.T) {
 	queryResp := func(i int32) *mgmtpb.PoolQueryResp {
+		total := uint32(42)
+		disabled := uint32(0)
+		rebuildState := mgmtpb.PoolRebuildStatus_IDLE
+		if i%2 == 0 {
+			disabled = total - 16
+			rebuildState = mgmtpb.PoolRebuildStatus_BUSY
+		}
+		active := uint32(total - disabled)
+
 		return &mgmtpb.PoolQueryResp{
 			Uuid:            test.MockUUID(i),
-			TotalTargets:    42,
-			ActiveTargets:   16,
-			DisabledTargets: 17,
+			TotalTargets:    total,
+			ActiveTargets:   active,
+			DisabledTargets: disabled,
 			Rebuild: &mgmtpb.PoolRebuildStatus{
-				State:   mgmtpb.PoolRebuildStatus_BUSY,
+				State:   rebuildState,
 				Objects: 1,
 				Records: 2,
 			},
@@ -1782,18 +1708,31 @@ func TestControl_ListPools(t *testing.T) {
 			},
 		}
 	}
-	expUsage := []*PoolTierUsage{
+	expRebuildStatus := func(i uint32) *daos.PoolRebuildStatus {
+		rebuildState := daos.PoolRebuildStateIdle
+		if i%2 == 0 {
+			rebuildState = daos.PoolRebuildStateBusy
+		}
+		return &daos.PoolRebuildStatus{
+			State:   rebuildState,
+			Objects: 1,
+			Records: 2,
+		}
+	}
+	expTierStats := []*daos.StorageUsageStats{
 		{
-			TierName:  "SCM",
-			Size:      123456,
-			Free:      0,
-			Imbalance: 12,
+			Total: 123456,
+			Free:  0,
+			Min:   1000,
+			Max:   2000,
+			Mean:  1500,
 		},
 		{
-			TierName:  "NVMe",
-			Size:      1234567,
-			Free:      600000,
-			Imbalance: 1,
+			Total: 1234567,
+			Free:  600000,
+			Min:   1000,
+			Max:   2000,
+			Mean:  15000,
 		},
 	}
 
@@ -1823,7 +1762,9 @@ func TestControl_ListPools(t *testing.T) {
 					},
 				),
 			},
-			expResp: &ListPoolsResp{},
+			expResp: &ListPoolsResp{
+				QueryErrors: make(map[uuid.UUID]*PoolQueryErr),
+			},
 		},
 		"one pool": {
 			mic: &MockInvokerConfig{
@@ -1833,7 +1774,7 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    test.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
-								State:   system.PoolServiceStateReady.String(),
+								State:   daos.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1841,17 +1782,18 @@ func TestControl_ListPools(t *testing.T) {
 				},
 			},
 			expResp: &ListPoolsResp{
-				Pools: []*Pool{
+				Pools: []*daos.PoolInfo{
 					{
-						UUID:            test.MockUUID(1),
+						State:           daos.PoolServiceStateReady,
+						UUID:            test.MockPoolUUID(1),
+						TotalTargets:    42,
+						ActiveTargets:   42,
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
-						TargetsTotal:    42,
-						TargetsDisabled: 17,
-						Usage:           expUsage,
-						State:           system.PoolServiceStateDegraded.String(),
-						RebuildState:    "busy",
+						Rebuild:         expRebuildStatus(1),
+						TierStats:       expTierStats,
 					},
 				},
+				QueryErrors: make(map[uuid.UUID]*PoolQueryErr),
 			},
 		},
 		"one pool; uuid mismatch in query response": {
@@ -1862,7 +1804,7 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    test.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
-								State:   system.PoolServiceStateReady.String(),
+								State:   daos.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1879,12 +1821,12 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    test.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
-								State:   system.PoolServiceStateReady.String(),
+								State:   daos.PoolServiceStateReady.String(),
 							},
 							{
 								Uuid:    test.MockUUID(2),
 								SvcReps: []uint32{1, 2, 3},
-								State:   system.PoolServiceStateReady.String(),
+								State:   daos.PoolServiceStateReady.String(),
 							},
 						},
 					}),
@@ -1893,26 +1835,28 @@ func TestControl_ListPools(t *testing.T) {
 				},
 			},
 			expResp: &ListPoolsResp{
-				Pools: []*Pool{
+				Pools: []*daos.PoolInfo{
 					{
-						UUID:            test.MockUUID(1),
+						State:           daos.PoolServiceStateReady,
+						UUID:            test.MockPoolUUID(1),
+						TotalTargets:    42,
+						ActiveTargets:   42,
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
-						TargetsTotal:    42,
-						TargetsDisabled: 17,
-						Usage:           expUsage,
-						State:           system.PoolServiceStateDegraded.String(),
-						RebuildState:    "busy",
+						Rebuild:         expRebuildStatus(1),
+						TierStats:       expTierStats,
 					},
 					{
-						UUID:            test.MockUUID(2),
+						State:           daos.PoolServiceStateDegraded,
+						UUID:            test.MockPoolUUID(2),
+						TotalTargets:    42,
+						ActiveTargets:   16,
+						DisabledTargets: 26,
 						ServiceReplicas: []ranklist.Rank{1, 2, 3},
-						TargetsTotal:    42,
-						TargetsDisabled: 17,
-						Usage:           expUsage,
-						State:           system.PoolServiceStateDegraded.String(),
-						RebuildState:    "busy",
+						Rebuild:         expRebuildStatus(2),
+						TierStats:       expTierStats,
 					},
 				},
+				QueryErrors: make(map[uuid.UUID]*PoolQueryErr),
 			},
 		},
 		"two pools; one query has error": {
@@ -1923,13 +1867,13 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:         test.MockUUID(1),
 								SvcReps:      []uint32{1, 3, 5, 8},
-								State:        system.PoolServiceStateReady.String(),
+								State:        daos.PoolServiceStateReady.String(),
 								RebuildState: "busy",
 							},
 							{
 								Uuid:         test.MockUUID(2),
 								SvcReps:      []uint32{1, 2, 3},
-								State:        system.PoolServiceStateReady.String(),
+								State:        daos.PoolServiceStateReady.String(),
 								RebuildState: "busy",
 							},
 						},
@@ -1939,22 +1883,26 @@ func TestControl_ListPools(t *testing.T) {
 				},
 			},
 			expResp: &ListPoolsResp{
-				Pools: []*Pool{
+				Pools: []*daos.PoolInfo{
 					{
-						UUID:            test.MockUUID(1),
+						State:           daos.PoolServiceStateReady,
+						UUID:            test.MockPoolUUID(1),
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
-						QueryErrorMsg:   "remote failed",
-						State:           system.PoolServiceStateReady.String(),
-						RebuildState:    "busy",
 					},
 					{
-						UUID:            test.MockUUID(2),
+						State:           daos.PoolServiceStateDegraded,
+						UUID:            test.MockPoolUUID(2),
+						TotalTargets:    42,
+						ActiveTargets:   16,
+						DisabledTargets: 26,
 						ServiceReplicas: []ranklist.Rank{1, 2, 3},
-						TargetsTotal:    42,
-						TargetsDisabled: 17,
-						Usage:           expUsage,
-						State:           system.PoolServiceStateDegraded.String(),
-						RebuildState:    "busy",
+						Rebuild:         expRebuildStatus(2),
+						TierStats:       expTierStats,
+					},
+				},
+				QueryErrors: map[uuid.UUID]*PoolQueryErr{
+					test.MockPoolUUID(1): {
+						Error: errors.New("remote failed"),
 					},
 				},
 			},
@@ -1967,13 +1915,13 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:         test.MockUUID(1),
 								SvcReps:      []uint32{1, 3, 5, 8},
-								State:        system.PoolServiceStateReady.String(),
+								State:        daos.PoolServiceStateReady.String(),
 								RebuildState: "busy",
 							},
 							{
 								Uuid:         test.MockUUID(2),
 								SvcReps:      []uint32{1, 2, 3},
-								State:        system.PoolServiceStateReady.String(),
+								State:        daos.PoolServiceStateReady.String(),
 								RebuildState: "busy",
 							},
 						},
@@ -1985,22 +1933,26 @@ func TestControl_ListPools(t *testing.T) {
 				},
 			},
 			expResp: &ListPoolsResp{
-				Pools: []*Pool{
+				Pools: []*daos.PoolInfo{
 					{
-						UUID:            test.MockUUID(1),
+						State:           daos.PoolServiceStateReady,
+						UUID:            test.MockPoolUUID(1),
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
-						QueryStatusMsg:  "DER_UNINIT(-1015): Device or resource not initialized",
-						State:           system.PoolServiceStateReady.String(),
-						RebuildState:    "busy",
 					},
 					{
-						UUID:            test.MockUUID(2),
+						State:           daos.PoolServiceStateDegraded,
+						UUID:            test.MockPoolUUID(2),
+						TotalTargets:    42,
+						ActiveTargets:   16,
+						DisabledTargets: 26,
 						ServiceReplicas: []ranklist.Rank{1, 2, 3},
-						TargetsTotal:    42,
-						TargetsDisabled: 17,
-						Usage:           expUsage,
-						State:           system.PoolServiceStateDegraded.String(),
-						RebuildState:    "busy",
+						Rebuild:         expRebuildStatus(2),
+						TierStats:       expTierStats,
+					},
+				},
+				QueryErrors: map[uuid.UUID]*PoolQueryErr{
+					test.MockPoolUUID(1): {
+						Status: daos.NotInit,
 					},
 				},
 			},
@@ -2013,12 +1965,12 @@ func TestControl_ListPools(t *testing.T) {
 							{
 								Uuid:    test.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
-								State:   system.PoolServiceStateReady.String(),
+								State:   daos.PoolServiceStateReady.String(),
 							},
 							{
 								Uuid:         test.MockUUID(2),
 								SvcReps:      []uint32{1, 2, 3},
-								State:        system.PoolServiceStateDestroying.String(),
+								State:        daos.PoolServiceStateDestroying.String(),
 								RebuildState: "busy",
 							},
 						},
@@ -2028,23 +1980,23 @@ func TestControl_ListPools(t *testing.T) {
 				},
 			},
 			expResp: &ListPoolsResp{
-				Pools: []*Pool{
+				Pools: []*daos.PoolInfo{
 					{
-						UUID:            test.MockUUID(1),
+						State:           daos.PoolServiceStateReady,
+						UUID:            test.MockPoolUUID(1),
+						TotalTargets:    42,
+						ActiveTargets:   42,
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
-						TargetsTotal:    42,
-						TargetsDisabled: 17,
-						Usage:           expUsage,
-						State:           system.PoolServiceStateDegraded.String(),
-						RebuildState:    "busy",
+						Rebuild:         expRebuildStatus(1),
+						TierStats:       expTierStats,
 					},
 					{
-						UUID:            test.MockUUID(2),
+						State:           daos.PoolServiceStateDestroying,
+						UUID:            test.MockPoolUUID(2),
 						ServiceReplicas: []ranklist.Rank{1, 2, 3},
-						State:           system.PoolServiceStateDestroying.String(),
-						RebuildState:    "busy",
 					},
 				},
+				QueryErrors: make(map[uuid.UUID]*PoolQueryErr),
 			},
 		},
 	} {
@@ -2070,7 +2022,10 @@ func TestControl_ListPools(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpts := []cmp.Option{
+				cmp.Comparer(test.CmpErrBool),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
