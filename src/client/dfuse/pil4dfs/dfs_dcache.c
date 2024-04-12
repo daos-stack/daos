@@ -479,7 +479,7 @@ drec_del_at_dact(dfs_dcache_t *dcache, dcache_rec_t *rec);
 static int
 dcache_create_dact(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t **dcache)
 {
-	dfs_dcache_t *dcache_tmp = NULL;
+	dfs_dcache_t *dcache_tmp;
 	int           rc;
 
 	D_ALLOC_PTR(dcache_tmp);
