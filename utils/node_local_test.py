@@ -1612,11 +1612,8 @@ def assert_file_size(ofd, size):
     assert_file_size_fd(ofd.fileno(), size)
 
 
-def import_daos(server, conf):
+def import_daos(server):
     """Return a handle to the pydaos module"""
-    pydir = f'python{sys.version_info.major}.{sys.version_info.minor}'
-
-    sys.path.append(join(conf['PREFIX'], 'lib64', pydir, 'site-packages'))
 
     os.environ['DD_MASK'] = 'all'
     os.environ['DD_SUBSYS'] = 'all'
@@ -2084,10 +2081,13 @@ class PosixTests():
         """Test container object class options"""
         container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
                                 oclass='S1', dir_oclass='S2', file_oclass='S4')
-        run_daos_cmd(self.conf,
-                     ['container', 'query',
-                      self.pool.id(), container.id()],
-                     show_stdout=True)
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'query',
+                           self.pool.id(), container.id()],
+                          show_stdout=True, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        assert rc.json['response']['object_class'] == 'S1'
 
         dfuse = DFuse(self.server, self.conf, container=container)
         dfuse.use_valgrind = False
@@ -5245,7 +5245,7 @@ def test_pydaos_kv(server, conf):
                                                   delete=False)
 
     os.environ['D_LOG_FILE'] = pydaos_log_file.name
-    daos = import_daos(server, conf)
+    daos = import_daos(server)
 
     pool = server.get_test_pool_obj()
 
@@ -5309,7 +5309,7 @@ def test_pydaos_kv_obj_class(server, conf):
         log_name = tmp_file.name
         os.environ['D_LOG_FILE'] = log_name
 
-    daos = import_daos(server, conf)
+    daos = import_daos(server)
 
     pool = server.get_test_pool_obj()
 

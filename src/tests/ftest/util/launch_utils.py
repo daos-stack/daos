@@ -693,7 +693,7 @@ class TestRunner():
         Args:
             logger (Logger): logger for the messages produced by this method
         """
-        avocado_logs_dir = self.avocado.get_logs_dir(logger)
+        avocado_logs_dir = self.avocado.get_logs_dir()
         crash_dir = os.path.join(avocado_logs_dir.replace("job-results", "data"), "crashes")
         if os.path.isdir(crash_dir):
             crash_files = [
