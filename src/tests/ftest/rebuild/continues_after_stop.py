@@ -8,7 +8,7 @@ import threading
 import time
 
 from command_utils_base import CommandFailure
-from general_utils import get_journalctl, journalctl_time
+from general_utils import get_journalctl, journalctl_time, wait_for_result
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
@@ -19,6 +19,11 @@ class ContinuesAfterStop(IorTestBase):
 
     :avocado: recursive
     """
+    def __init__(self, *args, **kwargs):
+        """Initialize a ContinuesAfterStop object."""
+        super().__init__(*args, **kwargs)
+        self.search_count = 0
+
     def run_ior_basic(self, namespace, pool, container):
         """Run IOR once with configurations in the test yaml.
 
@@ -62,12 +67,10 @@ class ContinuesAfterStop(IorTestBase):
         :avocado: tags=rebuild
         :avocado: tags=ContinuesAfterStop,test_continuous_after_stop
         """
-        # 1. Create a pool and a container.
         self.log_step("Create a pool and a container.")
         pool = self.get_pool()
         container = self.get_container(pool=pool)
 
-        # 2. Run IOR that takes several seconds with a thread.
         self.log_step("Run IOR that takes several seconds with a thread.")
         kwargs = {
             "namespace": "/run/ior/*",
@@ -78,48 +81,39 @@ class ContinuesAfterStop(IorTestBase):
         ior_start_time = journalctl_time()
         thread.start()
 
-        # 3. After a few seconds, stop one of the ranks (rank 3).
         self.log_step("After a few seconds, stop one of the ranks (rank 3).")
         # Wait for IOR to start and write some data. Otherwise rebuild will not occur.
         time.sleep(5)
         self.server_managers[0].stop_ranks(ranks=[3], daos_log=self.log)
 
-        # 4. Look for the start of the rebuild (Rebuild [scanning]) in journalctl with daos_server
-        # identifier.
         msg = ("4. Look for the start of the rebuild (Rebuild [scanning]) in journalctl with "
                "daos_server identifier.")
         self.log_step(msg)
-        scanning_found = False
-        for count in range(120):
-            self.log.info("Look for 'Rebuild [scanning]'. Count = %d", count)
+        def _search_scanning():
+            self.log.info("Search 'Rebuild [scanning]'. Count = %d", self.search_count)
+            self.search_count += 1
             journalctl_out = get_journalctl(
                 hosts=self.hostlist_servers, since=ior_start_time, until=None,
                 journalctl_type="daos_server")
+
             for _, journalctl in enumerate(journalctl_out):
                 data = journalctl["data"]
                 for line in data.splitlines():
                     if "Rebuild [scanning]" in line:
                         self.log.info("'Rebuild [scanning]' found: %s", line)
-                        scanning_found = True
-                        break
-                if scanning_found:
-                    break
-            if scanning_found:
-                break
-            time.sleep(1)
+                        return True
+            return False
 
+        scanning_found = wait_for_result(self.log, _search_scanning, timeout=120, delay=1)
         thread.join()
         if not scanning_found:
             self.fail("'Rebuild [scanning]' wasn't found in journalctl after stopping a rank!")
 
-        # 5. As soon as the message is detected, stop the rest of the ranks (0, 1, 2).
         self.log_step("As soon as the message is detected, stop the rest of the ranks (0, 1, 2).")
         self.server_managers[0].stop_ranks(ranks=[0, 1, 2], daos_log=self.log)
 
-        # 6. Restart the three ranks.
         self.log_step("Restart the three ranks.")
         self.server_managers[0].start_ranks(ranks=[0, 1, 2], daos_log=self.log)
 
-        # 7. Wait for rebuild to finish.
         self.log_step("Wait for rebuild to finish.")
         pool.wait_for_rebuild_to_end(interval=5)
