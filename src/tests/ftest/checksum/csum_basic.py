@@ -8,7 +8,9 @@ import ctypes
 
 from apricot import TestWithServers
 from general_utils import create_string_buffer
-from pydaos.raw import DaosContainer, DaosObj, IORequest
+from pydaos.raw import DaosObj, IORequest
+from test_utils_container import add_container
+from test_utils_pool import add_pool
 
 
 class CsumContainerValidation(TestWithServers):
@@ -21,41 +23,6 @@ class CsumContainerValidation(TestWithServers):
     :avocado: recursive
     """
 
-    # pylint: disable=too-many-instance-attributes
-    def setUp(self):
-        super().setUp()
-        self.agent_sessions = None
-        self.pool = None
-        self.container = None
-        self.obj = None
-        self.ioreq = None
-        self.no_of_dkeys = None
-        self.no_of_akeys = None
-        self.array_size = None
-        self.record_length = None
-
-        self.no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
-        self.no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
-        self.record_length = self.params.get("length", '/run/record/*')
-
-        self.add_pool(connect=False)
-        self.pool.connect(2)
-
-        self.csum = self.params.get("enable_checksum", '/run/container/*')
-        self.container = DaosContainer(self.context)
-        input_param = self.container.cont_input_values
-        input_param.enable_chksum = self.csum
-        self.container.create(poh=self.pool.pool.handle,
-                              con_prop=input_param)
-        self.container.open()
-
-        self.obj = DaosObj(self.context, self.container)
-        self.obj.create(objcls=1)
-        self.obj.open()
-        self.ioreq = IORequest(self.context,
-                               self.container,
-                               self.obj, objtype=4)
-
     def test_single_object_with_checksum(self):
         """
         Test ID: DAOS-3927
@@ -66,30 +33,48 @@ class CsumContainerValidation(TestWithServers):
         :avocado: tags=checksum
         :avocado: tags=CsumContainerValidation,test_single_object_with_checksum
         """
+        no_of_dkeys = self.params.get("no_of_dkeys", '/run/dkeys/*')[0]
+        no_of_akeys = self.params.get("no_of_akeys", '/run/akeys/*')[0]
+        record_length = self.params.get("length", '/run/record/*')
+
+        pool = add_pool(self, connect=False)
+        pool.connect(2)
+
+        enable_checksum = self.params.get("enable_checksum", '/run/container/*')
+        container = add_container(self, pool, create=False)
+        input_param = container.container.cont_input_values
+        input_param.enable_chksum = enable_checksum
+        container.create(input_param)
+        container.open()
+
+        obj = DaosObj(self.context, container.container)
+        obj.create(objcls=1)
+        obj.open()
+        ioreq = IORequest(self.context, container.container, obj, objtype=4)
+
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
-        for dkey in range(self.no_of_dkeys):
-            for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0])
-                          * self.record_length[record_index])
+        for dkey in range(no_of_dkeys):
+            for akey in range(no_of_akeys):
+                indata = "{0}".format(str(akey)[0]) * record_length[record_index]
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
                 c_akey = create_string_buffer("akey {0}".format(akey))
                 c_value = create_string_buffer(indata)
                 c_size = ctypes.c_size_t(ctypes.sizeof(c_value))
 
-                self.ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
+                ioreq.single_insert(c_dkey, c_akey, c_value, c_size)
                 record_index = record_index + 1
-                if record_index == len(self.record_length):
+                if record_index == len(record_length):
                     record_index = 0
 
         self.d_log.info("Single Dataset Verification -- Started")
         record_index = 0
-        for dkey in range(self.no_of_dkeys):
-            for akey in range(self.no_of_akeys):
-                indata = str(akey)[0] * self.record_length[record_index]
+        for dkey in range(no_of_dkeys):
+            for akey in range(no_of_akeys):
+                indata = str(akey)[0] * record_length[record_index]
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
                 c_akey = create_string_buffer("akey {0}".format(akey))
-                val = self.ioreq.single_fetch(c_dkey, c_akey, len(indata) + 1)
+                val = ioreq.single_fetch(c_dkey, c_akey, len(indata) + 1)
                 if indata != val.value.decode('utf-8'):
                     message = (
                         "ERROR:Data mismatch for dkey={}, akey={}: indata={}, "
@@ -98,5 +83,5 @@ class CsumContainerValidation(TestWithServers):
                     self.d_log.error(message)
                     self.fail(message)
                 record_index = record_index + 1
-                if record_index == len(self.record_length):
+                if record_index == len(record_length):
                     record_index = 0
