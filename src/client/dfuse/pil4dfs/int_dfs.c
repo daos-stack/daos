@@ -1892,7 +1892,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	/* file handled by DFS */
 	if (oflags & O_CREAT) {
 		/* clear the bits for types first. mode in open() only contains permission info. */
-		rc = dfs_open(dfs_mt->dfs, parent, item_name, (mode & (~S_IFMT)) | S_IFREG,
+		rc = dfs_open(dfs_mt->dfs, parent_dfs, item_name, (mode & (~S_IFMT)) | S_IFREG,
 			      oflags & (~O_APPEND), 0, 0, NULL, &dfs_obj);
 		mode_query = S_IFREG;
 	} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
