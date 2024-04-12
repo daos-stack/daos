@@ -101,8 +101,6 @@ dcache_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	rec = dlist2drec(rlink);
 	D_DEBUG(DB_TRACE, "delete record '%s' (ref=%u)", rec->dr_key, atomic_load(&rec->dr_ref));
 	rc = dfs_release(rec->dr_obj);
-	if (rc == ENOMEM)
-		rc = dfs_release(rec->dr_obj);
 	if (rc)
 		DS_ERROR(rc, "dfs_release() failed");
 	D_FREE(rec);
@@ -532,8 +530,6 @@ drec_del_at_dact(dfs_dcache_t *dcache, dcache_rec_t *rec)
 	D_DEBUG(DB_TRACE, "delete record %p", rec);
 
 	rc = dfs_release(rec->dr_obj);
-	if (rc == ENOMEM)
-		rc = dfs_release(rec->dr_obj);
 	if (rc)
 		DS_ERROR(rc, "dfs_release() failed");
 	D_FREE(rec);
