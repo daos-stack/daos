@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
- * This tests a threaded client sending RPCs on a single context
+ * This tests the dir-entry cache of the DAOS libpil4dfs library
  */
 
 #include <unistd.h>
