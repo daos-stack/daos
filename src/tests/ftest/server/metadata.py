@@ -88,10 +88,10 @@ class ObjectMetadata(TestWithServers):
 
     def create_pool(self, namespace=""):
         """Create a pool and display the svc ranks.
-        
+
         Args:
             namespace: Test variant for add pool. Defaults to empty.
-        
+
         """
         self.add_pool(namespace=namespace)
         self.log.info("Created pool %s: svc ranks:", self.pool.uuid)
