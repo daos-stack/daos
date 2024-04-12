@@ -102,7 +102,7 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
 fi
 
 # shellcheck disable=SC2086,SC2090,SC2048
-if ! python ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
+if ! python ./launch.py --failfast --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else
     rc=0
