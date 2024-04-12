@@ -169,8 +169,7 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60, verbose
                 # to the destination
                 log = getLogger()
                 command = get_clush_command(
-                    hosts, args="-S -v", command="cp {} {}".format(source, destination),
-                    command_sudo=True)
+                    hosts, args='-S -v', command=f'cp {source} {destination}', command_sudo=True)
                 result = run_command(log, command, verbose, timeout)
                 if not result.passed:
                     _debug_no_space(result, destination)
@@ -204,7 +203,7 @@ def remote_file_copy(log, hosts, source, destination, verbose=True, timeout=60):
         RemoteCommandResult: a grouping of the command results from the same hosts with the same
             return status
     """
-    command = f"clush -w {str(hosts)} -B -S -p -v --copy f'{source}' --dest '{destination}'"
+    command = f"clush -w {str(hosts)} -B -S -p -v --copy '{source}' --dest '{destination}'"
     return run_command(log, command, verbose, timeout)
 
 
@@ -222,5 +221,5 @@ def reverse_remote_file_copy(log, hosts, source, destination, timeout=60):
         RemoteCommandResult: a grouping of the command results from the same hosts with the same
             return status
     """
-    command = f"clush -w {str(hosts)} -B -S -p -v --rcopy f'{source}' --dest '{destination}'"
+    command = f"clush -w {str(hosts)} -B -S -p -v --rcopy '{source}' --dest '{destination}'"
     return run_command(log, command, True, timeout)
