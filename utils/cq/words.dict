@@ -63,6 +63,7 @@ Uncomment
 VMD
 XUnitResult
 acl
+adminexcluded
 akey
 akeys
 allocator
@@ -100,6 +101,7 @@ centric
 chdir
 checksum
 chgrp
+chk
 chmod
 chown
 chowned
@@ -129,6 +131,7 @@ datamover
 dataset
 dbench
 dcp
+ddb
 ddict
 dealloc
 debian
@@ -171,6 +174,7 @@ epcrange
 epilog
 errored
 ethernet
+fallocate
 fchmod
 fcntl
 filename
@@ -224,6 +228,7 @@ iod
 iodepth
 ioengine
 ior
+ioreqs
 iotype
 iov
 ip
@@ -381,6 +386,7 @@ rpaths
 rpc
 rpms
 rsvc
+rsync
 runtime
 runuser
 rw
@@ -498,6 +504,7 @@ vm
 vos
 wildcard
 wipefs
+xargs
 xattr
 xattrs
 xfer

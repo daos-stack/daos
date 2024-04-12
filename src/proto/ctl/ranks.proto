@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import "shared/ranks.proto";
 message RanksReq {
 	bool force = 3; // force operation
 	string ranks = 4; // rankset to operate over
+	bool check_mode = 5; // start in check mode
 }
 
 // Generic response containing DER result from multiple ranks.
