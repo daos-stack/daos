@@ -222,8 +222,8 @@ test_rename(void **state)
 
 	create_dir_tree(fd);
 
-	printf("Closing fd of path '%s'\n", mnt_path);
-	rc = close(fd);
+	printf("\ncreating directory '/a/bb/d/e'\n");
+	rc = mkdirat(fd, "a/bb/d/e", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 	assert_return_code(rc, errno);
 
 	D_ALLOC(path_old, PATH_MAX);
@@ -235,10 +235,14 @@ test_rename(void **state)
 
 	printf("\n-- START of test_rename --\n");
 
-	printf("\nrenaming directory '/a/bb' -> '/a/ccc/bb\n");
+	printf("\nrenaming directory '/a/bb' -> '/a/ccc/foo\n");
 	memcpy(path_old + mnt_len, "/a/bb", sizeof("/a/bb"));
 	memcpy(path_new + mnt_len, "/a/ccc/foo", sizeof("/a/ccc/foo"));
 	rc = rename(path_old, path_new);
+	assert_return_code(rc, errno);
+
+	printf("\ncreating directory '/a/ccc/foo/d/e/f'\n");
+	rc = mkdirat(fd, "a/ccc/foo/d/e/f", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 	assert_return_code(rc, errno);
 
 	printf("\nrenaming directory '/a/ccc/foo/d' -> '/a/ccc/foo/bar\n");
@@ -258,6 +262,10 @@ test_rename(void **state)
 	D_FREE(path_new);
 	D_FREE(path_old);
 	printf("\n-- END of test_rename --\n");
+
+	printf("Closing fd of path '%s'\n", mnt_path);
+	rc = close(fd);
+	assert_return_code(rc, errno);
 }
 
 static void
@@ -327,7 +335,7 @@ test_dup(void **state)
 	rc = close(dup_fd);
 	assert_return_code(rc, errno);
 
-	printf("\nclosing empty file '/foo/foo'\n");
+	printf("\nclosing empty file '/tesd_dup/foo'\n");
 	rc = close(foo_fd);
 	assert_return_code(rc, errno);
 

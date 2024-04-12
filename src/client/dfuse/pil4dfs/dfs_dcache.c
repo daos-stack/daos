@@ -182,11 +182,38 @@ drec_del_at_act(dfs_dcache_t *dcache, dcache_rec_t *rec);
 static int
 drec_del_act(dfs_dcache_t *dcache, char *path, dcache_rec_t *parent);
 
+static inline int
+dcache_add_root(dfs_dcache_t *dcache, dfs_obj_t *obj)
+{
+	dcache_rec_t *rec;
+	int           rc;
+
+	D_ALLOC(rec, sizeof(*rec) + DCACHE_KEY_PREF_SIZE);
+	if (rec == NULL)
+		D_GOTO(error, rc = -DER_NOMEM);
+
+	rec->dr_obj = obj;
+	atomic_init(&rec->dr_ref, 0);
+	atomic_init(&rec->dr_deleted, false);
+	memcpy(&rec->dr_key_child_prefix[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
+	memcpy(&rec->dr_key[0], &dcache->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE);
+	rec->dr_key_len = DCACHE_KEY_PREF_SIZE - 1;
+	rc = d_hash_rec_insert(&dcache->dd_dir_hash, rec->dr_key, rec->dr_key_len, &rec->dr_entry,
+			       true);
+	if (rc == 0)
+		D_GOTO(out, rc = -DER_SUCCESS);
+
+error:
+	D_FREE(rec);
+out:
+	return rc;
+}
+
 static int
 dcache_create_act(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t **dcache)
 {
 	dfs_dcache_t *dcache_tmp = NULL;
-	dfs_obj_t    *obj;
+	dfs_obj_t    *obj        = NULL;
 	daos_obj_id_t obj_id;
 	mode_t        mode;
 	int           rc;
@@ -197,7 +224,7 @@ dcache_create_act(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t 
 
 	dcache_tmp->dd_dfs = dfs;
 
-	rc = dfs_lookup(dfs, "/", O_RDONLY, &obj, &mode, NULL);
+	rc = dfs_lookup(dfs, "/", O_RDWR, &obj, &mode, NULL);
 	if (rc != 0)
 		D_GOTO(error, rc = daos_errno2der(rc));
 	rc = dfs_obj2id(obj, &obj_id);
@@ -205,9 +232,6 @@ dcache_create_act(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t 
 	rc = snprintf(&dcache_tmp->dd_key_root_prefix[0], DCACHE_KEY_PREF_SIZE,
 		      "%016" PRIx64 "-%016" PRIx64 ":", obj_id.hi, obj_id.lo);
 	D_ASSERT(rc == DCACHE_KEY_PREF_SIZE - 1);
-	rc = dfs_release(obj);
-	if (rc != 0)
-		D_GOTO(error, rc = daos_errno2der(rc));
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_MUTEX | D_HASH_FT_LRU, bits, NULL,
 					 &dcache_hash_ops, &dcache_tmp->dd_dir_hash);
@@ -221,10 +245,15 @@ dcache_create_act(dfs_t *dfs, uint32_t bits, uint32_t rec_timeout, dfs_dcache_t 
 	dcache_tmp->drec_del_at_fn = drec_del_at_act;
 	dcache_tmp->drec_del_fn    = drec_del_act;
 
+	rc = dcache_add_root(dcache_tmp, obj);
+	if (rc != 0)
+		D_GOTO(error, rc);
+
 	*dcache = dcache_tmp;
 	D_GOTO(out, rc = -DER_SUCCESS);
 
 error:
+	dfs_release(obj);
 	D_FREE(dcache_tmp);
 out:
 	return rc;
@@ -272,8 +301,8 @@ dcache_get(dfs_dcache_t *dcache, const char *key, size_t key_len)
 }
 
 static inline int
-dcache_add(dfs_dcache_t *dcache, const char *path, const char *key, size_t key_len,
-	   dcache_rec_t **rec)
+dcache_add(dfs_dcache_t *dcache, dcache_rec_t *parent, const char *name, const char *key,
+	   size_t key_len, dcache_rec_t **rec)
 {
 	dcache_rec_t *rec_tmp = NULL;
 	dfs_obj_t    *obj     = NULL;
@@ -289,7 +318,7 @@ dcache_add(dfs_dcache_t *dcache, const char *path, const char *key, size_t key_l
 	atomic_init(&rec_tmp->dr_ref, 1);
 	atomic_init(&rec_tmp->dr_deleted, false);
 
-	rc = dfs_lookup(dcache->dd_dfs, path, O_RDWR, &obj, &mode, NULL);
+	rc = dfs_lookup_rel(dcache->dd_dfs, parent->dr_obj, name, O_RDWR, &obj, &mode, NULL);
 	if (rc != 0)
 		D_GOTO(error, rc = daos_errno2der(rc));
 	if (!S_ISDIR(mode))
@@ -330,10 +359,11 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, dcache
 {
 	const size_t  key_prefix_len = DCACHE_KEY_PREF_SIZE - 1;
 	dcache_rec_t *rec_tmp;
+	dcache_rec_t *parent;
 	char         *key;
 	char         *key_prefix;
-	char         *token;
-	size_t        token_len;
+	char         *name;
+	size_t        name_len;
 	int           rc;
 
 	D_ASSERT(path_len > 0);
@@ -343,15 +373,16 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, dcache
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc         = -DER_SUCCESS;
-	token      = path;
-	token_len  = 0;
+	name       = path;
+	name_len   = 0;
 	key_prefix = dcache->dd_key_root_prefix;
+	parent     = NULL;
 	for (;;) {
 		size_t key_len;
 
 		memcpy(key, key_prefix, key_prefix_len);
-		memcpy(key + key_prefix_len, token, token_len);
-		key_len      = key_prefix_len + token_len;
+		memcpy(key + key_prefix_len, name, name_len);
+		key_len      = key_prefix_len + name_len;
 		key[key_len] = '\0';
 
 		rec_tmp = dcache_get(dcache, key, key_len);
@@ -359,36 +390,34 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, dcache
 			(rec_tmp == NULL) ? "miss" : "hit", DP_PATH(path), DP_DK(key));
 		if (rec_tmp == NULL) {
 			char   tmp;
-			size_t subpath_len;
 
-			tmp         = '\0';
-			subpath_len = (token + token_len) - path;
-			if (subpath_len == 0) {
-				subpath_len = 1;
-				tmp         = path[1];
-				path[1]     = '\0';
-			} else if (path[subpath_len] == '/') {
-				tmp               = '/';
-				path[subpath_len] = '\0';
-			}
-			rc = dcache_add(dcache, path, key, key_len, &rec_tmp);
-			if (tmp != '\0')
-				path[subpath_len] = tmp;
-			if (rc != -DER_SUCCESS)
+			D_ASSERT(name_len > 0);
+			D_ASSERT(parent != NULL);
+
+			tmp            = name[name_len];
+			name[name_len] = '\0';
+			rc             = dcache_add(dcache, parent, name, key, key_len, &rec_tmp);
+			name[name_len] = tmp;
+			if (rc != -DER_SUCCESS) {
+				drec_decref(dcache, parent);
 				D_GOTO(out, rc);
+			}
 		}
 		D_ASSERT(rec_tmp != NULL);
 
+		if (parent != NULL)
+			drec_decref(dcache, parent);
+
 		// NOTE skip '/' character
-		token += token_len + 1;
-		token_len = 0;
-		while (token + token_len < path + path_len && token[token_len] != '/')
-			++token_len;
-		if (token_len == 0)
+		name += name_len + 1;
+		name_len = 0;
+		while (name + name_len < path + path_len && name[name_len] != '/')
+			++name_len;
+		if (name_len == 0)
 			break;
 
 		key_prefix = &rec_tmp->dr_key_child_prefix[0];
-		drec_decref(dcache, rec_tmp);
+		parent     = rec_tmp;
 	}
 	*rec = rec_tmp;
 
