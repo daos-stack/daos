@@ -389,7 +389,7 @@ dcache_find_insert_act(dfs_dcache_t *dcache, char *path, size_t path_len, dcache
 		D_DEBUG(DB_TRACE, "dcache %s: path=" DF_PATH ", key=" DF_DK "\n",
 			(rec_tmp == NULL) ? "miss" : "hit", DP_PATH(path), DP_DK(key));
 		if (rec_tmp == NULL) {
-			char   tmp;
+			char tmp;
 
 			D_ASSERT(name_len > 0);
 			D_ASSERT(parent != NULL);
