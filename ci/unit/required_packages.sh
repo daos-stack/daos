@@ -2,17 +2,13 @@
 
 set -eux
 
-distro="$1"
 # No longer used but provided by pipeline-lib
+# distro="$1"
 # quick_build="${2:-false}"
 
-if [[ "$distro" = *7 ]]; then
-    OPENMPI_VER="3"
-    PY_MINOR_VER="6"
-elif [[ "$distro" = *8 ]]; then
-    OPENMPI_VER=""
-    PY_MINOR_VER=""
-fi
+OPENMPI_VER=""
+PY_MINOR_VER=""
+
 pkgs="argobots                         \
       boost-python3$PY_MINOR_VER-devel \
       capstone                         \
@@ -32,9 +28,6 @@ pkgs="argobots                         \
       patchelf                         \
       pmix                             \
       protobuf-c                       \
-      python3$PY_MINOR_VER-junit_xml   \
-      python3$PY_MINOR_VER-pyxattr     \
-      python3$PY_MINOR_VER-tabulate    \
       spdk-devel                       \
       valgrind-devel"
 

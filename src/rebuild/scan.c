@@ -339,9 +339,9 @@ rebuild_scan_done(void *data)
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
-	D_ASSERT(tls != NULL);
+	if (tls != NULL)
+		tls->rebuild_pool_scanning = 0;
 
-	tls->rebuild_pool_scanning = 0;
 	return 0;
 }
 
@@ -962,7 +962,8 @@ rebuild_scanner(void *data)
 
 	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver,
 				      rpt->rt_rebuild_gen);
-	D_ASSERT(tls != NULL);
+	if (tls == NULL)
+		return 0;
 
 	if (!is_rebuild_scanning_tgt(rpt)) {
 		D_DEBUG(DB_REBUILD, DF_UUID" skip scan\n", DP_UUID(rpt->rt_pool_uuid));
@@ -1228,8 +1229,11 @@ out:
 	if (tls && tls->rebuild_pool_status == 0 && rc != 0)
 		tls->rebuild_pool_status = rc;
 
-	if (rpt)
+	if (rpt) {
+		if (rc)
+			rpt_delete(rpt);
 		rpt_put(rpt);
+	}
 	ro = crt_reply_get(rpc);
 	ro->rso_status = rc;
 	ro->rso_stable_epoch = d_hlc_get();
