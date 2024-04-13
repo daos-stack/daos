@@ -75,11 +75,9 @@ int			dss_core_nr;
 unsigned int		dss_core_offset;
 /** NUMA node to bind to */
 int			dss_numa_node = -1;
-hwloc_bitmap_t	core_allocation_bitmap;
-/** a copy of the NUMA node object in the topology */
-hwloc_obj_t		numa_obj;
-/** number of cores in the given NUMA node */
-int			dss_num_cores_numa_node;
+/** Cached numa information */
+struct dss_numa_info   *numa_info;
+
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 /** Number of storage tiers: 2 for SCM and NVMe */
@@ -306,8 +304,11 @@ dss_topo_init()
 	int		num_cores_visited;
 	char		*cpuset;
 	int		k;
+	int              i;
+	int              rc = 0;
 	hwloc_obj_t	corenode;
 	bool            tgt_oversub = false;
+	bool             multi_socket = false;
 
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
@@ -317,11 +318,14 @@ dss_topo_init()
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
+	d_getenv_bool("DAOS_MULTISOCKET", &multi_socket);
+
+	if (multi_socket && numa_node_nr > 1)
+		dss_numa_nr = numa_node_nr;
 
 	/* if no NUMA node was specified, or NUMA data unavailable */
 	/* fall back to the legacy core allocation algorithm */
 	if (dss_numa_node == -1 || numa_node_nr <= 0) {
-		D_PRINT("Using legacy core allocation algorithm\n");
 		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
 					    tgt_oversub);
 
@@ -332,62 +336,90 @@ dss_topo_init()
 				dss_core_offset, dss_core_nr - 1);
 			return -DER_INVAL;
 		}
-		return 0;
+
+		if (dss_numa_nr == 1) {
+			D_PRINT("Using legacy core allocation algorithm\n");
+			return 0;
+		}
+
+		if ((dss_tgt_offload_xs_nr % numa_node_nr) != 0) {
+			D_ERROR("helper count must be evenly divisible by numa count\n");
+			return -DER_INVAL;
+		}
+		if ((dss_tgt_nr % numa_node_nr) != 0) {
+			D_ERROR("tgt count must be evenly divisible by numa count\n");
+			return -DER_INVAL;
+		}
+		dss_tgt_offload_per_numa_xs_nr = dss_tgt_offload_xs_nr / numa_node_nr;
+		dss_tgt_per_numa_nr            = dss_tgt_nr / numa_node_nr;
+		D_PRINT("Using multi-socket core allocation algorithm nr=%d target_per=%d "
+			"offload_per=%d\n",
+			numa_node_nr, dss_tgt_per_numa_nr, dss_tgt_offload_per_numa_xs_nr);
 	}
 
-	if (dss_numa_node > numa_node_nr) {
+	if (!multi_socket && dss_numa_node > numa_node_nr) {
 		D_ERROR("Invalid NUMA node selected. "
 			"Must be no larger than %d\n",
 			numa_node_nr);
 		return -DER_INVAL;
 	}
 
-	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
-	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology",
-			dss_numa_node);
-		return -DER_INVAL;
-	}
+	D_ALLOC_ARRAY(numa_info, numa_node_nr);
+	if (numa_info == NULL)
+		return -DER_NOMEM;
 
-	/* create an empty bitmap, then set each bit as we */
-	/* find a core that matches */
-	core_allocation_bitmap = hwloc_bitmap_alloc();
-	if (core_allocation_bitmap == NULL) {
-		D_ERROR("Unable to allocate core allocation bitmap\n");
-		return -DER_INVAL;
-	}
+	for (i = 0; i < numa_node_nr; i++) {
+		hwloc_obj_t numa_obj;
+		numa_info[i].ni_idx = i;
+		numa_obj = numa_info[i].ni_obj = hwloc_get_obj_by_depth(dss_topo, depth, 0);
+		if (numa_obj == NULL) {
+			D_ERROR("NUMA node %d was not found in the topology", i);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 
-	dss_num_cores_numa_node = 0;
-	num_cores_visited = 0;
+		/* create an empty bitmap, then set each bit as we */
+		/* find a core that matches */
+		numa_info[i].ni_core_allocation_bitmap = hwloc_bitmap_alloc();
+		if (numa_info[i].ni_core_allocation_bitmap == NULL) {
+			D_ERROR("Unable to allocate core allocation bitmap\n");
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 
-	for (k = 0; k < dss_core_nr; k++) {
-		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
-		if (corenode == NULL)
-			continue;
-		if (hwloc_bitmap_isincluded(corenode->cpuset,
-					    numa_obj->cpuset) != 0) {
-			if (num_cores_visited++ >= dss_core_offset) {
-				hwloc_bitmap_set(core_allocation_bitmap, k);
-				hwloc_bitmap_asprintf(&cpuset,
-						      corenode->cpuset);
+		numa_info[i].ni_core_nr = 0;
+		num_cores_visited       = 0;
+
+		for (k = 0; k < dss_core_nr; k++) {
+			corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
+			if (corenode == NULL)
+				continue;
+			if (hwloc_bitmap_isincluded(corenode->cpuset, numa_obj->cpuset) != 0) {
+				if (num_cores_visited++ >= dss_core_offset) {
+					hwloc_bitmap_set(numa_info[i].ni_core_allocation_bitmap, k);
+					hwloc_bitmap_asprintf(&cpuset, corenode->cpuset);
+				}
+				numa_info[i].ni_core_nr++;
 			}
-			dss_num_cores_numa_node++;
+		}
+		hwloc_bitmap_asprintf(&cpuset, numa_info[i].ni_core_allocation_bitmap);
+		free(cpuset);
+
+		if (i == dss_numa_node) {
+			dss_tgt_nr =
+			    dss_tgt_nr_get(numa_info[i].ni_core_nr, nr_threads, tgt_oversub);
+			if (dss_core_offset >= numa_info[i].ni_core_nr) {
+				D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
+					"should within range [0, %d]",
+					dss_core_offset, numa_info[i].ni_core_nr - 1);
+				D_GOTO(failed, rc = -DER_INVAL);
+			}
+			D_PRINT("Using NUMA core allocation algorithm\n");
 		}
 	}
-	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
-	free(cpuset);
 
-	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
-				    tgt_oversub);
-	if (dss_core_offset >= dss_num_cores_numa_node) {
-		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
-			"should within range [0, %d]", dss_core_offset,
-			dss_num_cores_numa_node - 1);
-		return -DER_INVAL;
-	}
-
-	D_PRINT("Using NUMA core allocation algorithm\n");
 	return 0;
+failed:
+	D_FREE(numa_info);
+	return rc;
 }
 
 static ABT_mutex		server_init_state_mutex;
@@ -825,7 +857,7 @@ server_init(int argc, char *argv[])
 		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
 		dss_tgt_offload_xs_nr, dss_core_offset, dss_hostname);
 
-	if (numa_obj)
+	if (numa_info && dss_numa_node != -1)
 		D_PRINT("Using NUMA node: %d", dss_numa_node);
 
 	return 0;
@@ -904,6 +936,7 @@ server_fini(bool force)
 		pl_fini();
 		daos_hhash_fini();
 	}
+	D_FREE(numa_info);
 	D_INFO("daos_fini() or pl_fini() done\n");
 	crt_finalize();
 	D_INFO("crt_finalize() done\n");

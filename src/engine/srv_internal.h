@@ -132,18 +132,30 @@ extern int		dss_core_nr;
 extern unsigned int	dss_core_offset;
 /** NUMA node to bind to */
 extern int		dss_numa_node;
-/** bitmap describing core allocation */
-extern hwloc_bitmap_t	core_allocation_bitmap;
-/** a copy of the NUMA node object in the topology */
-extern hwloc_obj_t	numa_obj;
-/** number of cores in the given NUMA node */
-extern int		dss_num_cores_numa_node;
+struct dss_numa_info {
+	/** a copy of the NUMA node object in the topology */
+	hwloc_obj_t    ni_obj;
+	/** numa index for this node */
+	int            ni_idx;
+	/** number of cores in the given NUMA node */
+	unsigned int   ni_core_nr;
+	/** Allocation bitmap for numa node */
+	hwloc_bitmap_t ni_core_allocation_bitmap;
+};
+/** Cached numa information */
+extern struct dss_numa_info *numa_info;
 /** Number of offload XS */
 extern unsigned int	dss_tgt_offload_xs_nr;
+/** Number of offload XS per socket */
+extern unsigned int          dss_tgt_offload_per_numa_xs_nr;
+/** Number of tgt XS per socket */
+extern unsigned int          dss_tgt_per_numa_nr;
 /** number of system XS */
 extern unsigned int	dss_sys_xs_nr;
 /** Flag of helper XS as a pool */
 extern bool		dss_helper_pool;
+/** Number of numa nodes in multi-socket mode (always 1 otherwise) */
+extern unsigned int          dss_numa_nr;
 
 /** Shadow dss_get_module_info */
 struct dss_module_info *get_module_info(void);

@@ -325,6 +325,33 @@ dss_thread_collective(int (*func)(void *), void *arg, unsigned int flags)
 /* ============== ULT create functions =================================== */
 
 static inline int
+sched_ult2xs_multisocket(int xs_type, int tgt_id)
+{
+	int socket;
+
+	/** Keep it simple for now.  Only support fewer helper threads than
+	 * io threads */
+	D_ASSERTF(dss_tgt_offload_xs_nr < dss_tgt_nr,
+		  "Must have fewer helper threads than targets in multi-socket mode");
+	switch (xs_type) {
+	case DSS_XS_IOFW:
+		/** Fall through */
+	case DSS_XS_OFFLOAD:
+		/* No helper threads */
+		if (dss_tgt_offload_xs_nr == 0)
+			return DSS_XS_SELF;
+		socket = tgt_id / dss_numa_nr;
+		/** tgt and offload xstreams are split among sockets evenly */
+		return dss_sys_xs_nr + dss_tgt_nr + (socket * dss_tgt_offload_per_numa_xs_nr) +
+		       tgt_id % dss_tgt_offload_per_numa_xs_nr;
+	default:
+		D_ASSERT(0);
+	};
+
+	return DSS_XS_SELF;
+}
+
+static inline int
 sched_ult2xs(int xs_type, int tgt_id)
 {
 	uint32_t	xs_id;
@@ -341,6 +368,10 @@ sched_ult2xs(int xs_type, int tgt_id)
 	case DSS_XS_DRPC:
 		return 2;
 	case DSS_XS_IOFW:
+		if (dss_numa_nr > 1) {
+			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
+			break;
+		}
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + 1;
@@ -379,6 +410,10 @@ sched_ult2xs(int xs_type, int tgt_id)
 			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
 		break;
 	case DSS_XS_OFFLOAD:
+		if (dss_numa_nr > 1) {
+			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
+			break;
+		}
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr / dss_tgt_nr;

@@ -75,10 +75,18 @@
 #define DRPC_XS_NR	(1)
 /** Number of offload XS */
 unsigned int	dss_tgt_offload_xs_nr;
+/** Number of offload per socket */
+unsigned int            dss_tgt_offload_per_numa_xs_nr;
+/** Number of target per socket */
+unsigned int            dss_tgt_per_numa_nr;
 /** Number of target (XS set) per engine */
 unsigned int	dss_tgt_nr;
 /** Number of system XS */
 unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
+/** Normally set to 1. In "multi-socket" mode, will be the number of
+ *  numa nodes.
+ */
+unsigned int            dss_numa_nr = 1;
 /**
  * Flag of helper XS as a pool.
  * false - the helper XS is near its main IO service XS. When there is one or
@@ -965,14 +973,41 @@ dss_start_xs_id(int tag, int xs_id)
 {
 	hwloc_obj_t	obj;
 	int		rc;
+	int                   tgt;
 	int		xs_core_offset;
-	unsigned	idx;
+	unsigned int          idx;
 	char		*cpuset;
+	struct dss_numa_info *ninfo;
+	bool                  clear = false;
 
 	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
 	/* if we are NUMA aware, use the NUMA information */
-	if (numa_obj) {
-		idx = hwloc_bitmap_first(core_allocation_bitmap);
+	if (numa_info) {
+		if (dss_numa_node == -1) {
+			tgt = dss_xs2tgt(xs_id);
+			if (xs_id == 1) {
+				D_INFO("Swim\n");
+				ninfo = &numa_info[1];
+			} else if (tgt != -1) {
+				D_INFO("target #%d\n", tgt);
+				ninfo = &numa_info[tgt / dss_tgt_per_numa_nr];
+			} else if (xs_id > 2) {
+				tgt = xs_id - dss_sys_xs_nr - dss_tgt_nr;
+				D_INFO("offload #%d\n", tgt);
+				ninfo = &numa_info[tgt / dss_tgt_offload_per_numa_xs_nr];
+			} else {
+				D_INFO("system  %d\n", xs_id);
+				ninfo = &numa_info[0];
+			}
+			if (xs_id != 0)
+				clear = true;
+		} else {
+			ninfo = &numa_info[dss_numa_node];
+			if (xs_id > 1 || (xs_id == 0 && dss_core_nr > dss_tgt_nr))
+				clear = true;
+		}
+
+		idx = hwloc_bitmap_first(ninfo->ni_core_allocation_bitmap);
 		if (idx == -1) {
 			D_ERROR("No core available for XS: %d", xs_id);
 			return -DER_INVAL;
@@ -983,8 +1018,8 @@ dss_start_xs_id(int tag, int xs_id)
 		 * All system XS will reuse the first XS' core, but
 		 * the SWIM and DRPC XS will use separate core if enough cores
 		 */
-		if (xs_id > 1 || (xs_id == 0 && dss_core_nr > dss_tgt_nr))
-			hwloc_bitmap_clr(core_allocation_bitmap, idx);
+		if (clear)
+			hwloc_bitmap_clr(ninfo->ni_core_allocation_bitmap, idx);
 
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
 		if (obj == NULL) {
@@ -993,7 +1028,7 @@ dss_start_xs_id(int tag, int xs_id)
 		}
 
 		hwloc_bitmap_asprintf(&cpuset, obj->cpuset);
-		D_DEBUG(DB_TRACE, "Using CPU set %s\n", cpuset);
+		D_DEBUG(DB_TRACE, "Using CPU set (numa %d) %s\n", ninfo->ni_idx, cpuset);
 		free(cpuset);
 	} else {
 		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
@@ -1076,9 +1111,8 @@ dss_xstreams_init(void)
 		dss_core_nr, dss_tgt_nr);
 
 	if (dss_numa_node != -1) {
-		D_DEBUG(DB_TRACE,
-			"Detected %d cores on NUMA node %d\n",
-			dss_num_cores_numa_node, dss_numa_node);
+		D_DEBUG(DB_TRACE, "Detected %d cores on NUMA node %d\n",
+			numa_info[dss_numa_node].ni_core_nr, dss_numa_node);
 	}
 
 	xstream_data.xd_xs_nr = DSS_XS_NR_TOTAL;
