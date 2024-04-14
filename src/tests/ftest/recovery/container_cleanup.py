@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,9 +34,9 @@ class ContainerCleanupTest(RecoveryTestBase):
 
         Jira ID: DAOS-12289
 
-        :avocado: tags=all,pr
-        :avocado: tags=vm
-        :avocado: tags=recovery,container_cleanup
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,test_cat_recovery,container_cleanup
         :avocado: tags=ContainerCleanupTest,test_container_label_inconsistency
         """
         # 1. Create a pool and a container.

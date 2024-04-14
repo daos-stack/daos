@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -109,9 +109,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-11711
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=recovery,test_cat_recovery,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_dangling_pool
         """
         # 1. Create a pool.
@@ -204,9 +204,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-11712
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=recovery,test_cat_recovery,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_orphan_pool_trust_ps
         """
         errors = []
@@ -226,9 +226,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-11712
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=recovery,test_cat_recovery,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_orphan_pool_trust_ms
         """
         errors = []
@@ -264,9 +264,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-12029
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=recovery,test_cat_recovery,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_majority_ps_replicas
         """
         # 1. Create a pool with --nsvc=3.
@@ -346,9 +346,9 @@ class PoolListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-12067
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_list_consolidation
+        :avocado: tags=recovery,test_cat_recovery,pool_list_consolidation
         :avocado: tags=PoolListConsolidationTest,test_lost_all_rdb
         """
         # 1. Create a pool.

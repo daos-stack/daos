@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -78,9 +78,9 @@ class PoolMembershipTest(IorTestBase):
 
         Jira ID: DAOS-11734
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_membership
+        :avocado: tags=recovery,test_cat_recovery,pool_membership
         :avocado: tags=PoolMembershipTest,test_orphan_pool_shard
         """
         # 1. Create a pool.
@@ -247,9 +247,9 @@ class PoolMembershipTest(IorTestBase):
 
         Jira ID: DAOS-11736
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_membership
+        :avocado: tags=recovery,test_cat_recovery,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_pool_map
         """
         # 1. Create a pool.
@@ -317,9 +317,9 @@ class PoolMembershipTest(IorTestBase):
 
         Jira ID: DAOS-11735
 
-        :avocado: tags=all,pr
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,pool_membership
+        :avocado: tags=recovery,test_cat_recovery,pool_membership
         :avocado: tags=PoolMembershipTest,test_dangling_rank_entry
         """
         targets = self.params.get("targets", "/run/server_config/engines/0/*")

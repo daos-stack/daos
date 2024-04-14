@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -31,9 +31,9 @@ class MSMembershipTest(TestWithServers):
 
         Jira ID: DAOS-11703
 
-        :avocado: tags=all,full_regression
-        :avocado: tags=vm
-        :avocado: tags=recovery,ms_membership
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,test_cat_recovery,ms_membership
         :avocado: tags=MSMembershipTest,test_checker_on_admin_excluded
         """
         dmg_command = self.get_dmg_command()
@@ -96,9 +96,9 @@ class MSMembershipTest(TestWithServers):
 
         Jira ID: DAOS-11704
 
-        :avocado: tags=all,full_regression
-        :avocado: tags=vm
-        :avocado: tags=recovery,ms_membership
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,test_cat_recovery,ms_membership
         :avocado: tags=MSMembershipTest,test_enable_disable_admin_excluded
         """
         errors = []

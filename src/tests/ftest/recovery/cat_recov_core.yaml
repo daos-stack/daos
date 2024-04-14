@@ -1,0 +1,58 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers: 4
+# Note that subtests below can set their own timeout so this
+# should be a general average of all tests not including outliers
+# (I'm looking at you "rebuild tests")
+timeout: 5400
+server_config:
+  name: daos_server
+  engines_per_host: 2
+  engines:
+    0:
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,any
+        - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
+        - D_LOG_FLUSH=DEBUG
+        - FI_LOG_LEVEL=warn
+        - D_LOG_STDERR_IN_LOG=1
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,md,any
+        - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
+        - D_LOG_FLUSH=DEBUG
+        - FI_LOG_LEVEL=warn
+        - D_LOG_STDERR_IN_LOG=1
+      storage: auto
+  transport_config:
+    allow_insecure: true
+  system_ram_reserved: 64
+agent_config:
+  transport_config:
+    allow_insecure: true
+dmg:
+  transport_config:
+    allow_insecure: true
+daos_tests:
+  num_clients:
+    test_daos_cat_recov_core: 1
+  test_name:
+    test_daos_cat_recov_core: DAOS_Cat_Recov_Core
+  daos_test:
+    test_daos_cat_recov_core: F
