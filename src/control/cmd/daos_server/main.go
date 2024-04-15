@@ -42,16 +42,15 @@ type mainOpts struct {
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	SCM           scmStorageCmd          `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
-	NVMe          nvmeStorageCmd         `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
-	LegacyStorage legacyStorageCmd       `command:"storage" description:"Perform tasks related to locally-attached storage (deprecated, use scm or nvme instead)"`
-	Start         startCmd               `command:"start" description:"Start daos_server"`
-	Network       networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
-	Version       versionCmd             `command:"version" description:"Print daos_server version"`
-	MgmtSvc       msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
-	DumpTopo      hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
-	Support       supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
-	Config        configCmd              `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
+	SCM      scmStorageCmd          `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
+	NVMe     nvmeStorageCmd         `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
+	Start    startCmd               `command:"start" description:"Start daos_server"`
+	Network  networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
+	Version  versionCmd             `command:"version" description:"Print daos_server version"`
+	MgmtSvc  msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
+	DumpTopo hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	Support  supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
+	Config   configCmd              `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
 
 	// Allow a set of tests to be run before executing commands.
 	preExecTests []execTestFn

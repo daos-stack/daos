@@ -54,6 +54,7 @@ message SystemStartReq {
 	string sys = 1; // DAOS system name
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
+	bool check_mode = 4; // start ranks in check mode
 }
 
 // SystemStartResp returns status of restart attempt and results

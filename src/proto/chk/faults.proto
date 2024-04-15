@@ -1,0 +1,19 @@
+//
+// (C) Copyright 2022 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+syntax = "proto3";
+package chk;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/chk";
+
+import "chk/chk.proto";
+
+message Fault {
+	CheckInconsistClass class = 1;
+	repeated string strings = 2;
+	repeated uint32 uints = 3;
+	repeated int32 ints = 4;
+}

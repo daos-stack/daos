@@ -608,7 +608,7 @@ dfuse_char_disabled(char *addr, size_t len)
  * set.
  */
 static int
-dfuse_cont_get_cache(struct dfuse_cont *dfc)
+dfuse_cont_get_cache(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
 {
 	size_t       sizes[ATTR_COUNT];
 	char        *buff;
@@ -730,6 +730,9 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 
 	if (have_dentry && !have_dentry_dir)
 		dfc->dfc_dentry_dir_timeout = dfc->dfc_dentry_timeout;
+
+	if (dfc->dfc_data_timeout != 0 && dfuse_info->di_wb_cache)
+		dfc->dfc_wb_cache = true;
 	rc = 0;
 out:
 	D_FREE(buff);
@@ -873,7 +876,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 		uuid_copy(dfc->dfc_uuid, c_info.ci_uuid);
 
 		if (dfuse_info->di_caching) {
-			rc = dfuse_cont_get_cache(dfc);
+			rc = dfuse_cont_get_cache(dfuse_info, dfc);
 			if (rc == ENODATA) {
 				DFUSE_TRA_INFO(dfc, "Using default caching values");
 				dfuse_set_default_cont_cache_values(dfc);
@@ -962,9 +965,9 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, const cha
 
 	return rc;
 err_umount:
-	dfs_umount(dfc->dfs_ns);
+	(void)dfs_umount(dfc->dfs_ns);
 err_close:
-	daos_cont_close(dfc->dfs_coh, NULL);
+	(void)daos_cont_close(dfc->dfs_coh, NULL);
 err_free:
 	D_FREE(dfc);
 err:
@@ -1250,6 +1253,7 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_il_count, 0);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
 	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
+	D_RWLOCK_INIT(&ie->ie_wlock, 0);
 }
 
 void
