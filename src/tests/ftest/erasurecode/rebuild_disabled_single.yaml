@@ -7,16 +7,14 @@ hosts:
     10_server:
       test_servers: server-[1-5]
   test_clients: 1
-timeout: 700
+timeout: 400
 setup:
   # Test variants use different server counts, so ensure servers are stopped after each run
   start_agents_once: False
   start_servers_once: False
 server_config:
   name: daos_server
-  crt_timeout: 10
   engines_per_host: 2
-  crt_timeout: 10
   engines:
     0:
       pinned_numa_node: 0
