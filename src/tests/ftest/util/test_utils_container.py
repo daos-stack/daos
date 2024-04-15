@@ -368,7 +368,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         if self.control_method.value == self.USE_API:
             # pydaos.raw doesn't support create with a label
-            self.log.info("Ignoring label for container created with API")
+            if not self.silent.value:
+                self.log.info("Ignoring label for container created with API")
             self.label.update(None)
 
             # Create a container with the API method
@@ -392,9 +393,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             self._call_method(self.container.create, kwargs)
 
         else:
-            # Disconnect the pool if connected
-            self.pool.disconnect()
-
             # Create a container with the daos command
             kwargs = {
                 "pool": self.pool.identifier,
@@ -498,7 +496,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         """
         if self.container and not self.opened:
-            self.log.info("Opening container %s", str(self))
+            if not self.silent.value:
+                self.log.info("Opening container %s", str(self))
             self.pool.connect()
             kwargs = {}
             kwargs["poh"] = pool_handle
@@ -518,7 +517,8 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
         """
         if self.container and self.opened:
-            self.log.info("Closing container %s", str(self))
+            if not self.silent.value:
+                self.log.info("Closing container %s", str(self))
             self._call_method(self.container.close, {})
             self.opened = False
             return True

@@ -751,7 +751,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		else
-			D_ERROR(DF_CONT DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
+			D_ERROR(DF_CONT" "DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
 				DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
@@ -2018,6 +2018,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	oqma.oqma_opc = DAOS_OBJ_RPC_QUERY_KEY;
 	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
 	oqma.oqma_ret = rc;
+	oqma.oqma_raw_recx = 1;
 
 	D_SPIN_LOCK(&cb_args->obj->cob_spin);
 	rc = daos_obj_query_merge(&oqma);
@@ -2155,6 +2156,7 @@ obj_shard_coll_query_cb(tse_task_t *task, void *data)
 	oqma.oqma_opc = DAOS_OBJ_RPC_COLL_QUERY;
 	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
 	oqma.oqma_ret = rc;
+	oqma.oqma_raw_recx = ocqo->ocqo_flags & OCRF_RAW_RECX ? 1 : 0;
 
 	/*
 	 * The RPC reply may be aggregated results from multiple VOS targets, as to related max/min

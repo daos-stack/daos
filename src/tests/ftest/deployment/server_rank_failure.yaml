@@ -19,7 +19,7 @@ server_config:
       log_file: daos_server0.log
       log_mask: INFO
       storage: auto
-      targets: 16
+      targets: 8
       env_vars:
         - DD_MASK=io,rebuild
     1:
@@ -30,7 +30,7 @@ server_config:
       log_file: daos_server1.log
       log_mask: INFO
       storage: auto
-      targets: 16
+      targets: 8
       env_vars:
         - DD_MASK=io,rebuild
 

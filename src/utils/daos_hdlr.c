@@ -531,10 +531,10 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path, m
 	/* Unset any unsupported mode bits. We track these errors so they can
 	 * be surfaced to the user at the end of the copy operation.
 	 */
-	if (!ignore_unsup && mode & (S_ISVTX | S_ISGID | S_ISUID)) {
+	if (!ignore_unsup && mode & S_ISVTX) {
 		(*num_chmod_enotsup)++;
 	}
-	mode &= ~(S_ISVTX | S_ISGID | S_ISUID);
+	mode &= ~S_ISVTX;
 
 	if (file_dfs->type == POSIX) {
 		rc = chmod(path, mode);
@@ -2511,8 +2511,9 @@ close:
 /* Dfuse cache evict (and helper).
  * Open a path and make a ioctl call for dfuse to evict it.  IF the path is the root then dfuse
  * cannot do this so perform the same over all the top-level directory entries instead.
+ *
+ * Always closes fd.
  */
-
 static int
 dfuse_evict_helper(int fd, struct dfuse_mem_query *query)
 {
@@ -2523,6 +2524,7 @@ dfuse_evict_helper(int fd, struct dfuse_mem_query *query)
 	dir = fdopendir(fd);
 	if (dir == 0) {
 		rc = errno;
+		close(fd);
 		return rc;
 	}
 
@@ -2573,6 +2575,7 @@ dfuse_evict(struct cmd_args_s *ap)
 
 	if (buf.st_ino == 1) {
 		rc = dfuse_evict_helper(fd, &query);
+		fd = -1;
 		if (rc != 0) {
 			DH_PERROR_SYS(ap, rc, "Unable to traverse root");
 			rc = daos_errno2der(rc);
@@ -2601,6 +2604,7 @@ out:
 	ap->dfuse_mem.container_count = query.container_count;
 
 close:
-	close(fd);
+	if (fd >= 0)
+		close(fd);
 	return rc;
 }

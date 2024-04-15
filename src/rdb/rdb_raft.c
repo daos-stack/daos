@@ -245,7 +245,7 @@ rdb_raft_store_replicas(daos_handle_t lc, uint64_t index, const d_rank_list_t *r
 			     2 /* n */, keys, vals);
 }
 
-static int
+int
 rdb_raft_load_replicas(daos_handle_t lc, uint64_t index, d_rank_list_t **replicas)
 {
 	d_iov_t		value;
@@ -1157,7 +1157,9 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 			goto err;
 		}
 	} else {
-		D_ASSERTF(0, "Unknown entry type %d\n", entry->type);
+		D_ERROR(DF_DB": unknown entry "DF_U64" type: %d\n", DP_DB(db), index, entry->type);
+		rc = -DER_IO;
+		goto err;
 	}
 
 	/*
@@ -1380,18 +1382,33 @@ rdb_raft_cb_notify_membership_event(raft_server_t *raft, void *udata, raft_node_
 }
 
 static void
-rdb_raft_cb_debug(raft_server_t *raft, raft_node_t *node, void *arg,
-		  const char *buf)
+rdb_raft_cb_log(raft_server_t *raft, raft_node_t *node, void *arg, raft_loglevel_e level,
+		const char *buf)
 {
 	struct rdb *db = raft_get_udata(raft);
+	d_rank_t    rank;
 
-	if (node != NULL) {
-		struct rdb_raft_node *rdb_node = raft_node_get_udata(node);
+	if (node == NULL)
+		rank = CRT_NO_RANK;
+	else
+		rank = ((struct rdb_raft_node *)raft_node_get_udata(node))->dn_rank;
 
-		D_DEBUG(DB_TRACE, DF_DB": %s: rank=%u\n", DP_DB(db), buf,
-			rdb_node->dn_rank);
-	} else {
-		D_DEBUG(DB_TRACE, DF_DB": %s\n", DP_DB(db), buf);
+	switch (level) {
+	case RAFT_LOG_ERROR:
+		D_ERROR(DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
+		break;
+	case RAFT_LOG_INFO:
+		/*
+		 * Demote to D_DEBUG, because we don't have a mechanism yet to
+		 * eventually stop replicas that have been excluded from the
+		 * pool. Every 1--2 election timeouts, these replicas will log a
+		 * few election messages, which might attract complaints if done
+		 * with D_INFO.
+		 */
+		D_DEBUG(DB_MD, DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
+		break;
+	default:
+		D_DEBUG(DB_IO, DF_DB ": %s: rank=%u\n", DP_DB(db), buf, rank);
 	}
 }
 
@@ -1404,6 +1421,12 @@ rdb_raft_cb_get_time(raft_server_t *raft, void *user_data)
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	D_ASSERTF(rc == 0, "clock_gettime: %d\n", errno);
 	return now.tv_sec * 1000 + now.tv_nsec / (1000 * 1000);
+}
+
+static double
+rdb_raft_cb_get_rand(raft_server_t *raft, void *user_data)
+{
+	return d_randd();
 }
 
 /*
@@ -1427,8 +1450,9 @@ static raft_cbs_t rdb_raft_cbs = {
 	.log_pop			= rdb_raft_cb_log_pop,
 	.log_get_node_id		= rdb_raft_cb_log_get_node_id,
 	.notify_membership_event	= rdb_raft_cb_notify_membership_event,
-	.log				= rdb_raft_cb_debug,
-	.get_time			= rdb_raft_cb_get_time
+	.log				= rdb_raft_cb_log,
+	.get_time			= rdb_raft_cb_get_time,
+	.get_rand			= rdb_raft_cb_get_rand
 };
 
 static int
@@ -2181,7 +2205,7 @@ rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc, d_iov_t *key,
 		    uuid_t uuid, struct rdb_lc_record *record)
 {
 	struct rdb_lc_record	r = {};
-	d_iov_t		value;
+	d_iov_t			value;
 	int			rc;
 
 	D_ASSERTF(key == &rdb_mc_lc || key == &rdb_mc_slc, "%p\n", key);
@@ -2364,6 +2388,11 @@ rdb_raft_load_lc(struct rdb *db)
 			DP_RC(rc));
 		goto err;
 	}
+	if (uuid_is_null(db->d_slc_record.dlr_uuid)) {
+		D_DEBUG(DB_MD, DF_DB": null SLC record\n", DP_DB(db));
+		db->d_slc = DAOS_HDL_INVAL;
+		goto load_snapshot;
+	}
 	rc = vos_cont_open(db->d_pool, db->d_slc_record.dlr_uuid, &db->d_slc);
 	if (rc == -DER_NONEXIST) {
 		D_DEBUG(DB_MD, DF_DB": dangling SLC record: "DF_UUID"\n",
@@ -2503,6 +2532,124 @@ rdb_raft_get_ae_max_size(void)
 		value = default_value;
 	}
 	return value;
+}
+
+/* For the rdb_raft_dictate case. */
+static int
+rdb_raft_discard_slc(struct rdb *db)
+{
+	struct rdb_lc_record	slc_record;
+	d_iov_t			value;
+	int			rc;
+
+	d_iov_set(&value, &slc_record, sizeof(slc_record));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_slc, &value);
+	if (rc == -DER_NONEXIST) {
+		D_DEBUG(DB_MD, DF_DB": no SLC record\n", DP_DB(db));
+		return 0;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up SLC: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+		return rc;
+	}
+	if (uuid_is_null(slc_record.dlr_uuid)) {
+		D_DEBUG(DB_MD, DF_DB": null SLC record\n", DP_DB(db));
+		return 0;
+	}
+
+	return rdb_raft_destroy_lc(db->d_pool, db->d_mc, &rdb_mc_slc, slc_record.dlr_uuid,
+				   NULL /* record */);
+}
+
+int
+rdb_raft_dictate(struct rdb *db)
+{
+	struct rdb_lc_record	lc_record = db->d_lc_record;
+	uint64_t		term;
+	d_rank_list_t		replicas;
+	d_rank_t		self = dss_self_rank();
+	d_iov_t			keys[2];
+	d_iov_t			value;
+	uint64_t		index = lc_record.dlr_tail;
+	int			rc;
+
+	/*
+	 * If an SLC exists, discard it, since it must be either stale or
+	 * incomplete. See rdb_raft_cb_recv_installsnapshot.
+	 */
+	rc = rdb_raft_discard_slc(db);
+	if (rc != 0)
+		return rc;
+
+	/*
+	 * Since we don't have an RDB fsck phase yet, do a basic check to avoid
+	 * arithmetic issues.
+	 */
+	if (lc_record.dlr_base >= index) {
+		D_ERROR(DF_DB": LC record corrupted: base "DF_U64" >= tail "DF_U64"\n", DP_DB(db),
+			lc_record.dlr_base, index);
+		return -DER_IO;
+	}
+
+	/* Get the term at the last index. */
+	if (index - lc_record.dlr_base - 1 > 0) {
+		struct rdb_entry header;
+
+		/* The LC has entries. Get from the last entry. */
+		d_iov_set(&value, &header, sizeof(header));
+		rc = rdb_lc_lookup(db->d_lc, index - 1, RDB_LC_ATTRS, &rdb_lc_entry_header, &value);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to look up entry "DF_U64" header: "DF_RC"\n",
+				DP_DB(db), index - 1, DP_RC(rc));
+			return rc;
+		}
+		term = header.dre_term;
+	} else {
+		/* The LC has no entries. Get from the snapshot. */
+		term = lc_record.dlr_base_term;
+	}
+
+	/*
+	 * At a new index, reset the membership to only ourself. We also punch
+	 * the entry header and data just for consistency, for this may be a
+	 * membership change entry that, for instance, adds a node other than
+	 * ourself, which contradicts with the new membership of only ourself.
+	 */
+	replicas.rl_ranks = &self;
+	replicas.rl_nr = 1;
+	rc = rdb_raft_store_replicas(db->d_lc, index, &replicas);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to reset membership: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+		return rc;
+	}
+	keys[0] = rdb_lc_entry_header;
+	keys[1] = rdb_lc_entry_data;
+	rc = rdb_lc_punch(db->d_lc, index, RDB_LC_ATTRS, 2 /* n */, keys);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to punch entry: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+		return rc;
+	}
+
+	/*
+	 * Update the LC base and tail. Note that, if successful, this
+	 * "publishes" all the modifications above and effectively commits all
+	 * entries.
+	 */
+	lc_record.dlr_base = index;
+	lc_record.dlr_base_term = term;
+	lc_record.dlr_tail = index + 1;
+	d_iov_set(&value, &lc_record, sizeof(lc_record));
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &value);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to update LC record: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+		return rc;
+	}
+	D_INFO(DF_DB": updated LC reocrd: base="DF_U64"->"DF_U64" base_term="DF_U64"->"DF_U64
+	       " tail="DF_U64"->"DF_U64"\n", DP_DB(db), db->d_lc_record.dlr_base,
+	       lc_record.dlr_base, db->d_lc_record.dlr_base_term, lc_record.dlr_base_term,
+	       db->d_lc_record.dlr_tail, lc_record.dlr_tail);
+	db->d_lc_record = lc_record;
+
+	return 0;
 }
 
 int
@@ -3196,8 +3343,8 @@ rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc)
 	}
 	rc = rdb_raft_check_state(db, &state, rc);
 	if (rc != 0 && rc != -DER_NOTLEADER)
-		D_ERROR(DF_DB": failed to process opc %u response: %d\n",
-			DP_DB(db), opc, rc);
+		DL_ERROR(rc, DF_DB ": failed to process opc %u response from rank %u", DP_DB(db),
+			 opc, rank);
 
 out_mutex:
 	ABT_mutex_unlock(db->d_raft_mutex);
@@ -3252,4 +3399,15 @@ rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc)
 	default:
 		D_ASSERTF(0, DF_DB": unexpected opc: %u\n", DP_DB(db), opc);
 	}
+}
+
+void
+rdb_raft_module_init(void)
+{
+	raft_set_log_level(RAFT_LOG_DEBUG);
+}
+
+void
+rdb_raft_module_fini(void)
+{
 }

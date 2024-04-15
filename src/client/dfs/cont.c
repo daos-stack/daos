@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,6 +62,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 		if (attr->da_oclass_id) {
 			dattr.da_dir_oclass_id  = attr->da_oclass_id;
 			dattr.da_file_oclass_id = attr->da_oclass_id;
+			dattr.da_oclass_id      = attr->da_oclass_id;
 		}
 		if (attr->da_file_oclass_id)
 			dattr.da_file_oclass_id = attr->da_file_oclass_id;

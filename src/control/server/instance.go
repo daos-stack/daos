@@ -157,6 +157,12 @@ func (ei *EngineInstance) Index() uint32 {
 	return ei.runner.GetConfig().Index
 }
 
+// SetCheckerMode adjusts the engine configuration to enable or disable
+// starting the engine in checker mode.
+func (ei *EngineInstance) SetCheckerMode(enabled bool) {
+	ei.runner.GetConfig().CheckerEnabled = enabled
+}
+
 // removeSocket removes the socket file used for dRPC communication with
 // harness and updates relevant ready states.
 func (ei *EngineInstance) removeSocket() error {
@@ -189,15 +195,20 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		r = *superblock.Rank
 	}
 
-	resp, err := ei.joinSystem(ctx, &control.SystemJoinReq{
-		UUID:        superblock.UUID,
-		Rank:        r,
-		URI:         ready.GetUri(),
-		NumContexts: ready.GetNctxs(),
-		FaultDomain: ei.hostFaultDomain,
-		InstanceIdx: ei.Index(),
-		Incarnation: ready.GetIncarnation(),
-	})
+	joinReq := &control.SystemJoinReq{
+		UUID:                 superblock.UUID,
+		Rank:                 r,
+		URI:                  ready.GetUri(),
+		SecondaryURIs:        ready.GetSecondaryUris(),
+		NumContexts:          ready.GetNctxs(),
+		NumSecondaryContexts: ready.GetSecondaryNctxs(),
+		FaultDomain:          ei.hostFaultDomain,
+		InstanceIdx:          ei.Index(),
+		Incarnation:          ready.GetIncarnation(),
+		CheckMode:            ready.GetCheckMode(),
+	}
+
+	resp, err := ei.joinSystem(ctx, joinReq)
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
 		return ranklist.NilRank, false, 0, err
@@ -205,6 +216,16 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	switch resp.State {
 	case system.MemberStateAdminExcluded, system.MemberStateExcluded:
 		return ranklist.NilRank, resp.LocalJoin, 0, errors.Errorf("rank %d excluded", resp.Rank)
+	case system.MemberStateCheckerStarted:
+		// If the system is in checker mode but the rank was not started in
+		// checker mode, we need to restart it in order to get the correct
+		// modules loaded.
+		if !ready.GetCheckMode() {
+			ei.log.Noticef("restarting rank %d in checker mode", resp.Rank)
+			go ei.requestStart(context.Background())
+			ei.SetCheckerMode(true)
+			return ranklist.NilRank, resp.LocalJoin, 0, errors.Errorf("rank %d restarting to enable checker", resp.Rank)
+		}
 	}
 	r = ranklist.Rank(resp.Rank)
 

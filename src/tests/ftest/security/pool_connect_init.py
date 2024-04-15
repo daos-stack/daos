@@ -32,7 +32,7 @@ class PoolSecurityTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,security
-        :avocado: tags=sec_basic,test_pool_connect
+        :avocado: tags=PoolSecurityTest,test_pool_connect
         """
         der_no_permission = "RC: -1001"
         user_uid = os.geteuid()

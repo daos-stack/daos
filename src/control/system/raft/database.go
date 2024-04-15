@@ -75,6 +75,7 @@ type (
 		MapVersion    uint32
 		Members       *MemberDatabase
 		Pools         *PoolDatabase
+		Checker       *CheckerDatabase
 		System        *SystemDatabase
 		SchemaVersion uint
 	}
@@ -120,8 +121,11 @@ type (
 
 	// RankEntry comprises the information about a rank in GroupMap.
 	RankEntry struct {
-		URI         string
-		Incarnation uint64
+		PrimaryURI       string
+		NumPrimaryCtxs   uint32
+		SecondaryURIs    []string
+		NumSecondaryCtxs []uint32
+		Incarnation      uint64
 	}
 
 	// RaftComponents holds the components required to start a raft instance.
@@ -258,6 +262,9 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 				Ranks:  make(PoolRankMap),
 				Uuids:  make(PoolUuidMap),
 				Labels: make(PoolLabelMap),
+			},
+			Checker: &CheckerDatabase{
+				Findings: make(CheckerFindingMap),
 			},
 			System: &SystemDatabase{
 				Attributes: make(map[string]string),
@@ -573,11 +580,19 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 		}
 		// Quick sanity-check: Don't include members that somehow have
 		// a nil rank or fabric URI, either.
-		if srv.Rank.Equals(ranklist.NilRank) || srv.FabricURI == "" {
-			db.log.Errorf("member has invalid rank (%d) or URI (%s)", srv.Rank, srv.FabricURI)
+		if srv.Rank.Equals(ranklist.NilRank) || srv.PrimaryFabricURI == "" {
+			db.log.Errorf("member has invalid rank (%d) or URIs (%s)", srv.Rank,
+				srv.PrimaryFabricURI)
 			continue
 		}
-		gm.RankEntries[srv.Rank] = RankEntry{URI: srv.FabricURI, Incarnation: srv.Incarnation}
+
+		gm.RankEntries[srv.Rank] = RankEntry{
+			PrimaryURI:       srv.PrimaryFabricURI,
+			NumPrimaryCtxs:   srv.PrimaryFabricContexts,
+			SecondaryURIs:    srv.SecondaryFabricURIs,
+			NumSecondaryCtxs: srv.SecondaryFabricContexts,
+			Incarnation:      srv.Incarnation,
+		}
 		if db.isReplica(srv.Addr) {
 			gm.MSRanks = append(gm.MSRanks, srv.Rank)
 		}
@@ -785,6 +800,8 @@ func (db *Database) UpdateMember(m *system.Member) error {
 	}
 	db.Lock()
 	defer db.Unlock()
+
+	db.log.Tracef("updating member: %+v", m)
 
 	_, err := db.FindMemberByUUID(m.UUID)
 	if err != nil {

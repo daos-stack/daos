@@ -124,10 +124,10 @@ struct rdb {
 	unsigned int		d_ae_max_entries;
 };
 
-/* thresholds of free space for a leader to avoid appending new log entries (512 KiB)
+/* thresholds of free space for a leader to avoid appending new log entries (4 MiB)
  * and follower to warn if the situation is really dire (16KiB)
  */
-#define RDB_NOAPPEND_FREE_SPACE (1ULL << 19)
+#define RDB_NOAPPEND_FREE_SPACE (1ULL << 22)
 #define RDB_CRITICAL_FREE_SPACE (1ULL << 14)
 
 /* Current rank */
@@ -178,15 +178,19 @@ struct rdb_raft_node {
 	struct rdb_raft_is	dn_is;
 };
 
+void rdb_raft_module_init(void);
+void rdb_raft_module_fini(void);
 int rdb_raft_init(daos_handle_t pool, daos_handle_t mc, const d_rank_list_t *replicas);
 int rdb_raft_open(struct rdb *db, uint64_t caller_term);
 int rdb_raft_start(struct rdb *db);
 void rdb_raft_stop(struct rdb *db);
 void rdb_raft_close(struct rdb *db);
+int rdb_raft_dictate(struct rdb *db);
 void rdb_raft_resign(struct rdb *db, uint64_t term);
 int rdb_raft_campaign(struct rdb *db);
 int rdb_raft_ping(struct rdb *db, uint64_t caller_term);
 int rdb_raft_verify_leadership(struct rdb *db);
+int rdb_raft_load_replicas(daos_handle_t lc, uint64_t index, d_rank_list_t **replicas);
 int rdb_raft_add_replica(struct rdb *db, d_rank_t rank);
 int rdb_raft_remove_replica(struct rdb *db, d_rank_t rank);
 int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
