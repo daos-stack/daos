@@ -53,7 +53,9 @@ test_1_pool:
     svc_ops_disable:
       properties: svc_ops_enabled:0
     svc_ops_150:
-      properties: svc_ops_enabled:1,svc_ops_entry_age:150
+      properties: svc_ops_enabled:1,svc_ops_entry_age:60
+#    svc_ops_150:
+#      properties: svc_ops_enabled:1,svc_ops_entry_age:150
 #    svc_ops_300:
 #      properties: svc_ops_enabled:1,svc_ops_entry_age:300
 #    svc_ops_600:
@@ -74,7 +76,7 @@ ior:
 metadata:
   mean_percent: 1
   num_addremove_loops: 4
-  created_cont_min: 25000
-  created_cont_max: 36000
+  created_cont_min: 30000
+  created_cont_max: 39000
   num_cont_to_destroy: 500
   fillup_seq_fail_max: 512
