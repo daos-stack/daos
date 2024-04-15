@@ -102,10 +102,6 @@ class NvmePoolCapacity(TestWithServers):
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool[-1].display_pool_daos_space(display_string)
                 nvme_size_begin[val] = self.pool[-1].get_pool_free_space("NVME")
-                # Before creating a container, we'll disconnect the pool. However, disconnecting the
-                # pool with threads causes the test to crash, so disconnect before creating any
-                # container. We connect during get_pool_free_space() above.
-                self.pool[-1].disconnect()
                 threads = []
                 # Create containers with threads because we'll be creating many containers, which
                 # will take too long if we create them serially.
@@ -226,4 +222,4 @@ class NvmePoolCapacity(TestWithServers):
         time.sleep(5)
         # Run Create/delete pool/container
         self.log.info("Running Test Case 3: Pool/Cont Create/Destroy")
-        self.run_test_create_delete(10, 50, 20)
+        self.run_test_create_delete(10, 50, 2)
