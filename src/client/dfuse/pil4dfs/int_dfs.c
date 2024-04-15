@@ -48,7 +48,6 @@
 #include <daos_prop.h>
 #include <daos/common.h>
 #include <daos/dfs_lib_int.h>
-#include <../common/dav/util.h>
 
 #include "hook.h"
 
@@ -1154,6 +1153,7 @@ static int
 consume_low_fd(void)
 {
 	int rc = 0;
+	int fd_dup;
 
 	if (atomic_load_relaxed(&daos_inited) == true)
 		return 0;
@@ -1166,18 +1166,24 @@ consume_low_fd(void)
 			DS_ERROR(errno, "failed to reserve a low fd");
 			goto err;
 		} else if (low_fd_list[low_fd_count] >= DAOS_MIN_FD) {
-			/* reserve fd 255 too. 255 is commonly used by bash. */
-			rc = dup2(low_fd_list[0], 255);
-			if (rc == -1) {
-				DS_ERROR(errno, "dup2() failed to reserve fd 255");
+			/* reserve fd 255 too if unused. 255 is commonly used by bash. */
+			fd_dup = fcntl(low_fd_list[0], F_DUPFD, 255);
+			if (fd_dup == -1) {
+				DS_ERROR(errno, "fcntl() failed");
 				goto err;
 			}
+			/* If fd 255 is used, lowest available fd is assigned to fd_dup. */
+			if (fd_dup >= 0 && fd_dup != 255)
+				libc_close(fd_dup);
+
 			/* reserve fd DAOS_DUMMY_FD which will be used later by dup2(). */
-			rc = dup2(low_fd_list[0], DAOS_DUMMY_FD);
-			if (rc == -1) {
-				DS_ERROR(errno, "dup2() failed to reserve fd DAOS_DUMMY_FD");
+			fd_dup = fcntl(low_fd_list[0], F_DUPFD, DAOS_DUMMY_FD);
+			if (fd_dup == -1) {
+				DS_ERROR(errno, "fcntl() failed");
 				goto err;
 			}
+			if (fd_dup >= 0 && fd_dup != DAOS_DUMMY_FD)
+				libc_close(fd_dup);
 			libc_close(low_fd_list[low_fd_count]);
 			break;
 		} else {
@@ -1290,12 +1296,16 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 	if (idx_dfs >= 0) {
 		/* trying to avoid lock as much as possible */
 		if (atomic_load_relaxed(&daos_inited) == false) {
+			uint64_t status_old = DAOS_INIT_NOT_RUNNING;
+			bool     rc_cmp_swap;
+
 			/* daos_init() is expensive to call. We call it only when necessary. */
 
 			/* Check whether daos_init() is running. If yes, pass to the original
 			 * libc functions. Avoid possible daos_init reentrancy/nested call.
 			 */
-			if (!util_bool_compare_and_swap64(&daos_initing, DAOS_INIT_NOT_RUNNING,
+
+			if (!atomic_compare_exchange_weak(&daos_initing, &status_old,
 			    DAOS_INIT_RUNNING)) {
 				*is_target_path = 0;
 				goto out_normal;
@@ -1329,11 +1339,10 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			atomic_store_relaxed(&daos_inited, true);
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
 
-			bool rc_cmp_swap;
-
-			rc_cmp_swap = util_bool_compare_and_swap64(&daos_initing, DAOS_INIT_RUNNING,
+			status_old = DAOS_INIT_RUNNING;
+			rc_cmp_swap = atomic_compare_exchange_weak(&daos_initing, &status_old,
 				DAOS_INIT_NOT_RUNNING);
-			assert(rc_cmp_swap);
+			D_ASSERT(rc_cmp_swap);
 		}
 
 		/* dfs info can be set up after daos has been initialized. */
