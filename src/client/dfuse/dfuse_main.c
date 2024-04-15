@@ -232,7 +232,7 @@ static void
 parse_mount_option(char *mnt_string, struct dfuse_info *dfuse_info, char *pool_name,
 		   char *cont_name)
 {
-	char *tok;
+	char *tok = NULL;
 	char *token;
 
 	while ((token = strtok_r(mnt_string, ",", &tok))) {
