@@ -92,7 +92,6 @@ class DaosServerCommand(YamlCommand):
         #   nvme           Perform tasks related to locally-attached NVMe storage
         #   scm            Perform tasks related to locally-attached SCM storage
         #   start          Start daos_server
-        #   storage        Perform tasks related to locally-attached storage
         #   support        Perform tasks related to debug the system to help support team
         #   version        Print daos_server version
         if sub_command == "ms":
@@ -105,8 +104,6 @@ class DaosServerCommand(YamlCommand):
             self.sub_command_class = self.ScmSubCommand()
         elif sub_command == "start":
             self.sub_command_class = self.StartSubCommand()
-        elif sub_command == "storage":
-            self.sub_command_class = self.StorageSubCommand()
         elif sub_command == "support":
             self.sub_command_class = self.SupportSubCommand()
         elif sub_command == "version":
@@ -512,58 +509,6 @@ class DaosServerCommand(YamlCommand):
                 #   --helper-log-file=   Log file location for debug from daos_admin binary
                 self.helper_log_file = FormattedParameter("--helper-log-file={}")
 
-    class StorageSubCommand(CommandWithSubCommand):
-        """Defines an object for the daos_server storage sub command."""
-
-        def __init__(self):
-            """Create a storage subcommand object."""
-            super().__init__("/run/daos_server/storage/*", "storage")
-
-        def get_sub_command_class(self):
-            """Get the daos_server storage sub command object."""
-            # Available sub-commands:
-            #   prepare  Prepare SCM and NVMe storage attached to remote servers
-            #   scan     Scan SCM and NVMe storage attached to local server
-            if self.sub_command.value == "prepare":
-                self.sub_command_class = self.PrepareSubCommand()
-            else:
-                self.sub_command_class = None
-
-        class PrepareSubCommand(CommandWithSubCommand):
-            """Defines an object for the daos_server storage prepare command."""
-
-            def __init__(self):
-                """Create a storage prepare subcommand object."""
-                super().__init__(
-                    "/run/daos_server/storage/prepare/*", "prepare")
-
-                # daos_server storage prepare command options:
-                #   --pci-allowlist=    White-space separated list of PCI
-                #                       devices (by address) to be unbound from
-                #                       Kernel driver and used with SPDK
-                #                       (default is all PCI devices).
-                #   --hugepages=        Number of hugepages to allocate (in MB)
-                #                       for use by SPDK (default 1024)
-                #   --target-user=      User that will own hugepage mountpoint
-                #                       directory and vfio groups.
-                #   --nvme-only         Only prepare NVMe storage.
-                #   --scm-only          Only prepare SCM.
-                #   --reset             Reset SCM modules to memory mode after
-                #                       removing namespaces. Reset SPDK
-                #                       returning NVMe device bindings back to
-                #                       kernel modules.
-                #   --force             Perform format without prompting for
-                #                       confirmation
-                #   --scm-ns-per-socket Number of SCM namespaces to create per socket (default: 1)
-                self.pci_allowlist = FormattedParameter("--pci-allowlist={}")
-                self.hugepages = FormattedParameter("--hugepages={}")
-                self.target_user = FormattedParameter("--target-user={}")
-                self.nvme_only = FormattedParameter("--nvme-only", False)
-                self.scm_only = FormattedParameter("--scm-only", False)
-                self.reset = FormattedParameter("--reset", False)
-                self.force = FormattedParameter("--force", False)
-                self.scm_ns_per_socket = FormattedParameter("--scm-ns-per-socket={}")
-
     class SupportSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server support sub command."""
 
@@ -609,7 +554,7 @@ class DaosServerCommand(YamlCommand):
 
 
 class DaosServerInformation():
-    """An object that stores the daos_server storage and network scan data."""
+    """An object that stores the server storage and network scan data."""
 
     def __init__(self, dmg):
         """Create a DaosServerInformation object.
