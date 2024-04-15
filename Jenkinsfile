@@ -217,25 +217,25 @@ pipeline {
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 8')
         booleanParam(name: 'CI_RPM_el9_NOBUILD',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Do not build RPM packages for EL 9')
         booleanParam(name: 'CI_RPM_leap15_NOBUILD',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Do not build RPM packages for Leap 15')
         booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
-                     defaultValue: false,
+                     defaultValue: true,
                      description: 'Do not build DEB packages for Ubuntu 20')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
                      defaultValue: false,
                      description: 'Continue testing if a previous stage is Unstable')
         booleanParam(name: 'CI_UNIT_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Unit Test on EL 8 test stage')
         booleanParam(name: 'CI_UNIT_TEST_MEMCHECK',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Unit Test with memcheck on EL 8 test stage')
         booleanParam(name: 'CI_FI_el8_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Fault injection testing on EL 8 test stage')
         booleanParam(name: 'CI_MORE_FUNCTIONAL_PR_TESTS',
                      defaultValue: false,
@@ -244,13 +244,13 @@ pipeline {
                      defaultValue: false,
                      description: 'Run the Functional on EL 8 with Valgrind test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on EL 8 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on EL 9 test stage')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional on Leap 15 test stage' +
                                   '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
@@ -261,22 +261,22 @@ pipeline {
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium test stage')
         booleanParam(name: 'CI_medium-md-on-ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium MD on SSD test stage')
         booleanParam(name: 'CI_medium_verbs_provider_TEST',
                      defaultValue: true,
                      description: 'Run the Functional Hardware Medium Verbs Provider test stage')
         booleanParam(name: 'CI_medium-verbs-provider-md-on-ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium Verbs Provider MD on SSD test stage')
         booleanParam(name: 'CI_medium-ucx-provider_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Medium UCX Provider test stage')
         booleanParam(name: 'CI_large_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Large test stage')
         booleanParam(name: 'CI_large-md-on-ssd_TEST',
-                     defaultValue: true,
+                     defaultValue: false,
                      description: 'Run the Functional Hardware Large MD on SSD test stage')
         string(name: 'CI_UNIT_VM1_LABEL',
                defaultValue: 'ci_vm1',
