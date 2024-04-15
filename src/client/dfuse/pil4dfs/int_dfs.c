@@ -1947,6 +1947,11 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	if (!is_target_path)
 		goto org_func;
+	if (oflags & O_CREAT && (oflags & O_DIRECTORY || oflags & O_PATH)) {
+		/* Create a dir is not supported. */
+		errno = ENOENT;
+		return (-1);
+	}
 
 	if (oflags & __O_TMPFILE) {
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
@@ -1977,10 +1982,11 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		if ((S_IXUSR & mode_parent) == 0 || (S_IWUSR & mode_parent) == 0)
 			D_GOTO(out_error, rc = EACCES);
 	}
-	/* file/dir should be handled by DFS */
+	/* file handled by DFS */
 	if (oflags & O_CREAT) {
-		rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFREG, oflags & (~O_APPEND),
-			      0, 0, NULL, &dfs_obj);
+		/* clear the bits for types first. mode in open() only contains permission info. */
+		rc = dfs_open(dfs_mt->dfs, parent, item_name, (mode & (~S_IFMT)) | S_IFREG,
+			      oflags & (~O_APPEND), 0, 0, NULL, &dfs_obj);
 		mode_query = S_IFREG;
 	} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc =
