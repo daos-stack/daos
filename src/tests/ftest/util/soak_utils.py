@@ -18,7 +18,7 @@ from avocado.utils.distro import detect
 from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
-from dfuse_utils import Dfuse
+from dfuse_utils import get_dfuse
 from dmg_utils import get_storage_query_device_info
 from duns_utils import format_path
 from fio_utils import FioCommand
@@ -712,10 +712,9 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
             cmd(list):          list of dfuse commands to add to job script
     """
     # Get Dfuse params
-    dfuse = Dfuse(self.hostlist_clients, self.tmp)
-    dfuse.namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
-    dfuse.bind_cores = self.params.get("cores", dfuse.namespace, None)
-    dfuse.get_params(self)
+    namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
+    dfuse = get_dfuse(self, self.hostlist_clients, namespace)
+
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
     self.used.append(unique)
