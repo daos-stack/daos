@@ -16,6 +16,7 @@ server_config:
   name: daos_server
   crt_timeout: 10
   engines_per_host: 2
+  crt_timeout: 10
   engines:
     0:
       pinned_numa_node: 0
