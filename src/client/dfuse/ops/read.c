@@ -189,6 +189,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	ev->de_complete_cb = dfuse_cb_read_complete;
 
+	DFUSE_IE_WFLUSH(oh->doh_ie);
+
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
 		D_GOTO(err, rc);

@@ -148,6 +148,8 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	DFUSE_TRA_DEBUG(oh, "Closing %d", oh->doh_caching);
 
+	DFUSE_IE_WFLUSH(oh->doh_ie);
+
 	if (oh->doh_readahead) {
 		struct dfuse_event *ev;
 
