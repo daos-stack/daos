@@ -2081,10 +2081,13 @@ class PosixTests():
         """Test container object class options"""
         container = create_cont(self.conf, self.pool, ctype="POSIX", label='oclass_test',
                                 oclass='S1', dir_oclass='S2', file_oclass='S4')
-        run_daos_cmd(self.conf,
-                     ['container', 'query',
-                      self.pool.id(), container.id()],
-                     show_stdout=True)
+        rc = run_daos_cmd(self.conf,
+                          ['container', 'query',
+                           self.pool.id(), container.id()],
+                          show_stdout=True, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+        assert rc.json['response']['object_class'] == 'S1'
 
         dfuse = DFuse(self.server, self.conf, container=container)
         dfuse.use_valgrind = False
