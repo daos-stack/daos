@@ -61,6 +61,12 @@ container_reserved:
   dir_oclass: SX
   control_method: daos
   daos_timeout: 30
+container_snapshot:
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
+  oclass: RP_2GX
+  control_method: API
+  daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -88,12 +94,14 @@ soak_harassers:
   # one harrasser is run during each pass of soak jobs
   harasserlist:
     test_soak_offline_harassers:
+      - snapshot-offline
       - exclude_reintegrate-offline
       - server-stop_server-start-offline
       - server-stop_server-reintegrate-offline
       - extend-pool-offline
       # - vmd-identify-check-offline
     test_soak_online_harassers:
+      - snapshot
       - exclude_reintegrate
       - server-stop_server-start
       - server-stop_server-reintegrate

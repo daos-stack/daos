@@ -31,7 +31,6 @@ from mdtest_utils import MdtestCommand
 from oclass_utils import extract_redundancy_factor
 from pydaos.raw import DaosApiError, DaosSnapshot
 from run_utils import run_remote
-from test_utils_container import TestContainer
 
 H_LOCK = threading.Lock()
 
@@ -337,7 +336,7 @@ def wait_for_pool_rebuild(self, pool, name):
 
 
 def launch_snapshot(self, pool, name):
-    """Create a basic snapshot of the reserved pool.
+    """Create a basic snapshot.
 
     Args:
         self (obj): soak obj
@@ -348,16 +347,13 @@ def launch_snapshot(self, pool, name):
         "<<<PASS %s: %s started at %s>>>", self.loop, name, time.ctime())
     status = True
     # Create container
-    container = TestContainer(pool)
-    container.namespace = "/run/container_reserved/*"
-    container.get_params(self)
-    container.create()
-    container.open()
-    obj_cls = self.params.get(
-        "object_class", '/run/container_reserved/*')
+    add_containers(self, pool, path='/run/container_snapshot/*')
+    container = self.container[-1]
+    oclass = self.params.get("oclass", '/run/container_snapshot/*')
+    obj_cls = "_".join(["OC", str(oclass)])
 
     # write data to object
-    data_pattern = get_random_bytes(500)
+    data_pattern = get_random_bytes(500000000)
     datasize = len(data_pattern) + 1
     dkey = b"dkey"
     akey = b"akey"
@@ -374,7 +370,7 @@ def launch_snapshot(self, pool, name):
     if status:
         self.log.info("Snapshot Created")
         # write more data to object
-        data_pattern2 = get_random_bytes(500)
+        data_pattern2 = get_random_bytes(500000)
         datasize2 = len(data_pattern2) + 1
         dkey = b"dkey"
         akey = b"akey"
@@ -403,12 +399,14 @@ def launch_snapshot(self, pool, name):
     except (RuntimeError, TestFail, DaosApiError) as error:
         self.log.error("Failed to destroy snapshot %s", error)
         status &= False
-    # cleanup
-    container.close()
-    container.destroy()
+
     params = {"name": name, "status": status, "vars": {}}
     with H_LOCK:
         self.harasser_job_done(params)
+    self.harasser_results["SNAPSHOT"] = status
+    self.harasser_args["SNAPSHOT"] = params
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
     self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
