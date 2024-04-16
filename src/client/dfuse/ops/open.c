@@ -176,7 +176,7 @@ getattr_cb(struct dfuse_event *ev)
 	}
 
 	ev->de_ie->ie_dc.stat.st_ino = ev->de_ie->ie_stat.st_ino;
-	ev->de_ie->ie_dc.valid = true;
+	ev->de_ie->ie_dc.valid       = true;
 	dfuse_dc_cache_set_time(ev->de_ie);
 
 	/* Data will have been read directory into ie->ie_dc.stat */
