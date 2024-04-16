@@ -185,10 +185,12 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		dfuse_ie_cs_flush(inode);
 
 		if (dfuse_dc_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
-			DFUSE_IE_STAT_ADD(inode, DS_PRE_GETATTR);
-			inode->ie_stat = inode->ie_dc.stat;
-			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
-			return;
+			if (inode->ie_dc.valid) {
+				DFUSE_IE_STAT_ADD(inode, DS_PRE_GETATTR);
+				inode->ie_dc.valid = false;
+				DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
+				return;
+			}
 		}
 	}
 	DFUSE_IE_WFLUSH(inode);
