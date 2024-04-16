@@ -53,21 +53,6 @@ class DaosCoreBase(TestWithServers):
         path = "/".join(["/run/daos_tests", name, "*"])
         return self.params.get(self.get_test_name(), path, default)
 
-    @fail_on(CommandFailure)
-    def start_server_managers(self, force=False):
-        """Start the daos_server processes on each specified list of hosts.
-
-        Args:
-            force (bool, optional): whether or not to force starting the
-                servers. Defaults to False.
-
-        Returns:
-            bool: whether or not to force the starting of the agents
-
-        """
-        # Start the servers
-        return super().start_server_managers(force=force)
-
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
         subtest = self.get_test_param("daos_test")
