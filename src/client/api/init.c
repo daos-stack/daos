@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -34,6 +34,10 @@ static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /** refcount on how many times daos_init has been called */
 static int		module_initialized;
+
+/** attach info to avoid doing multiple agent drpc upcalls */
+static struct dc_mgmt_sys_info *info = NULL;
+static Mgmt__GetAttachInfoResp *resp;
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
@@ -146,7 +150,7 @@ daos_init(void)
 {
 	struct d_fault_attr_t *d_fault_init;
 	struct d_fault_attr_t *d_fault_mem = NULL;
-	struct d_fault_attr_t d_fault_mem_saved;
+	struct d_fault_attr_t  d_fault_mem_saved;
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
@@ -195,19 +199,29 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
 
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		D_GOTO(out_job, rc);
+	rc = dc_get_attach_info(NULL, true, info, &resp);
+	if (rc != 0) {
+		D_FREE(info);
+		D_GOTO(out_job, rc);
+	}
+	dc_set_global_attach_info(info, resp);
+
 	/**
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
 	 * handling of NULL system names)
 	 */
 	rc = dc_mgmt_net_cfg(NULL);
 	if (rc != 0)
-		D_GOTO(out_job, rc);
+		D_GOTO(out_info, rc);
 
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_job, rc);
+		D_GOTO(out_info, rc);
 	}
 
 	/**
@@ -265,6 +279,10 @@ out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_info:
+	dc_clear_global_attach_info();
+	dc_put_attach_info(info, resp);
+	D_FREE(info);
 out_job:
 	dc_job_fini();
 out_agent:
@@ -321,6 +339,10 @@ daos_fini(void)
 	if (rc != 0)
 		D_ERROR("failed to disconnect some resources may leak, "
 			DF_RC"\n", DP_RC(rc));
+
+	dc_clear_global_attach_info();
+	dc_put_attach_info(info, resp);
+	D_FREE(info);
 
 	dc_agent_fini();
 	dc_job_fini();

@@ -571,7 +571,7 @@ init_pool(const char *label, uuid_t uuid, uint64_t capas, const char *grp,
 	pool->dp_capas = capas;
 
 	/** attach to the server group and initialize rsvc_client */
-	rc = dc_mgmt_sys_attach(grp, &pool->dp_sys);
+	rc = dc_mgmt_sys_attach(grp, true, &pool->dp_sys);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
 
@@ -1274,7 +1274,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args, int opc)
 			D_GOTO(out_tpriv, rc = -DER_NOMEM);
 		}
 
-		rc = dc_mgmt_sys_attach(args->grp, &tpriv->state->sys);
+		rc = dc_mgmt_sys_attach(args->grp, true, &tpriv->state->sys);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to sys attach, rc %d.\n",
 				DP_UUID(args->uuid), rc);
