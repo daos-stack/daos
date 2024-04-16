@@ -901,7 +901,7 @@ fs_copy(struct cmd_args_s *ap, struct dm_args *ca, struct file_dfs *src_file_dfs
 	}
 
 	/* Make sure the source and destination are not the same.
-	 * Make sure the source is not a subset of the destination. */
+	 * Make sure the source is not a subpath of the destination. */
 	if ((src_file_dfs->type == POSIX && dst_file_dfs->type == POSIX) ||
 	    (src_file_dfs->type == DAOS && dst_file_dfs->type == DAOS &&
 	     strcmp(ca->src_pool, ca->dst_pool) == 0 && strcmp(ca->src_cont, ca->dst_cont) == 0)) {
@@ -912,19 +912,22 @@ fs_copy(struct cmd_args_s *ap, struct dm_args *ca, struct file_dfs *src_file_dfs
 		}
 		if (S_ISDIR(src_stat.st_mode)) {
 			int  src_path_len;
+			int  dst_path_len;
 			bool src_is_subpath;
 
-			/* Always compare src_path with a trailing slash */
+			/* If src_path ends with / and dst_path starts with the full src_path,
+			 * then src_path is a subpath of dst_path.
+			 * If src_path doesn't end with / then it's only a subpath if equal
+			 * to dst_path and dst_path ends with / */
 			src_path_len = strlen(src_path);
+			dst_path_len = strlen(dst_path);
 			if (src_path[src_path_len - 1] == '/') {
 				src_is_subpath = (strncmp(src_path, dst_path, src_path_len) == 0);
 			} else {
-				char *tmp_src = NULL;
-
-				D_ASPRINTF(tmp_src, "%s/", src_path);
-				src_is_subpath =
-				    (strncmp(tmp_src, dst_path, src_path_len + 1) == 0);
-				D_FREE(tmp_src);
+				src_is_subpath = (
+					strncmp(src_path, dst_path, src_path_len) == 0 &&
+					dst_path_len > src_path_len &&
+					dst_path[src_path_len] == '/');
 			}
 
 			if (src_is_subpath) {
