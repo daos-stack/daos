@@ -257,6 +257,7 @@ type Config struct {
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
 	HugepageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
+	CheckerEnabled    bool           `yaml:"-" cmdLongFlag:"--checker" cmdShortFlag:"-C"`
 }
 
 // NewConfig returns an I/O Engine config.
