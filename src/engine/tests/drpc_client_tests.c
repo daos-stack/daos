@@ -230,7 +230,7 @@ test_drpc_verify_notify_ready(void **state)
 
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 
-	assert_rc_equal(drpc_notify_ready(), 0);
+	assert_rc_equal(drpc_notify_ready(false), 0);
 
 	/* socket was closed */
 	assert_int_equal(close_call_count, 1);
