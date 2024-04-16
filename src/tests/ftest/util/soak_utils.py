@@ -714,12 +714,12 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     # Get Dfuse params
     namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
     dfuse = get_dfuse(self, self.hostlist_clients, namespace)
-
+    dfuse.bind_cores = self.params.get("cores", dfuse.namespace, None)
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
     self.used.append(unique)
     mount_dir = dfuse.mount_dir.value + unique
-    dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.identifier)
+    dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.identifier,)
     dfuselog = os.path.join(
         self.soak_log_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
