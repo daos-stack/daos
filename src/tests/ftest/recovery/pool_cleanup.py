@@ -36,7 +36,7 @@ class PoolCleanupTest(RecoveryTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,test_cat_recovery,pool_cleanup
+        :avocado: tags=recovery,cat_recov,pool_cleanup
         :avocado: tags=PoolCleanupTest,test_corrupt_label_ms
         """
         # 1. Create a pool.
@@ -155,7 +155,7 @@ class PoolCleanupTest(RecoveryTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,test_cat_recovery,pool_cleanup
+        :avocado: tags=recovery,cat_recov,pool_cleanup
         :avocado: tags=PoolCleanupTest,test_corrupt_label_ps
         """
         # 1. Create a pool.

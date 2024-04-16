@@ -40,7 +40,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,test_cat_recovery,container_list_consolidation
+        :avocado: tags=recovery,cat_recov,container_list_consolidation
         :avocado: tags=ContainerListConsolidationTest,test_orphan_container
         """
         # 1. Create a pool and a container.

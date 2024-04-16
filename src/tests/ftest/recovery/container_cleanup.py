@@ -36,7 +36,7 @@ class ContainerCleanupTest(RecoveryTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,test_cat_recovery,container_cleanup
+        :avocado: tags=recovery,cat_recov,container_cleanup
         :avocado: tags=ContainerCleanupTest,test_container_label_inconsistency
         """
         # 1. Create a pool and a container.

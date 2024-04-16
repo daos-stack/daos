@@ -33,7 +33,7 @@ class MSMembershipTest(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,test_cat_recovery,ms_membership
+        :avocado: tags=recovery,cat_recov,ms_membership
         :avocado: tags=MSMembershipTest,test_checker_on_admin_excluded
         """
         dmg_command = self.get_dmg_command()
@@ -98,7 +98,7 @@ class MSMembershipTest(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=recovery,test_cat_recovery,ms_membership
+        :avocado: tags=recovery,cat_recov,ms_membership
         :avocado: tags=MSMembershipTest,test_enable_disable_admin_excluded
         """
         errors = []

@@ -24,7 +24,7 @@ class CatRecovCoreTest(DaosCoreBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,provider
-        :avocado: tags=recovery,test_cat_recovery,cat_recov_core
+        :avocado: tags=recovery,cat_recov
         :avocado: tags=CatRecovCoreTest,test_daos_cat_recov_core
         """
         self.run_subtest()
