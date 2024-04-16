@@ -1934,11 +1934,12 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 	newProviderMember.PrimaryFabricURI = fmt.Sprintf("verbs://%s", test.MockHostAddr(1))
 
 	for name, tc := range map[string]struct {
-		req      *mgmtpb.JoinReq
-		guResp   *mgmtpb.GroupUpdateResp
-		expGuReq *mgmtpb.GroupUpdateReq
-		expResp  *mgmtpb.JoinResp
-		expErr   error
+		req              *mgmtpb.JoinReq
+		pauseGroupUpdate bool
+		guResp           *mgmtpb.GroupUpdateResp
+		expGuReq         *mgmtpb.GroupUpdateReq
+		expResp          *mgmtpb.JoinResp
+		expErr           error
 	}{
 		"bad sys": {
 			req: &mgmtpb.JoinReq{
@@ -2039,6 +2040,21 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			},
 			expErr: errors.New("does not match"),
 		},
+		"group update paused": {
+			pauseGroupUpdate: true,
+			req: &mgmtpb.JoinReq{
+				Rank:        curMember.Rank.Uint32(),
+				Uuid:        curMember.UUID.String(),
+				Uri:         curMember.PrimaryFabricURI,
+				Incarnation: curMember.Incarnation + 1,
+			},
+			expResp: &mgmtpb.JoinResp{
+				Status:     0,
+				Rank:       curMember.Rank.Uint32(),
+				State:      mgmtpb.JoinResp_IN,
+				MapVersion: 2,
+			},
+		},
 		"new host (non local)": {
 			req: &mgmtpb.JoinReq{
 				Rank:        uint32(ranklist.NilRank),
@@ -2100,6 +2116,9 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			curCopy.Rank = ranklist.NilRank // ensure that db.data.NextRank is incremented
 
 			svc := mgmtSystemTestSetup(t, log, system.Members{curCopy}, nil)
+			if tc.pauseGroupUpdate {
+				svc.pauseGroupUpdate()
+			}
 
 			if tc.req.Sys == "" {
 				tc.req.Sys = build.DefaultSystemName
@@ -2140,6 +2159,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
+			// TODO KJ: figure out a way to verify no group update
 			if tc.expGuReq == nil {
 				return
 			}
@@ -2173,12 +2193,13 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 
 func TestMgmtSvc_updateFabricProviders(t *testing.T) {
 	for name, tc := range map[string]struct {
-		getSvc       func(*testing.T, logging.Logger) *mgmtSvc
-		oldProv      string
-		provs        []string
-		expErr       error
-		expProv      string
-		expNumEvents int
+		getSvc               func(*testing.T, logging.Logger) *mgmtSvc
+		oldProv              string
+		provs                []string
+		expErr               error
+		expProv              string
+		expNumEvents         int
+		expGroupUpdatePaused bool
 	}{
 		"no change": {
 			oldProv: "tcp",
@@ -2186,10 +2207,11 @@ func TestMgmtSvc_updateFabricProviders(t *testing.T) {
 			expProv: "tcp",
 		},
 		"successful change": {
-			oldProv:      "tcp",
-			provs:        []string{"verbs"},
-			expProv:      "verbs",
-			expNumEvents: 1,
+			oldProv:              "tcp",
+			provs:                []string{"verbs"},
+			expProv:              "verbs",
+			expNumEvents:         1,
+			expGroupUpdatePaused: true,
 		},
 		"fails getting prop": {
 			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
@@ -2292,6 +2314,15 @@ func TestMgmtSvc_updateFabricProviders(t *testing.T) {
 				test.AssertEqual(t, events.RASSystemFabricProvChanged, gotEvent.ID, "")
 				test.AssertEqual(t, events.RASSeverityNotice, gotEvent.Severity, "")
 			}
+
+			if tc.expProv != "" {
+				curProv, err := svc.getFabricProvider()
+				if err != nil {
+					t.Fatal(err)
+				}
+				test.AssertEqual(t, tc.expProv, curProv, "")
+			}
+			test.AssertEqual(t, tc.expGroupUpdatePaused, svc.isGroupUpdatePaused(), "")
 		})
 	}
 }
@@ -2369,6 +2400,179 @@ func TestMgmtSvc_checkReqFabricProvider(t *testing.T) {
 				test.AssertEqual(t, req.Rank, gotEvent.Rank, "")
 				test.AssertEqual(t, addr.String(), gotEvent.Hostname, "")
 			}
+		})
+	}
+}
+
+func TestMgmtSvc_isGroupUpdatePaused(t *testing.T) {
+	for name, tc := range map[string]struct {
+		getSvc    func(*testing.T, logging.Logger) *mgmtSvc
+		propVal   string
+		expResult bool
+	}{
+		"not leader": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, false)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+				})
+
+				return svc
+			},
+		},
+		"never set": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return mgmtSystemTestSetup(t, log, system.Members{}, []*control.HostResponse{})
+			},
+		},
+		"empty string": {},
+		"true": {
+			propVal:   "true",
+			expResult: true,
+		},
+		"true numeric": {
+			propVal:   "1",
+			expResult: true,
+		},
+		"false": {
+			propVal: "false",
+		},
+		"false numeric": {
+			propVal: "0",
+		},
+		"garbage": {
+			propVal: "blah blah blah",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.getSvc == nil {
+				tc.getSvc = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					ms := mgmtSystemTestSetup(t, l, system.Members{}, []*control.HostResponse{})
+					if err := system.SetMgmtProperty(ms.sysdb, groupUpdatePauseProp, tc.propVal); err != nil {
+						t.Fatal(err)
+					}
+					return ms
+				}
+			}
+
+			svc := tc.getSvc(t, log)
+
+			test.AssertEqual(t, tc.expResult, svc.isGroupUpdatePaused(), "")
+		})
+	}
+}
+
+func TestMgmtSvc_pauseGroupUpdate(t *testing.T) {
+	for name, tc := range map[string]struct {
+		getSvc   func(*testing.T, logging.Logger) *mgmtSvc
+		startVal string
+		expErr   error
+	}{
+		"not leader": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, false)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+				})
+
+				return svc
+			},
+			expErr: &system.ErrNotReplica{},
+		},
+		"never set": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return mgmtSystemTestSetup(t, log, system.Members{}, []*control.HostResponse{})
+			},
+		},
+		"true": {
+			startVal: "true",
+		},
+		"false": {
+			startVal: "false",
+		},
+		"garbage": {
+			startVal: "blah blah blah",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.getSvc == nil {
+				tc.getSvc = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					ms := mgmtSystemTestSetup(t, l, system.Members{}, []*control.HostResponse{})
+					if err := system.SetMgmtProperty(ms.sysdb, groupUpdatePauseProp, tc.startVal); err != nil {
+						t.Fatal(err)
+					}
+					return ms
+				}
+			}
+
+			svc := tc.getSvc(t, log)
+
+			err := svc.pauseGroupUpdate()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertEqual(t, tc.expErr == nil, svc.isGroupUpdatePaused(), "")
+		})
+	}
+}
+
+func TestMgmtSvc_resumeGroupUpdate(t *testing.T) {
+	for name, tc := range map[string]struct {
+		getSvc   func(*testing.T, logging.Logger) *mgmtSvc
+		startVal string
+		expErr   error
+	}{
+		"not leader": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvcMulti(t, log, maxEngines, false)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+				})
+
+				return svc
+			},
+			expErr: &system.ErrNotReplica{},
+		},
+		"never set": {
+			getSvc: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return mgmtSystemTestSetup(t, log, system.Members{}, []*control.HostResponse{})
+			},
+		},
+		"true": {
+			startVal: "true",
+		},
+		"false": {
+			startVal: "false",
+		},
+		"garbage": {
+			startVal: "blah blah blah",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.getSvc == nil {
+				tc.getSvc = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					ms := mgmtSystemTestSetup(t, l, system.Members{}, []*control.HostResponse{})
+					if err := system.SetMgmtProperty(ms.sysdb, groupUpdatePauseProp, tc.startVal); err != nil {
+						t.Fatal(err)
+					}
+					return ms
+				}
+			}
+
+			svc := tc.getSvc(t, log)
+
+			err := svc.resumeGroupUpdate()
+
+			test.CmpErr(t, tc.expErr, err)
+			test.AssertFalse(t, svc.isGroupUpdatePaused(), "")
 		})
 	}
 }
