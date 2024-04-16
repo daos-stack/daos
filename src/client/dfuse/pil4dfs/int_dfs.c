@@ -105,6 +105,11 @@ static uint16_t               low_fd_count;
 /* the list of low fd reserved */
 static int                    low_fd_list[DAOS_MIN_FD];
 
+/* flag whether fd 255 is reserved by pil4dfs */
+static bool                   fd_255_reserved;
+/* flag whether fd DAOS_DUMMY_FD is reserved by pil4dfs */
+static bool                   fd_dummy_reserved;
+
 /* In case of fork(), only the parent process could destroy daos env. */
 static bool                   context_reset;
 static __thread daos_handle_t td_eqh;
@@ -1172,6 +1177,8 @@ consume_low_fd(void)
 			/* If fd 255 is used, lowest available fd is assigned to fd_dup. */
 			if (fd_dup >= 0 && fd_dup != 255)
 				libc_close(fd_dup);
+			if (fd_dup == 255)
+				fd_255_reserved = true;
 
 			/* reserve fd DAOS_DUMMY_FD which will be used later by dup2(). */
 			fd_dup = fcntl(low_fd_list[0], F_DUPFD, DAOS_DUMMY_FD);
@@ -1181,6 +1188,8 @@ consume_low_fd(void)
 			}
 			if (fd_dup >= 0 && fd_dup != DAOS_DUMMY_FD)
 				libc_close(fd_dup);
+			if (fd_dup == DAOS_DUMMY_FD)
+				fd_dummy_reserved = true;
 			libc_close(low_fd_list[low_fd_count]);
 			break;
 		} else {
@@ -7266,6 +7275,11 @@ finalize_myhook(void)
 		D_MUTEX_DESTROY(&lock_fd);
 		D_MUTEX_DESTROY(&lock_mmap);
 		D_MUTEX_DESTROY(&lock_fd_dup2ed);
+
+		if (fd_255_reserved)
+			libc_close(255);
+		if (fd_dummy_reserved)
+			libc_close(DAOS_DUMMY_FD);
 
 		if (hook_enabled_bak)
 			uninstall_hook();
