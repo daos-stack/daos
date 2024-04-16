@@ -22,6 +22,11 @@ if ! command -v flake8 > /dev/null 2>&1; then
     exit 0
 fi
 
+if flake8 --version | grep ^6\\.; then
+    echo "  Flake8 >= 6.x does not have the --diff option, skipping."
+    exit 0
+fi
+
 if [ ! -f .flake8 ]; then
     echo "  No .flake8, skipping flake checks"
     exit 0
