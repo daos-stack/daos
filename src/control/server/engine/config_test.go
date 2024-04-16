@@ -729,7 +729,7 @@ func TestConfig_ToCmdVals(t *testing.T) {
 		"D_LOG_FILE=" + logFile,
 		"D_LOG_MASK=" + logMask,
 		"CRT_TIMEOUT=" + strconv.FormatUint(uint64(crtTimeout), 10),
-		"FI_OFI_RXM_USE_SRX=1",
+		"FI_OFI_RXM_USE_SRX=0",
 	}
 
 	gotArgs, err := cfg.CmdLineArgs()
