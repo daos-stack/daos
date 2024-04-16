@@ -563,7 +563,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	daos_size_t          glob_buf_size;
 	int                  rc = 0;
 
-	if (obj == NULL || !S_ISREG(obj->mode))
+	if (obj == NULL || (!S_ISREG(obj->mode) && !S_ISDIR(obj->mode)))
 		return EINVAL;
 
 	if (glob == NULL) {
@@ -611,7 +611,9 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	uuid_copy(obj_glob->cont_uuid, cont_uuid);
 	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME + 1);
 	obj_glob->name[DFS_MAX_NAME] = 0;
-	rc                           = dfs_get_chunk_size(obj, &obj_glob->chunk_size);
+	if (S_ISDIR(obj_glob->mode))
+		return 0;
+	rc = dfs_get_chunk_size(obj, &obj_glob->chunk_size);
 	if (rc)
 		return rc;
 
@@ -671,8 +673,12 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	obj->flags              = flags ? flags : obj_glob->flags;
 
 	daos_mode = get_daos_obj_mode(obj->flags);
-	rc        = daos_array_open_with_attr(dfs->coh, obj->oid, DAOS_TX_NONE, daos_mode, 1,
-					      obj_glob->chunk_size, &obj->oh, NULL);
+	if (S_ISDIR(obj->mode)) {
+		*_obj = obj;
+		return 0;
+	}
+	rc = daos_array_open_with_attr(dfs->coh, obj->oid, DAOS_TX_NONE, daos_mode, 1,
+				       obj_glob->chunk_size, &obj->oh, NULL);
 	if (rc) {
 		D_ERROR("daos_array_open_with_attr() failed, " DF_RC "\n", DP_RC(rc));
 		D_FREE(obj);

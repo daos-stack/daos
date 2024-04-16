@@ -897,9 +897,6 @@ fetch_dfs_obj_handle(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 	rc = ioctl(fd, DFUSE_IOCTL_IL_DSIZE, &hsd_reply);
 	if (rc != 0) {
 		rc = errno;
-		/* Known not working for a dir */
-		if (rc != EISDIR)
-			DS_WARN(rc, "ioctl call on %d failed", fd);
 		D_GOTO(err, rc);
 	}
 	/* to query dfs object for files */
@@ -2158,16 +2155,17 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 		/* query file object through ioctl() */
 		rc = fetch_dfs_obj_handle(fd_kernel, dfs_mt, &dfs_obj);
-		if (rc != 0 && rc != EISDIR) {
+		if (rc != 0) {
 			DS_WARN(rc, "fetch_dfs_obj_handle() failed");
 			goto out_compatible;
 		}
 
 		/* Need to create a fake fd and associate with fd_kernel */
 		atomic_fetch_add_relaxed(&num_open, 1);
+		dfs_get_mode(dfs_obj, &mode_query);
 
 		/* regular file */
-		if (rc == 0) {
+		if (S_ISREG(mode_query)) {
 			rc = find_next_available_fd(NULL, &idx_fd);
 			if (rc)
 				goto out_compatible_release;
@@ -2191,20 +2189,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		}
 
 		/* directory */
-		if (rc == EISDIR) {
-			/* need to get DFS handle directly */
-			if (oflags & O_CREAT) {
-				rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFDIR,
-					      oflags, 0, 0, NULL, &dfs_obj);
-				mode_query = S_IFDIR;
-			} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
-				rc = dfs_lookup(dfs_mt->dfs, "/", oflags, &dfs_obj, &mode_query,
-						NULL);
-			} else {
-				rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags,
-						    &dfs_obj, &mode_query, NULL);
-			}
-
+		if (S_ISDIR(mode_query)) {
 			rc = find_next_available_dirfd(NULL, &idx_dirfd);
 			if (rc)
 				goto out_compatible_release;
