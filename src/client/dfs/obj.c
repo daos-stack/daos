@@ -674,9 +674,16 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 
 	daos_mode = get_daos_obj_mode(obj->flags);
 	if (S_ISDIR(obj->mode)) {
+		rc = daos_obj_open(dfs->coh, obj->oid, DAOS_OO_RO, &obj->oh, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
+			D_FREE(obj);
+			return daos_der2errno(rc);
+		}
 		*_obj = obj;
 		return 0;
 	}
+
 	rc = daos_array_open_with_attr(dfs->coh, obj->oid, DAOS_TX_NONE, daos_mode, 1,
 				       obj_glob->chunk_size, &obj->oh, NULL);
 	if (rc) {
