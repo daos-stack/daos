@@ -5087,7 +5087,7 @@ def run_in_fg(server, conf, args):
 
         # Only set the container cache attributes when the container is initially created so they
         # can be modified later.
-        cont_attrs = {'dfuse-data-cache': False,
+        cont_attrs = {'dfuse-data-cache': 120,
                       'dfuse-attr-time': 67,
                       'dfuse-dentry-time': 19,
                       'dfuse-dentry-dir-time': 31,

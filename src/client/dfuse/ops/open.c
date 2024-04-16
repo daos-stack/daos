@@ -175,6 +175,7 @@ getattr_cb(struct dfuse_event *ev)
 		goto free;
 	}
 
+	ev->de_ie->ie_dc.stat.st_ino = ev->de_ie->ie_stat.st_ino;
 	ev->de_ie->ie_dc.valid = true;
 	dfuse_dc_cache_set_time(ev->de_ie);
 

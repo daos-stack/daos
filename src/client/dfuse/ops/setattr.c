@@ -15,6 +15,8 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie, struct stat *attr
 
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
+	dfuse_ie_cs_flush(ie);
+
 	if (ie->ie_unlinked) {
 		DFUSE_TRA_DEBUG(ie, "File is unlinked, returning most recent data");
 
