@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,10 +45,8 @@ typedef struct crt_init_options {
 	 * evnironment variable.
 	 */
 	int		cio_crt_timeout;
-	/** if cio_sep_override is 0 the cio_use_sep won't be used */
-	uint32_t	cio_sep_override:1,
-			/** whether or not to use SEP. not supported currently */
-			cio_use_sep:1,
+	uint32_t	cio_sep_override:1,	/**< Deprecated */
+			cio_use_sep:1,		/**< Deprecated */
 			/** whether or not to inject faults */
 			cio_fault_inject:1,
 			/**
