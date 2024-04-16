@@ -198,8 +198,8 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 		return rc;
 
 	if (crt_is_service()) {
-		ctx_num = CRT_SRV_CONTEXT_NUM;
-		max_num_ctx = CRT_SRV_CONTEXT_NUM;
+		ctx_num		= CRT_SRV_CONTEXT_NUM;
+		max_num_ctx	= CRT_SRV_CONTEXT_NUM;
 	} else {
 		/* Only limit the number of contexts for clients */
 		d_getenv_uint("CRT_CTX_NUM", &ctx_num);
@@ -214,37 +214,18 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 
 	if (max_num_ctx > CRT_SRV_CONTEXT_NUM)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM;
-
 	/* To be able to run on VMs */
 	if (max_num_ctx < CRT_SRV_CONTEXT_NUM_MIN)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
 
 	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
 
-	/* Assume for now this option is only available for a primary provider */
-	if (primary) {
-		if (opt && opt->cio_sep_override) {
-			if (opt->cio_use_sep) {
-				set_sep = true;
-				max_num_ctx = opt->cio_ctx_max_num;
-			}
-		} else {
-			share_addr = false;
+	d_getenv_bool("CRT_CTX_SHARE_ADDR", &set_sep);
+	if (set_sep)
+		D_WARN("Unsupported SEP mode requested. Unset CRT_CTX_SHARE_ADDR\n");
 
-			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
-			if (share_addr) {
-				set_sep = true;
-				ctx_num = 0;
-				d_getenv_uint("CRT_CTX_NUM", &ctx_num);
-				max_num_ctx = ctx_num;
-			}
-		}
-	}
-
-	if (set_sep) {
-		D_WARN("Scalable endpoint mode not supported. Unset CRT_CTX_SHARE_ADDR\n");
-		return -DER_NOSYS;
-	}
+	if (opt->cio_sep_override && opt->cio_use_sep)
+		D_WARN("Unsupported SEP mode requested in init options\n");
 
 	if (opt && opt->cio_use_expected_size)
 		max_expect_size = opt->cio_max_expected_size;
