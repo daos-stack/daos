@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-# Dummy change
 from os.path import join
 
 import avocado
