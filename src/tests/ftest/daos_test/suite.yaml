@@ -11,7 +11,7 @@ timeouts:
   test_daos_management: 110
   test_daos_cat_recovery: 5400
   test_daos_pool: 180
-  test_daos_container: 510
+  test_daos_container: 600
   test_daos_epoch: 125
   test_daos_verify_consistency: 105
   test_daos_io: 290
@@ -186,7 +186,7 @@ daos_tests:
   pools_created:
     test_daos_management: 4
     test_daos_pool: 9
-    test_daos_container: 17
+    test_daos_container: 18
     test_daos_distributed_tx: 5
     test_daos_rebuild_simple: 21
     test_daos_drain_simple: 8
