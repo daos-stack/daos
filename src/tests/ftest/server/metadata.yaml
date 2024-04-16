@@ -47,12 +47,12 @@ pool: &pool_common
   svcn: 5
   scm_size: 1G
   control_method: dmg
-test_1_pool:
+test1_pool:
   <<: *pool_common
   pool_prop: !mux
     svc_ops_disable:
       properties: svc_ops_enabled:0
-    svc_ops_150:
+    svc_ops_60:
       properties: svc_ops_enabled:1,svc_ops_entry_age:60
 #    svc_ops_150:
 #      properties: svc_ops_enabled:1,svc_ops_entry_age:150
@@ -60,7 +60,7 @@ test_1_pool:
 #      properties: svc_ops_enabled:1,svc_ops_entry_age:300
 #    svc_ops_600:
 #      properties: svc_ops_enabled:1,svc_ops_entry_age:600
-test_2_pool:
+test2_pool:
   <<: *pool_common
   properties: svc_ops_enabled:1,svc_ops_entry_age:150
 container:

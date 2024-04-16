@@ -255,7 +255,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=server,metadata
         :avocado: tags=ObjectMetadata,test_metadata_fillup
         """
-        self.create_pool(namespace='/run/test_1_pool/*')
+        self.create_pool(namespace='/run/test1_pool/*')
         svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
         if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
             self.fail("failed to run dummy metadata workload")
@@ -347,7 +347,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=server,metadata,nvme
         :avocado: tags=ObjectMetadata,test_metadata_addremove
         """
-        self.create_pool(namespace='/run/test_2_pool/*')
+        self.create_pool(namespace='/run/test2_pool/*')
         svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
         if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
             self.fail("failed to run dummy metadata workload")
@@ -422,7 +422,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=server,metadata,nvme,ior
         :avocado: tags=ObjectMetadata,test_metadata_server_restart
         """
-        self.create_pool(namespace='/run/test_2_pool/*')
+        self.create_pool(namespace='/run/test2_pool/*')
         files_per_thread = 400
         total_ior_threads = 5
 
