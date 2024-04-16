@@ -9,6 +9,8 @@ on:
       - 'release/*'
   pull_request:
 
+permissions: {}
+
 jobs:
   # Run isort on the tree.
   # This checks .py files only so misses SConstruct and SConscript files are not checked, rather
