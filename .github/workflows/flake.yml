@@ -4,6 +4,8 @@ name: Flake
 on:
   pull_request:
 
+permissions: {}
+
 jobs:
   flake8-lint:
     runs-on: ubuntu-22.04

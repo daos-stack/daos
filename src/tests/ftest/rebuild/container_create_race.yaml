@@ -36,7 +36,6 @@ testparams:
 
 pool:
   scm_size: 8G
-  svcn: 1
   pool_query_timeout: 15
   properties: rd_fac:1
 
