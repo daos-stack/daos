@@ -19,6 +19,7 @@
 
 #include "smd.pb-c.h"
 
+#define BIO_BLOB_HDR_MAGIC	(0xb0b51ed5)
 #define BIO_DMA_PAGE_SHIFT	12	/* 4K */
 #define BIO_DMA_PAGE_SZ		(1UL << BIO_DMA_PAGE_SHIFT)
 #define BIO_XS_CNT_MAX		BIO_MAX_VOS_TGT_CNT /* Max VOS xstreams per blobstore */
@@ -109,9 +110,6 @@ struct bio_dma_stats {
 	struct d_tm_node_t	*bds_queued_iods;
 	struct d_tm_node_t	*bds_grab_errs;
 	struct d_tm_node_t	*bds_grab_retries;
-	struct d_tm_node_t	*bds_wal_sz;
-	struct d_tm_node_t	*bds_wal_qd;
-	struct d_tm_node_t	*bds_wal_waiters;
 };
 
 /*

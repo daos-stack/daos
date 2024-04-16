@@ -9,10 +9,13 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited]
 
+permissions: {}
 
 jobs:
   example_comment_pr:
     runs-on: ubuntu-22.04
+    permissions:
+      pull-requests: write
     name: Report Jira data to PR comment
     steps:
       - name: Checkout
@@ -26,10 +29,8 @@ jobs:
         if: always()
         uses: thollander/actions-comment-pull-request@v2
         with:
-          comment_includes: 'Bug-tracker data'
-          message: |
-            Bug-tracker data:
-            ${{ steps.jira-data.outputs.message }}
+          comment_tag: 'jira_query_message'
+          message: ${{ steps.jira-data.outputs.message }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Set labels
         if: ${{ always() && steps.jira-data.outputs.label != '' }}

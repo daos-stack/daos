@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -653,8 +653,8 @@ enum {
 	DBTREE_VOS_BEGIN	= 10,
 	DBTREE_VOS_END		= DBTREE_VOS_BEGIN + 9,
 	DBTREE_DSM_BEGIN	= 20,
-	DBTREE_DSM_END		= DBTREE_DSM_BEGIN + 9,
-	DBTREE_SMD_BEGIN	= 30,
+	DBTREE_DSM_END		= DBTREE_DSM_BEGIN + 19,
+	DBTREE_SMD_BEGIN	= 40,
 	DBTREE_SMD_END		= DBTREE_SMD_BEGIN + 9,
 };
 

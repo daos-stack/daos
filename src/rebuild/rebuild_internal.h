@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -155,6 +155,7 @@ struct rebuild_global_pool_tracker {
 
 	uint32_t	rgt_refcount;
 
+	uint32_t	rgt_opc;
 	unsigned int	rgt_abort:1,
 			rgt_init_scan:1;
 };
@@ -174,7 +175,10 @@ struct rebuild_status_completed {
 /* Structure on all targets to track all pool rebuilding */
 struct rebuild_global {
 	/* Link rebuild_tgt_pool_tracker on all targets.
-	 * Only operated by stream 0, no need lock.
+	 * Can be inserted/deleted by system XS, be lookup by system XS or VOS target main XS.
+	 * Be protected by rg_ttl_rwlock -
+	 * system XS takes wrlock to insert/delete, VOS TGT XS takes rdlock to lookup,
+	 * no lock needed for system XS to lookup.
 	 */
 	d_list_t	rg_tgt_tracker_list;
 
@@ -198,6 +202,9 @@ struct rebuild_global {
 	 * are linked.
 	 */
 	d_list_t	rg_queue_list;
+
+	/* rwlock to protect rg_tgt_tracker_list */
+	ABT_rwlock	rg_ttl_rwlock;
 
 	ABT_mutex	rg_lock;
 	ABT_cond	rg_stop_cond;
@@ -305,6 +312,7 @@ rebuild_tls_get()
 
 void rpt_get(struct rebuild_tgt_pool_tracker *rpt);
 void rpt_put(struct rebuild_tgt_pool_tracker *rpt);
+void rpt_delete(struct rebuild_tgt_pool_tracker *rpt);
 
 struct rebuild_pool_tls *
 rebuild_pool_tls_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen);
@@ -339,7 +347,7 @@ rebuild_status_match(struct rebuild_tgt_pool_tracker *rpt,
 		enum pool_comp_state states);
 
 bool
-is_current_tgt_unavail(struct rebuild_tgt_pool_tracker *rpt);
+is_rebuild_scanning_tgt(struct rebuild_tgt_pool_tracker *rpt);
 
 typedef int (*rebuild_obj_insert_cb_t)(struct rebuild_root *cont_root,
 				       uuid_t co_uuid, daos_unit_oid_t oid,
@@ -360,7 +368,7 @@ int
 rebuilt_btr_destroy(daos_handle_t btr_hdl);
 
 struct rebuild_tgt_pool_tracker *
-rpt_lookup(uuid_t pool_uuid, unsigned int ver, uint32_t gen);
+rpt_lookup(uuid_t pool_uuid, uint32_t opc, unsigned int ver, unsigned int gen);
 
 void
 rgt_get(struct rebuild_global_pool_tracker *rgt);

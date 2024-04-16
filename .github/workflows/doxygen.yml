@@ -4,6 +4,8 @@ name: Doxygen
 on:
   pull_request:
 
+permissions: {}
+
 jobs:
 
   Doxygen:

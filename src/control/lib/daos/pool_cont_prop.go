@@ -148,6 +148,8 @@ const (
 	PoolSelfHealingAutoExclude = C.DAOS_SELF_HEAL_AUTO_EXCLUDE
 	// PoolSelfHealingAutoRebuild sets the self-healing strategy to auto-rebuild.
 	PoolSelfHealingAutoRebuild = C.DAOS_SELF_HEAL_AUTO_REBUILD
+	// PoolSelfHealingDelayRebuild sets the self-healing strategy to delay-rebuild.
+	PoolSelfHealingDelayRebuild = C.DAOS_SELF_HEAL_DELAY_REBUILD
 )
 
 const (
@@ -234,6 +236,7 @@ func RpPdaIsValid(pda uint64) bool {
 	return bool(C.daos_rp_pda_valid(C.uint32_t(pda)))
 }
 
+// DataThreshIsValid verifies that the input value meets the required criteria.
 func DataThreshIsValid(size uint64) bool {
 	if size > math.MaxUint32 {
 		return false

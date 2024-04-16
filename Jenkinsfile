@@ -108,7 +108,8 @@ void fixup_rpmlintrc() {
                     '/usr/bin/hello_drpc',
                     '/usr/bin/daos_firmware',
                     '/usr/bin/daos_admin',
-                    '/usr/bin/daos_server']
+                    '/usr/bin/daos_server',
+                    '/usr/bin/ddb']
 
     String content = readFile(file: 'utils/rpms/daos.rpmlintrc') + '\n\n' +
                      '# https://daosio.atlassian.net/browse/DAOS-11534\n'
@@ -782,7 +783,6 @@ pipeline {
                                          valgrind_stash: 'el8-gcc-nlt-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          name: 'NLT server leaks',
                                          qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
@@ -1017,10 +1017,10 @@ pipeline {
                     post {
                         always {
                             discoverGitReferenceBuild referenceJob: 'daos-stack/daos/master',
-                                                      scm: 'daos-stack/daos'
+                                                      scm: 'daos-stack/daos',
+                                                      requiredResult: hudson.model.Result.UNSTABLE
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
-                                         ignoreFailedBuilds: true,
                                          ignoreQualityGate: true,
                                          qualityGates: [[threshold: 1, type: 'TOTAL_ERROR'],
                                                         [threshold: 1, type: 'TOTAL_HIGH'],

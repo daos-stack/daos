@@ -22,7 +22,7 @@ class DaosServerSupportCollectLogTest(SupportTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=control,basic,support,daos_server
-        :avocado: tags=DaosSupportCollectLogTest,test_daos_server_support_collect_log
+        :avocado: tags=DaosServerSupportCollectLogTest,test_daos_server_support_collect_log
         """
         self.log_hosts = self.hostlist_servers
         self.run_user = 'daos_server'
