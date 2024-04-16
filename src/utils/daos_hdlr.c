@@ -925,9 +925,8 @@ fs_copy(struct cmd_args_s *ap, struct dm_args *ca, struct file_dfs *src_file_dfs
 				src_is_subpath = (strncmp(src_path, dst_path, src_path_len) == 0);
 			} else {
 				src_is_subpath =
-					(strncmp(src_path, dst_path, src_path_len) == 0 &&
-					 dst_path_len > src_path_len &&
-					 dst_path[src_path_len] == '/');
+				    (strncmp(src_path, dst_path, src_path_len) == 0 &&
+				     dst_path_len > src_path_len && dst_path[src_path_len] == '/');
 			}
 
 			if (src_is_subpath) {
