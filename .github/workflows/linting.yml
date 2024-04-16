@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
         with:
           python-version: '3'
       - uses: isort/isort-action@master
@@ -81,7 +81,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python environment
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
         with:
           python-version: '3'
       - name: Add parser
@@ -91,7 +91,7 @@ jobs:
       - name: Add error parser
         run: echo -n "::add-matcher::ci/daos-flakee-matcher.json"
       - name: flake8 Lint
-        uses: py-actions/flake8@v2
+        uses: py-actions/flake8@84ec6726560b6d5bd68f2a5bed83d62b52bb50ba  # v2.3.0
         with:
           # W503 and W504 are related as they conflict.  W503 is the preferred style and all code
           # should be using it now.
@@ -99,7 +99,7 @@ jobs:
           exclude: 'src/control/vendor,src/client/pydaos/raw'
           max-line-length: '100'
       - name: flake8 Lint on SCons files.
-        uses: py-actions/flake8@v2
+        uses: py-actions/flake8@84ec6726560b6d5bd68f2a5bed83d62b52bb50ba  # v2.3.0
         with:
           ignore: 'F821,W503,F841'
           max-line-length: '100'
@@ -120,7 +120,7 @@ jobs:
       - name: Run check
         run: doxygen Doxyfile
       - name: 'Upload Artifact'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3  # v4.3.1
         with:
           name: API Documentation
           path: docs/doxygen/html/
@@ -134,7 +134,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d  # v5.1.0
         with:
           python-version: '3.11'
       - name: Install core python packages
@@ -157,7 +157,7 @@ jobs:
       - name: Install extra python packages
         run: pip install --requirement utils/cq/requirements.txt
       - name: Run check
-        uses: codespell-project/actions-codespell@master
+        uses: codespell-project/actions-codespell@3174815d6231f5bdc24dbfb6fc3b8caec73d521c  # master
         with:
           skip: ./src/control/vendor,./src/control/go.sum,./.git
           ignore_words_file: ci/codespell.ignores
