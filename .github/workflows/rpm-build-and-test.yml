@@ -163,7 +163,7 @@ jobs:
     runs-on: [self-hosted, wolf]
     needs: [Import-commit-pragmas, Create-symlinks, Import-commit-message]
     if: ${{ inputs.rpm-test-version == '' }} &&
-        needs.Import-commit-pragmas.outputs.skip-build != 'true' &&
+        needs.Import-commit-pragmas.outputs.skip-build != 'true'
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
@@ -207,7 +207,8 @@ jobs:
         needs.Import-commit-pragmas.outputs.skip-build != 'true' &&
         ${{ inputs.rpm-test-version == '' }} &&
         needs.Create-symlinks.result == 'success' &&
-        ((!cancelled()) || success() || failure())
+        true
+        # ((!cancelled()) || success() || failure())
     strategy:
       matrix:
         distro: ${{ fromJSON(needs.Calc-rpm-build-matrix.outputs.matrix) }}
