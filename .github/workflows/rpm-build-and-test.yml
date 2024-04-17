@@ -159,7 +159,8 @@ jobs:
     name: Calculate RPM Build Matrix
     runs-on: [self-hosted, wolf]
     needs: [Import-commit-pragmas, Create-symlinks, Import-commit-message]
-    if: ${{ inputs.rpm-test-version == '' }}
+    if: ${{ inputs.rpm-test-version == '' }} &&
+        needs.Import-commit-pragmas.outputs.skip-build != 'true' &&
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
