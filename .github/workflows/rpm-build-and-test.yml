@@ -151,7 +151,7 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
-          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
+          commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Calculate RPM Build Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
@@ -215,7 +215,7 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
-          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
+          commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Set variables
         run: |
             FVERSION="38"
@@ -341,7 +341,7 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
-          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
+          commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -445,7 +445,7 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
-          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
+          commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Set variables
         run: |
             set -eux
@@ -593,7 +593,7 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
-          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
+          commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -694,7 +694,7 @@ jobs:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
-          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
+          commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Set variables
         run: |
             STAGE_TAGS="hw"
