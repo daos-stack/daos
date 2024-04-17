@@ -23,6 +23,7 @@ class Romio(MpiioTests):
         :avocado: tags=hw,medium
         :avocado: tags=mpiio,mpich,romio
         :avocado: tags=Romio,test_romio
+        :avocado: tags=master_failed
         """
         # setting romio parameters
         test_repo = self.params.get("romio_repo", '/run/romio/')

@@ -39,6 +39,7 @@ class AggregationChecksum(IorTestBase):
         :avocado: tags=hw,medium
         :avocado: tags=daosio,checksum,ior
         :avocado: tags=AggregationChecksum,test_aggregationchecksum
+        :avocado: tags=master_failed
         """
 
         # test params

@@ -29,6 +29,7 @@ class IorSmall(IorTestBase):
         :avocado: tags=hw,medium,md_on_ssd
         :avocado: tags=daosio,mpiio,checksum,mpich,dfuse,ior,dfs,hdf5
         :avocado: tags=IorSmall,test_ior_small
+        :avocado: tags=master_failed
         """
         cncl_tickets = []
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
