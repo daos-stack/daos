@@ -39,6 +39,10 @@ send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 	rpc_req_input->rank = test_g.t_verify_swim_status.rank;
 	rpc_req_input->exp_status = test_g.t_verify_swim_status.swim_status;
 
+	/* RPC is expected to finish in 10 seconds */
+	rc = crt_req_set_timeout(rpc_req, 10);
+	D_ASSERTF(rc == 0, "crt_req_set_timeout() failed. rc: %d\n", rc);
+
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
@@ -62,6 +66,10 @@ send_rpc_disable_swim(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 
 	/* Set rank and expected swim status based on CLI options */
 	rpc_req_input->rank = server_ep.ep_rank;
+
+	/* RPC is expected to finish in 10 seconds */
+	rc = crt_req_set_timeout(rpc_req, 10);
+	D_ASSERTF(rc == 0, "crt_req_set_timeout() failed. rc: %d\n", rc);
 
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
