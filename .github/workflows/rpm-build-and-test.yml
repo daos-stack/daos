@@ -115,7 +115,9 @@ jobs:
     name: Create lastBuild and lastSuccessfulBuild symlinks
     runs-on: [self-hosted, light]
     needs: [Import-commit-pragmas]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+    if: |
+        (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
+         ${{ github.event_name == 'workflow_dispatch' }}) &&
         needs.Import-commit-pragmas.outputs.rpm-test-version == '' &&
         !contains(needs.Import-commit-pragmas.outputs.pr-repos, 'daos@')
     env:
@@ -165,7 +167,9 @@ jobs:
       statuses: write
     runs-on: [self-hosted, docker]
     needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+    if: |
+        (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
+         ${{ github.event_name == 'workflow_dispatch' }}) &&
         needs.Create-symlinks.result == 'success' &&
         ((!cancelled()) || success() || failure())
     strategy:
@@ -314,7 +318,9 @@ jobs:
     name: Calculate Functional Testing Matrix
     runs-on: [self-hosted, wolf]
     needs: [Import-commit-pragmas]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+    if: |
+        (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
+         ${{ github.event_name == 'workflow_dispatch' }}) &&
         ((!cancelled()) || success() || failure())
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
@@ -382,7 +388,8 @@ jobs:
       fail-fast: false
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
-      needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+      (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
+         ${{ github.event_name == 'workflow_dispatch' }}) &&
       needs.Calc-functional-matrix.outputs.matrix != '[]' &&
       (!cancelled()) &&
       (needs.Build-RPM.result == 'success' ||
@@ -559,7 +566,9 @@ jobs:
     name: Calculate Functional Hardware Testing Matrix
     runs-on: [self-hosted, wolf]
     needs: [Import-commit-pragmas]
-    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+    if: |
+        (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
+         ${{ github.event_name == 'workflow_dispatch' }}) &&
         ((!cancelled()) || success() || failure())
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
@@ -628,7 +637,8 @@ jobs:
       fail-fast: false
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
-      needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+      (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
+         ${{ github.event_name == 'workflow_dispatch' }}) &&
       needs.Calc-functional-hardware-matrix.outputs.matrix != '[]' &&
       (!cancelled()) &&
       (needs.Build-RPM.result == 'success' ||
