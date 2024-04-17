@@ -461,20 +461,10 @@ type (
 		Targets []uint32
 	}
 
-	PoolQueryTargetType  int32
-	PoolQueryTargetState int32
-
-	// PoolQueryTargetInfo contains information about a single target
-	PoolQueryTargetInfo struct {
-		Type  PoolQueryTargetType  `json:"target_type"`
-		State PoolQueryTargetState `json:"target_state"`
-		Space []*daos.StorageTargetUsage
-	}
-
 	// PoolQueryTargetResp contains a pool query target response
 	PoolQueryTargetResp struct {
 		Status int32 `json:"status"`
-		Infos  []*PoolQueryTargetInfo
+		Infos  []*daos.PoolQueryTargetInfo
 	}
 )
 
@@ -648,60 +638,12 @@ func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQuer
 	return pqtr, nil
 }
 
-func (pqtt PoolQueryTargetType) MarshalJSON() ([]byte, error) {
-	typeStr, ok := mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(pqtt)]
-	if !ok {
-		return nil, errors.Errorf("invalid target type %d", pqtt)
-	}
-	return []byte(`"` + strings.ToLower(typeStr) + `"`), nil
-}
-
-func (ptt PoolQueryTargetType) String() string {
-	ptts, ok := mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)]
-	if !ok {
-		return "invalid"
-	}
-	return strings.ToLower(ptts)
-}
-
-const (
-	PoolTargetStateUnknown PoolQueryTargetState = iota
-	// PoolTargetStateDownOut indicates the target is not available
-	PoolTargetStateDownOut
-	// PoolTargetStateDown indicates the target is not available, may need rebuild
-	PoolTargetStateDown
-	// PoolTargetStateUp indicates the target is up
-	PoolTargetStateUp
-	// PoolTargetStateUpIn indicates the target is up and running
-	PoolTargetStateUpIn
-	// PoolTargetStateNew indicates the target is in an intermediate state (pool map change)
-	PoolTargetStateNew
-	// PoolTargetStateDrain indicates the target is being drained
-	PoolTargetStateDrain
-)
-
-func (pqts PoolQueryTargetState) MarshalJSON() ([]byte, error) {
-	stateStr, ok := mgmtpb.PoolQueryTargetInfo_TargetState_name[int32(pqts)]
-	if !ok {
-		return nil, errors.Errorf("invalid target state %d", pqts)
-	}
-	return []byte(`"` + strings.ToLower(stateStr) + `"`), nil
-}
-
-func (pts PoolQueryTargetState) String() string {
-	ptss, ok := mgmtpb.PoolQueryTargetInfo_TargetState_name[int32(pts)]
-	if !ok {
-		return "invalid"
-	}
-	return strings.ToLower(ptss)
-}
-
 // For using the pretty printer that dmg uses for this target info.
-func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*PoolQueryTargetInfo, error) {
-	pqti := new(PoolQueryTargetInfo)
-	pqti.Type = PoolQueryTargetType(pbInfo.Type)
-	pqti.State = PoolQueryTargetState(pbInfo.State)
-	pqti.Space = []*daos.StorageTargetUsage{
+func convertPoolTargetInfo(pbInfo *mgmtpb.PoolQueryTargetInfo) (*daos.PoolQueryTargetInfo, error) {
+	pqti := new(daos.PoolQueryTargetInfo)
+	pqti.Type = daos.PoolQueryTargetType(pbInfo.Type)
+	pqti.State = daos.PoolQueryTargetState(pbInfo.State)
+	pqti.Space = []*daos.StorageUsageStats{
 		{
 			Total:     uint64(pbInfo.Space[daos.StorageMediaTypeScm].Total),
 			Free:      uint64(pbInfo.Space[daos.StorageMediaTypeScm].Free),

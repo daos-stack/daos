@@ -7,6 +7,7 @@
 package pretty
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -251,6 +252,181 @@ Rebuild failed, status=2
 			var bld strings.Builder
 			if err := PrintPoolInfo(tc.pi, &bld); err != nil {
 				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
+				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestPretty_PrintPoolQueryTarget(t *testing.T) {
+	for name, tc := range map[string]struct {
+		pqti        *daos.PoolQueryTargetInfo
+		expErr      error
+		expPrintStr string
+	}{
+		"nil info": {
+			expErr: errors.New("nil"),
+		},
+		"valid: single target (unknown, down_out)": {
+			pqti: &daos.PoolQueryTargetInfo{
+				Type:  0,
+				State: daos.PoolTargetStateDownOut,
+				Space: []*daos.StorageUsageStats{
+					{
+						Total: 6000000000,
+						Free:  5000000000,
+					},
+					{
+						Total: 100000000000,
+						Free:  90000000000,
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state down_out
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, down)": {
+			pqti: &daos.PoolQueryTargetInfo{
+				Type:  0,
+				State: daos.PoolTargetStateDown,
+				Space: []*daos.StorageUsageStats{
+					{
+						Total: 6000000000,
+						Free:  5000000000,
+					},
+					{
+						Total: 100000000000,
+						Free:  90000000000,
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state down
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, up)": {
+			pqti: &daos.PoolQueryTargetInfo{
+				Type:  0,
+				State: daos.PoolTargetStateUp,
+				Space: []*daos.StorageUsageStats{
+					{
+						Total: 6000000000,
+						Free:  5000000000,
+					},
+					{
+						Total: 100000000000,
+						Free:  90000000000,
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state up
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, up_in)": {
+			pqti: &daos.PoolQueryTargetInfo{
+				Type:  0,
+				State: daos.PoolTargetStateUpIn,
+				Space: []*daos.StorageUsageStats{
+					{
+						Total: 6000000000,
+						Free:  5000000000,
+					},
+					{
+						Total: 100000000000,
+						Free:  90000000000,
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state up_in
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, new)": {
+			pqti: &daos.PoolQueryTargetInfo{
+				Type:  0,
+				State: daos.PoolTargetStateNew,
+				Space: []*daos.StorageUsageStats{
+					{
+						Total: 6000000000,
+						Free:  5000000000,
+					},
+					{
+						Total: 100000000000,
+						Free:  90000000000,
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state new
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+		"valid: single target (unknown, drain)": {
+			pqti: &daos.PoolQueryTargetInfo{
+				Type:  0,
+				State: daos.PoolTargetStateDrain,
+				Space: []*daos.StorageUsageStats{
+					{
+						Total: 6000000000,
+						Free:  5000000000,
+					},
+					{
+						Total: 100000000000,
+						Free:  90000000000,
+					},
+				},
+			},
+			expPrintStr: `
+Target: type unknown, state drain
+- Storage tier 0 (SCM):
+  Total size: 6.0 GB
+  Free: 5.0 GB
+- Storage tier 1 (NVMe):
+  Total size: 100 GB
+  Free: 90 GB
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var bld strings.Builder
+			gotErr := PrintPoolQueryTargetInfo(tc.pqti, &bld)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
 			}
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {

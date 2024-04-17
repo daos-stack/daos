@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -69,6 +69,27 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 				pi.Rebuild.State, pi.Rebuild.Objects, pi.Rebuild.Records)
 		} else {
 			fmt.Fprintf(w, "Rebuild failed, status=%d\n", pi.Rebuild.Status)
+		}
+	}
+
+	return w.Err
+}
+
+// PrintPoolQueryTargetInfo generates a human-readable representation of the supplied
+// PoolQueryTargetResp struct and writes it to the supplied io.Writer.
+func PrintPoolQueryTargetInfo(pqti *daos.PoolQueryTargetInfo, out io.Writer) error {
+	if pqti == nil {
+		return errors.Errorf("nil %T", pqti)
+	}
+	w := txtfmt.NewErrWriter(out)
+
+	// Maintain output compatibility with the `daos pool query-targets` output.
+	fmt.Fprintf(w, "Target: type %s, state %s\n", pqti.Type, pqti.State)
+	if pqti.Space != nil {
+		for tierIdx, tierUsage := range pqti.Space {
+			fmt.Fprintln(w, getTierNameText(tierIdx))
+			fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierUsage.Total))
+			fmt.Fprintf(w, "  Free: %s\n", humanize.Bytes(tierUsage.Free))
 		}
 	}
 

@@ -7,7 +7,6 @@
 package daos
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -71,6 +70,16 @@ type (
 		UpgradeLayoutVer uint32               `json:"upgrade_layout_ver"`
 	}
 
+	PoolQueryTargetType  int32
+	PoolQueryTargetState int32
+
+	// PoolQueryTargetInfo contains information about a single target
+	PoolQueryTargetInfo struct {
+		Type  PoolQueryTargetType  `json:"target_type"`
+		State PoolQueryTargetState `json:"target_state"`
+		Space []*StorageUsageStats `json:"space"`
+	}
+
 	// StorageTargetUsage represents DAOS target storage usage
 	StorageTargetUsage struct {
 		Total     uint64           `json:"total"`
@@ -120,50 +129,53 @@ type PoolServiceState uint
 
 const (
 	// PoolServiceStateCreating indicates that the pool service is being created
-	PoolServiceStateCreating PoolServiceState = iota
+	PoolServiceStateCreating = PoolServiceState(mgmtpb.PoolServiceState_Creating)
 	// PoolServiceStateReady indicates that the pool service is ready to be used
-	PoolServiceStateReady
+	PoolServiceStateReady = PoolServiceState(mgmtpb.PoolServiceState_Ready)
 	// PoolServiceStateDestroying indicates that the pool service is being destroyed
-	PoolServiceStateDestroying
+	PoolServiceStateDestroying = PoolServiceState(mgmtpb.PoolServiceState_Destroying)
 	// PoolServiceStateDegraded indicates that the pool service is in a degraded state
-	PoolServiceStateDegraded
+	PoolServiceStateDegraded = PoolServiceState(mgmtpb.PoolServiceState_Degraded)
 	// PoolServiceStateUnknown indicates that the pool service state is unknown
-	PoolServiceStateUnknown
+	PoolServiceStateUnknown = PoolServiceState(mgmtpb.PoolServiceState_Unknown)
 )
 
 func (pss PoolServiceState) String() string {
-	if pss < PoolServiceStateCreating || pss > PoolServiceStateUnknown {
-		return fmt.Sprintf("Invalid pool service state %d", pss)
+	psss, ok := mgmtpb.PoolServiceState_name[int32(pss)]
+	if !ok {
+		return "invalid"
 	}
-	return [...]string{
-		mgmtpb.PoolServiceState_Creating.String(),
-		mgmtpb.PoolServiceState_Ready.String(),
-		mgmtpb.PoolServiceState_Destroying.String(),
-		mgmtpb.PoolServiceState_Degraded.String(),
-		mgmtpb.PoolServiceState_Unknown.String(),
-	}[pss]
+	return psss
 }
 
 func (pss PoolServiceState) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + pss.String() + `"`), nil
 }
 
+func unmarshalStrVal(inStr string, name2Vals map[string]int32, val2Names map[int32]string) (int32, error) {
+	intVal, found := name2Vals[inStr]
+	if found {
+		return intVal, nil
+	}
+	// Try converting the string to an int32, to handle the
+	// conversion from protobuf message using convert.Types().
+	val, err := strconv.ParseInt(inStr, 0, 32)
+	if err != nil {
+		return 0, errors.Errorf("non-numeric string value %q", inStr)
+	}
+
+	if _, ok := val2Names[int32(val)]; !ok {
+		return 0, errors.Errorf("unable to resolve string to value %q", inStr)
+	}
+	return int32(val), nil
+}
+
 func (pss *PoolServiceState) UnmarshalJSON(data []byte) error {
 	stateStr := strings.Trim(string(data), "\"")
 
-	state, ok := mgmtpb.PoolServiceState_value[stateStr]
-	if !ok {
-		// Try converting the string to an int32, to handle the
-		// conversion from protobuf message using convert.Types().
-		si, err := strconv.ParseInt(stateStr, 0, 32)
-		if err != nil {
-			return errors.Errorf("invalid Pool Service state number parse %q", stateStr)
-		}
-
-		if _, ok = mgmtpb.PoolServiceState_name[int32(si)]; !ok {
-			return errors.Errorf("invalid Pool Service state name lookup %q", stateStr)
-		}
-		state = int32(si)
+	state, err := unmarshalStrVal(stateStr, mgmtpb.PoolServiceState_value, mgmtpb.PoolServiceState_name)
+	if err != nil {
+		return errors.Wrap(err, "failed to unmarshal PoolServiceState")
 	}
 	*pss = PoolServiceState(state)
 
@@ -175,18 +187,10 @@ type StorageMediaType int32
 
 const (
 	// StorageMediaTypeScm indicates that the media is storage class (persistent) memory
-	StorageMediaTypeScm StorageMediaType = iota
+	StorageMediaTypeScm = StorageMediaType(mgmtpb.StorageMediaType_SCM)
 	// StorageMediaTypeNvme indicates that the media is NVMe SSD
-	StorageMediaTypeNvme
+	StorageMediaTypeNvme = StorageMediaType(mgmtpb.StorageMediaType_NVME)
 )
-
-func (smt StorageMediaType) MarshalJSON() ([]byte, error) {
-	typeStr, ok := mgmtpb.StorageMediaType_name[int32(smt)]
-	if !ok {
-		return nil, errors.Errorf("invalid storage media type %d", smt)
-	}
-	return []byte(`"` + strings.ToLower(typeStr) + `"`), nil
-}
 
 func (smt StorageMediaType) String() string {
 	smts, ok := mgmtpb.StorageMediaType_name[int32(smt)]
@@ -196,16 +200,20 @@ func (smt StorageMediaType) String() string {
 	return strings.ToLower(smts)
 }
 
+func (smt StorageMediaType) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + smt.String() + `"`), nil
+}
+
 // PoolRebuildState indicates the current state of the pool rebuild process.
 type PoolRebuildState int32
 
 const (
 	// PoolRebuildStateIdle indicates that the rebuild process is idle.
-	PoolRebuildStateIdle PoolRebuildState = iota
+	PoolRebuildStateIdle = PoolRebuildState(mgmtpb.PoolRebuildStatus_IDLE)
 	// PoolRebuildStateDone indicates that the rebuild process has completed.
-	PoolRebuildStateDone
+	PoolRebuildStateDone = PoolRebuildState(mgmtpb.PoolRebuildStatus_DONE)
 	// PoolRebuildStateBusy indicates that the rebuild process is in progress.
-	PoolRebuildStateBusy
+	PoolRebuildStateBusy = PoolRebuildState(mgmtpb.PoolRebuildStatus_BUSY)
 )
 
 func (prs PoolRebuildState) String() string {
@@ -217,30 +225,57 @@ func (prs PoolRebuildState) String() string {
 }
 
 func (prs PoolRebuildState) MarshalJSON() ([]byte, error) {
-	stateStr, ok := mgmtpb.PoolRebuildStatus_State_name[int32(prs)]
-	if !ok {
-		return nil, errors.Errorf("invalid rebuild state %d", prs)
-	}
-	return []byte(`"` + strings.ToLower(stateStr) + `"`), nil
+	return []byte(`"` + prs.String() + `"`), nil
 }
 
 func (prs *PoolRebuildState) UnmarshalJSON(data []byte) error {
 	stateStr := strings.ToUpper(string(data))
-	state, ok := mgmtpb.PoolRebuildStatus_State_value[stateStr]
-	if !ok {
-		// Try converting the string to an int32, to handle the
-		// conversion from protobuf message using convert.Types().
-		si, err := strconv.ParseInt(stateStr, 0, 32)
-		if err != nil {
-			return errors.Errorf("invalid rebuild state %q", stateStr)
-		}
 
-		if _, ok = mgmtpb.PoolRebuildStatus_State_name[int32(si)]; !ok {
-			return errors.Errorf("invalid rebuild state %q", stateStr)
-		}
-		state = int32(si)
+	state, err := unmarshalStrVal(stateStr, mgmtpb.PoolRebuildStatus_State_value, mgmtpb.PoolRebuildStatus_State_name)
+	if err != nil {
+		return errors.Wrap(err, "failed to unmarshal PoolRebuildState")
 	}
 	*prs = PoolRebuildState(state)
 
 	return nil
+}
+
+func (ptt PoolQueryTargetType) String() string {
+	ptts, ok := mgmtpb.PoolQueryTargetInfo_TargetType_name[int32(ptt)]
+	if !ok {
+		return "invalid"
+	}
+	return strings.ToLower(ptts)
+}
+
+func (pqtt PoolQueryTargetType) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + pqtt.String() + `"`), nil
+}
+
+const (
+	PoolTargetStateUnknown = PoolQueryTargetState(mgmtpb.PoolQueryTargetInfo_STATE_UNKNOWN)
+	// PoolTargetStateDownOut indicates the target is not available
+	PoolTargetStateDownOut = PoolQueryTargetState(mgmtpb.PoolQueryTargetInfo_DOWN_OUT)
+	// PoolTargetStateDown indicates the target is not available, may need rebuild
+	PoolTargetStateDown = PoolQueryTargetState(mgmtpb.PoolQueryTargetInfo_DOWN)
+	// PoolTargetStateUp indicates the target is up
+	PoolTargetStateUp = PoolQueryTargetState(mgmtpb.PoolQueryTargetInfo_UP)
+	// PoolTargetStateUpIn indicates the target is up and running
+	PoolTargetStateUpIn = PoolQueryTargetState(mgmtpb.PoolQueryTargetInfo_UP_IN)
+	// PoolTargetStateNew indicates the target is in an intermediate state (pool map change)
+	PoolTargetStateNew = PoolQueryTargetState(mgmtpb.PoolQueryTargetInfo_NEW)
+	// PoolTargetStateDrain indicates the target is being drained
+	PoolTargetStateDrain = PoolQueryTargetState(mgmtpb.PoolQueryTargetInfo_DRAIN)
+)
+
+func (pqts PoolQueryTargetState) String() string {
+	pqtss, ok := mgmtpb.PoolQueryTargetInfo_TargetState_name[int32(pqts)]
+	if !ok {
+		return "invalid"
+	}
+	return strings.ToLower(pqtss)
+}
+
+func (pqts PoolQueryTargetState) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + pqts.String() + `"`), nil
 }

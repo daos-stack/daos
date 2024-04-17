@@ -45,21 +45,14 @@ func PrintPoolQueryTargetResponse(pqtr *control.PoolQueryTargetResp, out io.Writ
 	if pqtr == nil {
 		return errors.Errorf("nil %T", pqtr)
 	}
-	w := txtfmt.NewErrWriter(out)
 
-	// Maintain output compatibility with the `daos pool query-targets` output.
-	for infosIdx := range pqtr.Infos {
-		fmt.Fprintf(w, "Target: type %s, state %s\n", pqtr.Infos[infosIdx].Type, pqtr.Infos[infosIdx].State)
-		if pqtr.Infos[infosIdx].Space != nil {
-			for tierIdx, tierUsage := range pqtr.Infos[infosIdx].Space {
-				fmt.Fprintln(w, getTierNameText(tierIdx))
-				fmt.Fprintf(w, "  Total size: %s\n", humanize.Bytes(tierUsage.Total))
-				fmt.Fprintf(w, "  Free: %s\n", humanize.Bytes(tierUsage.Free))
-			}
+	for _, info := range pqtr.Infos {
+		if err := pretty.PrintPoolQueryTargetInfo(info, out); err != nil {
+			return err
 		}
 	}
 
-	return w.Err
+	return nil
 }
 
 // PrintTierRatio generates a human-readable representation of the supplied

@@ -37,194 +37,14 @@ func TestPretty_PrintPoolQueryTargetResp(t *testing.T) {
 			},
 			expPrintStr: "\n",
 		},
-		"valid: single target (unknown, down_out)": {
-			pqtr: &control.PoolQueryTargetResp{
-				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
-					{
-						Type:  0,
-						State: control.PoolTargetStateDownOut,
-						Space: []*daos.StorageTargetUsage{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
-					},
-				},
-			},
-			expPrintStr: `
-Target: type unknown, state down_out
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVMe):
-  Total size: 100 GB
-  Free: 90 GB
-`,
-		},
-		"valid: single target (unknown, down)": {
-			pqtr: &control.PoolQueryTargetResp{
-				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
-					{
-						Type:  0,
-						State: control.PoolTargetStateDown,
-						Space: []*daos.StorageTargetUsage{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
-					},
-				},
-			},
-			expPrintStr: `
-Target: type unknown, state down
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVMe):
-  Total size: 100 GB
-  Free: 90 GB
-`,
-		},
-		"valid: single target (unknown, up)": {
-			pqtr: &control.PoolQueryTargetResp{
-				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
-					{
-						Type:  0,
-						State: control.PoolTargetStateUp,
-						Space: []*daos.StorageTargetUsage{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
-					},
-				},
-			},
-			expPrintStr: `
-Target: type unknown, state up
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVMe):
-  Total size: 100 GB
-  Free: 90 GB
-`,
-		},
-		"valid: single target (unknown, up_in)": {
-			pqtr: &control.PoolQueryTargetResp{
-				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
-					{
-						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*daos.StorageTargetUsage{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
-					},
-				},
-			},
-			expPrintStr: `
-Target: type unknown, state up_in
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVMe):
-  Total size: 100 GB
-  Free: 90 GB
-`,
-		},
-		"valid: single target (unknown, new)": {
-			pqtr: &control.PoolQueryTargetResp{
-				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
-					{
-						Type:  0,
-						State: control.PoolTargetStateNew,
-						Space: []*daos.StorageTargetUsage{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
-					},
-				},
-			},
-			expPrintStr: `
-Target: type unknown, state new
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVMe):
-  Total size: 100 GB
-  Free: 90 GB
-`,
-		},
-		"valid: single target (unknown, drain)": {
-			pqtr: &control.PoolQueryTargetResp{
-				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
-					{
-						Type:  0,
-						State: control.PoolTargetStateDrain,
-						Space: []*daos.StorageTargetUsage{
-							{
-								Total: 6000000000,
-								Free:  5000000000,
-							},
-							{
-								Total: 100000000000,
-								Free:  90000000000,
-							},
-						},
-					},
-				},
-			},
-			expPrintStr: `
-Target: type unknown, state drain
-- Storage tier 0 (SCM):
-  Total size: 6.0 GB
-  Free: 5.0 GB
-- Storage tier 1 (NVMe):
-  Total size: 100 GB
-  Free: 90 GB
-`,
-		},
 		"valid: multiple target (mixed statuses exclude 2 targets in progress)": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
-						State: control.PoolTargetStateDown,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateDown,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -237,8 +57,8 @@ Target: type unknown, state drain
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -251,8 +71,8 @@ Target: type unknown, state drain
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateDownOut,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateDownOut,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -265,8 +85,8 @@ Target: type unknown, state drain
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -313,11 +133,11 @@ Target: type unknown, state up_in
 		"invalid target state": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
 						State: 42,
-						Space: []*daos.StorageTargetUsage{
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -330,8 +150,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -344,8 +164,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateDownOut,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateDownOut,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -358,8 +178,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -406,11 +226,11 @@ Target: type unknown, state up_in
 		"invalid target type": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  42,
-						State: control.PoolTargetStateDown,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateDown,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -423,8 +243,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -437,8 +257,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateDownOut,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateDownOut,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -451,8 +271,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -499,11 +319,11 @@ Target: type unknown, state up_in
 		"three tiers; third tier unknown StorageMediaType": {
 			pqtr: &control.PoolQueryTargetResp{
 				Status: 0,
-				Infos: []*control.PoolQueryTargetInfo{
+				Infos: []*daos.PoolQueryTargetInfo{
 					{
 						Type:  0,
-						State: control.PoolTargetStateDown,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateDown,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -520,8 +340,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -538,8 +358,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateDownOut,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateDownOut,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,
@@ -556,8 +376,8 @@ Target: type unknown, state up_in
 					},
 					{
 						Type:  0,
-						State: control.PoolTargetStateUpIn,
-						Space: []*daos.StorageTargetUsage{
+						State: daos.PoolTargetStateUpIn,
+						Space: []*daos.StorageUsageStats{
 							{
 								Total: 6000000000,
 								Free:  5000000000,

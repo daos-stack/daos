@@ -27,7 +27,6 @@ import (
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
-	. "github.com/daos-stack/daos/src/control/system"
 )
 
 var regenRaftFixtures = flag.Bool("regen-raft-fixtures", false, "regenerate raft test files")
@@ -103,12 +102,12 @@ func Test_Raft_RegenerateFixtures(t *testing.T) {
 	t.Log("adding ranks")
 	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 4)
 	for i := 0; i < maxRanks; i++ {
-		m := &Member{
+		m := &system.Member{
 			Rank:        NilRank,
 			UUID:        uuid.New(),
 			Addr:        <-nextAddr,
-			State:       MemberStateJoined,
-			FaultDomain: MustCreateFaultDomainFromString("/my/test/domain"),
+			State:       system.MemberStateJoined,
+			FaultDomain: system.MustCreateFaultDomainFromString("/my/test/domain"),
 		}
 
 		if err := db.AddMember(m); err != nil {
@@ -121,12 +120,12 @@ func Test_Raft_RegenerateFixtures(t *testing.T) {
 	t.Log("adding pools")
 	replicas := replicaGen(ctx, maxRanks, 3)
 	for i := 0; i < maxPools; i++ {
-		ps := &PoolService{
+		ps := &system.PoolService{
 			PoolUUID:  uuid.New(),
 			PoolLabel: fmt.Sprintf("pool%04d", i),
 			State:     system.PoolServiceStateReady,
 			Replicas:  <-replicas,
-			Storage: &PoolServiceStorage{
+			Storage: &system.PoolServiceStorage{
 				CreationRankStr:    fmt.Sprintf("[0-%d]", maxRanks),
 				CurrentRankStr:     fmt.Sprintf("[0-%d]", maxRanks),
 				PerRankTierStorage: []uint64{1, 2},
