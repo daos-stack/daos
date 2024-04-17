@@ -95,7 +95,7 @@ jobs:
       rpm-test-version: ${{ steps.rpm-test-version.outputs.value }}
       pr-repos: ${{ steps.pr-repos.outputs.value }}
       run-gha: ${{ steps.run-gha.outputs.value }}
-      skip-build: ${{ steps.skip-buid.outputs.value }}
+      skip-build: ${{ steps.skip-build.outputs.value }}
     steps:
       - name: Set rpm-test-version variable
         id: rpm-test-version
