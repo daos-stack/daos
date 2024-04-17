@@ -2738,7 +2738,7 @@ page_flush_completion(struct umem_cache *cache, struct umem_page_info *pinfo)
 	page_wakeup_io(cache, pinfo);
 }
 
-static void
+static int
 cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 		  struct umem_checkpoint_data *chkpt_data_all, int chkpt_nr,
 		  umem_cache_wait_cb_t wait_commit_cb, void *arg, uint64_t *chkpt_id,
@@ -2751,8 +2751,9 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 	d_list_t			 waiting_list;
 	uint64_t			 committed_tx = 0;
 	unsigned int			 max_iod_per_page;
+	unsigned int			 tot_pgs = 0, flushed_pgs = 0;
 	int				 inflight = 0;
-	int				 i, rc;
+	int				 i, rc = 0;
 
 	D_ASSERT(store != NULL);
 	D_ASSERT(!d_list_empty(dirty_list));
@@ -2780,6 +2781,7 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 		pinfo->pi_io = 1;
 		D_ASSERT(d_list_empty(&pinfo->pi_flush_link));
 		d_list_add_tail(&pinfo->pi_flush_link, &cache->ca_pgs_flushing);
+		tot_pgs++;
 
 		if (store->stor_ops->so_wal_id_cmp(store, pinfo->pi_last_inflight, *chkpt_id) > 0)
 			*chkpt_id = pinfo->pi_last_inflight;
@@ -2871,21 +2873,27 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 		if (chkpt_data == NULL)
 			continue;
 
-		D_ASSERT(store->stor_ops->so_wal_id_cmp(store, committed_tx,
-							chkpt_data->cd_max_tx) >= 0);
+		/* WAL commit failed due to faulty SSD */
+		if (store->stor_ops->so_wal_id_cmp(store, committed_tx,
+						   chkpt_data->cd_max_tx) < 0) {
+			D_ASSERT(store->store_faulty);
+			D_ERROR("WAL commit failed. "DF_X64" < "DF_X64"\n", committed_tx,
+				chkpt_data->cd_max_tx);
+			rc = -DER_NVME_IO;
+		}
 
 		/** Since the flush API only allows one at a time, let's just do one at a time
 		 *  before copying another page.  We can revisit this later if the API allows
 		 *  to pass more than one fh.
 		 */
-		rc         = store->stor_ops->so_flush_post(chkpt_data->cd_fh, 0);
-		D_ASSERT(rc == 0);
+		rc = store->stor_ops->so_flush_post(chkpt_data->cd_fh, rc);
 		for (i = 0; i < chkpt_data->cd_nr_pages; i++) {
 			pinfo = chkpt_data->cd_pages[i];
 			page_flush_completion(cache, pinfo);
 		}
 		inflight--;
 
+		flushed_pgs += chkpt_data->cd_nr_pages;
 		if (stats) {
 			stats->uccs_nr_pages	+= chkpt_data->cd_nr_pages;
 			stats->uccs_nr_dchunks	+= chkpt_data->cd_nr_dchunks;
@@ -2893,7 +2901,15 @@ cache_flush_pages(struct umem_cache *cache, d_list_t *dirty_list,
 		}
 		d_list_add(&chkpt_data->cd_link, &free_list);
 
+		if (rc != 0 || (DAOS_FAIL_CHECK(DAOS_MEM_FAIL_CHECKPOINT) &&
+		    flushed_pgs >= tot_pgs / 2)) {
+			rc = -DER_AGAIN;
+			break;
+		}
+
 	} while (inflight != 0 || !d_list_empty(dirty_list));
+
+	return rc;
 }
 
 int
@@ -2921,31 +2937,16 @@ umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, vo
 		return -DER_NOMEM;
 
 	D_INIT_LIST_HEAD(&dirty_list);
+	d_list_splice_init(&cache->ca_pgs_dirty, &dirty_list);
 
-	if (DAOS_FAIL_CHECK(DAOS_MEM_FAIL_CHECKPOINT)) {
-		unsigned int flush_nr = 0, dirty_nr = 0;
-
-		/* Flush half dirty pages to emulate interrupted checkpointing */
-		d_list_for_each_entry(pinfo, &cache->ca_pgs_dirty, pi_dirty_link)
-			dirty_nr++;
-
-		d_list_for_each_entry_safe(pinfo, tmp, &cache->ca_pgs_dirty, pi_dirty_link) {
-			d_list_del_init(&pinfo->pi_dirty_link);
-			d_list_add_tail(&pinfo->pi_dirty_link, &dirty_list);
-			flush_nr++;
-			if (flush_nr >= (dirty_nr / 2))
-				break;
-		}
-		rc = -DER_AGAIN;
-	} else {
-		d_list_splice_init(&cache->ca_pgs_dirty, &dirty_list);
-	}
-
-	cache_flush_pages(cache, &dirty_list, chkpt_data_all, MAX_INFLIGHT_SETS, wait_cb, arg,
-			  &chkpt_id, stats);
+	rc = cache_flush_pages(cache, &dirty_list, chkpt_data_all, MAX_INFLIGHT_SETS, wait_cb, arg,
+			       &chkpt_id, stats);
 
 	D_FREE(chkpt_data_all);
-	D_ASSERT(d_list_empty(&dirty_list));
+	if (!d_list_empty(&dirty_list)) {
+		D_ASSERT(rc != 0);
+		d_list_move(&dirty_list, &cache->ca_pgs_dirty);
+	}
 done:
 	/* Wait for the evicting pages (if any) with lower checkpoint id */
 	d_list_for_each_entry_safe(pinfo, tmp, &cache->ca_pgs_flushing, pi_flush_link) {
@@ -3062,6 +3063,7 @@ cache_flush_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	struct umem_checkpoint_data	*chkpt_data_all;
 	d_list_t			 dirty_list;
 	uint64_t			 chkpt_id = 0;
+	int				 rc;
 
 	if (pinfo->pi_io == 1) {
 		page_wait_io(cache, pinfo);
@@ -3086,12 +3088,12 @@ cache_flush_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	arg.wca_cache = cache;
 	arg.wca_pinfo = pinfo;
 
-	cache_flush_pages(cache, &dirty_list, chkpt_data_all, 1, wait_page_commit_cb, &arg,
-			  &chkpt_id, NULL);
+	rc = cache_flush_pages(cache, &dirty_list, chkpt_data_all, 1, wait_page_commit_cb, &arg,
+			       &chkpt_id, NULL);
 	D_FREE(chkpt_data_all);
 	D_ASSERT(d_list_empty(&dirty_list));
 
-	return 0;
+	return rc;
 }
 
 static int

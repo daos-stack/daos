@@ -260,7 +260,7 @@ out:
 }
 
 static int
-mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
+mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc, uint32_t *version)
 {
 	struct mgmt_svc	       *svc = mgmt_svc_obj(rsvc);
 	struct dss_module_info *info = dss_get_module_info();
@@ -283,10 +283,12 @@ mgmt_svc_map_dist_cb(struct ds_rsvc *rsvc)
 
 	rc = map_update_bcast(info->dmi_ctx, svc, map_version,
 			      n_map_servers, map_servers);
-
 	free_server_list(map_servers, n_map_servers);
+	if (rc != 0)
+		return rc;
 
-	return rc;
+	*version = map_version;
+	return 0;
 }
 
 static struct ds_rsvc_class mgmt_svc_rsvc_class = {

@@ -99,7 +99,7 @@ func Debug(msg proto.Message) string {
 		}
 		fmt.Fprintf(&bld, "meta-blob-size:%s", humanize.Bytes(m.MetaBlobBytes))
 	case *mgmtpb.PoolCreateResp:
-		fmt.Fprintf(&bld, "%T svc_ldr:%d ", m, m.Leader)
+		fmt.Fprintf(&bld, "%T svc_ldr:%d ", m, m.SvcLdr)
 		ranks := &ranklist.RankSet{}
 		for _, r := range m.SvcReps {
 			ranks.Add(ranklist.Rank(r))

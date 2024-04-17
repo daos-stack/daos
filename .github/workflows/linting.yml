@@ -9,6 +9,8 @@ on:
       - 'release/*'
   pull_request:
 
+permissions: {}
+
 jobs:
   # Run isort on the tree.
   # This checks .py files only so misses SConstruct and SConscript files are not checked, rather
@@ -26,7 +28,7 @@ jobs:
           python-version: '3'
       - uses: isort/isort-action@master
         with:
-          requirementsFiles: "requirements.txt utils/cq/requirements.txt"
+          requirementsFiles: "requirements.txt"
       - name: Run on SConstruct file.
         run: isort --check-only SConstruct
       - name: Run on build files.

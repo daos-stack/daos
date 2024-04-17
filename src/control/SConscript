@@ -19,6 +19,7 @@ def get_build_tags(benv):
     if is_firmware_mgmt_build(benv):
         tags.append("firmware")
     if not is_release_build(benv):
+        tags.append("fault_injection")
         tags.append("pprof")
     else:
         tags.append("release")
@@ -90,8 +91,11 @@ def install_go_bin(env, name, libs=None, install_man=False):
     if install_man:
         gen_bin = join('$BUILD_DIR/src/control', name)
         build_path = join('$BUILD_DIR/src/control', f'{name}.8')
-        env.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
-        env.Install('$PREFIX/share/man/man8', build_path)
+        menv = env.Clone()
+        # This runs code from the build area so needs LD_LIBRARY_PATH set.
+        menv.d_enable_ld_path(["cart", "gurt", "client/api", "common", "client/dfs", "utils"])
+        menv.Command(build_path, target, f'{gen_bin} manpage -o {build_path}')
+        menv.Install('$PREFIX/share/man/man8', build_path)
 
 
 def scons():
@@ -157,7 +161,7 @@ def scons():
     install_go_bin(senv, "daos_server")
 
     aenv = denv.Clone()
-    aenv.require('spdk', 'pmdk', 'ofi')
+    aenv.require('spdk', 'pmdk', 'ofi', 'argobots')
 
     aenv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     aenv.Replace(RPATH=[])
@@ -165,6 +169,7 @@ def scons():
                             "-L$BUILD_DIR/src/gurt "
                             "-L$BUILD_DIR/src/cart "
                             "-L$BUILD_DIR/src/common "
+                            "-L$BUILD_DIR/src/ddb "
                             "-L$SPDK_PREFIX/lib "
                             "-L$OFI_PREFIX/lib $_RPATH")
     # Explicitly link RTE & SPDK libs for CGO access
@@ -183,6 +188,15 @@ def scons():
     if is_firmware_mgmt_build(aenv):
         print("(EXPERIMENTAL) Building DAOS firmware tools")
         install_go_bin(aenv, "daos_firmware_helper", libs=['nvme_control'])
+
+    ddb_env = aenv.Clone()
+    ddb_env.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    ddb_env.d_add_rpaths(None, True, True)
+
+    # Add vos and dependent libs for ddb
+    ddb_env.AppendENVPath("CGO_LDFLAGS", " -lvos -ldaos_common_pmem -lpmem "
+                                         "-labt -lgurt -luuid -lbio -lcart", sep=" ")
+    install_go_bin(ddb_env, "ddb", ['ddb'])
 
 
 if __name__ == "SCons.Script":

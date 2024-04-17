@@ -1,3 +1,21 @@
+daos (2.5.101-4) unstable; urgency=medium
+  [ Fan Yong ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Fan Yong <fan.yong@intel.com>  Fri, 05 Apr 2024 09:30:00 +0900
+
+daos (2.5.101-3) unstable; urgency=medium
+  [ Ashley M. Pittman ]
+  * Updated pydaos install process
+
+ -- Ashley M. Pittman <ashley.m.pittman@intel.com>  Thu, 04 Apr 2024 09:15:00 -0800
+
+daos (2.5.101-2) unstable; urgency=medium
+  [ Jan Michalski ]
+  * Add dtx_tests to the server-tests package
+
+ -- Jan Michalski <jan.michalski@intel.com>  Mon, 18 Mar 2024 21:30:00 +0000
+
 daos (2.5.101-1) unstable; urgency=medium
   [ Phillip Henderson ]
   * Bump version to 2.5.101

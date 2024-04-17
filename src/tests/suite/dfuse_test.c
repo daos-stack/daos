@@ -60,7 +60,6 @@ print_usage()
 }
 
 char *test_dir;
-
 void
 do_openat(void **state)
 {
@@ -176,6 +175,32 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 
 	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
+extern int __open(const char *pathname, int flags, ...);
+void
+do_open(void **state)
+{
+	int  fd;
+	int  rc;
+	int  len;
+	char path[512];
+
+	len = snprintf(path, sizeof(path) - 1, "%s/open_file", test_dir);
+	assert_true(len < (sizeof(path) - 1));
+
+	/* Test O_CREAT with open but without mode. __open() is called to workaround
+	 * "-D_FORTIFY_SOURCE=3". Normally mode is required when O_CREAT is in flag.
+	 * libc seems supporting it although the permission could be undefined.
+	 */
+	fd = __open(path, O_RDWR | O_CREAT | O_EXCL);
+	assert_return_code(fd, errno);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = unlink(path);
 	assert_return_code(rc, errno);
 }
 
@@ -479,14 +504,28 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 }
 
+static int
+get_dir_num_entry(DIR *dirp)
+{
+	int            num_entry = 0;
+	struct dirent *ent;
+
+	while ((ent = readdir(dirp)) != NULL) {
+		num_entry++;
+	}
+	return num_entry;
+}
+
 /*
  * Check readdir for issues.
  *
  * Create a directory
  * Populate it
+ * Test scandirat
  * Check the file count
  * Rewind the directory handle
  * Re-check the file count.
+ * seekdir, then verify the number of entries left
  *
  * In order for this test to be idempotent and because it takes time to create the files then
  * ignore errors about file exists when creating.
@@ -494,13 +533,14 @@ do_mtime(void **state)
 void
 do_directory(void **state)
 {
-	int            root;
-	int            dfd;
-	int            rc;
-	int            i;
-	DIR           *dirp;
-	struct dirent *ent;
-	long           pos;
+	int             root;
+	int             dfd;
+	int             rc;
+	int             i;
+	DIR            *dirp;
+	struct dirent **namelist;
+	long            pos;
+	int             entry_count = 100;
 
 	printf("Creating dir and files\n");
 	root = open(test_dir, O_PATH | O_DIRECTORY);
@@ -513,11 +553,11 @@ do_directory(void **state)
 	dfd = openat(root, "wide_dir", O_RDONLY | O_DIRECTORY);
 	assert_return_code(dfd, errno);
 
-	for (i = 0; i < 100; i++) {
+	for (i = 0; i < entry_count; i++) {
 		char fname[17];
 		int  fd;
 
-		rc = snprintf(fname, 17, "file %d", i);
+		rc = snprintf(fname, 17, "file_%02d", i);
 		assert_in_range(rc, 0, 16);
 
 		fd = openat(dfd, fname, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
@@ -526,6 +566,21 @@ do_directory(void **state)
 		assert_return_code(rc, errno);
 	}
 
+	rc = scandirat(dfd, ".", &namelist, NULL, alphasort);
+	if (strcmp(namelist[0]->d_name, ".") == 0) {
+		entry_count += 2;
+	} else {
+		assert_true(strcmp(namelist[0]->d_name, "file_00") == 0);
+	}
+	assert_int_equal(rc, entry_count);
+	assert_true(strcmp(namelist[rc - 1]->d_name, "file_99") == 0);
+
+	/* free namelist */
+	while (rc--) {
+		free(namelist[rc]);
+	}
+	free(namelist);
+
 	printf("Checking file count\n");
 	dirp = fdopendir(dfd);
 	if (dirp == NULL)
@@ -533,28 +588,47 @@ do_directory(void **state)
 
 	pos = telldir(dirp);
 
-	i     = 0;
 	errno = 0;
-	while ((ent = readdir(dirp)) != NULL) {
-		i++;
-	}
+	rc    = get_dir_num_entry(dirp);
 	if (errno != 0)
 		assert_return_code(-1, errno);
-	printf("File count is %d\n", i);
-	assert_int_equal(i, 100);
+	printf("File count is %d\n", rc);
+	assert_int_equal(rc, entry_count);
 
 	printf("Rewinding and rechecking file count\n");
 	seekdir(dirp, pos);
 
-	i     = 0;
 	errno = 0;
-	while ((ent = readdir(dirp)) != NULL) {
-		i++;
-	}
+	rc    = get_dir_num_entry(dirp);
 	if (errno != 0)
 		assert_return_code(-1, errno);
-	printf("File count is %d\n", i);
-	assert_int_equal(i, 100);
+	printf("File count is %d\n", rc);
+	assert_int_equal(rc, entry_count);
+
+	long           positions[entry_count];
+	struct dirent *ent;
+	i = 0;
+	rewinddir(dirp);
+	positions[i] = telldir(dirp);
+	i++;
+
+	while ((ent = readdir(dirp)) != NULL) {
+		positions[i] = telldir(dirp);
+		assert_true(i <= entry_count);
+		i++;
+	}
+
+	for (i = 0; i < entry_count; i++) {
+		rewinddir(dirp);
+		seekdir(dirp, positions[i]);
+		assert_int_equal(get_dir_num_entry(dirp), entry_count - i);
+	}
+	for (i = 0; i < entry_count; i++) {
+		rewinddir(dirp);
+		readdir(dirp);
+		seekdir(dirp, positions[i]);
+		assert_int_equal(get_dir_num_entry(dirp), entry_count - i);
+	}
 
 	rc = close(dfd);
 	assert_return_code(rc, errno);
@@ -683,21 +757,21 @@ verify_pil4dfs_env()
 		goto err;
 	}
 
-	p = getenv("DAOS_MOUNT_POINT");
+	p = getenv("D_IL_MOUNT_POINT");
 	if (!p) {
-		printf("Error: DAOS_MOUNT_POINT is unset.\n");
+		printf("Error: D_IL_MOUNT_POINT is unset.\n");
 		goto err;
 	}
 
-	p = getenv("DAOS_POOL");
+	p = getenv("D_IL_POOL");
 	if (!p) {
-		printf("Error: DAOS_POOL is unset.\n");
+		printf("Error: D_IL_POOL is unset.\n");
 		goto err;
 	}
 
-	p = getenv("DAOS_CONTAINER");
+	p = getenv("D_IL_CONTAINER");
 	if (!p) {
-		printf("Error: DAOS_CONTAINER is unset.\n");
+		printf("Error: D_IL_CONTAINER is unset.\n");
 		goto err;
 	}
 
@@ -798,6 +872,7 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			printf("=====================\n");
 			const struct CMUnitTest io_tests[] = {
 			    cmocka_unit_test(do_openat),
+			    cmocka_unit_test(do_open),
 			    cmocka_unit_test(do_ioctl),
 			    cmocka_unit_test(do_readv_writev),
 			};

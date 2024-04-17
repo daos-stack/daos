@@ -347,7 +347,6 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 {
 	struct bio_desc	*biod = (struct bio_desc *)fh.cookie;
 
-	D_ASSERT(err == 0);
 	err = bio_iod_post(biod, err);
 	bio_iod_free(biod);
 	if (err) {
@@ -359,7 +358,6 @@ vos_meta_flush_post(daos_handle_t fh, int err)
 			if (err != 0)
 				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
 		}
-		err = 0;
 	}
 
 	return err;
@@ -481,7 +479,7 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 			if (rc != 0)
 				D_ERROR("Failed to raise SIGKILL: %d\n", errno);
 		}
-		rc = 0;
+		store->store_faulty = true;
 	} else if (vwm != NULL) {
 		d_tm_set_gauge(vwm->vwm_wal_sz, ws.ws_size);
 		d_tm_set_gauge(vwm->vwm_wal_qd, ws.ws_qd);
@@ -492,7 +490,7 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 
 	pool = store->vos_priv;
 	if (unlikely(pool == NULL))
-		return rc; /** In case there is any race for checkpoint init. */
+		return 0; /** In case there is any race for checkpoint init. */
 
 	/** Update checkpoint state after commit in case there is an active checkpoint waiting
 	 *  for this commit to finish.
@@ -500,7 +498,7 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
 			   wal_info.wi_tot_blks);
 
-	return rc;
+	return 0;
 }
 
 static inline int
@@ -1540,7 +1538,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 				vos_pool_decref(pool);
 				return -DER_BUSY;
 			}
-			if ((flags & VOS_POF_EXCL) || pool->vp_excl) {
+			if (!(flags & VOS_POF_FOR_CHECK_QUERY) &&
+			    ((flags & VOS_POF_EXCL) || pool->vp_excl)) {
 				vos_pool_decref(pool);
 				return -DER_BUSY;
 			}
@@ -1708,6 +1707,13 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 	D_ASSERT(pinfo != NULL);
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
 	pinfo->pif_gc_stat = pool->vp_gc_stat_global;
+
+	/*
+	 * NOTE: The chk_pool_info::cpi_statistics contains the inconsistency statistics during
+	 *	 phase range [CSP_DTX_RESYNC, CSP_AGGREGATION] for the pool shard on the target.
+	 *	 Related information will be filled in subsequent CR project milestone.
+	 */
+	memset(&pinfo->pif_chk, 0, sizeof(pinfo->pif_chk));
 
 	rc = vos_space_query(pool, &pinfo->pif_space, true);
 	if (rc)
