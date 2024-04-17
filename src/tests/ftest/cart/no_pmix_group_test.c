@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -686,8 +686,7 @@ int main(int argc, char **argv)
 	}
 
 	for (i = 0; i < 10; i++) {
-		rc = asprintf(&uris[i], "ofi+tcp;ofi_rxm://127.0.0.1:%d",
-				10000 + i);
+		rc = asprintf(&uris[i], "ofi+tcp://127.0.0.1:%d", 10000 + i);
 		if (rc == -1) {
 			D_ERROR("asprintf() failed\n");
 			assert(0);

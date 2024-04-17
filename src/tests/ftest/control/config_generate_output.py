@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -23,7 +23,7 @@ class ConfigGenerateOutput(TestWithServers):
         """Initialize a ConfigGenerateOutput object."""
         super().__init__(*args, **kwargs)
 
-        self.def_provider = "ofi+tcp;ofi_rxm"
+        self.def_provider = "ofi+tcp"
 
         # Data structure that store expected values.
         self.numa_node_to_pci_addrs = defaultdict(set)
@@ -194,14 +194,6 @@ class ConfigGenerateOutput(TestWithServers):
         self.prepare_expected_data()
 
         # 1. Call dmg config generate.
-                if storage["class"] == "ram":
-                    # Verify scm_list value is not set:
-                    if "scm_list" in storage:
-                        errors.append("unexpected scm_list field exists in ram tier")
-                    # Verify scm_size value is set:
-                    if "scm_size" not in storage:
-                        errors.append("Expected scm_size field does not exist in ram tier")
-                    scm_found = True
         result = self.get_dmg_command().config_generate(
             access_points="wolf-a", net_provider=self.def_provider)
         generated_yaml = yaml.safe_load(result.stdout)

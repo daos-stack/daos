@@ -445,6 +445,24 @@
    fun:indexbytebody
 }
 {
+   go-cond-racecall
+   Memcheck:Cond
+   ...
+   fun:racecall
+}
+{
+   go-value8-write_racecall
+   Memcheck:Value8
+   fun:__tsan_write
+   fun:racecall
+}
+{
+   go-value8-racecall
+   Memcheck:Value8
+   fun:_ZN6__tsan9ShadowSetEPNS_9RawShadowES1_S0_
+   fun:racecall
+}
+{
    FI leak 8
    Memcheck:Leak
    match-leak-kinds: reachable
@@ -483,9 +501,12 @@
    Memcheck:Param
    sendmsg(msg.msg_iov[1])
    ...
+   fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
    fun:ofi_bsock_sendv
    ...
    fun:fi_senddata
+   ...
 }
 {
    Tcp provider with ofi rxm
@@ -495,6 +516,7 @@
    fun:ofi_bsock_sendv
    ...
    fun:fi_tsend
+   ...
 }
 {
    Tcp provider with ofi rxm 2
@@ -538,4 +560,15 @@
    DAOS-14680-4
    Memcheck:Value8
    fun:aeshashbody
+}
+{
+   DAOS-15159
+   Memcheck:Param
+   write(buf)
+   fun:runtime/internal/syscall.Syscall6
+}
+{
+   DAOS-15548
+   Memcheck:Addr1
+   fun:racecallatomic
 }
