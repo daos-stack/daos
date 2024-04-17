@@ -89,6 +89,7 @@ jobs:
       rpm-test-version: ${{ steps.rpm-test-version.outputs.value }}
       pr-repos: ${{ steps.pr-repos.outputs.value }}
       run-gha: ${{ steps.run-gha.outputs.value }}
+      skip-build: ${{ steps.skip-buid.outputs.value }}
     steps:
       - name: Set rpm-test-version variable
         id: rpm-test-version
@@ -108,6 +109,13 @@ jobs:
         with:
           commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
           pragma: RUN_GHA
+          default: false
+      - name: Set skip-build variable
+        id: skip-build
+        uses: ./.github/actions/variable-from-pragma
+        with:
+          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
+          pragma: SKIP_BUILD
           default: false
 
   Create-symlinks:
@@ -185,6 +193,7 @@ jobs:
     if: |
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          ${{ github.event_name == 'workflow_dispatch' }}) &&
+        needs.Import-commit-pragmas.outputs.skip-build != 'true' &&
         needs.Create-symlinks.result == 'success' &&
         ((!cancelled()) || success() || failure())
     strategy:
