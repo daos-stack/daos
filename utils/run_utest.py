@@ -7,6 +7,7 @@
   Test script for running all DAOS unit tests
 """
 import argparse
+import getpass
 import json
 # pylint: disable=broad-except
 import os
@@ -19,7 +20,6 @@ import traceback
 
 import yaml
 from junit_xml import TestCase, TestSuite
-import getpass
 
 
 def check_version():

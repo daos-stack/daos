@@ -327,6 +327,7 @@ This is the package that bridges the difference between the MOFED openmpi
       --config=force         \
       --no-rpath             \
       USE_INSTALLED=all      \
+      STATIC_FUSE=0          \
       FIRMWARE_MGMT=yes      \
       CONF_DIR=%{conf_dir}   \
      %{?scons_args}          \
@@ -344,6 +345,7 @@ mv test.cov{,-build}
       %{buildroot}%{_prefix}          \
       %{buildroot}%{conf_dir}         \
       USE_INSTALLED=all               \
+      STATIC_FUSE=0          \
       FIRMWARE_MGMT=yes               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \

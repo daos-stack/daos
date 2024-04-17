@@ -2,7 +2,8 @@
 """Wrapper for changeId hook"""
 import os
 import sys
-import subprocess
+from subprocess import call as subcall  # nosec B404
+
 
 def run_changeid_hook():
     """Execute the changeId.sh hook from user area"""
@@ -35,7 +36,7 @@ def run_changeid_hook():
 
     args = sys.argv
     args[0] = hookpath
-    return subprocess.call(args)
+    return subcall(args)
 
 
 if __name__ == "__main__":

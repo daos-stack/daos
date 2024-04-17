@@ -18,7 +18,7 @@ endif
 SCONS = scons -j $(NUMJOBS)
 DEB_SCONS_OPTIONS := --config=force --no-rpath USE_INSTALLED=all \
                      CONF_DIR=$(sysconfdir)/daos PREFIX=$(prefix) \
-                     $(SCONS_ARGS)
+                     $(SCONS_ARGS) STATIC_FUSE=0
 
 export GOCACHE := $(CURDIR)/.gocache
 
@@ -34,7 +34,7 @@ override_dh_auto_build:
 
 override_dh_auto_clean:
 	echo $(DEB_BUILD_OPTIONS)
-	$(SCONS) --clean
+	$(SCONS) --clean STATIC_FUSE=0
 	rm -rf build install
 	find . -name '*.pyc' -delete
 	rm -rf _build.external-Linux

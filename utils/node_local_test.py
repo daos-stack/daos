@@ -24,7 +24,6 @@ import os
 import pickle  # nosec
 import pprint
 import pwd
-import random
 import re
 import shutil
 import signal
