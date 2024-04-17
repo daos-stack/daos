@@ -224,7 +224,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	if (set_sep)
 		D_WARN("Unsupported SEP mode requested. Unset CRT_CTX_SHARE_ADDR\n");
 
-	if (opt->cio_sep_override && opt->cio_use_sep)
+	if (opt && opt->cio_sep_override && opt->cio_use_sep)
 		D_WARN("Unsupported SEP mode requested in init options\n");
 
 	if (opt && opt->cio_use_expected_size)
