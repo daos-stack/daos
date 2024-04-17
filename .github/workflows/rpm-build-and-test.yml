@@ -49,6 +49,9 @@ jobs:
       message: ${{ steps.commit_message.outputs.text }}
       dequoted_message: ${{ steps.dequoted_commit_message.outputs.text }}
     steps:
+      - name: Display inputs.rpm-test-version
+        id: show_inputs_rpm_test_version
+        run: echo ${{ inputs.rpm-test-version }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
