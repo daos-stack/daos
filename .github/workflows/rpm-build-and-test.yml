@@ -432,9 +432,10 @@ jobs:
       (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          ${{ github.event_name == 'workflow_dispatch' }}) &&
       needs.Calc-functional-matrix.outputs.matrix != '[]' &&
-      (!cancelled()) &&
-      (needs.Build-RPM.result == 'success' ||
-       needs.Build-RPM.result == 'skipped')
+      true
+      # (!cancelled()) &&
+      # (needs.Build-RPM.result == 'success' ||
+      #  needs.Build-RPM.result == 'skipped')
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
