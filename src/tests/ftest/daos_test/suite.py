@@ -26,7 +26,6 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=hw,medium,provider,md_on_ssd
         :avocado: tags=daos_test,daos_core_test
         :avocado: tags=DaosCoreTest,test_daos_degraded_mode
-        :avocado: tags=master_failed
         """
         self.run_subtest()
 
