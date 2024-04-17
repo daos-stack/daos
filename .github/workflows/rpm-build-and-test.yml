@@ -19,6 +19,9 @@ on:
       commit-message:
         description: 'Commit message to use rather than the one from git'
         required: false
+      rpm-test-version:
+        description: 'RPM version to test'
+        required: false
   pull_request:
 
 concurrency:
@@ -153,6 +156,7 @@ jobs:
     name: Calculate RPM Build Matrix
     runs-on: [self-hosted, wolf]
     needs: [Import-commit-pragmas, Create-symlinks, Import-commit-message]
+    if: ${{ inputs.rpm-test-version == '' }}
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
@@ -194,6 +198,7 @@ jobs:
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          ${{ github.event_name == 'workflow_dispatch' }}) &&
         needs.Import-commit-pragmas.outputs.skip-build != 'true' &&
+        ${{ inputs.rpm-test-version == '' }} &&
         needs.Create-symlinks.result == 'success' &&
         ((!cancelled()) || success() || failure())
     strategy:
@@ -455,6 +460,8 @@ jobs:
       STAGE_NAME:
       QUEUE_URL:
       LABEL:
+      STAGE_TAGS:
+      FTEST_ARG:
       DISTRO_NAME:
       DISTRO_VERSION:
       COMMIT_STATUS_DISTRO_VERSION:
