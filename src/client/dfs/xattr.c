@@ -38,6 +38,8 @@ dfs_setxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, const void *value, da
 		return EINVAL;
 	if (name == NULL)
 		return EINVAL;
+	if (value == NULL && size != 0)
+		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
 	if (size > DFS_MAX_XATTR_LEN)
@@ -142,6 +144,8 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value, daos_siz
 	if (obj == NULL)
 		return EINVAL;
 	if (name == NULL)
+		return EINVAL;
+	if (value == NULL && size != NULL && *size > 0)
 		return EINVAL;
 	if (strnlen(name, DFS_MAX_XATTR_NAME + 1) > DFS_MAX_XATTR_NAME)
 		return EINVAL;
