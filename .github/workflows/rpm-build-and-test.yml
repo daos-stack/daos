@@ -16,6 +16,9 @@ on:
       pr-repos:
         description: 'Any PR-repos that you want included in this build'
         required: false
+      commit-message:
+        description: 'Commit message to use rather than the one from git'
+        required: false
   pull_request:
 
 concurrency:
@@ -29,7 +32,7 @@ defaults:
 permissions: {}
 
 jobs:
-  # it's a real shame that this step is even needed.  push events have the commit message # in
+  # it's a real shame that this step is even needed.  push events have the commit message in
   # ${{ github.event.head_commit.message }} but pull_requests don't.  :-(
   Import-commit-message:
     name: Get commit message
@@ -47,7 +50,11 @@ jobs:
       - name: Import Commit Message
         id: commit_message
         run: echo "text<<EOF" >> $GITHUB_OUTPUT;
-             git show -s --format=%B >> $GITHUB_OUTPUT;
+             if [ -n "${{ inputs.commit-message }}" ]; then
+                 echo "${{ inputs.commit-message }}"
+             else
+                 git show -s --format=%B >> $GITHUB_OUTPUT;
+             fi
              echo "EOF" >> $GITHUB_OUTPUT;
       - name: Import and Dequote Commit Message
         id: dequoted_commit_message
