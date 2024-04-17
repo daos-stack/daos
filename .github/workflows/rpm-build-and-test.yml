@@ -59,16 +59,10 @@ jobs:
              echo "EOF"
       - name: Import and Dequote Commit Message
         id: dequoted_commit_message
-        # TODO: can't we just use the step output from the previous step?
-        #       I.e. ${{ steps.commit_message.outputs.text }}
         run: . ci/gha_functions.sh;
              exec >> $GITHUB_OUTPUT;
              echo "text<<EOF";
-             if [ -n "${{ inputs.commit-message }}" ]; then
-                 echo "${{ inputs.commit-message }}" | escape_single_quotes;;
-             else
-                 git show -s --format=%B | escape_single_quotes;
-             fi;
+             echo "${{ steps.commit_message.outputs.text }} " | escape_single_quotes;
              echo "EOF"
       - name: Identify Commit Pragmas
         run: . ci/gha_functions.sh;
