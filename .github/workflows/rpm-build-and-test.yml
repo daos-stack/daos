@@ -49,13 +49,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Import Commit Message
         id: commit_message
-        run: echo "text<<EOF" >> $GITHUB_OUTPUT;
+        run: exec >> $GITHUB_OUTPUT;
+             echo "text<<EOF";
              if [ -n "${{ inputs.commit-message }}" ]; then
-                 echo "${{ inputs.commit-message }}"
+                 echo "${{ inputs.commit-message }}";
              else
-                 git show -s --format=%B >> $GITHUB_OUTPUT;
-             fi
-             echo "EOF" >> $GITHUB_OUTPUT;
+                 git show -s --format=%B;
+             fi;
+             echo "EOF";
       - name: Import and Dequote Commit Message
         id: dequoted_commit_message
         run: . ci/gha_functions.sh;
