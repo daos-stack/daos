@@ -22,6 +22,9 @@ on:
       rpm-test-version:
         description: 'RPM version to test'
         required: false
+      test-tag:
+        description: 'Test tag to use'
+        required: false
   pull_request:
 
 concurrency:
@@ -480,7 +483,7 @@ jobs:
         run: |
             set -eux
             env
-            STAGE_TAGS="-hw"
+            STAGE_TAGS="vm"
             FTEST_ARG=""
             INST_RPMS="daos-client daos-tests daos-server daos-serialize daos-tests-internal"
             case "${{ matrix.distro }}" in
@@ -552,6 +555,11 @@ jobs:
         id: run-test
         run: |
           . ci/gha_functions.sh
+          if [ -n "${{ inputs.test-tag }}" ]; then
+              REQ_TEST_TAG="${{ inputs.test-tag }}"
+          elif [ -n "${{ env.CP_TEST_TAG }}" ]; then
+              REQ_TEST_TAG="${{ env.CP_TEST_TAG }}"
+          fi
           NODE_COUNT="$NODE_COUNT"                                   \
           TEST_TAG="$(get_test_tags ${{ env.STAGE_TAGS}})"           \
           FTEST_ARG="${{ env.FTEST_ARG }}" ci/functional/test_main.sh
