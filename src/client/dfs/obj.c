@@ -674,7 +674,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 
 	daos_mode = get_daos_obj_mode(obj->flags);
 	if (S_ISDIR(obj->mode)) {
-		rc = daos_obj_open(dfs->coh, obj->oid, DAOS_OO_RO, &obj->oh, NULL);
+		rc = daos_obj_open(dfs->coh, obj->oid, daos_mode, &obj->oh, NULL);
 		if (rc) {
 			D_ERROR("daos_obj_open() failed, " DF_RC "\n", DP_RC(rc));
 			D_FREE(obj);
