@@ -173,7 +173,7 @@ bio_spdk_env_init(void)
 	}
 
 	if (geteuid() != 0) {
-		opts.iova_mode = "va";	// workaround for spdk issue #2683 when running as non-root
+		opts.iova_mode = "va"; // workaround for spdk issue #2683 when running as non-root
 	}
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
