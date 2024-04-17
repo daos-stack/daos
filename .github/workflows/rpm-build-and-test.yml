@@ -192,6 +192,7 @@ jobs:
       DISTRO_NAME:
       DISTRO_VERSION:
       CP_LEAP15_VERSION:
+      FVERSION:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -403,6 +404,8 @@ jobs:
       STAGE_NAME:
       QUEUE_URL:
       LABEL:
+      STAGE_TAGS:
+      FTEST_ARG:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -597,7 +600,7 @@ jobs:
       checks: write
       pull-requests: write
     timeout-minutes: 7200
-    needs: [Import-commit-message, Build-RPM, Calc-functional-hardware-matrix,
+    needs: [Build-RPM, Import-commit-message, Calc-functional-hardware-matrix,
             Import-commit-pragmas, Functional]
     strategy:
       matrix:
@@ -637,6 +640,9 @@ jobs:
       STAGE_NAME:
       QUEUE_URL:
       LABEL:
+      FTEST_ARG:
+      SIZE:
+      STAGE_TAGS:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
@@ -758,3 +764,51 @@ jobs:
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
+
+  dorny-actions-report-el8:
+    name: Dornys report
+    runs-on: [self-hosted, wolf]
+    needs: [Functional, Import-commit-pragmas]
+    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+        ((!cancelled()) || success() || failure())
+    steps:
+      - name: Dorny report
+        uses: dorny/test-reporter@v1.9.0
+        id: test-report
+        with:
+          artifact: Functional on EL 8.8 test-results
+          name: 'Functional on EL 8.8 Test Results (dorny)'
+          path: '**/results.xml'
+          reporter: java-junit
+
+  dorny-actions-report-el9:
+    name: Dornys report
+    runs-on: [self-hosted, wolf]
+    needs: [Functional, Import-commit-pragmas]
+    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+        ((!cancelled()) || success() || failure())
+    steps:
+      - name: Dorny report
+        uses: dorny/test-reporter@v1.9.0
+        id: test-report
+        with:
+          artifact: Functional on EL 9 test-results
+          name: 'Functional on EL 9 Test Results (dorny)'
+          path: '**/results.xml'
+          reporter: java-junit
+
+  phoenix-actions-report:
+    name: Phoenix-Actions report
+    runs-on: [self-hosted, wolf]
+    needs: [Functional, Import-commit-pragmas]
+    if: needs.Import-commit-pragmas.outputs.run-gha == 'true' &&
+        ((!cancelled()) || success() || failure())
+    steps:
+      - name: Phoenix-Actions report
+        uses: phoenix-actions/test-reporting@v14
+        id: test-report
+        with:
+          artifact: /(Functional on .*) test-results/
+          name: '$1 Test Results (phoenix-actions)'
+          path: '**/results.xml'
+          reporter: java-junit
