@@ -3,8 +3,9 @@ name: Build
 on:
   pull_request:
 
+# Unique to this workflow and PR, or SHA if not a PR
 concurrency:
-  group: ci2-${{ github.head_ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 permissions: {}

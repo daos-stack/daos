@@ -3,7 +3,7 @@ name: RPM Build and Test
 env:
   # TODO: we really need to define a list of supported versions (ideally it's no more than 2)
   #       build is done on the lowest version and test on the highest with a "sanity test"
-  #       stage done on all versions in the list ecept the highest
+  #       stage done on all versions in the list except the highest
   EL8_BUILD_VERSION: 8.6
   EL8_VERSION: 8.8
   EL9_BUILD_VERSION: 9
@@ -18,8 +18,9 @@ on:
         required: false
   pull_request:
 
+# Unique to this workflow and PR, or SHA if not a PR
 concurrency:
-  group: rpm-build-and-test-${{ github.head_ref  || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 defaults:

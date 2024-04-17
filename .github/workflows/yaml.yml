@@ -13,6 +13,11 @@ on:
       - '**/*.yml'
       - utils/cq/requirements.txt
 
+# Unique to this workflow and PR, or SHA if not a PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
