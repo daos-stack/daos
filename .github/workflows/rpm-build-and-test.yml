@@ -144,12 +144,14 @@ jobs:
   Calc-rpm-build-matrix:
     name: Calculate RPM Build Matrix
     runs-on: [self-hosted, wolf]
-    needs: [Import-commit-pragmas, Create-symlinks]
+    needs: [Import-commit-pragmas, Create-symlinks, Import-commit-message]
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
+        with:
+          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Calculate RPM Build Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
@@ -175,7 +177,7 @@ jobs:
     permissions:
       statuses: write
     runs-on: [self-hosted, docker]
-    needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix]
+    needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix, Import-commit-message]
     if: |
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          ${{ github.event_name == 'workflow_dispatch' }}) &&
@@ -212,6 +214,8 @@ jobs:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
+        with:
+          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Set variables
         run: |
             FVERSION="38"
@@ -326,7 +330,7 @@ jobs:
   Calc-functional-matrix:
     name: Calculate Functional Testing Matrix
     runs-on: [self-hosted, wolf]
-    needs: [Import-commit-pragmas]
+    needs: [Import-commit-pragmas, Import-commit-message]
     if: |
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          ${{ github.event_name == 'workflow_dispatch' }}) &&
@@ -336,6 +340,8 @@ jobs:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
+        with:
+          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -438,6 +444,8 @@ jobs:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
+        with:
+          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Set variables
         run: |
             set -eux
@@ -574,7 +582,7 @@ jobs:
   Calc-functional-hardware-matrix:
     name: Calculate Functional Hardware Testing Matrix
     runs-on: [self-hosted, wolf]
-    needs: [Import-commit-pragmas]
+    needs: [Import-commit-pragmas, Import-commit-message]
     if: |
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          ${{ github.event_name == 'workflow_dispatch' }}) &&
@@ -584,6 +592,8 @@ jobs:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
+        with:
+          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -683,6 +693,8 @@ jobs:
     steps:
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
+        with:
+          commit_message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Set variables
         run: |
             STAGE_TAGS="hw"
