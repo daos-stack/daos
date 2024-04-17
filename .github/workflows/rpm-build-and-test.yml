@@ -148,6 +148,10 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
@@ -212,6 +216,10 @@ jobs:
       COMMIT_STATUS_DISTRO_VERSION:
       FVERSION:
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
@@ -338,14 +346,14 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
-      - name: Import commit pragmas
-        uses: ./.github/actions/import-commit-pragmas
-        with:
-          commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Import commit pragmas
+        uses: ./.github/actions/import-commit-pragmas
+        with:
+          commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Calculate Functional Testing Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
@@ -442,6 +450,12 @@ jobs:
       DISTRO_VERSION:
       COMMIT_STATUS_DISTRO_VERSION:
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
@@ -510,12 +524,6 @@ jobs:
                  $GITHUB_ENV
             echo "LABEL=$LABEL" >> $GITHUB_ENV
             echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-          fetch-depth: 500
-          ref: ${{ github.event.pull_request.head.sha }}
       - name: Request and Provision a Cluster
         timeout-minutes: 7200
         uses: ./.github/actions/provision-cluster
@@ -590,14 +598,14 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
-      - name: Import commit pragmas
-        uses: ./.github/actions/import-commit-pragmas
-        with:
-          commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Import commit pragmas
+        uses: ./.github/actions/import-commit-pragmas
+        with:
+          commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Calculate Functional Testing Matrix
         id: matrix
         run: |  # do not use the non-| format for this script
@@ -691,6 +699,12 @@ jobs:
       LABEL:
       COMMIT_STATUS_DISTRO_VERSION:
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 500
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Import commit pragmas
         uses: ./.github/actions/import-commit-pragmas
         with:
@@ -751,12 +765,6 @@ jobs:
             echo "LABEL=$LABEL" >> $GITHUB_ENV
             echo "INST_RPMS=$INST_RPMS" >> $GITHUB_ENV
             echo "SIZE=$SIZE" >> $GITHUB_ENV
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          submodules: true
-          fetch-depth: 500
-          ref: ${{ github.event.pull_request.head.sha }}
       - name: Request and Provision a Cluster
         timeout-minutes: 7200
         uses: ./.github/actions/provision-cluster
