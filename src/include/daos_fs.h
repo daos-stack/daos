@@ -1305,6 +1305,9 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 int
 dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
+int
+dfs_copy_fs(...);
+
 #if defined(__cplusplus)
 }
 #endif /* __cplusplus */
