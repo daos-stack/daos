@@ -58,8 +58,8 @@ get_test_tags() {
     local test_tags=()
     local tags
     # Test-tag: has higher priority
-    if [ -n "${CP_TEST_TAG:-}" ]; then
-        tags="$CP_TEST_TAG"
+    if [ -n "${REQ_TEST_TAG:-}" ]; then
+        tags="$REQ_TEST_TAG"
     else
         tags="pr"
         if [ -n "${CP_FEATURES:-}" ]; then
@@ -243,14 +243,14 @@ Stage Name: $stage_name\" > /root/job_info
 # I.e. ../bash_unit/bash_unit ci/gha_functions.sh
 test_test_tag_and_features() {
     # Simple Test-tag: test
-    assert_equals "$(CP_TEST_TAG="always_passes always_fails" get_test_tags "-hw")" "always_passes,-hw always_fails,-hw"
+    assert_equals "$(REQ_TEST_TAG="always_passes always_fails" get_test_tags "-hw")" "always_passes,-hw always_fails,-hw"
     # Simple Features: test (no Test-tag:)
     assert_equals "$(CP_FEATURES="always_passes" get_test_tags "-hw")" \
                   "pr,-hw daily_regression,always_passes,-hw full_regression,always_passes,-hw"
     assert_equals "$(CP_FEATURES="foo bar" get_test_tags "-hw")" \
                   "pr,-hw daily_regression,foo,-hw full_regression,foo,-hw daily_regression,bar,-hw full_regression,bar,-hw"
     # Features: and Test-tag:
-    assert_equals "$(CP_TEST_TAG="always_passes always_fails"
+    assert_equals "$(REQ_TEST_TAG="always_passes always_fails"
                      CP_FEATURES="foo bar" get_test_tags "-hw")" "always_passes,-hw always_fails,-hw"
 }
 
