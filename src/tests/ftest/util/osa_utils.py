@@ -472,7 +472,7 @@ class OSAUtils(MdtestBase, IorTestBase):
             oclass (str): IOR object class, container class.
         """
         # Create container only
-        self.mdtest_cmd.dfs_destroy = False
+        self.mdtest_cmd.dfs_destroy.update(False)
         create_container = 0
         if self.container is None:
             self.add_container(self.pool, create=False)
