@@ -23,7 +23,6 @@ func TestDaosServer_MS_Commands_JSON(t *testing.T) {
 			"ms status -j",
 			nil,
 			nil,
-			nil,
 			errJSONOutputNotSupported,
 		},
 		{
@@ -31,13 +30,11 @@ func TestDaosServer_MS_Commands_JSON(t *testing.T) {
 			"ms restore -p foo -j",
 			nil,
 			nil,
-			nil,
 			errJSONOutputNotSupported,
 		},
 		{
 			"MS recover; JSON",
 			"ms recover -j",
-			nil,
 			nil,
 			nil,
 			errJSONOutputNotSupported,

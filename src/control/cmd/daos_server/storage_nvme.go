@@ -211,11 +211,6 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 }
 
 func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
-	storageCtlSvc, err := nvmeCmdInit(cmd)
-	if err != nil {
-		return err
-	}
-
 	cmd.Debug("Prepare locally-attached NVMe storage...")
 
 	cfgParam := cmd.config
@@ -230,7 +225,7 @@ func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 	cmd.Tracef("nvme prepare request parameters: %+v", req)
 
 	// Prepare NVMe device access.
-	_, err = storageCtlSvc.NvmePrepare(req)
+	_, err := cmd.ctlSvc.NvmePrepare(req)
 
 	return errors.Wrap(err, "nvme prepare backend")
 }
@@ -280,11 +275,6 @@ func (cmd *resetNVMeCmd) WithIgnoreConfig(b bool) *resetNVMeCmd {
 }
 
 func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
-	storageCtlSvc, err := nvmeCmdInit(cmd)
-	if err != nil {
-		return err
-	}
-
 	cmd.Debug("Reset locally-attached NVMe storage...")
 
 	cleanReq := storage.BdevPrepareRequest{
@@ -293,7 +283,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 
 	msg := "cleanup hugepages before nvme reset"
 
-	if resp, err := storageCtlSvc.NvmePrepare(cleanReq); err != nil {
+	if resp, err := cmd.ctlSvc.NvmePrepare(cleanReq); err != nil {
 		cmd.Errorf("%s", errors.Wrap(err, msg))
 	} else {
 		cmd.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
@@ -316,7 +306,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 
 	cmd.Tracef("nvme reset request parameters: %+v", resetReq)
 
-	resetResp, err := storageCtlSvc.NvmePrepare(resetReq)
+	resetResp, err := cmd.ctlSvc.NvmePrepare(resetReq)
 	if err != nil {
 		return errors.Wrap(err, "nvme reset backend")
 	}
@@ -336,7 +326,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 
 		cmd.Tracef("vmd second nvme reset request parameters: %+v", resetReq)
 
-		if _, err := storageCtlSvc.NvmePrepare(resetReq); err != nil {
+		if _, err := cmd.ctlSvc.NvmePrepare(resetReq); err != nil {
 			return errors.Wrap(err, "nvme reset backend")
 		}
 	}
@@ -372,12 +362,8 @@ func (cmd *scanNVMeCmd) getVMDState() bool {
 }
 
 func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
-	storageCtlSvc, err := nvmeCmdInit(&cmd.nvmeCmd)
-	if err != nil {
-		return nil, err
-	}
 	if cmd.getVMDState() {
-		storageCtlSvc.WithVMDEnabled()
+		cmd.ctlSvc.WithVMDEnabled()
 	}
 
 	req := storage.BdevScanRequest{}
@@ -416,7 +402,7 @@ func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
 	cmd.Info("Scan locally-attached NVMe storage...")
 
 	cmd.Tracef("nvme scan request: %+v", req)
-	return storageCtlSvc.NvmeScan(req)
+	return cmd.ctlSvc.NvmeScan(req)
 }
 
 func (cmd *scanNVMeCmd) Execute(_ []string) (err error) {

@@ -237,11 +237,6 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 
 			mbb, mockInitFn := getMockNvmeCmdInit(log, tc.bmbc)
 
-			nvmeCmdInit = mockInitFn
-			defer func() {
-				nvmeCmdInit = initNvmeCmd
-			}()
-
 			if tc.prepCmd == nil {
 				tc.prepCmd = &prepareNVMeCmd{}
 			}
@@ -252,6 +247,9 @@ func TestDaosServer_prepareNVMe(t *testing.T) {
 			tc.prepCmd.setIOMMUChecker(func() (bool, error) {
 				return !tc.iommuDisabled, nil
 			})
+			if err := tc.prepCmd.initWith(mockInitFn); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			req := storage.BdevPrepareRequest{
 				HugepageCount: tc.prepCmd.NrHugepages,
@@ -512,11 +510,6 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 
 			mbb, mockInitFn := getMockNvmeCmdInit(log, tc.bmbc)
 
-			nvmeCmdInit = mockInitFn
-			defer func() {
-				nvmeCmdInit = initNvmeCmd
-			}()
-
 			if tc.resetCmd == nil {
 				tc.resetCmd = &resetNVMeCmd{}
 			}
@@ -527,6 +520,9 @@ func TestDaosServer_resetNVMe(t *testing.T) {
 			tc.resetCmd.setIOMMUChecker(func() (bool, error) {
 				return !tc.iommuDisabled, nil
 			})
+			if err := tc.resetCmd.initWith(mockInitFn); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			req := storage.BdevPrepareRequest{
 				TargetUser:   tc.resetCmd.TargetUser,
@@ -751,11 +747,6 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 
 			mbb, mockInitFn := getMockNvmeCmdInit(log, tc.bmbc)
 
-			nvmeCmdInit = mockInitFn
-			defer func() {
-				nvmeCmdInit = initNvmeCmd
-			}()
-
 			if tc.expScanResp == nil {
 				tc.expScanResp = tc.bmbc.ScanRes
 			}
@@ -771,6 +762,9 @@ func TestDaosServer_scanNVMe(t *testing.T) {
 				return !tc.iommuDisabled, nil
 			})
 			tc.scanCmd.SkipPrep = tc.skipPrep
+			if err := tc.scanCmd.initWith(mockInitFn); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			gotResp, gotErr := scanNVMe(tc.scanCmd)
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -876,17 +870,10 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 	// Use a normal logger to verify that we don't mess up JSON output.
 	log := logging.NewCommandLineLogger()
 
-	genApplyMockFn := func(bmbc bdev.MockBackendConfig) func() {
-		_, mockInitFn := getMockNvmeCmdInit(log, bmbc)
-
-		return func() {
-			nvmeCmdInit = mockInitFn
-		}
-	}
-
-	genCleanupMockFn := func() func() {
-		return func() {
-			nvmeCmdInit = initNvmeCmd
+	genSetHelpers := func(bmbc bdev.MockBackendConfig) func(*mainOpts) {
+		_, mockInit := getMockNvmeCmdInit(log, bmbc)
+		return func(opts *mainOpts) {
+			opts.nvmeInitHelper = mockInit
 		}
 	}
 
@@ -894,47 +881,43 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 		{
 			"Prepare SSDs; JSON",
 			"nvme prepare -j",
-			genApplyMockFn(bdev.MockBackendConfig{
+			genSetHelpers(bdev.MockBackendConfig{
 				PrepareRes: &storage.BdevPrepareResponse{},
 			}),
-			genCleanupMockFn(),
 			nil,
 			nil,
 		},
 		{
 			"Prepare SSDs; JSON; returns error",
 			"nvme prepare -j",
-			genApplyMockFn(bdev.MockBackendConfig{
+			genSetHelpers(bdev.MockBackendConfig{
 				PrepareErr: errors.New("bad prep"),
 			}),
-			genCleanupMockFn(),
 			nil,
 			errors.New("nvme prepare backend: bad prep"),
 		},
 		{
 			"Reset SSDs; JSON",
 			"nvme reset -j",
-			genApplyMockFn(bdev.MockBackendConfig{
+			genSetHelpers(bdev.MockBackendConfig{
 				PrepareRes: &storage.BdevPrepareResponse{},
 			}),
-			genCleanupMockFn(),
 			nil,
 			nil,
 		},
 		{
 			"Reset SSDs; JSON; returns error",
 			"nvme reset -j",
-			genApplyMockFn(bdev.MockBackendConfig{
+			genSetHelpers(bdev.MockBackendConfig{
 				ResetErr: errors.New("bad reset"),
 			}),
-			genCleanupMockFn(),
 			nil,
 			errors.New("nvme reset backend: bad reset"),
 		},
 		{
 			"Scan SSDs; JSON",
 			"nvme scan -j",
-			genApplyMockFn(bdev.MockBackendConfig{
+			genSetHelpers(bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{
 						func() *storage.NvmeController {
@@ -945,7 +928,6 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 					},
 				},
 			}),
-			genCleanupMockFn(),
 			storage.NvmeControllers{
 				func() *storage.NvmeController {
 					c := storage.MockNvmeController(1)
@@ -958,10 +940,9 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 		{
 			"Scan SSDs; JSON; returns error",
 			"nvme scan -j",
-			genApplyMockFn(bdev.MockBackendConfig{
+			genSetHelpers(bdev.MockBackendConfig{
 				ScanErr: errors.New("bad scan"),
 			}),
-			genCleanupMockFn(),
 			nil,
 			errors.New("nvme scan backend: bad scan"),
 		},

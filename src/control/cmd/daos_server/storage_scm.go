@@ -39,11 +39,6 @@ type prepareSCMCmd struct {
 }
 
 func preparePMem(cmd *prepareSCMCmd) (*storage.ScmPrepareResponse, error) {
-	storageCtlSvc, err := scmCmdInit(&cmd.scmCmd)
-	if err != nil {
-		return nil, err
-	}
-
 	if cmd.NrNamespacesPerSocket == 0 {
 		return nil, errors.New("(-S|--scm-ns-per-socket) should be set to at least 1")
 	}
@@ -67,7 +62,7 @@ func preparePMem(cmd *prepareSCMCmd) (*storage.ScmPrepareResponse, error) {
 	cmd.Tracef("scm prepare request: %+v", req)
 
 	// Prepare PMem modules to be presented as pmem device files.
-	resp, err := storageCtlSvc.ScmPrepare(req)
+	resp, err := cmd.ctlSvc.ScmPrepare(req)
 	if err != nil {
 		return nil, err
 	}
@@ -148,11 +143,6 @@ type resetSCMCmd struct {
 }
 
 func resetPMem(cmd *resetSCMCmd) error {
-	storageCtlSvc, err := scmCmdInit(&cmd.scmCmd)
-	if err != nil {
-		return err
-	}
-
 	cmd.Info("Reset locally-attached PMem...")
 
 	cmd.Info(MsgStoragePrepareWarn)
@@ -172,7 +162,7 @@ func resetPMem(cmd *resetSCMCmd) error {
 	cmd.Tracef("scm prepare (reset) request: %+v", resetReq)
 
 	// Reset PMem modules to default memory mode after removing any PMem namespaces.
-	resetResp, err := storageCtlSvc.ScmPrepare(resetReq)
+	resetResp, err := cmd.ctlSvc.ScmPrepare(resetReq)
 	if err != nil {
 		return err
 	}
@@ -223,11 +213,6 @@ type scanSCMCmd struct {
 }
 
 func scanPMem(cmd *scanSCMCmd) (*storage.ScmScanResponse, error) {
-	storageCtlSvc, err := scmCmdInit(&cmd.scmCmd)
-	if err != nil {
-		return nil, err
-	}
-
 	cmd.Info("Scanning locally-attached PMem storage...")
 
 	req := storage.ScmScanRequest{
@@ -235,7 +220,7 @@ func scanPMem(cmd *scanSCMCmd) (*storage.ScmScanResponse, error) {
 	}
 
 	cmd.Tracef("scm scan request: %+v", req)
-	return storageCtlSvc.ScmScan(req)
+	return cmd.ctlSvc.ScmScan(req)
 }
 
 func (cmd *scanSCMCmd) Execute(_ []string) error {

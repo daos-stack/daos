@@ -35,9 +35,6 @@ func initNetworkCmd(cmd *networkScanCmd) (fabricScanFn, *config.Server, error) {
 	return hwprov.DefaultFabricScanner(cmd.Logger).Scan, cmd.config, nil
 }
 
-// Mockable init function pointer.
-var networkCmdInit initNetworkCmdFn = initNetworkCmd
-
 type networkCmd struct {
 	Scan networkScanCmd `command:"scan" description:"Scan for network interface devices on local server"`
 }
@@ -46,6 +43,7 @@ type networkCmd struct {
 // that match the given fabric provider.
 type networkScanCmd struct {
 	baseScanCmd
+	scan           fabricScanFn
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is the provider specified in daos_server.yml)"`
 }
 
@@ -101,12 +99,17 @@ func localHostFabricMap(hf *control.HostFabric) (control.HostFabricMap, error) {
 	return hfm, hfm.Add("localhost", hf)
 }
 
-func (cmd *networkScanCmd) Execute(_ []string) error {
-	fabScan, cfg, err := networkCmdInit(cmd)
+func (cmd *networkScanCmd) initWith(initFn initNetworkCmdFn) error {
+	var err error
+	cmd.scan, cmd.config, err = initFn(cmd)
 	if err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func (cmd *networkScanCmd) Execute(_ []string) error {
 	ctx := cmd.MustLogCtx()
 
 	var prov string
@@ -115,15 +118,15 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 		if !strings.EqualFold(cmd.FabricProvider, allProviders) {
 			prov = cmd.FabricProvider
 		}
-	case cfg != nil && cfg.Fabric.Provider != "":
-		priProv, err := cfg.Fabric.GetPrimaryProvider()
+	case cmd.config != nil && cmd.config.Fabric.Provider != "":
+		priProv, err := cmd.config.Fabric.GetPrimaryProvider()
 		if err != nil {
 			return errors.Wrapf(err, "unable to get fabric provider from config")
 		}
 		prov = priProv
 	}
 
-	hf, err := GetLocalFabricIfaces(ctx, fabScan, prov)
+	hf, err := GetLocalFabricIfaces(ctx, cmd.scan, prov)
 	if err != nil {
 		return errors.Wrap(err, "get local fabric interfaces")
 	}

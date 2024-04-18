@@ -85,22 +85,17 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 	// Use a normal logger to verify that we don't mess up JSON output.
 	log := logging.NewCommandLineLogger()
 
-	genApplyMockFn := func(t *testing.T, log logging.Logger, fis *hardware.FabricInterfaceSet, srvCfg *config.Server) func() {
+	genSetHelpers := func(t *testing.T, log logging.Logger, fis *hardware.FabricInterfaceSet, srvCfg *config.Server) func(*mainOpts) {
 		scanner, err := hardware.NewFabricScanner(log, scanCfgFromFIS(fis))
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		return func() {
-			networkCmdInit = func(cmd *networkScanCmd) (fabricScanFn, *config.Server, error) {
-				return scanner.Scan, srvCfg, nil
-			}
+		mockNetInit := func(cmd *networkScanCmd) (fabricScanFn, *config.Server, error) {
+			return scanner.Scan, srvCfg, nil
 		}
-	}
-
-	genCleanupMockFn := func(t *testing.T) func() {
-		return func() {
-			networkCmdInit = initNetworkCmd
+		return func(opts *mainOpts) {
+			opts.netInitHelper = mockNetInit
 		}
 	}
 
@@ -108,16 +103,14 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 		{
 			"Scan network; JSON; nothing found",
 			"network scan -j",
-			genApplyMockFn(t, log, hardware.NewFabricInterfaceSet(), nil),
-			genCleanupMockFn(t),
+			genSetHelpers(t, log, hardware.NewFabricInterfaceSet(), nil),
 			nil,
 			errors.New("get local fabric interfaces: no fabric interfaces could be found"),
 		},
 		{
 			"Scan network; JSON; interface found",
 			"network scan -j",
-			genApplyMockFn(t, log, hardware.NewFabricInterfaceSet(if1), nil),
-			genCleanupMockFn(t),
+			genSetHelpers(t, log, hardware.NewFabricInterfaceSet(if1), nil),
 			mustLocalHostFabricMap(t, &control.HostFabric{
 				Interfaces: []*control.HostFabricInterface{
 					{
@@ -133,8 +126,7 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 		{
 			"Scan network; JSON; nothing matching provider found",
 			"network scan -j -p ofi+tcp",
-			genApplyMockFn(t, log, hardware.NewFabricInterfaceSet(if1), nil),
-			genCleanupMockFn(t),
+			genSetHelpers(t, log, hardware.NewFabricInterfaceSet(if1), nil),
 			mustLocalHostFabricMap(t, &control.HostFabric{}),
 			nil,
 		},
