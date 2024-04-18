@@ -387,6 +387,9 @@ class Dfuse(DfuseCommand):
         Only works if there is one entry in the client list.
         """
 
+        if len(self.hosts) != 1:
+            raise CommandFailure("get_stats only supports one host")
+
         cmd = f"daos filesystem query --json {self.mount_dir.value}"
         result = run_remote(self.log, self.hosts, cmd)
         if not result.passed:
