@@ -21,10 +21,10 @@ import "C"
 
 import (
 	"fmt"
+	"github.com/pkg/errors"
+	"math"
 	"strings"
 	"unsafe"
-
-	"github.com/pkg/errors"
 )
 
 func dfsError(rc C.int) error {
@@ -51,6 +51,7 @@ type fsCmd struct {
 	DfuseEvict     fsDfuseEvictCmd     `command:"evict" description:"Evict object from dfuse"`
 	Scan           fsScanCmd           `command:"scan" description:"Scan POSIX container and report statistics"`
 	Chmod          fsChmodCmd          `command:"chmod" description:"Change file mode bits"`
+	Chown          fsChownCmd          `command:"chown" description:"changes the owner"`
 }
 
 type fsCopyCmd struct {
@@ -690,6 +691,47 @@ func (cmd *fsChmodCmd) Execute(_ []string) error {
 
 	if err := dfsError(C.fs_chmod_hdlr(ap)); err != nil {
 		return errors.Wrapf(err, "chmod failed")
+	}
+
+	return nil
+}
+
+type fsChownCmd struct {
+	fsAttrCmd
+
+	UserId  UserIdFlag  `long:"user-id" short:"u" description:"user id"`
+	GroupId GroupIdFlag `long:"group-id" short:"g" description:"group id"`
+}
+
+func (cmd *fsChownCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := setupFSAttrCmd(&cmd.fsAttrCmd)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	if !cmd.UserId.Set && !cmd.GroupId.Set {
+		return errors.New("Missing --user-id and/or --group-id")
+	}
+
+	ap.user_id = math.MaxUint32
+	if cmd.UserId.Set {
+		ap.user_id = cmd.UserId.Id
+	}
+
+	ap.group_id = math.MaxUint32
+	if cmd.GroupId.Set {
+		ap.group_id = cmd.GroupId.Id
+	}
+
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
+	if err != nil {
+		return errors.Wrapf(err, "failed to connect")
+	}
+	defer cleanup()
+
+	if err := dfsError(C.fs_chown_hdlr(ap)); err != nil {
+		return errors.Wrapf(err, "chown failed")
 	}
 
 	return nil

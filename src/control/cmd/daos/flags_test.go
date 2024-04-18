@@ -614,3 +614,83 @@ func TestFlags_ModeBitsFlag(t *testing.T) {
 	}
 
 }
+
+func TestFlags_UserIdFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		arg     string
+		expFlag *UserIdFlag
+		expErr  error
+	}{
+		"unset": {
+			expErr: errors.New("empty user id flag"),
+		},
+		"not an integer": {
+			arg:    "foo",
+			expErr: errors.New("invalid user id: \"foo\""),
+		},
+		"negative value": {
+			arg:    "-1",
+			expErr: errors.New("invalid user id: \"-1\""),
+		},
+		"valid": {
+			arg: "1000",
+			expFlag: &UserIdFlag{
+				Set: true,
+				Id:  1000,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := UserIdFlag{}
+			gotErr := f.UnmarshalFlag(tc.arg)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
+				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestFlags_GroupIdFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		arg     string
+		expFlag *GroupIdFlag
+		expErr  error
+	}{
+		"unset": {
+			expErr: errors.New("empty group id flag"),
+		},
+		"not an integer": {
+			arg:    "foo",
+			expErr: errors.New("invalid group id: \"foo\""),
+		},
+		"negative value": {
+			arg:    "-1",
+			expErr: errors.New("invalid group id: \"-1\""),
+		},
+		"valid": {
+			arg: "1000",
+			expFlag: &GroupIdFlag{
+				Set: true,
+				Id:  1000,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := GroupIdFlag{}
+			gotErr := f.UnmarshalFlag(tc.arg)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
+				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
