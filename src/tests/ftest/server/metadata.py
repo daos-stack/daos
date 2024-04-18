@@ -349,7 +349,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=server,metadata
         :avocado: tags=ObjectMetadata,test_metadata_fillup_svc_ops_disabled
         """
-        metadata_fillup(False)
+        self.metadata_fillup(False)
 
     def test_metadata_fillup_svc_ops_enabled(self):
         """JIRA ID: DAOS-15628.
@@ -359,7 +359,7 @@ class ObjectMetadata(TestWithServers):
 
         Use Cases:
             Create pool with properties svc_ops_enabledd:1.
-            Run dummy metadata workload to fillup svc ops.
+            Run dummy metadata workload to fill up svc ops.
             Create container until no space.
             Verify number of container within limit.
 
@@ -368,7 +368,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=server,metadata
         :avocado: tags=ObjectMetadata,test_metadata_fillup_svc_ops_enabled
         """
-        metadata_fillup(True)
+        self.metadata_fillup(True)
 
     def test_metadata_addremove(self):
         """JIRA ID: DAOS-1512.
@@ -376,7 +376,7 @@ class ObjectMetadata(TestWithServers):
         Test Description:
             Verify metadata release the space after container delete.
 
-        Use Case:
+        Use Cases:
             ?
 
         :avocado: tags=all,full_regression
@@ -453,7 +453,7 @@ class ObjectMetadata(TestWithServers):
             previously and validate data integrity by using IOR option
             "-R -G 1".
 
-        Use Case:
+        Use Cases:
             ?
 
         :avocado: tags=all,full_regression
