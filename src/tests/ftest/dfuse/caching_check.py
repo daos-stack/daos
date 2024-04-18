@@ -45,14 +45,18 @@ class DfuseCachingCheck(IorTestBase):
 
         self.log_step('Write to the dfuse mount point')
         self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
+        print(self.dfuse.get_stats())
 
         self.log_step('Get baseline read performance from dfuse with caching disabled')
         self.ior_cmd.update_params(flags=flags[1])
         base_read_arr = []
         out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
         base_read_arr.append(IorCommand.get_ior_metrics(out))
+        print(self.dfuse.get_stats())
+
         out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
         base_read_arr.append(IorCommand.get_ior_metrics(out))
+        print(self.dfuse.get_stats())
 
         # the index of max_mib
         max_mib = IorMetrics.MAX_MIB
@@ -66,9 +70,13 @@ class DfuseCachingCheck(IorTestBase):
         out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
         base_read_arr.append(IorCommand.get_ior_metrics(out))
 
+        print(self.dfuse.get_stats())
+
         self.log_step('Get cached read performance')
         out = self.run_ior_with_pool(fail_on_warning=False)
         with_caching = IorCommand.get_ior_metrics(out)
+
+        print(self.dfuse.get_stats())
 
         self.log_step('Verify cached read performance is greater than first read')
         # Log all the values first, then do the assert so that failures can be checked easily.
