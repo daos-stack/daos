@@ -26,14 +26,13 @@ static void
 rdb_chkptd_stop(struct rdb *db);
 
 /**
- * Create an RDB replica at \a path with \a uuid, \a caller_term, \a size,
- * \a vos_df_version, and \a replicas, and open it with \a cbs and \a arg.
+ * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
+ * open it with \a cbs and \a arg.
  *
  * \param[in]	path		replica path
  * \param[in]	uuid		database UUID
  * \param[in]	caller_term	caller term if not RDB_NIL_TERM (see rdb_open)
  * \param[in]	size		replica size in bytes
- * \param[in]	vos_df_version	version of VOS durable format
  * \param[in]	replicas	list of replica ranks
  * \param[in]	cbs		callbacks (not copied)
  * \param[in]	arg		argument for cbs
@@ -41,7 +40,7 @@ rdb_chkptd_stop(struct rdb *db);
  */
 int
 rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t size,
-	   uint32_t vos_df_version, const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+	   const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
 	   struct rdb_storage **storagep)
 {
 	daos_handle_t	pool;
@@ -52,10 +51,8 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	int		rc;
 
 	D_DEBUG(DB_MD,
-		DF_UUID ": creating db %s with %u replicas: caller_term=" DF_X64 " size=" DF_U64
-			" vos_df_version=%u\n",
-		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term, size,
-		vos_df_version);
+		DF_UUID ": creating db %s with %u replicas: caller_term=" DF_X64 " size=" DF_U64,
+		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term, size);
 
 	/*
 	 * Create and open a VOS pool. RDB pools specify VOS_POF_SMALL for
@@ -63,7 +60,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	 * access protection.
 	 */
 	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* nvme_sz */,
-			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, vos_df_version, &pool);
+			     VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB, 0 /* version */, &pool);
 	if (rc != 0)
 		goto out;
 	ABT_thread_yield();

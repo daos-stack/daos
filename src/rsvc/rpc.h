@@ -23,7 +23,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_RSVC_VERSION 4
+#define DAOS_RSVC_VERSION 3
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -54,8 +54,6 @@ extern struct crt_proto_format rsvc_proto_fmt;
 	((uint32_t)		(sai_class)		CRT_VAR) \
 	((uint32_t)		(sai_flags)		CRT_VAR) \
 	((uint64_t)		(sai_size)		CRT_VAR) \
-	((uint32_t)		(sai_vos_df_version)	CRT_VAR) \
-	((uint32_t)		(sai_padding)		CRT_VAR) \
 	((uint64_t)		(sai_term)		CRT_VAR) \
 	((d_rank_list_t)	(sai_ranks)		CRT_PTR)
 

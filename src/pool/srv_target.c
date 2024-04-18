@@ -1906,7 +1906,7 @@ update_vos_prop_on_targets(void *in)
 		goto out;
 
 	/** If necessary, upgrade the vos pool format */
-	df_version = ds_pool_get_vos_df_version(pool->sp_global_version);
+	df_version = ds_pool_get_vos_pool_df_version(pool->sp_global_version);
 	if (df_version == 0) {
 		ret = -DER_NO_PERM;
 		DL_ERROR(ret, DF_UUID ": pool global version %u no longer supported",

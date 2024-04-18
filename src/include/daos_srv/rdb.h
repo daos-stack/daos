@@ -118,8 +118,8 @@ struct rdb_cbs;
 
 /** Database storage methods */
 int rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t size,
-	       uint32_t vos_df_version, const d_rank_list_t *replicas, struct rdb_cbs *cbs,
-	       void *arg, struct rdb_storage **storagep);
+	       const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+	       struct rdb_storage **storagep);
 int rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_cbs *cbs,
 	     void *arg, struct rdb_storage **storagep);
 void rdb_close(struct rdb_storage *storage);

@@ -1537,14 +1537,11 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 
 	pool_df = pool->vp_pool_df;
 
-	if (version <= pool_df->pd_version) {
-		D_INFO(DF_UUID ": Ignore pool durable format upgrade from version %u to %u\n",
-		       DP_UUID(pool->vp_id), pool_df->pd_version, version);
+	if (version == pool_df->pd_version)
 		return 0;
-	}
 
-	D_INFO(DF_UUID ": Attempting pool durable format upgrade from %d to %d\n",
-	       DP_UUID(pool->vp_id), pool_df->pd_version, version);
+	D_DEBUG(DB_MGMT, "Attempting upgrade pool durable format from %d to %d\n",
+		pool_df->pd_version, version);
 	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
 		  "Invalid pool upgrade version %d, current version is %d\n", version,
 		  pool_df->pd_version);
