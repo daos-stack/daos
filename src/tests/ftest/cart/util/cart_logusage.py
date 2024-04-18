@@ -168,9 +168,8 @@ class UsageTracer():
                     possible += ptt
                     xml += loc.xml_str()
                 rate = taken / possible
-                pathname = f"{dname}/{data}"
                 fd.write(
-                    f' <class name="{pathname}" filename="{pathname}" branch-rate="{rate:.2f}">\n')
+                    f' <class name="{data}" filename="{dname}/{data}" branch-rate="{rate:.2f}">\n')
                 fd.write('  <methods/>\n')
                 fd.write('  <lines>\n')
                 fd.write(xml)
