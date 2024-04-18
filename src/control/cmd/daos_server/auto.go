@@ -40,12 +40,12 @@ type getFabricFn func(context.Context, logging.Logger, string) (*control.HostFab
 func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*control.HostFabric, error) {
 	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log).Scan, provider)
 	if err != nil {
-		return nil, errors.Wrapf(err, "fetching local fabric interfaces")
+		return nil, errors.Wrap(err, "fetching local fabric interfaces")
 	}
 
 	topo, err := hwprov.DefaultTopologyProvider(log).GetTopology(ctx)
 	if err != nil {
-		return nil, errors.Wrapf(err, "fetching local hardware topology")
+		return nil, errors.Wrap(err, "fetching local hardware topology")
 	}
 
 	hf.NumaCount = uint32(topo.NumNUMANodes())
@@ -65,9 +65,13 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 	snc.nvmeCmd.IgnoreConfig = true // Process all NVMe devices.
 	snc.nvmeCmd.Logger = log
 
+	if err := snc.initWith(initNvmeCmd); err != nil {
+		return nil, errors.Wrap(err, "nvme init")
+	}
+
 	nvmeResp, errNvme := scanNVMe(snc)
 	if errNvme != nil {
-		return nil, errors.Wrapf(errNvme, "nvme scan")
+		return nil, errors.Wrap(errNvme, "nvme scan")
 	}
 
 	ssc := &scanSCMCmd{
@@ -76,14 +80,18 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 	ssc.IgnoreConfig = true // Process all SCM devices.
 	ssc.Logger = log
 
+	if err := ssc.initWith(initScmCmd); err != nil {
+		return nil, errors.Wrap(err, "scm init")
+	}
+
 	scmResp, errScm := scanPMem(ssc)
 	if errScm != nil {
-		return nil, errors.Wrapf(errScm, "scm scan")
+		return nil, errors.Wrap(errScm, "scm scan")
 	}
 
 	mi, err := common.GetMemInfo()
 	if err != nil {
-		return nil, errors.Wrapf(err, "get hugepage info")
+		return nil, errors.Wrap(err, "get hugepage info")
 	}
 
 	return &control.HostStorage{
