@@ -67,7 +67,6 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		 * which pre-existed in the container.
 		 */
 
-		DFUSE_TRA_INFO(ie, "sec %ld", ie->ie_dcache_last_update.tv_sec);
 		if (atomic_load_relaxed(&ie->ie_open_count) > 0 ||
 		    ((ie->ie_dcache_last_update.tv_sec != 0) &&
 		     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
