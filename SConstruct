@@ -151,7 +151,7 @@ def update_rpm_version(version, tag):
                 pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE)  # nosec
                 packager = pkg_st.communicate()[0].strip().decode('UTF-8')
             except OSError:
-                print("You need to have the rpmdev-packager tool (from the "
+                print(" You need to have the rpmdev-packager tool (from the "
                       "rpmdevtools RPM on EL7) in order to make releases.\n\n"
                       "Additionally, you should define %packager in "
                       "~/.rpmmacros as such:\n"
