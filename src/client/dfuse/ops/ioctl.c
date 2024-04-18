@@ -110,7 +110,7 @@ err:
 static void
 handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 {
-	d_iov_t iov = {};
+	d_iov_t iov = {NULL, 0, 0};
 	int rc;
 
 	iov.iov_buf_len = size;
@@ -192,7 +192,7 @@ err:
 static void
 handle_coh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 {
-	d_iov_t iov = {};
+	d_iov_t iov = {NULL, 0, 0};
 	int rc;
 
 	iov.iov_buf_len = size;
@@ -247,7 +247,7 @@ err:
 static void
 handle_doh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 {
-	d_iov_t iov = {};
+	d_iov_t iov = {NULL, 0, 0};
 	int rc;
 
 	iov.iov_buf_len = size;

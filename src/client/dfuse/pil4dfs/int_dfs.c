@@ -99,6 +99,8 @@
  * low fd. Once a low fd is freed and available, calls dup2(DAOS_DUMMY_FD, fd) to reserve it.
  */
 #define DAOS_DUMMY_FD       1001
+/* fd_dummy actually reserved by pil4dfs returned by fcntl() */
+static int                    fd_dummy = -1;
 
 /* the number of low fd reserved */
 static uint16_t               low_fd_count;
@@ -107,8 +109,6 @@ static int                    low_fd_list[DAOS_MIN_FD];
 
 /* flag whether fd 255 is reserved by pil4dfs */
 static bool                   fd_255_reserved;
-/* flag whether fd DAOS_DUMMY_FD is reserved by pil4dfs */
-static bool                   fd_dummy_reserved;
 
 /* In case of fork(), only the parent process could destroy daos env. */
 static bool                   context_reset;
@@ -160,10 +160,6 @@ static bool             report;
 static bool             enforce_exec_env;
 /* current application is bash/sh or not */
 static bool             is_bash;
-/* the exe name extract from /proc/self/cmdline */
-static char             exe_path[DFS_MAX_PATH];
-/* the short exe name from exe_path */
-static char             exe_short[DFS_MAX_NAME];
 /* "compatible_mode" is a bool to control whether passing open(), openat(), and opendir() to dfuse
  * all the time to avoid using fake fd. Env variable "D_IL_COMPATIBLE=1" will set it true. This
  * can increase the compatibility of libpil4dfs with degraded performance in open(), openat(),
@@ -1168,35 +1164,37 @@ consume_low_fd(void)
 			DS_ERROR(errno, "failed to reserve a low fd");
 			goto err;
 		} else if (low_fd_list[low_fd_count] >= DAOS_MIN_FD) {
-			/* reserve fd 255 too if unused. 255 is commonly used by bash. */
-			fd_dup = fcntl(low_fd_list[0], F_DUPFD, 255);
-			if (fd_dup == -1) {
-				DS_ERROR(errno, "fcntl() failed");
-				goto err;
-			}
-			/* If fd 255 is used, lowest available fd is assigned to fd_dup. */
-			if (fd_dup >= 0 && fd_dup != 255)
-				libc_close(fd_dup);
-			if (fd_dup == 255)
-				fd_255_reserved = true;
-
-			/* reserve fd DAOS_DUMMY_FD which will be used later by dup2(). */
-			fd_dup = fcntl(low_fd_list[0], F_DUPFD, DAOS_DUMMY_FD);
-			if (fd_dup == -1) {
-				DS_ERROR(errno, "fcntl() failed");
-				goto err;
-			}
-			if (fd_dup >= 0 && fd_dup != DAOS_DUMMY_FD)
-				libc_close(fd_dup);
-			if (fd_dup == DAOS_DUMMY_FD)
-				fd_dummy_reserved = true;
-			libc_close(low_fd_list[low_fd_count]);
+			if (low_fd_count > 0)
+				libc_close(low_fd_list[low_fd_count]);
+			/* low_fd_list[0] will be used and closed later if low_fd_count is 0. */
 			break;
 		} else {
 			low_fd_count++;
 		}
 		low_fd_list[low_fd_count] = libc_open("/", O_RDONLY);
 	}
+
+	/* reserve fd 255 too if unused. 255 is commonly used by bash. */
+	fd_dup = fcntl(low_fd_list[0], F_DUPFD, 255);
+	if (fd_dup == -1) {
+		DS_ERROR(errno, "fcntl() failed");
+		goto err;
+	}
+	/* If fd 255 is used, lowest available fd is assigned to fd_dup. */
+	if (fd_dup >= 0 && fd_dup != 255)
+		libc_close(fd_dup);
+	if (fd_dup == 255)
+		fd_255_reserved = true;
+
+	/* reserve fd DAOS_DUMMY_FD which will be used later by dup2(). */
+	fd_dummy = fcntl(low_fd_list[0], F_DUPFD, DAOS_DUMMY_FD);
+	if (fd_dummy == -1) {
+		DS_ERROR(errno, "fcntl() failed");
+		goto err;
+	}
+
+	if (low_fd_count == 0 && low_fd_list[low_fd_count] >= DAOS_MIN_FD)
+		libc_close(low_fd_list[0]);
 
 	D_MUTEX_UNLOCK(&lock_reserve_fd);
 	return 0;
@@ -4434,6 +4432,12 @@ reset_daos_env_before_exec(void)
 	 */
 	d_log_disable_logging();
 
+	/* close fd 255 and fd_dummy before exec(). */
+	if (fd_255_reserved)
+		libc_close(255);
+	if (fd_dummy >= 0)
+		libc_close(fd_dummy);
+
 	rc = setup_fd_0_1_2();
 	if (rc)
 		return rc;
@@ -6972,51 +6976,39 @@ register_handler(int sig, struct sigaction *old_handler)
 	}
 }
 
+/* Check whether current executable is sh/bash or not. Flag is_bash is set. */
 static void
-extract_exe_path(void)
+check_exe_sh_bash(void)
 {
-        FILE *fIn;
-        char *line;
-	int readsize, len, len2, pos;
+	int   readsize;
+	/* the exe name extract from /proc/self/exe */
+	char *exe_path;
+	/* the short exe name from exe_path */
+	char *exe_short = NULL;
 
-	exe_path[0]  = 0;
-	exe_short[0] = 0;
-
-	D_ALLOC(line, DFS_MAX_PATH);
-	if (line == NULL)
+	D_ALLOC(exe_path, DFS_MAX_PATH);
+	if (exe_path == NULL)
 		return;
-        fIn = fopen("/proc/self/cmdline", "r");
-        if (fIn == NULL)        {
-                DS_ERROR(errno, "Fail to open file: /proc/self/cmdline");
-                goto out;
-        }
-        readsize = fread(line, 1, DFS_MAX_PATH, fIn);
-        fclose(fIn);
 
-        if (readsize <= 0)   {
-                D_DEBUG(DB_ANY, "Fail to determine the executable file name.\n");
-                goto out;
-        }
-	len = snprintf(exe_path, DFS_MAX_PATH, "%s", line);
-	if (len >= DFS_MAX_PATH) {
-		DS_ERROR(ENAMETOOLONG, "path is too long");
+	readsize = readlink("/proc/self/exe", exe_path, DFS_MAX_PATH);
+	if (readsize >= DFS_MAX_PATH) {
+		DS_ERROR(ENAMETOOLONG, "path from readlink() is too long");
+		goto out;
+	} else if (readsize < 0) {
+		DS_ERROR(errno, "readlink() failed");
 		goto out;
 	}
-	for (pos = len - 1; pos > 0; pos--) {
-		if (exe_path[pos] == '/') {
-			len2 = snprintf(exe_short, DFS_MAX_NAME, "%s", exe_path + pos + 1);
-			if (len2 >= DFS_MAX_NAME) {
-				DS_ERROR(ENAMETOOLONG, "name is too long");
-				goto out;
-			}
-			break;
-		}
+
+	exe_short = basename(exe_path);
+	if (exe_short == NULL) {
+		DS_ERROR(errno, "basename() failed");
+		goto out;
 	}
 	if (strncmp(exe_short, "bash", 5) == 0 || strncmp(exe_short, "sh", 3) == 0)
 		is_bash = true;
 
 out:
-	D_FREE(line);
+	D_FREE(exe_path);
 	return;
 }
 
@@ -7153,7 +7145,8 @@ init_myhook(void)
 
 	init_fd_dup2_list();
 
-	extract_exe_path();
+	if (compatible_mode)
+		check_exe_sh_bash();
 
 	install_hook();
 	hook_enabled = 1;
@@ -7278,8 +7271,8 @@ finalize_myhook(void)
 
 		if (fd_255_reserved)
 			libc_close(255);
-		if (fd_dummy_reserved)
-			libc_close(DAOS_DUMMY_FD);
+		if (fd_dummy >= 0)
+			libc_close(fd_dummy);
 
 		if (hook_enabled_bak)
 			uninstall_hook();

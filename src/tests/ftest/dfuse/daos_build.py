@@ -75,11 +75,11 @@ class DaosBuild(DfuseTestBase):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=vm
         :avocado: tags=daosio,dfuse,il,dfs,pil4dfs
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_pil4dfs
         """
-        self.run_build_test("nocache", il_lib='libpil4dfs.so')
+        self.run_build_test("nocache", il_lib='libpil4dfs.so', run_on_vms=True)
 
     def test_dfuse_daos_build_metadata(self):
         """This test builds DAOS on a dfuse filesystem.
@@ -143,12 +143,12 @@ class DaosBuild(DfuseTestBase):
         # scons commands which can both take a long time.
         build_time = 60
 
+        dfuse_namespace = None
+
+        with_pil4dfs = False
         if il_lib is not None:
             if il_lib == 'libpil4dfs.so':
-                # daos build takes ~4 hours in CI with tcp provider. 4~8 hours with verbs provider.
-                build_time *= 2
-
-        dfuse_namespace = None
+                with_pil4dfs = True
 
         # Run the deps build in parallel for speed/coverage however the daos build itself does
         # not yet work under the interception library so run this part in serial.
@@ -160,6 +160,9 @@ class DaosBuild(DfuseTestBase):
         if run_on_vms:
             dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
             build_jobs = 6 * 2
+            if with_pil4dfs:
+                # crashed previously with 6 * 2
+                build_jobs = 5 * 2
             remote_env['D_IL_MAX_EQ'] = '0'
 
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
@@ -191,7 +194,12 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-ndentry-time'] = '0'
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'nocache':
-            build_time *= 5
+            if with_pil4dfs:
+                # ~2 hours in CI hw with tcp provider. Larger variation with verbs provider.
+                # testing 12 hours in vm
+                build_time *= 12
+            else:
+                build_time *= 5
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
