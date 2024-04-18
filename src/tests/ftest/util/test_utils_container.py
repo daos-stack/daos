@@ -551,9 +551,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                     status = True
 
                 else:
-                    # Disconnect the pool if connected
-                    self.pool.disconnect()
-
                     # Destroy the container with the daos command
                     kwargs["pool"] = self.pool.identifier
                     kwargs["sys_name"] = self.pool.name.value

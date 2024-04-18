@@ -141,7 +141,7 @@ ior_harasser:
     - ["EC_2P1GX", "RP_2GX"]
     - ["EC_4P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/ior"
+    mount_dir: "/tmp/soak_dfuse_ior"
     disable_caching: true
 fio_harasser:
   api:
@@ -151,7 +151,7 @@ fio_harasser:
     - global
     - test
   global:
-    directory: "/tmp/daos_dfuse/fio/"
+    directory: "/tmp/soak_dfuse_fio/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -173,7 +173,7 @@ fio_harasser:
       - ["EC_2P1GX", "RP_2GX"]
       - ["EC_4P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/fio/"
+    mount_dir: "/tmp/soak_dfuse_fio/"
     disable_caching: true
 mdtest_harasser:
   # maximum timeout for a single job in test in minutes
@@ -205,7 +205,7 @@ mdtest_harasser:
     - ["EC_4P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/mdtest/"
+    mount_dir: "/tmp/soak_dfuse_mdtest/"
     disable_caching: true
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
