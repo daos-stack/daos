@@ -20,7 +20,7 @@ dnf --nodocs install \
     cmake \
     cunit-devel \
     flex \
-    fuse3-devel \
+    fuse3 \
     gcc \
     gcc-c++ \
     git \

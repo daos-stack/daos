@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,8 @@ package main
 import (
 	"context"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
@@ -83,7 +85,7 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 		return err
 	}
 
-	ctx := context.Background()
+	ctx := cmd.MustLogCtx()
 	fs := hwprov.DefaultFabricScanner(cmd.Logger)
 
 	var prov string
@@ -93,7 +95,11 @@ func (cmd *networkScanCmd) Execute(_ []string) error {
 			prov = cmd.FabricProvider
 		}
 	case cmd.config.Fabric.Provider != "":
-		prov = cmd.config.Fabric.Provider
+		priProv, err := cmd.config.Fabric.GetPrimaryProvider()
+		if err != nil {
+			return errors.Wrapf(err, "unable to get fabric provider from config")
+		}
+		prov = priProv
 	}
 
 	hf, err := GetLocalFabricIfaces(ctx, fs, prov)

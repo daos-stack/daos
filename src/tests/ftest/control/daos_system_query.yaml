@@ -14,5 +14,8 @@ server_config:
       log_mask: DEBUG,MEM=ERR
       env_vars:
         - DD_MASK=mgmt
-      storage: auto
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
   system_ram_reserved: 1

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -52,6 +52,7 @@ const (
 	ConfSetHotplugBusidRange     = C.NVME_CONF_SET_HOTPLUG_RANGE
 	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
 	ConfSetSpdkRpcServer         = C.NVME_CONF_SET_SPDK_RPC_SERVER
+	ConfSetAutoFaultyProps       = C.NVME_CONF_SET_AUTO_FAULTY
 )
 
 // Acceleration related constants for engine setting and optional capabilities.
@@ -124,13 +125,13 @@ func (nds *NvmeDevState) UnmarshalJSON(data []byte) error {
 // LedState represents the LED state of device.
 type LedState int32
 
-// LedState values representing the VMD LED state (see include/spdk/vmd.h).
+// LedState values representing the VMD LED state (see src/proto/ctl/smd.proto).
 const (
-	LedStateNormal LedState = iota
+	LedStateUnknown LedState = iota
 	LedStateIdentify
 	LedStateFaulty
 	LedStateRebuild
-	LedStateUnknown
+	LedStateNormal
 )
 
 func (vls LedState) String() string {
@@ -389,7 +390,11 @@ type NvmeControllers []*NvmeController
 func (ncs NvmeControllers) String() string {
 	var ss []string
 	for _, c := range ncs {
-		ss = append(ss, c.PciAddr)
+		s := c.PciAddr
+		for _, sd := range c.SmdDevices {
+			s += fmt.Sprintf("-nsid%d-%s", sd.CtrlrNamespaceID, sd.Roles.String())
+		}
+		ss = append(ss, s)
 	}
 	return strings.Join(ss, ", ")
 }
@@ -545,6 +550,7 @@ type (
 		Hostname          string
 		AccelProps        AccelProps
 		SpdkRpcSrvProps   SpdkRpcServer
+		AutoFaultyProps   BdevAutoFaulty
 		VMDEnabled        bool
 		ScannedBdevs      NvmeControllers // VMD needs address mapping for backing devices.
 	}

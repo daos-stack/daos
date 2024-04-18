@@ -12,14 +12,16 @@ char *dc_agent_sockpath;
 int
 dc_agent_init()
 {
-	char	*path = NULL;
-	char	*envpath = getenv(DAOS_AGENT_DRPC_DIR_ENV);
+	char *path = NULL;
+	char *envpath;
 
-	if (envpath)
+	d_agetenv_str(&envpath, DAOS_AGENT_DRPC_DIR_ENV);
+	if (envpath != NULL)
 		D_ASPRINTF(path, "%s/%s", envpath,
 				DAOS_AGENT_DRPC_SOCK_NAME);
 	else
 		D_STRNDUP_S(path, DEFAULT_DAOS_AGENT_DRPC_SOCK);
+	d_freeenv_str(&envpath);
 
 	if (path == NULL)
 		return -DER_NOMEM;

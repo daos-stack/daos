@@ -84,11 +84,11 @@ enum NvmeDevState {
 }
 
 enum LedState {
-	OFF = 0;		// Equivalent to SPDK_VMD_LED_STATE_OFF
+	NA = 0;			// Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
 	QUICK_BLINK = 1;	// Equivalent to SPDK_VMD_LED_STATE_IDENTIFY	(4Hz blink)
 	ON = 2;			// Equivalent to SPDK_VMD_LED_STATE_FAULT	(solid on)
 	SLOW_BLINK = 3;		// Equivalent to SPDK_VMD_LED_STATE_REBUILD	(1Hz blink)
-	NA = 4;			// Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
+	OFF = 4;		// Equivalent to SPDK_VMD_LED_STATE_OFF
 }
 
 // NvmeController represents an NVMe Controller (SSD).

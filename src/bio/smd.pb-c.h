@@ -66,9 +66,9 @@ typedef enum _Ctl__NvmeDevState {
 } Ctl__NvmeDevState;
 typedef enum _Ctl__LedState {
   /*
-   * Equivalent to SPDK_VMD_LED_STATE_OFF
+   * Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
    */
-  CTL__LED_STATE__OFF = 0,
+  CTL__LED_STATE__NA = 0,
   /*
    * Equivalent to SPDK_VMD_LED_STATE_IDENTIFY	(4Hz blink)
    */
@@ -82,9 +82,9 @@ typedef enum _Ctl__LedState {
    */
   CTL__LED_STATE__SLOW_BLINK = 3,
   /*
-   * Equivalent to SPDK_VMD_LED_STATE_UNKNOWN	(VMD not enabled)
+   * Equivalent to SPDK_VMD_LED_STATE_OFF
    */
-  CTL__LED_STATE__NA = 4
+  CTL__LED_STATE__OFF = 4
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__LED_STATE)
 } Ctl__LedState;
 typedef enum _Ctl__LedAction {
@@ -305,7 +305,7 @@ struct  _Ctl__NvmeController
 };
 #define CTL__NVME_CONTROLLER__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__nvme_controller__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,NULL, 0,NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__OFF, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,NULL, 0,NULL, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__NA, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*
@@ -558,7 +558,7 @@ struct  _Ctl__LedManageReq
 };
 #define CTL__LED_MANAGE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__led_manage_req__descriptor) \
-    , (char *)protobuf_c_empty_string, CTL__LED_ACTION__GET, CTL__LED_STATE__OFF, 0 }
+    , (char *)protobuf_c_empty_string, CTL__LED_ACTION__GET, CTL__LED_STATE__NA, 0 }
 
 
 struct  _Ctl__DevReplaceReq

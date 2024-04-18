@@ -19,6 +19,7 @@ import "ctl/smd.proto";
 message NvmeControllerResult {
 	string pci_addr = 1;		// PCI address of NVMe controller
 	ResponseState state = 2;	// state of current operation
+	uint32 role_bits = 3;		// Device active roles (bitmask)
 }
 
 message ScanNvmeReq {

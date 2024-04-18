@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,11 @@
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+#include <inttypes.h>
+#include <uuid/uuid.h>
+
+#include <daos_prop.h>
 
 /** Type of storage target */
 typedef enum {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2023 Intel Corporation.
+ * (C) Copyright 2017-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1083,15 +1083,12 @@ typedef struct {
  * to the open task.
  * For a simpler workflow, users can use the event based API instead of tasks.
  *
- * \param opc	[IN]	Operation Code to identify the daos op to associate with
- *			the task,
- * \param sched	[IN]	Scheduler / Engine this task will be added to.
- * \param num_deps [IN]	Number of tasks this task depends on before it gets
- *			scheduled. No tasks can be in progress.
- * \param dep_tasks [IN]
- *			Array of tasks that new task will wait on completion
- *			before it's scheduled.
- * \param taskp	[OUT]	Pointer to task to be created/initialized with the op.
+ * \param[in] opc	Operation Code to identify the daos op to associate with the task,
+ * \param[in] sched	Scheduler / Engine this task will be added to.
+ * \param[in] num_deps	Number of tasks this task depends on before it gets scheduled. No tasks can
+ * 			be in progress.
+ * \param[in] dep_tasks	Array of tasks that new task will wait on completion before it's scheduled.
+ * \param[out] taskp	Pointer to task to be created/initialized with the op.
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid parameter
@@ -1108,9 +1105,8 @@ daos_task_create(daos_opc_t opc, tse_sched_t *sched,
  * ref count on the task to prevent it to be freed after the DAOS operation has
  * completed).
  *
- * \param task	[IN]	Task to reset.
- * \param opc	[IN]	Operation code to identify the daos op to associate with
- *			the task.
+ * \param[in] task	Task to reset.
+ * \param[in] opc	Operation code to identify the daos op to associate with the task.
  *
  * \return		0		Success
  *			-DER_INVAL	Invalid parameter
@@ -1125,7 +1121,7 @@ daos_task_reset(tse_task_t *task, daos_opc_t opc);
  * created or in its prepare cb. The task must be created with
  * daos_task_create() and a valid DAOS opc.
  *
- * \param task	[IN]	Task to retrieve the struct from.
+ * \param[in] task	Task to retrieve the struct from.
  *
  * \return		Success: Pointer to arguments for the DAOS task
  */
@@ -1136,7 +1132,7 @@ daos_task_get_args(tse_task_t *task);
  * Return a pointer to the DAOS task private state. If no private state has
  * been set (via daos_task_get_priv()), NULL is returned.
  *
- * \param task	[IN]	Task to retrieve the private state from
+ * \param[in] task	Task to retrieve the private state from
  *
  * \return		Pointer to the private state
  */
@@ -1146,8 +1142,8 @@ daos_task_get_priv(tse_task_t *task);
 /**
  * Set a pointer to the DAOS task private state.
  *
- * \param task	[IN]	Task to retrieve the private state from
- * \param priv	[IN]	Pointer to the private state
+ * \param[in] task	Task to retrieve the private state from
+ * \param[in] priv	Pointer to the private state
  *
  * \return		private state set by the previous call
  */
@@ -1158,12 +1154,11 @@ daos_task_set_priv(tse_task_t *task, void *priv);
  * Make progress on the RPC context associated with the scheduler and schedule
  * tasks that are ready. Also check if the scheduler has any tasks.
  *
- * \param sched	[IN]	Scheduler to make progress on.
- * \param timeout [IN]	How long is caller going to wait (micro-second)
+ * \param[in] sched	Scheduler to make progress on.
+ * \param[in] timeout	How long is caller going to wait (micro-second)
  *			if \a timeout > 0,
  *			it can also be DAOS_EQ_NOWAIT, DAOS_EQ_WAIT
- * \param is_empty [OUT]
- *			flag to indicate whether the scheduler is empty or not.
+ * \param[out] is_empty	Flag to indicate whether the scheduler is empty or not.
  *
  * \return		0 if Success, negative DER if failed.
  */

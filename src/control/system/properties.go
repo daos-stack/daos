@@ -110,6 +110,11 @@ func GetUserProperties(db SysAttrGetter, sysProps daos.SystemPropertyMap, keys [
 	return userProps, nil
 }
 
+// SetUserProperty sets a single user-visible property for the supplied key/value.
+func SetUserProperty(db SysAttrSetter, sysProps daos.SystemPropertyMap, key, value string) error {
+	return SetUserProperties(db, sysProps, map[string]string{key: value})
+}
+
 // GetUserProperty returns a single user-visible property for the supplied key, or
 // an error if the key is unknown.
 func GetUserProperty(db SysAttrGetter, sysProps daos.SystemPropertyMap, key string) (val string, err error) {

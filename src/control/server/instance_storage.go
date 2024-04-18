@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -118,7 +118,7 @@ func (ei *EngineInstance) awaitStorageReady(ctx context.Context) error {
 
 	if !needsMetaFormat && !needsScmFormat {
 		ei.log.Debugf("instance %d: no SCM format required; checking for superblock", idx)
-		needsSuperblock, err := ei.NeedsSuperblock()
+		needsSuperblock, err := ei.needsSuperblock()
 		if err != nil {
 			ei.log.Errorf("instance %d: failed to check instance superblock: %s", idx, err)
 		}

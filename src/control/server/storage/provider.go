@@ -471,9 +471,10 @@ func BdevFormatRequestFromConfig(log logging.Logger, cfg *TierConfig) (BdevForma
 
 // BdevTierFormatResult contains details of a format operation result.
 type BdevTierFormatResult struct {
-	Tier   int
-	Error  error
-	Result *BdevFormatResponse
+	Tier        int
+	DeviceRoles BdevRoles
+	Error       error
+	Result      *BdevFormatResponse
 }
 
 // FormatBdevTiers formats all the Bdev tiers in the engine storage
@@ -505,6 +506,7 @@ func (p *Provider) FormatBdevTiers(ctrlrs NvmeControllers) (results []BdevTierFo
 		p.RUnlock()
 
 		results[i].Tier = cfg.Tier
+		results[i].DeviceRoles = cfg.Bdev.DeviceRoles
 		if err := results[i].Error; err != nil {
 			p.log.Errorf("Instance %d: format failed (%s)", err)
 			continue
@@ -573,6 +575,7 @@ func BdevWriteConfigRequestFromConfig(ctx context.Context, log logging.Logger, c
 		TierProps:        []BdevTierProperties{},
 		AccelProps:       cfg.AccelProps,
 		SpdkRpcSrvProps:  cfg.SpdkRpcSrvProps,
+		AutoFaultyProps:  cfg.AutoFaultyProps,
 	}
 
 	for idx, tier := range cfg.Tiers.BdevConfigs() {

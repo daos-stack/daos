@@ -25,8 +25,6 @@
 #include <gurt/common.h>
 #include <gurt/atomic.h>
 
-#define UINT64_MAX_STR "18446744073709551615"
-
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};
 
@@ -59,17 +57,14 @@ d_rand()
 	return result;
 }
 
-/* Return a random integer in [0, n), where n must be positive. */
-long int
-d_randn(long int n)
+/* Return a random double in [0, 1). */
+double
+d_randd(void)
 {
-	long int i;
+	double result;
 
-	D_ASSERT(n > 0);
-	i = ((double)d_rand() / D_RAND_MAX) * n;
-	if (i >= n)
-		i = 0;
-	return i;
+	drand48_r(&randBuffer, &result);
+	return result;
 }
 
 /* Developer/debug version, poison memory on free.
@@ -546,7 +541,7 @@ d_rank_list_shuffle(d_rank_list_t *rank_list)
 		return;
 
 	for (i = 0; i < rank_list->rl_nr; i++) {
-		j = rand() % rank_list->rl_nr;
+		j = d_rand() % rank_list->rl_nr;
 		tmp = rank_list->rl_ranks[i];
 		rank_list->rl_ranks[i] = rank_list->rl_ranks[j];
 		rank_list->rl_ranks[j] = tmp;
@@ -951,18 +946,17 @@ d_rank_range_list_free(d_rank_range_list_t *range_list)
 }
 
 static inline bool
-dis_unsigned_str(char *str)
+dis_signed_str(char *str)
 {
-	char *eos;
+	char  *eos;
+	size_t str_size;
 
-	if (str == NULL || str[0] == '\0')
-		return false;
-
-	eos = str + (sizeof(UINT64_MAX_STR) - 1);
-	while (str != eos && *str != '\0' && *str >= '0' && *str <= '9')
+	str_size = strlen(str);
+	eos      = str + str_size;
+	while (str != eos && *str != '-' && (*str < '0' || *str > '9'))
 		++str;
 
-	return *str == '\0';
+	return *str == '-';
 }
 
 static inline bool
@@ -1123,7 +1117,7 @@ out:
  * \param[in,out]	str_val		Copy of an environment string value.
  */
 void
-d_free_env_str(char **str_val)
+d_freeenv_str(char **str_val)
 {
 	assert(str_val != NULL);
 
@@ -1214,40 +1208,68 @@ out:
 }
 
 static int
-d_getenv_ull(unsigned long long *val, const char *name)
+d_getenv_ull(unsigned long long *val, const char *name, size_t val_size)
 {
 	char              *env;
+	char              *env_tmp = NULL;
 	char              *endptr;
-	unsigned long long tmp;
+	unsigned long long val_tmp;
 	int                rc;
 
 	assert(val != NULL);
 	assert(name != NULL);
+	assert(val_size <= sizeof(unsigned long long));
 
 	d_env_rwlock_rdlock();
 	env = getenv(name);
 	if (env == NULL) {
 		rc = -DER_NONEXIST;
+		d_env_rwlock_unlock();
 		goto out;
 	}
 
-	if (!dis_unsigned_str(env)) {
+	/* DAOS-14896 NOTES:
+	 * - Duplicate env to reduce data race condition with external libraries not using the DAOS
+	 *   thread safe environment variables management API.
+	 * - Use of strdup() as there is no limit to environment variable size.
+	 */
+	env_tmp = strdup(env);
+	if (env_tmp == NULL) {
+		rc = -DER_NOMEM;
+		d_env_rwlock_unlock();
+		goto out;
+	}
+	d_env_rwlock_unlock();
+
+	errno   = 0;
+	val_tmp = strtoull(env_tmp, &endptr, 10);
+	if (errno != 0 || endptr == env_tmp || *endptr != '\0') {
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	errno = 0;
-	tmp   = strtoull(env, &endptr, 0);
-	if (errno != 0 || endptr == env || *endptr != '\0') {
-		rc = -DER_INVAL;
-		goto out;
+	if (val_size != sizeof(unsigned long long)) {
+		const unsigned long long val_max   = (1ull << val_size * 8) - 1;
+		const bool               is_signed = dis_signed_str(env_tmp);
+
+		if (is_signed)
+			val_tmp = ~val_tmp;
+		if (val_tmp > val_max || (is_signed && val_tmp >= val_max)) {
+			rc = -DER_INVAL;
+			goto out;
+		}
+		if (is_signed) {
+			val_tmp = ~val_tmp;
+			val_tmp <<= (sizeof(unsigned long long) - val_size) * 8;
+			val_tmp >>= (sizeof(unsigned long long) - val_size) * 8;
+		}
 	}
 
-	*val = tmp;
+	*val = val_tmp;
 	rc   = -DER_SUCCESS;
 
 out:
-	d_env_rwlock_unlock();
+	free(env_tmp);
 
 	return rc;
 }
@@ -1269,19 +1291,27 @@ d_getenv_uint(const char *name, unsigned *uint_val)
 	assert(uint_val != NULL);
 	assert(name != NULL);
 
-	rc = d_getenv_ull(&tmp, name);
+	rc = d_getenv_ull(&tmp, name, sizeof(unsigned));
 	if (rc != -DER_SUCCESS)
 		return rc;
 
-#if UINT_MAX != ULLONG_MAX
-	assert(sizeof(unsigned) < sizeof(unsigned long long));
-	if (tmp > UINT_MAX) {
-		return -DER_INVAL;
-	}
-#endif
-
 	*uint_val = (unsigned)tmp;
 	return -DER_SUCCESS;
+}
+
+/**
+ * get an unsigned integer type environment variables.
+ *
+ * \param[in]		name		name of the environment variable.
+ * \param[in,out]	uint_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set or set as a non-integer value.
+ * \return				0 on success, a negative value on error.
+ * \deprecated				d_getenv_int() is deprecated, please use d_getenv_uint().
+ */
+int
+d_getenv_int(const char *name, unsigned *uint_val)
+{
+	return d_getenv_uint(name, uint_val);
 }
 
 /**
@@ -1301,16 +1331,9 @@ d_getenv_uint32_t(const char *name, uint32_t *uint32_val)
 	assert(uint32_val != NULL);
 	assert(name != NULL);
 
-	rc = d_getenv_ull(&tmp, name);
+	rc = d_getenv_ull(&tmp, name, sizeof(uint32_t));
 	if (rc != -DER_SUCCESS)
 		return rc;
-
-#if UINT32_MAX != ULLONG_MAX
-	assert(sizeof(uint32_t) < sizeof(unsigned long long));
-	if (tmp > UINT32_MAX) {
-		return -DER_INVAL;
-	}
-#endif
 
 	*uint32_val = (uint32_t)tmp;
 	return -DER_SUCCESS;
@@ -1333,16 +1356,9 @@ d_getenv_uint64_t(const char *name, uint64_t *uint64_val)
 	assert(uint64_val != NULL);
 	assert(name != NULL);
 
-	rc = d_getenv_ull(&tmp, name);
+	rc = d_getenv_ull(&tmp, name, sizeof(uint64_t));
 	if (rc != -DER_SUCCESS)
 		return rc;
-
-#if UINT64_MAX != ULLONG_MAX
-	assert(sizeof(uint64_t) < sizeof(unsigned long long));
-	if (tmp > UINT64_MAX) {
-		return -DER_INVAL;
-	}
-#endif
 
 	*uint64_val = (uint64_t)tmp;
 	return -DER_SUCCESS;

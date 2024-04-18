@@ -9,8 +9,7 @@ import time
 from apricot import TestWithServers
 from dfuse_utils import get_dfuse, start_dfuse, stop_dfuse
 from general_utils import join
-from ior_utils import get_ior
-from job_manager_utils import get_job_manager
+from ior_utils import read_data, write_data
 from test_utils_pool import add_pool
 
 
@@ -38,24 +37,6 @@ class ReplayTests(TestWithServers):
         self.log_step(join(' ', 'Creating a container (daos container create)', '-', details))
         return self.get_container(pool)
 
-    def write_data(self, container, ppn, dfuse=None):
-        """Write data to the container/dfuse using ior.
-
-        Args:
-            container (TestContainer): the container to populate
-            ppn (int): processes per node to use with the ior command
-            dfuse (Dfuse, optional): dfuse object defining the dfuse mount point. Defaults to None.
-
-        Returns:
-            Ior: the Ior object used to populate the container
-        """
-        job_manager = get_job_manager(self, subprocess=False, timeout=60)
-        ior = get_ior(
-            self, job_manager, self.hostlist_clients, self.workdir, None,
-            namespace='/run/ior_write/*')
-        ior.run(self.server_group, container.pool, container, None, ppn, dfuse=dfuse)
-        return ior
-
     def stop_engines(self):
         """Stop each server engine and verify they are not running."""
         self.log_step('Shutting down the engines (dmg system stop)')
@@ -79,18 +60,6 @@ class ReplayTests(TestWithServers):
         if rank_check:
             self.log.info('Ranks %s failed to start', rank_check)
             self.fail('Failed to start ranks cleanly')
-
-    def read_data(self, ior, container, ppn, dfuse=None):
-        """Verify the data used to populate the container.
-
-        Args:
-            ior (Ior): the ior command used to populate the container
-            container (TestContainer): the container to verify
-            ppn (int): processes per node to use with the ior command
-            dfuse (Dfuse, optional): dfuse object defining the dfuse mount point. Defaults to None.
-        """
-        ior.update('flags', self.params.get('flags', '/run/ior_read/*'))
-        ior.run(self.server_group, container.pool, container, None, ppn, dfuse=dfuse)
 
     def verify_snapshots(self, container, expected):
         """Verify the snapshots listed for the container match the expected list of snapshots.
@@ -126,17 +95,16 @@ class ReplayTests(TestWithServers):
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_restart
         """
-        ppn = self.params.get('ppn', '/run/ior_write/*', 1)
         container = self.create_container()
 
         self.log_step('Write data to the container (ior)')
-        ior = self.write_data(container, ppn)
+        ior = write_data(self, container)
 
         self.stop_engines()
         self.restart_engines()
 
         self.log_step('Verifying data previously written to the container (ior)')
-        self.read_data(ior, container, ppn)
+        read_data(self, ior, container)
         self.log_step('Test passed')
 
     def test_replay_posix(self):
@@ -159,7 +127,6 @@ class ReplayTests(TestWithServers):
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_posix
         """
-        ppn = self.params.get('ppn', '/run/ior_write/*', 1)
         container = self.create_container()
 
         self.log_step('Start dfuse')
@@ -167,7 +134,7 @@ class ReplayTests(TestWithServers):
         start_dfuse(self, dfuse, container.pool, container)
 
         self.log_step('Write data to the dfuse mount point (ior)')
-        ior = self.write_data(container, ppn, dfuse)
+        ior = write_data(self, container, dfuse=dfuse)
 
         self.log_step('After the read has completed, unmount dfuse')
         stop_dfuse(self, dfuse)
@@ -179,10 +146,10 @@ class ReplayTests(TestWithServers):
         start_dfuse(self, dfuse)
 
         self.log_step('Verifying data previously written to the dfuse mount point (ior)')
-        self.read_data(ior, container, ppn, dfuse)
+        read_data(self, ior, container, dfuse=dfuse)
 
         self.log_step('Write additional data to the dfuse mount point (ior)')
-        ior = self.write_data(container, ppn, dfuse)
+        ior = write_data(self, container, dfuse=dfuse)
 
         self.log.info('Test passed')
 
@@ -210,14 +177,13 @@ class ReplayTests(TestWithServers):
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_snapshots
         """
-        ppn = self.params.get('ppn', '/run/ior_write/*', 1)
         container = self.create_container()
 
         snapshots = []
         for index in range(1, 4):
             step = join(' ', index, 'of', 3)
             self.log_step(join(' ', 'Write data to the container (ior)', '-', step))
-            self.write_data(container, ppn)
+            write_data(self, container)
 
             self.log_step(join(' ', 'Creating a snapshot (daos container create-snap)', '-', step))
             snapshots.append(container.create_snap()['response']['epoch'])
@@ -278,7 +244,7 @@ class ReplayTests(TestWithServers):
             # Settable pool attributes
             {'checkpoint_freq': list(range(1, 10)),
              'checkpoint_thresh': list(range(25, 75)),
-             'scrub-freq': list(range(604200, 605200))},
+             'scrub_freq': list(range(604200, 605200))},
             # Settable container attributes
             {'label': [join('_', 'RenamedContainer', str(num)) for num in range(10, 20)]},
         ]
@@ -348,7 +314,6 @@ class ReplayTests(TestWithServers):
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_no_check_pointing
         """
-        ppn = self.params.get('ppn', '/run/ior_write/*', 1)
         container = self.create_container()
 
         self.log_step('Disabling check pointing on {}'.format(container.pool))
@@ -358,7 +323,7 @@ class ReplayTests(TestWithServers):
             self.fail('Pool check pointing not disabled before engine restart')
 
         self.log_step('Write data to the container (ior)')
-        ior = self.write_data(container, ppn)
+        ior = write_data(self, container)
 
         self.stop_engines()
         self.restart_engines()
@@ -371,7 +336,7 @@ class ReplayTests(TestWithServers):
             self.fail('Pool check pointing not disabled after engine restart')
 
         self.log_step('Verifying data previously written to the container (ior)')
-        self.read_data(ior, container, ppn)
+        read_data(self, ior, container)
         self.log_step('Test passed')
 
     def test_replay_check_pointing(self):
@@ -392,14 +357,13 @@ class ReplayTests(TestWithServers):
         :avocado: tags=server,replay
         :avocado: tags=ReplayTests,test_replay_check_pointing
         """
-        ppn = self.params.get('ppn', '/run/ior_write/*', 1)
         frequency = 5
         container = self.create_container(
             properties=f'checkpoint:timed,checkpoint_freq:{frequency}')
         self.log.info('%s check point frequency: %s seconds', container.pool, frequency)
 
         self.log_step('Write data to the container (ior)')
-        ior = self.write_data(container, ppn)
+        ior = write_data(self, container)
 
         self.log_step('Waiting for check pointing to complete (sleep {})'.format(frequency * 2))
         time.sleep(frequency * 2)
@@ -408,5 +372,5 @@ class ReplayTests(TestWithServers):
         self.restart_engines()
 
         self.log_step('Verifying data previously written to the container (ior)')
-        self.read_data(ior, container, ppn)
+        read_data(self, ior, container)
         self.log_step('Test passed')

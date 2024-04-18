@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,6 +16,24 @@
 #include <daos/tests_lib.h>
 #include <daos.h>
 #include <daos_srv/bio.h>
+
+/*
+ * D_LOG_DMG_STDERR_ENV provides the environment variable that can be used to enable test binaries
+ * to log the stderr output from executing dmg. This can be useful for debugging.
+ */
+#define D_LOG_DMG_STDERR_ENV "D_TEST_LOG_DMG_STDERR"
+
+static bool
+is_stderr_logging_enabled(void)
+{
+	int  rc;
+	bool enabled = false;
+
+	rc = d_getenv_bool(D_LOG_DMG_STDERR_ENV, &enabled);
+	if (rc == 0)
+		return enabled;
+	return false;
+}
 
 static void
 cmd_free_args(char **args, int argcount)
@@ -155,13 +173,18 @@ log_stderr_pipe(int fd)
 static int
 run_cmd(const char *command, int *outputfd)
 {
-	int rc = 0;
-	int child_rc = 0;
-	int child_pid;
-	int stdoutfd[2];
-	int stderrfd[2];
+	int  rc       = 0;
+	int  child_rc = 0;
+	int  child_pid;
+	int  stdoutfd[2];
+	int  stderrfd[2];
+	bool log_stderr;
 
 	D_DEBUG(DB_TEST, "dmg cmd: %s\n", command);
+
+	log_stderr = is_stderr_logging_enabled();
+	if (log_stderr)
+		D_DEBUG(DB_TEST, "dmg stderr output will be logged\n");
 
 	/* Create pipes */
 	if (pipe(stdoutfd) == -1) {
@@ -214,12 +237,15 @@ run_cmd(const char *command, int *outputfd)
 		D_ERROR("wait failed: %s\n", strerror(errno));
 		return daos_errno2der(errno);
 	}
-	D_DEBUG(DB_TEST, "dmg command executed successfully\n");
+	D_DEBUG(DB_TEST, "dmg command finished\n");
 
 	if (child_rc != 0) {
 		D_ERROR("child process failed, rc=%d (%s)\n", child_rc, strerror(child_rc));
 		close(stdoutfd[0]);
-		log_stderr_pipe(stderrfd[0]);
+		if (log_stderr)
+			log_stderr_pipe(stderrfd[0]); /* closes the pipe after reading */
+		else
+			close(stderrfd[0]);
 		return daos_errno2der(child_rc);
 	}
 
@@ -316,7 +342,6 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		D_GOTO(out_jbuf, rc = -DER_NOMEM);
 	jbuf = temp;
 	jbuf[total] = '\0';
-	D_DEBUG(DB_TEST, "dmg output=\"%s\"\n", jbuf);
 
 	tok = json_tokener_new_ex(parse_depth);
 	if (tok == NULL)
@@ -499,6 +524,57 @@ out:
 	return rc;
 }
 
+static int
+parse_dmg_string(struct json_object *obj, const char *key, char **tgt)
+{
+	struct json_object	*tmp;
+	const char		*str;
+
+	if (!json_object_object_get_ex(obj, key, &tmp)) {
+		D_ERROR("Unable to extract %s from check query result\n", key);
+		return -DER_INVAL;
+	}
+
+	str = json_object_get_string(tmp);
+	if (str == NULL) {
+		D_ERROR("Got empty %s from check query result\n", key);
+		return -DER_INVAL;
+	}
+
+	D_STRNDUP(*tgt, str, strlen(str));
+	if (*tgt == NULL) {
+		D_ERROR("Failed to dup %s from check query result\n", key);
+		return -DER_NOMEM;
+	}
+
+	return 0;
+}
+
+static int
+parse_dmg_uuid(struct json_object *obj, const char *key, uuid_t uuid)
+{
+	struct json_object	*tmp;
+	const char		*str;
+	int			 rc;
+
+	if (!json_object_object_get_ex(obj, key, &tmp)) {
+		D_ERROR("Unable to extract %s from check query result\n", key);
+		return -DER_INVAL;
+	}
+
+	str = json_object_get_string(tmp);
+	if (str == NULL) {
+		D_ERROR("Got empty %s from check query result\n", key);
+		return -DER_INVAL;
+	}
+
+	rc = uuid_parse(str, uuid);
+	if (rc != 0)
+		D_ERROR("Failed to parse uuid %s from check query result\n", str);
+
+	return rc;
+}
+
 int
 dmg_pool_set_prop(const char *dmg_config_file,
 		  const char *prop_name, const char *prop_value,
@@ -531,6 +607,58 @@ out_json:
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
 	cmd_free_args(args, argcount);
+out:
+	return rc;
+}
+
+int
+dmg_pool_get_prop(const char *dmg_config_file, const char *label,
+		  const uuid_t uuid, const char *name, char **value)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			len;
+	int			rc = 0;
+
+	D_ASSERT(name != NULL);
+	D_ASSERT(value != NULL);
+
+	if (label != NULL) {
+		args = cmd_push_arg(args, &argcount, "%s %s", label, name);
+	} else {
+		uuid_unparse_lower(uuid, uuid_str);
+		args = cmd_push_arg(args, &argcount, "%s %s", uuid_str, name);
+	}
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("pool get-prop", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0) {
+		D_ERROR("pool get-prop for %s failed: %d\n", label != NULL ? label : uuid_str, rc);
+		goto out_json;
+	}
+
+	D_ASSERT(dmg_out != NULL);
+
+	if (json_object_is_type(dmg_out, json_type_null)) {
+		D_ERROR("Cannot find the property %s for %s\n",
+			name, label != NULL ? label : uuid_str);
+		D_GOTO(out_json, rc = -DER_ENOENT);
+	}
+
+	len = json_object_array_length(dmg_out);
+	D_ASSERTF(len >= 1, "Invalid prop entries count: %d\n", len);
+
+	rc = parse_dmg_string(json_object_array_get_idx(dmg_out, 0), "value", value);
+
+out_json:
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+
 out:
 	return rc;
 }
@@ -645,6 +773,56 @@ dmg_pool_create(const char *dmg_config_file,
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			has_label = true;
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SCRUB_MODE);
+		if (entry != NULL) {
+			const char *scrub_str = NULL;
+
+			switch (entry->dpe_val) {
+			case DAOS_SCRUB_MODE_OFF:
+				scrub_str = "off";
+				break;
+			case DAOS_SCRUB_MODE_LAZY:
+				scrub_str = "lazy";
+				break;
+			case DAOS_SCRUB_MODE_TIMED:
+				scrub_str = "timed";
+				break;
+			default:
+				break;
+			}
+
+			if (scrub_str) {
+				args = cmd_push_arg(args, &argcount, "--properties=scrub:%s ",
+						    scrub_str);
+				if (args == NULL)
+					D_GOTO(out, rc = -DER_NOMEM);
+			}
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENABLED);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=svc_ops_enabled:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_OPS_ENTRY_AGE);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=svc_ops_entry_age:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SPACE_RB);
+		if (entry != NULL) {
+			args = cmd_push_arg(args, &argcount, "--properties=space_rb:%zu ",
+					    entry->dpe_val);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
 		}
 	}
 
@@ -1032,6 +1210,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 {
 	struct json_object	*tmp;
 	struct json_object	*dev = NULL;
+	struct json_object      *ctrlr  = NULL;
 	struct json_object	*target = NULL;
 	struct json_object	*targets;
 	int			tgts_len;
@@ -1081,19 +1260,24 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		}
 		devices[*disks].n_tgtidx = tgts_len;
 
-		if (!json_object_object_get_ex(dev, "dev_state", &tmp)) {
-			D_ERROR("unable to extract state from JSON\n");
-			return -DER_INVAL;
-		}
-
-		snprintf(devices[*disks].state, sizeof(devices[*disks].state),
-			 "%s", json_object_to_json_string(tmp));
-
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
 			D_ERROR("unable to extract rank from JSON\n");
 			return -DER_INVAL;
 		}
 		devices[*disks].rank = atoi(json_object_to_json_string(tmp));
+
+		if (!json_object_object_get_ex(dev, "ctrlr", &ctrlr)) {
+			D_ERROR("unable to extract ctrlr obj from JSON\n");
+			return -DER_INVAL;
+		}
+
+		if (!json_object_object_get_ex(ctrlr, "dev_state", &tmp)) {
+			D_ERROR("unable to extract state from JSON\n");
+			return -DER_INVAL;
+		}
+
+		snprintf(devices[*disks].state, sizeof(devices[*disks].state), "%s",
+			 json_object_to_json_string(tmp));
 		*disks = *disks + 1;
 	}
 
@@ -1235,9 +1419,10 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	struct json_object	*storage_map = NULL;
 	struct json_object	*smd_info = NULL;
 	struct json_object	*storage_info = NULL;
-	struct json_object	*health_info = NULL;
+	struct json_object       *health_stats = NULL;
 	struct json_object	*devices = NULL;
 	struct json_object	*dev_info = NULL;
+	struct json_object       *ctrlr_info   = NULL;
 	struct json_object	*tmp = NULL;
 	char			uuid_str[DAOS_UUID_STR_SIZE];
 	int			argcount = 0;
@@ -1284,10 +1469,13 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 		}
 
 		dev_info = json_object_array_get_idx(devices, 0);
-		json_object_object_get_ex(dev_info, "health", &health_info);
-		if (health_info != NULL) {
-			json_object_object_get_ex(health_info, stats,
-						  &tmp);
+		if (!json_object_object_get_ex(dev_info, "ctrlr", &ctrlr_info)) {
+			D_ERROR("unable to extract ctrlr details from JSON\n");
+			D_GOTO(out_json, rc = -DER_INVAL);
+		}
+		json_object_object_get_ex(ctrlr_info, "health_stats", &health_stats);
+		if (health_stats != NULL) {
+			json_object_object_get_ex(health_stats, stats, &tmp);
 			strcpy(stats, json_object_to_json_string(tmp));
 		}
 	}
@@ -1337,9 +1525,11 @@ int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force)
 	struct json_object	*dmg_out = NULL;
 	int			rc = 0;
 
-	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
-	if (args == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	if (rank != CRT_NO_RANK) {
+		args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 	if (force != 0) {
 		args = cmd_push_arg(args, &argcount, " --force ");
@@ -1367,9 +1557,11 @@ int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank)
 	struct json_object	*dmg_out = NULL;
 	int			rc = 0;
 
-	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
-	if (args == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	if (rank != CRT_NO_RANK) {
+		args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 	rc = daos_dmg_json_pipe("system start", dmg_config_file,
 				args, argcount, &dmg_out);
@@ -1383,6 +1575,63 @@ int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank)
 out:
 	return rc;
 }
+
+int dmg_system_reint_rank(const char *dmg_config_file, d_rank_t rank)
+{
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	if (rank == CRT_NO_RANK)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("system clear-exclude", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg system clear-exclude failed\n");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+
+out:
+	return rc;
+}
+
+int dmg_system_exclude_rank(const char *dmg_config_file, d_rank_t rank)
+{
+	int			argcount = 0;
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			rc = 0;
+
+	if (rank == CRT_NO_RANK)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	args = cmd_push_arg(args, &argcount, " -r %d ", rank);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("system exclude", dmg_config_file,
+				args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg system exclude failed\n");
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+
+out:
+	return rc;
+}
+
 const char *
 daos_target_state_enum_to_str(int state)
 {
@@ -1396,4 +1645,460 @@ daos_target_state_enum_to_str(int state)
 	}
 
 	return "Undefined State";
+}
+
+int
+dmg_fault_inject(const char *dmg_config_file, uuid_t uuid, bool mgmt, const char *fault)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			argcount = 0;
+	int			rc = 0;
+
+	if (mgmt)
+		args = cmd_push_arg(args, &argcount, " mgmt-svc pool");
+	else
+		args = cmd_push_arg(args, &argcount, " pool-svc");
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	uuid_unparse_lower(uuid, uuid_str);
+	args = cmd_push_arg(args, &argcount, " %s", uuid_str);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	args = cmd_push_arg(args, &argcount, " %s", fault);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("faults", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg %s fault injection for " DF_UUID " with %s got failure: %d\n",
+			mgmt ? "mgmt" : "pool", DP_UUID(uuid), fault, rc);
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+
+out:
+	return rc;
+}
+
+int
+dmg_check_switch(const char *dmg_config_file, bool enable)
+{
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			argcount = 0;
+	int			rc = 0;
+
+	if (enable)
+		args = cmd_push_arg(args, &argcount, " enable");
+	else
+		args = cmd_push_arg(args, &argcount, " disable");
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = daos_dmg_json_pipe("check", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg check switch to %s failed: %d\n", enable ? "enable" : "disable", rc);
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+
+out:
+	return rc;
+}
+
+int
+dmg_check_start(const char *dmg_config_file, uint32_t flags, uint32_t pool_nr, uuid_t uuids[],
+		const char *policies)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			argcount = 0;
+	int			rc = 0;
+	int			i;
+
+	if (flags & TCSF_DRYRUN) {
+		args = cmd_push_arg(args, &argcount, " -n");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (flags & TCSF_RESET) {
+		args = cmd_push_arg(args, &argcount, " -r");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (flags & TCSF_FAILOUT) {
+		args = cmd_push_arg(args, &argcount, " --failout=on");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (flags & TCSF_AUTO) {
+		args = cmd_push_arg(args, &argcount, " --auto=on");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (flags & TCSF_ORPHAN) {
+		args = cmd_push_arg(args, &argcount, " -O");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (flags & TCSF_NO_FAILOUT) {
+		args = cmd_push_arg(args, &argcount, " --failout=off");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (flags & TCSF_NO_AUTO) {
+		args = cmd_push_arg(args, &argcount, " --auto=off");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (policies != NULL) {
+		args = cmd_push_arg(args, &argcount, " --policies=%s", policies);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	for (i = 0; i < pool_nr; i++) {
+		uuid_unparse_lower(uuids[i], uuid_str);
+		args = cmd_push_arg(args, &argcount, " %s", uuid_str);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("check start", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg check start with flags %x, policies %s failed: %d\n", flags,
+			policies != NULL ? policies : "(null)", rc);
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+out:
+	cmd_free_args(args, argcount);
+
+	return rc;
+}
+
+int
+dmg_check_stop(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[])
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			argcount = 0;
+	int			rc = 0;
+	int			i;
+
+	for (i = 0; i < pool_nr; i++) {
+		uuid_unparse_lower(uuids[i], uuid_str);
+		args = cmd_push_arg(args, &argcount, " %s", uuid_str);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("check stop", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg check stop failed: %d\n", rc);
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+
+out:
+	return rc;
+}
+
+static int
+check_query_reports_cmp(const void *p1, const void *p2)
+{
+	const struct daos_check_report_info	*dcri1 = p1;
+	const struct daos_check_report_info	*dcri2 = p2;
+
+	if (dcri1->dcri_class > dcri2->dcri_class)
+		return 1;
+
+	if (dcri1->dcri_class < dcri2->dcri_class)
+		return -1;
+
+	return 0;
+}
+
+static int
+parse_check_query_pool(struct json_object *obj, uuid_t uuid, struct daos_check_info *dci)
+{
+	struct daos_check_pool_info	*dcpi;
+	struct json_object		*pool;
+	char				 uuid_str[DAOS_UUID_STR_SIZE];
+	int				 rc;
+
+	uuid_unparse_lower(uuid, uuid_str);
+
+	/* The queried pool may not exist. */
+	if (!json_object_object_get_ex(obj, uuid_str, &pool)) {
+		D_WARN("Do not find the pool %s in check query result, may not exist\n", uuid_str);
+		return 0;
+	}
+
+	dcpi = &dci->dci_pools[dci->dci_pool_nr];
+
+	rc = parse_dmg_uuid(pool, "uuid", dcpi->dcpi_uuid);
+	if (rc != 0)
+		return rc;
+
+	rc = parse_dmg_string(pool, "status", &dcpi->dcpi_status);
+	if (rc != 0)
+		return rc;
+
+	rc = parse_dmg_string(pool, "phase", &dcpi->dcpi_phase);
+	if (rc == 0)
+		dci->dci_pool_nr++;
+
+	return rc;
+}
+
+static int
+parse_check_query_report(struct json_object *obj, struct daos_check_report_info *dcri)
+{
+	struct json_object	*tmp;
+	int			 rc;
+	int			 i;
+
+	rc = parse_dmg_uuid(obj, "pool_uuid", dcri->dcri_uuid);
+	if (rc != 0)
+		return rc;
+
+	if (!json_object_object_get_ex(obj, "seq", &tmp)) {
+		D_ERROR("Unable to extract seq for pool " DF_UUID " from check query result\n",
+			DP_UUID(dcri->dcri_uuid));
+		return -DER_INVAL;
+	}
+
+	dcri->dcri_seq = json_object_get_int64(tmp);
+
+	if (!json_object_object_get_ex(obj, "class", &tmp)) {
+		D_ERROR("Unable to extract class for pool " DF_UUID " from check query result\n",
+			DP_UUID(dcri->dcri_uuid));
+		return -DER_INVAL;
+	}
+
+	dcri->dcri_class = json_object_get_int(tmp);
+
+	if (!json_object_object_get_ex(obj, "action", &tmp)) {
+		D_ERROR("Unable to extract action for pool " DF_UUID " from check query result\n",
+			DP_UUID(dcri->dcri_uuid));
+		return -DER_INVAL;
+	}
+
+	dcri->dcri_act = json_object_get_int(tmp);
+
+	if (!json_object_object_get_ex(obj, "result", &tmp))
+		dcri->dcri_result = 0;
+	else
+		dcri->dcri_result = json_object_get_int(tmp);
+
+	/* Not interaction. */
+	if (!json_object_object_get_ex(obj, "act_choices", &tmp))
+		return 0;
+
+	dcri->dcri_option_nr = json_object_array_length(tmp);
+	D_ASSERTF(dcri->dcri_option_nr > 0,
+		  "Invalid options count for pool " DF_UUID " in check query result: %d\n",
+		  DP_UUID(dcri->dcri_uuid), dcri->dcri_option_nr);
+
+	for (i = 0; i < dcri->dcri_option_nr; i++)
+		dcri->dcri_options[i] = json_object_get_int(json_object_array_get_idx(tmp, i));
+
+	return 0;
+}
+
+static int
+parse_check_query_info(struct json_object *query_output, uint32_t pool_nr, uuid_t uuids[],
+		       struct daos_check_info *dci)
+{
+	struct json_object	*obj;
+	int			 i;
+	int			 rc;
+
+	rc = parse_dmg_string(query_output, "status", &dci->dci_status);
+	if (rc != 0)
+		return rc;
+
+	rc = parse_dmg_string(query_output, "scan_phase", &dci->dci_phase);
+	if (rc != 0)
+		return rc;
+
+	dci->dci_pool_nr = 0;
+
+	if (pool_nr <= 0)
+		goto reports;
+
+	if (!json_object_object_get_ex(query_output, "pools", &obj)) {
+		D_ERROR("Unable to extract pools from check query result\n");
+		return -DER_INVAL;
+	}
+
+	if (json_object_is_type(obj, json_type_null))
+		goto reports;
+
+	D_ALLOC_ARRAY(dci->dci_pools, pool_nr);
+	if (dci->dci_pools == NULL) {
+		D_ERROR("Failed to allocate pools (len %d) for check query result\n", pool_nr);
+		return -DER_NOMEM;
+	}
+
+	for (i = 0; i < pool_nr; i++) {
+		rc = parse_check_query_pool(obj, uuids[i], dci);
+		if (rc != 0)
+			return rc;
+	}
+
+reports:
+	if (!json_object_object_get_ex(query_output, "reports", &obj)) {
+		D_ERROR("Unable to extract reports from check query result\n");
+		return -DER_INVAL;
+	}
+
+	if (json_object_is_type(obj, json_type_null)) {
+		dci->dci_report_nr = 0;
+		return 0;
+	}
+
+	dci->dci_report_nr = json_object_array_length(obj);
+	D_ASSERTF(dci->dci_report_nr > 0,
+		  "Invalid reports count pool in check query result: %d\n", dci->dci_report_nr);
+
+	D_ALLOC_ARRAY(dci->dci_reports, dci->dci_report_nr);
+	if (dci->dci_reports == NULL) {
+		D_ERROR("Failed to allocate reports (len %d) for check query result\n",
+			dci->dci_report_nr);
+		return -DER_NOMEM;
+	}
+
+	for (i = 0; i < dci->dci_report_nr; i++) {
+		rc = parse_check_query_report(json_object_array_get_idx(obj, i),
+					      &dci->dci_reports[i]);
+		if (rc != 0)
+			return rc;
+	}
+
+	/* Sort the inconsistency reports for easy verification. */
+	if (dci->dci_report_nr > 1)
+		qsort(dci->dci_reports, dci->dci_report_nr, sizeof(dci->dci_reports[0]),
+		      check_query_reports_cmp);
+
+	return 0;
+}
+
+int
+dmg_check_query(const char *dmg_config_file, uint32_t pool_nr, uuid_t uuids[],
+		struct daos_check_info *dci)
+{
+	char			uuid_str[DAOS_UUID_STR_SIZE];
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			argcount = 0;
+	int			rc = 0;
+	int			i;
+
+	for (i = 0; i < pool_nr; i++) {
+		uuid_unparse_lower(uuids[i], uuid_str);
+		args = cmd_push_arg(args, &argcount, " %s", uuid_str);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("check query", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg check query failed: %d\n", rc);
+	else
+		rc = parse_check_query_info(dmg_out, pool_nr, uuids, dci);
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+
+out:
+	return rc;
+}
+
+int
+dmg_check_repair(const char *dmg_config_file, uint64_t seq, uint32_t opt, bool for_all)
+{
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			argcount = 0;
+	int			rc = 0;
+
+	args = cmd_push_arg(args, &argcount, " %Lu %u", seq, opt);
+	if (args == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (for_all) {
+		args = cmd_push_arg(args, &argcount, " -f");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("check repair", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg check repair with seq %lu, opt %u, for_all %s, failed: %d\n",
+			(unsigned long)seq, opt, for_all ? "yes" : "no", rc);
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+
+out:
+	return rc;
+}
+int
+dmg_check_set_policy(const char *dmg_config_file, uint32_t flags, const char *policies)
+{
+	char			**args = NULL;
+	struct json_object	*dmg_out = NULL;
+	int			argcount = 0;
+	int			rc = 0;
+
+	if (flags & TCPF_RESET) {
+		args = cmd_push_arg(args, &argcount, " -d");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	if (flags & TCPF_INTERACT) {
+		args = cmd_push_arg(args, &argcount, " -a");
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	rc = daos_dmg_json_pipe("check set-policy", dmg_config_file, args, argcount, &dmg_out);
+	if (rc != 0)
+		D_ERROR("dmg check set-policy with flags %x, policies %s failed: %d\n", flags,
+			policies != NULL ? policies : "(null)", rc);
+
+	if (dmg_out != NULL)
+		json_object_put(dmg_out);
+
+	cmd_free_args(args, argcount);
+
+out:
+	return rc;
 }

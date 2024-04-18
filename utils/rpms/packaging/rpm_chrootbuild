@@ -4,6 +4,13 @@ set -uex
 
 cp /etc/mock/"$CHROOT_NAME".cfg mock.cfg
 
+# Enable mock ccache plugin
+cat <<EOF >> mock.cfg
+config_opts['plugin_conf']['ccache_enable'] = True
+config_opts['plugin_conf']['ccache_opts']['dir'] = "%(cache_topdir)s/%(root)s/ccache/"
+EOF
+
+
 if [[ $CHROOT_NAME == *epel-8-x86_64 ]]; then
     cat <<EOF >> mock.cfg
 config_opts['module_setup_commands'] = [
@@ -103,24 +110,30 @@ if [ -n "$DISTRO_VERSION" ]; then
 fi
 
 bs_dir=/scratch/mock/cache/"${CHROOT_NAME}"-bootstrap
-if ls -l /scratch/mock/cache/"${CHROOT_NAME}"-bootstrap/root_cache/cache.tar.gz; then
-    mkdir -p "/var/cache/mock/${CHROOT_NAME}-bootstrap"
+if ls -l "$bs_dir"/root_cache/cache.tar.gz; then
+    mkdir -p "/var/cache/mock/${CHROOT_NAME}-bootstrap/"
     flock "$bs_dir" -c "cp -a $bs_dir/root_cache /var/cache/mock/${CHROOT_NAME}-bootstrap"
+fi
+if ls -l "$bs_dir/ccache-$CHROOT_NAME-$PACKAGE".tar.gz; then
+    flock "$bs_dir" -c "tar -C / -xzf $bs_dir/ccache-$CHROOT_NAME-$PACKAGE.tar.gz"
 fi
 
 rc=0
 # shellcheck disable=SC2086,SC2048
-if ! eval mock -r mock.cfg ${repo_dels[*]} ${repo_adds[*]} --no-clean \
-          --disablerepo=\*-debug* ${releasever_opt[*]} $MOCK_OPTIONS  \
-          $RPM_BUILD_OPTIONS "$TARGET"; then
+if ! eval time mock -r mock.cfg ${repo_dels[*]} ${repo_adds[*]} --no-clean \
+                    --disablerepo=\*-debug* ${releasever_opt[*]} $MOCK_OPTIONS  \
+                    $RPM_BUILD_OPTIONS "$TARGET"; then
     rc=${PIPESTATUS[0]}
 fi
 
-if ls -l /var/cache/mock/"${CHROOT_NAME}"-bootstrap/root_cache/cache.tar.gz &&
-   [ -d /scratch/ ]; then
-    mkdir -p /scratch/mock/cache/"${CHROOT_NAME}"-bootstrap/
-    if ! cmp /var/cache/mock/"${CHROOT_NAME}"-bootstrap/root_cache/cache.tar.gz "$bs_dir"/root_cache/cache.tar.gz; then
-        flock "$bs_dir" -c "cp -a /var/cache/mock/${CHROOT_NAME}-bootstrap/root_cache $bs_dir/"
+# Save the ccache
+if [ -d /scratch/ ]; then
+    mkdir -p "$bs_dir"/
+    flock "$bs_dir" -c "tar -czf $bs_dir/ccache-$CHROOT_NAME-$PACKAGE.tar.gz /var/cache/mock/${CHROOT_NAME}/ccache"
+    if ls -l /var/cache/mock/"${CHROOT_NAME}"-bootstrap/root_cache/cache.tar.gz; then
+        if ! cmp /var/cache/mock/"${CHROOT_NAME}"-bootstrap/root_cache/cache.tar.gz "$bs_dir"/root_cache/cache.tar.gz; then
+            flock "$bs_dir" -c "cp -a /var/cache/mock/${CHROOT_NAME}-bootstrap/root_cache $bs_dir/"
+        fi
     fi
 fi
 

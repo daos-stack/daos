@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,6 +47,9 @@ iov2svt_key(d_iov_t *key_iov)
 static struct vos_rec_bundle *
 iov2rec_bundle(d_iov_t *val_iov)
 {
+	if (val_iov == NULL)
+		return NULL;
+
 	D_ASSERT(val_iov->iov_len == sizeof(struct vos_rec_bundle));
 	return (struct vos_rec_bundle *)val_iov->iov_buf;
 }
@@ -151,7 +154,9 @@ ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
 	struct ktr_hkey		*kkey = (struct ktr_hkey *)hkey;
 	struct umem_pool        *umm_pool = tins->ti_umm.umm_pool;
+	struct vos_pool         *pool     = (struct vos_pool *)tins->ti_priv;
 
+	D_ASSERT(key_iov->iov_len < pool->vp_pool_df->pd_scm_sz);
 	hkey_common_gen(key_iov, hkey);
 
 	if (key_iov->iov_len > KH_INLINE_MAX)
@@ -307,8 +312,19 @@ static int
 ktr_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	      d_iov_t *key_iov, d_iov_t *val_iov)
 {
+	char                    *kbuf;
 	struct vos_krec_df	*krec = vos_rec2krec(tins, rec);
 	struct vos_rec_bundle	*rbund = iov2rec_bundle(val_iov);
+
+	/** For embedded value, we sometimes only need to fetch the key,
+	 *  to generate the hash.
+	 */
+	if (rbund == NULL) {
+		D_ASSERT(key_iov != NULL);
+		kbuf = vos_krec2key(krec);
+		d_iov_set(key_iov, kbuf, krec->kr_size);
+		return 0;
+	}
 
 	rbund->rb_krec = krec;
 
@@ -585,7 +601,6 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	struct dtx_handle	*dth = NULL;
 	struct umem_rsrvd_act	*rsrvd_scm;
 	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
-	int			 i;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -618,10 +633,10 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	/** There can't be more cancellations than updates in this
 	 *  modification so just use the current one
 	 */
-	D_ASSERT(dth->dth_op_seq > 0);
-	D_ASSERT(dth->dth_op_seq <= dth->dth_deferred_cnt);
-	i = dth->dth_op_seq - 1;
-	rsrvd_scm = dth->dth_deferred[i];
+	D_ASSERTF(dth->dth_deferred_used_cnt < dth->dth_deferred_cnt, "%u < %u\n",
+		  dth->dth_deferred_used_cnt, dth->dth_deferred_cnt);
+	rsrvd_scm = dth->dth_deferred[dth->dth_deferred_used_cnt];
+	dth->dth_deferred_used_cnt++;
 	D_ASSERT(rsrvd_scm != NULL);
 
 	umem_defer_free(&tins->ti_umm, rec->rec_off, rsrvd_scm);
@@ -713,31 +728,33 @@ static btr_ops_t singv_btr_ops = {
  * @} vos_singv_btr
  */
 static struct vos_btr_attr vos_btr_attrs[] = {
-	{
-		.ta_class	= VOS_BTR_DKEY,
-		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
-		.ta_name	= "vos_dkey",
-		.ta_ops		= &key_btr_ops,
-	},
-	{
-		.ta_class	= VOS_BTR_AKEY,
-		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
-		.ta_name	= "vos_akey",
-		.ta_ops		= &key_btr_ops,
-	},
-	{
-		.ta_class	= VOS_BTR_SINGV,
-		.ta_order	= VOS_SVT_ORDER,
-		.ta_feats	= BTR_FEAT_DYNAMIC_ROOT,
-		.ta_name	= "singv",
-		.ta_ops		= &singv_btr_ops,
-	},
-	{
-		.ta_class	= VOS_BTR_END,
-		.ta_name	= "null",
-	},
+    {
+	.ta_class = VOS_BTR_DKEY,
+	.ta_order = VOS_KTR_ORDER,
+	.ta_feats =
+	    BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+	.ta_name = "vos_dkey",
+	.ta_ops  = &key_btr_ops,
+    },
+    {
+	.ta_class = VOS_BTR_AKEY,
+	.ta_order = VOS_KTR_ORDER,
+	.ta_feats =
+	    BTR_FEAT_EMBED_FIRST | BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
+	.ta_name = "vos_akey",
+	.ta_ops  = &key_btr_ops,
+    },
+    {
+	.ta_class = VOS_BTR_SINGV,
+	.ta_order = VOS_SVT_ORDER,
+	.ta_feats = BTR_FEAT_DYNAMIC_ROOT,
+	.ta_name  = "singv",
+	.ta_ops   = &singv_btr_ops,
+    },
+    {
+	.ta_class = VOS_BTR_END,
+	.ta_name  = "null",
+    },
 };
 
 static int
@@ -891,6 +908,13 @@ create:
 		}
 
 		ta = obj_tree_find_attr(tclass, flags);
+
+		/** Single value tree uses major epoch for hash key and minor
+		 * epoch for key so it doesn't play nicely with embedded value
+		 * and even if it did, it would not be more efficient.
+		 */
+		if (ta->ta_class != VOS_BTR_SINGV && (pool->vp_feats & VOS_POOL_FEAT_EMBED_FIRST))
+			tree_feats |= BTR_FEAT_EMBED_FIRST;
 
 		D_DEBUG(DB_TRACE, "Create dbtree %s feats 0x"DF_X64"\n",
 			ta->ta_name, tree_feats);

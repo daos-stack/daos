@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.5.100
-Release:       13%{?relval}%{?dist}
+Version:       2.5.101
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -67,13 +67,13 @@ BuildRequires: capstone-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
-BuildRequires: libisa-l-devel
+BuildRequires: isa-l-devel
 BuildRequires: libisa-l_crypto-devel
 %else
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.10.1-2.411.gefa15f4%{?dist}
+BuildRequires: daos-raft-devel = 0.11.0-1.416.g12dbc15%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -207,9 +207,7 @@ packages
 Summary: The DAOS test suite
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 Requires: %{name}-admin%{?_isa} = %{version}-%{release}
-Requires: python3-distro
-Requires: python3-tabulate
-Requires: python3-defusedxml
+Requires: %{name}-devel%{?_isa} = %{version}-%{release}
 Requires: protobuf-c-devel
 Requires: fio
 Requires: git
@@ -364,7 +362,7 @@ install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
 mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 # fixup env-script-interpreters
-sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,verify_perms}.py,%{_bindir}/daos_storage_estimator.py,%{_datarootdir}/daos/control/setup_spdk.sh}
+sed -i -e '1s/env //' %{buildroot}{%{daoshome}/TESTING/ftest/{cart/cart_logtest,config_file_gen,launch,slurm_setup,tags,verify_perms}.py,%{_bindir}/daos_storage_estimator.py}
 
 # shouldn't have source files in a non-devel RPM
 rm -f %{buildroot}%{daoshome}/TESTING/ftest/cart/{test_linkage.cpp,utest_{hlc,portnumber,protocol,swim}.c,wrap_cmocka.h}
@@ -383,6 +381,7 @@ getent passwd daos_server >/dev/null || useradd -s /sbin/nologin -r -g daos_serv
 %preun server
 %systemd_preun %{server_svc_name}
 
+# all of these macros are empty on EL so keep rpmlint happy
 %if (0%{?suse_version} > 0)
 %postun server
 %{?run_ldconfig}
@@ -408,7 +407,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files
 %defattr(-, root, root, -)
 %doc README.md
-%{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %attr(0755,root,root) %{conf_dir}/certs
 %config(noreplace) %{conf_dir}/memcheck-cart.supp
 %dir %{conf_dir}
@@ -433,8 +431,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %{_bindir}/daos_metrics
+%{_bindir}/ddb
+%{_sysconfdir}/ld.so.conf.d/daos.conf
 %dir %{_libdir}/daos_srv
+%{_libdir}/daos_srv/libchk.so
 %{_libdir}/daos_srv/libcont.so
+%{_libdir}/daos_srv/libddb.so
 %{_libdir}/daos_srv/libdtx.so
 %{_libdir}/daos_srv/libmgmt.so
 %{_libdir}/daos_srv/libobj.so
@@ -520,9 +522,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %config(noreplace) %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 %{_bindir}/crt_launch
-# For avocado tests
-%{daoshome}/.build_vars.json
-%{daoshome}/.build_vars.sh
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/daos_test
@@ -542,6 +541,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files server-tests
 %doc README.md
+%{_bindir}/dtx_tests
 %{_bindir}/evt_ctl
 %{_bindir}/jump_pl_map
 %{_bindir}/pl_bench
@@ -552,6 +552,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
+%{_bindir}/ddb_tests
 %{_bindir}/obj_ctl
 %{_bindir}/vos_perf
 
@@ -562,6 +563,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libgurt.so
 %{_libdir}/libcart.so
 %{_libdir}/*.a
+%{daoshome}/python
 
 %files firmware
 %doc README.md
@@ -585,6 +587,28 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Apr 05 2024 Fan Yong <fan.yong@intel.com> 2.5.101-4
+- Catastrophic Recovery
+
+* Thu Apr 04 2024 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.5.101-3
+- Update pydaos install process
+- Add a dependency from daos-client-tests to daos-devel
+
+* Mon Mar 18 2024 Jan Michalski <jan.michalski@intel.com> 2.5.101-2
+- Add dtx_tests to the server-tests package
+
+* Fri Mar 15 2024 Phillip Henderson <phillip.henderson@intel.com> 2.5.101-1
+- Bump version to 2.5.101
+
+* Tue Feb 27 2024 Li Wei <wei.g.li@intel.com> 2.5.100-16
+- Update raft to 0.11.0-1.416.g12dbc15
+
+* Mon Feb 12 2024 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-15
+- Updated isa-l package name to match EPEL
+
+* Tue Jan 09 2024 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-14
+- Move /etc/ld.so.conf.d/daos.conf to daos-server sub-package
+
 * Wed Dec 06 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-13
 - Update for EL 8.8 and Leap 15.5
 - Update raft to 0.10.1-2.411.gefa15f4

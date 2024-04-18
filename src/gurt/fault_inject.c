@@ -616,7 +616,7 @@ d_fault_inject_init(void)
 out:
 	if (fp)
 		fclose(fp);
-	d_free_env_str(&config_file);
+	d_freeenv_str(&config_file);
 	return rc;
 }
 
@@ -734,28 +734,28 @@ out:
 int
 d_fault_inject_init(void)
 {
-	D_INFO("Fault Injection not initialized feature not included in build\n");
+	D_DEBUG(DB_ALL, "Fault Injection not initialized feature not included in build\n");
 	return -DER_NOSYS;
 }
 
 int
 d_fault_inject_fini(void)
 {
-	D_INFO("Fault Injection not finalized feature not included in build\n");
+	D_DEBUG(DB_ALL, "Fault Injection not finalized feature not included in build\n");
 	return -DER_NOSYS;
 }
 
 int
 d_fault_inject_enable(void)
 {
-	D_INFO("Fault Injection not enabled feature not included in build\n");
+	D_DEBUG(DB_ALL, "Fault Injection not enabled feature not included in build\n");
 	return -DER_NOSYS;
 }
 
 int
 d_fault_inject_disable(void)
 {
-	D_INFO("Fault Injection not disabled feature not included in build\n");
+	D_DEBUG(DB_ALL, "Fault Injection not disabled feature not included in build\n");
 	return -DER_NOSYS;
 }
 

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,7 +7,7 @@
 /**
  * common helper functions for object
  */
-#define DDSUBSYS	DDFAC(object)
+#define D_LOGFAC DD_FAC(object)
 
 #include <daos_types.h>
 #include "obj_internal.h"
@@ -84,6 +84,225 @@ daos_iods_free(daos_iod_t *iods, int nr, bool need_free)
 
 	if (need_free)
 		D_FREE(iods);
+}
+
+void
+obj_ec_recx_vos2daos(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
+		     daos_recx_t *recx, bool get_max)
+{
+	daos_recx_t	tmp;
+	uint64_t	end;
+	uint64_t	dkey_hash;
+	uint64_t	stripe_rec_nr;
+	uint64_t	cell_rec_nr;
+	uint32_t	tgt_off;
+	bool		from_data_tgt;
+
+	D_ASSERT(daos_oclass_is_ec(oca));
+	D_ASSERT(!(recx->rx_idx & PARITY_INDICATOR));
+
+	dkey_hash = obj_dkey2hash(oid.id_pub, dkey);
+	tgt_off = obj_ec_shard_off_by_oca(oid.id_layout_ver, dkey_hash, oca, oid.id_shard);
+	from_data_tgt = is_ec_data_shard_by_tgt_off(tgt_off, oca);
+	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	cell_rec_nr = obj_ec_cell_rec_nr(oca);
+
+	/*
+	 * Data ext from data shard needs to be converted to daos ext,
+	 * replica ext from parity shard needs not to convert.
+	 */
+	end = DAOS_RECX_END(*recx);
+	if (end > 0 && from_data_tgt) {
+		tmp = *recx;
+		if (get_max) {
+			tmp.rx_idx = max(tmp.rx_idx, rounddown(end - 1, cell_rec_nr));
+			tmp.rx_nr = end - tmp.rx_idx;
+		} else {
+			tmp.rx_nr = min(end, roundup(tmp.rx_idx + 1, cell_rec_nr)) - tmp.rx_idx;
+		}
+
+		tmp.rx_idx = obj_ec_idx_vos2daos(tmp.rx_idx, stripe_rec_nr, cell_rec_nr, tgt_off);
+
+		D_DEBUG(DB_IO, "Convert Object "DF_UOID" data shard ext: off %u, stripe_rec_nr "
+			DF_U64", cell_rec_nr "DF_U64", ["DF_U64" "DF_U64"]/["DF_U64" "DF_U64"]\n",
+			DP_UOID(oid), tgt_off, stripe_rec_nr, cell_rec_nr,
+			recx->rx_idx, recx->rx_nr, tmp.rx_idx, tmp.rx_nr);
+		*recx = tmp;
+	}
+}
+
+static void
+obj_query_reduce_recx(struct daos_oclass_attr *oca, daos_unit_oid_t oid, daos_key_t *dkey,
+		      daos_recx_t *src_recx, daos_recx_t *tgt_recx, bool get_max, bool changed,
+		      bool raw_recx, uint32_t *shard)
+{
+	daos_recx_t tmp_recx = *src_recx;
+	uint64_t    tmp_end;
+
+	if (daos_oclass_is_ec(oca)) {
+		if (raw_recx)
+			obj_ec_recx_vos2daos(oca, oid, dkey, &tmp_recx, get_max);
+		tmp_end = DAOS_RECX_END(tmp_recx);
+		if ((get_max && DAOS_RECX_END(*tgt_recx) < tmp_end) ||
+		    (!get_max && DAOS_RECX_END(*tgt_recx) > tmp_end))
+			changed = true;
+	} else {
+		changed = true;
+	}
+
+	if (changed) {
+		*tgt_recx = tmp_recx;
+		if (shard != NULL)
+			*shard = oid.id_shard;
+	}
+}
+
+static inline void
+obj_query_reduce_key(uint64_t *tgt_val, uint64_t src_val, bool *changed, bool dkey,
+		     uint32_t *tgt_shard, uint32_t src_shard)
+{
+	D_DEBUG(DB_TRACE, "%s update "DF_U64"->"DF_U64"\n",
+		dkey ? "dkey" : "akey", *tgt_val, src_val);
+
+	*tgt_val = src_val;
+	/* Set to change akey and recx. */
+	*changed = true;
+	if (tgt_shard != NULL)
+		*tgt_shard = src_shard;
+}
+
+/*
+ * Merge object query results from different components.
+ * We will do at most four level query results merge:
+ *
+ * L1: merge the results from different shards on the same VOS target.
+ * L2: merge the results from different VOS targets on the same engine.
+ * L3: the relay engine merge the results from other child (relay) engines.
+ * L4: the client merge the results from all (relay or direct leaf) engines.
+ */
+int
+daos_obj_query_merge(struct obj_query_merge_args *oqma)
+{
+	uint64_t	*val;
+	uint64_t	*cur;
+	uint32_t	 timeout = 0;
+	bool		 check = true;
+	bool		 changed = false;
+	bool		 get_max = (oqma->oqma_flags & DAOS_GET_MAX) ? true : false;
+	bool		 first = false;
+	int		 rc = 0;
+
+	D_ASSERT(oqma->oqma_oca != NULL);
+	oqma->oqma_opc = opc_get(oqma->oqma_opc);
+
+	if (oqma->oqma_ret != 0) {
+		if (oqma->oqma_ret == -DER_NONEXIST)
+			D_GOTO(set_max_epoch, rc = 0);
+
+		if (oqma->oqma_ret == -DER_INPROGRESS || oqma->oqma_ret == -DER_TX_BUSY ||
+		    oqma->oqma_ret == -DER_OVERLOAD_RETRY)
+			D_DEBUG(DB_TRACE, "%s query rpc needs retry: "DF_RC"\n",
+				oqma->oqma_opc == DAOS_OBJ_RPC_COLL_QUERY ? "Coll" : "Regular",
+				DP_RC(oqma->oqma_ret));
+		else
+			D_ERROR("%s query rpc failed: "DF_RC"\n",
+				oqma->oqma_opc == DAOS_OBJ_RPC_COLL_QUERY ? "Coll" : "Regular",
+				DP_RC(oqma->oqma_ret));
+
+		if (oqma->oqma_ret == -DER_OVERLOAD_RETRY && oqma->oqma_rpc != NULL) {
+			D_ASSERT(oqma->oqma_max_delay != NULL);
+			D_ASSERT(oqma->oqma_queue_id != NULL);
+
+			if (oqma->oqma_opc == DAOS_OBJ_RPC_COLL_QUERY) {
+				struct obj_coll_query_out *ocqo = crt_reply_get(oqma->oqma_rpc);
+
+				if (*oqma->oqma_queue_id == 0)
+					*oqma->oqma_queue_id =
+						ocqo->ocqo_comm_out.req_out_enqueue_id;
+			} else {
+				struct obj_query_key_v10_out *okqo = crt_reply_get(oqma->oqma_rpc);
+
+				if (*oqma->oqma_queue_id == 0)
+					*oqma->oqma_queue_id =
+						okqo->okqo_comm_out.req_out_enqueue_id;
+			}
+
+			crt_req_get_timeout(oqma->oqma_rpc, &timeout);
+			if (timeout > *oqma->oqma_max_delay)
+				*oqma->oqma_max_delay = timeout;
+		}
+
+		D_GOTO(out, rc = oqma->oqma_ret);
+	}
+
+	if (*oqma->oqma_tgt_map_ver < oqma->oqma_src_map_ver)
+		*oqma->oqma_tgt_map_ver = oqma->oqma_src_map_ver;
+
+	if (oqma->oqma_flags == 0)
+		goto set_max_epoch;
+
+	if (oqma->oqma_tgt_dkey->iov_len == 0)
+		first = true;
+
+	if (oqma->oqma_flags & DAOS_GET_DKEY) {
+		val = (uint64_t *)oqma->oqma_src_dkey->iov_buf;
+		cur = (uint64_t *)oqma->oqma_tgt_dkey->iov_buf;
+
+		D_ASSERT(cur != NULL);
+
+		if (oqma->oqma_src_dkey->iov_len != sizeof(uint64_t)) {
+			D_ERROR("Invalid dkey obtained: %d\n", (int)oqma->oqma_src_dkey->iov_len);
+			D_GOTO(out, rc = -DER_IO);
+		}
+
+		/* For first merge, just set the dkey. */
+		if (first) {
+			oqma->oqma_tgt_dkey->iov_len = oqma->oqma_src_dkey->iov_len;
+			obj_query_reduce_key(cur, *val, &changed, true, oqma->oqma_shard,
+					     oqma->oqma_oid.id_shard);
+		} else if (get_max) {
+			if (*val > *cur)
+				obj_query_reduce_key(cur, *val, &changed, true, oqma->oqma_shard,
+						     oqma->oqma_oid.id_shard);
+			else if (!daos_oclass_is_ec(oqma->oqma_oca) || *val < *cur)
+				/*
+				 * No change, don't check akey and recx for replica obj. EC obj
+				 * needs to check again as it maybe from different data shards.
+				 */
+				check = false;
+		} else if (oqma->oqma_flags & DAOS_GET_MIN) {
+			if (*val < *cur)
+				obj_query_reduce_key(cur, *val, &changed, true, oqma->oqma_shard,
+						     oqma->oqma_oid.id_shard);
+			else if (!daos_oclass_is_ec(oqma->oqma_oca))
+				check = false;
+		} else {
+			D_ASSERT(0);
+		}
+	}
+
+	if (check && oqma->oqma_flags & DAOS_GET_AKEY) {
+		val = (uint64_t *)oqma->oqma_src_akey->iov_buf;
+		cur = (uint64_t *)oqma->oqma_tgt_akey->iov_buf;
+
+		/* If first merge or dkey changed, set akey. */
+		if (first || changed)
+			obj_query_reduce_key(cur, *val, &changed, false, NULL,
+					     oqma->oqma_oid.id_shard);
+	}
+
+	if (check && oqma->oqma_flags & DAOS_GET_RECX)
+		obj_query_reduce_recx(oqma->oqma_oca, oqma->oqma_oid,
+				      (oqma->oqma_flags & DAOS_GET_DKEY) ? oqma->oqma_src_dkey
+									 : oqma->oqma_in_dkey,
+				      oqma->oqma_src_recx, oqma->oqma_tgt_recx, get_max, changed,
+				      oqma->oqma_raw_recx, oqma->oqma_shard);
+
+set_max_epoch:
+	if (oqma->oqma_tgt_epoch != NULL && *oqma->oqma_tgt_epoch < oqma->oqma_src_epoch)
+		*oqma->oqma_tgt_epoch = oqma->oqma_src_epoch;
+out:
+	return rc;
 }
 
 struct recx_rec {

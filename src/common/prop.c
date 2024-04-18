@@ -16,7 +16,6 @@
 #include <daos/dtx.h>
 #include <daos_security.h>
 #include <daos/cont_props.h>
-#include <daos_srv/policy.h>
 #include <daos/pool.h>
 #include <daos/pool_map.h>
 
@@ -59,7 +58,6 @@ daos_prop_has_str(struct daos_prop_entry *entry)
 	case DAOS_PROP_CO_OWNER:
 	case DAOS_PROP_PO_OWNER_GROUP:
 	case DAOS_PROP_CO_OWNER_GROUP:
-	case DAOS_PROP_PO_POLICY:
 		return true;
 	}
 	return false;
@@ -237,15 +235,6 @@ daos_prop_owner_group_valid(d_string_t owner)
 	return str_valid(owner, "owner-group", DAOS_ACL_MAX_PRINCIPAL_LEN);
 }
 
-static bool
-daos_prop_policy_valid(d_string_t policy_str)
-{
-	if (!daos_policy_try_parse(policy_str, NULL))
-		return false;
-
-	return true;
-}
-
 /**
  * Check if the input daos_prop_t parameter is valid
  * \a pool true for pool properties, false for container properties.
@@ -309,11 +298,6 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
-		case DAOS_PROP_PO_POLICY:
-			if (!daos_prop_policy_valid(
-				prop->dpp_entries[i].dpe_str))
-				return false;
-			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
 			acl_ptr = prop->dpp_entries[i].dpe_val_ptr;
@@ -361,6 +345,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_RP_PDA:
 		case DAOS_PROP_PO_GLOBAL_VERSION:
 		case DAOS_PROP_PO_OBJ_VERSION:
+		case DAOS_PROP_PO_DATA_THRESH:
 			break;
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			val = prop->dpp_entries[i].dpe_val;
@@ -412,6 +397,21 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			val = prop->dpp_entries[i].dpe_val;
 			if (!daos_svc_rf_is_valid(val)) {
 				D_ERROR("invalid svc_rf "DF_U64"\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_SVC_OPS_ENABLED:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val > 1) {
+				D_ERROR("invalid svc_ops_enabled " DF_U64 ".\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_SVC_OPS_ENTRY_AGE:
+			val = prop->dpp_entries[i].dpe_val;
+			if ((val < DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MIN) ||
+			    (val > DAOS_PROP_PO_SVC_OPS_ENTRY_AGE_MAX)) {
+				D_ERROR("invalid svc_ops_entry_age " DF_U64 ".\n", val);
 				return false;
 			}
 			break;
@@ -620,12 +620,6 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 			return rc;
 		}
 		break;
-	case DAOS_PROP_PO_POLICY:
-		D_STRNDUP(entry_dup->dpe_str, entry->dpe_str,
-			  DAOS_PROP_POLICYSTR_MAX_LEN);
-		if (entry_dup->dpe_str == NULL)
-			return -DER_NOMEM;
-		break;
 	default:
 		entry_dup->dpe_val = entry->dpe_val;
 		break;
@@ -798,8 +792,7 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	bool			 owner_alloc = false;
 	bool			 group_alloc = false;
 	bool			 svc_list_alloc = false;
-	bool			 roots_alloc = false;
-	bool			 policy_alloc = false;
+	bool			 roots_alloc    = false;
 	struct daos_acl		*acl;
 	d_rank_list_t		*dst_list;
 	uint32_t		 type;
@@ -886,12 +879,6 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 				D_GOTO(out, rc);
 
 			roots_alloc = true;
-		} else if (type == DAOS_PROP_PO_POLICY) {
-			D_STRNDUP(entry_req->dpe_str, entry_reply->dpe_str,
-				  DAOS_PROP_POLICYSTR_MAX_LEN);
-			if (entry_req->dpe_str == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			policy_alloc = true;
 		} else {
 			entry_req->dpe_val = entry_reply->dpe_val;
 		}
@@ -922,9 +909,6 @@ out:
 		}
 		if (roots_alloc)
 			free_ptr_prop_entry(prop_req, DAOS_PROP_CO_ROOTS);
-
-		if (policy_alloc)
-			free_ptr_prop_entry(prop_req, DAOS_PROP_PO_POLICY);
 
 		if (entries_alloc)
 			D_FREE(prop_req->dpp_entries);

@@ -13,7 +13,6 @@
 #include <daos_srv/srv_csum.h>
 #include "vos_internal.h"
 #include "evt_priv.h"
-#include "vos_policy.h"
 
 unsigned int vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
 
@@ -979,14 +978,12 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 		daos_size_t size, bio_addr_t *addr)
 {
 	uint64_t	off, now;
-	uint16_t	media;
 	int		rc;
 
 	memset(addr, 0, sizeof(*addr));
-	media = vos_policy_media_select(vos_obj2pool(obj), DAOS_IOD_ARRAY, size,
-					VOS_IOS_AGGREGATION);
 
-	if (media == DAOS_MEDIA_SCM) {
+	if (vos_io_scm(vos_obj2pool(obj), DAOS_IOD_ARRAY, size, VOS_IOS_AGGREGATION)) {
+		/** Store on SCM */
 		off = vos_reserve_scm(obj->obj_cont, io->ic_rsrvd_scm, size);
 		if (UMOFF_IS_NULL(off)) {
 			now = daos_gettime_coarse();
@@ -996,11 +993,11 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 			}
 			return -DER_NOSPACE;
 		}
-		bio_addr_set(addr, media, off);
+		bio_addr_set(addr, DAOS_MEDIA_SCM, off);
 		return 0;
 	}
 
-	D_ASSERT(media == DAOS_MEDIA_NVME);
+	/** Store on NVMe */
 	rc = vos_reserve_blocks(obj->obj_cont, &io->ic_nvme_exts, size,
 				VOS_IOS_AGGREGATION, &off);
 	if (rc == -DER_NOSPACE) {
@@ -1014,7 +1011,7 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 		D_ERROR("Reserve "DF_U64" from NVMe failed. "DF_RC"\n",
 			size, DP_RC(rc));
 	} else {
-		bio_addr_set(addr, media, off);
+		bio_addr_set(addr, DAOS_MEDIA_NVME, off);
 	}
 
 	return rc;
@@ -1425,7 +1422,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw, bool last, unsign
 		return rc;
 
 	/* Publish SCM reservations */
-	rc = vos_publish_scm(obj->obj_cont, io->ic_rsrvd_scm, true);
+	rc = vos_publish_scm(vos_obj2umm(obj), io->ic_rsrvd_scm, true);
 	if (rc) {
 		D_ERROR("Publish SCM extents error: "DF_RC"\n", DP_RC(rc));
 		goto abort;
@@ -1574,7 +1571,7 @@ cleanup_segments(daos_handle_t ih, struct agg_merge_window *mw, int rc)
 
 	D_AGG_ASSERT(mw, obj != NULL);
 	if (rc) {
-		vos_publish_scm(obj->obj_cont, io->ic_rsrvd_scm, false);
+		vos_publish_scm(vos_obj2umm(obj), io->ic_rsrvd_scm, false);
 
 		if (!d_list_empty(&io->ic_nvme_exts))
 			vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts,
@@ -1634,8 +1631,11 @@ need_merge(daos_handle_t ih, uint16_t src_media, int lgc_cnt, daos_size_t seg_si
 	if (lgc_cnt == 1)
 		return false;
 
-	tgt_media = vos_policy_media_select(vos_obj2pool(obj), DAOS_IOD_ARRAY,
-					    seg_size, VOS_IOS_AGGREGATION);
+	if (vos_io_scm(vos_obj2pool(obj), DAOS_IOD_ARRAY, seg_size, VOS_IOS_AGGREGATION))
+		tgt_media = DAOS_MEDIA_SCM;
+	else
+		tgt_media = DAOS_MEDIA_NVME;
+
 	/* Some data can be migrated from SCM to NVMe to alleviate SCM pressure */
 	if (src_media != tgt_media)
 		return true;

@@ -149,7 +149,7 @@ class UsageTracer():
             if not dname.startswith('src'):
                 if dname == '':
                     dname = 'src/control/cmd/daos'
-                else:
+                elif "src" in dname:
                     parts = dname.split('/')
                     while parts[0] != 'src':
                         parts.pop(0)

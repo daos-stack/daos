@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,6 +44,7 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	D_ASSERT(bbs->bb_state == BIO_BS_STATE_OUT);
 	D_ASSERT(owner_thread(bbs) != NULL);
 
+	d_bdev->bb_trigger_reint = 1;
 	spdk_thread_send_msg(owner_thread(bbs), setup_bio_bdev, d_bdev);
 
 	/**
@@ -460,7 +461,10 @@ alloc_ctrlr_info(uuid_t dev_id, char *dev_name, struct bio_dev_info *b_info)
 	D_ASSERT(b_info->bdi_ctrlr == NULL);
 
 	if (dev_name == NULL) {
-		D_DEBUG(DB_MGMT, "missing bdev device name, skipping ctrlr info fetch\n");
+		D_DEBUG(DB_MGMT,
+			"missing bdev device name for device " DF_UUID ", skipping ctrlr "
+			"info fetch\n",
+			DP_UUID(dev_id));
 		return 0;
 	}
 
@@ -606,11 +610,46 @@ struct led_opts {
 	int                  status;
 };
 
+static Ctl__LedState
+led_state_spdk2daos(enum spdk_vmd_led_state in)
+{
+	switch (in) {
+	case SPDK_VMD_LED_STATE_OFF:
+		return CTL__LED_STATE__OFF;
+	case SPDK_VMD_LED_STATE_IDENTIFY:
+		return CTL__LED_STATE__QUICK_BLINK;
+	case SPDK_VMD_LED_STATE_FAULT:
+		return CTL__LED_STATE__ON;
+	case SPDK_VMD_LED_STATE_REBUILD:
+		return CTL__LED_STATE__SLOW_BLINK;
+	default:
+		return CTL__LED_STATE__NA;
+	}
+}
+
+static enum spdk_vmd_led_state
+led_state_daos2spdk(Ctl__LedState in)
+{
+	switch (in) {
+	case CTL__LED_STATE__OFF:
+		return SPDK_VMD_LED_STATE_OFF;
+	case CTL__LED_STATE__QUICK_BLINK:
+		return SPDK_VMD_LED_STATE_IDENTIFY;
+	case CTL__LED_STATE__ON:
+		return SPDK_VMD_LED_STATE_FAULT;
+	case CTL__LED_STATE__SLOW_BLINK:
+		return SPDK_VMD_LED_STATE_REBUILD;
+	default:
+		return SPDK_VMD_LED_STATE_UNKNOWN;
+	}
+}
+
 static void
 led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 {
 	struct led_opts		*opts = ctx;
 	enum spdk_vmd_led_state	 cur_led_state;
+	Ctl__LedState            d_led_state;
 	const char		*pci_dev_type = NULL;
 	char			 addr_buf[ADDR_STR_MAX_LEN + 1];
 	int			 rc;
@@ -656,14 +695,17 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	}
 
+	/* Convert state to Ctl__LedState from SPDK led_state */
+	d_led_state = led_state_spdk2daos(cur_led_state);
+
 	D_DEBUG(DB_MGMT, "led on dev %s has state: %s (action: %s, new state: %s)\n", addr_buf,
-		LED_STATE_NAME(cur_led_state), LED_ACTION_NAME(opts->action),
+		LED_STATE_NAME(d_led_state), LED_ACTION_NAME(opts->action),
 		LED_STATE_NAME(opts->led_state));
 
 	switch (opts->action) {
 	case CTL__LED_ACTION__GET:
 		/* Return early with current device state set */
-		opts->led_state = (Ctl__LedState)cur_led_state;
+		opts->led_state = d_led_state;
 		return;
 	case CTL__LED_ACTION__SET:
 		break;
@@ -678,14 +720,14 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		return;
 	}
 
-	if (cur_led_state == (enum spdk_vmd_led_state)opts->led_state) {
+	if (d_led_state == opts->led_state) {
 		D_DEBUG(DB_MGMT, "VMD device %s LED state already in state %s\n", addr_buf,
 			LED_STATE_NAME(opts->led_state));
 		return;
 	}
 
 	/* Set the LED to the new state */
-	rc = spdk_vmd_set_led_state(pci_device, (enum spdk_vmd_led_state)opts->led_state);
+	rc = spdk_vmd_set_led_state(pci_device, led_state_daos2spdk(opts->led_state));
 	if (spdk_unlikely(rc != 0)) {
 		D_ERROR("Failed to set the VMD LED state on %s (%s)\n", addr_buf,
 			spdk_strerror(-rc));
@@ -700,11 +742,12 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		opts->status = -DER_NOSYS;
 		return;
 	}
+	d_led_state = led_state_spdk2daos(cur_led_state);
 
 	/* Verify the correct state is set */
-	if (cur_led_state != (enum spdk_vmd_led_state)opts->led_state) {
+	if (d_led_state != opts->led_state) {
 		D_ERROR("Unexpected LED state on %s, want %s got %s\n", addr_buf,
-			LED_STATE_NAME(opts->led_state), LED_STATE_NAME(cur_led_state));
+			LED_STATE_NAME(opts->led_state), LED_STATE_NAME(d_led_state));
 		opts->status = -DER_INVAL;
 	}
 }

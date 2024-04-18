@@ -250,25 +250,17 @@ fail:
 }
 
 static int
-str2ctrlr(char **dst, const void *src)
+str2ctrlr(char **dst, const void *src, size_t size)
 {
-	int len;
-
 	assert(src != NULL);
 	assert(dst != NULL);
 	assert(*dst == NULL);
 
-	len = strnlen((const char *)src, NVME_DETAIL_BUFLEN);
-	if (len == NVME_DETAIL_BUFLEN) {
-		perror("src buf too big");
-		return -NVMEC_ERR_CHK_SIZE;
-	}
-
-	*dst = calloc(1, len + 1);
+	*dst = calloc(1, size + 1);
 	if (*dst == NULL)
 		return -ENOMEM;
 
-	if (copy_ascii(*dst, len + 1, src, len) != 0) {
+	if (copy_ascii(*dst, size + 1, src, size) != 0) {
 		perror("copy_ascii");
 		return -NVMEC_ERR_CHK_SIZE;
 	}
@@ -281,18 +273,15 @@ copy_ctrlr_data(struct nvme_ctrlr_t *cdst, const struct spdk_nvme_ctrlr_data *cd
 {
 	int rc;
 
-	rc = str2ctrlr(&cdst->model, cdata->mn);
-	if (rc != 0) {
+	rc = str2ctrlr(&cdst->model, cdata->mn, sizeof(cdata->mn));
+	if (rc != 0)
 		return rc;
-	}
-	rc = str2ctrlr(&cdst->serial, cdata->sn);
-	if (rc != 0) {
+	rc = str2ctrlr(&cdst->serial, cdata->sn, sizeof(cdata->sn));
+	if (rc != 0)
 		return rc;
-	}
-	rc = str2ctrlr(&cdst->fw_rev, cdata->fr);
-	if (rc != 0) {
+	rc = str2ctrlr(&cdst->fw_rev, cdata->fr, sizeof(cdata->fr));
+	if (rc != 0)
 		return rc;
-	}
 
 	return 0;
 }

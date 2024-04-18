@@ -82,7 +82,7 @@ extern "C" {
 
 void d_srand(long int);
 long int d_rand(void);
-long int d_randn(long int n);
+double d_randd(void);
 
 /* Instruct the compiler these are allocation functions that return a pointer, and if possible
  * which function needs to be used to free them.
@@ -581,11 +581,14 @@ d_getenv_str(char *str_val, size_t str_size, const char *name);
 int
 d_agetenv_str(char **str_val, const char *name);
 void
-d_free_env_str(char **str_val);
+d_freeenv_str(char **str_val);
 int
 d_getenv_bool(const char *name, bool *bool_val);
 int
 d_getenv_char(const char *name, char *char_val);
+int
+d_getenv_int(const char *name, unsigned int *uint_val)
+    __attribute__((deprecated("use d_getenv_uint")));
 int
 d_getenv_uint(const char *name, unsigned int *uint_val);
 int
@@ -600,13 +603,6 @@ int
 d_unsetenv(const char *name);
 int
 d_clearenv(void);
-
-static inline int
-d_getenv_int(const char *name, unsigned int *uint_val)
-{
-	D_WARN("d_getenv_int() is deprecated, please use d_getenv_uint()");
-	return d_getenv_uint(name, uint_val);
-}
 
 int
 d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);

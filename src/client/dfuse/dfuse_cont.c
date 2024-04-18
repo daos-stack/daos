@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,16 +31,14 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	 * lookups.
 	 */
 	if (uuid_parse(name, cont) < 0) {
-		struct fuse_entry_param entry = {.entry_timeout = 60};
-
 		DFUSE_TRA_DEBUG(parent, "Invalid container uuid");
-		DFUSE_REPLY_ENTRY(parent, req, entry);
+		DFUSE_REPLY_NO_ENTRY(parent, req, 60);
 		return;
 	}
 
 	DFUSE_TRA_DEBUG(parent, "Lookup of " DF_UUID, DP_UUID(cont));
 
-	rc = dfuse_cont_open(dfuse_info, dfp, &cont, &dfc);
+	rc = dfuse_cont_get_handle(dfuse_info, dfp, cont, &dfc);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -57,7 +55,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 			D_GOTO(decref, rc);
 		}
 
-		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
+		d_hash_rec_decref(dfp->dfp_cont_table, &dfc->dfs_entry);
 		entry.attr.st_ino   = ie->ie_stat.st_ino;
 		entry.attr_timeout  = dfc->dfc_attr_timeout;
 		entry.entry_timeout = dfc->dfc_dentry_dir_timeout;
@@ -95,14 +93,10 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 close:
 	dfuse_ie_free(dfuse_info, ie);
 decref:
-	d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
+	d_hash_rec_decref(dfp->dfp_cont_table, &dfc->dfs_entry);
 err:
-	if (rc == ENOENT) {
-		struct fuse_entry_param entry = {0};
-
-		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
-		DFUSE_REPLY_ENTRY(parent, req, entry);
-	} else {
+	if (rc == ENOENT)
+		DFUSE_REPLY_NO_ENTRY(parent, req, parent->ie_dfs->dfc_ndentry_timeout);
+	else
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	}
 }

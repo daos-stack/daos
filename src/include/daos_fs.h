@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,7 +21,14 @@ extern "C" {
 #endif
 
 #include <dirent.h>
+#include <inttypes.h>
 #include <sys/stat.h>
+
+#include <daos_types.h>
+#include <daos_obj.h>
+#include <daos_obj_class.h>
+#include <daos_array.h>
+#include <daos_cont.h>
 
 /** Maximum Name length */
 #define DFS_MAX_NAME		NAME_MAX
@@ -98,6 +105,10 @@ typedef struct {
 	daos_oclass_id_t	doi_oclass_id;
 	/** chunk size */
 	daos_size_t		doi_chunk_size;
+	/** In case of dir, return default object class for dirs created in that dir */
+	daos_oclass_id_t        doi_dir_oclass_id;
+	/** In case of dir, return default object class for files created in that dir */
+	daos_oclass_id_t        doi_file_oclass_id;
 } dfs_obj_info_t;
 
 /**
@@ -987,9 +998,12 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf);
 #define DFS_SET_ATTR_GID	(1 << 5)
 
 /**
- * set stat attributes for a file and fetch new values.  If the object is a
+ * Set stat attributes for a file and fetch new values.  If the object is a
  * symlink the link itself is modified.  See dfs_stat() for which entries
  * are filled.
+ * While the set-user/group-id bits in stbuf::st_mode are stored by libdfs, it
+ * up to the caller to implement support for the associated functionality
+ * since libdfs does not provide any way to execute binaries.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Open object (File, dir or syml) to modify.
@@ -1167,6 +1181,19 @@ enum {
 int
 dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
+/**
+ * Update a POSIX's container's owner user and/or owner group. This is the same as calling
+ * daos_cont_set_owner() but will also update the owner of the root directory in the container.
+ *
+ * \param[in]	coh	Open container handle
+ * \param[in]	user	New owner user (NULL if not updating)
+ * \param[in]	group	New owner group (NULL if not updating)
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group);
+
 /*
  * The Pipeline DFS API (everything under this comment) is under heavy development and should not be
  * used in production. The API is subject to change.
@@ -1264,6 +1291,19 @@ int
 dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_anchor_t *anchor,
 			uint32_t *nr, struct dirent *dirs, daos_obj_id_t *oids, daos_size_t *csizes,
 			uint64_t *nr_scanned);
+
+/**
+ * Scan the DFS namespace and report statistics about file/dir size and namespace structure.
+ *
+ * \param[in]	poh	Open pool handle.
+ * \param[in]	cont	POSIX container label.
+ * \param[in]	flags	Unused flag, added for future use.
+ * \param[in]	name	Optional subdirectory path to scan from.
+ *			Start from container root if not specified.
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_cont_scan(daos_handle_t poh, const char *cont, uint64_t flags, const char *name);
 
 #if defined(__cplusplus)
 }

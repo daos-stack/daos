@@ -2833,19 +2833,19 @@ const ProtobufCEnumDescriptor ctl__nvme_dev_state__descriptor =
 };
 static const ProtobufCEnumValue ctl__led_state__enum_values_by_number[5] =
 {
-  { "OFF", "CTL__LED_STATE__OFF", 0 },
+  { "NA", "CTL__LED_STATE__NA", 0 },
   { "QUICK_BLINK", "CTL__LED_STATE__QUICK_BLINK", 1 },
   { "ON", "CTL__LED_STATE__ON", 2 },
   { "SLOW_BLINK", "CTL__LED_STATE__SLOW_BLINK", 3 },
-  { "NA", "CTL__LED_STATE__NA", 4 },
+  { "OFF", "CTL__LED_STATE__OFF", 4 },
 };
 static const ProtobufCIntRange ctl__led_state__value_ranges[] = {
 {0, 0},{0, 5}
 };
 static const ProtobufCEnumValueIndex ctl__led_state__enum_values_by_name[5] =
 {
-  { "NA", 4 },
-  { "OFF", 0 },
+  { "NA", 0 },
+  { "OFF", 4 },
   { "ON", 2 },
   { "QUICK_BLINK", 1 },
   { "SLOW_BLINK", 3 },

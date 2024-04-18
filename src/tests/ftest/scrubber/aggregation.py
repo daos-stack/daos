@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -24,7 +24,7 @@ class TestScrubberEvictWithAggregation(TestWithScrubber, TestWithTelemetry):
         2. Create checksum faults above scrubber threshold
         and see whether SSD auto eviction works as expected.
 
-        :avocado: tags=all,manual
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=scrubber,faults
         :avocado: tags=TestScrubberEvictWithAggregation,test_target_eviction_during_aggregation
@@ -36,15 +36,23 @@ class TestScrubberEvictWithAggregation(TestWithScrubber, TestWithTelemetry):
         self.pool.set_property("reclaim", "disabled")
         self.add_container(self.pool)
         # Pool and Containers are already created. Just run the IOR.
+        # Run the initial IOR with a small block size.
+        self.ior_cmd.namespace = "/run/ior_small_block_size/*"
+        self.ior_cmd.get_params(self)
         self.run_ior_with_pool(create_cont=False)
         telemetry_string = "engine_pool_vos_aggregation_obj_scanned"
         initial_agg_metrics = self.telemetry.get_metrics(telemetry_string)
+        # Now enable the scrubber on the pool.
+        self.pool.set_prop(properties="scrub:timed,scrub_freq:1,scrub_thresh:3")
+        initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
+        # The disk fault injection is going to be slow.
+        # Reduce transfer size and increase block size for IOR to run for long time.
+        self.ior_cmd.namespace = "/run/ior_large_block_size/*"
+        self.processes = self.params.get("np", self.ior_cmd.namespace, self.processes)
+        self.ior_cmd.get_params(self)
+        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         # Enable the aggregation on the pool.
         self.pool.set_property("reclaim", "time")
-        # Now enable the scrubber on the pool.
-        self.pool.set_prop(properties="scrub:timed,scrub-freq:1,scrub-thresh:3")
-        initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
-        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
         # We want both aggregation and scrubber tasks
         # to run in parallel during this time.
         start_time = 0
