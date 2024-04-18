@@ -20,6 +20,7 @@ enum fs_op {
 	FS_RESET_OCLASS,
 	FS_CHECK,
 	FS_CHMOD,
+	FS_CHOWN,
 };
 
 enum cont_op {
@@ -163,6 +164,8 @@ struct cmd_args_s {
 	char			*entry;		/* --entry for ACL */
 	char			*principal;	/* --principal for ACL */
 	mode_t			object_mode;	/* object mode bits */
+	uid_t			user_id;	/* user id */
+	gid_t			group_id;	/* group id */
 };
 
 #define ARGS_VERIFY_PATH_CREATE(ap, label, rcexpr)			\
@@ -198,6 +201,7 @@ int fs_fix_entry_hdlr(struct cmd_args_s *ap, bool fix_entry);
 int fs_recreate_sb_hdlr(struct cmd_args_s *ap);
 int fs_relink_root_hdlr(struct cmd_args_s *ap);
 int fs_chmod_hdlr(struct cmd_args_s *ap);
+int fs_chown_hdlr(struct cmd_args_s *ap);
 
 /* Container operations */
 int cont_check_hdlr(struct cmd_args_s *ap);
