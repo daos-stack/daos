@@ -130,7 +130,7 @@ def update_rpm_version(version, tag):
         if line.startswith("Version:"):
             current_version = line[line.rfind(' ') + 1:].rstrip()
             if version < current_version:
-                print("You cannot create a new version ({}) lower than the RPM "
+                print("You  cannot create a new version ({}) lower than the RPM "
                       "spec file has currently ({})".format(version,
                                                             current_version))
                 return False
