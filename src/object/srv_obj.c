@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -226,14 +226,6 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 		}
 	}
 }
-
-struct obj_bulk_args {
-	ABT_eventual	eventual;
-	uint64_t	bulk_size;
-	int		bulks_inflight;
-	int		result;
-	bool		inited;
-};
 
 static int
 obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
@@ -490,7 +482,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	return rc;
 }
 
-static int
+int
 obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bulk_t *remote_bulks,
 		  uint64_t *remote_offs, uint8_t *skips, daos_handle_t ioh, d_sg_list_t **sgls,
 		  int sgl_nr, struct obj_bulk_args *p_arg, struct ds_cont_hdl *coh)
@@ -2291,7 +2283,8 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 }
 
 static int
-obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
+obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc,
+		      uint32_t rpc_map_ver, uint32_t flags)
 {
 	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
 		if (child->sc_ec_agg_active) {
@@ -2303,6 +2296,19 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 
 	if (!obj_is_modification_opc(opc))
 		return 0;
+
+	if (child->sc_pool->spc_pool->sp_rebuilding) {
+		uint32_t version;
+
+		ds_rebuild_running_query(child->sc_pool_uuid, RB_OP_REBUILD,
+					 &version, NULL, NULL);
+		if (version != 0 && version < rpc_map_ver) {
+			D_DEBUG(DB_IO, DF_UUID" retry rpc ver %u > rebuilding %u\n",
+				DP_UUID(child->sc_pool_uuid), rpc_map_ver,
+			        version);
+			return -DER_UPDATE_AGAIN;
+		}
+	}
 
 	/* If the incoming I/O is during integration, then it needs to wait the
 	 * vos discard to finish, which otherwise might discard these new in-flight
@@ -2352,7 +2358,7 @@ obj_ioc_begin(daos_obj_id_t oid, uint32_t rpc_map_ver, uuid_t pool_uuid,
 	if (rc != 0)
 		goto failed;
 
-	rc = obj_inflight_io_check(ioc->ioc_coc, opc, flags);
+	rc = obj_inflight_io_check(ioc->ioc_coc, opc, rpc_map_ver, flags);
 	if (rc != 0)
 		goto failed;
 
@@ -3548,17 +3554,7 @@ out:
 	return rc;
 }
 
-struct obj_tgt_punch_args {
-	uint32_t		 opc;
-	struct obj_io_context	*sponsor_ioc;
-	struct dtx_handle	*sponsor_dth;
-	struct obj_punch_in	*opi;
-	struct dtx_memberships	*mbs;
-	uint32_t		*ver;
-	void			*data;
-};
-
-static int
+int
 obj_tgt_punch(struct obj_tgt_punch_args *otpa, uint32_t *shards, uint32_t count)
 {
 	struct obj_io_context	 ioc = { 0 };
@@ -3677,12 +3673,13 @@ out:
 }
 
 static int
-obj_punch_agg_cb(struct dtx_leader_handle *dlh, int allow_failure)
+obj_punch_agg_cb(struct dtx_leader_handle *dlh, void *arg)
 {
 	struct dtx_sub_status	*sub;
 	uint32_t		 sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
-	int			 allow_failure_cnt = 0;
-	int			 succeeds = 0;
+	int			 allow_failure = dlh->dlh_allow_failure;
+	int			 allow_failure_cnt;
+	int			 succeeds;
 	int			 result = 0;
 	int			 i;
 
@@ -3690,11 +3687,9 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, int allow_failure)
 	 * For conditional punch, let's ignore DER_NONEXIST if some shard succeed,
 	 * since the object may not exist on some shards due to EC partial update.
 	 */
-	if (allow_failure != 0)
-		D_ASSERTF(allow_failure == -DER_NONEXIST,
-			  "Unexpected allow failure %d\n", allow_failure);
+	D_ASSERTF(allow_failure == -DER_NONEXIST, "Unexpected allow failure %d\n", allow_failure);
 
-	for (i = 0; i < sub_cnt; i++) {
+	for (i = 0, allow_failure_cnt = 0, succeeds = 0; i < sub_cnt; i++) {
 		sub = &dlh->dlh_subs[i];
 		if (sub->dss_tgt.st_rank != DAOS_TGT_IGNORE && sub->dss_comp) {
 			if (sub->dss_result == 0) {
@@ -3716,7 +3711,7 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, int allow_failure)
 		DP_DTI(&dlh->dlh_handle.dth_xid),
 		allow_failure_cnt, succeeds, allow_failure, result);
 
-	if (allow_failure != 0 && allow_failure_cnt > 0 && result == 0 && succeeds == 0)
+	if (allow_failure_cnt > 0 && result == 0 && succeeds == 0)
 		result = allow_failure;
 
 	return result;
@@ -3906,9 +3901,11 @@ again2:
 	exec_arg.flags = flags;
 
 	/* Execute the operation on all shards */
-	rc = dtx_leader_exec_ops(dlh, obj_tgt_punch_disp, obj_punch_agg_cb,
-				 (opi->opi_api_flags & DAOS_COND_PUNCH) ? -DER_NONEXIST : 0,
-				 &exec_arg);
+	if (opi->opi_api_flags & DAOS_COND_PUNCH)
+		rc = dtx_leader_exec_ops(dlh, obj_tgt_punch_disp, obj_punch_agg_cb, -DER_NONEXIST,
+					 &exec_arg);
+	else
+		rc = dtx_leader_exec_ops(dlh, obj_tgt_punch_disp, NULL, 0, &exec_arg);
 
 	if (max_ver < dlh->dlh_rmt_ver)
 		max_ver = dlh->dlh_rmt_ver;
@@ -3961,83 +3958,255 @@ cleanup:
 	obj_ioc_end(&ioc, rc);
 }
 
+static int
+obj_local_query(struct obj_tgt_query_args *otqa, struct obj_io_context *ioc, daos_unit_oid_t oid,
+		daos_epoch_t epoch, uint64_t api_flags, uint32_t map_ver, uint32_t opc,
+		uint32_t count, uint32_t *shards, struct dtx_handle *dth)
+{
+	struct obj_query_merge_args	 oqma = { 0 };
+	daos_key_t			 dkey;
+	daos_key_t			 akey;
+	daos_key_t			*p_dkey;
+	daos_key_t			*p_akey;
+	daos_recx_t			*p_recx;
+	daos_epoch_t			*p_epoch;
+	daos_unit_oid_t			 t_oid = oid;
+	uint32_t			 query_flags = api_flags;
+	uint32_t			 cell_size = 0;
+	uint64_t			 stripe_size = 0;
+	daos_epoch_t			 max_epoch = 0;
+	daos_recx_t			 recx = { 0 };
+	int				 succeeds;
+	int				 rc = 0;
+	int				 i;
+
+	if (count > 1)
+		D_ASSERT(otqa->otqa_need_copy);
+
+	if (daos_oclass_is_ec(&ioc->ioc_oca) && api_flags & DAOS_GET_RECX) {
+		query_flags |= VOS_GET_RECX_EC;
+		cell_size = obj_ec_cell_rec_nr(&ioc->ioc_oca);
+		stripe_size = obj_ec_stripe_rec_nr(&ioc->ioc_oca);
+	}
+
+	otqa->otqa_shard = shards[0];
+
+	if (otqa->otqa_need_copy) {
+		oqma.oqma_oca = &ioc->ioc_oca;
+		oqma.oqma_oid = oid;
+		oqma.oqma_oid.id_shard = shards[0];
+		oqma.oqma_in_dkey = otqa->otqa_in_dkey;
+		oqma.oqma_tgt_dkey = &otqa->otqa_dkey_copy;
+		oqma.oqma_tgt_akey = &otqa->otqa_akey_copy;
+		oqma.oqma_tgt_recx = &otqa->otqa_recx;
+		oqma.oqma_tgt_epoch = &otqa->otqa_max_epoch;
+		oqma.oqma_tgt_map_ver = &otqa->otqa_version;
+		oqma.oqma_shard = &otqa->otqa_shard;
+		oqma.oqma_flags = api_flags;
+		oqma.oqma_opc = opc;
+		oqma.oqma_src_map_ver = map_ver;
+	}
+
+	for (i = 0, succeeds = 0; i < count; i++ ) {
+		if (api_flags & DAOS_GET_DKEY) {
+			if (otqa->otqa_need_copy)
+				p_dkey = &dkey;
+			else
+				p_dkey = otqa->otqa_out_dkey;
+			d_iov_set(p_dkey, NULL, 0);
+		} else {
+			p_dkey = otqa->otqa_in_dkey;
+		}
+
+		if (api_flags & DAOS_GET_AKEY) {
+			if (otqa->otqa_need_copy)
+				p_akey = &akey;
+			else
+				p_akey = otqa->otqa_out_akey;
+			d_iov_set(p_akey, NULL, 0);
+		} else {
+			p_akey = otqa->otqa_in_akey;
+		}
+
+		if (otqa->otqa_need_copy) {
+			p_recx = &recx;
+			p_epoch = &max_epoch;
+		} else {
+			p_recx = &otqa->otqa_recx;
+			p_epoch = &otqa->otqa_max_epoch;
+		}
+
+		t_oid.id_shard = shards[i];
+
+again:
+		rc = vos_obj_query_key(ioc->ioc_vos_coh, t_oid, query_flags, epoch, p_dkey, p_akey,
+				       p_recx, p_epoch, cell_size, stripe_size, dth);
+		if (obj_dtx_need_refresh(dth, rc)) {
+			rc = dtx_refresh(dth, ioc->ioc_coc);
+			if (rc == -DER_AGAIN)
+				goto again;
+		}
+
+		if (rc == -DER_NONEXIST) {
+			if (otqa->otqa_need_copy && otqa->otqa_max_epoch < *p_epoch)
+				otqa->otqa_max_epoch = *p_epoch;
+			continue;
+		}
+
+		if (rc != 0)
+			goto out;
+
+		succeeds++;
+
+		if (!otqa->otqa_need_copy) {
+			otqa->otqa_shard = shards[i];
+			goto out;
+		}
+
+		if (succeeds == 1) {
+			rc = daos_iov_copy(&otqa->otqa_dkey_copy, p_dkey);
+			if (rc != 0)
+				goto out;
+
+			rc = daos_iov_copy(&otqa->otqa_akey_copy, p_akey);
+			if (rc != 0)
+				goto out;
+
+			otqa->otqa_recx = *p_recx;
+			if (otqa->otqa_max_epoch < *p_epoch)
+				otqa->otqa_max_epoch = *p_epoch;
+			otqa->otqa_shard = shards[i];
+			otqa->otqa_keys_allocated = 1;
+
+			if (otqa->otqa_raw_recx && daos_oclass_is_ec(&ioc->ioc_oca)) {
+				obj_ec_recx_vos2daos(&ioc->ioc_oca, t_oid, p_dkey, &otqa->otqa_recx,
+						     api_flags & DAOS_GET_MAX ? true : false);
+				otqa->otqa_raw_recx = 0;
+			}
+		} else {
+			oqma.oqma_oid.id_shard = shards[i];
+			oqma.oqma_src_epoch = *p_epoch;
+			oqma.oqma_src_dkey = p_dkey;
+			oqma.oqma_src_akey = p_akey;
+			oqma.oqma_src_recx = p_recx;
+			oqma.oqma_raw_recx = 1;
+			/*
+			 * Merge (L1) the results from different shards on the same VOS target
+			 * into current otqa that stands for the result for current VOS target.
+			 */
+			rc = daos_obj_query_merge(&oqma);
+			if (rc != 0)
+				goto out;
+		}
+	}
+
+	if (rc == -DER_NONEXIST && succeeds > 0)
+		rc = 0;
+
+out:
+	if (rc == -DER_NONEXIST && otqa->otqa_need_copy && !otqa->otqa_keys_allocated) {
+		/* Allocate key buffer for subsequent merge. */
+		rc = daos_iov_alloc(&otqa->otqa_dkey_copy, sizeof(uint64_t), true);
+		if (rc != 0)
+			goto out;
+
+		rc = daos_iov_alloc(&otqa->otqa_akey_copy, sizeof(uint64_t), true);
+		if (rc != 0)
+			goto out;
+
+		otqa->otqa_keys_allocated = 1;
+	}
+
+	otqa->otqa_result = rc;
+	otqa->otqa_completed = 1;
+
+	return rc;
+}
+
+int
+obj_tgt_query(struct obj_tgt_query_args *otqa, uuid_t po_uuid, uuid_t co_hdl, uuid_t co_uuid,
+	      daos_unit_oid_t oid, daos_epoch_t epoch, daos_epoch_t epoch_first,
+	      uint64_t api_flags, uint32_t rpc_flags, uint32_t *map_ver, crt_rpc_t *rpc,
+	      uint32_t count, uint32_t *shards, struct dtx_id *xid)
+{
+	struct dtx_epoch	 dtx_epoch = { 0 };
+	struct obj_io_context	 ioc = { 0 };
+	struct obj_io_context	*p_ioc = otqa->otqa_ioc;
+	struct dtx_handle	*dth = otqa->otqa_dth;
+	int			 rc = 0;
+
+	if (p_ioc == NULL)
+		p_ioc = &ioc;
+
+	if (!p_ioc->ioc_began) {
+		rc = obj_ioc_begin(oid.id_pub, *map_ver, po_uuid, co_hdl, co_uuid, rpc, rpc_flags,
+				   p_ioc);
+		if (rc != 0)
+			goto out;
+	}
+
+	if (dth == NULL) {
+		dtx_epoch.oe_value = epoch;
+		dtx_epoch.oe_first = epoch_first;
+		dtx_epoch.oe_flags = orf_to_dtx_epoch_flags(rpc_flags);
+
+		rc = dtx_begin(p_ioc->ioc_vos_coh, xid, &dtx_epoch, 0, *map_ver, &oid, NULL, 0, 0,
+			       NULL, &dth);
+		if (rc != 0)
+			goto out;
+	}
+
+	rc = obj_local_query(otqa, p_ioc, oid, epoch, api_flags, *map_ver, opc_get(rpc->cr_opc),
+			     count, shards, dth);
+
+	if (dth != otqa->otqa_dth)
+		rc = dtx_end(dth, p_ioc->ioc_coc, rc);
+
+out:
+	*map_ver = p_ioc->ioc_map_ver;
+	if (p_ioc != otqa->otqa_ioc)
+		obj_ioc_end(p_ioc, rc);
+
+	return rc;
+}
+
 void
 ds_obj_query_key_handler(crt_rpc_t *rpc)
 {
-	struct obj_query_key_in		*okqi;
-	struct obj_query_key_out	*okqo;
-	daos_key_t			*dkey;
-	daos_key_t			*akey;
-	struct dtx_handle		*dth = NULL;
-	struct obj_io_context		 ioc;
-	struct dtx_epoch		 epoch = {0};
-	uint32_t			 query_flags;
-	unsigned int			 cell_size = 0;
-	uint64_t			 stripe_size = 0;
+	struct dss_module_info		*dmi = dss_get_module_info();
+	struct obj_query_key_in		*okqi = crt_req_get(rpc);
+	struct obj_query_key_out	*okqo = crt_reply_get(rpc);
+	struct obj_tgt_query_args	 otqa = { 0 };
+	uint32_t			 version = okqi->okqi_map_ver;
 	int				 rc;
 
-	okqi = crt_req_get(rpc);
-	D_ASSERT(okqi != NULL);
-	okqo = crt_reply_get(rpc);
-	D_ASSERT(okqo != NULL);
-
-	D_DEBUG(DB_IO, "flags = "DF_U64"\n", okqi->okqi_api_flags);
-
-	rc = obj_ioc_begin(okqi->okqi_oid.id_pub, okqi->okqi_map_ver,
-			   okqi->okqi_pool_uuid, okqi->okqi_co_hdl,
-			   okqi->okqi_co_uuid, rpc, okqi->okqi_flags, &ioc);
-	if (rc)
-		D_GOTO(failed, rc);
-
-	rc = process_epoch(&okqi->okqi_epoch, &okqi->okqi_epoch_first,
-			   &okqi->okqi_flags);
+	rc = process_epoch(&okqi->okqi_epoch, &okqi->okqi_epoch_first, &okqi->okqi_flags);
 	if (rc == PE_OK_LOCAL)
 		okqi->okqi_flags &= ~ORF_EPOCH_UNCERTAIN;
 
-	dkey = &okqi->okqi_dkey;
-	akey = &okqi->okqi_akey;
-	d_iov_set(&okqo->okqo_akey, NULL, 0);
-	d_iov_set(&okqo->okqo_dkey, NULL, 0);
-	if (okqi->okqi_api_flags & DAOS_GET_DKEY)
-		dkey = &okqo->okqo_dkey;
-	if (okqi->okqi_api_flags & DAOS_GET_AKEY)
-		akey = &okqo->okqo_akey;
+	otqa.otqa_in_dkey = &okqi->okqi_dkey;
+	otqa.otqa_in_akey = &okqi->okqi_akey;
+	otqa.otqa_out_dkey = &okqo->okqo_dkey;
+	otqa.otqa_out_akey = &okqo->okqo_akey;
 
-	epoch.oe_value = okqi->okqi_epoch;
-	epoch.oe_first = okqi->okqi_epoch_first;
-	epoch.oe_flags = orf_to_dtx_epoch_flags(okqi->okqi_flags);
+	rc = obj_tgt_query(&otqa, okqi->okqi_pool_uuid, okqi->okqi_co_hdl, okqi->okqi_co_uuid,
+			   okqi->okqi_oid, okqi->okqi_epoch, okqi->okqi_epoch_first,
+			   okqi->okqi_api_flags, okqi->okqi_flags, &version, rpc, 1,
+			   &okqi->okqi_oid.id_shard, &okqi->okqi_dti);
+	okqo->okqo_max_epoch = otqa.otqa_max_epoch;
+	if (rc == 0)
+		okqo->okqo_recx = otqa.otqa_recx;
+	else
+		DL_CDEBUG(rc != -DER_NONEXIST && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
+			  DLOG_ERR, DB_IO, rc, "Failed to handle reqular query RPC %p on XS %u/%u "
+			  "for obj "DF_UOID" epc "DF_X64" pmv %u/%u, api_flags "DF_X64" with dti "
+			  DF_DTI, rpc, dmi->dmi_xs_id, dmi->dmi_tgt_id, DP_UOID(okqi->okqi_oid),
+			  okqi->okqi_epoch, okqi->okqi_map_ver, version, okqi->okqi_api_flags,
+			  DP_DTI(&okqi->okqi_dti));
 
-	rc = dtx_begin(ioc.ioc_vos_coh, &okqi->okqi_dti, &epoch, 0,
-		       okqi->okqi_map_ver, &okqi->okqi_oid, NULL, 0, 0, NULL,
-		       &dth);
-	if (rc != 0)
-		goto failed;
-
-	query_flags = okqi->okqi_api_flags;
-	if ((okqi->okqi_flags & ORF_EC) && (okqi->okqi_api_flags & DAOS_GET_RECX)) {
-		query_flags |= VOS_GET_RECX_EC;
-		cell_size = obj_ec_cell_rec_nr(&ioc.ioc_oca);
-		stripe_size = obj_ec_stripe_rec_nr(&ioc.ioc_oca);
-	}
-
-re_query:
-	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
-			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx,
-			       &okqo->okqo_max_epoch,
-			       cell_size, stripe_size, dth);
-	if (obj_dtx_need_refresh(dth, rc)) {
-		rc = dtx_refresh(dth, ioc.ioc_coc);
-		if (rc == -DER_AGAIN)
-			goto re_query;
-	}
-
-	rc = dtx_end(dth, ioc.ioc_coc, rc);
-
-failed:
 	obj_reply_set_status(rpc, rc);
-	obj_reply_map_version_set(rpc, ioc.ioc_map_ver);
-	okqo->okqo_epoch = epoch.oe_value;
-	obj_ioc_end(&ioc, rc);
+	obj_reply_map_version_set(rpc, version);
+	okqo->okqo_epoch = okqi->okqi_epoch;
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
@@ -4743,12 +4912,6 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 
 	rc = ds_cpd_handle_one_wrap(rpc, dcsh, dcde, dcsr, ioc, dth);
 
-	/* For the case of only containing read sub operations, we will
-	 * generate DTX entry for DTX recovery.
-	 */
-	if (rc == 0 && dth->dth_modification_cnt == 0)
-		rc = vos_dtx_attach(dth, true, false);
-
 	rc = dtx_end(dth, ioc->ioc_coc, rc);
 
 out:
@@ -5225,7 +5388,8 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 		goto reply;
 
 
-	rc = obj_inflight_io_check(ioc.ioc_coc, opc_get(rpc->cr_opc), oci->oci_flags);
+	rc = obj_inflight_io_check(ioc.ioc_coc, opc_get(rpc->cr_opc), oci->oci_map_ver,
+				   oci->oci_flags);
 	if (rc != 0)
 		goto reply;
 
@@ -5397,313 +5561,6 @@ out:
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
 }
 
-struct obj_coll_tgt_args {
-	crt_rpc_t				*octa_rpc;
-	struct daos_coll_shard			*octa_shards;
-	uint32_t				*octa_versions;
-	uint32_t				 octa_sponsor_tgt;
-	struct obj_io_context			*octa_sponsor_ioc;
-	struct dtx_handle			*octa_sponsor_dth;
-	union {
-		void				*octa_misc;
-		/* Different collective operations may need different parameters. */
-		struct dtx_memberships		*octa_mbs;
-	};
-};
-
-static int
-obj_coll_tgt_punch(void *args)
-{
-	struct obj_coll_tgt_args	*octa = args;
-	crt_rpc_t			*rpc = octa->octa_rpc;
-	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
-	struct obj_punch_in		*opi = NULL;
-	struct obj_tgt_punch_args	 otpa = { 0 };
-	uint32_t			 tgt_id = dss_get_module_info()->dmi_tgt_id;
-	int				 rc;
-
-	D_ALLOC_PTR(opi);
-	if (opi == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	opi->opi_dti = ocpi->ocpi_xid;
-	uuid_copy(opi->opi_pool_uuid, ocpi->ocpi_po_uuid);
-	uuid_copy(opi->opi_co_hdl, ocpi->ocpi_co_hdl);
-	uuid_copy(opi->opi_co_uuid, ocpi->ocpi_co_uuid);
-	opi->opi_oid = ocpi->ocpi_oid;
-	opi->opi_oid.id_shard = octa->octa_shards[tgt_id].dcs_buf[0];
-	opi->opi_epoch = ocpi->ocpi_epoch;
-	opi->opi_api_flags = ocpi->ocpi_api_flags;
-	opi->opi_map_ver = ocpi->ocpi_map_ver;
-	opi->opi_flags = ocpi->ocpi_flags & ~ORF_LEADER;
-
-	otpa.opi = opi;
-	otpa.opc = opc_get(rpc->cr_opc);
-	if (tgt_id == octa->octa_sponsor_tgt) {
-		otpa.sponsor_ioc = octa->octa_sponsor_ioc;
-		otpa.sponsor_dth = octa->octa_sponsor_dth;
-	}
-	otpa.mbs = octa->octa_mbs;
-	if (octa->octa_versions != NULL)
-		otpa.ver = &octa->octa_versions[tgt_id];
-	otpa.data = rpc;
-
-	rc = obj_tgt_punch(&otpa, octa->octa_shards[tgt_id].dcs_buf,
-			   octa->octa_shards[tgt_id].dcs_nr);
-	D_FREE(opi);
-
-out:
-	DL_CDEBUG(rc == 0 || rc == -DER_INPROGRESS || rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
-		  "Collective punch obj shard "DF_UOID" with "DF_DTI" on tgt %u",
-		  DP_OID(ocpi->ocpi_oid.id_pub), octa->octa_shards[tgt_id].dcs_buf[0],
-		  ocpi->ocpi_oid.id_layout_ver, DP_DTI(&ocpi->ocpi_xid), tgt_id);
-
-	return rc;
-}
-
-typedef int (*obj_coll_func_t)(void *args);
-
-static int
-obj_coll_local(crt_rpc_t *rpc, struct daos_coll_shard *shards, struct dtx_coll_entry *dce,
-	       uint32_t *version, struct obj_io_context *ioc, struct dtx_handle *dth, void *args,
-	       obj_coll_func_t func)
-{
-	struct obj_coll_tgt_args	octa = { 0 };
-	struct dss_coll_ops		coll_ops = { 0 };
-	struct dss_coll_args		coll_args = { 0 };
-	uint32_t			size = dce->dce_bitmap_sz << 3;
-	int				rc = 0;
-	int				i;
-
-	D_ASSERT(dce->dce_bitmap != NULL);
-	D_ASSERT(ioc != NULL);
-
-	if (version != NULL) {
-		if (size > dss_tgt_nr)
-			size = dss_tgt_nr;
-		D_ALLOC_ARRAY(octa.octa_versions, size);
-		if (octa.octa_versions == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	octa.octa_rpc = rpc;
-	octa.octa_shards = shards;
-	octa.octa_misc = args;
-	octa.octa_sponsor_ioc = ioc;
-	octa.octa_sponsor_dth = dth;
-	octa.octa_sponsor_tgt = dss_get_module_info()->dmi_tgt_id;
-
-	coll_ops.co_func = func;
-	coll_args.ca_func_args = &octa;
-	coll_args.ca_tgt_bitmap = dce->dce_bitmap;
-	coll_args.ca_tgt_bitmap_sz = dce->dce_bitmap_sz;
-
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_USE_CURRENT_ULT);
-
-out:
-	if (octa.octa_versions != NULL) {
-		for (i = 0, *version = 0; i < size; i++) {
-			if (isset(dce->dce_bitmap, i) && *version < octa.octa_versions[i])
-				*version = octa.octa_versions[i];
-		}
-		D_FREE(octa.octa_versions);
-	}
-
-	return rc;
-}
-
-static int
-obj_coll_punch_disp(struct dtx_leader_handle *dlh, void *arg, int idx, dtx_sub_comp_cb_t comp_cb)
-{
-	struct ds_obj_exec_arg		*exec_arg = arg;
-	crt_rpc_t			*rpc = exec_arg->rpc;
-	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
-	int				 rc;
-
-	if (idx != -1)
-		return ds_obj_coll_punch_remote(dlh, arg, idx, comp_cb);
-
-	/* Local punch on current rank, including the leader target. */
-	rc = obj_coll_local(rpc, exec_arg->coll_shards, dlh->dlh_coll_entry, NULL, exec_arg->ioc,
-			    &dlh->dlh_handle, dlh->dlh_handle.dth_mbs, obj_coll_tgt_punch);
-
-	DL_CDEBUG(rc == 0 || rc == -DER_INPROGRESS || rc == -DER_TX_RESTART, DB_IO, DLOG_ERR, rc,
-		  "Collective punch obj "DF_UOID" with "DF_DTI" on rank %u",
-		  DP_UOID(ocpi->ocpi_oid), DP_DTI(&ocpi->ocpi_xid), dss_self_rank());
-
-	if (comp_cb != NULL)
-		comp_cb(dlh, idx, rc);
-
-	return rc;
-}
-
-static int
-obj_coll_punch_bulk(crt_rpc_t *rpc, d_iov_t *iov, crt_proc_t *p_proc,
-		    struct daos_coll_target **p_dcts, uint32_t *dct_nr)
-{
-	struct obj_coll_punch_in	*ocpi = crt_req_get(rpc);
-	struct daos_coll_target		*dcts = NULL;
-	crt_proc_t			 proc = NULL;
-	d_sg_list_t			 sgl;
-	d_sg_list_t			*sgls = &sgl;
-	int				 rc = 0;
-	int				 i;
-	int				 j;
-
-	D_ALLOC(iov->iov_buf, ocpi->ocpi_bulk_tgt_sz);
-	if (iov->iov_buf == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	iov->iov_buf_len = ocpi->ocpi_bulk_tgt_sz;
-	iov->iov_len = ocpi->ocpi_bulk_tgt_sz;
-
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = iov;
-
-	rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &ocpi->ocpi_tgt_bulk, NULL, NULL,
-			       DAOS_HDL_INVAL, &sgls, 1, NULL, NULL);
-	if (rc != 0)
-		goto out;
-
-	rc = crt_proc_create(dss_get_module_info()->dmi_ctx, iov->iov_buf, iov->iov_len,
-			     CRT_PROC_DECODE, &proc);
-	if (rc != 0)
-		goto out;
-
-	D_ALLOC_ARRAY(dcts, ocpi->ocpi_bulk_tgt_nr);
-	if (dcts == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	for (i = 0; i < ocpi->ocpi_bulk_tgt_nr; i++) {
-		rc = crt_proc_struct_daos_coll_target(proc, CRT_PROC_DECODE, &dcts[i]);
-		if (rc != 0) {
-			crt_proc_reset(proc, iov->iov_buf, iov->iov_len, CRT_PROC_FREE);
-			for (j = 0; j < i; j++)
-				crt_proc_struct_daos_coll_target(proc, CRT_PROC_FREE, &dcts[j]);
-			goto out;
-		}
-	}
-
-out:
-	if (rc != 0) {
-		D_FREE(dcts);
-		if (proc != NULL)
-			crt_proc_destroy(proc);
-		daos_iov_free(iov);
-	} else {
-		*p_proc = proc;
-		*p_dcts = dcts;
-		*dct_nr = ocpi->ocpi_bulk_tgt_nr;
-	}
-
-	return rc;
-}
-
-static int
-obj_coll_punch_prep(struct obj_coll_punch_in *ocpi, struct daos_coll_target *dcts, uint32_t dct_nr,
-		    struct dtx_coll_entry **p_dce)
-{
-	struct pl_map		*map = NULL;
-	struct dtx_memberships	*mbs = ocpi->ocpi_mbs;
-	struct dtx_daos_target	*ddt = mbs->dm_tgts;
-	struct dtx_coll_entry	*dce = NULL;
-	struct dtx_coll_target	*target;
-	d_rank_t		 max_rank = 0;
-	uint32_t		 size;
-	int			 rc = 0;
-	int			 i;
-	int			 j;
-
-	/* dcts[0] is for current engine. */
-	if (dcts[0].dct_bitmap == NULL || dcts[0].dct_bitmap_sz == 0 ||
-	    dcts[0].dct_shards == NULL)
-		D_GOTO(out, rc = -DER_INVAL);
-
-	/* Already allocated enough space in MBS when decode to hold the targets and bitmap. */
-	target = (struct dtx_coll_target *)(ddt + mbs->dm_tgt_cnt);
-
-	size = sizeof(*ddt) * mbs->dm_tgt_cnt + sizeof(*target) +
-	       sizeof(dcts[0].dct_tgt_ids[0]) * dcts[0].dct_tgt_nr + dcts[0].dct_bitmap_sz;
-	if (unlikely(ocpi->ocpi_odm.odm_mbs_max_sz < sizeof(*mbs) + size)) {
-		D_ERROR("Pre-allocated MBS buffer is too small: %u vs %ld + %u\n",
-			ocpi->ocpi_odm.odm_mbs_max_sz, sizeof(*mbs), size);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	target->dct_tgt_nr = dcts[0].dct_tgt_nr;
-	memcpy(target->dct_tgts, dcts[0].dct_tgt_ids,
-	       sizeof(dcts[0].dct_tgt_ids[0]) * dcts[0].dct_tgt_nr);
-	target->dct_bitmap_sz = dcts[0].dct_bitmap_sz;
-	memcpy(target->dct_tgts + target->dct_tgt_nr, dcts[0].dct_bitmap, dcts[0].dct_bitmap_sz);
-	mbs->dm_data_size = size;
-
-	D_ALLOC_PTR(dce);
-	if (dce == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	dce->dce_xid = ocpi->ocpi_xid;
-	dce->dce_ver = ocpi->ocpi_map_ver;
-	dce->dce_refs = 1;
-
-	D_ALLOC(dce->dce_bitmap, dcts[0].dct_bitmap_sz);
-	if (dce->dce_bitmap == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	dce->dce_bitmap_sz = dcts[0].dct_bitmap_sz;
-	memcpy(dce->dce_bitmap, dcts[0].dct_bitmap, dcts[0].dct_bitmap_sz);
-
-	if (!(ocpi->ocpi_flags & ORF_LEADER) || unlikely(dct_nr <= 1))
-		D_GOTO(out, rc = 0);
-
-	map = pl_map_find(ocpi->ocpi_po_uuid, ocpi->ocpi_oid.id_pub);
-	if (map == NULL) {
-		D_ERROR("Failed to find valid placement map in pool "DF_UUID"\n",
-			DP_UUID(ocpi->ocpi_po_uuid));
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	size = pool_map_node_nr(map->pl_poolmap);
-	D_ALLOC_ARRAY(dce->dce_hints, size);
-	if (dce->dce_hints == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	dce->dce_ranks = d_rank_list_alloc(dct_nr - 1);
-	if (dce->dce_ranks == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	/* Set i = 1 to skip leader_rank. */
-	for (i = 1; i < dct_nr; i++) {
-		dce->dce_ranks->rl_ranks[i - 1] = dcts[i].dct_rank;
-		if (max_rank < dcts[i].dct_rank)
-			max_rank = dcts[i].dct_rank;
-
-		size = dcts[i].dct_bitmap_sz << 3;
-		if (size > dss_tgt_nr)
-			size = dss_tgt_nr;
-
-		for (j = 0; j < size; j++) {
-			if (isset(dcts[i].dct_bitmap, j)) {
-				dce->dce_hints[dcts[i].dct_rank] = j;
-				break;
-			}
-		}
-	}
-
-	dce->dce_hint_sz = max_rank + 1;
-
-out:
-	if (map != NULL)
-		pl_map_decref(map);
-
-	if (rc != 0 && dce != NULL)
-		dtx_coll_entry_put(dce);
-	else
-		*p_dce = dce;
-
-	return rc;
-}
-
 void
 ds_obj_coll_punch_handler(crt_rpc_t *rpc)
 {
@@ -5791,7 +5648,6 @@ again1:
 			/* TODO: Also recovery the epoch uncertainty. */
 			break;
 		case -DER_NONEXIST:
-			rc = 0;
 			break;
 		default:
 			D_GOTO(out, rc);
@@ -5895,5 +5751,157 @@ out:
 	}
 
 	/* It is no matter even if obj_ioc_begin() was not called. */
+	obj_ioc_end(&ioc, rc);
+}
+
+void
+ds_obj_coll_query_handler(crt_rpc_t *rpc)
+{
+	struct dss_module_info		*dmi = dss_get_module_info();
+	struct obj_coll_query_in	*ocqi = crt_req_get(rpc);
+	struct obj_coll_query_out	*ocqo = crt_reply_get(rpc);
+	struct daos_coll_target		*dcts;
+	struct dtx_leader_handle	*dlh = NULL;
+	struct ds_obj_exec_arg		 exec_arg = { 0 };
+	struct dtx_coll_entry		 dce = { 0 };
+	struct obj_tgt_query_args	*otqas = NULL;
+	struct obj_tgt_query_args	*otqa = NULL;
+	struct obj_io_context		 ioc = { 0 };
+	struct dtx_epoch		 epoch = { 0 };
+	uint32_t			 dct_nr;
+	uint32_t			 version = 0;
+	uint32_t			 tgt_id = dmi->dmi_tgt_id;
+	d_rank_t			 myrank = dss_self_rank();
+	int				 rc = 0;
+	int				 i;
+
+	D_ASSERT(ocqi != NULL);
+	D_ASSERT(ocqo != NULL);
+
+	D_DEBUG(DB_IO, "Handling collective query RPC %p %s forwarding for obj "
+		DF_UOID" on rank %d XS %u/%u epc "DF_X64" pmv %u, with dti "DF_DTI
+		", dct_nr %u, forward width %u, forward depth %u\n",
+		rpc, ocqi->ocqi_tgts.ca_count <= 1 ? "without" : "with", DP_UOID(ocqi->ocqi_oid),
+		myrank, dmi->dmi_xs_id, tgt_id, ocqi->ocqi_epoch, ocqi->ocqi_map_ver,
+		DP_DTI(&ocqi->ocqi_xid), (unsigned int)ocqi->ocqi_tgts.ca_count,
+		ocqi->ocqi_disp_width, ocqi->ocqi_disp_depth);
+
+	D_ASSERT(dmi->dmi_xs_id != 0);
+
+	if (unlikely(ocqi->ocqi_tgts.ca_count <= 0 || ocqi->ocqi_tgts.ca_arrays == NULL))
+		D_GOTO(out, rc = -DER_INVAL);
+
+	dcts = ocqi->ocqi_tgts.ca_arrays;
+	dct_nr = ocqi->ocqi_tgts.ca_count;
+
+	if (unlikely(dcts[0].dct_bitmap == NULL || dcts[0].dct_bitmap_sz == 0 ||
+		     dcts[0].dct_shards == NULL || dcts[0].dct_tgt_nr == 0))
+		D_GOTO(out, rc = -DER_INVAL);
+
+	rc = obj_ioc_begin(ocqi->ocqi_oid.id_pub, ocqi->ocqi_map_ver, ocqi->ocqi_po_uuid,
+			   ocqi->ocqi_co_hdl, ocqi->ocqi_co_uuid, rpc, ocqi->ocqi_flags, &ioc);
+	if (rc != 0)
+		goto out;
+
+	rc = process_epoch(&ocqi->ocqi_epoch, &ocqi->ocqi_epoch_first, &ocqi->ocqi_flags);
+	if (rc == PE_OK_LOCAL)
+		ocqi->ocqi_flags &= ~ORF_EPOCH_UNCERTAIN;
+
+	D_ALLOC_ARRAY(otqas, dss_tgt_nr);
+	if (otqas == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	for (i = 0; i < dss_tgt_nr; i++)
+		otqas[i].otqa_raw_recx = 1;
+
+	otqa = &otqas[tgt_id];
+
+	dce.dce_xid = ocqi->ocqi_xid;
+	dce.dce_ver = ocqi->ocqi_map_ver;
+	dce.dce_refs = 1;
+	dce.dce_bitmap = dcts[0].dct_bitmap;
+	dce.dce_bitmap_sz = dcts[0].dct_bitmap_sz;
+
+	if (ocqi->ocqi_tgts.ca_count == 1) {
+		rc = obj_coll_local(rpc, dcts[0].dct_shards, &dce, &version, &ioc, NULL, otqas,
+				    obj_coll_tgt_query);
+		if (otqa->otqa_completed && otqa->otqa_keys_allocated &&
+		    (rc == 0 || rc == -DER_NONEXIST)) {
+			D_ASSERT(ioc.ioc_began);
+			rc = obj_coll_query_merge_tgts(ocqi, &ioc.ioc_oca, otqas, dce.dce_bitmap,
+						       dce.dce_bitmap_sz, tgt_id, -DER_NONEXIST);
+		}
+
+		goto out;
+	}
+
+	version = ioc.ioc_map_ver;
+
+	epoch.oe_value = ocqi->ocqi_epoch;
+	epoch.oe_first = ocqi->ocqi_epoch_first;
+	epoch.oe_flags = orf_to_dtx_epoch_flags(ocqi->ocqi_flags);
+
+	exec_arg.rpc = rpc;
+	exec_arg.ioc = &ioc;
+	exec_arg.args = otqas;
+	exec_arg.coll_shards = dcts[0].dct_shards;
+	exec_arg.coll_tgts = dcts;
+	obj_coll_disp_init(dct_nr, ocqi->ocqi_max_tgt_sz, sizeof(*ocqi),
+			   1 /* start, [0] is for current engine */, ocqi->ocqi_disp_width,
+			   &exec_arg.coll_cur);
+
+	rc = dtx_leader_begin(ioc.ioc_vos_coh, &ocqi->ocqi_xid, &epoch, 0, ocqi->ocqi_map_ver,
+			      &ocqi->ocqi_oid, NULL /* dti_cos */, 0 /* dti_cos_cnt */,
+			      NULL /* tgts */, exec_arg.coll_cur.grp_nr /* tgt_cnt */,
+			      DTX_TGT_COLL | DTX_RELAY, NULL /* mbs */, &dce, &dlh);
+	if (rc != 0)
+		goto out;
+
+	rc = dtx_leader_exec_ops(dlh, obj_coll_query_disp, obj_coll_query_agg_cb, -DER_NONEXIST,
+				 &exec_arg);
+
+	if (version < dlh->dlh_rmt_ver)
+		version = dlh->dlh_rmt_ver;
+
+	rc = dtx_leader_end(dlh, ioc.ioc_coh, rc);
+
+out:
+	D_DEBUG(DB_IO, "Handled collective query RPC %p %s forwarding for obj "DF_UOID
+		" on rank %u XS %u/%u epc "DF_X64" pmv %u, with dti "DF_DTI", dct_nr %u, "
+		"forward width %u, forward depth %u\n: "DF_RC"\n", rpc,
+		ocqi->ocqi_tgts.ca_count <= 1 ? "without" : "with", DP_UOID(ocqi->ocqi_oid),
+		myrank, dmi->dmi_xs_id, tgt_id, ocqi->ocqi_epoch, ocqi->ocqi_map_ver,
+		DP_DTI(&ocqi->ocqi_xid), (unsigned int)ocqi->ocqi_tgts.ca_count,
+		ocqi->ocqi_disp_width, ocqi->ocqi_disp_depth, DP_RC(rc));
+
+	obj_reply_set_status(rpc, rc);
+	obj_reply_map_version_set(rpc, version);
+	ocqo->ocqo_epoch = epoch.oe_value;
+
+	if (rc == 0 || rc == -DER_NONEXIST) {
+		D_ASSERT(otqa != NULL);
+
+		ocqo->ocqo_shard = otqa->otqa_shard;
+		ocqo->ocqo_recx = otqa->otqa_recx;
+		ocqo->ocqo_max_epoch = otqa->otqa_max_epoch;
+		if (otqa->otqa_keys_allocated) {
+			ocqo->ocqo_dkey = otqa->otqa_dkey_copy;
+			ocqo->ocqo_akey = otqa->otqa_akey_copy;
+		}
+		if (otqa->otqa_raw_recx)
+			ocqo->ocqo_flags |= OCRF_RAW_RECX;
+	}
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+
+	/* Keep otqas until RPC replied, because the reply may use some keys in otqas array. */
+	if (otqas != NULL) {
+		for (i = 0; i < dss_tgt_nr; i++)
+			obj_tgt_query_cleanup(&otqas[i]);
+		D_FREE(otqas);
+	}
+
 	obj_ioc_end(&ioc, rc);
 }

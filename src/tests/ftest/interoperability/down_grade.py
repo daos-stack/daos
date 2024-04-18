@@ -27,6 +27,6 @@ class DowngradeTest(UpgradeDowngradeBase):
 
         :avocado: tags=manual
         :avocado: tags=interop
-        :avocado: tags=test_downgrade
+        :avocado: tags=DowngradeTest,test_downgrade
         """
         self.upgrade_and_downgrade()

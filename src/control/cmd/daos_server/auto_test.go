@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,8 +29,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
-
-var defMemInfo = common.MemInfo{HugepageSizeKiB: 2048}
 
 func TestDaosServer_Auto_Commands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
@@ -260,6 +258,30 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			WithTargetCount(18).WithHelperStreamCount(4),
 	}
 
+	var defCoresPerNuma uint32 = 26
+	var defNumaCount uint32 = 2
+	defMemInfo := common.MemInfo{HugepageSizeKiB: 2048}
+	defHostFabric := &control.HostFabric{
+		Interfaces: []*control.HostFabricInterface{
+			eth0, eth1, ib0, ib1,
+		},
+		NumaCount:    defNumaCount,
+		CoresPerNuma: defCoresPerNuma,
+	}
+	defHostStorage := &control.HostStorage{
+		ScmNamespaces: storage.ScmNamespaces{
+			storage.MockScmNamespace(0),
+			storage.MockScmNamespace(1),
+		},
+		MemInfo: &defMemInfo,
+		NvmeDevices: storage.NvmeControllers{
+			storage.MockNvmeController(1),
+			storage.MockNvmeController(2),
+			storage.MockNvmeController(3),
+			storage.MockNvmeController(4),
+		},
+	}
+
 	for name, tc := range map[string]struct {
 		accessPoints    string
 		nrEngines       int
@@ -322,27 +344,9 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			hs:     &control.HostStorage{},
 			expErr: errors.New("nil HostStorage.MemInfo"),
 		},
-		"single engine; dcpm on numa 1": {
-			hf: &control.HostFabric{
-				Interfaces: []*control.HostFabricInterface{
-					eth0, eth1, ib0, ib1,
-				},
-				NumaCount:    2,
-				CoresPerNuma: 24,
-			},
-			hs: &control.HostStorage{
-				ScmNamespaces: storage.ScmNamespaces{
-					storage.MockScmNamespace(0),
-					storage.MockScmNamespace(1),
-				},
-				MemInfo: &defMemInfo,
-				NvmeDevices: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
-					storage.MockNvmeController(4),
-				},
-			},
+		"dual engine; dcpm": {
+			hf: defHostFabric,
+			hs: defHostStorage,
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithNrHugepages(defNrHugepages).
 				WithAccessPoints("localhost:10001").
@@ -350,26 +354,8 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		},
 		"access points set": {
 			accessPoints: "moon-111,mars-115,jupiter-119",
-			hf: &control.HostFabric{
-				Interfaces: []*control.HostFabricInterface{
-					eth0, eth1, ib0, ib1,
-				},
-				NumaCount:    2,
-				CoresPerNuma: 24,
-			},
-			hs: &control.HostStorage{
-				ScmNamespaces: storage.ScmNamespaces{
-					storage.MockScmNamespace(0),
-					storage.MockScmNamespace(1),
-				},
-				MemInfo: &defMemInfo,
-				NvmeDevices: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
-					storage.MockNvmeController(4),
-				},
-			},
+			hf:           defHostFabric,
+			hs:           defHostStorage,
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
 				WithNrHugepages(defNrHugepages).
 				WithAccessPoints("localhost:10001").
@@ -377,13 +363,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
 		"unmet min nr ssds": {
-			hf: &control.HostFabric{
-				Interfaces: []*control.HostFabricInterface{
-					eth0, eth1, ib0, ib1,
-				},
-				NumaCount:    2,
-				CoresPerNuma: 24,
-			},
+			hf: defHostFabric,
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{
 					storage.MockScmNamespace(0),
@@ -396,61 +376,19 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		},
 		"unmet nr engines": {
 			nrEngines: 8,
-			hf: &control.HostFabric{
-				Interfaces: []*control.HostFabricInterface{
-					eth0, eth1, ib0, ib1,
-				},
-				NumaCount:    2,
-				CoresPerNuma: 24,
-			},
-			hs: &control.HostStorage{
-				ScmNamespaces: storage.ScmNamespaces{
-					storage.MockScmNamespace(0),
-					storage.MockScmNamespace(1),
-				},
-				MemInfo: &defMemInfo,
-				NvmeDevices: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
-					storage.MockNvmeController(4),
-				},
-			},
-			expErr: errors.New("insufficient number of pmem"),
+			hf:        defHostFabric,
+			hs:        defHostStorage,
+			expErr:    errors.New("insufficient number of pmem"),
 		},
 		"bad net class": {
 			netClass: "foo",
-			hf: &control.HostFabric{
-				Interfaces: []*control.HostFabricInterface{
-					eth0, eth1, ib0, ib1,
-				},
-				NumaCount:    2,
-				CoresPerNuma: 24,
-			},
-			hs: &control.HostStorage{
-				ScmNamespaces: storage.ScmNamespaces{
-					storage.MockScmNamespace(0),
-					storage.MockScmNamespace(1),
-				},
-				MemInfo: &defMemInfo,
-				NvmeDevices: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
-					storage.MockNvmeController(4),
-				},
-			},
-			expErr: errors.New("unrecognized net-class"),
+			hf:       defHostFabric,
+			hs:       defHostStorage,
+			expErr:   errors.New("unrecognized net-class"),
 		},
 		"tmpfs scm; no control_metadata path": {
 			tmpfsSCM: true,
-			hf: &control.HostFabric{
-				Interfaces: []*control.HostFabricInterface{
-					eth0, eth1, ib0, ib1,
-				},
-				NumaCount:    2,
-				CoresPerNuma: 24,
-			},
+			hf:       defHostFabric,
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{
 					storage.MockScmNamespace(0),
@@ -474,38 +412,14 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		},
 		"dcpm scm; control_metadata path set": {
 			extMetadataPath: metadataMountPath,
-			hf: &control.HostFabric{
-				Interfaces: []*control.HostFabricInterface{
-					eth0, eth1, ib0, ib1,
-				},
-				NumaCount:    2,
-				CoresPerNuma: 24,
-			},
-			hs: &control.HostStorage{
-				ScmNamespaces: storage.ScmNamespaces{
-					storage.MockScmNamespace(0),
-					storage.MockScmNamespace(1),
-				},
-				MemInfo: &defMemInfo,
-				NvmeDevices: storage.NvmeControllers{
-					storage.MockNvmeController(1),
-					storage.MockNvmeController(2),
-					storage.MockNvmeController(3),
-					storage.MockNvmeController(4),
-				},
-			},
-			expErr: errors.New("only supported with scm class ram"),
+			hf:              defHostFabric,
+			hs:              defHostStorage,
+			expErr:          errors.New("only supported with scm class ram"),
 		},
 		"tmpfs scm; md-on-ssd; low mem": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
-			hf: &control.HostFabric{
-				Interfaces: []*control.HostFabricInterface{
-					eth0, eth1, ib0, ib1,
-				},
-				NumaCount:    2,
-				CoresPerNuma: 24,
-			},
+			hf:              defHostFabric,
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{
 					storage.MockScmNamespace(0),
@@ -527,13 +441,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		"tmpfs scm; md-on-ssd": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
-			hf: &control.HostFabric{
-				Interfaces: []*control.HostFabricInterface{
-					eth0, eth1, ib0, ib1,
-				},
-				NumaCount:    2,
-				CoresPerNuma: 24,
-			},
+			hf:              defHostFabric,
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{
 					storage.MockScmNamespace(0),
@@ -559,13 +467,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		"tmpfs scm; md-on-ssd; no logging to stdout": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
-			hf: &control.HostFabric{
-				Interfaces: []*control.HostFabricInterface{
-					eth0, eth1, ib0, ib1,
-				},
-				NumaCount:    2,
-				CoresPerNuma: 24,
-			},
+			hf:              defHostFabric,
 			hs: &control.HostStorage{
 				ScmNamespaces: storage.ScmNamespaces{
 					storage.MockScmNamespace(0),
@@ -583,6 +485,79 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 			},
 			expOutPrefix: "port: 10001",
+		},
+		"dcpm scm; vmd; 2 domains-per-engine; 4 ssds-per-domain": {
+			hf: defHostFabric,
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				MemInfo: &defMemInfo,
+				NvmeDevices: storage.NvmeControllers{
+					&storage.NvmeController{PciAddr: "4a0005:01:00.0"},
+					&storage.NvmeController{PciAddr: "4a0005:02:00.0"},
+					&storage.NvmeController{PciAddr: "4a0005:03:00.0"},
+					&storage.NvmeController{PciAddr: "4a0005:04:00.0"},
+					&storage.NvmeController{PciAddr: "640005:01:00.0"},
+					&storage.NvmeController{PciAddr: "640005:02:00.0"},
+					&storage.NvmeController{PciAddr: "640005:03:00.0"},
+					&storage.NvmeController{PciAddr: "640005:04:00.0"},
+					&storage.NvmeController{PciAddr: "970005:01:00.0", SocketID: 1},
+					&storage.NvmeController{PciAddr: "970005:02:00.0", SocketID: 1},
+					&storage.NvmeController{PciAddr: "970005:03:00.0", SocketID: 1},
+					&storage.NvmeController{PciAddr: "970005:04:00.0", SocketID: 1},
+					&storage.NvmeController{PciAddr: "e20005:01:00.0", SocketID: 1},
+					&storage.NvmeController{PciAddr: "e20005:02:00.0", SocketID: 1},
+					&storage.NvmeController{PciAddr: "e20005:03:00.0", SocketID: 1},
+					&storage.NvmeController{PciAddr: "e20005:04:00.0", SocketID: 1},
+				},
+			},
+			expCfg: control.MockServerCfg("ofi+psm2", []*engine.Config{
+				control.DefaultEngineCfg(0).
+					WithPinnedNumaNode(0).
+					WithFabricInterface("ib0").
+					WithFabricInterfacePort(31416).
+					WithFabricProvider("ofi+psm2").
+					WithFabricNumaNodeIndex(0).
+					WithStorageNumaNodeIndex(0).
+					WithTargetCount(16).
+					WithHelperStreamCount(4).
+					WithStorage(
+						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
+							WithStorageClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem0").
+							WithScmMountPoint("/mnt/daos0"),
+						storage.NewTierConfig().
+							WithNumaNodeIndex(0).
+							WithStorageClass(storage.ClassNvme.String()).
+							WithBdevDeviceList("0000:4a:00.5", "0000:64:00.5"),
+					),
+				control.DefaultEngineCfg(1).
+					WithPinnedNumaNode(1).
+					WithFabricInterface("ib1").
+					WithFabricInterfacePort(32416).
+					WithFabricProvider("ofi+psm2").
+					WithFabricNumaNodeIndex(1).
+					WithStorageNumaNodeIndex(1).
+					WithTargetCount(16).
+					WithHelperStreamCount(4).
+					WithStorage(
+						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
+							WithStorageClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem1").
+							WithScmMountPoint("/mnt/daos1"),
+						storage.NewTierConfig().
+							WithNumaNodeIndex(1).
+							WithStorageClass(storage.ClassNvme.String()).
+							WithBdevDeviceList("0000:97:00.5", "0000:e2:00.5"),
+					),
+			}).
+				WithNrHugepages(16 /* tgts */ * 2 /* engines */ * 512 /* pages-per-tgt */).
+				WithAccessPoints("localhost:10001").
+				WithControlLogFile("/tmp/daos_server.log"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

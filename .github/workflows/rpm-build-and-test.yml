@@ -26,19 +26,14 @@ defaults:
   run:
     shell: bash --noprofile --norc -ueo pipefail {0}
 
-# https://github.com/dorny/test-reporter/issues/149
-permissions:
-  id-token: write
-  contents: read
-  checks: write
-  # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
-  pull-requests: write
+permissions: {}
 
 jobs:
   # it's a real shame that this step is even needed.  push events have the commit message # in
   # ${{ github.event.head_commit.message }} but pull_requests don't.  :-(
   Import-commit-message:
     name: Get commit message
+    if: github.repository == 'daos-stack/daos'
     runs-on: [self-hosted, light]
     # Map a step output to a job output
     outputs:
@@ -274,7 +269,7 @@ jobs:
              cat mock_result/build.log
       - name: Save RPM build logs
         continue-on-error: true
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.STAGE_NAME }} logs
           path: |
@@ -298,7 +293,7 @@ jobs:
         run: rm -f ${REPO_PATH}lastSuccessfulBuild;
              exit 1
       - name: Publish RPMs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
           path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
@@ -362,6 +357,10 @@ jobs:
   Functional:
     name: Functional Testing
     runs-on: [self-hosted, wolf]
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
     timeout-minutes: 7200
     needs: [Build-RPM, Import-commit-message, Calc-functional-matrix, Import-commit-pragmas]
     strategy:
@@ -522,14 +521,14 @@ jobs:
       - name: Publish artifacts
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.STAGE_NAME }} artifacts
           path: ${{ env.STAGE_NAME }}/**
       - name: Upload test results
         if: (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
@@ -593,6 +592,10 @@ jobs:
   Functional_Hardware:
     name: Functional Testing on Hardware
     runs-on: [self-hosted, wolf]
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
     timeout-minutes: 7200
     needs: [Import-commit-message, Build-RPM, Calc-functional-hardware-matrix,
             Import-commit-pragmas, Functional]
@@ -744,14 +747,14 @@ jobs:
       - name: Publish artifacts
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.STAGE_NAME }} artifacts
           path: ${{ env.STAGE_NAME }}/**
       - name: Upload test results
         if: (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml

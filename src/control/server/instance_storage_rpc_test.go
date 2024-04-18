@@ -30,6 +30,8 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 	withState := func(ctrlr *ctlpb.NvmeController, state ctlpb.NvmeDevState) *ctlpb.NvmeController {
 		ctrlr.DevState = state
 		ctrlr.HealthStats = nil
+		// scanEngineBdevsOverDrpc will always populate RoleBits in ctrlr.SmdDevices
+		ctrlr.SmdDevices = []*ctlpb.SmdDevice{{RoleBits: 7}}
 		return ctrlr
 	}
 	withDevState := func(smd *ctlpb.SmdDevice, state ctlpb.NvmeDevState) *ctlpb.SmdDevice {
@@ -137,15 +139,22 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			engStopped: true,
 			provRes: &storage.BdevScanResponse{
 				Controllers: storage.NvmeControllers{
-					&storage.NvmeController{PciAddr: "050505:01:00.0"},
-					&storage.NvmeController{PciAddr: "050505:03:00.0"},
+					&storage.NvmeController{
+						PciAddr:   "050505:01:00.0",
+						NvmeState: storage.NvmeStateNormal,
+					},
+					&storage.NvmeController{
+						PciAddr:   "050505:03:00.0",
+						NvmeState: storage.NvmeStateNormal,
+					},
 				},
 			},
 			expResp: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
 					func() *ctlpb.NvmeController {
 						nc := &ctlpb.NvmeController{
-							PciAddr: "050505:01:00.0",
+							PciAddr:  "050505:01:00.0",
+							DevState: ctlpb.NvmeDevState_NORMAL,
 						}
 						nc.SmdDevices = []*ctlpb.SmdDevice{
 							{Rank: uint32(ranklist.NilRank)},
@@ -154,7 +163,8 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 					}(),
 					func() *ctlpb.NvmeController {
 						nc := &ctlpb.NvmeController{
-							PciAddr: "050505:03:00.0",
+							PciAddr:  "050505:03:00.0",
+							DevState: ctlpb.NvmeDevState_NORMAL,
 						}
 						nc.SmdDevices = []*ctlpb.SmdDevice{
 							{Rank: uint32(ranklist.NilRank)},
@@ -194,22 +204,7 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 			req:    ctlpb.ScanNvmeReq{},
 			rank:   -1,
 			smdRes: defSmdScanRes(),
-			expResp: &ctlpb.ScanNvmeResp{
-				Ctrlrs: proto.NvmeControllers{
-					func() *ctlpb.NvmeController {
-						c := proto.MockNvmeController(2)
-						c.HealthStats = nil
-						c.SmdDevices = []*ctlpb.SmdDevice{
-							{
-								Rank:     uint32(ranklist.NilRank),
-								RoleBits: storage.BdevRoleAll,
-							},
-						}
-						return c
-					}(),
-				},
-				State: new(ctlpb.ResponseState),
-			},
+			expErr: errors.New("nil superblock"),
 		},
 		"scan over drpc; with health": {
 			req:       ctlpb.ScanNvmeReq{Health: true},
@@ -275,26 +270,39 @@ func TestIOEngineInstance_bdevScanEngine(t *testing.T) {
 		},
 		"scan over drpc; only ctrlrs with valid states shown": {
 			req: ctlpb.ScanNvmeReq{},
+			bdevAddrs: []string{
+				test.MockPCIAddr(1), test.MockPCIAddr(2),
+				test.MockPCIAddr(1), test.MockPCIAddr(2),
+				test.MockPCIAddr(5),
+			},
 			smdRes: &ctlpb.SmdDevResp{
 				Devices: proto.SmdDevices{
-					withDevState(proto.MockSmdDevice(storage.MockNvmeController(1), 1),
+					withDevState(proto.MockSmdDevice(
+						storage.MockNvmeController(1), 1),
 						ctlpb.NvmeDevState_UNPLUGGED),
-					withDevState(proto.MockSmdDevice(storage.MockNvmeController(2), 2),
+					withDevState(proto.MockSmdDevice(
+						storage.MockNvmeController(2), 2),
 						ctlpb.NvmeDevState_UNKNOWN),
-					withDevState(proto.MockSmdDevice(storage.MockNvmeController(3), 3),
+					withDevState(proto.MockSmdDevice(
+						storage.MockNvmeController(3), 3),
 						ctlpb.NvmeDevState_NORMAL),
-					withDevState(proto.MockSmdDevice(storage.MockNvmeController(4), 4),
+					withDevState(proto.MockSmdDevice(
+						storage.MockNvmeController(4), 4),
 						ctlpb.NvmeDevState_NEW),
-					withDevState(proto.MockSmdDevice(storage.MockNvmeController(5), 5),
+					withDevState(proto.MockSmdDevice(
+						storage.MockNvmeController(5), 5),
 						ctlpb.NvmeDevState_EVICTED),
 				},
 			},
 			healthRes: healthRespWithUsage(),
 			expResp: &ctlpb.ScanNvmeResp{
 				Ctrlrs: proto.NvmeControllers{
-					withState(proto.MockNvmeController(3), ctlpb.NvmeDevState_NORMAL),
-					withState(proto.MockNvmeController(4), ctlpb.NvmeDevState_NEW),
-					withState(proto.MockNvmeController(5), ctlpb.NvmeDevState_EVICTED),
+					withState(proto.MockNvmeController(3),
+						ctlpb.NvmeDevState_NORMAL),
+					withState(proto.MockNvmeController(4),
+						ctlpb.NvmeDevState_NEW),
+					withState(proto.MockNvmeController(5),
+						ctlpb.NvmeDevState_EVICTED),
 				},
 				State: new(ctlpb.ResponseState),
 			},

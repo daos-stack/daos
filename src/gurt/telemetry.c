@@ -1393,9 +1393,8 @@ void
 d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 {
 	if (format == D_TM_CSV) {
-		fprintf(stream, ",%lu,%lu,%lf,%lu",
-			stats->dtm_min, stats->dtm_max, stats->mean,
-			stats->sample_size);
+		fprintf(stream, ",%lu,%lu,%lf,%lu,%lu", stats->dtm_min, stats->dtm_max, stats->mean,
+			stats->sample_size, stats->dtm_sum);
 		if (stats->sample_size > 2)
 			fprintf(stream, ",%lf", stats->std_dev);
 		else
@@ -1403,8 +1402,8 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 		return;
 	}
 
-	fprintf(stream, " [min: %lu, max: %lu, avg: %.0lf",
-		stats->dtm_min, stats->dtm_max, stats->mean);
+	fprintf(stream, " [min: %lu, max: %lu, avg: %.0lf, sum: %lu", stats->dtm_min,
+		stats->dtm_max, stats->mean, stats->dtm_sum);
 	if (stats->sample_size > 2)
 		fprintf(stream, ", stddev: %.0lf", stats->std_dev);
 	fprintf(stream, ", samples: %lu]", stats->sample_size);
@@ -1582,7 +1581,7 @@ d_tm_print_field_descriptors(int opt_fields, FILE *stream)
 	if (opt_fields & D_TM_INCLUDE_TYPE)
 		fprintf(stream, "type,");
 
-	fprintf(stream, "value,min,max,mean,sample_size,std_dev");
+	fprintf(stream, "value,min,max,mean,sample_size,sum,std_dev");
 
 	if (opt_fields & D_TM_INCLUDE_METADATA)
 		fprintf(stream, ",description,units");

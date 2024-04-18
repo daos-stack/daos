@@ -19,7 +19,7 @@ server_config:
       log_file: daos_server0.log
       log_mask: INFO
       storage: auto
-      targets: 16
+      targets: 8
       env_vars:
         - DD_MASK=io,rebuild
     1:
@@ -30,18 +30,15 @@ server_config:
       log_file: daos_server1.log
       log_mask: INFO
       storage: auto
-      targets: 16
+      targets: 8
       env_vars:
         - DD_MASK=io,rebuild
 
 pool_size_ratio_80:
   size: 80%
-  control_method: dmg
   rebuild_timeout: 960
-  svcn: 5
 pool_size_value:
   size: 500G
-  control_method: dmg
   rebuild_timeout: 240
 
 container:

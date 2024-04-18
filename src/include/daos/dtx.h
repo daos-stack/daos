@@ -9,6 +9,13 @@
 
 #include <time.h>
 #include <uuid/uuid.h>
+#include <inttypes.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include <daos_types.h>
+#include <gurt/debug.h>
+#include <gurt/common.h>
 
 /* If the count of committable DTXs on leader exceeds this threshold,
  * it will trigger batched DTX commit globally. We will optimize the
@@ -259,6 +266,7 @@ daos_dti_equal(struct dtx_id *dti0, struct dtx_id *dti1)
 }
 
 #define DF_DTI		DF_UUID"."DF_X64
+#define DF_DTIF		DF_UUIDF"."DF_X64
 #define DP_DTI(dti)	DP_UUID((dti)->dti_uuid), (dti)->dti_hlc
 
 enum daos_ops_intent {

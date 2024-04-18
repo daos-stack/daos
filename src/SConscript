@@ -6,7 +6,8 @@ HEADERS = ['daos_api.h', 'daos_types.h', 'daos_errno.h', 'daos_kv.h',
            'daos_event.h', 'daos_mgmt.h', 'daos_types.h', 'daos_array.h',
            'daos_task.h', 'daos_fs.h', 'daos_uns.h', 'daos_security.h',
            'daos_prop.h', 'daos_obj_class.h', 'daos_obj.h', 'daos_pool.h',
-           'daos_cont.h', 'daos_version.h', 'daos_fs_sys.h', 'daos_s3.h', 'daos_pipeline.h']
+           'daos_cont.h', 'daos_version.h', 'daos_fs_sys.h', 'daos_s3.h', 'daos_pipeline.h',
+           'daos.h']
 HEADERS_GURT = ['dlog.h', 'debug.h', 'common.h', 'hash.h', 'list.h',
                 'heap.h', 'fault_inject.h', 'debug_setup.h',
                 'types.h', 'atomic.h', 'slab.h',
@@ -54,15 +55,6 @@ def read_and_save_version(env):
         return version
 
 
-def check_install_header(env, header):
-    """Runs a builder to ensure the header can standalone compile and installs it"""
-    result = env.CheckHeader(header)
-    # Ensure the target, actually gets built since none of these targets
-    # get installed.
-    Default(result)
-    env.Install(os.path.join('$PREFIX', os.path.dirname(header)), header)
-
-
 def scons():
     """Execute build"""
     Import('env', 'base_env', 'base_env_mpi', 'prereqs')
@@ -94,10 +86,11 @@ def scons():
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include'), os.path.join('include', header))
     for header in HEADERS_GURT:
-        check_install_header(env, os.path.join('include', 'gurt', header))
+        env.Install(os.path.join("$PREFIX", "include", "gurt"),
+                    os.path.join("include", "gurt", header))
     for header in HEADERS_CART:
-        check_install_header(env, os.path.join('include', 'cart', header))
-    check_install_header(env, 'include/daos.h')
+        env.Install(os.path.join("$PREFIX", "include", "cart"),
+                    os.path.join("include", "cart", header))
 
     env.Append(CCFLAGS=['-DCART_VERSION=\\"' + CART_VERSION + '\\"'])
     libdaos_tgts = []
@@ -113,6 +106,7 @@ def scons():
 
     # Build each DAOS component
     SConscript('rsvc/SConscript')
+    SConscript('chk/SConscript')
     SConscript('mgmt/SConscript')
     SConscript('pool/SConscript')
     SConscript('container/SConscript')
@@ -134,6 +128,9 @@ def scons():
 
     # Build utilities
     SConscript('utils/SConscript')
+
+    # Build ddb
+    SConscript('ddb/SConscript')
 
     # Build the control plane components
     SConscript('control/SConscript')

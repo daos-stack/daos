@@ -30,8 +30,6 @@ server_config:
       storage: auto
 pool:
   size: 93%
-  svcn: 5
-  control_method: dmg
   pool_query_timeout: 30
   properties: rd_fac:2
 container:

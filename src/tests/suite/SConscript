@@ -22,6 +22,8 @@ def scons():
     # pylint: disable-next=unused-variable
     daos_epoch_io = denv.SharedObject(['daos_epoch_io.c'])
     # pylint: disable-next=unused-variable
+    daos_test_rebuild = denv.SharedObject(['daos_rebuild_common.c'])
+    # pylint: disable-next=unused-variable
     daos_test_obj = denv.SharedObject(['daos_obj.c'])
 
     c_files = ['daos_debug_set_params.c']
@@ -39,14 +41,13 @@ def scons():
                     daos_obj_array.c daos_obj.c daos_oid_alloc.c daos_pool.c
                     daos_rebuild.c daos_rebuild_common.c daos_rebuild_ec.c
                     daos_rebuild_simple.c daos_test.c daos_verify_consistency.c
-                    daos_aggregate_ec.c daos_degrade_ec.c
+                    daos_aggregate_ec.c daos_degrade_ec.c daos_cr.c
                     daos_extend_simple.c daos_obj_ec.c daos_upgrade.c daos_pipeline.c""")
 
     daostest = newenv.d_program('daos_test', c_files + daos_test_tgt,
                                 LIBS=['daos_common'] + libraries)
 
     c_files = ['dfs_unit_test.c', 'dfs_par_test.c', 'dfs_test.c', 'dfs_sys_unit_test.c']
-    newenv.AppendUnique(CPPPATH=[Dir('../../client/dfs').srcnode()])
     dfstest = newenv.d_program('dfs_test', c_files + daos_test_tgt,
                                LIBS=['daos_common'] + libraries)
 
@@ -59,7 +60,8 @@ def scons():
     denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_4')
     denv.Install('$PREFIX/lib/daos/TESTING/io_conf', 'io_conf/daos_io_conf_5')
     SConscript('io_conf/SConscript',
-               exports=['denv', 'daos_epoch_io', 'daos_test_tgt', 'daos_test_obj'])
+               exports=['denv', 'daos_epoch_io', 'daos_test_tgt', 'daos_test_rebuild',
+                        'daos_test_obj'])
 
 
 if __name__ == "SCons.Script":

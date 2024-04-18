@@ -13,6 +13,7 @@
 
 #include <daos_types.h>
 #include <daos/object.h>
+#include <daos_srv/daos_chk.h>
 
 #define DAOS_RAS_STR_FIELD_SIZE 128
 #define DAOS_RAS_ID_FIELD_SIZE 64
@@ -35,30 +36,32 @@
  *   * Don't arbitrarily reorder entries
  *   * Do limit lines to 99 columns, wrapping as necessary
  */
-#define RAS_EVENT_LIST										\
-	X(RAS_UNKNOWN_EVENT,			"unknown_ras_event")				\
-	X(RAS_ENGINE_FORMAT_REQUIRED,		"engine_format_required")			\
-	X(RAS_ENGINE_DIED,			"engine_died")					\
-	X(RAS_ENGINE_ASSERTED,			"engine_asserted")				\
-	X(RAS_ENGINE_CLOCK_DRIFT,		"engine_clock_drift")				\
-	X(RAS_POOL_CORRUPTION_DETECTED,		"corruption_detected")				\
-	X(RAS_POOL_REBUILD_START,		"pool_rebuild_started")				\
-	X(RAS_POOL_REBUILD_END,			"pool_rebuild_finished")			\
-	X(RAS_POOL_REBUILD_FAILED,		"pool_rebuild_failed")				\
-	X(RAS_POOL_REPS_UPDATE,			"pool_replicas_updated")			\
-	X(RAS_POOL_DF_INCOMPAT,			"pool_durable_format_incompatible")		\
-	X(RAS_POOL_DEFER_DESTROY,		"pool_destroy_deferred")			\
-	X(RAS_CONT_DF_INCOMPAT,			"container_durable_format_incompatible")	\
-	X(RAS_RDB_DF_INCOMPAT,			"rdb_durable_format_incompatible")		\
-	X(RAS_SWIM_RANK_ALIVE,			"swim_rank_alive")				\
-	X(RAS_SWIM_RANK_DEAD,			"swim_rank_dead")				\
-	X(RAS_SYSTEM_START_FAILED,		"system_start_failed")				\
-	X(RAS_SYSTEM_STOP_FAILED,		"system_stop_failed")				\
-	X(RAS_DEVICE_SET_FAULTY,		"device_set_faulty")				\
-	X(RAS_DEVICE_MEDIA_ERROR,		"device_media_error")				\
-	X(RAS_DEVICE_UNPLUGGED,			"device_unplugged")				\
-	X(RAS_DEVICE_PLUGGED,			"device_plugged")				\
-	X(RAS_DEVICE_REPLACE,			"device_replace")
+#define RAS_EVENT_LIST                                                                             \
+	X(RAS_UNKNOWN_EVENT, "unknown_ras_event")                                                  \
+	X(RAS_ENGINE_FORMAT_REQUIRED, "engine_format_required")                                    \
+	X(RAS_ENGINE_DIED, "engine_died")                                                          \
+	X(RAS_ENGINE_ASSERTED, "engine_asserted")                                                  \
+	X(RAS_ENGINE_CLOCK_DRIFT, "engine_clock_drift")                                            \
+	X(RAS_POOL_CORRUPTION_DETECTED, "corruption_detected")                                     \
+	X(RAS_POOL_REBUILD_START, "pool_rebuild_started")                                          \
+	X(RAS_POOL_REBUILD_END, "pool_rebuild_finished")                                           \
+	X(RAS_POOL_REBUILD_FAILED, "pool_rebuild_failed")                                          \
+	X(RAS_POOL_REPS_UPDATE, "pool_replicas_updated")                                           \
+	X(RAS_POOL_DF_INCOMPAT, "pool_durable_format_incompatible")                                \
+	X(RAS_POOL_DEFER_DESTROY, "pool_destroy_deferred")                                         \
+	X(RAS_CONT_DF_INCOMPAT, "container_durable_format_incompatible")                           \
+	X(RAS_RDB_DF_INCOMPAT, "rdb_durable_format_incompatible")                                  \
+	X(RAS_SWIM_RANK_ALIVE, "swim_rank_alive")                                                  \
+	X(RAS_SWIM_RANK_DEAD, "swim_rank_dead")                                                    \
+	X(RAS_SYSTEM_START_FAILED, "system_start_failed")                                          \
+	X(RAS_SYSTEM_STOP_FAILED, "system_stop_failed")                                            \
+	X(RAS_DEVICE_SET_FAULTY, "device_set_faulty")                                              \
+	X(RAS_DEVICE_MEDIA_ERROR, "device_media_error")                                            \
+	X(RAS_DEVICE_UNPLUGGED, "device_unplugged")                                                \
+	X(RAS_DEVICE_PLUGGED, "device_plugged")                                                    \
+	X(RAS_DEVICE_REPLACE, "device_replace")                                                    \
+	X(RAS_SYSTEM_FABRIC_PROV_CHANGED, "system_fabric_provider_changed")                        \
+	X(RAS_ENGINE_JOIN_FAILED, "engine_join_failed")
 
 /** Define RAS event enum */
 typedef enum {
@@ -229,5 +232,53 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl, uint64_t version);
  */
 int
 ds_notify_swim_rank_dead(d_rank_t rank, uint64_t incarnation);
+
+/**
+ * List all the known pools from control plane (MS).
+ *
+ * \param[out] clp	The pools list.
+ *
+ * \retval		Positive value for the conut of pools.
+ *			Negative value if error.
+ */
+int
+ds_chk_listpool_upcall(struct chk_list_pool **clp);
+
+/**
+ * Register the pool to control plane (MS).
+ *
+ * \param[in] seq	DAOS Check event sequence, unique for the instance.
+ * \param[in] uuid	The pool uuid.
+ * \param[in] label	The pool label, optional.
+ * \param[in] svcreps	Ranks for the pool service.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_chk_regpool_upcall(uint64_t seq, uuid_t uuid, char *label, d_rank_list_t *svcreps);
+
+/**
+ * Deregister the pool from control plane (MS).
+ *
+ * \param[in] seq	DAOS Check event sequence, unique for the instance.
+ * \param[in] uuid	The pool uuid.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_chk_deregpool_upcall(uint64_t seq, uuid_t uuid);
+
+/**
+ * Report inconsistency to control plane (MS).
+ *
+ * \param[in] rpt	The pointer to Chk__CheckReport.
+ *
+ * \retval		Zero on success, non-zero otherwise.
+ */
+int
+ds_chk_report_upcall(void *rpt);
+
+void
+ds_chk_free_pool_list(struct chk_list_pool *clp, uint32_t nr);
 
 #endif /* __DAOS_RAS_H_ */

@@ -1,5 +1,5 @@
 /*
- *  (C) Copyright 2016-2023 Intel Corporation.
+ *  (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -751,7 +751,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		else
-			D_ERROR(DF_CONT DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
+			D_ERROR(DF_CONT" "DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
 				DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
@@ -1959,98 +1959,31 @@ out_put:
 struct obj_query_key_cb_args {
 	crt_rpc_t		*rpc;
 	unsigned int		*map_ver;
-	daos_unit_oid_t		oid;
 	daos_key_t		*dkey;
 	daos_key_t		*akey;
 	daos_recx_t		*recx;
 	daos_epoch_t		*max_epoch;
 	struct dc_object	*obj;
-	struct dc_obj_shard	*shard;
 	struct dtx_epoch	epoch;
 	daos_handle_t		th;
 	uint32_t		*max_delay;
 	uint64_t		*queue_id;
 };
 
-static void
-obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard, daos_key_t *dkey,
-			  daos_recx_t *reply_recx, bool get_max, bool changed)
-{
-	daos_recx_t		*result_recx = cb_args->recx;
-	daos_recx_t		 tmp_recx = {0};
-	uint64_t		 tmp_end;
-	uint32_t		 tgt_off;
-	bool			 from_data_tgt;
-	struct daos_oclass_attr	*oca;
-	uint64_t		dkey_hash;
-	uint64_t		 stripe_rec_nr, cell_rec_nr;
-
-	oca = obj_get_oca(cb_args->obj);
-	if (oca == NULL || !daos_oclass_is_ec(oca)) {
-		*result_recx = *reply_recx;
-		return;
-	}
-
-	dkey_hash = obj_dkey2hash(cb_args->obj->cob_md.omd_id, dkey);
-	tgt_off = obj_ec_shard_off(cb_args->obj, dkey_hash, shard);
-	from_data_tgt = is_ec_data_shard_by_tgt_off(tgt_off, oca);
-	stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
-	cell_rec_nr = obj_ec_cell_rec_nr(oca);
-	D_ASSERT(!(reply_recx->rx_idx & PARITY_INDICATOR));
-	/* data ext from data shard needs to convert to daos ext,
-	 * replica ext from parity shard needs not to convert.
-	 */
-	tmp_recx = *reply_recx;
-	tmp_end = DAOS_RECX_END(tmp_recx);
-	D_DEBUG(DB_IO, "shard %d/%u get recx "DF_U64" "DF_U64"\n",
-		shard, tgt_off, tmp_recx.rx_idx, tmp_recx.rx_nr);
-	if (tmp_end > 0 && from_data_tgt) {
-		if (get_max) {
-			tmp_recx.rx_idx = max(tmp_recx.rx_idx, rounddown(tmp_end - 1, cell_rec_nr));
-			tmp_recx.rx_nr = tmp_end - tmp_recx.rx_idx;
-		} else {
-			tmp_recx.rx_nr = min(tmp_end, roundup(tmp_recx.rx_idx + 1, cell_rec_nr)) -
-					 tmp_recx.rx_idx;
-		}
-
-		tmp_recx.rx_idx = obj_ec_idx_vos2daos(tmp_recx.rx_idx, stripe_rec_nr,
-							      cell_rec_nr, tgt_off);
-		tmp_end = DAOS_RECX_END(tmp_recx);
-	}
-
-	if (get_max) {
-		if (DAOS_RECX_END(*result_recx) < tmp_end || changed)
-			*result_recx = tmp_recx;
-	} else {
-		if (DAOS_RECX_END(*result_recx) > tmp_end || changed)
-			*result_recx = tmp_recx;
-	}
-}
-
 static int
 obj_shard_query_key_cb(tse_task_t *task, void *data)
 {
-	struct obj_query_key_cb_args	*cb_args;
-	struct obj_query_key_in		*okqi;
+	struct obj_query_key_cb_args	*cb_args = data;
+	crt_rpc_t			*rpc = cb_args->rpc;
+	struct obj_query_key_in		*okqi = crt_req_get(cb_args->rpc);
 	struct obj_query_key_out	*okqo;
-	uint32_t			flags;
-	int				opc;
-	int				ret = task->dt_result;
-	int				rc = 0;
-	crt_rpc_t			*rpc;
+	struct obj_query_merge_args	 oqma = { 0 };
+	int				 rc = task->dt_result;
+	int				 rc1;
 
-	cb_args = (struct obj_query_key_cb_args *)data;
-	rpc = cb_args->rpc;
-
-	okqi = crt_req_get(cb_args->rpc);
-	D_ASSERT(okqi != NULL);
-
-	flags = okqi->okqi_api_flags;
-	opc = opc_get(cb_args->rpc->cr_opc);
-
-	if (ret != 0) {
-		D_ERROR("RPC %d failed, "DF_RC"\n", opc, DP_RC(ret));
-		D_GOTO(out, ret);
+	if (rc != 0) {
+		D_ERROR("Regular query failed: "DF_RC"\n", DP_RC(rc));
+		goto out;
 	}
 
 	okqo = crt_reply_get(cb_args->rpc);
@@ -2058,132 +1991,42 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 	/* See the similar dc_rw_cb. */
 	if (daos_handle_is_valid(cb_args->th)) {
-		int rc_tmp;
-
-		rc_tmp = dc_tx_op_end(task, cb_args->th, &cb_args->epoch, rc,
-				      okqo->okqo_epoch);
-		if (rc_tmp != 0) {
-			D_ERROR("failed to end transaction operation (rc=%d "
-				"epoch="DF_U64": "DF_RC"\n", rc,
-				okqo->okqo_epoch, DP_RC(rc_tmp));
-			goto out;
+		rc1 = dc_tx_op_end(task, cb_args->th, &cb_args->epoch, rc, okqo->okqo_epoch);
+		if (rc1 != 0) {
+			D_ERROR("Failed to end TX (rc=%d, epoch="DF_U64", opc = %u): "DF_RC"\n",
+				rc, okqo->okqo_epoch, DAOS_OBJ_RPC_QUERY_KEY, DP_RC(rc1));
+			D_GOTO(out, rc = (rc != 0 ? rc : rc1));
 		}
 	}
 
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST) {
-			D_SPIN_LOCK(&cb_args->obj->cob_spin);
-			D_GOTO(set_max_epoch, rc = 0);
-		}
-
-		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY || rc == -DER_OVERLOAD_RETRY)
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
-				cb_args->rpc, opc, rc);
-		else
-			D_ERROR("rpc %p RPC %d failed: %d\n",
-				cb_args->rpc, opc, rc);
-
-		if (rc == -DER_OVERLOAD_RETRY) {
-			uint32_t			 timeout = 0;
-			struct obj_query_key_v10_out	*okqo_v10;
-
-			okqo_v10 = crt_reply_get(cb_args->rpc);
-			if (*cb_args->queue_id == 0)
-				*cb_args->queue_id = okqo_v10->okqo_comm_out.req_out_enqueue_id;
-			crt_req_get_timeout(cb_args->rpc, &timeout);
-			if (timeout > *cb_args->max_delay)
-				*cb_args->max_delay = timeout;
-
-		}
-		D_GOTO(out, rc);
-	}
+	oqma.oqma_oca = &cb_args->obj->cob_oca;
+	oqma.oqma_oid = okqi->okqi_oid;
+	oqma.oqma_src_epoch = okqo->okqo_max_epoch;
+	oqma.oqma_in_dkey = &okqi->okqi_dkey;
+	oqma.oqma_src_dkey = &okqo->okqo_dkey;
+	oqma.oqma_tgt_dkey = cb_args->dkey;
+	oqma.oqma_src_akey = &okqo->okqo_akey;
+	oqma.oqma_tgt_akey = cb_args->akey;
+	oqma.oqma_src_recx = &okqo->okqo_recx;
+	oqma.oqma_tgt_recx = cb_args->recx;
+	oqma.oqma_tgt_epoch = cb_args->max_epoch;
+	oqma.oqma_tgt_map_ver = cb_args->map_ver;
+	oqma.oqma_max_delay = cb_args->max_delay;
+	oqma.oqma_queue_id = cb_args->queue_id;
+	oqma.oqma_rpc = cb_args->rpc;
+	oqma.oqma_flags = okqi->okqi_api_flags;
+	oqma.oqma_opc = DAOS_OBJ_RPC_QUERY_KEY;
+	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
+	oqma.oqma_ret = rc;
+	oqma.oqma_raw_recx = 1;
 
 	D_SPIN_LOCK(&cb_args->obj->cob_spin);
-	*cb_args->map_ver = obj_reply_map_version_get(rpc);
-
-	if (flags == 0)
-		goto set_max_epoch;
-
-	bool check = true;
-	bool changed = false;
-	bool first = (cb_args->dkey->iov_len == 0);
-	bool is_ec_obj = obj_is_ec(cb_args->obj);
-
-	if (flags & DAOS_GET_DKEY) {
-		uint64_t *val = (uint64_t *)okqo->okqo_dkey.iov_buf;
-		uint64_t *cur = (uint64_t *)cb_args->dkey->iov_buf;
-
-		if (okqo->okqo_dkey.iov_len != sizeof(uint64_t)) {
-			D_ERROR("Invalid Dkey obtained\n");
-			D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
-			D_GOTO(out, rc = -DER_IO);
-		}
-
-		/** for first cb, just set the dkey */
-		if (first) {
-			*cur = *val;
-			cb_args->dkey->iov_len = okqo->okqo_dkey.iov_len;
-			changed = true;
-		} else if (flags & DAOS_GET_MAX) {
-			if (*val > *cur) {
-				D_DEBUG(DB_IO, "dkey update "DF_U64"->"
-					DF_U64"\n", *cur, *val);
-				*cur = *val;
-				/** set to change akey and recx */
-				changed = true;
-			} else {
-				/** no change, don't check akey and recx for
-				 * replica obj, for EC obj need to check again
-				 * as it possibly from different data shards.
-				 */
-				if (!is_ec_obj || *val < *cur)
-					check = false;
-			}
-		} else if (flags & DAOS_GET_MIN) {
-			if (*val < *cur) {
-				*cur = *val;
-				/** set to change akey and recx */
-				changed = true;
-			} else {
-				if (!is_ec_obj)
-					check = false;
-			}
-		} else {
-			D_ASSERT(0);
-		}
-	}
-
-	if (check && flags & DAOS_GET_AKEY) {
-		uint64_t *val = (uint64_t *)okqo->okqo_akey.iov_buf;
-		uint64_t *cur = (uint64_t *)cb_args->akey->iov_buf;
-
-		/** if first cb, or dkey changed, set akey */
-		if (first || changed)
-			*cur = *val;
-	}
-
-	if (check && flags & DAOS_GET_RECX) {
-		bool		 get_max = (okqi->okqi_api_flags & DAOS_GET_MAX);
-		daos_key_t	*dkey;
-
-		if (okqi->okqi_api_flags & DAOS_GET_DKEY)
-			dkey = &okqo->okqo_dkey;
-		else
-			dkey = &okqi->okqi_dkey;
-		obj_shard_query_recx_post(cb_args, okqi->okqi_oid.id_shard,
-					  dkey, &okqo->okqo_recx, get_max, changed);
-	}
-
-set_max_epoch:
-	if (cb_args->max_epoch && *cb_args->max_epoch < okqo->okqo_max_epoch)
-		*cb_args->max_epoch = okqo->okqo_max_epoch;
+	rc = daos_obj_query_merge(&oqma);
 	D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 
 out:
 	crt_req_decref(rpc);
-	if (ret == 0 || obj_retry_error(rc))
-		ret = rc;
-	return ret;
+	return rc;
 }
 
 int
@@ -2194,19 +2037,15 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task,
 		       uint32_t *max_delay, uint64_t *queue_id)
 {
-	struct dc_pool			*pool = NULL;
+	struct dc_pool			*pool = obj_shard_ptr2pool(shard);
 	struct obj_query_key_v10_in	*okqi;
 	crt_rpc_t			*req;
-	struct obj_query_key_cb_args	 cb_args;
-	daos_unit_oid_t			 oid;
+	struct obj_query_key_cb_args	 cb_args = { 0 };
 	crt_endpoint_t			 tgt_ep;
 	int				 rc;
 
-	pool = obj_shard_ptr2pool(shard);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+	D_ASSERT(pool != NULL);
 
-	oid = shard->do_id;
 	tgt_ep.ep_grp	= pool->dp_sys->sy_group;
 	tgt_ep.ep_tag	= shard->do_target_idx;
 	tgt_ep.ep_rank = shard->do_target_rank;
@@ -2222,12 +2061,10 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	crt_req_addref(req);
 	cb_args.rpc		= req;
 	cb_args.map_ver		= map_ver;
-	cb_args.oid		= shard->do_id;
 	cb_args.dkey		= dkey;
 	cb_args.akey		= akey;
 	cb_args.recx		= recx;
 	cb_args.obj		= obj;
-	cb_args.shard		= shard;
 	cb_args.epoch		= *epoch;
 	cb_args.th		= th;
 	cb_args.max_epoch	= max_epoch;
@@ -2245,7 +2082,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	okqi->okqi_epoch		= epoch->oe_value;
 	okqi->okqi_epoch_first		= epoch->oe_first;
 	okqi->okqi_api_flags		= flags;
-	okqi->okqi_oid			= oid;
+	okqi->okqi_oid			= shard->do_id;
 	d_iov_set(&okqi->okqi_dkey, NULL, 0);
 	d_iov_set(&okqi->okqi_akey, NULL, 0);
 	if (dkey != NULL && !(flags & DAOS_GET_DKEY))
@@ -2262,8 +2099,170 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	daos_dti_copy(&okqi->okqi_dti, dti);
 	okqi->okqi_comm_in.req_in_enqueue_id = *queue_id;
 
-	rc = daos_rpc_send(req, task);
+	return daos_rpc_send(req, task);
+
+out_req:
+	crt_req_decref(req);
+	crt_req_decref(req);
+out:
+	tse_task_complete(task, rc);
 	return rc;
+}
+
+static int
+obj_shard_coll_query_cb(tse_task_t *task, void *data)
+{
+	struct obj_query_key_cb_args	*cb_args = data;
+	crt_rpc_t			*rpc = cb_args->rpc;
+	struct obj_coll_query_in	*ocqi = crt_req_get(cb_args->rpc);
+	struct obj_coll_query_out	*ocqo;
+	struct obj_query_merge_args	 oqma = { 0 };
+	int				 rc = task->dt_result;
+	int				 rc1;
+
+	if (rc != 0) {
+		D_ERROR("Collective query failed: "DF_RC"\n", DP_RC(rc));
+		goto out;
+	}
+
+	ocqo = crt_reply_get(cb_args->rpc);
+	rc = obj_reply_get_status(rpc);
+
+	if (daos_handle_is_valid(cb_args->th)) {
+		rc1 = dc_tx_op_end(task, cb_args->th, &cb_args->epoch, rc, ocqo->ocqo_epoch);
+		if (rc1 != 0) {
+			D_ERROR("Failed to end TX (rc=%d, epoch="DF_U64", opc = %u): "DF_RC"\n",
+				rc, ocqo->ocqo_epoch, DAOS_OBJ_RPC_COLL_QUERY, DP_RC(rc1));
+			D_GOTO(out, rc = (rc != 0 ? rc : rc1));
+		}
+	}
+
+	oqma.oqma_oca = &cb_args->obj->cob_oca;
+	oqma.oqma_oid = ocqi->ocqi_oid;
+	oqma.oqma_src_epoch = ocqo->ocqo_max_epoch;
+	oqma.oqma_in_dkey = &ocqi->ocqi_dkey;
+	oqma.oqma_src_dkey = &ocqo->ocqo_dkey;
+	oqma.oqma_tgt_dkey = cb_args->dkey;
+	oqma.oqma_src_akey = &ocqo->ocqo_akey;
+	oqma.oqma_tgt_akey = cb_args->akey;
+	oqma.oqma_src_recx = &ocqo->ocqo_recx;
+	oqma.oqma_tgt_recx = cb_args->recx;
+	oqma.oqma_tgt_epoch = cb_args->max_epoch;
+	oqma.oqma_tgt_map_ver = cb_args->map_ver;
+	oqma.oqma_max_delay = cb_args->max_delay;
+	oqma.oqma_queue_id = cb_args->queue_id;
+	oqma.oqma_rpc = cb_args->rpc;
+	oqma.oqma_flags = ocqi->ocqi_api_flags;
+	oqma.oqma_opc = DAOS_OBJ_RPC_COLL_QUERY;
+	oqma.oqma_src_map_ver = obj_reply_map_version_get(rpc);
+	oqma.oqma_ret = rc;
+	oqma.oqma_raw_recx = ocqo->ocqo_flags & OCRF_RAW_RECX ? 1 : 0;
+
+	/*
+	 * The RPC reply may be aggregated results from multiple VOS targets, as to related max/min
+	 * dkey/recx are not from the direct target. The ocqo->ocqo_shard indicates the right one.
+	 */
+	oqma.oqma_oid.id_shard = ocqo->ocqo_shard;
+
+	/*
+	 * Merge (L4) the results from engine that may be single shard or aggregated results from
+	 * multuple shards from single or multiple engines.
+	 */
+	D_SPIN_LOCK(&cb_args->obj->cob_spin);
+	rc = daos_obj_query_merge(&oqma);
+	D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
+
+out:
+	crt_req_decref(rpc);
+	return rc;
+}
+
+int
+dc_obj_shard_coll_query(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
+			uint32_t req_map_ver, struct dc_object *obj, daos_key_t *dkey,
+			daos_key_t *akey, daos_recx_t *recx, daos_epoch_t *max_epoch,
+			const uuid_t coh_uuid, const uuid_t cont_uuid, struct dtx_id *dti,
+			uint32_t *map_ver, struct daos_coll_target *tgts, uint32_t tgt_nr,
+			uint32_t max_tgt_size, uint32_t disp_width, daos_handle_t th,
+			tse_task_t *task, uint32_t *max_delay, uint64_t *queue_id)
+{
+	struct dc_pool			*pool = obj->cob_pool;
+	struct obj_coll_query_in	*ocqi;
+	crt_rpc_t			*req = NULL;
+	struct obj_query_key_cb_args	 cb_args = { 0 };
+	crt_endpoint_t			 tgt_ep = { 0 };
+	int				 rc;
+
+	D_ASSERT(pool != NULL);
+
+	tgt_ep.ep_grp = pool->dp_sys->sy_group;
+	tgt_ep.ep_rank = shard->do_target_rank;
+	tgt_ep.ep_tag = shard->do_target_idx;
+
+	D_DEBUG(DB_IO, "OBJ_COLL_QUERY_RPC, rank=%d tag=%d.\n", tgt_ep.ep_rank, tgt_ep.ep_tag);
+
+	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_COLL_QUERY, &req);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	crt_req_addref(req);
+	cb_args.rpc = req;
+	cb_args.map_ver = map_ver;
+	cb_args.dkey = dkey;
+	cb_args.akey = akey;
+	cb_args.recx = recx;
+	cb_args.max_epoch = max_epoch;
+	cb_args.obj = obj;
+	cb_args.epoch = *epoch;
+	cb_args.th = th;
+	cb_args.queue_id = queue_id;
+	cb_args.max_delay = max_delay;
+
+	rc = tse_task_register_comp_cb(task, obj_shard_coll_query_cb, &cb_args, sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_req, rc);
+
+	ocqi = crt_req_get(req);
+	D_ASSERT(ocqi != NULL);
+
+	daos_dti_copy(&ocqi->ocqi_xid, dti);
+	uuid_copy(ocqi->ocqi_po_uuid, pool->dp_pool);
+	uuid_copy(ocqi->ocqi_co_hdl, coh_uuid);
+	uuid_copy(ocqi->ocqi_co_uuid, cont_uuid);
+	ocqi->ocqi_oid = shard->do_id;
+	ocqi->ocqi_epoch = epoch->oe_value;
+	ocqi->ocqi_epoch_first = epoch->oe_first;
+	ocqi->ocqi_api_flags = flags;
+	ocqi->ocqi_map_ver = req_map_ver;
+
+	ocqi->ocqi_flags = 0;
+	if (epoch->oe_flags & DTX_EPOCH_UNCERTAIN)
+		ocqi->ocqi_flags |= ORF_EPOCH_UNCERTAIN;
+	if (obj_is_ec(obj))
+		ocqi->ocqi_flags |= ORF_EC;
+
+	d_iov_set(&ocqi->ocqi_dkey, NULL, 0);
+	if (dkey != NULL && !(flags & DAOS_GET_DKEY))
+		ocqi->ocqi_dkey = *dkey;
+
+	d_iov_set(&ocqi->ocqi_akey, NULL, 0);
+	if (akey != NULL && !(flags & DAOS_GET_AKEY))
+		ocqi->ocqi_akey = *akey;
+
+	ocqi->ocqi_max_tgt_sz = max_tgt_size;
+	if (disp_width < COLL_DISP_WIDTH_MIN) {
+		ocqi->ocqi_disp_width = disp_width;
+	} else {
+		ocqi->ocqi_disp_width = disp_width - COLL_DISP_WIDTH_DIF;
+		if (ocqi->ocqi_disp_width < COLL_DISP_WIDTH_MIN)
+			ocqi->ocqi_disp_width = COLL_DISP_WIDTH_MIN;
+	}
+	ocqi->ocqi_disp_depth = 0;
+	ocqi->ocqi_tgts.ca_count = tgt_nr;
+	ocqi->ocqi_tgts.ca_arrays = tgts;
+	ocqi->ocqi_comm_in.req_in_enqueue_id = *queue_id;
+
+	return daos_rpc_send(req, task);
 
 out_req:
 	crt_req_decref(req);
@@ -2296,6 +2295,11 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 	if (ret != 0) {
 		D_ERROR("OBJ_SYNC RPC failed: rc = %d\n", ret);
 		D_GOTO(out, rc = ret);
+	}
+
+	if (DAOS_FAIL_CHECK(DAOS_OBJ_SYNC_RETRY)) {
+		D_ERROR("Expect to retry OBJ_SYNC RPC\n");
+		D_GOTO(out, rc = -DER_TIMEDOUT);
 	}
 
 	oso = crt_reply_get(rpc);

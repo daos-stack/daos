@@ -10,6 +10,7 @@ orterun:
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 48 hour test
 timeouts:
+  test_soak_stress_72h: 72H30M
   test_soak_stress_48h: 48H30M
   test_soak_stress_24h: 24H30M
   test_soak_stress_12h: 12H30M
@@ -76,6 +77,7 @@ soak_stress:
   name: soak_stress
   # stress test timeout in hours
   test_timeout:
+    test_soak_stress_72h: 72
     test_soak_stress_48h: 48
     test_soak_stress_24h: 24
     test_soak_stress_12h: 12
@@ -91,6 +93,7 @@ soak_stress:
   ignore_soak_errors: false
   enable_intercept_lib: true
   enable_remote_logging: false
+  enable_scrubber: true
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -122,7 +125,7 @@ ior_stress:
   repetitions: 5
   transfer_size:
     - '1m'
-    - '4k'
+    - '32k'
   dfs_oclass:
     - ["SX","SX"]
     - ["EC_2P1GX", "RP_2GX"]
@@ -131,7 +134,7 @@ ior_stress:
     #  - ["EC_8P2G1", "RP_3GX"]
     #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/ior/"
+    mount_dir: "/tmp/soak_dfuse_ior/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -146,7 +149,7 @@ fio_stress:
     - test
   global:
     create_serialize: 0
-    directory: "/tmp/daos_dfuse/fio/"
+    directory: "/tmp/soak_dfuse_fio/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -157,7 +160,7 @@ fio_stress:
     numjobs: 1
   soak:
     blocksize:
-      - '64K'
+      - '4K'
       - '1M'
     size:
       - '500M'
@@ -173,7 +176,7 @@ fio_stress:
       #  - ["EC_8P2G1", "RP_3GX"]
       #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/fio/"
+    mount_dir: "/tmp/soak_dfuse_fio/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -191,14 +194,14 @@ vpic_stress:
     - POSIX
     - POSIX-LIBIOIL
     - POSIX-LIBPIL4DFS
-  workdir: "/tmp/daos_dfuse/vpic/"
+  workdir: "/tmp/soak_dfuse_vpic/"
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/vpic/"
+    mount_dir: "/tmp/soak_dfuse_vpic/"
     disable_caching: true
   oclass:
     - ["EC_2P1GX", "RP_2GX"]
 lammps_stress:
-  job_timeout: 35
+  job_timeout: 45
   nodesperjob:
     - 8
   taskspernode:
@@ -208,9 +211,9 @@ lammps_stress:
     - POSIX
     - POSIX-LIBIOIL
     - POSIX-LIBPIL4DFS
-  workdir: "/tmp/daos_dfuse/lammps/"
+  workdir: "/tmp/soak_dfuse_lammps/"
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/lammps/"
+    mount_dir: "/tmp/soak_dfuse_lammps/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -251,7 +254,7 @@ mdtest_stress:
     #  - ["EC_16P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/mdtest/"
+    mount_dir: "/tmp/soak_dfuse_mdtest/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
@@ -282,18 +285,15 @@ macsio_stress:
     #  - ["EC_8P2G1", "RP_3GX"]
     #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/macsio/"
+    mount_dir: "/tmp/soak_dfuse_macsio/"
     disable_caching: true
     thread_count: 8
     cores: '0-7'
 datamover_stress:
   job_timeout: 10
   nodesperjob:
-    - 1
-    - 4
     - 8
   taskspernode:
-    - 16
     - 32
   oclass:
     - ["SX","SX"]
@@ -313,7 +313,7 @@ datamover_stress:
     transfer_size:
       - 1M
     block_size:
-      - 1M
+      - 4G
     test_file: "daos:/testFile"
     dfs_destroy: false
   ior_read:
@@ -324,7 +324,7 @@ datamover_stress:
     transfer_size:
       - 1M
     block_size:
-      - 1M
+      - 4G
     test_file: "daos:/testFile"
     dfs_destroy: false
 hdf5_vol:

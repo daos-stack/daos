@@ -168,14 +168,16 @@ main(int argc, char **argv)
 	}
 
 	/** if writing XML, force all ranks other than rank 0 to use stdout to avoid conflicts */
-	cmocka_message_output = getenv("CMOCKA_MESSAGE_OUTPUT");
+	d_agetenv_str(&cmocka_message_output, "CMOCKA_MESSAGE_OUTPUT");
 	if (rank != 0 && cmocka_message_output && strcasecmp(cmocka_message_output, "xml") == 0) {
+		d_freeenv_str(&cmocka_message_output);
 		rc = d_setenv("CMOCKA_MESSAGE_OUTPUT", "stdout", 1);
 		if (rc) {
 			print_message("d_setenv() failed with %d\n", rc);
 			return -1;
 		}
 	}
+	d_freeenv_str(&cmocka_message_output);
 
 	nr_failed = run_specified_tests(tests, rank, size, NULL, 0);
 

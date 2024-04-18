@@ -606,8 +606,8 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 		return rc;
 	}
 
-	D_INFO("Enter DTX resync for "DF_UUID"/"DF_UUID" with version: %u\n",
-	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+	D_DEBUG(DB_MD, "Enter DTX resync (%s) for "DF_UUID"/"DF_UUID" with ver %u\n",
+		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
 
 	crt_group_rank(NULL, &myrank);
 
@@ -619,8 +619,8 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 
 	if (target->ta_comp.co_status == PO_COMP_ST_UP) {
 		dra.discard_version = target->ta_comp.co_in_ver;
-		D_INFO("DTX resync for "DF_UUID"/"DF_UUID" discard version: %u\n",
-		       DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
+		D_DEBUG(DB_MD, "DTX resync for "DF_UUID"/"DF_UUID" discard version: %u\n",
+			DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
@@ -675,8 +675,8 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 		}
 	}
 
-	D_INFO("Start DTX resync scan for "DF_UUID"/"DF_UUID" with version %u\n",
-	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+	D_DEBUG(DB_MD, "Start DTX resync (%s) scan for "DF_UUID"/"DF_UUID" with ver %u\n",
+		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
 
 	rc = ds_cont_iter(po_hdl, co_uuid, dtx_iter_cb, &dra, VOS_ITER_DTX, 0);
 
@@ -690,8 +690,8 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	if (rc >= 0)
 		rc = rc1;
 
-	D_INFO("Stop DTX resync scan for "DF_UUID"/"DF_UUID" with version %u: rc = %d\n",
-	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);
+	D_DEBUG(DB_MD, "Stop DTX resync (%s) scan for "DF_UUID"/"DF_UUID" with ver %u: rc = %d\n",
+		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);
 
 fail:
 	ABT_mutex_lock(cont->sc_mutex);
@@ -703,8 +703,8 @@ out:
 	if (!dtx_cont_opened(cont))
 		stop_dtx_reindex_ult(cont);
 
-	D_INFO("Exit DTX resync for "DF_UUID"/"DF_UUID" with version: %u\n",
-	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+	D_DEBUG(DB_MD, "Exit DTX resync (%s) for "DF_UUID"/"DF_UUID" with ver %u, rc = %d\n",
+		block ? "block" : "non-block", DP_UUID(po_uuid), DP_UUID(co_uuid), ver, rc);
 
 	ds_cont_child_put(cont);
 	return rc > 0 ? 0 : rc;
@@ -756,12 +756,16 @@ dtx_resync_one(void *data)
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
+	if (unlikely(child->spc_no_storage))
+		D_GOTO(put, rc = 0);
+
 	cb_arg.arg = *arg;
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 container_scan_cb, NULL, &cb_arg, NULL);
 
+put:
 	ds_pool_child_put(child);
 out:
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",
@@ -793,7 +797,8 @@ dtx_resync_ult(void *data)
 	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
 		dss_sleep(5 * 1000);
 
-	rc = dss_thread_collective(dtx_resync_one, arg, DSS_ULT_DEEP_STACK);
+	rc = ds_pool_thread_collective(arg->pool_uuid, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT |
+				       PO_COMP_ST_NEW, dtx_resync_one, arg, DSS_ULT_DEEP_STACK);
 	if (rc) {
 		/* If dtx resync fails, then let's still update
 		 * sp_dtx_resync_version, so the rebuild can go ahead,

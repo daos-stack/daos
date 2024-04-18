@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,23 +15,16 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
-	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 var (
-	testDevices = []ipmctl.DeviceDiscovery{
-		mockDiscovery(0),
-		mockDiscovery(0),
-		mockDiscovery(1),
-		mockDiscovery(1),
-	}
 	testModules = storage.ScmModules{
-		mockModule(testDevices[0]),
-		mockModule(testDevices[1]),
-		mockModule(testDevices[2]),
-		mockModule(testDevices[3]),
+		mockModule("abcd", 30, 0, 0, 0, 1),
+		mockModule("abce", 31, 0, 0, 1, 0),
+		mockModule("abcf", 32, 1, 0, 0, 1),
+		mockModule("abcg", 33, 1, 0, 1, 0),
 	}
 	sock0 = uint(0)
 	sock1 = uint(1)
@@ -116,67 +109,6 @@ func getNsFromJSON(t *testing.T, j string) storage.ScmNamespaces {
 }
 
 const verStr = `Intel(R) Optane(TM) Persistent Memory Command Line Interface Version 02.00.00.3825`
-
-func TestIpmctl_getModules(t *testing.T) {
-	for name, tc := range map[string]struct {
-		cfg       *mockIpmctlCfg
-		sockID    int
-		expErr    error
-		expResult storage.ScmModules
-	}{
-		"ipmctl GetModules failed": {
-			cfg: &mockIpmctlCfg{
-				getModulesErr: errors.New("mock GetModules"),
-			},
-			sockID: sockAny,
-			expErr: errors.New("failed to discover pmem modules: mock GetModules"),
-		},
-		"no modules": {
-			cfg:       &mockIpmctlCfg{},
-			sockID:    sockAny,
-			expResult: storage.ScmModules{},
-		},
-		"get modules with no socket filter": {
-			cfg: &mockIpmctlCfg{
-				modules: testDevices,
-			},
-			sockID:    sockAny,
-			expResult: testModules,
-		},
-		"filter modules by socket 0": {
-			cfg: &mockIpmctlCfg{
-				modules: testDevices,
-			},
-			sockID:    0,
-			expResult: testModules[:2],
-		},
-		"filter modules by socket 1": {
-			cfg: &mockIpmctlCfg{
-				modules: testDevices,
-			},
-			sockID:    1,
-			expResult: testModules[2:],
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			mockBinding := newMockIpmctl(tc.cfg)
-			cr, err := newCmdRunner(log, mockBinding, nil, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			result, err := cr.getModules(tc.sockID)
-
-			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
-				t.Errorf("wrong firmware info (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
 
 func TestIpmctl_prep(t *testing.T) {
 	var (
@@ -683,7 +615,7 @@ func TestIpmctl_prep(t *testing.T) {
 				return "", nil
 			}
 
-			cr, err := newCmdRunner(log, nil, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, mockRun, mockLookPath)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -905,7 +837,7 @@ func TestIpmctl_prepReset(t *testing.T) {
 				return "", nil
 			}
 
-			cr, err := newCmdRunner(log, nil, mockRun, mockLookPath)
+			cr, err := newCmdRunner(log, mockRun, mockLookPath)
 			if err != nil {
 				t.Fatal(err)
 			}

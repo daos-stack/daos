@@ -266,32 +266,23 @@ int
 dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
 {
 	unsigned int	map_version;
+	unsigned int	map_version_before = 0;
 	int		rc;
 
 	D_ASSERT(map != NULL);
 	map_version = pool_map_get_version(map);
 
-	if (pool->dp_map == NULL) {
-		rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
-		if (rc != 0)
-			D_GOTO(out, rc);
+	if (pool->dp_map != NULL)
+		map_version_before = pool_map_get_version(pool->dp_map);
 
-		D_DEBUG(DB_MD, DF_UUID": init pool map: %u\n",
-			DP_UUID(pool->dp_pool), pool_map_get_version(map));
-		D_GOTO(out_update, rc = 0);
-	}
-
-	if (map_version < pool_map_get_version(pool->dp_map)) {
-		D_DEBUG(DB_MD, DF_UUID": got older pool map: %u -> %u %p\n",
-			DP_UUID(pool->dp_pool),
-			pool_map_get_version(pool->dp_map), map_version, pool);
+	if (map_version <= map_version_before) {
+		D_DEBUG(DB_MD, DF_UUID ": ignored pool map update: version=%u->%u pool=%p\n",
+			DP_UUID(pool->dp_pool), map_version_before, map_version, pool);
 		D_GOTO(out, rc = 0);
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": updating pool map: %u -> %u\n",
-		DP_UUID(pool->dp_pool),
-		pool->dp_map == NULL ?
-		0 : pool_map_get_version(pool->dp_map), map_version);
+	D_DEBUG(DB_MD, DF_UUID ": updating pool map: version=%u->%u\n", DP_UUID(pool->dp_pool),
+		map_version_before, map_version);
 
 	rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
 	if (rc != 0) {
@@ -300,12 +291,14 @@ dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
 		D_GOTO(out, rc);
 	}
 
-	pool_map_decref(pool->dp_map);
-out_update:
+	if (pool->dp_map != NULL)
+		pool_map_decref(pool->dp_map);
 	pool_map_addref(map);
 	pool->dp_map = map;
 	if (pool->dp_map_version_known < map_version)
 		pool->dp_map_version_known = map_version;
+	D_INFO(DF_UUID ": updated pool map: version=%u->%u\n", DP_UUID(pool->dp_pool),
+	       map_version_before, map_version);
 out:
 	return rc;
 }
@@ -1631,9 +1624,7 @@ choose_map_refresh_rank(struct map_refresh_arg *arg)
 
 	if (arg->mra_i == -1) {
 		/* Let i be a random integer in [0, n). */
-		i = ((double)rand() / RAND_MAX) * n;
-		if (i == n)
-			i = 0;
+		i = d_rand() % n;
 	} else {
 		/* Continue the round robin. */
 		i = arg->mra_i;

@@ -60,6 +60,8 @@ on_faulty(struct bio_blobstore *bbs)
 static void
 teardown_xs_bs(void *arg)
 {
+	struct bio_io_context	*ioc;
+	int			 opened_blobs = 0;
 	struct bio_xs_blobstore	*bxb = arg;
 
 	D_ASSERT(bxb != NULL);
@@ -72,8 +74,23 @@ teardown_xs_bs(void *arg)
 	if (bxb->bxb_io_channel == NULL)
 		return;
 
-	/* Blobs (VOS pools) should have been close on faulty reaction */
-	D_ASSERT(d_list_empty(&bxb->bxb_io_ctxts));
+	/* When a normal device is unplugged, the opened blobs need be closed here */
+	d_list_for_each_entry(ioc, &bxb->bxb_io_ctxts, bic_link) {
+		if (ioc->bic_blob == NULL && ioc->bic_opening == 0)
+			continue;
+
+		opened_blobs++;
+		if (ioc->bic_closing || ioc->bic_opening)
+			continue;
+
+		bio_blob_close(ioc, true);
+	}
+ 
+	if (opened_blobs) {
+		D_DEBUG(DB_MGMT, "blobstore:%p has %d opened blobs\n",
+			bxb->bxb_blobstore, opened_blobs);
+		return;
+	}
 
 	/* Put the io channel */
 	if (bxb->bxb_io_channel != NULL) {
@@ -158,6 +175,7 @@ on_teardown(struct bio_blobstore *bbs)
 			continue;
 
 		D_ASSERT(xs_ctxt->bxc_thread != NULL);
+		bxb->bxb_ready = false;
 		spdk_thread_send_msg(xs_ctxt->bxc_thread, teardown_xs_bs, bxb);
 		rc += 1;
 	}
@@ -199,8 +217,10 @@ on_teardown(struct bio_blobstore *bbs)
 static void
 setup_xs_bs(void *arg)
 {
+	struct bio_io_context	*ioc;
 	struct bio_xs_blobstore	*bxb = arg;
 	struct bio_blobstore	*bbs;
+	int			 closed_blobs = 0;
 
 	D_ASSERT(bxb != NULL);
 	if (!is_server_started()) {
@@ -223,9 +243,35 @@ setup_xs_bs(void *arg)
 			D_ERROR("Failed to create io channel for %p\n", bbs);
 			return;
 		}
-		/* Blobs (VOS pools) will be opened in reint reaction */
-		D_ASSERT(d_list_empty(&bxb->bxb_io_ctxts));
 	}
+
+	/* If reint will be tirggered later, blobs will be opened in reint reaction */
+	if (bbs->bb_dev->bb_trigger_reint) {
+		D_ASSERT(d_list_empty(&bxb->bxb_io_ctxts));
+		goto done;
+	}
+
+	/* Open all blobs when reint won't be tirggered */
+	d_list_for_each_entry(ioc, &bxb->bxb_io_ctxts, bic_link) {
+		if (ioc->bic_blob != NULL && !ioc->bic_closing)
+			continue;
+
+		closed_blobs += 1;
+		if (ioc->bic_opening || ioc->bic_closing)
+			continue;
+
+		D_ASSERT(ioc->bic_blob_id != SPDK_BLOBID_INVALID);
+		/* device type and flags will be ignored in bio_blob_open() */
+		bio_blob_open(ioc, true, 0, SMD_DEV_TYPE_MAX, ioc->bic_blob_id);
+	}
+
+	if (closed_blobs) {
+		D_DEBUG(DB_MGMT, "blobstore:%p has %d closed blobs\n",
+			bbs, closed_blobs);
+		return;
+	}
+done:
+	bxb->bxb_ready = true;
 }
 
 static void
@@ -325,7 +371,7 @@ bs_loaded:
 		D_ASSERT(bxb != NULL);
 
 		/* Setup for the per-xsteam blobstore is done */
-		if (bxb->bxb_io_channel != NULL)
+		if (bxb->bxb_ready)
 			continue;
 
 		D_ASSERT(xs_ctxt->bxc_thread != NULL);

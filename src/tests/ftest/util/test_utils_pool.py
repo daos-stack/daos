@@ -377,7 +377,7 @@ class TestPool(TestDaosApiBase):
             self.pool = TestPool(self.context, DmgCommand(self.bin))
 
         If it wants to use --nsvc option, it needs to set the value to
-        svcn.value. Otherwise, 1 is used. If it wants to use --group, it needs
+        svcn.value. If it wants to use --group, it needs
         to set groupname.value. If it wants to use --user, it needs to set
         username.value. If it wants to add other options, directly set it
         to self.dmg.action_command. Refer dmg_utils.py pool_create method for

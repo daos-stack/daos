@@ -95,13 +95,16 @@ func (m *Membership) Count() (int, error) {
 
 // JoinRequest contains information needed for join membership update.
 type JoinRequest struct {
-	Rank           Rank
-	UUID           uuid.UUID
-	ControlAddr    *net.TCPAddr
-	FabricURI      string
-	FabricContexts uint32
-	FaultDomain    *FaultDomain
-	Incarnation    uint64
+	Rank                    Rank
+	UUID                    uuid.UUID
+	ControlAddr             *net.TCPAddr
+	PrimaryFabricURI        string
+	SecondaryFabricURIs     []string
+	FabricContexts          uint32
+	SecondaryFabricContexts []uint32
+	FaultDomain             *FaultDomain
+	Incarnation             uint64
+	CheckMode               bool
 }
 
 // JoinResponse contains information returned from join membership update.
@@ -117,6 +120,10 @@ type JoinResponse struct {
 func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	m.Lock()
 	defer m.Unlock()
+
+	if req.PrimaryFabricURI == "" {
+		return nil, errors.New("no primary fabric URI in JoinRequest")
+	}
 
 	resp = new(JoinResponse)
 	var curMember *Member
@@ -159,11 +166,17 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		}
 
 		resp.PrevState = curMember.State
-		curMember.State = MemberStateJoined
+		if req.CheckMode {
+			curMember.State = MemberStateCheckerStarted
+		} else {
+			curMember.State = MemberStateJoined
+		}
 		curMember.Info = ""
 		curMember.Addr = req.ControlAddr
-		curMember.FabricURI = req.FabricURI
-		curMember.FabricContexts = req.FabricContexts
+		curMember.PrimaryFabricURI = req.PrimaryFabricURI
+		curMember.SecondaryFabricURIs = req.SecondaryFabricURIs
+		curMember.PrimaryFabricContexts = req.FabricContexts
+		curMember.SecondaryFabricContexts = req.SecondaryFabricContexts
 		curMember.FaultDomain = req.FaultDomain
 		curMember.Incarnation = req.Incarnation
 		if err := m.db.UpdateMember(curMember); err != nil {
@@ -188,14 +201,16 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	}
 
 	newMember := &Member{
-		Rank:           req.Rank,
-		Incarnation:    req.Incarnation,
-		UUID:           req.UUID,
-		Addr:           req.ControlAddr,
-		FabricURI:      req.FabricURI,
-		FabricContexts: req.FabricContexts,
-		FaultDomain:    req.FaultDomain,
-		State:          MemberStateJoined,
+		Rank:                    req.Rank,
+		Incarnation:             req.Incarnation,
+		UUID:                    req.UUID,
+		Addr:                    req.ControlAddr,
+		PrimaryFabricURI:        req.PrimaryFabricURI,
+		SecondaryFabricURIs:     req.SecondaryFabricURIs,
+		PrimaryFabricContexts:   req.FabricContexts,
+		SecondaryFabricContexts: req.SecondaryFabricContexts,
+		FaultDomain:             req.FaultDomain,
+		State:                   MemberStateJoined,
 	}
 	if err := m.db.AddMember(newMember); err != nil {
 		return nil, errors.Wrap(err, "failed to add new member")
@@ -432,18 +447,18 @@ func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	var allRanks, toTest []Rank
-	allRanks, err = m.db.MemberRanks()
-	if err != nil {
-		return
-	}
-	toTest, err = ParseRanks(ranks)
+	allRanks, err := m.db.MemberRanks()
 	if err != nil {
 		return
 	}
 
 	if ranks == "" {
 		return RankSetFromRanks(allRanks), RankSetFromRanks(nil), nil
+	}
+
+	toTest, err := ParseRanks(ranks)
+	if err != nil {
+		return
 	}
 
 	missing := CheckRankMembership(allRanks, toTest)

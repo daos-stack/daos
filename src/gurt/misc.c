@@ -57,17 +57,14 @@ d_rand()
 	return result;
 }
 
-/* Return a random integer in [0, n), where n must be positive. */
-long int
-d_randn(long int n)
+/* Return a random double in [0, 1). */
+double
+d_randd(void)
 {
-	long int i;
+	double result;
 
-	D_ASSERT(n > 0);
-	i = ((double)d_rand() / D_RAND_MAX) * n;
-	if (i >= n)
-		i = 0;
-	return i;
+	drand48_r(&randBuffer, &result);
+	return result;
 }
 
 /* Developer/debug version, poison memory on free.
@@ -544,7 +541,7 @@ d_rank_list_shuffle(d_rank_list_t *rank_list)
 		return;
 
 	for (i = 0; i < rank_list->rl_nr; i++) {
-		j = rand() % rank_list->rl_nr;
+		j = d_rand() % rank_list->rl_nr;
 		tmp = rank_list->rl_ranks[i];
 		rank_list->rl_ranks[i] = rank_list->rl_ranks[j];
 		rank_list->rl_ranks[j] = tmp;
@@ -1120,7 +1117,7 @@ out:
  * \param[in,out]	str_val		Copy of an environment string value.
  */
 void
-d_free_env_str(char **str_val)
+d_freeenv_str(char **str_val)
 {
 	assert(str_val != NULL);
 

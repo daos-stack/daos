@@ -58,7 +58,7 @@ get_test_tags() {
     local test_tags=()
     local tags
     # Test-tag: has higher priority
-    if [ -n "$CP_TEST_TAG" ]; then
+    if [ -n "${CP_TEST_TAG:-}" ]; then
         tags="$CP_TEST_TAG"
     else
         tags="pr"

@@ -107,7 +107,7 @@ class DaosServerYamlParameters(YamlParameters):
         #       is set for the running process. If group look up fails or user
         #       is not member, use uid return from user lookup.
         #
-        default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp;ofi_rxm")
+        default_provider = os.environ.get("D_PROVIDER", "ofi+tcp")
 
         # All log files should be placed in the same directory on each host to
         # enable easy log file archiving by launch.py
@@ -115,7 +115,7 @@ class DaosServerYamlParameters(YamlParameters):
 
         self.provider = BasicParameter(None, default_provider)
         self.crt_ctx_share_addr = BasicParameter(None)
-        self.crt_timeout = BasicParameter(None, 10)
+        self.crt_timeout = BasicParameter(None)
         self.disable_srx = BasicParameter(None)
         self.fabric_auth_key = BasicParameter(None)
         self.core_dump_filter = BasicParameter(None)
@@ -439,6 +439,7 @@ class EngineYamlParameters(YamlParameters):
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
             "COVFILE=/tmp/test.cov"],
+        "ofi+tcp": [],
         "ofi+tcp;ofi_rxm": [],
         "ofi+verbs": [
             "FI_OFI_RXM_USE_SRX=1"],
@@ -461,13 +462,13 @@ class EngineYamlParameters(YamlParameters):
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines", str(index), "*"]
         self._base_namespace = base_namespace
         self._index = index
-        self._provider = provider or os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp;ofi_rxm")
+        self._provider = provider or os.environ.get("D_PROVIDER", "ofi+tcp")
         self._max_storage_tiers = max_storage_tiers
         super().__init__(os.path.join(*namespace))
 
         # Use environment variables to get default parameters
         default_interface = os.environ.get("DAOS_TEST_FABRIC_IFACE", "eth0")
-        default_port = int(os.environ.get("OFI_PORT", 31416))
+        default_port = int(os.environ.get("D_PORT", 31416))
         default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
 
         # All log files should be placed in the same directory on each host
@@ -478,8 +479,8 @@ class EngineYamlParameters(YamlParameters):
         #   targets:                I/O service threads per engine
         #   first_core:             starting index for targets
         #   nr_xs_helpers:          I/O offload threads per engine
-        #   fabric_iface:           map to OFI_INTERFACE=eth0
-        #   fabric_iface_port:      map to OFI_PORT=31416
+        #   fabric_iface:           map to D_INTERFACE=eth0
+        #   fabric_iface_port:      map to D_PORT=31416
         #   log_mask:               map to D_LOG_MASK env
         #   log_file:               map to D_LOG_FILE env
         #   env_vars:               influences DAOS I/O Engine behavior

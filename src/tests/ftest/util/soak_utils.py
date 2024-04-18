@@ -1,5 +1,5 @@
 """
-(C) Copyright 2019-2023 Intel Corporation.
+(C) Copyright 2019-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -14,15 +14,18 @@ from itertools import product
 
 import slurm_utils
 from avocado.core.exceptions import TestFail
+from avocado.utils.distro import detect
 from command_utils_base import EnvironmentVariables
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
-from dfuse_utils import Dfuse
+from dfuse_utils import get_dfuse
 from dmg_utils import get_storage_query_device_info
 from duns_utils import format_path
+from exception_utils import CommandFailure
 from fio_utils import FioCommand
-from general_utils import (DaosTestError, get_host_data, get_log_file, get_random_bytes,
-                           get_random_string, list_to_str, pcmd, run_command, run_pcmd)
+from general_utils import (DaosTestError, check_ping, check_ssh, get_host_data, get_log_file,
+                           get_random_bytes, get_random_string, list_to_str, pcmd, run_command,
+                           run_pcmd, wait_for_result)
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
@@ -62,13 +65,25 @@ def add_pools(self, pool_names, ranks=None):
                     /run/<test_params>/poollist/*
         ranks (list, optional):  ranks to include in pool. Defaults to None
     """
+    params = {}
     target_list = ranks if ranks else None
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
+        properties = self.params.get('properties', path, None)
+        # allow yaml pool property to override the scrub default; whether scrubber is enabled or not
+        if self.enable_scrubber and "scrub" not in str(properties):
+            scrubber_properties = "scrub:timed,scrub_freq:120"
+            params['properties'] = (",").join(filter(None, [properties, scrubber_properties]))
+        else:
+            params['properties'] = properties
         # Create a pool and add it to the overall list of pools
-        self.pool.append(
-            self.get_pool(
-                namespace=path, connect=False, target_list=target_list, dmg=self.dmg_command))
+        self.pool.append(self.get_pool(
+            namespace=path,
+            connect=False,
+            target_list=target_list,
+            dmg=self.dmg_command,
+            **params))
+
         self.log.info("Valid Pool ID is %s", self.pool[-1].identifier)
 
 
@@ -85,7 +100,7 @@ def add_containers(self, pool, file_oclass=None, dir_oclass=None, path="/run/con
     kwargs = {}
     if file_oclass:
         kwargs['file_oclass'] = file_oclass
-        properties = self.params.get('properties', path, "")
+        properties = self.params.get('properties', path, None)
         redundancy_factor = extract_redundancy_factor(file_oclass)
         rd_fac = f'rd_fac:{str(redundancy_factor)}'
         kwargs['properties'] = (",").join(filter(None, [properties, rd_fac]))
@@ -226,8 +241,7 @@ def get_daos_server_logs(self):
         try:
             run_command(" ".join(command), timeout=600)
         except DaosTestError as error:
-            raise SoakTestError(
-                "<<FAILED: daos logs file from {} not copied>>".format(hosts)) from error
+            raise SoakTestError(f"<<FAILED: daos logs file from {hosts} not copied>>") from error
 
 
 def run_monitor_check(self):
@@ -306,6 +320,7 @@ def wait_for_pool_rebuild(self, pool, name):
     """
     rebuild_status = False
     self.log.info("<<Wait for %s rebuild on %s>> at %s", name, pool.identifier, time.ctime())
+    self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
     try:
         # # Wait for rebuild to start
         # pool.wait_for_rebuild_to_start()
@@ -318,6 +333,7 @@ def wait_for_pool_rebuild(self, pool, name):
     except TestFail as error1:
         self.log.error(
             f"<<<FAILED:{name} rebuild failed due to test issue: {error1}", exc_info=error1)
+    self.dmg_command.server_set_logmasks(raise_exception=False)
     return rebuild_status
 
 
@@ -419,8 +435,7 @@ def launch_vmd_identify_check(self, name, results, args):
 
     for uuid in uuids:
         # Blink led
-        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
-        time.sleep(2)
+        self.dmg_command.storage_led_identify(ids=uuid, timeout=2)
         # check if led is blinking
         result = self.dmg_command.storage_led_check(ids=uuid)
         # determine if leds are blinking as expected
@@ -430,10 +445,143 @@ def launch_vmd_identify_check(self, name, results, args):
                     if device['ctrlr']['led_state'] != "QUICK_BLINK":
                         failing_vmd.append([device['ctrlr']['pci_addr'], value['hosts']])
                         status = False
+    # reset leds to previous state
+    for uuid in uuids:
+        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
 
     params = {"name": name,
               "status": status,
               "vars": {"failing_vmd_devices": failing_vmd}}
+    self.harasser_job_done(params)
+    results.put(self.harasser_results)
+    args.put(self.harasser_args)
+    self.log.info("Harasser results: %s", self.harasser_results)
+    self.log.info("Harasser args: %s", self.harasser_args)
+    self.log.info("<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
+
+
+def launch_reboot(self, pools, name, results, args):
+    """Execute server unexpected reboot.
+
+    Args:
+        self (obj): soak obj
+        pools (TestPool): list of TestPool obj
+        name (str): name of dmg subcommand
+        results (queue): multiprocessing queue
+        args (queue): multiprocessing queue
+    """
+    # Harasser is run in two parts REBOOT and then REBOOT_REINTEGRATE
+    # REBOOT test steps
+    # shutdown random node
+    # wait for node to reboot
+    # If node rebooted ok wait for rebuild on both pool to complete
+    # Update multiprocessing queue with results and args
+    # REBOOT_REINTEGRATE test steps
+    # if REBOOT completed ok then
+    # Issue systemctl restart daos_server
+    # Verify that all ranks are joined
+    # If all ranks "joined", issue reintegrate for all pool on all ranks and wait for
+    #    rebuild to complete
+    # Update multiprocessing queue with results and args
+    status = False
+    params = {}
+    ranks = None
+    if name == "REBOOT":
+        reboot_host = self.random.choice(self.hostlist_servers)
+        ranklist = self.server_managers[0].get_host_ranks(reboot_host)
+        ranks = ",".join(str(rank) for rank in ranklist)
+        # init the status dictionary
+        params = {"name": name,
+                  "status": status,
+                  "vars": {"host": reboot_host, "ranks": ranklist}}
+        self.log.info(
+            "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
+        # reboot host in 1 min
+        result = run_remote(self.log, reboot_host, "sudo shutdown -r +1")
+        if result.passed:
+            status = True
+        else:
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to issue reboot")
+            status = False
+
+        if not wait_for_result(self.log, check_ping, 90, 5, True, host=reboot_host,
+                               expected_ping=False, cmd_timeout=60, verbose=True):
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to reboot")
+            status = False
+
+        if status:
+            rebuild_status = True
+            for pool in pools:
+                rebuild_status &= wait_for_pool_rebuild(self, pool, name)
+            status = rebuild_status
+
+    elif name == "REBOOT_REINTEGRATE" and self.harasser_results["REBOOT"]:
+        reboot_host = self.harasser_args["REBOOT"]["host"]
+        ranklist = self.harasser_args["REBOOT"]["ranks"]
+        ranks = ",".join(str(rank) for rank in ranklist)
+        self.log.info("<<<PASS %s: %s started on host %s at %s>>>\n", self.loop, name, reboot_host,
+                      time.ctime())
+        status = True
+        self.dmg_command.system_query()
+        # wait for node to complete rebooting
+        if not wait_for_result(self.log, check_ping, 60, 5, True, host=reboot_host,
+                               expected_ping=True, cmd_timeout=60, verbose=True):
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to reboot")
+            status = False
+        if not wait_for_result(self.log, check_ssh, 120, 2, True, hosts=reboot_host,
+                               cmd_timeout=30, verbose=True):
+            self.log.error(f"<<<FAILED:{name} - {reboot_host} failed to reboot")
+            status = False
+        if status:
+            # issue a restart
+            self.log.info("<<<PASS %s: Issue systemctl restart daos_server on %s at %s>>>\n",
+                          self.loop, name, reboot_host, time.ctime())
+            cmd_results = run_remote(self.log, reboot_host, "sudo systemctl restart daos_server")
+            if cmd_results.passed:
+                self.dmg_command.system_query()
+                for pool in pools:
+                    self.dmg_command.pool_query(pool.identifier)
+                # wait server to be started
+                try:
+                    self.dmg_command.system_start(ranks=ranks)
+                except CommandFailure as error:
+                    self.log.error("<<<FAILED:dmg system start failed", exc_info=error)
+                    status = False
+                for pool in pools:
+                    self.dmg_command.pool_query(pool.identifier)
+                self.dmg_command.system_query()
+            else:
+                self.log.error("<<<FAILED:systemctl start daos_server failed")
+                status = False
+        if status:
+            # reintegrate ranks
+            reintegrate_status = True
+            for pool in pools:
+                for rank in ranklist:
+                    try:
+                        pool.reintegrate(rank)
+                        status = True
+                    except TestFail as error:
+                        self.log.error(
+                            f"<<<FAILED: dmg pool {pool.identifier} reintegrate failed on rank"
+                            "{rank}", exc_info=error)
+                        status = False
+                    reintegrate_status &= status
+                    if reintegrate_status:
+                        reintegrate_status &= wait_for_pool_rebuild(self, pool, name)
+                        status = reintegrate_status
+                    else:
+                        status = False
+    else:
+        self.log.error("<<<PASS %s: %s failed due to REBOOT failure >>>", self.loop, name)
+        status = False
+
+    params = {"name": name,
+              "status": status,
+              "vars": {"host": reboot_host, "ranks": ranklist}}
+    if not status:
+        self.log.error("<<< %s failed - check logs for failure data>>>", name)
+    self.dmg_command.system_query()
     self.harasser_job_done(params)
     results.put(self.harasser_results)
     args.put(self.harasser_args)
@@ -458,14 +606,13 @@ def launch_extend(self, pool, name, results, args):
 
     if self.selected_host:
         ranklist = self.server_managers[0].get_host_ranks(self.selected_host)
-
+        ranks = ",".join(str(rank) for rank in ranklist)
         # init the status dictionary
         params = {"name": name,
                   "status": status,
                   "vars": {"host": self.selected_host, "ranks": ranks}}
         self.log.info(
             "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
-        ranks = ",".join(str(rank) for rank in ranklist)
         try:
             pool.extend(ranks)
             status = True
@@ -480,6 +627,7 @@ def launch_extend(self, pool, name, results, args):
               "vars": {"host": self.selected_host, "ranks": ranks}}
     if not status:
         self.log.error("<<< %s failed - check logs for failure data>>>", name)
+    self.dmg_command.system_query()
     self.harasser_job_done(params)
     results.put(self.harasser_results)
     args.put(self.harasser_args)
@@ -592,7 +740,9 @@ def launch_server_stop_start(self, pools, name, results, args):
         if drain:
             for pool in pools:
                 try:
+                    self.dmg_command.server_set_logmasks("DEBUG", raise_exception=False)
                     pool.drain(rank)
+                    self.dmg_command.server_set_logmasks(raise_exception=False)
                 except TestFail as error:
                     self.log.error(
                         f"<<<FAILED:dmg pool {pool.identifier} drain failed", exc_info=error)
@@ -611,7 +761,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                 self.log.error("<<<FAILED:dmg system stop failed", exc_info=error)
                 status = False
             time.sleep(30)
-            if not drain:
+            if not drain and status:
                 rebuild_status = True
                 for pool in pools:
                     rebuild_status &= wait_for_pool_rebuild(self, pool, name)
@@ -687,16 +837,15 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
 
     Args:
         self (obj): soak obj
-        pool (obj):             TestPool obj
+        pool (obj): TestPool obj
 
-    Returns dfuse(obj):         Dfuse obj
-            cmd(list):          list of dfuse commands to add to job script
+    Returns dfuse(obj): Dfuse obj
+            cmd(list): list of dfuse commands to add to job script
     """
     # Get Dfuse params
-    dfuse = Dfuse(self.hostlist_clients, self.tmp)
-    dfuse.namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
+    namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
+    dfuse = get_dfuse(self, self.hostlist_clients, namespace)
     dfuse.bind_cores = self.params.get("cores", dfuse.namespace, None)
-    dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
     unique = get_random_string(5, self.used)
     self.used.append(unique)
@@ -836,7 +985,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
-            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module load {self.mpi_module}"]
             # include dfuse cmdlines
             if api in ["HDF5-VOL", "POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -918,7 +1067,7 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             env["D_LOG_FILE"] = get_log_file(daos_log or f"{macsio.command}_daos.log")
             env["D_LOG_FILE_APPEND_PID"] = "1"
             env["DAOS_UNS_PREFIX"] = format_path(macsio.daos_pool, macsio.daos_cont)
-            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module load {self.mpi_module}"]
             mpirun_cmd = Mpirun(macsio, mpi_type=self.mpi_module)
             mpirun_cmd.get_params(self)
             mpirun_cmd.assign_processes(nodesperjob * ppn)
@@ -1008,8 +1157,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
-            sbatch_cmds = [
-                "module purge", f"module load {self.mpi_module}"]
+            sbatch_cmds = [f"module load {self.mpi_module}"]
             # include dfuse cmdlines
             if api in ["POSIX", "POSIX-LIBPIL4DFS", "POSIX-LIBIOIL"]:
                 dfuse, dfuse_start_cmdlist = start_dfuse(
@@ -1181,21 +1329,33 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
 
     """
     commands = []
-    sbatch_cmds = []
     app_params = os.path.join(os.sep, "run", job_spec, "*")
-    app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
     mpi_module = self.params.get("module", app_params, self.mpi_module)
     api_list = self.params.get("api", app_params, default=["DFS"])
+    apps_dir = os.environ["DAOS_TEST_APP_DIR"]
+    # Update DAOS_TEST_APP_DIR if used in the cmdline param in yaml
+    # ${DAOS_TEST_APP_SRC}                  =>  apps built with el8 and mpi/mpich (default)
+    # pylint: disable-next=wrong-spelling-in-comment,fixme
+    # ${DAOS_TEST_APP_SRC}/intelmpi         =>  apps built with el8 and intelmpi
+    # ${DAOS_TEST_APP_SRC}/suse             =>  apps built with suse and gnu-mpich
+    # pylint: disable-next=wrong-spelling-in-comment,fixme
+    # ${DAOS_TEST_APP_SRC}/suse/intelmpi    =>  apps built with suse and intelmpi
+    if "suse" in detect().name.lower():
+        os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "suse")
+    if "mpi/latest" in mpi_module:
+        os.environ["DAOS_TEST_APP_DIR"] += os.path.join(os.sep, "intelmpi")
+        os.environ["I_MPI_OFI_LIBRARY_INTERNAL"] = "0"
+    app_cmd = os.path.expandvars(self.params.get("cmdline", app_params, default=None))
     if app_cmd is None:
         self.log.info(f"<<{job_spec} command line not specified in yaml; job will not be run>>")
         return commands
     oclass_list = self.params.get("oclass", app_params)
     for file_oclass, dir_oclass in oclass_list:
         for api in api_list:
+            sbatch_cmds = [f"module load {mpi_module}"]
             if not self.enable_il and api in ["POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
                 continue
             add_containers(self, pool, file_oclass, dir_oclass)
-            sbatch_cmds = ["module purge", f"module load {self.mpi_module}"]
             log_name = "{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
             # include dfuse cmdlines
@@ -1203,9 +1363,6 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 dfuse, dfuse_start_cmdlist = start_dfuse(
                     self, pool, self.container[-1], name=log_name, job_spec=job_spec)
                 sbatch_cmds.extend(dfuse_start_cmdlist)
-            # allow apps that use an mpi other than default (self.mpi_module)
-            if mpi_module != self.mpi_module:
-                sbatch_cmds.append(f"module load {mpi_module}")
             mpirun_cmd = Mpirun(app_cmd, False, mpi_module)
             mpirun_cmd.get_params(self)
             env = EnvironmentVariables()
@@ -1228,16 +1385,15 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             sbatch_cmds.append(str(cmdline))
             sbatch_cmds.append("status=$?")
             if api in ["POSIX", "POSIX-LIBIOIL", "POSIX-LIBPIL4DFS"]:
-                if mpi_module != self.mpi_module:
-                    sbatch_cmds.extend(["module purge", f"module load {self.mpi_module}"])
                 sbatch_cmds.extend(stop_dfuse(dfuse))
             commands.append([sbatch_cmds, log_name])
             self.log.info(f"<<{job_spec.upper()} cmdlines>>:")
             for cmd in sbatch_cmds:
                 self.log.info("%s", cmd)
-            if mpi_module != self.mpi_module:
-                mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
-                mpirun_cmd.get_params(self)
+    if mpi_module != self.mpi_module:
+        mpirun_cmd = Mpirun(app_cmd, False, self.mpi_module)
+        mpirun_cmd.get_params(self)
+    os.environ["DAOS_TEST_APP_DIR"] = apps_dir
     return commands
 
 
@@ -1295,7 +1451,7 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
     return commands
 
 
-def build_job_script(self, commands, job, nodesperjob):
+def build_job_script(self, commands, job, nodesperjob, ppn):
     """Create a slurm batch script that will execute a list of cmdlines.
 
     Args:
@@ -1331,7 +1487,8 @@ def build_job_script(self, commands, job, nodesperjob):
             "exclude": str(self.slurm_exclude_nodes),
             "error": str(error),
             "export": "ALL",
-            "exclusive": None
+            "exclusive": None,
+            "ntasks": str(nodesperjob * ppn)
         }
         # include the cluster specific params
         sbatch.update(self.srun_params)

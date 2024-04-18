@@ -14,7 +14,10 @@ on:
       - 'utils/scripts/helpers/*'
       - utils/ci
       - ci
-      - requirements.txt
+      - requirements-build.txt
+      - requirements-utest.txt
+
+permissions: {}
 
 jobs:
 
@@ -56,7 +59,7 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 500
       - name: Setup git hash
@@ -85,6 +88,10 @@ jobs:
     name: Run DAOS/NLT tests
     needs: Prepare
     runs-on: ubuntu-22.04
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
     strategy:
       matrix:
         distro: [ubuntu]
@@ -99,7 +106,7 @@ jobs:
       COMPILER: clang
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 500
@@ -167,7 +174,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 500
@@ -241,7 +248,7 @@ jobs:
       BASE_DISTRO: ${{ matrix.with }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
       - name: Build dependencies in image.
@@ -328,7 +335,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: true
       - name: Build dependencies in image.

@@ -9,8 +9,6 @@
 #include "bio_internal.h"
 #include "bio_wal.h"
 
-#define BIO_BLOB_HDR_MAGIC	(0xb0b51ed5)
-
 struct blob_cp_arg {
 	spdk_blob_id		 bca_id;
 	struct spdk_blob	*bca_blob;
@@ -587,6 +585,7 @@ __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	D_INIT_LIST_HEAD(&ctxt->bic_link);
 	ctxt->bic_xs_ctxt = xs_ctxt;
 	uuid_copy(ctxt->bic_pool_id, uuid);
+	ctxt->bic_blob_id = SPDK_BLOBID_INVALID;
 
 	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
 	D_ASSERT(bxb != NULL);
@@ -1005,6 +1004,7 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 	ba->bca_inflights = 1;
 	bma->bma_ioc = ctxt;
 	bma->bma_async = async;
+	ctxt->bic_blob_id = spdk_blob_get_id(ctxt->bic_blob);
 	spdk_thread_send_msg(owner_thread(bbs), blob_msg_close, bma);
 
 	if (async)

@@ -299,7 +299,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 			return nil, errors.Wrap(err, "query on already-created pool failed")
 		}
 
-		resp.Leader = qr.Leader
+		resp.SvcLdr = qr.Leader
 		resp.SvcReps = ranklist.RanksToUint32(ps.Replicas)
 		resp.TgtRanks = ranklist.RanksToUint32(ps.Storage.CreationRanks())
 		resp.TierBytes = ps.Storage.PerRankTierStorage
@@ -642,7 +642,7 @@ func (svc *mgmtSvc) poolEvictConnections(ctx context.Context, req *mgmtpb.PoolDe
 
 	evResp, err := svc.PoolEvict(ctx, evReq)
 	if err != nil {
-		svc.log.Debugf("svc.PoolEvict failed\n")
+		svc.log.Errorf("svc.PoolEvict failed\n")
 		return 0, err
 	}
 
@@ -699,7 +699,7 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 
 		// Perform separate PoolEvict _before_ possible transition to destroying state.
 		evStatus, err := svc.poolEvictConnections(ctx, req)
-		if err != nil {
+		if !req.Force && err != nil {
 			return nil, err
 		}
 
@@ -715,8 +715,10 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 
 		if evStatus != daos.Success {
 			svc.log.Errorf("PoolEvict during pool destroy failed: %s", evStatus)
-			resp.Status = int32(evStatus)
-			return resp, nil
+			if !req.Force {
+				resp.Status = int32(evStatus)
+				return resp, nil
+			}
 		}
 	}
 
@@ -1188,7 +1190,7 @@ func (svc *mgmtSvc) PoolDeleteACL(ctx context.Context, req *mgmtpb.DeleteACLReq)
 
 // ListPools returns a set of all pools in the system.
 func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*mgmtpb.ListPoolsResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
+	if err := svc.checkReplicaRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 

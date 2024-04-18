@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -354,7 +354,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	if (intent == DAOS_INTENT_KILL && !(flags & VOS_OBJ_KILL_DKEY)) {
 		if (obj != &obj_local) {
-			if (vos_obj_refcount(obj) > 2)
+			if (!daos_lru_is_last_user(&obj->obj_llink))
 				D_GOTO(failed, rc = -DER_BUSY);
 
 			vos_obj_evict(occ, obj);

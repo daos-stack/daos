@@ -18,9 +18,10 @@
 #define POOL_MAP_VER_2		(2)
 #define POOL_MAP_VERSION	POOL_MAP_VER_2
 
-#define DF_TARGET "Target[%d] (rank %u idx %u status %u ver %u)"
+#define DF_TARGET "Target[%d] (rank %u idx %u status %u ver %u in/out ver %u fseq %u)"
 #define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index,\
-		     t->ta_comp.co_status, t->ta_comp.co_ver
+		     t->ta_comp.co_status, t->ta_comp.co_ver, t->ta_comp.co_in_ver, \
+		     t->ta_comp.co_fseq
 
 /**
  * pool component types
@@ -62,7 +63,16 @@ enum pool_component_flags {
 	 * indicate when in status PO_COMP_ST_DOWNOUT, it is changed from
 	 * PO_COMP_ST_DOWN (rather than from PO_COMP_ST_DRAIN).
 	 */
-	PO_COMPF_DOWN2OUT	= 1,
+	PO_COMPF_DOWN2OUT	= (1 << 0),
+	/**
+	 * If the target status is UP, then it indicates the UP status is
+	 * from DOWN directly, instead of NEW and DOWNOUT.
+	 */
+	PO_COMPF_DOWN2UP	= (1 << 1),
+	/**
+	 * The component has been processed by DAOS check, only in DRAM.
+	 */
+	PO_COMPF_CHK_DONE	= (1 << 2),
 };
 
 #define co_in_ver	co_out_ver
@@ -217,6 +227,27 @@ static inline unsigned int pool_buf_nr(size_t size)
 		sizeof(struct pool_component);
 }
 
+static inline const char *
+pool_map_status2name(uint32_t status)
+{
+	switch (status) {
+	case PO_COMP_ST_UNKNOWN:
+		return "unknown";
+	case PO_COMP_ST_NEW:
+		return "new";
+	case PO_COMP_ST_UP:
+		return "up";
+	case PO_COMP_ST_DOWN:
+		return "down";
+	case PO_COMP_ST_DOWNOUT:
+		return "downout";
+	case PO_COMP_ST_DRAIN:
+		return "drain";
+	default:
+		D_ASSERTF(0, "Invalid status %u\n", status);
+	}
+}
+
 struct pool_map;
 
 struct pool_buf *pool_buf_alloc(unsigned int nr);
@@ -240,6 +271,7 @@ void pool_map_print(struct pool_map *map);
 
 int  pool_map_set_version(struct pool_map *map, uint32_t version);
 uint32_t pool_map_get_version(struct pool_map *map);
+uint32_t pool_map_bump_version(struct pool_map *map);
 
 int pool_map_get_failed_cnt(struct pool_map *map, uint32_t domain);
 
@@ -272,7 +304,9 @@ int pool_map_find_target_by_rank_idx(struct pool_map *map, uint32_t rank,
 int pool_map_find_failed_tgts_by_rank(struct pool_map *map,
 				  struct pool_target ***tgt_ppp,
 				  unsigned int *tgt_cnt, d_rank_t rank);
-int pool_map_activate_new_target(struct pool_map *map, uint32_t id);
+int
+update_dom_status_by_tgt_id(struct pool_map *map, uint32_t tgt_id, uint32_t status,
+			    uint32_t version, bool *updated);
 bool
 pool_map_node_status_match(struct pool_domain *dom, unsigned int status);
 

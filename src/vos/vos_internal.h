@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,7 +20,6 @@
 #include <daos/lru.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
-#include <daos_srv/policy.h>
 #include <daos_srv/vos.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
@@ -223,14 +222,19 @@ struct vos_space_metrics {
 	uint64_t		 vsm_last_update_ts;	/* Timeout counter */
 };
 
-/* VOS Pool metrics for vos file rehydration */
-struct vos_rh_metrics {
-	struct d_tm_node_t	*vrh_size;		/* WAL replay size */
-	struct d_tm_node_t	*vrh_time;		/* WAL replay time */
-	struct d_tm_node_t	*vrh_count;		/* Total replay count */
-	struct d_tm_node_t	*vrh_entries;		/* Total replayed entry count */
-	struct d_tm_node_t	*vrh_tx_cnt;		/* Total replayed TX count */
+/* VOS Pool metrics for WAL */
+struct vos_wal_metrics {
+	struct d_tm_node_t      *vwm_wal_sz;		/* WAL size for single tx */
+	struct d_tm_node_t      *vwm_wal_qd;		/* WAL transaction queue depth */
+	struct d_tm_node_t      *vwm_wal_waiters;	/* Waiters for WAL reclaiming */
+	struct d_tm_node_t	*vwm_replay_size;	/* WAL replay size in bytes */
+	struct d_tm_node_t	*vwm_replay_time;	/* WAL replay time in us */
+	struct d_tm_node_t	*vwm_replay_count;	/* Total replay count */
+	struct d_tm_node_t	*vwm_replay_tx;		/* Total replayed TX count */
+	struct d_tm_node_t	*vwm_replay_ent;	/* Total replayed entry count */
 };
+
+void vos_wal_metrics_init(struct vos_wal_metrics *vw_metrics, const char *path, int tgt_id);
 
 struct vos_pool_metrics {
 	void			*vp_vea_metrics;
@@ -238,7 +242,7 @@ struct vos_pool_metrics {
 	struct vos_gc_metrics    vp_gc_metrics;
 	struct vos_space_metrics vp_space_metrics;
 	struct vos_chkpt_metrics vp_chkpt_metrics;
-	struct vos_rh_metrics	 vp_rh_metrics;
+	struct vos_wal_metrics	 vp_wal_metrics;
 	/* TODO: add more metrics for VOS */
 };
 
@@ -297,10 +301,10 @@ struct vos_pool {
 	void                    *vp_chkpt_arg;
 	/* The count of committed DTXs for the whole pool. */
 	uint32_t		 vp_dtx_committed_count;
-	/** Tiering policy */
-	struct policy_desc_t	vp_policy_desc;
+	/** Data threshold size */
+	uint32_t		 vp_data_thresh;
 	/** Space (in percentage) reserved for rebuild */
-	unsigned int		vp_space_rb;
+	unsigned int		 vp_space_rb;
 };
 
 /**
@@ -354,6 +358,7 @@ struct vos_container {
 	 * * transaction with older epoch must have been committed.
 	 */
 	daos_epoch_t		vc_solo_dtx_epoch;
+
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
@@ -1309,8 +1314,7 @@ umem_off_t
 vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
 		daos_size_t size);
 int
-vos_publish_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
-		bool publish);
+vos_publish_scm(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_scm, bool publish);
 int
 vos_reserve_blocks(struct vos_container *cont, d_list_t *rsrvd_nvme,
 		   daos_size_t size, enum vos_io_stream ios, uint64_t *off);
@@ -1798,5 +1802,34 @@ vos_fake_anchor_create(daos_anchor_t *anchor)
 	memset(&anchor->da_buf[0], 0, sizeof(anchor->da_buf));
 	anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
 }
+
+static inline bool
+vos_io_scm(struct vos_pool *pool, daos_iod_type_t type, daos_size_t size, enum vos_io_stream ios)
+{
+	if (pool->vp_vea_info == NULL)
+		return true;
+
+	if (pool->vp_data_thresh == 0)
+		return true;
+
+	if (size < pool->vp_data_thresh)
+		return true;
+
+	return false;
+}
+
+/**
+ * Insert object ID and its parent container into the array of objects touched by the ongoing
+ * local transaction.
+ *
+ * \param[in] dth	DTX handle for ongoing local transaction
+ * \param[in] cont	VOS container
+ * \param[in] oid	Object ID
+ *
+ * \return		0		: Success.
+ *			-DER_NOMEM	: Run out of the volatile memory.
+ */
+int
+vos_insert_oid(struct dtx_handle *dth, struct vos_container *cont, daos_unit_oid_t *oid);
 
 #endif /* __VOS_INTERNAL_H__ */

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,7 +26,8 @@ func printHostStorageMapVerbose(hsm control.HostStorageMap, out io.Writer, opts 
 		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
 		fmt.Fprintf(out, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
-		fmt.Fprintf(out, "HugePage Size: %d KB\n", hss.HostStorage.MemInfo.HugepageSizeKiB)
+		fmt.Fprintf(out, "HugePage Size: %d KB\n\n",
+			hss.HostStorage.MemInfo.HugepageSizeKiB)
 		if len(hss.HostStorage.ScmNamespaces) == 0 {
 			if err := PrintScmModules(hss.HostStorage.ScmModules, out, opts...); err != nil {
 				return err
@@ -279,7 +280,7 @@ func PrintSmdInfoMap(omitDevs, omitPools bool, hsm control.HostStorageMap, out i
 					fmt.Fprintln(out)
 				}
 			} else {
-				fmt.Fprintln(iw, "No pools found")
+				fmt.Fprintln(iw, "No pools with NVMe found")
 			}
 		}
 	}

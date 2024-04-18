@@ -506,12 +506,12 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with scrubbing",
-			fmt.Sprintf("pool create label --scm-size %s --properties=scrub:timed,scrub-freq:1", testSizeStr),
+			fmt.Sprintf("pool create label --scm-size %s --properties=scrub:timed,scrub_freq:1", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
 					Properties: []*daos.PoolProperty{
 						propWithVal("scrub", "timed"),
-						propWithVal("scrub-freq", "1"),
+						propWithVal("scrub_freq", "1"),
 						propWithVal("label", "label"),
 					},
 					User:      eUsr.Username + "@",

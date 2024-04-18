@@ -35,6 +35,7 @@ const (
 	sConfigUncomment = "daos_server_uncomment.yml"
 	tcpExample       = "../../../../utils/config/examples/daos_server_tcp.yml"
 	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
+	mdOnSSDExample   = "../../../../utils/config/examples/daos_server_mdonssd.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
 )
@@ -141,6 +142,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 		"uncommented default config": {inPath: "uncommentedDefault"},
 		"tcp example config":         {inPath: tcpExample},
 		"verbs example config":       {inPath: verbsExample},
+		"mdonssd example config":     {inPath: mdOnSSDExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
 			inPath: "/foo/bar/baz.yml",
@@ -329,6 +331,143 @@ func TestServerConfig_Constructed(t *testing.T) {
 
 	if diff := cmp.Diff(defaultCfg, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
+	}
+}
+
+func TestServerConfig_updateServerConfig(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfg       *Server
+		nilEngCfg bool
+		expEngCfg *engine.Config
+	}{
+		"nil engCfg": {
+			cfg: &Server{
+				SystemName: "name",
+			},
+			nilEngCfg: true,
+			expEngCfg: &engine.Config{},
+		},
+		"basic": {
+			cfg: &Server{
+				SystemName:    "name",
+				SocketDir:     "socketdir",
+				Modules:       "modules",
+				EnableHotplug: true,
+				Fabric: engine.FabricConfig{
+					Provider:              "provider",
+					Interface:             "iface",
+					InterfacePort:         1111,
+					NumSecondaryEndpoints: []int{2, 3, 4},
+				},
+			},
+			expEngCfg: &engine.Config{
+				SystemName: "name",
+				SocketDir:  "socketdir",
+				Modules:    "modules",
+				Storage: storage.Config{
+					EnableHotplug: true,
+				},
+				Fabric: engine.FabricConfig{
+					Provider:              "provider",
+					Interface:             "iface",
+					InterfacePort:         1111,
+					NumSecondaryEndpoints: []int{2, 3, 4},
+				},
+			},
+		},
+		"multiprovider": {
+			cfg: &Server{
+				SystemName: "name",
+				Fabric: engine.FabricConfig{
+					Provider:              "p1 p2 p3",
+					NumSecondaryEndpoints: []int{2, 3, 4},
+				},
+			},
+			expEngCfg: &engine.Config{
+				SystemName: "name",
+				Fabric: engine.FabricConfig{
+					Provider:              "p1 p2 p3",
+					NumSecondaryEndpoints: []int{2, 3, 4},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var engCfg *engine.Config
+			if !tc.nilEngCfg {
+				engCfg = &engine.Config{}
+			}
+
+			tc.cfg.updateServerConfig(&engCfg)
+
+			if diff := cmp.Diff(tc.expEngCfg, engCfg); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestServerConfig_MDonSSD_Constructed(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer ShowBufferOnFailure(t, buf)
+
+	mdOnSSDCfg, err := mockConfigFromFile(t, mdOnSSDExample)
+	if err != nil {
+		t.Fatalf("failed to load %s: %s", mdOnSSDExample, err)
+	}
+
+	constructed := DefaultServer().
+		WithControlMetadata(storage.ControlMetadata{
+			Path: "/var/daos/config",
+		}).
+		WithControlLogFile("/tmp/daos_server.log").
+		WithTelemetryPort(9191).
+		WithFabricProvider("ofi+tcp").
+		WithAccessPoints("example")
+
+	constructed.Engines = []*engine.Config{
+		engine.MockConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("/var/run/daos_server").
+			WithTargetCount(4).
+			WithHelperStreamCount(1).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos").
+					WithStorageClass("ram"),
+				storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:81:00.0").
+					WithBdevDeviceRoles(storage.BdevRoleWAL),
+				storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:82:00.0").
+					WithBdevDeviceRoles(storage.BdevRoleMeta),
+				storage.NewTierConfig().
+					WithStorageClass("nvme").
+					WithBdevDeviceList("0000:83:00.0").
+					WithBdevDeviceRoles(storage.BdevRoleData),
+			).
+			WithFabricInterface("ib0").
+			WithFabricInterfacePort(31316).
+			WithFabricProvider("ofi+tcp").
+			WithPinnedNumaNode(0).
+			WithEnvVars("FI_SOCKETS_CONN_TIMEOUT=2000", "FI_SOCKETS_MAX_CONN_RETRY=1").
+			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogMask("INFO"),
+	}
+
+	for i := range constructed.Engines {
+		t.Logf("constructed: %+v", constructed.Engines[i])
+		t.Logf("default: %+v", mdOnSSDCfg.Engines[i])
+	}
+
+	if diff := cmp.Diff(mdOnSSDCfg, constructed, defConfigCmpOpts...); diff != "" {
+		t.Fatalf("(-want, +got): %s", diff)
+	}
+
+	if err := mdOnSSDCfg.Validate(log); err != nil {
+		t.Fatalf("failed to validate %s: %s", mdOnSSDExample, err)
 	}
 }
 
@@ -865,7 +1004,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigHugepagesDisabled,
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
 		},
 		"disabled hugepages; emulated bdevs configured": {
 			extraConfig: func(c *Server) *Server {
@@ -885,7 +1024,7 @@ func TestServerConfig_SetNrHugepages(t *testing.T) {
 						),
 					)
 			},
-			expErr: FaultConfigHugepagesDisabled,
+			expErr: FaultConfigHugepagesDisabledWithBdevs,
 		},
 		"disabled hugepages; no bdevs configured": {
 			extraConfig: func(c *Server) *Server {
