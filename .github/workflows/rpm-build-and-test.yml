@@ -26,13 +26,7 @@ defaults:
   run:
     shell: bash --noprofile --norc -ueo pipefail {0}
 
-# https://github.com/dorny/test-reporter/issues/149
-permissions:
-  id-token: write
-  contents: read
-  checks: write
-  # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
-  pull-requests: write
+permissions: {}
 
 jobs:
   # it's a real shame that this step is even needed.  push events have the commit message # in
@@ -363,6 +357,10 @@ jobs:
   Functional:
     name: Functional Testing
     runs-on: [self-hosted, wolf]
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
     timeout-minutes: 7200
     needs: [Build-RPM, Import-commit-message, Calc-functional-matrix, Import-commit-pragmas]
     strategy:
@@ -594,6 +592,10 @@ jobs:
   Functional_Hardware:
     name: Functional Testing on Hardware
     runs-on: [self-hosted, wolf]
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
     timeout-minutes: 7200
     needs: [Import-commit-message, Build-RPM, Calc-functional-hardware-matrix,
             Import-commit-pragmas, Functional]

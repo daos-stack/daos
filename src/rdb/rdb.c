@@ -20,10 +20,6 @@
 static int rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
 			     uint64_t caller_term, struct rdb_cbs *cbs, void *arg,
 			     struct rdb **dbp);
-static int
-rdb_chkptd_start(struct rdb *db);
-static void
-rdb_chkptd_stop(struct rdb *db);
 
 /**
  * Create an RDB replica at \a path with \a uuid, \a caller_term, \a size,
@@ -78,8 +74,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 
 	/* Initialize the layout version. */
 	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version,
-			   &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_version, &value, NULL /* vtx */);
 	if (rc != 0)
 		goto out_mc_hdl;
 
@@ -93,7 +88,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	 * rdb_start() checks this attribute when starting a DB.
 	 */
 	d_iov_set(&value, (void *)uuid, sizeof(uuid_t));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value, NULL /* vtx */);
 	if (rc != 0)
 		goto out_mc_hdl;
 
@@ -232,6 +227,9 @@ rdb_lookup(const uuid_t uuid)
 	return rdb_obj(entry);
 }
 
+static int rdb_chkptd_start(struct rdb *db);
+static void rdb_chkptd_stop(struct rdb *db);
+
 /*
  * If created successfully, the new DB handle will consume pool and mc, which
  * the caller shall not close in this case.
@@ -245,7 +243,7 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 	struct vos_pool_space	vps;
 	uint64_t		rdb_extra_sys[DAOS_MEDIA_MAX];
 
-	D_ASSERT(cbs->dc_stop != NULL);
+	D_ASSERT(cbs == NULL || cbs->dc_stop != NULL);
 
 	D_ALLOC_PTR(db);
 	if (db == NULL) {
@@ -502,6 +500,97 @@ rdb_get_use_leases(void)
 }
 
 /**
+ * Glance at \a storage and return \a clue. Callers are responsible for freeing
+ * \a clue->bcl_replicas with d_rank_list_free.
+ *
+ * \param[in]	storage	database storage
+ * \param[out]	clue	database clue
+ */
+int
+rdb_glance(struct rdb_storage *storage, struct rdb_clue *clue)
+{
+	struct rdb	       *db = rdb_from_storage(storage);
+	d_iov_t			value;
+	uint64_t		term;
+	int			vote;
+	uint64_t		last_index = db->d_lc_record.dlr_tail - 1;
+	uint64_t		last_term;
+	d_rank_list_t	       *replicas;
+	uint64_t		oid_next;
+	int			rc;
+
+	d_iov_set(&value, &term, sizeof(term));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_term, &value);
+	if (rc == -DER_NONEXIST) {
+		term = 0;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up term: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+		goto err;
+	}
+
+	d_iov_set(&value, &vote, sizeof(vote));
+	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_vote, &value);
+	if (rc == -DER_NONEXIST) {
+		vote = -1;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up vote: "DF_RC"\n", DP_DB(db), DP_RC(rc));
+		goto err;
+	}
+
+	if (last_index == db->d_lc_record.dlr_base) {
+		last_term = db->d_lc_record.dlr_base_term;
+	} else {
+		struct rdb_entry header;
+
+		d_iov_set(&value, &header, sizeof(header));
+		rc = rdb_lc_lookup(db->d_lc, last_index, RDB_LC_ATTRS, &rdb_lc_entry_header,
+				   &value);
+		if (rc != 0) {
+			D_ERROR(DF_DB": failed to look up entry "DF_U64" header: %d\n", DP_DB(db),
+				last_index, rc);
+			goto err;
+		}
+		last_term = header.dre_term;
+	}
+
+	rc = rdb_raft_load_replicas(db->d_lc, last_index, &replicas);
+	if (rc != 0) {
+		D_ERROR(DF_DB": failed to load replicas at "DF_U64": "DF_RC"\n", DP_DB(db),
+			last_index, DP_RC(rc));
+		goto err;
+	}
+
+	d_iov_set(&value, &oid_next, sizeof(oid_next));
+	rc = rdb_lc_lookup(db->d_lc, last_index, RDB_LC_ATTRS, &rdb_lc_oid_next, &value);
+	if (rc == -DER_NONEXIST) {
+		oid_next = RDB_LC_OID_NEXT_INIT;
+	} else if (rc != 0) {
+		D_ERROR(DF_DB": failed to look up next object number: %d\n", DP_DB(db), rc);
+		goto err_replicas;
+	}
+
+	clue->bcl_term = term;
+	clue->bcl_vote = vote;
+	/*
+	 * In the future, the self node ID might differ from the rank and need
+	 * to be stored persistently.
+	 */
+	clue->bcl_self = dss_self_rank();
+	clue->bcl_last_index = last_index;
+	clue->bcl_last_term = last_term;
+	clue->bcl_base_index = db->d_lc_record.dlr_base;
+	clue->bcl_base_term = db->d_lc_record.dlr_base_term;
+	clue->bcl_replicas = replicas;
+	clue->bcl_oid_next = oid_next;
+	return 0;
+
+err_replicas:
+	d_rank_list_free(replicas);
+err:
+	return rc;
+}
+
+/**
  * Start \a storage, converting \a storage into \a dbp. If this is successful,
  * the caller must stop using \a storage; otherwise, the caller remains
  * responsible for closing \a storage.
@@ -575,6 +664,27 @@ rdb_stop_and_close(struct rdb *db)
 
 	rdb_stop(db, &storage);
 	rdb_close(storage);
+}
+
+/**
+ * Forcefully removing all other replicas from the membership. Callers must
+ * destroy all other replicas (or prevent them from starting) beforehand.
+ *
+ * This API is for catastrophic recovery scenarios, for instance, when more
+ * than a minority of replicas are lost.
+ *
+ *   1 Choose the best replica to recover from (see ds_pool_check_svc_clues).
+ *   2 Destroy all other replicas (or prevent them from starting).
+ *   3 Call rdb_open and rdb_dictate on the chosen replica.
+ *
+ * \param[in]	storage		database storage
+ */
+int
+rdb_dictate(struct rdb_storage *storage)
+{
+	struct rdb *db = rdb_from_storage(storage);
+
+	return rdb_raft_dictate(db);
 }
 
 /**
