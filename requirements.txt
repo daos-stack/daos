@@ -11,3 +11,5 @@ pyyaml
 scons
 tabulate
 wheel
+openpyxl
+pandas
