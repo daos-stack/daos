@@ -86,14 +86,19 @@ class ObjectMetadata(TestWithServers):
             self.log.debug("no pre-teardown steps defined")
         return error_list
 
-    def create_pool(self, namespace=""):
+    def create_pool(self, svc_ops_enabled=True):
         """Create a pool and display the svc ranks.
 
         Args:
-            namespace: Test variant for add pool. Defaults to empty.
+            svc_ops_enabled (Bool, optional): pool create with svc_ops_enabled, default to True.
 
         """
-        self.add_pool(namespace=namespace)
+        if svc_ops_enabled:
+            self.add_pool()
+        else:
+            params = {}
+            params['properties'] = "svc_ops_enabled:0"
+            self.add_pool(**params)
         self.log.info("Created pool %s: svc ranks:", self.pool.uuid)
         for index, rank in enumerate(self.pool.svc_ranks):
             self.log.info("[%d]: %d", index, rank)
@@ -241,24 +246,19 @@ class ObjectMetadata(TestWithServers):
 
         return True
 
-    def test_metadata_fillup(self):
-        """JIRA ID: DAOS-1512.
+    def metadata_fillup(self, svc_ops_enabled=True):
+        """Run test to verify no IO happens after metadata is full.
 
-        Test Description:
-            Test to verify no IO happens after metadata is full.
+        Args:
+            svc_ops_enabled (bool): Pool create properties svc_ops_enabled, default to True.
 
-        Use Cases:
-            ?
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=server,metadata
-        :avocado: tags=ObjectMetadata,test_metadata_fillup
         """
-        self.create_pool(namespace='/run/test1_pool/*')
-        svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
-        if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
-            self.fail("failed to run dummy metadata workload")
+        self.create_pool(svc_ops_enabled=svc_ops_enabled)
+        # Skip dummy_metadata_workload when feature is disabled
+        if svc_ops_enabled:
+            svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
+            if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
+                self.fail("failed to run dummy metadata workload")
         sequential_fail_max = self.params.get("fillup_seq_fail_max", "/run/metadata/*")
         num_cont_to_destroy = self.params.get("num_cont_to_destroy", "/run/metadata/*")
 
@@ -333,13 +333,50 @@ class ObjectMetadata(TestWithServers):
         self.log.info("Leaving pool metadata rdb full (containers will not be destroyed)")
         self.log.info("Test passed")
 
+    def test_metadata_fillup_svc_ops_disabled(self):
+        """JIRA ID: DAOS-15628.
+
+        Test Description:
+            Test to verify no IO happens after metadata is full when svc_ops_disabled.
+
+        Use Cases:
+            Create pool with properties svc_ops_enabled:0.
+            Create container until no space.
+            Verify number of container within limit.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server,metadata
+        :avocado: tags=ObjectMetadata,test_metadata_fillup_svc_ops_disabled
+        """
+        metadata_fillup(False)
+
+    def test_metadata_fillup_svc_ops_enabled(self):
+        """JIRA ID: DAOS-15628.
+
+        Test Description:
+            Test to verify no IO happens after metadata is full when svc_ops_enabled.
+
+        Use Cases:
+            Create pool with properties svc_ops_enabledd:1.
+            Run dummy metadata workload to fillup svc ops.
+            Create container until no space.
+            Verify number of container within limit.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server,metadata
+        :avocado: tags=ObjectMetadata,test_metadata_fillup_svc_ops_enabled
+        """
+        metadata_fillup(True)
+
     def test_metadata_addremove(self):
         """JIRA ID: DAOS-1512.
 
         Test Description:
             Verify metadata release the space after container delete.
 
-        Use Cases:
+        Use Case:
             ?
 
         :avocado: tags=all,full_regression
@@ -347,11 +384,13 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=server,metadata,nvme
         :avocado: tags=ObjectMetadata,test_metadata_addremove
         """
-        self.create_pool(namespace='/run/test2_pool/*')
-        svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
-        if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
-            self.fail("failed to run dummy metadata workload")
-
+        self.create_pool()
+        # Skip dummy_metadata_workload when feature is disabled
+        svc_ops_enabled = self.pool.get_property("svc_ops_enabled")
+        if svc_ops_enabled:
+            svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
+            if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
+                self.fail("failed to run dummy metadata workload")
         self.container = []
         mean_cont_cnt = 0
         percent_cont = self.params.get("mean_percent", "/run/metadata/*")
@@ -414,7 +453,7 @@ class ObjectMetadata(TestWithServers):
             previously and validate data integrity by using IOR option
             "-R -G 1".
 
-        Use Cases:
+        Use Case:
             ?
 
         :avocado: tags=all,full_regression
@@ -422,7 +461,7 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=server,metadata,nvme,ior
         :avocado: tags=ObjectMetadata,test_metadata_server_restart
         """
-        self.create_pool(namespace='/run/test2_pool/*')
+        self.create_pool()
         files_per_thread = 400
         total_ior_threads = 5
 
