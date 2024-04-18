@@ -153,13 +153,18 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 				return errors.Wrapf(err, "failed to load config from %s",
 					cfgCmd.configPath())
 			}
-			if _, err := os.Stat(opts.ConfigPath); err == nil {
-				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
-			}
 
-			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
-				if err := ovrCmd.setCLIOverrides(); err != nil {
-					return errors.Wrap(err, "failed to set CLI config overrides")
+			path := cfgCmd.configPath()
+			if path != "" {
+				if _, err := os.Stat(path); err == nil {
+					log.Infof("DAOS Server config loaded from %s", path)
+				}
+
+				if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
+					if err := ovrCmd.setCLIOverrides(); err != nil {
+						return errors.Wrap(err,
+							"failed to set CLI config overrides")
+					}
 				}
 			}
 		} else if opts.ConfigPath != "" {

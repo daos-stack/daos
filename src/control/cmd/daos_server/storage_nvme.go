@@ -211,19 +211,14 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 }
 
 func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd) error {
-	storageCtlSvc, err := nvmeCmdInit(cmd)
+	storageCtlSvc, cfg, err := nvmeCmdInit(cmd)
 	if err != nil {
 		return err
 	}
 
 	cmd.Debug("Prepare locally-attached NVMe storage...")
 
-	cfgParam := cmd.config
-	if cmd.IgnoreConfig {
-		cfgParam = nil
-	}
-
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &req); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cfg, cmd, &req); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
@@ -280,7 +275,7 @@ func (cmd *resetNVMeCmd) WithIgnoreConfig(b bool) *resetNVMeCmd {
 }
 
 func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
-	storageCtlSvc, err := nvmeCmdInit(cmd)
+	storageCtlSvc, cfg, err := nvmeCmdInit(cmd)
 	if err != nil {
 		return err
 	}
@@ -299,12 +294,7 @@ func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd) error {
 		cmd.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
 	}
 
-	cfgParam := cmd.config
-	if cmd.IgnoreConfig {
-		cfgParam = nil
-	}
-
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &resetReq); err != nil {
+	if err := processNVMePrepReq(cmd.Logger, cfg, cmd, &resetReq); err != nil {
 		return errors.Wrap(err, "processing request parameters")
 	}
 
@@ -368,11 +358,11 @@ func (cmd *scanNVMeCmd) getVMDState() bool {
 		return false
 	}
 
-	return cmd.IgnoreConfig || isVMDEnabled(cmd.config)
+	return isVMDEnabled(cmd.config)
 }
 
 func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
-	storageCtlSvc, err := nvmeCmdInit(&cmd.nvmeCmd)
+	storageCtlSvc, cfg, err := nvmeCmdInit(&cmd.nvmeCmd)
 	if err != nil {
 		return nil, err
 	}
@@ -382,8 +372,8 @@ func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
 
 	req := storage.BdevScanRequest{}
 
-	if !cmd.IgnoreConfig && cmd.config != nil {
-		req.DeviceList = nvmeBdevsFromCfg(cmd.config)
+	if cfg != nil {
+		req.DeviceList = nvmeBdevsFromCfg(cfg)
 		if req.DeviceList.Len() > 0 {
 			cmd.Debugf("applying devices filter derived from config file: %s",
 				req.DeviceList)
@@ -420,7 +410,7 @@ func scanNVMe(cmd *scanNVMeCmd) (_ *storage.BdevScanResponse, errOut error) {
 }
 
 func (cmd *scanNVMeCmd) Execute(_ []string) (err error) {
-	cmd.Debugf("executing scan nvme comhand: %+v", cmd)
+	cmd.Debugf("executing scan nvme command: %+v", cmd)
 
 	resp, err := scanNVMe(cmd)
 	if err != nil {

@@ -15,9 +15,9 @@ import (
 // TestDaosServer_MS_Commands_JSON verifies that the JSON-output flag is disabled for
 // management-service command syntax.
 func TestDaosServer_MS_Commands_JSON(t *testing.T) {
-	log := logging.NewCommandLineLogger()
+	log, buf := logging.NewTestCommandLineLogger()
 
-	runJSONCmdTests(t, log, []jsonCmdTest{
+	runJSONCmdTests(t, log, buf, []jsonCmdTest{
 		{
 			"MS status; JSON",
 			"ms status -j",

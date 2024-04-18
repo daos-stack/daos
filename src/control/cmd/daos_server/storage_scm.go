@@ -39,9 +39,19 @@ type prepareSCMCmd struct {
 }
 
 func preparePMem(cmd *prepareSCMCmd) (*storage.ScmPrepareResponse, error) {
-	storageCtlSvc, err := scmCmdInit(&cmd.scmCmd)
+	storageCtlSvc, cfg, err := scmCmdInit(&cmd.scmCmd)
 	if err != nil {
 		return nil, err
+	}
+
+	if cfg != nil && cmd.SocketID == nil {
+		// Read SocketID from config if not set explicitly in command.
+		affSrc, err := getAffinitySource(cmd.MustLogCtx(), cmd.Logger, cfg)
+		if err != nil {
+			cmd.Error(err.Error())
+		} else {
+			cmd.SocketID = getSockFromCfg(cmd.Logger, cfg, affSrc)
+		}
 	}
 
 	if cmd.NrNamespacesPerSocket == 0 {
@@ -148,9 +158,19 @@ type resetSCMCmd struct {
 }
 
 func resetPMem(cmd *resetSCMCmd) error {
-	storageCtlSvc, err := scmCmdInit(&cmd.scmCmd)
+	storageCtlSvc, cfg, err := scmCmdInit(&cmd.scmCmd)
 	if err != nil {
 		return err
+	}
+
+	if cfg != nil && cmd.SocketID == nil {
+		// Read SocketID from config if not set explicitly in command.
+		affSrc, err := getAffinitySource(cmd.MustLogCtx(), cmd.Logger, cfg)
+		if err != nil {
+			cmd.Error(err.Error())
+		} else {
+			cmd.SocketID = getSockFromCfg(cmd.Logger, cfg, affSrc)
+		}
 	}
 
 	cmd.Info("Reset locally-attached PMem...")
@@ -223,9 +243,19 @@ type scanSCMCmd struct {
 }
 
 func scanPMem(cmd *scanSCMCmd) (*storage.ScmScanResponse, error) {
-	storageCtlSvc, err := scmCmdInit(&cmd.scmCmd)
+	storageCtlSvc, cfg, err := scmCmdInit(&cmd.scmCmd)
 	if err != nil {
 		return nil, err
+	}
+
+	if cfg != nil && cmd.SocketID == nil {
+		// Read SocketID from config if not set explicitly in command.
+		affSrc, err := getAffinitySource(cmd.MustLogCtx(), cmd.Logger, cfg)
+		if err != nil {
+			cmd.Error(err.Error())
+		} else {
+			cmd.SocketID = getSockFromCfg(cmd.Logger, cfg, affSrc)
+		}
 	}
 
 	cmd.Info("Scanning locally-attached PMem storage...")

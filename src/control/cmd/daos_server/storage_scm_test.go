@@ -121,15 +121,15 @@ func TestDaosServer_setSockFromCfg(t *testing.T) {
 	}
 }
 
-func getMockScmCmdInit(log logging.Logger, smbc scm.MockBackendConfig) (*scm.MockBackend, initScmCmdFn) {
+func getMockScmCmdInit(log logging.Logger, smbc scm.MockBackendConfig, sc *config.Server) (*scm.MockBackend, initScmCmdFn) {
 	msb := scm.NewMockBackend(&smbc)
 	scs := server.NewMockStorageControlService(log, nil, nil,
 		scm.NewProvider(log, msb, system.NewMockSysProvider(log, nil), nil),
 		bdev.NewProvider(log, bdev.NewMockBackend(nil)), nil)
 
-	return msb, func(cmd *scmCmd) (*server.StorageControlService, error) {
+	return msb, func(cmd *scmCmd) (*server.StorageControlService, *config.Server, error) {
 		cmd.Logger.Tracef("mock storage control service set: %+v", scs)
-		return scs, nil
+		return scs, sc, nil
 	}
 }
 
@@ -253,7 +253,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 				PrepRes: tc.prepResp,
 				PrepErr: tc.prepErr,
 			}
-			msb, mockInitFn := getMockScmCmdInit(log, smbc)
+			msb, mockInitFn := getMockScmCmdInit(log, smbc, nil)
 
 			scmCmdInit = mockInitFn
 			defer func() {
@@ -460,7 +460,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 				PrepResetRes: tc.prepResp,
 				PrepResetErr: tc.prepErr,
 			}
-			msb, mockInitFn := getMockScmCmdInit(log, smbc)
+			msb, mockInitFn := getMockScmCmdInit(log, smbc, nil)
 
 			scmCmdInit = mockInitFn
 			defer func() {
@@ -562,7 +562,7 @@ func TestDaosServer_scanSCM(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			msb, mockInitFn := getMockScmCmdInit(log, tc.smbc)
+			msb, mockInitFn := getMockScmCmdInit(log, tc.smbc, nil)
 
 			scmCmdInit = mockInitFn
 			defer func() {
@@ -598,23 +598,6 @@ func TestDaosServer_scanSCM(t *testing.T) {
 
 func TestDaosServer_SCM_Commands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
-		{
-			"Prepare namespaces; JSON; no force",
-			"scm prepare -j",
-			printCommand(t, &prepareSCMCmd{
-				NrNamespacesPerSocket: 1,
-			}),
-			nil,
-		},
-		{
-			"Prepare namespaces with all opts with JSON",
-			"scm prepare -S 2 -f --socket 0 -j",
-			printCommand(t, &prepareSCMCmd{
-				NrNamespacesPerSocket: 2,
-				Force:                 true,
-			}),
-			nil,
-		},
 		{
 			"Prepare namespaces with all opts",
 			"scm prepare -S 2 -f --socket 0",
@@ -663,27 +646,27 @@ func TestDaosServer_SCM_Commands(t *testing.T) {
 // printed to standard out. Test cases should cover all scm subcommand variations.
 func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 	// Use a normal logger to verify that we don't mess up JSON output.
-	log := logging.NewCommandLineLogger()
+	log, buf := logging.NewTestCommandLineLogger()
 
-	genApplyMockFn := func(smbc scm.MockBackendConfig) func() {
-		_, mockInitFn := getMockScmCmdInit(log, smbc)
+	genApplyMockFn := func(smbc scm.MockBackendConfig, cs *config.Server) func(*testing.T) {
+		_, mockInitFn := getMockScmCmdInit(log, smbc, cs)
 
-		return func() {
+		return func(_ *testing.T) {
 			scmCmdInit = mockInitFn
 		}
 	}
 
-	genCleanupMockFn := func() func() {
-		return func() {
+	genCleanupMockFn := func() func(*testing.T) {
+		return func(_ *testing.T) {
 			scmCmdInit = initScmCmd
 		}
 	}
 
-	runJSONCmdTests(t, log, []jsonCmdTest{
+	runJSONCmdTests(t, log, buf, []jsonCmdTest{
 		{
 			"Prepare namespaces; JSON; no force",
 			"scm prepare -j",
-			genApplyMockFn(scm.MockBackendConfig{}),
+			genApplyMockFn(scm.MockBackendConfig{}, nil),
 			genCleanupMockFn(),
 			nil,
 			errNoForceWithJSON,
@@ -700,7 +683,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 						storage.MockScmNamespace(),
 					},
 				},
-			}),
+			}, nil),
 			genCleanupMockFn(),
 			storage.ScmNamespaces{storage.MockScmNamespace()},
 			nil,
@@ -710,7 +693,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 			"scm prepare -j -f",
 			genApplyMockFn(scm.MockBackendConfig{
 				PrepErr: errors.New("bad prep"),
-			}),
+			}, nil),
 			genCleanupMockFn(),
 			nil,
 			errors.New("bad prep"),
@@ -733,7 +716,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 						State: storage.ScmFreeCap,
 					},
 				},
-			}),
+			}, nil),
 			genCleanupMockFn(),
 			nil,
 			nil,
@@ -743,7 +726,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 			"scm reset -j -f",
 			genApplyMockFn(scm.MockBackendConfig{
 				PrepResetErr: errors.New("bad prep"),
-			}),
+			}, nil),
 			genCleanupMockFn(),
 			nil,
 			errors.New("bad prep"),
@@ -755,7 +738,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 				GetModulesRes: storage.ScmModules{
 					storage.MockScmModule(),
 				},
-			}),
+			}, nil),
 			genCleanupMockFn(),
 			storage.ScmModules{storage.MockScmModule()},
 			nil,
@@ -765,7 +748,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 			"scm scan -j",
 			genApplyMockFn(scm.MockBackendConfig{
 				GetModulesErr: errors.New("bad prep"),
-			}),
+			}, nil),
 			genCleanupMockFn(),
 			nil,
 			errors.New("bad prep"),
@@ -780,7 +763,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 				GetNamespacesRes: storage.ScmNamespaces{
 					storage.MockScmNamespace(),
 				},
-			}),
+			}, nil),
 			genCleanupMockFn(),
 			storage.ScmNamespaces{storage.MockScmNamespace()},
 			nil,
@@ -793,10 +776,73 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 					storage.MockScmModule(),
 				},
 				GetNamespacesErr: errors.New("bad prep"),
-			}),
+			}, nil),
 			genCleanupMockFn(),
 			nil,
 			errors.New("bad prep"),
 		},
 	})
+}
+
+// Verify that when --ignore-config is supplied on commandline, cmd.config is nil.
+func TestDaosServer_SCM_Commands_Config(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cmd       string
+		optsCheck func(t *testing.T, o *mainOpts)
+		expErr    error
+	}{
+		"prepare; ignore config": {
+			cmd: "scm prepare --ignore-config",
+			optsCheck: func(t *testing.T, o *mainOpts) {
+				checkCfgIgnored(t, o.SCM.Prepare.scmCmd.baseScanCmd)
+			},
+		},
+		"prepare; read config": {
+			cmd: "scm prepare",
+			optsCheck: func(t *testing.T, o *mainOpts) {
+				checkCfgNotIgnored(t, o.SCM.Prepare.scmCmd.baseScanCmd)
+			},
+		},
+		"reset; ignore config": {
+			cmd: "scm reset --ignore-config",
+			optsCheck: func(t *testing.T, o *mainOpts) {
+				checkCfgIgnored(t, o.SCM.Reset.scmCmd.baseScanCmd)
+			},
+		},
+		"reset; read config": {
+			cmd: "scm reset",
+			optsCheck: func(t *testing.T, o *mainOpts) {
+				checkCfgNotIgnored(t, o.SCM.Reset.scmCmd.baseScanCmd)
+			},
+		},
+		"scan; ignore config": {
+			cmd: "scm scan --ignore-config",
+			optsCheck: func(t *testing.T, o *mainOpts) {
+				checkCfgIgnored(t, o.SCM.Scan.scmCmd.baseScanCmd)
+			},
+		},
+		"scan; read config": {
+			cmd: "scm scan",
+			optsCheck: func(t *testing.T, o *mainOpts) {
+				checkCfgNotIgnored(t, o.SCM.Scan.scmCmd.baseScanCmd)
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			_, mockInitFn := getMockScmCmdInit(log, scm.MockBackendConfig{}, nil)
+
+			scmCmdInit = mockInitFn
+			defer func() {
+				scmCmdInit = initScmCmd
+			}()
+
+			var opts mainOpts
+			_ = parseOpts(strings.Split(tc.cmd, " "), &opts, log)
+
+			tc.optsCheck(t, &opts)
+		})
+	}
 }

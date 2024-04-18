@@ -62,7 +62,6 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		SkipPrep: skipPrep,
 		nvmeCmd:  nvmeCmd{},
 	}
-	snc.nvmeCmd.IgnoreConfig = true // Process all NVMe devices.
 	snc.nvmeCmd.Logger = log
 
 	nvmeResp, errNvme := scanNVMe(snc)
@@ -73,7 +72,6 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 	ssc := &scanSCMCmd{
 		scmCmd: scmCmd{},
 	}
-	ssc.IgnoreConfig = true // Process all SCM devices.
 	ssc.Logger = log
 
 	scmResp, errScm := scanPMem(ssc)

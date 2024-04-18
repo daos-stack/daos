@@ -9,6 +9,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -24,18 +25,19 @@ import (
 type jsonCmdTest struct {
 	name         string
 	cmd          string
-	applyMocks   func()      // Apply mocking via function pointers when tests are run.
-	cleanupMocks func()      // Cleanup mocking by resetting function pointers after each test.
-	expOut       interface{} // JSON encoded data should output.
+	applyMocks   func(t *testing.T) // Apply mocking via function pointers when tests are run.
+	cleanupMocks func(t *testing.T) // Cleanup mocking after each test.
+	expOut       interface{}        // JSON encoded data should output.
 	expErr       error
 }
 
-func runJSONCmdTests(t *testing.T, log *logging.LeveledLogger, cmdTests []jsonCmdTest) {
+func runJSONCmdTests(t *testing.T, log *logging.LeveledLogger, buf fmt.Stringer, cmdTests []jsonCmdTest) {
 	t.Helper()
 
 	for _, tc := range cmdTests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Helper()
+			defer test.ShowBufferOnFailure(t, buf)
 
 			// Replace os.Stdout so that we can verify the generated output.
 			var result bytes.Buffer
@@ -52,8 +54,8 @@ func runJSONCmdTests(t *testing.T, log *logging.LeveledLogger, cmdTests []jsonCm
 			os.Stdout = w
 
 			if tc.applyMocks != nil && tc.cleanupMocks != nil {
-				tc.applyMocks()
-				defer tc.cleanupMocks()
+				tc.applyMocks(t)
+				defer tc.cleanupMocks(t)
 			}
 
 			var opts mainOpts
