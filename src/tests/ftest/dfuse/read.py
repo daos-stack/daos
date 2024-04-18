@@ -29,12 +29,6 @@ class DFuseReadTest(DfuseTestBase):
 
         self.load_dfuse(self.hostlist_clients, None)
 
-        self.dfuse.disable_wb_cache.value = True
-
-        self.dfuse.env["D_LOG_MASK"] = "INFO,DFUSE=DEBUG"
-        self.dfuse.env["DD_MASK"] = "ALL"
-        self.dfuse.env["DD_SUBSYS"] = "ALL"
-
         cont_attrs = {}
 
         cont_attrs["dfuse-data-cache"] = "1h"
@@ -76,9 +70,11 @@ class DFuseReadTest(DfuseTestBase):
         data = self.dfuse.get_stats()
 
         # Check that the inode has been evicted, and there's been no reads so far.
-        assert data["inodes"] == 1, data
-        assert data["statistics"].get("read", 0) == 0, data
-        assert data["statistics"].get("pre_read", 0) == 0, data
+        self.assertEqual(data["inodes"], 1, "Incorrect number of active nodes")
+        self.assertEqual(data["statistics"].get("read", 0), 0, "expected zero reads")
+        self.assertEqual(
+            data["statistics"].get("pre_read", 0), 0, "expected zero pre reads"
+        )
 
         # Now read the file, and check it's read.
         cmd = f"dd if={fuse_root_dir}/td/test_file of=/dev/zero count=16 bs=128k"
@@ -90,7 +86,13 @@ class DFuseReadTest(DfuseTestBase):
 
         # pre_read requests are a subset of reads so for this test we should verify that they are
         # equal, and non-zero.
-        assert data["statistics"].get("pre_read", 0) > 0, data
-        assert data["statistics"].get("pre_read") == data["statistics"].get("read", 0), data
+        self.assertGreater(
+            data["statistics"].get("pre_read", 0), 0, "expected non-zero pre read"
+        )
+        self.assertEqual(
+            data["statistics"].get("pre_read"),
+            data["statistics"].get("read", 0),
+            "pre read does not match read",
+        )
 
-        assert data["inodes"] == 3, data
+        self.assertEqual(data["inodes"], 3, "expected 3 inodes in cache")
