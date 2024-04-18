@@ -23,7 +23,6 @@ func TestDaosServer_Support_Commands_JSON(t *testing.T) {
 			"support collect-log -j",
 			nil,
 			nil,
-			nil,
 			errJSONOutputNotSupported,
 		},
 	})

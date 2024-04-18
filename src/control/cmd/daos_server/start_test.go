@@ -425,7 +425,6 @@ func TestDaosServer_Start_Commands_JSON(t *testing.T) {
 			"start -j",
 			nil,
 			nil,
-			nil,
 			errJSONOutputNotSupported,
 		},
 	})

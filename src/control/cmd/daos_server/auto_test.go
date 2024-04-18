@@ -640,7 +640,6 @@ func TestDaosServer_Auto_Commands_JSON(t *testing.T) {
 			"config generate -j",
 			nil,
 			nil,
-			nil,
 			errJSONOutputNotSupported,
 		},
 	})

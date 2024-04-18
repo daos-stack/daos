@@ -22,12 +22,11 @@ import (
 )
 
 type jsonCmdTest struct {
-	name         string
-	cmd          string
-	applyMocks   func()      // Apply mocking via function pointers when tests are run.
-	cleanupMocks func()      // Cleanup mocking by resetting function pointers after each test.
-	expOut       interface{} // JSON encoded data should output.
-	expErr       error
+	name       string
+	cmd        string
+	setHelpers func(opts *mainOpts)
+	expOut     interface{} // JSON encoded data should output.
+	expErr     error
 }
 
 func runJSONCmdTests(t *testing.T, log *logging.LeveledLogger, cmdTests []jsonCmdTest) {
@@ -51,12 +50,10 @@ func runJSONCmdTests(t *testing.T, log *logging.LeveledLogger, cmdTests []jsonCm
 			}()
 			os.Stdout = w
 
-			if tc.applyMocks != nil && tc.cleanupMocks != nil {
-				tc.applyMocks()
-				defer tc.cleanupMocks()
-			}
-
 			var opts mainOpts
+			if tc.setHelpers != nil {
+				tc.setHelpers(&opts)
+			}
 			test.CmpErr(t, tc.expErr, parseOpts(strings.Split(tc.cmd, " "), &opts, log))
 
 			w.Close()

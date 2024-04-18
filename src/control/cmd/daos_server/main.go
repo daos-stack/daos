@@ -62,6 +62,11 @@ type mainOpts struct {
 
 	// Allow a set of tests to be run before executing commands.
 	preExecTests []execTestFn
+
+	// provide helpers for various initialization stages
+	netInitHelper  initNetworkCmdFn
+	nvmeInitHelper initNvmeCmdFn
+	scmInitHelper  initScmCmdFn
 }
 
 type versionCmd struct {
@@ -143,6 +148,24 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			logCmd.SetLog(log)
 		}
 
+		if netInitCmd, ok := cmd.(interface{ initWith(initNetworkCmdFn) error }); ok {
+			if err := netInitCmd.initWith(opts.netInitHelper); err != nil {
+				return err
+			}
+		}
+
+		if scmInitCmd, ok := cmd.(interface{ initWith(initScmCmdFn) error }); ok {
+			if err := scmInitCmd.initWith(opts.scmInitHelper); err != nil {
+				return err
+			}
+		}
+
+		if nvmeInitCmd, ok := cmd.(interface{ initWith(initNvmeCmdFn) error }); ok {
+			if err := nvmeInitCmd.initWith(opts.nvmeInitHelper); err != nil {
+				return err
+			}
+		}
+
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
 			if opts.ConfigPath == "" {
 				log.Debugf("Using build config directory %q", build.ConfigDir)
@@ -192,6 +215,9 @@ func main() {
 				return pbin.CheckHelper(log, pbin.DaosPrivHelperName)
 			},
 		},
+		netInitHelper:  initNetworkCmd,
+		nvmeInitHelper: initNvmeCmd,
+		scmInitHelper:  initScmCmd,
 	}
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {

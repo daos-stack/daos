@@ -92,6 +92,17 @@ type nvmeCmd struct {
 	baseScanCmd     `json:"-"`
 	helperLogCmd    `json:"-"`
 	iommuCheckerCmd `json:"-"`
+	ctlSvc          *server.StorageControlService
+}
+
+func (cmd *nvmeCmd) initWith(initFn initNvmeCmdFn) error {
+	var err error
+	cmd.ctlSvc, err = initFn(cmd)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type initNvmeCmdFn func(cmd *nvmeCmd) (*server.StorageControlService, error)
@@ -106,13 +117,21 @@ func initNvmeCmd(cmd *nvmeCmd) (*server.StorageControlService, error) {
 	return storageCmdInit(&cmd.baseScanCmd)
 }
 
-// Mockable init function pointer.
-var nvmeCmdInit initNvmeCmdFn = initNvmeCmd
-
 type scmCmd struct {
 	baseScanCmd  `json:"-"`
 	helperLogCmd `json:"-"`
 	scmSocketCmd `json:"-"`
+	ctlSvc       *server.StorageControlService
+}
+
+func (cmd *scmCmd) initWith(initFn initScmCmdFn) error {
+	var err error
+	cmd.ctlSvc, err = initFn(cmd)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func genFiAffFn(fis *hardware.FabricInterfaceSet) config.EngineAffinityFn {
@@ -211,6 +230,3 @@ func initScmCmd(cmd *scmCmd) (*server.StorageControlService, error) {
 
 	return storageCmdInit(&cmd.baseScanCmd)
 }
-
-// Mockable init function pointer.
-var scmCmdInit initScmCmdFn = initScmCmd
