@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -73,10 +73,11 @@ class DfuseCachingCheck(IorTestBase):
         print(self.dfuse.get_stats())
 
         self.log_step('Get cached read performance')
-        out = self.run_ior_with_pool(fail_on_warning=False)
+        out = self.run_ior_with_pool(fail_on_warning=False, stop_dfuse=False)
         with_caching = IorCommand.get_ior_metrics(out)
 
         print(self.dfuse.get_stats())
+        self.dfuse.unmount(tries=1)
 
         self.log_step('Verify cached read performance is greater than first read')
         # Log all the values first, then do the assert so that failures can be checked easily.
