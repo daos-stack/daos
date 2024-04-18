@@ -805,12 +805,12 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					TotalEngines:     3,
 					DisabledTargets:  4,
 					Version:          5,
-					Leader:           6,
+					ServiceLeader:    6,
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
@@ -823,14 +823,14 @@ func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
 					TotalEngines:     3,
 					DisabledTargets:  4,
 					Version:          5,
-					Leader:           6,
+					ServiceLeader:    6,
 					EnabledRanks:     ranklist.MustCreateRankSet("[0-3,5]"),
 					DisabledRanks:    &ranklist.RankSet{},
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"state":"Ready","uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -855,7 +855,7 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 		expErr  error
 	}{
 		"null rankset": {
-			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expResp: PoolQueryResp{
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
@@ -865,14 +865,14 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 					TotalEngines:     3,
 					DisabledTargets:  4,
 					Version:          5,
-					Leader:           6,
+					ServiceLeader:    6,
 					PoolLayoutVer:    7,
 					UpgradeLayoutVer: 8,
 				},
 			},
 		},
 		"valid rankset": {
-			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"svc_ldr":6,"svc_reps":null,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expResp: PoolQueryResp{
 				Status: 0,
 				PoolInfo: daos.PoolInfo{
@@ -882,7 +882,7 @@ func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
 					TotalEngines:     3,
 					DisabledTargets:  4,
 					Version:          5,
-					Leader:           6,
+					ServiceLeader:    6,
 					EnabledRanks:     ranklist.MustCreateRankSet("[0-3,5]"),
 					DisabledRanks:    &ranklist.RankSet{},
 					PoolLayoutVer:    7,

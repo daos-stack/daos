@@ -245,7 +245,7 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*daos.PoolInfo, error) {
 	poolInfo.DisabledTargets = uint32(pinfo.pi_ndisabled)
 	poolInfo.ActiveTargets = uint32(pinfo.pi_space.ps_ntargets)
 	poolInfo.TotalEngines = uint32(pinfo.pi_nnodes)
-	poolInfo.Leader = uint32(pinfo.pi_leader)
+	poolInfo.ServiceLeader = uint32(pinfo.pi_leader)
 	poolInfo.Version = uint32(pinfo.pi_map_ver)
 
 	poolInfo.TierStats = []*daos.StorageUsageStats{

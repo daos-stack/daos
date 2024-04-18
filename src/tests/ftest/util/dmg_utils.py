@@ -659,7 +659,7 @@ class DmgCommand(DmgCommandBase):
         #         "total_engines": 1,
         #         "disabled_targets": 0,
         #         "version": 1,
-        #         "leader": 0,
+        #         "svc_ldr": 0,
         #         "rebuild": {
         #             "status": 0,
         #             "state": "idle",

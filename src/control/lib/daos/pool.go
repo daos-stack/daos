@@ -60,7 +60,7 @@ type (
 		TotalEngines     uint32               `json:"total_engines"`
 		DisabledTargets  uint32               `json:"disabled_targets"`
 		Version          uint32               `json:"version"`
-		Leader           uint32               `json:"leader"`
+		ServiceLeader    uint32               `json:"svc_ldr"`
 		ServiceReplicas  []ranklist.Rank      `json:"svc_reps"`
 		Rebuild          *PoolRebuildStatus   `json:"rebuild"`
 		TierStats        []*StorageUsageStats `json:"tier_stats"`

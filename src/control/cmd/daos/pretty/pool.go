@@ -40,7 +40,7 @@ func PrintPoolInfo(pi *daos.PoolInfo, out io.Writer) error {
 
 	// Maintain output compatibility with the `daos pool query` output.
 	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d, state=%s\n",
-		pi.UUID, pi.TotalTargets, pi.DisabledTargets, pi.Leader, pi.Version, pi.State)
+		pi.UUID, pi.TotalTargets, pi.DisabledTargets, pi.ServiceLeader, pi.Version, pi.State)
 
 	if pi.PoolLayoutVer != pi.UpgradeLayoutVer {
 		fmt.Fprintf(w, "Pool layout out of date (%d < %d) -- see `dmg pool upgrade` for details.\n",
