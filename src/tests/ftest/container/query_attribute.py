@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,9 +18,9 @@ test_strings = [
     "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijabcdefghij",
     # Characters that don't require backslash. The backslashes in here
     # are required for the code to work, but not by daos.
-    "~@#$%^*-=_+[]\{\}/?.",  # noqa: W605
+    r"~@#$%^*-=_+[]\{\}/?.",
     # Characters that require backslash.
-    "\`\&\(\)\\\;\!\<\>\\\\\\,\\\\\\:",  # noqa: W605
+    r"\`\&\(\)\\\;\!\<\>\\\\\\,\\\\\\:",
     # Characters that include space.
     "\"aa bb\""]
 # We added backslashes for the code to work, but get-attr output
@@ -30,7 +30,7 @@ escape_to_not = {}
 escape_to_not[test_strings[-3]] = '~@#$%^*-=_+[]{}/?.'
 # We still need a backslash before the double quote for the code to
 # work.
-escape_to_not[test_strings[-2]] = "`&()\;!<>\,\:"  # noqa: W605
+escape_to_not[test_strings[-2]] = r"`&()\;!<>\,\:"
 escape_to_not[test_strings[-1]] = "aa bb"
 
 
