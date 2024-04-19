@@ -710,6 +710,7 @@ dss_chore_queue_ult(void *arg)
 	D_DEBUG(DB_TRACE, "begin\n");
 
 	for (;;) {
+		d_list_t          list_tmp = D_LIST_HEAD_INIT(list_tmp);
 		struct dss_chore *chore;
 		struct dss_chore *chore_tmp;
 		bool              stop = false;
@@ -742,16 +743,26 @@ dss_chore_queue_ult(void *arg)
 			break;
 
 		d_list_for_each_entry_safe(chore, chore_tmp, &list, cho_link) {
-			bool is_reentrance = (chore->cho_status == DSS_CHORE_YIELD);
+			enum dss_chore_status status;
 
+			/*
+			 * CAUTION: When cho_func returns DSS_CHORE_DONE, chore
+			 * may have been freed already!
+			 */
+			d_list_del_init(&chore->cho_link);
 			D_DEBUG(DB_TRACE, "%p: before: status=%d\n", chore, chore->cho_status);
-			chore->cho_status = chore->cho_func(chore, is_reentrance);
-			D_ASSERT(chore->cho_status != DSS_CHORE_NEW);
-			D_DEBUG(DB_TRACE, "%p: after: status=%d\n", chore, chore->cho_status);
-			if (chore->cho_status == DSS_CHORE_DONE)
-				d_list_del_init(&chore->cho_link);
+			status = chore->cho_func(chore, chore->cho_status == DSS_CHORE_YIELD);
+			D_DEBUG(DB_TRACE, "%p: after: status=%d\n", chore, status);
+			if (status == DSS_CHORE_YIELD) {
+				chore->cho_status = status;
+				d_list_add_tail(&chore->cho_link, &list_tmp);
+			} else {
+				D_ASSERTF(status == DSS_CHORE_DONE, "status=%d\n", status);
+			}
 			ABT_thread_yield();
 		}
+
+		d_list_splice_init(&list_tmp, &list);
 	}
 
 	D_DEBUG(DB_TRACE, "end\n");
