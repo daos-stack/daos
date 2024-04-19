@@ -1037,6 +1037,7 @@ pipeline {
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
                             archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
+                            archiveArtifacts artifacts: 'nltr.xml'
                             job_status_update()
                         }
                     }
