@@ -52,10 +52,7 @@ func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
 
 	instance.NotifyDrpcReady(req)
 
-	dc, err := instance.getDrpcClient()
-	if err != nil || dc == nil {
-		t.Fatal("Expected a dRPC client connection")
-	}
+	test.AssertEqual(t, req.DrpcListenerSock, instance.getDrpcSocket(), "expected socket value set")
 
 	waitForEngineReady(t, instance)
 }
@@ -76,10 +73,6 @@ func TestEngineInstance_CallDrpc(t *testing.T) {
 			notReady: true,
 			expErr:   errEngineNotReady,
 		},
-		"no client configured": {
-			noClient: true,
-			expErr:   errDRPCNotReady,
-		},
 		"success": {
 			resp: &drpc.Response{},
 		},
@@ -94,11 +87,11 @@ func TestEngineInstance_CallDrpc(t *testing.T) {
 			instance := NewEngineInstance(log, nil, nil, runner)
 			instance.ready.Store(!tc.notReady)
 
-			if !tc.noClient {
-				cfg := &mockDrpcClientConfig{
-					SendMsgResponse: tc.resp,
-				}
-				instance.setDrpcClient(newMockDrpcClient(cfg))
+			cfg := &mockDrpcClientConfig{
+				SendMsgResponse: tc.resp,
+			}
+			instance.getDrpcClientFn = func(s string) drpc.DomainSocketClient {
+				return newMockDrpcClient(cfg)
 			}
 
 			_, err := instance.CallDrpc(test.Context(t),
