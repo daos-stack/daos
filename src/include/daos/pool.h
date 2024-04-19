@@ -1,9 +1,11 @@
-/**
+/*
  * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
+ * \file
+ *
  * dc_pool: Pool Client API
  *
  * This consists of dc_pool methods that do not belong to DAOS API.
@@ -81,7 +83,14 @@
 int dc_pool_init(void);
 void dc_pool_fini(void);
 
-/* Client pool handle */
+/**
+ * Client pool handle
+ *
+ * The lock order:
+ *
+ *   dp_map_lock
+ *   dp_client_lock
+ */
 struct dc_pool {
 	/* link chain in the global handle hash table */
 	struct d_hlink		dp_hlink;
@@ -161,6 +170,18 @@ int dc_pool_tgt_idx2ptr(struct dc_pool *pool, uint32_t tgt_idx,
 			struct pool_target **tgt);
 
 int dc_pool_get_redunc(daos_handle_t poh);
+
+/** Map states of ranks that make up the pool group */
+#define DC_POOL_GROUP_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
+
+/** Map states of ranks that make up the pool service */
+#define DC_POOL_SVC_MAP_STATES (PO_COMP_ST_UPIN)
+
+/*
+ * Since we want all PS replicas to belong to the pool group,
+ * DC_POOL_SVC_MAP_STATES must be a subset of DC_POOL_GROUP_MAP_STATES.
+ */
+D_CASSERT((DC_POOL_SVC_MAP_STATES & DC_POOL_GROUP_MAP_STATES) == DC_POOL_SVC_MAP_STATES);
 
 int dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
 int dc_pool_choose_svc_rank(const char *label, uuid_t puuid,

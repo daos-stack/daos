@@ -245,7 +245,8 @@ vos_dedup_update(struct vos_pool *pool, struct dcs_csum_info *csum,
 	    BIO_ADDR_IS_DEDUP(&biov->bi_addr))
 		return;
 
-	if (bio_addr_is_hole(&biov->bi_addr))
+	/* NVMe extent dedup isn't supported yet */
+	if (bio_addr_is_hole(&biov->bi_addr) || bio_iov2media(biov) != DAOS_MEDIA_SCM)
 		return;
 
 	if (vos_dedup_lookup(pool, csum, csum_len, NULL))
