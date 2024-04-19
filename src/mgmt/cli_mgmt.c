@@ -23,6 +23,7 @@
 #include "rpc.h"
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/ipc.h>
 
 char agent_sys_name[DAOS_SYS_NAME_MAX + 1] = DAOS_DEFAULT_SYS_NAME;
 
@@ -1171,6 +1172,90 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 
 decref:
 	crt_req_decref(rpc);
+	return rc;
+}
+
+int
+dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *owner_uid)
+{
+	struct drpc_alloc          alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc               *ctx;
+	Mgmt__ClientTelemetryReq   req = MGMT__CLIENT_TELEMETRY_REQ__INIT;
+	Mgmt__ClientTelemetryResp *resp;
+	uint8_t                   *reqb;
+	size_t                     reqb_size;
+	Drpc__Call                *dreq;
+	Drpc__Response            *dresp;
+	int                        rc;
+
+	if (owner_uid == NULL)
+		return -DER_INVAL;
+
+	/* Connect to daos_agent. */
+	D_ASSERT(dc_agent_sockpath != NULL);
+	rc = drpc_connect(dc_agent_sockpath, &ctx);
+	if (rc != -DER_SUCCESS) {
+		DL_ERROR(rc, "failed to connect to %s ", dc_agent_sockpath);
+		D_GOTO(out, 0);
+	}
+
+	req.sys     = (char *)sys;
+	req.jobid   = dc_jobid;
+	req.shm_key = shm_key;
+
+	reqb_size = mgmt__client_telemetry_req__get_packed_size(&req);
+	D_ALLOC(reqb, reqb_size);
+	if (reqb == NULL) {
+		D_GOTO(out_ctx, rc = -DER_NOMEM);
+	}
+	mgmt__client_telemetry_req__pack(&req, reqb);
+
+	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT, DRPC_METHOD_MGMT_SETUP_CLIENT_TELEM, &dreq);
+	if (rc != 0) {
+		D_FREE(reqb);
+		goto out_ctx;
+	}
+	dreq->body.len  = reqb_size;
+	dreq->body.data = reqb;
+
+	/* Make the call and get the response. */
+	rc = drpc_call(ctx, R_SYNC, dreq, &dresp);
+	if (rc != 0) {
+		DL_ERROR(rc, "Sending client telemetry setup request failed");
+		goto out_dreq;
+	}
+	if (dresp->status != DRPC__STATUS__SUCCESS) {
+		D_ERROR("Client telemetry setup request unsuccessful: %d\n", dresp->status);
+		rc = -DER_UNINIT;
+		goto out_dresp;
+	}
+
+	resp = mgmt__client_telemetry_resp__unpack(&alloc.alloc, dresp->body.len, dresp->body.data);
+	if (alloc.oom)
+		D_GOTO(out_dresp, rc = -DER_NOMEM);
+	if (resp == NULL) {
+		D_ERROR("failed to unpack SetupClientTelemetry response\n");
+		rc = -DER_NOMEM;
+		goto out_dresp;
+	}
+	if (resp->status != 0) {
+		D_ERROR("SetupClientTelemetry(%s) failed: " DF_RC "\n", req.sys,
+			DP_RC(resp->status));
+		rc = resp->status;
+		goto out_resp;
+	}
+
+	*owner_uid = resp->agent_uid;
+
+out_resp:
+	mgmt__client_telemetry_resp__free_unpacked(resp, &alloc.alloc);
+out_dresp:
+	drpc_response_free(dresp);
+out_dreq:
+	drpc_call_free(dreq);
+out_ctx:
+	drpc_close(ctx);
+out:
 	return rc;
 }
 
