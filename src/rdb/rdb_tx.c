@@ -211,17 +211,18 @@ rdb_tx_hdr_decode(const void *buf, size_t len, struct rdb_tx_hdr *hdr)
 static bool
 rdb_tx_is_critical(struct rdb_tx *tx)
 {
-	struct rdb_tx_hdr hdr = {.critical = 1};
+	struct rdb_tx_hdr	hdr;
+	bool			crit = true;
 
 	D_ASSERT(tx != NULL);
-	if (tx->dt_entry_len > 0) {
-		ssize_t nb;
+	if (tx->dt_entry) {
+		ssize_t		nb;
 
-		D_ASSERT(tx->dt_entry != NULL);
 		nb = rdb_tx_hdr_decode(tx->dt_entry, tx->dt_entry_len, &hdr);
-		D_ASSERTF(nb > 0, "nb=%zd\n", nb);
+		D_ASSERT(nb == sizeof(struct rdb_tx_hdr));
+		crit = hdr.critical;
 	}
-	return hdr.critical;
+	return crit;
 }
 
 /* If buf is NULL, then just calculate and return the length required. */
@@ -685,15 +686,11 @@ rdb_oid_class(enum rdb_kvs_class class, rdb_oid_t *oid_class)
 	}
 }
 
-/* See rdb_tx_apply_create. */
-#define RDB_TX_APPLY_CREATE_NVOPS 2
-
-/* Must invoke no more than RDB_TX_APPLY_CREATE_NVOPS VOS TX operations. */
 static int
-rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent, d_iov_t *key,
-		    enum rdb_kvs_class class, bool crit, rdb_vos_tx_t vtx)
+rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
+		    d_iov_t *key, enum rdb_kvs_class class, bool crit)
 {
-	d_iov_t		value;
+	d_iov_t	value;
 	rdb_oid_t	oid_class;
 	rdb_oid_t	oid_number;
 	rdb_oid_t	oid;
@@ -702,7 +699,8 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent, d_iov_t *k
 	/* Convert the KVS class into the object ID class. */
 	rc = rdb_oid_class(class, &oid_class);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": unknown KVS class %x", DP_DB(db), class);
+		D_ERROR(DF_DB": unknown KVS class %x: %d\n", DP_DB(db), class,
+			rc);
 		return rc;
 	}
 
@@ -712,7 +710,8 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent, d_iov_t *k
 	if (rc == 0) {
 		return -DER_EXIST;
 	} else if (rc != -DER_NONEXIST) {
-		DL_ERROR(rc, DF_DB ": failed to check KVS existence", DP_DB(db));
+		D_ERROR(DF_DB": failed to check KVS existence: %d\n", DP_DB(db),
+			rc);
 		return rc;
 	}
 
@@ -725,7 +724,8 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent, d_iov_t *k
 		D_DEBUG(DB_MD, DF_DB": initialized rdb_lc_oid_next to "DF_U64
 			"\n", DP_DB(db), oid_number);
 	} else if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": failed to look up next object number", DP_DB(db));
+		D_ERROR(DF_DB": failed to look up next object number: %d\n",
+			DP_DB(db), rc);
 		return rc;
 	}
 	if ((oid_number & RDB_OID_CLASS_MASK) != 0) {
@@ -737,34 +737,32 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent, d_iov_t *k
 	oid_number += 1;
 
 	/* Update the next object number. */
-	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, 1 /* n */, &rdb_lc_oid_next, &value,
-			   vtx);
+	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, 1 /* n */,
+			   &rdb_lc_oid_next, &value);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": failed to update next object number " DF_X64, DP_DB(db),
-			 oid_number);
+		D_ERROR(DF_DB": failed to update next object number"DF_X64
+			": %d\n", DP_DB(db), oid_number, rc);
 		return rc;
 	}
 
 	/* Update the key in the parent object. */
 	d_iov_set(&value, &oid, sizeof(oid));
-	rc = rdb_lc_update(db->d_lc, index, parent, crit, 1 /* n */, key, &value, vtx);
+	rc = rdb_lc_update(db->d_lc, index, parent, crit, 1 /* n */,
+			   key, &value);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": failed to update parent KVS", DP_DB(db));
+		D_ERROR(DF_DB": failed to update parent KVS: %d\n", DP_DB(db),
+			rc);
 		return rc;
 	}
 
 	return 0;
 }
 
-/* See rdb_tx_apply_destroy. */
-#define RDB_TX_APPLY_DESTROY_NVOPS 2
-
-/* Must invoke no more than RDB_TX_APPLY_DESTROY_NVOPS VOS TX operations. */
 static int
-rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent, d_iov_t *key,
-		     rdb_vos_tx_t vtx)
+rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent,
+		     d_iov_t *key)
 {
-	d_iov_t		value;
+	d_iov_t	value;
 	rdb_oid_t	oid;
 	int		rc;
 
@@ -779,75 +777,51 @@ rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent, d_iov_t *
 	}
 
 	/* Punch the key in the parent object. */
-	rc = rdb_lc_punch(db->d_lc, index, parent, 1 /* n */, key, vtx);
+	rc = rdb_lc_punch(db->d_lc, index, parent, 1 /* n */, key);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": failed to update parent KVS " DF_X64, DP_DB(db), parent);
+		D_ERROR(DF_DB": failed to update parent KVS "DF_X64": %d\n",
+			DP_DB(db), parent, rc);
 		return rc;
 	}
 
 	/* Punch the KVS object. */
-	rc = rdb_lc_punch(db->d_lc, index, oid, 0 /* n */, NULL /* akeys */, vtx);
+	rc = rdb_lc_punch(db->d_lc, index, oid, 0 /* n */, NULL /* akeys */);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": failed to punch KVS " DF_X64, DP_DB(db), oid);
+		D_ERROR(DF_DB": failed to punch KVS "DF_X64": %d\n", DP_DB(db),
+			oid, rc);
 		return rc;
 	}
 
 	return 0;
 }
 
-/* See rdb_tx_apply_update. */
-#define RDB_TX_APPLY_UPDATE_NVOPS 1
-
-/* Must invoke no more than RDB_TX_APPLY_UPDATE_NVOPS VOS TX operations. */
 static int
-rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs, d_iov_t *key, d_iov_t *value,
-		    bool crit, rdb_vos_tx_t vtx)
+rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs,
+		    d_iov_t *key, d_iov_t *value, bool crit)
 {
 	int rc;
 
-	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */, key, value, vtx);
+	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */, key, value);
 	if (rc != 0)
-		DL_ERROR(rc, DF_DB ": failed to update KVS " DF_X64, DP_DB(db), kvs);
+		D_ERROR(DF_DB ": failed to update KVS " DF_X64 ": " DF_RC "\n", DP_DB(db), kvs,
+			DP_RC(rc));
 	return rc;
 }
 
-/* See rdb_tx_apply_delete. */
-#define RDB_TX_APPLY_DELETE_NVOPS 1
-
-/* Must invoke no more than RDB_TX_APPLY_DELETE_NVOPS VOS TX operations. */
 static int
-rdb_tx_apply_delete(struct rdb *db, uint64_t index, rdb_oid_t kvs, d_iov_t *key, rdb_vos_tx_t vtx)
+rdb_tx_apply_delete(struct rdb *db, uint64_t index, rdb_oid_t kvs,
+		    d_iov_t *key)
 {
 	int rc;
 
-	rc = rdb_lc_punch(db->d_lc, index, kvs, 1 /* n */, key, vtx);
+	rc = rdb_lc_punch(db->d_lc, index, kvs, 1 /* n */, key);
 	if (rc != 0)
 		DL_ERROR(rc, DF_DB ": failed to update KVS " DF_X64, DP_DB(db), kvs);
 	return rc;
 }
 
 static int
-rdb_tx_op_count_vops(struct rdb *db, struct rdb_tx_op *op)
-{
-	switch (op->dto_opc) {
-	case RDB_TX_CREATE_ROOT:
-	case RDB_TX_CREATE:
-		return RDB_TX_APPLY_CREATE_NVOPS;
-	case RDB_TX_DESTROY_ROOT:
-	case RDB_TX_DESTROY:
-		return RDB_TX_APPLY_DESTROY_NVOPS;
-	case RDB_TX_UPDATE:
-		return RDB_TX_APPLY_UPDATE_NVOPS;
-	case RDB_TX_DELETE:
-		return RDB_TX_APPLY_DELETE_NVOPS;
-	default:
-		D_ERROR(DF_DB ": unknown update operation %u\n", DP_DB(db), op->dto_opc);
-		return -DER_IO;
-	}
-}
-
-static int
-rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit, rdb_vos_tx_t vtx)
+rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit)
 {
 	struct rdb_kvs *kvs = NULL;
 	rdb_path_t	victim_path;
@@ -884,24 +858,28 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit,
 	switch (op->dto_opc) {
 	case RDB_TX_CREATE_ROOT:
 		rc = rdb_tx_apply_create(db, index, RDB_LC_ATTRS, &rdb_lc_root,
-					 op->dto_attr->dsa_class, crit, vtx);
+					 op->dto_attr->dsa_class, crit);
 		break;
 	case RDB_TX_CREATE:
-		rc = rdb_tx_apply_create(db, index, kvs->de_object, &op->dto_key,
-					 op->dto_attr->dsa_class, crit, vtx);
+		rc = rdb_tx_apply_create(db, index, kvs->de_object,
+					 &op->dto_key, op->dto_attr->dsa_class,
+					 crit);
 		break;
 	case RDB_TX_DESTROY_ROOT:
-		rc = rdb_tx_apply_destroy(db, index, RDB_LC_ATTRS, &rdb_lc_root, vtx);
+		rc = rdb_tx_apply_destroy(db, index, RDB_LC_ATTRS,
+					  &rdb_lc_root);
 		break;
 	case RDB_TX_DESTROY:
-		rc = rdb_tx_apply_destroy(db, index, kvs->de_object, &op->dto_key, vtx);
+		rc = rdb_tx_apply_destroy(db, index, kvs->de_object,
+					  &op->dto_key);
 		break;
 	case RDB_TX_UPDATE:
-		rc = rdb_tx_apply_update(db, index, kvs->de_object, &op->dto_key, &op->dto_value,
-					 crit, vtx);
+		rc = rdb_tx_apply_update(db, index, kvs->de_object,
+					 &op->dto_key, &op->dto_value, crit);
 		break;
 	case RDB_TX_DELETE:
-		rc = rdb_tx_apply_delete(db, index, kvs->de_object, &op->dto_key, vtx);
+		rc = rdb_tx_apply_delete(db, index, kvs->de_object,
+					 &op->dto_key);
 		break;
 	default:
 		D_ERROR(DF_DB": unknown update operation %u\n",
@@ -924,7 +902,8 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit,
 		 * call returns, no other TXs will look up victim_path in the
 		 * rdb_kvs cache.
 		 */
-		rc_tmp = rdb_kvs_lookup(db, &victim_path, index, false /* alloc */, &victim);
+		rc_tmp = rdb_kvs_lookup(db, &victim_path, index,
+					false /* alloc */, &victim);
 		if (rc_tmp == 0) {
 			D_DEBUG(DB_TRACE, DF_DB": evicting kvs %p\n",
 				DP_DB(db), victim);
@@ -944,48 +923,6 @@ out:
 	return rc;
 }
 
-int
-rdb_tx_count_vops(struct rdb *db, const void *buf, size_t len)
-{
-	const void       *p = buf;
-	ssize_t           n;
-	struct rdb_tx_hdr hdr;
-	int               count = 0;
-
-	if (len == 0)
-		return 0;
-
-	/* Skip the header. */
-	n = rdb_tx_hdr_decode(p, len, &hdr);
-	if (n < 0) {
-		D_ERROR(DF_DB ": invalid header: buf=%p, len=" DF_U64 "\n", DP_DB(db), buf, len);
-		return n;
-	}
-	p += n;
-
-	/* Count those that will be invoked by each RDB TX operation. */
-	while (p < buf + len) {
-		struct rdb_tx_op op;
-		int              rc;
-
-		n = rdb_tx_op_decode(p, buf + len - p, &op);
-		if (n < 0) {
-			D_ERROR(DF_DB ": invalid entry format: buf=%p len=" DF_U64 " p=%p\n",
-				DP_DB(db), buf, len, p);
-			return n;
-		}
-
-		rc = rdb_tx_op_count_vops(db, &op);
-		if (rc < 0)
-			return rc;
-		count += rc;
-
-		p += n;
-	}
-
-	return count;
-}
-
 /* Is "error" deterministic? */
 static inline bool
 rdb_tx_deterministic_error(int error)
@@ -1000,18 +937,14 @@ rdb_tx_deterministic_error(int error)
  * Interpret header to know if ops in the TX are deemed "critical".
  */
 int
-rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *result, bool *critp,
-	     rdb_vos_tx_t vtx)
+rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
+	     void *result, bool *critp)
 {
 	const void	       *p = buf;
 	ssize_t			n;
+	bool			crit = true;
 	daos_size_t		scm_remaining = 0;
-	struct rdb_tx_hdr	hdr = {.critical = 1};
 	int			rc = 0;
-
-	if (len == 0)
-		goto out;
-	D_ASSERT(buf != NULL);
 
 	rc = rdb_scm_left(db, &scm_remaining);
 	if (rc != 0) {
@@ -1020,28 +953,33 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *
 		return rc;
 	}
 
-	n = rdb_tx_hdr_decode(p, len, &hdr);
-	if (n < 0) {
-		D_ERROR(DF_DB ": invalid header: buf=%p, len=" DF_U64 "\n", DP_DB(db), buf, len);
-		rc = n;
-		return rc;
-	}
-	p += n;
+	if (buf) {
+		struct rdb_tx_hdr	hdr;
 
-	/*
-	 * scm_remaining < RDB_NOAPPEND_FREE_SPACE can happen on
-	 * on follower after leader compacts log first.
-	 * Warn only when critically low on space.
-	 */
-	if (!hdr.critical && (scm_remaining < RDB_CRITICAL_FREE_SPACE)) {
-		D_WARN(DF_DB ": space is tight! index " DF_U64 " buf=%p "
-		       "len=" DF_U64 " crit=%d scm_left=" DF_U64 "\n",
-		       DP_DB(db), index, buf, len, hdr.critical, scm_remaining);
+		n = rdb_tx_hdr_decode(p, sizeof(struct rdb_tx_hdr), &hdr);
+		if (n < 0) {
+			D_ERROR(DF_DB": invalid header: buf=%p, len="DF_U64"\n",
+				DP_DB(db), buf, sizeof(struct rdb_tx_hdr));
+			rc = n;
+			return rc;
+		}
+		p += n;
+		crit = hdr.critical;
+
+		/* scm_remaining < RDB_NOAPPEND_FREE_SPACE can happen on
+		 * on follower after leader compacts log first.
+		 * Warn only when critically low on space.
+		 */
+		if (!crit && (scm_remaining < RDB_CRITICAL_FREE_SPACE)) {
+			D_WARN(DF_DB": space is tight! index "DF_U64" buf=%p "
+			       "len="DF_U64" crit=%d scm_left="DF_U64"\n",
+			       DP_DB(db), index, buf, len, crit, scm_remaining);
+		}
 	}
 
 	D_DEBUG(DB_TRACE, DF_DB": applying index "DF_U64": buf=%p len="DF_U64
 		" crit=%d, scm_left="DF_U64"\n", DP_DB(db), index, buf, len,
-		hdr.critical, scm_remaining);
+		crit, scm_remaining);
 
 	while (p < buf + len) {
 		struct rdb_tx_op	op;
@@ -1053,7 +991,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *
 			rc = n;
 			break;
 		}
-		rc = rdb_tx_apply_op(db, index, &op, hdr.critical, vtx);
+		rc = rdb_tx_apply_op(db, index, &op, crit);
 		if (rc != 0) {
 			if (!rdb_tx_deterministic_error(rc))
 				D_ERROR(DF_DB ": failed to apply entry " DF_U64
@@ -1066,19 +1004,30 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *
 
 	/*
 	 * If an error occurs after we have potentially made some
-	 * modifications, empty the rdb_kvs cache (to evict any rdb_kvs objects
-	 * corresponding to KVSs created by this TX). Don't bother with undoing
-	 * the exact set of rdb_kvs changes made by this TX, as
-	 * nondeterministic errors must be rare and deterministic errors can be
-	 * easily avoided by rdb callers.
+	 * modifications, empty the rdb_kvs cache (to evict any rdb_kvs
+	 * objects corresponding to KVSs created by this TX) and discard all
+	 * updates in index. Don't bother with undoing the exact set of changes
+	 * made by this TX, as nondeterministic errors must be rare and
+	 * deterministic errors can be easily avoided by rdb callers.
 	 */
-	if (rc != 0)
+	if (rc != 0) {
+		int rc_tmp;
+
 		rdb_kvs_cache_evict(db->d_kvss);
+		rc_tmp = rdb_lc_discard(db->d_lc, index, index);
+		if (rc_tmp != 0) {
+			D_ERROR(DF_DB ": failed to discard entry " DF_U64 ": " DF_RC "\n",
+				DP_DB(db), index, DP_RC(rc_tmp));
+			if (rdb_tx_deterministic_error(rc))
+				return rc_tmp;
+			else
+				return rc;
+		}
+	}
 
 	if (rc != 0 && !rdb_tx_deterministic_error(rc))
 		return rc;
 
-out:
 	/*
 	 * Report the deterministic error to the result buffer, if there is
 	 * one, and consider this entry applied.
@@ -1086,7 +1035,7 @@ out:
 	if (result != NULL)
 		*(int *)result = rc;
 
-	*critp = hdr.critical;
+	*critp = crit;
 	return 0;
 }
 

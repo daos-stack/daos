@@ -227,8 +227,7 @@ err:
 }
 
 static int
-rdb_raft_store_replicas(daos_handle_t lc, uint64_t index, const d_rank_list_t *replicas,
-			rdb_vos_tx_t vtx)
+rdb_raft_store_replicas(daos_handle_t lc, uint64_t index, const d_rank_list_t *replicas)
 {
 	d_iov_t	keys[2];
 	d_iov_t	vals[2];
@@ -240,8 +239,10 @@ rdb_raft_store_replicas(daos_handle_t lc, uint64_t index, const d_rank_list_t *r
 	keys[0] = rdb_lc_nreplicas;
 	d_iov_set(&vals[0], &nreplicas, sizeof(nreplicas));
 	keys[1] = rdb_lc_replicas;
-	d_iov_set(&vals[1], replicas->rl_ranks, sizeof(*replicas->rl_ranks) * nreplicas);
-	return rdb_lc_update(lc, index, RDB_LC_ATTRS, true /* crit */, 2 /* n */, keys, vals, vtx);
+	d_iov_set(&vals[1], replicas->rl_ranks,
+		  sizeof(*replicas->rl_ranks) * nreplicas);
+	return rdb_lc_update(lc, index, RDB_LC_ATTRS, true /* crit */,
+			     2 /* n */, keys, vals);
 }
 
 int
@@ -881,7 +882,8 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 		d_iov_set(&values[0], slc_record, sizeof(*slc_record));
 		keys[1] = rdb_mc_slc;
 		d_iov_set(&values[1], lc_record, sizeof(*lc_record));
-		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys, values, NULL /* vtx */);
+		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys,
+				   values);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to swap LC records: %d\n",
 				DP_DB(db), rc);
@@ -923,8 +925,8 @@ rdb_raft_cb_recv_installsnapshot(raft_server_t *raft, void *arg,
 			DP_DB(db), slc_record->dlr_base, slc_record->dlr_seq);
 
 		d_iov_set(&values[0], slc_record, sizeof(*slc_record));
-		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_slc, &values[0],
-				   NULL /* vtx */);
+		rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */,
+				   &rdb_mc_slc, &values[0]);
 		if (rc != 0) {
 			D_ERROR(DF_DB": failed to update SLC record: %d\n",
 				DP_DB(db), rc);
@@ -1021,7 +1023,8 @@ rdb_raft_cb_persist_vote(raft_server_t *raft, void *arg, raft_node_id_t vote)
 		return 0;
 
 	d_iov_set(&value, &vote, sizeof(vote));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_vote, &value, NULL /* vtx */);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_vote,
+			   &value);
 	if (rc != 0)
 		D_ERROR(DF_DB": failed to persist vote %d: %d\n", DP_DB(db),
 			vote, rc);
@@ -1046,7 +1049,7 @@ rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, raft_term_t term,
 	d_iov_set(&values[0], &term, sizeof(term));
 	keys[1] = rdb_mc_vote;
 	d_iov_set(&values[1], &vote, sizeof(vote));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys, values, NULL /* vtx */);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys, values);
 	if (rc != 0)
 		D_ERROR(DF_DB ": failed to update term %ld and vote %d: " DF_RC "\n", DP_DB(db),
 			term, vote, DP_RC(rc));
@@ -1062,12 +1065,8 @@ rdb_raft_cfg_entry_rank(raft_entry_t *entry)
 	return *((d_rank_t *)entry->data.buf);
 }
 
-/* See rdb_raft_update_node. */
-#define RDB_RAFT_UPDATE_NODE_NVOPS 1
-
-/* Must invoke no more than RDB_RAFT_UPDATE_NODE_NVOPS VOS TX operations. */
 static int
-rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry, rdb_vos_tx_t vtx)
+rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry)
 {
 	d_rank_list_t  *replicas;
 	d_rank_t	rank = rdb_raft_cfg_entry_rank(entry);
@@ -1102,7 +1101,11 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry, rdb_vo
 	if (rc != 0)
 		goto out_replicas;
 
-	rc = rdb_raft_store_replicas(db->d_lc, index, replicas, vtx);
+	/*
+	 * Since this is one VOS operation, we don't need to call
+	 * rdb_lc_discard upon an error.
+	 */
+	rc = rdb_raft_store_replicas(db->d_lc, index, replicas);
 
 out_replicas:
 	d_rank_list_free(replicas);
@@ -1116,16 +1119,8 @@ out:
 	return rc;
 }
 
-/* See rdb_raft_log_offer_single. */
-#define RDB_RAFT_ENTRY_NVOPS 2
-
-/*
- * Must invoke no more than RDB_RAFT_ENTRY_NVOPS VOS TX operations directly
- * (i.e., not including those invoked by rdb_tx_apply and
- * rdb_raft_update_node).
- */
 static int
-rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, rdb_vos_tx_t vtx)
+rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 {
 	d_iov_t			keys[2];
 	d_iov_t			values[2];
@@ -1133,6 +1128,7 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 	int			n = 0;
 	bool			crit;
 	int			rc;
+	int			rc_tmp;
 
 	D_ASSERTF(index == db->d_lc_record.dlr_tail, DF_U64" == "DF_U64"\n",
 		  index, db->d_lc_record.dlr_tail);
@@ -1146,21 +1142,24 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 	 */
 	if (entry->type == RAFT_LOGTYPE_NORMAL) {
 		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
-				  rdb_raft_lookup_result(db, index), &crit, vtx);
+				  rdb_raft_lookup_result(db, index), &crit);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to apply entry " DF_U64, DP_DB(db), index);
-			return rc;
+			D_ERROR(DF_DB ": failed to apply entry " DF_U64 ": " DF_RC "\n", DP_DB(db),
+				index, DP_RC(rc));
+			goto err;
 		}
 	} else if (raft_entry_is_cfg_change(entry)) {
 		crit = true;
-		rc = rdb_raft_update_node(db, index, entry, vtx);
+		rc = rdb_raft_update_node(db, index, entry);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to update replicas " DF_U64, DP_DB(db), index);
-			return rc;
+			D_ERROR(DF_DB": failed to update replicas "DF_U64": %d\n",
+				DP_DB(db), index, rc);
+			goto err;
 		}
 	} else {
 		D_ERROR(DF_DB": unknown entry "DF_U64" type: %d\n", DP_DB(db), index, entry->type);
-		return -DER_IO;
+		rc = -DER_IO;
+		goto err;
 	}
 
 	/*
@@ -1178,20 +1177,23 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 		d_iov_set(&values[n], entry->data.buf, entry->data.len);
 		n++;
 	}
-	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, n, keys, values, vtx);
+	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, n,
+			   keys, values);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": failed to persist entry " DF_U64, DP_DB(db), index);
-		return rc;
+		D_ERROR(DF_DB ": failed to persist entry " DF_U64 ": " DF_RC "\n", DP_DB(db), index,
+			DP_RC(rc));
+		goto err_discard;
 	}
 
 	/* Replace entry->data.buf with the data's persistent memory address. */
 	if (entry->data.len > 0) {
 		d_iov_set(&values[0], NULL, entry->data.len);
-		rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS, &rdb_lc_entry_data, &values[0]);
+		rc = rdb_lc_lookup(db->d_lc, index, RDB_LC_ATTRS,
+				   &rdb_lc_entry_data, &values[0]);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to look up entry " DF_U64 " data", DP_DB(db),
-				 index);
-			return rc;
+			D_ERROR(DF_DB": failed to look up entry "DF_U64
+				" data: %d\n", DP_DB(db), index, rc);
+			goto err_discard;
 		}
 		entry->data.buf = values[0].iov_buf;
 	} else {
@@ -1201,44 +1203,27 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 	/* Update the log tail. See the log tail assertion above. */
 	db->d_lc_record.dlr_tail++;
 	d_iov_set(&values[0], &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &values[0], vtx);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
+			   &values[0]);
 	if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": failed to update log tail " DF_U64, DP_DB(db),
-			 db->d_lc_record.dlr_tail);
+		D_ERROR(DF_DB ": failed to update log tail " DF_U64 ": " DF_RC "\n", DP_DB(db),
+			db->d_lc_record.dlr_tail, DP_RC(rc));
 		db->d_lc_record.dlr_tail--;
-		return rc;
+		goto err_discard;
 	}
 
 	D_DEBUG(DB_TRACE, DF_DB": appended entry "DF_U64": term=%ld type=%s buf=%p len=%u\n",
 		DP_DB(db), index, entry->term, rdb_raft_entry_type_str(entry->type),
 		entry->data.buf, entry->data.len);
 	return 0;
-}
 
-static int
-rdb_raft_entry_count_vops(struct rdb *db, raft_entry_t *entry)
-{
-	int count = 0;
-
-	/* Count those that will be invoked when applying the entry. */
-	if (entry->type == RAFT_LOGTYPE_NORMAL) {
-		int rc;
-
-		rc = rdb_tx_count_vops(db, entry->data.buf, entry->data.len);
-		if (rc < 0)
-			return rc;
-		count += rc;
-	} else if (raft_entry_is_cfg_change(entry)) {
-		count += RDB_RAFT_UPDATE_NODE_NVOPS;
-	} else {
-		D_ERROR(DF_DB ": unknown entry type %d\n", DP_DB(db), entry->type);
-		return -DER_IO;
-	}
-
-	/* Count those that will be invoked when storing the entry. */
-	count += RDB_RAFT_ENTRY_NVOPS;
-
-	return count;
+err_discard:
+	rc_tmp = rdb_lc_discard(db->d_lc, index, index);
+	if (rc_tmp != 0)
+		D_ERROR(DF_DB ": failed to discard entry " DF_U64 ": " DF_RC "\n", DP_DB(db), index,
+			DP_RC(rc_tmp));
+err:
+	return rc;
 }
 
 static int
@@ -1252,36 +1237,10 @@ rdb_raft_cb_log_offer(raft_server_t *raft, void *arg, raft_entry_t *entries,
 	if (!db->d_raft_loaded)
 		return 0;
 
-	/*
-	 * Conservatively employ one VOS TX for each entry for now, so that if
-	 * an entry encounters an error, we still end up making some progress
-	 * by not rolling back prior entries in the batch. Once VOS supports
-	 * batching TXs, we can optimize this process further.
-	 */
-	for (i = 0; i < *n_entries; i++) {
-		rdb_vos_tx_t vtx;
-
-		rc = rdb_raft_entry_count_vops(db, &entries[i]);
-		if (rc < 0) {
-			DL_ERROR(rc, DF_DB ": failed to count VOS operations", DP_DB(db));
+	for (i = 0; i < *n_entries; ++i) {
+		rc = rdb_raft_log_offer_single(db, &entries[i], index + i);
+		if (rc != 0)
 			break;
-		}
-
-		rc = rdb_vos_tx_begin(db, rc, &vtx);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to begin VOS TX for entry %ld", DP_DB(db),
-				 index);
-			break;
-		}
-
-		rc = rdb_raft_log_offer_single(db, &entries[i], index + i, vtx);
-
-		rc = rdb_vos_tx_end(db, vtx, rc);
-		if (rc != 0) {
-			DL_ERROR(rc, DF_DB ": failed to end VOS TX for entry %ld", DP_DB(db),
-				 index);
-			break;
-		}
 	}
 	*n_entries = i;
 
@@ -1309,7 +1268,8 @@ rdb_raft_cb_log_poll(raft_server_t *raft, void *arg, raft_entry_t *entries,
 	db->d_lc_record.dlr_base = index + *n_entries - 1;
 	db->d_lc_record.dlr_base_term = entries[*n_entries - 1].term;
 	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &value, NULL /* vtx */);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
+			   &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update log base from "DF_U64" to "
 			DF_U64": %d\n", DP_DB(db), base,
@@ -1345,7 +1305,8 @@ rdb_raft_cb_log_pop(raft_server_t *raft, void *arg, raft_entry_t *entry,
 	/* Update the log tail. */
 	db->d_lc_record.dlr_tail = i;
 	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &value, NULL /* vtx */);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
+			   &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update log tail "DF_U64": %d\n",
 			DP_DB(db), db->d_lc_record.dlr_tail, rc);
@@ -1599,7 +1560,8 @@ rdb_raft_compact(struct rdb *db, uint64_t index)
 	aggregated = db->d_lc_record.dlr_aggregated;
 	db->d_lc_record.dlr_aggregated = index;
 	d_iov_set(&value, &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &value, NULL /* vtx */);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
+			   &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update last aggregated index to "
 			DF_U64": %d\n", DP_DB(db),
@@ -2199,7 +2161,7 @@ rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc, d_iov_t *key,
 		.dlr_aggregated	= base,
 		.dlr_term	= term
 	};
-	d_iov_t			value;
+	d_iov_t		value;
 	int			rc;
 
 	D_ASSERTF(key == &rdb_mc_lc || key == &rdb_mc_slc, "%p\n", key);
@@ -2217,7 +2179,7 @@ rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc, d_iov_t *key,
 	/* Create the record before creating the container. */
 	uuid_generate(r.dlr_uuid);
 	d_iov_set(&value, &r, sizeof(r));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, key, &value, NULL /* vtx */);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, key, &value);
 	if (rc != 0) {
 		D_ERROR("failed to create %s record: %d\n",
 			key == &rdb_mc_lc ? "LC" : "SLC", rc);
@@ -2259,7 +2221,7 @@ rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc, d_iov_t *key,
 	/* Clear the record. We cannot rollback the destroy. */
 	uuid_clear(r.dlr_uuid);
 	d_iov_set(&value, &r, sizeof(r));
-	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, key, &value, NULL /* vtx */);
+	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, key, &value);
 	if (rc != 0) {
 		D_ERROR("failed to clear %s record: %d\n",
 			key == &rdb_mc_lc ? "LC" : "SLC", rc);
@@ -2299,7 +2261,7 @@ rdb_raft_init(daos_handle_t pool, daos_handle_t mc, const d_rank_list_t *replica
 	D_ASSERTF(rc == 0, "Open VOS container: "DF_RC"\n", DP_RC(rc));
 
 	/* No initial configuration if rank list empty */
-	rc = rdb_raft_store_replicas(lc, 1 /* base */, replicas, NULL /* vtx */);
+	rc = rdb_raft_store_replicas(lc, 1 /* base */, replicas);
 	if (rc != 0)
 		D_ERROR("failed to create list of replicas: "DF_RC"\n",
 			DP_RC(rc));
@@ -2654,14 +2616,14 @@ rdb_raft_dictate(struct rdb *db)
 	 */
 	replicas.rl_ranks = &self;
 	replicas.rl_nr = 1;
-	rc = rdb_raft_store_replicas(db->d_lc, index, &replicas, NULL /* vtx */);
+	rc = rdb_raft_store_replicas(db->d_lc, index, &replicas);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to reset membership: "DF_RC"\n", DP_DB(db), DP_RC(rc));
 		return rc;
 	}
 	keys[0] = rdb_lc_entry_header;
 	keys[1] = rdb_lc_entry_data;
-	rc = rdb_lc_punch(db->d_lc, index, RDB_LC_ATTRS, 2 /* n */, keys, NULL /* vtx */);
+	rc = rdb_lc_punch(db->d_lc, index, RDB_LC_ATTRS, 2 /* n */, keys);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to punch entry: "DF_RC"\n", DP_DB(db), DP_RC(rc));
 		return rc;
@@ -2676,7 +2638,7 @@ rdb_raft_dictate(struct rdb *db)
 	lc_record.dlr_base_term = term;
 	lc_record.dlr_tail = index + 1;
 	d_iov_set(&value, &lc_record, sizeof(lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &value, NULL /* vtx */);
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &value);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to update LC record: "DF_RC"\n", DP_DB(db), DP_RC(rc));
 		return rc;
@@ -2768,8 +2730,7 @@ rdb_raft_open(struct rdb *db, uint64_t caller_term)
 			D_DEBUG(DB_MD, DF_DB": updating term: "DF_X64" -> "DF_X64"\n", DP_DB(db),
 				term, caller_term);
 			d_iov_set(&value, &caller_term, sizeof(caller_term));
-			rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_term, &value,
-					   NULL /* vtx */);
+			rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_term, &value);
 			if (rc != 0)
 				goto err_compacted_cv;
 		}
