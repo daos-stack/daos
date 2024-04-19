@@ -85,9 +85,6 @@
  */
 #define DAOS_POOL_GLOBAL_VERSION 3
 
-/** Default system name used in srv_pool.c */
-extern char daos_sysname[];
-
 int dc_pool_init(void);
 void dc_pool_fini(void);
 

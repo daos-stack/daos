@@ -1023,16 +1023,19 @@ parse(int argc, char **argv)
 		case 'f':
 			rc = arg_strtoul(optarg, &dss_core_offset, "\"-f\"");
 			break;
-		case 'g':
-			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
-			    DAOS_SYS_NAME_MAX) {
-				printf("DAOS system name must be at most "
-				       "%d bytes\n", DAOS_SYS_NAME_MAX);
+		case 'g': {
+			size_t sys_len = strnlen(optarg, DAOS_SYS_NAME_MAX + 1);
+
+			if (sys_len > DAOS_SYS_NAME_MAX) {
+				printf("DAOS system name must be at most %d bytes\n",
+				       DAOS_SYS_NAME_MAX);
 				rc = -DER_INVAL;
 				break;
 			}
-			strcpy(daos_sysname, optarg);
+			memcpy(daos_sysname, optarg, sys_len);
+			daos_sysname[sys_len] = '\0';
 			break;
+		}
 		case 's':
 			dss_storage_path = optarg;
 			break;
