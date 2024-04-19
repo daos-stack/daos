@@ -52,8 +52,7 @@ class NvmePoolCapacity(TestWithServers):
         # Define the arguments for the ior_runner_thread method
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(
-            self.server_group, pool, self.label_generator.get_label('TestContainer'))
+        ior_cmd.set_daos_params(pool, self.label_generator.get_label('TestContainer'))
         ior_cmd.dfs_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])

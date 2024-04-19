@@ -433,7 +433,7 @@ class ObjectMetadata(TestWithServers):
                 # Define the arguments for the run_ior_loop method
                 ior_cmd = IorCommand()
                 ior_cmd.get_params(self)
-                ior_cmd.set_daos_params(self.server_group, self.pool, None)
+                ior_cmd.set_daos_params(self.pool, None)
                 ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command
