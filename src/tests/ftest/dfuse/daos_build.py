@@ -194,12 +194,7 @@ class DaosBuild(DfuseTestBase):
             cont_attrs['dfuse-ndentry-time'] = '0'
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'nocache':
-            if with_pil4dfs:
-                # ~2 hours in CI hw with tcp provider. Larger variation with verbs provider.
-                # testing 12 hours in vm
-                build_time *= 12
-            else:
-                build_time *= 5
+            build_time *= 5
             cont_attrs['dfuse-data-cache'] = 'off'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
