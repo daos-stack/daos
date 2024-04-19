@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import json
 import os
 import time
 
@@ -379,6 +380,27 @@ class Dfuse(DfuseCommand):
 
         # Only assume clean if nothing above failed
         self.__need_cleanup = False
+
+    def get_stats(self):
+        """Return the I/O stats for the filesystem
+
+        Only works if there is one entry in the client list.
+
+        Returns:
+            dict: the json response
+        """
+        if len(self.hosts) != 1:
+            raise CommandFailure("get_stats only supports one host")
+
+        cmd = f"daos filesystem query --json {self.mount_dir.value}"
+        result = run_remote(self.log, self.hosts, cmd)
+        if not result.passed:
+            raise CommandFailure(f'"fs query failed on {result.failed_hosts}')
+
+        data = json.loads("\n".join(result.output[0].stdout))
+        if data["status"] != 0 or data["error"] is not None:
+            raise CommandFailure("fs query returned bad data.")
+        return data["response"]
 
 
 def get_dfuse(test, hosts, namespace=None):
