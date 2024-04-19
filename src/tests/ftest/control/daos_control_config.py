@@ -23,7 +23,7 @@ class DaosControlConfigTest(TestWithServers):
         Test Description: Test dmg tool executes with variant positive and
         negative inputs to its configuration file.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,basic
         :avocado: tags=DaosControlConfigTest,test_daos_control_config_basic

@@ -5,7 +5,7 @@ hosts:
   test_clients: 1
 timeout: 60
 server_config:
-  name: daos_server
+  name: test_server
   engines_per_host: 1
   engines:
     0:
@@ -19,9 +19,11 @@ server_config:
   transport_config:
     allow_insecure: true
 agent_config:
+  name: test_server
   transport_config:
     allow_insecure: true
 dmg:
+  name: test_server
   transport_config:
     allow_insecure: true
 # The 'config_val' list is composed of the following values:
