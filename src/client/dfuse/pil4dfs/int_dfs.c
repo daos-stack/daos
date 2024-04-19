@@ -96,7 +96,7 @@
 #define DAOS_MIN_FD         10
 /* a dummy fd that will be used to reserve low fd with dup2(). This is introduced to make sure low
  * fds are reserved as much as possible although applications (e.g., bash) may directly access
- * low fd. Once a low fd is freed and available, calls dup2(DAOS_DUMMY_FD, fd) to reserve it.
+ * low fd. Once a low fd is freed and available, calls dup2(fd_dummy, fd) to reserve it.
  */
 #define DAOS_DUMMY_FD       1001
 /* fd_dummy actually reserved by pil4dfs returned by fcntl() */
@@ -2480,7 +2480,7 @@ new_close_common(int (*next_close)(int fd), int fd)
 	if (compatible_mode && fd < FD_FILE_BASE) {
 		remove_fd_compatible(fd);
 		if (fd < DAOS_MIN_FD && daos_inited) {
-			rc = dup2(DAOS_DUMMY_FD, fd);
+			rc = dup2(fd_dummy, fd);
 			if (rc != -1)
 				return 0;
 
