@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -76,7 +76,7 @@ class ListVerboseTest(IorTestBase):
                     "imbalance": scm_imbalance
                 },
                 {
-                    "tier_name": "NVMe",
+                    "tier_name": "NVME",
                     "size": nvme_size,
                     "free": nvme_free,
                     "imbalance": nvme_imbalance
@@ -110,7 +110,7 @@ class ListVerboseTest(IorTestBase):
                     scm_size = usage["size"]
                     scm_free = usage["free"]
                     scm_imbalance = usage["imbalance"]
-                elif usage["tier_name"] == "NVMe":
+                elif usage["tier_name"] == "NVME":
                     nvme_free = usage["free"]
                     nvme_imbalance = usage["imbalance"]
 
@@ -332,7 +332,7 @@ class ListVerboseTest(IorTestBase):
 
         # 1. Create a pool of 80GB.
         self.pool = []
-        if storage == "NVMe":
+        if storage == "NVME":
             self.pool.append(self.get_pool(namespace="/run/pool_both/*"))
             nvme_size = [None]
         else:
@@ -410,7 +410,7 @@ class ListVerboseTest(IorTestBase):
         """
         errors = []
         self.log.debug("---------- NVMe test ----------")
-        errors.extend(self.verify_used_imbalance("NVMe"))
+        errors.extend(self.verify_used_imbalance("NVME"))
         self.log.debug("---------- SCM test ----------")
         errors.extend(self.verify_used_imbalance("SCM"))
 

@@ -1044,7 +1044,7 @@ class TestPool(TestDaosApiBase):
             rank_result = self.query_targets(rank=rank, target_idx=target_idx)
             for target, target_info in enumerate(rank_result['response']['Infos']):
                 rank_target_tier_space[rank][target] = {}
-                for tier in target_info['Space']:
+                for tier in target_info['space']:
                     rank_target_tier_space[rank][target][tier['media_type']] = {
                         'total': tier['total'],
                         'free': tier['free'],

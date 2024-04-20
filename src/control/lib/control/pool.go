@@ -473,13 +473,17 @@ func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
 		return []byte("null"), nil
 	}
 
-	type Alias PoolQueryResp
+	piJSON, err := json.Marshal(&pqr.PoolInfo)
+	if err != nil {
+		return nil, err
+	}
+
 	aux := &struct {
 		EnabledRanks  *[]ranklist.Rank `json:"enabled_ranks"`
 		DisabledRanks *[]ranklist.Rank `json:"disabled_ranks"`
-		*Alias
+		Status        int32            `json:"status"`
 	}{
-		Alias: (*Alias)(pqr),
+		Status: pqr.Status,
 	}
 
 	if pqr.EnabledRanks != nil {
@@ -492,7 +496,15 @@ func (pqr *PoolQueryResp) MarshalJSON() ([]byte, error) {
 		aux.DisabledRanks = &ranks
 	}
 
-	return json.Marshal(&aux)
+	auxJSON, err := json.Marshal(&aux)
+	if err != nil {
+		return nil, err
+	}
+
+	// Kinda gross, but needed to merge the embedded struct's MarshalJSON
+	// output with this one's.
+	piJSON[0] = ','
+	return append(auxJSON[:len(auxJSON)-1], piJSON...), nil
 }
 
 func unmarshallRankSet(ranks string) (*ranklist.RankSet, error) {

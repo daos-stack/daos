@@ -7,6 +7,7 @@
 package daos
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
 
@@ -93,6 +94,20 @@ func (srs *StorageUsageStats) calcImbalance(targCount uint32) uint32 {
 	return uint32((float64(spread) / (float64(srs.Total) / float64(targCount))) * 100)
 }
 
+func (pi *PoolInfo) MarshalJSON() ([]byte, error) {
+	type Alias PoolInfo
+
+	return json.Marshal(&struct {
+		*Alias
+		Usage []*PoolTierUsage `json:"usage,omitempty"`
+	}{
+		Alias: (*Alias)(pi),
+		Usage: pi.Usage(),
+	})
+}
+
+// Usage returns a slice of PoolTierUsage objects describing the pool's storage
+// usage in a simpler format.
 func (pi *PoolInfo) Usage() []*PoolTierUsage {
 	var tiers []*PoolTierUsage
 	for _, tier := range pi.TierStats {
