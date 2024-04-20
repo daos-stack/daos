@@ -2,7 +2,8 @@ hosts:
   test_servers: 4
   test_clients: 1
 timeouts:
-  test_metadata_fillup: 600
+  test_metadata_fillup_svc_ops_disabled: 600
+  test_metadata_fillup_svc_ops_enabled: 600
   test_metadata_addremove: 1600
   test_metadata_server_restart: 960
 server_config:

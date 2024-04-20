@@ -253,12 +253,14 @@ class ObjectMetadata(TestWithServers):
             svc_ops_enabled (bool): Pool create properties svc_ops_enabled, default to True.
 
         """
+        self.log_step("1. Create pool with properties svc_ops_enabled: {}".format(svc_ops_enabled))
         self.create_pool(svc_ops_enabled=svc_ops_enabled)
-        # Skip dummy_metadata_workload when feature is disabled
+        # Run dummy_metadata_workload when feature is enabled
         if svc_ops_enabled:
+            self.log_info("svc_ops_enabled enabled, run dummy_metadata_workload")
             svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
             if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
-                self.fail("failed to run dummy metadata workload")
+                self.fail("#1. failed to run dummy metadata workload")
         sequential_fail_max = self.params.get("fillup_seq_fail_max", "/run/metadata/*")
         num_cont_to_destroy = self.params.get("num_cont_to_destroy", "/run/metadata/*")
 
@@ -271,10 +273,7 @@ class ObjectMetadata(TestWithServers):
         # Phase 2: if Phase 1 passed:
         #          clean up several (not all) containers created (prove "critical" destroy
         #          in rdb (and vos) works without cascading no space errors
-
-        # Phase 1 sustained container creates even after no space error
-        self.log.info(
-            "Phase 1: sustained container creates: to no space and beyond")
+        self.log_step("2. sustained container creates: to no space and beyond.")
         self.container = []
         sequential_fail_counter = 0
         in_failure = False
@@ -310,23 +309,24 @@ class ObjectMetadata(TestWithServers):
 
             except TestFail as error:
                 self.log.error(str(error))
-                self.fail("Phase 1: fail (unexpected container create error)")
+                self.fail("#2. fail (unexpected container create error)")
+        self.log_step("3. Verify number of container within limit.")
         if len(self.container) >= self.created_containers_limit:
-            self.log.error("Phase 1: Created too many containers: %d > %d", len(self.container),
+            self.log.error("#3. Created too many containers: %d > %d", len(self.container),
                            self.created_containers_limit)
-            self.fail("Phase 1: Created too many containers")
+            self.fail("#3. Created too many containers")
         if len(self.container) < self.created_containers_min:
             self.log.info("Phase 1: Created too few containers: %d < %d", len(self.container),
                           self.created_containers_min)
-            self.fail("Phase 1: Created too few containers")
+            self.fail("#3. Created too few containers")
         self.log.info(
-            "Phase 1: passed (created %d / %d containers)", len(self.container), loop)
+            "Successfully created %d / %d containers)", len(self.container), loop)
 
         # Phase 2 clean up some containers (expected to succeed)
-        self.log.info("Phase 2: Cleaning up %d containers (expected to work)", num_cont_to_destroy)
+        msg = ("4. Cleaning up {} containers after pool is full.".format(num_cont_to_destroy))
+        self.log_step(msg)
         if not self.destroy_num_containers(num_cont_to_destroy):
-            self.fail("Phase 2: fail (unexpected container destroy error)")
-        self.log.info("Phase 2: passed")
+            self.fail("#4. fail (unexpected container destroy error)")
 
         # Do not destroy containers in teardown (destroy pool while metadata rdb is full)
         self.container = None
@@ -340,9 +340,10 @@ class ObjectMetadata(TestWithServers):
             Test to verify no IO happens after metadata is full when svc_ops_disabled.
 
         Use Cases:
-            Create pool with properties svc_ops_enabled:0.
-            Create container until no space.
-            Verify number of container within limit.
+            1. Create pool with properties svc_ops_enabled:0.
+            2. Create container until no space.
+            3. Verify number of container within limit.
+            4. Cleaning up containers after pool is full.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
@@ -358,10 +359,11 @@ class ObjectMetadata(TestWithServers):
             Test to verify no IO happens after metadata is full when svc_ops_enabled.
 
         Use Cases:
-            Create pool with properties svc_ops_enabledd:1.
-            Run dummy metadata workload to fill up svc ops.
-            Create container until no space.
-            Verify number of container within limit.
+            1. Create pool with properties svc_ops_enabledd:1.
+               and run dummy metadata workload to fill up svc ops.
+            2. Create container until no space.
+            3. Verify number of container within limit.
+            4. Cleaning up containers after pool is full.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
