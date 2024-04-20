@@ -632,9 +632,9 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 // TestDaosServer_Auto_Commands_JSON verifies that the JSON-output flag is disabled for config
 // generate commands.
 func TestDaosServer_Auto_Commands_JSON(t *testing.T) {
-	log := logging.NewCommandLineLogger()
+	log, buf := logging.NewTestCommandLineLogger()
 
-	runJSONCmdTests(t, log, []jsonCmdTest{
+	runJSONCmdTests(t, log, buf, []jsonCmdTest{
 		{
 			"Config generate; JSON",
 			"config generate -j",

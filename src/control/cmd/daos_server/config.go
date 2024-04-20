@@ -7,14 +7,13 @@
 package main
 
 import (
-	"os"
-
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 type cfgLoader interface {
 	loadConfig(cfgPath string) error
 	configPath() string
+	configOptional() bool
 }
 
 type cliOverrider interface {
@@ -26,18 +25,20 @@ type cfgCmd struct {
 	IgnoreConfig bool `long:"ignore-config" description:"Ignore parameters set in config file when running command"`
 }
 
-type optCfgCmd struct {
-	cfgCmd
-}
-
 func (c *cfgCmd) configPath() string {
 	if c.config == nil {
 		return ""
 	}
+
 	return c.config.Path
 }
 
 func (c *cfgCmd) loadConfig(cfgPath string) error {
+	if c.IgnoreConfig {
+		c.config = nil
+		return nil
+	}
+
 	// Don't load a new config if there's already
 	// one present. If the caller really wants to
 	// reload, it can do that explicitly.
@@ -53,10 +54,14 @@ func (c *cfgCmd) loadConfig(cfgPath string) error {
 	return c.config.Load()
 }
 
-func (c *optCfgCmd) loadConfig(cfgPath string) error {
-	err := c.cfgCmd.loadConfig(cfgPath)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	return err
+func (c *cfgCmd) configOptional() bool {
+	return false
+}
+
+type optCfgCmd struct {
+	cfgCmd
+}
+
+func (c *optCfgCmd) configOptional() bool {
+	return true
 }

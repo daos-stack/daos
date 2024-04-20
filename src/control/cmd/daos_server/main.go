@@ -167,25 +167,37 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		}
 
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
-			if opts.ConfigPath == "" {
+			confPathSet := false
+
+			if opts.ConfigPath != "" {
+				log.Debugf("Using supplied config file %q", opts.ConfigPath)
+				confPathSet = true
+			} else {
 				log.Debugf("Using build config directory %q", build.ConfigDir)
 				opts.ConfigPath = path.Join(build.ConfigDir, defaultConfigFile)
 			}
 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
-				return errors.Wrapf(err, "failed to load config from %s",
+				err = errors.Wrapf(err, "failed to load config from %s",
 					cfgCmd.configPath())
-			}
-			if _, err := os.Stat(opts.ConfigPath); err == nil {
-				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
-			}
 
-			if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
-				if err := ovrCmd.setCLIOverrides(); err != nil {
-					return errors.Wrap(err, "failed to set CLI config overrides")
+				if !os.IsNotExist(errors.Cause(err)) || !cfgCmd.configOptional() ||
+					confPathSet {
+					return err
+				}
+				log.Debug(err.Error()) // -o not set and default path missing.
+			} else if cfgCmd.configPath() != "" {
+				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
+
+				if ovrCmd, ok := cfgCmd.(cliOverrider); ok {
+					if err := ovrCmd.setCLIOverrides(); err != nil {
+						return errors.Wrap(err,
+							"failed to set CLI config overrides")
+					}
 				}
 			}
 		} else if opts.ConfigPath != "" {
+			// Command does not support supplying config file on cli.
 			return errors.Errorf("DAOS Server config filepath has been supplied but " +
 				"this command will not use it")
 		}

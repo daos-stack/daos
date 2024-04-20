@@ -405,7 +405,7 @@ func (cfg *Server) SetPath(inPath string) error {
 	}
 	cfg.Path = newPath
 
-	if _, err = os.Stat(cfg.Path); err != nil {
+	if _, err = os.Stat(newPath); err != nil {
 		return err
 	}
 

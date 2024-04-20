@@ -7,11 +7,13 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -79,36 +81,36 @@ func mustLocalHostFabricMap(t *testing.T, hf *control.HostFabric) control.HostFa
 	return hfm
 }
 
+func genSetHelpers(t *testing.T, log logging.Logger, fis *hardware.FabricInterfaceSet, srvCfg *config.Server) func(*mainOpts) {
+	scanner, err := hardware.NewFabricScanner(log, scanCfgFromFIS(fis))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mockNetInit := func(cmd *networkScanCmd) (fabricScanFn, *config.Server, error) {
+		return scanner.Scan, srvCfg, nil
+	}
+	return func(opts *mainOpts) {
+		opts.netInitHelper = mockNetInit
+	}
+}
+
 // TestDaosServer_Network_Commands_JSON verifies that when the JSON-output flag is set only JSON is
 // printed to standard out. Test cases should cover all network subcommand variations.
 func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 	// Use a normal logger to verify that we don't mess up JSON output.
-	log := logging.NewCommandLineLogger()
+	log, buf := logging.NewTestCommandLineLogger()
 
-	genSetHelpers := func(t *testing.T, log logging.Logger, fis *hardware.FabricInterfaceSet, srvCfg *config.Server) func(*mainOpts) {
-		scanner, err := hardware.NewFabricScanner(log, scanCfgFromFIS(fis))
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		mockNetInit := func(cmd *networkScanCmd) (fabricScanFn, *config.Server, error) {
-			return scanner.Scan, srvCfg, nil
-		}
-		return func(opts *mainOpts) {
-			opts.netInitHelper = mockNetInit
-		}
-	}
-
-	runJSONCmdTests(t, log, []jsonCmdTest{
+	runJSONCmdTests(t, log, buf, []jsonCmdTest{
 		{
-			"Scan network; JSON; nothing found",
+			"Scan network; nothing found",
 			"network scan -j",
 			genSetHelpers(t, log, hardware.NewFabricInterfaceSet(), nil),
 			nil,
 			errors.New("get local fabric interfaces: no fabric interfaces could be found"),
 		},
 		{
-			"Scan network; JSON; interface found",
+			"Scan network; interface found",
 			"network scan -j",
 			genSetHelpers(t, log, hardware.NewFabricInterfaceSet(if1), nil),
 			mustLocalHostFabricMap(t, &control.HostFabric{
@@ -124,12 +126,59 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 			nil,
 		},
 		{
-			"Scan network; JSON; nothing matching provider found",
+			"Scan network; config missing",
+			"network scan -j -o /really/unusual/directory/location/non-existent.yml",
+			genSetHelpers(t, log, hardware.NewFabricInterfaceSet(if1), nil),
+			nil,
+			errors.New("failed to load config from /really/unusual/directory/location/non-existent.yml: stat /really/unusual/directory/location/non-existent.yml: no such file or directory"),
+		},
+		{
+			"Scan network; nothing matching cli provider found",
 			"network scan -j -p ofi+tcp",
 			genSetHelpers(t, log, hardware.NewFabricInterfaceSet(if1), nil),
 			mustLocalHostFabricMap(t, &control.HostFabric{}),
 			nil,
 		},
-		// TODO DAOS-14529: Test --ignore-config flag
+		{
+			"Scan network; nothing matching config provider found",
+			"network scan -j",
+			genSetHelpers(t, log, hardware.NewFabricInterfaceSet(if1),
+				config.DefaultServer().WithFabricProvider("ofi+tcp")),
+			mustLocalHostFabricMap(t, &control.HostFabric{}),
+			nil,
+		},
 	})
+}
+
+// Verify that when --ignore-config is supplied on commandline, cmd.config is nil.
+func TestDaosServer_Network_Commands_Config(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cmd       string
+		optsCheck func(t *testing.T, o *mainOpts)
+		expErr    error
+	}{
+		"scan; ignore config": {
+			cmd: "network scan --ignore-config",
+			optsCheck: func(t *testing.T, o *mainOpts) {
+				checkCfgIgnored(t, o.Network.Scan.baseScanCmd)
+			},
+		},
+		"scan; read config": {
+			cmd: "network scan",
+			optsCheck: func(t *testing.T, o *mainOpts) {
+				checkCfgNotIgnored(t, o.Network.Scan.baseScanCmd)
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			var opts mainOpts
+			genSetHelpers(t, log, hardware.NewFabricInterfaceSet(), nil)(&opts)
+			_ = parseOpts(strings.Split(tc.cmd, " "), &opts, log)
+
+			tc.optsCheck(t, &opts)
+		})
+	}
 }
