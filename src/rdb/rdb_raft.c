@@ -2399,10 +2399,9 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 		return rdb_raft_rc(rc);
 	}
 
-	D_DEBUG(DB_TRACE,
-		DF_DB": loaded entry "DF_U64": term=%ld type=%d buf=%p "
-		"len=%u\n", DP_DB(db), index, entry.term, entry.type,
-		entry.data.buf, entry.data.len);
+	D_DEBUG(DB_TRACE, DF_DB ": loaded entry " DF_U64 ": term=%ld type=%s buf=%p len=%u\n",
+		DP_DB(db), index, entry.term, rdb_raft_entry_type_str(entry.type), entry.data.buf,
+		entry.data.len);
 	return 0;
 }
 
@@ -2848,6 +2847,14 @@ rdb_raft_load(struct rdb *db)
 	rc = rdb_raft_load_lc(db);
 	if (rc != 0)
 		goto out;
+
+	D_DEBUG(DB_MD,
+		DF_DB ": term=" DF_U64 " vote=%d lc.uuid=" DF_UUID " lc.base=" DF_U64
+		      " lc.base_term=" DF_U64 " lc.tail=" DF_U64 " lc.aggregated=" DF_U64
+		      " lc.term=" DF_U64 " lc.seq=" DF_U64 "\n",
+		DP_DB(db), term, vote, DP_UUID(db->d_lc_record.dlr_uuid), db->d_lc_record.dlr_base,
+		db->d_lc_record.dlr_base_term, db->d_lc_record.dlr_tail,
+		db->d_lc_record.dlr_aggregated, db->d_lc_record.dlr_term, db->d_lc_record.dlr_seq);
 
 	db->d_raft_loaded = true;
 out:

@@ -229,6 +229,9 @@ rdb_anchor_from_hashes(struct rdb_anchor *anchor, daos_anchor_t *obj_anchor,
 	anchor->da_akey = *akey_anchor;
 }
 
+/* Disable VOS local TX temporarily. */
+#define RDB_USE_VTX 0
+
 /*
  * The nvops parameter must be equal to or larger than the number of VOS
  * operations that will be executed in vtx.
@@ -237,6 +240,7 @@ int
 rdb_vos_tx_begin(struct rdb *db, int nvops, rdb_vos_tx_t *vtx)
 {
 	struct dtx_handle *dth;
+#if RDB_USE_VTX
 	int                rc;
 
 	rc = dtx_begin(db->d_pool, NULL /* dti */, NULL /* epoch */, nvops, 0 /* pm_ver */,
@@ -246,6 +250,9 @@ rdb_vos_tx_begin(struct rdb *db, int nvops, rdb_vos_tx_t *vtx)
 		DL_ERROR(rc, DF_DB ": failed to begin VOS TX", DP_DB(db));
 		return rc;
 	}
+#else
+	dth = NULL;
+#endif
 
 	*vtx = dth;
 	return 0;
@@ -258,10 +265,15 @@ rdb_vos_tx_end(struct rdb *db, rdb_vos_tx_t vtx, int err)
 	struct dtx_handle *dth = vtx;
 	int                rc;
 
+#if RDB_USE_VTX
 	rc = dtx_end(dth, NULL /* cont */, err);
 	if (rc != 0)
 		DL_ERROR(rc, DF_DB ": failed to %s VOS TX", DP_DB(db),
 			 err == 0 ? "commit" : "abort");
+#else
+	D_ASSERT(dth == NULL);
+	rc = 0;
+#endif
 
 	if (err != 0)
 		rc = err;
