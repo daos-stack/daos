@@ -1132,10 +1132,24 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 	struct rdb_entry	header;
 	int			n = 0;
 	bool			crit;
+	bool			dirtied_kvss = false;
 	int			rc;
 
-	D_ASSERTF(index == db->d_lc_record.dlr_tail, DF_U64" == "DF_U64"\n",
-		  index, db->d_lc_record.dlr_tail);
+	/*
+	 * Update the log tail. To work around DAOS-15670, and to get the same
+	 * minor epoch for all MC updates across different vtxs, we update the
+	 * MC first.
+	 */
+	D_ASSERTF(index == db->d_lc_record.dlr_tail, DF_U64 " == " DF_U64 "\n", index,
+		  db->d_lc_record.dlr_tail);
+	db->d_lc_record.dlr_tail++;
+	d_iov_set(&values[0], &db->d_lc_record, sizeof(db->d_lc_record));
+	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &values[0], vtx);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_DB ": failed to update log tail " DF_U64, DP_DB(db),
+			 db->d_lc_record.dlr_tail);
+		goto err;
+	}
 
 	/*
 	 * If this is an rdb_tx entry, apply it. Note that the updates involved
@@ -1149,18 +1163,20 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 				  rdb_raft_lookup_result(db, index), &crit, vtx);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_DB ": failed to apply entry " DF_U64, DP_DB(db), index);
-			return rc;
+			goto err;
 		}
+		dirtied_kvss = true;
 	} else if (raft_entry_is_cfg_change(entry)) {
 		crit = true;
 		rc = rdb_raft_update_node(db, index, entry, vtx);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_DB ": failed to update replicas " DF_U64, DP_DB(db), index);
-			return rc;
+			goto err;
 		}
 	} else {
 		D_ERROR(DF_DB": unknown entry "DF_U64" type: %d\n", DP_DB(db), index, entry->type);
-		return -DER_IO;
+		rc = -DER_IO;
+		goto err;
 	}
 
 	/*
@@ -1181,7 +1197,7 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, n, keys, values, vtx);
 	if (rc != 0) {
 		DL_ERROR(rc, DF_DB ": failed to persist entry " DF_U64, DP_DB(db), index);
-		return rc;
+		goto err;
 	}
 
 	/* Replace entry->data.buf with the data's persistent memory address. */
@@ -1191,28 +1207,23 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 		if (rc != 0) {
 			DL_ERROR(rc, DF_DB ": failed to look up entry " DF_U64 " data", DP_DB(db),
 				 index);
-			return rc;
+			goto err;
 		}
 		entry->data.buf = values[0].iov_buf;
 	} else {
 		entry->data.buf = NULL;
 	}
 
-	/* Update the log tail. See the log tail assertion above. */
-	db->d_lc_record.dlr_tail++;
-	d_iov_set(&values[0], &db->d_lc_record, sizeof(db->d_lc_record));
-	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc, &values[0], vtx);
-	if (rc != 0) {
-		DL_ERROR(rc, DF_DB ": failed to update log tail " DF_U64, DP_DB(db),
-			 db->d_lc_record.dlr_tail);
-		db->d_lc_record.dlr_tail--;
-		return rc;
-	}
-
 	D_DEBUG(DB_TRACE, DF_DB": appended entry "DF_U64": term=%ld type=%s buf=%p len=%u\n",
 		DP_DB(db), index, entry->term, rdb_raft_entry_type_str(entry->type),
 		entry->data.buf, entry->data.len);
 	return 0;
+
+err:
+	if (dirtied_kvss)
+		rdb_kvs_cache_evict(db->d_kvss);
+	db->d_lc_record.dlr_tail--;
+	return rc;
 }
 
 static int
@@ -2399,10 +2410,9 @@ rdb_raft_load_entry(struct rdb *db, uint64_t index)
 		return rdb_raft_rc(rc);
 	}
 
-	D_DEBUG(DB_TRACE,
-		DF_DB": loaded entry "DF_U64": term=%ld type=%d buf=%p "
-		"len=%u\n", DP_DB(db), index, entry.term, entry.type,
-		entry.data.buf, entry.data.len);
+	D_DEBUG(DB_TRACE, DF_DB ": loaded entry " DF_U64 ": term=%ld type=%s buf=%p len=%u\n",
+		DP_DB(db), index, entry.term, rdb_raft_entry_type_str(entry.type), entry.data.buf,
+		entry.data.len);
 	return 0;
 }
 
@@ -2848,6 +2858,14 @@ rdb_raft_load(struct rdb *db)
 	rc = rdb_raft_load_lc(db);
 	if (rc != 0)
 		goto out;
+
+	D_DEBUG(DB_MD,
+		DF_DB ": term=" DF_U64 " vote=%d lc.uuid=" DF_UUID " lc.base=" DF_U64
+		      " lc.base_term=" DF_U64 " lc.tail=" DF_U64 " lc.aggregated=" DF_U64
+		      " lc.term=" DF_U64 " lc.seq=" DF_U64 "\n",
+		DP_DB(db), term, vote, DP_UUID(db->d_lc_record.dlr_uuid), db->d_lc_record.dlr_base,
+		db->d_lc_record.dlr_base_term, db->d_lc_record.dlr_tail,
+		db->d_lc_record.dlr_aggregated, db->d_lc_record.dlr_term, db->d_lc_record.dlr_seq);
 
 	db->d_raft_loaded = true;
 out:
