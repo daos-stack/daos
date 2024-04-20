@@ -257,7 +257,7 @@ class ObjectMetadata(TestWithServers):
         self.create_pool(svc_ops_enabled=svc_ops_enabled)
         # Run dummy_metadata_workload when feature is enabled
         if svc_ops_enabled:
-            self.log_info("svc_ops_enabled enabled, run dummy_metadata_workload")
+            self.log.info("svc_ops_enabled enabled, run dummy_metadata_workload")
             svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
             if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
                 self.fail("#1. failed to run dummy metadata workload")
@@ -323,7 +323,7 @@ class ObjectMetadata(TestWithServers):
             "Successfully created %d / %d containers)", len(self.container), loop)
 
         # Phase 2 clean up some containers (expected to succeed)
-        msg = ("4. Cleaning up {} containers after pool is full.".format(num_cont_to_destroy))
+        msg = "4. Cleaning up {} containers after pool is full.".format(num_cont_to_destroy)
         self.log_step(msg)
         if not self.destroy_num_containers(num_cont_to_destroy):
             self.fail("#4. fail (unexpected container destroy error)")
