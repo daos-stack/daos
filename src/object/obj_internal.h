@@ -22,6 +22,7 @@
 #include <daos/object.h>
 #include <daos/cont_props.h>
 #include <daos/container.h>
+#include <daos/tls.h>
 
 #include "obj_rpc.h"
 #include "obj_ec.h"
@@ -609,6 +610,87 @@ struct dc_obj_verify_args {
 	uint32_t			 current_shard;
 	struct dc_obj_verify_cursor	 cursor;
 };
+
+/*
+ * Report latency on a per-I/O size.
+ * Buckets starts at [0; 256B[ and are increased by power of 2
+ * (i.e. [256B; 512B[, [512B; 1KB[) up to [4MB; infinity[
+ * Since 4MB = 2^22 and 256B = 2^8, this means
+ * (22 - 8 + 1) = 15 buckets plus the 4MB+ bucket, so
+ * 16 buckets in total.
+ */
+#define NR_LATENCY_BUCKETS 16
+
+struct dc_obj_tls {
+	/** Measure update/fetch latency based on I/O size (type = gauge) */
+	struct d_tm_node_t *cot_update_lat[NR_LATENCY_BUCKETS];
+	struct d_tm_node_t *cot_fetch_lat[NR_LATENCY_BUCKETS];
+
+	/** Measure per-operation latency in us (type = gauge) */
+	struct d_tm_node_t *cot_op_lat[OBJ_PROTO_CLI_COUNT];
+	/** Count number of per-opcode active requests (type = gauge) */
+	struct d_tm_node_t *cot_op_active[OBJ_PROTO_CLI_COUNT];
+};
+
+int
+obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *op, char *desc,
+		    bool server);
+extern struct daos_module_key dc_obj_module_key;
+
+static inline struct dc_obj_tls *
+dc_obj_tls_get()
+{
+	struct daos_thread_local_storage *dtls;
+
+	dtls = dc_tls_get(dc_obj_module_key.dmk_tags);
+	D_ASSERT(dtls != NULL);
+	return daos_module_key_get(dtls, &dc_obj_module_key);
+}
+
+struct obj_pool_metrics {
+	/** Count number of total per-opcode requests (type = counter) */
+	struct d_tm_node_t *opm_total[OBJ_PROTO_CLI_COUNT];
+	/** Total number of bytes fetched (type = counter) */
+	struct d_tm_node_t *opm_fetch_bytes;
+	/** Total number of bytes updated (type = counter) */
+	struct d_tm_node_t *opm_update_bytes;
+
+	/** Total number of silently restarted updates (type = counter) */
+	struct d_tm_node_t *opm_update_restart;
+	/** Total number of resent update operations (type = counter) */
+	struct d_tm_node_t *opm_update_resent;
+	/** Total number of retry update operations (type = counter) */
+	struct d_tm_node_t *opm_update_retry;
+	/** Total number of EC full-stripe update operations (type = counter) */
+	struct d_tm_node_t *opm_update_ec_full;
+	/** Total number of EC partial update operations (type = counter) */
+	struct d_tm_node_t *opm_update_ec_partial;
+};
+
+void
+obj_metrics_free(void *data);
+int
+obj_metrics_count(void);
+void *
+obj_metrics_alloc_internal(const char *path, int tgt_id, bool server);
+
+static inline unsigned int
+lat_bucket(uint64_t size)
+{
+	int nr;
+
+	if (size <= 256)
+		return 0;
+
+	/** return number of leading zero-bits */
+	nr = __builtin_clzl(size - 1);
+
+	/** >4MB, return last bucket */
+	if (nr < 42)
+		return NR_LATENCY_BUCKETS - 1;
+
+	return 56 - nr;
+}
 
 static inline int
 dc_cont2uuid(struct dc_cont *dc_cont, uuid_t *hdl_uuid, uuid_t *uuid)
