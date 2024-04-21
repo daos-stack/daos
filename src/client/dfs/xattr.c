@@ -173,13 +173,13 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value, daos_siz
 		sgl.sg_nr_out = 0;
 		sgl.sg_iovs   = &sg_iov;
 
-		rc = daos_obj_fetch(oh, dfs->th, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod, &sgl,
-				    NULL, NULL);
+		rc = daos_obj_fetch(oh, dfs->th, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod, &sgl, NULL,
+				    NULL);
 	} else {
 		iod.iod_size = DAOS_REC_ANY;
 
-		rc = daos_obj_fetch(oh, dfs->th, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod, NULL,
-				    NULL, NULL);
+		rc = daos_obj_fetch(oh, dfs->th, DAOS_COND_AKEY_FETCH, &dkey, 1, &iod, NULL, NULL,
+				    NULL);
 	}
 	if (rc) {
 		DL_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR, rc, "Failed to fetch xattr '%s'",

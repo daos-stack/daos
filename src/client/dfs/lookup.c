@@ -142,10 +142,10 @@ lookup_rel_path_loop:
 				D_GOTO(err_obj, rc = ENOENT);
 			}
 
-			rc = daos_array_open_with_attr(
-			    dfs->coh, entry.oid, dfs->th, daos_mode, 1,
-			    entry.chunk_size ? entry.chunk_size : dfs->attr.da_chunk_size, &obj->oh,
-			    NULL);
+			rc = daos_array_open_with_attr(dfs->coh, entry.oid, dfs->th, daos_mode, 1,
+						       entry.chunk_size ? entry.chunk_size
+									: dfs->attr.da_chunk_size,
+						       &obj->oh, NULL);
 			if (rc != 0) {
 				D_ERROR("daos_array_open() Failed (%d)\n", rc);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
@@ -421,8 +421,8 @@ lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags, dfs_o
 	if (daos_mode == -1)
 		return EINVAL;
 
-	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, name, len, true, &exists, &entry,
-			 xnr, xnames, xvals, xsizes);
+	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, name, len, true, &exists, &entry, xnr,
+			 xnames, xvals, xsizes);
 	if (rc)
 		return rc;
 

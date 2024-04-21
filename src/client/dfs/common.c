@@ -715,8 +715,8 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, struct 
 	}
 
 	/* Check if parent has the dirname entry */
-	rc = fetch_entry(dfs->layout_v, parent_oh, dfs->th, dir->name, len, false, &exists,
-			 entry, 0, NULL, NULL, NULL);
+	rc = fetch_entry(dfs->layout_v, parent_oh, dfs->th, dir->name, len, false, &exists, entry,
+			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", dir->name, rc);
 		return rc;

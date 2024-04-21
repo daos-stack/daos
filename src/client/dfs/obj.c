@@ -212,8 +212,8 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid, daos_s
 	}
 
 	/* Check if parent has the filename entry */
-	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, file->name, len, false, &exists,
-			 entry, 0, NULL, NULL, NULL);
+	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, file->name, len, false, &exists, entry,
+			 0, NULL, NULL, NULL);
 	if (rc) {
 		D_DEBUG(DB_TRACE, "fetch_entry %s failed %d.\n", file->name, rc);
 		return rc;
@@ -791,8 +791,7 @@ dfs_ostat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf)
 	if (rc)
 		return daos_der2errno(rc);
 
-	rc =
-	    entry_stat(dfs, dfs->th, oh, obj->name, strlen(obj->name), obj, true, stbuf, NULL);
+	rc = entry_stat(dfs, dfs->th, oh, obj->name, strlen(obj->name), obj, true, stbuf, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 

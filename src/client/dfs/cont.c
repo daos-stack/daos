@@ -1172,8 +1172,8 @@ dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
 	if (rc)
 		return rc;
 
-	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, name, len, true, &exists, &entry,
-			 0, NULL, NULL, NULL);
+	rc = fetch_entry(dfs->layout_v, parent->oh, dfs->th, name, len, true, &exists, &entry, 0,
+			 NULL, NULL, NULL);
 	if (rc) {
 		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
 		D_GOTO(out, rc);
@@ -1211,8 +1211,8 @@ dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs   = &sg_iov;
-	rc = daos_obj_update(parent->oh, dfs->th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl,
-			     NULL);
+	rc =
+	    daos_obj_update(parent->oh, dfs->th, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl, NULL);
 	if (rc) {
 		D_ERROR("Failed to update object type " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
