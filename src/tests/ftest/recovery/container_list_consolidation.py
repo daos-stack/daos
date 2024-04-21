@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -38,9 +38,9 @@ class ContainerListConsolidationTest(RecoveryTestBase):
 
         Jira ID: DAOS-12287
 
-        :avocado: tags=all,pr
-        :avocado: tags=vm
-        :avocado: tags=recovery,container_list_consolidation
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,cat_recov,container_list_consolidation
         :avocado: tags=ContainerListConsolidationTest,test_orphan_container
         """
         # 1. Create a pool and a container.

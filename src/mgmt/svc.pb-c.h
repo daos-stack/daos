@@ -31,6 +31,8 @@ typedef struct _Mgmt__PrepShutdownReq Mgmt__PrepShutdownReq;
 typedef struct _Mgmt__PingRankReq Mgmt__PingRankReq;
 typedef struct _Mgmt__SetRankReq Mgmt__SetRankReq;
 typedef struct _Mgmt__PoolMonitorReq Mgmt__PoolMonitorReq;
+typedef struct _Mgmt__ClientTelemetryReq Mgmt__ClientTelemetryReq;
+typedef struct _Mgmt__ClientTelemetryResp Mgmt__ClientTelemetryResp;
 
 
 /* --- enums --- */
@@ -258,7 +260,7 @@ struct  _Mgmt__ClientNetHint
 {
   ProtobufCMessage base;
   /*
-   * CaRT OFI provider
+   * CaRT provider
    */
   char *provider;
   /*
@@ -431,6 +433,44 @@ struct  _Mgmt__PoolMonitorReq
 #define MGMT__POOL_MONITOR_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_monitor_req__descriptor) \
     , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__ClientTelemetryReq
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
+   * Job ID used for client telemetry
+   */
+  char *jobid;
+  /*
+   * Client's shared memory segment key
+   */
+  int32_t shm_key;
+};
+#define MGMT__CLIENT_TELEMETRY_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__client_telemetry_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+
+
+struct  _Mgmt__ClientTelemetryResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS status code
+   */
+  int32_t status;
+  /*
+   * UID of agent process
+   */
+  int32_t agent_uid;
+};
+#define MGMT__CLIENT_TELEMETRY_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__client_telemetry_resp__descriptor) \
+    , 0, 0 }
 
 
 /* Mgmt__DaosResp methods */
@@ -705,6 +745,44 @@ Mgmt__PoolMonitorReq *
 void   mgmt__pool_monitor_req__free_unpacked
                      (Mgmt__PoolMonitorReq *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__ClientTelemetryReq methods */
+void   mgmt__client_telemetry_req__init
+                     (Mgmt__ClientTelemetryReq         *message);
+size_t mgmt__client_telemetry_req__get_packed_size
+                     (const Mgmt__ClientTelemetryReq   *message);
+size_t mgmt__client_telemetry_req__pack
+                     (const Mgmt__ClientTelemetryReq   *message,
+                      uint8_t             *out);
+size_t mgmt__client_telemetry_req__pack_to_buffer
+                     (const Mgmt__ClientTelemetryReq   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ClientTelemetryReq *
+       mgmt__client_telemetry_req__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__client_telemetry_req__free_unpacked
+                     (Mgmt__ClientTelemetryReq *message,
+                      ProtobufCAllocator *allocator);
+/* Mgmt__ClientTelemetryResp methods */
+void   mgmt__client_telemetry_resp__init
+                     (Mgmt__ClientTelemetryResp         *message);
+size_t mgmt__client_telemetry_resp__get_packed_size
+                     (const Mgmt__ClientTelemetryResp   *message);
+size_t mgmt__client_telemetry_resp__pack
+                     (const Mgmt__ClientTelemetryResp   *message,
+                      uint8_t             *out);
+size_t mgmt__client_telemetry_resp__pack_to_buffer
+                     (const Mgmt__ClientTelemetryResp   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ClientTelemetryResp *
+       mgmt__client_telemetry_resp__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__client_telemetry_resp__free_unpacked
+                     (Mgmt__ClientTelemetryResp *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Mgmt__DaosResp_Closure)
@@ -755,6 +833,12 @@ typedef void (*Mgmt__SetRankReq_Closure)
 typedef void (*Mgmt__PoolMonitorReq_Closure)
                  (const Mgmt__PoolMonitorReq *message,
                   void *closure_data);
+typedef void (*Mgmt__ClientTelemetryReq_Closure)
+                 (const Mgmt__ClientTelemetryReq *message,
+                  void *closure_data);
+typedef void (*Mgmt__ClientTelemetryResp_Closure)
+                 (const Mgmt__ClientTelemetryResp *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -778,6 +862,8 @@ extern const ProtobufCMessageDescriptor mgmt__prep_shutdown_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__ping_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__set_rank_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_monitor_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__client_telemetry_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__client_telemetry_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 
