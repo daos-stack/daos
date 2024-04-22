@@ -392,8 +392,8 @@ jobs:
                  exit 0
              fi
              if ! cd src/tests/ftest; then
-                 echo 'src/tests/ftest doesn't exist.'
-                 echo 'Could not determine if tests exist for this stage, assuming they do.'
+                 echo "src/tests/ftest doesn't exist."
+                 echo "Could not determine if tests exist for this stage, assuming they do."
                  exit 0
              fi
 
