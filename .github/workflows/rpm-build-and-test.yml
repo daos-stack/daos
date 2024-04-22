@@ -59,20 +59,20 @@ jobs:
       - name: Import Commit Message
         id: commit_message
         run: exec >> $GITHUB_OUTPUT;
-             echo "text<<EOF";
+             echo 'text<<EOF';
              if [ -n "${{ inputs.commit-message }}" ]; then
-                 echo "${{ inputs.commit-message }}";
+                 echo '${{ inputs.commit-message }}';
              else
                  git show -s --format=%B;
              fi;
-             echo "EOF"
+             echo 'EOF'
       - name: Import and Dequote Commit Message
         id: dequoted_commit_message
         run: . ci/gha_functions.sh;
              exec >> $GITHUB_OUTPUT;
-             echo "text<<EOF";
-             echo "${{ steps.commit_message.outputs.text }} " | escape_single_quotes;
-             echo "EOF"
+             echo 'text<<EOF';
+             echo '${{ steps.commit_message.outputs.text }}' | escape_single_quotes;
+             echo 'EOF'
       - name: Identify Commit Pragmas
         run: . ci/gha_functions.sh;
              echo '${{steps.dequoted_commit_message.outputs.text }}' | get_commit_pragmas
@@ -392,8 +392,8 @@ jobs:
                  exit 0
              fi
              if ! cd src/tests/ftest; then
-                 echo "src/tests/ftest doesn't exist."
-                 echo "Could not determine if tests exist for this stage, assuming they do."
+                 echo 'src/tests/ftest doesn't exist.'
+                 echo 'Could not determine if tests exist for this stage, assuming they do.'
                  exit 0
              fi
 
