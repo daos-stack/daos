@@ -7,13 +7,21 @@
 package main
 
 import (
+	"os"
+	"path"
+
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 type cfgLoader interface {
-	loadConfig(cfgPath string) error
+	loadConfig() error
 	configPath() string
 	configOptional() bool
+}
+
+type optionalCfgLoader interface {
+	setOptional()
 }
 
 type cliOverrider interface {
@@ -21,8 +29,10 @@ type cliOverrider interface {
 }
 
 type cfgCmd struct {
-	config       *config.Server
-	IgnoreConfig bool `long:"ignore-config" description:"Ignore parameters set in config file when running command"`
+	config           *config.Server
+	configIsOptional bool
+	IgnoreConfig     bool   `long:"ignore-config" description:"Ignore parameters set in config file when running command"`
+	ConfigPath       string `short:"o" long:"config" description:"Server config file path"`
 }
 
 func (c *cfgCmd) configPath() string {
@@ -33,21 +43,35 @@ func (c *cfgCmd) configPath() string {
 	return c.config.Path
 }
 
-func (c *cfgCmd) loadConfig(cfgPath string) error {
+func (c *cfgCmd) loadConfig() error {
 	if c.IgnoreConfig {
 		c.config = nil
 		return nil
 	}
 
-	// Don't load a new config if there's already
-	// one present. If the caller really wants to
+	// Don't load a new config if there's already one present. If the caller really wants to
 	// reload, it can do that explicitly.
 	if c.config != nil {
 		return nil
 	}
 
+	setInArgs := false
+	if c.ConfigPath != "" {
+		setInArgs = true
+	} else {
+		// Set config path to build directory if not supplied in command args.
+		c.ConfigPath = path.Join(build.ConfigDir, defaultConfigFile)
+	}
+
 	c.config = config.DefaultServer()
-	if err := c.config.SetPath(cfgPath); err != nil {
+	if err := c.config.SetPath(c.ConfigPath); err != nil {
+		if os.IsNotExist(err) && c.configOptional() && !setInArgs {
+			// Situation permitted where for an optCfgCmd -o has not been set and no
+			// file exists at the default path.
+			c.ConfigPath = ""
+			return nil
+		}
+
 		return err
 	}
 
@@ -55,13 +79,13 @@ func (c *cfgCmd) loadConfig(cfgPath string) error {
 }
 
 func (c *cfgCmd) configOptional() bool {
-	return false
+	return c.configIsOptional
 }
 
 type optCfgCmd struct {
 	cfgCmd
 }
 
-func (c *optCfgCmd) configOptional() bool {
-	return true
+func (oc *optCfgCmd) setOptional() {
+	oc.configIsOptional = true
 }

@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -41,7 +40,6 @@ type execTestFn func() error
 type mainOpts struct {
 	AllowProxy bool `long:"allow-proxy" description:"Allow proxy configuration via environment"`
 	// Minimal set of top-level options
-	ConfigPath string `short:"o" long:"config" description:"Server config file path"`
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
 	// subcommand's -d flag when we default to running it.
 	Debug   bool `short:"b" long:"debug" description:"Enable debug output"`
@@ -167,25 +165,13 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		}
 
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
-			confPathSet := false
-
-			if opts.ConfigPath != "" {
-				log.Debugf("Using supplied config file %q", opts.ConfigPath)
-				confPathSet = true
-			} else {
-				log.Debugf("Using build config directory %q", build.ConfigDir)
-				opts.ConfigPath = path.Join(build.ConfigDir, defaultConfigFile)
+			if optCfgCmd, ok := cmd.(optionalCfgLoader); ok {
+				optCfgCmd.setOptional()
 			}
 
-			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
-				err = errors.Wrapf(err, "failed to load config from %s",
+			if err := cfgCmd.loadConfig(); err != nil {
+				return errors.Wrapf(err, "failed to load config from %s",
 					cfgCmd.configPath())
-
-				if !os.IsNotExist(errors.Cause(err)) || !cfgCmd.configOptional() ||
-					confPathSet {
-					return err
-				}
-				log.Debug(err.Error()) // -o not set and default path missing.
 			} else if cfgCmd.configPath() != "" {
 				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
 
@@ -196,10 +182,6 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 					}
 				}
 			}
-		} else if opts.ConfigPath != "" {
-			// Command does not support supplying config file on cli.
-			return errors.Errorf("DAOS Server config filepath has been supplied but " +
-				"this command will not use it")
 		}
 
 		if err := cmd.Execute(cmdArgs); err != nil {

@@ -19,21 +19,21 @@ func TestDaosServer_MS_Commands_JSON(t *testing.T) {
 
 	runJSONCmdTests(t, log, buf, []jsonCmdTest{
 		{
-			"MS status; JSON",
+			"MS status",
 			"ms status -j",
 			nil,
 			nil,
 			errJSONOutputNotSupported,
 		},
 		{
-			"MS restore; JSON",
+			"MS restore",
 			"ms restore -p foo -j",
 			nil,
 			nil,
 			errJSONOutputNotSupported,
 		},
 		{
-			"MS recover; JSON",
+			"MS recover",
 			"ms recover -j",
 			nil,
 			nil,
