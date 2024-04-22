@@ -386,6 +386,9 @@ class Dfuse(DfuseCommand):
 
         Only works if there is one entry in the client list.
 
+        Raises:
+            CommandFailure: if the command fails
+
         Returns:
             dict: the json response
         """
