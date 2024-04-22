@@ -307,6 +307,11 @@ get_eqh(daos_handle_t *eqh);
 static void
 destroy_all_eqs(void);
 
+static void
+free_fd(int idx, bool closing_dup_fd);
+static void
+free_dirfd(int idx);
+
 /* Hash table entry for kernel fd.
  */
 
@@ -337,6 +342,12 @@ static void
 fd_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ht_fd *fd = fd_obj(rlink);
+
+	/* close fake fd */
+	if (fd->fake_fd >= FD_DIR_BASE)
+		free_dirfd(fd->fake_fd - FD_DIR_BASE);
+	else
+		free_fd(fd->fake_fd - FD_FILE_BASE, false);
 
 	D_FREE(fd);
 }
@@ -493,7 +504,7 @@ remove_dir_in_dcache(struct dfs_mt *mt, const char *path)
 	rlink = d_hash_rec_find(mt->dfs_dir_hash, path, len);
 	if (rlink == NULL)
 		return;
-	d_hash_rec_delete_at(mt->dfs_dir_hash, rlink);
+	d_hash_rec_decref(mt->dfs_dir_hash, rlink);
 }
 
 static int (*libc_open)(const char *pathname, int oflags, ...);
@@ -677,10 +688,6 @@ static int
 find_next_available_dirfd(struct dir_obj *obj, int *new_fd);
 static int
 find_next_available_map(int *idx);
-static void
-free_fd(int idx, bool closing_dup_fd);
-static void
-free_dirfd(int idx);
 static void
 free_map(int idx);
 
@@ -2445,21 +2452,14 @@ new_open_pthread(const char *pathname, int oflags, ...)
 static bool
 remove_fd_compatible(int real_fd)
 {
-	struct ht_fd *fd_ht_obj;
 	d_list_t     *rlink;
 
 	rlink = d_hash_rec_find(fd_hash, &real_fd, sizeof(int));
 	if (rlink == NULL)
 		return false;
 
-	fd_ht_obj = fd_obj(rlink);
-	/* close fake fd */
-	if (fd_ht_obj->fake_fd >= FD_DIR_BASE)
-		free_dirfd(fd_ht_obj->fake_fd - FD_DIR_BASE);
-	else
-		free_fd(fd_ht_obj->fake_fd - FD_FILE_BASE, false);
 	/* remove fd from hash table */
-	d_hash_rec_delete_at(fd_hash, rlink);
+	d_hash_rec_decref(fd_hash, rlink);
 	return true;
 }
 
@@ -3891,7 +3891,7 @@ closedir(DIR *dirp)
 			fd_ht_obj = fd_obj(rlink);
 			free_dirfd(fd_ht_obj->fake_fd - FD_DIR_BASE);
 			/* remove fd from hash table */
-			d_hash_rec_delete_at(fd_hash, rlink);
+			d_hash_rec_decref(fd_hash, rlink);
 			return next_closedir(dirp);
 		}
 	}
@@ -7269,7 +7269,7 @@ finalize_myhook(void)
 			rlink = d_hash_rec_first(fd_hash);
 			if (rlink == NULL)
 				break;
-			d_hash_rec_delete_at(fd_hash, rlink);
+			d_hash_rec_decref(fd_hash, rlink);
 		}
 
 		rc = d_hash_table_destroy(fd_hash, false);
@@ -7356,7 +7356,7 @@ finalize_dfs(void)
 			rlink = d_hash_rec_first(dfs_list[i].dfs_dir_hash);
 			if (rlink == NULL)
 				break;
-			d_hash_rec_delete_at(dfs_list[i].dfs_dir_hash, rlink);
+			d_hash_rec_decref(dfs_list[i].dfs_dir_hash, rlink);
 		}
 
 		rc = d_hash_table_destroy(dfs_list[i].dfs_dir_hash, false);
