@@ -55,9 +55,9 @@ container:
   daos_timeout: 30
 container_reserved:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  file_oclass: SX
-  dir_oclass: SX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
+  file_oclass: EC_2P2GX
+  dir_oclass: RP_3GX
   control_method: daos
   daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
@@ -138,7 +138,7 @@ ior_harasser:
     - '1m'
   segment_count: 1
   dfs_oclass:
-    - ["EC_2P1GX", "RP_2GX"]
+    - ["EC_2P2GX", "RP_3GX"]
     - ["EC_4P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/soak_dfuse_ior"
@@ -170,7 +170,7 @@ fio_harasser:
       - 'rw'
       - 'randrw'
     oclass:
-      - ["EC_2P1GX", "RP_2GX"]
+      - ["EC_2P2GX", "RP_3GX"]
       - ["EC_4P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/soak_dfuse_fio/"
@@ -201,7 +201,7 @@ mdtest_harasser:
     - 10
     - 0
   dfs_oclass:
-    - ["EC_2P1G1", "RP_2G1"]
+    - ["EC_2P2G1", "RP_3G1"]
     - ["EC_4P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
