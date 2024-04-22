@@ -7,6 +7,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -127,10 +128,11 @@ func TestDaosServer_Network_Commands_JSON(t *testing.T) {
 		},
 		{
 			"Scan network; config missing",
-			"network scan -j -o /really/unusual/directory/location/non-existent.yml",
+			fmt.Sprintf("network scan -j -o %s", badDir),
 			genSetHelpers(t, log, hardware.NewFabricInterfaceSet(if1), nil),
 			nil,
-			errors.New("failed to load config from /really/unusual/directory/location/non-existent.yml: stat /really/unusual/directory/location/non-existent.yml: no such file or directory"),
+			errors.New(fmt.Sprintf("failed to load config from %s: stat %s: "+
+				"no such file or directory", badDir, badDir)),
 		},
 		{
 			"Scan network; nothing matching cli provider found",

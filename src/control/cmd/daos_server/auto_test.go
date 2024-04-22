@@ -156,6 +156,12 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			"",
 			errors.New("Unknown command"),
 		},
+		{
+			"Config flag unsupported",
+			"config generate -o /foo",
+			"",
+			errors.New("unknown flag"),
+		},
 	})
 }
 

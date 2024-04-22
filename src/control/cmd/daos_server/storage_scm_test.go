@@ -7,6 +7,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -25,6 +26,8 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
+
+const badDir = "/really/unusual/directory/location/non-existent.yml"
 
 var (
 	zero uint = 0
@@ -760,7 +763,7 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 		},
 		{
 			"Scan namespaces; config missing",
-			"scm scan -j -o /really/unusual/directory/location/non-existent.yml",
+			fmt.Sprintf("scm scan -j -o %s", badDir),
 			genSetSCMHelpers(log, scm.MockBackendConfig{
 				GetModulesRes: storage.ScmModules{
 					storage.MockScmModule(),
@@ -770,7 +773,8 @@ func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
 				},
 			}),
 			nil,
-			errors.New("failed to load config from /really/unusual/directory/location/non-existent.yml: stat /really/unusual/directory/location/non-existent.yml: no such file or directory"),
+			errors.New(fmt.Sprintf("failed to load config from %s: stat %s: "+
+				"no such file or directory", badDir, badDir)),
 		},
 	})
 }

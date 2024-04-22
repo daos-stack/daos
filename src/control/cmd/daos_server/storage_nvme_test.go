@@ -905,14 +905,15 @@ func TestDaosServer_NVMe_Commands_JSON(t *testing.T) {
 		},
 		{
 			"Scan SSDs; config missing",
-			"nvme scan -j -o /really/unusual/directory/location/non-existent.yml",
+			fmt.Sprintf("nvme scan -j -o %s", badDir),
 			genSetNVMeHelpers(log, bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{c1},
 				},
 			}),
 			nil,
-			errors.New("failed to load config from /really/unusual/directory/location/non-existent.yml: stat /really/unusual/directory/location/non-existent.yml: no such file or directory"),
+			errors.New(fmt.Sprintf("failed to load config from %s: stat %s: "+
+				"no such file or directory", badDir, badDir)),
 		},
 	})
 }
