@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
@@ -94,12 +93,11 @@ func (cmd *poolBaseCmd) PoolID() ui.LabelOrUUIDFlag {
 
 func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
 	sysName := cmd.SysName
-	if sysName == "" {
-		sysName = build.DefaultSystemName
+	var cSysName *C.char
+	if sysName != "" {
+		cSysName := C.CString(sysName)
+		defer freeString(cSysName)
 	}
-	cSysName := C.CString(sysName)
-	defer freeString(cSysName)
-
 	var rc C.int
 	switch {
 	case cmd.PoolID().HasLabel():

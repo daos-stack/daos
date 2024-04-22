@@ -4912,12 +4912,6 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 
 	rc = ds_cpd_handle_one_wrap(rpc, dcsh, dcde, dcsr, ioc, dth);
 
-	/* For the case of only containing read sub operations, we will
-	 * generate DTX entry for DTX recovery.
-	 */
-	if (rc == 0 && dth->dth_modification_cnt == 0)
-		rc = vos_dtx_attach(dth, true, false);
-
 	rc = dtx_end(dth, ioc->ioc_coc, rc);
 
 out:
