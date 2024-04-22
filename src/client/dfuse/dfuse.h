@@ -526,6 +526,7 @@ struct dfuse_cont {
 	double                  dfc_data_timeout;
 	bool                    dfc_data_otoc;
 	bool                    dfc_direct_io_disable;
+	bool                          dfc_wb_cache;
 
 	/* Set to true if the inode was allocated to this structure, so should be kept on close*/
 	bool                    dfc_save_ino;
@@ -987,6 +988,10 @@ struct dfuse_inode_entry {
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
 
+	/* Lock for writes, shared locks are held during write-back reads, exclusive lock is
+	 * acquired and released to flush outstanding writes for getattr, close and forget.
+	 */
+	pthread_rwlock_t          ie_wlock;
 	/** Last file closed in this directory was read linearly.  Directories only.
 	 *
 	 * Set on close() of a file in the directory to the value of linear_read from the fh.
@@ -997,6 +1002,19 @@ struct dfuse_inode_entry {
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
 };
+
+/* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
+ * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending
+ * writes are complete.
+ */
+
+#define DFUSE_IE_WFLUSH(_ie)                                                                       \
+	do {                                                                                       \
+		if ((_ie)->ie_dfs->dfc_wb_cache && S_ISREG((_ie)->ie_stat.st_mode)) {              \
+			D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                         \
+			D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                         \
+		}                                                                                  \
+	} while (0)
 
 /* Lookup an inode and take a ref on it. */
 static inline struct dfuse_inode_entry *
