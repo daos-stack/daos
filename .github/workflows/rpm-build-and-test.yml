@@ -143,9 +143,9 @@ jobs:
     needs: [Import-commit-pragmas]
     if: |
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
-         ${{ github.event_name == 'workflow_dispatch' }}) &&
+         github.event_name == 'workflow_dispatch') &&
         needs.Import-commit-pragmas.outputs.rpm-test-version == '' &&
-        !contains(needs.Import-commit-pragmas.outputs.pr-repos, 'daos@')
+        ${{ ! contains(needs.Import-commit-pragmas.outputs.pr-repos, 'daos@') }}
     env:
       # TODO -- this should be on stable, backedup storage, not /scratch
       # yamllint disable-line rule:line-length
@@ -362,7 +362,7 @@ jobs:
     needs: [Import-commit-pragmas, Import-commit-message]
     if: |
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
-         ${{ github.event_name == 'workflow_dispatch' }}) &&
+         github.event_name == 'workflow_dispatch') &&
         ((!cancelled()) || success() || failure())
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
@@ -432,13 +432,12 @@ jobs:
       fail-fast: false
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
-      (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
-         ${{ github.event_name == 'workflow_dispatch' }}) &&
-      needs.Calc-functional-matrix.outputs.matrix != '[]' &&
-      true
-      # (!cancelled()) &&
-      # (needs.Build-RPM.result == 'success' ||
-      #  needs.Build-RPM.result == 'skipped')
+        (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
+         github.event_name == 'workflow_dispatch') &&
+        needs.Calc-functional-matrix.outputs.matrix != '[]' &&
+        (!cancelled()) &&
+        (needs.Build-RPM.result == 'success' ||
+         needs.Build-RPM.result == 'skipped')
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
@@ -622,7 +621,7 @@ jobs:
     needs: [Import-commit-pragmas, Import-commit-message]
     if: |
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
-         ${{ github.event_name == 'workflow_dispatch' }}) &&
+         github.event_name == 'workflow_dispatch') &&
         ((!cancelled()) || success() || failure())
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
@@ -693,14 +692,14 @@ jobs:
       fail-fast: false
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
-      (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
-         ${{ github.event_name == 'workflow_dispatch' }}) &&
-      needs.Calc-functional-hardware-matrix.outputs.matrix != '[]' &&
-      (!cancelled()) &&
-      (needs.Build-RPM.result == 'success' ||
-       needs.Build-RPM.result == 'skipped') &&
-      (needs.Functional.result == 'success' ||
-       needs.Functional.result == 'skipped')
+        (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
+         github.event_name == 'workflow_dispatch') &&
+        needs.Calc-functional-hardware-matrix.outputs.matrix != '[]' &&
+        (!cancelled()) &&
+        (needs.Build-RPM.result == 'success' ||
+         needs.Build-RPM.result == 'skipped') &&
+        (needs.Functional.result == 'success' ||
+         needs.Functional.result == 'skipped')
     env:
       CONFIG_POWER_ONLY: false
       PRAGMA_SUFFIX: -vm
