@@ -228,7 +228,7 @@ dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
 }
 
 void
-dc_detatch_system(void)
+dc_mgmt_drop_attach_info(void)
 {
 	return put_attach_info(&info_g, resp_g);
 }
@@ -381,12 +381,14 @@ out:
 
 int
 dc_get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
-		   Mgmt__GetAttachInfoResp **respp) {
+		   Mgmt__GetAttachInfoResp **respp)
+{
 	return get_attach_info(name, all_ranks, info, respp);
 }
 
 int
-dc_attach_system(const char *name) {
+dc_mgmt_cache_attach_info(const char *name)
+{
 	if (name != NULL && strcmp(name, agent_sys_name) != 0)
 		return -DER_INVAL;
 	return get_attach_info(name, true, &info_g, &resp_g);

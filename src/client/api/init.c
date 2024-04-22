@@ -196,8 +196,8 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
 
-	/** attach to default system */
-	rc = dc_attach_system(NULL);
+	/** get and cache attach info of default system */
+	rc = dc_mgmt_cache_attach_info(NULL);
 	if (rc != 0)
 		D_GOTO(out_job, rc);
 
@@ -280,7 +280,7 @@ out_pl:
 out_eq:
 	daos_eq_lib_fini();
 out_attach:
-	dc_detatch_system();
+	dc_mgmt_drop_attach_info();
 out_job:
 	dc_job_fini();
 out_agent:
@@ -341,7 +341,7 @@ daos_fini(void)
 			DF_RC"\n", DP_RC(rc));
 
 	dc_tm_fini();
-	dc_detatch_system();
+	dc_mgmt_drop_attach_info();
 	dc_agent_fini();
 	dc_job_fini();
 
