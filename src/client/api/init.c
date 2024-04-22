@@ -23,6 +23,7 @@
 #include <daos/btree_class.h>
 #include <daos/placement.h>
 #include <daos/job.h>
+#include <daos/metrics.h>
 #if BUILD_PIPELINE
 #include <daos/pipeline.h>
 #endif
@@ -34,10 +35,6 @@ static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /** refcount on how many times daos_init has been called */
 static int		module_initialized;
-
-/** attach info to avoid doing multiple agent drpc upcalls */
-static struct dc_mgmt_sys_info *info = NULL;
-static Mgmt__GetAttachInfoResp *resp;
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
@@ -199,15 +196,10 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
 
-	D_ALLOC_PTR(info);
-	if (info == NULL)
+	/** attach to default system */
+	rc = dc_attach_system(NULL);
+	if (rc != 0)
 		D_GOTO(out_job, rc);
-	rc = dc_get_attach_info(NULL, true, info, &resp);
-	if (rc != 0) {
-		D_FREE(info);
-		D_GOTO(out_job, rc);
-	}
-	dc_set_global_attach_info(info, resp);
 
 	/**
 	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
@@ -215,13 +207,13 @@ daos_init(void)
 	 */
 	rc = dc_mgmt_net_cfg(NULL);
 	if (rc != 0)
-		D_GOTO(out_info, rc);
+		D_GOTO(out_attach, rc);
 
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_info, rc);
+		D_GOTO(out_attach, rc);
 	}
 
 	/**
@@ -240,6 +232,13 @@ daos_init(void)
 	rc = dc_mgmt_init();
 	if (rc != 0)
 		D_GOTO(out_pl, rc);
+
+	/** set up client telemetry */
+	rc = dc_tm_init();
+	if (rc != 0) {
+		/* should not be fatal */
+		DL_WARN(rc, "failed to initialize client telemetry");
+	}
 
 	/** set up pool */
 	rc = dc_pool_init();
@@ -274,15 +273,14 @@ out_co:
 out_pool:
 	dc_pool_fini();
 out_mgmt:
+	dc_tm_fini();
 	dc_mgmt_fini();
 out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
-out_info:
-	dc_clear_global_attach_info();
-	dc_put_attach_info(info, resp);
-	D_FREE(info);
+out_attach:
+	dc_detatch_system();
 out_job:
 	dc_job_fini();
 out_agent:
@@ -327,6 +325,8 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+	/** clean up all registered per-module metrics */
+	daos_metrics_fini();
 #if BUILD_PIPELINE
 	dc_pipeline_fini();
 #endif
@@ -340,10 +340,8 @@ daos_fini(void)
 		D_ERROR("failed to disconnect some resources may leak, "
 			DF_RC"\n", DP_RC(rc));
 
-	dc_clear_global_attach_info();
-	dc_put_attach_info(info, resp);
-	D_FREE(info);
-
+	dc_tm_fini();
+	dc_detatch_system();
 	dc_agent_fini();
 	dc_job_fini();
 
