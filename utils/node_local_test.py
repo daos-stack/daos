@@ -3521,11 +3521,13 @@ class PosixTests():
         if dfuse.stop():
             self.fatal_errors = True
 
-    @needs_dfuse
+    @needs_dfuse_with_opt(caching=False)
     def test_complex_rename(self):
         """Test for rename semantics
 
-        Check that that rename is correctly updating the dfuse data for the moved file.
+        Check that that rename is correctly updating the dfuse data for the moved file.  For this
+        test to work correctly with caching then the attr-timeout needs to be shorter than the
+        time it takes to spin up the second DFuse instance, so do not this with caching on.
 
         # Create a file, read/write to it.
         # Check fstat works.
