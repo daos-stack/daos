@@ -145,7 +145,7 @@ jobs:
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          github.event_name == 'workflow_dispatch') &&
         needs.Import-commit-pragmas.outputs.rpm-test-version == '' &&
-        ${{ ! contains(needs.Import-commit-pragmas.outputs.pr-repos, 'daos@') }}
+        (!contains(needs.Import-commit-pragmas.outputs.pr-repos, 'daos@'))
     env:
       # TODO -- this should be on stable, backedup storage, not /scratch
       # yamllint disable-line rule:line-length
