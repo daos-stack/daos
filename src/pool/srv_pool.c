@@ -1334,7 +1334,7 @@ handle_event(struct pool_svc *svc, struct pool_svc_event *event)
 		ds_rsvc_request_map_dist(&svc->ps_rsvc);
 		D_DEBUG(DB_MD, DF_UUID": requested map dist for rank %u\n", DP_UUID(svc->ps_uuid),
 			event->psv_rank);
-	} else if (event->psv_type == CRT_EVT_DEAD) {
+	} else if (event->psv_src != CRT_EVS_GRPMOD && event->psv_type == CRT_EVT_DEAD) {
 		rc = pool_svc_exclude_rank(svc, event->psv_rank);
 		if (rc != 0)
 			D_ERROR(DF_UUID": failed to exclude rank %u: "DF_RC"\n",
@@ -1805,10 +1805,9 @@ pool_svc_check_node_status(struct pool_svc *svc)
 		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
 			doms[i].do_comp.co_rank,
 			rc == -DER_NONEXIST ? -1 : state.sms_status);
-		if (rc == -DER_NONEXIST || state.sms_status == SWIM_MEMBER_DEAD) {
+		if (rc == -DER_NONEXIST) {
 			rc = queue_event(svc, doms[i].do_comp.co_rank, 0 /* incarnation */,
-					 rc == -DER_NONEXIST ? CRT_EVS_GRPMOD : CRT_EVS_SWIM,
-					 CRT_EVT_DEAD);
+					 CRT_EVS_GRPMOD, CRT_EVT_DEAD);
 			if (rc) {
 				D_ERROR("failed to exclude rank %u: %d\n",
 					doms[i].do_comp.co_rank, rc);
