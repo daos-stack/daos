@@ -502,7 +502,7 @@ class ErasureCodeFio(FioBase):
             results (queue): queue for returning thread results
         """
         try:
-            self.execute_fio(stop_dfuse=False)
+            self.execute_fio()
             if results is not None:
                 results.put("PASS")
         except (CommandFailure, DaosApiError, DaosTestError):

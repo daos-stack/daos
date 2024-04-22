@@ -40,7 +40,7 @@ class Ecodtruncate(FioBase):
         fname = self.params.get("names", '/run/fio/*')
 
         # Write the file using Fio
-        self.execute_fio(stop_dfuse=False)
+        self.execute_fio()
 
         # Get the fuse file name.
         testfile = "{}.0.0".format(os.path.join(self.dfuse.mount_dir.value,

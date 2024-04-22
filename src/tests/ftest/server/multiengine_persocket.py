@@ -301,7 +301,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.log.info("===(%s)===IOR test", step)
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         self.run_ior_with_pool(
-            timeout=ior_timeout, create_pool=True, create_cont=True, stop_dfuse=True)
+            timeout=ior_timeout, create_pool=True, create_cont=True)
 
         # (8) MDTEST
         step += 1

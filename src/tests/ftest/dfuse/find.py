@@ -9,14 +9,15 @@ import string
 import sys
 
 import general_utils
-from ClusterShell.NodeSet import NodeSet
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
+# from ClusterShell.NodeSet import NodeSet
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
-from io_utilities import DirTree
+from io_utilities import DirectoryTreeCommand
+from run_utils import run_remote
 
 
-class DfuseFind(DfuseTestBase):
+class DfuseFind(TestWithServers):
     """Base DfuseFind test class.
 
     :avocado: recursive
@@ -94,7 +95,7 @@ class DfuseFind(DfuseTestBase):
         dfuses = []
         containers = []
 
-        self.add_pool(connect=False)
+        pool = self.get_pool(connect=False)
 
         if not dfs_path:
             temp_dfs_path = self._generate_temp_path_name("/tmp", "dfs_test_")
@@ -110,7 +111,7 @@ class DfuseFind(DfuseTestBase):
             return self._run_find_test(test_root, samples, cont_count, needles)
 
         try:
-            mount_dirs = self._setup_containers(dfs_path, cont_count, dfuses, containers)
+            mount_dirs = self._setup_containers(pool, dfs_path, cont_count, dfuses, containers)
 
             daos_stats = _run_find_test(dfs_path, mount_dirs)
 
@@ -193,22 +194,21 @@ class DfuseFind(DfuseTestBase):
 
         return profiler
 
-    def _setup_containers(self, dfs_path, cont_count, dfuses, containers):
+    def _setup_containers(self, pool, dfs_path, cont_count, dfuses, containers):
         """
         Setup as many containers as the test requested. Return the paths where
         the containers were mounted.
         """
         mount_dirs = []
         for count in range(cont_count):
-            self.add_container(self.pool)
-            cont_dir = "{}_daos_dfuse_{}".format(self.pool.uuid, count)
+            container = self.get_container(pool)
+            cont_dir = "{}_daos_dfuse_{}".format(pool.uuid, count)
             mount_dir = os.path.join(dfs_path, cont_dir)
-            self.log.info(
-                "Creating container Pool UUID: %s Con UUID: %s", self.pool, self.container)
+            self.log.info("Creating container Pool UUID: %s Con UUID: %s", pool, container)
             dfuse = get_dfuse(self, self.hostlist_clients)
-            start_dfuse(self, dfuse, pool=self.pool, container=self.container, mount_dir=mount_dir)
+            start_dfuse(self, dfuse, pool, container, mount_dir=mount_dir)
             dfuses.append(dfuse)
-            containers.append(self.container)
+            containers.append(container)
             mount_dirs.append(dfuse.mount_dir.value)
 
         return mount_dirs
@@ -219,28 +219,32 @@ class DfuseFind(DfuseTestBase):
 
         count = 0
         for path in paths:
-            self.log.info("Populating: %s", path)
-            prefix = "t{:05d}_".format(count)
+            command = DirectoryTreeCommand(self.hostlist_clients)
+            command.path.value = path
+            command.height.value = height
+            command.subdirs.value = subdirs
+            command.files.value = files_per_node
+            command.needles.value = needles
+            command.prefix.value = "t{:05d}_".format(count)
             count += 1
-            remote_args = "{} {} {} {} {} {}".format(
-                path, height, subdirs, files_per_node, needles, prefix)
-            dir_tree_cmd = "PYTHONPATH={} python3 {} {}".format(
-                remote_pythonpath, os.path.abspath(__file__), remote_args)
-            self._run_cmd(dir_tree_cmd)
+
+            self.log.info("Populating: %s", path)
+            self._run_cmd(str(command))
 
     def _run_cmd(self, cmd):
-        ret_code = general_utils.pcmd(self.hostlist_clients, cmd, timeout=180)
-        if 0 not in ret_code:
-            error_hosts = NodeSet(
-                ",".join([str(v) for k, v in list(ret_code.items()) if k != 0]))
-            raise CommandFailure(
-                "Error running '{}' on the following hosts: {}".format(cmd, error_hosts))
+        """Run the command on the remote client hosts.
+
+        Args:
+            cmd (str): command to run
+        """
+        result = run_remote(self.log, self.hostlist_clients, cmd, timeout=180)
+        if not result.passed:
+            self.fail(f'Error running \'{cmd}\' on {result.failed_hosts}')
 
     def _teardown_dfuse(self, dfuses):
         """Unmount all the containers that were created for the test"""
         for dfuse in dfuses:
             dfuse.stop()
-        self.dfuse = None
 
     def _setup_challenger(self, test_path, directories):
         """Create the paths where the directory trees of the challenger will be created."""
@@ -267,25 +271,3 @@ class DfuseFind(DfuseTestBase):
         random_name = "".join(random.choice(letters) for _ in range(8))  # nosec
 
         return os.path.join(root, "{}{}".format(prefix, random_name))
-
-
-def _populate_dir_tree():
-    """Wrapper function to create a directory tree and its needle files"""
-    path = sys.argv[1]
-    height = int(sys.argv[2])
-    subdirs_per_node = int(sys.argv[3])
-    files_per_node = int(sys.argv[4])
-    needles = int(sys.argv[5])
-    prefix = sys.argv[6]
-
-    print("Populating: {0}".format(path))
-
-    dir_tree = DirTree(path, height, subdirs_per_node, files_per_node)
-    dir_tree.set_needles_prefix(prefix)
-    dir_tree.set_number_of_needles(needles)
-    tree_path = dir_tree.create()
-    print("Dir tree created at: {0}".format(tree_path))
-
-
-if __name__ == '__main__':
-    _populate_dir_tree()

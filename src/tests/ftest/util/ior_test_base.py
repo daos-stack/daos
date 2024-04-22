@@ -5,15 +5,16 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from dfuse_test_base import DfuseTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from general_utils import get_random_string, pcmd
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 
 
-class IorTestBase(DfuseTestBase):
+class IorTestBase(TestWithServers):
     """Base IOR test class.
 
     :avocado: recursive
@@ -31,6 +32,7 @@ class IorTestBase(DfuseTestBase):
         self.container = None
         self.ior_timeout = None
         self.ppn = None
+        self.dfuse = None
 
     def setUp(self):
         """Set up each test case."""
@@ -71,10 +73,9 @@ class IorTestBase(DfuseTestBase):
         return self.container
 
     def run_ior_with_pool(self, intercept=None, display_space=True, test_file_suffix="",
-                          test_file="daos:/testFile", create_pool=True,
-                          create_cont=True, stop_dfuse=True, plugin_path=None,
-                          timeout=None, fail_on_warning=False,
-                          mount_dir=None, out_queue=None, env=None):
+                          test_file="daos:/testFile", create_pool=True, create_cont=True,
+                          plugin_path=None, timeout=None, fail_on_warning=False, mount_dir=None,
+                          out_queue=None, env=None):
         # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
@@ -93,8 +94,6 @@ class IorTestBase(DfuseTestBase):
             create_pool (bool, optional): If it is true, create pool and
                 container else just run the ior. Defaults to True.
             create_cont (bool, optional): Create new container. Default is True
-            stop_dfuse (bool, optional): Stop dfuse after ior command is
-                finished. Default is True.
             plugin_path (str, optional): HDF5 vol connector library path.
                 This will enable dfuse (xattr) working directory which is
                 needed to run vol connector for DAOS. Default is None.
@@ -118,7 +117,7 @@ class IorTestBase(DfuseTestBase):
         # start dfuse if api is POSIX or HDF5 with vol connector
         if (self.ior_cmd.api.value == "POSIX" or plugin_path) and not self.dfuse:
             # Initialize dfuse instance
-            self.load_dfuse(self.hostlist_clients)
+            self.dfuse = get_dfuse(self, self.hostlist_clients)
             # Default mount_dir to value in dfuse instance
             mount_dir = mount_dir or self.dfuse.mount_dir.value
             # Add a substring in case of HDF5-VOL
@@ -126,7 +125,7 @@ class IorTestBase(DfuseTestBase):
                 sub_dir = get_random_string(5)
                 mount_dir = os.path.join(mount_dir, sub_dir)
             # Connect to the pool, create container and then start dfuse
-            self.start_dfuse(self.hostlist_clients, self.pool, self.container, mount_dir=mount_dir)
+            start_dfuse(self, self.dfuse, self.pool, self.container, mount_dir=mount_dir)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
@@ -137,17 +136,9 @@ class IorTestBase(DfuseTestBase):
         self.ior_cmd.test_file.update("".join([test_file, test_file_suffix]))
         job_manager = self.get_ior_job_manager_command()
         job_manager.timeout = timeout
-        try:
-            out = self.run_ior(job_manager, self.processes,
-                               intercept=intercept,
-                               display_space=display_space, plugin_path=plugin_path,
-                               fail_on_warning=fail_on_warning,
-                               out_queue=out_queue, env=env)
-        finally:
-            if stop_dfuse:
-                self.stop_dfuse()
-
-        return out
+        return self.run_ior(
+            job_manager, self.processes, intercept=intercept, display_space=display_space,
+            plugin_path=plugin_path, fail_on_warning=fail_on_warning, out_queue=out_queue, env=env)
 
     def update_ior_cmd_with_pool(self, create_cont=True):
         """Update ior_cmd with pool.

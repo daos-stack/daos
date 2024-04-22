@@ -10,8 +10,12 @@ import tempfile
 import time
 from logging import getLogger
 
+from command_utils import ExecutableCommand
+from command_utils_base import FormattedParameter
+from exception_utils import CommandFailure
 from general_utils import DaosTestError, get_random_bytes
 from pydaos.raw import DaosApiError
+from run_utils import run_remote
 
 
 class DirTree():
@@ -504,3 +508,46 @@ def get_target_rank_list(daos_object):
         raise DaosTestError(
             "Error obtaining target list for the object: {}".format(
                 error)) from error
+
+
+class DirectoryTreeCommand(ExecutableCommand):
+    """Class defining the DirectoryTreeCommand object."""
+
+    def __init__(self, hosts, namespace="/run/directory_tree/*"):
+        """Create a DirectoryTreeCommand object.
+
+        Args:
+            hosts (NodeSet): hosts on which to run the command
+            namespace (str): command namespace. Defaults to /run/directory_tree/*
+
+        """
+        path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
+        super().__init__(namespace, "directory_tree.py", path)
+
+        # verify_perms.py options
+        self.path = FormattedParameter("--path {}")
+        self.height = FormattedParameter("--height {}")
+        self.subdirs = FormattedParameter("--subdirs {}")
+        self.files = FormattedParameter("--files {}")
+        self.needles = FormattedParameter("--needles {}")
+        self.prefix = FormattedParameter("--prefix {}")
+
+        # run options
+        self.hosts = hosts.copy()
+        self.timeout = 180
+
+    def run(self):
+        # pylint: disable=arguments-differ
+        """Run the command.
+
+        Raises:
+            CommandFailure: If the command fails
+
+        Returns:
+            RemoteCommandResult: result from run_remote
+        """
+        self.log.info('Running directory_tree.py on %s', str(self.hosts))
+        result = run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)
+        if not result.passed:
+            raise CommandFailure(f'verify_perms.py failed on: {result.failed_hosts}')
+        return result

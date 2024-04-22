@@ -4,13 +4,14 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+from apricot import TestWithServers
 from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables
-from dfuse_test_base import DfuseTestBase
+from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 
 
-class VolTestBase(DfuseTestBase):
+class VolTestBase(TestWithServers):
     """Runs HDF5 vol test-suites.
 
     :avocado: recursive
@@ -29,14 +30,17 @@ class VolTestBase(DfuseTestBase):
         client_processes = self.params.get("client_processes")
 
         # create pool, container and dfuse mount
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
+        self.log_step('Creating a single pool and container')
+        pool = self.get_pool(connect=False)
+        container = self.get_container(pool)
 
         # VOL needs to run from a file system that supports xattr.
         #  Currently nfs does not have this attribute so it was recommended
         #  to create a dfuse dir and run vol tests from there.
         # create dfuse container
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.log_step('Starting dfuse so VOL can run from a file system that supports xattr')
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
 
         # Assign the test to run
         job_manager.job = ExecutableCommand(
@@ -51,10 +55,12 @@ class VolTestBase(DfuseTestBase):
         job_manager.assign_hosts(self.hostlist_clients)
         job_manager.assign_processes(client_processes)
         job_manager.assign_environment(env, True)
-        job_manager.working_dir.value = self.dfuse.mount_dir.value
+        job_manager.working_dir.value = dfuse.mount_dir.value
 
         # run VOL Command
+        self.log_step(f'Running {job_manager.job.command}')
         try:
             job_manager.run()
-        except CommandFailure as _error:
-            self.fail("{} FAILED> \nException occurred: {}".format(job_manager.job, str(_error)))
+        except CommandFailure as error:
+            self.log.error(str(error))
+            self.fail(f"{job_manager.job.command} failed")

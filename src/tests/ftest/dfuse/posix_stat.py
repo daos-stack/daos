@@ -51,8 +51,8 @@ class POSIXStatTest(IorTestBase):
 
             # Run ior command.
             self.run_ior_with_pool(
-                timeout=200, stop_dfuse=False, create_pool=False,
-                create_cont=False, test_file_suffix=test_file_suffix)
+                timeout=200, create_pool=False, create_cont=False,
+                test_file_suffix=test_file_suffix)
 
             # Get current epoch.
             current_epoch = -1

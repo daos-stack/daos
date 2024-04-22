@@ -3,11 +3,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from dfuse_test_base import DfuseTestBase
+from apricot import TestWithServers
+from dfuse_utils import get_dfuse, start_dfuse
 from fio_utils import FioCommand
 
 
-class FioBase(DfuseTestBase):
+class FioBase(TestWithServers):
     """Base fio class.
 
     :avocado: recursive
@@ -19,6 +20,7 @@ class FioBase(DfuseTestBase):
         self.fio_cmd = None
         self.processes = None
         self.manager = None
+        self.dfuse = None
 
     def setUp(self):
         """Set up each test case."""
@@ -34,12 +36,11 @@ class FioBase(DfuseTestBase):
         self.processes = self.params.get("np", '/run/fio/client_processes/*')
         self.manager = self.params.get("manager", '/run/fio/*', "MPICH")
 
-    def execute_fio(self, directory=None, stop_dfuse=True):
+    def execute_fio(self, directory=None):
         """Runner method for Fio.
 
         Args:
             directory (str): path for fio run dir
-            stop_dfuse (bool): Flag to stop or not stop dfuse as part of this method.
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -57,7 +58,9 @@ class FioBase(DfuseTestBase):
                 # Instruct dfuse to disable direct-io for this container
                 self.container.set_attr(attrs={'dfuse-direct-io-disable': 'on'})
 
-                self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+                self.dfuse = get_dfuse(self, self.hostlist_clients)
+                start_dfuse(self, self.dfuse, self.pool, self.container)
+
                 self.fio_cmd.update(
                     "global", "directory", self.dfuse.mount_dir.value,
                     "fio --name=global --directory")
@@ -65,6 +68,3 @@ class FioBase(DfuseTestBase):
         # Run Fio
         self.fio_cmd.hosts = self.hostlist_clients
         self.fio_cmd.run()
-
-        if stop_dfuse:
-            self.stop_dfuse()
