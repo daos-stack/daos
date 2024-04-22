@@ -10,10 +10,7 @@ server_config:
     0:
       targets: 4
       nr_xs_helpers: 0
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
+      storage: auto
   system_ram_reserved: 1
 
 pool:

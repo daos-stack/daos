@@ -6999,7 +6999,7 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	 * if there's another PS replica, or reject it.
 	 */
 	node = pool_map_find_node_by_rank(map, dss_self_rank());
-	if (node == NULL || !(node->do_comp.co_status & POOL_SVC_MAP_STATES)) {
+	if (node == NULL || !(node->do_comp.co_status & DC_POOL_SVC_MAP_STATES)) {
 		d_rank_list_t *replicas;
 
 		rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
@@ -7993,7 +7993,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	/* Get available ranks */
-	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, POOL_GROUP_MAP_STATES, &out_ranks);
+	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, DC_POOL_GROUP_MAP_STATES, &out_ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",
 			DP_UUID(in->prgi_op.pi_uuid), DP_RC(rc));
