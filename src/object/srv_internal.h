@@ -154,36 +154,6 @@ struct obj_tgt_punch_args {
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
 
-/*
- * Report latency on a per-I/O size.
- * Buckets starts at [0; 256B[ and are increased by power of 2
- * (i.e. [256B; 512B[, [512B; 1KB[) up to [4MB; infinity[
- * Since 4MB = 2^22 and 256B = 2^8, this means
- * (22 - 8 + 1) = 15 buckets plus the 4MB+ bucket, so
- * 16 buckets in total.
- */
-#define NR_LATENCY_BUCKETS 16
-
-struct obj_pool_metrics {
-	/** Count number of total per-opcode requests (type = counter) */
-	struct d_tm_node_t	*opm_total[OBJ_PROTO_CLI_COUNT];
-	/** Total number of bytes fetched (type = counter) */
-	struct d_tm_node_t	*opm_fetch_bytes;
-	/** Total number of bytes updated (type = counter) */
-	struct d_tm_node_t	*opm_update_bytes;
-
-	/** Total number of silently restarted updates (type = counter) */
-	struct d_tm_node_t	*opm_update_restart;
-	/** Total number of resent update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_resent;
-	/** Total number of retry update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_retry;
-	/** Total number of EC full-stripe update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_ec_full;
-	/** Total number of EC partial update operations (type = counter) */
-	struct d_tm_node_t	*opm_update_ec_partial;
-};
-
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
@@ -213,24 +183,6 @@ static inline struct obj_tls *
 obj_tls_get()
 {
 	return dss_module_key_get(dss_tls_get(), &obj_module_key);
-}
-
-static inline unsigned int
-lat_bucket(uint64_t size)
-{
-	int nr;
-
-	if (size <= 256)
-		return 0;
-
-	/** return number of leading zero-bits */
-	nr =  __builtin_clzl(size - 1);
-
-	/** >4MB, return last bucket */
-	if (nr < 42)
-		return NR_LATENCY_BUCKETS - 1;
-
-	return 56 - nr;
 }
 
 enum latency_type {

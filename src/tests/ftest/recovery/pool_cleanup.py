@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -34,9 +34,9 @@ class PoolCleanupTest(RecoveryTestBase):
 
         Jira ID: DAOS-11741
 
-        :avocado: tags=all,pr
-        :avocado: tags=vm
-        :avocado: tags=recovery,pool_cleanup
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,cat_recov,pool_cleanup
         :avocado: tags=PoolCleanupTest,test_corrupt_label_ms
         """
         # 1. Create a pool.
@@ -153,9 +153,9 @@ class PoolCleanupTest(RecoveryTestBase):
 
         Jira ID: DAOS-11742
 
-        :avocado: tags=all,pr
-        :avocado: tags=vm
-        :avocado: tags=recovery,pool_cleanup
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,cat_recov,pool_cleanup
         :avocado: tags=PoolCleanupTest,test_corrupt_label_ps
         """
         # 1. Create a pool.

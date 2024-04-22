@@ -3164,8 +3164,7 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	arg.version = version;
 	arg.generation = generation;
 
-	rc = ds_pool_thread_collective(pool->sp_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				       PO_COMP_ST_DOWNOUT, migrate_fini_one_ult, &arg, 0);
+	rc = ds_pool_thread_collective(pool->sp_uuid, 0, migrate_fini_one_ult, &arg, 0);
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 
