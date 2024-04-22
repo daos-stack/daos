@@ -352,7 +352,7 @@ fd_rec_hash(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ht_fd *fd = fd_obj(rlink);
 
-	return d_hash_string_u32((const char *)(&fd->real_fd), sizeof(int));
+	return d_u32_hash((uint64_t)fd->real_fd & 0xFFFFFFFF, 6);
 }
 
 static d_hash_table_ops_t fd_hash_ops = {.hop_key_cmp    = fd_key_cmp,
@@ -493,7 +493,7 @@ remove_dir_in_dcache(struct dfs_mt *mt, const char *path)
 	rlink = d_hash_rec_find(mt->dfs_dir_hash, path, len);
 	if (rlink == NULL)
 		return;
-	d_hash_rec_decref(mt->dfs_dir_hash, rlink);
+	d_hash_rec_delete_at(mt->dfs_dir_hash, rlink);
 }
 
 static int (*libc_open)(const char *pathname, int oflags, ...);
@@ -2193,10 +2193,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			}
 			strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
 			fd_fake = idx_fd + FD_FILE_BASE;
-		}
-
-		/* directory */
-		if (S_ISDIR(mode_query)) {
+		} else if (S_ISDIR(mode_query)) {
+			/* directory */
 			rc = find_next_available_dirfd(NULL, &idx_dirfd);
 			if (rc)
 				goto out_compatible_release;
@@ -2229,11 +2227,14 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				goto out_compatible;
 			}
 			fd_fake = idx_dirfd + FD_DIR_BASE;
+		} else {
+			/* not supposed to be here. If the object is neither a dir or a regular
+			 * file, fetch_dfs_obj_handle() should fail already. */
+			D_ASSERT(0);
 		}
-		/* assert(fd_fake >= FD_FILE_BASE); */
 
 		/* add fd_kernel to hash table */
-		D_ALLOC(fd_ht_obj, sizeof(*fd_ht_obj));
+		D_ALLOC_PTR(fd_ht_obj);
 		if (fd_ht_obj == NULL) {
 			if (fd_fake >= FD_DIR_BASE)
 				free_dirfd(idx_dirfd);
@@ -2244,14 +2245,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		fd_ht_obj->real_fd = fd_kernel;
 		fd_ht_obj->fake_fd = fd_fake;
 		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry,
-				       true);
-		if (rc != 0) {
-			DL_WARN(rc, "d_hash_rec_insert() failed");
-			if (fd_fake >= FD_DIR_BASE)
-				free_dirfd(idx_dirfd);
-			else
-				free_fd(idx_fd, false);
-		}
+				       false);
+		D_ASSERT(rc == 0);
 		goto out_compatible;
 	}
 
@@ -2378,10 +2373,9 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 org_func:
 	FREE(parent_dir);
 	if (two_args)
-		fd_kernel = real_open(pathname, oflags);
+		return real_open(pathname, oflags);
 	else
-		fd_kernel = real_open(pathname, oflags, mode);
-	return fd_kernel;
+		return real_open(pathname, oflags, mode);
 
 out_error:
 	FREE(parent_dir);
@@ -2465,7 +2459,7 @@ remove_fd_compatible(int real_fd)
 	else
 		free_fd(fd_ht_obj->fake_fd - FD_FILE_BASE, false);
 	/* remove fd from hash table */
-	d_hash_rec_decref(fd_hash, rlink);
+	d_hash_rec_delete_at(fd_hash, rlink);
 	return true;
 }
 
@@ -2601,7 +2595,7 @@ read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *bu
 	if (!hook_enabled)
 		return next_read(fd, buf, size);
 
-	if (is_bash && fd <= 2 && compatible_mode)
+	if (is_bash && fd <= 2)
 		/* special cases to handle bash/sh */
 		return next_read(fd, buf, size);
 
@@ -2754,7 +2748,7 @@ write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, 
 	if (!hook_enabled)
 		return next_write(fd, buf, size);
 
-	if (is_bash && fd <= 2 && compatible_mode)
+	if (is_bash && fd <= 2)
 		/* special cases to handle bash/sh */
 		return next_write(fd, buf, size);
 
@@ -3397,7 +3391,7 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 	if (!hook_enabled)
 		return next_lseek(fd, offset, whence);
 
-	if (is_bash && fd <= 2 && compatible_mode)
+	if (is_bash && fd <= 2)
 		/* special cases to handle bash/sh */
 		return next_lseek(fd, offset, whence);
 
@@ -3712,15 +3706,11 @@ opendir(const char *path)
 			goto out_compatible;
 		}
 		fd_ht_obj->real_fd = dirfd(dirp_kernel);
-		assert(fd_ht_obj->real_fd >= 0);
+		D_ASSERT(fd_ht_obj->real_fd >= 0);
 		fd_ht_obj->fake_fd = idx_dirfd + FD_DIR_BASE;
 		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry,
-				       true);
-		if (rc != 0) {
-			DL_WARN(rc, "d_hash_rec_insert() failed");
-			free_dirfd(idx_dirfd);
-			D_FREE(fd_ht_obj);
-		}
+				       false);
+		D_ASSERT(rc == 0);
 		goto out_compatible;
 	}
 	FREE(parent_dir);
@@ -3901,7 +3891,7 @@ closedir(DIR *dirp)
 			fd_ht_obj = fd_obj(rlink);
 			free_dirfd(fd_ht_obj->fake_fd - FD_DIR_BASE);
 			/* remove fd from hash table */
-			d_hash_rec_decref(fd_hash, rlink);
+			d_hash_rec_delete_at(fd_hash, rlink);
 			return next_closedir(dirp);
 		}
 	}
@@ -6379,7 +6369,7 @@ dup2(int oldfd, int newfd)
 		struct ht_fd *fd_ht_obj = NULL;
 		int           fd_fake   = -1;
 
-		assert(oldfd < FD_FILE_BASE && newfd < FD_FILE_BASE);
+		D_ASSERT(oldfd < FD_FILE_BASE && newfd < FD_FILE_BASE);
 		/* next_dup2(oldfd, newfd) will close newfd, so we need to check whether
 		 * newfd is in fd_hash. Remove it in case existing. */
 		remove_fd_compatible(newfd);
@@ -6420,15 +6410,8 @@ dup2(int oldfd, int newfd)
 		fd_ht_obj->real_fd = fd_kernel;
 		fd_ht_obj->fake_fd = fd_fake;
 		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry,
-				       true);
-		if (rc != 0) {
-			DL_WARN(rc, "d_hash_rec_insert() failed");
-			if (fd_fake >= FD_DIR_BASE)
-				free_dirfd(next_dirfd);
-			else
-				free_fd(next_fd, false);
-			D_FREE(fd_ht_obj);
-		}
+				       false);
+		D_ASSERT(rc == 0);
 		return fd_kernel;
 	}
 
@@ -7047,7 +7030,7 @@ init_myhook(void)
 
 	if (compatible_mode) {
 		rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX |
-					 D_HASH_FT_LRU, 12, NULL, &fd_hash_ops, &fd_hash);
+					 D_HASH_FT_LRU, 6, NULL, &fd_hash_ops, &fd_hash);
 		if (rc != 0) {
 			DL_ERROR(rc, "failed to create fd hash table");
 			return;
@@ -7286,7 +7269,7 @@ finalize_myhook(void)
 			rlink = d_hash_rec_first(fd_hash);
 			if (rlink == NULL)
 				break;
-			d_hash_rec_decref(fd_hash, rlink);
+			d_hash_rec_delete_at(fd_hash, rlink);
 		}
 
 		rc = d_hash_table_destroy(fd_hash, false);
@@ -7373,7 +7356,7 @@ finalize_dfs(void)
 			rlink = d_hash_rec_first(dfs_list[i].dfs_dir_hash);
 			if (rlink == NULL)
 				break;
-			d_hash_rec_decref(dfs_list[i].dfs_dir_hash, rlink);
+			d_hash_rec_delete_at(dfs_list[i].dfs_dir_hash, rlink);
 		}
 
 		rc = d_hash_table_destroy(dfs_list[i].dfs_dir_hash, false);
