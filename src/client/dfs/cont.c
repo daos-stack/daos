@@ -364,6 +364,8 @@ fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char
 
 	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
 	recx.rx_idx   = OID_IDX;
+	recx.rx_nr    = sizeof(daos_obj_id_t);
+	iod.iod_nr    = 1;
 	iod.iod_recxs = &recx;
 	iod.iod_type  = DAOS_IOD_ARRAY;
 	iod.iod_size  = 1;
