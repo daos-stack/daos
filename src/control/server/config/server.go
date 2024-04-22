@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -405,7 +405,7 @@ func (cfg *Server) SetPath(inPath string) error {
 	}
 	cfg.Path = newPath
 
-	if _, err = os.Stat(newPath); err != nil {
+	if _, err = os.Stat(cfg.Path); err != nil {
 		return err
 	}
 
