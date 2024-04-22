@@ -79,10 +79,17 @@ func TestPromExp_StartExporter(t *testing.T) {
 
 			// Quick tests to make sure the exporter is listening and
 			// that our handlers are invoked.
-			resp, err := http.Get(fmt.Sprintf("http://localhost:%d/", tc.cfg.Port))
-			if err != nil {
-				t.Fatal(err)
+			var resp *http.Response
+			for {
+				var err error
+				resp, err = http.Get(fmt.Sprintf("http://localhost:%d/", tc.cfg.Port))
+				if err == nil {
+					break
+				}
+				log.Errorf("failed to connect to exporter: %+v", err)
+				time.Sleep(100 * time.Millisecond)
 			}
+
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				t.Fatal(err)
