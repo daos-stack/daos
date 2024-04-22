@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -125,6 +125,15 @@ struct engine_metrics {
 	struct d_tm_node_t	*meminfo;
 };
 
+struct dss_numa_info {
+	/** numa index for this node */
+	int            ni_idx;
+	/** Number of cores in this node */
+	int            ni_core_nr;
+	/** Allocation bitmap for this numa node */
+	hwloc_bitmap_t ni_coremap;
+};
+
 extern struct engine_metrics dss_engine_metrics;
 
 #define DSS_HOSTNAME_MAX_LEN	255
@@ -141,14 +150,16 @@ extern int		dss_core_nr;
 extern unsigned int	dss_core_offset;
 /** NUMA node to bind to */
 extern int		dss_numa_node;
-/** bitmap describing core allocation */
-extern hwloc_bitmap_t	core_allocation_bitmap;
-/** a copy of the NUMA node object in the topology */
-extern hwloc_obj_t	numa_obj;
-/** number of cores in the given NUMA node */
-extern int		dss_num_cores_numa_node;
+/** Cached numa information */
+extern struct dss_numa_info *dss_numa;
+/** Number of active numa nodes (only > 1 if DAOS_MULTISOCKET is enabled) */
+extern int                   dss_numa_nr;
 /** Number of offload XS */
 extern unsigned int	dss_tgt_offload_xs_nr;
+/** Number of offload per socket */
+extern unsigned int          dss_offload_per_numa_nr;
+/** Number of target per socket */
+extern unsigned int          dss_tgt_per_numa_nr;
 /** number of system XS */
 extern unsigned int	dss_sys_xs_nr;
 /** Flag of helper XS as a pool */

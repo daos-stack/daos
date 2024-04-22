@@ -370,6 +370,25 @@ out:
 	return rc;
 }
 
+static inline uint32_t
+sched_ult2xs_multisocket(int xs_type, int tgt_id)
+{
+	static __thread uint32_t offload;
+	uint32_t                 socket;
+	uint32_t                 base;
+	uint32_t                 target;
+
+	if (dss_tgt_offload_xs_nr == 0)
+		return DSS_XS_SELF;
+
+	socket  = tgt_id / dss_numa_nr;
+	base    = dss_sys_xs_nr + dss_tgt_nr + (socket * dss_offload_per_numa_nr);
+	target  = base + ((offload + tgt_id) % dss_offload_per_numa_nr);
+	offload = target + 17; /* Seed next selection */
+
+	return target;
+}
+
 /* ============== ULT create functions =================================== */
 
 static inline int
@@ -389,6 +408,10 @@ sched_ult2xs(int xs_type, int tgt_id)
 	case DSS_XS_DRPC:
 		return 2;
 	case DSS_XS_IOFW:
+		if (dss_numa_nr > 1) {
+			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
+			break;
+		}
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + 1;
@@ -427,6 +450,10 @@ sched_ult2xs(int xs_type, int tgt_id)
 			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
 		break;
 	case DSS_XS_OFFLOAD:
+		if (dss_numa_nr > 1) {
+			xs_id = sched_ult2xs_multisocket(xs_type, tgt_id);
+			break;
+		}
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr / dss_tgt_nr;
