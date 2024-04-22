@@ -21,7 +21,7 @@ timeout: 300
 #           scm_list: [/dev/pmem0]
 #         1:
 #           class: nvme
-#           bdev_list: ["5d0505:01:00.0"]
+#           bdev_list: ["0000:5d:05.5"]
 #       spdk_rpc_server:
 #         enable: true
 #         sock_addr: /var/tmp/spdk_0.sock
