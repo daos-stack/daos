@@ -141,16 +141,6 @@ class TelemetryUtils():
     ENGINE_POOL_VOS_SPACE_METRICS = [
         "engine_pool_vos_space_nvme_used",
         "engine_pool_vos_space_scm_used"]
-    ENGINE_POOL_VOS_WAL_METRICS = [
-        *_gen_stats_metrics("engine_pool_vos_wal_wal_sz"),
-        *_gen_stats_metrics("engine_pool_vos_wal_wal_qd"),
-        *_gen_stats_metrics("engine_pool_vos_wal_wal_waiters")]
-    ENGINE_POOL_VOS_WAL_REPLAY_METRICS = [
-        "engine_pool_vos_wal_replay_count",
-        "engine_pool_vos_wal_replay_entries",
-        "engine_pool_vos_wal_replay_size",
-        "engine_pool_vos_wal_replay_time",
-        "engine_pool_vos_wal_replay_transactions"]
     ENGINE_POOL_METRICS = ENGINE_POOL_ACTION_METRICS +\
         ENGINE_POOL_BLOCK_ALLOCATOR_METRICS +\
         ENGINE_POOL_CHECKPOINT_METRICS +\
@@ -159,9 +149,7 @@ class TelemetryUtils():
         ENGINE_POOL_OPS_METRICS +\
         ENGINE_POOL_SCRUBBER_METRICS +\
         ENGINE_POOL_VOS_AGGREGATION_METRICS +\
-        ENGINE_POOL_VOS_SPACE_METRICS + \
-        ENGINE_POOL_VOS_WAL_METRICS + \
-        ENGINE_POOL_VOS_WAL_REPLAY_METRICS
+        ENGINE_POOL_VOS_SPACE_METRICS
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
