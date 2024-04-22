@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1227,6 +1227,13 @@ test_verify_object_count(void **state)
 }
 
 static void
+iter_print(struct d_tm_context *ctx, struct d_tm_node_t *node, int level, char *path, int format,
+	   int opt_fields, void *arg)
+{
+	d_tm_print_node(ctx, node, level, path, format, opt_fields, (FILE *)arg);
+}
+
+static void
 test_print_metrics(void **state)
 {
 	struct d_tm_node_t	*node;
@@ -1238,15 +1245,15 @@ test_print_metrics(void **state)
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 
-	d_tm_iterate(cli_ctx, node, 0, filter, NULL, D_TM_STANDARD,
-		     D_TM_INCLUDE_METADATA, D_TM_ITER_READ, stdout);
+	d_tm_iterate(cli_ctx, node, 0, filter, NULL, D_TM_STANDARD, D_TM_INCLUDE_METADATA,
+		     iter_print, stdout);
 
 	d_tm_print_field_descriptors(D_TM_INCLUDE_TIMESTAMP |
 				     D_TM_INCLUDE_METADATA, stdout);
 
 	filter &= ~D_TM_DIRECTORY;
-	d_tm_iterate(cli_ctx, node, 0, filter, NULL, D_TM_CSV,
-		     D_TM_INCLUDE_METADATA, D_TM_ITER_READ, stdout);
+	d_tm_iterate(cli_ctx, node, 0, filter, NULL, D_TM_CSV, D_TM_INCLUDE_METADATA, iter_print,
+		     stdout);
 }
 
 static void
