@@ -3882,14 +3882,11 @@ closedir(DIR *dirp)
 	fd = dirfd(dirp);
 
 	if (compatible_mode && fd < FD_FILE_BASE) {
-		struct ht_fd *fd_ht_obj;
 		d_list_t     *rlink;
 		int           real_fd = fd;
 
 		rlink = d_hash_rec_find(fd_hash, &real_fd, sizeof(int));
 		if (rlink != NULL) {
-			fd_ht_obj = fd_obj(rlink);
-			free_dirfd(fd_ht_obj->fake_fd - FD_DIR_BASE);
 			/* remove fd from hash table */
 			d_hash_rec_decref(fd_hash, rlink);
 			return next_closedir(dirp);
