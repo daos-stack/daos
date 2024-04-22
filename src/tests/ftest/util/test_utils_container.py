@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2018-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -58,7 +58,7 @@ def remove_container(test, container):
         list: a list of any errors detected when removing the container
     """
     error_list = []
-    test.test_log.info("Destroying container %s", container.identifier)
+    test.test_log.info("Destroying container %s", str(container))
 
     # Ensure messages are logged
     container.silent.value = False
@@ -101,14 +101,9 @@ def get_existing_container(test, pool, container_id, daos=None, namespace=CONT_N
     if not daos:
         daos = test.get_daos_command()
 
-    # Query the container for existence and to get the uuid from a label
-    query_response = daos.container_query(pool=pool.uuid, cont=container_id)['response']
-
     # Create a TestContainer object from an existing container uuid.
-    container = add_container(
-        test, pool, namespace, False, daos, label=query_response.get('container_label'),
-        type=query_response.get('container_type'))
-    container.replicate(query_response['container_uuid'])
+    container = add_container(test, pool, namespace, False, daos)
+    container.create(query_id=container_id)
 
     return container
 
@@ -455,11 +450,14 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def create(self, con_in=None):
+    def create(self, con_in=None, query_id=None):
         """Create a container.
 
         Args:
             con_in (optional): to be defined. Defaults to None.
+            query_id (str, optional): container uuid or label which if specified will be used to
+                find an existing container through a daos query. Defaults to None which will use a
+                create command to populate this object.
 
         Returns:
             dict: the daos json command output converted to a python dictionary
@@ -475,7 +473,11 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.container = DaosContainer(self.pool.context)
         result = None
 
-        if self.control_method.value == self.USE_API:
+        if self.control_method.value == self.USE_API and query_id:
+            # Not supported
+            raise CommandFailure("Creating a TestContainer with pydaos and query not supported.")
+
+        elif self.control_method.value == self.USE_API:
             # pydaos.raw doesn't support create with a label
             if not self.silent.value:
                 self.log.info("Ignoring label for container created with API")
@@ -501,6 +503,12 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
 
             self._call_method(self.container.create, kwargs)
 
+        elif query_id:
+            # Get an existing container with the daos query command
+            kwargs = {"pool": self.pool.identifier, "cont": query_id}
+            self._log_method("daos.container_query", kwargs)
+            result = self.daos.container_query(**kwargs)
+
         else:
             # Create a container with the daos command
             kwargs = {
@@ -516,46 +524,33 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
                 "acl_file": self.acl_file.value,
                 "label": self.label.value
             }
-
             self._log_method("daos.container_create", kwargs)
+            result = self.daos.container_create(**kwargs)
+
+        if result:
             try:
-                result = self.daos.container_create(**kwargs)
                 if result["status"] != 0:
                     # The command failed but no exception was raised, so let the caller handle
                     return result
                 uuid = result["response"]["container_uuid"]
+
+                # Update if these values exist
+                self.label.update(result["response"].get("container_label"))
+                self.type.update(result["response"].get("container_type"))
+
             except KeyError as error:
                 raise CommandFailure("Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
-            self._update_api_container(uuid)
+            self.container.uuid = str_to_c_uuid(uuid)
+            self.container.attached = 1
+            self.container.poh = self.pool.pool.handle
 
         self.uuid = self.container.get_uuid_str()
         if not self.silent.value:
             self.log.info("  Created container %s", str(self))
 
         return result
-
-    def _update_api_container(self, uuid):
-        """Update the DaosContainer object with data from a non-API created container.
-
-        Args:
-            uuid (str): the existing container UUID.
-        """
-        self.container.uuid = str_to_c_uuid(uuid)
-        self.container.attached = 1
-        self.container.poh = self.pool.pool.handle
-
-    def replicate(self, uuid):
-        """Update this object to represent an already created container.
-
-        Args:
-            uuid (str): the existing container UUID.
-        """
-        self.destroy()
-        self.container = DaosContainer(self.pool.context)
-        self._update_api_container(uuid)
-        self.uuid = self.container.get_uuid_str()
 
     @fail_on(CommandFailure)
     def create_snap(self, *args, **kwargs):

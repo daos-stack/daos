@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2019-2023 Intel Corporation.
+  (C) Copyright 2019-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -42,9 +42,8 @@ class CsumContainerValidation(TestWithServers):
 
         enable_checksum = self.params.get("enable_checksum", '/run/container/*')
         container = add_container(self, pool, create=False)
-        input_param = container.container.cont_input_values
-        input_param.enable_chksum = enable_checksum
-        container.create(input_param)
+        container.input_params.enable_chksum = enable_checksum
+        container.create()
         container.open()
 
         obj = DaosObj(self.context, container.container)
