@@ -1668,14 +1668,30 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	int				 count;
 	int				 rc = 0;
 
-	if (!dth->dth_active)
-		return 0;
-
 	/* There must be vos_dtx_attach() before prepared. */
 	D_ASSERT(dae != NULL);
 	D_ASSERT(cont != NULL);
-	D_ASSERT(!dae->dae_aborting);
-	D_ASSERT(!dae->dae_aborted);
+	D_ASSERT(dae->dae_aborting == 0);
+	D_ASSERT(dae->dae_aborted == 0);
+
+	if (!dth->dth_active) {
+		/* For resend case, do nothing. */
+		if (likely(dth->dth_prepared))
+			return 0;
+
+		/*
+		 * Even if the transaction modifies nothing locally, we still need to store
+		 * it persistently. Otherwise, the subsequent DTX resync may not find it as
+		 * to regard it as failed transaction and abort it.
+		 */
+		rc = vos_dtx_active(dth);
+
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+			  "Active empty transaction " DF_DTI, DP_DTI(&dth->dth_xid));
+
+		if (rc != 0)
+			return rc;
+	}
 
 	if (dth->dth_solo) {
 		if (dth->dth_drop_cmt)
@@ -2677,14 +2693,10 @@ vos_dtx_mark_committable(struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent	*dae = dth->dth_ent;
 
-	D_ASSERT(dae != NULL);
-
-	D_ASSERTF(dae->dae_prepared == 1,
-		  "DTX " DF_DTI " should be prepared locally before committable\n",
-		  DP_DTI(&dth->dth_xid));
-
-	dae->dae_committable = 1;
-	DAE_FLAGS(dae) &= ~(DTE_CORRUPTED | DTE_ORPHAN);
+	if (dae != NULL) {
+		dae->dae_committable = 1;
+		DAE_FLAGS(dae) &= ~(DTE_CORRUPTED | DTE_ORPHAN);
+	}
 }
 
 int
@@ -3133,9 +3145,6 @@ void
 vos_dtx_detach(struct dtx_handle *dth)
 {
 	struct vos_dtx_act_ent	*dae = dth->dth_ent;
-
-	D_ASSERTF(dth->dth_local_tx_started == 0,
-		  "DTX " DF_DTI " should end locally before detach\n", DP_DTI(&dth->dth_xid));
 
 	if (dae != NULL) {
 		D_ASSERT(dae->dae_dth == dth);
