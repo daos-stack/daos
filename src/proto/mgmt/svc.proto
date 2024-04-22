@@ -135,3 +135,16 @@ message PoolMonitorReq {
 	string poolHandleUUID = 3; // Pool Handle UUID for the connection
 	string jobid = 4;	// Job ID to associate instance with.
 }
+
+message ClientTelemetryReq
+{
+	string sys     = 1; // DAOS system identifier
+	string jobid   = 2; // Job ID used for client telemetry
+	int32  shm_key = 3; // Client's shared memory segment key
+}
+
+message ClientTelemetryResp
+{
+	int32 status    = 1; // DAOS status code
+	int32 agent_uid = 2; // UID of agent process
+}

@@ -55,9 +55,9 @@ container:
   daos_timeout: 30
 container_reserved:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  file_oclass: SX
-  dir_oclass: SX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:2
+  file_oclass: EC_2P2GX
+  dir_oclass: RP_3GX
   control_method: daos
   daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
@@ -138,10 +138,10 @@ ior_harasser:
     - '1m'
   segment_count: 1
   dfs_oclass:
-    - ["EC_2P1GX", "RP_2GX"]
+    - ["EC_2P2GX", "RP_3GX"]
     - ["EC_4P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/ior"
+    mount_dir: "/tmp/soak_dfuse_ior"
     disable_caching: true
 fio_harasser:
   api:
@@ -151,7 +151,7 @@ fio_harasser:
     - global
     - test
   global:
-    directory: "/tmp/daos_dfuse/fio/"
+    directory: "/tmp/soak_dfuse_fio/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -170,10 +170,10 @@ fio_harasser:
       - 'rw'
       - 'randrw'
     oclass:
-      - ["EC_2P1GX", "RP_2GX"]
+      - ["EC_2P2GX", "RP_3GX"]
       - ["EC_4P2GX", "RP_3GX"]
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/fio/"
+    mount_dir: "/tmp/soak_dfuse_fio/"
     disable_caching: true
 mdtest_harasser:
   # maximum timeout for a single job in test in minutes
@@ -201,11 +201,11 @@ mdtest_harasser:
     - 10
     - 0
   dfs_oclass:
-    - ["EC_2P1G1", "RP_2G1"]
+    - ["EC_2P2G1", "RP_3G1"]
     - ["EC_4P2G1", "RP_3G1"]
   dfs_destroy: false
   dfuse:
-    mount_dir: "/tmp/daos_dfuse/mdtest/"
+    mount_dir: "/tmp/soak_dfuse_mdtest/"
     disable_caching: true
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
