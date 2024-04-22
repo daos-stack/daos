@@ -140,7 +140,7 @@ class HotPlugNoActivityTest(IorTestBase):
         self.log_step("Store the total NVMe size of each drive.")
         uuid_to_total_bytes_orig = self.get_uuid_to_total_byes(
             dmg_command=dmg_command, host_port=host_port)
-        self.log.debug(f"## uuid_to_total_bytes_orig = {uuid_to_total_bytes_orig}")
+        self.log.debug("## uuid_to_total_bytes_orig = %s", uuid_to_total_bytes_orig)
 
         self.log_step("Create a pool and a container")
         self.pool = self.get_pool(connect=False)
@@ -169,7 +169,7 @@ class HotPlugNoActivityTest(IorTestBase):
         command = (f"sudo /usr/share/spdk/scripts/rpc.py -s {spdk_sock_path} vmd_remove_device "
                    f"{pci_addr}")
         rpc_out = run_pcmd(hosts=self.hostlist_servers, command=command)
-        self.log.debug(f"## Hot remove out = {rpc_out}")
+        self.log.debug("## Hot remove out = %s", rpc_out)
         exit_status = rpc_out[0]["exit_status"]
         if exit_status != 0:
             self.fail(f"Hot remove failed! {rpc_out}")
@@ -194,25 +194,25 @@ class HotPlugNoActivityTest(IorTestBase):
         self.log_step(msg)
         uuid_to_total_bytes_after = self.get_uuid_to_total_byes(
             dmg_command=dmg_command, host_port=host_port)
-        self.log.debug(f"## uuid_to_total_bytes_after = {uuid_to_total_bytes_after}")
+        self.log.debug("## uuid_to_total_bytes_after = %s", uuid_to_total_bytes_after)
         # Check that the removed device doesn't appear in 'dmg storage query usage' output.
         if remove_uuid in uuid_to_total_bytes_after:
-            msg = (f"Removed device ({disk_uuid}) appears after hot remove! "
+            msg = (f"Removed device ({remove_uuid}) appears after hot remove! "
                    f"{uuid_to_total_bytes_after}")
             errors.append(msg)
         for disk_uuid, total_bytes in uuid_to_total_bytes_orig.items():
             if disk_uuid != remove_uuid:
                 if disk_uuid not in uuid_to_total_bytes_after:
-                    msg = (f"Untouched disk ({disk_uuid}) disappeared after a hot remove!")
+                    msg = f"Untouched disk ({disk_uuid}) disappeared after a hot remove!"
                     errors.append(msg)
                 elif total_bytes != uuid_to_total_bytes_after[disk_uuid]:
-                    msg = (f"Hot remove resulted in untouched disk ({disk_uuid}) size change!")
+                    msg = f"Hot remove resulted in untouched disk ({disk_uuid}) size change!"
                     errors.append(msg)
 
         self.log_step("Hot-plug.")
         command = f"sudo /usr/share/spdk/scripts/rpc.py -s {spdk_sock_path} vmd_rescan"
         rpc_out = run_pcmd(hosts=self.hostlist_servers, command=command)
-        self.log.debug(f"## Hot plug out = {rpc_out}")
+        self.log.debug("## Hot plug out = %s", rpc_out)
         exit_status = rpc_out[0]["exit_status"]
         if exit_status != 0:
             self.fail(f"Hot plug failed! {rpc_out}")
