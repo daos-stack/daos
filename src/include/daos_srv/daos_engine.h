@@ -31,6 +31,9 @@
 /* Standard max length of addresses e.g. URI, PCI */
 #define ADDR_STR_MAX_LEN 128
 
+/** DAOS system name (corresponds to crt group ID) */
+extern char              daos_sysname[];
+
 /** number of target (XS set) per engine */
 extern unsigned int	 dss_tgt_nr;
 
