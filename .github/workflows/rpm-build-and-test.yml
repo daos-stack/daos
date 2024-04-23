@@ -26,7 +26,7 @@ on:
         description: 'Test tag to use'
         required: false
       functional-test-distros:
-        description: 'Distros to run Functional testing on (i.e. el8, el8, leap15, etc.)'
+        description: 'Distros to run Functional testing on (i.e. el8 el9 leap15, etc.)'
         required: false
 
   pull_request:
@@ -56,9 +56,6 @@ jobs:
       - name: Display inputs.functional-test-distros raw
         id: show_inputs_functional_test_distros_raw
         run: echo '${{ inputs.functional-test-distros }}'
-      - name: Display inputs.functional-test-distros fromJSON()
-        id: show_inputs_functional_test_distros_raw_from_json
-        run: echo '${{ fromJSON(inputs.functional-test-distros) }}'
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -394,14 +391,15 @@ jobs:
              # test matrix won't include testing it since it was calculated and was
              # successful on the previous run without the failed build stage in it
 
+             l=()
+             trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT; \
+                   cat $GITHUB_OUTPUT' EXIT
              # Use inputs.functional-test-distros if it was given
              if [ -n '${{ inputs.functional-test-distros }}' ]; then
-                 echo 'text=${{ inputs.functional-test-distros }}' >> $GITHUB_OUTPUT
+                 l=(${{ inputs.functional-test-distros }})
                  echo 'Using input parameter instead of calculating'
                  exit 0
              fi
-             l=()
-             trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT' EXIT
              if ${CP_SKIP_FUNC_TEST:-false}; then
                  exit 0
              fi
