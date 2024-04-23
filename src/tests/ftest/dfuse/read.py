@@ -100,7 +100,7 @@ class DFusePreReadTest(DfuseTestBase):
 
 class DFuseReadTest(DfuseTestBase):
     """Base ReadTest test class.
-    
+
     :avocado: recursive
     """
 

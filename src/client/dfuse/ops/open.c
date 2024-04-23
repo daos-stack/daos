@@ -82,9 +82,9 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 			 * pre-existed in the container.
 			 */
 			if (atomic_load_relaxed(&ie->ie_open_count) > 0 ||
-		    ((ie->ie_dcache_last_update.tv_sec != 0) &&
+			    ((ie->ie_dcache_last_update.tv_sec != 0) &&
 
-			    dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
+			     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
 				fi_out.keep_cache = 1;
 			} else {
 				prefetch = true;
