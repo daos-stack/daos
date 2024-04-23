@@ -609,6 +609,8 @@ jobs:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
       - name: Update commit status
+        if: github.event_name == 'pull_request' ||
+            github.event_name == 'push'
         uses: ouzi-dev/commit-status-updater@v2
         with:
           # yamllint disable-line rule:line-length
@@ -850,6 +852,8 @@ jobs:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
       - name: Update commit status
+        if: github.event_name == 'pull_request' ||
+            github.event_name == 'push'
         uses: ouzi-dev/commit-status-updater@v2
         with:
           name: 'test/Functional Hardware ${{ matrix.stage }}'
