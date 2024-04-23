@@ -397,6 +397,7 @@ jobs:
              # Use inputs.functional-test-distros if it was given
              if [ -n '${{ inputs.functional-test-distros }}' ]; then
                  echo 'text=${{ inputs.functional-test-distros }}' >> $GITHUB_OUTPUT
+                 echo 'Using input parameter instead of calculating'
                  exit 0
              fi
              l=()
