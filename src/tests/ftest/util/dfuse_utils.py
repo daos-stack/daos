@@ -392,6 +392,7 @@ class Dfuse(DfuseCommand):
         Returns:
             dict: the json response
         """
+
         if len(self.hosts) != 1:
             raise CommandFailure("get_stats only supports one host")
 
