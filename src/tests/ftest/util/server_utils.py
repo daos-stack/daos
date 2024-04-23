@@ -132,7 +132,7 @@ class DaosServerManager(SubprocessManager):
 
         # Parameters to set storage prepare and format timeout
         self.storage_prepare_timeout = BasicParameter(None, 40)
-        self.storage_format_timeout = BasicParameter(None, 40)
+        self.storage_format_timeout = BasicParameter(None, 64)
         self.storage_reset_timeout = BasicParameter(None, 120)
         self.collect_log_timeout = BasicParameter(None, 120)
 
