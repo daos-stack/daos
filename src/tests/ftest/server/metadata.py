@@ -90,7 +90,7 @@ class ObjectMetadata(TestWithServers):
         """Create a pool and display the svc ranks.
 
         Args:
-            svc_ops_enabled (Bool, optional): pool create with svc_ops_enabled, default to True.
+            svc_ops_enabled (bool, optional): pool create with svc_ops_enabled. Defaults to True.
 
         """
         if svc_ops_enabled:
