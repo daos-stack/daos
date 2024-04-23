@@ -7234,6 +7234,21 @@ finalize_myhook(void)
 		destroy_all_eqs();
 	}
 
+	if (compatible_mode) {
+		/* Free record left in fd hash table then destroy it */
+		while (1) {
+			rlink = d_hash_rec_first(fd_hash);
+			if (rlink == NULL)
+				break;
+			d_hash_rec_decref(fd_hash, rlink);
+		}
+
+		rc = d_hash_table_destroy(fd_hash, false);
+		if (rc != 0) {
+			DL_ERROR(rc, "error in d_hash_table_destroy(fd_hash)");
+		}
+	}
+
 	if (num_dfs > 0) {
 		close_all_duped_fd();
 		close_all_fd();
@@ -7258,21 +7273,6 @@ finalize_myhook(void)
 			uninstall_hook();
 		else
 			free_memory_in_hook();
-	}
-
-	if (compatible_mode) {
-		/* Free record left in fd hash table then destroy it */
-		while (1) {
-			rlink = d_hash_rec_first(fd_hash);
-			if (rlink == NULL)
-				break;
-			d_hash_rec_decref(fd_hash, rlink);
-		}
-
-		rc = d_hash_table_destroy(fd_hash, false);
-		if (rc != 0) {
-			DL_ERROR(rc, "error in d_hash_table_destroy(fd_hash)");
-		}
 	}
 
 	if (daos_debug_inited)
