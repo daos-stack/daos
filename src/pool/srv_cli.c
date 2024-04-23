@@ -67,7 +67,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	pool->dp_capas = flags;
 
 	/** attach to the server group and initialize rsvc_client */
-	rc = dc_mgmt_sys_attach(daos_sysname, false, &pool->dp_sys);
+	rc = dc_mgmt_sys_attach(daos_sysname, &pool->dp_sys);
 	if (rc != 0)
 		D_GOTO(out, rc);
 

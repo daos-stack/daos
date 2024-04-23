@@ -92,7 +92,7 @@ multi_tests_common_parse(int argc, char *argv[])
 
 	D_ASSERT(g_nreps < g_nranks);
 
-	return dc_mgmt_sys_attach(group_id, false, &sys);
+	return dc_mgmt_sys_attach(group_id, &sys);
 }
 
 static void
@@ -589,7 +589,7 @@ init_hdlr(int argc, char *argv[])
 		}
 	}
 
-	rc = dc_mgmt_sys_attach(group_id, false, &sys);
+	rc = dc_mgmt_sys_attach(group_id, &sys);
 	if (rc != 0)
 		return rc;
 
@@ -720,7 +720,7 @@ test_hdlr(int argc, char *argv[])
 		}
 	}
 
-	rc = dc_mgmt_sys_attach(group_id, false, &sys);
+	rc = dc_mgmt_sys_attach(group_id, &sys);
 	if (rc != 0)
 		return rc;
 
@@ -1483,7 +1483,7 @@ fini_hdlr(int argc, char *argv[])
 		}
 	}
 
-	rc = dc_mgmt_sys_attach(group_id, false, &sys);
+	rc = dc_mgmt_sys_attach(group_id, &sys);
 	if (rc != 0)
 		return rc;
 

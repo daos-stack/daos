@@ -73,7 +73,7 @@ dc_mgmt_get_bs_state(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 
-	rc = dc_mgmt_sys_attach(args->grp, true, &cb_args.sys);
+	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
 	if (rc != 0) {
 		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
 		D_GOTO(out, rc);

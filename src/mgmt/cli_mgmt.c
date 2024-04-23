@@ -62,7 +62,7 @@ dc_mgmt_profile(char *path, int avg, bool start)
 	crt_opcode_t		opc;
 	int			rc;
 
-	rc = dc_mgmt_sys_attach(NULL, false, &sys);
+	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
 		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
 		return -DER_INVAL;
@@ -839,11 +839,12 @@ detach_group(bool server, crt_group_t *group)
 }
 
 static int
-attach(const char *name, bool use_global_resp, struct dc_mgmt_sys **sysp)
+attach(const char *name, struct dc_mgmt_sys **sysp)
 {
 	struct dc_mgmt_sys	*sys;
 	crt_group_t		*group;
 	Mgmt__GetAttachInfoResp *resp;
+	bool			 need_free_resp = false;
 	int			 rc;
 
 	D_DEBUG(DB_MGMT, "attaching to system '%s'\n", name);
@@ -871,7 +872,8 @@ attach(const char *name, bool use_global_resp, struct dc_mgmt_sys **sysp)
 		goto out;
 	}
 
-	if (!use_global_resp) {
+	if (!resp_g) {
+		need_free_resp = true;
 		rc = get_attach_info(name, true /* all_ranks */, &sys->sy_info, &resp);
 		if (rc != 0)
 			goto err_sys;
@@ -886,7 +888,7 @@ attach(const char *name, bool use_global_resp, struct dc_mgmt_sys **sysp)
 	if (rc != 0)
 		goto err_info;
 
-	if (!use_global_resp)
+	if (need_free_resp)
 		free_get_attach_info_resp(resp);
 out:
 	*sysp = sys;
@@ -894,7 +896,7 @@ out:
 
 err_info:
 	d_rank_list_free(sys->sy_info.ms_ranks);
-	if (!use_global_resp)
+	if (need_free_resp)
 		free_get_attach_info_resp(resp);
 err_sys:
 	D_FREE(sys);
@@ -930,7 +932,7 @@ lookup_sys(const char *name)
 }
 
 static int
-sys_attach(const char *name, bool use_global_resp, struct dc_mgmt_sys **sysp)
+sys_attach(const char *name, struct dc_mgmt_sys **sysp)
 {
 	struct dc_mgmt_sys     *sys;
 	int			rc = 0;
@@ -941,7 +943,7 @@ sys_attach(const char *name, bool use_global_resp, struct dc_mgmt_sys **sysp)
 	if (sys != NULL)
 		goto ok;
 
-	rc = attach(name, use_global_resp, &sys);
+	rc = attach(name, &sys);
 	if (rc != 0)
 		goto out_lock;
 
@@ -962,17 +964,11 @@ out_lock:
  * \param[in,out]	sys	system handle
  */
 int
-dc_mgmt_sys_attach(const char *name, bool use_global_resp, struct dc_mgmt_sys **sysp)
+dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp)
 {
-	if (name == NULL) {
+	if (name == NULL)
 		name = agent_sys_name;
-	} else {
-		/** use the global attach response if default system */
-		if (strcmp(name, agent_sys_name) != 0)
-			use_global_resp = false;
-	}
-
-	return sys_attach(name, use_global_resp, sysp);
+	return sys_attach(name, sysp);
 }
 
 /**
@@ -1030,7 +1026,7 @@ dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp)
 	}
 	sysb = buf;
 
-	return sys_attach(sysb->syb_name, false, sysp);
+	return sys_attach(sysb->syb_name, sysp);
 }
 
 /* For a given pool label or UUID, contact mgmt. service to look up its

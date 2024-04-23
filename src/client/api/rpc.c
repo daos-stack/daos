@@ -138,7 +138,7 @@ daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int 
 	int                      rc;
 	int			 i;
 
-	rc = dc_mgmt_sys_attach(NULL, true, &sys);
+	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
 		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
 		return rc;
