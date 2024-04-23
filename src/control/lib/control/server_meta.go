@@ -196,20 +196,26 @@ func (sr *SmdResp) addHostManageResponse(hr *HostResponse) error {
 		return errors.Errorf("unable to unpack message: %+v", hr.Message)
 	}
 
-	hs := &HostStorage{
-		SmdInfo: &SmdInfo{},
-	}
+	var sds []*storage.SmdDevice
 	for _, rResp := range pbResp.GetRanks() {
 		rank := ranklist.Rank(rResp.Rank)
 
 		for _, pbResult := range rResp.GetResults() {
+			if pbResult.Device == nil {
+				continue
+			}
 			sd := new(storage.SmdDevice)
 			if err := convert.Types(pbResult.Device, sd); err != nil {
 				return errors.Wrapf(err, "converting %T to %T", pbResult.Device, sd)
 			}
 			sd.Rank = rank
-			hs.SmdInfo.Devices = append(hs.SmdInfo.Devices, sd)
+			sds = append(sds, sd)
 		}
+	}
+
+	hs := &HostStorage{}
+	if len(sds) != 0 {
+		hs.SmdInfo = &SmdInfo{Devices: sds}
 	}
 
 	if sr.HostStorage == nil {
