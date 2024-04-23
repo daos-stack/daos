@@ -18,6 +18,50 @@ static volatile int	gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 static bool		g_prov_settings_applied[CRT_PROV_COUNT];
 
+/* List of the environment variables used in CaRT */
+static const char      *crt_env_names[] = {
+    "D_PROVIDER",
+    "D_INTERFACE",
+    "D_DOMAIN",
+    "D_PORT",
+    "CRT_PHY_ADDR_STR",
+    "D_LOG_STDERR_IN_LOG",
+    "D_LOG_SIZE",
+    "D_LOG_FILE",
+    "D_LOG_FILE_APPEND_PID",
+    "D_LOG_MASK",
+    "DD_MASK",
+    "DD_STDERR",
+    "DD_SUBSYS",
+    "CRT_TIMEOUT",
+    "CRT_ATTACH_INFO_PATH",
+    "OFI_PORT",
+    "OFI_INTERFACE",
+    "OFI_DOMAIN",
+    "CRT_CREDIT_EP_CTX",
+    "CRT_CTX_SHARE_ADDR",
+    "CRT_CTX_NUM",
+    "D_FI_CONFIG",
+    "FI_UNIVERSE_SIZE",
+    "CRT_ENABLE_MEM_PIN",
+    "FI_OFI_RXM_USE_SRX",
+    "D_LOG_FLUSH",
+    "CRT_MRC_ENABLE",
+    "CRT_SECONDARY_PROVIDER",
+    "D_PROVIDER_AUTH_KEY",
+    "D_PORT_AUTO_ADJUST",
+    "D_POLL_TIMEOUT",
+    "D_LOG_FILE_APPEND_RANK",
+    "D_QUOTA_RPCS",
+    "D_POST_INIT",
+    "D_POST_INCR",
+    "DAOS_SIGNAL_REGISTER",
+    "D_CLIENT_METRICS_ENABLE",
+    "D_CLIENT_METRICS_RETAIN",
+    "D_CLIENT_METRICS_DUMP_PATH",
+
+};
+
 static void
 crt_lib_init(void) __attribute__((__constructor__));
 
@@ -62,53 +106,19 @@ crt_lib_fini(void)
 static void
 dump_envariables(void)
 {
-	int                i;
-	char              *val;
-	static const char *var_names[] = {"D_PROVIDER",
-					  "D_INTERFACE",
-					  "D_DOMAIN",
-					  "D_PORT",
-					  "CRT_PHY_ADDR_STR",
-					  "D_LOG_STDERR_IN_LOG",
-					  "D_LOG_SIZE",
-					  "D_LOG_FILE",
-					  "D_LOG_FILE_APPEND_PID",
-					  "D_LOG_MASK",
-					  "DD_MASK",
-					  "DD_STDERR",
-					  "DD_SUBSYS",
-					  "CRT_TIMEOUT",
-					  "CRT_ATTACH_INFO_PATH",
-					  "OFI_PORT",
-					  "OFI_INTERFACE",
-					  "OFI_DOMAIN",
-					  "CRT_CREDIT_EP_CTX",
-					  "CRT_CTX_SHARE_ADDR",
-					  "CRT_CTX_NUM",
-					  "D_FI_CONFIG",
-					  "FI_UNIVERSE_SIZE",
-					  "CRT_ENABLE_MEM_PIN",
-					  "FI_OFI_RXM_USE_SRX",
-					  "D_LOG_FLUSH",
-					  "CRT_MRC_ENABLE",
-					  "CRT_SECONDARY_PROVIDER",
-					  "D_PROVIDER_AUTH_KEY",
-					  "D_PORT_AUTO_ADJUST",
-					  "D_POLL_TIMEOUT",
-					  "D_LOG_FILE_APPEND_RANK",
-					  "D_QUOTA_RPCS",
-					  "D_POST_INIT",
-					  "D_POST_INCR"};
+	int i;
 
 	D_INFO("-- ENVARS: --\n");
-	for (i = 0; i < ARRAY_SIZE(var_names); i++) {
-		d_agetenv_str(&val, var_names[i]);
+	for (i = 0; i < ARRAY_SIZE(crt_env_names); i++) {
+		char *val = NULL;
+
+		d_agetenv_str(&val, crt_env_names[i]);
 		if (val == NULL)
 			continue;
-		if (strcmp(var_names[i], "D_PROVIDER_AUTH_KEY") == 0)
-			D_INFO("%s = %s\n", var_names[i], "********");
+		if (strcmp(crt_env_names[i], "D_PROVIDER_AUTH_KEY") == 0)
+			D_INFO("%s = %s\n", crt_env_names[i], "********");
 		else
-			D_INFO("%s = %s\n", var_names[i], val);
+			D_INFO("%s = %s\n", crt_env_names[i], val);
 		d_freeenv_str(&val);
 	}
 }

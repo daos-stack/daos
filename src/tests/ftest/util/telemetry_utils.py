@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -30,7 +30,7 @@ def _gen_stats_metrics(basename):
 
 class TelemetryUtils():
     # pylint: disable=too-many-nested-blocks
-    """Defines a object used to verify telemetry information."""
+    """Defines an object used to verify server telemetry information."""
 
     # Define a set of patterns that shouldn't be used for comparisons.
     METRIC_EXCLUDE_PATTERNS = [
@@ -461,7 +461,7 @@ class TelemetryUtils():
                 return True
         return False
 
-    def list_metrics(self):
+    def list_metrics(self, hosts=None):
         """List the available metrics for each host.
 
         Returns:
@@ -469,8 +469,9 @@ class TelemetryUtils():
 
         """
         info = {}
-        self.log.info("Listing telemetry metrics from %s", self.hosts)
-        for host in self.hosts:
+        host_list = hosts or self.hosts
+        self.log.info("Listing telemetry metrics from %s", host_list)
+        for host in host_list:
             data = self.dmg.telemetry_metrics_list(host=host)
             info[host] = []
             if "response" in data:
@@ -480,7 +481,7 @@ class TelemetryUtils():
                             info[host].append(entry["name"])
         return info
 
-    def collect_data(self, names):
+    def collect_data(self, names, hosts=None):
         """Collect telemetry data for the specified metrics.
 
         Args:
@@ -496,7 +497,9 @@ class TelemetryUtils():
                     },
                     ...
         """
-        return self._data.collect(self.log, names, self.hosts, self.dmg)
+        host_list = hosts or self.hosts
+        self.log.info("Collecting telemetry data from %s", host_list)
+        return self._data.collect(self.log, names, host_list, self.dmg)
 
     def display_data(self):
         """Display the telemetry metric values."""
@@ -517,7 +520,7 @@ class TelemetryUtils():
         """
         return self._data.verify(self.log, ranges)
 
-    def get_metrics(self, name):
+    def get_metrics(self, name, hosts=None):
         """Obtain the specified metric information for each host.
 
         Args:
@@ -529,8 +532,9 @@ class TelemetryUtils():
 
         """
         info = {}
-        self.log.info("Querying telemetry metric %s from %s", name, self.hosts)
-        for host in self.hosts:
+        host_list = hosts or self.hosts
+        self.log.info("Querying telemetry metric %s from %s", name, host_list)
+        for host in host_list:
             data = self.dmg.telemetry_metrics_query(host=host, metrics=name)
             info[host] = {}
             if "response" in data:
@@ -798,6 +802,246 @@ class TelemetryUtils():
         return status
 
 
+class ClientTelemetryUtils(TelemetryUtils):
+    """Defines an object used to verify server and client telemetry information."""
+
+    CLIENT_EVENT_METRICS = [
+        "client_started_at"]
+    CLIENT_POOL_ACTION_METRICS = [
+        "client_pool_resent",
+        "client_pool_restarted",
+        "client_pool_retry",
+        "client_pool_xferred_fetch",
+        "client_pool_xferred_update"]
+    CLIENT_POOL_OPS_METRICS = [
+        "client_pool_ops_akey_enum",
+        "client_pool_ops_akey_punch",
+        "client_pool_ops_compound",
+        "client_pool_ops_dkey_enum",
+        "client_pool_ops_dkey_punch",
+        "client_pool_ops_ec_agg",
+        "client_pool_ops_ec_rep",
+        "client_pool_ops_fetch",
+        "client_pool_ops_key2anchor",
+        "client_pool_ops_key_query",
+        "client_pool_ops_migrate",
+        "client_pool_ops_obj_coll_punch",
+        "client_pool_ops_obj_coll_query",
+        "client_pool_ops_obj_enum",
+        "client_pool_ops_obj_punch",
+        "client_pool_ops_obj_sync",
+        "client_pool_ops_recx_enum",
+        "client_pool_ops_tgt_akey_punch",
+        "client_pool_ops_tgt_dkey_punch",
+        "client_pool_ops_tgt_punch",
+        "client_pool_ops_tgt_update",
+        "client_pool_ops_update"]
+    CLIENT_POOL_EC_UPDATE_METRICS = [
+        "client_pool_EC_update_full_stripe",
+        "client_pool_EC_update_partial"]
+    CLIENT_POOL_METRICS = CLIENT_POOL_ACTION_METRICS +\
+        CLIENT_POOL_OPS_METRICS +\
+        CLIENT_POOL_EC_UPDATE_METRICS
+    CLIENT_IO_LATENCY_FETCH_METRICS = \
+        _gen_stats_metrics("client_io_latency_fetch")
+    CLIENT_IO_LATENCY_UPDATE_METRICS = \
+        _gen_stats_metrics("client_io_latency_update")
+    CLIENT_IO_OPS_AKEY_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_akey_enum_active")
+    CLIENT_IO_OPS_AKEY_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_akey_enum_latency")
+    CLIENT_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_akey_punch_active")
+    CLIENT_IO_OPS_AKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_akey_punch_latency")
+    CLIENT_IO_OPS_COMPOUND_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_compound_active")
+    CLIENT_IO_OPS_COMPOUND_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_compound_latency")
+    CLIENT_IO_OPS_DKEY_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_dkey_enum_active")
+    CLIENT_IO_OPS_DKEY_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_dkey_enum_latency")
+    CLIENT_IO_OPS_DKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_dkey_punch_active")
+    CLIENT_IO_OPS_DKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_dkey_punch_latency")
+    CLIENT_IO_OPS_EC_AGG_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_ec_agg_active")
+    CLIENT_IO_OPS_EC_AGG_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_ec_agg_latency")
+    CLIENT_IO_OPS_EC_REP_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_ec_rep_active")
+    CLIENT_IO_OPS_EC_REP_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_ec_rep_latency")
+    CLIENT_IO_OPS_FETCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_fetch_active")
+    CLIENT_IO_OPS_KEY2ANCHOR_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_key2anchor_active")
+    CLIENT_IO_OPS_KEY2ANCHOR_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_key2anchor_latency")
+    CLIENT_IO_OPS_KEY_QUERY_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_key_query_active")
+    CLIENT_IO_OPS_KEY_QUERY_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_key_query_latency")
+    CLIENT_IO_OPS_MIGRATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_migrate_active")
+    CLIENT_IO_OPS_MIGRATE_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_migrate_latency")
+    CLIENT_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_coll_punch_active")
+    CLIENT_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_coll_punch_latency")
+    CLIENT_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_coll_query_active")
+    CLIENT_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_coll_query_latency")
+    CLIENT_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_enum_active")
+    CLIENT_IO_OPS_OBJ_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_enum_latency")
+    CLIENT_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_punch_active")
+    CLIENT_IO_OPS_OBJ_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_punch_latency")
+    CLIENT_IO_OPS_OBJ_punch_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_sync_active")
+    CLIENT_IO_OPS_OBJ_SYNC_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_obj_sync_latency")
+    CLIENT_IO_OPS_RECX_ENUM_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_recx_enum_active")
+    CLIENT_IO_OPS_RECX_ENUM_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_recx_enum_latency")
+    CLIENT_IO_OPS_TGT_AKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_akey_punch_active")
+    CLIENT_IO_OPS_TGT_AKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_akey_punch_latency")
+    CLIENT_IO_OPS_TGT_DKEY_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_dkey_punch_active")
+    CLIENT_IO_OPS_TGT_DKEY_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_dkey_punch_latency")
+    CLIENT_IO_OPS_TGT_PUNCH_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_punch_active")
+    CLIENT_IO_OPS_TGT_PUNCH_LATENCY_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_punch_latency")
+    CLIENT_IO_OPS_TGT_UPDATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_tgt_update_active")
+    CLIENT_IO_OPS_UPDATE_ACTIVE_METRICS = \
+        _gen_stats_metrics("client_io_ops_update_active")
+    CLIENT_IO_METRICS = CLIENT_IO_LATENCY_FETCH_METRICS +\
+        CLIENT_IO_LATENCY_UPDATE_METRICS +\
+        CLIENT_IO_OPS_AKEY_ENUM_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_AKEY_ENUM_LATENCY_METRICS +\
+        CLIENT_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_AKEY_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_COMPOUND_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_COMPOUND_LATENCY_METRICS +\
+        CLIENT_IO_OPS_DKEY_ENUM_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_DKEY_ENUM_LATENCY_METRICS +\
+        CLIENT_IO_OPS_DKEY_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_DKEY_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_EC_AGG_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_EC_AGG_LATENCY_METRICS +\
+        CLIENT_IO_OPS_EC_REP_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_EC_REP_LATENCY_METRICS +\
+        CLIENT_IO_OPS_FETCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_KEY2ANCHOR_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_KEY2ANCHOR_LATENCY_METRICS +\
+        CLIENT_IO_OPS_KEY_QUERY_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_KEY_QUERY_LATENCY_METRICS +\
+        CLIENT_IO_OPS_MIGRATE_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_MIGRATE_LATENCY_METRICS +\
+        CLIENT_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_OBJ_COLL_QUERY_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_OBJ_COLL_QUERY_LATENCY_METRICS +\
+        CLIENT_IO_OPS_OBJ_ENUM_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_OBJ_ENUM_LATENCY_METRICS +\
+        CLIENT_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_OBJ_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_OBJ_punch_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_OBJ_SYNC_LATENCY_METRICS +\
+        CLIENT_IO_OPS_RECX_ENUM_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_RECX_ENUM_LATENCY_METRICS +\
+        CLIENT_IO_OPS_TGT_AKEY_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_TGT_AKEY_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_TGT_DKEY_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_TGT_DKEY_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_TGT_PUNCH_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_TGT_PUNCH_LATENCY_METRICS +\
+        CLIENT_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
+        CLIENT_IO_OPS_UPDATE_ACTIVE_METRICS
+
+    def __init__(self, dmg, servers, clients):
+        """Create a ClientTelemetryUtils object.
+
+        Args:
+            dmg (DmgCommand): the DmgCommand object configured to communicate
+                with the servers
+            servers (list): a list of server host names
+            clients (list): a list of client host names
+        """
+        super().__init__(dmg, servers)
+        self.clients = NodeSet.fromlist(clients)
+
+    def get_all_client_metrics_names(self, with_pools=False):
+        """Get all the telemetry metrics names for this client.
+
+        Args:
+            with_pools (bool): if True, include pool metrics in the results
+
+        Returns:
+            list: all of the telemetry metrics names for this client
+
+        """
+        all_metrics_names = list(self.CLIENT_EVENT_METRICS)
+        all_metrics_names.extend(self.CLIENT_IO_METRICS)
+        if with_pools:
+            all_metrics_names.extend(self.CLIENT_POOL_METRICS)
+
+        return all_metrics_names
+
+    def list_client_metrics(self):
+        """List the available metrics for each host.
+
+        Returns:
+            dict: a dictionary of host keys linked to a list of metric names
+
+        """
+        return super().list_metrics(hosts=self.clients)
+
+    def collect_client_data(self, names):
+        """Collect telemetry data for the specified metrics.
+
+        Args:
+            names (list): list of metric names
+
+        Returns:
+            dict: dictionary of metric values keyed by the metric name and combination of metric
+                labels and values, e.g.
+                    <metric_name>: {
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_1>,
+                        <label_1:label_1_value,label_2:label_2_value,...>: <value_2>,
+                        ...
+                    },
+                    ...
+        """
+        return super().collect_data(names, hosts=self.clients)
+
+    def get_client_metrics(self, name):
+        """Obtain the specified metric information for each host.
+
+        Args:
+            name (str): Comma-separated list of metric names to query.
+
+        Returns:
+            dict: a dictionary of host keys linked to metric data for each
+                metric name specified
+
+        """
+        return super().get_metrics(name, hosts=self.clients)
+
+
 class MetricData():
     """Defines a object used to collect, display, and verify telemetry metric data."""
 
@@ -876,9 +1120,10 @@ class MetricData():
         log.info(format_str, *['-' * self._display['widths'][name] for name in columns])
         for metric in sorted(self._display['data']):
             for value, labels in self._display['data'][metric].items():
-                log.info(
-                    format_str, metric, *self._label_values(labels), value,
-                    *self._label_values(labels, ['check']))
+                for label in labels:
+                    log.info(
+                        format_str, metric, *self._label_values(label), value,
+                        *self._label_values(label, ['check']))
         return status
 
     def _get_metrics(self, log, names, hosts, dmg):

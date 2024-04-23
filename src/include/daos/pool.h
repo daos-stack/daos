@@ -14,6 +14,7 @@
 
 #include <daos/common.h>
 #include <gurt/hash.h>
+#include <gurt/telemetry_common.h>
 #include <daos/pool_map.h>
 #include <daos/rsvc.h>
 #include <daos/tse.h>
@@ -91,6 +92,7 @@ struct dc_pool {
 	pthread_rwlock_t	dp_map_lock;
 	struct pool_map	       *dp_map;
 	tse_task_t	       *dp_map_task;
+	void                  **dp_metrics;
 	/* highest known pool map version */
 	uint32_t		dp_map_version_known;
 	uint32_t		dp_disconnecting:1,

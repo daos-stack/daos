@@ -10,6 +10,7 @@
 #ifndef __DC_MGMT_H__
 #define __DC_MGMT_H__
 
+#include <sys/types.h>
 #include <daos/common.h>
 #include <daos/tse.h>
 #include <daos_types.h>
@@ -70,6 +71,9 @@ int dc_mgmt_net_get_num_srv_ranks(void);
 
 int dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **info);
 void dc_mgmt_put_sys_info(struct daos_sys_info *info);
+
+int
+     dc_mgmt_tm_register(const char *sys, const char *jobid, key_t shm_key, uid_t *owner_uid);
 
 int dc_get_attach_info(const char *name, bool all_ranks,
 		       struct dc_mgmt_sys_info *info,

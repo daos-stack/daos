@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2023 Intel Corporation.
+ * (C) Copyright 2020-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -145,9 +145,12 @@ enum {
 };
 
 enum {
-	D_TM_SERVER_PROCESS		= 0x000,
-	D_TM_SERIALIZATION		= 0x001,
-	D_TM_RETAIN_SHMEM		= 0x002,
+	D_TM_SERVER_PROCESS            = 0x000,
+	D_TM_SERIALIZATION             = 0x001,
+	D_TM_RETAIN_SHMEM              = 0x002,
+	D_TM_RETAIN_SHMEM_IF_NON_EMPTY = 0x004,
+	D_TM_OPEN_OR_CREATE            = 0x008,
+	D_TM_MULTIPLE_WRITER_LOCK      = 0x010,
 };
 
 /** Output formats */
