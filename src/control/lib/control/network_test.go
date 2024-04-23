@@ -19,30 +19,6 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-type mockFabricScan struct {
-	Hosts  string
-	Fabric *HostFabric
-}
-
-func mockHostFabricMap(t *testing.T, scans ...*mockFabricScan) HostFabricMap {
-	hfm := make(HostFabricMap)
-
-	for _, scan := range scans {
-		hfs := &HostFabricSet{
-			HostFabric: scan.Fabric,
-			HostSet:    mockHostSet(t, scan.Hosts),
-		}
-
-		hk, err := hfs.HostFabric.HashKey()
-		if err != nil {
-			t.Fatal(err)
-		}
-		hfm[hk] = hfs
-	}
-
-	return hfm
-}
-
 func TestControl_NetworkScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
@@ -128,7 +104,7 @@ func TestControl_NetworkScan(t *testing.T) {
 				},
 			},
 			expResp: &NetworkScanResp{
-				HostFabrics: mockHostFabricMap(t, &mockFabricScan{
+				HostFabrics: MockHostFabricMap(t, &MockFabricScan{
 					Hosts: "host1",
 					Fabric: &HostFabric{
 						Interfaces: []*HostFabricInterface{
@@ -168,7 +144,7 @@ func TestControl_NetworkScan(t *testing.T) {
 				},
 			},
 			expResp: &NetworkScanResp{
-				HostFabrics: mockHostFabricMap(t, &mockFabricScan{
+				HostFabrics: MockHostFabricMap(t, &MockFabricScan{
 					Hosts: "host1",
 					Fabric: &HostFabric{
 						Interfaces: []*HostFabricInterface{
@@ -230,7 +206,7 @@ func TestControl_NetworkScan(t *testing.T) {
 				},
 			},
 			expResp: &NetworkScanResp{
-				HostFabrics: mockHostFabricMap(t, &mockFabricScan{
+				HostFabrics: MockHostFabricMap(t, &MockFabricScan{
 					Hosts: "host[1-2]",
 					Fabric: &HostFabric{
 						Interfaces: []*HostFabricInterface{
