@@ -367,8 +367,6 @@ dss_topo_init(void)
 	if (multi_socket && numa_node_nr > 1) {
 		if (!dss_multi_socket_check(tgt_oversub, numa_node_nr))
 			return -DER_INVAL;
-
-		dss_numa_nr = numa_node_nr;
 	}
 
 	/* if no NUMA node was specified, or NUMA data unavailable */
@@ -435,6 +433,7 @@ dss_topo_init(void)
 		 * still use all of the cores.
 		 */
 		D_PRINT("Using Multi-socket NUMA core allocation algorithm\n");
+		dss_numa_nr             = numa_node_nr;
 		dss_offload_per_numa_nr = dss_tgt_offload_xs_nr / dss_numa_nr;
 		dss_tgt_per_numa_nr     = dss_tgt_nr / dss_numa_nr;
 		return dss_tgt_nr_check(dss_core_nr, dss_tgt_nr, tgt_oversub);
