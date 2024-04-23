@@ -44,7 +44,6 @@ static int rdb_raft_create_lc(daos_handle_t pool, daos_handle_t mc,
 static int rdb_raft_destroy_lc(daos_handle_t pool, daos_handle_t mc,
 			       d_iov_t *key, uuid_t uuid,
 			       struct rdb_lc_record *record);
-static void *rdb_raft_lookup_result(struct rdb *db, uint64_t index);
 
 /* Translate a raft error into an rdb error. */
 static inline int
@@ -1072,7 +1071,6 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry, rdb_vo
 	d_rank_list_t  *replicas;
 	d_rank_t	rank = rdb_raft_cfg_entry_rank(entry);
 	bool		found;
-	void	       *result;
 	int		rc;
 
 	D_DEBUG(DB_MD, DF_DB": cfg entry "DF_U64": term=%ld type=%s rank=%u\n", DP_DB(db), index,
@@ -1107,9 +1105,6 @@ rdb_raft_update_node(struct rdb *db, uint64_t index, raft_entry_t *entry, rdb_vo
 out_replicas:
 	d_rank_list_free(replicas);
 out:
-	result = rdb_raft_lookup_result(db, index);
-	if (result != NULL)
-		*(int *)result = rc;
 	if (rc != 0)
 		D_ERROR(DF_DB": failed to perform %s on rank %u at index "DF_U64": "DF_RC"\n",
 			DP_DB(db), rdb_raft_entry_type_str(entry->type), rank, index, DP_RC(rc));
@@ -1159,8 +1154,7 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index, r
 	 * rdb_tx_commit() call returns.)
 	 */
 	if (entry->type == RAFT_LOGTYPE_NORMAL) {
-		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
-				  rdb_raft_lookup_result(db, index), &crit, vtx);
+		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len, &crit, vtx);
 		if (rc != 0) {
 			DL_ERROR(rc, DF_DB ": failed to apply entry " DF_U64, DP_DB(db), index);
 			goto err;
@@ -1954,82 +1948,9 @@ rdb_raft_check_state(struct rdb *db, const struct rdb_raft_state *state,
 	return rc;
 }
 
-/* Result buffer for an entry */
-struct rdb_raft_result {
-	d_list_t	drr_entry;
-	uint64_t	drr_index;
-	void	       *drr_buf;
-};
-
-static inline struct rdb_raft_result *
-rdb_raft_result_obj(d_list_t *rlink)
-{
-	return container_of(rlink, struct rdb_raft_result, drr_entry);
-}
-
-static bool
-rdb_raft_result_key_cmp(struct d_hash_table *htable, d_list_t *rlink,
-			const void *key, unsigned int ksize)
-{
-	struct rdb_raft_result *result = rdb_raft_result_obj(rlink);
-
-	D_ASSERTF(ksize == sizeof(result->drr_index), "%u\n", ksize);
-	return memcmp(&result->drr_index, key, sizeof(result->drr_index)) == 0;
-}
-
-static d_hash_table_ops_t rdb_raft_result_hash_ops = {
-	.hop_key_cmp = rdb_raft_result_key_cmp
-};
-
-static int
-rdb_raft_register_result(struct rdb *db, uint64_t index, void *buf)
-{
-	struct rdb_raft_result *result;
-	int			rc;
-
-	D_ALLOC_PTR(result);
-	if (result == NULL)
-		return -DER_NOMEM;
-	result->drr_index = index;
-	result->drr_buf = buf;
-	rc = d_hash_rec_insert(&db->d_results, &result->drr_index,
-			       sizeof(result->drr_index), &result->drr_entry,
-			       true /* exclusive */);
-	if (rc != 0)
-		D_FREE(result);
-	return rc;
-}
-
-static void *
-rdb_raft_lookup_result(struct rdb *db, uint64_t index)
-{
-	d_list_t *entry;
-
-	entry = d_hash_rec_find(&db->d_results, &index, sizeof(index));
-	if (entry == NULL)
-		return NULL;
-	return rdb_raft_result_obj(entry)->drr_buf;
-}
-
-static void
-rdb_raft_unregister_result(struct rdb *db, uint64_t index)
-{
-	struct rdb_raft_result *result;
-	d_list_t	       *entry;
-	bool			deleted;
-
-	entry = d_hash_rec_find(&db->d_results, &index, sizeof(index));
-	D_ASSERT(entry != NULL);
-	result = rdb_raft_result_obj(entry);
-	deleted = d_hash_rec_delete_at(&db->d_results, entry);
-	D_ASSERT(deleted);
-	D_FREE(result);
-}
-
 /* Append and wait for \a entry to be applied. Caller must hold d_raft_mutex. */
 static int
-rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
-			       void *result)
+rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry)
 {
 	msg_entry_response_t	mresponse;
 	struct rdb_raft_state	state;
@@ -2037,11 +1958,6 @@ rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
 	int			rc;
 
 	index = raft_get_current_idx(db->d_raft) + 1;
-	if (result != NULL) {
-		rc = rdb_raft_register_result(db, index, result);
-		if (rc != 0)
-			goto out;
-	}
 
 	rdb_raft_save_state(db, &state);
 	rc = raft_recv_entry(db->d_raft, mentry, &mresponse);
@@ -2050,7 +1966,7 @@ rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
 		if (rc != -DER_NOTLEADER)
 			D_ERROR(DF_DB ": failed to append entry: " DF_RC "\n", DP_DB(db),
 				DP_RC(rc));
-		goto out_result;
+		return rc;
 	}
 
 	/* The actual index must match the expected index. */
@@ -2059,53 +1975,43 @@ rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
 	rc = rdb_raft_wait_applied(db, mresponse.idx, mresponse.term);
 	raft_apply_all(db->d_raft);
 
-out_result:
-	if (result != NULL)
-		rdb_raft_unregister_result(db, index);
-out:
 	return rc;
 }
 
 int
 rdb_raft_add_replica(struct rdb *db, d_rank_t rank)
 {
-	msg_entry_t	 entry = {};
-	int		 result;
-	int		 rc;
+	msg_entry_t entry = {};
 
 	D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n", DP_DB(db), rank);
 	entry.type = RAFT_LOGTYPE_ADD_NODE;
 	entry.data.buf = &rank;
 	entry.data.len = sizeof(d_rank_t);
-	rc = rdb_raft_append_apply_internal(db, &entry, &result);
-	return (rc != 0) ? rc : result;
+	return rdb_raft_append_apply_internal(db, &entry);
 }
 
 int
 rdb_raft_remove_replica(struct rdb *db, d_rank_t rank)
 {
-	msg_entry_t	 entry = {};
-	int		 result;
-	int		 rc;
+	msg_entry_t entry = {};
 
 	D_DEBUG(DB_MD, DF_DB": Replica Rank: %d\n", DP_DB(db), rank);
 	entry.type = RAFT_LOGTYPE_REMOVE_NODE;
 	entry.data.buf = &rank;
 	entry.data.len = sizeof(d_rank_t);
-	rc = rdb_raft_append_apply_internal(db, &entry, &result);
-	return (rc != 0) ? rc : result;
+	return rdb_raft_append_apply_internal(db, &entry);
 }
 
 /* Caller must hold d_raft_mutex. */
 int
-rdb_raft_append_apply(struct rdb *db, void *entry, size_t size, void *result)
+rdb_raft_append_apply(struct rdb *db, void *entry, size_t size)
 {
-	msg_entry_t	 mentry = {};
+	msg_entry_t mentry = {};
 
 	mentry.type = RAFT_LOGTYPE_NORMAL;
 	mentry.data.buf = entry;
 	mentry.data.len = size;
-	return rdb_raft_append_apply_internal(db, &mentry, result);
+	return rdb_raft_append_apply_internal(db, &mentry);
 }
 
 /* Verify the leadership with a majority. */
@@ -2119,7 +2025,7 @@ rdb_raft_verify_leadership(struct rdb *db)
 	 * Since raft does not provide a function for verifying leadership via
 	 * RPCs yet, append an empty entry as a (slower) workaround.
 	 */
-	return rdb_raft_append_apply(db, NULL /* entry */, 0 /* size */, NULL /* result */);
+	return rdb_raft_append_apply(db, NULL /* entry */, 0 /* size */);
 }
 
 /* Generate a random double in [0.0, 1.0]. */
@@ -2711,19 +2617,12 @@ rdb_raft_open(struct rdb *db, uint64_t caller_term)
 	db->d_ae_max_size = rdb_raft_get_ae_max_size();
 	db->d_ae_max_entries = rdb_raft_get_ae_max_entries();
 
-	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 4 /* bits */,
-					 NULL /* priv */,
-					 &rdb_raft_result_hash_ops,
-					 &db->d_results);
-	if (rc != 0)
-		goto err;
-
 	rc = ABT_cond_create(&db->d_applied_cv);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR(DF_DB": failed to create applied CV: %d\n", DP_DB(db),
 			rc);
 		rc = dss_abterr2der(rc);
-		goto err_results;
+		goto err;
 	}
 
 	rc = ABT_cond_create(&db->d_events_cv);
@@ -2801,8 +2700,6 @@ err_events_cv:
 	ABT_cond_free(&db->d_events_cv);
 err_applied_cv:
 	ABT_cond_free(&db->d_applied_cv);
-err_results:
-	d_hash_table_destroy_inplace(&db->d_results, true /* force */);
 err:
 	return rc;
 }
@@ -2817,7 +2714,6 @@ rdb_raft_close(struct rdb *db)
 	ABT_cond_free(&db->d_replies_cv);
 	ABT_cond_free(&db->d_events_cv);
 	ABT_cond_free(&db->d_applied_cv);
-	d_hash_table_destroy_inplace(&db->d_results, true /* force */);
 }
 
 /*

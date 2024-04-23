@@ -419,14 +419,14 @@ rdb_tx_discard(struct rdb_tx *tx)
 int
 rdb_tx_commit(struct rdb_tx *tx)
 {
-	int		result = 0;
-	int		rc;
+	int rc;
 
 	/* Don't fail query-only TXs for leader checks. */
 	if ((tx->dt_flags & RDB_TX_LOCAL) || tx->dt_entry == NULL)
 		return 0;
 
 	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
+
 	rc = rdb_tx_leader_check(tx);
 	if (rc != 0) {
 		D_ERROR(DF_DB": leader check: "DF_RC"\n", DP_DB(tx->dt_db),
@@ -490,15 +490,12 @@ check_space:
 			scm_remaining);
 	}
 
-	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len,
-				   &result);
+	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len);
+
 out_lock:
 	ABT_mutex_unlock(tx->dt_db->d_raft_mutex);
-	if (rc != 0)
-		return rc;
-	return result;
+	return rc;
 }
-
 
 /**
  * Create the root KVS.
@@ -986,21 +983,13 @@ rdb_tx_count_vops(struct rdb *db, const void *buf, size_t len)
 	return count;
 }
 
-/* Is "error" deterministic? */
-static inline bool
-rdb_tx_deterministic_error(int error)
-{
-	return error == -DER_NONEXIST || error == -DER_MISMATCH ||
-	       error == -DER_INVAL || error == -DER_NO_PERM;
-}
-
 /*
  * Apply an entry and return the error only if a nondeterministic error
  * happens. This function tries to discard index if an error occurs.
  * Interpret header to know if ops in the TX are deemed "critical".
  */
 int
-rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *result, bool *critp,
+rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, bool *critp,
 	     rdb_vos_tx_t vtx)
 {
 	const void	       *p = buf;
@@ -1055,10 +1044,8 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *
 		}
 		rc = rdb_tx_apply_op(db, index, &op, hdr.critical, vtx);
 		if (rc != 0) {
-			if (!rdb_tx_deterministic_error(rc))
-				D_ERROR(DF_DB ": failed to apply entry " DF_U64
-					      " op %u <%td, %zd>: " DF_RC "\n",
-					DP_DB(db), index, op.dto_opc, p - buf, n, DP_RC(rc));
+			DL_ERROR(rc, DF_DB ": failed to apply entry " DF_U64 " op %u <%td, %zd>",
+				 DP_DB(db), index, op.dto_opc, p - buf, n);
 			break;
 		}
 		p += n;
@@ -1072,20 +1059,12 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *
 	 * nondeterministic errors must be rare and deterministic errors can be
 	 * easily avoided by rdb callers.
 	 */
-	if (rc != 0)
+	if (rc != 0) {
 		rdb_kvs_cache_evict(db->d_kvss);
-
-	if (rc != 0 && !rdb_tx_deterministic_error(rc))
 		return rc;
+	}
 
 out:
-	/*
-	 * Report the deterministic error to the result buffer, if there is
-	 * one, and consider this entry applied.
-	 */
-	if (result != NULL)
-		*(int *)result = rc;
-
 	*critp = hdr.critical;
 	return 0;
 }

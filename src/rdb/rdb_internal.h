@@ -105,7 +105,6 @@ struct rdb {
 	uint64_t		d_applied;	/* last applied index */
 	uint64_t		d_debut;	/* first entry in a term */
 	ABT_cond		d_applied_cv;	/* for d_applied updates */
-	struct d_hash_table	d_results;	/* rdb_raft_result hash */
 	d_list_t		d_requests;	/* RPCs waiting for replies */
 	d_list_t		d_replies;	/* RPCs received replies */
 	ABT_cond		d_replies_cv;	/* for d_replies enqueues */
@@ -193,8 +192,7 @@ int rdb_raft_verify_leadership(struct rdb *db);
 int rdb_raft_load_replicas(daos_handle_t lc, uint64_t index, d_rank_list_t **replicas);
 int rdb_raft_add_replica(struct rdb *db, d_rank_t rank);
 int rdb_raft_remove_replica(struct rdb *db, d_rank_t rank);
-int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size,
-			  void *result);
+int rdb_raft_append_apply(struct rdb *db, void *entry, size_t size);
 int rdb_raft_wait_applied(struct rdb *db, uint64_t index, uint64_t term);
 int rdb_raft_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
 void rdb_requestvote_handler(crt_rpc_t *rpc);
@@ -493,7 +491,7 @@ int rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
 /* rdb_tx.c *******************************************************************/
 
 int rdb_tx_count_vops(struct rdb *db, const void *buf, size_t len);
-int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, void *result,
-		 bool *critp, rdb_vos_tx_t vtx);
+int rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len, bool *critp,
+		 rdb_vos_tx_t vtx);
 
 #endif /* RDB_INTERNAL_H */
