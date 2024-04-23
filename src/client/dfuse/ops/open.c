@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,8 +66,10 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		 * This should mean that pre-read is only used on the first read, and on files
 		 * which pre-existed in the container.
 		 */
+
 		if (atomic_load_relaxed(&ie->ie_open_count) > 0 ||
-		    dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout)) {
+		    ((ie->ie_dcache_last_update.tv_sec != 0) &&
+		     dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout))) {
 			fi_out.keep_cache = 1;
 		} else {
 			prefetch = true;
@@ -107,7 +109,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	/* Enable this for files up to the max read size. */
 	if (prefetch && oh->doh_parent_dir &&
 	    atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read) && ie->ie_stat.st_size > 0 &&
-	    ie->ie_stat.st_size <= DFUSE_MAX_READ) {
+	    ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ) {
 		D_ALLOC_PTR(oh->doh_readahead);
 		if (oh->doh_readahead) {
 			D_MUTEX_INIT(&oh->doh_readahead->dra_lock, 0);
@@ -163,7 +165,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		D_MUTEX_DESTROY(&oh->doh_readahead->dra_lock);
 		if (ev) {
 			daos_event_fini(&ev->de_ev);
-			d_slab_release(ev->de_eqt->de_read_slab, ev);
+			d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 		}
 		D_FREE(oh->doh_readahead);
 	}
@@ -224,13 +226,23 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	}
 	if (oh->doh_parent_dir) {
 		bool use_linear_read = false;
+		bool set_linear_read = true;
 
-		if (oh->doh_linear_read && oh->doh_linear_read_eof)
+		if (oh->doh_linear_read) {
+			/* If the file was not read from then this could indicate a cached read
+			 * so do not disable pre-read for the directory.
+			 */
+			if (!oh->doh_linear_read_eof)
+				set_linear_read = false;
 			use_linear_read = true;
+		}
 
-		DFUSE_TRA_DEBUG(oh->doh_parent_dir, "Setting linear_read to %d", use_linear_read);
+		if (set_linear_read) {
+			DFUSE_TRA_DEBUG(oh->doh_parent_dir, "Setting linear_read to %d",
+					use_linear_read);
 
-		atomic_store_relaxed(&oh->doh_parent_dir->ie_linear_read, use_linear_read);
+			atomic_store_relaxed(&oh->doh_parent_dir->ie_linear_read, use_linear_read);
+		}
 
 		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
 	}
