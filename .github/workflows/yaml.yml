@@ -13,6 +13,8 @@ on:
       - '**/*.yml'
       - utils/cq/requirements.txt
 
+permissions: {}
+
 jobs:
   yaml-lint:
     runs-on: ubuntu-22.04

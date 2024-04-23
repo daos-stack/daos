@@ -308,7 +308,7 @@ sudo ipcrm -M 0x10242049
 
     !!! note
         A server must be started with minimum setup.
-        You can also obtain the addresses with `daos_server storage scan`.
+        You can also obtain the addresses with `daos_server nvme scan`.
 
 1. Format the SCMs defined in the config file.
 1. Generate the config file using `dmg config generate`. The various requirements will be populated without a syntax error.
@@ -325,7 +325,7 @@ sudo ipcrm -M 0x10242049
 ### Problems creating a container
 1. Check that the path to daos is your intended binary. It's usually `/usr/bin/daos`.
 1. When the server configuration is changed, it's necessary to restart the agent.
-1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMem and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server storage scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
+1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMem and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server nvme scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
 1. Check the interface used in the server config (`fabric_iface`) also exists in the client and can communicate with the server.
 1. Check the access_points of the agent config points to the correct server host.
 1. Call `daos pool query` and check that the pool exists and has free space.
