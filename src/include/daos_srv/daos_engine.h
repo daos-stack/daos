@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,6 +15,7 @@
 #include <daos/drpc.h>
 #include <daos/rpc.h>
 #include <daos/cont_props.h>
+#include <daos/tls.h>
 #include <daos_srv/iv.h>
 #include <daos_srv/vos_types.h>
 #include <daos_srv/pool.h>
@@ -29,6 +30,9 @@
 
 /* Standard max length of addresses e.g. URI, PCI */
 #define ADDR_STR_MAX_LEN 128
+
+/** DAOS system name (corresponds to crt group ID) */
+extern char              daos_sysname[];
 
 /** number of target (XS set) per engine */
 extern unsigned int	 dss_tgt_nr;
@@ -53,84 +57,6 @@ extern unsigned int	 dss_instance_idx;
 
 /** Bypass for the nvme health check */
 extern bool		 dss_nvme_bypass_health_check;
-
-/**
- * Stackable Module API
- * Provides a modular interface to load and register server-side code on
- * demand. A module is composed of:
- * - a set of request handlers which are registered when the module is loaded.
- * - a server-side API (see header files suffixed by "_srv") used for
- *   inter-module direct calls.
- *
- * For now, all loaded modules are assumed to be trustful, but sandboxes can be
- * implemented in the future.
- */
-/*
- * Thead-local storage
- */
-struct dss_thread_local_storage {
-	uint32_t	dtls_tag;
-	void		**dtls_values;
-};
-
-enum dss_module_tag {
-	DAOS_SYS_TAG    = 1 << 0, /** only run on system xstream */
-	DAOS_TGT_TAG    = 1 << 1, /** only run on target xstream */
-	DAOS_RDB_TAG    = 1 << 2, /** only run on rdb xstream */
-	DAOS_OFF_TAG    = 1 << 3, /** only run on offload/helper xstream */
-	DAOS_SERVER_TAG = 0xff,   /** run on all xstream */
-};
-
-/* The module key descriptor for each xstream */
-struct dss_module_key {
-	/* Indicate where the keys should be instantiated */
-	enum dss_module_tag dmk_tags;
-
-	/* The position inside the dss_module_keys */
-	int dmk_index;
-	/* init keys for context */
-	void *(*dmk_init)(int tags, int xs_id, int tgt_id);
-
-	/* fini keys for context */
-	void (*dmk_fini)(int tags, void *data);
-};
-
-extern pthread_key_t dss_tls_key;
-extern struct dss_module_key *dss_module_keys[];
-#define DAOS_MODULE_KEYS_NR 10
-
-static inline struct dss_thread_local_storage *
-dss_tls_get()
-{
-	return (struct dss_thread_local_storage *)
-		pthread_getspecific(dss_tls_key);
-}
-
-/**
- * Get value from context by the key
- *
- * Get value inside dtls by key. So each module will use this API to
- * retrieve their own value in the thread context.
- *
- * \param[in] dtls	the thread context.
- * \param[in] key	key used to retrieve the dtls_value.
- *
- * \retval		the dtls_value retrieved by key.
- */
-static inline void *
-dss_module_key_get(struct dss_thread_local_storage *dtls,
-		   struct dss_module_key *key)
-{
-	D_ASSERT(key->dmk_index >= 0);
-	D_ASSERT(key->dmk_index < DAOS_MODULE_KEYS_NR);
-	D_ASSERT(dss_module_keys[key->dmk_index] == key);
-	D_ASSERT(dtls != NULL);
-
-	return dtls->dtls_values[key->dmk_index];
-}
-
-void dss_register_key(struct dss_module_key *key);
-void dss_unregister_key(struct dss_module_key *key);
 
 /** pthread names are limited to 16 chars */
 #define DSS_XS_NAME_LEN		(32)
@@ -172,7 +98,7 @@ static inline struct dss_module_info *
 dss_get_module_info(void)
 {
 	struct dss_module_info *dmi;
-	struct dss_thread_local_storage *dtc;
+	struct daos_thread_local_storage *dtc;
 
 	dtc = dss_tls_get();
 	dmi = (struct dss_module_info *)
@@ -425,23 +351,6 @@ struct dss_module_ops {
 int srv_profile_stop();
 int srv_profile_start(char *path, int avg);
 
-struct dss_module_metrics {
-	/* Indicate where the keys should be instantiated */
-	enum dss_module_tag dmm_tags;
-
-	/**
-	 * allocate metrics with path to ephemeral shmem for to the
-	 * newly-created pool
-	 */
-	void	*(*dmm_init)(const char *path, int tgt_id);
-	void	 (*dmm_fini)(void *data);
-
-	/**
-	 * Get the number of metrics allocated by this module in total (including all targets).
-	 */
-	int	 (*dmm_nr_metrics)(void);
-};
-
 /**
  * Each module should provide a dss_module structure which defines the module
  * interface. The name of the allocated structure must be the library name
@@ -487,7 +396,7 @@ struct dss_module {
 	struct dss_module_ops		*sm_mod_ops;
 
 	/* Per-pool metrics (optional) */
-	struct dss_module_metrics	*sm_metrics;
+	struct daos_module_metrics      *sm_metrics;
 };
 
 /**

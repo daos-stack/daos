@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2023 Intel Corporation.
+  (C) Copyright 2020-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -63,12 +63,21 @@ class DaosAgentYamlParameters(YamlParameters):
         #   - disable_caching: <bool>, Whether to disable the agent's internal caches. If true,
         #       the agent will query the server access point and local hardware data every time
         #       a client requests rank connection information.
+        #   - telemetry_port: <int>, e.g. 9192
+        #        Enable Prometheus endpoint for client telemetry.
+        #   - telemetry_enabled: <bool>, e.g. True
+        #        Enable client telemetry for all client processes.
+        #   - telemetry_retain: <str>, e.g. 5m
+        #        Time to retain per-client telemetry data.
         self.runtime_dir = BasicParameter(None, "/var/run/daos_agent")
         self.log_file = LogParameter(log_dir, None, "daos_agent.log")
         self.control_log_mask = BasicParameter(None, "debug")
         self.exclude_fabric_ifaces = BasicParameter(None)
         self.cache_expiration = BasicParameter(None)
         self.disable_caching = BasicParameter(None)
+        self.telemetry_port = BasicParameter(None)
+        self.telemetry_enabled = BasicParameter(None)
+        self.telemetry_retain = BasicParameter(None)
 
     def update_log_file(self, name):
         """Update the log file name for the daos agent.

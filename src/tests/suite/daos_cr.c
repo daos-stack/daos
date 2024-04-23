@@ -258,7 +258,7 @@ cr_rank_reint(uint32_t rank, bool start)
 }
 
 static inline int
-cr_rank_exclude(test_arg_t *arg, struct test_pool *pool, int *rank)
+cr_rank_exclude(test_arg_t *arg, struct test_pool *pool, int *rank, bool wait)
 {
 	int	count;
 	int	rc;
@@ -303,7 +303,13 @@ cr_rank_exclude(test_arg_t *arg, struct test_pool *pool, int *rank)
 	cr_debug_set_params_nowait(arg, 0);
 
 	print_message("CR: excluding the rank %d ...\n", *rank);
-	return dmg_system_exclude_rank(dmg_config_file, *rank);
+	rc = dmg_system_exclude_rank(dmg_config_file, *rank);
+	if (rc == 0 && wait) {
+		print_message("CR: sleep 30 seconds for the rank death event\n");
+		sleep(30);
+	}
+
+	return rc;
 }
 
 static inline int
@@ -2702,13 +2708,10 @@ cr_engine_death(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_rank_exclude(arg, &pool, &rank);
+	rc = cr_rank_exclude(arg, &pool, &rank, true);
 	if (rc > 0)
 		goto cleanup;
 	assert_rc_equal(rc, 0);
-
-	print_message("CR: sleep seconds for the rank death event\n");
-	sleep(20);
 
 	dcri = cr_locate_dcri(&dci, NULL, pool.pool_uuid);
 	action = TCA_TRUST_MS;
@@ -2807,7 +2810,7 @@ cr_engine_rejoin_succ(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_rank_exclude(arg, &pool, &rank);
+	rc = cr_rank_exclude(arg, &pool, &rank, false);
 	if (rc > 0)
 		goto cleanup;
 	assert_rc_equal(rc, 0);
@@ -2922,13 +2925,10 @@ cr_engine_rejoin_fail(void **state)
 	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_rank_exclude(arg, &pool, &rank);
+	rc = cr_rank_exclude(arg, &pool, &rank, true);
 	if (rc > 0)
 		goto cleanup;
 	assert_rc_equal(rc, 0);
-
-	print_message("CR: sleep seconds for the rank death event\n");
-	sleep(20);
 
 	/* Destroy the pool, then related shard will be left on the stopped rank. */
 	dcri = cr_locate_dcri(&dci, NULL, pool.pool_uuid);
