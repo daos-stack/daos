@@ -516,7 +516,7 @@ jobs:
                     DISTRO_VERSION_MAJOR="8"
                     OPENMPI="openmpi"
                     LABEL='${{ env.CP_EL8_VM9_LABEL &&
-                               env.CP_EL8_VM9_LABEL || 'ci_vm9' }}'
+                               env.CP_EL8_VM9_LABEL || 'all_vm9' }}'
                     ;;
                 'el9')
                     CHROOT_NAME="rocky+epel-9-x86_64"
@@ -529,7 +529,7 @@ jobs:
                     PROV_DISTRO_VERSION_MAJOR="8"
                     OPENMPI="openmpi"
                     LABEL='${{ env.CP_EL9_VM9_LABEL &&
-                               env.CP_EL9_VM9_LABEL || 'ci_vm9' }}'
+                               env.CP_EL9_VM9_LABEL || 'all_vm9' }}'
                     ;;
                 'leap15')
                     CHROOT_NAME='opensuse-leap-${{ env.CP_LEAP15_VERSION &&
@@ -543,7 +543,7 @@ jobs:
                     DISTRO_VERSION_MAJOR="15"
                     OPENMPI="openmpi3"
                     LABEL='${{ env.CP_LEAP15_VM9_LABEL &&
-                               env.CP_LEAP15_VM9_LABEL || 'ci_vm9' }}'
+                               env.CP_LEAP15_VM9_LABEL || 'all_vm9' }}'
                     ;;
             esac
             echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
