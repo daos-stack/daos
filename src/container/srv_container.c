@@ -3643,9 +3643,6 @@ check_set_prop_label(struct rdb_tx *tx, struct cont *cont,
 	D_DEBUG(DB_MD, DF_UUID": inserted new label in cs_uuids KVS: %s\n",
 		DP_UUID(cont->c_uuid), in_lbl);
 
-	if (old_lbl == NULL)
-		return 0;
-
 	/* Remove old label from cs_uuids KVS, if applicable */
 	if (old_lbl == NULL)
 		return 0;
