@@ -5394,9 +5394,6 @@ out_org:
 
 out_err:
 	FREE(parent_dir);
-	/* dfs_access returns EIO sometimes. Give another chance. */
-	if (rc == EIO && compatible_mode)
-		return next_access(path, mode);
 	errno = rc;
 	return (-1);
 }
