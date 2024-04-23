@@ -97,6 +97,7 @@ class DFusePreReadTest(DfuseTestBase):
 
         self.assertEqual(data["inodes"], 3, "expected 3 inodes in cache")
 
+
 class DFuseReadTest(DfuseTestBase):
     """Base ReadTest test class.
     
