@@ -53,9 +53,12 @@ jobs:
       message: ${{ steps.commit_message.outputs.text }}
       dequoted_message: ${{ steps.dequoted_commit_message.outputs.text }}
     steps:
-      - name: Display inputs.functional-test-distros
-        id: show_inputs_functional_test_distros
+      - name: Display inputs.functional-test-distros raw
+        id: show_inputs_functional_test_distros_raw
         run: echo '${{ inputs.functional-test-distros }}'
+      - name: Display inputs.functional-test-distros fromJSON()
+        id: show_inputs_functional_test_distros_raw_from_json
+        run: echo '${{ fromJSON(inputs.functional-test-distros) }}'
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -64,7 +67,7 @@ jobs:
         id: commit_message
         run: exec >> $GITHUB_OUTPUT;
              echo 'text<<EOF';
-             if [ -n '${{ inputs.commit-message }}. ]; then
+             if [ -n '${{ inputs.commit-message }}' ]; then
                  echo '${{ inputs.commit-message }}';
              else
                  git show -s --format=%B;
@@ -390,6 +393,12 @@ jobs:
              # all failed jobs and a previously failed RPM job is successful, the
              # test matrix won't include testing it since it was calculated and was
              # successful on the previous run without the failed build stage in it
+
+             # Use inputs.functional-test-distros if it was given
+             if [ -n '${{ inputs.functional-test-distros }}' ]; then
+                 echo 'text=${{ inputs.functional-test-distros }}' >> $GITHUB_OUTPUT'
+                 exit 0
+             fi
              l=()
              trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT' EXIT
              if ${CP_SKIP_FUNC_TEST:-false}; then
