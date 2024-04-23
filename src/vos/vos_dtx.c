@@ -3126,6 +3126,13 @@ out:
 			DP_DTI(&dth->dth_xid), DP_RC(rc));
 	}
 
+	if (persistent) {
+		D_ASSERT(!dth->dth_active);
+		D_DEBUG(DB_IO, "Persistently attach DTX "DF_DTI": sub mods %u, dist %s\n",
+			DP_DTI(&dth->dth_xid), dth->dth_modification_cnt,
+			dth->dth_dist ? "yes" : "no");
+	}
+
 	return rc;
 }
 

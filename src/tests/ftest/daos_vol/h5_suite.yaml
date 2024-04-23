@@ -10,6 +10,9 @@ server_config:
   engines_per_host: 1
   engines:
     0:
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,io,md,epc
       storage: auto
 pool:
   scm_size: 50G
