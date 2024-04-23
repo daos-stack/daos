@@ -55,7 +55,7 @@ jobs:
     steps:
       - name: Display inputs.functional-test-distros
         id: show_inputs_functional_test_distros
-        run: echo ${{ inputs.functional-test-distro }}
+        run: echo '${{ inputs.functional-test-distros }}'
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -64,7 +64,7 @@ jobs:
         id: commit_message
         run: exec >> $GITHUB_OUTPUT;
              echo 'text<<EOF';
-             if [ -n "${{ inputs.commit-message }}" ]; then
+             if [ -n '${{ inputs.commit-message }}. ]; then
                  echo '${{ inputs.commit-message }}';
              else
                  git show -s --format=%B;
@@ -256,27 +256,27 @@ jobs:
                 'el8')
                     CHROOT_NAME="rocky+epel-8-x86_64"
                     DISTRO_NAME="EL"
-                    DISTRO_VERSION="${{ env.EL8_BUILD_VERSION }}"
+                    DISTRO_VERSION='${{ env.EL8_BUILD_VERSION }}'
                     COMMIT_STATUS_DISTRO_VERSION="8"
                     ;;
                 'el9')
                     CHROOT_NAME="rocky+epel-9-x86_64"
                     DISTRO_NAME="EL"
-                    DISTRO_VERSION="${{ env.EL9_BUILD_VERSION }}"
+                    DISTRO_VERSION='${{ env.EL9_BUILD_VERSION }}'
                     ;;
                 'leap15')
-                    CHROOT_NAME="opensuse-leap-${{ env.CP_LEAP15_VERSION &&
+                    CHROOT_NAME='opensuse-leap-${{ env.CP_LEAP15_VERSION &&
                                                    env.CP_LEAP15_VERSION ||
-                                                   env.LEAP15_VERSION }}-x86_64"
+                                                   env.LEAP15_VERSION }}-x86_64'
                     DISTRO_NAME="Leap"
-                    DISTRO_VERSION="${{ env.CP_LEAP15_VERSION &&
-                                        env.CP_LEAP15_VERSION || env.LEAP15_VERSION }}"
+                    DISTRO_VERSION='${{ env.CP_LEAP15_VERSION &&
+                                        env.CP_LEAP15_VERSION || env.LEAP15_VERSION }}'
                     ;;
             esac
             echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
             echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
             echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
-            echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
+            echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-"'${{ github.run_id }}/' >> $GITHUB_ENV
             echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
             echo "FVERSION=$FVERSION" >> $GITHUB_ENV
             echo "COMMIT_STATUS_DISTRO_VERSION=$COMMIT_STATUS_DISTRO_VERSION" >> $GITHUB_ENV
@@ -496,52 +496,52 @@ jobs:
             STAGE_TAGS="vm"
             FTEST_ARG=""
             INST_RPMS="daos-client daos-tests daos-server daos-serialize daos-tests-internal"
-            case "${{ matrix.distro }}" in
+            case '${{ matrix.distro }}' in
                 'el8')
                     CHROOT_NAME="rocky+epel-8-x86_64"
                     DISTRO_NAME="EL"
                     DISTRO_NAME_UPPER="EL"
                     DISTRO_NAME_LOWER="el"
-                    DISTRO_VERSION="${{ env.CP_EL8_VERSION &&
-                                        env.CP_EL8_VERSION || env.EL8_VERSION }}"
+                    DISTRO_VERSION='${{ env.CP_EL8_VERSION &&
+                                        env.CP_EL8_VERSION || env.EL8_VERSION }}'
                     DISTRO_VERSION_MAJOR="8"
                     OPENMPI="openmpi"
-                    LABEL="${{ env.CP_EL8_VM9_LABEL &&
-                               env.CP_EL8_VM9_LABEL || 'ci_vm9' }}"
+                    LABEL='${{ env.CP_EL8_VM9_LABEL &&
+                               env.CP_EL8_VM9_LABEL || 'ci_vm9' }}'
                     ;;
                 'el9')
                     CHROOT_NAME="rocky+epel-9-x86_64"
                     DISTRO_NAME="EL"
                     DISTRO_NAME_UPPER="EL"
                     DISTRO_NAME_LOWER="el"
-                    DISTRO_VERSION="${{ env.CP_EL9_VERSION &&
-                                        env.CP_EL9_VERSION || env.EL9_VERSION }}"
+                    DISTRO_VERSION='${{ env.CP_EL9_VERSION &&
+                                        env.CP_EL9_VERSION || env.EL9_VERSION }}'
                     DISTRO_VERSION_MAJOR="9"
                     PROV_DISTRO_VERSION_MAJOR="8"
                     OPENMPI="openmpi"
-                    LABEL="${{ env.CP_EL9_VM9_LABEL &&
-                               env.CP_EL9_VM9_LABEL || 'ci_vm9' }}"
+                    LABEL='${{ env.CP_EL9_VM9_LABEL &&
+                               env.CP_EL9_VM9_LABEL || 'ci_vm9' }}'
                     ;;
                 'leap15')
-                    CHROOT_NAME="opensuse-leap-${{ env.CP_LEAP15_VERSION &&
+                    CHROOT_NAME='opensuse-leap-${{ env.CP_LEAP15_VERSION &&
                                                    env.CP_LEAP15_VERSION ||
-                                                   env.LEAP15_VERSION }}-x86_64"
+                                                   env.LEAP15_VERSION }}-x86_64'
                     DISTRO_NAME="Leap"
                     DISTRO_NAME_UPPER="LEAP"
                     DISTRO_NAME_LOWER="leap"
-                    DISTRO_VERSION="${{ env.CP_LEAP15_VERSION &&
-                                        env.CP_LEAP15_VERSION || env.LEAP15_VERSION }}"
+                    DISTRO_VERSION='${{ env.CP_LEAP15_VERSION &&
+                                        env.CP_LEAP15_VERSION || env.LEAP15_VERSION }}'
                     DISTRO_VERSION_MAJOR="15"
                     OPENMPI="openmpi3"
-                    LABEL="${{ env.CP_LEAP15_VM9_LABEL &&
-                               env.CP_LEAP15_VM9_LABEL || 'ci_vm9' }}"
+                    LABEL='${{ env.CP_LEAP15_VM9_LABEL &&
+                               env.CP_LEAP15_VM9_LABEL || 'ci_vm9' }}'
                     ;;
             esac
             echo "CHROOT_NAME=$CHROOT_NAME" >> $GITHUB_ENV
             echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
             echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
             echo "DISTRO_WITH_VERSION=$DISTRO_NAME_LOWER$DISTRO_VERSION" >> $GITHUB_ENV
-            echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME-${{ github.run_id }}/" >> $GITHUB_ENV
+            echo "BUILD_CHROOT=/var/lib/mock/$CHROOT_NAME"'-${{ github.run_id }}/' >> $GITHUB_ENV
             echo "STAGE_NAME=Functional on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
             echo "STAGE_TAGS=$STAGE_TAGS" >> $GITHUB_ENV
             echo "FTEST_ARG=$FTEST_ARG" >> $GITHUB_ENV
@@ -565,23 +565,23 @@ jobs:
         id: run-test
         run: |
           . ci/gha_functions.sh
-          if [ -n "${{ inputs.test-tag }}" ]; then
-              REQ_TEST_TAG="${{ inputs.test-tag }}"
-          elif [ -n "${{ env.CP_TEST_TAG }}" ]; then
-              REQ_TEST_TAG="${{ env.CP_TEST_TAG }}"
+          if [ -n '${{ inputs.test-tag }}' ]; then
+              REQ_TEST_TAG='${{ inputs.test-tag }}'
+          elif [ -n '${{ env.CP_TEST_TAG }}' ]; then
+              REQ_TEST_TAG='${{ env.CP_TEST_TAG }}'
           fi
           NODE_COUNT="$NODE_COUNT"                                   \
           TEST_TAG="$(get_test_tags ${{ env.STAGE_TAGS}})"           \
-          FTEST_ARG="${{ env.FTEST_ARG }}" ci/functional/test_main.sh
+          FTEST_ARG='${{ env.FTEST_ARG }}' ci/functional/test_main.sh
       - name: Cancel cluster request (if cancelled after requesting)
         if: cancelled()
         run: |
           set -eux
           . ci/gha_functions.sh
-          if ! JENKINS_URL="${{ env.JENKINS_URL }}" QUEUE_URL="${{ env.QUEUE_URL }}" \
+          if ! JENKINS_URL='${{ env.JENKINS_URL }}' QUEUE_URL='${{ env.QUEUE_URL }}' \
                cancel_provision; then
               # probably already provisioned and needs unprovisioning
-              if ! cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"; then
+              if ! cleanup_provision_request '${{ env.CLUSTER_REQUEST_reqid }}'; then
                   exit 1
               fi
           fi
@@ -591,7 +591,7 @@ jobs:
           set -eux
           . ci/gha_functions.sh
           NODELIST=${{ env.NODESTRING }} ci/functional/job_cleanup.sh || true
-          cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
+          cleanup_provision_request '${{ env.CLUSTER_REQUEST_reqid }}'
       - name: Publish test results
         if: (!cancelled()) && (success() || failure()) &&
             steps.run-test.outcome != 'skipped'
@@ -733,6 +733,9 @@ jobs:
       QUEUE_URL:
       LABEL:
       COMMIT_STATUS_DISTRO_VERSION:
+      FTEST_ARG:
+      STAGE_TAGS:
+      SIZE:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -753,33 +756,33 @@ jobs:
             DISTRO_NAME="EL"
             DISTRO_NAME_UPPER="EL"
             DISTRO_NAME_LOWER="el"
-            DISTRO_VERSION="${{ env.CP_EL8_TARGET &&
+            DISTRO_VERSION='${{ env.CP_EL8_TARGET &&
                                 env.CP_EL8_TARGET ||
                                 env.CP_EL8_VERSION &&
-                                env.CP_EL8_VERSION || env.EL8_VERSION }}"
+                                env.CP_EL8_VERSION || env.EL8_VERSION }}'
             DISTRO_VERSION_MAJOR="8"
-            if [[ "${{ matrix.stage }}" = Medium* ]]; then
+            if [[ '${{ matrix.stage }}' = Medium* ]]; then
                 LABEL=${{ env.CP_HW_MEDIUM_LABEL &&
                           env.CP_HW_MEDIUM_LABEL || 'ci_nvme5' }}
                 STAGE_TAGS+=",medium"
                 SIZE="MEDIUM"
-            elif [[ "${{ matrix.stage }}" = Large* ]]; then
+            elif [[ '${{ matrix.stage }}' = Large* ]]; then
                 LABEL=${{ env.CP_HW_LARGE_LABEL &&
                           env.CP_HW_LARGE_LABEL || 'ci_nvme9' }}
                 STAGE_TAGS+=",large"
                 SIZE="LARGE"
             fi
-            if [[ "${{ matrix.stage }}" = *\ Provider ]]; then
+            if [[ '${{ matrix.stage }}' = *\ Provider ]]; then
                 STAGE_TAGS+=",provider"
-                if [[ "${{ matrix.stage }}" = *\ Verbs\ * ]]; then
+                if [[ '${{ matrix.stage }}' = *\ Verbs\ * ]]; then
                   FTEST_ARG+=' --provider ofi+verbs'
-                elif [[ "${{ matrix.stage }}" = *\ UCX\ * ]]; then
+                elif [[ '${{ matrix.stage }}' = *\ UCX\ * ]]; then
                   FTEST_ARG+=' --provider ucx+dc_x'
                   INST_RPMS+=' mercury-ucx'
-                elif [[ "${{ matrix.stage }}" = *\ TCP\ * ]]; then
+                elif [[ '${{ matrix.stage }}' = *\ TCP\ * ]]; then
                   FTEST_ARG+=' --provider ofi+tcp'
                 else
-                    echo "Unknown provider in ${{ matrix.stage }}"
+                    echo 'Unknown provider in ${{ matrix.stage }}'
                     exit 1
                 fi
             else
@@ -788,7 +791,7 @@ jobs:
             echo "DISTRO_NAME=$DISTRO_NAME" >> $GITHUB_ENV
             echo "DISTRO_VERSION=$DISTRO_VERSION" >> $GITHUB_ENV
             echo "DISTRO_WITH_VERSION=$DISTRO_NAME_LOWER$DISTRO_VERSION" >> $GITHUB_ENV
-            echo "STAGE_NAME=Functional Hardware ${{ matrix.stage }}" >> $GITHUB_ENV
+            echo 'STAGE_NAME=Functional Hardware ${{ matrix.stage }}' >> $GITHUB_ENV
             echo "STAGE_TAGS=$STAGE_TAGS" >> $GITHUB_ENV
             echo "FTEST_ARG=$FTEST_ARG" >> $GITHUB_ENV
             echo "DISTRO=${DISTRO_NAME_UPPER}_$DISTRO_VERSION_MAJOR" >> $GITHUB_ENV
@@ -814,16 +817,16 @@ jobs:
           . ci/gha_functions.sh
           NODE_COUNT="$NODE_COUNT"                                   \
           TEST_TAG="$(get_test_tags ${{ env.STAGE_TAGS}})"           \
-          FTEST_ARG="${{ env.FTEST_ARG }}" ci/functional/test_main.sh
+          FTEST_ARG='${{ env.FTEST_ARG }}' ci/functional/test_main.sh
       - name: Cancel cluster request (if cancelled after requesting)
         if: cancelled()
         run: |
           set -eux
           . ci/gha_functions.sh
-          if ! JENKINS_URL="${{ env.JENKINS_URL }}" QUEUE_URL="${{ env.QUEUE_URL }}" \
+          if ! JENKINS_URL='${{ env.JENKINS_URL }}' QUEUE_URL='${{ env.QUEUE_URL }}' \
                cancel_provision; then
               # probably already provisioned and needs unprovisioning
-              if ! cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"; then
+              if ! cleanup_provision_request '${{ env.CLUSTER_REQUEST_reqid }}'; then
                   exit 1
               fi
           fi
@@ -832,7 +835,7 @@ jobs:
         run: |
           set -eux
           . ci/gha_functions.sh
-          cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
+          cleanup_provision_request '${{ env.CLUSTER_REQUEST_reqid }}'
           NODELIST=${{ env.NODESTRING }} ci/functional/job_cleanup.sh
       - name: Publish test results
         if: (!cancelled()) && (success() || failure()) &&
