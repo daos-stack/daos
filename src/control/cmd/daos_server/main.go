@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2023 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -28,6 +28,14 @@ import (
 
 const defaultConfigFile = "daos_server.yml"
 
+var errJSONOutputNotSupported = errors.New("this subcommand does not support JSON output")
+
+type baseScanCmd struct {
+	cmdutil.JSONOutputCmd `json:"-"`
+	cmdutil.LogCmd        `json:"-"`
+	optCfgCmd             `json:"-"`
+}
+
 type execTestFn func() error
 
 type mainOpts struct {
@@ -54,6 +62,11 @@ type mainOpts struct {
 
 	// Allow a set of tests to be run before executing commands.
 	preExecTests []execTestFn
+
+	// provide helpers for various initialization stages
+	netInitHelper  initNetworkCmdFn
+	nvmeInitHelper initNvmeCmdFn
+	scmInitHelper  initScmCmdFn
 }
 
 type versionCmd struct {
@@ -92,10 +105,14 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
 		}
 
-		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
-			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
-			// disable output on stdout other than JSON
-			log.ClearLevel(logging.LogLevelInfo)
+		if opts.JSON {
+			if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok {
+				jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
+				// disable output on stdout other than JSON
+				log.ClearLevel(logging.LogLevelInfo)
+			} else {
+				return errJSONOutputNotSupported
+			}
 		}
 
 		switch cmd.(type) {
@@ -131,6 +148,24 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			logCmd.SetLog(log)
 		}
 
+		if netInitCmd, ok := cmd.(interface{ initWith(initNetworkCmdFn) error }); ok {
+			if err := netInitCmd.initWith(opts.netInitHelper); err != nil {
+				return err
+			}
+		}
+
+		if scmInitCmd, ok := cmd.(interface{ initWith(initScmCmdFn) error }); ok {
+			if err := scmInitCmd.initWith(opts.scmInitHelper); err != nil {
+				return err
+			}
+		}
+
+		if nvmeInitCmd, ok := cmd.(interface{ initWith(initNvmeCmdFn) error }); ok {
+			if err := nvmeInitCmd.initWith(opts.nvmeInitHelper); err != nil {
+				return err
+			}
+		}
+
 		if cfgCmd, ok := cmd.(cfgLoader); ok {
 			if opts.ConfigPath == "" {
 				log.Debugf("Using build config directory %q", build.ConfigDir)
@@ -138,7 +173,8 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			}
 
 			if err := cfgCmd.loadConfig(opts.ConfigPath); err != nil {
-				return errors.Wrapf(err, "failed to load config from %s", cfgCmd.configPath())
+				return errors.Wrapf(err, "failed to load config from %s",
+					cfgCmd.configPath())
 			}
 			if _, err := os.Stat(opts.ConfigPath); err == nil {
 				log.Infof("DAOS Server config loaded from %s", cfgCmd.configPath())
@@ -179,6 +215,9 @@ func main() {
 				return pbin.CheckHelper(log, pbin.DaosPrivHelperName)
 			},
 		},
+		netInitHelper:  initNetworkCmd,
+		nvmeInitHelper: initNvmeCmd,
+		scmInitHelper:  initScmCmd,
 	}
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
