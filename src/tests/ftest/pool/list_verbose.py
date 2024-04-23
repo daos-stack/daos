@@ -59,15 +59,37 @@ class ListVerboseTest(IorTestBase):
         upgrade_layout_ver = p_query["response"]["upgrade_layout_ver"]
 
         return {
+            "state": state,
             "uuid": pool.uuid.lower(),
             "label": pool.label.value,
-            "svc_ldr": 0,
-            "svc_reps": pool.svc_ranks,
-            "state": state,
             "total_targets": targets_total,
+            "active_targets": targets_total - targets_disabled,
+            "total_engines": rank_count,
             "disabled_targets": targets_disabled,
+            "version": 1,
+            "svc_ldr": pool.svc_leader,
+            "svc_reps": pool.svc_ranks,
             "upgrade_layout_ver": upgrade_layout_ver,
             "pool_layout_ver": pool_layout_ver,
+            "rebuild": {
+                "status": 0,
+                "state": rebuild_state,
+                "objects": 0,
+                "records": 0
+            },
+            # NB: tests should not expect min/max/mean values
+            "tier_stats": [
+                {
+                    "total": scm_size,
+                    "free": scm_free,
+                    "media_type": "scm",
+                },
+                {
+                    "total": nvme_size,
+                    "free": nvme_free,
+                    "media_type": "nvme",
+                },
+            ],
             "usage": [
                 {
                     "tier_name": "SCM",
@@ -81,7 +103,6 @@ class ListVerboseTest(IorTestBase):
                     "free": nvme_free,
                     "imbalance": nvme_imbalance
                 }],
-            "rebuild_state": rebuild_state
         }
 
     @staticmethod
@@ -169,6 +190,11 @@ class ListVerboseTest(IorTestBase):
         expected_pools = []
 
         actual_pools = self.get_dmg_command().get_pool_list_all(verbose=True)
+        for pool in actual_pools:
+            for tier in pool["tier_stats"]:  # expected values are tricky to calculate
+                del tier['min']
+                del tier['max']
+                del tier['mean']
 
         # Get free and imbalance from actual so that we can use them in expected.
         free_data = self.get_scm_nvme_free_imbalance(actual_pools)

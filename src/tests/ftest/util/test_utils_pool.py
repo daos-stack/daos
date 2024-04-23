@@ -242,6 +242,7 @@ class TestPool(TestDaosApiBase):
         self.pool = None
         self.info = None
         self.svc_ranks = None
+        self.svc_leader = None
         self.connected = False
         # Flag to allow the non-create operations to use UUID. e.g., if you want
         # to destroy the pool with UUID, set this to False, then call destroy().
@@ -454,6 +455,7 @@ class TestPool(TestDaosApiBase):
             self.svc_ranks = [
                 int(self.pool.svc.rl_ranks[index])
                 for index in range(self.pool.svc.rl_nr)]
+            self.svc_leader = int(data["svc_ldr"])
 
     @fail_on(DaosApiError)
     def connect(self, permission=2):
