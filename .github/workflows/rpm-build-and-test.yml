@@ -25,6 +25,10 @@ on:
       test-tag:
         description: 'Test tag to use'
         required: false
+      functional-test-distros:
+        description: 'Distros to run Functional testing on (i.e. el8, el8, leap15, etc.)'
+        required: false
+
   pull_request:
 
 concurrency:
@@ -49,9 +53,9 @@ jobs:
       message: ${{ steps.commit_message.outputs.text }}
       dequoted_message: ${{ steps.dequoted_commit_message.outputs.text }}
     steps:
-      - name: Display inputs.rpm-test-version
-        id: show_inputs_rpm_test_version
-        run: echo ${{ inputs.rpm-test-version }}
+      - name: Display inputs.functional-test-distros
+        id: show_inputs_functional_test_distros
+        run: echo ${{ inputs.functional-test-distro }}
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -404,8 +408,10 @@ jobs:
                      # as unquoted strings so that we didn't have to double quote here
                      l+=('"el8"')
                  fi
-                 if ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
-                    ! ${CP_SKIP_FUNC_TEST_EL9:-false}; then
+                 if ${{ github.event_name == 'push' }} ||
+                    (${{ github.event_name == 'pull_request' }} &&
+                    ! ${CP_SKIP_BUILD_EL9_RPM:-false} &&
+                    ! ${CP_SKIP_FUNC_TEST_EL9:-true}); then
                      l+=('"el9"')
                  fi
                  if ${{ github.event_name == 'push' }} ||
@@ -609,8 +615,7 @@ jobs:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
       - name: Update commit status
-        if: github.event_name == 'pull_request' ||
-            github.event_name == 'push'
+        if: contains(fromJSON('["push", "pull_request"]'), github.event_name)
         uses: ouzi-dev/commit-status-updater@v2
         with:
           # yamllint disable-line rule:line-length
@@ -852,8 +857,7 @@ jobs:
           name: ${{ env.STAGE_NAME }} test-results
           path: ${{ env.STAGE_NAME }}/**/results.xml
       - name: Update commit status
-        if: github.event_name == 'pull_request' ||
-            github.event_name == 'push'
+        if: contains(fromJSON('["push", "pull_request"]'), github.event_name)
         uses: ouzi-dev/commit-status-updater@v2
         with:
           name: 'test/Functional Hardware ${{ matrix.stage }}'
