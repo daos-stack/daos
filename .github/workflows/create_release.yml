@@ -8,6 +8,8 @@ on:
       - master
       - 'release/**'
 
+permissions: {}
+
 jobs:
   make_release:
     name: Create Release
