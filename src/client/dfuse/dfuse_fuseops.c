@@ -157,8 +157,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		handle = (void *)fi->fh;
 
 	if (handle) {
-		inode                   = handle->doh_ie;
-		handle->doh_linear_read = false;
+		inode = handle->doh_ie;
 		DFUSE_IE_STAT_ADD(inode, DS_FGETATTR);
 	} else {
 		inode = dfuse_inode_lookup_nf(dfuse_info, ino);

@@ -28,8 +28,6 @@
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
 
-#include <daos.h> /* for daos_init() */
-
 #define MAX_MODULE_OPTIONS	64
 #if BUILD_PIPELINE
 #define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,pipeline"
@@ -47,7 +45,7 @@ static char		modules[MAX_MODULE_OPTIONS + 1];
 static unsigned int	nr_threads;
 
 /** DAOS system name (corresponds to crt group ID) */
-static char	       *daos_sysname = DAOS_DEFAULT_SYS_NAME;
+char                    daos_sysname[DAOS_SYS_NAME_MAX + 1] = DAOS_DEFAULT_SYS_NAME;
 
 /** Storage node hostname */
 char		        dss_hostname[DSS_HOSTNAME_MAX_LEN];
@@ -1106,16 +1104,19 @@ parse(int argc, char **argv)
 		case 'f':
 			rc = arg_strtoul(optarg, &dss_core_offset, "\"-f\"");
 			break;
-		case 'g':
-			if (strnlen(optarg, DAOS_SYS_NAME_MAX + 1) >
-			    DAOS_SYS_NAME_MAX) {
-				printf("DAOS system name must be at most "
-				       "%d bytes\n", DAOS_SYS_NAME_MAX);
+		case 'g': {
+			size_t sys_len = strnlen(optarg, DAOS_SYS_NAME_MAX + 1);
+
+			if (sys_len > DAOS_SYS_NAME_MAX) {
+				printf("DAOS system name must be at most %d bytes\n",
+				       DAOS_SYS_NAME_MAX);
 				rc = -DER_INVAL;
 				break;
 			}
-			daos_sysname = optarg;
+			memcpy(daos_sysname, optarg, sys_len);
+			daos_sysname[sys_len] = '\0';
 			break;
+		}
 		case 's':
 			dss_storage_path = optarg;
 			break;
