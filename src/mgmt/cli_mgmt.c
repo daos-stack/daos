@@ -240,19 +240,18 @@ get_env_deprecated(char **val, const char *new_env, const char *old_env)
 			D_WARN("Both %s and %s are set! Deprecated %s (%s) will be ignored\n",
 			       new_env, old_env, old_env, old);
 		*val = new;
-		D_GOTO(out, rc_new = 0);
+		d_freeenv_str(&old);
+		return 0;
 	}
 
 	if (rc_old == 0) {
 		D_INFO("%s is deprecated, upgrade your environment to use %s instead\n", old_env,
 		       new_env);
 		*val = old;
-		D_GOTO(out, rc_new = 0);
+		d_freeenv_str(&new);
+		return 0;
 	}
 
-out:
-	d_freeenv_str(&new);
-	d_freeenv_str(&old);
 	return rc_new;
 }
 /*
