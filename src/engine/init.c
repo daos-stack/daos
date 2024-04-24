@@ -82,7 +82,7 @@ unsigned int		dss_core_offset;
 int			dss_numa_node = -1;
 /** Cached numa information */
 struct dss_numa_info   *dss_numa;
-/** Number of active numa nodes (only > 1 if DAOS_MULTISOCKET is used) */
+/** Number of active numa nodes, multi-socket mode only */
 int                     dss_numa_nr = 1;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
@@ -311,32 +311,50 @@ dss_multi_socket_check(bool oversub, int numa_nr)
 {
 	/** Keep this simple and disallow some configurations */
 	if (oversub) {
-		D_ERROR("DAOS_MULTISOCKET may not be used with DAOS_TARGE_OVERSUBSCRIBE\n");
+		D_INFO("Oversubscription requested, bypassing multi-socket mode\n");
 		return false;
 	}
 
 	if (dss_numa_node != -1) {
-		D_ERROR("DAOS_MULTISOCKET is incompatible with specifying numa node\n");
+		D_INFO("Numa node specified, running in single socket mode\n");
 		return false;
 	}
 
 	if (dss_core_offset != 0) {
-		D_ERROR("DAOS_MULTISOCKET is incompatible with specifying core offset\n");
+		D_INFO("Core offset specified, running in single socket mode\n");
+		return false;
+	}
+
+	if (numa_nr < 2) {
+		D_INFO("No NUMA found, bypassing multi-socket mode\n");
 		return false;
 	}
 
 	if ((dss_tgt_offload_xs_nr % numa_nr) != 0) {
-		D_ERROR(
-		    "With DAOS_MULTISOCKET, nr_helpers must be evenly divisible by numa nodes\n");
+		D_INFO("Uneven split of helpers on sockets, bypassing multi-socket mode\n");
 		return false;
 	}
 
 	if ((dss_tgt_nr % numa_nr) != 0) {
-		D_ERROR("With DAOS_MULTISOCKET, targets must be evenly divisible by numa nodes\n");
+		D_INFO("Uneven split of targets on sockets, bypassing multi-socket mode\n");
 		return false;
 	}
 
 	return true;
+}
+
+static int
+dss_legacy_mode(bool oversub)
+{
+	D_PRINT("Using legacy core allocation algorithm\n");
+	if (dss_core_offset >= dss_core_nr) {
+		D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
+			"range [0, %u]\n",
+			dss_core_offset, dss_core_nr - 1);
+		return -DER_INVAL;
+	}
+
+	return dss_tgt_nr_check(dss_core_nr, dss_tgt_nr, oversub);
 }
 
 static int
@@ -361,27 +379,16 @@ dss_topo_init(void)
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
-	d_getenv_bool("DAOS_MULTISOCKET", &multi_socket);
 	dss_tgt_nr = nr_threads;
 
-	if (multi_socket && numa_node_nr > 1) {
-		if (!dss_multi_socket_check(tgt_oversub, numa_node_nr))
-			return -DER_INVAL;
-	}
+	if (dss_multi_socket_check(tgt_oversub, numa_node_nr))
+		multi_socket = true;
 
-	/* if no NUMA node was specified, or NUMA data unavailable */
-	/* fall back to the legacy core allocation algorithm */
-	if ((!multi_socket && dss_numa_node == -1) || numa_node_nr <= 0) {
-		D_PRINT("Using legacy core allocation algorithm\n");
-		if (dss_core_offset >= dss_core_nr) {
-			D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
-				"range [0, %u]\n",
-				dss_core_offset, dss_core_nr - 1);
-			return -DER_INVAL;
-		}
-
-		return dss_tgt_nr_check(dss_core_nr, dss_tgt_nr, tgt_oversub);
-	}
+	/* Fall back to legacy mode if no socket was specified and
+	 * multi-socket mode is not possible or NUMA data is unavailable
+	 */
+	if ((!multi_socket && dss_numa_node == -1) || numa_node_nr <= 0)
+		return dss_legacy_mode(tgt_oversub);
 
 	if (dss_numa_node > numa_node_nr) {
 		D_ERROR("Invalid NUMA node selected. Must be no larger than %d\n", numa_node_nr);
@@ -423,8 +430,9 @@ dss_topo_init(void)
 		}
 		if (multi_socket && numa_node > 0 &&
 		    dss_numa[numa_node].ni_core_nr != dss_numa[numa_node - 1].ni_core_nr) {
-			D_ERROR("DAOS_MULTISOCKET may not be used with non-uniform numa nodes\n");
-			D_GOTO(failed, rc = -DER_INVAL);
+			D_INFO("Non-uniform numa nodes, bypassing multi-socket mode\n");
+			D_FREE(dss_numa);
+			return dss_legacy_mode(false);
 		}
 	}
 

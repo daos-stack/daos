@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -378,8 +378,16 @@ sched_ult2xs_multisocket(int xs_type, int tgt_id)
 	uint32_t                 base;
 	uint32_t                 target;
 
-	if (dss_tgt_offload_xs_nr == 0)
+	if (dss_tgt_offload_xs_nr == 0) {
+		if (xs_type == DSS_XS_IOFW) {
+			/* Keep the old forwarding behavior, but NUMA aware */
+			socket = tgt_id / dss_numa_nr;
+			target =
+			    (socket * dss_tgt_per_numa_nr) + (tgt_id + 1) % dss_tgt_per_numa_nr;
+			return DSS_MAIN_XS_ID(target);
+		}
 		return DSS_XS_SELF;
+	}
 
 	socket  = tgt_id / dss_numa_nr;
 	base    = dss_sys_xs_nr + dss_tgt_nr + (socket * dss_offload_per_numa_nr);
