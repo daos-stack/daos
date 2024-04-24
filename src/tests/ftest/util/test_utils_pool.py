@@ -455,7 +455,7 @@ class TestPool(TestDaosApiBase):
             self.svc_ranks = [
                 int(self.pool.svc.rl_ranks[index])
                 for index in range(self.pool.svc.rl_nr)]
-            self.svc_leader = int(data["svc_ldr"])
+            self.svc_leader = int(data["leader"])
 
     @fail_on(DaosApiError)
     def connect(self, permission=2):

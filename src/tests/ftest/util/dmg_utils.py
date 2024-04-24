@@ -628,6 +628,7 @@ class DmgCommand(DmgCommandBase):
         data["status"] = output["status"]
         data["uuid"] = output["response"]["uuid"]
         data["svc"] = ",".join([str(svc) for svc in output["response"]["svc_reps"]])
+        data["leader"] = output["response"]["svc_ldr"]
         data["ranks"] = ",".join([str(r) for r in output["response"]["tgt_ranks"]])
         data["scm_per_rank"] = output["response"]["tier_bytes"][0]
         data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
