@@ -3564,8 +3564,6 @@ opendir(const char *path)
 	if (rc)
 		D_GOTO(out_err_ret, rc);
 	if (!is_target_path) {
-		if (parent != NULL)
-			drec_decref(dfs_mt->dcache, parent);
 		FREE(parent_dir);
 		return next_opendir(path);
 	}
@@ -5749,7 +5747,6 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 		times_us[0].tv_usec = times[0].tv_nsec / 1000;
 		times_us[1].tv_sec  = times[1].tv_sec;
 		times_us[1].tv_usec = times[1].tv_nsec / 1000;
-		drec_decref(dfs_mt->dcache, parent);
 		FREE(parent_dir);
 		return next_utimes(path, times_us);
 	}
