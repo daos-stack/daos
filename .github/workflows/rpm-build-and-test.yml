@@ -651,6 +651,9 @@ jobs:
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          github.event_name == 'workflow_dispatch') &&
         ((!cancelled()) || success() || failure())
+    env:
+      # keep VS Code's GHA linting happy
+      CP_TEST_TAG:
     outputs:
       matrix: ${{ steps.matrix.outputs.text }}
     steps:
@@ -689,6 +692,11 @@ jobs:
                  # it would definitely be nicer to get these into the environment
                  # as unquoted strings so that we didn't have to double quote here
                  l+=('"Large"')
+             fi
+             if [ -n '${{ inputs.test-tag }}' ]; then
+                 REQ_TEST_TAG='${{ inputs.test-tag }}'
+             elif [ -n '${{ env.CP_TEST_TAG }}' ]; then
+                 REQ_TEST_TAG='${{ env.CP_TEST_TAG }}'
              fi
              if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM:-false} &&
                 ./launch.py --list "$(get_test_tags "hw,medium,-provider")"; then
@@ -837,6 +845,11 @@ jobs:
         id: run-test
         run: |
           . ci/gha_functions.sh
+          if [ -n '${{ inputs.test-tag }}' ]; then
+              REQ_TEST_TAG='${{ inputs.test-tag }}'
+          elif [ -n '${{ env.CP_TEST_TAG }}' ]; then
+              REQ_TEST_TAG='${{ env.CP_TEST_TAG }}'
+          fi
           NODE_COUNT="$NODE_COUNT"                                   \
           TEST_TAG="$(get_test_tags ${{ env.STAGE_TAGS}})"           \
           FTEST_ARG='${{ env.FTEST_ARG }}' ci/functional/test_main.sh
