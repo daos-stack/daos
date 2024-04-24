@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,8 +7,9 @@
 package main
 
 import (
-	"github.com/daos-stack/daos/src/control/server/config"
 	"os"
+
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
 type cfgLoader interface {

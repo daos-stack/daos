@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -895,14 +895,16 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 			DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
 		rc = -DER_SHUTDOWN;
 	} else if (!cont_child_started(cont_child)) {
-		rc = cont_start_agg(cont_child);
-		if (rc != 0)
-			goto out;
+		if (!engine_in_check()) {
+			rc = cont_start_agg(cont_child);
+			if (rc != 0)
+				goto out;
 
-		rc = dtx_cont_register(cont_child);
-		if (rc != 0) {
-			cont_stop_agg(cont_child);
-			goto out;
+			rc = dtx_cont_register(cont_child);
+			if (rc != 0) {
+				cont_stop_agg(cont_child);
+				goto out;
+			}
 		}
 
 		d_list_add_tail(&cont_child->sc_link, &pool_child->spc_cont_list);
@@ -948,6 +950,58 @@ ds_cont_child_start_all(struct ds_pool_child *pool_child)
 	rc = vos_iterate(&iter_param, VOS_ITER_COUUID, false, &anchors,
 			 cont_child_start_cb, NULL, (void *)pool_child, NULL);
 	return rc;
+}
+
+static int
+cont_child_chk_post_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		       vos_iter_param_t *iter_param, void *data, unsigned *acts)
+{
+	struct dsm_tls		*tls = dsm_tls_get();
+	struct ds_pool_child	*pool_child = data;
+	struct ds_cont_child	*cont_child = NULL;
+	int			 rc = 0;
+
+	/* The container shard must has been opened. */
+	rc = cont_child_lookup(tls->dt_cont_cache, entry->ie_couuid,
+			       pool_child->spc_uuid, false /* create */, &cont_child);
+	if (rc != 0)
+		goto out;
+
+	if (cont_child->sc_stopping || !cont_child_started(cont_child))
+		D_GOTO(out, rc = -DER_SHUTDOWN);
+
+	rc = cont_start_agg(cont_child);
+	if (rc != 0)
+		goto out;
+
+	rc = dtx_cont_register(cont_child);
+
+out:
+	if (cont_child != NULL) {
+		if (rc != 0)
+			cont_stop_agg(cont_child);
+
+		ds_cont_child_put(cont_child);
+	}
+
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "[%d]: Post handle container "DF_CONTF" start after DAOS check: "DF_RC"\n",
+		 dss_get_module_info()->dmi_tgt_id,
+		 DP_CONT(pool_child->spc_uuid, entry->ie_couuid), DP_RC(rc));
+
+	return rc;
+}
+
+int
+ds_cont_chk_post(struct ds_pool_child *pool_child)
+{
+	vos_iter_param_t	iter_param = { 0 };
+	struct vos_iter_anchors	anchors = { 0 };
+
+	iter_param.ip_hdl = pool_child->spc_hdl;
+
+	return vos_iterate(&iter_param, VOS_ITER_COUUID, false, &anchors,
+			   cont_child_chk_post_cb, NULL, (void *)pool_child, NULL);
 }
 
 /* ds_cont_hdl ****************************************************************/
@@ -1290,7 +1344,9 @@ ds_cont_tgt_destroy_handler(crt_rpc_t *rpc)
 	D_DEBUG(DB_MD, DF_CONT": handling rpc %p\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc);
 
-	rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
+	if (!DAOS_FAIL_CHECK(DAOS_CHK_CONT_ORPHAN))
+		rc = ds_cont_tgt_destroy(in->tdi_pool_uuid, in->tdi_uuid);
+
 	out->tdo_rc = (rc == 0 ? 0 : 1);
 	D_DEBUG(DB_MD, DF_CONT ": replying rpc: %p %d " DF_RC "\n",
 		DP_CONT(in->tdi_pool_uuid, in->tdi_uuid), rpc, out->tdo_rc, DP_RC(rc));
@@ -1767,8 +1823,13 @@ ds_cont_tgt_close(uuid_t pool_uuid, uuid_t hdl_uuid)
 
 	uuid_copy(arg.uuid, hdl_uuid);
 
-	return ds_pool_thread_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-					 PO_COMP_ST_DOWNOUT, cont_close_one_hdl, &arg, 0);
+	/*
+	 * The container might be opened when the target is up, but changed to down when closing.
+	 * We need to attempt to close down/downout targets regardless; it won't take any action
+	 * if it was not opened before. Failure to properly close it will result in container
+	 * destruction failing with EBUSY. (See DAOS-15514)
+	 */
+	return ds_pool_thread_collective(pool_uuid, 0, cont_close_one_hdl, &arg, 0);
 }
 
 struct xstream_cont_query {
@@ -1982,9 +2043,16 @@ ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 	D_DEBUG(DB_EPC, DF_UUID": refreshing snapshots %d\n",
 		DP_UUID(cont_uuid), snap_count);
 
-	return ds_pool_task_collective(pool_uuid,
-				       PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
-				       cont_snap_update_one, &args, false);
+	/*
+	 * Before initiating the rebuild scan, the iv snap fetch function
+	 * will be invoked. This action may prompt a collective call to up targets
+	 * whose containers have not yet been created. Therefore, we should skip
+	 * the up targets in this scenario. The target property will be updated
+	 * upon initiating container aggregation.
+	 */
+	return ds_pool_task_collective(pool_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
+				       PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
+				       cont_snap_update_one, &args, 0);
 }
 
 void
