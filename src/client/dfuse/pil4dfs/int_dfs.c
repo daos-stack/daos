@@ -2092,9 +2092,14 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			if (strncmp(full_path, "/", 2) == 0)
 				D_STRNDUP(file_list[idx_fd]->path, dfs_mt->fs_root, DFS_MAX_PATH);
 			else
-				D_ASPRINTF(file_list[idx_fd]->path, "%s%s", dfs_mt->fs_root, full_path);
+				D_ASPRINTF(file_list[idx_fd]->path, "%s%s", dfs_mt->fs_root,
+					   full_path);
 			if (file_list[idx_fd]->path == NULL) {
 				free_fd(idx_fd, false);
+				/* free_fd() already called drec_decref(). set dfs_mt NULL to avoid
+				 * calling drec_decref() again.
+				 */
+				dfs_mt = NULL;
 				goto out_compatible;
 			}
 			strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
@@ -2146,6 +2151,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				free_dirfd(idx_dirfd);
 			else
 				free_fd(idx_fd, false);
+			dfs_mt = NULL;
 			goto out_compatible;
 		}
 		fd_ht_obj->real_fd = fd_kernel;
@@ -2153,7 +2159,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry,
 				       false);
 		D_ASSERT(rc == 0);
-		goto out_compatible;
+		FREE(parent_dir);
+		return fd_kernel;
 	}
 
 	if (oflags & __O_TMPFILE) {
@@ -2515,7 +2522,6 @@ read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *bu
 
 		if (rc >= 0)
 			file_list[fd_directed - FD_FILE_BASE]->offset += rc;
-
 		return rc;
 	} else {
 		return next_read(fd_directed, buf, size);
