@@ -43,7 +43,8 @@ class RebuildMdtest(MdtestBase):
 
         self.log_step("Create files with mdtest")
         self.mdtest_cmd.update_params(flags=create_flags)
-        self.execute_mdtest(display_space=False)
+        job_manager = self.get_mdtest_job_manager_command(self.manager)
+        self.execute_mdtest(display_space=False, job_manager=job_manager)
 
         self.log_step("Verify pool state before rebuild")
         pool_checks = {
@@ -64,7 +65,7 @@ class RebuildMdtest(MdtestBase):
         times["read_start"] = datetime.now()
         self.mdtest_cmd.update_params(flags=read_flags)
         self.subprocess = True  # run mdtest in the background
-        self.execute_mdtest(display_space=False)
+        self.execute_mdtest(display_space=False, job_manager=job_manager)
         self.log.info("Sleeping 5 seconds for mdtest to start")
         time.sleep(5)
 
@@ -92,10 +93,10 @@ class RebuildMdtest(MdtestBase):
             "Unexpected pool rebuild status after rebuild")
 
         self.log_step("Verify mdtest completed successfully")
-        mdtest_returncode = self.job_manager.process.wait()
+        mdtest_returncode = job_manager.process.wait()
         if mdtest_returncode != 0:
             self.fail("mdtest read during rebuild failed")
-        mdtest_output = get_subprocess_stdout(self.job_manager.process)
+        mdtest_output = get_subprocess_stdout(job_manager.process)
         # Parse timestamp format "mm/dd/yyyy hh:mm:ss"
         mdtest_finish_time = re.findall(
             r'finished at ([0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}:[0-9]{2})', mdtest_output)

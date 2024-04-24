@@ -29,7 +29,6 @@ from general_utils import (DaosTestError, dict_to_str, dump_engines_stacks,
                            get_avocado_config_value, get_default_config_file, get_file_listing,
                            nodeset_append_suffix, pcmd, run_command, set_avocado_config_value)
 from host_utils import HostException, HostInfo, HostRole, get_host_parameters, get_local_host
-from job_manager_utils import get_job_manager
 from logger_utils import TestLogger
 from pydaos.raw import DaosApiError, DaosContext, DaosLog
 from run_utils import command_as_user, run_remote, stop_processes
@@ -679,9 +678,6 @@ class TestWithServers(TestWithoutServers):
         self.config_file_base = "test"
         self.log_dir = os.path.split(
             os.getenv("D_LOG_FILE", "/tmp/server.log"))[0]
-        # self.debug = False
-        # self.config = None
-        self.job_manager = None
         # whether engines ULT stacks have been already dumped
         self.dumped_engines_stacks = False
         # Suffix to append to each access point name
@@ -837,9 +833,6 @@ class TestWithServers(TestWithoutServers):
                 self.fail(
                     "Errors detected attempting to ensure all pools had been "
                     "removed from continually running servers.")
-
-        # Setup a job manager command for running the test command
-        get_job_manager(self, class_name_default=None)
 
         # Mark the end of setup
         self.log_step('setUp(): Setup complete')
@@ -1411,9 +1404,6 @@ class TestWithServers(TestWithoutServers):
         # Tear down any test-specific items
         self._teardown_errors = self.pre_tear_down()
 
-        # Stop any test jobs that may still be running
-        self._teardown_errors.extend(self.stop_job_managers())
-
         # Destroy any containers first
         self._teardown_errors.extend(self.destroy_containers(self.container))
 
@@ -1437,22 +1427,6 @@ class TestWithServers(TestWithoutServers):
         """
         self.log.debug("no pre-teardown steps defined")
         return []
-
-    def stop_job_managers(self):
-        """Stop the test job manager.
-
-        Returns:
-            list: a list of exceptions raised stopping the agents
-
-        """
-        error_list = []
-        if self.job_manager:
-            self.test_log.info("Stopping test job manager")
-            if isinstance(self.job_manager, list):
-                error_list = self._stop_managers(self.job_manager, "test job manager")
-            else:
-                error_list = self._stop_managers([self.job_manager], "test job manager")
-        return error_list
 
     def destroy_containers(self, containers):
         """Close and destroy one or more containers.

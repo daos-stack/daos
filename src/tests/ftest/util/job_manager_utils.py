@@ -60,17 +60,55 @@ def get_job_manager(test, class_name=None, job=None, subprocess=None, mpi_type=N
 
     # Setup a job manager command for running the test command
     if class_name is not None:
-        job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
-        job_manager.get_params(test)
-        job_manager.timeout = timeout
-        if mpi_type == "openmpi" and hasattr(job_manager, "tmpdir_base"):
-            job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
-        if isinstance(test.job_manager, list):
-            test.job_manager.append(job_manager)
-        else:
-            test.job_manager = job_manager
+        job_manager = add_job_manager(test, class_name, job, subprocess, mpi_type, timeout)
 
     return job_manager
+
+
+def add_job_manager(test, class_name, job, subprocess, mpi_type, timeout):
+    """Add a new JobManager object to the test.
+
+    Args:
+        test (Test): the test to which the job manager will be added
+        class_name (_type_): _description_
+        job (_type_): _description_
+        subprocess (_type_): _description_
+        mpi_type (_type_): _description_
+        timeout (_type_): _description_
+
+    Returns:
+        JobManager: a JobManager class, e.g. Orterun, Mpirun, Srun, etc.
+    """
+    job_manager = get_job_manager_class(class_name, job, subprocess, mpi_type)
+    job_manager.get_params(test)
+    job_manager.timeout = timeout
+    if mpi_type == "openmpi" and hasattr(job_manager, "tmpdir_base"):
+        job_manager.tmpdir_base.update(test.test_dir, "tmpdir_base")
+
+    # Add a step to stop this job manager when the test completes
+    test.register_cleanup(stop_job_manager, test, job_manager)
+
+    return job_manager
+
+
+def stop_job_manager(test, job_manager):
+    """Stop the job manager being run by the test.
+
+    Args:
+        test (Test): the test to which the job manager was added
+        job_manager (JobManager): the job manager to stop
+
+    Returns:
+        list: a list of any errors detected when stopping the job manager
+    """
+    error_list = []
+    test.log.info("Stopping %s job manager: %s", job_manager.command, job_manager)
+    try:
+        job_manager.stop()
+    except Exception as error:      # pylint: disable=broad-except
+        test.log.error("Error stopping %s job manager: %s", job_manager.command, error)
+        error_list.append(f"Error detected stopping {job_manager.command} job manager")
+    return error_list
 
 
 class JobManager(ExecutableCommand):

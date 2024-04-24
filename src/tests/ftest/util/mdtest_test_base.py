@@ -61,12 +61,13 @@ class MdtestBase(DfuseTestBase):
             params['dir_oclass'] = self.mdtest_cmd.dfs_dir_oclass.value
         return self.get_container(pool, **params)
 
-    def execute_mdtest(self, out_queue=None, display_space=True):
+    def execute_mdtest(self, out_queue=None, display_space=True, job_manager=None):
         """Runner method for Mdtest.
 
         Args:
             out_queue (queue, optional): Pass any exceptions in a queue. Defaults to None.
             display_space (bool, optional): Whether to display the pool space. Defaults to True.
+            job_manager (JobManager, optional): job manager used to run mdtest. Defaults to None.
 
         Returns:
             object: result of job manager run
@@ -85,10 +86,13 @@ class MdtestBase(DfuseTestBase):
             self.start_dfuse(self.hostlist_clients, self.pool, self.container)
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
+        # Create a job manager if one is not provided
+        if job_manager is None:
+            job_manager = self.get_mdtest_job_manager_command(self.manager)
+
         # Run Mdtest
         out = self.run_mdtest(
-            self.get_mdtest_job_manager_command(self.manager),
-            self.processes, display_space=display_space, out_queue=out_queue)
+            job_manager, self.processes, display_space=display_space, out_queue=out_queue)
 
         if self.subprocess:
             return out
