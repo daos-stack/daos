@@ -275,13 +275,14 @@ class TestContainerData():
         return [data[:-1] for data in read_data] \
             if data_array_size > 0 else read_data.value
 
-    def read_object(self, container, txn=None):
+    def read_object(self, container, txn=None, test_hints=None):
         """Read an object from the container.
 
         Args:
             container (TestContainer): container from which to read the object
             txn (int, optional): transaction timestamp to read. Defaults to None
                 which uses the last timestamp written.
+            test_hints (list, optional): optional test hints list. Defaults to None
 
         Returns:
             bool: True if all the records where read successfully and matched
@@ -296,6 +297,7 @@ class TestContainerData():
                 "akey": record_info["akey"],
                 "dkey": record_info["dkey"],
                 "txn": txn,
+                "test_hints": test_hints,
             }
             try:
                 if isinstance(data, list):
@@ -329,7 +331,7 @@ class TestContainerData():
 class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
     """A class for functional testing of DaosContainer objects."""
 
-    def __init__(self, pool, daos_command=None, label_generator=None, namespace=CONT_NAMESPACE):
+    def __init__(self, pool, daos_command, label_generator=None, namespace=CONT_NAMESPACE):
         """Create a TestContainer object.
 
         Args:
@@ -352,7 +354,7 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         # for enabling different container properties
         self.input_params = DaosInputParams()
 
-        # Optional daos command object to use with the USE_DAOS control method
+        # The daos command object to use with the USE_DAOS control method
         self.daos = daos_command
 
         # Optional daos command argument values to use with the USE_DAOS control
@@ -473,9 +475,11 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
         self.container = DaosContainer(self.pool.context)
         result = None
 
-        if self.control_method.value == self.USE_API and query_id:
-            # Not supported
-            raise CommandFailure("Creating a TestContainer with pydaos and query not supported.")
+        if query_id:
+            # Get an existing container with the daos query command
+            kwargs = {"pool": self.pool.identifier, "cont": query_id}
+            self._log_method("daos.container_query", kwargs)
+            result = self.daos.container_query(**kwargs)
 
         elif self.control_method.value == self.USE_API:
             # pydaos.raw doesn't support create with a label
@@ -502,12 +506,6 @@ class TestContainer(TestDaosApiBase):  # pylint: disable=too-many-public-methods
             kwargs["con_prop"] = cop
 
             self._call_method(self.container.create, kwargs)
-
-        elif query_id:
-            # Get an existing container with the daos query command
-            kwargs = {"pool": self.pool.identifier, "cont": query_id}
-            self._log_method("daos.container_query", kwargs)
-            result = self.daos.container_query(**kwargs)
 
         else:
             # Create a container with the daos command
