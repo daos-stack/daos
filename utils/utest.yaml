@@ -177,7 +177,6 @@
       warn_if_missing: "bin/nvme_control_ctests is missing, SPDK_SRC not available when built?"
 - name: ddb
   base: "PREFIX"
-  required_src: ["src/ddb/tests/SConscript"]
   tests:
     - cmd: ["bin/ddb_tests"]
 - name: Source metadata testing
