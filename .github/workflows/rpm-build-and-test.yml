@@ -9,6 +9,11 @@ env:
   EL9_BUILD_VERSION: 9
   EL9_VERSION: 9
   LEAP15_VERSION: 15.5
+  # Which distros to build for
+  DISTROS: el8 el9 leap15
+  TEST_TAG: pr
+  PACKAGING_DIR: utils/rpms
+  NAME: daos
 
 on:
   workflow_dispatch:
@@ -50,16 +55,12 @@ jobs:
   # ${{ github.event.head_commit.message }} but pull_requests don't.  :-(
   Import-commit-message:
     name: Get commit message
-    if: github.repository == 'daos-stack/daos'
     runs-on: [self-hosted, light]
     # Map a step output to a job output
     outputs:
       message: ${{ steps.commit_message.outputs.text }}
       dequoted_message: ${{ steps.dequoted_commit_message.outputs.text }}
     steps:
-      - name: Display inputs.functional-test-distros raw
-        id: show_inputs_functional_test_distros_raw
-        run: echo '${{ inputs.functional-test-distros }}'
       - name: Checkout code
         uses: actions/checkout@v4
         with:
@@ -108,6 +109,10 @@ jobs:
       run-gha: ${{ steps.run-gha.outputs.value }}
       skip-build: ${{ steps.skip-build.outputs.value }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Set rpm-test-version variable
         id: rpm-test-version
         uses: ./.github/actions/variable-from-pragma
@@ -153,12 +158,16 @@ jobs:
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          github.event_name == 'workflow_dispatch') &&
         needs.Import-commit-pragmas.outputs.rpm-test-version == '' &&
-        (!contains(needs.Import-commit-pragmas.outputs.pr-repos, 'daos@'))
+        (!contains(needs.Import-commit-pragmas.outputs.pr-repos, '${{env.NAME }}@'))
     env:
       # TODO -- this should be on stable, backedup storage, not /scratch
       # yamllint disable-line rule:line-length
-      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
+      REPO_PATH: /scratch/job_repos/daos-stack/job/${{ env.NAME }}/job/PR-${{ github.event.pull_request.number }}/
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Create lastBuild and lastSuccessfulBuild symlinks
         run: . ci/gha_functions.sh;
                mkdir -p ${REPO_PATH};
@@ -191,15 +200,14 @@ jobs:
              if ${CP_SKIP_BUILD:-false}; then
                  exit 0
              fi
-             if ! ${CP_SKIP_BUILD_EL8_RPM:-false}; then
+             distros=(${{ env.DISTROS }})
+             if ! ${CP_SKIP_BUILD_EL8_RPM:-false} && [[ ${distros[@]} =~ el8 ]]; then
                  l+=('"el8"')
              fi
-             if ! ${CP_SKIP_BUILD_EL9_RPM:-false}; then
+             if ! ${CP_SKIP_BUILD_EL9_RPM:-false} && [[ ${distros[@]} =~ el9 ]]; then
                  l+=('"el9"')
              fi
-             if ${{ github.event_name == 'push' }} ||
-                (${{ github.event_name == 'pull_request' }} &&
-                ! ${CP_SKIP_BUILD_LEAP15_RPM:-false}); then
+             if ! ${CP_SKIP_BUILD_LEAP15_RPM:-false} && [[ ${distros[@]} =~ leap15 ]]; then
                  l+=('"leap15"')
              fi
 
@@ -233,7 +241,7 @@ jobs:
       PR_NUM: ${{ github.event.pull_request.number }}
       # TODO -- this should be on stable, backedup storage, not /scratch
       # yamllint disable-line rule:line-length
-      REPO_PATH: /scratch/job_repos/daos-stack/job/daos/job/PR-${{ github.event.pull_request.number }}/
+      REPO_PATH: /scratch/job_repos/daos-stack/job/${{ env.NAME }}/job/PR-${{ github.event.pull_request.number }}/
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       RUN_ID: ${{ github.run_id }}
       TARGET: ${{ matrix.distro }}
@@ -255,7 +263,7 @@ jobs:
           commit-message: ${{ needs.Import-commit-message.outputs.dequoted_message }}
       - name: Set variables
         run: |
-            FVERSION="38"
+            FVERSION="latest"
             case ${{ matrix.distro }} in
                 'el8')
                     CHROOT_NAME="rocky+epel-8-x86_64"
@@ -291,14 +299,14 @@ jobs:
       - name: Build RPM Docker image
         id: build-rpm-docker-image
         continue-on-error: true
-        run: docker build --file utils/rpms/packaging/Dockerfile.mockbuild
+        run: docker build --file ${{ env.PACKAGING_DIR }}/packaging/Dockerfile.mockbuild
                           --build-arg CACHEBUST=$(date +%s%3N)
                           --build-arg CB0=$(date +%V)
                           --build-arg REPO_FILE_URL=$REPO_FILE_URL
                           --build-arg UID=$(id -u)
                           --build-arg FVERSION=${{ env.FVERSION }}
                           --tag mock-build
-                          utils/rpms
+                         ${{ env.PACKAGING_DIR }}
       - name: Build RPM
         id: build-rpm
         continue-on-error: true
@@ -352,11 +360,12 @@ jobs:
         if: steps.test-repo.outcome != 'success'
         run: rm -f ${REPO_PATH}lastSuccessfulBuild;
              exit 1
-      - name: Publish RPMs
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
-          path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
+        # We can't actually do this due to SDL requirements
+        # - name: Publish RPMs
+        #   uses: actions/upload-artifact@v4
+        #   with:
+        #     name: ${{ env.DISTRO_NAME }} ${{ env.DISTRO_VERSION }} RPM repository
+        #     path: ${{ env.REPO_PATH}}${{ github.run_number }}/artifact/artifacts/${{ env.TARGET }}
       - name: Update commit status
         uses: ouzi-dev/commit-status-updater@v2
         with:
