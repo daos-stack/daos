@@ -1473,10 +1473,11 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 			D_ERROR("unable to extract ctrlr details from JSON\n");
 			D_GOTO(out_json, rc = -DER_INVAL);
 		}
-		json_object_object_get_ex(ctrlr_info, "health_stats", &health_stats);
-		if (health_stats != NULL) {
-			json_object_object_get_ex(health_stats, stats, &tmp);
-			strcpy(stats, json_object_to_json_string(tmp));
+		if (json_object_object_get_ex(ctrlr_info, "health_stats", &health_stats)) {
+			if (health_stats != NULL) {
+				if (json_object_object_get_ex(health_stats, stats, &tmp))
+					strcpy(stats, json_object_to_json_string(tmp));
+			}
 		}
 	}
 
