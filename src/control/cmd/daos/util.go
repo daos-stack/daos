@@ -17,7 +17,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -42,6 +41,7 @@ init_op_vals(struct cmd_args_s *ap)
 	ap->o_op = -1;
 	ap->fs_op = -1;
 	ap->sh_op = -1;
+	ap->sysname = NULL;
 }
 
 void
@@ -184,8 +184,6 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 		return
 	}
 
-	freeString(ap.sysname)
-
 	C.free(unsafe.Pointer(ap.dfs_path))
 	C.free(unsafe.Pointer(ap.dfs_prefix))
 
@@ -213,7 +211,6 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 	// allocate the struct using C memory to avoid any issues with Go GC
 	ap = (*C.struct_cmd_args_s)(C.calloc(1, C.sizeof_struct_cmd_args_s))
 	C.init_op_vals(ap)
-	ap.sysname = C.CString(build.DefaultSystemName)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	outStream, outCleanup, err := createWriteStream(ctx, log.Info)

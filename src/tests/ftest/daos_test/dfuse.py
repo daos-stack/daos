@@ -103,8 +103,16 @@ class DaosCoreTestDfuse(TestWithServers):
                 daos_test_env['D_IL_ENFORCE_EXEC_ENV'] = '1'
 
         command = [
-            daos_test, '--test-dir', mount_dir, '--io', '--stream', '--mmap', '--exec',
-            '--directory']
+            daos_test,
+            '--test-dir',
+            mount_dir,
+            '--io',
+            '--stream',
+            '--mmap',
+            '--exec',
+            '--directory',
+            '--cache'
+        ]
         if use_dfuse:
             command.append('--lowfd')
         else:

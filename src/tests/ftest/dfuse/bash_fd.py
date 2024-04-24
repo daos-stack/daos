@@ -108,7 +108,7 @@ class DFuseFdTest(TestWithServers):
         start_dfuse(self, dfuse, pool, container)
         fuse_root_dir = dfuse.mount_dir.value
 
-        self.log_step('Setting up the \'bash_fd_inner.sh\' script')
+        self.log_step("Setting up the 'bash_fd_inner.sh' script")
         with open(os.path.join(fuse_root_dir, "bash_fd_inner.sh"), "w", encoding="utf-8") as fd:
             fd.write(INNER)
         os.chmod(os.path.join(fuse_root_dir, "bash_fd_inner.sh"), stat.S_IXUSR | stat.S_IRUSR)

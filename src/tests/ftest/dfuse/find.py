@@ -6,11 +6,9 @@
 import os
 import random
 import string
-import sys
 
 import general_utils
 from apricot import TestWithServers
-# from ClusterShell.NodeSet import NodeSet
 from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from io_utilities import DirectoryTreeCommand
@@ -215,8 +213,6 @@ class DfuseFind(TestWithServers):
 
     def _create_dir_forest(self, paths, height, subdirs, files_per_node, needles):
         """Create a directory tree on each path listed in the paths variable"""
-        remote_pythonpath = ":".join(sys.path)
-
         count = 0
         for path in paths:
             command = DirectoryTreeCommand(self.hostlist_clients)

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
@@ -63,7 +63,7 @@ class DfuseMUPerms(TestWithServers):
         # Create a container as dfuse_user
         daos_command = self.get_daos_command()
         daos_command.run_user = dfuse_user
-        cont = self.get_container(pool, daos_command=daos_command)
+        cont = self.get_container(pool, daos=daos_command)
 
         # Run dfuse as dfuse_user
         dfuse = get_dfuse(self, client)
@@ -188,7 +188,7 @@ class DfuseMUPerms(TestWithServers):
         # Create a container as dfuse_user
         daos_command = self.get_daos_command()
         daos_command.run_user = dfuse_user
-        cont = self.get_container(pool, daos_command=daos_command)
+        cont = self.get_container(pool, daos=daos_command)
 
         self.log.info('Setting dfuse cache time to %s', cache_time)
         cont.set_attr(attrs={
@@ -284,7 +284,7 @@ class DfuseMUPerms(TestWithServers):
         # Create a container as dfuse_user
         daos_command = self.get_daos_command()
         daos_command.run_user = dfuse_user
-        cont = self.get_container(pool, daos_command=daos_command)
+        cont = self.get_container(pool, daos=daos_command)
 
         # Run dfuse as dfuse_user
         dfuse = get_dfuse(self, self.hostlist_clients)
