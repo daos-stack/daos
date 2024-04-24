@@ -2270,7 +2270,7 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 		btr_rec_string(tcx, rec, true, sbuf, BTR_PRINT_BUF));
 
 	rc = btr_rec_update(tcx, rec, key, val, val_out);
-	if (rc == -DER_NO_PERM) { /* cannot make inplace change */
+	if (rc == -DER_NO_PERM || rc == 1) {
 		struct btr_trace *trace = &tcx->tc_trace.ti_trace[tcx->tc_depth - 1];
 
 		if (btr_has_tx(tcx)) {
@@ -2278,6 +2278,10 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 			if (rc != 0)
 				goto out;
 		}
+
+		/* Original record is replaced by above btr_rec_update() */
+		if (rc == 1)
+			return 0;
 
 		D_DEBUG(DB_TRACE, "Replace the original record\n");
 		rc = btr_rec_free(tcx, rec, NULL);
