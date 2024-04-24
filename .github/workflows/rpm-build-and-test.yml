@@ -140,6 +140,18 @@ jobs:
           pragma: SKIP_BUILD
           default: false
 
+  # This job is entirely silly, but it's needed to be able use global
+  # env. vars. in job env.vars
+  Env-vars:
+    name: Make some env. vars. "outputs"
+    runs-on: [self-hosted, light]
+    outputs:
+      name: ${{ steps.name.outputs.value }}
+    steps:
+      - name: Set name variable
+        id: name
+        run: echo 'text=${{ env.NAME }}' >> $GITHUB_OUTPUT' EXIT
+
   Create-symlinks:
     # you might think this is an odd place to do this and it should be done as a result of the
     # build and/or testing stages and ideally you'd be right.
@@ -153,16 +165,17 @@ jobs:
     # lastSuccessfulBuild link if it fails
     name: Create lastBuild and lastSuccessfulBuild symlinks
     runs-on: [self-hosted, light]
-    needs: [Import-commit-pragmas]
+    needs: [Import-commit-pragmas, Env-vars]
     if: |
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          github.event_name == 'workflow_dispatch') &&
         needs.Import-commit-pragmas.outputs.rpm-test-version == '' &&
-        (!contains(needs.Import-commit-pragmas.outputs.pr-repos, '${{env.NAME }}@'))
+        (!contains(needs.Import-commit-pragmas.outputs.pr-repos,
+         '${{ needs.Env-vars.outputs.name }}@'))
     env:
       # TODO -- this should be on stable, backedup storage, not /scratch
       # yamllint disable-line rule:line-length
-      REPO_PATH: /scratch/job_repos/daos-stack/job/${{ env.NAME }}/job/PR-${{ github.event.pull_request.number }}/
+      REPO_PATH: /scratch/job_repos/daos-stack/job/${{ needs.Env-vars.outputs.name }}/job/PR-${{ github.event.pull_request.number }}/
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -216,7 +229,8 @@ jobs:
     permissions:
       statuses: write
     runs-on: [self-hosted, docker]
-    needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix, Import-commit-message]
+    needs: [Create-symlinks, Import-commit-pragmas, Calc-rpm-build-matrix,
+            Import-commit-message, Env-vars]
     if: |
         (needs.Import-commit-pragmas.outputs.run-gha == 'true' ||
          github.event_name == 'workflow_dispatch') &&
@@ -241,7 +255,7 @@ jobs:
       PR_NUM: ${{ github.event.pull_request.number }}
       # TODO -- this should be on stable, backedup storage, not /scratch
       # yamllint disable-line rule:line-length
-      REPO_PATH: /scratch/job_repos/daos-stack/job/${{ env.NAME }}/job/PR-${{ github.event.pull_request.number }}/
+      REPO_PATH: /scratch/job_repos/daos-stack/job/${{ needs.Env-vars.outputs.name }}/job/PR-${{ github.event.pull_request.number }}/
       REPO_FILE_URL: https://artifactory.dc.hpdd.intel.com/artifactory/repo-files/
       RUN_ID: ${{ github.run_id }}
       TARGET: ${{ matrix.distro }}
