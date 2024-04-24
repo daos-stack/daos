@@ -25,6 +25,9 @@ on:
       test-tag:
         description: 'Test tag to use'
         required: false
+      functional-test-distros-json:
+        description: 'Distros to run Functional testing on in a JSON array (i.e. ["el8", "el9", "leap15", "etc."])'
+        required: false
       functional-test-distros:
         description: 'Distros to run Functional testing on (i.e. el8 el9 leap15, etc.)'
         required: false
@@ -391,12 +394,22 @@ jobs:
              # test matrix won't include testing it since it was calculated and was
              # successful on the previous run without the failed build stage in it
 
+             # Use inputs.functional-test-distros-json if it was given
+             if [ -n '${{ inputs.functional-test-distros-json }}' ]; then
+                 echo '${{ inputs.functional-test-distros-json }}' >> $GITHUB_OUTPUT
+                 echo 'Using JSON input parameter instead of calculating'
+                 cat $GITHUB_OUTPUT
+                 exit 0
+             fi
              l=()
              trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT; \
                    cat $GITHUB_OUTPUT' EXIT
              # Use inputs.functional-test-distros if it was given
              if [ -n '${{ inputs.functional-test-distros }}' ]; then
-                 l=(${{ inputs.functional-test-distros }})
+                 ds=(${{ inputs.functional-test-distros }})
+                 for d in "${ds[@]}"; do
+                     l+=("\"$d\"")
+                 done
                  echo 'Using input parameter instead of calculating'
                  exit 0
              fi
