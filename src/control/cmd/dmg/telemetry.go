@@ -9,7 +9,6 @@ package main
 import (
 	"archive/tar"
 	"compress/gzip"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -324,7 +323,7 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
-	resp, err := control.MetricsList(context.Background(), req)
+	resp, err := control.MetricsList(cmd.MustLogCtx(), req)
 	if err != nil {
 		return err
 	}
@@ -380,7 +379,7 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
-	resp, err := control.MetricsQuery(context.Background(), req)
+	resp, err := control.MetricsQuery(cmd.MustLogCtx(), req)
 	if err != nil {
 		return err
 	}
