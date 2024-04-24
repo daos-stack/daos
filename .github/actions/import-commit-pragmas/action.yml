@@ -7,9 +7,10 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Show environment
-      run: env
-      shell: bash
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
     - run: . ci/gha_functions.sh;
            echo "${{ inputs.commit-message }}" |
              sed -e "s/'/'\"'\"'/g" |
