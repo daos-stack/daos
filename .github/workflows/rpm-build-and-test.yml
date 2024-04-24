@@ -150,7 +150,7 @@ jobs:
     steps:
       - name: Set name variable
         id: name
-        run: echo 'text=${{ env.NAME }}' >> $GITHUB_OUTPUT' EXIT
+        run: echo 'text=${{ env.NAME }}' >> $GITHUB_OUTPUT
 
   Create-symlinks:
     # you might think this is an odd place to do this and it should be done as a result of the
