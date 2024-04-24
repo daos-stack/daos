@@ -669,7 +669,7 @@ jobs:
         id: matrix
         run: |  # do not use the non-| format for this script
              . ci/gha_functions.sh
-             set -eu
+             set -eux
              # it might seem tempting to factor in the result of the build for this
              # distro here and not include a failed build in the test matrix but
              # the problem with that is that if/when the user asks GHA to rebuild
