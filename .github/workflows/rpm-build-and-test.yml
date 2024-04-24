@@ -394,10 +394,6 @@ jobs:
              # all failed jobs and a previously failed RPM job is successful, the
              # test matrix won't include testing it since it was calculated and was
              # successful on the previous run without the failed build stage in it
-             if ! ./launch.py --list "$(get_test_tags "vm")"; then
-                 echo 'text=' >> $GITHUB_OUTPUT
-                 exit 0
-             fi
              # Use inputs.functional-test-distros-json if it was given
              if [ -n '${{ inputs.functional-test-distros-json }}' ]; then
                  echo 'text=${{ inputs.functional-test-distros-json }}' >> $GITHUB_OUTPUT
@@ -426,7 +422,7 @@ jobs:
                  exit 0
              fi
 
-             if ./launch.py --list "$(get_test_tags "-hw")"; then
+             if ./launch.py --list "$(get_test_tags "vm")"; then
                  if ! ${CP_SKIP_BUILD_EL8_RPM:-false} &&
                     ! ${CP_SKIP_FUNC_TEST_EL8:-false}; then
                      # it would definitely be nicer to get these into the environment
@@ -678,7 +674,8 @@ jobs:
              # test matrix won't include testing it since it was calculated and was
              # successful on the previous run without the failed build stage in it
              l=()
-             trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT' EXIT
+             trap 'echo "text=[$(IFS=","; echo "${l[*]}")]" >> $GITHUB_OUTPUT; \
+                   cat $GITHUB_OUTPUT' EXIT
              if ${CP_SKIP_FUNC_HW_TEST:-false}; then
                  exit 0
              fi
