@@ -43,15 +43,17 @@ class NvmeFaultReintegrate(TestWithServers):
 
         """
         return self.check_result(
-            get_dmg_response(self.dmg.storage_led_check, ids=device), dev_state, led_state)
+            get_dmg_response(self.dmg.storage_query_list_devices, uuid=device),
+            dev_state, led_state)
 
     def check_result(self, result, dev_state, led_state):
         """Check for result of storage device and led states.
 
         Args:
-            result (dict): return from get_led_status_value for a storage device.
-            dev_state (str): expect dev_state.
-            led_state (str): expect led_state.
+            result (dict): return from verify_dev_led_state for an NVMe storage
+                device. Expects only a single smd_device.
+            dev_state (str): expected dev_state.
+            led_state (str): expected led_state.
 
         Return:
             True if the expected dev_state and led_state.
