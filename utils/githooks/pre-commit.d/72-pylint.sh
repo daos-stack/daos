@@ -16,6 +16,6 @@ if [ -f utils/cq/daos_pylint.py ]; then
             git diff HEAD --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
     else
             echo "  Checking against branch ${TARGET}"
-            git diff "$TARGET"... --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
+            git diff "$TARGET" --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
     fi
 fi

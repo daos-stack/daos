@@ -1,10 +1,10 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from telemetry_utils import TelemetryUtils
+from telemetry_utils import ClientTelemetryUtils, TelemetryUtils
 
 
 class TestWithTelemetry(TestWithServers):
@@ -263,3 +263,36 @@ class TestWithTelemetry(TestWithServers):
                     total += value
 
         return total
+
+
+class TestWithClientTelemetry(TestWithTelemetry):
+    """Test client telemetry metrics.
+
+    :avocado: recursive
+    """
+    def setUp(self):
+        """Set up each test case."""
+        super().setUp()
+        self.telemetry = ClientTelemetryUtils(
+            self.get_dmg_command(), self.server_managers[0].hosts, self.hostlist_clients)
+
+    def verify_client_telemetry_list(self, with_pools=False):
+        """Verify the  dmg telemetry metrics list command output."""
+        # Define a list of expected telemetry metrics names
+        expected = self.telemetry.get_all_client_metrics_names(
+            with_pools=with_pools)
+
+        # List all of the telemetry metrics
+        result = self.telemetry.list_metrics()
+
+        # Verify the lists are detected for each agent
+        errors = self.compare_lists(
+            list(result), self.hostlist_clients, 0, "",
+            "telemetry metrics list hosts")
+        for host, host_result in result.items():
+            errors.extend(
+                self.compare_lists(expected, host_result, 2, host, "telemetry metric names"))
+        if errors:
+            self.fail("\n".join(errors))
+
+        self.log.info("Test PASSED")

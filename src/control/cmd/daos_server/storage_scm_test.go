@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -17,6 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -120,6 +121,18 @@ func TestDaosServer_setSockFromCfg(t *testing.T) {
 	}
 }
 
+func getMockScmCmdInit(log logging.Logger, smbc scm.MockBackendConfig) (*scm.MockBackend, initScmCmdFn) {
+	msb := scm.NewMockBackend(&smbc)
+	scs := server.NewMockStorageControlService(log, nil, nil,
+		scm.NewProvider(log, msb, system.NewMockSysProvider(log, nil), nil),
+		bdev.NewProvider(log, bdev.NewMockBackend(nil)), nil)
+
+	return msb, func(cmd *scmCmd) (*server.StorageControlService, error) {
+		cmd.Logger.Tracef("mock storage control service set: %+v", scs)
+		return scs, nil
+	}
+}
+
 func TestDaosServer_preparePMem(t *testing.T) {
 	var printNamespace strings.Builder
 	msns := storage.ScmNamespaces{storage.MockScmNamespace()}
@@ -134,6 +147,7 @@ func TestDaosServer_preparePMem(t *testing.T) {
 		prepResp  *storage.ScmPrepareResponse
 		prepErr   error
 		expCalls  []storage.ScmPrepareRequest
+		expResp   *storage.ScmPrepareResponse
 		expErr    error
 		expLogMsg string
 	}{
@@ -223,21 +237,23 @@ func TestDaosServer_preparePMem(t *testing.T) {
 				},
 				Namespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
-			expLogMsg: printNamespace.String(),
+			expResp: &storage.ScmPrepareResponse{
+				Socket: &storage.ScmSocketState{
+					State: storage.ScmNoFreeCap,
+				},
+				Namespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mbp := bdev.NewProvider(log, nil)
-			smbc := &scm.MockBackendConfig{
+			smbc := scm.MockBackendConfig{
 				PrepRes: tc.prepResp,
 				PrepErr: tc.prepErr,
 			}
-			msb := scm.NewMockBackend(smbc)
-			msp := scm.NewProvider(log, msb, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
+			msb, mockInitFn := getMockScmCmdInit(log, smbc)
 
 			cmd := prepareSCMCmd{
 				Force: !tc.noForce,
@@ -246,6 +262,9 @@ func TestDaosServer_preparePMem(t *testing.T) {
 				Logger: log,
 			}
 			cmd.SocketID = tc.sockID
+			if err := cmd.initWith(mockInitFn); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			nrNs := uint(1)
 			if tc.zeroNrNs {
@@ -253,13 +272,17 @@ func TestDaosServer_preparePMem(t *testing.T) {
 			}
 			cmd.NrNamespacesPerSocket = nrNs
 
-			err := cmd.preparePMem(scs.ScmPrepare)
-			test.CmpErr(t, tc.expErr, err)
+			gotResp, gotErr := preparePMem(&cmd)
+			test.CmpErr(t, tc.expErr, gotErr)
 
 			if tc.expCalls == nil {
 				tc.expCalls = []storage.ScmPrepareRequest{
 					{NrNamespacesPerSocket: 1},
 				}
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("unexpected resp (-want, +got):\n%s\n", diff)
 			}
 
 			msb.RLock()
@@ -431,14 +454,11 @@ func TestDaosServer_resetPMem(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mbp := bdev.NewProvider(log, nil)
-			smbc := &scm.MockBackendConfig{
+			smbc := scm.MockBackendConfig{
 				PrepResetRes: tc.prepResp,
 				PrepResetErr: tc.prepErr,
 			}
-			msb := scm.NewMockBackend(smbc)
-			msp := scm.NewProvider(log, msb, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
+			msb, mockInitFn := getMockScmCmdInit(log, smbc)
 
 			cmd := resetSCMCmd{
 				Force: !tc.noForce,
@@ -447,8 +467,11 @@ func TestDaosServer_resetPMem(t *testing.T) {
 				Logger: log,
 			}
 			cmd.SocketID = tc.sockID
+			if err := cmd.initWith(mockInitFn); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			err := cmd.resetPMem(scs.ScmPrepare)
+			err := resetPMem(&cmd)
 			test.CmpErr(t, tc.expErr, err)
 
 			if tc.expCalls == nil {
@@ -490,14 +513,14 @@ func TestDaosServer_scanSCM(t *testing.T) {
 		sockID             *uint
 		cfg                *config.Server
 		ignoreCfg          bool
-		smbc               *scm.MockBackendConfig
+		smbc               scm.MockBackendConfig
 		expErr             error
 		expResp            *storage.ScmScanResponse
 		expModulesCalls    []int
 		expNamespacesCalls []int
 	}{
 		"normal scan": {
-			smbc: &scm.MockBackendConfig{
+			smbc: scm.MockBackendConfig{
 				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
 				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
@@ -509,7 +532,7 @@ func TestDaosServer_scanSCM(t *testing.T) {
 			},
 		},
 		"failed scan": {
-			smbc: &scm.MockBackendConfig{
+			smbc: scm.MockBackendConfig{
 				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
 				GetNamespacesErr: errors.New("fail"),
 			},
@@ -519,7 +542,7 @@ func TestDaosServer_scanSCM(t *testing.T) {
 		},
 		"single socket scan": {
 			sockID: &zero,
-			smbc: &scm.MockBackendConfig{
+			smbc: scm.MockBackendConfig{
 				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
 				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
@@ -535,10 +558,7 @@ func TestDaosServer_scanSCM(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mbp := bdev.NewProvider(log, nil)
-			msb := scm.NewMockBackend(tc.smbc)
-			msp := scm.NewProvider(log, msb, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
+			msb, mockInitFn := getMockScmCmdInit(log, tc.smbc)
 
 			cmd := scanSCMCmd{}
 			cmd.LogCmd = cmdutil.LogCmd{
@@ -547,8 +567,11 @@ func TestDaosServer_scanSCM(t *testing.T) {
 			cmd.SocketID = tc.sockID
 			cmd.config = tc.cfg
 			cmd.IgnoreConfig = tc.ignoreCfg
+			if err := cmd.initWith(mockInitFn); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-			resp, err := cmd.scanPMem(scs.ScmScan)
+			resp, err := scanPMem(&cmd)
 			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
@@ -569,6 +592,23 @@ func TestDaosServer_scanSCM(t *testing.T) {
 
 func TestDaosServer_SCM_Commands(t *testing.T) {
 	runCmdTests(t, []cmdTest{
+		{
+			"Prepare namespaces; JSON; no force",
+			"scm prepare -j",
+			printCommand(t, &prepareSCMCmd{
+				NrNamespacesPerSocket: 1,
+			}),
+			nil,
+		},
+		{
+			"Prepare namespaces with all opts with JSON",
+			"scm prepare -S 2 -f --socket 0 -j",
+			printCommand(t, &prepareSCMCmd{
+				NrNamespacesPerSocket: 2,
+				Force:                 true,
+			}),
+			nil,
+		},
 		{
 			"Prepare namespaces with all opts",
 			"scm prepare -S 2 -f --socket 0",
@@ -609,6 +649,131 @@ func TestDaosServer_SCM_Commands(t *testing.T) {
 			"scm scan --socket 1",
 			printCommand(t, &scanSCMCmd{}),
 			nil,
+		},
+	})
+}
+
+// TestDaosServer_SCM_Commands_JSON verifies that when the JSON-output flag is set only JSON is
+// printed to standard out. Test cases should cover all scm subcommand variations.
+func TestDaosServer_SCM_Commands_JSON(t *testing.T) {
+	// Use a normal logger to verify that we don't mess up JSON output.
+	log := logging.NewCommandLineLogger()
+
+	genSetHelpers := func(smbc scm.MockBackendConfig) func(*mainOpts) {
+		_, mockInit := getMockScmCmdInit(log, smbc)
+		return func(opts *mainOpts) {
+			opts.scmInitHelper = mockInit
+		}
+	}
+
+	runJSONCmdTests(t, log, []jsonCmdTest{
+		{
+			"Prepare namespaces; JSON; no force",
+			"scm prepare -j",
+			genSetHelpers(scm.MockBackendConfig{}),
+			nil,
+			errNoForceWithJSON,
+		},
+		{
+			"Prepare namespaces; JSON; with force",
+			"scm prepare -j -f",
+			genSetHelpers(scm.MockBackendConfig{
+				PrepRes: &storage.ScmPrepareResponse{
+					Socket: &storage.ScmSocketState{
+						State: storage.ScmNoFreeCap,
+					},
+					Namespaces: storage.ScmNamespaces{
+						storage.MockScmNamespace(),
+					},
+				},
+			}),
+			storage.ScmNamespaces{storage.MockScmNamespace()},
+			nil,
+		},
+		{
+			"Prepare namespaces; JSON; with force; returns error",
+			"scm prepare -j -f",
+			genSetHelpers(scm.MockBackendConfig{
+				PrepErr: errors.New("bad prep"),
+			}),
+			nil,
+			errors.New("bad prep"),
+		},
+		{
+			"Reset namespaces; JSON; no force",
+			"scm reset -j",
+			genSetHelpers(scm.MockBackendConfig{}),
+			nil,
+			errNoForceWithJSON,
+		},
+		{
+			"Reset namespaces; JSON; with force",
+			"scm reset -j -f",
+			genSetHelpers(scm.MockBackendConfig{
+				PrepResetRes: &storage.ScmPrepareResponse{
+					RebootRequired: true,
+					Socket: &storage.ScmSocketState{
+						State: storage.ScmFreeCap,
+					},
+				},
+			}),
+			nil,
+			nil,
+		},
+		{
+			"Reset namespaces; JSON; with force; returns error",
+			"scm reset -j -f",
+			genSetHelpers(scm.MockBackendConfig{
+				PrepResetErr: errors.New("bad prep"),
+			}),
+			nil,
+			errors.New("bad prep"),
+		},
+		{
+			"Scan modules; JSON",
+			"scm scan -j",
+			genSetHelpers(scm.MockBackendConfig{
+				GetModulesRes: storage.ScmModules{
+					storage.MockScmModule(),
+				},
+			}),
+			storage.ScmModules{storage.MockScmModule()},
+			nil,
+		},
+		{
+			"Scan modules; JSON; returns error",
+			"scm scan -j",
+			genSetHelpers(scm.MockBackendConfig{
+				GetModulesErr: errors.New("bad prep"),
+			}),
+			nil,
+			errors.New("bad prep"),
+		},
+		{
+			"Scan namespaces; JSON",
+			"scm scan -j",
+			genSetHelpers(scm.MockBackendConfig{
+				GetModulesRes: storage.ScmModules{
+					storage.MockScmModule(),
+				},
+				GetNamespacesRes: storage.ScmNamespaces{
+					storage.MockScmNamespace(),
+				},
+			}),
+			storage.ScmNamespaces{storage.MockScmNamespace()},
+			nil,
+		},
+		{
+			"Scan namespaces; JSON; returns error",
+			"scm scan -j",
+			genSetHelpers(scm.MockBackendConfig{
+				GetModulesRes: storage.ScmModules{
+					storage.MockScmModule(),
+				},
+				GetNamespacesErr: errors.New("bad prep"),
+			}),
+			nil,
+			errors.New("bad prep"),
 		},
 	})
 }
