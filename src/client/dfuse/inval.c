@@ -294,7 +294,7 @@ ival_thread_start(struct dfuse_info *dfuse_info)
 	rc = pthread_create(&ival_thread, NULL, ival_thread_fn, NULL);
 	if (rc != 0)
 		goto out;
-	pthread_setname_np(ival_thread, "dfuse inval");
+	pthread_setname_np(ival_thread, "dfuseinval");
 
 out:
 	return rc;
