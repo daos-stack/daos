@@ -247,7 +247,7 @@ class ObjectMetadata(TestWithServers):
         return True
 
     def metadata_fillup(self, svc_ops_enabled=True):
-        """Run test to verify no IO happens after metadata is full.
+        """Run test to verify number of resources that can be created until metadata is full.
 
         Args:
             svc_ops_enabled (bool): Pool create properties svc_ops_enabled. Defaults to True.
