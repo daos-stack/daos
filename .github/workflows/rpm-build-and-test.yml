@@ -394,10 +394,13 @@ jobs:
              # all failed jobs and a previously failed RPM job is successful, the
              # test matrix won't include testing it since it was calculated and was
              # successful on the previous run without the failed build stage in it
-
+             if ! ./launch.py --list "$(get_test_tags "vm")"; then
+                 echo 'text=' >> $GITHUB_OUTPUT
+                 exit 0
+             fi
              # Use inputs.functional-test-distros-json if it was given
              if [ -n '${{ inputs.functional-test-distros-json }}' ]; then
-                 echo '${{ inputs.functional-test-distros-json }}' >> $GITHUB_OUTPUT
+                 echo 'text=${{ inputs.functional-test-distros-json }}' >> $GITHUB_OUTPUT
                  echo 'Using JSON input parameter instead of calculating'
                  cat $GITHUB_OUTPUT
                  exit 0
