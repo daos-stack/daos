@@ -1518,25 +1518,28 @@ host1
 						SmdInfo: &control.SmdInfo{
 							Devices: []*storage.SmdDevice{
 								{
-									UUID:      test.MockUUID(0),
-									TargetIDs: []int32{0, 1, 2},
-									HasSysXS:  true,
-									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
-									Ctrlr:     newCtrlr,
+									UUID:             test.MockUUID(0),
+									TargetIDs:        []int32{0, 1, 2},
+									HasSysXS:         true,
+									Roles:            storage.BdevRoles{storage.BdevRoleWAL},
+									Ctrlr:            newCtrlr,
+									CtrlrNamespaceID: 1,
 								},
 								{
-									UUID:      test.MockUUID(1),
-									TargetIDs: []int32{3, 4, 5},
-									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
-									Ctrlr:     faultCtrlr,
+									UUID:             test.MockUUID(1),
+									TargetIDs:        []int32{3, 4, 5},
+									Roles:            storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
+									Ctrlr:            faultCtrlr,
+									CtrlrNamespaceID: 1,
 								},
 								{
-									UUID:      test.MockUUID(2),
-									TargetIDs: []int32{0, 1, 2},
-									Rank:      1,
-									HasSysXS:  true,
-									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
-									Ctrlr:     unknoCtrlr,
+									UUID:             test.MockUUID(2),
+									TargetIDs:        []int32{0, 1, 2},
+									Rank:             1,
+									HasSysXS:         true,
+									Roles:            storage.BdevRoles{storage.BdevRoleWAL},
+									Ctrlr:            unknoCtrlr,
+									CtrlrNamespaceID: 1,
 								},
 								{
 									UUID:      test.MockUUID(3),
@@ -1555,13 +1558,13 @@ host1
 host1
 -----
   Devices
-    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0 NSID:0]
+    UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0 NSID:1]
       Roles:wal SysXS Targets:[0 1 2] Rank:0 State:NEW LED:OFF
-    UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0 NSID:0]
+    UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0 NSID:1]
       Roles:data,meta Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
-    UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0 NSID:0]
+    UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0 NSID:1]
       Roles:wal SysXS Targets:[0 1 2] Rank:1 State:UNKNOWN LED:NA
-    UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0 NSID:0]
+    UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
       Roles:data,meta Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
 `,
 		},
@@ -1693,7 +1696,7 @@ host1
 host1
 -----
   Devices
-    TrAddr:0000:db:00.0 NSID:0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
+    TrAddr:0000:db:00.0 [UUID:842c739b-86b5-462f-a7ba-b4a91b674f3d] LED:QUICK_BLINK
 `,
 		},
 		"identify led; no uuid specified": {
