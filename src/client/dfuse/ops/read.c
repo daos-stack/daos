@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,6 +48,7 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 	DFUSE_REPLY_BUFQ(oh, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 release:
 	daos_event_fini(&ev->de_ev);
+	d_slab_restock(ev->de_eqt->de_read_slab);
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
 }
 
@@ -69,7 +70,7 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 	if (oh->doh_linear_read_pos != position) {
 		DFUSE_TRA_DEBUG(oh, "disabling readahead");
 		daos_event_fini(&oh->doh_readahead->dra_ev->de_ev);
-		d_slab_release(oh->doh_readahead->dra_ev->de_eqt->de_read_slab,
+		d_slab_release(oh->doh_readahead->dra_ev->de_eqt->de_pre_read_slab,
 			       oh->doh_readahead->dra_ev);
 		oh->doh_readahead->dra_ev = NULL;
 		return false;
@@ -127,7 +128,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 			if (ev) {
 				daos_event_fini(&ev->de_ev);
-				d_slab_release(ev->de_eqt->de_read_slab, ev);
+				d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
+				DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
 			}
 		}
 		DFUSE_REPLY_BUFQ(oh, req, NULL, 0);
@@ -142,6 +144,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 		D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
 
 		if (replied) {
+			DFUSE_IE_STAT_ADD(oh->doh_ie, DS_PRE_READ);
 			return;
 		}
 	}
@@ -186,6 +189,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 
 	ev->de_complete_cb = dfuse_cb_read_complete;
 
+	DFUSE_IE_WFLUSH(oh->doh_ie);
+
 	rc = dfs_read(oh->doh_dfs, oh->doh_obj, &ev->de_sgl, position, &ev->de_len, &ev->de_ev);
 	if (rc != 0) {
 		D_GOTO(err, rc);
@@ -217,7 +222,7 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 	if (ev->de_ev.ev_error != 0) {
 		oh->doh_readahead->dra_rc = ev->de_ev.ev_error;
 		daos_event_fini(&ev->de_ev);
-		d_slab_release(ev->de_eqt->de_read_slab, ev);
+		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 		oh->doh_readahead->dra_ev = NULL;
 	}
 
@@ -227,7 +232,7 @@ dfuse_cb_pre_read_complete(struct dfuse_event *ev)
 	 */
 	if (ev->de_len != ev->de_readahead_len) {
 		daos_event_fini(&ev->de_ev);
-		d_slab_release(ev->de_eqt->de_read_slab, ev);
+		d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 		oh->doh_readahead->dra_ev = NULL;
 	}
 
@@ -246,7 +251,7 @@ dfuse_pre_read(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
 	eqt     = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
 
-	ev = d_slab_acquire(eqt->de_read_slab);
+	ev = d_slab_acquire(eqt->de_pre_read_slab);
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
@@ -277,7 +282,7 @@ err:
 	oh->doh_readahead->dra_rc = rc;
 	if (ev) {
 		daos_event_fini(&ev->de_ev);
-		d_slab_release(eqt->de_read_slab, ev);
+		d_slab_release(eqt->de_pre_read_slab, ev);
 		oh->doh_readahead->dra_ev = NULL;
 	}
 	D_MUTEX_UNLOCK(&oh->doh_readahead->dra_lock);
