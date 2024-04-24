@@ -687,16 +687,16 @@ jobs:
                  echo "Could not determine if tests exist for this stage, assuming they do."
                  exit 0
              fi
+             if [ -n '${{ inputs.test-tag }}' ]; then
+                 REQ_TEST_TAG='${{ inputs.test-tag }}'
+             elif [ -n '${{ env.CP_TEST_TAG }}' ]; then
+                 REQ_TEST_TAG='${{ env.CP_TEST_TAG }}'
+             fi
              if ! "${CP_SKIP_FUNC_HW_TEST_LARGE:-false}" &&
                 ./launch.py --list "$(get_test_tags "hw,large,-provider")"; then
                  # it would definitely be nicer to get these into the environment
                  # as unquoted strings so that we didn't have to double quote here
                  l+=('"Large"')
-             fi
-             if [ -n '${{ inputs.test-tag }}' ]; then
-                 REQ_TEST_TAG='${{ inputs.test-tag }}'
-             elif [ -n '${{ env.CP_TEST_TAG }}' ]; then
-                 REQ_TEST_TAG='${{ env.CP_TEST_TAG }}'
              fi
              if ! ${CP_SKIP_FUNC_HW_TEST_MEDIUM:-false} &&
                 ./launch.py --list "$(get_test_tags "hw,medium,-provider")"; then
