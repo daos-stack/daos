@@ -80,6 +80,8 @@ int			dss_core_nr;
 unsigned int		dss_core_offset;
 /** NUMA node to bind to */
 int			dss_numa_node = -1;
+/** Forward I/O work to self */
+bool                    dss_forward_self;
 /** Cached numa information */
 struct dss_numa_info   *dss_numa;
 /** Number of active numa nodes, multi-socket mode only */
@@ -379,6 +381,7 @@ dss_topo_init(void)
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
+	d_getenv_bool("DAOS_FORWARD_SELF", &dss_forward_self);
 	dss_tgt_nr = nr_threads;
 
 	if (dss_multi_socket_check(tgt_oversub, numa_node_nr))

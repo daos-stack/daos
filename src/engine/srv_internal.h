@@ -154,6 +154,8 @@ extern int		dss_numa_node;
 extern struct dss_numa_info *dss_numa;
 /** Number of active numa nodes (only > 1 if DAOS_MULTISOCKET is enabled) */
 extern int                   dss_numa_nr;
+/** Forward I/O work to self */
+extern bool                  dss_forward_self;
 /** Number of offload XS */
 extern unsigned int	dss_tgt_offload_xs_nr;
 /** Number of offload per socket */

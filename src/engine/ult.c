@@ -379,11 +379,12 @@ sched_ult2xs_multisocket(int xs_type, int tgt_id)
 	uint32_t                 target;
 
 	if (dss_tgt_offload_xs_nr == 0) {
-		if (xs_type == DSS_XS_IOFW) {
+		if (xs_type == DSS_XS_IOFW && !dss_forward_self) {
 			/* Keep the old forwarding behavior, but NUMA aware */
 			socket = tgt_id / dss_numa_nr;
-			target =
-			    (socket * dss_tgt_per_numa_nr) + (tgt_id + 1) % dss_tgt_per_numa_nr;
+			target = (socket * dss_tgt_per_numa_nr) +
+				 (tgt_id + offload) % dss_tgt_per_numa_nr;
+			offload = target + 17; /* Seed next selection */
 			return DSS_MAIN_XS_ID(target);
 		}
 		return DSS_XS_SELF;
