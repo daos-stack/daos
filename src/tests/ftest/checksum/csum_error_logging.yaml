@@ -21,3 +21,5 @@ daos_tests:
     test_csum_error_logging: DAOS_Checksum_tests
   daos_test:
     test_csum_error_logging: z
+  args:
+    test_csum_error_logging: -u
