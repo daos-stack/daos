@@ -26,6 +26,7 @@ on:
         description: 'Test tag to use'
         required: false
       functional-test-distros-json:
+        # yamllint disable-line rule:line-length
         description: 'Distros to run Functional testing on in a JSON array (i.e. ["el8", "el9", "leap15", "etc."])'
         required: false
       functional-test-distros:
