@@ -3,7 +3,7 @@ hosts:
   test_clients: 1
 timeout: 80
 server_config:
-  name: custom_daos_server  # Use a non-default name
+  name: other_dserver  # Use a non-default name
   engines_per_host: 1
   engines:
     0:
