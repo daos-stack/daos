@@ -3385,8 +3385,7 @@ chk_leader_prop(chk_prop_cb_t prop_cb, void *buf)
 {
 	struct chk_property	*prop = &chk_leader->ci_prop;
 
-	return prop_cb(buf, (struct chk_policy *)prop->cp_policies,
-		       CHK_POLICY_MAX - 1, prop->cp_flags);
+	return prop_cb(buf, prop->cp_policies, CHK_POLICY_MAX - 1, prop->cp_flags);
 }
 
 static int
