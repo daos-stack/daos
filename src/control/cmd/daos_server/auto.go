@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022-2023 Intel Corporation.
+// (C) Copyright 2022-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,9 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // configCmd is the struct representing the top-level config subcommand.
@@ -40,14 +38,14 @@ type configGenCmd struct {
 type getFabricFn func(context.Context, logging.Logger, string) (*control.HostFabric, error)
 
 func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*control.HostFabric, error) {
-	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log), provider)
+	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log).Scan, provider)
 	if err != nil {
-		return nil, errors.Wrapf(err, "fetching local fabric interfaces")
+		return nil, errors.Wrap(err, "fetching local fabric interfaces")
 	}
 
 	topo, err := hwprov.DefaultTopologyProvider(log).GetTopology(ctx)
 	if err != nil {
-		return nil, errors.Wrapf(err, "fetching local hardware topology")
+		return nil, errors.Wrap(err, "fetching local hardware topology")
 	}
 
 	hf.NumaCount = uint32(topo.NumNUMANodes())
@@ -59,53 +57,41 @@ func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*
 type getStorageFn func(context.Context, logging.Logger, bool) (*control.HostStorage, error)
 
 func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*control.HostStorage, error) {
-	svc := server.NewStorageControlService(log, config.DefaultServer().Engines).
-		WithVMDEnabled() // use vmd if present
+	var err error
+	snc := &scanNVMeCmd{
+		SkipPrep: skipPrep,
+		nvmeCmd:  nvmeCmd{},
+	}
+	snc.nvmeCmd.IgnoreConfig = true // Process all NVMe devices.
+	snc.nvmeCmd.Logger = log
 
-	var nc *nvmeCmd
-	if !skipPrep {
-		nc = &nvmeCmd{}
-		nc.Logger = log
-		nc.IgnoreConfig = true
-		if err := nc.init(); err != nil {
-			return nil, errors.Wrap(err, "could not init nvme cmd")
-		}
-
-		req := storage.BdevPrepareRequest{}
-		if err := prepareNVMe(req, nc, svc.NvmePrepare); err != nil {
-			return nil, errors.Wrap(err, "nvme prep before fetching local storage failed, "+
-				"try cmd again with --skip-prep after performing a manual nvme prepare")
-		}
+	if err := snc.initWith(initNvmeCmd); err != nil {
+		return nil, errors.Wrap(err, "nvme init")
 	}
 
-	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
-	if err != nil {
-		return nil, errors.Wrapf(err, "nvme scan")
+	nvmeResp, errNvme := scanNVMe(snc)
+	if errNvme != nil {
+		return nil, errors.Wrap(errNvme, "nvme scan")
 	}
 
-	if !skipPrep {
-		// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
-		//                 controllers (as specified in the server config file) then the
-		//                 backing devices of the unselected VMD controllers will be bound
-		//                 to no driver and therefore inaccessible from both OS and SPDK.
-		//                 Workaround is to run nvme scan --ignore-config to reset driver
-		//                 bindings.
+	ssc := &scanSCMCmd{
+		scmCmd: scmCmd{},
+	}
+	ssc.IgnoreConfig = true // Process all SCM devices.
+	ssc.Logger = log
 
-		req := storage.BdevPrepareRequest{Reset_: true}
-		if err := resetNVMe(req, nc, svc.NvmePrepare); err != nil {
-			return nil, errors.Wrap(err, "nvme reset after fetching local storage failed, "+
-				"try cmd again with --skip-prep after performing a manual nvme reset")
-		}
+	if err := ssc.initWith(initScmCmd); err != nil {
+		return nil, errors.Wrap(err, "scm init")
 	}
 
-	scmResp, err := svc.ScmScan(storage.ScmScanRequest{})
-	if err != nil {
-		return nil, errors.Wrapf(err, "scm scan")
+	scmResp, errScm := scanPMem(ssc)
+	if errScm != nil {
+		return nil, errors.Wrap(errScm, "scm scan")
 	}
 
 	mi, err := common.GetMemInfo()
 	if err != nil {
-		return nil, errors.Wrapf(err, "get hugepage info")
+		return nil, errors.Wrap(err, "get hugepage info")
 	}
 
 	return &control.HostStorage{

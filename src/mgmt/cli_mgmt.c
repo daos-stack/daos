@@ -25,6 +25,8 @@
 #include <stdlib.h>
 #include <sys/ipc.h>
 
+char agent_sys_name[DAOS_SYS_NAME_MAX + 1] = DAOS_DEFAULT_SYS_NAME;
+
 int
 dc_cp(tse_task_t *task, void *data)
 {
@@ -342,6 +344,14 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	rc = fill_sys_info(resp, info);
 	if (rc != 0)
 		goto out_resp;
+
+	/** set the agent system info to be the default one */
+	if (name == NULL) {
+		if (copy_str(agent_sys_name, resp->sys)) {
+			rc = -DER_INVAL;
+			goto out_resp;
+		}
+	}
 	*respp = resp;
 
 out_resp:
@@ -947,7 +957,7 @@ int
 dc_mgmt_sys_attach(const char *name, struct dc_mgmt_sys **sysp)
 {
 	if (name == NULL)
-		name = DAOS_DEFAULT_SYS_NAME;
+		name = agent_sys_name;
 
 	return sys_attach(name, sysp);
 }
