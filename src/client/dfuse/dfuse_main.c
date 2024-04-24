@@ -171,7 +171,6 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 int
 dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 {
-	pthread_t self;
 	int       rc;
 
 	dfuse_info->di_session = dfuse_session_new(args, dfuse_info);
@@ -203,9 +202,6 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 	rc = dfuse_send_to_fg(0);
 	if (rc != -DER_SUCCESS)
 		DFUSE_TRA_ERROR(dfuse_info, "Error sending signal to fg: "DF_RC, DP_RC(rc));
-
-	self = pthread_self();
-	pthread_setname_np(self, "main");
 
 	/* Blocking */
 	if (dfuse_info->di_threaded)
