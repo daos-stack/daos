@@ -872,7 +872,7 @@ attach(const char *name, struct dc_mgmt_sys **sysp)
 		goto out;
 	}
 
-	if (!resp_g) {
+	if (strcmp(name, agent_sys_name) != 0 || !resp_g) {
 		need_free_resp = true;
 		rc = get_attach_info(name, true /* all_ranks */, &sys->sy_info, &resp);
 		if (rc != 0)
