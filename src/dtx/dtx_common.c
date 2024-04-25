@@ -1463,8 +1463,7 @@ out:
 
 	if (!daos_is_zero_dti(&dth->dth_xid)) {
 		/* Drop partial modification and remove the pinned DTX entry. */
-		if (result < 0 && result != -DER_AGAIN && !aborted && !dth->dth_solo &&
-		    dth->dth_modification_cnt > 0)
+		if (result < 0 && !aborted && dth->dth_modification_cnt > 0)
 			vos_dtx_cleanup(dth, true);
 
 		/* For solo DTX, just let client retry for DER_AGAIN case. */

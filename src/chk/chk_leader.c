@@ -1396,7 +1396,7 @@ chk_leader_start_pool_svc(struct chk_pool_rec *cpr)
 
 	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, cpr->cpr_uuid, ranks, RDB_NIL_TERM,
 				cpr->cpr_healthy ? DS_RSVC_START : DS_RSVC_DICTATE,
-				false /* bootstrap */, 0 /* size */);
+				false /* bootstrap */, 0 /* size */, 0 /* vos_df_version */);
 
 out:
 	d_rank_list_free(ranks);
