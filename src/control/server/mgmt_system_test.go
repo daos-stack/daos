@@ -31,6 +31,7 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -2022,6 +2023,7 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			},
 		},
 		"provider doesn't match": {
+			pauseGroupUpdate: true,
 			req: &mgmtpb.JoinReq{
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
@@ -2040,13 +2042,23 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			},
 			expErr: errors.New("does not match"),
 		},
-		"group update paused": {
+		"group update resumed": {
 			pauseGroupUpdate: true,
 			req: &mgmtpb.JoinReq{
 				Rank:        curMember.Rank.Uint32(),
 				Uuid:        curMember.UUID.String(),
 				Uri:         curMember.PrimaryFabricURI,
 				Incarnation: curMember.Incarnation + 1,
+			},
+			expGuReq: &mgmtpb.GroupUpdateReq{
+				MapVersion: 3,
+				Engines: []*mgmtpb.GroupUpdateReq_Engine{
+					{
+						Rank:        curMember.Rank.Uint32(),
+						Uri:         curMember.PrimaryFabricURI,
+						Incarnation: curMember.Incarnation + 1,
+					},
+				},
 			},
 			expResp: &mgmtpb.JoinResp{
 				Status:     0,
@@ -2159,7 +2171,6 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
 
-			// TODO KJ: figure out a way to verify no group update
 			if tc.expGuReq == nil {
 				return
 			}
@@ -2186,6 +2197,140 @@ func TestServer_MgmtSvc_Join(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expGuReq, gotGuReq, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected GroupUpdate request (-want, +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestServer_MgmtSvc_doGroupUpdate(t *testing.T) {
+	mockMembers := func(t *testing.T, count int, state string) system.Members {
+		result := system.Members{}
+		for i := 0; i < count; i++ {
+			result = append(result, mockMember(t, int32(i), int32(i), state))
+		}
+		return result
+	}
+
+	defaultMemberCount := 3
+	defaultTestMS := func(t *testing.T, l logging.Logger) *mgmtSvc {
+		return mgmtSystemTestSetup(t, l, mockMembers(t, defaultMemberCount, "joined"), nil)
+	}
+
+	uri := func(idx int) string {
+		return "tcp://" + test.MockHostAddr(int32(idx)).String()
+	}
+
+	getGroupUpdateReq := func(mapVer, count int) *mgmtpb.GroupUpdateReq {
+		req := &mgmtpb.GroupUpdateReq{
+			MapVersion: uint32(mapVer),
+		}
+		for i := 0; i < count; i++ {
+			req.Engines = append(req.Engines, &mgmtpb.GroupUpdateReq_Engine{
+				Rank:        uint32(i),
+				Uri:         uri(i),
+				Incarnation: uint64(i),
+			})
+		}
+		return req
+	}
+
+	getDefaultGroupUpdateReq := func() *mgmtpb.GroupUpdateReq {
+		return getGroupUpdateReq(defaultMemberCount, defaultMemberCount)
+	}
+
+	for name, tc := range map[string]struct {
+		getSvc     func(*testing.T, logging.Logger) *mgmtSvc
+		force      bool
+		expDrpcReq *mgmtpb.GroupUpdateReq
+		drpcResp   *mgmtpb.GroupUpdateResp
+		drpcErr    error
+		expErr     error
+	}{
+		"group update paused": {
+			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := defaultTestMS(t, l)
+				svc.pauseGroupUpdate()
+				return svc
+			},
+		},
+		"group update paused with force": {
+			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := defaultTestMS(t, l)
+				svc.pauseGroupUpdate()
+				return svc
+			},
+			force: true,
+		},
+		"no ranks": {
+			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := mgmtSystemTestSetup(t, l, system.Members{}, nil)
+				return svc
+			},
+			expErr: system.ErrEmptyGroupMap,
+		},
+		"map version already updated": {
+			getSvc: func(t *testing.T, l logging.Logger) *mgmtSvc {
+				svc := defaultTestMS(t, l)
+				svc.lastMapVer = uint32(defaultMemberCount)
+				return svc
+			},
+		},
+		"drpc failed": {
+			drpcErr:    errors.New("mock drpc"),
+			expDrpcReq: getDefaultGroupUpdateReq(),
+			expErr:     errors.New("mock drpc"),
+		},
+		"drpc bad status": {
+			drpcResp:   &mgmtpb.GroupUpdateResp{Status: daos.MiscError.Int32()},
+			expDrpcReq: getDefaultGroupUpdateReq(),
+			expErr:     daos.MiscError,
+		},
+		"success": {
+			drpcResp:   &mgmtpb.GroupUpdateResp{},
+			expDrpcReq: getDefaultGroupUpdateReq(),
+		},
+		"force": {
+			force:      true,
+			drpcResp:   &mgmtpb.GroupUpdateResp{},
+			expDrpcReq: getGroupUpdateReq(defaultMemberCount+1, defaultMemberCount),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.getSvc == nil {
+				tc.getSvc = func(t *testing.T, l logging.Logger) *mgmtSvc {
+					svc := defaultTestMS(t, l)
+					return svc
+				}
+			}
+			svc := tc.getSvc(t, log)
+			mockDrpc := getMockDrpcClient(tc.drpcResp, tc.drpcErr)
+			setMockDrpcClient(svc, mockDrpc)
+
+			err := svc.doGroupUpdate(test.Context(t), tc.force)
+
+			test.CmpErr(t, tc.expErr, err)
+
+			gotDrpcCalls := mockDrpc.calls.get()
+			if tc.expDrpcReq == nil {
+				test.AssertEqual(t, 0, len(gotDrpcCalls), "no dRPC calls expected")
+			} else {
+				test.AssertEqual(t, 1, len(gotDrpcCalls), "expected a GroupUpdate dRPC call")
+
+				gotReq := new(mgmtpb.GroupUpdateReq)
+				if err := proto.Unmarshal(gotDrpcCalls[0].Body, gotReq); err != nil {
+					t.Fatal(err)
+				}
+
+				// Order of engines in the actual req is arbitrary -- sort for comparison
+				sort.Slice(gotReq.Engines, func(i, j int) bool {
+					return gotReq.Engines[i].Rank < gotReq.Engines[j].Rank
+				})
+				if diff := cmp.Diff(tc.expDrpcReq, gotReq, cmpopts.IgnoreUnexported(mgmtpb.GroupUpdateReq{}, mgmtpb.GroupUpdateReq_Engine{})); diff != "" {
+					t.Fatalf("want-, got+:\n%s", diff)
+				}
 			}
 		})
 	}
