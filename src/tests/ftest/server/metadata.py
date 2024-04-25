@@ -387,7 +387,6 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=ObjectMetadata,test_metadata_addremove
         """
         self.create_pool()
-        # Skip dummy_metadata_workload when feature is disabled
         svc_ops_enabled = self.pool.get_property("svc_ops_enabled")
         if svc_ops_enabled:
             svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
