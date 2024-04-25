@@ -2138,6 +2138,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 				goto out_compatible;
 			}
 			fd_fake = idx_dirfd + FD_DIR_BASE;
+			drec_decref(dfs_mt->dcache, parent);
 		} else {
 			/* not supposed to be here. If the object is neither a dir or a regular
 			 * file, fetch_dfs_obj_handle() should fail already. */
@@ -2511,7 +2512,7 @@ read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *bu
 	if (!hook_enabled)
 		return next_read(fd, buf, size);
 
-	if (is_bash && fd <= 2)
+	if (is_bash && fd <= 2 && compatible_mode)
 		/* special cases to handle bash/sh */
 		return next_read(fd, buf, size);
 
@@ -2663,7 +2664,7 @@ write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, 
 	if (!hook_enabled)
 		return next_write(fd, buf, size);
 
-	if (is_bash && fd <= 2)
+	if (is_bash && fd <= 2 && compatible_mode)
 		/* special cases to handle bash/sh */
 		return next_write(fd, buf, size);
 
@@ -3316,7 +3317,7 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 	if (!hook_enabled)
 		return next_lseek(fd, offset, whence);
 
-	if (is_bash && fd <= 2)
+	if (is_bash && fd <= 2 && compatible_mode)
 		/* special cases to handle bash/sh */
 		return next_lseek(fd, offset, whence);
 
@@ -6834,8 +6835,13 @@ init_myhook(void)
 
 	init_fd_dup2_list();
 
-	if (compatible_mode)
-		check_exe_sh_bash();
+	/* Need to check whether current process is bash or not under regular & compatible modes.*/
+	check_exe_sh_bash();
+	if (is_bash)
+		/* Disable directory caching inside bash. bash could remove a dir then recreate
+		 * it which causes cache inconsistency. Observed such issue in "configure" in ucx.
+		 */
+		dcache_rec_timeout = 0;
 
 	install_hook();
 	hook_enabled = 1;
