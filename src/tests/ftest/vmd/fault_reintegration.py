@@ -173,7 +173,7 @@ class NvmeFaultReintegrate(TestWithServers):
 
         # check device state after set nvme-faulty
         if not self.verify_dev_led_state(test_dev, "EVICTED", "ON"):
-            self.fail("#After set_device_fault, device not in NORMAL, LED ON state")
+            self.fail("#After set_device_fault, device not in EVICTED, LED ON state")
 
         # 5.
         self.log_step("Waiting for IOR to complete")
@@ -198,10 +198,10 @@ class NvmeFaultReintegrate(TestWithServers):
             self.fail("Errors running IOR {} thread".format(errors))
 
         # 7.
-        self.log_step("Check drive status as 'NORMAL' and led status is 'ON'")
-        if not self.verify_dev_led_state(test_dev, "NORMAL", "ON"):
+        self.log_step("Check drive status as 'EVICTED' and led status is 'ON'")
+        if not self.verify_dev_led_state(test_dev, "EVICTED", "ON"):
             self.fail(
-                "#After set_device_fault, IOR completed, device not in expected NORMAL, ON state")
+                "#After set_device_fault, IOR completed, device not in expected EVICTED, ON state")
 
         # 8. Verify IOR data and check container
         self.log_step("Verify IOR data and check container")
