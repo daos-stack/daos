@@ -1,5 +1,5 @@
 """
-(C) Copyright 2021-2023 Intel Corporation.
+(C) Copyright 2021-2024 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -33,13 +33,6 @@ class DaosServerCommand(YamlCommand):
     SYSTEM_QUERY_PATTERN = "joined"
 
     DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
-
-    def _get_default_yaml(self):
-        # If specified use the configuration file from the YamlParameters object
-        default_yaml_file = None
-        if self.yaml is not None and hasattr(self.yaml, "filename"):
-            default_yaml_file = self.yaml.filename
-        self.config = FormattedParameter("--config={}", default_yaml_file)
 
     def __init__(self, path="", yaml_cfg=None, timeout=45):
         """Create a daos_server command object.
@@ -86,6 +79,11 @@ class DaosServerCommand(YamlCommand):
             # Use the sub_command parameter from the test's yaml
             sub_command = self.sub_command.value
 
+        # If specified use the configuration file from the YamlParameters object as the default
+        default_config = None
+        if self.yaml is not None and hasattr(self.yaml, "filename"):
+            default_config = self.yaml.filename
+
         # Available daos_server sub-commands:
         #   dump-topology  Dump system topology
         #   ms             Perform tasks related to management service replicas
@@ -96,17 +94,17 @@ class DaosServerCommand(YamlCommand):
         #   support        Perform tasks related to debug the system to help support team
         #   version        Print daos_server version
         if sub_command == "ms":
-            self.sub_command_class = self.MsSubCommand()
+            self.sub_command_class = self.MsSubCommand(default_config)
         elif sub_command == "network":
-            self.sub_command_class = self.NetworkSubCommand()
+            self.sub_command_class = self.NetworkSubCommand(default_config)
         elif sub_command == "nvme":
-            self.sub_command_class = self.NvmeSubCommand()
+            self.sub_command_class = self.NvmeSubCommand(default_config)
         elif sub_command == "scm":
-            self.sub_command_class = self.ScmSubCommand()
+            self.sub_command_class = self.ScmSubCommand(default_config)
         elif sub_command == "start":
-            self.sub_command_class = self.StartSubCommand()
+            self.sub_command_class = self.StartSubCommand(default_config)
         elif sub_command == "support":
-            self.sub_command_class = self.SupportSubCommand()
+            self.sub_command_class = self.SupportSubCommand(default_config)
         elif sub_command == "version":
             self.sub_command_class = self.VersionSubCommand()
         else:
@@ -236,11 +234,14 @@ class DaosServerCommand(YamlCommand):
     class MsSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server ms sub command."""
 
-        def __init__(self):
-            """Create an ms subcommand object."""
+        def __init__(self, default_config=None):
+            """Create an ms subcommand object.
+
+            Args:
+                default_config (str, optional): default yaml config file
+            """
             super().__init__("/run/daos_server/ms/*", "ms")
-            self.config = FormattedParameter(
-                "--config={}", self._get_default_yaml())
+            self.config = FormattedParameter("--config={}", default_config)
 
         def get_sub_command_class(self):
             """Get the daos_server ms sub command object."""
@@ -289,12 +290,15 @@ class DaosServerCommand(YamlCommand):
     class NetworkSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server network sub command."""
 
-        def __init__(self):
-            """Create a network subcommand object."""
+        def __init__(self, default_config=None):
+            """Create a network subcommand object.
+
+            Args:
+                default_config (str, optional): default yaml config file
+            """
             super().__init__(
                 "/run/daos_server/network/*", "network")
-            self.config = FormattedParameter(
-                "--config={}", self._get_default_yaml())
+            self.config = FormattedParameter("--config={}", default_config)
 
         def get_sub_command_class(self):
             """Get the daos_server network sub command object."""
@@ -325,11 +329,14 @@ class DaosServerCommand(YamlCommand):
     class StartSubCommand(CommandWithParameters):
         """Defines an object representing a daos_server start sub command."""
 
-        def __init__(self):
-            """Create a start subcommand object."""
+        def __init__(self, default_config):
+            """Create a start subcommand object.
+
+            Args:
+                default_config (str, optional): default yaml config file
+            """
             super().__init__("/run/daos_server/start/*", "start")
-            self.config = FormattedParameter(
-                "--config={}", self._get_default_yaml())
+            self.config = FormattedParameter("--config={}", default_config)
 
             # daos_server start command options:
             #   --port=                 Port for the gRPC management interface
@@ -361,11 +368,14 @@ class DaosServerCommand(YamlCommand):
     class NvmeSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server nvme sub command."""
 
-        def __init__(self):
-            """Create a daos_server nvme subcommand object."""
+        def __init__(self, default_config):
+            """Create a daos_server nvme subcommand object.
+
+            Args:
+                default_config (str, optional): default yaml config file
+            """
             super().__init__("/run/daos_server/nvme/*", "nvme")
-            self.config = FormattedParameter(
-                "--config={}", self._get_default_yaml())
+            self.config = FormattedParameter("--config={}", default_config)
 
         def get_sub_command_class(self):
             """Get the daos_server nvme sub command object."""
@@ -448,11 +458,14 @@ class DaosServerCommand(YamlCommand):
     class ScmSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server scm sub command."""
 
-        def __init__(self):
-            """Create a daos_server scm subcommand object."""
+        def __init__(self, default_config):
+            """Create a daos_server scm subcommand object.
+
+            Args:
+                default_config (str, optional): default yaml config file
+            """
             super().__init__("/run/daos_server/scm/*", "scm")
-            self.config = FormattedParameter(
-                "--config={}", self._get_default_yaml())
+            self.config = FormattedParameter("--config={}", default_config)
 
         def get_sub_command_class(self):
             """Get the daos_server scm sub command object."""
@@ -523,11 +536,14 @@ class DaosServerCommand(YamlCommand):
     class SupportSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server support sub command."""
 
-        def __init__(self):
-            """Create a support subcommand object."""
+        def __init__(self, default_config):
+            """Create a support subcommand object.
+
+            Args:
+                default_config (str, optional): default yaml config file
+            """
             super().__init__("/run/daos_server/support/*", "support")
-            self.config = FormattedParameter(
-                "--config={}", self._get_default_yaml())
+            self.config = FormattedParameter("--config={}", default_config)
 
         def get_sub_command_class(self):
             """Get the daos_server support sub command object."""
