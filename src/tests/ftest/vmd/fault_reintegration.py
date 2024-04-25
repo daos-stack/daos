@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2023 Intel Corporation.
+  (C) Copyright 2023-2024 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -114,6 +114,7 @@ class NvmeFaultReintegrate(TestWithServers):
         test_dev = devices[0]
         for device in devices:
             get_dmg_response(self.dmg.storage_led_identify, reset=True, ids=device)
+
         # 2.
         self.log_step("Verify that each device is in a 'NORMAL' state and its LED is 'OFF'")
         err_dev = []
@@ -168,16 +169,11 @@ class NvmeFaultReintegrate(TestWithServers):
         self.log_step(
             "Marking the {} device as faulty and verifying it is 'EVICTED' and its "
             "LED is 'ON'".format(test_dev))
-        check = self.check_result(
-            set_device_faulty(self, self.dmg, self.dmg.hostlist, test_dev, self.pool),
-            "EVICTED", "ON")
-
-        if not check:
-            self.fail("#Result of set_device_fault, device not in expected EVICTED, ON state")
+        set_device_faulty(self, self.dmg, self.dmg.hostlist, test_dev, self.pool)
 
         # check device state after set nvme-faulty
-        if not self.verify_dev_led_state(test_dev, "NORMAL", "ON"):
-            self.fail("#After set_device_fault, device not back to NORMAL, ON state")
+        if not self.verify_dev_led_state(test_dev, "EVICTED", "ON"):
+            self.fail("#After set_device_fault, device not in NORMAL, LED ON state")
 
         # 5.
         self.log_step("Waiting for IOR to complete")
@@ -219,7 +215,7 @@ class NvmeFaultReintegrate(TestWithServers):
 
         # 9.
         self.log_step("Replace the same drive back.")
-        result = get_dmg_response(
+        get_dmg_response(
             self.dmg.storage_replace_nvme, old_uuid=test_dev, new_uuid=test_dev)
         # Wait for rebuild to start
         self.pool.wait_for_rebuild_to_start()
@@ -229,6 +225,6 @@ class NvmeFaultReintegrate(TestWithServers):
 
         # 10.
         self.log_step("Drive status LED should be off indicating good device is plugged-in.")
-        if not self.check_result(result, "NORMAL", "OFF"):
+        if not self.verify_dev_led_state(test_dev, "NORMAL", "OFF"):
             self.fail("#After storage replace nvme, device not in expected NORMAL, OFF state")
         self.log.info("Test passed")
