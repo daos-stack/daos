@@ -54,6 +54,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         daos_command.faults_container(
             pool=pool.identifier, cont=container.identifier,
             location="DAOS_CHK_CONT_ORPHAN")
+        container.skip_cleanup()
 
         # 3. Check that the container doesn't appear with daos command.
         self.log_step("Check that the container doesn't appear with daos command.")
