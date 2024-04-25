@@ -15,7 +15,10 @@ from user_utils import get_chown_command
 
 
 class DfuseMUPerms(TestWithServers):
-    """Verify dfuse multi-user basic permissions."""
+    """Verify dfuse multi-user basic permissions.
+
+    :avocado: recursive
+    """
 
     def test_dfuse_mu_perms(self):
         """Jira ID: DAOS-10854.

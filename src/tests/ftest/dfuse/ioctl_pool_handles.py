@@ -10,7 +10,10 @@ from telemetry_test_base import TestWithTelemetry
 
 
 class IoctlPoolHandles(TestWithTelemetry):
-    """Verifies interception library is using the same pool/container handles as dfuse."""
+    """Verifies interception library is using the same pool/container handles as dfuse.
+
+    :avocado: recursive
+    """
 
     def test_ioctl_pool_handles(self):
         """JIRA ID: DAOS-8403.

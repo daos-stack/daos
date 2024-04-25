@@ -135,7 +135,7 @@ class DfuseSpaceCheck(IorTestBase):
         self.pool.set_property("reclaim", "disabled")
 
         # Write small files until we run out of space
-        file_count1 = self.write_multiple_files()
+        file_count1 = self.write_multiple_files(dfuse)
 
         # Enable aggregation
         self.log.info("Enabling aggregation")
@@ -152,7 +152,7 @@ class DfuseSpaceCheck(IorTestBase):
         self.pool.set_property("reclaim", "disabled")
 
         # Write small files again until we run out of space and verify we wrote the same amount
-        file_count2 = self.write_multiple_files()
+        file_count2 = self.write_multiple_files(dfuse)
 
         self.log.info('file_count1 = %s', file_count1)
         self.log.info('file_count2 = %s', file_count2)
