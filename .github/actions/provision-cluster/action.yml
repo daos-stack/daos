@@ -19,21 +19,26 @@ runs:
           STAGE_NAME='${{ env.STAGE_NAME }}'
           REQID='${{ github.event.pull_request.number }}-${{ github.run_number }}'
           CP_PRIORITY=${{ env.CP_PRIORITY }}
+          echo "::group::Provisioning"
           if ! JENKINS_URL='${{ env.JENKINS_URL }}'                   \
                LABEL='${{ env.LABEL }}'                               \
                PRIORITY=${CP_PRIORITY:-3}                             \
                provision_cluster "$STAGE_NAME" "${{ github.run_id }}" \
                                  "${{ runner.name }}"                 \
                                  "$REQID-${STAGE_NAME// /_}"; then
+               echo "::endgroup::"
                echo "Failed to provision cluster"
                exit 1
           fi
+          echo "::endgroup::"
     - name: Wait for nodes to be ready
       if: ${{ inputs.condition }}
       shell: bash
       run: . ci/gha_functions.sh;
            set -eux;
-           wait_nodes_ready
+           echo "::group::Waiting for nodes to be ready";
+           wait_nodes_ready;
+           echo "::endgroup::"
     - name: Post-provision cluster
       if: ${{ inputs.condition }}
       shell: bash
@@ -51,7 +56,9 @@ runs:
             inst_repos+=" daos@PR-${{ github.event.pull_request.number }}"
             inst_repos+=":${{ github.run_number }}"
         fi
+        echo "::group::Post-provision configuration";
         ARTIFACTS_URL="$ARTIFACTS_URL"                                    \
         INST_REPOS="$(eval echo "$inst_repos")"                           \
         CI_RPM_TEST_VERSION="$rpm_test_version"                           \
         DISTRO=$PROVISION_DISTRO ci/provisioning/post_provision_config.sh
+        echo "::endgroup::"
