@@ -1,8 +1,14 @@
-daos (2.5.101-4) unstable; urgency=medium
+daos (2.5.101-5) unstable; urgency=medium
   [ Jeff Olivier ]
   * Switch from libfuse3 to libfused
 
- -- Jeff Olivier <jeffolivier@google.com>  Fri, 05 Apr 2024 21:30:00 +0000
+ -- Jeff Olivier <jeffolivier@google.com>  Thu, 25 Apr 2024 10:30:00 +0000
+
+daos (2.5.101-5) unstable; urgency=medium
+  [ Fan Yong ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Fan Yong <fan.yong@intel.com>  Fri, 05 Apr 2024 09:30:00 +0900
 
 daos (2.5.101-3) unstable; urgency=medium
   [ Ashley M. Pittman ]

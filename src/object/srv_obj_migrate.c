@@ -472,7 +472,8 @@ migrate_pool_tls_create_one(void *data)
 	struct migrate_pool_tls_create_arg *arg = data;
 	struct obj_tls			   *tls = obj_tls_get();
 	struct migrate_pool_tls		   *pool_tls;
-	int rc;
+	struct ds_pool_child		   *pool_child = NULL;
+	int				    rc = 0;
 
 	pool_tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version, arg->generation);
 	if (pool_tls != NULL) {
@@ -481,6 +482,16 @@ migrate_pool_tls_create_one(void *data)
 		 */
 		migrate_pool_tls_put(pool_tls);
 		return 0;
+	}
+
+	pool_child = ds_pool_child_lookup(arg->pool_uuid);
+	if (pool_child == NULL) {
+		D_ASSERTF(dss_get_module_info()->dmi_xs_id == 0,
+			  "Cannot find the pool "DF_UUIDF"\n", DP_UUID(arg->pool_uuid));
+	} else if (unlikely(pool_child->spc_no_storage)) {
+		D_DEBUG(DB_REBUILD, DF_UUID" "DF_UUID" lost pool shard, ver %d, skip.\n",
+			DP_UUID(arg->pool_uuid), DP_UUID(arg->pool_hdl_uuid), arg->version);
+		D_GOTO(out, rc = 0);
 	}
 
 	D_ALLOC_PTR(pool_tls);
@@ -557,6 +568,9 @@ out:
 	if (rc && pool_tls)
 		migrate_pool_tls_destroy(pool_tls);
 
+	if (pool_child != NULL)
+		ds_pool_child_put(pool_child);
+
 	return rc;
 }
 
@@ -579,9 +593,9 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 			ABT_mutex_lock(tls->mpt_init_mutex);
 			ABT_cond_wait(tls->mpt_init_cond, tls->mpt_init_mutex);
 			ABT_mutex_unlock(tls->mpt_init_mutex);
-			if (tls->mpt_init_failed) {
+			if (tls->mpt_init_err) {
 				migrate_pool_tls_put(tls);
-				rc = -DER_NOMEM;
+				rc = tls->mpt_init_err;
 			}
 		}
 
@@ -637,7 +651,9 @@ migrate_pool_tls_lookup_create(struct ds_pool *pool, unsigned int version, unsig
 	arg.svc_list = (d_rank_list_t *)entry->dpe_val_ptr;
 	arg.obj_ult_cnts = tls->mpt_obj_ult_cnts;
 	arg.dkey_ult_cnts = tls->mpt_dkey_ult_cnts;
-	rc = dss_task_collective(migrate_pool_tls_create_one, &arg, 0);
+	rc = ds_pool_task_collective(pool->sp_uuid,
+				     PO_COMP_ST_NEW | PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT,
+				     migrate_pool_tls_create_one, &arg, 0);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create migrate tls: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
@@ -649,7 +665,7 @@ out:
 		tls->mpt_init_tls = 0;
 		/* Set init failed, so the waiting lookup(above) can be notified */
 		if (rc != 0)
-			tls->mpt_init_failed = 1;
+			tls->mpt_init_err = rc;
 		ABT_mutex_lock(tls->mpt_init_mutex);
 		ABT_cond_broadcast(tls->mpt_init_cond);
 		ABT_mutex_unlock(tls->mpt_init_mutex);
@@ -3148,8 +3164,7 @@ ds_migrate_stop(struct ds_pool *pool, unsigned int version, unsigned int generat
 	arg.version = version;
 	arg.generation = generation;
 
-	rc = ds_pool_thread_collective(pool->sp_uuid, PO_COMP_ST_NEW | PO_COMP_ST_DOWN |
-				       PO_COMP_ST_DOWNOUT, migrate_fini_one_ult, &arg, 0);
+	rc = ds_pool_thread_collective(pool->sp_uuid, 0, migrate_fini_one_ult, &arg, 0);
 	if (rc)
 		D_ERROR(DF_UUID" migrate stop: %d\n", DP_UUID(pool->sp_uuid), rc);
 

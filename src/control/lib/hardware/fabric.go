@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2023 Intel Corporation.
+// (C) Copyright 2021-2024 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -946,6 +946,13 @@ func (s *FabricScanner) Scan(ctx context.Context, providers ...string) (*FabricI
 	if s == nil {
 		return nil, errors.New("FabricScanner is nil")
 	}
+	provs := []string{}
+	for _, prov := range providers {
+		if prov != "" {
+			provs = append(provs, prov)
+		}
+	}
+	providers = provs
 
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -968,9 +975,11 @@ func (s *FabricScanner) Scan(ctx context.Context, providers ...string) (*FabricI
 
 	if result.NumFabricInterfaces() == 0 {
 		if len(providers) == 0 {
-			return nil, errors.New("no fabric interfaces found")
+			return nil, errors.New("no fabric interfaces could be found")
 		}
-		return nil, fmt.Errorf("no fabric interfaces found with providers: %s", strings.Join(providers, ", "))
+		return nil, fmt.Errorf("no fabric interfaces found with %s %s",
+			common.Pluralise("provider", len(providers)),
+			strings.Join(providers, ", "))
 	}
 	return result, nil
 }

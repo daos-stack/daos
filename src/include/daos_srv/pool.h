@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2023 Intel Corporation.
+ * (C) Copyright 2016-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,6 +24,10 @@
 #include <daos_pool.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
+#include <daos_srv/rdb.h>
+
+/* Pool service (opaque) */
+struct ds_pool_svc;
 
 /**
  * Each individual object layout format, like oid layout, dkey to group,
@@ -33,6 +37,7 @@
 
 /* age of an entry in svc_ops KVS before it may be evicted */
 #define DEFAULT_SVC_OPS_ENTRY_AGE_SEC_MAX 300ULL
+
 /*
  * Pool object
  *
@@ -173,7 +178,9 @@ struct ds_pool_child {
 	int		spc_ref;
 	ABT_eventual	spc_ref_eventual;
 
-	uint32_t	spc_discard_done:1;
+	uint64_t	spc_discard_done:1,
+			spc_no_storage:1; /* The pool shard has no storage. */
+
 	uint32_t	spc_reint_mode;
 	uint32_t	*spc_state;	/* Pointer to ds_pool->sp_states[i] */
 	/**
@@ -252,7 +259,7 @@ uint32_t ds_pool_child_state(uuid_t pool_uuid, uint32_t tgt_id);
 int ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 			 enum daos_module_id module, crt_opcode_t opcode,
 			 uint32_t version, crt_rpc_t **rpc, crt_bulk_t bulk_hdl,
-			 d_rank_list_t *excluded_list);
+			 d_rank_list_t *excluded_list, void *priv);
 
 int ds_pool_map_buf_get(uuid_t uuid, d_iov_t *iov, uint32_t *map_ver);
 
@@ -265,6 +272,8 @@ int ds_pool_tgt_finish_rebuild(uuid_t pool_uuid, struct pool_target_id_list *lis
 int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
+int ds_pool_chk_post(uuid_t uuid);
+int ds_pool_start_with_svc(uuid_t uuid);
 int ds_pool_start(uuid_t uuid);
 void ds_pool_stop(uuid_t uuid);
 int ds_pool_extend(uuid_t pool_uuid, int ntargets, const d_rank_list_t *rank_list, int ndomains,
@@ -335,7 +344,7 @@ int ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 			     uuid_t *cont_hdl_uuid);
 
 int ds_pool_svc_term_get(uuid_t uuid, uint64_t *term);
-int ds_pool_svc_global_map_version_get(uuid_t uuid, uint32_t *global_ver);
+int ds_pool_svc_query_map_dist(uuid_t uuid, uint32_t *version, bool *idle);
 
 int
 ds_pool_child_map_refresh_sync(struct ds_pool_child *dpc);
@@ -365,6 +374,14 @@ int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 
 int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
+int ds_pool_mark_connectable(struct ds_pool_svc *ds_svc);
+int ds_pool_svc_load_map(struct ds_pool_svc *ds_svc, struct pool_map **map);
+int ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map);
+int ds_pool_svc_schedule_reconf(struct ds_pool_svc *svc);
+int ds_pool_svc_update_label(struct ds_pool_svc *ds_svc, const char *label);
+int ds_pool_svc_evict_all(struct ds_pool_svc *ds_svc);
+struct ds_pool *ds_pool_svc2pool(struct ds_pool_svc *ds_svc);
+struct cont_svc *ds_pool_ps2cs(struct ds_pool_svc *ds_svc);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
@@ -425,11 +442,85 @@ ds_pool_get_version(struct ds_pool *pool)
 	return ver;
 }
 
+/**
+ * Pool service replica clue
+ *
+ * Pool service replica info gathered when glancing at a pool.
+ */
+struct ds_pool_svc_clue {
+	struct rdb_clue	psc_db_clue;
+	uint32_t	psc_map_version;	/**< if 0, empty DB replica */
+};
+
+/** Pool parent directory */
+enum ds_pool_dir {
+	DS_POOL_DIR_NORMAL,
+	DS_POOL_DIR_NEWBORN,
+	DS_POOL_DIR_ZOMBIE
+};
+
+enum ds_pool_tgt_status {
+	DS_POOL_TGT_NONEXIST,
+	DS_POOL_TGT_EMPTY,
+	DS_POOL_TGT_NORMAL
+};
+
 int
 ds_start_chkpt_ult(struct ds_pool_child *child);
 void
     ds_stop_chkpt_ult(struct ds_pool_child *child);
 int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 			    d_iov_t *cred);
+
+/**
+ * Pool clue
+ *
+ * Pool shard and service replica (if applicable) info gathered when glancing
+ * at a pool. The pc_uuid, pc_dir, and pc_rc fields are always valid; the
+ * pc_svc_clue field is valid only if pc_rc is positive value.
+ */
+struct ds_pool_clue {
+	uuid_t				 pc_uuid;
+	d_rank_t			 pc_rank;
+	enum ds_pool_dir		 pc_dir;
+	int				 pc_rc;
+	int				 pc_tgt_nr;
+	uint32_t			 pc_label_len;
+	/*
+	 * DAOS check phase for current pool shard. Different pool shards may claim different
+	 * check phase because some shards may has ever missed the RPC for check phase update.
+	 */
+	uint32_t			 pc_phase;
+	struct ds_pool_svc_clue		*pc_svc_clue;
+	char				*pc_label;
+	uint32_t			*pc_tgt_status;
+};
+
+void ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue);
+void ds_pool_clue_fini(struct ds_pool_clue *clue);
+
+/** Array of ds_pool_clue objects */
+struct ds_pool_clues {
+	struct ds_pool_clue    *pcs_array;
+	int			pcs_len;
+	int			pcs_cap;
+};
+
+/**
+ * If this callback returns 0, the pool with \a uuid will be glanced at;
+ * otherwise, the pool with \a uuid will be skipped.
+ */
+typedef int (*ds_pool_clues_init_filter_t)(uuid_t uuid, void *arg, int *phase);
+
+int ds_pool_clues_init(ds_pool_clues_init_filter_t filter, void *filter_arg,
+		       struct ds_pool_clues *clues_out);
+void ds_pool_clues_fini(struct ds_pool_clues *clues);
+void ds_pool_clues_print(struct ds_pool_clues *clues);
+
+int ds_pool_check_svc_clues(struct ds_pool_clues *clues, int *advice_out);
+
+int ds_pool_svc_lookup_leader(uuid_t uuid, struct ds_pool_svc **ds_svcp, struct rsvc_hint *hint);
+
+void ds_pool_svc_put_leader(struct ds_pool_svc *ds_svc);
 
 #endif /* __DAOS_SRV_POOL_H__ */

@@ -17,6 +17,8 @@ on:
       - requirements-build.txt
       - requirements-utest.txt
 
+permissions: {}
+
 jobs:
 
   # Build a base Docker image, and save it with a key based on the hash of the dependencies, and a
@@ -86,6 +88,10 @@ jobs:
     name: Run DAOS/NLT tests
     needs: Prepare
     runs-on: ubuntu-22.04
+    permissions:
+      # https://github.com/EnricoMi/publish-unit-test-result-action#permissions
+      checks: write
+      pull-requests: write
     strategy:
       matrix:
         distro: [ubuntu]

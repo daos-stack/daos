@@ -82,11 +82,19 @@ struct dfuse_eq {
 	pthread_t           de_thread;
 
 	struct d_slab_type *de_read_slab;
+	struct d_slab_type *de_pre_read_slab;
 	struct d_slab_type *de_write_slab;
 };
 
-/* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected */
+/* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected
+ * This is the maximum size expected from the kernel, increasing this without changing kernel
+ * behavior will have no effect.
+ */
 #define DFUSE_MAX_READ (1024 * 1024)
+
+/* Maximum file-size for pre-read requests.  This can be any value at the cost of
+ * memory consumption */
+#define DFUSE_MAX_PRE_READ (1024 * 1024 * 4)
 
 /* Launch fuse, and do not return until complete */
 int
@@ -105,8 +113,9 @@ struct dfuse_inode_entry;
  * Pre-read is enabled when:
  *  Caching is enabled
  *  The file is not cached
- *  The file is small enough to fit in one buffer (1mb)
- *  The previous file from the same directory was read linearly.
+ *  The file is small enough to fit in one buffer (4mb)
+ *  The previous file from the same directory was read linearly, or there have been no files
+ *   accessed from the directory.
  * Similar to the READDIR_PLUS_AUTO logic this feature is enabled bassed on the I/O pattern of the
  * most recent access to the parent directory, general I/O workloads or interception library use are
  * unlikely to trigger this code however something that is reading the entire contents of a
@@ -119,11 +128,11 @@ struct dfuse_inode_entry;
  * callback.  Read requests then take the lock to ensure the dfs read is complete and reply directly
  * with the data in the buffer.
  *
- * This works up to the buffer size, the pre-read tries to read the expected file size is smaller
+ * This works up to the buffer size, pre-read tries to read the expected file size is smaller
  * then dfuse will detect this and back off to regular read, however it will not detect if the file
  * has grown in size.
  *
- * A dfuse_event is hung off this new descriptor and these come from the same pool as regular reads,
+ * A dfuse_event is hung off this new descriptor,
  * this buffer is kept as long as it's needed but released as soon as possible, either on error or
  * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
  */
@@ -463,6 +472,7 @@ struct dfuse_pool {
 	ACTION(LISTXATTR)                                                                          \
 	ACTION(RENAME)                                                                             \
 	ACTION(OPEN)                                                                               \
+	ACTION(PRE_READ)                                                                           \
 	ACTION(READ)                                                                               \
 	ACTION(WRITE)                                                                              \
 	ACTION(STATFS)
@@ -526,6 +536,7 @@ struct dfuse_cont {
 	double                  dfc_data_timeout;
 	bool                    dfc_data_otoc;
 	bool                    dfc_direct_io_disable;
+	bool                          dfc_wb_cache;
 
 	/* Set to true if the inode was allocated to this structure, so should be kept on close*/
 	bool                    dfc_save_ino;
@@ -987,6 +998,10 @@ struct dfuse_inode_entry {
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
 
+	/* Lock for writes, shared locks are held during write-back reads, exclusive lock is
+	 * acquired and released to flush outstanding writes for getattr, close and forget.
+	 */
+	pthread_rwlock_t          ie_wlock;
 	/** Last file closed in this directory was read linearly.  Directories only.
 	 *
 	 * Set on close() of a file in the directory to the value of linear_read from the fh.
@@ -997,6 +1012,19 @@ struct dfuse_inode_entry {
 	/* Entry on the evict list */
 	d_list_t                  ie_evict_entry;
 };
+
+/* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
+ * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending
+ * writes are complete.
+ */
+
+#define DFUSE_IE_WFLUSH(_ie)                                                                       \
+	do {                                                                                       \
+		if ((_ie)->ie_dfs->dfc_wb_cache && S_ISREG((_ie)->ie_stat.st_mode)) {              \
+			D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                         \
+			D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                         \
+		}                                                                                  \
+	} while (0)
 
 /* Lookup an inode and take a ref on it. */
 static inline struct dfuse_inode_entry *
