@@ -42,7 +42,7 @@ class EcodFioRebuild(ErasureCodeFio):
             # Enabled on-line rebuild for the test
             self.set_online_rebuild = True
         # 2.b Write the Fio data and kill server if rebuild_mode is on-line
-        self.start_online_fio()
+        self.start_online_fio(self.pool)
 
         # 3. Get initial total free space (scm+nvme)
         self.log_step("Get initial total free space (scm+nvme)")

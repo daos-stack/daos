@@ -7,6 +7,7 @@
 import os
 import time
 
+from dfuse_utils import get_dfuse, start_dfuse
 from ior_test_base import IorTestBase
 
 
@@ -57,8 +58,11 @@ class DfuseSpaceCheck(IorTestBase):
         self.log.info("Free space when test terminated: %s", current_space)
         self.fail("Aggregation did not complete within {} seconds".format(retries * interval))
 
-    def write_multiple_files(self):
+    def write_multiple_files(self, dfuse):
         """Write multiple files.
+
+        Args:
+            dfuse (Dfuse): the dfuse object
 
         Returns:
             int: Total number of files created before going out of space.
@@ -66,7 +70,7 @@ class DfuseSpaceCheck(IorTestBase):
         """
         file_count = 0
         while self.get_nvme_free_space(False) >= self.block_size:
-            file_path = os.path.join(self.dfuse.mount_dir.value, "file{}.txt".format(file_count))
+            file_path = os.path.join(dfuse.mount_dir.value, "file{}.txt".format(file_count))
             write_dd_cmd = "dd if=/dev/zero of={} bs={} count=1".format(file_path, self.block_size)
             if 0 in self.execute_cmd(write_dd_cmd, fail_on_err=True, display_output=False):
                 file_count += 1
@@ -106,13 +110,14 @@ class DfuseSpaceCheck(IorTestBase):
         # Create a pool, container, and start dfuse
         self.create_pool()
         self.create_cont()
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, self.pool, self.container)
 
         # get nvme space before write
         self.initial_space = self.get_nvme_free_space()
 
         # Create a file as large as we can
-        large_file = os.path.join(self.dfuse.mount_dir.value, 'largefile.txt')
+        large_file = os.path.join(dfuse.mount_dir.value, 'largefile.txt')
         self.execute_cmd('touch {}'.format(large_file))
         dd_count = (self.initial_space // self.block_size) + 1
         write_dd_cmd = "dd if=/dev/zero of={} bs={} count={}".format(
@@ -137,7 +142,7 @@ class DfuseSpaceCheck(IorTestBase):
         self.pool.set_property("reclaim", "time")
 
         # remove all the small files created above.
-        self.execute_cmd("rm -rf {}".format(os.path.join(self.dfuse.mount_dir.value, '*')))
+        self.execute_cmd("rm -rf {}".format(os.path.join(dfuse.mount_dir.value, '*')))
 
         # Wait for aggregation to complete after file removal
         self.wait_for_aggregation()

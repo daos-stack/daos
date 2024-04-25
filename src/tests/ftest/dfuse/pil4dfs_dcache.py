@@ -7,12 +7,12 @@
 import os
 import re
 
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from dfuse_test_base import DfuseTestBase
-from dfuse_utils import Pil4dfsDcacheCmd
+from dfuse_utils import Pil4dfsDcacheCmd, get_dfuse, start_dfuse
 
 
-class Pil4dfsDcache(DfuseTestBase):
+class Pil4dfsDcache(TestWithServers):
     """Test class Description: Runs set of unit test on pil4dfs directory cache.
 
     :avocado: recursive
@@ -185,17 +185,6 @@ class Pil4dfsDcache(DfuseTestBase):
         # Start the servers and agents
         super().setUp()
 
-    def _mount_dfuse(self):
-        """Mount a DFuse mount point."""
-        self.log.info("Creating DAOS pool")
-        self.add_pool()
-
-        self.log.info("Creating DAOS container")
-        self.add_container(self.pool)
-
-        self.log.info("Mounting DFuse mount point")
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
-
     def _update_cmd_env(self, env, mnt, timeout=None):
         """Update the Pil4dfsDcacheCmd command environment.
 
@@ -273,13 +262,20 @@ class Pil4dfsDcache(DfuseTestBase):
         :avocado: tags=pil4dfs,dcache,dfuse
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_enabled
         """
+        self.log_step("Creating DAOS pool")
+        pool = self.get_pool()
+
+        self.log_step("Creating DAOS container")
+        container = self.get_container(pool)
+
         self.log_step("Mount a DFuse mount point")
-        self._mount_dfuse()
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
 
         self.log.info("Running pil4dfs_dcache command")
         hostname = self.hostlist_clients[0]
         host = NodeSet(hostname)
-        mnt = self.dfuse.mount_dir.value
+        mnt = dfuse.mount_dir.value
         cmd = Pil4dfsDcacheCmd(host, self.prefix)
         self._update_cmd_env(cmd.env, mnt)
 
@@ -307,13 +303,20 @@ class Pil4dfsDcache(DfuseTestBase):
         :avocado: tags=pil4dfs,dcache,dfuse
         :avocado: tags=Pil4dfsDcache,test_pil4dfs_dcache_disabled
         """
+        self.log_step("Creating DAOS pool")
+        pool = self.get_pool()
+
+        self.log_step("Creating DAOS container")
+        container = self.get_container(pool)
+
         self.log_step("Mount a DFuse mount point")
-        self._mount_dfuse()
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool, container)
 
         self.log.info("Running pil4dfs_dcache command")
         hostname = self.hostlist_clients[0]
         host = NodeSet(hostname)
-        mnt = self.dfuse.mount_dir.value
+        mnt = dfuse.mount_dir.value
         cmd = Pil4dfsDcacheCmd(host, self.prefix)
         self._update_cmd_env(cmd.env, mnt, 0)
 

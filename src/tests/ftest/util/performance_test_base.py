@@ -8,6 +8,7 @@ import time
 
 import oclass_utils
 from avocado.core.exceptions import TestFail
+from dfuse_utils import stop_dfuse
 from exception_utils import CommandFailure
 from ior_test_base import IorTestBase
 from ior_utils import IorMetrics
@@ -341,7 +342,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self._run_performance_ior_single(intercept)
 
         # Manually stop dfuse after ior write completes
-        self.stop_dfuse()
+        stop_dfuse(self, self.dfuse)
 
         # Wait between write and read
         self.phase_barrier()
@@ -351,7 +352,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self._run_performance_ior_single(intercept)
 
         # Manually stop dfuse after ior read completes
-        self.stop_dfuse()
+        stop_dfuse(self, self.dfuse)
 
         self._log_daos_metrics()
 
@@ -437,6 +438,6 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.verify_system_status(self.pool, self.container)
 
         # Manually stop dfuse after mdtest completes
-        self.stop_dfuse()
+        stop_dfuse(self, self.dfuse)
 
         self._log_daos_metrics()

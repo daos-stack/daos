@@ -10,6 +10,7 @@ import time
 
 from apricot import TestWithServers
 from daos_utils import DaosCommand
+from dfuse_utils import get_dfuse, start_dfuse
 from exception_utils import CommandFailure
 from fio_test_base import FioBase
 from general_utils import DaosTestError, run_pcmd
@@ -499,13 +500,19 @@ class ErasureCodeFio(FioBase):
                     error_list.extend(super().stop_job_managers())
         return error_list
 
-    def write_single_fio_dataset(self, results):
+    def write_single_fio_dataset(self, pool, results):
         """Run Fio Benchmark.
 
         Args:
+            pool (TestPool): a daos pool
             results (queue): queue for returning thread results
         """
         try:
+            container = self.get_container(pool)
+            container.set_attr(attrs={'dfuse-direct-io-disable': 'on'})
+            dfuse = get_dfuse(self, self.hostlist_clients)
+            start_dfuse(self, dfuse, pool, container)
+            self.fio_cmd.update_directory(dfuse.mount_dir.value)
             self.execute_fio()
             if results is not None:
                 results.put("PASS")
@@ -514,14 +521,17 @@ class ErasureCodeFio(FioBase):
                 results.put("FAIL")
                 raise
 
-    def start_online_fio(self):
+    def start_online_fio(self, pool):
         """Run Fio operation with thread in background.
+
+        Args:
+            pool (TestPool): a daos pool
 
         Trigger the server failure while Fio is running
         """
         # Create the Fio run thread
         job = threading.Thread(target=self.write_single_fio_dataset,
-                               kwargs={"results": self.out_queue})
+                               kwargs={"pool": pool, "results": self.out_queue})
 
         # Launch the Fio thread
         job.start()
