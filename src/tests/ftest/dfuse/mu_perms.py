@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022-2023 Intel Corporation.
+  (C) Copyright 2022-2024 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
@@ -7,14 +7,14 @@ import re
 import time
 from itertools import product
 
+from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from dfuse_test_base import DfuseTestBase
 from dfuse_utils import VerifyPermsCommand, get_dfuse, start_dfuse
 from run_utils import command_as_user, run_remote
 from user_utils import get_chown_command
 
 
-class DfuseMUPerms(DfuseTestBase):
+class DfuseMUPerms(TestWithServers):
     """Verify dfuse multi-user basic permissions."""
 
     def test_dfuse_mu_perms(self):
@@ -63,7 +63,7 @@ class DfuseMUPerms(DfuseTestBase):
         # Create a container as dfuse_user
         daos_command = self.get_daos_command()
         daos_command.run_user = dfuse_user
-        cont = self.get_container(pool, daos_command=daos_command)
+        cont = self.get_container(pool, daos=daos_command)
 
         # Run dfuse as dfuse_user
         dfuse = get_dfuse(self, client)
@@ -189,7 +189,7 @@ class DfuseMUPerms(DfuseTestBase):
         # Create a container as dfuse_user
         daos_command = self.get_daos_command()
         daos_command.run_user = dfuse_user
-        cont = self.get_container(pool, daos_command=daos_command)
+        cont = self.get_container(pool, daos=daos_command)
 
         self.log.info('Setting dfuse cache time to %s', cache_time)
         cont.set_attr(attrs={
@@ -287,7 +287,7 @@ class DfuseMUPerms(DfuseTestBase):
         # Create a container as dfuse_user
         daos_command = self.get_daos_command()
         daos_command.run_user = dfuse_user
-        cont = self.get_container(pool, daos_command=daos_command)
+        cont = self.get_container(pool, daos=daos_command)
 
         # Run dfuse as dfuse_user
         dfuse = get_dfuse(self, self.hostlist_clients)

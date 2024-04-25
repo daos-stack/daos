@@ -477,7 +477,7 @@ class DestroyTests(TestWithServers):
         self.assertTrue(
             exception_detected, "No exception when deleting a connected pool")
 
-    def test_forcedestroy_connected(self):
+    def test_force_destroy_connected(self):
         """Forcibly destroy pool with connected client.
 
         Test destroying a pool that has a connected client with force == true.
@@ -486,7 +486,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=DestroyTests,test_forcedestroy_connected
+        :avocado: tags=DestroyTests,test_force_destroy_connected
         """
         hostlist_servers = self.hostlist_servers[0:1]
 
@@ -567,7 +567,7 @@ class DestroyTests(TestWithServers):
         self.assertTrue(
             exception_detected, "No exception when deleting a pool with containers")
 
-    def test_recursivedestroy_with_containers(self):
+    def test_recursive_destroy_with_containers(self):
         """Recursively destroy pool with existing containers.
 
         Test destroying a pool that has existing containers with recursive == true.
@@ -576,7 +576,7 @@ class DestroyTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_destroy
-        :avocado: tags=DestroyTests,test_recursivedestroy_with_containers
+        :avocado: tags=DestroyTests,test_recursive_destroy_with_containers
         """
         hostlist_servers = self.hostlist_servers[0:1]
 
@@ -601,6 +601,6 @@ class DestroyTests(TestWithServers):
                 str(result))
         finally:
             # Prevent attempting to delete container in tearDown() after pool has been destroyed.
-            self.container = None
+            self.container.skip_cleanup()
             if exception_detected:
                 self.fail("recursive destroy on pool with containers failed")
