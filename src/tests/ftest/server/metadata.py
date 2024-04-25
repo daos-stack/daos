@@ -393,6 +393,8 @@ class ObjectMetadata(TestWithServers):
             svc_ops_entry_age = self.pool.get_property("svc_ops_entry_age")
             if not self.run_dummy_metadata_workload(duration=svc_ops_entry_age):
                 self.fail("failed to run dummy metadata workload")
+        else:
+            self.fail("svc_ops_enabled:0 is not supported for this testcase.")
         self.container = []
         mean_cont_cnt = 0
         percent_cont = self.params.get("mean_percent", "/run/metadata/*")

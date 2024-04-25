@@ -48,11 +48,11 @@ pool:
   svcn: 5
   scm_size: 1G
   control_method: dmg
-  properties: svc_ops_enabled:1,svc_ops_entry_age:60
+  properties: svc_ops_entry_age:60
 # Uncomment the following for manual test with different svc_ops_entry_age value
-#  properties: svc_ops_enabled:1,svc_ops_entry_age:150
-#  properties: svc_ops_enabled:1,svc_ops_entry_age:300
-#  properties: svc_ops_enabled:1,svc_ops_entry_age:600
+#  properties: svc_ops_entry_age:150
+#  properties: svc_ops_entry_age:300
+#  properties: svc_ops_entry_age:600
 container:
   control_method: API
   silent: true
