@@ -95,10 +95,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 	}{
 		"Server uses verbs + Infiniband": {
 			clientNetworkHint: &mgmtpb.ClientNetHint{
-				Provider:        "ofi+verbs",
-				CrtCtxShareAddr: 1,
-				CrtTimeout:      10,
-				NetDevClass:     uint32(hardware.Infiniband),
+				Provider:    "ofi+verbs",
+				CrtTimeout:  10,
+				NetDevClass: uint32(hardware.Infiniband),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -106,10 +105,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				ClientNetHint: &mgmtpb.ClientNetHint{
-					Provider:        "ofi+verbs",
-					CrtCtxShareAddr: 1,
-					CrtTimeout:      10,
-					NetDevClass:     uint32(hardware.Infiniband),
+					Provider:    "ofi+verbs",
+					CrtTimeout:  10,
+					NetDevClass: uint32(hardware.Infiniband),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
@@ -130,10 +128,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 		},
 		"Server uses TCP sockets + Ethernet": {
 			clientNetworkHint: &mgmtpb.ClientNetHint{
-				Provider:        "ofi+tcp",
-				CrtCtxShareAddr: 0,
-				CrtTimeout:      5,
-				NetDevClass:     uint32(hardware.Ether),
+				Provider:    "ofi+tcp",
+				CrtTimeout:  5,
+				NetDevClass: uint32(hardware.Ether),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -141,10 +138,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				ClientNetHint: &mgmtpb.ClientNetHint{
-					Provider:        "ofi+tcp",
-					CrtCtxShareAddr: 0,
-					CrtTimeout:      5,
-					NetDevClass:     uint32(hardware.Ether),
+					Provider:    "ofi+tcp",
+					CrtTimeout:  5,
+					NetDevClass: uint32(hardware.Ether),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
@@ -165,10 +161,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 		},
 		"older client (AllRanks: false)": {
 			clientNetworkHint: &mgmtpb.ClientNetHint{
-				Provider:        "ofi+tcp",
-				CrtCtxShareAddr: 0,
-				CrtTimeout:      5,
-				NetDevClass:     uint32(hardware.Ether),
+				Provider:    "ofi+tcp",
+				CrtTimeout:  5,
+				NetDevClass: uint32(hardware.Ether),
 			},
 			req: &mgmtpb.GetAttachInfoReq{
 				Sys:      build.DefaultSystemName,
@@ -176,10 +171,9 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
 				ClientNetHint: &mgmtpb.ClientNetHint{
-					Provider:        "ofi+tcp",
-					CrtCtxShareAddr: 0,
-					CrtTimeout:      5,
-					NetDevClass:     uint32(hardware.Ether),
+					Provider:    "ofi+tcp",
+					CrtTimeout:  5,
+					NetDevClass: uint32(hardware.Ether),
 				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{

@@ -172,7 +172,6 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 		D_NOTE("No system name in GetAttachInfo. Agent may be out of date with libdaos\n");
 	}
 
-	info->crt_ctx_share_addr = hint->crt_ctx_share_addr;
 	info->crt_timeout = hint->crt_timeout;
 	info->srv_srx_set = hint->srv_srx_set;
 
@@ -194,9 +193,9 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 
 	D_DEBUG(DB_MGMT,
 		"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
-		"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u, "
+		"CRT_TIMEOUT: %u, "
 		"FI_OFI_RXM_USE_SRX: %d, CRT_SECONDARY_PROVIDER: %d\n",
-		info->provider, info->interface, info->domain, info->crt_ctx_share_addr,
+		info->provider, info->interface, info->domain,
 		info->crt_timeout, info->srv_srx_set, info->provider_idx);
 
 	return 0;
@@ -503,7 +502,6 @@ int dc_mgmt_net_cfg(const char *name)
 {
 	int                      rc;
 	char                    *provider;
-	char                    *crt_ctx_share_addr = NULL;
 	char                    *cli_srx_set        = NULL;
 	char                    *crt_timeout        = NULL;
 	char                     buf[SYS_INFO_BUF_SIZE];
@@ -548,14 +546,6 @@ int dc_mgmt_net_cfg(const char *name)
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
-	rc = asprintf(&crt_ctx_share_addr, "%d", info.crt_ctx_share_addr);
-	if (rc < 0) {
-		crt_ctx_share_addr = NULL;
-		D_GOTO(cleanup, rc = -DER_NOMEM);
-	}
-	rc = d_setenv("CRT_CTX_SHARE_ADDR", crt_ctx_share_addr, 1);
-	if (rc != 0)
-		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* If the server has set this, the client must use the same value. */
 	if (info.srv_srx_set != -1) {
@@ -612,14 +602,13 @@ int dc_mgmt_net_cfg(const char *name)
 	D_INFO("Network interface: %s, Domain: %s\n", info.interface, info.domain);
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
-		"\tD_PROVIDER: %s, CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s, "
+		"\tD_PROVIDER: %s, CRT_TIMEOUT: %s, "
 		"CRT_SECONDARY_PROVIDER: %s\n",
-		provider, crt_ctx_share_addr, crt_timeout, buf);
+		provider, crt_timeout, buf);
 
 cleanup:
 	d_freeenv_str(&crt_timeout);
 	d_freeenv_str(&cli_srx_set);
-	d_freeenv_str(&crt_ctx_share_addr);
 	put_attach_info(&info, resp);
 
 	return rc;

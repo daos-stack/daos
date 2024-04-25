@@ -1507,7 +1507,7 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 		if (rc != 0)
 			D_GOTO(err_threads, rc = daos_errno2der(rc));
 
-		pthread_setname_np(eqt->de_thread, "progress");
+		pthread_setname_np(eqt->de_thread, "dfuse progress");
 	}
 
 	rc = dfuse_launch_fuse(dfuse_info, &args);
