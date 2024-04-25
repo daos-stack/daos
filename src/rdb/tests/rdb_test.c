@@ -278,7 +278,7 @@ rdbt_test_rsvc(void)
 	 * leader with a newer term.
 	 */
 	MUST(ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 2 /* term */, true /* create */,
-			   DB_CAP, NULL /* replicas */, NULL /* arg */));
+			   DB_CAP, 0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */));
 	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 1 /* term */, true /* destroy */);
 	D_ASSERTF(rc == -DER_STALE, DF_RC"\n", DP_RC(rc));
 
@@ -287,7 +287,7 @@ rdbt_test_rsvc(void)
 	 * leader with a newer term.
 	 */
 	rc = ds_rsvc_start(DS_RSVC_CLASS_TEST, &svc_id, uuid, 3 /* term */, true /* create */,
-			   DB_CAP, NULL /* replicas */, NULL /* arg */);
+			   DB_CAP, 0 /* vos_df_version */, NULL /* replicas */, NULL /* arg */);
 	D_ASSERTF(rc == -DER_ALREADY, DF_RC"\n", DP_RC(rc));
 	rc = ds_rsvc_stop(DS_RSVC_CLASS_TEST, &svc_id, 2 /* term */, true /* destroy */);
 	D_ASSERTF(rc == -DER_STALE, DF_RC"\n", DP_RC(rc));
@@ -641,7 +641,8 @@ rdbt_init_handler(crt_rpc_t *rpc)
 		D_WARN("ranks[%u]=%u\n", ri, ranks->rl_ranks[ri]);
 
 	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, in->tii_uuid, ranks, RDB_NIL_TERM,
-				DS_RSVC_CREATE, true /* bootstrap */, DB_CAP));
+				DS_RSVC_CREATE, true /* bootstrap */, DB_CAP,
+				0 /* vos_df_version*/));
 	crt_reply_send(rpc);
 }
 
@@ -768,8 +769,9 @@ rdbt_replicas_add_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
-	rc = ds_rsvc_add_replicas(DS_RSVC_CLASS_TEST, &test_svc_id, ranks,
-				  DB_CAP, &out->rtmo_hint);
+	rc = ds_rsvc_add_replicas(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, DB_CAP,
+				  0 /* vos_df_ version */, &out->rtmo_hint);
+
 	out->rtmo_failed = ranks;
 
 out:
@@ -849,7 +851,8 @@ rdbt_dictate_handler(crt_rpc_t *rpc)
 	ranks->rl_ranks[0] = in->rti_rank;
 	ranks->rl_nr = 1;
 	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, db_uuid, ranks, RDB_NIL_TERM,
-				DS_RSVC_DICTATE, false /* bootstrap */, 0 /* size */));
+				DS_RSVC_DICTATE, false /* bootstrap */, 0 /* size */,
+				0 /* vos_df_version */));
 
 	d_rank_list_free(ranks);
 	out->rto_rc = 0;
