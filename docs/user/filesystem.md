@@ -1026,6 +1026,18 @@ Normally child processes inherit environmental variables from parent processes. 
 scons, envs are striped off when calling execve().  It might be useful to force pil4dfs related env
 set in child processes by setting env "D_IL_ENFORCE_EXEC_ENV=1". This flag is 0 if not set.
 
+
+### Change dir cache timeout with env
+
+Directory caching is employed for better performance.  The default timeout is 60 seconds.  User can
+change it if necessary.  The unit is second and an integer should be provided.
+```
+$ export D_IL_DCACHE_TIMEOUT=5
+```
+
+!!! note
+    The directory cache can be deactivated with setting a timeout of 0 second.
+
 ### Limitations of libpil4dfs
 
 Libpil4dfs is a available as a preview. Some features are not implemented yet. Many APIs are
