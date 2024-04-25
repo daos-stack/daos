@@ -34,6 +34,13 @@ class DaosServerCommand(YamlCommand):
 
     DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
 
+    def _get_default_yaml(self):
+        # If specified use the configuration file from the YamlParameters object
+        default_yaml_file = None
+        if self.yaml is not None and hasattr(self.yaml, "filename"):
+            default_yaml_file = self.yaml.filename
+        self.config = FormattedParameter("--config={}", default_yaml_file)
+
     def __init__(self, path="", yaml_cfg=None, timeout=45):
         """Create a daos_server command object.
 
@@ -48,11 +55,6 @@ class DaosServerCommand(YamlCommand):
             "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
         self.pattern = self.NORMAL_PATTERN
 
-        # If specified use the configuration file from the YamlParameters object
-        default_yaml_file = None
-        if self.yaml is not None and hasattr(self.yaml, "filename"):
-            default_yaml_file = self.yaml.filename
-
         # Command line parameters:
         # -d, --debug        Enable debug output
         # -J, --json-logging Enable JSON logging
@@ -60,7 +62,6 @@ class DaosServerCommand(YamlCommand):
         self.debug = FormattedParameter("--debug", True)
         self.json_logs = FormattedParameter("--json-logging", False)
         self.json = FormattedParameter("--json", False)
-        self.config = FormattedParameter("--config={}", default_yaml_file)
         # Additional daos_server command line parameters:
         #     --allow-proxy  Allow proxy configuration via environment
         self.allow_proxy = FormattedParameter("--allow-proxy", False)
@@ -238,6 +239,8 @@ class DaosServerCommand(YamlCommand):
         def __init__(self):
             """Create an ms subcommand object."""
             super().__init__("/run/daos_server/ms/*", "ms")
+            self.config = FormattedParameter(
+                "--config={}", self._get_default_yaml())
 
         def get_sub_command_class(self):
             """Get the daos_server ms sub command object."""
@@ -290,6 +293,8 @@ class DaosServerCommand(YamlCommand):
             """Create a network subcommand object."""
             super().__init__(
                 "/run/daos_server/network/*", "network")
+            self.config = FormattedParameter(
+                "--config={}", self._get_default_yaml())
 
         def get_sub_command_class(self):
             """Get the daos_server network sub command object."""
@@ -323,6 +328,8 @@ class DaosServerCommand(YamlCommand):
         def __init__(self):
             """Create a start subcommand object."""
             super().__init__("/run/daos_server/start/*", "start")
+            self.config = FormattedParameter(
+                "--config={}", self._get_default_yaml())
 
             # daos_server start command options:
             #   --port=                 Port for the gRPC management interface
@@ -357,6 +364,8 @@ class DaosServerCommand(YamlCommand):
         def __init__(self):
             """Create a daos_server nvme subcommand object."""
             super().__init__("/run/daos_server/nvme/*", "nvme")
+            self.config = FormattedParameter(
+                "--config={}", self._get_default_yaml())
 
         def get_sub_command_class(self):
             """Get the daos_server nvme sub command object."""
@@ -442,6 +451,8 @@ class DaosServerCommand(YamlCommand):
         def __init__(self):
             """Create a daos_server scm subcommand object."""
             super().__init__("/run/daos_server/scm/*", "scm")
+            self.config = FormattedParameter(
+                "--config={}", self._get_default_yaml())
 
         def get_sub_command_class(self):
             """Get the daos_server scm sub command object."""
@@ -515,6 +526,8 @@ class DaosServerCommand(YamlCommand):
         def __init__(self):
             """Create a support subcommand object."""
             super().__init__("/run/daos_server/support/*", "support")
+            self.config = FormattedParameter(
+                "--config={}", self._get_default_yaml())
 
         def get_sub_command_class(self):
             """Get the daos_server support sub command object."""
