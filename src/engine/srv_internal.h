@@ -139,33 +139,33 @@ extern struct engine_metrics dss_engine_metrics;
 #define DSS_HOSTNAME_MAX_LEN	255
 
 /** Server node hostname */
-extern char		dss_hostname[];
+extern char                  dss_hostname[];
 /** Server node topology */
-extern hwloc_topology_t	dss_topo;
+extern hwloc_topology_t      dss_topo;
 /** core depth of the topology */
-extern int		dss_core_depth;
+extern int                   dss_core_depth;
 /** number of physical cores, w/o hyper-threading */
-extern int		dss_core_nr;
+extern int                   dss_core_nr;
 /** start offset index of the first core for service XS */
-extern unsigned int	dss_core_offset;
+extern unsigned int          dss_core_offset;
 /** NUMA node to bind to */
-extern int		dss_numa_node;
+extern int                   dss_numa_node;
+/** Number of active numa nodes (only > 1 if multi-socket mode is enabled) */
+extern int                   dss_numa_nr;
+/** number of system XS */
+extern unsigned int          dss_sys_xs_nr;
+/** Flag of helper XS as a pool */
+extern bool                  dss_helper_pool;
 /** Cached numa information */
 extern struct dss_numa_info *dss_numa;
-/** Number of active numa nodes (only > 1 if DAOS_MULTISOCKET is enabled) */
-extern int                   dss_numa_nr;
-/** Forward I/O work to self */
-extern bool                  dss_forward_self;
+/** Forward I/O work to neighbor */
+extern bool                  dss_forward_neighbor;
 /** Number of offload XS */
-extern unsigned int	dss_tgt_offload_xs_nr;
+extern unsigned int          dss_tgt_offload_xs_nr;
 /** Number of offload per socket */
 extern unsigned int          dss_offload_per_numa_nr;
 /** Number of target per socket */
 extern unsigned int          dss_tgt_per_numa_nr;
-/** number of system XS */
-extern unsigned int	dss_sys_xs_nr;
-/** Flag of helper XS as a pool */
-extern bool		dss_helper_pool;
 
 /** Shadow dss_get_module_info */
 struct dss_module_info *get_module_info(void);

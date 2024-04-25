@@ -74,12 +74,14 @@ hwloc_topology_t	dss_topo;
 int			dss_core_depth;
 /** number of physical cores, w/o hyperthreading */
 int			dss_core_nr;
-/** start offset index of the first core for service XS */
-unsigned int		dss_core_offset;
+/** start offset index of the first core for service XS.  Init to -1 so we can
+ * detect when it is explicitly set and disable multi-socket mode.
+ */
+unsigned int            dss_core_offset = -1;
 /** NUMA node to bind to */
 int			dss_numa_node = -1;
-/** Forward I/O work to self */
-bool                    dss_forward_self;
+/** Forward I/O work to neighbor */
+bool                    dss_forward_neighbor;
 /** Cached numa information */
 struct dss_numa_info   *dss_numa;
 /** Number of active numa nodes, multi-socket mode only */
@@ -320,11 +322,6 @@ dss_multi_socket_check(bool oversub, int numa_nr)
 		return false;
 	}
 
-	if (dss_core_offset != 0) {
-		D_INFO("Core offset specified, running in single socket mode\n");
-		return false;
-	}
-
 	if (numa_nr < 2) {
 		D_INFO("No NUMA found, bypassing multi-socket mode\n");
 		return false;
@@ -379,11 +376,19 @@ dss_topo_init(void)
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
-	d_getenv_bool("DAOS_FORWARD_SELF", &dss_forward_self);
+	d_getenv_bool("DAOS_FORWARD_NEIGHBOR", &dss_forward_neighbor);
 	dss_tgt_nr = nr_threads;
 
-	if (dss_multi_socket_check(tgt_oversub, numa_node_nr))
-		multi_socket = true;
+	/** Set to -1 initially so we can detect when it's set explicitly to
+	 * maintain mode consistency between engines where one sets it to 0.
+	 */
+	if (dss_core_offset == -1) {
+		dss_core_offset = 0;
+		if (dss_multi_socket_check(tgt_oversub, numa_node_nr))
+			multi_socket = true;
+	} else {
+		D_INFO("Core offset specified, running in single socket mode\n");
+	}
 
 	/* Fall back to legacy mode if no socket was specified and
 	 * multi-socket mode is not possible or NUMA data is unavailable

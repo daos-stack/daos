@@ -379,7 +379,7 @@ sched_ult2xs_multisocket(int xs_type, int tgt_id)
 	uint32_t                 target;
 
 	if (dss_tgt_offload_xs_nr == 0) {
-		if (xs_type == DSS_XS_IOFW && !dss_forward_self) {
+		if (xs_type == DSS_XS_IOFW && dss_forward_neighbor) {
 			/* Keep the old forwarding behavior, but NUMA aware */
 			socket = tgt_id / dss_numa_nr;
 			target = (socket * dss_tgt_per_numa_nr) +
