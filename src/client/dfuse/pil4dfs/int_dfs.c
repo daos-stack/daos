@@ -171,6 +171,11 @@ static bool             report;
 static bool             enforce_exec_env;
 /* current application is bash/sh or not */
 static bool             is_bash;
+/* "no_dcache_in_bash" is a flag to control whether turns off directory caching inside sh/bash
+ * process. It is set true as default.
+ */
+static bool             no_dcache_in_bash = true;
+
 /* "compatible_mode" is a bool to control whether passing open(), openat(), and opendir() to dfuse
  * all the time to avoid using fake fd. Env variable "D_IL_COMPATIBLE=1" will set it true. This
  * can increase the compatibility of libpil4dfs with degraded performance in open(), openat(),
@@ -2520,7 +2525,6 @@ read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *bu
 	if (fd_directed >= FD_FILE_BASE) {
 		rc = pread_over_dfs(fd_directed - FD_FILE_BASE, buf, size,
 				    file_list[fd_directed - FD_FILE_BASE]->offset);
-
 		if (rc >= 0)
 			file_list[fd_directed - FD_FILE_BASE]->offset += rc;
 		return rc;
@@ -4089,7 +4093,7 @@ out_readdir:
  */
 static char  *env_list[] = {"D_IL_REPORT", "D_IL_MOUNT_POINT", "D_IL_POOL", "D_IL_CONTAINER",
 			    "D_IL_MAX_EQ", "D_LOG_FILE", "D_IL_ENFORCE_EXEC_ENV",  "DD_MASK",
-			    "DD_SUBSYS", "D_LOG_MASK", "D_IL_COMPATIBLE"};
+			    "DD_SUBSYS", "D_LOG_MASK", "D_IL_COMPATIBLE", "D_IL_NO_DCACHE_BASH"};
 
 /* Environmental variables could be cleared in some applications. To make sure all libpil4dfs
  * related env properly set, we intercept execve and its variants to check envp[] and append our
@@ -6723,6 +6727,8 @@ init_myhook(void)
 	compatible_mode = false;
 	d_getenv_bool("D_IL_COMPATIBLE", &compatible_mode);
 
+	d_getenv_bool("D_IL_NO_DCACHE_BASH", &no_dcache_in_bash);
+
 	if (compatible_mode) {
 		rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX |
 					 D_HASH_FT_LRU, 6, NULL, &fd_hash_ops, &fd_hash);
@@ -6837,7 +6843,7 @@ init_myhook(void)
 
 	/* Need to check whether current process is bash or not under regular & compatible modes.*/
 	check_exe_sh_bash();
-	if (is_bash)
+	if (is_bash && no_dcache_in_bash)
 		/* Disable directory caching inside bash. bash could remove a dir then recreate
 		 * it which causes cache inconsistency. Observed such issue in "configure" in ucx.
 		 */
