@@ -205,7 +205,7 @@ class AvocadoInfo():
         if tag_filters:
             command.extend(tag_filters)
         if failfast:
-            command.extend(["--failfast", "on"])
+            command.extend(["--failfast"])
         command.extend(["--mux-yaml", test.yaml_file])
         if test.extra_yaml:
             command.extend(test.extra_yaml)
