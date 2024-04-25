@@ -52,6 +52,8 @@ release:
 	d_slab_release(ev->de_eqt->de_read_slab, ev);
 }
 
+#define K128 (1024 * 128)
+
 static bool
 dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_obj_hdl *oh)
 {
@@ -63,12 +65,14 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 	}
 
 	if (!oh->doh_linear_read || oh->doh_readahead->dra_ev == NULL) {
-		DFUSE_TRA_DEBUG(oh, "Readahead disabled");
+		DFUSE_TRA_DEBUG(oh, "Pre read disabled");
 		return false;
 	}
 
-	if (oh->doh_linear_read_pos != position) {
-		DFUSE_TRA_DEBUG(oh, "disabling readahead");
+	if (((position % K128) == 0) && ((len % K128) == 0)) {
+		DFUSE_TRA_DEBUG(oh, "allowing out-of-order pre read");
+	} else if (oh->doh_linear_read_pos != position) {
+		DFUSE_TRA_DEBUG(oh, "disabling pre read");
 		daos_event_fini(&oh->doh_readahead->dra_ev->de_ev);
 		d_slab_release(oh->doh_readahead->dra_ev->de_eqt->de_pre_read_slab,
 			       oh->doh_readahead->dra_ev);

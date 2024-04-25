@@ -9,7 +9,7 @@ from dfuse_test_base import DfuseTestBase
 from run_utils import run_remote
 
 
-class DFuseReadTest(DfuseTestBase):
+class DFusePreReadTest(DfuseTestBase):
     """Base ReadTest test class.
     :avocado: recursive
     """
@@ -21,7 +21,7 @@ class DFuseReadTest(DfuseTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=dfuse
-        :avocado: tags=DFuseReadTest,test_dfuse_pre_read
+        :avocado: tags=DFusePreReadTest,test_dfuse_pre_read
         """
 
         pool = self.get_pool(connect=False)
@@ -77,7 +77,7 @@ class DFuseReadTest(DfuseTestBase):
         )
 
         # Now read the file, and check it's read.
-        cmd = f"dd if={fuse_root_dir}/td/test_file of=/dev/zero count=16 bs=128k"
+        cmd = f"dd if={fuse_root_dir}/td/test_file of=/dev/zero count=1 bs=2M"
         result = run_remote(self.log, self.hostlist_clients, cmd)
         if not result.passed:
             self.fail(f'"{cmd}" failed on {result.failed_hosts}')
